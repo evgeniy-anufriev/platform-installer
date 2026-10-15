@@ -1,3 +1,863 @@
+@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/roles/clickhouse_tls/tasks/validate.yml","mode":420,"size":3912,"sha256":"cb931959914b68b78557f406fc2690d421c4c23a975e4009870b0da51aa1a142","index":0,"count":1,"encoding":"utf-8","payloadBytes":3912}
+---
+- name: Validate closed ClickHouse deployment inputs
+  ansible.builtin.assert:
+    that:
+      - platform_clickhouse_mode in ['standalone', 'raft-ha']
+      - platform_clickhouse_deployment_id is match('^[a-z0-9][a-z0-9-]*$')
+      - platform_clickhouse_deployment_id | length <= 128
+      - platform_clickhouse_instances is sequence
+      - platform_clickhouse_instances is not string
+      - platform_clickhouse_instances | length == (1 if platform_clickhouse_mode == 'standalone' else 3)
+      - platform_clickhouse_tls_profile is string
+      - platform_clickhouse_tls_profile | length > 0 or platform_clickhouse_tls_directory | default('') | length > 0
+      - platform_clickhouse_default_credential is mapping
+      - platform_clickhouse_default_credential.passwordSecretRef | default('') is match('^runtime:[a-z][a-z0-9-]{0,127}$')
+      - platform_clickhouse_secret_files is mapping
+      - platform_clickhouse_default_credential.passwordSecretRef in platform_clickhouse_secret_files
+    fail_msg: CLICKHOUSE_INPUT_INVALID
+  no_log: true
+
+- name: Validate each ClickHouse placement before filesystem mutation
+  ansible.builtin.assert:
+    that:
+      - item is mapping
+      - item.id | default('') is match('^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$')
+      - item.id | length <= 128
+      - item.id is match('^.+-[1-9][0-9]*$')
+      - (platform_clickhouse_name ~ '-server@' ~ platform_clickhouse_deployment_id ~ '-' ~ (item.id | regex_replace('^.*-', '')) ~ '.service') | length <= 255
+      - platform_clickhouse_mode != 'raft-ha' or (platform_clickhouse_name ~ '-keeper@' ~ platform_clickhouse_deployment_id ~ '-' ~ (item.id | regex_replace('^.*-', '')) ~ '.service') | length <= 255
+      - item.host | default('') is string
+      - item.host | length > 0
+      - item.address | default('') is string
+      - item.address | length > 0
+      - item.roles | default([]) | sort == (['server'] if platform_clickhouse_mode == 'standalone' else ['keeper', 'server'])
+    fail_msg: CLICKHOUSE_PLACEMENT_INVALID
+  loop: "{{ platform_clickhouse_instances }}"
+  loop_control:
+    label: "{{ item.id | default('invalid') }}"
+
+- name: Reject duplicate ClickHouse member IDs
+  ansible.builtin.assert:
+    that: platform_clickhouse_instances | map(attribute='id') | unique | list | length == platform_clickhouse_instances | length
+    fail_msg: CLICKHOUSE_MEMBER_ID_DUPLICATE
+
+- name: Require runtime-only default password file
+  ansible.builtin.stat:
+    path: "{{ platform_clickhouse_secret_files[platform_clickhouse_default_credential.passwordSecretRef] }}"
+    follow: false
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
+  delegate_to: localhost
+  become: false
+  register: _platform_clickhouse_password_file
+  no_log: true
+
+- name: Reject missing or substituted default password file
+  ansible.builtin.assert:
+    that:
+      - _platform_clickhouse_password_file.stat.exists
+      - _platform_clickhouse_password_file.stat.isreg
+      - not _platform_clickhouse_password_file.stat.islnk
+      - _platform_clickhouse_password_file.stat.size >= 1
+      - _platform_clickhouse_password_file.stat.size <= 4096
+    fail_msg: CLICKHOUSE_PASSWORD_INPUT_INVALID
+  no_log: true
+
+- name: Read the exact runtime password bytes without trimming
+  ansible.builtin.set_fact:
+    _platform_clickhouse_default_password: "{{ lookup('ansible.builtin.file', platform_clickhouse_secret_files[platform_clickhouse_default_credential.passwordSecretRef], lstrip=False, rstrip=False) }}"
+  no_log: true
+
+- name: Require a nonempty UTF-8 password with the exact byte bound
+  ansible.builtin.assert:
+    that:
+      - _platform_clickhouse_default_password | string | length > 0
+      - _platform_clickhouse_default_password | string | length <= 4096
+      - _platform_clickhouse_default_password | string | hash('sha256') is match('^[0-9a-f]{64}$')
+    fail_msg: CLICKHOUSE_PASSWORD_INPUT_INVALID
+  no_log: true
+
+@@END
+@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/roles/clickhouse_tls/tasks/validate_data_paths.yml","mode":420,"size":1108,"sha256":"9995ce910416220bf1f303def89a774aa6b39aed3dcd21008324a20b9e5fa255","index":0,"count":1,"encoding":"utf-8","payloadBytes":1108}
+---
+- name: Keep the shared ClickHouse data root separate from co-located members
+  ansible.builtin.assert:
+    that: item.data_directory != platform_clickhouse_data_root
+    fail_msg: "CLICKHOUSE_DATA_DIRECTORY_COLLISION: {{ item.id }}: {{ item.data_directory }} is the shared root"
+  loop: "{{ _platform_clickhouse_local_instances }}"
+  loop_control:
+    label: "{{ item.id }}"
+  when: _platform_clickhouse_local_instances | length > 1
+
+- name: Refuse overlapping ClickHouse member directories on the same host
+  ansible.builtin.assert:
+    that:
+      - not item.0.data_directory.startswith(item.1.data_directory ~ '/')
+      - not item.1.data_directory.startswith(item.0.data_directory ~ '/')
+      - item.0.data_directory != item.1.data_directory
+    fail_msg: >-
+      CLICKHOUSE_DATA_DIRECTORY_COLLISION: {{ item.0.id }}={{ item.0.data_directory }},
+      {{ item.1.id }}={{ item.1.data_directory }}
+  loop: "{{ _platform_clickhouse_local_instances | product(_platform_clickhouse_local_instances) | list }}"
+  loop_control:
+    label: "{{ item.0.id }} / {{ item.1.id }}"
+  when: item.0.id < item.1.id
+
+@@END
+@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/roles/clickhouse_tls/tasks/verify.yml","mode":420,"size":2762,"sha256":"93a4064ecae998a5f1e98986991f41c4babfe09a6f701244077e037920352a11","index":0,"count":1,"encoding":"utf-8","payloadBytes":2762}
+---
+- name: Observe the exact ClickHouse server unit
+  ansible.builtin.command:
+    argv: [systemctl, is-active, "{{ clickhouse_member.server_unit_name }}"]
+  register: _platform_clickhouse_server_status
+  changed_when: false
+  failed_when: false
+
+- name: Require an active member-owned ClickHouse server
+  ansible.builtin.assert:
+    that:
+      - _platform_clickhouse_server_status.rc == 0
+      - _platform_clickhouse_server_status.stdout == 'active'
+    fail_msg: CLICKHOUSE_SERVER_NOT_ACTIVE
+
+- name: Observe the exact Keeper unit only for HA
+  ansible.builtin.command:
+    argv: [systemctl, is-active, "{{ clickhouse_member.keeper_unit_name }}"]
+  register: _platform_clickhouse_keeper_status
+  changed_when: false
+  failed_when: false
+
+- name: Require the expected mode-specific Keeper process state
+  ansible.builtin.assert:
+    that: >-
+      (platform_clickhouse_mode == 'raft-ha' and _platform_clickhouse_keeper_status.stdout == 'active') or
+      (platform_clickhouse_mode == 'standalone' and _platform_clickhouse_keeper_status.stdout != 'active')
+    fail_msg: CLICKHOUSE_KEEPER_MODE_MISMATCH
+
+- name: Query ClickHouse HTTPS as default with exact runtime-only password and trusted CA
+  ansible.builtin.uri:
+    url: "https://{{ clickhouse_member.address }}:{{ clickhouse_member.https_port }}/?query=SELECT%201"
+    method: GET
+    url_username: default
+    url_password: "{{ _platform_clickhouse_default_password }}"
+    force_basic_auth: true
+    validate_certs: true
+    ca_path: "{{ clickhouse_member.config_directory }}/pki/ca-chain.pem"
+    return_content: true
+    status_code: 200
+  register: _platform_clickhouse_https_query
+  changed_when: false
+  failed_when: false
+  until: _platform_clickhouse_https_query.status | default(-1) | int == 200
+  retries: 15
+  delay: 2
+  no_log: true
+
+- name: Report only bounded HTTPS status on failed authentication or TLS
+  ansible.builtin.debug:
+    msg: "CLICKHOUSE_HTTPS_STATUS={{ _platform_clickhouse_https_query.status | default(-1) }}"
+  when: _platform_clickhouse_https_query.status | default(-1) | int != 200
+
+- name: Require authenticated ClickHouse HTTPS query result
+  ansible.builtin.assert:
+    that:
+      - _platform_clickhouse_https_query.status | default(-1) | int == 200
+      - _platform_clickhouse_https_query.content | default('') | trim == '1'
+    fail_msg: "CLICKHOUSE_AUTHENTICATED_HTTPS_VERIFY_FAILED status={{ _platform_clickhouse_https_query.status | default(-1) }}"
+  no_log: true
+
+- name: Require HA Keeper TLS listener or skip it for standalone
+  ansible.builtin.wait_for:
+    host: "{{ clickhouse_member.address }}"
+    port: "{{ clickhouse_member.keeper_client_port }}"
+    state: started
+    timeout: 30
+  when: platform_clickhouse_mode == 'raft-ha'
+  changed_when: false
+
+@@END
+@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/roles/clickhouse_tls/templates/keeper.service.j2","mode":420,"size":571,"sha256":"d89694fccde54b08d306815363b10d20ca094d80b21a0bcbdfc4642309c3b2b7","index":0,"count":1,"encoding":"utf-8","payloadBytes":571}
+# {{ platform_clickhouse_name }}-managed: {{ platform_clickhouse_deployment_id }}/{{ clickhouse_member.id }}/keeper
+[Unit]
+Description=Platform ClickHouse Keeper {{ clickhouse_member.id }}
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{ platform_clickhouse_user }}
+Group={{ platform_clickhouse_group }}
+ExecStart=/usr/bin/clickhouse-keeper --config-file={{ clickhouse_member.config_directory }}/keeper.xml
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=262144
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
+
+@@END
+@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/roles/clickhouse_tls/templates/keeper.xml.j2","mode":420,"size":2122,"sha256":"3067bc03281e8d7bce8dd09e805d629c47d933b38b35286e6648356e33040c47","index":0,"count":1,"encoding":"utf-8","payloadBytes":2122}
+<clickhouse>
+  <logger>
+    <level>information</level>
+    <log>{{ clickhouse_member.log_directory | e }}/keeper.log</log>
+    <errorlog>{{ clickhouse_member.log_directory | e }}/keeper.err.log</errorlog>
+  </logger>
+  <listen_host>0.0.0.0</listen_host>
+  <keeper_server>
+    <tcp_port_secure>{{ clickhouse_member.keeper_client_port }}</tcp_port_secure>
+    <server_id>{{ clickhouse_member.slot }}</server_id>
+    <log_storage_path>{{ clickhouse_member.data_directory | e }}/keeper/log</log_storage_path>
+    <snapshot_storage_path>{{ clickhouse_member.data_directory | e }}/keeper/snapshots</snapshot_storage_path>
+    <coordination_settings>
+      <operation_timeout_ms>10000</operation_timeout_ms>
+      <session_timeout_ms>30000</session_timeout_ms>
+    </coordination_settings>
+    <raft_configuration>
+      <secure>true</secure>
+{% for keeper in _platform_clickhouse_instances %}
+      <server><id>{{ keeper.slot }}</id><hostname>{{ keeper.address | e }}</hostname><port>{{ keeper.keeper_raft_port }}</port></server>
+{% endfor %}
+    </raft_configuration>
+  </keeper_server>
+  <openSSL>
+    <server>
+      <certificateFile>{{ clickhouse_member.config_directory | e }}/pki/certificate.pem</certificateFile>
+      <privateKeyFile>{{ clickhouse_member.config_directory | e }}/pki/private-key.pem</privateKeyFile>
+      <caConfig>{{ clickhouse_member.config_directory | e }}/pki/ca-chain.pem</caConfig>
+      <verificationMode>strict</verificationMode>
+      <invalidCertificateHandler><name>RejectCertificateHandler</name></invalidCertificateHandler>
+    </server>
+    <client>
+      <certificateFile>{{ clickhouse_member.config_directory | e }}/pki/certificate.pem</certificateFile>
+      <privateKeyFile>{{ clickhouse_member.config_directory | e }}/pki/private-key.pem</privateKeyFile>
+      <caConfig>{{ clickhouse_member.config_directory | e }}/pki/ca-chain.pem</caConfig>
+      <loadDefaultCAFile>false</loadDefaultCAFile>
+      <verificationMode>strict</verificationMode>
+      <invalidCertificateHandler><name>RejectCertificateHandler</name></invalidCertificateHandler>
+    </client>
+  </openSSL>
+</clickhouse>
+
+@@END
+@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/roles/clickhouse_tls/templates/server.service.j2","mode":420,"size":807,"sha256":"020abe3a0a5a17bfeb27175d2931a4c2dd977bf81aa27ae4d1e8db63e379a7b0","index":0,"count":1,"encoding":"utf-8","payloadBytes":807}
+# {{ platform_clickhouse_name }}-managed: {{ platform_clickhouse_deployment_id }}/{{ clickhouse_member.id }}/server
+[Unit]
+Description=Platform ClickHouse server {{ clickhouse_member.id }}
+After={{ 'network-online.target ' ~ clickhouse_member.keeper_unit_name if platform_clickhouse_mode == 'raft-ha' else 'network-online.target' }}
+Wants=network-online.target
+Requires={{ clickhouse_member.keeper_unit_name if platform_clickhouse_mode == 'raft-ha' else 'network-online.target' }}
+
+[Service]
+Type=simple
+User={{ platform_clickhouse_user }}
+Group={{ platform_clickhouse_group }}
+ExecStart=/usr/bin/clickhouse-server --config-file={{ clickhouse_member.config_directory }}/server.xml
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=262144
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
+
+@@END
+@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/roles/clickhouse_tls/templates/server.xml.j2","mode":420,"size":3102,"sha256":"15ebd8e316d80a1f0936ce1443f36774a6a3ef9e33505f6f04cee492cfb02471","index":0,"count":1,"encoding":"utf-8","payloadBytes":3102}
+<clickhouse>
+  <logger>
+    <level>information</level>
+    <log>{{ clickhouse_member.log_directory | e }}/server.log</log>
+    <errorlog>{{ clickhouse_member.log_directory | e }}/server.err.log</errorlog>
+  </logger>
+  <query_masking_rules>
+    <rule>
+      <name>application-password-verifier</name>
+      <regexp>(?i)sha256_hash\s+BY\s+'[^']*'</regexp>
+      <replace>sha256_hash BY '[redacted]'</replace>
+    </rule>
+  </query_masking_rules>
+  <listen_host>0.0.0.0</listen_host>
+  <https_port>{{ clickhouse_member.https_port }}</https_port>
+  <tcp_port_secure>{{ clickhouse_member.native_port }}</tcp_port_secure>
+  <interserver_https_port>{{ clickhouse_member.interserver_port }}</interserver_https_port>
+  <interserver_https_host>{{ clickhouse_member.address | e }}</interserver_https_host>
+  <path>{{ clickhouse_member.data_directory | e }}/data/</path>
+  <access_control_path>{{ clickhouse_member.data_directory | e }}/access/</access_control_path>
+  <tmp_path>{{ clickhouse_member.data_directory | e }}/tmp/</tmp_path>
+  <user_files_path>{{ clickhouse_member.data_directory | e }}/user_files/</user_files_path>
+  <format_schema_path>{{ clickhouse_member.data_directory | e }}/format_schemas/</format_schema_path>
+  <users_config>{{ clickhouse_member.config_directory | e }}/users.xml</users_config>
+  <openSSL>
+    <server>
+      <certificateFile>{{ clickhouse_member.config_directory | e }}/pki/certificate.pem</certificateFile>
+      <privateKeyFile>{{ clickhouse_member.config_directory | e }}/pki/private-key.pem</privateKeyFile>
+      <caConfig>{{ clickhouse_member.config_directory | e }}/pki/ca-chain.pem</caConfig>
+      <verificationMode>none</verificationMode>
+      <invalidCertificateHandler><name>RejectCertificateHandler</name></invalidCertificateHandler>
+    </server>
+    <client>
+      <certificateFile>{{ clickhouse_member.config_directory | e }}/pki/certificate.pem</certificateFile>
+      <privateKeyFile>{{ clickhouse_member.config_directory | e }}/pki/private-key.pem</privateKeyFile>
+      <caConfig>{{ clickhouse_member.config_directory | e }}/pki/ca-chain.pem</caConfig>
+      <loadDefaultCAFile>false</loadDefaultCAFile>
+      <verificationMode>strict</verificationMode>
+      <invalidCertificateHandler><name>RejectCertificateHandler</name></invalidCertificateHandler>
+    </client>
+  </openSSL>
+{% if platform_clickhouse_mode == 'raft-ha' %}
+  <remote_servers>
+    <default>
+      <shard>
+{% for replica in _platform_clickhouse_instances %}
+        <replica>
+          <host>{{ replica.address | e }}</host>
+          <port>{{ replica.native_port }}</port>
+          <secure>1</secure>
+        </replica>
+{% endfor %}
+      </shard>
+    </default>
+  </remote_servers>
+  <distributed_ddl><path>/clickhouse/task_queue/ddl</path></distributed_ddl>
+  <zookeeper>
+{% for keeper in _platform_clickhouse_instances %}
+    <node><host>{{ keeper.address | e }}</host><port>{{ keeper.keeper_client_port }}</port><secure>1</secure></node>
+{% endfor %}
+  </zookeeper>
+  <macros><shard>1</shard><replica>{{ clickhouse_member.id | e }}</replica></macros>
+{% endif %}
+</clickhouse>
+
+@@END
+@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/roles/clickhouse_tls/templates/users.xml.j2","mode":420,"size":403,"sha256":"5938d691f140ab208091106c0cd30ff6fcd61bff327501f664959a42942d04b5","index":0,"count":1,"encoding":"utf-8","payloadBytes":403}
+<clickhouse>
+  <users>
+    <default>
+      <password_sha256_hex>{{ _platform_clickhouse_default_password | hash('sha256') }}</password_sha256_hex>
+      <networks><ip>::/0</ip></networks>
+      <profile>default</profile>
+      <quota>default</quota>
+      <access_management>1</access_management>
+    </default>
+  </users>
+  <profiles><default /></profiles>
+  <quotas><default /></quotas>
+</clickhouse>
+
+@@END
+@@PORTABLE {"path":"services/clickhouse/artifacts.yml","mode":420,"size":1102,"sha256":"abad8356d1348e3893650ca9fdff6b2fac08d36560f6cc5df2120338726f7260","index":0,"count":1,"encoding":"utf-8","payloadBytes":1102}
+apiVersion: platform.installer/artifacts/v1alpha1
+service: clickhouse
+artifacts:
+  - {id: clickhouse-common-static, version: "26.8.14.3", filename: clickhouse-common-static-26.8.14.3.x86_64.rpm, mediaType: application/x-rpm, sha256: b98cfaa7e82a563c0a21276c3dd0a637bf8976f1b65bd7a71f1d625f231954e9, source: "https://packages.clickhouse.com/rpm/lts/clickhouse-common-static-26.8.14.3.x86_64.rpm", offlineRequired: true}
+  - {id: clickhouse-server, version: "26.8.14.3", filename: clickhouse-server-26.8.14.3.x86_64.rpm, mediaType: application/x-rpm, sha256: 3d72d3e909f4dcca5378faeb7d3dd9fbf0741038f7309ff87965fe0efb70e4ee, source: "https://packages.clickhouse.com/rpm/lts/clickhouse-server-26.8.14.3.x86_64.rpm", offlineRequired: true}
+  - {id: clickhouse-client, version: "26.8.14.3", filename: clickhouse-client-26.8.14.3.x86_64.rpm, mediaType: application/x-rpm, sha256: 796874f358d73b96ff8bf04c5aabbf474ea020303eb7d113f1009961739e41c7, source: "https://packages.clickhouse.com/rpm/lts/clickhouse-client-26.8.14.3.x86_64.rpm", offlineRequired: true}
+status: approved-dev-artifact-offline-production
+
+@@END
+@@PORTABLE {"path":"services/clickhouse/compatibility.yml","mode":420,"size":522,"sha256":"d9f05b7637be145992879685f6958058314490296f002d1e28ae2f58576a781b","index":0,"count":1,"encoding":"utf-8","payloadBytes":522}
+apiVersion: platform.installer/compatibility/v1alpha1
+service: clickhouse
+combinations:
+  - os: redos
+    osVersion: "7.3"
+    architecture: x86_64
+    clickhouse: "26.8.14.3-1"
+    source: verified-offline-bundle
+    status: runtime-verified-redos73-support-01
+  - os: redos
+    osVersion: "8.0"
+    architecture: x86_64
+    clickhouse: "26.8.14.3-1"
+    source: verified-offline-bundle
+    status: acquired-not-runtime-validated
+  - os: altlinux
+    status: deferred
+status: requires-service-install-09-runtime-evidence
+
+@@END
+@@PORTABLE {"path":"services/clickhouse/configuration.schema.json","mode":420,"size":1313,"sha256":"227bb8c6d570dc7cc5f1de6dbf03b668433d857a3462f88602c46b467fdc175d","index":0,"count":1,"encoding":"utf-8","payloadBytes":1313}
+{
+  "$id": "https://platform.installer/schemas/services/clickhouse/configuration-v1alpha1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "dataDirectory": {
+      "maxLength": 255,
+      "minLength": 1,
+      "type": "string"
+    },
+    "dataRoot": {
+      "maxLength": 255,
+      "minLength": 1,
+      "type": "string"
+    },
+    "defaultCredential": {
+      "additionalProperties": false,
+      "properties": {
+        "passwordSecretRef": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "passwordSecretRef"
+      ],
+      "type": "object"
+    },
+    "interserverPort": {
+      "maximum": 65535,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "keeperClientPort": {
+      "maximum": 65535,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "keeperRaftPort": {
+      "maximum": 65535,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "nativePort": {
+      "maximum": 65535,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "port": {
+      "maximum": 65535,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "tlsProfile": {
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "title": "ClickHouse desired configuration",
+  "type": "object"
+}
+
+@@END
+@@PORTABLE {"path":"services/clickhouse/playbooks/apply.yml","mode":420,"size":626,"sha256":"263156ef5a4896155aeca3ebef1d3cc701148140d103d98d44b34de05665fe94","index":0,"count":1,"encoding":"utf-8","payloadBytes":626}
+---
+- import_playbook: ../../../ansible-core/playbooks/validate.yml
+
+- import_playbook: ../../../ansible-core/playbooks/pki-apply.yml
+
+- name: Apply ClickHouse TLS deployment
+  hosts: platform_targets
+  become: true
+  gather_facts: false
+  pre_tasks:
+    - name: Apply trusted runtime ClickHouse settings
+      ansible.builtin.include_role:
+        name: platform.core.runtime_role_variables
+      when: platform_execution_role_variables_by_host is defined
+  roles:
+    - role: platform.clickhouse.clickhouse_tls
+      platform_clickhouse_verify_only: false
+
+- import_playbook: ../../integrations/playbooks/apply-endpoint.yml
+
+@@END
+@@PORTABLE {"path":"services/clickhouse/playbooks/verify.yml","mode":420,"size":559,"sha256":"9701e87c257d2a4084c050ef76aaf994daa998e881c2b17878090eee38c73d2d","index":0,"count":1,"encoding":"utf-8","payloadBytes":559}
+---
+- import_playbook: ../../../ansible-core/playbooks/validate.yml
+
+- import_playbook: ../../../ansible-core/playbooks/pki-verify.yml
+
+- name: Verify ClickHouse TLS deployment
+  hosts: platform_targets
+  become: true
+  gather_facts: false
+  pre_tasks:
+    - name: Apply trusted runtime ClickHouse settings
+      ansible.builtin.include_role:
+        name: platform.core.runtime_role_variables
+      when: platform_execution_role_variables_by_host is defined
+  roles:
+    - role: platform.clickhouse.clickhouse_tls
+      platform_clickhouse_verify_only: true
+
+@@END
+@@PORTABLE {"path":"services/clickhouse/service.yml","mode":420,"size":6130,"sha256":"5b61b2012cbc4d39446260e10666bcf811a55e2c8e2893a4dd2496f0a9bff494","index":0,"count":1,"encoding":"utf-8","payloadBytes":6130}
+apiVersion: platform.installer/service-manifest/v1alpha1
+kind: ServiceManifest
+metadata:
+  id: clickhouse
+  version: "1.0.0-alpha.1"
+  displayName: ClickHouse
+  description: TLS-only ClickHouse standalone or one-shard Raft HA with paired Keeper members
+  category: database
+modes:
+  standalone:
+    displayName: Standalone
+    description: One ClickHouse server without Keeper
+    memberRoles: [server]
+    placement:
+      explicit: true
+      minMembers: 1
+      maxMembers: 1
+      distinctHosts: false
+      roleCardinality:
+        server: {minimum: 1, maximum: 1}
+    x-requiredRuntimeSecretSettings: [defaultCredential]
+  raft-ha:
+    displayName: Raft HA
+    description: One shard with three replicas, each paired with a Keeper voter
+    memberRoles: [server, keeper]
+    placement:
+      explicit: true
+      minMembers: 3
+      maxMembers: 3
+      distinctHosts: false
+      roleCardinality:
+        server: {minimum: 3, maximum: 3}
+        keeper: {minimum: 3, maximum: 3}
+    x-requiredRuntimeSecretSettings: [defaultCredential]
+listeners:
+  client: {protocol: https, defaultPort: 8443, tlsCapable: true, scope: member}
+  native: {protocol: tcp, defaultPort: 9440, tlsCapable: true, scope: member}
+  interserver: {protocol: https, defaultPort: 9010, tlsCapable: true, scope: member}
+  keeper-client: {protocol: tcp, defaultPort: 9281, tlsCapable: true, scope: member}
+  keeper-raft: {protocol: tcp, defaultPort: 9444, tlsCapable: true, scope: member}
+endpoint: {}
+x-haproxyBackendDefaults: {balance: roundrobin, check: true, fall: 3, rise: 2, ssl: true, sslVerify: required}
+x-backendClientListener: {listener: client, allocation: {kind: HOST_LOCAL_ORDINAL, stride: 1}}
+capabilities: [service.clickhouse.https, service.clickhouse.keeper, service.clickhouse.database, service.clickhouse.account]
+dependencies: []
+configurationSchema: {$ref: configuration.schema.json}
+configuration:
+  additionalProperties: false
+  settings:
+    tlsProfile: {kind: MANAGED, roleVariable: platform_clickhouse_tls_profile, type: string, scopes: [deployment], validation: {minLength: 1}, ui: {label: TLS profile, section: TLS, order: 10, x-referenceKind: TLS_PROFILE}}
+    port: {kind: MANAGED, roleVariable: platform_clickhouse_port, type: integer, scopes: [deployment, member], validation: {minimum: 1, maximum: 65535}, ui: {label: HTTPS port, section: Network, order: 20}}
+    nativePort: {kind: MANAGED, roleVariable: platform_clickhouse_native_port, type: integer, scopes: [deployment], validation: {minimum: 1, maximum: 65535}, ui: {label: Secure native TCP base port, section: Network, order: 21}}
+    interserverPort: {kind: MANAGED, roleVariable: platform_clickhouse_interserver_port, type: integer, scopes: [deployment], validation: {minimum: 1, maximum: 65535}, ui: {label: Interserver HTTPS base port, section: Network, order: 22}}
+    keeperClientPort: {kind: MANAGED, roleVariable: platform_clickhouse_keeper_client_port, type: integer, scopes: [deployment], validation: {minimum: 1, maximum: 65535}, ui: {label: Keeper secure client base port, section: Network, order: 23}}
+    keeperRaftPort: {kind: MANAGED, roleVariable: platform_clickhouse_keeper_raft_port, type: integer, scopes: [deployment], validation: {minimum: 1, maximum: 65535}, ui: {label: Keeper Raft base port, section: Network, order: 24}}
+    dataRoot: {kind: MANAGED, roleVariable: platform_clickhouse_data_root, type: string, scopes: [deployment], validation: {minLength: 1, maxLength: 255}, ui: {label: Каталог данных, section: Хранение, order: 0, description: По умолчанию <корневой каталог данных сервисов>/<ID развёртывания>. Для нескольких участников на одном сервере создаются отдельные подкаталоги. Существующие данные автоматически не переносятся.}}
+    dataDirectory: {kind: MANAGED, roleVariable: platform_clickhouse_member_data_directory, type: string, scopes: [member], validation: {minLength: 1, maxLength: 255}, ui: {label: Каталог данных участника, section: Хранение, order: 0, description: Абсолютный путь на сервере; переопределяет каталог данных только этого участника.}}
+    defaultCredential:
+      kind: MANAGED
+      roleVariable: platform_clickhouse_default_credential
+      type: object
+      scopes: [deployment]
+      validation: {required: [passwordSecretRef]}
+      schema:
+        type: object
+        additionalProperties: false
+        required: [passwordSecretRef]
+        properties:
+          passwordSecretRef: {type: string, minLength: 1}
+      ui: {label: Default user password, section: Credentials, order: 40, x-runtimeSecretRequirement: {requirementRef: clickhouse-default-password, purpose: SERVICE_PASSWORD}}
+x-memberDataDirectorySetting: dataDirectory
+x-dataDirectoryProjection: {deploymentSetting: dataRoot, memberSetting: dataDirectory, rootVariable: platform_data_root_directory, appendMemberIdWhenCoLocated: true}
+roleEntrypoints:
+  apply: {fqcn: platform.clickhouse.clickhouse_tls, variablesPrefix: platform_clickhouse_, x-memberListVariable: platform_clickhouse_instances}
+  verify: {fqcn: platform.clickhouse.clickhouse_tls, variablesPrefix: platform_clickhouse_, x-memberListVariable: platform_clickhouse_instances}
+artifacts:
+  - {id: clickhouse-common-static, name: clickhouse-common-static, version: "26.8.14.3", os: redos, architecture: x86_64, digest: "sha256:b98cfaa7e82a563c0a21276c3dd0a637bf8976f1b65bd7a71f1d625f231954e9", requiredOffline: true}
+  - {id: clickhouse-server, name: clickhouse-server, version: "26.8.14.3", os: redos, architecture: x86_64, digest: "sha256:3d72d3e909f4dcca5378faeb7d3dd9fbf0741038f7309ff87965fe0efb70e4ee", requiredOffline: true}
+  - {id: clickhouse-client, name: clickhouse-client, version: "26.8.14.3", os: redos, architecture: x86_64, digest: "sha256:796874f358d73b96ff8bf04c5aabbf474ea020303eb7d113f1009961739e41c7", requiredOffline: true}
+compatibilityRef: compatibility.yml
+
+@@END
+@@PORTABLE {"path":"services/dns-client/ansible_collections/platform/dns_client/galaxy.yml","mode":420,"size":223,"sha256":"cd51d6e421ab0b0a2b86397f6334db9678ce3724793e183b820728cefbbcd8bd","index":0,"count":1,"encoding":"utf-8","payloadBytes":223}
+namespace: platform
+name: dns_client
+version: 1.0.0
+readme: README.md
+authors: [Platform Installer V2]
+description: NET-03.1 split DNS client adapters
+license: [MIT]
+tags: [dns, split-dns, systemd-resolved, networkmanager]
+
+@@END
+@@PORTABLE {"path":"services/dns-client/ansible_collections/platform/dns_client/roles/dns_client/defaults/main.yml","mode":420,"size":33,"sha256":"671f2e8a49e559a367469764123f5f2486083bd2e0d7603207815b7038988a3f","index":0,"count":1,"encoding":"utf-8","payloadBytes":33}
+platform_dns_client_phase: apply
+
+@@END
+@@PORTABLE {"path":"services/dns-client/ansible_collections/platform/dns_client/roles/dns_client/tasks/discover.yml","mode":420,"size":3105,"sha256":"dd2219c6005e04cf7ad41a3de423f9e1b55e74e77486639be6ecd8e3859e08ca","index":0,"count":1,"encoding":"utf-8","payloadBytes":3105}
+---
+- name: Inspect systemd-resolved unit load state
+  ansible.builtin.command:
+    argv: [systemctl, show, systemd-resolved.service, --property=LoadState, --value]
+  register: _platform_dns_client_resolved_unit
+  changed_when: false
+  failed_when: false
+
+- name: Inspect NetworkManager unit load state
+  ansible.builtin.command:
+    argv: [systemctl, show, NetworkManager.service, --property=LoadState, --value]
+  register: _platform_dns_client_nm_unit
+  changed_when: false
+  failed_when: false
+
+- name: Inspect whether systemd-resolved is running
+  ansible.builtin.command:
+    argv: [systemctl, is-active, systemd-resolved.service]
+  register: _platform_dns_client_resolved_active
+  changed_when: false
+  failed_when: false
+
+- name: Inspect whether NetworkManager is running
+  ansible.builtin.command:
+    argv: [systemctl, is-active, NetworkManager.service]
+  register: _platform_dns_client_nm_active
+  changed_when: false
+  failed_when: false
+
+- name: Inspect resolver configuration ownership
+  ansible.builtin.stat:
+    path: /etc/resolv.conf
+    follow: false
+  register: _platform_dns_client_resolv_conf
+
+- name: Read resolver configuration link without mutation
+  ansible.builtin.command:
+    argv: [readlink, /etc/resolv.conf]
+  register: _platform_dns_client_resolv_link
+  changed_when: false
+  failed_when: false
+  when: _platform_dns_client_resolv_conf.stat.islnk | default(false)
+
+- name: Select deterministic DNS client backend
+  ansible.builtin.set_fact:
+    platform_dns_client_backend: >-
+      {{ 'systemd-resolved'
+         if _platform_dns_client_resolved_unit.stdout | trim == 'loaded'
+         and _platform_dns_client_resolved_active.stdout | trim == 'active'
+         else ('NetworkManager'
+               if _platform_dns_client_nm_unit.stdout | trim == 'loaded'
+               and _platform_dns_client_nm_active.stdout | trim == 'active'
+               else '') }}
+
+- name: Require a supported DNS client backend
+  ansible.builtin.assert:
+    that: platform_dns_client_backend | length > 0
+    fail_msg: DNS_CLIENT_BACKEND_UNSUPPORTED
+
+- name: Require safe resolved ownership of resolv.conf
+  ansible.builtin.assert:
+    that:
+      - _platform_dns_client_resolv_conf.stat.islnk | default(false)
+      - _platform_dns_client_resolv_link.stdout | trim in ['../run/systemd/resolve/stub-resolv.conf', '../run/systemd/resolve/resolv.conf', '/run/systemd/resolve/stub-resolv.conf', '/run/systemd/resolve/resolv.conf']
+    fail_msg: DNS_CLIENT_RESOLV_CONF_CONFLICT
+  when: platform_dns_client_backend == 'systemd-resolved'
+
+- name: Inspect NetworkManager split DNS configuration
+  ansible.builtin.slurp:
+    src: /etc/NetworkManager/NetworkManager.conf
+  register: _platform_dns_client_nm_config
+  failed_when: false
+  when: platform_dns_client_backend == 'NetworkManager'
+
+- name: Determine NetworkManager split DNS capability
+  ansible.builtin.set_fact:
+    platform_dns_client_nm_split_supported: >-
+      {{ _platform_dns_client_nm_config.content | default('') | b64decode is search('(?m)^\\s*dns\\s*=\\s*dnsmasq\\s*$') }}
+  when: platform_dns_client_backend == 'NetworkManager'
+
+@@END
+@@PORTABLE {"path":"services/dns-client/ansible_collections/platform/dns_client/roles/dns_client/tasks/main.yml","mode":420,"size":2487,"sha256":"603f87764e2c600577e2404ab06baf76ce6feb28335b860800beb45812f61d87","index":0,"count":1,"encoding":"utf-8","payloadBytes":2487}
+---
+- name: Validate portable service resource settings
+  ansible.builtin.include_role:
+    name: platform.core.project_settings
+
+- name: Require DNS client desired and runtime projections
+  ansible.builtin.assert:
+    that:
+      - platform_desired_state is mapping
+      - platform_deployments | default({}) is mapping
+      - platform_dns_client_phase in ['apply', 'verify']
+      - hostvars['localhost'].platform_dns_client_runtime_projection.clients | default({}) is mapping
+    fail_msg: DNS_CLIENT_RUNTIME_PROJECTION_INVALID
+
+- name: Consume controller-projected DNS client inputs
+  ansible.builtin.set_fact:
+    _platform_dns_client_clients: "{{ hostvars['localhost'].platform_dns_client_runtime_projection.clients | default({}) }}"
+
+- name: Select local DNS client deployment
+  ansible.builtin.set_fact:
+    _platform_dns_client_local_items: >-
+      {{ _platform_dns_client_clients | dict2items | selectattr('key', 'in', platform_deployments | default({})) | list }}
+
+- name: Reject ambiguous DNS client deployment ownership
+  ansible.builtin.assert:
+    that: _platform_dns_client_local_items | length <= 1
+    fail_msg: DNS_CLIENT_LOCAL_DEPLOYMENT_AMBIGUOUS
+
+- name: End DNS client role on non-participating host
+  ansible.builtin.meta: end_host
+  when: _platform_dns_client_local_items | length == 0
+
+- name: Publish local DNS client projection
+  ansible.builtin.set_fact:
+    platform_dns_client_local: "{{ _platform_dns_client_local_items | first | default({}) }}"
+
+- name: Publish local DNS client placement
+  ansible.builtin.set_fact:
+    _platform_dns_client_local_placement: "{{ platform_deployments[platform_dns_client_local.key] }}"
+
+- name: Replace local DNS client projection with derived values
+  ansible.builtin.set_fact:
+    platform_dns_client_local: "{{ _platform_dns_client_clients[platform_dns_client_local.key] }}"
+
+- name: Discover DNS client runtime adapter safely
+  ansible.builtin.include_tasks: discover.yml
+
+- name: Apply systemd-resolved split DNS adapter
+  ansible.builtin.include_tasks: resolved.yml
+  when:
+    - platform_dns_client_phase == 'apply'
+    - platform_dns_client_backend == 'systemd-resolved'
+
+- name: Apply NetworkManager split DNS adapter
+  ansible.builtin.include_tasks: networkmanager.yml
+  when:
+    - platform_dns_client_phase == 'apply'
+    - platform_dns_client_backend == 'NetworkManager'
+
+- name: Verify DNS client runtime read-only
+  ansible.builtin.include_tasks: verify.yml
+  when: platform_dns_client_phase == 'verify'
+
+@@END
+@@PORTABLE {"path":"services/dns-client/ansible_collections/platform/dns_client/roles/dns_client/tasks/networkmanager.yml","mode":420,"size":3736,"sha256":"3e3123f1971efad031694d2ec8bbfc6285a38900cc1aaf77e803eae7c3d53891","index":0,"count":1,"encoding":"utf-8","payloadBytes":3736}
+---
+- name: Require a proven NetworkManager split DNS backend
+  ansible.builtin.assert:
+    that: platform_dns_client_nm_split_supported | default(false) | bool
+    fail_msg: DNS_CLIENT_SPLIT_DNS_UNSUPPORTED
+
+- name: Validate explicit NetworkManager connection override
+  ansible.builtin.assert:
+    that: _platform_dns_client_local_placement.networkManagerConnection is match('^[A-Za-z0-9][A-Za-z0-9 _.-]{0,127}$')
+    fail_msg: DNS_CLIENT_NM_CONNECTION_INVALID
+  when: _platform_dns_client_local_placement.networkManagerConnection is defined
+
+- name: Inspect active IPv4 default route devices
+  ansible.builtin.command:
+    argv: [ip, -o, -4, route, show, default]
+  register: _platform_dns_client_nm_default_routes
+  changed_when: false
+  when: _platform_dns_client_local_placement.networkManagerConnection is not defined
+
+- name: Derive unique active default route device
+  ansible.builtin.set_fact:
+    _platform_dns_client_nm_default_devices: >-
+      {{ _platform_dns_client_nm_default_routes.stdout_lines | map('regex_replace', '^.*\\sdev\\s+([^\\s]+).*$','\\1') | unique | list }}
+  when: _platform_dns_client_local_placement.networkManagerConnection is not defined
+
+- name: Require one unambiguous default route device
+  ansible.builtin.assert:
+    that: _platform_dns_client_nm_default_devices | length == 1
+    fail_msg: DNS_CLIENT_NM_CONNECTION_AMBIGUOUS
+  when: _platform_dns_client_local_placement.networkManagerConnection is not defined
+
+- name: Inspect connection associated with default route device
+  ansible.builtin.command:
+    argv: [nmcli, -g, GENERAL.CONNECTION, device, show, "{{ _platform_dns_client_nm_default_devices | first }}"]
+  register: _platform_dns_client_nm_derived_connection
+  changed_when: false
+  when: _platform_dns_client_local_placement.networkManagerConnection is not defined
+
+- name: Publish selected NetworkManager connection
+  ansible.builtin.set_fact:
+    platform_dns_client_nm_connection: >-
+      {{ _platform_dns_client_local_placement.networkManagerConnection
+         if _platform_dns_client_local_placement.networkManagerConnection is defined
+         else (_platform_dns_client_nm_derived_connection.stdout | trim) }}
+
+- name: Require an active NetworkManager connection
+  ansible.builtin.assert:
+    that:
+      - platform_dns_client_nm_connection | length > 0
+      - platform_dns_client_nm_connection != '--'
+    fail_msg: DNS_CLIENT_NM_CONNECTION_AMBIGUOUS
+
+- name: Read NetworkManager profile DNS properties
+  ansible.builtin.command:
+    argv: [nmcli, -g, ipv4.dns,ipv4.dns-search,ipv4.ignore-auto-dns, connection, show, "{{ platform_dns_client_nm_connection }}"]
+  register: _platform_dns_client_nm_profile
+  changed_when: false
+
+- name: Apply deterministic NetworkManager split DNS profile
+  ansible.builtin.command:
+    argv:
+      - nmcli
+      - connection
+      - modify
+      - "{{ platform_dns_client_nm_connection }}"
+      - ipv4.ignore-auto-dns
+      - 'no'
+      - ipv4.dns
+      - "{{ platform_dns_client_local.servers | join(',') }}"
+      - ipv4.dns-search
+      - "~{{ platform_dns_client_local.managedZone }}"
+  when: >-
+    (platform_dns_client_local.servers | join(',')) not in _platform_dns_client_nm_profile.stdout
+    or ('~' ~ platform_dns_client_local.managedZone) not in _platform_dns_client_nm_profile.stdout
+    or 'no' not in _platform_dns_client_nm_profile.stdout
+  register: _platform_dns_client_nm_profile_update
+
+- name: Reapply active NetworkManager device without reconnect
+  ansible.builtin.command:
+    argv: [nmcli, device, reapply, "{{ _platform_dns_client_nm_default_devices | first }}"]
+  when:
+    - _platform_dns_client_nm_profile_update is changed
+    - _platform_dns_client_local_placement.networkManagerConnection is not defined
+
+@@END
+@@PORTABLE {"path":"services/dns-client/ansible_collections/platform/dns_client/roles/dns_client/tasks/resolved.yml","mode":420,"size":1353,"sha256":"b5356dcb89a46bb870f4d0641200c266f71d1a44b62287141171751d03120698","index":0,"count":1,"encoding":"utf-8","payloadBytes":1353}
+---
+- name: Validate derived systemd-resolved split DNS inputs
+  ansible.builtin.assert:
+    that:
+      - platform_dns_client_local.servers | default([]) | length >= 2
+      - platform_dns_client_local.managedZone | default('') | length > 0
+      - platform_dns_client_local.managedZone is match('^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$')
+    fail_msg: DNS_CLIENT_RESOLVED_INPUT_INVALID
+
+- name: Create Platform systemd-resolved drop-in directory
+  ansible.builtin.file:
+    path: /etc/systemd/resolved.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Render Platform split DNS systemd-resolved drop-in
+  ansible.builtin.template:
+    src: platform-installer.conf.j2
+    dest: "/etc/systemd/resolved.conf.d/{{ (platform_name_prefix | default('') ~ '-') if (platform_name_prefix | default('')) else '' }}installer.conf"
+    owner: root
+    group: root
+    mode: '0644'
+  register: _platform_dns_client_resolved_dropin
+
+- name: Ensure systemd-resolved is enabled and active
+  ansible.builtin.systemd:
+    name: systemd-resolved.service
+    enabled: true
+    state: started
+
+- name: Restart systemd-resolved after changed Platform drop-in
+  ansible.builtin.systemd:
+    name: systemd-resolved.service
+    state: restarted
+  when: _platform_dns_client_resolved_dropin.changed
+
+@@END
 @@PORTABLE {"path":"services/dns-client/ansible_collections/platform/dns_client/roles/dns_client/tasks/verify.yml","mode":420,"size":2821,"sha256":"51743c787118ae6bb1bde7d6354d3497270de1dac50d4665a72ed0776ee4b95a","index":0,"count":1,"encoding":"utf-8","payloadBytes":2821}
 ---
 - name: Verify systemd-resolved is active
@@ -5301,7 +6161,7 @@ dependencies: []
   no_log: true
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/schema_registry_validate.yml","mode":420,"size":4893,"sha256":"dd296dfd48b89bd74a8a25f433b4206497c93e7c61a0bf59e2432f497b451ce2","index":0,"count":1,"encoding":"utf-8","payloadBytes":4893}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/schema_registry_validate.yml","mode":420,"size":4939,"sha256":"f459228fe4c4d0c0c5c9c93f10b3ecc110ae76f2206707bfce1f698797d4bac5","index":0,"count":1,"encoding":"utf-8","payloadBytes":4939}
 ---
 - name: Validate Registry component and execution phase
   ansible.builtin.assert:
@@ -5359,6 +6219,7 @@ dependencies: []
     platform_artifact_requirements:
       - {id: schema-registry-binary, name: confluent-schema-registry}
   when:
+    - not (platform_kafka_verify_only | bool)
     - platform_kafka_schema_registry_enabled
     - _platform_kafka_registry_local | length > 0
     - platform_artifact_source_authority_active | default(false) or platform_resolved_artifact_sources is defined
