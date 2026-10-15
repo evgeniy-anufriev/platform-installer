@@ -22,6 +22,7 @@ import execution_secret_lease
 import execution_secret_output
 import execution_target_trust
 import infrastructure_verification as infra
+import execution_ssh
 
 
 SERVICE_TYPES = frozenset(("kafka", "keepalived", "postgresql", "bind", "haproxy", "dns-client", "redis", "vault", "clickhouse", "docker"))
@@ -519,6 +520,8 @@ def _environment(release, journal=None, operation=None, leased_private_key=False
     ssh_args = ("-F none -o UserKnownHostsFile=%s -o GlobalKnownHostsFile=none -o KnownHostsCommand=none -o UpdateHostKeys=no -o StrictHostKeyChecking=yes -o IdentitiesOnly=yes" % trust_file)
     if not leased_private_key:
         ssh_args = "-o IdentityFile=%s/identities/default/id_ed25519 %s" % (EXECUTION_STATE_ROOT, ssh_args)
+    if journal is not None and operation is not None:
+        ssh_args += ' -o ControlMaster=auto -o ControlPersist=60s -o ControlPath=' + execution_ssh.control_path(journal, operation)
     environment.update(
         ANSIBLE_CONFIG=os.path.join(release, "ansible-core", "ansible.cfg"),
         ANSIBLE_COLLECTIONS_PATH=_collection_path(release),
@@ -1038,6 +1041,7 @@ def _dispatch(release, journal, manifest, stopped):
                         os.unlink(temporary_path)
             if pki_lock_descriptor is not None:
                 os.close(pki_lock_descriptor)
+            execution_ssh.cleanup(journal, operation)
         if completed is None:
             return "CANCELLED"
         returncode, error_code, raw_failure_output = completed

@@ -124,6 +124,20 @@ class BindDynamicUpdateRuntimeTests(unittest.TestCase):
                     probe = "zone example.test.\\nupdate add probe.example.test. 60 A 192.0.2.101\\nsend\\n".replace("\\n", "\n")
                     self.run_checked(["nsupdate", "-4", "-l", "-k", str(key), "-p", str(dns_port)], input_text=probe)
                     self.assertIn("192.0.2.101", self.query(dns_port, "probe.example.test", "A", "+short").stdout)
+                    # One zone message changes multiple owners only when all
+                    # observed RDATA/existence prerequisites still hold.
+                    argv = ["nsupdate", "-4", "-l", "-v", "-k", str(key), "-p", str(dns_port)]
+                    batch = ("zone example.test.\n"
+                             "prereq yxrrset probe.example.test. A 192.0.2.101\n"
+                             "prereq nxdomain second.example.test.\n"
+                             "update delete probe.example.test. A\n"
+                             "update add probe.example.test. 60 A 192.0.2.102\n"
+                             "update add second.example.test. 60 A 192.0.2.103\nsend\n")
+                    self.run_checked(argv, input_text=batch)
+                    self.assertIn('192.0.2.103', self.query(dns_port, 'second.example.test', 'A', '+short').stdout)
+                    failed = subprocess.run(argv, input=batch, capture_output=True, text=True, timeout=8)
+                    self.assertNotEqual(0, failed.returncode)
+                    self.assertIn('192.0.2.102', self.query(dns_port, 'probe.example.test', 'A', '+short').stdout)
                 finally:
                     process.terminate()
                     try:

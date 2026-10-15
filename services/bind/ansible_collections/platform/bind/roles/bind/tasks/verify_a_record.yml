@@ -1,0 +1,46 @@
+---
+- name: Re-read A record after update
+  ansible.builtin.command:
+    argv:
+      - dig
+      - "@127.0.0.1"
+      - "{{ platform_bind_a_record.owner }}"
+      - A
+      - +norecurse
+      - +noall
+      - +answer
+      - +comments
+  register: _platform_bind_a_record_after
+  changed_when: false
+  when: _platform_bind_a_record_update is not skipped
+
+- name: Normalize A record set after dynamic update
+  ansible.builtin.set_fact:
+    _platform_bind_a_record_after_answer_lines: >-
+      {{ _platform_bind_a_record_after.stdout_lines |
+         reject('match', '^\s*(;|$)') |
+         select('search', 'IN') | list }}
+    _platform_bind_a_record_after_addresses: []
+  when: _platform_bind_a_record_update is not skipped
+
+- name: Normalize each DNS A-record answer after dynamic update
+  ansible.builtin.set_fact:
+    _platform_bind_a_record_after_addresses: >-
+      {{ _platform_bind_a_record_after_addresses +
+         [(platform_bind_a_record_answer.split()[1] | string) ~ ' IN A ' ~
+          platform_bind_a_record_answer.split()[4]] }}
+  loop: "{{ _platform_bind_a_record_after_answer_lines | default([]) }}"
+  loop_control:
+    loop_var: platform_bind_a_record_answer
+    label: Normalize updated DNS A-record answer
+  when: _platform_bind_a_record_update is not skipped
+
+- name: Verify exact authoritative A record set after update
+  ansible.builtin.assert:
+    that:
+      - _platform_bind_a_record_after.rc == 0
+      - "'flags: qr aa' in _platform_bind_a_record_after.stdout"
+      - "'status: NOERROR' in _platform_bind_a_record_after.stdout"
+      - _platform_bind_a_record_after_addresses == _platform_bind_a_record_desired_addresses
+    fail_msg: BIND_DNS_A_RECORD_UPDATE_VERIFY_FAILED
+  when: _platform_bind_a_record_update is not skipped

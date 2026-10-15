@@ -5,8 +5,8 @@
   gather_facts: false
   any_errors_fatal: true
   tasks:
-    - name: Publish each ready logical source with existing provider tasks
+    - name: Publish selected ready logical sources with existing provider tasks
       ansible.builtin.include_tasks: ../../services/integrations/tasks/apply-source.yml
-      loop: "{{ hostvars['localhost'].platform_endpoint_sources | default({}) | sort }}"
-      loop_control:
-        loop_var: platform_endpoint_source_id
+      vars:
+        platform_endpoint_source_ids: "{{ hostvars['localhost'].platform_endpoint_sources | default({}) | sort }}"
+      when: hostvars['localhost'].platform_endpoint_sources | default({}) | length > 0

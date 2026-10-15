@@ -1,0 +1,9 @@
+---
+- name: Resolve one source without changing its probe policy
+  ansible.builtin.include_tasks: resolve-source.yml
+  vars:
+    platform_endpoint_source_id: "{{ _platform_selected_source_id }}"
+
+- name: Retain this exact source projection for publication and sequential probes
+  ansible.builtin.set_fact:
+    _platform_integration_selected_sources: "{{ _platform_integration_selected_sources + [{'sourceId': _platform_selected_source_id, 'projection': platform_service_integration_projection, 'dnsRecords': platform_bind_source_dns_records, 'fqdns': _platform_integration_source_fqdns, 'probe': _platform_integration_probe, 'expectedAddresses': platform_endpoint_probe_expected_addresses}] }}"

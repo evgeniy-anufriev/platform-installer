@@ -1,0 +1,72 @@
+---
+- name: Require one exact nonempty zone and unique owners for this update
+  ansible.builtin.assert:
+    that:
+      - platform_bind_a_records is sequence
+      - platform_bind_a_records is not string
+      - platform_bind_a_records | length > 0
+      - platform_bind_a_records | map(attribute='zone') | unique | list | length == 1
+      - platform_bind_a_records | map(attribute='owner') | unique | list | length == platform_bind_a_records | length
+    fail_msg: BIND_DNS_A_RECORD_UPDATE_INPUT_INVALID
+
+- name: Initialize this zone's read-only observations
+  ansible.builtin.set_fact:
+    _platform_bind_zone_observations: []
+
+- name: Validate and read every selected owner before any DNS mutation
+  ansible.builtin.include_tasks: prepare_a_record.yml
+  vars:
+    platform_bind_a_record: "{{ _platform_bind_record }}"
+  loop: "{{ platform_bind_a_records | sort(attribute='owner') }}"
+  loop_control:
+    loop_var: _platform_bind_record
+
+- name: Build one zone update with observed existence and RDATA prerequisites
+  ansible.builtin.set_fact:
+    _platform_bind_zone_update: |-
+      zone {{ platform_bind_a_records[0].zone }}.
+      {% for observation in _platform_bind_zone_observations %}
+      {% if observation.absentOwner %}
+      prereq nxdomain {{ observation.record.owner }}
+      {% else %}
+      prereq nxrrset {{ observation.record.owner }} CNAME
+      {% if observation.currentAddresses | length > 0 %}
+      {% for address in observation.currentAddresses %}
+      prereq yxrrset {{ observation.record.owner }} A {{ address }}
+      {% endfor %}
+      {% else %}
+      prereq nxrrset {{ observation.record.owner }} A
+      {% endif %}
+      {% endif %}
+      {% endfor %}
+      {% for observation in _platform_bind_zone_observations | selectattr('changed') %}
+      update delete {{ observation.record.owner }} A
+      {% for address in observation.record.addresses | sort %}
+      update add {{ observation.record.owner }} {{ observation.record.ttl }} A {{ address }}
+      {% endfor %}
+      {% endfor %}
+      send
+
+- name: Bound the entire DNS request before its first mutation
+  ansible.builtin.assert:
+    # All input is validated ASCII; the presentation-size bound conservatively
+    # covers uncompressed DNS names, headers and RR metadata on a TCP message.
+    that: (_platform_bind_zone_update | length * 2 + 512) <= 60000
+    fail_msg: BIND_DNS_ZONE_UPDATE_TOO_LARGE
+
+- name: Apply the exact selected zone changes through local authenticated DNS update
+  ansible.builtin.command:
+    argv: [nsupdate, -l, -v]
+    stdin: "{{ _platform_bind_zone_update }}"
+  register: _platform_bind_a_record_update
+  changed_when: true
+  when: _platform_bind_zone_observations | selectattr('changed') | list | length > 0
+
+- name: Verify every changed authoritative RRset after the zone update
+  ansible.builtin.include_tasks: verify_a_record.yml
+  vars:
+    platform_bind_a_record: "{{ _platform_bind_observation.record }}"
+    _platform_bind_a_record_desired_addresses: "{{ _platform_bind_observation.record.addresses | sort | map('regex_replace', '^', (_platform_bind_observation.record.ttl | string) ~ ' IN A ') | list }}"
+  loop: "{{ _platform_bind_zone_observations | selectattr('changed') | list }}"
+  loop_control:
+    loop_var: _platform_bind_observation

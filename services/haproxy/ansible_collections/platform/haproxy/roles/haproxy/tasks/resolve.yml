@@ -1,15 +1,18 @@
 ---
+- name: Normalize the exact partial source scope
+  ansible.builtin.include_tasks: partial_scope.yml
+
 - name: Reuse the common normalized endpoint sources
   ansible.builtin.include_role:
     name: platform.core.resolve_endpoint_sources
-  when: platform_haproxy_full_reconcile | bool or platform_haproxy_partial_deployment_id is defined
+  when: platform_haproxy_full_reconcile | bool or (platform_haproxy_partial_deployment_id is defined or platform_haproxy_partial_deployment_ids is defined)
 
 - name: Load published service catalog for HAProxy projection
   ansible.builtin.include_vars:
     file: "{{ platform_service_catalog_path }}"
     name: _platform_haproxy_catalog_file
   run_once: true
-  when: platform_haproxy_full_reconcile | bool or platform_haproxy_partial_deployment_id is defined
+  when: platform_haproxy_full_reconcile | bool or (platform_haproxy_partial_deployment_id is defined or platform_haproxy_partial_deployment_ids is defined)
 
 - name: Select the one local HAProxy deployment from canonical desired state
   ansible.builtin.set_fact:
@@ -36,7 +39,7 @@
   loop: "{{ groups['platform_targets'] | default([]) | sort }}"
   run_once: true
   no_log: true
-  when: platform_haproxy_full_reconcile | bool or platform_haproxy_partial_deployment_id is defined
+  when: platform_haproxy_full_reconcile | bool or (platform_haproxy_partial_deployment_id is defined or platform_haproxy_partial_deployment_ids is defined)
 
 - name: Resolve generic endpoint projection for HAProxy
   platform.core.resolve_service_endpoints:
@@ -44,10 +47,10 @@
     desired_state: "{{ platform_desired_state }}"
     service_catalog: "{{ _platform_haproxy_catalog_file.platform_service_catalog | default(_platform_haproxy_catalog_file, true) }}"
     inventory_deployments: "{{ _platform_haproxy_placements }}"
-    deployment_ids: "{{ [platform_haproxy_partial_deployment_id] if platform_haproxy_partial_deployment_id is defined and not (platform_haproxy_full_reconcile | bool) else omit }}"
+    deployment_ids: "{{ _platform_haproxy_partial_ids if (platform_haproxy_partial_deployment_id is defined or platform_haproxy_partial_deployment_ids is defined) and not (platform_haproxy_full_reconcile | bool) else omit }}"
   register: _platform_haproxy_endpoints
   run_once: true
-  when: platform_haproxy_full_reconcile | bool or platform_haproxy_partial_deployment_id is defined
+  when: platform_haproxy_full_reconcile | bool or (platform_haproxy_partial_deployment_id is defined or platform_haproxy_partial_deployment_ids is defined)
 
 - name: Resolve deterministic HAProxy external backends
   platform.core.resolve_haproxy_backends:
@@ -58,19 +61,19 @@
     inventory_deployments: "{{ _platform_haproxy_placements }}"
     resolved_service_endpoints: "{{ _platform_haproxy_endpoints.resolved_service_endpoints }}"
     backend_defaults: {}
-    target_deployment_ids: "{{ [platform_haproxy_partial_deployment_id] if platform_haproxy_partial_deployment_id is defined and not (platform_haproxy_full_reconcile | bool) else omit }}"
+    target_deployment_ids: "{{ _platform_haproxy_partial_ids if (platform_haproxy_partial_deployment_id is defined or platform_haproxy_partial_deployment_ids is defined) and not (platform_haproxy_full_reconcile | bool) else omit }}"
   register: _platform_haproxy_backends
   run_once: true
-  when: platform_haproxy_full_reconcile | bool or platform_haproxy_partial_deployment_id is defined
+  when: platform_haproxy_full_reconcile | bool or (platform_haproxy_partial_deployment_id is defined or platform_haproxy_partial_deployment_ids is defined)
 
 - name: Publish HAProxy runtime projection
   ansible.builtin.set_fact:
     platform_haproxy_runtime_projection:
       endpoints: >-
         {{ _platform_haproxy_endpoints.resolved_service_endpoints
-           if (platform_haproxy_full_reconcile | bool or platform_haproxy_partial_deployment_id is defined)
+           if (platform_haproxy_full_reconcile | bool or (platform_haproxy_partial_deployment_id is defined or platform_haproxy_partial_deployment_ids is defined))
            else {'endpoints': {}, 'hostEndpoints': {}, 'findings': [], 'status': 'PASS'} }}
       backends: >-
         {{ _platform_haproxy_backends.resolved_haproxy_backends
-           if (platform_haproxy_full_reconcile | bool or platform_haproxy_partial_deployment_id is defined)
+           if (platform_haproxy_full_reconcile | bool or (platform_haproxy_partial_deployment_id is defined or platform_haproxy_partial_deployment_ids is defined))
            else {'backends': {}, 'findings': [], 'status': 'PASS'} }}

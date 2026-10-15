@@ -7,7 +7,7 @@
     platform_haproxy_application_backends: >-
       {{ platform_haproxy_runtime_projection.backends.backends | dict2items |
          selectattr('key', 'in', platform_deployments) | map(attribute='value') |
-         flatten | selectattr('targetDeploymentId', 'equalto', platform_haproxy_partial_deployment_id) |
+         flatten | selectattr('targetDeploymentId', 'in', _platform_haproxy_partial_ids) |
          selectattr('providerHostIds', 'contains', inventory_hostname) | list }}
 
 - name: Check selected backend targets read-only

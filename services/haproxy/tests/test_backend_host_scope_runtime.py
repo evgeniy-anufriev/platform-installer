@@ -13,6 +13,37 @@ ROLE = Path(__file__).resolve().parents[1] / "ansible_collections/platform/hapro
 
 
 class BackendHostScopeRuntimeTests(unittest.TestCase):
+    def test_plural_partial_scope_keeps_each_provider_host_and_unrelated_files(self):
+        if not shutil.which('ansible-playbook'):
+            self.skipTest('Ansible runtime required')
+        prepare = yaml.safe_load((ROLE / 'tasks/prepare.yml').read_text())
+        names = {'Select exact filenames owned by the partial endpoint source',
+                 'Retain exact proven backend inventory in base mode',
+                 'Select only this source deployment backend for partial integration'}
+        tasks = yaml.safe_load((ROLE / 'tasks/partial_scope.yml').read_text())
+        tasks += [task for task in prepare if task.get('name') in names]
+        backends = [dict(targetDeploymentId='app-one', configFileName='30-backend-app-one.cfg', providerHostIds=['node1']),
+                    dict(targetDeploymentId='app-two', configFileName='30-backend-app-two.cfg', providerHostIds=['node2'])]
+        plays = []
+        for host, source in [('node1', 'app-one'), ('node2', 'app-two')]:
+            variables = dict(inventory_hostname=host, platform_deployments={'proxy': {}},
+                             platform_haproxy_full_reconcile=False,
+                             platform_haproxy_partial_deployment_ids=['app-one', 'app-two'],
+                             platform_haproxy_runtime_projection={'backends': {'backends': {'proxy': backends}}},
+                             _platform_haproxy_prior_backend_capture={'previousInventory': [
+                                 {'name': '30-backend-' + source + '.cfg'}, {'name': '30-backend-unselected.cfg'}]},
+                             expected_source=source)
+            checks = [{'ansible.builtin.assert': {'that': [
+                "platform_haproxy_application_backends | map(attribute='targetDeploymentId') | list == [expected_source]",
+                "platform_haproxy_managed_application_backend_files | length == 2",
+                "'30-backend-unselected.cfg' in platform_haproxy_managed_application_backend_files"]}}]
+            plays.append(dict(hosts='localhost', connection='local', gather_facts=False, vars=variables, tasks=tasks + checks))
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'test.yml'
+            path.write_text(yaml.safe_dump(plays))
+            result = subprocess.run(['ansible-playbook', '-i', 'localhost,', str(path)], capture_output=True, text=True, timeout=40)
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+
     def test_partial_backend_does_not_reinstall_provider_under_source_authority(self):
         executable = shutil.which("ansible-playbook")
         if not executable:
@@ -84,7 +115,7 @@ class BackendHostScopeRuntimeTests(unittest.TestCase):
                 if partial:
                     variables["platform_haproxy_partial_deployment_id"] = "app"
                 plays.append({"hosts": "localhost", "connection": "local", "gather_facts": False,
-                              "vars": variables, "tasks": selected + [{"ansible.builtin.assert": {"fail_msg": "{{ platform_haproxy_managed_application_backend_files }} != {{ expected_files }}", "that": [
+                              "vars": variables, "tasks": yaml.safe_load((ROLE / "tasks/partial_scope.yml").read_text()) + selected + [{"ansible.builtin.assert": {"fail_msg": "{{ platform_haproxy_managed_application_backend_files }} != {{ expected_files }}", "that": [
                                   "platform_haproxy_managed_application_backend_files == expected_files",
                                   "platform_haproxy_application_backends | length == expected_source_count",
                               ]}}]})

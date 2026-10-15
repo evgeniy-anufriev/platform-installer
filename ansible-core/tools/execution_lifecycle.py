@@ -203,6 +203,8 @@ class Journal(object):
     def cleanup_runtime_connection_credentials(self):
         """Remove only owned, exact temporary connection-credential entries."""
         _assert_private_path(self.directory, directory=True)
+        import execution_ssh
+        execution_ssh.cleanup(self)
         credentials = os.path.join(self.directory, ".ansible-runtime-credentials.json")
         try:
             details = os.lstat(credentials)

@@ -6,7 +6,7 @@
     owner: root
     group: root
     mode: '0755'
-  when: platform_haproxy_partial_deployment_id is not defined
+  when: (platform_haproxy_partial_deployment_id is not defined and platform_haproxy_partial_deployment_ids is not defined)
 
 - name: Ensure systemd creates the HAProxy runtime socket directory
   ansible.builtin.template:
@@ -16,7 +16,7 @@
     group: root
     mode: '0644'
   register: _platform_haproxy_runtime_dropin
-  when: platform_haproxy_partial_deployment_id is not defined
+  when: (platform_haproxy_partial_deployment_id is not defined and platform_haproxy_partial_deployment_ids is not defined)
 
 - name: Start or reload validated HAProxy service
   ansible.builtin.systemd:
@@ -27,12 +27,12 @@
                          (platform_haproxy_tls_material_changed | default(false) | bool) or
                          (_platform_haproxy_runtime_dropin.changed | default(false) | bool)) else 'started' }}
     enabled: true
-  when: platform_haproxy_partial_deployment_id is not defined
+  when: (platform_haproxy_partial_deployment_id is not defined and platform_haproxy_partial_deployment_ids is not defined)
 
 - name: Reload existing HAProxy only after a changed partial backend graph
   ansible.builtin.systemd:
     name: "{{ platform_haproxy_service_name }}"
     state: reloaded
   when:
-    - platform_haproxy_partial_deployment_id is defined
+    - (platform_haproxy_partial_deployment_id is defined or platform_haproxy_partial_deployment_ids is defined)
     - platform_haproxy_active_artifacts_changed | default(false) | bool

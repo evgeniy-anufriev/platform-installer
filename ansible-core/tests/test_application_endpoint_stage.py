@@ -94,7 +94,7 @@ class EndpointTaskTest(unittest.TestCase):
                  'Stage proven existing application backends for base provider update',
                  'Retain exact proven backend inventory in base mode',
                  'Select only this source deployment backend for partial integration'}
-        tasks = [task for task in tasks if task.get('name') in names]
+        tasks = yaml.safe_load((ROLE / 'tasks/partial_scope.yml').read_text()) + [task for task in tasks if task.get('name') in names]
         for task in tasks:
             if 'ansible.builtin.copy' in task:
                 task['ansible.builtin.copy'].update(owner=str(os.geteuid()), group=str(os.getegid()))
