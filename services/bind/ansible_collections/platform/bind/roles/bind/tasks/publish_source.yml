@@ -6,17 +6,11 @@
       - platform_bind_source_dns_records is not string
     fail_msg: BIND_DNS_A_RECORD_UPDATE_INPUT_INVALID
 
-- name: Apply only source records on matching primary participants
-  ansible.builtin.include_role:
-    name: platform.bind.bind
-    tasks_from: update_a_record.yml
+- name: Apply each exact primary and zone scope once
+  ansible.builtin.include_tasks: update_a_records.yml
   vars:
-    platform_bind_a_record: "{{ item }}"
-  loop: "{{ platform_bind_source_dns_records }}"
-  loop_control:
-    label: "{{ item.owner | default('invalid source DNS owner') }}"
+    platform_bind_a_records: "{{ item.1 }}"
+  loop: "{{ platform_bind_source_dns_records | groupby('bindDeploymentId') | map('last') | map('groupby', 'zone') | list | flatten(levels=1) }}"
   when:
-    - item is mapping
-    - item.bindDeploymentId is defined
-    - item.bindDeploymentId in (platform_deployments | default({}))
-    - platform_deployments[item.bindDeploymentId].roles | default([]) == ['primary']
+    - item.1[0].bindDeploymentId in (platform_deployments | default({}))
+    - platform_deployments[item.1[0].bindDeploymentId].roles | default([]) == ['primary']

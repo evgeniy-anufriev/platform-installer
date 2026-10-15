@@ -1,0 +1,34 @@
+---
+- name: Require a nonempty explicit endpoint source selection
+  ansible.builtin.assert:
+    that:
+      - platform_endpoint_source_ids is sequence
+      - platform_endpoint_source_ids is not string
+      - platform_endpoint_source_ids | length > 0
+      - platform_endpoint_source_ids | difference(hostvars['localhost'].platform_endpoint_sources | list) | length == 0
+      - platform_endpoint_source_id is not defined or platform_endpoint_source_ids | unique | list == [platform_endpoint_source_id]
+    fail_msg: APPLICATION_ENDPOINT_SCOPE_INVALID
+
+- name: Initialize operation-local selected source projections
+  ansible.builtin.set_fact:
+    _platform_integration_selected_sources: []
+
+- name: Resolve each selected source through the existing resolver
+  ansible.builtin.include_tasks: resolve-selected-source.yml
+  loop: "{{ platform_endpoint_source_ids | unique | sort }}"
+  loop_control:
+    loop_var: _platform_selected_source_id
+
+- name: Publish union of exact selected provider participants and DNS records
+  ansible.builtin.set_fact:
+    platform_service_integration_projection:
+      haproxyHosts: "{{ _platform_integration_selected_sources | map(attribute='projection.haproxyHosts') | flatten | unique | sort }}"
+      haproxyDeployments: "{{ _platform_integration_selected_sources | map(attribute='projection.haproxyDeployments') | flatten | unique | sort }}"
+      dnsDeployments: "{{ _platform_integration_selected_sources | map(attribute='projection.dnsDeployments') | flatten | unique | sort }}"
+    platform_bind_source_dns_records: "{{ _platform_integration_selected_sources | map(attribute='dnsRecords') | flatten | unique | list }}"
+
+- name: Reject conflicting selected DNS owner projections before provider mutation
+  ansible.builtin.assert:
+    that: item.1 | unique | list | length == 1
+    fail_msg: APPLICATION_ENDPOINT_DNS_CONFLICT
+  loop: "{{ platform_bind_source_dns_records | groupby('bindDeploymentId') | map('last') | map('groupby', 'owner') | list | flatten(levels=1) }}"

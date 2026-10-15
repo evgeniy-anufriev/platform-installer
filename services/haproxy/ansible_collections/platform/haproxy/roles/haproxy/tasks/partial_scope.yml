@@ -1,0 +1,23 @@
+---
+- name: Require a nonempty unambiguous explicit partial source set
+  ansible.builtin.assert:
+    that:
+      - platform_haproxy_partial_deployment_ids is sequence
+      - platform_haproxy_partial_deployment_ids is not string
+      - platform_haproxy_partial_deployment_ids | length > 0
+      - platform_haproxy_partial_deployment_id is not defined or platform_haproxy_partial_deployment_ids | unique | list == [platform_haproxy_partial_deployment_id]
+      - not (platform_haproxy_full_reconcile | bool)
+    fail_msg: HAPROXY_PARTIAL_SCOPE_INVALID
+  when: platform_haproxy_partial_deployment_ids is defined
+
+- name: Normalize singleton compatibility without interpreting empty scope as full
+  ansible.builtin.set_fact:
+    _platform_haproxy_partial_ids: "{{ platform_haproxy_partial_deployment_ids | default([platform_haproxy_partial_deployment_id] if platform_haproxy_partial_deployment_id is defined else []) | unique | sort }}"
+
+- name: Require exact safe partial source identities
+  ansible.builtin.assert:
+    that:
+      - item is string
+      - item is match('^[a-z0-9][a-z0-9-]{0,126}[a-z0-9]$')
+    fail_msg: HAPROXY_PARTIAL_SCOPE_INVALID
+  loop: "{{ _platform_haproxy_partial_ids }}"

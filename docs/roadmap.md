@@ -16,6 +16,13 @@ When saved infrastructure Verify evidence is absent or stale, the library-only p
 includes fixed infrastructure Verify before library Apply/Verify in the same run;
 infrastructure Apply is never repeated by this fallback.
 
+Owner-approved [Apply performance P2](work/application-libraries/apply-performance-plan.md)
+optimizes the existing path using pipelining, operation-isolated SSH multiplexing
+and partial HAProxy/DNS batches. Existing sequential checks and trust/lease/Cancel
+guards remain mandatory. New probe parallelism and stage C are excluded. Acceptance
+requires native/service regressions, independent DIFF review and measured real
+React/Wails library Apply/Verify without infrastructure Apply; status is in CURRENT_STATE.
+
 Current status and authorization live only in [CURRENT_STATE](../CURRENT_STATE.md).
 This document describes sequence, scope and exit criteria. Recorded implementation
 checkpoints are retained in [history](history/roadmap-checkpoints-20261012.md).

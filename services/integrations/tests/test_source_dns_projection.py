@@ -34,6 +34,7 @@ class SourceDnsProjectionTests(unittest.TestCase):
                     "dnsDeployments": ["qa-bind"],
                 },
                 "platform_bind_source_dns_records": [{"owner": "app.example.test."}],
+                "_platform_integration_selected_sources": [{"sourceId": "app"}],
             },
             "tasks": [publish, {
                 "name": "Require controller-scoped source data on every target",

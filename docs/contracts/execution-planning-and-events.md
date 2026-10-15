@@ -442,6 +442,20 @@ the earlier B4 instruction requiring an explicit fresh Build after checkbox chan
 
 ### B4 application runtime inputs (owner amendment, 2026-10-15)
 
+Performance P2 retains the existing operation/lease contracts. Core Ansible enables
+standard SSH pipelining; each controller operation has private, short-lived OpenSSH
+ControlMaster sockets, isolated from other runs/operations. Strict host trust,
+identity selection and fresh lease admission remain mandatory. Completion/failure
+cleans only owned sockets, and confirmed-stop credential cleanup covers recovery.
+No socket reuses another operation's lease or trust context.
+
+Library endpoint tasks publish the exact selected source set using one HAProxy
+candidate per provider host and one authenticated DNS UPDATE per changed zone.
+Partial source lists are derived runtime role inputs, not desired-state persistence
+or a new wire mode. Existing prepare/active-validation barriers and recovery
+archives remain; this is not a distributed transaction. Network checks retain
+their original sequential execution, observer and probe policies.
+
 `BuildRuntimeSecretDescriptors/v1alpha3.applicationInputs` is carried by the existing Go transport. The Installation Plan tab offers session-only password inputs using those Core descriptors. `SetDeploymentRuntimeSecretValues` with an empty serviceDeployment selects the complete application-input subset; its project revision, descriptor fingerprint, project/node/runtime guards remain mandatory. It uses the existing pending Broker and is reattested/promoted at Start. Service dialogs retain their existing scope.
 
 The existing v1alpha3/v1alpha4 `runtimeSecretValues` lease map carries values under Core requirementRef keys. Application purposes from the approved plan participate in exact lease-key-set validation; only the approved subset is serialized. The controller's existing application projection maps those references to runtimeReference and checks provider/library/host/operation scope. No new credential store, lease endpoint or plaintext persistence is introduced.

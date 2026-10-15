@@ -660,3 +660,16 @@ Local infrastructure observations are display-only UNKNOWN on reload. Backend
 presentation exposes mode and actual Core verification/operation output without
 synthetic infrastructure success. Legacy CreateInstallationPlan remains compatible;
 production transport/UI integration and real bridge acceptance belong to B4.
+
+## ADR-042: Apply performance reuses transport and scoped endpoint publication
+
+Owner approved P2 on2026-10-15. Ansible keeps execution/domain ownership. Standard
+pipelining and operation-private OpenSSH control sockets reduce repeated transport
+setup; runtime lease/trust and confirmed-stop semantics are unchanged. Socket
+custody is ephemeral derived state, not a new credential store or session registry.
+Existing source resolvers and HAProxy candidate/archive/activation tasks accept a
+selected source set; BIND keeps local authenticated dynamic update grouped by zone.
+Singleton role inputs remain compatible. Every backend and public endpoint retains
+its original sequential checks. No distributed rollback, scheduler, workers, health
+cache, new public DTO or UI performance controls are introduced. See the
+[P2 plan](work/application-libraries/apply-performance-plan.md) for safety and QA gates.

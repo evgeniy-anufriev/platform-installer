@@ -1,14 +1,21 @@
 ---
+- name: Normalize the explicit endpoint selection without broadening its scope
+  ansible.builtin.set_fact:
+    _platform_integration_requested_sources: "{{ platform_endpoint_source_ids | default([platform_endpoint_source_id | default(platform_execution_service_deployment | default(platform_integration_source_deployment_id | default('')))]) }}"
+
 - name: Resolve this source using the shared controller tasks
   ansible.builtin.include_tasks:
-    file: resolve-source.yml
+    file: resolve-selected-sources.yml
     apply: {delegate_to: localhost, become: false}
+  vars:
+    platform_endpoint_source_ids: "{{ _platform_integration_requested_sources }}"
   run_once: true
 
 - name: Publish the resolved source projection once for every provider host
   ansible.builtin.set_fact:
     platform_service_integration_projection: "{{ platform_service_integration_projection }}"
     platform_bind_source_dns_records: "{{ platform_bind_source_dns_records }}"
+    _platform_integration_selected_sources: "{{ _platform_integration_selected_sources }}"
   delegate_to: localhost
   delegate_facts: true
   run_once: true
@@ -17,8 +24,9 @@
   ansible.builtin.assert:
     that:
       - hostvars['localhost'].platform_service_integration_projection.haproxyHosts | difference(ansible_play_hosts_all) | length == 0
-      - hostvars['localhost'].platform_endpoint_sources[platform_endpoint_source_id].targets | map(attribute='hostId') | difference(ansible_play_hosts_all) | length == 0
+      - hostvars['localhost'].platform_endpoint_sources[item.sourceId].targets | map(attribute='hostId') | difference(ansible_play_hosts_all) | length == 0
     fail_msg: APPLICATION_ENDPOINT_HOST_SCOPE_INCOMPLETE
+  loop: "{{ hostvars['localhost']._platform_integration_selected_sources }}"
   run_once: true
 
 - name: Prepare source candidates before any provider activation
@@ -27,7 +35,7 @@
     apply: {become: true}
   vars:
     platform_haproxy_phase: prepare
-    platform_haproxy_partial_deployment_id: "{{ platform_endpoint_source_id }}"
+    platform_haproxy_partial_deployment_ids: "{{ hostvars['localhost']._platform_integration_selected_sources | map(attribute='sourceId') | list }}"
   when: inventory_hostname in hostvars['localhost'].platform_service_integration_projection.haproxyHosts and not (platform_endpoint_verify_only | default(false) | bool)
 
 - name: Activate source after all provider candidates passed validation
@@ -36,7 +44,7 @@
     apply: {become: true}
   vars:
     platform_haproxy_phase: activate
-    platform_haproxy_partial_deployment_id: "{{ platform_endpoint_source_id }}"
+    platform_haproxy_partial_deployment_ids: "{{ hostvars['localhost']._platform_integration_selected_sources | map(attribute='sourceId') | list }}"
   when: inventory_hostname in hostvars['localhost'].platform_service_integration_projection.haproxyHosts and not (platform_endpoint_verify_only | default(false) | bool)
 
 - name: Reload source after all providers passed activation
@@ -45,7 +53,7 @@
     apply: {become: true}
   vars:
     platform_haproxy_phase: start
-    platform_haproxy_partial_deployment_id: "{{ platform_endpoint_source_id }}"
+    platform_haproxy_partial_deployment_ids: "{{ hostvars['localhost']._platform_integration_selected_sources | map(attribute='sourceId') | list }}"
   when: inventory_hostname in hostvars['localhost'].platform_service_integration_projection.haproxyHosts and not (platform_endpoint_verify_only | default(false) | bool)
 
 - name: Verify source without provider mutation
@@ -54,7 +62,7 @@
     tasks_from: endpoint_verify
     apply: {become: true}
   vars:
-    platform_haproxy_partial_deployment_id: "{{ platform_endpoint_source_id }}"
+    platform_haproxy_partial_deployment_ids: "{{ hostvars['localhost']._platform_integration_selected_sources | map(attribute='sourceId') | list }}"
   when: inventory_hostname in hostvars['localhost'].platform_service_integration_projection.haproxyHosts and (platform_endpoint_verify_only | default(false) | bool)
 
 - name: Publish source records using the existing BIND hook
@@ -72,8 +80,11 @@
     fail_msg: APPLICATION_ENDPOINT_NOT_PUBLISHED
   run_once: true
 
-- name: Verify DNS and HTTPS through the existing external probe
+- name: Verify every source sequentially using its original DNS and HTTPS policy
   ansible.builtin.include_tasks:
-    file: probe-endpoint.yml
+    file: probe-selected-source.yml
     apply: {delegate_to: localhost, become: false}
+  loop: "{{ hostvars['localhost']._platform_integration_selected_sources }}"
+  loop_control:
+    loop_var: _platform_selected_probe
   run_once: true

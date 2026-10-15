@@ -16,7 +16,8 @@ class ARecordAnswerRuntimeTests(unittest.TestCase):
         executable = shutil.which("ansible-playbook")
         if not executable:
             self.skipTest("Ansible runtime required")
-        source = yaml.safe_load((ROLE / "tasks/update_a_record.yml").read_text())
+        source = (yaml.safe_load((ROLE / "tasks/prepare_a_record.yml").read_text()) +
+                  yaml.safe_load((ROLE / "tasks/verify_a_record.yml").read_text()))
         names = {
             "Collect existing authoritative answer records for the exact owner",
             "Reject CNAME or foreign-owner answer before changing the A record",
