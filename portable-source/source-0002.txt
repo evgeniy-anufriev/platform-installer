@@ -1,3 +1,314 @@
+@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/roles/clickhouse_tls/tasks/provision.yml","mode":420,"size":7566,"sha256":"a41b8903e89405e4b7bc6019a344f893d0df4b1d664ec3d87d187e34b8d78eab","index":0,"count":1,"encoding":"utf-8","payloadBytes":7566}
+---
+- name: Create private ClickHouse service group
+  ansible.builtin.group:
+    name: "{{ platform_clickhouse_group }}"
+    system: true
+
+- name: Create non-login ClickHouse service account
+  ansible.builtin.user:
+    name: "{{ platform_clickhouse_user }}"
+    group: "{{ platform_clickhouse_group }}"
+    system: true
+    create_home: false
+    shell: /sbin/nologin
+
+- name: Create root-owned ClickHouse root and deployment directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  loop:
+    - "{{ platform_clickhouse_config_root }}"
+    - "{{ platform_clickhouse_log_root }}"
+    - "{{ platform_clickhouse_config_root }}/{{ platform_clickhouse_deployment_id }}"
+    - "{{ platform_clickhouse_log_root }}/{{ platform_clickhouse_deployment_id }}"
+
+- name: Create shared ClickHouse data parent for co-located members
+  ansible.builtin.file:
+    path: "{{ platform_clickhouse_data_root }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  when: _platform_clickhouse_local_instances | length > 1
+
+- name: Create private ClickHouse member directories
+  ansible.builtin.file:
+    path: "{{ item.0[item.1] }}"
+    state: directory
+    owner: "{{ platform_clickhouse_user }}"
+    group: "{{ platform_clickhouse_group }}"
+    mode: '0700'
+  loop: "{{ _platform_clickhouse_local_instances | product(['config_directory', 'data_directory', 'log_directory']) | list }}"
+  no_log: true
+
+- name: Create private persistent SQL access-control directories
+  ansible.builtin.file:
+    path: "{{ item.data_directory }}/access"
+    state: directory
+    owner: "{{ platform_clickhouse_user }}"
+    group: "{{ platform_clickhouse_group }}"
+    mode: '0700'
+  loop: "{{ _platform_clickhouse_local_instances }}"
+  loop_control:
+    label: "{{ item.id }}"
+
+- name: Bind member data paths to one immutable managed identity
+  ansible.builtin.copy:
+    content: "{{ {'apiVersion': 'platform.installer/clickhouse-member-marker/v1alpha1', 'deploymentId': platform_clickhouse_deployment_id, 'memberId': item.id, 'unitId': item.unit_id} | to_nice_json }}\n"
+    dest: "{{ item.data_directory }}/.{{ platform_clickhouse_name }}-member.json"
+    owner: "{{ platform_clickhouse_user }}"
+    group: "{{ platform_clickhouse_group }}"
+    mode: '0600'
+    force: false
+  loop: "{{ _platform_clickhouse_local_instances }}"
+  loop_control:
+    label: "{{ item.id }}"
+
+- name: Create member-private TLS directories
+  ansible.builtin.file:
+    path: "{{ item.config_directory }}/pki"
+    state: directory
+    owner: "{{ platform_clickhouse_user }}"
+    group: "{{ platform_clickhouse_group }}"
+    mode: '0700'
+  loop: "{{ _platform_clickhouse_local_instances }}"
+  loop_control:
+    label: "{{ item.id }}"
+
+- name: Copy exact PKI material into member-private paths
+  ansible.builtin.copy:
+    src: "{{ _platform_clickhouse_tls_directory }}/{{ item.1 }}"
+    dest: "{{ item.0.config_directory }}/pki/{{ item.1 }}"
+    remote_src: true
+    owner: "{{ platform_clickhouse_user }}"
+    group: "{{ platform_clickhouse_group }}"
+    mode: '0600'
+  loop: "{{ _platform_clickhouse_local_instances | product(['ca-chain.pem', 'certificate.pem', 'private-key.pem']) | list }}"
+  register: _platform_clickhouse_tls_copies
+  no_log: true
+
+- name: Render password verifier and default user policy without plaintext
+  ansible.builtin.template:
+    src: users.xml.j2
+    dest: "{{ item.config_directory }}/users.xml"
+    owner: "{{ platform_clickhouse_user }}"
+    group: "{{ platform_clickhouse_group }}"
+    mode: '0600'
+  loop: "{{ _platform_clickhouse_local_instances }}"
+  loop_control:
+    label: "{{ item.id }}"
+  register: _platform_clickhouse_users_configs
+  no_log: true
+
+- name: Render private ClickHouse server configuration
+  ansible.builtin.template:
+    src: server.xml.j2
+    dest: "{{ clickhouse_member.config_directory }}/server.xml"
+    owner: "{{ platform_clickhouse_user }}"
+    group: "{{ platform_clickhouse_group }}"
+    mode: '0600'
+  loop: "{{ _platform_clickhouse_local_instances }}"
+  loop_control:
+    loop_var: clickhouse_member
+    label: "{{ clickhouse_member.id }}"
+  register: _platform_clickhouse_server_configs
+  no_log: true
+
+- name: Render private Keeper Raft configuration only for HA
+  ansible.builtin.template:
+    src: keeper.xml.j2
+    dest: "{{ clickhouse_member.config_directory }}/keeper.xml"
+    owner: "{{ platform_clickhouse_user }}"
+    group: "{{ platform_clickhouse_group }}"
+    mode: '0600'
+  loop: "{{ _platform_clickhouse_local_instances }}"
+  loop_control:
+    loop_var: clickhouse_member
+    label: "{{ clickhouse_member.id }}"
+  register: _platform_clickhouse_keeper_configs
+  when: platform_clickhouse_mode == 'raft-ha'
+  no_log: true
+
+- name: Install exact member-owned ClickHouse server units
+  ansible.builtin.template:
+    src: server.service.j2
+    dest: "/etc/systemd/system/{{ clickhouse_member.server_unit_name }}"
+    owner: root
+    group: root
+    mode: '0644'
+  loop: "{{ _platform_clickhouse_local_instances }}"
+  loop_control:
+    loop_var: clickhouse_member
+    label: "{{ clickhouse_member.id }}"
+  register: _platform_clickhouse_server_units
+
+- name: Install exact member-owned Keeper units only for HA
+  ansible.builtin.template:
+    src: keeper.service.j2
+    dest: "/etc/systemd/system/{{ clickhouse_member.keeper_unit_name }}"
+    owner: root
+    group: root
+    mode: '0644'
+  loop: "{{ _platform_clickhouse_local_instances }}"
+  loop_control:
+    loop_var: clickhouse_member
+    label: "{{ clickhouse_member.id }}"
+  register: _platform_clickhouse_keeper_units
+  when: platform_clickhouse_mode == 'raft-ha'
+
+- name: Reload systemd only after member-unit changes
+  ansible.builtin.systemd:
+    daemon_reload: true
+  when: >-
+    (_platform_clickhouse_server_units.results | selectattr('changed', 'equalto', true) | list | length > 0)
+    or
+    (_platform_clickhouse_keeper_units.results | default([]) | selectattr('changed', 'equalto', true) | list | length > 0)
+
+- name: Determine members with changed TLS or user policy
+  ansible.builtin.set_fact:
+    _platform_clickhouse_restart_all: >-
+      {{ (_platform_clickhouse_tls_copies.results | selectattr('changed', 'equalto', true) | list | length > 0)
+         or (_platform_clickhouse_users_configs.results | selectattr('changed', 'equalto', true) | list | length > 0) }}
+
+- name: Start or restart isolated Keeper voters before ClickHouse servers
+  ansible.builtin.systemd:
+    name: "{{ clickhouse_member.keeper_unit_name }}"
+    enabled: true
+    state: >-
+      {{ 'restarted' if _platform_clickhouse_restart_all or
+         _platform_clickhouse_keeper_configs.results[clickhouse_index].changed or
+         _platform_clickhouse_keeper_units.results[clickhouse_index].changed else 'started' }}
+  loop: "{{ _platform_clickhouse_local_instances }}"
+  loop_control:
+    loop_var: clickhouse_member
+    index_var: clickhouse_index
+    label: "{{ clickhouse_member.id }}"
+  when: platform_clickhouse_mode == 'raft-ha'
+
+- name: Start or restart isolated ClickHouse servers
+  ansible.builtin.systemd:
+    name: "{{ clickhouse_member.server_unit_name }}"
+    enabled: true
+    state: >-
+      {{ 'restarted' if _platform_clickhouse_restart_all or
+         _platform_clickhouse_server_configs.results[clickhouse_index].changed or
+         _platform_clickhouse_server_units.results[clickhouse_index].changed else 'started' }}
+  loop: "{{ _platform_clickhouse_local_instances }}"
+  loop_control:
+    loop_var: clickhouse_member
+    index_var: clickhouse_index
+    label: "{{ clickhouse_member.id }}"
+
+@@END
+@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/roles/clickhouse_tls/tasks/resolve_tls.yml","mode":420,"size":1728,"sha256":"142d38c2b88edae1479d23db409fc5bc334f9000b573c79860255fe53bf87e55","index":0,"count":1,"encoding":"utf-8","payloadBytes":1728}
+---
+- name: Select the Core PKI consumer plan when available
+  ansible.builtin.include_role:
+    name: platform.core.pki_materialize
+    tasks_from: select_consumer_plan.yml
+  vars:
+    platform_pki_consumer_tls_profile_id: "{{ platform_clickhouse_tls_profile }}"
+  when: >-
+    platform_pki_materialization_plans | default(hostvars['localhost'].platform_pki_materialization_plans | default([]), true) | length > 0
+
+- name: Resolve one approved TLS directory
+  ansible.builtin.set_fact:
+    _platform_clickhouse_tls_directory: >-
+      {{ platform_pki_selected_consumer_plan.targetDirectory
+         if platform_pki_selected_consumer_plan is defined
+         else platform_clickhouse_tls_directory }}
+
+- name: Reject a missing or unsafe TLS directory
+  ansible.builtin.assert:
+    that:
+      - _platform_clickhouse_tls_directory is match('^/[A-Za-z0-9_./-]{1,240}$')
+      - "'..' not in _platform_clickhouse_tls_directory.split('/')"
+    fail_msg: CLICKHOUSE_PKI_MATERIALIZATION_REQUIRED
+
+- name: Inspect exact ClickHouse TLS files
+  ansible.builtin.stat:
+    path: "{{ _platform_clickhouse_tls_directory }}/{{ item }}"
+    follow: false
+    get_mime: false
+    get_attributes: false
+    get_checksum: false
+  loop: [ca-chain.pem, certificate.pem, private-key.pem]
+  register: _platform_clickhouse_tls_files
+  no_log: true
+
+- name: Require regular, non-symlink ClickHouse TLS files
+  ansible.builtin.assert:
+    that: >-
+      _platform_clickhouse_tls_files.results |
+      rejectattr('stat.isreg', 'equalto', true) | list | length == 0 and
+      _platform_clickhouse_tls_files.results |
+      selectattr('stat.islnk', 'equalto', true) | list | length == 0
+    fail_msg: CLICKHOUSE_PKI_MATERIALIZATION_REQUIRED
+  no_log: true
+
+@@END
+@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/roles/clickhouse_tls/tasks/stock_unit.yml","mode":420,"size":2240,"sha256":"b4a98f703d8b2ee985cf4ad103473af7337833593c3ef2c7bb4c4859789e719d","index":0,"count":1,"encoding":"utf-8","payloadBytes":2240}
+---
+- name: Locate the installed stock ClickHouse server unit
+  ansible.builtin.command:
+    argv: [systemctl, show, clickhouse-server.service, --property=FragmentPath, --value]
+  register: _platform_clickhouse_stock_fragment
+  changed_when: false
+
+- name: Require a real stock unit fragment before changing its enablement
+  ansible.builtin.assert:
+    that:
+      - _platform_clickhouse_stock_fragment.stdout is match('^/.+/clickhouse-server[.]service$')
+    fail_msg: CLICKHOUSE_STOCK_UNIT_OWNERSHIP_UNCONFIRMED
+
+- name: Identify the RPM owning the stock ClickHouse server unit
+  ansible.builtin.command:
+    argv: [rpm, -qf, --qf, '%{NAME}-%{VERSION}-%{RELEASE}.%{ARCH}', "{{ _platform_clickhouse_stock_fragment.stdout }}"]
+  register: _platform_clickhouse_stock_unit_owner
+  changed_when: false
+  failed_when: false
+
+- name: Refuse to change a stock unit outside the exact pinned server RPM
+  ansible.builtin.assert:
+    that:
+      - _platform_clickhouse_stock_unit_owner.rc == 0
+      - _platform_clickhouse_stock_unit_owner.stdout == 'clickhouse-server-' ~ platform_clickhouse_package_version ~ '-1.x86_64'
+    fail_msg: CLICKHOUSE_STOCK_UNIT_OWNERSHIP_UNCONFIRMED
+
+- name: Check stock ClickHouse server activity after RPM installation
+  ansible.builtin.command:
+    argv: [systemctl, is-active, clickhouse-server.service]
+  register: _platform_clickhouse_stock_after_install
+  changed_when: false
+  failed_when: false
+
+- name: Preserve an active stock ClickHouse server for explicit conflict handling
+  ansible.builtin.assert:
+    that: _platform_clickhouse_stock_after_install.stdout != 'active'
+    fail_msg: CLICKHOUSE_FOREIGN_UNIT_ACTIVE
+
+- name: Disable the inactive RPM-provided stock ClickHouse server unit
+  ansible.builtin.systemd:
+    name: clickhouse-server.service
+    enabled: false
+
+- name: Confirm the RPM stock unit stayed inactive
+  ansible.builtin.command:
+    argv: [systemctl, is-active, clickhouse-server.service]
+  register: _platform_clickhouse_stock_after_disable
+  changed_when: false
+  failed_when: false
+
+- name: Refuse concurrent activation of the RPM stock unit
+  ansible.builtin.assert:
+    that: _platform_clickhouse_stock_after_disable.stdout != 'active'
+    fail_msg: CLICKHOUSE_FOREIGN_UNIT_ACTIVE
+
+@@END
 @@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/roles/clickhouse_tls/tasks/validate.yml","mode":420,"size":3912,"sha256":"cb931959914b68b78557f406fc2690d421c4c23a975e4009870b0da51aa1a142","index":0,"count":1,"encoding":"utf-8","payloadBytes":3912}
 ---
 - name: Validate closed ClickHouse deployment inputs
@@ -2808,7 +3119,7 @@ platform_haproxy_full_reconcile: false
           archive={{ _platform_haproxy_backend_archive.archivePath | default('none', true) }}
 
 @@END
-@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/activate_publish.yml","mode":420,"size":3019,"sha256":"5dea5454319749d7fc03757eb5fd1594a37c5d21232d48d3ba98616ea51425c0","index":0,"count":1,"encoding":"utf-8","payloadBytes":3019}
+@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/activate_publish.yml","mode":420,"size":3192,"sha256":"c85c2a493199b166ba0e6e2bd98f1e20f31c6d8f50a20f46bde20239bee43178","index":0,"count":1,"encoding":"utf-8","payloadBytes":3192}
 ---
 - name: Install exact validated Platform main configuration atomically
   ansible.builtin.copy:
@@ -2819,7 +3130,7 @@ platform_haproxy_full_reconcile: false
     group: root
     mode: '0640'
   register: _platform_haproxy_main_config_install
-  when: platform_haproxy_partial_deployment_id is not defined
+  when: (platform_haproxy_partial_deployment_id is not defined and platform_haproxy_partial_deployment_ids is not defined)
 
 - name: Install exact validated Platform HAProxy fragments atomically
   ansible.builtin.copy:
@@ -2829,7 +3140,7 @@ platform_haproxy_full_reconcile: false
     owner: root
     group: root
     mode: '0640'
-  loop: "{{ ['10-public.cfg'] if platform_haproxy_partial_deployment_id is defined else ['10-public.cfg', '20-local-stats.cfg', '90-stats-backends.cfg'] }}"
+  loop: "{{ ['10-public.cfg'] if (platform_haproxy_partial_deployment_id is defined or platform_haproxy_partial_deployment_ids is defined) else ['10-public.cfg', '20-local-stats.cfg', '90-stats-backends.cfg'] }}"
   register: _platform_haproxy_fragment_install
 
 - name: Install exact validated managed HAProxy application backend fragments
@@ -2842,7 +3153,7 @@ platform_haproxy_full_reconcile: false
     mode: '0640'
   loop: >-
     {{ (platform_haproxy_application_backends | map(attribute='configFileName') | list)
-       if platform_haproxy_partial_deployment_id is defined
+       if (platform_haproxy_partial_deployment_id is defined or platform_haproxy_partial_deployment_ids is defined)
        else platform_haproxy_managed_application_backend_files | default([]) }}
   register: _platform_haproxy_application_backend_install
 
@@ -2964,7 +3275,7 @@ platform_haproxy_full_reconcile: false
   no_log: true
 
 @@END
-@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/endpoint_verify.yml","mode":420,"size":813,"sha256":"9ba663e290b97056a95fafe8b990719807278fdbb48625b4bf799e0c874af170","index":0,"count":1,"encoding":"utf-8","payloadBytes":813}
+@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/endpoint_verify.yml","mode":420,"size":799,"sha256":"6e675693a38fd4c56714668970f2859d530957a9d489144881b18057571d77ce","index":0,"count":1,"encoding":"utf-8","payloadBytes":799}
 ---
 - name: Resolve the same backend model for read-only endpoint verification
   ansible.builtin.include_tasks: resolve.yml
@@ -2974,7 +3285,7 @@ platform_haproxy_full_reconcile: false
     platform_haproxy_application_backends: >-
       {{ platform_haproxy_runtime_projection.backends.backends | dict2items |
          selectattr('key', 'in', platform_deployments) | map(attribute='value') |
-         flatten | selectattr('targetDeploymentId', 'equalto', platform_haproxy_partial_deployment_id) |
+         flatten | selectattr('targetDeploymentId', 'in', _platform_haproxy_partial_ids) |
          selectattr('providerHostIds', 'contains', inventory_hostname) | list }}
 
 - name: Check selected backend targets read-only
@@ -2984,11 +3295,11 @@ platform_haproxy_full_reconcile: false
   ansible.builtin.include_tasks: verify.yml
 
 @@END
-@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/lifecycle.yml","mode":420,"size":2028,"sha256":"bd6b0c28017277a2e45ad7ce65d434c06309f94b73b35664efaabfa49940a82f","index":0,"count":1,"encoding":"utf-8","payloadBytes":2028}
+@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/lifecycle.yml","mode":420,"size":2272,"sha256":"aafc4f233b16ecef168381baaf47bad92c3ab72dd744e54caffdc28ae9f0676b","index":0,"count":1,"encoding":"utf-8","payloadBytes":2272}
 ---
 - name: Resolve HAProxy runtime projection from canonical state
   ansible.builtin.include_tasks: resolve.yml
-  when: platform_haproxy_partial_deployment_id is not defined or platform_haproxy_phase == 'prepare'
+  when: (platform_haproxy_partial_deployment_id is not defined and platform_haproxy_partial_deployment_ids is not defined) or platform_haproxy_phase == 'prepare'
 
 - name: Select the exact PKI consumer plan before HAProxy mutation
   ansible.builtin.include_role:
@@ -2998,7 +3309,7 @@ platform_haproxy_full_reconcile: false
     platform_pki_consumer_tls_profile_id: "{{ platform_haproxy_tls_profile }}"
     platform_execution_service_deployment: "{{ _platform_haproxy_local_deployments[0].key }}"
   when:
-    - platform_haproxy_partial_deployment_id is not defined
+    - (platform_haproxy_partial_deployment_id is not defined and platform_haproxy_partial_deployment_ids is not defined)
     - platform_haproxy_phase == 'prepare'
 
 - name: Validate resolved HAProxy artifact sources before mutation
@@ -3008,7 +3319,7 @@ platform_haproxy_full_reconcile: false
     platform_artifact_requirements:
       - {id: haproxy, name: haproxy}
   when:
-    - platform_haproxy_partial_deployment_id is not defined
+    - (platform_haproxy_partial_deployment_id is not defined and platform_haproxy_partial_deployment_ids is not defined)
     - platform_resolved_artifact_sources is defined or (platform_artifact_source_authority_active | default(false))
 
 - name: Deliver selected HAProxy offline artifacts
@@ -3018,7 +3329,7 @@ platform_haproxy_full_reconcile: false
     platform_artifact_delivery_requirements:
       - {id: haproxy, name: haproxy}
   when:
-    - platform_haproxy_partial_deployment_id is not defined
+    - (platform_haproxy_partial_deployment_id is not defined and platform_haproxy_partial_deployment_ids is not defined)
     - platform_resolved_artifact_sources is defined
     - platform_haproxy_phase == 'prepare'
 
@@ -3039,8 +3350,11 @@ platform_haproxy_full_reconcile: false
   when: platform_haproxy_phase == 'verify'
 
 @@END
-@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/main.yml","mode":420,"size":907,"sha256":"53f76ec200379c7bef7e870ecc1f6d4a24197c59bec2ee66bdbc6f69722871e0","index":0,"count":1,"encoding":"utf-8","payloadBytes":907}
+@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/main.yml","mode":420,"size":857,"sha256":"9902f72fb322764e1cb90deaaa0387df99c1bce6ff83613aab9f9d69ee03b7b6","index":0,"count":1,"encoding":"utf-8","payloadBytes":857}
 ---
+- name: Normalize the exact partial source scope
+  ansible.builtin.include_tasks: partial_scope.yml
+
 - name: Validate portable service resource settings
   ansible.builtin.include_role:
     name: platform.core.project_settings
@@ -3051,7 +3365,6 @@ platform_haproxy_full_reconcile: false
       - platform_haproxy_phase in ['prepare', 'activate', 'start', 'verify']
       - platform_desired_state is mapping
       - platform_deployments | default({}) is mapping
-      - platform_haproxy_partial_deployment_id is not defined or platform_haproxy_partial_deployment_id is match('^[a-z0-9][a-z0-9-]{0,126}[a-z0-9]$')
     fail_msg: HAPROXY_DESIRED_STATE_INVALID
 
 - name: Run HAProxy lifecycle only on participating hosts
@@ -3059,7 +3372,33 @@ platform_haproxy_full_reconcile: false
   when: (platform_desired_state.serviceDeployments | dict2items | selectattr('value.serviceType', 'equalto', 'haproxy') | selectattr('key', 'in', platform_deployments | default({})) | list | length) > 0
 
 @@END
-@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/prepare.yml","mode":420,"size":11139,"sha256":"63b9aa1db52fff9c515948f8c41b1078c14422d7392e221353c766b05bb60e78","index":0,"count":1,"encoding":"utf-8","payloadBytes":11139}
+@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/partial_scope.yml","mode":420,"size":1198,"sha256":"10a957bd03256562c073974f7fe109afbf11ca812432ec53ea7daab917990e25","index":0,"count":1,"encoding":"utf-8","payloadBytes":1198}
+---
+- name: Require a nonempty unambiguous explicit partial source set
+  ansible.builtin.assert:
+    that:
+      - platform_haproxy_partial_deployment_ids is sequence
+      - platform_haproxy_partial_deployment_ids is not string
+      - platform_haproxy_partial_deployment_ids | length > 0
+      - platform_haproxy_partial_deployment_id is not defined or platform_haproxy_partial_deployment_ids | unique | list == [platform_haproxy_partial_deployment_id]
+      - not (platform_haproxy_full_reconcile | bool)
+    fail_msg: HAPROXY_PARTIAL_SCOPE_INVALID
+  when: platform_haproxy_partial_deployment_ids is defined
+
+- name: Normalize singleton compatibility without interpreting empty scope as full
+  ansible.builtin.set_fact:
+    _platform_haproxy_partial_ids: "{{ platform_haproxy_partial_deployment_ids | default([platform_haproxy_partial_deployment_id] if platform_haproxy_partial_deployment_id is defined else []) | unique | sort }}"
+
+- name: Require exact safe partial source identities
+  ansible.builtin.assert:
+    that:
+      - item is string
+      - item is match('^[a-z0-9][a-z0-9-]{0,126}[a-z0-9]$')
+    fail_msg: HAPROXY_PARTIAL_SCOPE_INVALID
+  loop: "{{ _platform_haproxy_partial_ids }}"
+
+@@END
+@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/prepare.yml","mode":420,"size":11678,"sha256":"597eb85e547650991f905d23c964b70cad78a3bda54dd5286eca77107bacb024","index":0,"count":1,"encoding":"utf-8","payloadBytes":11678}
 ---
 - name: Capture exact prior Platform HAProxy backend inventory before candidate reset
   platform.haproxy.archive_managed_backends:
@@ -3073,7 +3412,7 @@ platform_haproxy_full_reconcile: false
     name: "{{ platform_haproxy_package }}"
     state: present
   when:
-    - platform_haproxy_partial_deployment_id is not defined
+    - (platform_haproxy_partial_deployment_id is not defined and platform_haproxy_partial_deployment_ids is not defined)
     - >-
       platform_resolved_artifact_sources is not defined or
       platform_resolved_artifact_sources.haproxy.source == 'REPOSITORY'
@@ -3086,13 +3425,13 @@ platform_haproxy_full_reconcile: false
     group: root
     mode: '0750'
   loop: ["{{ platform_haproxy_conf_directory }}", "{{ platform_haproxy_pki_directory }}"]
-  when: platform_haproxy_partial_deployment_id is not defined
+  when: (platform_haproxy_partial_deployment_id is not defined and platform_haproxy_partial_deployment_ids is not defined)
 
 - name: Require HAProxy PKI materialization
   ansible.builtin.assert:
     that: platform_pki_selected_consumer_plan.targetDirectory is defined
     fail_msg: HAPROXY_PKI_PLAN_REQUIRED
-  when: platform_haproxy_partial_deployment_id is not defined
+  when: (platform_haproxy_partial_deployment_id is not defined and platform_haproxy_partial_deployment_ids is not defined)
 
 - name: Deploy HAProxy TLS PEM inputs
   ansible.builtin.copy:
@@ -3107,7 +3446,7 @@ platform_haproxy_full_reconcile: false
     - {name: ca-chain.pem, bundle: '02-ca-chain.pem', mode: '0640'}
     - {name: private-key.pem, bundle: '03-private-key.pem', mode: '0640'}
   no_log: true
-  when: platform_haproxy_partial_deployment_id is not defined
+  when: (platform_haproxy_partial_deployment_id is not defined and platform_haproxy_partial_deployment_ids is not defined)
 
 - name: Discover unrelated HAProxy conf.d files for complete candidate validation
   ansible.builtin.find:
@@ -3122,7 +3461,7 @@ platform_haproxy_full_reconcile: false
     _platform_haproxy_partial_source_files: >-
       {{ platform_haproxy_runtime_projection.backends.backends | dict2items |
          map(attribute='value') | flatten |
-         selectattr('targetDeploymentId', 'equalto', platform_haproxy_partial_deployment_id | default('')) |
+         selectattr('targetDeploymentId', 'in', _platform_haproxy_partial_ids) |
          map(attribute='configFileName') | unique | list }}
 
 - name: Build HAProxy PEM bundle atomically without logging key data
@@ -3135,7 +3474,7 @@ platform_haproxy_full_reconcile: false
     mode: '0640'
   no_log: true
   register: _platform_haproxy_pem_bundle
-  when: platform_haproxy_partial_deployment_id is not defined
+  when: (platform_haproxy_partial_deployment_id is not defined and platform_haproxy_partial_deployment_ids is not defined)
 
 - name: Record whether HAProxy TLS material changed
   ansible.builtin.set_fact:
@@ -3172,7 +3511,7 @@ platform_haproxy_full_reconcile: false
     platform_haproxy_application_backends: >-
       {{ platform_haproxy_runtime_projection.backends.backends | dict2items |
          selectattr('key', 'in', platform_deployments) | map(attribute='value') |
-         flatten | selectattr('targetDeploymentId', 'equalto', platform_haproxy_partial_deployment_id) |
+         flatten | selectattr('targetDeploymentId', 'in', _platform_haproxy_partial_ids) |
          selectattr('providerHostIds', 'contains', inventory_hostname) |
          sort(attribute='configFileName') }}
     platform_haproxy_managed_application_backend_files: >-
@@ -3180,12 +3519,12 @@ platform_haproxy_full_reconcile: false
            reject('in', _platform_haproxy_partial_source_files)) | list) +
          (platform_haproxy_runtime_projection.backends.backends | dict2items |
           selectattr('key', 'in', platform_deployments) | map(attribute='value') |
-          flatten | selectattr('targetDeploymentId', 'equalto', platform_haproxy_partial_deployment_id) |
+          flatten | selectattr('targetDeploymentId', 'in', _platform_haproxy_partial_ids) |
           selectattr('providerHostIds', 'contains', inventory_hostname) |
           map(attribute='configFileName') | list)) | unique | sort }}
   when:
     - not (platform_haproxy_full_reconcile | bool)
-    - platform_haproxy_partial_deployment_id is defined
+    - (platform_haproxy_partial_deployment_id is defined or platform_haproxy_partial_deployment_ids is defined)
 
 - name: Check the projected targets before candidate publication
   ansible.builtin.include_tasks: check_targets.yml
@@ -3229,7 +3568,7 @@ platform_haproxy_full_reconcile: false
   when:
     - not (platform_haproxy_full_reconcile | bool)
     - >-
-      platform_haproxy_partial_deployment_id is not defined or
+      (platform_haproxy_partial_deployment_id is not defined and platform_haproxy_partial_deployment_ids is not defined) or
       item.name not in _platform_haproxy_partial_source_files
   changed_when: false
 
@@ -3246,7 +3585,7 @@ platform_haproxy_full_reconcile: false
     - {src: 20-local-stats.cfg.j2, dest: conf.d/20-local-stats.cfg}
     - {src: 90-stats-backends.cfg.j2, dest: conf.d/90-stats-backends.cfg}
   changed_when: false
-  when: platform_haproxy_partial_deployment_id is not defined
+  when: (platform_haproxy_partial_deployment_id is not defined and platform_haproxy_partial_deployment_ids is not defined)
 
 - name: Stage unchanged provider configuration for partial backend validation
   ansible.builtin.copy:
@@ -3260,7 +3599,7 @@ platform_haproxy_full_reconcile: false
     - {src: "{{ platform_haproxy_conf_directory }}/20-local-stats.cfg", dest: conf.d/20-local-stats.cfg}
     - {src: "{{ platform_haproxy_conf_directory }}/90-stats-backends.cfg", dest: conf.d/90-stats-backends.cfg}
   changed_when: false
-  when: platform_haproxy_partial_deployment_id is defined
+  when: (platform_haproxy_partial_deployment_id is defined or platform_haproxy_partial_deployment_ids is defined)
 
 - name: Update domain precedence in the existing public frontend candidate
   ansible.builtin.template:
@@ -3270,7 +3609,7 @@ platform_haproxy_full_reconcile: false
     group: root
     mode: '0640'
   changed_when: false
-  when: platform_haproxy_partial_deployment_id is defined
+  when: (platform_haproxy_partial_deployment_id is defined or platform_haproxy_partial_deployment_ids is defined)
 
 - name: Render one managed HAProxy application backend candidate per resolved backend
   ansible.builtin.template:
@@ -3314,19 +3653,22 @@ platform_haproxy_full_reconcile: false
   changed_when: false
 
 @@END
-@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/resolve.yml","mode":420,"size":4368,"sha256":"430ac191aae88fc753baedbe66cbe364b6a675ca258b2ad6691075b0ce8b3592","index":0,"count":1,"encoding":"utf-8","payloadBytes":4368}
+@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/resolve.yml","mode":420,"size":4951,"sha256":"0849c2899a82b84ad9a93273999b57d93e37ed3492571ccc43a46c26faf64dc4","index":0,"count":1,"encoding":"utf-8","payloadBytes":4951}
 ---
+- name: Normalize the exact partial source scope
+  ansible.builtin.include_tasks: partial_scope.yml
+
 - name: Reuse the common normalized endpoint sources
   ansible.builtin.include_role:
     name: platform.core.resolve_endpoint_sources
-  when: platform_haproxy_full_reconcile | bool or platform_haproxy_partial_deployment_id is defined
+  when: platform_haproxy_full_reconcile | bool or (platform_haproxy_partial_deployment_id is defined or platform_haproxy_partial_deployment_ids is defined)
 
 - name: Load published service catalog for HAProxy projection
   ansible.builtin.include_vars:
     file: "{{ platform_service_catalog_path }}"
     name: _platform_haproxy_catalog_file
   run_once: true
-  when: platform_haproxy_full_reconcile | bool or platform_haproxy_partial_deployment_id is defined
+  when: platform_haproxy_full_reconcile | bool or (platform_haproxy_partial_deployment_id is defined or platform_haproxy_partial_deployment_ids is defined)
 
 - name: Select the one local HAProxy deployment from canonical desired state
   ansible.builtin.set_fact:
@@ -3353,7 +3695,7 @@ platform_haproxy_full_reconcile: false
   loop: "{{ groups['platform_targets'] | default([]) | sort }}"
   run_once: true
   no_log: true
-  when: platform_haproxy_full_reconcile | bool or platform_haproxy_partial_deployment_id is defined
+  when: platform_haproxy_full_reconcile | bool or (platform_haproxy_partial_deployment_id is defined or platform_haproxy_partial_deployment_ids is defined)
 
 - name: Resolve generic endpoint projection for HAProxy
   platform.core.resolve_service_endpoints:
@@ -3361,10 +3703,10 @@ platform_haproxy_full_reconcile: false
     desired_state: "{{ platform_desired_state }}"
     service_catalog: "{{ _platform_haproxy_catalog_file.platform_service_catalog | default(_platform_haproxy_catalog_file, true) }}"
     inventory_deployments: "{{ _platform_haproxy_placements }}"
-    deployment_ids: "{{ [platform_haproxy_partial_deployment_id] if platform_haproxy_partial_deployment_id is defined and not (platform_haproxy_full_reconcile | bool) else omit }}"
+    deployment_ids: "{{ _platform_haproxy_partial_ids if (platform_haproxy_partial_deployment_id is defined or platform_haproxy_partial_deployment_ids is defined) and not (platform_haproxy_full_reconcile | bool) else omit }}"
   register: _platform_haproxy_endpoints
   run_once: true
-  when: platform_haproxy_full_reconcile | bool or platform_haproxy_partial_deployment_id is defined
+  when: platform_haproxy_full_reconcile | bool or (platform_haproxy_partial_deployment_id is defined or platform_haproxy_partial_deployment_ids is defined)
 
 - name: Resolve deterministic HAProxy external backends
   platform.core.resolve_haproxy_backends:
@@ -3375,25 +3717,25 @@ platform_haproxy_full_reconcile: false
     inventory_deployments: "{{ _platform_haproxy_placements }}"
     resolved_service_endpoints: "{{ _platform_haproxy_endpoints.resolved_service_endpoints }}"
     backend_defaults: {}
-    target_deployment_ids: "{{ [platform_haproxy_partial_deployment_id] if platform_haproxy_partial_deployment_id is defined and not (platform_haproxy_full_reconcile | bool) else omit }}"
+    target_deployment_ids: "{{ _platform_haproxy_partial_ids if (platform_haproxy_partial_deployment_id is defined or platform_haproxy_partial_deployment_ids is defined) and not (platform_haproxy_full_reconcile | bool) else omit }}"
   register: _platform_haproxy_backends
   run_once: true
-  when: platform_haproxy_full_reconcile | bool or platform_haproxy_partial_deployment_id is defined
+  when: platform_haproxy_full_reconcile | bool or (platform_haproxy_partial_deployment_id is defined or platform_haproxy_partial_deployment_ids is defined)
 
 - name: Publish HAProxy runtime projection
   ansible.builtin.set_fact:
     platform_haproxy_runtime_projection:
       endpoints: >-
         {{ _platform_haproxy_endpoints.resolved_service_endpoints
-           if (platform_haproxy_full_reconcile | bool or platform_haproxy_partial_deployment_id is defined)
+           if (platform_haproxy_full_reconcile | bool or (platform_haproxy_partial_deployment_id is defined or platform_haproxy_partial_deployment_ids is defined))
            else {'endpoints': {}, 'hostEndpoints': {}, 'findings': [], 'status': 'PASS'} }}
       backends: >-
         {{ _platform_haproxy_backends.resolved_haproxy_backends
-           if (platform_haproxy_full_reconcile | bool or platform_haproxy_partial_deployment_id is defined)
+           if (platform_haproxy_full_reconcile | bool or (platform_haproxy_partial_deployment_id is defined or platform_haproxy_partial_deployment_ids is defined))
            else {'backends': {}, 'findings': [], 'status': 'PASS'} }}
 
 @@END
-@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/start.yml","mode":420,"size":1522,"sha256":"934ce27e037293adc364b8bbf7c7f869f6b995b08fabe07023ae8ef2ed10110c","index":0,"count":1,"encoding":"utf-8","payloadBytes":1522}
+@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/start.yml","mode":420,"size":1761,"sha256":"71f0e32e830be321c147d252a61773b4579792e8c688c07f9ffa4cf375d6dafe","index":0,"count":1,"encoding":"utf-8","payloadBytes":1761}
 ---
 - name: Create HAProxy systemd drop-in directory
   ansible.builtin.file:
@@ -3402,7 +3744,7 @@ platform_haproxy_full_reconcile: false
     owner: root
     group: root
     mode: '0755'
-  when: platform_haproxy_partial_deployment_id is not defined
+  when: (platform_haproxy_partial_deployment_id is not defined and platform_haproxy_partial_deployment_ids is not defined)
 
 - name: Ensure systemd creates the HAProxy runtime socket directory
   ansible.builtin.template:
@@ -3412,7 +3754,7 @@ platform_haproxy_full_reconcile: false
     group: root
     mode: '0644'
   register: _platform_haproxy_runtime_dropin
-  when: platform_haproxy_partial_deployment_id is not defined
+  when: (platform_haproxy_partial_deployment_id is not defined and platform_haproxy_partial_deployment_ids is not defined)
 
 - name: Start or reload validated HAProxy service
   ansible.builtin.systemd:
@@ -3423,14 +3765,14 @@ platform_haproxy_full_reconcile: false
                          (platform_haproxy_tls_material_changed | default(false) | bool) or
                          (_platform_haproxy_runtime_dropin.changed | default(false) | bool)) else 'started' }}
     enabled: true
-  when: platform_haproxy_partial_deployment_id is not defined
+  when: (platform_haproxy_partial_deployment_id is not defined and platform_haproxy_partial_deployment_ids is not defined)
 
 - name: Reload existing HAProxy only after a changed partial backend graph
   ansible.builtin.systemd:
     name: "{{ platform_haproxy_service_name }}"
     state: reloaded
   when:
-    - platform_haproxy_partial_deployment_id is defined
+    - (platform_haproxy_partial_deployment_id is defined or platform_haproxy_partial_deployment_ids is defined)
     - platform_haproxy_active_artifacts_changed | default(false) | bool
 
 @@END
@@ -3802,18 +4144,25 @@ compatibilityRef: compatibility.yml
     platform_provider_selected_deployments: "{{ hostvars['localhost'].platform_service_integration_projection.haproxyDeployments }}"
 
 @@END
-@@PORTABLE {"path":"services/integrations/tasks/apply-source.yml","mode":420,"size":3710,"sha256":"bdcba1ebb70fbb7f87e169b7b4e90144b3d08a57258052963cec7d5334ff710d","index":0,"count":1,"encoding":"utf-8","payloadBytes":3710}
+@@PORTABLE {"path":"services/integrations/tasks/apply-source.yml","mode":420,"size":4742,"sha256":"e770e50edb0f88331517c1904385cc987334944db17612a83cdad81818f11a76","index":0,"count":1,"encoding":"utf-8","payloadBytes":4742}
 ---
+- name: Normalize the explicit endpoint selection without broadening its scope
+  ansible.builtin.set_fact:
+    _platform_integration_requested_sources: "{{ platform_endpoint_source_ids | default([platform_endpoint_source_id | default(platform_execution_service_deployment | default(platform_integration_source_deployment_id | default('')))]) }}"
+
 - name: Resolve this source using the shared controller tasks
   ansible.builtin.include_tasks:
-    file: resolve-source.yml
+    file: resolve-selected-sources.yml
     apply: {delegate_to: localhost, become: false}
+  vars:
+    platform_endpoint_source_ids: "{{ _platform_integration_requested_sources }}"
   run_once: true
 
 - name: Publish the resolved source projection once for every provider host
   ansible.builtin.set_fact:
     platform_service_integration_projection: "{{ platform_service_integration_projection }}"
     platform_bind_source_dns_records: "{{ platform_bind_source_dns_records }}"
+    _platform_integration_selected_sources: "{{ _platform_integration_selected_sources }}"
   delegate_to: localhost
   delegate_facts: true
   run_once: true
@@ -3822,8 +4171,9 @@ compatibilityRef: compatibility.yml
   ansible.builtin.assert:
     that:
       - hostvars['localhost'].platform_service_integration_projection.haproxyHosts | difference(ansible_play_hosts_all) | length == 0
-      - hostvars['localhost'].platform_endpoint_sources[platform_endpoint_source_id].targets | map(attribute='hostId') | difference(ansible_play_hosts_all) | length == 0
+      - hostvars['localhost'].platform_endpoint_sources[item.sourceId].targets | map(attribute='hostId') | difference(ansible_play_hosts_all) | length == 0
     fail_msg: APPLICATION_ENDPOINT_HOST_SCOPE_INCOMPLETE
+  loop: "{{ hostvars['localhost']._platform_integration_selected_sources }}"
   run_once: true
 
 - name: Prepare source candidates before any provider activation
@@ -3832,7 +4182,7 @@ compatibilityRef: compatibility.yml
     apply: {become: true}
   vars:
     platform_haproxy_phase: prepare
-    platform_haproxy_partial_deployment_id: "{{ platform_endpoint_source_id }}"
+    platform_haproxy_partial_deployment_ids: "{{ hostvars['localhost']._platform_integration_selected_sources | map(attribute='sourceId') | list }}"
   when: inventory_hostname in hostvars['localhost'].platform_service_integration_projection.haproxyHosts and not (platform_endpoint_verify_only | default(false) | bool)
 
 - name: Activate source after all provider candidates passed validation
@@ -3841,7 +4191,7 @@ compatibilityRef: compatibility.yml
     apply: {become: true}
   vars:
     platform_haproxy_phase: activate
-    platform_haproxy_partial_deployment_id: "{{ platform_endpoint_source_id }}"
+    platform_haproxy_partial_deployment_ids: "{{ hostvars['localhost']._platform_integration_selected_sources | map(attribute='sourceId') | list }}"
   when: inventory_hostname in hostvars['localhost'].platform_service_integration_projection.haproxyHosts and not (platform_endpoint_verify_only | default(false) | bool)
 
 - name: Reload source after all providers passed activation
@@ -3850,7 +4200,7 @@ compatibilityRef: compatibility.yml
     apply: {become: true}
   vars:
     platform_haproxy_phase: start
-    platform_haproxy_partial_deployment_id: "{{ platform_endpoint_source_id }}"
+    platform_haproxy_partial_deployment_ids: "{{ hostvars['localhost']._platform_integration_selected_sources | map(attribute='sourceId') | list }}"
   when: inventory_hostname in hostvars['localhost'].platform_service_integration_projection.haproxyHosts and not (platform_endpoint_verify_only | default(false) | bool)
 
 - name: Verify source without provider mutation
@@ -3859,7 +4209,7 @@ compatibilityRef: compatibility.yml
     tasks_from: endpoint_verify
     apply: {become: true}
   vars:
-    platform_haproxy_partial_deployment_id: "{{ platform_endpoint_source_id }}"
+    platform_haproxy_partial_deployment_ids: "{{ hostvars['localhost']._platform_integration_selected_sources | map(attribute='sourceId') | list }}"
   when: inventory_hostname in hostvars['localhost'].platform_service_integration_projection.haproxyHosts and (platform_endpoint_verify_only | default(false) | bool)
 
 - name: Publish source records using the existing BIND hook
@@ -3877,10 +4227,13 @@ compatibilityRef: compatibility.yml
     fail_msg: APPLICATION_ENDPOINT_NOT_PUBLISHED
   run_once: true
 
-- name: Verify DNS and HTTPS through the existing external probe
+- name: Verify every source sequentially using its original DNS and HTTPS policy
   ansible.builtin.include_tasks:
-    file: probe-endpoint.yml
+    file: probe-selected-source.yml
     apply: {delegate_to: localhost, become: false}
+  loop: "{{ hostvars['localhost']._platform_integration_selected_sources }}"
+  loop_control:
+    loop_var: _platform_selected_probe
   run_once: true
 
 @@END
@@ -3943,6 +4296,67 @@ compatibilityRef: compatibility.yml
     fail_msg: SERVICE_ENDPOINT_UNAVAILABLE
   vars:
     statuses: "{{ _platform_integration_endpoint_http.results | selectattr('status', 'defined') | map(attribute='status') | map('int') | list }}"
+
+@@END
+@@PORTABLE {"path":"services/integrations/tasks/probe-selected-source.yml","mode":420,"size":464,"sha256":"26b07cbbbc34a1860844e81f88199040593d9ed7c16425e9403b0dddc04fedde","index":0,"count":1,"encoding":"utf-8","payloadBytes":464}
+---
+- name: Bind this source's original sequential probe inputs
+  ansible.builtin.set_fact:
+    _platform_integration_source_fqdns: "{{ _platform_selected_probe.fqdns }}"
+    _platform_integration_probe: "{{ _platform_selected_probe.probe }}"
+    platform_endpoint_probe_expected_addresses: "{{ _platform_selected_probe.expectedAddresses }}"
+
+- name: Check the source using the original observer and probe tasks
+  ansible.builtin.include_tasks: probe-endpoint.yml
+
+@@END
+@@PORTABLE {"path":"services/integrations/tasks/resolve-selected-source.yml","mode":420,"size":695,"sha256":"5f86898255d7e81a6fd773fbdcf79f4479b75128f86c844c8285875404a6a405","index":0,"count":1,"encoding":"utf-8","payloadBytes":695}
+---
+- name: Resolve one source without changing its probe policy
+  ansible.builtin.include_tasks: resolve-source.yml
+  vars:
+    platform_endpoint_source_id: "{{ _platform_selected_source_id }}"
+
+- name: Retain this exact source projection for publication and sequential probes
+  ansible.builtin.set_fact:
+    _platform_integration_selected_sources: "{{ _platform_integration_selected_sources + [{'sourceId': _platform_selected_source_id, 'projection': platform_service_integration_projection, 'dnsRecords': platform_bind_source_dns_records, 'fqdns': _platform_integration_source_fqdns, 'probe': _platform_integration_probe, 'expectedAddresses': platform_endpoint_probe_expected_addresses}] }}"
+
+@@END
+@@PORTABLE {"path":"services/integrations/tasks/resolve-selected-sources.yml","mode":420,"size":2009,"sha256":"2a749c154a0347058a784b25c3a16999d27531442dde2954be4cfc5d5c6ac972","index":0,"count":1,"encoding":"utf-8","payloadBytes":2009}
+---
+- name: Require a nonempty explicit endpoint source selection
+  ansible.builtin.assert:
+    that:
+      - platform_endpoint_source_ids is sequence
+      - platform_endpoint_source_ids is not string
+      - platform_endpoint_source_ids | length > 0
+      - platform_endpoint_source_ids | difference(hostvars['localhost'].platform_endpoint_sources | list) | length == 0
+      - platform_endpoint_source_id is not defined or platform_endpoint_source_ids | unique | list == [platform_endpoint_source_id]
+    fail_msg: APPLICATION_ENDPOINT_SCOPE_INVALID
+
+- name: Initialize operation-local selected source projections
+  ansible.builtin.set_fact:
+    _platform_integration_selected_sources: []
+
+- name: Resolve each selected source through the existing resolver
+  ansible.builtin.include_tasks: resolve-selected-source.yml
+  loop: "{{ platform_endpoint_source_ids | unique | sort }}"
+  loop_control:
+    loop_var: _platform_selected_source_id
+
+- name: Publish union of exact selected provider participants and DNS records
+  ansible.builtin.set_fact:
+    platform_service_integration_projection:
+      haproxyHosts: "{{ _platform_integration_selected_sources | map(attribute='projection.haproxyHosts') | flatten | unique | sort }}"
+      haproxyDeployments: "{{ _platform_integration_selected_sources | map(attribute='projection.haproxyDeployments') | flatten | unique | sort }}"
+      dnsDeployments: "{{ _platform_integration_selected_sources | map(attribute='projection.dnsDeployments') | flatten | unique | sort }}"
+    platform_bind_source_dns_records: "{{ _platform_integration_selected_sources | map(attribute='dnsRecords') | flatten | unique | list }}"
+
+- name: Reject conflicting selected DNS owner projections before provider mutation
+  ansible.builtin.assert:
+    that: item.1 | unique | list | length == 1
+    fail_msg: APPLICATION_ENDPOINT_DNS_CONFLICT
+  loop: "{{ platform_bind_source_dns_records | groupby('bindDeploymentId') | map('last') | map('groupby', 'owner') | list | flatten(levels=1) }}"
 
 @@END
 @@PORTABLE {"path":"services/integrations/tasks/resolve-source.yml","mode":420,"size":7652,"sha256":"bd743850c2c66ad909b353725ae71184185e2c6d9f42613b6d7e0dbf902a9ad9","index":0,"count":1,"encoding":"utf-8","payloadBytes":7652}

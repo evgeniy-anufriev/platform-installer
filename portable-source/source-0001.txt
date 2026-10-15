@@ -77,7 +77,7 @@ __pycache__/
 *.py[cod]
 
 @@END
-@@PORTABLE {"path":"ansible-core/ansible.cfg","mode":420,"size":315,"sha256":"3e1370e805ff83b442c4a6424c9e60bf9ca951341ee100535f416cdc1b68e3d9","index":0,"count":1,"encoding":"utf-8","payloadBytes":315}
+@@PORTABLE {"path":"ansible-core/ansible.cfg","mode":420,"size":351,"sha256":"a5b1dcf69f456b279f5424c4b2dae86a0f8b2dc5f753cff919ef03d308b2d04e","index":0,"count":1,"encoding":"utf-8","payloadBytes":351}
 [defaults]
 collections_path = ./collections
 retry_files_enabled = False
@@ -89,6 +89,9 @@ hash_behaviour = merge
 
 [privilege_escalation]
 become = False
+
+[ssh_connection]
+pipelining = True
 
 @@END
 @@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/galaxy.yml","mode":420,"size":283,"sha256":"cdb25c0866e6d48f8c2cf35321505b6c911d5fd930508c7aff9a08ec6a344c3f","index":0,"count":1,"encoding":"utf-8","payloadBytes":283}
@@ -32492,7 +32495,7 @@ artifactLock:
       no_log: true
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-endpoint-stage.yml","mode":420,"size":499,"sha256":"cbff18e531898912b2ffd16479bf4bd5f439ffeade9344263b9e1bd10d3f1a78","index":0,"count":1,"encoding":"utf-8","payloadBytes":499}
+@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-endpoint-stage.yml","mode":420,"size":563,"sha256":"50a09f136956bedd8792dff0040c345cf621bdf52c099ed055522157e20c1bf0","index":0,"count":1,"encoding":"utf-8","payloadBytes":563}
 ---
 - name: Run common endpoint hooks in the original Ansible execution context
   hosts: platform_targets
@@ -32500,11 +32503,11 @@ artifactLock:
   gather_facts: false
   any_errors_fatal: true
   tasks:
-    - name: Publish each ready logical source with existing provider tasks
+    - name: Publish selected ready logical sources with existing provider tasks
       ansible.builtin.include_tasks: ../../services/integrations/tasks/apply-source.yml
-      loop: "{{ hostvars['localhost'].platform_endpoint_sources | default({}) | sort }}"
-      loop_control:
-        loop_var: platform_endpoint_source_id
+      vars:
+        platform_endpoint_source_ids: "{{ hostvars['localhost'].platform_endpoint_sources | default({}) | sort }}"
+      when: hostvars['localhost'].platform_endpoint_sources | default({}) | length > 0
 
 @@END
 @@PORTABLE {"path":"ansible-core/playbooks/application-libraries-preflight.yml","mode":420,"size":825,"sha256":"df794ed9cbacfad554d4a72e02890bfad3159251865138315bd111e0b0a939a3","index":0,"count":1,"encoding":"utf-8","payloadBytes":825}
@@ -34124,7 +34127,7 @@ if __name__ == "__main__":
     raise SystemExit(main())
 
 @@END
-@@PORTABLE {"path":"ansible-core/tools/execution_controller.py","mode":420,"size":65930,"sha256":"8328fa7f924968c7e12e8047175421882fb6975cb439371a87224edbcd427cfb","index":0,"count":2,"encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"ansible-core/tools/execution_controller.py","mode":420,"size":66191,"sha256":"cd235399456ed02c4d334f057864dae1fb1931b08b059f84372180476b793caf","index":0,"count":2,"encoding":"utf-8","payloadBytes":48000}
 #!/usr/bin/env python3
 """Fixed Execution Node controller.  It never accepts a command or playbook."""
 from __future__ import print_function
@@ -34149,6 +34152,7 @@ import execution_secret_lease
 import execution_secret_output
 import execution_target_trust
 import infrastructure_verification as infra
+import execution_ssh
 
 
 SERVICE_TYPES = frozenset(("kafka", "keepalived", "postgresql", "bind", "haproxy", "dns-client", "redis", "vault", "clickhouse", "docker"))
@@ -34646,6 +34650,8 @@ def _environment(release, journal=None, operation=None, leased_private_key=False
     ssh_args = ("-F none -o UserKnownHostsFile=%s -o GlobalKnownHostsFile=none -o KnownHostsCommand=none -o UpdateHostKeys=no -o StrictHostKeyChecking=yes -o IdentitiesOnly=yes" % trust_file)
     if not leased_private_key:
         ssh_args = "-o IdentityFile=%s/identities/default/id_ed25519 %s" % (EXECUTION_STATE_ROOT, ssh_args)
+    if journal is not None and operation is not None:
+        ssh_args += ' -o ControlMaster=auto -o ControlPersist=60s -o ControlPath=' + execution_ssh.control_path(journal, operation)
     environment.update(
         ANSIBLE_CONFIG=os.path.join(release, "ansible-core", "ansible.cfg"),
         ANSIBLE_COLLECTIONS_PATH=_collection_path(release),
@@ -34975,12 +34981,12 @@ def validate_application_manifest(manifest):
     for item in manifest['applicationSecretRequirements']:
         if (item['requirementRef'] in refs or item['runtimeReference'] in names or
                 not set(item['applicationLibraries']).issubset(manifest['operations'][-1].get('applicationLibraries', [])) or
-                not set(item['hosts']).issubset(manifest['operations'][-1].get('targets', []))):
-            raise LifecycleError('EXECUTION_MANIFEST_INVALID')
-        refs.add(item['requirementRef']); names.add(item['runtim
+                n
 @@END
-@@PORTABLE {"path":"ansible-core/tools/execution_controller.py","mode":420,"size":65930,"sha256":"8328fa7f924968c7e12e8047175421882fb6975cb439371a87224edbcd427cfb","index":1,"count":2,"encoding":"utf-8","payloadBytes":17930}
-eReference'])
+@@PORTABLE {"path":"ansible-core/tools/execution_controller.py","mode":420,"size":66191,"sha256":"cd235399456ed02c4d334f057864dae1fb1931b08b059f84372180476b793caf","index":1,"count":2,"encoding":"utf-8","payloadBytes":18191}
+ot set(item['hosts']).issubset(manifest['operations'][-1].get('targets', []))):
+            raise LifecycleError('EXECUTION_MANIFEST_INVALID')
+        refs.add(item['requirementRef']); names.add(item['runtimeReference'])
         if item['purpose'] == 'APPLICATION_VAULT_ADMIN_TOKEN':
             if (item['providerDeployment'] not in vaults or
                     item['runtimeReference'] != 'vault-admin-token-' + item['providerDeployment']):
@@ -35168,6 +35174,7 @@ def _dispatch(release, journal, manifest, stopped):
                         os.unlink(temporary_path)
             if pki_lock_descriptor is not None:
                 os.close(pki_lock_descriptor)
+            execution_ssh.cleanup(journal, operation)
         if completed is None:
             return "CANCELLED"
         returncode, error_code, raw_failure_output = completed
@@ -35251,7 +35258,7 @@ if __name__ == "__main__":
         raise SystemExit(2)
 
 @@END
-@@PORTABLE {"path":"ansible-core/tools/execution_lifecycle.py","mode":420,"size":35390,"sha256":"1182d6c1b74d9876c49b9007aae5418d5bbd409e2165eecaed3ba8c1cf44fb5d","index":0,"count":1,"encoding":"utf-8","payloadBytes":35390}
+@@PORTABLE {"path":"ansible-core/tools/execution_lifecycle.py","mode":420,"size":35455,"sha256":"196c9719217da15918b5c0688fcb703557f30bc17b74725bfde09cddf3bf3dcb","index":0,"count":1,"encoding":"utf-8","payloadBytes":35455}
 """Private, durable Execution Node lifecycle primitives for UI-BE-04C.
 
 This module deliberately has no Installer, SSH or arbitrary-command API.  The
@@ -35457,6 +35464,8 @@ class Journal(object):
     def cleanup_runtime_connection_credentials(self):
         """Remove only owned, exact temporary connection-credential entries."""
         _assert_private_path(self.directory, directory=True)
+        import execution_ssh
+        execution_ssh.cleanup(self)
         credentials = os.path.join(self.directory, ".ansible-runtime-credentials.json")
         try:
             details = os.lstat(credentials)
@@ -38619,6 +38628,108 @@ def main():
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+@@END
+@@PORTABLE {"path":"ansible-core/tools/execution_ssh.py","mode":420,"size":3982,"sha256":"3fcb2d43fc77f0a31e3bec205771c4b7e9e3b5d7386e4ff268beabd864d85d11","index":0,"count":1,"encoding":"utf-8","payloadBytes":3982}
+"""Operation-private OpenSSH control sockets; no credentials or session registry."""
+import hashlib
+import os
+import re
+import stat
+import subprocess
+import time
+
+
+def _root():
+    # OpenSSH also appends a dot and 16 random bytes before its atomic rename.
+    return '/tmp/p' + str(os.geteuid())
+
+
+def _private_directory(path, create=False):
+    if create:
+        try:
+            os.mkdir(path, 0o700)
+        except FileExistsError:
+            pass
+    info = os.lstat(path)
+    if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.geteuid() or info.st_mode & 0o077:
+        raise ValueError('EXECUTION_SSH_CONTROL_DIRECTORY_INVALID')
+
+
+def _run_prefix(journal):
+    key = os.path.realpath(journal.root) + '\0' + journal.run_id
+    return hashlib.sha256(key.encode()).hexdigest()[:20]
+
+
+def _operation_name(journal, operation):
+    return _run_prefix(journal) + hashlib.sha256(operation['operationId'].encode()).hexdigest()[:12]
+
+
+def control_path(journal, operation):
+    root = _root()
+    directory = os.path.join(root, _operation_name(journal, operation))
+    for path in (root, directory):
+        _private_directory(path, create=True)
+    result = os.path.join(directory, '%C')
+    if len(result.encode()) - 2 + 40 + 17 >= 108:
+        raise ValueError('EXECUTION_SSH_CONTROL_PATH_INVALID')
+    return result
+
+
+def cleanup(journal, operation=None):
+    root = _root()
+    if not os.path.lexists(root):
+        return
+    _private_directory(root)
+    names = ([_operation_name(journal, operation)] if operation else
+             [name for name in os.listdir(root) if name.startswith(_run_prefix(journal))])
+    for name in names:
+        if re.fullmatch('[0-9a-f]{32}', name) is None:
+            raise ValueError('EXECUTION_SSH_CONTROL_DIRECTORY_INVALID')
+        directory = os.path.join(root, name)
+        if not os.path.lexists(directory):
+            continue
+        _private_directory(directory)
+        for socket_name in os.listdir(directory):
+            path = os.path.join(directory, socket_name)
+            try:
+                info = os.lstat(path)
+            except FileNotFoundError:
+                # ControlPersist can expire between listing and inspection.
+                continue
+            if (re.fullmatch('[0-9a-f]{40}', socket_name) is None or
+                    not stat.S_ISSOCK(info.st_mode) or info.st_uid != os.geteuid()):
+                raise ValueError('EXECUTION_SSH_CONTROL_SOCKET_INVALID')
+            # -O never falls back to a normal SSH session. No key/host data needed.
+            try:
+                result = subprocess.run(['ssh', '-F', 'none', '-S', path, '-O', 'exit', '127.0.0.1'],
+                                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                        timeout=3, check=False)
+            except subprocess.TimeoutExpired:
+                raise ValueError('EXECUTION_SSH_CONTROL_CLEANUP_FAILED') from None
+            if result.returncode == 0:
+                # Exit acknowledgement precedes the master's socket unlink.
+                deadline = time.monotonic() + 3
+                while os.path.lexists(path):
+                    if time.monotonic() >= deadline:
+                        raise ValueError('EXECUTION_SSH_CONTROL_CLEANUP_FAILED')
+                    time.sleep(0.02)
+            if result.returncode != 0 and os.path.lexists(path):
+                # A stopped control-group can leave a stale socket. Prove no master.
+                import socket
+                probe = socket.socket(socket.AF_UNIX)
+                try:
+                    probe.settimeout(1)
+                    probe.connect(path)
+                except ConnectionRefusedError:
+                    os.unlink(path)
+                except FileNotFoundError:
+                    pass
+                else:
+                    raise ValueError('EXECUTION_SSH_CONTROL_CLEANUP_FAILED')
+                finally:
+                    probe.close()
+        os.rmdir(directory)
 
 @@END
 @@PORTABLE {"path":"ansible-core/tools/execution_target_trust.py","mode":420,"size":8785,"sha256":"ace332efaed56feb45feefbececba6b977b4fb722ba3212fa19535d449e33576","index":0,"count":1,"encoding":"utf-8","payloadBytes":8785}
@@ -112894,7 +113005,110 @@ platform_bind_lifecycle_recovery: {}
       (platform_bind_full_reconcile | default(false) | bool)
 
 @@END
-@@PORTABLE {"path":"services/bind/ansible_collections/platform/bind/roles/bind/tasks/publish_source.yml","mode":420,"size":819,"sha256":"a983681cb40175be05b8858af55c2e9c44a62d74903b039043d79220fbd0fb93","index":0,"count":1,"encoding":"utf-8","payloadBytes":819}
+@@PORTABLE {"path":"services/bind/ansible_collections/platform/bind/roles/bind/tasks/prepare_a_record.yml","mode":420,"size":4884,"sha256":"e380f596efe86c4b64138045ab1b6c8cc77be929808001018fb755cb9b23be21","index":0,"count":1,"encoding":"utf-8","payloadBytes":4884}
+---
+- name: Validate resolved DNS A-record update input
+  ansible.builtin.assert:
+    that:
+      - platform_bind_a_record is mapping
+      - platform_bind_a_record.zone is string
+      - platform_bind_a_record.zone is match('^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$')
+      - platform_bind_a_record.owner is string
+      - platform_bind_a_record.owner is match('^(?=.{1,254}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}\.$')
+      - platform_bind_a_record.owner.endswith('.' ~ platform_bind_a_record.zone ~ '.')
+      - platform_bind_a_record.addresses is sequence
+      - platform_bind_a_record.addresses is not string
+      - platform_bind_a_record.addresses | length > 0
+      - platform_bind_a_record.addresses | unique | length == platform_bind_a_record.addresses | length
+      - >-
+        platform_bind_a_record.ttl is integer or
+        (platform_bind_a_record.ttl is string and platform_bind_a_record.ttl is match('^[0-9]+$'))
+      - platform_bind_a_record.ttl | int >= 1
+      - platform_bind_a_record.ttl | int <= 2147483647
+    fail_msg: BIND_DNS_A_RECORD_UPDATE_INPUT_INVALID
+
+- name: Validate each resolved DNS A-record IPv4 address
+  ansible.builtin.assert:
+    that:
+      - platform_bind_a_record_address is string
+      - platform_bind_a_record_address is match('^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])$')
+    fail_msg: BIND_DNS_A_RECORD_UPDATE_ADDRESS_INVALID
+  loop: "{{ platform_bind_a_record.addresses | default([]) }}"
+  loop_control:
+    loop_var: platform_bind_a_record_address
+    label: Validate DNS A-record IPv4 address
+
+- name: Read current authoritative A record from local primary
+  ansible.builtin.command:
+    argv:
+      - dig
+      - "@127.0.0.1"
+      - "{{ platform_bind_a_record.owner }}"
+      - A
+      - +norecurse
+      - +noall
+      - +answer
+      - +comments
+  register: _platform_bind_a_record_current
+  changed_when: false
+  failed_when: >-
+    _platform_bind_a_record_current.rc != 0 or
+    'flags: qr aa' not in _platform_bind_a_record_current.stdout or
+    not ('status: NOERROR' in _platform_bind_a_record_current.stdout or
+         'status: NXDOMAIN' in _platform_bind_a_record_current.stdout)
+
+- name: Collect existing authoritative answer records for the exact owner
+  ansible.builtin.set_fact:
+    _platform_bind_a_record_current_answer_lines: >-
+      {{ _platform_bind_a_record_current.stdout_lines |
+         reject('match', '^\s*(;|$)') |
+         select('search', 'IN') | list }}
+
+- name: Reject CNAME or foreign-owner answer before changing the A record
+  ansible.builtin.assert:
+    that:
+      - platform_bind_a_record_answer.split() | length == 5
+      - platform_bind_a_record_answer.split()[0] | lower == platform_bind_a_record.owner | lower
+      - platform_bind_a_record_answer.split()[2] | upper == 'IN'
+      - platform_bind_a_record_answer.split()[3] | upper == 'A'
+    fail_msg: BIND_DNS_A_RECORD_EXISTING_RECORD_CONFLICT
+  loop: "{{ _platform_bind_a_record_current_answer_lines }}"
+  loop_control:
+    loop_var: platform_bind_a_record_answer
+    label: Validate existing authoritative A-record answer
+
+- name: Normalize current and desired A record sets
+  ansible.builtin.set_fact:
+    _platform_bind_a_record_current_addresses: []
+    _platform_bind_a_record_desired_addresses: []
+
+- name: Add current DNS answer fields to the exact comparison set
+  ansible.builtin.set_fact:
+    _platform_bind_a_record_current_addresses: >-
+      {{ _platform_bind_a_record_current_addresses +
+         [(platform_bind_a_record_answer.split()[1] | string) ~ ' IN A ' ~
+          platform_bind_a_record_answer.split()[4]] }}
+  loop: "{{ _platform_bind_a_record_current_answer_lines }}"
+  loop_control:
+    loop_var: platform_bind_a_record_answer
+    label: Normalize current DNS A-record answer
+
+- name: Build exact desired A record set including TTL
+  ansible.builtin.set_fact:
+    _platform_bind_a_record_desired_addresses: >-
+      {{ _platform_bind_a_record_desired_addresses +
+         [(platform_bind_a_record.ttl | string) ~ ' IN A ' ~ platform_bind_a_record_address] }}
+  loop: "{{ platform_bind_a_record.addresses | sort }}"
+  loop_control:
+    loop_var: platform_bind_a_record_address
+    label: Add desired A-record IPv4 to comparison set
+
+- name: Retain exact observed RRsets and desired update without mutations
+  ansible.builtin.set_fact:
+    _platform_bind_zone_observations: "{{ _platform_bind_zone_observations + [{'record': platform_bind_a_record, 'currentAddresses': _platform_bind_a_record_current_answer_lines | map('split') | map('last') | sort | list, 'absentOwner': 'status: NXDOMAIN' in _platform_bind_a_record_current.stdout, 'changed': (_platform_bind_a_record_current_addresses != _platform_bind_a_record_desired_addresses) or (platform_bind_force_dynamic_update_probe | default(false) | bool)}] }}"
+
+@@END
+@@PORTABLE {"path":"services/bind/ansible_collections/platform/bind/roles/bind/tasks/publish_source.yml","mode":420,"size":726,"sha256":"664e02904f8238465a51680a104b6e6cf2e6afe89ccefec742c53e4892a6bddc","index":0,"count":1,"encoding":"utf-8","payloadBytes":726}
 ---
 - name: Validate resolved source DNS record list
   ansible.builtin.assert:
@@ -112903,20 +113117,14 @@ platform_bind_lifecycle_recovery: {}
       - platform_bind_source_dns_records is not string
     fail_msg: BIND_DNS_A_RECORD_UPDATE_INPUT_INVALID
 
-- name: Apply only source records on matching primary participants
-  ansible.builtin.include_role:
-    name: platform.bind.bind
-    tasks_from: update_a_record.yml
+- name: Apply each exact primary and zone scope once
+  ansible.builtin.include_tasks: update_a_records.yml
   vars:
-    platform_bind_a_record: "{{ item }}"
-  loop: "{{ platform_bind_source_dns_records }}"
-  loop_control:
-    label: "{{ item.owner | default('invalid source DNS owner') }}"
+    platform_bind_a_records: "{{ item.1 }}"
+  loop: "{{ platform_bind_source_dns_records | groupby('bindDeploymentId') | map('last') | map('groupby', 'zone') | list | flatten(levels=1) }}"
   when:
-    - item is mapping
-    - item.bindDeploymentId is defined
-    - item.bindDeploymentId in (platform_deployments | default({}))
-    - platform_deployments[item.bindDeploymentId].roles | default([]) == ['primary']
+    - item.1[0].bindDeploymentId in (platform_deployments | default({}))
+    - platform_deployments[item.1[0].bindDeploymentId].roles | default([]) == ['primary']
 
 @@END
 @@PORTABLE {"path":"services/bind/ansible_collections/platform/bind/roles/bind/tasks/reconcile_primary_zone.yml","mode":420,"size":4895,"sha256":"4c1223d85b3e0bcbc9a1e69c559b0101e27978eeeebf8eca1b121fbf3d69da74","index":0,"count":1,"encoding":"utf-8","payloadBytes":4895}
@@ -113121,165 +113329,87 @@ platform_bind_lifecycle_recovery: {}
   when: platform_deployments[platform_bind_base_zone.key].roles | first == 'primary'
 
 @@END
-@@PORTABLE {"path":"services/bind/ansible_collections/platform/bind/roles/bind/tasks/update_a_record.yml","mode":420,"size":6734,"sha256":"15f2a8cee0212cd7ccc28c78015874eb5e5408f0b6dc036af063d52afac16f63","index":0,"count":1,"encoding":"utf-8","payloadBytes":6734}
+@@PORTABLE {"path":"services/bind/ansible_collections/platform/bind/roles/bind/tasks/update_a_record.yml","mode":420,"size":191,"sha256":"9a7e8268b680c49ff772eae36256cfa3c18432b4b0477fcfdb43f6e467e98fc7","index":0,"count":1,"encoding":"utf-8","payloadBytes":191}
 ---
-- name: Validate resolved DNS A-record update input
+- name: Apply a singleton through the same guarded zone update
+  ansible.builtin.include_tasks: update_a_records.yml
+  vars:
+    platform_bind_a_records: "{{ [platform_bind_a_record] }}"
+
+@@END
+@@PORTABLE {"path":"services/bind/ansible_collections/platform/bind/roles/bind/tasks/update_a_records.yml","mode":420,"size":3274,"sha256":"d6f8db82a4515a21cd654b42045ddcedb48baad028394c3a6cc705bb06ab100c","index":0,"count":1,"encoding":"utf-8","payloadBytes":3274}
+---
+- name: Require one exact nonempty zone and unique owners for this update
   ansible.builtin.assert:
     that:
-      - platform_bind_a_record is mapping
-      - platform_bind_a_record.zone is string
-      - platform_bind_a_record.zone is match('^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$')
-      - platform_bind_a_record.owner is string
-      - platform_bind_a_record.owner is match('^(?=.{1,254}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}\.$')
-      - platform_bind_a_record.owner.endswith('.' ~ platform_bind_a_record.zone ~ '.')
-      - platform_bind_a_record.addresses is sequence
-      - platform_bind_a_record.addresses is not string
-      - platform_bind_a_record.addresses | length > 0
-      - platform_bind_a_record.addresses | unique | length == platform_bind_a_record.addresses | length
-      - >-
-        platform_bind_a_record.ttl is integer or
-        (platform_bind_a_record.ttl is string and platform_bind_a_record.ttl is match('^[0-9]+$'))
-      - platform_bind_a_record.ttl | int >= 1
-      - platform_bind_a_record.ttl | int <= 2147483647
+      - platform_bind_a_records is sequence
+      - platform_bind_a_records is not string
+      - platform_bind_a_records | length > 0
+      - platform_bind_a_records | map(attribute='zone') | unique | list | length == 1
+      - platform_bind_a_records | map(attribute='owner') | unique | list | length == platform_bind_a_records | length
     fail_msg: BIND_DNS_A_RECORD_UPDATE_INPUT_INVALID
 
-- name: Validate each resolved DNS A-record IPv4 address
-  ansible.builtin.assert:
-    that:
-      - platform_bind_a_record_address is string
-      - platform_bind_a_record_address is match('^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])$')
-    fail_msg: BIND_DNS_A_RECORD_UPDATE_ADDRESS_INVALID
-  loop: "{{ platform_bind_a_record.addresses | default([]) }}"
-  loop_control:
-    loop_var: platform_bind_a_record_address
-    label: Validate DNS A-record IPv4 address
-
-- name: Read current authoritative A record from local primary
-  ansible.builtin.command:
-    argv:
-      - dig
-      - "@127.0.0.1"
-      - "{{ platform_bind_a_record.owner }}"
-      - A
-      - +norecurse
-      - +noall
-      - +answer
-      - +comments
-  register: _platform_bind_a_record_current
-  changed_when: false
-  failed_when: >-
-    _platform_bind_a_record_current.rc != 0 or
-    'flags: qr aa' not in _platform_bind_a_record_current.stdout or
-    not ('status: NOERROR' in _platform_bind_a_record_current.stdout or
-         'status: NXDOMAIN' in _platform_bind_a_record_current.stdout)
-
-- name: Collect existing authoritative answer records for the exact owner
+- name: Initialize this zone's read-only observations
   ansible.builtin.set_fact:
-    _platform_bind_a_record_current_answer_lines: >-
-      {{ _platform_bind_a_record_current.stdout_lines |
-         reject('match', '^\s*(;|$)') |
-         select('search', 'IN') | list }}
+    _platform_bind_zone_observations: []
 
-- name: Reject CNAME or foreign-owner answer before changing the A record
-  ansible.builtin.assert:
-    that:
-      - platform_bind_a_record_answer.split() | length == 5
-      - platform_bind_a_record_answer.split()[0] | lower == platform_bind_a_record.owner | lower
-      - platform_bind_a_record_answer.split()[2] | upper == 'IN'
-      - platform_bind_a_record_answer.split()[3] | upper == 'A'
-    fail_msg: BIND_DNS_A_RECORD_EXISTING_RECORD_CONFLICT
-  loop: "{{ _platform_bind_a_record_current_answer_lines }}"
+- name: Validate and read every selected owner before any DNS mutation
+  ansible.builtin.include_tasks: prepare_a_record.yml
+  vars:
+    platform_bind_a_record: "{{ _platform_bind_record }}"
+  loop: "{{ platform_bind_a_records | sort(attribute='owner') }}"
   loop_control:
-    loop_var: platform_bind_a_record_answer
-    label: Validate existing authoritative A-record answer
+    loop_var: _platform_bind_record
 
-- name: Normalize current and desired A record sets
+- name: Build one zone update with observed existence and RDATA prerequisites
   ansible.builtin.set_fact:
-    _platform_bind_a_record_current_addresses: []
-    _platform_bind_a_record_desired_addresses: []
-
-- name: Add current DNS answer fields to the exact comparison set
-  ansible.builtin.set_fact:
-    _platform_bind_a_record_current_addresses: >-
-      {{ _platform_bind_a_record_current_addresses +
-         [(platform_bind_a_record_answer.split()[1] | string) ~ ' IN A ' ~
-          platform_bind_a_record_answer.split()[4]] }}
-  loop: "{{ _platform_bind_a_record_current_answer_lines }}"
-  loop_control:
-    loop_var: platform_bind_a_record_answer
-    label: Normalize current DNS A-record answer
-
-- name: Build exact desired A record set including TTL
-  ansible.builtin.set_fact:
-    _platform_bind_a_record_desired_addresses: >-
-      {{ _platform_bind_a_record_desired_addresses +
-         [(platform_bind_a_record.ttl | string) ~ ' IN A ' ~ platform_bind_a_record_address] }}
-  loop: "{{ platform_bind_a_record.addresses | sort }}"
-  loop_control:
-    loop_var: platform_bind_a_record_address
-    label: Add desired A-record IPv4 to comparison set
-
-- name: Apply exact A record through BIND local dynamic update
-  ansible.builtin.command:
-    argv: [nsupdate, -l]
-    stdin: |-
-      zone {{ platform_bind_a_record.zone }}.
-      update delete {{ platform_bind_a_record.owner }} A
-      {% for address in platform_bind_a_record.addresses | sort %}
-      update add {{ platform_bind_a_record.owner }} {{ platform_bind_a_record.ttl }} A {{ address }}
+    _platform_bind_zone_update: |-
+      zone {{ platform_bind_a_records[0].zone }}.
+      {% for observation in _platform_bind_zone_observations %}
+      {% if observation.absentOwner %}
+      prereq nxdomain {{ observation.record.owner }}
+      {% else %}
+      prereq nxrrset {{ observation.record.owner }} CNAME
+      {% if observation.currentAddresses | length > 0 %}
+      {% for address in observation.currentAddresses %}
+      prereq yxrrset {{ observation.record.owner }} A {{ address }}
+      {% endfor %}
+      {% else %}
+      prereq nxrrset {{ observation.record.owner }} A
+      {% endif %}
+      {% endif %}
+      {% endfor %}
+      {% for observation in _platform_bind_zone_observations | selectattr('changed') %}
+      update delete {{ observation.record.owner }} A
+      {% for address in observation.record.addresses | sort %}
+      update add {{ observation.record.owner }} {{ observation.record.ttl }} A {{ address }}
+      {% endfor %}
       {% endfor %}
       send
+
+- name: Bound the entire DNS request before its first mutation
+  ansible.builtin.assert:
+    # All input is validated ASCII; the presentation-size bound conservatively
+    # covers uncompressed DNS names, headers and RR metadata on a TCP message.
+    that: (_platform_bind_zone_update | length * 2 + 512) <= 60000
+    fail_msg: BIND_DNS_ZONE_UPDATE_TOO_LARGE
+
+- name: Apply the exact selected zone changes through local authenticated DNS update
+  ansible.builtin.command:
+    argv: [nsupdate, -l, -v]
+    stdin: "{{ _platform_bind_zone_update }}"
   register: _platform_bind_a_record_update
   changed_when: true
-  when: >-
-    (_platform_bind_a_record_current_addresses != _platform_bind_a_record_desired_addresses) or
-    (platform_bind_force_dynamic_update_probe | default(false) | bool)
+  when: _platform_bind_zone_observations | selectattr('changed') | list | length > 0
 
-- name: Re-read A record after update
-  ansible.builtin.command:
-    argv:
-      - dig
-      - "@127.0.0.1"
-      - "{{ platform_bind_a_record.owner }}"
-      - A
-      - +norecurse
-      - +noall
-      - +answer
-      - +comments
-  register: _platform_bind_a_record_after
-  changed_when: false
-  when: _platform_bind_a_record_update is not skipped
-
-- name: Normalize A record set after dynamic update
-  ansible.builtin.set_fact:
-    _platform_bind_a_record_after_answer_lines: >-
-      {{ _platform_bind_a_record_after.stdout_lines |
-         reject('match', '^\s*(;|$)') |
-         select('search', 'IN') | list }}
-    _platform_bind_a_record_after_addresses: []
-  when: _platform_bind_a_record_update is not skipped
-
-- name: Normalize each DNS A-record answer after dynamic update
-  ansible.builtin.set_fact:
-    _platform_bind_a_record_after_addresses: >-
-      {{ _platform_bind_a_record_after_addresses +
-         [(platform_bind_a_record_answer.split()[1] | string) ~ ' IN A ' ~
-          platform_bind_a_record_answer.split()[4]] }}
-  loop: "{{ _platform_bind_a_record_after_answer_lines | default([]) }}"
+- name: Verify every changed authoritative RRset after the zone update
+  ansible.builtin.include_tasks: verify_a_record.yml
+  vars:
+    platform_bind_a_record: "{{ _platform_bind_observation.record }}"
+    _platform_bind_a_record_desired_addresses: "{{ _platform_bind_observation.record.addresses | sort | map('regex_replace', '^', (_platform_bind_observation.record.ttl | string) ~ ' IN A ') | list }}"
+  loop: "{{ _platform_bind_zone_observations | selectattr('changed') | list }}"
   loop_control:
-    loop_var: platform_bind_a_record_answer
-    label: Normalize updated DNS A-record answer
-  when: _platform_bind_a_record_update is not skipped
-
-- name: Verify exact authoritative A record set after update
-  ansible.builtin.assert:
-    that:
-      - _platform_bind_a_record_after.rc == 0
-      - "'flags: qr aa' in _platform_bind_a_record_after.stdout"
-      - "'status: NOERROR' in _platform_bind_a_record_after.stdout"
-      - _platform_bind_a_record_after_addresses == _platform_bind_a_record_desired_addresses
-    fail_msg: BIND_DNS_A_RECORD_UPDATE_VERIFY_FAILED
-  when: _platform_bind_a_record_update is not skipped
+    loop_var: _platform_bind_observation
 
 @@END
 @@PORTABLE {"path":"services/bind/ansible_collections/platform/bind/roles/bind/tasks/update_base_zone_records.yml","mode":420,"size":501,"sha256":"0018f10f67ac33d527b8bc6e9837081e7741a1cf84170e2f87de015b6fd4348e","index":0,"count":1,"encoding":"utf-8","payloadBytes":501}
@@ -113338,6 +113468,55 @@ platform_bind_lifecycle_recovery: {}
   loop: "{{ platform_bind_resolved_zones | dict2items | selectattr('key', 'in', platform_deployments) | list }}"
   loop_control:
     label: "{{ item.key }}"
+
+@@END
+@@PORTABLE {"path":"services/bind/ansible_collections/platform/bind/roles/bind/tasks/verify_a_record.yml","mode":420,"size":1758,"sha256":"f3659e801ae093a609cf32b92cc7e269b29670c8b350737909f2b0f211ed8151","index":0,"count":1,"encoding":"utf-8","payloadBytes":1758}
+---
+- name: Re-read A record after update
+  ansible.builtin.command:
+    argv:
+      - dig
+      - "@127.0.0.1"
+      - "{{ platform_bind_a_record.owner }}"
+      - A
+      - +norecurse
+      - +noall
+      - +answer
+      - +comments
+  register: _platform_bind_a_record_after
+  changed_when: false
+  when: _platform_bind_a_record_update is not skipped
+
+- name: Normalize A record set after dynamic update
+  ansible.builtin.set_fact:
+    _platform_bind_a_record_after_answer_lines: >-
+      {{ _platform_bind_a_record_after.stdout_lines |
+         reject('match', '^\s*(;|$)') |
+         select('search', 'IN') | list }}
+    _platform_bind_a_record_after_addresses: []
+  when: _platform_bind_a_record_update is not skipped
+
+- name: Normalize each DNS A-record answer after dynamic update
+  ansible.builtin.set_fact:
+    _platform_bind_a_record_after_addresses: >-
+      {{ _platform_bind_a_record_after_addresses +
+         [(platform_bind_a_record_answer.split()[1] | string) ~ ' IN A ' ~
+          platform_bind_a_record_answer.split()[4]] }}
+  loop: "{{ _platform_bind_a_record_after_answer_lines | default([]) }}"
+  loop_control:
+    loop_var: platform_bind_a_record_answer
+    label: Normalize updated DNS A-record answer
+  when: _platform_bind_a_record_update is not skipped
+
+- name: Verify exact authoritative A record set after update
+  ansible.builtin.assert:
+    that:
+      - _platform_bind_a_record_after.rc == 0
+      - "'flags: qr aa' in _platform_bind_a_record_after.stdout"
+      - "'status: NOERROR' in _platform_bind_a_record_after.stdout"
+      - _platform_bind_a_record_after_addresses == _platform_bind_a_record_desired_addresses
+    fail_msg: BIND_DNS_A_RECORD_UPDATE_VERIFY_FAILED
+  when: _platform_bind_a_record_update is not skipped
 
 @@END
 @@PORTABLE {"path":"services/bind/ansible_collections/platform/bind/roles/bind/templates/platform-installer-options.conf.j2","mode":420,"size":499,"sha256":"331131073b3373154416cf59f3246cd24c59a81a75cc015ce44a51a2bb5d2179","index":0,"count":1,"encoding":"utf-8","payloadBytes":499}
@@ -114915,316 +115094,5 @@ platform_clickhouse_expected_rpm_digests:
     fail_msg: CLICKHOUSE_LISTENER_IN_USE
   loop: "{{ _platform_clickhouse_new_member_ports }}"
   when: _platform_clickhouse_new_member_ports | length > 0
-
-@@END
-@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/roles/clickhouse_tls/tasks/provision.yml","mode":420,"size":7566,"sha256":"a41b8903e89405e4b7bc6019a344f893d0df4b1d664ec3d87d187e34b8d78eab","index":0,"count":1,"encoding":"utf-8","payloadBytes":7566}
----
-- name: Create private ClickHouse service group
-  ansible.builtin.group:
-    name: "{{ platform_clickhouse_group }}"
-    system: true
-
-- name: Create non-login ClickHouse service account
-  ansible.builtin.user:
-    name: "{{ platform_clickhouse_user }}"
-    group: "{{ platform_clickhouse_group }}"
-    system: true
-    create_home: false
-    shell: /sbin/nologin
-
-- name: Create root-owned ClickHouse root and deployment directories
-  ansible.builtin.file:
-    path: "{{ item }}"
-    state: directory
-    owner: root
-    group: root
-    mode: '0755'
-  loop:
-    - "{{ platform_clickhouse_config_root }}"
-    - "{{ platform_clickhouse_log_root }}"
-    - "{{ platform_clickhouse_config_root }}/{{ platform_clickhouse_deployment_id }}"
-    - "{{ platform_clickhouse_log_root }}/{{ platform_clickhouse_deployment_id }}"
-
-- name: Create shared ClickHouse data parent for co-located members
-  ansible.builtin.file:
-    path: "{{ platform_clickhouse_data_root }}"
-    state: directory
-    owner: root
-    group: root
-    mode: '0755'
-  when: _platform_clickhouse_local_instances | length > 1
-
-- name: Create private ClickHouse member directories
-  ansible.builtin.file:
-    path: "{{ item.0[item.1] }}"
-    state: directory
-    owner: "{{ platform_clickhouse_user }}"
-    group: "{{ platform_clickhouse_group }}"
-    mode: '0700'
-  loop: "{{ _platform_clickhouse_local_instances | product(['config_directory', 'data_directory', 'log_directory']) | list }}"
-  no_log: true
-
-- name: Create private persistent SQL access-control directories
-  ansible.builtin.file:
-    path: "{{ item.data_directory }}/access"
-    state: directory
-    owner: "{{ platform_clickhouse_user }}"
-    group: "{{ platform_clickhouse_group }}"
-    mode: '0700'
-  loop: "{{ _platform_clickhouse_local_instances }}"
-  loop_control:
-    label: "{{ item.id }}"
-
-- name: Bind member data paths to one immutable managed identity
-  ansible.builtin.copy:
-    content: "{{ {'apiVersion': 'platform.installer/clickhouse-member-marker/v1alpha1', 'deploymentId': platform_clickhouse_deployment_id, 'memberId': item.id, 'unitId': item.unit_id} | to_nice_json }}\n"
-    dest: "{{ item.data_directory }}/.{{ platform_clickhouse_name }}-member.json"
-    owner: "{{ platform_clickhouse_user }}"
-    group: "{{ platform_clickhouse_group }}"
-    mode: '0600'
-    force: false
-  loop: "{{ _platform_clickhouse_local_instances }}"
-  loop_control:
-    label: "{{ item.id }}"
-
-- name: Create member-private TLS directories
-  ansible.builtin.file:
-    path: "{{ item.config_directory }}/pki"
-    state: directory
-    owner: "{{ platform_clickhouse_user }}"
-    group: "{{ platform_clickhouse_group }}"
-    mode: '0700'
-  loop: "{{ _platform_clickhouse_local_instances }}"
-  loop_control:
-    label: "{{ item.id }}"
-
-- name: Copy exact PKI material into member-private paths
-  ansible.builtin.copy:
-    src: "{{ _platform_clickhouse_tls_directory }}/{{ item.1 }}"
-    dest: "{{ item.0.config_directory }}/pki/{{ item.1 }}"
-    remote_src: true
-    owner: "{{ platform_clickhouse_user }}"
-    group: "{{ platform_clickhouse_group }}"
-    mode: '0600'
-  loop: "{{ _platform_clickhouse_local_instances | product(['ca-chain.pem', 'certificate.pem', 'private-key.pem']) | list }}"
-  register: _platform_clickhouse_tls_copies
-  no_log: true
-
-- name: Render password verifier and default user policy without plaintext
-  ansible.builtin.template:
-    src: users.xml.j2
-    dest: "{{ item.config_directory }}/users.xml"
-    owner: "{{ platform_clickhouse_user }}"
-    group: "{{ platform_clickhouse_group }}"
-    mode: '0600'
-  loop: "{{ _platform_clickhouse_local_instances }}"
-  loop_control:
-    label: "{{ item.id }}"
-  register: _platform_clickhouse_users_configs
-  no_log: true
-
-- name: Render private ClickHouse server configuration
-  ansible.builtin.template:
-    src: server.xml.j2
-    dest: "{{ clickhouse_member.config_directory }}/server.xml"
-    owner: "{{ platform_clickhouse_user }}"
-    group: "{{ platform_clickhouse_group }}"
-    mode: '0600'
-  loop: "{{ _platform_clickhouse_local_instances }}"
-  loop_control:
-    loop_var: clickhouse_member
-    label: "{{ clickhouse_member.id }}"
-  register: _platform_clickhouse_server_configs
-  no_log: true
-
-- name: Render private Keeper Raft configuration only for HA
-  ansible.builtin.template:
-    src: keeper.xml.j2
-    dest: "{{ clickhouse_member.config_directory }}/keeper.xml"
-    owner: "{{ platform_clickhouse_user }}"
-    group: "{{ platform_clickhouse_group }}"
-    mode: '0600'
-  loop: "{{ _platform_clickhouse_local_instances }}"
-  loop_control:
-    loop_var: clickhouse_member
-    label: "{{ clickhouse_member.id }}"
-  register: _platform_clickhouse_keeper_configs
-  when: platform_clickhouse_mode == 'raft-ha'
-  no_log: true
-
-- name: Install exact member-owned ClickHouse server units
-  ansible.builtin.template:
-    src: server.service.j2
-    dest: "/etc/systemd/system/{{ clickhouse_member.server_unit_name }}"
-    owner: root
-    group: root
-    mode: '0644'
-  loop: "{{ _platform_clickhouse_local_instances }}"
-  loop_control:
-    loop_var: clickhouse_member
-    label: "{{ clickhouse_member.id }}"
-  register: _platform_clickhouse_server_units
-
-- name: Install exact member-owned Keeper units only for HA
-  ansible.builtin.template:
-    src: keeper.service.j2
-    dest: "/etc/systemd/system/{{ clickhouse_member.keeper_unit_name }}"
-    owner: root
-    group: root
-    mode: '0644'
-  loop: "{{ _platform_clickhouse_local_instances }}"
-  loop_control:
-    loop_var: clickhouse_member
-    label: "{{ clickhouse_member.id }}"
-  register: _platform_clickhouse_keeper_units
-  when: platform_clickhouse_mode == 'raft-ha'
-
-- name: Reload systemd only after member-unit changes
-  ansible.builtin.systemd:
-    daemon_reload: true
-  when: >-
-    (_platform_clickhouse_server_units.results | selectattr('changed', 'equalto', true) | list | length > 0)
-    or
-    (_platform_clickhouse_keeper_units.results | default([]) | selectattr('changed', 'equalto', true) | list | length > 0)
-
-- name: Determine members with changed TLS or user policy
-  ansible.builtin.set_fact:
-    _platform_clickhouse_restart_all: >-
-      {{ (_platform_clickhouse_tls_copies.results | selectattr('changed', 'equalto', true) | list | length > 0)
-         or (_platform_clickhouse_users_configs.results | selectattr('changed', 'equalto', true) | list | length > 0) }}
-
-- name: Start or restart isolated Keeper voters before ClickHouse servers
-  ansible.builtin.systemd:
-    name: "{{ clickhouse_member.keeper_unit_name }}"
-    enabled: true
-    state: >-
-      {{ 'restarted' if _platform_clickhouse_restart_all or
-         _platform_clickhouse_keeper_configs.results[clickhouse_index].changed or
-         _platform_clickhouse_keeper_units.results[clickhouse_index].changed else 'started' }}
-  loop: "{{ _platform_clickhouse_local_instances }}"
-  loop_control:
-    loop_var: clickhouse_member
-    index_var: clickhouse_index
-    label: "{{ clickhouse_member.id }}"
-  when: platform_clickhouse_mode == 'raft-ha'
-
-- name: Start or restart isolated ClickHouse servers
-  ansible.builtin.systemd:
-    name: "{{ clickhouse_member.server_unit_name }}"
-    enabled: true
-    state: >-
-      {{ 'restarted' if _platform_clickhouse_restart_all or
-         _platform_clickhouse_server_configs.results[clickhouse_index].changed or
-         _platform_clickhouse_server_units.results[clickhouse_index].changed else 'started' }}
-  loop: "{{ _platform_clickhouse_local_instances }}"
-  loop_control:
-    loop_var: clickhouse_member
-    index_var: clickhouse_index
-    label: "{{ clickhouse_member.id }}"
-
-@@END
-@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/roles/clickhouse_tls/tasks/resolve_tls.yml","mode":420,"size":1728,"sha256":"142d38c2b88edae1479d23db409fc5bc334f9000b573c79860255fe53bf87e55","index":0,"count":1,"encoding":"utf-8","payloadBytes":1728}
----
-- name: Select the Core PKI consumer plan when available
-  ansible.builtin.include_role:
-    name: platform.core.pki_materialize
-    tasks_from: select_consumer_plan.yml
-  vars:
-    platform_pki_consumer_tls_profile_id: "{{ platform_clickhouse_tls_profile }}"
-  when: >-
-    platform_pki_materialization_plans | default(hostvars['localhost'].platform_pki_materialization_plans | default([]), true) | length > 0
-
-- name: Resolve one approved TLS directory
-  ansible.builtin.set_fact:
-    _platform_clickhouse_tls_directory: >-
-      {{ platform_pki_selected_consumer_plan.targetDirectory
-         if platform_pki_selected_consumer_plan is defined
-         else platform_clickhouse_tls_directory }}
-
-- name: Reject a missing or unsafe TLS directory
-  ansible.builtin.assert:
-    that:
-      - _platform_clickhouse_tls_directory is match('^/[A-Za-z0-9_./-]{1,240}$')
-      - "'..' not in _platform_clickhouse_tls_directory.split('/')"
-    fail_msg: CLICKHOUSE_PKI_MATERIALIZATION_REQUIRED
-
-- name: Inspect exact ClickHouse TLS files
-  ansible.builtin.stat:
-    path: "{{ _platform_clickhouse_tls_directory }}/{{ item }}"
-    follow: false
-    get_mime: false
-    get_attributes: false
-    get_checksum: false
-  loop: [ca-chain.pem, certificate.pem, private-key.pem]
-  register: _platform_clickhouse_tls_files
-  no_log: true
-
-- name: Require regular, non-symlink ClickHouse TLS files
-  ansible.builtin.assert:
-    that: >-
-      _platform_clickhouse_tls_files.results |
-      rejectattr('stat.isreg', 'equalto', true) | list | length == 0 and
-      _platform_clickhouse_tls_files.results |
-      selectattr('stat.islnk', 'equalto', true) | list | length == 0
-    fail_msg: CLICKHOUSE_PKI_MATERIALIZATION_REQUIRED
-  no_log: true
-
-@@END
-@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/roles/clickhouse_tls/tasks/stock_unit.yml","mode":420,"size":2240,"sha256":"b4a98f703d8b2ee985cf4ad103473af7337833593c3ef2c7bb4c4859789e719d","index":0,"count":1,"encoding":"utf-8","payloadBytes":2240}
----
-- name: Locate the installed stock ClickHouse server unit
-  ansible.builtin.command:
-    argv: [systemctl, show, clickhouse-server.service, --property=FragmentPath, --value]
-  register: _platform_clickhouse_stock_fragment
-  changed_when: false
-
-- name: Require a real stock unit fragment before changing its enablement
-  ansible.builtin.assert:
-    that:
-      - _platform_clickhouse_stock_fragment.stdout is match('^/.+/clickhouse-server[.]service$')
-    fail_msg: CLICKHOUSE_STOCK_UNIT_OWNERSHIP_UNCONFIRMED
-
-- name: Identify the RPM owning the stock ClickHouse server unit
-  ansible.builtin.command:
-    argv: [rpm, -qf, --qf, '%{NAME}-%{VERSION}-%{RELEASE}.%{ARCH}', "{{ _platform_clickhouse_stock_fragment.stdout }}"]
-  register: _platform_clickhouse_stock_unit_owner
-  changed_when: false
-  failed_when: false
-
-- name: Refuse to change a stock unit outside the exact pinned server RPM
-  ansible.builtin.assert:
-    that:
-      - _platform_clickhouse_stock_unit_owner.rc == 0
-      - _platform_clickhouse_stock_unit_owner.stdout == 'clickhouse-server-' ~ platform_clickhouse_package_version ~ '-1.x86_64'
-    fail_msg: CLICKHOUSE_STOCK_UNIT_OWNERSHIP_UNCONFIRMED
-
-- name: Check stock ClickHouse server activity after RPM installation
-  ansible.builtin.command:
-    argv: [systemctl, is-active, clickhouse-server.service]
-  register: _platform_clickhouse_stock_after_install
-  changed_when: false
-  failed_when: false
-
-- name: Preserve an active stock ClickHouse server for explicit conflict handling
-  ansible.builtin.assert:
-    that: _platform_clickhouse_stock_after_install.stdout != 'active'
-    fail_msg: CLICKHOUSE_FOREIGN_UNIT_ACTIVE
-
-- name: Disable the inactive RPM-provided stock ClickHouse server unit
-  ansible.builtin.systemd:
-    name: clickhouse-server.service
-    enabled: false
-
-- name: Confirm the RPM stock unit stayed inactive
-  ansible.builtin.command:
-    argv: [systemctl, is-active, clickhouse-server.service]
-  register: _platform_clickhouse_stock_after_disable
-  changed_when: false
-  failed_when: false
-
-- name: Refuse concurrent activation of the RPM stock unit
-  ansible.builtin.assert:
-    that: _platform_clickhouse_stock_after_disable.stdout != 'active'
-    fail_msg: CLICKHOUSE_FOREIGN_UNIT_ACTIVE
 
 @@END
