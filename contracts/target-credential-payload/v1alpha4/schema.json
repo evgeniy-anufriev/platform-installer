@@ -11,8 +11,8 @@
     "privateKey": {"type": ["string", "null"], "minLength": 1},
     "sudoPassword": {"type": ["string", "null"], "minLength": 1},
     "pkiStorePassword": {"type": ["string", "null"], "minLength": 1, "maxLength": 4096},
-    "runtimeSecretValues": {"type": "object", "maxProperties": 16, "propertyNames": {"$ref": "#/$defs/requirement"}, "additionalProperties": {"type": "string", "minLength": 1, "maxLength": 4096}},
-    "runtimeSecretInputs": {"type": "array", "maxItems": 16, "items": {"$ref": "#/$defs/input"}}
+    "runtimeSecretValues": {"type": "object", "propertyNames": {"$ref": "#/$defs/requirement"}, "additionalProperties": {"type": "string", "minLength": 1, "maxLength": 4096}},
+    "runtimeSecretInputs": {"type": "array", "items": {"$ref": "#/$defs/input"}}
   },
   "oneOf": [
     {"properties": {"password": {"type": "string"}, "privateKey": {"type": "null"}}},

@@ -632,12 +632,17 @@ func planRequiresPKIStorePassword(plan DeploymentPlan) bool {
 func planRuntimeSecretRequirements(plan DeploymentPlan) []string {
 	result := []string{}
 	for _, requirement := range plan.RequiredCredentials {
-		if requirement.Purpose == "SERVICE_PASSWORD" && runtimeSecretRequirementPattern.MatchString(requirement.RequirementRef) {
+		if RuntimeSecretValuePurpose(requirement.Purpose) && runtimeSecretRequirementPattern.MatchString(requirement.RequirementRef) {
 			result = append(result, requirement.RequirementRef)
 		}
 	}
 	slices.Sort(result)
 	return result
+}
+
+// RuntimeSecretValuePurpose identifies values carried in the existing lease map.
+func RuntimeSecretValuePurpose(purpose string) bool {
+	return purpose == "SERVICE_PASSWORD" || purpose == "APPLICATION_SECRET" || purpose == "APPLICATION_VAULT_ADMIN_TOKEN"
 }
 
 func planRuntimeSecretInputRequirements(plan DeploymentPlan) []RuntimeSecretInputRequirement {

@@ -612,6 +612,12 @@ are preserved. New request/capability/plan/manifest versions isolate the extensi
 See [technical plan B](work/application-libraries/milestones/b/b-technical-plan.md)
 and [execution contract](contracts/execution-planning-and-events.md#b0-cross-run-infrastructure-verification).
 
+Owner amendment, 2026-10-14: if compatible saved Verify evidence is absent or stale,
+the same approved library-only plan includes fixed infrastructure Verify operations
+before library Apply/Verify. It has no infrastructure Apply, separate plan or second
+approval. Core stops the run before libraries on Verify failure/cancel and publishes
+successful verification through the existing evidence generation.
+
 ## ADR-040: Library edits and package import reuse the local managed writer
 
 Owner-approved B2 scope, 2026-10-14. Library edits mutate only existing

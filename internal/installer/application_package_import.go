@@ -58,6 +58,12 @@ func safeApplicationPackagePath(logical string) bool {
 	return false
 }
 
+// ApplicationPackagePathAllowed exposes the existing data-only package path
+// contract to the guarded project transport; it does not authorize execution.
+func ApplicationPackagePathAllowed(logical string) bool {
+	return safeApplicationPackagePath(logical)
+}
+
 func applicationPackageDocuments(root string) ([]exportRecord, error) {
 	directory, err := openExportSourceDirectory(root)
 	if err != nil {

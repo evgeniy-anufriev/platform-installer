@@ -29,6 +29,7 @@ import (
 	"platform-installer/internal/artifactsource"
 	"platform-installer/internal/commandwindow"
 	"platform-installer/internal/executionbundle"
+	"platform-installer/internal/installer"
 	"platform-installer/internal/sshpassword"
 )
 
@@ -619,7 +620,7 @@ func createProjectArchive(root string) (string, error) {
 		_ = os.Remove(name)
 		return "", e
 	}
-	for _, entry := range []string{"inventory", "project.yml", "ansible.cfg"} {
+	for _, entry := range []string{"inventory", "project.yml", "ansible.cfg", "application-packages", "library-packages"} {
 		candidate := filepath.Join(absolute, entry)
 		if _, statErr := os.Lstat(candidate); statErr != nil {
 			if errors.Is(statErr, os.ErrNotExist) && entry != "inventory" {
@@ -664,7 +665,7 @@ func createCandidateProjectArchive(root string) (string, error) {
 		return "", errors.New("PROJECT_CANDIDATE_INVALID")
 	}
 	paths := []string{"project.yml", "ansible.cfg", "inventory/hosts.yml"}
-	for _, directory := range []string{"inventory/group_vars", "inventory/host_vars"} {
+	for _, directory := range []string{"inventory/group_vars", "inventory/host_vars", "application-packages", "library-packages"} {
 		candidateRoot := filepath.Join(absolute, filepath.FromSlash(directory))
 		entry, statErr := os.Lstat(candidateRoot)
 		if errors.Is(statErr, os.ErrNotExist) {
@@ -776,6 +777,9 @@ func createCandidateProjectArchive(root string) (string, error) {
 }
 
 func candidateArchiveLogicalPathAllowed(logical string) bool {
+	if installer.ApplicationPackagePathAllowed(logical) {
+		return true
+	}
 	if logical == "project.yml" || logical == "ansible.cfg" || logical == "inventory/hosts.yml" {
 		return true
 	}

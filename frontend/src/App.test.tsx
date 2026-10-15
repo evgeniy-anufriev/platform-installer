@@ -427,36 +427,28 @@ function api(overrides: Record<string, unknown> = {}): MockApi {
 
 it("attaches the previous run and reuses execution, events and cancellation without another Start", async () => {
   const runId = "installer-prior-run";
-  const inspectOrphanRun = vi
-    .fn()
-    .mockResolvedValue({
-      status: "FOUND",
-      recoveryId: "recovery-token",
-      runId,
-      runState: "RUNNING",
-      projectRevision: "sha256:previous-revision",
-    });
-  const attachOrphanRun = vi
-    .fn()
-    .mockResolvedValue({
-      status: "READY",
-      reconnected: true,
-      projectRevision: "sha256:previous-revision",
-      run: { runId, state: "RUNNING", sequence: 0 },
-    });
-  const subscribeInstallationRun = vi
-    .fn()
-    .mockResolvedValue({
-      status: "SUBSCRIBED",
-      subscriptionId: "recovered-sub",
-    });
-  const cancelInstallationRun = vi
-    .fn()
-    .mockResolvedValue({
-      status: "CANCELLING",
-      reconnected: true,
-      run: { runId, state: "CANCELLING", sequence: 0 },
-    });
+  const inspectOrphanRun = vi.fn().mockResolvedValue({
+    status: "FOUND",
+    recoveryId: "recovery-token",
+    runId,
+    runState: "RUNNING",
+    projectRevision: "sha256:previous-revision",
+  });
+  const attachOrphanRun = vi.fn().mockResolvedValue({
+    status: "READY",
+    reconnected: true,
+    projectRevision: "sha256:previous-revision",
+    run: { runId, state: "RUNNING", sequence: 0 },
+  });
+  const subscribeInstallationRun = vi.fn().mockResolvedValue({
+    status: "SUBSCRIBED",
+    subscriptionId: "recovered-sub",
+  });
+  const cancelInstallationRun = vi.fn().mockResolvedValue({
+    status: "CANCELLING",
+    reconnected: true,
+    run: { runId, state: "CANCELLING", sequence: 0 },
+  });
   const startApprovedInstallation = vi.fn();
   const value = api({
     inspectOrphanRun,
@@ -3519,3 +3511,115 @@ describe("UI-01E3 session credentials", () => {
     expect(screen.queryByText("not-visible-after-submit")).toBeNull();
   });
 });
+
+it.each(["blocked", "new-risk", "ready"])(
+  "B4 approval builds library-only plan: %s",
+  async (scenario) => {
+    const fullPlan = {
+      id: "b4-full",
+      executionMode: "FULL_PROJECT",
+      status: "EXECUTABLE",
+      projectRevision: "sha256:old",
+      planFingerprint: "sha256:fp",
+      executionNodeId: "node",
+      runtime: {},
+      expiresAt: "2099-01-01",
+      approved: false,
+      acknowledgements: [],
+      phases: [],
+    };
+    const mode = vi
+      .fn()
+      .mockResolvedValueOnce({ status: "PLAN_REVIEW", plan: fullPlan })
+      .mockResolvedValue(
+        scenario === "blocked"
+          ? {
+              status: "BLOCKED",
+              error: {
+                code: "INFRA_VERIFY_MISSING",
+                message: "Verify required",
+              },
+            }
+          : {
+              status: "PLAN_REVIEW",
+              plan: {
+                ...fullPlan,
+                id: "b4-library",
+                executionMode: "APPLICATION_LIBRARIES_ONLY",
+                acknowledgements:
+                  scenario === "new-risk"
+                    ? [{ code: "NEW_RISK", summary: "New confirmation" }]
+                    : [],
+              },
+            },
+      );
+    const legacy = vi.fn();
+    const value = api({
+      createInstallationPlanForMode: mode,
+      createInstallationPlan: legacy,
+      approveInstallationPlan: vi.fn().mockResolvedValue({
+        status: "PLAN_APPROVED",
+        plan: {
+          ...fullPlan,
+          id: "b4-library",
+          executionMode: "APPLICATION_LIBRARIES_ONLY",
+          approved: true,
+        },
+      }),
+      getInstallationState: vi.fn().mockResolvedValue({
+        status: "PLAN_REVIEW",
+        project: {
+          id: "p",
+          revision: "sha256:old",
+          hasUnsavedChanges: false,
+        },
+        executionNode: { status: "READY" },
+        plan: { status: "PLAN_REVIEW", planId: "b4-full" },
+        prerequisites: [],
+      }),
+    });
+    value.chooseProject.mockResolvedValue({
+      ...project,
+      managed: { ...project.managed, deployments: {} },
+    });
+    render(<App api={value} />);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Открыть папку проекта" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Установка" }));
+    await userEvent.click(screen.getByRole("tab", { name: "План" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Сформировать свежий план" }),
+    );
+    await screen.findByRole("checkbox", {
+      name: "Устанавливать инфраструктуру",
+    });
+    await userEvent.click(
+      screen.getByRole("checkbox", { name: "Устанавливать инфраструктуру" }),
+    );
+    expect(mode).toHaveBeenCalledTimes(1);
+    await userEvent.click(screen.getByRole("button", { name: "Серверы" }));
+    await userEvent.click(screen.getByRole("button", { name: "Установка" }));
+    await userEvent.click(screen.getByRole("tab", { name: "План" }));
+    expect(
+      screen.getByRole("checkbox", { name: "Устанавливать инфраструктуру" }),
+    ).toHaveProperty("checked", false);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Одобрить план" }),
+    );
+    await waitFor(() =>
+      expect(mode).toHaveBeenCalledWith({
+        executionMode: "APPLICATION_LIBRARIES_ONLY",
+        deploymentOrder: [],
+        applicationVaultSources: {},
+      }),
+    );
+    expect(legacy).not.toHaveBeenCalled();
+    if (scenario === "ready")
+      expect(value.approveInstallationPlan).toHaveBeenCalledWith(
+        "b4-library",
+        [],
+      );
+    else expect(value.approveInstallationPlan).not.toHaveBeenCalled();
+  },
+);

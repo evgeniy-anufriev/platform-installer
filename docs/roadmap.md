@@ -12,6 +12,9 @@ library-only/Verify-only scopes. Its gate is node-authoritative full coverage,
 stale-evidence/trust/concurrency protection and standalone RED OS acceptance.
 B1–B4 then integrate the existing Go adapter/writer/lifecycle; C owns application UI.
 Local status is operational evidence, never a second desired-state or Start authority.
+When saved infrastructure Verify evidence is absent or stale, the library-only plan
+includes fixed infrastructure Verify before library Apply/Verify in the same run;
+infrastructure Apply is never repeated by this fallback.
 
 Current status and authorization live only in [CURRENT_STATE](../CURRENT_STATE.md).
 This document describes sequence, scope and exit criteria. Recorded implementation

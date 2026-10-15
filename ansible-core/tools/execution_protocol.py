@@ -165,6 +165,7 @@ def _application_capabilities(args):
     result['apiVersion'] = 'platform.installer/execution-capabilities/v1alpha7'
     result['deploymentPlanRequestVersions'] = [DEPLOYMENT_PLAN_REQUEST_VERSION, APPLICATION_PLAN_REQUEST_VERSION]
     result['runtimeSecretDescriptors']['protocol'] = 'BuildRuntimeSecretDescriptors/v1alpha3'
+    result['runtimeSecretDescriptors'].pop('maxDescriptors', None)
     result['applicationExecution'] = {'manifestContract': 'platform.installer/execution-manifest/v1alpha2',
                                      'planContract': 'platform.installer/plan/v1alpha4',
                                      'requiredPlanRequestVersion': APPLICATION_PLAN_REQUEST_VERSION}
@@ -225,7 +226,7 @@ def _start_v2(value, state_root, runtime_release, controller, active_bundle_dige
         execution_target_trust.verify(state_root, staging_id, manifest)
     requirements = manifest.get("runtimeSecretRequirements", [])
     typed_requirements = manifest.get("runtimeSecretInputs", [])
-    if not isinstance(requirements, list) or len(requirements) > 16:
+    if not isinstance(requirements, list):
         raise LifecycleError("EXECUTION_MANIFEST_INVALID")
     execution_secret_lease._validate_typed_secret_requirements(typed_requirements)
     pki, service = [], []
@@ -381,6 +382,21 @@ def _candidate_logical_path(name):
         return False
     if name in ("project.yml", "ansible.cfg", "inventory/hosts.yml"):
         return True
+    if len(parts) >= 4 and parts[0] in ("application-packages", "library-packages"):
+        if (re.fullmatch(r'[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*', parts[1]) is None or
+                re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', parts[2]) is None or
+                any(re.fullmatch(r'[A-Za-z0-9_.-]+', part) is None or part.endswith('.') for part in parts)):
+            return False
+        kind = parts[0][:-9]
+        relative = '/'.join(parts[3:])
+        role = 'roles/%s_%s/' % (kind, parts[1])
+        if relative == kind + '.yml' or relative == role + 'defaults/main.yml':
+            return True
+        if kind == 'library' and relative == 'files/.env':
+            return True
+        return (relative.startswith((role + 'templates/', 'configuration/', 'assets/')) and
+                os.path.splitext(parts[-1])[1].lower() in
+                ('.j2', '.yml', '.yaml', '.json', '.conf', '.cfg', '.hcl', '.txt', '.properties', '.xml', '.crt', '.pem'))
     if len(parts) < 3 or parts[0] != "inventory" or parts[1] not in ("group_vars", "host_vars"):
         return False
     return os.path.splitext(parts[-1])[1].lower() in (".yml", ".yaml", ".json")

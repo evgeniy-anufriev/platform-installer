@@ -9,7 +9,7 @@
     "projectIdentity": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,127}$"},
     "projectRevision": {"$ref": "../../runtime-secret-lease/v1alpha1/request.schema.json#/$defs/digest"},
     "descriptorSetFingerprint": {"$ref": "../../runtime-secret-lease/v1alpha1/request.schema.json#/$defs/digest"},
-    "descriptors": {"type": "array", "maxItems": 16, "items": {
+    "descriptors": {"type": "array", "items": {
       "type": "object", "additionalProperties": false,
       "required": ["requirementRef", "purpose", "serviceDeployment", "displayLabel", "hosts", "requiredWhen", "operations"],
       "properties": {

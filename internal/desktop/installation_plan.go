@@ -252,7 +252,7 @@ func (a *App) missingInstallationSecretsLocked(plan executionnode.DeploymentPlan
 				}
 				return nil, errors.New("RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE")
 			}
-			currentDescriptors = descriptors.Descriptors
+			currentDescriptors = a.runtimeSecretEvidenceDescriptorsLocked(plan.ProjectRevision)
 		}
 		known := map[string]bool{}
 		for _, descriptor := range currentDescriptors {
@@ -263,8 +263,8 @@ func (a *App) missingInstallationSecretsLocked(plan executionnode.DeploymentPlan
 			}
 			labels[descriptor.RequirementRef] = label
 		}
-		for _, reference := range passwords {
-			if !known[reference+"\x00SERVICE_PASSWORD"] {
+		for _, requirement := range plan.RequiredCredentials {
+			if executionnode.RuntimeSecretValuePurpose(requirement.Purpose) && !known[requirement.RequirementRef+"\x00"+requirement.Purpose] {
 				return nil, errors.New("RUNTIME_SECRET_DESCRIPTORS_STALE")
 			}
 		}
@@ -282,7 +282,11 @@ func (a *App) runtimeSecretEvidenceDescriptorsLocked(revision string) []RuntimeS
 	if a.runtimeSecretEvidence == nil || a.runtimeSecretEvidence.projectRevision != revision || a.current.Project == nil || a.runtimeSecretEvidence.projectID != a.current.Project.ID || a.binding == nil || a.runtimeSecretEvidence.nodeID != a.binding.node.ID || !runtimeEvidenceMatchesExpected(a.runtimeSecretEvidence.runtime, a.binding.reader.runtimeRelease) {
 		return nil
 	}
-	return a.runtimeSecretEvidence.descriptors
+	result := append([]RuntimeSecretDescriptorView(nil), a.runtimeSecretEvidence.descriptors...)
+	for _, item := range a.runtimeSecretEvidence.applicationInputs {
+		result = append(result, RuntimeSecretDescriptorView{RequirementRef: item.RequirementRef, Purpose: item.Purpose, DisplayLabel: item.DisplayLabel, Hosts: append([]string(nil), item.Hosts...)})
+	}
+	return result
 }
 
 func missingInstallationSecretsError(missing []string) *ProjectOpenError {
@@ -386,7 +390,7 @@ func installationPlanRuntimeSecretRequirements(plan executionnode.DeploymentPlan
 	result := make([]string, 0)
 	seen := map[string]struct{}{}
 	for _, requirement := range plan.RequiredCredentials {
-		if requirement.Purpose != "SERVICE_PASSWORD" {
+		if !executionnode.RuntimeSecretValuePurpose(requirement.Purpose) {
 			continue
 		}
 		if !runtimeSecretDescriptorRequirement.MatchString(requirement.RequirementRef) {

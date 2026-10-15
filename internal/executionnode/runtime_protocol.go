@@ -138,7 +138,19 @@ type RuntimeSecretDescriptor struct {
 type RuntimeSecretDescriptorResult struct {
 	ProjectIdentity, ProjectRevision, DescriptorSetFingerprint string
 	Descriptors                                                []RuntimeSecretDescriptor
+	ApplicationInputs                                          []ApplicationSecretDescriptor `json:"applicationInputs"`
 	Runtime                                                    RuntimeEvidence
+}
+
+type ApplicationSecretDescriptor struct {
+	RequirementRef       string   `json:"requirementRef"`
+	Purpose              string   `json:"purpose"`
+	ProviderDeployment   *string  `json:"providerDeployment"`
+	ApplicationLibraries []string `json:"applicationLibraries"`
+	Hosts                []string `json:"hosts"`
+	Operations           []string `json:"operations"`
+	SourceRef            string   `json:"sourceRef"`
+	DisplayLabel         string   `json:"displayLabel"`
 }
 
 type ExecutionRun struct {
@@ -592,7 +604,7 @@ func (t OpenSSHTransport) BuildRuntimeSecretDescriptors(ctx context.Context, nod
 		return RuntimeSecretDescriptorResult{}, errors.New("RUNTIME_SECRET_DESCRIPTORS_RESPONSE_INVALID")
 	}
 	var result RuntimeSecretDescriptorResult
-	if err := json.Unmarshal(data, &result); err != nil || result.ProjectIdentity != request.ProjectIdentity || result.ProjectRevision != request.ProjectRevision || !validSHA256(result.DescriptorSetFingerprint) || len(result.Descriptors) > 16 {
+	if err := json.Unmarshal(data, &result); err != nil || result.ProjectIdentity != request.ProjectIdentity || result.ProjectRevision != request.ProjectRevision || !validSHA256(result.DescriptorSetFingerprint) {
 		return RuntimeSecretDescriptorResult{}, errors.New("RUNTIME_SECRET_DESCRIPTORS_RESPONSE_INVALID")
 	}
 	result.Runtime, ok = decodeRuntimeEvidence(response["runtimeEvidence"])
@@ -1081,7 +1093,7 @@ func decodeDeploymentPlan(value map[string]any) (DeploymentPlan, error) {
 
 func decodeRequiredCredentials(raw any) ([]RequiredCredential, error) {
 	values, ok := raw.([]any)
-	if !ok || len(values) > 32 {
+	if !ok {
 		return nil, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
 	}
 	result := make([]RequiredCredential, 0, len(values))

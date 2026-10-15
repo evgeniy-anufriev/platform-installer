@@ -59,7 +59,6 @@
       "additionalProperties": false,
       "required": [
         "protocol",
-        "maxDescriptors",
         "maxHostsPerDescriptor",
         "maxResponseBytes"
       ],

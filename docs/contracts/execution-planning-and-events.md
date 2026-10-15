@@ -91,20 +91,30 @@ from a terminal FAILED run can supplement other Verify-only runs; FAILED remains
 FAILED. Missing/corrupt/retained-away journals fail closed; an interrupted index
 update may lose readiness but cannot imply success or replay work.
 
-Library-only Build requires all enabled infrastructure Verify coverage. Under the
-existing active-run admission lock, Start rechecks exact evidence revision, source
-journals and approved SSH host keys before controller launch. The controller
-rechecks before application preparation. Local client JSON is never accepted as
-proof. A stale plan requires fresh Build and approval. There is no fallback to full
-infrastructure installation and no caller-provided playbook/command or skipBarrier.
+Library-only Build uses saved Verify coverage when it is complete and compatible.
+Under the existing active-run admission lock, Start rechecks that evidence revision,
+source journals and approved SSH host keys before controller launch. When compatible
+saved evidence is absent or stale, the same authoritative plan includes fixed
+SERVICE_VERIFY operations for every enabled infrastructure deployment before the
+fixed library Apply/Verify suffix. This is one plan, approval and run; no second
+Verify-only plan is created. Infrastructure Apply is never included. Core's normal
+phase failure/cancel handling prevents library operations from starting if infra
+Verify fails. Local client JSON is never accepted as proof. Arbitrary playbook or
+command input and skipBarrier remain forbidden.
 
 Library-only contains exactly application Apply and Verify; Vault sources must be
 RUNTIME_INPUT. Unseal shares and CURRENT_RUN_BOOTSTRAP have no application producer
 in that scope. Verify-only retains the established typed service-input declaration
 contract, but dispatch contains no Apply capable of consuming Apply permissions.
-PKI materialization is excluded; service Verify reads existing PKI. Historical
+PKI materialization is excluded; service Verify reads existing PKI. The existing
+PKI_STORE_PASSWORD requirement remains in the same runtime lease when needed to
+open existing PKCS12 stores or publish a library's PKI-derived shared credential;
+retaining that input does not add a PKI or infrastructure Apply operation. Historical
 Verify does not promise continuous target health: normal provider/ownership/readiness
 guards remain. Build and evidence inspection stay target-contact free.
+Library-only retains the existing project SERVICE_PASSWORD inputs for its provider
+hooks through the same approved lease. Saved infrastructure Verify does not replace
+those credentials; Apply-only service inputs and secret outputs remain excluded.
 
 Go local caching/integration belongs to B1–B4, not B0. The original A9 operator
 acceptance is not imported into the new machine-owned evidence index.
@@ -396,3 +406,44 @@ Go owns local session/subscriber state and requests replay/reconnect/cancel.
 The Execution Node journal remains authoritative after workstation failure.
 No SQLite or other store becomes desired-state or execution-semantics
 authority.
+
+
+## B4 production transport integration
+
+Generated Wails bindings and browser RPC expose B3 CreateInstallationPlanForMode
+and GetInfrastructureVerification; TypeScript reuses their data shapes. The
+ordinary desktop edit-session allowlist now admits the already validated B2
+library operations. No separate writer or command bridge is introduced.
+
+Owner-approved Installation checkbox selects FULL_PROJECT or
+APPLICATION_LIBRARIES_ONLY. Libraries always use Apply/Verify. Empty source-policy
+map delegates the default to Core (RUNTIME_INPUT); frontend does not infer Vault
+producer/bootstrap policy. Unsupported library mode never falls back to full
+installation. Full-project legacy API remains available for older callers;
+current production transports call mode-aware Build explicitly. Existing
+approval, Start, trust, runtime lease, events/results and reconnect are unchanged.
+
+The selected scope is retained across navigation. A plan for another selection
+stays visible for review but cannot be approved/started; its services operations
+are visually muted when excluded. Selection appears only in the services block
+of an existing plan on the Plan tab, not before initial Build. Active run scope is displayed separately
+and cannot be changed. Cached observations show UNKNOWN; only fresh plan output
+can display Core verification. Actual source infra run IDs are Advanced metadata,
+never substitute current library-run operations or imply continuous health.
+
+B4 owner amendment (2026-10-14, final): the services checkbox is local presentation
+only and never calls Core. On Approve, a changed scope first builds an authoritative
+plan with the existing mode-aware API. Only that returned plan can be approved.
+New acknowledgements, changed runtime/revision/node, or re-including infrastructure
+require reviewing the returned plan before another confirmation. No separate Build
+click is required for the scope change. Libraries remain Apply -> Verify; Start is
+unavailable while the displayed plan differs from the selected scope. This replaces
+the earlier B4 instruction requiring an explicit fresh Build after checkbox changes.
+
+### B4 application runtime inputs (owner amendment, 2026-10-15)
+
+`BuildRuntimeSecretDescriptors/v1alpha3.applicationInputs` is carried by the existing Go transport. The Installation Plan tab offers session-only password inputs using those Core descriptors. `SetDeploymentRuntimeSecretValues` with an empty serviceDeployment selects the complete application-input subset; its project revision, descriptor fingerprint, project/node/runtime guards remain mandatory. It uses the existing pending Broker and is reattested/promoted at Start. Service dialogs retain their existing scope.
+
+The existing v1alpha3/v1alpha4 `runtimeSecretValues` lease map carries values under Core requirementRef keys. Application purposes from the approved plan participate in exact lease-key-set validation; only the approved subset is serialized. The controller's existing application projection maps those references to runtimeReference and checks provider/library/host/operation scope. No new credential store, lease endpoint or plaintext persistence is introduced.
+
+Requirement quantity is not capped at16/32. Existing per-value4096-byte, aggregate value65536-byte, descriptor response65536-byte, typed-input aggregate and total lease payload bounds remain, together with unique IDs, closed types, exact identity/fingerprint and expiry guards. v1alpha3 descriptor capability omits the old maxDescriptors metadata; older capability responses remain conservative for old clients. Secret output package limits and host/library scope bounds are unchanged.

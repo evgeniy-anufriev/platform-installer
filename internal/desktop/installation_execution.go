@@ -299,8 +299,10 @@ func (a *App) configureTargetCredentialLease() {
 			}
 			if len(request.RuntimeSecretRequirements) > 0 {
 				payload.RuntimeSecretValues = make(map[string]string, len(credential.RuntimeSecretValues))
-				for reference, value := range credential.RuntimeSecretValues {
-					payload.RuntimeSecretValues[reference] = string(value)
+				for _, reference := range request.RuntimeSecretRequirements {
+					if value, ok := credential.RuntimeSecretValues[reference]; ok {
+						payload.RuntimeSecretValues[reference] = string(value)
+					}
 				}
 			}
 			if len(request.RuntimeSecretInputs) > 0 {
@@ -310,6 +312,9 @@ func (a *App) configureTargetCredentialLease() {
 					expected[item.RequirementRef] = item.Purpose
 				}
 				for _, item := range credential.RuntimeSecretInputs {
+					if _, required := expected[item.RequirementRef]; !required {
+						continue
+					}
 					if expected[item.RequirementRef] != item.Purpose {
 						return errors.New("RUNTIME_SECRET_DESCRIPTORS_STALE")
 					}
@@ -454,7 +459,7 @@ func (a *App) StartApprovedInstallation(planID string) InstallationRunOperation 
 				code := "RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE"
 				return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: code, Message: projectErrorMessage(code)}}
 			}
-			if len(typedInputs) > 0 && !runtimeDescriptorsMatchPlan(descriptors.Descriptors, typedInputs) {
+			if len(typedInputs) > 0 && !runtimeDescriptorsMatchPlan(descriptors.Descriptors, typedInputs, planRecord.Plan.ExecutionMode) {
 				a.editMu.Unlock()
 				return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: "RUNTIME_SECRET_DESCRIPTORS_STALE", Message: "Типизированные входы сервисов не совпадают с требованиями одобренного плана. Сформируйте свежий план и повторите ввод секретов."}}
 			}

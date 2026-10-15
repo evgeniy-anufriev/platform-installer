@@ -129,7 +129,7 @@ else
     mv -- "$candidate" "$release"
     created=1
 fi
-env PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$release/ansible-core/tools" python3 -c 'from execution_secret_output import _directory; from execution_lifecycle import EXECUTION_STATE_ROOT; exec("with _directory(EXECUTION_STATE_ROOT, create=True):\n    pass\")'
+env PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$release/ansible-core/tools" python3 -c 'from execution_secret_output import _directory; from execution_lifecycle import EXECUTION_STATE_ROOT; exec("with _directory(EXECUTION_STATE_ROOT, create=True):\n    pass")'
 env PYTHONDONTWRITEBYTECODE=1 ANSIBLE_CONFIG="$release/ansible-core/ansible.cfg" ANSIBLE_COLLECTIONS_PATH="$release/ansible-core/collections" ansible-playbook -i localhost, "$release/ansible-core/playbooks/execution-capabilities.yml" -e "platform_execution_runtime_root=$release" -e "platform_execution_bundle_digest=$bundle_digest" >/dev/null
 printf 'BUNDLE_VERSION=%s\nBUNDLE_DIGEST=%s\nCORE_VERSION=%s\nPROTOCOL=%s\nANSIBLE=yes\nCAPABILITIES=yes\n' "$bundle_version" "$bundle_digest" "$core_version" "$protocol" > "$backup/new-active"
 ln -s -- "$release" "$backup/new-current"

@@ -113,6 +113,22 @@ class ApplicationPlanTests(unittest.TestCase):
     def test_no_accounts_or_agent_requires_no_application_secrets(self):
         self.assertEqual([], application_execution_model(application_snapshot(), image_lock())['runtimeSecretRequirements'])
 
+    def test_descriptor_quantity_uses_response_byte_bound(self):
+        value = application_snapshot()
+        library = value['applicationLibraries']['libraries']['sdku']
+        library['sharedSecretRequirements'] = {
+            'secret-%s' % i: {'source': {'kind': 'runtime_secret_ref', 'ref': 'secret-%s' % i}}
+            for i in range(40)}
+        result = build_runtime_secret_descriptors(value, catalog())
+        self.assertEqual(40, len(result['applicationInputs']))
+        validator = SchemaValidator(str(REPO / 'contracts'))
+        self.assertEqual([], validator.validate(result, str(REPO / 'contracts/runtime-secret-descriptors/v1alpha3/schema.json')))
+        library['sharedSecretRequirements'] = {
+            'secret-%s' % i: {'source': {'kind': 'runtime_secret_ref', 'ref': 'secret-%s' % i}}
+            for i in range(600)}
+        with self.assertRaisesRegex(ValueError, 'RUNTIME_SECRET_DESCRIPTORS_BLOCKED'):
+            build_runtime_secret_descriptors(value, catalog())
+
     def test_vault_token_has_explicit_provider_and_application_scope(self):
         value = application_snapshot()
         instance = value['applicationLibraries']['libraries']['sdku']['instances']['apigateway-sdku']

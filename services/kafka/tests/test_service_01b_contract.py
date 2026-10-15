@@ -77,7 +77,9 @@ class Service01BContractTests(unittest.TestCase):
         self.assertIn("KAFKA_UNIT_OWNERSHIP_UNKNOWN", main)
         self.assertLess(main.index("Validate common Kafka member inputs"), main.index("Deliver selected Kafka offline artifacts"))
         self.assertLess(main.index("Reject same-host Kafka unit-name collisions"), main.index("Deliver selected Kafka offline artifacts"))
-        self.assertIn("# platform-kafka-managed:", (ROLE / "templates/kafka.service.j2").read_text(encoding="utf-8"))
+        self.assertIn("# {{ platform_kafka_name }}-managed: {{ kafka_member.systemd_unit_name }}",
+                      (ROLE / "templates/kafka.service.j2").read_text(encoding="utf-8"))
+        self.assertIn("'systemd_unit_ownership_marker': '# ' ~ platform_kafka_name ~ '-managed: '", source)
 
     def test_member_role_uses_controller_count_and_member_role_for_format_strategy(self):
         source = (ROLE / "tasks" / "member.yml").read_text(encoding="utf-8")
@@ -153,11 +155,19 @@ class Service01BContractTests(unittest.TestCase):
         self.assertIn("-verify_ip", handshake)
         self.assertNotIn("endpoint.identification.algorithm=", handshake)
 
+    def test_registry_source_preflight_is_apply_only(self):
+        with (ROLE / "tasks" / "schema_registry_validate.yml").open(encoding="utf-8") as stream:
+            tasks = yaml.safe_load(stream)
+        preflight = next(task for task in tasks if task["name"] == "Preflight the selected Registry source before Kafka mutation")
+        self.assertIn("not (platform_kafka_verify_only | bool)", preflight["when"])
+        self.assertIn("platform_kafka_schema_registry_enabled", preflight["when"])
+        self.assertEqual("platform.core.artifact_source_gate", preflight["ansible.builtin.include_role"]["name"])
+
     def test_dynamic_and_static_config_projections_are_mutually_exclusive(self):
         with (ROLE / "tasks" / "member.yml").open(encoding="utf-8") as stream:
             tasks = {task["name"]: task for task in yaml.safe_load(stream)}
         common = tasks["Build common member effective configuration"]["ansible.builtin.set_fact"]["kafka_effective_config"]
-        dynamic = tasks["Add dynamic quorum projection when explicitly selected"]["ansible.builtin.set_fact"]["kafka_effective_config"]
+        dynamic = tasks["Add the requested dynamic quorum projection"]["ansible.builtin.set_fact"]["kafka_effective_config"]
         static = tasks["Add static quorum projection when explicitly selected"]["ansible.builtin.set_fact"]["kafka_effective_config"]
         self.assertNotIn("controller.quorum.bootstrap.servers", common)
         self.assertNotIn("controller.quorum.voters", common)

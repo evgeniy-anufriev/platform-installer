@@ -1,13 +1,17 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type {
   InstallationEventView,
   InstallationPlanOperation,
   InstallationPlanView,
+  InstallationExecutionMode,
+  InfrastructureVerificationView,
   InstallationRunOperation,
   InstallationState,
   SessionCredentialStatus,
   SecretOutputPackagesOperation,
   SecretOutputDeliveryOperation,
+  RuntimeSecretDescriptorOperation,
+  RuntimeSecretValuesInput,
 } from "./backend";
 import {
   actionResultLabel,
@@ -16,6 +20,7 @@ import {
 } from "./installationPresentation";
 import { executionNodeStatusLabel } from "./executionNodeLabels";
 import { eventTimestampLabel, taskNameWithoutRole } from "./event-format";
+import { ApplicationSecretInputs } from "./ApplicationSecretInputs";
 
 type InstallationTab = "summary" | "plan" | "execution" | "result";
 
@@ -211,6 +216,9 @@ export function InstallationPage({
   plan,
   busy,
   onCreatePlan,
+  infrastructureObservation,
+  selectedExecutionMode,
+  onExecutionModeChange,
   serviceDeployments = [],
   serviceExecutionPriorities = [],
   onApprovePlan,
@@ -229,6 +237,8 @@ export function InstallationPage({
   outputDelivery,
   onRefreshSecretOutputs = () => {},
   onCollectSecretOutputs = async () => {},
+  onGetRuntimeSecretDescriptors,
+  onSetRuntimeSecretValues,
 }: {
   state?: InstallationState;
   draftActive?: boolean;
@@ -237,7 +247,13 @@ export function InstallationPage({
   onOpenServers: () => void;
   plan?: InstallationPlanOperation;
   busy: boolean;
-  onCreatePlan: (deploymentOrder: string[]) => void;
+  onCreatePlan: (
+    deploymentOrder: string[],
+    mode?: InstallationExecutionMode,
+  ) => void;
+  infrastructureObservation?: InfrastructureVerificationView;
+  selectedExecutionMode?: InstallationExecutionMode;
+  onExecutionModeChange?: (mode: InstallationExecutionMode) => void;
   serviceDeployments?: ServiceDeploymentInput[];
   serviceExecutionPriorities?: ServicePriorityInput[];
   onApprovePlan: (planId: string, acknowledgements: string[]) => void;
@@ -257,8 +273,28 @@ export function InstallationPage({
   outputDelivery?: SecretOutputDeliveryOperation;
   onRefreshSecretOutputs?: () => void;
   onCollectSecretOutputs?: () => Promise<void>;
+  onGetRuntimeSecretDescriptors?: () => Promise<RuntimeSecretDescriptorOperation>;
+  onSetRuntimeSecretValues?: (input: RuntimeSecretValuesInput) => Promise<void>;
 }) {
   const [orderError, setOrderError] = useState("");
+  const [localExecutionMode, setLocalExecutionMode] =
+    useState<InstallationExecutionMode>("FULL_PROJECT");
+  const executionMode = selectedExecutionMode || localExecutionMode;
+  const setExecutionMode = (mode: InstallationExecutionMode) => {
+    setLocalExecutionMode(mode);
+    onExecutionModeChange?.(mode);
+  };
+  useEffect(() => {
+    if (
+      !selectedExecutionMode &&
+      (plan?.plan?.executionMode === "FULL_PROJECT" ||
+        plan?.plan?.executionMode === "APPLICATION_LIBRARIES_ONLY")
+    )
+      setLocalExecutionMode(plan.plan.executionMode);
+  }, [plan?.plan?.id, plan?.plan?.executionMode, selectedExecutionMode]);
+  const scopeChanged =
+    !!plan?.plan &&
+    (plan.plan.executionMode || "FULL_PROJECT") !== executionMode;
   const deploymentOrder = useMemo(
     () =>
       deploymentOrderFromPriorities(
@@ -277,7 +313,8 @@ export function InstallationPage({
       return;
     }
     setOrderError("");
-    onCreatePlan(deploymentOrder.order);
+    if (executionMode === "FULL_PROJECT") onCreatePlan(deploymentOrder.order);
+    else onCreatePlan(deploymentOrder.order, executionMode);
   };
   const node = state?.executionNode;
   const runActive = ["STARTING", "RUNNING", "CANCELLING"].includes(
@@ -286,6 +323,73 @@ export function InstallationPage({
   const displayedPlan: InstallationPlanOperation | undefined =
     runActive && runPlan ? { status: "PLAN_APPROVED", plan: runPlan } : plan;
   const presentation = installationDisplay(state, run, runProgress);
+  const cachedObservation = (
+    <>
+      {!plan?.plan?.infrastructureVerification && infrastructureObservation && (
+        <p role="status">
+          Предыдущее наблюдение инфраструктуры: UNKNOWN
+          {infrastructureObservation.observedAt
+            ? ` · ${infrastructureObservation.observedAt}`
+            : ""}
+          . Для разрешения запуска нужен свежий план Core.
+        </p>
+      )}
+    </>
+  );
+  const servicesControl = (
+    <div aria-label="services">
+      <div
+        data-state={
+          executionMode === "APPLICATION_LIBRARIES_ONLY"
+            ? "excluded"
+            : "included"
+        }
+        className={
+          executionMode === "APPLICATION_LIBRARIES_ONLY" ? "muted" : undefined
+        }
+      >
+        <label>
+          <input
+            type="checkbox"
+            aria-label="Устанавливать инфраструктуру"
+            checked={executionMode === "FULL_PROJECT"}
+            disabled={busy || runActive}
+            onChange={(event) =>
+              setExecutionMode(
+                event.target.checked
+                  ? "FULL_PROJECT"
+                  : "APPLICATION_LIBRARIES_ONLY",
+              )
+            }
+          />
+          Инфраструктура
+        </label>
+        <p>
+          {executionMode === "FULL_PROJECT"
+            ? "Полный цикл Apply → Verify инфраструктуры."
+            : "Установка инфраструктуры исключена. При отсутствии актуального Verify Core включит проверку инфраструктуры в этот план перед библиотеками."}
+        </p>
+      </div>
+      <div>
+        <strong>Библиотеки</strong>
+        <p>Полный цикл Apply → Verify.</p>
+      </div>
+      {executionMode === "APPLICATION_LIBRARIES_ONLY" && (
+        <p>
+          Действия Apply инфраструктуры скрыты только в этом представлении. При
+          одобрении Core сформирует точный план; если Verify отсутствует, он
+          добавит его перед полным циклом библиотек.
+        </p>
+      )}
+      {cachedObservation}
+      {scopeChanged && (
+        <p role="status">
+          Состав запуска изменён. Актуальный план будет сформирован при
+          одобрении перед запуском.
+        </p>
+      )}
+    </div>
+  );
   return (
     <section className="installation-page">
       <div className="title">
@@ -311,6 +415,7 @@ export function InstallationPage({
             : ""}
         </span>
       </div>
+
       <nav
         className="installation-tabs"
         role="tablist"
@@ -474,31 +579,48 @@ export function InstallationPage({
           </section>
         )}
         {tab === "plan" && (
-          <PlanStage
-            state={state}
-            draftActive={draftActive}
-            operation={
-              ["STARTING", "RUNNING", "CANCELLING"].includes(
-                run?.run?.state || "",
-              ) && runPlan
-                ? { status: "PLAN_APPROVED", plan: runPlan }
-                : plan
-            }
-            busy={
-              busy ||
-              ["STARTING", "RUNNING", "CANCELLING"].includes(
-                run?.run?.state || "",
-              )
-            }
-            onCreatePlan={createPlan}
-            orderError={orderError}
-            onApprovePlan={onApprovePlan}
-            approvalErrorAttempt={approvalErrorAttempt}
-            onStart={onStart}
-            run={run}
-            credentialStatus={credentialStatus}
-            onSetOutputEncryptionPassword={onSetOutputEncryptionPassword}
-          />
+          <>
+            {onGetRuntimeSecretDescriptors && onSetRuntimeSecretValues && (
+              <ApplicationSecretInputs
+                key={plan?.plan?.projectRevision || "no-revision"}
+                disabled={busy || runActive || !!draftActive}
+                load={onGetRuntimeSecretDescriptors}
+                save={onSetRuntimeSecretValues}
+              />
+            )}
+            <PlanStage
+              key={plan?.plan?.id || "no-plan"}
+              servicesControl={servicesControl}
+              cachedObservation={cachedObservation}
+              scopeChanged={!runActive && scopeChanged}
+              infrastructureExcluded={
+                executionMode === "APPLICATION_LIBRARIES_ONLY"
+              }
+              state={state}
+              draftActive={draftActive}
+              operation={
+                ["STARTING", "RUNNING", "CANCELLING"].includes(
+                  run?.run?.state || "",
+                ) && runPlan
+                  ? { status: "PLAN_APPROVED", plan: runPlan }
+                  : plan
+              }
+              busy={
+                busy ||
+                ["STARTING", "RUNNING", "CANCELLING"].includes(
+                  run?.run?.state || "",
+                )
+              }
+              onCreatePlan={createPlan}
+              orderError={orderError}
+              onApprovePlan={onApprovePlan}
+              approvalErrorAttempt={approvalErrorAttempt}
+              onStart={onStart}
+              run={run}
+              credentialStatus={credentialStatus}
+              onSetOutputEncryptionPassword={onSetOutputEncryptionPassword}
+            />
+          </>
         )}
         {tab === "execution" && (
           <ExecutionStage
@@ -532,6 +654,10 @@ export function InstallationPage({
 }
 
 function PlanStage({
+  servicesControl,
+  cachedObservation,
+  scopeChanged,
+  infrastructureExcluded,
   state,
   draftActive,
   operation,
@@ -545,6 +671,10 @@ function PlanStage({
   credentialStatus,
   onSetOutputEncryptionPassword,
 }: {
+  servicesControl: ReactNode;
+  cachedObservation: ReactNode;
+  scopeChanged: boolean;
+  infrastructureExcluded: boolean;
   state?: InstallationState;
   draftActive: boolean;
   operation?: InstallationPlanOperation;
@@ -589,6 +719,7 @@ function PlanStage({
     return (
       <article className="card installation-empty">
         <h2>План</h2>
+        {cachedObservation}
         <p>
           {operation?.error && (
             <>
@@ -616,6 +747,19 @@ function PlanStage({
   const present = credentialStatus?.pkiStorePasswordStatus === "PRESENT";
   const outputRequired = !!plan.secretOutputEncryptionRequired;
   const outputReady = !outputRequired || outputPasswordPresent;
+  const displayedPhases =
+    infrastructureExcluded && scopeChanged
+      ? plan.phases.map((phase) =>
+          phase.id === "services"
+            ? {
+                ...phase,
+                actions: phase.actions.filter(
+                  (action) => action.type !== "SERVICE_APPLY",
+                ),
+              }
+            : phase,
+        )
+      : plan.phases;
   const currentPlan =
     !["STARTING", "RUNNING", "CANCELLING"].includes(run?.run?.state || "") &&
     !draftActive &&
@@ -625,13 +769,14 @@ function PlanStage({
     state?.plan.planId === plan.id;
   const canApprove =
     currentPlan &&
-    state?.status === "PLAN_REVIEW" &&
-    state.plan.status === "PLAN_REVIEW" &&
+    (scopeChanged || state?.status === "PLAN_REVIEW") &&
+    (scopeChanged || state?.plan.status === "PLAN_REVIEW") &&
     plan.status === "EXECUTABLE" &&
-    !plan.approved &&
+    (scopeChanged || !plan.approved) &&
     requiredCodes.every((code) => acknowledged.includes(code)) &&
     outputReady;
   const canStart =
+    !scopeChanged &&
     currentPlan &&
     !["STARTING", "RUNNING", "CANCELLING"].includes(run?.run?.state || "") &&
     state?.status === "PLAN_APPROVED" &&
@@ -714,7 +859,7 @@ function PlanStage({
       "Проверьте актуальность плана и готовность узла выполнения.",
     );
   }
-  const hasActions = plan.phases.some((phase) => phase.actions.length > 0);
+  const hasActions = displayedPhases.some((phase) => phase.actions.length > 0);
   const saveOutputPassword = async () => {
     setOutputError("");
     try {
@@ -737,6 +882,48 @@ function PlanStage({
       <div className="installation-plan-scroll">
         <article className="card">
           <h2>Новый план установки</h2>
+          {plan.infrastructureVerification && (
+            <section aria-label="Проверка инфраструктуры">
+              <h3>
+                {plan.infrastructureVerification.status === "PASS"
+                  ? "Инфраструктура проверена"
+                  : "Проверка инфраструктуры не подтверждена"}
+              </h3>
+              <p>
+                {plan.infrastructureVerification.status}
+                {plan.infrastructureVerification.code
+                  ? ` · ${plan.infrastructureVerification.code}`
+                  : ""}
+              </p>
+              {plan.infrastructureObservedAt && (
+                <p>Получено: {plan.infrastructureObservedAt}</p>
+              )}
+              <ul>
+                {plan.infrastructureVerification.deployments.map((item) => (
+                  <li key={item.deploymentId}>
+                    {item.deploymentId} · Verify {item.verifiedAt}
+                  </li>
+                ))}
+              </ul>
+              <details>
+                <summary>Advanced: источники инфраструктурных Verify</summary>
+                <ul>
+                  {plan.infrastructureVerification.deployments.map((item) => (
+                    <li key={item.deploymentId}>
+                      {item.deploymentId}: {item.sourceRunId}
+                    </li>
+                  ))}
+                </ul>
+              </details>
+              {plan.infrastructureCacheWarning && (
+                <p role="status">
+                  Локальное наблюдение не сохранено. Решение текущего плана
+                  получено от Core.
+                </p>
+              )}
+            </section>
+          )}
+
           <dl>
             <dt>Статус</dt>
             <dd>{planOperationStatusLabel(operation.status)}</dd>
@@ -783,7 +970,7 @@ function PlanStage({
               Этот план нельзя использовать для текущего состояния проекта.
               Сохраните или отмените черновик и сформируйте свежий план.
             </p>
-            {state?.status === "READY_TO_PLAN" && (
+            {(state?.status === "READY_TO_PLAN" || scopeChanged) && (
               <>
                 {orderError && (
                   <p className="error" role="alert">
@@ -874,15 +1061,21 @@ function PlanStage({
         )}
         <article className="card installation-plan-phases">
           <h2>Этапы плана</h2>
+          {!displayedPhases.some((phase) => phase.id === "services") && (
+            <section className="plan-phase-card">
+              <h3>services · Инфраструктура</h3>
+              {servicesControl}
+            </section>
+          )}
           {!hasActions && (
             <p role="status">
               В плане нет действий по развёртыванию сервисов. Проверьте состав и
               размещение сервисов в проекте.
             </p>
           )}
-          {plan.phases.map((phase) => (
+          {displayedPhases.map((phase) => (
             <details
-              className="plan-phase-card"
+              className={`plan-phase-card${phase.id === "services" && infrastructureExcluded ? " installation-phase-excluded" : ""}`}
               key={phase.id}
               open={phase.order < 2}
             >
@@ -896,7 +1089,11 @@ function PlanStage({
                         ? "Применение"
                         : phase.id === "verify"
                           ? "Проверка и завершение"
-                          : phase.id}
+                          : phase.id === "services"
+                            ? "services · Инфраструктура"
+                            : phase.id === "applications"
+                              ? "Библиотеки"
+                              : phase.id}
                   </b>
                   <small>
                     {phase.actions.length}{" "}
@@ -906,13 +1103,18 @@ function PlanStage({
                   </small>
                 </span>
                 <span className="plan-phase-state">
-                  {plan.status !== "EXECUTABLE"
-                    ? "Есть замечания"
-                    : plan.approved
-                      ? "Готово к выполнению"
-                      : "Ожидает одобрения"}
+                  {phase.id === "services" && infrastructureExcluded
+                    ? "Исключено из выбранного запуска"
+                    : scopeChanged
+                      ? "Требуется свежий план"
+                      : plan.status !== "EXECUTABLE"
+                        ? "Есть замечания"
+                        : plan.approved
+                          ? "Готово к выполнению"
+                          : "Ожидает одобрения"}
                 </span>
               </summary>
+              {phase.id === "services" && servicesControl}
               <div className="plan-phase-actions">
                 {phase.actions
                   .slice(
@@ -961,7 +1163,7 @@ function PlanStage({
             </details>
           ))}
         </article>
-        {plan.status === "EXECUTABLE" && !plan.approved && (
+        {plan.status === "EXECUTABLE" && (scopeChanged || !plan.approved) && (
           <article className="card">
             <h2>Подтверждение</h2>
             {plan.acknowledgements.map((item) => (
@@ -987,7 +1189,7 @@ function PlanStage({
           </article>
         )}
       </div>
-      {plan.status === "EXECUTABLE" && !plan.approved && (
+      {plan.status === "EXECUTABLE" && (scopeChanged || !plan.approved) && (
         <footer
           className="installation-plan-actions"
           aria-label="Подтверждение плана"
@@ -1006,7 +1208,7 @@ function PlanStage({
           </button>
         </footer>
       )}
-      {plan.approved && (
+      {plan.approved && !scopeChanged && (
         <StartApproval
           plan={plan}
           busy={busy}

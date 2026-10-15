@@ -803,15 +803,17 @@ def validate_application_manifest(manifest):
             return
         if manifest['executionMode'] == 'APPLICATION_LIBRARIES_ONLY':
             operations = manifest['operations']
-            if (operations[0]['targets'] != operations[1]['targets'] or
-                    operations[0]['applicationLibraries'] != operations[1]['applicationLibraries'] or
-                    operations[0]['applicationSemanticFingerprint'] != operations[1]['applicationSemanticFingerprint']):
+            application_operations = operations[-2:]
+            if (len(application_operations) != 2 or
+                    application_operations[0]['targets'] != application_operations[1]['targets'] or
+                    application_operations[0]['applicationLibraries'] != application_operations[1]['applicationLibraries'] or
+                    application_operations[0]['applicationSemanticFingerprint'] != application_operations[1]['applicationSemanticFingerprint']):
                 raise LifecycleError('EXECUTION_MANIFEST_INVALID')
             refs, names = set(), set()
             for item in manifest['applicationSecretRequirements']:
                 if (item['requirementRef'] in refs or item['runtimeReference'] in names or
-                        not set(item['hosts']).issubset(operations[0]['targets']) or
-                        not set(item['applicationLibraries']).issubset(operations[0]['applicationLibraries']) or
+                        not set(item['hosts']).issubset(application_operations[0]['targets']) or
+                        not set(item['applicationLibraries']).issubset(application_operations[0]['applicationLibraries']) or
                         (item['purpose'] == 'APPLICATION_VAULT_ADMIN_TOKEN' and
                          (item['providerDeployment'] not in manifest['infrastructureVerification']['model']['coverage'] or
                           item['runtimeReference'] != 'vault-admin-token-' + item['providerDeployment'])) or
@@ -875,12 +877,16 @@ def _validate_application_barrier(manifest):
             apps[0]['applicationSemanticFingerprint'] != apps[1]['applicationSemanticFingerprint']):
         raise LifecycleError('APPLICATION_INFRASTRUCTURE_BARRIER_INVALID')
     services = [item for item in operations[:-2] if item.get('operation') in ('SERVICE_APPLY', 'SERVICE_VERIFY')]
-    applies, verifies = {}, {}
-    for index, item in enumerate(services):
-        (applies if item['operation'] == 'SERVICE_APPLY' else verifies)[item['serviceDeployment']] = index
-    if (not applies or set(applies) != set(verifies) or len(services) != len(applies) * 2 or
-            any(applies[key] >= verifies[key] for key in applies)):
-        raise LifecycleError('APPLICATION_INFRASTRUCTURE_BARRIER_INVALID')
+    if manifest.get('executionMode') == 'APPLICATION_LIBRARIES_ONLY':
+        # The versioned infrastructure validator enforces the exact verify prefix.
+        return
+    else:
+        applies, verifies = {}, {}
+        for index, item in enumerate(services):
+            (applies if item['operation'] == 'SERVICE_APPLY' else verifies)[item['serviceDeployment']] = index
+        if (not applies or set(applies) != set(verifies) or len(services) != len(applies) * 2 or
+                any(applies[key] >= verifies[key] for key in applies)):
+            raise LifecycleError('APPLICATION_INFRASTRUCTURE_BARRIER_INVALID')
 
 
 def _materialize_application_projection(journal, manifest):
@@ -964,7 +970,9 @@ def _dispatch(release, journal, manifest, stopped):
                 return 'CANCELLED'
         if operation.get("operation") in ("PKI_REISSUE", "PKI_APPLY", "SERVICE_APPLY", "SERVICE_VERIFY", 'APPLICATION_LIBRARIES_APPLY', 'APPLICATION_LIBRARIES_VERIFY'):
             execution_target_trust.verify(journal.root, journal.run_id, manifest)
-        if manifest.get('executionMode') == 'INFRASTRUCTURE_VERIFY_ONLY':
+        if (manifest.get('executionMode') == 'INFRASTRUCTURE_VERIFY_ONLY' or
+                (manifest.get('executionMode') == 'APPLICATION_LIBRARIES_ONLY' and
+                 any(op.get('operation') == 'SERVICE_VERIFY' for op in operations))):
             command = command + ['--skip-tags', 'platform_installer_pki_materialization']
         if pki_applied_in_run and operation.get("operation") == "SERVICE_APPLY":
             command = command + ["--skip-tags", "platform_installer_pki_materialization"]

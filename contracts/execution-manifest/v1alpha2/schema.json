@@ -42,8 +42,7 @@
       "type": "array",
       "items": {
         "type": "object"
-      },
-      "maxItems": 16
+      }
     },
     "runtimeSecretOutputs": {
       "type": "array",
@@ -143,8 +142,7 @@
           }
         },
         "additionalProperties": false
-      },
-      "maxItems": 16
+      }
     },
     "operations": {
       "type": "array",
@@ -236,8 +234,7 @@
       "type": "array",
       "items": {
         "type": "object"
-      },
-      "maxItems": 16
+      }
     },
     "planFingerprint": {
       "type": "string",

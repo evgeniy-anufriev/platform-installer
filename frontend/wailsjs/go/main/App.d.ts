@@ -50,6 +50,8 @@ export function ConfirmRuntimeBundleUpdate(arg1:string):Promise<desktop.RuntimeB
 
 export function CreateInstallationPlan(arg1:Array<string>):Promise<desktop.InstallationPlanOperation>;
 
+export function CreateInstallationPlanForMode(arg1:desktop.InstallationPlanRequest):Promise<desktop.InstallationPlanOperation>;
+
 export function CreateProject(arg1:projectlifecycle.CreateProjectRequest):Promise<desktop.ProjectOpenResult>;
 
 export function CurrentProject():Promise<desktop.ProjectOpenResult>;
@@ -67,6 +69,8 @@ export function GetApplicationConfig():Promise<desktop.ApplicationConfigResult>;
 export function GetEndpointPreview():Promise<desktop.EndpointPreview>;
 
 export function GetExecutionNodeContext():Promise<desktop.ExecutionNodeContext>;
+
+export function GetInfrastructureVerification():Promise<desktop.InfrastructureVerificationView>;
 
 export function GetInstallationPlan(arg1:string):Promise<desktop.InstallationPlanOperation>;
 

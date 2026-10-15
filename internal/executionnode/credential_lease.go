@@ -23,7 +23,6 @@ const (
 	credentialPayloadVersionV4 = "TargetCredentialLeasePayload/v1alpha4"
 	credentialLeaseProtocolV2  = "PutRuntimeSecretLease/v1alpha2"
 	startProtocolV2            = "StartExecution/v1alpha2"
-	maxRuntimeSecretValues     = 16
 	maxRuntimeSecretValueBytes = 4096
 	maxRuntimeSecretTotalBytes = 65536
 )
@@ -223,6 +222,9 @@ func (t OpenSSHTransport) PutRuntimeSecretLease(ctx context.Context, node Node, 
 		body["apiVersion"] = version
 		body["pkiStorePassword"] = payload.PKIStorePassword
 	}
+	if (version == credentialPayloadVersionV3 || version == credentialPayloadVersionV4) && payload.PKIStorePassword == "" {
+		body["pkiStorePassword"] = nil
+	}
 	if payload.Password != "" {
 		body["password"] = payload.Password
 	} else {
@@ -267,7 +269,7 @@ func validRuntimeSecretValues(values map[string]string) bool {
 	if values == nil {
 		return true
 	}
-	if len(values) == 0 || len(values) > maxRuntimeSecretValues {
+	if len(values) == 0 {
 		return false
 	}
 	total := 0
@@ -288,9 +290,6 @@ func validRuntimeSecretValues(values map[string]string) bool {
 }
 
 func validRuntimeSecretInputs(values []RuntimeSecretInputPayload) bool {
-	if len(values) > 16 {
-		return false
-	}
 	seen := map[string]bool{}
 	total := 0
 	for _, input := range values {

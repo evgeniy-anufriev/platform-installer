@@ -412,8 +412,6 @@ def _service_input_requirements(deployments, definitions, resolved_topology):
     refs = [item["requirementRef"] for item in private]
     if len(set(keys)) != len(keys) or len(set(refs)) != len(refs):
         findings.append(_finding("SERVICE_SECRET_INPUT_DUPLICATE", "serviceDeployments", "Service secret input requirements must be unique"))
-    if len(public) > 16:
-        findings.append(_finding("SERVICE_SECRET_INPUT_LIMIT_EXCEEDED", "serviceDeployments", "Service secret input requirements exceed the supported limit"))
     return public, private, findings
 
 
@@ -462,7 +460,7 @@ def build_runtime_secret_descriptors(snapshot, catalog, pki_materialization=None
     identity = snapshot.get("project", {}).get("id") if isinstance(snapshot.get("project"), dict) else None
     revision = snapshot.get("projectRevision")
     if (not isinstance(identity, str) or not identity or not isinstance(revision, str) or
-            DIGEST_PATTERN.fullmatch(revision) is None or len(descriptors) > 16 or
+            DIGEST_PATTERN.fullmatch(revision) is None or
             any(len(item["hosts"]) > 256 for item in descriptors)):
         raise ValueError("RUNTIME_SECRET_DESCRIPTORS_BLOCKED")
     fields = ("requirementRef", "purpose", "serviceDeployment", "hosts", "requiredWhen", "operations")
@@ -475,11 +473,13 @@ def build_runtime_secret_descriptors(snapshot, catalog, pki_materialization=None
                                                      'applicationLibraries', 'hosts', 'operations')},
                            sourceRef=item['runtimeReference'], displayLabel=item['runtimeReference'])
                       for item in model['runtimeSecretRequirements']]
-        if len(app_inputs) + len(descriptors) > 16 or any(len(item['hosts']) > 256 for item in app_inputs):
+        if any(len(item['hosts']) > 256 for item in app_inputs):
             raise ValueError('RUNTIME_SECRET_DESCRIPTORS_BLOCKED')
         result.update(apiVersion='BuildRuntimeSecretDescriptors/v1alpha3', applicationInputs=app_inputs)
         result['descriptorSetFingerprint'] = canonical_digest(dict(
             serviceInputs=[{key: item[key] for key in fields} for item in descriptors], applicationInputs=app_inputs))
+    if len(json.dumps(result, ensure_ascii=True, separators=(',', ':')).encode('utf-8')) > 65536:
+        raise ValueError('RUNTIME_SECRET_DESCRIPTORS_BLOCKED')
     return result
 
 
@@ -695,9 +695,6 @@ def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at
     if application_model:
         required_credentials.extend({key: item[key] for key in ('requirementRef', 'purpose', 'hosts')}
                                     for item in application_model['runtimeSecretRequirements'] if item['source'] == 'RUNTIME_INPUT')
-        if len(service_private) + len(application_model['runtimeSecretRequirements']) > 16:
-            findings.append(_finding('RUNTIME_SECRET_REQUIREMENTS_LIMIT', 'applicationLibraries',
-                                     'The current runtime secret lease admits at most 16 values'))
     runtime_secret_requirements = pki_private + service_private
     if len({item["requirementRef"] for item in runtime_secret_requirements + service_input_private}) != len(runtime_secret_requirements) + len(service_input_private) or len({item["runtimeReference"] for item in runtime_secret_requirements if "runtimeReference" in item}) != len([item for item in runtime_secret_requirements if "runtimeReference" in item]):
         service_secret_findings.append(_finding("RUNTIME_SECRET_REQUIREMENT_DUPLICATE", "runtimeSecrets", "Runtime secret requirements must be unique"))

@@ -328,6 +328,10 @@ export const browserBackend: ProjectBackend = {
   getInstallationState: () => invoke("getInstallationState"),
   createInstallationPlan: (deploymentOrder) =>
     invoke("createInstallationPlan", [deploymentOrder]),
+  createInstallationPlanForMode: (request) =>
+    invoke("createInstallationPlanForMode", [request]),
+  getInfrastructureVerification: () =>
+    invoke("getInfrastructureVerification", []),
   getInstallationPlan: (planId) => invoke("getInstallationPlan", [planId]),
   approveInstallationPlan: (planId, acknowledgements) =>
     invoke("approveInstallationPlan", [planId, acknowledgements]),

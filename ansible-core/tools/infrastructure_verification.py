@@ -95,6 +95,19 @@ def model(manifest):
     return dict(fingerprint=digest(semantic), coverage=coverage, hosts=sorted(hosts))
 
 
+def has_library_verify_prefix(manifest):
+    operations = manifest.get('operations', [])
+    if (manifest.get('executionMode') != 'APPLICATION_LIBRARIES_ONLY' or len(operations) < 3 or
+            [op.get('operation') for op in operations[-2:]] !=
+            ['APPLICATION_LIBRARIES_APPLY', 'APPLICATION_LIBRARIES_VERIFY']):
+        return False
+    verifies = operations[:-2]
+    coverage = manifest.get('infrastructureVerification', {}).get('model', {}).get('coverage', {})
+    return (bool(verifies) and len(verifies) == len(coverage) and
+            all(op.get('operation') == 'SERVICE_VERIFY' for op in verifies) and
+            {op.get('serviceDeployment'): digest(op) for op in verifies} == coverage)
+
+
 def _trust(journal, manifest, hosts):
     connections = manifest.get('targetConnections', {})
     if not connections:
@@ -165,6 +178,11 @@ def assert_admission(root, manifest, run_id=None):
     binding = manifest.get('infrastructureVerification', {})
     if manifest.get('executionMode') != 'APPLICATION_LIBRARIES_ONLY':
         return
+    # When saved evidence is absent, this same approved plan carries the fixed
+    # infrastructure Verify prefix. That Verify is the admission proof; do not
+    # require the evidence that the plan is about to create.
+    if has_library_verify_prefix(manifest):
+        return
     current = summary(root, manifest['projectIdentity'], binding['model'])
     if current['status'] != 'PASS' or current['evidenceRevision'] != binding['evidenceRevision']:
         raise LifecycleError('INFRA_EVIDENCE_CHANGED')
@@ -201,10 +219,23 @@ def validate_manifest(manifest):
                 manifest['runtimeSecretOutputs']):
             raise LifecycleError('EXECUTION_MANIFEST_INVALID')
     if mode == 'APPLICATION_LIBRARIES_ONLY':
-        if ([op['operation'] for op in operations] != ['APPLICATION_LIBRARIES_APPLY', 'APPLICATION_LIBRARIES_VERIFY'] or
-                not isinstance(binding['evidenceRevision'], str) or
-                not re.fullmatch(r'sha256:[a-f0-9]{64}', binding['evidenceRevision']) or
-                manifest['runtimeSecretRequirements'] or manifest['runtimeSecretInputs'] or manifest['runtimeSecretOutputs'] or
+        apps = operations[-2:]
+        service_verifies = operations[:-2]
+        combined_verify = bool(service_verifies)
+        service_requirements = manifest['runtimeSecretRequirements']
+        service_inputs = manifest['runtimeSecretInputs']
+        if (not apps or [op['operation'] for op in apps] != ['APPLICATION_LIBRARIES_APPLY', 'APPLICATION_LIBRARIES_VERIFY'] or
+                (combined_verify and not has_library_verify_prefix(manifest)) or
+                (not combined_verify and not isinstance(binding['evidenceRevision'], str)) or
+                (not combined_verify and not re.fullmatch(r'sha256:[a-f0-9]{64}', binding['evidenceRevision'])) or
+                (combined_verify and binding['evidenceRevision'] is not None and
+                 not re.fullmatch(r'sha256:[a-f0-9]{64}', binding['evidenceRevision'])) or
+                (combined_verify and (any(item.get('purpose') not in ('SERVICE_PASSWORD', 'PKI_STORE_PASSWORD') for item in service_requirements) or
+                 any(item.get('operations') != {
+                     'SERVICE_ADMIN_TOKEN': ['SERVICE_APPLY', 'SERVICE_VERIFY'],
+                     'SERVICE_UNSEAL_SHARES': ['SERVICE_APPLY'],
+                 }.get(item.get('purpose')) for item in service_inputs))) or
+                (not combined_verify and (any(item.get('purpose') not in ('SERVICE_PASSWORD', 'PKI_STORE_PASSWORD') for item in service_requirements) or service_inputs)) or manifest['runtimeSecretOutputs'] or
                 any(item['source'] != 'RUNTIME_INPUT' for item in manifest['applicationSecretRequirements'])):
             raise LifecycleError('EXECUTION_MANIFEST_INVALID')
 
@@ -237,7 +268,8 @@ def begin(journal, manifest):
 def _begin(journal, manifest):
     """Once per infrastructure run; called before its first target operation."""
     mode = manifest.get('executionMode', 'FULL_PROJECT')
-    if mode == 'APPLICATION_LIBRARIES_ONLY':
+    has_verify_prefix = has_library_verify_prefix(manifest)
+    if mode == 'APPLICATION_LIBRARIES_ONLY' and not has_verify_prefix:
         assert_admission(journal.root, manifest, journal.run_id)
         return
     marker = os.path.join(journal.directory, 'infrastructure-verifies.json')
@@ -250,7 +282,9 @@ def _begin(journal, manifest):
     except (OSError, ValueError):
         index = None
     trust = _trust(journal, manifest, expected['hosts']) if expected else {}
-    if (mode != 'INFRASTRUCTURE_VERIFY_ONLY' or not index or index.get('model') != expected or
+    reuse_verification_generation = (mode == 'INFRASTRUCTURE_VERIFY_ONLY' or
+                                     mode == 'APPLICATION_LIBRARIES_ONLY' and has_verify_prefix)
+    if (not reuse_verification_generation or not index or index.get('model') != expected or
             index.get('trust') != trust):
         index = dict(schemaVersion=1, projectIdentity=manifest['projectIdentity'], generation=os.urandom(16).hex(),
                      model=expected, trust=trust, verifies={})
@@ -319,7 +353,8 @@ def before_terminal(journal, manifest, state):
     # Revoke while the run is still ACTIVE, before another Start can be admitted.
     if manifest.get('apiVersion') != MANIFEST_VERSION or state == 'SUCCEEDED':
         return
-    application_started = manifest.get('executionMode') == 'APPLICATION_LIBRARIES_ONLY' or any(
+    application_started = (manifest.get('executionMode') == 'APPLICATION_LIBRARIES_ONLY' and
+                           not has_library_verify_prefix(manifest)) or any(
         event.get('eventType') == 'ACTION_STARTED' and event.get('actionId') == 'applications:apply'
         for event in journal.events())
     if application_started:
@@ -354,7 +389,8 @@ def _publish(journal, manifest):
     status, result = _read(journal.status_path), _read(journal.result_path)
     if status.get('state') != result.get('state') or result.get('state') not in ('SUCCEEDED', 'FAILED', 'CANCELLED'):
         return
-    if manifest.get('executionMode') == 'APPLICATION_LIBRARIES_ONLY':
+    has_verify_prefix = has_library_verify_prefix(manifest)
+    if manifest.get('executionMode') == 'APPLICATION_LIBRARIES_ONLY' and not has_verify_prefix:
         if result['state'] != 'SUCCEEDED':
             _revoke_library_failure(journal, manifest, path, index)
         return
@@ -408,28 +444,63 @@ def scope_plan(result, mode, root):
     manifest.update(apiVersion=MANIFEST_VERSION, executionMode=mode, infrastructureVerification=binding)
     manifest.setdefault('applicationSecretRequirements', [])
     if mode == 'APPLICATION_LIBRARIES_ONLY':
-        if observation['status'] != 'PASS':
-            plan['status'], plan['readiness'] = 'BLOCKED', 'BLOCKED'
-            plan['findings'].append(dict(apiVersion='platform.installer/finding/v1alpha1', kind='Finding',
-                code=observation['code'], status='BLOCKED', category='deployment-plan', field='infrastructureVerification',
-                safeMessage='Infrastructure Verify evidence is missing or stale'))
-            result['executionManifest'] = None
         if any(item['source'] != 'RUNTIME_INPUT' for item in manifest['applicationSecretRequirements']):
             raise LifecycleError('APPLICATION_BOOTSTRAP_PROVIDER_INVALID')
-        phases = [p for p in plan['phases'] if p['id'] == 'applications']
-        if not phases:
+        application_phases = [p for p in plan['phases'] if p['id'] == 'applications']
+        if not application_phases:
             raise LifecycleError('APPLICATION_LIBRARIES_REQUIRED')
-        phases[0]['actions'][0]['dependsOn'] = []
-        manifest['operations'] = [op for op in manifest['operations'] if op['operation'].startswith('APPLICATION_LIBRARIES_')]
-        manifest['runtimeSecretRequirements'] = []
-        manifest['runtimeSecretInputs'] = []
-        manifest['runtimeSecretOutputs'] = []
-        manifest['requiredCredentials'] = [{k: item[k] for k in ('requirementRef', 'purpose', 'hosts')}
-                                           for item in manifest['applicationSecretRequirements']]
-        manifest['runtimeSecretDescriptorSetFingerprint'] = digest(dict(serviceDescriptors=[],
-            applicationDescriptors=manifest['applicationSecretRequirements']))
-        manifest['artifactRequirements'] = [item for item in manifest['artifactRequirements'] if item.get('artifactType') == 'container-image']
-        manifest['artifactSourceAuthorities'] = []
+        verify_in_plan = observation['status'] != 'PASS'
+        if verify_in_plan:
+            service_phases = [p for p in plan['phases'] if p['id'] == 'services']
+            if not service_phases:
+                raise LifecycleError('INFRA_VERIFY_COVERAGE_INCOMPLETE')
+            service_phases[0]['actions'] = [a for a in service_phases[0]['actions'] if a['type'] == 'SERVICE_VERIFY']
+            for action in service_phases[0]['actions']:
+                action['dependsOn'] = []
+            phases = service_phases + application_phases
+            manifest['operations'] = [op for op in manifest['operations']
+                if op['operation'] == 'SERVICE_VERIFY' or op['operation'].startswith('APPLICATION_LIBRARIES_')]
+            manifest['runtimeSecretRequirements'] = [item for item in manifest['runtimeSecretRequirements']
+                if item['purpose'] in ('SERVICE_PASSWORD', 'PKI_STORE_PASSWORD')]
+            manifest['runtimeSecretInputs'] = [item for item in manifest['runtimeSecretInputs']
+                if 'SERVICE_VERIFY' in item['operations']]
+            verify_refs = {item['requirementRef'] for item in manifest['runtimeSecretRequirements'] + manifest['runtimeSecretInputs']}
+            application_refs = {item['requirementRef'] for item in manifest['applicationSecretRequirements']}
+            manifest['requiredCredentials'] = [item for item in manifest['requiredCredentials']
+                if item['requirementRef'] in verify_refs | application_refs]
+            manifest['runtimeSecretOutputs'] = []
+            service_descriptors = [
+                {key: item.get(key) for key in ('requirementRef', 'purpose', 'serviceDeployment', 'hosts')}
+                for item in manifest['runtimeSecretRequirements']
+            ] + [
+                {key: item.get(key) for key in ('requirementRef', 'purpose', 'serviceDeployment', 'hosts', 'requiredWhen', 'operations')}
+                for item in manifest['runtimeSecretInputs']
+            ]
+            manifest['runtimeSecretDescriptorSetFingerprint'] = digest(dict(
+                serviceDescriptors=service_descriptors,
+                applicationDescriptors=manifest['applicationSecretRequirements']))
+            manifest['artifactRequirements'] = [item for item in manifest['artifactRequirements']
+                if item.get('artifactType') == 'container-image']
+            manifest['artifactSourceAuthorities'] = []
+        else:
+            phases = application_phases
+            phases[0]['actions'][0]['dependsOn'] = []
+            manifest['operations'] = [op for op in manifest['operations']
+                if op['operation'].startswith('APPLICATION_LIBRARIES_')]
+            # Provider hooks use the existing service passwords; shared-secret
+            # projection may read existing PKCS12 credentials. Neither installs infra.
+            manifest['runtimeSecretRequirements'] = [item for item in manifest['runtimeSecretRequirements']
+                if item['purpose'] in ('SERVICE_PASSWORD', 'PKI_STORE_PASSWORD')]
+            manifest['runtimeSecretInputs'] = []
+            manifest['runtimeSecretOutputs'] = []
+            manifest['requiredCredentials'] = [{k: item[k] for k in ('requirementRef', 'purpose', 'hosts')}
+                for item in manifest['runtimeSecretRequirements'] + manifest['applicationSecretRequirements']]
+            service_descriptors = [{k: item.get(k) for k in ('requirementRef', 'purpose', 'serviceDeployment', 'hosts')}
+                                  for item in manifest['runtimeSecretRequirements']]
+            manifest['runtimeSecretDescriptorSetFingerprint'] = digest(dict(serviceDescriptors=service_descriptors,
+                applicationDescriptors=manifest['applicationSecretRequirements']))
+            manifest['artifactRequirements'] = [item for item in manifest['artifactRequirements'] if item.get('artifactType') == 'container-image']
+            manifest['artifactSourceAuthorities'] = []
     elif mode == 'INFRASTRUCTURE_VERIFY_ONLY':
         phases = [p for p in plan['phases'] if p['id'] == 'services']
         phases[0]['actions'] = [a for a in phases[0]['actions'] if a['type'] == 'SERVICE_VERIFY']
@@ -443,8 +514,8 @@ def scope_plan(result, mode, root):
         manifest['runtimeSecretInputs'] = [item for item in manifest['runtimeSecretInputs'] if 'SERVICE_VERIFY' in item['operations']]
         # Preserve the existing typed lease declaration contract. There is no
         # Apply operation in this manifest to consume its Apply permission.
-        # Verify may read existing PKI, but must never run PKI materialization.
-        manifest['runtimeSecretRequirements'] = [item for item in manifest['runtimeSecretRequirements'] if item['purpose'] == 'SERVICE_PASSWORD']
+        # Verify may open existing PKCS12 stores, without PKI materialization.
+        manifest['runtimeSecretRequirements'] = [item for item in manifest['runtimeSecretRequirements'] if item['purpose'] in ('SERVICE_PASSWORD', 'PKI_STORE_PASSWORD')]
         names = {item['requirementRef'] for item in manifest['runtimeSecretRequirements'] + manifest['runtimeSecretInputs']}
         manifest['requiredCredentials'] = [item for item in manifest['requiredCredentials'] if item['requirementRef'] in names]
     else:

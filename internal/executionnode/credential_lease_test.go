@@ -118,6 +118,9 @@ func TestPutRuntimeSecretLeaseUsesV4ForTypedOptionalInputs(t *testing.T) {
 		t.Fatal("typed lease transport was not invoked")
 	}
 	call := runner.calls[len(runner.calls)-1]
+	if !strings.Contains(call.input, `"pkiStorePassword":null`) {
+		t.Fatal("absent optional PKI password must be null, not empty")
+	}
 	if !strings.Contains(call.input, `"runtimeSecretValues":{}`) || strings.Contains(call.input, `"runtimeSecretValues":null`) {
 		t.Fatal("v4 empty runtime secret values must serialize as an object")
 	}

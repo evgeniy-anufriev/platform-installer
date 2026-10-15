@@ -283,7 +283,7 @@ func (b *Broker) SetPKIStorePassword(binding Binding, value string) (Status, err
 // caller supplies only safe requirement IDs; values never enter Status or a
 // serializable DTO.
 func (b *Broker) SetRuntimeSecretValues(binding Binding, values map[string]string) error {
-	if len(values) == 0 || len(values) > 16 {
+	if len(values) == 0 {
 		return errors.New("RUNTIME_SECRET_INPUT_INVALID")
 	}
 	next, total := make(map[string][]byte, len(values)), 0
@@ -364,6 +364,11 @@ func (b *Broker) SetPendingRuntimeSecretValuesForRequirements(binding Binding, r
 			merged[reference] = value
 		}
 		next = merged
+		if !validRuntimeSecretMap(next) {
+			zeroSecretMap(next)
+			zeroTypedSecretMap(typed)
+			return errors.New("RUNTIME_SECRET_INPUT_INVALID")
+		}
 		b.clearPendingLocked()
 		b.pending = &pendingRuntimeSecrets{binding: binding, values: next, typed: typed, expiresAt: b.now().Add(b.ttl)}
 		b.nextGen++
@@ -1125,7 +1130,7 @@ var runtimeSecretRequirementPattern = regexp.MustCompile(`^[a-z][a-z0-9-]{0,63}$
 func runtimeSecretID(value string) bool { return runtimeSecretRequirementPattern.MatchString(value) }
 
 func sameRuntimeSecretRequirements(requirements []string, values map[string]string) bool {
-	if len(requirements) == 0 || len(requirements) != len(values) || len(requirements) > 16 {
+	if len(requirements) == 0 || len(requirements) != len(values) {
 		return false
 	}
 	seen := make(map[string]struct{}, len(requirements))
@@ -1145,7 +1150,7 @@ func sameRuntimeSecretRequirements(requirements []string, values map[string]stri
 }
 
 func validRuntimeSecretMap(values map[string][]byte) bool {
-	if len(values) == 0 || len(values) > 16 {
+	if len(values) == 0 {
 		return false
 	}
 	total := 0
@@ -1162,7 +1167,7 @@ func validRuntimeSecretMap(values map[string][]byte) bool {
 }
 
 func validRuntimeSecretMapFromStrings(values map[string]string) bool {
-	if len(values) == 0 || len(values) > 16 {
+	if len(values) == 0 {
 		return false
 	}
 	total := 0

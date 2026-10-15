@@ -29,6 +29,8 @@ import {
   DeclineTargetHostKey,
   GetInstallationState,
   CreateInstallationPlan,
+  CreateInstallationPlanForMode,
+  GetInfrastructureVerification,
   GetInstallationPlan,
   ApproveInstallationPlan,
   StartApprovedInstallation,
@@ -58,7 +60,7 @@ import {
   VerifyProject,
   ClearSessionCredential,
 } from "../wailsjs/go/main/App";
-import type { desktop } from "../wailsjs/go/models";
+import type { desktop, executionnode } from "../wailsjs/go/models";
 import { EventsOn } from "../wailsjs/runtime/runtime";
 
 export type VerificationStatus = {
@@ -244,7 +246,25 @@ export type InstallationState = {
     safeMessage: string;
   }>;
 };
+export type InstallationExecutionMode =
+  "FULL_PROJECT" | "APPLICATION_LIBRARIES_ONLY" | "INFRASTRUCTURE_VERIFY_ONLY";
+export type InstallationPlanRequest = {
+  executionMode: InstallationExecutionMode;
+  deploymentOrder: string[];
+  applicationVaultSources: Record<
+    string,
+    "RUNTIME_INPUT" | "CURRENT_RUN_BOOTSTRAP"
+  >;
+};
+export type InfrastructureVerificationView = Pick<
+  desktop.InfrastructureVerificationView,
+  "availability" | "observedAt" | "previous"
+>;
 export type InstallationPlanView = {
+  executionMode?: InstallationExecutionMode;
+  infrastructureVerification?: executionnode.InfrastructureVerification;
+  infrastructureObservedAt?: string;
+  infrastructureCacheWarning?: boolean;
   id: string;
   status: "EXECUTABLE" | "BLOCKED";
   projectRevision: string;
@@ -408,6 +428,16 @@ export type RuntimeSecretDescriptorOperation = {
   projectRevision?: string;
   descriptorSetFingerprint?: string;
   descriptors?: RuntimeSecretDescriptor[];
+  applicationInputs?: Array<{
+    requirementRef: string;
+    purpose: "APPLICATION_SECRET" | "APPLICATION_VAULT_ADMIN_TOKEN";
+    providerDeployment: string | null;
+    applicationLibraries: string[];
+    hosts: string[];
+    operations: string[];
+    sourceRef: string;
+    displayLabel: string;
+  }>;
   error?: { code: string; message: string };
 };
 export type ServiceConfigurationPreview = {
@@ -576,6 +606,10 @@ export interface ProjectBackend {
   createInstallationPlan?(
     deploymentOrder: string[],
   ): Promise<InstallationPlanOperation>;
+  createInstallationPlanForMode?(
+    request: InstallationPlanRequest,
+  ): Promise<InstallationPlanOperation>;
+  getInfrastructureVerification?(): Promise<InfrastructureVerificationView>;
   getInstallationPlan?(planId: string): Promise<InstallationPlanOperation>;
   approveInstallationPlan?(
     planId: string,
@@ -698,6 +732,12 @@ export const backend: ProjectBackend = {
     CreateInstallationPlan(
       deploymentOrder,
     ) as unknown as Promise<InstallationPlanOperation>,
+  createInstallationPlanForMode: (request) =>
+    CreateInstallationPlanForMode(
+      request,
+    ) as unknown as Promise<InstallationPlanOperation>,
+  getInfrastructureVerification: () =>
+    GetInfrastructureVerification() as unknown as Promise<InfrastructureVerificationView>,
   getInstallationPlan: (planId) =>
     GetInstallationPlan(
       planId,

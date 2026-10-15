@@ -26,10 +26,8 @@ RUNTIME_SECRET_PAYLOAD_VERSION = "TargetCredentialLeasePayload/v1alpha3"
 TYPED_RUNTIME_SECRET_PAYLOAD_VERSION = "TargetCredentialLeasePayload/v1alpha4"
 MAX_PAYLOAD_BYTES = 1088 * 1024
 MAX_PKI_STORE_PASSWORD_BYTES = 4096
-MAX_RUNTIME_SECRET_VALUES = 16
 MAX_RUNTIME_SECRET_VALUE_BYTES = 4096
 MAX_RUNTIME_SECRET_TOTAL_BYTES = 65536
-MAX_TYPED_RUNTIME_SECRET_INPUTS = 16
 MAX_TYPED_RUNTIME_SECRET_TOTAL_BYTES = 65536
 MAX_TYPED_SHARE_ARRAY_BYTES = 32768
 _TYPED_INPUT_OPERATIONS = {
@@ -154,7 +152,7 @@ def _payload(value):
             if size < 1 or size > MAX_PKI_STORE_PASSWORD_BYTES:
                 raise LifecycleError("LEASE_PAYLOAD_INVALID")
         values = value.get("runtimeSecretValues")
-        if not isinstance(values, dict) or len(values) > MAX_RUNTIME_SECRET_VALUES or (value.get("apiVersion") == RUNTIME_SECRET_PAYLOAD_VERSION and not values):
+        if not isinstance(values, dict) or (value.get("apiVersion") == RUNTIME_SECRET_PAYLOAD_VERSION and not values):
             raise LifecycleError("LEASE_PAYLOAD_INVALID")
         total = 0
         for reference, secret in values.items():
@@ -169,7 +167,7 @@ def _payload(value):
                 raise LifecycleError("LEASE_PAYLOAD_INVALID")
     if value.get("apiVersion") == TYPED_RUNTIME_SECRET_PAYLOAD_VERSION:
         inputs = value.get("runtimeSecretInputs")
-        if not isinstance(inputs, list) or len(inputs) > MAX_TYPED_RUNTIME_SECRET_INPUTS:
+        if not isinstance(inputs, list):
             raise LifecycleError("LEASE_PAYLOAD_INVALID")
         seen, total = set(), 0
         for item in inputs:
@@ -292,7 +290,7 @@ def runtime_secret_values_for_run(state_root, run_id):
 def application_secret_values_for_operation(state_root, run_id, operation, requirements):
     """Bounded application scope over the existing v1alpha3/v1alpha4 secret lease."""
     allowed = ['APPLICATION_LIBRARIES_APPLY', 'APPLICATION_LIBRARIES_VERIFY']
-    if operation not in allowed or not isinstance(requirements, list) or len(requirements) > MAX_RUNTIME_SECRET_VALUES:
+    if operation not in allowed or not isinstance(requirements, list):
         raise LifecycleError('EXECUTION_MANIFEST_INVALID')
     refs, names = set(), set()
     for item in requirements:
@@ -350,7 +348,7 @@ def _attached_payload_for_run(state_root, run_id):
 
 
 def _validate_typed_secret_requirements(requirements):
-    if not isinstance(requirements, list) or len(requirements) > MAX_TYPED_RUNTIME_SECRET_INPUTS:
+    if not isinstance(requirements, list):
         raise LifecycleError("EXECUTION_MANIFEST_INVALID")
     expected = {}
     for requirement in requirements:

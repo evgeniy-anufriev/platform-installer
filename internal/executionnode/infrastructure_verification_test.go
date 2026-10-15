@@ -52,15 +52,20 @@ func TestB0CapabilityVersionAndScope(t *testing.T) {
 
 type b1PlanRunner struct {
 	protocolRunner
-	request   map[string]any
-	summary   map[string]any
-	wrongMode bool
+	request           map[string]any
+	summary           map[string]any
+	wrongMode         bool
+	capabilityVersion string
 }
 
 func (r *b1PlanRunner) RunBounded(ctx context.Context, name string, args []string, input []byte, limit int) ([]byte, error) {
 	var request map[string]any
 	_ = json.Unmarshal(input, &request)
 	if request["operation"] == "GetCapabilities" {
+		r.capabilityVersion, _ = request["apiVersion"].(string)
+		if r.capabilityVersion != "platform.installer/execution-runtime/v1alpha4" {
+			return json.Marshal(map[string]any{"apiVersion": "platform.installer/execution-capabilities/v1alpha6"})
+		}
 		return json.Marshal(b0Capability())
 	}
 	if request["operation"] == "BuildDeploymentPlan" {
@@ -92,7 +97,7 @@ func TestModePlanUsesExistingFixedProtocolAndRejectsWrongMode(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if p.ExecutionMode != ApplicationLibrariesOnly || runner.request["apiVersion"] != "platform.installer/execution-runtime/v1alpha4" || runner.request["applicationVaultSources"].(map[string]any)["vault-main"] != "RUNTIME_INPUT" {
+		if p.ExecutionMode != ApplicationLibrariesOnly || runner.capabilityVersion != "platform.installer/execution-runtime/v1alpha4" || runner.request["apiVersion"] != "platform.installer/execution-runtime/v1alpha4" || runner.request["applicationVaultSources"].(map[string]any)["vault-main"] != "RUNTIME_INPUT" {
 			t.Fatal("mode/source request changed")
 		}
 	}

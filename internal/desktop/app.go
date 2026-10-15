@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -169,12 +170,13 @@ type RuntimeSecretDescriptorView struct {
 }
 
 type RuntimeSecretDescriptorOperation struct {
-	SecretsInstalled         bool                          `json:"secretsInstalled,omitempty"`
-	Status                   string                        `json:"status"`
-	ProjectRevision          string                        `json:"projectRevision,omitempty"`
-	DescriptorSetFingerprint string                        `json:"descriptorSetFingerprint,omitempty"`
-	Descriptors              []RuntimeSecretDescriptorView `json:"descriptors,omitempty"`
-	Error                    *ProjectOpenError             `json:"error,omitempty"`
+	SecretsInstalled         bool                                        `json:"secretsInstalled,omitempty"`
+	Status                   string                                      `json:"status"`
+	ProjectRevision          string                                      `json:"projectRevision,omitempty"`
+	DescriptorSetFingerprint string                                      `json:"descriptorSetFingerprint,omitempty"`
+	Descriptors              []RuntimeSecretDescriptorView               `json:"descriptors,omitempty"`
+	ApplicationInputs        []executionnode.ApplicationSecretDescriptor `json:"applicationInputs,omitempty"`
+	Error                    *ProjectOpenError                           `json:"error,omitempty"`
 }
 
 // RuntimeSecretValuesInput is one non-persistent submission for a single
@@ -217,6 +219,7 @@ type runtimeSecretDescriptorEvidence struct {
 	projectID, projectRevision, nodeID, fingerprint string
 	runtime                                         executionnode.RuntimeEvidence
 	descriptors                                     []RuntimeSecretDescriptorView
+	applicationInputs                               []executionnode.ApplicationSecretDescriptor
 }
 
 var runtimeSecretDescriptorRequirement = regexp.MustCompile(`^[a-z][a-z0-9-]{0,63}$`)
@@ -784,6 +787,15 @@ func (a *App) SetDeploymentRuntimeSecretValues(input RuntimeSecretValuesInput) e
 			requirements = append(requirements, descriptor.RequirementRef)
 		}
 	}
+	if input.ServiceDeployment == "" {
+		for _, descriptor := range evidence.applicationInputs {
+			requirements = append(requirements, descriptor.RequirementRef)
+		}
+		if len(requirements) == 0 {
+			return errors.New("RUNTIME_SECRET_DESCRIPTOR_NOT_FOUND")
+		}
+		return a.secrets.SetPendingRuntimeSecretValuesForRequirements(binding, requirements, input.Values)
+	}
 	if len(requirements) == 0 {
 		return errors.New("RUNTIME_SECRET_DESCRIPTOR_NOT_FOUND")
 	}
@@ -1168,8 +1180,21 @@ func (a *App) getRuntimeSecretDescriptorsLocked(clearAttached bool) RuntimeSecre
 		}
 		view.Descriptors = append(view.Descriptors, RuntimeSecretDescriptorView{RequirementRef: item.RequirementRef, Purpose: item.Purpose, ServiceDeployment: item.ServiceDeployment, DisplayLabel: item.DisplayLabel, RequiredWhen: item.RequiredWhen, Operations: append([]string(nil), item.Operations...), Hosts: append([]string(nil), item.Hosts...)})
 	}
-	if len(view.Descriptors) > 16 {
-		return RuntimeSecretDescriptorOperation{Status: "UNAVAILABLE", Error: &ProjectOpenError{Code: "RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE", Message: "Core returned too many service secret descriptors."}}
+	seen := map[string]bool{}
+	for _, item := range view.Descriptors {
+		if seen[item.RequirementRef] {
+			return RuntimeSecretDescriptorOperation{Status: "UNAVAILABLE", Error: &ProjectOpenError{Code: "RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE"}}
+		}
+		seen[item.RequirementRef] = true
+	}
+	sources := map[string]bool{}
+	for _, item := range result.ApplicationInputs {
+		if !validApplicationSecretDescriptor(item) || seen[item.RequirementRef] || sources[item.SourceRef] {
+			return RuntimeSecretDescriptorOperation{Status: "UNAVAILABLE", Error: &ProjectOpenError{Code: "RUNTIME_SECRET_DESCRIPTORS_UNAVAILABLE", Message: "Core returned an unsafe application secret descriptor."}}
+		}
+		seen[item.RequirementRef] = true
+		sources[item.SourceRef] = true
+		view.ApplicationInputs = append(view.ApplicationInputs, item)
 	}
 	// A fresh Core descriptor set invalidates values already attached to a
 	// target credential, but retains local pending values long enough to prove
@@ -1179,6 +1204,7 @@ func (a *App) getRuntimeSecretDescriptorsLocked(clearAttached bool) RuntimeSecre
 		a.secrets.ClearAttachedRuntimeSecretValues(credentialBinding)
 	}
 	a.runtimeSecretEvidence = &runtimeSecretDescriptorEvidence{projectID: a.current.Project.ID, projectRevision: revision, nodeID: binding.node.ID, runtime: result.Runtime, fingerprint: result.DescriptorSetFingerprint, descriptors: append([]RuntimeSecretDescriptorView(nil), view.Descriptors...)}
+	a.runtimeSecretEvidence.applicationInputs = append([]executionnode.ApplicationSecretDescriptor(nil), view.ApplicationInputs...)
 	requirements := make([]string, 0, len(view.Descriptors))
 	typedRequirements := make([]runtimesecret.RuntimeSecretInput, 0, len(view.Descriptors))
 	for _, descriptor := range view.Descriptors {
@@ -1188,6 +1214,9 @@ func (a *App) getRuntimeSecretDescriptorsLocked(clearAttached bool) RuntimeSecre
 		if descriptor.Purpose == secretfiles.PurposeAdminToken || descriptor.Purpose == secretfiles.PurposeUnsealShares {
 			typedRequirements = append(typedRequirements, runtimesecret.RuntimeSecretInput{RequirementRef: descriptor.RequirementRef, Purpose: descriptor.Purpose, ServiceDeployment: descriptor.ServiceDeployment, Operations: append([]string(nil), descriptor.Operations...)})
 		}
+	}
+	for _, item := range view.ApplicationInputs {
+		requirements = append(requirements, item.RequirementRef)
 	}
 	if credentialBinding, bindingErr := a.credentialBindingLocked(); bindingErr == nil {
 		if err := a.secrets.PromotePendingRuntimeSecretValues(credentialBinding, requirements); err != nil {
@@ -1240,9 +1269,12 @@ func typedRuntimeSecretRequirements(plan executionnode.DeploymentPlan) []executi
 	return result
 }
 
-func runtimeDescriptorsMatchPlan(descriptors []RuntimeSecretDescriptorView, requirements []executionnode.RuntimeSecretInputRequirement) bool {
+func runtimeDescriptorsMatchPlan(descriptors []RuntimeSecretDescriptorView, requirements []executionnode.RuntimeSecretInputRequirement, mode executionnode.ExecutionMode) bool {
 	actual := make([]executionnode.RuntimeSecretInputRequirement, 0)
 	for _, descriptor := range descriptors {
+		if (mode == executionnode.ApplicationLibrariesOnly || mode == executionnode.InfrastructureVerifyOnly) && !slices.Contains(descriptor.Operations, "SERVICE_VERIFY") {
+			continue
+		}
 		if descriptor.Purpose == secretfiles.PurposeAdminToken || descriptor.Purpose == secretfiles.PurposeUnsealShares {
 			actual = append(actual, executionnode.RuntimeSecretInputRequirement{RequirementRef: descriptor.RequirementRef, Purpose: descriptor.Purpose})
 		}
@@ -1534,6 +1566,9 @@ func (a *App) AppendEditCommand(sessionID string, command installer.EditCommand)
 		"CreateCertificateProfile", "UpdateCertificateProfile", "DeleteCertificateProfile",
 		"CreateTLSProfile", "UpdateTLSProfile", "DeleteTLSProfile",
 		"CreateCertificateScope", "UpdateCertificateScope", "DeleteCertificateScope":
+	case "CreateApplicationLibraryDeployment", "UpdateApplicationLibraryDeployment", "DeleteApplicationLibraryDeployment",
+		"SetApplicationLibrarySlot", "RemoveApplicationLibrarySlot", "SetApplicationLibraryPlacement", "RemoveApplicationLibraryPlacement",
+		"SetApplicationLibraryOverride", "RemoveApplicationLibraryOverride":
 	case "SetServiceConfigurationValue", "RemoveServiceConfigurationOverride":
 	default:
 		return a.editFailure(errors.New("EDIT_OPERATION_NOT_AVAILABLE"))

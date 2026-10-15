@@ -28,7 +28,6 @@
     },
     "descriptors": {
       "type": "array",
-      "maxItems": 16,
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -232,8 +231,7 @@
           "displayLabel"
         ]
       },
-      "type": "array",
-      "maxItems": 16
+      "type": "array"
     }
   }
 }

@@ -256,21 +256,23 @@ Save текущей ревизии
 ```
 
 Admission query/Build остаются target-free: чтение journal на Execution Node не
-превращается в скрытый Verify. Проверки реального здоровья выполняются в отдельном
-явно выбранном Verify-only run или штатных задачах library Apply.
+превращается в скрытый Verify. При совместимом полном evidence library-only manifest
+содержит только APPLICATION_LIBRARIES_APPLY/VERIFY и binding на проверенную ревизию
+evidence. Если доказательство отсутствует или устарело, один authoritative plan
+содержит fixed SERVICE_VERIFY для всех enabled infrastructure deployments перед
+библиотечными операциями. Это не отдельный Verify-only plan/run и не второе одобрение.
 
-В manifest нет SERVICE_APPLY/SERVICE_VERIFY и нет имитации их SUCCESS. Вместо них
-versioned admission reference, immutable infrastructure fingerprint, evidence revision,
-точный deployment coverage и привязка к выбранному Execution Node/runtime.
-Контроллер принимает только evidence, найденное в своём trusted state. Arbitrary
-playbook paths/commands или `skipBarrier` в request запрещены.
+SERVICE_APPLY запрещён в обоих library-only вариантах. Core выполняет Verify через
+существующие entrypoints и передаёт управление библиотекам только после успешного
+завершения этой фазы. Ошибка или отмена Verify завершает общий run обычным путём Core
+до начала library Apply. Частичные результаты Verify сохраняются по действующим
+generation/journal правилам и становятся evidence только после terminal состояния.
+Контроллер принимает только local trusted proofs; произвольные playbook/command input
+и `skipBarrier` в request запрещены.
 
-При отсутствии доказательств план BLOCKED с missing/stale deployments и typed
-действием «Проверить инфраструктуру». Verify-only использует существующие service
-Verify entrypoints и собственный fresh plan/approval/run; не содержит Apply, install,
-reset или automatic repair. В B0 проверить поддержку этого режима текущим planner;
-если её нет, добавить минимальный fixed operation scope перед включением кнопки.
-Не реализовывать произвольное подмножество сервисов в рамках этого этапа.
+Отдельный `INFRASTRUCTURE_VERIFY_ONLY` остаётся явным scope, но не используется как
+автоматический второй план при снятом Services checkbox. Не реализовывать произвольное
+подмножество сервисов в рамках этого этапа.
 
 Verify-only — отдельный explicit verification scope того же lifecycle, а не третий
 неявный режим установки. B0 переиспользует существующий scope, если он доказан
@@ -438,7 +440,8 @@ approval/secret/lock boundaries. QA и cleanup подтверждены, review 
    existing Execution Node journals и bounded operational index.
 3. Требовать все enabled infra deployments, разрешать evidence из нескольких terminal
    runs при одном полном infra fingerprint; без TTL и без частичной совместимости в v1.
-4. При stale/missing evidence предлагать Verify-only, никогда не начинать full Apply автоматически.
+4. При stale/missing evidence в library-only plan выполнять fixed Verify всех enabled
+   infra services перед library Apply; infrastructure Apply не включать.
 5. Library-only — новый явный approved run полного library scope; Vault через актуальный
    runtime input; никакого неявного извлечения старого bootstrap.
 6. Начинать код только после согласования этого плана. Этот запрос разрешает документирование.
@@ -461,3 +464,57 @@ from names or assignment text. Explicit Installer credential source descriptors
 and runtime private-key custody remain separate. D03: reject overlapping
 parent/child edit writes while retaining independent slot edits. Reuse existing
 writer and Core validators; no new secret classification framework.
+
+
+### B4 owner UI refinement (2026-10-14)
+
+Owner approved minimal integration on the existing Installation page. Final
+choice: Infrastructure checkbox checked = FULL_PROJECT; unchecked = library
+Apply/Verify using saved infrastructure Verify evidence. No actual infrastructure
+Verify is implied by unchecked. Libraries have no checkbox yet and always use
+Apply/Verify. No new Core scope/manifest/protocol is introduced. Scope choice
+must survive navigation and reject use of an old plan for another selection.
+The existing React/Wails lifecycle and later separate editor scope are retained.
+Positive target acceptance still requires its own approved bounded QA scope;
+prerequisite refusal through the real bridge is partial evidence only.
+
+
+Final owner placement clarification: the operator first builds the plan from the
+topology, then chooses to omit repeated infrastructure installation in its services
+block on the Plan tab. No scope checkbox before an initial plan or above the tabs.
+Keep the prior plan visible but services muted; require fresh mode-specific Build
+and approval before any Start. Libraries remain Apply/Verify without a checkbox.
+
+B4 owner amendment (2026-10-14, final): the services checkbox is local presentation
+only and never calls Core. On Approve, a changed scope first builds an authoritative
+plan with the existing mode-aware API. Only that returned plan can be approved.
+New acknowledgements, changed runtime/revision/node, or re-including infrastructure
+require reviewing the returned plan before another confirmation. No separate Build
+click is required for the scope change. Libraries remain Apply -> Verify; Start is
+unavailable while the displayed plan differs from the selected scope. This replaces
+the earlier B4 instruction requiring an explicit fresh Build after checkbox changes.
+
+B4 owner amendment (2026-10-14, missing Verify evidence): when Services is unchecked
+and Core has no compatible saved infrastructure Verify evidence, the authoritative
+plan contains fixed SERVICE_VERIFY operations for every enabled infrastructure
+deployment followed by the existing library Apply/Verify operations. This is one
+plan, one approval and one run. It never includes infrastructure Apply. Verify
+failure or cancellation stops the same Core run before libraries; successful Verify
+publishes infrastructure evidence under the existing generation/journal rules. If
+compatible saved evidence exists, the plan remains library-only and skips infra Verify.
+
+B4 owner clarification: the missing-evidence SERVICE_VERIFY prefix is part of the
+same library execution plan, not a separate plan or approval. The fixed library
+Apply/Verify operations remain in that plan. Standard Core failure handling stops
+the run before library operations if infrastructure Verify fails; no separate
+preflight stage or approval is added.
+
+B4 presentation clarification: while the displayed plan still belongs to the
+previous scope and the Services checkbox is unchecked, the Plan tab rebuilds
+only its local display projection and omits `SERVICE_APPLY` rows from the services
+block. It does not send a request to Core or mutate the received plan. Once Core
+returns the authoritative selected-scope plan during approval, the UI displays
+that plan without filtering.
+
+### B4 credential completion amendment (2026-10-15)
+Owner authorized removal of the requirement-count limit and carrying applicationInputs through the existing runtime lease. Reuse Core descriptors, the existing Broker/value map, current binding/expiry/size guards and actual React/Wails flow. Plan gets a minimal session-only library-secret dialog. Do not change application configuration or weaken target acceptance to avoid credential requirements. Independent FULL DIFF review and real target acceptance remain required; infrastructure Apply is forbidden in this QA.

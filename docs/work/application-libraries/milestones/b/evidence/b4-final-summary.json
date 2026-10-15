@@ -1,0 +1,36 @@
+{
+  "milestone": "B4",
+  "status": "PASS_WITH_DOCUMENTED_LOCAL_CLEANUP_EXCEPTION",
+  "bundleDigest": "sha256:bac6ba030953635ae7e82e7ab7af68a2181baf1ef775f7de3c8c3bf989f33dfe",
+  "projectRevision": "sha256:62a12cdee5ebcce35e24d87da65c2e59c9a2e0b6368c5a5c55a1983cce8d7c39",
+  "verifyPrefixRun": "installer-fab0fbfeb5b289a759880a0da4b47355",
+  "savedProofRun": "installer-9ba62439061817f6b571fcc8716ec91f",
+  "savedProofState": "SUCCEEDED",
+  "operationTypes": [
+    "APPLICATION_LIBRARIES_APPLY",
+    "APPLICATION_LIBRARIES_VERIFY"
+  ],
+  "infrastructureApplyCount": 0,
+  "ownedContainers": 3,
+  "containerMetadataIdentical": true,
+  "statusProbes": 5,
+  "allStatus200": true,
+  "allEightChecksOk": true,
+  "httpsVerification": "CA_AND_HOSTNAME",
+  "coreRegression": {
+    "failures": 0,
+    "tests": 691,
+    "errors": 0,
+    "passed": 670,
+    "skipped": 21
+  },
+  "secretAudit": {
+    "matches": 0,
+    "knownValues": 16,
+    "files": 141
+  },
+  "remoteQaWorkspacesCleaned": true,
+  "ownedQaProcessesStopped": true,
+  "localCredentialCopyCleanup": "BLOCKED_BY_AUTOMATIC_APPROVAL_REVIEW",
+  "visualInspectionClaimed": false
+}

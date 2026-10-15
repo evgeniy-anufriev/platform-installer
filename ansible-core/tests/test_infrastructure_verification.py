@@ -15,6 +15,7 @@ from test_deployment_plan import DIGEST
 import infrastructure_verification as infra
 import execution_controller as controller
 import execution_protocol as protocol
+import execution_secret_lease as secret_lease
 from execution_lifecycle import Journal, LifecycleError, digest
 
 
@@ -57,10 +58,65 @@ class InfrastructureVerificationTests(unittest.TestCase):
     def observation(self):
         return infra.summary(self.root, self.full['executionManifest']['projectIdentity'], self.expected)
 
-    def test_missing_evidence_blocks_library_only(self):
-        result = infra.scope_plan(self.base, 'APPLICATION_LIBRARIES_ONLY', self.root)
-        self.assertEqual('BLOCKED', result['deploymentPlan']['status'])
-        self.assertIsNone(result['executionManifest'])
+    def test_missing_evidence_builds_verify_then_library_plan(self):
+        base = copy.deepcopy(self.base)
+        service_password = dict(requirementRef='service-password-test', purpose='SERVICE_PASSWORD', hosts=['node1'])
+        service_input = dict(requirementRef='service-admin-token-provider', purpose='SERVICE_ADMIN_TOKEN',
+                             serviceDeployment='provider', hosts=['node1'], requiredWhen='INITIALIZED',
+                             operations=['SERVICE_APPLY', 'SERVICE_VERIFY'],
+                             manifestRequirementRef='service-secret-provider-admin-token')
+        base['executionManifest']['runtimeSecretRequirements'] = [service_password]
+        base['executionManifest']['runtimeSecretInputs'] = [service_input]
+        base['executionManifest']['requiredCredentials'] += [
+            {key: service_password[key] for key in ('requirementRef', 'purpose', 'hosts')},
+            {key: service_input[key] for key in ('requirementRef', 'purpose', 'hosts')}]
+        result = infra.scope_plan(base, 'APPLICATION_LIBRARIES_ONLY', self.root)
+        self.assertEqual('EXECUTABLE', result['deploymentPlan']['status'])
+        manifest = result['executionManifest']
+        self.assertEqual(['services', 'applications'], [phase['id'] for phase in result['deploymentPlan']['phases']])
+        self.assertEqual(['SERVICE_VERIFY', 'SERVICE_VERIFY',
+                          'APPLICATION_LIBRARIES_APPLY', 'APPLICATION_LIBRARIES_VERIFY'],
+                         [op['operation'] for op in manifest['operations']])
+        self.assertEqual('BLOCKED', result['deploymentPlan']['infrastructureVerification']['status'])
+        self.assertIsNone(manifest['infrastructureVerification']['evidenceRevision'])
+        self.assertEqual([service_password], manifest['runtimeSecretRequirements'])
+        self.assertEqual(['SERVICE_APPLY', 'SERVICE_VERIFY'], manifest['runtimeSecretInputs'][0]['operations'])
+        self.assertEqual(1, len(secret_lease._validate_typed_secret_requirements(manifest['runtimeSecretInputs'])))
+        self.assertEqual([], manifest['runtimeSecretOutputs'])
+        controller.validate_application_manifest(manifest)
+        infra.validate_manifest(manifest)
+
+    def test_verify_scopes_preserve_existing_pkcs12_password_requirement(self):
+        base = copy.deepcopy(self.base)
+        private = dict(requirementRef='pki-store-password', purpose='PKI_STORE_PASSWORD',
+                       hosts=['node1'], runtimeReference='runtime:pki-store-password')
+        public = {key: private[key] for key in ('requirementRef', 'purpose', 'hosts')}
+        base['executionManifest']['runtimeSecretRequirements'] = [private]
+        base['executionManifest']['requiredCredentials'] = [public]
+        for mode in ('APPLICATION_LIBRARIES_ONLY', 'INFRASTRUCTURE_VERIFY_ONLY'):
+            with self.subTest(mode=mode):
+                result = infra.scope_plan(base, mode, self.root)
+                manifest = result['executionManifest']
+                self.assertEqual([private], manifest['runtimeSecretRequirements'])
+                self.assertIn(public, manifest['requiredCredentials'])
+                self.assertFalse(any(op['operation'] in ('SERVICE_APPLY', 'PKI_APPLY', 'PKI_REISSUE')
+                                     for op in manifest['operations']))
+                infra.validate_manifest(manifest)
+
+        self.complete()
+        provider_password = dict(requirementRef='service-provider-password', purpose='SERVICE_PASSWORD',
+                                 serviceDeployment='provider', hosts=['node1'], runtimeReference='runtime:provider-password')
+        base['executionManifest']['runtimeSecretRequirements'].append(provider_password)
+        provider_public = {key: provider_password[key] for key in ('requirementRef', 'purpose', 'hosts')}
+        base['executionManifest']['requiredCredentials'].append(provider_public)
+        manifest = infra.scope_plan(base, 'APPLICATION_LIBRARIES_ONLY', self.root)['executionManifest']
+        self.assertEqual(['APPLICATION_LIBRARIES_APPLY', 'APPLICATION_LIBRARIES_VERIFY'],
+                         [op['operation'] for op in manifest['operations']])
+        self.assertEqual([private, provider_password], manifest['runtimeSecretRequirements'])
+        self.assertIn(public, manifest['requiredCredentials'])
+        self.assertIn(provider_public, manifest['requiredCredentials'])
+        controller.validate_application_manifest(manifest)
+        infra.validate_manifest(manifest)
 
     def test_fixed_library_scope_after_success(self):
         self.complete()
@@ -71,6 +127,37 @@ class InfrastructureVerificationTests(unittest.TestCase):
                          [op['operation'] for op in manifest['operations']])
         controller.validate_application_manifest(manifest)
         infra.assert_admission(self.root, manifest)
+
+    def test_failed_in_plan_verify_stops_before_library_apply(self):
+        base = copy.deepcopy(self.base)
+        base['executionManifest']['targetConnections'] = {
+            'node1': dict(address='192.0.2.1', port=22, mode='ssh', unsupportedOptions=False)}
+        manifest = infra.scope_plan(base, 'APPLICATION_LIBRARIES_ONLY', self.root)['executionManifest']
+        journal = self.journal(manifest, 'installer-verify-before-library')
+        connection = manifest['targetConnections']['node1']
+        endpoint = connection['address']
+        if connection['port'] != 22:
+            endpoint = '[%s]:%s' % (endpoint, connection['port'])
+        (Path(journal.directory) / 'known_hosts').write_text(endpoint + ' ssh-ed25519 synthetic-key\n')
+        (Path(journal.directory) / 'known_hosts').chmod(0o600)
+        executed = []
+        def wait(process, *_args):
+            executed.append(process.args[0])
+            return (1, 'SYNTHETIC_VERIFY_FAILURE', None)
+        with patch.object(controller, '_command', side_effect=lambda _release, _journal, operation: [operation['operationId']]), \
+             patch.object(controller, '_claim_raw_ansible_failure_capture', return_value=False), \
+             patch.object(controller, '_environment', return_value={}), \
+             patch.object(controller.subprocess, 'Popen', side_effect=lambda args, **_kwargs: type('Process', (), {'args': args})()), \
+             patch.object(controller, '_wait_for_operation', side_effect=wait), \
+             patch.object(controller.execution_target_trust, 'verify'), \
+             patch.object(controller.execution_secret_lease, 'ansible_connection_credentials_for_run', return_value=None), \
+             patch.object(controller.execution_secret_lease, 'runtime_secret_inputs_for_operation', return_value=[]), \
+             patch.object(controller, '_materialize_application_projection') as materialize:
+            with self.assertRaisesRegex(LifecycleError, 'EXECUTION_OPERATION_FAILED'):
+                controller._dispatch('/runtime/release', journal, manifest, [False])
+        self.assertEqual([manifest['operations'][0]['operationId']], executed)
+        self.assertFalse(any(action.startswith('applications:') for action in executed))
+        materialize.assert_not_called()
 
     def test_verify_only_contains_no_apply_and_has_full_coverage(self):
         result = infra.scope_plan(self.base, 'INFRASTRUCTURE_VERIFY_ONLY', self.root)
@@ -474,28 +561,35 @@ class InfrastructureVerificationTests(unittest.TestCase):
 class NativeInfrastructureScopeTests(unittest.TestCase):
     setUp = InfrastructureVerificationTests.setUp
     journal = InfrastructureVerificationTests.journal
-    def test_real_action_uses_fixed_scope_and_private_journal_without_targets(self):
+    def test_real_action_builds_verify_and_library_scopes_without_targets(self):
         """Real Ansible controller action, current code; all data is synthetic."""
         from test_application_plan import REPO, application_snapshot, image_lock
         from test_deployment_plan import catalog, runtime, sources
-        play = Path(self.root, 'plan.yml')
-        args = dict(snapshot=application_snapshot(), service_catalog=catalog(), runtime_release=runtime(),
-                    bundle_artifact_sources=sources(), application_image_lock=image_lock(),
-                    deployment_order=['provider', 'consumer'], pki_state_root=self.root,
-                    execution_mode='INFRASTRUCTURE_VERIFY_ONLY')
-        output = Path(self.root, 'manifest.json')
-        play.write_text(json.dumps([dict(hosts='localhost', gather_facts=False, tasks=[
-            {'name': 'Build B0 Verify-only via real action', 'platform.core.build_deployment_plan': args}])]))
-        env = dict(os.environ, ANSIBLE_COLLECTIONS_PATH=str(REPO / 'ansible-core/collections'),
-                   PLATFORM_EXECUTION_MANIFEST_OUTPUT=str(output))
-        completed = subprocess.run(['ansible-playbook', '-i', 'localhost,', '-c', 'local', str(play)],
-                                   env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-        self.assertEqual(0, completed.returncode, completed.stdout[-3000:])
-        manifest = json.loads(output.read_text())
-        controller.validate_application_manifest(manifest)
-        self.assertTrue(all(op['operation'] == 'SERVICE_VERIFY' for op in manifest['operations']))
+        for mode in ('INFRASTRUCTURE_VERIFY_ONLY', 'APPLICATION_LIBRARIES_ONLY'):
+            with self.subTest(mode=mode):
+                play = Path(self.root, mode + '-plan.yml')
+                args = dict(snapshot=application_snapshot(), service_catalog=catalog(), runtime_release=runtime(),
+                            bundle_artifact_sources=sources(), application_image_lock=image_lock(),
+                            deployment_order=['provider', 'consumer'], pki_state_root=self.root,
+                            execution_mode=mode)
+                output = Path(self.root, mode + '-manifest.json')
+                play.write_text(json.dumps([dict(hosts='localhost', gather_facts=False, tasks=[
+                    {'name': 'Build fixed Core scope via real action', 'platform.core.build_deployment_plan': args}])]))
+                env = dict(os.environ, ANSIBLE_COLLECTIONS_PATH=str(REPO / 'ansible-core/collections'),
+                           PLATFORM_EXECUTION_MANIFEST_OUTPUT=str(output))
+                completed = subprocess.run(['ansible-playbook', '-i', 'localhost,', '-c', 'local', str(play)],
+                                           env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+                self.assertEqual(0, completed.returncode, completed.stdout[-3000:])
+                manifest = json.loads(output.read_text())
+                controller.validate_application_manifest(manifest)
+                if mode == 'INFRASTRUCTURE_VERIFY_ONLY':
+                    self.assertTrue(all(op['operation'] == 'SERVICE_VERIFY' for op in manifest['operations']))
+                else:
+                    self.assertEqual(['SERVICE_VERIFY', 'SERVICE_VERIFY',
+                                      'APPLICATION_LIBRARIES_APPLY', 'APPLICATION_LIBRARIES_VERIFY'],
+                                     [op['operation'] for op in manifest['operations']])
 
-    def test_real_fixed_controller_verify_scope_publishes_only_after_terminal(self):
+    def test_real_controller_verifies_then_applies_libraries_in_one_run(self):
         """Isolated fixture runtime: real controller, trust, projection and Ansible.
 
         Fixture service Verify bodies are localhost assertions, not service acceptance.
@@ -512,7 +606,7 @@ class NativeInfrastructureScopeTests(unittest.TestCase):
                 operation['roleVariablesByHost'] = {'node1': {'platform_fixture_enabled': True}}
         base['executionManifest']['targetConnections'] = {
             'node1': dict(address='192.0.2.1', port=22, mode='ssh', unsupportedOptions=False)}
-        manifest = infra.scope_plan(base, 'INFRASTRUCTURE_VERIFY_ONLY', self.root)['executionManifest']
+        manifest = infra.scope_plan(base, 'APPLICATION_LIBRARIES_ONLY', self.root)['executionManifest']
         journal = self.journal(manifest, 'installer-0123456789abcdef0123456789abcdef')
         project = Path(journal.directory, 'project', 'inventory')
         project.mkdir(parents=True)
@@ -534,35 +628,26 @@ class NativeInfrastructureScopeTests(unittest.TestCase):
             manifestDigest=digest(manifest), approvals=[dict(hostId='node1', address='192.0.2.1', port=22,
                 keyType=kind, publicKey=key)]))
         controller._materialize_runtime_projection(journal, journal.metadata(), manifest)
-        self.assertEqual('SUCCEEDED', controller._dispatch(str(release), journal, manifest, [False]))
-        expected = manifest['infrastructureVerification']['model']
-        self.assertEqual('BLOCKED', infra.summary(self.root, manifest['projectIdentity'], expected)['status'])
-        controller._finish_run_with_outputs(journal, 'SUCCEEDED', '', '', manifest, str(release))
-        self.assertEqual('PASS', infra.summary(self.root, manifest['projectIdentity'], expected)['status'])
-        completed = [event['actionId'] for event in journal.events() if event['eventType'] == 'ACTION_COMPLETED']
-        self.assertEqual(['verify:provider', 'verify:consumer'], completed)
-        # A second independent run uses only the two fixed application paths.
-        application = infra.scope_plan(base, 'APPLICATION_LIBRARIES_ONLY', self.root)['executionManifest']
-        library = self.journal(application, 'installer-abcdef0123456789abcdef0123456789')
-        inventory = Path(library.directory, 'project', 'inventory')
-        inventory.mkdir(parents=True)
-        (inventory / 'hosts.yml').write_text((project / 'hosts.yml').read_text())
+        self.assertEqual(['SERVICE_VERIFY', 'SERVICE_VERIFY', 'APPLICATION_LIBRARIES_APPLY', 'APPLICATION_LIBRARIES_VERIFY'],
+                         [op['operation'] for op in manifest['operations']])
         playbooks = core / 'playbooks'
         playbooks.mkdir()
         for action in ('apply', 'verify'):
             (playbooks / ('application-libraries-' + action + '.yml')).write_text(
                 '- hosts: node1\n  gather_facts: false\n  tasks:\n    - ansible.builtin.assert:\n        that: platform_application_expected_library_ids == ["sdku"]\n')
-        execution_target_trust.stage(self.root, dict(stagingId=library.run_id,
-            projectIdentity=application['projectIdentity'], projectRevision=application['projectRevision'],
-            planFingerprint=application['planFingerprint'], runtimeRelease=application['runtimeRelease'],
-            manifestDigest=digest(application), approvals=[dict(hostId='node1', address='192.0.2.1', port=22,
+        execution_target_trust.stage(self.root, dict(stagingId=journal.run_id,
+            projectIdentity=manifest['projectIdentity'], projectRevision=manifest['projectRevision'],
+            planFingerprint=manifest['planFingerprint'], runtimeRelease=manifest['runtimeRelease'],
+            manifestDigest=digest(manifest), approvals=[dict(hostId='node1', address='192.0.2.1', port=22,
                 keyType=kind, publicKey=key)]))
-        controller._materialize_runtime_projection(library, library.metadata(), application)
-        self.assertEqual('SUCCEEDED', controller._dispatch(str(release), library, application, [False]))
-        controller._finish_run_with_outputs(library, 'SUCCEEDED', '', '', application, str(release))
-        actions = [event['actionId'] for event in library.events() if event['eventType'] == 'ACTION_COMPLETED']
-        self.assertEqual(['applications:apply', 'applications:verify'], actions)
+        controller._materialize_runtime_projection(journal, journal.metadata(), manifest)
+        self.assertEqual('SUCCEEDED', controller._dispatch(str(release), journal, manifest, [False]))
+        expected = manifest['infrastructureVerification']['model']
+        self.assertEqual('BLOCKED', infra.summary(self.root, manifest['projectIdentity'], expected)['status'])
+        controller._finish_run_with_outputs(journal, 'SUCCEEDED', '', '', manifest, str(release))
         self.assertEqual('PASS', infra.summary(self.root, manifest['projectIdentity'], expected)['status'])
+        actions = [event['actionId'] for event in journal.events() if event['eventType'] == 'ACTION_COMPLETED']
+        self.assertEqual(['verify:provider', 'verify:consumer', 'applications:apply', 'applications:verify'], actions)
 
 
 if __name__ == '__main__':

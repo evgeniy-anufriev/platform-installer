@@ -854,7 +854,10 @@ function ExecutionNodePanel({
           ? ` · Проверка проекта: ${verificationLabel(preparation.verification.status)}`
           : ""}
       </p>
-      {[...(readiness?.findings || []), ...(preparation?.findings || [])].map(
+      {[
+        ...(preparation?.status === "PREPARED" ? [] : readiness?.findings || []),
+        ...(preparation?.findings || []),
+      ].map(
         (finding, index) => (
           <p
             className="field-error"

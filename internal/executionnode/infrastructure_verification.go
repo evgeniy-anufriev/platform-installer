@@ -111,7 +111,7 @@ func (t OpenSSHTransport) BuildDeploymentPlanForMode(ctx context.Context, node N
 	if projectRoot == "" || len(release) == 0 || !validModePlanInput(order, mode, vaultSources) {
 		return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_INPUT_INVALID")
 	}
-	c, err := t.runtimeProtocol(ctx, node, map[string]any{"apiVersion": "platform.installer/execution-runtime/v1alpha1", "operation": "GetCapabilities"})
+	c, err := t.runtimeProtocol(ctx, node, map[string]any{"apiVersion": "platform.installer/execution-runtime/v1alpha4", "operation": "GetCapabilities"})
 	if err != nil {
 		return DeploymentPlan{}, err
 	}

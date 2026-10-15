@@ -93,6 +93,53 @@ func TestPreparationDisclosesRuntimePackageStep(t *testing.T) {
 	t.Fatal("runtime package installation absent from preparation plan")
 }
 
+func TestNativeRuntimeActivationCustodyCommandParses(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("requires the Execution Node Python runtime")
+	}
+	python, err := exec.LookPath("python3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var custodyCommand string
+	for _, line := range strings.Split(runtimeActivationPhase, "\n") {
+		if strings.Contains(line, "from execution_secret_output import _directory") {
+			custodyCommand = line
+		}
+	}
+	if custodyCommand == "" {
+		t.Fatal("custody initialization command missing")
+	}
+	bin := t.TempDir()
+	// Compile the exact payload received after shell quoting, without executing
+	// the imports or accessing the real execution-state directory.
+	validator := `import ast, sys
+tree = ast.parse(sys.argv[1])
+compile(tree, "<runtime-custody>", "exec")
+calls = [node for node in ast.walk(tree) if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "exec"]
+assert len(calls) == 1
+compile(ast.literal_eval(calls[0].args[0]), "<runtime-custody-exec>", "exec")`
+	shim := "#!/bin/sh\n[ \"$1\" = -c ] || exit 65\nexec " + shellLiteral(python) + " -c " + shellLiteral(validator) + " \"$2\"\n"
+	if err := os.WriteFile(filepath.Join(bin, "python3"), []byte(shim), 0700); err != nil {
+		t.Fatal(err)
+	}
+	command := exec.Command("sh", "-c", custodyCommand)
+	command.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"), "release="+t.TempDir())
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("custody command did not parse: %v: %s", err, output)
+	}
+	// The former escaped closing quote is valid outer Python but invalid exec input.
+	broken := strings.Replace(custodyCommand, `pass")`, `pass\")`, 1)
+	if broken == custodyCommand {
+		t.Fatal("could not reconstruct former malformed payload")
+	}
+	command = exec.Command("sh", "-c", broken)
+	command.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"), "release="+t.TempDir())
+	if output, err := command.CombinedOutput(); err == nil || !strings.Contains(string(output), "SyntaxError") {
+		t.Fatalf("former payload must fail syntax validation: %v: %s", err, output)
+	}
+}
+
 func TestNativeRuntimeActivationPreservesReleaseAndSerializesAttempts(t *testing.T) {
 	if runtime.GOOS != "linux" || os.Geteuid() != 0 {
 		t.Skip("requires Linux root in isolated QA workspace")

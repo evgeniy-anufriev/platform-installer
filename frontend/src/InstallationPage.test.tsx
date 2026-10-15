@@ -250,7 +250,7 @@ describe("InstallationPage", () => {
     expect(screen.getByText("Развёртывание: kafka-main")).toBeTruthy();
     const approve = screen.getByRole("button", { name: "Одобрить план" });
     expect(approve).toHaveProperty("disabled", true);
-    await user.click(screen.getByRole("checkbox"));
+    await user.click(screen.getByRole("checkbox", { name: /ACK_RISK/ }));
     await user.click(approve);
     expect(onApprovePlan).toHaveBeenCalledWith("plan-1", ["ACK_RISK"]);
   });
@@ -956,7 +956,7 @@ describe("InstallationPage", () => {
     await user.click(
       screen.getByRole("button", { name: "Сохранить пароль в сеансе" }),
     );
-    await user.click(screen.getByRole("checkbox"));
+    await user.click(screen.getByRole("checkbox", { name: /ACK_RISK/ }));
     expect(approve).toHaveProperty("disabled", false);
     await user.click(approve);
     expect(setOutputPassword).toHaveBeenCalledWith(

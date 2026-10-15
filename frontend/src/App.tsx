@@ -9,6 +9,8 @@ import type {
   EndpointPreview,
   InstallationState,
   InstallationPlanOperation,
+  InstallationExecutionMode,
+  InfrastructureVerificationView,
   InstallationRunOperation,
   InstallationEventView,
   OpenResult,
@@ -308,6 +310,11 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
   const [installationTab, setInstallationTab] = useState<
     "summary" | "plan" | "execution" | "result"
   >("summary");
+  const [installationExecutionMode, setInstallationExecutionMode] =
+    useState<InstallationExecutionMode>("FULL_PROJECT");
+  useEffect(() => setInstallationExecutionMode("FULL_PROJECT"), [result.root]);
+  const [infrastructureObservation, setInfrastructureObservation] =
+    useState<InfrastructureVerificationView>();
   const [installationPlan, setInstallationPlan] = useState<
     InstallationPlanOperation | undefined
   >(undefined);
@@ -570,10 +577,15 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     if (!projectOpen || !api.getInstallationState) {
       setInstallationState(undefined);
       setInstallationPlan(undefined);
+      setInfrastructureObservation(undefined);
       return () => {
         live = false;
       };
     }
+    api
+      .getInfrastructureVerification?.()
+      .then((value) => live && setInfrastructureObservation(value))
+      .catch(() => live && setInfrastructureObservation(undefined));
     api
       .getInstallationState()
       .then((value) => live && setInstallationState(value))
@@ -863,17 +875,39 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
       setBundleBusy(false);
     }
   };
-  const createInstallationPlan = async (deploymentOrder: string[]) => {
+  const installationOrderRef = useRef<string[]>([]);
+  const createInstallationPlan = async (
+    deploymentOrder: string[],
+    executionMode: InstallationExecutionMode = "FULL_PROJECT",
+  ) => {
     if (
       ["STARTING", "RUNNING", "CANCELLING"].includes(
         installationRun?.run?.state || "",
       )
     )
       return;
-    if (!api.createInstallationPlan) return;
+    if (!api.createInstallationPlan && !api.createInstallationPlanForMode)
+      return;
     setInstallationBusy(true);
+    installationOrderRef.current = deploymentOrder;
     try {
-      const operation = await api.createInstallationPlan(deploymentOrder);
+      const operation: InstallationPlanOperation =
+        api.createInstallationPlanForMode
+          ? await api.createInstallationPlanForMode({
+              executionMode,
+              deploymentOrder,
+              applicationVaultSources: {},
+            })
+          : executionMode === "FULL_PROJECT" && api.createInstallationPlan
+            ? await api.createInstallationPlan(deploymentOrder)
+            : {
+                status: "BLOCKED",
+                error: {
+                  code: "EXECUTION_MODE_RUNTIME_UNSUPPORTED",
+                  message:
+                    "Режим библиотек не поддерживается текущим transport. Полная установка не запущена.",
+                },
+              };
       setInstallationPlan(operation);
       await refreshInstallationState();
       setInstallationTab("plan");
@@ -894,6 +928,43 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     if (!api.approveInstallationPlan) return;
     setInstallationBusy(true);
     try {
+      if (
+        (installationPlan?.plan?.executionMode || "FULL_PROJECT") !==
+        installationExecutionMode
+      ) {
+        if (!api.createInstallationPlanForMode) return;
+        const fresh = await api.createInstallationPlanForMode({
+          executionMode: installationExecutionMode,
+          deploymentOrder: installationOrderRef.current,
+          applicationVaultSources: {},
+        });
+        setInstallationPlan(fresh);
+        const previous = installationPlan?.plan;
+        const next = fresh.plan;
+        if (
+          !next ||
+          next.status !== "EXECUTABLE" ||
+          fresh.error ||
+          installationExecutionMode === "FULL_PROJECT" ||
+          next.executionNodeId !== previous?.executionNodeId ||
+          JSON.stringify(next.runtime) !== JSON.stringify(previous?.runtime) ||
+          next.projectRevision !== previous?.projectRevision ||
+          next.acknowledgements.some(
+            (item) =>
+              !previous.acknowledgements.some(
+                (old) =>
+                  old.code === item.code &&
+                  old.summary === item.summary &&
+                  acknowledgements.includes(item.code),
+              ),
+          )
+        ) {
+          await refreshInstallationState();
+          return;
+        }
+        planId = next.id;
+        acknowledgements = next.acknowledgements.map((item) => item.code);
+      }
       const operation = await api.approveInstallationPlan(
         planId,
         acknowledgements,
@@ -2356,12 +2427,18 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
           )}
           {!loading && !creating && projectOpen && page === "installation" && (
             <InstallationPage
+              key={result.root}
+              onGetRuntimeSecretDescriptors={api.getRuntimeSecretDescriptors}
+              onSetRuntimeSecretValues={api.setDeploymentRuntimeSecretValues}
               state={installationState}
               draftActive={!!sessionId || refreshRequired}
               tab={installationTab}
               onTabChange={setInstallationTab}
               onOpenServers={() => setPage("servers")}
               plan={installationPlan}
+              infrastructureObservation={infrastructureObservation}
+              selectedExecutionMode={installationExecutionMode}
+              onExecutionModeChange={setInstallationExecutionMode}
               busy={installationBusy}
               onCreatePlan={createInstallationPlan}
               serviceDeployments={Object.values(

@@ -47,6 +47,20 @@ def typed_runtime_secret_payload(inputs, values=None, store_password=None):
 
 
 class ExecutionSecretLeaseTests(unittest.TestCase):
+    def test_quantity_uses_existing_value_and_payload_byte_bounds(self):
+        values = {'secret-%s' % i: 'synthetic' for i in range(80)}
+        execution_secret_lease._payload(typed_runtime_secret_payload([], values))
+        with self.assertRaisesRegex(LifecycleError, 'LEASE_PAYLOAD_INVALID'):
+            execution_secret_lease._payload(typed_runtime_secret_payload([], dict(values, **{'secret-0': 'x' * 4097})))
+        with self.assertRaisesRegex(LifecycleError, 'LEASE_PAYLOAD_INVALID'):
+            execution_secret_lease._payload(typed_runtime_secret_payload([], {key: 'x' * 1024 for key in values}))
+        inputs = [dict(requirementRef='token-%s' % i, purpose='SERVICE_ADMIN_TOKEN',
+                       serviceDeployment='vault-%s' % i, operations=['SERVICE_APPLY', 'SERVICE_VERIFY'],
+                       value='synthetic') for i in range(40)]
+        execution_secret_lease._payload(typed_runtime_secret_payload(inputs))
+        with self.assertRaisesRegex(LifecycleError, 'LEASE_PAYLOAD_INVALID'):
+            execution_secret_lease._payload(typed_runtime_secret_payload(inputs + [inputs[0]]))
+
     def test_complete_put_is_idempotent_and_never_persists_request_secret(self):
         with tempfile.TemporaryDirectory() as root:
             first = execution_secret_lease.put(root, request(), payload())
@@ -185,6 +199,8 @@ class ExecutionSecretLeaseTests(unittest.TestCase):
             self.assertTrue(execution_secret_lease.attach(root, stored["leaseId"], request(), "installer-123"))
             self.assertEqual([{"requirementRef": item["requirementRef"], "purpose": item["purpose"], "value": item["value"]}],
                              execution_secret_lease.runtime_secret_inputs_for_operation(root, "installer-123", "vault-ha", "SERVICE_APPLY", [descriptor]))
+            self.assertEqual([{"requirementRef": item["requirementRef"], "purpose": item["purpose"], "value": item["value"]}],
+                             execution_secret_lease.runtime_secret_inputs_for_operation(root, "installer-123", "vault-ha", "SERVICE_VERIFY", [descriptor]))
             self.assertEqual([], execution_secret_lease.runtime_secret_inputs_for_operation(root, "installer-123", "vault-other", "SERVICE_APPLY", [descriptor]))
             self.assertEqual([], execution_secret_lease.runtime_secret_inputs_for_operation(root, "installer-123", "vault-ha", "PKI_APPLY", [descriptor]))
             self.assertTrue(execution_secret_lease.cleanup_run(root, "installer-123"))

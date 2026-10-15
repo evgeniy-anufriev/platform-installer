@@ -90,6 +90,10 @@ export function CreateInstallationPlan(arg1) {
   return window['go']['main']['App']['CreateInstallationPlan'](arg1);
 }
 
+export function CreateInstallationPlanForMode(arg1) {
+  return window['go']['main']['App']['CreateInstallationPlanForMode'](arg1);
+}
+
 export function CreateProject(arg1) {
   return window['go']['main']['App']['CreateProject'](arg1);
 }
@@ -124,6 +128,10 @@ export function GetEndpointPreview() {
 
 export function GetExecutionNodeContext() {
   return window['go']['main']['App']['GetExecutionNodeContext']();
+}
+
+export function GetInfrastructureVerification() {
+  return window['go']['main']['App']['GetInfrastructureVerification']();
 }
 
 export function GetInstallationPlan(arg1) {

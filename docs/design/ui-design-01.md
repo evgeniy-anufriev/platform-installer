@@ -706,3 +706,43 @@ editing follow only with their backend contracts.
 ### Owner refinement: server information (2026-10-08)
 
 Servers and Execution Node use one «Проверить сервер» action. Its modal obtains the SSH fingerprint and requires explicit confirmation; the same exact key supplies installation trust. Read-only Go observations appear in one compact, non-wrapping line below the server: hostname, OS/version/architecture, CPU/RAM, server time and last successful check in Russian Moscow time. «Проверен» is independent of «Сохранён» and runtime readiness. A failed/stale session cannot publish successful observations. This supersedes separate key/check controls in the earlier mockup; see [plan](../work/server-information/server-information-check-plan.md).
+
+
+### B4 owner-approved Installation scope control (2026-10-14)
+
+After the user builds the initial plan, its services block on the Plan tab has
+an Infrastructure checkbox. It is not shown before a plan or above the tabs.
+The reviewed plan remains visible when the choice changes; services actions are
+muted, with Apply rows omitted locally while the displayed plan belongs to the
+previous scope. Checked selects
+FULL_PROJECT; unchecked selects APPLICATION_LIBRARIES_ONLY and visually mutes
+infrastructure. While the displayed plan belongs to the previous scope, the Plan
+tab locally omits SERVICE_APPLY rows from the services block but leaves the
+underlying Core plan unchanged; this is only a display projection, not an
+execution plan. Once Core returns the selected-scope plan, the UI displays it
+without filtering. If fresh Core Build finds compatible saved infrastructure Verify
+evidence, the plan contains only library Apply/Verify. If that evidence is missing
+or stale, the same plan includes infrastructure Verify before library Apply/Verify;
+it does not include infrastructure Apply or create another plan/approval. A Core
+Verify failure stops the run before libraries. Libraries always run Apply/Verify
+and have no checkbox in this stage. The choice is local
+presentation state retained across navigation, not portable desired state.
+On Approve, Core builds the selected scope; the previous plan cannot be approved
+or started for that selection. During an active run the choice is locked. Existing Plan/Approve/Start/
+Execution/Result are reused. Core observations display current plan verification,
+source run IDs separately in Advanced, and cached observations as UNKNOWN only.
+The full application editor and further visual redesign remain C scope.
+The static mockup remains a generic full-plan example and does not demonstrate
+the checkbox-driven local display projection; it is not an execution-scope
+authority.
+
+B4 owner amendment (2026-10-14, final): the services checkbox is local presentation
+only and never calls Core. On Approve, a changed scope first builds an authoritative
+plan with the existing mode-aware API. Only that returned plan can be approved.
+New acknowledgements, changed runtime/revision/node, or re-including infrastructure
+require reviewing the returned plan before another confirmation. No separate Build
+click is required for the scope change. Libraries remain Apply -> Verify; Start is
+unavailable while the displayed plan differs from the selected scope. This replaces
+the earlier B4 instruction requiring an explicit fresh Build after checkbox changes.
+
+B4 owner-authorized credential completion (2026-10-15): Plan adds a compact «Секреты библиотек» dialog, using the existing runtime-secret dialog styling and Core-derived applicationInputs. The selected service's Secrets dialog remains unchanged. Password values remain in the existing session Broker/lease, never desired state. This is a minimal integration addition to the Installation mockup, not a library editor.
