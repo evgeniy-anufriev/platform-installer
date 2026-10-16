@@ -1,3 +1,2143 @@
+@@PORTABLE {"path":"vendor/golang.org/x/sys/windows/zsyscall_windows.go","mode":420,"size":209178,"sha256":"c40bdeba110bf46782feb55976a00c88c2ae51d8c812de5ae023326eeb083c92","index":4,"count":5,"encoding":"utf-8","payloadBytes":17178}
+, _, e1 := syscall.SyscallN(procExitWindowsEx.Addr(), uintptr(flags), uintptr(reason))
+	if r1 == 0 {
+		err = errnoErr(e1)
+	}
+	return
+}
+
+func GetClassName(hwnd HWND, className *uint16, maxCount int32) (copied int32, err error) {
+	r0, _, e1 := syscall.SyscallN(procGetClassNameW.Addr(), uintptr(hwnd), uintptr(unsafe.Pointer(className)), uintptr(maxCount))
+	copied = int32(r0)
+	if copied == 0 {
+		err = errnoErr(e1)
+	}
+	return
+}
+
+func GetDesktopWindow() (hwnd HWND) {
+	r0, _, _ := syscall.SyscallN(procGetDesktopWindow.Addr())
+	hwnd = HWND(r0)
+	return
+}
+
+func GetForegroundWindow() (hwnd HWND) {
+	r0, _, _ := syscall.SyscallN(procGetForegroundWindow.Addr())
+	hwnd = HWND(r0)
+	return
+}
+
+func GetGUIThreadInfo(thread uint32, info *GUIThreadInfo) (err error) {
+	r1, _, e1 := syscall.SyscallN(procGetGUIThreadInfo.Addr(), uintptr(thread), uintptr(unsafe.Pointer(info)))
+	if r1 == 0 {
+		err = errnoErr(e1)
+	}
+	return
+}
+
+func GetKeyboardLayout(tid uint32) (hkl Handle) {
+	r0, _, _ := syscall.SyscallN(procGetKeyboardLayout.Addr(), uintptr(tid))
+	hkl = Handle(r0)
+	return
+}
+
+func GetShellWindow() (shellWindow HWND) {
+	r0, _, _ := syscall.SyscallN(procGetShellWindow.Addr())
+	shellWindow = HWND(r0)
+	return
+}
+
+func GetWindowThreadProcessId(hwnd HWND, pid *uint32) (tid uint32, err error) {
+	r0, _, e1 := syscall.SyscallN(procGetWindowThreadProcessId.Addr(), uintptr(hwnd), uintptr(unsafe.Pointer(pid)))
+	tid = uint32(r0)
+	if tid == 0 {
+		err = errnoErr(e1)
+	}
+	return
+}
+
+func IsWindow(hwnd HWND) (isWindow bool) {
+	r0, _, _ := syscall.SyscallN(procIsWindow.Addr(), uintptr(hwnd))
+	isWindow = r0 != 0
+	return
+}
+
+func IsWindowUnicode(hwnd HWND) (isUnicode bool) {
+	r0, _, _ := syscall.SyscallN(procIsWindowUnicode.Addr(), uintptr(hwnd))
+	isUnicode = r0 != 0
+	return
+}
+
+func IsWindowVisible(hwnd HWND) (isVisible bool) {
+	r0, _, _ := syscall.SyscallN(procIsWindowVisible.Addr(), uintptr(hwnd))
+	isVisible = r0 != 0
+	return
+}
+
+func LoadKeyboardLayout(name *uint16, flags uint32) (hkl Handle, err error) {
+	r0, _, e1 := syscall.SyscallN(procLoadKeyboardLayoutW.Addr(), uintptr(unsafe.Pointer(name)), uintptr(flags))
+	hkl = Handle(r0)
+	if hkl == 0 {
+		err = errnoErr(e1)
+	}
+	return
+}
+
+func MessageBox(hwnd HWND, text *uint16, caption *uint16, boxtype uint32) (ret int32, err error) {
+	r0, _, e1 := syscall.SyscallN(procMessageBoxW.Addr(), uintptr(hwnd), uintptr(unsafe.Pointer(text)), uintptr(unsafe.Pointer(caption)), uintptr(boxtype))
+	ret = int32(r0)
+	if ret == 0 {
+		err = errnoErr(e1)
+	}
+	return
+}
+
+func ToUnicodeEx(vkey uint32, scancode uint32, keystate *byte, pwszBuff *uint16, cchBuff int32, flags uint32, hkl Handle) (ret int32) {
+	r0, _, _ := syscall.SyscallN(procToUnicodeEx.Addr(), uintptr(vkey), uintptr(scancode), uintptr(unsafe.Pointer(keystate)), uintptr(unsafe.Pointer(pwszBuff)), uintptr(cchBuff), uintptr(flags), uintptr(hkl))
+	ret = int32(r0)
+	return
+}
+
+func UnloadKeyboardLayout(hkl Handle) (err error) {
+	r1, _, e1 := syscall.SyscallN(procUnloadKeyboardLayout.Addr(), uintptr(hkl))
+	if r1 == 0 {
+		err = errnoErr(e1)
+	}
+	return
+}
+
+func CreateEnvironmentBlock(block **uint16, token Token, inheritExisting bool) (err error) {
+	var _p0 uint32
+	if inheritExisting {
+		_p0 = 1
+	}
+	r1, _, e1 := syscall.SyscallN(procCreateEnvironmentBlock.Addr(), uintptr(unsafe.Pointer(block)), uintptr(token), uintptr(_p0))
+	if r1 == 0 {
+		err = errnoErr(e1)
+	}
+	return
+}
+
+func DestroyEnvironmentBlock(block *uint16) (err error) {
+	r1, _, e1 := syscall.SyscallN(procDestroyEnvironmentBlock.Addr(), uintptr(unsafe.Pointer(block)))
+	if r1 == 0 {
+		err = errnoErr(e1)
+	}
+	return
+}
+
+func GetUserProfileDirectory(t Token, dir *uint16, dirLen *uint32) (err error) {
+	r1, _, e1 := syscall.SyscallN(procGetUserProfileDirectoryW.Addr(), uintptr(t), uintptr(unsafe.Pointer(dir)), uintptr(unsafe.Pointer(dirLen)))
+	if r1 == 0 {
+		err = errnoErr(e1)
+	}
+	return
+}
+
+func GetFileVersionInfoSize(filename string, zeroHandle *Handle) (bufSize uint32, err error) {
+	var _p0 *uint16
+	_p0, err = syscall.UTF16PtrFromString(filename)
+	if err != nil {
+		return
+	}
+	return _GetFileVersionInfoSize(_p0, zeroHandle)
+}
+
+func _GetFileVersionInfoSize(filename *uint16, zeroHandle *Handle) (bufSize uint32, err error) {
+	r0, _, e1 := syscall.SyscallN(procGetFileVersionInfoSizeW.Addr(), uintptr(unsafe.Pointer(filename)), uintptr(unsafe.Pointer(zeroHandle)))
+	bufSize = uint32(r0)
+	if bufSize == 0 {
+		err = errnoErr(e1)
+	}
+	return
+}
+
+func GetFileVersionInfo(filename string, handle uint32, bufSize uint32, buffer unsafe.Pointer) (err error) {
+	var _p0 *uint16
+	_p0, err = syscall.UTF16PtrFromString(filename)
+	if err != nil {
+		return
+	}
+	return _GetFileVersionInfo(_p0, handle, bufSize, buffer)
+}
+
+func _GetFileVersionInfo(filename *uint16, handle uint32, bufSize uint32, buffer unsafe.Pointer) (err error) {
+	r1, _, e1 := syscall.SyscallN(procGetFileVersionInfoW.Addr(), uintptr(unsafe.Pointer(filename)), uintptr(handle), uintptr(bufSize), uintptr(buffer))
+	if r1 == 0 {
+		err = errnoErr(e1)
+	}
+	return
+}
+
+func VerQueryValue(block unsafe.Pointer, subBlock string, pointerToBufferPointer unsafe.Pointer, bufSize *uint32) (err error) {
+	var _p0 *uint16
+	_p0, err = syscall.UTF16PtrFromString(subBlock)
+	if err != nil {
+		return
+	}
+	return _VerQueryValue(block, _p0, pointerToBufferPointer, bufSize)
+}
+
+func _VerQueryValue(block unsafe.Pointer, subBlock *uint16, pointerToBufferPointer unsafe.Pointer, bufSize *uint32) (err error) {
+	r1, _, e1 := syscall.SyscallN(procVerQueryValueW.Addr(), uintptr(block), uintptr(unsafe.Pointer(subBlock)), uintptr(pointerToBufferPointer), uintptr(unsafe.Pointer(bufSize)))
+	if r1 == 0 {
+		err = errnoErr(e1)
+	}
+	return
+}
+
+func TimeBeginPeriod(period uint32) (err error) {
+	r1, _, e1 := syscall.SyscallN(proctimeBeginPeriod.Addr(), uintptr(period))
+	if r1 != 0 {
+		err = errnoErr(e1)
+	}
+	return
+}
+
+func TimeEndPeriod(period uint32) (err error) {
+	r1, _, e1 := syscall.SyscallN(proctimeEndPeriod.Addr(), uintptr(period))
+	if r1 != 0 {
+		err = errnoErr(e1)
+	}
+	return
+}
+
+func WinVerifyTrustEx(hwnd HWND, actionId *GUID, data *WinTrustData) (ret error) {
+	r0, _, _ := syscall.SyscallN(procWinVerifyTrustEx.Addr(), uintptr(hwnd), uintptr(unsafe.Pointer(actionId)), uintptr(unsafe.Pointer(data)))
+	if r0 != 0 {
+		ret = syscall.Errno(r0)
+	}
+	return
+}
+
+func FreeAddrInfoW(addrinfo *AddrinfoW) {
+	syscall.SyscallN(procFreeAddrInfoW.Addr(), uintptr(unsafe.Pointer(addrinfo)))
+	return
+}
+
+func GetAddrInfoW(nodename *uint16, servicename *uint16, hints *AddrinfoW, result **AddrinfoW) (sockerr error) {
+	r0, _, _ := syscall.SyscallN(procGetAddrInfoW.Addr(), uintptr(unsafe.Pointer(nodename)), uintptr(unsafe.Pointer(servicename)), uintptr(unsafe.Pointer(hints)), uintptr(unsafe.Pointer(result)))
+	if r0 != 0 {
+		sockerr = syscall.Errno(r0)
+	}
+	return
+}
+
+func WSACleanup() (err error) {
+	r1, _, e1 := syscall.SyscallN(procWSACleanup.Addr())
+	if r1 == socket_error {
+		err = errnoErr(e1)
+	}
+	return
+}
+
+func WSADuplicateSocket(s Handle, processID uint32, info *WSAProtocolInfo) (err error) {
+	r1, _, e1 := syscall.SyscallN(procWSADuplicateSocketW.Addr(), uintptr(s), uintptr(processID), uintptr(unsafe.Pointer(info)))
+	if r1 != 0 {
+		err = errnoErr(e1)
+	}
+	return
+}
+
+func WSAEnumProtocols(protocols *int32, protocolBuffer *WSAProtocolInfo, bufferLength *uint32) (n int32, err error) {
+	r0, _, e1 := syscall.SyscallN(procWSAEnumProtocolsW.Addr(), uintptr(unsafe.Pointer(protocols)), uintptr(unsafe.Pointer(protocolBuffer)), uintptr(unsafe.Pointer(bufferLength)))
+	n = int32(r0)
+	if n == -1 {
+		err = errnoErr(e1)
+	}
+	return
+}
+
+func WSAGetOverlappedResult(h Handle, o *Overlapped, bytes *uint32, wait bool, flags *uint32) (err error) {
+	var _p0 uint32
+	if wait {
+		_p0 = 1
+	}
+	r1, _, e1 := syscall.SyscallN(procWSAGetOverlappedResult.Addr(), uintptr(h), uintptr(unsafe.Pointer(o)), uintptr(unsafe.Pointer(bytes)), uintptr(_p0), uintptr(unsafe.Pointer(flags)))
+	if r1 == 0 {
+		err = errnoErr(e1)
+	}
+	return
+}
+
+func WSAIoctl(s Handle, iocc uint32, inbuf *byte, cbif uint32, outbuf *byte, cbob uint32, cbbr *uint32, overlapped *Overlapped, completionRoutine uintptr) (err error) {
+	r1, _, e1 := syscall.SyscallN(procWSAIoctl.Addr(), uintptr(s), uintptr(iocc), uintptr(unsafe.Pointer(inbuf)), uintptr(cbif), uintptr(unsafe.Pointer(outbuf)), uintptr(cbob), uintptr(unsafe.Pointer(cbbr)), uintptr(unsafe.Pointer(overlapped)), uintptr(completionRoutine))
+	if r1 == socket_error {
+		err = errnoErr(e1)
+	}
+	return
+}
+
+func WSALookupServiceBegin(querySet *WSAQUERYSET, flags uint32, handle *Handle) (err error) {
+	r1, _, e1 := syscall.SyscallN(procWSALookupServiceBeginW.Addr(), uintptr(unsafe.Pointer(querySet)), uintptr(flags), uintptr(unsafe.Pointer(handle)))
+	if r1 == socket_error {
+		err = errnoErr(e1)
+	}
+	return
+}
+
+func WSALookupServiceEnd(handle Handle) (err error) {
+	r1, _, e1 := syscall.SyscallN(procWSALookupServiceEnd.Addr(), uintptr(handle))
+	if r1 == socket_error {
+		err = errnoErr(e1)
+	}
+	return
+}
+
+func WSALookupServiceNext(handle Handle, flags uint32, size *int32, querySet *WSAQUERYSET) (err error) {
+	r1, _, e1 := syscall.SyscallN(procWSALookupServiceNextW.Addr(), uintptr(handle), uintptr(flags), uintptr(unsafe.Pointer(size)), uintptr(unsafe.Pointer(querySet)))
+	if r1 == socket_error {
+		err = errnoErr(e1)
+	}
+	return
+}
+
+func WSARecv(s Handle, bufs *WSABuf, bufcnt uint32, recvd *uint32, flags *uint32, overlapped *Overlapped, croutine *byte) (err error) {
+	r1, _, e1 := syscall.SyscallN(procWSARecv.Addr(), uintptr(s), uintptr(unsafe.Pointer(bufs)), uintptr(bufcnt), uintptr(unsafe.Pointer(recvd)), uintptr(unsafe.Pointer(flags)), uintptr(unsafe.Pointer(overlapped)), uintptr(unsafe.Pointer(croutine)))
+	if r1 == socket_error {
+		err = errnoErr(e1)
+	}
+	return
+}
+
+func WSARecvFrom(s Handle, bufs *WSABuf, bufcnt uint32, recvd *uint32, flags *uint32, from *RawSockaddrAny, fromlen *int32, overlapped *Overlapped, croutine *byte) (err error) {
+	r1, _, e1 := syscall.SyscallN(procWSARecvFrom.Addr(), uintptr(s), uintptr(unsafe.Pointer(bufs)), uintptr(bufcnt), uintptr(unsafe.Pointer(recvd)), uintptr(unsafe.Pointer(flags)), uintptr(unsafe.Pointer(from)), uintptr(unsafe.Pointer(fromlen)), uintptr(unsafe.Pointer(overlapped)), uintptr(unsafe.Pointer(croutine)))
+	if r1 == socket_error {
+		err = errnoErr(e1)
+	}
+	return
+}
+
+func WSASend(s Handle, bufs *WSABuf, bufcnt uint32, sent *uint32, flags uint32, overlapped *Overlapped, croutine *byte) (err error) {
+	r1, _, e1 := syscall.SyscallN(procWSASend.Addr(), uintptr(s), uintptr(unsafe.Pointer(bufs)), uintptr(bufcnt), uintptr(unsafe.Pointer(sent)), uintptr(flags), uintptr(unsafe.Pointer(overlapped)), uintptr(unsafe.Pointer(croutine)))
+	if r1 == socket_error {
+		err = errnoErr(e1)
+	}
+	return
+}
+
+func WSASendTo(s Handle, bufs *WSABuf, bufcnt uint32, sent *uint32, flags uint32, to *RawSockaddrAny, tolen int32, overlapped *Overlapped, croutine *byte) (err error) {
+	r1, _, e1 := syscall.SyscallN(procWSASendTo.Addr(), uintptr(s), uintptr(unsafe.Pointer(bufs)), uintptr(bufcnt), uintptr(unsafe.Pointer(sent)), uintptr(flags), uintptr(unsafe.Pointer(to)), uintptr(tolen), uintptr(unsafe.Pointer(overlapped)), uintptr(unsafe.Pointer(croutine)))
+	if r1 == socket_error {
+		err = errnoErr(e1)
+	}
+	return
+}
+
+func WSASocket(af int32, typ int32, protocol int32, protoInfo *WSAProtocolInfo, group uint32, flags uint32) (handle Handle, err error) {
+	r0, _, e1 := syscall.SyscallN(procWSASocketW.Addr(), uintptr(af), uintptr(typ), uintptr(protocol), uintptr(unsafe.Pointer(protoInfo)), uintptr(group), uintptr(flags))
+	handle = Handle(r0)
+	if handle == InvalidHandle {
+		err = errnoErr(e1)
+	}
+	return
+}
+
+func WSAStartup(verreq uint32, data *WSAData) (sockerr error) {
+	r0, _, _ := syscall.SyscallN(procWSAStartup.Addr(), uintptr(verreq), uintptr(unsafe.Pointer(data)))
+	if r0 != 0 {
+		sockerr = syscall.Errno(r0)
+	}
+	return
+}
+
+func bind(s Handle, name unsafe.Pointer, namelen int32) (err error) {
+	r1, _, e1 := syscall.SyscallN(procbind.Addr(), uintptr(s), uintptr(name), uintptr(namelen))
+	if r1 == socket_error {
+		err = errnoErr(e1)
+	}
+	return
+}
+
+func Closesocket(s Handle) (err error) {
+	r1, _, e1 := syscall.SyscallN(procclosesocket.Addr(), uintptr(s))
+	if r1 == socket_error {
+		err = errnoErr(e1)
+	}
+	return
+}
+
+func connect(s Handle, name unsafe.Pointer, namelen int32) (err error) {
+	r1, _, e1 := syscall.SyscallN(procconnect.Addr(), uintptr(s), uintptr(name), uintptr(namelen))
+	if r1 == socket_error {
+		err = errnoErr(e1)
+	}
+	return
+}
+
+func GetHostByName(name string) (h *Hostent, err error) {
+	var _p0 *byte
+	_p0, err = syscall.BytePtrFromString(name)
+	if err != nil {
+		return
+	}
+	return _GetHostByName(_p0)
+}
+
+func _GetHostByName(name *byte) (h *Hostent, err error) {
+	r0, _, e1 := syscall.SyscallN(procgethostbyname.Addr(), uintptr(unsafe.Pointer(name)))
+	h = (*Hostent)(unsafe.Pointer(r0))
+	if h == nil {
+		err = errnoErr(e1)
+	}
+	return
+}
+
+func getpeername(s Handle, rsa *RawSockaddrAny, addrlen *int32) (err error) {
+	r1, _, e1 := syscall.SyscallN(procgetpeername.Addr(), uintptr(s), uintptr(unsafe.Pointer(rsa)), uintptr(unsafe.Pointer(addrlen)))
+	if r1 == socket_error {
+		err = errnoErr(e1)
+	}
+	return
+}
+
+func GetProtoByName(name string) (p *Protoent, err error) {
+	var _p0 *byte
+	_p0, err = syscall.BytePtrFromString(name)
+	if err != nil {
+		return
+	}
+	return _GetProtoByName(_p0)
+}
+
+func _GetProtoByName(name *byte) (p *Protoent, err error) {
+	r0, _, e1 := syscall.SyscallN(procgetprotobyname.Addr(), uintptr(unsafe.Pointer(name)))
+	p = (*Protoent)(unsafe.Pointer(r0))
+	if p == nil {
+		err = errnoErr(e1)
+	}
+	return
+}
+
+func GetServByName(name string, proto string) (s *Servent, err error) {
+	var _p0 *byte
+	_p0, err = syscall.BytePtrFromString(name)
+	if err != nil {
+		return
+	}
+	var _p1 *byte
+	_p1, err = syscall.BytePtrFromString(proto)
+	if err != nil {
+		return
+	}
+	return _GetServByName(_p0, _p1)
+}
+
+func _GetServByName(name *byte, proto *byte) (s *Servent, err error) {
+	r0, _, e1 := syscall.SyscallN(procgetservbyname.Addr(), uintptr(unsafe.Pointer(name)), uintptr(unsafe.Pointer(proto)))
+	s = (*Servent)(unsafe.Pointer(r0))
+	if s == nil {
+		err = errnoErr(e1)
+	}
+	return
+}
+
+func getsockname(s Handle, rsa *RawSockaddrAny, addrlen *int32) (err error) {
+	r1, _, e1 := syscall.SyscallN(procgetsockname.Addr(), uintptr(s), uintptr(unsafe.Pointer(rsa)), uintptr(unsafe.Pointer(addrlen)))
+	if r1 == socket_error {
+		err = errnoErr(e1)
+	}
+	return
+}
+
+func Getsockopt(s Handle, level int32, optname int32, optval *byte, optlen *int32) (err error) {
+	r1, _, e1 := syscall.SyscallN(procgetsockopt.Addr(), uintptr(s), uintptr(level), uintptr(optname), uintptr(unsafe.Pointer(optval)), uintptr(unsafe.Pointer(optlen)))
+	if r1 == socket_error {
+		err = errnoErr(e1)
+	}
+	return
+}
+
+func listen(s Handle, backlog int32) (err error) {
+	r1, _, e1 := syscall.SyscallN(proclisten.Addr(), uintptr(s), uintptr(backlog))
+	if r1 == socket_error {
+		err = errnoErr(e1)
+	}
+	return
+}
+
+func Ntohs(netshort uint16) (u uint16) {
+	r0, _, _ := syscall.SyscallN(procntohs.Addr(), uintptr(netshort))
+	u = uint16(r0)
+	return
+}
+
+func recvfrom(s Handle, buf []byte, flags int32, from *RawSockaddrAny, fromlen *int32) (n int32, err error) {
+	var _p0 *byte
+	if len(buf) > 0 {
+		_p0 = &buf[0]
+	}
+	r0, _, e1 := syscall.SyscallN(procrecvfrom.Addr(), uintptr(s), uintptr(unsafe.Pointer(_p0)), uintptr(len(buf)), uintptr(flags), uintptr(unsafe.Pointer(from)), uintptr(unsafe.Pointer(fromlen)))
+	n = int32(r0)
+	if n == -1 {
+		err = errnoErr(e1)
+	}
+	return
+}
+
+func sendto(s Handle, buf []byte, flags int32, to unsafe.Pointer, tolen int32) (err error) {
+	var _p0 *byte
+	if len(buf) > 0 {
+		_p0 = &buf[0]
+	}
+	r1, _, e1 := syscall.SyscallN(procsendto.Addr(), uintptr(s), uintptr(unsafe.Pointer(_p0)), uintptr(len(buf)), uintptr(flags), uintptr(to), uintptr(tolen))
+	if r1 == socket_error {
+		err = errnoErr(e1)
+	}
+	return
+}
+
+func Setsockopt(s Handle, level int32, optname int32, optval *byte, optlen int32) (err error) {
+	r1, _, e1 := syscall.SyscallN(procsetsockopt.Addr(), uintptr(s), uintptr(level), uintptr(optname), uintptr(unsafe.Pointer(optval)), uintptr(optlen))
+	if r1 == socket_error {
+		err = errnoErr(e1)
+	}
+	return
+}
+
+func shutdown(s Handle, how int32) (err error) {
+	r1, _, e1 := syscall.SyscallN(procshutdown.Addr(), uintptr(s), uintptr(how))
+	if r1 == socket_error {
+		err = errnoErr(e1)
+	}
+	return
+}
+
+func socket(af int32, typ int32, protocol int32) (handle Handle, err error) {
+	r0, _, e1 := syscall.SyscallN(procsocket.Addr(), uintptr(af), uintptr(typ), uintptr(protocol))
+	handle = Handle(r0)
+	if handle == InvalidHandle {
+		err = errnoErr(e1)
+	}
+	return
+}
+
+func WTSEnumerateSessions(handle Handle, reserved uint32, version uint32, sessions **WTS_SESSION_INFO, count *uint32) (err error) {
+	r1, _, e1 := syscall.SyscallN(procWTSEnumerateSessionsW.Addr(), uintptr(handle), uintptr(reserved), uintptr(version), uintptr(unsafe.Pointer(sessions)), uintptr(unsafe.Pointer(count)))
+	if r1 == 0 {
+		err = errnoErr(e1)
+	}
+	return
+}
+
+func WTSFreeMemory(ptr uintptr) {
+	syscall.SyscallN(procWTSFreeMemory.Addr(), uintptr(ptr))
+	return
+}
+
+func WTSQueryUserToken(session uint32, token *Token) (err error) {
+	r1, _, e1 := syscall.SyscallN(procWTSQueryUserToken.Addr(), uintptr(session), uintptr(unsafe.Pointer(token)))
+	if r1 == 0 {
+		err = errnoErr(e1)
+	}
+	return
+}
+
+@@END
+@@PORTABLE {"path":"vendor/golang.org/x/text/LICENSE","mode":420,"size":1453,"sha256":"911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad","index":0,"count":1,"encoding":"utf-8","payloadBytes":1453}
+Copyright 2009 The Go Authors.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+   * Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer.
+   * Redistributions in binary form must reproduce the above
+copyright notice, this list of conditions and the following disclaimer
+in the documentation and/or other materials provided with the
+distribution.
+   * Neither the name of Google LLC nor the names of its
+contributors may be used to endorse or promote products derived from
+this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+@@END
+@@PORTABLE {"path":"vendor/golang.org/x/text/PATENTS","mode":420,"size":1303,"sha256":"96f408bfae65bf137fc2525d3ecb030271c50c1e90799f87abf8846d8dd505cc","index":0,"count":1,"encoding":"utf-8","payloadBytes":1303}
+Additional IP Rights Grant (Patents)
+
+"This implementation" means the copyrightable works distributed by
+Google as part of the Go project.
+
+Google hereby grants to You a perpetual, worldwide, non-exclusive,
+no-charge, royalty-free, irrevocable (except as stated in this section)
+patent license to make, have made, use, offer to sell, sell, import,
+transfer and otherwise run, modify and propagate the contents of this
+implementation of Go, where such license applies only to those patent
+claims, both currently owned or controlled by Google and acquired in
+the future, licensable by Google that are necessarily infringed by this
+implementation of Go.  This grant does not include claims that would be
+infringed only as a consequence of further modification of this
+implementation.  If you or your agent or exclusive licensee institute or
+order or agree to the institution of patent litigation against any
+entity (including a cross-claim or counterclaim in a lawsuit) alleging
+that this implementation of Go or any code incorporated within this
+implementation of Go constitutes direct or contributory patent
+infringement, or inducement of patent infringement, then any patent
+rights granted to you under this License for this implementation of Go
+shall terminate as of the date such litigation is filed.
+
+@@END
+@@PORTABLE {"path":"vendor/golang.org/x/text/cases/cases.go","mode":420,"size":4991,"sha256":"052af64ba88e6e5275195a544c59d14de78cdc3a659e2f4be4c7070d929b376f","index":0,"count":1,"encoding":"utf-8","payloadBytes":4991}
+// Copyright 2014 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+//go:generate go run gen.go gen_trieval.go
+
+// Package cases provides general and language-specific case mappers.
+package cases // import "golang.org/x/text/cases"
+
+import (
+	"golang.org/x/text/language"
+	"golang.org/x/text/transform"
+)
+
+// References:
+// - Unicode Reference Manual Chapter 3.13, 4.2, and 5.18.
+// - https://www.unicode.org/reports/tr29/
+// - https://www.unicode.org/Public/6.3.0/ucd/CaseFolding.txt
+// - https://www.unicode.org/Public/6.3.0/ucd/SpecialCasing.txt
+// - https://www.unicode.org/Public/6.3.0/ucd/DerivedCoreProperties.txt
+// - https://www.unicode.org/Public/6.3.0/ucd/auxiliary/WordBreakProperty.txt
+// - https://www.unicode.org/Public/6.3.0/ucd/auxiliary/WordBreakTest.txt
+// - http://userguide.icu-project.org/transforms/casemappings
+
+// TODO:
+// - Case folding
+// - Wide and Narrow?
+// - Segmenter option for title casing.
+// - ASCII fast paths
+// - Encode Soft-Dotted property within trie somehow.
+
+// A Caser transforms given input to a certain case. It implements
+// transform.Transformer.
+//
+// A Caser may be stateful and should therefore not be shared between
+// goroutines.
+type Caser struct {
+	t transform.SpanningTransformer
+}
+
+// Bytes returns a new byte slice with the result of converting b to the case
+// form implemented by c.
+func (c Caser) Bytes(b []byte) []byte {
+	b, _, _ = transform.Bytes(c.t, b)
+	return b
+}
+
+// String returns a string with the result of transforming s to the case form
+// implemented by c.
+func (c Caser) String(s string) string {
+	s, _, _ = transform.String(c.t, s)
+	return s
+}
+
+// Reset resets the Caser to be reused for new input after a previous call to
+// Transform.
+func (c Caser) Reset() { c.t.Reset() }
+
+// Transform implements the transform.Transformer interface and transforms the
+// given input to the case form implemented by c.
+func (c Caser) Transform(dst, src []byte, atEOF bool) (nDst, nSrc int, err error) {
+	return c.t.Transform(dst, src, atEOF)
+}
+
+// Span implements the transform.SpanningTransformer interface.
+func (c Caser) Span(src []byte, atEOF bool) (n int, err error) {
+	return c.t.Span(src, atEOF)
+}
+
+// Upper returns a Caser for language-specific uppercasing.
+func Upper(t language.Tag, opts ...Option) Caser {
+	return Caser{makeUpper(t, getOpts(opts...))}
+}
+
+// Lower returns a Caser for language-specific lowercasing.
+func Lower(t language.Tag, opts ...Option) Caser {
+	return Caser{makeLower(t, getOpts(opts...))}
+}
+
+// Title returns a Caser for language-specific title casing. It uses an
+// approximation of the default Unicode Word Break algorithm.
+func Title(t language.Tag, opts ...Option) Caser {
+	return Caser{makeTitle(t, getOpts(opts...))}
+}
+
+// Fold returns a Caser that implements Unicode case folding. The returned Caser
+// is stateless and safe to use concurrently by multiple goroutines.
+//
+// Case folding does not normalize the input and may not preserve a normal form.
+// Use the collate or search package for more convenient and linguistically
+// sound comparisons. Use golang.org/x/text/secure/precis for string comparisons
+// where security aspects are a concern.
+func Fold(opts ...Option) Caser {
+	return Caser{makeFold(getOpts(opts...))}
+}
+
+// An Option is used to modify the behavior of a Caser.
+type Option func(o options) options
+
+// TODO: consider these options to take a boolean as well, like FinalSigma.
+// The advantage of using this approach is that other providers of a lower-case
+// algorithm could set different defaults by prefixing a user-provided slice
+// of options with their own. This is handy, for instance, for the precis
+// package which would override the default to not handle the Greek final sigma.
+
+var (
+	// NoLower disables the lowercasing of non-leading letters for a title
+	// caser.
+	NoLower Option = noLower
+
+	// Compact omits mappings in case folding for characters that would grow the
+	// input. (Unimplemented.)
+	Compact Option = compact
+)
+
+// TODO: option to preserve a normal form, if applicable?
+
+type options struct {
+	noLower bool
+	simple  bool
+
+	// TODO: segmenter, max ignorable, alternative versions, etc.
+
+	ignoreFinalSigma bool
+}
+
+func getOpts(o ...Option) (res options) {
+	for _, f := range o {
+		res = f(res)
+	}
+	return
+}
+
+func noLower(o options) options {
+	o.noLower = true
+	return o
+}
+
+func compact(o options) options {
+	o.simple = true
+	return o
+}
+
+// HandleFinalSigma specifies whether the special handling of Greek final sigma
+// should be enabled. Unicode prescribes handling the Greek final sigma for all
+// locales, but standards like IDNA and PRECIS override this default.
+func HandleFinalSigma(enable bool) Option {
+	if enable {
+		return handleFinalSigma
+	}
+	return ignoreFinalSigma
+}
+
+func ignoreFinalSigma(o options) options {
+	o.ignoreFinalSigma = true
+	return o
+}
+
+func handleFinalSigma(o options) options {
+	o.ignoreFinalSigma = false
+	return o
+}
+
+@@END
+@@PORTABLE {"path":"vendor/golang.org/x/text/cases/context.go","mode":420,"size":9693,"sha256":"dd93d0dfbbc4513731b6ba5f865d7e7022e237fcbdac405a38981df53fa77f4e","index":0,"count":1,"encoding":"utf-8","payloadBytes":9693}
+// Copyright 2014 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package cases
+
+import "golang.org/x/text/transform"
+
+// A context is used for iterating over source bytes, fetching case info and
+// writing to a destination buffer.
+//
+// Casing operations may need more than one rune of context to decide how a rune
+// should be cased. Casing implementations should call checkpoint on context
+// whenever it is known to be safe to return the runes processed so far.
+//
+// It is recommended for implementations to not allow for more than 30 case
+// ignorables as lookahead (analogous to the limit in norm) and to use state if
+// unbounded lookahead is needed for cased runes.
+type context struct {
+	dst, src []byte
+	atEOF    bool
+
+	pDst int // pDst points past the last written rune in dst.
+	pSrc int // pSrc points to the start of the currently scanned rune.
+
+	// checkpoints safe to return in Transform, where nDst <= pDst and nSrc <= pSrc.
+	nDst, nSrc int
+	err        error
+
+	sz   int  // size of current rune
+	info info // case information of currently scanned rune
+
+	// State preserved across calls to Transform.
+	isMidWord bool // false if next cased letter needs to be title-cased.
+}
+
+func (c *context) Reset() {
+	c.isMidWord = false
+}
+
+// ret returns the return values for the Transform method. It checks whether
+// there were insufficient bytes in src to complete and introduces an error
+// accordingly, if necessary.
+func (c *context) ret() (nDst, nSrc int, err error) {
+	if c.err != nil || c.nSrc == len(c.src) {
+		return c.nDst, c.nSrc, c.err
+	}
+	// This point is only reached by mappers if there was no short destination
+	// buffer. This means that the source buffer was exhausted and that c.sz was
+	// set to 0 by next.
+	if c.atEOF && c.pSrc == len(c.src) {
+		return c.pDst, c.pSrc, nil
+	}
+	return c.nDst, c.nSrc, transform.ErrShortSrc
+}
+
+// retSpan returns the return values for the Span method. It checks whether
+// there were insufficient bytes in src to complete and introduces an error
+// accordingly, if necessary.
+func (c *context) retSpan() (n int, err error) {
+	_, nSrc, err := c.ret()
+	return nSrc, err
+}
+
+// checkpoint sets the return value buffer points for Transform to the current
+// positions.
+func (c *context) checkpoint() {
+	if c.err == nil {
+		c.nDst, c.nSrc = c.pDst, c.pSrc+c.sz
+	}
+}
+
+// unreadRune causes the last rune read by next to be reread on the next
+// invocation of next. Only one unreadRune may be called after a call to next.
+func (c *context) unreadRune() {
+	c.sz = 0
+}
+
+func (c *context) next() bool {
+	c.pSrc += c.sz
+	if c.pSrc == len(c.src) || c.err != nil {
+		c.info, c.sz = 0, 0
+		return false
+	}
+	v, sz := trie.lookup(c.src[c.pSrc:])
+	c.info, c.sz = info(v), sz
+	if c.sz == 0 {
+		if c.atEOF {
+			// A zero size means we have an incomplete rune. If we are atEOF,
+			// this means it is an illegal rune, which we will consume one
+			// byte at a time.
+			c.sz = 1
+		} else {
+			c.err = transform.ErrShortSrc
+			return false
+		}
+	}
+	return true
+}
+
+// writeBytes adds bytes to dst.
+func (c *context) writeBytes(b []byte) bool {
+	if len(c.dst)-c.pDst < len(b) {
+		c.err = transform.ErrShortDst
+		return false
+	}
+	// This loop is faster than using copy.
+	for _, ch := range b {
+		c.dst[c.pDst] = ch
+		c.pDst++
+	}
+	return true
+}
+
+// writeString writes the given string to dst.
+func (c *context) writeString(s string) bool {
+	if len(c.dst)-c.pDst < len(s) {
+		c.err = transform.ErrShortDst
+		return false
+	}
+	// This loop is faster than using copy.
+	for i := 0; i < len(s); i++ {
+		c.dst[c.pDst] = s[i]
+		c.pDst++
+	}
+	return true
+}
+
+// copy writes the current rune to dst.
+func (c *context) copy() bool {
+	return c.writeBytes(c.src[c.pSrc : c.pSrc+c.sz])
+}
+
+// copyXOR copies the current rune to dst and modifies it by applying the XOR
+// pattern of the case info. It is the responsibility of the caller to ensure
+// that this is a rune with a XOR pattern defined.
+func (c *context) copyXOR() bool {
+	if !c.copy() {
+		return false
+	}
+	if c.info&xorIndexBit == 0 {
+		// Fast path for 6-bit XOR pattern, which covers most cases.
+		c.dst[c.pDst-1] ^= byte(c.info >> xorShift)
+	} else {
+		// Interpret XOR bits as an index.
+		// TODO: test performance for unrolling this loop. Verify that we have
+		// at least two bytes and at most three.
+		idx := c.info >> xorShift
+		for p := c.pDst - 1; ; p-- {
+			c.dst[p] ^= xorData[idx]
+			idx--
+			if xorData[idx] == 0 {
+				break
+			}
+		}
+	}
+	return true
+}
+
+// hasPrefix returns true if src[pSrc:] starts with the given string.
+func (c *context) hasPrefix(s string) bool {
+	b := c.src[c.pSrc:]
+	if len(b) < len(s) {
+		return false
+	}
+	for i, c := range b[:len(s)] {
+		if c != s[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// caseType returns an info with only the case bits, normalized to either
+// cLower, cUpper, cTitle or cUncased.
+func (c *context) caseType() info {
+	cm := c.info & 0x7
+	if cm < 4 {
+		return cm
+	}
+	if cm >= cXORCase {
+		// xor the last bit of the rune with the case type bits.
+		b := c.src[c.pSrc+c.sz-1]
+		return info(b&1) ^ cm&0x3
+	}
+	if cm == cIgnorableCased {
+		return cLower
+	}
+	return cUncased
+}
+
+// lower writes the lowercase version of the current rune to dst.
+func lower(c *context) bool {
+	ct := c.caseType()
+	if c.info&hasMappingMask == 0 || ct == cLower {
+		return c.copy()
+	}
+	if c.info&exceptionBit == 0 {
+		return c.copyXOR()
+	}
+	e := exceptions[c.info>>exceptionShift:]
+	offset := 2 + e[0]&lengthMask // size of header + fold string
+	if nLower := (e[1] >> lengthBits) & lengthMask; nLower != noChange {
+		return c.writeString(e[offset : offset+nLower])
+	}
+	return c.copy()
+}
+
+func isLower(c *context) bool {
+	ct := c.caseType()
+	if c.info&hasMappingMask == 0 || ct == cLower {
+		return true
+	}
+	if c.info&exceptionBit == 0 {
+		c.err = transform.ErrEndOfSpan
+		return false
+	}
+	e := exceptions[c.info>>exceptionShift:]
+	if nLower := (e[1] >> lengthBits) & lengthMask; nLower != noChange {
+		c.err = transform.ErrEndOfSpan
+		return false
+	}
+	return true
+}
+
+// upper writes the uppercase version of the current rune to dst.
+func upper(c *context) bool {
+	ct := c.caseType()
+	if c.info&hasMappingMask == 0 || ct == cUpper {
+		return c.copy()
+	}
+	if c.info&exceptionBit == 0 {
+		return c.copyXOR()
+	}
+	e := exceptions[c.info>>exceptionShift:]
+	offset := 2 + e[0]&lengthMask // size of header + fold string
+	// Get length of first special case mapping.
+	n := (e[1] >> lengthBits) & lengthMask
+	if ct == cTitle {
+		// The first special case mapping is for lower. Set n to the second.
+		if n == noChange {
+			n = 0
+		}
+		n, e = e[1]&lengthMask, e[n:]
+	}
+	if n != noChange {
+		return c.writeString(e[offset : offset+n])
+	}
+	return c.copy()
+}
+
+// isUpper reports whether the current rune is in upper case.
+func isUpper(c *context) bool {
+	ct := c.caseType()
+	if c.info&hasMappingMask == 0 || ct == cUpper {
+		return true
+	}
+	if c.info&exceptionBit == 0 {
+		c.err = transform.ErrEndOfSpan
+		return false
+	}
+	e := exceptions[c.info>>exceptionShift:]
+	// Get length of first special case mapping.
+	n := (e[1] >> lengthBits) & lengthMask
+	if ct == cTitle {
+		n = e[1] & lengthMask
+	}
+	if n != noChange {
+		c.err = transform.ErrEndOfSpan
+		return false
+	}
+	return true
+}
+
+// title writes the title case version of the current rune to dst.
+func title(c *context) bool {
+	ct := c.caseType()
+	if c.info&hasMappingMask == 0 || ct == cTitle {
+		return c.copy()
+	}
+	if c.info&exceptionBit == 0 {
+		if ct == cLower {
+			return c.copyXOR()
+		}
+		return c.copy()
+	}
+	// Get the exception data.
+	e := exceptions[c.info>>exceptionShift:]
+	offset := 2 + e[0]&lengthMask // size of header + fold string
+
+	nFirst := (e[1] >> lengthBits) & lengthMask
+	if nTitle := e[1] & lengthMask; nTitle != noChange {
+		if nFirst != noChange {
+			e = e[nFirst:]
+		}
+		return c.writeString(e[offset : offset+nTitle])
+	}
+	if ct == cLower && nFirst != noChange {
+		// Use the uppercase version instead.
+		return c.writeString(e[offset : offset+nFirst])
+	}
+	// Already in correct case.
+	return c.copy()
+}
+
+// isTitle reports whether the current rune is in title case.
+func isTitle(c *context) bool {
+	ct := c.caseType()
+	if c.info&hasMappingMask == 0 || ct == cTitle {
+		return true
+	}
+	if c.info&exceptionBit == 0 {
+		if ct == cLower {
+			c.err = transform.ErrEndOfSpan
+			return false
+		}
+		return true
+	}
+	// Get the exception data.
+	e := exceptions[c.info>>exceptionShift:]
+	if nTitle := e[1] & lengthMask; nTitle != noChange {
+		c.err = transform.ErrEndOfSpan
+		return false
+	}
+	nFirst := (e[1] >> lengthBits) & lengthMask
+	if ct == cLower && nFirst != noChange {
+		c.err = transform.ErrEndOfSpan
+		return false
+	}
+	return true
+}
+
+// foldFull writes the foldFull version of the current rune to dst.
+func foldFull(c *context) bool {
+	if c.info&hasMappingMask == 0 {
+		return c.copy()
+	}
+	ct := c.caseType()
+	if c.info&exceptionBit == 0 {
+		if ct != cLower || c.info&inverseFoldBit != 0 {
+			return c.copyXOR()
+		}
+		return c.copy()
+	}
+	e := exceptions[c.info>>exceptionShift:]
+	n := e[0] & lengthMask
+	if n == 0 {
+		if ct == cLower {
+			return c.copy()
+		}
+		n = (e[1] >> lengthBits) & lengthMask
+	}
+	return c.writeString(e[2 : 2+n])
+}
+
+// isFoldFull reports whether the current run is mapped to foldFull
+func isFoldFull(c *context) bool {
+	if c.info&hasMappingMask == 0 {
+		return true
+	}
+	ct := c.caseType()
+	if c.info&exceptionBit == 0 {
+		if ct != cLower || c.info&inverseFoldBit != 0 {
+			c.err = transform.ErrEndOfSpan
+			return false
+		}
+		return true
+	}
+	e := exceptions[c.info>>exceptionShift:]
+	n := e[0] & lengthMask
+	if n == 0 && ct == cLower {
+		return true
+	}
+	c.err = transform.ErrEndOfSpan
+	return false
+}
+
+@@END
+@@PORTABLE {"path":"vendor/golang.org/x/text/cases/fold.go","mode":420,"size":935,"sha256":"14ff03fda441587198ce6f3e59e6dde979fc21b2db9e248c15b43da497c594ac","index":0,"count":1,"encoding":"utf-8","payloadBytes":935}
+// Copyright 2016 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package cases
+
+import "golang.org/x/text/transform"
+
+type caseFolder struct{ transform.NopResetter }
+
+// caseFolder implements the Transformer interface for doing case folding.
+func (t *caseFolder) Transform(dst, src []byte, atEOF bool) (nDst, nSrc int, err error) {
+	c := context{dst: dst, src: src, atEOF: atEOF}
+	for c.next() {
+		foldFull(&c)
+		c.checkpoint()
+	}
+	return c.ret()
+}
+
+func (t *caseFolder) Span(src []byte, atEOF bool) (n int, err error) {
+	c := context{src: src, atEOF: atEOF}
+	for c.next() && isFoldFull(&c) {
+		c.checkpoint()
+	}
+	return c.retSpan()
+}
+
+func makeFold(o options) transform.SpanningTransformer {
+	// TODO: Special case folding, through option Language, Special/Turkic, or
+	// both.
+	// TODO: Implement Compact options.
+	return &caseFolder{}
+}
+
+@@END
+@@PORTABLE {"path":"vendor/golang.org/x/text/cases/icu.go","mode":420,"size":1444,"sha256":"4089e1e6e4dbf9d3276a04aceb66c3a76c85ebe734d6297c4b4aea313514e5c2","index":0,"count":1,"encoding":"utf-8","payloadBytes":1444}
+// Copyright 2016 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+//go:build icu
+
+package cases
+
+// Ideally these functions would be defined in a test file, but go test doesn't
+// allow CGO in tests. The build tag should ensure either way that these
+// functions will not end up in the package.
+
+// TODO: Ensure that the correct ICU version is set.
+
+/*
+#cgo LDFLAGS: -licui18n.57 -licuuc.57
+#include <stdlib.h>
+#include <unicode/ustring.h>
+#include <unicode/utypes.h>
+#include <unicode/localpointer.h>
+#include <unicode/ucasemap.h>
+*/
+import "C"
+
+import "unsafe"
+
+func doICU(tag, caser, input string) string {
+	err := C.UErrorCode(0)
+	loc := C.CString(tag)
+	cm := C.ucasemap_open(loc, C.uint32_t(0), &err)
+
+	buf := make([]byte, len(input)*4)
+	dst := (*C.char)(unsafe.Pointer(&buf[0]))
+	src := C.CString(input)
+
+	cn := C.int32_t(0)
+
+	switch caser {
+	case "fold":
+		cn = C.ucasemap_utf8FoldCase(cm,
+			dst, C.int32_t(len(buf)),
+			src, C.int32_t(len(input)),
+			&err)
+	case "lower":
+		cn = C.ucasemap_utf8ToLower(cm,
+			dst, C.int32_t(len(buf)),
+			src, C.int32_t(len(input)),
+			&err)
+	case "upper":
+		cn = C.ucasemap_utf8ToUpper(cm,
+			dst, C.int32_t(len(buf)),
+			src, C.int32_t(len(input)),
+			&err)
+	case "title":
+		cn = C.ucasemap_utf8ToTitle(cm,
+			dst, C.int32_t(len(buf)),
+			src, C.int32_t(len(input)),
+			&err)
+	}
+	return string(buf[:cn])
+}
+
+@@END
+@@PORTABLE {"path":"vendor/golang.org/x/text/cases/info.go","mode":420,"size":2997,"sha256":"282c97fc424f7cdbcc817d06b2ef34d53d8404a803087a08b9d7d31f65c9dabe","index":0,"count":1,"encoding":"utf-8","payloadBytes":2997}
+// Copyright 2015 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package cases
+
+func (c info) cccVal() info {
+	if c&exceptionBit != 0 {
+		return info(exceptions[c>>exceptionShift]) & cccMask
+	}
+	return c & cccMask
+}
+
+func (c info) cccType() info {
+	ccc := c.cccVal()
+	if ccc <= cccZero {
+		return cccZero
+	}
+	return ccc
+}
+
+// TODO: Implement full Unicode breaking algorithm:
+// 1) Implement breaking in separate package.
+// 2) Use the breaker here.
+// 3) Compare table size and performance of using the more generic breaker.
+//
+// Note that we can extend the current algorithm to be much more accurate. This
+// only makes sense, though, if the performance and/or space penalty of using
+// the generic breaker is big. Extra data will only be needed for non-cased
+// runes, which means there are sufficient bits left in the caseType.
+// ICU prohibits breaking in such cases as well.
+
+// For the purpose of title casing we use an approximation of the Unicode Word
+// Breaking algorithm defined in Annex #29:
+// https://www.unicode.org/reports/tr29/#Default_Grapheme_Cluster_Table.
+//
+// For our approximation, we group the Word Break types into the following
+// categories, with associated rules:
+//
+// 1) Letter:
+//    ALetter, Hebrew_Letter, Numeric, ExtendNumLet, Extend, Format_FE, ZWJ.
+//    Rule: Never break between consecutive runes of this category.
+//
+// 2) Mid:
+//    MidLetter, MidNumLet, Single_Quote.
+//    (Cf. case-ignorable: MidLetter, MidNumLet, Single_Quote or cat is Mn,
+//    Me, Cf, Lm or Sk).
+//    Rule: Don't break between Letter and Mid, but break between two Mids.
+//
+// 3) Break:
+//    Any other category: NewLine, MidNum, CR, LF, Double_Quote, Katakana, and
+//    Other.
+//    These categories should always result in a break between two cased letters.
+//    Rule: Always break.
+//
+// Note 1: the Katakana and MidNum categories can, in esoteric cases, result in
+// preventing a break between two cased letters. For now we will ignore this
+// (e.g. [ALetter] [ExtendNumLet] [Katakana] [ExtendNumLet] [ALetter] and
+// [ALetter] [Numeric] [MidNum] [Numeric] [ALetter].)
+//
+// Note 2: the rule for Mid is very approximate, but works in most cases. To
+// improve, we could store the categories in the trie value and use a FA to
+// manage breaks. See TODO comment above.
+//
+// Note 3: according to the spec, it is possible for the Extend category to
+// introduce breaks between other categories grouped in Letter. However, this
+// is undesirable for our purposes. ICU prevents breaks in such cases as well.
+
+// isBreak returns whether this rune should introduce a break.
+func (c info) isBreak() bool {
+	return c.cccVal() == cccBreak
+}
+
+// isLetter returns whether the rune is of break type ALetter, Hebrew_Letter,
+// Numeric, ExtendNumLet, or Extend.
+func (c info) isLetter() bool {
+	ccc := c.cccVal()
+	if ccc == cccZero {
+		return !c.isCaseIgnorable()
+	}
+	return ccc != cccBreak
+}
+
+@@END
+@@PORTABLE {"path":"vendor/golang.org/x/text/cases/map.go","mode":420,"size":23280,"sha256":"2e7f128e208198348b041d4e32f5bad8884ea5246a0d24fdcb8c02f06391cbe6","index":0,"count":1,"encoding":"utf-8","payloadBytes":23280}
+// Copyright 2014 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package cases
+
+// This file contains the definitions of case mappings for all supported
+// languages. The rules for the language-specific tailorings were taken and
+// modified from the CLDR transform definitions in common/transforms.
+
+import (
+	"strings"
+	"unicode"
+	"unicode/utf8"
+
+	"golang.org/x/text/internal"
+	"golang.org/x/text/language"
+	"golang.org/x/text/transform"
+	"golang.org/x/text/unicode/norm"
+)
+
+// A mapFunc takes a context set to the current rune and writes the mapped
+// version to the same context. It may advance the context to the next rune. It
+// returns whether a checkpoint is possible: whether the pDst bytes written to
+// dst so far won't need changing as we see more source bytes.
+type mapFunc func(*context) bool
+
+// A spanFunc takes a context set to the current rune and returns whether this
+// rune would be altered when written to the output. It may advance the context
+// to the next rune. It returns whether a checkpoint is possible.
+type spanFunc func(*context) bool
+
+// maxIgnorable defines the maximum number of ignorables to consider for
+// lookahead operations.
+const maxIgnorable = 30
+
+// supported lists the language tags for which we have tailorings.
+const supported = "und af az el lt nl tr"
+
+func init() {
+	tags := []language.Tag{}
+	for _, s := range strings.Split(supported, " ") {
+		tags = append(tags, language.MustParse(s))
+	}
+	matcher = internal.NewInheritanceMatcher(tags)
+	Supported = language.NewCoverage(tags)
+}
+
+var (
+	matcher *internal.InheritanceMatcher
+
+	Supported language.Coverage
+
+	// We keep the following lists separate, instead of having a single per-
+	// language struct, to give the compiler a chance to remove unused code.
+
+	// Some uppercase mappers are stateless, so we can precompute the
+	// Transformers and save a bit on runtime allocations.
+	upperFunc = []struct {
+		upper mapFunc
+		span  spanFunc
+	}{
+		{nil, nil},                  // und
+		{nil, nil},                  // af
+		{aztrUpper(upper), isUpper}, // az
+		{elUpper, noSpan},           // el
+		{ltUpper(upper), noSpan},    // lt
+		{nil, nil},                  // nl
+		{aztrUpper(upper), isUpper}, // tr
+	}
+
+	undUpper            transform.SpanningTransformer = &undUpperCaser{}
+	undLower            transform.SpanningTransformer = &undLowerCaser{}
+	undLowerIgnoreSigma transform.SpanningTransformer = &undLowerIgnoreSigmaCaser{}
+
+	lowerFunc = []mapFunc{
+		nil,       // und
+		nil,       // af
+		aztrLower, // az
+		nil,       // el
+		ltLower,   // lt
+		nil,       // nl
+		aztrLower, // tr
+	}
+
+	titleInfos = []struct {
+		title     mapFunc
+		lower     mapFunc
+		titleSpan spanFunc
+		rewrite   func(*context)
+	}{
+		{title, lower, isTitle, nil},                // und
+		{title, lower, isTitle, afnlRewrite},        // af
+		{aztrUpper(title), aztrLower, isTitle, nil}, // az
+		{title, lower, isTitle, nil},                // el
+		{ltUpper(title), ltLower, noSpan, nil},      // lt
+		{nlTitle, lower, nlTitleSpan, afnlRewrite},  // nl
+		{aztrUpper(title), aztrLower, isTitle, nil}, // tr
+	}
+)
+
+func makeUpper(t language.Tag, o options) transform.SpanningTransformer {
+	_, i, _ := matcher.Match(t)
+	f := upperFunc[i].upper
+	if f == nil {
+		return undUpper
+	}
+	return &simpleCaser{f: f, span: upperFunc[i].span}
+}
+
+func makeLower(t language.Tag, o options) transform.SpanningTransformer {
+	_, i, _ := matcher.Match(t)
+	f := lowerFunc[i]
+	if f == nil {
+		if o.ignoreFinalSigma {
+			return undLowerIgnoreSigma
+		}
+		return undLower
+	}
+	if o.ignoreFinalSigma {
+		return &simpleCaser{f: f, span: isLower}
+	}
+	return &lowerCaser{
+		first:   f,
+		midWord: finalSigma(f),
+	}
+}
+
+func makeTitle(t language.Tag, o options) transform.SpanningTransformer {
+	_, i, _ := matcher.Match(t)
+	x := &titleInfos[i]
+	lower := x.lower
+	if o.noLower {
+		lower = (*context).copy
+	} else if !o.ignoreFinalSigma {
+		lower = finalSigma(lower)
+	}
+	return &titleCaser{
+		title:     x.title,
+		lower:     lower,
+		titleSpan: x.titleSpan,
+		rewrite:   x.rewrite,
+	}
+}
+
+func noSpan(c *context) bool {
+	c.err = transform.ErrEndOfSpan
+	return false
+}
+
+// TODO: consider a similar special case for the fast majority lower case. This
+// is a bit more involved so will require some more precise benchmarking to
+// justify it.
+
+type undUpperCaser struct{ transform.NopResetter }
+
+// undUpperCaser implements the Transformer interface for doing an upper case
+// mapping for the root locale (und). It eliminates the need for an allocation
+// as it prevents escaping by not using function pointers.
+func (t undUpperCaser) Transform(dst, src []byte, atEOF bool) (nDst, nSrc int, err error) {
+	c := context{dst: dst, src: src, atEOF: atEOF}
+	for c.next() {
+		upper(&c)
+		c.checkpoint()
+	}
+	return c.ret()
+}
+
+func (t undUpperCaser) Span(src []byte, atEOF bool) (n int, err error) {
+	c := context{src: src, atEOF: atEOF}
+	for c.next() && isUpper(&c) {
+		c.checkpoint()
+	}
+	return c.retSpan()
+}
+
+// undLowerIgnoreSigmaCaser implements the Transformer interface for doing
+// a lower case mapping for the root locale (und) ignoring final sigma
+// handling. This casing algorithm is used in some performance-critical packages
+// like secure/precis and x/net/http/idna, which warrants its special-casing.
+type undLowerIgnoreSigmaCaser struct{ transform.NopResetter }
+
+func (t undLowerIgnoreSigmaCaser) Transform(dst, src []byte, atEOF bool) (nDst, nSrc int, err error) {
+	c := context{dst: dst, src: src, atEOF: atEOF}
+	for c.next() && lower(&c) {
+		c.checkpoint()
+	}
+	return c.ret()
+
+}
+
+// Span implements a generic lower-casing. This is possible as isLower works
+// for all lowercasing variants. All lowercase variants only vary in how they
+// transform a non-lowercase letter. They will never change an already lowercase
+// letter. In addition, there is no state.
+func (t undLowerIgnoreSigmaCaser) Span(src []byte, atEOF bool) (n int, err error) {
+	c := context{src: src, atEOF: atEOF}
+	for c.next() && isLower(&c) {
+		c.checkpoint()
+	}
+	return c.retSpan()
+}
+
+type simpleCaser struct {
+	context
+	f    mapFunc
+	span spanFunc
+}
+
+// simpleCaser implements the Transformer interface for doing a case operation
+// on a rune-by-rune basis.
+func (t *simpleCaser) Transform(dst, src []byte, atEOF bool) (nDst, nSrc int, err error) {
+	c := context{dst: dst, src: src, atEOF: atEOF}
+	for c.next() && t.f(&c) {
+		c.checkpoint()
+	}
+	return c.ret()
+}
+
+func (t *simpleCaser) Span(src []byte, atEOF bool) (n int, err error) {
+	c := context{src: src, atEOF: atEOF}
+	for c.next() && t.span(&c) {
+		c.checkpoint()
+	}
+	return c.retSpan()
+}
+
+// undLowerCaser implements the Transformer interface for doing a lower case
+// mapping for the root locale (und) ignoring final sigma handling. This casing
+// algorithm is used in some performance-critical packages like secure/precis
+// and x/net/http/idna, which warrants its special-casing.
+type undLowerCaser struct{ transform.NopResetter }
+
+func (t undLowerCaser) Transform(dst, src []byte, atEOF bool) (nDst, nSrc int, err error) {
+	c := context{dst: dst, src: src, atEOF: atEOF}
+
+	for isInterWord := true; c.next(); {
+		if isInterWord {
+			if c.info.isCased() {
+				if !lower(&c) {
+					break
+				}
+				isInterWord = false
+			} else if !c.copy() {
+				break
+			}
+		} else {
+			if c.info.isNotCasedAndNotCaseIgnorable() {
+				if !c.copy() {
+					break
+				}
+				isInterWord = true
+			} else if !c.hasPrefix("Σ") {
+				if !lower(&c) {
+					break
+				}
+			} else if !finalSigmaBody(&c) {
+				break
+			}
+		}
+		c.checkpoint()
+	}
+	return c.ret()
+}
+
+func (t undLowerCaser) Span(src []byte, atEOF bool) (n int, err error) {
+	c := context{src: src, atEOF: atEOF}
+	for c.next() && isLower(&c) {
+		c.checkpoint()
+	}
+	return c.retSpan()
+}
+
+// lowerCaser implements the Transformer interface. The default Unicode lower
+// casing requires different treatment for the first and subsequent characters
+// of a word, most notably to handle the Greek final Sigma.
+type lowerCaser struct {
+	undLowerIgnoreSigmaCaser
+
+	context
+
+	first, midWord mapFunc
+}
+
+func (t *lowerCaser) Transform(dst, src []byte, atEOF bool) (nDst, nSrc int, err error) {
+	t.context = context{dst: dst, src: src, atEOF: atEOF}
+	c := &t.context
+
+	for isInterWord := true; c.next(); {
+		if isInterWord {
+			if c.info.isCased() {
+				if !t.first(c) {
+					break
+				}
+				isInterWord = false
+			} else if !c.copy() {
+				break
+			}
+		} else {
+			if c.info.isNotCasedAndNotCaseIgnorable() {
+				if !c.copy() {
+					break
+				}
+				isInterWord = true
+			} else if !t.midWord(c) {
+				break
+			}
+		}
+		c.checkpoint()
+	}
+	return c.ret()
+}
+
+// titleCaser implements the Transformer interface. Title casing algorithms
+// distinguish between the first letter of a word and subsequent letters of the
+// same word. It uses state to avoid requiring a potentially infinite lookahead.
+type titleCaser struct {
+	context
+
+	// rune mappings used by the actual casing algorithms.
+	title     mapFunc
+	lower     mapFunc
+	titleSpan spanFunc
+
+	rewrite func(*context)
+}
+
+// Transform implements the standard Unicode title case algorithm as defined in
+// Chapter 3 of The Unicode Standard:
+// toTitlecase(X): Find the word boundaries in X according to Unicode Standard
+// Annex #29, "Unicode Text Segmentation." For each word boundary, find the
+// first cased character F following the word boundary. If F exists, map F to
+// Titlecase_Mapping(F); then map all characters C between F and the following
+// word boundary to Lowercase_Mapping(C).
+func (t *titleCaser) Transform(dst, src []byte, atEOF bool) (nDst, nSrc int, err error) {
+	t.context = context{dst: dst, src: src, atEOF: atEOF, isMidWord: t.isMidWord}
+	c := &t.context
+
+	if !c.next() {
+		return c.ret()
+	}
+
+	for {
+		p := c.info
+		if t.rewrite != nil {
+			t.rewrite(c)
+		}
+
+		wasMid := p.isMid()
+		// Break out of this loop on failure to ensure we do not modify the
+		// state incorrectly.
+		if p.isCased() {
+			if !c.isMidWord {
+				if !t.title(c) {
+					break
+				}
+				c.isMidWord = true
+			} else if !t.lower(c) {
+				break
+			}
+		} else if !c.copy() {
+			break
+		} else if p.isBreak() {
+			c.isMidWord = false
+		}
+
+		// As we save the state of the transformer, it is safe to call
+		// checkpoint after any successful write.
+		if !(c.isMidWord && wasMid) {
+			c.checkpoint()
+		}
+
+		if !c.next() {
+			break
+		}
+		if wasMid && c.info.isMid() {
+			c.isMidWord = false
+		}
+	}
+	return c.ret()
+}
+
+func (t *titleCaser) Span(src []byte, atEOF bool) (n int, err error) {
+	t.context = context{src: src, atEOF: atEOF, isMidWord: t.isMidWord}
+	c := &t.context
+
+	if !c.next() {
+		return c.retSpan()
+	}
+
+	for {
+		p := c.info
+		if t.rewrite != nil {
+			t.rewrite(c)
+		}
+
+		wasMid := p.isMid()
+		// Break out of this loop on failure to ensure we do not modify the
+		// state incorrectly.
+		if p.isCased() {
+			if !c.isMidWord {
+				if !t.titleSpan(c) {
+					break
+				}
+				c.isMidWord = true
+			} else if !isLower(c) {
+				break
+			}
+		} else if p.isBreak() {
+			c.isMidWord = false
+		}
+		// As we save the state of the transformer, it is safe to call
+		// checkpoint after any successful write.
+		if !(c.isMidWord && wasMid) {
+			c.checkpoint()
+		}
+
+		if !c.next() {
+			break
+		}
+		if wasMid && c.info.isMid() {
+			c.isMidWord = false
+		}
+	}
+	return c.retSpan()
+}
+
+// finalSigma adds Greek final Sigma handing to another casing function. It
+// determines whether a lowercased sigma should be σ or ς, by looking ahead for
+// case-ignorables and a cased letters.
+func finalSigma(f mapFunc) mapFunc {
+	return func(c *context) bool {
+		if !c.hasPrefix("Σ") {
+			return f(c)
+		}
+		return finalSigmaBody(c)
+	}
+}
+
+func finalSigmaBody(c *context) bool {
+	// Current rune must be ∑.
+
+	// ::NFD();
+	// # 03A3; 03C2; 03A3; 03A3; Final_Sigma; # GREEK CAPITAL LETTER SIGMA
+	// Σ } [:case-ignorable:]* [:cased:] → σ;
+	// [:cased:] [:case-ignorable:]* { Σ → ς;
+	// ::Any-Lower;
+	// ::NFC();
+
+	p := c.pDst
+	c.writeString("ς")
+
+	// TODO: we should do this here, but right now this will never have an
+	// effect as this is called when the prefix is Sigma, whereas Dutch and
+	// Afrikaans only test for an apostrophe.
+	//
+	// if t.rewrite != nil {
+	// 	t.rewrite(c)
+	// }
+
+	// We need to do one more iteration after maxIgnorable, as a cased
+	// letter is not an ignorable and may modify the result.
+	wasMid := false
+	for i := 0; i < maxIgnorable+1; i++ {
+		if !c.next() {
+			return false
+		}
+		if !c.info.isCaseIgnorable() {
+			// All Midword runes are also case ignorable, so we are
+			// guaranteed to have a letter or word break here. As we are
+			// unreading the run, there is no need to unset c.isMidWord;
+			// the title caser will handle this.
+			if c.info.isCased() {
+				// p+1 is guaranteed to be in bounds: if writing ς was
+				// successful, p+1 will contain the second byte of ς. If not,
+				// this function will have returned after c.next returned false.
+				c.dst[p+1]++ // ς → σ
+			}
+			c.unreadRune()
+			return true
+		}
+		// A case ignorable may also introduce a word break, so we may need
+		// to continue searching even after detecting a break.
+		isMid := c.info.isMid()
+		if (wasMid && isMid) || c.info.isBreak() {
+			c.isMidWord = false
+		}
+		wasMid = isMid
+		c.copy()
+	}
+	return true
+}
+
+// finalSigmaSpan would be the same as isLower.
+
+// elUpper implements Greek upper casing, which entails removing a predefined
+// set of non-blocked modifiers. Note that these accents should not be removed
+// for title casing!
+// Example: "Οδός" -> "ΟΔΟΣ".
+func elUpper(c *context) bool {
+	// From CLDR:
+	// [:Greek:] [^[:ccc=Not_Reordered:][:ccc=Above:]]*? { [\u0313\u0314\u0301\u0300\u0306\u0342\u0308\u0304] → ;
+	// [:Greek:] [^[:ccc=Not_Reordered:][:ccc=Iota_Subscript:]]*? { \u0345 → ;
+
+	r, _ := utf8.DecodeRune(c.src[c.pSrc:])
+	oldPDst := c.pDst
+	if !upper(c) {
+		return false
+	}
+	if !unicode.Is(unicode.Greek, r) {
+		return true
+	}
+	i := 0
+	// Take the properties of the uppercased rune that is already written to the
+	// destination. This saves us the trouble of having to uppercase the
+	// decomposed rune again.
+	if b := norm.NFD.Properties(c.dst[oldPDst:]).Decomposition(); b != nil {
+		// Restore the destination position and process the decomposed rune.
+		r, sz := utf8.DecodeRune(b)
+		if r <= 0xFF { // See A.6.1
+			return true
+		}
+		c.pDst = oldPDst
+		// Insert the first rune and ignore the modifiers. See A.6.2.
+		c.writeBytes(b[:sz])
+		i = len(b[sz:]) / 2 // Greek modifiers are always of length 2.
+	}
+
+	for ; i < maxIgnorable && c.next(); i++ {
+		switch r, _ := utf8.DecodeRune(c.src[c.pSrc:]); r {
+		// Above and Iota Subscript
+		case 0x0300, // U+0300 COMBINING GRAVE ACCENT
+			0x0301, // U+0301 COMBINING ACUTE ACCENT
+			0x0304, // U+0304 COMBINING MACRON
+			0x0306, // U+0306 COMBINING BREVE
+			0x0308, // U+0308 COMBINING DIAERESIS
+			0x0313, // U+0313 COMBINING COMMA ABOVE
+			0x0314, // U+0314 COMBINING REVERSED COMMA ABOVE
+			0x0342, // U+0342 COMBINING GREEK PERISPOMENI
+			0x0345: // U+0345 COMBINING GREEK YPOGEGRAMMENI
+			// No-op. Gobble the modifier.
+
+		default:
+			switch v, _ := trie.lookup(c.src[c.pSrc:]); info(v).cccType() {
+			case cccZero:
+				c.unreadRune()
+				return true
+
+			// We don't need to test for IotaSubscript as the only rune that
+			// qualifies (U+0345) was already excluded in the switch statement
+			// above. See A.4.
+
+			case cccAbove:
+				return c.copy()
+			default:
+				// Some other modifier. We're still allowed to gobble Greek
+				// modifiers after this.
+				c.copy()
+			}
+		}
+	}
+	return i == maxIgnorable
+}
+
+// TODO: implement elUpperSpan (low-priority: complex and infrequent).
+
+func ltLower(c *context) bool {
+	// From CLDR:
+	// # Introduce an explicit dot above when lowercasing capital I's and J's
+	// # whenever there are more accents above.
+	// # (of the accents used in Lithuanian: grave, acute, tilde above, and ogonek)
+	// # 0049; 0069 0307; 0049; 0049; lt More_Above; # LATIN CAPITAL LETTER I
+	// # 004A; 006A 0307; 004A; 004A; lt More_Above; # LATIN CAPITAL LETTER J
+	// # 012E; 012F 0307; 012E; 012E; lt More_Above; # LATIN CAPITAL LETTER I WITH OGONEK
+	// # 00CC; 0069 0307 0300; 00CC; 00CC; lt; # LATIN CAPITAL LETTER I WITH GRAVE
+	// # 00CD; 0069 0307 0301; 00CD; 00CD; lt; # LATIN CAPITAL LETTER I WITH ACUTE
+	// # 0128; 0069 0307 0303; 0128; 0128; lt; # LATIN CAPITAL LETTER I WITH TILDE
+	// ::NFD();
+	// I } [^[:ccc=Not_Reordered:][:ccc=Above:]]* [:ccc=Above:] → i \u0307;
+	// J } [^[:ccc=Not_Reordered:][:ccc=Above:]]* [:ccc=Above:] → j \u0307;
+	// I \u0328 (Į) } [^[:ccc=Not_Reordered:][:ccc=Above:]]* [:ccc=Above:] → i \u0328 \u0307;
+	// I \u0300 (Ì) → i \u0307 \u0300;
+	// I \u0301 (Í) → i \u0307 \u0301;
+	// I \u0303 (Ĩ) → i \u0307 \u0303;
+	// ::Any-Lower();
+	// ::NFC();
+
+	i := 0
+	if r := c.src[c.pSrc]; r < utf8.RuneSelf {
+		lower(c)
+		if r != 'I' && r != 'J' {
+			return true
+		}
+	} else {
+		p := norm.NFD.Properties(c.src[c.pSrc:])
+		if d := p.Decomposition(); len(d) >= 3 && (d[0] == 'I' || d[0] == 'J') {
+			// UTF-8 optimization: the decomposition will only have an above
+			// modifier if the last rune of the decomposition is in [U+300-U+311].
+			// In all other cases, a decomposition starting with I is always
+			// an I followed by modifiers that are not cased themselves. See A.2.
+			if d[1] == 0xCC && d[2] <= 0x91 { // A.2.4.
+				if !c.writeBytes(d[:1]) {
+					return false
+				}
+				c.dst[c.pDst-1] += 'a' - 'A' // lower
+
+				// Assumption: modifier never changes on lowercase. See A.1.
+				// Assumption: all modifiers added have CCC = Above. See A.2.3.
+				return c.writeString("\u0307") && c.writeBytes(d[1:])
+			}
+			// In all other cases the additional modifiers will have a CCC
+			// that is less than 230 (Above). We will insert the U+0307, if
+			// needed, after these modifiers so that a string in FCD form
+			// will remain so. See A.2.2.
+			lower(c)
+			i = 1
+		} else {
+			return lower(c)
+		}
+	}
+
+	for ; i < maxIgnorable && c.next(); i++ {
+		switch c.info.cccType() {
+		case cccZero:
+			c.unreadRune()
+			return true
+		case cccAbove:
+			return c.writeString("\u0307") && c.copy() // See A.1.
+		default:
+			c.copy() // See A.1.
+		}
+	}
+	return i == maxIgnorable
+}
+
+// ltLowerSpan would be the same as isLower.
+
+func ltUpper(f mapFunc) mapFunc {
+	return func(c *context) bool {
+		// Unicode:
+		// 0307; 0307; ; ; lt After_Soft_Dotted; # COMBINING DOT ABOVE
+		//
+		// From CLDR:
+		// # Remove \u0307 following soft-dotteds (i, j, and the like), with possible
+		// # intervening non-230 marks.
+		// ::NFD();
+		// [:Soft_Dotted:] [^[:ccc=Not_Reordered:][:ccc=Above:]]* { \u0307 → ;
+		// ::Any-Upper();
+		// ::NFC();
+
+		// TODO: See A.5. A soft-dotted rune never has an exception. This would
+		// allow us to overload the exception bit and encode this property in
+		// info. Need to measure performance impact of this.
+		r, _ := utf8.DecodeRune(c.src[c.pSrc:])
+		oldPDst := c.pDst
+		if !f(c) {
+			return false
+		}
+		if !unicode.Is(unicode.Soft_Dotted, r) {
+			return true
+		}
+
+		// We don't need to do an NFD normalization, as a soft-dotted rune never
+		// contains U+0307. See A.3.
+
+		i := 0
+		for ; i < maxIgnorable && c.next(); i++ {
+			switch c.info.cccType() {
+			case cccZero:
+				c.unreadRune()
+				return true
+			case cccAbove:
+				if c.hasPrefix("\u0307") {
+					// We don't do a full NFC, but rather combine runes for
+					// some of the common cases. (Returning NFC or
+					// preserving normal form is neither a requirement nor
+					// a possibility anyway).
+					if !c.next() {
+						return false
+					}
+					if c.dst[oldPDst] == 'I' && c.pDst == oldPDst+1 && c.src[c.pSrc] == 0xcc {
+						s := ""
+						switch c.src[c.pSrc+1] {
+						case 0x80: // U+0300 COMBINING GRAVE ACCENT
+							s = "\u00cc" // U+00CC LATIN CAPITAL LETTER I WITH GRAVE
+						case 0x81: // U+0301 COMBINING ACUTE ACCENT
+							s = "\u00cd" // U+00CD LATIN CAPITAL LETTER I WITH ACUTE
+						case 0x83: // U+0303 COMBINING TILDE
+							s = "\u0128" // U+0128 LATIN CAPITAL LETTER I WITH TILDE
+						case 0x88: // U+0308 COMBINING DIAERESIS
+							s = "\u00cf" // U+00CF LATIN CAPITAL LETTER I WITH DIAERESIS
+						default:
+						}
+						if s != "" {
+							c.pDst = oldPDst
+							return c.writeString(s)
+						}
+					}
+				}
+				return c.copy()
+			default:
+				c.copy()
+			}
+		}
+		return i == maxIgnorable
+	}
+}
+
+// TODO: implement ltUpperSpan (low priority: complex and infrequent).
+
+func aztrUpper(f mapFunc) mapFunc {
+	return func(c *context) bool {
+		// i→İ;
+		if c.src[c.pSrc] == 'i' {
+			return c.writeString("İ")
+		}
+		return f(c)
+	}
+}
+
+func aztrLower(c *context) (done bool) {
+	// From CLDR:
+	// # I and i-dotless; I-dot and i are case pairs in Turkish and Azeri
+	// # 0130; 0069; 0130; 0130; tr; # LATIN CAPITAL LETTER I WITH DOT ABOVE
+	// İ→i;
+	// # When lowercasing, remove dot_above in the sequence I + dot_above, which will turn into i.
+	// # This matches the behavior of the canonically equivalent I-dot_above
+	// # 0307; ; 0307; 0307; tr After_I; # COMBINING DOT ABOVE
+	// # When lowercasing, unless an I is before a dot_above, it turns into a dotless i.
+	// # 0049; 0131; 0049; 0049; tr Not_Before_Dot; # LATIN CAPITAL LETTER I
+	// I([^[:ccc=Not_Reordered:][:ccc=Above:]]*)\u0307 → i$1 ;
+	// I→ı ;
+	// ::Any-Lower();
+	if c.hasPrefix("\u0130") { // İ
+		return c.writeString("i")
+	}
+	if c.src[c.pSrc] != 'I' {
+		return lower(c)
+	}
+
+	// We ignore the lower-case I for now, but insert it later when we know
+	// which form we need.
+	start := c.pSrc + c.sz
+
+	i := 0
+Loop:
+	// We check for up to n ignorables before \u0307. As \u0307 is an
+	// ignorable as well, n is maxIgnorable-1.
+	for ; i < maxIgnorable && c.next(); i++ {
+		switch c.info.cccType() {
+		case cccAbove:
+			if c.hasPrefix("\u0307") {
+				return c.writeString("i") && c.writeBytes(c.src[start:c.pSrc]) // ignore U+0307
+			}
+			done = true
+			break Loop
+		case cccZero:
+			c.unreadRune()
+			done = true
+			break Loop
+		default:
+			// We'll write this rune after we know which starter to use.
+		}
+	}
+	if i == maxIgnorable {
+		done = true
+	}
+	return c.writeString("ı") && c.writeBytes(c.src[start:c.pSrc+c.sz]) && done
+}
+
+// aztrLowerSpan would be the same as isLower.
+
+func nlTitle(c *context) bool {
+	// From CLDR:
+	// # Special titlecasing for Dutch initial "ij".
+	// ::Any-Title();
+	// # Fix up Ij at the beginning of a "word" (per Any-Title, not UAX #29)
+	// [:^WB=ALetter:] [:WB=Extend:]* [[:WB=MidLetter:][:WB=MidNumLet:]]? { Ij } → IJ ;
+	if c.src[c.pSrc] != 'I' && c.src[c.pSrc] != 'i' {
+		return title(c)
+	}
+
+	if !c.writeString("I") || !c.next() {
+		return false
+	}
+	if c.src[c.pSrc] == 'j' || c.src[c.pSrc] == 'J' {
+		return c.writeString("J")
+	}
+	c.unreadRune()
+	return true
+}
+
+func nlTitleSpan(c *context) bool {
+	// From CLDR:
+	// # Special titlecasing for Dutch initial "ij".
+	// ::Any-Title();
+	// # Fix up Ij at the beginning of a "word" (per Any-Title, not UAX #29)
+	// [:^WB=ALetter:] [:WB=Extend:]* [[:WB=MidLetter:][:WB=MidNumLet:]]? { Ij } → IJ ;
+	if c.src[c.pSrc] != 'I' {
+		return isTitle(c)
+	}
+	if !c.next() || c.src[c.pSrc] == 'j' {
+		return false
+	}
+	if c.src[c.pSrc] != 'J' {
+		c.unreadRune()
+	}
+	return true
+}
+
+// Not part of CLDR, but see https://unicode.org/cldr/trac/ticket/7078.
+func afnlRewrite(c *context) {
+	if c.hasPrefix("'") || c.hasPrefix("’") {
+		c.isMidWord = true
+	}
+}
+
+@@END
 @@PORTABLE {"path":"vendor/golang.org/x/text/cases/tables15.0.0.go","mode":420,"size":109041,"sha256":"68d3c1d6960ec0fa66d2ec9cdc9d8c58572f5d3216ad6b3e1e0486948b6c950c","index":0,"count":3,"encoding":"utf-8","payloadBytes":49102}
 // Code generated by running "go generate" in golang.org/x/text. DO NOT EDIT.
 
