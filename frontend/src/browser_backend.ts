@@ -278,9 +278,20 @@ export const browserBackend: ProjectBackend = {
     promptExecutionNodePath("Папка для экспорта проекта"),
   createProject: (input) => invoke("createProject", [input]),
   closeProject: () => invoke("closeProject"),
+  chooseApplicationPackageDirectory: () =>
+    invoke("chooseApplicationPackageDirectory", []),
+  reviewApplicationPackageImport: (...args) =>
+    invoke("reviewApplicationPackageImport", args),
   startEditSession: () => invoke("startEditSession"),
   appendEditCommand: (sessionID, command) =>
     invoke("appendEditCommand", [sessionID, command]),
+  amendApplicationLibraryDraft: (sessionID, index, expected, replacement) =>
+    invoke("amendApplicationLibraryDraft", [
+      sessionID,
+      index,
+      expected,
+      replacement,
+    ]),
   amendServiceConfigurationDraft: (sessionID, index, expected, replacement) =>
     invoke("amendServiceConfigurationDraft", [
       sessionID,

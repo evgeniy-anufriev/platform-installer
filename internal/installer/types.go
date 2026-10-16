@@ -263,17 +263,27 @@ type StructuralSaveResult struct {
 // an Ansible-resolved ProjectSnapshot and exposes only directly owned provider
 // fields, never Core-derived endpoint, DNS or PKI semantics.
 type ManagedProjectView struct {
-	ApplicationLibraries  map[string]map[string]any       `json:"applicationLibraries"`
-	ApplicationPlacements map[string]map[string]any       `json:"applicationPlacements"`
-	ProjectRevision       string                          `json:"projectRevision"`
-	DataRootDirectory     string                          `json:"dataRootDirectory"`
-	NamePrefix            string                          `json:"namePrefix"`
-	Servers               map[string]ManagedServer        `json:"servers"`
-	Deployments           map[string]ManagedDeployment    `json:"deployments"`
-	EndpointGroups        map[string]ManagedEndpointGroup `json:"endpointGroups"`
-	MemberPlacements      []ManagedMemberPlacement        `json:"memberPlacements"`
-	HostPlacements        []ManagedHostPlacement          `json:"hostPlacements"`
-	PKI                   ManagedPKI                      `json:"pki"`
+	ApplicationPackages   map[string]ManagedApplicationPackage `json:"applicationPackages"`
+	ApplicationLibraries  map[string]map[string]any            `json:"applicationLibraries"`
+	ApplicationPlacements map[string]map[string]any            `json:"applicationPlacements"`
+	ProjectRevision       string                               `json:"projectRevision"`
+	DataRootDirectory     string                               `json:"dataRootDirectory"`
+	NamePrefix            string                               `json:"namePrefix"`
+	Servers               map[string]ManagedServer             `json:"servers"`
+	Deployments           map[string]ManagedDeployment         `json:"deployments"`
+	EndpointGroups        map[string]ManagedEndpointGroup      `json:"endpointGroups"`
+	MemberPlacements      []ManagedMemberPlacement             `json:"memberPlacements"`
+	HostPlacements        []ManagedHostPlacement               `json:"hostPlacements"`
+	PKI                   ManagedPKI                           `json:"pki"`
+}
+
+// ManagedApplicationPackage contains authored package data, never resolved
+// Ansible values. Rendering/interpolation remains Core-owned.
+type ManagedApplicationPackage struct {
+	Kind       string         `json:"kind"`
+	Ref        string         `json:"ref"`
+	Digest     string         `json:"digest"`
+	Definition map[string]any `json:"definition"`
 }
 
 // ManagedPKI contains direct Installer-owned desired input only; it never

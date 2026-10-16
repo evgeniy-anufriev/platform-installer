@@ -23,6 +23,8 @@ versioned schemas, service packages или accepted substage scope.
 
 | B (предложение) | Go backend; cross-run infrastructure Verify evidence и отдельный approved library run | [Технический план](milestones/b/b-technical-plan.md) |
 
+| C (проект плана) | UI editor поверх B1–B4, дизайн и реальные acceptance gates | [Технический план](milestones/c/c-technical-plan.md) · [HTML-макет](../../design/ui-design-01-mockups.html) |
+
 Последующие Go и UI описываются в [общем плане](implementation-plan.md).
 Kafka SASL/principal/ACL является отдельным security scope; SSL-only probe
 не доказывает authenticated access.

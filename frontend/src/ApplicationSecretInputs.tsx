@@ -8,8 +8,12 @@ export function ApplicationSecretInputs({
   disabled,
   load,
   save,
+  libraryId,
+  title = "Секреты библиотек",
 }: {
   disabled: boolean;
+  libraryId?: string;
+  title?: string;
   load: () => Promise<RuntimeSecretDescriptorOperation>;
   save: (input: RuntimeSecretValuesInput) => Promise<void>;
 }) {
@@ -33,12 +37,15 @@ export function ApplicationSecretInputs({
         setMessage(result.error?.message || "Требования к секретам недоступны");
         return;
       }
-      if (!result.applicationInputs?.length) {
+      const inputs = result.applicationInputs?.filter(
+        (item) => !libraryId || item.applicationLibraries.includes(libraryId),
+      );
+      if (!inputs?.length) {
         setMessage("Секреты библиотек не требуются");
         return;
       }
       setValues({});
-      setOperation(result);
+      setOperation({ ...result, applicationInputs: inputs });
       dialog.current?.showModal();
     } catch {
       setMessage("Не удалось получить требования к секретам");
@@ -53,13 +60,13 @@ export function ApplicationSecretInputs({
         disabled={disabled || busy}
         onClick={() => void open()}
       >
-        Секреты библиотек
+        {title}
       </button>
       {message && <p role="status">{message}</p>}
       <dialog
         ref={dialog}
         className="runtime-secret-dialog"
-        aria-label="Секреты библиотек"
+        aria-label={title}
         onCancel={(event) => {
           event.preventDefault();
           close();
@@ -79,6 +86,7 @@ export function ApplicationSecretInputs({
               projectRevision: operation.projectRevision,
               descriptorSetFingerprint: operation.descriptorSetFingerprint,
               serviceDeployment: "",
+              ...(libraryId ? { applicationLibrary: libraryId } : {}),
               values,
             })
               .then(() => {
@@ -94,7 +102,7 @@ export function ApplicationSecretInputs({
               .finally(() => setBusy(false));
           }}
         >
-          <h2>Секреты библиотек</h2>
+          <h2>{title}</h2>
           <p className="muted">
             Значения остаются только в памяти и передаются через runtime lease
             для одобренного плана.

@@ -468,6 +468,12 @@ failure/cancel/retry, точные revision/digest; публикация не в
 
 ## C. UI
 
+Детализация C1–C4 и актуальные границы B4: [технический план C](milestones/c/c-technical-plan.md).
+Он уточняет ранний UI proposal: RESOLUTION_SCOPE вместо вымышленного field origin,
+library membership, существующий guarded writer/import, saved infra evidence или
+Verify prefix. Реализация начинается только после согласования C1.
+
+
 ### C1. Макет и соответствие действующим flow
 
 Сопоставить «Сервисы», shared UI rules и новый [UI proposal](ui.md).
@@ -487,6 +493,8 @@ Core проекции отображаются read-only; raw YAML не разб
 
 ### C3. Установка и наблюдение
 
+С учётом финального B4 решения свежий infra Verify позволяет пропустить infra operations;
+при его отсутствии тот же план выполняет fixed Verify prefix без infrastructure Apply.
 Общая страница «Установка» показывает отдельные этапы «Инфраструктура» и
 «Библиотеки приложений» в порядке Core. Второй ожидает успешного завершения
 первого; причина блокировки/отмены видна без нового terminal state.

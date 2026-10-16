@@ -108,21 +108,30 @@ func decodeBrowserArgs(body []byte, outputs ...any) error {
 
 func browserOperations() map[string]browserOperation {
 	return map[string]browserOperation{
-		"chooseRuntimeBundleUpdate":  noBrowserArgs((*App).ChooseRuntimeBundleUpdate),
-		"confirmRuntimeBundleUpdate": oneBrowserArg((*App).ConfirmRuntimeBundleUpdate),
-		"inspectOrphanRun":           noBrowserArgs((*App).InspectOrphanRun),
-		"attachOrphanRun":            oneBrowserArg((*App).AttachOrphanRun),
-		"cancelOrphanRun":            oneBrowserArg((*App).CancelOrphanRun),
-		"getApplicationConfig":       noBrowserArgs((*App).GetApplicationConfig),
-		"currentProject":             noBrowserArgs((*App).CurrentProject),
-		"openProject":                oneBrowserArg((*App).OpenProject),
-		"createProject":              oneBrowserArg((*App).CreateProject),
-		"closeProject":               noBrowserArgs((*App).CloseProject),
-		"startEditSession":           noBrowserArgs((*App).StartEditSession),
+		"chooseRuntimeBundleUpdate":         noBrowserArgs((*App).ChooseRuntimeBundleUpdate),
+		"confirmRuntimeBundleUpdate":        oneBrowserArg((*App).ConfirmRuntimeBundleUpdate),
+		"inspectOrphanRun":                  noBrowserArgs((*App).InspectOrphanRun),
+		"attachOrphanRun":                   oneBrowserArg((*App).AttachOrphanRun),
+		"cancelOrphanRun":                   oneBrowserArg((*App).CancelOrphanRun),
+		"getApplicationConfig":              noBrowserArgs((*App).GetApplicationConfig),
+		"currentProject":                    noBrowserArgs((*App).CurrentProject),
+		"openProject":                       oneBrowserArg((*App).OpenProject),
+		"createProject":                     oneBrowserArg((*App).CreateProject),
+		"closeProject":                      noBrowserArgs((*App).CloseProject),
+		"startEditSession":                  noBrowserArgs((*App).StartEditSession),
+		"chooseApplicationPackageDirectory": noBrowserArgs((*App).ChooseApplicationPackageDirectory),
+		"reviewApplicationPackageImport": func(app *App, body []byte) (any, error) {
+			var session, source, kind, name, version, digest string
+			if err := decodeBrowserArgs(body, &session, &source, &kind, &name, &version, &digest); err != nil {
+				return nil, err
+			}
+			return app.ReviewApplicationPackageImport(session, source, kind, name, version, digest), nil
+		},
 		"appendEditCommand": twoBrowserArgs(func(app *App, sessionID string, command installer.EditCommand) EditOperationResult {
 			return app.AppendEditCommand(sessionID, command)
 		}),
-		"amendServiceConfigurationDraft":          browserAmendConfiguration(),
+		"amendServiceConfigurationDraft":          browserAmendConfiguration(false),
+		"amendApplicationLibraryDraft":            browserAmendConfiguration(true),
 		"reviewEditSession":                       oneBrowserArg((*App).ReviewStructuralEditSession),
 		"commitEditPlan":                          twoBrowserArgs((*App).CommitStructuralEditPlan),
 		"discardEditSession":                      oneBrowserArg((*App).DiscardEditSession),
@@ -183,7 +192,7 @@ func browserOperations() map[string]browserOperation {
 	}
 }
 
-func browserAmendConfiguration() browserOperation {
+func browserAmendConfiguration(application bool) browserOperation {
 	type args struct {
 		SessionID   string
 		Index       int
@@ -194,6 +203,9 @@ func browserAmendConfiguration() browserOperation {
 		var input args
 		if err := decodeBrowserArgs(body, &input.SessionID, &input.Index, &input.Expected, &input.Replacement); err != nil {
 			return nil, errors.New("REQUEST_ARGUMENTS_INVALID")
+		}
+		if application {
+			return app.AmendApplicationLibraryDraft(input.SessionID, input.Index, input.Expected, input.Replacement), nil
 		}
 		return app.AmendServiceConfigurationDraft(input.SessionID, input.Index, input.Expected, input.Replacement), nil
 	}

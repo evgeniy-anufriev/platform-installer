@@ -11,6 +11,11 @@ bounded B0 Core extension for cross-run infrastructure Verify evidence and expli
 library-only/Verify-only scopes. Its gate is node-authoritative full coverage,
 stale-evidence/trust/concurrency protection and standalone RED OS acceptance.
 B1–B4 then integrate the existing Go adapter/writer/lifecycle; C owns application UI.
+[C editor plan](work/application-libraries/milestones/c/c-technical-plan.md) specifies
+Applications master-detail, existing guarded edits/import, runtime-secret input and
+actual React/Wails acceptance. C1 is design/owner approval; C2–C4 are separately
+gated implementation and QA. No second desired-state store or new execution path.
+
 Local status is operational evidence, never a second desired-state or Start authority.
 When saved infrastructure Verify evidence is absent or stale, the library-only plan
 includes fixed infrastructure Verify before library Apply/Verify in the same run;

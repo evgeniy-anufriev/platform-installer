@@ -180,11 +180,12 @@ type RuntimeSecretDescriptorOperation struct {
 }
 
 // RuntimeSecretValuesInput is one non-persistent submission for a single
-// Core-derived service deployment. Values are accepted but never returned.
+// Core-derived service deployment or application library. Values are never returned.
 type RuntimeSecretValuesInput struct {
 	ProjectRevision          string            `json:"projectRevision"`
 	DescriptorSetFingerprint string            `json:"descriptorSetFingerprint"`
 	ServiceDeployment        string            `json:"serviceDeployment"`
+	ApplicationLibrary       string            `json:"applicationLibrary,omitempty"`
 	Values                   map[string]string `json:"values"`
 }
 
@@ -782,6 +783,9 @@ func (a *App) SetDeploymentRuntimeSecretValues(input RuntimeSecretValuesInput) e
 		return errors.New("RUNTIME_SECRET_DESCRIPTORS_STALE")
 	}
 	requirements := make([]string, 0)
+	if input.ApplicationLibrary != "" && input.ServiceDeployment != "" {
+		return errors.New("RUNTIME_SECRET_INPUT_INVALID")
+	}
 	for _, descriptor := range evidence.descriptors {
 		if descriptor.Purpose == "SERVICE_PASSWORD" && descriptor.ServiceDeployment == input.ServiceDeployment {
 			requirements = append(requirements, descriptor.RequirementRef)
@@ -789,6 +793,9 @@ func (a *App) SetDeploymentRuntimeSecretValues(input RuntimeSecretValuesInput) e
 	}
 	if input.ServiceDeployment == "" {
 		for _, descriptor := range evidence.applicationInputs {
+			if input.ApplicationLibrary != "" && !slices.Contains(descriptor.ApplicationLibraries, input.ApplicationLibrary) {
+				continue
+			}
 			requirements = append(requirements, descriptor.RequirementRef)
 		}
 		if len(requirements) == 0 {
@@ -1588,13 +1595,25 @@ func (a *App) AppendEditCommand(sessionID string, command installer.EditCommand)
 // AmendServiceConfigurationDraft replaces or withdraws one acknowledged
 // setting command in the current unsaved session. It cannot edit other intents.
 func (a *App) AmendServiceConfigurationDraft(sessionID string, index int, expected installer.EditCommand, replacement *installer.EditCommand) EditOperationResult {
+	return a.amendDraft(sessionID, index, expected, replacement, false)
+}
+
+func (a *App) AmendApplicationLibraryDraft(sessionID string, index int, expected installer.EditCommand, replacement *installer.EditCommand) EditOperationResult {
+	return a.amendDraft(sessionID, index, expected, replacement, true)
+}
+
+func (a *App) amendDraft(sessionID string, index int, expected installer.EditCommand, replacement *installer.EditCommand, application bool) EditOperationResult {
 	a.editMu.Lock()
 	defer a.editMu.Unlock()
 	a.reconcileEditSessionLocked()
 	if sessionID == "" || sessionID != a.activeSession {
 		return a.editFailure(errors.New("EDIT_SESSION_EXPIRED"))
 	}
-	session, err := a.sessions.AmendConfiguration(sessionID, index, expected, replacement, a.editor)
+	amend := a.sessions.AmendConfiguration
+	if application {
+		amend = a.sessions.AmendApplication
+	}
+	session, err := amend(sessionID, index, expected, replacement, a.editor)
 	if err != nil {
 		return a.editFailure(err)
 	}

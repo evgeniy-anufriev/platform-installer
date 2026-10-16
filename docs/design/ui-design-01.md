@@ -94,6 +94,23 @@ separate from server identity and cannot select services, placement,
 Execution Node or source policy. Legacy missing and locally unknown valid types
 remain readable without automatic defaults or rewrites.
 
+## Application libraries editor — C design proposal (2026-10-15)
+
+The [C technical plan](../work/application-libraries/milestones/c/c-technical-plan.md)
+adds Applications between Services and Installation. The HTML now includes a
+synthetic master-detail prototype: library deployments and recipe slots on the
+left, scoped settings on the right. It demonstrates navigation, tabs, filtering,
+explicit overrides and separate resolved/observed information. Creation/import
+and Review/Save buttons describe their intended flow; they do not implement disk
+writes or production bindings. No real installation status is simulated as proof.
+
+Reuse the existing project edit/review/save lifecycle and runtime secret dialog.
+Core owns identities, precedence, providers and execution. Origin is currently
+RESOLUTION_SCOPE, not per-field provenance. Placement remains library membership.
+Installation retains B4 services checkbox, saved infra evidence or fixed Verify
+prefix, and library Apply/Verify. Approval of this proposed design is required
+before production C implementation.
+
 ## 1. Product principle
 
 Platform Installer is a visual editor and orchestrator for the same standard
@@ -126,6 +143,7 @@ Execution Node panel. Its primary items are:
 | Topology | service instances, placement, roles and entry-point configuration |
 | Certificates | PKI profile intent, Core-derived consumers/SAN preview; no runtime issuance |
 | Services | settings of the same topology deployments, including PKI profile references |
+| Applications (C proposal) | library deployments, recipe slots, bindings, placement and authored overrides; execution remains on Installation |
 | Installation | current-revision readiness summary, plan and deployment lifecycle; it does not prepare the Execution Node |
 | Logs | historical runs, audit and sanitized diagnostics |
 | Help | offline help and troubleshooting entry point |
@@ -746,3 +764,13 @@ unavailable while the displayed plan differs from the selected scope. This repla
 the earlier B4 instruction requiring an explicit fresh Build after checkbox changes.
 
 B4 owner-authorized credential completion (2026-10-15): Plan adds a compact «Секреты библиотек» dialog, using the existing runtime-secret dialog styling and Core-derived applicationInputs. The selected service's Secrets dialog remains unchanged. Password values remain in the existing session Broker/lease, never desired state. This is a minimal integration addition to the Installation mockup, not a library editor.
+
+C owner refinement: the application slot Parameters tab edits image, host
+(published) and container ports, inherited from package defaults. Explicit overrides
+have independent reset actions; reset removes authored values rather than copying
+defaults. Core remains responsible for resolution and port conflicts.
+
+C owner refinement: add application Secrets for credentials of every declared
+connection, using typed source settings and the existing runtime input dialog.
+Connections without username/password requirements show their actual TLS/PKI/Vault
+binding contract. Do not infer a password requirement from a service name.

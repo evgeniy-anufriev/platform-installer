@@ -92,7 +92,15 @@
     #execution-node-panel-state.warn::before { content: "!"; }
     #execution-node-panel-state.ok { background: light-dark(#e5f6ee,#173d30); color: light-dark(#176443,#8ad6b1); }
     #execution-node-panel-state.ok::before { content: "✓"; }
-  </style>
+
+    .app-library-layout{display:grid;grid-template-columns:250px minmax(0,1fr);gap:14px;min-height:0;flex:1;overflow:hidden}
+    .app-library-list,.app-library-editor{min-height:0;overflow:auto;border:1px solid light-dark(#d8e2ef,#35445a);border-radius:8px;background:light-dark(#fff,#152131)}
+    .app-library-list{padding:12px}.app-library-editor{display:flex;flex-direction:column;overflow:hidden}.app-library-editor>header{padding:14px;border-bottom:1px solid light-dark(#d8e2ef,#35445a)}
+    .app-library-group{border-bottom:1px solid light-dark(#e2e9f1,#35445a);padding:8px 0}.app-library-group[hidden]{display:none}.app-library-group button{display:block;width:100%;text-align:left;border:0;background:transparent;color:inherit;padding:11px;border-radius:5px;cursor:pointer}.app-library-group button[aria-current]{background:light-dark(#eaf3ff,#213f5c);color:light-dark(#165da1,#c7e7ff)}.app-library-group button+button{padding-left:26px}
+    #app-tabs{display:flex;gap:7px;overflow:auto;margin-top:10px}#app-editor-body{padding:18px;overflow:auto;min-height:0;flex:1}.app-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin:14px 0}.app-fields label{display:grid;gap:5px}.app-info{padding:10px;background:light-dark(#eef4fc,#223148);border-radius:6px;margin:12px 0}.app-library-editor footer{padding:12px 16px;border-top:1px solid light-dark(#d8e2ef,#35445a)}#app-draft-note{display:block;min-height:30px;margin-bottom:8px}
+    @media(max-width:1100px){.app-library-layout{grid-template-columns:220px minmax(0,1fr)}.app-fields{grid-template-columns:1fr}}
+    @media(max-width:800px){.app-library-layout{display:flex;flex-direction:column;overflow:auto}.app-library-list{max-height:180px;flex-shrink:0}.app-library-editor{min-height:390px;overflow:visible}#app-editor-body{overflow:visible}}
+</style>
 </head>
 <body>
   <div class="app" id="ui-design-01">
@@ -104,6 +112,7 @@
         <button type="button" data-page="topology">Топология</button>
         <button type="button" data-page="certificates">Сертификаты</button>
         <button type="button" data-page="service-configuration">Сервисы</button>
+        <button type="button" data-page="applications">Приложения</button>
         <button type="button" data-page="installation" aria-current="page">Установка</button>
         <button type="button" data-page="logs">Журналы</button>
         <button type="button" class="lower" data-page="help">Справка</button>
@@ -135,6 +144,25 @@ Task events and PLAY RECAP will appear here.</pre></div></article></div></sectio
         <section class="topology-view" id="services"><div class="triple"><article class="card"><h2>Экземпляры сервисов</h2><div class="body"><input placeholder="ID или сервис"><div class="sel">qa-bind <span>BIND</span></div><div class="row">qa-clickhouse · ClickHouse</div><div class="row">qa-dns-client · DNS client</div><div class="row">qa-docker · Docker rootless</div></div></article><article class="card"><h2>Выбранный экземпляр</h2><div class="body"><div class="row">ID <b>qa-bind</b></div><div class="row">Сервис <b>BIND</b></div><div class="row">Режим <b>Primary / Secondary</b></div><div class="row">Размещение <b>По серверам</b></div><div class="row">Состояние <b>Сохранён</b></div><h3>Размещение на серверах</h3><div class="row"><b>node1</b> <span class="chip">primary</span></div><div class="row"><b>node2</b> <span class="chip">secondary</span></div><p><button class="btn main">Изменить размещение</button> <button class="btn" type="button" data-open-service-settings>Настроить экземпляр</button> <button class="btn">Удалить</button></p><small>Выбор участника открывает его настройки в редакторе сервисов.</small></div></article><article class="card"><h2>Состояние топологии</h2><div class="body"><div class="row">Экземпляры <b>10</b></div><div class="row">Черновик <b>0 / 16 изменений</b></div><div class="row">Размещение <b>Настраивается здесь</b></div><div class="row">Проверка Core <b>После сохранения</b></div><p class="muted">Размещение и роли задаются в проекте; итоговую проверку выполняет Core после сохранения.</p></div></article></div></section>
         <section class="topology-view" id="topology-servers" hidden><div class="triple"><article class="card"><h2>Выбор сервера</h2><div class="body"><input placeholder="Поиск сервера"><div class="sel"><b>node1</b><br><small>192.168.56.101</small></div><div class="row">node2 <span class="ok">✓</span></div><div class="row">node3 <span class="ok">✓</span></div></div></article><article class="card"><h2>node1 · members</h2><div class="body"><p><b>Kafka / kafka-main</b></p><div class="row">controller-1 <span class="chip">controller</span></div><div class="row">broker-1 <span class="chip">broker</span></div><p><b>PostgreSQL / billing-db</b></p><div class="row">monitor-1 <span class="chip">monitor</span></div><p><button class="btn">Добавить member</button></p></div></article><article class="card"><h2>Сводная по серверу</h2><div class="body"><div class="row">Host <b>node1</b></div><div class="row">Deployments <b>2</b></div><div class="row">Members <b>3</b></div><div class="row">Roles <b>3</b></div><div class="row">Готовность <b class="ok">PASS</b></div></div></article></div></section>
         <section class="topology-view" id="entrypoints" hidden><div class="triple"><article class="card"><h2>Группы endpoint</h2><div class="body"><div class="row"><b>qa-alternate-endpoint</b><span>qa-alt.example.internal</span><button class="btn">Изменить</button></div><div class="row"><b>qa-shared-endpoint</b><span>qa-renamed.example.internal</span><button class="btn">Изменить</button></div></div></article><article class="card"><h2>Назначения consumers</h2><div class="body"><div class="row">qa-bind <select><option>Выберите группу</option></select></div><div class="row">qa-clickhouse <select><option>Выберите группу</option></select></div><div class="row">qa-dns-client <select><option>Выберите группу</option></select></div></div></article><article class="card"><h2>Provider / VIP</h2><div class="body"><div class="row"><b>qa-keepalived</b><span>qa-shared-endpoint · VRID 42</span><button class="btn">Настроить</button></div><div class="row">192.168.56.111 · enp0s8</div></div></article></div></section>
+      </section>
+
+      <section class="page" id="applications" hidden>
+        <div class="head"><div><h1>Приложения</h1><p class="muted">Библиотеки, настройки и размещение приложений</p></div><button class="btn" data-page-link="installation">К плану установки</button></div>
+        <div class="app-info">Макет C · данные синтетические. Создание, импорт и Review — поясняющие заглушки; ввод сбрасывается при переходе.</div>
+        <div class="app-library-layout">
+          <aside class="app-library-list" aria-label="Библиотеки и приложения">
+            <label>Поиск<input id="app-search" placeholder="Библиотека или приложение"></label>
+            <div class="flow-actions"><button class="btn primary" data-app-demo="Создание: выбрать exact пакет, ввести один deployment ID и Docker runtime; затем обычный черновик и Review/Save.">Добавить библиотеку</button><button class="btn" data-app-demo="Импорт: native directory chooser → проверка manifest/digest → preview → guarded commit. В макете диск не читается.">Импорт пакета…</button></div>
+            <div class="app-library-group"><button data-app-pick="library" data-library="sdku" aria-current="true"><b>СДКУ</b><br><small>sdku · sdku@1.0.0</small></button><button data-app-pick="slot" data-library="sdku">↳ gateway<br><small>apigateway · 2 размещения</small></button></div>
+            <div class="app-library-group"><button data-app-pick="library" data-library="cspa"><b>ЦСПА</b><br><small>cspa · cspa@1.0.0</small></button><button data-app-pick="slot" data-library="cspa">↳ gateway<br><small>apigateway · 1 размещение</small></button></div>
+            <p class="muted">Библиотека задаёт общие подключения и membership. Slot задаёт приложение из recipe.</p>
+          </aside>
+          <article class="app-library-editor">
+            <header><h2 id="app-selection"></h2><small>Настройки проекта · расчёт Core показан отдельно</small><nav id="app-tabs" aria-label="Настройки выбранного элемента"></nav></header>
+            <div id="app-editor-body"></div>
+            <footer><small id="app-draft-note" role="status" aria-live="polite">Открытие формы не создаёт переопределений.</small><button class="btn primary" data-app-demo="Демо: изменения формы добавлены в общий черновик. Следующий шаг — общий Review/Save проекта, установка отдельно.">В черновик</button> <button class="btn" data-app-demo="Review покажет общий проектный diff и findings. Сохранение использует существующий guarded writer; макет ничего не записывает.">Показать изменения</button></footer>
+          </article>
+        </div>
       </section>
       <section class="page" id="logs" hidden><div class="head"><div><h1>Журналы</h1><p class="muted">Исторические безопасные результаты выполнения</p></div><b class="status ok">Secrets redacted</b></div><div class="triple"><article class="card"><h2>Выполнения</h2><div class="body"><div class="sel">run-8d42<br><small class="ok">PASS · verify</small></div><div class="row">run-8d41 <span class="ok">PASS</span></div><div class="row">run-8d40 <span class="warn">BLOCKED</span></div></div></article><article class="card"><h2>run-8d42 · Kafka verify</h2><div class="body"><pre>PLAY RECAP
 node1 : ok=167 changed=0 failed=0
@@ -571,6 +599,55 @@ Verification: OK</pre></div></article><article class="card"><h2>Сводка</h2
     });
     // Start the design review at the project entry point, not a simulated run.
     root.querySelector('[data-page="projects"]').click();
+  </script>
+  <script>
+    // C design prototype only: synthetic state, no Core, storage or network calls.
+    (() => {
+      const page = document.getElementById('applications');
+      const selected = page.querySelector('#app-selection');
+      const body = page.querySelector('#app-editor-body');
+      const note = page.querySelector('#app-draft-note');
+      let level = 'library', library = 'sdku', tab = 0;
+      const packageDefaults = {image:'approved/apigateway:1.0.0',host:'10101',container:'10101'};
+      const instanceOverrides = {sdku:{},cspa:{}};
+      function overrideField(key,label,type='text') {
+        const overridden=Object.hasOwn(instanceOverrides[library],key);
+        const value=overridden ? instanceOverrides[library][key] : packageDefaults[key];
+        return `<div><label>${label}<input type="${type}" ${type==='number' ? 'min="1" max="65535" step="1"' : ''} data-instance-field="${key}"></label><small data-origin="${key}">${overridden ? 'Переопределено в экземпляре' : 'По умолчанию из пакета'}</small><br><button class="btn" data-reset-instance="${key}" ${overridden ? '' : 'disabled'}>Сбросить к default</button></div>`;
+      }
+      const tabs = [['Общее','Подключения','Ресурсы и секреты','Размещение'],['Параметры','Секреты','УЗ и файлы','Endpoint','Расчёт и состояние']];
+      const field = (label, value, readonly = false) => `<label>${label}<input value="${value}" ${readonly ? 'readonly' : 'data-draft-field'}></label>`;
+      function render() {
+        selected.textContent = level === 'library' ? `Библиотека · ${library}` : `Приложение · gateway / ${library}`;
+        page.querySelector('#app-tabs').innerHTML = tabs[level === 'library' ? 0 : 1].map((t,i) => `<button type="button" class="btn ${tab === i ? 'primary' : ''}" data-app-tab="${i}" aria-pressed="${tab === i}">${t}</button>`).join('');
+        const lib = [
+          `<h3>Экземпляр библиотеки</h3><div class="app-fields">${field('ID библиотеки',library,true)}${field('Пакет · точная версия',library+'@1.0.0',true)}${field('Docker runtime','qa-docker',true)}</div><p class="muted">ID задаётся один раз при создании. Смена версии проходит Review; общий пакет здесь не редактируется.</p><h3>Состав из recipe</h3><div class="row"><b>gateway</b><span>apigateway@1.0.0</span></div><p>Выберите gateway слева для настройки приложения.</p>`,
+          `<h3>Подключения библиотеки</h3><p class="muted">Выбор существующих deployment; адреса и listeners возвращает Core.</p><div class="app-fields"><label>База данных<select data-draft-field><option>qa-postgresql</option><option>Не выбрано</option></select></label><label>Сообщения<select data-draft-field><option>qa-kafka-structure</option><option>Не выбрано</option></select></label><label>Кэш<select data-draft-field><option>qa-redis</option><option>Не выбрано</option></select></label><label>Секреты<select data-draft-field><option>qa-vault</option><option>Не выбрано</option></select></label></div><div class="app-info">Общие подключения используются приложениями библиотеки. React не рассчитывает endpoints.</div>`,
+          `<h3>Общие ресурсы</h3><table class="task-table"><tr><th>Ресурс</th><th>Провайдер</th><th>Намерение</th></tr><tr><td>application-db</td><td>PostgreSQL</td><td>БД библиотеки</td></tr><tr><td>events</td><td>Kafka</td><td>Topic из пакета</td></tr></table><h3>Общие секреты</h3><div class="row"><span>PKI material</span><span>Ссылка на профиль infrastructure-tls</span></div><p class="muted">Здесь только references. Значения вводятся отдельно для запуска и не сохраняются в проекте.</p><button class="btn" data-app-demo="Сессионный ввод использует существующий диалог runtime inputs. Макет не принимает секретные значения.">Runtime-ввод…</button>`,
+          `<h3>Размещение библиотеки</h3><p class="muted">Общее membership библиотеки. Отдельное размещение slot не предусмотрено текущим контрактом.</p><label class="choice"><input type="checkbox" checked data-draft-field> node1 · 192.168.56.101</label><label class="choice"><input type="checkbox" ${library === 'sdku' ? 'checked' : ''} data-draft-field> node2 · 192.168.56.102</label><p>Host overrides: параметры и порты. SERVER_ID — производный host ID.</p>`
+        ];
+        const app = [
+          `<h3>Параметры приложения</h3><div class="app-info">Расчёт Core: сохранённая версия · область ANSIBLE / RESOLUTION_SCOPE. Точный источник каждого поля не заявляется.</div><div class="app-fields">${field('log_level · явное переопределение','DEBUG')}${field('request_timeout_ms · явное значение','30000')}</div><button class="btn" id="app-reset">Сбросить override log_level</button><h3>Образ и порты экземпляра</h3><p class="muted">Значения пакета используются по умолчанию. Изменение создаёт явный override; сброс удаляет его. Значения ниже демонстрационные.</p><div class="app-fields">${overrideField('image','Образ · image')}${overrideField('host','Порт хоста · host / published','number')}${overrideField('container','Порт контейнера · container','number')}</div><p class="muted">Listener: http · TCP. Настройки относятся к выбранному slot на всех размещениях библиотеки.</p><h3>Последний расчёт · только чтение</h3><div class="row"><span>Команда</span><code>/opt/apigateway/bin/apigateway</code></div><p class="muted">Пользовательские environment/parameters принимают произвольные имена. Typed credentials вводятся отдельно.</p>`,
+          `<h3>Секреты · credentials подключений</h3><p>Все подключения приложения: PostgreSQL, Redis, ClickHouse, Kafka, Vault. Отдельные username/password показываются только когда объявлены пакетом; TLS/PKI и Vault bindings настраиваются по соответствующему контракту.</p><label>PostgreSQL · источник пароля<select data-draft-field><option>runtime_secret_ref</option><option>generated</option><option>vault_ref</option><option>pki_credential</option></select></label><label>Имя runtime ссылки<input data-draft-field value="application-postgres-password"></label><p class="muted">В проекте только references. Literal password не сохраняется; фактические значения вводятся отдельно в существующем runtime диалоге.</p><button class="btn" data-app-demo="Production использует существующие Core descriptors и runtime lease. Макет не принимает секретные значения.">Задать runtime-секреты…</button>`,
+          `<h3>УЗ и файлы</h3><div class="row"><span>PostgreSQL account</span><span>managed · source: runtime_secret_ref</span></div><div class="row"><span>Vault binding</span><span>secrets</span></div><div class="row"><span>appsettings</span><span>Package file → readonly mount</span></div><p class="muted">Проект хранит ссылки и настройки, не runtime values. Файлы пакета здесь не редактируются. AppRole/пути — read-only проекция Core.</p>`,
+          `<h3>Публикация endpoint</h3><label class="choice"><input type="checkbox" checked data-draft-field> Публиковать endpoint</label><div class="app-fields">${field('Listener','http')}${field('Health path','/status')}${field('Ожидаемый HTTP status','200')}</div><h3>Последняя проекция Core</h3><p><code>https://apigateway-${library}.evoscada.internal</code></p><p class="muted">HAProxy/DNS обрабатываются существующими provider hooks. Новые значения появятся после Core Verify/Build.</p>`,
+          `<h3>Расчёт и наблюдение</h3><div class="row"><span>Instance ID · от Core</span><code>apigateway-${library}</code></div><div class="row"><span>Container Running</span><span class="status neutral">Нет данных</span></div><div class="row"><span>Connection checks</span><span class="status neutral">Нет данных</span></div><div class="row"><span>Endpoint Verify</span><span class="status neutral">Нет данных</span></div><p class="muted">Демонстрационный проект не имеет реального run. Сохранённые настройки не означают успешную установку.</p>`
+        ];
+        body.innerHTML = (level === 'library' ? lib : app)[tab];
+        body.querySelectorAll('[data-instance-field]').forEach(input=>{const key=input.dataset.instanceField;input.value=instanceOverrides[library][key] ?? packageDefaults[key];});
+      }
+      page.addEventListener('click', e => {
+        const pick = e.target.closest('[data-app-pick]');
+        if (pick) { library = pick.dataset.library; level = pick.dataset.appPick; tab = 0; page.querySelectorAll('[data-app-pick]').forEach(b=>b.removeAttribute('aria-current')); pick.setAttribute('aria-current','true'); render(); }
+        const t = e.target.closest('[data-app-tab]'); if(t){tab=Number(t.dataset.appTab);render();}
+        const demo = e.target.closest('[data-app-demo]'); if(demo) note.textContent=demo.dataset.appDemo;
+        const reset=e.target.closest('[data-reset-instance]');if(reset){delete instanceOverrides[library][reset.dataset.resetInstance];render();note.textContent='Демо: override удалён. Используется default пакета; в проект значение default не копируется.';}
+        if(e.target.id === 'app-reset'){body.querySelector('input').value='INFO';note.textContent='Демо: удалён authored override log_level. INFO — иллюстрация последнего расчёта, не новое записанное значение.';}
+      });
+      page.addEventListener('change', e => {if(e.target.matches('[data-instance-field]')){const key=e.target.dataset.instanceField;instanceOverrides[library][key]=e.target.value;body.querySelector(`[data-origin="${key}"]`).textContent='Переопределено в экземпляре';body.querySelector(`[data-reset-instance="${key}"]`).disabled=false;note.textContent='Демо: явный override экземпляра; общий Review/Save требуется. Данные только в памяти макета.';}if(e.target.matches('[data-draft-field]')) note.textContent='Демо: изменён локальный ввод. Ничего не записано в проект; production использует общий edit session → Review → Save.';});
+      page.querySelector('#app-search').addEventListener('input', e => page.querySelectorAll('.app-library-group').forEach(g=>g.hidden=!g.textContent.toLowerCase().includes(e.target.value.toLowerCase())));
+      render();
+    })();
   </script>
 </body>
 </html>

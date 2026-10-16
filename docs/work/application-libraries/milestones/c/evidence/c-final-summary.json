@@ -1,0 +1,173 @@
+{
+  "date": "2026-10-16",
+  "milestone": "APPLICATION-LIBRARIES-C",
+  "status": "PASS",
+  "runtimeBundleDigest": "sha256:b00ded903bffaf188638cbf2c4f13fb91a6a886d74bd2ca582ac32e65629b165",
+  "infrastructureApplyCount": 0,
+  "runs": [
+    {
+      "actions": [
+        {
+          "finishedAt": "2026-10-16T06:47:02Z",
+          "startedAt": "2026-10-16T06:37:19Z",
+          "elapsedSeconds": 583.0,
+          "state": "SUCCESS",
+          "id": "applications:apply"
+        },
+        {
+          "finishedAt": "2026-10-16T06:50:19Z",
+          "startedAt": "2026-10-16T06:47:02Z",
+          "elapsedSeconds": 197.0,
+          "state": "SUCCESS",
+          "id": "applications:verify"
+        }
+      ],
+      "scenario": "first-library-pair",
+      "state": "SUCCEEDED",
+      "savedRevision": "sha256:fc1ca32742fe3bcd367aeefc41f66ead815b94d3da65ffb540e4b6e70fefc65d",
+      "runId": "installer-4d36a5f2209c953262e73cdf2acffcc8",
+      "selectedActionTypes": [
+        "APPLICATION_LIBRARIES_APPLY",
+        "APPLICATION_LIBRARIES_VERIFY"
+      ]
+    },
+    {
+      "actions": [
+        {
+          "finishedAt": "2026-10-16T07:09:26Z",
+          "startedAt": "2026-10-16T06:59:19Z",
+          "elapsedSeconds": 607.0,
+          "state": "SUCCESS",
+          "id": "applications:apply"
+        },
+        {
+          "finishedAt": "2026-10-16T07:12:40Z",
+          "startedAt": "2026-10-16T07:09:26Z",
+          "elapsedSeconds": 194.0,
+          "state": "SUCCESS",
+          "id": "applications:verify"
+        }
+      ],
+      "scenario": "unchanged-repeat",
+      "state": "SUCCEEDED",
+      "savedRevision": "sha256:fc1ca32742fe3bcd367aeefc41f66ead815b94d3da65ffb540e4b6e70fefc65d",
+      "runId": "installer-efeaf47ac72f9e17e598c136aab5eead",
+      "selectedActionTypes": [
+        "APPLICATION_LIBRARIES_APPLY",
+        "APPLICATION_LIBRARIES_VERIFY"
+      ]
+    },
+    {
+      "actions": [
+        {
+          "finishedAt": "2026-10-16T07:31:26Z",
+          "startedAt": "2026-10-16T07:22:16Z",
+          "elapsedSeconds": 550.0,
+          "state": "SUCCESS",
+          "id": "applications:apply"
+        },
+        {
+          "finishedAt": "2026-10-16T07:34:44Z",
+          "startedAt": "2026-10-16T07:31:26Z",
+          "elapsedSeconds": 198.0,
+          "state": "SUCCESS",
+          "id": "applications:verify"
+        }
+      ],
+      "scenario": "baseline-restoration",
+      "state": "SUCCEEDED",
+      "savedRevision": "sha256:8c58b48bbd11ff0bc8e4169ce832a20802f9a3a979e1025d6ab1d4e073167128",
+      "runId": "installer-a07bef468522f094c0f203f5cc269980",
+      "selectedActionTypes": [
+        "APPLICATION_LIBRARIES_APPLY",
+        "APPLICATION_LIBRARIES_VERIFY"
+      ]
+    }
+  ],
+  "repeatMetadataIdentical": true,
+  "agentBindingsMatched": 11,
+  "statusEndpoints": 5,
+  "statusChecksPerEndpoint": 8,
+  "frontendTestsPassed": 186,
+  "knownSecretsAudited": 20,
+  "secretMatches": 0,
+  "ownedTemporaryAccountsRemoved": [
+    "postgresql:c_qa_gateway",
+    "redis:c_qa_gateway:3members",
+    "sentinel:c_qa_gateway:3members",
+    "clickhouse:c_qa_gateway:3members"
+  ],
+  "remoteQaWorkspacesRemoved": 5,
+  "failedRunsPreserved": [
+    "installer-b9f0c7e2d30814007ad1d84de9d845d0",
+    "installer-fccdd07b7cb1fe1dfef56f32428a2506"
+  ],
+  "limitations": [
+    "Production dark theme not added; supported light rendering tested under dark OS preference.",
+    "No raw Ansible recap changed counter claimed; full selected stable metadata compared.",
+    "Earlier failed and blocked attempts retain their actual results."
+  ],
+  "safeArtifacts": [
+    {
+      "path": ".runtime/qa/c/evidence/repeat-comparison.json",
+      "sha256": "3d6607177c155f04c35fd6ec7db8a2871c0d61e413b8fefdebcd44a330601bfc"
+    },
+    {
+      "path": ".runtime/qa/c/evidence/secret-chain-diagnostic.json",
+      "sha256": "7e7872867c8fd2b0323dedb7880702c14bf44de49b9b0dac638c1c1b964cdff4"
+    },
+    {
+      "path": ".runtime/qa/c/evidence/secret-chain-after-agent-restart.json",
+      "sha256": "7e7872867c8fd2b0323dedb7880702c14bf44de49b9b0dac638c1c1b964cdff4"
+    },
+    {
+      "path": ".runtime/qa/c/evidence/secret-chain-baseline-final.json",
+      "sha256": "1182026338da01c092770a14633ea44baed481b0342a92a553b5b8bfa74cde46"
+    },
+    {
+      "path": ".runtime/qa/c/evidence/status-after-cleanup.json",
+      "sha256": "90dd22800ca9dd3371bbffc8471bd3d94d2c2c6a0abdea6fae964240faf91a78"
+    },
+    {
+      "path": ".runtime/qa/c/evidence/remote-cleanup.json",
+      "sha256": "a9ae020989612457ef9178b4f671dab5117de4f1a5f577c44307801f0fa780d9"
+    },
+    {
+      "path": ".runtime/qa/c/evidence/ui-editor-final.json",
+      "sha256": "846da258d50f41714135a2fa42ddf64255273f7af864523177cca248a175ad25"
+    },
+    {
+      "path": ".runtime/qa/c/evidence/ui-import.json",
+      "sha256": "ffb96b1f1fa88fbebe6c919c0cdf96fcad42c41d4974e14a234993197e0dd5bd"
+    },
+    {
+      "path": ".runtime/qa/c/evidence/ui-conflict-visual.json",
+      "sha256": "ce46ed803921fe783e432dbda6484a1db08200506e416d03157a40de1ffa9b67"
+    },
+    {
+      "path": ".runtime/qa/c/evidence/secret-hygiene-summary.json",
+      "sha256": "2fe9248747a21c946854f803ecc2f1308e2afeed96149a7c053467a15fed729d"
+    }
+  ],
+  "localCleanup": {
+    "status": "OWNER_ACCEPTED_RETENTION",
+    "protectedRuntimeInputCopy": ".runtime/secrets/c/application-input-values.json",
+    "publicFixtureDirectoryCount": 9,
+    "targetResourcesAndRemoteWorkspacesCleaned": true,
+    "reason": "Owner explicitly instructed to retain remaining local QA directories and protected C runtime-input copy on 2026-10-16.",
+    "publicFixtureDirectories": [
+      "bin",
+      "conflict-project-1792134808927",
+      "conflict-project-1792134885021",
+      "conflict-project-1792135040828",
+      "editor-project",
+      "editor-project-1792093924965",
+      "editor-project-final",
+      "import-project",
+      "import-source"
+    ],
+    "publicFixtureParent": ".runtime/qa/c/"
+  },
+  "finalPublicFilesAudited": 349,
+  "ownQaProcessesStopped": 3
+}
