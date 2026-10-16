@@ -1,3 +1,2539 @@
+@@PORTABLE {"path":"vendor/github.com/labstack/echo/v4/bind.go","mode":420,"size":15356,"sha256":"9ddbb4ec5da411a4da481881da38b81b9dac6ef354f0352516cdbf3114ab1ffc","index":0,"count":1,"encoding":"utf-8","payloadBytes":15356}
+// SPDX-License-Identifier: MIT
+// SPDX-FileCopyrightText: © 2015 LabStack LLC and Echo contributors
+
+package echo
+
+import (
+	"encoding"
+	"encoding/xml"
+	"errors"
+	"fmt"
+	"mime/multipart"
+	"net/http"
+	"reflect"
+	"strconv"
+	"strings"
+)
+
+// Binder is the interface that wraps the Bind method.
+type Binder interface {
+	Bind(i interface{}, c Context) error
+}
+
+// DefaultBinder is the default implementation of the Binder interface.
+type DefaultBinder struct{}
+
+// BindUnmarshaler is the interface used to wrap the UnmarshalParam method.
+// Types that don't implement this, but do implement encoding.TextUnmarshaler
+// will use that interface instead.
+type BindUnmarshaler interface {
+	// UnmarshalParam decodes and assigns a value from an form or query param.
+	UnmarshalParam(param string) error
+}
+
+// bindMultipleUnmarshaler is used by binder to unmarshal multiple values from request at once to
+// type implementing this interface. For example request could have multiple query fields `?a=1&a=2&b=test` in that case
+// for `a` following slice `["1", "2"] will be passed to unmarshaller.
+type bindMultipleUnmarshaler interface {
+	UnmarshalParams(params []string) error
+}
+
+// BindPathParams binds path params to bindable object
+func (b *DefaultBinder) BindPathParams(c Context, i interface{}) error {
+	names := c.ParamNames()
+	values := c.ParamValues()
+	params := map[string][]string{}
+	for i, name := range names {
+		params[name] = []string{values[i]}
+	}
+	if err := b.bindData(i, params, "param", nil); err != nil {
+		return NewHTTPError(http.StatusBadRequest, err.Error()).SetInternal(err)
+	}
+	return nil
+}
+
+// BindQueryParams binds query params to bindable object
+func (b *DefaultBinder) BindQueryParams(c Context, i interface{}) error {
+	if err := b.bindData(i, c.QueryParams(), "query", nil); err != nil {
+		return NewHTTPError(http.StatusBadRequest, err.Error()).SetInternal(err)
+	}
+	return nil
+}
+
+// BindBody binds request body contents to bindable object
+// NB: then binding forms take note that this implementation uses standard library form parsing
+// which parses form data from BOTH URL and BODY if content type is not MIMEMultipartForm
+// See non-MIMEMultipartForm: https://golang.org/pkg/net/http/#Request.ParseForm
+// See MIMEMultipartForm: https://golang.org/pkg/net/http/#Request.ParseMultipartForm
+func (b *DefaultBinder) BindBody(c Context, i interface{}) (err error) {
+	req := c.Request()
+	if req.ContentLength == 0 {
+		return
+	}
+
+	// mediatype is found like `mime.ParseMediaType()` does it
+	base, _, _ := strings.Cut(req.Header.Get(HeaderContentType), ";")
+	mediatype := strings.TrimSpace(base)
+
+	switch mediatype {
+	case MIMEApplicationJSON:
+		if err = c.Echo().JSONSerializer.Deserialize(c, i); err != nil {
+			switch err.(type) {
+			case *HTTPError:
+				return err
+			default:
+				return NewHTTPError(http.StatusBadRequest, err.Error()).SetInternal(err)
+			}
+		}
+	case MIMEApplicationXML, MIMETextXML:
+		if err = xml.NewDecoder(req.Body).Decode(i); err != nil {
+			if ute, ok := err.(*xml.UnsupportedTypeError); ok {
+				return NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Unsupported type error: type=%v, error=%v", ute.Type, ute.Error())).SetInternal(err)
+			} else if se, ok := err.(*xml.SyntaxError); ok {
+				return NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Syntax error: line=%v, error=%v", se.Line, se.Error())).SetInternal(err)
+			}
+			return NewHTTPError(http.StatusBadRequest, err.Error()).SetInternal(err)
+		}
+	case MIMEApplicationForm:
+		params, err := c.FormParams()
+		if err != nil {
+			return NewHTTPError(http.StatusBadRequest, err.Error()).SetInternal(err)
+		}
+		if err = b.bindData(i, params, "form", nil); err != nil {
+			return NewHTTPError(http.StatusBadRequest, err.Error()).SetInternal(err)
+		}
+	case MIMEMultipartForm:
+		params, err := c.MultipartForm()
+		if err != nil {
+			return NewHTTPError(http.StatusBadRequest, err.Error()).SetInternal(err)
+		}
+		if err = b.bindData(i, params.Value, "form", params.File); err != nil {
+			return NewHTTPError(http.StatusBadRequest, err.Error()).SetInternal(err)
+		}
+	default:
+		return ErrUnsupportedMediaType
+	}
+	return nil
+}
+
+// BindHeaders binds HTTP headers to a bindable object
+func (b *DefaultBinder) BindHeaders(c Context, i interface{}) error {
+	if err := b.bindData(i, c.Request().Header, "header", nil); err != nil {
+		return NewHTTPError(http.StatusBadRequest, err.Error()).SetInternal(err)
+	}
+	return nil
+}
+
+// Bind implements the `Binder#Bind` function.
+// Binding is done in following order: 1) path params; 2) query params; 3) request body. Each step COULD override previous
+// step binded values. For single source binding use their own methods BindBody, BindQueryParams, BindPathParams.
+func (b *DefaultBinder) Bind(i interface{}, c Context) (err error) {
+	if err := b.BindPathParams(c, i); err != nil {
+		return err
+	}
+	// Only bind query parameters for GET/DELETE/HEAD to avoid unexpected behavior with destination struct binding from body.
+	// For example a request URL `&id=1&lang=en` with body `{"id":100,"lang":"de"}` would lead to precedence issues.
+	// The HTTP method check restores pre-v4.1.11 behavior to avoid these problems (see issue #1670)
+	method := c.Request().Method
+	if method == http.MethodGet || method == http.MethodDelete || method == http.MethodHead {
+		if err = b.BindQueryParams(c, i); err != nil {
+			return err
+		}
+	}
+	return b.BindBody(c, i)
+}
+
+// bindData will bind data ONLY fields in destination struct that have EXPLICIT tag
+func (b *DefaultBinder) bindData(destination interface{}, data map[string][]string, tag string, dataFiles map[string][]*multipart.FileHeader) error {
+	if destination == nil || (len(data) == 0 && len(dataFiles) == 0) {
+		return nil
+	}
+	hasFiles := len(dataFiles) > 0
+	typ := reflect.TypeOf(destination).Elem()
+	val := reflect.ValueOf(destination).Elem()
+
+	// Support binding to limited Map destinations:
+	// - map[string][]string,
+	// - map[string]string <-- (binds first value from data slice)
+	// - map[string]interface{}
+	// You are better off binding to struct but there are user who want this map feature. Source of data for these cases are:
+	// params,query,header,form as these sources produce string values, most of the time slice of strings, actually.
+	if typ.Kind() == reflect.Map && typ.Key().Kind() == reflect.String {
+		k := typ.Elem().Kind()
+		isElemInterface := k == reflect.Interface
+		isElemString := k == reflect.String
+		isElemSliceOfStrings := k == reflect.Slice && typ.Elem().Elem().Kind() == reflect.String
+		if !(isElemSliceOfStrings || isElemString || isElemInterface) {
+			return nil
+		}
+		if val.IsNil() {
+			val.Set(reflect.MakeMap(typ))
+		}
+		for k, v := range data {
+			if isElemString {
+				val.SetMapIndex(reflect.ValueOf(k), reflect.ValueOf(v[0]))
+			} else if isElemInterface {
+				// To maintain backward compatibility, we always bind to the first string value
+				// and not the slice of strings when dealing with map[string]interface{}{}
+				val.SetMapIndex(reflect.ValueOf(k), reflect.ValueOf(v[0]))
+			} else {
+				val.SetMapIndex(reflect.ValueOf(k), reflect.ValueOf(v))
+			}
+		}
+		return nil
+	}
+
+	// !struct
+	if typ.Kind() != reflect.Struct {
+		if tag == "param" || tag == "query" || tag == "header" {
+			// incompatible type, data is probably to be found in the body
+			return nil
+		}
+		return errors.New("binding element must be a struct")
+	}
+
+	for i := 0; i < typ.NumField(); i++ { // iterate over all destination fields
+		typeField := typ.Field(i)
+		structField := val.Field(i)
+		if typeField.Anonymous {
+			if structField.Kind() == reflect.Ptr {
+				structField = structField.Elem()
+			}
+		}
+		if !structField.CanSet() {
+			continue
+		}
+		structFieldKind := structField.Kind()
+		inputFieldName := typeField.Tag.Get(tag)
+		if typeField.Anonymous && structFieldKind == reflect.Struct && inputFieldName != "" {
+			// if anonymous struct with query/param/form tags, report an error
+			return errors.New("query/param/form tags are not allowed with anonymous struct field")
+		}
+
+		if inputFieldName == "" {
+			// If tag is nil, we inspect if the field is a not BindUnmarshaler struct and try to bind data into it (might contain fields with tags).
+			// structs that implement BindUnmarshaler are bound only when they have explicit tag
+			if _, ok := structField.Addr().Interface().(BindUnmarshaler); !ok && structFieldKind == reflect.Struct {
+				if err := b.bindData(structField.Addr().Interface(), data, tag, dataFiles); err != nil {
+					return err
+				}
+			}
+			// does not have explicit tag and is not an ordinary struct - so move to next field
+			continue
+		}
+
+		if hasFiles {
+			if ok, err := isFieldMultipartFile(structField.Type()); err != nil {
+				return err
+			} else if ok {
+				if ok := setMultipartFileHeaderTypes(structField, inputFieldName, dataFiles); ok {
+					continue
+				}
+			}
+		}
+
+		inputValue, exists := data[inputFieldName]
+		if !exists {
+			// Go json.Unmarshal supports case-insensitive binding.  However the
+			// url params are bound case-sensitive which is inconsistent.  To
+			// fix this we must check all of the map values in a
+			// case-insensitive search.
+			for k, v := range data {
+				if strings.EqualFold(k, inputFieldName) {
+					inputValue = v
+					exists = true
+					break
+				}
+			}
+		}
+
+		if !exists {
+			continue
+		}
+
+		// NOTE: algorithm here is not particularly sophisticated. It probably does not work with absurd types like `**[]*int`
+		// but it is smart enough to handle niche cases like `*int`,`*[]string`,`[]*int` .
+
+		// try unmarshalling first, in case we're dealing with an alias to an array type
+		if ok, err := unmarshalInputsToField(typeField.Type.Kind(), inputValue, structField); ok {
+			if err != nil {
+				return err
+			}
+			continue
+		}
+
+		if ok, err := unmarshalInputToField(typeField.Type.Kind(), inputValue[0], structField); ok {
+			if err != nil {
+				return err
+			}
+			continue
+		}
+
+		// we could be dealing with pointer to slice `*[]string` so dereference it. There are wierd OpenAPI generators
+		// that could create struct fields like that.
+		if structFieldKind == reflect.Pointer {
+			structFieldKind = structField.Elem().Kind()
+			structField = structField.Elem()
+		}
+
+		if structFieldKind == reflect.Slice {
+			sliceOf := structField.Type().Elem().Kind()
+			numElems := len(inputValue)
+			slice := reflect.MakeSlice(structField.Type(), numElems, numElems)
+			for j := 0; j < numElems; j++ {
+				if err := setWithProperType(sliceOf, inputValue[j], slice.Index(j)); err != nil {
+					return err
+				}
+			}
+			structField.Set(slice)
+			continue
+		}
+
+		if err := setWithProperType(structFieldKind, inputValue[0], structField); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func setWithProperType(valueKind reflect.Kind, val string, structField reflect.Value) error {
+	// But also call it here, in case we're dealing with an array of BindUnmarshalers
+	if ok, err := unmarshalInputToField(valueKind, val, structField); ok {
+		return err
+	}
+
+	switch valueKind {
+	case reflect.Ptr:
+		return setWithProperType(structField.Elem().Kind(), val, structField.Elem())
+	case reflect.Int:
+		return setIntField(val, 0, structField)
+	case reflect.Int8:
+		return setIntField(val, 8, structField)
+	case reflect.Int16:
+		return setIntField(val, 16, structField)
+	case reflect.Int32:
+		return setIntField(val, 32, structField)
+	case reflect.Int64:
+		return setIntField(val, 64, structField)
+	case reflect.Uint:
+		return setUintField(val, 0, structField)
+	case reflect.Uint8:
+		return setUintField(val, 8, structField)
+	case reflect.Uint16:
+		return setUintField(val, 16, structField)
+	case reflect.Uint32:
+		return setUintField(val, 32, structField)
+	case reflect.Uint64:
+		return setUintField(val, 64, structField)
+	case reflect.Bool:
+		return setBoolField(val, structField)
+	case reflect.Float32:
+		return setFloatField(val, 32, structField)
+	case reflect.Float64:
+		return setFloatField(val, 64, structField)
+	case reflect.String:
+		structField.SetString(val)
+	default:
+		return errors.New("unknown type")
+	}
+	return nil
+}
+
+func unmarshalInputsToField(valueKind reflect.Kind, values []string, field reflect.Value) (bool, error) {
+	if valueKind == reflect.Ptr {
+		if field.IsNil() {
+			field.Set(reflect.New(field.Type().Elem()))
+		}
+		field = field.Elem()
+	}
+
+	fieldIValue := field.Addr().Interface()
+	unmarshaler, ok := fieldIValue.(bindMultipleUnmarshaler)
+	if !ok {
+		return false, nil
+	}
+	return true, unmarshaler.UnmarshalParams(values)
+}
+
+func unmarshalInputToField(valueKind reflect.Kind, val string, field reflect.Value) (bool, error) {
+	if valueKind == reflect.Ptr {
+		if field.IsNil() {
+			field.Set(reflect.New(field.Type().Elem()))
+		}
+		field = field.Elem()
+	}
+
+	fieldIValue := field.Addr().Interface()
+	switch unmarshaler := fieldIValue.(type) {
+	case BindUnmarshaler:
+		return true, unmarshaler.UnmarshalParam(val)
+	case encoding.TextUnmarshaler:
+		return true, unmarshaler.UnmarshalText([]byte(val))
+	}
+
+	return false, nil
+}
+
+func setIntField(value string, bitSize int, field reflect.Value) error {
+	if value == "" {
+		value = "0"
+	}
+	intVal, err := strconv.ParseInt(value, 10, bitSize)
+	if err == nil {
+		field.SetInt(intVal)
+	}
+	return err
+}
+
+func setUintField(value string, bitSize int, field reflect.Value) error {
+	if value == "" {
+		value = "0"
+	}
+	uintVal, err := strconv.ParseUint(value, 10, bitSize)
+	if err == nil {
+		field.SetUint(uintVal)
+	}
+	return err
+}
+
+func setBoolField(value string, field reflect.Value) error {
+	if value == "" {
+		value = "false"
+	}
+	boolVal, err := strconv.ParseBool(value)
+	if err == nil {
+		field.SetBool(boolVal)
+	}
+	return err
+}
+
+func setFloatField(value string, bitSize int, field reflect.Value) error {
+	if value == "" {
+		value = "0.0"
+	}
+	floatVal, err := strconv.ParseFloat(value, bitSize)
+	if err == nil {
+		field.SetFloat(floatVal)
+	}
+	return err
+}
+
+var (
+	// NOT supported by bind as you can NOT check easily empty struct being actual file or not
+	multipartFileHeaderType = reflect.TypeOf(multipart.FileHeader{})
+	// supported by bind as you can check by nil value if file existed or not
+	multipartFileHeaderPointerType      = reflect.TypeOf(&multipart.FileHeader{})
+	multipartFileHeaderSliceType        = reflect.TypeOf([]multipart.FileHeader(nil))
+	multipartFileHeaderPointerSliceType = reflect.TypeOf([]*multipart.FileHeader(nil))
+)
+
+func isFieldMultipartFile(field reflect.Type) (bool, error) {
+	switch field {
+	case multipartFileHeaderPointerType,
+		multipartFileHeaderSliceType,
+		multipartFileHeaderPointerSliceType:
+		return true, nil
+	case multipartFileHeaderType:
+		return true, errors.New("binding to multipart.FileHeader struct is not supported, use pointer to struct")
+	default:
+		return false, nil
+	}
+}
+
+func setMultipartFileHeaderTypes(structField reflect.Value, inputFieldName string, files map[string][]*multipart.FileHeader) bool {
+	fileHeaders := files[inputFieldName]
+	if len(fileHeaders) == 0 {
+		return false
+	}
+
+	result := true
+	switch structField.Type() {
+	case multipartFileHeaderPointerSliceType:
+		structField.Set(reflect.ValueOf(fileHeaders))
+	case multipartFileHeaderSliceType:
+		headers := make([]multipart.FileHeader, len(fileHeaders))
+		for i, fileHeader := range fileHeaders {
+			headers[i] = *fileHeader
+		}
+		structField.Set(reflect.ValueOf(headers))
+	case multipartFileHeaderPointerType:
+		structField.Set(reflect.ValueOf(fileHeaders[0]))
+	default:
+		result = false
+	}
+
+	return result
+}
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/labstack/echo/v4/binder.go","mode":420,"size":43853,"sha256":"3daaec44166047d87b599de79850e2eebeedd093986eda6714806ed81541be67","index":0,"count":1,"encoding":"utf-8","payloadBytes":43853}
+// SPDX-License-Identifier: MIT
+// SPDX-FileCopyrightText: © 2015 LabStack LLC and Echo contributors
+
+package echo
+
+import (
+	"encoding"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"strconv"
+	"strings"
+	"time"
+)
+
+/**
+	Following functions provide handful of methods for binding to Go native types from request query or path parameters.
+    * QueryParamsBinder(c) - binds query parameters (source URL)
+    * PathParamsBinder(c) - binds path parameters (source URL)
+    * FormFieldBinder(c) - binds form fields (source URL + body)
+
+	Example:
+  ```go
+  var length int64
+  err := echo.QueryParamsBinder(c).Int64("length", &length).BindError()
+  ```
+
+	For every supported type there are following methods:
+		* <Type>("param", &destination) - if parameter value exists then binds it to given destination of that type i.e Int64(...).
+		* Must<Type>("param", &destination) - parameter value is required to exist, binds it to given destination of that type i.e MustInt64(...).
+		* <Type>s("param", &destination) - (for slices) if parameter values exists then binds it to given destination of that type i.e Int64s(...).
+		* Must<Type>s("param", &destination) - (for slices) parameter value is required to exist, binds it to given destination of that type i.e MustInt64s(...).
+
+  for some slice types `BindWithDelimiter("param", &dest, ",")` supports splitting parameter values before type conversion is done
+  i.e. URL `/api/search?id=1,2,3&id=1` can be bind to `[]int64{1,2,3,1}`
+
+	`FailFast` flags binder to stop binding after first bind error during binder call chain. Enabled by default.
+  `BindError()` returns first bind error from binder and resets errors in binder. Useful along with `FailFast()` method
+		to do binding and returns on first problem
+  `BindErrors()` returns all bind errors from binder and resets errors in binder.
+
+	Types that are supported:
+		* bool
+		* float32
+		* float64
+		* int
+		* int8
+		* int16
+		* int32
+		* int64
+		* uint
+		* uint8/byte (does not support `bytes()`. Use BindUnmarshaler/CustomFunc to convert value from base64 etc to []byte{})
+		* uint16
+		* uint32
+		* uint64
+		* string
+		* time
+		* duration
+		* BindUnmarshaler() interface
+		* TextUnmarshaler() interface
+		* JSONUnmarshaler() interface
+		* UnixTime() - converts unix time (integer) to time.Time
+		* UnixTimeMilli() - converts unix time with millisecond precision (integer) to time.Time
+		* UnixTimeNano() - converts unix time with nanosecond precision (integer) to time.Time
+		* CustomFunc() - callback function for your custom conversion logic. Signature `func(values []string) []error`
+*/
+
+// BindingError represents an error that occurred while binding request data.
+type BindingError struct {
+	// Field is the field name where value binding failed
+	Field string `json:"field"`
+	*HTTPError
+	// Values of parameter that failed to bind.
+	Values []string `json:"-"`
+}
+
+// NewBindingError creates new instance of binding error
+func NewBindingError(sourceParam string, values []string, message interface{}, internalError error) error {
+	return &BindingError{
+		Field:  sourceParam,
+		Values: values,
+		HTTPError: &HTTPError{
+			Code:     http.StatusBadRequest,
+			Message:  message,
+			Internal: internalError,
+		},
+	}
+}
+
+// Error returns error message
+func (be *BindingError) Error() string {
+	return fmt.Sprintf("%s, field=%s", be.HTTPError.Error(), be.Field)
+}
+
+// ValueBinder provides utility methods for binding query or path parameter to various Go built-in types
+type ValueBinder struct {
+	// ValueFunc is used to get single parameter (first) value from request
+	ValueFunc func(sourceParam string) string
+	// ValuesFunc is used to get all values for parameter from request. i.e. `/api/search?ids=1&ids=2`
+	ValuesFunc func(sourceParam string) []string
+	// ErrorFunc is used to create errors. Allows you to use your own error type, that for example marshals to your specific json response
+	ErrorFunc func(sourceParam string, values []string, message interface{}, internalError error) error
+	errors    []error
+	// failFast is flag for binding methods to return without attempting to bind when previous binding already failed
+	failFast bool
+}
+
+// QueryParamsBinder creates query parameter value binder
+func QueryParamsBinder(c Context) *ValueBinder {
+	return &ValueBinder{
+		failFast:  true,
+		ValueFunc: c.QueryParam,
+		ValuesFunc: func(sourceParam string) []string {
+			values, ok := c.QueryParams()[sourceParam]
+			if !ok {
+				return nil
+			}
+			return values
+		},
+		ErrorFunc: NewBindingError,
+	}
+}
+
+// PathParamsBinder creates path parameter value binder
+func PathParamsBinder(c Context) *ValueBinder {
+	return &ValueBinder{
+		failFast:  true,
+		ValueFunc: c.Param,
+		ValuesFunc: func(sourceParam string) []string {
+			// path parameter should not have multiple values so getting values does not make sense but lets not error out here
+			value := c.Param(sourceParam)
+			if value == "" {
+				return nil
+			}
+			return []string{value}
+		},
+		ErrorFunc: NewBindingError,
+	}
+}
+
+// FormFieldBinder creates form field value binder
+// For all requests, FormFieldBinder parses the raw query from the URL and uses query params as form fields
+//
+// For POST, PUT, and PATCH requests, it also reads the request body, parses it
+// as a form and uses query params as form fields. Request body parameters take precedence over URL query
+// string values in r.Form.
+//
+// NB: when binding forms take note that this implementation uses standard library form parsing
+// which parses form data from BOTH URL and BODY if content type is not MIMEMultipartForm
+// See https://golang.org/pkg/net/http/#Request.ParseForm
+func FormFieldBinder(c Context) *ValueBinder {
+	vb := &ValueBinder{
+		failFast: true,
+		ValueFunc: func(sourceParam string) string {
+			return c.Request().FormValue(sourceParam)
+		},
+		ErrorFunc: NewBindingError,
+	}
+	vb.ValuesFunc = func(sourceParam string) []string {
+		if c.Request().Form == nil {
+			// this is same as `Request().FormValue()` does internally
+			_ = c.Request().ParseMultipartForm(32 << 20)
+		}
+		values, ok := c.Request().Form[sourceParam]
+		if !ok {
+			return nil
+		}
+		return values
+	}
+
+	return vb
+}
+
+// FailFast set internal flag to indicate if binding methods will return early (without binding) when previous bind failed
+// NB: call this method before any other binding methods as it modifies binding methods behaviour
+func (b *ValueBinder) FailFast(value bool) *ValueBinder {
+	b.failFast = value
+	return b
+}
+
+func (b *ValueBinder) setError(err error) {
+	if b.errors == nil {
+		b.errors = []error{err}
+		return
+	}
+	b.errors = append(b.errors, err)
+}
+
+// BindError returns first seen bind error and resets/empties binder errors for further calls
+func (b *ValueBinder) BindError() error {
+	if b.errors == nil {
+		return nil
+	}
+	err := b.errors[0]
+	b.errors = nil // reset errors so next chain will start from zero
+	return err
+}
+
+// BindErrors returns all bind errors and resets/empties binder errors for further calls
+func (b *ValueBinder) BindErrors() []error {
+	if b.errors == nil {
+		return nil
+	}
+	errors := b.errors
+	b.errors = nil // reset errors so next chain will start from zero
+	return errors
+}
+
+// CustomFunc binds parameter values with Func. Func is called only when parameter values exist.
+func (b *ValueBinder) CustomFunc(sourceParam string, customFunc func(values []string) []error) *ValueBinder {
+	return b.customFunc(sourceParam, customFunc, false)
+}
+
+// MustCustomFunc requires parameter values to exist to bind with Func. Returns error when value does not exist.
+func (b *ValueBinder) MustCustomFunc(sourceParam string, customFunc func(values []string) []error) *ValueBinder {
+	return b.customFunc(sourceParam, customFunc, true)
+}
+
+func (b *ValueBinder) customFunc(sourceParam string, customFunc func(values []string) []error, valueMustExist bool) *ValueBinder {
+	if b.failFast && b.errors != nil {
+		return b
+	}
+
+	values := b.ValuesFunc(sourceParam)
+	if len(values) == 0 {
+		if valueMustExist {
+			b.setError(b.ErrorFunc(sourceParam, []string{}, "required field value is empty", nil))
+		}
+		return b
+	}
+	if errs := customFunc(values); errs != nil {
+		b.errors = append(b.errors, errs...)
+	}
+	return b
+}
+
+// String binds parameter to string variable
+func (b *ValueBinder) String(sourceParam string, dest *string) *ValueBinder {
+	if b.failFast && b.errors != nil {
+		return b
+	}
+
+	value := b.ValueFunc(sourceParam)
+	if value == "" {
+		return b
+	}
+	*dest = value
+	return b
+}
+
+// MustString requires parameter value to exist to bind to string variable. Returns error when value does not exist
+func (b *ValueBinder) MustString(sourceParam string, dest *string) *ValueBinder {
+	if b.failFast && b.errors != nil {
+		return b
+	}
+
+	value := b.ValueFunc(sourceParam)
+	if value == "" {
+		b.setError(b.ErrorFunc(sourceParam, []string{value}, "required field value is empty", nil))
+		return b
+	}
+	*dest = value
+	return b
+}
+
+// Strings binds parameter values to slice of string
+func (b *ValueBinder) Strings(sourceParam string, dest *[]string) *ValueBinder {
+	if b.failFast && b.errors != nil {
+		return b
+	}
+
+	value := b.ValuesFunc(sourceParam)
+	if value == nil {
+		return b
+	}
+	*dest = value
+	return b
+}
+
+// MustStrings requires parameter values to exist to bind to slice of string variables. Returns error when value does not exist
+func (b *ValueBinder) MustStrings(sourceParam string, dest *[]string) *ValueBinder {
+	if b.failFast && b.errors != nil {
+		return b
+	}
+
+	value := b.ValuesFunc(sourceParam)
+	if value == nil {
+		b.setError(b.ErrorFunc(sourceParam, []string{}, "required field value is empty", nil))
+		return b
+	}
+	*dest = value
+	return b
+}
+
+// BindUnmarshaler binds parameter to destination implementing BindUnmarshaler interface
+func (b *ValueBinder) BindUnmarshaler(sourceParam string, dest BindUnmarshaler) *ValueBinder {
+	if b.failFast && b.errors != nil {
+		return b
+	}
+
+	tmp := b.ValueFunc(sourceParam)
+	if tmp == "" {
+		return b
+	}
+
+	if err := dest.UnmarshalParam(tmp); err != nil {
+		b.setError(b.ErrorFunc(sourceParam, []string{tmp}, "failed to bind field value to BindUnmarshaler interface", err))
+	}
+	return b
+}
+
+// MustBindUnmarshaler requires parameter value to exist to bind to destination implementing BindUnmarshaler interface.
+// Returns error when value does not exist
+func (b *ValueBinder) MustBindUnmarshaler(sourceParam string, dest BindUnmarshaler) *ValueBinder {
+	if b.failFast && b.errors != nil {
+		return b
+	}
+
+	value := b.ValueFunc(sourceParam)
+	if value == "" {
+		b.setError(b.ErrorFunc(sourceParam, []string{value}, "required field value is empty", nil))
+		return b
+	}
+
+	if err := dest.UnmarshalParam(value); err != nil {
+		b.setError(b.ErrorFunc(sourceParam, []string{value}, "failed to bind field value to BindUnmarshaler interface", err))
+	}
+	return b
+}
+
+// JSONUnmarshaler binds parameter to destination implementing json.Unmarshaler interface
+func (b *ValueBinder) JSONUnmarshaler(sourceParam string, dest json.Unmarshaler) *ValueBinder {
+	if b.failFast && b.errors != nil {
+		return b
+	}
+
+	tmp := b.ValueFunc(sourceParam)
+	if tmp == "" {
+		return b
+	}
+
+	if err := dest.UnmarshalJSON([]byte(tmp)); err != nil {
+		b.setError(b.ErrorFunc(sourceParam, []string{tmp}, "failed to bind field value to json.Unmarshaler interface", err))
+	}
+	return b
+}
+
+// MustJSONUnmarshaler requires parameter value to exist to bind to destination implementing json.Unmarshaler interface.
+// Returns error when value does not exist
+func (b *ValueBinder) MustJSONUnmarshaler(sourceParam string, dest json.Unmarshaler) *ValueBinder {
+	if b.failFast && b.errors != nil {
+		return b
+	}
+
+	tmp := b.ValueFunc(sourceParam)
+	if tmp == "" {
+		b.setError(b.ErrorFunc(sourceParam, []string{tmp}, "required field value is empty", nil))
+		return b
+	}
+
+	if err := dest.UnmarshalJSON([]byte(tmp)); err != nil {
+		b.setError(b.ErrorFunc(sourceParam, []string{tmp}, "failed to bind field value to json.Unmarshaler interface", err))
+	}
+	return b
+}
+
+// TextUnmarshaler binds parameter to destination implementing encoding.TextUnmarshaler interface
+func (b *ValueBinder) TextUnmarshaler(sourceParam string, dest encoding.TextUnmarshaler) *ValueBinder {
+	if b.failFast && b.errors != nil {
+		return b
+	}
+
+	tmp := b.ValueFunc(sourceParam)
+	if tmp == "" {
+		return b
+	}
+
+	if err := dest.UnmarshalText([]byte(tmp)); err != nil {
+		b.setError(b.ErrorFunc(sourceParam, []string{tmp}, "failed to bind field value to encoding.TextUnmarshaler interface", err))
+	}
+	return b
+}
+
+// MustTextUnmarshaler requires parameter value to exist to bind to destination implementing encoding.TextUnmarshaler interface.
+// Returns error when value does not exist
+func (b *ValueBinder) MustTextUnmarshaler(sourceParam string, dest encoding.TextUnmarshaler) *ValueBinder {
+	if b.failFast && b.errors != nil {
+		return b
+	}
+
+	tmp := b.ValueFunc(sourceParam)
+	if tmp == "" {
+		b.setError(b.ErrorFunc(sourceParam, []string{tmp}, "required field value is empty", nil))
+		return b
+	}
+
+	if err := dest.UnmarshalText([]byte(tmp)); err != nil {
+		b.setError(b.ErrorFunc(sourceParam, []string{tmp}, "failed to bind field value to encoding.TextUnmarshaler interface", err))
+	}
+	return b
+}
+
+// BindWithDelimiter binds parameter to destination by suitable conversion function.
+// Delimiter is used before conversion to split parameter value to separate values
+func (b *ValueBinder) BindWithDelimiter(sourceParam string, dest interface{}, delimiter string) *ValueBinder {
+	return b.bindWithDelimiter(sourceParam, dest, delimiter, false)
+}
+
+// MustBindWithDelimiter requires parameter value to exist to bind destination by suitable conversion function.
+// Delimiter is used before conversion to split parameter value to separate values
+func (b *ValueBinder) MustBindWithDelimiter(sourceParam string, dest interface{}, delimiter string) *ValueBinder {
+	return b.bindWithDelimiter(sourceParam, dest, delimiter, true)
+}
+
+func (b *ValueBinder) bindWithDelimiter(sourceParam string, dest interface{}, delimiter string, valueMustExist bool) *ValueBinder {
+	if b.failFast && b.errors != nil {
+		return b
+	}
+	values := b.ValuesFunc(sourceParam)
+	if len(values) == 0 {
+		if valueMustExist {
+			b.setError(b.ErrorFunc(sourceParam, []string{}, "required field value is empty", nil))
+		}
+		return b
+	}
+	tmpValues := make([]string, 0, len(values))
+	for _, v := range values {
+		tmpValues = append(tmpValues, strings.Split(v, delimiter)...)
+	}
+
+	switch d := dest.(type) {
+	case *[]string:
+		*d = tmpValues
+		return b
+	case *[]bool:
+		return b.bools(sourceParam, tmpValues, d)
+	case *[]int64, *[]int32, *[]int16, *[]int8, *[]int:
+		return b.ints(sourceParam, tmpValues, d)
+	case *[]uint64, *[]uint32, *[]uint16, *[]uint8, *[]uint: // *[]byte is same as *[]uint8
+		return b.uints(sourceParam, tmpValues, d)
+	case *[]float64, *[]float32:
+		return b.floats(sourceParam, tmpValues, d)
+	case *[]time.Duration:
+		return b.durations(sourceParam, tmpValues, d)
+	default:
+		// support only cases when destination is slice
+		// does not support time.Time as it needs argument (layout) for parsing or BindUnmarshaler
+		b.setError(b.ErrorFunc(sourceParam, []string{}, "unsupported bind type", nil))
+		return b
+	}
+}
+
+// Int64 binds parameter to int64 variable
+func (b *ValueBinder) Int64(sourceParam string, dest *int64) *ValueBinder {
+	return b.intValue(sourceParam, dest, 64, false)
+}
+
+// MustInt64 requires parameter value to exist to bind to int64 variable. Returns error when value does not exist
+func (b *ValueBinder) MustInt64(sourceParam string, dest *int64) *ValueBinder {
+	return b.intValue(sourceParam, dest, 64, true)
+}
+
+// Int32 binds parameter to int32 variable
+func (b *ValueBinder) Int32(sourceParam string, dest *int32) *ValueBinder {
+	return b.intValue(sourceParam, dest, 32, false)
+}
+
+// MustInt32 requires parameter value to exist to bind to int32 variable. Returns error when value does not exist
+func (b *ValueBinder) MustInt32(sourceParam string, dest *int32) *ValueBinder {
+	return b.intValue(sourceParam, dest, 32, true)
+}
+
+// Int16 binds parameter to int16 variable
+func (b *ValueBinder) Int16(sourceParam string, dest *int16) *ValueBinder {
+	return b.intValue(sourceParam, dest, 16, false)
+}
+
+// MustInt16 requires parameter value to exist to bind to int16 variable. Returns error when value does not exist
+func (b *ValueBinder) MustInt16(sourceParam string, dest *int16) *ValueBinder {
+	return b.intValue(sourceParam, dest, 16, true)
+}
+
+// Int8 binds parameter to int8 variable
+func (b *ValueBinder) Int8(sourceParam string, dest *int8) *ValueBinder {
+	return b.intValue(sourceParam, dest, 8, false)
+}
+
+// MustInt8 requires parameter value to exist to bind to int8 variable. Returns error when value does not exist
+func (b *ValueBinder) MustInt8(sourceParam string, dest *int8) *ValueBinder {
+	return b.intValue(sourceParam, dest, 8, true)
+}
+
+// Int binds parameter to int variable
+func (b *ValueBinder) Int(sourceParam string, dest *int) *ValueBinder {
+	return b.intValue(sourceParam, dest, 0, false)
+}
+
+// MustInt requires parameter value to exist to bind to int variable. Returns error when value does not exist
+func (b *ValueBinder) MustInt(sourceParam string, dest *int) *ValueBinder {
+	return b.intValue(sourceParam, dest, 0, true)
+}
+
+func (b *ValueBinder) intValue(sourceParam string, dest interface{}, bitSize int, valueMustExist bool) *ValueBinder {
+	if b.failFast && b.errors != nil {
+		return b
+	}
+
+	value := b.ValueFunc(sourceParam)
+	if value == "" {
+		if valueMustExist {
+			b.setError(b.ErrorFunc(sourceParam, []string{}, "required field value is empty", nil))
+		}
+		return b
+	}
+
+	return b.int(sourceParam, value, dest, bitSize)
+}
+
+func (b *ValueBinder) int(sourceParam string, value string, dest interface{}, bitSize int) *ValueBinder {
+	n, err := strconv.ParseInt(value, 10, bitSize)
+	if err != nil {
+		if bitSize == 0 {
+			b.setError(b.ErrorFunc(sourceParam, []string{value}, "failed to bind field value to int", err))
+		} else {
+			b.setError(b.ErrorFunc(sourceParam, []string{value}, fmt.Sprintf("failed to bind field value to int%v", bitSize), err))
+		}
+		return b
+	}
+
+	switch d := dest.(type) {
+	case *int64:
+		*d = n
+	case *int32:
+		*d = int32(n)
+	case *int16:
+		*d = int16(n)
+	case *int8:
+		*d = int8(n)
+	case *int:
+		*d = int(n)
+	}
+	return b
+}
+
+func (b *ValueBinder) intsValue(sourceParam string, dest interface{}, valueMustExist bool) *ValueBinder {
+	if b.failFast && b.errors != nil {
+		return b
+	}
+
+	values := b.ValuesFunc(sourceParam)
+	if len(values) == 0 {
+		if valueMustExist {
+			b.setError(b.ErrorFunc(sourceParam, values, "required field value is empty", nil))
+		}
+		return b
+	}
+	return b.ints(sourceParam, values, dest)
+}
+
+func (b *ValueBinder) ints(sourceParam string, values []string, dest interface{}) *ValueBinder {
+	switch d := dest.(type) {
+	case *[]int64:
+		tmp := make([]int64, len(values))
+		for i, v := range values {
+			b.int(sourceParam, v, &tmp[i], 64)
+			if b.failFast && b.errors != nil {
+				return b
+			}
+		}
+		if b.errors == nil {
+			*d = tmp
+		}
+	case *[]int32:
+		tmp := make([]int32, len(values))
+		for i, v := range values {
+			b.int(sourceParam, v, &tmp[i], 32)
+			if b.failFast && b.errors != nil {
+				return b
+			}
+		}
+		if b.errors == nil {
+			*d = tmp
+		}
+	case *[]int16:
+		tmp := make([]int16, len(values))
+		for i, v := range values {
+			b.int(sourceParam, v, &tmp[i], 16)
+			if b.failFast && b.errors != nil {
+				return b
+			}
+		}
+		if b.errors == nil {
+			*d = tmp
+		}
+	case *[]int8:
+		tmp := make([]int8, len(values))
+		for i, v := range values {
+			b.int(sourceParam, v, &tmp[i], 8)
+			if b.failFast && b.errors != nil {
+				return b
+			}
+		}
+		if b.errors == nil {
+			*d = tmp
+		}
+	case *[]int:
+		tmp := make([]int, len(values))
+		for i, v := range values {
+			b.int(sourceParam, v, &tmp[i], 0)
+			if b.failFast && b.errors != nil {
+				return b
+			}
+		}
+		if b.errors == nil {
+			*d = tmp
+		}
+	}
+	return b
+}
+
+// Int64s binds parameter to slice of int64
+func (b *ValueBinder) Int64s(sourceParam string, dest *[]int64) *ValueBinder {
+	return b.intsValue(sourceParam, dest, false)
+}
+
+// MustInt64s requires parameter value to exist to bind to int64 slice variable. Returns error when value does not exist
+func (b *ValueBinder) MustInt64s(sourceParam string, dest *[]int64) *ValueBinder {
+	return b.intsValue(sourceParam, dest, true)
+}
+
+// Int32s binds parameter to slice of int32
+func (b *ValueBinder) Int32s(sourceParam string, dest *[]int32) *ValueBinder {
+	return b.intsValue(sourceParam, dest, false)
+}
+
+// MustInt32s requires parameter value to exist to bind to int32 slice variable. Returns error when value does not exist
+func (b *ValueBinder) MustInt32s(sourceParam string, dest *[]int32) *ValueBinder {
+	return b.intsValue(sourceParam, dest, true)
+}
+
+// Int16s binds parameter to slice of int16
+func (b *ValueBinder) Int16s(sourceParam string, dest *[]int16) *ValueBinder {
+	return b.intsValue(sourceParam, dest, false)
+}
+
+// MustInt16s requires parameter value to exist to bind to int16 slice variable. Returns error when value does not exist
+func (b *ValueBinder) MustInt16s(sourceParam string, dest *[]int16) *ValueBinder {
+	return b.intsValue(sourceParam, dest, true)
+}
+
+// Int8s binds parameter to slice of int8
+func (b *ValueBinder) Int8s(sourceParam string, dest *[]int8) *ValueBinder {
+	return b.intsValue(sourceParam, dest, false)
+}
+
+// MustInt8s requires parameter value to exist to bind to int8 slice variable. Returns error when value does not exist
+func (b *ValueBinder) MustInt8s(sourceParam string, dest *[]int8) *ValueBinder {
+	return b.intsValue(sourceParam, dest, true)
+}
+
+// Ints binds parameter to slice of int
+func (b *ValueBinder) Ints(sourceParam string, dest *[]int) *ValueBinder {
+	return b.intsValue(sourceParam, dest, false)
+}
+
+// MustInts requires parameter value to exist to bind to int slice variable. Returns error when value does not exist
+func (b *ValueBinder) MustInts(sourceParam string, dest *[]int) *ValueBinder {
+	return b.intsValue(sourceParam, dest, true)
+}
+
+// Uint64 binds parameter to uint64 variable
+func (b *ValueBinder) Uint64(sourceParam string, dest *uint64) *ValueBinder {
+	return b.uintValue(sourceParam, dest, 64, false)
+}
+
+// MustUint64 requires parameter value to exist to bind to uint64 variable. Returns error when value does not exist
+func (b *ValueBinder) MustUint64(sourceParam string, dest *uint64) *ValueBinder {
+	return b.uintValue(sourceParam, dest, 64, true)
+}
+
+// Uint32 binds parameter to uint32 variable
+func (b *ValueBinder) Uint32(sourceParam string, dest *uint32) *ValueBinder {
+	return b.uintValue(sourceParam, dest, 32, false)
+}
+
+// MustUint32 requires parameter value to exist to bind to uint32 variable. Returns error when value does not exist
+func (b *ValueBinder) MustUint32(sourceParam string, dest *uint32) *ValueBinder {
+	return b.uintValue(sourceParam, dest, 32, true)
+}
+
+// Uint16 binds parameter to uint16 variable
+func (b *ValueBinder) Uint16(sourceParam string, dest *uint16) *ValueBinder {
+	return b.uintValue(sourceParam, dest, 16, false)
+}
+
+// MustUint16 requires parameter value to exist to bind to uint16 variable. Returns error when value does not exist
+func (b *ValueBinder) MustUint16(sourceParam string, dest *uint16) *ValueBinder {
+	return b.uintValue(sourceParam, dest, 16, true)
+}
+
+// Uint8 binds parameter to uint8 variable
+func (b *ValueBinder) Uint8(sourceParam string, dest *uint8) *ValueBinder {
+	return b.uintValue(sourceParam, dest, 8, false)
+}
+
+// MustUint8 requires parameter value to exist to bind to uint8 variable. Returns error when value does not exist
+func (b *ValueBinder) MustUint8(sourceParam string, dest *uint8) *ValueBinder {
+	return b.uintValue(sourceParam, dest, 8, true)
+}
+
+// Byte binds parameter to byte variable
+func (b *ValueBinder) Byte(sourceParam string, dest *byte) *ValueBinder {
+	return b.uintValue(sourceParam, dest, 8, false)
+}
+
+// MustByte requires parameter value to exist to bind to byte variable. Returns error when value does not exist
+func (b *ValueBinder) MustByte(sourceParam string, dest *byte) *ValueBinder {
+	return b.uintValue(sourceParam, dest, 8, true)
+}
+
+// Uint binds parameter to uint variable
+func (b *ValueBinder) Uint(sourceParam string, dest *uint) *ValueBinder {
+	return b.uintValue(sourceParam, dest, 0, false)
+}
+
+// MustUint requires parameter value to exist to bind to uint variable. Returns error when value does not exist
+func (b *ValueBinder) MustUint(sourceParam string, dest *uint) *ValueBinder {
+	return b.uintValue(sourceParam, dest, 0, true)
+}
+
+func (b *ValueBinder) uintValue(sourceParam string, dest interface{}, bitSize int, valueMustExist bool) *ValueBinder {
+	if b.failFast && b.errors != nil {
+		return b
+	}
+
+	value := b.ValueFunc(sourceParam)
+	if value == "" {
+		if valueMustExist {
+			b.setError(b.ErrorFunc(sourceParam, []string{}, "required field value is empty", nil))
+		}
+		return b
+	}
+
+	return b.uint(sourceParam, value, dest, bitSize)
+}
+
+func (b *ValueBinder) uint(sourceParam string, value string, dest interface{}, bitSize int) *ValueBinder {
+	n, err := strconv.ParseUint(value, 10, bitSize)
+	if err != nil {
+		if bitSize == 0 {
+			b.setError(b.ErrorFunc(sourceParam, []string{value}, "failed to bind field value to uint", err))
+		} else {
+			b.setError(b.ErrorFunc(sourceParam, []string{value}, fmt.Sprintf("failed to bind field value to uint%v", bitSize), err))
+		}
+		return b
+	}
+
+	switch d := dest.(type) {
+	case *uint64:
+		*d = n
+	case *uint32:
+		*d = uint32(n)
+	case *uint16:
+		*d = uint16(n)
+	case *uint8: // byte is alias to uint8
+		*d = uint8(n)
+	case *uint:
+		*d = uint(n)
+	}
+	return b
+}
+
+func (b *ValueBinder) uintsValue(sourceParam string, dest interface{}, valueMustExist bool) *ValueBinder {
+	if b.failFast && b.errors != nil {
+		return b
+	}
+
+	values := b.ValuesFunc(sourceParam)
+	if len(values) == 0 {
+		if valueMustExist {
+			b.setError(b.ErrorFunc(sourceParam, values, "required field value is empty", nil))
+		}
+		return b
+	}
+	return b.uints(sourceParam, values, dest)
+}
+
+func (b *ValueBinder) uints(sourceParam string, values []string, dest interface{}) *ValueBinder {
+	switch d := dest.(type) {
+	case *[]uint64:
+		tmp := make([]uint64, len(values))
+		for i, v := range values {
+			b.uint(sourceParam, v, &tmp[i], 64)
+			if b.failFast && b.errors != nil {
+				return b
+			}
+		}
+		if b.errors == nil {
+			*d = tmp
+		}
+	case *[]uint32:
+		tmp := make([]uint32, len(values))
+		for i, v := range values {
+			b.uint(sourceParam, v, &tmp[i], 32)
+			if b.failFast && b.errors != nil {
+				return b
+			}
+		}
+		if b.errors == nil {
+			*d = tmp
+		}
+	case *[]uint16:
+		tmp := make([]uint16, len(values))
+		for i, v := range values {
+			b.uint(sourceParam, v, &tmp[i], 16)
+			if b.failFast && b.errors != nil {
+				return b
+			}
+		}
+		if b.errors == nil {
+			*d = tmp
+		}
+	case *[]uint8: // byte is alias to uint8
+		tmp := make([]uint8, len(values))
+		for i, v := range values {
+			b.uint(sourceParam, v, &tmp[i], 8)
+			if b.failFast && b.errors != nil {
+				return b
+			}
+		}
+		if b.errors == nil {
+			*d = tmp
+		}
+	case *[]uint:
+		tmp := make([]uint, len(values))
+		for i, v := range values {
+			b.uint(sourceParam, v, &tmp[i], 0)
+			if b.failFast && b.errors != nil {
+				return b
+			}
+		}
+		if b.errors == nil {
+			*d = tmp
+		}
+	}
+	return b
+}
+
+// Uint64s binds parameter to slice of uint64
+func (b *ValueBinder) Uint64s(sourceParam string, dest *[]uint64) *ValueBinder {
+	return b.uintsValue(sourceParam, dest, false)
+}
+
+// MustUint64s requires parameter value to exist to bind to uint64 slice variable. Returns error when value does not exist
+func (b *ValueBinder) MustUint64s(sourceParam string, dest *[]uint64) *ValueBinder {
+	return b.uintsValue(sourceParam, dest, true)
+}
+
+// Uint32s binds parameter to slice of uint32
+func (b *ValueBinder) Uint32s(sourceParam string, dest *[]uint32) *ValueBinder {
+	return b.uintsValue(sourceParam, dest, false)
+}
+
+// MustUint32s requires parameter value to exist to bind to uint32 slice variable. Returns error when value does not exist
+func (b *ValueBinder) MustUint32s(sourceParam string, dest *[]uint32) *ValueBinder {
+	return b.uintsValue(sourceParam, dest, true)
+}
+
+// Uint16s binds parameter to slice of uint16
+func (b *ValueBinder) Uint16s(sourceParam string, dest *[]uint16) *ValueBinder {
+	return b.uintsValue(sourceParam, dest, false)
+}
+
+// MustUint16s requires parameter value to exist to bind to uint16 slice variable. Returns error when value does not exist
+func (b *ValueBinder) MustUint16s(sourceParam string, dest *[]uint16) *ValueBinder {
+	return b.uintsValue(sourceParam, dest, true)
+}
+
+// Uint8s binds parameter to slice of uint8
+func (b *ValueBinder) Uint8s(sourceParam string, dest *[]uint8) *ValueBinder {
+	return b.uintsValue(sourceParam, dest, false)
+}
+
+// MustUint8s requires parameter value to exist to bind to uint8 slice variable. Returns error when value does not exist
+func (b *ValueBinder) MustUint8s(sourceParam string, dest *[]uint8) *ValueBinder {
+	return b.uintsValue(sourceParam, dest, true)
+}
+
+// Uints binds parameter to slice of uint
+func (b *ValueBinder) Uints(sourceParam string, dest *[]uint) *ValueBinder {
+	return b.uintsValue(sourceParam, dest, false)
+}
+
+// MustUints requires parameter value to exist to bind to uint slice variable. Returns error when value does not exist
+func (b *ValueBinder) MustUints(sourceParam string, dest *[]uint) *ValueBinder {
+	return b.uintsValue(sourceParam, dest, true)
+}
+
+// Bool binds parameter to bool variable
+func (b *ValueBinder) Bool(sourceParam string, dest *bool) *ValueBinder {
+	return b.boolValue(sourceParam, dest, false)
+}
+
+// MustBool requires parameter value to exist to bind to bool variable. Returns error when value does not exist
+func (b *ValueBinder) MustBool(sourceParam string, dest *bool) *ValueBinder {
+	return b.boolValue(sourceParam, dest, true)
+}
+
+func (b *ValueBinder) boolValue(sourceParam string, dest *bool, valueMustExist bool) *ValueBinder {
+	if b.failFast && b.errors != nil {
+		return b
+	}
+
+	value := b.ValueFunc(sourceParam)
+	if value == "" {
+		if valueMustExist {
+			b.setError(b.ErrorFunc(sourceParam, []string{}, "required field value is empty", nil))
+		}
+		return b
+	}
+	return b.bool(sourceParam, value, dest)
+}
+
+func (b *ValueBinder) bool(sourceParam string, value string, dest *bool) *ValueBinder {
+	n, err := strconv.ParseBool(value)
+	if err != nil {
+		b.setError(b.ErrorFunc(sourceParam, []string{value}, "failed to bind field value to bool", err))
+		return b
+	}
+
+	*dest = n
+	return b
+}
+
+func (b *ValueBinder) boolsValue(sourceParam string, dest *[]bool, valueMustExist bool) *ValueBinder {
+	if b.failFast && b.errors != nil {
+		return b
+	}
+
+	values := b.ValuesFunc(sourceParam)
+	if len(values) == 0 {
+		if valueMustExist {
+			b.setError(b.ErrorFunc(sourceParam, []string{}, "required field value is empty", nil))
+		}
+		return b
+	}
+	return b.bools(sourceParam, values, dest)
+}
+
+func (b *ValueBinder) bools(sourceParam string, values []string, dest *[]bool) *ValueBinder {
+	tmp := make([]bool, len(values))
+	for i, v := range values {
+		b.bool(sourceParam, v, &tmp[i])
+		if b.failFast && b.errors != nil {
+			return b
+		}
+	}
+	if b.errors == nil {
+		*dest = tmp
+	}
+	return b
+}
+
+// Bools binds parameter values to slice of bool variables
+func (b *ValueBinder) Bools(sourceParam string, dest *[]bool) *ValueBinder {
+	return b.boolsValue(sourceParam, dest, false)
+}
+
+// MustBools requires parameter values to exist to bind to slice of bool variables. Returns error when values does not exist
+func (b *ValueBinder) MustBools(sourceParam string, dest *[]bool) *ValueBinder {
+	return b.boolsValue(sourceParam, dest, true)
+}
+
+// Float64 binds parameter to float64 variable
+func (b *ValueBinder) Float64(sourceParam string, dest *float64) *ValueBinder {
+	return b.floatValue(sourceParam, dest, 64, false)
+}
+
+// MustFloat64 requires parameter value to exist to bind to float64 variable. Returns error when value does not exist
+func (b *ValueBinder) MustFloat64(sourceParam string, dest *float64) *ValueBinder {
+	return b.floatValue(sourceParam, dest, 64, true)
+}
+
+// Float32 binds parameter to float32 variable
+func (b *ValueBinder) Float32(sourceParam string, dest *float32) *ValueBinder {
+	return b.floatValue(sourceParam, dest, 32, false)
+}
+
+// MustFloat32 requires parameter value to exist to bind to float32 variable. Returns error when value does not exist
+func (b *ValueBinder) MustFloat32(sourceParam string, dest *float32) *ValueBinder {
+	return b.floatValue(sourceParam, dest, 32, true)
+}
+
+func (b *ValueBinder) floatValue(sourceParam string, dest interface{}, bitSize int, valueMustExist bool) *ValueBinder {
+	if b.failFast && b.errors != nil {
+		return b
+	}
+
+	value := b.ValueFunc(sourceParam)
+	if value == "" {
+		if valueMustExist {
+			b.setError(b.ErrorFunc(sourceParam, []string{}, "required field value is empty", nil))
+		}
+		return b
+	}
+
+	return b.float(sourceParam, value, dest, bitSize)
+}
+
+func (b *ValueBinder) float(sourceParam string, value string, dest interface{}, bitSize int) *ValueBinder {
+	n, err := strconv.ParseFloat(value, bitSize)
+	if err != nil {
+		b.setError(b.ErrorFunc(sourceParam, []string{value}, fmt.Sprintf("failed to bind field value to float%v", bitSize), err))
+		return b
+	}
+
+	switch d := dest.(type) {
+	case *float64:
+		*d = n
+	case *float32:
+		*d = float32(n)
+	}
+	return b
+}
+
+func (b *ValueBinder) floatsValue(sourceParam string, dest interface{}, valueMustExist bool) *ValueBinder {
+	if b.failFast && b.errors != nil {
+		return b
+	}
+
+	values := b.ValuesFunc(sourceParam)
+	if len(values) == 0 {
+		if valueMustExist {
+			b.setError(b.ErrorFunc(sourceParam, []string{}, "required field value is empty", nil))
+		}
+		return b
+	}
+	return b.floats(sourceParam, values, dest)
+}
+
+func (b *ValueBinder) floats(sourceParam string, values []string, dest interface{}) *ValueBinder {
+	switch d := dest.(type) {
+	case *[]float64:
+		tmp := make([]float64, len(values))
+		for i, v := range values {
+			b.float(sourceParam, v, &tmp[i], 64)
+			if b.failFast && b.errors != nil {
+				return b
+			}
+		}
+		if b.errors == nil {
+			*d = tmp
+		}
+	case *[]float32:
+		tmp := make([]float32, len(values))
+		for i, v := range values {
+			b.float(sourceParam, v, &tmp[i], 32)
+			if b.failFast && b.errors != nil {
+				return b
+			}
+		}
+		if b.errors == nil {
+			*d = tmp
+		}
+	}
+	return b
+}
+
+// Float64s binds parameter values to slice of float64 variables
+func (b *ValueBinder) Float64s(sourceParam string, dest *[]float64) *ValueBinder {
+	return b.floatsValue(sourceParam, dest, false)
+}
+
+// MustFloat64s requires parameter values to exist to bind to slice of float64 variables. Returns error when values does not exist
+func (b *ValueBinder) MustFloat64s(sourceParam string, dest *[]float64) *ValueBinder {
+	return b.floatsValue(sourceParam, dest, true)
+}
+
+// Float32s binds parameter values to slice of float32 variables
+func (b *ValueBinder) Float32s(sourceParam string, dest *[]float32) *ValueBinder {
+	return b.floatsValue(sourceParam, dest, false)
+}
+
+// MustFloat32s requires parameter values to exist to bind to slice of float32 variables. Returns error when values does not exist
+func (b *ValueBinder) MustFloat32s(sourceParam string, dest *[]float32) *ValueBinder {
+	return b.floatsValue(sourceParam, dest, true)
+}
+
+// Time binds parameter to time.Time variable
+func (b *ValueBinder) Time(sourceParam string, dest *time.Time, layout string) *ValueBinder {
+	return b.time(sourceParam, dest, layout, false)
+}
+
+// MustTime requires parameter value to exist to bind to time.Time variable. Returns error when value does not exist
+func (b *ValueBinder) MustTime(sourceParam string, dest *time.Time, layout string) *ValueBinder {
+	return b.time(sourceParam, dest, layout, true)
+}
+
+func (b *ValueBinder) time(sourceParam string, dest *time.Time, layout string, valueMustExist bool) *ValueBinder {
+	if b.failFast && b.errors != nil {
+		return b
+	}
+
+	value := b.ValueFunc(sourceParam)
+	if value == "" {
+		if valueMustExist {
+			b.setError(b.ErrorFunc(sourceParam, []string{value}, "required field value is empty", nil))
+		}
+		return b
+	}
+	t, err := time.Parse(layout, value)
+	if err != nil {
+		b.setError(b.ErrorFunc(sourceParam, []string{value}, "failed to bind field value to Time", err))
+		return b
+	}
+	*dest = t
+	return b
+}
+
+// Times binds parameter values to slice of time.Time variables
+func (b *ValueBinder) Times(sourceParam string, dest *[]time.Time, layout string) *ValueBinder {
+	return b.times(sourceParam, dest, layout, false)
+}
+
+// MustTimes requires parameter values to exist to bind to slice of time.Time variables. Returns error when values does not exist
+func (b *ValueBinder) MustTimes(sourceParam string, dest *[]time.Time, layout string) *ValueBinder {
+	return b.times(sourceParam, dest, layout, true)
+}
+
+func (b *ValueBinder) times(sourceParam string, dest *[]time.Time, layout string, valueMustExist bool) *ValueBinder {
+	if b.failFast && b.errors != nil {
+		return b
+	}
+
+	values := b.ValuesFunc(sourceParam)
+	if len(values) == 0 {
+		if valueMustExist {
+			b.setError(b.ErrorFunc(sourceParam, []string{}, "required field value is empty", nil))
+		}
+		return b
+	}
+
+	tmp := make([]time.Time, len(values))
+	for i, v := range values {
+		t, err := time.Parse(layout, v)
+		if err != nil {
+			b.setError(b.ErrorFunc(sourceParam, []string{v}, "failed to bind field value to Time", err))
+			if b.failFast {
+				return b
+			}
+			continue
+		}
+		tmp[i] = t
+	}
+	if b.errors == nil {
+		*dest = tmp
+	}
+	return b
+}
+
+// Duration binds parameter to time.Duration variable
+func (b *ValueBinder) Duration(sourceParam string, dest *time.Duration) *ValueBinder {
+	return b.duration(sourceParam, dest, false)
+}
+
+// MustDuration requires parameter value to exist to bind to time.Duration variable. Returns error when value does not exist
+func (b *ValueBinder) MustDuration(sourceParam string, dest *time.Duration) *ValueBinder {
+	return b.duration(sourceParam, dest, true)
+}
+
+func (b *ValueBinder) duration(sourceParam string, dest *time.Duration, valueMustExist bool) *ValueBinder {
+	if b.failFast && b.errors != nil {
+		return b
+	}
+
+	value := b.ValueFunc(sourceParam)
+	if value == "" {
+		if valueMustExist {
+			b.setError(b.ErrorFunc(sourceParam, []string{value}, "required field value is empty", nil))
+		}
+		return b
+	}
+	t, err := time.ParseDuration(value)
+	if err != nil {
+		b.setError(b.ErrorFunc(sourceParam, []string{value}, "failed to bind field value to Duration", err))
+		return b
+	}
+	*dest = t
+	return b
+}
+
+// Durations binds parameter values to slice of time.Duration variables
+func (b *ValueBinder) Durations(sourceParam string, dest *[]time.Duration) *ValueBinder {
+	return b.durationsValue(sourceParam, dest, false)
+}
+
+// MustDurations requires parameter values to exist to bind to slice of time.Duration variables. Returns error when values does not exist
+func (b *ValueBinder) MustDurations(sourceParam string, dest *[]time.Duration) *ValueBinder {
+	return b.durationsValue(sourceParam, dest, true)
+}
+
+func (b *ValueBinder) durationsValue(sourceParam string, dest *[]time.Duration, valueMustExist bool) *ValueBinder {
+	if b.failFast && b.errors != nil {
+		return b
+	}
+
+	values := b.ValuesFunc(sourceParam)
+	if len(values) == 0 {
+		if valueMustExist {
+			b.setError(b.ErrorFunc(sourceParam, []string{}, "required field value is empty", nil))
+		}
+		return b
+	}
+	return b.durations(sourceParam, values, dest)
+}
+
+func (b *ValueBinder) durations(sourceParam string, values []string, dest *[]time.Duration) *ValueBinder {
+	tmp := make([]time.Duration, len(values))
+	for i, v := range values {
+		t, err := time.ParseDuration(v)
+		if err != nil {
+			b.setError(b.ErrorFunc(sourceParam, []string{v}, "failed to bind field value to Duration", err))
+			if b.failFast {
+				return b
+			}
+			continue
+		}
+		tmp[i] = t
+	}
+	if b.errors == nil {
+		*dest = tmp
+	}
+	return b
+}
+
+// UnixTime binds parameter to time.Time variable (in local Time corresponding to the given Unix time).
+//
+// Example: 1609180603 bind to 2020-12-28T18:36:43.000000000+00:00
+//
+// Note:
+//   - time.Time{} (param is empty) and time.Unix(0,0) (param = "0") are not equal
+func (b *ValueBinder) UnixTime(sourceParam string, dest *time.Time) *ValueBinder {
+	return b.unixTime(sourceParam, dest, false, time.Second)
+}
+
+// MustUnixTime requires parameter value to exist to bind to time.Duration variable (in local time corresponding
+// to the given Unix time). Returns error when value does not exist.
+//
+// Example: 1609180603 bind to 2020-12-28T18:36:43.000000000+00:00
+//
+// Note:
+//   - time.Time{} (param is empty) and time.Unix(0,0) (param = "0") are not equal
+func (b *ValueBinder) MustUnixTime(sourceParam string, dest *time.Time) *ValueBinder {
+	return b.unixTime(sourceParam, dest, true, time.Second)
+}
+
+// UnixTimeMilli binds parameter to time.Time variable (in local time corresponding to the given Unix time in millisecond precision).
+//
+// Example: 1647184410140 bind to 2022-03-13T15:13:30.140000000+00:00
+//
+// Note:
+//   - time.Time{} (param is empty) and time.Unix(0,0) (param = "0") are not equal
+func (b *ValueBinder) UnixTimeMilli(sourceParam string, dest *time.Time) *ValueBinder {
+	return b.unixTime(sourceParam, dest, false, time.Millisecond)
+}
+
+// MustUnixTimeMilli requires parameter value to exist to bind to time.Duration variable  (in local time corresponding
+// to the given Unix time in millisecond precision). Returns error when value does not exist.
+//
+// Example: 1647184410140 bind to 2022-03-13T15:13:30.140000000+00:00
+//
+// Note:
+//   - time.Time{} (param is empty) and time.Unix(0,0) (param = "0") are not equal
+func (b *ValueBinder) MustUnixTimeMilli(sourceParam string, dest *time.Time) *ValueBinder {
+	return b.unixTime(sourceParam, dest, true, time.Millisecond)
+}
+
+// UnixTimeNano binds parameter to time.Time variable (in local time corresponding to the given Unix time in nanosecond precision).
+//
+// Example: 1609180603123456789 binds to 2020-12-28T18:36:43.123456789+00:00
+// Example:          1000000000 binds to 1970-01-01T00:00:01.000000000+00:00
+// Example:           999999999 binds to 1970-01-01T00:00:00.999999999+00:00
+//
+// Note:
+//   - time.Time{} (param is empty) and time.Unix(0,0) (param = "0") are not equal
+//   - Javascript's Number type only has about 53 bits of precision (Number.MAX_SAFE_INTEGER = 9007199254740991). Compare it to 1609180603123456789 in example.
+func (b *ValueBinder) UnixTimeNano(sourceParam string, dest *time.Time) *ValueBinder {
+	return b.unixTime(sourceParam, dest, false, time.Nanosecond)
+}
+
+// MustUnixTimeNano requires parameter value to exist to bind to time.Duration variable  (in local Time corresponding
+// to the given Unix time value in nano second precision). Returns error when value does not exist.
+//
+// Example: 1609180603123456789 binds to 2020-12-28T18:36:43.123456789+00:00
+// Example:          1000000000 binds to 1970-01-01T00:00:01.000000000+00:00
+// Example:           999999999 binds to 1970-01-01T00:00:00.999999999+00:00
+//
+// Note:
+//   - time.Time{} (param is empty) and time.Unix(0,0) (param = "0") are not equal
+//   - Javascript's Number type only has about 53 bits of precision (Number.MAX_SAFE_INTEGER = 9007199254740991). Compare it to 1609180603123456789 in example.
+func (b *ValueBinder) MustUnixTimeNano(sourceParam string, dest *time.Time) *ValueBinder {
+	return b.unixTime(sourceParam, dest, true, time.Nanosecond)
+}
+
+func (b *ValueBinder) unixTime(sourceParam string, dest *time.Time, valueMustExist bool, precision time.Duration) *ValueBinder {
+	if b.failFast && b.errors != nil {
+		return b
+	}
+
+	value := b.ValueFunc(sourceParam)
+	if value == "" {
+		if valueMustExist {
+			b.setError(b.ErrorFunc(sourceParam, []string{value}, "required field value is empty", nil))
+		}
+		return b
+	}
+
+	n, err := strconv.ParseInt(value, 10, 64)
+	if err != nil {
+		b.setError(b.ErrorFunc(sourceParam, []string{value}, "failed to bind field value to Time", err))
+		return b
+	}
+
+	switch precision {
+	case time.Second:
+		*dest = time.Unix(n, 0)
+	case time.Millisecond:
+		*dest = time.UnixMilli(n)
+	case time.Nanosecond:
+		*dest = time.Unix(0, n)
+	}
+	return b
+}
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/labstack/echo/v4/codecov.yml","mode":420,"size":151,"sha256":"0b68c5e0f2253d39108e52cd6a5c50ab2ab3b97e0e951b0126db2ff98d2bd8bf","index":0,"count":1,"encoding":"utf-8","payloadBytes":151}
+coverage:
+  status:
+    project:
+      default:
+        threshold: 1%
+    patch:
+      default:
+        threshold: 1%
+
+comment:
+  require_changes: true
+@@END
+@@PORTABLE {"path":"vendor/github.com/labstack/echo/v4/context.go","mode":420,"size":17587,"sha256":"69df062de1cb7da7c733633a8523b47e43f2677bd7a497f617dd3351b9757de7","index":0,"count":1,"encoding":"utf-8","payloadBytes":17587}
+// SPDX-License-Identifier: MIT
+// SPDX-FileCopyrightText: © 2015 LabStack LLC and Echo contributors
+
+package echo
+
+import (
+	"bytes"
+	"encoding/xml"
+	"fmt"
+	"io"
+	"mime/multipart"
+	"net"
+	"net/http"
+	"net/url"
+	"strings"
+	"sync"
+)
+
+// Context represents the context of the current HTTP request. It holds request and
+// response objects, path, path parameters, data and registered handler.
+type Context interface {
+	// Request returns `*http.Request`.
+	Request() *http.Request
+
+	// SetRequest sets `*http.Request`.
+	SetRequest(r *http.Request)
+
+	// SetResponse sets `*Response`.
+	SetResponse(r *Response)
+
+	// Response returns `*Response`.
+	Response() *Response
+
+	// IsTLS returns true if HTTP connection is TLS otherwise false.
+	IsTLS() bool
+
+	// IsWebSocket returns true if HTTP connection is WebSocket otherwise false.
+	IsWebSocket() bool
+
+	// Scheme returns the HTTP protocol scheme, `http` or `https`.
+	Scheme() string
+
+	// RealIP returns the client's network address based on `X-Forwarded-For`
+	// or `X-Real-IP` request header.
+	// The behavior can be configured using `Echo#IPExtractor`.
+	RealIP() string
+
+	// Path returns the registered path for the handler.
+	Path() string
+
+	// SetPath sets the registered path for the handler.
+	SetPath(p string)
+
+	// Param returns path parameter by name.
+	Param(name string) string
+
+	// ParamNames returns path parameter names.
+	ParamNames() []string
+
+	// SetParamNames sets path parameter names.
+	SetParamNames(names ...string)
+
+	// ParamValues returns path parameter values.
+	ParamValues() []string
+
+	// SetParamValues sets path parameter values.
+	SetParamValues(values ...string)
+
+	// QueryParam returns the query param for the provided name.
+	QueryParam(name string) string
+
+	// QueryParams returns the query parameters as `url.Values`.
+	QueryParams() url.Values
+
+	// QueryString returns the URL query string.
+	QueryString() string
+
+	// FormValue returns the form field value for the provided name.
+	FormValue(name string) string
+
+	// FormParams returns the form parameters as `url.Values`.
+	FormParams() (url.Values, error)
+
+	// FormFile returns the multipart form file for the provided name.
+	FormFile(name string) (*multipart.FileHeader, error)
+
+	// MultipartForm returns the multipart form.
+	MultipartForm() (*multipart.Form, error)
+
+	// Cookie returns the named cookie provided in the request.
+	Cookie(name string) (*http.Cookie, error)
+
+	// SetCookie adds a `Set-Cookie` header in HTTP response.
+	SetCookie(cookie *http.Cookie)
+
+	// Cookies returns the HTTP cookies sent with the request.
+	Cookies() []*http.Cookie
+
+	// Get retrieves data from the context.
+	Get(key string) interface{}
+
+	// Set saves data in the context.
+	Set(key string, val interface{})
+
+	// Bind binds path params, query params and the request body into provided type `i`. The default binder
+	// binds body based on Content-Type header.
+	Bind(i interface{}) error
+
+	// Validate validates provided `i`. It is usually called after `Context#Bind()`.
+	// Validator must be registered using `Echo#Validator`.
+	Validate(i interface{}) error
+
+	// Render renders a template with data and sends a text/html response with status
+	// code. Renderer must be registered using `Echo.Renderer`.
+	Render(code int, name string, data interface{}) error
+
+	// HTML sends an HTTP response with status code.
+	HTML(code int, html string) error
+
+	// HTMLBlob sends an HTTP blob response with status code.
+	HTMLBlob(code int, b []byte) error
+
+	// String sends a string response with status code.
+	String(code int, s string) error
+
+	// JSON sends a JSON response with status code.
+	JSON(code int, i interface{}) error
+
+	// JSONPretty sends a pretty-print JSON with status code.
+	JSONPretty(code int, i interface{}, indent string) error
+
+	// JSONBlob sends a JSON blob response with status code.
+	JSONBlob(code int, b []byte) error
+
+	// JSONP sends a JSONP response with status code. It uses `callback` to construct
+	// the JSONP payload.
+	JSONP(code int, callback string, i interface{}) error
+
+	// JSONPBlob sends a JSONP blob response with status code. It uses `callback`
+	// to construct the JSONP payload.
+	JSONPBlob(code int, callback string, b []byte) error
+
+	// XML sends an XML response with status code.
+	XML(code int, i interface{}) error
+
+	// XMLPretty sends a pretty-print XML with status code.
+	XMLPretty(code int, i interface{}, indent string) error
+
+	// XMLBlob sends an XML blob response with status code.
+	XMLBlob(code int, b []byte) error
+
+	// Blob sends a blob response with status code and content type.
+	Blob(code int, contentType string, b []byte) error
+
+	// Stream sends a streaming response with status code and content type.
+	Stream(code int, contentType string, r io.Reader) error
+
+	// File sends a response with the content of the file.
+	File(file string) error
+
+	// Attachment sends a response as attachment, prompting client to save the
+	// file.
+	Attachment(file string, name string) error
+
+	// Inline sends a response as inline, opening the file in the browser.
+	Inline(file string, name string) error
+
+	// NoContent sends a response with no body and a status code.
+	NoContent(code int) error
+
+	// Redirect redirects the request to a provided URL with status code.
+	Redirect(code int, url string) error
+
+	// Error invokes the registered global HTTP error handler. Generally used by middleware.
+	// A side-effect of calling global error handler is that now Response has been committed (sent to the client) and
+	// middlewares up in chain can not change Response status code or Response body anymore.
+	//
+	// Avoid using this method in handlers as no middleware will be able to effectively handle errors after that.
+	Error(err error)
+
+	// Handler returns the matched handler by router.
+	Handler() HandlerFunc
+
+	// SetHandler sets the matched handler by router.
+	SetHandler(h HandlerFunc)
+
+	// Logger returns the `Logger` instance.
+	Logger() Logger
+
+	// SetLogger Set the logger
+	SetLogger(l Logger)
+
+	// Echo returns the `Echo` instance.
+	Echo() *Echo
+
+	// Reset resets the context after request completes. It must be called along
+	// with `Echo#AcquireContext()` and `Echo#ReleaseContext()`.
+	// See `Echo#ServeHTTP()`
+	Reset(r *http.Request, w http.ResponseWriter)
+}
+
+type context struct {
+	logger   Logger
+	request  *http.Request
+	response *Response
+	query    url.Values
+	echo     *Echo
+
+	store Map
+	lock  sync.RWMutex
+
+	// following fields are set by Router
+	handler HandlerFunc
+
+	// path is route path that Router matched. It is empty string where there is no route match.
+	// Route registered with RouteNotFound is considered as a match and path therefore is not empty.
+	path string
+
+	// Usually echo.Echo is sizing pvalues but there could be user created middlewares that decide to
+	// overwrite parameter by calling SetParamNames + SetParamValues.
+	// When echo.Echo allocated that slice it length/capacity is tied to echo.Echo.maxParam value.
+	//
+	// It is important that pvalues size is always equal or bigger to pnames length.
+	pvalues []string
+
+	// pnames length is tied to param count for the matched route
+	pnames []string
+}
+
+const (
+	// ContextKeyHeaderAllow is set by Router for getting value for `Allow` header in later stages of handler call chain.
+	// Allow header is mandatory for status 405 (method not found) and useful for OPTIONS method requests.
+	// It is added to context only when Router does not find matching method handler for request.
+	ContextKeyHeaderAllow = "echo_header_allow"
+)
+
+const (
+	defaultMemory = 32 << 20 // 32 MB
+	indexPage     = "index.html"
+	defaultIndent = "  "
+)
+
+func (c *context) writeContentType(value string) {
+	header := c.Response().Header()
+	if header.Get(HeaderContentType) == "" {
+		header.Set(HeaderContentType, value)
+	}
+}
+
+func (c *context) Request() *http.Request {
+	return c.request
+}
+
+func (c *context) SetRequest(r *http.Request) {
+	c.request = r
+}
+
+func (c *context) Response() *Response {
+	return c.response
+}
+
+func (c *context) SetResponse(r *Response) {
+	c.response = r
+}
+
+func (c *context) IsTLS() bool {
+	return c.request.TLS != nil
+}
+
+func (c *context) IsWebSocket() bool {
+	upgrade := c.request.Header.Get(HeaderUpgrade)
+	return strings.EqualFold(upgrade, "websocket")
+}
+
+func (c *context) Scheme() string {
+	// Can't use `r.Request.URL.Scheme`
+	// See: https://groups.google.com/forum/#!topic/golang-nuts/pMUkBlQBDF0
+	if c.IsTLS() {
+		return "https"
+	}
+	if scheme := c.request.Header.Get(HeaderXForwardedProto); scheme != "" {
+		return scheme
+	}
+	if scheme := c.request.Header.Get(HeaderXForwardedProtocol); scheme != "" {
+		return scheme
+	}
+	if ssl := c.request.Header.Get(HeaderXForwardedSsl); ssl == "on" {
+		return "https"
+	}
+	if scheme := c.request.Header.Get(HeaderXUrlScheme); scheme != "" {
+		return scheme
+	}
+	return "http"
+}
+
+func (c *context) RealIP() string {
+	if c.echo != nil && c.echo.IPExtractor != nil {
+		return c.echo.IPExtractor(c.request)
+	}
+	// Fall back to legacy behavior
+	if ip := c.request.Header.Get(HeaderXForwardedFor); ip != "" {
+		i := strings.IndexAny(ip, ",")
+		if i > 0 {
+			xffip := strings.TrimSpace(ip[:i])
+			xffip = strings.TrimPrefix(xffip, "[")
+			xffip = strings.TrimSuffix(xffip, "]")
+			return xffip
+		}
+		return ip
+	}
+	if ip := c.request.Header.Get(HeaderXRealIP); ip != "" {
+		ip = strings.TrimPrefix(ip, "[")
+		ip = strings.TrimSuffix(ip, "]")
+		return ip
+	}
+	ra, _, _ := net.SplitHostPort(c.request.RemoteAddr)
+	return ra
+}
+
+func (c *context) Path() string {
+	return c.path
+}
+
+func (c *context) SetPath(p string) {
+	c.path = p
+}
+
+func (c *context) Param(name string) string {
+	for i, n := range c.pnames {
+		if i < len(c.pvalues) {
+			if n == name {
+				return c.pvalues[i]
+			}
+		}
+	}
+	return ""
+}
+
+func (c *context) ParamNames() []string {
+	return c.pnames
+}
+
+func (c *context) SetParamNames(names ...string) {
+	c.pnames = names
+
+	l := len(names)
+	if len(c.pvalues) < l {
+		// Keeping the old pvalues just for backward compatibility, but it sounds that doesn't make sense to keep them,
+		// probably those values will be overridden in a Context#SetParamValues
+		newPvalues := make([]string, l)
+		copy(newPvalues, c.pvalues)
+		c.pvalues = newPvalues
+	}
+}
+
+func (c *context) ParamValues() []string {
+	return c.pvalues[:len(c.pnames)]
+}
+
+func (c *context) SetParamValues(values ...string) {
+	// NOTE: Don't just set c.pvalues = values, because it has to have length c.echo.maxParam (or bigger) at all times
+	// It will brake the Router#Find code
+	limit := len(values)
+	if limit > len(c.pvalues) {
+		c.pvalues = make([]string, limit)
+	}
+	for i := 0; i < limit; i++ {
+		c.pvalues[i] = values[i]
+	}
+}
+
+func (c *context) QueryParam(name string) string {
+	if c.query == nil {
+		c.query = c.request.URL.Query()
+	}
+	return c.query.Get(name)
+}
+
+func (c *context) QueryParams() url.Values {
+	if c.query == nil {
+		c.query = c.request.URL.Query()
+	}
+	return c.query
+}
+
+func (c *context) QueryString() string {
+	return c.request.URL.RawQuery
+}
+
+func (c *context) FormValue(name string) string {
+	return c.request.FormValue(name)
+}
+
+func (c *context) FormParams() (url.Values, error) {
+	if strings.HasPrefix(c.request.Header.Get(HeaderContentType), MIMEMultipartForm) {
+		if err := c.request.ParseMultipartForm(defaultMemory); err != nil {
+			return nil, err
+		}
+	} else {
+		if err := c.request.ParseForm(); err != nil {
+			return nil, err
+		}
+	}
+	return c.request.Form, nil
+}
+
+func (c *context) FormFile(name string) (*multipart.FileHeader, error) {
+	f, fh, err := c.request.FormFile(name)
+	if err != nil {
+		return nil, err
+	}
+	f.Close()
+	return fh, nil
+}
+
+func (c *context) MultipartForm() (*multipart.Form, error) {
+	err := c.request.ParseMultipartForm(defaultMemory)
+	return c.request.MultipartForm, err
+}
+
+func (c *context) Cookie(name string) (*http.Cookie, error) {
+	return c.request.Cookie(name)
+}
+
+func (c *context) SetCookie(cookie *http.Cookie) {
+	http.SetCookie(c.Response(), cookie)
+}
+
+func (c *context) Cookies() []*http.Cookie {
+	return c.request.Cookies()
+}
+
+func (c *context) Get(key string) interface{} {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	return c.store[key]
+}
+
+func (c *context) Set(key string, val interface{}) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	if c.store == nil {
+		c.store = make(Map)
+	}
+	c.store[key] = val
+}
+
+func (c *context) Bind(i interface{}) error {
+	return c.echo.Binder.Bind(i, c)
+}
+
+func (c *context) Validate(i interface{}) error {
+	if c.echo.Validator == nil {
+		return ErrValidatorNotRegistered
+	}
+	return c.echo.Validator.Validate(i)
+}
+
+func (c *context) Render(code int, name string, data interface{}) (err error) {
+	if c.echo.Renderer == nil {
+		return ErrRendererNotRegistered
+	}
+	buf := new(bytes.Buffer)
+	if err = c.echo.Renderer.Render(buf, name, data, c); err != nil {
+		return
+	}
+	return c.HTMLBlob(code, buf.Bytes())
+}
+
+func (c *context) HTML(code int, html string) (err error) {
+	return c.HTMLBlob(code, []byte(html))
+}
+
+func (c *context) HTMLBlob(code int, b []byte) (err error) {
+	return c.Blob(code, MIMETextHTMLCharsetUTF8, b)
+}
+
+func (c *context) String(code int, s string) (err error) {
+	return c.Blob(code, MIMETextPlainCharsetUTF8, []byte(s))
+}
+
+func (c *context) jsonPBlob(code int, callback string, i interface{}) (err error) {
+	indent := ""
+	if _, pretty := c.QueryParams()["pretty"]; c.echo.Debug || pretty {
+		indent = defaultIndent
+	}
+	c.writeContentType(MIMEApplicationJavaScriptCharsetUTF8)
+	c.response.WriteHeader(code)
+	if _, err = c.response.Write([]byte(callback + "(")); err != nil {
+		return
+	}
+	if err = c.echo.JSONSerializer.Serialize(c, i, indent); err != nil {
+		return
+	}
+	if _, err = c.response.Write([]byte(");")); err != nil {
+		return
+	}
+	return
+}
+
+func (c *context) json(code int, i interface{}, indent string) error {
+	c.writeContentType(MIMEApplicationJSON)
+	c.response.Status = code
+	return c.echo.JSONSerializer.Serialize(c, i, indent)
+}
+
+func (c *context) JSON(code int, i interface{}) (err error) {
+	indent := ""
+	if _, pretty := c.QueryParams()["pretty"]; c.echo.Debug || pretty {
+		indent = defaultIndent
+	}
+	return c.json(code, i, indent)
+}
+
+func (c *context) JSONPretty(code int, i interface{}, indent string) (err error) {
+	return c.json(code, i, indent)
+}
+
+func (c *context) JSONBlob(code int, b []byte) (err error) {
+	return c.Blob(code, MIMEApplicationJSON, b)
+}
+
+func (c *context) JSONP(code int, callback string, i interface{}) (err error) {
+	return c.jsonPBlob(code, callback, i)
+}
+
+func (c *context) JSONPBlob(code int, callback string, b []byte) (err error) {
+	c.writeContentType(MIMEApplicationJavaScriptCharsetUTF8)
+	c.response.WriteHeader(code)
+	if _, err = c.response.Write([]byte(callback + "(")); err != nil {
+		return
+	}
+	if _, err = c.response.Write(b); err != nil {
+		return
+	}
+	_, err = c.response.Write([]byte(");"))
+	return
+}
+
+func (c *context) xml(code int, i interface{}, indent string) (err error) {
+	c.writeContentType(MIMEApplicationXMLCharsetUTF8)
+	c.response.WriteHeader(code)
+	enc := xml.NewEncoder(c.response)
+	if indent != "" {
+		enc.Indent("", indent)
+	}
+	if _, err = c.response.Write([]byte(xml.Header)); err != nil {
+		return
+	}
+	return enc.Encode(i)
+}
+
+func (c *context) XML(code int, i interface{}) (err error) {
+	indent := ""
+	if _, pretty := c.QueryParams()["pretty"]; c.echo.Debug || pretty {
+		indent = defaultIndent
+	}
+	return c.xml(code, i, indent)
+}
+
+func (c *context) XMLPretty(code int, i interface{}, indent string) (err error) {
+	return c.xml(code, i, indent)
+}
+
+func (c *context) XMLBlob(code int, b []byte) (err error) {
+	c.writeContentType(MIMEApplicationXMLCharsetUTF8)
+	c.response.WriteHeader(code)
+	if _, err = c.response.Write([]byte(xml.Header)); err != nil {
+		return
+	}
+	_, err = c.response.Write(b)
+	return
+}
+
+func (c *context) Blob(code int, contentType string, b []byte) (err error) {
+	c.writeContentType(contentType)
+	c.response.WriteHeader(code)
+	_, err = c.response.Write(b)
+	return
+}
+
+func (c *context) Stream(code int, contentType string, r io.Reader) (err error) {
+	c.writeContentType(contentType)
+	c.response.WriteHeader(code)
+	_, err = io.Copy(c.response, r)
+	return
+}
+
+func (c *context) Attachment(file, name string) error {
+	return c.contentDisposition(file, name, "attachment")
+}
+
+func (c *context) Inline(file, name string) error {
+	return c.contentDisposition(file, name, "inline")
+}
+
+var quoteEscaper = strings.NewReplacer("\\", "\\\\", `"`, "\\\"")
+
+func (c *context) contentDisposition(file, name, dispositionType string) error {
+	c.response.Header().Set(HeaderContentDisposition, fmt.Sprintf(`%s; filename="%s"`, dispositionType, quoteEscaper.Replace(name)))
+	return c.File(file)
+}
+
+func (c *context) NoContent(code int) error {
+	c.response.WriteHeader(code)
+	return nil
+}
+
+func (c *context) Redirect(code int, url string) error {
+	if code < 300 || code > 308 {
+		return ErrInvalidRedirectCode
+	}
+	c.response.Header().Set(HeaderLocation, url)
+	c.response.WriteHeader(code)
+	return nil
+}
+
+func (c *context) Error(err error) {
+	c.echo.HTTPErrorHandler(err, c)
+}
+
+func (c *context) Echo() *Echo {
+	return c.echo
+}
+
+func (c *context) Handler() HandlerFunc {
+	return c.handler
+}
+
+func (c *context) SetHandler(h HandlerFunc) {
+	c.handler = h
+}
+
+func (c *context) Logger() Logger {
+	res := c.logger
+	if res != nil {
+		return res
+	}
+	return c.echo.Logger
+}
+
+func (c *context) SetLogger(l Logger) {
+	c.logger = l
+}
+
+func (c *context) Reset(r *http.Request, w http.ResponseWriter) {
+	c.request = r
+	c.response.reset(w)
+	c.query = nil
+	c.handler = NotFoundHandler
+	c.store = nil
+	c.path = ""
+	c.pnames = nil
+	c.logger = nil
+	// NOTE: Don't reset because it has to have length c.echo.maxParam (or bigger) at all times
+	for i := 0; i < len(c.pvalues); i++ {
+		c.pvalues[i] = ""
+	}
+}
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/labstack/echo/v4/context_fs.go","mode":420,"size":1371,"sha256":"59af17fca3b8c43f4206363f1528e1d83095a79bdf8aa79eed69d9749867ac5b","index":0,"count":1,"encoding":"utf-8","payloadBytes":1371}
+// SPDX-License-Identifier: MIT
+// SPDX-FileCopyrightText: © 2015 LabStack LLC and Echo contributors
+
+package echo
+
+import (
+	"errors"
+	"io"
+	"io/fs"
+	"net/http"
+	"path/filepath"
+)
+
+func (c *context) File(file string) error {
+	return fsFile(c, file, c.echo.Filesystem)
+}
+
+// FileFS serves file from given file system.
+//
+// When dealing with `embed.FS` use `fs := echo.MustSubFS(fs, "rootDirectory") to create sub fs which uses necessary
+// prefix for directory path. This is necessary as `//go:embed assets/images` embeds files with paths
+// including `assets/images` as their prefix.
+func (c *context) FileFS(file string, filesystem fs.FS) error {
+	return fsFile(c, file, filesystem)
+}
+
+func fsFile(c Context, file string, filesystem fs.FS) error {
+	f, err := filesystem.Open(file)
+	if err != nil {
+		return ErrNotFound
+	}
+	defer f.Close()
+
+	fi, _ := f.Stat()
+	if fi.IsDir() {
+		file = filepath.ToSlash(filepath.Join(file, indexPage)) // ToSlash is necessary for Windows. fs.Open and os.Open are different in that aspect.
+		f, err = filesystem.Open(file)
+		if err != nil {
+			return ErrNotFound
+		}
+		defer f.Close()
+		if fi, err = f.Stat(); err != nil {
+			return err
+		}
+	}
+	ff, ok := f.(io.ReadSeeker)
+	if !ok {
+		return errors.New("file does not implement io.ReadSeeker")
+	}
+	http.ServeContent(c.Response(), c.Request(), fi.Name(), fi.ModTime(), ff)
+	return nil
+}
+
+@@END
 @@PORTABLE {"path":"vendor/github.com/labstack/echo/v4/echo.go","mode":420,"size":35295,"sha256":"2a46f9f52bc23cfad9417d3fbd25db44a6b8cf367e53c4e48b5b043a45291ad3","index":0,"count":1,"encoding":"utf-8","payloadBytes":35295}
 // SPDX-License-Identifier: MIT
 // SPDX-FileCopyrightText: © 2015 LabStack LLC and Echo contributors
@@ -59867,3097 +62403,4 @@ func (f *Frontend) MenuUpdateApplicationMenu() {
 	processMenu(f.mainWindow, f.mainWindow.applicationMenu)
 }
 
-@@END
-@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/notifications.go","mode":420,"size":14307,"sha256":"0e6f0925030a6f709b8658207b9e3d7865155481ea6db2826685953ce3bedf68","index":0,"count":1,"encoding":"utf-8","payloadBytes":14307}
-//go:build windows
-// +build windows
-
-package windows
-
-import (
-	"encoding/base64"
-	"encoding/json"
-	"log"
-	"sync"
-
-	wintoast "git.sr.ht/~jackmordaunt/go-toast/v2/wintoast"
-	"github.com/google/uuid"
-	"github.com/wailsapp/wails/v2/internal/frontend"
-	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc"
-	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
-
-	"fmt"
-	"os"
-	"path/filepath"
-	_ "unsafe" // for go:linkname
-
-	"git.sr.ht/~jackmordaunt/go-toast/v2"
-	"golang.org/x/sys/windows/registry"
-)
-
-var (
-	categories     map[string]frontend.NotificationCategory
-	categoriesLock sync.RWMutex
-	appName        string
-	appGUID        string
-	iconPath       string = ""
-	exePath        string
-	iconOnce       sync.Once
-	iconErr        error
-
-	notificationResultCallback func(result frontend.NotificationResult)
-	callbackLock               sync.RWMutex
-)
-
-const DefaultActionIdentifier = "DEFAULT_ACTION"
-
-const (
-	ToastRegistryPath                  = `Software\Classes\AppUserModelId\`
-	ToastRegistryGuidKey               = "CustomActivator"
-	NotificationCategoriesRegistryPath = `SOFTWARE\%s\NotificationCategories`
-	NotificationCategoriesRegistryKey  = "Categories"
-)
-
-// NotificationPayload combines the action ID and user data into a single structure
-type NotificationPayload struct {
-	Action  string                       `json:"action"`
-	Options frontend.NotificationOptions `json:"payload,omitempty"`
-}
-
-func (f *Frontend) InitializeNotifications() error {
-	categoriesLock.Lock()
-	defer categoriesLock.Unlock()
-	categories = make(map[string]frontend.NotificationCategory)
-
-	exe, err := os.Executable()
-	if err != nil {
-		return fmt.Errorf("failed to get executable: %w", err)
-	}
-	exePath = exe
-	appName = filepath.Base(exePath)
-
-	appGUID, err = getGUID()
-	if err != nil {
-		return err
-	}
-
-	iconPath = filepath.Join(os.TempDir(), appName+appGUID+".png")
-
-	// Create the registry key for the toast activator
-	key, _, err := registry.CreateKey(registry.CURRENT_USER,
-		`Software\Classes\CLSID\`+appGUID+`\LocalServer32`, registry.ALL_ACCESS)
-	if err != nil {
-		return fmt.Errorf("failed to create CLSID key: %w", err)
-	}
-	defer key.Close()
-
-	if err := key.SetStringValue("", fmt.Sprintf("\"%s\" %%1", exePath)); err != nil {
-		return fmt.Errorf("failed to set CLSID server path: %w", err)
-	}
-
-	toast.SetAppData(toast.AppData{
-		AppID:         appName,
-		GUID:          appGUID,
-		IconPath:      iconPath,
-		ActivationExe: exePath,
-	})
-
-	toast.SetActivationCallback(func(args string, data []toast.UserData) {
-		result := frontend.NotificationResult{}
-
-		actionIdentifier, options, err := parseNotificationResponse(args)
-
-		if err != nil {
-			result.Error = err
-		} else {
-			// Subtitle is retained but was not shown with the notification
-			response := frontend.NotificationResponse{
-				ID:               options.ID,
-				ActionIdentifier: actionIdentifier,
-				Title:            options.Title,
-				Subtitle:         options.Subtitle,
-				Body:             options.Body,
-				CategoryID:       options.CategoryID,
-				UserInfo:         options.Data,
-			}
-
-			if userText, found := getUserText(data); found {
-				response.UserText = userText
-			}
-
-			result.Response = response
-		}
-
-		handleNotificationResult(result)
-	})
-
-	// Register the COM class factory for toast activation.
-	// This is required for Windows to activate the app when users interact with notifications.
-	// The go-toast library's SetAppData and SetActivationCallback handle the callback setup,
-	// but the COM class factory registration is not exposed via public APIs, so we use
-	// go:linkname to access the internal registerClassFactory function.
-	if err := registerToastClassFactory(wintoast.ClassFactory); err != nil {
-		return fmt.Errorf("CoRegisterClassObject failed: %w", err)
-	}
-
-	return loadCategoriesFromRegistry()
-}
-
-// registerToastClassFactory registers the COM class factory required for Windows toast notification activation.
-// This function uses go:linkname to access the unexported registerClassFactory function from go-toast.
-// The class factory is necessary for Windows COM activation when users click notification actions.
-// Without this registration, notification actions will not activate the application.
-//
-// This is a workaround until go-toast exports this functionality via a public API.
-// See: https://git.sr.ht/~jackmordaunt/go-toast
-//
-//go:linkname registerToastClassFactory git.sr.ht/~jackmordaunt/go-toast/v2/wintoast.registerClassFactory
-func registerToastClassFactory(factory *wintoast.IClassFactory) error
-
-// CleanupNotifications is a Windows stub that does nothing.
-// (Linux-specific cleanup)
-func (f *Frontend) CleanupNotifications() {
-	// No cleanup needed on Windows
-}
-
-func (f *Frontend) IsNotificationAvailable() bool {
-	return true
-}
-
-func (f *Frontend) RequestNotificationAuthorization() (bool, error) {
-	return true, nil
-}
-
-func (f *Frontend) CheckNotificationAuthorization() (bool, error) {
-	return true, nil
-}
-
-// SendNotification sends a basic notification with a name, title, and body. All other options are ignored on Windows.
-// (subtitle is only available on macOS and Linux)
-func (f *Frontend) SendNotification(options frontend.NotificationOptions) error {
-	if err := f.saveIconToDir(); err != nil {
-		f.logger.Warning("Error saving icon: %v", err)
-	}
-
-	n := toast.Notification{
-		Title:               options.Title,
-		Body:                options.Body,
-		ActivationType:      toast.Foreground,
-		ActivationArguments: DefaultActionIdentifier,
-	}
-
-	encodedPayload, err := encodePayload(DefaultActionIdentifier, options)
-	if err != nil {
-		return fmt.Errorf("failed to encode notification payload: %w", err)
-	}
-	n.ActivationArguments = encodedPayload
-
-	return n.Push()
-}
-
-// SendNotificationWithActions sends a notification with additional actions and inputs.
-// A NotificationCategory must be registered with RegisterNotificationCategory first. The `CategoryID` must match the registered category.
-// If a NotificationCategory is not registered a basic notification will be sent.
-// (subtitle is only available on macOS and Linux)
-func (f *Frontend) SendNotificationWithActions(options frontend.NotificationOptions) error {
-	if err := f.saveIconToDir(); err != nil {
-		f.logger.Warning("Error saving icon: %v", err)
-	}
-
-	categoriesLock.RLock()
-	nCategory, categoryExists := categories[options.CategoryID]
-	categoriesLock.RUnlock()
-
-	if options.CategoryID == "" || !categoryExists {
-		f.logger.Warning("Category '%s' not found, sending basic notification without actions", options.CategoryID)
-		return f.SendNotification(options)
-	}
-
-	n := toast.Notification{
-		Title:               options.Title,
-		Body:                options.Body,
-		ActivationType:      toast.Foreground,
-		ActivationArguments: DefaultActionIdentifier,
-	}
-
-	for _, action := range nCategory.Actions {
-		n.Actions = append(n.Actions, toast.Action{
-			Content:   action.Title,
-			Arguments: action.ID,
-		})
-	}
-
-	if nCategory.HasReplyField {
-		n.Inputs = append(n.Inputs, toast.Input{
-			ID:          "userText",
-			Placeholder: nCategory.ReplyPlaceholder,
-		})
-
-		n.Actions = append(n.Actions, toast.Action{
-			Content:   nCategory.ReplyButtonTitle,
-			Arguments: "TEXT_REPLY",
-			InputID:   "userText",
-		})
-	}
-
-	encodedPayload, err := encodePayload(n.ActivationArguments, options)
-	if err != nil {
-		return fmt.Errorf("failed to encode notification payload: %w", err)
-	}
-	n.ActivationArguments = encodedPayload
-
-	for index := range n.Actions {
-		encodedPayload, err := encodePayload(n.Actions[index].Arguments, options)
-		if err != nil {
-			return fmt.Errorf("failed to encode notification payload: %w", err)
-		}
-		n.Actions[index].Arguments = encodedPayload
-	}
-
-	return n.Push()
-}
-
-// RegisterNotificationCategory registers a new NotificationCategory to be used with SendNotificationWithActions.
-// Registering a category with the same name as a previously registered NotificationCategory will override it.
-func (f *Frontend) RegisterNotificationCategory(category frontend.NotificationCategory) error {
-	categoriesLock.Lock()
-	defer categoriesLock.Unlock()
-
-	categories[category.ID] = frontend.NotificationCategory{
-		ID:               category.ID,
-		Actions:          category.Actions,
-		HasReplyField:    category.HasReplyField,
-		ReplyPlaceholder: category.ReplyPlaceholder,
-		ReplyButtonTitle: category.ReplyButtonTitle,
-	}
-
-	return saveCategoriesToRegistry()
-}
-
-// RemoveNotificationCategory removes a previously registered NotificationCategory.
-func (f *Frontend) RemoveNotificationCategory(categoryId string) error {
-	categoriesLock.Lock()
-	defer categoriesLock.Unlock()
-
-	delete(categories, categoryId)
-
-	return saveCategoriesToRegistry()
-}
-
-// RemoveAllPendingNotifications is a Windows stub that always returns nil.
-// (macOS and Linux only)
-func (f *Frontend) RemoveAllPendingNotifications() error {
-	return nil
-}
-
-// RemovePendingNotification is a Windows stub that always returns nil.
-// (macOS and Linux only)
-func (f *Frontend) RemovePendingNotification(_ string) error {
-	return nil
-}
-
-// RemoveAllDeliveredNotifications is a Windows stub that always returns nil.
-// (macOS and Linux only)
-func (f *Frontend) RemoveAllDeliveredNotifications() error {
-	return nil
-}
-
-// RemoveDeliveredNotification is a Windows stub that always returns nil.
-// (macOS and Linux only)
-func (f *Frontend) RemoveDeliveredNotification(_ string) error {
-	return nil
-}
-
-// RemoveNotification is a Windows stub that always returns nil.
-// (Linux-specific)
-func (f *Frontend) RemoveNotification(identifier string) error {
-	return nil
-}
-
-func (f *Frontend) OnNotificationResponse(callback func(result frontend.NotificationResult)) {
-	callbackLock.Lock()
-	defer callbackLock.Unlock()
-
-	notificationResultCallback = callback
-}
-
-func (f *Frontend) saveIconToDir() error {
-	iconOnce.Do(func() {
-		hIcon := w32.ExtractIcon(exePath, 0)
-		if hIcon == 0 {
-			iconErr = fmt.Errorf("ExtractIcon failed for %s", exePath)
-			return
-		}
-		defer w32.DestroyIcon(hIcon)
-		iconErr = winc.SaveHIconAsPNG(hIcon, iconPath)
-	})
-	return iconErr
-}
-
-func saveCategoriesToRegistry() error {
-	// We assume lock is held by caller
-
-	registryPath := fmt.Sprintf(NotificationCategoriesRegistryPath, appName)
-
-	key, _, err := registry.CreateKey(
-		registry.CURRENT_USER,
-		registryPath,
-		registry.ALL_ACCESS,
-	)
-	if err != nil {
-		return err
-	}
-	defer key.Close()
-
-	data, err := json.Marshal(categories)
-	if err != nil {
-		return err
-	}
-
-	return key.SetStringValue(NotificationCategoriesRegistryKey, string(data))
-}
-
-func loadCategoriesFromRegistry() error {
-	// We assume lock is held by caller
-
-	registryPath := fmt.Sprintf(NotificationCategoriesRegistryPath, appName)
-
-	key, err := registry.OpenKey(
-		registry.CURRENT_USER,
-		registryPath,
-		registry.QUERY_VALUE,
-	)
-	if err != nil {
-		if err == registry.ErrNotExist {
-			// Not an error, no saved categories
-			return nil
-		}
-		return fmt.Errorf("failed to open registry key: %w", err)
-	}
-	defer key.Close()
-
-	data, _, err := key.GetStringValue(NotificationCategoriesRegistryKey)
-	if err != nil {
-		if err == registry.ErrNotExist {
-			// No value yet, but key exists
-			return nil
-		}
-		return fmt.Errorf("failed to read categories from registry: %w", err)
-	}
-
-	_categories := make(map[string]frontend.NotificationCategory)
-	if err := json.Unmarshal([]byte(data), &_categories); err != nil {
-		return fmt.Errorf("failed to parse notification categories from registry: %w", err)
-	}
-
-	categories = _categories
-
-	return nil
-}
-
-func getUserText(data []toast.UserData) (string, bool) {
-	for _, d := range data {
-		if d.Key == "userText" {
-			return d.Value, true
-		}
-	}
-	return "", false
-}
-
-// encodePayload combines an action ID and user data into a single encoded string
-func encodePayload(actionID string, options frontend.NotificationOptions) (string, error) {
-	payload := NotificationPayload{
-		Action:  actionID,
-		Options: options,
-	}
-
-	jsonData, err := json.Marshal(payload)
-	if err != nil {
-		return actionID, err
-	}
-
-	encodedPayload := base64.StdEncoding.EncodeToString(jsonData)
-	return encodedPayload, nil
-}
-
-// decodePayload extracts the action ID and user data from an encoded payload
-func decodePayload(encodedString string) (string, frontend.NotificationOptions, error) {
-	jsonData, err := base64.StdEncoding.DecodeString(encodedString)
-	if err != nil {
-		return encodedString, frontend.NotificationOptions{}, fmt.Errorf("failed to decode base64 payload: %w", err)
-	}
-
-	var payload NotificationPayload
-	if err := json.Unmarshal(jsonData, &payload); err != nil {
-		return encodedString, frontend.NotificationOptions{}, fmt.Errorf("failed to unmarshal notification payload: %w", err)
-	}
-
-	return payload.Action, payload.Options, nil
-}
-
-// parseNotificationResponse updated to use structured payload decoding
-func parseNotificationResponse(response string) (action string, options frontend.NotificationOptions, err error) {
-	actionID, options, err := decodePayload(response)
-
-	if err != nil {
-		log.Printf("Warning: Failed to decode notification response: %v", err)
-		return response, frontend.NotificationOptions{}, err
-	}
-
-	return actionID, options, nil
-}
-
-func handleNotificationResult(result frontend.NotificationResult) {
-	callbackLock.RLock()
-	callback := notificationResultCallback
-	callbackLock.RUnlock()
-
-	if callback != nil {
-		go func() {
-			defer func() {
-				if r := recover(); r != nil {
-					// Log panic but don't crash the app
-					fmt.Fprintf(os.Stderr, "panic in notification callback: %v\n", r)
-				}
-			}()
-			callback(result)
-		}()
-	}
-}
-
-// Helper functions
-
-func getGUID() (string, error) {
-	keyPath := ToastRegistryPath + appName
-
-	k, err := registry.OpenKey(registry.CURRENT_USER, keyPath, registry.QUERY_VALUE)
-	if err == nil {
-		guid, _, err := k.GetStringValue(ToastRegistryGuidKey)
-		k.Close()
-		if err == nil && guid != "" {
-			return guid, nil
-		}
-	}
-
-	guid := generateGUID()
-
-	k, _, err = registry.CreateKey(registry.CURRENT_USER, keyPath, registry.WRITE)
-	if err != nil {
-		return "", fmt.Errorf("failed to create registry key: %w", err)
-	}
-	defer k.Close()
-
-	if err := k.SetStringValue(ToastRegistryGuidKey, guid); err != nil {
-		return "", fmt.Errorf("failed to write GUID to registry: %w", err)
-	}
-
-	return guid, nil
-}
-
-func generateGUID() string {
-	guid := uuid.New()
-	return fmt.Sprintf("{%s}", guid.String())
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/screen.go","mode":420,"size":5350,"sha256":"b9295a84170363714e2402a5f6bbaf9335ffb1b85a99880a2381a9934ea0a0dd","index":0,"count":1,"encoding":"utf-8","payloadBytes":5350}
-//go:build windows
-// +build windows
-
-package windows
-
-import (
-	"fmt"
-	"syscall"
-	"unsafe"
-
-	"github.com/pkg/errors"
-	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc"
-	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
-)
-
-func MonitorsEqual(first w32.MONITORINFO, second w32.MONITORINFO) bool {
-	// Checks to make sure all the fields are the same.
-	// A cleaner way would be to check identity of devices. but I couldn't find a way of doing that using the win32 API
-	return first.DwFlags == second.DwFlags &&
-		first.RcMonitor.Top == second.RcMonitor.Top &&
-		first.RcMonitor.Bottom == second.RcMonitor.Bottom &&
-		first.RcMonitor.Right == second.RcMonitor.Right &&
-		first.RcMonitor.Left == second.RcMonitor.Left &&
-		first.RcWork.Top == second.RcWork.Top &&
-		first.RcWork.Bottom == second.RcWork.Bottom &&
-		first.RcWork.Right == second.RcWork.Right &&
-		first.RcWork.Left == second.RcWork.Left
-}
-
-func GetMonitorInfo(hMonitor w32.HMONITOR) (*w32.MONITORINFO, error) {
-	// Adapted from winc.utils.getMonitorInfo TODO: add this to win32
-	// See docs for
-	//https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getmonitorinfoa
-
-	var info w32.MONITORINFO
-	info.CbSize = uint32(unsafe.Sizeof(info))
-	succeeded := w32.GetMonitorInfo(hMonitor, &info)
-	if !succeeded {
-		return &info, errors.New("Windows call to getMonitorInfo failed")
-	}
-	return &info, nil
-}
-
-func EnumProc(hMonitor w32.HMONITOR, hdcMonitor w32.HDC, lprcMonitor *w32.RECT, screenContainer *ScreenContainer) uintptr {
-	// adapted from https://stackoverflow.com/a/23492886/4188138
-
-	// see docs for the following pages to better understand this function
-	// https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-enumdisplaymonitors
-	// https://docs.microsoft.com/en-us/windows/win32/api/winuser/nc-winuser-monitorenumproc
-	// https://docs.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-monitorinfo
-	// https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-monitorfromwindow
-
-	ourMonitorData := Screen{}
-	currentMonHndl := w32.MonitorFromWindow(screenContainer.mainWinHandle, w32.MONITOR_DEFAULTTONEAREST)
-	currentMonInfo, currErr := GetMonitorInfo(currentMonHndl)
-
-	if currErr != nil {
-		screenContainer.errors = append(screenContainer.errors, currErr)
-		screenContainer.monitors = append(screenContainer.monitors, Screen{})
-		// not sure what the consequences of returning false are, so let's just return true and handle it ourselves
-		return w32.TRUE
-	}
-
-	monInfo, err := GetMonitorInfo(hMonitor)
-	if err != nil {
-		screenContainer.errors = append(screenContainer.errors, err)
-		screenContainer.monitors = append(screenContainer.monitors, Screen{})
-		return w32.TRUE
-	}
-
-	width := lprcMonitor.Right - lprcMonitor.Left
-	height := lprcMonitor.Bottom - lprcMonitor.Top
-	ourMonitorData.IsPrimary = monInfo.DwFlags&w32.MONITORINFOF_PRIMARY == 1
-	ourMonitorData.Height = int(height)
-	ourMonitorData.Width = int(width)
-	ourMonitorData.IsCurrent = MonitorsEqual(*currentMonInfo, *monInfo)
-
-	ourMonitorData.PhysicalSize.Width = int(width)
-	ourMonitorData.PhysicalSize.Height = int(height)
-
-	var dpiX, dpiY uint
-	w32.GetDPIForMonitor(hMonitor, w32.MDT_EFFECTIVE_DPI, &dpiX, &dpiY)
-	if dpiX == 0 || dpiY == 0 {
-		screenContainer.errors = append(screenContainer.errors, fmt.Errorf("unable to get DPI for screen"))
-		screenContainer.monitors = append(screenContainer.monitors, Screen{})
-		return w32.TRUE
-	}
-	ourMonitorData.Size.Width = winc.ScaleToDefaultDPI(ourMonitorData.PhysicalSize.Width, dpiX)
-	ourMonitorData.Size.Height = winc.ScaleToDefaultDPI(ourMonitorData.PhysicalSize.Height, dpiY)
-
-	// the reason we need a container is that we have don't know how many times this function will be called
-	// this "append" call could potentially do an allocation and rewrite the pointer to monitors. So we save the pointer in screenContainer.monitors
-	// and retrieve the values after all EnumProc calls
-	// If EnumProc is multi-threaded, this could be problematic. Although, I don't think it is.
-	screenContainer.monitors = append(screenContainer.monitors, ourMonitorData)
-	// let's keep screenContainer.errors the same size as screenContainer.monitors in case we want to match them up later if necessary
-	screenContainer.errors = append(screenContainer.errors, nil)
-	return w32.TRUE
-}
-
-type ScreenContainer struct {
-	monitors      []Screen
-	errors        []error
-	mainWinHandle w32.HWND
-}
-
-func GetAllScreens(mainWinHandle w32.HWND) ([]Screen, error) {
-	// TODO fix hack of container sharing by having a proper data sharing mechanism between windows and the runtime
-	monitorContainer := ScreenContainer{mainWinHandle: mainWinHandle}
-	returnErr := error(nil)
-	errorStrings := []string{}
-
-	dc := w32.GetDC(0)
-	defer w32.ReleaseDC(0, dc)
-	succeeded := w32.EnumDisplayMonitors(dc, nil, syscall.NewCallback(EnumProc), unsafe.Pointer(&monitorContainer))
-	if !succeeded {
-		return monitorContainer.monitors, errors.New("Windows call to EnumDisplayMonitors failed")
-	}
-	for idx, err := range monitorContainer.errors {
-		if err != nil {
-			errorStrings = append(errorStrings, fmt.Sprintf("Error from monitor #%v, %v", idx+1, err))
-		}
-	}
-
-	if len(errorStrings) > 0 {
-		returnErr = fmt.Errorf("%v errors encountered: %v", len(errorStrings), errorStrings)
-	}
-	return monitorContainer.monitors, returnErr
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/single_instance.go","mode":420,"size":3368,"sha256":"8f39fbc6e443a982bf8773d8ef7dd4aafbb1bcd4bfad8dcc716cef095bfc0444","index":0,"count":1,"encoding":"utf-8","payloadBytes":3368}
-//go:build windows
-
-package windows
-
-import (
-	"encoding/json"
-	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
-	"github.com/wailsapp/wails/v2/pkg/options"
-	"golang.org/x/sys/windows"
-	"log"
-	"os"
-	"syscall"
-	"unsafe"
-)
-
-type COPYDATASTRUCT struct {
-	dwData uintptr
-	cbData uint32
-	lpData uintptr
-}
-
-// WMCOPYDATA_SINGLE_INSTANCE_DATA we define our own type for WM_COPYDATA message
-const WMCOPYDATA_SINGLE_INSTANCE_DATA = 1542
-
-func SendMessage(hwnd w32.HWND, data string) {
-	arrUtf16, _ := syscall.UTF16FromString(data)
-
-	pCopyData := new(COPYDATASTRUCT)
-	pCopyData.dwData = WMCOPYDATA_SINGLE_INSTANCE_DATA
-	pCopyData.cbData = uint32(len(arrUtf16)*2 + 1)
-	pCopyData.lpData = uintptr(unsafe.Pointer(windows.StringToUTF16Ptr(data)))
-
-	w32.SendMessage(hwnd, w32.WM_COPYDATA, 0, uintptr(unsafe.Pointer(pCopyData)))
-}
-
-// SetupSingleInstance single instance Windows app
-func SetupSingleInstance(uniqueId string) {
-	id := "wails-app-" + uniqueId
-
-	className := id + "-sic"
-	windowName := id + "-siw"
-	mutexName := id + "sim"
-
-	_, err := windows.CreateMutex(nil, false, windows.StringToUTF16Ptr(mutexName))
-
-	if err != nil {
-		if err == windows.ERROR_ALREADY_EXISTS {
-			// app is already running
-			hwnd := w32.FindWindowW(windows.StringToUTF16Ptr(className), windows.StringToUTF16Ptr(windowName))
-
-			if hwnd != 0 {
-				data := options.SecondInstanceData{
-					Args: os.Args[1:],
-				}
-				data.WorkingDirectory, err = os.Getwd()
-				if err != nil {
-					log.Printf("Failed to get working directory: %v", err)
-					return
-				}
-				serialized, err := json.Marshal(data)
-				if err != nil {
-					log.Printf("Failed to marshal data: %v", err)
-					return
-				}
-
-				SendMessage(hwnd, string(serialized))
-				// exit second instance of app after sending message
-				os.Exit(0)
-			}
-			// if we got any other unknown error we will just start new application instance
-		}
-	} else {
-		createEventTargetWindow(className, windowName)
-	}
-}
-
-func createEventTargetWindow(className string, windowName string) w32.HWND {
-	// callback handler in the event target window
-	wndProc := func(
-		hwnd w32.HWND, msg uint32, wparam w32.WPARAM, lparam w32.LPARAM,
-	) w32.LRESULT {
-		if msg == w32.WM_COPYDATA {
-			ldata := (*COPYDATASTRUCT)(unsafe.Pointer(lparam))
-
-			if ldata.dwData == WMCOPYDATA_SINGLE_INSTANCE_DATA {
-				serialized := windows.UTF16PtrToString((*uint16)(unsafe.Pointer(ldata.lpData)))
-
-				var secondInstanceData options.SecondInstanceData
-
-				err := json.Unmarshal([]byte(serialized), &secondInstanceData)
-
-				if err == nil {
-					secondInstanceBuffer <- secondInstanceData
-				}
-			}
-
-			return w32.LRESULT(0)
-		}
-
-		return w32.DefWindowProc(hwnd, msg, wparam, lparam)
-	}
-
-	var class w32.WNDCLASSEX
-	class.Size = uint32(unsafe.Sizeof(class))
-	class.Style = 0
-	class.WndProc = syscall.NewCallback(wndProc)
-	class.ClsExtra = 0
-	class.WndExtra = 0
-	class.Instance = w32.GetModuleHandle("")
-	class.Icon = 0
-	class.Cursor = 0
-	class.Background = 0
-	class.MenuName = nil
-	class.ClassName = windows.StringToUTF16Ptr(className)
-	class.IconSm = 0
-
-	w32.RegisterClassEx(&class)
-
-	// create event window that will not be visible for user
-	hwnd := w32.CreateWindowEx(
-		0,
-		windows.StringToUTF16Ptr(className),
-		windows.StringToUTF16Ptr(windowName),
-		0,
-		0,
-		0,
-		0,
-		0,
-		w32.HWND_MESSAGE,
-		0,
-		w32.GetModuleHandle(""),
-		nil,
-	)
-
-	return hwnd
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/theme.go","mode":420,"size":1892,"sha256":"c971d9d97734b1573bda571f06c087a3910fb027694b3856eb05b1b7f54d2d17","index":0,"count":1,"encoding":"utf-8","payloadBytes":1892}
-//go:build windows
-
-package windows
-
-import (
-	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/win32"
-	"github.com/wailsapp/wails/v2/pkg/options/windows"
-)
-
-func (w *Window) UpdateTheme() {
-
-	// Don't redraw theme if nothing has changed
-	if !w.themeChanged {
-		return
-	}
-	w.themeChanged = false
-
-	if win32.IsCurrentlyHighContrastMode() {
-		return
-	}
-
-	if !win32.SupportsThemes() {
-		return
-	}
-
-	var isDarkMode bool
-	switch w.theme {
-	case windows.SystemDefault:
-		isDarkMode = win32.IsCurrentlyDarkMode()
-	case windows.Dark:
-		isDarkMode = true
-	case windows.Light:
-		isDarkMode = false
-	}
-	win32.SetTheme(w.Handle(), isDarkMode)
-
-	// Custom theme processing
-	winOptions := w.frontendOptions.Windows
-	var customTheme *windows.ThemeSettings
-	if winOptions != nil {
-		customTheme = winOptions.CustomTheme
-	}
-	// Custom theme
-	if win32.SupportsCustomThemes() && customTheme != nil {
-		if w.isActive {
-			if isDarkMode {
-				win32.SetTitleBarColour(w.Handle(), customTheme.DarkModeTitleBar)
-				win32.SetTitleTextColour(w.Handle(), customTheme.DarkModeTitleText)
-				win32.SetBorderColour(w.Handle(), customTheme.DarkModeBorder)
-			} else {
-				win32.SetTitleBarColour(w.Handle(), customTheme.LightModeTitleBar)
-				win32.SetTitleTextColour(w.Handle(), customTheme.LightModeTitleText)
-				win32.SetBorderColour(w.Handle(), customTheme.LightModeBorder)
-			}
-		} else {
-			if isDarkMode {
-				win32.SetTitleBarColour(w.Handle(), customTheme.DarkModeTitleBarInactive)
-				win32.SetTitleTextColour(w.Handle(), customTheme.DarkModeTitleTextInactive)
-				win32.SetBorderColour(w.Handle(), customTheme.DarkModeBorderInactive)
-			} else {
-				win32.SetTitleBarColour(w.Handle(), customTheme.LightModeTitleBarInactive)
-				win32.SetTitleTextColour(w.Handle(), customTheme.LightModeTitleTextInactive)
-				win32.SetBorderColour(w.Handle(), customTheme.LightModeBorderInactive)
-			}
-		}
-	}
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/win32/clipboard.go","mode":420,"size":3550,"sha256":"e6bf5f7d24b3ea81526cb4df42fe884b93645d475b114a93d7e7ac21359d460b","index":0,"count":1,"encoding":"utf-8","payloadBytes":3550}
-//go:build windows
-
-/*
- * Based on code originally from https://github.com/atotto/clipboard. Copyright (c) 2013 Ato Araki. All rights reserved.
- */
-
-package win32
-
-import (
-	"runtime"
-	"syscall"
-	"time"
-	"unsafe"
-)
-
-const (
-	cfUnicodetext = 13
-	gmemMoveable  = 0x0002
-)
-
-// waitOpenClipboard opens the clipboard, waiting for up to a second to do so.
-func waitOpenClipboard() error {
-	started := time.Now()
-	limit := started.Add(time.Second)
-	var r uintptr
-	var err error
-	for time.Now().Before(limit) {
-		r, _, err = procOpenClipboard.Call(0)
-		if r != 0 {
-			return nil
-		}
-		time.Sleep(time.Millisecond)
-	}
-	return err
-}
-
-func GetClipboardText() (string, error) {
-	// LockOSThread ensure that the whole method will keep executing on the same thread from begin to end (it actually locks the goroutine thread attribution).
-	// Otherwise if the goroutine switch thread during execution (which is a common practice), the OpenClipboard and CloseClipboard will happen on two different threads, and it will result in a clipboard deadlock.
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-	if formatAvailable, _, err := procIsClipboardFormatAvailable.Call(cfUnicodetext); formatAvailable == 0 {
-		return "", err
-	}
-	err := waitOpenClipboard()
-	if err != nil {
-		return "", err
-	}
-
-	h, _, err := procGetClipboardData.Call(cfUnicodetext)
-	if h == 0 {
-		_, _, _ = procCloseClipboard.Call()
-		return "", err
-	}
-
-	l, _, err := kernelGlobalLock.Call(h)
-	if l == 0 {
-		_, _, _ = procCloseClipboard.Call()
-		return "", err
-	}
-
-	text := syscall.UTF16ToString((*[1 << 20]uint16)(unsafe.Pointer(l))[:])
-
-	r, _, err := kernelGlobalUnlock.Call(h)
-	if r == 0 {
-		_, _, _ = procCloseClipboard.Call()
-		return "", err
-	}
-
-	closed, _, err := procCloseClipboard.Call()
-	if closed == 0 {
-		return "", err
-	}
-	return text, nil
-}
-
-func SetClipboardText(text string) error {
-	// LockOSThread ensure that the whole method will keep executing on the same thread from begin to end (it actually locks the goroutine thread attribution).
-	// Otherwise if the goroutine switch thread during execution (which is a common practice), the OpenClipboard and CloseClipboard will happen on two different threads, and it will result in a clipboard deadlock.
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-
-	err := waitOpenClipboard()
-	if err != nil {
-		return err
-	}
-
-	r, _, err := procEmptyClipboard.Call(0)
-	if r == 0 {
-		_, _, _ = procCloseClipboard.Call()
-		return err
-	}
-
-	data, err := syscall.UTF16FromString(text)
-	if err != nil {
-		return err
-	}
-
-	// "If the hMem parameter identifies a memory object, the object must have
-	// been allocated using the function with the GMEM_MOVEABLE flag."
-	h, _, err := kernelGlobalAlloc.Call(gmemMoveable, uintptr(len(data)*int(unsafe.Sizeof(data[0]))))
-	if h == 0 {
-		_, _, _ = procCloseClipboard.Call()
-		return err
-	}
-	defer func() {
-		if h != 0 {
-			kernelGlobalFree.Call(h)
-		}
-	}()
-
-	l, _, err := kernelGlobalLock.Call(h)
-	if l == 0 {
-		_, _, _ = procCloseClipboard.Call()
-		return err
-	}
-
-	r, _, err = kernelLstrcpy.Call(l, uintptr(unsafe.Pointer(&data[0])))
-	if r == 0 {
-		_, _, _ = procCloseClipboard.Call()
-		return err
-	}
-
-	r, _, err = kernelGlobalUnlock.Call(h)
-	if r == 0 {
-		if err.(syscall.Errno) != 0 {
-			_, _, _ = procCloseClipboard.Call()
-			return err
-		}
-	}
-
-	r, _, err = procSetClipboardData.Call(cfUnicodetext, h)
-	if r == 0 {
-		_, _, _ = procCloseClipboard.Call()
-		return err
-	}
-	h = 0 // suppress deferred cleanup
-	closed, _, err := procCloseClipboard.Call()
-	if closed == 0 {
-		return err
-	}
-	return nil
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/win32/consts.go","mode":420,"size":2276,"sha256":"317429bbd035b3e68e732aeae1e1bea8170abc725ee32e0b1a5d16c3aaaab5b0","index":0,"count":1,"encoding":"utf-8","payloadBytes":2276}
-//go:build windows
-
-package win32
-
-import (
-	"syscall"
-
-	"github.com/wailsapp/wails/v2/internal/system/operatingsystem"
-)
-
-type HRESULT int32
-type HANDLE uintptr
-type HMONITOR HANDLE
-
-var (
-	moduser32                      = syscall.NewLazyDLL("user32.dll")
-	procSystemParametersInfo       = moduser32.NewProc("SystemParametersInfoW")
-	procGetWindowLong              = moduser32.NewProc("GetWindowLongW")
-	procSetClassLong               = moduser32.NewProc("SetClassLongW")
-	procSetClassLongPtr            = moduser32.NewProc("SetClassLongPtrW")
-	procShowWindow                 = moduser32.NewProc("ShowWindow")
-	procIsWindowVisible            = moduser32.NewProc("IsWindowVisible")
-	procGetWindowRect              = moduser32.NewProc("GetWindowRect")
-	procGetMonitorInfo             = moduser32.NewProc("GetMonitorInfoW")
-	procMonitorFromWindow          = moduser32.NewProc("MonitorFromWindow")
-	procIsClipboardFormatAvailable = moduser32.NewProc("IsClipboardFormatAvailable")
-	procOpenClipboard              = moduser32.NewProc("OpenClipboard")
-	procCloseClipboard             = moduser32.NewProc("CloseClipboard")
-	procEmptyClipboard             = moduser32.NewProc("EmptyClipboard")
-	procGetClipboardData           = moduser32.NewProc("GetClipboardData")
-	procSetClipboardData           = moduser32.NewProc("SetClipboardData")
-)
-var (
-	moddwmapi                        = syscall.NewLazyDLL("dwmapi.dll")
-	procDwmSetWindowAttribute        = moddwmapi.NewProc("DwmSetWindowAttribute")
-	procDwmExtendFrameIntoClientArea = moddwmapi.NewProc("DwmExtendFrameIntoClientArea")
-)
-var (
-	modwingdi            = syscall.NewLazyDLL("gdi32.dll")
-	procCreateSolidBrush = modwingdi.NewProc("CreateSolidBrush")
-)
-var (
-	kernel32           = syscall.NewLazyDLL("kernel32")
-	kernelGlobalAlloc  = kernel32.NewProc("GlobalAlloc")
-	kernelGlobalFree   = kernel32.NewProc("GlobalFree")
-	kernelGlobalLock   = kernel32.NewProc("GlobalLock")
-	kernelGlobalUnlock = kernel32.NewProc("GlobalUnlock")
-	kernelLstrcpy      = kernel32.NewProc("lstrcpyW")
-)
-
-var windowsVersion, _ = operatingsystem.GetWindowsVersionInfo()
-
-func IsWindowsVersionAtLeast(major, minor, buildNumber int) bool {
-	return windowsVersion.Major >= major &&
-		windowsVersion.Minor >= minor &&
-		windowsVersion.Build >= buildNumber
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/win32/theme.go","mode":420,"size":3292,"sha256":"65f73f74a2bc67f7e3e955389122c6d79786c5b88e1f60332502e06fb3f7d1fd","index":0,"count":1,"encoding":"utf-8","payloadBytes":3292}
-//go:build windows
-
-package win32
-
-import (
-	"unsafe"
-
-	"golang.org/x/sys/windows/registry"
-)
-
-type DWMWINDOWATTRIBUTE int32
-
-const DwmwaUseImmersiveDarkModeBefore20h1 DWMWINDOWATTRIBUTE = 19
-const DwmwaUseImmersiveDarkMode DWMWINDOWATTRIBUTE = 20
-const DwmwaBorderColor DWMWINDOWATTRIBUTE = 34
-const DwmwaCaptionColor DWMWINDOWATTRIBUTE = 35
-const DwmwaTextColor DWMWINDOWATTRIBUTE = 36
-const DwmwaSystemBackdropType DWMWINDOWATTRIBUTE = 38
-
-const SPI_GETHIGHCONTRAST = 0x0042
-const HCF_HIGHCONTRASTON = 0x00000001
-
-// BackdropType defines the type of translucency we wish to use
-type BackdropType int32
-
-func dwmSetWindowAttribute(hwnd uintptr, dwAttribute DWMWINDOWATTRIBUTE, pvAttribute unsafe.Pointer, cbAttribute uintptr) {
-	ret, _, err := procDwmSetWindowAttribute.Call(
-		hwnd,
-		uintptr(dwAttribute),
-		uintptr(pvAttribute),
-		cbAttribute)
-	if ret != 0 {
-		_ = err
-		// println(err.Error())
-	}
-}
-
-func SupportsThemes() bool {
-	// We can't support Windows versions before 17763
-	return IsWindowsVersionAtLeast(10, 0, 17763)
-}
-
-func SupportsCustomThemes() bool {
-	return IsWindowsVersionAtLeast(10, 0, 17763)
-}
-
-func SupportsBackdropTypes() bool {
-	return IsWindowsVersionAtLeast(10, 0, 22621)
-}
-
-func SupportsImmersiveDarkMode() bool {
-	return IsWindowsVersionAtLeast(10, 0, 18985)
-}
-
-func SetTheme(hwnd uintptr, useDarkMode bool) {
-	if SupportsThemes() {
-		attr := DwmwaUseImmersiveDarkModeBefore20h1
-		if SupportsImmersiveDarkMode() {
-			attr = DwmwaUseImmersiveDarkMode
-		}
-		var winDark int32
-		if useDarkMode {
-			winDark = 1
-		}
-		dwmSetWindowAttribute(hwnd, attr, unsafe.Pointer(&winDark), unsafe.Sizeof(winDark))
-	}
-}
-
-func EnableTranslucency(hwnd uintptr, backdrop BackdropType) {
-	if SupportsBackdropTypes() {
-		dwmSetWindowAttribute(hwnd, DwmwaSystemBackdropType, unsafe.Pointer(&backdrop), unsafe.Sizeof(backdrop))
-	} else {
-		println("Warning: Translucency type unavailable on Windows < 22621")
-	}
-}
-
-func SetTitleBarColour(hwnd uintptr, titleBarColour int32) {
-	dwmSetWindowAttribute(hwnd, DwmwaCaptionColor, unsafe.Pointer(&titleBarColour), unsafe.Sizeof(titleBarColour))
-}
-
-func SetTitleTextColour(hwnd uintptr, titleTextColour int32) {
-	dwmSetWindowAttribute(hwnd, DwmwaTextColor, unsafe.Pointer(&titleTextColour), unsafe.Sizeof(titleTextColour))
-}
-
-func SetBorderColour(hwnd uintptr, titleBorderColour int32) {
-	dwmSetWindowAttribute(hwnd, DwmwaBorderColor, unsafe.Pointer(&titleBorderColour), unsafe.Sizeof(titleBorderColour))
-}
-
-func IsCurrentlyDarkMode() bool {
-	key, err := registry.OpenKey(registry.CURRENT_USER, `SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize`, registry.QUERY_VALUE)
-	if err != nil {
-		return false
-	}
-	defer key.Close()
-
-	AppsUseLightTheme, _, err := key.GetIntegerValue("AppsUseLightTheme")
-	if err != nil {
-		return false
-	}
-	return AppsUseLightTheme == 0
-}
-
-type highContrast struct {
-	CbSize            uint32
-	DwFlags           uint32
-	LpszDefaultScheme *int16
-}
-
-func IsCurrentlyHighContrastMode() bool {
-	var result highContrast
-	result.CbSize = uint32(unsafe.Sizeof(result))
-	res, _, err := procSystemParametersInfo.Call(SPI_GETHIGHCONTRAST, uintptr(result.CbSize), uintptr(unsafe.Pointer(&result)), 0)
-	if res == 0 {
-		_ = err
-		return false
-	}
-	r := result.DwFlags&HCF_HIGHCONTRASTON == HCF_HIGHCONTRASTON
-	return r
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/win32/window.go","mode":420,"size":5699,"sha256":"a82b7ea9ed2e7189bd117244d0b7081dac07109ce2788bc4c61089045e791b15","index":0,"count":1,"encoding":"utf-8","payloadBytes":5699}
-//go:build windows
-
-package win32
-
-import (
-	"fmt"
-	"log"
-	"strconv"
-	"syscall"
-	"unsafe"
-
-	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc"
-)
-
-const (
-	WS_MAXIMIZE = 0x01000000
-	WS_MINIMIZE = 0x20000000
-
-	GWL_STYLE = -16
-
-	MONITOR_DEFAULTTOPRIMARY = 0x00000001
-)
-
-const (
-	SW_HIDE            = 0
-	SW_NORMAL          = 1
-	SW_SHOWNORMAL      = 1
-	SW_SHOWMINIMIZED   = 2
-	SW_MAXIMIZE        = 3
-	SW_SHOWMAXIMIZED   = 3
-	SW_SHOWNOACTIVATE  = 4
-	SW_SHOW            = 5
-	SW_MINIMIZE        = 6
-	SW_SHOWMINNOACTIVE = 7
-	SW_SHOWNA          = 8
-	SW_RESTORE         = 9
-	SW_SHOWDEFAULT     = 10
-	SW_FORCEMINIMIZE   = 11
-)
-
-const (
-	GCLP_HBRBACKGROUND int32 = -10
-)
-
-// Power
-const (
-	// WM_POWERBROADCAST - Notifies applications that a power-management event has occurred.
-	WM_POWERBROADCAST = 536
-
-	// PBT_APMPOWERSTATUSCHANGE - Power status has changed.
-	PBT_APMPOWERSTATUSCHANGE = 10
-
-	// PBT_APMRESUMEAUTOMATIC -Operation is resuming automatically from a low-power state. This message is sent every time the system resumes.
-	PBT_APMRESUMEAUTOMATIC = 18
-
-	// PBT_APMRESUMESUSPEND - Operation is resuming from a low-power state. This message is sent after PBT_APMRESUMEAUTOMATIC if the resume is triggered by user input, such as pressing a key.
-	PBT_APMRESUMESUSPEND = 7
-
-	// PBT_APMSUSPEND - System is suspending operation.
-	PBT_APMSUSPEND = 4
-
-	// PBT_POWERSETTINGCHANGE - A power setting change event has been received.
-	PBT_POWERSETTINGCHANGE = 32787
-)
-
-// http://msdn.microsoft.com/en-us/library/windows/desktop/bb773244.aspx
-type MARGINS struct {
-	CxLeftWidth, CxRightWidth, CyTopHeight, CyBottomHeight int32
-}
-
-// http://msdn.microsoft.com/en-us/library/windows/desktop/dd162897.aspx
-type RECT struct {
-	Left, Top, Right, Bottom int32
-}
-
-// http://msdn.microsoft.com/en-us/library/windows/desktop/dd145065.aspx
-type MONITORINFO struct {
-	CbSize    uint32
-	RcMonitor RECT
-	RcWork    RECT
-	DwFlags   uint32
-}
-
-func ExtendFrameIntoClientArea(hwnd uintptr, extend bool) {
-	// -1: Adds the default frame styling (aero shadow and e.g. rounded corners on Windows 11)
-	//     Also shows the caption buttons if transparent ant translucent but they don't work.
-	//  0: Adds the default frame styling but no aero shadow, does not show the caption buttons.
-	//  1: Adds the default frame styling (aero shadow and e.g. rounded corners on Windows 11) but no caption buttons
-	//     are shown if transparent ant translucent.
-	var margins MARGINS
-	if extend {
-		margins = MARGINS{1, 1, 1, 1} // Only extend 1 pixel to have the default frame styling but no caption buttons
-	}
-	if err := dwmExtendFrameIntoClientArea(hwnd, &margins); err != nil {
-		log.Fatal(fmt.Errorf("DwmExtendFrameIntoClientArea failed: %s", err))
-	}
-}
-
-func IsVisible(hwnd uintptr) bool {
-	ret, _, _ := procIsWindowVisible.Call(hwnd)
-	return ret != 0
-}
-
-func IsWindowFullScreen(hwnd uintptr) bool {
-	wRect := GetWindowRect(hwnd)
-	m := MonitorFromWindow(hwnd, MONITOR_DEFAULTTOPRIMARY)
-	var mi MONITORINFO
-	mi.CbSize = uint32(unsafe.Sizeof(mi))
-	if !GetMonitorInfo(m, &mi) {
-		return false
-	}
-	return wRect.Left == mi.RcMonitor.Left &&
-		wRect.Top == mi.RcMonitor.Top &&
-		wRect.Right == mi.RcMonitor.Right &&
-		wRect.Bottom == mi.RcMonitor.Bottom
-}
-
-func IsWindowMaximised(hwnd uintptr) bool {
-	style := uint32(getWindowLong(hwnd, GWL_STYLE))
-	return style&WS_MAXIMIZE != 0
-}
-func IsWindowMinimised(hwnd uintptr) bool {
-	style := uint32(getWindowLong(hwnd, GWL_STYLE))
-	return style&WS_MINIMIZE != 0
-}
-
-func RestoreWindow(hwnd uintptr) {
-	showWindow(hwnd, SW_RESTORE)
-}
-
-func ShowWindow(hwnd uintptr) {
-	showWindow(hwnd, SW_SHOW)
-}
-
-func ShowWindowMaximised(hwnd uintptr) {
-	showWindow(hwnd, SW_MAXIMIZE)
-}
-func ShowWindowMinimised(hwnd uintptr) {
-	showWindow(hwnd, SW_MINIMIZE)
-}
-
-func SetBackgroundColour(hwnd uintptr, r, g, b uint8) {
-	col := winc.RGB(r, g, b)
-	hbrush, _, _ := procCreateSolidBrush.Call(uintptr(col))
-	setClassLongPtr(hwnd, GCLP_HBRBACKGROUND, hbrush)
-}
-
-func IsWindowNormal(hwnd uintptr) bool {
-	return !IsWindowMaximised(hwnd) && !IsWindowMinimised(hwnd) && !IsWindowFullScreen(hwnd)
-}
-
-func dwmExtendFrameIntoClientArea(hwnd uintptr, margins *MARGINS) error {
-	ret, _, _ := procDwmExtendFrameIntoClientArea.Call(
-		hwnd,
-		uintptr(unsafe.Pointer(margins)))
-
-	if ret != 0 {
-		return syscall.GetLastError()
-	}
-
-	return nil
-}
-
-func setClassLongPtr(hwnd uintptr, param int32, val uintptr) bool {
-	proc := procSetClassLongPtr
-	if strconv.IntSize == 32 {
-		/*
-			https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setclasslongptrw
-			Note: 	To write code that is compatible with both 32-bit and 64-bit Windows, use SetClassLongPtr.
-					When compiling for 32-bit Windows, SetClassLongPtr is defined as a call to the SetClassLong function
-
-			=> We have to do this dynamically when directly calling the DLL procedures
-		*/
-		proc = procSetClassLong
-	}
-
-	ret, _, _ := proc.Call(
-		hwnd,
-		uintptr(param),
-		val,
-	)
-	return ret != 0
-}
-
-func getWindowLong(hwnd uintptr, index int) int32 {
-	ret, _, _ := procGetWindowLong.Call(
-		hwnd,
-		uintptr(index))
-
-	return int32(ret)
-}
-
-func showWindow(hwnd uintptr, cmdshow int) bool {
-	ret, _, _ := procShowWindow.Call(
-		hwnd,
-		uintptr(cmdshow))
-	return ret != 0
-}
-
-func GetWindowRect(hwnd uintptr) *RECT {
-	var rect RECT
-	procGetWindowRect.Call(
-		hwnd,
-		uintptr(unsafe.Pointer(&rect)))
-
-	return &rect
-}
-
-func MonitorFromWindow(hwnd uintptr, dwFlags uint32) HMONITOR {
-	ret, _, _ := procMonitorFromWindow.Call(
-		hwnd,
-		uintptr(dwFlags),
-	)
-	return HMONITOR(ret)
-}
-
-func GetMonitorInfo(hMonitor HMONITOR, lmpi *MONITORINFO) bool {
-	ret, _, _ := procGetMonitorInfo.Call(
-		uintptr(hMonitor),
-		uintptr(unsafe.Pointer(lmpi)),
-	)
-	return ret != 0
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/.gitignore","mode":420,"size":192,"sha256":"b9175b0e088749089ed975252cfaa193d821dae694c8fb425ef8020b23831595","index":0,"count":1,"encoding":"utf-8","payloadBytes":192}
-# Binaries for programs and plugins
-*.exe
-*.exe~
-*.dll
-*.so
-*.dylib
-
-# Test binary, build with `go test -c`
-*.test
-
-# Output of the go coverage tool, specifically when used with LiteIDE
-*.out
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/AUTHORS","mode":420,"size":302,"sha256":"3e6babb0262dbc81071b4d7296e6038bd3a48e6990b4d54159e11eb1dbcb3220","index":0,"count":1,"encoding":"utf-8","payloadBytes":302}
-# This is the official list of 'Winc' authors for copyright purposes.
-
-# Names should be added to this file as
-#   Name or Organization <email address>
-# The email address is not required for organizations.
-
-# Please keep the list sorted.
-
-# Contributors
-# ============
-
-Tad Vizbaras <tad@etasoft.com>
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/LICENSE","mode":420,"size":1069,"sha256":"bccedbce38390429aa2fbb6cdff1e5622be8cd14c2b5b6b1f522db1813cdbb46","index":0,"count":1,"encoding":"utf-8","payloadBytes":1069}
-MIT License
-
-Copyright (c) 2019 winc Authors
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/app.go","mode":420,"size":2623,"sha256":"81c8e58da5b7c67064bc8de13af53697c801511ae15c1373a1b004de9150da3f","index":0,"count":1,"encoding":"utf-8","payloadBytes":2623}
-//go:build windows
-
-/*
- * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
- * Copyright (C) 2010-2013 Allen Dang. All Rights Reserved.
- */
-package winc
-
-import (
-	"runtime"
-	"unsafe"
-
-	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
-)
-
-var (
-	// resource compilation tool assigns app.ico ID of 3
-	// rsrc -manifest app.manifest -ico app.ico -o rsrc.syso
-	AppIconID = 3
-)
-
-func init() {
-	runtime.LockOSThread()
-
-	gAppInstance = w32.GetModuleHandle("")
-	if gAppInstance == 0 {
-		panic("Error occurred in App.Init")
-	}
-
-	// Initialize the common controls
-	var initCtrls w32.INITCOMMONCONTROLSEX
-	initCtrls.DwSize = uint32(unsafe.Sizeof(initCtrls))
-	initCtrls.DwICC =
-		w32.ICC_LISTVIEW_CLASSES | w32.ICC_PROGRESS_CLASS | w32.ICC_TAB_CLASSES |
-			w32.ICC_TREEVIEW_CLASSES | w32.ICC_BAR_CLASSES
-
-	w32.InitCommonControlsEx(&initCtrls)
-}
-
-// SetAppIcon sets resource icon ID for the apps windows.
-func SetAppIcon(appIconID int) {
-	AppIconID = appIconID
-}
-
-func GetAppInstance() w32.HINSTANCE {
-	return gAppInstance
-}
-
-func PreTranslateMessage(msg *w32.MSG) bool {
-	// This functions is called by the MessageLoop. It processes the
-	// keyboard accelerator keys and calls Controller.PreTranslateMessage for
-	// keyboard and mouse events.
-
-	processed := false
-
-	if (msg.Message >= w32.WM_KEYFIRST && msg.Message <= w32.WM_KEYLAST) ||
-		(msg.Message >= w32.WM_MOUSEFIRST && msg.Message <= w32.WM_MOUSELAST) {
-
-		if msg.Hwnd != 0 {
-			if controller := GetMsgHandler(msg.Hwnd); controller != nil {
-				// Search the chain of parents for pretranslated messages.
-				for p := controller; p != nil; p = p.Parent() {
-
-					if processed = p.PreTranslateMessage(msg); processed {
-						break
-					}
-				}
-			}
-		}
-	}
-
-	return processed
-}
-
-// RunMainLoop processes messages in main application loop.
-func RunMainLoop() int {
-	m := (*w32.MSG)(unsafe.Pointer(w32.GlobalAlloc(0, uint32(unsafe.Sizeof(w32.MSG{})))))
-	defer w32.GlobalFree(w32.HGLOBAL(unsafe.Pointer(m)))
-
-	for w32.GetMessage(m, 0, 0, 0) != 0 {
-
-		if !PreTranslateMessage(m) {
-			w32.TranslateMessage(m)
-			w32.DispatchMessage(m)
-		}
-	}
-
-	w32.GdiplusShutdown()
-	return int(m.WParam)
-}
-
-// PostMessages processes recent messages. Sometimes helpful for instant window refresh.
-func PostMessages() {
-	m := (*w32.MSG)(unsafe.Pointer(w32.GlobalAlloc(0, uint32(unsafe.Sizeof(w32.MSG{})))))
-	defer w32.GlobalFree(w32.HGLOBAL(unsafe.Pointer(m)))
-
-	for i := 0; i < 10; i++ {
-		if w32.GetMessage(m, 0, 0, 0) != 0 {
-			if !PreTranslateMessage(m) {
-				w32.TranslateMessage(m)
-				w32.DispatchMessage(m)
-			}
-		}
-	}
-}
-
-func Exit() {
-	w32.PostQuitMessage(0)
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/bitmap.go","mode":420,"size":2740,"sha256":"a6889cb9e4c1718f351a24020452615f263ee6a939535e1a5e0e30f9a9ba9e58","index":0,"count":1,"encoding":"utf-8","payloadBytes":2740}
-//go:build windows
-
-/*
- * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
- * Copyright (C) 2010-2013 Allen Dang. All Rights Reserved.
- */
-
-package winc
-
-import (
-	"errors"
-	"unsafe"
-
-	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
-)
-
-type Bitmap struct {
-	handle        w32.HBITMAP
-	width, height int
-}
-
-func assembleBitmapFromHBITMAP(hbitmap w32.HBITMAP) (*Bitmap, error) {
-	var dib w32.DIBSECTION
-	if w32.GetObject(w32.HGDIOBJ(hbitmap), unsafe.Sizeof(dib), unsafe.Pointer(&dib)) == 0 {
-		return nil, errors.New("GetObject for HBITMAP failed")
-	}
-
-	return &Bitmap{
-		handle: hbitmap,
-		width:  int(dib.DsBmih.BiWidth),
-		height: int(dib.DsBmih.BiHeight),
-	}, nil
-}
-
-func NewBitmapFromFile(filepath string, background Color) (*Bitmap, error) {
-	var gpBitmap *uintptr
-	var err error
-
-	gpBitmap, err = w32.GdipCreateBitmapFromFile(filepath)
-	if err != nil {
-		return nil, err
-	}
-	defer w32.GdipDisposeImage(gpBitmap)
-
-	var hbitmap w32.HBITMAP
-	// Reverse RGB to BGR to satisfy gdiplus color schema.
-	hbitmap, err = w32.GdipCreateHBITMAPFromBitmap(gpBitmap, uint32(RGB(background.B(), background.G(), background.R())))
-	if err != nil {
-		return nil, err
-	}
-
-	return assembleBitmapFromHBITMAP(hbitmap)
-}
-
-func NewBitmapFromResource(instance w32.HINSTANCE, resName *uint16, resType *uint16, background Color) (*Bitmap, error) {
-	var gpBitmap *uintptr
-	var err error
-	var hRes w32.HRSRC
-
-	hRes, err = w32.FindResource(w32.HMODULE(instance), resName, resType)
-	if err != nil {
-		return nil, err
-	}
-	resSize := w32.SizeofResource(w32.HMODULE(instance), hRes)
-	pResData := w32.LockResource(w32.LoadResource(w32.HMODULE(instance), hRes))
-	resBuffer := w32.GlobalAlloc(w32.GMEM_MOVEABLE, resSize)
-	pResBuffer := w32.GlobalLock(resBuffer)
-	w32.MoveMemory(pResBuffer, pResData, resSize)
-
-	stream := w32.CreateStreamOnHGlobal(resBuffer, false)
-
-	gpBitmap, err = w32.GdipCreateBitmapFromStream(stream)
-	if err != nil {
-		return nil, err
-	}
-	defer stream.Release()
-	defer w32.GlobalUnlock(resBuffer)
-	defer w32.GlobalFree(resBuffer)
-	defer w32.GdipDisposeImage(gpBitmap)
-
-	var hbitmap w32.HBITMAP
-	// Reverse gform.RGB to BGR to satisfy gdiplus color schema.
-	hbitmap, err = w32.GdipCreateHBITMAPFromBitmap(gpBitmap, uint32(RGB(background.B(), background.G(), background.R())))
-	if err != nil {
-		return nil, err
-	}
-
-	return assembleBitmapFromHBITMAP(hbitmap)
-}
-
-func (bm *Bitmap) Dispose() {
-	if bm.handle != 0 {
-		w32.DeleteObject(w32.HGDIOBJ(bm.handle))
-		bm.handle = 0
-	}
-}
-
-func (bm *Bitmap) GetHBITMAP() w32.HBITMAP {
-	return bm.handle
-}
-
-func (bm *Bitmap) Size() (int, int) {
-	return bm.width, bm.height
-}
-
-func (bm *Bitmap) Height() int {
-	return bm.height
-}
-
-func (bm *Bitmap) Width() int {
-	return bm.width
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/brush.go","mode":420,"size":1654,"sha256":"b9d9e5aa9a52293fc9ae31a05104eca0ba8770560b073bca88781ca3a67352e7","index":0,"count":1,"encoding":"utf-8","payloadBytes":1654}
-//go:build windows
-
-/*
- * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
- * Copyright (C) 2010-2013 Allen Dang. All Rights Reserved.
- */
-
-package winc
-
-import (
-	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
-)
-
-var DefaultBackgroundBrush = NewSystemColorBrush(w32.COLOR_BTNFACE)
-
-type Brush struct {
-	hBrush   w32.HBRUSH
-	logBrush w32.LOGBRUSH
-}
-
-func NewSolidColorBrush(color Color) *Brush {
-	lb := w32.LOGBRUSH{LbStyle: w32.BS_SOLID, LbColor: w32.COLORREF(color)}
-	hBrush := w32.CreateBrushIndirect(&lb)
-	if hBrush == 0 {
-		panic("Faild to create solid color brush")
-	}
-
-	return &Brush{hBrush, lb}
-}
-
-func NewSystemColorBrush(colorIndex int) *Brush {
-	//lb := w32.LOGBRUSH{LbStyle: w32.BS_SOLID, LbColor: w32.COLORREF(colorIndex)}
-	lb := w32.LOGBRUSH{LbStyle: w32.BS_NULL}
-	hBrush := w32.GetSysColorBrush(colorIndex)
-	if hBrush == 0 {
-		panic("GetSysColorBrush failed")
-	}
-	return &Brush{hBrush, lb}
-}
-
-func NewHatchedColorBrush(color Color) *Brush {
-	lb := w32.LOGBRUSH{LbStyle: w32.BS_HATCHED, LbColor: w32.COLORREF(color)}
-	hBrush := w32.CreateBrushIndirect(&lb)
-	if hBrush == 0 {
-		panic("Faild to create solid color brush")
-	}
-
-	return &Brush{hBrush, lb}
-}
-
-func NewNullBrush() *Brush {
-	lb := w32.LOGBRUSH{LbStyle: w32.BS_NULL}
-	hBrush := w32.CreateBrushIndirect(&lb)
-	if hBrush == 0 {
-		panic("Failed to create null brush")
-	}
-
-	return &Brush{hBrush, lb}
-}
-
-func (br *Brush) GetHBRUSH() w32.HBRUSH {
-	return br.hBrush
-}
-
-func (br *Brush) GetLOGBRUSH() *w32.LOGBRUSH {
-	return &br.logBrush
-}
-
-func (br *Brush) Dispose() {
-	if br.hBrush != 0 {
-		w32.DeleteObject(w32.HGDIOBJ(br.hBrush))
-		br.hBrush = 0
-	}
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/buttons.go","mode":420,"size":3391,"sha256":"4c60ff56c95a150b99da8c939e0a9bf571104bba3497aa9218ef477504403091","index":0,"count":1,"encoding":"utf-8","payloadBytes":3391}
-//go:build windows
-
-/*
- * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
- * Copyright (C) 2010-2013 Allen Dang. All Rights Reserved.
- */
-
-package winc
-
-import (
-	"fmt"
-
-	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
-)
-
-type Button struct {
-	ControlBase
-	onClick EventManager
-}
-
-func (bt *Button) OnClick() *EventManager {
-	return &bt.onClick
-}
-
-func (bt *Button) WndProc(msg uint32, wparam, lparam uintptr) uintptr {
-	switch msg {
-	case w32.WM_COMMAND:
-		bt.onClick.Fire(NewEvent(bt, nil))
-		/*case w32.WM_LBUTTONDOWN:
-			w32.SetCapture(bt.Handle())
-		case w32.WM_LBUTTONUP:
-			w32.ReleaseCapture()*/
-		/*case win.WM_GETDLGCODE:
-		println("GETDLGCODE")*/
-	}
-	return w32.DefWindowProc(bt.hwnd, msg, wparam, lparam)
-	//return bt.W32Control.WndProc(msg, wparam, lparam)
-}
-
-func (bt *Button) Checked() bool {
-	result := w32.SendMessage(bt.hwnd, w32.BM_GETCHECK, 0, 0)
-	return result == w32.BST_CHECKED
-}
-
-func (bt *Button) SetChecked(checked bool) {
-	wparam := w32.BST_CHECKED
-	if !checked {
-		wparam = w32.BST_UNCHECKED
-	}
-	w32.SendMessage(bt.hwnd, w32.BM_SETCHECK, uintptr(wparam), 0)
-}
-
-// SetIcon sets icon on the button. Recommended icons are 32x32 with 32bit color depth.
-func (bt *Button) SetIcon(ico *Icon) {
-	w32.SendMessage(bt.hwnd, w32.BM_SETIMAGE, w32.IMAGE_ICON, uintptr(ico.handle))
-}
-
-func (bt *Button) SetResIcon(iconID uint16) {
-	if ico, err := NewIconFromResource(GetAppInstance(), iconID); err == nil {
-		bt.SetIcon(ico)
-		return
-	}
-	panic(fmt.Sprintf("missing icon with icon ID: %d", iconID))
-}
-
-type PushButton struct {
-	Button
-}
-
-func NewPushButton(parent Controller) *PushButton {
-	pb := new(PushButton)
-
-	pb.InitControl("BUTTON", parent, 0, w32.BS_PUSHBUTTON|w32.WS_TABSTOP|w32.WS_VISIBLE|w32.WS_CHILD)
-	RegMsgHandler(pb)
-
-	pb.SetFont(DefaultFont)
-	pb.SetText("Button")
-	pb.SetSize(100, 22)
-
-	return pb
-}
-
-// SetDefault is used for dialogs to set default button.
-func (pb *PushButton) SetDefault() {
-	pb.SetAndClearStyleBits(w32.BS_DEFPUSHBUTTON, w32.BS_PUSHBUTTON)
-}
-
-// IconButton does not display text, requires SetResIcon call.
-type IconButton struct {
-	Button
-}
-
-func NewIconButton(parent Controller) *IconButton {
-	pb := new(IconButton)
-
-	pb.InitControl("BUTTON", parent, 0, w32.BS_ICON|w32.WS_TABSTOP|w32.WS_VISIBLE|w32.WS_CHILD)
-	RegMsgHandler(pb)
-
-	pb.SetFont(DefaultFont)
-	// even if text would be set it would not be displayed
-	pb.SetText("")
-	pb.SetSize(100, 22)
-
-	return pb
-}
-
-type CheckBox struct {
-	Button
-}
-
-func NewCheckBox(parent Controller) *CheckBox {
-	cb := new(CheckBox)
-
-	cb.InitControl("BUTTON", parent, 0, w32.WS_TABSTOP|w32.WS_VISIBLE|w32.WS_CHILD|w32.BS_AUTOCHECKBOX)
-	RegMsgHandler(cb)
-
-	cb.SetFont(DefaultFont)
-	cb.SetText("CheckBox")
-	cb.SetSize(100, 22)
-
-	return cb
-}
-
-type RadioButton struct {
-	Button
-}
-
-func NewRadioButton(parent Controller) *RadioButton {
-	rb := new(RadioButton)
-
-	rb.InitControl("BUTTON", parent, 0, w32.WS_TABSTOP|w32.WS_VISIBLE|w32.WS_CHILD|w32.BS_AUTORADIOBUTTON)
-	RegMsgHandler(rb)
-
-	rb.SetFont(DefaultFont)
-	rb.SetText("RadioButton")
-	rb.SetSize(100, 22)
-
-	return rb
-}
-
-type GroupBox struct {
-	Button
-}
-
-func NewGroupBox(parent Controller) *GroupBox {
-	gb := new(GroupBox)
-
-	gb.InitControl("BUTTON", parent, 0, w32.WS_CHILD|w32.WS_VISIBLE|w32.WS_GROUP|w32.BS_GROUPBOX)
-	RegMsgHandler(gb)
-
-	gb.SetFont(DefaultFont)
-	gb.SetText("GroupBox")
-	gb.SetSize(100, 100)
-
-	return gb
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/canvas.go","mode":420,"size":4588,"sha256":"ca52901b37db510fd9f50ffe263dc7f983dc6563936895e5392024cfaacb1e82","index":0,"count":1,"encoding":"utf-8","payloadBytes":4588}
-//go:build windows
-
-/*
- * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
- * Copyright (C) 2010-2013 Allen Dang. All Rights Reserved.
- */
-
-package winc
-
-import (
-	"fmt"
-
-	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
-)
-
-type Canvas struct {
-	hwnd         w32.HWND
-	hdc          w32.HDC
-	doNotDispose bool
-}
-
-var nullBrush = NewNullBrush()
-
-func NewCanvasFromHwnd(hwnd w32.HWND) *Canvas {
-	hdc := w32.GetDC(hwnd)
-	if hdc == 0 {
-		panic(fmt.Sprintf("Create canvas from %v failed.", hwnd))
-	}
-
-	return &Canvas{hwnd: hwnd, hdc: hdc, doNotDispose: false}
-}
-
-func NewCanvasFromHDC(hdc w32.HDC) *Canvas {
-	if hdc == 0 {
-		panic("Cannot create canvas from invalid HDC.")
-	}
-
-	return &Canvas{hdc: hdc, doNotDispose: true}
-}
-
-func (ca *Canvas) Dispose() {
-	if !ca.doNotDispose && ca.hdc != 0 {
-		if ca.hwnd == 0 {
-			w32.DeleteDC(ca.hdc)
-		} else {
-			w32.ReleaseDC(ca.hwnd, ca.hdc)
-		}
-
-		ca.hdc = 0
-	}
-}
-
-func (ca *Canvas) DrawBitmap(bmp *Bitmap, x, y int) {
-	cdc := w32.CreateCompatibleDC(0)
-	defer w32.DeleteDC(cdc)
-
-	hbmpOld := w32.SelectObject(cdc, w32.HGDIOBJ(bmp.GetHBITMAP()))
-	defer w32.SelectObject(cdc, w32.HGDIOBJ(hbmpOld))
-
-	w, h := bmp.Size()
-
-	w32.BitBlt(ca.hdc, x, y, w, h, cdc, 0, 0, w32.SRCCOPY)
-}
-
-func (ca *Canvas) DrawStretchedBitmap(bmp *Bitmap, rect *Rect) {
-	cdc := w32.CreateCompatibleDC(0)
-	defer w32.DeleteDC(cdc)
-
-	hbmpOld := w32.SelectObject(cdc, w32.HGDIOBJ(bmp.GetHBITMAP()))
-	defer w32.SelectObject(cdc, w32.HGDIOBJ(hbmpOld))
-
-	w, h := bmp.Size()
-
-	rc := rect.GetW32Rect()
-	w32.StretchBlt(ca.hdc, int(rc.Left), int(rc.Top), int(rc.Right), int(rc.Bottom), cdc, 0, 0, w, h, w32.SRCCOPY)
-}
-
-func (ca *Canvas) DrawIcon(ico *Icon, x, y int) bool {
-	return w32.DrawIcon(ca.hdc, x, y, ico.Handle())
-}
-
-// DrawFillRect draw and fill rectangle with color.
-func (ca *Canvas) DrawFillRect(rect *Rect, pen *Pen, brush *Brush) {
-	w32Rect := rect.GetW32Rect()
-
-	previousPen := w32.SelectObject(ca.hdc, w32.HGDIOBJ(pen.GetHPEN()))
-	defer w32.SelectObject(ca.hdc, previousPen)
-
-	previousBrush := w32.SelectObject(ca.hdc, w32.HGDIOBJ(brush.GetHBRUSH()))
-	defer w32.SelectObject(ca.hdc, previousBrush)
-
-	w32.Rectangle(ca.hdc, w32Rect.Left, w32Rect.Top, w32Rect.Right, w32Rect.Bottom)
-}
-
-func (ca *Canvas) DrawRect(rect *Rect, pen *Pen) {
-	w32Rect := rect.GetW32Rect()
-
-	previousPen := w32.SelectObject(ca.hdc, w32.HGDIOBJ(pen.GetHPEN()))
-	defer w32.SelectObject(ca.hdc, previousPen)
-
-	// nullBrush is used to make interior of the rect transparent
-	previousBrush := w32.SelectObject(ca.hdc, w32.HGDIOBJ(nullBrush.GetHBRUSH()))
-	defer w32.SelectObject(ca.hdc, previousBrush)
-
-	w32.Rectangle(ca.hdc, w32Rect.Left, w32Rect.Top, w32Rect.Right, w32Rect.Bottom)
-}
-
-func (ca *Canvas) FillRect(rect *Rect, brush *Brush) {
-	w32.FillRect(ca.hdc, rect.GetW32Rect(), brush.GetHBRUSH())
-}
-
-func (ca *Canvas) DrawEllipse(rect *Rect, pen *Pen) {
-	w32Rect := rect.GetW32Rect()
-
-	previousPen := w32.SelectObject(ca.hdc, w32.HGDIOBJ(pen.GetHPEN()))
-	defer w32.SelectObject(ca.hdc, previousPen)
-
-	// nullBrush is used to make interior of the rect transparent
-	previousBrush := w32.SelectObject(ca.hdc, w32.HGDIOBJ(nullBrush.GetHBRUSH()))
-	defer w32.SelectObject(ca.hdc, previousBrush)
-
-	w32.Ellipse(ca.hdc, w32Rect.Left, w32Rect.Top, w32Rect.Right, w32Rect.Bottom)
-}
-
-// DrawFillEllipse draw and fill ellipse with color.
-func (ca *Canvas) DrawFillEllipse(rect *Rect, pen *Pen, brush *Brush) {
-	w32Rect := rect.GetW32Rect()
-
-	previousPen := w32.SelectObject(ca.hdc, w32.HGDIOBJ(pen.GetHPEN()))
-	defer w32.SelectObject(ca.hdc, previousPen)
-
-	previousBrush := w32.SelectObject(ca.hdc, w32.HGDIOBJ(brush.GetHBRUSH()))
-	defer w32.SelectObject(ca.hdc, previousBrush)
-
-	w32.Ellipse(ca.hdc, w32Rect.Left, w32Rect.Top, w32Rect.Right, w32Rect.Bottom)
-}
-
-func (ca *Canvas) DrawLine(x, y, x2, y2 int, pen *Pen) {
-	w32.MoveToEx(ca.hdc, x, y, nil)
-
-	previousPen := w32.SelectObject(ca.hdc, w32.HGDIOBJ(pen.GetHPEN()))
-	defer w32.SelectObject(ca.hdc, previousPen)
-
-	w32.LineTo(ca.hdc, int32(x2), int32(y2))
-}
-
-// Refer win32 DrawText document for uFormat.
-func (ca *Canvas) DrawText(text string, rect *Rect, format uint, font *Font, textColor Color) {
-	previousFont := w32.SelectObject(ca.hdc, w32.HGDIOBJ(font.GetHFONT()))
-	defer w32.SelectObject(ca.hdc, w32.HGDIOBJ(previousFont))
-
-	previousBkMode := w32.SetBkMode(ca.hdc, w32.TRANSPARENT)
-	defer w32.SetBkMode(ca.hdc, previousBkMode)
-
-	previousTextColor := w32.SetTextColor(ca.hdc, w32.COLORREF(textColor))
-	defer w32.SetTextColor(ca.hdc, previousTextColor)
-
-	w32.DrawText(ca.hdc, text, len(text), rect.GetW32Rect(), format)
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/color.go","mode":420,"size":442,"sha256":"5564db6f51a0bdf8ec8a09a9b767f914f054bb6dcbfb9e9baaf70de2cc404203","index":0,"count":1,"encoding":"utf-8","payloadBytes":442}
-//go:build windows
-
-/*
- * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
- * Copyright (C) 2010-2013 Allen Dang. All Rights Reserved.
- */
-
-package winc
-
-type Color uint32
-
-func RGB(r, g, b byte) Color {
-	return Color(uint32(r) | uint32(g)<<8 | uint32(b)<<16)
-}
-
-func (c Color) R() byte {
-	return byte(c & 0xff)
-}
-
-func (c Color) G() byte {
-	return byte((c >> 8) & 0xff)
-}
-
-func (c Color) B() byte {
-	return byte((c >> 16) & 0xff)
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/combobox.go","mode":420,"size":1748,"sha256":"d94f2c95d24243c751edc1308de7676f9ea2a048d0dea3140fcb83199da80964","index":0,"count":1,"encoding":"utf-8","payloadBytes":1748}
-//go:build windows
-
-/*
- * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
- */
-
-package winc
-
-import (
-	"syscall"
-	"unsafe"
-
-	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
-)
-
-type ComboBox struct {
-	ControlBase
-	onSelectedChange EventManager
-}
-
-func NewComboBox(parent Controller) *ComboBox {
-	cb := new(ComboBox)
-
-	cb.InitControl("COMBOBOX", parent, 0, w32.WS_CHILD|w32.WS_VISIBLE|w32.WS_TABSTOP|w32.WS_VSCROLL|w32.CBS_DROPDOWNLIST)
-	RegMsgHandler(cb)
-
-	cb.SetFont(DefaultFont)
-	cb.SetSize(200, 400)
-	return cb
-}
-
-func (cb *ComboBox) DeleteAllItems() bool {
-	return w32.SendMessage(cb.hwnd, w32.CB_RESETCONTENT, 0, 0) == w32.TRUE
-}
-
-func (cb *ComboBox) InsertItem(index int, str string) bool {
-	lp := uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr(str)))
-	return w32.SendMessage(cb.hwnd, w32.CB_INSERTSTRING, uintptr(index), lp) != w32.CB_ERR
-}
-
-func (cb *ComboBox) DeleteItem(index int) bool {
-	return w32.SendMessage(cb.hwnd, w32.CB_DELETESTRING, uintptr(index), 0) != w32.CB_ERR
-}
-
-func (cb *ComboBox) SelectedItem() int {
-	return int(int32(w32.SendMessage(cb.hwnd, w32.CB_GETCURSEL, 0, 0)))
-}
-
-func (cb *ComboBox) SetSelectedItem(value int) bool {
-	return int(int32(w32.SendMessage(cb.hwnd, w32.CB_SETCURSEL, uintptr(value), 0))) == value
-}
-
-func (cb *ComboBox) OnSelectedChange() *EventManager {
-	return &cb.onSelectedChange
-}
-
-// Message processor
-func (cb *ComboBox) WndProc(msg uint32, wparam, lparam uintptr) uintptr {
-	switch msg {
-	case w32.WM_COMMAND:
-		code := w32.HIWORD(uint32(wparam))
-
-		switch code {
-		case w32.CBN_SELCHANGE:
-			cb.onSelectedChange.Fire(NewEvent(cb, nil))
-		}
-	}
-	return w32.DefWindowProc(cb.hwnd, msg, wparam, lparam)
-	//return cb.W32Control.WndProc(msg, wparam, lparam)
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/commondlgs.go","mode":420,"size":3654,"sha256":"18ca66e0d6482a869e23c220109ec8e87a68ba7ade41197d23bc7d1dc4cb2ff9","index":0,"count":1,"encoding":"utf-8","payloadBytes":3654}
-//go:build windows
-
-/*
- * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
- * Copyright (C) 2010-2013 Allen Dang. All Rights Reserved.
- */
-
-package winc
-
-import (
-	"fmt"
-	"syscall"
-	"unsafe"
-
-	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
-)
-
-func genOFN(parent Controller, title, filter string, filterIndex uint, initialDir string, buf []uint16) *w32.OPENFILENAME {
-	var ofn w32.OPENFILENAME
-	ofn.StructSize = uint32(unsafe.Sizeof(ofn))
-	ofn.Owner = parent.Handle()
-
-	if filter != "" {
-		filterBuf := make([]uint16, len(filter)+1)
-		copy(filterBuf, syscall.StringToUTF16(filter))
-		// Replace '|' with the expected '\0'
-		for i, c := range filterBuf {
-			if byte(c) == '|' {
-				filterBuf[i] = uint16(0)
-			}
-		}
-		ofn.Filter = &filterBuf[0]
-		ofn.FilterIndex = uint32(filterIndex)
-	}
-
-	ofn.File = &buf[0]
-	ofn.MaxFile = uint32(len(buf))
-
-	if initialDir != "" {
-		ofn.InitialDir = syscall.StringToUTF16Ptr(initialDir)
-	}
-	if title != "" {
-		ofn.Title = syscall.StringToUTF16Ptr(title)
-	}
-
-	ofn.Flags = w32.OFN_FILEMUSTEXIST
-	return &ofn
-}
-
-func ShowOpenFileDlg(parent Controller, title, filter string, filterIndex uint, initialDir string) (filePath string, accepted bool) {
-	buf := make([]uint16, 1024)
-	ofn := genOFN(parent, title, filter, filterIndex, initialDir, buf)
-
-	if accepted = w32.GetOpenFileName(ofn); accepted {
-		filePath = syscall.UTF16ToString(buf)
-	}
-	return
-}
-
-func ShowSaveFileDlg(parent Controller, title, filter string, filterIndex uint, initialDir string) (filePath string, accepted bool) {
-	buf := make([]uint16, 1024)
-	ofn := genOFN(parent, title, filter, filterIndex, initialDir, buf)
-
-	if accepted = w32.GetSaveFileName(ofn); accepted {
-		filePath = syscall.UTF16ToString(buf)
-	}
-	return
-}
-
-func ShowBrowseFolderDlg(parent Controller, title string) (folder string, accepted bool) {
-	var bi w32.BROWSEINFO
-	bi.Owner = parent.Handle()
-	bi.Title = syscall.StringToUTF16Ptr(title)
-	bi.Flags = w32.BIF_RETURNONLYFSDIRS | w32.BIF_NEWDIALOGSTYLE
-
-	w32.CoInitialize()
-	ret := w32.SHBrowseForFolder(&bi)
-	w32.CoUninitialize()
-
-	folder = w32.SHGetPathFromIDList(ret)
-	accepted = folder != ""
-	return
-}
-
-// MsgBoxOkCancel basic pop up message. Returns 1 for OK and 2 for CANCEL.
-func MsgBoxOkCancel(parent Controller, title, caption string) int {
-	return MsgBox(parent, title, caption, w32.MB_ICONEXCLAMATION|w32.MB_OKCANCEL)
-}
-
-func MsgBoxYesNo(parent Controller, title, caption string) int {
-	return MsgBox(parent, title, caption, w32.MB_ICONEXCLAMATION|w32.MB_YESNO)
-}
-
-func MsgBoxOk(parent Controller, title, caption string) {
-	MsgBox(parent, title, caption, w32.MB_ICONINFORMATION|w32.MB_OK)
-}
-
-// Warningf is generic warning message with OK and Cancel buttons. Returns 1 for OK.
-func Warningf(parent Controller, format string, data ...interface{}) int {
-	caption := fmt.Sprintf(format, data...)
-	return MsgBox(parent, "Warning", caption, w32.MB_ICONWARNING|w32.MB_OKCANCEL)
-}
-
-// Printf is generic info message with OK button.
-func Printf(parent Controller, format string, data ...interface{}) {
-	caption := fmt.Sprintf(format, data...)
-	MsgBox(parent, "Information", caption, w32.MB_ICONINFORMATION|w32.MB_OK)
-}
-
-// Errorf is generic error message with OK button.
-func Errorf(parent Controller, format string, data ...interface{}) {
-	caption := fmt.Sprintf(format, data...)
-	MsgBox(parent, "Error", caption, w32.MB_ICONERROR|w32.MB_OK)
-}
-
-func MsgBox(parent Controller, title, caption string, flags uint) int {
-	var result int
-	if parent != nil {
-		result = w32.MessageBox(parent.Handle(), caption, title, flags)
-	} else {
-		result = w32.MessageBox(0, caption, title, flags)
-	}
-
-	return result
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/controlbase.go","mode":420,"size":13389,"sha256":"84207174999250e1acfcb17ffdee48c0cc3f091a9f0ebb35de09984c270fce0f","index":0,"count":1,"encoding":"utf-8","payloadBytes":13389}
-//go:build windows
-
-/*
- * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
- * Copyright (C) 2010-2013 Allen Dang. All Rights Reserved.
- */
-
-package winc
-
-import (
-	"fmt"
-	"runtime"
-	"sync"
-	"syscall"
-	"unsafe"
-
-	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
-)
-
-type ControlBase struct {
-	hwnd        w32.HWND
-	font        *Font
-	parent      Controller
-	contextMenu *MenuItem
-
-	isForm bool
-
-	minWidth, minHeight int
-	maxWidth, maxHeight int
-
-	// General events
-	onCreate EventManager
-	onClose  EventManager
-
-	// Focus events
-	onKillFocus EventManager
-	onSetFocus  EventManager
-
-	// Drag and drop events
-	onDropFiles EventManager
-
-	// Mouse events
-	onLBDown    EventManager
-	onLBUp      EventManager
-	onLBDbl     EventManager
-	onMBDown    EventManager
-	onMBUp      EventManager
-	onRBDown    EventManager
-	onRBUp      EventManager
-	onRBDbl     EventManager
-	onMouseMove EventManager
-
-	// use MouseControl to capture onMouseHover and onMouseLeave events.
-	onMouseHover EventManager
-	onMouseLeave EventManager
-
-	// Keyboard events
-	onKeyUp EventManager
-
-	// Paint events
-	onPaint EventManager
-	onSize  EventManager
-
-	m         sync.Mutex
-	dispatchq []func()
-}
-
-// InitControl is called by controls: edit, button, treeview, listview, and so on.
-func (cba *ControlBase) InitControl(className string, parent Controller, exstyle, style uint) {
-	cba.hwnd = CreateWindow(className, parent, exstyle, style)
-	if cba.hwnd == 0 {
-		panic("cannot create window for " + className)
-	}
-	cba.parent = parent
-}
-
-// InitWindow is called by custom window based controls such as split, panel, etc.
-func (cba *ControlBase) InitWindow(className string, parent Controller, exstyle, style uint) {
-	RegClassOnlyOnce(className)
-	cba.hwnd = CreateWindow(className, parent, exstyle, style)
-	if cba.hwnd == 0 {
-		panic("cannot create window for " + className)
-	}
-	cba.parent = parent
-}
-
-// SetTheme for TreeView and ListView controls.
-func (cba *ControlBase) SetTheme(appName string) error {
-	if hr := w32.SetWindowTheme(cba.hwnd, syscall.StringToUTF16Ptr(appName), nil); w32.FAILED(hr) {
-		return fmt.Errorf("SetWindowTheme %d", hr)
-	}
-	return nil
-}
-
-func (cba *ControlBase) Handle() w32.HWND {
-	return cba.hwnd
-}
-
-func (cba *ControlBase) SetHandle(hwnd w32.HWND) {
-	cba.hwnd = hwnd
-}
-
-func (cba *ControlBase) GetWindowDPI() (w32.UINT, w32.UINT) {
-	if w32.HasGetDpiForWindowFunc() {
-		// GetDpiForWindow is supported beginning with Windows 10, 1607 and is the most accureate
-		// one, especially it is consistent with the WM_DPICHANGED event.
-		dpi := w32.GetDpiForWindow(cba.hwnd)
-		return dpi, dpi
-	}
-
-	if w32.HasGetDPIForMonitorFunc() {
-		// GetDpiForWindow is supported beginning with Windows 8.1
-		monitor := w32.MonitorFromWindow(cba.hwnd, w32.MONITOR_DEFAULTTONEAREST)
-		if monitor == 0 {
-			return 0, 0
-		}
-		var dpiX, dpiY w32.UINT
-		w32.GetDPIForMonitor(monitor, w32.MDT_EFFECTIVE_DPI, &dpiX, &dpiY)
-		return dpiX, dpiY
-	}
-
-	// If none of the above is supported fallback to the System DPI.
-	screen := w32.GetDC(0)
-	x := w32.GetDeviceCaps(screen, w32.LOGPIXELSX)
-	y := w32.GetDeviceCaps(screen, w32.LOGPIXELSY)
-	w32.ReleaseDC(0, screen)
-	return w32.UINT(x), w32.UINT(y)
-}
-
-func (cba *ControlBase) SetAndClearStyleBits(set, clear uint32) error {
-	style := uint32(w32.GetWindowLong(cba.hwnd, w32.GWL_STYLE))
-	if style == 0 {
-		return fmt.Errorf("GetWindowLong")
-	}
-
-	if newStyle := style&^clear | set; newStyle != style {
-		if w32.SetWindowLong(cba.hwnd, w32.GWL_STYLE, newStyle) == 0 {
-			return fmt.Errorf("SetWindowLong")
-		}
-	}
-	return nil
-}
-
-func (cba *ControlBase) SetIsForm(isform bool) {
-	cba.isForm = isform
-}
-
-func (cba *ControlBase) SetText(caption string) {
-	w32.SetWindowText(cba.hwnd, caption)
-}
-
-func (cba *ControlBase) Text() string {
-	return w32.GetWindowText(cba.hwnd)
-}
-
-func (cba *ControlBase) Close() {
-	UnRegMsgHandler(cba.hwnd)
-	w32.DestroyWindow(cba.hwnd)
-}
-
-func (cba *ControlBase) SetTranslucentBackground() {
-	var accent = w32.ACCENT_POLICY{
-		AccentState: w32.ACCENT_ENABLE_BLURBEHIND,
-	}
-	var data w32.WINDOWCOMPOSITIONATTRIBDATA
-	data.Attrib = w32.WCA_ACCENT_POLICY
-	data.PvData = unsafe.Pointer(&accent)
-	data.CbData = unsafe.Sizeof(accent)
-
-	w32.SetWindowCompositionAttribute(cba.hwnd, &data)
-}
-
-func (cba *ControlBase) SetContentProtection(enable bool) {
-	if enable {
-		w32.SetWindowDisplayAffinity(uintptr(cba.hwnd), w32.WDA_EXCLUDEFROMCAPTURE)
-	} else {
-		w32.SetWindowDisplayAffinity(uintptr(cba.hwnd), w32.WDA_NONE)
-	}
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-
-func (cba *ControlBase) clampSize(width, height int) (int, int) {
-	if cba.minWidth != 0 {
-		width = max(width, cba.minWidth)
-	}
-	if cba.maxWidth != 0 {
-		width = min(width, cba.maxWidth)
-	}
-	if cba.minHeight != 0 {
-		height = max(height, cba.minHeight)
-	}
-	if cba.maxHeight != 0 {
-		height = min(height, cba.maxHeight)
-	}
-	return width, height
-}
-
-func (cba *ControlBase) SetSize(width, height int) {
-	x, y := cba.Pos()
-	width, height = cba.clampSize(width, height)
-	width, height = cba.scaleWithWindowDPI(width, height)
-	w32.MoveWindow(cba.hwnd, x, y, width, height, true)
-}
-
-func (cba *ControlBase) SetMinSize(width, height int) {
-	cba.minWidth = width
-	cba.minHeight = height
-
-	// Ensure we set max if min > max
-	if cba.maxWidth > 0 {
-		cba.maxWidth = max(cba.minWidth, cba.maxWidth)
-	}
-	if cba.maxHeight > 0 {
-		cba.maxHeight = max(cba.minHeight, cba.maxHeight)
-	}
-
-	x, y := cba.Pos()
-	currentWidth, currentHeight := cba.Size()
-	clampedWidth, clampedHeight := cba.clampSize(currentWidth, currentHeight)
-	if clampedWidth != currentWidth || clampedHeight != currentHeight {
-		w32.MoveWindow(cba.hwnd, x, y, clampedWidth, clampedHeight, true)
-	}
-}
-func (cba *ControlBase) SetMaxSize(width, height int) {
-	cba.maxWidth = width
-	cba.maxHeight = height
-
-	// Ensure we set min if max > min
-	if cba.maxWidth > 0 {
-		cba.minWidth = min(cba.maxWidth, cba.minWidth)
-	}
-	if cba.maxHeight > 0 {
-		cba.minHeight = min(cba.maxHeight, cba.minHeight)
-	}
-
-	x, y := cba.Pos()
-	currentWidth, currentHeight := cba.Size()
-	clampedWidth, clampedHeight := cba.clampSize(currentWidth, currentHeight)
-	if clampedWidth != currentWidth || clampedHeight != currentHeight {
-		w32.MoveWindow(cba.hwnd, x, y, clampedWidth, clampedHeight, true)
-	}
-}
-
-func (cba *ControlBase) Size() (width, height int) {
-	rect := w32.GetWindowRect(cba.hwnd)
-	width = int(rect.Right - rect.Left)
-	height = int(rect.Bottom - rect.Top)
-	width, height = cba.scaleToDefaultDPI(width, height)
-	return
-}
-
-func (cba *ControlBase) Width() int {
-	rect := w32.GetWindowRect(cba.hwnd)
-	return int(rect.Right - rect.Left)
-}
-
-func (cba *ControlBase) Height() int {
-	rect := w32.GetWindowRect(cba.hwnd)
-	return int(rect.Bottom - rect.Top)
-}
-
-func (cba *ControlBase) SetPos(x, y int) {
-	info := getMonitorInfo(cba.hwnd)
-	workRect := info.RcWork
-
-	w32.SetWindowPos(cba.hwnd, w32.HWND_TOP, int(workRect.Left)+x, int(workRect.Top)+y, 0, 0, w32.SWP_NOSIZE)
-}
-func (cba *ControlBase) SetAlwaysOnTop(b bool) {
-	if b {
-		w32.SetWindowPos(cba.hwnd, w32.HWND_TOPMOST, 0, 0, 0, 0, w32.SWP_NOSIZE|w32.SWP_NOMOVE)
-	} else {
-		w32.SetWindowPos(cba.hwnd, w32.HWND_NOTOPMOST, 0, 0, 0, 0, w32.SWP_NOSIZE|w32.SWP_NOMOVE)
-	}
-}
-
-func (cba *ControlBase) Pos() (x, y int) {
-	rect := w32.GetWindowRect(cba.hwnd)
-	x = int(rect.Left)
-	y = int(rect.Top)
-	if !cba.isForm && cba.parent != nil {
-		x, y, _ = w32.ScreenToClient(cba.parent.Handle(), x, y)
-	}
-	return
-}
-
-func (cba *ControlBase) Visible() bool {
-	return w32.IsWindowVisible(cba.hwnd)
-}
-
-func (cba *ControlBase) ToggleVisible() bool {
-	visible := w32.IsWindowVisible(cba.hwnd)
-	if visible {
-		cba.Hide()
-	} else {
-		cba.Show()
-	}
-	return !visible
-}
-
-func (cba *ControlBase) ContextMenu() *MenuItem {
-	return cba.contextMenu
-}
-
-func (cba *ControlBase) SetContextMenu(menu *MenuItem) {
-	cba.contextMenu = menu
-}
-
-func (cba *ControlBase) Bounds() *Rect {
-	rect := w32.GetWindowRect(cba.hwnd)
-	if cba.isForm {
-		return &Rect{*rect}
-	}
-
-	return ScreenToClientRect(cba.hwnd, rect)
-}
-
-func (cba *ControlBase) ClientRect() *Rect {
-	rect := w32.GetClientRect(cba.hwnd)
-	return ScreenToClientRect(cba.hwnd, rect)
-}
-func (cba *ControlBase) ClientWidth() int {
-	rect := w32.GetClientRect(cba.hwnd)
-	return int(rect.Right - rect.Left)
-}
-
-func (cba *ControlBase) ClientHeight() int {
-	rect := w32.GetClientRect(cba.hwnd)
-	return int(rect.Bottom - rect.Top)
-}
-
-func (cba *ControlBase) Show() {
-	// WindowPos is used with HWND_TOPMOST to guarantee bring our app on top
-	// force set our main window on top
-	w32.SetWindowPos(
-		cba.hwnd,
-		w32.HWND_TOPMOST,
-		0, 0, 0, 0,
-		w32.SWP_SHOWWINDOW|w32.SWP_NOSIZE|w32.SWP_NOMOVE,
-	)
-	// remove topmost to allow normal windows manipulations
-	w32.SetWindowPos(
-		cba.hwnd,
-		w32.HWND_NOTOPMOST,
-		0, 0, 0, 0,
-		w32.SWP_SHOWWINDOW|w32.SWP_NOSIZE|w32.SWP_NOMOVE,
-	)
-	// put main window on tops foreground
-	w32.SetForegroundWindow(cba.hwnd)
-}
-
-func (cba *ControlBase) Hide() {
-	w32.ShowWindow(cba.hwnd, w32.SW_HIDE)
-}
-
-func (cba *ControlBase) Enabled() bool {
-	return w32.IsWindowEnabled(cba.hwnd)
-}
-
-func (cba *ControlBase) SetEnabled(b bool) {
-	w32.EnableWindow(cba.hwnd, b)
-}
-
-func (cba *ControlBase) SetFocus() {
-	w32.SetFocus(cba.hwnd)
-}
-
-func (cba *ControlBase) Invalidate(erase bool) {
-	// pRect := w32.GetClientRect(cba.hwnd)
-	// if cba.isForm {
-	// 	w32.InvalidateRect(cba.hwnd, pRect, erase)
-	// } else {
-	// 	rc := ScreenToClientRect(cba.hwnd, pRect)
-	// 	w32.InvalidateRect(cba.hwnd, rc.GetW32Rect(), erase)
-	// }
-	w32.InvalidateRect(cba.hwnd, nil, erase)
-}
-
-func (cba *ControlBase) Parent() Controller {
-	return cba.parent
-}
-
-func (cba *ControlBase) SetParent(parent Controller) {
-	cba.parent = parent
-}
-
-func (cba *ControlBase) Font() *Font {
-	return cba.font
-}
-
-func (cba *ControlBase) SetFont(font *Font) {
-	w32.SendMessage(cba.hwnd, w32.WM_SETFONT, uintptr(font.hfont), 1)
-	cba.font = font
-}
-
-func (cba *ControlBase) EnableDragAcceptFiles(b bool) {
-	w32.DragAcceptFiles(cba.hwnd, b)
-}
-
-func (cba *ControlBase) InvokeRequired() bool {
-	if cba.hwnd == 0 {
-		return false
-	}
-
-	windowThreadId, _ := w32.GetWindowThreadProcessId(cba.hwnd)
-	currentThreadId := w32.GetCurrentThreadId()
-
-	return windowThreadId != currentThreadId
-}
-
-// Invoke schedules f to run on the window's UI thread. It returns true when
-// PostMessage succeeded (or f was executed synchronously on the current thread),
-// and false when PostMessage failed; the caller is responsible for logging and
-// retrying when a false return matters.
-func (cba *ControlBase) Invoke(f func()) bool {
-	if cba.tryInvokeOnCurrentGoRoutine(f) {
-		return true
-	}
-
-	cba.m.Lock()
-	cba.dispatchq = append(cba.dispatchq, f)
-	cba.m.Unlock()
-	return w32.PostMessage(cba.hwnd, wmInvokeCallback, 0, 0)
-}
-
-func (cba *ControlBase) PreTranslateMessage(msg *w32.MSG) bool {
-	if msg.Message == w32.WM_GETDLGCODE {
-		println("pretranslate, WM_GETDLGCODE")
-	}
-	return false
-}
-
-// Events
-func (cba *ControlBase) OnCreate() *EventManager {
-	return &cba.onCreate
-}
-
-func (cba *ControlBase) OnClose() *EventManager {
-	return &cba.onClose
-}
-
-func (cba *ControlBase) OnKillFocus() *EventManager {
-	return &cba.onKillFocus
-}
-
-func (cba *ControlBase) OnSetFocus() *EventManager {
-	return &cba.onSetFocus
-}
-
-func (cba *ControlBase) OnDropFiles() *EventManager {
-	return &cba.onDropFiles
-}
-
-func (cba *ControlBase) OnLBDown() *EventManager {
-	return &cba.onLBDown
-}
-
-func (cba *ControlBase) OnLBUp() *EventManager {
-	return &cba.onLBUp
-}
-
-func (cba *ControlBase) OnLBDbl() *EventManager {
-	return &cba.onLBDbl
-}
-
-func (cba *ControlBase) OnMBDown() *EventManager {
-	return &cba.onMBDown
-}
-
-func (cba *ControlBase) OnMBUp() *EventManager {
-	return &cba.onMBUp
-}
-
-func (cba *ControlBase) OnRBDown() *EventManager {
-	return &cba.onRBDown
-}
-
-func (cba *ControlBase) OnRBUp() *EventManager {
-	return &cba.onRBUp
-}
-
-func (cba *ControlBase) OnRBDbl() *EventManager {
-	return &cba.onRBDbl
-}
-
-func (cba *ControlBase) OnMouseMove() *EventManager {
-	return &cba.onMouseMove
-}
-
-func (cba *ControlBase) OnMouseHover() *EventManager {
-	return &cba.onMouseHover
-}
-
-func (cba *ControlBase) OnMouseLeave() *EventManager {
-	return &cba.onMouseLeave
-}
-
-func (cba *ControlBase) OnPaint() *EventManager {
-	return &cba.onPaint
-}
-
-func (cba *ControlBase) OnSize() *EventManager {
-	return &cba.onSize
-}
-
-func (cba *ControlBase) OnKeyUp() *EventManager {
-	return &cba.onKeyUp
-}
-
-func (cba *ControlBase) scaleWithWindowDPI(width, height int) (int, int) {
-	dpix, dpiy := cba.GetWindowDPI()
-	scaledWidth := ScaleWithDPI(width, dpix)
-	scaledHeight := ScaleWithDPI(height, dpiy)
-
-	return scaledWidth, scaledHeight
-}
-
-func (cba *ControlBase) scaleToDefaultDPI(width, height int) (int, int) {
-	dpix, dpiy := cba.GetWindowDPI()
-	scaledWidth := ScaleToDefaultDPI(width, dpix)
-	scaledHeight := ScaleToDefaultDPI(height, dpiy)
-
-	return scaledWidth, scaledHeight
-}
-
-func (cba *ControlBase) tryInvokeOnCurrentGoRoutine(f func()) bool {
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-
-	if cba.InvokeRequired() {
-		return false
-	}
-	f()
-	return true
-}
-
-func (cba *ControlBase) invokeCallbacks() {
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-
-	if cba.InvokeRequired() {
-		panic("InvokeCallbacks must always be called on the window thread")
-	}
-
-	cba.m.Lock()
-	q := append([]func(){}, cba.dispatchq...)
-	cba.dispatchq = []func(){}
-	cba.m.Unlock()
-	for _, v := range q {
-		v()
-	}
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/controller.go","mode":420,"size":1636,"sha256":"0615537361b0ccaf4b1f3e3eabc435eed5794e6692f7f37fba6a0d9577d83014","index":0,"count":1,"encoding":"utf-8","payloadBytes":1636}
-//go:build windows
-
-/*
- * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
- * Copyright (C) 2010-2013 Allen Dang. All Rights Reserved.
- */
-
-package winc
-
-import (
-	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
-)
-
-type Controller interface {
-	Text() string
-
-	Enabled() bool
-	SetFocus()
-
-	Handle() w32.HWND
-	Invalidate(erase bool)
-	Parent() Controller
-
-	Pos() (x, y int)
-	Size() (w, h int)
-	Height() int
-	Width() int
-	Visible() bool
-	Bounds() *Rect
-	ClientRect() *Rect
-
-	SetText(s string)
-	SetEnabled(b bool)
-	SetPos(x, y int)
-	SetSize(w, h int)
-	EnableDragAcceptFiles(b bool)
-	Show()
-	Hide()
-
-	ContextMenu() *MenuItem
-	SetContextMenu(menu *MenuItem)
-
-	Font() *Font
-	SetFont(font *Font)
-	InvokeRequired() bool
-	Invoke(func()) bool
-	PreTranslateMessage(msg *w32.MSG) bool
-	WndProc(msg uint32, wparam, lparam uintptr) uintptr
-
-	//General events
-	OnCreate() *EventManager
-	OnClose() *EventManager
-
-	// Focus events
-	OnKillFocus() *EventManager
-	OnSetFocus() *EventManager
-
-	//Drag and drop events
-	OnDropFiles() *EventManager
-
-	//Mouse events
-	OnLBDown() *EventManager
-	OnLBUp() *EventManager
-	OnLBDbl() *EventManager
-	OnMBDown() *EventManager
-	OnMBUp() *EventManager
-	OnRBDown() *EventManager
-	OnRBUp() *EventManager
-	OnRBDbl() *EventManager
-	OnMouseMove() *EventManager
-
-	// OnMouseLeave and OnMouseHover does not fire unless control called internalTrackMouseEvent.
-	// Use MouseControl for a how to example.
-	OnMouseHover() *EventManager
-	OnMouseLeave() *EventManager
-
-	//Keyboard events
-	OnKeyUp() *EventManager
-
-	//Paint events
-	OnPaint() *EventManager
-	OnSize() *EventManager
-
-	invokeCallbacks()
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/dialog.go","mode":420,"size":3174,"sha256":"8d3355a43c779555395b1f1e58887fe49533db5e5e1774126d977aca72687145","index":0,"count":1,"encoding":"utf-8","payloadBytes":3174}
-//go:build windows
-
-/*
- * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
- * Copyright (C) 2010-2013 Allen Dang. All Rights Reserved.
- */
-
-package winc
-
-import "github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
-
-// Dialog displayed as z-order top window until closed.
-// It also disables parent window so it can not be clicked.
-type Dialog struct {
-	Form
-	isModal bool
-
-	btnOk     *PushButton
-	btnCancel *PushButton
-
-	onLoad   EventManager
-	onOk     EventManager
-	onCancel EventManager
-}
-
-func NewDialog(parent Controller) *Dialog {
-	dlg := new(Dialog)
-
-	dlg.isForm = true
-	dlg.isModal = true
-	RegClassOnlyOnce("winc_Dialog")
-
-	dlg.hwnd = CreateWindow("winc_Dialog", parent, w32.WS_EX_CONTROLPARENT, /* IMPORTANT */
-		w32.WS_SYSMENU|w32.WS_CAPTION|w32.WS_THICKFRAME /*|w32.WS_BORDER|w32.WS_POPUP*/)
-	dlg.parent = parent
-
-	// dlg might fail if icon resource is not embedded in the binary
-	if ico, err := NewIconFromResource(GetAppInstance(), uint16(AppIconID)); err == nil {
-		dlg.SetIcon(0, ico)
-	}
-
-	// Dlg forces display of focus rectangles, as soon as the user starts to type.
-	w32.SendMessage(dlg.hwnd, w32.WM_CHANGEUISTATE, w32.UIS_INITIALIZE, 0)
-	RegMsgHandler(dlg)
-
-	dlg.SetFont(DefaultFont)
-	dlg.SetText("Form")
-	dlg.SetSize(200, 100)
-	return dlg
-}
-
-func (dlg *Dialog) SetModal(modal bool) {
-	dlg.isModal = modal
-}
-
-// SetButtons wires up dialog events to buttons. btnCancel can be nil.
-func (dlg *Dialog) SetButtons(btnOk *PushButton, btnCancel *PushButton) {
-	dlg.btnOk = btnOk
-	dlg.btnOk.SetDefault()
-	dlg.btnCancel = btnCancel
-}
-
-// Events
-func (dlg *Dialog) OnLoad() *EventManager {
-	return &dlg.onLoad
-}
-
-func (dlg *Dialog) OnOk() *EventManager {
-	return &dlg.onOk
-}
-
-func (dlg *Dialog) OnCancel() *EventManager {
-	return &dlg.onCancel
-}
-
-// PreTranslateMessage handles dialog specific messages. IMPORTANT.
-func (dlg *Dialog) PreTranslateMessage(msg *w32.MSG) bool {
-	if msg.Message >= w32.WM_KEYFIRST && msg.Message <= w32.WM_KEYLAST {
-		if w32.IsDialogMessage(dlg.hwnd, msg) {
-			return true
-		}
-	}
-	return false
-}
-
-// Show dialog performs special setup for dialog windows.
-func (dlg *Dialog) Show() {
-	if dlg.isModal {
-		dlg.Parent().SetEnabled(false)
-	}
-	dlg.onLoad.Fire(NewEvent(dlg, nil))
-	dlg.Form.Show()
-}
-
-// Close dialog when you done with it.
-func (dlg *Dialog) Close() {
-	if dlg.isModal {
-		dlg.Parent().SetEnabled(true)
-	}
-	dlg.ControlBase.Close()
-}
-
-func (dlg *Dialog) cancel() {
-	if dlg.btnCancel != nil {
-		dlg.btnCancel.onClick.Fire(NewEvent(dlg.btnCancel, nil))
-	}
-	dlg.onCancel.Fire(NewEvent(dlg, nil))
-}
-
-func (dlg *Dialog) WndProc(msg uint32, wparam, lparam uintptr) uintptr {
-	switch msg {
-	case w32.WM_COMMAND:
-		switch w32.LOWORD(uint32(wparam)) {
-		case w32.IDOK:
-			if dlg.btnOk != nil {
-				dlg.btnOk.onClick.Fire(NewEvent(dlg.btnOk, nil))
-			}
-			dlg.onOk.Fire(NewEvent(dlg, nil))
-			return w32.TRUE
-
-		case w32.IDCANCEL:
-			dlg.cancel()
-			return w32.TRUE
-		}
-
-	case w32.WM_CLOSE:
-		dlg.cancel() // use onCancel or dlg.btnCancel.OnClick to close
-		return 0
-
-	case w32.WM_DESTROY:
-		if dlg.isModal {
-			dlg.Parent().SetEnabled(true)
-		}
-	}
-	return w32.DefWindowProc(dlg.hwnd, msg, wparam, lparam)
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/dock_topbottom.png","mode":420,"size":1867,"sha256":"19a7a63d6d51a7dd81524c5c5e9124179309598d5e4d7c7adee991864a7916fb","index":0,"count":1,"encoding":"base64","payloadBytes":2492}
-iVBORw0KGgoAAAANSUhEUgAAAcIAAAEGCAMAAADBv2XVAAAABGdBTUEAALGPC/xhBQAAACBjSFJNAAB6JgAAgIQAAPoAAACA6AAAdTAAAOpgAAA6mAAAF3CculE8AAAAtFBMVEXDw8MAAAD//////9uQOgBmtv///7ZmAAD/tmYAOpDb///bkDoAZrZmADqQ2//b/7YAAGa2//86kNuQOjr/25A6ADo6AAAAADo6ZraQ27ZmOpDb/9s6AGa2ZgBmkJBmtrbDw6huLABOi8PDw4tOAADDi04ALG6ow8OLTgAATouobixOACxuqMMsbqhuLCwAAE6Lw8PDqG4sAAAAACwsTotOLG6ow6gsAE5Obm4sACw6kLa2/9svUQhtAAAAAWJLR0QCZgt8ZAAAAAlwSFlzAAAOwgAADsIBFShKgAAAAAd0SU1FB+YIHw4rIHNDrpwAAAV/SURBVHja7dxpU9tGAIBhyzeYUBAO5Gw5Qg4aNyHp3f//v7q70iq24AMJGCLneWY6BkvrpH5nd2XPRL1eQaf1ehJKiIRIKGHUp4MklBAJkVBCCSVEQiSUUEIJkZAfPeFgOPqq88eT0XRr+1sOSnj7VvGvObpxwtnO6mOu9Gh3uvXTJP0/7+23E8aDEq4vYdnvT4vylgkHB1Wl+ePda/6MAwnXnbA/DTMnzsc4geaHYVbGhNOjlGNWFOGH6mias2U9d8tmSKo0f9LPCevnBwdPJ2lsfVDCNSYMu9VgGObVbG9/PCn742fPh6O64PxFavQyHg1TaXkW5iFLL5cS5ucHw/ASsyvrqoRrSphSxV0rveWD4c/1kjg/HOU04ehKwjyknTA/n1bj1eMSrjFhShfe9GrXCkvhUf3Wh4W1TKtrWlCXE+Yh7YT5+SrhZCTh/eyF7Vk4mjVXIHmOti9nzMLvJ+H8sKw3sK3tZi9MT+TL06p0v9oP82Mecv1euLVd7YWduhbt7OfCtGaOw6e69LngMPweJ1CMGT9wFMVOfV44nJbVvLzmIa2E+fnB8JdJ0cGrGV+wffNXPBJKKKGEEm4KCSVEQiSUUEIJkRAJJZRQQiREQgkl3JSEuHUQEiKhhEiIhEgoIZ1O6JsOX7AhIRJKiIRIyI+Y8Me+f1e3Erp/1wYkLN2/awMSun9X9xO6f9cmJHT/rs4ndP+uzu+F7t/V6YTu39X5z4Xu37WB3848yFc8EkoooYQSbgwJJURCJJRQQgmREAkllFBCJERCCf0rX/9QGwmRUEJvQucTAgAAAAAAAAAAAAAAAAAAAAAAANANxyenX3X+2avT89dvlp95+y79d/UAd94q3vTv9MYJL96tPuaEv76Ppd5WL/Y2/lgnrA6wzoSLXu+8WNwy4fFvVcJFexbWB1hzwt75h49pPoaH3uWnMJFiwvPP71Osogg/VEfTnF3Uc3fRDEkJL3/v5YR1vjphPMC6E4Yd6/gkvOcXHz6evVr0zv748+S0Lnj518dc5SJMp+VZmIcsbYBXEnJ/CVOquHOlJMcnf/+TCoZJGZfUy/hbOLqSMA9ZSlikaSnhgyRM6cL6We1cYYn8XKcJC+sira5pQV1OmIeYhd/HXtiehacXzVVInqPty5lrZqGED5Tw8tOi3thev2n2wvREvjytSveq/TA/5iESPvznwrRmnr0qipgjrJmf38flMcaMHziK4l19XjicltW8vOYhEgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADwQAo6TUIJkRAJJawS9ukgCSVEQiSUUEIJkRAJJZRQQiT8ZoPh6KvOH09G063t/trHSHhdq/gXHN044Wxn9THneLQbcqQX29tvnd06tTVGwtsnLPv9aVHeMuHgoEpYhpE7N0xYjZHwThL2p2HqxCkUZ9D8MMzKmHB6tJsyFEX4oTqapllZz92yGZJyzJ9ULzYLWZbO/nfl1MHB00mx998wvWQaI+HdJAzbUpo9s7398aTsj589H47qgvMXqdHLnSrO8izMQ1ZerJmJ8UAzC/Mzg2EqO0qv5XLmbhOmVHF7SkkGw58fp4JhUsYldR5/C0dXEuYhqxtrKN8caBLmZ9ICHZ+YLm+ZEt5JwvSehne42p4GaamrG4Z1MK6uqc5ywjyktbEe7TYHmoT5GQnXuBe2Z+Hoy1KX52j7cuaaWViuzGiz8N4Szg/z/rW13eyFXy4t0+ypr1lz2OqiZae/sqnlWdgcSAeXT5VwTZ8L05o5nhRFfMfDmnmUZkuMGT9wFMVOfV44nJbVvLzmIVc+ZC69VrlyqoRIiIQSIiESIqGESIiESCghEiIhEkqIhEiIhBIiIfebEPdgQ0IklJDOJvwff4AzVIYYBZ4AAAAldEVYdGRhdGU6Y3JlYXRlADIwMjItMDgtMzFUMTQ6NDE6MzgrMDA6MDBpUqI6AAAAJXRFWHRkYXRlOm1vZGlmeQAyMDIyLTA4LTMxVDE0OjQxOjM0KzAwOjAw369w8gAAAABJRU5ErkJggg==
 @@END

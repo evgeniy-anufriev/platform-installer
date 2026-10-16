@@ -1,3 +1,2369 @@
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/wailsapp/go-webview2/pkg/edge/ICoreWebView2HttpRequestHeaders.go","mode":420,"size":2401,"sha256":"5f9a6463cb10d332f0e6ae64585060a0c4e0b55f76ec5ed7ee2e59f1fc337981","index":0,"count":1,"encoding":"utf-8","payloadBytes":2401}
+//go:build windows
+
+package edge
+
+import (
+	"syscall"
+	"unsafe"
+
+	"golang.org/x/sys/windows"
+)
+
+const (
+	ERROR_ELEMENT_NOT_FOUND syscall.Errno = 0x80070490
+)
+
+type _ICoreWebView2HttpRequestHeadersVtbl struct {
+	_IUnknownVtbl
+	GetHeader    ComProc
+	GetHeaders   ComProc
+	Contains     ComProc
+	SetHeader    ComProc
+	RemoveHeader ComProc
+	GetIterator  ComProc
+}
+
+type ICoreWebView2HttpRequestHeaders struct {
+	vtbl *_ICoreWebView2HttpRequestHeadersVtbl
+}
+
+func (i *ICoreWebView2HttpRequestHeaders) AddRef() error {
+	i.vtbl.AddRef.Call(uintptr(unsafe.Pointer(i)))
+
+	return nil
+}
+
+func (i *ICoreWebView2HttpRequestHeaders) Release() error {
+	i.vtbl.Release.Call(uintptr(unsafe.Pointer(i)))
+
+	return nil
+}
+
+// GetHeader returns the value of the specified header. If the header is not found
+// ERROR_ELEMENT_NOT_FOUND is returned as error.
+func (i *ICoreWebView2HttpRequestHeaders) GetHeader(name string) (string, error) {
+	_name, err := windows.UTF16PtrFromString(name)
+	if err != nil {
+		return "", err
+	}
+
+	var _value *uint16
+	hr, _, _ := i.vtbl.GetHeader.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(_name)),
+		uintptr(unsafe.Pointer(&_value)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return "", windows.Errno(hr)
+	}
+
+	value := windows.UTF16PtrToString(_value)
+	windows.CoTaskMemFree(unsafe.Pointer(_value))
+	return value, nil
+}
+
+// SetHeader sets the specified header to the value.
+func (i *ICoreWebView2HttpRequestHeaders) SetHeader(name, value string) error {
+	_name, err := windows.UTF16PtrFromString(name)
+	if err != nil {
+		return err
+	}
+
+	_value, err := windows.UTF16PtrFromString(value)
+	if err != nil {
+		return err
+	}
+
+	hr, _, _ := i.vtbl.SetHeader.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(_name)),
+		uintptr(unsafe.Pointer(_value)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return windows.Errno(hr)
+	}
+
+	return nil
+}
+
+// GetIterator returns an iterator over the collection of request headers. Make sure to call
+// Release on the returned Object after finished using it.
+func (i *ICoreWebView2HttpRequestHeaders) GetIterator() (*ICoreWebView2HttpHeadersCollectionIterator, error) {
+	var headers *ICoreWebView2HttpHeadersCollectionIterator
+	hr, _, _ := i.vtbl.GetIterator.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(&headers)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return nil, windows.Errno(hr)
+	}
+
+	return headers, nil
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/wailsapp/go-webview2/pkg/edge/ICoreWebView2HttpResponseHeaders.go","mode":420,"size":1206,"sha256":"886ee32bb3d9934889cae2578487bb1d02a7df9994ccd5dbd6bacc43f7dc3513","index":0,"count":1,"encoding":"utf-8","payloadBytes":1206}
+//go:build windows
+
+package edge
+
+import (
+	"syscall"
+	"unsafe"
+
+	"golang.org/x/sys/windows"
+)
+
+type _ICoreWebView2HttpResponseHeadersVtbl struct {
+	_IUnknownVtbl
+	AppendHeader ComProc
+	Contains     ComProc
+	GetHeader    ComProc
+	GetHeaders   ComProc
+	GetIterator  ComProc
+}
+
+type ICoreWebView2HttpResponseHeaders struct {
+	vtbl *_ICoreWebView2HttpResponseHeadersVtbl
+}
+
+func (i *ICoreWebView2HttpResponseHeaders) AddRef() uint32 {
+	ret, _, _ := i.vtbl.AddRef.Call(uintptr(unsafe.Pointer(i)))
+
+	return uint32(ret)
+}
+
+func (i *ICoreWebView2HttpResponseHeaders) Release() uint32 {
+	ret, _, _ := i.vtbl.Release.Call(uintptr(unsafe.Pointer(i)))
+
+	return uint32(ret)
+}
+
+func (i *ICoreWebView2HttpResponseHeaders) AppendHeader(name string, value string) error {
+	// Convert string 'name' to *uint16
+	_name, err := UTF16PtrFromString(name)
+	if err != nil {
+		return err
+	}
+	// Convert string 'value' to *uint16
+	_value, err := UTF16PtrFromString(value)
+	if err != nil {
+		return err
+	}
+
+	hr, _, _ := i.vtbl.AppendHeader.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(_name)),
+		uintptr(unsafe.Pointer(_value)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return syscall.Errno(hr)
+	}
+	return nil
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/wailsapp/go-webview2/pkg/edge/ICoreWebView2NavigationCompletedEventArgs.go","mode":420,"size":640,"sha256":"c9f12660d7a26be72773c2e1aedd5e4c19ab1a7c96915bd6d6d3f2c537a4749b","index":0,"count":1,"encoding":"utf-8","payloadBytes":640}
+//go:build windows
+
+package edge
+
+import (
+	"unsafe"
+)
+
+type _ICoreWebView2NavigationCompletedEventArgsVtbl struct {
+	_IUnknownVtbl
+	GetIsSuccess      ComProc
+	GetWebErrorStatus ComProc
+	GetNavigationId   ComProc
+}
+
+type ICoreWebView2NavigationCompletedEventArgs struct {
+	vtbl *_ICoreWebView2NavigationCompletedEventArgsVtbl
+}
+
+func (i *ICoreWebView2NavigationCompletedEventArgs) AddRef() uint32 {
+	ret, _, _ := i.vtbl.AddRef.Call(uintptr(unsafe.Pointer(i)))
+
+	return uint32(ret)
+}
+
+func (i *ICoreWebView2NavigationCompletedEventArgs) Release() uint32 {
+	ret, _, _ := i.vtbl.Release.Call(uintptr(unsafe.Pointer(i)))
+
+	return uint32(ret)
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/wailsapp/go-webview2/pkg/edge/ICoreWebView2NavigationCompletedEventHandler.go","mode":420,"size":2155,"sha256":"63a421e289f909b7e03c6e7f2c3f771293c767e9c678e166bbf4a4fbfdf6f750","index":0,"count":1,"encoding":"utf-8","payloadBytes":2155}
+//go:build windows
+
+package edge
+
+import (
+	"unsafe"
+)
+
+type _ICoreWebView2NavigationCompletedEventHandlerVtbl struct {
+	_IUnknownVtbl
+	Invoke ComProc
+}
+
+type ICoreWebView2NavigationCompletedEventHandler struct {
+	vtbl *_ICoreWebView2NavigationCompletedEventHandlerVtbl
+	impl _ICoreWebView2NavigationCompletedEventHandlerImpl
+}
+
+func (i *ICoreWebView2NavigationCompletedEventHandler) AddRef() uintptr {
+	ret, _, _ := i.vtbl.AddRef.Call(uintptr(unsafe.Pointer(i)))
+
+	return ret
+}
+func _ICoreWebView2NavigationCompletedEventHandlerIUnknownQueryInterface(this *ICoreWebView2NavigationCompletedEventHandler, refiid, object uintptr) uintptr {
+	return this.impl.QueryInterface(refiid, object)
+}
+
+func _ICoreWebView2NavigationCompletedEventHandlerIUnknownAddRef(this *ICoreWebView2NavigationCompletedEventHandler) uintptr {
+	return this.impl.AddRef()
+}
+
+func _ICoreWebView2NavigationCompletedEventHandlerIUnknownRelease(this *ICoreWebView2NavigationCompletedEventHandler) uintptr {
+	return this.impl.Release()
+}
+
+func _ICoreWebView2NavigationCompletedEventHandlerInvoke(this *ICoreWebView2NavigationCompletedEventHandler, sender *ICoreWebView2, args *ICoreWebView2NavigationCompletedEventArgs) uintptr {
+	return this.impl.NavigationCompleted(sender, args)
+}
+
+type _ICoreWebView2NavigationCompletedEventHandlerImpl interface {
+	_IUnknownImpl
+	NavigationCompleted(sender *ICoreWebView2, args *ICoreWebView2NavigationCompletedEventArgs) uintptr
+}
+
+var _ICoreWebView2NavigationCompletedEventHandlerFn = _ICoreWebView2NavigationCompletedEventHandlerVtbl{
+	_IUnknownVtbl{
+		NewComProc(_ICoreWebView2NavigationCompletedEventHandlerIUnknownQueryInterface),
+		NewComProc(_ICoreWebView2NavigationCompletedEventHandlerIUnknownAddRef),
+		NewComProc(_ICoreWebView2NavigationCompletedEventHandlerIUnknownRelease),
+	},
+	NewComProc(_ICoreWebView2NavigationCompletedEventHandlerInvoke),
+}
+
+func newICoreWebView2NavigationCompletedEventHandler(impl _ICoreWebView2NavigationCompletedEventHandlerImpl) *ICoreWebView2NavigationCompletedEventHandler {
+	return &ICoreWebView2NavigationCompletedEventHandler{
+		vtbl: &_ICoreWebView2NavigationCompletedEventHandlerFn,
+		impl: impl,
+	}
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/wailsapp/go-webview2/pkg/edge/ICoreWebView2ObjectCollectionView.go","mode":420,"size":1200,"sha256":"0184945923438d7aa52fac3b3b30f705991c572b740cca9a50e5c5b252757780","index":0,"count":1,"encoding":"utf-8","payloadBytes":1200}
+//go:build windows
+
+package edge
+
+import (
+	"unsafe"
+
+	"golang.org/x/sys/windows"
+)
+
+type _ICoreWebView2ObjectCollectionViewVtbl struct {
+	_IUnknownVtbl
+	GetCount        ComProc
+	GetValueAtIndex ComProc
+}
+
+type ICoreWebView2ObjectCollectionView struct {
+	vtbl *_ICoreWebView2ObjectCollectionViewVtbl
+}
+
+func (i *ICoreWebView2ObjectCollectionView) AddRef() error {
+	i.vtbl.AddRef.Call(uintptr(unsafe.Pointer(i)))
+
+	return nil
+}
+
+func (i *ICoreWebView2ObjectCollectionView) Release() error {
+	i.vtbl.Release.Call(uintptr(unsafe.Pointer(i)))
+
+	return nil
+}
+
+func (i *ICoreWebView2ObjectCollectionView) GetCount() (uint32, error) {
+	
+	var value uint32
+	hr, _, _ := i.vtbl.GetCount.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(&value)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return 0, windows.Errno(hr)
+	}
+	return value, nil
+}
+
+func (i *ICoreWebView2ObjectCollectionView) GetValueAtIndex(index uint32) (*_IUnknownVtbl, error) {
+	
+	var value *_IUnknownVtbl
+	hr, _, _ := i.vtbl.GetValueAtIndex.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(index),
+		uintptr(unsafe.Pointer(&value)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return nil, windows.Errno(hr)
+	}
+	return value, nil
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/wailsapp/go-webview2/pkg/edge/ICoreWebView2ProcessFailedEventArgs.go","mode":420,"size":753,"sha256":"1bdf7d2949b3d5b4f42a1ec0ceab7c587fcc51f13fff352cd1ecc0b86edeb263","index":0,"count":1,"encoding":"utf-8","payloadBytes":753}
+//go:build windows
+
+package edge
+
+import (
+	"fmt"
+	"syscall"
+	"unsafe"
+
+	"golang.org/x/sys/windows"
+)
+
+type _ICoreWebView2ProcessFailedEventArgsVtbl struct {
+	_IUnknownVtbl
+	GetProcessFailedKind ComProc
+}
+
+type ICoreWebView2ProcessFailedEventArgs struct {
+	vtbl *_ICoreWebView2ProcessFailedEventArgsVtbl
+}
+
+func (i *ICoreWebView2ProcessFailedEventArgs) GetProcessFailedKind() (COREWEBVIEW2_PROCESS_FAILED_KIND, error) {
+	kind := COREWEBVIEW2_PROCESS_FAILED_KIND(0xffffffff)
+	hr, _, _ := i.vtbl.GetProcessFailedKind.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(&kind)),
+	)
+
+	if windows.Handle(hr) != windows.S_OK {
+		return 0, syscall.Errno(hr)
+	}
+
+	if kind == 0xffffffff {
+		return 0, fmt.Errorf("unknown error")
+	}
+
+	return kind, nil
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/wailsapp/go-webview2/pkg/edge/ICoreWebView2ProcessFailedEventHandler.go","mode":420,"size":1981,"sha256":"c1857faf38e6286da3a64d25a750dace66bdc46a2591e7d0be36cb3d0af6addb","index":0,"count":1,"encoding":"utf-8","payloadBytes":1981}
+//go:build windows
+
+package edge
+
+import (
+	"unsafe"
+)
+
+type _ICoreWebView2ProcessFailedEventHandlerVtbl struct {
+	_IUnknownVtbl
+	Invoke ComProc
+}
+
+type ICoreWebView2ProcessFailedEventHandler struct {
+	vtbl *_ICoreWebView2ProcessFailedEventHandlerVtbl
+	impl _ICoreWebView2ProcessFailedEventHandlerImpl
+}
+
+func (i *ICoreWebView2ProcessFailedEventHandler) AddRef() uintptr {
+	ret, _, _ := i.vtbl.AddRef.Call(uintptr(unsafe.Pointer(i)))
+
+	return ret
+}
+func _ICoreWebView2ProcessFailedEventHandlerIUnknownQueryInterface(this *ICoreWebView2ProcessFailedEventHandler, refiid, object uintptr) uintptr {
+	return this.impl.QueryInterface(refiid, object)
+}
+
+func _ICoreWebView2ProcessFailedEventHandlerIUnknownAddRef(this *ICoreWebView2ProcessFailedEventHandler) uintptr {
+	return this.impl.AddRef()
+}
+
+func _ICoreWebView2ProcessFailedEventHandlerIUnknownRelease(this *ICoreWebView2ProcessFailedEventHandler) uintptr {
+	return this.impl.Release()
+}
+
+func _ICoreWebView2ProcessFailedEventHandlerInvoke(this *ICoreWebView2ProcessFailedEventHandler, sender *ICoreWebView2, args *ICoreWebView2ProcessFailedEventArgs) uintptr {
+	return this.impl.ProcessFailed(sender, args)
+}
+
+type _ICoreWebView2ProcessFailedEventHandlerImpl interface {
+	_IUnknownImpl
+	ProcessFailed(sender *ICoreWebView2, args *ICoreWebView2ProcessFailedEventArgs) uintptr
+}
+
+var _ICoreWebView2ProcessFailedEventHandlerFn = _ICoreWebView2ProcessFailedEventHandlerVtbl{
+	_IUnknownVtbl{
+		NewComProc(_ICoreWebView2ProcessFailedEventHandlerIUnknownQueryInterface),
+		NewComProc(_ICoreWebView2ProcessFailedEventHandlerIUnknownAddRef),
+		NewComProc(_ICoreWebView2ProcessFailedEventHandlerIUnknownRelease),
+	},
+	NewComProc(_ICoreWebView2ProcessFailedEventHandlerInvoke),
+}
+
+func newICoreWebView2ProcessFailedEventHandler(impl _ICoreWebView2ProcessFailedEventHandlerImpl) *ICoreWebView2ProcessFailedEventHandler {
+	return &ICoreWebView2ProcessFailedEventHandler{
+		vtbl: &_ICoreWebView2ProcessFailedEventHandlerFn,
+		impl: impl,
+	}
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/wailsapp/go-webview2/pkg/edge/ICoreWebView2RasterizationScaleChangedEventHandler.go","mode":420,"size":2266,"sha256":"6b8eb121947cf0dc03659d465358404d40f56492a97629355c5a7a35f455f5a3","index":0,"count":1,"encoding":"utf-8","payloadBytes":2266}
+//go:build windows
+
+package edge
+
+import (
+	"unsafe"
+)
+
+type ICoreWebView2RasterizationScaleChangedEventHandlerVtbl struct {
+	IUnknownVtbl
+	Invoke ComProc
+}
+
+type ICoreWebView2RasterizationScaleChangedEventHandler struct {
+	Vtbl *ICoreWebView2RasterizationScaleChangedEventHandlerVtbl
+	impl ICoreWebView2RasterizationScaleChangedEventHandlerImpl
+}
+
+func (i *ICoreWebView2RasterizationScaleChangedEventHandler) AddRef() uintptr {
+	refCounter, _, _ := i.Vtbl.AddRef.Call(uintptr(unsafe.Pointer(i)))
+	return refCounter
+}
+
+func ICoreWebView2RasterizationScaleChangedEventHandlerIUnknownQueryInterface(this *ICoreWebView2RasterizationScaleChangedEventHandler, refiid, object uintptr) uintptr {
+	return this.impl.QueryInterface(refiid, object)
+}
+
+func ICoreWebView2RasterizationScaleChangedEventHandlerIUnknownAddRef(this *ICoreWebView2RasterizationScaleChangedEventHandler) uintptr {
+	return this.impl.AddRef()
+}
+
+func ICoreWebView2RasterizationScaleChangedEventHandlerIUnknownRelease(this *ICoreWebView2RasterizationScaleChangedEventHandler) uintptr {
+	return this.impl.Release()
+}
+
+func ICoreWebView2RasterizationScaleChangedEventHandlerInvoke(this *ICoreWebView2RasterizationScaleChangedEventHandler, sender *ICoreWebView2Controller, args *IUnknown) uintptr {
+	return this.impl.RasterizationScaleChanged(sender, args)
+}
+
+type ICoreWebView2RasterizationScaleChangedEventHandlerImpl interface {
+	IUnknownImpl
+	RasterizationScaleChanged(sender *ICoreWebView2Controller, args *IUnknown) uintptr
+}
+
+var ICoreWebView2RasterizationScaleChangedEventHandlerFn = ICoreWebView2RasterizationScaleChangedEventHandlerVtbl{
+	IUnknownVtbl{
+		NewComProc(ICoreWebView2RasterizationScaleChangedEventHandlerIUnknownQueryInterface),
+		NewComProc(ICoreWebView2RasterizationScaleChangedEventHandlerIUnknownAddRef),
+		NewComProc(ICoreWebView2RasterizationScaleChangedEventHandlerIUnknownRelease),
+	},
+	NewComProc(ICoreWebView2RasterizationScaleChangedEventHandlerInvoke),
+}
+
+func NewICoreWebView2RasterizationScaleChangedEventHandler(impl ICoreWebView2RasterizationScaleChangedEventHandlerImpl) *ICoreWebView2RasterizationScaleChangedEventHandler {
+	return &ICoreWebView2RasterizationScaleChangedEventHandler{
+		Vtbl: &ICoreWebView2RasterizationScaleChangedEventHandlerFn,
+		impl: impl,
+	}
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/wailsapp/go-webview2/pkg/edge/ICoreWebView2Settings.go","mode":420,"size":6874,"sha256":"1fa023a287f98fc55daef45268f46755f36882ccf4a5e856ca6ea114c1f704b5","index":0,"count":1,"encoding":"utf-8","payloadBytes":6874}
+//go:build windows
+
+package edge
+
+import (
+	"unsafe"
+
+	"golang.org/x/sys/windows"
+)
+
+type _ICoreWebView2SettingsVtbl struct {
+	_IUnknownVtbl
+	GetIsScriptEnabled                ComProc
+	PutIsScriptEnabled                ComProc
+	GetIsWebMessageEnabled            ComProc
+	PutIsWebMessageEnabled            ComProc
+	GetAreDefaultScriptDialogsEnabled ComProc
+	PutAreDefaultScriptDialogsEnabled ComProc
+	GetIsStatusBarEnabled             ComProc
+	PutIsStatusBarEnabled             ComProc
+	GetAreDevToolsEnabled             ComProc
+	PutAreDevToolsEnabled             ComProc
+	GetAreDefaultContextMenusEnabled  ComProc
+	PutAreDefaultContextMenusEnabled  ComProc
+	GetAreHostObjectsAllowed          ComProc
+	PutAreHostObjectsAllowed          ComProc
+	GetIsZoomControlEnabled           ComProc
+	PutIsZoomControlEnabled           ComProc
+	GetIsBuiltInErrorPageEnabled      ComProc
+	PutIsBuiltInErrorPageEnabled      ComProc
+}
+
+type ICoreWebView2Settings struct {
+	vtbl *_ICoreWebView2SettingsVtbl
+}
+
+func (i *ICoreWebView2Settings) AddRef() uintptr {
+	ret, _, _ := i.vtbl.AddRef.Call(uintptr(unsafe.Pointer(i)))
+
+	return ret
+}
+
+func (i *ICoreWebView2Settings) GetIsScriptEnabled() (bool, error) {
+	
+	var isScriptEnabled bool
+	hr, _, _ := i.vtbl.GetIsScriptEnabled.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(&isScriptEnabled)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return false, windows.Errno(hr)
+	}
+	return isScriptEnabled, nil
+}
+
+func (i *ICoreWebView2Settings) PutIsScriptEnabled(isScriptEnabled bool) error {
+	
+
+	hr, _, _ := i.vtbl.PutIsScriptEnabled.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(boolToInt(isScriptEnabled)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return windows.Errno(hr)
+	}
+	return nil
+}
+
+func (i *ICoreWebView2Settings) GetIsWebMessageEnabled() (bool, error) {
+	
+	var isWebMessageEnabled bool
+	hr, _, _ := i.vtbl.GetIsWebMessageEnabled.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(&isWebMessageEnabled)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return false, windows.Errno(hr)
+	}
+	return isWebMessageEnabled, nil
+}
+
+func (i *ICoreWebView2Settings) PutIsWebMessageEnabled(isWebMessageEnabled bool) error {
+	
+
+	hr, _, _ := i.vtbl.PutIsWebMessageEnabled.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(boolToInt(isWebMessageEnabled)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return windows.Errno(hr)
+	}
+	return nil
+}
+
+func (i *ICoreWebView2Settings) GetAreDefaultScriptDialogsEnabled() (bool, error) {
+	
+	var areDefaultScriptDialogsEnabled bool
+	hr, _, _ := i.vtbl.GetAreDefaultScriptDialogsEnabled.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(&areDefaultScriptDialogsEnabled)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return false, windows.Errno(hr)
+	}
+	return areDefaultScriptDialogsEnabled, nil
+}
+
+func (i *ICoreWebView2Settings) PutAreDefaultScriptDialogsEnabled(areDefaultScriptDialogsEnabled bool) error {
+	
+
+	hr, _, _ := i.vtbl.PutAreDefaultScriptDialogsEnabled.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(boolToInt(areDefaultScriptDialogsEnabled)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return windows.Errno(hr)
+	}
+	return nil
+}
+
+func (i *ICoreWebView2Settings) GetIsStatusBarEnabled() (bool, error) {
+	
+	var isStatusBarEnabled bool
+	hr, _, _ := i.vtbl.GetIsStatusBarEnabled.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(&isStatusBarEnabled)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return false, windows.Errno(hr)
+	}
+	return isStatusBarEnabled, nil
+}
+
+func (i *ICoreWebView2Settings) PutIsStatusBarEnabled(isStatusBarEnabled bool) error {
+	
+
+	hr, _, _ := i.vtbl.PutIsStatusBarEnabled.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(boolToInt(isStatusBarEnabled)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return windows.Errno(hr)
+	}
+	return nil
+}
+
+func (i *ICoreWebView2Settings) GetAreDevToolsEnabled() (bool, error) {
+	
+	var areDevToolsEnabled bool
+	hr, _, _ := i.vtbl.GetAreDevToolsEnabled.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(&areDevToolsEnabled)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return false, windows.Errno(hr)
+	}
+	return areDevToolsEnabled, nil
+}
+
+func (i *ICoreWebView2Settings) PutAreDevToolsEnabled(areDevToolsEnabled bool) error {
+	
+	hr, _, _ := i.vtbl.PutAreDevToolsEnabled.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(boolToInt(areDevToolsEnabled)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return windows.Errno(hr)
+	}
+	return nil
+}
+
+func (i *ICoreWebView2Settings) GetAreDefaultContextMenusEnabled() (bool, error) {
+	
+	var enabled bool
+	hr, _, _ := i.vtbl.GetAreDefaultContextMenusEnabled.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(&enabled)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return false, windows.Errno(hr)
+	}
+	return enabled, nil
+}
+
+func (i *ICoreWebView2Settings) PutAreDefaultContextMenusEnabled(enabled bool) error {
+	
+	hr, _, _ := i.vtbl.PutAreDefaultContextMenusEnabled.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(boolToInt(enabled)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return windows.Errno(hr)
+	}
+	return nil
+}
+
+func (i *ICoreWebView2Settings) GetAreHostObjectsAllowed() (bool, error) {
+	
+	var allowed bool
+	hr, _, _ := i.vtbl.GetAreHostObjectsAllowed.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(&allowed)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return false, windows.Errno(hr)
+	}
+	return allowed, nil
+}
+
+func (i *ICoreWebView2Settings) PutAreHostObjectsAllowed(allowed bool) error {
+	
+
+	hr, _, _ := i.vtbl.PutAreHostObjectsAllowed.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(boolToInt(allowed)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return windows.Errno(hr)
+	}
+	return nil
+}
+
+func (i *ICoreWebView2Settings) GetIsZoomControlEnabled() (bool, error) {
+	
+	var enabled bool
+	hr, _, _ := i.vtbl.GetIsZoomControlEnabled.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(&enabled)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return false, windows.Errno(hr)
+	}
+	return enabled, nil
+}
+
+func (i *ICoreWebView2Settings) PutIsZoomControlEnabled(enabled bool) error {
+	
+
+	hr, _, _ := i.vtbl.PutIsZoomControlEnabled.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(boolToInt(enabled)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return windows.Errno(hr)
+	}
+	return nil
+}
+
+func (i *ICoreWebView2Settings) GetIsBuiltInErrorPageEnabled() (bool, error) {
+	
+	var enabled bool
+	hr, _, _ := i.vtbl.GetIsBuiltInErrorPageEnabled.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(&enabled)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return false, windows.Errno(hr)
+	}
+	return enabled, nil
+}
+
+func (i *ICoreWebView2Settings) PutIsBuiltInErrorPageEnabled(enabled bool) error {
+	
+
+	hr, _, _ := i.vtbl.PutIsBuiltInErrorPageEnabled.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(boolToInt(enabled)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return windows.Errno(hr)
+	}
+	return nil
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/wailsapp/go-webview2/pkg/edge/ICoreWebView2Settings2.go","mode":420,"size":2455,"sha256":"268bf23f92aaaee5bf60cd0c04d0095db59b215e8416dc5c135ec2970881d717","index":0,"count":1,"encoding":"utf-8","payloadBytes":2455}
+//go:build windows
+
+package edge
+
+import (
+	"golang.org/x/sys/windows"
+	"syscall"
+	"unsafe"
+)
+
+type ICoreWebView2Settings2Vtbl struct {
+	_IUnknownVtbl
+	GetIsScriptEnabled                ComProc
+	PutIsScriptEnabled                ComProc
+	GetIsWebMessageEnabled            ComProc
+	PutIsWebMessageEnabled            ComProc
+	GetAreDefaultScriptDialogsEnabled ComProc
+	PutAreDefaultScriptDialogsEnabled ComProc
+	GetIsStatusBarEnabled             ComProc
+	PutIsStatusBarEnabled             ComProc
+	GetAreDevToolsEnabled             ComProc
+	PutAreDevToolsEnabled             ComProc
+	GetAreDefaultContextMenusEnabled  ComProc
+	PutAreDefaultContextMenusEnabled  ComProc
+	GetAreHostObjectsAllowed          ComProc
+	PutAreHostObjectsAllowed          ComProc
+	GetIsZoomControlEnabled           ComProc
+	PutIsZoomControlEnabled           ComProc
+	GetIsBuiltInErrorPageEnabled      ComProc
+	PutIsBuiltInErrorPageEnabled      ComProc
+	GetUserAgent                      ComProc
+	PutUserAgent                      ComProc
+}
+
+type ICoreWebView2Settings2 struct {
+	Vtbl *ICoreWebView2Settings2Vtbl
+}
+
+func (i *ICoreWebView2Settings2) AddRef() uintptr {
+	refCounter, _, _ := i.Vtbl.AddRef.Call(uintptr(unsafe.Pointer(i)))
+	return refCounter
+}
+
+func (i *ICoreWebViewSettings) GetICoreWebView2Settings2() *ICoreWebView2Settings2 {
+	var result *ICoreWebView2Settings2
+
+	iidICoreWebView2Settings2 := NewGUID("{ee9a0f68-f46c-4e32-ac23-ef8cac224d2a}")
+	_, _, _ = i.vtbl.QueryInterface.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(iidICoreWebView2Settings2)),
+		uintptr(unsafe.Pointer(&result)))
+
+	return result
+}
+
+func (i *ICoreWebView2Settings2) GetUserAgent() (string, error) {
+	// Create *uint16 to hold result
+	var _userAgent *uint16
+
+	hr, _, _ := i.Vtbl.GetUserAgent.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(_userAgent)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return "", syscall.Errno(hr)
+	}
+	// Get result and cleanup
+	userAgent := UTF16PtrToString(_userAgent)
+	CoTaskMemFree(unsafe.Pointer(_userAgent))
+	return userAgent, nil
+}
+
+func (i *ICoreWebView2Settings2) PutUserAgent(userAgent string) error {
+
+	// Convert string 'userAgent' to *uint16
+	_userAgent, err := UTF16PtrFromString(userAgent)
+	if err != nil {
+		return err
+	}
+
+	hr, _, _ := i.Vtbl.PutUserAgent.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(_userAgent)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return syscall.Errno(hr)
+	}
+	return nil
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/wailsapp/go-webview2/pkg/edge/ICoreWebView2Settings3.go","mode":420,"size":2657,"sha256":"69a59e70423447a6cd8c2e5ea849cf736f68380c66b866ea8639c4bd3922ab2a","index":0,"count":1,"encoding":"utf-8","payloadBytes":2657}
+//go:build windows
+
+package edge
+
+import (
+	"golang.org/x/sys/windows"
+	"syscall"
+	"unsafe"
+)
+
+type ICoreWebView2Settings3Vtbl struct {
+	_IUnknownVtbl
+	GetIsScriptEnabled                  ComProc
+	PutIsScriptEnabled                  ComProc
+	GetIsWebMessageEnabled              ComProc
+	PutIsWebMessageEnabled              ComProc
+	GetAreDefaultScriptDialogsEnabled   ComProc
+	PutAreDefaultScriptDialogsEnabled   ComProc
+	GetIsStatusBarEnabled               ComProc
+	PutIsStatusBarEnabled               ComProc
+	GetAreDevToolsEnabled               ComProc
+	PutAreDevToolsEnabled               ComProc
+	GetAreDefaultContextMenusEnabled    ComProc
+	PutAreDefaultContextMenusEnabled    ComProc
+	GetAreHostObjectsAllowed            ComProc
+	PutAreHostObjectsAllowed            ComProc
+	GetIsZoomControlEnabled             ComProc
+	PutIsZoomControlEnabled             ComProc
+	GetIsBuiltInErrorPageEnabled        ComProc
+	PutIsBuiltInErrorPageEnabled        ComProc
+	GetUserAgent                        ComProc
+	PutUserAgent                        ComProc
+	GetAreBrowserAcceleratorKeysEnabled ComProc
+	PutAreBrowserAcceleratorKeysEnabled ComProc
+}
+
+type ICoreWebView2Settings3 struct {
+	Vtbl *ICoreWebView2Settings3Vtbl
+}
+
+func (i *ICoreWebView2Settings3) AddRef() uintptr {
+	refCounter, _, _ := i.Vtbl.AddRef.Call(uintptr(unsafe.Pointer(i)))
+	return refCounter
+}
+
+func (i *ICoreWebViewSettings) GetICoreWebView2Settings3() *ICoreWebView2Settings3 {
+	var result *ICoreWebView2Settings3
+
+	iidICoreWebView2Settings3 := NewGUID("{fdb5ab74-af33-4854-84f0-0a631deb5eba}")
+	_, _, _ = i.vtbl.QueryInterface.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(iidICoreWebView2Settings3)),
+		uintptr(unsafe.Pointer(&result)))
+
+	return result
+}
+
+func (i *ICoreWebView2Settings3) GetAreBrowserAcceleratorKeysEnabled() (bool, error) {
+	// Create int32 to hold bool result
+	var _areBrowserAcceleratorKeysEnabled int32
+
+	hr, _, _ := i.Vtbl.GetAreBrowserAcceleratorKeysEnabled.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(&_areBrowserAcceleratorKeysEnabled)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return false, syscall.Errno(hr)
+	}
+	// Get result and cleanup
+	areBrowserAcceleratorKeysEnabled := _areBrowserAcceleratorKeysEnabled != 0
+	return areBrowserAcceleratorKeysEnabled, nil
+}
+
+func (i *ICoreWebView2Settings3) PutAreBrowserAcceleratorKeysEnabled(areBrowserAcceleratorKeysEnabled bool) error {
+
+	hr, _, _ := i.Vtbl.PutAreBrowserAcceleratorKeysEnabled.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(&areBrowserAcceleratorKeysEnabled)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return syscall.Errno(hr)
+	}
+	return nil
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/wailsapp/go-webview2/pkg/edge/ICoreWebView2Settings4.go","mode":420,"size":3418,"sha256":"70d905fc92bf4e3508948ced6e39958694fee2047a3490ff061ae59e3870a8af","index":0,"count":1,"encoding":"utf-8","payloadBytes":3418}
+//go:build windows
+
+package edge
+
+import (
+	"golang.org/x/sys/windows"
+	"syscall"
+	"unsafe"
+)
+
+type ICoreWebView2Settings4Vtbl struct {
+	_IUnknownVtbl
+	GetIsScriptEnabled                  ComProc
+	PutIsScriptEnabled                  ComProc
+	GetIsWebMessageEnabled              ComProc
+	PutIsWebMessageEnabled              ComProc
+	GetAreDefaultScriptDialogsEnabled   ComProc
+	PutAreDefaultScriptDialogsEnabled   ComProc
+	GetIsStatusBarEnabled               ComProc
+	PutIsStatusBarEnabled               ComProc
+	GetAreDevToolsEnabled               ComProc
+	PutAreDevToolsEnabled               ComProc
+	GetAreDefaultContextMenusEnabled    ComProc
+	PutAreDefaultContextMenusEnabled    ComProc
+	GetAreHostObjectsAllowed            ComProc
+	PutAreHostObjectsAllowed            ComProc
+	GetIsZoomControlEnabled             ComProc
+	PutIsZoomControlEnabled             ComProc
+	GetIsBuiltInErrorPageEnabled        ComProc
+	PutIsBuiltInErrorPageEnabled        ComProc
+	GetUserAgent                        ComProc
+	PutUserAgent                        ComProc
+	GetAreBrowserAcceleratorKeysEnabled ComProc
+	PutAreBrowserAcceleratorKeysEnabled ComProc
+	GetIsPasswordAutosaveEnabled        ComProc
+	PutIsPasswordAutosaveEnabled        ComProc
+	GetIsGeneralAutofillEnabled         ComProc
+	PutIsGeneralAutofillEnabled         ComProc
+}
+
+type ICoreWebView2Settings4 struct {
+	Vtbl *ICoreWebView2Settings4Vtbl
+}
+
+func (i *ICoreWebView2Settings4) AddRef() uintptr {
+	refCounter, _, _ := i.Vtbl.AddRef.Call(uintptr(unsafe.Pointer(i)))
+	return refCounter
+}
+
+func (i *ICoreWebViewSettings) GetICoreWebView2Settings4() *ICoreWebView2Settings4 {
+	var result *ICoreWebView2Settings4
+
+	iidICoreWebView2Settings4 := NewGUID("{cb56846c-4168-4d53-b04f-03b6d6796ff2}")
+	_, _, _ = i.vtbl.QueryInterface.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(iidICoreWebView2Settings4)),
+		uintptr(unsafe.Pointer(&result)))
+
+	return result
+}
+
+func (i *ICoreWebView2Settings4) GetIsPasswordAutosaveEnabled() (bool, error) {
+	// Create int32 to hold bool result
+	var _value int32
+
+	hr, _, _ := i.Vtbl.GetIsPasswordAutosaveEnabled.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(&_value)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return false, syscall.Errno(hr)
+	}
+	// Get result and cleanup
+	value := _value != 0
+	return value, nil
+}
+
+// PutIsPasswordAutosaveEnabled sets the IsPasswordAutosaveEnabled property.
+// The default value is `FALSE`.
+func (i *ICoreWebView2Settings4) PutIsPasswordAutosaveEnabled(value bool) error {
+
+	hr, _, _ := i.Vtbl.PutIsPasswordAutosaveEnabled.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(boolToInt(value)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return syscall.Errno(hr)
+	}
+
+	return nil
+}
+
+func (i *ICoreWebView2Settings4) GetIsGeneralAutofillEnabled() (bool, error) {
+	// Create int32 to hold bool result
+	var _value int32
+
+	hr, _, _ := i.Vtbl.GetIsGeneralAutofillEnabled.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(&_value)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return false, syscall.Errno(hr)
+	}
+	// Get result and cleanup
+	value := _value != 0
+	return value, nil
+}
+
+func (i *ICoreWebView2Settings4) PutIsGeneralAutofillEnabled(value bool) error {
+
+	hr, _, _ := i.Vtbl.PutIsGeneralAutofillEnabled.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(boolToInt(value)),
+	)
+
+	if windows.Handle(hr) != windows.S_OK {
+		return syscall.Errno(hr)
+	}
+
+	return nil
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/wailsapp/go-webview2/pkg/edge/ICoreWebView2Settings5.go","mode":420,"size":2696,"sha256":"cbb56de46ea81bfc0a0eb9dd88a531f32c5546c50cda4de216b137fc5c9706b6","index":0,"count":1,"encoding":"utf-8","payloadBytes":2696}
+//go:build windows
+
+package edge
+
+import (
+	"golang.org/x/sys/windows"
+	"syscall"
+	"unsafe"
+)
+
+type ICoreWebView2Settings5Vtbl struct {
+	_IUnknownVtbl
+	GetIsScriptEnabled                  ComProc
+	PutIsScriptEnabled                  ComProc
+	GetIsWebMessageEnabled              ComProc
+	PutIsWebMessageEnabled              ComProc
+	GetAreDefaultScriptDialogsEnabled   ComProc
+	PutAreDefaultScriptDialogsEnabled   ComProc
+	GetIsStatusBarEnabled               ComProc
+	PutIsStatusBarEnabled               ComProc
+	GetAreDevToolsEnabled               ComProc
+	PutAreDevToolsEnabled               ComProc
+	GetAreDefaultContextMenusEnabled    ComProc
+	PutAreDefaultContextMenusEnabled    ComProc
+	GetAreHostObjectsAllowed            ComProc
+	PutAreHostObjectsAllowed            ComProc
+	GetIsZoomControlEnabled             ComProc
+	PutIsZoomControlEnabled             ComProc
+	GetIsBuiltInErrorPageEnabled        ComProc
+	PutIsBuiltInErrorPageEnabled        ComProc
+	GetUserAgent                        ComProc
+	PutUserAgent                        ComProc
+	GetAreBrowserAcceleratorKeysEnabled ComProc
+	PutAreBrowserAcceleratorKeysEnabled ComProc
+	GetIsPasswordAutosaveEnabled        ComProc
+	PutIsPasswordAutosaveEnabled        ComProc
+	GetIsGeneralAutofillEnabled         ComProc
+	PutIsGeneralAutofillEnabled         ComProc
+	GetIsPinchZoomEnabled               ComProc
+	PutIsPinchZoomEnabled               ComProc
+}
+
+type ICoreWebView2Settings5 struct {
+	Vtbl *ICoreWebView2Settings5Vtbl
+}
+
+func (i *ICoreWebView2Settings5) AddRef() uintptr {
+	refCounter, _, _ := i.Vtbl.AddRef.Call(uintptr(unsafe.Pointer(i)))
+	return refCounter
+}
+
+func (i *ICoreWebViewSettings) GetICoreWebView2Settings5() *ICoreWebView2Settings5 {
+	var result *ICoreWebView2Settings5
+
+	iidICoreWebView2Settings5 := NewGUID("{183e7052-1d03-43a0-ab99-98e043b66b39}")
+	_, _, _ = i.vtbl.QueryInterface.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(iidICoreWebView2Settings5)),
+		uintptr(unsafe.Pointer(&result)))
+
+	return result
+}
+
+func (i *ICoreWebView2Settings5) GetIsPinchZoomEnabled() (bool, error) {
+	// Create int32 to hold bool result
+	var _enabled int32
+
+	hr, _, _ := i.Vtbl.GetIsPinchZoomEnabled.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(&_enabled)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return false, syscall.Errno(hr)
+	}
+	// Get result and cleanup
+	enabled := _enabled != 0
+	return enabled, nil
+}
+
+func (i *ICoreWebView2Settings5) PutIsPinchZoomEnabled(enabled bool) error {
+
+	hr, _, _ := i.Vtbl.PutIsPinchZoomEnabled.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(&enabled)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return syscall.Errno(hr)
+	}
+	return nil
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/wailsapp/go-webview2/pkg/edge/ICoreWebView2Settings6.go","mode":420,"size":2794,"sha256":"a0d5c22e145a111b14a21fd728721918e2dab83bfd24c09034c41d1c0232636e","index":0,"count":1,"encoding":"utf-8","payloadBytes":2794}
+//go:build windows
+
+package edge
+
+import (
+	"golang.org/x/sys/windows"
+	"syscall"
+	"unsafe"
+)
+
+type ICoreWebView2Settings6Vtbl struct {
+	_IUnknownVtbl
+	GetIsScriptEnabled                  ComProc
+	PutIsScriptEnabled                  ComProc
+	GetIsWebMessageEnabled              ComProc
+	PutIsWebMessageEnabled              ComProc
+	GetAreDefaultScriptDialogsEnabled   ComProc
+	PutAreDefaultScriptDialogsEnabled   ComProc
+	GetIsStatusBarEnabled               ComProc
+	PutIsStatusBarEnabled               ComProc
+	GetAreDevToolsEnabled               ComProc
+	PutAreDevToolsEnabled               ComProc
+	GetAreDefaultContextMenusEnabled    ComProc
+	PutAreDefaultContextMenusEnabled    ComProc
+	GetAreHostObjectsAllowed            ComProc
+	PutAreHostObjectsAllowed            ComProc
+	GetIsZoomControlEnabled             ComProc
+	PutIsZoomControlEnabled             ComProc
+	GetIsBuiltInErrorPageEnabled        ComProc
+	PutIsBuiltInErrorPageEnabled        ComProc
+	GetUserAgent                        ComProc
+	PutUserAgent                        ComProc
+	GetAreBrowserAcceleratorKeysEnabled ComProc
+	PutAreBrowserAcceleratorKeysEnabled ComProc
+	GetIsPasswordAutosaveEnabled        ComProc
+	PutIsPasswordAutosaveEnabled        ComProc
+	GetIsGeneralAutofillEnabled         ComProc
+	PutIsGeneralAutofillEnabled         ComProc
+	GetIsPinchZoomEnabled               ComProc
+	PutIsPinchZoomEnabled               ComProc
+	GetIsSwipeNavigationEnabled         ComProc
+	PutIsSwipeNavigationEnabled         ComProc
+}
+
+type ICoreWebView2Settings6 struct {
+	Vtbl *ICoreWebView2Settings6Vtbl
+}
+
+func (i *ICoreWebView2Settings6) AddRef() uintptr {
+	refCounter, _, _ := i.Vtbl.AddRef.Call(uintptr(unsafe.Pointer(i)))
+	return refCounter
+}
+
+func (i *ICoreWebViewSettings) GetICoreWebView2Settings6() *ICoreWebView2Settings6 {
+	var result *ICoreWebView2Settings6
+
+	iidICoreWebView2Settings6 := NewGUID("{11cb3acd-9bc8-43b8-83bf-f40753714f87}")
+	i.vtbl.QueryInterface.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(iidICoreWebView2Settings6)),
+		uintptr(unsafe.Pointer(&result)))
+
+	return result
+}
+
+func (i *ICoreWebView2Settings6) GetIsSwipeNavigationEnabled() (bool, error) {
+	// Create int32 to hold bool result
+	var _enabled int32
+
+	hr, _, _ := i.Vtbl.GetIsSwipeNavigationEnabled.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(&_enabled)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return false, syscall.Errno(hr)
+	}
+	// Get result and cleanup
+	enabled := _enabled != 0
+	return enabled, nil
+}
+
+func (i *ICoreWebView2Settings6) PutIsSwipeNavigationEnabled(enabled bool) error {
+
+	hr, _, _ := i.Vtbl.PutIsSwipeNavigationEnabled.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(boolToInt(enabled)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return syscall.Errno(hr)
+	}
+	return nil
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/wailsapp/go-webview2/pkg/edge/ICoreWebView2WebMessageReceivedEventArgs.go","mode":420,"size":1614,"sha256":"72aba6b97bb74adcc440baa70bc1a9d37aa28d0803e53098f70b2d12f28eba79","index":0,"count":1,"encoding":"utf-8","payloadBytes":1614}
+//go:build windows
+
+package edge
+
+import (
+	"unsafe"
+
+	"golang.org/x/sys/windows"
+)
+
+type iCoreWebView2WebMessageReceivedEventArgsVtbl struct {
+	_IUnknownVtbl
+	GetSource                ComProc
+	GetWebMessageAsJSON      ComProc
+	TryGetWebMessageAsString ComProc
+	GetAdditionalObjects     ComProc
+}
+
+type ICoreWebView2WebMessageReceivedEventArgs struct {
+	vtbl *iCoreWebView2WebMessageReceivedEventArgsVtbl
+}
+
+func (i *ICoreWebView2WebMessageReceivedEventArgs) GetSource() (string, error) {
+	var _source *uint16
+	hr, _, _ := i.vtbl.GetSource.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(&_source)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return "", windows.Errno(hr)
+	}
+	source := windows.UTF16PtrToString(_source)
+	windows.CoTaskMemFree(unsafe.Pointer(_source))
+	return source, nil
+}
+
+func (i *ICoreWebView2WebMessageReceivedEventArgs) GetAdditionalObjects() (*ICoreWebView2ObjectCollectionView, error) {
+	var value *ICoreWebView2ObjectCollectionView
+
+	hr, _, _ := i.vtbl.GetAdditionalObjects.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(&value)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return nil, windows.Errno(hr)
+	}
+	return value, nil
+}
+
+func (i *ICoreWebView2WebMessageReceivedEventArgs) TryGetWebMessageAsString() (string, error) {
+	var u16msg *uint16
+
+	hr, _, _ := i.vtbl.TryGetWebMessageAsString.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(&u16msg)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return "", windows.Errno(hr)
+	}
+	defer windows.CoTaskMemFree(unsafe.Pointer(u16msg))
+
+	msg := windows.UTF16PtrToString(u16msg)
+
+	return msg, nil
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/wailsapp/go-webview2/pkg/edge/ICoreWebView2WebMessageReceivedEventHandler.go","mode":420,"size":1941,"sha256":"313b8ed2bc8ad34ca79d7a23be2c1d9542bf4a886e8bf493862cb7e7dfa405fc","index":0,"count":1,"encoding":"utf-8","payloadBytes":1941}
+//go:build windows
+
+package edge
+
+type iCoreWebView2WebMessageReceivedEventHandlerVtbl struct {
+	_IUnknownVtbl
+	Invoke ComProc
+}
+
+type iCoreWebView2WebMessageReceivedEventHandler struct {
+	vtbl *iCoreWebView2WebMessageReceivedEventHandlerVtbl
+	impl iCoreWebView2WebMessageReceivedEventHandlerImpl
+}
+
+func _ICoreWebView2WebMessageReceivedEventHandlerIUnknownQueryInterface(this *iCoreWebView2WebMessageReceivedEventHandler, refiid, object uintptr) uintptr {
+	return this.impl.QueryInterface(refiid, object)
+}
+
+func _ICoreWebView2WebMessageReceivedEventHandlerIUnknownAddRef(this *iCoreWebView2WebMessageReceivedEventHandler) uintptr {
+	return this.impl.AddRef()
+}
+
+func _ICoreWebView2WebMessageReceivedEventHandlerIUnknownRelease(this *iCoreWebView2WebMessageReceivedEventHandler) uintptr {
+	return this.impl.Release()
+}
+
+func _ICoreWebView2WebMessageReceivedEventHandlerInvoke(this *iCoreWebView2WebMessageReceivedEventHandler, sender *ICoreWebView2, args *ICoreWebView2WebMessageReceivedEventArgs) uintptr {
+	return this.impl.MessageReceived(sender, args)
+}
+
+type iCoreWebView2WebMessageReceivedEventHandlerImpl interface {
+	_IUnknownImpl
+	MessageReceived(sender *ICoreWebView2, args *ICoreWebView2WebMessageReceivedEventArgs) uintptr
+}
+
+var iCoreWebView2WebMessageReceivedEventHandlerFn = iCoreWebView2WebMessageReceivedEventHandlerVtbl{
+	_IUnknownVtbl{
+		NewComProc(_ICoreWebView2WebMessageReceivedEventHandlerIUnknownQueryInterface),
+		NewComProc(_ICoreWebView2WebMessageReceivedEventHandlerIUnknownAddRef),
+		NewComProc(_ICoreWebView2WebMessageReceivedEventHandlerIUnknownRelease),
+	},
+	NewComProc(_ICoreWebView2WebMessageReceivedEventHandlerInvoke),
+}
+
+func newICoreWebView2WebMessageReceivedEventHandler(impl iCoreWebView2WebMessageReceivedEventHandlerImpl) *iCoreWebView2WebMessageReceivedEventHandler {
+	return &iCoreWebView2WebMessageReceivedEventHandler{
+		vtbl: &iCoreWebView2WebMessageReceivedEventHandlerFn,
+		impl: impl,
+	}
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/wailsapp/go-webview2/pkg/edge/ICoreWebView2WebResourceRequest.go","mode":420,"size":2480,"sha256":"2603a865e06c01cd17c30ca8c24fccde6093c8ec349a52569bbe21e943125bca","index":0,"count":1,"encoding":"utf-8","payloadBytes":2480}
+//go:build windows
+
+package edge
+
+import (
+	"unsafe"
+
+	"golang.org/x/sys/windows"
+)
+
+type _ICoreWebView2WebResourceRequestVtbl struct {
+	_IUnknownVtbl
+	GetUri     ComProc
+	PutUri     ComProc
+	GetMethod  ComProc
+	PutMethod  ComProc
+	GetContent ComProc
+	PutContent ComProc
+	GetHeaders ComProc
+}
+
+type ICoreWebView2WebResourceRequest struct {
+	vtbl *_ICoreWebView2WebResourceRequestVtbl
+}
+
+func (i *ICoreWebView2WebResourceRequest) AddRef() uintptr {
+	ret, _, _ := i.vtbl.AddRef.Call(uintptr(unsafe.Pointer(i)))
+
+	return ret
+}
+
+func (i *ICoreWebView2WebResourceRequest) Release() uintptr {
+	ret, _, _ := i.vtbl.Release.Call(uintptr(unsafe.Pointer(i)))
+
+	return ret
+}
+
+func (i *ICoreWebView2WebResourceRequest) GetMethod() (string, error) {
+	// Create *uint16 to hold result
+	var _method *uint16
+	hr, _, _ := i.vtbl.GetMethod.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(&_method)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return "", windows.Errno(hr)
+	}
+	// Get result and cleanup
+	uri := windows.UTF16PtrToString(_method)
+	windows.CoTaskMemFree(unsafe.Pointer(_method))
+	return uri, nil
+}
+
+func (i *ICoreWebView2WebResourceRequest) GetUri() (string, error) {
+	
+	// Create *uint16 to hold result
+	var _uri *uint16
+	hr, _, _ := i.vtbl.GetUri.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(&_uri)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return "", windows.Errno(hr)
+	} // Get result and cleanup
+	uri := windows.UTF16PtrToString(_uri)
+	windows.CoTaskMemFree(unsafe.Pointer(_uri))
+	return uri, nil
+}
+
+// GetContent returns the body of the request. Returns nil if there's no body. Make sure to call
+// Release on the returned IStream after finished using it.
+func (i *ICoreWebView2WebResourceRequest) GetContent() (*IStream, error) {
+	var stream *IStream
+	hr, _, _ := i.vtbl.GetContent.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(&stream)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return nil, windows.Errno(hr)
+	}
+	return stream, nil
+}
+
+// GetHeaders returns the mutable HTTP request headers. Make sure to call
+// Release on the returned Object after finished using it.
+func (i *ICoreWebView2WebResourceRequest) GetHeaders() (*ICoreWebView2HttpRequestHeaders, error) {
+	var headers *ICoreWebView2HttpRequestHeaders
+	hr, _, _ := i.vtbl.GetHeaders.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(&headers)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return nil, windows.Errno(hr)
+	}
+	return headers, nil
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/wailsapp/go-webview2/pkg/edge/ICoreWebView2WebResourceRequestedEventArgs.go","mode":420,"size":1848,"sha256":"b05aaeec45295b77a642eed17c6a13a206ae5f0aa774d842230b09c1cde41363","index":0,"count":1,"encoding":"utf-8","payloadBytes":1848}
+//go:build windows
+
+package edge
+
+import (
+	"fmt"
+	"syscall"
+	"unsafe"
+
+	"golang.org/x/sys/windows"
+)
+
+type _ICoreWebView2WebResourceRequestedEventArgsVtbl struct {
+	_IUnknownVtbl
+	GetRequest         ComProc
+	GetResponse        ComProc
+	PutResponse        ComProc
+	GetDeferral        ComProc
+	GetResourceContext ComProc
+}
+
+type ICoreWebView2WebResourceRequestedEventArgs struct {
+	vtbl *_ICoreWebView2WebResourceRequestedEventArgsVtbl
+}
+
+func (i *ICoreWebView2WebResourceRequestedEventArgs) AddRef() uint32 {
+	ret, _, _ := i.vtbl.AddRef.Call(uintptr(unsafe.Pointer(i)))
+
+	return uint32(ret)
+}
+
+func (i *ICoreWebView2WebResourceRequestedEventArgs) Release() uint32 {
+	ret, _, _ := i.vtbl.Release.Call(uintptr(unsafe.Pointer(i)))
+
+	return uint32(ret)
+}
+
+func (i *ICoreWebView2WebResourceRequestedEventArgs) PutResponse(response *ICoreWebView2WebResourceResponse) error {
+	
+
+	hr, _, _ := i.vtbl.PutResponse.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(response)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return windows.Errno(hr)
+	}
+	return nil
+}
+
+func (i *ICoreWebView2WebResourceRequestedEventArgs) GetRequest() (*ICoreWebView2WebResourceRequest, error) {
+	
+	var request *ICoreWebView2WebResourceRequest
+	hr, _, _ := i.vtbl.GetRequest.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(&request)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return nil, windows.Errno(hr)
+	}
+	return request, nil
+}
+
+func (i *ICoreWebView2WebResourceRequestedEventArgs) GetDeferral() (*ICoreWebView2Deferral, error) {
+	var deferral *ICoreWebView2Deferral
+
+	hr, _, _ := i.vtbl.GetDeferral.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(&deferral)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return nil, syscall.Errno(hr)
+	}
+
+	if deferral == nil {
+		return nil, fmt.Errorf("unknown error")
+	}
+
+	return deferral, nil
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/wailsapp/go-webview2/pkg/edge/ICoreWebView2WebResourceRequestedEventHandler.go","mode":420,"size":2011,"sha256":"a2e8ac65ed28a06f9f2d22a87d784a646340101a2544f59c6c9ea503a5a320ef","index":0,"count":1,"encoding":"utf-8","payloadBytes":2011}
+//go:build windows
+
+package edge
+
+type _ICoreWebView2WebResourceRequestedEventHandlerVtbl struct {
+	_IUnknownVtbl
+	Invoke ComProc
+}
+
+type iCoreWebView2WebResourceRequestedEventHandler struct {
+	vtbl *_ICoreWebView2WebResourceRequestedEventHandlerVtbl
+	impl _ICoreWebView2WebResourceRequestedEventHandlerImpl
+}
+
+func _ICoreWebView2WebResourceRequestedEventHandlerIUnknownQueryInterface(this *iCoreWebView2WebResourceRequestedEventHandler, refiid, object uintptr) uintptr {
+	return this.impl.QueryInterface(refiid, object)
+}
+
+func _ICoreWebView2WebResourceRequestedEventHandlerIUnknownAddRef(this *iCoreWebView2WebResourceRequestedEventHandler) uintptr {
+	return this.impl.AddRef()
+}
+
+func _ICoreWebView2WebResourceRequestedEventHandlerIUnknownRelease(this *iCoreWebView2WebResourceRequestedEventHandler) uintptr {
+	return this.impl.Release()
+}
+
+func _ICoreWebView2WebResourceRequestedEventHandlerInvoke(this *iCoreWebView2WebResourceRequestedEventHandler, sender *ICoreWebView2, args *ICoreWebView2WebResourceRequestedEventArgs) uintptr {
+	return this.impl.WebResourceRequested(sender, args)
+}
+
+type _ICoreWebView2WebResourceRequestedEventHandlerImpl interface {
+	_IUnknownImpl
+	WebResourceRequested(sender *ICoreWebView2, args *ICoreWebView2WebResourceRequestedEventArgs) uintptr
+}
+
+var _ICoreWebView2WebResourceRequestedEventHandlerFn = _ICoreWebView2WebResourceRequestedEventHandlerVtbl{
+	_IUnknownVtbl{
+		NewComProc(_ICoreWebView2WebResourceRequestedEventHandlerIUnknownQueryInterface),
+		NewComProc(_ICoreWebView2WebResourceRequestedEventHandlerIUnknownAddRef),
+		NewComProc(_ICoreWebView2WebResourceRequestedEventHandlerIUnknownRelease),
+	},
+	NewComProc(_ICoreWebView2WebResourceRequestedEventHandlerInvoke),
+}
+
+func newICoreWebView2WebResourceRequestedEventHandler(impl _ICoreWebView2WebResourceRequestedEventHandlerImpl) *iCoreWebView2WebResourceRequestedEventHandler {
+	return &iCoreWebView2WebResourceRequestedEventHandler{
+		vtbl: &_ICoreWebView2WebResourceRequestedEventHandlerFn,
+		impl: impl,
+	}
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/wailsapp/go-webview2/pkg/edge/ICoreWebView2WebResourceResponse.go","mode":420,"size":2711,"sha256":"24a1323ce716ed48ce5e173d01b42f93ba3638a88af519dd673b82ea8cdb3f3f","index":0,"count":1,"encoding":"utf-8","payloadBytes":2711}
+//go:build windows
+
+package edge
+
+import (
+	"errors"
+	"fmt"
+	"net/http"
+	"syscall"
+	"unsafe"
+
+	"github.com/wailsapp/go-webview2/internal/w32"
+	"golang.org/x/sys/windows"
+)
+
+type _ICoreWebView2WebResourceResponseVtbl struct {
+	_IUnknownVtbl
+	GetContent      ComProc
+	PutContent      ComProc
+	GetHeaders      ComProc
+	GetStatusCode   ComProc
+	PutStatusCode   ComProc
+	GetReasonPhrase ComProc
+	PutReasonPhrase ComProc
+}
+
+type ICoreWebView2WebResourceResponse struct {
+	vtbl *_ICoreWebView2WebResourceResponseVtbl
+}
+
+func (i *ICoreWebView2WebResourceResponse) AddRef() error {
+	_, _, err := i.vtbl.AddRef.Call(uintptr(unsafe.Pointer(i)))
+	if err != nil && !errors.Is(err, windows.ERROR_SUCCESS) {
+		return err
+	}
+
+	return nil
+}
+
+func (i *ICoreWebView2WebResourceResponse) Release() error {
+	_, _, err := i.vtbl.Release.Call(uintptr(unsafe.Pointer(i)))
+	if err != nil && !errors.Is(err, windows.ERROR_SUCCESS) {
+		return err
+	}
+
+	return nil
+}
+
+// GetHeaders returns the mutable HTTP request headers. Make sure to call
+// Release on the returned Object after finished using it.
+func (i *ICoreWebView2WebResourceResponse) GetHeaders() (*ICoreWebView2HttpResponseHeaders, error) {
+	var headers *ICoreWebView2HttpResponseHeaders
+	hr, _, _ := i.vtbl.GetHeaders.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(&headers)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return nil, syscall.Errno(hr)
+	}
+	if headers == nil {
+
+		return nil, fmt.Errorf("unknown error")
+	}
+	return headers, nil
+}
+
+func (i *ICoreWebView2WebResourceResponse) PutStatusCode(statusCode int) error {
+	hr, _, _ := i.vtbl.PutStatusCode.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(statusCode),
+	)
+
+	if windows.Handle(hr) != windows.S_OK {
+		return syscall.Errno(hr)
+	}
+
+	// Convert string 'reasonPhrase' to *uint16
+	_reasonPhrase, err := UTF16PtrFromString(http.StatusText(statusCode))
+	if err != nil {
+		return err
+	}
+
+	hr, _, _ = i.vtbl.PutReasonPhrase.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(_reasonPhrase)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return syscall.Errno(hr)
+	}
+	return nil
+}
+
+func (i *ICoreWebView2WebResourceResponse) PutContent(content *IStream) error {
+	hr, _, _ := i.vtbl.PutContent.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(content)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return syscall.Errno(hr)
+	}
+
+	return nil
+}
+
+func (i *ICoreWebView2WebResourceResponse) PutByteContent(content []byte) error {
+	var stream *IStream
+	if len(content) > 0 {
+		// Create stream for response
+		str, err := w32.SHCreateMemStream(content)
+		if err != nil {
+			return err
+		}
+		stream = (*IStream)(unsafe.Pointer(str))
+		defer stream.Release()
+	}
+
+	return i.PutContent(stream)
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/wailsapp/go-webview2/pkg/edge/ICoreWebView2_2.go","mode":420,"size":4168,"sha256":"855e93691c21852aeaf0eae77947c050e4da5c95f65a53e514627694bab89346","index":0,"count":1,"encoding":"utf-8","payloadBytes":4168}
+//go:build windows
+
+package edge
+
+import (
+	"syscall"
+	"unsafe"
+
+	"golang.org/x/sys/windows"
+)
+
+type iCoreWebView2_2Vtbl struct {
+	QueryInterface ComProc
+	AddRef         ComProc
+	Release        ComProc
+	// ICoreWebView2 methods
+	GetSettings                            ComProc
+	GetSource                              ComProc
+	Navigate                               ComProc
+	NavigateToString                       ComProc
+	AddNavigationStarting                  ComProc
+	RemoveNavigationStarting               ComProc
+	AddContentLoading                      ComProc
+	RemoveContentLoading                   ComProc
+	AddSourceChanged                       ComProc
+	RemoveSourceChanged                    ComProc
+	AddHistoryChanged                      ComProc
+	RemoveHistoryChanged                   ComProc
+	AddNavigationCompleted                 ComProc
+	RemoveNavigationCompleted              ComProc
+	AddFrameNavigationStarting             ComProc
+	RemoveFrameNavigationStarting          ComProc
+	AddFrameNavigationCompleted            ComProc
+	RemoveFrameNavigationCompleted         ComProc
+	AddScriptDialogOpening                 ComProc
+	RemoveScriptDialogOpening              ComProc
+	AddPermissionRequested                 ComProc
+	RemovePermissionRequested              ComProc
+	AddProcessFailed                       ComProc
+	RemoveProcessFailed                    ComProc
+	AddScriptToExecuteOnDocumentCreated    ComProc
+	RemoveScriptToExecuteOnDocumentCreated ComProc
+	ExecuteScript                          ComProc
+	CapturePreview                         ComProc
+	Reload                                 ComProc
+	PostWebMessageAsJSON                   ComProc
+	PostWebMessageAsString                 ComProc
+	AddWebMessageReceived                  ComProc
+	RemoveWebMessageReceived               ComProc
+	CallDevToolsProtocolMethod             ComProc
+	GetBrowserProcessID                    ComProc
+	GetCanGoBack                           ComProc
+	GetCanGoForward                        ComProc
+	GoBack                                 ComProc
+	GoForward                              ComProc
+	GetDevToolsProtocolEventReceiver       ComProc
+	Stop                                   ComProc
+	AddNewWindowRequested                  ComProc
+	RemoveNewWindowRequested               ComProc
+	AddDocumentTitleChanged                ComProc
+	RemoveDocumentTitleChanged             ComProc
+	GetDocumentTitle                       ComProc
+	AddHostObjectToScript                  ComProc
+	RemoveHostObjectFromScript             ComProc
+	OpenDevToolsWindow                     ComProc
+	AddContainsFullScreenElementChanged    ComProc
+	RemoveContainsFullScreenElementChanged ComProc
+	GetContainsFullScreenElement           ComProc
+	AddWebResourceRequested                ComProc
+	RemoveWebResourceRequested             ComProc
+	AddWebResourceRequestedFilter          ComProc
+	RemoveWebResourceRequestedFilter       ComProc
+	AddWindowCloseRequested                ComProc
+	RemoveWindowCloseRequested             ComProc
+	// ICoreWebView2_2 methods
+	AddWebResourceResponseReceived    ComProc
+	RemoveWebResourceResponseReceived ComProc
+	NavigateWithWebResourceRequest    ComProc
+	AddDomContentLoaded               ComProc
+	RemoveDomContentLoaded            ComProc
+	GetCookieManager                  ComProc
+	GetEnvironment                    ComProc
+}
+
+type ICoreWebView2_2 struct {
+	vtbl *iCoreWebView2_2Vtbl
+}
+
+// AddRef increments the reference count of the ICoreWebView2_2 interface
+func (i *ICoreWebView2_2) AddRef() uint32 {
+	ret, _, _ := i.vtbl.AddRef.Call(uintptr(unsafe.Pointer(i)))
+
+	return uint32(ret)
+}
+
+// Release decrements the reference count of the ICoreWebView2_2 interface
+func (i *ICoreWebView2_2) Release() uint32 {
+	ret, _, _ := i.vtbl.Release.Call(uintptr(unsafe.Pointer(i)))
+
+	return uint32(ret)
+}
+
+func (i *ICoreWebView2_2) GetCookieManager() (*ICoreWebView2CookieManager, error) {
+	var cookieManager *ICoreWebView2CookieManager
+	hr, _, _ := i.vtbl.GetCookieManager.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(&cookieManager)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return nil, syscall.Errno(hr)
+	}
+	return cookieManager, nil
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/wailsapp/go-webview2/pkg/edge/ICoreWebView2_3.go","mode":420,"size":1739,"sha256":"e1aa8e87e6b9bd29626b40573188f004efe8a85a315cc4845afc5d454031997c","index":0,"count":1,"encoding":"utf-8","payloadBytes":1739}
+//go:build windows
+
+package edge
+
+import (
+	"unsafe"
+
+	"golang.org/x/sys/windows"
+)
+
+type iCoreWebView2_3Vtbl struct {
+	iCoreWebView2_2Vtbl
+	TrySuspend                          ComProc
+	Resume                              ComProc
+	GetIsSuspended                      ComProc
+	SetVirtualHostNameToFolderMapping   ComProc
+	ClearVirtualHostNameToFolderMapping ComProc
+}
+
+type ICoreWebView2_3 struct {
+	vtbl *iCoreWebView2_3Vtbl
+}
+
+func (i *ICoreWebView2_3) AddRef() uint32 {
+	ret, _, _ := i.vtbl.AddRef.Call(uintptr(unsafe.Pointer(i)))
+
+	return uint32(ret)
+}
+
+func (i *ICoreWebView2_3) Release() uint32 {
+	ret, _, _ := i.vtbl.Release.Call(uintptr(unsafe.Pointer(i)))
+
+	return uint32(ret)
+}
+
+func (i *ICoreWebView2_3) SetVirtualHostNameToFolderMapping(hostName, folderPath string, accessKind COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND) error {
+	_hostName, err := windows.UTF16PtrFromString(hostName)
+	if err != nil {
+		return err
+	}
+
+	_folderPath, err := windows.UTF16PtrFromString(folderPath)
+	if err != nil {
+		return err
+	}
+
+	hr, _, _ := i.vtbl.SetVirtualHostNameToFolderMapping.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(_hostName)),
+		uintptr(unsafe.Pointer(_folderPath)),
+		uintptr(accessKind),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return windows.Errno(hr)
+	}
+
+	return nil
+}
+
+func (i *ICoreWebView2) GetICoreWebView2_3() *ICoreWebView2_3 {
+	var result *ICoreWebView2_3
+
+	iidICoreWebView2_3 := NewGUID("{A0D6DF20-3B92-416D-AA0C-437A9C727857}")
+	_, _, _ = i.vtbl.QueryInterface.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(iidICoreWebView2_3)),
+		uintptr(unsafe.Pointer(&result)))
+
+	return result
+}
+
+func (e *Chromium) GetICoreWebView2_3() *ICoreWebView2_3 {
+	return e.webview.GetICoreWebView2_3()
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/wailsapp/go-webview2/pkg/edge/ICoreWebViewSettings.go","mode":420,"size":10483,"sha256":"8fcb7d27ed4f8e2b1690b6b7030cffc43c33be325be370967ab3e56a240c5aa2","index":0,"count":1,"encoding":"utf-8","payloadBytes":10483}
+//go:build windows
+
+package edge
+
+import (
+	"unsafe"
+
+	"golang.org/x/sys/windows"
+)
+
+// ICoreWebviewSettings is the merged settings class
+
+type _ICoreWebViewSettingsVtbl struct {
+	_IUnknownVtbl
+	GetIsScriptEnabled                  ComProc
+	PutIsScriptEnabled                  ComProc
+	GetIsWebMessageEnabled              ComProc
+	PutIsWebMessageEnabled              ComProc
+	GetAreDefaultScriptDialogsEnabled   ComProc
+	PutAreDefaultScriptDialogsEnabled   ComProc
+	GetIsStatusBarEnabled               ComProc
+	PutIsStatusBarEnabled               ComProc
+	GetAreDevToolsEnabled               ComProc
+	PutAreDevToolsEnabled               ComProc
+	GetAreDefaultContextMenusEnabled    ComProc
+	PutAreDefaultContextMenusEnabled    ComProc
+	GetAreHostObjectsAllowed            ComProc
+	PutAreHostObjectsAllowed            ComProc
+	GetIsZoomControlEnabled             ComProc
+	PutIsZoomControlEnabled             ComProc
+	GetIsBuiltInErrorPageEnabled        ComProc
+	PutIsBuiltInErrorPageEnabled        ComProc
+	GetUserAgent                        ComProc // ICoreWebView2Settings2: SDK 1.0.864.35
+	PutUserAgent                        ComProc
+	GetAreBrowserAcceleratorKeysEnabled ComProc // ICoreWebView2Settings3: SDK 1.0.864.35
+	PutAreBrowserAcceleratorKeysEnabled ComProc
+	GetIsPasswordAutosaveEnabled        ComProc // ICoreWebView2Settings4: SDK 1.0.902.49
+	PutIsPasswordAutosaveEnabled        ComProc
+	GetIsGeneralAutofillEnabled         ComProc
+	PutIsGeneralAutofillEnabled         ComProc
+	GetIsPinchZoomEnabled               ComProc // ICoreWebView2Settings5: SDK 1.0.902.49
+	PutIsPinchZoomEnabled               ComProc
+	GetIsSwipeNavigationEnabled         ComProc // ICoreWebView2Settings6: SDK 1.0.992.28
+	PutIsSwipeNavigationEnabled         ComProc
+}
+
+type ICoreWebViewSettings struct {
+	vtbl *_ICoreWebViewSettingsVtbl
+}
+
+func (i *ICoreWebViewSettings) AddRef() uint32 {
+	ret, _, _ := i.vtbl.AddRef.Call(uintptr(unsafe.Pointer(i)))
+
+	return uint32(ret)
+}
+
+func (i *ICoreWebViewSettings) Release() uint32 {
+	ret, _, _ := i.vtbl.Release.Call(uintptr(unsafe.Pointer(i)))
+
+	return uint32(ret)
+}
+
+func (i *ICoreWebViewSettings) GetIsScriptEnabled() (bool, error) {
+	var isScriptEnabled bool
+	hr, _, _ := i.vtbl.GetIsScriptEnabled.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(&isScriptEnabled)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return false, windows.Errno(hr)
+	}
+	return isScriptEnabled, nil
+}
+
+func (i *ICoreWebViewSettings) PutIsScriptEnabled(isScriptEnabled bool) error {
+	hr, _, _ := i.vtbl.PutIsScriptEnabled.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(boolToInt(isScriptEnabled)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return windows.Errno(hr)
+	}
+	return nil
+}
+
+func (i *ICoreWebViewSettings) GetIsWebMessageEnabled() (bool, error) {
+	var isWebMessageEnabled bool
+	hr, _, _ := i.vtbl.GetIsWebMessageEnabled.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(&isWebMessageEnabled)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return false, windows.Errno(hr)
+	}
+	return isWebMessageEnabled, nil
+}
+
+func (i *ICoreWebViewSettings) PutIsWebMessageEnabled(isWebMessageEnabled bool) error {
+	hr, _, _ := i.vtbl.PutIsWebMessageEnabled.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(boolToInt(isWebMessageEnabled)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return windows.Errno(hr)
+	}
+	return nil
+}
+
+func (i *ICoreWebViewSettings) GetAreDefaultScriptDialogsEnabled() (bool, error) {
+	var areDefaultScriptDialogsEnabled bool
+	hr, _, _ := i.vtbl.GetAreDefaultScriptDialogsEnabled.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(&areDefaultScriptDialogsEnabled)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return false, windows.Errno(hr)
+	}
+	return areDefaultScriptDialogsEnabled, nil
+}
+
+func (i *ICoreWebViewSettings) PutAreDefaultScriptDialogsEnabled(areDefaultScriptDialogsEnabled bool) error {
+	hr, _, _ := i.vtbl.PutAreDefaultScriptDialogsEnabled.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(boolToInt(areDefaultScriptDialogsEnabled)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return windows.Errno(hr)
+	}
+	return nil
+}
+
+func (i *ICoreWebViewSettings) GetIsStatusBarEnabled() (bool, error) {
+	var isStatusBarEnabled bool
+	hr, _, _ := i.vtbl.GetIsStatusBarEnabled.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(&isStatusBarEnabled)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return false, windows.Errno(hr)
+	}
+	return isStatusBarEnabled, nil
+}
+
+func (i *ICoreWebViewSettings) PutIsStatusBarEnabled(isStatusBarEnabled bool) error {
+	hr, _, _ := i.vtbl.PutIsStatusBarEnabled.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(boolToInt(isStatusBarEnabled)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return windows.Errno(hr)
+	}
+	return nil
+}
+
+func (i *ICoreWebViewSettings) GetAreDevToolsEnabled() (bool, error) {
+	var areDevToolsEnabled bool
+	hr, _, _ := i.vtbl.GetAreDevToolsEnabled.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(&areDevToolsEnabled)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return false, windows.Errno(hr)
+	}
+	return areDevToolsEnabled, nil
+}
+
+func (i *ICoreWebViewSettings) PutAreDevToolsEnabled(areDevToolsEnabled bool) error {
+	hr, _, _ := i.vtbl.PutAreDevToolsEnabled.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(boolToInt(areDevToolsEnabled)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return windows.Errno(hr)
+	}
+	return nil
+}
+
+func (i *ICoreWebViewSettings) GetAreDefaultContextMenusEnabled() (bool, error) {
+	var enabled bool
+	hr, _, _ := i.vtbl.GetAreDefaultContextMenusEnabled.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(&enabled)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return false, windows.Errno(hr)
+	}
+	return enabled, nil
+}
+
+func (i *ICoreWebViewSettings) PutAreDefaultContextMenusEnabled(enabled bool) error {
+	hr, _, _ := i.vtbl.PutAreDefaultContextMenusEnabled.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(boolToInt(enabled)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return windows.Errno(hr)
+	}
+	return nil
+}
+
+func (i *ICoreWebViewSettings) GetAreHostObjectsAllowed() (bool, error) {
+	var allowed bool
+	hr, _, _ := i.vtbl.GetAreHostObjectsAllowed.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(&allowed)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return false, windows.Errno(hr)
+	}
+	return allowed, nil
+}
+
+func (i *ICoreWebViewSettings) PutAreHostObjectsAllowed(allowed bool) error {
+	hr, _, _ := i.vtbl.PutAreHostObjectsAllowed.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(boolToInt(allowed)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return windows.Errno(hr)
+	}
+	return nil
+}
+
+func (i *ICoreWebViewSettings) GetIsZoomControlEnabled() (bool, error) {
+	var enabled bool
+	hr, _, _ := i.vtbl.GetIsZoomControlEnabled.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(&enabled)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return false, windows.Errno(hr)
+	}
+	return enabled, nil
+}
+
+func (i *ICoreWebViewSettings) PutIsZoomControlEnabled(enabled bool) error {
+	hr, _, _ := i.vtbl.PutIsZoomControlEnabled.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(boolToInt(enabled)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return windows.Errno(hr)
+	}
+	return nil
+}
+
+func (i *ICoreWebViewSettings) GetIsBuiltInErrorPageEnabled() (bool, error) {
+	var enabled bool
+	hr, _, _ := i.vtbl.GetIsBuiltInErrorPageEnabled.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(&enabled)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return false, windows.Errno(hr)
+	}
+	return enabled, nil
+}
+
+func (i *ICoreWebViewSettings) PutIsBuiltInErrorPageEnabled(enabled bool) error {
+	hr, _, _ := i.vtbl.PutIsBuiltInErrorPageEnabled.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(boolToInt(enabled)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return windows.Errno(hr)
+	}
+	return nil
+}
+
+func (i *ICoreWebViewSettings) GetUserAgent() (string, error) {
+	// Create *uint16 to hold result
+	var _userAgent *uint16
+	hr, _, _ := i.vtbl.GetUserAgent.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(_userAgent)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return "", windows.Errno(hr)
+	} // Get result and cleanup
+	userAgent := windows.UTF16PtrToString(_userAgent)
+	windows.CoTaskMemFree(unsafe.Pointer(_userAgent))
+	return userAgent, nil
+}
+
+func (i *ICoreWebViewSettings) PutUserAgent(userAgent string) error {
+	
+	// Convert string 'userAgent' to *uint16
+	_userAgent, err := windows.UTF16PtrFromString(userAgent)
+	if err != nil {
+		return err
+	}
+
+	hr, _, _ := i.vtbl.PutUserAgent.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(_userAgent)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return windows.Errno(hr)
+	}
+	return nil
+}
+
+func (i *ICoreWebViewSettings) GetAreBrowserAcceleratorKeysEnabled() (bool, error) {
+	var enabled bool
+	hr, _, _ := i.vtbl.GetAreBrowserAcceleratorKeysEnabled.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(&enabled)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return false, windows.Errno(hr)
+	}
+	return enabled, nil
+}
+
+func (i *ICoreWebViewSettings) PutAreBrowserAcceleratorKeysEnabled(enabled bool) error {
+	hr, _, _ := i.vtbl.PutAreBrowserAcceleratorKeysEnabled.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(boolToInt(enabled)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return windows.Errno(hr)
+	}
+	return nil
+}
+
+func (i *ICoreWebViewSettings) GetIsPinchZoomEnabled() (bool, error) {
+	var enabled bool
+	hr, _, _ := i.vtbl.GetIsPinchZoomEnabled.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(&enabled)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return false, windows.Errno(hr)
+	}
+	return enabled, nil
+}
+
+func (i *ICoreWebViewSettings) PutIsPinchZoomEnabled(enabled bool) error {
+	hr, _, _ := i.vtbl.PutIsPinchZoomEnabled.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(boolToInt(enabled)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return windows.Errno(hr)
+	}
+	return nil
+}
+
+func (i *ICoreWebViewSettings) GetIsSwipeNavigationEnabled() (bool, error) {
+	var enabled bool
+	hr, _, _ := i.vtbl.GetIsSwipeNavigationEnabled.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(&enabled)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return false, windows.Errno(hr)
+	}
+	return enabled, nil
+}
+
+func (i *ICoreWebViewSettings) PutIsSwipeNavigationEnabled(enabled bool) error {
+	hr, _, _ := i.vtbl.PutIsSwipeNavigationEnabled.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(boolToInt(enabled)),
+	)
+	if windows.Handle(hr) != windows.S_OK {
+		return windows.Errno(hr)
+	}
+	return nil
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/wailsapp/go-webview2/pkg/edge/IStream.go","mode":420,"size":1145,"sha256":"7d514fcb17784757c36adac30edeaa73301ee3037ed4a1a3e3522798d8fc1e5a","index":0,"count":1,"encoding":"utf-8","payloadBytes":1145}
+//go:build windows
+
+package edge
+
+import (
+	"errors"
+	"io"
+	"syscall"
+	"unsafe"
+
+	"golang.org/x/sys/windows"
+)
+
+type _IStreamVtbl struct {
+	_IUnknownVtbl
+	Read  ComProc
+	Write ComProc
+}
+
+type IStream struct {
+	vtbl *_IStreamVtbl
+}
+
+func (i *IStream) AddRef() error {
+	_, _, err := i.vtbl.AddRef.Call(uintptr(unsafe.Pointer(i)))
+	if err != nil && !errors.Is(err, windows.ERROR_SUCCESS) {
+		return err
+	}
+
+	return nil
+}
+
+func (i *IStream) Release() error {
+	_, _, err := i.vtbl.Release.Call(uintptr(unsafe.Pointer(i)))
+	if err != nil && !errors.Is(err, windows.ERROR_SUCCESS) {
+		return err
+	}
+
+	return nil
+}
+
+func (i *IStream) Read(p []byte) (int, error) {
+	bufLen := len(p)
+	if bufLen == 0 {
+		return 0, nil
+	}
+
+	var n int
+	hr, _, _ := i.vtbl.Read.Call(
+		uintptr(unsafe.Pointer(i)),
+		uintptr(unsafe.Pointer(&p[0])),
+		uintptr(bufLen),
+		uintptr(unsafe.Pointer(&n)),
+	)
+
+	switch windows.Handle(hr) {
+	case windows.S_OK:
+		// The buffer has been completely filled
+		return n, nil
+	case windows.S_FALSE:
+		// The buffer has been filled with less than len data and the stream is EOF
+		return n, io.EOF
+	default:
+		return 0, syscall.Errno(hr)
+	}
+}
+
+@@END
 @@PORTABLE {"path":"third_party/wails/vendor/github.com/wailsapp/go-webview2/pkg/edge/capabilities.go","mode":420,"size":8563,"sha256":"d8bf2f6aeee2e263f313fcac2b519fbae127e632c2d6e35fd9010f17325c92c2","index":0,"count":1,"encoding":"utf-8","payloadBytes":8563}
 package edge
 
@@ -78971,1862 +81337,6 @@ func (q *Kernel) transform_Image_Image_Src(dst Image, dr, adr image.Rectangle, d
 			}
 		}
 	}
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/image/draw/scale.go","mode":420,"size":16182,"sha256":"c38c400ca8f00628f0eae1f65c8cba81084ae2836c8575b609e38484a06d6f92","index":0,"count":1,"encoding":"utf-8","payloadBytes":16182}
-// Copyright 2015 The Go Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
-//go:generate go run gen.go
-
-package draw
-
-import (
-	"image"
-	"image/color"
-	"math"
-	"sync"
-
-	"golang.org/x/image/math/f64"
-)
-
-// Copy copies the part of the source image defined by src and sr and writes
-// the result of a Porter-Duff composition to the part of the destination image
-// defined by dst and the translation of sr so that sr.Min translates to dp.
-func Copy(dst Image, dp image.Point, src image.Image, sr image.Rectangle, op Op, opts *Options) {
-	var o Options
-	if opts != nil {
-		o = *opts
-	}
-	dr := sr.Add(dp.Sub(sr.Min))
-	if o.DstMask == nil {
-		DrawMask(dst, dr, src, sr.Min, o.SrcMask, o.SrcMaskP.Add(sr.Min), op)
-	} else {
-		NearestNeighbor.Scale(dst, dr, src, sr, op, opts)
-	}
-}
-
-// Scaler scales the part of the source image defined by src and sr and writes
-// the result of a Porter-Duff composition to the part of the destination image
-// defined by dst and dr.
-//
-// A Scaler is safe to use concurrently.
-type Scaler interface {
-	Scale(dst Image, dr image.Rectangle, src image.Image, sr image.Rectangle, op Op, opts *Options)
-}
-
-// Transformer transforms the part of the source image defined by src and sr
-// and writes the result of a Porter-Duff composition to the part of the
-// destination image defined by dst and the affine transform m applied to sr.
-//
-// For example, if m is the matrix
-//
-//	m00 m01 m02
-//	m10 m11 m12
-//
-// then the src-space point (sx, sy) maps to the dst-space point
-// (m00*sx + m01*sy + m02, m10*sx + m11*sy + m12).
-//
-// A Transformer is safe to use concurrently.
-type Transformer interface {
-	Transform(dst Image, m f64.Aff3, src image.Image, sr image.Rectangle, op Op, opts *Options)
-}
-
-// Options are optional parameters to Copy, Scale and Transform.
-//
-// A nil *Options means to use the default (zero) values of each field.
-type Options struct {
-	// Masks limit what parts of the dst image are drawn to and what parts of
-	// the src image are drawn from.
-	//
-	// A dst or src mask image having a zero alpha (transparent) pixel value in
-	// the respective coordinate space means that dst pixel is entirely
-	// unaffected or that src pixel is considered transparent black. A full
-	// alpha (opaque) value means that the dst pixel is maximally affected or
-	// the src pixel contributes maximally. The default values, nil, are
-	// equivalent to fully opaque, infinitely large mask images.
-	//
-	// The DstMask is otherwise known as a clip mask, and its pixels map 1:1 to
-	// the dst image's pixels. DstMaskP in DstMask space corresponds to
-	// image.Point{X:0, Y:0} in dst space. For example, when limiting
-	// repainting to a 'dirty rectangle', use that image.Rectangle and a zero
-	// image.Point as the DstMask and DstMaskP.
-	//
-	// The SrcMask's pixels map 1:1 to the src image's pixels. SrcMaskP in
-	// SrcMask space corresponds to image.Point{X:0, Y:0} in src space. For
-	// example, when drawing font glyphs in a uniform color, use an
-	// *image.Uniform as the src, and use the glyph atlas image and the
-	// per-glyph offset as SrcMask and SrcMaskP:
-	//	Copy(dst, dp, image.NewUniform(color), image.Rect(0, 0, glyphWidth, glyphHeight), &Options{
-	//		SrcMask:  glyphAtlas,
-	//		SrcMaskP: glyphOffset,
-	//	})
-	DstMask  image.Image
-	DstMaskP image.Point
-	SrcMask  image.Image
-	SrcMaskP image.Point
-
-	// TODO: a smooth vs sharp edges option, for arbitrary rotations?
-}
-
-// Interpolator is an interpolation algorithm, when dst and src pixels don't
-// have a 1:1 correspondence.
-//
-// Of the interpolators provided by this package:
-//   - NearestNeighbor is fast but usually looks worst.
-//   - CatmullRom is slow but usually looks best.
-//   - ApproxBiLinear has reasonable speed and quality.
-//
-// The time taken depends on the size of dr. For kernel interpolators, the
-// speed also depends on the size of sr, and so are often slower than
-// non-kernel interpolators, especially when scaling down.
-type Interpolator interface {
-	Scaler
-	Transformer
-}
-
-// Kernel is an interpolator that blends source pixels weighted by a symmetric
-// kernel function.
-type Kernel struct {
-	// Support is the kernel support and must be >= 0. At(t) is assumed to be
-	// zero when t >= Support.
-	Support float64
-	// At is the kernel function. It will only be called with t in the
-	// range [0, Support).
-	At func(t float64) float64
-}
-
-// Scale implements the Scaler interface.
-func (q *Kernel) Scale(dst Image, dr image.Rectangle, src image.Image, sr image.Rectangle, op Op, opts *Options) {
-	q.newScaler(dr.Dx(), dr.Dy(), sr.Dx(), sr.Dy(), false).Scale(dst, dr, src, sr, op, opts)
-}
-
-// NewScaler returns a Scaler that is optimized for scaling multiple times with
-// the same fixed destination and source width and height.
-func (q *Kernel) NewScaler(dw, dh, sw, sh int) Scaler {
-	return q.newScaler(dw, dh, sw, sh, true)
-}
-
-func (q *Kernel) newScaler(dw, dh, sw, sh int, usePool bool) Scaler {
-	z := &kernelScaler{
-		kernel:     q,
-		dw:         int32(dw),
-		dh:         int32(dh),
-		sw:         int32(sw),
-		sh:         int32(sh),
-		horizontal: newDistrib(q, int32(dw), int32(sw)),
-		vertical:   newDistrib(q, int32(dh), int32(sh)),
-	}
-	if usePool {
-		z.pool.New = func() interface{} {
-			tmp := z.makeTmpBuf()
-			return &tmp
-		}
-	}
-	return z
-}
-
-var (
-	// NearestNeighbor is the nearest neighbor interpolator. It is very fast,
-	// but usually gives very low quality results. When scaling up, the result
-	// will look 'blocky'.
-	NearestNeighbor = Interpolator(nnInterpolator{})
-
-	// ApproxBiLinear is a mixture of the nearest neighbor and bi-linear
-	// interpolators. It is fast, but usually gives medium quality results.
-	//
-	// It implements bi-linear interpolation when upscaling and a bi-linear
-	// blend of the 4 nearest neighbor pixels when downscaling. This yields
-	// nicer quality than nearest neighbor interpolation when upscaling, but
-	// the time taken is independent of the number of source pixels, unlike the
-	// bi-linear interpolator. When downscaling a large image, the performance
-	// difference can be significant.
-	ApproxBiLinear = Interpolator(ablInterpolator{})
-
-	// BiLinear is the tent kernel. It is slow, but usually gives high quality
-	// results.
-	BiLinear = &Kernel{1, func(t float64) float64 {
-		return 1 - t
-	}}
-
-	// CatmullRom is the Catmull-Rom kernel. It is very slow, but usually gives
-	// very high quality results.
-	//
-	// It is an instance of the more general cubic BC-spline kernel with parameters
-	// B=0 and C=0.5. See Mitchell and Netravali, "Reconstruction Filters in
-	// Computer Graphics", Computer Graphics, Vol. 22, No. 4, pp. 221-228.
-	CatmullRom = &Kernel{2, func(t float64) float64 {
-		if t < 1 {
-			return float64((float64(1.5*t)-2.5)*t*t) + 1
-		}
-		return float64((float64(float64(float64(-0.5*t)+2.5)*t)-4)*t) + 2
-	}}
-
-	// TODO: a Kaiser-Bessel kernel?
-)
-
-type nnInterpolator struct{}
-
-type ablInterpolator struct{}
-
-type kernelScaler struct {
-	kernel               *Kernel
-	dw, dh, sw, sh       int32
-	horizontal, vertical distrib
-	pool                 sync.Pool
-}
-
-func (z *kernelScaler) makeTmpBuf() [][4]float64 {
-	return make([][4]float64, z.dw*z.sh)
-}
-
-// source is a range of contribs, their inverse total weight, and that ITW
-// divided by 0xffff.
-type source struct {
-	i, j               int32
-	invTotalWeight     float64
-	invTotalWeightFFFF float64
-}
-
-// contrib is the weight of a column or row.
-type contrib struct {
-	coord  int32
-	weight float64
-}
-
-// distrib measures how source pixels are distributed over destination pixels.
-type distrib struct {
-	// sources are what contribs each column or row in the source image owns,
-	// and the total weight of those contribs.
-	sources []source
-	// contribs are the contributions indexed by sources[s].i and sources[s].j.
-	contribs []contrib
-}
-
-// newDistrib returns a distrib that distributes sw source columns (or rows)
-// over dw destination columns (or rows).
-func newDistrib(q *Kernel, dw, sw int32) distrib {
-	scale := float64(sw) / float64(dw)
-	halfWidth, kernelArgScale := q.Support, 1.0
-	// When shrinking, broaden the effective kernel support so that we still
-	// visit every source pixel.
-	if scale > 1 {
-		halfWidth *= scale
-		kernelArgScale = 1 / scale
-	}
-
-	// Make the sources slice, one source for each column or row, and temporarily
-	// appropriate its elements' fields so that invTotalWeight is the scaled
-	// coordinate of the source column or row, and i and j are the lower and
-	// upper bounds of the range of destination columns or rows affected by the
-	// source column or row.
-	n, sources := int32(0), make([]source, dw)
-	for x := range sources {
-		center := float64((float64(x)+0.5)*scale) - 0.5
-		i := int32(math.Floor(center - halfWidth))
-		if i < 0 {
-			i = 0
-		}
-		j := int32(math.Ceil(center + halfWidth))
-		if j > sw {
-			j = sw
-			if j < i {
-				j = i
-			}
-		}
-		sources[x] = source{i: i, j: j, invTotalWeight: center}
-		n += j - i
-	}
-
-	contribs := make([]contrib, 0, n)
-	for k, b := range sources {
-		totalWeight := 0.0
-		l := int32(len(contribs))
-		for coord := b.i; coord < b.j; coord++ {
-			t := abs((b.invTotalWeight - float64(coord)) * kernelArgScale)
-			if t >= q.Support {
-				continue
-			}
-			weight := q.At(t)
-			if weight == 0 {
-				continue
-			}
-			totalWeight += weight
-			contribs = append(contribs, contrib{coord, weight})
-		}
-		totalWeight = 1 / totalWeight
-		sources[k] = source{
-			i:                  l,
-			j:                  int32(len(contribs)),
-			invTotalWeight:     totalWeight,
-			invTotalWeightFFFF: totalWeight / 0xffff,
-		}
-	}
-
-	return distrib{sources, contribs}
-}
-
-// abs is like math.Abs, but it doesn't care about negative zero, infinities or
-// NaNs.
-func abs(f float64) float64 {
-	if f < 0 {
-		f = -f
-	}
-	return f
-}
-
-// ftou converts the range [0.0, 1.0] to [0, 0xffff].
-func ftou(f float64) uint16 {
-	i := int32(float64(0xffff*f) + 0.5)
-	if i > 0xffff {
-		return 0xffff
-	}
-	if i > 0 {
-		return uint16(i)
-	}
-	return 0
-}
-
-// fffftou converts the range [0.0, 65535.0] to [0, 0xffff].
-func fffftou(f float64) uint16 {
-	i := int32(f + 0.5)
-	if i > 0xffff {
-		return 0xffff
-	}
-	if i > 0 {
-		return uint16(i)
-	}
-	return 0
-}
-
-// invert returns the inverse of m.
-//
-// TODO: move this into the f64 package, once we work out the convention for
-// matrix methods in that package: do they modify the receiver, take a dst
-// pointer argument, or return a new value?
-func invert(m *f64.Aff3) f64.Aff3 {
-	m00 := +m[3*1+1]
-	m01 := -m[3*0+1]
-	m02 := +float64(m[3*1+2]*m[3*0+1]) - float64(m[3*1+1]*m[3*0+2])
-	m10 := -m[3*1+0]
-	m11 := +m[3*0+0]
-	m12 := +float64(m[3*1+0]*m[3*0+2]) - float64(m[3*1+2]*m[3*0+0])
-
-	det := float64(m00*m11) - float64(m10*m01)
-
-	return f64.Aff3{
-		m00 / det,
-		m01 / det,
-		m02 / det,
-		m10 / det,
-		m11 / det,
-		m12 / det,
-	}
-}
-
-func matMul(p, q *f64.Aff3) f64.Aff3 {
-	return f64.Aff3{
-		float64(p[3*0+0]*q[3*0+0]) + float64(p[3*0+1]*q[3*1+0]),
-		float64(p[3*0+0]*q[3*0+1]) + float64(p[3*0+1]*q[3*1+1]),
-		float64(p[3*0+0]*q[3*0+2]) + float64(p[3*0+1]*q[3*1+2]) + p[3*0+2],
-		float64(p[3*1+0]*q[3*0+0]) + float64(p[3*1+1]*q[3*1+0]),
-		float64(p[3*1+0]*q[3*0+1]) + float64(p[3*1+1]*q[3*1+1]),
-		float64(p[3*1+0]*q[3*0+2]) + float64(p[3*1+1]*q[3*1+2]) + p[3*1+2],
-	}
-}
-
-// transformRect returns a rectangle dr that contains sr transformed by s2d.
-func transformRect(s2d *f64.Aff3, sr *image.Rectangle) (dr image.Rectangle) {
-	ps := [...]image.Point{
-		{sr.Min.X, sr.Min.Y},
-		{sr.Max.X, sr.Min.Y},
-		{sr.Min.X, sr.Max.Y},
-		{sr.Max.X, sr.Max.Y},
-	}
-	for i, p := range ps {
-		sxf := float64(p.X)
-		syf := float64(p.Y)
-		dx := int(math.Floor(float64(s2d[0]*sxf) + float64(s2d[1]*syf) + s2d[2]))
-		dy := int(math.Floor(float64(s2d[3]*sxf) + float64(s2d[4]*syf) + s2d[5]))
-
-		// The +1 adjustments below are because an image.Rectangle is inclusive
-		// on the low end but exclusive on the high end.
-
-		if i == 0 {
-			dr = image.Rectangle{
-				Min: image.Point{dx + 0, dy + 0},
-				Max: image.Point{dx + 1, dy + 1},
-			}
-			continue
-		}
-
-		if dr.Min.X > dx {
-			dr.Min.X = dx
-		}
-		dx++
-		if dr.Max.X < dx {
-			dr.Max.X = dx
-		}
-
-		if dr.Min.Y > dy {
-			dr.Min.Y = dy
-		}
-		dy++
-		if dr.Max.Y < dy {
-			dr.Max.Y = dy
-		}
-	}
-	return dr
-}
-
-func clipAffectedDestRect(adr image.Rectangle, dstMask image.Image, dstMaskP image.Point) (image.Rectangle, image.Image) {
-	if dstMask == nil {
-		return adr, nil
-	}
-	if r, ok := dstMask.(image.Rectangle); ok {
-		return adr.Intersect(r.Sub(dstMaskP)), nil
-	}
-	// TODO: clip to dstMask.Bounds() if the color model implies that out-of-bounds means 0 alpha?
-	return adr, dstMask
-}
-
-func transform_Uniform(dst Image, dr, adr image.Rectangle, d2s *f64.Aff3, src *image.Uniform, sr image.Rectangle, bias image.Point, op Op) {
-	switch op {
-	case Over:
-		switch dst := dst.(type) {
-		case *image.RGBA:
-			pr, pg, pb, pa := src.C.RGBA()
-			pa1 := (0xffff - pa) * 0x101
-
-			for dy := int32(adr.Min.Y); dy < int32(adr.Max.Y); dy++ {
-				dyf := float64(dr.Min.Y+int(dy)) + 0.5
-				d := dst.PixOffset(dr.Min.X+adr.Min.X, dr.Min.Y+int(dy))
-				for dx := int32(adr.Min.X); dx < int32(adr.Max.X); dx, d = dx+1, d+4 {
-					dxf := float64(dr.Min.X+int(dx)) + 0.5
-					sx0 := int(float64(d2s[0]*dxf)+float64(d2s[1]*dyf)+d2s[2]) + bias.X
-					sy0 := int(float64(d2s[3]*dxf)+float64(d2s[4]*dyf)+d2s[5]) + bias.Y
-					if !(image.Point{sx0, sy0}).In(sr) {
-						continue
-					}
-					dst.Pix[d+0] = uint8((uint32(dst.Pix[d+0])*pa1/0xffff + pr) >> 8)
-					dst.Pix[d+1] = uint8((uint32(dst.Pix[d+1])*pa1/0xffff + pg) >> 8)
-					dst.Pix[d+2] = uint8((uint32(dst.Pix[d+2])*pa1/0xffff + pb) >> 8)
-					dst.Pix[d+3] = uint8((uint32(dst.Pix[d+3])*pa1/0xffff + pa) >> 8)
-				}
-			}
-
-		default:
-			pr, pg, pb, pa := src.C.RGBA()
-			pa1 := 0xffff - pa
-			dstColorRGBA64 := &color.RGBA64{}
-			dstColor := color.Color(dstColorRGBA64)
-
-			for dy := int32(adr.Min.Y); dy < int32(adr.Max.Y); dy++ {
-				dyf := float64(dr.Min.Y+int(dy)) + 0.5
-				for dx := int32(adr.Min.X); dx < int32(adr.Max.X); dx++ {
-					dxf := float64(dr.Min.X+int(dx)) + 0.5
-					sx0 := int(float64(d2s[0]*dxf)+float64(d2s[1]*dyf)+d2s[2]) + bias.X
-					sy0 := int(float64(d2s[3]*dxf)+float64(d2s[4]*dyf)+d2s[5]) + bias.Y
-					if !(image.Point{sx0, sy0}).In(sr) {
-						continue
-					}
-					qr, qg, qb, qa := dst.At(dr.Min.X+int(dx), dr.Min.Y+int(dy)).RGBA()
-					dstColorRGBA64.R = uint16(qr*pa1/0xffff + pr)
-					dstColorRGBA64.G = uint16(qg*pa1/0xffff + pg)
-					dstColorRGBA64.B = uint16(qb*pa1/0xffff + pb)
-					dstColorRGBA64.A = uint16(qa*pa1/0xffff + pa)
-					dst.Set(dr.Min.X+int(dx), dr.Min.Y+int(dy), dstColor)
-				}
-			}
-		}
-
-	case Src:
-		switch dst := dst.(type) {
-		case *image.RGBA:
-			pr, pg, pb, pa := src.C.RGBA()
-			pr8 := uint8(pr >> 8)
-			pg8 := uint8(pg >> 8)
-			pb8 := uint8(pb >> 8)
-			pa8 := uint8(pa >> 8)
-
-			for dy := int32(adr.Min.Y); dy < int32(adr.Max.Y); dy++ {
-				dyf := float64(dr.Min.Y+int(dy)) + 0.5
-				d := dst.PixOffset(dr.Min.X+adr.Min.X, dr.Min.Y+int(dy))
-				for dx := int32(adr.Min.X); dx < int32(adr.Max.X); dx, d = dx+1, d+4 {
-					dxf := float64(dr.Min.X+int(dx)) + 0.5
-					sx0 := int(float64(d2s[0]*dxf)+float64(d2s[1]*dyf)+d2s[2]) + bias.X
-					sy0 := int(float64(d2s[3]*dxf)+float64(d2s[4]*dyf)+d2s[5]) + bias.Y
-					if !(image.Point{sx0, sy0}).In(sr) {
-						continue
-					}
-					dst.Pix[d+0] = pr8
-					dst.Pix[d+1] = pg8
-					dst.Pix[d+2] = pb8
-					dst.Pix[d+3] = pa8
-				}
-			}
-
-		default:
-			pr, pg, pb, pa := src.C.RGBA()
-			dstColorRGBA64 := &color.RGBA64{
-				uint16(pr),
-				uint16(pg),
-				uint16(pb),
-				uint16(pa),
-			}
-			dstColor := color.Color(dstColorRGBA64)
-
-			for dy := int32(adr.Min.Y); dy < int32(adr.Max.Y); dy++ {
-				dyf := float64(dr.Min.Y+int(dy)) + 0.5
-				for dx := int32(adr.Min.X); dx < int32(adr.Max.X); dx++ {
-					dxf := float64(dr.Min.X+int(dx)) + 0.5
-					sx0 := int(float64(d2s[0]*dxf)+float64(d2s[1]*dyf)+d2s[2]) + bias.X
-					sy0 := int(float64(d2s[3]*dxf)+float64(d2s[4]*dyf)+d2s[5]) + bias.Y
-					if !(image.Point{sx0, sy0}).In(sr) {
-						continue
-					}
-					dst.Set(dr.Min.X+int(dx), dr.Min.Y+int(dy), dstColor)
-				}
-			}
-		}
-	}
-}
-
-func opaque(m image.Image) bool {
-	o, ok := m.(interface {
-		Opaque() bool
-	})
-	return ok && o.Opaque()
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/image/math/f64/f64.go","mode":420,"size":1096,"sha256":"943538d75254f50e03d00812a4546d07e9e305caad1b56ff52d61e66b90fd439","index":0,"count":1,"encoding":"utf-8","payloadBytes":1096}
-// Copyright 2015 The Go Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
-// Package f64 implements float64 vector and matrix types.
-package f64 // import "golang.org/x/image/math/f64"
-
-// Vec2 is a 2-element vector.
-type Vec2 [2]float64
-
-// Vec3 is a 3-element vector.
-type Vec3 [3]float64
-
-// Vec4 is a 4-element vector.
-type Vec4 [4]float64
-
-// Mat3 is a 3x3 matrix in row major order.
-//
-// m[3*r + c] is the element in the r'th row and c'th column.
-type Mat3 [9]float64
-
-// Mat4 is a 4x4 matrix in row major order.
-//
-// m[4*r + c] is the element in the r'th row and c'th column.
-type Mat4 [16]float64
-
-// Aff3 is a 3x3 affine transformation matrix in row major order, where the
-// bottom row is implicitly [0 0 1].
-//
-// m[3*r + c] is the element in the r'th row and c'th column.
-type Aff3 [6]float64
-
-// Aff4 is a 4x4 affine transformation matrix in row major order, where the
-// bottom row is implicitly [0 0 0 1].
-//
-// m[4*r + c] is the element in the r'th row and c'th column.
-type Aff4 [12]float64
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/mod/LICENSE","mode":420,"size":1453,"sha256":"911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad","index":0,"count":1,"encoding":"utf-8","payloadBytes":1453}
-Copyright 2009 The Go Authors.
-
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are
-met:
-
-   * Redistributions of source code must retain the above copyright
-notice, this list of conditions and the following disclaimer.
-   * Redistributions in binary form must reproduce the above
-copyright notice, this list of conditions and the following disclaimer
-in the documentation and/or other materials provided with the
-distribution.
-   * Neither the name of Google LLC nor the names of its
-contributors may be used to endorse or promote products derived from
-this software without specific prior written permission.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/mod/PATENTS","mode":420,"size":1303,"sha256":"96f408bfae65bf137fc2525d3ecb030271c50c1e90799f87abf8846d8dd505cc","index":0,"count":1,"encoding":"utf-8","payloadBytes":1303}
-Additional IP Rights Grant (Patents)
-
-"This implementation" means the copyrightable works distributed by
-Google as part of the Go project.
-
-Google hereby grants to You a perpetual, worldwide, non-exclusive,
-no-charge, royalty-free, irrevocable (except as stated in this section)
-patent license to make, have made, use, offer to sell, sell, import,
-transfer and otherwise run, modify and propagate the contents of this
-implementation of Go, where such license applies only to those patent
-claims, both currently owned or controlled by Google and acquired in
-the future, licensable by Google that are necessarily infringed by this
-implementation of Go.  This grant does not include claims that would be
-infringed only as a consequence of further modification of this
-implementation.  If you or your agent or exclusive licensee institute or
-order or agree to the institution of patent litigation against any
-entity (including a cross-claim or counterclaim in a lawsuit) alleging
-that this implementation of Go or any code incorporated within this
-implementation of Go constitutes direct or contributory patent
-infringement, or inducement of patent infringement, then any patent
-rights granted to you under this License for this implementation of Go
-shall terminate as of the date such litigation is filed.
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/mod/internal/lazyregexp/lazyre.go","mode":420,"size":1871,"sha256":"2c98e15329ce3fb10d4348f791446d1a7f557b92c954a26a7188dad26f78974b","index":0,"count":1,"encoding":"utf-8","payloadBytes":1871}
-// Copyright 2018 The Go Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
-// Package lazyregexp is a thin wrapper over regexp, allowing the use of global
-// regexp variables without forcing them to be compiled at init.
-package lazyregexp
-
-import (
-	"os"
-	"regexp"
-	"strings"
-	"sync"
-)
-
-// Regexp is a wrapper around [regexp.Regexp], where the underlying regexp will be
-// compiled the first time it is needed.
-type Regexp struct {
-	str  string
-	once sync.Once
-	rx   *regexp.Regexp
-}
-
-func (r *Regexp) re() *regexp.Regexp {
-	r.once.Do(r.build)
-	return r.rx
-}
-
-func (r *Regexp) build() {
-	r.rx = regexp.MustCompile(r.str)
-	r.str = ""
-}
-
-func (r *Regexp) FindSubmatch(s []byte) [][]byte {
-	return r.re().FindSubmatch(s)
-}
-
-func (r *Regexp) FindStringSubmatch(s string) []string {
-	return r.re().FindStringSubmatch(s)
-}
-
-func (r *Regexp) FindStringSubmatchIndex(s string) []int {
-	return r.re().FindStringSubmatchIndex(s)
-}
-
-func (r *Regexp) ReplaceAllString(src, repl string) string {
-	return r.re().ReplaceAllString(src, repl)
-}
-
-func (r *Regexp) FindString(s string) string {
-	return r.re().FindString(s)
-}
-
-func (r *Regexp) FindAllString(s string, n int) []string {
-	return r.re().FindAllString(s, n)
-}
-
-func (r *Regexp) MatchString(s string) bool {
-	return r.re().MatchString(s)
-}
-
-func (r *Regexp) SubexpNames() []string {
-	return r.re().SubexpNames()
-}
-
-var inTest = len(os.Args) > 0 && strings.HasSuffix(strings.TrimSuffix(os.Args[0], ".exe"), ".test")
-
-// New creates a new lazy regexp, delaying the compiling work until it is first
-// needed. If the code is being run as part of tests, the regexp compiling will
-// happen immediately.
-func New(str string) *Regexp {
-	lr := &Regexp{str: str}
-	if inTest {
-		// In tests, always compile the regexps early.
-		lr.re()
-	}
-	return lr
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/mod/modfile/print.go","mode":420,"size":3862,"sha256":"9e5fcaa2123a5f0548b3a320a8c3e363a9c7ca84aaae774e7e8cdf4d9023a54b","index":0,"count":1,"encoding":"utf-8","payloadBytes":3862}
-// Copyright 2018 The Go Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
-// Module file printer.
-
-package modfile
-
-import (
-	"bytes"
-	"fmt"
-	"strings"
-)
-
-// Format returns a go.mod file as a byte slice, formatted in standard style.
-func Format(f *FileSyntax) []byte {
-	pr := &printer{}
-	pr.file(f)
-
-	// remove trailing blank lines
-	b := pr.Bytes()
-	for len(b) > 0 && b[len(b)-1] == '\n' && (len(b) == 1 || b[len(b)-2] == '\n') {
-		b = b[:len(b)-1]
-	}
-	return b
-}
-
-// A printer collects the state during printing of a file or expression.
-type printer struct {
-	bytes.Buffer           // output buffer
-	comment      []Comment // pending end-of-line comments
-	margin       int       // left margin (indent), a number of tabs
-}
-
-// printf prints to the buffer.
-func (p *printer) printf(format string, args ...any) {
-	fmt.Fprintf(p, format, args...)
-}
-
-// indent returns the position on the current line, in bytes, 0-indexed.
-func (p *printer) indent() int {
-	b := p.Bytes()
-	n := 0
-	for n < len(b) && b[len(b)-1-n] != '\n' {
-		n++
-	}
-	return n
-}
-
-// newline ends the current line, flushing end-of-line comments.
-func (p *printer) newline() {
-	if len(p.comment) > 0 {
-		p.printf(" ")
-		for i, com := range p.comment {
-			if i > 0 {
-				p.trim()
-				p.printf("\n")
-				for i := 0; i < p.margin; i++ {
-					p.printf("\t")
-				}
-			}
-			p.printf("%s", strings.TrimSpace(com.Token))
-		}
-		p.comment = p.comment[:0]
-	}
-
-	p.trim()
-	if b := p.Bytes(); len(b) == 0 || (len(b) >= 2 && b[len(b)-1] == '\n' && b[len(b)-2] == '\n') {
-		// skip the blank line at top of file or after a blank line
-	} else {
-		p.printf("\n")
-	}
-	for i := 0; i < p.margin; i++ {
-		p.printf("\t")
-	}
-}
-
-// trim removes trailing spaces and tabs from the current line.
-func (p *printer) trim() {
-	// Remove trailing spaces and tabs from line we're about to end.
-	b := p.Bytes()
-	n := len(b)
-	for n > 0 && (b[n-1] == '\t' || b[n-1] == ' ') {
-		n--
-	}
-	p.Truncate(n)
-}
-
-// file formats the given file into the print buffer.
-func (p *printer) file(f *FileSyntax) {
-	for _, com := range f.Before {
-		p.printf("%s", strings.TrimSpace(com.Token))
-		p.newline()
-	}
-
-	for i, stmt := range f.Stmt {
-		switch x := stmt.(type) {
-		case *CommentBlock:
-			// comments already handled
-			p.expr(x)
-
-		default:
-			p.expr(x)
-			p.newline()
-		}
-
-		for _, com := range stmt.Comment().After {
-			p.printf("%s", strings.TrimSpace(com.Token))
-			p.newline()
-		}
-
-		if i+1 < len(f.Stmt) {
-			p.newline()
-		}
-	}
-}
-
-func (p *printer) expr(x Expr) {
-	// Emit line-comments preceding this expression.
-	if before := x.Comment().Before; len(before) > 0 {
-		// Want to print a line comment.
-		// Line comments must be at the current margin.
-		p.trim()
-		if p.indent() > 0 {
-			// There's other text on the line. Start a new line.
-			p.printf("\n")
-		}
-		// Re-indent to margin.
-		for i := 0; i < p.margin; i++ {
-			p.printf("\t")
-		}
-		for _, com := range before {
-			p.printf("%s", strings.TrimSpace(com.Token))
-			p.newline()
-		}
-	}
-
-	switch x := x.(type) {
-	default:
-		panic(fmt.Errorf("printer: unexpected type %T", x))
-
-	case *CommentBlock:
-		// done
-
-	case *LParen:
-		p.printf("(")
-	case *RParen:
-		p.printf(")")
-
-	case *Line:
-		p.tokens(x.Token)
-
-	case *LineBlock:
-		p.tokens(x.Token)
-		p.printf(" ")
-		p.expr(&x.LParen)
-		p.margin++
-		for _, l := range x.Line {
-			p.newline()
-			p.expr(l)
-		}
-		p.margin--
-		p.newline()
-		p.expr(&x.RParen)
-	}
-
-	// Queue end-of-line comments for printing when we
-	// reach the end of the line.
-	p.comment = append(p.comment, x.Comment().Suffix...)
-}
-
-func (p *printer) tokens(tokens []string) {
-	sep := ""
-	for _, t := range tokens {
-		if t == "," || t == ")" || t == "]" || t == "}" {
-			sep = ""
-		}
-		p.printf("%s%s", sep, t)
-		sep = " "
-		if t == "(" || t == "[" || t == "{" {
-			sep = ""
-		}
-	}
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/mod/modfile/read.go","mode":420,"size":23950,"sha256":"c433d32623ca5621e4d4d97692ddc38451ebcd6638d54fa505fd7faa9b3e4399","index":0,"count":1,"encoding":"utf-8","payloadBytes":23950}
-// Copyright 2018 The Go Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
-package modfile
-
-import (
-	"bytes"
-	"errors"
-	"fmt"
-	"os"
-	"slices"
-	"strconv"
-	"strings"
-	"unicode"
-	"unicode/utf8"
-)
-
-// A Position describes an arbitrary source position in a file, including the
-// file, line, column, and byte offset.
-type Position struct {
-	Line     int // line in input (starting at 1)
-	LineRune int // rune in line (starting at 1)
-	Byte     int // byte in input (starting at 0)
-}
-
-// add returns the position at the end of s, assuming it starts at p.
-func (p Position) add(s string) Position {
-	p.Byte += len(s)
-	if n := strings.Count(s, "\n"); n > 0 {
-		p.Line += n
-		s = s[strings.LastIndex(s, "\n")+1:]
-		p.LineRune = 1
-	}
-	p.LineRune += utf8.RuneCountInString(s)
-	return p
-}
-
-// An Expr represents an input element.
-type Expr interface {
-	// Span returns the start and end position of the expression,
-	// excluding leading or trailing comments.
-	Span() (start, end Position)
-
-	// Comment returns the comments attached to the expression.
-	// This method would normally be named 'Comments' but that
-	// would interfere with embedding a type of the same name.
-	Comment() *Comments
-}
-
-// A Comment represents a single // comment.
-type Comment struct {
-	Start  Position
-	Token  string // without trailing newline
-	Suffix bool   // an end of line (not whole line) comment
-}
-
-// Comments collects the comments associated with an expression.
-type Comments struct {
-	Before []Comment // whole-line comments before this expression
-	Suffix []Comment // end-of-line comments after this expression
-
-	// For top-level expressions only, After lists whole-line
-	// comments following the expression.
-	After []Comment
-}
-
-// Comment returns the receiver. This isn't useful by itself, but
-// a [Comments] struct is embedded into all the expression
-// implementation types, and this gives each of those a Comment
-// method to satisfy the Expr interface.
-func (c *Comments) Comment() *Comments {
-	return c
-}
-
-// A FileSyntax represents an entire go.mod file.
-type FileSyntax struct {
-	Name string // file path
-	Comments
-	Stmt []Expr
-}
-
-func (x *FileSyntax) Span() (start, end Position) {
-	if len(x.Stmt) == 0 {
-		return
-	}
-	start, _ = x.Stmt[0].Span()
-	_, end = x.Stmt[len(x.Stmt)-1].Span()
-	return start, end
-}
-
-// addLine adds a line containing the given tokens to the file.
-//
-// If the first token of the hint matches the first token of the
-// line, the new line is added at the end of the block containing hint,
-// extracting hint into a new block if it is not yet in one.
-//
-// If the hint is non-nil but its first token does not match,
-// the new line is added after the block containing hint
-// (or hint itself, if not in a block).
-//
-// If no hint is provided, addLine appends the line to the end of
-// the last block with a matching first token,
-// or to the end of the file if no such block exists.
-func (x *FileSyntax) addLine(hint Expr, tokens ...string) *Line {
-	if hint == nil {
-		// If no hint given, add to the last statement of the given type.
-	Loop:
-		for _, stmt := range slices.Backward(x.Stmt) {
-			switch stmt := stmt.(type) {
-			case *Line:
-				if stmt.Token != nil && stmt.Token[0] == tokens[0] {
-					hint = stmt
-					break Loop
-				}
-			case *LineBlock:
-				if stmt.Token[0] == tokens[0] {
-					hint = stmt
-					break Loop
-				}
-			}
-		}
-	}
-
-	newLineAfter := func(i int) *Line {
-		new := &Line{Token: tokens}
-		if i == len(x.Stmt) {
-			x.Stmt = append(x.Stmt, new)
-		} else {
-			x.Stmt = append(x.Stmt, nil)
-			copy(x.Stmt[i+2:], x.Stmt[i+1:])
-			x.Stmt[i+1] = new
-		}
-		return new
-	}
-
-	if hint != nil {
-		for i, stmt := range x.Stmt {
-			switch stmt := stmt.(type) {
-			case *Line:
-				if stmt == hint {
-					if stmt.Token == nil || stmt.Token[0] != tokens[0] {
-						return newLineAfter(i)
-					}
-
-					// Convert line to line block.
-					stmt.InBlock = true
-					block := &LineBlock{Token: stmt.Token[:1], Line: []*Line{stmt}}
-					stmt.Token = stmt.Token[1:]
-					x.Stmt[i] = block
-					new := &Line{Token: tokens[1:], InBlock: true}
-					block.Line = append(block.Line, new)
-					return new
-				}
-
-			case *LineBlock:
-				if stmt == hint {
-					if stmt.Token[0] != tokens[0] {
-						return newLineAfter(i)
-					}
-
-					new := &Line{Token: tokens[1:], InBlock: true}
-					stmt.Line = append(stmt.Line, new)
-					return new
-				}
-
-				for j, line := range stmt.Line {
-					if line == hint {
-						if stmt.Token[0] != tokens[0] {
-							return newLineAfter(i)
-						}
-
-						// Add new line after hint within the block.
-						stmt.Line = append(stmt.Line, nil)
-						copy(stmt.Line[j+2:], stmt.Line[j+1:])
-						new := &Line{Token: tokens[1:], InBlock: true}
-						stmt.Line[j+1] = new
-						return new
-					}
-				}
-			}
-		}
-	}
-
-	new := &Line{Token: tokens}
-	x.Stmt = append(x.Stmt, new)
-	return new
-}
-
-func (x *FileSyntax) updateLine(line *Line, tokens ...string) {
-	if line.InBlock {
-		tokens = tokens[1:]
-	}
-	line.Token = tokens
-}
-
-// markRemoved modifies line so that it (and its end-of-line comment, if any)
-// will be dropped by (*FileSyntax).Cleanup.
-func (line *Line) markRemoved() {
-	line.Token = nil
-	line.Comments.Suffix = nil
-}
-
-// Cleanup cleans up the file syntax x after any edit operations.
-// To avoid quadratic behavior, (*Line).markRemoved marks the line as dead
-// by setting line.Token = nil but does not remove it from the slice
-// in which it appears. After edits have all been indicated,
-// calling Cleanup cleans out the dead lines.
-func (x *FileSyntax) Cleanup() {
-	w := 0
-	for _, stmt := range x.Stmt {
-		switch stmt := stmt.(type) {
-		case *Line:
-			if stmt.Token == nil {
-				continue
-			}
-		case *LineBlock:
-			ww := 0
-			for _, line := range stmt.Line {
-				if line.Token != nil {
-					stmt.Line[ww] = line
-					ww++
-				}
-			}
-			if ww == 0 {
-				continue
-			}
-			if ww == 1 && len(stmt.RParen.Comments.Before) == 0 {
-				// Collapse block into single line but keep the Line reference used by the
-				// parsed File structure.
-				*stmt.Line[0] = Line{
-					Comments: Comments{
-						Before: commentsAdd(stmt.Before, stmt.Line[0].Before),
-						Suffix: commentsAdd(stmt.Line[0].Suffix, stmt.Suffix),
-						After:  commentsAdd(stmt.Line[0].After, stmt.After),
-					},
-					Token: stringsAdd(stmt.Token, stmt.Line[0].Token),
-				}
-				x.Stmt[w] = stmt.Line[0]
-				w++
-				continue
-			}
-			stmt.Line = stmt.Line[:ww]
-		}
-		x.Stmt[w] = stmt
-		w++
-	}
-	x.Stmt = x.Stmt[:w]
-}
-
-func commentsAdd(x, y []Comment) []Comment {
-	return append(x[:len(x):len(x)], y...)
-}
-
-func stringsAdd(x, y []string) []string {
-	return append(x[:len(x):len(x)], y...)
-}
-
-// A CommentBlock represents a top-level block of comments separate
-// from any rule.
-type CommentBlock struct {
-	Comments
-	Start Position
-}
-
-func (x *CommentBlock) Span() (start, end Position) {
-	return x.Start, x.Start
-}
-
-// A Line is a single line of tokens.
-type Line struct {
-	Comments
-	Start   Position
-	Token   []string
-	InBlock bool
-	End     Position
-}
-
-func (x *Line) Span() (start, end Position) {
-	return x.Start, x.End
-}
-
-// A LineBlock is a factored block of lines, like
-//
-//	require (
-//		"x"
-//		"y"
-//	)
-type LineBlock struct {
-	Comments
-	Start  Position
-	LParen LParen
-	Token  []string
-	Line   []*Line
-	RParen RParen
-}
-
-func (x *LineBlock) Span() (start, end Position) {
-	return x.Start, x.RParen.Pos.add(")")
-}
-
-// An LParen represents the beginning of a parenthesized line block.
-// It is a place to store suffix comments.
-type LParen struct {
-	Comments
-	Pos Position
-}
-
-func (x *LParen) Span() (start, end Position) {
-	return x.Pos, x.Pos.add(")")
-}
-
-// An RParen represents the end of a parenthesized line block.
-// It is a place to store whole-line (before) comments.
-type RParen struct {
-	Comments
-	Pos Position
-}
-
-func (x *RParen) Span() (start, end Position) {
-	return x.Pos, x.Pos.add(")")
-}
-
-// An input represents a single input file being parsed.
-type input struct {
-	// Lexing state.
-	filename   string    // name of input file, for errors
-	complete   []byte    // entire input
-	remaining  []byte    // remaining input
-	tokenStart []byte    // token being scanned to end of input
-	token      token     // next token to be returned by lex, peek
-	pos        Position  // current input position
-	comments   []Comment // accumulated comments
-
-	// Parser state.
-	file        *FileSyntax // returned top-level syntax tree
-	parseErrors ErrorList   // errors encountered during parsing
-
-	// Comment assignment state.
-	pre  []Expr // all expressions, in preorder traversal
-	post []Expr // all expressions, in postorder traversal
-}
-
-func newInput(filename string, data []byte) *input {
-	return &input{
-		filename:  filename,
-		complete:  data,
-		remaining: data,
-		pos:       Position{Line: 1, LineRune: 1, Byte: 0},
-	}
-}
-
-// parse parses the input file.
-func parse(file string, data []byte) (f *FileSyntax, err error) {
-	// The parser panics for both routine errors like syntax errors
-	// and for programmer bugs like array index errors.
-	// Turn both into error returns. Catching bug panics is
-	// especially important when processing many files.
-	in := newInput(file, data)
-	defer func() {
-		if e := recover(); e != nil && e != &in.parseErrors {
-			in.parseErrors = append(in.parseErrors, Error{
-				Filename: in.filename,
-				Pos:      in.pos,
-				Err:      fmt.Errorf("internal error: %v", e),
-			})
-		}
-		if err == nil && len(in.parseErrors) > 0 {
-			err = in.parseErrors
-		}
-	}()
-
-	// Prime the lexer by reading in the first token. It will be available
-	// in the next peek() or lex() call.
-	in.readToken()
-
-	// Invoke the parser.
-	in.parseFile()
-	if len(in.parseErrors) > 0 {
-		return nil, in.parseErrors
-	}
-	in.file.Name = in.filename
-
-	// Assign comments to nearby syntax.
-	in.assignComments()
-
-	return in.file, nil
-}
-
-// Error is called to report an error.
-// Error does not return: it panics.
-func (in *input) Error(s string) {
-	in.parseErrors = append(in.parseErrors, Error{
-		Filename: in.filename,
-		Pos:      in.pos,
-		Err:      errors.New(s),
-	})
-	panic(&in.parseErrors)
-}
-
-// eof reports whether the input has reached end of file.
-func (in *input) eof() bool {
-	return len(in.remaining) == 0
-}
-
-// peekRune returns the next rune in the input without consuming it.
-func (in *input) peekRune() int {
-	if len(in.remaining) == 0 {
-		return 0
-	}
-	r, _ := utf8.DecodeRune(in.remaining)
-	return int(r)
-}
-
-// peekPrefix reports whether the remaining input begins with the given prefix.
-func (in *input) peekPrefix(prefix string) bool {
-	// This is like bytes.HasPrefix(in.remaining, []byte(prefix))
-	// but without the allocation of the []byte copy of prefix.
-	for i := 0; i < len(prefix); i++ {
-		if i >= len(in.remaining) || in.remaining[i] != prefix[i] {
-			return false
-		}
-	}
-	return true
-}
-
-// readRune consumes and returns the next rune in the input.
-func (in *input) readRune() int {
-	if len(in.remaining) == 0 {
-		in.Error("internal lexer error: readRune at EOF")
-	}
-	r, size := utf8.DecodeRune(in.remaining)
-	in.remaining = in.remaining[size:]
-	if r == '\n' {
-		in.pos.Line++
-		in.pos.LineRune = 1
-	} else {
-		in.pos.LineRune++
-	}
-	in.pos.Byte += size
-	return int(r)
-}
-
-type token struct {
-	kind   tokenKind
-	pos    Position
-	endPos Position
-	text   string
-}
-
-type tokenKind int
-
-const (
-	_EOF tokenKind = -(iota + 1)
-	_EOLCOMMENT
-	_IDENT
-	_STRING
-	_COMMENT
-
-	// newlines and punctuation tokens are allowed as ASCII codes.
-)
-
-func (k tokenKind) isComment() bool {
-	return k == _COMMENT || k == _EOLCOMMENT
-}
-
-// isEOL returns whether a token terminates a line.
-func (k tokenKind) isEOL() bool {
-	return k == _EOF || k == _EOLCOMMENT || k == '\n'
-}
-
-// startToken marks the beginning of the next input token.
-// It must be followed by a call to endToken, once the token's text has
-// been consumed using readRune.
-func (in *input) startToken() {
-	in.tokenStart = in.remaining
-	in.token.text = ""
-	in.token.pos = in.pos
-}
-
-// endToken marks the end of an input token.
-// It records the actual token string in tok.text.
-// A single trailing newline (LF or CRLF) will be removed from comment tokens.
-func (in *input) endToken(kind tokenKind) {
-	in.token.kind = kind
-	text := string(in.tokenStart[:len(in.tokenStart)-len(in.remaining)])
-	if kind.isComment() {
-		if strings.HasSuffix(text, "\r\n") {
-			text = text[:len(text)-2]
-		} else {
-			text = strings.TrimSuffix(text, "\n")
-		}
-	}
-	in.token.text = text
-	in.token.endPos = in.pos
-}
-
-// peek returns the kind of the next token returned by lex.
-func (in *input) peek() tokenKind {
-	return in.token.kind
-}
-
-// lex is called from the parser to obtain the next input token.
-func (in *input) lex() token {
-	tok := in.token
-	in.readToken()
-	return tok
-}
-
-// readToken lexes the next token from the text and stores it in in.token.
-func (in *input) readToken() {
-	// Skip past spaces, stopping at non-space or EOF.
-	for !in.eof() {
-		c := in.peekRune()
-		if c == ' ' || c == '\t' || c == '\r' {
-			in.readRune()
-			continue
-		}
-
-		// Comment runs to end of line.
-		if in.peekPrefix("//") {
-			in.startToken()
-
-			// Is this comment the only thing on its line?
-			// Find the last \n before this // and see if it's all
-			// spaces from there to here.
-			i := bytes.LastIndex(in.complete[:in.pos.Byte], []byte("\n"))
-			suffix := len(bytes.TrimSpace(in.complete[i+1:in.pos.Byte])) > 0
-			in.readRune()
-			in.readRune()
-
-			// Consume comment.
-			for len(in.remaining) > 0 && in.readRune() != '\n' {
-			}
-
-			// If we are at top level (not in a statement), hand the comment to
-			// the parser as a _COMMENT token. The grammar is written
-			// to handle top-level comments itself.
-			if !suffix {
-				in.endToken(_COMMENT)
-				return
-			}
-
-			// Otherwise, save comment for later attachment to syntax tree.
-			in.endToken(_EOLCOMMENT)
-			in.comments = append(in.comments, Comment{in.token.pos, in.token.text, suffix})
-			return
-		}
-
-		if in.peekPrefix("/*") {
-			in.Error("mod files must use // comments (not /* */ comments)")
-		}
-
-		// Found non-space non-comment.
-		break
-	}
-
-	// Found the beginning of the next token.
-	in.startToken()
-
-	// End of file.
-	if in.eof() {
-		in.endToken(_EOF)
-		return
-	}
-
-	// Punctuation tokens.
-	switch c := in.peekRune(); c {
-	case '\n', '(', ')', '[', ']', '{', '}', ',':
-		in.readRune()
-		in.endToken(tokenKind(c))
-		return
-
-	case '"', '`': // quoted string
-		quote := c
-		in.readRune()
-		for {
-			if in.eof() {
-				in.pos = in.token.pos
-				in.Error("unexpected EOF in string")
-			}
-			if in.peekRune() == '\n' {
-				in.Error("unexpected newline in string")
-			}
-			c := in.readRune()
-			if c == quote {
-				break
-			}
-			if c == '\\' && quote != '`' {
-				if in.eof() {
-					in.pos = in.token.pos
-					in.Error("unexpected EOF in string")
-				}
-				in.readRune()
-			}
-		}
-		in.endToken(_STRING)
-		return
-	}
-
-	// Checked all punctuation. Must be identifier token.
-	if c := in.peekRune(); !isIdent(c) {
-		in.Error(fmt.Sprintf("unexpected input character %#q", rune(c)))
-	}
-
-	// Scan over identifier.
-	for isIdent(in.peekRune()) {
-		if in.peekPrefix("//") {
-			break
-		}
-		if in.peekPrefix("/*") {
-			in.Error("mod files must use // comments (not /* */ comments)")
-		}
-		in.readRune()
-	}
-	in.endToken(_IDENT)
-}
-
-// isIdent reports whether c is an identifier rune.
-// We treat most printable runes as identifier runes, except for a handful of
-// ASCII punctuation characters.
-func isIdent(c int) bool {
-	switch r := rune(c); r {
-	case ' ', '(', ')', '[', ']', '{', '}', ',':
-		return false
-	default:
-		return !unicode.IsSpace(r) && unicode.IsPrint(r)
-	}
-}
-
-// Comment assignment.
-// We build two lists of all subexpressions, preorder and postorder.
-// The preorder list is ordered by start location, with outer expressions first.
-// The postorder list is ordered by end location, with outer expressions last.
-// We use the preorder list to assign each whole-line comment to the syntax
-// immediately following it, and we use the postorder list to assign each
-// end-of-line comment to the syntax immediately preceding it.
-
-// order walks the expression adding it and its subexpressions to the
-// preorder and postorder lists.
-func (in *input) order(x Expr) {
-	if x != nil {
-		in.pre = append(in.pre, x)
-	}
-	switch x := x.(type) {
-	default:
-		panic(fmt.Errorf("order: unexpected type %T", x))
-	case nil:
-		// nothing
-	case *LParen, *RParen:
-		// nothing
-	case *CommentBlock:
-		// nothing
-	case *Line:
-		// nothing
-	case *FileSyntax:
-		for _, stmt := range x.Stmt {
-			in.order(stmt)
-		}
-	case *LineBlock:
-		in.order(&x.LParen)
-		for _, l := range x.Line {
-			in.order(l)
-		}
-		in.order(&x.RParen)
-	}
-	if x != nil {
-		in.post = append(in.post, x)
-	}
-}
-
-// assignComments attaches comments to nearby syntax.
-func (in *input) assignComments() {
-	const debug = false
-
-	// Generate preorder and postorder lists.
-	in.order(in.file)
-
-	// Split into whole-line comments and suffix comments.
-	var line, suffix []Comment
-	for _, com := range in.comments {
-		if com.Suffix {
-			suffix = append(suffix, com)
-		} else {
-			line = append(line, com)
-		}
-	}
-
-	if debug {
-		for _, c := range line {
-			fmt.Fprintf(os.Stderr, "LINE %q :%d:%d #%d\n", c.Token, c.Start.Line, c.Start.LineRune, c.Start.Byte)
-		}
-	}
-
-	// Assign line comments to syntax immediately following.
-	for _, x := range in.pre {
-		start, _ := x.Span()
-		if debug {
-			fmt.Fprintf(os.Stderr, "pre %T :%d:%d #%d\n", x, start.Line, start.LineRune, start.Byte)
-		}
-		xcom := x.Comment()
-		for len(line) > 0 && start.Byte >= line[0].Start.Byte {
-			if debug {
-				fmt.Fprintf(os.Stderr, "ASSIGN LINE %q #%d\n", line[0].Token, line[0].Start.Byte)
-			}
-			xcom.Before = append(xcom.Before, line[0])
-			line = line[1:]
-		}
-	}
-
-	// Remaining line comments go at end of file.
-	in.file.After = append(in.file.After, line...)
-
-	if debug {
-		for _, c := range suffix {
-			fmt.Fprintf(os.Stderr, "SUFFIX %q :%d:%d #%d\n", c.Token, c.Start.Line, c.Start.LineRune, c.Start.Byte)
-		}
-	}
-
-	// Assign suffix comments to syntax immediately before.
-	for _, x := range slices.Backward(in.post) {
-		start, end := x.Span()
-		if debug {
-			fmt.Fprintf(os.Stderr, "post %T :%d:%d #%d :%d:%d #%d\n", x, start.Line, start.LineRune, start.Byte, end.Line, end.LineRune, end.Byte)
-		}
-
-		// Do not assign suffix comments to end of line block or whole file.
-		// Instead assign them to the last element inside.
-		switch x.(type) {
-		case *FileSyntax:
-			continue
-		}
-
-		// Do not assign suffix comments to something that starts
-		// on an earlier line, so that in
-		//
-		//	x ( y
-		//		z ) // comment
-		//
-		// we assign the comment to z and not to x ( ... ).
-		if start.Line != end.Line {
-			continue
-		}
-		xcom := x.Comment()
-		for len(suffix) > 0 && end.Byte <= suffix[len(suffix)-1].Start.Byte {
-			if debug {
-				fmt.Fprintf(os.Stderr, "ASSIGN SUFFIX %q #%d\n", suffix[len(suffix)-1].Token, suffix[len(suffix)-1].Start.Byte)
-			}
-			xcom.Suffix = append(xcom.Suffix, suffix[len(suffix)-1])
-			suffix = suffix[:len(suffix)-1]
-		}
-	}
-
-	// We assigned suffix comments in reverse.
-	// If multiple suffix comments were appended to the same
-	// expression node, they are now in reverse. Fix that.
-	for _, x := range in.post {
-		reverseComments(x.Comment().Suffix)
-	}
-
-	// Remaining suffix comments go at beginning of file.
-	in.file.Before = append(in.file.Before, suffix...)
-}
-
-// reverseComments reverses the []Comment list.
-func reverseComments(list []Comment) {
-	for i, j := 0, len(list)-1; i < j; i, j = i+1, j-1 {
-		list[i], list[j] = list[j], list[i]
-	}
-}
-
-func (in *input) parseFile() {
-	in.file = new(FileSyntax)
-	var cb *CommentBlock
-	for {
-		switch in.peek() {
-		case '\n':
-			in.lex()
-			if cb != nil {
-				in.file.Stmt = append(in.file.Stmt, cb)
-				cb = nil
-			}
-		case _COMMENT:
-			tok := in.lex()
-			if cb == nil {
-				cb = &CommentBlock{Start: tok.pos}
-			}
-			com := cb.Comment()
-			com.Before = append(com.Before, Comment{Start: tok.pos, Token: tok.text})
-		case _EOF:
-			if cb != nil {
-				in.file.Stmt = append(in.file.Stmt, cb)
-			}
-			return
-		default:
-			in.parseStmt()
-			if cb != nil {
-				in.file.Stmt[len(in.file.Stmt)-1].Comment().Before = cb.Before
-				cb = nil
-			}
-		}
-	}
-}
-
-func (in *input) parseStmt() {
-	tok := in.lex()
-	start := tok.pos
-	end := tok.endPos
-	tokens := []string{tok.text}
-	for {
-		tok := in.lex()
-		switch {
-		case tok.kind.isEOL():
-			in.file.Stmt = append(in.file.Stmt, &Line{
-				Start: start,
-				Token: tokens,
-				End:   end,
-			})
-			return
-
-		case tok.kind == '(':
-			if next := in.peek(); next.isEOL() {
-				// Start of block: no more tokens on this line.
-				in.file.Stmt = append(in.file.Stmt, in.parseLineBlock(start, tokens, tok))
-				return
-			} else if next == ')' {
-				rparen := in.lex()
-				if in.peek().isEOL() {
-					// Empty block.
-					in.lex()
-					in.file.Stmt = append(in.file.Stmt, &LineBlock{
-						Start:  start,
-						Token:  tokens,
-						LParen: LParen{Pos: tok.pos},
-						RParen: RParen{Pos: rparen.pos},
-					})
-					return
-				}
-				// '( )' in the middle of the line, not a block.
-				tokens = append(tokens, tok.text, rparen.text)
-			} else {
-				// '(' in the middle of the line, not a block.
-				tokens = append(tokens, tok.text)
-			}
-
-		default:
-			tokens = append(tokens, tok.text)
-			end = tok.endPos
-		}
-	}
-}
-
-func (in *input) parseLineBlock(start Position, token []string, lparen token) *LineBlock {
-	x := &LineBlock{
-		Start:  start,
-		Token:  token,
-		LParen: LParen{Pos: lparen.pos},
-	}
-	var comments []Comment
-	for {
-		switch in.peek() {
-		case _EOLCOMMENT:
-			// Suffix comment, will be attached later by assignComments.
-			in.lex()
-		case '\n':
-			// Blank line. Add an empty comment to preserve it.
-			in.lex()
-			if len(comments) == 0 && len(x.Line) > 0 || len(comments) > 0 && comments[len(comments)-1].Token != "" {
-				comments = append(comments, Comment{})
-			}
-		case _COMMENT:
-			tok := in.lex()
-			comments = append(comments, Comment{Start: tok.pos, Token: tok.text})
-		case _EOF:
-			in.Error(fmt.Sprintf("syntax error (unterminated block started at %s:%d:%d)", in.filename, x.Start.Line, x.Start.LineRune))
-		case ')':
-			rparen := in.lex()
-			// Don't preserve blank lines (denoted by a single empty comment, added above)
-			// at the end of the block.
-			if len(comments) == 1 && comments[0] == (Comment{}) {
-				comments = nil
-			}
-			x.RParen.Before = comments
-			x.RParen.Pos = rparen.pos
-			if !in.peek().isEOL() {
-				in.Error("syntax error (expected newline after closing paren)")
-			}
-			in.lex()
-			return x
-		default:
-			l := in.parseLine()
-			x.Line = append(x.Line, l)
-			l.Comment().Before = comments
-			comments = nil
-		}
-	}
-}
-
-func (in *input) parseLine() *Line {
-	tok := in.lex()
-	if tok.kind.isEOL() {
-		in.Error("internal parse error: parseLine at end of line")
-	}
-	start := tok.pos
-	end := tok.endPos
-	tokens := []string{tok.text}
-	for {
-		tok := in.lex()
-		if tok.kind.isEOL() {
-			return &Line{
-				Start:   start,
-				Token:   tokens,
-				End:     end,
-				InBlock: true,
-			}
-		}
-		tokens = append(tokens, tok.text)
-		end = tok.endPos
-	}
-}
-
-var (
-	slashSlash = []byte("//")
-	moduleStr  = []byte("module")
-)
-
-// ModulePath returns the module path from the gomod file text.
-// If it cannot find a module path, it returns an empty string.
-// It is tolerant of unrelated problems in the go.mod file.
-func ModulePath(mod []byte) string {
-	for len(mod) > 0 {
-		line := mod
-		mod = nil
-		if i := bytes.IndexByte(line, '\n'); i >= 0 {
-			line, mod = line[:i], line[i+1:]
-		}
-		if i := bytes.Index(line, slashSlash); i >= 0 {
-			line = line[:i]
-		}
-		line = bytes.TrimSpace(line)
-		if !bytes.HasPrefix(line, moduleStr) {
-			continue
-		}
-		line = line[len(moduleStr):]
-		n := len(line)
-		line = bytes.TrimSpace(line)
-		if len(line) == n || len(line) == 0 {
-			continue
-		}
-
-		if line[0] == '"' || line[0] == '`' {
-			p, err := strconv.Unquote(string(line))
-			if err != nil {
-				return "" // malformed quoted string or multiline module path
-			}
-			return p
-		}
-
-		return string(line)
-	}
-	return "" // missing module path
 }
 
 @@END

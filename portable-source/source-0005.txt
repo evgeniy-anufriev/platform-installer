@@ -1,3 +1,2359 @@
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/bitfield/script/CODE_OF_CONDUCT.md","mode":420,"size":3296,"sha256":"802ea1a32fed4880c7b16fff8376bf3fc314d87d018bee677c2c62043b1ef775","index":0,"count":1,"encoding":"utf-8","payloadBytes":3296}
+# CONTRIBUTOR CODE OF CONDUCT
+
+## Our Pledge
+
+In the interest of fostering an open and welcoming environment, we as contributors and maintainers pledge to make participation in our project and our community a harassment-free experience for everyone, regardless of age, body size, disability, ethnicity, sex characteristics, gender identity and expression, level of experience, education, socio-economic status, nationality, personal appearance, race, religion, or sexual identity and orientation.
+
+## Our Standards
+
+Examples of behavior that contributes to creating a positive environment include:
+* Using welcoming and inclusive language
+* Being respectful of differing viewpoints and experiences
+* Gracefully accepting constructive criticism
+* Focusing on what is best for the community
+* Showing empathy towards other community members
+
+Examples of unacceptable behavior by participants include:
+* The use of sexualized language or imagery and unwelcome sexual attention or advances
+* Trolling, insulting/derogatory comments, and personal or political attacks
+* Public or private harassment
+* Publishing others’ private information, such as a physical or electronic address, without explicit permission
+* Other conduct which could reasonably be considered inappropriate in a professional setting
+
+## Our Responsibilities
+
+Project maintainers are responsible for clarifying the standards of acceptable behavior and are expected to take appropriate and fair corrective action in response to any instances of unacceptable behavior.
+Project maintainers have the right and responsibility to remove, edit, or reject comments, commits, code, wiki edits, issues, and other contributions that are not aligned to this Code of Conduct, or to ban temporarily or permanently any contributor for other behaviors that they deem inappropriate, threatening, offensive, or harmful.
+
+## Scope
+
+This Code of Conduct applies within all project spaces, and it also applies when an individual is representing the project or its community in public spaces. Examples of representing a project or community include using an official project e-mail address, posting via an official social media account, or acting as an appointed representative at an online or offline event. Representation of a project may be further defined and clarified by project maintainers.
+
+## Enforcement
+
+Instances of abusive, harassing, or otherwise unacceptable behavior may be reported by contacting the project team at go@bitfieldconsulting.com. All complaints will be reviewed and investigated and will result in a response that is deemed necessary and appropriate to the circumstances. The project team is obligated to maintain confidentiality with regard to the reporter of an incident. Further details of specific enforcement policies may be posted separately.
+Project maintainers who do not follow or enforce the Code of Conduct in good faith may face temporary or permanent repercussions as determined by other members of the project’s leadership.
+
+## Attribution
+
+This Code of Conduct is adapted from the Contributor Covenant, version 1.4, available at https://www.contributor-covenant.org/version/1/4/code-of-conduct.html
+For answers to common questions about this code of conduct, see https://www.contributor-covenant.org/faq
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/bitfield/script/CONTRIBUTING.md","mode":420,"size":13874,"sha256":"4bc87103fb736542baf56a45c0567df288625e89202494294017db9f0323e6e8","index":0,"count":1,"encoding":"utf-8","payloadBytes":13874}
+So you'd like to contribute to the `script` library? Excellent! Thank you very much. I can absolutely use your help.
+
+# Getting started
+
+Here are some hints on a good workflow for contributing to the project.
+
+## Look for existing issues
+
+First of all, check the [issues](https://github.com/bitfield/script/issues) list. If you see an outstanding issue that you would like to tackle, by all means comment on the issue and let me know.
+
+If you already have an idea for a feature you want to add, check the issues list anyway, just to make sure it hasn't already been discussed.
+
+## Open a new issue before making a PR
+
+I _don't_ recommend just making a pull request for some new feature—it probably won't be accepted! Usually it's better to [open an issue](https://github.com/bitfield/script/issues/new) first, and we can discuss what the feature is about, how best to design it, other people can weigh in with contributions, and so forth. Design is, in fact, the hard part. Once we have a solid, well-thought-out design, implementing it is usually fairly easy. (Implementing a bad design may be easy too, but it's a waste of effort.)
+
+## Write a use case
+
+This is probably the most important thing to bear in mind. A great design principle for software libraries is to start with a real-world use case, and try to implement it using the feature you have in mind. _No issues or PRs will be accepted into `script` without an accompanying use case_. And I hold myself to that rule just as much as anybody else.
+
+What do I mean by "use case"? I mean a real problem that you or someone else actually has, that could be solved using the feature. For example, you might think it's a very cool idea to add a `Frobnicate()` method to `script`. Maybe it is, but what's it for? Where would this be used in the real world? Can you give an example of a problem that could be solved by a `script` program using `Frobnicate()`? If so, what would the program look like?
+
+The reason for insisting on this up front is that it's much easier to design a feature the right way if you start with its usage in mind. It's all too easy to design something in the abstract, and then find later that when you try to use it in a program, the API is completely unsuitable.
+
+A concrete use case also provides a helpful example program that can be included with the library to show how the feature is used.
+
+The final reason is that it's tempting to over-elaborate a design and add all sorts of bells and whistles that nobody actually wants. Simple APIs are best. If you think of an enhancement, but it's not needed for your use case, leave it out. Things can always be enhanced later if necessary.
+
+# Coding standards
+
+A library is easier to use, and easier for contributors to work on, if it has a consistent, unified style, approach, and layout. Here are a few hints on how to make a `script` PR that will be accepted right away.
+
+## Tests
+
+It goes without saying, but I'll say it anyway, that you must provide comprehensive tests for your feature. Code coverage doesn't need to be 100% (that's a waste of time and effort), but it does need to be very good. The [awesome-go](https://github.com/avelino/awesome-go) collection (which `script` is part of) mandates at least 80% coverage, and I'd rather it were 90% or better.
+
+Test data should go in the `testdata` directory. If you create a file of data for input to your method, name it `method_name.input.txt`. If you create a 'golden' file (of correct output, to compare with the output from your method) name it `method_name.golden.txt`. This will help keep things organised.
+
+### Use the standard library
+
+All `script` tests use the standard Go `testing` library; they don't use `testify` or `gock` or any of the other tempting and shiny test libraries. There's nothing wrong with those libraries, but it's good to keep things consistent, and not import any libraries we don't absolutely need.
+
+You'll get the feel of things by reading the existing tests, and maybe copying and adapting them for your own feature.
+
+All tests should call `t.Parallel()`. If there is some really good reason why your test can't be run in parallel, we'll talk about it.
+
+### Spend time on your test cases
+
+Add lots of test cases; they're cheap. Don't just test the obvious happy-path cases; test the null case, where your feature does nothing (make sure it does!). Test edge cases, strange inputs, missing inputs, non-ASCII characters, zeroes, and nils. Knowing what you know about your implementation, what inputs and cases might possibly cause it to break? Test those.
+
+Remember people are using `script` to write mission-critical system administration programs where their data, their privacy, and even their business could be at stake. Now, of course it's up to them to make sure that their programs are safe and correct; library maintainers bear no responsibility for that. But we can at least ensure that the code is as reliable and trustworthy as we can make it.
+
+### Add your method to `doMethodsOnPipe` for stress testing
+
+One final point: a common source of errors in Go programs is methods being called on zero or nil values. All `script` pipe methods should handle this situation, as well as being called on a valid pipe that just happens to have no contents (such as a newly-created pipe).
+
+To ensure this, we call every possible method on (in turn) a nil pipe, a zero pipe, and an empty pipe, using the `doMethodsOnPipe` helper function. If you add a new method to `script`, add a call to your method to this helper function, and it will automatically be stress tested.
+
+Methods on a nil, zero, or empty pipe should not necessarily do nothing; that depends on the method semantics. For example, `WriteFile()` on an empty pipe creates the required file, writes nothing to it, and closes it. This is correct behaviour.
+
+## Dealing with errors
+
+Runtime errors (as opposed to test failures or compilation errors) are handled in a special way in `script`.
+
+### Don't panic
+
+Methods should not, in any situation, panic. In fact, no `script` method panics, nor should any library method. Because calling `panic()` ends the program, this decision should be reserved for the `main()` function. In other words, it's up to the user, not us, when to crash the program. This is a good design principle for Go libraries in general, but especially here because we have a better way of dealing with errors.
+
+### Set the pipe's error status
+
+Normally, Go library code that encounters a problem would return an error to the caller, but `script` methods are specifically designed not to do this (see [Handling errors](README.md#Handling-errors)). Instead, set the error status on the pipe and return. Before you do anything at all in your method, you should check whether the pipe is nil, or the error status is set, and if so, return immediately.
+
+Here's an example:
+
+```go
+func (p *Pipe) Frobnicate() *Pipe {
+	// If the pipe has an error, or is nil, this is a no-op
+	if p == nil || p.Error() != nil {
+		return p
+	}
+	output, err := doSomething()
+	if err != nil {
+		// Something went wrong, so save the error in the pipe. The user can
+		// check it afterwards.
+		p.SetError(err)
+		return p
+	}
+	return NewPipe().WithReader(bytes.NewReader(output))
+}
+```
+
+## Style and formatting
+
+This is easy in Go. Just use `gofmt`. End of.
+
+Your code should also pass `golint` and `go vet` without errors (and if you want to run other linters too, that would be excellent). Very, very occasionally there are situations where `golint` incorrectly detects a problem, and the workaround is awkward or annoying. In that situation, comment on the PR and we'll work out how best to handle it.
+
+# Documentation
+
+It doesn't matter if you write the greatest piece of code in the history of the world, if no one knows it exists, or how to use it.
+
+## Write doc comments
+
+Any functions or methods you write should have useful documentation comments in the standard `go doc` format. Specifically, they should say what inputs the function takes, what it does (in detail), and what outputs it returns. If it returns an error value, explain under what circumstances this happens.
+
+For example:
+
+```go
+// WriteFile writes the contents of the pipe to the specified file, and closes
+// the pipe after reading. If the file already exists, it is truncated and the
+// new data will replace the old. It returns the number of bytes successfully
+// written, or an error.
+func (p *Pipe) WriteFile(fileName string) (int64, error) {
+```
+
+This is the _whole_ user manual for your code. It will be included in the autogenerated documentation for the whole package. Remember that readers will often see it _without_ the accompanying code, so it needs to make sense on its own.
+
+## Update the README
+
+Any change to the `script` API should also be accompanied by an update to the README. If you add a new method, add it to the appropriate table (sources, filters, or sinks), and if it's the equivalent of a command Unix command, add it to the table of Unix equivalents too.
+
+# Before submitting your pull request
+
+Here's a handy checklist for making sure your PR will be accepted as quickly as possible.
+
+- [ ] Have you opened an issue to discuss the feature and agree its general design?
+- [ ] Do you have a use case and, ideally, an example program using the feature?
+- [ ] Do you have tests covering 90%+ of the feature code (and, of course passing)
+- [ ] Have you added your method to the `doMethodsOnPipe` stress tests?
+- [ ] Have you written complete and accurate doc comments?
+- [ ] Have you updated the README and its table of contents?
+- [ ] You rock. Thanks a lot.
+
+# After submitting your PR
+
+Here's a nice tip for PR-driven development in general. After you've submitted the PR, do a 'pre-code-review'. Go through the diffs, line by line, and be your own code reviewer. Does something look weird? Is something not quite straightforward? It's quite likely that you'll spot errors at this stage that you missed before, simply because you're looking at the code with a reviewer's mindset.
+
+If so, fix them! But if you can foresee a question from a code reviewer, comment on the code to answer it in advance. (Even better, improve the code so that the question doesn't arise.)
+
+# The code review process
+
+If you've completed all these steps, I _will_ invest significant time and energy in giving your PR a detailed code review. This is a powerful and beneficial process that can not only improve the code, but can also help you learn to be a better engineer and a better Go programmer—and the same goes for me!
+
+## Expect to be taken seriously
+
+Don't think of code review as a "you got this wrong, fix it" kind of conversation (this isn't a helpful review comment). Instead, think of it as a discussion where both sides can ask questions, make suggestions, clarify problems and misunderstandings, catch mistakes, and add improvements.
+
+You shouldn't be disappointed if you don't get a simple 'LGTM' and an instant merge. If this is what you're used to, then your team isn't really doing code review to its full potential. Instead, the more comments you get, the more seriously it means I'm taking your work. Where appropriate, I'll say what I liked as well as what I'd like to see improved.
+
+## Dealing with comments
+
+Now comes the tricky bit. You may not agree with some of the code review comments. Reviewing code is a delicate business in the first place, requiring diplomacy as well as discretion, but responding to code reviews is also a skilled task.
+
+If you find yourself reacting emotionally, take a break. Go walk in the woods for a while, or play with a laughing child. When you come back to the code, approach it as though it were someone else's, not your own, and ask yourself seriously whether or not the reviewer _has a point_.
+
+If you genuinely think the reviewer has just misunderstood something, or made a mistake, try to clarify the issue. Ask questions, don't make accusations. Remember that every project has a certain way of doing things that may not be _your_ way. It's polite to go along with these practices and conventions.
+
+You may feel as though you're doing the project maintainer a favour by contributing, as indeed you are, but an open source project is like somebody's home. They're used to living there, they probably like it the way it is, and they don't always respond well to strangers marching in and rearranging the furniture. Be considerate, and be willing to listen and make changes.
+
+## This may take a while
+
+Don't be impatient. We've all had the experience of sending in our beautifully-crafted PR and then waiting, waiting, waiting. Why won't those idiots just merge it? How come other issues and PRs are getting dealt with ahead of mine? Am I invisible?
+
+In fact, doing a _proper_ and serious code review is a time-consuming business. It's not just a case of skim-reading the diffs. The reviewer will need to check out your branch, run the tests, think carefully about what you've done, make suggestions, test alternatives. It's almost as much work as writing the PR in the first place.
+
+Open source maintainers are just regular folk with jobs, kids, and zero free time or energy. They may not be able to drop everything and put in several hours on your PR. The task may have to wait a week or two until they can get sufficient time and peace and quiet to work on it. Don't pester them. It's fine to add a comment on the PR if you haven't heard anything for a while, asking if the reviewer's been able to look at it and whether there's anything you can do to help speed things up. Comments like 'Y U NO MERGE' are unlikely to elicit a positive response.
+
+Thanks again for helping out!
+
+## Code of Conduct
+
+As a contributor you can help keep the `script` community inclusive and open to everyone. Please read and adhere to our [Code of Conduct](CODE_OF_CONDUCT.md).
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/bitfield/script/LICENSE","mode":420,"size":1069,"sha256":"3f0b9eb2fbcf15ac83a4fb79d1d8e767668aa24bea2611a313f1785411070ca3","index":0,"count":1,"encoding":"utf-8","payloadBytes":1069}
+MIT License
+
+Copyright (c) 2019 John Arundel
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/bitfield/script/README.md","mode":420,"size":21256,"sha256":"ed5bce704c52619fd1760bf8cef27571367e919e55d524aac5722e04f8923bcb","index":0,"count":1,"encoding":"utf-8","payloadBytes":21256}
+[![Go Reference](https://pkg.go.dev/badge/github.com/bitfield/script.svg)](https://pkg.go.dev/github.com/bitfield/script)
+[![Go Report Card](https://goreportcard.com/badge/github.com/bitfield/script)](https://goreportcard.com/report/github.com/bitfield/script)
+[![Mentioned in Awesome Go](https://awesome.re/mentioned-badge-flat.svg)](https://github.com/avelino/awesome-go)
+![CI](https://github.com/bitfield/script/actions/workflows/ci.yml/badge.svg)
+![Audit](https://github.com/bitfield/script/actions/workflows/audit.yml/badge.svg)
+
+```go
+import "github.com/bitfield/script"
+```
+
+[![Magical gopher logo](img/magic.png)](https://bitfieldconsulting.com/golang/scripting)
+
+# What is `script`?
+
+`script` is a Go library for doing the kind of tasks that shell scripts are good at: reading files, executing subprocesses, counting lines, matching strings, and so on.
+
+Why shouldn't it be as easy to write system administration programs in Go as it is in a typical shell? `script` aims to make it just that easy.
+
+Shell scripts often compose a sequence of operations on a stream of data (a _pipeline_). This is how `script` works, too.
+
+> *This is one absolutely superb API design. Taking inspiration from shell pipes and turning it into a Go library with syntax this clean is really impressive.*\
+> —[Simon Willison](https://news.ycombinator.com/item?id=30649524)
+
+Read more: [Scripting with Go](https://bitfieldconsulting.com/golang/scripting)
+
+# Quick start: Unix equivalents
+
+If you're already familiar with shell scripting and the Unix toolset, here is a rough guide to the equivalent `script` operation for each listed Unix command.
+
+| Unix / shell       | `script` equivalent |
+| ------------------ | ------------------- |
+| (any program name) | [`Exec`](https://pkg.go.dev/github.com/bitfield/script#Exec) |
+| `[ -f FILE ]`      | [`IfExists`](https://pkg.go.dev/github.com/bitfield/script#IfExists) |
+| `>`                | [`WriteFile`](https://pkg.go.dev/github.com/bitfield/script#Pipe.WriteFile) |
+| `>>`               | [`AppendFile`](https://pkg.go.dev/github.com/bitfield/script#Pipe.AppendFile) |
+| `$*`               | [`Args`](https://pkg.go.dev/github.com/bitfield/script#Args) |
+| `base64`           | [`DecodeBase64`](https://pkg.go.dev/github.com/bitfield/script#Pipe.DecodeBase64) / [`EncodeBase64`](https://pkg.go.dev/github.com/bitfield/script#Pipe.EncodeBase64) |
+| `basename`         | [`Basename`](https://pkg.go.dev/github.com/bitfield/script#Pipe.Basename) |
+| `cat`              | [`File`](https://pkg.go.dev/github.com/bitfield/script#File) / [`Concat`](https://pkg.go.dev/github.com/bitfield/script#Pipe.Concat) |
+| `curl`             | [`Do`](https://pkg.go.dev/github.com/bitfield/script#Pipe.Do) / [`Get`](https://pkg.go.dev/github.com/bitfield/script#Pipe.Get) / [`Post`](https://pkg.go.dev/github.com/bitfield/script#Pipe.Post) |
+| `cut`              | [`Column`](https://pkg.go.dev/github.com/bitfield/script#Pipe.Column) |
+| `dirname`          | [`Dirname`](https://pkg.go.dev/github.com/bitfield/script#Pipe.Dirname) |
+| `echo`             | [`Echo`](https://pkg.go.dev/github.com/bitfield/script#Echo) |
+| `find`             | [`FindFiles`](https://pkg.go.dev/github.com/bitfield/script#FindFiles) |
+| `grep`             | [`Match`](https://pkg.go.dev/github.com/bitfield/script#Pipe.Match) / [`MatchRegexp`](https://pkg.go.dev/github.com/bitfield/script#Pipe.MatchRegexp) |
+| `grep -v`          | [`Reject`](https://pkg.go.dev/github.com/bitfield/script#Pipe.Reject) / [`RejectRegexp`](https://pkg.go.dev/github.com/bitfield/script#Pipe.RejectRegexp) |
+| `head`             | [`First`](https://pkg.go.dev/github.com/bitfield/script#Pipe.First) |
+| `jq`     | [`JQ`](https://pkg.go.dev/github.com/bitfield/script#Pipe.JQ) |
+| `ls`               | [`ListFiles`](https://pkg.go.dev/github.com/bitfield/script#ListFiles) |
+| `sed`              | [`Replace`](https://pkg.go.dev/github.com/bitfield/script#Pipe.Replace) / [`ReplaceRegexp`](https://pkg.go.dev/github.com/bitfield/script#Pipe.ReplaceRegexp) |
+| `sha256sum`        | [`Hash`](https://pkg.go.dev/github.com/bitfield/script#Pipe.Hash) / [`HashSums`](https://pkg.go.dev/github.com/bitfield/script#Pipe.HashSums) |
+| `tail`             | [`Last`](https://pkg.go.dev/github.com/bitfield/script#Pipe.Last) |
+| `tee`              | [`Tee`](https://pkg.go.dev/github.com/bitfield/script#Pipe.Tee) |
+| `uniq -c`          | [`Freq`](https://pkg.go.dev/github.com/bitfield/script#Pipe.Freq) |
+| `wc -l`            | [`CountLines`](https://pkg.go.dev/github.com/bitfield/script#Pipe.CountLines) |
+| `xargs`            | [`ExecForEach`](https://pkg.go.dev/github.com/bitfield/script#Pipe.ExecForEach) |
+
+# Some examples
+
+Let's see some simple examples. Suppose you want to read the contents of a file as a string:
+
+```go
+contents, err := script.File("test.txt").String()
+```
+
+That looks straightforward enough, but suppose you now want to count the lines in that file.
+
+```go
+numLines, err := script.File("test.txt").CountLines()
+```
+
+For something a bit more challenging, let's try counting the number of lines in the file that match the string `Error`:
+
+```go
+numErrors, err := script.File("test.txt").Match("Error").CountLines()
+```
+
+But what if, instead of reading a specific file, we want to simply pipe input into this program, and have it output only matching lines (like `grep`)?
+
+```go
+script.Stdin().Match("Error").Stdout()
+```
+
+Just for fun, let's filter all the results through some arbitrary Go function:
+
+```go
+script.Stdin().Match("Error").FilterLine(strings.ToUpper).Stdout()
+```
+
+That was almost too easy! So let's pass in a list of files on the command line, and have our program read them all in sequence and output the matching lines:
+
+```go
+script.Args().Concat().Match("Error").Stdout()
+```
+
+Maybe we're only interested in the first 10 matches. No problem:
+
+```go
+script.Args().Concat().Match("Error").First(10).Stdout()
+```
+
+What's that? You want to append that output to a file instead of printing it to the terminal? *You've got some attitude, mister*. But okay:
+
+```go
+script.Args().Concat().Match("Error").First(10).AppendFile("/var/log/errors.txt")
+```
+
+And if we'd like to send the output to the terminal *as well as* to the file, we can do that:
+
+```go
+script.Echo("data").Tee().AppendFile("data.txt")
+```
+
+We're not limited to getting data only from files or standard input. We can get it from HTTP requests too:
+
+```go
+script.Get("https://wttr.in/London?format=3").Stdout()
+// Output:
+// London: 🌦   +13°C
+```
+
+That's great for simple GET requests, but suppose we want to *send* some data in the body of a POST request, for example. Here's how that works:
+
+```go
+script.Echo(data).Post(URL).Stdout()
+```
+
+If we need to customise the HTTP behaviour in some way, such as using our own HTTP client, we can do that:
+
+```go
+script.NewPipe().WithHTTPClient(&http.Client{
+	Timeout: 10 * time.Second,
+}).Get("https://example.com").Stdout()
+```
+
+Or maybe we need to set some custom header on the request. No problem. We can just create the request in the usual way, and set it up however we want. Then we pass it to `Do`, which will actually perform the request:
+
+```go
+req, err := http.NewRequest(http.MethodGet, "http://example.com", nil)
+req.Header.Add("Authorization", "Bearer "+token)
+script.Do(req).Stdout()
+```
+
+The HTTP server could return some non-okay response, though; for example, “404 Not Found”. So what happens then?
+
+In general, when any pipe stage (such as `Do`) encounters an error, it produces no output to subsequent stages. And `script` treats HTTP response status codes outside the range 200-299 as errors. So the answer for the previous example is that we just won't *see* any output from this program if the server returns an error response.
+
+Instead, the pipe “remembers” any error that occurs, and we can retrieve it later by calling its `Error` method, or by using a *sink* method such as `String`, which returns an `error` value along with the result.
+
+`Stdout` also returns an error, plus the number of bytes successfully written (which we don't care about for this particular case). So we can check that error, which is always a good idea in Go:
+
+```go
+_, err := script.Do(req).Stdout()
+if err != nil {
+	log.Fatal(err)
+}
+```
+
+If, as is common, the data we get from an HTTP request is in JSON format, we can use [JQ](https://stedolan.github.io/jq/) queries to interrogate it:
+
+```go
+data, err := script.Do(req).JQ(".[0] | {message: .commit.message, name: .commit.committer.name}").String()
+```
+
+We can also run external programs and get their output:
+
+```go
+script.Exec("ping 127.0.0.1").Stdout()
+```
+
+Note that `Exec` runs the command concurrently: it doesn't wait for the command to complete before returning any output. That's good, because this `ping` command will run forever (or until we get bored).
+
+Instead, when we read from the pipe using `Stdout`, we see each line of output as it's produced:
+
+```
+PING 127.0.0.1 (127.0.0.1): 56 data bytes
+64 bytes from 127.0.0.1: icmp_seq=0 ttl=64 time=0.056 ms
+64 bytes from 127.0.0.1: icmp_seq=1 ttl=64 time=0.054 ms
+...
+```
+
+In the `ping` example, we knew the exact arguments we wanted to send the command, and we just needed to run it once. But what if we don't know the arguments yet? We might get them from the user, for example.
+
+We might like to be able to run the external command repeatedly, each time passing it the next line of data from the pipe as an argument. No worries:
+
+```go
+script.Args().ExecForEach("ping -c 1 {{.}}").Stdout()
+```
+
+That `{{.}}` is standard Go template syntax; it'll substitute each line of data from the pipe into the command line before it's executed. You can write as fancy a Go template expression as you want here (but this simple example probably covers most use cases).
+
+If there isn't a built-in operation that does what we want, we can just write our own, using `Filter`:
+
+```go
+script.Echo("hello world").Filter(func (r io.Reader, w io.Writer) error {
+	n, err := io.Copy(w, r)
+	fmt.Fprintf(w, "\nfiltered %d bytes\n", n)
+	return err
+}).Stdout()
+// Output:
+// hello world
+// filtered 11 bytes
+```
+
+The `func` we supply to `Filter` takes just two parameters: a reader to read from, and a writer to write to. The reader reads the previous stages of the pipe, as you might expect, and anything written to the writer goes to the *next* stage of the pipe.
+
+If our `func` returns some error, then, just as with the `Do` example, the pipe's error status is set, and subsequent stages become a no-op.
+
+Filters run concurrently, so the pipeline can start producing output before the input has been fully read, as it did in the `ping` example. In fact, most built-in pipe methods, including `Exec`, are implemented *using* `Filter`.
+
+If we want to scan input line by line, we could do that with a `Filter` function that creates a `bufio.Scanner` on its input, but we don't need to:
+
+```go
+script.Echo("a\nb\nc").FilterScan(func(line string, w io.Writer) {
+	fmt.Fprintf(w, "scanned line: %q\n", line)
+}).Stdout()
+// Output:
+// scanned line: "a"
+// scanned line: "b"
+// scanned line: "c"
+```
+
+And there's more. Much more. [Read the docs](https://pkg.go.dev/github.com/bitfield/script) for full details, and more examples.
+
+# A realistic use case
+
+Let's use `script` to write a program that system administrators might actually need. One thing I often find myself doing is counting the most frequent visitors to a website over a given period of time. Given an Apache log in the Common Log Format like this:
+
+```
+212.205.21.11 - - [30/Jun/2019:17:06:15 +0000] "GET / HTTP/1.1" 200 2028 "https://example.com/ "Mozilla/5.0 (Linux; Android 8.0.0; FIG-LX1 Build/HUAWEIFIG-LX1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/64.0.3282.156 Mobile Safari/537.36"
+```
+
+we would like to extract the visitor's IP address (the first column in the logfile), and count the number of times this IP address occurs in the file. Finally, we might like to list the top 10 visitors by frequency. In a shell script we might do something like:
+
+```sh
+cut -d' ' -f 1 access.log |sort |uniq -c |sort -rn |head
+```
+
+There's a lot going on there, and it's pleasing to find that the equivalent `script` program is quite brief:
+
+```go
+package main
+
+import (
+	"github.com/bitfield/script"
+)
+
+func main() {
+	script.Stdin().Column(1).Freq().First(10).Stdout()
+}
+```
+
+Let's try it out with some [sample data](testdata/access.log):
+
+```
+16 176.182.2.191
+ 7 212.205.21.11
+ 1 190.253.121.1
+ 1 90.53.111.17
+```
+
+# Documentation
+
+See [pkg.go.dev](https://pkg.go.dev/github.com/bitfield/script) for the full documentation, or read on for a summary.
+
+## Sources
+
+These are functions that create a pipe with a given contents:
+
+| Source | Contents |
+| -------- | ------------- |
+| [`Args`](https://pkg.go.dev/github.com/bitfield/script#Args) | command-line arguments |
+| [`Do`](https://pkg.go.dev/github.com/bitfield/script#Do) | HTTP response |
+| [`Echo`](https://pkg.go.dev/github.com/bitfield/script#Echo) | a string |
+| [`Exec`](https://pkg.go.dev/github.com/bitfield/script#Exec) | command output |
+| [`File`](https://pkg.go.dev/github.com/bitfield/script#File) | file contents |
+| [`FindFiles`](https://pkg.go.dev/github.com/bitfield/script#FindFiles) | recursive file listing |
+| [`Get`](https://pkg.go.dev/github.com/bitfield/script#Get) | HTTP response |
+| [`IfExists`](https://pkg.go.dev/github.com/bitfield/script#IfExists) | do something only if some file exists |
+| [`ListFiles`](https://pkg.go.dev/github.com/bitfield/script#ListFiles) | file listing (including wildcards) |
+| [`Post`](https://pkg.go.dev/github.com/bitfield/script#Post) | HTTP response |
+| [`Slice`](https://pkg.go.dev/github.com/bitfield/script#Slice) | slice elements, one per line |
+| [`Stdin`](https://pkg.go.dev/github.com/bitfield/script#Stdin) | standard input |
+
+## Modifiers
+
+These are methods on a pipe that change its configuration:
+
+| Source | Modifies |
+| -------- | ------------- |
+| [`WithEnv`](https://pkg.go.dev/github.com/bitfield/script#Pipe.WithEnv) | environment for commands |
+| [`WithError`](https://pkg.go.dev/github.com/bitfield/script#Pipe.WithError) | pipe error status |
+| [`WithHTTPClient`](https://pkg.go.dev/github.com/bitfield/script#Pipe.WithHTTPClient) | client for HTTP requests |
+| [`WithReader`](https://pkg.go.dev/github.com/bitfield/script#Pipe.WithReader) | pipe source |
+| [`WithStderr`](https://pkg.go.dev/github.com/bitfield/script#Pipe.WithStderr) | standard error output stream for command |
+| [`WithStdout`](https://pkg.go.dev/github.com/bitfield/script#Pipe.WithStdout) | standard output stream for pipe |
+
+## Filters
+
+Filters are methods on an existing pipe that also return a pipe, allowing you to chain filters indefinitely. The filters modify each line of their input according to the following rules:
+
+| Filter | Results |
+| -------- | ------------- |
+| [`Basename`](https://pkg.go.dev/github.com/bitfield/script#Pipe.Basename) | removes leading path components from each line, leaving only the filename |
+| [`Column`](https://pkg.go.dev/github.com/bitfield/script#Pipe.Column) | Nth column of input |
+| [`Concat`](https://pkg.go.dev/github.com/bitfield/script#Pipe.Concat) | contents of multiple files |
+| [`DecodeBase64`](https://pkg.go.dev/github.com/bitfield/script#Pipe.DecodeBase64) | input decoded from base64 |
+| [`Dirname`](https://pkg.go.dev/github.com/bitfield/script#Pipe.Dirname) | removes filename from each line, leaving only leading path components |
+| [`Do`](https://pkg.go.dev/github.com/bitfield/script#Pipe.Do) | response to supplied HTTP request |
+| [`Echo`](https://pkg.go.dev/github.com/bitfield/script#Pipe.Echo) | all input replaced by given string |
+| [`EncodeBase64`](https://pkg.go.dev/github.com/bitfield/script#Pipe.EncodeBase64) | input encoded to base64 |
+| [`Exec`](https://pkg.go.dev/github.com/bitfield/script#Pipe.Exec) | filtered through external command |
+| [`ExecForEach`](https://pkg.go.dev/github.com/bitfield/script#Pipe.ExecForEach) | execute given command template for each line of input |
+| [`Filter`](https://pkg.go.dev/github.com/bitfield/script#Pipe.Filter) | user-supplied function filtering a reader to a writer |
+| [`FilterLine`](https://pkg.go.dev/github.com/bitfield/script#Pipe.FilterLine) | user-supplied function filtering each line to a string|
+| [`FilterScan`](https://pkg.go.dev/github.com/bitfield/script#Pipe.FilterScan) | user-supplied function filtering each line to a writer |
+| [`First`](https://pkg.go.dev/github.com/bitfield/script#Pipe.First) | first N lines of input |
+| [`Freq`](https://pkg.go.dev/github.com/bitfield/script#Pipe.Freq) | frequency count of unique input lines, most frequent first |
+| [`Get`](https://pkg.go.dev/github.com/bitfield/script#Pipe.Get) | response to HTTP GET on supplied URL |
+| [`HashSums`](https://pkg.go.dev/github.com/bitfield/script#Pipe.HashSums) | hashes of each listed file |
+| [`Join`](https://pkg.go.dev/github.com/bitfield/script#Pipe.Join) | replace all newlines with spaces |
+| [`JQ`](https://pkg.go.dev/github.com/bitfield/script#Pipe.JQ) | result of `jq` query |
+| [`Last`](https://pkg.go.dev/github.com/bitfield/script#Pipe.Last) | last N lines of input|
+| [`Match`](https://pkg.go.dev/github.com/bitfield/script#Pipe.Match) | lines matching given string |
+| [`MatchRegexp`](https://pkg.go.dev/github.com/bitfield/script#Pipe.MatchRegexp) | lines matching given regexp |
+| [`Post`](https://pkg.go.dev/github.com/bitfield/script#Pipe.Post) | response to HTTP POST on supplied URL |
+| [`Reject`](https://pkg.go.dev/github.com/bitfield/script#Pipe.Reject) | lines not matching given string |
+| [`RejectRegexp`](https://pkg.go.dev/github.com/bitfield/script#Pipe.RejectRegexp) | lines not matching given regexp |
+| [`Replace`](https://pkg.go.dev/github.com/bitfield/script#Pipe.Replace) | matching text replaced with given string |
+| [`ReplaceRegexp`](https://pkg.go.dev/github.com/bitfield/script#Pipe.ReplaceRegexp) | matching text replaced with given string |
+| [`Tee`](https://pkg.go.dev/github.com/bitfield/script#Pipe.Tee) | input copied to supplied writers |
+
+Note that filters run concurrently, rather than producing nothing until each stage has fully read its input. This is convenient for executing long-running commands, for example. If you do need to wait for the pipeline to complete, call [`Wait`](https://pkg.go.dev/github.com/bitfield/script#Pipe.Wait).
+
+## Sinks
+
+Sinks are methods that return some data from a pipe, ending the pipeline and extracting its full contents in a specified way:
+
+| Sink | Destination | Results |
+| ---- | ----------- | ------- |
+| [`AppendFile`](https://pkg.go.dev/github.com/bitfield/script#Pipe.AppendFile) | appended to file, creating if it doesn't exist | bytes written, error |
+| [`Bytes`](https://pkg.go.dev/github.com/bitfield/script#Pipe.Bytes) | | data as `[]byte`, error
+| [`Hash`](https://pkg.go.dev/github.com/bitfield/script#Pipe.Hash) | | hash, error  |
+| [`CountLines`](https://pkg.go.dev/github.com/bitfield/script#Pipe.CountLines) | |number of lines, error  |
+| [`Read`](https://pkg.go.dev/github.com/bitfield/script#Pipe.Read) | given `[]byte` | bytes read, error  |
+| [`Slice`](https://pkg.go.dev/github.com/bitfield/script#Pipe.Slice) | | data as `[]string`, error  |
+| [`Stdout`](https://pkg.go.dev/github.com/bitfield/script#Pipe.Stdout) | standard output | bytes written, error  |
+| [`String`](https://pkg.go.dev/github.com/bitfield/script#Pipe.String) | | data as `string`, error  |
+| [`Wait`](https://pkg.go.dev/github.com/bitfield/script#Pipe.Wait) | | error  |
+| [`WriteFile`](https://pkg.go.dev/github.com/bitfield/script#Pipe.WriteFile) | specified file, truncating if it exists | bytes written, error  |
+
+# What's new
+
+| Version | New |
+| ----------- | ------- |
+| 0.24.0  | [`Hash`](https://pkg.go.dev/github.com/bitfield/script#Pipe.Hash) |
+|         | [`HashSums`](https://pkg.go.dev/github.com/bitfield/script#Pipe.HashSums) |
+| 0.23.0  | [`WithEnv`](https://pkg.go.dev/github.com/bitfield/script#Pipe.WithEnv) |
+|         | [`DecodeBase64`](https://pkg.go.dev/github.com/bitfield/script#Pipe.DecodeBase64) / [`EncodeBase64`](https://pkg.go.dev/github.com/bitfield/script#Pipe.EncodeBase64) |
+|         | [`Wait`](https://pkg.go.dev/github.com/bitfield/script#Pipe.Wait) returns error |
+| v0.22.0 | [`Tee`](https://pkg.go.dev/github.com/bitfield/script#Pipe.Tee), [`WithStderr`](https://pkg.go.dev/github.com/bitfield/script#Pipe.WithStderr) |
+| v0.21.0 | HTTP support: [`Do`](https://pkg.go.dev/github.com/bitfield/script#Pipe.Do), [`Get`](https://pkg.go.dev/github.com/bitfield/script#Pipe.Get), [`Post`](https://pkg.go.dev/github.com/bitfield/script#Pipe.Post) |
+| v0.20.0 | [`JQ`](https://pkg.go.dev/github.com/bitfield/script#Pipe.JQ) |
+
+# Contributing
+
+See the [contributor's guide](CONTRIBUTING.md) for some helpful tips if you'd like to contribute to the `script` project.
+
+# Links
+
+- [Scripting with Go](https://bitfieldconsulting.com/posts/scripting)
+- [Code Club: Script](https://www.youtube.com/watch?v=6S5EqzVwpEg)
+- [Bitfield Consulting](https://bitfieldconsulting.com/)
+- [Go books by John Arundel](https://bitfieldconsulting.com/books)
+
+<small>Gopher image by [MariaLetta](https://github.com/MariaLetta/free-gophers-pack)</small>
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/bitfield/script/doc.go","mode":420,"size":199,"sha256":"ab944edd4b360a3ac7dcb1380259d86fae079ba2a703bf71606110f00653f1aa","index":0,"count":1,"encoding":"utf-8","payloadBytes":199}
+// Package script aims to make it easy to write shell-type scripts in Go, for
+// general system administration purposes: reading files, counting lines,
+// matching strings, and so on.
+package script
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/bitfield/script/script.go","mode":420,"size":30859,"sha256":"a70d8f2f08b25eee62fd074077ecac9e708476c915996317d6833485b9084fe7","index":0,"count":1,"encoding":"utf-8","payloadBytes":30859}
+package script
+
+import (
+	"bufio"
+	"container/ring"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"hash"
+	"io"
+	"io/fs"
+	"math"
+	"net/http"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"regexp"
+	"sort"
+	"strconv"
+	"strings"
+	"sync"
+	"text/template"
+
+	"github.com/itchyny/gojq"
+	"mvdan.cc/sh/v3/shell"
+)
+
+// Pipe represents a pipe object with an associated [ReadAutoCloser].
+type Pipe struct {
+	// Reader is the underlying reader.
+	Reader     ReadAutoCloser
+	stdout     io.Writer
+	httpClient *http.Client
+
+	mu     *sync.Mutex
+	err    error
+	stderr io.Writer
+	env    []string
+}
+
+// Args creates a pipe containing the program's command-line arguments from
+// [os.Args], excluding the program name, one per line.
+func Args() *Pipe {
+	return Slice(os.Args[1:])
+}
+
+// Do creates a pipe that makes the HTTP request req and produces the response.
+// See [Pipe.Do] for how the HTTP response status is interpreted.
+func Do(req *http.Request) *Pipe {
+	return NewPipe().Do(req)
+}
+
+// Echo creates a pipe containing the string s.
+func Echo(s string) *Pipe {
+	return NewPipe().WithReader(strings.NewReader(s))
+}
+
+// Exec creates a pipe that runs cmdLine as an external command and produces
+// its combined output (interleaving standard output and standard error). See
+// [Pipe.Exec] for error handling details.
+//
+// Use [Pipe.Exec] to send the contents of an existing pipe to the command's
+// standard input.
+func Exec(cmdLine string) *Pipe {
+	return NewPipe().Exec(cmdLine)
+}
+
+// File creates a pipe that reads from the file path.
+func File(path string) *Pipe {
+	f, err := os.Open(path)
+	if err != nil {
+		return NewPipe().WithError(err)
+	}
+	return NewPipe().WithReader(f)
+}
+
+// FindFiles creates a pipe listing all the files in the directory dir and its
+// subdirectories recursively, one per line, like Unix find(1).
+// Errors are ignored unless no files are found (in which case the pipe's error
+// status will be set to the last error encountered).
+//
+// Each line of the output consists of a slash-separated path, starting with
+// the initial directory. For example, if the directory looks like this:
+//
+//	test/
+//	        1.txt
+//	        2.txt
+//
+// the pipe's output will be:
+//
+//	test/1.txt
+//	test/2.txt
+func FindFiles(dir string) *Pipe {
+	var paths []string
+	var innerErr error
+	fs.WalkDir(os.DirFS(dir), ".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			innerErr = err
+			return fs.SkipDir
+		}
+		if !d.IsDir() {
+			paths = append(paths, filepath.Join(dir, path))
+		}
+		return nil
+	})
+	if innerErr != nil && len(paths) == 0 {
+		return NewPipe().WithError(innerErr)
+	}
+	return Slice(paths)
+}
+
+// Get creates a pipe that makes an HTTP GET request to url, and produces the
+// response. See [Pipe.Do] for how the HTTP response status is interpreted.
+func Get(url string) *Pipe {
+	return NewPipe().Get(url)
+}
+
+// IfExists tests whether path exists, and creates a pipe whose error status
+// reflects the result. If the file doesn't exist, the pipe's error status will
+// be set, and if the file does exist, the pipe will have no error status. This
+// can be used to do some operation only if a given file exists:
+//
+//	IfExists("/foo/bar").Exec("/usr/bin/something")
+func IfExists(path string) *Pipe {
+	_, err := os.Stat(path)
+	if err != nil {
+		return NewPipe().WithError(err)
+	}
+	return NewPipe()
+}
+
+// ListFiles creates a pipe containing the files or directories specified by
+// path, one per line. path can be a glob expression, as for [filepath.Match].
+// For example:
+//
+//	ListFiles("/data/*").Stdout()
+//
+// ListFiles does not recurse into subdirectories; use [FindFiles] instead.
+func ListFiles(path string) *Pipe {
+	if strings.ContainsAny(path, "[]^*?\\{}!") {
+		fileNames, err := filepath.Glob(path)
+		if err != nil {
+			return NewPipe().WithError(err)
+		}
+		return Slice(fileNames)
+	}
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		// Check for the case where the path matches exactly one file
+		s, err := os.Stat(path)
+		if err != nil {
+			return NewPipe().WithError(err)
+		}
+		if !s.IsDir() {
+			return Echo(path)
+		}
+		return NewPipe().WithError(err)
+	}
+	matches := make([]string, len(entries))
+	for i, e := range entries {
+		matches[i] = filepath.Join(path, e.Name())
+	}
+	return Slice(matches)
+}
+
+// NewPipe creates a new pipe with an empty reader (use [Pipe.WithReader] to
+// attach another reader to it).
+func NewPipe() *Pipe {
+	return &Pipe{
+		Reader:     ReadAutoCloser{},
+		mu:         new(sync.Mutex),
+		stdout:     os.Stdout,
+		httpClient: http.DefaultClient,
+		env:        nil,
+	}
+}
+
+// Post creates a pipe that makes an HTTP POST request to url, with an empty
+// body, and produces the response. See [Pipe.Do] for how the HTTP response
+// status is interpreted.
+func Post(url string) *Pipe {
+	return NewPipe().Post(url)
+}
+
+// Slice creates a pipe containing each element of s, one per line. If s is
+// empty or nil, then the pipe is empty.
+func Slice(s []string) *Pipe {
+	if len(s) == 0 {
+		return NewPipe()
+	}
+	return Echo(strings.Join(s, "\n") + "\n")
+}
+
+// Stdin creates a pipe that reads from [os.Stdin].
+func Stdin() *Pipe {
+	return NewPipe().WithReader(os.Stdin)
+}
+
+// AppendFile appends the contents of the pipe to the file path, creating it if
+// necessary, and returns the number of bytes successfully written, or an
+// error.
+func (p *Pipe) AppendFile(path string) (int64, error) {
+	return p.writeOrAppendFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY)
+}
+
+// Basename reads paths from the pipe, one per line, and removes any leading
+// directory components from each. So, for example, /usr/local/bin/foo would
+// become just foo. This is the complementary operation to [Pipe.Dirname].
+//
+// If any line is empty, Basename will transform it to a single dot. Trailing
+// slashes are removed. The behaviour of Basename is the same as
+// [filepath.Base] (not by coincidence).
+func (p *Pipe) Basename() *Pipe {
+	return p.FilterLine(filepath.Base)
+}
+
+// Bytes returns the contents of the pipe as a []byte, or an error.
+func (p *Pipe) Bytes() ([]byte, error) {
+	if p.Error() != nil {
+		return nil, p.Error()
+	}
+	data, err := io.ReadAll(p)
+	if err != nil {
+		p.SetError(err)
+	}
+	return data, p.Error()
+}
+
+// Close closes the pipe's associated reader. This is a no-op if the reader is
+// not an [io.Closer].
+func (p *Pipe) Close() error {
+	return p.Reader.Close()
+}
+
+// Column produces column col of each line of input, where the first column is
+// column 1, and columns are delimited by Unicode whitespace. Lines containing
+// fewer than col columns will be skipped.
+func (p *Pipe) Column(col int) *Pipe {
+	return p.FilterScan(func(line string, w io.Writer) {
+		columns := strings.Fields(line)
+		if col > 0 && col <= len(columns) {
+			fmt.Fprintln(w, columns[col-1])
+		}
+	})
+}
+
+// Concat reads paths from the pipe, one per line, and produces the contents of
+// all the corresponding files in sequence. If there are any errors (for
+// example, non-existent files), these will be ignored, execution will
+// continue, and the pipe's error status will not be set.
+//
+// This makes it convenient to write programs that take a list of paths on the
+// command line. For example:
+//
+//	script.Args().Concat().Stdout()
+//
+// The list of paths could also come from a file:
+//
+//	script.File("filelist.txt").Concat()
+//
+// Or from the output of a command:
+//
+//	script.Exec("ls /var/app/config/").Concat().Stdout()
+//
+// Each input file will be closed once it has been fully read. If any of the
+// files can't be opened or read, Concat will simply skip these and carry on,
+// without setting the pipe's error status. This mimics the behaviour of Unix
+// cat(1).
+func (p *Pipe) Concat() *Pipe {
+	var readers []io.Reader
+	p.FilterScan(func(line string, w io.Writer) {
+		input, err := os.Open(line)
+		if err == nil {
+			readers = append(readers, NewReadAutoCloser(input))
+		}
+	}).Wait()
+	return p.WithReader(io.MultiReader(readers...))
+}
+
+// CountLines returns the number of lines of input, or an error.
+func (p *Pipe) CountLines() (lines int, err error) {
+	p.FilterScan(func(line string, w io.Writer) {
+		lines++
+	}).Wait()
+	return lines, p.Error()
+}
+
+// DecodeBase64 produces the string represented by the base64 encoded input.
+func (p *Pipe) DecodeBase64() *Pipe {
+	return p.Filter(func(r io.Reader, w io.Writer) error {
+		decoder := base64.NewDecoder(base64.StdEncoding, r)
+		_, err := io.Copy(w, decoder)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+}
+
+// Dirname reads paths from the pipe, one per line, and produces only the
+// parent directories of each path. For example, /usr/local/bin/foo would
+// become just /usr/local/bin. This is the complementary operation to
+// [Pipe.Basename].
+//
+// If a line is empty, Dirname will transform it to a single dot. Trailing
+// slashes are removed, unless Dirname returns the root folder. Otherwise, the
+// behaviour of Dirname is the same as [filepath.Dir] (not by coincidence).
+func (p *Pipe) Dirname() *Pipe {
+	return p.FilterLine(func(line string) string {
+		// filepath.Dir() does not handle trailing slashes correctly
+		if len(line) > 1 && strings.HasSuffix(line, "/") {
+			line = line[:len(line)-1]
+		}
+		dirname := filepath.Dir(line)
+		// filepath.Dir() does not preserve a leading './'
+		if strings.HasPrefix(line, "./") {
+			return "./" + dirname
+		}
+		return dirname
+	})
+}
+
+// Do performs the HTTP request req using the pipe's configured HTTP client, as
+// set by [Pipe.WithHTTPClient], or [http.DefaultClient] otherwise. The
+// response body is streamed concurrently to the pipe's output. If the response
+// status is anything other than HTTP 200-299, the pipe's error status is set.
+func (p *Pipe) Do(req *http.Request) *Pipe {
+	return p.Filter(func(r io.Reader, w io.Writer) error {
+		resp, err := p.httpClient.Do(req)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+		_, err = io.Copy(w, resp.Body)
+		if err != nil {
+			return err
+		}
+		// Any HTTP 2xx status code is considered okay
+		if resp.StatusCode/100 != 2 {
+			return fmt.Errorf("unexpected HTTP response status: %s", resp.Status)
+		}
+		return nil
+	})
+}
+
+// EachLine calls the function process on each line of input, passing it the
+// line as a string, and a [*strings.Builder] to write its output to.
+//
+// Deprecated: use [Pipe.FilterLine] or [Pipe.FilterScan] instead, which run
+// concurrently and don't do unnecessary reads on the input.
+func (p *Pipe) EachLine(process func(string, *strings.Builder)) *Pipe {
+	return p.Filter(func(r io.Reader, w io.Writer) error {
+		scanner := newScanner(r)
+		output := new(strings.Builder)
+		for scanner.Scan() {
+			process(scanner.Text(), output)
+		}
+		fmt.Fprint(w, output.String())
+		return scanner.Err()
+	})
+}
+
+// Echo sets the pipe's reader to one that produces the string s, detaching any
+// existing reader without draining or closing it.
+func (p *Pipe) Echo(s string) *Pipe {
+	if p.Error() != nil {
+		return p
+	}
+	return p.WithReader(strings.NewReader(s))
+}
+
+// EncodeBase64 produces the base64 encoding of the input.
+func (p *Pipe) EncodeBase64() *Pipe {
+	return p.Filter(func(r io.Reader, w io.Writer) error {
+		encoder := base64.NewEncoder(base64.StdEncoding, w)
+		defer encoder.Close()
+		_, err := io.Copy(encoder, r)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+}
+
+func (p *Pipe) environment() []string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.env
+}
+
+// Error returns any error present on the pipe, or nil otherwise.
+// Error is not a sink and does not wait until the pipe reaches
+// completion. To wait for completion before returning the error,
+// see [Pipe.Wait].
+func (p *Pipe) Error() error {
+	if p.mu == nil { // uninitialised pipe
+		return nil
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.err
+}
+
+// Exec runs cmdLine as an external command, sending it the contents of the
+// pipe as input, and produces the command's standard output (see below for
+// error output). The effect of this is to filter the contents of the pipe
+// through the external command.
+//
+// # Environment
+//
+// The command inherits the current process's environment, optionally modified
+// by [Pipe.WithEnv].
+//
+// # Error handling
+//
+// If the command had a non-zero exit status, the pipe's error status will also
+// be set to the string “exit status X”, where X is the integer exit status.
+// Even in the event of a non-zero exit status, the command's output will still
+// be available in the pipe. This is often helpful for debugging. However,
+// because [Pipe.String] is a no-op if the pipe's error status is set, if you
+// want output you will need to reset the error status before calling
+// [Pipe.String].
+//
+// If the command writes to its standard error stream, this will also go to the
+// pipe, along with its standard output. However, the standard error text can
+// instead be redirected to a supplied writer, using [Pipe.WithStderr].
+func (p *Pipe) Exec(cmdLine string) *Pipe {
+	return p.Filter(func(r io.Reader, w io.Writer) error {
+		args, err := shell.Fields(cmdLine, nil)
+		if err != nil {
+			return err
+		}
+		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Stdin = r
+		cmd.Stdout = w
+		cmd.Stderr = w
+		pipeStderr := p.stdErr()
+		if pipeStderr != nil {
+			cmd.Stderr = pipeStderr
+		}
+		pipeEnv := p.environment()
+		if pipeEnv != nil {
+			cmd.Env = pipeEnv
+		}
+		err = cmd.Start()
+		if err != nil {
+			fmt.Fprintln(cmd.Stderr, err)
+			return err
+		}
+		return cmd.Wait()
+	})
+}
+
+// ExecForEach renders cmdLine as a Go template for each line of input, running
+// the resulting command, and produces the combined output of all these
+// commands in sequence. See [Pipe.Exec] for details on error handling and
+// environment variables.
+//
+// This is mostly useful for substituting data into commands using Go template
+// syntax. For example:
+//
+//	ListFiles("*").ExecForEach("touch {{.}}").Wait()
+func (p *Pipe) ExecForEach(cmdLine string) *Pipe {
+	tpl, err := template.New("").Parse(cmdLine)
+	if err != nil {
+		return p.WithError(err)
+	}
+	return p.Filter(func(r io.Reader, w io.Writer) error {
+		scanner := newScanner(r)
+		for scanner.Scan() {
+			cmdLine := new(strings.Builder)
+			err := tpl.Execute(cmdLine, scanner.Text())
+			if err != nil {
+				return err
+			}
+			args, err := shell.Fields(cmdLine.String(), nil)
+			if err != nil {
+				return err
+			}
+			cmd := exec.Command(args[0], args[1:]...)
+			cmd.Stdout = w
+			cmd.Stderr = w
+			pipeStderr := p.stdErr()
+			if pipeStderr != nil {
+				cmd.Stderr = pipeStderr
+			}
+			if p.env != nil {
+				cmd.Env = p.env
+			}
+			err = cmd.Start()
+			if err != nil {
+				fmt.Fprintln(cmd.Stderr, err)
+				continue
+			}
+			err = cmd.Wait()
+			if err != nil {
+				fmt.Fprintln(cmd.Stderr, err)
+				continue
+			}
+		}
+		return scanner.Err()
+	})
+}
+
+var exitStatusPattern = regexp.MustCompile(`exit status (\d+)$`)
+
+// ExitStatus returns the integer exit status of a previous command (for
+// example run by [Pipe.Exec]). This will be zero unless the pipe's error
+// status is set and the error matches the pattern “exit status %d”.
+func (p *Pipe) ExitStatus() int {
+	if p.Error() == nil {
+		return 0
+	}
+	match := exitStatusPattern.FindStringSubmatch(p.Error().Error())
+	if len(match) < 2 {
+		return 0
+	}
+	status, err := strconv.Atoi(match[1])
+	if err != nil {
+		// This seems unlikely, but...
+		return 0
+	}
+	return status
+}
+
+// Filter sends the contents of the pipe to the function filter and produces
+// the result. filter takes an [io.Reader] to read its input from and an
+// [io.Writer] to write its output to, and returns an error, which will be set
+// on the pipe.
+//
+// filter runs concurrently, so its goroutine will not exit until the pipe has
+// been fully read. Use [Pipe.Wait] to wait for all concurrent filters to
+// complete.
+func (p *Pipe) Filter(filter func(io.Reader, io.Writer) error) *Pipe {
+	if p.Error() != nil {
+		return p
+	}
+	pr, pw := io.Pipe()
+	origReader := p.Reader
+	p = p.WithReader(pr)
+	go func() {
+		defer pw.Close()
+		err := filter(origReader, pw)
+		if err != nil {
+			p.SetError(err)
+		}
+	}()
+	return p
+}
+
+// FilterLine sends the contents of the pipe to the function filter, a line at
+// a time, and produces the result. filter takes each line as a string and
+// returns a string as its output. See [Pipe.Filter] for concurrency handling.
+func (p *Pipe) FilterLine(filter func(string) string) *Pipe {
+	return p.FilterScan(func(line string, w io.Writer) {
+		fmt.Fprintln(w, filter(line))
+	})
+}
+
+// FilterScan sends the contents of the pipe to the function filter, a line at
+// a time, and produces the result. filter takes each line as a string and an
+// [io.Writer] to write its output to. See [Pipe.Filter] for concurrency
+// handling.
+func (p *Pipe) FilterScan(filter func(string, io.Writer)) *Pipe {
+	return p.Filter(func(r io.Reader, w io.Writer) error {
+		scanner := newScanner(r)
+		for scanner.Scan() {
+			filter(scanner.Text(), w)
+		}
+		return scanner.Err()
+	})
+}
+
+// First produces only the first n lines of the pipe's contents, or all the
+// lines if there are less than n. If n is zero or negative, there is no output
+// at all. When n lines have been produced, First stops reading its input and
+// sends EOF to its output.
+func (p *Pipe) First(n int) *Pipe {
+	if p.Error() != nil {
+		return p
+	}
+	if n <= 0 {
+		return NewPipe()
+	}
+	return p.Filter(func(r io.Reader, w io.Writer) error {
+		scanner := newScanner(r)
+		for i := 0; i < n && scanner.Scan(); i++ {
+			_, err := fmt.Fprintln(w, scanner.Text())
+			if err != nil {
+				return err
+			}
+		}
+		return scanner.Err()
+	})
+}
+
+// Freq produces only the unique lines from the pipe's contents, each prefixed
+// with a frequency count, in descending numerical order (most frequent lines
+// first). Lines with equal frequency will be sorted alphabetically.
+//
+// For example, we could take a common shell pipeline like this:
+//
+//	sort input.txt |uniq -c |sort -rn
+//
+// and replace it with:
+//
+//	File("input.txt").Freq().Stdout()
+//
+// Or to get only the ten most common lines:
+//
+//	File("input.txt").Freq().First(10).Stdout()
+//
+// Like Unix uniq(1), Freq right-justifies its count values in a column for
+// readability, padding with spaces if necessary.
+func (p *Pipe) Freq() *Pipe {
+	freq := map[string]int{}
+	type frequency struct {
+		line  string
+		count int
+	}
+	return p.Filter(func(r io.Reader, w io.Writer) error {
+		scanner := newScanner(r)
+		for scanner.Scan() {
+			freq[scanner.Text()]++
+		}
+		freqs := make([]frequency, 0, len(freq))
+		max := 0
+		for line, count := range freq {
+			freqs = append(freqs, frequency{line, count})
+			if count > max {
+				max = count
+			}
+		}
+		sort.Slice(freqs, func(i, j int) bool {
+			x, y := freqs[i].count, freqs[j].count
+			if x == y {
+				return freqs[i].line < freqs[j].line
+			}
+			return x > y
+		})
+		fieldWidth := len(strconv.Itoa(max))
+		for _, item := range freqs {
+			fmt.Fprintf(w, "%*d %s\n", fieldWidth, item.count, item.line)
+		}
+		return nil
+	})
+}
+
+// Get makes an HTTP GET request to url, sending the contents of the pipe as
+// the request body, and produces the server's response. See [Pipe.Do] for how
+// the HTTP response status is interpreted.
+func (p *Pipe) Get(url string) *Pipe {
+	req, err := http.NewRequest(http.MethodGet, url, p.Reader)
+	if err != nil {
+		return p.WithError(err)
+	}
+	return p.Do(req)
+}
+
+// Hash returns the hex-encoded hash of the entire contents of the
+// pipe based on the provided hasher, or an error.
+// To perform hashing on files, see [Pipe.HashSums].
+func (p *Pipe) Hash(hasher hash.Hash) (string, error) {
+	if p.Error() != nil {
+		return "", p.Error()
+	}
+	_, err := io.Copy(hasher, p)
+	if err != nil {
+		p.SetError(err)
+		return "", err
+	}
+	return hex.EncodeToString(hasher.Sum(nil)), nil
+}
+
+// HashSums reads paths from the pipe, one per line, and produces the
+// hex-encoded hash of each corresponding file based on the provided hasher,
+// one per line. Any files that cannot be opened or read will be ignored.
+// To perform hashing on the contents of the pipe, see [Pipe.Hash].
+func (p *Pipe) HashSums(hasher hash.Hash) *Pipe {
+	return p.FilterScan(func(line string, w io.Writer) {
+		f, err := os.Open(line)
+		if err != nil {
+			return // skip unopenable files
+		}
+		defer f.Close()
+		_, err = io.Copy(hasher, f)
+		if err != nil {
+			return // skip unreadable files
+		}
+		fmt.Fprintln(w, hex.EncodeToString(hasher.Sum(nil)))
+	})
+}
+
+// Join joins all the lines in the pipe's contents into a single
+// space-separated string, which will always end with a newline.
+func (p *Pipe) Join() *Pipe {
+	return p.Filter(func(r io.Reader, w io.Writer) error {
+		scanner := newScanner(r)
+		first := true
+		for scanner.Scan() {
+			if !first {
+				fmt.Fprint(w, " ")
+			}
+			line := scanner.Text()
+			fmt.Fprint(w, line)
+			first = false
+		}
+		fmt.Fprintln(w)
+		return scanner.Err()
+	})
+}
+
+// JQ executes query on the pipe's contents (presumed to be JSON), producing
+// the result. An invalid query will set the appropriate error on the pipe.
+//
+// The exact dialect of JQ supported is that provided by
+// [github.com/itchyny/gojq], whose documentation explains the differences
+// between it and standard JQ.
+func (p *Pipe) JQ(query string) *Pipe {
+	return p.Filter(func(r io.Reader, w io.Writer) error {
+		q, err := gojq.Parse(query)
+		if err != nil {
+			return err
+		}
+		var input interface{}
+		err = json.NewDecoder(r).Decode(&input)
+		if err != nil {
+			return err
+		}
+		iter := q.Run(input)
+		for {
+			v, ok := iter.Next()
+			if !ok {
+				return nil
+			}
+			if err, ok := v.(error); ok {
+				return err
+			}
+			result, err := gojq.Marshal(v)
+			if err != nil {
+				return err
+			}
+			fmt.Fprintln(w, string(result))
+		}
+	})
+}
+
+// Last produces only the last n lines of the pipe's contents, or all the lines
+// if there are less than n. If n is zero or negative, there is no output at
+// all.
+func (p *Pipe) Last(n int) *Pipe {
+	if p.Error() != nil {
+		return p
+	}
+	if n <= 0 {
+		return NewPipe()
+	}
+	return p.Filter(func(r io.Reader, w io.Writer) error {
+		scanner := newScanner(r)
+		input := ring.New(n)
+		for scanner.Scan() {
+			input.Value = scanner.Text()
+			input = input.Next()
+		}
+		input.Do(func(p interface{}) {
+			if p != nil {
+				fmt.Fprintln(w, p)
+			}
+		})
+		return scanner.Err()
+	})
+}
+
+// Match produces only the input lines that contain the string s.
+func (p *Pipe) Match(s string) *Pipe {
+	return p.FilterScan(func(line string, w io.Writer) {
+		if strings.Contains(line, s) {
+			fmt.Fprintln(w, line)
+		}
+	})
+}
+
+// MatchRegexp produces only the input lines that match the compiled regexp re.
+func (p *Pipe) MatchRegexp(re *regexp.Regexp) *Pipe {
+	return p.FilterScan(func(line string, w io.Writer) {
+		if re.MatchString(line) {
+			fmt.Fprintln(w, line)
+		}
+	})
+}
+
+// Post makes an HTTP POST request to url, using the contents of the pipe as
+// the request body, and produces the server's response. See [Pipe.Do] for how
+// the HTTP response status is interpreted.
+func (p *Pipe) Post(url string) *Pipe {
+	req, err := http.NewRequest(http.MethodPost, url, p.Reader)
+	if err != nil {
+		return p.WithError(err)
+	}
+	return p.Do(req)
+}
+
+// Reject produces only lines that do not contain the string s.
+func (p *Pipe) Reject(s string) *Pipe {
+	return p.FilterScan(func(line string, w io.Writer) {
+		if !strings.Contains(line, s) {
+			fmt.Fprintln(w, line)
+		}
+	})
+}
+
+// RejectRegexp produces only lines that don't match the compiled regexp re.
+func (p *Pipe) RejectRegexp(re *regexp.Regexp) *Pipe {
+	return p.FilterScan(func(line string, w io.Writer) {
+		if !re.MatchString(line) {
+			fmt.Fprintln(w, line)
+		}
+	})
+}
+
+// Replace replaces all occurrences of the string search with the string
+// replace.
+func (p *Pipe) Replace(search, replace string) *Pipe {
+	return p.FilterLine(func(line string) string {
+		return strings.ReplaceAll(line, search, replace)
+	})
+}
+
+// ReplaceRegexp replaces all matches of the compiled regexp re with the string
+// replace. $x variables in the replace string are interpreted as by
+// [regexp#Regexp.Expand]; for example, $1 represents the text of the first submatch.
+func (p *Pipe) ReplaceRegexp(re *regexp.Regexp, replace string) *Pipe {
+	return p.FilterLine(func(line string) string {
+		return re.ReplaceAllString(line, replace)
+	})
+}
+
+// Read reads up to len(b) bytes from the pipe into b. It returns the number of
+// bytes read and any error encountered. At end of file, or on a nil pipe, Read
+// returns 0, [io.EOF].
+func (p *Pipe) Read(b []byte) (int, error) {
+	if p.Error() != nil {
+		return 0, p.Error()
+	}
+	return p.Reader.Read(b)
+}
+
+// SetError sets the error err on the pipe.
+func (p *Pipe) SetError(err error) {
+	if p.mu == nil { // uninitialised pipe
+		return
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.err = err
+}
+
+// SHA256Sum returns the hex-encoded SHA-256 hash of the entire contents of the
+// pipe, or an error.
+// Deprecated: SHA256Sum has been deprecated by [Pipe.Hash]. To get the SHA-256
+// hash for the contents of the pipe, call `Hash(sha256.new())`
+func (p *Pipe) SHA256Sum() (string, error) {
+	return p.Hash(sha256.New())
+}
+
+// SHA256Sums reads paths from the pipe, one per line, and produces the
+// hex-encoded SHA-256 hash of each corresponding file, one per line. Any files
+// that cannot be opened or read will be ignored.
+// Deprecated: SHA256Sums has been deprecated by [Pipe.HashSums]. To get the SHA-256
+// hash for each file path in the pipe, call `HashSums(sha256.new())`
+func (p *Pipe) SHA256Sums() *Pipe {
+	return p.HashSums(sha256.New())
+}
+
+// Slice returns the pipe's contents as a slice of strings, one element per
+// line, or an error.
+//
+// An empty pipe will produce an empty slice. A pipe containing a single empty
+// line (that is, a single \n character) will produce a slice containing the
+// empty string as its single element.
+func (p *Pipe) Slice() ([]string, error) {
+	result := []string{}
+	p.FilterScan(func(line string, w io.Writer) {
+		result = append(result, line)
+	}).Wait()
+	return result, p.Error()
+}
+
+// stdErr returns the pipe's configured standard error writer for commands run
+// via [Pipe.Exec] and [Pipe.ExecForEach]. The default is nil, which means that
+// error output will go to the pipe.
+func (p *Pipe) stdErr() io.Writer {
+	if p.mu == nil { // uninitialised pipe
+		return nil
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.stderr
+}
+
+// Stdout copies the pipe's contents to its configured standard output (using
+// [Pipe.WithStdout]), or to [os.Stdout] otherwise, and returns the number of
+// bytes successfully written, together with any error.
+func (p *Pipe) Stdout() (int, error) {
+	if p.Error() != nil {
+		return 0, p.Error()
+	}
+	n64, err := io.Copy(p.stdout, p)
+	if err != nil {
+		return 0, err
+	}
+	n := int(n64)
+	if int64(n) != n64 {
+		return 0, fmt.Errorf("length %d overflows int", n64)
+	}
+	return n, p.Error()
+}
+
+// String returns the pipe's contents as a string, together with any error.
+func (p *Pipe) String() (string, error) {
+	data, err := p.Bytes()
+	if err != nil {
+		p.SetError(err)
+	}
+	return string(data), p.Error()
+}
+
+// Tee copies the pipe's contents to each of the supplied writers, like Unix
+// tee(1). If no writers are supplied, the default is the pipe's standard
+// output.
+func (p *Pipe) Tee(writers ...io.Writer) *Pipe {
+	teeWriter := p.stdout
+	if len(writers) > 0 {
+		teeWriter = io.MultiWriter(writers...)
+	}
+	return p.WithReader(io.TeeReader(p.Reader, teeWriter))
+}
+
+// Wait reads the pipe to completion and returns any error present on
+// the pipe, or nil otherwise. This is mostly useful for waiting until
+// concurrent filters have completed (see [Pipe.Filter]).
+func (p *Pipe) Wait() error {
+	_, err := io.Copy(io.Discard, p)
+	if err != nil {
+		p.SetError(err)
+	}
+	return p.Error()
+}
+
+// WithEnv sets the environment for subsequent [Pipe.Exec] and [Pipe.ExecForEach]
+// commands to the string slice env, using the same format as [os/exec.Cmd.Env].
+// An empty slice unsets all existing environment variables.
+func (p *Pipe) WithEnv(env []string) *Pipe {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.env = env
+	return p
+}
+
+// WithError sets the error err on the pipe.
+func (p *Pipe) WithError(err error) *Pipe {
+	p.SetError(err)
+	return p
+}
+
+// WithHTTPClient sets the HTTP client c for use with subsequent requests via
+// [Pipe.Do], [Pipe.Get], or [Pipe.Post]. For example, to make a request using
+// a client with a timeout:
+//
+//	NewPipe().WithHTTPClient(&http.Client{
+//	        Timeout: 10 * time.Second,
+//	}).Get("https://example.com").Stdout()
+func (p *Pipe) WithHTTPClient(c *http.Client) *Pipe {
+	p.httpClient = c
+	return p
+}
+
+// WithReader sets the pipe's input reader to r. Once r has been completely
+// read, it will be closed if necessary.
+func (p *Pipe) WithReader(r io.Reader) *Pipe {
+	p.Reader = NewReadAutoCloser(r)
+	return p
+}
+
+// WithStderr sets the standard error output for [Pipe.Exec] or
+// [Pipe.ExecForEach] commands to w, instead of the pipe.
+func (p *Pipe) WithStderr(w io.Writer) *Pipe {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.stderr = w
+	return p
+}
+
+// WithStdout sets the pipe's standard output to the writer w, instead of the
+// default [os.Stdout].
+func (p *Pipe) WithStdout(w io.Writer) *Pipe {
+	p.stdout = w
+	return p
+}
+
+// WriteFile writes the pipe's contents to the file path, truncating it if it
+// exists, and returns the number of bytes successfully written, or an error.
+func (p *Pipe) WriteFile(path string) (int64, error) {
+	return p.writeOrAppendFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC)
+}
+
+func (p *Pipe) writeOrAppendFile(path string, mode int) (int64, error) {
+	if p.Error() != nil {
+		return 0, p.Error()
+	}
+	out, err := os.OpenFile(path, mode, 0o666)
+	if err != nil {
+		p.SetError(err)
+		return 0, err
+	}
+	defer out.Close()
+	wrote, err := io.Copy(out, p)
+	if err != nil {
+		p.SetError(err)
+	}
+	return wrote, p.Error()
+}
+
+// ReadAutoCloser wraps an [io.ReadCloser] so that it will be automatically
+// closed once it has been fully read.
+type ReadAutoCloser struct {
+	r io.ReadCloser
+}
+
+// NewReadAutoCloser returns a [ReadAutoCloser] wrapping the reader r.
+func NewReadAutoCloser(r io.Reader) ReadAutoCloser {
+	if _, ok := r.(io.Closer); !ok {
+		return ReadAutoCloser{io.NopCloser(r)}
+	}
+	rc, ok := r.(io.ReadCloser)
+	if !ok {
+		// This can never happen, but just in case it does...
+		panic("internal error: type assertion to io.ReadCloser failed")
+	}
+	return ReadAutoCloser{rc}
+}
+
+// Close closes ra's reader, returning any resulting error.
+func (ra ReadAutoCloser) Close() error {
+	if ra.r == nil {
+		return nil
+	}
+	return ra.r.Close()
+}
+
+// Read reads up to len(b) bytes from ra's reader into b. It returns the number
+// of bytes read and any error encountered. At end of file, Read returns 0,
+// [io.EOF]. If end-of-file is reached, the reader will be closed.
+func (ra ReadAutoCloser) Read(b []byte) (n int, err error) {
+	if ra.r == nil {
+		return 0, io.EOF
+	}
+	n, err = ra.r.Read(b)
+	if err == io.EOF {
+		ra.Close()
+	}
+	return n, err
+}
+
+func newScanner(r io.Reader) *bufio.Scanner {
+	scanner := bufio.NewScanner(r)
+	scanner.Buffer(make([]byte, 4096), math.MaxInt)
+	return scanner
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/charmbracelet/glamour/.gitattributes","mode":420,"size":28,"sha256":"186e36bc13ebb1031bb9be6a6aca8eae9202c2912d2c5fb806cceb604a5a0123","index":0,"count":1,"encoding":"utf-8","payloadBytes":28}
+*.golden linguist-generated
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/charmbracelet/glamour/.gitignore","mode":420,"size":13,"sha256":"66f1ab6443c2a54dad71c969a7c47d49931a87bc818b64169fcb22a199b9d941","index":0,"count":1,"encoding":"utf-8","payloadBytes":13}
+cmd/
+!*.test
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/charmbracelet/glamour/.golangci.yml","mode":420,"size":359,"sha256":"55c422cacb7ed9d87e5d4e5c677b3587e89082be93fa295011f4ebe63575b0dc","index":0,"count":1,"encoding":"utf-8","payloadBytes":359}
+run:
+  tests: false
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+linters:
+  enable:
+    - bodyclose
+    - dupl
+    - exportloopref
+    - goconst
+    - godot
+    - godox
+    - goimports
+    - mnd
+    - goprintffuncname
+    - gosec
+    - misspell
+    - prealloc
+    - rowserrcheck
+    - sqlclosecheck
+    - unconvert
+    - unparam
+    - whitespace
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/charmbracelet/glamour/CONTRIBUTING.md","mode":420,"size":504,"sha256":"f20577802e8eb888a62e5bac619f243987fddd4883ab9c70100e24e22ec55762","index":0,"count":1,"encoding":"utf-8","payloadBytes":504}
+# Contributing
+
+Contributions are welcome!
+
+Please submit a pull request for minor changes and submit issues for major changes for discussions.
+
+## Testing
+
+When providing a new feature or bug fix, please provide tests that demonstrate the issue along with your fix.
+
+## Themes
+
+New styles need to be implemented in `styles/<style-name>.go`, and then `go generate
+./...` will create the JSON files from it.
+
+You can look up all references of another theme (e.g. Dracula), and add your
+theme accordingly.
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/charmbracelet/glamour/LICENSE","mode":420,"size":1080,"sha256":"30bf812ed0c30e86192cb609b74cf5f2a7303553f7e10ddbfc926172af115b89","index":0,"count":1,"encoding":"utf-8","payloadBytes":1080}
+MIT License
+
+Copyright (c) 2019-2023 Charmbracelet, Inc
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/charmbracelet/glamour/README.md","mode":420,"size":3822,"sha256":"ecdf0c1ed00898eef74cc75b4e6a6fcdae98643374d033435cee6932a030bfc6","index":0,"count":1,"encoding":"utf-8","payloadBytes":3822}
+# Glamour
+
+<p>
+    <img src="https://stuff.charm.sh/glamour/glamour-github-header.png" width="245" alt="Glamour Title Treatment"><br>
+    <a href="https://github.com/charmbracelet/glamour/releases"><img src="https://img.shields.io/github/release/charmbracelet/glamour.svg" alt="Latest Release"></a>
+    <a href="https://pkg.go.dev/github.com/charmbracelet/glamour?tab=doc"><img src="https://godoc.org/github.com/golang/gddo?status.svg" alt="GoDoc"></a>
+    <a href="https://github.com/charmbracelet/glamour/actions"><img src="https://github.com/charmbracelet/glamour/workflows/build/badge.svg" alt="Build Status"></a>
+    <a href="https://coveralls.io/github/charmbracelet/glamour?branch=master"><img src="https://coveralls.io/repos/github/charmbracelet/glamour/badge.svg?branch=master" alt="Coverage Status"></a>
+    <a href="https://goreportcard.com/report/charmbracelet/glamour"><img src="https://goreportcard.com/badge/charmbracelet/glamour" alt="Go ReportCard"></a>
+</p>
+
+Stylesheet-based markdown rendering for your CLI apps.
+
+![Glamour dark style example](https://stuff.charm.sh/glamour/glamour-example.png)
+
+`glamour` lets you render [markdown](https://en.wikipedia.org/wiki/Markdown)
+documents & templates on [ANSI](https://en.wikipedia.org/wiki/ANSI_escape_code)
+compatible terminals. You can create your own stylesheet or simply use one of
+the stylish defaults.
+
+## Usage
+
+```go
+import "github.com/charmbracelet/glamour"
+
+in := `# Hello World
+
+This is a simple example of Markdown rendering with Glamour!
+Check out the [other examples](https://github.com/charmbracelet/glamour/tree/master/examples) too.
+
+Bye!
+`
+
+out, err := glamour.Render(in, "dark")
+fmt.Print(out)
+```
+
+<img src="https://github.com/charmbracelet/glamour/raw/master/examples/helloworld/helloworld.png" width="600" alt="Hello World example">
+
+### Custom Renderer
+
+```go
+import "github.com/charmbracelet/glamour"
+
+r, _ := glamour.NewTermRenderer(
+    // detect background color and pick either the default dark or light theme
+    glamour.WithAutoStyle(),
+    // wrap output at specific width (default is 80)
+    glamour.WithWordWrap(40),
+)
+
+out, err := r.Render(in)
+fmt.Print(out)
+```
+
+## Styles
+
+You can find all available default styles in our [gallery](https://github.com/charmbracelet/glamour/tree/master/styles/gallery).
+Want to create your own style? [Learn how!](https://github.com/charmbracelet/glamour/tree/master/styles)
+
+There are a few options for using a custom style:
+1. Call `glamour.Render(inputText, "desiredStyle")`
+1. Set the `GLAMOUR_STYLE` environment variable to your desired default style or a file location for a style and call `glamour.RenderWithEnvironmentConfig(inputText)`
+1. Set the `GLAMOUR_STYLE` environment variable and pass `glamour.WithEnvironmentConfig()` to your custom renderer
+
+## Glamourous Projects
+
+Check out these projects, which use `glamour`:
+- [Glow](https://github.com/charmbracelet/glow), a markdown renderer for
+the command-line.
+- [GitHub CLI](https://github.com/cli/cli), GitHub’s official command line tool.
+- [GitLab CLI](https://gitlab.com/gitlab-org/cli), GitLab's official command line tool.
+- [Gitea CLI](https://gitea.com/gitea/tea), Gitea's official command line tool.
+- [Meteor](https://github.com/odpf/meteor), an easy-to-use, plugin-driven metadata collection framework.
+
+## Feedback
+
+We’d love to hear your thoughts on this project. Feel free to drop us a note!
+
+* [Twitter](https://twitter.com/charmcli)
+* [The Fediverse](https://mastodon.social/@charmcli)
+* [Discord](https://charm.sh/chat)
+
+## License
+
+[MIT](https://github.com/charmbracelet/glamour/raw/master/LICENSE)
+
+***
+
+Part of [Charm](https://charm.sh).
+
+<a href="https://charm.sh/"><img alt="The Charm logo" src="https://stuff.charm.sh/charm-badge.jpg" width="400"></a>
+
+Charm热爱开源 • Charm loves open source
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/charmbracelet/glamour/ansi/baseelement.go","mode":420,"size":3185,"sha256":"3338e51065aa8171babcb2c9a9527630dcde8992bfdb548b6f69810a31a8f763","index":0,"count":1,"encoding":"utf-8","payloadBytes":3185}
+package ansi
+
+import (
+	"bytes"
+	"io"
+	"strings"
+	"text/template"
+
+	"github.com/muesli/termenv"
+)
+
+// BaseElement renders a styled primitive element.
+type BaseElement struct {
+	Token  string
+	Prefix string
+	Suffix string
+	Style  StylePrimitive
+}
+
+func formatToken(format string, token string) (string, error) {
+	var b bytes.Buffer
+
+	v := make(map[string]interface{})
+	v["text"] = token
+
+	tmpl, err := template.New(format).Funcs(TemplateFuncMap).Parse(format)
+	if err != nil {
+		return "", err
+	}
+
+	err = tmpl.Execute(&b, v)
+	return b.String(), err
+}
+
+func renderText(w io.Writer, p termenv.Profile, rules StylePrimitive, s string) {
+	if len(s) == 0 {
+		return
+	}
+
+	out := termenv.String(s)
+	if rules.Upper != nil && *rules.Upper {
+		out = termenv.String(strings.ToUpper(s))
+	}
+	if rules.Lower != nil && *rules.Lower {
+		out = termenv.String(strings.ToLower(s))
+	}
+	if rules.Title != nil && *rules.Title {
+		out = termenv.String(strings.Title(s))
+	}
+	if rules.Color != nil {
+		out = out.Foreground(p.Color(*rules.Color))
+	}
+	if rules.BackgroundColor != nil {
+		out = out.Background(p.Color(*rules.BackgroundColor))
+	}
+	if rules.Underline != nil && *rules.Underline {
+		out = out.Underline()
+	}
+	if rules.Bold != nil && *rules.Bold {
+		out = out.Bold()
+	}
+	if rules.Italic != nil && *rules.Italic {
+		out = out.Italic()
+	}
+	if rules.CrossedOut != nil && *rules.CrossedOut {
+		out = out.CrossOut()
+	}
+	if rules.Overlined != nil && *rules.Overlined {
+		out = out.Overline()
+	}
+	if rules.Inverse != nil && *rules.Inverse {
+		out = out.Reverse()
+	}
+	if rules.Blink != nil && *rules.Blink {
+		out = out.Blink()
+	}
+
+	_, _ = io.WriteString(w, out.String())
+}
+
+func (e *BaseElement) StyleOverrideRender(w io.Writer, ctx RenderContext, style StylePrimitive) error {
+	bs := ctx.blockStack
+	st1 := cascadeStylePrimitives(bs.Current().Style.StylePrimitive, style)
+	st2 := cascadeStylePrimitives(bs.With(e.Style), style)
+
+	return e.doRender(w, ctx.options.ColorProfile, st1, st2)
+}
+
+func (e *BaseElement) Render(w io.Writer, ctx RenderContext) error {
+	bs := ctx.blockStack
+	st1 := bs.Current().Style.StylePrimitive
+	st2 := bs.With(e.Style)
+	return e.doRender(w, ctx.options.ColorProfile, st1, st2)
+}
+
+func (e *BaseElement) doRender(w io.Writer, p termenv.Profile, st1, st2 StylePrimitive) error {
+	renderText(w, p, st1, e.Prefix)
+	defer func() {
+		renderText(w, p, st1, e.Suffix)
+	}()
+
+	// render unstyled prefix/suffix
+	renderText(w, p, st1, st2.BlockPrefix)
+	defer func() {
+		renderText(w, p, st1, st2.BlockSuffix)
+	}()
+
+	// render styled prefix/suffix
+	renderText(w, p, st2, st2.Prefix)
+	defer func() {
+		renderText(w, p, st2, st2.Suffix)
+	}()
+
+	s := e.Token
+	if len(st2.Format) > 0 {
+		var err error
+		s, err = formatToken(st2.Format, s)
+		if err != nil {
+			return err
+		}
+	}
+	renderText(w, p, st2, escapeReplacer.Replace(s))
+	return nil
+}
+
+// https://www.markdownguide.org/basic-syntax/#characters-you-can-escape
+var escapeReplacer = strings.NewReplacer(
+	"\\\\", "\\",
+	"\\`", "`",
+	"\\*", "*",
+	"\\_", "_",
+	"\\{", "{",
+	"\\}", "}",
+	"\\[", "[",
+	"\\]", "]",
+	"\\<", "<",
+	"\\>", ">",
+	"\\(", "(",
+	"\\)", ")",
+	"\\#", "#",
+	"\\+", "+",
+	"\\-", "-",
+	"\\.", ".",
+	"\\!", "!",
+	"\\|", "|",
+)
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/charmbracelet/glamour/ansi/blockelement.go","mode":420,"size":1509,"sha256":"95675171ea8ce5162d2e3084ba68827b14acac601720033fb5c14eaf8ec6f9d1","index":0,"count":1,"encoding":"utf-8","payloadBytes":1509}
+package ansi
+
+import (
+	"bytes"
+	"io"
+
+	"github.com/charmbracelet/x/ansi"
+)
+
+// BlockElement provides a render buffer for children of a block element.
+// After all children have been rendered into it, it applies indentation and
+// margins around them and writes everything to the parent rendering buffer.
+type BlockElement struct {
+	Block   *bytes.Buffer
+	Style   StyleBlock
+	Margin  bool
+	Newline bool
+}
+
+func (e *BlockElement) Render(w io.Writer, ctx RenderContext) error {
+	bs := ctx.blockStack
+	bs.Push(*e)
+
+	renderText(w, ctx.options.ColorProfile, bs.Parent().Style.StylePrimitive, e.Style.BlockPrefix)
+	renderText(bs.Current().Block, ctx.options.ColorProfile, bs.Current().Style.StylePrimitive, e.Style.Prefix)
+	return nil
+}
+
+func (e *BlockElement) Finish(w io.Writer, ctx RenderContext) error {
+	bs := ctx.blockStack
+
+	if e.Margin {
+		s := ansi.Wordwrap(
+			bs.Current().Block.String(),
+			int(bs.Width(ctx)),
+			" ,.;-+|",
+		)
+
+		mw := NewMarginWriter(ctx, w, bs.Current().Style)
+		if _, err := io.WriteString(mw, s); err != nil {
+			return err
+		}
+
+		if e.Newline {
+			if _, err := io.WriteString(mw, "\n"); err != nil {
+				return err
+			}
+		}
+	} else {
+		_, err := bs.Parent().Block.Write(bs.Current().Block.Bytes())
+		if err != nil {
+			return err
+		}
+	}
+
+	renderText(w, ctx.options.ColorProfile, bs.Current().Style.StylePrimitive, e.Style.Suffix)
+	renderText(w, ctx.options.ColorProfile, bs.Parent().Style.StylePrimitive, e.Style.BlockSuffix)
+
+	bs.Current().Block.Reset()
+	bs.Pop()
+	return nil
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/charmbracelet/glamour/ansi/blockstack.go","mode":420,"size":1909,"sha256":"5b000525909e515a1d09271c141283290833520e11dd75bfbaf2b1d4b90f5ce5","index":0,"count":1,"encoding":"utf-8","payloadBytes":1909}
+package ansi
+
+import (
+	"bytes"
+)
+
+// BlockStack is a stack of block elements, used to calculate the current
+// indentation & margin level during the rendering process.
+type BlockStack []BlockElement
+
+// Len returns the length of the stack.
+func (s *BlockStack) Len() int {
+	return len(*s)
+}
+
+// Push appends an item to the stack.
+func (s *BlockStack) Push(e BlockElement) {
+	*s = append(*s, e)
+}
+
+// Pop removes the last item on the stack.
+func (s *BlockStack) Pop() {
+	stack := *s
+	if len(stack) == 0 {
+		return
+	}
+
+	stack = stack[0 : len(stack)-1]
+	*s = stack
+}
+
+// Indent returns the current indentation level of all elements in the stack.
+func (s BlockStack) Indent() uint {
+	var i uint
+
+	for _, v := range s {
+		if v.Style.Indent == nil {
+			continue
+		}
+		i += *v.Style.Indent
+	}
+
+	return i
+}
+
+// Margin returns the current margin level of all elements in the stack.
+func (s BlockStack) Margin() uint {
+	var i uint
+
+	for _, v := range s {
+		if v.Style.Margin == nil {
+			continue
+		}
+		i += *v.Style.Margin
+	}
+
+	return i
+}
+
+// Width returns the available rendering width.
+func (s BlockStack) Width(ctx RenderContext) uint {
+	if s.Indent()*s.Margin() > uint(ctx.options.WordWrap) {
+		return 0
+	}
+	return uint(ctx.options.WordWrap) - s.Indent()*s.Margin()
+}
+
+// Parent returns the current BlockElement's parent.
+func (s BlockStack) Parent() BlockElement {
+	if len(s) == 1 {
+		return BlockElement{
+			Block: &bytes.Buffer{},
+		}
+	}
+
+	return s[len(s)-2]
+}
+
+// Current returns the current BlockElement.
+func (s BlockStack) Current() BlockElement {
+	if len(s) == 0 {
+		return BlockElement{
+			Block: &bytes.Buffer{},
+		}
+	}
+
+	return s[len(s)-1]
+}
+
+// With returns a StylePrimitive that inherits the current BlockElement's style.
+func (s BlockStack) With(child StylePrimitive) StylePrimitive {
+	sb := StyleBlock{}
+	sb.StylePrimitive = child
+	return cascadeStyle(s.Current().Style, sb, false).StylePrimitive
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/charmbracelet/glamour/ansi/codeblock.go","mode":420,"size":4585,"sha256":"5ae26f435304c7b4f69e9c6b473b372deb37c9aa812eb0ff2bc4eba23e2f6ab1","index":0,"count":1,"encoding":"utf-8","payloadBytes":4585}
+package ansi
+
+import (
+	"io"
+	"sync"
+
+	"github.com/alecthomas/chroma/v2"
+	"github.com/alecthomas/chroma/v2/quick"
+	"github.com/alecthomas/chroma/v2/styles"
+	"github.com/muesli/reflow/indent"
+	"github.com/muesli/termenv"
+)
+
+const (
+	// The chroma style theme name used for rendering.
+	chromaStyleTheme = "charm"
+)
+
+// mutex for synchronizing access to the chroma style registry.
+// Related https://github.com/alecthomas/chroma/pull/650
+var mutex = sync.Mutex{}
+
+// A CodeBlockElement is used to render code blocks.
+type CodeBlockElement struct {
+	Code     string
+	Language string
+}
+
+func chromaStyle(style StylePrimitive) string {
+	var s string
+
+	if style.Color != nil {
+		s = *style.Color
+	}
+	if style.BackgroundColor != nil {
+		if s != "" {
+			s += " "
+		}
+		s += "bg:" + *style.BackgroundColor
+	}
+	if style.Italic != nil && *style.Italic {
+		if s != "" {
+			s += " "
+		}
+		s += "italic"
+	}
+	if style.Bold != nil && *style.Bold {
+		if s != "" {
+			s += " "
+		}
+		s += "bold"
+	}
+	if style.Underline != nil && *style.Underline {
+		if s != "" {
+			s += " "
+		}
+		s += "underline"
+	}
+
+	return s
+}
+
+func (e *CodeBlockElement) Render(w io.Writer, ctx RenderContext) error {
+	bs := ctx.blockStack
+
+	var indentation uint
+	var margin uint
+	rules := ctx.options.Styles.CodeBlock
+	if rules.Indent != nil {
+		indentation = *rules.Indent
+	}
+	if rules.Margin != nil {
+		margin = *rules.Margin
+	}
+	theme := rules.Theme
+
+	if rules.Chroma != nil && ctx.options.ColorProfile != termenv.Ascii {
+		theme = chromaStyleTheme
+		mutex.Lock()
+		// Don't register the style if it's already registered.
+		_, ok := styles.Registry[theme]
+		if !ok {
+			styles.Register(chroma.MustNewStyle(theme,
+				chroma.StyleEntries{
+					chroma.Text:                chromaStyle(rules.Chroma.Text),
+					chroma.Error:               chromaStyle(rules.Chroma.Error),
+					chroma.Comment:             chromaStyle(rules.Chroma.Comment),
+					chroma.CommentPreproc:      chromaStyle(rules.Chroma.CommentPreproc),
+					chroma.Keyword:             chromaStyle(rules.Chroma.Keyword),
+					chroma.KeywordReserved:     chromaStyle(rules.Chroma.KeywordReserved),
+					chroma.KeywordNamespace:    chromaStyle(rules.Chroma.KeywordNamespace),
+					chroma.KeywordType:         chromaStyle(rules.Chroma.KeywordType),
+					chroma.Operator:            chromaStyle(rules.Chroma.Operator),
+					chroma.Punctuation:         chromaStyle(rules.Chroma.Punctuation),
+					chroma.Name:                chromaStyle(rules.Chroma.Name),
+					chroma.NameBuiltin:         chromaStyle(rules.Chroma.NameBuiltin),
+					chroma.NameTag:             chromaStyle(rules.Chroma.NameTag),
+					chroma.NameAttribute:       chromaStyle(rules.Chroma.NameAttribute),
+					chroma.NameClass:           chromaStyle(rules.Chroma.NameClass),
+					chroma.NameConstant:        chromaStyle(rules.Chroma.NameConstant),
+					chroma.NameDecorator:       chromaStyle(rules.Chroma.NameDecorator),
+					chroma.NameException:       chromaStyle(rules.Chroma.NameException),
+					chroma.NameFunction:        chromaStyle(rules.Chroma.NameFunction),
+					chroma.NameOther:           chromaStyle(rules.Chroma.NameOther),
+					chroma.Literal:             chromaStyle(rules.Chroma.Literal),
+					chroma.LiteralNumber:       chromaStyle(rules.Chroma.LiteralNumber),
+					chroma.LiteralDate:         chromaStyle(rules.Chroma.LiteralDate),
+					chroma.LiteralString:       chromaStyle(rules.Chroma.LiteralString),
+					chroma.LiteralStringEscape: chromaStyle(rules.Chroma.LiteralStringEscape),
+					chroma.GenericDeleted:      chromaStyle(rules.Chroma.GenericDeleted),
+					chroma.GenericEmph:         chromaStyle(rules.Chroma.GenericEmph),
+					chroma.GenericInserted:     chromaStyle(rules.Chroma.GenericInserted),
+					chroma.GenericStrong:       chromaStyle(rules.Chroma.GenericStrong),
+					chroma.GenericSubheading:   chromaStyle(rules.Chroma.GenericSubheading),
+					chroma.Background:          chromaStyle(rules.Chroma.Background),
+				}))
+		}
+		mutex.Unlock()
+	}
+
+	iw := indent.NewWriterPipe(w, indentation+margin, func(wr io.Writer) {
+		renderText(w, ctx.options.ColorProfile, bs.Current().Style.StylePrimitive, " ")
+	})
+
+	if len(theme) > 0 {
+		renderText(iw, ctx.options.ColorProfile, bs.Current().Style.StylePrimitive, rules.BlockPrefix)
+
+		err := quick.Highlight(iw, e.Code, e.Language, "terminal256", theme)
+		if err != nil {
+			return err
+		}
+		renderText(iw, ctx.options.ColorProfile, bs.Current().Style.StylePrimitive, rules.BlockSuffix)
+		return nil
+	}
+
+	// fallback rendering
+	el := &BaseElement{
+		Token: e.Code,
+		Style: rules.StylePrimitive,
+	}
+
+	return el.Render(iw, ctx)
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/charmbracelet/glamour/ansi/codespan.go","mode":420,"size":320,"sha256":"5295e7bd86b575ce93293f55fb5e19baa6d88b078ede3d26227621c77133f4c2","index":0,"count":1,"encoding":"utf-8","payloadBytes":320}
+package ansi
+
+import "io"
+
+// A CodeSpanElement is used to render codespan.
+type CodeSpanElement struct {
+	Text  string
+	Style StylePrimitive
+}
+
+func (e *CodeSpanElement) Render(w io.Writer, ctx RenderContext) error {
+	renderText(w, ctx.options.ColorProfile, e.Style, e.Style.Prefix+e.Text+e.Style.Suffix)
+	return nil
+}
+
+@@END
 @@PORTABLE {"path":"third_party/wails/vendor/github.com/charmbracelet/glamour/ansi/context.go","mode":420,"size":759,"sha256":"d088d9ef795bed34ea9bafc8aed3865bf0d55252f9a7c299aed0bf50262374c8","index":0,"count":1,"encoding":"utf-8","payloadBytes":759}
 package ansi
 
@@ -163277,2009 +165633,6 @@ var Cols = []*Col{
 		Hsl:  Hsl{0, 0, 93},
 		Name: "Grey93",
 	},
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/leaanthony/go-ansi-parser/logo.png","mode":420,"size":10362,"sha256":"87a36c82f2898cd5ab2bbc76096dadf422933f6f7b77f76a269526243f945d1b","index":0,"count":1,"encoding":"base64","payloadBytes":13816}
-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
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/leaanthony/go-ansi-parser/options.go","mode":420,"size":845,"sha256":"1e7ed890b78e3a4fa87b6c41fd50be1a7331065de846bfa7c25e98a977bbe238","index":0,"count":1,"encoding":"utf-8","payloadBytes":845}
-package ansi
-
-// ParseOption specifies parse option.
-type ParseOption struct {
-	ignoreUnexpectedCode bool
-	ansiForegroundColor  string
-	ansiBackgroundColor  string
-}
-
-// WithIgnoreInvalidCodes disables returning an error on invalid ANSI code.
-func WithIgnoreInvalidCodes() ParseOption {
-	return ParseOption{ignoreUnexpectedCode: true}
-}
-
-// WithDefaultForegroundColor specifies default foreground code (ANSI 39).
-// See ColourMap variable and foreground color codes 30-37.
-func WithDefaultForegroundColor(ansiColor string) ParseOption {
-	return ParseOption{ansiForegroundColor: ansiColor}
-}
-
-// WithDefaultBackgroundColor specifies default foreground code (ANSI 49).
-// See ColourMap variable and foreground color codes 30-37.
-func WithDefaultBackgroundColor(ansiColor string) ParseOption {
-	return ParseOption{ansiBackgroundColor: ansiColor}
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/leaanthony/gosod/.gitignore","mode":420,"size":272,"sha256":"750e5fd3dc47744ff1c098703e872469c972d8b9b5ab56449793592eb47de1ad","index":0,"count":1,"encoding":"utf-8","payloadBytes":272}
-# Binaries for programs and plugins
-*.exe
-*.exe~
-*.dll
-*.so
-*.dylib
-
-# Test binary, build with `go test -c`
-*.test
-
-# Output of the go coverage tool, specifically when used with LiteIDE
-*.out
-
-generated
-examples/ignore/ignore
-examples/basic/basic
-examples/filters/filters
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/leaanthony/gosod/LICENSE","mode":420,"size":1068,"sha256":"6ec71bfac83b3a260158e53408a81392f84982fe19c43b4c2b6e2b6f0b44457b","index":0,"count":1,"encoding":"utf-8","payloadBytes":1068}
-MIT License
-
-Copyright (c) 2019 Lea Anthony
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/leaanthony/gosod/README.md","mode":420,"size":3097,"sha256":"78372ba337881cb00dc7107ec7e82fecfef35829092a73f8894846673d831313","index":0,"count":1,"encoding":"utf-8","payloadBytes":3097}
-<p align="center" style="text-align: center">
-   <img src="logo.png" width="50%"><br/>
-</p>
-
-<p align="center">
-	Scaffolding simplified<br/><br/>
-   <a href="https://github.com/leaanthony/gosod/blob/master/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg"></a>
-   <a href="https://goreportcard.com/report/github.com/leaanthony/gosod"><img src="https://goreportcard.com/badge/github.com/leaanthony/gosod"/></a>
-   <a href="https://godoc.org/github.com/leaanthony/gosod"><img src="https://img.shields.io/badge/godoc-reference-blue.svg"/></a>
-   <a href="https://github.com/leaanthony/gosod/issues"><img src="https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat" alt="CodeFactor" /></a>
-   <a href="https://app.fossa.io/projects/git%2Bgithub.com%2Fleaanthony%2Fgosod?ref=badge_shield" alt="FOSSA Status"><img src="https://app.fossa.io/api/projects/git%2Bgithub.com%2Fleaanthony%2Fgosod.svg?type=shield"/></a>
-</p>
-
-
-Features:
-  - Scaffold out project directories from templates
-  - Uses Go's native templating engine
-  - Uses `fs.FS` for input, so it works well with `go:embed` and [debme](https://github.com/leaanthony/debme)
-  - Go alternative to [cookiecutter](https://github.com/cookiecutter/cookiecutter)
-
-## Installation 
-
-`go get github.com/leaanthony/gosod`
-
-## Usage
-
-  1. Define a template directory
-  2. Define some data
-  3. Extract to a target directory
-
-```go
-package main
-
-import (
-	"log"
-
-	"github.com/leaanthony/gosod"
-)
-
-type config struct {
-	Name string
-}
-
-
-// mytemplate/
-// ├── custom.filtername.txt
-// ├── ignored.txt
-// ├── subdir
-// │   ├── included.txt
-// │   └── sub.tmpl.go
-// └── test.tmpl.go
-//go:embed mytemplate/*
-var mytemplate embed.FS
-
-func main() {
-
-	// Define a new Template directory
-	basic, err := gosod.New(mytemplate)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// Make some config data
-	myConfig := &config{
-		Name: "Mat",
-	}
-		
-	// Ignore files
-	basic.IgnoreFile("ignored.txt")
-	
-	// Custom template filters
-	basic.SetTemplateFilters([]string{ ".filtername", ".tmpl" })
-
-	// Create a new directory using the template and config
-	err = basic.Extract("./generated", myConfig)
-	if err != nil {
-		log.Fatal(err)
-	}
-	
-	// Ouput FS:
-	// generated/
-	// ├── custom.txt
-	// ├── subdir
-	// │   ├── included.txt
-	// │   └── sub.go
-	// └── test.go
-}
-```
-
-## Template Directories
-
-A template directory is simply a directory structure contianing files you wish to copy. The algorithm for copying is:
-
-  * Categorise all files into one of: directory, standard file and template files
-	* Create the directory structure
-	* Copy standard files
-	* Copy template files, assembled using the given data
-
-Template files, by default, are any file with ".tmpl" in their filename. To change this, use `SetTemplateFilters([]string)`. This allows you to set any number of filters.
-
-Files may also be ignored by using the `IgnoreFilename(string)` method.
-
-## What's with the name?
-
-Google is your [friend](https://translate.google.com/?sl=cy&tl=en&text=gosod&op=translate)
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/leaanthony/gosod/gosod.go","mode":420,"size":232,"sha256":"f9fc78ccf72763047b815f0f00aa3be3c3c4dee1c8bf2ba683edae44cb87c1e9","index":0,"count":1,"encoding":"utf-8","payloadBytes":232}
-package gosod
-
-import (
-	"github.com/leaanthony/gosod/internal/templatedir"
-	"io/fs"
-)
-
-// New creates a new TemplateDir structure for the given filesystem
-func New(fs fs.FS) *templatedir.TemplateDir {
-	return templatedir.New(fs)
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/leaanthony/gosod/internal/templatedir/templatedir.go","mode":420,"size":6017,"sha256":"2faaab0bb516666df02b206b3cf1ea1f89e8cd4886bf17a5969835efe6c7ba42","index":0,"count":1,"encoding":"utf-8","payloadBytes":6017}
-package templatedir
-
-import (
-	"bytes"
-	"io"
-	"io/fs"
-	"log"
-	"os"
-	"path/filepath"
-	"strings"
-	"syscall"
-	"text/template"
-)
-
-// TemplateDir defines a directory containing directories and files, including template files
-type TemplateDir struct {
-	fs              fs.FS
-	templateFilters []string
-	dirs            []string
-	standardFiles   []string
-	templateFiles   []string
-	ignoredFiles    map[string]struct{}
-	renameFiles     map[string]string
-}
-
-// New attempts to create a new TemplateDir from the given FS
-func New(fs fs.FS) *TemplateDir {
-
-	return &TemplateDir{
-		fs:              fs,
-		templateFilters: []string{".tmpl"},
-		ignoredFiles:    make(map[string]struct{}),
-		renameFiles:     make(map[string]string),
-	}
-
-}
-
-// IgnoreFile will add the given filename to the list of files to ignore
-// during extraction
-func (t *TemplateDir) IgnoreFile(filename string) {
-	t.ignoredFiles[filename] = struct{}{}
-}
-
-// SetTemplateFilters sets the template filter. Each filename is checked to see if
-// it contains this string and if so, it is deemed to be a template file
-func (t *TemplateDir) SetTemplateFilters(filters []string) {
-	t.templateFilters = filters
-}
-
-func (t *TemplateDir) RenameFiles(renameFiles map[string]string) {
-	t.renameFiles = renameFiles
-}
-
-// Extract the templates to the given directory, using data as input
-func (t *TemplateDir) Extract(targetDirectory string, data interface{}) error {
-
-	// Get the absolute path
-	targetDirectory, err := filepath.Abs(targetDirectory)
-	if err != nil {
-		return err
-	}
-
-	// If the targetDirectory doesn't exist, then create it
-	if _, err := os.Stat(targetDirectory); os.IsNotExist(err) == true {
-		// Create the targetDirectory
-		err = os.MkdirAll(targetDirectory, 0755)
-		if err != nil {
-			return err
-		}
-	}
-
-	// Process the template files
-	err = t.processTemplateDirFiles(targetDirectory, data)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (t *TemplateDir) processTemplateDirFiles(targetDirectory string, data interface{}) error {
-	// Categorise all files
-	err := t.categoriseFiles()
-	if err != nil {
-		return err
-	}
-
-	// Create all directories
-	err = t.createDirectories(targetDirectory, data)
-	if err != nil {
-		return err
-	}
-
-	// Process TemplateDirs
-	err = t.processTemplateDirs(targetDirectory, data)
-	if err != nil {
-		return err
-	}
-
-	// Copy files
-	err = t.copyFiles(targetDirectory, data)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (t *TemplateDir) categoriseFiles() error {
-	return fs.WalkDir(t.fs, ".", t.categoriseFile)
-}
-
-func (t *TemplateDir) categoriseFile(path string, info fs.DirEntry, err error) error {
-
-	// Process error
-	if err != nil {
-		return err
-	}
-
-	// Is it a directory?
-	if info.IsDir() {
-		// Ignore base dir
-		if path != "." {
-			t.dirs = append(t.dirs, path)
-		}
-		return nil
-	}
-
-	// Get the filename
-	filename := filepath.Base(path)
-
-	// Is it a file we are ignoring?
-	_, ignored := t.ignoredFiles[filename]
-	if ignored {
-		return nil
-	}
-
-	// Is it a template?
-	for _, filter := range t.templateFilters {
-		if strings.Index(filename, filter) > -1 {
-			t.templateFiles = append(t.templateFiles, path)
-			return nil
-		}
-	}
-
-	// Treat as standard file
-	t.standardFiles = append(t.standardFiles, path)
-	return nil
-}
-
-func (t *TemplateDir) convertPathTarget(path string, targetDirectory string, data any) string {
-
-	result := filepath.Join(targetDirectory, path)
-	if data == nil {
-		return result
-	}
-
-	// Load the filename as a template
-	tmpl, err := template.New("filename").Parse(result)
-	if err != nil {
-		return result
-	}
-
-	// Execute the template
-	var buf bytes.Buffer
-	err = tmpl.Execute(&buf, data)
-	if err != nil {
-		return result
-	}
-
-	// Return the result
-	return buf.String()
-}
-
-func (t *TemplateDir) createDirectories(targetDirectory string, data any) error {
-
-	// Iterate all directories and attempt to create them
-	for _, dirPath := range t.dirs {
-
-		targetDir := t.convertPathTarget(dirPath, targetDirectory, data)
-
-		// Create the directory
-		err := os.MkdirAll(targetDir, 0755)
-
-		// Ignore directory exists errors
-		if err != nil && err != syscall.EEXIST {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (t *TemplateDir) processTemplateDirs(targetDirectory string, data interface{}) error {
-
-	// Iterate template files
-	for _, templateFile := range t.templateFiles {
-
-		// Parse template
-		tmpl, err := template.ParseFS(t.fs, templateFile)
-		if err != nil {
-			return err
-		}
-
-		// Convert path to target path
-		targetFile := t.convertPathTarget(templateFile, targetDirectory, data)
-
-		// update filename
-		baseDir := filepath.Dir(targetFile)
-		filename := filepath.Base(targetFile)
-		for _, filter := range t.templateFilters {
-			filename = strings.ReplaceAll(filename, filter, "")
-		}
-		renamedFile := t.renameFiles[filename]
-		if renamedFile != "" {
-			filename = renamedFile
-		}
-		targetFile = filepath.Join(baseDir, filename)
-
-		// Create target file
-		writer, err := os.Create(targetFile)
-		if err != nil {
-			return err
-		}
-
-		err = tmpl.Execute(writer, data)
-		if err != nil {
-			err2 := writer.Close()
-			if err2 != nil {
-				return err2
-			}
-			return err
-		}
-
-		err = writer.Close()
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (t *TemplateDir) copyFiles(targetDirectory string, data any) error {
-
-	// Iterate over files
-	for _, filename := range t.standardFiles {
-		targetFile := filename
-		renamedFile := t.renameFiles[filename]
-		if renamedFile != "" {
-			targetFile = renamedFile
-		}
-
-		targetFilename := t.convertPathTarget(targetFile, targetDirectory, data)
-		err := t.copyFile(filename, targetFilename)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (t *TemplateDir) copyFile(source, target string) error {
-	s, err := t.fs.Open(source)
-	if err != nil {
-		return err
-	}
-	defer func(s fs.File) {
-		err := s.Close()
-		if err != nil {
-			log.Fatal(err)
-		}
-	}(s)
-	d, err := os.Create(target)
-	if err != nil {
-		return err
-	}
-	if _, err := io.Copy(d, s); err != nil {
-		err := d.Close()
-		if err != nil {
-			return err
-		}
-		return err
-	}
-	return d.Close()
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/leaanthony/gosod/logo.png","mode":420,"size":5050,"sha256":"7e2d8ec2d0cb3a13f2131f13526ad0435e7da3e030f14d56dbf26f434152bbcb","index":0,"count":1,"encoding":"base64","payloadBytes":6736}
-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Lw73oe+mpqbdu3fHB+pT5UM7ePDgcccdF2cN6uzsrJ1JfOZI3njjjRUrVsTnhxBYkEtgQUkvvfTSCDffMcWVP2/evKVLl37ve9/bsmXL/w5j/fr18clCucCqueKKK+KsIdra2pYvX3777bfXtvToo4/+eYhaEd577721/SxZsmS47xK97Z577olvHY0333xz6HuP6ne/+91dd93V1dX13ve+N25l0Ic+9KH4mtGo8qF97Wtfi7OGqH0R1r7GNmzYsHnz5kceeWTo3moefPDB7u7ub3zjG6eddlp88v8TWJBLYEF5w/2DrBSlA+vJJ59sbm6O4/LUrur6/wL0iEb4BFtp3/nOd+JrRqPKh/bcc8+NnG4pBBbkElhQXn9//6c+9al4UyUpHVg1XV1dcVySpqamzZs3x/eNUnpg1fKlt7c3vmaUqnxoV199dRyaTWBBLoEFY/Laa691dHTEyyrDWAKrr69vuI9aj9HatWvjy0YvN7COPfbY+++/P75j9Kp8aLWUv+CCC+LcVAILcgksGKtXX331sssui/fVmI0lsGr27du3cOHCOHQMmpqaVq1aNTAwEN80eomBNWnSpJ///OfxBWVV+dB6enqG+3ldKQQW5BJYkOOuu+4a7jeulDPGwHqr+JEBt912W0tLSxw9etOnT3/ggQfiC8rKCqz29vY//vGPcfrYVPbQ3ir2tmHDhjHubcqUKfE/FQQW5BJYkObf//733Xff/ZGPfCTeXaWMPbDetmfPnltuueWMM86IL6jP3Llza3+oAwcOxLljMPbA+vCHP/yDH/ygduBxdJIKHtphu3fvvvnmm08//fT41qNpa2u74YYbXnrppfg/CgILcgksyPfCCy/84he/uPrqq+fPn9/R0TFjxozhfrT3CLIC620DAwOPPfbYpk2brrzyynnz5p111lmnnnrq0G9mNDc3T506tbbVs88+e+HChddee+199923a9euOCjDqALr2GOPnTZtWq115syZ89WvfvXOO+98/PHH48TxUalDCw7vrbOz8+Mf/3h7e/v06dNrX2ZNTU2Ht9fS0nLmmWdedNFFy5cv/+EPf/jGG2+8/ezhBUMJLMglsAAAkgksAIBkAgsAIJnAAgBIJrAAAJIJLACAZAILACCZwAIASCawAACSCSwAgGQCCwAgmcACAEgmsAAAkgksAIBkAgsAIJnAAgBIJrAAAJIJLACAZAILACCZwAIASCawAACSCSwAgGQCCwAgmcACAEgmsAAAkgksAIBkAgsAIJnAAgBIJrAAAJIJLACAZAILACCZwAIASCawAACSCSwAgGQCCwAgmcACAEgmsAAAkgksAIBkAgsAIJnAAgBIJrAAAJIJLACAZAILACCZwAIASCawAACSCSwAgGQCCwAgmcACAEgmsAAAkgksAIBkAgsAIJnAAgBIJrAAAJIJLACAZAILACCZwAIASCawAACSCSwAgGQCCwAgmcACAEgmsAAAkgksAIBkAgsAIJnAAgBIJrAAAJIJLACAZAILACCZwAIASCawAACSCSwAgGQCCwAgmcACAEgmsAAAkgksAIBkAgsAIJnAAgBIJrAAAJIJLACAZAILACCZwAIASCawAACSCSwAgGQCCwAgmcACAEgmsAAAkgksAIBkAgsAIJnAAgBIJrAAAJIJLACAZAILACCZwAIASCawAACSCSwAgGQCCwAgmcACAEgmsAAAkgksAIBkAgsAIJnAAgBIJrAAAJIJLACAZAILACCZwAIASCawAACSCSwAgGQCCwAgmcACAEgmsAAAkgksAIBkAgsAIJnAAgBIJrAAAJIJLACAZAILACCZwAIASCawAACSCSwAgGQCCwAgmcACAEgmsAAAkgksAIBkAgsAIJnAAgBIJrAAAJIJLACAZAILACDZ/wFIDEqvYfgNzQAAAABJRU5ErkJggg==
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/leaanthony/slicer/.gitignore","mode":420,"size":205,"sha256":"c304b752c90a39f286390f1f38a1ef510f1671b60d386689bb5e0e142234db5d","index":0,"count":1,"encoding":"utf-8","payloadBytes":205}
-# Binaries for programs and plugins
-*.exe
-*.exe~
-*.dll
-*.so
-*.dylib
-
-# Test binary, build with `go test -c`
-*.test
-
-# Output of the go coverage tool, specifically when used with LiteIDE
-*.out
-coverage.txt
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/leaanthony/slicer/CHANGELOG.md","mode":420,"size":803,"sha256":"5c71935b43141c571f3ff3e387828aa6d7252d56ab58d2cd2ea25762c1b84ec9","index":0,"count":1,"encoding":"utf-8","payloadBytes":803}
-<a name="unreleased"></a>
-## [Unreleased]
-
-
-<a name="v1.3.1"></a>
-## [v1.3.1] - 2019-03-03
-### Fix
-- Fix Float tests
-
-
-<a name="v1.3.0"></a>
-## [v1.3.0] - 2019-03-03
-### Feat
-- Add optional slice as part of construction
-
-
-<a name="v1.2.0"></a>
-## [v1.2.0] - 2019-02-26
-### Chore
-- add changelog
-
-### Feat
-- Add Slicer.Each()
-
-
-<a name="v1.1.0"></a>
-## [v1.1.0] - 2019-02-26
-### Feat
-- Added Filter
-
-
-<a name="v1.0.0"></a>
-## v1.0.0 - 2019-01-13
-
-[Unreleased]: https://github.com/leaanthony/slicer/compare/v1.3.1...HEAD
-[v1.3.1]: https://github.com/leaanthony/slicer/compare/v1.3.0...v1.3.1
-[v1.3.0]: https://github.com/leaanthony/slicer/compare/v1.2.0...v1.3.0
-[v1.2.0]: https://github.com/leaanthony/slicer/compare/v1.1.0...v1.2.0
-[v1.1.0]: https://github.com/leaanthony/slicer/compare/v1.0.0...v1.1.0
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/leaanthony/slicer/LICENSE","mode":420,"size":1068,"sha256":"6ec71bfac83b3a260158e53408a81392f84982fe19c43b4c2b6e2b6f0b44457b","index":0,"count":1,"encoding":"utf-8","payloadBytes":1068}
-MIT License
-
-Copyright (c) 2019 Lea Anthony
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/leaanthony/slicer/README.md","mode":420,"size":4121,"sha256":"2bd8b12ccc6150eea82fb4c87f4cce44114a2aff15abe6e63f33ec860e0bf1cc","index":0,"count":1,"encoding":"utf-8","payloadBytes":4121}
-
-<div style="text-align:center; width:400px">
-  <img src="logo.png"/>
-  Utility class for handling slices.
-</div>
-
-
-[![Go Report Card](https://goreportcard.com/badge/github.com/leaanthony/slicer)](https://goreportcard.com/report/github.com/leaanthony/slicer)  [![GoDoc](https://img.shields.io/badge/godoc-reference-blue.svg)](http://godoc.org/github.com/leaanthony/slicer) [![CodeFactor](https://www.codefactor.io/repository/github/leaanthony/slicer/badge)](https://www.codefactor.io/repository/github/leaanthony/slicer) [![codecov](https://codecov.io/gh/leaanthony/slicer/branch/master/graph/badge.svg)](https://codecov.io/gh/leaanthony/slicer) [![Mentioned in Awesome Go](https://awesome.re/mentioned-badge.svg)](https://github.com/avelino/awesome-go)  
-
-
-
-
-
-## Install
-
-`go get -u github.com/leaanthony/slicer`
-
-## Quick Start
-
-```
-  import "github.com/leaanthony/slicer"
-
-  func test() {
-    s := slicer.String()
-    s.Add("one")
-    s.Add("two")
-    s.AddSlice([]string{"three","four"})
-    fmt.Printf("My slice = %+v\n", s.AsSlice())
-    
-    t := slicer.String()
-    t.Add("zero")
-    t.AddSlicer(s)
-    fmt.Printf("My slice = %+v\n", t.AsSlice())
-  }
-```
-
-## Available slicers
-
-- Int
-- Int8
-- Int16
-- Int32
-- Int64  
-- UInt
-- UInt8
-- UInt16
-- UInt32
-- UInt64
-- Float32
-- Float64
-- String
-- Bool
-- Interface
-  
-## API
-
-### Construction
-
-Create new Slicers by calling one of the following functions:
-  - Int()
-  - Int8()
-  - Int16()
-  - Int32()
-  - Int64()
-  - Float32()
-  - Float64()
-  - String()
-  - Bool()
-  - Interface()
-
-```
-  s := slicer.String()
-```
-
-If you wish to convert an existing slice to a Slicer, you may pass it in during creation:
-
-```
-  values := []string{"one", "two", "three"}
-  s := slicer.String(values)
-```
-
-### Add 
-
-Adds a value to the slice.
-
-```
-  values := []string{"one", "two", "three"}
-  s := slicer.String(values)
-  s.Add("four")
-```
-
-### AddUnique
-
-Adds a value to the slice if it doesn't already contain it.
-
-```
-  values := []string{"one", "two", "three", "one", "two", "three"}
-  s := slicer.String(values)
-  result := s.Join(",")
-  // result is "one,two,three"
-```
-### AddSlice
-
-Adds an existing slice of values to a slicer
-
-```
-  s := slicer.String([]string{"one"})
-  s.AddSlice([]string{"two"})
-```
-
-### AsSlice
-
-Returns a regular slice from the slicer.
-
-```
-  s := slicer.String([]string{"one"})
-  for _, value := range s.AsSlice() {
-    ...
-  }
-```
-
-### AddSlicer
-
-Adds an existing slicer of values to another slicer
-
-```
-  a := slicer.String([]string{"one"})
-  b := slicer.String([]string{"two"})
-  a.AddSlicer(b)
-```
-
-### Filter
-
-Filter the values of a slicer based on the result of calling the given function with each value of the slice. If it returns true, the value is added to the result.
-
-```
-  a := slicer.Int([]int{1,5,7,9,6,3,1,9,1})
-  result := a.Filter(func(v int) bool {
-    return v > 5
-  })
-  // result is []int{7,9,9}
-  
-```
-
-### Each 
-
-Each iterates over all the values of a slicer, passing them in as paramter to a function
-
-```
-  a := slicer.Int([]int{1,5,7,9,6,3,1,9,1})
-  result := 0
-  a.Each(func(v int) {
-    result += v
-  })
-  // result is 42
-```
-
-### Contains
-
-Contains returns true if the slicer contains the given value
-
-```
-  a := slicer.Int([]int{1,5,7,9,6,3,1,9,1})
-  result := a.Contains(9)
-  // result is True
-```
-
-### Join
-
-Returns a string with the slicer elements separated by the given separator
-
-```
-  a := slicer.String([]string{"one", "two", "three"})
-  result := a.Join(",")
-  // result is "one,two,three"
-```
-### Length
-
-Returns the length of the slice
-
-```
-  a := slicer.String([]string{"one", "two", "three"})
-  result := a.Length()
-  // result is 3
-```
-
-### Clear
-
-Clears all elements from the current slice
-
-```
-  a := slicer.String([]string{"one", "two", "three"})
-  a.Clear()
-  // a.Length() == 0
-```
-
-### Sort
-
-Sorts the elements of a slice
-Not supported by: InterfaceSlicer, BoolSlicer
-
-```
-  a := slicer.Int([]int{5,3,4,1,2})
-  a.Sort()
-  // a is []int{1,2,3,4,5}
-```
-
-### Deduplicate
-
-Deduplicate removes all duplicates within a slice.
-
-```
-  a := slicer.Int([]int{5,3,5,1,3})
-  a.Deduplicate()
-  // a is []int{5,3,1}
-```
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/leaanthony/slicer/bool.go","mode":420,"size":2773,"sha256":"c95875f68c77e7641184bb829b6b6436661bff8395a24b00ad2d36055c3152ce","index":0,"count":1,"encoding":"utf-8","payloadBytes":2773}
-// Package slicer contains utility classes for handling slices
-package slicer
-
-// Imports
-import "fmt"
-import "strings"
-
-// BoolSlicer handles slices of bool
-type BoolSlicer struct {
-	slice []bool
-}
-
-// Bool creates a new BoolSlicer
-func Bool(slice ...[]bool) *BoolSlicer {
-	if len(slice) > 0 {
-		return &BoolSlicer{slice: slice[0]}
-	}
-	return &BoolSlicer{}
-}
-
-// Add a bool value to the slicer
-func (s *BoolSlicer) Add(value bool, additional ...bool) {
-	s.slice = append(s.slice, value)
-	s.slice = append(s.slice, additional...)
-}
-
-// AddUnique adds a bool value to the slicer if it does not already exist
-func (s *BoolSlicer) AddUnique(value bool, additional ...bool) {
-
-	if !s.Contains(value) {
-		s.slice = append(s.slice, value)
-	}
-
-	// Add additional values
-	for _, value := range additional {
-		if !s.Contains(value) {
-			s.slice = append(s.slice, value)
-		}
-	}
-}
-
-// AddSlice adds a bool slice to the slicer
-func (s *BoolSlicer) AddSlice(value []bool) {
-	s.slice = append(s.slice, value...)
-}
-
-// AsSlice returns the slice
-func (s *BoolSlicer) AsSlice() []bool {
-	return s.slice
-}
-
-// AddSlicer appends a BoolSlicer to the slicer
-func (s *BoolSlicer) AddSlicer(value *BoolSlicer) {
-	s.slice = append(s.slice, value.AsSlice()...)
-}
-
-// Filter the slice based on the given function
-func (s *BoolSlicer) Filter(fn func(bool) bool) *BoolSlicer {
-	result := &BoolSlicer{}
-	for _, elem := range s.slice {
-		if fn(elem) {
-			result.Add(elem)
-		}
-	}
-	return result
-}
-
-// Each runs a function on every element of the slice
-func (s *BoolSlicer) Each(fn func(bool)) {
-	for _, elem := range s.slice {
-		fn(elem)
-	}
-}
-
-// Contains indicates if the given value is in the slice
-func (s *BoolSlicer) Contains(matcher bool) bool {
-	result := false
-	for _, elem := range s.slice {
-		if elem == matcher {
-			result = true
-		}
-	}
-	return result
-}
-
-// Length returns the number of elements in the slice
-func (s *BoolSlicer) Length() int {
-	return len(s.slice)
-}
-
-// Clear all elements in the slice
-func (s *BoolSlicer) Clear() {
-	s.slice = []bool{}
-}
-
-// Deduplicate removes duplicate values from the slice
-func (s *BoolSlicer) Deduplicate() {
-
-	result := &BoolSlicer{}
-
-	for _, elem := range s.slice {
-		if !result.Contains(elem) {
-			result.Add(elem)
-		}
-	}
-
-	s.slice = result.AsSlice()
-}
-
-// Join returns a string with the slicer elements separated by the given separator
-func (s *BoolSlicer) Join(separator string) string {
-	var builder strings.Builder
-
-	// Shortcut no elements
-	if len(s.slice) == 0 {
-		return ""
-	}
-
-	// Iterate over length - 1
-	index := 0
-	for index = 0; index < len(s.slice)-1; index++ {
-		builder.WriteString(fmt.Sprintf("%v%s", s.slice[index], separator))
-	}
-	builder.WriteString(fmt.Sprintf("%v", s.slice[index]))
-	result := builder.String()
-	return result
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/leaanthony/slicer/float32.go","mode":420,"size":3048,"sha256":"a63231fc141ed9165b040980e0cde49cf00b3b931d712c1ad63337947d8f01b7","index":0,"count":1,"encoding":"utf-8","payloadBytes":3048}
-// Package slicer contains utility classes for handling slices
-package slicer
-
-// Imports
-import "sort"
-import "fmt"
-import "strings"
-
-// Float32Slicer handles slices of float32
-type Float32Slicer struct {
-	slice []float32
-}
-
-// Float32 creates a new Float32Slicer
-func Float32(slice ...[]float32) *Float32Slicer {
-	if len(slice) > 0 {
-		return &Float32Slicer{slice: slice[0]}
-	}
-	return &Float32Slicer{}
-}
-
-// Add a float32 value to the slicer
-func (s *Float32Slicer) Add(value float32, additional ...float32) {
-	s.slice = append(s.slice, value)
-	s.slice = append(s.slice, additional...)
-}
-
-// AddUnique adds a float32 value to the slicer if it does not already exist
-func (s *Float32Slicer) AddUnique(value float32, additional ...float32) {
-
-	if !s.Contains(value) {
-		s.slice = append(s.slice, value)
-	}
-
-	// Add additional values
-	for _, value := range additional {
-		if !s.Contains(value) {
-			s.slice = append(s.slice, value)
-		}
-	}
-}
-
-// AddSlice adds a float32 slice to the slicer
-func (s *Float32Slicer) AddSlice(value []float32) {
-	s.slice = append(s.slice, value...)
-}
-
-// AsSlice returns the slice
-func (s *Float32Slicer) AsSlice() []float32 {
-	return s.slice
-}
-
-// AddSlicer appends a Float32Slicer to the slicer
-func (s *Float32Slicer) AddSlicer(value *Float32Slicer) {
-	s.slice = append(s.slice, value.AsSlice()...)
-}
-
-// Filter the slice based on the given function
-func (s *Float32Slicer) Filter(fn func(float32) bool) *Float32Slicer {
-	result := &Float32Slicer{}
-	for _, elem := range s.slice {
-		if fn(elem) {
-			result.Add(elem)
-		}
-	}
-	return result
-}
-
-// Each runs a function on every element of the slice
-func (s *Float32Slicer) Each(fn func(float32)) {
-	for _, elem := range s.slice {
-		fn(elem)
-	}
-}
-
-// Contains indicates if the given value is in the slice
-func (s *Float32Slicer) Contains(matcher float32) bool {
-	result := false
-	for _, elem := range s.slice {
-		if elem == matcher {
-			result = true
-		}
-	}
-	return result
-}
-
-// Length returns the number of elements in the slice
-func (s *Float32Slicer) Length() int {
-	return len(s.slice)
-}
-
-// Clear all elements in the slice
-func (s *Float32Slicer) Clear() {
-	s.slice = []float32{}
-}
-
-// Deduplicate removes duplicate values from the slice
-func (s *Float32Slicer) Deduplicate() {
-
-	result := &Float32Slicer{}
-
-	for _, elem := range s.slice {
-		if !result.Contains(elem) {
-			result.Add(elem)
-		}
-	}
-
-	s.slice = result.AsSlice()
-}
-
-// Join returns a string with the slicer elements separated by the given separator
-func (s *Float32Slicer) Join(separator string) string {
-	var builder strings.Builder
-
-	// Shortcut no elements
-	if len(s.slice) == 0 {
-		return ""
-	}
-
-	// Iterate over length - 1
-	index := 0
-	for index = 0; index < len(s.slice)-1; index++ {
-		builder.WriteString(fmt.Sprintf("%v%s", s.slice[index], separator))
-	}
-	builder.WriteString(fmt.Sprintf("%v", s.slice[index]))
-	result := builder.String()
-	return result
-}
-
-// Sort the slice values
-func (s *Float32Slicer) Sort() {
-	sort.Slice(s.slice, func(i, j int) bool { return s.slice[i] < s.slice[j] })
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/leaanthony/slicer/float64.go","mode":420,"size":3048,"sha256":"9fb081d1b0e7e3619122c4d98316387ecaf97722e246ee239013ec066099500d","index":0,"count":1,"encoding":"utf-8","payloadBytes":3048}
-// Package slicer contains utility classes for handling slices
-package slicer
-
-// Imports
-import "sort"
-import "fmt"
-import "strings"
-
-// Float64Slicer handles slices of float64
-type Float64Slicer struct {
-	slice []float64
-}
-
-// Float64 creates a new Float64Slicer
-func Float64(slice ...[]float64) *Float64Slicer {
-	if len(slice) > 0 {
-		return &Float64Slicer{slice: slice[0]}
-	}
-	return &Float64Slicer{}
-}
-
-// Add a float64 value to the slicer
-func (s *Float64Slicer) Add(value float64, additional ...float64) {
-	s.slice = append(s.slice, value)
-	s.slice = append(s.slice, additional...)
-}
-
-// AddUnique adds a float64 value to the slicer if it does not already exist
-func (s *Float64Slicer) AddUnique(value float64, additional ...float64) {
-
-	if !s.Contains(value) {
-		s.slice = append(s.slice, value)
-	}
-
-	// Add additional values
-	for _, value := range additional {
-		if !s.Contains(value) {
-			s.slice = append(s.slice, value)
-		}
-	}
-}
-
-// AddSlice adds a float64 slice to the slicer
-func (s *Float64Slicer) AddSlice(value []float64) {
-	s.slice = append(s.slice, value...)
-}
-
-// AsSlice returns the slice
-func (s *Float64Slicer) AsSlice() []float64 {
-	return s.slice
-}
-
-// AddSlicer appends a Float64Slicer to the slicer
-func (s *Float64Slicer) AddSlicer(value *Float64Slicer) {
-	s.slice = append(s.slice, value.AsSlice()...)
-}
-
-// Filter the slice based on the given function
-func (s *Float64Slicer) Filter(fn func(float64) bool) *Float64Slicer {
-	result := &Float64Slicer{}
-	for _, elem := range s.slice {
-		if fn(elem) {
-			result.Add(elem)
-		}
-	}
-	return result
-}
-
-// Each runs a function on every element of the slice
-func (s *Float64Slicer) Each(fn func(float64)) {
-	for _, elem := range s.slice {
-		fn(elem)
-	}
-}
-
-// Contains indicates if the given value is in the slice
-func (s *Float64Slicer) Contains(matcher float64) bool {
-	result := false
-	for _, elem := range s.slice {
-		if elem == matcher {
-			result = true
-		}
-	}
-	return result
-}
-
-// Length returns the number of elements in the slice
-func (s *Float64Slicer) Length() int {
-	return len(s.slice)
-}
-
-// Clear all elements in the slice
-func (s *Float64Slicer) Clear() {
-	s.slice = []float64{}
-}
-
-// Deduplicate removes duplicate values from the slice
-func (s *Float64Slicer) Deduplicate() {
-
-	result := &Float64Slicer{}
-
-	for _, elem := range s.slice {
-		if !result.Contains(elem) {
-			result.Add(elem)
-		}
-	}
-
-	s.slice = result.AsSlice()
-}
-
-// Join returns a string with the slicer elements separated by the given separator
-func (s *Float64Slicer) Join(separator string) string {
-	var builder strings.Builder
-
-	// Shortcut no elements
-	if len(s.slice) == 0 {
-		return ""
-	}
-
-	// Iterate over length - 1
-	index := 0
-	for index = 0; index < len(s.slice)-1; index++ {
-		builder.WriteString(fmt.Sprintf("%v%s", s.slice[index], separator))
-	}
-	builder.WriteString(fmt.Sprintf("%v", s.slice[index]))
-	result := builder.String()
-	return result
-}
-
-// Sort the slice values
-func (s *Float64Slicer) Sort() {
-	sort.Slice(s.slice, func(i, j int) bool { return s.slice[i] < s.slice[j] })
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/leaanthony/slicer/int.go","mode":420,"size":2880,"sha256":"f08a65580a4dfdd34b29adebcae47b45e63473fa0cee7041dcf4f7aad4d68e1a","index":0,"count":1,"encoding":"utf-8","payloadBytes":2880}
-// Package slicer contains utility classes for handling slices
-package slicer
-
-// Imports
-import "sort"
-import "fmt"
-import "strings"
-
-// IntSlicer handles slices of int
-type IntSlicer struct {
-	slice []int
-}
-
-// Int creates a new IntSlicer
-func Int(slice ...[]int) *IntSlicer {
-	if len(slice) > 0 {
-		return &IntSlicer{slice: slice[0]}
-	}
-	return &IntSlicer{}
-}
-
-// Add a int value to the slicer
-func (s *IntSlicer) Add(value int, additional ...int) {
-	s.slice = append(s.slice, value)
-	s.slice = append(s.slice, additional...)
-}
-
-// AddUnique adds a int value to the slicer if it does not already exist
-func (s *IntSlicer) AddUnique(value int, additional ...int) {
-
-	if !s.Contains(value) {
-		s.slice = append(s.slice, value)
-	}
-
-	// Add additional values
-	for _, value := range additional {
-		if !s.Contains(value) {
-			s.slice = append(s.slice, value)
-		}
-	}
-}
-
-// AddSlice adds a int slice to the slicer
-func (s *IntSlicer) AddSlice(value []int) {
-	s.slice = append(s.slice, value...)
-}
-
-// AsSlice returns the slice
-func (s *IntSlicer) AsSlice() []int {
-	return s.slice
-}
-
-// AddSlicer appends a IntSlicer to the slicer
-func (s *IntSlicer) AddSlicer(value *IntSlicer) {
-	s.slice = append(s.slice, value.AsSlice()...)
-}
-
-// Filter the slice based on the given function
-func (s *IntSlicer) Filter(fn func(int) bool) *IntSlicer {
-	result := &IntSlicer{}
-	for _, elem := range s.slice {
-		if fn(elem) {
-			result.Add(elem)
-		}
-	}
-	return result
-}
-
-// Each runs a function on every element of the slice
-func (s *IntSlicer) Each(fn func(int)) {
-	for _, elem := range s.slice {
-		fn(elem)
-	}
-}
-
-// Contains indicates if the given value is in the slice
-func (s *IntSlicer) Contains(matcher int) bool {
-	result := false
-	for _, elem := range s.slice {
-		if elem == matcher {
-			result = true
-		}
-	}
-	return result
-}
-
-// Length returns the number of elements in the slice
-func (s *IntSlicer) Length() int {
-	return len(s.slice)
-}
-
-// Clear all elements in the slice
-func (s *IntSlicer) Clear() {
-	s.slice = []int{}
-}
-
-// Deduplicate removes duplicate values from the slice
-func (s *IntSlicer) Deduplicate() {
-
-	result := &IntSlicer{}
-
-	for _, elem := range s.slice {
-		if !result.Contains(elem) {
-			result.Add(elem)
-		}
-	}
-
-	s.slice = result.AsSlice()
-}
-
-// Join returns a string with the slicer elements separated by the given separator
-func (s *IntSlicer) Join(separator string) string {
-	var builder strings.Builder
-
-	// Shortcut no elements
-	if len(s.slice) == 0 {
-		return ""
-	}
-
-	// Iterate over length - 1
-	index := 0
-	for index = 0; index < len(s.slice)-1; index++ {
-		builder.WriteString(fmt.Sprintf("%v%s", s.slice[index], separator))
-	}
-	builder.WriteString(fmt.Sprintf("%v", s.slice[index]))
-	result := builder.String()
-	return result
-}
-
-// Sort the slice values
-func (s *IntSlicer) Sort() {
-	sort.Slice(s.slice, func(i, j int) bool { return s.slice[i] < s.slice[j] })
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/leaanthony/slicer/int16.go","mode":420,"size":2964,"sha256":"089a260af1dc5cd2cac11f480738cc8c6a7327b88fc74e885c286b06999216ff","index":0,"count":1,"encoding":"utf-8","payloadBytes":2964}
-// Package slicer contains utility classes for handling slices
-package slicer
-
-// Imports
-import "sort"
-import "fmt"
-import "strings"
-
-// Int16Slicer handles slices of int16
-type Int16Slicer struct {
-	slice []int16
-}
-
-// Int16 creates a new Int16Slicer
-func Int16(slice ...[]int16) *Int16Slicer {
-	if len(slice) > 0 {
-		return &Int16Slicer{slice: slice[0]}
-	}
-	return &Int16Slicer{}
-}
-
-// Add a int16 value to the slicer
-func (s *Int16Slicer) Add(value int16, additional ...int16) {
-	s.slice = append(s.slice, value)
-	s.slice = append(s.slice, additional...)
-}
-
-// AddUnique adds a int16 value to the slicer if it does not already exist
-func (s *Int16Slicer) AddUnique(value int16, additional ...int16) {
-
-	if !s.Contains(value) {
-		s.slice = append(s.slice, value)
-	}
-
-	// Add additional values
-	for _, value := range additional {
-		if !s.Contains(value) {
-			s.slice = append(s.slice, value)
-		}
-	}
-}
-
-// AddSlice adds a int16 slice to the slicer
-func (s *Int16Slicer) AddSlice(value []int16) {
-	s.slice = append(s.slice, value...)
-}
-
-// AsSlice returns the slice
-func (s *Int16Slicer) AsSlice() []int16 {
-	return s.slice
-}
-
-// AddSlicer appends a Int16Slicer to the slicer
-func (s *Int16Slicer) AddSlicer(value *Int16Slicer) {
-	s.slice = append(s.slice, value.AsSlice()...)
-}
-
-// Filter the slice based on the given function
-func (s *Int16Slicer) Filter(fn func(int16) bool) *Int16Slicer {
-	result := &Int16Slicer{}
-	for _, elem := range s.slice {
-		if fn(elem) {
-			result.Add(elem)
-		}
-	}
-	return result
-}
-
-// Each runs a function on every element of the slice
-func (s *Int16Slicer) Each(fn func(int16)) {
-	for _, elem := range s.slice {
-		fn(elem)
-	}
-}
-
-// Contains indicates if the given value is in the slice
-func (s *Int16Slicer) Contains(matcher int16) bool {
-	result := false
-	for _, elem := range s.slice {
-		if elem == matcher {
-			result = true
-		}
-	}
-	return result
-}
-
-// Length returns the number of elements in the slice
-func (s *Int16Slicer) Length() int {
-	return len(s.slice)
-}
-
-// Clear all elements in the slice
-func (s *Int16Slicer) Clear() {
-	s.slice = []int16{}
-}
-
-// Deduplicate removes duplicate values from the slice
-func (s *Int16Slicer) Deduplicate() {
-
-	result := &Int16Slicer{}
-
-	for _, elem := range s.slice {
-		if !result.Contains(elem) {
-			result.Add(elem)
-		}
-	}
-
-	s.slice = result.AsSlice()
-}
-
-// Join returns a string with the slicer elements separated by the given separator
-func (s *Int16Slicer) Join(separator string) string {
-	var builder strings.Builder
-
-	// Shortcut no elements
-	if len(s.slice) == 0 {
-		return ""
-	}
-
-	// Iterate over length - 1
-	index := 0
-	for index = 0; index < len(s.slice)-1; index++ {
-		builder.WriteString(fmt.Sprintf("%v%s", s.slice[index], separator))
-	}
-	builder.WriteString(fmt.Sprintf("%v", s.slice[index]))
-	result := builder.String()
-	return result
-}
-
-// Sort the slice values
-func (s *Int16Slicer) Sort() {
-	sort.Slice(s.slice, func(i, j int) bool { return s.slice[i] < s.slice[j] })
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/leaanthony/slicer/int32.go","mode":420,"size":2964,"sha256":"dece70b2ba8203c20f0858d9b0fa4a1d53a6b0798424a7d7ed45488595e2ef40","index":0,"count":1,"encoding":"utf-8","payloadBytes":2964}
-// Package slicer contains utility classes for handling slices
-package slicer
-
-// Imports
-import "sort"
-import "fmt"
-import "strings"
-
-// Int32Slicer handles slices of int32
-type Int32Slicer struct {
-	slice []int32
-}
-
-// Int32 creates a new Int32Slicer
-func Int32(slice ...[]int32) *Int32Slicer {
-	if len(slice) > 0 {
-		return &Int32Slicer{slice: slice[0]}
-	}
-	return &Int32Slicer{}
-}
-
-// Add a int32 value to the slicer
-func (s *Int32Slicer) Add(value int32, additional ...int32) {
-	s.slice = append(s.slice, value)
-	s.slice = append(s.slice, additional...)
-}
-
-// AddUnique adds a int32 value to the slicer if it does not already exist
-func (s *Int32Slicer) AddUnique(value int32, additional ...int32) {
-
-	if !s.Contains(value) {
-		s.slice = append(s.slice, value)
-	}
-
-	// Add additional values
-	for _, value := range additional {
-		if !s.Contains(value) {
-			s.slice = append(s.slice, value)
-		}
-	}
-}
-
-// AddSlice adds a int32 slice to the slicer
-func (s *Int32Slicer) AddSlice(value []int32) {
-	s.slice = append(s.slice, value...)
-}
-
-// AsSlice returns the slice
-func (s *Int32Slicer) AsSlice() []int32 {
-	return s.slice
-}
-
-// AddSlicer appends a Int32Slicer to the slicer
-func (s *Int32Slicer) AddSlicer(value *Int32Slicer) {
-	s.slice = append(s.slice, value.AsSlice()...)
-}
-
-// Filter the slice based on the given function
-func (s *Int32Slicer) Filter(fn func(int32) bool) *Int32Slicer {
-	result := &Int32Slicer{}
-	for _, elem := range s.slice {
-		if fn(elem) {
-			result.Add(elem)
-		}
-	}
-	return result
-}
-
-// Each runs a function on every element of the slice
-func (s *Int32Slicer) Each(fn func(int32)) {
-	for _, elem := range s.slice {
-		fn(elem)
-	}
-}
-
-// Contains indicates if the given value is in the slice
-func (s *Int32Slicer) Contains(matcher int32) bool {
-	result := false
-	for _, elem := range s.slice {
-		if elem == matcher {
-			result = true
-		}
-	}
-	return result
-}
-
-// Length returns the number of elements in the slice
-func (s *Int32Slicer) Length() int {
-	return len(s.slice)
-}
-
-// Clear all elements in the slice
-func (s *Int32Slicer) Clear() {
-	s.slice = []int32{}
-}
-
-// Deduplicate removes duplicate values from the slice
-func (s *Int32Slicer) Deduplicate() {
-
-	result := &Int32Slicer{}
-
-	for _, elem := range s.slice {
-		if !result.Contains(elem) {
-			result.Add(elem)
-		}
-	}
-
-	s.slice = result.AsSlice()
-}
-
-// Join returns a string with the slicer elements separated by the given separator
-func (s *Int32Slicer) Join(separator string) string {
-	var builder strings.Builder
-
-	// Shortcut no elements
-	if len(s.slice) == 0 {
-		return ""
-	}
-
-	// Iterate over length - 1
-	index := 0
-	for index = 0; index < len(s.slice)-1; index++ {
-		builder.WriteString(fmt.Sprintf("%v%s", s.slice[index], separator))
-	}
-	builder.WriteString(fmt.Sprintf("%v", s.slice[index]))
-	result := builder.String()
-	return result
-}
-
-// Sort the slice values
-func (s *Int32Slicer) Sort() {
-	sort.Slice(s.slice, func(i, j int) bool { return s.slice[i] < s.slice[j] })
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/leaanthony/slicer/int64.go","mode":420,"size":2964,"sha256":"d32148728b40bb91594518d93fbea7dee97221eb3bcace04ca67c2a5dfcf4a92","index":0,"count":1,"encoding":"utf-8","payloadBytes":2964}
-// Package slicer contains utility classes for handling slices
-package slicer
-
-// Imports
-import "sort"
-import "fmt"
-import "strings"
-
-// Int64Slicer handles slices of int64
-type Int64Slicer struct {
-	slice []int64
-}
-
-// Int64 creates a new Int64Slicer
-func Int64(slice ...[]int64) *Int64Slicer {
-	if len(slice) > 0 {
-		return &Int64Slicer{slice: slice[0]}
-	}
-	return &Int64Slicer{}
-}
-
-// Add a int64 value to the slicer
-func (s *Int64Slicer) Add(value int64, additional ...int64) {
-	s.slice = append(s.slice, value)
-	s.slice = append(s.slice, additional...)
-}
-
-// AddUnique adds a int64 value to the slicer if it does not already exist
-func (s *Int64Slicer) AddUnique(value int64, additional ...int64) {
-
-	if !s.Contains(value) {
-		s.slice = append(s.slice, value)
-	}
-
-	// Add additional values
-	for _, value := range additional {
-		if !s.Contains(value) {
-			s.slice = append(s.slice, value)
-		}
-	}
-}
-
-// AddSlice adds a int64 slice to the slicer
-func (s *Int64Slicer) AddSlice(value []int64) {
-	s.slice = append(s.slice, value...)
-}
-
-// AsSlice returns the slice
-func (s *Int64Slicer) AsSlice() []int64 {
-	return s.slice
-}
-
-// AddSlicer appends a Int64Slicer to the slicer
-func (s *Int64Slicer) AddSlicer(value *Int64Slicer) {
-	s.slice = append(s.slice, value.AsSlice()...)
-}
-
-// Filter the slice based on the given function
-func (s *Int64Slicer) Filter(fn func(int64) bool) *Int64Slicer {
-	result := &Int64Slicer{}
-	for _, elem := range s.slice {
-		if fn(elem) {
-			result.Add(elem)
-		}
-	}
-	return result
-}
-
-// Each runs a function on every element of the slice
-func (s *Int64Slicer) Each(fn func(int64)) {
-	for _, elem := range s.slice {
-		fn(elem)
-	}
-}
-
-// Contains indicates if the given value is in the slice
-func (s *Int64Slicer) Contains(matcher int64) bool {
-	result := false
-	for _, elem := range s.slice {
-		if elem == matcher {
-			result = true
-		}
-	}
-	return result
-}
-
-// Length returns the number of elements in the slice
-func (s *Int64Slicer) Length() int {
-	return len(s.slice)
-}
-
-// Clear all elements in the slice
-func (s *Int64Slicer) Clear() {
-	s.slice = []int64{}
-}
-
-// Deduplicate removes duplicate values from the slice
-func (s *Int64Slicer) Deduplicate() {
-
-	result := &Int64Slicer{}
-
-	for _, elem := range s.slice {
-		if !result.Contains(elem) {
-			result.Add(elem)
-		}
-	}
-
-	s.slice = result.AsSlice()
-}
-
-// Join returns a string with the slicer elements separated by the given separator
-func (s *Int64Slicer) Join(separator string) string {
-	var builder strings.Builder
-
-	// Shortcut no elements
-	if len(s.slice) == 0 {
-		return ""
-	}
-
-	// Iterate over length - 1
-	index := 0
-	for index = 0; index < len(s.slice)-1; index++ {
-		builder.WriteString(fmt.Sprintf("%v%s", s.slice[index], separator))
-	}
-	builder.WriteString(fmt.Sprintf("%v", s.slice[index]))
-	result := builder.String()
-	return result
-}
-
-// Sort the slice values
-func (s *Int64Slicer) Sort() {
-	sort.Slice(s.slice, func(i, j int) bool { return s.slice[i] < s.slice[j] })
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/leaanthony/slicer/int8.go","mode":420,"size":2922,"sha256":"c4e6beadfffd973221161ba034465feb5111111a606818f901f1f81148da9693","index":0,"count":1,"encoding":"utf-8","payloadBytes":2922}
-// Package slicer contains utility classes for handling slices
-package slicer
-
-// Imports
-import "sort"
-import "fmt"
-import "strings"
-
-// Int8Slicer handles slices of int8
-type Int8Slicer struct {
-	slice []int8
-}
-
-// Int8 creates a new Int8Slicer
-func Int8(slice ...[]int8) *Int8Slicer {
-	if len(slice) > 0 {
-		return &Int8Slicer{slice: slice[0]}
-	}
-	return &Int8Slicer{}
-}
-
-// Add a int8 value to the slicer
-func (s *Int8Slicer) Add(value int8, additional ...int8) {
-	s.slice = append(s.slice, value)
-	s.slice = append(s.slice, additional...)
-}
-
-// AddUnique adds a int8 value to the slicer if it does not already exist
-func (s *Int8Slicer) AddUnique(value int8, additional ...int8) {
-
-	if !s.Contains(value) {
-		s.slice = append(s.slice, value)
-	}
-
-	// Add additional values
-	for _, value := range additional {
-		if !s.Contains(value) {
-			s.slice = append(s.slice, value)
-		}
-	}
-}
-
-// AddSlice adds a int8 slice to the slicer
-func (s *Int8Slicer) AddSlice(value []int8) {
-	s.slice = append(s.slice, value...)
-}
-
-// AsSlice returns the slice
-func (s *Int8Slicer) AsSlice() []int8 {
-	return s.slice
-}
-
-// AddSlicer appends a Int8Slicer to the slicer
-func (s *Int8Slicer) AddSlicer(value *Int8Slicer) {
-	s.slice = append(s.slice, value.AsSlice()...)
-}
-
-// Filter the slice based on the given function
-func (s *Int8Slicer) Filter(fn func(int8) bool) *Int8Slicer {
-	result := &Int8Slicer{}
-	for _, elem := range s.slice {
-		if fn(elem) {
-			result.Add(elem)
-		}
-	}
-	return result
-}
-
-// Each runs a function on every element of the slice
-func (s *Int8Slicer) Each(fn func(int8)) {
-	for _, elem := range s.slice {
-		fn(elem)
-	}
-}
-
-// Contains indicates if the given value is in the slice
-func (s *Int8Slicer) Contains(matcher int8) bool {
-	result := false
-	for _, elem := range s.slice {
-		if elem == matcher {
-			result = true
-		}
-	}
-	return result
-}
-
-// Length returns the number of elements in the slice
-func (s *Int8Slicer) Length() int {
-	return len(s.slice)
-}
-
-// Clear all elements in the slice
-func (s *Int8Slicer) Clear() {
-	s.slice = []int8{}
-}
-
-// Deduplicate removes duplicate values from the slice
-func (s *Int8Slicer) Deduplicate() {
-
-	result := &Int8Slicer{}
-
-	for _, elem := range s.slice {
-		if !result.Contains(elem) {
-			result.Add(elem)
-		}
-	}
-
-	s.slice = result.AsSlice()
-}
-
-// Join returns a string with the slicer elements separated by the given separator
-func (s *Int8Slicer) Join(separator string) string {
-	var builder strings.Builder
-
-	// Shortcut no elements
-	if len(s.slice) == 0 {
-		return ""
-	}
-
-	// Iterate over length - 1
-	index := 0
-	for index = 0; index < len(s.slice)-1; index++ {
-		builder.WriteString(fmt.Sprintf("%v%s", s.slice[index], separator))
-	}
-	builder.WriteString(fmt.Sprintf("%v", s.slice[index]))
-	result := builder.String()
-	return result
-}
-
-// Sort the slice values
-func (s *Int8Slicer) Sort() {
-	sort.Slice(s.slice, func(i, j int) bool { return s.slice[i] < s.slice[j] })
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/leaanthony/slicer/interface.go","mode":420,"size":3010,"sha256":"64c9c161055ef0ee4f1b5f72b78329427db30fa6132c04c250b8e283964179ac","index":0,"count":1,"encoding":"utf-8","payloadBytes":3010}
-// Package slicer contains utility classes for handling slices
-package slicer
-
-// Imports
-import "fmt"
-import "strings"
-
-// InterfaceSlicer handles slices of interface{}
-type InterfaceSlicer struct {
-	slice []interface{}
-}
-
-// Interface creates a new InterfaceSlicer
-func Interface(slice ...[]interface{}) *InterfaceSlicer {
-	if len(slice) > 0 {
-		return &InterfaceSlicer{slice: slice[0]}
-	}
-	return &InterfaceSlicer{}
-}
-
-// Add a interface{} value to the slicer
-func (s *InterfaceSlicer) Add(value interface{}, additional ...interface{}) {
-	s.slice = append(s.slice, value)
-	s.slice = append(s.slice, additional...)
-}
-
-// AddUnique adds a interface{} value to the slicer if it does not already exist
-func (s *InterfaceSlicer) AddUnique(value interface{}, additional ...interface{}) {
-
-	if !s.Contains(value) {
-		s.slice = append(s.slice, value)
-	}
-
-	// Add additional values
-	for _, value := range additional {
-		if !s.Contains(value) {
-			s.slice = append(s.slice, value)
-		}
-	}
-}
-
-// AddSlice adds a interface{} slice to the slicer
-func (s *InterfaceSlicer) AddSlice(value []interface{}) {
-	s.slice = append(s.slice, value...)
-}
-
-// AsSlice returns the slice
-func (s *InterfaceSlicer) AsSlice() []interface{} {
-	return s.slice
-}
-
-// AddSlicer appends a InterfaceSlicer to the slicer
-func (s *InterfaceSlicer) AddSlicer(value *InterfaceSlicer) {
-	s.slice = append(s.slice, value.AsSlice()...)
-}
-
-// Filter the slice based on the given function
-func (s *InterfaceSlicer) Filter(fn func(interface{}) bool) *InterfaceSlicer {
-	result := &InterfaceSlicer{}
-	for _, elem := range s.slice {
-		if fn(elem) {
-			result.Add(elem)
-		}
-	}
-	return result
-}
-
-// Each runs a function on every element of the slice
-func (s *InterfaceSlicer) Each(fn func(interface{})) {
-	for _, elem := range s.slice {
-		fn(elem)
-	}
-}
-
-// Contains indicates if the given value is in the slice
-func (s *InterfaceSlicer) Contains(matcher interface{}) bool {
-	result := false
-	for _, elem := range s.slice {
-		if elem == matcher {
-			result = true
-		}
-	}
-	return result
-}
-
-// Length returns the number of elements in the slice
-func (s *InterfaceSlicer) Length() int {
-	return len(s.slice)
-}
-
-// Clear all elements in the slice
-func (s *InterfaceSlicer) Clear() {
-	s.slice = []interface{}{}
-}
-
-// Deduplicate removes duplicate values from the slice
-func (s *InterfaceSlicer) Deduplicate() {
-
-	result := &InterfaceSlicer{}
-
-	for _, elem := range s.slice {
-		if !result.Contains(elem) {
-			result.Add(elem)
-		}
-	}
-
-	s.slice = result.AsSlice()
-}
-
-// Join returns a string with the slicer elements separated by the given separator
-func (s *InterfaceSlicer) Join(separator string) string {
-	var builder strings.Builder
-
-	// Shortcut no elements
-	if len(s.slice) == 0 {
-		return ""
-	}
-
-	// Iterate over length - 1
-	index := 0
-	for index = 0; index < len(s.slice)-1; index++ {
-		builder.WriteString(fmt.Sprintf("%v%s", s.slice[index], separator))
-	}
-	builder.WriteString(fmt.Sprintf("%v", s.slice[index]))
-	result := builder.String()
-	return result
 }
 
 @@END

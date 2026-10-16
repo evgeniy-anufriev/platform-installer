@@ -1,3 +1,3096 @@
+@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/notifications.go","mode":420,"size":14307,"sha256":"0e6f0925030a6f709b8658207b9e3d7865155481ea6db2826685953ce3bedf68","index":0,"count":1,"encoding":"utf-8","payloadBytes":14307}
+//go:build windows
+// +build windows
+
+package windows
+
+import (
+	"encoding/base64"
+	"encoding/json"
+	"log"
+	"sync"
+
+	wintoast "git.sr.ht/~jackmordaunt/go-toast/v2/wintoast"
+	"github.com/google/uuid"
+	"github.com/wailsapp/wails/v2/internal/frontend"
+	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc"
+	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
+
+	"fmt"
+	"os"
+	"path/filepath"
+	_ "unsafe" // for go:linkname
+
+	"git.sr.ht/~jackmordaunt/go-toast/v2"
+	"golang.org/x/sys/windows/registry"
+)
+
+var (
+	categories     map[string]frontend.NotificationCategory
+	categoriesLock sync.RWMutex
+	appName        string
+	appGUID        string
+	iconPath       string = ""
+	exePath        string
+	iconOnce       sync.Once
+	iconErr        error
+
+	notificationResultCallback func(result frontend.NotificationResult)
+	callbackLock               sync.RWMutex
+)
+
+const DefaultActionIdentifier = "DEFAULT_ACTION"
+
+const (
+	ToastRegistryPath                  = `Software\Classes\AppUserModelId\`
+	ToastRegistryGuidKey               = "CustomActivator"
+	NotificationCategoriesRegistryPath = `SOFTWARE\%s\NotificationCategories`
+	NotificationCategoriesRegistryKey  = "Categories"
+)
+
+// NotificationPayload combines the action ID and user data into a single structure
+type NotificationPayload struct {
+	Action  string                       `json:"action"`
+	Options frontend.NotificationOptions `json:"payload,omitempty"`
+}
+
+func (f *Frontend) InitializeNotifications() error {
+	categoriesLock.Lock()
+	defer categoriesLock.Unlock()
+	categories = make(map[string]frontend.NotificationCategory)
+
+	exe, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("failed to get executable: %w", err)
+	}
+	exePath = exe
+	appName = filepath.Base(exePath)
+
+	appGUID, err = getGUID()
+	if err != nil {
+		return err
+	}
+
+	iconPath = filepath.Join(os.TempDir(), appName+appGUID+".png")
+
+	// Create the registry key for the toast activator
+	key, _, err := registry.CreateKey(registry.CURRENT_USER,
+		`Software\Classes\CLSID\`+appGUID+`\LocalServer32`, registry.ALL_ACCESS)
+	if err != nil {
+		return fmt.Errorf("failed to create CLSID key: %w", err)
+	}
+	defer key.Close()
+
+	if err := key.SetStringValue("", fmt.Sprintf("\"%s\" %%1", exePath)); err != nil {
+		return fmt.Errorf("failed to set CLSID server path: %w", err)
+	}
+
+	toast.SetAppData(toast.AppData{
+		AppID:         appName,
+		GUID:          appGUID,
+		IconPath:      iconPath,
+		ActivationExe: exePath,
+	})
+
+	toast.SetActivationCallback(func(args string, data []toast.UserData) {
+		result := frontend.NotificationResult{}
+
+		actionIdentifier, options, err := parseNotificationResponse(args)
+
+		if err != nil {
+			result.Error = err
+		} else {
+			// Subtitle is retained but was not shown with the notification
+			response := frontend.NotificationResponse{
+				ID:               options.ID,
+				ActionIdentifier: actionIdentifier,
+				Title:            options.Title,
+				Subtitle:         options.Subtitle,
+				Body:             options.Body,
+				CategoryID:       options.CategoryID,
+				UserInfo:         options.Data,
+			}
+
+			if userText, found := getUserText(data); found {
+				response.UserText = userText
+			}
+
+			result.Response = response
+		}
+
+		handleNotificationResult(result)
+	})
+
+	// Register the COM class factory for toast activation.
+	// This is required for Windows to activate the app when users interact with notifications.
+	// The go-toast library's SetAppData and SetActivationCallback handle the callback setup,
+	// but the COM class factory registration is not exposed via public APIs, so we use
+	// go:linkname to access the internal registerClassFactory function.
+	if err := registerToastClassFactory(wintoast.ClassFactory); err != nil {
+		return fmt.Errorf("CoRegisterClassObject failed: %w", err)
+	}
+
+	return loadCategoriesFromRegistry()
+}
+
+// registerToastClassFactory registers the COM class factory required for Windows toast notification activation.
+// This function uses go:linkname to access the unexported registerClassFactory function from go-toast.
+// The class factory is necessary for Windows COM activation when users click notification actions.
+// Without this registration, notification actions will not activate the application.
+//
+// This is a workaround until go-toast exports this functionality via a public API.
+// See: https://git.sr.ht/~jackmordaunt/go-toast
+//
+//go:linkname registerToastClassFactory git.sr.ht/~jackmordaunt/go-toast/v2/wintoast.registerClassFactory
+func registerToastClassFactory(factory *wintoast.IClassFactory) error
+
+// CleanupNotifications is a Windows stub that does nothing.
+// (Linux-specific cleanup)
+func (f *Frontend) CleanupNotifications() {
+	// No cleanup needed on Windows
+}
+
+func (f *Frontend) IsNotificationAvailable() bool {
+	return true
+}
+
+func (f *Frontend) RequestNotificationAuthorization() (bool, error) {
+	return true, nil
+}
+
+func (f *Frontend) CheckNotificationAuthorization() (bool, error) {
+	return true, nil
+}
+
+// SendNotification sends a basic notification with a name, title, and body. All other options are ignored on Windows.
+// (subtitle is only available on macOS and Linux)
+func (f *Frontend) SendNotification(options frontend.NotificationOptions) error {
+	if err := f.saveIconToDir(); err != nil {
+		f.logger.Warning("Error saving icon: %v", err)
+	}
+
+	n := toast.Notification{
+		Title:               options.Title,
+		Body:                options.Body,
+		ActivationType:      toast.Foreground,
+		ActivationArguments: DefaultActionIdentifier,
+	}
+
+	encodedPayload, err := encodePayload(DefaultActionIdentifier, options)
+	if err != nil {
+		return fmt.Errorf("failed to encode notification payload: %w", err)
+	}
+	n.ActivationArguments = encodedPayload
+
+	return n.Push()
+}
+
+// SendNotificationWithActions sends a notification with additional actions and inputs.
+// A NotificationCategory must be registered with RegisterNotificationCategory first. The `CategoryID` must match the registered category.
+// If a NotificationCategory is not registered a basic notification will be sent.
+// (subtitle is only available on macOS and Linux)
+func (f *Frontend) SendNotificationWithActions(options frontend.NotificationOptions) error {
+	if err := f.saveIconToDir(); err != nil {
+		f.logger.Warning("Error saving icon: %v", err)
+	}
+
+	categoriesLock.RLock()
+	nCategory, categoryExists := categories[options.CategoryID]
+	categoriesLock.RUnlock()
+
+	if options.CategoryID == "" || !categoryExists {
+		f.logger.Warning("Category '%s' not found, sending basic notification without actions", options.CategoryID)
+		return f.SendNotification(options)
+	}
+
+	n := toast.Notification{
+		Title:               options.Title,
+		Body:                options.Body,
+		ActivationType:      toast.Foreground,
+		ActivationArguments: DefaultActionIdentifier,
+	}
+
+	for _, action := range nCategory.Actions {
+		n.Actions = append(n.Actions, toast.Action{
+			Content:   action.Title,
+			Arguments: action.ID,
+		})
+	}
+
+	if nCategory.HasReplyField {
+		n.Inputs = append(n.Inputs, toast.Input{
+			ID:          "userText",
+			Placeholder: nCategory.ReplyPlaceholder,
+		})
+
+		n.Actions = append(n.Actions, toast.Action{
+			Content:   nCategory.ReplyButtonTitle,
+			Arguments: "TEXT_REPLY",
+			InputID:   "userText",
+		})
+	}
+
+	encodedPayload, err := encodePayload(n.ActivationArguments, options)
+	if err != nil {
+		return fmt.Errorf("failed to encode notification payload: %w", err)
+	}
+	n.ActivationArguments = encodedPayload
+
+	for index := range n.Actions {
+		encodedPayload, err := encodePayload(n.Actions[index].Arguments, options)
+		if err != nil {
+			return fmt.Errorf("failed to encode notification payload: %w", err)
+		}
+		n.Actions[index].Arguments = encodedPayload
+	}
+
+	return n.Push()
+}
+
+// RegisterNotificationCategory registers a new NotificationCategory to be used with SendNotificationWithActions.
+// Registering a category with the same name as a previously registered NotificationCategory will override it.
+func (f *Frontend) RegisterNotificationCategory(category frontend.NotificationCategory) error {
+	categoriesLock.Lock()
+	defer categoriesLock.Unlock()
+
+	categories[category.ID] = frontend.NotificationCategory{
+		ID:               category.ID,
+		Actions:          category.Actions,
+		HasReplyField:    category.HasReplyField,
+		ReplyPlaceholder: category.ReplyPlaceholder,
+		ReplyButtonTitle: category.ReplyButtonTitle,
+	}
+
+	return saveCategoriesToRegistry()
+}
+
+// RemoveNotificationCategory removes a previously registered NotificationCategory.
+func (f *Frontend) RemoveNotificationCategory(categoryId string) error {
+	categoriesLock.Lock()
+	defer categoriesLock.Unlock()
+
+	delete(categories, categoryId)
+
+	return saveCategoriesToRegistry()
+}
+
+// RemoveAllPendingNotifications is a Windows stub that always returns nil.
+// (macOS and Linux only)
+func (f *Frontend) RemoveAllPendingNotifications() error {
+	return nil
+}
+
+// RemovePendingNotification is a Windows stub that always returns nil.
+// (macOS and Linux only)
+func (f *Frontend) RemovePendingNotification(_ string) error {
+	return nil
+}
+
+// RemoveAllDeliveredNotifications is a Windows stub that always returns nil.
+// (macOS and Linux only)
+func (f *Frontend) RemoveAllDeliveredNotifications() error {
+	return nil
+}
+
+// RemoveDeliveredNotification is a Windows stub that always returns nil.
+// (macOS and Linux only)
+func (f *Frontend) RemoveDeliveredNotification(_ string) error {
+	return nil
+}
+
+// RemoveNotification is a Windows stub that always returns nil.
+// (Linux-specific)
+func (f *Frontend) RemoveNotification(identifier string) error {
+	return nil
+}
+
+func (f *Frontend) OnNotificationResponse(callback func(result frontend.NotificationResult)) {
+	callbackLock.Lock()
+	defer callbackLock.Unlock()
+
+	notificationResultCallback = callback
+}
+
+func (f *Frontend) saveIconToDir() error {
+	iconOnce.Do(func() {
+		hIcon := w32.ExtractIcon(exePath, 0)
+		if hIcon == 0 {
+			iconErr = fmt.Errorf("ExtractIcon failed for %s", exePath)
+			return
+		}
+		defer w32.DestroyIcon(hIcon)
+		iconErr = winc.SaveHIconAsPNG(hIcon, iconPath)
+	})
+	return iconErr
+}
+
+func saveCategoriesToRegistry() error {
+	// We assume lock is held by caller
+
+	registryPath := fmt.Sprintf(NotificationCategoriesRegistryPath, appName)
+
+	key, _, err := registry.CreateKey(
+		registry.CURRENT_USER,
+		registryPath,
+		registry.ALL_ACCESS,
+	)
+	if err != nil {
+		return err
+	}
+	defer key.Close()
+
+	data, err := json.Marshal(categories)
+	if err != nil {
+		return err
+	}
+
+	return key.SetStringValue(NotificationCategoriesRegistryKey, string(data))
+}
+
+func loadCategoriesFromRegistry() error {
+	// We assume lock is held by caller
+
+	registryPath := fmt.Sprintf(NotificationCategoriesRegistryPath, appName)
+
+	key, err := registry.OpenKey(
+		registry.CURRENT_USER,
+		registryPath,
+		registry.QUERY_VALUE,
+	)
+	if err != nil {
+		if err == registry.ErrNotExist {
+			// Not an error, no saved categories
+			return nil
+		}
+		return fmt.Errorf("failed to open registry key: %w", err)
+	}
+	defer key.Close()
+
+	data, _, err := key.GetStringValue(NotificationCategoriesRegistryKey)
+	if err != nil {
+		if err == registry.ErrNotExist {
+			// No value yet, but key exists
+			return nil
+		}
+		return fmt.Errorf("failed to read categories from registry: %w", err)
+	}
+
+	_categories := make(map[string]frontend.NotificationCategory)
+	if err := json.Unmarshal([]byte(data), &_categories); err != nil {
+		return fmt.Errorf("failed to parse notification categories from registry: %w", err)
+	}
+
+	categories = _categories
+
+	return nil
+}
+
+func getUserText(data []toast.UserData) (string, bool) {
+	for _, d := range data {
+		if d.Key == "userText" {
+			return d.Value, true
+		}
+	}
+	return "", false
+}
+
+// encodePayload combines an action ID and user data into a single encoded string
+func encodePayload(actionID string, options frontend.NotificationOptions) (string, error) {
+	payload := NotificationPayload{
+		Action:  actionID,
+		Options: options,
+	}
+
+	jsonData, err := json.Marshal(payload)
+	if err != nil {
+		return actionID, err
+	}
+
+	encodedPayload := base64.StdEncoding.EncodeToString(jsonData)
+	return encodedPayload, nil
+}
+
+// decodePayload extracts the action ID and user data from an encoded payload
+func decodePayload(encodedString string) (string, frontend.NotificationOptions, error) {
+	jsonData, err := base64.StdEncoding.DecodeString(encodedString)
+	if err != nil {
+		return encodedString, frontend.NotificationOptions{}, fmt.Errorf("failed to decode base64 payload: %w", err)
+	}
+
+	var payload NotificationPayload
+	if err := json.Unmarshal(jsonData, &payload); err != nil {
+		return encodedString, frontend.NotificationOptions{}, fmt.Errorf("failed to unmarshal notification payload: %w", err)
+	}
+
+	return payload.Action, payload.Options, nil
+}
+
+// parseNotificationResponse updated to use structured payload decoding
+func parseNotificationResponse(response string) (action string, options frontend.NotificationOptions, err error) {
+	actionID, options, err := decodePayload(response)
+
+	if err != nil {
+		log.Printf("Warning: Failed to decode notification response: %v", err)
+		return response, frontend.NotificationOptions{}, err
+	}
+
+	return actionID, options, nil
+}
+
+func handleNotificationResult(result frontend.NotificationResult) {
+	callbackLock.RLock()
+	callback := notificationResultCallback
+	callbackLock.RUnlock()
+
+	if callback != nil {
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					// Log panic but don't crash the app
+					fmt.Fprintf(os.Stderr, "panic in notification callback: %v\n", r)
+				}
+			}()
+			callback(result)
+		}()
+	}
+}
+
+// Helper functions
+
+func getGUID() (string, error) {
+	keyPath := ToastRegistryPath + appName
+
+	k, err := registry.OpenKey(registry.CURRENT_USER, keyPath, registry.QUERY_VALUE)
+	if err == nil {
+		guid, _, err := k.GetStringValue(ToastRegistryGuidKey)
+		k.Close()
+		if err == nil && guid != "" {
+			return guid, nil
+		}
+	}
+
+	guid := generateGUID()
+
+	k, _, err = registry.CreateKey(registry.CURRENT_USER, keyPath, registry.WRITE)
+	if err != nil {
+		return "", fmt.Errorf("failed to create registry key: %w", err)
+	}
+	defer k.Close()
+
+	if err := k.SetStringValue(ToastRegistryGuidKey, guid); err != nil {
+		return "", fmt.Errorf("failed to write GUID to registry: %w", err)
+	}
+
+	return guid, nil
+}
+
+func generateGUID() string {
+	guid := uuid.New()
+	return fmt.Sprintf("{%s}", guid.String())
+}
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/screen.go","mode":420,"size":5350,"sha256":"b9295a84170363714e2402a5f6bbaf9335ffb1b85a99880a2381a9934ea0a0dd","index":0,"count":1,"encoding":"utf-8","payloadBytes":5350}
+//go:build windows
+// +build windows
+
+package windows
+
+import (
+	"fmt"
+	"syscall"
+	"unsafe"
+
+	"github.com/pkg/errors"
+	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc"
+	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
+)
+
+func MonitorsEqual(first w32.MONITORINFO, second w32.MONITORINFO) bool {
+	// Checks to make sure all the fields are the same.
+	// A cleaner way would be to check identity of devices. but I couldn't find a way of doing that using the win32 API
+	return first.DwFlags == second.DwFlags &&
+		first.RcMonitor.Top == second.RcMonitor.Top &&
+		first.RcMonitor.Bottom == second.RcMonitor.Bottom &&
+		first.RcMonitor.Right == second.RcMonitor.Right &&
+		first.RcMonitor.Left == second.RcMonitor.Left &&
+		first.RcWork.Top == second.RcWork.Top &&
+		first.RcWork.Bottom == second.RcWork.Bottom &&
+		first.RcWork.Right == second.RcWork.Right &&
+		first.RcWork.Left == second.RcWork.Left
+}
+
+func GetMonitorInfo(hMonitor w32.HMONITOR) (*w32.MONITORINFO, error) {
+	// Adapted from winc.utils.getMonitorInfo TODO: add this to win32
+	// See docs for
+	//https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getmonitorinfoa
+
+	var info w32.MONITORINFO
+	info.CbSize = uint32(unsafe.Sizeof(info))
+	succeeded := w32.GetMonitorInfo(hMonitor, &info)
+	if !succeeded {
+		return &info, errors.New("Windows call to getMonitorInfo failed")
+	}
+	return &info, nil
+}
+
+func EnumProc(hMonitor w32.HMONITOR, hdcMonitor w32.HDC, lprcMonitor *w32.RECT, screenContainer *ScreenContainer) uintptr {
+	// adapted from https://stackoverflow.com/a/23492886/4188138
+
+	// see docs for the following pages to better understand this function
+	// https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-enumdisplaymonitors
+	// https://docs.microsoft.com/en-us/windows/win32/api/winuser/nc-winuser-monitorenumproc
+	// https://docs.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-monitorinfo
+	// https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-monitorfromwindow
+
+	ourMonitorData := Screen{}
+	currentMonHndl := w32.MonitorFromWindow(screenContainer.mainWinHandle, w32.MONITOR_DEFAULTTONEAREST)
+	currentMonInfo, currErr := GetMonitorInfo(currentMonHndl)
+
+	if currErr != nil {
+		screenContainer.errors = append(screenContainer.errors, currErr)
+		screenContainer.monitors = append(screenContainer.monitors, Screen{})
+		// not sure what the consequences of returning false are, so let's just return true and handle it ourselves
+		return w32.TRUE
+	}
+
+	monInfo, err := GetMonitorInfo(hMonitor)
+	if err != nil {
+		screenContainer.errors = append(screenContainer.errors, err)
+		screenContainer.monitors = append(screenContainer.monitors, Screen{})
+		return w32.TRUE
+	}
+
+	width := lprcMonitor.Right - lprcMonitor.Left
+	height := lprcMonitor.Bottom - lprcMonitor.Top
+	ourMonitorData.IsPrimary = monInfo.DwFlags&w32.MONITORINFOF_PRIMARY == 1
+	ourMonitorData.Height = int(height)
+	ourMonitorData.Width = int(width)
+	ourMonitorData.IsCurrent = MonitorsEqual(*currentMonInfo, *monInfo)
+
+	ourMonitorData.PhysicalSize.Width = int(width)
+	ourMonitorData.PhysicalSize.Height = int(height)
+
+	var dpiX, dpiY uint
+	w32.GetDPIForMonitor(hMonitor, w32.MDT_EFFECTIVE_DPI, &dpiX, &dpiY)
+	if dpiX == 0 || dpiY == 0 {
+		screenContainer.errors = append(screenContainer.errors, fmt.Errorf("unable to get DPI for screen"))
+		screenContainer.monitors = append(screenContainer.monitors, Screen{})
+		return w32.TRUE
+	}
+	ourMonitorData.Size.Width = winc.ScaleToDefaultDPI(ourMonitorData.PhysicalSize.Width, dpiX)
+	ourMonitorData.Size.Height = winc.ScaleToDefaultDPI(ourMonitorData.PhysicalSize.Height, dpiY)
+
+	// the reason we need a container is that we have don't know how many times this function will be called
+	// this "append" call could potentially do an allocation and rewrite the pointer to monitors. So we save the pointer in screenContainer.monitors
+	// and retrieve the values after all EnumProc calls
+	// If EnumProc is multi-threaded, this could be problematic. Although, I don't think it is.
+	screenContainer.monitors = append(screenContainer.monitors, ourMonitorData)
+	// let's keep screenContainer.errors the same size as screenContainer.monitors in case we want to match them up later if necessary
+	screenContainer.errors = append(screenContainer.errors, nil)
+	return w32.TRUE
+}
+
+type ScreenContainer struct {
+	monitors      []Screen
+	errors        []error
+	mainWinHandle w32.HWND
+}
+
+func GetAllScreens(mainWinHandle w32.HWND) ([]Screen, error) {
+	// TODO fix hack of container sharing by having a proper data sharing mechanism between windows and the runtime
+	monitorContainer := ScreenContainer{mainWinHandle: mainWinHandle}
+	returnErr := error(nil)
+	errorStrings := []string{}
+
+	dc := w32.GetDC(0)
+	defer w32.ReleaseDC(0, dc)
+	succeeded := w32.EnumDisplayMonitors(dc, nil, syscall.NewCallback(EnumProc), unsafe.Pointer(&monitorContainer))
+	if !succeeded {
+		return monitorContainer.monitors, errors.New("Windows call to EnumDisplayMonitors failed")
+	}
+	for idx, err := range monitorContainer.errors {
+		if err != nil {
+			errorStrings = append(errorStrings, fmt.Sprintf("Error from monitor #%v, %v", idx+1, err))
+		}
+	}
+
+	if len(errorStrings) > 0 {
+		returnErr = fmt.Errorf("%v errors encountered: %v", len(errorStrings), errorStrings)
+	}
+	return monitorContainer.monitors, returnErr
+}
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/single_instance.go","mode":420,"size":3368,"sha256":"8f39fbc6e443a982bf8773d8ef7dd4aafbb1bcd4bfad8dcc716cef095bfc0444","index":0,"count":1,"encoding":"utf-8","payloadBytes":3368}
+//go:build windows
+
+package windows
+
+import (
+	"encoding/json"
+	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
+	"github.com/wailsapp/wails/v2/pkg/options"
+	"golang.org/x/sys/windows"
+	"log"
+	"os"
+	"syscall"
+	"unsafe"
+)
+
+type COPYDATASTRUCT struct {
+	dwData uintptr
+	cbData uint32
+	lpData uintptr
+}
+
+// WMCOPYDATA_SINGLE_INSTANCE_DATA we define our own type for WM_COPYDATA message
+const WMCOPYDATA_SINGLE_INSTANCE_DATA = 1542
+
+func SendMessage(hwnd w32.HWND, data string) {
+	arrUtf16, _ := syscall.UTF16FromString(data)
+
+	pCopyData := new(COPYDATASTRUCT)
+	pCopyData.dwData = WMCOPYDATA_SINGLE_INSTANCE_DATA
+	pCopyData.cbData = uint32(len(arrUtf16)*2 + 1)
+	pCopyData.lpData = uintptr(unsafe.Pointer(windows.StringToUTF16Ptr(data)))
+
+	w32.SendMessage(hwnd, w32.WM_COPYDATA, 0, uintptr(unsafe.Pointer(pCopyData)))
+}
+
+// SetupSingleInstance single instance Windows app
+func SetupSingleInstance(uniqueId string) {
+	id := "wails-app-" + uniqueId
+
+	className := id + "-sic"
+	windowName := id + "-siw"
+	mutexName := id + "sim"
+
+	_, err := windows.CreateMutex(nil, false, windows.StringToUTF16Ptr(mutexName))
+
+	if err != nil {
+		if err == windows.ERROR_ALREADY_EXISTS {
+			// app is already running
+			hwnd := w32.FindWindowW(windows.StringToUTF16Ptr(className), windows.StringToUTF16Ptr(windowName))
+
+			if hwnd != 0 {
+				data := options.SecondInstanceData{
+					Args: os.Args[1:],
+				}
+				data.WorkingDirectory, err = os.Getwd()
+				if err != nil {
+					log.Printf("Failed to get working directory: %v", err)
+					return
+				}
+				serialized, err := json.Marshal(data)
+				if err != nil {
+					log.Printf("Failed to marshal data: %v", err)
+					return
+				}
+
+				SendMessage(hwnd, string(serialized))
+				// exit second instance of app after sending message
+				os.Exit(0)
+			}
+			// if we got any other unknown error we will just start new application instance
+		}
+	} else {
+		createEventTargetWindow(className, windowName)
+	}
+}
+
+func createEventTargetWindow(className string, windowName string) w32.HWND {
+	// callback handler in the event target window
+	wndProc := func(
+		hwnd w32.HWND, msg uint32, wparam w32.WPARAM, lparam w32.LPARAM,
+	) w32.LRESULT {
+		if msg == w32.WM_COPYDATA {
+			ldata := (*COPYDATASTRUCT)(unsafe.Pointer(lparam))
+
+			if ldata.dwData == WMCOPYDATA_SINGLE_INSTANCE_DATA {
+				serialized := windows.UTF16PtrToString((*uint16)(unsafe.Pointer(ldata.lpData)))
+
+				var secondInstanceData options.SecondInstanceData
+
+				err := json.Unmarshal([]byte(serialized), &secondInstanceData)
+
+				if err == nil {
+					secondInstanceBuffer <- secondInstanceData
+				}
+			}
+
+			return w32.LRESULT(0)
+		}
+
+		return w32.DefWindowProc(hwnd, msg, wparam, lparam)
+	}
+
+	var class w32.WNDCLASSEX
+	class.Size = uint32(unsafe.Sizeof(class))
+	class.Style = 0
+	class.WndProc = syscall.NewCallback(wndProc)
+	class.ClsExtra = 0
+	class.WndExtra = 0
+	class.Instance = w32.GetModuleHandle("")
+	class.Icon = 0
+	class.Cursor = 0
+	class.Background = 0
+	class.MenuName = nil
+	class.ClassName = windows.StringToUTF16Ptr(className)
+	class.IconSm = 0
+
+	w32.RegisterClassEx(&class)
+
+	// create event window that will not be visible for user
+	hwnd := w32.CreateWindowEx(
+		0,
+		windows.StringToUTF16Ptr(className),
+		windows.StringToUTF16Ptr(windowName),
+		0,
+		0,
+		0,
+		0,
+		0,
+		w32.HWND_MESSAGE,
+		0,
+		w32.GetModuleHandle(""),
+		nil,
+	)
+
+	return hwnd
+}
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/theme.go","mode":420,"size":1892,"sha256":"c971d9d97734b1573bda571f06c087a3910fb027694b3856eb05b1b7f54d2d17","index":0,"count":1,"encoding":"utf-8","payloadBytes":1892}
+//go:build windows
+
+package windows
+
+import (
+	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/win32"
+	"github.com/wailsapp/wails/v2/pkg/options/windows"
+)
+
+func (w *Window) UpdateTheme() {
+
+	// Don't redraw theme if nothing has changed
+	if !w.themeChanged {
+		return
+	}
+	w.themeChanged = false
+
+	if win32.IsCurrentlyHighContrastMode() {
+		return
+	}
+
+	if !win32.SupportsThemes() {
+		return
+	}
+
+	var isDarkMode bool
+	switch w.theme {
+	case windows.SystemDefault:
+		isDarkMode = win32.IsCurrentlyDarkMode()
+	case windows.Dark:
+		isDarkMode = true
+	case windows.Light:
+		isDarkMode = false
+	}
+	win32.SetTheme(w.Handle(), isDarkMode)
+
+	// Custom theme processing
+	winOptions := w.frontendOptions.Windows
+	var customTheme *windows.ThemeSettings
+	if winOptions != nil {
+		customTheme = winOptions.CustomTheme
+	}
+	// Custom theme
+	if win32.SupportsCustomThemes() && customTheme != nil {
+		if w.isActive {
+			if isDarkMode {
+				win32.SetTitleBarColour(w.Handle(), customTheme.DarkModeTitleBar)
+				win32.SetTitleTextColour(w.Handle(), customTheme.DarkModeTitleText)
+				win32.SetBorderColour(w.Handle(), customTheme.DarkModeBorder)
+			} else {
+				win32.SetTitleBarColour(w.Handle(), customTheme.LightModeTitleBar)
+				win32.SetTitleTextColour(w.Handle(), customTheme.LightModeTitleText)
+				win32.SetBorderColour(w.Handle(), customTheme.LightModeBorder)
+			}
+		} else {
+			if isDarkMode {
+				win32.SetTitleBarColour(w.Handle(), customTheme.DarkModeTitleBarInactive)
+				win32.SetTitleTextColour(w.Handle(), customTheme.DarkModeTitleTextInactive)
+				win32.SetBorderColour(w.Handle(), customTheme.DarkModeBorderInactive)
+			} else {
+				win32.SetTitleBarColour(w.Handle(), customTheme.LightModeTitleBarInactive)
+				win32.SetTitleTextColour(w.Handle(), customTheme.LightModeTitleTextInactive)
+				win32.SetBorderColour(w.Handle(), customTheme.LightModeBorderInactive)
+			}
+		}
+	}
+}
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/win32/clipboard.go","mode":420,"size":3550,"sha256":"e6bf5f7d24b3ea81526cb4df42fe884b93645d475b114a93d7e7ac21359d460b","index":0,"count":1,"encoding":"utf-8","payloadBytes":3550}
+//go:build windows
+
+/*
+ * Based on code originally from https://github.com/atotto/clipboard. Copyright (c) 2013 Ato Araki. All rights reserved.
+ */
+
+package win32
+
+import (
+	"runtime"
+	"syscall"
+	"time"
+	"unsafe"
+)
+
+const (
+	cfUnicodetext = 13
+	gmemMoveable  = 0x0002
+)
+
+// waitOpenClipboard opens the clipboard, waiting for up to a second to do so.
+func waitOpenClipboard() error {
+	started := time.Now()
+	limit := started.Add(time.Second)
+	var r uintptr
+	var err error
+	for time.Now().Before(limit) {
+		r, _, err = procOpenClipboard.Call(0)
+		if r != 0 {
+			return nil
+		}
+		time.Sleep(time.Millisecond)
+	}
+	return err
+}
+
+func GetClipboardText() (string, error) {
+	// LockOSThread ensure that the whole method will keep executing on the same thread from begin to end (it actually locks the goroutine thread attribution).
+	// Otherwise if the goroutine switch thread during execution (which is a common practice), the OpenClipboard and CloseClipboard will happen on two different threads, and it will result in a clipboard deadlock.
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	if formatAvailable, _, err := procIsClipboardFormatAvailable.Call(cfUnicodetext); formatAvailable == 0 {
+		return "", err
+	}
+	err := waitOpenClipboard()
+	if err != nil {
+		return "", err
+	}
+
+	h, _, err := procGetClipboardData.Call(cfUnicodetext)
+	if h == 0 {
+		_, _, _ = procCloseClipboard.Call()
+		return "", err
+	}
+
+	l, _, err := kernelGlobalLock.Call(h)
+	if l == 0 {
+		_, _, _ = procCloseClipboard.Call()
+		return "", err
+	}
+
+	text := syscall.UTF16ToString((*[1 << 20]uint16)(unsafe.Pointer(l))[:])
+
+	r, _, err := kernelGlobalUnlock.Call(h)
+	if r == 0 {
+		_, _, _ = procCloseClipboard.Call()
+		return "", err
+	}
+
+	closed, _, err := procCloseClipboard.Call()
+	if closed == 0 {
+		return "", err
+	}
+	return text, nil
+}
+
+func SetClipboardText(text string) error {
+	// LockOSThread ensure that the whole method will keep executing on the same thread from begin to end (it actually locks the goroutine thread attribution).
+	// Otherwise if the goroutine switch thread during execution (which is a common practice), the OpenClipboard and CloseClipboard will happen on two different threads, and it will result in a clipboard deadlock.
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
+	err := waitOpenClipboard()
+	if err != nil {
+		return err
+	}
+
+	r, _, err := procEmptyClipboard.Call(0)
+	if r == 0 {
+		_, _, _ = procCloseClipboard.Call()
+		return err
+	}
+
+	data, err := syscall.UTF16FromString(text)
+	if err != nil {
+		return err
+	}
+
+	// "If the hMem parameter identifies a memory object, the object must have
+	// been allocated using the function with the GMEM_MOVEABLE flag."
+	h, _, err := kernelGlobalAlloc.Call(gmemMoveable, uintptr(len(data)*int(unsafe.Sizeof(data[0]))))
+	if h == 0 {
+		_, _, _ = procCloseClipboard.Call()
+		return err
+	}
+	defer func() {
+		if h != 0 {
+			kernelGlobalFree.Call(h)
+		}
+	}()
+
+	l, _, err := kernelGlobalLock.Call(h)
+	if l == 0 {
+		_, _, _ = procCloseClipboard.Call()
+		return err
+	}
+
+	r, _, err = kernelLstrcpy.Call(l, uintptr(unsafe.Pointer(&data[0])))
+	if r == 0 {
+		_, _, _ = procCloseClipboard.Call()
+		return err
+	}
+
+	r, _, err = kernelGlobalUnlock.Call(h)
+	if r == 0 {
+		if err.(syscall.Errno) != 0 {
+			_, _, _ = procCloseClipboard.Call()
+			return err
+		}
+	}
+
+	r, _, err = procSetClipboardData.Call(cfUnicodetext, h)
+	if r == 0 {
+		_, _, _ = procCloseClipboard.Call()
+		return err
+	}
+	h = 0 // suppress deferred cleanup
+	closed, _, err := procCloseClipboard.Call()
+	if closed == 0 {
+		return err
+	}
+	return nil
+}
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/win32/consts.go","mode":420,"size":2276,"sha256":"317429bbd035b3e68e732aeae1e1bea8170abc725ee32e0b1a5d16c3aaaab5b0","index":0,"count":1,"encoding":"utf-8","payloadBytes":2276}
+//go:build windows
+
+package win32
+
+import (
+	"syscall"
+
+	"github.com/wailsapp/wails/v2/internal/system/operatingsystem"
+)
+
+type HRESULT int32
+type HANDLE uintptr
+type HMONITOR HANDLE
+
+var (
+	moduser32                      = syscall.NewLazyDLL("user32.dll")
+	procSystemParametersInfo       = moduser32.NewProc("SystemParametersInfoW")
+	procGetWindowLong              = moduser32.NewProc("GetWindowLongW")
+	procSetClassLong               = moduser32.NewProc("SetClassLongW")
+	procSetClassLongPtr            = moduser32.NewProc("SetClassLongPtrW")
+	procShowWindow                 = moduser32.NewProc("ShowWindow")
+	procIsWindowVisible            = moduser32.NewProc("IsWindowVisible")
+	procGetWindowRect              = moduser32.NewProc("GetWindowRect")
+	procGetMonitorInfo             = moduser32.NewProc("GetMonitorInfoW")
+	procMonitorFromWindow          = moduser32.NewProc("MonitorFromWindow")
+	procIsClipboardFormatAvailable = moduser32.NewProc("IsClipboardFormatAvailable")
+	procOpenClipboard              = moduser32.NewProc("OpenClipboard")
+	procCloseClipboard             = moduser32.NewProc("CloseClipboard")
+	procEmptyClipboard             = moduser32.NewProc("EmptyClipboard")
+	procGetClipboardData           = moduser32.NewProc("GetClipboardData")
+	procSetClipboardData           = moduser32.NewProc("SetClipboardData")
+)
+var (
+	moddwmapi                        = syscall.NewLazyDLL("dwmapi.dll")
+	procDwmSetWindowAttribute        = moddwmapi.NewProc("DwmSetWindowAttribute")
+	procDwmExtendFrameIntoClientArea = moddwmapi.NewProc("DwmExtendFrameIntoClientArea")
+)
+var (
+	modwingdi            = syscall.NewLazyDLL("gdi32.dll")
+	procCreateSolidBrush = modwingdi.NewProc("CreateSolidBrush")
+)
+var (
+	kernel32           = syscall.NewLazyDLL("kernel32")
+	kernelGlobalAlloc  = kernel32.NewProc("GlobalAlloc")
+	kernelGlobalFree   = kernel32.NewProc("GlobalFree")
+	kernelGlobalLock   = kernel32.NewProc("GlobalLock")
+	kernelGlobalUnlock = kernel32.NewProc("GlobalUnlock")
+	kernelLstrcpy      = kernel32.NewProc("lstrcpyW")
+)
+
+var windowsVersion, _ = operatingsystem.GetWindowsVersionInfo()
+
+func IsWindowsVersionAtLeast(major, minor, buildNumber int) bool {
+	return windowsVersion.Major >= major &&
+		windowsVersion.Minor >= minor &&
+		windowsVersion.Build >= buildNumber
+}
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/win32/theme.go","mode":420,"size":3292,"sha256":"65f73f74a2bc67f7e3e955389122c6d79786c5b88e1f60332502e06fb3f7d1fd","index":0,"count":1,"encoding":"utf-8","payloadBytes":3292}
+//go:build windows
+
+package win32
+
+import (
+	"unsafe"
+
+	"golang.org/x/sys/windows/registry"
+)
+
+type DWMWINDOWATTRIBUTE int32
+
+const DwmwaUseImmersiveDarkModeBefore20h1 DWMWINDOWATTRIBUTE = 19
+const DwmwaUseImmersiveDarkMode DWMWINDOWATTRIBUTE = 20
+const DwmwaBorderColor DWMWINDOWATTRIBUTE = 34
+const DwmwaCaptionColor DWMWINDOWATTRIBUTE = 35
+const DwmwaTextColor DWMWINDOWATTRIBUTE = 36
+const DwmwaSystemBackdropType DWMWINDOWATTRIBUTE = 38
+
+const SPI_GETHIGHCONTRAST = 0x0042
+const HCF_HIGHCONTRASTON = 0x00000001
+
+// BackdropType defines the type of translucency we wish to use
+type BackdropType int32
+
+func dwmSetWindowAttribute(hwnd uintptr, dwAttribute DWMWINDOWATTRIBUTE, pvAttribute unsafe.Pointer, cbAttribute uintptr) {
+	ret, _, err := procDwmSetWindowAttribute.Call(
+		hwnd,
+		uintptr(dwAttribute),
+		uintptr(pvAttribute),
+		cbAttribute)
+	if ret != 0 {
+		_ = err
+		// println(err.Error())
+	}
+}
+
+func SupportsThemes() bool {
+	// We can't support Windows versions before 17763
+	return IsWindowsVersionAtLeast(10, 0, 17763)
+}
+
+func SupportsCustomThemes() bool {
+	return IsWindowsVersionAtLeast(10, 0, 17763)
+}
+
+func SupportsBackdropTypes() bool {
+	return IsWindowsVersionAtLeast(10, 0, 22621)
+}
+
+func SupportsImmersiveDarkMode() bool {
+	return IsWindowsVersionAtLeast(10, 0, 18985)
+}
+
+func SetTheme(hwnd uintptr, useDarkMode bool) {
+	if SupportsThemes() {
+		attr := DwmwaUseImmersiveDarkModeBefore20h1
+		if SupportsImmersiveDarkMode() {
+			attr = DwmwaUseImmersiveDarkMode
+		}
+		var winDark int32
+		if useDarkMode {
+			winDark = 1
+		}
+		dwmSetWindowAttribute(hwnd, attr, unsafe.Pointer(&winDark), unsafe.Sizeof(winDark))
+	}
+}
+
+func EnableTranslucency(hwnd uintptr, backdrop BackdropType) {
+	if SupportsBackdropTypes() {
+		dwmSetWindowAttribute(hwnd, DwmwaSystemBackdropType, unsafe.Pointer(&backdrop), unsafe.Sizeof(backdrop))
+	} else {
+		println("Warning: Translucency type unavailable on Windows < 22621")
+	}
+}
+
+func SetTitleBarColour(hwnd uintptr, titleBarColour int32) {
+	dwmSetWindowAttribute(hwnd, DwmwaCaptionColor, unsafe.Pointer(&titleBarColour), unsafe.Sizeof(titleBarColour))
+}
+
+func SetTitleTextColour(hwnd uintptr, titleTextColour int32) {
+	dwmSetWindowAttribute(hwnd, DwmwaTextColor, unsafe.Pointer(&titleTextColour), unsafe.Sizeof(titleTextColour))
+}
+
+func SetBorderColour(hwnd uintptr, titleBorderColour int32) {
+	dwmSetWindowAttribute(hwnd, DwmwaBorderColor, unsafe.Pointer(&titleBorderColour), unsafe.Sizeof(titleBorderColour))
+}
+
+func IsCurrentlyDarkMode() bool {
+	key, err := registry.OpenKey(registry.CURRENT_USER, `SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize`, registry.QUERY_VALUE)
+	if err != nil {
+		return false
+	}
+	defer key.Close()
+
+	AppsUseLightTheme, _, err := key.GetIntegerValue("AppsUseLightTheme")
+	if err != nil {
+		return false
+	}
+	return AppsUseLightTheme == 0
+}
+
+type highContrast struct {
+	CbSize            uint32
+	DwFlags           uint32
+	LpszDefaultScheme *int16
+}
+
+func IsCurrentlyHighContrastMode() bool {
+	var result highContrast
+	result.CbSize = uint32(unsafe.Sizeof(result))
+	res, _, err := procSystemParametersInfo.Call(SPI_GETHIGHCONTRAST, uintptr(result.CbSize), uintptr(unsafe.Pointer(&result)), 0)
+	if res == 0 {
+		_ = err
+		return false
+	}
+	r := result.DwFlags&HCF_HIGHCONTRASTON == HCF_HIGHCONTRASTON
+	return r
+}
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/win32/window.go","mode":420,"size":5699,"sha256":"a82b7ea9ed2e7189bd117244d0b7081dac07109ce2788bc4c61089045e791b15","index":0,"count":1,"encoding":"utf-8","payloadBytes":5699}
+//go:build windows
+
+package win32
+
+import (
+	"fmt"
+	"log"
+	"strconv"
+	"syscall"
+	"unsafe"
+
+	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc"
+)
+
+const (
+	WS_MAXIMIZE = 0x01000000
+	WS_MINIMIZE = 0x20000000
+
+	GWL_STYLE = -16
+
+	MONITOR_DEFAULTTOPRIMARY = 0x00000001
+)
+
+const (
+	SW_HIDE            = 0
+	SW_NORMAL          = 1
+	SW_SHOWNORMAL      = 1
+	SW_SHOWMINIMIZED   = 2
+	SW_MAXIMIZE        = 3
+	SW_SHOWMAXIMIZED   = 3
+	SW_SHOWNOACTIVATE  = 4
+	SW_SHOW            = 5
+	SW_MINIMIZE        = 6
+	SW_SHOWMINNOACTIVE = 7
+	SW_SHOWNA          = 8
+	SW_RESTORE         = 9
+	SW_SHOWDEFAULT     = 10
+	SW_FORCEMINIMIZE   = 11
+)
+
+const (
+	GCLP_HBRBACKGROUND int32 = -10
+)
+
+// Power
+const (
+	// WM_POWERBROADCAST - Notifies applications that a power-management event has occurred.
+	WM_POWERBROADCAST = 536
+
+	// PBT_APMPOWERSTATUSCHANGE - Power status has changed.
+	PBT_APMPOWERSTATUSCHANGE = 10
+
+	// PBT_APMRESUMEAUTOMATIC -Operation is resuming automatically from a low-power state. This message is sent every time the system resumes.
+	PBT_APMRESUMEAUTOMATIC = 18
+
+	// PBT_APMRESUMESUSPEND - Operation is resuming from a low-power state. This message is sent after PBT_APMRESUMEAUTOMATIC if the resume is triggered by user input, such as pressing a key.
+	PBT_APMRESUMESUSPEND = 7
+
+	// PBT_APMSUSPEND - System is suspending operation.
+	PBT_APMSUSPEND = 4
+
+	// PBT_POWERSETTINGCHANGE - A power setting change event has been received.
+	PBT_POWERSETTINGCHANGE = 32787
+)
+
+// http://msdn.microsoft.com/en-us/library/windows/desktop/bb773244.aspx
+type MARGINS struct {
+	CxLeftWidth, CxRightWidth, CyTopHeight, CyBottomHeight int32
+}
+
+// http://msdn.microsoft.com/en-us/library/windows/desktop/dd162897.aspx
+type RECT struct {
+	Left, Top, Right, Bottom int32
+}
+
+// http://msdn.microsoft.com/en-us/library/windows/desktop/dd145065.aspx
+type MONITORINFO struct {
+	CbSize    uint32
+	RcMonitor RECT
+	RcWork    RECT
+	DwFlags   uint32
+}
+
+func ExtendFrameIntoClientArea(hwnd uintptr, extend bool) {
+	// -1: Adds the default frame styling (aero shadow and e.g. rounded corners on Windows 11)
+	//     Also shows the caption buttons if transparent ant translucent but they don't work.
+	//  0: Adds the default frame styling but no aero shadow, does not show the caption buttons.
+	//  1: Adds the default frame styling (aero shadow and e.g. rounded corners on Windows 11) but no caption buttons
+	//     are shown if transparent ant translucent.
+	var margins MARGINS
+	if extend {
+		margins = MARGINS{1, 1, 1, 1} // Only extend 1 pixel to have the default frame styling but no caption buttons
+	}
+	if err := dwmExtendFrameIntoClientArea(hwnd, &margins); err != nil {
+		log.Fatal(fmt.Errorf("DwmExtendFrameIntoClientArea failed: %s", err))
+	}
+}
+
+func IsVisible(hwnd uintptr) bool {
+	ret, _, _ := procIsWindowVisible.Call(hwnd)
+	return ret != 0
+}
+
+func IsWindowFullScreen(hwnd uintptr) bool {
+	wRect := GetWindowRect(hwnd)
+	m := MonitorFromWindow(hwnd, MONITOR_DEFAULTTOPRIMARY)
+	var mi MONITORINFO
+	mi.CbSize = uint32(unsafe.Sizeof(mi))
+	if !GetMonitorInfo(m, &mi) {
+		return false
+	}
+	return wRect.Left == mi.RcMonitor.Left &&
+		wRect.Top == mi.RcMonitor.Top &&
+		wRect.Right == mi.RcMonitor.Right &&
+		wRect.Bottom == mi.RcMonitor.Bottom
+}
+
+func IsWindowMaximised(hwnd uintptr) bool {
+	style := uint32(getWindowLong(hwnd, GWL_STYLE))
+	return style&WS_MAXIMIZE != 0
+}
+func IsWindowMinimised(hwnd uintptr) bool {
+	style := uint32(getWindowLong(hwnd, GWL_STYLE))
+	return style&WS_MINIMIZE != 0
+}
+
+func RestoreWindow(hwnd uintptr) {
+	showWindow(hwnd, SW_RESTORE)
+}
+
+func ShowWindow(hwnd uintptr) {
+	showWindow(hwnd, SW_SHOW)
+}
+
+func ShowWindowMaximised(hwnd uintptr) {
+	showWindow(hwnd, SW_MAXIMIZE)
+}
+func ShowWindowMinimised(hwnd uintptr) {
+	showWindow(hwnd, SW_MINIMIZE)
+}
+
+func SetBackgroundColour(hwnd uintptr, r, g, b uint8) {
+	col := winc.RGB(r, g, b)
+	hbrush, _, _ := procCreateSolidBrush.Call(uintptr(col))
+	setClassLongPtr(hwnd, GCLP_HBRBACKGROUND, hbrush)
+}
+
+func IsWindowNormal(hwnd uintptr) bool {
+	return !IsWindowMaximised(hwnd) && !IsWindowMinimised(hwnd) && !IsWindowFullScreen(hwnd)
+}
+
+func dwmExtendFrameIntoClientArea(hwnd uintptr, margins *MARGINS) error {
+	ret, _, _ := procDwmExtendFrameIntoClientArea.Call(
+		hwnd,
+		uintptr(unsafe.Pointer(margins)))
+
+	if ret != 0 {
+		return syscall.GetLastError()
+	}
+
+	return nil
+}
+
+func setClassLongPtr(hwnd uintptr, param int32, val uintptr) bool {
+	proc := procSetClassLongPtr
+	if strconv.IntSize == 32 {
+		/*
+			https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setclasslongptrw
+			Note: 	To write code that is compatible with both 32-bit and 64-bit Windows, use SetClassLongPtr.
+					When compiling for 32-bit Windows, SetClassLongPtr is defined as a call to the SetClassLong function
+
+			=> We have to do this dynamically when directly calling the DLL procedures
+		*/
+		proc = procSetClassLong
+	}
+
+	ret, _, _ := proc.Call(
+		hwnd,
+		uintptr(param),
+		val,
+	)
+	return ret != 0
+}
+
+func getWindowLong(hwnd uintptr, index int) int32 {
+	ret, _, _ := procGetWindowLong.Call(
+		hwnd,
+		uintptr(index))
+
+	return int32(ret)
+}
+
+func showWindow(hwnd uintptr, cmdshow int) bool {
+	ret, _, _ := procShowWindow.Call(
+		hwnd,
+		uintptr(cmdshow))
+	return ret != 0
+}
+
+func GetWindowRect(hwnd uintptr) *RECT {
+	var rect RECT
+	procGetWindowRect.Call(
+		hwnd,
+		uintptr(unsafe.Pointer(&rect)))
+
+	return &rect
+}
+
+func MonitorFromWindow(hwnd uintptr, dwFlags uint32) HMONITOR {
+	ret, _, _ := procMonitorFromWindow.Call(
+		hwnd,
+		uintptr(dwFlags),
+	)
+	return HMONITOR(ret)
+}
+
+func GetMonitorInfo(hMonitor HMONITOR, lmpi *MONITORINFO) bool {
+	ret, _, _ := procGetMonitorInfo.Call(
+		uintptr(hMonitor),
+		uintptr(unsafe.Pointer(lmpi)),
+	)
+	return ret != 0
+}
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/.gitignore","mode":420,"size":192,"sha256":"b9175b0e088749089ed975252cfaa193d821dae694c8fb425ef8020b23831595","index":0,"count":1,"encoding":"utf-8","payloadBytes":192}
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, build with `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/AUTHORS","mode":420,"size":302,"sha256":"3e6babb0262dbc81071b4d7296e6038bd3a48e6990b4d54159e11eb1dbcb3220","index":0,"count":1,"encoding":"utf-8","payloadBytes":302}
+# This is the official list of 'Winc' authors for copyright purposes.
+
+# Names should be added to this file as
+#   Name or Organization <email address>
+# The email address is not required for organizations.
+
+# Please keep the list sorted.
+
+# Contributors
+# ============
+
+Tad Vizbaras <tad@etasoft.com>
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/LICENSE","mode":420,"size":1069,"sha256":"bccedbce38390429aa2fbb6cdff1e5622be8cd14c2b5b6b1f522db1813cdbb46","index":0,"count":1,"encoding":"utf-8","payloadBytes":1069}
+MIT License
+
+Copyright (c) 2019 winc Authors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/app.go","mode":420,"size":2623,"sha256":"81c8e58da5b7c67064bc8de13af53697c801511ae15c1373a1b004de9150da3f","index":0,"count":1,"encoding":"utf-8","payloadBytes":2623}
+//go:build windows
+
+/*
+ * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
+ * Copyright (C) 2010-2013 Allen Dang. All Rights Reserved.
+ */
+package winc
+
+import (
+	"runtime"
+	"unsafe"
+
+	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
+)
+
+var (
+	// resource compilation tool assigns app.ico ID of 3
+	// rsrc -manifest app.manifest -ico app.ico -o rsrc.syso
+	AppIconID = 3
+)
+
+func init() {
+	runtime.LockOSThread()
+
+	gAppInstance = w32.GetModuleHandle("")
+	if gAppInstance == 0 {
+		panic("Error occurred in App.Init")
+	}
+
+	// Initialize the common controls
+	var initCtrls w32.INITCOMMONCONTROLSEX
+	initCtrls.DwSize = uint32(unsafe.Sizeof(initCtrls))
+	initCtrls.DwICC =
+		w32.ICC_LISTVIEW_CLASSES | w32.ICC_PROGRESS_CLASS | w32.ICC_TAB_CLASSES |
+			w32.ICC_TREEVIEW_CLASSES | w32.ICC_BAR_CLASSES
+
+	w32.InitCommonControlsEx(&initCtrls)
+}
+
+// SetAppIcon sets resource icon ID for the apps windows.
+func SetAppIcon(appIconID int) {
+	AppIconID = appIconID
+}
+
+func GetAppInstance() w32.HINSTANCE {
+	return gAppInstance
+}
+
+func PreTranslateMessage(msg *w32.MSG) bool {
+	// This functions is called by the MessageLoop. It processes the
+	// keyboard accelerator keys and calls Controller.PreTranslateMessage for
+	// keyboard and mouse events.
+
+	processed := false
+
+	if (msg.Message >= w32.WM_KEYFIRST && msg.Message <= w32.WM_KEYLAST) ||
+		(msg.Message >= w32.WM_MOUSEFIRST && msg.Message <= w32.WM_MOUSELAST) {
+
+		if msg.Hwnd != 0 {
+			if controller := GetMsgHandler(msg.Hwnd); controller != nil {
+				// Search the chain of parents for pretranslated messages.
+				for p := controller; p != nil; p = p.Parent() {
+
+					if processed = p.PreTranslateMessage(msg); processed {
+						break
+					}
+				}
+			}
+		}
+	}
+
+	return processed
+}
+
+// RunMainLoop processes messages in main application loop.
+func RunMainLoop() int {
+	m := (*w32.MSG)(unsafe.Pointer(w32.GlobalAlloc(0, uint32(unsafe.Sizeof(w32.MSG{})))))
+	defer w32.GlobalFree(w32.HGLOBAL(unsafe.Pointer(m)))
+
+	for w32.GetMessage(m, 0, 0, 0) != 0 {
+
+		if !PreTranslateMessage(m) {
+			w32.TranslateMessage(m)
+			w32.DispatchMessage(m)
+		}
+	}
+
+	w32.GdiplusShutdown()
+	return int(m.WParam)
+}
+
+// PostMessages processes recent messages. Sometimes helpful for instant window refresh.
+func PostMessages() {
+	m := (*w32.MSG)(unsafe.Pointer(w32.GlobalAlloc(0, uint32(unsafe.Sizeof(w32.MSG{})))))
+	defer w32.GlobalFree(w32.HGLOBAL(unsafe.Pointer(m)))
+
+	for i := 0; i < 10; i++ {
+		if w32.GetMessage(m, 0, 0, 0) != 0 {
+			if !PreTranslateMessage(m) {
+				w32.TranslateMessage(m)
+				w32.DispatchMessage(m)
+			}
+		}
+	}
+}
+
+func Exit() {
+	w32.PostQuitMessage(0)
+}
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/bitmap.go","mode":420,"size":2740,"sha256":"a6889cb9e4c1718f351a24020452615f263ee6a939535e1a5e0e30f9a9ba9e58","index":0,"count":1,"encoding":"utf-8","payloadBytes":2740}
+//go:build windows
+
+/*
+ * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
+ * Copyright (C) 2010-2013 Allen Dang. All Rights Reserved.
+ */
+
+package winc
+
+import (
+	"errors"
+	"unsafe"
+
+	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
+)
+
+type Bitmap struct {
+	handle        w32.HBITMAP
+	width, height int
+}
+
+func assembleBitmapFromHBITMAP(hbitmap w32.HBITMAP) (*Bitmap, error) {
+	var dib w32.DIBSECTION
+	if w32.GetObject(w32.HGDIOBJ(hbitmap), unsafe.Sizeof(dib), unsafe.Pointer(&dib)) == 0 {
+		return nil, errors.New("GetObject for HBITMAP failed")
+	}
+
+	return &Bitmap{
+		handle: hbitmap,
+		width:  int(dib.DsBmih.BiWidth),
+		height: int(dib.DsBmih.BiHeight),
+	}, nil
+}
+
+func NewBitmapFromFile(filepath string, background Color) (*Bitmap, error) {
+	var gpBitmap *uintptr
+	var err error
+
+	gpBitmap, err = w32.GdipCreateBitmapFromFile(filepath)
+	if err != nil {
+		return nil, err
+	}
+	defer w32.GdipDisposeImage(gpBitmap)
+
+	var hbitmap w32.HBITMAP
+	// Reverse RGB to BGR to satisfy gdiplus color schema.
+	hbitmap, err = w32.GdipCreateHBITMAPFromBitmap(gpBitmap, uint32(RGB(background.B(), background.G(), background.R())))
+	if err != nil {
+		return nil, err
+	}
+
+	return assembleBitmapFromHBITMAP(hbitmap)
+}
+
+func NewBitmapFromResource(instance w32.HINSTANCE, resName *uint16, resType *uint16, background Color) (*Bitmap, error) {
+	var gpBitmap *uintptr
+	var err error
+	var hRes w32.HRSRC
+
+	hRes, err = w32.FindResource(w32.HMODULE(instance), resName, resType)
+	if err != nil {
+		return nil, err
+	}
+	resSize := w32.SizeofResource(w32.HMODULE(instance), hRes)
+	pResData := w32.LockResource(w32.LoadResource(w32.HMODULE(instance), hRes))
+	resBuffer := w32.GlobalAlloc(w32.GMEM_MOVEABLE, resSize)
+	pResBuffer := w32.GlobalLock(resBuffer)
+	w32.MoveMemory(pResBuffer, pResData, resSize)
+
+	stream := w32.CreateStreamOnHGlobal(resBuffer, false)
+
+	gpBitmap, err = w32.GdipCreateBitmapFromStream(stream)
+	if err != nil {
+		return nil, err
+	}
+	defer stream.Release()
+	defer w32.GlobalUnlock(resBuffer)
+	defer w32.GlobalFree(resBuffer)
+	defer w32.GdipDisposeImage(gpBitmap)
+
+	var hbitmap w32.HBITMAP
+	// Reverse gform.RGB to BGR to satisfy gdiplus color schema.
+	hbitmap, err = w32.GdipCreateHBITMAPFromBitmap(gpBitmap, uint32(RGB(background.B(), background.G(), background.R())))
+	if err != nil {
+		return nil, err
+	}
+
+	return assembleBitmapFromHBITMAP(hbitmap)
+}
+
+func (bm *Bitmap) Dispose() {
+	if bm.handle != 0 {
+		w32.DeleteObject(w32.HGDIOBJ(bm.handle))
+		bm.handle = 0
+	}
+}
+
+func (bm *Bitmap) GetHBITMAP() w32.HBITMAP {
+	return bm.handle
+}
+
+func (bm *Bitmap) Size() (int, int) {
+	return bm.width, bm.height
+}
+
+func (bm *Bitmap) Height() int {
+	return bm.height
+}
+
+func (bm *Bitmap) Width() int {
+	return bm.width
+}
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/brush.go","mode":420,"size":1654,"sha256":"b9d9e5aa9a52293fc9ae31a05104eca0ba8770560b073bca88781ca3a67352e7","index":0,"count":1,"encoding":"utf-8","payloadBytes":1654}
+//go:build windows
+
+/*
+ * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
+ * Copyright (C) 2010-2013 Allen Dang. All Rights Reserved.
+ */
+
+package winc
+
+import (
+	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
+)
+
+var DefaultBackgroundBrush = NewSystemColorBrush(w32.COLOR_BTNFACE)
+
+type Brush struct {
+	hBrush   w32.HBRUSH
+	logBrush w32.LOGBRUSH
+}
+
+func NewSolidColorBrush(color Color) *Brush {
+	lb := w32.LOGBRUSH{LbStyle: w32.BS_SOLID, LbColor: w32.COLORREF(color)}
+	hBrush := w32.CreateBrushIndirect(&lb)
+	if hBrush == 0 {
+		panic("Faild to create solid color brush")
+	}
+
+	return &Brush{hBrush, lb}
+}
+
+func NewSystemColorBrush(colorIndex int) *Brush {
+	//lb := w32.LOGBRUSH{LbStyle: w32.BS_SOLID, LbColor: w32.COLORREF(colorIndex)}
+	lb := w32.LOGBRUSH{LbStyle: w32.BS_NULL}
+	hBrush := w32.GetSysColorBrush(colorIndex)
+	if hBrush == 0 {
+		panic("GetSysColorBrush failed")
+	}
+	return &Brush{hBrush, lb}
+}
+
+func NewHatchedColorBrush(color Color) *Brush {
+	lb := w32.LOGBRUSH{LbStyle: w32.BS_HATCHED, LbColor: w32.COLORREF(color)}
+	hBrush := w32.CreateBrushIndirect(&lb)
+	if hBrush == 0 {
+		panic("Faild to create solid color brush")
+	}
+
+	return &Brush{hBrush, lb}
+}
+
+func NewNullBrush() *Brush {
+	lb := w32.LOGBRUSH{LbStyle: w32.BS_NULL}
+	hBrush := w32.CreateBrushIndirect(&lb)
+	if hBrush == 0 {
+		panic("Failed to create null brush")
+	}
+
+	return &Brush{hBrush, lb}
+}
+
+func (br *Brush) GetHBRUSH() w32.HBRUSH {
+	return br.hBrush
+}
+
+func (br *Brush) GetLOGBRUSH() *w32.LOGBRUSH {
+	return &br.logBrush
+}
+
+func (br *Brush) Dispose() {
+	if br.hBrush != 0 {
+		w32.DeleteObject(w32.HGDIOBJ(br.hBrush))
+		br.hBrush = 0
+	}
+}
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/buttons.go","mode":420,"size":3391,"sha256":"4c60ff56c95a150b99da8c939e0a9bf571104bba3497aa9218ef477504403091","index":0,"count":1,"encoding":"utf-8","payloadBytes":3391}
+//go:build windows
+
+/*
+ * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
+ * Copyright (C) 2010-2013 Allen Dang. All Rights Reserved.
+ */
+
+package winc
+
+import (
+	"fmt"
+
+	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
+)
+
+type Button struct {
+	ControlBase
+	onClick EventManager
+}
+
+func (bt *Button) OnClick() *EventManager {
+	return &bt.onClick
+}
+
+func (bt *Button) WndProc(msg uint32, wparam, lparam uintptr) uintptr {
+	switch msg {
+	case w32.WM_COMMAND:
+		bt.onClick.Fire(NewEvent(bt, nil))
+		/*case w32.WM_LBUTTONDOWN:
+			w32.SetCapture(bt.Handle())
+		case w32.WM_LBUTTONUP:
+			w32.ReleaseCapture()*/
+		/*case win.WM_GETDLGCODE:
+		println("GETDLGCODE")*/
+	}
+	return w32.DefWindowProc(bt.hwnd, msg, wparam, lparam)
+	//return bt.W32Control.WndProc(msg, wparam, lparam)
+}
+
+func (bt *Button) Checked() bool {
+	result := w32.SendMessage(bt.hwnd, w32.BM_GETCHECK, 0, 0)
+	return result == w32.BST_CHECKED
+}
+
+func (bt *Button) SetChecked(checked bool) {
+	wparam := w32.BST_CHECKED
+	if !checked {
+		wparam = w32.BST_UNCHECKED
+	}
+	w32.SendMessage(bt.hwnd, w32.BM_SETCHECK, uintptr(wparam), 0)
+}
+
+// SetIcon sets icon on the button. Recommended icons are 32x32 with 32bit color depth.
+func (bt *Button) SetIcon(ico *Icon) {
+	w32.SendMessage(bt.hwnd, w32.BM_SETIMAGE, w32.IMAGE_ICON, uintptr(ico.handle))
+}
+
+func (bt *Button) SetResIcon(iconID uint16) {
+	if ico, err := NewIconFromResource(GetAppInstance(), iconID); err == nil {
+		bt.SetIcon(ico)
+		return
+	}
+	panic(fmt.Sprintf("missing icon with icon ID: %d", iconID))
+}
+
+type PushButton struct {
+	Button
+}
+
+func NewPushButton(parent Controller) *PushButton {
+	pb := new(PushButton)
+
+	pb.InitControl("BUTTON", parent, 0, w32.BS_PUSHBUTTON|w32.WS_TABSTOP|w32.WS_VISIBLE|w32.WS_CHILD)
+	RegMsgHandler(pb)
+
+	pb.SetFont(DefaultFont)
+	pb.SetText("Button")
+	pb.SetSize(100, 22)
+
+	return pb
+}
+
+// SetDefault is used for dialogs to set default button.
+func (pb *PushButton) SetDefault() {
+	pb.SetAndClearStyleBits(w32.BS_DEFPUSHBUTTON, w32.BS_PUSHBUTTON)
+}
+
+// IconButton does not display text, requires SetResIcon call.
+type IconButton struct {
+	Button
+}
+
+func NewIconButton(parent Controller) *IconButton {
+	pb := new(IconButton)
+
+	pb.InitControl("BUTTON", parent, 0, w32.BS_ICON|w32.WS_TABSTOP|w32.WS_VISIBLE|w32.WS_CHILD)
+	RegMsgHandler(pb)
+
+	pb.SetFont(DefaultFont)
+	// even if text would be set it would not be displayed
+	pb.SetText("")
+	pb.SetSize(100, 22)
+
+	return pb
+}
+
+type CheckBox struct {
+	Button
+}
+
+func NewCheckBox(parent Controller) *CheckBox {
+	cb := new(CheckBox)
+
+	cb.InitControl("BUTTON", parent, 0, w32.WS_TABSTOP|w32.WS_VISIBLE|w32.WS_CHILD|w32.BS_AUTOCHECKBOX)
+	RegMsgHandler(cb)
+
+	cb.SetFont(DefaultFont)
+	cb.SetText("CheckBox")
+	cb.SetSize(100, 22)
+
+	return cb
+}
+
+type RadioButton struct {
+	Button
+}
+
+func NewRadioButton(parent Controller) *RadioButton {
+	rb := new(RadioButton)
+
+	rb.InitControl("BUTTON", parent, 0, w32.WS_TABSTOP|w32.WS_VISIBLE|w32.WS_CHILD|w32.BS_AUTORADIOBUTTON)
+	RegMsgHandler(rb)
+
+	rb.SetFont(DefaultFont)
+	rb.SetText("RadioButton")
+	rb.SetSize(100, 22)
+
+	return rb
+}
+
+type GroupBox struct {
+	Button
+}
+
+func NewGroupBox(parent Controller) *GroupBox {
+	gb := new(GroupBox)
+
+	gb.InitControl("BUTTON", parent, 0, w32.WS_CHILD|w32.WS_VISIBLE|w32.WS_GROUP|w32.BS_GROUPBOX)
+	RegMsgHandler(gb)
+
+	gb.SetFont(DefaultFont)
+	gb.SetText("GroupBox")
+	gb.SetSize(100, 100)
+
+	return gb
+}
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/canvas.go","mode":420,"size":4588,"sha256":"ca52901b37db510fd9f50ffe263dc7f983dc6563936895e5392024cfaacb1e82","index":0,"count":1,"encoding":"utf-8","payloadBytes":4588}
+//go:build windows
+
+/*
+ * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
+ * Copyright (C) 2010-2013 Allen Dang. All Rights Reserved.
+ */
+
+package winc
+
+import (
+	"fmt"
+
+	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
+)
+
+type Canvas struct {
+	hwnd         w32.HWND
+	hdc          w32.HDC
+	doNotDispose bool
+}
+
+var nullBrush = NewNullBrush()
+
+func NewCanvasFromHwnd(hwnd w32.HWND) *Canvas {
+	hdc := w32.GetDC(hwnd)
+	if hdc == 0 {
+		panic(fmt.Sprintf("Create canvas from %v failed.", hwnd))
+	}
+
+	return &Canvas{hwnd: hwnd, hdc: hdc, doNotDispose: false}
+}
+
+func NewCanvasFromHDC(hdc w32.HDC) *Canvas {
+	if hdc == 0 {
+		panic("Cannot create canvas from invalid HDC.")
+	}
+
+	return &Canvas{hdc: hdc, doNotDispose: true}
+}
+
+func (ca *Canvas) Dispose() {
+	if !ca.doNotDispose && ca.hdc != 0 {
+		if ca.hwnd == 0 {
+			w32.DeleteDC(ca.hdc)
+		} else {
+			w32.ReleaseDC(ca.hwnd, ca.hdc)
+		}
+
+		ca.hdc = 0
+	}
+}
+
+func (ca *Canvas) DrawBitmap(bmp *Bitmap, x, y int) {
+	cdc := w32.CreateCompatibleDC(0)
+	defer w32.DeleteDC(cdc)
+
+	hbmpOld := w32.SelectObject(cdc, w32.HGDIOBJ(bmp.GetHBITMAP()))
+	defer w32.SelectObject(cdc, w32.HGDIOBJ(hbmpOld))
+
+	w, h := bmp.Size()
+
+	w32.BitBlt(ca.hdc, x, y, w, h, cdc, 0, 0, w32.SRCCOPY)
+}
+
+func (ca *Canvas) DrawStretchedBitmap(bmp *Bitmap, rect *Rect) {
+	cdc := w32.CreateCompatibleDC(0)
+	defer w32.DeleteDC(cdc)
+
+	hbmpOld := w32.SelectObject(cdc, w32.HGDIOBJ(bmp.GetHBITMAP()))
+	defer w32.SelectObject(cdc, w32.HGDIOBJ(hbmpOld))
+
+	w, h := bmp.Size()
+
+	rc := rect.GetW32Rect()
+	w32.StretchBlt(ca.hdc, int(rc.Left), int(rc.Top), int(rc.Right), int(rc.Bottom), cdc, 0, 0, w, h, w32.SRCCOPY)
+}
+
+func (ca *Canvas) DrawIcon(ico *Icon, x, y int) bool {
+	return w32.DrawIcon(ca.hdc, x, y, ico.Handle())
+}
+
+// DrawFillRect draw and fill rectangle with color.
+func (ca *Canvas) DrawFillRect(rect *Rect, pen *Pen, brush *Brush) {
+	w32Rect := rect.GetW32Rect()
+
+	previousPen := w32.SelectObject(ca.hdc, w32.HGDIOBJ(pen.GetHPEN()))
+	defer w32.SelectObject(ca.hdc, previousPen)
+
+	previousBrush := w32.SelectObject(ca.hdc, w32.HGDIOBJ(brush.GetHBRUSH()))
+	defer w32.SelectObject(ca.hdc, previousBrush)
+
+	w32.Rectangle(ca.hdc, w32Rect.Left, w32Rect.Top, w32Rect.Right, w32Rect.Bottom)
+}
+
+func (ca *Canvas) DrawRect(rect *Rect, pen *Pen) {
+	w32Rect := rect.GetW32Rect()
+
+	previousPen := w32.SelectObject(ca.hdc, w32.HGDIOBJ(pen.GetHPEN()))
+	defer w32.SelectObject(ca.hdc, previousPen)
+
+	// nullBrush is used to make interior of the rect transparent
+	previousBrush := w32.SelectObject(ca.hdc, w32.HGDIOBJ(nullBrush.GetHBRUSH()))
+	defer w32.SelectObject(ca.hdc, previousBrush)
+
+	w32.Rectangle(ca.hdc, w32Rect.Left, w32Rect.Top, w32Rect.Right, w32Rect.Bottom)
+}
+
+func (ca *Canvas) FillRect(rect *Rect, brush *Brush) {
+	w32.FillRect(ca.hdc, rect.GetW32Rect(), brush.GetHBRUSH())
+}
+
+func (ca *Canvas) DrawEllipse(rect *Rect, pen *Pen) {
+	w32Rect := rect.GetW32Rect()
+
+	previousPen := w32.SelectObject(ca.hdc, w32.HGDIOBJ(pen.GetHPEN()))
+	defer w32.SelectObject(ca.hdc, previousPen)
+
+	// nullBrush is used to make interior of the rect transparent
+	previousBrush := w32.SelectObject(ca.hdc, w32.HGDIOBJ(nullBrush.GetHBRUSH()))
+	defer w32.SelectObject(ca.hdc, previousBrush)
+
+	w32.Ellipse(ca.hdc, w32Rect.Left, w32Rect.Top, w32Rect.Right, w32Rect.Bottom)
+}
+
+// DrawFillEllipse draw and fill ellipse with color.
+func (ca *Canvas) DrawFillEllipse(rect *Rect, pen *Pen, brush *Brush) {
+	w32Rect := rect.GetW32Rect()
+
+	previousPen := w32.SelectObject(ca.hdc, w32.HGDIOBJ(pen.GetHPEN()))
+	defer w32.SelectObject(ca.hdc, previousPen)
+
+	previousBrush := w32.SelectObject(ca.hdc, w32.HGDIOBJ(brush.GetHBRUSH()))
+	defer w32.SelectObject(ca.hdc, previousBrush)
+
+	w32.Ellipse(ca.hdc, w32Rect.Left, w32Rect.Top, w32Rect.Right, w32Rect.Bottom)
+}
+
+func (ca *Canvas) DrawLine(x, y, x2, y2 int, pen *Pen) {
+	w32.MoveToEx(ca.hdc, x, y, nil)
+
+	previousPen := w32.SelectObject(ca.hdc, w32.HGDIOBJ(pen.GetHPEN()))
+	defer w32.SelectObject(ca.hdc, previousPen)
+
+	w32.LineTo(ca.hdc, int32(x2), int32(y2))
+}
+
+// Refer win32 DrawText document for uFormat.
+func (ca *Canvas) DrawText(text string, rect *Rect, format uint, font *Font, textColor Color) {
+	previousFont := w32.SelectObject(ca.hdc, w32.HGDIOBJ(font.GetHFONT()))
+	defer w32.SelectObject(ca.hdc, w32.HGDIOBJ(previousFont))
+
+	previousBkMode := w32.SetBkMode(ca.hdc, w32.TRANSPARENT)
+	defer w32.SetBkMode(ca.hdc, previousBkMode)
+
+	previousTextColor := w32.SetTextColor(ca.hdc, w32.COLORREF(textColor))
+	defer w32.SetTextColor(ca.hdc, previousTextColor)
+
+	w32.DrawText(ca.hdc, text, len(text), rect.GetW32Rect(), format)
+}
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/color.go","mode":420,"size":442,"sha256":"5564db6f51a0bdf8ec8a09a9b767f914f054bb6dcbfb9e9baaf70de2cc404203","index":0,"count":1,"encoding":"utf-8","payloadBytes":442}
+//go:build windows
+
+/*
+ * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
+ * Copyright (C) 2010-2013 Allen Dang. All Rights Reserved.
+ */
+
+package winc
+
+type Color uint32
+
+func RGB(r, g, b byte) Color {
+	return Color(uint32(r) | uint32(g)<<8 | uint32(b)<<16)
+}
+
+func (c Color) R() byte {
+	return byte(c & 0xff)
+}
+
+func (c Color) G() byte {
+	return byte((c >> 8) & 0xff)
+}
+
+func (c Color) B() byte {
+	return byte((c >> 16) & 0xff)
+}
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/combobox.go","mode":420,"size":1748,"sha256":"d94f2c95d24243c751edc1308de7676f9ea2a048d0dea3140fcb83199da80964","index":0,"count":1,"encoding":"utf-8","payloadBytes":1748}
+//go:build windows
+
+/*
+ * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
+ */
+
+package winc
+
+import (
+	"syscall"
+	"unsafe"
+
+	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
+)
+
+type ComboBox struct {
+	ControlBase
+	onSelectedChange EventManager
+}
+
+func NewComboBox(parent Controller) *ComboBox {
+	cb := new(ComboBox)
+
+	cb.InitControl("COMBOBOX", parent, 0, w32.WS_CHILD|w32.WS_VISIBLE|w32.WS_TABSTOP|w32.WS_VSCROLL|w32.CBS_DROPDOWNLIST)
+	RegMsgHandler(cb)
+
+	cb.SetFont(DefaultFont)
+	cb.SetSize(200, 400)
+	return cb
+}
+
+func (cb *ComboBox) DeleteAllItems() bool {
+	return w32.SendMessage(cb.hwnd, w32.CB_RESETCONTENT, 0, 0) == w32.TRUE
+}
+
+func (cb *ComboBox) InsertItem(index int, str string) bool {
+	lp := uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr(str)))
+	return w32.SendMessage(cb.hwnd, w32.CB_INSERTSTRING, uintptr(index), lp) != w32.CB_ERR
+}
+
+func (cb *ComboBox) DeleteItem(index int) bool {
+	return w32.SendMessage(cb.hwnd, w32.CB_DELETESTRING, uintptr(index), 0) != w32.CB_ERR
+}
+
+func (cb *ComboBox) SelectedItem() int {
+	return int(int32(w32.SendMessage(cb.hwnd, w32.CB_GETCURSEL, 0, 0)))
+}
+
+func (cb *ComboBox) SetSelectedItem(value int) bool {
+	return int(int32(w32.SendMessage(cb.hwnd, w32.CB_SETCURSEL, uintptr(value), 0))) == value
+}
+
+func (cb *ComboBox) OnSelectedChange() *EventManager {
+	return &cb.onSelectedChange
+}
+
+// Message processor
+func (cb *ComboBox) WndProc(msg uint32, wparam, lparam uintptr) uintptr {
+	switch msg {
+	case w32.WM_COMMAND:
+		code := w32.HIWORD(uint32(wparam))
+
+		switch code {
+		case w32.CBN_SELCHANGE:
+			cb.onSelectedChange.Fire(NewEvent(cb, nil))
+		}
+	}
+	return w32.DefWindowProc(cb.hwnd, msg, wparam, lparam)
+	//return cb.W32Control.WndProc(msg, wparam, lparam)
+}
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/commondlgs.go","mode":420,"size":3654,"sha256":"18ca66e0d6482a869e23c220109ec8e87a68ba7ade41197d23bc7d1dc4cb2ff9","index":0,"count":1,"encoding":"utf-8","payloadBytes":3654}
+//go:build windows
+
+/*
+ * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
+ * Copyright (C) 2010-2013 Allen Dang. All Rights Reserved.
+ */
+
+package winc
+
+import (
+	"fmt"
+	"syscall"
+	"unsafe"
+
+	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
+)
+
+func genOFN(parent Controller, title, filter string, filterIndex uint, initialDir string, buf []uint16) *w32.OPENFILENAME {
+	var ofn w32.OPENFILENAME
+	ofn.StructSize = uint32(unsafe.Sizeof(ofn))
+	ofn.Owner = parent.Handle()
+
+	if filter != "" {
+		filterBuf := make([]uint16, len(filter)+1)
+		copy(filterBuf, syscall.StringToUTF16(filter))
+		// Replace '|' with the expected '\0'
+		for i, c := range filterBuf {
+			if byte(c) == '|' {
+				filterBuf[i] = uint16(0)
+			}
+		}
+		ofn.Filter = &filterBuf[0]
+		ofn.FilterIndex = uint32(filterIndex)
+	}
+
+	ofn.File = &buf[0]
+	ofn.MaxFile = uint32(len(buf))
+
+	if initialDir != "" {
+		ofn.InitialDir = syscall.StringToUTF16Ptr(initialDir)
+	}
+	if title != "" {
+		ofn.Title = syscall.StringToUTF16Ptr(title)
+	}
+
+	ofn.Flags = w32.OFN_FILEMUSTEXIST
+	return &ofn
+}
+
+func ShowOpenFileDlg(parent Controller, title, filter string, filterIndex uint, initialDir string) (filePath string, accepted bool) {
+	buf := make([]uint16, 1024)
+	ofn := genOFN(parent, title, filter, filterIndex, initialDir, buf)
+
+	if accepted = w32.GetOpenFileName(ofn); accepted {
+		filePath = syscall.UTF16ToString(buf)
+	}
+	return
+}
+
+func ShowSaveFileDlg(parent Controller, title, filter string, filterIndex uint, initialDir string) (filePath string, accepted bool) {
+	buf := make([]uint16, 1024)
+	ofn := genOFN(parent, title, filter, filterIndex, initialDir, buf)
+
+	if accepted = w32.GetSaveFileName(ofn); accepted {
+		filePath = syscall.UTF16ToString(buf)
+	}
+	return
+}
+
+func ShowBrowseFolderDlg(parent Controller, title string) (folder string, accepted bool) {
+	var bi w32.BROWSEINFO
+	bi.Owner = parent.Handle()
+	bi.Title = syscall.StringToUTF16Ptr(title)
+	bi.Flags = w32.BIF_RETURNONLYFSDIRS | w32.BIF_NEWDIALOGSTYLE
+
+	w32.CoInitialize()
+	ret := w32.SHBrowseForFolder(&bi)
+	w32.CoUninitialize()
+
+	folder = w32.SHGetPathFromIDList(ret)
+	accepted = folder != ""
+	return
+}
+
+// MsgBoxOkCancel basic pop up message. Returns 1 for OK and 2 for CANCEL.
+func MsgBoxOkCancel(parent Controller, title, caption string) int {
+	return MsgBox(parent, title, caption, w32.MB_ICONEXCLAMATION|w32.MB_OKCANCEL)
+}
+
+func MsgBoxYesNo(parent Controller, title, caption string) int {
+	return MsgBox(parent, title, caption, w32.MB_ICONEXCLAMATION|w32.MB_YESNO)
+}
+
+func MsgBoxOk(parent Controller, title, caption string) {
+	MsgBox(parent, title, caption, w32.MB_ICONINFORMATION|w32.MB_OK)
+}
+
+// Warningf is generic warning message with OK and Cancel buttons. Returns 1 for OK.
+func Warningf(parent Controller, format string, data ...interface{}) int {
+	caption := fmt.Sprintf(format, data...)
+	return MsgBox(parent, "Warning", caption, w32.MB_ICONWARNING|w32.MB_OKCANCEL)
+}
+
+// Printf is generic info message with OK button.
+func Printf(parent Controller, format string, data ...interface{}) {
+	caption := fmt.Sprintf(format, data...)
+	MsgBox(parent, "Information", caption, w32.MB_ICONINFORMATION|w32.MB_OK)
+}
+
+// Errorf is generic error message with OK button.
+func Errorf(parent Controller, format string, data ...interface{}) {
+	caption := fmt.Sprintf(format, data...)
+	MsgBox(parent, "Error", caption, w32.MB_ICONERROR|w32.MB_OK)
+}
+
+func MsgBox(parent Controller, title, caption string, flags uint) int {
+	var result int
+	if parent != nil {
+		result = w32.MessageBox(parent.Handle(), caption, title, flags)
+	} else {
+		result = w32.MessageBox(0, caption, title, flags)
+	}
+
+	return result
+}
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/controlbase.go","mode":420,"size":13389,"sha256":"84207174999250e1acfcb17ffdee48c0cc3f091a9f0ebb35de09984c270fce0f","index":0,"count":1,"encoding":"utf-8","payloadBytes":13389}
+//go:build windows
+
+/*
+ * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
+ * Copyright (C) 2010-2013 Allen Dang. All Rights Reserved.
+ */
+
+package winc
+
+import (
+	"fmt"
+	"runtime"
+	"sync"
+	"syscall"
+	"unsafe"
+
+	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
+)
+
+type ControlBase struct {
+	hwnd        w32.HWND
+	font        *Font
+	parent      Controller
+	contextMenu *MenuItem
+
+	isForm bool
+
+	minWidth, minHeight int
+	maxWidth, maxHeight int
+
+	// General events
+	onCreate EventManager
+	onClose  EventManager
+
+	// Focus events
+	onKillFocus EventManager
+	onSetFocus  EventManager
+
+	// Drag and drop events
+	onDropFiles EventManager
+
+	// Mouse events
+	onLBDown    EventManager
+	onLBUp      EventManager
+	onLBDbl     EventManager
+	onMBDown    EventManager
+	onMBUp      EventManager
+	onRBDown    EventManager
+	onRBUp      EventManager
+	onRBDbl     EventManager
+	onMouseMove EventManager
+
+	// use MouseControl to capture onMouseHover and onMouseLeave events.
+	onMouseHover EventManager
+	onMouseLeave EventManager
+
+	// Keyboard events
+	onKeyUp EventManager
+
+	// Paint events
+	onPaint EventManager
+	onSize  EventManager
+
+	m         sync.Mutex
+	dispatchq []func()
+}
+
+// InitControl is called by controls: edit, button, treeview, listview, and so on.
+func (cba *ControlBase) InitControl(className string, parent Controller, exstyle, style uint) {
+	cba.hwnd = CreateWindow(className, parent, exstyle, style)
+	if cba.hwnd == 0 {
+		panic("cannot create window for " + className)
+	}
+	cba.parent = parent
+}
+
+// InitWindow is called by custom window based controls such as split, panel, etc.
+func (cba *ControlBase) InitWindow(className string, parent Controller, exstyle, style uint) {
+	RegClassOnlyOnce(className)
+	cba.hwnd = CreateWindow(className, parent, exstyle, style)
+	if cba.hwnd == 0 {
+		panic("cannot create window for " + className)
+	}
+	cba.parent = parent
+}
+
+// SetTheme for TreeView and ListView controls.
+func (cba *ControlBase) SetTheme(appName string) error {
+	if hr := w32.SetWindowTheme(cba.hwnd, syscall.StringToUTF16Ptr(appName), nil); w32.FAILED(hr) {
+		return fmt.Errorf("SetWindowTheme %d", hr)
+	}
+	return nil
+}
+
+func (cba *ControlBase) Handle() w32.HWND {
+	return cba.hwnd
+}
+
+func (cba *ControlBase) SetHandle(hwnd w32.HWND) {
+	cba.hwnd = hwnd
+}
+
+func (cba *ControlBase) GetWindowDPI() (w32.UINT, w32.UINT) {
+	if w32.HasGetDpiForWindowFunc() {
+		// GetDpiForWindow is supported beginning with Windows 10, 1607 and is the most accureate
+		// one, especially it is consistent with the WM_DPICHANGED event.
+		dpi := w32.GetDpiForWindow(cba.hwnd)
+		return dpi, dpi
+	}
+
+	if w32.HasGetDPIForMonitorFunc() {
+		// GetDpiForWindow is supported beginning with Windows 8.1
+		monitor := w32.MonitorFromWindow(cba.hwnd, w32.MONITOR_DEFAULTTONEAREST)
+		if monitor == 0 {
+			return 0, 0
+		}
+		var dpiX, dpiY w32.UINT
+		w32.GetDPIForMonitor(monitor, w32.MDT_EFFECTIVE_DPI, &dpiX, &dpiY)
+		return dpiX, dpiY
+	}
+
+	// If none of the above is supported fallback to the System DPI.
+	screen := w32.GetDC(0)
+	x := w32.GetDeviceCaps(screen, w32.LOGPIXELSX)
+	y := w32.GetDeviceCaps(screen, w32.LOGPIXELSY)
+	w32.ReleaseDC(0, screen)
+	return w32.UINT(x), w32.UINT(y)
+}
+
+func (cba *ControlBase) SetAndClearStyleBits(set, clear uint32) error {
+	style := uint32(w32.GetWindowLong(cba.hwnd, w32.GWL_STYLE))
+	if style == 0 {
+		return fmt.Errorf("GetWindowLong")
+	}
+
+	if newStyle := style&^clear | set; newStyle != style {
+		if w32.SetWindowLong(cba.hwnd, w32.GWL_STYLE, newStyle) == 0 {
+			return fmt.Errorf("SetWindowLong")
+		}
+	}
+	return nil
+}
+
+func (cba *ControlBase) SetIsForm(isform bool) {
+	cba.isForm = isform
+}
+
+func (cba *ControlBase) SetText(caption string) {
+	w32.SetWindowText(cba.hwnd, caption)
+}
+
+func (cba *ControlBase) Text() string {
+	return w32.GetWindowText(cba.hwnd)
+}
+
+func (cba *ControlBase) Close() {
+	UnRegMsgHandler(cba.hwnd)
+	w32.DestroyWindow(cba.hwnd)
+}
+
+func (cba *ControlBase) SetTranslucentBackground() {
+	var accent = w32.ACCENT_POLICY{
+		AccentState: w32.ACCENT_ENABLE_BLURBEHIND,
+	}
+	var data w32.WINDOWCOMPOSITIONATTRIBDATA
+	data.Attrib = w32.WCA_ACCENT_POLICY
+	data.PvData = unsafe.Pointer(&accent)
+	data.CbData = unsafe.Sizeof(accent)
+
+	w32.SetWindowCompositionAttribute(cba.hwnd, &data)
+}
+
+func (cba *ControlBase) SetContentProtection(enable bool) {
+	if enable {
+		w32.SetWindowDisplayAffinity(uintptr(cba.hwnd), w32.WDA_EXCLUDEFROMCAPTURE)
+	} else {
+		w32.SetWindowDisplayAffinity(uintptr(cba.hwnd), w32.WDA_NONE)
+	}
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func (cba *ControlBase) clampSize(width, height int) (int, int) {
+	if cba.minWidth != 0 {
+		width = max(width, cba.minWidth)
+	}
+	if cba.maxWidth != 0 {
+		width = min(width, cba.maxWidth)
+	}
+	if cba.minHeight != 0 {
+		height = max(height, cba.minHeight)
+	}
+	if cba.maxHeight != 0 {
+		height = min(height, cba.maxHeight)
+	}
+	return width, height
+}
+
+func (cba *ControlBase) SetSize(width, height int) {
+	x, y := cba.Pos()
+	width, height = cba.clampSize(width, height)
+	width, height = cba.scaleWithWindowDPI(width, height)
+	w32.MoveWindow(cba.hwnd, x, y, width, height, true)
+}
+
+func (cba *ControlBase) SetMinSize(width, height int) {
+	cba.minWidth = width
+	cba.minHeight = height
+
+	// Ensure we set max if min > max
+	if cba.maxWidth > 0 {
+		cba.maxWidth = max(cba.minWidth, cba.maxWidth)
+	}
+	if cba.maxHeight > 0 {
+		cba.maxHeight = max(cba.minHeight, cba.maxHeight)
+	}
+
+	x, y := cba.Pos()
+	currentWidth, currentHeight := cba.Size()
+	clampedWidth, clampedHeight := cba.clampSize(currentWidth, currentHeight)
+	if clampedWidth != currentWidth || clampedHeight != currentHeight {
+		w32.MoveWindow(cba.hwnd, x, y, clampedWidth, clampedHeight, true)
+	}
+}
+func (cba *ControlBase) SetMaxSize(width, height int) {
+	cba.maxWidth = width
+	cba.maxHeight = height
+
+	// Ensure we set min if max > min
+	if cba.maxWidth > 0 {
+		cba.minWidth = min(cba.maxWidth, cba.minWidth)
+	}
+	if cba.maxHeight > 0 {
+		cba.minHeight = min(cba.maxHeight, cba.minHeight)
+	}
+
+	x, y := cba.Pos()
+	currentWidth, currentHeight := cba.Size()
+	clampedWidth, clampedHeight := cba.clampSize(currentWidth, currentHeight)
+	if clampedWidth != currentWidth || clampedHeight != currentHeight {
+		w32.MoveWindow(cba.hwnd, x, y, clampedWidth, clampedHeight, true)
+	}
+}
+
+func (cba *ControlBase) Size() (width, height int) {
+	rect := w32.GetWindowRect(cba.hwnd)
+	width = int(rect.Right - rect.Left)
+	height = int(rect.Bottom - rect.Top)
+	width, height = cba.scaleToDefaultDPI(width, height)
+	return
+}
+
+func (cba *ControlBase) Width() int {
+	rect := w32.GetWindowRect(cba.hwnd)
+	return int(rect.Right - rect.Left)
+}
+
+func (cba *ControlBase) Height() int {
+	rect := w32.GetWindowRect(cba.hwnd)
+	return int(rect.Bottom - rect.Top)
+}
+
+func (cba *ControlBase) SetPos(x, y int) {
+	info := getMonitorInfo(cba.hwnd)
+	workRect := info.RcWork
+
+	w32.SetWindowPos(cba.hwnd, w32.HWND_TOP, int(workRect.Left)+x, int(workRect.Top)+y, 0, 0, w32.SWP_NOSIZE)
+}
+func (cba *ControlBase) SetAlwaysOnTop(b bool) {
+	if b {
+		w32.SetWindowPos(cba.hwnd, w32.HWND_TOPMOST, 0, 0, 0, 0, w32.SWP_NOSIZE|w32.SWP_NOMOVE)
+	} else {
+		w32.SetWindowPos(cba.hwnd, w32.HWND_NOTOPMOST, 0, 0, 0, 0, w32.SWP_NOSIZE|w32.SWP_NOMOVE)
+	}
+}
+
+func (cba *ControlBase) Pos() (x, y int) {
+	rect := w32.GetWindowRect(cba.hwnd)
+	x = int(rect.Left)
+	y = int(rect.Top)
+	if !cba.isForm && cba.parent != nil {
+		x, y, _ = w32.ScreenToClient(cba.parent.Handle(), x, y)
+	}
+	return
+}
+
+func (cba *ControlBase) Visible() bool {
+	return w32.IsWindowVisible(cba.hwnd)
+}
+
+func (cba *ControlBase) ToggleVisible() bool {
+	visible := w32.IsWindowVisible(cba.hwnd)
+	if visible {
+		cba.Hide()
+	} else {
+		cba.Show()
+	}
+	return !visible
+}
+
+func (cba *ControlBase) ContextMenu() *MenuItem {
+	return cba.contextMenu
+}
+
+func (cba *ControlBase) SetContextMenu(menu *MenuItem) {
+	cba.contextMenu = menu
+}
+
+func (cba *ControlBase) Bounds() *Rect {
+	rect := w32.GetWindowRect(cba.hwnd)
+	if cba.isForm {
+		return &Rect{*rect}
+	}
+
+	return ScreenToClientRect(cba.hwnd, rect)
+}
+
+func (cba *ControlBase) ClientRect() *Rect {
+	rect := w32.GetClientRect(cba.hwnd)
+	return ScreenToClientRect(cba.hwnd, rect)
+}
+func (cba *ControlBase) ClientWidth() int {
+	rect := w32.GetClientRect(cba.hwnd)
+	return int(rect.Right - rect.Left)
+}
+
+func (cba *ControlBase) ClientHeight() int {
+	rect := w32.GetClientRect(cba.hwnd)
+	return int(rect.Bottom - rect.Top)
+}
+
+func (cba *ControlBase) Show() {
+	// WindowPos is used with HWND_TOPMOST to guarantee bring our app on top
+	// force set our main window on top
+	w32.SetWindowPos(
+		cba.hwnd,
+		w32.HWND_TOPMOST,
+		0, 0, 0, 0,
+		w32.SWP_SHOWWINDOW|w32.SWP_NOSIZE|w32.SWP_NOMOVE,
+	)
+	// remove topmost to allow normal windows manipulations
+	w32.SetWindowPos(
+		cba.hwnd,
+		w32.HWND_NOTOPMOST,
+		0, 0, 0, 0,
+		w32.SWP_SHOWWINDOW|w32.SWP_NOSIZE|w32.SWP_NOMOVE,
+	)
+	// put main window on tops foreground
+	w32.SetForegroundWindow(cba.hwnd)
+}
+
+func (cba *ControlBase) Hide() {
+	w32.ShowWindow(cba.hwnd, w32.SW_HIDE)
+}
+
+func (cba *ControlBase) Enabled() bool {
+	return w32.IsWindowEnabled(cba.hwnd)
+}
+
+func (cba *ControlBase) SetEnabled(b bool) {
+	w32.EnableWindow(cba.hwnd, b)
+}
+
+func (cba *ControlBase) SetFocus() {
+	w32.SetFocus(cba.hwnd)
+}
+
+func (cba *ControlBase) Invalidate(erase bool) {
+	// pRect := w32.GetClientRect(cba.hwnd)
+	// if cba.isForm {
+	// 	w32.InvalidateRect(cba.hwnd, pRect, erase)
+	// } else {
+	// 	rc := ScreenToClientRect(cba.hwnd, pRect)
+	// 	w32.InvalidateRect(cba.hwnd, rc.GetW32Rect(), erase)
+	// }
+	w32.InvalidateRect(cba.hwnd, nil, erase)
+}
+
+func (cba *ControlBase) Parent() Controller {
+	return cba.parent
+}
+
+func (cba *ControlBase) SetParent(parent Controller) {
+	cba.parent = parent
+}
+
+func (cba *ControlBase) Font() *Font {
+	return cba.font
+}
+
+func (cba *ControlBase) SetFont(font *Font) {
+	w32.SendMessage(cba.hwnd, w32.WM_SETFONT, uintptr(font.hfont), 1)
+	cba.font = font
+}
+
+func (cba *ControlBase) EnableDragAcceptFiles(b bool) {
+	w32.DragAcceptFiles(cba.hwnd, b)
+}
+
+func (cba *ControlBase) InvokeRequired() bool {
+	if cba.hwnd == 0 {
+		return false
+	}
+
+	windowThreadId, _ := w32.GetWindowThreadProcessId(cba.hwnd)
+	currentThreadId := w32.GetCurrentThreadId()
+
+	return windowThreadId != currentThreadId
+}
+
+// Invoke schedules f to run on the window's UI thread. It returns true when
+// PostMessage succeeded (or f was executed synchronously on the current thread),
+// and false when PostMessage failed; the caller is responsible for logging and
+// retrying when a false return matters.
+func (cba *ControlBase) Invoke(f func()) bool {
+	if cba.tryInvokeOnCurrentGoRoutine(f) {
+		return true
+	}
+
+	cba.m.Lock()
+	cba.dispatchq = append(cba.dispatchq, f)
+	cba.m.Unlock()
+	return w32.PostMessage(cba.hwnd, wmInvokeCallback, 0, 0)
+}
+
+func (cba *ControlBase) PreTranslateMessage(msg *w32.MSG) bool {
+	if msg.Message == w32.WM_GETDLGCODE {
+		println("pretranslate, WM_GETDLGCODE")
+	}
+	return false
+}
+
+// Events
+func (cba *ControlBase) OnCreate() *EventManager {
+	return &cba.onCreate
+}
+
+func (cba *ControlBase) OnClose() *EventManager {
+	return &cba.onClose
+}
+
+func (cba *ControlBase) OnKillFocus() *EventManager {
+	return &cba.onKillFocus
+}
+
+func (cba *ControlBase) OnSetFocus() *EventManager {
+	return &cba.onSetFocus
+}
+
+func (cba *ControlBase) OnDropFiles() *EventManager {
+	return &cba.onDropFiles
+}
+
+func (cba *ControlBase) OnLBDown() *EventManager {
+	return &cba.onLBDown
+}
+
+func (cba *ControlBase) OnLBUp() *EventManager {
+	return &cba.onLBUp
+}
+
+func (cba *ControlBase) OnLBDbl() *EventManager {
+	return &cba.onLBDbl
+}
+
+func (cba *ControlBase) OnMBDown() *EventManager {
+	return &cba.onMBDown
+}
+
+func (cba *ControlBase) OnMBUp() *EventManager {
+	return &cba.onMBUp
+}
+
+func (cba *ControlBase) OnRBDown() *EventManager {
+	return &cba.onRBDown
+}
+
+func (cba *ControlBase) OnRBUp() *EventManager {
+	return &cba.onRBUp
+}
+
+func (cba *ControlBase) OnRBDbl() *EventManager {
+	return &cba.onRBDbl
+}
+
+func (cba *ControlBase) OnMouseMove() *EventManager {
+	return &cba.onMouseMove
+}
+
+func (cba *ControlBase) OnMouseHover() *EventManager {
+	return &cba.onMouseHover
+}
+
+func (cba *ControlBase) OnMouseLeave() *EventManager {
+	return &cba.onMouseLeave
+}
+
+func (cba *ControlBase) OnPaint() *EventManager {
+	return &cba.onPaint
+}
+
+func (cba *ControlBase) OnSize() *EventManager {
+	return &cba.onSize
+}
+
+func (cba *ControlBase) OnKeyUp() *EventManager {
+	return &cba.onKeyUp
+}
+
+func (cba *ControlBase) scaleWithWindowDPI(width, height int) (int, int) {
+	dpix, dpiy := cba.GetWindowDPI()
+	scaledWidth := ScaleWithDPI(width, dpix)
+	scaledHeight := ScaleWithDPI(height, dpiy)
+
+	return scaledWidth, scaledHeight
+}
+
+func (cba *ControlBase) scaleToDefaultDPI(width, height int) (int, int) {
+	dpix, dpiy := cba.GetWindowDPI()
+	scaledWidth := ScaleToDefaultDPI(width, dpix)
+	scaledHeight := ScaleToDefaultDPI(height, dpiy)
+
+	return scaledWidth, scaledHeight
+}
+
+func (cba *ControlBase) tryInvokeOnCurrentGoRoutine(f func()) bool {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
+	if cba.InvokeRequired() {
+		return false
+	}
+	f()
+	return true
+}
+
+func (cba *ControlBase) invokeCallbacks() {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
+	if cba.InvokeRequired() {
+		panic("InvokeCallbacks must always be called on the window thread")
+	}
+
+	cba.m.Lock()
+	q := append([]func(){}, cba.dispatchq...)
+	cba.dispatchq = []func(){}
+	cba.m.Unlock()
+	for _, v := range q {
+		v()
+	}
+}
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/controller.go","mode":420,"size":1636,"sha256":"0615537361b0ccaf4b1f3e3eabc435eed5794e6692f7f37fba6a0d9577d83014","index":0,"count":1,"encoding":"utf-8","payloadBytes":1636}
+//go:build windows
+
+/*
+ * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
+ * Copyright (C) 2010-2013 Allen Dang. All Rights Reserved.
+ */
+
+package winc
+
+import (
+	"github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
+)
+
+type Controller interface {
+	Text() string
+
+	Enabled() bool
+	SetFocus()
+
+	Handle() w32.HWND
+	Invalidate(erase bool)
+	Parent() Controller
+
+	Pos() (x, y int)
+	Size() (w, h int)
+	Height() int
+	Width() int
+	Visible() bool
+	Bounds() *Rect
+	ClientRect() *Rect
+
+	SetText(s string)
+	SetEnabled(b bool)
+	SetPos(x, y int)
+	SetSize(w, h int)
+	EnableDragAcceptFiles(b bool)
+	Show()
+	Hide()
+
+	ContextMenu() *MenuItem
+	SetContextMenu(menu *MenuItem)
+
+	Font() *Font
+	SetFont(font *Font)
+	InvokeRequired() bool
+	Invoke(func()) bool
+	PreTranslateMessage(msg *w32.MSG) bool
+	WndProc(msg uint32, wparam, lparam uintptr) uintptr
+
+	//General events
+	OnCreate() *EventManager
+	OnClose() *EventManager
+
+	// Focus events
+	OnKillFocus() *EventManager
+	OnSetFocus() *EventManager
+
+	//Drag and drop events
+	OnDropFiles() *EventManager
+
+	//Mouse events
+	OnLBDown() *EventManager
+	OnLBUp() *EventManager
+	OnLBDbl() *EventManager
+	OnMBDown() *EventManager
+	OnMBUp() *EventManager
+	OnRBDown() *EventManager
+	OnRBUp() *EventManager
+	OnRBDbl() *EventManager
+	OnMouseMove() *EventManager
+
+	// OnMouseLeave and OnMouseHover does not fire unless control called internalTrackMouseEvent.
+	// Use MouseControl for a how to example.
+	OnMouseHover() *EventManager
+	OnMouseLeave() *EventManager
+
+	//Keyboard events
+	OnKeyUp() *EventManager
+
+	//Paint events
+	OnPaint() *EventManager
+	OnSize() *EventManager
+
+	invokeCallbacks()
+}
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/dialog.go","mode":420,"size":3174,"sha256":"8d3355a43c779555395b1f1e58887fe49533db5e5e1774126d977aca72687145","index":0,"count":1,"encoding":"utf-8","payloadBytes":3174}
+//go:build windows
+
+/*
+ * Copyright (C) 2019 The Winc Authors. All Rights Reserved.
+ * Copyright (C) 2010-2013 Allen Dang. All Rights Reserved.
+ */
+
+package winc
+
+import "github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/w32"
+
+// Dialog displayed as z-order top window until closed.
+// It also disables parent window so it can not be clicked.
+type Dialog struct {
+	Form
+	isModal bool
+
+	btnOk     *PushButton
+	btnCancel *PushButton
+
+	onLoad   EventManager
+	onOk     EventManager
+	onCancel EventManager
+}
+
+func NewDialog(parent Controller) *Dialog {
+	dlg := new(Dialog)
+
+	dlg.isForm = true
+	dlg.isModal = true
+	RegClassOnlyOnce("winc_Dialog")
+
+	dlg.hwnd = CreateWindow("winc_Dialog", parent, w32.WS_EX_CONTROLPARENT, /* IMPORTANT */
+		w32.WS_SYSMENU|w32.WS_CAPTION|w32.WS_THICKFRAME /*|w32.WS_BORDER|w32.WS_POPUP*/)
+	dlg.parent = parent
+
+	// dlg might fail if icon resource is not embedded in the binary
+	if ico, err := NewIconFromResource(GetAppInstance(), uint16(AppIconID)); err == nil {
+		dlg.SetIcon(0, ico)
+	}
+
+	// Dlg forces display of focus rectangles, as soon as the user starts to type.
+	w32.SendMessage(dlg.hwnd, w32.WM_CHANGEUISTATE, w32.UIS_INITIALIZE, 0)
+	RegMsgHandler(dlg)
+
+	dlg.SetFont(DefaultFont)
+	dlg.SetText("Form")
+	dlg.SetSize(200, 100)
+	return dlg
+}
+
+func (dlg *Dialog) SetModal(modal bool) {
+	dlg.isModal = modal
+}
+
+// SetButtons wires up dialog events to buttons. btnCancel can be nil.
+func (dlg *Dialog) SetButtons(btnOk *PushButton, btnCancel *PushButton) {
+	dlg.btnOk = btnOk
+	dlg.btnOk.SetDefault()
+	dlg.btnCancel = btnCancel
+}
+
+// Events
+func (dlg *Dialog) OnLoad() *EventManager {
+	return &dlg.onLoad
+}
+
+func (dlg *Dialog) OnOk() *EventManager {
+	return &dlg.onOk
+}
+
+func (dlg *Dialog) OnCancel() *EventManager {
+	return &dlg.onCancel
+}
+
+// PreTranslateMessage handles dialog specific messages. IMPORTANT.
+func (dlg *Dialog) PreTranslateMessage(msg *w32.MSG) bool {
+	if msg.Message >= w32.WM_KEYFIRST && msg.Message <= w32.WM_KEYLAST {
+		if w32.IsDialogMessage(dlg.hwnd, msg) {
+			return true
+		}
+	}
+	return false
+}
+
+// Show dialog performs special setup for dialog windows.
+func (dlg *Dialog) Show() {
+	if dlg.isModal {
+		dlg.Parent().SetEnabled(false)
+	}
+	dlg.onLoad.Fire(NewEvent(dlg, nil))
+	dlg.Form.Show()
+}
+
+// Close dialog when you done with it.
+func (dlg *Dialog) Close() {
+	if dlg.isModal {
+		dlg.Parent().SetEnabled(true)
+	}
+	dlg.ControlBase.Close()
+}
+
+func (dlg *Dialog) cancel() {
+	if dlg.btnCancel != nil {
+		dlg.btnCancel.onClick.Fire(NewEvent(dlg.btnCancel, nil))
+	}
+	dlg.onCancel.Fire(NewEvent(dlg, nil))
+}
+
+func (dlg *Dialog) WndProc(msg uint32, wparam, lparam uintptr) uintptr {
+	switch msg {
+	case w32.WM_COMMAND:
+		switch w32.LOWORD(uint32(wparam)) {
+		case w32.IDOK:
+			if dlg.btnOk != nil {
+				dlg.btnOk.onClick.Fire(NewEvent(dlg.btnOk, nil))
+			}
+			dlg.onOk.Fire(NewEvent(dlg, nil))
+			return w32.TRUE
+
+		case w32.IDCANCEL:
+			dlg.cancel()
+			return w32.TRUE
+		}
+
+	case w32.WM_CLOSE:
+		dlg.cancel() // use onCancel or dlg.btnCancel.OnClick to close
+		return 0
+
+	case w32.WM_DESTROY:
+		if dlg.isModal {
+			dlg.Parent().SetEnabled(true)
+		}
+	}
+	return w32.DefWindowProc(dlg.hwnd, msg, wparam, lparam)
+}
+
+@@END
+@@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/dock_topbottom.png","mode":420,"size":1867,"sha256":"19a7a63d6d51a7dd81524c5c5e9124179309598d5e4d7c7adee991864a7916fb","index":0,"count":1,"encoding":"base64","payloadBytes":2492}
+iVBORw0KGgoAAAANSUhEUgAAAcIAAAEGCAMAAADBv2XVAAAABGdBTUEAALGPC/xhBQAAACBjSFJNAAB6JgAAgIQAAPoAAACA6AAAdTAAAOpgAAA6mAAAF3CculE8AAAAtFBMVEXDw8MAAAD//////9uQOgBmtv///7ZmAAD/tmYAOpDb///bkDoAZrZmADqQ2//b/7YAAGa2//86kNuQOjr/25A6ADo6AAAAADo6ZraQ27ZmOpDb/9s6AGa2ZgBmkJBmtrbDw6huLABOi8PDw4tOAADDi04ALG6ow8OLTgAATouobixOACxuqMMsbqhuLCwAAE6Lw8PDqG4sAAAAACwsTotOLG6ow6gsAE5Obm4sACw6kLa2/9svUQhtAAAAAWJLR0QCZgt8ZAAAAAlwSFlzAAAOwgAADsIBFShKgAAAAAd0SU1FB+YIHw4rIHNDrpwAAAV/SURBVHja7dxpU9tGAIBhyzeYUBAO5Gw5Qg4aNyHp3f//v7q70iq24AMJGCLneWY6BkvrpH5nd2XPRL1eQaf1ehJKiIRIKGHUp4MklBAJkVBCCSVEQiSUUEIJkZAfPeFgOPqq88eT0XRr+1sOSnj7VvGvObpxwtnO6mOu9Gh3uvXTJP0/7+23E8aDEq4vYdnvT4vylgkHB1Wl+ePda/6MAwnXnbA/DTMnzsc4geaHYVbGhNOjlGNWFOGH6mias2U9d8tmSKo0f9LPCevnBwdPJ2lsfVDCNSYMu9VgGObVbG9/PCn742fPh6O64PxFavQyHg1TaXkW5iFLL5cS5ucHw/ASsyvrqoRrSphSxV0rveWD4c/1kjg/HOU04ehKwjyknTA/n1bj1eMSrjFhShfe9GrXCkvhUf3Wh4W1TKtrWlCXE+Yh7YT5+SrhZCTh/eyF7Vk4mjVXIHmOti9nzMLvJ+H8sKw3sK3tZi9MT+TL06p0v9oP82Mecv1euLVd7YWduhbt7OfCtGaOw6e69LngMPweJ1CMGT9wFMVOfV44nJbVvLzmIa2E+fnB8JdJ0cGrGV+wffNXPBJKKKGEEm4KCSVEQiSUUEIJkRAJJZRQQiREQgkl3JSEuHUQEiKhhEiIhEgoIZ1O6JsOX7AhIRJKiIRIyI+Y8Me+f1e3Erp/1wYkLN2/awMSun9X9xO6f9cmJHT/rs4ndP+uzu+F7t/V6YTu39X5z4Xu37WB3848yFc8EkoooYQSbgwJJURCJJRQQgmREAkllFBCJERCCf0rX/9QGwmRUEJvQucTAgAAAAAAAAAAAAAAAAAAAAAAANANxyenX3X+2avT89dvlp95+y79d/UAd94q3vTv9MYJL96tPuaEv76Ppd5WL/Y2/lgnrA6wzoSLXu+8WNwy4fFvVcJFexbWB1hzwt75h49pPoaH3uWnMJFiwvPP71Osogg/VEfTnF3Uc3fRDEkJL3/v5YR1vjphPMC6E4Yd6/gkvOcXHz6evVr0zv748+S0Lnj518dc5SJMp+VZmIcsbYBXEnJ/CVOquHOlJMcnf/+TCoZJGZfUy/hbOLqSMA9ZSlikaSnhgyRM6cL6We1cYYn8XKcJC+sira5pQV1OmIeYhd/HXtiehacXzVVInqPty5lrZqGED5Tw8tOi3thev2n2wvREvjytSveq/TA/5iESPvznwrRmnr0qipgjrJmf38flMcaMHziK4l19XjicltW8vOYhEgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADwQAo6TUIJkRAJJawS9ukgCSVEQiSUUEIJkRAJJZRQQiT8ZoPh6KvOH09G063t/trHSHhdq/gXHN044Wxn9THneLQbcqQX29tvnd06tTVGwtsnLPv9aVHeMuHgoEpYhpE7N0xYjZHwThL2p2HqxCkUZ9D8MMzKmHB6tJsyFEX4oTqapllZz92yGZJyzJ9ULzYLWZbO/nfl1MHB00mx998wvWQaI+HdJAzbUpo9s7398aTsj589H47qgvMXqdHLnSrO8izMQ1ZerJmJ8UAzC/Mzg2EqO0qv5XLmbhOmVHF7SkkGw58fp4JhUsYldR5/C0dXEuYhqxtrKN8caBLmZ9ICHZ+YLm+ZEt5JwvSehne42p4GaamrG4Z1MK6uqc5ywjyktbEe7TYHmoT5GQnXuBe2Z+Hoy1KX52j7cuaaWViuzGiz8N4Szg/z/rW13eyFXy4t0+ypr1lz2OqiZae/sqnlWdgcSAeXT5VwTZ8L05o5nhRFfMfDmnmUZkuMGT9wFMVOfV44nJbVvLzmIVc+ZC69VrlyqoRIiIQSIiESIqGESIiESCghEiIhEkqIhEiIhBIiIfebEPdgQ0IklJDOJvwff4AzVIYYBZ4AAAAldEVYdGRhdGU6Y3JlYXRlADIwMjItMDgtMzFUMTQ6NDE6MzgrMDA6MDBpUqI6AAAAJXRFWHRkYXRlOm1vZGlmeQAyMDIyLTA4LTMxVDE0OjQxOjM0KzAwOjAw369w8gAAAABJRU5ErkJggg==
+@@END
 @@PORTABLE {"path":"vendor/github.com/wailsapp/wails/v2/internal/frontend/desktop/windows/winc/dock_topleft.png","mode":420,"size":1927,"sha256":"83cab3a98df24f74318ea7e216487d527129116ab94a123937d74a63e57a8266","index":0,"count":1,"encoding":"base64","payloadBytes":2572}
 iVBORw0KGgoAAAANSUhEUgAAAcIAAAEGCAMAAADBv2XVAAAABGdBTUEAALGPC/xhBQAAACBjSFJNAAB6JgAAgIQAAPoAAACA6AAAdTAAAOpgAAA6mAAAF3CculE8AAAAsVBMVEXDw8MAAAD//////9uQOgBmtv///7ZmAAD/tmYAOpDb///bkDoAZrZmADqQ2//b/7YAAGa2//86kNuQOjr/25A6ADo6AAAAADo6ZraQ27ZmOpDb/9s6AGa2ZgBmkJBmtrbDw6huLABOi8PDw4tOAADDi04ALG6ow8OLTgAATouobixOACxuqMMsbqhuLCwAAE6Lw8PDqG4sAAAAACwsTotOLG6ow6gsAE4AZpBObm4sACzB3uYxAAAAAWJLR0QCZgt8ZAAAAAlwSFlzAAAOwgAADsIBFShKgAAAAAd0SU1FB+YIHw4rOo4hV+YAAAW+SURBVHja7dx5UxNJGAfgTG4IsjBEcD12AcWDNavo3t//g22fqWTAKhWRxHp+VdaE6e5R5/F9eyZ/2Os1stXp9RAiFISCEGFMX7YwCBEKQkGIECFCQSgIESJEeJ8ZDEdfNH88GU13dr9mEOHtreIfcfTZhLO99WNVerA/3flpkv6+B4ddwjiI8O4I235/2rS3JBwcZaX5w/0bfo8jhHdN2J+Gyon1GAtofhyqMhJOTxLHrGnChzyaarYttdsulySl+aN+JSznB0c/T9LaMojwDgnDbjUYhrqaHRyOJ21//PjJcFQE50+T0bM4GkpptQrrkpXLJcJ6fjAMl5hd66sI74gwUcVdK93ywfCX0hLnx6NKE0bXCOuSLmE9n7rx+jjCOyRMdOGm510rtMKTcutDY21Td00NdZWwLukS1vOZcDJC+H32wm4VjmbLJ5Bao93HGVW4OYTz47ZsYDu7y70wnaiPp1m6n/fDeqxLbt4Ld3bzXrh1z6Jb+V6YeuY4vNWl94Lj8HMsoIgZXziaZq/MC8Oprdb2Wpd0COv5wfDXSbOlTzO+YPuqr3gQIkSIEOGPFIQIBaEgRIgQoSAUhAgRIhSEghCh/y7B/3ghCAUhQjdh6wll6+MfGUKECBEiRIjwRyDc6K8ABSFChAgRIhSECBEiRIhQECJEiBAhQkGIECFChAgFIUKECBEiFIQIESJEiFAQIkSIECFCQYgQIUKECAUhQoQIESIUhAgRIkSIUBAiRIgQIUJBiBAhQoQIBSFChAgRIhSECBEiRIhQECJEiBAhQkGIECFChAgRIkSIECFChAgRIkSIECFChAgRIkSIECFChAgRIkSIECFChAgRIkSIECHCbSU8PTv/ovnPX5xfvHy1eub1m/Tr+gDC5ltbxWuefzbh5Zv1YyX87W2Uep0v9jp+LIR5YKMJB8PRFzGMJ6Ppzu61izT53I2jd0u46PUumsUtCU9/z4SLbhWWgc0gDLc5ZPTZhLO99WMlfLAfkDqrpgeHeWIe/d6EvYt371M9hkPv6kMopEh48fFtwmqa8CGPpppdlNpdLJckwqs/epWw8BXCOLAphG241017S8LB0U2EkS1OzKPfnTDsWKdn4Z5fvnv//MWi9/zPv87Oi+DV3++rymUop9UqrEtWNsBrhBv1OJMIU73EeoxlMz8OVRkxpif7Catpwoc8mmq2LbXbLpckpPmjCl9Oh4XNP2liHr0PwkQVd65Ecnr2739JMBRlbKlX8acwukZYl6wQNqksN5swbFaDYSiX2cHheNL2x4+fDEdFcP40GT2Lo6GSVquwLunWbp27rMJ7eJwphIku9M+8c4UW+bHQhMa6SN01NdRVwrpky6owECaquGklksHwl4dJMBRlZJnHn8LoGmFd0iFczr1vwoDRrcLzy+VTSK3R7uPMDVW4JYSJLhjkTSv0wpNCExprm7praqirhHVJl7DOvWfCqw+LsrG9fLXcC9OJ+niapXt5P6zHumT79sJuFY5myweQWqPdx5lPVWGde5+EuUHGWmuayBF65se3sT1GzPjC0TRvyrwwnNpqba91yVYRzo/bsrHt7C73wnSiymTpft7j6rEu6RAu52bCTz+K+oLt270Xpp45njTpTTz0wZP9iBEx4wtH0+yVeWE4tdXaXuuSzsXq3Gm5XIvQF2yCECFChAgRCkKECBEiRCgIESJEiBAhQoQIESJEiBAhQoQIESJEiBAhQoQIESJEiBAhQoQIESJEiBAhQoQIESJEiBAhQoQIESJEiBAhQoQIESJEiBAhQoQIESJEiBAhQoQIESJEiBAhQoQIESJEiBAhQoQIESJEiBAhQoQIESJEiBAhQoQIESJEiFAQIkSIECFCQYgQIUKECAUhQoQIESIUhAgRIkSIUBAiRIgQIUJBiBAhQoQIBSFChAgRIhSECBEiRIhQECJEuJmEmxtACBEiRIgQocgPnv8BULzq3LTG6G4AAAAldEVYdGRhdGU6Y3JlYXRlADIwMjItMDgtMzFUMTQ6NDE6MzgrMDA6MDBpUqI6AAAAJXRFWHRkYXRlOm1vZGlmeQAyMDIyLTA4LTMxVDE0OjQxOjM0KzAwOjAw369w8gAAAABJRU5ErkJggg==
 @@END
@@ -52090,2248 +55183,4 @@ var entity = map[string]rune{
 	"els;":                             '\U00002A95',
 	"elsdot;":                          '\U00002A97',
 	"emacr;":                 
-@@END
-@@PORTABLE {"path":"vendor/golang.org/x/net/html/entity.go","mode":420,"size":114515,"sha256":"680a9bb55e7eca9bc0cbee59755591ab9f97abf3fe39490211eb088cc2cd62c2","index":1,"count":3,"encoding":"utf-8","payloadBytes":48000}
-          '\U00000113',
-	"empty;":                           '\U00002205',
-	"emptyset;":                        '\U00002205',
-	"emptyv;":                          '\U00002205',
-	"emsp;":                            '\U00002003',
-	"emsp13;":                          '\U00002004',
-	"emsp14;":                          '\U00002005',
-	"eng;":                             '\U0000014B',
-	"ensp;":                            '\U00002002',
-	"eogon;":                           '\U00000119',
-	"eopf;":                            '\U0001D556',
-	"epar;":                            '\U000022D5',
-	"eparsl;":                          '\U000029E3',
-	"eplus;":                           '\U00002A71',
-	"epsi;":                            '\U000003B5',
-	"epsilon;":                         '\U000003B5',
-	"epsiv;":                           '\U000003F5',
-	"eqcirc;":                          '\U00002256',
-	"eqcolon;":                         '\U00002255',
-	"eqsim;":                           '\U00002242',
-	"eqslantgtr;":                      '\U00002A96',
-	"eqslantless;":                     '\U00002A95',
-	"equals;":                          '\U0000003D',
-	"equest;":                          '\U0000225F',
-	"equiv;":                           '\U00002261',
-	"equivDD;":                         '\U00002A78',
-	"eqvparsl;":                        '\U000029E5',
-	"erDot;":                           '\U00002253',
-	"erarr;":                           '\U00002971',
-	"escr;":                            '\U0000212F',
-	"esdot;":                           '\U00002250',
-	"esim;":                            '\U00002242',
-	"eta;":                             '\U000003B7',
-	"eth;":                             '\U000000F0',
-	"euml;":                            '\U000000EB',
-	"euro;":                            '\U000020AC',
-	"excl;":                            '\U00000021',
-	"exist;":                           '\U00002203',
-	"expectation;":                     '\U00002130',
-	"exponentiale;":                    '\U00002147',
-	"fallingdotseq;":                   '\U00002252',
-	"fcy;":                             '\U00000444',
-	"female;":                          '\U00002640',
-	"ffilig;":                          '\U0000FB03',
-	"fflig;":                           '\U0000FB00',
-	"ffllig;":                          '\U0000FB04',
-	"ffr;":                             '\U0001D523',
-	"filig;":                           '\U0000FB01',
-	"flat;":                            '\U0000266D',
-	"fllig;":                           '\U0000FB02',
-	"fltns;":                           '\U000025B1',
-	"fnof;":                            '\U00000192',
-	"fopf;":                            '\U0001D557',
-	"forall;":                          '\U00002200',
-	"fork;":                            '\U000022D4',
-	"forkv;":                           '\U00002AD9',
-	"fpartint;":                        '\U00002A0D',
-	"frac12;":                          '\U000000BD',
-	"frac13;":                          '\U00002153',
-	"frac14;":                          '\U000000BC',
-	"frac15;":                          '\U00002155',
-	"frac16;":                          '\U00002159',
-	"frac18;":                          '\U0000215B',
-	"frac23;":                          '\U00002154',
-	"frac25;":                          '\U00002156',
-	"frac34;":                          '\U000000BE',
-	"frac35;":                          '\U00002157',
-	"frac38;":                          '\U0000215C',
-	"frac45;":                          '\U00002158',
-	"frac56;":                          '\U0000215A',
-	"frac58;":                          '\U0000215D',
-	"frac78;":                          '\U0000215E',
-	"frasl;":                           '\U00002044',
-	"frown;":                           '\U00002322',
-	"fscr;":                            '\U0001D4BB',
-	"gE;":                              '\U00002267',
-	"gEl;":                             '\U00002A8C',
-	"gacute;":                          '\U000001F5',
-	"gamma;":                           '\U000003B3',
-	"gammad;":                          '\U000003DD',
-	"gap;":                             '\U00002A86',
-	"gbreve;":                          '\U0000011F',
-	"gcirc;":                           '\U0000011D',
-	"gcy;":                             '\U00000433',
-	"gdot;":                            '\U00000121',
-	"ge;":                              '\U00002265',
-	"gel;":                             '\U000022DB',
-	"geq;":                             '\U00002265',
-	"geqq;":                            '\U00002267',
-	"geqslant;":                        '\U00002A7E',
-	"ges;":                             '\U00002A7E',
-	"gescc;":                           '\U00002AA9',
-	"gesdot;":                          '\U00002A80',
-	"gesdoto;":                         '\U00002A82',
-	"gesdotol;":                        '\U00002A84',
-	"gesles;":                          '\U00002A94',
-	"gfr;":                             '\U0001D524',
-	"gg;":                              '\U0000226B',
-	"ggg;":                             '\U000022D9',
-	"gimel;":                           '\U00002137',
-	"gjcy;":                            '\U00000453',
-	"gl;":                              '\U00002277',
-	"glE;":                             '\U00002A92',
-	"gla;":                             '\U00002AA5',
-	"glj;":                             '\U00002AA4',
-	"gnE;":                             '\U00002269',
-	"gnap;":                            '\U00002A8A',
-	"gnapprox;":                        '\U00002A8A',
-	"gne;":                             '\U00002A88',
-	"gneq;":                            '\U00002A88',
-	"gneqq;":                           '\U00002269',
-	"gnsim;":                           '\U000022E7',
-	"gopf;":                            '\U0001D558',
-	"grave;":                           '\U00000060',
-	"gscr;":                            '\U0000210A',
-	"gsim;":                            '\U00002273',
-	"gsime;":                           '\U00002A8E',
-	"gsiml;":                           '\U00002A90',
-	"gt;":                              '\U0000003E',
-	"gtcc;":                            '\U00002AA7',
-	"gtcir;":                           '\U00002A7A',
-	"gtdot;":                           '\U000022D7',
-	"gtlPar;":                          '\U00002995',
-	"gtquest;":                         '\U00002A7C',
-	"gtrapprox;":                       '\U00002A86',
-	"gtrarr;":                          '\U00002978',
-	"gtrdot;":                          '\U000022D7',
-	"gtreqless;":                       '\U000022DB',
-	"gtreqqless;":                      '\U00002A8C',
-	"gtrless;":                         '\U00002277',
-	"gtrsim;":                          '\U00002273',
-	"hArr;":                            '\U000021D4',
-	"hairsp;":                          '\U0000200A',
-	"half;":                            '\U000000BD',
-	"hamilt;":                          '\U0000210B',
-	"hardcy;":                          '\U0000044A',
-	"harr;":                            '\U00002194',
-	"harrcir;":                         '\U00002948',
-	"harrw;":                           '\U000021AD',
-	"hbar;":                            '\U0000210F',
-	"hcirc;":                           '\U00000125',
-	"hearts;":                          '\U00002665',
-	"heartsuit;":                       '\U00002665',
-	"hellip;":                          '\U00002026',
-	"hercon;":                          '\U000022B9',
-	"hfr;":                             '\U0001D525',
-	"hksearow;":                        '\U00002925',
-	"hkswarow;":                        '\U00002926',
-	"hoarr;":                           '\U000021FF',
-	"homtht;":                          '\U0000223B',
-	"hookleftarrow;":                   '\U000021A9',
-	"hookrightarrow;":                  '\U000021AA',
-	"hopf;":                            '\U0001D559',
-	"horbar;":                          '\U00002015',
-	"hscr;":                            '\U0001D4BD',
-	"hslash;":                          '\U0000210F',
-	"hstrok;":                          '\U00000127',
-	"hybull;":                          '\U00002043',
-	"hyphen;":                          '\U00002010',
-	"iacute;":                          '\U000000ED',
-	"ic;":                              '\U00002063',
-	"icirc;":                           '\U000000EE',
-	"icy;":                             '\U00000438',
-	"iecy;":                            '\U00000435',
-	"iexcl;":                           '\U000000A1',
-	"iff;":                             '\U000021D4',
-	"ifr;":                             '\U0001D526',
-	"igrave;":                          '\U000000EC',
-	"ii;":                              '\U00002148',
-	"iiiint;":                          '\U00002A0C',
-	"iiint;":                           '\U0000222D',
-	"iinfin;":                          '\U000029DC',
-	"iiota;":                           '\U00002129',
-	"ijlig;":                           '\U00000133',
-	"imacr;":                           '\U0000012B',
-	"image;":                           '\U00002111',
-	"imagline;":                        '\U00002110',
-	"imagpart;":                        '\U00002111',
-	"imath;":                           '\U00000131',
-	"imof;":                            '\U000022B7',
-	"imped;":                           '\U000001B5',
-	"in;":                              '\U00002208',
-	"incare;":                          '\U00002105',
-	"infin;":                           '\U0000221E',
-	"infintie;":                        '\U000029DD',
-	"inodot;":                          '\U00000131',
-	"int;":                             '\U0000222B',
-	"intcal;":                          '\U000022BA',
-	"integers;":                        '\U00002124',
-	"intercal;":                        '\U000022BA',
-	"intlarhk;":                        '\U00002A17',
-	"intprod;":                         '\U00002A3C',
-	"iocy;":                            '\U00000451',
-	"iogon;":                           '\U0000012F',
-	"iopf;":                            '\U0001D55A',
-	"iota;":                            '\U000003B9',
-	"iprod;":                           '\U00002A3C',
-	"iquest;":                          '\U000000BF',
-	"iscr;":                            '\U0001D4BE',
-	"isin;":                            '\U00002208',
-	"isinE;":                           '\U000022F9',
-	"isindot;":                         '\U000022F5',
-	"isins;":                           '\U000022F4',
-	"isinsv;":                          '\U000022F3',
-	"isinv;":                           '\U00002208',
-	"it;":                              '\U00002062',
-	"itilde;":                          '\U00000129',
-	"iukcy;":                           '\U00000456',
-	"iuml;":                            '\U000000EF',
-	"jcirc;":                           '\U00000135',
-	"jcy;":                             '\U00000439',
-	"jfr;":                             '\U0001D527',
-	"jmath;":                           '\U00000237',
-	"jopf;":                            '\U0001D55B',
-	"jscr;":                            '\U0001D4BF',
-	"jsercy;":                          '\U00000458',
-	"jukcy;":                           '\U00000454',
-	"kappa;":                           '\U000003BA',
-	"kappav;":                          '\U000003F0',
-	"kcedil;":                          '\U00000137',
-	"kcy;":                             '\U0000043A',
-	"kfr;":                             '\U0001D528',
-	"kgreen;":                          '\U00000138',
-	"khcy;":                            '\U00000445',
-	"kjcy;":                            '\U0000045C',
-	"kopf;":                            '\U0001D55C',
-	"kscr;":                            '\U0001D4C0',
-	"lAarr;":                           '\U000021DA',
-	"lArr;":                            '\U000021D0',
-	"lAtail;":                          '\U0000291B',
-	"lBarr;":                           '\U0000290E',
-	"lE;":                              '\U00002266',
-	"lEg;":                             '\U00002A8B',
-	"lHar;":                            '\U00002962',
-	"lacute;":                          '\U0000013A',
-	"laemptyv;":                        '\U000029B4',
-	"lagran;":                          '\U00002112',
-	"lambda;":                          '\U000003BB',
-	"lang;":                            '\U000027E8',
-	"langd;":                           '\U00002991',
-	"langle;":                          '\U000027E8',
-	"lap;":                             '\U00002A85',
-	"laquo;":                           '\U000000AB',
-	"larr;":                            '\U00002190',
-	"larrb;":                           '\U000021E4',
-	"larrbfs;":                         '\U0000291F',
-	"larrfs;":                          '\U0000291D',
-	"larrhk;":                          '\U000021A9',
-	"larrlp;":                          '\U000021AB',
-	"larrpl;":                          '\U00002939',
-	"larrsim;":                         '\U00002973',
-	"larrtl;":                          '\U000021A2',
-	"lat;":                             '\U00002AAB',
-	"latail;":                          '\U00002919',
-	"late;":                            '\U00002AAD',
-	"lbarr;":                           '\U0000290C',
-	"lbbrk;":                           '\U00002772',
-	"lbrace;":                          '\U0000007B',
-	"lbrack;":                          '\U0000005B',
-	"lbrke;":                           '\U0000298B',
-	"lbrksld;":                         '\U0000298F',
-	"lbrkslu;":                         '\U0000298D',
-	"lcaron;":                          '\U0000013E',
-	"lcedil;":                          '\U0000013C',
-	"lceil;":                           '\U00002308',
-	"lcub;":                            '\U0000007B',
-	"lcy;":                             '\U0000043B',
-	"ldca;":                            '\U00002936',
-	"ldquo;":                           '\U0000201C',
-	"ldquor;":                          '\U0000201E',
-	"ldrdhar;":                         '\U00002967',
-	"ldrushar;":                        '\U0000294B',
-	"ldsh;":                            '\U000021B2',
-	"le;":                              '\U00002264',
-	"leftarrow;":                       '\U00002190',
-	"leftarrowtail;":                   '\U000021A2',
-	"leftharpoondown;":                 '\U000021BD',
-	"leftharpoonup;":                   '\U000021BC',
-	"leftleftarrows;":                  '\U000021C7',
-	"leftrightarrow;":                  '\U00002194',
-	"leftrightarrows;":                 '\U000021C6',
-	"leftrightharpoons;":               '\U000021CB',
-	"leftrightsquigarrow;":             '\U000021AD',
-	"leftthreetimes;":                  '\U000022CB',
-	"leg;":                             '\U000022DA',
-	"leq;":                             '\U00002264',
-	"leqq;":                            '\U00002266',
-	"leqslant;":                        '\U00002A7D',
-	"les;":                             '\U00002A7D',
-	"lescc;":                           '\U00002AA8',
-	"lesdot;":                          '\U00002A7F',
-	"lesdoto;":                         '\U00002A81',
-	"lesdotor;":                        '\U00002A83',
-	"lesges;":                          '\U00002A93',
-	"lessapprox;":                      '\U00002A85',
-	"lessdot;":                         '\U000022D6',
-	"lesseqgtr;":                       '\U000022DA',
-	"lesseqqgtr;":                      '\U00002A8B',
-	"lessgtr;":                         '\U00002276',
-	"lesssim;":                         '\U00002272',
-	"lfisht;":                          '\U0000297C',
-	"lfloor;":                          '\U0000230A',
-	"lfr;":                             '\U0001D529',
-	"lg;":                              '\U00002276',
-	"lgE;":                             '\U00002A91',
-	"lhard;":                           '\U000021BD',
-	"lharu;":                           '\U000021BC',
-	"lharul;":                          '\U0000296A',
-	"lhblk;":                           '\U00002584',
-	"ljcy;":                            '\U00000459',
-	"ll;":                              '\U0000226A',
-	"llarr;":                           '\U000021C7',
-	"llcorner;":                        '\U0000231E',
-	"llhard;":                          '\U0000296B',
-	"lltri;":                           '\U000025FA',
-	"lmidot;":                          '\U00000140',
-	"lmoust;":                          '\U000023B0',
-	"lmoustache;":                      '\U000023B0',
-	"lnE;":                             '\U00002268',
-	"lnap;":                            '\U00002A89',
-	"lnapprox;":                        '\U00002A89',
-	"lne;":                             '\U00002A87',
-	"lneq;":                            '\U00002A87',
-	"lneqq;":                           '\U00002268',
-	"lnsim;":                           '\U000022E6',
-	"loang;":                           '\U000027EC',
-	"loarr;":                           '\U000021FD',
-	"lobrk;":                           '\U000027E6',
-	"longleftarrow;":                   '\U000027F5',
-	"longleftrightarrow;":              '\U000027F7',
-	"longmapsto;":                      '\U000027FC',
-	"longrightarrow;":                  '\U000027F6',
-	"looparrowleft;":                   '\U000021AB',
-	"looparrowright;":                  '\U000021AC',
-	"lopar;":                           '\U00002985',
-	"lopf;":                            '\U0001D55D',
-	"loplus;":                          '\U00002A2D',
-	"lotimes;":                         '\U00002A34',
-	"lowast;":                          '\U00002217',
-	"lowbar;":                          '\U0000005F',
-	"loz;":                             '\U000025CA',
-	"lozenge;":                         '\U000025CA',
-	"lozf;":                            '\U000029EB',
-	"lpar;":                            '\U00000028',
-	"lparlt;":                          '\U00002993',
-	"lrarr;":                           '\U000021C6',
-	"lrcorner;":                        '\U0000231F',
-	"lrhar;":                           '\U000021CB',
-	"lrhard;":                          '\U0000296D',
-	"lrm;":                             '\U0000200E',
-	"lrtri;":                           '\U000022BF',
-	"lsaquo;":                          '\U00002039',
-	"lscr;":                            '\U0001D4C1',
-	"lsh;":                             '\U000021B0',
-	"lsim;":                            '\U00002272',
-	"lsime;":                           '\U00002A8D',
-	"lsimg;":                           '\U00002A8F',
-	"lsqb;":                            '\U0000005B',
-	"lsquo;":                           '\U00002018',
-	"lsquor;":                          '\U0000201A',
-	"lstrok;":                          '\U00000142',
-	"lt;":                              '\U0000003C',
-	"ltcc;":                            '\U00002AA6',
-	"ltcir;":                           '\U00002A79',
-	"ltdot;":                           '\U000022D6',
-	"lthree;":                          '\U000022CB',
-	"ltimes;":                          '\U000022C9',
-	"ltlarr;":                          '\U00002976',
-	"ltquest;":                         '\U00002A7B',
-	"ltrPar;":                          '\U00002996',
-	"ltri;":                            '\U000025C3',
-	"ltrie;":                           '\U000022B4',
-	"ltrif;":                           '\U000025C2',
-	"lurdshar;":                        '\U0000294A',
-	"luruhar;":                         '\U00002966',
-	"mDDot;":                           '\U0000223A',
-	"macr;":                            '\U000000AF',
-	"male;":                            '\U00002642',
-	"malt;":                            '\U00002720',
-	"maltese;":                         '\U00002720',
-	"map;":                             '\U000021A6',
-	"mapsto;":                          '\U000021A6',
-	"mapstodown;":                      '\U000021A7',
-	"mapstoleft;":                      '\U000021A4',
-	"mapstoup;":                        '\U000021A5',
-	"marker;":                          '\U000025AE',
-	"mcomma;":                          '\U00002A29',
-	"mcy;":                             '\U0000043C',
-	"mdash;":                           '\U00002014',
-	"measuredangle;":                   '\U00002221',
-	"mfr;":                             '\U0001D52A',
-	"mho;":                             '\U00002127',
-	"micro;":                           '\U000000B5',
-	"mid;":                             '\U00002223',
-	"midast;":                          '\U0000002A',
-	"midcir;":                          '\U00002AF0',
-	"middot;":                          '\U000000B7',
-	"minus;":                           '\U00002212',
-	"minusb;":                          '\U0000229F',
-	"minusd;":                          '\U00002238',
-	"minusdu;":                         '\U00002A2A',
-	"mlcp;":                            '\U00002ADB',
-	"mldr;":                            '\U00002026',
-	"mnplus;":                          '\U00002213',
-	"models;":                          '\U000022A7',
-	"mopf;":                            '\U0001D55E',
-	"mp;":                              '\U00002213',
-	"mscr;":                            '\U0001D4C2',
-	"mstpos;":                          '\U0000223E',
-	"mu;":                              '\U000003BC',
-	"multimap;":                        '\U000022B8',
-	"mumap;":                           '\U000022B8',
-	"nLeftarrow;":                      '\U000021CD',
-	"nLeftrightarrow;":                 '\U000021CE',
-	"nRightarrow;":                     '\U000021CF',
-	"nVDash;":                          '\U000022AF',
-	"nVdash;":                          '\U000022AE',
-	"nabla;":                           '\U00002207',
-	"nacute;":                          '\U00000144',
-	"nap;":                             '\U00002249',
-	"napos;":                           '\U00000149',
-	"napprox;":                         '\U00002249',
-	"natur;":                           '\U0000266E',
-	"natural;":                         '\U0000266E',
-	"naturals;":                        '\U00002115',
-	"nbsp;":                            '\U000000A0',
-	"ncap;":                            '\U00002A43',
-	"ncaron;":                          '\U00000148',
-	"ncedil;":                          '\U00000146',
-	"ncong;":                           '\U00002247',
-	"ncup;":                            '\U00002A42',
-	"ncy;":                             '\U0000043D',
-	"ndash;":                           '\U00002013',
-	"ne;":                              '\U00002260',
-	"neArr;":                           '\U000021D7',
-	"nearhk;":                          '\U00002924',
-	"nearr;":                           '\U00002197',
-	"nearrow;":                         '\U00002197',
-	"nequiv;":                          '\U00002262',
-	"nesear;":                          '\U00002928',
-	"nexist;":                          '\U00002204',
-	"nexists;":                         '\U00002204',
-	"nfr;":                             '\U0001D52B',
-	"nge;":                             '\U00002271',
-	"ngeq;":                            '\U00002271',
-	"ngsim;":                           '\U00002275',
-	"ngt;":                             '\U0000226F',
-	"ngtr;":                            '\U0000226F',
-	"nhArr;":                           '\U000021CE',
-	"nharr;":                           '\U000021AE',
-	"nhpar;":                           '\U00002AF2',
-	"ni;":                              '\U0000220B',
-	"nis;":                             '\U000022FC',
-	"nisd;":                            '\U000022FA',
-	"niv;":                             '\U0000220B',
-	"njcy;":                            '\U0000045A',
-	"nlArr;":                           '\U000021CD',
-	"nlarr;":                           '\U0000219A',
-	"nldr;":                            '\U00002025',
-	"nle;":                             '\U00002270',
-	"nleftarrow;":                      '\U0000219A',
-	"nleftrightarrow;":                 '\U000021AE',
-	"nleq;":                            '\U00002270',
-	"nless;":                           '\U0000226E',
-	"nlsim;":                           '\U00002274',
-	"nlt;":                             '\U0000226E',
-	"nltri;":                           '\U000022EA',
-	"nltrie;":                          '\U000022EC',
-	"nmid;":                            '\U00002224',
-	"nopf;":                            '\U0001D55F',
-	"not;":                             '\U000000AC',
-	"notin;":                           '\U00002209',
-	"notinva;":                         '\U00002209',
-	"notinvb;":                         '\U000022F7',
-	"notinvc;":                         '\U000022F6',
-	"notni;":                           '\U0000220C',
-	"notniva;":                         '\U0000220C',
-	"notnivb;":                         '\U000022FE',
-	"notnivc;":                         '\U000022FD',
-	"npar;":                            '\U00002226',
-	"nparallel;":                       '\U00002226',
-	"npolint;":                         '\U00002A14',
-	"npr;":                             '\U00002280',
-	"nprcue;":                          '\U000022E0',
-	"nprec;":                           '\U00002280',
-	"nrArr;":                           '\U000021CF',
-	"nrarr;":                           '\U0000219B',
-	"nrightarrow;":                     '\U0000219B',
-	"nrtri;":                           '\U000022EB',
-	"nrtrie;":                          '\U000022ED',
-	"nsc;":                             '\U00002281',
-	"nsccue;":                          '\U000022E1',
-	"nscr;":                            '\U0001D4C3',
-	"nshortmid;":                       '\U00002224',
-	"nshortparallel;":                  '\U00002226',
-	"nsim;":                            '\U00002241',
-	"nsime;":                           '\U00002244',
-	"nsimeq;":                          '\U00002244',
-	"nsmid;":                           '\U00002224',
-	"nspar;":                           '\U00002226',
-	"nsqsube;":                         '\U000022E2',
-	"nsqsupe;":                         '\U000022E3',
-	"nsub;":                            '\U00002284',
-	"nsube;":                           '\U00002288',
-	"nsubseteq;":                       '\U00002288',
-	"nsucc;":                           '\U00002281',
-	"nsup;":                            '\U00002285',
-	"nsupe;":                           '\U00002289',
-	"nsupseteq;":                       '\U00002289',
-	"ntgl;":                            '\U00002279',
-	"ntilde;":                          '\U000000F1',
-	"ntlg;":                            '\U00002278',
-	"ntriangleleft;":                   '\U000022EA',
-	"ntrianglelefteq;":                 '\U000022EC',
-	"ntriangleright;":                  '\U000022EB',
-	"ntrianglerighteq;":                '\U000022ED',
-	"nu;":                              '\U000003BD',
-	"num;":                             '\U00000023',
-	"numero;":                          '\U00002116',
-	"numsp;":                           '\U00002007',
-	"nvDash;":                          '\U000022AD',
-	"nvHarr;":                          '\U00002904',
-	"nvdash;":                          '\U000022AC',
-	"nvinfin;":                         '\U000029DE',
-	"nvlArr;":                          '\U00002902',
-	"nvrArr;":                          '\U00002903',
-	"nwArr;":                           '\U000021D6',
-	"nwarhk;":                          '\U00002923',
-	"nwarr;":                           '\U00002196',
-	"nwarrow;":                         '\U00002196',
-	"nwnear;":                          '\U00002927',
-	"oS;":                              '\U000024C8',
-	"oacute;":                          '\U000000F3',
-	"oast;":                            '\U0000229B',
-	"ocir;":                            '\U0000229A',
-	"ocirc;":                           '\U000000F4',
-	"ocy;":                             '\U0000043E',
-	"odash;":                           '\U0000229D',
-	"odblac;":                          '\U00000151',
-	"odiv;":                            '\U00002A38',
-	"odot;":                            '\U00002299',
-	"odsold;":                          '\U000029BC',
-	"oelig;":                           '\U00000153',
-	"ofcir;":                           '\U000029BF',
-	"ofr;":                             '\U0001D52C',
-	"ogon;":                            '\U000002DB',
-	"ograve;":                          '\U000000F2',
-	"ogt;":                             '\U000029C1',
-	"ohbar;":                           '\U000029B5',
-	"ohm;":                             '\U000003A9',
-	"oint;":                            '\U0000222E',
-	"olarr;":                           '\U000021BA',
-	"olcir;":                           '\U000029BE',
-	"olcross;":                         '\U000029BB',
-	"oline;":                           '\U0000203E',
-	"olt;":                             '\U000029C0',
-	"omacr;":                           '\U0000014D',
-	"omega;":                           '\U000003C9',
-	"omicron;":                         '\U000003BF',
-	"omid;":                            '\U000029B6',
-	"ominus;":                          '\U00002296',
-	"oopf;":                            '\U0001D560',
-	"opar;":                            '\U000029B7',
-	"operp;":                           '\U000029B9',
-	"oplus;":                           '\U00002295',
-	"or;":                              '\U00002228',
-	"orarr;":                           '\U000021BB',
-	"ord;":                             '\U00002A5D',
-	"order;":                           '\U00002134',
-	"orderof;":                         '\U00002134',
-	"ordf;":                            '\U000000AA',
-	"ordm;":                            '\U000000BA',
-	"origof;":                          '\U000022B6',
-	"oror;":                            '\U00002A56',
-	"orslope;":                         '\U00002A57',
-	"orv;":                             '\U00002A5B',
-	"oscr;":                            '\U00002134',
-	"oslash;":                          '\U000000F8',
-	"osol;":                            '\U00002298',
-	"otilde;":                          '\U000000F5',
-	"otimes;":                          '\U00002297',
-	"otimesas;":                        '\U00002A36',
-	"ouml;":                            '\U000000F6',
-	"ovbar;":                           '\U0000233D',
-	"par;":                             '\U00002225',
-	"para;":                            '\U000000B6',
-	"parallel;":                        '\U00002225',
-	"parsim;":                          '\U00002AF3',
-	"parsl;":                           '\U00002AFD',
-	"part;":                            '\U00002202',
-	"pcy;":                             '\U0000043F',
-	"percnt;":                          '\U00000025',
-	"period;":                          '\U0000002E',
-	"permil;":                          '\U00002030',
-	"perp;":                            '\U000022A5',
-	"pertenk;":                         '\U00002031',
-	"pfr;":                             '\U0001D52D',
-	"phi;":                             '\U000003C6',
-	"phiv;":                            '\U000003D5',
-	"phmmat;":                          '\U00002133',
-	"phone;":                           '\U0000260E',
-	"pi;":                              '\U000003C0',
-	"pitchfork;":                       '\U000022D4',
-	"piv;":                             '\U000003D6',
-	"planck;":                          '\U0000210F',
-	"planckh;":                         '\U0000210E',
-	"plankv;":                          '\U0000210F',
-	"plus;":                            '\U0000002B',
-	"plusacir;":                        '\U00002A23',
-	"plusb;":                           '\U0000229E',
-	"pluscir;":                         '\U00002A22',
-	"plusdo;":                          '\U00002214',
-	"plusdu;":                          '\U00002A25',
-	"pluse;":                           '\U00002A72',
-	"plusmn;":                          '\U000000B1',
-	"plussim;":                         '\U00002A26',
-	"plustwo;":                         '\U00002A27',
-	"pm;":                              '\U000000B1',
-	"pointint;":                        '\U00002A15',
-	"popf;":                            '\U0001D561',
-	"pound;":                           '\U000000A3',
-	"pr;":                              '\U0000227A',
-	"prE;":                             '\U00002AB3',
-	"prap;":                            '\U00002AB7',
-	"prcue;":                           '\U0000227C',
-	"pre;":                             '\U00002AAF',
-	"prec;":                            '\U0000227A',
-	"precapprox;":                      '\U00002AB7',
-	"preccurlyeq;":                     '\U0000227C',
-	"preceq;":                          '\U00002AAF',
-	"precnapprox;":                     '\U00002AB9',
-	"precneqq;":                        '\U00002AB5',
-	"precnsim;":                        '\U000022E8',
-	"precsim;":                         '\U0000227E',
-	"prime;":                           '\U00002032',
-	"primes;":                          '\U00002119',
-	"prnE;":                            '\U00002AB5',
-	"prnap;":                           '\U00002AB9',
-	"prnsim;":                          '\U000022E8',
-	"prod;":                            '\U0000220F',
-	"profalar;":                        '\U0000232E',
-	"profline;":                        '\U00002312',
-	"profsurf;":                        '\U00002313',
-	"prop;":                            '\U0000221D',
-	"propto;":                          '\U0000221D',
-	"prsim;":                           '\U0000227E',
-	"prurel;":                          '\U000022B0',
-	"pscr;":                            '\U0001D4C5',
-	"psi;":                             '\U000003C8',
-	"puncsp;":                          '\U00002008',
-	"qfr;":                             '\U0001D52E',
-	"qint;":                            '\U00002A0C',
-	"qopf;":                            '\U0001D562',
-	"qprime;":                          '\U00002057',
-	"qscr;":                            '\U0001D4C6',
-	"quaternions;":                     '\U0000210D',
-	"quatint;":                         '\U00002A16',
-	"quest;":                           '\U0000003F',
-	"questeq;":                         '\U0000225F',
-	"quot;":                            '\U00000022',
-	"rAarr;":                           '\U000021DB',
-	"rArr;":                            '\U000021D2',
-	"rAtail;":                          '\U0000291C',
-	"rBarr;":                           '\U0000290F',
-	"rHar;":                            '\U00002964',
-	"racute;":                          '\U00000155',
-	"radic;":                           '\U0000221A',
-	"raemptyv;":                        '\U000029B3',
-	"rang;":                            '\U000027E9',
-	"rangd;":                           '\U00002992',
-	"range;":                           '\U000029A5',
-	"rangle;":                          '\U000027E9',
-	"raquo;":                           '\U000000BB',
-	"rarr;":                            '\U00002192',
-	"rarrap;":                          '\U00002975',
-	"rarrb;":                           '\U000021E5',
-	"rarrbfs;":                         '\U00002920',
-	"rarrc;":                           '\U00002933',
-	"rarrfs;":                          '\U0000291E',
-	"rarrhk;":                          '\U000021AA',
-	"rarrlp;":                          '\U000021AC',
-	"rarrpl;":                          '\U00002945',
-	"rarrsim;":                         '\U00002974',
-	"rarrtl;":                          '\U000021A3',
-	"rarrw;":                           '\U0000219D',
-	"ratail;":                          '\U0000291A',
-	"ratio;":                           '\U00002236',
-	"rationals;":                       '\U0000211A',
-	"rbarr;":                           '\U0000290D',
-	"rbbrk;":                           '\U00002773',
-	"rbrace;":                          '\U0000007D',
-	"rbrack;":                          '\U0000005D',
-	"rbrke;":                           '\U0000298C',
-	"rbrksld;":                         '\U0000298E',
-	"rbrkslu;":                         '\U00002990',
-	"rcaron;":                          '\U00000159',
-	"rcedil;":                          '\U00000157',
-	"rceil;":                           '\U00002309',
-	"rcub;":                            '\U0000007D',
-	"rcy;":                             '\U00000440',
-	"rdca;":                            '\U00002937',
-	"rdldhar;":                         '\U00002969',
-	"rdquo;":                           '\U0000201D',
-	"rdquor;":                          '\U0000201D',
-	"rdsh;":                            '\U000021B3',
-	"real;":                            '\U0000211C',
-	"realine;":                         '\U0000211B',
-	"realpart;":                        '\U0000211C',
-	"reals;":                           '\U0000211D',
-	"rect;":                            '\U000025AD',
-	"reg;":                             '\U000000AE',
-	"rfisht;":                          '\U0000297D',
-	"rfloor;":                          '\U0000230B',
-	"rfr;":                             '\U0001D52F',
-	"rhard;":                           '\U000021C1',
-	"rharu;":                           '\U000021C0',
-	"rharul;":                          '\U0000296C',
-	"rho;":                             '\U000003C1',
-	"rhov;":                            '\U000003F1',
-	"rightarrow;":                      '\U00002192',
-	"rightarrowtail;":                  '\U000021A3',
-	"rightharpoondown;":                '\U000021C1',
-	"rightharpoonup;":                  '\U000021C0',
-	"rightleftarrows;":                 '\U000021C4',
-	"rightleftharpoons;":               '\U000021CC',
-	"rightrightarrows;":                '\U000021C9',
-	"rightsquigarrow;":                 '\U0000219D',
-	"rightthreetimes;":                 '\U000022CC',
-	"ring;":                            '\U000002DA',
-	"risingdotseq;":                    '\U00002253',
-	"rlarr;":                           '\U000021C4',
-	"rlhar;":                           '\U000021CC',
-	"rlm;":                             '\U0000200F',
-	"rmoust;":                          '\U000023B1',
-	"rmoustache;":                      '\U000023B1',
-	"rnmid;":                           '\U00002AEE',
-	"roang;":                           '\U000027ED',
-	"roarr;":                           '\U000021FE',
-	"robrk;":                           '\U000027E7',
-	"ropar;":                           '\U00002986',
-	"ropf;":                            '\U0001D563',
-	"roplus;":                          '\U00002A2E',
-	"rotimes;":                         '\U00002A35',
-	"rpar;":                            '\U00000029',
-	"rpargt;":                          '\U00002994',
-	"rppolint;":                        '\U00002A12',
-	"rrarr;":                           '\U000021C9',
-	"rsaquo;":                          '\U0000203A',
-	"rscr;":                            '\U0001D4C7',
-	"rsh;":                             '\U000021B1',
-	"rsqb;":                            '\U0000005D',
-	"rsquo;":                           '\U00002019',
-	"rsquor;":                          '\U00002019',
-	"rthree;":                          '\U000022CC',
-	"rtimes;":                          '\U000022CA',
-	"rtri;":                            '\U000025B9',
-	"rtrie;":                           '\U000022B5',
-	"rtrif;":                           '\U000025B8',
-	"rtriltri;":                        '\U000029CE',
-	"ruluhar;":                         '\U00002968',
-	"rx;":                              '\U0000211E',
-	"sacute;":                          '\U0000015B',
-	"sbquo;":                           '\U0000201A',
-	"sc;":                              '\U0000227B',
-	"scE;":                             '\U00002AB4',
-	"scap;":                            '\U00002AB8',
-	"scaron;":                          '\U00000161',
-	"sccue;":                           '\U0000227D',
-	"sce;":                             '\U00002AB0',
-	"scedil;":                          '\U0000015F',
-	"scirc;":                           '\U0000015D',
-	"scnE;":                            '\U00002AB6',
-	"scnap;":                           '\U00002ABA',
-	"scnsim;":                          '\U000022E9',
-	"scpolint;":                        '\U00002A13',
-	"scsim;":                           '\U0000227F',
-	"scy;":                             '\U00000441',
-	"sdot;":                            '\U000022C5',
-	"sdotb;":                           '\U000022A1',
-	"sdote;":                           '\U00002A66',
-	"seArr;":                           '\U000021D8',
-	"searhk;":                          '\U00002925',
-	"searr;":                           '\U00002198',
-	"searrow;":                         '\U00002198',
-	"sect;":                            '\U000000A7',
-	"semi;":                            '\U0000003B',
-	"seswar;":                          '\U00002929',
-	"setminus;":                        '\U00002216',
-	"setmn;":                           '\U00002216',
-	"sext;":                            '\U00002736',
-	"sfr;":                             '\U0001D530',
-	"sfrown;":                          '\U00002322',
-	"sharp;":                           '\U0000266F',
-	"shchcy;":                          '\U00000449',
-	"shcy;":                            '\U00000448',
-	"shortmid;":                        '\U00002223',
-	"shortparallel;":                   '\U00002225',
-	"shy;":                             '\U000000AD',
-	"sigma;":                           '\U000003C3',
-	"sigmaf;":                          '\U000003C2',
-	"sigmav;":                          '\U000003C2',
-	"sim;":                             '\U0000223C',
-	"simdot;":                          '\U00002A6A',
-	"sime;":                            '\U00002243',
-	"simeq;":                           '\U00002243',
-	"simg;":                            '\U00002A9E',
-	"simgE;":                           '\U00002AA0',
-	"siml;":                            '\U00002A9D',
-	"simlE;":                           '\U00002A9F',
-	"simne;":                           '\U00002246',
-	"simplus;":                         '\U00002A24',
-	"simrarr;":                         '\U00002972',
-	"slarr;":                           '\U00002190',
-	"smallsetminus;":                   '\U00002216',
-	"smashp;":                          '\U00002A33',
-	"smeparsl;":                        '\U000029E4',
-	"smid;":                            '\U00002223',
-	"smile;":                           '\U00002323',
-	"smt;":                             '\U00002AAA',
-	"smte;":                            '\U00002AAC',
-	"softcy;":                          '\U0000044C',
-	"sol;":                             '\U0000002F',
-	"solb;":                            '\U000029C4',
-	"solbar;":                          '\U0000233F',
-	"sopf;":                            '\U0001D564',
-	"spades;":                          '\U00002660',
-	"spadesuit;":                       '\U00002660',
-	"spar;":                            '\U00002225',
-	"sqcap;":                           '\U00002293',
-	"sqcup;":                           '\U00002294',
-	"sqsub;":                           '\U0000228F',
-	"sqsube;":                          '\U00002291',
-	"sqsubset;":                        '\U0000228F',
-	"sqsubseteq;":                      '\U00002291',
-	"sqsup;":                           '\U00002290',
-	"sqsupe;":                          '\U00002292',
-	"sqsupset;":                        '\U00002290',
-	"sqsupseteq;":                      '\U00002292',
-	"squ;":                             '\U000025A1',
-	"square;":                          '\U000025A1',
-	"squarf;":                          '\U000025AA',
-	"squf;":                            '\U000025AA',
-	"srarr;":                           '\U00002192',
-	"sscr;":                            '\U0001D4C8',
-	"ssetmn;":                          '\U00002216',
-	"ssmile;":                          '\U00002323',
-	"sstarf;":                          '\U000022C6',
-	"star;":                            '\U00002606',
-	"starf;":                           '\U00002605',
-	"straightepsilon;":                 '\U000003F5',
-	"straightphi;":                     '\U000003D5',
-	"strns;":                           '\U000000AF',
-	"sub;":                             '\U00002282',
-	"subE;":                            '\U00002AC5',
-	"subdot;":                          '\U00002ABD',
-	"sube;":                            '\U00002286',
-	"subedot;":                         '\U00002AC3',
-	"submult;":                         '\U00002AC1',
-	"subnE;":                           '\U00002ACB',
-	"subne;":                           '\U0000228A',
-	"subplus;":                         '\U00002ABF',
-	"subrarr;":                         '\U00002979',
-	"subset;":                          '\U00002282',
-	"subseteq;":                        '\U00002286',
-	"subseteqq;":                       '\U00002AC5',
-	"subsetneq;":                       '\U0000228A',
-	"subsetneqq;":                      '\U00002ACB',
-	"subsim;":                          '\U00002AC7',
-	"subsub;":                          '\U00002AD5',
-	"subsup;":                          '\U00002AD3',
-	"succ;":                            '\U0000227B',
-	"succapprox;":                      '\U00002AB8',
-	"succcurlyeq;":                     '\U0000227D',
-	"succeq;":                          '\U00002AB0',
-	"succnapprox;":                     '\U00002ABA',
-	"succneqq;":                        '\U00002AB6',
-	"succnsim;":                        '\U000022E9',
-	"succsim;":                         '\U0000227F',
-	"sum;":                             '\U00002211',
-	"sung;":                            '\U0000266A',
-	"sup;":                             '\U00002283',
-	"sup1;":                            '\U000000B9',
-	"sup2;":                            '\U000000B2',
-	"sup3;":                            '\U000000B3',
-	"supE;":                            '\U00002AC6',
-	"supdot;":                          '\U00002ABE',
-	"supdsub;":                         '\U00002AD8',
-	"supe;":                            '\U00002287',
-	"supedot;":                         '\U00002AC4',
-	"suphsol;":                         '\U000027C9',
-	"suphsub;":                         '\U00002AD7',
-	"suplarr;":                         '\U0000297B',
-	"supmult;":                         '\U00002AC2',
-	"supnE;":                           '\U00002ACC',
-	"supne;":                           '\U0000228B',
-	"supplus;":                         '\U00002AC0',
-	"supset;":                          '\U00002283',
-	"supseteq;":                        '\U00002287',
-	"supseteqq;":                       '\U00002AC6',
-	"supsetneq;":                       '\U0000228B',
-	"supsetneqq;":                      '\U00002ACC',
-	"supsim;":                          '\U00002AC8',
-	"supsub;":                          '\U00002AD4',
-	"supsup;":                          '\U00002AD6',
-	"swArr;":                           '\U000021D9',
-	"swarhk;":                          '\U00002926',
-	"swarr;":                           '\U00002199',
-	"swarrow;":                         '\U00002199',
-	"swnwar;":                          '\U0000292A',
-	"szlig;":                           '\U000000DF',
-	"target;":                          '\U00002316',
-	"tau;":                             '\U000003C4',
-	"tbrk;":                            '\U000023B4',
-	"tcaron;":                          '\U00000165',
-	"tcedil;":                          '\U00000163',
-	"tcy;":                             '\U00000442',
-	"tdot;":                            '\U000020DB',
-	"telrec;":                          '\U00002315',
-	"tfr;":                             '\U0001D531',
-	"there4;":                          '\U00002234',
-	"therefore;":                       '\U00002234',
-	"theta;":                           '\U000003B8',
-	"thetasym;":                        '\U000003D1',
-	"thetav;":                          '\U000003D1',
-	"thickapprox;":                     '\U00002248',
-	"thicksim;":                        '\U0000223C',
-	"thinsp;":                          '\U00002009',
-	"thkap;":                           '\U00002248',
-	"thksim;":                          '\U0000223C',
-	"thorn;":                           '\U000000FE',
-	"tilde;":                           '\U000002DC',
-	"times;":                           '\U000000D7',
-	"timesb;":                          '\U000022A0',
-	"timesbar;":                        '\U00002A31',
-	"timesd;":                          '\U00002A30',
-	"tint;":                            '\U0000222D',
-	"toea;":                            '\U00002928',
-	"top;":                             '\U000022A4',
-	"topbot;":                          '\U00002336',
-	"topcir;":                          '\U00002AF1',
-	"topf;":                            '\U0001D565',
-	"topfork;":                        
-@@END
-@@PORTABLE {"path":"vendor/golang.org/x/net/html/entity.go","mode":420,"size":114515,"sha256":"680a9bb55e7eca9bc0cbee59755591ab9f97abf3fe39490211eb088cc2cd62c2","index":2,"count":3,"encoding":"utf-8","payloadBytes":18515}
- '\U00002ADA',
-	"tosa;":                            '\U00002929',
-	"tprime;":                          '\U00002034',
-	"trade;":                           '\U00002122',
-	"triangle;":                        '\U000025B5',
-	"triangledown;":                    '\U000025BF',
-	"triangleleft;":                    '\U000025C3',
-	"trianglelefteq;":                  '\U000022B4',
-	"triangleq;":                       '\U0000225C',
-	"triangleright;":                   '\U000025B9',
-	"trianglerighteq;":                 '\U000022B5',
-	"tridot;":                          '\U000025EC',
-	"trie;":                            '\U0000225C',
-	"triminus;":                        '\U00002A3A',
-	"triplus;":                         '\U00002A39',
-	"trisb;":                           '\U000029CD',
-	"tritime;":                         '\U00002A3B',
-	"trpezium;":                        '\U000023E2',
-	"tscr;":                            '\U0001D4C9',
-	"tscy;":                            '\U00000446',
-	"tshcy;":                           '\U0000045B',
-	"tstrok;":                          '\U00000167',
-	"twixt;":                           '\U0000226C',
-	"twoheadleftarrow;":                '\U0000219E',
-	"twoheadrightarrow;":               '\U000021A0',
-	"uArr;":                            '\U000021D1',
-	"uHar;":                            '\U00002963',
-	"uacute;":                          '\U000000FA',
-	"uarr;":                            '\U00002191',
-	"ubrcy;":                           '\U0000045E',
-	"ubreve;":                          '\U0000016D',
-	"ucirc;":                           '\U000000FB',
-	"ucy;":                             '\U00000443',
-	"udarr;":                           '\U000021C5',
-	"udblac;":                          '\U00000171',
-	"udhar;":                           '\U0000296E',
-	"ufisht;":                          '\U0000297E',
-	"ufr;":                             '\U0001D532',
-	"ugrave;":                          '\U000000F9',
-	"uharl;":                           '\U000021BF',
-	"uharr;":                           '\U000021BE',
-	"uhblk;":                           '\U00002580',
-	"ulcorn;":                          '\U0000231C',
-	"ulcorner;":                        '\U0000231C',
-	"ulcrop;":                          '\U0000230F',
-	"ultri;":                           '\U000025F8',
-	"umacr;":                           '\U0000016B',
-	"uml;":                             '\U000000A8',
-	"uogon;":                           '\U00000173',
-	"uopf;":                            '\U0001D566',
-	"uparrow;":                         '\U00002191',
-	"updownarrow;":                     '\U00002195',
-	"upharpoonleft;":                   '\U000021BF',
-	"upharpoonright;":                  '\U000021BE',
-	"uplus;":                           '\U0000228E',
-	"upsi;":                            '\U000003C5',
-	"upsih;":                           '\U000003D2',
-	"upsilon;":                         '\U000003C5',
-	"upuparrows;":                      '\U000021C8',
-	"urcorn;":                          '\U0000231D',
-	"urcorner;":                        '\U0000231D',
-	"urcrop;":                          '\U0000230E',
-	"uring;":                           '\U0000016F',
-	"urtri;":                           '\U000025F9',
-	"uscr;":                            '\U0001D4CA',
-	"utdot;":                           '\U000022F0',
-	"utilde;":                          '\U00000169',
-	"utri;":                            '\U000025B5',
-	"utrif;":                           '\U000025B4',
-	"uuarr;":                           '\U000021C8',
-	"uuml;":                            '\U000000FC',
-	"uwangle;":                         '\U000029A7',
-	"vArr;":                            '\U000021D5',
-	"vBar;":                            '\U00002AE8',
-	"vBarv;":                           '\U00002AE9',
-	"vDash;":                           '\U000022A8',
-	"vangrt;":                          '\U0000299C',
-	"varepsilon;":                      '\U000003F5',
-	"varkappa;":                        '\U000003F0',
-	"varnothing;":                      '\U00002205',
-	"varphi;":                          '\U000003D5',
-	"varpi;":                           '\U000003D6',
-	"varpropto;":                       '\U0000221D',
-	"varr;":                            '\U00002195',
-	"varrho;":                          '\U000003F1',
-	"varsigma;":                        '\U000003C2',
-	"vartheta;":                        '\U000003D1',
-	"vartriangleleft;":                 '\U000022B2',
-	"vartriangleright;":                '\U000022B3',
-	"vcy;":                             '\U00000432',
-	"vdash;":                           '\U000022A2',
-	"vee;":                             '\U00002228',
-	"veebar;":                          '\U000022BB',
-	"veeeq;":                           '\U0000225A',
-	"vellip;":                          '\U000022EE',
-	"verbar;":                          '\U0000007C',
-	"vert;":                            '\U0000007C',
-	"vfr;":                             '\U0001D533',
-	"vltri;":                           '\U000022B2',
-	"vopf;":                            '\U0001D567',
-	"vprop;":                           '\U0000221D',
-	"vrtri;":                           '\U000022B3',
-	"vscr;":                            '\U0001D4CB',
-	"vzigzag;":                         '\U0000299A',
-	"wcirc;":                           '\U00000175',
-	"wedbar;":                          '\U00002A5F',
-	"wedge;":                           '\U00002227',
-	"wedgeq;":                          '\U00002259',
-	"weierp;":                          '\U00002118',
-	"wfr;":                             '\U0001D534',
-	"wopf;":                            '\U0001D568',
-	"wp;":                              '\U00002118',
-	"wr;":                              '\U00002240',
-	"wreath;":                          '\U00002240',
-	"wscr;":                            '\U0001D4CC',
-	"xcap;":                            '\U000022C2',
-	"xcirc;":                           '\U000025EF',
-	"xcup;":                            '\U000022C3',
-	"xdtri;":                           '\U000025BD',
-	"xfr;":                             '\U0001D535',
-	"xhArr;":                           '\U000027FA',
-	"xharr;":                           '\U000027F7',
-	"xi;":                              '\U000003BE',
-	"xlArr;":                           '\U000027F8',
-	"xlarr;":                           '\U000027F5',
-	"xmap;":                            '\U000027FC',
-	"xnis;":                            '\U000022FB',
-	"xodot;":                           '\U00002A00',
-	"xopf;":                            '\U0001D569',
-	"xoplus;":                          '\U00002A01',
-	"xotime;":                          '\U00002A02',
-	"xrArr;":                           '\U000027F9',
-	"xrarr;":                           '\U000027F6',
-	"xscr;":                            '\U0001D4CD',
-	"xsqcup;":                          '\U00002A06',
-	"xuplus;":                          '\U00002A04',
-	"xutri;":                           '\U000025B3',
-	"xvee;":                            '\U000022C1',
-	"xwedge;":                          '\U000022C0',
-	"yacute;":                          '\U000000FD',
-	"yacy;":                            '\U0000044F',
-	"ycirc;":                           '\U00000177',
-	"ycy;":                             '\U0000044B',
-	"yen;":                             '\U000000A5',
-	"yfr;":                             '\U0001D536',
-	"yicy;":                            '\U00000457',
-	"yopf;":                            '\U0001D56A',
-	"yscr;":                            '\U0001D4CE',
-	"yucy;":                            '\U0000044E',
-	"yuml;":                            '\U000000FF',
-	"zacute;":                          '\U0000017A',
-	"zcaron;":                          '\U0000017E',
-	"zcy;":                             '\U00000437',
-	"zdot;":                            '\U0000017C',
-	"zeetrf;":                          '\U00002128',
-	"zeta;":                            '\U000003B6',
-	"zfr;":                             '\U0001D537',
-	"zhcy;":                            '\U00000436',
-	"zigrarr;":                         '\U000021DD',
-	"zopf;":                            '\U0001D56B',
-	"zscr;":                            '\U0001D4CF',
-	"zwj;":                             '\U0000200D',
-	"zwnj;":                            '\U0000200C',
-	"AElig":                            '\U000000C6',
-	"AMP":                              '\U00000026',
-	"Aacute":                           '\U000000C1',
-	"Acirc":                            '\U000000C2',
-	"Agrave":                           '\U000000C0',
-	"Aring":                            '\U000000C5',
-	"Atilde":                           '\U000000C3',
-	"Auml":                             '\U000000C4',
-	"COPY":                             '\U000000A9',
-	"Ccedil":                           '\U000000C7',
-	"ETH":                              '\U000000D0',
-	"Eacute":                           '\U000000C9',
-	"Ecirc":                            '\U000000CA',
-	"Egrave":                           '\U000000C8',
-	"Euml":                             '\U000000CB',
-	"GT":                               '\U0000003E',
-	"Iacute":                           '\U000000CD',
-	"Icirc":                            '\U000000CE',
-	"Igrave":                           '\U000000CC',
-	"Iuml":                             '\U000000CF',
-	"LT":                               '\U0000003C',
-	"Ntilde":                           '\U000000D1',
-	"Oacute":                           '\U000000D3',
-	"Ocirc":                            '\U000000D4',
-	"Ograve":                           '\U000000D2',
-	"Oslash":                           '\U000000D8',
-	"Otilde":                           '\U000000D5',
-	"Ouml":                             '\U000000D6',
-	"QUOT":                             '\U00000022',
-	"REG":                              '\U000000AE',
-	"THORN":                            '\U000000DE',
-	"Uacute":                           '\U000000DA',
-	"Ucirc":                            '\U000000DB',
-	"Ugrave":                           '\U000000D9',
-	"Uuml":                             '\U000000DC',
-	"Yacute":                           '\U000000DD',
-	"aacute":                           '\U000000E1',
-	"acirc":                            '\U000000E2',
-	"acute":                            '\U000000B4',
-	"aelig":                            '\U000000E6',
-	"agrave":                           '\U000000E0',
-	"amp":                              '\U00000026',
-	"aring":                            '\U000000E5',
-	"atilde":                           '\U000000E3',
-	"auml":                             '\U000000E4',
-	"brvbar":                           '\U000000A6',
-	"ccedil":                           '\U000000E7',
-	"cedil":                            '\U000000B8',
-	"cent":                             '\U000000A2',
-	"copy":                             '\U000000A9',
-	"curren":                           '\U000000A4',
-	"deg":                              '\U000000B0',
-	"divide":                           '\U000000F7',
-	"eacute":                           '\U000000E9',
-	"ecirc":                            '\U000000EA',
-	"egrave":                           '\U000000E8',
-	"eth":                              '\U000000F0',
-	"euml":                             '\U000000EB',
-	"frac12":                           '\U000000BD',
-	"frac14":                           '\U000000BC',
-	"frac34":                           '\U000000BE',
-	"gt":                               '\U0000003E',
-	"iacute":                           '\U000000ED',
-	"icirc":                            '\U000000EE',
-	"iexcl":                            '\U000000A1',
-	"igrave":                           '\U000000EC',
-	"iquest":                           '\U000000BF',
-	"iuml":                             '\U000000EF',
-	"laquo":                            '\U000000AB',
-	"lt":                               '\U0000003C',
-	"macr":                             '\U000000AF',
-	"micro":                            '\U000000B5',
-	"middot":                           '\U000000B7',
-	"nbsp":                             '\U000000A0',
-	"not":                              '\U000000AC',
-	"ntilde":                           '\U000000F1',
-	"oacute":                           '\U000000F3',
-	"ocirc":                            '\U000000F4',
-	"ograve":                           '\U000000F2',
-	"ordf":                             '\U000000AA',
-	"ordm":                             '\U000000BA',
-	"oslash":                           '\U000000F8',
-	"otilde":                           '\U000000F5',
-	"ouml":                             '\U000000F6',
-	"para":                             '\U000000B6',
-	"plusmn":                           '\U000000B1',
-	"pound":                            '\U000000A3',
-	"quot":                             '\U00000022',
-	"raquo":                            '\U000000BB',
-	"reg":                              '\U000000AE',
-	"sect":                             '\U000000A7',
-	"shy":                              '\U000000AD',
-	"sup1":                             '\U000000B9',
-	"sup2":                             '\U000000B2',
-	"sup3":                             '\U000000B3',
-	"szlig":                            '\U000000DF',
-	"thorn":                            '\U000000FE',
-	"times":                            '\U000000D7',
-	"uacute":                           '\U000000FA',
-	"ucirc":                            '\U000000FB',
-	"ugrave":                           '\U000000F9',
-	"uml":                              '\U000000A8',
-	"uuml":                             '\U000000FC',
-	"yacute":                           '\U000000FD',
-	"yen":                              '\U000000A5',
-	"yuml":                             '\U000000FF',
-}
-
-// HTML entities that are two unicode codepoints.
-var entity2 = map[string][2]rune{
-	"nLt;":                     {'\u226A', '\u20D2'},
-	"nGt;":                     {'\u226B', '\u20D2'},
-	"NotEqualTilde;":           {'\u2242', '\u0338'},
-	"NotGreaterFullEqual;":     {'\u2267', '\u0338'},
-	"NotGreaterGreater;":       {'\u226B', '\u0338'},
-	"NotGreaterSlantEqual;":    {'\u2A7E', '\u0338'},
-	"NotHumpDownHump;":         {'\u224E', '\u0338'},
-	"NotHumpEqual;":            {'\u224F', '\u0338'},
-	"NotLeftTriangleBar;":      {'\u29CF', '\u0338'},
-	"NotLessLess;":             {'\u226A', '\u0338'},
-	"NotLessSlantEqual;":       {'\u2A7D', '\u0338'},
-	"NotNestedGreaterGreater;": {'\u2AA2', '\u0338'},
-	"NotNestedLessLess;":       {'\u2AA1', '\u0338'},
-	"NotPrecedesEqual;":        {'\u2AAF', '\u0338'},
-	"NotRightTriangleBar;":     {'\u29D0', '\u0338'},
-	"NotSquareSubset;":         {'\u228F', '\u0338'},
-	"NotSquareSuperset;":       {'\u2290', '\u0338'},
-	"NotSubset;":               {'\u2282', '\u20D2'},
-	"NotSucceedsEqual;":        {'\u2AB0', '\u0338'},
-	"NotSucceedsTilde;":        {'\u227F', '\u0338'},
-	"NotSuperset;":             {'\u2283', '\u20D2'},
-	"ThickSpace;":              {'\u205F', '\u200A'},
-	"acE;":                     {'\u223E', '\u0333'},
-	"bne;":                     {'\u003D', '\u20E5'},
-	"bnequiv;":                 {'\u2261', '\u20E5'},
-	"caps;":                    {'\u2229', '\uFE00'},
-	"cups;":                    {'\u222A', '\uFE00'},
-	"fjlig;":                   {'\u0066', '\u006A'},
-	"gesl;":                    {'\u22DB', '\uFE00'},
-	"gvertneqq;":               {'\u2269', '\uFE00'},
-	"gvnE;":                    {'\u2269', '\uFE00'},
-	"lates;":                   {'\u2AAD', '\uFE00'},
-	"lesg;":                    {'\u22DA', '\uFE00'},
-	"lvertneqq;":               {'\u2268', '\uFE00'},
-	"lvnE;":                    {'\u2268', '\uFE00'},
-	"nGg;":                     {'\u22D9', '\u0338'},
-	"nGtv;":                    {'\u226B', '\u0338'},
-	"nLl;":                     {'\u22D8', '\u0338'},
-	"nLtv;":                    {'\u226A', '\u0338'},
-	"nang;":                    {'\u2220', '\u20D2'},
-	"napE;":                    {'\u2A70', '\u0338'},
-	"napid;":                   {'\u224B', '\u0338'},
-	"nbump;":                   {'\u224E', '\u0338'},
-	"nbumpe;":                  {'\u224F', '\u0338'},
-	"ncongdot;":                {'\u2A6D', '\u0338'},
-	"nedot;":                   {'\u2250', '\u0338'},
-	"nesim;":                   {'\u2242', '\u0338'},
-	"ngE;":                     {'\u2267', '\u0338'},
-	"ngeqq;":                   {'\u2267', '\u0338'},
-	"ngeqslant;":               {'\u2A7E', '\u0338'},
-	"nges;":                    {'\u2A7E', '\u0338'},
-	"nlE;":                     {'\u2266', '\u0338'},
-	"nleqq;":                   {'\u2266', '\u0338'},
-	"nleqslant;":               {'\u2A7D', '\u0338'},
-	"nles;":                    {'\u2A7D', '\u0338'},
-	"notinE;":                  {'\u22F9', '\u0338'},
-	"notindot;":                {'\u22F5', '\u0338'},
-	"nparsl;":                  {'\u2AFD', '\u20E5'},
-	"npart;":                   {'\u2202', '\u0338'},
-	"npre;":                    {'\u2AAF', '\u0338'},
-	"npreceq;":                 {'\u2AAF', '\u0338'},
-	"nrarrc;":                  {'\u2933', '\u0338'},
-	"nrarrw;":                  {'\u219D', '\u0338'},
-	"nsce;":                    {'\u2AB0', '\u0338'},
-	"nsubE;":                   {'\u2AC5', '\u0338'},
-	"nsubset;":                 {'\u2282', '\u20D2'},
-	"nsubseteqq;":              {'\u2AC5', '\u0338'},
-	"nsucceq;":                 {'\u2AB0', '\u0338'},
-	"nsupE;":                   {'\u2AC6', '\u0338'},
-	"nsupset;":                 {'\u2283', '\u20D2'},
-	"nsupseteqq;":              {'\u2AC6', '\u0338'},
-	"nvap;":                    {'\u224D', '\u20D2'},
-	"nvge;":                    {'\u2265', '\u20D2'},
-	"nvgt;":                    {'\u003E', '\u20D2'},
-	"nvle;":                    {'\u2264', '\u20D2'},
-	"nvlt;":                    {'\u003C', '\u20D2'},
-	"nvltrie;":                 {'\u22B4', '\u20D2'},
-	"nvrtrie;":                 {'\u22B5', '\u20D2'},
-	"nvsim;":                   {'\u223C', '\u20D2'},
-	"race;":                    {'\u223D', '\u0331'},
-	"smtes;":                   {'\u2AAC', '\uFE00'},
-	"sqcaps;":                  {'\u2293', '\uFE00'},
-	"sqcups;":                  {'\u2294', '\uFE00'},
-	"varsubsetneq;":            {'\u228A', '\uFE00'},
-	"varsubsetneqq;":           {'\u2ACB', '\uFE00'},
-	"varsupsetneq;":            {'\u228B', '\uFE00'},
-	"varsupsetneqq;":           {'\u2ACC', '\uFE00'},
-	"vnsub;":                   {'\u2282', '\u20D2'},
-	"vnsup;":                   {'\u2283', '\u20D2'},
-	"vsubnE;":                  {'\u2ACB', '\uFE00'},
-	"vsubne;":                  {'\u228A', '\uFE00'},
-	"vsupnE;":                  {'\u2ACC', '\uFE00'},
-	"vsupne;":                  {'\u228B', '\uFE00'},
-}
-
-@@END
-@@PORTABLE {"path":"vendor/golang.org/x/net/html/escape.go","mode":420,"size":8968,"sha256":"a982866bfe8359184109e87d9fd8c5e4f06a98a71a391f4beae0e488529720f1","index":0,"count":1,"encoding":"utf-8","payloadBytes":8968}
-// Copyright 2010 The Go Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
-package html
-
-import (
-	"bytes"
-	"slices"
-	"strings"
-	"unicode/utf8"
-)
-
-// These replacements permit compatibility with old numeric entities that
-// assumed Windows-1252 encoding.
-// https://html.spec.whatwg.org/multipage/syntax.html#consume-a-character-reference
-var replacementTable = [...]rune{
-	'\u20AC', // First entry is what 0x80 should be replaced with.
-	'\u0081',
-	'\u201A',
-	'\u0192',
-	'\u201E',
-	'\u2026',
-	'\u2020',
-	'\u2021',
-	'\u02C6',
-	'\u2030',
-	'\u0160',
-	'\u2039',
-	'\u0152',
-	'\u008D',
-	'\u017D',
-	'\u008F',
-	'\u0090',
-	'\u2018',
-	'\u2019',
-	'\u201C',
-	'\u201D',
-	'\u2022',
-	'\u2013',
-	'\u2014',
-	'\u02DC',
-	'\u2122',
-	'\u0161',
-	'\u203A',
-	'\u0153',
-	'\u009D',
-	'\u017E',
-	'\u0178', // Last entry is 0x9F.
-	// 0x00->'\uFFFD' is handled programmatically.
-	// 0x0D->'\u000D' is a no-op.
-}
-
-// unescapeEntity attempts to consume a character reference from s[src:],
-// returning the rune, potential second rune, and number of bytes consumed
-// (which indicates the length of the character reference). It is assumed that
-// the first byte of s is '&'. attribute should be true if parsing an attribute
-// value.
-func unescapeEntity(s []byte, attribute bool) (rune, rune, int) {
-	// https://html.spec.whatwg.org/multipage/syntax.html#consume-a-character-reference
-
-	// i starts at 1 because we already know that s[0] == '&'.
-	i := 1
-
-	if len(s) <= 1 {
-		return '&', 0, 1
-	}
-
-	if s[i] == '#' {
-		if len(s) <= 2 { // We need to have at least "&#".
-			return '&', 0, 1
-		}
-		i++
-		c := s[i]
-		hex := false
-		if c == 'x' || c == 'X' {
-			hex = true
-			i++
-		}
-
-		i0 := i
-		x := '\x00'
-		for i < len(s) {
-			c = s[i]
-			var d rune
-			var mult rune
-			if hex {
-				mult = 16
-				if '0' <= c && c <= '9' {
-					d = rune(c) - '0'
-				} else if 'a' <= c && c <= 'f' {
-					d = rune(c) - 'a' + 10
-				} else if 'A' <= c && c <= 'F' {
-					d = rune(c) - 'A' + 10
-				} else {
-					break
-				}
-			} else {
-				mult = 10
-				if '0' <= c && c <= '9' {
-					d = rune(c) - '0'
-				} else {
-					break
-				}
-			}
-			if x <= 0x10FFFF {
-				x = mult*x + d
-			}
-			i++
-		}
-
-		if i == i0 { // No characters matched.
-			return '&', 0, 1
-		}
-
-		if i < len(s) && s[i] == ';' {
-			i++
-		}
-
-		if 0x80 <= x && x <= 0x9F {
-			// Replace characters from Windows-1252 with UTF-8 equivalents.
-			x = replacementTable[x-0x80]
-		} else if x == 0 || (0xD800 <= x && x <= 0xDFFF) || x > 0x10FFFF {
-			// Replace invalid characters with the replacement character.
-			x = '\uFFFD'
-		}
-
-		return x, 0, i
-	}
-
-	// Consume the maximum number of characters possible, with the
-	// consumed characters matching one of the named references.
-
-	for i < len(s) {
-		c := s[i]
-		i++
-		// Lower-cased characters are more common in entities, so we check for them first.
-		if 'a' <= c && c <= 'z' || 'A' <= c && c <= 'Z' || '0' <= c && c <= '9' {
-			continue
-		}
-		if c != ';' {
-			i--
-		}
-		break
-	}
-
-	entityName := string(s[1:i])
-	if entityName == "" {
-		// No-op.
-	} else if attribute && entityName[len(entityName)-1] != ';' && len(s) > i && s[i] == '=' {
-		// No-op.
-	} else if x := entity[entityName]; x != 0 {
-		return x, 0, i
-	} else if x := entity2[entityName]; x[0] != 0 {
-		return x[0], x[1], i
-	} else if !attribute {
-		maxLen := len(entityName) - 1
-		if maxLen > longestEntityWithoutSemicolon {
-			maxLen = longestEntityWithoutSemicolon
-		}
-		for j := maxLen; j > 1; j-- {
-			if x := entity[entityName[:j]]; x != 0 {
-				return x, 0, j + 1
-			}
-		}
-	}
-
-	return '&', 0, 1
-}
-
-// unescape unescapes b's entites, so that "a&lt;b" becomes "a<b". It attempts
-// to do so in place, but if the unescaped value is longer than the input it
-// allocates a new slice. attribute should be true if parsing an attribute
-// value.
-func unescape(b []byte, attribute bool) []byte {
-	firstAmp := slices.Index(b, '&')
-	if firstAmp == -1 {
-		return b
-	}
-
-	out := b[:firstAmp]
-	src := firstAmp
-	reusingB := true
-	for src < len(b) {
-		if b[src] != '&' {
-			out = append(out, b[src])
-			src++
-			continue
-		}
-
-		r1, r2, entityNameLen := unescapeEntity(b[src:], attribute)
-		if entityNameLen == 1 && r1 == '&' {
-			// Not an entity
-			out = append(out, '&')
-			src++
-			continue
-		}
-
-		// Compute replacement length
-		replLen := utf8.RuneLen(r1)
-		if r2 != 0 {
-			replLen += utf8.RuneLen(r2)
-		}
-
-		// If the name of the entity is shorter than the width of the
-		// replacement runes then we need to expand the output slice to
-		// fit the replacement.
-		if replLen > entityNameLen {
-			if reusingB {
-				out = slices.Clone(out)
-				reusingB = false
-			}
-			out = slices.Grow(out, replLen)
-		}
-		out = utf8.AppendRune(out, r1)
-		if r2 != 0 {
-			out = utf8.AppendRune(out, r2)
-		}
-
-		src += entityNameLen
-	}
-
-	return out
-}
-
-// lower lower-cases the A-Z bytes in b in-place, so that "aBc" becomes "abc".
-func lower(b []byte) []byte {
-	for i, c := range b {
-		if 'A' <= c && c <= 'Z' {
-			b[i] = c + 'a' - 'A'
-		}
-	}
-	return b
-}
-
-// escapeComment is like func escape but escapes its input bytes less often.
-// Per https://github.com/golang/go/issues/58246 some HTML comments are (1)
-// meaningful and (2) contain angle brackets that we'd like to avoid escaping
-// unless we have to.
-//
-// "We have to" includes the '&' byte, since that introduces other escapes.
-//
-// It also includes those bytes (not including EOF) that would otherwise end
-// the comment. Per the summary table at the bottom of comment_test.go, this is
-// the '>' byte that, per above, we'd like to avoid escaping unless we have to.
-//
-// Studying the summary table (and T actions in its '>' column) closely, we
-// only need to escape in states 43, 44, 49, 51 and 52. State 43 is at the
-// start of the comment data. State 52 is after a '!'. The other three states
-// are after a '-'.
-//
-// Our algorithm is thus to escape every '&' and to escape '>' if and only if:
-//   - The '>' is after a '!' or '-' (in the unescaped data) or
-//   - The '>' is at the start of the comment data (after the opening "<!--").
-func escapeComment(w writer, s string) error {
-	// When modifying this function, consider manually increasing the
-	// maxSuffixLen constant in func TestComments, from 6 to e.g. 9 or more.
-	// That increase should only be temporary, not committed, as it
-	// exponentially affects the test running time.
-
-	if len(s) == 0 {
-		return nil
-	}
-
-	// Loop:
-	//   - Grow j such that s[i:j] does not need escaping.
-	//   - If s[j] does need escaping, output s[i:j] and an escaped s[j],
-	//     resetting i and j to point past that s[j] byte.
-	i := 0
-	for j := 0; j < len(s); j++ {
-		escaped := ""
-		switch s[j] {
-		case '&':
-			escaped = "&amp;"
-
-		case '>':
-			if j > 0 {
-				if prev := s[j-1]; (prev != '!') && (prev != '-') {
-					continue
-				}
-			}
-			escaped = "&gt;"
-
-		default:
-			continue
-		}
-
-		if i < j {
-			if _, err := w.WriteString(s[i:j]); err != nil {
-				return err
-			}
-		}
-		if _, err := w.WriteString(escaped); err != nil {
-			return err
-		}
-		i = j + 1
-	}
-
-	if i < len(s) {
-		if _, err := w.WriteString(s[i:]); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// escapeCommentString is to EscapeString as escapeComment is to escape.
-func escapeCommentString(s string) string {
-	if strings.IndexAny(s, "&>") == -1 {
-		return s
-	}
-	var buf bytes.Buffer
-	escapeComment(&buf, s)
-	return buf.String()
-}
-
-const escapedChars = "&'<>\"\r"
-
-func escape(w writer, s string) error {
-	i := strings.IndexAny(s, escapedChars)
-	for i != -1 {
-		if _, err := w.WriteString(s[:i]); err != nil {
-			return err
-		}
-		var esc string
-		switch s[i] {
-		case '&':
-			esc = "&amp;"
-		case '\'':
-			// "&#39;" is shorter than "&apos;" and apos was not in HTML until HTML5.
-			esc = "&#39;"
-		case '<':
-			esc = "&lt;"
-		case '>':
-			esc = "&gt;"
-		case '"':
-			// "&#34;" is shorter than "&quot;".
-			esc = "&#34;"
-		case '\r':
-			esc = "&#13;"
-		default:
-			panic("html: unrecognized escape character")
-		}
-		s = s[i+1:]
-		if _, err := w.WriteString(esc); err != nil {
-			return err
-		}
-		i = strings.IndexAny(s, escapedChars)
-	}
-	_, err := w.WriteString(s)
-	return err
-}
-
-// EscapeString escapes special characters like "<" to become "&lt;". It
-// escapes only five such characters: <, >, &, ' and ".
-// UnescapeString(EscapeString(s)) == s always holds, but the converse isn't
-// always true.
-func EscapeString(s string) string {
-	if strings.IndexAny(s, escapedChars) == -1 {
-		return s
-	}
-	var buf bytes.Buffer
-	escape(&buf, s)
-	return buf.String()
-}
-
-// UnescapeString unescapes entities like "&lt;" to become "<". It unescapes a
-// larger range of entities than EscapeString escapes. For example, "&aacute;"
-// unescapes to "á", as does "&#225;" and "&xE1;".
-// UnescapeString(EscapeString(s)) == s always holds, but the converse isn't
-// always true.
-func UnescapeString(s string) string {
-	for _, c := range s {
-		if c == '&' {
-			return string(unescape([]byte(s), false))
-		}
-	}
-	return s
-}
-
-@@END
-@@PORTABLE {"path":"vendor/golang.org/x/net/html/foreign.go","mode":420,"size":6353,"sha256":"d227ce6839726bb85fc88ec95df265901da8a04d7e2f7261101bdc7b4d1af1ad","index":0,"count":1,"encoding":"utf-8","payloadBytes":6353}
-// Copyright 2011 The Go Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
-package html
-
-import (
-	"strings"
-)
-
-func adjustAttributeNames(aa []Attribute, nameMap map[string]string) {
-	for i := range aa {
-		if newName, ok := nameMap[aa[i].Key]; ok {
-			aa[i].Key = newName
-		}
-	}
-}
-
-func adjustForeignAttributes(aa []Attribute) {
-	for i, a := range aa {
-		if a.Key == "" || a.Key[0] != 'x' {
-			continue
-		}
-		switch a.Key {
-		case "xlink:actuate", "xlink:arcrole", "xlink:href", "xlink:role", "xlink:show",
-			"xlink:title", "xlink:type", "xml:lang", "xml:space", "xmlns:xlink":
-			j := strings.Index(a.Key, ":")
-			aa[i].Namespace = a.Key[:j]
-			aa[i].Key = a.Key[j+1:]
-		}
-	}
-}
-
-func htmlIntegrationPoint(n *Node) bool {
-	if n.Type != ElementNode {
-		return false
-	}
-	switch n.Namespace {
-	case "math":
-		if n.Data == "annotation-xml" {
-			for _, a := range n.Attr {
-				if a.Key == "encoding" {
-					if strings.EqualFold(a.Val, "text/html") || strings.EqualFold(a.Val, "application/xhtml+xml") {
-						return true
-					}
-				}
-			}
-		}
-	case "svg":
-		switch n.Data {
-		case "desc", "foreignObject", "title":
-			return true
-		}
-	}
-	return false
-}
-
-func mathMLTextIntegrationPoint(n *Node) bool {
-	if n.Namespace != "math" {
-		return false
-	}
-	switch n.Data {
-	case "mi", "mo", "mn", "ms", "mtext":
-		return true
-	}
-	return false
-}
-
-// Section 12.2.6.5.
-var breakout = map[string]bool{
-	"b":          true,
-	"big":        true,
-	"blockquote": true,
-	"body":       true,
-	"br":         true,
-	"center":     true,
-	"code":       true,
-	"dd":         true,
-	"div":        true,
-	"dl":         true,
-	"dt":         true,
-	"em":         true,
-	"embed":      true,
-	"h1":         true,
-	"h2":         true,
-	"h3":         true,
-	"h4":         true,
-	"h5":         true,
-	"h6":         true,
-	"head":       true,
-	"hr":         true,
-	"i":          true,
-	"img":        true,
-	"li":         true,
-	"listing":    true,
-	"menu":       true,
-	"meta":       true,
-	"nobr":       true,
-	"ol":         true,
-	"p":          true,
-	"pre":        true,
-	"ruby":       true,
-	"s":          true,
-	"small":      true,
-	"span":       true,
-	"strong":     true,
-	"strike":     true,
-	"sub":        true,
-	"sup":        true,
-	"table":      true,
-	"tt":         true,
-	"u":          true,
-	"ul":         true,
-	"var":        true,
-}
-
-// Section 12.2.6.5.
-var svgTagNameAdjustments = map[string]string{
-	"altglyph":            "altGlyph",
-	"altglyphdef":         "altGlyphDef",
-	"altglyphitem":        "altGlyphItem",
-	"animatecolor":        "animateColor",
-	"animatemotion":       "animateMotion",
-	"animatetransform":    "animateTransform",
-	"clippath":            "clipPath",
-	"feblend":             "feBlend",
-	"fecolormatrix":       "feColorMatrix",
-	"fecomponenttransfer": "feComponentTransfer",
-	"fecomposite":         "feComposite",
-	"feconvolvematrix":    "feConvolveMatrix",
-	"fediffuselighting":   "feDiffuseLighting",
-	"fedisplacementmap":   "feDisplacementMap",
-	"fedistantlight":      "feDistantLight",
-	"feflood":             "feFlood",
-	"fefunca":             "feFuncA",
-	"fefuncb":             "feFuncB",
-	"fefuncg":             "feFuncG",
-	"fefuncr":             "feFuncR",
-	"fegaussianblur":      "feGaussianBlur",
-	"feimage":             "feImage",
-	"femerge":             "feMerge",
-	"femergenode":         "feMergeNode",
-	"femorphology":        "feMorphology",
-	"feoffset":            "feOffset",
-	"fepointlight":        "fePointLight",
-	"fespecularlighting":  "feSpecularLighting",
-	"fespotlight":         "feSpotLight",
-	"fetile":              "feTile",
-	"feturbulence":        "feTurbulence",
-	"foreignobject":       "foreignObject",
-	"glyphref":            "glyphRef",
-	"lineargradient":      "linearGradient",
-	"radialgradient":      "radialGradient",
-	"textpath":            "textPath",
-}
-
-// Section 12.2.6.1
-var mathMLAttributeAdjustments = map[string]string{
-	"definitionurl": "definitionURL",
-}
-
-var svgAttributeAdjustments = map[string]string{
-	"attributename":       "attributeName",
-	"attributetype":       "attributeType",
-	"basefrequency":       "baseFrequency",
-	"baseprofile":         "baseProfile",
-	"calcmode":            "calcMode",
-	"clippathunits":       "clipPathUnits",
-	"diffuseconstant":     "diffuseConstant",
-	"edgemode":            "edgeMode",
-	"filterunits":         "filterUnits",
-	"glyphref":            "glyphRef",
-	"gradienttransform":   "gradientTransform",
-	"gradientunits":       "gradientUnits",
-	"kernelmatrix":        "kernelMatrix",
-	"kernelunitlength":    "kernelUnitLength",
-	"keypoints":           "keyPoints",
-	"keysplines":          "keySplines",
-	"keytimes":            "keyTimes",
-	"lengthadjust":        "lengthAdjust",
-	"limitingconeangle":   "limitingConeAngle",
-	"markerheight":        "markerHeight",
-	"markerunits":         "markerUnits",
-	"markerwidth":         "markerWidth",
-	"maskcontentunits":    "maskContentUnits",
-	"maskunits":           "maskUnits",
-	"numoctaves":          "numOctaves",
-	"pathlength":          "pathLength",
-	"patterncontentunits": "patternContentUnits",
-	"patterntransform":    "patternTransform",
-	"patternunits":        "patternUnits",
-	"pointsatx":           "pointsAtX",
-	"pointsaty":           "pointsAtY",
-	"pointsatz":           "pointsAtZ",
-	"preservealpha":       "preserveAlpha",
-	"preserveaspectratio": "preserveAspectRatio",
-	"primitiveunits":      "primitiveUnits",
-	"refx":                "refX",
-	"refy":                "refY",
-	"repeatcount":         "repeatCount",
-	"repeatdur":           "repeatDur",
-	"requiredextensions":  "requiredExtensions",
-	"requiredfeatures":    "requiredFeatures",
-	"specularconstant":    "specularConstant",
-	"specularexponent":    "specularExponent",
-	"spreadmethod":        "spreadMethod",
-	"startoffset":         "startOffset",
-	"stddeviation":        "stdDeviation",
-	"stitchtiles":         "stitchTiles",
-	"surfacescale":        "surfaceScale",
-	"systemlanguage":      "systemLanguage",
-	"tablevalues":         "tableValues",
-	"targetx":             "targetX",
-	"targety":             "targetY",
-	"textlength":          "textLength",
-	"viewbox":             "viewBox",
-	"viewtarget":          "viewTarget",
-	"xchannelselector":    "xChannelSelector",
-	"ychannelselector":    "yChannelSelector",
-	"zoomandpan":          "zoomAndPan",
-}
-
-@@END
-@@PORTABLE {"path":"vendor/golang.org/x/net/html/iter.go","mode":420,"size":1471,"sha256":"54299c163639df83f3dd22ff31643b6b6cedbedb0c388b1f53020146a10d7504","index":0,"count":1,"encoding":"utf-8","payloadBytes":1471}
-// Copyright 2024 The Go Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
-package html
-
-import "iter"
-
-// Ancestors returns an iterator over the ancestors of n, starting with n.Parent.
-//
-// Mutating a Node or its parents while iterating may have unexpected results.
-func (n *Node) Ancestors() iter.Seq[*Node] {
-	_ = n.Parent // eager nil check
-
-	return func(yield func(*Node) bool) {
-		for p := n.Parent; p != nil && yield(p); p = p.Parent {
-		}
-	}
-}
-
-// ChildNodes returns an iterator over the immediate children of n,
-// starting with n.FirstChild.
-//
-// Mutating a Node or its children while iterating may have unexpected results.
-func (n *Node) ChildNodes() iter.Seq[*Node] {
-	_ = n.FirstChild // eager nil check
-
-	return func(yield func(*Node) bool) {
-		for c := n.FirstChild; c != nil && yield(c); c = c.NextSibling {
-		}
-	}
-
-}
-
-// Descendants returns an iterator over all nodes recursively beneath
-// n, excluding n itself. Nodes are visited in depth-first preorder.
-//
-// Mutating a Node or its descendants while iterating may have unexpected results.
-func (n *Node) Descendants() iter.Seq[*Node] {
-	_ = n.FirstChild // eager nil check
-
-	return func(yield func(*Node) bool) {
-		n.descendants(yield)
-	}
-}
-
-func (n *Node) descendants(yield func(*Node) bool) bool {
-	for c := range n.ChildNodes() {
-		if !yield(c) || !c.descendants(yield) {
-			return false
-		}
-	}
-	return true
-}
-
-@@END
-@@PORTABLE {"path":"vendor/golang.org/x/net/html/node.go","mode":420,"size":5840,"sha256":"3acf739c450f61abd0fc45ccb19e4ddde2982b798791037a6a03c78603b6176f","index":0,"count":1,"encoding":"utf-8","payloadBytes":5840}
-// Copyright 2011 The Go Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
-package html
-
-import (
-	"golang.org/x/net/html/atom"
-)
-
-// A NodeType is the type of a Node.
-type NodeType uint32
-
-//go:generate stringer -type NodeType
-const (
-	ErrorNode NodeType = iota
-	TextNode
-	DocumentNode
-	ElementNode
-	CommentNode
-	DoctypeNode
-	// RawNode nodes are not returned by the parser, but can be part of the
-	// Node tree passed to func Render to insert raw HTML (without escaping).
-	// If so, this package makes no guarantee that the rendered HTML is secure
-	// (from e.g. Cross Site Scripting attacks) or well-formed.
-	RawNode
-	scopeMarkerNode
-)
-
-// Section 12.2.4.3 says "The markers are inserted when entering applet,
-// object, marquee, template, td, th, and caption elements, and are used
-// to prevent formatting from "leaking" into applet, object, marquee,
-// template, td, th, and caption elements".
-var scopeMarker = Node{Type: scopeMarkerNode}
-
-// A Node consists of a NodeType and some Data (tag name for element nodes,
-// content for text) and are part of a tree of Nodes. Element nodes may also
-// have a Namespace and contain a slice of Attributes. Data is unescaped, so
-// that it looks like "a<b" rather than "a&lt;b". For element nodes, DataAtom
-// is the atom for Data, or zero if Data is not a known tag name.
-//
-// Node trees may be navigated using the link fields (Parent,
-// FirstChild, and so on) or a range loop over iterators such as
-// [Node.Descendants].
-//
-// An empty Namespace implies a "http://www.w3.org/1999/xhtml" namespace.
-// Similarly, "math" is short for "http://www.w3.org/1998/Math/MathML", and
-// "svg" is short for "http://www.w3.org/2000/svg".
-type Node struct {
-	Parent, FirstChild, LastChild, PrevSibling, NextSibling *Node
-
-	Type      NodeType
-	DataAtom  atom.Atom
-	Data      string
-	Namespace string
-	Attr      []Attribute
-}
-
-// InsertBefore inserts newChild as a child of n, immediately before oldChild
-// in the sequence of n's children. oldChild may be nil, in which case newChild
-// is appended to the end of n's children.
-//
-// It will panic if newChild already has a parent or siblings.
-func (n *Node) InsertBefore(newChild, oldChild *Node) {
-	if newChild.Parent != nil || newChild.PrevSibling != nil || newChild.NextSibling != nil {
-		panic("html: InsertBefore called for an attached child Node")
-	}
-	var prev, next *Node
-	if oldChild != nil {
-		prev, next = oldChild.PrevSibling, oldChild
-	} else {
-		prev = n.LastChild
-	}
-	if prev != nil {
-		prev.NextSibling = newChild
-	} else {
-		n.FirstChild = newChild
-	}
-	if next != nil {
-		next.PrevSibling = newChild
-	} else {
-		n.LastChild = newChild
-	}
-	newChild.Parent = n
-	newChild.PrevSibling = prev
-	newChild.NextSibling = next
-}
-
-// AppendChild adds a node c as a child of n.
-//
-// It will panic if c already has a parent or siblings.
-func (n *Node) AppendChild(c *Node) {
-	if c.Parent != nil || c.PrevSibling != nil || c.NextSibling != nil {
-		panic("html: AppendChild called for an attached child Node")
-	}
-	last := n.LastChild
-	if last != nil {
-		last.NextSibling = c
-	} else {
-		n.FirstChild = c
-	}
-	n.LastChild = c
-	c.Parent = n
-	c.PrevSibling = last
-}
-
-// RemoveChild removes a node c that is a child of n. Afterwards, c will have
-// no parent and no siblings.
-//
-// It will panic if c's parent is not n.
-func (n *Node) RemoveChild(c *Node) {
-	if c.Parent != n {
-		panic("html: RemoveChild called for a non-child Node")
-	}
-	if n.FirstChild == c {
-		n.FirstChild = c.NextSibling
-	}
-	if c.NextSibling != nil {
-		c.NextSibling.PrevSibling = c.PrevSibling
-	}
-	if n.LastChild == c {
-		n.LastChild = c.PrevSibling
-	}
-	if c.PrevSibling != nil {
-		c.PrevSibling.NextSibling = c.NextSibling
-	}
-	c.Parent = nil
-	c.PrevSibling = nil
-	c.NextSibling = nil
-}
-
-// reparentChildren reparents all of src's child nodes to dst.
-func reparentChildren(dst, src *Node) {
-	for {
-		child := src.FirstChild
-		if child == nil {
-			break
-		}
-		src.RemoveChild(child)
-		dst.AppendChild(child)
-	}
-}
-
-// clone returns a new node with the same type, data and attributes.
-// The clone has no parent, no siblings and no children.
-func (n *Node) clone() *Node {
-	m := &Node{
-		Type:     n.Type,
-		DataAtom: n.DataAtom,
-		Data:     n.Data,
-		Attr:     make([]Attribute, len(n.Attr)),
-	}
-	copy(m.Attr, n.Attr)
-	return m
-}
-
-// nodeStack is a stack of nodes.
-type nodeStack []*Node
-
-// pop pops the stack. It will panic if s is empty.
-func (s *nodeStack) pop() *Node {
-	i := len(*s)
-	n := (*s)[i-1]
-	*s = (*s)[:i-1]
-	return n
-}
-
-// top returns the most recently pushed node, or nil if s is empty.
-func (s *nodeStack) top() *Node {
-	if i := len(*s); i > 0 {
-		return (*s)[i-1]
-	}
-	return nil
-}
-
-// index returns the index of the top-most occurrence of n in the stack, or -1
-// if n is not present.
-func (s *nodeStack) index(n *Node) int {
-	for i := len(*s) - 1; i >= 0; i-- {
-		if (*s)[i] == n {
-			return i
-		}
-	}
-	return -1
-}
-
-// contains returns whether a is within s.
-func (s *nodeStack) contains(a atom.Atom) bool {
-	for _, n := range *s {
-		if n.DataAtom == a && n.Namespace == "" {
-			return true
-		}
-	}
-	return false
-}
-
-// insert inserts a node at the given index.
-func (s *nodeStack) insert(i int, n *Node) {
-	(*s) = append(*s, nil)
-	copy((*s)[i+1:], (*s)[i:])
-	(*s)[i] = n
-}
-
-// remove removes a node from the stack. It is a no-op if n is not present.
-func (s *nodeStack) remove(n *Node) {
-	i := s.index(n)
-	if i == -1 {
-		return
-	}
-	copy((*s)[i:], (*s)[i+1:])
-	j := len(*s) - 1
-	(*s)[j] = nil
-	*s = (*s)[:j]
-}
-
-type insertionModeStack []insertionMode
-
-func (s *insertionModeStack) pop() (im insertionMode) {
-	i := len(*s)
-	im = (*s)[i-1]
-	*s = (*s)[:i-1]
-	return im
-}
-
-func (s *insertionModeStack) top() insertionMode {
-	if i := len(*s); i > 0 {
-		return (*s)[i-1]
-	}
-	return nil
-}
-
-@@END
-@@PORTABLE {"path":"vendor/golang.org/x/net/html/nodetype_string.go","mode":420,"size":861,"sha256":"747f99ad7577bc2e790097bf591b7e66c1856a496a5a2e515a40324659e0266c","index":0,"count":1,"encoding":"utf-8","payloadBytes":861}
-// Code generated by "stringer -type NodeType"; DO NOT EDIT.
-
-package html
-
-import "strconv"
-
-func _() {
-	// An "invalid array index" compiler error signifies that the constant values have changed.
-	// Re-run the stringer command to generate them again.
-	var x [1]struct{}
-	_ = x[ErrorNode-0]
-	_ = x[TextNode-1]
-	_ = x[DocumentNode-2]
-	_ = x[ElementNode-3]
-	_ = x[CommentNode-4]
-	_ = x[DoctypeNode-5]
-	_ = x[RawNode-6]
-	_ = x[scopeMarkerNode-7]
-}
-
-const _NodeType_name = "ErrorNodeTextNodeDocumentNodeElementNodeCommentNodeDoctypeNodeRawNodescopeMarkerNode"
-
-var _NodeType_index = [...]uint8{0, 9, 17, 29, 40, 51, 62, 69, 84}
-
-func (i NodeType) String() string {
-	idx := int(i) - 0
-	if i < 0 || idx >= len(_NodeType_index)-1 {
-		return "NodeType(" + strconv.FormatInt(int64(i), 10) + ")"
-	}
-	return _NodeType_name[_NodeType_index[idx]:_NodeType_index[idx+1]]
-}
-
 @@END

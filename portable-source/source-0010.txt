@@ -1,3 +1,810 @@
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/sys/windows/zerrors_windows.go","mode":420,"size":945502,"sha256":"fdf634bbd093494501a9aec0660aa53b434fdc2c2bb989e8d0925323e511358d","index":18,"count":20,"encoding":"utf-8","payloadBytes":48000}
+0
+	STATUS_GRAPHICS_NO_DISPLAY_DEVICE_CORRESPONDS_TO_NAME                     NTStatus      = 0xC01E05E1
+	STATUS_GRAPHICS_DISPLAY_DEVICE_NOT_ATTACHED_TO_DESKTOP                    NTStatus      = 0xC01E05E2
+	STATUS_GRAPHICS_MIRRORING_DEVICES_NOT_SUPPORTED                           NTStatus      = 0xC01E05E3
+	STATUS_GRAPHICS_INVALID_POINTER                                           NTStatus      = 0xC01E05E4
+	STATUS_GRAPHICS_NO_MONITORS_CORRESPOND_TO_DISPLAY_DEVICE                  NTStatus      = 0xC01E05E5
+	STATUS_GRAPHICS_PARAMETER_ARRAY_TOO_SMALL                                 NTStatus      = 0xC01E05E6
+	STATUS_GRAPHICS_INTERNAL_ERROR                                            NTStatus      = 0xC01E05E7
+	STATUS_GRAPHICS_SESSION_TYPE_CHANGE_IN_PROGRESS                           NTStatus      = 0xC01E05E8
+	STATUS_FVE_LOCKED_VOLUME                                                  NTStatus      = 0xC0210000
+	STATUS_FVE_NOT_ENCRYPTED                                                  NTStatus      = 0xC0210001
+	STATUS_FVE_BAD_INFORMATION                                                NTStatus      = 0xC0210002
+	STATUS_FVE_TOO_SMALL                                                      NTStatus      = 0xC0210003
+	STATUS_FVE_FAILED_WRONG_FS                                                NTStatus      = 0xC0210004
+	STATUS_FVE_BAD_PARTITION_SIZE                                             NTStatus      = 0xC0210005
+	STATUS_FVE_FS_NOT_EXTENDED                                                NTStatus      = 0xC0210006
+	STATUS_FVE_FS_MOUNTED                                                     NTStatus      = 0xC0210007
+	STATUS_FVE_NO_LICENSE                                                     NTStatus      = 0xC0210008
+	STATUS_FVE_ACTION_NOT_ALLOWED                                             NTStatus      = 0xC0210009
+	STATUS_FVE_BAD_DATA                                                       NTStatus      = 0xC021000A
+	STATUS_FVE_VOLUME_NOT_BOUND                                               NTStatus      = 0xC021000B
+	STATUS_FVE_NOT_DATA_VOLUME                                                NTStatus      = 0xC021000C
+	STATUS_FVE_CONV_READ_ERROR                                                NTStatus      = 0xC021000D
+	STATUS_FVE_CONV_WRITE_ERROR                                               NTStatus      = 0xC021000E
+	STATUS_FVE_OVERLAPPED_UPDATE                                              NTStatus      = 0xC021000F
+	STATUS_FVE_FAILED_SECTOR_SIZE                                             NTStatus      = 0xC0210010
+	STATUS_FVE_FAILED_AUTHENTICATION                                          NTStatus      = 0xC0210011
+	STATUS_FVE_NOT_OS_VOLUME                                                  NTStatus      = 0xC0210012
+	STATUS_FVE_KEYFILE_NOT_FOUND                                              NTStatus      = 0xC0210013
+	STATUS_FVE_KEYFILE_INVALID                                                NTStatus      = 0xC0210014
+	STATUS_FVE_KEYFILE_NO_VMK                                                 NTStatus      = 0xC0210015
+	STATUS_FVE_TPM_DISABLED                                                   NTStatus      = 0xC0210016
+	STATUS_FVE_TPM_SRK_AUTH_NOT_ZERO                                          NTStatus      = 0xC0210017
+	STATUS_FVE_TPM_INVALID_PCR                                                NTStatus      = 0xC0210018
+	STATUS_FVE_TPM_NO_VMK                                                     NTStatus      = 0xC0210019
+	STATUS_FVE_PIN_INVALID                                                    NTStatus      = 0xC021001A
+	STATUS_FVE_AUTH_INVALID_APPLICATION                                       NTStatus      = 0xC021001B
+	STATUS_FVE_AUTH_INVALID_CONFIG                                            NTStatus      = 0xC021001C
+	STATUS_FVE_DEBUGGER_ENABLED                                               NTStatus      = 0xC021001D
+	STATUS_FVE_DRY_RUN_FAILED                                                 NTStatus      = 0xC021001E
+	STATUS_FVE_BAD_METADATA_POINTER                                           NTStatus      = 0xC021001F
+	STATUS_FVE_OLD_METADATA_COPY                                              NTStatus      = 0xC0210020
+	STATUS_FVE_REBOOT_REQUIRED                                                NTStatus      = 0xC0210021
+	STATUS_FVE_RAW_ACCESS                                                     NTStatus      = 0xC0210022
+	STATUS_FVE_RAW_BLOCKED                                                    NTStatus      = 0xC0210023
+	STATUS_FVE_NO_AUTOUNLOCK_MASTER_KEY                                       NTStatus      = 0xC0210024
+	STATUS_FVE_MOR_FAILED                                                     NTStatus      = 0xC0210025
+	STATUS_FVE_NO_FEATURE_LICENSE                                             NTStatus      = 0xC0210026
+	STATUS_FVE_POLICY_USER_DISABLE_RDV_NOT_ALLOWED                            NTStatus      = 0xC0210027
+	STATUS_FVE_CONV_RECOVERY_FAILED                                           NTStatus      = 0xC0210028
+	STATUS_FVE_VIRTUALIZED_SPACE_TOO_BIG                                      NTStatus      = 0xC0210029
+	STATUS_FVE_INVALID_DATUM_TYPE                                             NTStatus      = 0xC021002A
+	STATUS_FVE_VOLUME_TOO_SMALL                                               NTStatus      = 0xC0210030
+	STATUS_FVE_ENH_PIN_INVALID                                                NTStatus      = 0xC0210031
+	STATUS_FVE_FULL_ENCRYPTION_NOT_ALLOWED_ON_TP_STORAGE                      NTStatus      = 0xC0210032
+	STATUS_FVE_WIPE_NOT_ALLOWED_ON_TP_STORAGE                                 NTStatus      = 0xC0210033
+	STATUS_FVE_NOT_ALLOWED_ON_CSV_STACK                                       NTStatus      = 0xC0210034
+	STATUS_FVE_NOT_ALLOWED_ON_CLUSTER                                         NTStatus      = 0xC0210035
+	STATUS_FVE_NOT_ALLOWED_TO_UPGRADE_WHILE_CONVERTING                        NTStatus      = 0xC0210036
+	STATUS_FVE_WIPE_CANCEL_NOT_APPLICABLE                                     NTStatus      = 0xC0210037
+	STATUS_FVE_EDRIVE_DRY_RUN_FAILED                                          NTStatus      = 0xC0210038
+	STATUS_FVE_SECUREBOOT_DISABLED                                            NTStatus      = 0xC0210039
+	STATUS_FVE_SECUREBOOT_CONFIG_CHANGE                                       NTStatus      = 0xC021003A
+	STATUS_FVE_DEVICE_LOCKEDOUT                                               NTStatus      = 0xC021003B
+	STATUS_FVE_VOLUME_EXTEND_PREVENTS_EOW_DECRYPT                             NTStatus      = 0xC021003C
+	STATUS_FVE_NOT_DE_VOLUME                                                  NTStatus      = 0xC021003D
+	STATUS_FVE_PROTECTION_DISABLED                                            NTStatus      = 0xC021003E
+	STATUS_FVE_PROTECTION_CANNOT_BE_DISABLED                                  NTStatus      = 0xC021003F
+	STATUS_FVE_OSV_KSR_NOT_ALLOWED                                            NTStatus      = 0xC0210040
+	STATUS_FWP_CALLOUT_NOT_FOUND                                              NTStatus      = 0xC0220001
+	STATUS_FWP_CONDITION_NOT_FOUND                                            NTStatus      = 0xC0220002
+	STATUS_FWP_FILTER_NOT_FOUND                                               NTStatus      = 0xC0220003
+	STATUS_FWP_LAYER_NOT_FOUND                                                NTStatus      = 0xC0220004
+	STATUS_FWP_PROVIDER_NOT_FOUND                                             NTStatus      = 0xC0220005
+	STATUS_FWP_PROVIDER_CONTEXT_NOT_FOUND                                     NTStatus      = 0xC0220006
+	STATUS_FWP_SUBLAYER_NOT_FOUND                                             NTStatus      = 0xC0220007
+	STATUS_FWP_NOT_FOUND                                                      NTStatus      = 0xC0220008
+	STATUS_FWP_ALREADY_EXISTS                                                 NTStatus      = 0xC0220009
+	STATUS_FWP_IN_USE                                                         NTStatus      = 0xC022000A
+	STATUS_FWP_DYNAMIC_SESSION_IN_PROGRESS                                    NTStatus      = 0xC022000B
+	STATUS_FWP_WRONG_SESSION                                                  NTStatus      = 0xC022000C
+	STATUS_FWP_NO_TXN_IN_PROGRESS                                             NTStatus      = 0xC022000D
+	STATUS_FWP_TXN_IN_PROGRESS                                                NTStatus      = 0xC022000E
+	STATUS_FWP_TXN_ABORTED                                                    NTStatus      = 0xC022000F
+	STATUS_FWP_SESSION_ABORTED                                                NTStatus      = 0xC0220010
+	STATUS_FWP_INCOMPATIBLE_TXN                                               NTStatus      = 0xC0220011
+	STATUS_FWP_TIMEOUT                                                        NTStatus      = 0xC0220012
+	STATUS_FWP_NET_EVENTS_DISABLED                                            NTStatus      = 0xC0220013
+	STATUS_FWP_INCOMPATIBLE_LAYER                                             NTStatus      = 0xC0220014
+	STATUS_FWP_KM_CLIENTS_ONLY                                                NTStatus      = 0xC0220015
+	STATUS_FWP_LIFETIME_MISMATCH                                              NTStatus      = 0xC0220016
+	STATUS_FWP_BUILTIN_OBJECT                                                 NTStatus      = 0xC0220017
+	STATUS_FWP_TOO_MANY_CALLOUTS                                              NTStatus      = 0xC0220018
+	STATUS_FWP_NOTIFICATION_DROPPED                                           NTStatus      = 0xC0220019
+	STATUS_FWP_TRAFFIC_MISMATCH                                               NTStatus      = 0xC022001A
+	STATUS_FWP_INCOMPATIBLE_SA_STATE                                          NTStatus      = 0xC022001B
+	STATUS_FWP_NULL_POINTER                                                   NTStatus      = 0xC022001C
+	STATUS_FWP_INVALID_ENUMERATOR                                             NTStatus      = 0xC022001D
+	STATUS_FWP_INVALID_FLAGS                                                  NTStatus      = 0xC022001E
+	STATUS_FWP_INVALID_NET_MASK                                               NTStatus      = 0xC022001F
+	STATUS_FWP_INVALID_RANGE                                                  NTStatus      = 0xC0220020
+	STATUS_FWP_INVALID_INTERVAL                                               NTStatus      = 0xC0220021
+	STATUS_FWP_ZERO_LENGTH_ARRAY                                              NTStatus      = 0xC0220022
+	STATUS_FWP_NULL_DISPLAY_NAME                                              NTStatus      = 0xC0220023
+	STATUS_FWP_INVALID_ACTION_TYPE                                            NTStatus      = 0xC0220024
+	STATUS_FWP_INVALID_WEIGHT                                                 NTStatus      = 0xC0220025
+	STATUS_FWP_MATCH_TYPE_MISMATCH                                            NTStatus      = 0xC0220026
+	STATUS_FWP_TYPE_MISMATCH                                                  NTStatus      = 0xC0220027
+	STATUS_FWP_OUT_OF_BOUNDS                                                  NTStatus      = 0xC0220028
+	STATUS_FWP_RESERVED                                                       NTStatus      = 0xC0220029
+	STATUS_FWP_DUPLICATE_CONDITION                                            NTStatus      = 0xC022002A
+	STATUS_FWP_DUPLICATE_KEYMOD                                               NTStatus      = 0xC022002B
+	STATUS_FWP_ACTION_INCOMPATIBLE_WITH_LAYER                                 NTStatus      = 0xC022002C
+	STATUS_FWP_ACTION_INCOMPATIBLE_WITH_SUBLAYER                              NTStatus      = 0xC022002D
+	STATUS_FWP_CONTEXT_INCOMPATIBLE_WITH_LAYER                                NTStatus      = 0xC022002E
+	STATUS_FWP_CONTEXT_INCOMPATIBLE_WITH_CALLOUT                              NTStatus      = 0xC022002F
+	STATUS_FWP_INCOMPATIBLE_AUTH_METHOD                                       NTStatus      = 0xC0220030
+	STATUS_FWP_INCOMPATIBLE_DH_GROUP                                          NTStatus      = 0xC0220031
+	STATUS_FWP_EM_NOT_SUPPORTED                                               NTStatus      = 0xC0220032
+	STATUS_FWP_NEVER_MATCH                                                    NTStatus      = 0xC0220033
+	STATUS_FWP_PROVIDER_CONTEXT_MISMATCH                                      NTStatus      = 0xC0220034
+	STATUS_FWP_INVALID_PARAMETER                                              NTStatus      = 0xC0220035
+	STATUS_FWP_TOO_MANY_SUBLAYERS                                             NTStatus      = 0xC0220036
+	STATUS_FWP_CALLOUT_NOTIFICATION_FAILED                                    NTStatus      = 0xC0220037
+	STATUS_FWP_INVALID_AUTH_TRANSFORM                                         NTStatus      = 0xC0220038
+	STATUS_FWP_INVALID_CIPHER_TRANSFORM                                       NTStatus      = 0xC0220039
+	STATUS_FWP_INCOMPATIBLE_CIPHER_TRANSFORM                                  NTStatus      = 0xC022003A
+	STATUS_FWP_INVALID_TRANSFORM_COMBINATION                                  NTStatus      = 0xC022003B
+	STATUS_FWP_DUPLICATE_AUTH_METHOD                                          NTStatus      = 0xC022003C
+	STATUS_FWP_INVALID_TUNNEL_ENDPOINT                                        NTStatus      = 0xC022003D
+	STATUS_FWP_L2_DRIVER_NOT_READY                                            NTStatus      = 0xC022003E
+	STATUS_FWP_KEY_DICTATOR_ALREADY_REGISTERED                                NTStatus      = 0xC022003F
+	STATUS_FWP_KEY_DICTATION_INVALID_KEYING_MATERIAL                          NTStatus      = 0xC0220040
+	STATUS_FWP_CONNECTIONS_DISABLED                                           NTStatus      = 0xC0220041
+	STATUS_FWP_INVALID_DNS_NAME                                               NTStatus      = 0xC0220042
+	STATUS_FWP_STILL_ON                                                       NTStatus      = 0xC0220043
+	STATUS_FWP_IKEEXT_NOT_RUNNING                                             NTStatus      = 0xC0220044
+	STATUS_FWP_TCPIP_NOT_READY                                                NTStatus      = 0xC0220100
+	STATUS_FWP_INJECT_HANDLE_CLOSING                                          NTStatus      = 0xC0220101
+	STATUS_FWP_INJECT_HANDLE_STALE                                            NTStatus      = 0xC0220102
+	STATUS_FWP_CANNOT_PEND                                                    NTStatus      = 0xC0220103
+	STATUS_FWP_DROP_NOICMP                                                    NTStatus      = 0xC0220104
+	STATUS_NDIS_CLOSING                                                       NTStatus      = 0xC0230002
+	STATUS_NDIS_BAD_VERSION                                                   NTStatus      = 0xC0230004
+	STATUS_NDIS_BAD_CHARACTERISTICS                                           NTStatus      = 0xC0230005
+	STATUS_NDIS_ADAPTER_NOT_FOUND                                             NTStatus      = 0xC0230006
+	STATUS_NDIS_OPEN_FAILED                                                   NTStatus      = 0xC0230007
+	STATUS_NDIS_DEVICE_FAILED                                                 NTStatus      = 0xC0230008
+	STATUS_NDIS_MULTICAST_FULL                                                NTStatus      = 0xC0230009
+	STATUS_NDIS_MULTICAST_EXISTS                                              NTStatus      = 0xC023000A
+	STATUS_NDIS_MULTICAST_NOT_FOUND                                           NTStatus      = 0xC023000B
+	STATUS_NDIS_REQUEST_ABORTED                                               NTStatus      = 0xC023000C
+	STATUS_NDIS_RESET_IN_PROGRESS                                             NTStatus      = 0xC023000D
+	STATUS_NDIS_NOT_SUPPORTED                                                 NTStatus      = 0xC02300BB
+	STATUS_NDIS_INVALID_PACKET                                                NTStatus      = 0xC023000F
+	STATUS_NDIS_ADAPTER_NOT_READY                                             NTStatus      = 0xC0230011
+	STATUS_NDIS_INVALID_LENGTH                                                NTStatus      = 0xC0230014
+	STATUS_NDIS_INVALID_DATA                                                  NTStatus      = 0xC0230015
+	STATUS_NDIS_BUFFER_TOO_SHORT                                              NTStatus      = 0xC0230016
+	STATUS_NDIS_INVALID_OID                                                   NTStatus      = 0xC0230017
+	STATUS_NDIS_ADAPTER_REMOVED                                               NTStatus      = 0xC0230018
+	STATUS_NDIS_UNSUPPORTED_MEDIA                                             NTStatus      = 0xC0230019
+	STATUS_NDIS_GROUP_ADDRESS_IN_USE                                          NTStatus      = 0xC023001A
+	STATUS_NDIS_FILE_NOT_FOUND                                                NTStatus      = 0xC023001B
+	STATUS_NDIS_ERROR_READING_FILE                                            NTStatus      = 0xC023001C
+	STATUS_NDIS_ALREADY_MAPPED                                                NTStatus      = 0xC023001D
+	STATUS_NDIS_RESOURCE_CONFLICT                                             NTStatus      = 0xC023001E
+	STATUS_NDIS_MEDIA_DISCONNECTED                                            NTStatus      = 0xC023001F
+	STATUS_NDIS_INVALID_ADDRESS                                               NTStatus      = 0xC0230022
+	STATUS_NDIS_INVALID_DEVICE_REQUEST                                        NTStatus      = 0xC0230010
+	STATUS_NDIS_PAUSED                                                        NTStatus      = 0xC023002A
+	STATUS_NDIS_INTERFACE_NOT_FOUND                                           NTStatus      = 0xC023002B
+	STATUS_NDIS_UNSUPPORTED_REVISION                                          NTStatus      = 0xC023002C
+	STATUS_NDIS_INVALID_PORT                                                  NTStatus      = 0xC023002D
+	STATUS_NDIS_INVALID_PORT_STATE                                            NTStatus      = 0xC023002E
+	STATUS_NDIS_LOW_POWER_STATE                                               NTStatus      = 0xC023002F
+	STATUS_NDIS_REINIT_REQUIRED                                               NTStatus      = 0xC0230030
+	STATUS_NDIS_NO_QUEUES                                                     NTStatus      = 0xC0230031
+	STATUS_NDIS_DOT11_AUTO_CONFIG_ENABLED                                     NTStatus      = 0xC0232000
+	STATUS_NDIS_DOT11_MEDIA_IN_USE                                            NTStatus      = 0xC0232001
+	STATUS_NDIS_DOT11_POWER_STATE_INVALID                                     NTStatus      = 0xC0232002
+	STATUS_NDIS_PM_WOL_PATTERN_LIST_FULL                                      NTStatus      = 0xC0232003
+	STATUS_NDIS_PM_PROTOCOL_OFFLOAD_LIST_FULL                                 NTStatus      = 0xC0232004
+	STATUS_NDIS_DOT11_AP_CHANNEL_CURRENTLY_NOT_AVAILABLE                      NTStatus      = 0xC0232005
+	STATUS_NDIS_DOT11_AP_BAND_CURRENTLY_NOT_AVAILABLE                         NTStatus      = 0xC0232006
+	STATUS_NDIS_DOT11_AP_CHANNEL_NOT_ALLOWED                                  NTStatus      = 0xC0232007
+	STATUS_NDIS_DOT11_AP_BAND_NOT_ALLOWED                                     NTStatus      = 0xC0232008
+	STATUS_NDIS_INDICATION_REQUIRED                                           NTStatus      = 0x40230001
+	STATUS_NDIS_OFFLOAD_POLICY                                                NTStatus      = 0xC023100F
+	STATUS_NDIS_OFFLOAD_CONNECTION_REJECTED                                   NTStatus      = 0xC0231012
+	STATUS_NDIS_OFFLOAD_PATH_REJECTED                                         NTStatus      = 0xC0231013
+	STATUS_TPM_ERROR_MASK                                                     NTStatus      = 0xC0290000
+	STATUS_TPM_AUTHFAIL                                                       NTStatus      = 0xC0290001
+	STATUS_TPM_BADINDEX                                                       NTStatus      = 0xC0290002
+	STATUS_TPM_BAD_PARAMETER                                                  NTStatus      = 0xC0290003
+	STATUS_TPM_AUDITFAILURE                                                   NTStatus      = 0xC0290004
+	STATUS_TPM_CLEAR_DISABLED                                                 NTStatus      = 0xC0290005
+	STATUS_TPM_DEACTIVATED                                                    NTStatus      = 0xC0290006
+	STATUS_TPM_DISABLED                                                       NTStatus      = 0xC0290007
+	STATUS_TPM_DISABLED_CMD                                                   NTStatus      = 0xC0290008
+	STATUS_TPM_FAIL                                                           NTStatus      = 0xC0290009
+	STATUS_TPM_BAD_ORDINAL                                                    NTStatus      = 0xC029000A
+	STATUS_TPM_INSTALL_DISABLED                                               NTStatus      = 0xC029000B
+	STATUS_TPM_INVALID_KEYHANDLE                                              NTStatus      = 0xC029000C
+	STATUS_TPM_KEYNOTFOUND                                                    NTStatus      = 0xC029000D
+	STATUS_TPM_INAPPROPRIATE_ENC                                              NTStatus      = 0xC029000E
+	STATUS_TPM_MIGRATEFAIL                                                    NTStatus      = 0xC029000F
+	STATUS_TPM_INVALID_PCR_INFO                                               NTStatus      = 0xC0290010
+	STATUS_TPM_NOSPACE                                                        NTStatus      = 0xC0290011
+	STATUS_TPM_NOSRK                                                          NTStatus      = 0xC0290012
+	STATUS_TPM_NOTSEALED_BLOB                                                 NTStatus      = 0xC0290013
+	STATUS_TPM_OWNER_SET                                                      NTStatus      = 0xC0290014
+	STATUS_TPM_RESOURCES                                                      NTStatus      = 0xC0290015
+	STATUS_TPM_SHORTRANDOM                                                    NTStatus      = 0xC0290016
+	STATUS_TPM_SIZE                                                           NTStatus      = 0xC0290017
+	STATUS_TPM_WRONGPCRVAL                                                    NTStatus      = 0xC0290018
+	STATUS_TPM_BAD_PARAM_SIZE                                                 NTStatus      = 0xC0290019
+	STATUS_TPM_SHA_THREAD                                                     NTStatus      = 0xC029001A
+	STATUS_TPM_SHA_ERROR                                                      NTStatus      = 0xC029001B
+	STATUS_TPM_FAILEDSELFTEST                                                 NTStatus      = 0xC029001C
+	STATUS_TPM_AUTH2FAIL                                                      NTStatus      = 0xC029001D
+	STATUS_TPM_BADTAG                                                         NTStatus      = 0xC029001E
+	STATUS_TPM_IOERROR                                                        NTStatus      = 0xC029001F
+	STATUS_TPM_ENCRYPT_ERROR                                                  NTStatus      = 0xC0290020
+	STATUS_TPM_DECRYPT_ERROR                                                  NTStatus      = 0xC0290021
+	STATUS_TPM_INVALID_AUTHHANDLE                                             NTStatus      = 0xC0290022
+	STATUS_TPM_NO_ENDORSEMENT                                                 NTStatus      = 0xC0290023
+	STATUS_TPM_INVALID_KEYUSAGE                                               NTStatus      = 0xC0290024
+	STATUS_TPM_WRONG_ENTITYTYPE                                               NTStatus      = 0xC0290025
+	STATUS_TPM_INVALID_POSTINIT                                               NTStatus      = 0xC0290026
+	STATUS_TPM_INAPPROPRIATE_SIG                                              NTStatus      = 0xC0290027
+	STATUS_TPM_BAD_KEY_PROPERTY                                               NTStatus      = 0xC0290028
+	STATUS_TPM_BAD_MIGRATION                                                  NTStatus      = 0xC0290029
+	STATUS_TPM_BAD_SCHEME                                                     NTStatus      = 0xC029002A
+	STATUS_TPM_BAD_DATASIZE                                                   NTStatus      = 0xC029002B
+	STATUS_TPM_BAD_MODE                                                       NTStatus      = 0xC029002C
+	STATUS_TPM_BAD_PRESENCE                                                   NTStatus      = 0xC029002D
+	STATUS_TPM_BAD_VERSION                                                    NTStatus      = 0xC029002E
+	STATUS_TPM_NO_WRAP_TRANSPORT                                              NTStatus      = 0xC029002F
+	STATUS_TPM_AUDITFAIL_UNSUCCESSFUL                                         NTStatus      = 0xC0290030
+	STATUS_TPM_AUDITFAIL_SUCCESSFUL                                           NTStatus      = 0xC0290031
+	STATUS_TPM_NOTRESETABLE                                                   NTStatus      = 0xC0290032
+	STATUS_TPM_NOTLOCAL                                                       NTStatus      = 0xC0290033
+	STATUS_TPM_BAD_TYPE                                                       NTStatus      = 0xC0290034
+	STATUS_TPM_INVALID_RESOURCE                                               NTStatus      = 0xC0290035
+	STATUS_TPM_NOTFIPS                                                        NTStatus      = 0xC0290036
+	STATUS_TPM_INVALID_FAMILY                                                 NTStatus      = 0xC0290037
+	STATUS_TPM_NO_NV_PERMISSION                                               NTStatus      = 0xC0290038
+	STATUS_TPM_REQUIRES_SIGN                                                  NTStatus      = 0xC0290039
+	STATUS_TPM_KEY_NOTSUPPORTED                                               NTStatus      = 0xC029003A
+	STATUS_TPM_AUTH_CONFLICT                                                  NTStatus      = 0xC029003B
+	STATUS_TPM_AREA_LOCKED                                                    NTStatus      = 0xC029003C
+	STATUS_TPM_BAD_LOCALITY                                                   NTStatus      = 0xC029003D
+	STATUS_TPM_READ_ONLY                                                      NTStatus      = 0xC029003E
+	STATUS_TPM_PER_NOWRITE                                                    NTStatus      = 0xC029003F
+	STATUS_TPM_FAMILYCOUNT                                                    NTStatus      = 0xC0290040
+	STATUS_TPM_WRITE_LOCKED                                                   NTStatus      = 0xC0290041
+	STATUS_TPM_BAD_ATTRIBUTES                                                 NTStatus      = 0xC0290042
+	STATUS_TPM_INVALID_STRUCTURE                                              NTStatus      = 0xC0290043
+	STATUS_TPM_KEY_OWNER_CONTROL                                              NTStatus      = 0xC0290044
+	STATUS_TPM_BAD_COUNTER                                                    NTStatus      = 0xC0290045
+	STATUS_TPM_NOT_FULLWRITE                                                  NTStatus      = 0xC0290046
+	STATUS_TPM_CONTEXT_GAP                                                    NTStatus      = 0xC0290047
+	STATUS_TPM_MAXNVWRITES                                                    NTStatus      = 0xC0290048
+	STATUS_TPM_NOOPERATOR                                                     NTStatus      = 0xC0290049
+	STATUS_TPM_RESOURCEMISSING                                                NTStatus      = 0xC029004A
+	STATUS_TPM_DELEGATE_LOCK                                                  NTStatus      = 0xC029004B
+	STATUS_TPM_DELEGATE_FAMILY                                                NTStatus      = 0xC029004C
+	STATUS_TPM_DELEGATE_ADMIN                                                 NTStatus      = 0xC029004D
+	STATUS_TPM_TRANSPORT_NOTEXCLUSIVE                                         NTStatus      = 0xC029004E
+	STATUS_TPM_OWNER_CONTROL                                                  NTStatus      = 0xC029004F
+	STATUS_TPM_DAA_RESOURCES                                                  NTStatus      = 0xC0290050
+	STATUS_TPM_DAA_INPUT_DATA0                                                NTStatus      = 0xC0290051
+	STATUS_TPM_DAA_INPUT_DATA1                                                NTStatus      = 0xC0290052
+	STATUS_TPM_DAA_ISSUER_SETTINGS                                            NTStatus      = 0xC0290053
+	STATUS_TPM_DAA_TPM_SETTINGS                                               NTStatus      = 0xC0290054
+	STATUS_TPM_DAA_STAGE                                                      NTStatus      = 0xC0290055
+	STATUS_TPM_DAA_ISSUER_VALIDITY                                            NTStatus      = 0xC0290056
+	STATUS_TPM_DAA_WRONG_W                                                    NTStatus      = 0xC0290057
+	STATUS_TPM_BAD_HANDLE                                                     NTStatus      = 0xC0290058
+	STATUS_TPM_BAD_DELEGATE                                                   NTStatus      = 0xC0290059
+	STATUS_TPM_BADCONTEXT                                                     NTStatus      = 0xC029005A
+	STATUS_TPM_TOOMANYCONTEXTS                                                NTStatus      = 0xC029005B
+	STATUS_TPM_MA_TICKET_SIGNATURE                                            NTStatus      = 0xC029005C
+	STATUS_TPM_MA_DESTINATION                                                 NTStatus      = 0xC029005D
+	STATUS_TPM_MA_SOURCE                                                      NTStatus      = 0xC029005E
+	STATUS_TPM_MA_AUTHORITY                                                   NTStatus      = 0xC029005F
+	STATUS_TPM_PERMANENTEK                                                    NTStatus      = 0xC0290061
+	STATUS_TPM_BAD_SIGNATURE                                                  NTStatus      = 0xC0290062
+	STATUS_TPM_NOCONTEXTSPACE                                                 NTStatus      = 0xC0290063
+	STATUS_TPM_20_E_ASYMMETRIC                                                NTStatus      = 0xC0290081
+	STATUS_TPM_20_E_ATTRIBUTES                                                NTStatus      = 0xC0290082
+	STATUS_TPM_20_E_HASH                                                      NTStatus      = 0xC0290083
+	STATUS_TPM_20_E_VALUE                                                     NTStatus      = 0xC0290084
+	STATUS_TPM_20_E_HIERARCHY                                                 NTStatus      = 0xC0290085
+	STATUS_TPM_20_E_KEY_SIZE                                                  NTStatus      = 0xC0290087
+	STATUS_TPM_20_E_MGF                                                       NTStatus      = 0xC0290088
+	STATUS_TPM_20_E_MODE                                                      NTStatus      = 0xC0290089
+	STATUS_TPM_20_E_TYPE                                                      NTStatus      = 0xC029008A
+	STATUS_TPM_20_E_HANDLE                                                    NTStatus      = 0xC029008B
+	STATUS_TPM_20_E_KDF                                                       NTStatus      = 0xC029008C
+	STATUS_TPM_20_E_RANGE                                                     NTStatus      = 0xC029008D
+	STATUS_TPM_20_E_AUTH_FAIL                                                 NTStatus      = 0xC029008E
+	STATUS_TPM_20_E_NONCE                                                     NTStatus      = 0xC029008F
+	STATUS_TPM_20_E_PP                                                        NTStatus      = 0xC0290090
+	STATUS_TPM_20_E_SCHEME                                                    NTStatus      = 0xC0290092
+	STATUS_TPM_20_E_SIZE                                                      NTStatus      = 0xC0290095
+	STATUS_TPM_20_E_SYMMETRIC                                                 NTStatus      = 0xC0290096
+	STATUS_TPM_20_E_TAG                                                       NTStatus      = 0xC0290097
+	STATUS_TPM_20_E_SELECTOR                                                  NTStatus      = 0xC0290098
+	STATUS_TPM_20_E_INSUFFICIENT                                              NTStatus      = 0xC029009A
+	STATUS_TPM_20_E_SIGNATURE                                                 NTStatus      = 0xC029009B
+	STATUS_TPM_20_E_KEY                                                       NTStatus      = 0xC029009C
+	STATUS_TPM_20_E_POLICY_FAIL                                               NTStatus      = 0xC029009D
+	STATUS_TPM_20_E_INTEGRITY                                                 NTStatus      = 0xC029009F
+	STATUS_TPM_20_E_TICKET                                                    NTStatus      = 0xC02900A0
+	STATUS_TPM_20_E_RESERVED_BITS                                             NTStatus      = 0xC02900A1
+	STATUS_TPM_20_E_BAD_AUTH                                                  NTStatus      = 0xC02900A2
+	STATUS_TPM_20_E_EXPIRED                                                   NTStatus      = 0xC02900A3
+	STATUS_TPM_20_E_POLICY_CC                                                 NTStatus      = 0xC02900A4
+	STATUS_TPM_20_E_BINDING                                                   NTStatus      = 0xC02900A5
+	STATUS_TPM_20_E_CURVE                                                     NTStatus      = 0xC02900A6
+	STATUS_TPM_20_E_ECC_POINT                                                 NTStatus      = 0xC02900A7
+	STATUS_TPM_20_E_INITIALIZE                                                NTStatus      = 0xC0290100
+	STATUS_TPM_20_E_FAILURE                                                   NTStatus      = 0xC0290101
+	STATUS_TPM_20_E_SEQUENCE                                                  NTStatus      = 0xC0290103
+	STATUS_TPM_20_E_PRIVATE                                                   NTStatus      = 0xC029010B
+	STATUS_TPM_20_E_HMAC                                                      NTStatus      = 0xC0290119
+	STATUS_TPM_20_E_DISABLED                                                  NTStatus      = 0xC0290120
+	STATUS_TPM_20_E_EXCLUSIVE                                                 NTStatus      = 0xC0290121
+	STATUS_TPM_20_E_ECC_CURVE                                                 NTStatus      = 0xC0290123
+	STATUS_TPM_20_E_AUTH_TYPE                                                 NTStatus      = 0xC0290124
+	STATUS_TPM_20_E_AUTH_MISSING                                              NTStatus      = 0xC0290125
+	STATUS_TPM_20_E_POLICY                                                    NTStatus      = 0xC0290126
+	STATUS_TPM_20_E_PCR                                                       NTStatus      = 0xC0290127
+	STATUS_TPM_20_E_PCR_CHANGED                                               NTStatus      = 0xC0290128
+	STATUS_TPM_20_E_UPGRADE                                                   NTStatus      = 0xC029012D
+	STATUS_TPM_20_E_TOO_MANY_CONTEXTS                                         NTStatus      = 0xC029012E
+	STATUS_TPM_20_E_AUTH_UNAVAILABLE                                          NTStatus      = 0xC029012F
+	STATUS_TPM_20_E_REBOOT                                                    NTStatus      = 0xC0290130
+	STATUS_TPM_20_E_UNBALANCED                                                NTStatus      = 0xC0290131
+	STATUS_TPM_20_E_COMMAND_SIZE                                              NTStatus      = 0xC0290142
+	STATUS_TPM_20_E_COMMAND_CODE                                              NTStatus      = 0xC0290143
+	STATUS_TPM_20_E_AUTHSIZE                                                  NTStatus      = 0xC0290144
+	STATUS_TPM_20_E_AUTH_CONTEXT                                              NTStatus      = 0xC0290145
+	STATUS_TPM_20_E_NV_RANGE                                                  NTStatus      = 0xC0290146
+	STATUS_TPM_20_E_NV_SIZE                                                   NTStatus      = 0xC0290147
+	STATUS_TPM_20_E_NV_LOCKED                                                 NTStatus      = 0xC0290148
+	STATUS_TPM_20_E_NV_AUTHORIZATION                                          NTStatus      = 0xC0290149
+	STATUS_TPM_20_E_NV_UNINITIALIZED                                          NTStatus      = 0xC029014A
+	STATUS_TPM_20_E_NV_SPACE                                                  NTStatus      = 0xC029014B
+	STATUS_TPM_20_E_NV_DEFINED                                                NTStatus      = 0xC029014C
+	STATUS_TPM_20_E_BAD_CONTEXT                                               NTStatus      = 0xC0290150
+	STATUS_TPM_20_E_CPHASH                                                    NTStatus      = 0xC0290151
+	STATUS_TPM_20_E_PARENT                                                    NTStatus      = 0xC0290152
+	STATUS_TPM_20_E_NEEDS_TEST                                                NTStatus      = 0xC0290153
+	STATUS_TPM_20_E_NO_RESULT                                                 NTStatus      = 0xC0290154
+	STATUS_TPM_20_E_SENSITIVE                                                 NTStatus      = 0xC0290155
+	STATUS_TPM_COMMAND_BLOCKED                                                NTStatus      = 0xC0290400
+	STATUS_TPM_INVALID_HANDLE                                                 NTStatus      = 0xC0290401
+	STATUS_TPM_DUPLICATE_VHANDLE                                              NTStatus      = 0xC0290402
+	STATUS_TPM_EMBEDDED_COMMAND_BLOCKED                                       NTStatus      = 0xC0290403
+	STATUS_TPM_EMBEDDED_COMMAND_UNSUPPORTED                                   NTStatus      = 0xC0290404
+	STATUS_TPM_RETRY                                                          NTStatus      = 0xC0290800
+	STATUS_TPM_NEEDS_SELFTEST                                                 NTStatus      = 0xC0290801
+	STATUS_TPM_DOING_SELFTEST                                                 NTStatus      = 0xC0290802
+	STATUS_TPM_DEFEND_LOCK_RUNNING                                            NTStatus      = 0xC0290803
+	STATUS_TPM_COMMAND_CANCELED                                               NTStatus      = 0xC0291001
+	STATUS_TPM_TOO_MANY_CONTEXTS                                              NTStatus      = 0xC0291002
+	STATUS_TPM_NOT_FOUND                                                      NTStatus      = 0xC0291003
+	STATUS_TPM_ACCESS_DENIED                                                  NTStatus      = 0xC0291004
+	STATUS_TPM_INSUFFICIENT_BUFFER                                            NTStatus      = 0xC0291005
+	STATUS_TPM_PPI_FUNCTION_UNSUPPORTED                                       NTStatus      = 0xC0291006
+	STATUS_PCP_ERROR_MASK                                                     NTStatus      = 0xC0292000
+	STATUS_PCP_DEVICE_NOT_READY                                               NTStatus      = 0xC0292001
+	STATUS_PCP_INVALID_HANDLE                                                 NTStatus      = 0xC0292002
+	STATUS_PCP_INVALID_PARAMETER                                              NTStatus      = 0xC0292003
+	STATUS_PCP_FLAG_NOT_SUPPORTED                                             NTStatus      = 0xC0292004
+	STATUS_PCP_NOT_SUPPORTED                                                  NTStatus      = 0xC0292005
+	STATUS_PCP_BUFFER_TOO_SMALL                                               NTStatus      = 0xC0292006
+	STATUS_PCP_INTERNAL_ERROR                                                 NTStatus      = 0xC0292007
+	STATUS_PCP_AUTHENTICATION_FAILED                                          NTStatus      = 0xC0292008
+	STATUS_PCP_AUTHENTICATION_IGNORED                                         NTStatus      = 0xC0292009
+	STATUS_PCP_POLICY_NOT_FOUND                                               NTStatus      = 0xC029200A
+	STATUS_PCP_PROFILE_NOT_FOUND                                              NTStatus      = 0xC029200B
+	STATUS_PCP_VALIDATION_FAILED                                              NTStatus      = 0xC029200C
+	STATUS_PCP_DEVICE_NOT_FOUND                                               NTStatus      = 0xC029200D
+	STATUS_PCP_WRONG_PARENT                                                   NTStatus      = 0xC029200E
+	STATUS_PCP_KEY_NOT_LOADED                                                 NTStatus      = 0xC029200F
+	STATUS_PCP_NO_KEY_CERTIFICATION                                           NTStatus      = 0xC0292010
+	STATUS_PCP_KEY_NOT_FINALIZED                                              NTStatus      = 0xC0292011
+	STATUS_PCP_ATTESTATION_CHALLENGE_NOT_SET                                  NTStatus      = 0xC0292012
+	STATUS_PCP_NOT_PCR_BOUND                                                  NTStatus      = 0xC0292013
+	STATUS_PCP_KEY_ALREADY_FINALIZED                                          NTStatus      = 0xC0292014
+	STATUS_PCP_KEY_USAGE_POLICY_NOT_SUPPORTED                                 NTStatus      = 0xC0292015
+	STATUS_PCP_KEY_USAGE_POLICY_INVALID                                       NTStatus      = 0xC0292016
+	STATUS_PCP_SOFT_KEY_ERROR                                                 NTStatus      = 0xC0292017
+	STATUS_PCP_KEY_NOT_AUTHENTICATED                                          NTStatus      = 0xC0292018
+	STATUS_PCP_KEY_NOT_AIK                                                    NTStatus      = 0xC0292019
+	STATUS_PCP_KEY_NOT_SIGNING_KEY                                            NTStatus      = 0xC029201A
+	STATUS_PCP_LOCKED_OUT                                                     NTStatus      = 0xC029201B
+	STATUS_PCP_CLAIM_TYPE_NOT_SUPPORTED                                       NTStatus      = 0xC029201C
+	STATUS_PCP_TPM_VERSION_NOT_SUPPORTED                                      NTStatus      = 0xC029201D
+	STATUS_PCP_BUFFER_LENGTH_MISMATCH                                         NTStatus      = 0xC029201E
+	STATUS_PCP_IFX_RSA_KEY_CREATION_BLOCKED                                   NTStatus      = 0xC029201F
+	STATUS_PCP_TICKET_MISSING                                                 NTStatus      = 0xC0292020
+	STATUS_PCP_RAW_POLICY_NOT_SUPPORTED                                       NTStatus      = 0xC0292021
+	STATUS_PCP_KEY_HANDLE_INVALIDATED                                         NTStatus      = 0xC0292022
+	STATUS_PCP_UNSUPPORTED_PSS_SALT                                           NTStatus      = 0x40292023
+	STATUS_RTPM_CONTEXT_CONTINUE                                              NTStatus      = 0x00293000
+	STATUS_RTPM_CONTEXT_COMPLETE                                              NTStatus      = 0x00293001
+	STATUS_RTPM_NO_RESULT                                                     NTStatus      = 0xC0293002
+	STATUS_RTPM_PCR_READ_INCOMPLETE                                           NTStatus      = 0xC0293003
+	STATUS_RTPM_INVALID_CONTEXT                                               NTStatus      = 0xC0293004
+	STATUS_RTPM_UNSUPPORTED_CMD                                               NTStatus      = 0xC0293005
+	STATUS_TPM_ZERO_EXHAUST_ENABLED                                           NTStatus      = 0xC0294000
+	STATUS_HV_INVALID_HYPERCALL_CODE                                          NTStatus      = 0xC0350002
+	STATUS_HV_INVALID_HYPERCALL_INPUT                                         NTStatus      = 0xC0350003
+	STATUS_HV_INVALID_ALIGNMENT                                               NTStatus      = 0xC0350004
+	STATUS_HV_INVALID_PARAMETER                                               NTStatus      = 0xC0350005
+	STATUS_HV_ACCESS_DENIED                                                   NTStatus      = 0xC0350006
+	STATUS_HV_INVALID_PARTITION_STATE                                         NTStatus      = 0xC0350007
+	STATUS_HV_OPERATION_DENIED                                                NTStatus      = 0xC0350008
+	STATUS_HV_UNKNOWN_PROPERTY                                                NTStatus      = 0xC0350009
+	STATUS_HV_PROPERTY_VALUE_OUT_OF_RANGE                                     NTStatus      = 0xC035000A
+	STATUS_HV_INSUFFICIENT_MEMORY                                             NTStatus      = 0xC035000B
+	STATUS_HV_PARTITION_TOO_DEEP                                              NTStatus      = 0xC035000C
+	STATUS_HV_INVALID_PARTITION_ID                                            NTStatus      = 0xC035000D
+	STATUS_HV_INVALID_VP_INDEX                                                NTStatus      = 0xC035000E
+	STATUS_HV_INVALID_PORT_ID                                                 NTStatus      = 0xC0350011
+	STATUS_HV_INVALID_CONNECTION_ID                                           NTStatus      = 0xC0350012
+	STATUS_HV_INSUFFICIENT_BUFFERS                                            NTStatus      = 0xC0350013
+	STATUS_HV_NOT_ACKNOWLEDGED                                                NTStatus      = 0xC0350014
+	STATUS_HV_INVALID_VP_STATE                                                NTStatus      = 0xC0350015
+	STATUS_HV_ACKNOWLEDGED                                                    NTStatus      = 0xC0350016
+	STATUS_HV_INVALID_SAVE_RESTORE_STATE                                      NTStatus      = 0xC0350017
+	STATUS_HV_INVALID_SYNIC_STATE                                             NTStatus      = 0xC0350018
+	STATUS_HV_OBJECT_IN_USE                                                   NTStatus      = 0xC0350019
+	STATUS_HV_INVALID_PROXIMITY_DOMAIN_INFO                                   NTStatus      = 0xC035001A
+	STATUS_HV_NO_DATA                                                         NTStatus      = 0xC035001B
+	STATUS_HV_INACTIVE                                                        NTStatus      = 0xC035001C
+	STATUS_HV_NO_RESOURCES                                                    NTStatus      = 0xC035001D
+	STATUS_HV_FEATURE_UNAVAILABLE                                             NTStatus      = 0xC035001E
+	STATUS_HV_INSUFFICIENT_BUFFER                                             NTStatus      = 0xC0350033
+	STATUS_HV_INSUFFICIENT_DEVICE_DOMAINS                                     NTStatus      = 0xC0350038
+	STATUS_HV_CPUID_FEATURE_VALIDATION_ERROR                                  NTStatus      = 0xC035003C
+	STATUS_HV_CPUID_XSAVE_FEATURE_VALIDATION_ERROR                            NTStatus      = 0xC035003D
+	STATUS_HV_PROCESSOR_STARTUP_TIMEOUT                                       NTStatus      = 0xC035003E
+	STATUS_HV_SMX_ENABLED                                                     NTStatus      = 0xC035003F
+	STATUS_HV_INVALID_LP_INDEX                                                NTStatus      = 0xC0350041
+	STATUS_HV_INVALID_REGISTER_VALUE                                          NTStatus      = 0xC0350050
+	STATUS_HV_INVALID_VTL_STATE                                               NTStatus      = 0xC0350051
+	STATUS_HV_NX_NOT_DETECTED                                                 NTStatus      = 0xC0350055
+	STATUS_HV_INVALID_DEVICE_ID                                               NTStatus      = 0xC0350057
+	STATUS_HV_INVALID_DEVICE_STATE                                            NTStatus      = 0xC0350058
+	STATUS_HV_PENDING_PAGE_REQUESTS                                           NTStatus      = 0x00350059
+	STATUS_HV_PAGE_REQUEST_INVALID                                            NTStatus      = 0xC0350060
+	STATUS_HV_INVALID_CPU_GROUP_ID                                            NTStatus      = 0xC035006F
+	STATUS_HV_INVALID_CPU_GROUP_STATE                                         NTStatus      = 0xC0350070
+	STATUS_HV_OPERATION_FAILED                                                NTStatus      = 0xC0350071
+	STATUS_HV_NOT_ALLOWED_WITH_NESTED_VIRT_ACTIVE                             NTStatus      = 0xC0350072
+	STATUS_HV_INSUFFICIENT_ROOT_MEMORY                                        NTStatus      = 0xC0350073
+	STATUS_HV_NOT_PRESENT                                                     NTStatus      = 0xC0351000
+	STATUS_VID_DUPLICATE_HANDLER                                              NTStatus      = 0xC0370001
+	STATUS_VID_TOO_MANY_HANDLERS                                              NTStatus      = 0xC0370002
+	STATUS_VID_QUEUE_FULL                                                     NTStatus      = 0xC0370003
+	STATUS_VID_HANDLER_NOT_PRESENT                                            NTStatus      = 0xC0370004
+	STATUS_VID_INVALID_OBJECT_NAME                                            NTStatus      = 0xC0370005
+	STATUS_VID_PARTITION_NAME_TOO_LONG                                        NTStatus      = 0xC0370006
+	STATUS_VID_MESSAGE_QUEUE_NAME_TOO_LONG                                    NTStatus      = 0xC0370007
+	STATUS_VID_PARTITION_ALREADY_EXISTS                                       NTStatus      = 0xC0370008
+	STATUS_VID_PARTITION_DOES_NOT_EXIST                      
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/sys/windows/zerrors_windows.go","mode":420,"size":945502,"sha256":"fdf634bbd093494501a9aec0660aa53b434fdc2c2bb989e8d0925323e511358d","index":19,"count":20,"encoding":"utf-8","payloadBytes":33502}
+                 NTStatus      = 0xC0370009
+	STATUS_VID_PARTITION_NAME_NOT_FOUND                                       NTStatus      = 0xC037000A
+	STATUS_VID_MESSAGE_QUEUE_ALREADY_EXISTS                                   NTStatus      = 0xC037000B
+	STATUS_VID_EXCEEDED_MBP_ENTRY_MAP_LIMIT                                   NTStatus      = 0xC037000C
+	STATUS_VID_MB_STILL_REFERENCED                                            NTStatus      = 0xC037000D
+	STATUS_VID_CHILD_GPA_PAGE_SET_CORRUPTED                                   NTStatus      = 0xC037000E
+	STATUS_VID_INVALID_NUMA_SETTINGS                                          NTStatus      = 0xC037000F
+	STATUS_VID_INVALID_NUMA_NODE_INDEX                                        NTStatus      = 0xC0370010
+	STATUS_VID_NOTIFICATION_QUEUE_ALREADY_ASSOCIATED                          NTStatus      = 0xC0370011
+	STATUS_VID_INVALID_MEMORY_BLOCK_HANDLE                                    NTStatus      = 0xC0370012
+	STATUS_VID_PAGE_RANGE_OVERFLOW                                            NTStatus      = 0xC0370013
+	STATUS_VID_INVALID_MESSAGE_QUEUE_HANDLE                                   NTStatus      = 0xC0370014
+	STATUS_VID_INVALID_GPA_RANGE_HANDLE                                       NTStatus      = 0xC0370015
+	STATUS_VID_NO_MEMORY_BLOCK_NOTIFICATION_QUEUE                             NTStatus      = 0xC0370016
+	STATUS_VID_MEMORY_BLOCK_LOCK_COUNT_EXCEEDED                               NTStatus      = 0xC0370017
+	STATUS_VID_INVALID_PPM_HANDLE                                             NTStatus      = 0xC0370018
+	STATUS_VID_MBPS_ARE_LOCKED                                                NTStatus      = 0xC0370019
+	STATUS_VID_MESSAGE_QUEUE_CLOSED                                           NTStatus      = 0xC037001A
+	STATUS_VID_VIRTUAL_PROCESSOR_LIMIT_EXCEEDED                               NTStatus      = 0xC037001B
+	STATUS_VID_STOP_PENDING                                                   NTStatus      = 0xC037001C
+	STATUS_VID_INVALID_PROCESSOR_STATE                                        NTStatus      = 0xC037001D
+	STATUS_VID_EXCEEDED_KM_CONTEXT_COUNT_LIMIT                                NTStatus      = 0xC037001E
+	STATUS_VID_KM_INTERFACE_ALREADY_INITIALIZED                               NTStatus      = 0xC037001F
+	STATUS_VID_MB_PROPERTY_ALREADY_SET_RESET                                  NTStatus      = 0xC0370020
+	STATUS_VID_MMIO_RANGE_DESTROYED                                           NTStatus      = 0xC0370021
+	STATUS_VID_INVALID_CHILD_GPA_PAGE_SET                                     NTStatus      = 0xC0370022
+	STATUS_VID_RESERVE_PAGE_SET_IS_BEING_USED                                 NTStatus      = 0xC0370023
+	STATUS_VID_RESERVE_PAGE_SET_TOO_SMALL                                     NTStatus      = 0xC0370024
+	STATUS_VID_MBP_ALREADY_LOCKED_USING_RESERVED_PAGE                         NTStatus      = 0xC0370025
+	STATUS_VID_MBP_COUNT_EXCEEDED_LIMIT                                       NTStatus      = 0xC0370026
+	STATUS_VID_SAVED_STATE_CORRUPT                                            NTStatus      = 0xC0370027
+	STATUS_VID_SAVED_STATE_UNRECOGNIZED_ITEM                                  NTStatus      = 0xC0370028
+	STATUS_VID_SAVED_STATE_INCOMPATIBLE                                       NTStatus      = 0xC0370029
+	STATUS_VID_VTL_ACCESS_DENIED                                              NTStatus      = 0xC037002A
+	STATUS_VID_REMOTE_NODE_PARENT_GPA_PAGES_USED                              NTStatus      = 0x80370001
+	STATUS_IPSEC_BAD_SPI                                                      NTStatus      = 0xC0360001
+	STATUS_IPSEC_SA_LIFETIME_EXPIRED                                          NTStatus      = 0xC0360002
+	STATUS_IPSEC_WRONG_SA                                                     NTStatus      = 0xC0360003
+	STATUS_IPSEC_REPLAY_CHECK_FAILED                                          NTStatus      = 0xC0360004
+	STATUS_IPSEC_INVALID_PACKET                                               NTStatus      = 0xC0360005
+	STATUS_IPSEC_INTEGRITY_CHECK_FAILED                                       NTStatus      = 0xC0360006
+	STATUS_IPSEC_CLEAR_TEXT_DROP                                              NTStatus      = 0xC0360007
+	STATUS_IPSEC_AUTH_FIREWALL_DROP                                           NTStatus      = 0xC0360008
+	STATUS_IPSEC_THROTTLE_DROP                                                NTStatus      = 0xC0360009
+	STATUS_IPSEC_DOSP_BLOCK                                                   NTStatus      = 0xC0368000
+	STATUS_IPSEC_DOSP_RECEIVED_MULTICAST                                      NTStatus      = 0xC0368001
+	STATUS_IPSEC_DOSP_INVALID_PACKET                                          NTStatus      = 0xC0368002
+	STATUS_IPSEC_DOSP_STATE_LOOKUP_FAILED                                     NTStatus      = 0xC0368003
+	STATUS_IPSEC_DOSP_MAX_ENTRIES                                             NTStatus      = 0xC0368004
+	STATUS_IPSEC_DOSP_KEYMOD_NOT_ALLOWED                                      NTStatus      = 0xC0368005
+	STATUS_IPSEC_DOSP_MAX_PER_IP_RATELIMIT_QUEUES                             NTStatus      = 0xC0368006
+	STATUS_VOLMGR_INCOMPLETE_REGENERATION                                     NTStatus      = 0x80380001
+	STATUS_VOLMGR_INCOMPLETE_DISK_MIGRATION                                   NTStatus      = 0x80380002
+	STATUS_VOLMGR_DATABASE_FULL                                               NTStatus      = 0xC0380001
+	STATUS_VOLMGR_DISK_CONFIGURATION_CORRUPTED                                NTStatus      = 0xC0380002
+	STATUS_VOLMGR_DISK_CONFIGURATION_NOT_IN_SYNC                              NTStatus      = 0xC0380003
+	STATUS_VOLMGR_PACK_CONFIG_UPDATE_FAILED                                   NTStatus      = 0xC0380004
+	STATUS_VOLMGR_DISK_CONTAINS_NON_SIMPLE_VOLUME                             NTStatus      = 0xC0380005
+	STATUS_VOLMGR_DISK_DUPLICATE                                              NTStatus      = 0xC0380006
+	STATUS_VOLMGR_DISK_DYNAMIC                                                NTStatus      = 0xC0380007
+	STATUS_VOLMGR_DISK_ID_INVALID                                             NTStatus      = 0xC0380008
+	STATUS_VOLMGR_DISK_INVALID                                                NTStatus      = 0xC0380009
+	STATUS_VOLMGR_DISK_LAST_VOTER                                             NTStatus      = 0xC038000A
+	STATUS_VOLMGR_DISK_LAYOUT_INVALID                                         NTStatus      = 0xC038000B
+	STATUS_VOLMGR_DISK_LAYOUT_NON_BASIC_BETWEEN_BASIC_PARTITIONS              NTStatus      = 0xC038000C
+	STATUS_VOLMGR_DISK_LAYOUT_NOT_CYLINDER_ALIGNED                            NTStatus      = 0xC038000D
+	STATUS_VOLMGR_DISK_LAYOUT_PARTITIONS_TOO_SMALL                            NTStatus      = 0xC038000E
+	STATUS_VOLMGR_DISK_LAYOUT_PRIMARY_BETWEEN_LOGICAL_PARTITIONS              NTStatus      = 0xC038000F
+	STATUS_VOLMGR_DISK_LAYOUT_TOO_MANY_PARTITIONS                             NTStatus      = 0xC0380010
+	STATUS_VOLMGR_DISK_MISSING                                                NTStatus      = 0xC0380011
+	STATUS_VOLMGR_DISK_NOT_EMPTY                                              NTStatus      = 0xC0380012
+	STATUS_VOLMGR_DISK_NOT_ENOUGH_SPACE                                       NTStatus      = 0xC0380013
+	STATUS_VOLMGR_DISK_REVECTORING_FAILED                                     NTStatus      = 0xC0380014
+	STATUS_VOLMGR_DISK_SECTOR_SIZE_INVALID                                    NTStatus      = 0xC0380015
+	STATUS_VOLMGR_DISK_SET_NOT_CONTAINED                                      NTStatus      = 0xC0380016
+	STATUS_VOLMGR_DISK_USED_BY_MULTIPLE_MEMBERS                               NTStatus      = 0xC0380017
+	STATUS_VOLMGR_DISK_USED_BY_MULTIPLE_PLEXES                                NTStatus      = 0xC0380018
+	STATUS_VOLMGR_DYNAMIC_DISK_NOT_SUPPORTED                                  NTStatus      = 0xC0380019
+	STATUS_VOLMGR_EXTENT_ALREADY_USED                                         NTStatus      = 0xC038001A
+	STATUS_VOLMGR_EXTENT_NOT_CONTIGUOUS                                       NTStatus      = 0xC038001B
+	STATUS_VOLMGR_EXTENT_NOT_IN_PUBLIC_REGION                                 NTStatus      = 0xC038001C
+	STATUS_VOLMGR_EXTENT_NOT_SECTOR_ALIGNED                                   NTStatus      = 0xC038001D
+	STATUS_VOLMGR_EXTENT_OVERLAPS_EBR_PARTITION                               NTStatus      = 0xC038001E
+	STATUS_VOLMGR_EXTENT_VOLUME_LENGTHS_DO_NOT_MATCH                          NTStatus      = 0xC038001F
+	STATUS_VOLMGR_FAULT_TOLERANT_NOT_SUPPORTED                                NTStatus      = 0xC0380020
+	STATUS_VOLMGR_INTERLEAVE_LENGTH_INVALID                                   NTStatus      = 0xC0380021
+	STATUS_VOLMGR_MAXIMUM_REGISTERED_USERS                                    NTStatus      = 0xC0380022
+	STATUS_VOLMGR_MEMBER_IN_SYNC                                              NTStatus      = 0xC0380023
+	STATUS_VOLMGR_MEMBER_INDEX_DUPLICATE                                      NTStatus      = 0xC0380024
+	STATUS_VOLMGR_MEMBER_INDEX_INVALID                                        NTStatus      = 0xC0380025
+	STATUS_VOLMGR_MEMBER_MISSING                                              NTStatus      = 0xC0380026
+	STATUS_VOLMGR_MEMBER_NOT_DETACHED                                         NTStatus      = 0xC0380027
+	STATUS_VOLMGR_MEMBER_REGENERATING                                         NTStatus      = 0xC0380028
+	STATUS_VOLMGR_ALL_DISKS_FAILED                                            NTStatus      = 0xC0380029
+	STATUS_VOLMGR_NO_REGISTERED_USERS                                         NTStatus      = 0xC038002A
+	STATUS_VOLMGR_NO_SUCH_USER                                                NTStatus      = 0xC038002B
+	STATUS_VOLMGR_NOTIFICATION_RESET                                          NTStatus      = 0xC038002C
+	STATUS_VOLMGR_NUMBER_OF_MEMBERS_INVALID                                   NTStatus      = 0xC038002D
+	STATUS_VOLMGR_NUMBER_OF_PLEXES_INVALID                                    NTStatus      = 0xC038002E
+	STATUS_VOLMGR_PACK_DUPLICATE                                              NTStatus      = 0xC038002F
+	STATUS_VOLMGR_PACK_ID_INVALID                                             NTStatus      = 0xC0380030
+	STATUS_VOLMGR_PACK_INVALID                                                NTStatus      = 0xC0380031
+	STATUS_VOLMGR_PACK_NAME_INVALID                                           NTStatus      = 0xC0380032
+	STATUS_VOLMGR_PACK_OFFLINE                                                NTStatus      = 0xC0380033
+	STATUS_VOLMGR_PACK_HAS_QUORUM                                             NTStatus      = 0xC0380034
+	STATUS_VOLMGR_PACK_WITHOUT_QUORUM                                         NTStatus      = 0xC0380035
+	STATUS_VOLMGR_PARTITION_STYLE_INVALID                                     NTStatus      = 0xC0380036
+	STATUS_VOLMGR_PARTITION_UPDATE_FAILED                                     NTStatus      = 0xC0380037
+	STATUS_VOLMGR_PLEX_IN_SYNC                                                NTStatus      = 0xC0380038
+	STATUS_VOLMGR_PLEX_INDEX_DUPLICATE                                        NTStatus      = 0xC0380039
+	STATUS_VOLMGR_PLEX_INDEX_INVALID                                          NTStatus      = 0xC038003A
+	STATUS_VOLMGR_PLEX_LAST_ACTIVE                                            NTStatus      = 0xC038003B
+	STATUS_VOLMGR_PLEX_MISSING                                                NTStatus      = 0xC038003C
+	STATUS_VOLMGR_PLEX_REGENERATING                                           NTStatus      = 0xC038003D
+	STATUS_VOLMGR_PLEX_TYPE_INVALID                                           NTStatus      = 0xC038003E
+	STATUS_VOLMGR_PLEX_NOT_RAID5                                              NTStatus      = 0xC038003F
+	STATUS_VOLMGR_PLEX_NOT_SIMPLE                                             NTStatus      = 0xC0380040
+	STATUS_VOLMGR_STRUCTURE_SIZE_INVALID                                      NTStatus      = 0xC0380041
+	STATUS_VOLMGR_TOO_MANY_NOTIFICATION_REQUESTS                              NTStatus      = 0xC0380042
+	STATUS_VOLMGR_TRANSACTION_IN_PROGRESS                                     NTStatus      = 0xC0380043
+	STATUS_VOLMGR_UNEXPECTED_DISK_LAYOUT_CHANGE                               NTStatus      = 0xC0380044
+	STATUS_VOLMGR_VOLUME_CONTAINS_MISSING_DISK                                NTStatus      = 0xC0380045
+	STATUS_VOLMGR_VOLUME_ID_INVALID                                           NTStatus      = 0xC0380046
+	STATUS_VOLMGR_VOLUME_LENGTH_INVALID                                       NTStatus      = 0xC0380047
+	STATUS_VOLMGR_VOLUME_LENGTH_NOT_SECTOR_SIZE_MULTIPLE                      NTStatus      = 0xC0380048
+	STATUS_VOLMGR_VOLUME_NOT_MIRRORED                                         NTStatus      = 0xC0380049
+	STATUS_VOLMGR_VOLUME_NOT_RETAINED                                         NTStatus      = 0xC038004A
+	STATUS_VOLMGR_VOLUME_OFFLINE                                              NTStatus      = 0xC038004B
+	STATUS_VOLMGR_VOLUME_RETAINED                                             NTStatus      = 0xC038004C
+	STATUS_VOLMGR_NUMBER_OF_EXTENTS_INVALID                                   NTStatus      = 0xC038004D
+	STATUS_VOLMGR_DIFFERENT_SECTOR_SIZE                                       NTStatus      = 0xC038004E
+	STATUS_VOLMGR_BAD_BOOT_DISK                                               NTStatus      = 0xC038004F
+	STATUS_VOLMGR_PACK_CONFIG_OFFLINE                                         NTStatus      = 0xC0380050
+	STATUS_VOLMGR_PACK_CONFIG_ONLINE                                          NTStatus      = 0xC0380051
+	STATUS_VOLMGR_NOT_PRIMARY_PACK                                            NTStatus      = 0xC0380052
+	STATUS_VOLMGR_PACK_LOG_UPDATE_FAILED                                      NTStatus      = 0xC0380053
+	STATUS_VOLMGR_NUMBER_OF_DISKS_IN_PLEX_INVALID                             NTStatus      = 0xC0380054
+	STATUS_VOLMGR_NUMBER_OF_DISKS_IN_MEMBER_INVALID                           NTStatus      = 0xC0380055
+	STATUS_VOLMGR_VOLUME_MIRRORED                                             NTStatus      = 0xC0380056
+	STATUS_VOLMGR_PLEX_NOT_SIMPLE_SPANNED                                     NTStatus      = 0xC0380057
+	STATUS_VOLMGR_NO_VALID_LOG_COPIES                                         NTStatus      = 0xC0380058
+	STATUS_VOLMGR_PRIMARY_PACK_PRESENT                                        NTStatus      = 0xC0380059
+	STATUS_VOLMGR_NUMBER_OF_DISKS_INVALID                                     NTStatus      = 0xC038005A
+	STATUS_VOLMGR_MIRROR_NOT_SUPPORTED                                        NTStatus      = 0xC038005B
+	STATUS_VOLMGR_RAID5_NOT_SUPPORTED                                         NTStatus      = 0xC038005C
+	STATUS_BCD_NOT_ALL_ENTRIES_IMPORTED                                       NTStatus      = 0x80390001
+	STATUS_BCD_TOO_MANY_ELEMENTS                                              NTStatus      = 0xC0390002
+	STATUS_BCD_NOT_ALL_ENTRIES_SYNCHRONIZED                                   NTStatus      = 0x80390003
+	STATUS_VHD_DRIVE_FOOTER_MISSING                                           NTStatus      = 0xC03A0001
+	STATUS_VHD_DRIVE_FOOTER_CHECKSUM_MISMATCH                                 NTStatus      = 0xC03A0002
+	STATUS_VHD_DRIVE_FOOTER_CORRUPT                                           NTStatus      = 0xC03A0003
+	STATUS_VHD_FORMAT_UNKNOWN                                                 NTStatus      = 0xC03A0004
+	STATUS_VHD_FORMAT_UNSUPPORTED_VERSION                                     NTStatus      = 0xC03A0005
+	STATUS_VHD_SPARSE_HEADER_CHECKSUM_MISMATCH                                NTStatus      = 0xC03A0006
+	STATUS_VHD_SPARSE_HEADER_UNSUPPORTED_VERSION                              NTStatus      = 0xC03A0007
+	STATUS_VHD_SPARSE_HEADER_CORRUPT                                          NTStatus      = 0xC03A0008
+	STATUS_VHD_BLOCK_ALLOCATION_FAILURE                                       NTStatus      = 0xC03A0009
+	STATUS_VHD_BLOCK_ALLOCATION_TABLE_CORRUPT                                 NTStatus      = 0xC03A000A
+	STATUS_VHD_INVALID_BLOCK_SIZE                                             NTStatus      = 0xC03A000B
+	STATUS_VHD_BITMAP_MISMATCH                                                NTStatus      = 0xC03A000C
+	STATUS_VHD_PARENT_VHD_NOT_FOUND                                           NTStatus      = 0xC03A000D
+	STATUS_VHD_CHILD_PARENT_ID_MISMATCH                                       NTStatus      = 0xC03A000E
+	STATUS_VHD_CHILD_PARENT_TIMESTAMP_MISMATCH                                NTStatus      = 0xC03A000F
+	STATUS_VHD_METADATA_READ_FAILURE                                          NTStatus      = 0xC03A0010
+	STATUS_VHD_METADATA_WRITE_FAILURE                                         NTStatus      = 0xC03A0011
+	STATUS_VHD_INVALID_SIZE                                                   NTStatus      = 0xC03A0012
+	STATUS_VHD_INVALID_FILE_SIZE                                              NTStatus      = 0xC03A0013
+	STATUS_VIRTDISK_PROVIDER_NOT_FOUND                                        NTStatus      = 0xC03A0014
+	STATUS_VIRTDISK_NOT_VIRTUAL_DISK                                          NTStatus      = 0xC03A0015
+	STATUS_VHD_PARENT_VHD_ACCESS_DENIED                                       NTStatus      = 0xC03A0016
+	STATUS_VHD_CHILD_PARENT_SIZE_MISMATCH                                     NTStatus      = 0xC03A0017
+	STATUS_VHD_DIFFERENCING_CHAIN_CYCLE_DETECTED                              NTStatus      = 0xC03A0018
+	STATUS_VHD_DIFFERENCING_CHAIN_ERROR_IN_PARENT                             NTStatus      = 0xC03A0019
+	STATUS_VIRTUAL_DISK_LIMITATION                                            NTStatus      = 0xC03A001A
+	STATUS_VHD_INVALID_TYPE                                                   NTStatus      = 0xC03A001B
+	STATUS_VHD_INVALID_STATE                                                  NTStatus      = 0xC03A001C
+	STATUS_VIRTDISK_UNSUPPORTED_DISK_SECTOR_SIZE                              NTStatus      = 0xC03A001D
+	STATUS_VIRTDISK_DISK_ALREADY_OWNED                                        NTStatus      = 0xC03A001E
+	STATUS_VIRTDISK_DISK_ONLINE_AND_WRITABLE                                  NTStatus      = 0xC03A001F
+	STATUS_CTLOG_TRACKING_NOT_INITIALIZED                                     NTStatus      = 0xC03A0020
+	STATUS_CTLOG_LOGFILE_SIZE_EXCEEDED_MAXSIZE                                NTStatus      = 0xC03A0021
+	STATUS_CTLOG_VHD_CHANGED_OFFLINE                                          NTStatus      = 0xC03A0022
+	STATUS_CTLOG_INVALID_TRACKING_STATE                                       NTStatus      = 0xC03A0023
+	STATUS_CTLOG_INCONSISTENT_TRACKING_FILE                                   NTStatus      = 0xC03A0024
+	STATUS_VHD_METADATA_FULL                                                  NTStatus      = 0xC03A0028
+	STATUS_VHD_INVALID_CHANGE_TRACKING_ID                                     NTStatus      = 0xC03A0029
+	STATUS_VHD_CHANGE_TRACKING_DISABLED                                       NTStatus      = 0xC03A002A
+	STATUS_VHD_MISSING_CHANGE_TRACKING_INFORMATION                            NTStatus      = 0xC03A0030
+	STATUS_VHD_RESIZE_WOULD_TRUNCATE_DATA                                     NTStatus      = 0xC03A0031
+	STATUS_VHD_COULD_NOT_COMPUTE_MINIMUM_VIRTUAL_SIZE                         NTStatus      = 0xC03A0032
+	STATUS_VHD_ALREADY_AT_OR_BELOW_MINIMUM_VIRTUAL_SIZE                       NTStatus      = 0xC03A0033
+	STATUS_QUERY_STORAGE_ERROR                                                NTStatus      = 0x803A0001
+	STATUS_GDI_HANDLE_LEAK                                                    NTStatus      = 0x803F0001
+	STATUS_RKF_KEY_NOT_FOUND                                                  NTStatus      = 0xC0400001
+	STATUS_RKF_DUPLICATE_KEY                                                  NTStatus      = 0xC0400002
+	STATUS_RKF_BLOB_FULL                                                      NTStatus      = 0xC0400003
+	STATUS_RKF_STORE_FULL                                                     NTStatus      = 0xC0400004
+	STATUS_RKF_FILE_BLOCKED                                                   NTStatus      = 0xC0400005
+	STATUS_RKF_ACTIVE_KEY                                                     NTStatus      = 0xC0400006
+	STATUS_RDBSS_RESTART_OPERATION                                            NTStatus      = 0xC0410001
+	STATUS_RDBSS_CONTINUE_OPERATION                                           NTStatus      = 0xC0410002
+	STATUS_RDBSS_POST_OPERATION                                               NTStatus      = 0xC0410003
+	STATUS_RDBSS_RETRY_LOOKUP                                                 NTStatus      = 0xC0410004
+	STATUS_BTH_ATT_INVALID_HANDLE                                             NTStatus      = 0xC0420001
+	STATUS_BTH_ATT_READ_NOT_PERMITTED                                         NTStatus      = 0xC0420002
+	STATUS_BTH_ATT_WRITE_NOT_PERMITTED                                        NTStatus      = 0xC0420003
+	STATUS_BTH_ATT_INVALID_PDU                                                NTStatus      = 0xC0420004
+	STATUS_BTH_ATT_INSUFFICIENT_AUTHENTICATION                                NTStatus      = 0xC0420005
+	STATUS_BTH_ATT_REQUEST_NOT_SUPPORTED                                      NTStatus      = 0xC0420006
+	STATUS_BTH_ATT_INVALID_OFFSET                                             NTStatus      = 0xC0420007
+	STATUS_BTH_ATT_INSUFFICIENT_AUTHORIZATION                                 NTStatus      = 0xC0420008
+	STATUS_BTH_ATT_PREPARE_QUEUE_FULL                                         NTStatus      = 0xC0420009
+	STATUS_BTH_ATT_ATTRIBUTE_NOT_FOUND                                        NTStatus      = 0xC042000A
+	STATUS_BTH_ATT_ATTRIBUTE_NOT_LONG                                         NTStatus      = 0xC042000B
+	STATUS_BTH_ATT_INSUFFICIENT_ENCRYPTION_KEY_SIZE                           NTStatus      = 0xC042000C
+	STATUS_BTH_ATT_INVALID_ATTRIBUTE_VALUE_LENGTH                             NTStatus      = 0xC042000D
+	STATUS_BTH_ATT_UNLIKELY                                                   NTStatus      = 0xC042000E
+	STATUS_BTH_ATT_INSUFFICIENT_ENCRYPTION                                    NTStatus      = 0xC042000F
+	STATUS_BTH_ATT_UNSUPPORTED_GROUP_TYPE                                     NTStatus      = 0xC0420010
+	STATUS_BTH_ATT_INSUFFICIENT_RESOURCES                                     NTStatus      = 0xC0420011
+	STATUS_BTH_ATT_UNKNOWN_ERROR                                              NTStatus      = 0xC0421000
+	STATUS_SECUREBOOT_ROLLBACK_DETECTED                                       NTStatus      = 0xC0430001
+	STATUS_SECUREBOOT_POLICY_VIOLATION                                        NTStatus      = 0xC0430002
+	STATUS_SECUREBOOT_INVALID_POLICY                                          NTStatus      = 0xC0430003
+	STATUS_SECUREBOOT_POLICY_PUBLISHER_NOT_FOUND                              NTStatus      = 0xC0430004
+	STATUS_SECUREBOOT_POLICY_NOT_SIGNED                                       NTStatus      = 0xC0430005
+	STATUS_SECUREBOOT_NOT_ENABLED                                             NTStatus      = 0x80430006
+	STATUS_SECUREBOOT_FILE_REPLACED                                           NTStatus      = 0xC0430007
+	STATUS_SECUREBOOT_POLICY_NOT_AUTHORIZED                                   NTStatus      = 0xC0430008
+	STATUS_SECUREBOOT_POLICY_UNKNOWN                                          NTStatus      = 0xC0430009
+	STATUS_SECUREBOOT_POLICY_MISSING_ANTIROLLBACKVERSION                      NTStatus      = 0xC043000A
+	STATUS_SECUREBOOT_PLATFORM_ID_MISMATCH                                    NTStatus      = 0xC043000B
+	STATUS_SECUREBOOT_POLICY_ROLLBACK_DETECTED                                NTStatus      = 0xC043000C
+	STATUS_SECUREBOOT_POLICY_UPGRADE_MISMATCH                                 NTStatus      = 0xC043000D
+	STATUS_SECUREBOOT_REQUIRED_POLICY_FILE_MISSING                            NTStatus      = 0xC043000E
+	STATUS_SECUREBOOT_NOT_BASE_POLICY                                         NTStatus      = 0xC043000F
+	STATUS_SECUREBOOT_NOT_SUPPLEMENTAL_POLICY                                 NTStatus      = 0xC0430010
+	STATUS_PLATFORM_MANIFEST_NOT_AUTHORIZED                                   NTStatus      = 0xC0EB0001
+	STATUS_PLATFORM_MANIFEST_INVALID                                          NTStatus      = 0xC0EB0002
+	STATUS_PLATFORM_MANIFEST_FILE_NOT_AUTHORIZED                              NTStatus      = 0xC0EB0003
+	STATUS_PLATFORM_MANIFEST_CATALOG_NOT_AUTHORIZED                           NTStatus      = 0xC0EB0004
+	STATUS_PLATFORM_MANIFEST_BINARY_ID_NOT_FOUND                              NTStatus      = 0xC0EB0005
+	STATUS_PLATFORM_MANIFEST_NOT_ACTIVE                                       NTStatus      = 0xC0EB0006
+	STATUS_PLATFORM_MANIFEST_NOT_SIGNED                                       NTStatus      = 0xC0EB0007
+	STATUS_SYSTEM_INTEGRITY_ROLLBACK_DETECTED                                 NTStatus      = 0xC0E90001
+	STATUS_SYSTEM_INTEGRITY_POLICY_VIOLATION                                  NTStatus      = 0xC0E90002
+	STATUS_SYSTEM_INTEGRITY_INVALID_POLICY                                    NTStatus      = 0xC0E90003
+	STATUS_SYSTEM_INTEGRITY_POLICY_NOT_SIGNED                                 NTStatus      = 0xC0E90004
+	STATUS_SYSTEM_INTEGRITY_TOO_MANY_POLICIES                                 NTStatus      = 0xC0E90005
+	STATUS_SYSTEM_INTEGRITY_SUPPLEMENTAL_POLICY_NOT_AUTHORIZED                NTStatus      = 0xC0E90006
+	STATUS_NO_APPLICABLE_APP_LICENSES_FOUND                                   NTStatus      = 0xC0EA0001
+	STATUS_CLIP_LICENSE_NOT_FOUND                                             NTStatus      = 0xC0EA0002
+	STATUS_CLIP_DEVICE_LICENSE_MISSING                                        NTStatus      = 0xC0EA0003
+	STATUS_CLIP_LICENSE_INVALID_SIGNATURE                                     NTStatus      = 0xC0EA0004
+	STATUS_CLIP_KEYHOLDER_LICENSE_MISSING_OR_INVALID                          NTStatus      = 0xC0EA0005
+	STATUS_CLIP_LICENSE_EXPIRED                                               NTStatus      = 0xC0EA0006
+	STATUS_CLIP_LICENSE_SIGNED_BY_UNKNOWN_SOURCE                              NTStatus      = 0xC0EA0007
+	STATUS_CLIP_LICENSE_NOT_SIGNED                                            NTStatus      = 0xC0EA0008
+	STATUS_CLIP_LICENSE_HARDWARE_ID_OUT_OF_TOLERANCE                          NTStatus      = 0xC0EA0009
+	STATUS_CLIP_LICENSE_DEVICE_ID_MISMATCH                                    NTStatus      = 0xC0EA000A
+	STATUS_AUDIO_ENGINE_NODE_NOT_FOUND                                        NTStatus      = 0xC0440001
+	STATUS_HDAUDIO_EMPTY_CONNECTION_LIST                                      NTStatus      = 0xC0440002
+	STATUS_HDAUDIO_CONNECTION_LIST_NOT_SUPPORTED                              NTStatus      = 0xC0440003
+	STATUS_HDAUDIO_NO_LOGICAL_DEVICES_CREATED                                 NTStatus      = 0xC0440004
+	STATUS_HDAUDIO_NULL_LINKED_LIST_ENTRY                                     NTStatus      = 0xC0440005
+	STATUS_SPACES_REPAIRED                                                    NTStatus      = 0x00E70000
+	STATUS_SPACES_PAUSE                                                       NTStatus      = 0x00E70001
+	STATUS_SPACES_COMPLETE                                                    NTStatus      = 0x00E70002
+	STATUS_SPACES_REDIRECT                                                    NTStatus      = 0x00E70003
+	STATUS_SPACES_FAULT_DOMAIN_TYPE_INVALID                                   NTStatus      = 0xC0E70001
+	STATUS_SPACES_RESILIENCY_TYPE_INVALID                                     NTStatus      = 0xC0E70003
+	STATUS_SPACES_DRIVE_SECTOR_SIZE_INVALID                                   NTStatus      = 0xC0E70004
+	STATUS_SPACES_DRIVE_REDUNDANCY_INVALID                                    NTStatus      = 0xC0E70006
+	STATUS_SPACES_NUMBER_OF_DATA_COPIES_INVALID                               NTStatus      = 0xC0E70007
+	STATUS_SPACES_INTERLEAVE_LENGTH_INVALID                                   NTStatus      = 0xC0E70009
+	STATUS_SPACES_NUMBER_OF_COLUMNS_INVALID                                   NTStatus      = 0xC0E7000A
+	STATUS_SPACES_NOT_ENOUGH_DRIVES                                           NTStatus      = 0xC0E7000B
+	STATUS_SPACES_EXTENDED_ERROR                                              NTStatus      = 0xC0E7000C
+	STATUS_SPACES_PROVISIONING_TYPE_INVALID                                   NTStatus      = 0xC0E7000D
+	STATUS_SPACES_ALLOCATION_SIZE_INVALID                                     NTStatus      = 0xC0E7000E
+	STATUS_SPACES_ENCLOSURE_AWARE_INVALID                                     NTStatus      = 0xC0E7000F
+	STATUS_SPACES_WRITE_CACHE_SIZE_INVALID                                    NTStatus      = 0xC0E70010
+	STATUS_SPACES_NUMBER_OF_GROUPS_INVALID                                    NTStatus      = 0xC0E70011
+	STATUS_SPACES_DRIVE_OPERATIONAL_STATE_INVALID                             NTStatus      = 0xC0E70012
+	STATUS_SPACES_UPDATE_COLUMN_STATE                                         NTStatus      = 0xC0E70013
+	STATUS_SPACES_MAP_REQUIRED                                                NTStatus      = 0xC0E70014
+	STATUS_SPACES_UNSUPPORTED_VERSION                                         NTStatus      = 0xC0E70015
+	STATUS_SPACES_CORRUPT_METADATA                                            NTStatus      = 0xC0E70016
+	STATUS_SPACES_DRT_FULL                                                    NTStatus      = 0xC0E70017
+	STATUS_SPACES_INCONSISTENCY                                               NTStatus      = 0xC0E70018
+	STATUS_SPACES_LOG_NOT_READY                                               NTStatus      = 0xC0E70019
+	STATUS_SPACES_NO_REDUNDANCY                                               NTStatus      = 0xC0E7001A
+	STATUS_SPACES_DRIVE_NOT_READY                                             NTStatus      = 0xC0E7001B
+	STATUS_SPACES_DRIVE_SPLIT                                                 NTStatus      = 0xC0E7001C
+	STATUS_SPACES_DRIVE_LOST_DATA                                             NTStatus      = 0xC0E7001D
+	STATUS_SPACES_ENTRY_INCOMPLETE                                            NTStatus      = 0xC0E7001E
+	STATUS_SPACES_ENTRY_INVALID                                               NTStatus      = 0xC0E7001F
+	STATUS_SPACES_MARK_DIRTY                                                  NTStatus      = 0xC0E70020
+	STATUS_VOLSNAP_BOOTFILE_NOT_VALID                                         NTStatus      = 0xC0500003
+	STATUS_VOLSNAP_ACTIVATION_TIMEOUT                                         NTStatus      = 0xC0500004
+	STATUS_IO_PREEMPTED                                                       NTStatus      = 0xC0510001
+	STATUS_SVHDX_ERROR_STORED                                                 NTStatus      = 0xC05C0000
+	STATUS_SVHDX_ERROR_NOT_AVAILABLE                                          NTStatus      = 0xC05CFF00
+	STATUS_SVHDX_UNIT_ATTENTION_AVAILABLE                                     NTStatus      = 0xC05CFF01
+	STATUS_SVHDX_UNIT_ATTENTION_CAPACITY_DATA_CHANGED                         NTStatus      = 0xC05CFF02
+	STATUS_SVHDX_UNIT_ATTENTION_RESERVATIONS_PREEMPTED                        NTStatus      = 0xC05CFF03
+	STATUS_SVHDX_UNIT_ATTENTION_RESERVATIONS_RELEASED                         NTStatus      = 0xC05CFF04
+	STATUS_SVHDX_UNIT_ATTENTION_REGISTRATIONS_PREEMPTED                       NTStatus      = 0xC05CFF05
+	STATUS_SVHDX_UNIT_ATTENTION_OPERATING_DEFINITION_CHANGED                  NTStatus      = 0xC05CFF06
+	STATUS_SVHDX_RESERVATION_CONFLICT                                         NTStatus      = 0xC05CFF07
+	STATUS_SVHDX_WRONG_FILE_TYPE                                              NTStatus      = 0xC05CFF08
+	STATUS_SVHDX_VERSION_MISMATCH                                             NTStatus      = 0xC05CFF09
+	STATUS_VHD_SHARED                                                         NTStatus      = 0xC05CFF0A
+	STATUS_SVHDX_NO_INITIATOR                                                 NTStatus      = 0xC05CFF0B
+	STATUS_VHDSET_BACKING_STORAGE_NOT_FOUND                                   NTStatus      = 0xC05CFF0C
+	STATUS_SMB_NO_PREAUTH_INTEGRITY_HASH_OVERLAP                              NTStatus      = 0xC05D0000
+	STATUS_SMB_BAD_CLUSTER_DIALECT                                            NTStatus      = 0xC05D0001
+	STATUS_SMB_GUEST_LOGON_BLOCKED                                            NTStatus      = 0xC05D0002
+	STATUS_SECCORE_INVALID_COMMAND                                            NTStatus      = 0xC0E80000
+	STATUS_VSM_NOT_INITIALIZED                                                NTStatus      = 0xC0450000
+	STATUS_VSM_DMA_PROTECTION_NOT_IN_USE                                      NTStatus      = 0xC0450001
+	STATUS_APPEXEC_CONDITION_NOT_SATISFIED                                    NTStatus      = 0xC0EC0000
+	STATUS_APPEXEC_HANDLE_INVALIDATED                                         NTStatus      = 0xC0EC0001
+	STATUS_APPEXEC_INVALID_HOST_GENERATION                                    NTStatus      = 0xC0EC0002
+	STATUS_APPEXEC_UNEXPECTED_PROCESS_REGISTRATION                            NTStatus      = 0xC0EC0003
+	STATUS_APPEXEC_INVALID_HOST_STATE                                         NTStatus      = 0xC0EC0004
+	STATUS_APPEXEC_NO_DONOR                                                   NTStatus      = 0xC0EC0005
+	STATUS_APPEXEC_HOST_ID_MISMATCH                                           NTStatus      = 0xC0EC0006
+	STATUS_APPEXEC_UNKNOWN_USER                                               NTStatus      = 0xC0EC0007
+)
+
+@@END
 @@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/sys/windows/zknownfolderids_windows.go","mode":420,"size":19145,"sha256":"3815bbaa8adf5400041954decc56e8889eb56eb20bfc30053e7799703af0fc95","index":0,"count":1,"encoding":"utf-8","payloadBytes":19145}
 // Code generated by 'mkknownfolderids.bash'; DO NOT EDIT.
 
@@ -138543,2541 +139350,5 @@ help: ## Display this help screen
 goversion ?= "1.20"
 test_version: ## Run tests inside Docker with given version (defaults to 1.20 oldest supported). Example: make test_version goversion=1.20
 	@docker run --rm -it -v $(shell pwd):/project golang:$(goversion) /bin/sh -c "cd /project && make init check"
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/labstack/echo/v4/bind.go","mode":420,"size":15356,"sha256":"9ddbb4ec5da411a4da481881da38b81b9dac6ef354f0352516cdbf3114ab1ffc","index":0,"count":1,"encoding":"utf-8","payloadBytes":15356}
-// SPDX-License-Identifier: MIT
-// SPDX-FileCopyrightText: © 2015 LabStack LLC and Echo contributors
-
-package echo
-
-import (
-	"encoding"
-	"encoding/xml"
-	"errors"
-	"fmt"
-	"mime/multipart"
-	"net/http"
-	"reflect"
-	"strconv"
-	"strings"
-)
-
-// Binder is the interface that wraps the Bind method.
-type Binder interface {
-	Bind(i interface{}, c Context) error
-}
-
-// DefaultBinder is the default implementation of the Binder interface.
-type DefaultBinder struct{}
-
-// BindUnmarshaler is the interface used to wrap the UnmarshalParam method.
-// Types that don't implement this, but do implement encoding.TextUnmarshaler
-// will use that interface instead.
-type BindUnmarshaler interface {
-	// UnmarshalParam decodes and assigns a value from an form or query param.
-	UnmarshalParam(param string) error
-}
-
-// bindMultipleUnmarshaler is used by binder to unmarshal multiple values from request at once to
-// type implementing this interface. For example request could have multiple query fields `?a=1&a=2&b=test` in that case
-// for `a` following slice `["1", "2"] will be passed to unmarshaller.
-type bindMultipleUnmarshaler interface {
-	UnmarshalParams(params []string) error
-}
-
-// BindPathParams binds path params to bindable object
-func (b *DefaultBinder) BindPathParams(c Context, i interface{}) error {
-	names := c.ParamNames()
-	values := c.ParamValues()
-	params := map[string][]string{}
-	for i, name := range names {
-		params[name] = []string{values[i]}
-	}
-	if err := b.bindData(i, params, "param", nil); err != nil {
-		return NewHTTPError(http.StatusBadRequest, err.Error()).SetInternal(err)
-	}
-	return nil
-}
-
-// BindQueryParams binds query params to bindable object
-func (b *DefaultBinder) BindQueryParams(c Context, i interface{}) error {
-	if err := b.bindData(i, c.QueryParams(), "query", nil); err != nil {
-		return NewHTTPError(http.StatusBadRequest, err.Error()).SetInternal(err)
-	}
-	return nil
-}
-
-// BindBody binds request body contents to bindable object
-// NB: then binding forms take note that this implementation uses standard library form parsing
-// which parses form data from BOTH URL and BODY if content type is not MIMEMultipartForm
-// See non-MIMEMultipartForm: https://golang.org/pkg/net/http/#Request.ParseForm
-// See MIMEMultipartForm: https://golang.org/pkg/net/http/#Request.ParseMultipartForm
-func (b *DefaultBinder) BindBody(c Context, i interface{}) (err error) {
-	req := c.Request()
-	if req.ContentLength == 0 {
-		return
-	}
-
-	// mediatype is found like `mime.ParseMediaType()` does it
-	base, _, _ := strings.Cut(req.Header.Get(HeaderContentType), ";")
-	mediatype := strings.TrimSpace(base)
-
-	switch mediatype {
-	case MIMEApplicationJSON:
-		if err = c.Echo().JSONSerializer.Deserialize(c, i); err != nil {
-			switch err.(type) {
-			case *HTTPError:
-				return err
-			default:
-				return NewHTTPError(http.StatusBadRequest, err.Error()).SetInternal(err)
-			}
-		}
-	case MIMEApplicationXML, MIMETextXML:
-		if err = xml.NewDecoder(req.Body).Decode(i); err != nil {
-			if ute, ok := err.(*xml.UnsupportedTypeError); ok {
-				return NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Unsupported type error: type=%v, error=%v", ute.Type, ute.Error())).SetInternal(err)
-			} else if se, ok := err.(*xml.SyntaxError); ok {
-				return NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Syntax error: line=%v, error=%v", se.Line, se.Error())).SetInternal(err)
-			}
-			return NewHTTPError(http.StatusBadRequest, err.Error()).SetInternal(err)
-		}
-	case MIMEApplicationForm:
-		params, err := c.FormParams()
-		if err != nil {
-			return NewHTTPError(http.StatusBadRequest, err.Error()).SetInternal(err)
-		}
-		if err = b.bindData(i, params, "form", nil); err != nil {
-			return NewHTTPError(http.StatusBadRequest, err.Error()).SetInternal(err)
-		}
-	case MIMEMultipartForm:
-		params, err := c.MultipartForm()
-		if err != nil {
-			return NewHTTPError(http.StatusBadRequest, err.Error()).SetInternal(err)
-		}
-		if err = b.bindData(i, params.Value, "form", params.File); err != nil {
-			return NewHTTPError(http.StatusBadRequest, err.Error()).SetInternal(err)
-		}
-	default:
-		return ErrUnsupportedMediaType
-	}
-	return nil
-}
-
-// BindHeaders binds HTTP headers to a bindable object
-func (b *DefaultBinder) BindHeaders(c Context, i interface{}) error {
-	if err := b.bindData(i, c.Request().Header, "header", nil); err != nil {
-		return NewHTTPError(http.StatusBadRequest, err.Error()).SetInternal(err)
-	}
-	return nil
-}
-
-// Bind implements the `Binder#Bind` function.
-// Binding is done in following order: 1) path params; 2) query params; 3) request body. Each step COULD override previous
-// step binded values. For single source binding use their own methods BindBody, BindQueryParams, BindPathParams.
-func (b *DefaultBinder) Bind(i interface{}, c Context) (err error) {
-	if err := b.BindPathParams(c, i); err != nil {
-		return err
-	}
-	// Only bind query parameters for GET/DELETE/HEAD to avoid unexpected behavior with destination struct binding from body.
-	// For example a request URL `&id=1&lang=en` with body `{"id":100,"lang":"de"}` would lead to precedence issues.
-	// The HTTP method check restores pre-v4.1.11 behavior to avoid these problems (see issue #1670)
-	method := c.Request().Method
-	if method == http.MethodGet || method == http.MethodDelete || method == http.MethodHead {
-		if err = b.BindQueryParams(c, i); err != nil {
-			return err
-		}
-	}
-	return b.BindBody(c, i)
-}
-
-// bindData will bind data ONLY fields in destination struct that have EXPLICIT tag
-func (b *DefaultBinder) bindData(destination interface{}, data map[string][]string, tag string, dataFiles map[string][]*multipart.FileHeader) error {
-	if destination == nil || (len(data) == 0 && len(dataFiles) == 0) {
-		return nil
-	}
-	hasFiles := len(dataFiles) > 0
-	typ := reflect.TypeOf(destination).Elem()
-	val := reflect.ValueOf(destination).Elem()
-
-	// Support binding to limited Map destinations:
-	// - map[string][]string,
-	// - map[string]string <-- (binds first value from data slice)
-	// - map[string]interface{}
-	// You are better off binding to struct but there are user who want this map feature. Source of data for these cases are:
-	// params,query,header,form as these sources produce string values, most of the time slice of strings, actually.
-	if typ.Kind() == reflect.Map && typ.Key().Kind() == reflect.String {
-		k := typ.Elem().Kind()
-		isElemInterface := k == reflect.Interface
-		isElemString := k == reflect.String
-		isElemSliceOfStrings := k == reflect.Slice && typ.Elem().Elem().Kind() == reflect.String
-		if !(isElemSliceOfStrings || isElemString || isElemInterface) {
-			return nil
-		}
-		if val.IsNil() {
-			val.Set(reflect.MakeMap(typ))
-		}
-		for k, v := range data {
-			if isElemString {
-				val.SetMapIndex(reflect.ValueOf(k), reflect.ValueOf(v[0]))
-			} else if isElemInterface {
-				// To maintain backward compatibility, we always bind to the first string value
-				// and not the slice of strings when dealing with map[string]interface{}{}
-				val.SetMapIndex(reflect.ValueOf(k), reflect.ValueOf(v[0]))
-			} else {
-				val.SetMapIndex(reflect.ValueOf(k), reflect.ValueOf(v))
-			}
-		}
-		return nil
-	}
-
-	// !struct
-	if typ.Kind() != reflect.Struct {
-		if tag == "param" || tag == "query" || tag == "header" {
-			// incompatible type, data is probably to be found in the body
-			return nil
-		}
-		return errors.New("binding element must be a struct")
-	}
-
-	for i := 0; i < typ.NumField(); i++ { // iterate over all destination fields
-		typeField := typ.Field(i)
-		structField := val.Field(i)
-		if typeField.Anonymous {
-			if structField.Kind() == reflect.Ptr {
-				structField = structField.Elem()
-			}
-		}
-		if !structField.CanSet() {
-			continue
-		}
-		structFieldKind := structField.Kind()
-		inputFieldName := typeField.Tag.Get(tag)
-		if typeField.Anonymous && structFieldKind == reflect.Struct && inputFieldName != "" {
-			// if anonymous struct with query/param/form tags, report an error
-			return errors.New("query/param/form tags are not allowed with anonymous struct field")
-		}
-
-		if inputFieldName == "" {
-			// If tag is nil, we inspect if the field is a not BindUnmarshaler struct and try to bind data into it (might contain fields with tags).
-			// structs that implement BindUnmarshaler are bound only when they have explicit tag
-			if _, ok := structField.Addr().Interface().(BindUnmarshaler); !ok && structFieldKind == reflect.Struct {
-				if err := b.bindData(structField.Addr().Interface(), data, tag, dataFiles); err != nil {
-					return err
-				}
-			}
-			// does not have explicit tag and is not an ordinary struct - so move to next field
-			continue
-		}
-
-		if hasFiles {
-			if ok, err := isFieldMultipartFile(structField.Type()); err != nil {
-				return err
-			} else if ok {
-				if ok := setMultipartFileHeaderTypes(structField, inputFieldName, dataFiles); ok {
-					continue
-				}
-			}
-		}
-
-		inputValue, exists := data[inputFieldName]
-		if !exists {
-			// Go json.Unmarshal supports case-insensitive binding.  However the
-			// url params are bound case-sensitive which is inconsistent.  To
-			// fix this we must check all of the map values in a
-			// case-insensitive search.
-			for k, v := range data {
-				if strings.EqualFold(k, inputFieldName) {
-					inputValue = v
-					exists = true
-					break
-				}
-			}
-		}
-
-		if !exists {
-			continue
-		}
-
-		// NOTE: algorithm here is not particularly sophisticated. It probably does not work with absurd types like `**[]*int`
-		// but it is smart enough to handle niche cases like `*int`,`*[]string`,`[]*int` .
-
-		// try unmarshalling first, in case we're dealing with an alias to an array type
-		if ok, err := unmarshalInputsToField(typeField.Type.Kind(), inputValue, structField); ok {
-			if err != nil {
-				return err
-			}
-			continue
-		}
-
-		if ok, err := unmarshalInputToField(typeField.Type.Kind(), inputValue[0], structField); ok {
-			if err != nil {
-				return err
-			}
-			continue
-		}
-
-		// we could be dealing with pointer to slice `*[]string` so dereference it. There are wierd OpenAPI generators
-		// that could create struct fields like that.
-		if structFieldKind == reflect.Pointer {
-			structFieldKind = structField.Elem().Kind()
-			structField = structField.Elem()
-		}
-
-		if structFieldKind == reflect.Slice {
-			sliceOf := structField.Type().Elem().Kind()
-			numElems := len(inputValue)
-			slice := reflect.MakeSlice(structField.Type(), numElems, numElems)
-			for j := 0; j < numElems; j++ {
-				if err := setWithProperType(sliceOf, inputValue[j], slice.Index(j)); err != nil {
-					return err
-				}
-			}
-			structField.Set(slice)
-			continue
-		}
-
-		if err := setWithProperType(structFieldKind, inputValue[0], structField); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func setWithProperType(valueKind reflect.Kind, val string, structField reflect.Value) error {
-	// But also call it here, in case we're dealing with an array of BindUnmarshalers
-	if ok, err := unmarshalInputToField(valueKind, val, structField); ok {
-		return err
-	}
-
-	switch valueKind {
-	case reflect.Ptr:
-		return setWithProperType(structField.Elem().Kind(), val, structField.Elem())
-	case reflect.Int:
-		return setIntField(val, 0, structField)
-	case reflect.Int8:
-		return setIntField(val, 8, structField)
-	case reflect.Int16:
-		return setIntField(val, 16, structField)
-	case reflect.Int32:
-		return setIntField(val, 32, structField)
-	case reflect.Int64:
-		return setIntField(val, 64, structField)
-	case reflect.Uint:
-		return setUintField(val, 0, structField)
-	case reflect.Uint8:
-		return setUintField(val, 8, structField)
-	case reflect.Uint16:
-		return setUintField(val, 16, structField)
-	case reflect.Uint32:
-		return setUintField(val, 32, structField)
-	case reflect.Uint64:
-		return setUintField(val, 64, structField)
-	case reflect.Bool:
-		return setBoolField(val, structField)
-	case reflect.Float32:
-		return setFloatField(val, 32, structField)
-	case reflect.Float64:
-		return setFloatField(val, 64, structField)
-	case reflect.String:
-		structField.SetString(val)
-	default:
-		return errors.New("unknown type")
-	}
-	return nil
-}
-
-func unmarshalInputsToField(valueKind reflect.Kind, values []string, field reflect.Value) (bool, error) {
-	if valueKind == reflect.Ptr {
-		if field.IsNil() {
-			field.Set(reflect.New(field.Type().Elem()))
-		}
-		field = field.Elem()
-	}
-
-	fieldIValue := field.Addr().Interface()
-	unmarshaler, ok := fieldIValue.(bindMultipleUnmarshaler)
-	if !ok {
-		return false, nil
-	}
-	return true, unmarshaler.UnmarshalParams(values)
-}
-
-func unmarshalInputToField(valueKind reflect.Kind, val string, field reflect.Value) (bool, error) {
-	if valueKind == reflect.Ptr {
-		if field.IsNil() {
-			field.Set(reflect.New(field.Type().Elem()))
-		}
-		field = field.Elem()
-	}
-
-	fieldIValue := field.Addr().Interface()
-	switch unmarshaler := fieldIValue.(type) {
-	case BindUnmarshaler:
-		return true, unmarshaler.UnmarshalParam(val)
-	case encoding.TextUnmarshaler:
-		return true, unmarshaler.UnmarshalText([]byte(val))
-	}
-
-	return false, nil
-}
-
-func setIntField(value string, bitSize int, field reflect.Value) error {
-	if value == "" {
-		value = "0"
-	}
-	intVal, err := strconv.ParseInt(value, 10, bitSize)
-	if err == nil {
-		field.SetInt(intVal)
-	}
-	return err
-}
-
-func setUintField(value string, bitSize int, field reflect.Value) error {
-	if value == "" {
-		value = "0"
-	}
-	uintVal, err := strconv.ParseUint(value, 10, bitSize)
-	if err == nil {
-		field.SetUint(uintVal)
-	}
-	return err
-}
-
-func setBoolField(value string, field reflect.Value) error {
-	if value == "" {
-		value = "false"
-	}
-	boolVal, err := strconv.ParseBool(value)
-	if err == nil {
-		field.SetBool(boolVal)
-	}
-	return err
-}
-
-func setFloatField(value string, bitSize int, field reflect.Value) error {
-	if value == "" {
-		value = "0.0"
-	}
-	floatVal, err := strconv.ParseFloat(value, bitSize)
-	if err == nil {
-		field.SetFloat(floatVal)
-	}
-	return err
-}
-
-var (
-	// NOT supported by bind as you can NOT check easily empty struct being actual file or not
-	multipartFileHeaderType = reflect.TypeOf(multipart.FileHeader{})
-	// supported by bind as you can check by nil value if file existed or not
-	multipartFileHeaderPointerType      = reflect.TypeOf(&multipart.FileHeader{})
-	multipartFileHeaderSliceType        = reflect.TypeOf([]multipart.FileHeader(nil))
-	multipartFileHeaderPointerSliceType = reflect.TypeOf([]*multipart.FileHeader(nil))
-)
-
-func isFieldMultipartFile(field reflect.Type) (bool, error) {
-	switch field {
-	case multipartFileHeaderPointerType,
-		multipartFileHeaderSliceType,
-		multipartFileHeaderPointerSliceType:
-		return true, nil
-	case multipartFileHeaderType:
-		return true, errors.New("binding to multipart.FileHeader struct is not supported, use pointer to struct")
-	default:
-		return false, nil
-	}
-}
-
-func setMultipartFileHeaderTypes(structField reflect.Value, inputFieldName string, files map[string][]*multipart.FileHeader) bool {
-	fileHeaders := files[inputFieldName]
-	if len(fileHeaders) == 0 {
-		return false
-	}
-
-	result := true
-	switch structField.Type() {
-	case multipartFileHeaderPointerSliceType:
-		structField.Set(reflect.ValueOf(fileHeaders))
-	case multipartFileHeaderSliceType:
-		headers := make([]multipart.FileHeader, len(fileHeaders))
-		for i, fileHeader := range fileHeaders {
-			headers[i] = *fileHeader
-		}
-		structField.Set(reflect.ValueOf(headers))
-	case multipartFileHeaderPointerType:
-		structField.Set(reflect.ValueOf(fileHeaders[0]))
-	default:
-		result = false
-	}
-
-	return result
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/labstack/echo/v4/binder.go","mode":420,"size":43853,"sha256":"3daaec44166047d87b599de79850e2eebeedd093986eda6714806ed81541be67","index":0,"count":1,"encoding":"utf-8","payloadBytes":43853}
-// SPDX-License-Identifier: MIT
-// SPDX-FileCopyrightText: © 2015 LabStack LLC and Echo contributors
-
-package echo
-
-import (
-	"encoding"
-	"encoding/json"
-	"fmt"
-	"net/http"
-	"strconv"
-	"strings"
-	"time"
-)
-
-/**
-	Following functions provide handful of methods for binding to Go native types from request query or path parameters.
-    * QueryParamsBinder(c) - binds query parameters (source URL)
-    * PathParamsBinder(c) - binds path parameters (source URL)
-    * FormFieldBinder(c) - binds form fields (source URL + body)
-
-	Example:
-  ```go
-  var length int64
-  err := echo.QueryParamsBinder(c).Int64("length", &length).BindError()
-  ```
-
-	For every supported type there are following methods:
-		* <Type>("param", &destination) - if parameter value exists then binds it to given destination of that type i.e Int64(...).
-		* Must<Type>("param", &destination) - parameter value is required to exist, binds it to given destination of that type i.e MustInt64(...).
-		* <Type>s("param", &destination) - (for slices) if parameter values exists then binds it to given destination of that type i.e Int64s(...).
-		* Must<Type>s("param", &destination) - (for slices) parameter value is required to exist, binds it to given destination of that type i.e MustInt64s(...).
-
-  for some slice types `BindWithDelimiter("param", &dest, ",")` supports splitting parameter values before type conversion is done
-  i.e. URL `/api/search?id=1,2,3&id=1` can be bind to `[]int64{1,2,3,1}`
-
-	`FailFast` flags binder to stop binding after first bind error during binder call chain. Enabled by default.
-  `BindError()` returns first bind error from binder and resets errors in binder. Useful along with `FailFast()` method
-		to do binding and returns on first problem
-  `BindErrors()` returns all bind errors from binder and resets errors in binder.
-
-	Types that are supported:
-		* bool
-		* float32
-		* float64
-		* int
-		* int8
-		* int16
-		* int32
-		* int64
-		* uint
-		* uint8/byte (does not support `bytes()`. Use BindUnmarshaler/CustomFunc to convert value from base64 etc to []byte{})
-		* uint16
-		* uint32
-		* uint64
-		* string
-		* time
-		* duration
-		* BindUnmarshaler() interface
-		* TextUnmarshaler() interface
-		* JSONUnmarshaler() interface
-		* UnixTime() - converts unix time (integer) to time.Time
-		* UnixTimeMilli() - converts unix time with millisecond precision (integer) to time.Time
-		* UnixTimeNano() - converts unix time with nanosecond precision (integer) to time.Time
-		* CustomFunc() - callback function for your custom conversion logic. Signature `func(values []string) []error`
-*/
-
-// BindingError represents an error that occurred while binding request data.
-type BindingError struct {
-	// Field is the field name where value binding failed
-	Field string `json:"field"`
-	*HTTPError
-	// Values of parameter that failed to bind.
-	Values []string `json:"-"`
-}
-
-// NewBindingError creates new instance of binding error
-func NewBindingError(sourceParam string, values []string, message interface{}, internalError error) error {
-	return &BindingError{
-		Field:  sourceParam,
-		Values: values,
-		HTTPError: &HTTPError{
-			Code:     http.StatusBadRequest,
-			Message:  message,
-			Internal: internalError,
-		},
-	}
-}
-
-// Error returns error message
-func (be *BindingError) Error() string {
-	return fmt.Sprintf("%s, field=%s", be.HTTPError.Error(), be.Field)
-}
-
-// ValueBinder provides utility methods for binding query or path parameter to various Go built-in types
-type ValueBinder struct {
-	// ValueFunc is used to get single parameter (first) value from request
-	ValueFunc func(sourceParam string) string
-	// ValuesFunc is used to get all values for parameter from request. i.e. `/api/search?ids=1&ids=2`
-	ValuesFunc func(sourceParam string) []string
-	// ErrorFunc is used to create errors. Allows you to use your own error type, that for example marshals to your specific json response
-	ErrorFunc func(sourceParam string, values []string, message interface{}, internalError error) error
-	errors    []error
-	// failFast is flag for binding methods to return without attempting to bind when previous binding already failed
-	failFast bool
-}
-
-// QueryParamsBinder creates query parameter value binder
-func QueryParamsBinder(c Context) *ValueBinder {
-	return &ValueBinder{
-		failFast:  true,
-		ValueFunc: c.QueryParam,
-		ValuesFunc: func(sourceParam string) []string {
-			values, ok := c.QueryParams()[sourceParam]
-			if !ok {
-				return nil
-			}
-			return values
-		},
-		ErrorFunc: NewBindingError,
-	}
-}
-
-// PathParamsBinder creates path parameter value binder
-func PathParamsBinder(c Context) *ValueBinder {
-	return &ValueBinder{
-		failFast:  true,
-		ValueFunc: c.Param,
-		ValuesFunc: func(sourceParam string) []string {
-			// path parameter should not have multiple values so getting values does not make sense but lets not error out here
-			value := c.Param(sourceParam)
-			if value == "" {
-				return nil
-			}
-			return []string{value}
-		},
-		ErrorFunc: NewBindingError,
-	}
-}
-
-// FormFieldBinder creates form field value binder
-// For all requests, FormFieldBinder parses the raw query from the URL and uses query params as form fields
-//
-// For POST, PUT, and PATCH requests, it also reads the request body, parses it
-// as a form and uses query params as form fields. Request body parameters take precedence over URL query
-// string values in r.Form.
-//
-// NB: when binding forms take note that this implementation uses standard library form parsing
-// which parses form data from BOTH URL and BODY if content type is not MIMEMultipartForm
-// See https://golang.org/pkg/net/http/#Request.ParseForm
-func FormFieldBinder(c Context) *ValueBinder {
-	vb := &ValueBinder{
-		failFast: true,
-		ValueFunc: func(sourceParam string) string {
-			return c.Request().FormValue(sourceParam)
-		},
-		ErrorFunc: NewBindingError,
-	}
-	vb.ValuesFunc = func(sourceParam string) []string {
-		if c.Request().Form == nil {
-			// this is same as `Request().FormValue()` does internally
-			_ = c.Request().ParseMultipartForm(32 << 20)
-		}
-		values, ok := c.Request().Form[sourceParam]
-		if !ok {
-			return nil
-		}
-		return values
-	}
-
-	return vb
-}
-
-// FailFast set internal flag to indicate if binding methods will return early (without binding) when previous bind failed
-// NB: call this method before any other binding methods as it modifies binding methods behaviour
-func (b *ValueBinder) FailFast(value bool) *ValueBinder {
-	b.failFast = value
-	return b
-}
-
-func (b *ValueBinder) setError(err error) {
-	if b.errors == nil {
-		b.errors = []error{err}
-		return
-	}
-	b.errors = append(b.errors, err)
-}
-
-// BindError returns first seen bind error and resets/empties binder errors for further calls
-func (b *ValueBinder) BindError() error {
-	if b.errors == nil {
-		return nil
-	}
-	err := b.errors[0]
-	b.errors = nil // reset errors so next chain will start from zero
-	return err
-}
-
-// BindErrors returns all bind errors and resets/empties binder errors for further calls
-func (b *ValueBinder) BindErrors() []error {
-	if b.errors == nil {
-		return nil
-	}
-	errors := b.errors
-	b.errors = nil // reset errors so next chain will start from zero
-	return errors
-}
-
-// CustomFunc binds parameter values with Func. Func is called only when parameter values exist.
-func (b *ValueBinder) CustomFunc(sourceParam string, customFunc func(values []string) []error) *ValueBinder {
-	return b.customFunc(sourceParam, customFunc, false)
-}
-
-// MustCustomFunc requires parameter values to exist to bind with Func. Returns error when value does not exist.
-func (b *ValueBinder) MustCustomFunc(sourceParam string, customFunc func(values []string) []error) *ValueBinder {
-	return b.customFunc(sourceParam, customFunc, true)
-}
-
-func (b *ValueBinder) customFunc(sourceParam string, customFunc func(values []string) []error, valueMustExist bool) *ValueBinder {
-	if b.failFast && b.errors != nil {
-		return b
-	}
-
-	values := b.ValuesFunc(sourceParam)
-	if len(values) == 0 {
-		if valueMustExist {
-			b.setError(b.ErrorFunc(sourceParam, []string{}, "required field value is empty", nil))
-		}
-		return b
-	}
-	if errs := customFunc(values); errs != nil {
-		b.errors = append(b.errors, errs...)
-	}
-	return b
-}
-
-// String binds parameter to string variable
-func (b *ValueBinder) String(sourceParam string, dest *string) *ValueBinder {
-	if b.failFast && b.errors != nil {
-		return b
-	}
-
-	value := b.ValueFunc(sourceParam)
-	if value == "" {
-		return b
-	}
-	*dest = value
-	return b
-}
-
-// MustString requires parameter value to exist to bind to string variable. Returns error when value does not exist
-func (b *ValueBinder) MustString(sourceParam string, dest *string) *ValueBinder {
-	if b.failFast && b.errors != nil {
-		return b
-	}
-
-	value := b.ValueFunc(sourceParam)
-	if value == "" {
-		b.setError(b.ErrorFunc(sourceParam, []string{value}, "required field value is empty", nil))
-		return b
-	}
-	*dest = value
-	return b
-}
-
-// Strings binds parameter values to slice of string
-func (b *ValueBinder) Strings(sourceParam string, dest *[]string) *ValueBinder {
-	if b.failFast && b.errors != nil {
-		return b
-	}
-
-	value := b.ValuesFunc(sourceParam)
-	if value == nil {
-		return b
-	}
-	*dest = value
-	return b
-}
-
-// MustStrings requires parameter values to exist to bind to slice of string variables. Returns error when value does not exist
-func (b *ValueBinder) MustStrings(sourceParam string, dest *[]string) *ValueBinder {
-	if b.failFast && b.errors != nil {
-		return b
-	}
-
-	value := b.ValuesFunc(sourceParam)
-	if value == nil {
-		b.setError(b.ErrorFunc(sourceParam, []string{}, "required field value is empty", nil))
-		return b
-	}
-	*dest = value
-	return b
-}
-
-// BindUnmarshaler binds parameter to destination implementing BindUnmarshaler interface
-func (b *ValueBinder) BindUnmarshaler(sourceParam string, dest BindUnmarshaler) *ValueBinder {
-	if b.failFast && b.errors != nil {
-		return b
-	}
-
-	tmp := b.ValueFunc(sourceParam)
-	if tmp == "" {
-		return b
-	}
-
-	if err := dest.UnmarshalParam(tmp); err != nil {
-		b.setError(b.ErrorFunc(sourceParam, []string{tmp}, "failed to bind field value to BindUnmarshaler interface", err))
-	}
-	return b
-}
-
-// MustBindUnmarshaler requires parameter value to exist to bind to destination implementing BindUnmarshaler interface.
-// Returns error when value does not exist
-func (b *ValueBinder) MustBindUnmarshaler(sourceParam string, dest BindUnmarshaler) *ValueBinder {
-	if b.failFast && b.errors != nil {
-		return b
-	}
-
-	value := b.ValueFunc(sourceParam)
-	if value == "" {
-		b.setError(b.ErrorFunc(sourceParam, []string{value}, "required field value is empty", nil))
-		return b
-	}
-
-	if err := dest.UnmarshalParam(value); err != nil {
-		b.setError(b.ErrorFunc(sourceParam, []string{value}, "failed to bind field value to BindUnmarshaler interface", err))
-	}
-	return b
-}
-
-// JSONUnmarshaler binds parameter to destination implementing json.Unmarshaler interface
-func (b *ValueBinder) JSONUnmarshaler(sourceParam string, dest json.Unmarshaler) *ValueBinder {
-	if b.failFast && b.errors != nil {
-		return b
-	}
-
-	tmp := b.ValueFunc(sourceParam)
-	if tmp == "" {
-		return b
-	}
-
-	if err := dest.UnmarshalJSON([]byte(tmp)); err != nil {
-		b.setError(b.ErrorFunc(sourceParam, []string{tmp}, "failed to bind field value to json.Unmarshaler interface", err))
-	}
-	return b
-}
-
-// MustJSONUnmarshaler requires parameter value to exist to bind to destination implementing json.Unmarshaler interface.
-// Returns error when value does not exist
-func (b *ValueBinder) MustJSONUnmarshaler(sourceParam string, dest json.Unmarshaler) *ValueBinder {
-	if b.failFast && b.errors != nil {
-		return b
-	}
-
-	tmp := b.ValueFunc(sourceParam)
-	if tmp == "" {
-		b.setError(b.ErrorFunc(sourceParam, []string{tmp}, "required field value is empty", nil))
-		return b
-	}
-
-	if err := dest.UnmarshalJSON([]byte(tmp)); err != nil {
-		b.setError(b.ErrorFunc(sourceParam, []string{tmp}, "failed to bind field value to json.Unmarshaler interface", err))
-	}
-	return b
-}
-
-// TextUnmarshaler binds parameter to destination implementing encoding.TextUnmarshaler interface
-func (b *ValueBinder) TextUnmarshaler(sourceParam string, dest encoding.TextUnmarshaler) *ValueBinder {
-	if b.failFast && b.errors != nil {
-		return b
-	}
-
-	tmp := b.ValueFunc(sourceParam)
-	if tmp == "" {
-		return b
-	}
-
-	if err := dest.UnmarshalText([]byte(tmp)); err != nil {
-		b.setError(b.ErrorFunc(sourceParam, []string{tmp}, "failed to bind field value to encoding.TextUnmarshaler interface", err))
-	}
-	return b
-}
-
-// MustTextUnmarshaler requires parameter value to exist to bind to destination implementing encoding.TextUnmarshaler interface.
-// Returns error when value does not exist
-func (b *ValueBinder) MustTextUnmarshaler(sourceParam string, dest encoding.TextUnmarshaler) *ValueBinder {
-	if b.failFast && b.errors != nil {
-		return b
-	}
-
-	tmp := b.ValueFunc(sourceParam)
-	if tmp == "" {
-		b.setError(b.ErrorFunc(sourceParam, []string{tmp}, "required field value is empty", nil))
-		return b
-	}
-
-	if err := dest.UnmarshalText([]byte(tmp)); err != nil {
-		b.setError(b.ErrorFunc(sourceParam, []string{tmp}, "failed to bind field value to encoding.TextUnmarshaler interface", err))
-	}
-	return b
-}
-
-// BindWithDelimiter binds parameter to destination by suitable conversion function.
-// Delimiter is used before conversion to split parameter value to separate values
-func (b *ValueBinder) BindWithDelimiter(sourceParam string, dest interface{}, delimiter string) *ValueBinder {
-	return b.bindWithDelimiter(sourceParam, dest, delimiter, false)
-}
-
-// MustBindWithDelimiter requires parameter value to exist to bind destination by suitable conversion function.
-// Delimiter is used before conversion to split parameter value to separate values
-func (b *ValueBinder) MustBindWithDelimiter(sourceParam string, dest interface{}, delimiter string) *ValueBinder {
-	return b.bindWithDelimiter(sourceParam, dest, delimiter, true)
-}
-
-func (b *ValueBinder) bindWithDelimiter(sourceParam string, dest interface{}, delimiter string, valueMustExist bool) *ValueBinder {
-	if b.failFast && b.errors != nil {
-		return b
-	}
-	values := b.ValuesFunc(sourceParam)
-	if len(values) == 0 {
-		if valueMustExist {
-			b.setError(b.ErrorFunc(sourceParam, []string{}, "required field value is empty", nil))
-		}
-		return b
-	}
-	tmpValues := make([]string, 0, len(values))
-	for _, v := range values {
-		tmpValues = append(tmpValues, strings.Split(v, delimiter)...)
-	}
-
-	switch d := dest.(type) {
-	case *[]string:
-		*d = tmpValues
-		return b
-	case *[]bool:
-		return b.bools(sourceParam, tmpValues, d)
-	case *[]int64, *[]int32, *[]int16, *[]int8, *[]int:
-		return b.ints(sourceParam, tmpValues, d)
-	case *[]uint64, *[]uint32, *[]uint16, *[]uint8, *[]uint: // *[]byte is same as *[]uint8
-		return b.uints(sourceParam, tmpValues, d)
-	case *[]float64, *[]float32:
-		return b.floats(sourceParam, tmpValues, d)
-	case *[]time.Duration:
-		return b.durations(sourceParam, tmpValues, d)
-	default:
-		// support only cases when destination is slice
-		// does not support time.Time as it needs argument (layout) for parsing or BindUnmarshaler
-		b.setError(b.ErrorFunc(sourceParam, []string{}, "unsupported bind type", nil))
-		return b
-	}
-}
-
-// Int64 binds parameter to int64 variable
-func (b *ValueBinder) Int64(sourceParam string, dest *int64) *ValueBinder {
-	return b.intValue(sourceParam, dest, 64, false)
-}
-
-// MustInt64 requires parameter value to exist to bind to int64 variable. Returns error when value does not exist
-func (b *ValueBinder) MustInt64(sourceParam string, dest *int64) *ValueBinder {
-	return b.intValue(sourceParam, dest, 64, true)
-}
-
-// Int32 binds parameter to int32 variable
-func (b *ValueBinder) Int32(sourceParam string, dest *int32) *ValueBinder {
-	return b.intValue(sourceParam, dest, 32, false)
-}
-
-// MustInt32 requires parameter value to exist to bind to int32 variable. Returns error when value does not exist
-func (b *ValueBinder) MustInt32(sourceParam string, dest *int32) *ValueBinder {
-	return b.intValue(sourceParam, dest, 32, true)
-}
-
-// Int16 binds parameter to int16 variable
-func (b *ValueBinder) Int16(sourceParam string, dest *int16) *ValueBinder {
-	return b.intValue(sourceParam, dest, 16, false)
-}
-
-// MustInt16 requires parameter value to exist to bind to int16 variable. Returns error when value does not exist
-func (b *ValueBinder) MustInt16(sourceParam string, dest *int16) *ValueBinder {
-	return b.intValue(sourceParam, dest, 16, true)
-}
-
-// Int8 binds parameter to int8 variable
-func (b *ValueBinder) Int8(sourceParam string, dest *int8) *ValueBinder {
-	return b.intValue(sourceParam, dest, 8, false)
-}
-
-// MustInt8 requires parameter value to exist to bind to int8 variable. Returns error when value does not exist
-func (b *ValueBinder) MustInt8(sourceParam string, dest *int8) *ValueBinder {
-	return b.intValue(sourceParam, dest, 8, true)
-}
-
-// Int binds parameter to int variable
-func (b *ValueBinder) Int(sourceParam string, dest *int) *ValueBinder {
-	return b.intValue(sourceParam, dest, 0, false)
-}
-
-// MustInt requires parameter value to exist to bind to int variable. Returns error when value does not exist
-func (b *ValueBinder) MustInt(sourceParam string, dest *int) *ValueBinder {
-	return b.intValue(sourceParam, dest, 0, true)
-}
-
-func (b *ValueBinder) intValue(sourceParam string, dest interface{}, bitSize int, valueMustExist bool) *ValueBinder {
-	if b.failFast && b.errors != nil {
-		return b
-	}
-
-	value := b.ValueFunc(sourceParam)
-	if value == "" {
-		if valueMustExist {
-			b.setError(b.ErrorFunc(sourceParam, []string{}, "required field value is empty", nil))
-		}
-		return b
-	}
-
-	return b.int(sourceParam, value, dest, bitSize)
-}
-
-func (b *ValueBinder) int(sourceParam string, value string, dest interface{}, bitSize int) *ValueBinder {
-	n, err := strconv.ParseInt(value, 10, bitSize)
-	if err != nil {
-		if bitSize == 0 {
-			b.setError(b.ErrorFunc(sourceParam, []string{value}, "failed to bind field value to int", err))
-		} else {
-			b.setError(b.ErrorFunc(sourceParam, []string{value}, fmt.Sprintf("failed to bind field value to int%v", bitSize), err))
-		}
-		return b
-	}
-
-	switch d := dest.(type) {
-	case *int64:
-		*d = n
-	case *int32:
-		*d = int32(n)
-	case *int16:
-		*d = int16(n)
-	case *int8:
-		*d = int8(n)
-	case *int:
-		*d = int(n)
-	}
-	return b
-}
-
-func (b *ValueBinder) intsValue(sourceParam string, dest interface{}, valueMustExist bool) *ValueBinder {
-	if b.failFast && b.errors != nil {
-		return b
-	}
-
-	values := b.ValuesFunc(sourceParam)
-	if len(values) == 0 {
-		if valueMustExist {
-			b.setError(b.ErrorFunc(sourceParam, values, "required field value is empty", nil))
-		}
-		return b
-	}
-	return b.ints(sourceParam, values, dest)
-}
-
-func (b *ValueBinder) ints(sourceParam string, values []string, dest interface{}) *ValueBinder {
-	switch d := dest.(type) {
-	case *[]int64:
-		tmp := make([]int64, len(values))
-		for i, v := range values {
-			b.int(sourceParam, v, &tmp[i], 64)
-			if b.failFast && b.errors != nil {
-				return b
-			}
-		}
-		if b.errors == nil {
-			*d = tmp
-		}
-	case *[]int32:
-		tmp := make([]int32, len(values))
-		for i, v := range values {
-			b.int(sourceParam, v, &tmp[i], 32)
-			if b.failFast && b.errors != nil {
-				return b
-			}
-		}
-		if b.errors == nil {
-			*d = tmp
-		}
-	case *[]int16:
-		tmp := make([]int16, len(values))
-		for i, v := range values {
-			b.int(sourceParam, v, &tmp[i], 16)
-			if b.failFast && b.errors != nil {
-				return b
-			}
-		}
-		if b.errors == nil {
-			*d = tmp
-		}
-	case *[]int8:
-		tmp := make([]int8, len(values))
-		for i, v := range values {
-			b.int(sourceParam, v, &tmp[i], 8)
-			if b.failFast && b.errors != nil {
-				return b
-			}
-		}
-		if b.errors == nil {
-			*d = tmp
-		}
-	case *[]int:
-		tmp := make([]int, len(values))
-		for i, v := range values {
-			b.int(sourceParam, v, &tmp[i], 0)
-			if b.failFast && b.errors != nil {
-				return b
-			}
-		}
-		if b.errors == nil {
-			*d = tmp
-		}
-	}
-	return b
-}
-
-// Int64s binds parameter to slice of int64
-func (b *ValueBinder) Int64s(sourceParam string, dest *[]int64) *ValueBinder {
-	return b.intsValue(sourceParam, dest, false)
-}
-
-// MustInt64s requires parameter value to exist to bind to int64 slice variable. Returns error when value does not exist
-func (b *ValueBinder) MustInt64s(sourceParam string, dest *[]int64) *ValueBinder {
-	return b.intsValue(sourceParam, dest, true)
-}
-
-// Int32s binds parameter to slice of int32
-func (b *ValueBinder) Int32s(sourceParam string, dest *[]int32) *ValueBinder {
-	return b.intsValue(sourceParam, dest, false)
-}
-
-// MustInt32s requires parameter value to exist to bind to int32 slice variable. Returns error when value does not exist
-func (b *ValueBinder) MustInt32s(sourceParam string, dest *[]int32) *ValueBinder {
-	return b.intsValue(sourceParam, dest, true)
-}
-
-// Int16s binds parameter to slice of int16
-func (b *ValueBinder) Int16s(sourceParam string, dest *[]int16) *ValueBinder {
-	return b.intsValue(sourceParam, dest, false)
-}
-
-// MustInt16s requires parameter value to exist to bind to int16 slice variable. Returns error when value does not exist
-func (b *ValueBinder) MustInt16s(sourceParam string, dest *[]int16) *ValueBinder {
-	return b.intsValue(sourceParam, dest, true)
-}
-
-// Int8s binds parameter to slice of int8
-func (b *ValueBinder) Int8s(sourceParam string, dest *[]int8) *ValueBinder {
-	return b.intsValue(sourceParam, dest, false)
-}
-
-// MustInt8s requires parameter value to exist to bind to int8 slice variable. Returns error when value does not exist
-func (b *ValueBinder) MustInt8s(sourceParam string, dest *[]int8) *ValueBinder {
-	return b.intsValue(sourceParam, dest, true)
-}
-
-// Ints binds parameter to slice of int
-func (b *ValueBinder) Ints(sourceParam string, dest *[]int) *ValueBinder {
-	return b.intsValue(sourceParam, dest, false)
-}
-
-// MustInts requires parameter value to exist to bind to int slice variable. Returns error when value does not exist
-func (b *ValueBinder) MustInts(sourceParam string, dest *[]int) *ValueBinder {
-	return b.intsValue(sourceParam, dest, true)
-}
-
-// Uint64 binds parameter to uint64 variable
-func (b *ValueBinder) Uint64(sourceParam string, dest *uint64) *ValueBinder {
-	return b.uintValue(sourceParam, dest, 64, false)
-}
-
-// MustUint64 requires parameter value to exist to bind to uint64 variable. Returns error when value does not exist
-func (b *ValueBinder) MustUint64(sourceParam string, dest *uint64) *ValueBinder {
-	return b.uintValue(sourceParam, dest, 64, true)
-}
-
-// Uint32 binds parameter to uint32 variable
-func (b *ValueBinder) Uint32(sourceParam string, dest *uint32) *ValueBinder {
-	return b.uintValue(sourceParam, dest, 32, false)
-}
-
-// MustUint32 requires parameter value to exist to bind to uint32 variable. Returns error when value does not exist
-func (b *ValueBinder) MustUint32(sourceParam string, dest *uint32) *ValueBinder {
-	return b.uintValue(sourceParam, dest, 32, true)
-}
-
-// Uint16 binds parameter to uint16 variable
-func (b *ValueBinder) Uint16(sourceParam string, dest *uint16) *ValueBinder {
-	return b.uintValue(sourceParam, dest, 16, false)
-}
-
-// MustUint16 requires parameter value to exist to bind to uint16 variable. Returns error when value does not exist
-func (b *ValueBinder) MustUint16(sourceParam string, dest *uint16) *ValueBinder {
-	return b.uintValue(sourceParam, dest, 16, true)
-}
-
-// Uint8 binds parameter to uint8 variable
-func (b *ValueBinder) Uint8(sourceParam string, dest *uint8) *ValueBinder {
-	return b.uintValue(sourceParam, dest, 8, false)
-}
-
-// MustUint8 requires parameter value to exist to bind to uint8 variable. Returns error when value does not exist
-func (b *ValueBinder) MustUint8(sourceParam string, dest *uint8) *ValueBinder {
-	return b.uintValue(sourceParam, dest, 8, true)
-}
-
-// Byte binds parameter to byte variable
-func (b *ValueBinder) Byte(sourceParam string, dest *byte) *ValueBinder {
-	return b.uintValue(sourceParam, dest, 8, false)
-}
-
-// MustByte requires parameter value to exist to bind to byte variable. Returns error when value does not exist
-func (b *ValueBinder) MustByte(sourceParam string, dest *byte) *ValueBinder {
-	return b.uintValue(sourceParam, dest, 8, true)
-}
-
-// Uint binds parameter to uint variable
-func (b *ValueBinder) Uint(sourceParam string, dest *uint) *ValueBinder {
-	return b.uintValue(sourceParam, dest, 0, false)
-}
-
-// MustUint requires parameter value to exist to bind to uint variable. Returns error when value does not exist
-func (b *ValueBinder) MustUint(sourceParam string, dest *uint) *ValueBinder {
-	return b.uintValue(sourceParam, dest, 0, true)
-}
-
-func (b *ValueBinder) uintValue(sourceParam string, dest interface{}, bitSize int, valueMustExist bool) *ValueBinder {
-	if b.failFast && b.errors != nil {
-		return b
-	}
-
-	value := b.ValueFunc(sourceParam)
-	if value == "" {
-		if valueMustExist {
-			b.setError(b.ErrorFunc(sourceParam, []string{}, "required field value is empty", nil))
-		}
-		return b
-	}
-
-	return b.uint(sourceParam, value, dest, bitSize)
-}
-
-func (b *ValueBinder) uint(sourceParam string, value string, dest interface{}, bitSize int) *ValueBinder {
-	n, err := strconv.ParseUint(value, 10, bitSize)
-	if err != nil {
-		if bitSize == 0 {
-			b.setError(b.ErrorFunc(sourceParam, []string{value}, "failed to bind field value to uint", err))
-		} else {
-			b.setError(b.ErrorFunc(sourceParam, []string{value}, fmt.Sprintf("failed to bind field value to uint%v", bitSize), err))
-		}
-		return b
-	}
-
-	switch d := dest.(type) {
-	case *uint64:
-		*d = n
-	case *uint32:
-		*d = uint32(n)
-	case *uint16:
-		*d = uint16(n)
-	case *uint8: // byte is alias to uint8
-		*d = uint8(n)
-	case *uint:
-		*d = uint(n)
-	}
-	return b
-}
-
-func (b *ValueBinder) uintsValue(sourceParam string, dest interface{}, valueMustExist bool) *ValueBinder {
-	if b.failFast && b.errors != nil {
-		return b
-	}
-
-	values := b.ValuesFunc(sourceParam)
-	if len(values) == 0 {
-		if valueMustExist {
-			b.setError(b.ErrorFunc(sourceParam, values, "required field value is empty", nil))
-		}
-		return b
-	}
-	return b.uints(sourceParam, values, dest)
-}
-
-func (b *ValueBinder) uints(sourceParam string, values []string, dest interface{}) *ValueBinder {
-	switch d := dest.(type) {
-	case *[]uint64:
-		tmp := make([]uint64, len(values))
-		for i, v := range values {
-			b.uint(sourceParam, v, &tmp[i], 64)
-			if b.failFast && b.errors != nil {
-				return b
-			}
-		}
-		if b.errors == nil {
-			*d = tmp
-		}
-	case *[]uint32:
-		tmp := make([]uint32, len(values))
-		for i, v := range values {
-			b.uint(sourceParam, v, &tmp[i], 32)
-			if b.failFast && b.errors != nil {
-				return b
-			}
-		}
-		if b.errors == nil {
-			*d = tmp
-		}
-	case *[]uint16:
-		tmp := make([]uint16, len(values))
-		for i, v := range values {
-			b.uint(sourceParam, v, &tmp[i], 16)
-			if b.failFast && b.errors != nil {
-				return b
-			}
-		}
-		if b.errors == nil {
-			*d = tmp
-		}
-	case *[]uint8: // byte is alias to uint8
-		tmp := make([]uint8, len(values))
-		for i, v := range values {
-			b.uint(sourceParam, v, &tmp[i], 8)
-			if b.failFast && b.errors != nil {
-				return b
-			}
-		}
-		if b.errors == nil {
-			*d = tmp
-		}
-	case *[]uint:
-		tmp := make([]uint, len(values))
-		for i, v := range values {
-			b.uint(sourceParam, v, &tmp[i], 0)
-			if b.failFast && b.errors != nil {
-				return b
-			}
-		}
-		if b.errors == nil {
-			*d = tmp
-		}
-	}
-	return b
-}
-
-// Uint64s binds parameter to slice of uint64
-func (b *ValueBinder) Uint64s(sourceParam string, dest *[]uint64) *ValueBinder {
-	return b.uintsValue(sourceParam, dest, false)
-}
-
-// MustUint64s requires parameter value to exist to bind to uint64 slice variable. Returns error when value does not exist
-func (b *ValueBinder) MustUint64s(sourceParam string, dest *[]uint64) *ValueBinder {
-	return b.uintsValue(sourceParam, dest, true)
-}
-
-// Uint32s binds parameter to slice of uint32
-func (b *ValueBinder) Uint32s(sourceParam string, dest *[]uint32) *ValueBinder {
-	return b.uintsValue(sourceParam, dest, false)
-}
-
-// MustUint32s requires parameter value to exist to bind to uint32 slice variable. Returns error when value does not exist
-func (b *ValueBinder) MustUint32s(sourceParam string, dest *[]uint32) *ValueBinder {
-	return b.uintsValue(sourceParam, dest, true)
-}
-
-// Uint16s binds parameter to slice of uint16
-func (b *ValueBinder) Uint16s(sourceParam string, dest *[]uint16) *ValueBinder {
-	return b.uintsValue(sourceParam, dest, false)
-}
-
-// MustUint16s requires parameter value to exist to bind to uint16 slice variable. Returns error when value does not exist
-func (b *ValueBinder) MustUint16s(sourceParam string, dest *[]uint16) *ValueBinder {
-	return b.uintsValue(sourceParam, dest, true)
-}
-
-// Uint8s binds parameter to slice of uint8
-func (b *ValueBinder) Uint8s(sourceParam string, dest *[]uint8) *ValueBinder {
-	return b.uintsValue(sourceParam, dest, false)
-}
-
-// MustUint8s requires parameter value to exist to bind to uint8 slice variable. Returns error when value does not exist
-func (b *ValueBinder) MustUint8s(sourceParam string, dest *[]uint8) *ValueBinder {
-	return b.uintsValue(sourceParam, dest, true)
-}
-
-// Uints binds parameter to slice of uint
-func (b *ValueBinder) Uints(sourceParam string, dest *[]uint) *ValueBinder {
-	return b.uintsValue(sourceParam, dest, false)
-}
-
-// MustUints requires parameter value to exist to bind to uint slice variable. Returns error when value does not exist
-func (b *ValueBinder) MustUints(sourceParam string, dest *[]uint) *ValueBinder {
-	return b.uintsValue(sourceParam, dest, true)
-}
-
-// Bool binds parameter to bool variable
-func (b *ValueBinder) Bool(sourceParam string, dest *bool) *ValueBinder {
-	return b.boolValue(sourceParam, dest, false)
-}
-
-// MustBool requires parameter value to exist to bind to bool variable. Returns error when value does not exist
-func (b *ValueBinder) MustBool(sourceParam string, dest *bool) *ValueBinder {
-	return b.boolValue(sourceParam, dest, true)
-}
-
-func (b *ValueBinder) boolValue(sourceParam string, dest *bool, valueMustExist bool) *ValueBinder {
-	if b.failFast && b.errors != nil {
-		return b
-	}
-
-	value := b.ValueFunc(sourceParam)
-	if value == "" {
-		if valueMustExist {
-			b.setError(b.ErrorFunc(sourceParam, []string{}, "required field value is empty", nil))
-		}
-		return b
-	}
-	return b.bool(sourceParam, value, dest)
-}
-
-func (b *ValueBinder) bool(sourceParam string, value string, dest *bool) *ValueBinder {
-	n, err := strconv.ParseBool(value)
-	if err != nil {
-		b.setError(b.ErrorFunc(sourceParam, []string{value}, "failed to bind field value to bool", err))
-		return b
-	}
-
-	*dest = n
-	return b
-}
-
-func (b *ValueBinder) boolsValue(sourceParam string, dest *[]bool, valueMustExist bool) *ValueBinder {
-	if b.failFast && b.errors != nil {
-		return b
-	}
-
-	values := b.ValuesFunc(sourceParam)
-	if len(values) == 0 {
-		if valueMustExist {
-			b.setError(b.ErrorFunc(sourceParam, []string{}, "required field value is empty", nil))
-		}
-		return b
-	}
-	return b.bools(sourceParam, values, dest)
-}
-
-func (b *ValueBinder) bools(sourceParam string, values []string, dest *[]bool) *ValueBinder {
-	tmp := make([]bool, len(values))
-	for i, v := range values {
-		b.bool(sourceParam, v, &tmp[i])
-		if b.failFast && b.errors != nil {
-			return b
-		}
-	}
-	if b.errors == nil {
-		*dest = tmp
-	}
-	return b
-}
-
-// Bools binds parameter values to slice of bool variables
-func (b *ValueBinder) Bools(sourceParam string, dest *[]bool) *ValueBinder {
-	return b.boolsValue(sourceParam, dest, false)
-}
-
-// MustBools requires parameter values to exist to bind to slice of bool variables. Returns error when values does not exist
-func (b *ValueBinder) MustBools(sourceParam string, dest *[]bool) *ValueBinder {
-	return b.boolsValue(sourceParam, dest, true)
-}
-
-// Float64 binds parameter to float64 variable
-func (b *ValueBinder) Float64(sourceParam string, dest *float64) *ValueBinder {
-	return b.floatValue(sourceParam, dest, 64, false)
-}
-
-// MustFloat64 requires parameter value to exist to bind to float64 variable. Returns error when value does not exist
-func (b *ValueBinder) MustFloat64(sourceParam string, dest *float64) *ValueBinder {
-	return b.floatValue(sourceParam, dest, 64, true)
-}
-
-// Float32 binds parameter to float32 variable
-func (b *ValueBinder) Float32(sourceParam string, dest *float32) *ValueBinder {
-	return b.floatValue(sourceParam, dest, 32, false)
-}
-
-// MustFloat32 requires parameter value to exist to bind to float32 variable. Returns error when value does not exist
-func (b *ValueBinder) MustFloat32(sourceParam string, dest *float32) *ValueBinder {
-	return b.floatValue(sourceParam, dest, 32, true)
-}
-
-func (b *ValueBinder) floatValue(sourceParam string, dest interface{}, bitSize int, valueMustExist bool) *ValueBinder {
-	if b.failFast && b.errors != nil {
-		return b
-	}
-
-	value := b.ValueFunc(sourceParam)
-	if value == "" {
-		if valueMustExist {
-			b.setError(b.ErrorFunc(sourceParam, []string{}, "required field value is empty", nil))
-		}
-		return b
-	}
-
-	return b.float(sourceParam, value, dest, bitSize)
-}
-
-func (b *ValueBinder) float(sourceParam string, value string, dest interface{}, bitSize int) *ValueBinder {
-	n, err := strconv.ParseFloat(value, bitSize)
-	if err != nil {
-		b.setError(b.ErrorFunc(sourceParam, []string{value}, fmt.Sprintf("failed to bind field value to float%v", bitSize), err))
-		return b
-	}
-
-	switch d := dest.(type) {
-	case *float64:
-		*d = n
-	case *float32:
-		*d = float32(n)
-	}
-	return b
-}
-
-func (b *ValueBinder) floatsValue(sourceParam string, dest interface{}, valueMustExist bool) *ValueBinder {
-	if b.failFast && b.errors != nil {
-		return b
-	}
-
-	values := b.ValuesFunc(sourceParam)
-	if len(values) == 0 {
-		if valueMustExist {
-			b.setError(b.ErrorFunc(sourceParam, []string{}, "required field value is empty", nil))
-		}
-		return b
-	}
-	return b.floats(sourceParam, values, dest)
-}
-
-func (b *ValueBinder) floats(sourceParam string, values []string, dest interface{}) *ValueBinder {
-	switch d := dest.(type) {
-	case *[]float64:
-		tmp := make([]float64, len(values))
-		for i, v := range values {
-			b.float(sourceParam, v, &tmp[i], 64)
-			if b.failFast && b.errors != nil {
-				return b
-			}
-		}
-		if b.errors == nil {
-			*d = tmp
-		}
-	case *[]float32:
-		tmp := make([]float32, len(values))
-		for i, v := range values {
-			b.float(sourceParam, v, &tmp[i], 32)
-			if b.failFast && b.errors != nil {
-				return b
-			}
-		}
-		if b.errors == nil {
-			*d = tmp
-		}
-	}
-	return b
-}
-
-// Float64s binds parameter values to slice of float64 variables
-func (b *ValueBinder) Float64s(sourceParam string, dest *[]float64) *ValueBinder {
-	return b.floatsValue(sourceParam, dest, false)
-}
-
-// MustFloat64s requires parameter values to exist to bind to slice of float64 variables. Returns error when values does not exist
-func (b *ValueBinder) MustFloat64s(sourceParam string, dest *[]float64) *ValueBinder {
-	return b.floatsValue(sourceParam, dest, true)
-}
-
-// Float32s binds parameter values to slice of float32 variables
-func (b *ValueBinder) Float32s(sourceParam string, dest *[]float32) *ValueBinder {
-	return b.floatsValue(sourceParam, dest, false)
-}
-
-// MustFloat32s requires parameter values to exist to bind to slice of float32 variables. Returns error when values does not exist
-func (b *ValueBinder) MustFloat32s(sourceParam string, dest *[]float32) *ValueBinder {
-	return b.floatsValue(sourceParam, dest, true)
-}
-
-// Time binds parameter to time.Time variable
-func (b *ValueBinder) Time(sourceParam string, dest *time.Time, layout string) *ValueBinder {
-	return b.time(sourceParam, dest, layout, false)
-}
-
-// MustTime requires parameter value to exist to bind to time.Time variable. Returns error when value does not exist
-func (b *ValueBinder) MustTime(sourceParam string, dest *time.Time, layout string) *ValueBinder {
-	return b.time(sourceParam, dest, layout, true)
-}
-
-func (b *ValueBinder) time(sourceParam string, dest *time.Time, layout string, valueMustExist bool) *ValueBinder {
-	if b.failFast && b.errors != nil {
-		return b
-	}
-
-	value := b.ValueFunc(sourceParam)
-	if value == "" {
-		if valueMustExist {
-			b.setError(b.ErrorFunc(sourceParam, []string{value}, "required field value is empty", nil))
-		}
-		return b
-	}
-	t, err := time.Parse(layout, value)
-	if err != nil {
-		b.setError(b.ErrorFunc(sourceParam, []string{value}, "failed to bind field value to Time", err))
-		return b
-	}
-	*dest = t
-	return b
-}
-
-// Times binds parameter values to slice of time.Time variables
-func (b *ValueBinder) Times(sourceParam string, dest *[]time.Time, layout string) *ValueBinder {
-	return b.times(sourceParam, dest, layout, false)
-}
-
-// MustTimes requires parameter values to exist to bind to slice of time.Time variables. Returns error when values does not exist
-func (b *ValueBinder) MustTimes(sourceParam string, dest *[]time.Time, layout string) *ValueBinder {
-	return b.times(sourceParam, dest, layout, true)
-}
-
-func (b *ValueBinder) times(sourceParam string, dest *[]time.Time, layout string, valueMustExist bool) *ValueBinder {
-	if b.failFast && b.errors != nil {
-		return b
-	}
-
-	values := b.ValuesFunc(sourceParam)
-	if len(values) == 0 {
-		if valueMustExist {
-			b.setError(b.ErrorFunc(sourceParam, []string{}, "required field value is empty", nil))
-		}
-		return b
-	}
-
-	tmp := make([]time.Time, len(values))
-	for i, v := range values {
-		t, err := time.Parse(layout, v)
-		if err != nil {
-			b.setError(b.ErrorFunc(sourceParam, []string{v}, "failed to bind field value to Time", err))
-			if b.failFast {
-				return b
-			}
-			continue
-		}
-		tmp[i] = t
-	}
-	if b.errors == nil {
-		*dest = tmp
-	}
-	return b
-}
-
-// Duration binds parameter to time.Duration variable
-func (b *ValueBinder) Duration(sourceParam string, dest *time.Duration) *ValueBinder {
-	return b.duration(sourceParam, dest, false)
-}
-
-// MustDuration requires parameter value to exist to bind to time.Duration variable. Returns error when value does not exist
-func (b *ValueBinder) MustDuration(sourceParam string, dest *time.Duration) *ValueBinder {
-	return b.duration(sourceParam, dest, true)
-}
-
-func (b *ValueBinder) duration(sourceParam string, dest *time.Duration, valueMustExist bool) *ValueBinder {
-	if b.failFast && b.errors != nil {
-		return b
-	}
-
-	value := b.ValueFunc(sourceParam)
-	if value == "" {
-		if valueMustExist {
-			b.setError(b.ErrorFunc(sourceParam, []string{value}, "required field value is empty", nil))
-		}
-		return b
-	}
-	t, err := time.ParseDuration(value)
-	if err != nil {
-		b.setError(b.ErrorFunc(sourceParam, []string{value}, "failed to bind field value to Duration", err))
-		return b
-	}
-	*dest = t
-	return b
-}
-
-// Durations binds parameter values to slice of time.Duration variables
-func (b *ValueBinder) Durations(sourceParam string, dest *[]time.Duration) *ValueBinder {
-	return b.durationsValue(sourceParam, dest, false)
-}
-
-// MustDurations requires parameter values to exist to bind to slice of time.Duration variables. Returns error when values does not exist
-func (b *ValueBinder) MustDurations(sourceParam string, dest *[]time.Duration) *ValueBinder {
-	return b.durationsValue(sourceParam, dest, true)
-}
-
-func (b *ValueBinder) durationsValue(sourceParam string, dest *[]time.Duration, valueMustExist bool) *ValueBinder {
-	if b.failFast && b.errors != nil {
-		return b
-	}
-
-	values := b.ValuesFunc(sourceParam)
-	if len(values) == 0 {
-		if valueMustExist {
-			b.setError(b.ErrorFunc(sourceParam, []string{}, "required field value is empty", nil))
-		}
-		return b
-	}
-	return b.durations(sourceParam, values, dest)
-}
-
-func (b *ValueBinder) durations(sourceParam string, values []string, dest *[]time.Duration) *ValueBinder {
-	tmp := make([]time.Duration, len(values))
-	for i, v := range values {
-		t, err := time.ParseDuration(v)
-		if err != nil {
-			b.setError(b.ErrorFunc(sourceParam, []string{v}, "failed to bind field value to Duration", err))
-			if b.failFast {
-				return b
-			}
-			continue
-		}
-		tmp[i] = t
-	}
-	if b.errors == nil {
-		*dest = tmp
-	}
-	return b
-}
-
-// UnixTime binds parameter to time.Time variable (in local Time corresponding to the given Unix time).
-//
-// Example: 1609180603 bind to 2020-12-28T18:36:43.000000000+00:00
-//
-// Note:
-//   - time.Time{} (param is empty) and time.Unix(0,0) (param = "0") are not equal
-func (b *ValueBinder) UnixTime(sourceParam string, dest *time.Time) *ValueBinder {
-	return b.unixTime(sourceParam, dest, false, time.Second)
-}
-
-// MustUnixTime requires parameter value to exist to bind to time.Duration variable (in local time corresponding
-// to the given Unix time). Returns error when value does not exist.
-//
-// Example: 1609180603 bind to 2020-12-28T18:36:43.000000000+00:00
-//
-// Note:
-//   - time.Time{} (param is empty) and time.Unix(0,0) (param = "0") are not equal
-func (b *ValueBinder) MustUnixTime(sourceParam string, dest *time.Time) *ValueBinder {
-	return b.unixTime(sourceParam, dest, true, time.Second)
-}
-
-// UnixTimeMilli binds parameter to time.Time variable (in local time corresponding to the given Unix time in millisecond precision).
-//
-// Example: 1647184410140 bind to 2022-03-13T15:13:30.140000000+00:00
-//
-// Note:
-//   - time.Time{} (param is empty) and time.Unix(0,0) (param = "0") are not equal
-func (b *ValueBinder) UnixTimeMilli(sourceParam string, dest *time.Time) *ValueBinder {
-	return b.unixTime(sourceParam, dest, false, time.Millisecond)
-}
-
-// MustUnixTimeMilli requires parameter value to exist to bind to time.Duration variable  (in local time corresponding
-// to the given Unix time in millisecond precision). Returns error when value does not exist.
-//
-// Example: 1647184410140 bind to 2022-03-13T15:13:30.140000000+00:00
-//
-// Note:
-//   - time.Time{} (param is empty) and time.Unix(0,0) (param = "0") are not equal
-func (b *ValueBinder) MustUnixTimeMilli(sourceParam string, dest *time.Time) *ValueBinder {
-	return b.unixTime(sourceParam, dest, true, time.Millisecond)
-}
-
-// UnixTimeNano binds parameter to time.Time variable (in local time corresponding to the given Unix time in nanosecond precision).
-//
-// Example: 1609180603123456789 binds to 2020-12-28T18:36:43.123456789+00:00
-// Example:          1000000000 binds to 1970-01-01T00:00:01.000000000+00:00
-// Example:           999999999 binds to 1970-01-01T00:00:00.999999999+00:00
-//
-// Note:
-//   - time.Time{} (param is empty) and time.Unix(0,0) (param = "0") are not equal
-//   - Javascript's Number type only has about 53 bits of precision (Number.MAX_SAFE_INTEGER = 9007199254740991). Compare it to 1609180603123456789 in example.
-func (b *ValueBinder) UnixTimeNano(sourceParam string, dest *time.Time) *ValueBinder {
-	return b.unixTime(sourceParam, dest, false, time.Nanosecond)
-}
-
-// MustUnixTimeNano requires parameter value to exist to bind to time.Duration variable  (in local Time corresponding
-// to the given Unix time value in nano second precision). Returns error when value does not exist.
-//
-// Example: 1609180603123456789 binds to 2020-12-28T18:36:43.123456789+00:00
-// Example:          1000000000 binds to 1970-01-01T00:00:01.000000000+00:00
-// Example:           999999999 binds to 1970-01-01T00:00:00.999999999+00:00
-//
-// Note:
-//   - time.Time{} (param is empty) and time.Unix(0,0) (param = "0") are not equal
-//   - Javascript's Number type only has about 53 bits of precision (Number.MAX_SAFE_INTEGER = 9007199254740991). Compare it to 1609180603123456789 in example.
-func (b *ValueBinder) MustUnixTimeNano(sourceParam string, dest *time.Time) *ValueBinder {
-	return b.unixTime(sourceParam, dest, true, time.Nanosecond)
-}
-
-func (b *ValueBinder) unixTime(sourceParam string, dest *time.Time, valueMustExist bool, precision time.Duration) *ValueBinder {
-	if b.failFast && b.errors != nil {
-		return b
-	}
-
-	value := b.ValueFunc(sourceParam)
-	if value == "" {
-		if valueMustExist {
-			b.setError(b.ErrorFunc(sourceParam, []string{value}, "required field value is empty", nil))
-		}
-		return b
-	}
-
-	n, err := strconv.ParseInt(value, 10, 64)
-	if err != nil {
-		b.setError(b.ErrorFunc(sourceParam, []string{value}, "failed to bind field value to Time", err))
-		return b
-	}
-
-	switch precision {
-	case time.Second:
-		*dest = time.Unix(n, 0)
-	case time.Millisecond:
-		*dest = time.UnixMilli(n)
-	case time.Nanosecond:
-		*dest = time.Unix(0, n)
-	}
-	return b
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/labstack/echo/v4/codecov.yml","mode":420,"size":151,"sha256":"0b68c5e0f2253d39108e52cd6a5c50ab2ab3b97e0e951b0126db2ff98d2bd8bf","index":0,"count":1,"encoding":"utf-8","payloadBytes":151}
-coverage:
-  status:
-    project:
-      default:
-        threshold: 1%
-    patch:
-      default:
-        threshold: 1%
-
-comment:
-  require_changes: true
-@@END
-@@PORTABLE {"path":"vendor/github.com/labstack/echo/v4/context.go","mode":420,"size":17587,"sha256":"69df062de1cb7da7c733633a8523b47e43f2677bd7a497f617dd3351b9757de7","index":0,"count":1,"encoding":"utf-8","payloadBytes":17587}
-// SPDX-License-Identifier: MIT
-// SPDX-FileCopyrightText: © 2015 LabStack LLC and Echo contributors
-
-package echo
-
-import (
-	"bytes"
-	"encoding/xml"
-	"fmt"
-	"io"
-	"mime/multipart"
-	"net"
-	"net/http"
-	"net/url"
-	"strings"
-	"sync"
-)
-
-// Context represents the context of the current HTTP request. It holds request and
-// response objects, path, path parameters, data and registered handler.
-type Context interface {
-	// Request returns `*http.Request`.
-	Request() *http.Request
-
-	// SetRequest sets `*http.Request`.
-	SetRequest(r *http.Request)
-
-	// SetResponse sets `*Response`.
-	SetResponse(r *Response)
-
-	// Response returns `*Response`.
-	Response() *Response
-
-	// IsTLS returns true if HTTP connection is TLS otherwise false.
-	IsTLS() bool
-
-	// IsWebSocket returns true if HTTP connection is WebSocket otherwise false.
-	IsWebSocket() bool
-
-	// Scheme returns the HTTP protocol scheme, `http` or `https`.
-	Scheme() string
-
-	// RealIP returns the client's network address based on `X-Forwarded-For`
-	// or `X-Real-IP` request header.
-	// The behavior can be configured using `Echo#IPExtractor`.
-	RealIP() string
-
-	// Path returns the registered path for the handler.
-	Path() string
-
-	// SetPath sets the registered path for the handler.
-	SetPath(p string)
-
-	// Param returns path parameter by name.
-	Param(name string) string
-
-	// ParamNames returns path parameter names.
-	ParamNames() []string
-
-	// SetParamNames sets path parameter names.
-	SetParamNames(names ...string)
-
-	// ParamValues returns path parameter values.
-	ParamValues() []string
-
-	// SetParamValues sets path parameter values.
-	SetParamValues(values ...string)
-
-	// QueryParam returns the query param for the provided name.
-	QueryParam(name string) string
-
-	// QueryParams returns the query parameters as `url.Values`.
-	QueryParams() url.Values
-
-	// QueryString returns the URL query string.
-	QueryString() string
-
-	// FormValue returns the form field value for the provided name.
-	FormValue(name string) string
-
-	// FormParams returns the form parameters as `url.Values`.
-	FormParams() (url.Values, error)
-
-	// FormFile returns the multipart form file for the provided name.
-	FormFile(name string) (*multipart.FileHeader, error)
-
-	// MultipartForm returns the multipart form.
-	MultipartForm() (*multipart.Form, error)
-
-	// Cookie returns the named cookie provided in the request.
-	Cookie(name string) (*http.Cookie, error)
-
-	// SetCookie adds a `Set-Cookie` header in HTTP response.
-	SetCookie(cookie *http.Cookie)
-
-	// Cookies returns the HTTP cookies sent with the request.
-	Cookies() []*http.Cookie
-
-	// Get retrieves data from the context.
-	Get(key string) interface{}
-
-	// Set saves data in the context.
-	Set(key string, val interface{})
-
-	// Bind binds path params, query params and the request body into provided type `i`. The default binder
-	// binds body based on Content-Type header.
-	Bind(i interface{}) error
-
-	// Validate validates provided `i`. It is usually called after `Context#Bind()`.
-	// Validator must be registered using `Echo#Validator`.
-	Validate(i interface{}) error
-
-	// Render renders a template with data and sends a text/html response with status
-	// code. Renderer must be registered using `Echo.Renderer`.
-	Render(code int, name string, data interface{}) error
-
-	// HTML sends an HTTP response with status code.
-	HTML(code int, html string) error
-
-	// HTMLBlob sends an HTTP blob response with status code.
-	HTMLBlob(code int, b []byte) error
-
-	// String sends a string response with status code.
-	String(code int, s string) error
-
-	// JSON sends a JSON response with status code.
-	JSON(code int, i interface{}) error
-
-	// JSONPretty sends a pretty-print JSON with status code.
-	JSONPretty(code int, i interface{}, indent string) error
-
-	// JSONBlob sends a JSON blob response with status code.
-	JSONBlob(code int, b []byte) error
-
-	// JSONP sends a JSONP response with status code. It uses `callback` to construct
-	// the JSONP payload.
-	JSONP(code int, callback string, i interface{}) error
-
-	// JSONPBlob sends a JSONP blob response with status code. It uses `callback`
-	// to construct the JSONP payload.
-	JSONPBlob(code int, callback string, b []byte) error
-
-	// XML sends an XML response with status code.
-	XML(code int, i interface{}) error
-
-	// XMLPretty sends a pretty-print XML with status code.
-	XMLPretty(code int, i interface{}, indent string) error
-
-	// XMLBlob sends an XML blob response with status code.
-	XMLBlob(code int, b []byte) error
-
-	// Blob sends a blob response with status code and content type.
-	Blob(code int, contentType string, b []byte) error
-
-	// Stream sends a streaming response with status code and content type.
-	Stream(code int, contentType string, r io.Reader) error
-
-	// File sends a response with the content of the file.
-	File(file string) error
-
-	// Attachment sends a response as attachment, prompting client to save the
-	// file.
-	Attachment(file string, name string) error
-
-	// Inline sends a response as inline, opening the file in the browser.
-	Inline(file string, name string) error
-
-	// NoContent sends a response with no body and a status code.
-	NoContent(code int) error
-
-	// Redirect redirects the request to a provided URL with status code.
-	Redirect(code int, url string) error
-
-	// Error invokes the registered global HTTP error handler. Generally used by middleware.
-	// A side-effect of calling global error handler is that now Response has been committed (sent to the client) and
-	// middlewares up in chain can not change Response status code or Response body anymore.
-	//
-	// Avoid using this method in handlers as no middleware will be able to effectively handle errors after that.
-	Error(err error)
-
-	// Handler returns the matched handler by router.
-	Handler() HandlerFunc
-
-	// SetHandler sets the matched handler by router.
-	SetHandler(h HandlerFunc)
-
-	// Logger returns the `Logger` instance.
-	Logger() Logger
-
-	// SetLogger Set the logger
-	SetLogger(l Logger)
-
-	// Echo returns the `Echo` instance.
-	Echo() *Echo
-
-	// Reset resets the context after request completes. It must be called along
-	// with `Echo#AcquireContext()` and `Echo#ReleaseContext()`.
-	// See `Echo#ServeHTTP()`
-	Reset(r *http.Request, w http.ResponseWriter)
-}
-
-type context struct {
-	logger   Logger
-	request  *http.Request
-	response *Response
-	query    url.Values
-	echo     *Echo
-
-	store Map
-	lock  sync.RWMutex
-
-	// following fields are set by Router
-	handler HandlerFunc
-
-	// path is route path that Router matched. It is empty string where there is no route match.
-	// Route registered with RouteNotFound is considered as a match and path therefore is not empty.
-	path string
-
-	// Usually echo.Echo is sizing pvalues but there could be user created middlewares that decide to
-	// overwrite parameter by calling SetParamNames + SetParamValues.
-	// When echo.Echo allocated that slice it length/capacity is tied to echo.Echo.maxParam value.
-	//
-	// It is important that pvalues size is always equal or bigger to pnames length.
-	pvalues []string
-
-	// pnames length is tied to param count for the matched route
-	pnames []string
-}
-
-const (
-	// ContextKeyHeaderAllow is set by Router for getting value for `Allow` header in later stages of handler call chain.
-	// Allow header is mandatory for status 405 (method not found) and useful for OPTIONS method requests.
-	// It is added to context only when Router does not find matching method handler for request.
-	ContextKeyHeaderAllow = "echo_header_allow"
-)
-
-const (
-	defaultMemory = 32 << 20 // 32 MB
-	indexPage     = "index.html"
-	defaultIndent = "  "
-)
-
-func (c *context) writeContentType(value string) {
-	header := c.Response().Header()
-	if header.Get(HeaderContentType) == "" {
-		header.Set(HeaderContentType, value)
-	}
-}
-
-func (c *context) Request() *http.Request {
-	return c.request
-}
-
-func (c *context) SetRequest(r *http.Request) {
-	c.request = r
-}
-
-func (c *context) Response() *Response {
-	return c.response
-}
-
-func (c *context) SetResponse(r *Response) {
-	c.response = r
-}
-
-func (c *context) IsTLS() bool {
-	return c.request.TLS != nil
-}
-
-func (c *context) IsWebSocket() bool {
-	upgrade := c.request.Header.Get(HeaderUpgrade)
-	return strings.EqualFold(upgrade, "websocket")
-}
-
-func (c *context) Scheme() string {
-	// Can't use `r.Request.URL.Scheme`
-	// See: https://groups.google.com/forum/#!topic/golang-nuts/pMUkBlQBDF0
-	if c.IsTLS() {
-		return "https"
-	}
-	if scheme := c.request.Header.Get(HeaderXForwardedProto); scheme != "" {
-		return scheme
-	}
-	if scheme := c.request.Header.Get(HeaderXForwardedProtocol); scheme != "" {
-		return scheme
-	}
-	if ssl := c.request.Header.Get(HeaderXForwardedSsl); ssl == "on" {
-		return "https"
-	}
-	if scheme := c.request.Header.Get(HeaderXUrlScheme); scheme != "" {
-		return scheme
-	}
-	return "http"
-}
-
-func (c *context) RealIP() string {
-	if c.echo != nil && c.echo.IPExtractor != nil {
-		return c.echo.IPExtractor(c.request)
-	}
-	// Fall back to legacy behavior
-	if ip := c.request.Header.Get(HeaderXForwardedFor); ip != "" {
-		i := strings.IndexAny(ip, ",")
-		if i > 0 {
-			xffip := strings.TrimSpace(ip[:i])
-			xffip = strings.TrimPrefix(xffip, "[")
-			xffip = strings.TrimSuffix(xffip, "]")
-			return xffip
-		}
-		return ip
-	}
-	if ip := c.request.Header.Get(HeaderXRealIP); ip != "" {
-		ip = strings.TrimPrefix(ip, "[")
-		ip = strings.TrimSuffix(ip, "]")
-		return ip
-	}
-	ra, _, _ := net.SplitHostPort(c.request.RemoteAddr)
-	return ra
-}
-
-func (c *context) Path() string {
-	return c.path
-}
-
-func (c *context) SetPath(p string) {
-	c.path = p
-}
-
-func (c *context) Param(name string) string {
-	for i, n := range c.pnames {
-		if i < len(c.pvalues) {
-			if n == name {
-				return c.pvalues[i]
-			}
-		}
-	}
-	return ""
-}
-
-func (c *context) ParamNames() []string {
-	return c.pnames
-}
-
-func (c *context) SetParamNames(names ...string) {
-	c.pnames = names
-
-	l := len(names)
-	if len(c.pvalues) < l {
-		// Keeping the old pvalues just for backward compatibility, but it sounds that doesn't make sense to keep them,
-		// probably those values will be overridden in a Context#SetParamValues
-		newPvalues := make([]string, l)
-		copy(newPvalues, c.pvalues)
-		c.pvalues = newPvalues
-	}
-}
-
-func (c *context) ParamValues() []string {
-	return c.pvalues[:len(c.pnames)]
-}
-
-func (c *context) SetParamValues(values ...string) {
-	// NOTE: Don't just set c.pvalues = values, because it has to have length c.echo.maxParam (or bigger) at all times
-	// It will brake the Router#Find code
-	limit := len(values)
-	if limit > len(c.pvalues) {
-		c.pvalues = make([]string, limit)
-	}
-	for i := 0; i < limit; i++ {
-		c.pvalues[i] = values[i]
-	}
-}
-
-func (c *context) QueryParam(name string) string {
-	if c.query == nil {
-		c.query = c.request.URL.Query()
-	}
-	return c.query.Get(name)
-}
-
-func (c *context) QueryParams() url.Values {
-	if c.query == nil {
-		c.query = c.request.URL.Query()
-	}
-	return c.query
-}
-
-func (c *context) QueryString() string {
-	return c.request.URL.RawQuery
-}
-
-func (c *context) FormValue(name string) string {
-	return c.request.FormValue(name)
-}
-
-func (c *context) FormParams() (url.Values, error) {
-	if strings.HasPrefix(c.request.Header.Get(HeaderContentType), MIMEMultipartForm) {
-		if err := c.request.ParseMultipartForm(defaultMemory); err != nil {
-			return nil, err
-		}
-	} else {
-		if err := c.request.ParseForm(); err != nil {
-			return nil, err
-		}
-	}
-	return c.request.Form, nil
-}
-
-func (c *context) FormFile(name string) (*multipart.FileHeader, error) {
-	f, fh, err := c.request.FormFile(name)
-	if err != nil {
-		return nil, err
-	}
-	f.Close()
-	return fh, nil
-}
-
-func (c *context) MultipartForm() (*multipart.Form, error) {
-	err := c.request.ParseMultipartForm(defaultMemory)
-	return c.request.MultipartForm, err
-}
-
-func (c *context) Cookie(name string) (*http.Cookie, error) {
-	return c.request.Cookie(name)
-}
-
-func (c *context) SetCookie(cookie *http.Cookie) {
-	http.SetCookie(c.Response(), cookie)
-}
-
-func (c *context) Cookies() []*http.Cookie {
-	return c.request.Cookies()
-}
-
-func (c *context) Get(key string) interface{} {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
-	return c.store[key]
-}
-
-func (c *context) Set(key string, val interface{}) {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-
-	if c.store == nil {
-		c.store = make(Map)
-	}
-	c.store[key] = val
-}
-
-func (c *context) Bind(i interface{}) error {
-	return c.echo.Binder.Bind(i, c)
-}
-
-func (c *context) Validate(i interface{}) error {
-	if c.echo.Validator == nil {
-		return ErrValidatorNotRegistered
-	}
-	return c.echo.Validator.Validate(i)
-}
-
-func (c *context) Render(code int, name string, data interface{}) (err error) {
-	if c.echo.Renderer == nil {
-		return ErrRendererNotRegistered
-	}
-	buf := new(bytes.Buffer)
-	if err = c.echo.Renderer.Render(buf, name, data, c); err != nil {
-		return
-	}
-	return c.HTMLBlob(code, buf.Bytes())
-}
-
-func (c *context) HTML(code int, html string) (err error) {
-	return c.HTMLBlob(code, []byte(html))
-}
-
-func (c *context) HTMLBlob(code int, b []byte) (err error) {
-	return c.Blob(code, MIMETextHTMLCharsetUTF8, b)
-}
-
-func (c *context) String(code int, s string) (err error) {
-	return c.Blob(code, MIMETextPlainCharsetUTF8, []byte(s))
-}
-
-func (c *context) jsonPBlob(code int, callback string, i interface{}) (err error) {
-	indent := ""
-	if _, pretty := c.QueryParams()["pretty"]; c.echo.Debug || pretty {
-		indent = defaultIndent
-	}
-	c.writeContentType(MIMEApplicationJavaScriptCharsetUTF8)
-	c.response.WriteHeader(code)
-	if _, err = c.response.Write([]byte(callback + "(")); err != nil {
-		return
-	}
-	if err = c.echo.JSONSerializer.Serialize(c, i, indent); err != nil {
-		return
-	}
-	if _, err = c.response.Write([]byte(");")); err != nil {
-		return
-	}
-	return
-}
-
-func (c *context) json(code int, i interface{}, indent string) error {
-	c.writeContentType(MIMEApplicationJSON)
-	c.response.Status = code
-	return c.echo.JSONSerializer.Serialize(c, i, indent)
-}
-
-func (c *context) JSON(code int, i interface{}) (err error) {
-	indent := ""
-	if _, pretty := c.QueryParams()["pretty"]; c.echo.Debug || pretty {
-		indent = defaultIndent
-	}
-	return c.json(code, i, indent)
-}
-
-func (c *context) JSONPretty(code int, i interface{}, indent string) (err error) {
-	return c.json(code, i, indent)
-}
-
-func (c *context) JSONBlob(code int, b []byte) (err error) {
-	return c.Blob(code, MIMEApplicationJSON, b)
-}
-
-func (c *context) JSONP(code int, callback string, i interface{}) (err error) {
-	return c.jsonPBlob(code, callback, i)
-}
-
-func (c *context) JSONPBlob(code int, callback string, b []byte) (err error) {
-	c.writeContentType(MIMEApplicationJavaScriptCharsetUTF8)
-	c.response.WriteHeader(code)
-	if _, err = c.response.Write([]byte(callback + "(")); err != nil {
-		return
-	}
-	if _, err = c.response.Write(b); err != nil {
-		return
-	}
-	_, err = c.response.Write([]byte(");"))
-	return
-}
-
-func (c *context) xml(code int, i interface{}, indent string) (err error) {
-	c.writeContentType(MIMEApplicationXMLCharsetUTF8)
-	c.response.WriteHeader(code)
-	enc := xml.NewEncoder(c.response)
-	if indent != "" {
-		enc.Indent("", indent)
-	}
-	if _, err = c.response.Write([]byte(xml.Header)); err != nil {
-		return
-	}
-	return enc.Encode(i)
-}
-
-func (c *context) XML(code int, i interface{}) (err error) {
-	indent := ""
-	if _, pretty := c.QueryParams()["pretty"]; c.echo.Debug || pretty {
-		indent = defaultIndent
-	}
-	return c.xml(code, i, indent)
-}
-
-func (c *context) XMLPretty(code int, i interface{}, indent string) (err error) {
-	return c.xml(code, i, indent)
-}
-
-func (c *context) XMLBlob(code int, b []byte) (err error) {
-	c.writeContentType(MIMEApplicationXMLCharsetUTF8)
-	c.response.WriteHeader(code)
-	if _, err = c.response.Write([]byte(xml.Header)); err != nil {
-		return
-	}
-	_, err = c.response.Write(b)
-	return
-}
-
-func (c *context) Blob(code int, contentType string, b []byte) (err error) {
-	c.writeContentType(contentType)
-	c.response.WriteHeader(code)
-	_, err = c.response.Write(b)
-	return
-}
-
-func (c *context) Stream(code int, contentType string, r io.Reader) (err error) {
-	c.writeContentType(contentType)
-	c.response.WriteHeader(code)
-	_, err = io.Copy(c.response, r)
-	return
-}
-
-func (c *context) Attachment(file, name string) error {
-	return c.contentDisposition(file, name, "attachment")
-}
-
-func (c *context) Inline(file, name string) error {
-	return c.contentDisposition(file, name, "inline")
-}
-
-var quoteEscaper = strings.NewReplacer("\\", "\\\\", `"`, "\\\"")
-
-func (c *context) contentDisposition(file, name, dispositionType string) error {
-	c.response.Header().Set(HeaderContentDisposition, fmt.Sprintf(`%s; filename="%s"`, dispositionType, quoteEscaper.Replace(name)))
-	return c.File(file)
-}
-
-func (c *context) NoContent(code int) error {
-	c.response.WriteHeader(code)
-	return nil
-}
-
-func (c *context) Redirect(code int, url string) error {
-	if code < 300 || code > 308 {
-		return ErrInvalidRedirectCode
-	}
-	c.response.Header().Set(HeaderLocation, url)
-	c.response.WriteHeader(code)
-	return nil
-}
-
-func (c *context) Error(err error) {
-	c.echo.HTTPErrorHandler(err, c)
-}
-
-func (c *context) Echo() *Echo {
-	return c.echo
-}
-
-func (c *context) Handler() HandlerFunc {
-	return c.handler
-}
-
-func (c *context) SetHandler(h HandlerFunc) {
-	c.handler = h
-}
-
-func (c *context) Logger() Logger {
-	res := c.logger
-	if res != nil {
-		return res
-	}
-	return c.echo.Logger
-}
-
-func (c *context) SetLogger(l Logger) {
-	c.logger = l
-}
-
-func (c *context) Reset(r *http.Request, w http.ResponseWriter) {
-	c.request = r
-	c.response.reset(w)
-	c.query = nil
-	c.handler = NotFoundHandler
-	c.store = nil
-	c.path = ""
-	c.pnames = nil
-	c.logger = nil
-	// NOTE: Don't reset because it has to have length c.echo.maxParam (or bigger) at all times
-	for i := 0; i < len(c.pvalues); i++ {
-		c.pvalues[i] = ""
-	}
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/labstack/echo/v4/context_fs.go","mode":420,"size":1371,"sha256":"59af17fca3b8c43f4206363f1528e1d83095a79bdf8aa79eed69d9749867ac5b","index":0,"count":1,"encoding":"utf-8","payloadBytes":1371}
-// SPDX-License-Identifier: MIT
-// SPDX-FileCopyrightText: © 2015 LabStack LLC and Echo contributors
-
-package echo
-
-import (
-	"errors"
-	"io"
-	"io/fs"
-	"net/http"
-	"path/filepath"
-)
-
-func (c *context) File(file string) error {
-	return fsFile(c, file, c.echo.Filesystem)
-}
-
-// FileFS serves file from given file system.
-//
-// When dealing with `embed.FS` use `fs := echo.MustSubFS(fs, "rootDirectory") to create sub fs which uses necessary
-// prefix for directory path. This is necessary as `//go:embed assets/images` embeds files with paths
-// including `assets/images` as their prefix.
-func (c *context) FileFS(file string, filesystem fs.FS) error {
-	return fsFile(c, file, filesystem)
-}
-
-func fsFile(c Context, file string, filesystem fs.FS) error {
-	f, err := filesystem.Open(file)
-	if err != nil {
-		return ErrNotFound
-	}
-	defer f.Close()
-
-	fi, _ := f.Stat()
-	if fi.IsDir() {
-		file = filepath.ToSlash(filepath.Join(file, indexPage)) // ToSlash is necessary for Windows. fs.Open and os.Open are different in that aspect.
-		f, err = filesystem.Open(file)
-		if err != nil {
-			return ErrNotFound
-		}
-		defer f.Close()
-		if fi, err = f.Stat(); err != nil {
-			return err
-		}
-	}
-	ff, ok := f.(io.ReadSeeker)
-	if !ok {
-		return errors.New("file does not implement io.ReadSeeker")
-	}
-	http.ServeContent(c.Response(), c.Request(), fi.Name(), fi.ModTime(), ff)
-	return nil
-}
 
 @@END

@@ -1,3 +1,2006 @@
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/leaanthony/go-ansi-parser/logo.png","mode":420,"size":10362,"sha256":"87a36c82f2898cd5ab2bbc76096dadf422933f6f7b77f76a269526243f945d1b","index":0,"count":1,"encoding":"base64","payloadBytes":13816}
+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
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/leaanthony/go-ansi-parser/options.go","mode":420,"size":845,"sha256":"1e7ed890b78e3a4fa87b6c41fd50be1a7331065de846bfa7c25e98a977bbe238","index":0,"count":1,"encoding":"utf-8","payloadBytes":845}
+package ansi
+
+// ParseOption specifies parse option.
+type ParseOption struct {
+	ignoreUnexpectedCode bool
+	ansiForegroundColor  string
+	ansiBackgroundColor  string
+}
+
+// WithIgnoreInvalidCodes disables returning an error on invalid ANSI code.
+func WithIgnoreInvalidCodes() ParseOption {
+	return ParseOption{ignoreUnexpectedCode: true}
+}
+
+// WithDefaultForegroundColor specifies default foreground code (ANSI 39).
+// See ColourMap variable and foreground color codes 30-37.
+func WithDefaultForegroundColor(ansiColor string) ParseOption {
+	return ParseOption{ansiForegroundColor: ansiColor}
+}
+
+// WithDefaultBackgroundColor specifies default foreground code (ANSI 49).
+// See ColourMap variable and foreground color codes 30-37.
+func WithDefaultBackgroundColor(ansiColor string) ParseOption {
+	return ParseOption{ansiBackgroundColor: ansiColor}
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/leaanthony/gosod/.gitignore","mode":420,"size":272,"sha256":"750e5fd3dc47744ff1c098703e872469c972d8b9b5ab56449793592eb47de1ad","index":0,"count":1,"encoding":"utf-8","payloadBytes":272}
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, build with `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+
+generated
+examples/ignore/ignore
+examples/basic/basic
+examples/filters/filters
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/leaanthony/gosod/LICENSE","mode":420,"size":1068,"sha256":"6ec71bfac83b3a260158e53408a81392f84982fe19c43b4c2b6e2b6f0b44457b","index":0,"count":1,"encoding":"utf-8","payloadBytes":1068}
+MIT License
+
+Copyright (c) 2019 Lea Anthony
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/leaanthony/gosod/README.md","mode":420,"size":3097,"sha256":"78372ba337881cb00dc7107ec7e82fecfef35829092a73f8894846673d831313","index":0,"count":1,"encoding":"utf-8","payloadBytes":3097}
+<p align="center" style="text-align: center">
+   <img src="logo.png" width="50%"><br/>
+</p>
+
+<p align="center">
+	Scaffolding simplified<br/><br/>
+   <a href="https://github.com/leaanthony/gosod/blob/master/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg"></a>
+   <a href="https://goreportcard.com/report/github.com/leaanthony/gosod"><img src="https://goreportcard.com/badge/github.com/leaanthony/gosod"/></a>
+   <a href="https://godoc.org/github.com/leaanthony/gosod"><img src="https://img.shields.io/badge/godoc-reference-blue.svg"/></a>
+   <a href="https://github.com/leaanthony/gosod/issues"><img src="https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat" alt="CodeFactor" /></a>
+   <a href="https://app.fossa.io/projects/git%2Bgithub.com%2Fleaanthony%2Fgosod?ref=badge_shield" alt="FOSSA Status"><img src="https://app.fossa.io/api/projects/git%2Bgithub.com%2Fleaanthony%2Fgosod.svg?type=shield"/></a>
+</p>
+
+
+Features:
+  - Scaffold out project directories from templates
+  - Uses Go's native templating engine
+  - Uses `fs.FS` for input, so it works well with `go:embed` and [debme](https://github.com/leaanthony/debme)
+  - Go alternative to [cookiecutter](https://github.com/cookiecutter/cookiecutter)
+
+## Installation 
+
+`go get github.com/leaanthony/gosod`
+
+## Usage
+
+  1. Define a template directory
+  2. Define some data
+  3. Extract to a target directory
+
+```go
+package main
+
+import (
+	"log"
+
+	"github.com/leaanthony/gosod"
+)
+
+type config struct {
+	Name string
+}
+
+
+// mytemplate/
+// ├── custom.filtername.txt
+// ├── ignored.txt
+// ├── subdir
+// │   ├── included.txt
+// │   └── sub.tmpl.go
+// └── test.tmpl.go
+//go:embed mytemplate/*
+var mytemplate embed.FS
+
+func main() {
+
+	// Define a new Template directory
+	basic, err := gosod.New(mytemplate)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Make some config data
+	myConfig := &config{
+		Name: "Mat",
+	}
+		
+	// Ignore files
+	basic.IgnoreFile("ignored.txt")
+	
+	// Custom template filters
+	basic.SetTemplateFilters([]string{ ".filtername", ".tmpl" })
+
+	// Create a new directory using the template and config
+	err = basic.Extract("./generated", myConfig)
+	if err != nil {
+		log.Fatal(err)
+	}
+	
+	// Ouput FS:
+	// generated/
+	// ├── custom.txt
+	// ├── subdir
+	// │   ├── included.txt
+	// │   └── sub.go
+	// └── test.go
+}
+```
+
+## Template Directories
+
+A template directory is simply a directory structure contianing files you wish to copy. The algorithm for copying is:
+
+  * Categorise all files into one of: directory, standard file and template files
+	* Create the directory structure
+	* Copy standard files
+	* Copy template files, assembled using the given data
+
+Template files, by default, are any file with ".tmpl" in their filename. To change this, use `SetTemplateFilters([]string)`. This allows you to set any number of filters.
+
+Files may also be ignored by using the `IgnoreFilename(string)` method.
+
+## What's with the name?
+
+Google is your [friend](https://translate.google.com/?sl=cy&tl=en&text=gosod&op=translate)
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/leaanthony/gosod/gosod.go","mode":420,"size":232,"sha256":"f9fc78ccf72763047b815f0f00aa3be3c3c4dee1c8bf2ba683edae44cb87c1e9","index":0,"count":1,"encoding":"utf-8","payloadBytes":232}
+package gosod
+
+import (
+	"github.com/leaanthony/gosod/internal/templatedir"
+	"io/fs"
+)
+
+// New creates a new TemplateDir structure for the given filesystem
+func New(fs fs.FS) *templatedir.TemplateDir {
+	return templatedir.New(fs)
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/leaanthony/gosod/internal/templatedir/templatedir.go","mode":420,"size":6017,"sha256":"2faaab0bb516666df02b206b3cf1ea1f89e8cd4886bf17a5969835efe6c7ba42","index":0,"count":1,"encoding":"utf-8","payloadBytes":6017}
+package templatedir
+
+import (
+	"bytes"
+	"io"
+	"io/fs"
+	"log"
+	"os"
+	"path/filepath"
+	"strings"
+	"syscall"
+	"text/template"
+)
+
+// TemplateDir defines a directory containing directories and files, including template files
+type TemplateDir struct {
+	fs              fs.FS
+	templateFilters []string
+	dirs            []string
+	standardFiles   []string
+	templateFiles   []string
+	ignoredFiles    map[string]struct{}
+	renameFiles     map[string]string
+}
+
+// New attempts to create a new TemplateDir from the given FS
+func New(fs fs.FS) *TemplateDir {
+
+	return &TemplateDir{
+		fs:              fs,
+		templateFilters: []string{".tmpl"},
+		ignoredFiles:    make(map[string]struct{}),
+		renameFiles:     make(map[string]string),
+	}
+
+}
+
+// IgnoreFile will add the given filename to the list of files to ignore
+// during extraction
+func (t *TemplateDir) IgnoreFile(filename string) {
+	t.ignoredFiles[filename] = struct{}{}
+}
+
+// SetTemplateFilters sets the template filter. Each filename is checked to see if
+// it contains this string and if so, it is deemed to be a template file
+func (t *TemplateDir) SetTemplateFilters(filters []string) {
+	t.templateFilters = filters
+}
+
+func (t *TemplateDir) RenameFiles(renameFiles map[string]string) {
+	t.renameFiles = renameFiles
+}
+
+// Extract the templates to the given directory, using data as input
+func (t *TemplateDir) Extract(targetDirectory string, data interface{}) error {
+
+	// Get the absolute path
+	targetDirectory, err := filepath.Abs(targetDirectory)
+	if err != nil {
+		return err
+	}
+
+	// If the targetDirectory doesn't exist, then create it
+	if _, err := os.Stat(targetDirectory); os.IsNotExist(err) == true {
+		// Create the targetDirectory
+		err = os.MkdirAll(targetDirectory, 0755)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Process the template files
+	err = t.processTemplateDirFiles(targetDirectory, data)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (t *TemplateDir) processTemplateDirFiles(targetDirectory string, data interface{}) error {
+	// Categorise all files
+	err := t.categoriseFiles()
+	if err != nil {
+		return err
+	}
+
+	// Create all directories
+	err = t.createDirectories(targetDirectory, data)
+	if err != nil {
+		return err
+	}
+
+	// Process TemplateDirs
+	err = t.processTemplateDirs(targetDirectory, data)
+	if err != nil {
+		return err
+	}
+
+	// Copy files
+	err = t.copyFiles(targetDirectory, data)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (t *TemplateDir) categoriseFiles() error {
+	return fs.WalkDir(t.fs, ".", t.categoriseFile)
+}
+
+func (t *TemplateDir) categoriseFile(path string, info fs.DirEntry, err error) error {
+
+	// Process error
+	if err != nil {
+		return err
+	}
+
+	// Is it a directory?
+	if info.IsDir() {
+		// Ignore base dir
+		if path != "." {
+			t.dirs = append(t.dirs, path)
+		}
+		return nil
+	}
+
+	// Get the filename
+	filename := filepath.Base(path)
+
+	// Is it a file we are ignoring?
+	_, ignored := t.ignoredFiles[filename]
+	if ignored {
+		return nil
+	}
+
+	// Is it a template?
+	for _, filter := range t.templateFilters {
+		if strings.Index(filename, filter) > -1 {
+			t.templateFiles = append(t.templateFiles, path)
+			return nil
+		}
+	}
+
+	// Treat as standard file
+	t.standardFiles = append(t.standardFiles, path)
+	return nil
+}
+
+func (t *TemplateDir) convertPathTarget(path string, targetDirectory string, data any) string {
+
+	result := filepath.Join(targetDirectory, path)
+	if data == nil {
+		return result
+	}
+
+	// Load the filename as a template
+	tmpl, err := template.New("filename").Parse(result)
+	if err != nil {
+		return result
+	}
+
+	// Execute the template
+	var buf bytes.Buffer
+	err = tmpl.Execute(&buf, data)
+	if err != nil {
+		return result
+	}
+
+	// Return the result
+	return buf.String()
+}
+
+func (t *TemplateDir) createDirectories(targetDirectory string, data any) error {
+
+	// Iterate all directories and attempt to create them
+	for _, dirPath := range t.dirs {
+
+		targetDir := t.convertPathTarget(dirPath, targetDirectory, data)
+
+		// Create the directory
+		err := os.MkdirAll(targetDir, 0755)
+
+		// Ignore directory exists errors
+		if err != nil && err != syscall.EEXIST {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (t *TemplateDir) processTemplateDirs(targetDirectory string, data interface{}) error {
+
+	// Iterate template files
+	for _, templateFile := range t.templateFiles {
+
+		// Parse template
+		tmpl, err := template.ParseFS(t.fs, templateFile)
+		if err != nil {
+			return err
+		}
+
+		// Convert path to target path
+		targetFile := t.convertPathTarget(templateFile, targetDirectory, data)
+
+		// update filename
+		baseDir := filepath.Dir(targetFile)
+		filename := filepath.Base(targetFile)
+		for _, filter := range t.templateFilters {
+			filename = strings.ReplaceAll(filename, filter, "")
+		}
+		renamedFile := t.renameFiles[filename]
+		if renamedFile != "" {
+			filename = renamedFile
+		}
+		targetFile = filepath.Join(baseDir, filename)
+
+		// Create target file
+		writer, err := os.Create(targetFile)
+		if err != nil {
+			return err
+		}
+
+		err = tmpl.Execute(writer, data)
+		if err != nil {
+			err2 := writer.Close()
+			if err2 != nil {
+				return err2
+			}
+			return err
+		}
+
+		err = writer.Close()
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (t *TemplateDir) copyFiles(targetDirectory string, data any) error {
+
+	// Iterate over files
+	for _, filename := range t.standardFiles {
+		targetFile := filename
+		renamedFile := t.renameFiles[filename]
+		if renamedFile != "" {
+			targetFile = renamedFile
+		}
+
+		targetFilename := t.convertPathTarget(targetFile, targetDirectory, data)
+		err := t.copyFile(filename, targetFilename)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (t *TemplateDir) copyFile(source, target string) error {
+	s, err := t.fs.Open(source)
+	if err != nil {
+		return err
+	}
+	defer func(s fs.File) {
+		err := s.Close()
+		if err != nil {
+			log.Fatal(err)
+		}
+	}(s)
+	d, err := os.Create(target)
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(d, s); err != nil {
+		err := d.Close()
+		if err != nil {
+			return err
+		}
+		return err
+	}
+	return d.Close()
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/leaanthony/gosod/logo.png","mode":420,"size":5050,"sha256":"7e2d8ec2d0cb3a13f2131f13526ad0435e7da3e030f14d56dbf26f434152bbcb","index":0,"count":1,"encoding":"base64","payloadBytes":6736}
+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LLw73oe+mpqbdu3fHB+pT5UM7ePDgcccdF2cN6uzsrJ1JfOZI3njjjRUrVsTnhxBYkEtgQUkvvfTSCDffMcWVP2/evKVLl37ve9/bsmXL/w5j/fr18clCucCqueKKK+KsIdra2pYvX3777bfXtvToo4/+eYhaEd577721/SxZsmS47xK97Z577olvHY0333xz6HuP6ne/+91dd93V1dX13ve+N25l0Ic+9KH4mtGo8qF97Wtfi7OGqH0R1r7GNmzYsHnz5kceeWTo3moefPDB7u7ub3zjG6eddlp88v8TWJBLYEF5w/2DrBSlA+vJJ59sbm6O4/LUrur6/wL0iEb4BFtp3/nOd+JrRqPKh/bcc8+NnG4pBBbkElhQXn9//6c+9al4UyUpHVg1XV1dcVySpqamzZs3x/eNUnpg1fKlt7c3vmaUqnxoV199dRyaTWBBLoEFY/Laa691dHTEyyrDWAKrr69vuI9aj9HatWvjy0YvN7COPfbY+++/P75j9Kp8aLWUv+CCC+LcVAILcgksGKtXX331sssui/fVmI0lsGr27du3cOHCOHQMmpqaVq1aNTAwEN80eomBNWnSpJ///OfxBWVV+dB6enqG+3ldKQQW5BJYkOOuu+4a7jeulDPGwHqr+JEBt912W0tLSxw9etOnT3/ggQfiC8rKCqz29vY//vGPcfrYVPbQ3ir2tmHDhjHubcqUKfE/FQQW5BJYkObf//733Xff/ZGPfCTeXaWMPbDetmfPnltuueWMM86IL6jP3Llza3+oAwcOxLljMPbA+vCHP/yDH/ygduBxdJIKHtphu3fvvvnmm08//fT41qNpa2u74YYbXnrppfg/CgILcgksyPfCCy/84he/uPrqq+fPn9/R0TFjxozhfrT3CLIC620DAwOPPfbYpk2brrzyynnz5p111lmnnnrq0G9mNDc3T506tbbVs88+e+HChddee+199923a9euOCjDqALr2GOPnTZtWq115syZ89WvfvXOO+98/PHH48TxUalDCw7vrbOz8+Mf/3h7e/v06dNrX2ZNTU2Ht9fS0nLmmWdedNFFy5cv/+EPf/jGG2+8/ezhBUMJLMglsAAAkgksAIBkAgsAIJnAAgBIJrAAAJIJLACAZAILACCZwAIASCawAACSCSwAgGQCCwAgmcACAEgmsAAAkgksAIBkAgsAIJnAAgBIJrAAAJIJLACAZAILACCZwAIASCawAACSCSwAgGQCCwAgmcACAEgmsAAAkgksAIBkAgsAIJnAAgBIJrAAAJIJLACAZAILACCZwAIASCawAACSCSwAgGQCCwAgmcACAEgmsAAAkgksAIBkAgsAIJnAAgBIJrAAAJIJLACAZAILACCZwAIASCawAACSCSwAgGQCCwAgmcACAEgmsAAAkgksAIBkAgsAIJnAAgBIJrAAAJIJLACAZAILACCZwAIASCawAACSCSwAgGQCCwAgmcACAEgmsAAAkgksAIBkAgsAIJnAAgBIJrAAAJIJLACAZAILACCZwAIASCawAACSCSwAgGQCCwAgmcACAEgmsAAAkgksAIBkAgsAIJnAAgBIJrAAAJIJLACAZAILACCZwAIASCawAACSCSwAgGQCCwAgmcACAEgmsAAAkgksAIBkAgsAIJnAAgBIJrAAAJIJLACAZAILACCZwAIASCawAACSCSwAgGQCCwAgmcACAEgmsAAAkgksAIBkAgsAIJnAAgBIJrAAAJIJLACAZAILACCZwAIASCawAACSCSwAgGQCCwAgmcACAEgmsAAAkgksAIBkAgsAIJnAAgBIJrAAAJIJLACAZAILACCZwAIASCawAACSCSwAgGQCCwAgmcACAEgmsAAAkgksAIBkAgsAIJnAAgBIJrAAAJIJLACAZAILACDZ/wFIDEqvYfgNzQAAAABJRU5ErkJggg==
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/leaanthony/slicer/.gitignore","mode":420,"size":205,"sha256":"c304b752c90a39f286390f1f38a1ef510f1671b60d386689bb5e0e142234db5d","index":0,"count":1,"encoding":"utf-8","payloadBytes":205}
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, build with `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+coverage.txt
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/leaanthony/slicer/CHANGELOG.md","mode":420,"size":803,"sha256":"5c71935b43141c571f3ff3e387828aa6d7252d56ab58d2cd2ea25762c1b84ec9","index":0,"count":1,"encoding":"utf-8","payloadBytes":803}
+<a name="unreleased"></a>
+## [Unreleased]
+
+
+<a name="v1.3.1"></a>
+## [v1.3.1] - 2019-03-03
+### Fix
+- Fix Float tests
+
+
+<a name="v1.3.0"></a>
+## [v1.3.0] - 2019-03-03
+### Feat
+- Add optional slice as part of construction
+
+
+<a name="v1.2.0"></a>
+## [v1.2.0] - 2019-02-26
+### Chore
+- add changelog
+
+### Feat
+- Add Slicer.Each()
+
+
+<a name="v1.1.0"></a>
+## [v1.1.0] - 2019-02-26
+### Feat
+- Added Filter
+
+
+<a name="v1.0.0"></a>
+## v1.0.0 - 2019-01-13
+
+[Unreleased]: https://github.com/leaanthony/slicer/compare/v1.3.1...HEAD
+[v1.3.1]: https://github.com/leaanthony/slicer/compare/v1.3.0...v1.3.1
+[v1.3.0]: https://github.com/leaanthony/slicer/compare/v1.2.0...v1.3.0
+[v1.2.0]: https://github.com/leaanthony/slicer/compare/v1.1.0...v1.2.0
+[v1.1.0]: https://github.com/leaanthony/slicer/compare/v1.0.0...v1.1.0
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/leaanthony/slicer/LICENSE","mode":420,"size":1068,"sha256":"6ec71bfac83b3a260158e53408a81392f84982fe19c43b4c2b6e2b6f0b44457b","index":0,"count":1,"encoding":"utf-8","payloadBytes":1068}
+MIT License
+
+Copyright (c) 2019 Lea Anthony
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/leaanthony/slicer/README.md","mode":420,"size":4121,"sha256":"2bd8b12ccc6150eea82fb4c87f4cce44114a2aff15abe6e63f33ec860e0bf1cc","index":0,"count":1,"encoding":"utf-8","payloadBytes":4121}
+
+<div style="text-align:center; width:400px">
+  <img src="logo.png"/>
+  Utility class for handling slices.
+</div>
+
+
+[![Go Report Card](https://goreportcard.com/badge/github.com/leaanthony/slicer)](https://goreportcard.com/report/github.com/leaanthony/slicer)  [![GoDoc](https://img.shields.io/badge/godoc-reference-blue.svg)](http://godoc.org/github.com/leaanthony/slicer) [![CodeFactor](https://www.codefactor.io/repository/github/leaanthony/slicer/badge)](https://www.codefactor.io/repository/github/leaanthony/slicer) [![codecov](https://codecov.io/gh/leaanthony/slicer/branch/master/graph/badge.svg)](https://codecov.io/gh/leaanthony/slicer) [![Mentioned in Awesome Go](https://awesome.re/mentioned-badge.svg)](https://github.com/avelino/awesome-go)  
+
+
+
+
+
+## Install
+
+`go get -u github.com/leaanthony/slicer`
+
+## Quick Start
+
+```
+  import "github.com/leaanthony/slicer"
+
+  func test() {
+    s := slicer.String()
+    s.Add("one")
+    s.Add("two")
+    s.AddSlice([]string{"three","four"})
+    fmt.Printf("My slice = %+v\n", s.AsSlice())
+    
+    t := slicer.String()
+    t.Add("zero")
+    t.AddSlicer(s)
+    fmt.Printf("My slice = %+v\n", t.AsSlice())
+  }
+```
+
+## Available slicers
+
+- Int
+- Int8
+- Int16
+- Int32
+- Int64  
+- UInt
+- UInt8
+- UInt16
+- UInt32
+- UInt64
+- Float32
+- Float64
+- String
+- Bool
+- Interface
+  
+## API
+
+### Construction
+
+Create new Slicers by calling one of the following functions:
+  - Int()
+  - Int8()
+  - Int16()
+  - Int32()
+  - Int64()
+  - Float32()
+  - Float64()
+  - String()
+  - Bool()
+  - Interface()
+
+```
+  s := slicer.String()
+```
+
+If you wish to convert an existing slice to a Slicer, you may pass it in during creation:
+
+```
+  values := []string{"one", "two", "three"}
+  s := slicer.String(values)
+```
+
+### Add 
+
+Adds a value to the slice.
+
+```
+  values := []string{"one", "two", "three"}
+  s := slicer.String(values)
+  s.Add("four")
+```
+
+### AddUnique
+
+Adds a value to the slice if it doesn't already contain it.
+
+```
+  values := []string{"one", "two", "three", "one", "two", "three"}
+  s := slicer.String(values)
+  result := s.Join(",")
+  // result is "one,two,three"
+```
+### AddSlice
+
+Adds an existing slice of values to a slicer
+
+```
+  s := slicer.String([]string{"one"})
+  s.AddSlice([]string{"two"})
+```
+
+### AsSlice
+
+Returns a regular slice from the slicer.
+
+```
+  s := slicer.String([]string{"one"})
+  for _, value := range s.AsSlice() {
+    ...
+  }
+```
+
+### AddSlicer
+
+Adds an existing slicer of values to another slicer
+
+```
+  a := slicer.String([]string{"one"})
+  b := slicer.String([]string{"two"})
+  a.AddSlicer(b)
+```
+
+### Filter
+
+Filter the values of a slicer based on the result of calling the given function with each value of the slice. If it returns true, the value is added to the result.
+
+```
+  a := slicer.Int([]int{1,5,7,9,6,3,1,9,1})
+  result := a.Filter(func(v int) bool {
+    return v > 5
+  })
+  // result is []int{7,9,9}
+  
+```
+
+### Each 
+
+Each iterates over all the values of a slicer, passing them in as paramter to a function
+
+```
+  a := slicer.Int([]int{1,5,7,9,6,3,1,9,1})
+  result := 0
+  a.Each(func(v int) {
+    result += v
+  })
+  // result is 42
+```
+
+### Contains
+
+Contains returns true if the slicer contains the given value
+
+```
+  a := slicer.Int([]int{1,5,7,9,6,3,1,9,1})
+  result := a.Contains(9)
+  // result is True
+```
+
+### Join
+
+Returns a string with the slicer elements separated by the given separator
+
+```
+  a := slicer.String([]string{"one", "two", "three"})
+  result := a.Join(",")
+  // result is "one,two,three"
+```
+### Length
+
+Returns the length of the slice
+
+```
+  a := slicer.String([]string{"one", "two", "three"})
+  result := a.Length()
+  // result is 3
+```
+
+### Clear
+
+Clears all elements from the current slice
+
+```
+  a := slicer.String([]string{"one", "two", "three"})
+  a.Clear()
+  // a.Length() == 0
+```
+
+### Sort
+
+Sorts the elements of a slice
+Not supported by: InterfaceSlicer, BoolSlicer
+
+```
+  a := slicer.Int([]int{5,3,4,1,2})
+  a.Sort()
+  // a is []int{1,2,3,4,5}
+```
+
+### Deduplicate
+
+Deduplicate removes all duplicates within a slice.
+
+```
+  a := slicer.Int([]int{5,3,5,1,3})
+  a.Deduplicate()
+  // a is []int{5,3,1}
+```
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/leaanthony/slicer/bool.go","mode":420,"size":2773,"sha256":"c95875f68c77e7641184bb829b6b6436661bff8395a24b00ad2d36055c3152ce","index":0,"count":1,"encoding":"utf-8","payloadBytes":2773}
+// Package slicer contains utility classes for handling slices
+package slicer
+
+// Imports
+import "fmt"
+import "strings"
+
+// BoolSlicer handles slices of bool
+type BoolSlicer struct {
+	slice []bool
+}
+
+// Bool creates a new BoolSlicer
+func Bool(slice ...[]bool) *BoolSlicer {
+	if len(slice) > 0 {
+		return &BoolSlicer{slice: slice[0]}
+	}
+	return &BoolSlicer{}
+}
+
+// Add a bool value to the slicer
+func (s *BoolSlicer) Add(value bool, additional ...bool) {
+	s.slice = append(s.slice, value)
+	s.slice = append(s.slice, additional...)
+}
+
+// AddUnique adds a bool value to the slicer if it does not already exist
+func (s *BoolSlicer) AddUnique(value bool, additional ...bool) {
+
+	if !s.Contains(value) {
+		s.slice = append(s.slice, value)
+	}
+
+	// Add additional values
+	for _, value := range additional {
+		if !s.Contains(value) {
+			s.slice = append(s.slice, value)
+		}
+	}
+}
+
+// AddSlice adds a bool slice to the slicer
+func (s *BoolSlicer) AddSlice(value []bool) {
+	s.slice = append(s.slice, value...)
+}
+
+// AsSlice returns the slice
+func (s *BoolSlicer) AsSlice() []bool {
+	return s.slice
+}
+
+// AddSlicer appends a BoolSlicer to the slicer
+func (s *BoolSlicer) AddSlicer(value *BoolSlicer) {
+	s.slice = append(s.slice, value.AsSlice()...)
+}
+
+// Filter the slice based on the given function
+func (s *BoolSlicer) Filter(fn func(bool) bool) *BoolSlicer {
+	result := &BoolSlicer{}
+	for _, elem := range s.slice {
+		if fn(elem) {
+			result.Add(elem)
+		}
+	}
+	return result
+}
+
+// Each runs a function on every element of the slice
+func (s *BoolSlicer) Each(fn func(bool)) {
+	for _, elem := range s.slice {
+		fn(elem)
+	}
+}
+
+// Contains indicates if the given value is in the slice
+func (s *BoolSlicer) Contains(matcher bool) bool {
+	result := false
+	for _, elem := range s.slice {
+		if elem == matcher {
+			result = true
+		}
+	}
+	return result
+}
+
+// Length returns the number of elements in the slice
+func (s *BoolSlicer) Length() int {
+	return len(s.slice)
+}
+
+// Clear all elements in the slice
+func (s *BoolSlicer) Clear() {
+	s.slice = []bool{}
+}
+
+// Deduplicate removes duplicate values from the slice
+func (s *BoolSlicer) Deduplicate() {
+
+	result := &BoolSlicer{}
+
+	for _, elem := range s.slice {
+		if !result.Contains(elem) {
+			result.Add(elem)
+		}
+	}
+
+	s.slice = result.AsSlice()
+}
+
+// Join returns a string with the slicer elements separated by the given separator
+func (s *BoolSlicer) Join(separator string) string {
+	var builder strings.Builder
+
+	// Shortcut no elements
+	if len(s.slice) == 0 {
+		return ""
+	}
+
+	// Iterate over length - 1
+	index := 0
+	for index = 0; index < len(s.slice)-1; index++ {
+		builder.WriteString(fmt.Sprintf("%v%s", s.slice[index], separator))
+	}
+	builder.WriteString(fmt.Sprintf("%v", s.slice[index]))
+	result := builder.String()
+	return result
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/leaanthony/slicer/float32.go","mode":420,"size":3048,"sha256":"a63231fc141ed9165b040980e0cde49cf00b3b931d712c1ad63337947d8f01b7","index":0,"count":1,"encoding":"utf-8","payloadBytes":3048}
+// Package slicer contains utility classes for handling slices
+package slicer
+
+// Imports
+import "sort"
+import "fmt"
+import "strings"
+
+// Float32Slicer handles slices of float32
+type Float32Slicer struct {
+	slice []float32
+}
+
+// Float32 creates a new Float32Slicer
+func Float32(slice ...[]float32) *Float32Slicer {
+	if len(slice) > 0 {
+		return &Float32Slicer{slice: slice[0]}
+	}
+	return &Float32Slicer{}
+}
+
+// Add a float32 value to the slicer
+func (s *Float32Slicer) Add(value float32, additional ...float32) {
+	s.slice = append(s.slice, value)
+	s.slice = append(s.slice, additional...)
+}
+
+// AddUnique adds a float32 value to the slicer if it does not already exist
+func (s *Float32Slicer) AddUnique(value float32, additional ...float32) {
+
+	if !s.Contains(value) {
+		s.slice = append(s.slice, value)
+	}
+
+	// Add additional values
+	for _, value := range additional {
+		if !s.Contains(value) {
+			s.slice = append(s.slice, value)
+		}
+	}
+}
+
+// AddSlice adds a float32 slice to the slicer
+func (s *Float32Slicer) AddSlice(value []float32) {
+	s.slice = append(s.slice, value...)
+}
+
+// AsSlice returns the slice
+func (s *Float32Slicer) AsSlice() []float32 {
+	return s.slice
+}
+
+// AddSlicer appends a Float32Slicer to the slicer
+func (s *Float32Slicer) AddSlicer(value *Float32Slicer) {
+	s.slice = append(s.slice, value.AsSlice()...)
+}
+
+// Filter the slice based on the given function
+func (s *Float32Slicer) Filter(fn func(float32) bool) *Float32Slicer {
+	result := &Float32Slicer{}
+	for _, elem := range s.slice {
+		if fn(elem) {
+			result.Add(elem)
+		}
+	}
+	return result
+}
+
+// Each runs a function on every element of the slice
+func (s *Float32Slicer) Each(fn func(float32)) {
+	for _, elem := range s.slice {
+		fn(elem)
+	}
+}
+
+// Contains indicates if the given value is in the slice
+func (s *Float32Slicer) Contains(matcher float32) bool {
+	result := false
+	for _, elem := range s.slice {
+		if elem == matcher {
+			result = true
+		}
+	}
+	return result
+}
+
+// Length returns the number of elements in the slice
+func (s *Float32Slicer) Length() int {
+	return len(s.slice)
+}
+
+// Clear all elements in the slice
+func (s *Float32Slicer) Clear() {
+	s.slice = []float32{}
+}
+
+// Deduplicate removes duplicate values from the slice
+func (s *Float32Slicer) Deduplicate() {
+
+	result := &Float32Slicer{}
+
+	for _, elem := range s.slice {
+		if !result.Contains(elem) {
+			result.Add(elem)
+		}
+	}
+
+	s.slice = result.AsSlice()
+}
+
+// Join returns a string with the slicer elements separated by the given separator
+func (s *Float32Slicer) Join(separator string) string {
+	var builder strings.Builder
+
+	// Shortcut no elements
+	if len(s.slice) == 0 {
+		return ""
+	}
+
+	// Iterate over length - 1
+	index := 0
+	for index = 0; index < len(s.slice)-1; index++ {
+		builder.WriteString(fmt.Sprintf("%v%s", s.slice[index], separator))
+	}
+	builder.WriteString(fmt.Sprintf("%v", s.slice[index]))
+	result := builder.String()
+	return result
+}
+
+// Sort the slice values
+func (s *Float32Slicer) Sort() {
+	sort.Slice(s.slice, func(i, j int) bool { return s.slice[i] < s.slice[j] })
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/leaanthony/slicer/float64.go","mode":420,"size":3048,"sha256":"9fb081d1b0e7e3619122c4d98316387ecaf97722e246ee239013ec066099500d","index":0,"count":1,"encoding":"utf-8","payloadBytes":3048}
+// Package slicer contains utility classes for handling slices
+package slicer
+
+// Imports
+import "sort"
+import "fmt"
+import "strings"
+
+// Float64Slicer handles slices of float64
+type Float64Slicer struct {
+	slice []float64
+}
+
+// Float64 creates a new Float64Slicer
+func Float64(slice ...[]float64) *Float64Slicer {
+	if len(slice) > 0 {
+		return &Float64Slicer{slice: slice[0]}
+	}
+	return &Float64Slicer{}
+}
+
+// Add a float64 value to the slicer
+func (s *Float64Slicer) Add(value float64, additional ...float64) {
+	s.slice = append(s.slice, value)
+	s.slice = append(s.slice, additional...)
+}
+
+// AddUnique adds a float64 value to the slicer if it does not already exist
+func (s *Float64Slicer) AddUnique(value float64, additional ...float64) {
+
+	if !s.Contains(value) {
+		s.slice = append(s.slice, value)
+	}
+
+	// Add additional values
+	for _, value := range additional {
+		if !s.Contains(value) {
+			s.slice = append(s.slice, value)
+		}
+	}
+}
+
+// AddSlice adds a float64 slice to the slicer
+func (s *Float64Slicer) AddSlice(value []float64) {
+	s.slice = append(s.slice, value...)
+}
+
+// AsSlice returns the slice
+func (s *Float64Slicer) AsSlice() []float64 {
+	return s.slice
+}
+
+// AddSlicer appends a Float64Slicer to the slicer
+func (s *Float64Slicer) AddSlicer(value *Float64Slicer) {
+	s.slice = append(s.slice, value.AsSlice()...)
+}
+
+// Filter the slice based on the given function
+func (s *Float64Slicer) Filter(fn func(float64) bool) *Float64Slicer {
+	result := &Float64Slicer{}
+	for _, elem := range s.slice {
+		if fn(elem) {
+			result.Add(elem)
+		}
+	}
+	return result
+}
+
+// Each runs a function on every element of the slice
+func (s *Float64Slicer) Each(fn func(float64)) {
+	for _, elem := range s.slice {
+		fn(elem)
+	}
+}
+
+// Contains indicates if the given value is in the slice
+func (s *Float64Slicer) Contains(matcher float64) bool {
+	result := false
+	for _, elem := range s.slice {
+		if elem == matcher {
+			result = true
+		}
+	}
+	return result
+}
+
+// Length returns the number of elements in the slice
+func (s *Float64Slicer) Length() int {
+	return len(s.slice)
+}
+
+// Clear all elements in the slice
+func (s *Float64Slicer) Clear() {
+	s.slice = []float64{}
+}
+
+// Deduplicate removes duplicate values from the slice
+func (s *Float64Slicer) Deduplicate() {
+
+	result := &Float64Slicer{}
+
+	for _, elem := range s.slice {
+		if !result.Contains(elem) {
+			result.Add(elem)
+		}
+	}
+
+	s.slice = result.AsSlice()
+}
+
+// Join returns a string with the slicer elements separated by the given separator
+func (s *Float64Slicer) Join(separator string) string {
+	var builder strings.Builder
+
+	// Shortcut no elements
+	if len(s.slice) == 0 {
+		return ""
+	}
+
+	// Iterate over length - 1
+	index := 0
+	for index = 0; index < len(s.slice)-1; index++ {
+		builder.WriteString(fmt.Sprintf("%v%s", s.slice[index], separator))
+	}
+	builder.WriteString(fmt.Sprintf("%v", s.slice[index]))
+	result := builder.String()
+	return result
+}
+
+// Sort the slice values
+func (s *Float64Slicer) Sort() {
+	sort.Slice(s.slice, func(i, j int) bool { return s.slice[i] < s.slice[j] })
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/leaanthony/slicer/int.go","mode":420,"size":2880,"sha256":"f08a65580a4dfdd34b29adebcae47b45e63473fa0cee7041dcf4f7aad4d68e1a","index":0,"count":1,"encoding":"utf-8","payloadBytes":2880}
+// Package slicer contains utility classes for handling slices
+package slicer
+
+// Imports
+import "sort"
+import "fmt"
+import "strings"
+
+// IntSlicer handles slices of int
+type IntSlicer struct {
+	slice []int
+}
+
+// Int creates a new IntSlicer
+func Int(slice ...[]int) *IntSlicer {
+	if len(slice) > 0 {
+		return &IntSlicer{slice: slice[0]}
+	}
+	return &IntSlicer{}
+}
+
+// Add a int value to the slicer
+func (s *IntSlicer) Add(value int, additional ...int) {
+	s.slice = append(s.slice, value)
+	s.slice = append(s.slice, additional...)
+}
+
+// AddUnique adds a int value to the slicer if it does not already exist
+func (s *IntSlicer) AddUnique(value int, additional ...int) {
+
+	if !s.Contains(value) {
+		s.slice = append(s.slice, value)
+	}
+
+	// Add additional values
+	for _, value := range additional {
+		if !s.Contains(value) {
+			s.slice = append(s.slice, value)
+		}
+	}
+}
+
+// AddSlice adds a int slice to the slicer
+func (s *IntSlicer) AddSlice(value []int) {
+	s.slice = append(s.slice, value...)
+}
+
+// AsSlice returns the slice
+func (s *IntSlicer) AsSlice() []int {
+	return s.slice
+}
+
+// AddSlicer appends a IntSlicer to the slicer
+func (s *IntSlicer) AddSlicer(value *IntSlicer) {
+	s.slice = append(s.slice, value.AsSlice()...)
+}
+
+// Filter the slice based on the given function
+func (s *IntSlicer) Filter(fn func(int) bool) *IntSlicer {
+	result := &IntSlicer{}
+	for _, elem := range s.slice {
+		if fn(elem) {
+			result.Add(elem)
+		}
+	}
+	return result
+}
+
+// Each runs a function on every element of the slice
+func (s *IntSlicer) Each(fn func(int)) {
+	for _, elem := range s.slice {
+		fn(elem)
+	}
+}
+
+// Contains indicates if the given value is in the slice
+func (s *IntSlicer) Contains(matcher int) bool {
+	result := false
+	for _, elem := range s.slice {
+		if elem == matcher {
+			result = true
+		}
+	}
+	return result
+}
+
+// Length returns the number of elements in the slice
+func (s *IntSlicer) Length() int {
+	return len(s.slice)
+}
+
+// Clear all elements in the slice
+func (s *IntSlicer) Clear() {
+	s.slice = []int{}
+}
+
+// Deduplicate removes duplicate values from the slice
+func (s *IntSlicer) Deduplicate() {
+
+	result := &IntSlicer{}
+
+	for _, elem := range s.slice {
+		if !result.Contains(elem) {
+			result.Add(elem)
+		}
+	}
+
+	s.slice = result.AsSlice()
+}
+
+// Join returns a string with the slicer elements separated by the given separator
+func (s *IntSlicer) Join(separator string) string {
+	var builder strings.Builder
+
+	// Shortcut no elements
+	if len(s.slice) == 0 {
+		return ""
+	}
+
+	// Iterate over length - 1
+	index := 0
+	for index = 0; index < len(s.slice)-1; index++ {
+		builder.WriteString(fmt.Sprintf("%v%s", s.slice[index], separator))
+	}
+	builder.WriteString(fmt.Sprintf("%v", s.slice[index]))
+	result := builder.String()
+	return result
+}
+
+// Sort the slice values
+func (s *IntSlicer) Sort() {
+	sort.Slice(s.slice, func(i, j int) bool { return s.slice[i] < s.slice[j] })
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/leaanthony/slicer/int16.go","mode":420,"size":2964,"sha256":"089a260af1dc5cd2cac11f480738cc8c6a7327b88fc74e885c286b06999216ff","index":0,"count":1,"encoding":"utf-8","payloadBytes":2964}
+// Package slicer contains utility classes for handling slices
+package slicer
+
+// Imports
+import "sort"
+import "fmt"
+import "strings"
+
+// Int16Slicer handles slices of int16
+type Int16Slicer struct {
+	slice []int16
+}
+
+// Int16 creates a new Int16Slicer
+func Int16(slice ...[]int16) *Int16Slicer {
+	if len(slice) > 0 {
+		return &Int16Slicer{slice: slice[0]}
+	}
+	return &Int16Slicer{}
+}
+
+// Add a int16 value to the slicer
+func (s *Int16Slicer) Add(value int16, additional ...int16) {
+	s.slice = append(s.slice, value)
+	s.slice = append(s.slice, additional...)
+}
+
+// AddUnique adds a int16 value to the slicer if it does not already exist
+func (s *Int16Slicer) AddUnique(value int16, additional ...int16) {
+
+	if !s.Contains(value) {
+		s.slice = append(s.slice, value)
+	}
+
+	// Add additional values
+	for _, value := range additional {
+		if !s.Contains(value) {
+			s.slice = append(s.slice, value)
+		}
+	}
+}
+
+// AddSlice adds a int16 slice to the slicer
+func (s *Int16Slicer) AddSlice(value []int16) {
+	s.slice = append(s.slice, value...)
+}
+
+// AsSlice returns the slice
+func (s *Int16Slicer) AsSlice() []int16 {
+	return s.slice
+}
+
+// AddSlicer appends a Int16Slicer to the slicer
+func (s *Int16Slicer) AddSlicer(value *Int16Slicer) {
+	s.slice = append(s.slice, value.AsSlice()...)
+}
+
+// Filter the slice based on the given function
+func (s *Int16Slicer) Filter(fn func(int16) bool) *Int16Slicer {
+	result := &Int16Slicer{}
+	for _, elem := range s.slice {
+		if fn(elem) {
+			result.Add(elem)
+		}
+	}
+	return result
+}
+
+// Each runs a function on every element of the slice
+func (s *Int16Slicer) Each(fn func(int16)) {
+	for _, elem := range s.slice {
+		fn(elem)
+	}
+}
+
+// Contains indicates if the given value is in the slice
+func (s *Int16Slicer) Contains(matcher int16) bool {
+	result := false
+	for _, elem := range s.slice {
+		if elem == matcher {
+			result = true
+		}
+	}
+	return result
+}
+
+// Length returns the number of elements in the slice
+func (s *Int16Slicer) Length() int {
+	return len(s.slice)
+}
+
+// Clear all elements in the slice
+func (s *Int16Slicer) Clear() {
+	s.slice = []int16{}
+}
+
+// Deduplicate removes duplicate values from the slice
+func (s *Int16Slicer) Deduplicate() {
+
+	result := &Int16Slicer{}
+
+	for _, elem := range s.slice {
+		if !result.Contains(elem) {
+			result.Add(elem)
+		}
+	}
+
+	s.slice = result.AsSlice()
+}
+
+// Join returns a string with the slicer elements separated by the given separator
+func (s *Int16Slicer) Join(separator string) string {
+	var builder strings.Builder
+
+	// Shortcut no elements
+	if len(s.slice) == 0 {
+		return ""
+	}
+
+	// Iterate over length - 1
+	index := 0
+	for index = 0; index < len(s.slice)-1; index++ {
+		builder.WriteString(fmt.Sprintf("%v%s", s.slice[index], separator))
+	}
+	builder.WriteString(fmt.Sprintf("%v", s.slice[index]))
+	result := builder.String()
+	return result
+}
+
+// Sort the slice values
+func (s *Int16Slicer) Sort() {
+	sort.Slice(s.slice, func(i, j int) bool { return s.slice[i] < s.slice[j] })
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/leaanthony/slicer/int32.go","mode":420,"size":2964,"sha256":"dece70b2ba8203c20f0858d9b0fa4a1d53a6b0798424a7d7ed45488595e2ef40","index":0,"count":1,"encoding":"utf-8","payloadBytes":2964}
+// Package slicer contains utility classes for handling slices
+package slicer
+
+// Imports
+import "sort"
+import "fmt"
+import "strings"
+
+// Int32Slicer handles slices of int32
+type Int32Slicer struct {
+	slice []int32
+}
+
+// Int32 creates a new Int32Slicer
+func Int32(slice ...[]int32) *Int32Slicer {
+	if len(slice) > 0 {
+		return &Int32Slicer{slice: slice[0]}
+	}
+	return &Int32Slicer{}
+}
+
+// Add a int32 value to the slicer
+func (s *Int32Slicer) Add(value int32, additional ...int32) {
+	s.slice = append(s.slice, value)
+	s.slice = append(s.slice, additional...)
+}
+
+// AddUnique adds a int32 value to the slicer if it does not already exist
+func (s *Int32Slicer) AddUnique(value int32, additional ...int32) {
+
+	if !s.Contains(value) {
+		s.slice = append(s.slice, value)
+	}
+
+	// Add additional values
+	for _, value := range additional {
+		if !s.Contains(value) {
+			s.slice = append(s.slice, value)
+		}
+	}
+}
+
+// AddSlice adds a int32 slice to the slicer
+func (s *Int32Slicer) AddSlice(value []int32) {
+	s.slice = append(s.slice, value...)
+}
+
+// AsSlice returns the slice
+func (s *Int32Slicer) AsSlice() []int32 {
+	return s.slice
+}
+
+// AddSlicer appends a Int32Slicer to the slicer
+func (s *Int32Slicer) AddSlicer(value *Int32Slicer) {
+	s.slice = append(s.slice, value.AsSlice()...)
+}
+
+// Filter the slice based on the given function
+func (s *Int32Slicer) Filter(fn func(int32) bool) *Int32Slicer {
+	result := &Int32Slicer{}
+	for _, elem := range s.slice {
+		if fn(elem) {
+			result.Add(elem)
+		}
+	}
+	return result
+}
+
+// Each runs a function on every element of the slice
+func (s *Int32Slicer) Each(fn func(int32)) {
+	for _, elem := range s.slice {
+		fn(elem)
+	}
+}
+
+// Contains indicates if the given value is in the slice
+func (s *Int32Slicer) Contains(matcher int32) bool {
+	result := false
+	for _, elem := range s.slice {
+		if elem == matcher {
+			result = true
+		}
+	}
+	return result
+}
+
+// Length returns the number of elements in the slice
+func (s *Int32Slicer) Length() int {
+	return len(s.slice)
+}
+
+// Clear all elements in the slice
+func (s *Int32Slicer) Clear() {
+	s.slice = []int32{}
+}
+
+// Deduplicate removes duplicate values from the slice
+func (s *Int32Slicer) Deduplicate() {
+
+	result := &Int32Slicer{}
+
+	for _, elem := range s.slice {
+		if !result.Contains(elem) {
+			result.Add(elem)
+		}
+	}
+
+	s.slice = result.AsSlice()
+}
+
+// Join returns a string with the slicer elements separated by the given separator
+func (s *Int32Slicer) Join(separator string) string {
+	var builder strings.Builder
+
+	// Shortcut no elements
+	if len(s.slice) == 0 {
+		return ""
+	}
+
+	// Iterate over length - 1
+	index := 0
+	for index = 0; index < len(s.slice)-1; index++ {
+		builder.WriteString(fmt.Sprintf("%v%s", s.slice[index], separator))
+	}
+	builder.WriteString(fmt.Sprintf("%v", s.slice[index]))
+	result := builder.String()
+	return result
+}
+
+// Sort the slice values
+func (s *Int32Slicer) Sort() {
+	sort.Slice(s.slice, func(i, j int) bool { return s.slice[i] < s.slice[j] })
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/leaanthony/slicer/int64.go","mode":420,"size":2964,"sha256":"d32148728b40bb91594518d93fbea7dee97221eb3bcace04ca67c2a5dfcf4a92","index":0,"count":1,"encoding":"utf-8","payloadBytes":2964}
+// Package slicer contains utility classes for handling slices
+package slicer
+
+// Imports
+import "sort"
+import "fmt"
+import "strings"
+
+// Int64Slicer handles slices of int64
+type Int64Slicer struct {
+	slice []int64
+}
+
+// Int64 creates a new Int64Slicer
+func Int64(slice ...[]int64) *Int64Slicer {
+	if len(slice) > 0 {
+		return &Int64Slicer{slice: slice[0]}
+	}
+	return &Int64Slicer{}
+}
+
+// Add a int64 value to the slicer
+func (s *Int64Slicer) Add(value int64, additional ...int64) {
+	s.slice = append(s.slice, value)
+	s.slice = append(s.slice, additional...)
+}
+
+// AddUnique adds a int64 value to the slicer if it does not already exist
+func (s *Int64Slicer) AddUnique(value int64, additional ...int64) {
+
+	if !s.Contains(value) {
+		s.slice = append(s.slice, value)
+	}
+
+	// Add additional values
+	for _, value := range additional {
+		if !s.Contains(value) {
+			s.slice = append(s.slice, value)
+		}
+	}
+}
+
+// AddSlice adds a int64 slice to the slicer
+func (s *Int64Slicer) AddSlice(value []int64) {
+	s.slice = append(s.slice, value...)
+}
+
+// AsSlice returns the slice
+func (s *Int64Slicer) AsSlice() []int64 {
+	return s.slice
+}
+
+// AddSlicer appends a Int64Slicer to the slicer
+func (s *Int64Slicer) AddSlicer(value *Int64Slicer) {
+	s.slice = append(s.slice, value.AsSlice()...)
+}
+
+// Filter the slice based on the given function
+func (s *Int64Slicer) Filter(fn func(int64) bool) *Int64Slicer {
+	result := &Int64Slicer{}
+	for _, elem := range s.slice {
+		if fn(elem) {
+			result.Add(elem)
+		}
+	}
+	return result
+}
+
+// Each runs a function on every element of the slice
+func (s *Int64Slicer) Each(fn func(int64)) {
+	for _, elem := range s.slice {
+		fn(elem)
+	}
+}
+
+// Contains indicates if the given value is in the slice
+func (s *Int64Slicer) Contains(matcher int64) bool {
+	result := false
+	for _, elem := range s.slice {
+		if elem == matcher {
+			result = true
+		}
+	}
+	return result
+}
+
+// Length returns the number of elements in the slice
+func (s *Int64Slicer) Length() int {
+	return len(s.slice)
+}
+
+// Clear all elements in the slice
+func (s *Int64Slicer) Clear() {
+	s.slice = []int64{}
+}
+
+// Deduplicate removes duplicate values from the slice
+func (s *Int64Slicer) Deduplicate() {
+
+	result := &Int64Slicer{}
+
+	for _, elem := range s.slice {
+		if !result.Contains(elem) {
+			result.Add(elem)
+		}
+	}
+
+	s.slice = result.AsSlice()
+}
+
+// Join returns a string with the slicer elements separated by the given separator
+func (s *Int64Slicer) Join(separator string) string {
+	var builder strings.Builder
+
+	// Shortcut no elements
+	if len(s.slice) == 0 {
+		return ""
+	}
+
+	// Iterate over length - 1
+	index := 0
+	for index = 0; index < len(s.slice)-1; index++ {
+		builder.WriteString(fmt.Sprintf("%v%s", s.slice[index], separator))
+	}
+	builder.WriteString(fmt.Sprintf("%v", s.slice[index]))
+	result := builder.String()
+	return result
+}
+
+// Sort the slice values
+func (s *Int64Slicer) Sort() {
+	sort.Slice(s.slice, func(i, j int) bool { return s.slice[i] < s.slice[j] })
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/leaanthony/slicer/int8.go","mode":420,"size":2922,"sha256":"c4e6beadfffd973221161ba034465feb5111111a606818f901f1f81148da9693","index":0,"count":1,"encoding":"utf-8","payloadBytes":2922}
+// Package slicer contains utility classes for handling slices
+package slicer
+
+// Imports
+import "sort"
+import "fmt"
+import "strings"
+
+// Int8Slicer handles slices of int8
+type Int8Slicer struct {
+	slice []int8
+}
+
+// Int8 creates a new Int8Slicer
+func Int8(slice ...[]int8) *Int8Slicer {
+	if len(slice) > 0 {
+		return &Int8Slicer{slice: slice[0]}
+	}
+	return &Int8Slicer{}
+}
+
+// Add a int8 value to the slicer
+func (s *Int8Slicer) Add(value int8, additional ...int8) {
+	s.slice = append(s.slice, value)
+	s.slice = append(s.slice, additional...)
+}
+
+// AddUnique adds a int8 value to the slicer if it does not already exist
+func (s *Int8Slicer) AddUnique(value int8, additional ...int8) {
+
+	if !s.Contains(value) {
+		s.slice = append(s.slice, value)
+	}
+
+	// Add additional values
+	for _, value := range additional {
+		if !s.Contains(value) {
+			s.slice = append(s.slice, value)
+		}
+	}
+}
+
+// AddSlice adds a int8 slice to the slicer
+func (s *Int8Slicer) AddSlice(value []int8) {
+	s.slice = append(s.slice, value...)
+}
+
+// AsSlice returns the slice
+func (s *Int8Slicer) AsSlice() []int8 {
+	return s.slice
+}
+
+// AddSlicer appends a Int8Slicer to the slicer
+func (s *Int8Slicer) AddSlicer(value *Int8Slicer) {
+	s.slice = append(s.slice, value.AsSlice()...)
+}
+
+// Filter the slice based on the given function
+func (s *Int8Slicer) Filter(fn func(int8) bool) *Int8Slicer {
+	result := &Int8Slicer{}
+	for _, elem := range s.slice {
+		if fn(elem) {
+			result.Add(elem)
+		}
+	}
+	return result
+}
+
+// Each runs a function on every element of the slice
+func (s *Int8Slicer) Each(fn func(int8)) {
+	for _, elem := range s.slice {
+		fn(elem)
+	}
+}
+
+// Contains indicates if the given value is in the slice
+func (s *Int8Slicer) Contains(matcher int8) bool {
+	result := false
+	for _, elem := range s.slice {
+		if elem == matcher {
+			result = true
+		}
+	}
+	return result
+}
+
+// Length returns the number of elements in the slice
+func (s *Int8Slicer) Length() int {
+	return len(s.slice)
+}
+
+// Clear all elements in the slice
+func (s *Int8Slicer) Clear() {
+	s.slice = []int8{}
+}
+
+// Deduplicate removes duplicate values from the slice
+func (s *Int8Slicer) Deduplicate() {
+
+	result := &Int8Slicer{}
+
+	for _, elem := range s.slice {
+		if !result.Contains(elem) {
+			result.Add(elem)
+		}
+	}
+
+	s.slice = result.AsSlice()
+}
+
+// Join returns a string with the slicer elements separated by the given separator
+func (s *Int8Slicer) Join(separator string) string {
+	var builder strings.Builder
+
+	// Shortcut no elements
+	if len(s.slice) == 0 {
+		return ""
+	}
+
+	// Iterate over length - 1
+	index := 0
+	for index = 0; index < len(s.slice)-1; index++ {
+		builder.WriteString(fmt.Sprintf("%v%s", s.slice[index], separator))
+	}
+	builder.WriteString(fmt.Sprintf("%v", s.slice[index]))
+	result := builder.String()
+	return result
+}
+
+// Sort the slice values
+func (s *Int8Slicer) Sort() {
+	sort.Slice(s.slice, func(i, j int) bool { return s.slice[i] < s.slice[j] })
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/leaanthony/slicer/interface.go","mode":420,"size":3010,"sha256":"64c9c161055ef0ee4f1b5f72b78329427db30fa6132c04c250b8e283964179ac","index":0,"count":1,"encoding":"utf-8","payloadBytes":3010}
+// Package slicer contains utility classes for handling slices
+package slicer
+
+// Imports
+import "fmt"
+import "strings"
+
+// InterfaceSlicer handles slices of interface{}
+type InterfaceSlicer struct {
+	slice []interface{}
+}
+
+// Interface creates a new InterfaceSlicer
+func Interface(slice ...[]interface{}) *InterfaceSlicer {
+	if len(slice) > 0 {
+		return &InterfaceSlicer{slice: slice[0]}
+	}
+	return &InterfaceSlicer{}
+}
+
+// Add a interface{} value to the slicer
+func (s *InterfaceSlicer) Add(value interface{}, additional ...interface{}) {
+	s.slice = append(s.slice, value)
+	s.slice = append(s.slice, additional...)
+}
+
+// AddUnique adds a interface{} value to the slicer if it does not already exist
+func (s *InterfaceSlicer) AddUnique(value interface{}, additional ...interface{}) {
+
+	if !s.Contains(value) {
+		s.slice = append(s.slice, value)
+	}
+
+	// Add additional values
+	for _, value := range additional {
+		if !s.Contains(value) {
+			s.slice = append(s.slice, value)
+		}
+	}
+}
+
+// AddSlice adds a interface{} slice to the slicer
+func (s *InterfaceSlicer) AddSlice(value []interface{}) {
+	s.slice = append(s.slice, value...)
+}
+
+// AsSlice returns the slice
+func (s *InterfaceSlicer) AsSlice() []interface{} {
+	return s.slice
+}
+
+// AddSlicer appends a InterfaceSlicer to the slicer
+func (s *InterfaceSlicer) AddSlicer(value *InterfaceSlicer) {
+	s.slice = append(s.slice, value.AsSlice()...)
+}
+
+// Filter the slice based on the given function
+func (s *InterfaceSlicer) Filter(fn func(interface{}) bool) *InterfaceSlicer {
+	result := &InterfaceSlicer{}
+	for _, elem := range s.slice {
+		if fn(elem) {
+			result.Add(elem)
+		}
+	}
+	return result
+}
+
+// Each runs a function on every element of the slice
+func (s *InterfaceSlicer) Each(fn func(interface{})) {
+	for _, elem := range s.slice {
+		fn(elem)
+	}
+}
+
+// Contains indicates if the given value is in the slice
+func (s *InterfaceSlicer) Contains(matcher interface{}) bool {
+	result := false
+	for _, elem := range s.slice {
+		if elem == matcher {
+			result = true
+		}
+	}
+	return result
+}
+
+// Length returns the number of elements in the slice
+func (s *InterfaceSlicer) Length() int {
+	return len(s.slice)
+}
+
+// Clear all elements in the slice
+func (s *InterfaceSlicer) Clear() {
+	s.slice = []interface{}{}
+}
+
+// Deduplicate removes duplicate values from the slice
+func (s *InterfaceSlicer) Deduplicate() {
+
+	result := &InterfaceSlicer{}
+
+	for _, elem := range s.slice {
+		if !result.Contains(elem) {
+			result.Add(elem)
+		}
+	}
+
+	s.slice = result.AsSlice()
+}
+
+// Join returns a string with the slicer elements separated by the given separator
+func (s *InterfaceSlicer) Join(separator string) string {
+	var builder strings.Builder
+
+	// Shortcut no elements
+	if len(s.slice) == 0 {
+		return ""
+	}
+
+	// Iterate over length - 1
+	index := 0
+	for index = 0; index < len(s.slice)-1; index++ {
+		builder.WriteString(fmt.Sprintf("%v%s", s.slice[index], separator))
+	}
+	builder.WriteString(fmt.Sprintf("%v", s.slice[index]))
+	result := builder.String()
+	return result
+}
+
+@@END
 @@PORTABLE {"path":"third_party/wails/vendor/github.com/leaanthony/slicer/logo.png","mode":420,"size":28473,"sha256":"38b6ec67484c836514161696b3db89c27c8e7291afa7f328474e17016c71e1c2","index":0,"count":1,"encoding":"base64","payloadBytes":37964}
 iVBORw0KGgoAAAANSUhEUgAABAYAAAD5CAYAAAC00TcGAAAAAXNSR0IArs4c6QAAAAlwSFlzAAALEwAACxMBAJqcGAAABCdpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IlhNUCBDb3JlIDUuNC4wIj4KICAgPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4KICAgICAgPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIKICAgICAgICAgICAgeG1sbnM6dGlmZj0iaHR0cDovL25zLmFkb2JlLmNvbS90aWZmLzEuMC8iCiAgICAgICAgICAgIHhtbG5zOmV4aWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20vZXhpZi8xLjAvIgogICAgICAgICAgICB4bWxuczpkYz0iaHR0cDovL3B1cmwub3JnL2RjL2VsZW1lbnRzLzEuMS8iCiAgICAgICAgICAgIHhtbG5zOnhtcD0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wLyI+CiAgICAgICAgIDx0aWZmOlJlc29sdXRpb25Vbml0PjI8L3RpZmY6UmVzb2x1dGlvblVuaXQ+CiAgICAgICAgIDx0aWZmOkNvbXByZXNzaW9uPjA8L3RpZmY6Q29tcHJlc3Npb24+CiAgICAgICAgIDx0aWZmOlhSZXNvbHV0aW9uPjcyPC90aWZmOlhSZXNvbHV0aW9uPgogICAgICAgICA8dGlmZjpPcmllbnRhdGlvbj4xPC90aWZmOk9yaWVudGF0aW9uPgogICAgICAgICA8dGlmZjpZUmVzb2x1dGlvbj43MjwvdGlmZjpZUmVzb2x1dGlvbj4KICAgICAgICAgPGV4aWY6UGl4ZWxYRGltZW5zaW9uPjEwMzA8L2V4aWY6UGl4ZWxYRGltZW5zaW9uPgogICAgICAgICA8ZXhpZjpDb2xvclNwYWNlPjE8L2V4aWY6Q29sb3JTcGFjZT4KICAgICAgICAgPGV4aWY6UGl4ZWxZRGltZW5zaW9uPjI0OTwvZXhpZjpQaXhlbFlEaW1lbnNpb24+CiAgICAgICAgIDxkYzpzdWJqZWN0PgogICAgICAgICAgICA8cmRmOkJhZy8+CiAgICAgICAgIDwvZGM6c3ViamVjdD4KICAgICAgICAgPHhtcDpNb2RpZnlEYXRlPjIwMTktMDEtMTBUMjE6MDE6MzY8L3htcDpNb2RpZnlEYXRlPgogICAgICAgICA8eG1wOkNyZWF0b3JUb29sPlBpeGVsbWF0b3IgMy43LjU8L3htcDpDcmVhdG9yVG9vbD4KICAgICAgPC9yZGY6RGVzY3JpcHRpb24+CiAgIDwvcmRmOlJERj4KPC94OnhtcG1ldGE+Cn2k3uoAAEAASURBVHgB7Z0HnBxl+cdnd+8uvRcSCCSB0JJQg4jUAKICAraAooIVBBFF8U+xXbBhAcRGUSkqxZxio0lLAGnSS0KA0BJy6blccv1ud/6/39xOcil3W2bmnbK/55NfdnZ35n2e97t7OzPPPO87liUTAREQgRgSsG17T4aNx3QMw1fIIhAIAffvIpDG1agIiIAIiIAIiIAIiIAIiIAIRI0AToJSUYtJ8YiACIiACIiACIiACIiACIiACIiACBggoEoBA5DlInYE9HcRu49MAYuACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIiACIhAuQRS5W6o7URABERABCqTgG3bqaeffrpqwIABqZUrV+aOPPLIrsokoV6LgAiIgAiIgAiIgAiIgAiIgAiIQIURQFIgXVtbW9Wz29dcc011z+daFgEREAEREAEREAEREIFKIJBGJwdAI6HtoUnQBGg0NBjSQTIgyERABJJFgEkBt0dYHtfc3DwDjzV8bc6cORn3PT2KQAgEuE8eA02E3P3xICxv/M5iWSYCIiACIiACItAL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
 @@END
@@ -80663,2372 +82666,6 @@ func (i *ICoreWebView2HttpHeadersCollectionIterator) MoveNext() (bool, error) {
 	}
 
 	return next != 0, nil
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/wailsapp/go-webview2/pkg/edge/ICoreWebView2HttpRequestHeaders.go","mode":420,"size":2401,"sha256":"5f9a6463cb10d332f0e6ae64585060a0c4e0b55f76ec5ed7ee2e59f1fc337981","index":0,"count":1,"encoding":"utf-8","payloadBytes":2401}
-//go:build windows
-
-package edge
-
-import (
-	"syscall"
-	"unsafe"
-
-	"golang.org/x/sys/windows"
-)
-
-const (
-	ERROR_ELEMENT_NOT_FOUND syscall.Errno = 0x80070490
-)
-
-type _ICoreWebView2HttpRequestHeadersVtbl struct {
-	_IUnknownVtbl
-	GetHeader    ComProc
-	GetHeaders   ComProc
-	Contains     ComProc
-	SetHeader    ComProc
-	RemoveHeader ComProc
-	GetIterator  ComProc
-}
-
-type ICoreWebView2HttpRequestHeaders struct {
-	vtbl *_ICoreWebView2HttpRequestHeadersVtbl
-}
-
-func (i *ICoreWebView2HttpRequestHeaders) AddRef() error {
-	i.vtbl.AddRef.Call(uintptr(unsafe.Pointer(i)))
-
-	return nil
-}
-
-func (i *ICoreWebView2HttpRequestHeaders) Release() error {
-	i.vtbl.Release.Call(uintptr(unsafe.Pointer(i)))
-
-	return nil
-}
-
-// GetHeader returns the value of the specified header. If the header is not found
-// ERROR_ELEMENT_NOT_FOUND is returned as error.
-func (i *ICoreWebView2HttpRequestHeaders) GetHeader(name string) (string, error) {
-	_name, err := windows.UTF16PtrFromString(name)
-	if err != nil {
-		return "", err
-	}
-
-	var _value *uint16
-	hr, _, _ := i.vtbl.GetHeader.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(unsafe.Pointer(_name)),
-		uintptr(unsafe.Pointer(&_value)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return "", windows.Errno(hr)
-	}
-
-	value := windows.UTF16PtrToString(_value)
-	windows.CoTaskMemFree(unsafe.Pointer(_value))
-	return value, nil
-}
-
-// SetHeader sets the specified header to the value.
-func (i *ICoreWebView2HttpRequestHeaders) SetHeader(name, value string) error {
-	_name, err := windows.UTF16PtrFromString(name)
-	if err != nil {
-		return err
-	}
-
-	_value, err := windows.UTF16PtrFromString(value)
-	if err != nil {
-		return err
-	}
-
-	hr, _, _ := i.vtbl.SetHeader.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(unsafe.Pointer(_name)),
-		uintptr(unsafe.Pointer(_value)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return windows.Errno(hr)
-	}
-
-	return nil
-}
-
-// GetIterator returns an iterator over the collection of request headers. Make sure to call
-// Release on the returned Object after finished using it.
-func (i *ICoreWebView2HttpRequestHeaders) GetIterator() (*ICoreWebView2HttpHeadersCollectionIterator, error) {
-	var headers *ICoreWebView2HttpHeadersCollectionIterator
-	hr, _, _ := i.vtbl.GetIterator.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(unsafe.Pointer(&headers)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return nil, windows.Errno(hr)
-	}
-
-	return headers, nil
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/wailsapp/go-webview2/pkg/edge/ICoreWebView2HttpResponseHeaders.go","mode":420,"size":1206,"sha256":"886ee32bb3d9934889cae2578487bb1d02a7df9994ccd5dbd6bacc43f7dc3513","index":0,"count":1,"encoding":"utf-8","payloadBytes":1206}
-//go:build windows
-
-package edge
-
-import (
-	"syscall"
-	"unsafe"
-
-	"golang.org/x/sys/windows"
-)
-
-type _ICoreWebView2HttpResponseHeadersVtbl struct {
-	_IUnknownVtbl
-	AppendHeader ComProc
-	Contains     ComProc
-	GetHeader    ComProc
-	GetHeaders   ComProc
-	GetIterator  ComProc
-}
-
-type ICoreWebView2HttpResponseHeaders struct {
-	vtbl *_ICoreWebView2HttpResponseHeadersVtbl
-}
-
-func (i *ICoreWebView2HttpResponseHeaders) AddRef() uint32 {
-	ret, _, _ := i.vtbl.AddRef.Call(uintptr(unsafe.Pointer(i)))
-
-	return uint32(ret)
-}
-
-func (i *ICoreWebView2HttpResponseHeaders) Release() uint32 {
-	ret, _, _ := i.vtbl.Release.Call(uintptr(unsafe.Pointer(i)))
-
-	return uint32(ret)
-}
-
-func (i *ICoreWebView2HttpResponseHeaders) AppendHeader(name string, value string) error {
-	// Convert string 'name' to *uint16
-	_name, err := UTF16PtrFromString(name)
-	if err != nil {
-		return err
-	}
-	// Convert string 'value' to *uint16
-	_value, err := UTF16PtrFromString(value)
-	if err != nil {
-		return err
-	}
-
-	hr, _, _ := i.vtbl.AppendHeader.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(unsafe.Pointer(_name)),
-		uintptr(unsafe.Pointer(_value)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return syscall.Errno(hr)
-	}
-	return nil
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/wailsapp/go-webview2/pkg/edge/ICoreWebView2NavigationCompletedEventArgs.go","mode":420,"size":640,"sha256":"c9f12660d7a26be72773c2e1aedd5e4c19ab1a7c96915bd6d6d3f2c537a4749b","index":0,"count":1,"encoding":"utf-8","payloadBytes":640}
-//go:build windows
-
-package edge
-
-import (
-	"unsafe"
-)
-
-type _ICoreWebView2NavigationCompletedEventArgsVtbl struct {
-	_IUnknownVtbl
-	GetIsSuccess      ComProc
-	GetWebErrorStatus ComProc
-	GetNavigationId   ComProc
-}
-
-type ICoreWebView2NavigationCompletedEventArgs struct {
-	vtbl *_ICoreWebView2NavigationCompletedEventArgsVtbl
-}
-
-func (i *ICoreWebView2NavigationCompletedEventArgs) AddRef() uint32 {
-	ret, _, _ := i.vtbl.AddRef.Call(uintptr(unsafe.Pointer(i)))
-
-	return uint32(ret)
-}
-
-func (i *ICoreWebView2NavigationCompletedEventArgs) Release() uint32 {
-	ret, _, _ := i.vtbl.Release.Call(uintptr(unsafe.Pointer(i)))
-
-	return uint32(ret)
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/wailsapp/go-webview2/pkg/edge/ICoreWebView2NavigationCompletedEventHandler.go","mode":420,"size":2155,"sha256":"63a421e289f909b7e03c6e7f2c3f771293c767e9c678e166bbf4a4fbfdf6f750","index":0,"count":1,"encoding":"utf-8","payloadBytes":2155}
-//go:build windows
-
-package edge
-
-import (
-	"unsafe"
-)
-
-type _ICoreWebView2NavigationCompletedEventHandlerVtbl struct {
-	_IUnknownVtbl
-	Invoke ComProc
-}
-
-type ICoreWebView2NavigationCompletedEventHandler struct {
-	vtbl *_ICoreWebView2NavigationCompletedEventHandlerVtbl
-	impl _ICoreWebView2NavigationCompletedEventHandlerImpl
-}
-
-func (i *ICoreWebView2NavigationCompletedEventHandler) AddRef() uintptr {
-	ret, _, _ := i.vtbl.AddRef.Call(uintptr(unsafe.Pointer(i)))
-
-	return ret
-}
-func _ICoreWebView2NavigationCompletedEventHandlerIUnknownQueryInterface(this *ICoreWebView2NavigationCompletedEventHandler, refiid, object uintptr) uintptr {
-	return this.impl.QueryInterface(refiid, object)
-}
-
-func _ICoreWebView2NavigationCompletedEventHandlerIUnknownAddRef(this *ICoreWebView2NavigationCompletedEventHandler) uintptr {
-	return this.impl.AddRef()
-}
-
-func _ICoreWebView2NavigationCompletedEventHandlerIUnknownRelease(this *ICoreWebView2NavigationCompletedEventHandler) uintptr {
-	return this.impl.Release()
-}
-
-func _ICoreWebView2NavigationCompletedEventHandlerInvoke(this *ICoreWebView2NavigationCompletedEventHandler, sender *ICoreWebView2, args *ICoreWebView2NavigationCompletedEventArgs) uintptr {
-	return this.impl.NavigationCompleted(sender, args)
-}
-
-type _ICoreWebView2NavigationCompletedEventHandlerImpl interface {
-	_IUnknownImpl
-	NavigationCompleted(sender *ICoreWebView2, args *ICoreWebView2NavigationCompletedEventArgs) uintptr
-}
-
-var _ICoreWebView2NavigationCompletedEventHandlerFn = _ICoreWebView2NavigationCompletedEventHandlerVtbl{
-	_IUnknownVtbl{
-		NewComProc(_ICoreWebView2NavigationCompletedEventHandlerIUnknownQueryInterface),
-		NewComProc(_ICoreWebView2NavigationCompletedEventHandlerIUnknownAddRef),
-		NewComProc(_ICoreWebView2NavigationCompletedEventHandlerIUnknownRelease),
-	},
-	NewComProc(_ICoreWebView2NavigationCompletedEventHandlerInvoke),
-}
-
-func newICoreWebView2NavigationCompletedEventHandler(impl _ICoreWebView2NavigationCompletedEventHandlerImpl) *ICoreWebView2NavigationCompletedEventHandler {
-	return &ICoreWebView2NavigationCompletedEventHandler{
-		vtbl: &_ICoreWebView2NavigationCompletedEventHandlerFn,
-		impl: impl,
-	}
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/wailsapp/go-webview2/pkg/edge/ICoreWebView2ObjectCollectionView.go","mode":420,"size":1200,"sha256":"0184945923438d7aa52fac3b3b30f705991c572b740cca9a50e5c5b252757780","index":0,"count":1,"encoding":"utf-8","payloadBytes":1200}
-//go:build windows
-
-package edge
-
-import (
-	"unsafe"
-
-	"golang.org/x/sys/windows"
-)
-
-type _ICoreWebView2ObjectCollectionViewVtbl struct {
-	_IUnknownVtbl
-	GetCount        ComProc
-	GetValueAtIndex ComProc
-}
-
-type ICoreWebView2ObjectCollectionView struct {
-	vtbl *_ICoreWebView2ObjectCollectionViewVtbl
-}
-
-func (i *ICoreWebView2ObjectCollectionView) AddRef() error {
-	i.vtbl.AddRef.Call(uintptr(unsafe.Pointer(i)))
-
-	return nil
-}
-
-func (i *ICoreWebView2ObjectCollectionView) Release() error {
-	i.vtbl.Release.Call(uintptr(unsafe.Pointer(i)))
-
-	return nil
-}
-
-func (i *ICoreWebView2ObjectCollectionView) GetCount() (uint32, error) {
-	
-	var value uint32
-	hr, _, _ := i.vtbl.GetCount.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(unsafe.Pointer(&value)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return 0, windows.Errno(hr)
-	}
-	return value, nil
-}
-
-func (i *ICoreWebView2ObjectCollectionView) GetValueAtIndex(index uint32) (*_IUnknownVtbl, error) {
-	
-	var value *_IUnknownVtbl
-	hr, _, _ := i.vtbl.GetValueAtIndex.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(index),
-		uintptr(unsafe.Pointer(&value)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return nil, windows.Errno(hr)
-	}
-	return value, nil
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/wailsapp/go-webview2/pkg/edge/ICoreWebView2ProcessFailedEventArgs.go","mode":420,"size":753,"sha256":"1bdf7d2949b3d5b4f42a1ec0ceab7c587fcc51f13fff352cd1ecc0b86edeb263","index":0,"count":1,"encoding":"utf-8","payloadBytes":753}
-//go:build windows
-
-package edge
-
-import (
-	"fmt"
-	"syscall"
-	"unsafe"
-
-	"golang.org/x/sys/windows"
-)
-
-type _ICoreWebView2ProcessFailedEventArgsVtbl struct {
-	_IUnknownVtbl
-	GetProcessFailedKind ComProc
-}
-
-type ICoreWebView2ProcessFailedEventArgs struct {
-	vtbl *_ICoreWebView2ProcessFailedEventArgsVtbl
-}
-
-func (i *ICoreWebView2ProcessFailedEventArgs) GetProcessFailedKind() (COREWEBVIEW2_PROCESS_FAILED_KIND, error) {
-	kind := COREWEBVIEW2_PROCESS_FAILED_KIND(0xffffffff)
-	hr, _, _ := i.vtbl.GetProcessFailedKind.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(unsafe.Pointer(&kind)),
-	)
-
-	if windows.Handle(hr) != windows.S_OK {
-		return 0, syscall.Errno(hr)
-	}
-
-	if kind == 0xffffffff {
-		return 0, fmt.Errorf("unknown error")
-	}
-
-	return kind, nil
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/wailsapp/go-webview2/pkg/edge/ICoreWebView2ProcessFailedEventHandler.go","mode":420,"size":1981,"sha256":"c1857faf38e6286da3a64d25a750dace66bdc46a2591e7d0be36cb3d0af6addb","index":0,"count":1,"encoding":"utf-8","payloadBytes":1981}
-//go:build windows
-
-package edge
-
-import (
-	"unsafe"
-)
-
-type _ICoreWebView2ProcessFailedEventHandlerVtbl struct {
-	_IUnknownVtbl
-	Invoke ComProc
-}
-
-type ICoreWebView2ProcessFailedEventHandler struct {
-	vtbl *_ICoreWebView2ProcessFailedEventHandlerVtbl
-	impl _ICoreWebView2ProcessFailedEventHandlerImpl
-}
-
-func (i *ICoreWebView2ProcessFailedEventHandler) AddRef() uintptr {
-	ret, _, _ := i.vtbl.AddRef.Call(uintptr(unsafe.Pointer(i)))
-
-	return ret
-}
-func _ICoreWebView2ProcessFailedEventHandlerIUnknownQueryInterface(this *ICoreWebView2ProcessFailedEventHandler, refiid, object uintptr) uintptr {
-	return this.impl.QueryInterface(refiid, object)
-}
-
-func _ICoreWebView2ProcessFailedEventHandlerIUnknownAddRef(this *ICoreWebView2ProcessFailedEventHandler) uintptr {
-	return this.impl.AddRef()
-}
-
-func _ICoreWebView2ProcessFailedEventHandlerIUnknownRelease(this *ICoreWebView2ProcessFailedEventHandler) uintptr {
-	return this.impl.Release()
-}
-
-func _ICoreWebView2ProcessFailedEventHandlerInvoke(this *ICoreWebView2ProcessFailedEventHandler, sender *ICoreWebView2, args *ICoreWebView2ProcessFailedEventArgs) uintptr {
-	return this.impl.ProcessFailed(sender, args)
-}
-
-type _ICoreWebView2ProcessFailedEventHandlerImpl interface {
-	_IUnknownImpl
-	ProcessFailed(sender *ICoreWebView2, args *ICoreWebView2ProcessFailedEventArgs) uintptr
-}
-
-var _ICoreWebView2ProcessFailedEventHandlerFn = _ICoreWebView2ProcessFailedEventHandlerVtbl{
-	_IUnknownVtbl{
-		NewComProc(_ICoreWebView2ProcessFailedEventHandlerIUnknownQueryInterface),
-		NewComProc(_ICoreWebView2ProcessFailedEventHandlerIUnknownAddRef),
-		NewComProc(_ICoreWebView2ProcessFailedEventHandlerIUnknownRelease),
-	},
-	NewComProc(_ICoreWebView2ProcessFailedEventHandlerInvoke),
-}
-
-func newICoreWebView2ProcessFailedEventHandler(impl _ICoreWebView2ProcessFailedEventHandlerImpl) *ICoreWebView2ProcessFailedEventHandler {
-	return &ICoreWebView2ProcessFailedEventHandler{
-		vtbl: &_ICoreWebView2ProcessFailedEventHandlerFn,
-		impl: impl,
-	}
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/wailsapp/go-webview2/pkg/edge/ICoreWebView2RasterizationScaleChangedEventHandler.go","mode":420,"size":2266,"sha256":"6b8eb121947cf0dc03659d465358404d40f56492a97629355c5a7a35f455f5a3","index":0,"count":1,"encoding":"utf-8","payloadBytes":2266}
-//go:build windows
-
-package edge
-
-import (
-	"unsafe"
-)
-
-type ICoreWebView2RasterizationScaleChangedEventHandlerVtbl struct {
-	IUnknownVtbl
-	Invoke ComProc
-}
-
-type ICoreWebView2RasterizationScaleChangedEventHandler struct {
-	Vtbl *ICoreWebView2RasterizationScaleChangedEventHandlerVtbl
-	impl ICoreWebView2RasterizationScaleChangedEventHandlerImpl
-}
-
-func (i *ICoreWebView2RasterizationScaleChangedEventHandler) AddRef() uintptr {
-	refCounter, _, _ := i.Vtbl.AddRef.Call(uintptr(unsafe.Pointer(i)))
-	return refCounter
-}
-
-func ICoreWebView2RasterizationScaleChangedEventHandlerIUnknownQueryInterface(this *ICoreWebView2RasterizationScaleChangedEventHandler, refiid, object uintptr) uintptr {
-	return this.impl.QueryInterface(refiid, object)
-}
-
-func ICoreWebView2RasterizationScaleChangedEventHandlerIUnknownAddRef(this *ICoreWebView2RasterizationScaleChangedEventHandler) uintptr {
-	return this.impl.AddRef()
-}
-
-func ICoreWebView2RasterizationScaleChangedEventHandlerIUnknownRelease(this *ICoreWebView2RasterizationScaleChangedEventHandler) uintptr {
-	return this.impl.Release()
-}
-
-func ICoreWebView2RasterizationScaleChangedEventHandlerInvoke(this *ICoreWebView2RasterizationScaleChangedEventHandler, sender *ICoreWebView2Controller, args *IUnknown) uintptr {
-	return this.impl.RasterizationScaleChanged(sender, args)
-}
-
-type ICoreWebView2RasterizationScaleChangedEventHandlerImpl interface {
-	IUnknownImpl
-	RasterizationScaleChanged(sender *ICoreWebView2Controller, args *IUnknown) uintptr
-}
-
-var ICoreWebView2RasterizationScaleChangedEventHandlerFn = ICoreWebView2RasterizationScaleChangedEventHandlerVtbl{
-	IUnknownVtbl{
-		NewComProc(ICoreWebView2RasterizationScaleChangedEventHandlerIUnknownQueryInterface),
-		NewComProc(ICoreWebView2RasterizationScaleChangedEventHandlerIUnknownAddRef),
-		NewComProc(ICoreWebView2RasterizationScaleChangedEventHandlerIUnknownRelease),
-	},
-	NewComProc(ICoreWebView2RasterizationScaleChangedEventHandlerInvoke),
-}
-
-func NewICoreWebView2RasterizationScaleChangedEventHandler(impl ICoreWebView2RasterizationScaleChangedEventHandlerImpl) *ICoreWebView2RasterizationScaleChangedEventHandler {
-	return &ICoreWebView2RasterizationScaleChangedEventHandler{
-		Vtbl: &ICoreWebView2RasterizationScaleChangedEventHandlerFn,
-		impl: impl,
-	}
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/wailsapp/go-webview2/pkg/edge/ICoreWebView2Settings.go","mode":420,"size":6874,"sha256":"1fa023a287f98fc55daef45268f46755f36882ccf4a5e856ca6ea114c1f704b5","index":0,"count":1,"encoding":"utf-8","payloadBytes":6874}
-//go:build windows
-
-package edge
-
-import (
-	"unsafe"
-
-	"golang.org/x/sys/windows"
-)
-
-type _ICoreWebView2SettingsVtbl struct {
-	_IUnknownVtbl
-	GetIsScriptEnabled                ComProc
-	PutIsScriptEnabled                ComProc
-	GetIsWebMessageEnabled            ComProc
-	PutIsWebMessageEnabled            ComProc
-	GetAreDefaultScriptDialogsEnabled ComProc
-	PutAreDefaultScriptDialogsEnabled ComProc
-	GetIsStatusBarEnabled             ComProc
-	PutIsStatusBarEnabled             ComProc
-	GetAreDevToolsEnabled             ComProc
-	PutAreDevToolsEnabled             ComProc
-	GetAreDefaultContextMenusEnabled  ComProc
-	PutAreDefaultContextMenusEnabled  ComProc
-	GetAreHostObjectsAllowed          ComProc
-	PutAreHostObjectsAllowed          ComProc
-	GetIsZoomControlEnabled           ComProc
-	PutIsZoomControlEnabled           ComProc
-	GetIsBuiltInErrorPageEnabled      ComProc
-	PutIsBuiltInErrorPageEnabled      ComProc
-}
-
-type ICoreWebView2Settings struct {
-	vtbl *_ICoreWebView2SettingsVtbl
-}
-
-func (i *ICoreWebView2Settings) AddRef() uintptr {
-	ret, _, _ := i.vtbl.AddRef.Call(uintptr(unsafe.Pointer(i)))
-
-	return ret
-}
-
-func (i *ICoreWebView2Settings) GetIsScriptEnabled() (bool, error) {
-	
-	var isScriptEnabled bool
-	hr, _, _ := i.vtbl.GetIsScriptEnabled.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(unsafe.Pointer(&isScriptEnabled)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return false, windows.Errno(hr)
-	}
-	return isScriptEnabled, nil
-}
-
-func (i *ICoreWebView2Settings) PutIsScriptEnabled(isScriptEnabled bool) error {
-	
-
-	hr, _, _ := i.vtbl.PutIsScriptEnabled.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(boolToInt(isScriptEnabled)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return windows.Errno(hr)
-	}
-	return nil
-}
-
-func (i *ICoreWebView2Settings) GetIsWebMessageEnabled() (bool, error) {
-	
-	var isWebMessageEnabled bool
-	hr, _, _ := i.vtbl.GetIsWebMessageEnabled.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(unsafe.Pointer(&isWebMessageEnabled)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return false, windows.Errno(hr)
-	}
-	return isWebMessageEnabled, nil
-}
-
-func (i *ICoreWebView2Settings) PutIsWebMessageEnabled(isWebMessageEnabled bool) error {
-	
-
-	hr, _, _ := i.vtbl.PutIsWebMessageEnabled.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(boolToInt(isWebMessageEnabled)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return windows.Errno(hr)
-	}
-	return nil
-}
-
-func (i *ICoreWebView2Settings) GetAreDefaultScriptDialogsEnabled() (bool, error) {
-	
-	var areDefaultScriptDialogsEnabled bool
-	hr, _, _ := i.vtbl.GetAreDefaultScriptDialogsEnabled.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(unsafe.Pointer(&areDefaultScriptDialogsEnabled)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return false, windows.Errno(hr)
-	}
-	return areDefaultScriptDialogsEnabled, nil
-}
-
-func (i *ICoreWebView2Settings) PutAreDefaultScriptDialogsEnabled(areDefaultScriptDialogsEnabled bool) error {
-	
-
-	hr, _, _ := i.vtbl.PutAreDefaultScriptDialogsEnabled.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(boolToInt(areDefaultScriptDialogsEnabled)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return windows.Errno(hr)
-	}
-	return nil
-}
-
-func (i *ICoreWebView2Settings) GetIsStatusBarEnabled() (bool, error) {
-	
-	var isStatusBarEnabled bool
-	hr, _, _ := i.vtbl.GetIsStatusBarEnabled.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(unsafe.Pointer(&isStatusBarEnabled)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return false, windows.Errno(hr)
-	}
-	return isStatusBarEnabled, nil
-}
-
-func (i *ICoreWebView2Settings) PutIsStatusBarEnabled(isStatusBarEnabled bool) error {
-	
-
-	hr, _, _ := i.vtbl.PutIsStatusBarEnabled.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(boolToInt(isStatusBarEnabled)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return windows.Errno(hr)
-	}
-	return nil
-}
-
-func (i *ICoreWebView2Settings) GetAreDevToolsEnabled() (bool, error) {
-	
-	var areDevToolsEnabled bool
-	hr, _, _ := i.vtbl.GetAreDevToolsEnabled.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(unsafe.Pointer(&areDevToolsEnabled)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return false, windows.Errno(hr)
-	}
-	return areDevToolsEnabled, nil
-}
-
-func (i *ICoreWebView2Settings) PutAreDevToolsEnabled(areDevToolsEnabled bool) error {
-	
-	hr, _, _ := i.vtbl.PutAreDevToolsEnabled.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(boolToInt(areDevToolsEnabled)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return windows.Errno(hr)
-	}
-	return nil
-}
-
-func (i *ICoreWebView2Settings) GetAreDefaultContextMenusEnabled() (bool, error) {
-	
-	var enabled bool
-	hr, _, _ := i.vtbl.GetAreDefaultContextMenusEnabled.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(unsafe.Pointer(&enabled)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return false, windows.Errno(hr)
-	}
-	return enabled, nil
-}
-
-func (i *ICoreWebView2Settings) PutAreDefaultContextMenusEnabled(enabled bool) error {
-	
-	hr, _, _ := i.vtbl.PutAreDefaultContextMenusEnabled.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(boolToInt(enabled)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return windows.Errno(hr)
-	}
-	return nil
-}
-
-func (i *ICoreWebView2Settings) GetAreHostObjectsAllowed() (bool, error) {
-	
-	var allowed bool
-	hr, _, _ := i.vtbl.GetAreHostObjectsAllowed.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(unsafe.Pointer(&allowed)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return false, windows.Errno(hr)
-	}
-	return allowed, nil
-}
-
-func (i *ICoreWebView2Settings) PutAreHostObjectsAllowed(allowed bool) error {
-	
-
-	hr, _, _ := i.vtbl.PutAreHostObjectsAllowed.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(boolToInt(allowed)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return windows.Errno(hr)
-	}
-	return nil
-}
-
-func (i *ICoreWebView2Settings) GetIsZoomControlEnabled() (bool, error) {
-	
-	var enabled bool
-	hr, _, _ := i.vtbl.GetIsZoomControlEnabled.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(unsafe.Pointer(&enabled)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return false, windows.Errno(hr)
-	}
-	return enabled, nil
-}
-
-func (i *ICoreWebView2Settings) PutIsZoomControlEnabled(enabled bool) error {
-	
-
-	hr, _, _ := i.vtbl.PutIsZoomControlEnabled.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(boolToInt(enabled)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return windows.Errno(hr)
-	}
-	return nil
-}
-
-func (i *ICoreWebView2Settings) GetIsBuiltInErrorPageEnabled() (bool, error) {
-	
-	var enabled bool
-	hr, _, _ := i.vtbl.GetIsBuiltInErrorPageEnabled.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(unsafe.Pointer(&enabled)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return false, windows.Errno(hr)
-	}
-	return enabled, nil
-}
-
-func (i *ICoreWebView2Settings) PutIsBuiltInErrorPageEnabled(enabled bool) error {
-	
-
-	hr, _, _ := i.vtbl.PutIsBuiltInErrorPageEnabled.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(boolToInt(enabled)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return windows.Errno(hr)
-	}
-	return nil
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/wailsapp/go-webview2/pkg/edge/ICoreWebView2Settings2.go","mode":420,"size":2455,"sha256":"268bf23f92aaaee5bf60cd0c04d0095db59b215e8416dc5c135ec2970881d717","index":0,"count":1,"encoding":"utf-8","payloadBytes":2455}
-//go:build windows
-
-package edge
-
-import (
-	"golang.org/x/sys/windows"
-	"syscall"
-	"unsafe"
-)
-
-type ICoreWebView2Settings2Vtbl struct {
-	_IUnknownVtbl
-	GetIsScriptEnabled                ComProc
-	PutIsScriptEnabled                ComProc
-	GetIsWebMessageEnabled            ComProc
-	PutIsWebMessageEnabled            ComProc
-	GetAreDefaultScriptDialogsEnabled ComProc
-	PutAreDefaultScriptDialogsEnabled ComProc
-	GetIsStatusBarEnabled             ComProc
-	PutIsStatusBarEnabled             ComProc
-	GetAreDevToolsEnabled             ComProc
-	PutAreDevToolsEnabled             ComProc
-	GetAreDefaultContextMenusEnabled  ComProc
-	PutAreDefaultContextMenusEnabled  ComProc
-	GetAreHostObjectsAllowed          ComProc
-	PutAreHostObjectsAllowed          ComProc
-	GetIsZoomControlEnabled           ComProc
-	PutIsZoomControlEnabled           ComProc
-	GetIsBuiltInErrorPageEnabled      ComProc
-	PutIsBuiltInErrorPageEnabled      ComProc
-	GetUserAgent                      ComProc
-	PutUserAgent                      ComProc
-}
-
-type ICoreWebView2Settings2 struct {
-	Vtbl *ICoreWebView2Settings2Vtbl
-}
-
-func (i *ICoreWebView2Settings2) AddRef() uintptr {
-	refCounter, _, _ := i.Vtbl.AddRef.Call(uintptr(unsafe.Pointer(i)))
-	return refCounter
-}
-
-func (i *ICoreWebViewSettings) GetICoreWebView2Settings2() *ICoreWebView2Settings2 {
-	var result *ICoreWebView2Settings2
-
-	iidICoreWebView2Settings2 := NewGUID("{ee9a0f68-f46c-4e32-ac23-ef8cac224d2a}")
-	_, _, _ = i.vtbl.QueryInterface.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(unsafe.Pointer(iidICoreWebView2Settings2)),
-		uintptr(unsafe.Pointer(&result)))
-
-	return result
-}
-
-func (i *ICoreWebView2Settings2) GetUserAgent() (string, error) {
-	// Create *uint16 to hold result
-	var _userAgent *uint16
-
-	hr, _, _ := i.Vtbl.GetUserAgent.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(unsafe.Pointer(_userAgent)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return "", syscall.Errno(hr)
-	}
-	// Get result and cleanup
-	userAgent := UTF16PtrToString(_userAgent)
-	CoTaskMemFree(unsafe.Pointer(_userAgent))
-	return userAgent, nil
-}
-
-func (i *ICoreWebView2Settings2) PutUserAgent(userAgent string) error {
-
-	// Convert string 'userAgent' to *uint16
-	_userAgent, err := UTF16PtrFromString(userAgent)
-	if err != nil {
-		return err
-	}
-
-	hr, _, _ := i.Vtbl.PutUserAgent.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(unsafe.Pointer(_userAgent)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return syscall.Errno(hr)
-	}
-	return nil
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/wailsapp/go-webview2/pkg/edge/ICoreWebView2Settings3.go","mode":420,"size":2657,"sha256":"69a59e70423447a6cd8c2e5ea849cf736f68380c66b866ea8639c4bd3922ab2a","index":0,"count":1,"encoding":"utf-8","payloadBytes":2657}
-//go:build windows
-
-package edge
-
-import (
-	"golang.org/x/sys/windows"
-	"syscall"
-	"unsafe"
-)
-
-type ICoreWebView2Settings3Vtbl struct {
-	_IUnknownVtbl
-	GetIsScriptEnabled                  ComProc
-	PutIsScriptEnabled                  ComProc
-	GetIsWebMessageEnabled              ComProc
-	PutIsWebMessageEnabled              ComProc
-	GetAreDefaultScriptDialogsEnabled   ComProc
-	PutAreDefaultScriptDialogsEnabled   ComProc
-	GetIsStatusBarEnabled               ComProc
-	PutIsStatusBarEnabled               ComProc
-	GetAreDevToolsEnabled               ComProc
-	PutAreDevToolsEnabled               ComProc
-	GetAreDefaultContextMenusEnabled    ComProc
-	PutAreDefaultContextMenusEnabled    ComProc
-	GetAreHostObjectsAllowed            ComProc
-	PutAreHostObjectsAllowed            ComProc
-	GetIsZoomControlEnabled             ComProc
-	PutIsZoomControlEnabled             ComProc
-	GetIsBuiltInErrorPageEnabled        ComProc
-	PutIsBuiltInErrorPageEnabled        ComProc
-	GetUserAgent                        ComProc
-	PutUserAgent                        ComProc
-	GetAreBrowserAcceleratorKeysEnabled ComProc
-	PutAreBrowserAcceleratorKeysEnabled ComProc
-}
-
-type ICoreWebView2Settings3 struct {
-	Vtbl *ICoreWebView2Settings3Vtbl
-}
-
-func (i *ICoreWebView2Settings3) AddRef() uintptr {
-	refCounter, _, _ := i.Vtbl.AddRef.Call(uintptr(unsafe.Pointer(i)))
-	return refCounter
-}
-
-func (i *ICoreWebViewSettings) GetICoreWebView2Settings3() *ICoreWebView2Settings3 {
-	var result *ICoreWebView2Settings3
-
-	iidICoreWebView2Settings3 := NewGUID("{fdb5ab74-af33-4854-84f0-0a631deb5eba}")
-	_, _, _ = i.vtbl.QueryInterface.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(unsafe.Pointer(iidICoreWebView2Settings3)),
-		uintptr(unsafe.Pointer(&result)))
-
-	return result
-}
-
-func (i *ICoreWebView2Settings3) GetAreBrowserAcceleratorKeysEnabled() (bool, error) {
-	// Create int32 to hold bool result
-	var _areBrowserAcceleratorKeysEnabled int32
-
-	hr, _, _ := i.Vtbl.GetAreBrowserAcceleratorKeysEnabled.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(unsafe.Pointer(&_areBrowserAcceleratorKeysEnabled)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return false, syscall.Errno(hr)
-	}
-	// Get result and cleanup
-	areBrowserAcceleratorKeysEnabled := _areBrowserAcceleratorKeysEnabled != 0
-	return areBrowserAcceleratorKeysEnabled, nil
-}
-
-func (i *ICoreWebView2Settings3) PutAreBrowserAcceleratorKeysEnabled(areBrowserAcceleratorKeysEnabled bool) error {
-
-	hr, _, _ := i.Vtbl.PutAreBrowserAcceleratorKeysEnabled.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(unsafe.Pointer(&areBrowserAcceleratorKeysEnabled)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return syscall.Errno(hr)
-	}
-	return nil
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/wailsapp/go-webview2/pkg/edge/ICoreWebView2Settings4.go","mode":420,"size":3418,"sha256":"70d905fc92bf4e3508948ced6e39958694fee2047a3490ff061ae59e3870a8af","index":0,"count":1,"encoding":"utf-8","payloadBytes":3418}
-//go:build windows
-
-package edge
-
-import (
-	"golang.org/x/sys/windows"
-	"syscall"
-	"unsafe"
-)
-
-type ICoreWebView2Settings4Vtbl struct {
-	_IUnknownVtbl
-	GetIsScriptEnabled                  ComProc
-	PutIsScriptEnabled                  ComProc
-	GetIsWebMessageEnabled              ComProc
-	PutIsWebMessageEnabled              ComProc
-	GetAreDefaultScriptDialogsEnabled   ComProc
-	PutAreDefaultScriptDialogsEnabled   ComProc
-	GetIsStatusBarEnabled               ComProc
-	PutIsStatusBarEnabled               ComProc
-	GetAreDevToolsEnabled               ComProc
-	PutAreDevToolsEnabled               ComProc
-	GetAreDefaultContextMenusEnabled    ComProc
-	PutAreDefaultContextMenusEnabled    ComProc
-	GetAreHostObjectsAllowed            ComProc
-	PutAreHostObjectsAllowed            ComProc
-	GetIsZoomControlEnabled             ComProc
-	PutIsZoomControlEnabled             ComProc
-	GetIsBuiltInErrorPageEnabled        ComProc
-	PutIsBuiltInErrorPageEnabled        ComProc
-	GetUserAgent                        ComProc
-	PutUserAgent                        ComProc
-	GetAreBrowserAcceleratorKeysEnabled ComProc
-	PutAreBrowserAcceleratorKeysEnabled ComProc
-	GetIsPasswordAutosaveEnabled        ComProc
-	PutIsPasswordAutosaveEnabled        ComProc
-	GetIsGeneralAutofillEnabled         ComProc
-	PutIsGeneralAutofillEnabled         ComProc
-}
-
-type ICoreWebView2Settings4 struct {
-	Vtbl *ICoreWebView2Settings4Vtbl
-}
-
-func (i *ICoreWebView2Settings4) AddRef() uintptr {
-	refCounter, _, _ := i.Vtbl.AddRef.Call(uintptr(unsafe.Pointer(i)))
-	return refCounter
-}
-
-func (i *ICoreWebViewSettings) GetICoreWebView2Settings4() *ICoreWebView2Settings4 {
-	var result *ICoreWebView2Settings4
-
-	iidICoreWebView2Settings4 := NewGUID("{cb56846c-4168-4d53-b04f-03b6d6796ff2}")
-	_, _, _ = i.vtbl.QueryInterface.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(unsafe.Pointer(iidICoreWebView2Settings4)),
-		uintptr(unsafe.Pointer(&result)))
-
-	return result
-}
-
-func (i *ICoreWebView2Settings4) GetIsPasswordAutosaveEnabled() (bool, error) {
-	// Create int32 to hold bool result
-	var _value int32
-
-	hr, _, _ := i.Vtbl.GetIsPasswordAutosaveEnabled.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(unsafe.Pointer(&_value)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return false, syscall.Errno(hr)
-	}
-	// Get result and cleanup
-	value := _value != 0
-	return value, nil
-}
-
-// PutIsPasswordAutosaveEnabled sets the IsPasswordAutosaveEnabled property.
-// The default value is `FALSE`.
-func (i *ICoreWebView2Settings4) PutIsPasswordAutosaveEnabled(value bool) error {
-
-	hr, _, _ := i.Vtbl.PutIsPasswordAutosaveEnabled.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(boolToInt(value)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return syscall.Errno(hr)
-	}
-
-	return nil
-}
-
-func (i *ICoreWebView2Settings4) GetIsGeneralAutofillEnabled() (bool, error) {
-	// Create int32 to hold bool result
-	var _value int32
-
-	hr, _, _ := i.Vtbl.GetIsGeneralAutofillEnabled.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(unsafe.Pointer(&_value)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return false, syscall.Errno(hr)
-	}
-	// Get result and cleanup
-	value := _value != 0
-	return value, nil
-}
-
-func (i *ICoreWebView2Settings4) PutIsGeneralAutofillEnabled(value bool) error {
-
-	hr, _, _ := i.Vtbl.PutIsGeneralAutofillEnabled.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(boolToInt(value)),
-	)
-
-	if windows.Handle(hr) != windows.S_OK {
-		return syscall.Errno(hr)
-	}
-
-	return nil
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/wailsapp/go-webview2/pkg/edge/ICoreWebView2Settings5.go","mode":420,"size":2696,"sha256":"cbb56de46ea81bfc0a0eb9dd88a531f32c5546c50cda4de216b137fc5c9706b6","index":0,"count":1,"encoding":"utf-8","payloadBytes":2696}
-//go:build windows
-
-package edge
-
-import (
-	"golang.org/x/sys/windows"
-	"syscall"
-	"unsafe"
-)
-
-type ICoreWebView2Settings5Vtbl struct {
-	_IUnknownVtbl
-	GetIsScriptEnabled                  ComProc
-	PutIsScriptEnabled                  ComProc
-	GetIsWebMessageEnabled              ComProc
-	PutIsWebMessageEnabled              ComProc
-	GetAreDefaultScriptDialogsEnabled   ComProc
-	PutAreDefaultScriptDialogsEnabled   ComProc
-	GetIsStatusBarEnabled               ComProc
-	PutIsStatusBarEnabled               ComProc
-	GetAreDevToolsEnabled               ComProc
-	PutAreDevToolsEnabled               ComProc
-	GetAreDefaultContextMenusEnabled    ComProc
-	PutAreDefaultContextMenusEnabled    ComProc
-	GetAreHostObjectsAllowed            ComProc
-	PutAreHostObjectsAllowed            ComProc
-	GetIsZoomControlEnabled             ComProc
-	PutIsZoomControlEnabled             ComProc
-	GetIsBuiltInErrorPageEnabled        ComProc
-	PutIsBuiltInErrorPageEnabled        ComProc
-	GetUserAgent                        ComProc
-	PutUserAgent                        ComProc
-	GetAreBrowserAcceleratorKeysEnabled ComProc
-	PutAreBrowserAcceleratorKeysEnabled ComProc
-	GetIsPasswordAutosaveEnabled        ComProc
-	PutIsPasswordAutosaveEnabled        ComProc
-	GetIsGeneralAutofillEnabled         ComProc
-	PutIsGeneralAutofillEnabled         ComProc
-	GetIsPinchZoomEnabled               ComProc
-	PutIsPinchZoomEnabled               ComProc
-}
-
-type ICoreWebView2Settings5 struct {
-	Vtbl *ICoreWebView2Settings5Vtbl
-}
-
-func (i *ICoreWebView2Settings5) AddRef() uintptr {
-	refCounter, _, _ := i.Vtbl.AddRef.Call(uintptr(unsafe.Pointer(i)))
-	return refCounter
-}
-
-func (i *ICoreWebViewSettings) GetICoreWebView2Settings5() *ICoreWebView2Settings5 {
-	var result *ICoreWebView2Settings5
-
-	iidICoreWebView2Settings5 := NewGUID("{183e7052-1d03-43a0-ab99-98e043b66b39}")
-	_, _, _ = i.vtbl.QueryInterface.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(unsafe.Pointer(iidICoreWebView2Settings5)),
-		uintptr(unsafe.Pointer(&result)))
-
-	return result
-}
-
-func (i *ICoreWebView2Settings5) GetIsPinchZoomEnabled() (bool, error) {
-	// Create int32 to hold bool result
-	var _enabled int32
-
-	hr, _, _ := i.Vtbl.GetIsPinchZoomEnabled.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(unsafe.Pointer(&_enabled)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return false, syscall.Errno(hr)
-	}
-	// Get result and cleanup
-	enabled := _enabled != 0
-	return enabled, nil
-}
-
-func (i *ICoreWebView2Settings5) PutIsPinchZoomEnabled(enabled bool) error {
-
-	hr, _, _ := i.Vtbl.PutIsPinchZoomEnabled.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(unsafe.Pointer(&enabled)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return syscall.Errno(hr)
-	}
-	return nil
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/wailsapp/go-webview2/pkg/edge/ICoreWebView2Settings6.go","mode":420,"size":2794,"sha256":"a0d5c22e145a111b14a21fd728721918e2dab83bfd24c09034c41d1c0232636e","index":0,"count":1,"encoding":"utf-8","payloadBytes":2794}
-//go:build windows
-
-package edge
-
-import (
-	"golang.org/x/sys/windows"
-	"syscall"
-	"unsafe"
-)
-
-type ICoreWebView2Settings6Vtbl struct {
-	_IUnknownVtbl
-	GetIsScriptEnabled                  ComProc
-	PutIsScriptEnabled                  ComProc
-	GetIsWebMessageEnabled              ComProc
-	PutIsWebMessageEnabled              ComProc
-	GetAreDefaultScriptDialogsEnabled   ComProc
-	PutAreDefaultScriptDialogsEnabled   ComProc
-	GetIsStatusBarEnabled               ComProc
-	PutIsStatusBarEnabled               ComProc
-	GetAreDevToolsEnabled               ComProc
-	PutAreDevToolsEnabled               ComProc
-	GetAreDefaultContextMenusEnabled    ComProc
-	PutAreDefaultContextMenusEnabled    ComProc
-	GetAreHostObjectsAllowed            ComProc
-	PutAreHostObjectsAllowed            ComProc
-	GetIsZoomControlEnabled             ComProc
-	PutIsZoomControlEnabled             ComProc
-	GetIsBuiltInErrorPageEnabled        ComProc
-	PutIsBuiltInErrorPageEnabled        ComProc
-	GetUserAgent                        ComProc
-	PutUserAgent                        ComProc
-	GetAreBrowserAcceleratorKeysEnabled ComProc
-	PutAreBrowserAcceleratorKeysEnabled ComProc
-	GetIsPasswordAutosaveEnabled        ComProc
-	PutIsPasswordAutosaveEnabled        ComProc
-	GetIsGeneralAutofillEnabled         ComProc
-	PutIsGeneralAutofillEnabled         ComProc
-	GetIsPinchZoomEnabled               ComProc
-	PutIsPinchZoomEnabled               ComProc
-	GetIsSwipeNavigationEnabled         ComProc
-	PutIsSwipeNavigationEnabled         ComProc
-}
-
-type ICoreWebView2Settings6 struct {
-	Vtbl *ICoreWebView2Settings6Vtbl
-}
-
-func (i *ICoreWebView2Settings6) AddRef() uintptr {
-	refCounter, _, _ := i.Vtbl.AddRef.Call(uintptr(unsafe.Pointer(i)))
-	return refCounter
-}
-
-func (i *ICoreWebViewSettings) GetICoreWebView2Settings6() *ICoreWebView2Settings6 {
-	var result *ICoreWebView2Settings6
-
-	iidICoreWebView2Settings6 := NewGUID("{11cb3acd-9bc8-43b8-83bf-f40753714f87}")
-	i.vtbl.QueryInterface.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(unsafe.Pointer(iidICoreWebView2Settings6)),
-		uintptr(unsafe.Pointer(&result)))
-
-	return result
-}
-
-func (i *ICoreWebView2Settings6) GetIsSwipeNavigationEnabled() (bool, error) {
-	// Create int32 to hold bool result
-	var _enabled int32
-
-	hr, _, _ := i.Vtbl.GetIsSwipeNavigationEnabled.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(unsafe.Pointer(&_enabled)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return false, syscall.Errno(hr)
-	}
-	// Get result and cleanup
-	enabled := _enabled != 0
-	return enabled, nil
-}
-
-func (i *ICoreWebView2Settings6) PutIsSwipeNavigationEnabled(enabled bool) error {
-
-	hr, _, _ := i.Vtbl.PutIsSwipeNavigationEnabled.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(boolToInt(enabled)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return syscall.Errno(hr)
-	}
-	return nil
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/wailsapp/go-webview2/pkg/edge/ICoreWebView2WebMessageReceivedEventArgs.go","mode":420,"size":1614,"sha256":"72aba6b97bb74adcc440baa70bc1a9d37aa28d0803e53098f70b2d12f28eba79","index":0,"count":1,"encoding":"utf-8","payloadBytes":1614}
-//go:build windows
-
-package edge
-
-import (
-	"unsafe"
-
-	"golang.org/x/sys/windows"
-)
-
-type iCoreWebView2WebMessageReceivedEventArgsVtbl struct {
-	_IUnknownVtbl
-	GetSource                ComProc
-	GetWebMessageAsJSON      ComProc
-	TryGetWebMessageAsString ComProc
-	GetAdditionalObjects     ComProc
-}
-
-type ICoreWebView2WebMessageReceivedEventArgs struct {
-	vtbl *iCoreWebView2WebMessageReceivedEventArgsVtbl
-}
-
-func (i *ICoreWebView2WebMessageReceivedEventArgs) GetSource() (string, error) {
-	var _source *uint16
-	hr, _, _ := i.vtbl.GetSource.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(unsafe.Pointer(&_source)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return "", windows.Errno(hr)
-	}
-	source := windows.UTF16PtrToString(_source)
-	windows.CoTaskMemFree(unsafe.Pointer(_source))
-	return source, nil
-}
-
-func (i *ICoreWebView2WebMessageReceivedEventArgs) GetAdditionalObjects() (*ICoreWebView2ObjectCollectionView, error) {
-	var value *ICoreWebView2ObjectCollectionView
-
-	hr, _, _ := i.vtbl.GetAdditionalObjects.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(unsafe.Pointer(&value)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return nil, windows.Errno(hr)
-	}
-	return value, nil
-}
-
-func (i *ICoreWebView2WebMessageReceivedEventArgs) TryGetWebMessageAsString() (string, error) {
-	var u16msg *uint16
-
-	hr, _, _ := i.vtbl.TryGetWebMessageAsString.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(unsafe.Pointer(&u16msg)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return "", windows.Errno(hr)
-	}
-	defer windows.CoTaskMemFree(unsafe.Pointer(u16msg))
-
-	msg := windows.UTF16PtrToString(u16msg)
-
-	return msg, nil
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/wailsapp/go-webview2/pkg/edge/ICoreWebView2WebMessageReceivedEventHandler.go","mode":420,"size":1941,"sha256":"313b8ed2bc8ad34ca79d7a23be2c1d9542bf4a886e8bf493862cb7e7dfa405fc","index":0,"count":1,"encoding":"utf-8","payloadBytes":1941}
-//go:build windows
-
-package edge
-
-type iCoreWebView2WebMessageReceivedEventHandlerVtbl struct {
-	_IUnknownVtbl
-	Invoke ComProc
-}
-
-type iCoreWebView2WebMessageReceivedEventHandler struct {
-	vtbl *iCoreWebView2WebMessageReceivedEventHandlerVtbl
-	impl iCoreWebView2WebMessageReceivedEventHandlerImpl
-}
-
-func _ICoreWebView2WebMessageReceivedEventHandlerIUnknownQueryInterface(this *iCoreWebView2WebMessageReceivedEventHandler, refiid, object uintptr) uintptr {
-	return this.impl.QueryInterface(refiid, object)
-}
-
-func _ICoreWebView2WebMessageReceivedEventHandlerIUnknownAddRef(this *iCoreWebView2WebMessageReceivedEventHandler) uintptr {
-	return this.impl.AddRef()
-}
-
-func _ICoreWebView2WebMessageReceivedEventHandlerIUnknownRelease(this *iCoreWebView2WebMessageReceivedEventHandler) uintptr {
-	return this.impl.Release()
-}
-
-func _ICoreWebView2WebMessageReceivedEventHandlerInvoke(this *iCoreWebView2WebMessageReceivedEventHandler, sender *ICoreWebView2, args *ICoreWebView2WebMessageReceivedEventArgs) uintptr {
-	return this.impl.MessageReceived(sender, args)
-}
-
-type iCoreWebView2WebMessageReceivedEventHandlerImpl interface {
-	_IUnknownImpl
-	MessageReceived(sender *ICoreWebView2, args *ICoreWebView2WebMessageReceivedEventArgs) uintptr
-}
-
-var iCoreWebView2WebMessageReceivedEventHandlerFn = iCoreWebView2WebMessageReceivedEventHandlerVtbl{
-	_IUnknownVtbl{
-		NewComProc(_ICoreWebView2WebMessageReceivedEventHandlerIUnknownQueryInterface),
-		NewComProc(_ICoreWebView2WebMessageReceivedEventHandlerIUnknownAddRef),
-		NewComProc(_ICoreWebView2WebMessageReceivedEventHandlerIUnknownRelease),
-	},
-	NewComProc(_ICoreWebView2WebMessageReceivedEventHandlerInvoke),
-}
-
-func newICoreWebView2WebMessageReceivedEventHandler(impl iCoreWebView2WebMessageReceivedEventHandlerImpl) *iCoreWebView2WebMessageReceivedEventHandler {
-	return &iCoreWebView2WebMessageReceivedEventHandler{
-		vtbl: &iCoreWebView2WebMessageReceivedEventHandlerFn,
-		impl: impl,
-	}
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/wailsapp/go-webview2/pkg/edge/ICoreWebView2WebResourceRequest.go","mode":420,"size":2480,"sha256":"2603a865e06c01cd17c30ca8c24fccde6093c8ec349a52569bbe21e943125bca","index":0,"count":1,"encoding":"utf-8","payloadBytes":2480}
-//go:build windows
-
-package edge
-
-import (
-	"unsafe"
-
-	"golang.org/x/sys/windows"
-)
-
-type _ICoreWebView2WebResourceRequestVtbl struct {
-	_IUnknownVtbl
-	GetUri     ComProc
-	PutUri     ComProc
-	GetMethod  ComProc
-	PutMethod  ComProc
-	GetContent ComProc
-	PutContent ComProc
-	GetHeaders ComProc
-}
-
-type ICoreWebView2WebResourceRequest struct {
-	vtbl *_ICoreWebView2WebResourceRequestVtbl
-}
-
-func (i *ICoreWebView2WebResourceRequest) AddRef() uintptr {
-	ret, _, _ := i.vtbl.AddRef.Call(uintptr(unsafe.Pointer(i)))
-
-	return ret
-}
-
-func (i *ICoreWebView2WebResourceRequest) Release() uintptr {
-	ret, _, _ := i.vtbl.Release.Call(uintptr(unsafe.Pointer(i)))
-
-	return ret
-}
-
-func (i *ICoreWebView2WebResourceRequest) GetMethod() (string, error) {
-	// Create *uint16 to hold result
-	var _method *uint16
-	hr, _, _ := i.vtbl.GetMethod.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(unsafe.Pointer(&_method)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return "", windows.Errno(hr)
-	}
-	// Get result and cleanup
-	uri := windows.UTF16PtrToString(_method)
-	windows.CoTaskMemFree(unsafe.Pointer(_method))
-	return uri, nil
-}
-
-func (i *ICoreWebView2WebResourceRequest) GetUri() (string, error) {
-	
-	// Create *uint16 to hold result
-	var _uri *uint16
-	hr, _, _ := i.vtbl.GetUri.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(unsafe.Pointer(&_uri)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return "", windows.Errno(hr)
-	} // Get result and cleanup
-	uri := windows.UTF16PtrToString(_uri)
-	windows.CoTaskMemFree(unsafe.Pointer(_uri))
-	return uri, nil
-}
-
-// GetContent returns the body of the request. Returns nil if there's no body. Make sure to call
-// Release on the returned IStream after finished using it.
-func (i *ICoreWebView2WebResourceRequest) GetContent() (*IStream, error) {
-	var stream *IStream
-	hr, _, _ := i.vtbl.GetContent.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(unsafe.Pointer(&stream)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return nil, windows.Errno(hr)
-	}
-	return stream, nil
-}
-
-// GetHeaders returns the mutable HTTP request headers. Make sure to call
-// Release on the returned Object after finished using it.
-func (i *ICoreWebView2WebResourceRequest) GetHeaders() (*ICoreWebView2HttpRequestHeaders, error) {
-	var headers *ICoreWebView2HttpRequestHeaders
-	hr, _, _ := i.vtbl.GetHeaders.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(unsafe.Pointer(&headers)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return nil, windows.Errno(hr)
-	}
-	return headers, nil
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/wailsapp/go-webview2/pkg/edge/ICoreWebView2WebResourceRequestedEventArgs.go","mode":420,"size":1848,"sha256":"b05aaeec45295b77a642eed17c6a13a206ae5f0aa774d842230b09c1cde41363","index":0,"count":1,"encoding":"utf-8","payloadBytes":1848}
-//go:build windows
-
-package edge
-
-import (
-	"fmt"
-	"syscall"
-	"unsafe"
-
-	"golang.org/x/sys/windows"
-)
-
-type _ICoreWebView2WebResourceRequestedEventArgsVtbl struct {
-	_IUnknownVtbl
-	GetRequest         ComProc
-	GetResponse        ComProc
-	PutResponse        ComProc
-	GetDeferral        ComProc
-	GetResourceContext ComProc
-}
-
-type ICoreWebView2WebResourceRequestedEventArgs struct {
-	vtbl *_ICoreWebView2WebResourceRequestedEventArgsVtbl
-}
-
-func (i *ICoreWebView2WebResourceRequestedEventArgs) AddRef() uint32 {
-	ret, _, _ := i.vtbl.AddRef.Call(uintptr(unsafe.Pointer(i)))
-
-	return uint32(ret)
-}
-
-func (i *ICoreWebView2WebResourceRequestedEventArgs) Release() uint32 {
-	ret, _, _ := i.vtbl.Release.Call(uintptr(unsafe.Pointer(i)))
-
-	return uint32(ret)
-}
-
-func (i *ICoreWebView2WebResourceRequestedEventArgs) PutResponse(response *ICoreWebView2WebResourceResponse) error {
-	
-
-	hr, _, _ := i.vtbl.PutResponse.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(unsafe.Pointer(response)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return windows.Errno(hr)
-	}
-	return nil
-}
-
-func (i *ICoreWebView2WebResourceRequestedEventArgs) GetRequest() (*ICoreWebView2WebResourceRequest, error) {
-	
-	var request *ICoreWebView2WebResourceRequest
-	hr, _, _ := i.vtbl.GetRequest.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(unsafe.Pointer(&request)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return nil, windows.Errno(hr)
-	}
-	return request, nil
-}
-
-func (i *ICoreWebView2WebResourceRequestedEventArgs) GetDeferral() (*ICoreWebView2Deferral, error) {
-	var deferral *ICoreWebView2Deferral
-
-	hr, _, _ := i.vtbl.GetDeferral.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(unsafe.Pointer(&deferral)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return nil, syscall.Errno(hr)
-	}
-
-	if deferral == nil {
-		return nil, fmt.Errorf("unknown error")
-	}
-
-	return deferral, nil
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/wailsapp/go-webview2/pkg/edge/ICoreWebView2WebResourceRequestedEventHandler.go","mode":420,"size":2011,"sha256":"a2e8ac65ed28a06f9f2d22a87d784a646340101a2544f59c6c9ea503a5a320ef","index":0,"count":1,"encoding":"utf-8","payloadBytes":2011}
-//go:build windows
-
-package edge
-
-type _ICoreWebView2WebResourceRequestedEventHandlerVtbl struct {
-	_IUnknownVtbl
-	Invoke ComProc
-}
-
-type iCoreWebView2WebResourceRequestedEventHandler struct {
-	vtbl *_ICoreWebView2WebResourceRequestedEventHandlerVtbl
-	impl _ICoreWebView2WebResourceRequestedEventHandlerImpl
-}
-
-func _ICoreWebView2WebResourceRequestedEventHandlerIUnknownQueryInterface(this *iCoreWebView2WebResourceRequestedEventHandler, refiid, object uintptr) uintptr {
-	return this.impl.QueryInterface(refiid, object)
-}
-
-func _ICoreWebView2WebResourceRequestedEventHandlerIUnknownAddRef(this *iCoreWebView2WebResourceRequestedEventHandler) uintptr {
-	return this.impl.AddRef()
-}
-
-func _ICoreWebView2WebResourceRequestedEventHandlerIUnknownRelease(this *iCoreWebView2WebResourceRequestedEventHandler) uintptr {
-	return this.impl.Release()
-}
-
-func _ICoreWebView2WebResourceRequestedEventHandlerInvoke(this *iCoreWebView2WebResourceRequestedEventHandler, sender *ICoreWebView2, args *ICoreWebView2WebResourceRequestedEventArgs) uintptr {
-	return this.impl.WebResourceRequested(sender, args)
-}
-
-type _ICoreWebView2WebResourceRequestedEventHandlerImpl interface {
-	_IUnknownImpl
-	WebResourceRequested(sender *ICoreWebView2, args *ICoreWebView2WebResourceRequestedEventArgs) uintptr
-}
-
-var _ICoreWebView2WebResourceRequestedEventHandlerFn = _ICoreWebView2WebResourceRequestedEventHandlerVtbl{
-	_IUnknownVtbl{
-		NewComProc(_ICoreWebView2WebResourceRequestedEventHandlerIUnknownQueryInterface),
-		NewComProc(_ICoreWebView2WebResourceRequestedEventHandlerIUnknownAddRef),
-		NewComProc(_ICoreWebView2WebResourceRequestedEventHandlerIUnknownRelease),
-	},
-	NewComProc(_ICoreWebView2WebResourceRequestedEventHandlerInvoke),
-}
-
-func newICoreWebView2WebResourceRequestedEventHandler(impl _ICoreWebView2WebResourceRequestedEventHandlerImpl) *iCoreWebView2WebResourceRequestedEventHandler {
-	return &iCoreWebView2WebResourceRequestedEventHandler{
-		vtbl: &_ICoreWebView2WebResourceRequestedEventHandlerFn,
-		impl: impl,
-	}
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/wailsapp/go-webview2/pkg/edge/ICoreWebView2WebResourceResponse.go","mode":420,"size":2711,"sha256":"24a1323ce716ed48ce5e173d01b42f93ba3638a88af519dd673b82ea8cdb3f3f","index":0,"count":1,"encoding":"utf-8","payloadBytes":2711}
-//go:build windows
-
-package edge
-
-import (
-	"errors"
-	"fmt"
-	"net/http"
-	"syscall"
-	"unsafe"
-
-	"github.com/wailsapp/go-webview2/internal/w32"
-	"golang.org/x/sys/windows"
-)
-
-type _ICoreWebView2WebResourceResponseVtbl struct {
-	_IUnknownVtbl
-	GetContent      ComProc
-	PutContent      ComProc
-	GetHeaders      ComProc
-	GetStatusCode   ComProc
-	PutStatusCode   ComProc
-	GetReasonPhrase ComProc
-	PutReasonPhrase ComProc
-}
-
-type ICoreWebView2WebResourceResponse struct {
-	vtbl *_ICoreWebView2WebResourceResponseVtbl
-}
-
-func (i *ICoreWebView2WebResourceResponse) AddRef() error {
-	_, _, err := i.vtbl.AddRef.Call(uintptr(unsafe.Pointer(i)))
-	if err != nil && !errors.Is(err, windows.ERROR_SUCCESS) {
-		return err
-	}
-
-	return nil
-}
-
-func (i *ICoreWebView2WebResourceResponse) Release() error {
-	_, _, err := i.vtbl.Release.Call(uintptr(unsafe.Pointer(i)))
-	if err != nil && !errors.Is(err, windows.ERROR_SUCCESS) {
-		return err
-	}
-
-	return nil
-}
-
-// GetHeaders returns the mutable HTTP request headers. Make sure to call
-// Release on the returned Object after finished using it.
-func (i *ICoreWebView2WebResourceResponse) GetHeaders() (*ICoreWebView2HttpResponseHeaders, error) {
-	var headers *ICoreWebView2HttpResponseHeaders
-	hr, _, _ := i.vtbl.GetHeaders.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(unsafe.Pointer(&headers)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return nil, syscall.Errno(hr)
-	}
-	if headers == nil {
-
-		return nil, fmt.Errorf("unknown error")
-	}
-	return headers, nil
-}
-
-func (i *ICoreWebView2WebResourceResponse) PutStatusCode(statusCode int) error {
-	hr, _, _ := i.vtbl.PutStatusCode.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(statusCode),
-	)
-
-	if windows.Handle(hr) != windows.S_OK {
-		return syscall.Errno(hr)
-	}
-
-	// Convert string 'reasonPhrase' to *uint16
-	_reasonPhrase, err := UTF16PtrFromString(http.StatusText(statusCode))
-	if err != nil {
-		return err
-	}
-
-	hr, _, _ = i.vtbl.PutReasonPhrase.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(unsafe.Pointer(_reasonPhrase)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return syscall.Errno(hr)
-	}
-	return nil
-}
-
-func (i *ICoreWebView2WebResourceResponse) PutContent(content *IStream) error {
-	hr, _, _ := i.vtbl.PutContent.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(unsafe.Pointer(content)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return syscall.Errno(hr)
-	}
-
-	return nil
-}
-
-func (i *ICoreWebView2WebResourceResponse) PutByteContent(content []byte) error {
-	var stream *IStream
-	if len(content) > 0 {
-		// Create stream for response
-		str, err := w32.SHCreateMemStream(content)
-		if err != nil {
-			return err
-		}
-		stream = (*IStream)(unsafe.Pointer(str))
-		defer stream.Release()
-	}
-
-	return i.PutContent(stream)
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/wailsapp/go-webview2/pkg/edge/ICoreWebView2_2.go","mode":420,"size":4168,"sha256":"855e93691c21852aeaf0eae77947c050e4da5c95f65a53e514627694bab89346","index":0,"count":1,"encoding":"utf-8","payloadBytes":4168}
-//go:build windows
-
-package edge
-
-import (
-	"syscall"
-	"unsafe"
-
-	"golang.org/x/sys/windows"
-)
-
-type iCoreWebView2_2Vtbl struct {
-	QueryInterface ComProc
-	AddRef         ComProc
-	Release        ComProc
-	// ICoreWebView2 methods
-	GetSettings                            ComProc
-	GetSource                              ComProc
-	Navigate                               ComProc
-	NavigateToString                       ComProc
-	AddNavigationStarting                  ComProc
-	RemoveNavigationStarting               ComProc
-	AddContentLoading                      ComProc
-	RemoveContentLoading                   ComProc
-	AddSourceChanged                       ComProc
-	RemoveSourceChanged                    ComProc
-	AddHistoryChanged                      ComProc
-	RemoveHistoryChanged                   ComProc
-	AddNavigationCompleted                 ComProc
-	RemoveNavigationCompleted              ComProc
-	AddFrameNavigationStarting             ComProc
-	RemoveFrameNavigationStarting          ComProc
-	AddFrameNavigationCompleted            ComProc
-	RemoveFrameNavigationCompleted         ComProc
-	AddScriptDialogOpening                 ComProc
-	RemoveScriptDialogOpening              ComProc
-	AddPermissionRequested                 ComProc
-	RemovePermissionRequested              ComProc
-	AddProcessFailed                       ComProc
-	RemoveProcessFailed                    ComProc
-	AddScriptToExecuteOnDocumentCreated    ComProc
-	RemoveScriptToExecuteOnDocumentCreated ComProc
-	ExecuteScript                          ComProc
-	CapturePreview                         ComProc
-	Reload                                 ComProc
-	PostWebMessageAsJSON                   ComProc
-	PostWebMessageAsString                 ComProc
-	AddWebMessageReceived                  ComProc
-	RemoveWebMessageReceived               ComProc
-	CallDevToolsProtocolMethod             ComProc
-	GetBrowserProcessID                    ComProc
-	GetCanGoBack                           ComProc
-	GetCanGoForward                        ComProc
-	GoBack                                 ComProc
-	GoForward                              ComProc
-	GetDevToolsProtocolEventReceiver       ComProc
-	Stop                                   ComProc
-	AddNewWindowRequested                  ComProc
-	RemoveNewWindowRequested               ComProc
-	AddDocumentTitleChanged                ComProc
-	RemoveDocumentTitleChanged             ComProc
-	GetDocumentTitle                       ComProc
-	AddHostObjectToScript                  ComProc
-	RemoveHostObjectFromScript             ComProc
-	OpenDevToolsWindow                     ComProc
-	AddContainsFullScreenElementChanged    ComProc
-	RemoveContainsFullScreenElementChanged ComProc
-	GetContainsFullScreenElement           ComProc
-	AddWebResourceRequested                ComProc
-	RemoveWebResourceRequested             ComProc
-	AddWebResourceRequestedFilter          ComProc
-	RemoveWebResourceRequestedFilter       ComProc
-	AddWindowCloseRequested                ComProc
-	RemoveWindowCloseRequested             ComProc
-	// ICoreWebView2_2 methods
-	AddWebResourceResponseReceived    ComProc
-	RemoveWebResourceResponseReceived ComProc
-	NavigateWithWebResourceRequest    ComProc
-	AddDomContentLoaded               ComProc
-	RemoveDomContentLoaded            ComProc
-	GetCookieManager                  ComProc
-	GetEnvironment                    ComProc
-}
-
-type ICoreWebView2_2 struct {
-	vtbl *iCoreWebView2_2Vtbl
-}
-
-// AddRef increments the reference count of the ICoreWebView2_2 interface
-func (i *ICoreWebView2_2) AddRef() uint32 {
-	ret, _, _ := i.vtbl.AddRef.Call(uintptr(unsafe.Pointer(i)))
-
-	return uint32(ret)
-}
-
-// Release decrements the reference count of the ICoreWebView2_2 interface
-func (i *ICoreWebView2_2) Release() uint32 {
-	ret, _, _ := i.vtbl.Release.Call(uintptr(unsafe.Pointer(i)))
-
-	return uint32(ret)
-}
-
-func (i *ICoreWebView2_2) GetCookieManager() (*ICoreWebView2CookieManager, error) {
-	var cookieManager *ICoreWebView2CookieManager
-	hr, _, _ := i.vtbl.GetCookieManager.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(unsafe.Pointer(&cookieManager)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return nil, syscall.Errno(hr)
-	}
-	return cookieManager, nil
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/wailsapp/go-webview2/pkg/edge/ICoreWebView2_3.go","mode":420,"size":1739,"sha256":"e1aa8e87e6b9bd29626b40573188f004efe8a85a315cc4845afc5d454031997c","index":0,"count":1,"encoding":"utf-8","payloadBytes":1739}
-//go:build windows
-
-package edge
-
-import (
-	"unsafe"
-
-	"golang.org/x/sys/windows"
-)
-
-type iCoreWebView2_3Vtbl struct {
-	iCoreWebView2_2Vtbl
-	TrySuspend                          ComProc
-	Resume                              ComProc
-	GetIsSuspended                      ComProc
-	SetVirtualHostNameToFolderMapping   ComProc
-	ClearVirtualHostNameToFolderMapping ComProc
-}
-
-type ICoreWebView2_3 struct {
-	vtbl *iCoreWebView2_3Vtbl
-}
-
-func (i *ICoreWebView2_3) AddRef() uint32 {
-	ret, _, _ := i.vtbl.AddRef.Call(uintptr(unsafe.Pointer(i)))
-
-	return uint32(ret)
-}
-
-func (i *ICoreWebView2_3) Release() uint32 {
-	ret, _, _ := i.vtbl.Release.Call(uintptr(unsafe.Pointer(i)))
-
-	return uint32(ret)
-}
-
-func (i *ICoreWebView2_3) SetVirtualHostNameToFolderMapping(hostName, folderPath string, accessKind COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND) error {
-	_hostName, err := windows.UTF16PtrFromString(hostName)
-	if err != nil {
-		return err
-	}
-
-	_folderPath, err := windows.UTF16PtrFromString(folderPath)
-	if err != nil {
-		return err
-	}
-
-	hr, _, _ := i.vtbl.SetVirtualHostNameToFolderMapping.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(unsafe.Pointer(_hostName)),
-		uintptr(unsafe.Pointer(_folderPath)),
-		uintptr(accessKind),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return windows.Errno(hr)
-	}
-
-	return nil
-}
-
-func (i *ICoreWebView2) GetICoreWebView2_3() *ICoreWebView2_3 {
-	var result *ICoreWebView2_3
-
-	iidICoreWebView2_3 := NewGUID("{A0D6DF20-3B92-416D-AA0C-437A9C727857}")
-	_, _, _ = i.vtbl.QueryInterface.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(unsafe.Pointer(iidICoreWebView2_3)),
-		uintptr(unsafe.Pointer(&result)))
-
-	return result
-}
-
-func (e *Chromium) GetICoreWebView2_3() *ICoreWebView2_3 {
-	return e.webview.GetICoreWebView2_3()
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/wailsapp/go-webview2/pkg/edge/ICoreWebViewSettings.go","mode":420,"size":10483,"sha256":"8fcb7d27ed4f8e2b1690b6b7030cffc43c33be325be370967ab3e56a240c5aa2","index":0,"count":1,"encoding":"utf-8","payloadBytes":10483}
-//go:build windows
-
-package edge
-
-import (
-	"unsafe"
-
-	"golang.org/x/sys/windows"
-)
-
-// ICoreWebviewSettings is the merged settings class
-
-type _ICoreWebViewSettingsVtbl struct {
-	_IUnknownVtbl
-	GetIsScriptEnabled                  ComProc
-	PutIsScriptEnabled                  ComProc
-	GetIsWebMessageEnabled              ComProc
-	PutIsWebMessageEnabled              ComProc
-	GetAreDefaultScriptDialogsEnabled   ComProc
-	PutAreDefaultScriptDialogsEnabled   ComProc
-	GetIsStatusBarEnabled               ComProc
-	PutIsStatusBarEnabled               ComProc
-	GetAreDevToolsEnabled               ComProc
-	PutAreDevToolsEnabled               ComProc
-	GetAreDefaultContextMenusEnabled    ComProc
-	PutAreDefaultContextMenusEnabled    ComProc
-	GetAreHostObjectsAllowed            ComProc
-	PutAreHostObjectsAllowed            ComProc
-	GetIsZoomControlEnabled             ComProc
-	PutIsZoomControlEnabled             ComProc
-	GetIsBuiltInErrorPageEnabled        ComProc
-	PutIsBuiltInErrorPageEnabled        ComProc
-	GetUserAgent                        ComProc // ICoreWebView2Settings2: SDK 1.0.864.35
-	PutUserAgent                        ComProc
-	GetAreBrowserAcceleratorKeysEnabled ComProc // ICoreWebView2Settings3: SDK 1.0.864.35
-	PutAreBrowserAcceleratorKeysEnabled ComProc
-	GetIsPasswordAutosaveEnabled        ComProc // ICoreWebView2Settings4: SDK 1.0.902.49
-	PutIsPasswordAutosaveEnabled        ComProc
-	GetIsGeneralAutofillEnabled         ComProc
-	PutIsGeneralAutofillEnabled         ComProc
-	GetIsPinchZoomEnabled               ComProc // ICoreWebView2Settings5: SDK 1.0.902.49
-	PutIsPinchZoomEnabled               ComProc
-	GetIsSwipeNavigationEnabled         ComProc // ICoreWebView2Settings6: SDK 1.0.992.28
-	PutIsSwipeNavigationEnabled         ComProc
-}
-
-type ICoreWebViewSettings struct {
-	vtbl *_ICoreWebViewSettingsVtbl
-}
-
-func (i *ICoreWebViewSettings) AddRef() uint32 {
-	ret, _, _ := i.vtbl.AddRef.Call(uintptr(unsafe.Pointer(i)))
-
-	return uint32(ret)
-}
-
-func (i *ICoreWebViewSettings) Release() uint32 {
-	ret, _, _ := i.vtbl.Release.Call(uintptr(unsafe.Pointer(i)))
-
-	return uint32(ret)
-}
-
-func (i *ICoreWebViewSettings) GetIsScriptEnabled() (bool, error) {
-	var isScriptEnabled bool
-	hr, _, _ := i.vtbl.GetIsScriptEnabled.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(unsafe.Pointer(&isScriptEnabled)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return false, windows.Errno(hr)
-	}
-	return isScriptEnabled, nil
-}
-
-func (i *ICoreWebViewSettings) PutIsScriptEnabled(isScriptEnabled bool) error {
-	hr, _, _ := i.vtbl.PutIsScriptEnabled.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(boolToInt(isScriptEnabled)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return windows.Errno(hr)
-	}
-	return nil
-}
-
-func (i *ICoreWebViewSettings) GetIsWebMessageEnabled() (bool, error) {
-	var isWebMessageEnabled bool
-	hr, _, _ := i.vtbl.GetIsWebMessageEnabled.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(unsafe.Pointer(&isWebMessageEnabled)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return false, windows.Errno(hr)
-	}
-	return isWebMessageEnabled, nil
-}
-
-func (i *ICoreWebViewSettings) PutIsWebMessageEnabled(isWebMessageEnabled bool) error {
-	hr, _, _ := i.vtbl.PutIsWebMessageEnabled.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(boolToInt(isWebMessageEnabled)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return windows.Errno(hr)
-	}
-	return nil
-}
-
-func (i *ICoreWebViewSettings) GetAreDefaultScriptDialogsEnabled() (bool, error) {
-	var areDefaultScriptDialogsEnabled bool
-	hr, _, _ := i.vtbl.GetAreDefaultScriptDialogsEnabled.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(unsafe.Pointer(&areDefaultScriptDialogsEnabled)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return false, windows.Errno(hr)
-	}
-	return areDefaultScriptDialogsEnabled, nil
-}
-
-func (i *ICoreWebViewSettings) PutAreDefaultScriptDialogsEnabled(areDefaultScriptDialogsEnabled bool) error {
-	hr, _, _ := i.vtbl.PutAreDefaultScriptDialogsEnabled.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(boolToInt(areDefaultScriptDialogsEnabled)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return windows.Errno(hr)
-	}
-	return nil
-}
-
-func (i *ICoreWebViewSettings) GetIsStatusBarEnabled() (bool, error) {
-	var isStatusBarEnabled bool
-	hr, _, _ := i.vtbl.GetIsStatusBarEnabled.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(unsafe.Pointer(&isStatusBarEnabled)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return false, windows.Errno(hr)
-	}
-	return isStatusBarEnabled, nil
-}
-
-func (i *ICoreWebViewSettings) PutIsStatusBarEnabled(isStatusBarEnabled bool) error {
-	hr, _, _ := i.vtbl.PutIsStatusBarEnabled.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(boolToInt(isStatusBarEnabled)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return windows.Errno(hr)
-	}
-	return nil
-}
-
-func (i *ICoreWebViewSettings) GetAreDevToolsEnabled() (bool, error) {
-	var areDevToolsEnabled bool
-	hr, _, _ := i.vtbl.GetAreDevToolsEnabled.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(unsafe.Pointer(&areDevToolsEnabled)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return false, windows.Errno(hr)
-	}
-	return areDevToolsEnabled, nil
-}
-
-func (i *ICoreWebViewSettings) PutAreDevToolsEnabled(areDevToolsEnabled bool) error {
-	hr, _, _ := i.vtbl.PutAreDevToolsEnabled.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(boolToInt(areDevToolsEnabled)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return windows.Errno(hr)
-	}
-	return nil
-}
-
-func (i *ICoreWebViewSettings) GetAreDefaultContextMenusEnabled() (bool, error) {
-	var enabled bool
-	hr, _, _ := i.vtbl.GetAreDefaultContextMenusEnabled.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(unsafe.Pointer(&enabled)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return false, windows.Errno(hr)
-	}
-	return enabled, nil
-}
-
-func (i *ICoreWebViewSettings) PutAreDefaultContextMenusEnabled(enabled bool) error {
-	hr, _, _ := i.vtbl.PutAreDefaultContextMenusEnabled.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(boolToInt(enabled)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return windows.Errno(hr)
-	}
-	return nil
-}
-
-func (i *ICoreWebViewSettings) GetAreHostObjectsAllowed() (bool, error) {
-	var allowed bool
-	hr, _, _ := i.vtbl.GetAreHostObjectsAllowed.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(unsafe.Pointer(&allowed)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return false, windows.Errno(hr)
-	}
-	return allowed, nil
-}
-
-func (i *ICoreWebViewSettings) PutAreHostObjectsAllowed(allowed bool) error {
-	hr, _, _ := i.vtbl.PutAreHostObjectsAllowed.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(boolToInt(allowed)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return windows.Errno(hr)
-	}
-	return nil
-}
-
-func (i *ICoreWebViewSettings) GetIsZoomControlEnabled() (bool, error) {
-	var enabled bool
-	hr, _, _ := i.vtbl.GetIsZoomControlEnabled.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(unsafe.Pointer(&enabled)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return false, windows.Errno(hr)
-	}
-	return enabled, nil
-}
-
-func (i *ICoreWebViewSettings) PutIsZoomControlEnabled(enabled bool) error {
-	hr, _, _ := i.vtbl.PutIsZoomControlEnabled.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(boolToInt(enabled)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return windows.Errno(hr)
-	}
-	return nil
-}
-
-func (i *ICoreWebViewSettings) GetIsBuiltInErrorPageEnabled() (bool, error) {
-	var enabled bool
-	hr, _, _ := i.vtbl.GetIsBuiltInErrorPageEnabled.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(unsafe.Pointer(&enabled)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return false, windows.Errno(hr)
-	}
-	return enabled, nil
-}
-
-func (i *ICoreWebViewSettings) PutIsBuiltInErrorPageEnabled(enabled bool) error {
-	hr, _, _ := i.vtbl.PutIsBuiltInErrorPageEnabled.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(boolToInt(enabled)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return windows.Errno(hr)
-	}
-	return nil
-}
-
-func (i *ICoreWebViewSettings) GetUserAgent() (string, error) {
-	// Create *uint16 to hold result
-	var _userAgent *uint16
-	hr, _, _ := i.vtbl.GetUserAgent.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(unsafe.Pointer(_userAgent)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return "", windows.Errno(hr)
-	} // Get result and cleanup
-	userAgent := windows.UTF16PtrToString(_userAgent)
-	windows.CoTaskMemFree(unsafe.Pointer(_userAgent))
-	return userAgent, nil
-}
-
-func (i *ICoreWebViewSettings) PutUserAgent(userAgent string) error {
-	
-	// Convert string 'userAgent' to *uint16
-	_userAgent, err := windows.UTF16PtrFromString(userAgent)
-	if err != nil {
-		return err
-	}
-
-	hr, _, _ := i.vtbl.PutUserAgent.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(unsafe.Pointer(_userAgent)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return windows.Errno(hr)
-	}
-	return nil
-}
-
-func (i *ICoreWebViewSettings) GetAreBrowserAcceleratorKeysEnabled() (bool, error) {
-	var enabled bool
-	hr, _, _ := i.vtbl.GetAreBrowserAcceleratorKeysEnabled.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(unsafe.Pointer(&enabled)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return false, windows.Errno(hr)
-	}
-	return enabled, nil
-}
-
-func (i *ICoreWebViewSettings) PutAreBrowserAcceleratorKeysEnabled(enabled bool) error {
-	hr, _, _ := i.vtbl.PutAreBrowserAcceleratorKeysEnabled.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(boolToInt(enabled)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return windows.Errno(hr)
-	}
-	return nil
-}
-
-func (i *ICoreWebViewSettings) GetIsPinchZoomEnabled() (bool, error) {
-	var enabled bool
-	hr, _, _ := i.vtbl.GetIsPinchZoomEnabled.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(unsafe.Pointer(&enabled)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return false, windows.Errno(hr)
-	}
-	return enabled, nil
-}
-
-func (i *ICoreWebViewSettings) PutIsPinchZoomEnabled(enabled bool) error {
-	hr, _, _ := i.vtbl.PutIsPinchZoomEnabled.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(boolToInt(enabled)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return windows.Errno(hr)
-	}
-	return nil
-}
-
-func (i *ICoreWebViewSettings) GetIsSwipeNavigationEnabled() (bool, error) {
-	var enabled bool
-	hr, _, _ := i.vtbl.GetIsSwipeNavigationEnabled.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(unsafe.Pointer(&enabled)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return false, windows.Errno(hr)
-	}
-	return enabled, nil
-}
-
-func (i *ICoreWebViewSettings) PutIsSwipeNavigationEnabled(enabled bool) error {
-	hr, _, _ := i.vtbl.PutIsSwipeNavigationEnabled.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(boolToInt(enabled)),
-	)
-	if windows.Handle(hr) != windows.S_OK {
-		return windows.Errno(hr)
-	}
-	return nil
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/wailsapp/go-webview2/pkg/edge/IStream.go","mode":420,"size":1145,"sha256":"7d514fcb17784757c36adac30edeaa73301ee3037ed4a1a3e3522798d8fc1e5a","index":0,"count":1,"encoding":"utf-8","payloadBytes":1145}
-//go:build windows
-
-package edge
-
-import (
-	"errors"
-	"io"
-	"syscall"
-	"unsafe"
-
-	"golang.org/x/sys/windows"
-)
-
-type _IStreamVtbl struct {
-	_IUnknownVtbl
-	Read  ComProc
-	Write ComProc
-}
-
-type IStream struct {
-	vtbl *_IStreamVtbl
-}
-
-func (i *IStream) AddRef() error {
-	_, _, err := i.vtbl.AddRef.Call(uintptr(unsafe.Pointer(i)))
-	if err != nil && !errors.Is(err, windows.ERROR_SUCCESS) {
-		return err
-	}
-
-	return nil
-}
-
-func (i *IStream) Release() error {
-	_, _, err := i.vtbl.Release.Call(uintptr(unsafe.Pointer(i)))
-	if err != nil && !errors.Is(err, windows.ERROR_SUCCESS) {
-		return err
-	}
-
-	return nil
-}
-
-func (i *IStream) Read(p []byte) (int, error) {
-	bufLen := len(p)
-	if bufLen == 0 {
-		return 0, nil
-	}
-
-	var n int
-	hr, _, _ := i.vtbl.Read.Call(
-		uintptr(unsafe.Pointer(i)),
-		uintptr(unsafe.Pointer(&p[0])),
-		uintptr(bufLen),
-		uintptr(unsafe.Pointer(&n)),
-	)
-
-	switch windows.Handle(hr) {
-	case windows.S_OK:
-		// The buffer has been completely filled
-		return n, nil
-	case windows.S_FALSE:
-		// The buffer has been filled with less than len data and the stream is EOF
-		return n, io.EOF
-	default:
-		return 0, syscall.Errno(hr)
-	}
 }
 
 @@END
