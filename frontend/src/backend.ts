@@ -2,8 +2,11 @@ import {
   ProbeServerInformation,
   CheckServerInformation,
   AmendServiceConfigurationDraft,
+  AmendApplicationLibraryDraft,
   AppendEditCommand,
   ChooseProject,
+  ChooseApplicationPackageDirectory,
+  ReviewApplicationPackageImport,
   ChooseProjectExportParent,
   ChooseProjectParent,
   CloseProject,
@@ -466,6 +469,7 @@ export type RuntimeSecretValuesInput = {
   projectRevision: string;
   descriptorSetFingerprint: string;
   serviceDeployment: string;
+  applicationLibrary?: string;
   values: Record<string, string>;
 };
 export type PendingRuntimeSecretValuesInput = {
@@ -549,10 +553,25 @@ export interface ProjectBackend {
     compatibilitySourceId: string;
   }): Promise<OpenResult>;
   closeProject(): Promise<OpenResult>;
+  chooseApplicationPackageDirectory?(): Promise<string>;
+  reviewApplicationPackageImport?(
+    sessionId: string,
+    source: string,
+    kind: string,
+    name: string,
+    version: string,
+    digest: string,
+  ): Promise<EditResult>;
   startEditSession(): Promise<EditResult>;
   appendEditCommand(
     sessionId: string,
     command: Record<string, unknown>,
+  ): Promise<EditResult>;
+  amendApplicationLibraryDraft?(
+    sessionId: string,
+    index: number,
+    expected: Record<string, unknown>,
+    replacement: Record<string, unknown> | null,
   ): Promise<EditResult>;
   amendServiceConfigurationDraft(
     sessionId: string,
@@ -655,11 +674,21 @@ export const backend: ProjectBackend = {
   createProject: (input) =>
     CreateProject(input as never) as unknown as Promise<OpenResult>,
   closeProject: () => CloseProject() as unknown as Promise<OpenResult>,
+  chooseApplicationPackageDirectory: ChooseApplicationPackageDirectory,
+  reviewApplicationPackageImport: (...args) =>
+    ReviewApplicationPackageImport(...args) as unknown as Promise<EditResult>,
   startEditSession: () => StartEditSession() as unknown as Promise<EditResult>,
   appendEditCommand: (sessionId, command) =>
     AppendEditCommand(
       sessionId,
       command as never,
+    ) as unknown as Promise<EditResult>,
+  amendApplicationLibraryDraft: (sessionId, index, expected, replacement) =>
+    AmendApplicationLibraryDraft(
+      sessionId,
+      index,
+      expected as never,
+      replacement as never,
     ) as unknown as Promise<EditResult>,
   amendServiceConfigurationDraft: (sessionId, index, expected, replacement) =>
     AmendServiceConfigurationDraft(

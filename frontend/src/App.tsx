@@ -54,12 +54,18 @@ import {
 } from "./installationPresentation";
 import { executionNodeStatusLabel } from "./executionNodeLabels";
 import "./edit.css";
+import {
+  ApplicationsPage,
+  isApplicationIntent,
+  type ApplicationIntent,
+} from "./ApplicationsPage";
 
 type Page =
   | "project"
   | "servers"
   | "topology"
   | "certificates"
+  | "applications"
   | "services"
   | "installation"
   | "logs"
@@ -78,7 +84,8 @@ type StructuralIntent =
   | EndpointIntent
   | ProviderIntent
   | CertificateIntent
-  | ConfigurationIntent;
+  | ConfigurationIntent
+  | ApplicationIntent;
 type ProjectSettingDraftValues = Partial<
   Record<"platform_data_root_directory" | "platform_name_prefix", string>
 >;
@@ -107,6 +114,7 @@ const navigation: Array<{ id: Page | string; label: string }> = [
   { id: "topology", label: "Топология" },
   { id: "certificates", label: "Сертификаты" },
   { id: "services", label: "Сервисы" },
+  { id: "applications", label: "Приложения" },
   { id: "installation", label: "Установка" },
   { id: "logs", label: "Журналы" },
   { id: "help", label: "Справка" },
@@ -349,6 +357,21 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
   const endpointPreviewRequest = useRef(0);
   const destination = parent ? `${parent}${separator}${name.trim()}` : root;
   const nameError = projectFolderNameError(name);
+  const [applicationFormDirty, setApplicationFormDirty] = useState(false);
+  const confirmApplicationExit = () => {
+    if (
+      applicationFormDirty &&
+      !window.confirm("Отбросить незавершённый ввод формы приложения?")
+    )
+      return false;
+    setApplicationFormDirty(false);
+    return true;
+  };
+  const requestPage = (next: Page) => {
+    if (page === next) return;
+    if (page === "applications" && !confirmApplicationExit()) return;
+    setPage(next);
+  };
   const snapshot = result.snapshot;
   const managed = result.managed;
   const verification = result.verification || { status: "UNVERIFIED" };
@@ -623,6 +646,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
   }, [api, installationState?.plan.planId]);
 
   const clearDraft = () => {
+    setImportReview(false);
     setEdit(null);
     setEditError(null);
     setSessionId("");
@@ -651,6 +675,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     setRefreshError("");
   };
   const open = async () => {
+    if (!confirmApplicationExit()) return;
     setLoading(true);
     try {
       const next = await api.chooseProject();
@@ -724,6 +749,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     }
   };
   const close = async () => {
+    if (!confirmApplicationExit()) return;
     setResult(await api.closeProject());
     clearRefreshFailure();
     resetTopologySelection();
@@ -1479,8 +1505,8 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     }
   };
   const amendConfigurationIntent = async (
-    previous: ConfigurationIntent,
-    replacement: ConfigurationIntent | null,
+    previous: ConfigurationIntent | ApplicationIntent,
+    replacement: ConfigurationIntent | ApplicationIntent | null,
   ): Promise<boolean> => {
     const index = intents.indexOf(previous);
     if (!sessionId || index < 0) {
@@ -1493,12 +1519,17 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     }
     setEditBusy(true);
     try {
-      const next = await api.amendServiceConfigurationDraft(
-        sessionId,
-        index,
-        previous,
-        replacement,
-      );
+      const amend = isApplicationIntent(previous)
+        ? api.amendApplicationLibraryDraft
+        : api.amendServiceConfigurationDraft;
+      if (!amend) {
+        setEditError({
+          code: "EDIT_OPERATION_NOT_AVAILABLE",
+          message: "Редактирование библиотек недоступно в этом backend.",
+        });
+        return false;
+      }
+      const next = await amend(sessionId, index, previous, replacement);
       if (replacement === null && next.status === "DISCARDED" && !next.error) {
         clearDraft();
         endpointPreviewRequest.current += 1;
@@ -1532,7 +1563,67 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
       setEditBusy(false);
     }
   };
+  const [importReview, setImportReview] = useState(false);
+  const reviewPackage = async (
+    source: string,
+    kind: string,
+    name: string,
+    version: string,
+    digest: string,
+  ) => {
+    if (sessionId || !api.reviewApplicationPackageImport) {
+      setEditError({
+        code: "EDIT_SESSION_ACTIVE",
+        message: "Сначала сохраните или отмените текущий черновик.",
+      });
+      return false;
+    }
+    setEditBusy(true);
+    try {
+      const started = await api.startEditSession();
+      if (!started.session) {
+        setEditError(started.error ?? null);
+        return false;
+      }
+      const id = started.session.sessionId;
+      setSessionId(id);
+      setEdit(started);
+      const next = await api.reviewApplicationPackageImport(
+        id,
+        source,
+        kind,
+        name,
+        version,
+        digest,
+      );
+      setEdit(next);
+      setEditError(next.error ?? null);
+      setImportReview(true);
+      setReviewOpen(true);
+      return !!next.plan?.saveAllowed;
+    } catch {
+      setEditError({
+        code: "APPLICATION_PACKAGE_INVALID",
+        message: "Не удалось подготовить импорт пакета.",
+      });
+      return false;
+    } finally {
+      setEditBusy(false);
+    }
+  };
   const review = async () => {
+    if (applicationFormDirty) {
+      setEditError({
+        code: "LOCAL_FORM_UNSAVED",
+        message:
+          "Добавьте незавершённый ввод приложения в черновик или отбросьте его перед Review.",
+      });
+      return;
+    }
+    if (importReview && edit?.plan) {
+      setReviewOpen(true);
+      return;
+    }
     if (!sessionId || commandCount === 0) {
       setReviewOpen(true);
       setEditError({
@@ -1877,6 +1968,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
                 "topology",
                 "certificates",
                 "services",
+                "applications",
                 "installation",
                 "logs",
                 "help",
@@ -1891,6 +1983,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
                 (item.id === "topology" && topologyAvailable) ||
                 (item.id === "certificates" && topologyAvailable) ||
                 (item.id === "services" && topologyAvailable) ||
+                (item.id === "applications" && projectOpen) ||
                 (item.id === "installation" && projectOpen) ||
                 item.id === "logs" ||
                 item.id === "help" ||
@@ -1911,6 +2004,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
                       item.id !== "topology" &&
                       item.id !== "certificates" &&
                       item.id !== "services" &&
+                      item.id !== "applications" &&
                       item.id !== "installation" &&
                       item.id !== "logs" &&
                       item.id !== "help" &&
@@ -1918,6 +2012,15 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
                       item.id !== "settings"
                     )
                       return;
+                    if (
+                      page === "applications" &&
+                      applicationFormDirty &&
+                      !window.confirm(
+                        "Отбросить несохранённый ввод формы приложения?",
+                      )
+                    )
+                      return;
+                    setApplicationFormDirty(false);
                     setPage(item.id as Page);
                     if (item.id === "services") setServicesView("list");
                   }}
@@ -1947,7 +2050,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
                 <button
                   className="readonly outline"
                   type="button"
-                  onClick={() => setPage("project")}
+                  onClick={() => requestPage("project")}
                   title={verificationErrorMessage(verification.error.code)}
                 >
                   {verificationLabel(verification.status, true)}
@@ -1962,7 +2065,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
             <button
               className="execution-node-badge"
               aria-label="Открыть узел выполнения"
-              onClick={() => setPage("servers")}
+              onClick={() => requestPage("servers")}
               title="Открыть узел выполнения на странице «Серверы»"
             >
               Узел выполнения:{" "}
@@ -1979,6 +2082,8 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
               type="button"
               className={`installation-global-status ${installationView.tone}`}
               onClick={() => {
+                if (page === "applications" && !confirmApplicationExit())
+                  return;
                 setPage("installation");
                 setInstallationTab(
                   installationView.stage === "result"
@@ -2297,6 +2402,37 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
               verificationStatus={verification.status}
             />
           )}
+          {!loading && !creating && projectOpen && page === "applications" && (
+            <ApplicationsPage
+              managed={managed}
+              snapshot={snapshot}
+              intents={intents.filter(isApplicationIntent)}
+              busy={
+                editBusy ||
+                refreshRequired ||
+                ["STARTING", "RUNNING", "CANCELLING"].includes(
+                  installationRun?.run?.state || "",
+                )
+              }
+              onAppend={appendStructuralIntent}
+              onAmend={amendConfigurationIntent}
+              onReview={review}
+              onInstallation={() => setPage("installation")}
+              onProviderSecrets={(deployment) => {
+                setSelectedServiceDeployment(deployment);
+                setSelectedServiceMember("");
+                setServicesView("detail");
+                setPage("services");
+              }}
+              onDirtyChange={setApplicationFormDirty}
+              choosePackage={api.chooseApplicationPackageDirectory}
+              onImport={reviewPackage}
+              draftActive={!!sessionId}
+              backendError={editError?.message}
+              loadSecrets={api.getRuntimeSecretDescriptors}
+              saveSecrets={api.setDeploymentRuntimeSecretValues}
+            />
+          )}
           {!loading && !creating && projectOpen && page === "services" && (
             <ServicesPage
               key={serviceFormEpoch}
@@ -2562,7 +2698,13 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
               edit={edit}
               error={editError}
               busy={editBusy}
-              onClose={() => setReviewOpen(false)}
+              onClose={() => {
+                setReviewOpen(false);
+                if (importReview) {
+                  void discard();
+                  setImportReview(false);
+                }
+              }}
               onReview={review}
               onSave={save}
               onDiscard={discard}

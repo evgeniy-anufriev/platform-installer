@@ -152,6 +152,14 @@ func (s *EditSessionStore) Append(sessionID string, command EditCommand, backend
 // command. The expected command is a compare-and-swap guard against a stale UI;
 // structural commands and other draft targets are never rewritten.
 func (s *EditSessionStore) AmendConfiguration(sessionID string, index int, expected EditCommand, replacement *EditCommand, backend *Backend) (EditSession, error) {
+	return s.amendCommand(sessionID, index, expected, replacement, backend, false)
+}
+
+func (s *EditSessionStore) AmendApplication(sessionID string, index int, expected EditCommand, replacement *EditCommand, backend *Backend) (EditSession, error) {
+	return s.amendCommand(sessionID, index, expected, replacement, backend, true)
+}
+
+func (s *EditSessionStore) amendCommand(sessionID string, index int, expected EditCommand, replacement *EditCommand, backend *Backend, application bool) (EditSession, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.expireLocked()
@@ -165,14 +173,25 @@ func (s *EditSessionStore) AmendConfiguration(sessionID string, index int, expec
 	if backend == nil || index < 0 || index >= len(state.commands) {
 		return EditSession{}, blocked("EDIT_COMMAND_CONFLICT", "Configuration draft changed", "command")
 	}
+	allowed := isConfigurationCommand
+	sameTarget := sameConfigurationTarget
+	if application {
+		allowed = func(c EditCommand) bool { return applicationEditOperation(c.Operation) }
+		sameTarget = func(a, b EditCommand) bool {
+			return a.DeploymentID == b.DeploymentID && a.EntityID == b.EntityID && a.HostID == b.HostID && a.Property == b.Property && a.Setting == b.Setting && applicationCommandFamily(a.Operation) == applicationCommandFamily(b.Operation)
+		}
+	}
 	normalize := func(command *EditCommand) {
 		command.APIVersion = EditCommandAPIVersionV10
+		if application {
+			command.APIVersion = EditCommandAPIVersionV11
+		}
 		command.Kind = "EditCommand"
 		command.BaseProjectRevision = state.public.BaseProjectRevision
 	}
 	normalize(&expected)
 	prior := state.commands[index]
-	if !isConfigurationCommand(prior) || !isConfigurationCommand(expected) {
+	if !allowed(prior) || !allowed(expected) {
 		return EditSession{}, blocked("EDIT_COMMAND_CONFLICT", "Only configuration draft commands can be amended", "command")
 	}
 	want, err := json.Marshal(expected)
@@ -185,7 +204,7 @@ func (s *EditSessionStore) AmendConfiguration(sessionID string, index int, expec
 	}
 	if replacement != nil {
 		normalize(replacement)
-		if !isConfigurationCommand(*replacement) || !sameConfigurationTarget(prior, *replacement) {
+		if !allowed(*replacement) || !sameTarget(prior, *replacement) {
 			return EditSession{}, blocked("EDIT_COMMAND_CONFLICT", "Configuration target cannot change", "command")
 		}
 		if err := backend.validateCommand(*replacement); err != nil {
@@ -331,6 +350,44 @@ func (s *EditSessionStore) BeginCommit(sessionID, planID string) (EditSession, e
 	return state.public, nil
 }
 
+// ReviewApplicationPackageImport uses the same session, opaque plan store and
+// commit path. Imports cannot be mixed with pending structural edit commands.
+func (s *EditSessionStore) ReviewApplicationPackageImport(ctx context.Context, backend *Backend, sessionID, source, kind, name, version, digest string) (*StructuralEditPlan, error) {
+	s.mu.Lock()
+	s.expireLocked()
+	state := s.sessions[sessionID]
+	if state == nil || backend == nil {
+		s.mu.Unlock()
+		return nil, blocked("EDIT_SESSION_EXPIRED", "Edit session is absent", "sessionId")
+	}
+	if state.busy || len(state.commands) != 0 {
+		s.mu.Unlock()
+		return nil, blocked("EDIT_SESSION_ACTIVE", "Save or discard the current draft before importing", "sessionId")
+	}
+	if state.public.ReviewedPlanID != "" {
+		backend.plans.Discard(state.public.ReviewedPlanID)
+		state.public.ReviewedPlanID = ""
+		state.public.Status = "EDITING"
+	}
+	state.busy = true
+	root, revision := state.public.ProjectRoot, state.public.BaseProjectRevision
+	s.mu.Unlock()
+	plan, err := backend.PlanApplicationPackageImport(ctx, root, source, revision, kind, name, version, digest)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	state = s.sessions[sessionID]
+	if state != nil {
+		state.busy = false
+		state.updated = s.now()
+		state.public.ExpiresAt = state.updated.Add(s.ttl)
+		if err == nil && plan != nil && plan.SaveAllowed {
+			state.public.Status = "REVIEWED"
+			state.public.ReviewedPlanID = plan.PlanID
+		}
+	}
+	return plan, err
+}
+
 func (s *EditSessionStore) FinishCommit(sessionID, planID string, committed bool) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -375,4 +432,16 @@ func (s *EditSessionStore) ConsumePlan(sessionID, planID string) bool {
 	delete(s.byProject, state.public.ProjectContextID)
 	delete(s.sessions, sessionID)
 	return true
+}
+
+func applicationCommandFamily(operation string) string {
+	switch operation {
+	case "SetApplicationLibraryOverride", "RemoveApplicationLibraryOverride":
+		return "override"
+	case "SetApplicationLibrarySlot", "RemoveApplicationLibrarySlot":
+		return "slot"
+	case "SetApplicationLibraryPlacement", "RemoveApplicationLibraryPlacement":
+		return "placement"
+	}
+	return operation
 }

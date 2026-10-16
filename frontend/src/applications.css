@@ -1,0 +1,142 @@
+.applications-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+  gap: 12px;
+}
+.applications-layout {
+  display: grid;
+  grid-template-columns: 250px minmax(0, 1fr);
+  gap: 14px;
+  min-height: 0;
+  flex: 1;
+}
+.application-list,
+.application-editor {
+  border: 1px solid var(--border, #cad5e3);
+  border-radius: 8px;
+  padding: 14px;
+  min-height: 0;
+  overflow: auto;
+}
+.application-list {
+  background: #fff;
+  color: #172033;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.application-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-bottom: 1px solid var(--border, #cad5e3);
+  padding: 8px 0;
+}
+.application-group button {
+  text-align: left;
+}
+.application-group small {
+  display: block;
+}
+.application-slot {
+  margin-left: 14px;
+}
+.application-group [aria-current] {
+  background: #e4effb;
+  color: #175b97;
+}
+.application-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.application-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+.application-tabs [aria-pressed="true"] {
+  background: #e4effb;
+  color: #175b97;
+}
+.application-content {
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+}
+.application-editor footer {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.application-field {
+  display: grid;
+  gap: 6px;
+  margin: 14px 0;
+}
+.application-field label,
+.application-editor > label {
+  display: grid;
+  gap: 6px;
+}
+.application-editor pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.application-editor fieldset {
+  margin: 12px 0;
+  border: 1px solid var(--border, #cad5e3);
+}
+@media (max-width: 1100px) {
+  .applications-layout {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+}
+@media (max-width: 800px) {
+  .applications-layout {
+    display: flex;
+    flex-direction: column;
+    overflow: auto;
+  }
+  .application-list {
+    max-height: 180px;
+    flex-shrink: 0;
+  }
+  .application-editor {
+    min-height: 420px;
+  }
+}
+.application-list label {
+  display: grid;
+  gap: 6px;
+}
+.application-editor input,
+.application-editor select,
+.application-editor textarea,
+.application-list input {
+  width: 100%;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border, #cad5e3);
+  border-radius: 6px;
+  font: inherit;
+  color: inherit;
+  background: #fff;
+}
+.application-editor > header {
+  height: auto;
+  min-height: 80px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  padding-bottom: 12px;
+}
+.application-editor > header h2 {
+  margin: 0;
+}
+.application-tabs {
+  flex-basis: 100%;
+  margin-top: 0;
+}

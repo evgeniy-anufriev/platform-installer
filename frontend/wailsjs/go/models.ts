@@ -1710,6 +1710,7 @@ export namespace desktop {
 	    projectRevision: string;
 	    descriptorSetFingerprint: string;
 	    serviceDeployment: string;
+	    applicationLibrary?: string;
 	    values: Record<string, string>;
 
 	    static createFrom(source: any = {}) {
@@ -1721,6 +1722,7 @@ export namespace desktop {
 	        this.projectRevision = source["projectRevision"];
 	        this.descriptorSetFingerprint = source["descriptorSetFingerprint"];
 	        this.serviceDeployment = source["serviceDeployment"];
+	        this.applicationLibrary = source["applicationLibrary"];
 	        this.values = source["values"];
 	    }
 	}
@@ -2614,7 +2616,26 @@ export namespace installer {
 	        this.sshPort = source["sshPort"];
 	    }
 	}
+	export class ManagedApplicationPackage {
+	    kind: string;
+	    ref: string;
+	    digest: string;
+	    definition: Record<string, any>;
+
+	    static createFrom(source: any = {}) {
+	        return new ManagedApplicationPackage(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.kind = source["kind"];
+	        this.ref = source["ref"];
+	        this.digest = source["digest"];
+	        this.definition = source["definition"];
+	    }
+	}
 	export class ManagedProjectView {
+	    applicationPackages: Record<string, ManagedApplicationPackage>;
 	    applicationLibraries: Record<string, any>;
 	    applicationPlacements: Record<string, any>;
 	    projectRevision: string;
@@ -2633,6 +2654,7 @@ export namespace installer {
 
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.applicationPackages = this.convertValues(source["applicationPackages"], ManagedApplicationPackage, true);
 	        this.applicationLibraries = source["applicationLibraries"];
 	        this.applicationPlacements = source["applicationPlacements"];
 	        this.projectRevision = source["projectRevision"];
@@ -2922,6 +2944,7 @@ export namespace installer {
 		    return a;
 		}
 	}
+
 
 
 

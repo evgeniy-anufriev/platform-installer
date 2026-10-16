@@ -36,6 +36,10 @@ func ReadManagedProjectViewWithCatalog(projectRoot string, catalog *projectlifec
 	if err != nil {
 		return nil, err
 	}
+	before, err := ProjectRevision(root)
+	if err != nil {
+		return nil, err
+	}
 	read := managedReadBudget{}
 	document, _, err := read.ownedDocument(root, managedInventoryDocument)
 	if err != nil {
@@ -77,7 +81,14 @@ func ReadManagedProjectViewWithCatalog(projectRoot string, catalog *projectlifec
 		return nil, err
 	}
 	sortManagedView(view)
+	view.ApplicationPackages, err = readManagedApplicationPackages(root)
+	if err != nil {
+		return nil, err
+	}
 	view.ProjectRevision, err = ProjectRevision(root)
+	if err == nil && view.ProjectRevision != before {
+		return nil, blocked("PROJECT_CHANGED", "Project changed while reading its managed view", "project")
+	}
 	return view, err
 }
 

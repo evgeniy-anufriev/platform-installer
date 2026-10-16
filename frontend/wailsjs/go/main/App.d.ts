@@ -6,6 +6,8 @@ import {runtimesecret} from '../models';
 import {projectlifecycle} from '../models';
 import {executionnode} from '../models';
 
+export function AmendApplicationLibraryDraft(arg1:string,arg2:number,arg3:installer.EditCommand,arg4:installer.EditCommand):Promise<desktop.EditOperationResult>;
+
 export function AmendServiceConfigurationDraft(arg1:string,arg2:number,arg3:installer.EditCommand,arg4:installer.EditCommand):Promise<desktop.EditOperationResult>;
 
 export function AppendEditCommand(arg1:string,arg2:installer.EditCommand):Promise<desktop.EditOperationResult>;
@@ -25,6 +27,8 @@ export function CancelOrphanRun(arg1:string):Promise<desktop.OrphanRunRecoveryRe
 export function CheckExecutionNode():Promise<desktop.ExecutionNodeReadiness>;
 
 export function CheckServerInformation(arg1:string):Promise<desktop.ServerInformationResult>;
+
+export function ChooseApplicationPackageDirectory():Promise<string>;
 
 export function ChoosePendingDeploymentRuntimeSecretFile(arg1:desktop.PendingRuntimeSecretFileInput):Promise<string>;
 
@@ -105,6 +109,8 @@ export function ProbeExecutionNodeHostKey():Promise<desktop.HostKeyProbeResult>;
 export function ProbeServerInformation(arg1:string):Promise<desktop.HostKeyProbeResult>;
 
 export function ProbeTargetHostKey(arg1:string):Promise<desktop.HostKeyProbeResult>;
+
+export function ReviewApplicationPackageImport(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string,arg6:string):Promise<desktop.StructuralEditOperationResult>;
 
 export function ReviewEditSession(arg1:string):Promise<desktop.EditOperationResult>;
 

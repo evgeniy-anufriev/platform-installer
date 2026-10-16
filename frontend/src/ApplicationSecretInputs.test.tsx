@@ -26,6 +26,52 @@ const result: RuntimeSecretDescriptorOperation = {
 };
 
 describe("application runtime inputs", () => {
+  it("scopes fields to the selected library while preserving Core fingerprint and requirement IDs", async () => {
+    HTMLDialogElement.prototype.showModal = function () {
+      this.setAttribute("open", "");
+    };
+    HTMLDialogElement.prototype.close = function () {
+      this.removeAttribute("open");
+    };
+    const save = vi.fn().mockResolvedValue(undefined);
+    const other = {
+      ...result.applicationInputs![0],
+      requirementRef: "other-reference",
+      applicationLibraries: ["cspa"],
+      displayLabel: "Other password",
+    };
+    render(
+      <ApplicationSecretInputs
+        disabled={false}
+        libraryId="sdku"
+        load={vi.fn().mockResolvedValue({
+          ...result,
+          applicationInputs: [...result.applicationInputs!, other],
+        })}
+        save={save}
+      />,
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Секреты библиотек" }),
+    );
+    expect(screen.queryByLabelText("Other password")).toBeNull();
+    await userEvent.type(
+      await screen.findByLabelText("Database password"),
+      "synthetic-scoped-only",
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Сохранить в сессии" }),
+    );
+    await waitFor(() =>
+      expect(save).toHaveBeenCalledWith({
+        projectRevision: "revision",
+        descriptorSetFingerprint: "fingerprint",
+        serviceDeployment: "",
+        applicationLibrary: "sdku",
+        values: { "application-secret-reference": "synthetic-scoped-only" },
+      }),
+    );
+  });
   it("submits the exact Core binding through the existing runtime values API and clears the form", async () => {
     HTMLDialogElement.prototype.showModal = function () {
       this.setAttribute("open", "");

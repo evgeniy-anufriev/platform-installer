@@ -70,3 +70,26 @@ An exported project reopens through the existing project-open path.
 
 These are B2 backend primitives. Production UI/package-picker integration is later;
 local Save never grants installation admission.
+
+## C editor integration
+
+ManagedProjectView additionally exposes applicationPackages keyed by kind:exactRef,
+with kind/ref/digest/definition. Definitions are authored package data from the
+existing handle-bound reader/manifest validator, not Ansible-resolved values.
+Template/file contents are not exposed. Opening a form never creates an override.
+
+AmendApplicationLibraryDraft reuses edit-session compare-and-swap, byte/expiry
+bounds and reviewed-plan invalidation. It can only replace/withdraw the exact
+application target; service amendment remains separately restricted.
+
+ReviewApplicationPackageImport binds an existing data-only import preview to
+an empty edit session. Existing CommitStructuralEditPlan remains the sole
+publication path and performs its normal transaction/revision/refresh checks.
+Source bytes are captured at preview; changing the external source afterward
+cannot replace the reviewed bytes. Dirty ordinary edits cannot mix with import.
+
+Application Secrets edits typed credential source descriptors through existing
+slot accounts; source values use the existing descriptor-bound runtime lease.
+The UI may scope visible runtime requirements by declared applicationLibraries,
+while preserving the authoritative descriptor-set fingerprint and requirement IDs.
+Core source rules and runtime descriptor validation remain authoritative.

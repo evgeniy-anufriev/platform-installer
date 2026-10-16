@@ -136,7 +136,7 @@ func checkPackageManifest(records []exportRecord, kind, name, version string) (s
 		if key != "compose_template" && key != "agent_template" && key != "base_compose_template" && key != "base_compose_filename" && key != "base_service" {
 			return "", invalid
 		}
-		if strings.HasSuffix(key, "template") && (!listed[strings.ToLower(value)] || !strings.HasSuffix(value, ".j2")) {
+		if strings.HasSuffix(key, "template") && (!listed[strings.ToLower(value)] || (!strings.HasSuffix(value, ".j2") && !(key == "agent_template" && strings.HasSuffix(value, ".hcl")))) {
 			return "", invalid
 		}
 	}
