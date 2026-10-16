@@ -1,5 +1,6 @@
 """Validate Core-owned values from the native Compose JSON projection."""
 from ansible.parsing.dataloader import DataLoader
+from ansible_collections.platform.core.plugins.module_utils.application_libraries import account_policies
 from ansible_collections.platform.core.plugins.module_utils.application_runtime import validate_compose, validate_config_contents, selected_archive, pinned_registry_reference, agent_config, validate_agent
 
 
@@ -21,6 +22,6 @@ def parent_paths(paths):
 class FilterModule(object):
     def filters(self):
         return {"application_agent_config": agent_config, "application_validate_agent": validate_agent, "application_validate_compose": validate_compose, "application_parent_paths": parent_paths,
-                "application_validate_configs": validate_config_contents,
+                "application_validate_configs": validate_config_contents, "application_account_policies": account_policies,
                 "application_selected_archive": selected_archive_path,
                 "application_pinned_registry_reference": pinned_registry_reference}

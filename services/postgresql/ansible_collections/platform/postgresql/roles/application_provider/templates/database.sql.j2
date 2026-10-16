@@ -46,7 +46,7 @@ BEGIN
     RAISE EXCEPTION 'APPLICATION_PROVIDER_ACCOUNT_CONFLICT';
   END IF;
 {% endif %}
-{% if application_provider_operation != 'preflight' %}
+{% if application_provider_operation != 'preflight' and (account.databaseAccess is not defined or account.databaseAccess | selectattr('database', 'equalto', db.name) | list | length > 0) %}
   IF NOT has_database_privilege(r.oid,current_database(),'CONNECT') THEN
 {% if account.mode == 'managed' and application_provider_operation == 'grants' %}
     GRANT CONNECT ON DATABASE {{ db.name | platform.postgresql.application_sql_identifier }} TO {{ account.name | platform.postgresql.application_sql_identifier }};
@@ -56,6 +56,9 @@ BEGIN
 {% endif %}
   END IF;
 {% endif %}
+{% if account.databaseAccess is defined %}
+{% include 'database_access.sql.j2' %}
+{% else %}
 {% for grant in account.grants %}
 {% if grant.kind != 'schema' %}
   SELECT cc.* INTO c FROM pg_class cc JOIN pg_namespace nn ON nn.oid=cc.relnamespace
@@ -84,6 +87,7 @@ BEGIN
 {% endfor %}
 {% endif %}
 {% endfor %}
+{% endif %}
 {% endfor %}
 END
 $platform_objects$;

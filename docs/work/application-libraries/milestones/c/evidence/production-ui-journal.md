@@ -111,3 +111,175 @@ limitation above; no protected credentials were created or removed. No commit.
 Final read-only screenshot pass inspected the actual binding form at 1440x900 and
 1024x720 after spacing changes. Fixed footer remains visible and binding controls
 wrap inside the editor. No new target or project write in this visual pass.
+### Library screen alignment (2026-10-16)
+
+Owner approved merging Overview/Placement, Docker runtime selection, and compact
+resources grouped by provider deployment with database add/remove/name edits.
+Existing deployments.schema.json resources accepts named PostgreSQL databases,
+PostgreSQL schemas and ClickHouse databases. application_providers.py consumes
+parameters.name and databaseRef; application_library_save.go replaces the resources
+map through the existing UpdateApplicationLibraryDeployment intent. No Core/Go or
+contract changes are necessary. UI deletion removes desired declarations only;
+installed database destruction/rename is not introduced. Dependent references
+remain subject to normal Core verification.
+
+Implemented three library tabs, combined identity/runtime/placement overview,
+unique Docker runtime autofill at creation, compact provider-grouped resource table,
+focused resource editor, two-row resource pagination and collapsed shared-secret
+source rows using the existing CredentialSourceEditor. Existing opaque resource
+fields and schema databaseRef survive edits. Package and host override settings
+remain available under explicit disclosure controls. No new persistence layer.
+
+Real React/Wails add database / Review / Commit / reopen, rename / Commit / reopen
+and delete / Commit / reopen PASS on an isolated copied project. Local evidence:
+.runtime/qa/application-design/library-layout-wails.json. No target contact or
+installation. Initial QA failures were selector timing/accessible-name ambiguity;
+corrected bounded selectors then all three flows passed. Read-only screenshots
+inspected at 1440x900 and 1024x720. At 1024x720 both default Overview and Resources
+bodies have clientHeight=scrollHeight=345; at 1440x900 Overview=524/524. Long lists
+use pages; expanded advanced settings may scroll. Public temporary QA project
+copies retained alongside earlier owner-retained copies; no credentials created.
+Final frontend regression: 200 tests PASS; ESLint PASS; TypeScript and Vite build
+PASS. Seven focused resource tests cover grouping, schema-reference preservation,
+addition, confirmed deletion, duplicate IDs, pagination and rejected-stage dirty
+state. Existing bundle-size advisory unchanged; no test or validation weakened.
+
+### Name-first universal parameters and automatic types (2026-10-16)
+
+Owner retained the universal parameter form but approved name-first addition:
+Add parameter asks only for a name, then creates an ordinary editable row.
+New empty-valued parameters infer boolean/finite safe numeric values; leading-zero
+identifiers, multi-dot versions, IPs, large integers and whitespace-bearing strings
+stay strings. Existing/package scalar types are preserved. A collapsed Advanced
+control offers explicit string/number/boolean selection; object/list creation
+reuses the existing recursive structured editors, not JSON text editing. No
+metadata/type store or Core changes. Invalid typed values cannot be staged;
+normal rejected-stage and dirty/reset guards remain. Host-scope labels now name
+the selected server and all applications affected, rather than membership/slots.
+
+Fourteen focused input cases PASS, covering inference, name-only addition,
+package string preservation/manual override, invalid numeric values, reset and
+object creation. Real React/Wails evidence and full frontend results follow.
+Final real React/Wails name-first addition and Save/reopen PASS for numeric 30,
+string 001 and boolean true on node1 membership overrides. Safe evidence:
+.runtime/qa/application-design/parameter-types-wails.json (three cases PASS).
+Initial bridge refusal did not discard any active draft. Subsequent QA exposed
+that selecting a host remounted and closed the disclosure; explicit disclosure
+state now survives that edit. No target contact or installation. Full frontend
+214 tests PASS, lint PASS, TypeScript/Vite build PASS. Existing generated Wails
+bindings were restored after build-only regeneration; no transport change.
+
+### Database name and provider selector simplification (2026-10-16)
+
+Owner removed separate resource-ID input. New database declarations use their
+name as resources key; duplicate keys/names are rejected. Existing keys remain
+stable when changing the desired database name, preserving account/schema refs
+and owned-resource markers; no implicit identifier migration or data rename.
+Bindings are filtered by the selected resource kind against existing managed
+deployment serviceType metadata. Changing type clears incompatible selection
+(or selects the sole compatible binding). Unknown/mismatched references cannot
+be submitted. Core provider validation remains unchanged.
+
+Eight resource tests PASS, including PG/CH filtering, exclusion of PKI bindings,
+name-derived keys and existing schema reference preservation. Real React/Wails
+name-only add / Save / reopen, rename / Save / reopen and delete / Save / reopen
+PASS; evidence .runtime/qa/application-design/resource-name-wails.json. Actual
+PostgreSQL options contained only qa-postgresql/postgres. No target contact.
+Final frontend regression215 PASS; ESLint and TypeScript/Vite build PASS. No Core/Go changes.
+
+### Library connections table (2026-10-16)
+
+Owner requested table alignment for library Connections. ApplicationBindings now
+renders named rows with reference kind, deployment/profile selector and existing
+Stage/Reset actions. Three-row pages keep the base view compact; paging/addition
+is blocked while another row has unstaged edits. Add connection asks only for its
+name, then exposes its selectors. Vault reference settings are disclosed separately.
+Existing draft update/removal, opaque-field preservation, stale-reference display,
+reference-kind switching and dirty/rejected-save guards remain in place. No Core,
+Go, credential or desired-state contract change.
+
+Five focused table tests PASS. Existing connection test now locates its table row
+instead of the replaced fieldset, preserving the exact neighboring-binding payload
+assertion. Real React/Wails add TLS binding / Review / Commit / reopen and reset /
+Commit / reopen PASS on an isolated public project copy, no targets contacted.
+Evidence .runtime/qa/application-design/connections-table-wails.json. Screenshots
+inspected at 1440x900 and 1024x720; at 1024 Connections clientHeight=scrollHeight=345.
+Final frontend regression220 PASS; ESLint, TypeScript and Vite production frontend build PASS.
+
+### Unified Vault connection and scrolling (owner revision 2026-10-16)
+
+Owner superseded paged Connections with one scrollable service table. All binding
+rows remain mounted; the header is sticky and the draft footer stays outside the
+scroll region. Separate Vault reference form removed. The active vault_ref.binding
+is marked on its existing binding row. Other bindings targeting managed Vault
+deployments expose Select for secrets, saving the same existing vault_ref.binding
+through UpdateApplicationLibraryDeployment. Vault credentials, paths and secrets
+are not edited or fetched by this action. No new Core field or desired-state store.
+Existing service binding updates/reset and reference validation remain unchanged.
+
+Seven focused tests PASS: complete nonpaged list, Vault alias selection, sibling
+preservation, reference kind changes, reset and rejected-stage dirty behavior.
+Real React/Wails Vault binding selection / Review / Commit / reopen PASS; restoring
+the original alias and removing the temporary binding also PASS. Evidence:
+.runtime/qa/application-design/connections-vault-scroll-wails.json. The first QA
+attempt assumed qa-vault, while this fixture correctly uses qa-vault-consumer;
+QA now reads the selected deployment from the actual existing binding. No
+production authority or target change. At 1024x720 the list has seven rows and
+scrolls internally (201px client / 301px content); page body remains 345/345.
+Screenshot inspected. Full frontend222 PASS, ESLint and TypeScript/Vite build PASS.
+
+### Instance General screen (owner-approved 2026-10-16)
+
+General now contains a compact image override/reset row, read-only Core instance
+identity, authored/package summary (placements, port pairs, declared connection
+count), and a typed readiness form. Generic parameters moved intact to a dedicated
+Parameters tab; no parameter value is removed from the project. Readiness exposes
+only contract fields mode/container|healthcheck, retries1..60 and delay1..30,
+with package sources, explicit edit/stage and section reset. Missing package
+values show Core default placeholders without inventing effective defaults.
+Existing override/remove intents and sibling-dirty guards are reused.
+
+Owner explicitly chose read-only instance identity after contract inspection:
+Core currently derives application-name + library-ID and has no name override.
+UI reads the existing Core instance-map key by slotId; absent evidence displays
+Not yet calculated. No rename, identity migration or Core extension authorized.
+
+Focused readiness5 and editor11 cases PASS, including contract bounds, absent
+package defaults, package/override behavior, rejected saves/reset, separate
+parameters and Core-supplied identity. Existing image tests retain exact payload
+assertions after the label change. Real React/Wails image+readiness Stage / Review /
+Commit / reopen, reset / Commit / reopen and separate Parameters tab PASS.
+Evidence .runtime/qa/application-design/instance-general-wails.json. Synthetic
+image change only in a copied project, no target contact/pull/install. Actual
+screenshots inspected at1440x900 and1024x720; final small-screen content326/326
+(client/scroll), footer visible. Public QA copies retained; no credentials created.
+Final full frontend229 PASS; ESLint and TypeScript/Vite build PASS. No Core/Go changes or EXE rebuild in this screen task.
+
+### Ports source display and Add port (2026-10-16)
+
+Owner requested the missing-port fix for cspa/apigateway. UI previously enumerated
+only application defaults and authored instance ports. It now shows distinct raw
+source rows for application package, library slot override, instance override,
+host placement override, and existing Core placement ports with revision labels.
+These sources are never merged into an invented effective Ansible result. General
+shows a bounded source-labelled preview; exact resolved server pairs remain Core
+projection data. Partial source rows explicitly show an em dash for the absent
+side. No runtime container discovery or target action is implied.
+
+Add port stages a complete named published/container pair through the existing
+SetApplicationLibraryOverride property ports operation. Optional inherited/Core
+source copy is an explicit operator action, not resolution. Duplicate authored
+listeners are rejected; current per-side edit/reset controls remain unchanged.
+Range/integer and ID input guards preserve contract bounds. Empty settings show
+an explicit Add port / Project Verify explanation rather than an empty editor.
+
+Six focused port cases and twelve editor cases PASS, covering source separation,
+library/host/Core data without package or instance defaults, complete-pair payload,
+empty state, ranges, duplicate protection and rejected-stage dirty state.
+Real React/Wails empty-instance state, Add complete pair / Review / Commit /
+reopen, source-labelled General summary and original-pair restoration PASS on an
+isolated public cspa/gateway project copy. Evidence:
+.runtime/qa/application-design/ports-sources-wails.json. No target contact,
+container restart or installation. Screenshots inspected at1440x900 and1024x720;
+ports editor body can scroll, keeping the existing fixed draft footer visible.
+Final full frontend236 PASS; ESLint, TypeScript/Vite build PASS. No Core/Go or target changes. EXE not rebuilt in this task.

@@ -16,6 +16,13 @@ Applications master-detail, existing guarded edits/import, runtime-secret input 
 actual React/Wails acceptance. C1 is design/owner approval; C2–C4 are separately
 gated implementation and QA. No second desired-state store or new execution path.
 
+The owner-approved [Secrets access extension](work/application-libraries/milestones/c/secrets-access-technical-plan.md)
+adds a compact account/access UI, PostgreSQL multi-DB batch/default grants and
+bounded ClickHouse grant reduction using existing provider hooks/witnesses.
+Operator-assigned object ownership remains permitted. Gates include independent
+review, real credential/Agent flow and isolated permission/revoke/repeat tests;
+no infrastructure Apply or new execution mode is introduced.
+
 Local status is operational evidence, never a second desired-state or Start authority.
 When saved infrastructure Verify evidence is absent or stale, the library-only plan
 includes fixed infrastructure Verify before library Apply/Verify in the same run;

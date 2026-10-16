@@ -56,6 +56,83 @@ function Harness({
   );
 }
 describe("application secret bindings", () => {
+  it("edits credential variables inline and resets only that credential", async () => {
+    const save = vi.fn(async () => true);
+    const props = {
+      value: initial,
+      defaults,
+      accounts: [accounts],
+      disabled: false,
+      onSave: save,
+      onDirtyChange: vi.fn(),
+      credential: { account: "postgres", field: "username" },
+    };
+    render(<ApplicationSecretBindings {...props} />);
+    expect(
+      screen.queryByText("Переменные приложения из credentials"),
+    ).toBeNull();
+    await userEvent.click(
+      screen.getByRole("button", {
+        name: "Переопределить переменные postgres username",
+      }),
+    );
+    const input = screen.getByLabelText("Переменные postgres username");
+    await userEvent.clear(input);
+    await userEvent.type(input, "DB_USER");
+    await userEvent.click(
+      screen.getByRole("button", {
+        name: "Сохранить переменные postgres username",
+      }),
+    );
+    expect(save).toHaveBeenLastCalledWith({
+      ...initial,
+      secret_bindings: {
+        CUSTOM_SHARED: initial.secret_bindings.CUSTOM_SHARED,
+        DB_USER: { source: { account: "postgres", field: "username" } },
+      },
+    });
+    await userEvent.click(
+      screen.getByRole("button", {
+        name: "Сбросить переменные postgres username к default",
+      }),
+    );
+    expect(save).toHaveBeenLastCalledWith({
+      ...initial,
+      secret_bindings: { CUSTOM_SHARED: initial.secret_bindings.CUSTOM_SHARED },
+    });
+  });
+  it("keeps packaged names and rejects collisions with other bindings inline", async () => {
+    const save = vi.fn(async () => true);
+    render(
+      <ApplicationSecretBindings
+        value={initial}
+        defaults={defaults}
+        accounts={[accounts]}
+        disabled={false}
+        onSave={save}
+        onDirtyChange={vi.fn()}
+        credential={{ account: "postgres", field: "password" }}
+      />,
+    );
+    expect(screen.getByText("PG_PASSWORD")).toBeTruthy();
+    await userEvent.click(
+      screen.getByRole("button", {
+        name: "Переопределить переменные postgres password",
+      }),
+    );
+    await userEvent.type(
+      screen.getByLabelText("Переменные postgres password"),
+      "CUSTOM_SHARED",
+    );
+    expect(
+      (
+        screen.getByRole("button", {
+          name: "Сохранить переменные postgres password",
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(true);
+    expect(save).not.toHaveBeenCalled();
+  });
   it("overrides and resets a package binding without changing shared bindings or Agent settings", async () => {
     const save = vi.fn();
     render(<Harness save={save} />);

@@ -238,6 +238,50 @@ application-aware planning and the mixed execution barrier; the original A1
 rejection is historical, not a current restriction.
 See [A1 implementation notes](work/application-libraries/milestones/a1/evidence/a1-test-journal.md).
 
+### Application account database access
+
+The existing account contract accepts PostgreSQL `databaseAccess`, an array of
+`{databaseRef, privileges, additionalCreatorRoles?}`. Each databaseRef selects a
+managed library resource on the account's provider. Privileges are SELECT,
+INSERT, UPDATE and DELETE. One managed account/credential is retained across
+all entries. An empty array removes managed object access without deleting the
+account, database or data; normal PUBLIC CONNECT/TEMPORARY are unchanged.
+
+An account declaration cannot contain both databaseAccess and legacy
+databaseRef/grants. Core makes the grant-policy alternatives atomic after the
+ordinary Ansible combine, in the same existing layer order. An explicit new
+policy replaces inherited legacy policy, not inherited credentials. Reset
+restores the package policy. There is no automatic legacy-access broadening.
+The UI requires confirmation and ordinary Review/Save for this switch.
+
+The PostgreSQL provider requires capability `service.postgresql.database-access`.
+All existing user schemas/tables/sequences are reconciled in bounded SQL batches;
+database-wide default privileges cover future schemas/tables/sequences created
+by the library owner and explicitly listed, validated same-library creator roles.
+Member roles must actually SET ROLE when creating objects. Unknown future roles
+are not covered. INSERT implies sequence USAGE, not sequence UPDATE/setval.
+System schemas, foreign ownership, PUBLIC DML, membership and unsupported grants
+retain their conflict guards. Per the owner decision, the app account may itself
+own objects/be a creator: its ownership/implicit grant authority is preserved,
+and deleting DML access does not claim to remove that owner authority. No
+ownership transfer or elevated role attributes are performed by this feature.
+
+ClickHouse retains its existing grants format, supporting databaseRef plus
+tables `['*']` and SELECT/INSERT. For managed accounts, these direct privileges
+in the same library's managed databases are authoritative. The existing
+UUID/marker witness must verify both account and every database before a
+calculated REVOKE. Foreign database grants, roles, grant option, column grants
+and partial revokes remain conflicts, never cleanup candidates. Observed grants
+for other accounts are untouched. Verify is readonly and refuses any remaining
+delta. Existing accounts retain their prior non-mutating policy. Redis/Sentinel
+retain the existing structured ACL contract and command restrictions.
+
+Vault paths and stored username/password fields are unchanged. Application
+variables use existing secret_bindings; runtime values use only the existing
+lease, never project data. See the [access plan](work/application-libraries/milestones/c/secrets-access-technical-plan.md)
+and [journal](work/application-libraries/milestones/c/evidence/secrets-access-journal.md)
+for current implementation acceptance; this contract is not a QA PASS claim.
+
 B2 adds bounded local library edits through the existing structural writer and
 explicit data-only package import. Package bytes participate in local revision and
 portable export. Save remains local and does not prove Core validity or admission.

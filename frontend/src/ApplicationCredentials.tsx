@@ -1,6 +1,10 @@
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { objectValue } from "./application-draft";
 import { ApplicationValueFields } from "./ApplicationValueFields";
+import {
+  ApplicationAccountAccess,
+  ApplicationRedisAccess,
+} from "./ApplicationAccountAccess";
 
 type Obj = Record<string, unknown>;
 export function CredentialSourceEditor({
@@ -12,6 +16,7 @@ export function CredentialSourceEditor({
   onSave,
   onReset,
   onDirtyChange,
+  compact = false,
 }: {
   label: string;
   source: Obj;
@@ -21,6 +26,7 @@ export function CredentialSourceEditor({
   onSave: (source: Obj) => Promise<boolean>;
   onReset: () => Promise<boolean>;
   onDirtyChange: (dirty: boolean) => void;
+  compact?: boolean;
 }) {
   const initial = Object.keys(source).length ? source : packageSource;
   const [kind, setKind] = useState(
@@ -56,14 +62,29 @@ export function CredentialSourceEditor({
     }
   };
   return (
-    <fieldset>
+    <fieldset
+      className={
+        compact
+          ? `application-credential-source${keys.length > 1 ? " application-credential-source-expanded" : ""}`
+          : undefined
+      }
+      title={
+        compact
+          ? `Пакет: ${String(packageSource.kind ?? "Не объявлен")} · ${Object.keys(source).length ? "Явное переопределение" : "Наследуется"}`
+          : undefined
+      }
+    >
       <legend>{label}</legend>
-      <p>
-        Пакет: {String(packageSource.kind ?? "Не объявлен")} ·{" "}
-        {Object.keys(source).length ? "Явное переопределение" : "Наследуется"}
-      </p>
+      {!compact && (
+        <p>
+          Пакет: {String(packageSource.kind ?? "Не объявлен")} ·{" "}
+          {Object.keys(source).length ? "Явное переопределение" : "Наследуется"}
+        </p>
+      )}
       <label>
-        Источник
+        <span className={compact ? "application-credential-label" : undefined}>
+          Источник
+        </span>
         <select
           disabled={disabled}
           value={kind}
@@ -82,8 +103,17 @@ export function CredentialSourceEditor({
       </label>
       {keys.map((key) => (
         <label key={key}>
-          {labels[key]}
+          <span
+            className={
+              compact && keys.length <= 1
+                ? "application-credential-label"
+                : undefined
+            }
+          >
+            {labels[key]}
+          </span>
           <input
+            placeholder={compact ? labels[key] : undefined}
             disabled={disabled}
             value={String(values[key] ?? "")}
             autoComplete="off"
@@ -94,28 +124,40 @@ export function CredentialSourceEditor({
           />
         </label>
       ))}
-      <button
-        disabled={
-          disabled ||
-          !dirty ||
-          keys.some((k) => !String(values[k] ?? "").trim())
-        }
-        onClick={() =>
-          void onSave({
-            kind,
-            ...Object.fromEntries(keys.map((k) => [k, values[k]])),
-          }).then(finish)
+      <div
+        className={
+          compact
+            ? "application-credential-actions"
+            : "application-credential-actions-default"
         }
       >
-        В черновик
-      </button>
-      <button
-        className="outline"
-        disabled={disabled || !Object.keys(source).length}
-        onClick={() => void onReset().then(finish)}
-      >
-        Сбросить к default
-      </button>
+        <button
+          aria-label="В черновик"
+          title="В черновик"
+          disabled={
+            disabled ||
+            !dirty ||
+            keys.some((k) => !String(values[k] ?? "").trim())
+          }
+          onClick={() =>
+            void onSave({
+              kind,
+              ...Object.fromEntries(keys.map((k) => [k, values[k]])),
+            }).then(finish)
+          }
+        >
+          {compact ? "✓" : "В черновик"}
+        </button>
+        <button
+          aria-label="Сбросить к default"
+          title="Сбросить к default"
+          className="outline"
+          disabled={disabled || !Object.keys(source).length}
+          onClick={() => void onReset().then(finish)}
+        >
+          {compact ? "↺" : "Сбросить к default"}
+        </button>
+      </div>
     </fieldset>
   );
 }
@@ -128,7 +170,10 @@ export function ApplicationCredentials({
   onSave,
   onDirtyChange,
   bindings,
-  onProviderSecrets,
+  resources = {},
+  deploymentTypes = {},
+  variableBindings = {},
+  renderVariables,
 }: {
   defaults: Obj;
   authored: Obj;
@@ -137,7 +182,10 @@ export function ApplicationCredentials({
   onSave: (accounts: Obj) => Promise<boolean>;
   onDirtyChange: (dirty: boolean) => void;
   bindings: Obj;
-  onProviderSecrets?: (deploymentId: string) => void;
+  resources?: Obj;
+  deploymentTypes?: Record<string, string>;
+  variableBindings?: Obj;
+  renderVariables?: (account: string, field: string) => ReactNode;
 }) {
   const dirtyFields = useRef(new Set<string>());
   const mark = (key: string, dirty: boolean) => {
@@ -175,6 +223,13 @@ export function ApplicationCredentials({
           );
           const credentials = objectValue(account.credentials);
           const base = objectValue(packageAccount.credentials);
+          const binding = String(
+            objectValue(connections[name]).library_binding ?? name,
+          );
+          const deployment = String(
+            objectValue(bindings[binding]).deploymentRef ?? "",
+          );
+          const serviceType = deploymentTypes[deployment] ?? "";
           const save = (value: Obj) => {
             const next = { ...accounts };
             if (Object.keys(value).length) next[name] = value;
@@ -182,91 +237,86 @@ export function ApplicationCredentials({
             return onSave(next);
           };
           return (
-            <section key={name}>
-              <h3>{name}</h3>
-              <p>
-                Подключение:{" "}
-                {String(objectValue(connections[name]).library_binding ?? name)}
-              </p>
-              {Object.keys(packageAccount).length > 0 && (
-                <label>
-                  Режим аккаунта · явное переопределение
-                  <select
-                    disabled={disabled}
-                    value={String(account.mode ?? "")}
-                    onChange={(event) =>
-                      void save(
-                        event.target.value
-                          ? {
-                              ...account,
-                              mode: event.target.value,
-                              credentials,
-                            }
-                          : {},
-                      )
-                    }
-                  >
-                    <option value="">Пакет · сброс аккаунта к defaults</option>
-                    <option value="managed">managed</option>
-                    <option value="existing">existing</option>
-                  </select>
-                </label>
-              )}
-              {typeof objectValue(
-                bindings[
-                  String(objectValue(connections[name]).library_binding ?? name)
-                ],
-              ).deploymentRef === "string" &&
-                onProviderSecrets && (
-                  <button
-                    className="outline"
-                    disabled={disabled}
-                    onClick={() =>
-                      onProviderSecrets(
-                        String(
-                          objectValue(
-                            bindings[
-                              String(
-                                objectValue(connections[name])
-                                  .library_binding ?? name,
-                              )
-                            ],
-                          ).deploymentRef,
-                        ),
-                      )
-                    }
-                  >
-                    Административные секреты сервиса
-                  </button>
-                )}
-              {Object.keys(packageAccount).length > 0 && (
-                <ApplicationValueFields
-                  label="Режим и grants"
-                  value={Object.fromEntries(
-                    Object.entries(account).filter(([key]) =>
-                      ["databaseRef", "grants"].includes(key),
-                    ),
+            <section className="application-account-card" key={name}>
+              <h3 title={`Подключение: ${binding}`}>
+                {deployment || name} <small>{serviceType}</small>
+              </h3>
+              <details className="application-account-settings">
+                <summary>Настройки</summary>
+                <div className="application-account-settings-content">
+                  {Object.keys(packageAccount).length > 0 && (
+                    <label>
+                      Управление учётной записью
+                      <select
+                        aria-label="Управление учётной записью"
+                        disabled={disabled}
+                        value={String(account.mode ?? "")}
+                        onChange={(event) =>
+                          void save(
+                            event.target.value
+                              ? {
+                                  ...account,
+                                  mode: event.target.value,
+                                  credentials,
+                                }
+                              : {},
+                          )
+                        }
+                      >
+                        <option value="">Из пакета</option>
+                        <option value="managed">Создавать и настраивать</option>
+                        <option value="existing">
+                          Использовать существующую
+                        </option>
+                      </select>
+                    </label>
                   )}
-                  defaults={Object.fromEntries(
-                    Object.entries(packageAccount).filter(([key]) =>
-                      ["databaseRef", "grants"].includes(key),
-                    ),
+                  {Object.keys(packageAccount).length > 0 && (
+                    <details className="application-legacy-grants">
+                      <summary>Расширенные настройки аккаунта</summary>
+                      <ApplicationValueFields
+                        label="Режим и grants"
+                        value={Object.fromEntries(
+                          Object.entries(account).filter(([key]) =>
+                            [
+                              "databaseRef",
+                              "grants",
+                              "databaseAccess",
+                            ].includes(key),
+                          ),
+                        )}
+                        defaults={Object.fromEntries(
+                          Object.entries(packageAccount).filter(([key]) =>
+                            [
+                              "databaseRef",
+                              "grants",
+                              "databaseAccess",
+                            ].includes(key),
+                          ),
+                        )}
+                        excludeKeys={["credentials"]}
+                        disabled={disabled || !account.mode}
+                        onDirtyChange={(dirty) => mark(name + "options", dirty)}
+                        onSave={(metadata) =>
+                          save({
+                            ...Object.fromEntries(
+                              Object.entries(account).filter(
+                                ([key]) =>
+                                  ![
+                                    "databaseRef",
+                                    "grants",
+                                    "databaseAccess",
+                                  ].includes(key),
+                              ),
+                            ),
+                            ...metadata,
+                          })
+                        }
+                      />
+                    </details>
                   )}
-                  excludeKeys={["credentials"]}
-                  disabled={disabled || !account.mode}
-                  onDirtyChange={(dirty) => mark(name + "options", dirty)}
-                  onSave={(metadata) =>
-                    save({
-                      ...Object.fromEntries(
-                        Object.entries(account).filter(
-                          ([key]) => !["databaseRef", "grants"].includes(key),
-                        ),
-                      ),
-                      ...metadata,
-                    })
-                  }
-                />
-              )}
+                </div>
+              </details>
               {Object.keys({
                 ...base,
                 ...credentials,
@@ -279,50 +329,119 @@ export function ApplicationCredentials({
                   bindings библиотеки.
                 </p>
               ) : (
-                (["username", "password"] as const)
-                  .filter(
-                    (field) =>
-                      Object.hasOwn(base, field) ||
-                      Object.hasOwn(credentials, field),
-                  )
-                  .map((field) => {
-                    const source = objectValue(
-                      objectValue(credentials[field]).source,
-                    );
-                    return (
-                      <CredentialSourceEditor
-                        key={name + field + JSON.stringify(source)}
-                        label={
-                          field === "username" ? "Имя пользователя" : "Пароль"
-                        }
-                        source={source}
-                        packageSource={objectValue(
-                          objectValue(base[field]).source,
-                        )}
-                        allowLiteral={field === "username"}
-                        disabled={disabled || !account.mode}
-                        onDirtyChange={(dirty) => mark(name + field, dirty)}
-                        onSave={(source) =>
-                          save({
-                            ...account,
-                            credentials: {
-                              ...credentials,
-                              [field]: { source },
-                            },
-                          })
-                        }
-                        onReset={() => {
-                          const nextCredentials = { ...credentials };
-                          delete nextCredentials[field];
-                          const nextAccount = { ...account };
-                          if (Object.keys(nextCredentials).length)
-                            nextAccount.credentials = nextCredentials;
-                          else delete nextAccount.credentials;
-                          return save(nextAccount);
-                        }}
-                      />
-                    );
-                  })
+                <table className="application-credential-table">
+                  <thead>
+                    <tr>
+                      <th>Поле</th>
+                      <th>Переменные приложения</th>
+                      <th>Источник и значение / ссылка</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(["username", "password"] as const)
+                      .filter(
+                        (field) =>
+                          Object.hasOwn(base, field) ||
+                          Object.hasOwn(credentials, field),
+                      )
+                      .map((field) => {
+                        const source = objectValue(
+                          objectValue(credentials[field]).source,
+                        );
+                        return (
+                          <tr key={name + field + JSON.stringify(source)}>
+                            <th>{field}</th>
+                            <td>
+                              {renderVariables
+                                ? renderVariables(name, field)
+                                : Object.entries(variableBindings)
+                                    .filter(([, value]) => {
+                                      const binding = objectValue(
+                                        objectValue(value).source,
+                                      );
+                                      return (
+                                        binding.account === name &&
+                                        binding.field === field
+                                      );
+                                    })
+                                    .map(([variable]) => (
+                                      <code key={variable}>{variable} </code>
+                                    ))}
+                            </td>
+                            <td>
+                              <CredentialSourceEditor
+                                compact
+                                label={
+                                  field === "username"
+                                    ? "Имя пользователя"
+                                    : "Пароль"
+                                }
+                                source={source}
+                                packageSource={objectValue(
+                                  objectValue(base[field]).source,
+                                )}
+                                allowLiteral={field === "username"}
+                                disabled={disabled || !account.mode}
+                                onDirtyChange={(dirty) =>
+                                  mark(name + field, dirty)
+                                }
+                                onSave={(source) =>
+                                  save({
+                                    ...account,
+                                    credentials: {
+                                      ...credentials,
+                                      [field]: { source },
+                                    },
+                                  })
+                                }
+                                onReset={() => {
+                                  const nextCredentials = { ...credentials };
+                                  delete nextCredentials[field];
+                                  const nextAccount = { ...account };
+                                  if (Object.keys(nextCredentials).length)
+                                    nextAccount.credentials = nextCredentials;
+                                  else delete nextAccount.credentials;
+                                  return save(nextAccount);
+                                }}
+                              />
+                            </td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
+              )}
+              <ApplicationAccountAccess
+                key={
+                  name +
+                  JSON.stringify([account.databaseAccess, account.grants])
+                }
+                serviceType={serviceType}
+                deployment={deployment}
+                resources={resources}
+                bindings={bindings}
+                account={account}
+                inherited={packageAccount}
+                disabled={disabled || !account.mode}
+                onDirtyChange={(dirty) => mark(name + "access", dirty)}
+                onSave={(metadata) => {
+                  const next = { ...account };
+                  for (const key of ["databaseRef", "grants", "databaseAccess"])
+                    delete next[key];
+                  return save({ ...next, ...metadata });
+                }}
+              />
+              {serviceType === "redis" && (
+                <ApplicationRedisAccess
+                  key={name + JSON.stringify(account.grants)}
+                  value={objectValue(account.grants ?? packageAccount.grants)}
+                  sentinel={
+                    objectValue(bindings[binding]).connectionRef === "sentinel"
+                  }
+                  disabled={disabled || !account.mode}
+                  onDirtyChange={(dirty) => mark(name + "acl", dirty)}
+                  onSave={(grants) => save({ ...account, grants })}
+                />
               )}
             </section>
           );

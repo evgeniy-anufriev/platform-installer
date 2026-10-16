@@ -673,3 +673,18 @@ Singleton role inputs remain compatible. Every backend and public endpoint retai
 its original sequential checks. No distributed rollback, scheduler, workers, health
 cache, new public DTO or UI performance controls are introduced. See the
 [P2 plan](work/application-libraries/apply-performance-plan.md) for safety and QA gates.
+
+## ADR-043: Application database access reuses provider authority
+
+Owner approved the Secrets access plan on2026-10-16 and authorized SEC-D02
+reconciliation while rejecting SEC-D01 as an ownership prohibition. Ordinary
+project accounts remain canonical. Core atomically selects legacy or database
+grant policy after the existing Ansible combine; credentials and runtime lease
+are unchanged. PostgreSQL uses batch GRANT and database-wide default privileges
+for declared creator roles. Operator-assigned object ownership is permitted and
+is not represented as a revocable DML grant. No ownership transfer is inferred.
+ClickHouse's existing UUID/marker witness bounds direct SELECT/INSERT REVOKE to
+the managed account and its managed library databases, retaining foreign/role/
+grant-option/partial/column conflicts and the existing ON CLUSTER execution.
+No grant ledger, daemon, event trigger, new DTO/store or parallelism is introduced.
+Acceptance is tracked only in CURRENT_STATE and the access journal.

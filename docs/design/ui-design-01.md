@@ -146,6 +146,30 @@ acceptance. Production contracts are unchanged; no direct container controls are
 
 ### Existing-contract secret binding editor (2026-10-16)
 
+The production HTML mockup now includes the subsequent UX audit refinement:
+compact deployment cards with inline credential variable aliases/reset, session
+password entry next to its source, and database access tables (four PostgreSQL
+and two ClickHouse example databases), plus Redis ACL. It removes instance Vault
+binding/path editing, administrative service credentials and generic Agent
+settings. Account mode is separate from a confirmed whole-account reset.
+General shows readiness instead of application parameters; endpoint and Core
+diagnostics are secondary disclosures. The footer distinguishes form input,
+draft, review and save. All values/results remain synthetic and memory-only;
+this design is not evidence of production implementation or target acceptance.
+Browser checks passed at 1440/1024 widths, including exclusion of runtime values
+from Review; rendered screenshots were inspected.
+Owner follow-up removes the instance Connections tab from this mockup. General
+contains a service/deployment summary linking to library connection settings;
+Secrets retains deployment headings. Library connection ownership is unchanged.
+The following owner refinement also removes the instance Ports tab from the
+mockup: General now contains image, compact library/service summary, readiness,
+Host/Container ports and endpoint hostname/port/protocol. The redundant image
+scope hint is removed. General fits without vertical scrolling at 1024x900 in
+the browser check; 1440x900 was rendered and visually inspected as well.
+Owner baseline: 1440 and 1024 CSS pixels are the primary desktop widths. Below
+1024 keep a minimum 1024-pixel layout with horizontal scrolling; do not add a
+smaller/mobile composition. This is the acceptance rule for subsequent UI work.
+
 The production Secrets tab edits `overrides.provisioner.secret_bindings` through
 the existing writer. A row binds a process variable to an account's `username`
 or `password`; credential values, KV document paths and Vault fields are unchanged.
@@ -155,6 +179,22 @@ package variables: another name does not rename or delete the original package
 variable. The UI states this explicitly. Other bindings (including shared secrets)
 and Agent settings remain untouched. Core generates the existing process-supervisor
 env_template; no new resolver, credential persistence, Go DTO or Core semantics.
+
+### Secrets account/access refinement (2026-10-16)
+
+The approved follow-up extends Core access semantics while retaining the preceding
+credential binding contract. The instance Secrets tab groups by provider deployment
+and connection alias, with username/password source rows and application-variable
+names, then a flat database/rights/actions table. No schema/object columns or
+account per database. Add/Edit/Delete stages ordinary account settings; PG offers
+SELECT/INSERT/UPDATE/DELETE, CH SELECT/INSERT. PG rights apply to all user schemas
+and existing/future objects for the owner and explicit creator roles. An explicit
+legacy-policy switch requires confirmation and Review; opening never broadens
+grants. Ownership is permitted: the UI states that removing DML does not remove
+owner authority. Redis/Sentinel use the existing structured commands/keys/channels
+editor, preserving provider restrictions. Runtime input remains inline through
+the existing lease; no KV rename/new secret store is implied. Current evidence
+and outstanding gates are in the Secrets access journal, not this design section.
 
 ## 1. Product principle
 
@@ -819,3 +859,55 @@ C owner refinement: add application Secrets for credentials of every declared
 connection, using typed source settings and the existing runtime input dialog.
 Connections without username/password requirements show their actual TLS/PKI/Vault
 binding contract. Do not infer a password requirement from a service name.
+
+### Library overview and shared resources (approved 2026-10-16)
+
+Library Overview includes placement and a Docker deployment selector. A unique
+Docker choice autofills new-library creation; an existing authored runtime is
+preserved. Resources use deployment-grouped rows, explicit Add database,
+Configure and Remove actions, and a focused name/binding/mode editor. Two-row pages
+keep large lists bounded. Shared secret sources reuse the existing editor behind
+named disclosure rows. Changes use the existing project draft/Review/Save flow;
+removing a desired resource does not delete an installed database, and changing
+its desired name does not promise database migration. Core checks provider and
+reference consistency. No public contract or Core change.
+
+Universal parameter addition is name-first: Add parameter asks for the name and
+then exposes its value row. Types of existing/package values remain unchanged;
+new values infer booleans and safe decimal numbers, keeping ambiguous identifiers
+as strings. The detected type is visible; manual scalar type selection and
+structured object/list creation are under Advanced. This is input conversion,
+not a replacement for Core schema validation or Ansible resolution.
+New database resources use the entered database name as their resource key; the
+form has no separate ID input. Existing keys stay stable on name changes to
+preserve existing references. Provider binding choices are filtered by selected
+database type using managed deployment serviceType metadata, with authoritative
+provider validation remaining in Core.
+
+Library Connections uses a paged table: named binding, service/TLS reference type,
+selected deployment/profile and Stage/Reset actions. Add connection asks for a
+name before editing its row. Unstaged row edits prevent paging away; current
+reference semantics and project candidates remain unchanged. Vault reference
+settings are in a separate disclosure below the table.
+
+Owner revision: Connections now uses a single internally scrolling table rather
+than pages. Vault is an ordinary binding row, with the active secret-store alias
+marked inline; Select for secrets updates existing vault_ref.binding. The separate
+Vault reference form is removed. This supersedes the prior paged-table design.
+
+### Instance General screen (approved 2026-10-16)
+
+General contains image override/reset, a read-only instance identity from the
+last Core projection, compact placement/port/connection summary and typed
+readiness fields. Parameters live on a dedicated tab. Readiness edits existing
+mode, retries and delay only; defaults are displayed from package data, omitted
+Core defaults are not guessed, and existing override/reset operations persist
+changes. Owner deferred editable instance naming: show Core-projected identity
+or Not yet calculated. No Core contract extension or UI-generated instance name.
+
+Ports now displays application-package, library-slot, instance and host settings
+as separate labelled sources. Existing Core placement ports are shown separately
+with their saved revision. General shows a bounded labelled preview, not a new
+UI precedence resolver. Add port accepts name and Host → Container, stages the
+complete pair through existing override intents, and preserves per-side resets.
+When no sources declare ports, show a clear empty state and Add port action.

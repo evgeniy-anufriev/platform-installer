@@ -105,6 +105,19 @@ alias, and conflicting nonempty roots fail. See
 [runtime fixture](../examples/valid/application-runtime/README.md) and
 [A2 evidence](work/application-libraries/milestones/a2/evidence/a2-test-journal.md).
 
+The account-access extension reuses these provider hooks. PostgreSQL's optional
+databaseAccess policy batches grants/default privileges within each owned DB;
+removed access stays in the hook's bounded reconciliation scope. An explicit
+grant-policy switch is normalized after ordinary Ansible combine; no Go/UI
+precedence resolver is added. Object owner authority is preserved when the
+operator assigns ownership to the application account. ClickHouse managed
+SELECT/INSERT deltas are reconciled only for the witnessed account and its
+library's witnessed managed DBs; cluster revokes/grants share the existing native
+batch and per-server verification. Verify performs no grants or probe DDL.
+The [canonical project contract](project-contract.md#application-account-database-access)
+defines authority and compatibility; capability gating prevents stale runtimes
+from silently ignoring the new PostgreSQL policy.
+
 A7 adds target-free application descriptions to the existing machine plan and
 runtime-secret descriptor entrypoints. Nonempty libraries use plan v1alpha4 and
 descriptor v1alpha3; empty libraries preserve the infrastructure versions.

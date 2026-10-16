@@ -56,7 +56,13 @@
           combine(application_job.slot.overrides | default({}), recursive=true, list_merge='replace') |
           combine(application_job.instance.overrides | default({}), recursive=true, list_merge='replace') |
           combine(({'accounts': application_job.instance.accounts} if application_job.instance.accounts is defined else {}), recursive=true, list_merge='replace') |
-          combine(application_job.hostOverride, recursive=true, list_merge='replace')
+          combine(application_job.hostOverride, recursive=true, list_merge='replace') |
+          platform.core.application_account_policies([
+            _application_package.platform_application_definition.defaults,
+            application_job.slot.overrides | default({}),
+            application_job.instance.overrides | default({}),
+            {'accounts': application_job.instance.accounts | default({})},
+            application_job.hostOverride])
       }] }}
   no_log: true
   become: false

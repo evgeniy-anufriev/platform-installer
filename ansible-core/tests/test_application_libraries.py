@@ -24,6 +24,19 @@ def load(path):
 
 
 class ApplicationLibrariesTest(unittest.TestCase):
+    def test_account_policy_switch_is_atomic_without_replacing_credentials(self):
+        base = {'accounts': {'pg': {'databaseRef': 'db', 'grants': [{'schema':'api','privileges':['USAGE']}],
+                                    'credentials': {'username': 'unchanged'}}}}
+        override = {'accounts': {'pg': {'databaseAccess': []}}}
+        merged = copy.deepcopy(base)
+        merged['accounts']['pg']['databaseAccess'] = []
+        actual = APP.account_policies(merged, [base, override])
+        self.assertEqual({'databaseAccess': [], 'credentials': {'username':'unchanged'}},actual['accounts']['pg'])
+        self.assertIn('databaseRef',base['accounts']['pg'])
+        self.assertNotIn('databaseAccess',APP.account_policies(merged,[override,base])['accounts']['pg'])
+        with self.assertRaises(ValueError):
+            APP.account_policies(merged,[{'accounts': {'pg': {'databaseAccess':[], 'grants':[]}}}])
+
     def setUp(self):
         self.desired = load(os.path.join(FIXTURE, "inventory/group_vars/all/platform-installer.yml"))["platform_desired_state"]
         self.memberships = {host: load(os.path.join(FIXTURE, "inventory/host_vars", host, "platform-installer.yml"))["platform_application_libraries"] for host in ("node1", "node2")}

@@ -28,8 +28,7 @@ export function ApplicationValueFields({
     onDirtyChange(dirtyFields.current.size > 0);
   };
   const [name, setName] = useState("");
-  const [type, setType] = useState("string");
-  const [text, setText] = useState("");
+  const [adding, setAdding] = useState(false);
   const keys = Object.keys({ ...defaults, ...value });
   return (
     <section>
@@ -89,6 +88,7 @@ export function ApplicationValueFields({
             key={key + JSON.stringify(current)}
             label={key}
             value={current}
+            inferType={inherited === undefined && current === ""}
             explicit={Object.hasOwn(value, key)}
             disabled={disabled}
             onDirtyChange={(dirty) => mark(key, dirty)}
@@ -97,78 +97,67 @@ export function ApplicationValueFields({
           />
         );
       })}
-      <fieldset>
-        <legend>Добавить значение</legend>
-        <label>
-          Имя
-          <input
-            value={name}
-            disabled={disabled}
-            onChange={(e) => {
-              setName(e.target.value);
-              mark("__add", true);
-            }}
-          />
-        </label>
-        <label>
-          Тип
-          <select
-            value={type}
-            disabled={disabled}
-            onChange={(e) => {
-              setType(e.target.value);
-              mark("__add", true);
-            }}
-          >
-            <option value="string">Строка</option>
-            <option value="number">Число</option>
-            <option value="boolean">Логическое</option>
-            <option value="object">Объект</option>
-          </select>
-        </label>
-        <label>
-          Значение
-          <input
-            value={text}
-            disabled={disabled}
-            onChange={(e) => {
-              setText(e.target.value);
-              mark("__add", true);
-            }}
-          />
-        </label>
+      {!adding ? (
         <button
-          disabled={
-            disabled ||
-            !name ||
-            excludeKeys.includes(name) ||
-            Object.hasOwn(value, name) ||
-            (type === "number" && !Number.isFinite(Number(text))) ||
-            (type === "boolean" && !["true", "false"].includes(text))
-          }
-          onClick={() =>
-            void onSave({
-              ...value,
-              [name]:
-                type === "object"
-                  ? {}
-                  : type === "number"
-                    ? Number(text)
-                    : type === "boolean"
-                      ? text === "true"
-                      : text,
-            }).then((ok) => {
+          className="outline"
+          disabled={disabled}
+          onClick={() => setAdding(true)}
+        >
+          Добавить параметр · {label}
+        </button>
+      ) : (
+        <form
+          className="application-add-parameter"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!name || keys.includes(name) || excludeKeys.includes(name))
+              return;
+            void onSave({ ...value, [name]: "" }).then((ok) => {
               if (ok) {
                 setName("");
-                setText("");
+                setAdding(false);
                 mark("__add", false);
               }
-            })
-          }
+            });
+          }}
         >
-          В черновик
-        </button>
-      </fieldset>
+          <label>
+            Имя параметра
+            <input
+              value={name}
+              disabled={disabled}
+              autoFocus
+              onChange={(e) => {
+                setName(e.target.value);
+                mark("__add", true);
+              }}
+            />
+          </label>
+          <button
+            disabled={
+              disabled ||
+              !name ||
+              keys.includes(name) ||
+              excludeKeys.includes(name)
+            }
+          >
+            Добавить
+          </button>
+          <button
+            type="button"
+            className="outline"
+            disabled={disabled}
+            onClick={() => {
+              setName("");
+              setAdding(false);
+              mark("__add", false);
+            }}
+          >
+            Отмена
+          </button>
+          <small>Значение задаётся в строке параметра после добавления.</small>
+        </form>
+      )}
     </section>
   );
 }
@@ -268,6 +257,7 @@ function ScalarValue({
   onSave,
   onReset,
   onDirtyChange,
+  inferType = false,
 }: {
   label: string;
   value: unknown;
@@ -276,9 +266,33 @@ function ScalarValue({
   onSave: (value: unknown) => Promise<boolean>;
   onReset: () => Promise<boolean>;
   onDirtyChange: (dirty: boolean) => void;
+  inferType?: boolean;
 }) {
   const [text, setText] = useState(String(value ?? ""));
   const [dirty, setDirty] = useState(false);
+  const [manualType, setManualType] = useState("auto");
+  const inferred = inferParameterValue(text);
+  const originalType = typeof value;
+  const type =
+    manualType !== "auto"
+      ? manualType
+      : inferType
+        ? typeof inferred
+        : originalType;
+  const parsed =
+    type === "number"
+      ? Number(text)
+      : type === "boolean"
+        ? text === "true"
+        : text;
+  const valid =
+    type === "number"
+      ? text.trim() !== "" && Number.isFinite(Number(text))
+      : type === "boolean"
+        ? ["true", "false"].includes(text)
+        : true;
+  const typeLabel =
+    type === "number" ? "Число" : type === "boolean" ? "Логическое" : "Строка";
   return (
     <div className="application-field">
       <label>
@@ -294,24 +308,64 @@ function ScalarValue({
         />
       </label>
       <small>
+        Тип: {typeLabel}
+        {manualType === "auto" ? " · автоматически" : " · задан вручную"}
+      </small>
+      <details className="application-parameter-type">
+        <summary>Дополнительно</summary>
+        <label>
+          Тип · {label}
+          <select
+            value={manualType}
+            disabled={disabled}
+            onChange={(e) => {
+              setManualType(e.target.value);
+              setDirty(true);
+              onDirtyChange(true);
+            }}
+          >
+            <option value="auto">Автоматически</option>
+            <option value="string">Строка</option>
+            <option value="number">Число</option>
+            <option value="boolean">Логическое</option>
+          </select>
+        </label>
+        <div className="row">
+          {[
+            { title: "Создать объект", value: {} },
+            { title: "Создать список", value: [] },
+          ].map((choice) => (
+            <button
+              key={choice.title}
+              className="outline"
+              disabled={disabled}
+              onClick={() => {
+                if (
+                  text &&
+                  !window.confirm("Заменить текущее значение структурой?")
+                )
+                  return;
+                void onSave(choice.value).then((ok) => {
+                  if (ok) onDirtyChange(false);
+                });
+              }}
+            >
+              {choice.title}
+            </button>
+          ))}
+        </div>
+      </details>
+      {!valid && (
+        <small role="alert">Значение не соответствует типу {typeLabel}.</small>
+      )}
+      <small>
         {explicit ? "Явное значение" : "Из пакета · без вычисления Ansible"}
       </small>
       <div className="row">
         <button
-          disabled={
-            disabled ||
-            !dirty ||
-            (typeof value === "number" && !Number.isFinite(Number(text))) ||
-            (typeof value === "boolean" && !["true", "false"].includes(text))
-          }
+          disabled={disabled || !dirty || !valid}
           onClick={() =>
-            void onSave(
-              typeof value === "number"
-                ? Number(text)
-                : typeof value === "boolean"
-                  ? text === "true"
-                  : text,
-            ).then((ok) => {
+            void onSave(parsed).then((ok) => {
               if (ok) {
                 setDirty(false);
                 onDirtyChange(false);
@@ -335,4 +389,16 @@ function ScalarValue({
       </div>
     </div>
   );
+}
+
+// UI input conversion only; package validation and Ansible resolution stay in Core.
+export function inferParameterValue(text: string): string | number | boolean {
+  if (text === "true" || text === "false") return text === "true";
+  if (
+    /^-?(?:0|[1-9]\d*)(?:\.\d+)?$/.test(text) &&
+    Number.isFinite(Number(text)) &&
+    Math.abs(Number(text)) <= Number.MAX_SAFE_INTEGER
+  )
+    return Number(text);
+  return text;
 }

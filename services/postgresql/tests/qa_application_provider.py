@@ -140,6 +140,93 @@ class ApplicationProviderQA(unittest.TestCase):
         print('A3_TIMING phases=%s accounts=%d seconds=%.3f' % ('+'.join(phases), len(job['accounts']), elapsed), flush=True)
         return result.stdout.decode(), elapsed
 
+    def test_database_access_existing_future_revoke_and_repeat(self):
+        job = self.make_job('bulkqa', 1)
+        first = job['databases'][0]
+        for index in range(1, 4):
+            db = copy.deepcopy(first)
+            db.update(name='bulkqa_db_'+str(index), resourceId='db'+str(index),
+                      marker=first['marker']+str(index), accounts=[])
+            job['databases'].append(db)
+        self.play(job)
+        account = job['accounts'][0]
+        for db in job['databases']:
+            self.sql('SET ROLE "%s"; CREATE TABLE api.before_apply(id serial, value text)' % db['owner'], db['name'])
+        migration = 'bulkqa_migrator'
+        self.sql("CREATE ROLE %s NOLOGIN; COMMENT ON ROLE %s IS '%s'" %
+                 (migration, migration, account['marker'].rsplit('account:',1)[0]+'account:migration/postgres'))
+        self.sql('GRANT CREATE ON DATABASE bulkqa_db TO '+migration)
+        account['grants'] = []
+        account['databaseAccess'] = [dict(database=db['name'], privileges=['SELECT','INSERT'],
+                                         creatorRoles=[db['owner']] + ([migration] if i == 0 else []))
+                                     for i, db in enumerate(job['databases'])]
+        self.play(job, phases=('preflight','accounts','verify'))
+        before = self.sql("SELECT oid FROM pg_roles WHERE rolname='bulkqa_user_0'")
+        output, _ = self.play(job, phases=('preflight','accounts','verify'))
+        self.assertRegex(output, r'localhost\s+:\s+ok=\d+\s+changed=0')
+        self.assertEqual(before,self.sql("SELECT oid FROM pg_roles WHERE rolname='bulkqa_user_0'"))
+        for db in job['databases']:
+            self.sql('SET ROLE "%s"; CREATE SCHEMA later; CREATE TABLE later.new_table(id serial, value text)' % db['owner'], db['name'])
+            self.sql("SET ROLE bulkqa_user_0; INSERT INTO later.new_table(value) VALUES ('ok'); SELECT * FROM later.new_table",db['name'])
+            self.sql('SET ROLE bulkqa_user_0; DELETE FROM later.new_table',db['name'],success=False)
+        self.sql('SET ROLE '+migration+'; CREATE SCHEMA migration; CREATE TABLE migration.new_table(id serial)', first['name'])
+        self.sql('SET ROLE bulkqa_user_0; INSERT INTO migration.new_table DEFAULT VALUES',first['name'])
+        account['databaseAccess'] = []
+        self.play(job, phases=('preflight','accounts','verify'))
+        for db in job['databases']:
+            self.sql('SET ROLE bulkqa_user_0; SELECT * FROM later.new_table',db['name'],success=False)
+            self.assertEqual('0',self.sql("SELECT count(*) FROM pg_default_acl d, LATERAL aclexplode(d.defaclacl) x WHERE x.grantee=(SELECT oid FROM pg_roles WHERE rolname='bulkqa_user_0')",db['name']))
+        output, _ = self.play(job, phases=('preflight','accounts','verify'))
+        self.assertRegex(output, r'localhost\s+:\s+ok=\d+\s+changed=0')
+
+    def test_database_access_conflicts_and_missing_defaults(self):
+        job = self.make_job('bulknegative', 1)
+        self.play(job)
+        account, db = job['accounts'][0], job['databases'][0]
+        self.sql('SET ROLE "%s"; CREATE TABLE api.items(id serial)' % db['owner'],db['name'])
+        access = dict(database=db['name'], privileges=['SELECT','INSERT'],creatorRoles=[db['owner']])
+        account['databaseAccess'] = [access]; account['grants'] = []
+        access['creatorRoles'].append('unregistered_creator')
+        self.play(job, phases=('preflight',), success=False)
+        access['creatorRoles'].pop()
+        self.sql('GRANT DELETE ON api.items TO PUBLIC',db['name'])
+        self.play(job, phases=('preflight',), success=False)
+        self.sql('REVOKE DELETE ON api.items FROM PUBLIC',db['name'])
+        self.sql('CREATE TABLE api.foreign_owned(id int)',db['name'])
+        self.play(job, phases=('preflight',), success=False)
+        self.sql('DROP TABLE api.foreign_owned',db['name'])
+        self.sql('ALTER DEFAULT PRIVILEGES FOR ROLE "%s" GRANT DELETE ON TABLES TO PUBLIC' % db['owner'],db['name'])
+        self.play(job, phases=('preflight',), success=False)
+        self.sql('ALTER DEFAULT PRIVILEGES FOR ROLE "%s" REVOKE DELETE ON TABLES FROM PUBLIC' % db['owner'],db['name'])
+        self.play(job, phases=('preflight','accounts','verify'))
+        self.sql('ALTER DEFAULT PRIVILEGES FOR ROLE "%s" REVOKE SELECT ON TABLES FROM "%s"' % (db['owner'],account['name']),db['name'])
+        self.play(job, phases=('verify',), success=False)
+        access['privileges'] = ['SELECT']
+        self.play(job, phases=('preflight','accounts','verify'))
+        self.assertEqual('f',self.sql("SELECT has_sequence_privilege('bulknegative_user_0','api.items_id_seq','USAGE')",db['name']))
+        self.sql('GRANT SELECT(id) ON api.items TO bulknegative_user_0',db['name'])
+        self.play(job, phases=('preflight',), success=False)
+
+    def test_database_access_owner_authority_is_preserved(self):
+        job = self.make_job('bulkowner', 1)
+        self.play(job)
+        account, db = job['accounts'][0], job['databases'][0]
+        self.sql('CREATE SCHEMA app_owned AUTHORIZATION bulkowner_user_0; SET ROLE bulkowner_user_0; '
+                 'CREATE TABLE app_owned.items(id serial, value text)',db['name'])
+        query = "SELECT relname,relowner,coalesce(relacl::text,'') FROM pg_class WHERE relnamespace='app_owned'::regnamespace ORDER BY relname"
+        before = self.sql(query,db['name'])
+        account['databaseAccess'] = [dict(database=db['name'],privileges=['SELECT'],creatorRoles=[db['owner'],account['name']])]
+        account['grants'] = []
+        output,_ = self.play(job, phases=('preflight','accounts','verify'))
+        self.assertEqual(before,self.sql(query,db['name']))
+        self.sql('SET ROLE bulkowner_user_0; CREATE TABLE app_owned.future(id serial)',db['name'])
+        account['databaseAccess'] = []
+        self.play(job, phases=('preflight','accounts','verify'))
+        self.sql("SET ROLE bulkowner_user_0; INSERT INTO app_owned.items(value) VALUES ('owned'); ALTER TABLE app_owned.items ADD COLUMN later int",db['name'])
+        output,_ = self.play(job, phases=('preflight','accounts','verify'))
+        self.assertRegex(output,r'localhost\s+:\s+ok=\d+\s+changed=0')
+        self.assertEqual('1',self.sql('SELECT count(*) FROM app_owned.items',db['name']))
+
     def test_01_resources_accounts_verify_repeat(self):
         self.play()
         self.play(phases=('preflight', 'verify'))

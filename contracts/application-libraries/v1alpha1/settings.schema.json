@@ -114,12 +114,25 @@
     },
     "account": {
       "type": "object",
+      "not": {"anyOf": [{"required": ["databaseAccess", "databaseRef"]}, {"required": ["databaseAccess", "grants"]}]},
       "properties": {
         "mode": {
           "enum": [
             "managed",
             "existing"
           ]
+        },
+        "databaseAccess": {
+          "type": "array", "maxItems": 256,
+          "items": {
+            "type": "object",
+            "properties": {
+              "databaseRef": {"type": "string", "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$", "maxLength": 128},
+              "privileges": {"type": "array", "minItems": 1, "maxItems": 4, "uniqueItems": true, "items": {"enum": ["SELECT", "INSERT", "UPDATE", "DELETE"]}},
+              "additionalCreatorRoles": {"type": "array", "maxItems": 256, "uniqueItems": true, "items": {"type": "string", "pattern": "^[a-z_][a-z0-9_-]{0,62}$"}}
+            },
+            "required": ["databaseRef", "privileges"], "additionalProperties": false
+          }
         },
         "databaseRef": {
           "type": "string",

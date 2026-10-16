@@ -135,13 +135,41 @@ def required_grants(account):
     return values
 
 
-def user_batch(account, password, missing, create, clustered):
+def managed_grant_delta(account, rows, databases):
+    """Reconcile only direct SELECT/INSERT on this account's witnessed library DBs.
+
+    Custody and UUID/marker checks remain the caller's prerequisite. Anything
+    outside that limited authority remains a conflict, not a cleanup candidate.
+    """
+    grants = [row for row in rows if row['kind'] == 'grant' and row['name'] == account['name']]
+    if (any(row['column'] or row['is_partial_revoke'] or row['grant_option'] for row in grants)
+            or any(row['kind'] == 'role' and row['name'] == account['name'] for row in rows)):
+        raise ProviderFailure('CLICKHOUSE_APPLICATION_GRANTS_DRIFT')
+    prefix = account['marker'].split(':account:', 1)[0] + ':clickhouse.database:'
+    owned = {db['name'] for db in databases if db['mode'] == 'managed' and db['marker'].startswith(prefix)}
+    current = {(row['database'], row['table'] or '*', row['privilege']) for row in grants}
+    expected = required_grants(account)
+    removed = current - expected
+    for database, table, privilege in removed:
+        if database not in owned or privilege not in {'SELECT', 'INSERT'}:
+            raise ProviderFailure('CLICKHOUSE_APPLICATION_GRANTS_DRIFT')
+        if table != '*':
+            identifier(table)
+    return expected - current, removed
+
+
+def user_batch(account, password, missing, create, clustered, revoked=()):
     name = identifier(account['name'])
     cluster = ' ON CLUSTER default' if clustered else ''
     statements = []
     if create:
         verifier = hashlib.sha256(password.encode()).hexdigest()
         statements.append("CREATE USER %s%s IDENTIFIED WITH sha256_hash BY '%s' DEFAULT ROLE NONE;" % (name, cluster, verifier))
+    for database, table, privilege in sorted(revoked):
+        if privilege not in {'SELECT', 'INSERT'}:
+            raise ProviderFailure('CLICKHOUSE_APPLICATION_GRANTS_INVALID')
+        scope = identifier(database) + '.' + ('*' if table == '*' else identifier(table))
+        statements.append('REVOKE%s %s ON %s FROM %s;' % (cluster, privilege, scope, name))
     for database, table, privilege in sorted(missing):
         if privilege not in {'SELECT', 'INSERT'}:
             raise ProviderFailure('CLICKHOUSE_APPLICATION_GRANTS_INVALID')

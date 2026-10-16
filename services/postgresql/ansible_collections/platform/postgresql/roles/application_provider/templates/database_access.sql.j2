@@ -1,0 +1,160 @@
+{# Nested PL/pgSQL block: one account, current owned database. No SQL per table. #}
+{% set entries = account.databaseAccess | selectattr('database', 'equalto', db.name) | list %}
+{% set access = entries[0] if entries else {'privileges': [], 'creatorRoles': []} %}
+DECLARE
+  desired text[] := ARRAY[{% for p in access.privileges %}{{ p | platform.postgresql.application_sql_literal }}{{ ',' if not loop.last else '' }}{% endfor %}]::text[];
+  creators text[] := ARRAY[{% for role in access.creatorRoles %}{{ role | platform.postgresql.application_sql_literal }}{{ ',' if not loop.last else '' }}{% endfor %}]::text[];
+  expected text[]; missing text[]; extra text[];
+  ns record; creator record; acl record; object_type text; acl_type "char";
+  target_oid oid := r.oid;
+  target_name text := {{ account.name | platform.postgresql.application_sql_literal }};
+  owner_name text := {{ db.owner | platform.postgresql.application_sql_literal }};
+  role_prefix text := {{ ('platform.application/v1:' ~ platform_postgresql_application_job.projectId ~ ':' ~ platform_postgresql_application_job.providerId ~ ':' ~ db.libraryId ~ ':account:') | platform.postgresql.application_sql_literal }};
+BEGIN
+  IF current_setting('server_version_num')::int < 150000 THEN
+    RAISE EXCEPTION 'APPLICATION_PROVIDER_DATABASE_ACCESS_VERSION_REQUIRED';
+  END IF;
+  FOR creator IN SELECT unnest(creators) AS name LOOP
+    IF NOT EXISTS (SELECT FROM pg_roles cr WHERE cr.rolname=creator.name
+        AND NOT cr.rolsuper AND NOT cr.rolcreatedb AND NOT cr.rolcreaterole
+        AND NOT cr.rolreplication AND NOT cr.rolbypassrls
+        AND (cr.rolname=owner_name OR left(shobj_description(cr.oid,'pg_authid'),length(role_prefix))=role_prefix)) THEN
+      RAISE EXCEPTION 'APPLICATION_PROVIDER_CREATOR_ROLE_CONFLICT';
+    END IF;
+  END LOOP;
+  -- Foreign ownership is a conflict; the operator may deliberately make this
+  -- account an object owner. Its owner authority is not a revocable DML grant.
+  IF EXISTS (SELECT FROM pg_namespace nn WHERE nn.nspname !~ '^pg_' AND nn.nspname <> 'information_schema'
+       AND pg_get_userbyid(nn.nspowner) <> owner_name
+       AND NOT (nn.nspname='public' AND pg_get_userbyid(nn.nspowner)='pg_database_owner')
+       AND coalesce(left(shobj_description(nn.nspowner,'pg_authid'),length(role_prefix)),'')<>role_prefix)
+    OR EXISTS (SELECT FROM pg_class cc JOIN pg_namespace nn ON nn.oid=cc.relnamespace
+       WHERE nn.nspname !~ '^pg_' AND nn.nspname <> 'information_schema'
+       AND cc.relkind IN ('r','p','v','m','f','S') AND pg_get_userbyid(cc.relowner) <> owner_name
+       AND coalesce(left(shobj_description(cc.relowner,'pg_authid'),length(role_prefix)),'')<>role_prefix) THEN
+    RAISE EXCEPTION 'APPLICATION_PROVIDER_OBJECT_CONFLICT';
+  END IF;
+  IF EXISTS (SELECT FROM pg_namespace WHERE nspowner=target_oid AND nspname !~ '^pg_' AND nspname<>'information_schema')
+     OR EXISTS (SELECT FROM pg_class cc JOIN pg_namespace nn ON nn.oid=cc.relnamespace
+       WHERE cc.relowner=target_oid AND nn.nspname !~ '^pg_' AND nn.nspname<>'information_schema'
+       AND cc.relkind IN ('r','p','v','m','f','S')) THEN
+    RAISE NOTICE 'APPLICATION_PROVIDER_OWNER_AUTHORITY_PRESERVED';
+  END IF;
+  IF EXISTS (SELECT FROM pg_attribute aa JOIN pg_class cc ON cc.oid=aa.attrelid
+      JOIN pg_namespace nn ON nn.oid=cc.relnamespace CROSS JOIN LATERAL aclexplode(aa.attacl) x
+      WHERE nn.nspname !~ '^pg_' AND nn.nspname<>'information_schema' AND x.grantee IN (0,target_oid)) THEN
+    RAISE EXCEPTION 'APPLICATION_PROVIDER_COLUMN_GRANTS_CONFLICT';
+  END IF;
+  IF EXISTS (SELECT FROM pg_namespace nn CROSS JOIN LATERAL aclexplode(nn.nspacl) x
+      WHERE nn.nspname !~ '^pg_' AND nn.nspname<>'information_schema' AND x.grantee=0 AND x.privilege_type='CREATE')
+    OR EXISTS (SELECT FROM pg_default_acl d CROSS JOIN LATERAL aclexplode(d.defaclacl) x
+      WHERE pg_get_userbyid(d.defaclrole)=ANY(creators) AND x.grantee=0
+      AND NOT x.privilege_type=ANY(CASE d.defaclobjtype WHEN 'n' THEN ARRAY['USAGE']
+        WHEN 'r' THEN desired WHEN 'S' THEN CASE WHEN 'INSERT'=ANY(desired) THEN ARRAY['USAGE'] ELSE ARRAY[]::text[] END
+        ELSE ARRAY[]::text[] END)) THEN
+    RAISE EXCEPTION 'APPLICATION_PROVIDER_EXTERNAL_GRANTS_CONFLICT';
+  END IF;
+  IF EXISTS (SELECT FROM pg_class cc JOIN pg_namespace nn ON nn.oid=cc.relnamespace,
+       LATERAL aclexplode(coalesce(cc.relacl,acldefault(CASE WHEN cc.relkind='S' THEN 's'::"char" ELSE 'r'::"char" END,cc.relowner))) x
+       WHERE nn.nspname !~ '^pg_' AND nn.nspname <> 'information_schema'
+       AND cc.relkind IN ('r','p','v','m','f','S') AND x.grantee=0
+       AND NOT x.privilege_type=ANY(CASE WHEN cc.relkind='S' THEN
+          CASE WHEN 'INSERT'=ANY(desired) THEN ARRAY['USAGE'] ELSE ARRAY[]::text[] END ELSE desired END)) THEN
+    RAISE EXCEPTION 'APPLICATION_PROVIDER_EXTERNAL_GRANTS_CONFLICT';
+  END IF;
+{% if application_provider_operation != 'preflight' %}
+  -- Reconcile defaults, including removed creator roles and per-schema entries.
+  FOR acl IN SELECT d.defaclrole,d.defaclnamespace,d.defaclobjtype,x.privilege_type,x.is_grantable
+      FROM pg_default_acl d CROSS JOIN LATERAL aclexplode(d.defaclacl) x
+      WHERE x.grantee=target_oid AND d.defaclrole<>target_oid LOOP
+    expected := CASE acl.defaclobjtype WHEN 'n' THEN CASE WHEN cardinality(desired)>0 THEN ARRAY['USAGE'] ELSE ARRAY[]::text[] END
+      WHEN 'r' THEN desired WHEN 'S' THEN CASE WHEN 'INSERT'=ANY(desired) THEN ARRAY['USAGE'] ELSE ARRAY[]::text[] END ELSE ARRAY[]::text[] END;
+    IF acl.defaclnamespace<>0 OR NOT pg_get_userbyid(acl.defaclrole)=ANY(creators)
+       OR NOT acl.privilege_type=ANY(expected) OR acl.is_grantable THEN
+      IF pg_get_userbyid(acl.defaclrole)<>owner_name AND
+         coalesce(left(shobj_description(acl.defaclrole,'pg_authid'),length(role_prefix)),'')<>role_prefix THEN
+        RAISE EXCEPTION 'APPLICATION_PROVIDER_EXTERNAL_GRANTS_CONFLICT';
+      END IF;
+{% if application_provider_operation == 'grants' %}
+      object_type := CASE acl.defaclobjtype WHEN 'n' THEN 'SCHEMAS' WHEN 'r' THEN 'TABLES' WHEN 'S' THEN 'SEQUENCES' ELSE NULL END;
+      IF object_type IS NULL THEN RAISE EXCEPTION 'APPLICATION_PROVIDER_EXTERNAL_GRANTS_CONFLICT'; END IF;
+      EXECUTE format('ALTER DEFAULT PRIVILEGES FOR ROLE %I %s REVOKE %s ON %s FROM %I RESTRICT',
+        pg_get_userbyid(acl.defaclrole),CASE WHEN acl.defaclnamespace=0 THEN '' ELSE format('IN SCHEMA %I', (SELECT nspname FROM pg_namespace WHERE oid=acl.defaclnamespace)) END,
+        acl.privilege_type,object_type,target_name);
+      RAISE NOTICE 'APPLICATION_PROVIDER_CHANGED';
+{% else %}
+      RAISE EXCEPTION 'APPLICATION_PROVIDER_GRANTS_REQUIRED';
+{% endif %}
+    END IF;
+  END LOOP;
+  FOR ns IN SELECT * FROM pg_namespace WHERE nspname !~ '^pg_' AND nspname <> 'information_schema' ORDER BY nspname LOOP
+    expected := CASE WHEN cardinality(desired)>0 THEN ARRAY['USAGE'] ELSE ARRAY[]::text[] END;
+    SELECT coalesce(array_agg(x.privilege_type),ARRAY[]::text[]) INTO extra
+      FROM aclexplode(coalesce(ns.nspacl,acldefault('n',ns.nspowner))) x
+      WHERE x.grantee=target_oid AND ns.nspowner<>target_oid AND (NOT x.privilege_type=ANY(expected) OR x.is_grantable);
+    IF cardinality(extra)>0 THEN
+{% if application_provider_operation == 'grants' %}
+      EXECUTE format('REVOKE %s ON SCHEMA %I FROM %I RESTRICT',array_to_string(extra,','),ns.nspname,target_name);
+      RAISE NOTICE 'APPLICATION_PROVIDER_CHANGED';
+{% else %}
+      RAISE EXCEPTION 'APPLICATION_PROVIDER_GRANTS_REQUIRED';
+{% endif %}
+    END IF;
+    IF cardinality(expected)>0 AND NOT has_schema_privilege(target_oid,ns.oid,'USAGE') THEN
+{% if application_provider_operation == 'grants' %}
+      EXECUTE format('GRANT USAGE ON SCHEMA %I TO %I',ns.nspname,target_name);
+      RAISE NOTICE 'APPLICATION_PROVIDER_CHANGED';
+{% else %}
+      RAISE EXCEPTION 'APPLICATION_PROVIDER_GRANTS_REQUIRED';
+{% endif %}
+    END IF;
+    FOREACH object_type IN ARRAY ARRAY['TABLES','SEQUENCES'] LOOP
+      expected := CASE WHEN object_type='TABLES' THEN desired ELSE CASE WHEN 'INSERT'=ANY(desired) THEN ARRAY['USAGE'] ELSE ARRAY[]::text[] END END;
+      SELECT coalesce(array_agg(DISTINCT x.privilege_type),ARRAY[]::text[]) INTO extra
+        FROM pg_class cc CROSS JOIN LATERAL aclexplode(coalesce(cc.relacl,acldefault(CASE WHEN cc.relkind='S' THEN 's'::"char" ELSE 'r'::"char" END,cc.relowner))) x
+        WHERE cc.relnamespace=ns.oid AND (CASE WHEN object_type='TABLES' THEN cc.relkind IN ('r','p','v','m','f') ELSE cc.relkind='S' END)
+        AND x.grantee=target_oid AND cc.relowner<>target_oid AND (NOT x.privilege_type=ANY(expected) OR x.is_grantable);
+      IF cardinality(extra)>0 THEN
+{% if application_provider_operation == 'grants' %}
+        EXECUTE format('REVOKE %s ON ALL %s IN SCHEMA %I FROM %I RESTRICT',array_to_string(extra,','),object_type,ns.nspname,target_name);
+        RAISE NOTICE 'APPLICATION_PROVIDER_CHANGED';
+{% else %}
+        RAISE EXCEPTION 'APPLICATION_PROVIDER_GRANTS_REQUIRED';
+{% endif %}
+      END IF;
+      SELECT coalesce(array_agg(p),ARRAY[]::text[]) INTO missing FROM unnest(expected) p
+        WHERE EXISTS (SELECT FROM pg_class cc WHERE cc.relnamespace=ns.oid
+          AND (CASE WHEN object_type='TABLES' THEN cc.relkind IN ('r','p','v','m','f') ELSE cc.relkind='S' END)
+          AND NOT (CASE WHEN object_type='TABLES' THEN has_table_privilege(target_oid,cc.oid,p) ELSE has_sequence_privilege(target_oid,cc.oid,p) END));
+      IF cardinality(missing)>0 THEN
+{% if application_provider_operation == 'grants' %}
+        EXECUTE format('GRANT %s ON ALL %s IN SCHEMA %I TO %I',array_to_string(missing,','),object_type,ns.nspname,target_name);
+        RAISE NOTICE 'APPLICATION_PROVIDER_CHANGED';
+{% else %}
+        RAISE EXCEPTION 'APPLICATION_PROVIDER_GRANTS_REQUIRED';
+{% endif %}
+      END IF;
+    END LOOP;
+  END LOOP;
+  FOREACH object_type IN ARRAY ARRAY['SCHEMAS','TABLES','SEQUENCES'] LOOP
+    acl_type := CASE object_type WHEN 'SCHEMAS' THEN 'n' WHEN 'TABLES' THEN 'r' ELSE 'S' END;
+    expected := CASE object_type WHEN 'SCHEMAS' THEN CASE WHEN cardinality(desired)>0 THEN ARRAY['USAGE'] ELSE ARRAY[]::text[] END
+      WHEN 'TABLES' THEN desired ELSE CASE WHEN 'INSERT'=ANY(desired) THEN ARRAY['USAGE'] ELSE ARRAY[]::text[] END END;
+    FOR creator IN SELECT rolname,oid FROM pg_roles WHERE rolname=ANY(creators) LOOP
+      SELECT coalesce(array_agg(p),ARRAY[]::text[]) INTO missing FROM unnest(expected) p
+        WHERE NOT EXISTS (SELECT FROM aclexplode(coalesce((SELECT d.defaclacl FROM pg_default_acl d
+          WHERE d.defaclrole=creator.oid AND d.defaclnamespace=0 AND d.defaclobjtype=acl_type),
+          acldefault(CASE WHEN acl_type='S' THEN 's'::"char" ELSE acl_type END,creator.oid))) x
+          WHERE x.grantee=target_oid AND x.privilege_type=p AND NOT x.is_grantable);
+      IF cardinality(missing)>0 THEN
+{% if application_provider_operation == 'grants' %}
+        EXECUTE format('ALTER DEFAULT PRIVILEGES FOR ROLE %I GRANT %s ON %s TO %I',creator.rolname,array_to_string(missing,','),object_type,target_name);
+        RAISE NOTICE 'APPLICATION_PROVIDER_CHANGED';
+{% else %}
+        RAISE EXCEPTION 'APPLICATION_PROVIDER_GRANTS_REQUIRED';
+{% endif %}
+      END IF;
+    END LOOP;
+  END LOOP;
+{% endif %}
+END;

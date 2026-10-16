@@ -9,14 +9,14 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:08cd1f4c1b77104b32d11841c8eab105b14099a636a3577fdfb26b7e7009ccaa
+  digest: sha256:711214971b92478128881d29b656bec555371626ff23cebbbfa55a721caae2cf
   services:
     haproxy:
       definitionVersion: 1.0.0-alpha.1
       digest: sha256:fbb7260777f57459fb77adaa0d4afb4efe88af8bd76774e483d490afdb42984e
     postgresql:
       definitionVersion: 1.0.0-alpha.1
-      digest: sha256:26cb32999b5b2ef7df3cf3e4e6cbe1b6caea5002f95492d423a1405a09e9ed01
+      digest: sha256:47d118a27045149da76419bd87a312af5b03e71b40150d1ee7a0de8926e86f84
     keepalived:
       definitionVersion: 1.0.0-alpha.1
       digest: sha256:5b721ee5a5f5667f9cb6ccd1b40b3afe00693890aec3f2500e5a8fc9f5dad444

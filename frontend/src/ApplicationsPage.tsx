@@ -1,4 +1,7 @@
 import { useRef, useState } from "react";
+import { ApplicationLibraryResources } from "./ApplicationLibraryResources";
+import { ApplicationPorts, type PortSource } from "./ApplicationPorts";
+import { ApplicationReadiness } from "./ApplicationReadiness";
 import { ApplicationSecretInputs } from "./ApplicationSecretInputs";
 import { ApplicationBindings } from "./ApplicationBindings";
 import { ApplicationSecretBindings } from "./ApplicationSecretBindings";
@@ -40,7 +43,6 @@ export function ApplicationsPage({
   onImport,
   draftActive,
   backendError,
-  onProviderSecrets,
 }: {
   choosePackage?: () => Promise<string>;
   onImport: (
@@ -73,6 +75,7 @@ export function ApplicationsPage({
   const [selected, setSelected] = useState("");
   const [slot, setSlot] = useState("");
   const [hostOverrides, setHostOverrides] = useState("");
+  const [hostSettingsOpen, setHostSettingsOpen] = useState(false);
   const [tab, setTab] = useState("Общее");
   const [search, setSearch] = useState("");
   const [formEpoch, setFormEpoch] = useState(0);
@@ -80,6 +83,11 @@ export function ApplicationsPage({
   const [id, setId] = useState("");
   const [ref, setRef] = useState("");
   const [runtime, setRuntime] = useState("");
+  const runtimeOptions = Object.entries(managed?.deployments ?? {})
+    .filter(([, row]) => row.serviceType === "docker")
+    .map(([key]) => key);
+  const selectedRuntime =
+    runtime || (runtimeOptions.length === 1 ? runtimeOptions[0] : "");
   const [local, setLocal] = useState<Record<string, string>>({});
   const [editing, setEditing] = useState<Set<string>>(new Set());
   const [error, setError] = useState("");
@@ -252,7 +260,13 @@ export function ApplicationsPage({
     reset?: () => Promise<boolean>,
     type = "text",
   ) => (
-    <div className="application-field" key={key}>
+    <div
+      className={
+        "application-field" +
+        (key === "image" ? " application-image-field" : "")
+      }
+      key={key}
+    >
       <div className="application-field-origin">
         <span>
           {authoredValue === undefined ? "Из пакета" : "Переопределено"}
@@ -297,6 +311,7 @@ export function ApplicationsPage({
       </small>
       <div className="row">
         <button
+          hidden={key === "image" && local[key] === undefined}
           disabled={
             busy ||
             local[key] === undefined ||
@@ -314,6 +329,7 @@ export function ApplicationsPage({
         {reset && (
           <button
             className="outline"
+            hidden={key === "image" && authoredValue === undefined}
             disabled={busy || authoredValue === undefined}
             onClick={() =>
               void reset().then((ok) => {
@@ -337,15 +353,44 @@ export function ApplicationsPage({
     ? [
         "Основное",
         "Порты",
+        "Параметры",
         "Подключения",
         "Секреты",
         "Файлы",
         "Запуск",
         "Состояние",
       ]
-    : ["Общее", "Подключения", "Ресурсы и секреты", "Размещение"];
+    : ["Общее", "Подключения", "Ресурсы и секреты"];
   const selectedTab = tabs.includes(tab) ? tab : tabs[0];
   const resolved = snapshot?.applicationLibraries?.libraries?.[selected];
+  const portSources: PortSource[] = [
+    { label: "Пакет приложения", ports: objectValue(defaults.ports) },
+    {
+      label: "Пакет библиотеки · " + slot,
+      ports: objectValue(objectValue(slotDefinition.overrides).ports),
+    },
+    { label: "Экземпляр", ports: objectValue(overrides.ports) },
+    ...Object.entries(placements)
+      .filter(([, members]) => Object.hasOwn(members, selected))
+      .map(([host, members]) => ({
+        label: "Размещение · " + host,
+        ports: objectValue(
+          objectValue(objectValue(members[selected]).overrides).ports,
+        ),
+      })),
+    ...Object.entries(resolved?.instances ?? {})
+      .filter(([, instance]) => instance.slotId === slot)
+      .flatMap(([, instance]) =>
+        Object.entries(instance.placements ?? {}).map(([host, placement]) => ({
+          label:
+            "Core · " +
+            host +
+            " · " +
+            (snapshot?.projectRevision ?? "последняя проверка"),
+          ports: objectValue(placement.ports),
+        })),
+      ),
+  ];
   return (
     <section className="applications-page">
       <header className="page-heading">
@@ -496,26 +541,26 @@ export function ApplicationsPage({
               <label>
                 Docker runtime
                 <select
-                  value={runtime}
+                  value={selectedRuntime}
                   onChange={(e) => {
                     setRuntime(e.target.value);
                     markChildDirty(true, "create");
                   }}
                 >
                   <option value="">Выберите deployment</option>
-                  {Object.keys(managed?.deployments ?? {}).map((key) => (
+                  {runtimeOptions.map((key) => (
                     <option key={key}>{key}</option>
                   ))}
                 </select>
               </label>
               <p>Совместимость runtime и пакета проверяет Core.</p>
               <button
-                disabled={busy || !id || !ref || !runtime}
+                disabled={busy || !id || !ref || !selectedRuntime}
                 onClick={() =>
                   void send({
                     operation: "CreateApplicationLibraryDeployment",
                     deploymentId: id,
-                    entity: { libraryRef: ref, runtimeRef: runtime },
+                    entity: { libraryRef: ref, runtimeRef: selectedRuntime },
                   }).then((ok) => {
                     if (ok) {
                       markChildDirty(false, "create");
@@ -599,95 +644,145 @@ export function ApplicationsPage({
                 )}
                 {!slot && selectedTab === "Общее" && (
                   <>
-                    <section className="application-section">
+                    <section className="application-library-overview">
                       <h3>Экземпляр библиотеки</h3>
                       <label>
                         ID экземпляра библиотеки
                         <input value={selected} readOnly />
                       </label>
+                      <label>
+                        Среда контейнеризации
+                        <select
+                          aria-label="Среда контейнеризации"
+                          value={String(library.runtimeRef ?? "")}
+                          disabled={busy}
+                          onChange={(e) =>
+                            void send({
+                              operation: "UpdateApplicationLibraryDeployment",
+                              deploymentId: selected,
+                              entity: { runtimeRef: e.target.value },
+                            })
+                          }
+                        >
+                          <option value="">Выберите среду</option>
+                          {!!library.runtimeRef &&
+                            !Object.hasOwn(
+                              managed?.deployments ?? {},
+                              String(library.runtimeRef),
+                            ) && (
+                              <option value={String(library.runtimeRef)}>
+                                {String(library.runtimeRef)} · недоступна
+                              </option>
+                            )}
+                          {Object.entries(managed?.deployments ?? {})
+                            .filter(
+                              ([key, row]) =>
+                                row.serviceType === "docker" ||
+                                key === library.runtimeRef,
+                            )
+                            .map(([key]) => (
+                              <option key={key}>{key}</option>
+                            ))}
+                        </select>
+                      </label>
                       <p className="muted">
-                        ID задаётся при создании и после сохранения не меняется.
+                        Пакет: {String(library.libraryRef)} · ID задаётся при
+                        создании
                       </p>
-                      <p>Runtime: {String(library.runtimeRef)}</p>
                     </section>
-                    {scalar(
-                      "libraryRef",
-                      "Пакет · точная версия",
-                      undefined,
-                      library.libraryRef,
-                      (value) =>
-                        send({
-                          operation: "UpdateApplicationLibraryDeployment",
-                          deploymentId: selected,
-                          entity: { libraryRef: value },
-                        }),
-                    )}
-                    {scalar(
-                      "runtimeRef",
-                      "Docker runtime deployment",
-                      undefined,
-                      library.runtimeRef,
-                      (value) =>
-                        send({
-                          operation: "UpdateApplicationLibraryDeployment",
-                          deploymentId: selected,
-                          entity: { runtimeRef: value },
-                        }),
-                    )}
-                    <button
-                      className="outline"
-                      disabled={busy}
-                      onClick={() => {
-                        if (
-                          window.confirm(
-                            "Удалить библиотеку из проекта? Установленные ресурсы этим действием не удаляются. Сначала удалите размещения.",
-                          )
-                        )
-                          void send({
-                            operation: "DeleteApplicationLibraryDeployment",
-                            deploymentId: selected,
-                          }).then((ok) => {
-                            if (ok) setSelected("");
-                          });
-                      }}
-                    >
-                      Удалить из проекта
-                    </button>
-                  </>
-                )}
-                {!slot &&
-                  selectedTab === "Размещение" &&
-                  Object.keys(managed?.servers ?? {}).map((host) => (
-                    <div className="row" key={host}>
-                      <span>{host}</span>
-                      <button
-                        disabled={busy}
-                        onClick={() =>
-                          void send({
-                            operation: Object.hasOwn(
+                    <section className="application-library-placement">
+                      <h3>Размещение</h3>
+                      <p className="muted">
+                        Серверы для экземпляров этой библиотеки
+                      </p>
+                      {Object.keys(managed?.servers ?? {}).map((host) => (
+                        <label className="application-placement" key={host}>
+                          <input
+                            type="checkbox"
+                            checked={Object.hasOwn(
                               placements[host] ?? {},
                               selected,
-                            )
-                              ? "RemoveApplicationLibraryPlacement"
-                              : "SetApplicationLibraryPlacement",
+                            )}
+                            disabled={busy}
+                            onChange={() =>
+                              void send({
+                                operation: Object.hasOwn(
+                                  placements[host] ?? {},
+                                  selected,
+                                )
+                                  ? "RemoveApplicationLibraryPlacement"
+                                  : "SetApplicationLibraryPlacement",
+                                deploymentId: selected,
+                                hostId: host,
+                                ...(Object.hasOwn(
+                                  placements[host] ?? {},
+                                  selected,
+                                )
+                                  ? {}
+                                  : { placement: {} }),
+                              })
+                            }
+                          />
+                          <span>{host}</span>
+                        </label>
+                      ))}
+                    </section>
+                    <details className="application-library-package">
+                      <summary>Пакет и управление библиотекой</summary>
+                      {scalar(
+                        "libraryRef",
+                        "Пакет · точная версия",
+                        undefined,
+                        library.libraryRef,
+                        (value) =>
+                          send({
+                            operation: "UpdateApplicationLibraryDeployment",
                             deploymentId: selected,
-                            hostId: host,
-                            ...(Object.hasOwn(placements[host] ?? {}, selected)
-                              ? {}
-                              : { placement: {} }),
-                          })
-                        }
+                            entity: { libraryRef: value },
+                          }),
+                      )}
+                      <button
+                        className="outline"
+                        disabled={busy}
+                        onClick={() => {
+                          if (
+                            window.confirm(
+                              "Удалить библиотеку из проекта? Установленные ресурсы сохранятся. Сначала удалите размещения.",
+                            )
+                          )
+                            void send({
+                              operation: "DeleteApplicationLibraryDeployment",
+                              deploymentId: selected,
+                            }).then((ok) => {
+                              if (ok) setSelected("");
+                            });
+                        }}
                       >
-                        {Object.hasOwn(placements[host] ?? {}, selected)
-                          ? "Убрать размещение"
-                          : "Разместить"}
+                        Удалить из проекта
                       </button>
-                    </div>
-                  ))}
-                {!slot && selectedTab === "Размещение" && (
-                  <section>
+                    </details>
+                  </>
+                )}
+                {!slot && selectedTab === "Общее" && (
+                  <details
+                    className="application-host-settings"
+                    open={hostSettingsOpen}
+                  >
+                    <summary
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setHostSettingsOpen((value) => !value);
+                      }}
+                    >
+                      Дополнительные настройки размещения
+                    </summary>
+                    <p className="muted">
+                      Переопределения для всех приложений библиотеки на
+                      выбранном сервере. Значения из пакетов сохраняются, пока
+                      не заданы переопределения.
+                    </p>
                     <label>
-                      Настройки membership хоста
+                      Сервер для дополнительных настроек
                       <select
                         value={hostOverrides}
                         onChange={(e) =>
@@ -716,7 +811,11 @@ export function ApplicationsPage({
                         return (
                           <ApplicationValueFields
                             key={selected + hostOverrides + field}
-                            label={field + " · membership хоста, все slots"}
+                            label={
+                              field === "parameters"
+                                ? "Параметры приложений"
+                                : "Порты приложений"
+                            }
                             value={objectValue(
                               objectValue(member.overrides)[field],
                             )}
@@ -742,16 +841,35 @@ export function ApplicationsPage({
                           />
                         );
                       })}
-                  </section>
+                  </details>
                 )}
                 {!slot && selectedTab === "Подключения" && (
                   <>
-                    <p>
-                      deploymentRef выбирает существующий deployment; profileRef
-                      — PKI профиль. Совместимость проверяет Core.
-                    </p>
                     <ApplicationBindings
                       key={selected + "bindings"}
+                      vaultBinding={
+                        typeof objectValue(library.vault_ref).binding ===
+                        "string"
+                          ? String(objectValue(library.vault_ref).binding)
+                          : undefined
+                      }
+                      deploymentTypes={Object.fromEntries(
+                        Object.entries(managed?.deployments ?? {}).map(
+                          ([id, row]) => [id, row.serviceType],
+                        ),
+                      )}
+                      onSelectVault={(binding) =>
+                        send({
+                          operation: "UpdateApplicationLibraryDeployment",
+                          deploymentId: selected,
+                          entity: {
+                            vault_ref: {
+                              ...objectValue(library.vault_ref),
+                              binding,
+                            },
+                          },
+                        })
+                      }
                       value={objectValue(library.bindings)}
                       hints={bindingHints}
                       deployments={Object.keys(managed?.deployments ?? {})}
@@ -766,30 +884,15 @@ export function ApplicationsPage({
                         })
                       }
                     />
-                    <ApplicationValueFields
-                      key={selected + "vault"}
-                      label="Vault reference"
-                      value={objectValue(library.vault_ref)}
-                      defaults={{}}
-                      disabled={busy}
-                      onDirtyChange={(v) => markChildDirty(v, "vault")}
-                      onSave={(vault_ref) =>
-                        send({
-                          operation: "UpdateApplicationLibraryDeployment",
-                          deploymentId: selected,
-                          entity: { vault_ref },
-                        })
-                      }
-                    />
                   </>
                 )}
                 {!slot && selectedTab === "Ресурсы и секреты" && (
                   <>
-                    <ApplicationValueFields
+                    <ApplicationLibraryResources
+                      deployments={managed?.deployments ?? {}}
                       key={selected + "resources"}
-                      label="Общие ресурсы"
-                      value={objectValue(library.resources)}
-                      defaults={objectValue(definition.resources)}
+                      resources={objectValue(library.resources)}
+                      bindings={objectValue(library.bindings)}
                       disabled={busy}
                       onDirtyChange={(v) => markChildDirty(v, "resources")}
                       onSave={(resources) =>
@@ -810,61 +913,91 @@ export function ApplicationsPage({
                           .source,
                       );
                       return (
-                        <CredentialSourceEditor
+                        <details
                           key={selected + name + JSON.stringify(source)}
-                          label={name}
-                          source={source}
-                          packageSource={objectValue(
-                            objectValue(
-                              objectValue(definition.shared_secrets)[name],
-                            ).source,
-                          )}
-                          allowLiteral={false}
-                          disabled={busy}
-                          onDirtyChange={(v) => markChildDirty(v, name)}
-                          onSave={(source) =>
-                            send({
-                              operation: "UpdateApplicationLibraryDeployment",
-                              deploymentId: selected,
-                              entity: {
-                                shared_secrets: {
-                                  ...objectValue(library.shared_secrets),
-                                  [name]: { source },
+                          className="application-shared-secret"
+                        >
+                          <summary>
+                            {name} ·{" "}
+                            {String(
+                              source.kind ??
+                                objectValue(
+                                  objectValue(
+                                    objectValue(definition.shared_secrets)[
+                                      name
+                                    ],
+                                  ).source,
+                                ).kind ??
+                                "Источник пакета",
+                            )}
+                          </summary>
+                          <CredentialSourceEditor
+                            label={name}
+                            source={source}
+                            packageSource={objectValue(
+                              objectValue(
+                                objectValue(definition.shared_secrets)[name],
+                              ).source,
+                            )}
+                            allowLiteral={false}
+                            disabled={busy}
+                            onDirtyChange={(v) => markChildDirty(v, name)}
+                            onSave={(source) =>
+                              send({
+                                operation: "UpdateApplicationLibraryDeployment",
+                                deploymentId: selected,
+                                entity: {
+                                  shared_secrets: {
+                                    ...objectValue(library.shared_secrets),
+                                    [name]: { source },
+                                  },
                                 },
-                              },
-                            })
-                          }
-                          onReset={() => {
-                            const next = {
-                              ...objectValue(library.shared_secrets),
-                            };
-                            delete next[name];
-                            return send({
-                              operation: "UpdateApplicationLibraryDeployment",
-                              deploymentId: selected,
-                              entity: { shared_secrets: next },
-                            });
-                          }}
-                        />
+                              })
+                            }
+                            onReset={() => {
+                              const next = {
+                                ...objectValue(library.shared_secrets),
+                              };
+                              delete next[name];
+                              return send({
+                                operation: "UpdateApplicationLibraryDeployment",
+                                deploymentId: selected,
+                                entity: { shared_secrets: next },
+                              });
+                            }}
+                          />
+                        </details>
                       );
                     })}
                   </>
                 )}
                 {slot && selectedTab === "Основное" && (
-                  <>
+                  <div className="application-instance-general">
                     <section className="application-section">
-                      <h3>Образ контейнера</h3>{" "}
+                      <div className="application-instance-name">
+                        <span>Имя экземпляра · Core</span>
+                        <strong>
+                          {Object.entries(resolved?.instances ?? {}).find(
+                            ([, instance]) => instance.slotId === slot,
+                          )?.[0] ?? "Ещё не рассчитано"}
+                        </strong>
+                        <small>
+                          Только чтение · по последней проверке проекта
+                        </small>
+                      </div>
                       {scalar(
                         "image",
-                        "Образ · image",
+                        "Образ контейнера",
                         defaults.image,
                         overrides.image,
                         (v) => send(override("image", v)),
                         () => send(remove("image")),
                       )}
                     </section>
-                    <section className="application-section">
-                      <h3>Сводка конфигурации</h3>
+                    <section
+                      className="application-section application-general-summary"
+                      aria-label="Сводка конфигурации"
+                    >
                       <div className="application-summary">
                         <div>
                           <small>Размещение библиотеки</small>
@@ -880,7 +1013,7 @@ export function ApplicationsPage({
                             onClick={() =>
                               navigate(() => {
                                 setSlot("");
-                                setTab("Размещение");
+                                setTab("Общее");
                               })
                             }
                           >
@@ -889,11 +1022,34 @@ export function ApplicationsPage({
                         </div>
                         <div>
                           <small>Публикация портов</small>
+                          <strong>
+                            {portSources
+                              .filter(
+                                (source) => Object.keys(source.ports).length,
+                              )
+                              .slice(0, 2)
+                              .map(
+                                (source) =>
+                                  source.label +
+                                  ": " +
+                                  Object.values(source.ports)
+                                    .map((raw) => {
+                                      const port = objectValue(raw);
+                                      return (
+                                        String(port.published ?? "—") +
+                                        " → " +
+                                        String(port.container ?? "—")
+                                      );
+                                    })
+                                    .join(", "),
+                              )
+                              .join("; ") || "Не заданы"}
+                          </strong>
                           <button
                             className="application-link"
                             onClick={() => navigate(() => setTab("Порты"))}
                           >
-                            Host → Container
+                            Настроить порты
                           </button>
                         </div>
                         <div>
@@ -915,48 +1071,55 @@ export function ApplicationsPage({
                         </div>
                       </div>
                     </section>
-                    <section className="application-section">
-                      <ApplicationValueFields
-                        key={selected + slot + "parameters"}
-                        label="Параметры приложения"
-                        value={objectValue(overrides.parameters)}
-                        defaults={objectValue(defaults.parameters)}
-                        disabled={busy}
-                        onDirtyChange={(v) => markChildDirty(v, "parameters")}
-                        onSave={(value) =>
-                          send(
-                            Object.keys(value).length
-                              ? override("parameters", value)
-                              : remove("parameters"),
-                          )
-                        }
-                      />{" "}
-                      <ApplicationValueFields
-                        key={selected + slot + "readiness"}
-                        label="Readiness"
-                        value={objectValue(overrides.readiness)}
-                        defaults={objectValue(defaults.readiness)}
-                        disabled={busy}
-                        onDirtyChange={(v) => markChildDirty(v, "readiness")}
-                        onSave={(value) =>
-                          send(
-                            Object.keys(value).length
-                              ? override("readiness", value)
-                              : remove("readiness"),
-                          )
-                        }
-                      />
-                    </section>
-                    <p className="muted">
-                      Показаны значения пакета и явные переопределения. Итоговую
-                      конфигурацию подтверждает Core.
-                    </p>
-                  </>
+                    <ApplicationReadiness
+                      key={
+                        selected + slot + JSON.stringify(overrides.readiness)
+                      }
+                      value={objectValue(overrides.readiness)}
+                      defaults={objectValue(defaults.readiness)}
+                      disabled={busy}
+                      onDirtyChange={(v) => markChildDirty(v, "readiness")}
+                      onSave={(value) => send(override("readiness", value))}
+                      onReset={() => send(remove("readiness"))}
+                    />
+                  </div>
+                )}
+                {slot && selectedTab === "Параметры" && (
+                  <section className="application-section">
+                    {" "}
+                    <ApplicationValueFields
+                      key={selected + slot + "parameters"}
+                      label="Параметры приложения"
+                      value={objectValue(overrides.parameters)}
+                      defaults={objectValue(defaults.parameters)}
+                      disabled={busy}
+                      onDirtyChange={(v) => markChildDirty(v, "parameters")}
+                      onSave={(value) =>
+                        send(
+                          Object.keys(value).length
+                            ? override("parameters", value)
+                            : remove("parameters"),
+                        )
+                      }
+                    />
+                  </section>
+                )}
+                {slot && selectedTab === "Порты" && (
+                  <ApplicationPorts
+                    key={selected + slot + "port-sources"}
+                    sources={portSources}
+                    value={objectValue(overrides.ports)}
+                    disabled={busy}
+                    onDirtyChange={(v) => markChildDirty(v, "add-port")}
+                    onSave={(name, value) =>
+                      send(override(name, value, "ports"))
+                    }
+                  />
                 )}
                 {slot && selectedTab === "Порты" && (
                   <section className="application-section">
                     {" "}
-                    <h3>Порты</h3>
+                    <h3>Переопределения портов экземпляра</h3>
                     {Object.entries({
                       ...objectValue(defaults.ports),
                       ...objectValue(overrides.ports),
@@ -1117,39 +1280,44 @@ export function ApplicationsPage({
                       Источники credentials — настройки проекта; значения
                       секретов — только сессия.
                     </p>
-                    {scalar(
-                      "vault_binding",
-                      "Vault binding приложения",
-                      undefined,
-                      objectValue(authored.credentials).vault_binding,
-                      (v) =>
-                        send({
-                          operation: "SetApplicationLibrarySlot",
-                          deploymentId: selected,
-                          entityId: slot,
-                          entity: {
-                            credentials: {
-                              ...objectValue(authored.credentials),
-                              vault_binding: v,
-                            },
-                          },
-                        }),
-                      () =>
-                        send({
-                          operation: "SetApplicationLibrarySlot",
-                          deploymentId: selected,
-                          entityId: slot,
-                          entity: { credentials: {} },
-                        }),
-                    )}
                     <ApplicationCredentials
+                      renderVariables={(account, field) => (
+                        <ApplicationSecretBindings
+                          credential={{ account, field }}
+                          value={objectValue(overrides.provisioner)}
+                          defaults={objectValue(defaults.provisioner)}
+                          accounts={[]}
+                          disabled={busy}
+                          onDirtyChange={(v) =>
+                            markChildDirty(
+                              v,
+                              `secret_bindings:${account}:${field}`,
+                            )
+                          }
+                          onSave={(value) =>
+                            send(
+                              Object.keys(value).length
+                                ? override("provisioner", value)
+                                : remove("provisioner"),
+                            )
+                          }
+                        />
+                      )}
+                      variableBindings={{
+                        ...objectValue(
+                          objectValue(defaults.provisioner).secret_bindings,
+                        ),
+                        ...objectValue(
+                          objectValue(overrides.provisioner).secret_bindings,
+                        ),
+                      }}
+                      resources={objectValue(library.resources)}
+                      deploymentTypes={Object.fromEntries(
+                        Object.entries(managed?.deployments ?? {}).map(
+                          ([id, row]) => [id, row.serviceType],
+                        ),
+                      )}
                       bindings={objectValue(library.bindings)}
-                      onProviderSecrets={
-                        onProviderSecrets
-                          ? (deployment) =>
-                              navigate(() => onProviderSecrets(deployment))
-                          : undefined
-                      }
                       onDirtyChange={markChildDirty}
                       defaults={defaults}
                       authored={authored}
@@ -1163,64 +1331,6 @@ export function ApplicationsPage({
                           entity: { accounts },
                         })
                       }
-                    />
-                    <ApplicationSecretBindings
-                      key={selected + slot + "secret_bindings"}
-                      value={objectValue(overrides.provisioner)}
-                      defaults={objectValue(defaults.provisioner)}
-                      accounts={[
-                        objectValue(defaults.accounts),
-                        objectValue(overrides.accounts),
-                        objectValue(authored.accounts),
-                      ]}
-                      disabled={busy}
-                      onDirtyChange={(v) =>
-                        markChildDirty(v, "secret_bindings")
-                      }
-                      onSave={(value) =>
-                        send(
-                          Object.keys(value).length
-                            ? override("provisioner", value)
-                            : remove("provisioner"),
-                        )
-                      }
-                    />
-                    <ApplicationValueFields
-                      key={selected + slot + "provisioner"}
-                      label="Другие настройки Vault Agent"
-                      excludeKeys={["secret_bindings"]}
-                      value={Object.fromEntries(
-                        Object.entries(
-                          objectValue(overrides.provisioner),
-                        ).filter(([key]) => key !== "secret_bindings"),
-                      )}
-                      defaults={Object.fromEntries(
-                        Object.entries(
-                          objectValue(defaults.provisioner),
-                        ).filter(([key]) => key !== "secret_bindings"),
-                      )}
-                      disabled={busy}
-                      onDirtyChange={(v) => markChildDirty(v, "provisioner")}
-                      onSave={(value) => {
-                        const next = {
-                          ...value,
-                          ...(Object.hasOwn(
-                            objectValue(overrides.provisioner),
-                            "secret_bindings",
-                          )
-                            ? {
-                                secret_bindings: objectValue(
-                                  overrides.provisioner,
-                                ).secret_bindings,
-                              }
-                            : {}),
-                        };
-                        return send(
-                          Object.keys(next).length
-                            ? override("provisioner", next)
-                            : remove("provisioner"),
-                        );
-                      }}
                     />
                     {loadSecrets && saveSecrets && (
                       <ApplicationSecretInputs

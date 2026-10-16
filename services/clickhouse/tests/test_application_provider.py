@@ -19,10 +19,24 @@ import xml.etree.ElementTree as ET
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from ansible_collections.platform.clickhouse.plugins.module_utils.application_sql import NativeClient, user_batch, ProviderFailure
+from ansible_collections.platform.clickhouse.plugins.module_utils.application_sql import NativeClient, user_batch, ProviderFailure, managed_grant_delta
 
 
 class ApplicationProviderTests(unittest.TestCase):
+    def test_revoke_delta_is_limited_to_witnessed_library_databases(self):
+        account = {'name':'app','marker':'platform.application/v1:qa:ch:lib:account:app/ch','grants':[]}
+        database = {'name':'analytics','mode':'managed','marker':'platform.application/v1:qa:ch:lib:clickhouse.database:db'}
+        row = {'kind':'grant','name':'app','database':'analytics','table':'*','privilege':'INSERT',
+               'column':None,'is_partial_revoke':False,'grant_option':False}
+        self.assertEqual((set(),{('analytics','*','INSERT')}),managed_grant_delta(account,[row],[database]))
+        for update in ({'database':'foreign'}, {'privilege':'DROP TABLE'}, {'column':'id'}, {'grant_option':True}, {'is_partial_revoke':True}):
+            with self.subTest(update=update), self.assertRaises(ProviderFailure):
+                managed_grant_delta(account,[dict(row,**update)],[database])
+        with self.assertRaises(ProviderFailure):
+            managed_grant_delta(account,[row,{'kind':'role','name':'app'}],[database])
+        self.assertEqual('REVOKE ON CLUSTER default INSERT ON `analytics`.* FROM `app`;',
+                         user_batch(account,'unused',set(),False,True,{('analytics','*','INSERT')}))
+
     def test_cluster_batch_has_one_create_and_cluster_grants_without_plaintext(self):
         password = secrets.token_urlsafe(24)
         text = user_batch({'name': 'api-lib'}, password, {('analytics', 'events', 'SELECT'), ('analytics', 'events', 'INSERT')}, True, True)
@@ -170,7 +184,8 @@ class ApplicationProviderTests(unittest.TestCase):
                 database = {'resourceId': 'analytics', 'name': 'analytics', 'mode': 'managed',
                             'marker': 'platform.application/v1:qa:ch-qa:lib:clickhouse.database:analytics'}
                 job = {'serviceType': 'clickhouse', 'providerId': 'ch-qa', 'mode': 'raft-ha' if clustered else 'standalone', 'candidates': targets,
-                       'adminPasswordRef': 'admin', 'databases': [database], 'accounts': []}
+                       'adminPasswordRef': 'admin', 'databases': [database,dict(database,name='archive',resourceId='archive',
+                           marker='platform.application/v1:qa:ch-qa:lib:clickhouse.database:archive')], 'accounts': []}
                 variables = {'platform_clickhouse_application_job': job, 'platform_clickhouse_config_root': str(root / 'config'),
                              'platform_clickhouse_user': getpass.getuser(), 'platform_application_secret_root': str(secret_root),
                              'platform_clickhouse_application_credential_files': {'admin': str(secret_root / 'admin'), 'app': str(secret_root / 'app')}}
@@ -237,6 +252,50 @@ class ApplicationProviderTests(unittest.TestCase):
                 witness_before = (directory / 'application-objects.json').read_bytes()
                 self.assertIn('changed=0', role('verify'))
                 self.assertEqual(witness_before, (directory / 'application-objects.json').read_bytes())
+                # SEC-D02: one owned account, two owned databases; exact revoke
+                # and neighbor isolation on standalone and all cluster members.
+                original_grants = account['grants']
+                account['grants'] = [{'database': name,'table':'*','privileges':['SELECT','INSERT']}
+                                     for name in ('analytics','archive')]
+                role('accounts')
+                cluster = ' ON CLUSTER default' if clustered else ''
+                admin.query('CREATE USER neighbor%s IDENTIFIED WITH sha256_hash BY \'%s\'; GRANT%s SELECT ON archive.* TO neighbor;' %
+                            (cluster,hashlib.sha256(user_password.encode()).hexdigest(),cluster))
+                neighbor_before = admin.query("SHOW GRANTS FOR neighbor;")
+                for member in targets:
+                    client = NativeClient(member,str(directory),admin_password)
+                    try:
+                        client.query('CREATE TABLE analytics.future(id UInt64) ENGINE=Memory; CREATE TABLE archive.future(id UInt64) ENGINE=Memory;')
+                    finally: client.close()
+                account['grants'][0]['privileges'] = ['SELECT']
+                role('verify',expected=2)
+                role('accounts'); role('verify')
+                for member in targets:
+                    client = NativeClient(member,str(directory),user_password,'api-lib')
+                    try:
+                        self.assertEqual('0',client.query('SELECT count() FROM analytics.future;').strip())
+                        with self.assertRaises(ProviderFailure): client.query('INSERT INTO analytics.future VALUES (1);')
+                        client.query('INSERT INTO archive.future VALUES (1);')
+                    finally: client.close()
+                account['grants'] = [account['grants'][0]]
+                role('accounts'); role('verify')
+                for member in targets:
+                    client = NativeClient(member,str(directory),user_password,'api-lib')
+                    try:
+                        with self.assertRaises(ProviderFailure): client.query('SELECT count() FROM archive.future;')
+                    finally: client.close()
+                account['grants'] = []
+                role('accounts'); role('verify')
+                self.assertIn('changed=0',role('accounts'))
+                self.assertEqual(neighbor_before,admin.query('SHOW GRANTS FOR neighbor;'))
+                self.assertEqual(witness_before,(directory/'application-objects.json').read_bytes())
+                admin.query('GRANT%s SELECT ON system.one TO `api-lib`;' % cluster)
+                foreign_before = admin.query('SHOW GRANTS FOR `api-lib`;')
+                role('preflight',expected=2)
+                self.assertEqual(foreign_before,admin.query('SHOW GRANTS FOR `api-lib`;'))
+                admin.query('REVOKE%s SELECT ON system.one FROM `api-lib`;' % cluster)
+                account['grants'] = original_grants
+                role('accounts'); role('verify')
                 if not clustered:
                     witness = json.loads(witness_before)
                     witness['user/api-lib'] = 'corrupted-record'

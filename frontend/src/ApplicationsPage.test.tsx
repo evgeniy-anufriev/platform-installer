@@ -3,7 +3,11 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ApplicationsPage } from "./ApplicationsPage";
-import { applicationDraft, type ApplicationIntent } from "./application-draft";
+import {
+  applicationDraft,
+  objectValue,
+  type ApplicationIntent,
+} from "./application-draft";
 import type { OpenResult, RuntimeSecretDescriptorOperation } from "./backend";
 
 const managed = {
@@ -105,16 +109,20 @@ function Harness({
   calls,
   dirty = vi.fn(),
   accept = true,
+  snapshot,
+  view = managed,
 }: {
   calls: ApplicationIntent[];
   dirty?: (value: boolean) => void;
   accept?: boolean;
+  snapshot?: OpenResult["snapshot"];
+  view?: NonNullable<OpenResult["managed"]>;
 }) {
   const [intents, setIntents] = useState<ApplicationIntent[]>([]);
   return (
     <ApplicationsPage
-      managed={managed}
-      snapshot={undefined}
+      managed={view}
+      snapshot={snapshot}
       intents={intents}
       busy={false}
       onAppend={async (c) => {
@@ -142,6 +150,91 @@ async function selectSlot() {
   await userEvent.click(screen.getByRole("button", { name: "↳ gateway" }));
 }
 describe("application editor", () => {
+  it("shows library and host port sources even without application defaults or instance overrides", async () => {
+    const view = structuredClone(managed);
+    delete objectValue(
+      objectValue(
+        view.applicationPackages["application:gateway@1.0.0"].definition,
+      ).defaults,
+    ).ports;
+    delete objectValue(
+      objectValue(
+        objectValue(view.applicationLibraries.sdku.applications).gateway,
+      ).overrides,
+    ).ports;
+    objectValue(
+      objectValue(view.applicationPackages["library:sdku@1.0.0"].definition)
+        .slots,
+    ).gateway = {
+      applicationRef: "gateway@1.0.0",
+      overrides: { ports: { http: { published: 10102, container: 8080 } } },
+    };
+    objectValue(view.applicationPlacements.node1.sdku).overrides = {
+      ports: { http: { published: 3333 } },
+    };
+    const snapshot = {
+      projectRevision: "verified-revision",
+      applicationLibraries: {
+        libraries: {
+          sdku: {
+            instances: {
+              "gateway-sdku": {
+                slotId: "gateway",
+                placements: {
+                  node1: {
+                    ports: { http: { published: 3333, container: 8080 } },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    } as unknown as OpenResult["snapshot"];
+    render(<Harness calls={[]} view={view} snapshot={snapshot} />);
+    await selectSlot();
+    expect(
+      screen.getByText(/Пакет библиотеки · gateway: 10102 → 8080/),
+    ).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Порты" }));
+    expect(screen.getByText("Пакет библиотеки · gateway")).toBeTruthy();
+    expect(screen.getByText("Размещение · node1")).toBeTruthy();
+    expect(screen.getByText(/Core · node1 · verified-revision/)).toBeTruthy();
+    expect(screen.getByText("3333 → —")).toBeTruthy();
+    expect(screen.getByText("3333 → 8080")).toBeTruthy();
+  });
+  it("displays the Core instance identity without inventing a name or enabling rename", async () => {
+    const snapshot = {
+      applicationLibraries: {
+        libraries: {
+          sdku: { instances: { "core-gateway-name": { slotId: "gateway" } } },
+        },
+      },
+    } as unknown as OpenResult["snapshot"];
+    render(<Harness calls={[]} snapshot={snapshot} />);
+    await selectSlot();
+    expect(screen.getByText("core-gateway-name")).toBeTruthy();
+    expect(
+      screen.queryByRole("textbox", { name: /Имя экземпляра/ }),
+    ).toBeNull();
+  });
+  it("keeps only image, summary and readiness on General, with parameters on their own tab", async () => {
+    render(<Harness calls={[]} />);
+    await selectSlot();
+    expect(
+      screen.getByRole("heading", { name: "Проверка готовности" }),
+    ).toBeTruthy();
+    expect(
+      screen.queryByRole("heading", { name: "Параметры приложения" }),
+    ).toBeNull();
+    expect(screen.queryByLabelText("PASSWORD", { exact: true })).toBeNull();
+    expect(screen.getByText(/Экземпляр: 28480 → —/)).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Параметры" }));
+    expect(
+      screen.getByRole("heading", { name: "Параметры приложения" }),
+    ).toBeTruthy();
+    expect(screen.getByLabelText("PASSWORD", { exact: true })).toBeTruthy();
+  });
   it("reuses public descriptors across libraries and refreshes them for a new saved revision", async () => {
     HTMLDialogElement.prototype.showModal = function () {
       this.setAttribute("open", "");
@@ -286,10 +379,10 @@ describe("application editor", () => {
     render(<Harness calls={calls} />);
     await selectSlot();
     expect(calls).toHaveLength(0);
-    const image = screen.getByLabelText("Образ · image");
+    const image = screen.getByLabelText("Образ контейнера");
     expect((image as HTMLInputElement).value).toBe("approved/gateway:1");
     await userEvent.click(
-      screen.getByRole("button", { name: "Переопределить: Образ · image" }),
+      screen.getByRole("button", { name: "Переопределить: Образ контейнера" }),
     );
     await userEvent.clear(image);
     await userEvent.type(image, "approved/gateway:2");
@@ -311,7 +404,7 @@ describe("application editor", () => {
     );
     expect(calls[1].operation).toBe("RemoveApplicationLibraryOverride");
     expect(
-      (screen.getByLabelText("Образ · image") as HTMLInputElement).value,
+      (screen.getByLabelText("Образ контейнера") as HTMLInputElement).value,
     ).toBe("approved/gateway:1");
   });
   it("changes only host port and reset does not copy container default into authored mapping", async () => {

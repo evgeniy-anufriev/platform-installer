@@ -33,7 +33,7 @@ describe("application connection settings", () => {
       (screen.getByLabelText("Источник") as HTMLSelectElement).disabled,
     ).toBe(true);
     await userEvent.selectOptions(
-      screen.getByLabelText("Режим аккаунта · явное переопределение"),
+      screen.getByLabelText("Управление учётной записью"),
       "managed",
     );
     expect(save).toHaveBeenCalledWith({
@@ -57,9 +57,7 @@ describe("application connection settings", () => {
       screen.getByLabelText("Подключение database"),
       "db-two",
     );
-    const group = screen
-      .getByLabelText("Подключение database")
-      .closest("fieldset")!;
+    const group = screen.getByLabelText("Подключение database").closest("tr")!;
     await userEvent.click(
       Array.from(group.querySelectorAll("button")).find(
         (b) => b.textContent === "В черновик",

@@ -18,6 +18,7 @@ export function ApplicationSecretBindings({
   disabled,
   onSave,
   onDirtyChange,
+  credential,
 }: {
   value: Obj;
   defaults: Obj;
@@ -25,6 +26,7 @@ export function ApplicationSecretBindings({
   disabled: boolean;
   onSave: (value: Obj) => Promise<boolean>;
   onDirtyChange: (dirty: boolean) => void;
+  credential?: { account: string; field: string };
 }) {
   const authored = objectValue(value.secret_bindings),
     base = objectValue(defaults.secret_bindings);
@@ -75,6 +77,55 @@ export function ApplicationSecretBindings({
     return save(next);
   };
   const names = Object.keys({ ...base, ...authored });
+  if (credential) {
+    const key = `${credential.account}:${credential.field}`;
+    const inherited = Object.keys(base).filter(
+      (name) =>
+        sourceKey(base[name]) === key &&
+        sourceKey(authored[name] ?? base[name]) === key,
+    );
+    const aliases = names.filter(
+      (name) =>
+        sourceKey(authored[name] ?? base[name]) === key &&
+        !inherited.includes(name),
+    );
+    return (
+      <CredentialVariableNames
+        key={JSON.stringify([key, authored, base])}
+        label={`${credential.account} ${credential.field}`}
+        inherited={inherited}
+        aliases={aliases}
+        names={names}
+        disabled={disabled}
+        explicit={names.some(
+          (name) =>
+            Object.hasOwn(authored, name) &&
+            (sourceKey(authored[name]) === key ||
+              sourceKey(base[name]) === key),
+        )}
+        onDirtyChange={onDirtyChange}
+        onSave={(aliases) => {
+          const next = { ...authored };
+          for (const name of names)
+            if (sourceKey(authored[name]) === key && !Object.hasOwn(base, name))
+              delete next[name];
+          for (const name of aliases)
+            next[name] = { source: { ...credential } };
+          return save(next);
+        }}
+        onReset={() => {
+          const next = { ...authored };
+          for (const name of names)
+            if (
+              sourceKey(authored[name]) === key ||
+              sourceKey(base[name]) === key
+            )
+              delete next[name];
+          return save(next);
+        }}
+      />
+    );
+  }
   return (
     <section className="application-section application-secret-bindings">
       <h3>Переменные приложения из credentials</h3>
@@ -170,6 +221,97 @@ export function ApplicationSecretBindings({
         )}
       </fieldset>
     </section>
+  );
+}
+function CredentialVariableNames({
+  label,
+  inherited,
+  aliases,
+  names,
+  disabled,
+  explicit,
+  onDirtyChange,
+  onSave,
+  onReset,
+}: {
+  label: string;
+  inherited: string[];
+  aliases: string[];
+  names: string[];
+  disabled: boolean;
+  explicit: boolean;
+  onDirtyChange: (dirty: boolean) => void;
+  onSave: (names: string[]) => Promise<boolean>;
+  onReset: () => Promise<boolean>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState(aliases.join(", "));
+  const next = text
+    .split(",")
+    .map((v) => v.trim())
+    .filter(Boolean);
+  const valid =
+    next.every(
+      (v) =>
+        /^[A-Za-z_][A-Za-z0-9_]*$/.test(v) &&
+        (!names.includes(v) || aliases.includes(v)),
+    ) && new Set(next).size === next.length;
+  const finish = (ok: boolean) => {
+    if (ok) {
+      onDirtyChange(false);
+      setEditing(false);
+    }
+  };
+  return (
+    <div className="application-credential-variables">
+      {inherited.map((name) => (
+        <code key={name} title="Из пакета">
+          {name}
+        </code>
+      ))}
+      {!editing && aliases.map((name) => <code key={name}>{name}</code>)}
+      {editing ? (
+        <>
+          <input
+            aria-label={`Переменные ${label}`}
+            placeholder="Дополнительные имена, через запятую"
+            value={text}
+            disabled={disabled}
+            onChange={(e) => {
+              setText(e.target.value);
+              onDirtyChange(true);
+            }}
+          />
+          <button
+            title="В черновик"
+            aria-label={`Сохранить переменные ${label}`}
+            disabled={disabled || !valid}
+            onClick={() => void onSave(next).then(finish)}
+          >
+            ✓
+          </button>
+        </>
+      ) : (
+        <button
+          className="outline"
+          title="Переопределить переменные; пакетные имена сохраняются"
+          aria-label={`Переопределить переменные ${label}`}
+          disabled={disabled}
+          onClick={() => setEditing(true)}
+        >
+          ✎
+        </button>
+      )}
+      <button
+        className="outline"
+        title="Сбросить переменные к default"
+        aria-label={`Сбросить переменные ${label} к default`}
+        disabled={disabled || !explicit}
+        onClick={() => void onReset().then(finish)}
+      >
+        ↺
+      </button>
+    </div>
   );
 }
 function BindingRow({

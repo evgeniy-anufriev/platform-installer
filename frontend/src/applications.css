@@ -361,9 +361,707 @@
   display: grid;
   gap: 6px;
 }
+.application-account-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  border: 1px solid #dce4ee;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+}
+.application-account-card > * {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+.application-account-card > h3 {
+  grid-column: 1;
+  display: flex;
+  gap: 10px;
+  margin: 0;
+}
+.application-account-settings {
+  grid-column: 2;
+  font-size: 11px;
+}
+.application-account-settings > summary {
+  cursor: pointer;
+  color: #34659a;
+}
+.application-account-settings[open] {
+  grid-column: 1 / -1;
+}
+.application-account-settings-content {
+  display: grid;
+  gap: 8px;
+  padding: 8px 0;
+}
+.application-account-card > h3 small {
+  font-weight: 400;
+  color: #65758b;
+}
+.application-credential-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 6px 0;
+}
+.application-credential-table th,
+.application-credential-table td {
+  padding: 5px 6px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid #dce4ee;
+}
+.application-credential-table th {
+  font-weight: 500;
+}
+.application-credential-table code {
+  display: block;
+  font-size: 11px;
+}
+.application-credential-variables {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.application-credential-variables code {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.application-credential-variables button {
+  padding: 3px 6px;
+}
+.application-credential-variables input {
+  width: 100%;
+  min-width: 0;
+}
+.application-credential-table .application-credential-source {
+  display: grid;
+  grid-template-columns: minmax(140px, 0.9fr) minmax(160px, 1.3fr) auto;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.application-credential-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.application-credential-source label {
+  min-width: 0;
+}
+.application-credential-actions {
+  display: flex;
+  gap: 4px;
+}
+.application-credential-actions-default {
+  display: contents;
+}
+.application-credential-actions button {
+  width: 32px;
+  min-width: 32px;
+  padding: 5px;
+}
+.application-credential-table .application-credential-source-expanded {
+  grid-template-columns: repeat(2, minmax(140px, 1fr));
+}
+.application-credential-source-expanded .application-credential-actions {
+  justify-content: flex-end;
+  align-self: end;
+}
+.application-credential-source legend {
+  display: none;
+}
+.application-credential-source p {
+  grid-column: 1 / -1;
+  font-size: 10px;
+  margin: 0;
+  color: #65758b;
+}
+.application-credential-table td:last-child {
+  width: 65%;
+}
+.application-account-card > fieldset {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) minmax(180px, 1.5fr) auto auto;
+  align-items: end;
+  gap: 8px;
+}
+.application-account-card > fieldset > p {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+.application-account-access header {
+  display: flex;
+  height: auto;
+  border-bottom: 0;
+  justify-content: space-between;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  min-height: 0;
+  gap: 8px;
+}
+.application-account-access {
+  margin: 0;
+  padding: 0;
+}
+.application-account-access header h4 {
+  margin: 0;
+}
+.application-account-access > p {
+  margin: 6px 0;
+}
+.application-account-access table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.application-account-access th,
+.application-account-access td {
+  padding: 9px;
+  border-bottom: 1px solid #dce4ee;
+  text-align: left;
+}
+.application-account-access td small {
+  display: block;
+  color: #65758b;
+  margin-top: 5px;
+}
+.application-account-access td:last-child {
+  white-space: nowrap;
+}
+.application-account-access td button {
+  margin-right: 6px;
+}
+.application-rights {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin: 12px 0;
+}
+.application-rights label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.application-rights input {
+  width: auto;
+}
+.application-redis-access {
+  display: grid;
+  gap: 10px;
+}
+.application-legacy-grants {
+  margin: 12px 0;
+}
+@media (max-width: 1100px) {
+  .application-account-card > fieldset {
+    grid-template-columns: 1fr 1fr;
+  }
+}
 .application-secret-bindings .row {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 8px;
+}
+.application-library-resources table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.application-library-resources td,
+.application-library-resources th {
+  padding: 7px 10px;
+  text-align: left;
+  border-bottom: 1px solid #e2e8f0;
+}
+.application-resource-group {
+  background: #eef3f9;
+}
+.application-resource-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #d4deeb;
+  margin-top: 12px;
+}
+.application-resource-form h4,
+.application-resource-form > .row,
+.application-resource-form > [role="alert"] {
+  grid-column: 1/-1;
+  margin: 0;
+}
+.application-resource-form label {
+  display: grid;
+  gap: 4px;
+}
+.application-shared-secret {
+  border-bottom: 1px solid #e2e8f0;
+  padding: 8px 0;
+}
+.application-shared-secret summary,
+.application-host-settings summary {
+  cursor: pointer;
+  font-weight: 500;
+}
+.application-host-settings {
+  margin-top: 10px;
+}
+.application-content:has(.application-host-settings) .application-section {
+  margin-bottom: 10px;
+  padding: 10px;
+}
+.application-content:has(.application-host-settings) .application-section p {
+  margin: 4px 0;
+}
+.application-content:has(.application-host-settings) > .row {
+  display: inline-flex;
+  margin: 8px 14px 8px 0;
+  gap: 8px;
+}
+.application-placement {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 12px;
+  margin: 6px 8px 6px 0;
+  border: 1px solid #d4deeb;
+  border-radius: 5px;
+}
+.application-placement input {
+  width: auto;
+}
+.application-content:has(.application-host-settings) {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 16px;
+  align-content: start;
+}
+.application-content:has(.application-host-settings) > .application-section {
+  grid-column: 1/-1;
+}
+.application-content:has(.application-host-settings)
+  > .application-host-settings {
+  grid-column: 1/-1;
+}
+.application-content:has(.application-host-settings)
+  > .application-library-overview,
+.application-content:has(.application-host-settings)
+  > .application-library-placement,
+.application-content:has(.application-host-settings)
+  > .application-library-package {
+  grid-column: 1/-1;
+}
+.application-library-overview {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 16px;
+}
+.application-library-overview h3,
+.application-library-overview p {
+  grid-column: 1/-1;
+  margin: 0;
+}
+.application-library-overview label {
+  display: grid;
+  gap: 6px;
+}
+.application-library-placement h3,
+.application-library-placement p {
+  margin: 4px 0;
+}
+.application-library-package summary {
+  cursor: pointer;
+}
+.application-library-resources > .row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.application-content:has(.application-resource-form) {
+  position: relative;
+}
+.application-resource-form {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  left: 12px;
+  z-index: 2;
+  background: #fff;
+  box-shadow: 0 8px 30px #17243b33;
+  margin: 0;
+  border-radius: 6px;
+}
+@media (max-height: 800px) {
+  .application-library-resources > .muted {
+    font-size: 10px;
+    margin: 4px 0;
+  }
+  .application-library-resources td,
+  .application-library-resources th {
+    padding: 4px 7px;
+    font-size: 11px;
+  }
+  .application-library-resources button {
+    padding: 5px 8px;
+    min-height: 26px;
+  }
+  .application-library-resources h3 {
+    margin: 4px 0;
+  }
+  .application-content:has(.application-library-resources) > h3 {
+    margin: 8px 0 4px;
+  }
+  .application-shared-secret {
+    padding: 5px 0;
+  }
+  .application-content:has(.application-host-settings) {
+    gap: 6px 12px;
+  }
+  .application-library-overview,
+  .application-library-placement {
+    padding: 9px;
+  }
+}
+.application-content > .application-library-overview,
+.application-content > .application-library-placement {
+  margin: 0;
+  padding: 10px;
+}
+.application-content:has(.application-host-settings)
+  > .application-host-settings {
+  margin-top: 0;
+}
+.application-add-parameter {
+  display: flex;
+  align-items: end;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+.application-add-parameter label {
+  display: grid;
+  gap: 4px;
+  flex: 1;
+  min-width: 160px;
+}
+.application-add-parameter small {
+  flex-basis: 100%;
+  color: #728196;
+}
+.application-parameter-type summary {
+  cursor: pointer;
+  font-size: 11px;
+  color: #50739c;
+}
+.application-host-settings .application-field {
+  padding: 10px 0;
+  border-bottom: 1px solid #e1e7ef;
+}
+.application-bindings-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  table-layout: fixed;
+}
+.application-bindings-table td,
+.application-bindings-table th {
+  padding: 5px;
+  text-align: left;
+  border-bottom: 1px solid #e1e7ef;
+  overflow-wrap: anywhere;
+}
+.application-bindings-table th:first-child {
+  width: 18%;
+}
+.application-bindings-table th:nth-child(2) {
+  width: 23%;
+}
+.application-bindings-table th:nth-child(3) {
+  width: 27%;
+}
+.application-bindings-table .row {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.application-bindings-table button {
+  padding: 5px 8px;
+}
+.application-bindings-table > p {
+  margin: 6px 0;
+  font-size: 11px;
+}
+.application-bindings-table > button,
+.application-bindings-table > .row {
+  margin-top: 8px;
+}
+.application-vault-reference summary {
+  cursor: pointer;
+}
+@media (max-height: 800px) {
+  .application-bindings-table select {
+    padding: 5px;
+  }
+  .application-content > .application-bindings-table {
+    padding: 8px;
+    margin-bottom: 8px;
+  }
+}
+.application-bindings-table h3 {
+  margin: 0 0 4px;
+}
+.application-content > .application-bindings-table {
+  padding: 10px;
+  margin: 0 0 8px;
+}
+.application-bindings-table select {
+  padding: 5px;
+}
+.application-bindings-table td,
+.application-bindings-table th {
+  padding: 4px;
+}
+.application-content:has(.application-bindings-table) {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.application-content > .application-bindings-table {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+.application-connections-scroll {
+  overflow: auto;
+  min-height: 0;
+  flex: 1;
+  border-bottom: 1px solid #e1e7ef;
+}
+.application-connections-scroll thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #fff;
+}
+.application-bindings-table > button {
+  align-self: flex-start;
+  flex-shrink: 0;
+}
+.application-bindings-table h3,
+.application-bindings-table > p,
+.application-bindings-table > .application-add-parameter {
+  flex-shrink: 0;
+}
+.application-vault-badge {
+  display: block;
+  color: #50739c;
+  font-size: 10px;
+  font-weight: normal;
+  margin-top: 3px;
+}
+.application-instance-general {
+  display: grid;
+  gap: 8px;
+}
+.application-instance-general > .application-section {
+  padding: 10px;
+  margin: 0;
+}
+.application-image-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 5px 12px;
+  align-items: center;
+}
+.application-image-field > label {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  display: grid;
+  gap: 5px;
+}
+.application-image-field > .application-field-origin {
+  grid-column: 2;
+  grid-row: 1;
+}
+.application-image-field > .row {
+  grid-column: 2;
+  grid-row: 2;
+  display: flex;
+  gap: 5px;
+}
+.application-image-field > small {
+  display: none;
+}
+.application-general-summary .application-summary {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.application-general-summary .application-summary > div {
+  padding-left: 8px;
+  gap: 5px;
+}
+.application-general-summary strong {
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.application-readiness > .row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.application-readiness h3 {
+  margin: 0;
+}
+.application-readiness-fields {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr 1fr;
+  gap: 10px;
+  margin-top: 8px;
+}
+.application-readiness-fields label {
+  display: grid;
+  gap: 4px;
+  font-size: 11px;
+}
+.application-readiness-fields small {
+  color: #728196;
+  font-size: 10px;
+}
+.application-readiness > p,
+.application-instance-general > p {
+  margin: 5px 0 0;
+  font-size: 10px;
+}
+.application-readiness > .row:last-child {
+  justify-content: flex-start;
+  margin-top: 6px;
+}
+.application-readiness button {
+  font-size: 11px;
+  padding: 5px 8px;
+}
+.application-tabs button {
+  flex-shrink: 0;
+}
+.application-instance-name {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px 10px;
+  font-size: 11px;
+  padding-bottom: 7px;
+  margin-bottom: 7px;
+  border-bottom: 1px solid #e1e7ef;
+}
+.application-instance-name small {
+  font-size: 10px;
+  color: #728196;
+  margin-left: auto;
+}
+.application-image-field > label {
+  grid-row: 1;
+}
+.application-image-field > .row:not(:has(button:not([hidden]))) {
+  display: none;
+}
+@media (max-height: 800px) {
+  .application-instance-general {
+    gap: 6px;
+  }
+  .application-instance-general > .application-section {
+    padding: 8px;
+  }
+  .application-general-summary .application-summary > div {
+    gap: 3px;
+  }
+  .application-readiness-fields {
+    margin-top: 6px;
+    gap: 8px;
+  }
+  .application-readiness-fields input,
+  .application-readiness-fields select {
+    padding: 6px 8px;
+  }
+  .application-image-field input {
+    padding: 6px 8px;
+  }
+  .application-instance-name {
+    padding-bottom: 5px;
+    margin-bottom: 5px;
+  }
+}
+@media (max-height: 800px) {
+  .application-content:has(.application-instance-general) {
+    padding: 8px 12px;
+  }
+}
+.application-ports > .row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.application-ports h3 {
+  margin: 0;
+}
+.application-ports > p {
+  font-size: 11px;
+  margin: 8px 0;
+}
+.application-port-sources-scroll {
+  max-height: 180px;
+  overflow: auto;
+}
+.application-ports table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+.application-ports td,
+.application-ports th {
+  padding: 6px;
+  border-bottom: 1px solid #e1e7ef;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.application-ports thead th {
+  position: sticky;
+  top: 0;
+  background: #fff;
+}
+.application-port-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto 1fr;
+  gap: 8px;
+  align-items: end;
+  margin-top: 10px;
+}
+.application-port-form label {
+  display: grid;
+  gap: 4px;
+}
+.application-port-form > .row,
+.application-port-form > small,
+.application-port-form > p {
+  grid-column: 1/-1;
+}
+.application-port-form > .row {
+  display: flex;
+  gap: 8px;
+}
+.application-port-arrow {
+  align-self: center;
 }

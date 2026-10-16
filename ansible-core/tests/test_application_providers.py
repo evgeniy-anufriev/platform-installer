@@ -13,6 +13,38 @@ from application_providers import project_providers, normalize_grants, identifie
 
 
 class ApplicationProvidersTest(unittest.TestCase):
+    def test_database_access_multi_database_and_removed_scope(self):
+        self.resources['other'] = dict(kind='postgresql.database', binding='pg', parameters={'name':'reports'})
+        self.catalog['definitions']['postgresql']['capabilities'].append('service.postgresql.database-access')
+        account = self.accounts['postgres']
+        del account['databaseRef']
+        del account['grants']
+        account['databaseAccess'] = [{'databaseRef':'db','privileges':['INSERT','SELECT']},
+                                     {'databaseRef':'other','privileges':['SELECT']}]
+        result = self.resolve()
+        self.assertEqual('PASS', result['status'],result['findings'])
+        job = result['instanceJobs'][0]
+        self.assertEqual(1,len(job['accounts']))
+        self.assertEqual({'app','reports'},{row['database'] for row in job['loginAccounts']})
+        account['databaseAccess'] = []
+        result = self.resolve()
+        self.assertEqual('PASS',result['status'],result['findings'])
+        self.assertEqual({'app','reports'},{db['name'] for db in result['instanceJobs'][0]['databases']})
+        self.assertTrue(all(len(db['accounts'])==1 for db in result['instanceJobs'][0]['databases']))
+
+    def test_database_access_conflicts_fail_closed(self):
+        self.catalog['definitions']['postgresql']['capabilities'].append('service.postgresql.database-access')
+        account = self.accounts['postgres']
+        account['databaseAccess'] = [{'databaseRef':'db','privileges':['SELECT']}]
+        self.assertEqual('BLOCKED',self.resolve()['status'])  # legacy policy is not broadened silently
+        del account['databaseRef']; del account['grants']
+        for entries in ([{'databaseRef':'missing','privileges':['SELECT']}],
+                        [{'databaseRef':'db','privileges':['CREATE']}],
+                        [{'databaseRef':'db','privileges':['SELECT'],'additionalCreatorRoles':['postgres']}],
+                        [{'databaseRef':'db','privileges':['SELECT']}]*2):
+            account['databaseAccess']=entries
+            self.assertEqual('BLOCKED',self.resolve()['status'])
+
     def setUp(self):
         self.resources = {'db': {'kind': 'postgresql.database', 'binding': 'pg', 'parameters': {'name': 'app'}},
                           'schema': {'kind': 'postgresql.schema', 'binding': 'pg', 'databaseRef': 'db', 'parameters': {'name': 'api'}}}
@@ -223,6 +255,13 @@ class ApplicationProvidersTest(unittest.TestCase):
         self.assertEqual([], result['libraryJobs'][0]['accounts'])
         self.assertEqual([], result['libraryJobs'][0]['libraries'])
         self.assertEqual('analytics', result['instanceJobs'][0]['accounts'][0]['grants'][0]['database'])
+        self.resources['retired'] = {'kind': 'clickhouse.database', 'binding': 'pg', 'parameters': {'name': 'archive'}}
+        self.resources['external'] = {'kind': 'clickhouse.database', 'binding': 'pg', 'mode':'existing', 'parameters': {'name': 'external'}}
+        self.accounts['postgres']['grants'] = []
+        result = self.resolve()
+        self.assertEqual('PASS',result['status'],result['findings'])
+        self.assertEqual({'analytics','archive'}, {db['name'] for db in result['instanceJobs'][0]['databases']})
+        self.assertEqual([],result['instanceJobs'][0]['accounts'][0]['grants'])
 
 
 if __name__ == '__main__':

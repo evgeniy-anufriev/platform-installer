@@ -301,6 +301,29 @@ def resolve_connection(deployment_id, declaration, selector, desired, configurat
     return connection
 
 
+def account_policies(settings, layers):
+    """Keep policy alternatives atomic after ordinary Ansible combine.
+
+    The resolving task supplies layers in its existing order. Credential
+    inheritance is unchanged; a deliberate policy switch clears its alternative.
+    """
+    import copy
+    result = copy.deepcopy(settings)
+    policies = {}
+    for layer in layers:
+        for name, declaration in layer.get('accounts', {}).items():
+            if 'databaseAccess' in declaration:
+                if 'databaseRef' in declaration or 'grants' in declaration:
+                    raise ValueError('APPLICATION_PROVIDER_GRANTS_INVALID')
+                policies[name] = 'databaseAccess'
+            elif 'databaseRef' in declaration or 'grants' in declaration:
+                policies[name] = 'legacy'
+    for name, policy in policies.items():
+        for key in (('databaseRef', 'grants') if policy == 'databaseAccess' else ('databaseAccess',)):
+            result['accounts'][name].pop(key, None)
+    return result
+
+
 def project(rows, desired, configuration, catalog, hosts, project_id="ansible-project"):
     findings, libraries, ports = [], {}, set()
     if not isinstance(project_id, str) or not ID.fullmatch(project_id):
@@ -333,6 +356,7 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
         if (accounts or agent_required) and settings.get("provisioner", {}).get("type") != "vault-agent":
             findings.append(finding("APPLICATION_PROVISIONER_REQUIRED", field))
         for name, account in declared_accounts.items():
+            nonsecret_values(account.get("databaseAccess", []), field + ".accounts." + name + ".databaseAccess", findings)
             nonsecret_values(account.get("grants", []), field + ".accounts." + name + ".grants", findings)
             for credential, descriptor in account["credentials"].items():
                 source = descriptor["source"]

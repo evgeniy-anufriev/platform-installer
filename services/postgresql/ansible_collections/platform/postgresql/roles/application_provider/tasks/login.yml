@@ -20,7 +20,7 @@
   register: application_provider_login
   changed_when: false
   failed_when: application_provider_login.rc != 0 or application_provider_login.stdout != '1'
-  loop: "{{ platform_postgresql_application_job.accounts }}"
+  loop: "{{ platform_postgresql_application_job.loginAccounts | default(platform_postgresql_application_job.accounts) }}"
   when: >-
     application_provider_probe_scope == 'all' or
     (application_provider_probe_scope == 'existing' and item.name in platform_application_provider_runtime[platform_postgresql_application_job.providerId].catalog.roles) or

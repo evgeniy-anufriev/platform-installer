@@ -95,6 +95,31 @@ def normalize_grants(values):
     return [dict(kind=k[0], schema=k[1], name=k[2], privileges=sorted(v)) for k, v in sorted(merged.items())]
 
 
+def normalize_database_access(values, databases, provider_id, owner):
+    """Explicit database-wide policy; never infer creator roles from membership."""
+    if not isinstance(values, list) or len(values) > 256:
+        raise ValueError('APPLICATION_PROVIDER_GRANTS_INVALID')
+    result, seen = [], set()
+    for value in values:
+        if not isinstance(value, dict) or set(value) - {'databaseRef', 'privileges', 'additionalCreatorRoles'}:
+            raise ValueError('APPLICATION_PROVIDER_GRANTS_INVALID')
+        database = databases.get(value.get('databaseRef'))
+        privileges, creators = value.get('privileges'), value.get('additionalCreatorRoles', [])
+        if (not database or database['providerId'] != provider_id or database['mode'] != 'managed'
+                or database['name'] in seen or not isinstance(privileges, list) or not privileges
+                or len(privileges) > 4 or any(not isinstance(p, str) for p in privileges)
+                or len(set(privileges)) != len(privileges) or not set(privileges) <= GRANTS['table']
+                or not isinstance(creators, list) or len(creators) > 256):
+            raise ValueError('APPLICATION_PROVIDER_GRANTS_INVALID')
+        creators = [identifier(role, True) for role in creators]
+        if len(set(creators)) != len(creators):
+            raise ValueError('APPLICATION_PROVIDER_GRANTS_INVALID')
+        seen.add(database['name'])
+        result.append(dict(database=database['name'], privileges=sorted(privileges),
+                           creatorRoles=sorted(set([owner] + creators))))
+    return sorted(result, key=lambda row: row['database'])
+
+
 def project_providers(rows, snapshot, configuration, desired, catalog):
     """Discovery per provider; mutation batches per library and logical instance."""
     jobs, findings, names, logical = {}, [], {}, {}
@@ -185,7 +210,11 @@ def project_providers(rows, snapshot, configuration, desired, catalog):
                     ref = connection['deploymentRef']
                     job = provider(ref)
                     database = databases.get(account.get('databaseRef'))
-                    if service_type != 'redis' and (not database or database['providerId'] != ref or (account['mode'] == 'managed' and database['mode'] != 'managed')):
+                    bulk_access = 'databaseAccess' in account
+                    if bulk_access and (service_type != 'postgresql' or account['mode'] != 'managed'
+                                        or 'service.postgresql.database-access' not in catalog['definitions']['postgresql'].get('capabilities', [])):
+                        raise ValueError('APPLICATION_PROVIDER_CAPABILITY_UNSUPPORTED')
+                    if not bulk_access and service_type != 'redis' and (not database or database['providerId'] != ref or (account['mode'] == 'managed' and database['mode'] != 'managed')):
                         raise ValueError('APPLICATION_PROVIDER_DATABASE_REF_INVALID')
                     credentials = account['credentials']
                     if set(credentials) != {'username', 'password'} or credentials['username']['source']['kind'] != 'literal':
@@ -207,6 +236,13 @@ def project_providers(rows, snapshot, configuration, desired, catalog):
                         grants = normalize_clickhouse_grants(account.get('grants', []), databases, ref)
                         if account['mode'] == 'managed' and any(databases[g['databaseRef']]['mode'] != 'managed' for g in account.get('grants', [])):
                             raise ValueError('APPLICATION_PROVIDER_GRANTS_INVALID')
+                    elif bulk_access:
+                        if 'grants' in account or 'databaseRef' in account:
+                            raise ValueError('APPLICATION_PROVIDER_GRANTS_INVALID')
+                        owner = 'pla_' + hashlib.sha256((project_id + ':' + ref + ':' + library_id).encode()).hexdigest()[:24]
+                        access = normalize_database_access(account['databaseAccess'], databases, ref, owner)
+                        grants = []
+                        database = next((db for db in databases.values() if access and db['name'] == access[0]['database']), None)
                     else:
                         grants = normalize_grants(account.get('grants', []))
                         schemas_by_name = {s['name']: s for s in database['schemas']}
@@ -219,6 +255,9 @@ def project_providers(rows, snapshot, configuration, desired, catalog):
                                  listener=listener, candidates=connection.get('targets', job['candidates']),
                                  passwordRef=(credentials['password']['source']['ref'] if credentials['password']['source']['kind'] == 'runtime_secret_ref' else 'pla-vault-'+hashlib.sha256(repr(sorted(credentials['password']['source'].items())).encode()).hexdigest()[:32]), grants=grants,
                                  marker=marker(project_id, ref, library_id, 'account', instance_id + '/' + account_id))
+                    if bulk_access:
+                        value['databaseAccess'] = access
+                        value['database'] = database['name'] if database else 'postgres'
                     job['accounts'].append(value)
                     if database:
                         database['accounts'].append(value)
@@ -247,8 +286,15 @@ def split_provider_jobs(providers):
             database_names = {a['database'] for a in accounts}
             if job.get('serviceType') == 'clickhouse':
                 database_names.update(grant['database'] for account in accounts for grant in account['grants'])
-            databases = [dict(db, accounts=[a for a in accounts if a['database'] == db['name']])
-                         for db in job['databases'] if db['name'] in database_names]
+            bulk_accounts = [a for a in accounts if 'databaseAccess' in a]
+            reconcile_accounts = bulk_accounts + ([a for a in accounts if a['mode'] == 'managed']
+                                                  if job.get('serviceType') == 'clickhouse' else [])
+            databases = [dict(db, accounts=[a for a in accounts if a['database'] == db['name'] or
+                                           (a in bulk_accounts and db['libraryId'] == library_id and db['mode'] == 'managed')])
+                         for db in job['databases'] if db['name'] in database_names or
+                         (reconcile_accounts and db['libraryId'] == library_id and db['mode'] == 'managed')]
+            login_accounts = [dict(a, database=entry['database']) for a in accounts
+                              for entry in (a.get('databaseAccess') or [{'database': a['database']}])]
             instance_jobs.append(dict(job, libraryId=library_id, instanceId=instance_id, libraries=[],
-                                      databases=databases, accounts=accounts))
+                                      databases=databases, accounts=accounts, loginAccounts=login_accounts))
     return library_jobs, instance_jobs

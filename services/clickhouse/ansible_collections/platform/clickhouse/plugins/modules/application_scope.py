@@ -5,7 +5,7 @@ from subprocess import SubprocessError
 from ansible.module_utils.basic import AnsibleModule
 from ansible_collections.platform.clickhouse.plugins.module_utils.application_sql import (
     NativeClient, ProviderFailure, custody, publish, state, identifier,
-    required_grants, user_batch, verify_login)
+    required_grants, user_batch, verify_login, managed_grant_delta)
 
 DOCUMENTATION = r'''
 module: application_scope
@@ -106,15 +106,17 @@ def main():
                 if existing and len(existing) != len(targets):
                     raise ProviderFailure('CLICKHOUSE_APPLICATION_PARTIAL_ACCOUNT')
                 expected = required_grants(account)
-                missing_union = set()
+                missing_union, removed_union = set(), set()
                 for target, client in zip(targets, clients):
                     rows = observed[target['memberId']]
                     grants = [row for row in rows if row['kind'] == 'grant' and row['name'] == account['name']]
                     current = {(row['database'], row['table'] or '*', row['privilege']) for row in grants}
-                    if account['mode'] == 'managed' and (not current <= expected or any(row['column'] or row['is_partial_revoke'] or row['grant_option'] for row in grants)
-                            or any(row['kind'] == 'role' and row['name'] == account['name'] for row in rows)):
-                        raise ProviderFailure('CLICKHOUSE_APPLICATION_GRANTS_DRIFT')
                     missing = expected - current
+                    if account['mode'] == 'managed':
+                        missing, removed = managed_grant_delta(account, rows, databases)
+                        if phase == 'verify' and removed:
+                            raise ProviderFailure('CLICKHOUSE_APPLICATION_GRANTS_DRIFT')
+                        removed_union.update(removed)
                     if phase == 'verify' and missing and account['mode'] == 'managed':
                         raise ProviderFailure('CLICKHOUSE_APPLICATION_GRANTS_MISSING')
                     missing_union.update(missing)
@@ -131,7 +133,7 @@ def main():
                         finally:
                             user_client.close()
                 if phase == 'accounts' and account['mode'] == 'managed':
-                    account_sql.append(user_batch(account, args['passwords'][account['passwordRef']], missing_union, not existing, job['mode'] == 'raft-ha'))
+                    account_sql.append(user_batch(account, args['passwords'][account['passwordRef']], missing_union, not existing, job['mode'] == 'raft-ha', removed_union))
             if any(account_sql):
                 clients[0].query('SET distributed_ddl_task_timeout = 30;\n' + '\n'.join(account_sql))
                 changed = True
@@ -149,6 +151,11 @@ def main():
                     if value['mode'] == 'managed':
                         witness[kind + '/' + value['name']] = {'marker': value['marker'], 'ids': ids}
                 for account in accounts:
+                    if account['mode'] == 'managed':
+                        for rows in final.values():
+                            missing, removed = managed_grant_delta(account, rows, databases)
+                            if missing or removed:
+                                raise ProviderFailure('CLICKHOUSE_APPLICATION_GRANTS_DRIFT')
                     for target in targets:
                         user_client = NativeClient(target, directory, args['passwords'][account['passwordRef']], account['name'], args['query_timeout'])
                         try:
