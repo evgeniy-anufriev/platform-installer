@@ -283,3 +283,65 @@ isolated public cspa/gateway project copy. Evidence:
 container restart or installation. Screenshots inspected at1440x900 and1024x720;
 ports editor body can scroll, keeping the existing fixed draft footer visible.
 Final full frontend236 PASS; ESLint, TypeScript/Vite build PASS. No Core/Go or target changes. EXE not rebuilt in this task.
+
+## Working UI aligned to the revised mockup — 2026-10-16
+
+Owner authorized production UI integration of the revised mockup. Instance Ports
+and Connections tabs are removed; Parameters remains separate. General now holds
+image/read-only Core identity, library/service summary, readiness, Host/Container
+editing, Add Port/provenance and endpoint settings. The library link opens its
+existing Connections tab. Source rows stay separate: React does not reconstruct
+Ansible precedence. A missing application-package port shows an explicit source
+hint, never an invented effective value. Core-derived endpoint addresses/ports
+are not editable mockup fields; the existing endpoint contract/editor remains
+under an expandable section. Readiness retains its actual container/healthcheck
+contract instead of the synthetic mockup's HTTP-path example.
+
+Cards/spacing/actions and credential typography are compact. Account management
+mode reset now removes only mode, preserving authored credentials/access; an
+added regression test checks that distinction. No Core/Go/security boundary or
+runtime lease change, no additional architecture review required for this UI
+delta. Primary desktop widths1440/1024; below1024 shell remains1024px with its
+desktop columns, no smaller composition. Existing layout-only max800 rules were
+removed from applications.css.
+
+Real React/Wails Save/Review/Commit/reopen and reset PASS for image and host port
+on an isolated QA project copy; library navigation and grouped Secrets checked.
+Evidence `.runtime/qa/application-design/ui-parity-wails.json`. Screenshots
+general1440x900, general1024x900 and secrets1024x900 inspected. General body:
+1440 client505/scroll505px;1024 client506/scroll506px, no horizontal overflow.
+At800 viewport shell width1024 with160/864px columns. No target mutation or
+infrastructure Apply. Earlier attempts with stopped/starting Wails dev server
+failed CONNECTION_REFUSED before project open; subsequent actual bridge PASS.
+Final frontend244 PASS/22files, lint/typecheck/build checked; known-value scan
+20 values/314files/0matches. This UI acceptance does not close the outstanding
+Secrets/Core target-run, repeat and cleanup gates recorded in the access journal.
+Production desktop EXE rebuilt successfully with `wails build -skipbindings`
+(no Go/binding contract changes). The backend context was restored to the original
+QA project after isolated UI checks. Attempted bounded cleanup of newly created
+ui-parity-project fixtures and this session's exact owned dev processes was
+rejected by automatic approval policy, without a detailed reason. No bypass or
+repeat deletion attempted; these temporary resources remain. Existing Vite,
+historical owner-retained QA data and target infrastructure are preserved.
+
+### Parameters merged into Startup — owner follow-up
+
+Removed the instance Parameters tab. Startup has separate ENV and Configuration
+settings blocks; the latter renders only when package or authored parameters
+exist. The existing ApplicationValueFields and parameters/environment writer
+operations are unchanged, with no migration or value rewriting. Added tests for
+empty hiding, package-only defaults and parameters-only save payload. Focused
+editor15 PASS, lint/typecheck/production desktop build PASS. HTML mockup reflects
+the two Startup blocks as well.
+
+Actual React/Wails Add configuration parameter, edit, Review/Save/reopen and
+reset/Save/reopen PASS on a fresh owned QA project copy. The ENV editor remains
+separate. Evidence ui-parity-wails.json now includes startup-configuration cases;
+no target operation was invoked. Original QA project context restored. Earlier
+cleanup rejection/retention and the independent Core target acceptance remain
+unchanged; this local UI follow-up does not relabel those gates.
+Owner requested the UI commit and master synchronization. Final frontend
+regression247 PASS/22files, lint/typecheck PASS. Unrelated SDKU package definitions,
+tests, journal and their CURRENT_STATE row are excluded from the UI publication.
+Commit-scope known-value audit:20 protected values,318 source/evidence files,
+zero matches; no secret values printed. Publication identity is Git history.

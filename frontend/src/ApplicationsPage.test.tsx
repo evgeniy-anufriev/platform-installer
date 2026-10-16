@@ -193,10 +193,9 @@ describe("application editor", () => {
     } as unknown as OpenResult["snapshot"];
     render(<Harness calls={[]} view={view} snapshot={snapshot} />);
     await selectSlot();
-    expect(
-      screen.getByText(/Пакет библиотеки · gateway: 10102 → 8080/),
-    ).toBeTruthy();
-    await userEvent.click(screen.getByRole("button", { name: "Порты" }));
+    await userEvent.click(screen.getByText("Источники настроек портов"));
+    expect(screen.getByText("10102 → 8080")).toBeTruthy();
+
     expect(screen.getByText("Пакет библиотеки · gateway")).toBeTruthy();
     expect(screen.getByText("Размещение · node1")).toBeTruthy();
     expect(screen.getByText(/Core · node1 · verified-revision/)).toBeTruthy();
@@ -218,7 +217,7 @@ describe("application editor", () => {
       screen.queryByRole("textbox", { name: /Имя экземпляра/ }),
     ).toBeNull();
   });
-  it("keeps only image, summary and readiness on General, with parameters on their own tab", async () => {
+  it("keeps General focused and moves configuration parameters to Startup", async () => {
     render(<Harness calls={[]} />);
     await selectSlot();
     expect(
@@ -228,12 +227,76 @@ describe("application editor", () => {
       screen.queryByRole("heading", { name: "Параметры приложения" }),
     ).toBeNull();
     expect(screen.queryByLabelText("PASSWORD", { exact: true })).toBeNull();
-    expect(screen.getByText(/Экземпляр: 28480 → —/)).toBeTruthy();
-    await userEvent.click(screen.getByRole("button", { name: "Параметры" }));
+    expect(screen.getByLabelText("Порт хоста")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Порты" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Подключения" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Параметры" })).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Запуск" }));
     expect(
-      screen.getByRole("heading", { name: "Параметры приложения" }),
+      screen.getByRole("heading", { name: "Настройки конфигурации" }),
     ).toBeTruthy();
     expect(screen.getByLabelText("PASSWORD", { exact: true })).toBeTruthy();
+  });
+  it("hides empty configuration settings while keeping ENV on Startup", async () => {
+    const view = structuredClone(managed);
+    delete objectValue(
+      objectValue(
+        objectValue(view.applicationLibraries.sdku.applications).gateway,
+      ).overrides,
+    ).parameters;
+    render(<Harness calls={[]} view={view} />);
+    await selectSlot();
+    await userEvent.click(screen.getByRole("button", { name: "Запуск" }));
+    expect(
+      screen.queryByRole("heading", { name: "Настройки конфигурации" }),
+    ).toBeNull();
+    expect(
+      screen.getByRole("heading", { name: "Переменные окружения (ENV)" }),
+    ).toBeTruthy();
+  });
+  it("shows configuration settings declared only by the package", async () => {
+    const view = structuredClone(managed);
+    delete objectValue(
+      objectValue(
+        objectValue(view.applicationLibraries.sdku.applications).gateway,
+      ).overrides,
+    ).parameters;
+    objectValue(
+      objectValue(
+        view.applicationPackages["application:gateway@1.0.0"].definition,
+      ).defaults,
+    ).parameters = { request_timeout: 30 };
+    render(<Harness calls={[]} view={view} />);
+    await selectSlot();
+    await userEvent.click(screen.getByRole("button", { name: "Запуск" }));
+    expect(
+      (
+        screen.getByLabelText("request_timeout", {
+          exact: true,
+        }) as HTMLInputElement
+      ).value,
+    ).toBe("30");
+  });
+  it("saves configuration parameters through their existing setting, without changing ENV", async () => {
+    const calls: ApplicationIntent[] = [];
+    render(<Harness calls={calls} />);
+    await selectSlot();
+    await userEvent.click(screen.getByRole("button", { name: "Запуск" }));
+    const input = screen.getByLabelText("PASSWORD", { exact: true });
+    await userEvent.clear(input);
+    await userEvent.type(input, "user-owned-updated");
+    await userEvent.click(
+      within(input.closest(".application-field")!).getByRole("button", {
+        name: "В черновик",
+      }),
+    );
+    expect(calls).toEqual([
+      expect.objectContaining({
+        operation: "SetApplicationLibraryOverride",
+        setting: "parameters",
+        value: { PASSWORD: "user-owned-updated" },
+      }),
+    ]);
   });
   it("reuses public descriptors across libraries and refreshes them for a new saved revision", async () => {
     HTMLDialogElement.prototype.showModal = function () {
@@ -411,7 +474,7 @@ describe("application editor", () => {
     const calls: ApplicationIntent[] = [];
     render(<Harness calls={calls} />);
     await selectSlot();
-    await userEvent.click(screen.getByRole("button", { name: "Порты" }));
+
     const host = screen.getByLabelText("Порт хоста");
     expect((host as HTMLInputElement).value).toBe("28480");
     expect(
@@ -445,7 +508,7 @@ describe("application editor", () => {
     const calls: ApplicationIntent[] = [];
     render(<Harness calls={calls} />);
     await selectSlot();
-    await userEvent.click(screen.getByRole("button", { name: "Порты" }));
+
     const container = screen.getByLabelText("Порт контейнера"),
       host = screen.getByLabelText("Порт хоста");
     await userEvent.click(

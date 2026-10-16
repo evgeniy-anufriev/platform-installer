@@ -251,17 +251,14 @@ export function ApplicationCredentials({
                         aria-label="Управление учётной записью"
                         disabled={disabled}
                         value={String(account.mode ?? "")}
-                        onChange={(event) =>
-                          void save(
-                            event.target.value
-                              ? {
-                                  ...account,
-                                  mode: event.target.value,
-                                  credentials,
-                                }
-                              : {},
-                          )
-                        }
+                        onChange={(event) => {
+                          const next = { ...account };
+                          if (event.target.value) {
+                            next.mode = event.target.value;
+                            next.credentials = credentials;
+                          } else delete next.mode;
+                          void save(next);
+                        }}
                       >
                         <option value="">Из пакета</option>
                         <option value="managed">Создавать и настраивать</option>

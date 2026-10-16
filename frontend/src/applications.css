@@ -1,4 +1,5 @@
 .applications-page {
+  min-width: 750px;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -95,20 +96,7 @@
     grid-template-columns: 220px minmax(0, 1fr);
   }
 }
-@media (max-width: 800px) {
-  .applications-layout {
-    display: flex;
-    flex-direction: column;
-    overflow: auto;
-  }
-  .application-list {
-    max-height: 180px;
-    flex-shrink: 0;
-  }
-  .application-editor {
-    min-height: 420px;
-  }
-}
+
 .application-list label {
   display: grid;
   gap: 6px;
@@ -327,13 +315,7 @@
     padding: 14px;
   }
 }
-@media (max-width: 800px) {
-  .applications-layout {
-    display: flex;
-    flex-direction: column;
-    overflow: auto;
-  }
-}
+
 .workspace-content:has(> .applications-page) {
   display: flex;
   flex-direction: column;
@@ -418,6 +400,7 @@
 .application-credential-table code {
   display: block;
   font-size: 11px;
+  color: #355a82;
 }
 .application-credential-variables {
   display: flex;
@@ -486,7 +469,7 @@
   color: #65758b;
 }
 .application-credential-table td:last-child {
-  width: 65%;
+  width: 60%;
 }
 .application-account-card > fieldset {
   display: grid;
@@ -539,6 +522,11 @@
 }
 .application-account-access td button {
   margin-right: 6px;
+  padding: 5px 8px;
+  font-size: 11px;
+  color: #34659a;
+  background: #fff;
+  border-color: #cad5e3;
 }
 .application-rights {
   display: flex;
@@ -873,7 +861,132 @@
 }
 .application-instance-general {
   display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
   gap: 8px;
+}
+.shell:has(.applications-page) {
+  min-width: 1024px;
+}
+@media (max-width: 1023px) {
+  .shell:has(.applications-page) {
+    grid-template-columns: 160px minmax(0, 1fr);
+  }
+  .shell:has(.applications-page) .app-header {
+    grid-template-columns: minmax(125px, 1fr) auto minmax(160px, 220px) minmax(
+        145px,
+        175px
+      );
+    grid-template-areas: "identity statuses node installation" "actions actions actions actions";
+    gap: 4px 7px;
+  }
+}
+.application-instance-general > .application-section:first-child,
+.application-general-ports {
+  grid-column: 1 / -1;
+}
+.application-instance-general .application-image-field {
+  margin: 0;
+}
+.application-instance-general .application-field-origin {
+  font-size: 11px;
+}
+.application-overview-lines {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 6px 10px;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+.application-overview-lines dd {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 8px;
+}
+.application-overview-lines dd span {
+  overflow-wrap: anywhere;
+  background: #edf4ff;
+  border-radius: 4px;
+  padding: 1px 4px;
+}
+.application-general-summary h3 {
+  margin: 0 0 8px;
+}
+.application-general-ports {
+  border: 1px solid #e1e7ef;
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: #fff;
+}
+.application-general-ports > .application-section {
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.application-general-ports .application-ports h3 {
+  font-size: 13px;
+}
+.application-general-ports .application-ports > .row > button {
+  padding: 5px 8px;
+  font-size: 12px;
+}
+.application-general-ports .application-general-port-overrides > h3 {
+  display: none;
+}
+.application-general-port-overrides fieldset {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  margin: 6px 0;
+  padding: 4px 8px;
+}
+.application-general-port-overrides .application-field {
+  margin: 0;
+}
+.application-general-port-overrides .application-field > small {
+  display: none;
+}
+.application-general-port-overrides .application-field > label {
+  display: grid;
+  gap: 3px;
+}
+.application-general-port-overrides input {
+  padding: 6px 8px;
+}
+.application-general-port-overrides .application-field > .row {
+  display: flex;
+  gap: 4px;
+  margin-top: 3px;
+}
+.application-general-port-overrides .application-field > .row button:disabled {
+  display: none;
+}
+.application-general-port-overrides button {
+  padding: 3px 7px;
+  font-size: 11px;
+}
+.application-general-endpoint,
+.application-port-provenance {
+  font-size: 12px;
+  margin-top: 5px;
+}
+.application-general-endpoint > summary,
+.application-port-provenance > summary {
+  cursor: pointer;
+  color: #34659a;
+}
+.application-content:has(.application-instance-general) {
+  padding: 10px 12px;
+}
+.application-instance-general .application-readiness-fields {
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1fr);
+}
+.application-instance-general .application-readiness > .row {
+  flex-wrap: wrap;
+}
+.application-instance-general .application-readiness-fields input,
+.application-instance-general .application-readiness-fields select {
+  padding: 6px;
+  min-width: 0;
 }
 .application-instance-general > .application-section {
   padding: 10px;

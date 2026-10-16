@@ -169,6 +169,17 @@ the browser check; 1440x900 was rendered and visually inspected as well.
 Owner baseline: 1440 and 1024 CSS pixels are the primary desktop widths. Below
 1024 keep a minimum 1024-pixel layout with horizontal scrolling; do not add a
 smaller/mobile composition. This is the acceptance rule for subsequent UI work.
+Production follow-up integrates the compact General layout and removes instance
+Ports/Connections tabs while retaining Parameters. Source provenance stays
+expandable and separate, with the existing per-side port writer/reset. Library
+connection editing remains library-owned. Mockup-only HTTP readiness path and
+free public endpoint hostname/port do not match the existing contract: production
+retains typed container/healthcheck readiness and the established endpoint editor,
+with Core owning resolved public addresses. No new Core fields are implied.
+Owner follow-up merges instance Parameters into Startup: ENV and Configuration
+settings are distinct blocks using their existing environment/parameters writer
+settings. Configuration settings are hidden when both package and authored
+parameters are empty. The instance now has five tabs; library tabs are unchanged.
 
 The production Secrets tab edits `overrides.provisioner.secret_bindings` through
 the existing writer. A row binds a process variable to an account's `username`

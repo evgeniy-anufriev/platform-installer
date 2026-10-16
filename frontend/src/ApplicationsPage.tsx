@@ -269,7 +269,11 @@ export function ApplicationsPage({
     >
       <div className="application-field-origin">
         <span>
-          {authoredValue === undefined ? "Из пакета" : "Переопределено"}
+          {authoredValue === undefined
+            ? defaultValue === undefined
+              ? "Не задано в пакете"
+              : "Из пакета"
+            : "Переопределено"}
         </span>
         <button
           className="application-link"
@@ -294,6 +298,11 @@ export function ApplicationsPage({
         ) : (
           <input
             type={type}
+            placeholder={
+              key.startsWith("port:") && defaultValue === undefined
+                ? "См. источники портов"
+                : undefined
+            }
             min={type === "number" ? 1 : undefined}
             max={type === "number" ? 65535 : undefined}
             value={local[key] ?? String(authoredValue ?? defaultValue ?? "")}
@@ -350,16 +359,7 @@ export function ApplicationsPage({
     </div>
   );
   const tabs = slot
-    ? [
-        "Основное",
-        "Порты",
-        "Параметры",
-        "Подключения",
-        "Секреты",
-        "Файлы",
-        "Запуск",
-        "Состояние",
-      ]
+    ? ["Основное", "Секреты", "Файлы", "Запуск", "Состояние"]
     : ["Общее", "Подключения", "Ресурсы и секреты"];
   const selectedTab = tabs.includes(tab) ? tab : tabs[0];
   const resolved = snapshot?.applicationLibraries?.libraries?.[selected];
@@ -592,9 +592,7 @@ export function ApplicationsPage({
                   </button>
                   {slot && <span> / {slot}</span>}
                 </div>
-                <h2>
-                  {slot ? `Приложение · ${slot}` : `Библиотека · ${selected}`}
-                </h2>
+                <h2>{slot || selected}</h2>
                 <small>
                   {String(
                     slot
@@ -609,7 +607,7 @@ export function ApplicationsPage({
                     onClick={() => {
                       if (
                         window.confirm(
-                          "Удалить authored настройки slot? Recipe defaults сохраняются; это не отключает приложение и не удаляет runtime ресурсы.",
+                          "Сбросить настройки экземпляра к пакету? Это не отключает приложение и не удаляет установленные ресурсы.",
                         )
                       )
                         void send({
@@ -619,7 +617,7 @@ export function ApplicationsPage({
                         });
                     }}
                   >
-                    Сбросить настройки slot
+                    Сбросить настройки
                   </button>
                 )}
                 <nav className="application-tabs">
@@ -998,78 +996,49 @@ export function ApplicationsPage({
                       className="application-section application-general-summary"
                       aria-label="Сводка конфигурации"
                     >
-                      <div className="application-summary">
-                        <div>
-                          <small>Размещение библиотеки</small>
-                          <strong>
-                            {Object.keys(placements)
-                              .filter((host) =>
-                                Object.hasOwn(placements[host] ?? {}, selected),
-                              )
-                              .join(", ") || "Не задано"}
-                          </strong>
-                          <button
-                            className="application-link"
-                            onClick={() =>
-                              navigate(() => {
-                                setSlot("");
-                                setTab("Общее");
-                              })
-                            }
-                          >
-                            Настроить библиотеку
-                          </button>
-                        </div>
-                        <div>
-                          <small>Публикация портов</small>
-                          <strong>
-                            {portSources
-                              .filter(
-                                (source) => Object.keys(source.ports).length,
-                              )
-                              .slice(0, 2)
-                              .map(
-                                (source) =>
-                                  source.label +
-                                  ": " +
-                                  Object.values(source.ports)
-                                    .map((raw) => {
-                                      const port = objectValue(raw);
-                                      return (
-                                        String(port.published ?? "—") +
-                                        " → " +
-                                        String(port.container ?? "—")
-                                      );
-                                    })
-                                    .join(", "),
-                              )
-                              .join("; ") || "Не заданы"}
-                          </strong>
-                          <button
-                            className="application-link"
-                            onClick={() => navigate(() => setTab("Порты"))}
-                          >
-                            Настроить порты
-                          </button>
-                        </div>
-                        <div>
-                          <small>Подключения</small>
-                          <strong>
-                            {
-                              Object.keys(
-                                objectValue(appDefinition.connections),
-                              ).length
-                            }{" "}
-                            объявлено пакетом
-                          </strong>
-                          <button
-                            className="application-link"
-                            onClick={() => navigate(() => setTab("Секреты"))}
-                          >
-                            Настроить секреты
-                          </button>
-                        </div>
-                      </div>
+                      <h3>Библиотека и подключения</h3>
+                      <dl className="application-overview-lines">
+                        <dt>Размещение</dt>
+                        <dd>
+                          {Object.keys(placements)
+                            .filter((host) =>
+                              Object.hasOwn(placements[host] ?? {}, selected),
+                            )
+                            .join(", ") || "Не задано"}
+                        </dd>
+                        <dt>Подключения</dt>
+                        <dd>
+                          {Object.entries(
+                            objectValue(appDefinition.connections),
+                          ).map(([name, raw]) => {
+                            const binding = String(
+                              objectValue(raw).library_binding ?? name,
+                            );
+                            const target = objectValue(
+                              objectValue(library.bindings)[binding],
+                            );
+                            return (
+                              <span
+                                key={name}
+                                title={`${binding}: ${String(target.deploymentRef ?? target.profileRef ?? "Не задано")}`}
+                              >
+                                {name}
+                              </span>
+                            );
+                          })}
+                        </dd>
+                      </dl>
+                      <button
+                        className="application-link"
+                        onClick={() =>
+                          navigate(() => {
+                            setSlot("");
+                            setTab("Подключения");
+                          })
+                        }
+                      >
+                        Настроить подключения библиотеки ↗
+                      </button>
                     </section>
                     <ApplicationReadiness
                       key={
@@ -1082,94 +1051,95 @@ export function ApplicationsPage({
                       onSave={(value) => send(override("readiness", value))}
                       onReset={() => send(remove("readiness"))}
                     />
+                    <div className="application-general-ports">
+                      <ApplicationPorts
+                        compact
+                        key={selected + slot + "port-sources"}
+                        sources={portSources}
+                        value={objectValue(overrides.ports)}
+                        disabled={busy}
+                        onDirtyChange={(v) => markChildDirty(v, "add-port")}
+                        onSave={(name, value) =>
+                          send(override(name, value, "ports"))
+                        }
+                      />
+                      <section className="application-section application-general-port-overrides">
+                        {" "}
+                        <h3>Host → Container</h3>
+                        {Object.entries({
+                          ...objectValue(defaults.ports),
+                          ...objectValue(overrides.ports),
+                        }).map(([listener, raw]) => {
+                          const d = objectValue(
+                            objectValue(defaults.ports)[listener],
+                          );
+                          const a = objectValue(
+                            objectValue(overrides.ports)[listener],
+                          );
+                          return (
+                            <fieldset key={listener}>
+                              <legend>{listener}</legend>
+                              {(
+                                [
+                                  ["published", "Порт хоста"],
+                                  ["container", "Порт контейнера"],
+                                ] as const
+                              ).map(([side, label]) =>
+                                scalar(
+                                  `port:${listener}:${side}`,
+                                  label,
+                                  d[side],
+                                  a[side],
+                                  (v) =>
+                                    send(
+                                      override(
+                                        listener,
+                                        { ...a, [side]: Number(v) },
+                                        "ports",
+                                      ),
+                                    ),
+                                  () => {
+                                    const remaining = { ...a };
+                                    delete remaining[side];
+                                    return send(
+                                      Object.keys(remaining).length
+                                        ? override(listener, remaining, "ports")
+                                        : remove(listener, "ports"),
+                                    );
+                                  },
+                                  "number",
+                                ),
+                              )}
+                              {raw === null && <p>Недоступная схема порта</p>}
+                            </fieldset>
+                          );
+                        })}
+                      </section>
+                      <details className="application-general-endpoint">
+                        <summary>Endpoint · публикация HAProxy / DNS</summary>
+                        <p>
+                          Публикацию и совместимость backend/TLS проверяет Core.
+                        </p>
+                        <ApplicationValueFields
+                          key={selected + slot + "endpoint"}
+                          label="Endpoint"
+                          value={objectValue(overrides.endpoint)}
+                          defaults={objectValue(defaults.endpoint)}
+                          disabled={busy}
+                          onDirtyChange={(v) => markChildDirty(v, "endpoint")}
+                          onSave={(value) =>
+                            send(
+                              Object.keys(value).length
+                                ? override("endpoint", value)
+                                : remove("endpoint"),
+                            )
+                          }
+                        />
+                      </details>
+                    </div>
                   </div>
                 )}
-                {slot && selectedTab === "Параметры" && (
-                  <section className="application-section">
-                    {" "}
-                    <ApplicationValueFields
-                      key={selected + slot + "parameters"}
-                      label="Параметры приложения"
-                      value={objectValue(overrides.parameters)}
-                      defaults={objectValue(defaults.parameters)}
-                      disabled={busy}
-                      onDirtyChange={(v) => markChildDirty(v, "parameters")}
-                      onSave={(value) =>
-                        send(
-                          Object.keys(value).length
-                            ? override("parameters", value)
-                            : remove("parameters"),
-                        )
-                      }
-                    />
-                  </section>
-                )}
-                {slot && selectedTab === "Порты" && (
-                  <ApplicationPorts
-                    key={selected + slot + "port-sources"}
-                    sources={portSources}
-                    value={objectValue(overrides.ports)}
-                    disabled={busy}
-                    onDirtyChange={(v) => markChildDirty(v, "add-port")}
-                    onSave={(name, value) =>
-                      send(override(name, value, "ports"))
-                    }
-                  />
-                )}
-                {slot && selectedTab === "Порты" && (
-                  <section className="application-section">
-                    {" "}
-                    <h3>Переопределения портов экземпляра</h3>
-                    {Object.entries({
-                      ...objectValue(defaults.ports),
-                      ...objectValue(overrides.ports),
-                    }).map(([listener, raw]) => {
-                      const d = objectValue(
-                        objectValue(defaults.ports)[listener],
-                      );
-                      const a = objectValue(
-                        objectValue(overrides.ports)[listener],
-                      );
-                      return (
-                        <fieldset key={listener}>
-                          <legend>{listener}</legend>
-                          {(
-                            [
-                              ["published", "Порт хоста"],
-                              ["container", "Порт контейнера"],
-                            ] as const
-                          ).map(([side, label]) =>
-                            scalar(
-                              `port:${listener}:${side}`,
-                              label,
-                              d[side],
-                              a[side],
-                              (v) =>
-                                send(
-                                  override(
-                                    listener,
-                                    { ...a, [side]: Number(v) },
-                                    "ports",
-                                  ),
-                                ),
-                              () => {
-                                const remaining = { ...a };
-                                delete remaining[side];
-                                return send(
-                                  Object.keys(remaining).length
-                                    ? override(listener, remaining, "ports")
-                                    : remove(listener, "ports"),
-                                );
-                              },
-                              "number",
-                            ),
-                          )}
-                          {raw === null && <p>Недоступная схема порта</p>}
-                        </fieldset>
-                      );
-                    })}
-                  </section>
-                )}
+
                 {slot && selectedTab === "Запуск" && (
                   <>
                     <section className="application-section">
@@ -1201,7 +1171,7 @@ export function ApplicationsPage({
                     <section className="application-section">
                       <ApplicationValueFields
                         key={selected + slot + "environment"}
-                        label="Environment"
+                        label="Переменные окружения (ENV)"
                         value={objectValue(overrides.environment)}
                         defaults={objectValue(defaults.environment)}
                         disabled={busy}
@@ -1214,71 +1184,45 @@ export function ApplicationsPage({
                           )
                         }
                       />
+                      <p className="muted">
+                        ENV передаются процессу контейнера.
+                      </p>
                     </section>
+                    {(Object.keys(objectValue(defaults.parameters)).length >
+                      0 ||
+                      Object.keys(objectValue(overrides.parameters)).length >
+                        0) && (
+                      <section className="application-section">
+                        <ApplicationValueFields
+                          key={selected + slot + "parameters"}
+                          label="Настройки конфигурации"
+                          value={objectValue(overrides.parameters)}
+                          defaults={objectValue(defaults.parameters)}
+                          disabled={busy}
+                          onDirtyChange={(v) => markChildDirty(v, "parameters")}
+                          onSave={(value) =>
+                            send(
+                              Object.keys(value).length
+                                ? override("parameters", value)
+                                : remove("parameters"),
+                            )
+                          }
+                        />
+                        <p className="muted">
+                          Значения для шаблонов конфигурации пакета; не ENV.
+                        </p>
+                      </section>
+                    )}
                   </>
                 )}
-                {slot && selectedTab === "Подключения" && (
-                  <section className="application-section">
-                    <h3>Подключения приложения</h3>
-                    <p>
-                      Привязки принадлежат библиотеке. Совместимость и
-                      разрешение адресов проверяет Core.
-                    </p>
-                    <button
-                      className="application-link"
-                      onClick={() =>
-                        navigate(() => {
-                          setSlot("");
-                          setTab("Подключения");
-                        })
-                      }
-                    >
-                      Настроить библиотеку →
-                    </button>
-                    <div className="application-table-scroll">
-                      <table>
-                        <thead>
-                          <tr>
-                            <th>Подключение</th>
-                            <th>Binding</th>
-                            <th>Deployment / профиль</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {Object.entries(
-                            objectValue(appDefinition.connections),
-                          ).map(([name, raw]) => {
-                            const binding = String(
-                              objectValue(raw).library_binding ?? name,
-                            );
-                            const target = objectValue(
-                              objectValue(library.bindings)[binding],
-                            );
-                            return (
-                              <tr key={name}>
-                                <td>{name}</td>
-                                <td>{binding}</td>
-                                <td>
-                                  {String(
-                                    target.deploymentRef ??
-                                      target.profileRef ??
-                                      "Не задано",
-                                  )}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  </section>
-                )}
+
                 {slot && selectedTab === "Секреты" && (
                   <>
-                    <h3>Credentials всех подключений</h3>
+                    <h3>Секреты подключений</h3>
                     <p>
-                      Источники credentials — настройки проекта; значения
-                      секретов — только сессия.
+                      Подключения настраиваются в библиотеке. Здесь — источники
+                      секретов, переменные приложения и права. Пароли — только в
+                      сессии.
                     </p>
                     <ApplicationCredentials
                       renderVariables={(account, field) => (
@@ -1370,28 +1314,7 @@ export function ApplicationsPage({
                     </p>
                   </>
                 )}
-                {slot && selectedTab === "Порты" && (
-                  <>
-                    <p>
-                      Публикацию и совместимость backend/TLS проверяет Core.
-                    </p>
-                    <ApplicationValueFields
-                      key={selected + slot + "endpoint"}
-                      label="Endpoint"
-                      value={objectValue(overrides.endpoint)}
-                      defaults={objectValue(defaults.endpoint)}
-                      disabled={busy}
-                      onDirtyChange={(v) => markChildDirty(v, "endpoint")}
-                      onSave={(value) =>
-                        send(
-                          Object.keys(value).length
-                            ? override("endpoint", value)
-                            : remove("endpoint"),
-                        )
-                      }
-                    />
-                  </>
-                )}
+
                 {slot && selectedTab === "Состояние" && (
                   <>
                     <p>
@@ -1403,20 +1326,25 @@ export function ApplicationsPage({
                       Origin: ANSIBLE / RESOLUTION_SCOPE; точный источник
                       каждого поля не определяется.
                     </p>
-                    <pre>
-                      {JSON.stringify(
-                        Object.fromEntries(
-                          Object.entries(resolved?.instances ?? {}).filter(
-                            ([, instance]) => instance.slotId === slot,
+                    <details className="application-state-diagnostics">
+                      <summary>
+                        Рассчитанная конфигурация · диагностика Core
+                      </summary>
+                      <pre>
+                        {JSON.stringify(
+                          Object.fromEntries(
+                            Object.entries(resolved?.instances ?? {}).filter(
+                              ([, instance]) => instance.slotId === slot,
+                            ),
                           ),
-                        ),
-                        null,
-                        2,
-                      )}
-                    </pre>
+                          null,
+                          2,
+                        )}
+                      </pre>
+                    </details>
                     <p>
-                      Running / connection checks / endpoint Verify: нет текущих
-                      данных наблюдения. Результаты запусков доступны на
+                      Работа контейнера, подключения и endpoint Verify: нет
+                      текущих данных наблюдения. Результаты запусков доступны на
                       странице установки.
                     </p>
                   </>

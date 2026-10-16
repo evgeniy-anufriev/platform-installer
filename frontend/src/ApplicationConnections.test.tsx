@@ -8,6 +8,36 @@ import {
 } from "./ApplicationCredentials";
 
 describe("application connection settings", () => {
+  it("resets only account management mode and preserves credentials and rights", async () => {
+    const save = vi.fn().mockResolvedValue(true);
+    const credentials = {
+      password: { source: { kind: "runtime_secret_ref", ref: "pg-password" } },
+    };
+    const databaseAccess = [{ databaseRef: "db", privileges: ["SELECT"] }];
+    render(
+      <ApplicationCredentials
+        defaults={{ accounts: { postgres: { mode: "managed", credentials } } }}
+        authored={{
+          accounts: {
+            postgres: { mode: "existing", credentials, databaseAccess },
+          },
+        }}
+        connections={{ postgres: { library_binding: "db" } }}
+        bindings={{}}
+        disabled={false}
+        onSave={save}
+        onDirtyChange={vi.fn()}
+      />,
+    );
+    await userEvent.click(screen.getByText("Настройки"));
+    await userEvent.selectOptions(
+      screen.getByLabelText("Управление учётной записью"),
+      "",
+    );
+    expect(save).toHaveBeenCalledWith({
+      postgres: { credentials, databaseAccess },
+    });
+  });
   it("requires an explicit account mode before a credential override without copying package fields", async () => {
     const save = vi.fn().mockResolvedValue(true);
     render(

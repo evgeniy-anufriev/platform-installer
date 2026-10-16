@@ -8,12 +8,14 @@ export function ApplicationPorts({
   disabled,
   onSave,
   onDirtyChange,
+  compact = false,
 }: {
   sources: PortSource[];
   value: ObjectValue;
   disabled: boolean;
   onSave: (name: string, port: ObjectValue) => Promise<boolean>;
   onDirtyChange: (dirty: boolean) => void;
+  compact?: boolean;
 }) {
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
@@ -58,52 +60,55 @@ export function ApplicationPorts({
           Добавить порт
         </button>
       </div>
-      <p className="muted">
-        Значения каждого источника показаны отдельно. Итог для сервера
-        рассчитывает Core; последний расчёт может отличаться от черновика.
-      </p>
-      {rows.length ? (
-        <div className="application-port-sources-scroll">
-          <table>
-            <thead>
-              <tr>
-                <th>Порт</th>
-                <th>Host → Container</th>
-                <th>Источник</th>
-                <th>Действие</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row, index) => (
-                <tr key={index}>
-                  <td>{row.id}</td>
-                  <td>
-                    {String(row.port.published ?? "—")} →{" "}
-                    {String(row.port.container ?? "—")}
-                  </td>
-                  <td>{row.source}</td>
-                  <td>
-                    {!Object.hasOwn(value, row.id) && (
-                      <button
-                        className="outline"
-                        disabled={disabled}
-                        onClick={() => open(row.id, row.port)}
-                      >
-                        Переопределить
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <p>
-          Порты не заданы в доступных настройках. Добавьте порт Host → Container
-          или выполните проверку проекта для расчёта Core.
+      <details open={!compact} className="application-port-provenance">
+        <summary>Источники настроек портов</summary>
+        <p className="muted">
+          Значения каждого источника показаны отдельно. Итог для сервера
+          рассчитывает Core; последний расчёт может отличаться от черновика.
         </p>
-      )}
+        {rows.length ? (
+          <div className="application-port-sources-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Порт</th>
+                  <th>Host → Container</th>
+                  <th>Источник</th>
+                  <th>Действие</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row, index) => (
+                  <tr key={index}>
+                    <td>{row.id}</td>
+                    <td>
+                      {String(row.port.published ?? "—")} →{" "}
+                      {String(row.port.container ?? "—")}
+                    </td>
+                    <td>{row.source}</td>
+                    <td>
+                      {!Object.hasOwn(value, row.id) && (
+                        <button
+                          className="outline"
+                          disabled={disabled}
+                          onClick={() => open(row.id, row.port)}
+                        >
+                          Переопределить
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p>
+            Порты не заданы в доступных настройках. Добавьте порт Host →
+            Container или выполните проверку проекта для расчёта Core.
+          </p>
+        )}
+      </details>
       {adding && (
         <form
           className="application-port-form"
