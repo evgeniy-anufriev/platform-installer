@@ -140,3 +140,230 @@
   flex-basis: 100%;
   margin-top: 0;
 }
+
+/* Application settings share the project shell; only the form body scrolls. */
+.applications-page {
+  font-size: 12px;
+  color: #21334c;
+  gap: 16px;
+}
+.applications-page h1 {
+  font-size: 22px;
+}
+.applications-page h2 {
+  font-size: 18px;
+}
+.applications-page h3 {
+  font-size: 14px;
+  margin: 0 0 12px;
+}
+.applications-page p {
+  font-size: 11px;
+}
+.applications-layout {
+  grid-template-columns: 222px minmax(0, 1fr);
+  gap: 16px;
+}
+.application-editor {
+  padding: 0;
+  overflow: hidden;
+  gap: 0;
+  background: #fff;
+  color: #21334c;
+}
+.application-editor > header {
+  padding: 18px 20px 0;
+  gap: 8px;
+}
+.application-editor > header small {
+  color: #728196;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.application-breadcrumb {
+  flex-basis: 100%;
+  font-size: 10px;
+}
+.application-content {
+  padding: 20px;
+  background: #fbfcfe;
+}
+.application-tabs {
+  gap: 18px;
+  flex-wrap: nowrap;
+  overflow: auto;
+  white-space: nowrap;
+}
+.application-tabs button {
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  font-size: 11px;
+  padding: 12px 0;
+  background: transparent;
+  color: #728196;
+}
+.application-tabs [aria-pressed="true"] {
+  border-bottom-color: #2676df;
+  color: #2676df;
+  background: transparent;
+}
+.application-section,
+.application-content > section {
+  border: 1px solid #e1e7ef;
+  border-radius: 8px;
+  padding: 16px;
+  background: #fff;
+  margin: 0 0 16px;
+}
+.application-field-origin {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  color: #728196;
+  font-size: 10px;
+}
+.applications-page .application-link {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: #2676df;
+  font-size: 11px;
+}
+.application-field small {
+  color: #728196;
+  font-size: 10px;
+}
+.application-field button {
+  font-size: 10px;
+  padding: 5px 8px;
+}
+.application-editor input:disabled,
+.application-editor textarea:disabled,
+.application-editor select:disabled,
+.application-editor input[readonly] {
+  background: #f5f8fb;
+  color: #536a86;
+  opacity: 1;
+}
+.applications-page button:focus-visible,
+.applications-page input:focus-visible,
+.applications-page select:focus-visible,
+.applications-page textarea:focus-visible {
+  outline: 2px solid #78aaee;
+  outline-offset: 2px;
+}
+.application-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+.application-summary > div {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  border-left: 1px solid #e1e7ef;
+  padding-left: 12px;
+}
+.application-summary small {
+  font-size: 10px;
+  color: #728196;
+}
+.application-table-scroll {
+  overflow: auto;
+  margin-top: 12px;
+}
+.application-table-scroll table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+.application-table-scroll th,
+.application-table-scroll td {
+  padding: 12px;
+  border-bottom: 1px solid #e1e7ef;
+  font-size: 11px;
+}
+.application-table-scroll th {
+  color: #728196;
+  font-weight: 500;
+}
+.application-editor footer {
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  padding: 12px 20px;
+  border-top: 1px solid #e1e7ef;
+}
+.application-draft-status {
+  display: grid;
+  gap: 3px;
+  margin-right: auto;
+}
+.application-draft-status strong {
+  font-size: 11px;
+  font-weight: 500;
+}
+.application-draft-status small {
+  color: #728196;
+  font-size: 10px;
+}
+.application-inline-secrets form {
+  display: grid;
+  gap: 12px;
+}
+.application-inline-secrets small {
+  font-size: 10px;
+  color: #728196;
+}
+@media (max-width: 1100px) {
+  .applications-layout {
+    grid-template-columns: 190px minmax(0, 1fr);
+  }
+  .application-summary {
+    grid-template-columns: 1fr 1fr;
+  }
+  .application-content {
+    padding: 14px;
+  }
+}
+@media (max-width: 800px) {
+  .applications-layout {
+    display: flex;
+    flex-direction: column;
+    overflow: auto;
+  }
+}
+.workspace-content:has(> .applications-page) {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.applications-page > .page-heading {
+  flex-shrink: 0;
+}
+.application-editor > header > .application-breadcrumb {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  margin-right: 0;
+}
+.application-field .row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.application-secret-bindings fieldset {
+  padding: 12px;
+  border-radius: 6px;
+}
+.application-secret-bindings label {
+  display: grid;
+  gap: 6px;
+}
+.application-secret-bindings .row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}

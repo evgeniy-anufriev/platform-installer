@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { ApplicationSecretInputs } from "./ApplicationSecretInputs";
 import { ApplicationBindings } from "./ApplicationBindings";
+import { ApplicationSecretBindings } from "./ApplicationSecretBindings";
 import { ApplicationCredentials } from "./ApplicationCredentials";
 import { ApplicationValueFields } from "./ApplicationValueFields";
 import { CredentialSourceEditor } from "./ApplicationCredentials";
@@ -80,6 +81,7 @@ export function ApplicationsPage({
   const [ref, setRef] = useState("");
   const [runtime, setRuntime] = useState("");
   const [local, setLocal] = useState<Record<string, string>>({});
+  const [editing, setEditing] = useState<Set<string>>(new Set());
   const [error, setError] = useState("");
   // One public descriptor query per saved revision while this page is open.
   // A fresh query intentionally invalidates attached service inputs on the backend.
@@ -152,6 +154,7 @@ export function ApplicationsPage({
   };
   const clearLocal = () => {
     setLocal({});
+    setEditing(new Set());
     setChildDirty(false);
     childDirtyKeys.current.clear();
     setFormEpoch((v) => v + 1);
@@ -250,12 +253,28 @@ export function ApplicationsPage({
     type = "text",
   ) => (
     <div className="application-field" key={key}>
+      <div className="application-field-origin">
+        <span>
+          {authoredValue === undefined ? "Из пакета" : "Переопределено"}
+        </span>
+        <button
+          className="application-link"
+          type="button"
+          disabled={busy}
+          aria-label={`Переопределить: ${label}`}
+          onClick={() => setEditing((current) => new Set(current).add(key))}
+        >
+          Переопределить
+        </button>
+      </div>
       <label>
         {label}
         {type === "multiline" ? (
           <textarea
             value={local[key] ?? String(authoredValue ?? defaultValue ?? "")}
-            disabled={busy}
+            disabled={
+              busy || (authoredValue === undefined && !editing.has(key))
+            }
             onChange={(e) => change(key, e.target.value)}
           />
         ) : (
@@ -265,7 +284,9 @@ export function ApplicationsPage({
             max={type === "number" ? 65535 : undefined}
             value={local[key] ?? String(authoredValue ?? defaultValue ?? "")}
             onChange={(e) => change(key, e.target.value)}
-            disabled={busy}
+            disabled={
+              busy || (authoredValue === undefined && !editing.has(key))
+            }
           />
         )}
       </label>
@@ -294,7 +315,17 @@ export function ApplicationsPage({
           <button
             className="outline"
             disabled={busy || authoredValue === undefined}
-            onClick={() => void reset().then((ok) => clearField(key, ok))}
+            onClick={() =>
+              void reset().then((ok) => {
+                clearField(key, ok);
+                if (ok)
+                  setEditing((current) => {
+                    const next = new Set(current);
+                    next.delete(key);
+                    return next;
+                  });
+              })
+            }
           >
             Сбросить к default
           </button>
@@ -303,7 +334,15 @@ export function ApplicationsPage({
     </div>
   );
   const tabs = slot
-    ? ["Параметры", "Секреты", "УЗ и файлы", "Endpoint", "Расчёт и состояние"]
+    ? [
+        "Основное",
+        "Порты",
+        "Подключения",
+        "Секреты",
+        "Файлы",
+        "Запуск",
+        "Состояние",
+      ]
     : ["Общее", "Подключения", "Ресурсы и секреты", "Размещение"];
   const selectedTab = tabs.includes(tab) ? tab : tabs[0];
   const resolved = snapshot?.applicationLibraries?.libraries?.[selected];
@@ -312,7 +351,7 @@ export function ApplicationsPage({
       <header className="page-heading">
         <div>
           <h1>Приложения</h1>
-          <p>Библиотеки, приложения из recipe и явные переопределения</p>
+          <p>Пакеты, настройки экземпляров и подключения к сервисам</p>
         </div>
         <button className="outline" onClick={() => navigate(onInstallation)}>
           К плану установки
@@ -417,12 +456,31 @@ export function ApplicationsPage({
                   }}
                 />
               </label>
+              <div className="row">
+                <small>
+                  По умолчанию — имя выбранной библиотеки. Можно изменить до
+                  создания.
+                </small>
+                <button
+                  type="button"
+                  className="outline"
+                  disabled={busy || !ref || id === ref.split("@")[0]}
+                  onClick={() => {
+                    setId(ref.split("@")[0]);
+                    markChildDirty(true, "create");
+                  }}
+                >
+                  Сбросить ID к имени библиотеки
+                </button>
+              </div>
               <label>
                 Пакет
                 <select
                   value={ref}
                   onChange={(e) => {
                     setRef(e.target.value);
+                    if (!id || id === ref.split("@")[0])
+                      setId(e.target.value.split("@")[0]);
                     markChildDirty(true, "create");
                   }}
                 >
@@ -475,6 +533,20 @@ export function ApplicationsPage({
           ) : (
             <>
               <header>
+                <div className="application-breadcrumb">
+                  <button
+                    className="application-link"
+                    onClick={() =>
+                      navigate(() => {
+                        setSlot("");
+                        setTab("Общее");
+                      })
+                    }
+                  >
+                    {selected}
+                  </button>
+                  {slot && <span> / {slot}</span>}
+                </div>
                 <h2>
                   {slot ? `Приложение · ${slot}` : `Библиотека · ${selected}`}
                 </h2>
@@ -527,9 +599,17 @@ export function ApplicationsPage({
                 )}
                 {!slot && selectedTab === "Общее" && (
                   <>
-                    <p>
-                      ID: {selected} · Runtime: {String(library.runtimeRef)}
-                    </p>
+                    <section className="application-section">
+                      <h3>Экземпляр библиотеки</h3>
+                      <label>
+                        ID экземпляра библиотеки
+                        <input value={selected} readOnly />
+                      </label>
+                      <p className="muted">
+                        ID задаётся при создании и после сохранения не меняется.
+                      </p>
+                      <p>Runtime: {String(library.runtimeRef)}</p>
+                    </section>
                     {scalar(
                       "libraryRef",
                       "Пакет · точная версия",
@@ -770,59 +850,112 @@ export function ApplicationsPage({
                     })}
                   </>
                 )}
-                {slot && selectedTab === "Параметры" && (
+                {slot && selectedTab === "Основное" && (
                   <>
-                    {scalar(
-                      "image",
-                      "Образ · image",
-                      defaults.image,
-                      overrides.image,
-                      (v) => send(override("image", v)),
-                      () => send(remove("image")),
-                    )}
-                    {scalar(
-                      "command",
-                      "Команда · каждый аргумент с новой строки",
-                      Array.isArray(defaults.command)
-                        ? defaults.command.join("\n")
-                        : undefined,
-                      Array.isArray(overrides.command)
-                        ? overrides.command.join("\n")
-                        : undefined,
-                      (v) => send(override("command", v.split("\n"))),
-                      () => send(remove("command")),
-                      "multiline",
-                    )}
-                    {(["user", "restart"] as const).map((field) =>
-                      scalar(
-                        field,
-                        field,
-                        defaults[field],
-                        overrides[field],
-                        (v) => send(override(field, v)),
-                        () => send(remove(field)),
-                      ),
-                    )}
-                    <p>
-                      Поля показывают пакет приложения и authored overrides.
-                      Recipe и host overrides проверяйте в последнем расчёте
-                      Core.
+                    <section className="application-section">
+                      <h3>Образ контейнера</h3>{" "}
+                      {scalar(
+                        "image",
+                        "Образ · image",
+                        defaults.image,
+                        overrides.image,
+                        (v) => send(override("image", v)),
+                        () => send(remove("image")),
+                      )}
+                    </section>
+                    <section className="application-section">
+                      <h3>Сводка конфигурации</h3>
+                      <div className="application-summary">
+                        <div>
+                          <small>Размещение библиотеки</small>
+                          <strong>
+                            {Object.keys(placements)
+                              .filter((host) =>
+                                Object.hasOwn(placements[host] ?? {}, selected),
+                              )
+                              .join(", ") || "Не задано"}
+                          </strong>
+                          <button
+                            className="application-link"
+                            onClick={() =>
+                              navigate(() => {
+                                setSlot("");
+                                setTab("Размещение");
+                              })
+                            }
+                          >
+                            Настроить библиотеку
+                          </button>
+                        </div>
+                        <div>
+                          <small>Публикация портов</small>
+                          <button
+                            className="application-link"
+                            onClick={() => navigate(() => setTab("Порты"))}
+                          >
+                            Host → Container
+                          </button>
+                        </div>
+                        <div>
+                          <small>Подключения</small>
+                          <strong>
+                            {
+                              Object.keys(
+                                objectValue(appDefinition.connections),
+                              ).length
+                            }{" "}
+                            объявлено пакетом
+                          </strong>
+                          <button
+                            className="application-link"
+                            onClick={() => navigate(() => setTab("Секреты"))}
+                          >
+                            Настроить секреты
+                          </button>
+                        </div>
+                      </div>
+                    </section>
+                    <section className="application-section">
+                      <ApplicationValueFields
+                        key={selected + slot + "parameters"}
+                        label="Параметры приложения"
+                        value={objectValue(overrides.parameters)}
+                        defaults={objectValue(defaults.parameters)}
+                        disabled={busy}
+                        onDirtyChange={(v) => markChildDirty(v, "parameters")}
+                        onSave={(value) =>
+                          send(
+                            Object.keys(value).length
+                              ? override("parameters", value)
+                              : remove("parameters"),
+                          )
+                        }
+                      />{" "}
+                      <ApplicationValueFields
+                        key={selected + slot + "readiness"}
+                        label="Readiness"
+                        value={objectValue(overrides.readiness)}
+                        defaults={objectValue(defaults.readiness)}
+                        disabled={busy}
+                        onDirtyChange={(v) => markChildDirty(v, "readiness")}
+                        onSave={(value) =>
+                          send(
+                            Object.keys(value).length
+                              ? override("readiness", value)
+                              : remove("readiness"),
+                          )
+                        }
+                      />
+                    </section>
+                    <p className="muted">
+                      Показаны значения пакета и явные переопределения. Итоговую
+                      конфигурацию подтверждает Core.
                     </p>
-                    <ApplicationValueFields
-                      key={selected + slot + "readiness"}
-                      label="Readiness"
-                      value={objectValue(overrides.readiness)}
-                      defaults={objectValue(defaults.readiness)}
-                      disabled={busy}
-                      onDirtyChange={(v) => markChildDirty(v, "readiness")}
-                      onSave={(value) =>
-                        send(
-                          Object.keys(value).length
-                            ? override("readiness", value)
-                            : remove("readiness"),
-                        )
-                      }
-                    />
+                  </>
+                )}
+                {slot && selectedTab === "Порты" && (
+                  <section className="application-section">
+                    {" "}
                     <h3>Порты</h3>
                     {Object.entries({
                       ...objectValue(defaults.ports),
@@ -872,26 +1005,110 @@ export function ApplicationsPage({
                         </fieldset>
                       );
                     })}
-                    {(["parameters", "environment"] as const).map((field) => (
+                  </section>
+                )}
+                {slot && selectedTab === "Запуск" && (
+                  <>
+                    <section className="application-section">
+                      <h3>Команда и политика запуска</h3>{" "}
+                      {scalar(
+                        "command",
+                        "Команда · каждый аргумент с новой строки",
+                        Array.isArray(defaults.command)
+                          ? defaults.command.join("\n")
+                          : undefined,
+                        Array.isArray(overrides.command)
+                          ? overrides.command.join("\n")
+                          : undefined,
+                        (v) => send(override("command", v.split("\n"))),
+                        () => send(remove("command")),
+                        "multiline",
+                      )}
+                      {(["user", "restart"] as const).map((field) =>
+                        scalar(
+                          field,
+                          field,
+                          defaults[field],
+                          overrides[field],
+                          (v) => send(override(field, v)),
+                          () => send(remove(field)),
+                        ),
+                      )}
+                    </section>
+                    <section className="application-section">
                       <ApplicationValueFields
-                        key={selected + slot + field}
-                        label={
-                          field === "parameters" ? "Параметры" : "Environment"
-                        }
-                        value={objectValue(overrides[field])}
-                        defaults={objectValue(defaults[field])}
+                        key={selected + slot + "environment"}
+                        label="Environment"
+                        value={objectValue(overrides.environment)}
+                        defaults={objectValue(defaults.environment)}
                         disabled={busy}
-                        onDirtyChange={(v) => markChildDirty(v, field)}
+                        onDirtyChange={(v) => markChildDirty(v, "environment")}
                         onSave={(value) =>
                           send(
                             Object.keys(value).length
-                              ? override(field, value)
-                              : remove(field),
+                              ? override("environment", value)
+                              : remove("environment"),
                           )
                         }
                       />
-                    ))}
+                    </section>
                   </>
+                )}
+                {slot && selectedTab === "Подключения" && (
+                  <section className="application-section">
+                    <h3>Подключения приложения</h3>
+                    <p>
+                      Привязки принадлежат библиотеке. Совместимость и
+                      разрешение адресов проверяет Core.
+                    </p>
+                    <button
+                      className="application-link"
+                      onClick={() =>
+                        navigate(() => {
+                          setSlot("");
+                          setTab("Подключения");
+                        })
+                      }
+                    >
+                      Настроить библиотеку →
+                    </button>
+                    <div className="application-table-scroll">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Подключение</th>
+                            <th>Binding</th>
+                            <th>Deployment / профиль</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {Object.entries(
+                            objectValue(appDefinition.connections),
+                          ).map(([name, raw]) => {
+                            const binding = String(
+                              objectValue(raw).library_binding ?? name,
+                            );
+                            const target = objectValue(
+                              objectValue(library.bindings)[binding],
+                            );
+                            return (
+                              <tr key={name}>
+                                <td>{name}</td>
+                                <td>{binding}</td>
+                                <td>
+                                  {String(
+                                    target.deploymentRef ??
+                                      target.profileRef ??
+                                      "Не задано",
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </section>
                 )}
                 {slot && selectedTab === "Секреты" && (
                   <>
@@ -947,13 +1164,19 @@ export function ApplicationsPage({
                         })
                       }
                     />
-                    <ApplicationValueFields
-                      key={selected + slot + "provisioner"}
-                      label="Vault Agent · provisioner и variable bindings"
+                    <ApplicationSecretBindings
+                      key={selected + slot + "secret_bindings"}
                       value={objectValue(overrides.provisioner)}
                       defaults={objectValue(defaults.provisioner)}
+                      accounts={[
+                        objectValue(defaults.accounts),
+                        objectValue(overrides.accounts),
+                        objectValue(authored.accounts),
+                      ]}
                       disabled={busy}
-                      onDirtyChange={(v) => markChildDirty(v, "provisioner")}
+                      onDirtyChange={(v) =>
+                        markChildDirty(v, "secret_bindings")
+                      }
                       onSave={(value) =>
                         send(
                           Object.keys(value).length
@@ -962,8 +1185,46 @@ export function ApplicationsPage({
                         )
                       }
                     />
+                    <ApplicationValueFields
+                      key={selected + slot + "provisioner"}
+                      label="Другие настройки Vault Agent"
+                      excludeKeys={["secret_bindings"]}
+                      value={Object.fromEntries(
+                        Object.entries(
+                          objectValue(overrides.provisioner),
+                        ).filter(([key]) => key !== "secret_bindings"),
+                      )}
+                      defaults={Object.fromEntries(
+                        Object.entries(
+                          objectValue(defaults.provisioner),
+                        ).filter(([key]) => key !== "secret_bindings"),
+                      )}
+                      disabled={busy}
+                      onDirtyChange={(v) => markChildDirty(v, "provisioner")}
+                      onSave={(value) => {
+                        const next = {
+                          ...value,
+                          ...(Object.hasOwn(
+                            objectValue(overrides.provisioner),
+                            "secret_bindings",
+                          )
+                            ? {
+                                secret_bindings: objectValue(
+                                  overrides.provisioner,
+                                ).secret_bindings,
+                              }
+                            : {}),
+                        };
+                        return send(
+                          Object.keys(next).length
+                            ? override("provisioner", next)
+                            : remove("provisioner"),
+                        );
+                      }}
+                    />
                     {loadSecrets && saveSecrets && (
                       <ApplicationSecretInputs
+                        inline
                         disabled={busy || draftActive || dirty}
                         key={selected + slot + managed?.projectRevision}
                         title={"Секреты: " + selected + " / " + slot}
@@ -980,7 +1241,7 @@ export function ApplicationsPage({
                     )}
                   </>
                 )}
-                {slot && selectedTab === "УЗ и файлы" && (
+                {slot && selectedTab === "Файлы" && (
                   <>
                     <ApplicationFileSettings
                       key={
@@ -999,7 +1260,7 @@ export function ApplicationsPage({
                     </p>
                   </>
                 )}
-                {slot && selectedTab === "Endpoint" && (
+                {slot && selectedTab === "Порты" && (
                   <>
                     <p>
                       Публикацию и совместимость backend/TLS проверяет Core.
@@ -1021,7 +1282,7 @@ export function ApplicationsPage({
                     />
                   </>
                 )}
-                {slot && selectedTab === "Расчёт и состояние" && (
+                {slot && selectedTab === "Состояние" && (
                   <>
                     <p>
                       Расчёт для сохранённой ревизии:{" "}
@@ -1054,6 +1315,14 @@ export function ApplicationsPage({
             </>
           )}
           <footer>
+            <div className="application-draft-status">
+              <strong>
+                {intents.length
+                  ? `В черновике: ${intents.length}`
+                  : "Нет изменений"}
+              </strong>
+              <small>Сохранение не запускает установку</small>
+            </div>
             <button
               className="outline"
               disabled={busy || intents.length === 0 || dirty}

@@ -111,6 +111,51 @@ Installation retains B4 services checkbox, saved infra evidence or fixed Verify
 prefix, and library Apply/Verify. Approval of this proposed design is required
 before production C implementation.
 
+### Production layout (approved 2026-10-16; UI-only implementation)
+
+The separate [interactive application editor mockup](application-editor-production-mockup.html)
+proposes a Portainer-inspired settings layout within the existing project shell:
+library/instance navigation, image and independent Host/Container overrides,
+and focused tabs for connections, credentials, files, startup and observed state.
+Package defaults and explicit resets remain visible. Library membership stays
+at library scope; editing uses the existing draft/Review/Save lifecycle and
+installation remains on Installation. Owner revision adds a library instance ID
+defaulting to the library name, with override/reset. The latest owner-approved
+secret layout groups application connection fields by bound deployment, with
+Vault binding, KV mount and an overridable application base path (`app_gateway`).
+Each deployment has its own KV document, for example
+`secret/app_gateway/qa-postgresql` and `secret/app_gateway/qa-clickhouse`.
+Field names are independent between documents; repeated names do not imply
+shared credentials. Redis and Sentinel share a document when bound to the same
+deployment. The synthetic Agent preview lists each document separately.
+Each row uses the same name for its Vault key and manifest variable, followed by
+value source and inline value. Example fields are PG_USER and PG_PASSWORD,
+plus declared Redis/Sentinel/ClickHouse fields. Renaming updates the synthetic
+materialization preview; actual manifest/template compatibility is Core-owned.
+Runtime values stay outside Review/Save. Existing Vault and generated sources
+do not accept inline replacement values. Agent renders a package-defined file;
+the mockup does not imply automatic process environment injection.
+The password-free connections block and runtime-secret modal are removed.
+Production integration reuses the existing runtime-secret lease. Owner limited
+implementation to UI on the existing contract: existing library IDs stay read-only
+(new IDs default from the package name), and writable KV document/key mapping
+remains unchanged. The grouped editable KV mapping is design-only until a separately
+authorized Core extension.
+This is a synthetic, memory-only design artifact, not production UI or Core
+acceptance. Production contracts are unchanged; no direct container controls are added.
+
+### Existing-contract secret binding editor (2026-10-16)
+
+The production Secrets tab edits `overrides.provisioner.secret_bindings` through
+the existing writer. A row binds a process variable to an account's `username`
+or `password`; credential values, KV document paths and Vault fields are unchanged.
+Package rows can override their source and reset to package defaults. A custom
+variable adds an alias and can be reset/removed. Core's recursive combine preserves
+package variables: another name does not rename or delete the original package
+variable. The UI states this explicitly. Other bindings (including shared secrets)
+and Agent settings remain untouched. Core generates the existing process-supervisor
+env_template; no new resolver, credential persistence, Go DTO or Core semantics.
+
 ## 1. Product principle
 
 Platform Installer is a visual editor and orchestrator for the same standard

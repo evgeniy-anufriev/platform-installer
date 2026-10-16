@@ -26,6 +26,39 @@ const result: RuntimeSecretDescriptorOperation = {
 };
 
 describe("application runtime inputs", () => {
+  it("renders inline without a dialog and clears submitted runtime values", async () => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    render(
+      <ApplicationSecretInputs
+        inline
+        disabled={false}
+        libraryId="sdku"
+        load={vi.fn().mockResolvedValue(result)}
+        save={save}
+      />,
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Секреты библиотек" }),
+    );
+    expect(document.querySelector("dialog")).toBeNull();
+    await userEvent.type(
+      await screen.findByLabelText("Database password"),
+      "synthetic-inline-only",
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Сохранить в сессии" }),
+    );
+    await waitFor(() =>
+      expect(save).toHaveBeenCalledWith({
+        projectRevision: "revision",
+        descriptorSetFingerprint: "fingerprint",
+        serviceDeployment: "",
+        applicationLibrary: "sdku",
+        values: { "application-secret-reference": "synthetic-inline-only" },
+      }),
+    );
+    expect(screen.queryByLabelText("Database password")).toBeNull();
+  });
   it("scopes fields to the selected library while preserving Core fingerprint and requirement IDs", async () => {
     HTMLDialogElement.prototype.showModal = function () {
       this.setAttribute("open", "");

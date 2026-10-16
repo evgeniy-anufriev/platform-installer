@@ -6,12 +6,14 @@ import type {
 
 export function ApplicationSecretInputs({
   disabled,
+  inline = false,
   load,
   save,
   libraryId,
   title = "Секреты библиотек",
 }: {
   disabled: boolean;
+  inline?: boolean;
   libraryId?: string;
   title?: string;
   load: () => Promise<RuntimeSecretDescriptorOperation>;
@@ -46,13 +48,79 @@ export function ApplicationSecretInputs({
       }
       setValues({});
       setOperation({ ...result, applicationInputs: inputs });
-      dialog.current?.showModal();
+      if (!inline) dialog.current?.showModal();
     } catch {
       setMessage("Не удалось получить требования к секретам");
     } finally {
       setBusy(false);
     }
   };
+  const form = (
+    <form
+      method="dialog"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (!operation?.projectRevision || !operation.descriptorSetFingerprint)
+          return;
+        setBusy(true);
+        void save({
+          projectRevision: operation.projectRevision,
+          descriptorSetFingerprint: operation.descriptorSetFingerprint,
+          serviceDeployment: "",
+          ...(libraryId ? { applicationLibrary: libraryId } : {}),
+          values,
+        })
+          .then(() => {
+            close();
+            setMessage("Секреты сохранены только в сессии");
+          })
+          .catch(() => {
+            setValues({});
+            setMessage(
+              "Не удалось сохранить секреты; проверьте актуальность проекта и сессии",
+            );
+          })
+          .finally(() => setBusy(false));
+      }}
+    >
+      <h2>{title}</h2>
+      <p className="muted">
+        Значения остаются только в памяти и передаются через runtime lease для
+        одобренного плана.
+      </p>
+      {operation?.applicationInputs?.map((item) => (
+        <label key={item.requirementRef}>
+          <span>{item.displayLabel}</span>
+          {inline && (
+            <small>
+              Источник: {item.sourceRef} ·{" "}
+              {item.providerDeployment ?? "Приложение"}
+            </small>
+          )}
+          <input
+            aria-label={item.displayLabel}
+            type="password"
+            autoComplete="new-password"
+            required
+            disabled={disabled || busy}
+            value={values[item.requirementRef] || ""}
+            onChange={(event) =>
+              setValues((current) => ({
+                ...current,
+                [item.requirementRef]: event.target.value,
+              }))
+            }
+          />
+        </label>
+      ))}
+      <button type="button" disabled={busy} onClick={close}>
+        Отмена
+      </button>
+      <button type="submit" disabled={disabled || busy}>
+        Сохранить в сессии
+      </button>
+    </form>
+  );
   return (
     <section className="card">
       <button
@@ -63,76 +131,21 @@ export function ApplicationSecretInputs({
         {title}
       </button>
       {message && <p role="status">{message}</p>}
-      <dialog
-        ref={dialog}
-        className="runtime-secret-dialog"
-        aria-label={title}
-        onCancel={(event) => {
-          event.preventDefault();
-          close();
-        }}
-      >
-        <form
-          method="dialog"
-          onSubmit={(event) => {
+      {inline ? (
+        operation && <div className="application-inline-secrets">{form}</div>
+      ) : (
+        <dialog
+          ref={dialog}
+          className="runtime-secret-dialog"
+          aria-label={title}
+          onCancel={(event) => {
             event.preventDefault();
-            if (
-              !operation?.projectRevision ||
-              !operation.descriptorSetFingerprint
-            )
-              return;
-            setBusy(true);
-            void save({
-              projectRevision: operation.projectRevision,
-              descriptorSetFingerprint: operation.descriptorSetFingerprint,
-              serviceDeployment: "",
-              ...(libraryId ? { applicationLibrary: libraryId } : {}),
-              values,
-            })
-              .then(() => {
-                close();
-                setMessage("Секреты сохранены только в сессии");
-              })
-              .catch(() => {
-                setValues({});
-                setMessage(
-                  "Не удалось сохранить секреты; проверьте актуальность проекта и сессии",
-                );
-              })
-              .finally(() => setBusy(false));
+            close();
           }}
         >
-          <h2>{title}</h2>
-          <p className="muted">
-            Значения остаются только в памяти и передаются через runtime lease
-            для одобренного плана.
-          </p>
-          {operation?.applicationInputs?.map((item) => (
-            <label key={item.requirementRef}>
-              {item.displayLabel}
-              <input
-                type="password"
-                autoComplete="new-password"
-                required
-                disabled={disabled || busy}
-                value={values[item.requirementRef] || ""}
-                onChange={(event) =>
-                  setValues((current) => ({
-                    ...current,
-                    [item.requirementRef]: event.target.value,
-                  }))
-                }
-              />
-            </label>
-          ))}
-          <button type="button" disabled={busy} onClick={close}>
-            Отмена
-          </button>
-          <button type="submit" disabled={disabled || busy}>
-            Сохранить в сессии
-          </button>
-        </form>
-      </dialog>
+          {form}{" "}
+        </dialog>
+      )}
     </section>
   );
 }

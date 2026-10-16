@@ -227,6 +227,28 @@ describe("application editor", () => {
     await screen.findByLabelText("cspa input");
     expect(load).toHaveBeenCalledTimes(2);
   });
+  it("defaults a new library ID from its package without replacing a custom ID", async () => {
+    render(<Harness calls={[]} />);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Добавить библиотеку" }),
+    );
+    await userEvent.selectOptions(screen.getByLabelText("Пакет"), "sdku@1.0.0");
+    expect(
+      (screen.getByLabelText("ID библиотеки") as HTMLInputElement).value,
+    ).toBe("sdku");
+    await userEvent.clear(screen.getByLabelText("ID библиотеки"));
+    await userEvent.type(screen.getByLabelText("ID библиотеки"), "custom");
+    await userEvent.selectOptions(screen.getByLabelText("Пакет"), "sdku@1.0.0");
+    expect(
+      (screen.getByLabelText("ID библиотеки") as HTMLInputElement).value,
+    ).toBe("custom");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Сбросить ID к имени библиотеки" }),
+    );
+    expect(
+      (screen.getByLabelText("ID библиотеки") as HTMLInputElement).value,
+    ).toBe("sdku");
+  });
   it.each([true, false])(
     "clears only accepted create form dirty state (accepted=%s)",
     async (accept) => {
@@ -266,6 +288,9 @@ describe("application editor", () => {
     expect(calls).toHaveLength(0);
     const image = screen.getByLabelText("Образ · image");
     expect((image as HTMLInputElement).value).toBe("approved/gateway:1");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Переопределить: Образ · image" }),
+    );
     await userEvent.clear(image);
     await userEvent.type(image, "approved/gateway:2");
     await userEvent.click(
@@ -293,6 +318,7 @@ describe("application editor", () => {
     const calls: ApplicationIntent[] = [];
     render(<Harness calls={calls} />);
     await selectSlot();
+    await userEvent.click(screen.getByRole("button", { name: "Порты" }));
     const host = screen.getByLabelText("Порт хоста");
     expect((host as HTMLInputElement).value).toBe("28480");
     expect(
@@ -322,14 +348,18 @@ describe("application editor", () => {
     });
     expect(calls[1]).not.toHaveProperty("value");
   });
-  it("preserves another local input when saving one field", async () => {
+  it("preserves another local port input when saving one field", async () => {
     const calls: ApplicationIntent[] = [];
     render(<Harness calls={calls} />);
     await selectSlot();
-    const image = screen.getByLabelText("Образ · image"),
+    await userEvent.click(screen.getByRole("button", { name: "Порты" }));
+    const container = screen.getByLabelText("Порт контейнера"),
       host = screen.getByLabelText("Порт хоста");
-    await userEvent.clear(image);
-    await userEvent.type(image, "approved/gateway:local");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Переопределить: Порт контейнера" }),
+    );
+    await userEvent.clear(container);
+    await userEvent.type(container, "8081");
     await userEvent.clear(host);
     await userEvent.type(host, "30000");
     await userEvent.click(
@@ -337,7 +367,7 @@ describe("application editor", () => {
         name: "В черновик",
       }),
     );
-    expect((image as HTMLInputElement).value).toBe("approved/gateway:local");
+    expect((container as HTMLInputElement).value).toBe("8081");
     expect(screen.getByRole("status").textContent).toContain("Есть ввод");
   });
   it("shows every declared connection and rejects literal password entry in typed source controls", async () => {
@@ -345,7 +375,7 @@ describe("application editor", () => {
     await selectSlot();
     await userEvent.click(screen.getByRole("button", { name: "Секреты" }));
     expect(screen.getByRole("heading", { name: "postgres" })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "kafka" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "kafka" })).toBeNull();
     const password = screen.getByRole("group", { name: "Пароль" });
     expect(
       within(password).queryByRole("option", { name: "Имя пользователя" }),
