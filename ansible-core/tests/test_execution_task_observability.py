@@ -79,6 +79,37 @@ class _Result(object):
 
 
 class ExecutionTaskObservabilityTests(unittest.TestCase):
+    def test_http_diagnostic_only_promotes_tagged_closed_assertion_message(self):
+        safe = 'HTTP backend 127.0.0.1:10041; expected=200; actual=503; timeout=10s; reason=HTTP_STATUS_MISMATCH'
+        for action, tags, no_log, message, emitted in [
+                ('ansible.builtin.assert', ['platform_http_backend_diagnostic'], False, safe, True),
+                ('ansible.builtin.assert', ['platform_http_backend_diagnostic'], False,
+                 safe.replace('actual=503', 'actual=200').replace('HTTP_STATUS_MISMATCH', 'OK'), True),
+                ('ansible.builtin.assert', ['platform_http_backend_diagnostic'], True, safe, False),
+                ('ansible.builtin.uri', ['platform_http_backend_diagnostic'], False, safe, False),
+                ('ansible.builtin.assert', [], False, safe, False),
+                ('ansible.builtin.assert', ['platform_http_backend_diagnostic'], False, safe + ' SENSITIVE_SENTINEL', False)]:
+            with self.subTest(action=action, tags=tags, no_log=no_log, emitted=emitted), tempfile.TemporaryDirectory() as root:
+                journal = _active_journal(root)
+                task = _Task(no_log=no_log)
+                task.action, task.tags = action, tags
+                result = _Result(task, {'msg': message, 'cookies': 'SENSITIVE_COOKIE_SENTINEL',
+                                        'content': 'SENSITIVE_BODY_SENTINEL'})
+                with mock.patch.object(execution_events_json, 'EXECUTION_STATE_ROOT', root), mock.patch.dict(
+                        os.environ, {'PLATFORM_EXECUTION_RUN_ID': 'run-1'}, clear=False):
+                    callback = execution_events_json.CallbackModule()
+                    if message.endswith('reason=OK'):
+                        callback.v2_runner_on_ok(result)
+                    else:
+                        callback.v2_runner_on_failed(result)
+                diagnostics = [event for event in journal.events() if event['eventType'] == 'DIAGNOSTIC'
+                               and event['safeMessage'].startswith('HTTP backend ')]
+                self.assertEqual(int(emitted), len(diagnostics))
+                self.assertNotIn('SENSITIVE_', json.dumps(journal.events()))
+                if emitted:
+                    self.assertEqual(message, diagnostics[0]['safeMessage'])
+                self.assert_events_match_contract(journal.events())
+
     def assert_events_match_contract(self, events):
         validator = SchemaValidator(CONTRACTS)
         schema = CONTRACTS / "event" / "v1alpha1" / "schema.json"

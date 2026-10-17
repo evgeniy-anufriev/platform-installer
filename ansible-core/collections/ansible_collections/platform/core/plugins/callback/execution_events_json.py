@@ -123,6 +123,14 @@ class CallbackModule(CallbackBase):
                 failure_result=getattr(result, "_result", {}) if status == "FAILED" else None,
                 **self._context()
             )
+            # Only the tagged assertion's closed diagnostic grammar is public.
+            if (result is not None and not no_log and
+                    getattr(task, 'action', '') == 'ansible.builtin.assert' and
+                    'platform_http_backend_diagnostic' in getattr(task, 'tags', [])):
+                message = getattr(result, '_result', {}).get('msg', '')
+                if isinstance(message, str) and re.fullmatch(
+                        r'HTTP backend (?:[A-Za-z0-9.:\[\]-]{1,253}|<invalid>):[0-9]{1,5}; expected=[0-9]{3}; actual=-?[0-9]{1,3}; timeout=[0-9]{1,10}s; reason=(?:OK|HTTP_STATUS_MISMATCH|TIMEOUT|CONNECTION_REFUSED|DNS_FAILURE|NETWORK_FAILURE|REQUEST_FAILED)', message):
+                    self._journal().event('DIAGNOSTIC', status, message, **self._context())
         except Exception:
             try:
                 self._journal().mark_task_observability_degraded("TASK_EVENT_WRITE_FAILED")

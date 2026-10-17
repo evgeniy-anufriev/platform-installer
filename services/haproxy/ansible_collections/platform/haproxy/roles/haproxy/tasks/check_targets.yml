@@ -70,15 +70,8 @@
   no_log: true
 
 - name: Require reachable HTTP targets before candidate publication
-  ansible.builtin.uri:
-    url: "{{ 'https' if item.0.settings.ssl else 'http' }}://{{ item.1.address }}:{{ item.1.port }}{{ item.0.probe.path }}"
-    headers:
-      Host: "{{ item.0.endpoint.fqdn }}"
-    status_code: "{{ item.0.probe.expected_status }}"
-    timeout: "{{ item.0.probe.timeout }}"
-    validate_certs: true
-    follow_redirects: none
-    return_content: false
+  ansible.builtin.include_tasks: check_http_target.yml
   loop: "{{ platform_haproxy_application_backends | selectattr('probe', 'defined') | selectattr('settings.ssl', 'equalto', false) | subelements('targets') }}"
-  changed_when: false
+  loop_control:
+    loop_var: _platform_http_target
   no_log: true
