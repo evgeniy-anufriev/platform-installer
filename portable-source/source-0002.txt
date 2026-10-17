@@ -1,3 +1,702 @@
+@@PORTABLE {"path":"internal/installer/project_files.go","mode":420,"size":8192,"sha256":"2dba011d9b6cc9bd7e91df4bad89dca6978af7cb0572d7d3939d5ad3679d319a","index":0,"count":1,"encoding":"utf-8","payloadBytes":8192}
+package installer
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+)
+
+const (
+	desiredDocument   = "inventory/group_vars/all/platform-installer.yml"
+	generatedDocument = "inventory/group_vars/all/platform-state.yml"
+)
+
+type projectDocument struct {
+	LogicalPath string
+	Digest      string
+}
+
+func digestBytes(content []byte) string {
+	sum := sha256.Sum256(content)
+	return "sha256:" + hex.EncodeToString(sum[:])
+}
+
+func cleanRoot(root string) (string, error) {
+	absolute, err := filepath.Abs(root)
+	if err != nil {
+		return "", err
+	}
+	absolute = filepath.Clean(absolute)
+	if err := assertSafeExistingAncestors(absolute); err != nil {
+		return "", err
+	}
+	info, err := os.Lstat(absolute)
+	if err != nil || !info.IsDir() || pathEntryUnsafe(info) {
+		return "", blocked("PROJECT_PATH_INVALID", "Project root is not a directory", "projectRoot")
+	}
+	return absolute, nil
+}
+
+func assertSafeExistingAncestors(path string) error {
+	for current := filepath.Clean(path); ; current = filepath.Dir(current) {
+		info, err := os.Lstat(current)
+		if err != nil {
+			return blocked("PROJECT_PATH_INVALID", "Project path cannot be inspected", "projectRoot")
+		}
+		if pathEntryUnsafe(info) {
+			return blocked("PATH_UNSAFE", "Project path contains a symlink or reparse point", "projectRoot")
+		}
+		parent := filepath.Dir(current)
+		if parent == current {
+			return nil
+		}
+	}
+}
+
+func logicalPath(path string) string { return filepath.ToSlash(path) }
+
+func safeProjectPath(root, logical string, allowMissing bool) (string, error) {
+	if logical == "" || filepath.IsAbs(logical) || filepath.VolumeName(logical) != "" {
+		return "", blocked("PATH_UNSAFE", "Managed document path is unsafe", "document.logicalPath")
+	}
+	clean := filepath.Clean(filepath.FromSlash(logical))
+	if clean == "." || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+		return "", blocked("PATH_UNSAFE", "Managed document path escapes the project", "document.logicalPath")
+	}
+	path := filepath.Join(root, clean)
+	relative, err := filepath.Rel(root, path)
+	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		return "", blocked("PATH_UNSAFE", "Managed document path escapes the project", "document.logicalPath")
+	}
+	current := root
+	parts := strings.Split(filepath.ToSlash(clean), "/")
+	for index, part := range parts {
+		current = filepath.Join(current, part)
+		info, statErr := os.Lstat(current)
+		if statErr != nil {
+			if os.IsNotExist(statErr) && allowMissing {
+				break
+			}
+			return "", blocked("WRITE_OWNERSHIP_REQUIRED", "Installer-owned document does not exist", "document")
+		}
+		if pathEntryUnsafe(info) {
+			return "", blocked("PATH_UNSAFE", "Managed document path contains a symlink or reparse point", "document.logicalPath")
+		}
+		if index < len(parts)-1 && !info.IsDir() {
+			return "", blocked("PATH_UNSAFE", "Managed document parent is not a directory", "document.logicalPath")
+		}
+	}
+	return path, nil
+}
+
+func collectProjectDocuments(root string) ([]projectDocument, string, error) {
+	candidates := []string{"project.yml", "ansible.cfg", "inventory/hosts.yml"}
+	packageDocuments, err := applicationPackageDocuments(root)
+	if err != nil {
+		return nil, "", err
+	}
+	packageContents := map[string][]byte{}
+	for _, record := range packageDocuments {
+		candidates = append(candidates, record.LogicalPath)
+		packageContents[record.LogicalPath] = record.content
+	}
+	for _, directory := range []string{"inventory/group_vars", "inventory/host_vars"} {
+		base := filepath.Join(root, filepath.FromSlash(directory))
+		if _, err := os.Stat(base); os.IsNotExist(err) {
+			continue
+		}
+		err := filepath.WalkDir(base, func(path string, entry os.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
+			}
+			if entry.Type()&os.ModeSymlink != 0 {
+				return blocked("PATH_UNSAFE", "Canonical project documents must not contain symlinks", "project")
+			}
+			if entry.IsDir() {
+				return nil
+			}
+			extension := strings.ToLower(filepath.Ext(entry.Name()))
+			if extension != ".yml" && extension != ".yaml" && extension != ".json" {
+				return nil
+			}
+			relative, err := filepath.Rel(root, path)
+			if err != nil {
+				return err
+			}
+			candidates = append(candidates, logicalPath(relative))
+			return nil
+		})
+		if err != nil {
+			return nil, "", err
+		}
+	}
+	sort.Strings(candidates)
+	seen := make(map[string]bool)
+	documents := make([]projectDocument, 0, len(candidates))
+	var revisionInput []byte
+	for _, logical := range candidates {
+		if seen[logical] {
+			continue
+		}
+		seen[logical] = true
+		path, err := safeProjectPath(root, logical, true)
+		if err != nil {
+			return nil, "", err
+		}
+		content, packageFile := packageContents[logical]
+		if !packageFile {
+			content, err = os.ReadFile(path)
+		} else {
+			err = nil
+		}
+		if os.IsNotExist(err) {
+			continue
+		}
+		if err != nil {
+			return nil, "", err
+		}
+		digest := digestBytes(content)
+		documents = append(documents, projectDocument{LogicalPath: logical, Digest: digest})
+		if logical != generatedDocument {
+			revisionInput = append(revisionInput, []byte(logical)...)
+			revisionInput = append(revisionInput, 0)
+			revisionInput = append(revisionInput, []byte(digest)...)
+			revisionInput = append(revisionInput, 0)
+		}
+	}
+	return documents, digestBytes(revisionInput), nil
+}
+
+// ProjectRevision returns the canonical raw-byte revision used to bind an edit
+// session. It does not parse or mutate project content.
+func ProjectRevision(root string) (string, error) {
+	clean, err := cleanRoot(root)
+	if err != nil {
+		return "", err
+	}
+	_, revision, err := collectProjectDocuments(clean)
+	return revision, err
+}
+
+func managedHostDocument(hostID string) string {
+	return "inventory/host_vars/" + hostID + "/platform-installer.yml"
+}
+
+func discoverOwnedPaths(root string) ([]string, error) {
+	paths := []string{"ansible.cfg", "inventory/hosts.yml", desiredDocument}
+	hostRoot := filepath.Join(root, "inventory", "host_vars")
+	entries, err := os.ReadDir(hostRoot)
+	if err != nil && !os.IsNotExist(err) {
+		return nil, err
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			paths = append(paths, managedHostDocument(entry.Name()))
+		}
+	}
+	owned := make([]string, 0, len(paths))
+	for _, logical := range paths {
+		path, err := safeProjectPath(root, logical, true)
+		if err != nil {
+			return nil, err
+		}
+		content, err := os.ReadFile(path)
+		if os.IsNotExist(err) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		ownedHeader := managedHeader
+		if logical == "ansible.cfg" {
+			ownedHeader = managedConfigHeader
+		}
+		if strings.HasPrefix(string(content), string(ownedHeader)) {
+			owned = append(owned, logical)
+		}
+	}
+	sort.Strings(owned)
+	return owned, nil
+}
+
+func copyProject(source string) (string, func(), error) {
+	parent, err := os.MkdirTemp("", "platform-installer-stage-")
+	if err != nil {
+		return "", nil, err
+	}
+	cleanup := func() { _ = os.RemoveAll(parent) }
+	destination := filepath.Join(parent, "project")
+	err = filepath.WalkDir(source, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		relative, err := filepath.Rel(source, path)
+		if err != nil {
+			return err
+		}
+		if relative == "secrets" {
+			if entry.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if relative == ".git" || relative == ".runtime" {
+			return filepath.SkipDir
+		}
+		info, infoErr := entry.Info()
+		if infoErr != nil {
+			return infoErr
+		}
+		if pathEntryUnsafe(info) {
+			return blocked("PATH_UNSAFE", "Staged projects must not contain symlinks", "project")
+		}
+		target := filepath.Join(destination, relative)
+		if entry.IsDir() {
+			return os.MkdirAll(target, 0o755)
+		}
+		input, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+		defer input.Close()
+		output, err := os.OpenFile(target, os.O_CREATE|os.O_EXCL|os.O_WRONLY, info.Mode().Perm())
+		if err != nil {
+			return err
+		}
+		_, copyErr := io.Copy(output, input)
+		closeErr := output.Close()
+		if copyErr != nil {
+			return copyErr
+		}
+		return closeErr
+	})
+	if err != nil {
+		cleanup()
+		return "", nil, fmt.Errorf("stage project: %w", err)
+	}
+	return destination, cleanup, nil
+}
+
+@@END
+@@PORTABLE {"path":"internal/installer/replace_unix.go","mode":420,"size":364,"sha256":"e8e2e741294a807b39b46608dba78345f8583058bdfd27b9273e2af50359c8ff","index":0,"count":1,"encoding":"utf-8","payloadBytes":364}
+//go:build !windows
+
+package installer
+
+import "os"
+
+type replaceFunc func(source, destination string) error
+
+func atomicReplace(source, destination string) error { return os.Rename(source, destination) }
+
+func syncDirectory(path string) error {
+	directory, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer directory.Close()
+	return directory.Sync()
+}
+
+@@END
+@@PORTABLE {"path":"internal/installer/replace_windows.go","mode":420,"size":837,"sha256":"e7ef157c98808942df29b0f9f875a4acbac9fbc1f782242146f41e4f4ea3a115","index":0,"count":1,"encoding":"utf-8","payloadBytes":837}
+//go:build windows
+
+package installer
+
+import (
+	"os"
+	"syscall"
+	"unsafe"
+)
+
+type replaceFunc func(source, destination string) error
+
+var moveFileEx = syscall.NewLazyDLL("kernel32.dll").NewProc("MoveFileExW")
+
+const moveFileReplaceExisting = 0x1
+const moveFileWriteThrough = 0x8
+
+func atomicReplace(source, destination string) error {
+	from, err := syscall.UTF16PtrFromString(source)
+	if err != nil {
+		return err
+	}
+	to, err := syscall.UTF16PtrFromString(destination)
+	if err != nil {
+		return err
+	}
+	result, _, callErr := moveFileEx.Call(uintptr(unsafe.Pointer(from)), uintptr(unsafe.Pointer(to)),
+		moveFileReplaceExisting|moveFileWriteThrough)
+	if result == 0 {
+		if callErr != nil && callErr != syscall.Errno(0) {
+			return callErr
+		}
+		return os.ErrInvalid
+	}
+	return nil
+}
+
+func syncDirectory(path string) error { return nil }
+
+@@END
+@@PORTABLE {"path":"internal/installer/secret_output_files.go","mode":420,"size":13679,"sha256":"52420f3407b06331a06f0df8a2a0cbd4778b485cfeb7e60bc00a48dcf5196768","index":0,"count":1,"encoding":"utf-8","payloadBytes":13679}
+package installer
+
+import (
+	"bytes"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"io"
+	"os"
+	"path/filepath"
+	"regexp"
+)
+
+var (
+	secretOutputProjectID    = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,127}$`)
+	secretOutputDeploymentID = regexp.MustCompile(`^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$`)
+	secretOutputPackageID    = regexp.MustCompile(`^[0-9a-f]{32}$`)
+	secretOutputRunID        = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`)
+	secretOutputDigest       = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
+)
+
+var ErrSecretOutputFiles = errors.New("SECRET_OUTPUT_FILES_UNAVAILABLE")
+
+type SecretOutputStagingRetainedError struct{ Path string }
+
+func (*SecretOutputStagingRetainedError) Error() string { return "EXPORT_STAGING_RETAINED" }
+
+type SecretOutputFileReceipt struct {
+	ReceiptID     string            `json:"receiptId"`
+	Directory     string            `json:"directory"`
+	Digests       map[string]string `json:"ciphertextDigests"`
+	ProjectID     string            `json:"projectId"`
+	DeploymentID  string            `json:"deploymentId"`
+	PackageID     string            `json:"packageId"`
+	SourceRunID   string            `json:"sourceRunId"`
+	Generation    int               `json:"generation"`
+	RuntimeDigest string            `json:"runtimeDigest"`
+}
+
+type secretOutputLocalReceipt struct {
+	SchemaVersion int               `json:"schemaVersion"`
+	ProjectID     string            `json:"projectId"`
+	DeploymentID  string            `json:"deploymentId"`
+	PackageID     string            `json:"packageId"`
+	SourceRunID   string            `json:"sourceRunId"`
+	Generation    int               `json:"generation"`
+	RuntimeDigest string            `json:"runtimeDigest"`
+	ReceiptID     string            `json:"receiptId"`
+	Entries       []string          `json:"entries"`
+	Digests       map[string]string `json:"ciphertextDigests"`
+}
+
+// PublishSecretOutputFiles writes only the two encrypted, fixed-name output
+// entries and their completion receipt. It uses the existing platform-safe
+// directory-handle writer, never overwrites a package, and publishes by one
+// no-replace directory rename. On failure it does not guess that pathname
+// cleanup is identity-safe.
+func PublishSecretOutputFiles(parent, projectID, deploymentID, packageID, sourceRunID string, generation int, runtimeDigest string, adminTokenAge, unsealSharesAge []byte) (SecretOutputFileReceipt, error) {
+	return publishSecretOutputFiles(parent, projectID, deploymentID, packageID, sourceRunID, generation, runtimeDigest, adminTokenAge, unsealSharesAge, nil)
+}
+
+// Fault injection stays local to this publication operation; production has
+// no global hooks or alternate writer.
+func publishSecretOutputFiles(parent, projectID, deploymentID, packageID, sourceRunID string, generation int, runtimeDigest string, adminTokenAge, unsealSharesAge []byte, before func(string) error) (SecretOutputFileReceipt, error) {
+	check := func(stage string) error {
+		if before != nil {
+			return before(stage)
+		}
+		return nil
+	}
+	if parent == "" || !secretOutputProjectID.MatchString(projectID) || !secretOutputDeploymentID.MatchString(deploymentID) || !secretOutputPackageID.MatchString(packageID) || !secretOutputRunID.MatchString(sourceRunID) || generation < 1 || !secretOutputDigest.MatchString(runtimeDigest) || len(adminTokenAge) == 0 || len(adminTokenAge) > 131072 || len(unsealSharesAge) == 0 || len(unsealSharesAge) > 131072 {
+		return SecretOutputFileReceipt{}, ErrSecretOutputFiles
+	}
+	var random [16]byte
+	if _, err := rand.Read(random[:]); err != nil {
+		return SecretOutputFileReceipt{}, ErrSecretOutputFiles
+	}
+	receiptID := hex.EncodeToString(random[:])
+	digests := map[string]string{"admin-token": ciphertextDigest(adminTokenAge), "unseal-shares": ciphertextDigest(unsealSharesAge)}
+	name := packageID
+	receipt := secretOutputLocalReceipt{SchemaVersion: 1, ProjectID: projectID, DeploymentID: deploymentID, PackageID: packageID, SourceRunID: sourceRunID, Generation: generation, RuntimeDigest: runtimeDigest, ReceiptID: receiptID, Entries: []string{"admin-token", "unseal-shares"}, Digests: digests}
+	encodedReceipt, err := json.Marshal(receipt)
+	if err != nil {
+		return SecretOutputFileReceipt{}, ErrSecretOutputFiles
+	}
+	root, err := openExportDestinationDirectory(parent)
+	if err != nil {
+		return SecretOutputFileReceipt{}, ErrSecretOutputFiles
+	}
+	defer root.close()
+	projectRoot := root
+	secrets, err := root.createDirectory("secrets")
+	if err != nil {
+		secrets, err = openSecretOutputDirectory(root, []string{"secrets"})
+	}
+	if err != nil {
+		return SecretOutputFileReceipt{}, ErrSecretOutputFiles
+	}
+	defer secrets.close()
+	if check("project-flush") != nil || syncSecretOutputDirectory(projectRoot) != nil {
+		return SecretOutputFileReceipt{}, ErrSecretOutputFiles
+	}
+	deployment, err := secrets.createDirectory(deploymentID)
+	if err != nil {
+		deployment, err = openSecretOutputDirectory(secrets, []string{deploymentID})
+	}
+	if err != nil {
+		return SecretOutputFileReceipt{}, ErrSecretOutputFiles
+	}
+	defer deployment.close()
+	if syncSecretOutputDirectory(secrets) != nil {
+		return SecretOutputFileReceipt{}, ErrSecretOutputFiles
+	}
+	root = deployment
+	parent = filepath.Join(parent, "secrets", deploymentID)
+	staging, stagingName, err := root.createStaging(name)
+	if err != nil {
+		return SecretOutputFileReceipt{}, ErrSecretOutputFiles
+	}
+	defer staging.close()
+	retained := func() error {
+		path := filepath.Join(parent, stagingName)
+		if len(path) > 4096 {
+			path = ""
+		}
+		return &SecretOutputStagingRetainedError{Path: path}
+	}
+	entries := []struct {
+		name string
+		data []byte
+	}{{"admin-token.age", adminTokenAge}, {"unseal-shares.age", unsealSharesAge}}
+	for _, entry := range entries {
+		if err := staging.writeFile(entry.name, entry.data); err != nil {
+			return SecretOutputFileReceipt{}, retained()
+		}
+		readBack, _, err := staging.readFile([]string{entry.name}, 131072)
+		if err != nil || len(readBack) != len(entry.data) || ciphertextDigest(readBack) != ciphertextDigest(entry.data) {
+			return SecretOutputFileReceipt{}, retained()
+		}
+	}
+	if err := staging.writeFile("complete", encodedReceipt); err != nil {
+		return SecretOutputFileReceipt{}, retained()
+	}
+	readBack, _, err := staging.readFile([]string{"complete"}, 8192)
+	if err != nil || string(readBack) != string(encodedReceipt) {
+		return SecretOutputFileReceipt{}, retained()
+	}
+	if check("staging-flush") != nil || syncSecretOutputDirectory(staging) != nil {
+		return SecretOutputFileReceipt{}, retained()
+	}
+	if check("publish") != nil {
+		return SecretOutputFileReceipt{}, retained()
+	}
+	if err := root.publish(staging, stagingName, name); err != nil {
+		return SecretOutputFileReceipt{}, retained()
+	}
+	if check("published-flush") != nil {
+		return SecretOutputFileReceipt{}, ErrSecretOutputFiles
+	}
+	published, err := root.openDirectory([]string{name})
+	if err != nil {
+		return SecretOutputFileReceipt{}, ErrSecretOutputFiles
+	}
+	defer published.close()
+	if published.identity() != staging.identity() || syncSecretOutputDirectory(staging) != nil || syncSecretOutputDirectory(root) != nil {
+		return SecretOutputFileReceipt{}, ErrSecretOutputFiles
+	}
+	for _, entry := range append(entries, struct {
+		name string
+		data []byte
+	}{"complete", encodedReceipt}) {
+		data, _, readErr := published.readFile([]string{entry.name}, 131072)
+		if readErr != nil || !bytes.Equal(data, entry.data) {
+			return SecretOutputFileReceipt{}, ErrSecretOutputFiles
+		}
+	}
+	if check("binding-readback") != nil {
+		return SecretOutputFileReceipt{}, ErrSecretOutputFiles
+	}
+	currentRoot, err := openExportDestinationDirectory(filepath.Dir(filepath.Dir(parent)))
+	if err != nil {
+		return SecretOutputFileReceipt{}, ErrSecretOutputFiles
+	}
+	defer currentRoot.close()
+	currentSecrets, err := currentRoot.openDirectory([]string{"secrets"})
+	if err != nil {
+		return SecretOutputFileReceipt{}, ErrSecretOutputFiles
+	}
+	defer currentSecrets.close()
+	currentDeployment, err := currentSecrets.openDirectory([]string{deploymentID})
+	if err != nil {
+		return SecretOutputFileReceipt{}, ErrSecretOutputFiles
+	}
+	defer currentDeployment.close()
+	if currentRoot.identity() != projectRoot.identity() || currentSecrets.identity() != secrets.identity() || currentDeployment.identity() != root.identity() {
+		return SecretOutputFileReceipt{}, ErrSecretOutputFiles
+	}
+	return SecretOutputFileReceipt{ReceiptID: receiptID, Directory: filepath.Join(parent, name), Digests: digests, ProjectID: projectID, DeploymentID: deploymentID, PackageID: packageID, SourceRunID: sourceRunID, Generation: generation, RuntimeDigest: runtimeDigest}, nil
+}
+
+// ReadSecretOutputFiles verifies a previously published package through the
+// same safe opened-directory primitives. It returns only encrypted bytes and
+// never follows a substituted package/file path.
+func ReadSecretOutputFiles(parent, projectID, deploymentID, packageID, sourceRunID string, generation int, runtimeDigest string) (SecretOutputFileReceipt, map[string][]byte, error) {
+	if parent == "" || !secretOutputProjectID.MatchString(projectID) || !secretOutputDeploymentID.MatchString(deploymentID) || !secretOutputPackageID.MatchString(packageID) || !secretOutputRunID.MatchString(sourceRunID) || generation < 1 || !secretOutputDigest.MatchString(runtimeDigest) {
+		return SecretOutputFileReceipt{}, nil, ErrSecretOutputFiles
+	}
+	root, err := openExportDestinationDirectory(parent)
+	if err != nil {
+		return SecretOutputFileReceipt{}, nil, ErrSecretOutputFiles
+	}
+	defer root.close()
+	name := packageID
+	projectRoot := root
+	secrets, err := openSecretOutputDirectory(root, []string{"secrets"})
+	if err != nil {
+		return SecretOutputFileReceipt{}, nil, ErrSecretOutputFiles
+	}
+	defer secrets.close()
+	root = secrets
+	parent = filepath.Join(parent, "secrets")
+	deployment, err := openSecretOutputDirectory(root, []string{deploymentID})
+	if err != nil {
+		return SecretOutputFileReceipt{}, nil, ErrSecretOutputFiles
+	}
+	defer deployment.close()
+	directory, err := openSecretOutputDirectory(deployment, []string{name})
+	if err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return SecretOutputFileReceipt{}, nil, ErrSecretOutputFiles
+		}
+		// Files published before package-specific directories remain readable
+		// only when their complete receipt matches the requested package.
+		directory = deployment
+		name = ""
+	} else {
+		defer directory.close()
+	}
+	encoded, _, err := directory.readFile([]string{"complete"}, 8192)
+	var receipt secretOutputLocalReceipt
+	decoder := json.NewDecoder(bytes.NewReader(encoded))
+	decoder.DisallowUnknownFields()
+	if err != nil || decoder.Decode(&receipt) != nil || receipt.SchemaVersion != 1 || receipt.ProjectID != projectID || receipt.DeploymentID != deploymentID || receipt.PackageID != packageID || receipt.SourceRunID != sourceRunID || receipt.Generation != generation || receipt.RuntimeDigest != runtimeDigest || !secretOutputPackageID.MatchString(receipt.ReceiptID) || len(receipt.Entries) != 2 || receipt.Entries[0] != "admin-token" || receipt.Entries[1] != "unseal-shares" || len(receipt.Digests) != 2 {
+		return SecretOutputFileReceipt{}, nil, ErrSecretOutputFiles
+	}
+	var trailing any
+	if decoder.Decode(&trailing) != io.EOF {
+		return SecretOutputFileReceipt{}, nil, ErrSecretOutputFiles
+	}
+	ciphertexts := make(map[string][]byte, 2)
+	for _, entry := range []struct{ id, file string }{{"admin-token", "admin-token.age"}, {"unseal-shares", "unseal-shares.age"}} {
+		data, _, readErr := directory.readFile([]string{entry.file}, 131072)
+		if readErr != nil || !secretOutputDigest.MatchString(receipt.Digests[entry.id]) || ciphertextDigest(data) != receipt.Digests[entry.id] {
+			for _, value := range ciphertexts {
+				clear(value)
+			}
+			clear(data)
+			return SecretOutputFileReceipt{}, nil, ErrSecretOutputFiles
+		}
+		ciphertexts[entry.id] = data
+	}
+	if syncSecretOutputDirectory(directory) != nil || syncSecretOutputDirectory(deployment) != nil || syncSecretOutputDirectory(root) != nil || syncSecretOutputDirectory(projectRoot) != nil {
+		for _, data := range ciphertexts {
+			clear(data)
+		}
+		return SecretOutputFileReceipt{}, nil, ErrSecretOutputFiles
+	}
+	return SecretOutputFileReceipt{ReceiptID: receipt.ReceiptID, Directory: filepath.Join(parent, deploymentID, name), Digests: receipt.Digests, ProjectID: projectID, DeploymentID: deploymentID, PackageID: packageID, SourceRunID: sourceRunID, Generation: generation, RuntimeDigest: runtimeDigest}, ciphertexts, nil
+}
+
+func ciphertextDigest(data []byte) string {
+	digest := sha256.Sum256(data)
+	return "sha256:" + hex.EncodeToString(digest[:])
+}
+
+// ReadSecretOutputReceipt discovers binding only at one canonical deployment
+// path supplied by the managed projection, never by directory scanning.
+func ReadSecretOutputReceipt(rootPath, projectID, deploymentID, runtimeDigest string) (SecretOutputFileReceipt, map[string][]byte, error) {
+	if !secretOutputDeploymentID.MatchString(deploymentID) {
+		return SecretOutputFileReceipt{}, nil, ErrSecretOutputFiles
+	}
+	root, err := openExportSourceDirectory(rootPath)
+	if err != nil {
+		return SecretOutputFileReceipt{}, nil, ErrSecretOutputFiles
+	}
+	defer root.close()
+	dir, err := root.openDirectory([]string{"secrets", deploymentID})
+	if err != nil {
+		return SecretOutputFileReceipt{}, nil, ErrSecretOutputFiles
+	}
+	defer dir.close()
+	data, _, err := dir.readFile([]string{"complete"}, 8192)
+	var receipt secretOutputLocalReceipt
+	if err != nil || json.Unmarshal(data, &receipt) != nil {
+		return SecretOutputFileReceipt{}, nil, ErrSecretOutputFiles
+	}
+	return ReadSecretOutputFiles(rootPath, projectID, deploymentID, receipt.PackageID, receipt.SourceRunID, receipt.Generation, runtimeDigest)
+}
+
+@@END
+@@PORTABLE {"path":"internal/installer/secret_output_sync_unix.go","mode":420,"size":375,"sha256":"23198a6df2dfb9779608e2cd49ee6c87c30e3f4af63df5b98e34dd2982f89f34","index":0,"count":1,"encoding":"utf-8","payloadBytes":375}
+//go:build linux
+
+package installer
+
+import "golang.org/x/sys/unix"
+
+// Sync the held directory, not a pathname that can be replaced.
+func syncSecretOutputDirectory(directory *exportDirectory) error {
+	return unix.Fsync(directory.fd)
+}
+
+func openSecretOutputDirectory(parent *exportDirectory, parts []string) (*exportDirectory, error) {
+	return parent.openDirectory(parts)
+}
+
+@@END
+@@PORTABLE {"path":"internal/installer/secret_output_sync_windows.go","mode":420,"size":831,"sha256":"287a45e241f13cd80f24306233381d358d1087938a1c8118273698b7a715c570","index":0,"count":1,"encoding":"utf-8","payloadBytes":831}
+//go:build windows
+
+package installer
+
+import (
+	"unsafe"
+
+	"golang.org/x/sys/windows"
+)
+
+var secretOutputFlush = windows.NewLazySystemDLL("ntdll.dll").NewProc("NtFlushBuffersFileEx")
+
+// Fail closed if the filesystem cannot durably flush the held directory.
+func syncSecretOutputDirectory(directory *exportDirectory) error {
+	if err := secretOutputFlush.Find(); err != nil {
+		return err
+	}
+	var status windows.IO_STATUS_BLOCK
+	result, _, _ := secretOutputFlush.Call(uintptr(directory.handle), 0, 0, 0, uintptr(unsafe.Pointer(&status)))
+	if int32(result) < 0 {
+		return windows.NTStatus(result)
+	}
+	return nil
+}
+
+func openSecretOutputDirectory(parent *exportDirectory, parts []string) (*exportDirectory, error) {
+	return parent.openDirectoryWithAccess(parts, windows.FILE_GENERIC_READ|windows.FILE_GENERIC_WRITE|windows.DELETE)
+}
+
+@@END
 @@PORTABLE {"path":"internal/installer/server.go","mode":420,"size":5719,"sha256":"14ed0e9284e68189dfd24ff1a87a6d829e60e2a7d4657544853d86b0ebb2eb76","index":0,"count":1,"encoding":"utf-8","payloadBytes":5719}
 package installer
 
