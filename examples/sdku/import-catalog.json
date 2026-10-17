@@ -1,0 +1,191 @@
+[
+  {
+    "digest": "sha256:9a70aa9a752b2946eef16af3227bb905069ba510bbc423f59d3ed96fd10b6b01",
+    "kind": "application",
+    "name": "alarm-service",
+    "sourceDirectory": ".",
+    "version": "1.0.0"
+  },
+  {
+    "digest": "sha256:d9bb375bdd72b5504cf5bc950b9ca6910e084c0a49d89a5b3807e07a95c20c78",
+    "kind": "application",
+    "name": "alarm-view-service",
+    "sourceDirectory": ".",
+    "version": "1.0.0"
+  },
+  {
+    "digest": "sha256:812ebd159db27149a22749a2dfaa7478746dfbd11d5f2e6602afba45f5d2c5e8",
+    "kind": "application",
+    "name": "data-manager",
+    "sourceDirectory": ".",
+    "version": "1.0.0"
+  },
+  {
+    "digest": "sha256:60b69127ade283ade231d543856c10cc77f1278f793fe5a6d251bedb84cfaee9",
+    "kind": "application",
+    "name": "ef-backend",
+    "sourceDirectory": ".",
+    "version": "1.0.0"
+  },
+  {
+    "digest": "sha256:74eb8be37af52c2f0a804d0fb9cec5139ebb17c8f47c22af808f3571d0ad5fb1",
+    "kind": "application",
+    "name": "evo-manager",
+    "sourceDirectory": ".",
+    "version": "1.0.0"
+  },
+  {
+    "digest": "sha256:65451898145300f2f10aa384214e84c48674d7c51e662bc881606c551797590c",
+    "kind": "application",
+    "name": "evo-scheduler",
+    "sourceDirectory": ".",
+    "version": "1.0.0"
+  },
+  {
+    "digest": "sha256:a617036c584c0154b69117dd63d00b86bd90ca24a5e03a2df6dcf5acd186fb4f",
+    "kind": "application",
+    "name": "ham-backend",
+    "sourceDirectory": ".",
+    "version": "1.0.0"
+  },
+  {
+    "digest": "sha256:1b2b1d1a469946b37195113e75461d0876c7a74d961007ee1fff9f8b6dd10b05",
+    "kind": "application",
+    "name": "hmi-backend",
+    "sourceDirectory": ".",
+    "version": "1.0.0"
+  },
+  {
+    "digest": "sha256:c2cf5b636e242e5b0e5b6efac83a5ba8daa097fcbe0c2b49ad1261d5d5dee8b9",
+    "kind": "application",
+    "name": "hmi-frontend-alarms",
+    "sourceDirectory": ".",
+    "version": "1.0.0"
+  },
+  {
+    "digest": "sha256:95e20908a8a0f8bdb33b6abb6f513e9551bfd8cd5ac47b358336b0a227cf2313",
+    "kind": "application",
+    "name": "hmi-frontend-para",
+    "sourceDirectory": ".",
+    "version": "1.0.0"
+  },
+  {
+    "digest": "sha256:700e1eb9c9541346badd8806bf3021fdef2fb753df4870faaab2ec64e562a79a",
+    "kind": "application",
+    "name": "hmi-frontend-svg-editor",
+    "sourceDirectory": ".",
+    "version": "1.0.0"
+  },
+  {
+    "digest": "sha256:ea4667f17147d523991fc8b9df062fff4a3036205ec376c7827c30c20d368411",
+    "kind": "application",
+    "name": "hmi-frontend-trends",
+    "sourceDirectory": ".",
+    "version": "1.0.0"
+  },
+  {
+    "digest": "sha256:b037e59092cdb91f656925b74d26a0de8114b9a1c2308ff090c68243c8003cef",
+    "kind": "application",
+    "name": "hmi-frontend-viewer-noszi",
+    "sourceDirectory": ".",
+    "version": "1.0.0"
+  },
+  {
+    "digest": "sha256:f788d1d3474deb0ace00a654e53de80a9d98deba390594436e6d02e0cdd3b99f",
+    "kind": "application",
+    "name": "hmi-frontend-viewer",
+    "sourceDirectory": ".",
+    "version": "1.0.0"
+  },
+  {
+    "digest": "sha256:9ffce969db65b68fd333d0918b54eae0be5137990a503167e3e303f20a55813a",
+    "kind": "application",
+    "name": "iec60870",
+    "sourceDirectory": ".",
+    "version": "1.0.0"
+  },
+  {
+    "digest": "sha256:0971e8c08e8f535ac4f1fa8abd053cad05f7b63d70029f6f7177c8efedb754d3",
+    "kind": "application",
+    "name": "kafka-ch-replicator",
+    "sourceDirectory": ".",
+    "version": "1.0.0"
+  },
+  {
+    "digest": "sha256:7513b16ffe3a418a451d8e42e696f8d330e0daaa2faac6416919d72ee0eb92b6",
+    "kind": "application",
+    "name": "kafka-history-writer",
+    "sourceDirectory": ".",
+    "version": "1.0.0"
+  },
+  {
+    "digest": "sha256:28dcb9ca84b721ecab67c35f141d4ee503f356dd79a85812e99bd4cdf4832cfa",
+    "kind": "application",
+    "name": "opc-ua-server",
+    "sourceDirectory": ".",
+    "version": "1.0.0"
+  },
+  {
+    "digest": "sha256:9a8493924a089c8784567e6b48f16989eca70728700d5aba12b4e0fc91b894a1",
+    "kind": "application",
+    "name": "sdku-knp-ui",
+    "sourceDirectory": ".",
+    "version": "1.0.0"
+  },
+  {
+    "digest": "sha256:e174d4be63781b991767c64c74fdec0941ff6d1d5272dd5bc42f7096a3464d29",
+    "kind": "application",
+    "name": "sdku-knp",
+    "sourceDirectory": ".",
+    "version": "1.0.0"
+  },
+  {
+    "digest": "sha256:4ecbd4eba1adb6b7dfeb16e01d404a0f49bf8a44ebc74737a45fb59b9caf4002",
+    "kind": "application",
+    "name": "sdku-status-calculation",
+    "sourceDirectory": ".",
+    "version": "1.0.0"
+  },
+  {
+    "digest": "sha256:d38329bfbf1acabdeb6c577b3813435a3cdac4a64e9c94141501cab12ac67ffa",
+    "kind": "application",
+    "name": "sdku-tank-farm",
+    "sourceDirectory": ".",
+    "version": "1.0.0"
+  },
+  {
+    "digest": "sha256:d8b3b29cd945b5ba6f5904086c508ac9563b1bad2e9c0cbd9f71f295d9cf03c9",
+    "kind": "application",
+    "name": "sdku-telemechanics",
+    "sourceDirectory": ".",
+    "version": "1.0.0"
+  },
+  {
+    "digest": "sha256:6ec8cd06d4636b626774f6746956bf98e5fb6df96ee84910b35e98e11d09c79a",
+    "kind": "application",
+    "name": "sdku-vtor-ui",
+    "sourceDirectory": ".",
+    "version": "1.0.0"
+  },
+  {
+    "digest": "sha256:afb1e0fdd0c30c7c44dd9139ab0ebb78c5eb89f92f91cd750a7096745a296524",
+    "kind": "application",
+    "name": "sdku-vtor",
+    "sourceDirectory": ".",
+    "version": "1.0.0"
+  },
+  {
+    "digest": "sha256:3d0f71f9726d3f1186fd5686986595164c56cd178ef07527e63f4810f723c3a8",
+    "kind": "application",
+    "name": "user-preferences",
+    "sourceDirectory": ".",
+    "version": "1.0.0"
+  },
+  {
+    "digest": "sha256:c777df00cfd3552395dba016673dd301077ea4b0799c185774ba5c9594488d8e",
+    "kind": "library",
+    "name": "sdku",
+    "sourceDirectory": ".",
+    "version": "1.0.0"
+  }
+]

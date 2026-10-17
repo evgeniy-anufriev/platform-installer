@@ -1,0 +1,37 @@
+platform_application_definition:
+    connections: {}
+    defaults:
+        command:
+            - /app/docker-entrypoint.sh
+        environment:
+            ALARMS_URL: https://{{ application_parameters.source_variables.PUBLIC_HOST | default(undef(hint='Configure SDKU PUBLIC_HOST'), true) }}/hmi-frontend-alarms
+            CSPA_HMI_BACK: https://{{ application_parameters.source_variables.PUBLIC_HOST | default(undef(hint='Configure SDKU PUBLIC_HOST'), true) }}/hmi-backend
+            CSPA_HMI_BACK_WS: wss://{{ application_parameters.source_variables.PUBLIC_HOST | default(undef(hint='Configure SDKU PUBLIC_HOST'), true) }}/hmi-backend
+            GRANT_ACCESS: https://{{ application_parameters.source_variables.PUBLIC_HOST | default(undef(hint='Configure SDKU PUBLIC_HOST'), true) }}/grant-access
+            GRANT_ACCESS_AUDIT: https://{{ application_parameters.source_variables.PUBLIC_HOST | default(undef(hint='Configure SDKU PUBLIC_HOST'), true) }}/grant-access-audit
+            HMI_BACK: https://{{ application_parameters.source_variables.PUBLIC_HOST | default(undef(hint='Configure SDKU PUBLIC_HOST'), true) }}/ef-backend
+            NGINX_URL: nginx.{{ application_parameters.source_variables.URL_ROOT | default(undef(hint='Configure SDKU URL_ROOT'), true) }}
+            SVG_EDITOR: https://{{ application_parameters.source_variables.PUBLIC_HOST | default(undef(hint='Configure SDKU PUBLIC_HOST'), true) }}/hmi-frontend-svg-editor
+            TRENDS_URL: https://{{ application_parameters.source_variables.PUBLIC_HOST | default(undef(hint='Configure SDKU PUBLIC_HOST'), true) }}/hmi-frontend-trends
+            VTOR_URL: https://{{ application_parameters.source_variables.PUBLIC_HOST | default(undef(hint='Configure SDKU PUBLIC_HOST'), true) }}/sdku-vtor-ui
+        image: evoscada-docker.artifacts.tn.tngrp.ru/hmi-frontend-viewer:0.0.1-8a014e63
+        parameters:
+            mount_sources:
+                mount-1: ""
+                mount-2: ""
+            source_variables:
+                PUBLIC_HOST: ""
+                URL_ROOT: ""
+        ports:
+            port-1:
+                container: 10211
+                published: 10213
+        readiness:
+            delay: 2
+            mode: container
+            retries: 30
+        restart: always
+        user: 1000:1000
+    identity_environment: []
+    name: hmi-frontend-viewer
+    version: 1.0.0

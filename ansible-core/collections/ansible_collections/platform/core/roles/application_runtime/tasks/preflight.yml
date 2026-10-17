@@ -163,6 +163,7 @@
       vault_path: "{{ application_instance_path }}/vault"
       pki_path: "{{ application_instance_path }}/pki"
     library_runtime:
+      defaults: "{{ application_runtime_job.commonDefaults | default({}) }}"
       library_id: "{{ application_runtime_job.libraryId }}"
       host_id: "{{ inventory_hostname }}"
       connections: "{{ hostvars['localhost'].application_snapshot.snapshot.applicationLibraries.libraries[application_runtime_job.libraryId].instances[application_runtime_job.instanceId].connections }}"

@@ -341,6 +341,8 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
             findings.append(finding("APPLICATION_IDENTITY_INVALID", field))
         for section in ("parameters", "environment", "command"):
             nonsecret_values(settings.get(section, {}), field + "." + section, findings)
+        for key in ('commonDefaults', 'inherited'):
+            nonsecret_values(row.get(key, {}), field + '.' + key, findings)
         nonsecret_values(settings.get("endpoint", {}), field + ".endpoint", findings)
         for resource_id, resource in row["resources"].items():
             nonsecret_values(resource.get("parameters", {}), field + ".resources." + resource_id + ".parameters", findings)
@@ -446,6 +448,7 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
         instance["approle"] = {"bind_secret_id": False, "token_bound_cidrs": "RUNTIME_HOST_SUBNET_AND_LOOPBACK"} if agent_required else None
         # Settings safe projection is explicit: do not send raw defaults/hostvars to callers.
         instance["placements"][host] = {"SERVER_ID": host, "runtimeRef": runtime_ref, "command": settings.get("command", []),
+                                          "commonDefaults": row.get('commonDefaults', {}), "inherited": row.get('inherited', {}),
                                           "imageRequirement": {"image": settings.get("image"), "artifactType": "container-image"},
                                           "origin": {"resolution": "ANSIBLE", "precision": "RESOLUTION_SCOPE",
                                                      "applicationPackage": row['applicationName'] + '@' + row['applicationVersion'],
@@ -478,6 +481,6 @@ def validate_public_projection(projection):
             for account_id, account in instance.get("credentialRequirements", {}).items():
                 nonsecret_values(account.get("grants", []), prefix + ".accounts." + account_id + ".grants", findings)
             for host_id, placement in instance.get("placements", {}).items():
-                for section in ("parameters", "environment", "command", "endpoint"):
+                for section in ("parameters", "environment", "command", "endpoint", "commonDefaults", "inherited"):
                     nonsecret_values(placement.get(section, {}), prefix + ".placements." + host_id + "." + section, findings)
     return findings

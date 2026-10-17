@@ -38,13 +38,15 @@ type ApplicationInstance struct {
 }
 
 type ApplicationPlacement struct {
+	CommonDefaults   map[string]json.RawMessage `json:"commonDefaults,omitempty"`
+	Inherited        map[string]json.RawMessage `json:"inherited,omitempty"`
 	ServerID         string                     `json:"SERVER_ID"`
 	RuntimeRef       string                     `json:"runtimeRef"`
 	Command          []string                   `json:"command"`
 	ImageRequirement json.RawMessage            `json:"imageRequirement"`
 	Origin           ApplicationOrigin          `json:"origin"`
 	Parameters       map[string]json.RawMessage `json:"parameters"`
-	Environment      map[string]string          `json:"environment"`
+	Environment      map[string]any             `json:"environment"`
 	Ports            map[string]json.RawMessage `json:"ports"`
 	Endpoint         json.RawMessage            `json:"endpoint"`
 	ContainerName    string                     `json:"containerName"`

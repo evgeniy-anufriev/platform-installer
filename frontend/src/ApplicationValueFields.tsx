@@ -12,6 +12,7 @@ export function ApplicationValueFields({
   onSave,
   onDirtyChange,
   excludeKeys = [],
+  defaultLabel = "Из пакета · без вычисления Ansible",
 }: {
   label: string;
   value: Obj;
@@ -20,6 +21,7 @@ export function ApplicationValueFields({
   onSave: (value: Obj) => Promise<boolean>;
   onDirtyChange: (dirty: boolean) => void;
   excludeKeys?: string[];
+  defaultLabel?: string;
 }) {
   const dirtyFields = useRef(new Set<string>());
   const mark = (key: string, dirty: boolean) => {
@@ -50,6 +52,7 @@ export function ApplicationValueFields({
                 label={key}
                 value={objectValue(authored)}
                 defaults={objectValue(inherited)}
+                defaultLabel={defaultLabel}
                 disabled={disabled}
                 onSave={(next) => onSave({ ...value, [key]: next })}
                 onDirtyChange={(dirty) => mark(key, dirty)}
@@ -90,6 +93,7 @@ export function ApplicationValueFields({
             value={current}
             inferType={inherited === undefined && current === ""}
             explicit={Object.hasOwn(value, key)}
+            defaultLabel={defaultLabel}
             disabled={disabled}
             onDirtyChange={(dirty) => mark(key, dirty)}
             onSave={(next) => onSave({ ...value, [key]: next })}
@@ -258,6 +262,7 @@ function ScalarValue({
   onReset,
   onDirtyChange,
   inferType = false,
+  defaultLabel = "Из пакета · без вычисления Ansible",
 }: {
   label: string;
   value: unknown;
@@ -267,6 +272,7 @@ function ScalarValue({
   onReset: () => Promise<boolean>;
   onDirtyChange: (dirty: boolean) => void;
   inferType?: boolean;
+  defaultLabel?: string;
 }) {
   const [text, setText] = useState(String(value ?? ""));
   const [dirty, setDirty] = useState(false);
@@ -358,9 +364,7 @@ function ScalarValue({
       {!valid && (
         <small role="alert">Значение не соответствует типу {typeLabel}.</small>
       )}
-      <small>
-        {explicit ? "Явное значение" : "Из пакета · без вычисления Ansible"}
-      </small>
+      <small>{explicit ? "Явное значение" : defaultLabel}</small>
       <div className="row">
         <button
           disabled={disabled || !dirty || !valid}

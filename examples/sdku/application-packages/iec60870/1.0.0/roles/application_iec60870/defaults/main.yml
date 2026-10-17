@@ -1,0 +1,88 @@
+platform_application_definition:
+    connections:
+        kafka:
+            library_binding: messaging
+            protocol: tcp
+        redis:
+            library_binding: cache
+            protocol: tcp
+        vault:
+            library_binding: secrets
+            protocol: https
+    defaults:
+        command:
+            - '{{ sdku_start_commands[''iec60870''] | mandatory }}'
+        environment:
+            LOGGER_LEVEL: INFO
+            LOGGER_ROOT_LEVEL: WARN
+            REDU_DISABLE: true
+            REDU_GROUP_ID: iec-1
+            REDU_MANAGER_ID: '{{ application_instance_id }}'
+            SET_INVALID_BIT: 2
+            SMOOTH: false
+            SPRING_CONFIG_ADDITIONAL_LOCATION: /usr/local/config/connection.yml
+            SPRING_KAFKA_SCHEMA_REGISTRY_URL: '{{ application_parameters.source_variables.KAFKA_SCHEMA_REGISTRY_URL | default(undef(hint=''Configure SDKU KAFKA_SCHEMA_REGISTRY_URL''), true) }}'
+            TN_SCADA_DRIVER_GROUP_ID: iec-1
+            TN_SCADA_METADATA_TARGET_PROJECT: TNSV
+            TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
+            TNSCADA_PROXY_IMPL: dist-proxy.direct
+            WEB_SERVER_PORT: 8088
+            server.max-http-request-header-size: 100MB
+            tn-scada.metadata.dontShowTargetProjectInNames: true
+            tn-scada.metadata.load-projects: TNSV
+        image: evoscada-docker.artifacts.tn.tngrp.ru/iec60870:0.0.17.4-68960f25-redos
+        parameters:
+            mount_sources:
+                mount-6: ""
+            source_variables:
+                KAFKA_SCHEMA_REGISTRY_URL: ""
+                REDIS_SENTINEL_MASTER: ""
+        ports: {}
+        provisioner:
+            approle:
+                bind_secret_id: false
+            auth:
+                method: approle
+            mode: process-supervisor
+            secret_bindings:
+                JAVA_KEYSTORE_PASSWORD:
+                    source:
+                        library_secret: java_keystore_password
+                SPRING_KAFKA_SSL_KEY_STORE_PASSWORD:
+                    source:
+                        library_secret: java_keystore_password
+                SPRING_KAFKA_SSL_TRUST_STORE_PASSWORD:
+                    source:
+                        library_secret: java_keystore_password
+                TN_SCADA_REDIS_ACL_PASSWORD:
+                    source:
+                        library_secret: redis_password
+                TN_SCADA_REDIS_ACL_SENTINEL_PASSWORD:
+                    source:
+                        library_secret: redis_sentinel_password
+                TN_SCADA_REDIS_ACL_SENTINEL_USERNAME:
+                    source:
+                        library_secret: redis_sentinel_username
+                TN_SCADA_REDIS_ACL_USERNAME:
+                    source:
+                        library_secret: redis_username
+                TN_SCADA_REDIS_SSL_PROPERTIES_KEY_STORE_PASSWORD:
+                    source:
+                        library_secret: java_keystore_password
+                TN_SCADA_REDIS_SSL_PROPERTIES_TRUST_STORE_PASSWORD:
+                    source:
+                        library_secret: java_keystore_password
+            secrets:
+                mount: applications
+            type: vault-agent
+        readiness:
+            delay: 2
+            mode: container
+            retries: 30
+        restart: on-failure
+        user: 1000:1000
+    identity_environment:
+        - KAFKA_APPLICATION_ID_CONFIG
+        - KAFKA_LISTENER_ID_CONFIG
+    name: iec60870
+    version: 1.0.0

@@ -28,6 +28,8 @@ class ApplicationLibraryEditTests(unittest.TestCase):
     def test_slot_placement_and_reset(self):
         for operation, fields in (
             ('SetApplicationLibrarySlot', dict(entityId='gateway', entity=dict(overrides={}))),
+            ('SetApplicationLibraryOverride', dict(setting='environment', value={'COMMON': 'site'})),
+            ('RemoveApplicationLibraryOverride', dict(setting='parameters')),
             ('SetApplicationLibraryPlacement', dict(hostId='node1', placement={})),
             ('RemoveApplicationLibraryOverride', dict(entityId='gateway', property='parameters', setting='timeout')),
             ('SetApplicationLibraryOverride', dict(hostId='node1', property='ports', setting='http', value=dict(container=8080, published=28480))),
@@ -37,6 +39,9 @@ class ApplicationLibraryEditTests(unittest.TestCase):
             self.assertEqual([], self.validate(value), operation)
 
     def test_closed_paths_and_scopes(self):
+        common = self.command('SetApplicationLibraryOverride')
+        common.update(setting='image', value='not-a-common-setting')
+        self.assertTrue(self.validate(common))
         value = self.command('RemoveApplicationLibraryOverride')
         value.update(entityId='gateway', property='parameters', setting='timeout')
         for fields in (dict(value='forbidden'), dict(hostId='node1'), dict(deploymentId='../sdku'),

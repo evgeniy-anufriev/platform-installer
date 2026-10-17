@@ -67,7 +67,7 @@ export function applicationDraft(
         target = objectValue(member.overrides);
         member.overrides = target;
         placements[c.hostId][id] = member;
-      } else {
+      } else if (c.entityId) {
         libraries[id] ??= {};
         const apps = objectValue(libraries[id].applications);
         const slot = objectValue(apps[c.entityId!]);
@@ -75,6 +75,10 @@ export function applicationDraft(
         slot.overrides = target;
         apps[c.entityId!] = slot;
         libraries[id].applications = apps;
+      } else {
+        libraries[id] ??= {};
+        target = objectValue(libraries[id].overrides);
+        libraries[id].overrides = target;
       }
       const fields = c.property ? objectValue(target[c.property]) : target;
       if (c.operation.startsWith("Remove")) delete fields[c.setting];

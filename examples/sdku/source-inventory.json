@@ -1,0 +1,274 @@
+{
+  "applications": [
+    {
+      "frontend": false,
+      "image": "evoscada-docker.artifacts.tn.tngrp.ru/alarm-service:0.4.2-3a1d508c-redos",
+      "issues": [],
+      "name": "alarm-service",
+      "observedImageId": "sha256:9b3d2069bb1ab7ee33a68e06084d3335200a30adc54cb264465e7a124a9e410e",
+      "sourceManifest": "alarm-service.yml",
+      "sourceService": "alarm-service"
+    },
+    {
+      "frontend": false,
+      "image": "evoscada-docker.artifacts.tn.tngrp.ru/alarm-view-service:0.4.0-96e90ee0-redos",
+      "issues": [],
+      "name": "alarm-view-service",
+      "observedImageId": "sha256:b433d1444aa820debe45e69c69b4e3ab7963d72d855df5b6e554788f2ca36b8f",
+      "sourceManifest": "alarm-view-service.yml",
+      "sourceService": "alarm-view-service-multi"
+    },
+    {
+      "frontend": false,
+      "image": "evoscada-docker.artifacts.tn.tngrp.ru/data-manager:1.5.0-SNAPSHOT-7a795dc1-redos",
+      "issues": [],
+      "name": "data-manager",
+      "observedImageId": "sha256:fa4f2f1418c97bb011f3e635586ea37cd8e690190f2abda32621290be7e0d689",
+      "sourceManifest": "data-manager.yml",
+      "sourceService": "data-manager"
+    },
+    {
+      "frontend": false,
+      "image": "evoscada-docker.artifacts.tn.tngrp.ru/ef-backend:1.0.4-SNAPSHOT-11cc4fa1-redos",
+      "issues": [],
+      "name": "ef-backend",
+      "observedImageId": "sha256:4819c8c8a294eff01e3935b2bae6594f49ef59b433536d3d0bc26c5462aadfb4",
+      "sourceManifest": "ef-backend.yml",
+      "sourceService": "ef-backend"
+    },
+    {
+      "frontend": false,
+      "image": "evoscada-docker.artifacts.tn.tngrp.ru/evo-manager:3.10.21-eedea228-redos",
+      "issues": [
+        "Configure parameters.mount_sources for application files/TLS on target; no host private key or data copied"
+      ],
+      "name": "evo-manager",
+      "observedImageId": "sha256:b71d0fe5e2941069b709190bbdc52879fc0808b95680bd6b9c29e05271d4e1d9",
+      "sourceManifest": "evo-manager_tnsv.yml",
+      "sourceService": "evo-manager"
+    },
+    {
+      "frontend": false,
+      "image": "evoscada-docker.artifacts.tn.tngrp.ru/evo-scheduler:0.1.1-SNAPSHOT-078b0422-redos",
+      "issues": [],
+      "name": "evo-scheduler",
+      "observedImageId": "sha256:81e3eb67e2b7daddf0c57019c7cb254798613ab5b4ad69ebdd69f372d64cf128",
+      "sourceManifest": "evo-scheduler.yml",
+      "sourceService": "evo-scheduler"
+    },
+    {
+      "frontend": false,
+      "image": "evoscada-docker.artifacts.tn.tngrp.ru/hmi-backend:1.2.11-d414e0ef-redos",
+      "issues": [
+        "Exact image child command unavailable; supply sdku_start_commands or override command after inspecting this image"
+      ],
+      "name": "ham-backend",
+      "observedImageId": null,
+      "sourceManifest": "ham-backend.yml",
+      "sourceService": "ham-backend"
+    },
+    {
+      "frontend": false,
+      "image": "evoscada-docker.artifacts.tn.tngrp.ru/hmi-backend:1.2.11-45c5e804-redos",
+      "issues": [],
+      "name": "hmi-backend",
+      "observedImageId": "sha256:0cee526e3146085af904efba8b31b9db54326d0e1760ab1e908b70eef60353cc",
+      "sourceManifest": "hmi-backend.yml",
+      "sourceService": "hmi-backend"
+    },
+    {
+      "frontend": true,
+      "image": "evoscada-docker.artifacts.tn.tngrp.ru/hmi-frontend-alarms:0.0.1-9c1910f8",
+      "issues": [
+        "Configure parameters.mount_sources for application files/TLS on target; no host private key or data copied"
+      ],
+      "name": "hmi-frontend-alarms",
+      "observedImageId": "sha256:647af15dca85461d18c0f2b4a0e40a31a5d87b01f4579fc48202841ee014cc7e",
+      "sourceManifest": "hmi-frontend-alarms.yml",
+      "sourceService": "hmi-frontend-alarms"
+    },
+    {
+      "frontend": true,
+      "image": "evoscada-docker.artifacts.tn.tngrp.ru/hmi-frontend-para:0.0.1-f878fe7c",
+      "issues": [
+        "Configure parameters.mount_sources for application files/TLS on target; no host private key or data copied"
+      ],
+      "name": "hmi-frontend-para",
+      "observedImageId": "sha256:634bfc5225182aa71025344f0ca03258fd79dc0cb00171e2feee9089f31d91a0",
+      "sourceManifest": "hmi-frontend-para.yml",
+      "sourceService": "hmi-frontend-para"
+    },
+    {
+      "frontend": true,
+      "image": "evoscada-docker.artifacts.tn.tngrp.ru/hmi-frontend-svg-editor:0.0.1-cf3ed45c",
+      "issues": [
+        "Configure parameters.mount_sources for application files/TLS on target; no host private key or data copied"
+      ],
+      "name": "hmi-frontend-svg-editor",
+      "observedImageId": "sha256:8a1d76e179ec9d5a312931c772c1845209aad65a0187107f892400ff7dcb7402",
+      "sourceManifest": "hmi-frontend-svg-editor.yml",
+      "sourceService": "hmi-frontend-svg-editor"
+    },
+    {
+      "frontend": true,
+      "image": "evoscada-docker.artifacts.tn.tngrp.ru/hmi-frontend-trends:0.0.1-f878fe7c",
+      "issues": [],
+      "name": "hmi-frontend-trends",
+      "observedImageId": "sha256:d70ad58b9db40cb1319e0ca7a95812843871827894d10c8f8ec220d6a40ca525",
+      "sourceManifest": "hmi-frontend-trends.yml",
+      "sourceService": "hmi-frontend-trends"
+    },
+    {
+      "frontend": true,
+      "image": "evoscada-docker.artifacts.tn.tngrp.ru/hmi-frontend-viewer:0.0.0-89658527",
+      "issues": [
+        "Exact image child command unavailable; supply sdku_start_commands or override command after inspecting this image",
+        "Configure parameters.mount_sources for application files/TLS on target; no host private key or data copied"
+      ],
+      "name": "hmi-frontend-viewer-noszi",
+      "observedImageId": null,
+      "sourceManifest": "hmi-frontend-viewer-noszi.yml",
+      "sourceService": "hmi-frontend-viewer-noszi"
+    },
+    {
+      "frontend": true,
+      "image": "evoscada-docker.artifacts.tn.tngrp.ru/hmi-frontend-viewer:0.0.1-8a014e63",
+      "issues": [
+        "Configure parameters.mount_sources for application files/TLS on target; no host private key or data copied"
+      ],
+      "name": "hmi-frontend-viewer",
+      "observedImageId": "sha256:e2d6be0f470384e512071ba1979847aae58c4b6bd18e550a9425e4ae9f77210f",
+      "sourceManifest": "hmi-frontend-viewer.yml",
+      "sourceService": "hmi-frontend-viewer"
+    },
+    {
+      "frontend": false,
+      "image": "evoscada-docker.artifacts.tn.tngrp.ru/iec60870:0.0.17.4-68960f25-redos",
+      "issues": [
+        "Exact image child command unavailable; supply sdku_start_commands or override command after inspecting this image",
+        "Configure parameters.mount_sources for application files/TLS on target; no host private key or data copied"
+      ],
+      "name": "iec60870",
+      "observedImageId": null,
+      "sourceManifest": "iec60870.yml",
+      "sourceService": "iec-client-multi-1"
+    },
+    {
+      "frontend": false,
+      "image": "evoscada-docker.artifacts.tn.tngrp.ru/kafka-ch-replicatior:0.0.5-SNAPSHOT-14953056-redos",
+      "issues": [],
+      "name": "kafka-ch-replicator",
+      "observedImageId": "sha256:5505a5c50d3cce64d45f3ad2f87129632026b67ac6c9382bcbde9d307dfbb076",
+      "sourceManifest": "kafka-ch-replicatior.yml",
+      "sourceService": "kafka-ch-replicator"
+    },
+    {
+      "frontend": false,
+      "image": "evoscada-docker.artifacts.tn.tngrp.ru/kafka-history-writer:0.0.67-412ebcbf-redos",
+      "issues": [],
+      "name": "kafka-history-writer",
+      "observedImageId": "sha256:9fc80f43af459e081709b2a4e2ae4f5eb35faac6177e5b8a47e4a62d7c3f979e",
+      "sourceManifest": "kafka-history-writer.yml",
+      "sourceService": "kafka-history-writer"
+    },
+    {
+      "frontend": false,
+      "image": "evoscada-docker.artifacts.tn.tngrp.ru/opc-ua-server:1.1.2-67bad727-redos",
+      "issues": [
+        "Configure parameters.mount_sources for application files/TLS on target; no host private key or data copied"
+      ],
+      "name": "opc-ua-server",
+      "observedImageId": null,
+      "sourceManifest": "opc-ua-server.yml",
+      "sourceService": "opcua-server"
+    },
+    {
+      "frontend": true,
+      "image": "evoscada-docker.artifacts.tn.tngrp.ru/sdku-knp-ui:0.0.1-3fb701a5",
+      "issues": [],
+      "name": "sdku-knp-ui",
+      "observedImageId": "sha256:b706afd02d65fb716ff5d560afb889c7577fd930350606a3223b92e8405ac2b4",
+      "sourceManifest": "sdku-knp-ui.yml",
+      "sourceService": "sdku-knp-ui"
+    },
+    {
+      "frontend": false,
+      "image": "evoscada-docker.artifacts.tn.tngrp.ru/sdku-knp:0.2.5-10437ccc-redos",
+      "issues": [
+        "Exact image child command unavailable; supply sdku_start_commands or override command after inspecting this image"
+      ],
+      "name": "sdku-knp",
+      "observedImageId": null,
+      "sourceManifest": "sdku-knp.yml",
+      "sourceService": "sdku-knp"
+    },
+    {
+      "frontend": false,
+      "image": "evoscada-docker.artifacts.tn.tngrp.ru/sdku-status-calculation:0.5.0-1508923e-redos",
+      "issues": [],
+      "name": "sdku-status-calculation",
+      "observedImageId": "sha256:b7a03d6cb46e085ebfade677da6a625ee7359911b0dcf9a109f7e864b0e921e9",
+      "sourceManifest": "sdku-status-calculation.yml",
+      "sourceService": "sdku-status-calculation"
+    },
+    {
+      "frontend": false,
+      "image": "evoscada-docker.artifacts.tn.tngrp.ru/sdku-tank-farm:1.2.1-3091dc07-redos",
+      "issues": [],
+      "name": "sdku-tank-farm",
+      "observedImageId": "sha256:2928b1161e3268faec02bb45da6d36fadace61f2c9aea06b862358dbd561890a",
+      "sourceManifest": "sdku-tank-farm.yml",
+      "sourceService": "sdku-tank-farm"
+    },
+    {
+      "frontend": false,
+      "image": "evoscada-docker.artifacts.tn.tngrp.ru/sdku-telemechanics:1.2.3-6aa0b4a0-redos",
+      "issues": [],
+      "name": "sdku-telemechanics",
+      "observedImageId": "sha256:82e6e172a592e17e2a3947074f651ab383c2fca621d88170b6dbab46200f3b4d",
+      "sourceManifest": "sdku-telemechanics.yml",
+      "sourceService": "sdku-telemechanics"
+    },
+    {
+      "frontend": true,
+      "image": "evoscada-docker.artifacts.tn.tngrp.ru/sdku-vtor-ui:0.1.0-e5633c83",
+      "issues": [],
+      "name": "sdku-vtor-ui",
+      "observedImageId": "sha256:a65194e3dd36dce2d459d102fea131bef6bda1e9f96feed140037f6b631feee9",
+      "sourceManifest": "sdku-vtor-ui.yml",
+      "sourceService": "sdku-vtor-ui"
+    },
+    {
+      "frontend": false,
+      "image": "evoscada-docker.artifacts.tn.tngrp.ru/sdku-vtor:1.2.8-c8f4f8a5-redos",
+      "issues": [],
+      "name": "sdku-vtor",
+      "observedImageId": "sha256:f542f37489d6e3b8878a81c4077909d772935dddb22da00023cca62267187c7b",
+      "sourceManifest": "sdku-vtor.yml",
+      "sourceService": "sdku-vtor"
+    },
+    {
+      "frontend": false,
+      "image": "evoscada-docker.artifacts.tn.tngrp.ru/user-preferences:0.0.4-c707ead9-redos",
+      "issues": [],
+      "name": "user-preferences",
+      "observedImageId": "sha256:8c357cc64d1e74d0f74414e9f358ad1cc991051bd1d2b13c3ab1263ee34efeff",
+      "sourceManifest": "user-preferences.yml",
+      "sourceService": "user-preferences"
+    }
+  ],
+  "date": "2026-10-16",
+  "excluded": [
+    "cadvisor",
+    "gitlab-runner",
+    "iperf-server",
+    "pgadmin4",
+    "portainer",
+    "cspa-impexp",
+    "hydro-calculation",
+    "hydro-history-and-model",
+    "hmi-frontend-hydrocyclone"
+  ],
+  "sourceDirectory": "/data/manifests/scada/",
+  "sourceHost": "192.168.56.107"
+}

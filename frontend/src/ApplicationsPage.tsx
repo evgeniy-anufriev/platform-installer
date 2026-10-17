@@ -360,9 +360,35 @@ export function ApplicationsPage({
   );
   const tabs = slot
     ? ["Основное", "Секреты", "Файлы", "Запуск", "Состояние"]
-    : ["Общее", "Подключения", "Ресурсы и секреты"];
+    : ["Общее", "Общие параметры", "Подключения", "Ресурсы и секреты"];
   const selectedTab = tabs.includes(tab) ? tab : tabs[0];
   const resolved = snapshot?.applicationLibraries?.libraries?.[selected];
+  const [baselineHost, setBaselineHost] = useState("");
+  const instancePlacements =
+    Object.values(resolved?.instances ?? {}).find(
+      (instance) => instance.slotId === slot,
+    )?.placements ?? {};
+  const hosts = Object.keys(instancePlacements);
+  const selectedBaselineHost = hosts.includes(baselineHost)
+    ? baselineHost
+    : hosts[0];
+  const inherited = objectValue(
+    objectValue(instancePlacements[selectedBaselineHost]).inherited,
+  );
+  const commonActive =
+    slotDefinition.inherit_defaults !== false &&
+    (Object.keys(objectValue(definition.defaults)).length > 0 ||
+      Object.keys(objectValue(library.overrides)).length > 0);
+  const freshBaseline =
+    snapshot?.projectRevision === managed?.projectRevision &&
+    !draftActive &&
+    intents.length === 0 &&
+    Object.keys(inherited).length > 0;
+  const startupDefaults = freshBaseline
+    ? inherited
+    : commonActive
+      ? {}
+      : defaults;
   const portSources: PortSource[] = [
     { label: "Пакет приложения", ports: objectValue(defaults.ports) },
     {
@@ -841,6 +867,42 @@ export function ApplicationsPage({
                       })}
                   </details>
                 )}
+                {!slot && selectedTab === "Общие параметры" && (
+                  <>
+                    <p className="muted">
+                      Общие значения библиотеки. Изменения сохраняются в
+                      group_vars; собственные значения приложений задаются в их
+                      настройках.
+                    </p>
+                    {["environment", "parameters"].map((section) => (
+                      <ApplicationValueFields
+                        key={selected + section + formEpoch}
+                        label={
+                          section === "environment"
+                            ? "Общие ENV"
+                            : "Общие параметры конфигурации"
+                        }
+                        value={objectValue(
+                          objectValue(library.overrides)[section],
+                        )}
+                        defaults={objectValue(
+                          objectValue(definition.defaults)[section],
+                        )}
+                        disabled={busy}
+                        onDirtyChange={(value) =>
+                          markChildDirty(value, section)
+                        }
+                        onSave={(value) =>
+                          send(
+                            Object.keys(value).length
+                              ? override(section, value)
+                              : remove(section),
+                          )
+                        }
+                      />
+                    ))}
+                  </>
+                )}
                 {!slot && selectedTab === "Подключения" && (
                   <>
                     <ApplicationBindings
@@ -1142,6 +1204,28 @@ export function ApplicationsPage({
 
                 {slot && selectedTab === "Запуск" && (
                   <>
+                    {hosts.length > 1 && (
+                      <label>
+                        Наследуемые значения для сервера
+                        <select
+                          value={selectedBaselineHost}
+                          onChange={(e) =>
+                            navigate(() => setBaselineHost(e.target.value))
+                          }
+                        >
+                          {hosts.map((host) => (
+                            <option key={host}>{host}</option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
+                    {commonActive && !freshBaseline && (
+                      <p className="muted">
+                        Унаследованные значения требуют проверки сохранённого
+                        проекта в Core. Здесь показаны только явные
+                        переопределения.
+                      </p>
+                    )}
                     <section className="application-section">
                       <h3>Команда и политика запуска</h3>{" "}
                       {scalar(
@@ -1173,7 +1257,12 @@ export function ApplicationsPage({
                         key={selected + slot + "environment"}
                         label="Переменные окружения (ENV)"
                         value={objectValue(overrides.environment)}
-                        defaults={objectValue(defaults.environment)}
+                        defaults={objectValue(startupDefaults.environment)}
+                        defaultLabel={
+                          freshBaseline
+                            ? "Унаследовано · последний расчёт Core"
+                            : undefined
+                        }
                         disabled={busy}
                         onDirtyChange={(v) => markChildDirty(v, "environment")}
                         onSave={(value) =>
@@ -1188,8 +1277,9 @@ export function ApplicationsPage({
                         ENV передаются процессу контейнера.
                       </p>
                     </section>
-                    {(Object.keys(objectValue(defaults.parameters)).length >
-                      0 ||
+                    {(Object.keys(objectValue(startupDefaults.parameters))
+                      .length > 0 ||
+                      commonActive ||
                       Object.keys(objectValue(overrides.parameters)).length >
                         0) && (
                       <section className="application-section">
@@ -1197,7 +1287,12 @@ export function ApplicationsPage({
                           key={selected + slot + "parameters"}
                           label="Настройки конфигурации"
                           value={objectValue(overrides.parameters)}
-                          defaults={objectValue(defaults.parameters)}
+                          defaults={objectValue(startupDefaults.parameters)}
+                          defaultLabel={
+                            freshBaseline
+                              ? "Унаследовано · последний расчёт Core"
+                              : undefined
+                          }
                           disabled={busy}
                           onDirtyChange={(v) => markChildDirty(v, "parameters")}
                           onSave={(value) =>

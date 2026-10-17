@@ -1,0 +1,15 @@
+{
+  "apiVersion": "platform.installer/application-package/v1alpha1",
+  "files": [
+    "roles/application_sdku-status-calculation/defaults/main.yml",
+    "roles/application_sdku-status-calculation/templates/compose.yml.j2",
+    "roles/application_sdku-status-calculation/templates/agent.hcl.j2"
+  ],
+  "kind": "ApplicationPackage",
+  "name": "sdku-status-calculation",
+  "render": {
+    "agent_template": "roles/application_sdku-status-calculation/templates/agent.hcl.j2",
+    "compose_template": "roles/application_sdku-status-calculation/templates/compose.yml.j2"
+  },
+  "version": "1.0.0"
+}

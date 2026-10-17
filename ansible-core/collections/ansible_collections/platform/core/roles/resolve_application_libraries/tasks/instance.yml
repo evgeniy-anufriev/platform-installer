@@ -23,10 +23,22 @@
 - name: Resolve parameters after this placement identity is available
   ansible.builtin.set_fact:
     application_parameters: >-
-      {{ _application_package.platform_application_definition.defaults.parameters | default({}) |
+      {{ (application_job.commonDefaults.parameters | default({}) if application_job.slot.inherit_defaults | default(true) else {}) |
+         combine(_application_package.platform_application_definition.defaults.parameters | default({}), recursive=true, list_merge='replace') |
          combine(application_job.slot.overrides.parameters | default({}), recursive=true, list_merge='replace') |
+         combine(application_job.commonOverrides.parameters | default({}) if application_job.slot.inherit_defaults | default(true) else {}, recursive=true, list_merge='replace') |
          combine(application_job.instance.overrides.parameters | default({}), recursive=true, list_merge='replace') |
          combine(application_job.hostOverride.parameters | default({}), recursive=true, list_merge='replace') }}
+  no_log: true
+  become: false
+
+- name: Resolve inherited settings without this application's explicit overrides
+  ansible.builtin.set_fact:
+    application_inherited: >-
+      {{ (application_job.commonDefaults if application_job.slot.inherit_defaults | default(true) else {}) |
+         combine(_application_package.platform_application_definition.defaults, recursive=true, list_merge='replace') |
+         combine(application_job.slot.overrides | default({}), recursive=true, list_merge='replace') |
+         combine(application_job.commonOverrides if application_job.slot.inherit_defaults | default(true) else {}, recursive=true, list_merge='replace') }}
   no_log: true
   become: false
 
@@ -52,8 +64,9 @@
         'connections': _application_package.platform_application_definition.connections | default({}),
         'identityNames': _application_package.platform_application_definition.identity_environment | default([]),
         'packageIdentity': {'application': application_job.application.digest, 'library': application_job.library.digest},
-        'settings': _application_package.platform_application_definition.defaults |
-          combine(application_job.slot.overrides | default({}), recursive=true, list_merge='replace') |
+        'commonDefaults': application_job.commonDefaults | combine(application_job.commonOverrides, recursive=true, list_merge='replace'),
+        'inherited': {'environment': application_inherited.environment | default({}), 'parameters': application_inherited.parameters | default({})},
+        'settings': application_inherited |
           combine(application_job.instance.overrides | default({}), recursive=true, list_merge='replace') |
           combine(({'accounts': application_job.instance.accounts} if application_job.instance.accounts is defined else {}), recursive=true, list_merge='replace') |
           combine(application_job.hostOverride, recursive=true, list_merge='replace') |

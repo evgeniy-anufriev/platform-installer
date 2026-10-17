@@ -150,6 +150,146 @@ async function selectSlot() {
   await userEvent.click(screen.getByRole("button", { name: "↳ gateway" }));
 }
 describe("application editor", () => {
+  it("resets common overrides at library scope without creating a slot", async () => {
+    const view = structuredClone(managed);
+    objectValue(
+      view.applicationPackages["library:sdku@1.0.0"].definition,
+    ).defaults = { environment: { COMMON: "package" } };
+    view.applicationLibraries.sdku.overrides = {
+      environment: { COMMON: "site" },
+    };
+    const calls: ApplicationIntent[] = [];
+    render(<Harness calls={calls} view={view} />);
+    await userEvent.click(screen.getByRole("button", { name: /^sdku/ }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Общие параметры" }),
+    );
+    expect((screen.getByLabelText("COMMON") as HTMLInputElement).value).toBe(
+      "site",
+    );
+    await userEvent.click(
+      within(
+        screen
+          .getByLabelText("COMMON")
+          .closest(".application-field") as HTMLElement,
+      ).getByRole("button", { name: "Сбросить к default" }),
+    );
+    expect((screen.getByLabelText("COMMON") as HTMLInputElement).value).toBe(
+      "package",
+    );
+    expect(calls.at(-1)).toMatchObject({
+      operation: "RemoveApplicationLibraryOverride",
+      entityId: "",
+      setting: "environment",
+    });
+    const draft = applicationDraft(view, calls);
+    expect(objectValue(draft.libraries.sdku.applications)[""]).toBeUndefined();
+  });
+
+  it("uses the Core inherited baseline and marks it stale after instance reset", async () => {
+    const view = structuredClone(managed);
+    objectValue(
+      view.applicationPackages["library:sdku@1.0.0"].definition,
+    ).defaults = { environment: { COMMON: "package" } };
+    objectValue(
+      objectValue(
+        objectValue(view.applicationLibraries.sdku.applications).gateway,
+      ).overrides,
+    ).environment = { COMMON: "instance" };
+    const snapshotData = {
+      projectRevision: "revision",
+      applicationLibraries: {
+        libraries: {
+          sdku: {
+            instances: {
+              gateway: {
+                slotId: "gateway",
+                placements: {
+                  node1: {
+                    inherited: {
+                      environment: {
+                        COMMON: "site",
+                        ONLY_INHERITED: "from-core",
+                      },
+                    },
+                  },
+                  node2: {
+                    inherited: {
+                      environment: { ONLY_INHERITED: "second-host" },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    };
+    const snapshot = snapshotData as unknown as OpenResult["snapshot"];
+    const calls: ApplicationIntent[] = [];
+    const rendered = render(
+      <Harness calls={calls} view={view} snapshot={snapshot} />,
+    );
+    await selectSlot();
+    await userEvent.click(screen.getByRole("button", { name: "Запуск" }));
+    expect((screen.getByLabelText("COMMON") as HTMLInputElement).value).toBe(
+      "instance",
+    );
+    expect(
+      (screen.getByLabelText("ONLY_INHERITED") as HTMLInputElement).value,
+    ).toBe("from-core");
+    await userEvent.selectOptions(
+      screen.getByLabelText("Наследуемые значения для сервера"),
+      "node2",
+    );
+    expect(
+      (screen.getByLabelText("ONLY_INHERITED") as HTMLInputElement).value,
+    ).toBe("second-host");
+    Object.assign(
+      snapshotData.applicationLibraries.libraries.sdku.instances.gateway,
+      {
+        placements: {
+          node3: { inherited: { environment: { ONLY_INHERITED: "new-host" } } },
+          node4: {
+            inherited: { environment: { ONLY_INHERITED: "another-host" } },
+          },
+        },
+      },
+    );
+    rendered.rerender(
+      <Harness
+        calls={calls}
+        view={view}
+        snapshot={snapshotData as unknown as OpenResult["snapshot"]}
+      />,
+    );
+    expect(
+      (
+        screen.getByLabelText(
+          "Наследуемые значения для сервера",
+        ) as HTMLSelectElement
+      ).value,
+    ).toBe("node3");
+    expect(
+      (screen.getByLabelText("ONLY_INHERITED") as HTMLInputElement).value,
+    ).toBe("new-host");
+    await userEvent.click(
+      within(
+        screen
+          .getByLabelText("COMMON")
+          .closest(".application-field") as HTMLElement,
+      ).getByRole("button", { name: "Сбросить к default" }),
+    );
+    expect(calls.at(-1)).toMatchObject({
+      operation: "RemoveApplicationLibraryOverride",
+      entityId: "gateway",
+      setting: "environment",
+    });
+    expect(
+      screen.getByText(/Унаследованные значения требуют проверки/),
+    ).toBeTruthy();
+    expect(screen.queryByLabelText("ONLY_INHERITED")).toBeNull();
+  });
   it("shows library and host port sources even without application defaults or instance overrides", async () => {
     const view = structuredClone(managed);
     delete objectValue(

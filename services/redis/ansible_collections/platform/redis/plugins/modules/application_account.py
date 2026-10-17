@@ -47,7 +47,7 @@ def main():
         username, grants = args['username'], args['grants']
         if not re.fullmatch(r'[a-z_][a-z0-9_-]{0,62}', username) or username == 'default' or not 1 <= args['port'] <= 65535 or not 1 <= args['timeout'] <= 120:
             raise ACLFailure('REDIS_APPLICATION_INPUT_INVALID')
-        permitted = {'commands'} if args['listener'] == 'sentinel' else {'commands', 'keys', 'channels'}
+        permitted = {'commands', 'keys', 'channels'}
         if set(grants) - permitted or not isinstance(grants.get('commands'), list) or not grants['commands']:
             raise ACLFailure('REDIS_APPLICATION_INPUT_INVALID')
         for field, values in grants.items():
@@ -56,14 +56,8 @@ def main():
             for value in values:
                 if not isinstance(value, str) or not value or len(value) > 256 or any(char.isspace() or ord(char) < 32 for char in value):
                     raise ACLFailure('REDIS_APPLICATION_INPUT_INVALID')
-                if field == 'commands' and not re.fullmatch(r'[a-z][a-z0-9]*(?:\|[a-z][a-z0-9-]*)?', value):
+                if field == 'commands' and not re.fullmatch(r'[+-]?(?:@[a-z][a-z0-9_-]*|[a-z][a-z0-9]*(?:\|[a-z][a-z0-9-]*)?)', value):
                     raise ACLFailure('REDIS_APPLICATION_INPUT_INVALID')
-                if field != 'commands' and value[0] in '~&+-#><%':
-                    raise ACLFailure('REDIS_APPLICATION_INPUT_INVALID')
-        if args['listener'] == 'sentinel' and not set(grants['commands']) <= {'ping', 'auth', 'hello', 'sentinel|get-master-addr-by-name'}:
-            raise ACLFailure('REDIS_APPLICATION_INPUT_INVALID')
-        if args['listener'] == 'client' and any(value.split('|')[0] in {'acl', 'config', 'flushall', 'flushdb', 'shutdown', 'module', 'debug', 'replicaof', 'slaveof', 'sentinel'} for value in grants['commands']):
-            raise ACLFailure('REDIS_APPLICATION_INPUT_INVALID')
         for _ in range(2):
             clients.append(Client(args['address'], args['port'], args['ca'], args['certificate'], args['private_key'], args['timeout']))
         if clients[0].command('AUTH', 'default', args['admin_password']) != 'OK':

@@ -179,6 +179,64 @@ class ApplicationProviderQA(unittest.TestCase):
         output, _ = self.play(job, phases=('preflight','accounts','verify'))
         self.assertRegex(output, r'localhost\s+:\s+ok=\d+\s+changed=0')
 
+    def test_database_access_create_existing_future_revoke_and_repeat(self):
+        job = self.make_job('createqa', 1)
+        self.play(job)
+        account, db = job['accounts'][0], job['databases'][0]
+        user, owner = account['name'], db['owner']
+        self.sql('SET ROLE "%s"; CREATE TABLE api.reference(id int)' % owner, db['name'])
+        migration = 'createqa_migrator'
+        self.sql("CREATE ROLE %s NOLOGIN; COMMENT ON ROLE %s IS '%s'" %
+                 (migration, migration, account['marker'].rsplit('account:',1)[0]+'account:migration/postgres'))
+        self.sql('GRANT CREATE ON DATABASE %s TO %s' % (db['name'], migration))
+        account['grants'] = []
+        access = dict(database=db['name'], privileges=['CREATE'], creatorRoles=[owner, migration])
+        account['databaseAccess'] = [access]
+        self.play(job, phases=('verify',), success=False)
+        self.play(job, phases=('preflight','accounts','verify'))
+        self.sql('SET ROLE "%s"; CREATE TABLE api.created(id int)' % user, db['name'])
+        self.sql('SET ROLE "%s"; SELECT * FROM api.reference' % user, db['name'], success=False)
+        self.sql('SET ROLE "%s"; CREATE SCHEMA forbidden' % user, db['name'], success=False)
+        self.sql('SET ROLE "%s"; CREATE SCHEMA future; CREATE TABLE future.reference(id int)' % owner, db['name'])
+        self.sql('SET ROLE "%s"; CREATE TABLE future.created(id int)' % user, db['name'])
+        self.sql('SET ROLE %s; CREATE SCHEMA migration_before' % migration, db['name'])
+        self.sql('SET ROLE "%s"; CREATE TABLE migration_before.created(id int)' % user, db['name'])
+        access['creatorRoles'] = [owner]
+        access['privileges'] = ['CREATE','SELECT']
+        self.play(job, phases=('preflight','accounts','verify'))
+        self.sql('SET ROLE %s; CREATE SCHEMA migration_after' % migration, db['name'])
+        self.sql('SET ROLE "%s"; CREATE TABLE migration_after.forbidden(id int)' % user, db['name'], success=False)
+        self.sql('SET ROLE "%s"; SELECT * FROM future.reference' % user, db['name'])
+        access['privileges'] = ['SELECT']
+        self.play(job, phases=('verify',), success=False)
+        self.play(job, phases=('preflight','accounts','verify'))
+        self.sql('SET ROLE "%s"; CREATE TABLE api.forbidden(id int)' % user, db['name'], success=False)
+        self.sql('SET ROLE "%s"; CREATE TABLE future.forbidden(id int)' % user, db['name'], success=False)
+        self.sql('SET ROLE "%s"; CREATE SCHEMA after_revoke; CREATE TABLE after_revoke.reference(id int)' % owner, db['name'])
+        self.sql('SET ROLE "%s"; SELECT * FROM after_revoke.reference' % user, db['name'])
+        self.sql('SET ROLE "%s"; CREATE TABLE after_revoke.forbidden(id int)' % user, db['name'], success=False)
+        self.sql('SET ROLE "%s"; INSERT INTO api.created VALUES (1)' % user, db['name'])
+        output, _ = self.play(job, phases=('preflight','accounts','verify'))
+        self.assertRegex(output, r'localhost\s+:\s+ok=\d+\s+changed=0')
+
+    def test_database_access_public_schema_and_public_role_conflict(self):
+        job = self.make_job('createpublicqa', 2)
+        self.play(job)
+        account, db = job['accounts'][0], job['databases'][0]
+        account['grants'] = []
+        account['databaseAccess'] = [dict(database=db['name'], privileges=['CREATE','SELECT'], creatorRoles=[db['owner']])]
+        self.play(job, phases=('preflight','accounts','verify'))
+        self.sql('SET ROLE "%s"; CREATE TABLE public.created(id int)' % account['name'], db['name'])
+        self.assertEqual('f', self.sql("SELECT has_schema_privilege('%s','public','CREATE')" % job['accounts'][1]['name'], db['name']))
+        self.sql('ALTER DEFAULT PRIVILEGES FOR ROLE "%s" GRANT CREATE ON SCHEMAS TO PUBLIC' % db['owner'], db['name'])
+        query = "SELECT json_agg(a) FROM (SELECT defaclrole,defaclnamespace,defaclobjtype,defaclacl::text FROM pg_default_acl ORDER BY oid) a"
+        before = self.sql(query, db['name'])
+        for phase in ('preflight','accounts','verify'):
+            self.play(job, phases=(phase,), success=False)
+            self.assertEqual(before, self.sql(query, db['name']))
+        self.sql('ALTER DEFAULT PRIVILEGES FOR ROLE "%s" REVOKE CREATE ON SCHEMAS FROM PUBLIC' % db['owner'], db['name'])
+        self.play(job, phases=('preflight','accounts','verify'))
+
     def test_database_access_conflicts_and_missing_defaults(self):
         job = self.make_job('bulknegative', 1)
         self.play(job)

@@ -1,0 +1,116 @@
+platform_application_definition:
+    connections:
+        clickhouse:
+            library_binding: analytics
+            protocol: https
+        kafka:
+            library_binding: messaging
+            protocol: tcp
+        redis:
+            library_binding: cache
+            protocol: tcp
+        vault:
+            library_binding: secrets
+            protocol: https
+    defaults:
+        command:
+            - java
+            - -XX:MaxRAMPercentage=70.0
+            - -javaagent:/usr/local/app/opentelemetry-javaagent.jar
+            - -jar
+            - alarm-service.jar
+        environment:
+            ALERT_CLASS_TOPIC: '{{ application_parameters.source_variables.REDIS_ALERT_CLASS_TOPIC | default(undef(hint=''Configure SDKU REDIS_ALERT_CLASS_TOPIC''), true) }}'
+            ALERT_HANDLER_TOPIC: '{{ application_parameters.source_variables.REDIS_ALERT_HANDLER_TOPIC | default(undef(hint=''Configure SDKU REDIS_ALERT_HANDLER_TOPIC''), true) }}'
+            AUTO_ACK_DELAY: "600000"
+            AUTO_ACK_TIME: PT2H
+            ENABLE_CUSTOM_TIMESTAMP: "false"
+            JAVA_OPTS: -Xmx4096m
+            KAFKA_ALARM_COMPACT_TOPIC: '{{ application_parameters.source_variables.ALARM_TOPIC | default(undef(hint=''Configure SDKU ALARM_TOPIC''), true) }}-compact'
+            KAFKA_ALARM_GROUP: alarm-service-group
+            KAFKA_ALARM_HISTORY_TOPIC: '{{ application_parameters.source_variables.ALARM_TOPIC | default(undef(hint=''Configure SDKU ALARM_TOPIC''), true) }}'
+            KAFKA_ALARM_PRODUCER_ID: alarm-service-producer
+            KAFKA_CONSUMER_ENABLE_AUTO_COMMIT: true
+            KAFKA_SIGNAL_TOPIC: '{{ application_parameters.source_variables.MAIN_TOPIC | default(undef(hint=''Configure SDKU MAIN_TOPIC''), true) }}'
+            LOGGER_LEVEL: DEBUG
+            REDIS_CONNECT_TIMEOUT: 1000
+            REDIS_TIMEOUT: 1000
+            SERVER_ALLOWED_ORIGINS: '*'
+            SIM_DELAY: "1000"
+            SPRING_KAFKA_SCHEMA_REGISTRY_URL: '{{ application_parameters.source_variables.KAFKA_SCHEMA_REGISTRY_URL | default(undef(hint=''Configure SDKU KAFKA_SCHEMA_REGISTRY_URL''), true) }}'
+            SPRING_PROFILES_ACTIVE: sdku
+            SQL_INIT_MODE: never
+            TIME_STAMP_PATTERN: yyyy.MM.dd HH:mm:ss.SSS
+            TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
+            alarm-service.is-generate-additional-alarm-flags: "false"
+            kafka.consumer.group.instance.id: alarm-service-{{ application_instance_id }}
+            server.max-http-request-header-size: 100MB
+            tn-scada.kafka.listener.seekToEnd: false
+        image: evoscada-docker.artifacts.tn.tngrp.ru/alarm-service:0.4.2-3a1d508c-redos
+        parameters:
+            source_variables:
+                ALARM_TOPIC: sdku-alarms
+                KAFKA_SCHEMA_REGISTRY_URL: ""
+                MAIN_TOPIC: sdku-main
+                REDIS_ALERT_CLASS_TOPIC: alert-class
+                REDIS_ALERT_HANDLER_TOPIC: alert-hdl
+                REDIS_SENTINEL_MASTER: ""
+        ports:
+            port-1:
+                container: 10011
+                published: 10011
+        provisioner:
+            approle:
+                bind_secret_id: false
+            auth:
+                method: approle
+            mode: process-supervisor
+            secret_bindings:
+                HISTORY_DATASOURCE_CLICKHOUSE_PASSWORD:
+                    source:
+                        library_secret: clickhouse_scada_password
+                HISTORY_DATASOURCE_CLICKHOUSE_USERNAME:
+                    source:
+                        library_secret: clickhouse_scada_username
+                JAVA_KEYSTORE_PASSWORD:
+                    source:
+                        library_secret: java_keystore_password
+                SPRING_KAFKA_SSL_KEY_STORE_PASSWORD:
+                    source:
+                        library_secret: java_keystore_password
+                SPRING_KAFKA_SSL_TRUST_STORE_PASSWORD:
+                    source:
+                        library_secret: java_keystore_password
+                TN_SCADA_REDIS_ACL_PASSWORD:
+                    source:
+                        library_secret: redis_password
+                TN_SCADA_REDIS_ACL_SENTINEL_PASSWORD:
+                    source:
+                        library_secret: redis_sentinel_password
+                TN_SCADA_REDIS_ACL_SENTINEL_USERNAME:
+                    source:
+                        library_secret: redis_sentinel_username
+                TN_SCADA_REDIS_ACL_USERNAME:
+                    source:
+                        library_secret: redis_username
+                TN_SCADA_REDIS_SSL_PROPERTIES_KEY_STORE_PASSWORD:
+                    source:
+                        library_secret: java_keystore_password
+                TN_SCADA_REDIS_SSL_PROPERTIES_TRUST_STORE_PASSWORD:
+                    source:
+                        library_secret: java_keystore_password
+            secrets:
+                mount: applications
+            type: vault-agent
+        readiness:
+            delay: 2
+            mode: healthcheck
+            retries: 30
+        restart: on-failure
+        user: 1000:1000
+    identity_environment:
+        - EVO_MANAGER_APP_ID
+        - KAFKA_APPLICATION_ID_CONFIG
+        - KAFKA_LISTENER_ID_CONFIG
+    name: alarm-service
+    version: 1.0.0

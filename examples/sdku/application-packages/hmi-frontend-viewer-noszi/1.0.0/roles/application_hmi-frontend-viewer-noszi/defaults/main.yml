@@ -1,0 +1,35 @@
+platform_application_definition:
+    connections: {}
+    defaults:
+        command:
+            - '{{ sdku_start_commands[''hmi-frontend-viewer-noszi''] | mandatory }}'
+        environment:
+            ALARMS_BACK: https://alarm-view-service.tnsv.tn.tngrp.ru
+            ALARMS_URL: https://hmi-frontend-alarms.tnsv.tn.tngrp.ru
+            ALARMS_WS: wss://alarm-view-service.tnsv.tn.tngrp.ru
+            CSPA_HMI_BACK: https://cspa-hmi-backend.tnsv.tn.tngrp.ru
+            CSPA_HMI_BACK_WS: wss://cspa-hmi-backend.tnsv.tn.tngrp.ru
+            EDITOR_FRONT: ""
+            HMI_BACK: https://hmi-backend.tnsv.tn.tngrp.ru
+            NGINX_URL: ""
+            TRENDS_URL: https://hmi-frontend-trends.tnsv.tn.tngrp.ru
+            VTOR_URL: https://sdku-vtor-ui.tnsv.tn.tngrp.ru
+        image: evoscada-docker.artifacts.tn.tngrp.ru/hmi-frontend-viewer:0.0.0-89658527
+        parameters:
+            mount_sources:
+                mount-1: ""
+                mount-2: ""
+            source_variables: {}
+        ports:
+            port-1:
+                container: 10211
+                published: 10214
+        readiness:
+            delay: 2
+            mode: container
+            retries: 30
+        restart: always
+        user: 1000:1000
+    identity_environment: []
+    name: hmi-frontend-viewer-noszi
+    version: 1.0.0

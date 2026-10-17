@@ -26,10 +26,11 @@ class StandaloneLibrariesQA(unittest.TestCase):
         with open(path, "w") as stream:
             json.dump(data, stream, sort_keys=True)
 
-    def snapshot(self):
+    def snapshot(self, expected_error=None):
         output = os.path.join(self.tmp.name, "snapshot.json")
         env = dict(os.environ, ANSIBLE_CONFIG=os.path.join(REPO, "ansible-core/ansible.cfg"),
-                   ANSIBLE_COLLECTIONS_PATH=os.path.join(REPO, "ansible-core/collections"),
+                   ANSIBLE_COLLECTIONS_PATH=os.pathsep.join([os.path.join(REPO, "ansible-core/collections")] +
+                       [os.path.join(REPO, 'services', name) for name in os.listdir(os.path.join(REPO, 'services'))]),
                    ANSIBLE_CALLBACKS_ENABLED="platform.core.project_snapshot_json",
                    PLATFORM_PROJECT_SNAPSHOT_OUTPUT=output)
         command = ["ansible-playbook", "-i", os.path.join(self.root, "inventory/hosts.yml"),
@@ -37,6 +38,10 @@ class StandaloneLibrariesQA(unittest.TestCase):
                    "-e", "platform_project_root=" + self.root,
                    "-e", "platform_service_catalog_path=" + os.path.join(REPO, "examples/catalog/service-catalog.yml")]
         completed = subprocess.run(command, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=60)
+        if expected_error:
+            self.assertNotEqual(0, completed.returncode)
+            self.assertIn(expected_error.encode(), completed.stdout)
+            return
         # Don't include raw Ansible output in assertion errors.
         self.assertEqual(0, completed.returncode, "Standalone Ansible failed; inspect protected temporary output")
         self.assertNotIn(b"changed=1", completed.stdout)
@@ -64,6 +69,42 @@ class StandaloneLibrariesQA(unittest.TestCase):
         self.assertEqual({"account": "redis", "field": "password"}, sdku["secretBindings"]["REDIS_PASSWORD"]["source"])
         self.assertEqual({"library_secret": "java_keystore_password"}, sdku["secretBindings"]["JAVA_KEYSTORE_PASSWORD"]["source"])
         self.assertEqual(snapshot["snapshotFingerprint"], self.snapshot()["snapshotFingerprint"])
+
+    def test_library_defaults_inheritance_resets_and_opt_out(self):
+        library = os.path.join(self.root, 'library-packages/sdku/1.0.0/roles/library_sdku/defaults/main.yml')
+        self.edit(library, lambda d: d['platform_library_definition'].update(defaults={
+            'environment': {'COMMON': 'library', 'LEVEL': 'library'},
+            'parameters': {'common_number': 7}}))
+        self.edit(self.defaults, lambda d: d['platform_application_definition']['defaults'].setdefault('environment', {}).update(LEVEL='application'))
+        def instance(d):
+            lib = d['platform_desired_state']['applicationLibraryDeployments']['sdku']
+            lib['overrides'] = {'environment': {'LEVEL': 'library-instance'}}
+            lib['applications']['gateway'].setdefault('overrides', {})['environment'] = {'LEVEL': 'instance'}
+        self.edit(self.vars, instance)
+        def placement():
+            result = self.snapshot()
+            self.assertEqual('PASS', result['status'], [(f['code'], f.get('field')) for f in result['findings']])
+            return result['applicationLibraries']['libraries']['sdku']['instances']['apigateway-sdku']['placements']['node1']
+        row = placement()
+        self.assertEqual('instance', row['environment']['LEVEL'])
+        self.assertEqual('library-instance', row['inherited']['environment']['LEVEL'])
+        self.assertEqual('library', row['environment']['COMMON'])
+        self.assertEqual(7, row['parameters']['common_number'])
+        self.assertEqual('library-instance', row['commonDefaults']['environment']['LEVEL'])
+        self.edit(self.vars, lambda d: d['platform_desired_state']['applicationLibraryDeployments']['sdku']['applications']['gateway']['overrides'].pop('environment'))
+        self.assertEqual('library-instance', placement()['environment']['LEVEL'])
+        self.edit(self.vars, lambda d: d['platform_desired_state']['applicationLibraryDeployments']['sdku'].pop('overrides'))
+        self.assertEqual('application', placement()['environment']['LEVEL'])
+        self.edit(library, lambda d: d['platform_library_definition']['slots']['gateway'].update(inherit_defaults=False))
+        row = placement()
+        self.assertNotIn('COMMON', row['environment'])
+        self.assertNotIn('common_number', row['parameters'])
+
+    def test_common_defaults_cannot_use_indirect_application_context(self):
+        library = os.path.join(self.root, 'library-packages/sdku/1.0.0/roles/library_sdku/defaults/main.yml')
+        self.edit(library, lambda d: d['platform_library_definition'].update(defaults={'environment': {'INVALID': '{{ indirect_application }}'}}))
+        self.edit(self.vars, lambda d: d.update(application_name='stale-application', indirect_application='{{ application_name }}'))
+        self.snapshot(expected_error='PROJECT_SNAPSHOT_INPUT_INVALID')
 
     def test_dotted_project_id_blocks_compose_projection(self):
         dotted_root = os.path.join(self.tmp.name, "project.test")
@@ -167,7 +208,8 @@ class StandaloneLibrariesQA(unittest.TestCase):
     def test_validate_entrypoint_consumes_shared_projection(self):
         output = os.path.join(self.tmp.name, "validation.json")
         env = dict(os.environ, ANSIBLE_CONFIG=os.path.join(REPO, "ansible-core/ansible.cfg"),
-                   ANSIBLE_COLLECTIONS_PATH=os.path.join(REPO, "ansible-core/collections"))
+                   ANSIBLE_COLLECTIONS_PATH=os.pathsep.join([os.path.join(REPO, "ansible-core/collections")] +
+                       [os.path.join(REPO, 'services', name) for name in os.listdir(os.path.join(REPO, 'services'))]))
         completed = subprocess.run(["ansible-playbook", "-i", os.path.join(self.root, "inventory/hosts.yml"),
                                     os.path.join(REPO, "ansible-core/playbooks/validate.yml"),
                                     "-e", "platform_project_root=" + self.root,

@@ -19,11 +19,12 @@ class ApplicationProvidersTest(unittest.TestCase):
         account = self.accounts['postgres']
         del account['databaseRef']
         del account['grants']
-        account['databaseAccess'] = [{'databaseRef':'db','privileges':['INSERT','SELECT']},
+        account['databaseAccess'] = [{'databaseRef':'db','privileges':['INSERT','SELECT','UPDATE','DELETE','CREATE']},
                                      {'databaseRef':'other','privileges':['SELECT']}]
         result = self.resolve()
         self.assertEqual('PASS', result['status'],result['findings'])
         job = result['instanceJobs'][0]
+        self.assertEqual(['CREATE','DELETE','INSERT','SELECT','UPDATE'], job['accounts'][0]['databaseAccess'][0]['privileges'])
         self.assertEqual(1,len(job['accounts']))
         self.assertEqual({'app','reports'},{row['database'] for row in job['loginAccounts']})
         account['databaseAccess'] = []
@@ -39,7 +40,7 @@ class ApplicationProvidersTest(unittest.TestCase):
         self.assertEqual('BLOCKED',self.resolve()['status'])  # legacy policy is not broadened silently
         del account['databaseRef']; del account['grants']
         for entries in ([{'databaseRef':'missing','privileges':['SELECT']}],
-                        [{'databaseRef':'db','privileges':['CREATE']}],
+                        [{'databaseRef':'db','privileges':['TRUNCATE']}],
                         [{'databaseRef':'db','privileges':['SELECT'],'additionalCreatorRoles':['postgres']}],
                         [{'databaseRef':'db','privileges':['SELECT']}]*2):
             account['databaseAccess']=entries
@@ -190,17 +191,22 @@ class ApplicationProvidersTest(unittest.TestCase):
             with self.subTest(name=name), self.assertRaises(ValueError):
                 identifier(name)
 
-    def test_redis_acl_typed_grants_and_sentinel_discovery_only(self):
+    def test_redis_acl_typed_grants_and_operator_selected_commands(self):
         result = normalize_redis_grants({'commands': ['set', 'ping', 'ping'], 'keys': ['sdku:*']})
-        self.assertEqual({'commands': ['ping', 'set'], 'keys': ['sdku:*'], 'channels': []}, result)
-        self.assertEqual(['ping', 'sentinel|get-master-addr-by-name'], normalize_redis_grants(
-            {'commands': ['ping', 'sentinel|get-master-addr-by-name']}, True)['commands'])
-        for value, sentinel in [({'commands': ['+@all']}, False), ({'commands': ['acl']}, False),
-                                ({'commands': ['ping'], 'keys': ['safe:* +@all']}, False),
-                                ({'commands': ['sentinel|monitor']}, True),
-                                ({'commands': ['ping'], 'keys': ['sdku:*']}, True), ([], False)]:
+        self.assertEqual({'commands': ['set', 'ping', 'ping'], 'keys': ['sdku:*'], 'channels': []}, result)
+        commands = ['acl', 'config|set', 'flushall', 'flushdb', 'shutdown', 'module', 'debug',
+                    'replicaof', 'slaveof', 'sentinel', 'sentinel|get-master-addr-by-name', 'sentinel|master',
+                    'sentinel|monitor', 'sentinel|set', 'sentinel|reset', 'sentinel|failover', 'futurecommand']
+        self.assertEqual(commands, normalize_redis_grants({'commands': commands})['commands'])
+        self.assertEqual(['@all'], normalize_redis_grants({'commands': ['@all']})['commands'])
+        rules = ['+@all', '-@admin', '+config|get', '-@all', '+@read', '+@read']
+        self.assertEqual(rules, normalize_redis_grants({'commands': rules})['commands'])
+        self.assertEqual(['+switch-master'], normalize_redis_grants(
+            {'commands': ['subscribe'], 'keys': ['~literal:*'], 'channels': ['+switch-master']})['channels'])
+        for value in [{'commands': ['+@all -@admin']}, {'commands': ['config set']},
+                      {'commands': ['ping'], 'keys': ['safe:* +@all']}, {'commands': []}, []]:
             with self.subTest(value=value), self.assertRaises(ValueError):
-                normalize_redis_grants(value, sentinel)
+                normalize_redis_grants(value)
 
     def test_clickhouse_explicit_scopes_and_no_global_privileges(self):
         databases = {'analytics': {'providerId': 'ch', 'name': 'sdku'}}

@@ -126,7 +126,7 @@ export function ApplicationAccountAccess({
       <p className="muted">
         Все пользовательские схемы и объекты БД, существующие и будущие.
         {pg &&
-          " Будущие объекты: владелец библиотеки и указанные роли миграций; членство не заменяет SET ROLE."}
+          " CREATE разрешает создавать объекты внутри схем этой БД. Будущие объекты: владелец библиотеки и указанные роли миграций; членство не заменяет SET ROLE."}
       </p>
       {pg && (
         <p className="muted">
@@ -216,7 +216,7 @@ export function ApplicationAccountAccess({
           </label>
           <div className="application-rights">
             {(pg
-              ? ["SELECT", "INSERT", "UPDATE", "DELETE"]
+              ? ["SELECT", "INSERT", "UPDATE", "DELETE", "CREATE"]
               : ["SELECT", "INSERT"]
             ).map((right) => (
               <label key={right}>
@@ -327,7 +327,7 @@ export function ApplicationRedisAccess({
   return (
     <fieldset className="application-redis-access">
       <legend>ACL {sentinel ? "Sentinel" : "Redis"}</legend>
-      {(sentinel ? ["commands"] : ["commands", "keys", "channels"]).map(
+      {["commands", "keys", "channels"].map(
         (key) => (
           <label key={key}>
             {
@@ -352,24 +352,19 @@ export function ApplicationRedisAccess({
         ),
       )}
       <p className="muted">
-        Отдельные команды и шаблоны, без сырой ACL-строки. Core проверит
-        разрешённые команды.
+        Права задаются списком команд и шаблонов. Core проверит формат данных.
       </p>
       <button
         disabled={disabled || !dirty || !fields.commands.trim()}
         onClick={() => {
           const next = Object.fromEntries(
-            (sentinel ? ["commands"] : ["commands", "keys", "channels"]).map(
+            ["commands", "keys", "channels"].map(
               (key) => [
                 key,
-                [
-                  ...new Set(
-                    fields[key]
-                      .split(",")
-                      .map((v) => v.trim())
-                      .filter(Boolean),
-                  ),
-                ],
+                fields[key]
+                  .split(",")
+                  .map((v) => v.trim())
+                  .filter(Boolean),
               ],
             ),
           );

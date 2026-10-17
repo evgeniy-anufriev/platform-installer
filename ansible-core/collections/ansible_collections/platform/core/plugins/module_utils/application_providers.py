@@ -13,9 +13,9 @@ GRANTS = {'schema': {'USAGE'}, 'table': {'SELECT', 'INSERT', 'UPDATE', 'DELETE'}
           'sequence': {'USAGE', 'SELECT', 'UPDATE'}}
 
 
-def normalize_redis_grants(value, sentinel=False):
-    """Typed ACL tokens only; no categories, raw ACL rules or global defaults."""
-    allowed = {'commands'} if sentinel else {'commands', 'keys', 'channels'}
+def normalize_redis_grants(value):
+    """Validate typed ACL data, retaining ordered operator command rules."""
+    allowed = {'commands', 'keys', 'channels'}
     if not isinstance(value, dict) or set(value) - allowed:
         raise ValueError('APPLICATION_PROVIDER_GRANTS_INVALID')
     result = {}
@@ -24,16 +24,11 @@ def normalize_redis_grants(value, sentinel=False):
         if not isinstance(values, list) or len(values) > 256 or any(not isinstance(item, str) or not item or len(item) > 256 for item in values):
             raise ValueError('APPLICATION_PROVIDER_GRANTS_INVALID')
         if key == 'commands':
-            if not values or any(not re.fullmatch(r'[a-z][a-z0-9]*(?:\|[a-z][a-z0-9-]*)?', item) for item in values):
+            if not values or any(not re.fullmatch(r'[+-]?(?:@[a-z][a-z0-9_-]*|[a-z][a-z0-9]*(?:\|[a-z][a-z0-9-]*)?)', item) for item in values):
                 raise ValueError('APPLICATION_PROVIDER_GRANTS_INVALID')
-            # Only discovery, never Sentinel administration in application hooks.
-            if sentinel and not set(values) <= {'ping', 'auth', 'hello', 'sentinel|get-master-addr-by-name'}:
-                raise ValueError('APPLICATION_PROVIDER_GRANTS_INVALID')
-            if not sentinel and any(item.split('|')[0] in {'acl', 'config', 'flushall', 'flushdb', 'shutdown', 'module', 'debug', 'replicaof', 'slaveof', 'sentinel'} for item in values):
-                raise ValueError('APPLICATION_PROVIDER_GRANTS_INVALID')
-        elif any(any(char.isspace() or ord(char) < 32 for char in item) or item[0] in {'~', '&', '+', '-', '#', '>', '<', '%'} for item in values):
+        elif any(any(char.isspace() or ord(char) < 32 for char in item) for item in values):
             raise ValueError('APPLICATION_PROVIDER_GRANTS_INVALID')
-        result[key] = sorted(set(values))
+        result[key] = list(values) if key == 'commands' else sorted(set(values))
     return result
 
 
@@ -107,8 +102,8 @@ def normalize_database_access(values, databases, provider_id, owner):
         privileges, creators = value.get('privileges'), value.get('additionalCreatorRoles', [])
         if (not database or database['providerId'] != provider_id or database['mode'] != 'managed'
                 or database['name'] in seen or not isinstance(privileges, list) or not privileges
-                or len(privileges) > 4 or any(not isinstance(p, str) for p in privileges)
-                or len(set(privileges)) != len(privileges) or not set(privileges) <= GRANTS['table']
+                or len(privileges) > 5 or any(not isinstance(p, str) for p in privileges)
+                or len(set(privileges)) != len(privileges) or not set(privileges) <= GRANTS['table'] | {'CREATE'}
                 or not isinstance(creators, list) or len(creators) > 256):
             raise ValueError('APPLICATION_PROVIDER_GRANTS_INVALID')
         creators = [identifier(role, True) for role in creators]
@@ -229,7 +224,7 @@ def project_providers(rows, snapshot, configuration, desired, catalog):
                     if service_type == 'redis':
                         if listener == 'sentinel' and 'service.redis.sentinel.account' not in catalog['definitions']['redis'].get('capabilities', []):
                             raise ValueError('APPLICATION_PROVIDER_CAPABILITY_UNSUPPORTED')
-                        grants = normalize_redis_grants(account.get('grants', {}), listener == 'sentinel')
+                        grants = normalize_redis_grants(account.get('grants', {}))
                         if 'databaseRef' in account:
                             raise ValueError('APPLICATION_PROVIDER_DATABASE_REF_INVALID')
                     elif service_type == 'clickhouse':

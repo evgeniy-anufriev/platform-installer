@@ -10,6 +10,7 @@
   "additionalProperties": {
     "type": "object",
     "properties": {
+      "overrides": {"$ref": "settings.schema.json#/$defs/common"},
       "vault_ref": {
         "type": "object",
         "properties": {

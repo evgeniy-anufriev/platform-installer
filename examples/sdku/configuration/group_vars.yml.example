@@ -1,0 +1,35 @@
+---
+# Merge this fragment into the project's ordinary inventory/group_vars.
+# References below must name existing deployments of THAT project.
+# This is not a standalone runnable inventory.
+# Requires a runtime containing the library common defaults Core extension.
+
+platform_desired_state:
+  applicationLibraryDeployments:
+    sdku-main:
+      libraryRef: sdku@1.0.0
+      runtimeRef: docker-apps
+      overrides:
+        environment:
+          KAFKA_CONSUMER_REQUEST_TIMEOUT_MS: "60000"
+          KAFKA_PRODUCER_REQUEST_TIMEOUT_MS: "60000"
+      bindings:
+        database: {deploymentRef: postgres-apps}
+        analytics: {deploymentRef: clickhouse-apps}
+        cache: {deploymentRef: redis-apps}
+        messaging: {deploymentRef: kafka-apps}
+        secrets: {deploymentRef: vault-apps}
+        application-pki: {profileRef: application-pki}
+      connection_defaults:
+        kafka: {connectionRef: CLIENT_SSL}
+      applications:
+        hmi-backend:
+          overrides:
+            ports:
+              port-1: {container: 10101, published: 18101}
+        data-manager:
+          overrides:
+            environment:
+              JAVA_OPTS: "-Xmx2048m"
+# Complete source_variables, secret sources, resources and mounts before Verify.
+# Library ID is sdku-main; instance overrides use slot keys, not computed IDs.

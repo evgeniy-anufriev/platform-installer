@@ -1,0 +1,15 @@
+{
+  "apiVersion": "platform.installer/application-package/v1alpha1",
+  "files": [
+    "roles/application_sdku-knp/defaults/main.yml",
+    "roles/application_sdku-knp/templates/compose.yml.j2",
+    "roles/application_sdku-knp/templates/agent.hcl.j2"
+  ],
+  "kind": "ApplicationPackage",
+  "name": "sdku-knp",
+  "render": {
+    "agent_template": "roles/application_sdku-knp/templates/agent.hcl.j2",
+    "compose_template": "roles/application_sdku-knp/templates/compose.yml.j2"
+  },
+  "version": "1.0.0"
+}

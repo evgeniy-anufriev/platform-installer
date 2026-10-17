@@ -1,0 +1,33 @@
+platform_application_definition:
+    connections: {}
+    defaults:
+        command:
+            - /app/docker-entrypoint.sh
+        environment:
+            GRANT_ACCESS: grant-access
+            GRANT_ACCESS_AUDIT: grant-access-audit
+            NGINX_CSPA_BACK: hmi-backend
+            NGINX_DATA_MANAGER_BACK: data-manager
+            NGINX_PARA_FRONT: hmi-frontend-para
+            NGINX_URL: nginx.{{ application_parameters.source_variables.URL_ROOT | default(undef(hint='Configure SDKU URL_ROOT'), true) }}
+            NGINX_URL_SCHEDULER: evo-scheduler
+        image: evoscada-docker.artifacts.tn.tngrp.ru/hmi-frontend-para:0.0.1-f878fe7c
+        parameters:
+            mount_sources:
+                mount-1: ""
+                mount-2: ""
+            source_variables:
+                URL_ROOT: ""
+        ports:
+            port-1:
+                container: 10171
+                published: 10171
+        readiness:
+            delay: 2
+            mode: healthcheck
+            retries: 30
+        restart: on-failure
+        user: 1000:1000
+    identity_environment: []
+    name: hmi-frontend-para
+    version: 1.0.0

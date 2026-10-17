@@ -143,6 +143,30 @@ def account_state(client, username):
     return dict(zip(value[::2], value[1::2]))
 
 
+def command_permissions(rules, commands, categories):
+    """Compare ordered ACL rules against the selected server's command metadata."""
+    result = set()
+    for rule in rules:
+        if not re.fullmatch(r'[+-]?(?:@[a-z][a-z0-9_-]*|[a-z][a-z0-9]*(?:\|[a-z][a-z0-9-]*)?)', rule):
+            raise ACLFailure('REDIS_APPLICATION_GRANTS_INVALID')
+        name = rule[1:] if rule[0] in '+-' else rule
+        if name == '@all':
+            selected = set(commands) | {'@all'}
+        elif name.startswith('@'):
+            if name[1:] not in categories:
+                raise ACLFailure('REDIS_APPLICATION_GRANTS_INVALID')
+            selected = {command for command, groups in commands.items() if name in groups}
+        else:
+            selected = {command for command in commands if command == name or command.startswith(name + '|')}
+            if not selected:
+                raise ACLFailure('REDIS_APPLICATION_GRANTS_INVALID')
+        if rule.startswith('-'):
+            result.difference_update(selected)
+        else:
+            result.update(selected)
+    return result
+
+
 def ensure_account(client, user_client, directory, username, password, marker, listener, grants, mode, verify=False, timeout=15, preflight=False):
     """One locked check/mutation/save/witness; no password rotation or takeover."""
     changed = False
@@ -169,10 +193,23 @@ def ensure_account(client, user_client, directory, username, password, marker, l
             raise ACLFailure('REDIS_APPLICATION_ACCOUNT_MISSING')
         if actual is None and witness_key in witness:
             raise ACLFailure('REDIS_APPLICATION_OWNERSHIP_DRIFT')
+        expected_hash = hashlib.sha256(password.encode('utf-8')).hexdigest()
+        command_tokens = [item if item[0] in '+-' else '+' + item for item in grants['commands']]
+        commands, pending = {}, list(client.command('COMMAND'))
+        while pending:
+            row = pending.pop()
+            if not isinstance(row, list) or len(row) < 7:
+                raise ACLFailure('REDIS_APPLICATION_METADATA_INVALID')
+            children = row[9] if len(row) > 9 else []
+            if children:
+                pending.extend(children)
+            else:
+                commands[row[0]] = row[6]
+        categories = client.command('ACL', 'CAT')
+        expected_commands = command_permissions(command_tokens, commands, categories)
         if actual is None and preflight:
             return False
-        expected_hash = hashlib.sha256(password.encode('utf-8')).hexdigest()
-        tokens = ['+' + item for item in grants['commands']]
+        tokens = list(command_tokens)
         tokens += ['~' + item for item in grants.get('keys', [])]
         tokens += ['&' + item for item in grants.get('channels', [])]
         if actual is None:
@@ -183,12 +220,16 @@ def ensure_account(client, user_client, directory, username, password, marker, l
             if not {'on'} <= set(actual.get('flags', [])) or set(actual.get('flags', [])) - {'on', 'sanitize-payload'} or actual.get('passwords') != [expected_hash] or actual.get('selectors'):
                 raise ACLFailure('REDIS_APPLICATION_ACCOUNT_DRIFT')
             actual_commands = actual.get('commands', '').split()
-            if not actual_commands or actual_commands[0] != '-@all' or any(not item.startswith('+') or item.startswith('+@') for item in actual_commands[1:]):
-                raise ACLFailure('REDIS_APPLICATION_GRANTS_DRIFT')
-            for field, prefix, requested in [('commands', '+', grants['commands']),
-                                              ('keys', '~', grants.get('keys', [])),
+            observed_commands = command_permissions(actual_commands, commands, categories)
+            updates = []
+            if observed_commands != expected_commands:
+                if verify or mode == 'existing':
+                    raise ACLFailure('REDIS_APPLICATION_GRANTS_DRIFT' if observed_commands - expected_commands else
+                                     'REDIS_APPLICATION_GRANTS_MISSING')
+                updates = ['nocommands', *command_tokens]
+            for field, prefix, requested in [('keys', '~', grants.get('keys', [])),
                                               ('channels', '&', grants.get('channels', []))]:
-                observed = set(actual_commands[1:]) if field == 'commands' else set(actual.get(field, '').split())
+                observed = set(actual.get(field, '').split())
                 expected = {prefix + item for item in requested}
                 if not observed <= expected:
                     raise ACLFailure('REDIS_APPLICATION_GRANTS_DRIFT')
@@ -196,11 +237,11 @@ def ensure_account(client, user_client, directory, username, password, marker, l
                 if missing:
                     if verify or mode == 'existing':
                         raise ACLFailure('REDIS_APPLICATION_GRANTS_MISSING')
-                    if preflight:
-                        continue
-                    if client.command('ACL', 'SETUSER', username, *missing) != 'OK':
-                        raise ACLFailure('REDIS_APPLICATION_COMMAND_FAILED')
-                    changed = True
+                    updates.extend(missing)
+            if updates and not preflight:
+                if client.command('ACL', 'SETUSER', username, *updates) != 'OK':
+                    raise ACLFailure('REDIS_APPLICATION_COMMAND_FAILED')
+                changed = True
         if user_client.command('AUTH', username, password) != 'OK' or (not preflight and 'ping' in grants['commands'] and user_client.command('PING') != 'PONG'):
             raise ACLFailure('REDIS_APPLICATION_LOGIN_FAILED')
         if changed:

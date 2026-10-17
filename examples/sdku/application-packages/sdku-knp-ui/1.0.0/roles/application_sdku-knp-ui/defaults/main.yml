@@ -1,0 +1,29 @@
+platform_application_definition:
+    connections: {}
+    defaults:
+        command:
+            - /app/docker-entrypoint.sh
+        environment:
+            REACT_APP_ALARM_VIEW_URL: '{{ application_parameters.source_variables.ALARM_VIEW_SERVICE_URL | default(undef(hint=''Configure SDKU ALARM_VIEW_SERVICE_URL''), true) }}'
+            REACT_APP_BASE_NAME: sdku-knp-ui
+            REACT_APP_HMI_BACKEND_URL: '{{ application_parameters.source_variables.HMI_BACKEND_URL | default(undef(hint=''Configure SDKU HMI_BACKEND_URL''), true) }}'
+            REACT_APP_KNP_URL: https://nginx.{{ application_parameters.source_variables.URL_ROOT | default(undef(hint='Configure SDKU URL_ROOT'), true) }}/sdku-knp
+        image: evoscada-docker.artifacts.tn.tngrp.ru/sdku-knp-ui:0.0.1-3fb701a5
+        parameters:
+            source_variables:
+                ALARM_VIEW_SERVICE_URL: ""
+                HMI_BACKEND_URL: ""
+                URL_ROOT: ""
+        ports:
+            port-1:
+                container: 10291
+                published: 10291
+        readiness:
+            delay: 2
+            mode: container
+            retries: 30
+        restart: on-failure
+        user: 1000:1000
+    identity_environment: []
+    name: sdku-knp-ui
+    version: 1.0.0

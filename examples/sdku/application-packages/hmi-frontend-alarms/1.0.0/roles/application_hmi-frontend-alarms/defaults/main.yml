@@ -1,0 +1,53 @@
+platform_application_definition:
+    connections: {}
+    defaults:
+        command:
+            - /app/docker-entrypoint.sh
+        environment:
+            ALARMS_HEADER_TITLE: ""
+            ALARMS_IMPORTANT_QUERY_PAGE_SIZE: 50
+            ALARMS_OFFSET_TO_FUTURE_IN_REST_REQ_MS: 0
+            ALARMS_PAGINATION_MAX_PAGE_SIZE: 500
+            ENABLE_HMI_DEV_FEATURES: true
+            GRANT_ACCESS: grant-access
+            MAX_NUMBER_OF_CRITICAL_SOUNDS: 20
+            MAX_NUMBER_OF_OTHER_SOUNDS: 20
+            NGINX_ALARM_SERVICE_BACK: alarm-service
+            NGINX_ALARMS_BACK: alarm-view-service
+            NGINX_ALARMS_BACK_WS: alarm-view-service
+            NGINX_ALARMS_FRONT: hmi-frontend-alarms
+            NGINX_DATA_MANAGER_BACK: data-manager
+            NGINX_DATA_MANAGER_FRONT: hmi-frontend-para
+            NGINX_GRANT_ACCESS_AUDIT: grant-access-audit
+            NGINX_GRANT_ACCESS_FRONT: grant-access-front
+            NGINX_GRANT_ACCESS_INTEGRITY: grant-access-integrity
+            NGINX_URL: nginx.{{ application_parameters.source_variables.URL_ROOT | default(undef(hint='Configure SDKU URL_ROOT'), true) }}
+            NGINX_URL_TRENDS_FRONT: hmi-frontend-trends
+            NGINX_VTOR_SERVICE_FRONT: sdku-vtor-ui
+            PAUSE_BETWEEN_ALL_CRITICAL: 10000
+            PAUSE_BETWEEN_SOUNDS: 1000
+            SDKU_ALARMS_IMPORTANT_GRID_SHOW_MINUTES: 1440
+            SDKU_ALARMS_STANDARD_GRID_SHOW_MINUTES: 60
+            USE_LOCAL_TIME_IN_FILTER: false
+            USE_SIGNAL_ID_IN_FILTER: falses
+            VOICES: '{"Windows" : "Microsoft Pavel - Russian (Russia)", "Linux" : ""}'
+        image: evoscada-docker.artifacts.tn.tngrp.ru/hmi-frontend-alarms:0.0.1-9c1910f8
+        parameters:
+            mount_sources:
+                mount-1: ""
+                mount-2: ""
+            source_variables:
+                URL_ROOT: ""
+        ports:
+            port-1:
+                container: 10061
+                published: 10061
+        readiness:
+            delay: 2
+            mode: healthcheck
+            retries: 30
+        restart: on-failure
+        user: 1000:1000
+    identity_environment: []
+    name: hmi-frontend-alarms
+    version: 1.0.0

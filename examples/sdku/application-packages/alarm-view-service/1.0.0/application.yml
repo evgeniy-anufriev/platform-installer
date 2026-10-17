@@ -1,0 +1,15 @@
+{
+  "apiVersion": "platform.installer/application-package/v1alpha1",
+  "files": [
+    "roles/application_alarm-view-service/defaults/main.yml",
+    "roles/application_alarm-view-service/templates/compose.yml.j2",
+    "roles/application_alarm-view-service/templates/agent.hcl.j2"
+  ],
+  "kind": "ApplicationPackage",
+  "name": "alarm-view-service",
+  "render": {
+    "agent_template": "roles/application_alarm-view-service/templates/agent.hcl.j2",
+    "compose_template": "roles/application_alarm-view-service/templates/compose.yml.j2"
+  },
+  "version": "1.0.0"
+}

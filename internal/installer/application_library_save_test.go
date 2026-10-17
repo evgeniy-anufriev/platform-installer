@@ -8,6 +8,43 @@ import (
 	"testing"
 )
 
+func TestLibraryCommonOverridesSaveAndReset(t *testing.T) {
+	root, b, revision := b2Project(t)
+	create := b2Command(revision, "CreateApplicationLibraryDeployment")
+	create.Entity = map[string]any{"libraryRef": "sdku@1.0.0", "runtimeRef": "kafka-main"}
+	result := commitStructuralForTest(t, b, root, projectlifecycle.ClassificationManaged, revision, []EditCommand{create})
+	set := b2Command(result.NewProjectRevision, "SetApplicationLibraryOverride")
+	set.Setting = "environment"
+	set.Value = map[string]any{"COMMON": "library-instance"}
+	result = commitStructuralForTest(t, b, root, projectlifecycle.ClassificationManaged, result.NewProjectRevision, []EditCommand{set})
+	view, err := ReadManagedProjectView(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lib := view.ApplicationLibraries["sdku"]
+	if asMap(asMap(lib["overrides"])["environment"])["COMMON"] != "library-instance" || lib["applications"] != nil {
+		t.Fatal("common override written as an application slot")
+	}
+	reset := b2Command(result.NewProjectRevision, "RemoveApplicationLibraryOverride")
+	reset.Setting = "environment"
+	commitStructuralForTest(t, b, root, projectlifecycle.ClassificationManaged, result.NewProjectRevision, []EditCommand{reset})
+	view, err = ReadManagedProjectView(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if asMap(view.ApplicationLibraries["sdku"]["overrides"])["environment"] != nil {
+		t.Fatal("common reset retained override")
+	}
+	for _, setting := range []string{"image", "command", "provisioner"} {
+		bad := b2Command(revision, "SetApplicationLibraryOverride")
+		bad.Setting = setting
+		bad.Value = "x"
+		if validateApplicationEdit(bad) == nil {
+			t.Fatalf("common %s accepted", setting)
+		}
+	}
+}
+
 func b2Project(t *testing.T) (string, *Backend, string) {
 	t.Helper()
 	root, revision := emptyManagedProject(t)
@@ -26,6 +63,34 @@ func b2Project(t *testing.T) (string, *Backend, string) {
 }
 func b2Command(revision, op string) EditCommand {
 	return EditCommand{APIVersion: EditCommandAPIVersionV11, Kind: "EditCommand", BaseProjectRevision: revision, Operation: op, DeploymentID: "sdku"}
+}
+
+func TestApplicationCreateGrantSaveReopenAndReset(t *testing.T) {
+	root, b, revision := b2Project(t)
+	create := b2Command(revision, "CreateApplicationLibraryDeployment")
+	create.Entity = map[string]any{"libraryRef": "sdku@1.0.0", "runtimeRef": "kafka-main"}
+	result := commitStructuralForTest(t, b, root, projectlifecycle.ClassificationManaged, revision, []EditCommand{create})
+	slot := b2Command(result.NewProjectRevision, "SetApplicationLibrarySlot")
+	slot.EntityID = "gateway"
+	slot.Entity = map[string]any{"accounts": map[string]any{"postgres": map[string]any{"databaseAccess": []any{map[string]any{"databaseRef": "main", "privileges": []any{"CREATE", "SELECT"}}}}}}
+	result = commitStructuralForTest(t, b, root, projectlifecycle.ClassificationManaged, result.NewProjectRevision, []EditCommand{slot})
+	view, err := ReadManagedProjectView(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	account := asMap(asMap(asMap(asMap(view.ApplicationLibraries["sdku"]["applications"])["gateway"])["accounts"])["postgres"])
+	access := account["databaseAccess"].([]any)[0].(map[string]any)
+	if rights := access["privileges"].([]any); len(rights) != 2 || rights[0] != "CREATE" || rights[1] != "SELECT" {
+		t.Fatalf("saved rights changed: %v", rights)
+	}
+	slot.BaseProjectRevision = result.NewProjectRevision
+	slot.Operation = "RemoveApplicationLibrarySlot"
+	slot.Entity = nil
+	commitStructuralForTest(t, b, root, projectlifecycle.ClassificationManaged, result.NewProjectRevision, []EditCommand{slot})
+	view, err = ReadManagedProjectView(root)
+	if err != nil || asMap(asMap(asMap(view.ApplicationLibraries["sdku"]["applications"])["gateway"])["accounts"]) != nil {
+		t.Fatalf("account override reset failed: %v", err)
+	}
 }
 
 func TestB2LibrarySaveResetReopenPreservesOpaqueFiles(t *testing.T) {

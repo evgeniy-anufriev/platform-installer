@@ -481,6 +481,16 @@ target store or new transaction guarantee is introduced. See the
 
 ## ADR-034: Application libraries use an additive Ansible-only resolve boundary
 
+Owner-authorized common defaults extension (2026-10-17): library packages may
+declare defaults.environment/parameters; application-owned defaults remain in
+application packages. Library and application instance overrides stay in ordinary
+group_vars. A slot may opt out with inherit_defaults=false. Native Ansible
+composition and an isolated common template context produce library/host defaults
+and the application's inherited baseline for runtime/UI; Go/React do not resolve
+precedence. Existing edit commands address common overrides without a slot/host,
+through the same guarded writer. See the
+[bounded plan](work/application-libraries/library-common-defaults-plan.md).
+
 A8 extends this decision with one mixed execution manifest/run and the existing
 sequential fail-fast controller. Application Apply is a final suffix after all
 infrastructure Verify operations; no scheduler or separate approval is added.
@@ -688,3 +698,19 @@ the managed account and its managed library databases, retaining foreign/role/
 grant-option/partial/column conflicts and the existing ON CLUSTER execution.
 No grant ledger, daemon, event trigger, new DTO/store or parallelism is introduced.
 Acceptance is tracked only in CURRENT_STATE and the access journal.
+
+## ADR-044: Application Redis/Sentinel command policy belongs to the operator
+
+Owner explicitly removed Core command prohibitions on2026-10-17. Ordinary
+defaults/group_vars grants select named commands and subcommands for the chosen
+application account; Core and the standalone account module validate typed data
+without administrative denylist or Sentinel allowlist. Both listeners accept
+commands, keys and channels. Literal patterns remain separate RESP arguments.
+Account ownership/custody, TLS, secret handling and existing drift/Verify
+semantics remain in the provider. Owner additionally requested ordered category
+inclusion/exclusion: server COMMAND and ACL CAT metadata support semantic
+comparison and owned managed command reconciliation without a category policy.
+No account/password control tokens are accepted through command rules. This adds no
+permission resolver, persistence or UI-specific policy. See the
+[bounded plan](work/application-libraries/redis-command-policy-plan.md) and
+[category amendment](work/application-libraries/redis-acl-rules-plan.md).

@@ -1,0 +1,92 @@
+platform_application_definition:
+    connections:
+        kafka:
+            library_binding: messaging
+            protocol: tcp
+        postgres:
+            library_binding: database
+            protocol: tcp
+        redis:
+            library_binding: cache
+            protocol: tcp
+        vault:
+            library_binding: secrets
+            protocol: https
+    defaults:
+        command:
+            - java
+            - -javaagent:/usr/local/app/opentelemetry-javaagent.jar
+            - -jar
+            - ef-backend.jar
+        environment:
+            DB_CONNECTION_SSL: "true"
+            JAVA_OPTS: -Xmx4096m
+            NETWORK_TIMEOUT_MS: 10000
+            SERVER_ALLOWED_ORIGINS: '*'
+            SPRING_KAFKA_SCHEMA_REGISTRY_URL: '{{ application_parameters.source_variables.KAFKA_SCHEMA_REGISTRY_URL | default(undef(hint=''Configure SDKU KAFKA_SCHEMA_REGISTRY_URL''), true) }}'
+            TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
+            logging.charset.console: UTF-8
+            server.max-http-header-size: 10MB
+            server.max-http-request-header-size: 10MB
+        image: evoscada-docker.artifacts.tn.tngrp.ru/ef-backend:1.0.4-SNAPSHOT-11cc4fa1-redos
+        parameters:
+            database_name: ef-store
+            source_variables:
+                KAFKA_SCHEMA_REGISTRY_URL: ""
+                REDIS_SENTINEL_MASTER: ""
+        ports:
+            port-1:
+                container: 10341
+                published: 10341
+        provisioner:
+            approle:
+                bind_secret_id: false
+            auth:
+                method: approle
+            mode: process-supervisor
+            secret_bindings:
+                DB_PASSWORD:
+                    source:
+                        library_secret: ef_backend_db_password
+                DB_USERNAME:
+                    source:
+                        library_secret: ef_backend_db_username
+                JAVA_KEYSTORE_PASSWORD:
+                    source:
+                        library_secret: java_keystore_password
+                SPRING_KAFKA_SSL_KEY_STORE_PASSWORD:
+                    source:
+                        library_secret: java_keystore_password
+                SPRING_KAFKA_SSL_TRUST_STORE_PASSWORD:
+                    source:
+                        library_secret: java_keystore_password
+                TN_SCADA_REDIS_ACL_PASSWORD:
+                    source:
+                        library_secret: redis_password
+                TN_SCADA_REDIS_ACL_SENTINEL_PASSWORD:
+                    source:
+                        library_secret: redis_sentinel_password
+                TN_SCADA_REDIS_ACL_SENTINEL_USERNAME:
+                    source:
+                        library_secret: redis_sentinel_username
+                TN_SCADA_REDIS_ACL_USERNAME:
+                    source:
+                        library_secret: redis_username
+                TN_SCADA_REDIS_SSL_PROPERTIES_KEY_STORE_PASSWORD:
+                    source:
+                        library_secret: java_keystore_password
+                TN_SCADA_REDIS_SSL_PROPERTIES_TRUST_STORE_PASSWORD:
+                    source:
+                        library_secret: java_keystore_password
+            secrets:
+                mount: applications
+            type: vault-agent
+        readiness:
+            delay: 2
+            mode: healthcheck
+            retries: 30
+        restart: on-failure
+        user: 1000:1000
+    identity_environment: []
+    name: ef-backend
+    version: 1.0.0

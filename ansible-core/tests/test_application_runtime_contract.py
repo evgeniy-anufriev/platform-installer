@@ -12,7 +12,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 UTILS = ROOT / "ansible-core/collections/ansible_collections/platform/core/plugins/module_utils"
 sys.path.insert(0, str(UTILS))
-from application_runtime import bundle_archive, selected_archive, runtime_reference, pinned_registry_reference, prepare_runtime, validate_compose, validate_config_contents, safe_relative
+from application_runtime import bundle_archive, selected_archive, runtime_reference, pinned_registry_reference, image_requirement, prepare_runtime, validate_compose, validate_config_contents, safe_relative
 from artifact_authority import assemble_authority
 from schema_validation import SchemaValidator
 from application_libraries import load_package
@@ -139,6 +139,21 @@ class ApplicationRuntimeTests(unittest.TestCase):
                                     ("registry.example:5000/team/image:tag", "registry.example:5000/team/image"),
                                     ("registry.example:5000/team/image", "registry.example:5000/team/image")):
             self.assertEqual(expected + "@" + DIGEST, pinned_registry_reference(reference, DIGEST))
+
+    def test_uppercase_image_tags_preserve_repository_and_digest_guards(self):
+        image = {"imageId": DIGEST, "platform": {"os": "linux", "architecture": "amd64"}}
+        for reference in ("evoscada-docker.artifacts.tn.tngrp.ru/data-manager:1.5.0-SNAPSHOT-7a795dc1-redos",
+                          "registry.example:5000/team/image:SNAPSHOT"):
+            with self.subTest(reference=reference):
+                self.assertEqual(reference, image_requirement("dm", reference, image)["name"])
+                self.assertEqual(reference.rsplit(":", 1)[0] + "@" + DIGEST,
+                                 pinned_registry_reference(reference, DIGEST))
+                self.assertEqual(reference + "@" + DIGEST,
+                                 image_requirement("dm", reference + "@" + DIGEST, image)["name"])
+        for reference in ("registry.example/Team/image:SNAPSHOT", "registry.example/image:BAD TAG",
+                          "registry.example/image:SNAPSHOT;echo", "registry.example/image@sha256:" + "A" * 64):
+            with self.subTest(reference=reference), self.assertRaises(ValueError):
+                image_requirement("dm", reference, image)
 
     def test_verified_archive_and_symlink_or_changed_bytes_fail(self):
         with tempfile.TemporaryDirectory() as directory:

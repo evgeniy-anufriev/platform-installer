@@ -1,0 +1,13 @@
+{
+  "apiVersion": "platform.installer/application-package/v1alpha1",
+  "files": [
+    "roles/application_sdku-knp-ui/defaults/main.yml",
+    "roles/application_sdku-knp-ui/templates/compose.yml.j2"
+  ],
+  "kind": "ApplicationPackage",
+  "name": "sdku-knp-ui",
+  "render": {
+    "compose_template": "roles/application_sdku-knp-ui/templates/compose.yml.j2"
+  },
+  "version": "1.0.0"
+}

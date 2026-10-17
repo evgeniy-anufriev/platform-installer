@@ -2,7 +2,8 @@
 {% set entries = account.databaseAccess | selectattr('database', 'equalto', db.name) | list %}
 {% set access = entries[0] if entries else {'privileges': [], 'creatorRoles': []} %}
 DECLARE
-  desired text[] := ARRAY[{% for p in access.privileges %}{{ p | platform.postgresql.application_sql_literal }}{{ ',' if not loop.last else '' }}{% endfor %}]::text[];
+  desired text[] := ARRAY[{% for p in access.privileges if p != 'CREATE' %}{{ p | platform.postgresql.application_sql_literal }}{{ ',' if not loop.last else '' }}{% endfor %}]::text[];
+  schema_rights text[] := ARRAY[{% if access.privileges %}'USAGE'{% if 'CREATE' in access.privileges %},'CREATE'{% endif %}{% endif %}]::text[];
   creators text[] := ARRAY[{% for role in access.creatorRoles %}{{ role | platform.postgresql.application_sql_literal }}{{ ',' if not loop.last else '' }}{% endfor %}]::text[];
   expected text[]; missing text[]; extra text[];
   ns record; creator record; acl record; object_type text; acl_type "char";
@@ -67,7 +68,7 @@ BEGIN
   FOR acl IN SELECT d.defaclrole,d.defaclnamespace,d.defaclobjtype,x.privilege_type,x.is_grantable
       FROM pg_default_acl d CROSS JOIN LATERAL aclexplode(d.defaclacl) x
       WHERE x.grantee=target_oid AND d.defaclrole<>target_oid LOOP
-    expected := CASE acl.defaclobjtype WHEN 'n' THEN CASE WHEN cardinality(desired)>0 THEN ARRAY['USAGE'] ELSE ARRAY[]::text[] END
+    expected := CASE acl.defaclobjtype WHEN 'n' THEN schema_rights
       WHEN 'r' THEN desired WHEN 'S' THEN CASE WHEN 'INSERT'=ANY(desired) THEN ARRAY['USAGE'] ELSE ARRAY[]::text[] END ELSE ARRAY[]::text[] END;
     IF acl.defaclnamespace<>0 OR NOT pg_get_userbyid(acl.defaclrole)=ANY(creators)
        OR NOT acl.privilege_type=ANY(expected) OR acl.is_grantable THEN
@@ -88,7 +89,7 @@ BEGIN
     END IF;
   END LOOP;
   FOR ns IN SELECT * FROM pg_namespace WHERE nspname !~ '^pg_' AND nspname <> 'information_schema' ORDER BY nspname LOOP
-    expected := CASE WHEN cardinality(desired)>0 THEN ARRAY['USAGE'] ELSE ARRAY[]::text[] END;
+    expected := schema_rights;
     SELECT coalesce(array_agg(x.privilege_type),ARRAY[]::text[]) INTO extra
       FROM aclexplode(coalesce(ns.nspacl,acldefault('n',ns.nspowner))) x
       WHERE x.grantee=target_oid AND ns.nspowner<>target_oid AND (NOT x.privilege_type=ANY(expected) OR x.is_grantable);
@@ -100,9 +101,11 @@ BEGIN
       RAISE EXCEPTION 'APPLICATION_PROVIDER_GRANTS_REQUIRED';
 {% endif %}
     END IF;
-    IF cardinality(expected)>0 AND NOT has_schema_privilege(target_oid,ns.oid,'USAGE') THEN
+    SELECT coalesce(array_agg(p),ARRAY[]::text[]) INTO missing FROM unnest(expected) p
+      WHERE NOT has_schema_privilege(target_oid,ns.oid,p);
+    IF cardinality(missing)>0 THEN
 {% if application_provider_operation == 'grants' %}
-      EXECUTE format('GRANT USAGE ON SCHEMA %I TO %I',ns.nspname,target_name);
+      EXECUTE format('GRANT %s ON SCHEMA %I TO %I',array_to_string(missing,','),ns.nspname,target_name);
       RAISE NOTICE 'APPLICATION_PROVIDER_CHANGED';
 {% else %}
       RAISE EXCEPTION 'APPLICATION_PROVIDER_GRANTS_REQUIRED';
@@ -138,7 +141,7 @@ BEGIN
   END LOOP;
   FOREACH object_type IN ARRAY ARRAY['SCHEMAS','TABLES','SEQUENCES'] LOOP
     acl_type := CASE object_type WHEN 'SCHEMAS' THEN 'n' WHEN 'TABLES' THEN 'r' ELSE 'S' END;
-    expected := CASE object_type WHEN 'SCHEMAS' THEN CASE WHEN cardinality(desired)>0 THEN ARRAY['USAGE'] ELSE ARRAY[]::text[] END
+    expected := CASE object_type WHEN 'SCHEMAS' THEN schema_rights
       WHEN 'TABLES' THEN desired ELSE CASE WHEN 'INSERT'=ANY(desired) THEN ARRAY['USAGE'] ELSE ARRAY[]::text[] END END;
     FOR creator IN SELECT rolname,oid FROM pg_roles WHERE rolname=ANY(creators) LOOP
       SELECT coalesce(array_agg(p),ARRAY[]::text[]) INTO missing FROM unnest(expected) p

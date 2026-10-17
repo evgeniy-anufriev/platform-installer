@@ -1,0 +1,98 @@
+platform_application_definition:
+    connections:
+        kafka:
+            library_binding: messaging
+            protocol: tcp
+        postgres:
+            library_binding: database
+            protocol: tcp
+        redis:
+            library_binding: cache
+            protocol: tcp
+        vault:
+            library_binding: secrets
+            protocol: https
+    defaults:
+        command:
+            - java
+            - -jar
+            - evo-scheduler.jar
+        environment:
+            ALARM_VIEW_SERVICE_ROOT_URL: '{{ application_parameters.source_variables.ALARM_VIEW_SERVICE_URL | default(undef(hint=''Configure SDKU ALARM_VIEW_SERVICE_URL''), true) }}'
+            DATA_MANAGER_CERTIFICATE_VALIDATION: false
+            DATA_MANAGER_DTO_PORTION_SIZE: 300
+            DATA_MANAGER_ROOT_URL: '{{ application_parameters.source_variables.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
+            HMI_BACKEND_ROOT_URL: '{{ application_parameters.source_variables.HMI_BACKEND_URL | default(undef(hint=''Configure SDKU HMI_BACKEND_URL''), true) }}'
+            INCOMING_FILE_DIR: /usr/local/app/data
+            JAVA_OPTS: -Xmx15000m
+            RESULT_FILE_DIR: /usr/local/app/data
+            SPRING_KAFKA_SCHEMA_REGISTRY_URL: '{{ application_parameters.source_variables.KAFKA_SCHEMA_REGISTRY_URL | default(undef(hint=''Configure SDKU KAFKA_SCHEMA_REGISTRY_URL''), true) }}'
+            TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
+            WEB_CLIENT_CONNECTION_TIMEOUT: 100000
+            WEB_CLIENT_RESPONSE_TIMEOUT: 30000
+            server.max-http-request-header-size: 100MB
+        image: evoscada-docker.artifacts.tn.tngrp.ru/evo-scheduler:0.1.1-SNAPSHOT-078b0422-redos
+        parameters:
+            database_name: tn-scada
+            source_variables:
+                ALARM_VIEW_SERVICE_URL: ""
+                DATA_MANAGER_URL_ROOT: ""
+                HMI_BACKEND_URL: ""
+                KAFKA_SCHEMA_REGISTRY_URL: ""
+                REDIS_SENTINEL_MASTER: ""
+        ports:
+            port-1:
+                container: 12080
+                published: 12080
+        provisioner:
+            approle:
+                bind_secret_id: false
+            auth:
+                method: approle
+            mode: process-supervisor
+            secret_bindings:
+                DB_PASSWORD:
+                    source:
+                        library_secret: postgres_scada_password
+                DB_USERNAME:
+                    source:
+                        library_secret: postgres_scada_user
+                JAVA_KEYSTORE_PASSWORD:
+                    source:
+                        library_secret: java_keystore_password
+                SPRING_KAFKA_SSL_KEY_STORE_PASSWORD:
+                    source:
+                        library_secret: java_keystore_password
+                SPRING_KAFKA_SSL_TRUST_STORE_PASSWORD:
+                    source:
+                        library_secret: java_keystore_password
+                TN_SCADA_REDIS_ACL_PASSWORD:
+                    source:
+                        library_secret: redis_password
+                TN_SCADA_REDIS_ACL_SENTINEL_PASSWORD:
+                    source:
+                        library_secret: redis_sentinel_password
+                TN_SCADA_REDIS_ACL_SENTINEL_USERNAME:
+                    source:
+                        library_secret: redis_sentinel_username
+                TN_SCADA_REDIS_ACL_USERNAME:
+                    source:
+                        library_secret: redis_username
+                TN_SCADA_REDIS_SSL_PROPERTIES_KEY_STORE_PASSWORD:
+                    source:
+                        library_secret: java_keystore_password
+                TN_SCADA_REDIS_SSL_PROPERTIES_TRUST_STORE_PASSWORD:
+                    source:
+                        library_secret: java_keystore_password
+            secrets:
+                mount: applications
+            type: vault-agent
+        readiness:
+            delay: 2
+            mode: container
+            retries: 30
+        restart: always
+        user: 1000:1000
+    identity_environment: []
+    name: evo-scheduler
+    version: 1.0.0

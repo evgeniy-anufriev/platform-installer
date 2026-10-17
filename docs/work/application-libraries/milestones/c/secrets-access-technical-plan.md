@@ -211,8 +211,10 @@ Verify не создаёт пробные таблицы; такие прове�
   PostgreSQL четыре DML checkbox; ClickHouse только SELECT/INSERT.
 * Общая подпись current/future + компактное «Создатели объектов» в расширенных
   настройках PostgreSQL. Core-derived owner readonly; роли миграций — явный список.
-* Redis chips commands/keys/channels, add/remove; Sentinel только свой capability.
-  Не принимать произвольную ACL строку или административные команды.
+* Redis/Sentinel commands/keys/channels, add/remove. Owner amendment2026-10-17:
+  явно указанные команды, включая административные, задаются оператором;
+  Core проверяет typed format, без command allowlist/denylist. Произвольные ACL
+  строки не вводятся; см. [план](../../redis-command-policy-plan.md).
 * Draft/Review/Save/reset/dirty/navigation существующие. Удаление доступа не
   выполняет target mutation до обычного утверждённого Apply.
 * Runtime password скрыт, ввод inline; runtime values не попадают в Review,

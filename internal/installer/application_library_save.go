@@ -29,7 +29,7 @@ func validateApplicationEdit(c EditCommand) error {
 	switch c.Operation {
 	case "CreateApplicationLibraryDeployment", "UpdateApplicationLibraryDeployment":
 		fields = append(fields, "entity")
-		if c.Entity == nil || !applicationKeys(c.Entity, "libraryRef", "runtimeRef", "bindings", "resources", "shared_secrets", "vault_ref", "applications") {
+		if c.Entity == nil || !applicationKeys(c.Entity, "libraryRef", "runtimeRef", "bindings", "resources", "shared_secrets", "vault_ref", "applications", "overrides") {
 			return invalid
 		}
 		if c.Operation == "CreateApplicationLibraryDeployment" {
@@ -41,6 +41,9 @@ func validateApplicationEdit(c EditCommand) error {
 			}
 		}
 		for key, value := range c.Entity {
+			if key == "overrides" && !applicationKeys(asMap(value), "environment", "parameters") {
+				return invalid
+			}
 			if key == "libraryRef" {
 				s, ok := value.(string)
 				if !ok || !exactLibraryRef.MatchString(s) || len(s) > 160 {
@@ -89,9 +92,8 @@ func validateApplicationEdit(c EditCommand) error {
 		if c.EntityID != "" && !validLibraryInputID(c.EntityID) || c.HostID != "" && !identifierPattern.MatchString(c.HostID) || c.EntityID != "" && c.HostID != "" {
 			return invalid
 		}
-		// Application overrides belong to a slot; host overrides are the fixed
-		// membership parameters/ports projection. There is no effective-value edit.
-		if c.EntityID == "" && c.HostID == "" {
+		// Empty slot/host addresses the common library environment/parameters only.
+		if c.EntityID == "" && c.HostID == "" && (c.Property != "" || c.Setting != "environment" && c.Setting != "parameters") {
 			return invalid
 		}
 		if c.HostID != "" && c.Property != "parameters" && c.Property != "ports" {
@@ -399,7 +401,7 @@ func (c *structuralCandidate) reduceApplicationEdit(cmd EditCommand) error {
 			if owner == nil {
 				return referenceNotFound("placement")
 			}
-		} else {
+		} else if cmd.EntityID != "" {
 			if cmd.Operation == "RemoveApplicationLibraryOverride" && asMap(owner["applications"]) == nil {
 				return nil
 			}

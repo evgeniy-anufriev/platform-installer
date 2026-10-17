@@ -243,7 +243,7 @@ See [A1 implementation notes](work/application-libraries/milestones/a1/evidence/
 The existing account contract accepts PostgreSQL `databaseAccess`, an array of
 `{databaseRef, privileges, additionalCreatorRoles?}`. Each databaseRef selects a
 managed library resource on the account's provider. Privileges are SELECT,
-INSERT, UPDATE and DELETE. One managed account/credential is retained across
+INSERT, UPDATE, DELETE and CREATE. CREATE grants object creation inside the user schemas of that managed database, including future schemas created by approved creator roles. It grants neither database-level CREATE (schema creation) nor CREATE DATABASE, membership or ownership. Removing CREATE revokes its direct/default schema grants and preserves existing objects and owner authority. Older runtimes reject CREATE before execution; use a newly published matching bundle. One managed account/credential is retained across
 all entries. An empty array removes managed object access without deleting the
 account, database or data; normal PUBLIC CONNECT/TEMPORARY are unchanged.
 
@@ -274,7 +274,16 @@ calculated REVOKE. Foreign database grants, roles, grant option, column grants
 and partial revokes remain conflicts, never cleanup candidates. Observed grants
 for other accounts are untouched. Verify is readonly and refuses any remaining
 delta. Existing accounts retain their prior non-mutating policy. Redis/Sentinel
-retain the existing structured ACL contract and command restrictions.
+use the same structured commands/keys/channels ACL contract. The operator's
+ordered command/subcommand and +@category/-@category rules in defaults/group_vars define permission
+policy, including administrative commands. Core and the standalone module have
+no command allowlist/denylist. They validate bounded typed syntax; key/channel
+patterns are literal data prefixed by the existing RESP writer. Bare commands
+and categories are additive shorthand. Redis metadata defines categories;
+Core preserves command order and duplicates. Owned managed accounts reconcile
+command permissions, including exclusions; existing accounts and Verify are
+readonly. Identity/password and key/channel custody retain their existing rules.
+Raw account/password control tokens are outside the command-rule format.
 
 Vault paths and stored username/password fields are unchanged. Application
 variables use existing secret_bindings; runtime values use only the existing

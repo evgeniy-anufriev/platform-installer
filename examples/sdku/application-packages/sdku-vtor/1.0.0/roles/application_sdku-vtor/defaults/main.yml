@@ -1,0 +1,119 @@
+platform_application_definition:
+    connections:
+        kafka:
+            library_binding: messaging
+            protocol: tcp
+        redis:
+            library_binding: cache
+            protocol: tcp
+        vault:
+            library_binding: secrets
+            protocol: https
+    defaults:
+        command:
+            - java
+            - -javaagent:/usr/local/app/opentelemetry-javaagent.jar
+            - -XX:MaxRAMPercentage=70.0
+            - -jar
+            - sdku-vtor.jar
+        environment:
+            ALARM_SERVICE_API_READ_TIMEOUT: 5000
+            ALARM_SERVICE_API_ROOT_URI: '{{ application_parameters.source_variables.ALARM_SERVICE_URL | default(undef(hint=''Configure SDKU ALARM_SERVICE_URL''), true) }}'
+            ALARM_SERVICE_API_SERVER_PATH: /generate-alarm
+            ALARM_SERVICE_API_TYPE: buffered
+            ALARM_TOPIC: '{{ application_parameters.source_variables.ALARM_TOPIC_COMPACT | default(undef(hint=''Configure SDKU ALARM_TOPIC_COMPACT''), true) }}'
+            EVO_SERVICES_CONSENSUS_SERVICE_HEALTH_CHECK_INTERVAL: 1000
+            EVO_SERVICES_CONSENSUS_SERVICE_HEALTH_CHECK_TIMEOUT: 999
+            EVO_SERVICES_CONSENSUS_SERVICE_HEARTBEAT_INTERVAL: 500
+            EVO_SERVICES_CONSENSUS_SERVICE_INSTANCE_NAME: sdku-vtor-{{ application_instance_id }}
+            EVO_SERVICES_CONSENSUS_SERVICE_LISTEN_PORT: '{{ application_parameters.source_variables.SDKU_VTOR_CONSENSUS_TCP_PORT | default(undef(hint=''Configure SDKU SDKU_VTOR_CONSENSUS_TCP_PORT''), true) }}'
+            EVO_SERVICES_CONSENSUS_SERVICE_MOCK: true
+            EVO_SERVICES_CONSENSUS_SERVICE_OTHER_INSTANCES: sdku-vtor-{{ application_parameters.source_variables.OTHER_SERVER_ID_1 | default(undef(hint='Configure SDKU OTHER_SERVER_ID_1'), true) }}={{ application_parameters.source_variables.SERVER_REPLICAS_1 | default(undef(hint='Configure SDKU SERVER_REPLICAS_1'), true) }}:{{ application_parameters.source_variables.SDKU_VTOR_CONSENSUS_TCP_PORT | default(undef(hint='Configure SDKU SDKU_VTOR_CONSENSUS_TCP_PORT'), true) }}
+            EVO_SERVICES_CONSENSUS_SERVICE_TERM_LIFESPAN: 2000
+            EVO_SERVICES_CONSENSUS_SERVICE_TIMER_INTERVAL: 500
+            EVO_SERVICES_CONSENSUS_SERVICE_WORKLOAD: LOW
+            SPRING_KAFKA_SCHEMA_REGISTRY_URL: '{{ application_parameters.source_variables.KAFKA_SCHEMA_REGISTRY_URL | default(undef(hint=''Configure SDKU KAFKA_SCHEMA_REGISTRY_URL''), true) }}'
+            TN_SCADA_DATA_MANAGER_URL_ROOT: '{{ application_parameters.source_variables.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
+            TN_SCADA_DATASOURCE_URL: '{{ application_parameters.source_variables.CLICKHOUSE_SSL_URL | default(undef(hint=''Configure SDKU CLICKHOUSE_SSL_URL''), true) }}:8443?ssl=true&sslmode=strict'
+            TN_SCADA_METADATA_TARGET_PROJECT: TNSV
+            TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
+            TN_SCADA_USER_PREFERENCES_URL_ROOT: '{{ application_parameters.source_variables.USER_PREFERENCES_URL_ROOT | default(undef(hint=''Configure SDKU USER_PREFERENCES_URL_ROOT''), true) }}'
+            VTOR_CONFIG_PATH: /usr/local/app/config/vtor_config.yaml
+            logging.level.tnt.evo.services.BufferedServiceBase: WARN
+            server.max-http-header-size: 10MB
+            server.max-http-request-header-size: 10MB
+            tn-scada.metadata.dontShowTargetProjectInNames: false
+            tn-scada.metadata.load-projects: TNSV
+            vtor.debug.addDebugUser: true
+        image: evoscada-docker.artifacts.tn.tngrp.ru/sdku-vtor:1.2.8-c8f4f8a5-redos
+        parameters:
+            source_variables:
+                ALARM_SERVICE_URL: ""
+                ALARM_TOPIC_COMPACT: sdku-alarms-compact
+                CLICKHOUSE_SSL_URL: ""
+                DATA_MANAGER_URL_ROOT: ""
+                KAFKA_SCHEMA_REGISTRY_URL: ""
+                OTHER_SERVER_ID_1: ""
+                REDIS_SENTINEL_MASTER: ""
+                SDKU_VTOR_CONSENSUS_TCP_PORT: "40301"
+                SERVER_REPLICAS_1: ""
+                USER_PREFERENCES_URL_ROOT: ""
+        ports:
+            port-1:
+                container: 15017
+                published: 15017
+            port-2:
+                container: 10301
+                published: 10301
+            port-3:
+                container: 40301
+                published: 40301
+        provisioner:
+            approle:
+                bind_secret_id: false
+            auth:
+                method: approle
+            mode: process-supervisor
+            secret_bindings:
+                JAVA_KEYSTORE_PASSWORD:
+                    source:
+                        library_secret: java_keystore_password
+                SPRING_KAFKA_SSL_KEY_STORE_PASSWORD:
+                    source:
+                        library_secret: java_keystore_password
+                SPRING_KAFKA_SSL_TRUST_STORE_PASSWORD:
+                    source:
+                        library_secret: java_keystore_password
+                TN_SCADA_REDIS_ACL_PASSWORD:
+                    source:
+                        library_secret: redis_password
+                TN_SCADA_REDIS_ACL_SENTINEL_PASSWORD:
+                    source:
+                        library_secret: redis_sentinel_password
+                TN_SCADA_REDIS_ACL_SENTINEL_USERNAME:
+                    source:
+                        library_secret: redis_sentinel_username
+                TN_SCADA_REDIS_ACL_USERNAME:
+                    source:
+                        library_secret: redis_username
+                TN_SCADA_REDIS_SSL_PROPERTIES_KEY_STORE_PASSWORD:
+                    source:
+                        library_secret: java_keystore_password
+                TN_SCADA_REDIS_SSL_PROPERTIES_TRUST_STORE_PASSWORD:
+                    source:
+                        library_secret: java_keystore_password
+            secrets:
+                mount: applications
+            type: vault-agent
+        readiness:
+            delay: 2
+            mode: container
+            retries: 30
+        restart: on-failure
+        user: 1000:1000
+    identity_environment:
+        - EVO_MANAGER_APP_ID
+        - KAFKA_APPLICATION_ID_CONFIG
+        - KAFKA_LISTENER_ID_CONFIG
+    name: sdku-vtor
+    version: 1.0.0

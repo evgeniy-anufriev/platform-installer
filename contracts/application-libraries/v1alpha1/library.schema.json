@@ -3,6 +3,7 @@
   "title": "Library definition defaults v1alpha1",
   "type": "object",
   "properties": {
+    "defaults": {"$ref": "settings.schema.json#/$defs/common"},
     "name": {
       "type": "string",
       "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$",
@@ -22,6 +23,7 @@
       "additionalProperties": {
         "type": "object",
         "properties": {
+          "inherit_defaults": {"type": "boolean"},
           "applicationRef": {
             "type": "string",
             "pattern": "^[a-z][a-z0-9-]*@[0-9]+\\.[0-9]+\\.[0-9]+$"

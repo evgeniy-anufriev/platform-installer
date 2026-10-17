@@ -89,13 +89,15 @@ export namespace coreadapter {
 	    }
 	}
 	export class ApplicationPlacement {
+	    commonDefaults?: Record<string, Array<number>>;
+	    inherited?: Record<string, Array<number>>;
 	    SERVER_ID: string;
 	    runtimeRef: string;
 	    command: string[];
 	    imageRequirement: number[];
 	    origin: ApplicationOrigin;
 	    parameters: Record<string, Array<number>>;
-	    environment: Record<string, string>;
+	    environment: Record<string, any>;
 	    ports: Record<string, Array<number>>;
 	    endpoint: number[];
 	    containerName: string;
@@ -109,6 +111,8 @@ export namespace coreadapter {
 
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.commonDefaults = source["commonDefaults"];
+	        this.inherited = source["inherited"];
 	        this.SERVER_ID = source["SERVER_ID"];
 	        this.runtimeRef = source["runtimeRef"];
 	        this.command = source["command"];

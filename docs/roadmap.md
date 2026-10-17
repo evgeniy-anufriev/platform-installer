@@ -23,6 +23,12 @@ Operator-assigned object ownership remains permitted. Gates include independent
 review, real credential/Agent flow and isolated permission/revoke/repeat tests;
 no infrastructure Apply or new execution mode is introduced.
 
+Owner's2026-10-17 [Redis command policy amendment](work/application-libraries/redis-command-policy-plan.md)
+removes Core/module command allowlists/denylists: explicit defaults/group_vars
+commands define application-account permissions. Typed syntax, ownership and
+existing drift/Verify behavior remain. Gates include independent review and
+isolated proof of explicitly granted administrative commands and repeat/Verify.
+
 Local status is operational evidence, never a second desired-state or Start authority.
 When saved infrastructure Verify evidence is absent or stale, the library-only plan
 includes fixed infrastructure Verify before library Apply/Verify in the same run;
@@ -52,6 +58,12 @@ A1 standalone schemas/read-only Ansible+Core resolution, then rendering/image
 delivery/provider hooks and execution integration, then Go and UI. Infrastructure
 installation without library selection remains supported. A1 does not authorize A2
 or real container/provider mutation; active status is recorded only in CURRENT_STATE.
+
+The [common defaults extension](work/application-libraries/library-common-defaults-plan.md)
+adds library ENV/parameters, instance group_vars overrides and Core-projected
+inheritance/Reset in the existing editor. Target-free checks and real local
+React/Wails Save/reopen are its gates; service installation and bundle publication
+are separate owner-authorized work.
 
 [A2](work/application-libraries/milestones/a2/a2-technical-plan.md) covers explicit standalone
 rendering, pinned image delivery and rootless Compose Apply/Verify. Its exit gates

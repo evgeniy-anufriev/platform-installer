@@ -96,6 +96,23 @@ remain readable without automatic defaults or rewrites.
 
 ## Application libraries editor — C design proposal (2026-10-15)
 
+### Library common defaults (owner-authorized 2026-10-17)
+
+The library editor adds a Common parameters tab with ENV and configuration
+parameters, reusing ApplicationValueFields and the existing draft/Review/Save.
+Package values come from library defaults; authored changes belong to the library
+deployment's overrides in group_vars. Slot definitions describe membership and
+inherit_defaults; SDKU contains no slot overrides. Applications retain their own
+package defaults and individual group_vars overrides. Frontend slots opt out.
+
+Only Core composes these layers. Instance Startup uses a fresh saved-revision
+Core inherited baseline, with a host selector where placements differ. After
+edits or Reset the old baseline is not presented as current: show that saved
+project verification is required. Removing an override is a node-free Save;
+it does not trigger Verify or installation. Existing projects without common
+defaults retain their controls. This is part of the
+[common defaults plan](../work/application-libraries/library-common-defaults-plan.md).
+
 The [C technical plan](../work/application-libraries/milestones/c/c-technical-plan.md)
 adds Applications between Services and Installation. The HTML now includes a
 synthetic master-detail prototype: library deployments and recipe slots on the
@@ -148,7 +165,7 @@ acceptance. Production contracts are unchanged; no direct container controls are
 
 The production HTML mockup now includes the subsequent UX audit refinement:
 compact deployment cards with inline credential variable aliases/reset, session
-password entry next to its source, and database access tables (four PostgreSQL
+password entry next to its source, and database access tables (five PostgreSQL
 and two ClickHouse example databases), plus Redis ACL. It removes instance Vault
 binding/path editing, administrative service credentials and generic Agent
 settings. Account mode is separate from a confirmed whole-account reset.
@@ -198,7 +215,7 @@ credential binding contract. The instance Secrets tab groups by provider deploym
 and connection alias, with username/password source rows and application-variable
 names, then a flat database/rights/actions table. No schema/object columns or
 account per database. Add/Edit/Delete stages ordinary account settings; PG offers
-SELECT/INSERT/UPDATE/DELETE, CH SELECT/INSERT. PG rights apply to all user schemas
+SELECT/INSERT/UPDATE/DELETE/CREATE, CH SELECT/INSERT. CREATE creates objects inside user schemas of the selected library-managed database; it does not grant database CREATE, ownership or membership. PG rights apply to all user schemas
 and existing/future objects for the owner and explicit creator roles. An explicit
 legacy-policy switch requires confirmation and Review; opening never broadens
 grants. Ownership is permitted: the UI states that removing DML does not remove

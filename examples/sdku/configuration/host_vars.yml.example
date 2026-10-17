@@ -1,0 +1,4 @@
+---
+# inventory/host_vars/<existing-host>/application-libraries.yml
+platform_application_libraries:
+  sdku-main: {}

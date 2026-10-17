@@ -1,0 +1,15 @@
+{
+  "apiVersion": "platform.installer/application-package/v1alpha1",
+  "files": [
+    "roles/application_opc-ua-server/defaults/main.yml",
+    "roles/application_opc-ua-server/templates/compose.yml.j2",
+    "roles/application_opc-ua-server/templates/agent.hcl.j2"
+  ],
+  "kind": "ApplicationPackage",
+  "name": "opc-ua-server",
+  "render": {
+    "agent_template": "roles/application_opc-ua-server/templates/agent.hcl.j2",
+    "compose_template": "roles/application_opc-ua-server/templates/compose.yml.j2"
+  },
+  "version": "1.0.0"
+}

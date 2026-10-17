@@ -1,0 +1,15 @@
+{
+  "apiVersion": "platform.installer/application-package/v1alpha1",
+  "files": [
+    "roles/library_sdku/defaults/main.yml",
+    "roles/library_sdku/templates/.base_compose.yml.j2"
+  ],
+  "kind": "LibraryPackage",
+  "name": "sdku",
+  "render": {
+    "base_compose_filename": ".base_compose.yml",
+    "base_compose_template": "roles/library_sdku/templates/.base_compose.yml.j2",
+    "base_service": "base"
+  },
+  "version": "1.0.0"
+}

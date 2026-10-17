@@ -1,0 +1,206 @@
+platform_library_definition:
+    connection_defaults:
+        kafka:
+            connectionRef: CLIENT_SSL
+    defaults:
+        environment:
+            KAFKA_CONSUMER_DEFAULT_API_TIMEOUT_MS: "3500"
+            KAFKA_CONSUMER_HEARTBEAT_INTERVAL_MS: "500"
+            KAFKA_CONSUMER_REQUEST_TIMEOUT_MS: "3000"
+            KAFKA_CONSUMER_SESSION_TIMEOUT_MS: "2500"
+            KAFKA_CONSUMER_SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS: "5000"
+            KAFKA_CONSUMER_SOCKET_CONNECTION_SETUP_TIMEOUT_MS: "1500"
+            KAFKA_PRODUCER_DELIVERY_TIMEOUT_MS: "20000"
+            KAFKA_PRODUCER_HEARTBEAT_INTERVAL_MS: "500"
+            KAFKA_PRODUCER_LINGER_MS: "15"
+            KAFKA_PRODUCER_MAX_BLOCK_MS: "2500"
+            KAFKA_PRODUCER_REQUEST_TIMEOUT_MS: "3000"
+            KAFKA_PRODUCER_SESSION_TIMEOUT_MS: "2500"
+            KAFKA_PRODUCER_SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS: "5000"
+            KAFKA_PRODUCER_SOCKET_CONNECTION_SETUP_TIMEOUT_MS: "1500"
+            SPRING_KAFKA_SSL_ENABLE_SSL: "false"
+            SPRING_KAFKA_SSL_KEY_STORE_LOCATION: /opt/application/pki/keystore.p12
+            SPRING_KAFKA_SSL_TRUST_STORE_LOCATION: /opt/application/pki/truststore.p12
+            SPRING_KAFKA_STREAMS_DEFAULT_API_TIMEOUT_MS: "90000000"
+            SPRING_KAFKA_STREAMS_DELIVERY_TIMEOUT_MS: "3500"
+            SPRING_KAFKA_STREAMS_HEARTBEAT_INTERVAL_MS: "500"
+            SPRING_KAFKA_STREAMS_MAX_BLOCK_MS: "2500"
+            SPRING_KAFKA_STREAMS_REQUEST_TIMEOUT_MS: "3000"
+            SPRING_KAFKA_STREAMS_SESSION_TIMEOUT_MS: "2500"
+            SPRING_KAFKA_STREAMS_SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS: "5000"
+            SPRING_KAFKA_STREAMS_SOCKET_CONNECTION_SETUP_TIMEOUT_MS: "1500"
+            TN_SCADA_METADATA_TOPIC: dm-meta
+            TN_SCADA_REDIS_CONNECTION_TYPE: Standalone
+            TN_SCADA_REDIS_SSL_PROPERTIES_KEY_STORE_LOCATION: /opt/application/pki/keystore.p12
+            TN_SCADA_REDIS_SSL_PROPERTIES_SSL: "false"
+            TN_SCADA_REDIS_SSL_PROPERTIES_TRUST_STORE_LOCATION: /opt/application/pki/truststore.p12
+            VAULT_CACERT: /opt/application/pki/ca-chain.pem
+            kafka.consumer.default.api.timeout.ms: "3500"
+            kafka.consumer.heartbeat.interval.ms: "500"
+            kafka.consumer.http.connect.timeout.ms: "1000"
+            kafka.consumer.http.read.timeout.ms: "1000"
+            kafka.consumer.max.poll.interval.ms: "10000"
+            kafka.consumer.request.timeout.ms: "3000"
+            kafka.consumer.session.timeout.ms: "2500"
+            kafka.consumer.socket.connection.setup.timeout.max.ms: "5000"
+            kafka.consumer.socket.connection.setup.timeout.ms: "1500"
+            kafka.producer.heartbeat.interval.ms: "500"
+            kafka.producer.http.connect.timeout.ms: "1000"
+            kafka.producer.http.read.timeout.ms: "1000"
+            kafka.producer.max.block.ms: "2500"
+            kafka.producer.request.timeout.ms: "3000"
+            kafka.producer.session.timeout.ms: "2500"
+            kafka.producer.socket.connection.setup.timeout.max.ms: "5000"
+            kafka.producer.socket.connection.setup.timeout.ms: "1500"
+        parameters: {}
+    name: sdku
+    shared_secrets:
+        clickhouse_scada_password:
+            source:
+                kind: runtime_secret_ref
+                ref: clickhouse_scada_password
+        clickhouse_scada_username:
+            source:
+                kind: runtime_secret_ref
+                ref: clickhouse_scada_username
+        ef_backend_db_password:
+            source:
+                kind: runtime_secret_ref
+                ref: ef_backend_db_password
+        ef_backend_db_username:
+            source:
+                kind: runtime_secret_ref
+                ref: ef_backend_db_username
+        java_keystore_password:
+            source:
+                binding: application-pki
+                credential: java_keystore_password
+                kind: pki_credential
+        opc_ua_server_db_password:
+            source:
+                kind: runtime_secret_ref
+                ref: opc_ua_server_db_password
+        opc_ua_server_db_username:
+            source:
+                kind: runtime_secret_ref
+                ref: opc_ua_server_db_username
+        postgres_scada_password:
+            source:
+                kind: runtime_secret_ref
+                ref: postgres_scada_password
+        postgres_scada_user:
+            source:
+                kind: runtime_secret_ref
+                ref: postgres_scada_user
+        postgres_userpreferences_password:
+            source:
+                kind: runtime_secret_ref
+                ref: postgres_userpreferences_password
+        postgres_userpreferences_user:
+            source:
+                kind: runtime_secret_ref
+                ref: postgres_userpreferences_user
+        redis_password:
+            source:
+                kind: runtime_secret_ref
+                ref: redis_password
+        redis_sentinel_password:
+            source:
+                kind: runtime_secret_ref
+                ref: redis_sentinel_password
+        redis_sentinel_username:
+            source:
+                kind: runtime_secret_ref
+                ref: redis_sentinel_username
+        redis_username:
+            source:
+                kind: runtime_secret_ref
+                ref: redis_username
+    slots:
+        alarm-service:
+            applicationRef: alarm-service@1.0.0
+            required: false
+        alarm-view-service:
+            applicationRef: alarm-view-service@1.0.0
+            required: false
+        data-manager:
+            applicationRef: data-manager@1.0.0
+            required: false
+        ef-backend:
+            applicationRef: ef-backend@1.0.0
+            required: false
+        evo-manager:
+            applicationRef: evo-manager@1.0.0
+            required: false
+        evo-scheduler:
+            applicationRef: evo-scheduler@1.0.0
+            required: false
+        ham-backend:
+            applicationRef: ham-backend@1.0.0
+            required: false
+        hmi-backend:
+            applicationRef: hmi-backend@1.0.0
+            required: false
+        hmi-frontend-alarms:
+            applicationRef: hmi-frontend-alarms@1.0.0
+            inherit_defaults: false
+            required: false
+        hmi-frontend-para:
+            applicationRef: hmi-frontend-para@1.0.0
+            inherit_defaults: false
+            required: false
+        hmi-frontend-svg-editor:
+            applicationRef: hmi-frontend-svg-editor@1.0.0
+            inherit_defaults: false
+            required: false
+        hmi-frontend-trends:
+            applicationRef: hmi-frontend-trends@1.0.0
+            inherit_defaults: false
+            required: false
+        hmi-frontend-viewer:
+            applicationRef: hmi-frontend-viewer@1.0.0
+            inherit_defaults: false
+            required: false
+        hmi-frontend-viewer-noszi:
+            applicationRef: hmi-frontend-viewer-noszi@1.0.0
+            inherit_defaults: false
+            required: false
+        iec60870:
+            applicationRef: iec60870@1.0.0
+            required: false
+        kafka-ch-replicator:
+            applicationRef: kafka-ch-replicator@1.0.0
+            required: false
+        kafka-history-writer:
+            applicationRef: kafka-history-writer@1.0.0
+            required: false
+        opc-ua-server:
+            applicationRef: opc-ua-server@1.0.0
+            required: false
+        sdku-knp:
+            applicationRef: sdku-knp@1.0.0
+            required: false
+        sdku-knp-ui:
+            applicationRef: sdku-knp-ui@1.0.0
+            inherit_defaults: false
+            required: false
+        sdku-status-calculation:
+            applicationRef: sdku-status-calculation@1.0.0
+            required: false
+        sdku-tank-farm:
+            applicationRef: sdku-tank-farm@1.0.0
+            required: false
+        sdku-telemechanics:
+            applicationRef: sdku-telemechanics@1.0.0
+            required: false
+        sdku-vtor:
+            applicationRef: sdku-vtor@1.0.0
+            required: false
+        sdku-vtor-ui:
+            applicationRef: sdku-vtor-ui@1.0.0
+            inherit_defaults: false
+            required: false
+        user-preferences:
+            applicationRef: user-preferences@1.0.0
+            required: false
+    version: 1.0.0

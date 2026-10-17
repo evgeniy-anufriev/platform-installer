@@ -46,6 +46,7 @@ describe("account database access", () => {
       "main",
     );
     await userEvent.click(screen.getByLabelText("SELECT"));
+    await userEvent.click(screen.getByLabelText("CREATE"));
     await userEvent.click(screen.getByText("Создатели будущих объектов"));
     await userEvent.type(
       screen.getByLabelText("Роли миграций"),
@@ -56,7 +57,7 @@ describe("account database access", () => {
       databaseAccess: [
         {
           databaseRef: "main",
-          privileges: ["SELECT"],
+          privileges: ["CREATE", "SELECT"],
           additionalCreatorRoles: ["app_migrator"],
         },
       ],
@@ -135,6 +136,7 @@ describe("account database access", () => {
     );
     await userEvent.click(screen.getByLabelText("SELECT"));
     expect(screen.queryByLabelText("UPDATE")).toBeNull();
+    expect(screen.queryByLabelText("CREATE")).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "В черновик" }));
     expect(screen.getByLabelText("База данных доступа")).toBeTruthy();
     expect(dirty).toHaveBeenLastCalledWith(true);
@@ -149,13 +151,34 @@ describe("account database access", () => {
         onDirtyChange={vi.fn()}
       />,
     );
-    await userEvent.type(screen.getByLabelText("ACL commands"), ", set");
+    await userEvent.clear(screen.getByLabelText("ACL commands"));
+    await userEvent.type(screen.getByLabelText("ACL commands"), "+@all, -@admin, +@all");
     await userEvent.type(screen.getByLabelText("ACL channels"), "events:*");
     await userEvent.click(screen.getByRole("button", { name: "В черновик" }));
     expect(save).toHaveBeenCalledWith({
-      commands: ["get", "set"],
+      commands: ["+@all", "-@admin", "+@all"],
       keys: ["app:*"],
       channels: ["events:*"],
+    });
+  });
+  it("edits operator-selected Sentinel commands and channel patterns", async () => {
+    const save = vi.fn().mockResolvedValue(true);
+    render(
+      <ApplicationRedisAccess
+        sentinel
+        value={{ commands: ["sentinel|master"] }}
+        disabled={false}
+        onSave={save}
+        onDirtyChange={vi.fn()}
+      />,
+    );
+    await userEvent.type(screen.getByLabelText("ACL commands"), ", sentinel|set");
+    await userEvent.type(screen.getByLabelText("ACL channels"), "+switch-master");
+    await userEvent.click(screen.getByRole("button", { name: "В черновик" }));
+    expect(save).toHaveBeenCalledWith({
+      commands: ["sentinel|master", "sentinel|set"],
+      keys: [],
+      channels: ["+switch-master"],
     });
   });
 });

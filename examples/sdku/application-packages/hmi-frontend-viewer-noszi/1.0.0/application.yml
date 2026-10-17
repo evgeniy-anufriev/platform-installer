@@ -1,0 +1,13 @@
+{
+  "apiVersion": "platform.installer/application-package/v1alpha1",
+  "files": [
+    "roles/application_hmi-frontend-viewer-noszi/defaults/main.yml",
+    "roles/application_hmi-frontend-viewer-noszi/templates/compose.yml.j2"
+  ],
+  "kind": "ApplicationPackage",
+  "name": "hmi-frontend-viewer-noszi",
+  "render": {
+    "compose_template": "roles/application_hmi-frontend-viewer-noszi/templates/compose.yml.j2"
+  },
+  "version": "1.0.0"
+}

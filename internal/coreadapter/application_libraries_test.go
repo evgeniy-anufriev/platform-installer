@@ -18,6 +18,18 @@ func TestApplicationSnapshotTypedProjection(t *testing.T) {
 	}
 }
 
+func TestApplicationSnapshotPreservesScalarEnvironment(t *testing.T) {
+	data := strings.Replace(applicationSnapshot, `"SERVER_ID":"node1"`, `"environment":{"TEXT":"001","COUNT":2000,"ENABLED":false},"SERVER_ID":"node1"`, 1)
+	s, err := DecodeSnapshot([]byte(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	env := s.ApplicationLibraries.Libraries["sdku"].Instances["gateway-sdku"].Placements["node1"].Environment
+	if env["TEXT"] != "001" || env["COUNT"] != float64(2000) || env["ENABLED"] != false {
+		t.Fatalf("environment scalar types changed: %v", env)
+	}
+}
+
 func TestApplicationSnapshotRejectsUnsupportedAndInvalidIdentity(t *testing.T) {
 	for _, data := range []string{
 		strings.Replace(applicationSnapshot, "project-snapshot/v2alpha1", "project-snapshot/v99", 1),

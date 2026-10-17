@@ -11,7 +11,7 @@ except ImportError:
     from artifact_authority import assemble_authority
 
 DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
-REFERENCE = re.compile(r"^[a-z0-9][a-z0-9._:/-]*(?:@sha256:[0-9a-f]{64})?$")
+REFERENCE = re.compile(r"^[a-z0-9][a-z0-9._:/-]*(?::[A-Za-z0-9_][A-Za-z0-9_.-]*)?(?:@sha256:[0-9a-f]{64})?$")
 LABEL = "platform.installer.config-digest"
 
 
