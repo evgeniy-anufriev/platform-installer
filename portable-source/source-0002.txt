@@ -1,3 +1,917 @@
+@@PORTABLE {"path":"internal/installer/project_export.go","mode":420,"size":19676,"sha256":"53ba8aabaa3a54ec046783fba40ac6f1b98416375dcf372987cb7876b4eb8edd","index":0,"count":1,"encoding":"utf-8","payloadBytes":19676}
+package installer
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
+	"path"
+	"path/filepath"
+	"sort"
+	"strconv"
+	"strings"
+)
+
+const (
+	projectExportAPIVersion   = "platform.installer/project-export/v1alpha1"
+	maxExportFiles            = 4096
+	maxExportDirectoryEntries = maxExportFiles
+	maxExportFileBytes        = int64(4 * 1024 * 1024)
+	maxExportTotalBytes       = int64(64 * 1024 * 1024)
+	maxExportLogicalBytes     = 512
+)
+
+// ProjectExportDocument is bounded metadata for one portable desired-state
+// document. Content is intentionally never returned across the App/Wails seam.
+type ProjectExportDocument struct {
+	LogicalPath string `json:"logicalPath"`
+	Size        int64  `json:"size"`
+	Digest      string `json:"digest"`
+}
+
+// ProjectExportPlan is an in-memory capability summary, not portable desired
+// state and not a public/versioned project contract.
+type ProjectExportPlan struct {
+	APIVersion            string                  `json:"apiVersion"`
+	Kind                  string                  `json:"kind"`
+	SourceProjectRoot     string                  `json:"sourceProjectRoot"`
+	SourceProjectRevision string                  `json:"sourceProjectRevision"`
+	DestinationParent     string                  `json:"destinationParent"`
+	DirectoryName         string                  `json:"directoryName"`
+	DestinationRoot       string                  `json:"destinationRoot"`
+	Documents             []ProjectExportDocument `json:"documents"`
+	AggregateSize         int64                   `json:"aggregateSize"`
+	ExcludedCategories    []string                `json:"excludedCategories"`
+	PlanDigest            string                  `json:"planDigest"`
+}
+
+type ProjectExportResult struct {
+	APIVersion            string `json:"apiVersion"`
+	Kind                  string `json:"kind"`
+	Status                string `json:"status"`
+	DestinationRoot       string `json:"destinationRoot,omitempty"`
+	SourceProjectRevision string `json:"sourceProjectRevision,omitempty"`
+	DocumentCount         int    `json:"documentCount"`
+	AggregateSize         int64  `json:"aggregateSize"`
+	ErrorCode             string `json:"errorCode,omitempty"`
+}
+
+// ProjectExport retains the two opened filesystem authorities for one preview
+// and exactly one commit attempt. It must be closed when the App invalidates
+// the preview or shuts down.
+type ProjectExport struct {
+	source           *exportDirectory
+	destination      *exportDirectory
+	sourceIdentity   exportIdentity
+	destIdentity     exportIdentity
+	sourceDisplay    string
+	destDisplay      string
+	directoryName    string
+	plan             ProjectExportPlan
+	manifest         exportObservation
+	writeObservation func(*exportDirectory, exportObservation) error
+	closed           bool
+}
+
+func PlanProjectExport(sourceRoot, destinationParent, directoryName string) (*ProjectExport, ProjectExportPlan, error) {
+	name, err := ValidateExportDirectoryName(directoryName)
+	if err != nil {
+		return nil, ProjectExportPlan{}, err
+	}
+	sourceDisplay, err := absoluteExportDisplayPath(sourceRoot)
+	if err != nil {
+		return nil, ProjectExportPlan{}, errors.New("EXPORT_SOURCE_UNSAFE")
+	}
+	destDisplay, err := absoluteExportDisplayPath(destinationParent)
+	if err != nil {
+		return nil, ProjectExportPlan{}, errors.New("EXPORT_DESTINATION_INVALID")
+	}
+	if rootsOverlap(sourceDisplay, filepath.Join(destDisplay, name)) {
+		return nil, ProjectExportPlan{}, errors.New("EXPORT_DESTINATION_INVALID")
+	}
+	source, err := openExportSourceDirectory(sourceDisplay)
+	if err != nil {
+		return nil, ProjectExportPlan{}, errors.New("EXPORT_SOURCE_UNSAFE")
+	}
+	destination, err := openExportDestinationDirectory(destDisplay)
+	if err != nil {
+		source.close()
+		return nil, ProjectExportPlan{}, errors.New("EXPORT_DESTINATION_UNSAFE")
+	}
+	capability := &ProjectExport{source: source, destination: destination, sourceIdentity: source.identity(), destIdentity: destination.identity(), sourceDisplay: sourceDisplay, destDisplay: destDisplay, directoryName: name}
+	observation, err := stableExportObservation(source)
+	if err != nil {
+		capability.Close()
+		return nil, ProjectExportPlan{}, errors.New(exportErrorCode(err, "EXPORT_SOURCE_UNSAFE"))
+	}
+	if exists, existErr := destination.exists(name); existErr != nil || exists {
+		capability.Close()
+		if existErr != nil {
+			return nil, ProjectExportPlan{}, errors.New("EXPORT_DESTINATION_UNSAFE")
+		}
+		return nil, ProjectExportPlan{}, errors.New("EXPORT_DESTINATION_EXISTS")
+	}
+	output, err := namedExportObservation(observation, name)
+	if err != nil {
+		capability.Close()
+		return nil, ProjectExportPlan{}, err
+	}
+	plan := projectExportPlan(sourceDisplay, destDisplay, name, capability.sourceIdentity, capability.destIdentity, output, observation.revision)
+	// The capability retains only integrity metadata between preview and
+	// commit. Exact bytes are re-read through the held source authority during
+	// Commit, after the source has been proven unchanged.
+	capability.plan, capability.manifest = plan, exportObservationMetadata(observation)
+	return capability, cloneProjectExportPlan(plan), nil
+}
+
+func (export *ProjectExport) Plan() ProjectExportPlan { return cloneProjectExportPlan(export.plan) }
+
+func (export *ProjectExport) Close() {
+	if export == nil || export.closed {
+		return
+	}
+	export.closed = true
+	if export.source != nil {
+		export.source.close()
+	}
+	if export.destination != nil {
+		export.destination.close()
+	}
+}
+
+func (export *ProjectExport) Commit(planDigest string) (result ProjectExportResult) {
+	result = ProjectExportResult{APIVersion: projectExportAPIVersion, Kind: "ProjectExportResult", Status: "FAILED", ErrorCode: "EXPORT_PLAN_STALE"}
+	if export == nil || export.closed || planDigest == "" || planDigest != export.plan.PlanDigest {
+		return result
+	}
+	defer export.Close()
+	if export.source.identity() != export.sourceIdentity || export.destination.identity() != export.destIdentity {
+		result.ErrorCode = "PROJECT_CHANGED"
+		return result
+	}
+	observation, err := stableExportObservation(export.source)
+	if err != nil {
+		result.ErrorCode = exportErrorCode(err, "PROJECT_CHANGED")
+		return result
+	}
+	if !sameExportObservation(observation, export.manifest) {
+		result.ErrorCode = "EXPORT_PLAN_STALE"
+		return result
+	}
+	output, err := namedExportObservation(observation, export.directoryName)
+	if err != nil {
+		result.ErrorCode = exportErrorCode(err, "EXPORT_SOURCE_UNSAFE")
+		return result
+	}
+	if exists, existErr := export.destination.exists(export.directoryName); existErr != nil || exists {
+		if existErr != nil {
+			result.ErrorCode = "EXPORT_DESTINATION_UNSAFE"
+		} else {
+			result.ErrorCode = "EXPORT_DESTINATION_EXISTS"
+		}
+		return result
+	}
+	staging, stagingName, err := export.destination.createStaging(export.directoryName)
+	if err != nil {
+		result.ErrorCode = "EXPORT_WRITE_FAILED"
+		return result
+	}
+	published := false
+	defer func() {
+		if !published {
+			if cleanupErr := export.destination.removeOwnedTree(staging, stagingName); cleanupErr != nil {
+				result.ErrorCode = exportErrorCode(cleanupErr, "EXPORT_STAGING_RETAINED")
+			}
+		}
+		staging.close()
+	}()
+	write := writeExportObservation
+	if export.writeObservation != nil {
+		write = export.writeObservation
+	}
+	if err := write(staging, output); err != nil {
+		result.ErrorCode = exportErrorCode(err, "EXPORT_WRITE_FAILED")
+		return result
+	}
+	if err := verifyExportObservation(staging, output); err != nil {
+		result.ErrorCode = "EXPORT_WRITE_FAILED"
+		return result
+	}
+	finalObservation, err := stableExportObservation(export.source)
+	if err != nil || !sameExportObservation(finalObservation, export.manifest) || export.source.identity() != export.sourceIdentity {
+		result.ErrorCode = "PROJECT_CHANGED"
+		return result
+	}
+	if exists, existErr := export.destination.exists(export.directoryName); existErr != nil || exists {
+		if existErr != nil {
+			result.ErrorCode = "EXPORT_DESTINATION_UNSAFE"
+		} else {
+			result.ErrorCode = "EXPORT_DESTINATION_EXISTS"
+		}
+		return result
+	}
+	if err := export.destination.publish(staging, stagingName, export.directoryName); err != nil {
+		result.ErrorCode = "EXPORT_PUBLISH_FAILED"
+		return result
+	}
+	published = true
+	return ProjectExportResult{APIVersion: projectExportAPIVersion, Kind: "ProjectExportResult", Status: "EXPORTED", DestinationRoot: filepath.Join(export.destDisplay, export.directoryName), SourceProjectRevision: observation.revision, DocumentCount: len(output.documents), AggregateSize: output.total}
+}
+
+type exportRecord struct {
+	ProjectExportDocument
+	identity exportFileIdentity
+	content  []byte
+}
+
+type exportObservation struct {
+	documents []exportRecord
+	revision  string
+	total     int64
+}
+
+func exportObservationMetadata(observation exportObservation) exportObservation {
+	metadata := exportObservation{
+		documents: make([]exportRecord, len(observation.documents)),
+		revision:  observation.revision,
+		total:     observation.total,
+	}
+	for index, record := range observation.documents {
+		metadata.documents[index] = exportRecord{
+			ProjectExportDocument: record.ProjectExportDocument,
+			identity:              record.identity,
+		}
+	}
+	return metadata
+}
+
+func stableExportObservation(root *exportDirectory) (exportObservation, error) {
+	first, err := observeExportProject(root)
+	if err != nil {
+		return exportObservation{}, err
+	}
+	second, err := observeExportProject(root)
+	if err != nil {
+		return exportObservation{}, err
+	}
+	if !sameExportObservation(first, second) {
+		return exportObservation{}, errors.New("PROJECT_CHANGED")
+	}
+	return second, nil
+}
+
+func observeExportProject(root *exportDirectory) (exportObservation, error) {
+	if root == nil || root.identity().empty() {
+		return exportObservation{}, errors.New("EXPORT_SOURCE_UNSAFE")
+	}
+	result := exportObservation{}
+	seen := map[string]bool{}
+	caseFolded := map[string]bool{}
+	for _, logical := range []string{"project.yml", "ansible.cfg", "inventory/hosts.yml"} {
+		if err := addExportDocument(root, logical, &result, seen, caseFolded); err != nil {
+			if isExportNotExist(err) {
+				continue
+			}
+			return exportObservation{}, err
+		}
+	}
+	for _, logical := range []string{"inventory/group_vars", "inventory/host_vars", "application-packages", "library-packages"} {
+		directory, err := root.openDirectory(strings.Split(logical, "/"))
+		if isExportNotExist(err) {
+			continue
+		}
+		if err != nil {
+			return exportObservation{}, errors.New("EXPORT_SOURCE_UNSAFE")
+		}
+		err = collectExportDirectory(directory, logical, &result, seen, caseFolded)
+		directory.close()
+		if err != nil {
+			return exportObservation{}, err
+		}
+	}
+	if err := validateExportPackages(result.documents); err != nil {
+		return exportObservation{}, err
+	}
+	sort.Slice(result.documents, func(left, right int) bool {
+		return result.documents[left].LogicalPath < result.documents[right].LogicalPath
+	})
+	result.revision = exportContentRevision(result.documents)
+	return result, nil
+}
+
+func exportContentRevision(documents []exportRecord) string {
+	var revisionInput []byte
+	for _, document := range documents {
+		if document.LogicalPath == generatedDocument {
+			continue
+		}
+		revisionInput = append(revisionInput, []byte(document.LogicalPath)...)
+		revisionInput = append(revisionInput, 0)
+		revisionInput = append(revisionInput, []byte(document.Digest)...)
+		revisionInput = append(revisionInput, 0)
+	}
+	return digestBytes(revisionInput)
+}
+
+func collectExportDirectory(directory *exportDirectory, prefix string, result *exportObservation, seen, caseFolded map[string]bool) error {
+	entries, err := directory.entries()
+	if err != nil {
+		return errors.New("EXPORT_SOURCE_UNSAFE")
+	}
+	for _, entry := range entries {
+		logical := prefix + "/" + entry.name
+		if !safeExportLogicalPath(logical) {
+			return errors.New("EXPORT_SOURCE_UNSAFE")
+		}
+		switch entry.kind {
+		case exportEntryDirectory:
+			child, openErr := directory.openDirectory([]string{entry.name})
+			if openErr != nil {
+				return errors.New("EXPORT_SOURCE_UNSAFE")
+			}
+			recurseErr := collectExportDirectory(child, logical, result, seen, caseFolded)
+			child.close()
+			if recurseErr != nil {
+				return recurseErr
+			}
+		case exportEntryRegular:
+			if logical == generatedDocument {
+				continue
+			}
+			extension := strings.ToLower(path.Ext(entry.name))
+			if strings.HasPrefix(logical, "application-packages/") || strings.HasPrefix(logical, "library-packages/") || extension == ".yml" || extension == ".yaml" || extension == ".json" {
+				if strings.HasPrefix(logical, "application-packages/") || strings.HasPrefix(logical, "library-packages/") {
+					if !safeApplicationPackagePath(logical) {
+						return errors.New("APPLICATION_PACKAGE_PATH_INVALID")
+					}
+				}
+				if err := addExportDocument(directory, entry.name, result, seen, caseFolded, logical); err != nil {
+					return err
+				}
+			}
+		default:
+			return errors.New("EXPORT_SOURCE_UNSAFE")
+		}
+	}
+	return nil
+}
+
+func addExportDocument(root *exportDirectory, logical string, result *exportObservation, seen, caseFolded map[string]bool, explicit ...string) error {
+	parts := strings.Split(logical, "/")
+	storedLogical := logical
+	if len(explicit) == 1 {
+		storedLogical = explicit[0]
+	}
+	if !safeExportLogicalPath(storedLogical) {
+		return errors.New("EXPORT_SOURCE_UNSAFE")
+	}
+	if seen[storedLogical] || caseFolded[strings.ToLower(storedLogical)] {
+		return errors.New("EXPORT_SOURCE_UNSAFE")
+	}
+	content, identity, err := root.readFile(parts, maxExportFileBytes)
+	if err != nil {
+		return err
+	}
+	if len(result.documents) >= maxExportFiles || result.total > maxExportTotalBytes-int64(len(content)) {
+		return errors.New("EXPORT_LIMIT_EXCEEDED")
+	}
+	seen[storedLogical], caseFolded[strings.ToLower(storedLogical)] = true, true
+	record := exportRecord{ProjectExportDocument: ProjectExportDocument{LogicalPath: storedLogical, Size: int64(len(content)), Digest: digestBytes(content)}, identity: identity, content: content}
+	result.documents = append(result.documents, record)
+	result.total += int64(len(content))
+	return nil
+}
+
+func safeExportLogicalPath(logical string) bool {
+	if logical == "" || len([]byte(logical)) > maxExportLogicalBytes || strings.Contains(logical, "\\") || path.Clean(logical) != logical || strings.HasPrefix(logical, "/") {
+		return false
+	}
+	for _, part := range strings.Split(logical, "/") {
+		if part == "" || part == "." || part == ".." {
+			return false
+		}
+	}
+	return true
+}
+
+func sameExportObservation(left, right exportObservation) bool {
+	if left.revision != right.revision || left.total != right.total || len(left.documents) != len(right.documents) {
+		return false
+	}
+	for index := range left.documents {
+		leftDocument, rightDocument := left.documents[index], right.documents[index]
+		if leftDocument.LogicalPath != rightDocument.LogicalPath || leftDocument.Size != rightDocument.Size || leftDocument.Digest != rightDocument.Digest || leftDocument.identity != rightDocument.identity {
+			return false
+		}
+	}
+	return true
+}
+
+func sameExportContentObservation(left, right exportObservation) bool {
+	if left.revision != right.revision || left.total != right.total || len(left.documents) != len(right.documents) {
+		return false
+	}
+	for index := range left.documents {
+		leftDocument, rightDocument := left.documents[index], right.documents[index]
+		if leftDocument.LogicalPath != rightDocument.LogicalPath || leftDocument.Size != rightDocument.Size || leftDocument.Digest != rightDocument.Digest {
+			return false
+		}
+	}
+	return true
+}
+
+func projectExportPlan(sourceRoot, destinationParent, name string, sourceIdentity, destinationIdentity exportIdentity, observation exportObservation, sourceRevision string) ProjectExportPlan {
+	documents := make([]ProjectExportDocument, len(observation.documents))
+	for index, document := range observation.documents {
+		documents[index] = document.ProjectExportDocument
+	}
+	plan := ProjectExportPlan{APIVersion: projectExportAPIVersion, Kind: "ProjectExportPlan", SourceProjectRoot: sourceRoot, SourceProjectRevision: sourceRevision, DestinationParent: destinationParent, DirectoryName: name, DestinationRoot: filepath.Join(destinationParent, name), Documents: documents, AggregateSize: observation.total, ExcludedCategories: []string{"DRAFT", "RUNTIME_CREDENTIALS", "GENERATED_STATE", "RUNTIME_STATE", "PLANS", "FACTS", "LOGS", "RESULTS", "VERIFICATION_EVIDENCE"}}
+	input := []byte(plan.APIVersion + "\x00" + sourceIdentity.String() + "\x00" + destinationIdentity.String() + "\x00" + plan.SourceProjectRevision + "\x00" + plan.DestinationRoot + "\x00")
+	for _, document := range documents {
+		input = append(input, []byte(document.LogicalPath)...)
+		input = append(input, 0)
+		input = append(input, []byte(document.Digest)...)
+		input = append(input, 0)
+		input = append(input, []byte(strconv.FormatInt(document.Size, 10))...)
+		input = append(input, 0)
+	}
+	sum := sha256.Sum256(input)
+	plan.PlanDigest = "sha256:" + hex.EncodeToString(sum[:])
+	return plan
+}
+
+func cloneProjectExportPlan(plan ProjectExportPlan) ProjectExportPlan {
+	plan.Documents = append([]ProjectExportDocument(nil), plan.Documents...)
+	plan.ExcludedCategories = append([]string(nil), plan.ExcludedCategories...)
+	return plan
+}
+
+func absoluteExportDisplayPath(value string) (string, error) {
+	if value == "" {
+		return "", errors.New("invalid path")
+	}
+	absolute, err := filepath.Abs(value)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Clean(absolute), nil
+}
+
+func rootsOverlap(left, right string) bool {
+	leftToRight, leftErr := filepath.Rel(left, right)
+	rightToLeft, rightErr := filepath.Rel(right, left)
+	leftContainsRight := leftErr == nil && (leftToRight == "." || (leftToRight != ".." && !strings.HasPrefix(leftToRight, ".."+string(filepath.Separator))))
+	rightContainsLeft := rightErr == nil && (rightToLeft == "." || (rightToLeft != ".." && !strings.HasPrefix(rightToLeft, ".."+string(filepath.Separator))))
+	return leftContainsRight || rightContainsLeft
+}
+
+func writeExportObservation(staging *exportDirectory, observation exportObservation) error {
+	created := map[string]*exportDirectory{"": staging}
+	defer func() {
+		for logical, directory := range created {
+			if logical != "" {
+				directory.close()
+			}
+		}
+	}()
+	for _, document := range observation.documents {
+		parent := path.Dir(document.LogicalPath)
+		directory, err := ensureExportDirectory(staging, parent, created)
+		if err != nil {
+			return err
+		}
+		if err := directory.writeFile(path.Base(document.LogicalPath), document.content); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func ensureExportDirectory(root *exportDirectory, logical string, created map[string]*exportDirectory) (*exportDirectory, error) {
+	if logical == "." || logical == "" {
+		return root, nil
+	}
+	current, currentLogical := root, ""
+	for _, part := range strings.Split(logical, "/") {
+		if currentLogical == "" {
+			currentLogical = part
+		} else {
+			currentLogical += "/" + part
+		}
+		if known, ok := created[currentLogical]; ok {
+			current = known
+			continue
+		}
+		next, err := current.createDirectory(part)
+		if err != nil {
+			return nil, err
+		}
+		created[currentLogical], current = next, next
+	}
+	return current, nil
+}
+
+func verifyExportObservation(staging *exportDirectory, expected exportObservation) error {
+	actual, err := observeExportProject(staging)
+	if err != nil || !sameExportContentObservation(actual, expected) {
+		return errors.New("EXPORT_WRITE_FAILED")
+	}
+	return nil
+}
+
+func exportErrorCode(err error, fallback string) string {
+	if err == nil {
+		return fallback
+	}
+	for _, code := range []string{"PROJECT_CHANGED", "EXPORT_LIMIT_EXCEEDED", "EXPORT_SOURCE_UNSAFE", "EXPORT_DESTINATION_UNSAFE", "EXPORT_WRITE_FAILED", "EXPORT_STAGING_RETAINED"} {
+		if err.Error() == code {
+			return code
+		}
+	}
+	return fallback
+}
+
+@@END
+@@PORTABLE {"path":"internal/installer/project_export_other.go","mode":420,"size":1998,"sha256":"0d6df1155578328acdc61ddae29368e25b02be2591f97d23cbf3041a44ef55e9","index":0,"count":1,"encoding":"utf-8","payloadBytes":1998}
+//go:build !windows && !linux
+
+package installer
+
+import "errors"
+
+type exportIdentity struct{}
+
+func (exportIdentity) empty() bool    { return true }
+func (exportIdentity) String() string { return "" }
+
+type exportFileIdentity struct{}
+type exportDirectory struct{}
+type exportEntryKind uint8
+
+const (
+	exportEntryDirectory exportEntryKind = iota + 1
+	exportEntryRegular
+)
+
+type exportEntry struct {
+	name string
+	kind exportEntryKind
+}
+
+func openExportSourceDirectory(string) (*exportDirectory, error) {
+	return nil, errors.New("EXPORT_SOURCE_UNSAFE")
+}
+func openExportDestinationDirectory(string) (*exportDirectory, error) {
+	return nil, errors.New("EXPORT_DESTINATION_UNSAFE")
+}
+func (directory *exportDirectory) close()                   {}
+func (directory *exportDirectory) identity() exportIdentity { return exportIdentity{} }
+func (directory *exportDirectory) openDirectory([]string) (*exportDirectory, error) {
+	return nil, errors.New("unsupported")
+}
+func (directory *exportDirectory) entries() ([]exportEntry, error) {
+	return nil, errors.New("unsupported")
+}
+func (directory *exportDirectory) readFile([]string, int64) ([]byte, exportFileIdentity, error) {
+	return nil, exportFileIdentity{}, errors.New("unsupported")
+}
+func (directory *exportDirectory) exists(string) (bool, error) {
+	return false, errors.New("unsupported")
+}
+func (directory *exportDirectory) createStaging(string) (*exportDirectory, string, error) {
+	return nil, "", errors.New("unsupported")
+}
+func (directory *exportDirectory) createDirectory(string) (*exportDirectory, error) {
+	return nil, errors.New("unsupported")
+}
+func (directory *exportDirectory) writeFile(string, []byte) error { return errors.New("unsupported") }
+func (directory *exportDirectory) publish(*exportDirectory, string, string) error {
+	return errors.New("unsupported")
+}
+func (directory *exportDirectory) removeOwnedTree(*exportDirectory, string) error {
+	return errors.New("unsupported")
+}
+func isExportNotExist(error) bool { return false }
+
+@@END
+@@PORTABLE {"path":"internal/installer/project_export_unix.go","mode":420,"size":9965,"sha256":"fb38db635788dfbff693df8f7755f319770a1783004d4f34fe4006b400ef896f","index":0,"count":1,"encoding":"utf-8","payloadBytes":9965}
+//go:build linux
+
+package installer
+
+import (
+	"crypto/rand"
+	"encoding/hex"
+	"errors"
+	"io"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+
+	"golang.org/x/sys/unix"
+)
+
+type exportIdentity struct {
+	device uint64
+	inode  uint64
+}
+
+func (identity exportIdentity) empty() bool { return identity.device == 0 && identity.inode == 0 }
+func (identity exportIdentity) String() string {
+	return hex.EncodeToString([]byte{byte(identity.device), byte(identity.device >> 8), byte(identity.device >> 16), byte(identity.device >> 24), byte(identity.device >> 32), byte(identity.device >> 40), byte(identity.device >> 48), byte(identity.device >> 56), byte(identity.inode), byte(identity.inode >> 8), byte(identity.inode >> 16), byte(identity.inode >> 24), byte(identity.inode >> 32), byte(identity.inode >> 40), byte(identity.inode >> 48), byte(identity.inode >> 56)})
+}
+
+type exportFileIdentity struct {
+	exportIdentity
+	links uint64
+}
+
+type exportDirectory struct{ fd int }
+
+type exportEntryKind uint8
+
+const (
+	exportEntryDirectory exportEntryKind = iota + 1
+	exportEntryRegular
+)
+
+type exportEntry struct {
+	name string
+	kind exportEntryKind
+}
+
+func openExportSourceDirectory(root string) (*exportDirectory, error) {
+	return openExportUnixRoot(root)
+}
+func openExportDestinationDirectory(root string) (*exportDirectory, error) {
+	return openExportUnixRoot(root)
+}
+
+func openExportUnixRoot(root string) (*exportDirectory, error) {
+	if !filepath.IsAbs(root) {
+		return nil, errors.New("unsafe export root")
+	}
+	fd, err := unix.Open("/", unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+	if err != nil {
+		return nil, err
+	}
+	directory := &exportDirectory{fd: fd}
+	if err := directory.verify(); err != nil {
+		directory.close()
+		return nil, err
+	}
+	relative := strings.TrimPrefix(filepath.Clean(root), string(filepath.Separator))
+	if relative == "" {
+		directory.close()
+		return nil, errors.New("unsafe export root")
+	}
+	opened, err := directory.openDirectory(strings.Split(relative, string(filepath.Separator)))
+	directory.close()
+	return opened, err
+}
+
+func (directory *exportDirectory) close() {
+	if directory != nil && directory.fd >= 0 {
+		_ = unix.Close(directory.fd)
+		directory.fd = -1
+	}
+}
+
+func (directory *exportDirectory) verify() error {
+	var stat unix.Stat_t
+	if directory == nil || directory.fd < 0 || unix.Fstat(directory.fd, &stat) != nil || stat.Mode&unix.S_IFMT != unix.S_IFDIR {
+		return errors.New("unsafe export directory")
+	}
+	return nil
+}
+
+func (directory *exportDirectory) identity() exportIdentity {
+	var stat unix.Stat_t
+	if directory == nil || directory.fd < 0 || unix.Fstat(directory.fd, &stat) != nil {
+		return exportIdentity{}
+	}
+	return exportIdentity{device: uint64(stat.Dev), inode: stat.Ino}
+}
+
+func (directory *exportDirectory) openDirectory(parts []string) (*exportDirectory, error) {
+	if directory == nil || directory.fd < 0 {
+		return nil, errors.New("unsafe export directory")
+	}
+	current, owned := directory.fd, false
+	for _, part := range parts {
+		next, err := unix.Openat(current, part, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+		if err != nil {
+			if owned {
+				_ = unix.Close(current)
+			}
+			return nil, exportUnixNotExist(err)
+		}
+		if owned {
+			_ = unix.Close(current)
+		}
+		current, owned = next, true
+	}
+	if !owned {
+		return nil, errors.New("unsafe export directory")
+	}
+	child := &exportDirectory{fd: current}
+	if err := child.verify(); err != nil {
+		child.close()
+		return nil, err
+	}
+	return child, nil
+}
+
+func (directory *exportDirectory) entries() ([]exportEntry, error) {
+	duplicate, err := unix.Dup(directory.fd)
+	if err != nil {
+		return nil, err
+	}
+	file := os.NewFile(uintptr(duplicate), "export-directory")
+	if file == nil {
+		_ = unix.Close(duplicate)
+		return nil, errors.New("unsafe export directory")
+	}
+	entries, err := file.ReadDir(maxExportDirectoryEntries + 1)
+	closeErr := file.Close()
+	if (err != nil && !errors.Is(err, io.EOF)) || closeErr != nil || len(entries) > maxExportDirectoryEntries {
+		return nil, errors.New("unsafe export directory")
+	}
+	result := make([]exportEntry, 0, len(entries))
+	for _, entry := range entries {
+		name := entry.Name()
+		if name == "" || name == "." || name == ".." {
+			return nil, errors.New("unsafe export directory")
+		}
+		child, directoryErr := directory.openDirectory([]string{name})
+		if directoryErr == nil {
+			child.close()
+			result = append(result, exportEntry{name: name, kind: exportEntryDirectory})
+			continue
+		}
+		fd, fileErr := unix.Openat(directory.fd, name, unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+		if fileErr != nil {
+			return nil, errors.New("unsafe export directory")
+		}
+		var stat unix.Stat_t
+		valid := unix.Fstat(fd, &stat) == nil && stat.Mode&unix.S_IFMT == unix.S_IFREG
+		_ = unix.Close(fd)
+		if !valid {
+			return nil, errors.New("unsafe export directory")
+		}
+		result = append(result, exportEntry{name: name, kind: exportEntryRegular})
+	}
+	sort.Slice(result, func(left, right int) bool { return result[left].name < result[right].name })
+	return result, nil
+}
+
+func (directory *exportDirectory) readFile(parts []string, limit int64) ([]byte, exportFileIdentity, error) {
+	if len(parts) == 0 {
+		return nil, exportFileIdentity{}, errors.New("unsafe export file")
+	}
+	parent := directory
+	var owned *exportDirectory
+	if len(parts) > 1 {
+		var err error
+		owned, err = directory.openDirectory(parts[:len(parts)-1])
+		if err != nil {
+			return nil, exportFileIdentity{}, err
+		}
+		defer owned.close()
+		parent = owned
+	}
+	fd, err := unix.Openat(parent.fd, parts[len(parts)-1], unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+	if err != nil {
+		return nil, exportFileIdentity{}, exportUnixNotExist(err)
+	}
+	file := os.NewFile(uintptr(fd), parts[len(parts)-1])
+	if file == nil {
+		_ = unix.Close(fd)
+		return nil, exportFileIdentity{}, errors.New("unsafe export file")
+	}
+	defer file.Close()
+	identity, size, err := exportUnixFileIdentity(fd)
+	if err != nil || identity.links != 1 {
+		return nil, exportFileIdentity{}, errors.New("unsafe export file")
+	}
+	if size > limit {
+		return nil, exportFileIdentity{}, errors.New("EXPORT_LIMIT_EXCEEDED")
+	}
+	data, err := io.ReadAll(io.LimitReader(file, limit+1))
+	if err != nil || int64(len(data)) != size {
+		return nil, exportFileIdentity{}, errors.New("unsafe export file")
+	}
+	after, afterSize, afterErr := exportUnixFileIdentity(fd)
+	if afterErr != nil || after != identity || afterSize != size {
+		return nil, exportFileIdentity{}, errors.New("PROJECT_CHANGED")
+	}
+	return data, identity, nil
+}
+
+func (directory *exportDirectory) exists(name string) (bool, error) {
+	child, directoryErr := directory.openDirectory([]string{name})
+	if directoryErr == nil {
+		child.close()
+		return true, nil
+	}
+	fd, fileErr := unix.Openat(directory.fd, name, unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+	if fileErr == nil {
+		_ = unix.Close(fd)
+		return true, nil
+	}
+	if isExportNotExist(exportUnixNotExist(directoryErr)) && isExportNotExist(exportUnixNotExist(fileErr)) {
+		return false, nil
+	}
+	return false, errors.New("unsafe export destination")
+}
+
+func (directory *exportDirectory) createStaging(_ string) (*exportDirectory, string, error) {
+	for attempt := 0; attempt < 16; attempt++ {
+		value := make([]byte, 12)
+		if _, err := rand.Read(value); err != nil {
+			return nil, "", err
+		}
+		name := ".platform-export-" + hex.EncodeToString(value)
+		if err := unix.Mkdirat(directory.fd, name, 0o700); err == nil {
+			staging, openErr := directory.openDirectory([]string{name})
+			if openErr != nil {
+				return nil, "", openErr
+			}
+			return staging, name, nil
+		} else if !errors.Is(err, unix.EEXIST) {
+			return nil, "", err
+		}
+	}
+	return nil, "", errors.New("staging name collision")
+}
+
+func (directory *exportDirectory) createDirectory(name string) (*exportDirectory, error) {
+	if err := unix.Mkdirat(directory.fd, name, 0o700); err != nil {
+		return nil, err
+	}
+	return directory.openDirectory([]string{name})
+}
+
+func (directory *exportDirectory) writeFile(name string, content []byte) error {
+	fd, err := unix.Openat(directory.fd, name, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0o600)
+	if err != nil {
+		return err
+	}
+	file := os.NewFile(uintptr(fd), name)
+	if file == nil {
+		_ = unix.Close(fd)
+		return errors.New("unsafe export file")
+	}
+	if _, err := file.Write(content); err != nil {
+		_ = file.Close()
+		return err
+	}
+	if err := file.Sync(); err != nil {
+		_ = file.Close()
+		return err
+	}
+	return file.Close()
+}
+
+func (directory *exportDirectory) publish(_ *exportDirectory, stagingName, destination string) error {
+	return unix.Renameat2(directory.fd, stagingName, directory.fd, destination, unix.RENAME_NOREPLACE)
+}
+
+func (directory *exportDirectory) removeOwnedTree(staging *exportDirectory, stagingName string) error {
+	linked, err := directory.openDirectory([]string{stagingName})
+	if err != nil {
+		return err
+	}
+	linkedIdentity, stagingIdentity := linked.identity(), staging.identity()
+	linked.close()
+	if linkedIdentity != stagingIdentity {
+		return errors.New("EXPORT_STAGING_RETAINED")
+	}
+	// Linux has no unlink-by-open-directory-handle primitive. A pathname-based
+	// recursive cleanup could delete a sibling swapped in after the identity
+	// check above, so fail closed and leave staging for operator cleanup.
+	return errors.New("EXPORT_STAGING_RETAINED")
+}
+
+func exportUnixFileIdentity(fd int) (exportFileIdentity, int64, error) {
+	var stat unix.Stat_t
+	if err := unix.Fstat(fd, &stat); err != nil || stat.Mode&unix.S_IFMT != unix.S_IFREG {
+		return exportFileIdentity{}, 0, errors.New("unsafe export file")
+	}
+	return exportFileIdentity{exportIdentity: exportIdentity{device: uint64(stat.Dev), inode: stat.Ino}, links: uint64(stat.Nlink)}, stat.Size, nil
+}
+
+func exportUnixNotExist(err error) error {
+	if errors.Is(err, unix.ENOENT) || errors.Is(err, unix.ENOTDIR) {
+		return os.ErrNotExist
+	}
+	return err
+}
+
+func isExportNotExist(err error) bool { return errors.Is(err, os.ErrNotExist) }
+
+@@END
 @@PORTABLE {"path":"internal/installer/project_export_windows.go","mode":420,"size":15514,"sha256":"b976e5e04524321f2b8079a752ca07fb428dc48a71ef8a76393149d6a24c1f28","index":0,"count":1,"encoding":"utf-8","payloadBytes":15514}
 //go:build windows
 
@@ -11437,7 +12351,7 @@ class FilterModule:
         return {'platform_clickhouse_members': project_members}
 
 @@END
-@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/plugins/module_utils/application_sql.py","mode":420,"size":9432,"sha256":"e57eda5552f74dae2422660c02dd9271ca50b7acd7dad342221bcee9d5fe2d8e","index":0,"count":1,"encoding":"utf-8","payloadBytes":9432}
+@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/plugins/module_utils/application_sql.py","mode":420,"size":13406,"sha256":"1d66fad57a035612cfcdef13cf3d7d5f3b268f1c30c5c668afba41dfe304827b","index":0,"count":1,"encoding":"utf-8","payloadBytes":13406}
 """Private native-client execution for library and logical instance scopes."""
 import contextlib
 import fcntl
@@ -11464,6 +12378,55 @@ def identifier(value):
 
 def literal(value):
     return "'" + value.replace('\\', '\\\\').replace("'", "\\'") + "'"
+
+
+def table_matches(client, database, table):
+    """Read only declared schema; ClickHouse normalizes expressions, not a SQL parser here."""
+    where = 'database = %s AND name = %s' % (literal(database), literal(table['name']))
+    rows = [json.loads(line) for line in client.query(
+        'SELECT engine, partition_key, primary_key, sorting_key, sampling_key, create_table_query '
+        'FROM system.tables WHERE ' + where + ' FORMAT JSONEachRow;').splitlines() if line.strip()]
+    if not rows:
+        return False
+    actual = rows[0]
+    if actual['engine'] != table['engine']:
+        raise ProviderFailure('CLICKHOUSE_APPLICATION_TABLE_ENGINE_DRIFT')
+    columns = [json.loads(line) for line in client.query(
+        'SELECT name, type, compression_codec FROM system.columns WHERE database = %s AND table = %s '
+        'ORDER BY position FORMAT JSONEachRow;' % (literal(database), literal(table['name']))).splitlines() if line.strip()]
+    if [(c['name'], c['type']) for c in columns] != [(c['name'], c['type']) for c in table['columns']]:
+        raise ProviderFailure('CLICKHOUSE_APPLICATION_TABLE_COLUMNS_DRIFT')
+    pairs = [('CODEC(' + c['codec'] + ')', a['compression_codec']) for c, a in zip(table['columns'], columns) if c.get('codec')]
+    for desired, observed in [('partition_by', 'partition_key'), ('primary_key', 'primary_key'),
+                              ('order_by', 'sorting_key'), ('sample_by', 'sampling_key')]:
+        expected = table.get(desired, table['order_by'] if desired == 'primary_key' else '')
+        value = actual[observed]
+        if bool(expected) != bool(value):
+            raise ProviderFailure('CLICKHOUSE_APPLICATION_TABLE_KEYS_DRIFT')
+        if expected:
+            pairs.append((expected, '(' + value + ')'))
+    indexes = [json.loads(line) for line in client.query(
+        'SELECT name, expr, type_full, granularity FROM system.data_skipping_indices WHERE database = %s AND table = %s '
+        'ORDER BY name FORMAT JSONEachRow;' % (literal(database), literal(table['name']))).splitlines() if line.strip()]
+    expected_indexes = sorted(table.get('indexes', []), key=lambda i: i['name'])
+    if [(i['name'], i['type_full'], i['granularity']) for i in indexes] != [(i['name'], i['type'], i['granularity']) for i in expected_indexes]:
+        raise ProviderFailure('CLICKHOUSE_APPLICATION_TABLE_INDEX_DRIFT')
+    pairs.extend((e['expression'], a['expr']) for e, a in zip(expected_indexes, indexes))
+    expressions = ','.join(literal('SELECT ' + value) for pair in pairs for value in pair)
+    normalized = json.loads(client.query('SELECT arrayMap(x -> formatQuerySingleLine(x), [' + expressions + ']) AS expressions FORMAT JSONEachRow;'))['expressions']
+    if any(normalized[i] != normalized[i + 1] for i in range(0, len(normalized), 2)):
+        raise ProviderFailure('CLICKHOUSE_APPLICATION_TABLE_EXPRESSION_DRIFT')
+    for key, value in table.get('settings', {}).items():
+        value = literal(value) if isinstance(value, str) else str(int(value) if isinstance(value, bool) or float(value).is_integer() else value)
+        if not re.search(r'\b' + re.escape(key) + r'\s*=\s*' + re.escape(value) + r'\s*(?:,|$)', actual['create_table_query']):
+            raise ProviderFailure('CLICKHOUSE_APPLICATION_TABLE_SETTINGS_DRIFT')
+    if table['engine'].startswith('Replicated'):
+        replicas = [json.loads(line) for line in client.query(
+            'SELECT zookeeper_path, replica_name, getMacro(\'shard\') AS shard, getMacro(\'replica\') AS replica '
+            'FROM system.replicas WHERE database = %s AND table = %s FORMAT JSONEachRow;' % (literal(database), literal(table['name']))).splitlines() if line.strip()]
+        if len(replicas) != 1 or replicas[0]['zookeeper_path'] != table['replicationPath'].replace('{shard}', replicas[0]['shard']) or replicas[0]['replica_name'] != replicas[0]['replica']:
+            raise ProviderFailure('CLICKHOUSE_APPLICATION_TABLE_REPLICATION_DRIFT')
+    return True
 
 
 class NativeClient:
@@ -11661,15 +12624,16 @@ def project_members(instances, deployment, settings):
     return result
 
 @@END
-@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/plugins/modules/application_scope.py","mode":420,"size":11626,"sha256":"3c3b2544147c92735862dab26782d5f4156c357477a946f90a76e2fa5df23426","index":0,"count":1,"encoding":"utf-8","payloadBytes":11626}
+@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/plugins/modules/application_scope.py","mode":420,"size":14082,"sha256":"22258a24aa39730001118e1721fee635254454b8ed3c996ded875aca1fe163d5","index":0,"count":1,"encoding":"utf-8","payloadBytes":14082}
 #!/usr/bin/python
 """One library resource batch or logical instance account/grant batch."""
 import json
+import time
 from subprocess import SubprocessError
 from ansible.module_utils.basic import AnsibleModule
 from ansible_collections.platform.clickhouse.plugins.module_utils.application_sql import (
     NativeClient, ProviderFailure, custody, publish, state, identifier,
-    required_grants, user_batch, verify_login, managed_grant_delta)
+    required_grants, user_batch, verify_login, managed_grant_delta, table_matches)
 
 DOCUMENTATION = r'''
 module: application_scope
@@ -11682,6 +12646,7 @@ options:
   directory: {type: path, required: true}
   admin_password: {type: str, required: true}
   passwords: {type: dict, default: {}}
+  tables: {type: list, elements: dict, default: []}
   phase: {type: str, choices: [preflight, resources, accounts, verify], required: true}
   lock_timeout: {type: int, default: 15}
   query_timeout: {type: int, default: 60}
@@ -11717,9 +12682,10 @@ def main():
         'job': {'type': 'dict', 'required': True}, 'directory': {'type': 'path', 'required': True},
         'admin_password': {'type': 'str', 'required': True, 'no_log': True},
         'passwords': {'type': 'dict', 'default': {}, 'no_log': True},
+        'tables': {'type': 'list', 'elements': 'dict', 'default': []},
         'phase': {'choices': ['preflight', 'resources', 'accounts', 'verify'], 'required': True},
         'lock_timeout': {'type': 'int', 'default': 15}, 'query_timeout': {'type': 'int', 'default': 60}})
-    args, clients, changed = module.params, [], False
+    args, clients, changed, active_table = module.params, [], False, {}
     try:
         job, phase, directory = args['job'], args['phase'], args['directory']
         if not 1 <= args['lock_timeout'] <= 120 or not 1 <= args['query_timeout'] <= 120:
@@ -11750,6 +12716,14 @@ def main():
                     raise ProviderFailure('CLICKHOUSE_APPLICATION_CLUSTER_INVALID')
             observed = {target['memberId']: state(client, databases, accounts) for target, client in zip(targets, clients)}
             resource_sql = {target['memberId']: [] for target in targets}
+            missing_tables = []
+            if phase != 'accounts':
+                for active_table in args['tables']:
+                    present = [table_matches(client, active_table['database'], active_table['definition']) for client in clients]
+                    if not all(present):
+                        if phase == 'verify':
+                            raise ProviderFailure('CLICKHOUSE_APPLICATION_TABLE_MISSING')
+                        missing_tables.append(active_table)
             for database in databases:
                 actual = {member: identity(rows, 'database', database['name']) for member, rows in observed.items()}
                 check_owner(witness, 'database/' + database['name'], database['marker'], actual, database['mode'], phase)
@@ -11764,6 +12738,29 @@ def main():
                     client.query('\n'.join(statements))
                     changed = True
             account_sql = []
+            # Persist newly created database ownership before a table error can
+            # interrupt the scope; retry must not treat our database as foreign.
+            if phase == 'resources' and changed:
+                for database in databases:
+                    ids = {target['memberId']: identity(state(client, [database], []), 'database', database['name'])
+                           for target, client in zip(targets, clients)}
+                    if any(value is None for value in ids.values()):
+                        raise ProviderFailure('CLICKHOUSE_APPLICATION_OBJECT_MISSING')
+                    if any(identity(observed[member], 'database', database['name']) not in (None, value) for member, value in ids.items()):
+                        raise ProviderFailure('CLICKHOUSE_APPLICATION_OWNERSHIP_DRIFT')
+                    if database['mode'] == 'managed':
+                        witness['database/' + database['name']] = dict(marker=database['marker'], ids=ids)
+                publish(directory, witness)
+                original_witness = dict(witness)
+            if phase == 'resources':
+                for active_table in missing_tables:
+                    clients[0].query('SET distributed_ddl_task_timeout = 30;\n' + active_table['sql'])
+                    changed = True
+                    deadline = time.monotonic() + args['query_timeout']
+                    while not all(table_matches(client, active_table['database'], active_table['definition']) for client in clients):
+                        if time.monotonic() >= deadline:
+                            raise ProviderFailure('CLICKHOUSE_APPLICATION_TABLE_NOT_READY')
+                        time.sleep(1)
             for account in accounts:
                 actual = {member: identity(rows, 'user', account['name']) for member, rows in observed.items()}
                 existing = check_owner(witness, 'user/' + account['name'], account['marker'], actual, account['mode'], phase)
@@ -11830,7 +12827,7 @@ def main():
                     publish(directory, witness)
         module.exit_json(changed=changed)
     except ProviderFailure as error:
-        module.fail_json(msg=str(error))
+        module.fail_json(msg=str(error), database=active_table.get('database', ''), table=active_table.get('definition', {}).get('name', ''))
     except (ValueError, OSError, TypeError, KeyError, SubprocessError):
         module.fail_json(msg='CLICKHOUSE_APPLICATION_SCOPE_FAILED')
     finally:
@@ -11881,7 +12878,7 @@ platform_clickhouse_application_credential_files: "{{ platform_clickhouse_secret
     platform_clickhouse_application_phase: resources
 
 @@END
-@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/roles/application_provider/tasks/scope.yml","mode":420,"size":2216,"sha256":"878e90ca7525dbc3f18c843f6f536599ace74aa6417871168010a1d9ba44247b","index":0,"count":1,"encoding":"utf-8","payloadBytes":2216}
+@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/roles/application_provider/tasks/scope.yml","mode":420,"size":3641,"sha256":"666cd05fc53aef85b2ce406e868f36c0c0c25f1a5493e27f7221c4fbfeb894c6","index":0,"count":1,"encoding":"utf-8","payloadBytes":3641}
 ---
 - name: Require protected credentials for the bounded ClickHouse scope
   ansible.builtin.assert:
@@ -11894,9 +12891,22 @@ platform_clickhouse_application_credential_files: "{{ platform_clickhouse_secret
     fail_msg: APPLICATION_PROVIDER_SECRET_FILE_INVALID
   no_log: true
 
+- name: Initialize rendered library table declarations
+  ansible.builtin.set_fact:
+    clickhouse_application_tables: []
+
+- name: Render declared tables with ordinary Ansible templates
+  ansible.builtin.set_fact:
+    clickhouse_application_tables: "{{ clickhouse_application_tables + [{'database': item.0.name, 'definition': item.1, 'sql': lookup('ansible.builtin.template', 'application-table.sql.j2')}] }}"
+  loop: "{{ platform_clickhouse_application_job.databases | subelements('tables', skip_missing=true) }}"
+  loop_control:
+    label: "{{ item.0.name }}.{{ item.1.name }}"
+  no_log: true
+
 - name: Execute one ClickHouse library or instance scope with native TLS
   platform.clickhouse.application_scope:
     job: "{{ platform_clickhouse_application_job }}"
+    tables: "{{ clickhouse_application_tables }}"
     directory: "{{ hostvars[clickhouse_application_target.hostId].platform_clickhouse_config_root | default(platform_clickhouse_config_root) }}/{{ platform_clickhouse_application_job.providerId }}/{{ clickhouse_application_target.memberId }}"
     admin_password: "{{ lookup('ansible.builtin.file', platform_clickhouse_application_credential_files[platform_clickhouse_application_job.adminPasswordRef], rstrip=false) }}"
     passwords: "{{ dict(clickhouse_application_password_refs | zip(query('ansible.builtin.file', *clickhouse_application_password_paths, rstrip=false))) }}"
@@ -11911,6 +12921,20 @@ platform_clickhouse_application_credential_files: "{{ platform_clickhouse_secret
   become: true
   become_user: "{{ hostvars[clickhouse_application_target.hostId].platform_clickhouse_user | default(platform_clickhouse_user) }}"
   no_log: true
+  register: clickhouse_application_result
+  failed_when: false
+
+- name: Report safe ClickHouse resource or account failure
+  ansible.builtin.assert:
+    that: clickhouse_application_result.msg is not defined
+    fail_msg: "{{ clickhouse_application_diagnostic | to_json }}"
+  vars:
+    clickhouse_application_diagnostic:
+      code: "{{ clickhouse_application_result.msg | default('') | regex_search('^CLICKHOUSE_APPLICATION_[A-Z0-9_]+$') | default('CLICKHOUSE_APPLICATION_SCOPE_FAILED', true) }}"
+      provider: "{{ platform_clickhouse_application_job.providerId }}"
+      operation: "{{ platform_clickhouse_application_phase }}"
+      database: "{{ clickhouse_application_result.database | default('') }}"
+      table: "{{ clickhouse_application_result.table | default('') }}"
 
 @@END
 @@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/roles/application_provider/tasks/verify.yml","mode":420,"size":104,"sha256":"f17b35ae53966d208405df226844db6e5e2d220dfe15302f949c4231a233e949","index":0,"count":1,"encoding":"utf-8","payloadBytes":104}
@@ -11918,6 +12942,32 @@ platform_clickhouse_application_credential_files: "{{ platform_clickhouse_secret
 - ansible.builtin.import_tasks: scope.yml
   vars:
     platform_clickhouse_application_phase: verify
+
+@@END
+@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/roles/application_provider/templates/application-table.sql.j2","mode":420,"size":1428,"sha256":"7475efbb91c4df1fdf1b098c684e6c1ce35c80cd1b1089c742ea6a3c70269c31","index":0,"count":1,"encoding":"utf-8","payloadBytes":1428}
+#jinja2: trim_blocks: False
+CREATE TABLE IF NOT EXISTS `{{ item.0.name | replace('`', '``') }}`.`{{ item.1.name | replace('`', '``') }}`{% if platform_clickhouse_application_job.mode == 'raft-ha' %} ON CLUSTER default{% endif %}
+(
+{% for column in item.1.columns %}
+  `{{ column.name | replace('`', '``') }}` {{ column.type }}{% if column.codec is defined %} CODEC({{ column.codec }}){% endif %}{{ ',' if not loop.last or item.1.indexes | default([]) else '' }}
+{% endfor %}
+{% for index in item.1.indexes | default([]) %}
+  INDEX `{{ index.name | replace('`', '``') }}` {{ index.expression }} TYPE {{ index.type }} GRANULARITY {{ index.granularity }}{{ ',' if not loop.last else '' }}
+{% endfor %}
+)
+ENGINE = {{ item.1.engine }}{% if platform_clickhouse_application_job.mode == 'raft-ha' %}('{{ item.1.replicationPath }}', '{replica}'){% else %}(){% endif %}
+{% for key, clause in [('partition_by', 'PARTITION BY'), ('primary_key', 'PRIMARY KEY'), ('order_by', 'ORDER BY'), ('sample_by', 'SAMPLE BY')] %}
+{% if item.1[key] is defined %}
+{{ clause }} {{ item.1[key] }}
+{% endif %}
+{% endfor %}
+{% if item.1.settings | default({}) %}
+SETTINGS
+{% for key, value in item.1.settings | dictsort %}
+  {{ key }} = {% if value is string %}'{{ value | replace('\\', '\\\\') | replace("'", "\\'") }}'{% elif value is boolean %}{{ value | int }}{% else %}{{ value }}{% endif %}{{ ',' if not loop.last else '' }}
+{% endfor %}
+{% endif %}
+;
 
 @@END
 @@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/roles/clickhouse_tls/defaults/main.yml","mode":420,"size":1612,"sha256":"c825431e488a4287f3d5dbea97dcbebbd8fb5db542306bacf703bce8993240ad","index":0,"count":1,"encoding":"utf-8","payloadBytes":1612}
@@ -13325,12 +14375,12 @@ status: requires-service-install-09-runtime-evidence
       platform_clickhouse_verify_only: true
 
 @@END
-@@PORTABLE {"path":"services/clickhouse/service.yml","mode":420,"size":6130,"sha256":"5b61b2012cbc4d39446260e10666bcf811a55e2c8e2893a4dd2496f0a9bff494","index":0,"count":1,"encoding":"utf-8","payloadBytes":6130}
+@@PORTABLE {"path":"services/clickhouse/service.yml","mode":420,"size":6156,"sha256":"cc87f8dd08494641dd496b5438fd5c10961116fb3a539db41f1e9ea7bc5b7d74","index":0,"count":1,"encoding":"utf-8","payloadBytes":6156}
 apiVersion: platform.installer/service-manifest/v1alpha1
 kind: ServiceManifest
 metadata:
   id: clickhouse
-  version: "1.0.0-alpha.1"
+  version: "1.0.0-alpha.2"
   displayName: ClickHouse
   description: TLS-only ClickHouse standalone or one-shard Raft HA with paired Keeper members
   category: database
@@ -13369,7 +14419,7 @@ listeners:
 endpoint: {}
 x-haproxyBackendDefaults: {balance: roundrobin, check: true, fall: 3, rise: 2, ssl: true, sslVerify: required}
 x-backendClientListener: {listener: client, allocation: {kind: HOST_LOCAL_ORDINAL, stride: 1}}
-capabilities: [service.clickhouse.https, service.clickhouse.keeper, service.clickhouse.database, service.clickhouse.account]
+capabilities: [service.clickhouse.https, service.clickhouse.keeper, service.clickhouse.database, service.clickhouse.account, service.clickhouse.table]
 dependencies: []
 configurationSchema: {$ref: configuration.schema.json}
 configuration:

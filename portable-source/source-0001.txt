@@ -479,7 +479,7 @@ class ActionModule(ActionBase):
             return dict(status='BLOCKED', changed=False, code=code, providers=[], libraryJobs=[], instanceJobs=[])
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/project_snapshot.py","mode":420,"size":38212,"sha256":"72e239a6a8f16e2ee494c9570eaad5baff48165f9c96498c4213d2786ddff709","index":0,"count":1,"encoding":"utf-8","payloadBytes":38212}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/project_snapshot.py","mode":420,"size":38531,"sha256":"46efff641bdf5565837a14fb02817743064a14bbab86539bfdd2606b303578f5","index":0,"count":1,"encoding":"utf-8","payloadBytes":38531}
 from __future__ import absolute_import, division, print_function
 
 __metaclass__ = type
@@ -1081,6 +1081,9 @@ class ActionModule(ActionBase):
                     definition = {"name": row["applicationName"], "version": "1.0.0", "defaults": row["settings"],
                                   "connections": row["connections"], "identity_environment": row["identityNames"]}
                     resolved_findings.extend(validator.validate(definition, os.path.join(repo_root, "contracts", "application-libraries", "v1alpha1", "application.schema.json")))
+                    resolved_findings.extend(validator.validate(
+                        dict(name=row['libraryId'], version='1.0.0', slots={}, resource_defaults=row.get('resourceDefaults', {})),
+                        os.path.join(repo_root, 'contracts', 'application-libraries', 'v1alpha1', 'library.schema.json')))
                 applications = project_application_libraries(
                     task_vars["platform_application_rows"], materialized, configuration, catalog, hosts,
                     metadata.get("id", os.path.basename(project_root)),
@@ -21165,7 +21168,7 @@ def project_endpoint_sources(rows, desired, hosts):
     return sources
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_libraries.py","mode":420,"size":37908,"sha256":"c17ed5d2fffde03a4639e66399a14bb33bbe7f532d5c67eabc6ac679f0c0f341","index":0,"count":1,"encoding":"utf-8","payloadBytes":37908}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_libraries.py","mode":420,"size":39759,"sha256":"f74ce68e9afe9d43360087f60852290ddb98431d87edd042e053d5f60e266f44","index":0,"count":1,"encoding":"utf-8","payloadBytes":39759}
 """Read-only application contract checks. Ansible owns composition and templating."""
 import hashlib
 import json
@@ -21549,6 +21552,25 @@ def resolve_topics(resources, bindings, desired):
     return topics
 
 
+def resolve_tables(resources, bindings, desired, defaults, catalog, project_id):
+    result = {}
+    for resource_id, resource in resources.items():
+        if resource['kind'] != 'clickhouse.database':
+            continue
+        ref = bindings[resource['binding']]['deploymentRef']
+        deployment = desired['serviceDeployments'][ref]
+        if deployment['serviceType'] != 'clickhouse' or deployment['mode'] not in ('standalone', 'raft-ha'):
+            raise ValueError('APPLICATION_TABLE_PROVIDER_INVALID')
+        specs = defaults.get('clickhouse', {}).get('tables', {})
+        if specs and 'service.clickhouse.table' not in catalog['definitions']['clickhouse'].get('capabilities', []):
+            raise ValueError('APPLICATION_TABLE_CAPABILITY_UNSUPPORTED')
+        result[resource_id] = [dict(spec, name=name,
+            engine=('Replicated' if deployment['mode'] == 'raft-ha' else '') + spec['engine'],
+            replicationPath='/clickhouse/tables/%s/%s/{shard}/%s/%s' % (project_id, ref, resource['parameters']['name'], name))
+            for name, spec in sorted(specs.items())]
+    return result
+
+
 def project(rows, desired, configuration, catalog, hosts, project_id="ansible-project"):
     findings, libraries, ports = [], {}, set()
     if not isinstance(project_id, str) or not ID.fullmatch(project_id):
@@ -21677,6 +21699,14 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
         if library['connections'] != shared_connections or library['runtimeDirectory'] != row.get('runtimeDirectory', '~/' + library_id):
             findings.append(finding('APPLICATION_HOST_RESOURCE_CONFLICT', field))
         library["packages"][row["applicationName"]] = row["packageIdentity"]
+        try:
+            tables = resolve_tables(row['resources'], row['bindings'], desired, row.get('resourceDefaults', {}), catalog, project_id)
+            if library.setdefault('tables', tables) != tables:
+                findings.append(finding('APPLICATION_HOST_RESOURCE_CONFLICT', field))
+        except (KeyError, ValueError, TypeError):
+            findings.append(finding('APPLICATION_TABLE_RESOURCE_INVALID', field))
+        if library.setdefault('resourceDefaults', row.get('resourceDefaults', {})) != row.get('resourceDefaults', {}):
+            findings.append(finding('APPLICATION_HOST_RESOURCE_CONFLICT', field))
         instance = library["instances"].setdefault(app_id, {"applicationName": row["applicationName"], "slotId": row["slotId"], "placements": {},
                                                            "connections": connections, 'topics': topic_bindings, "credentialRequirements": accounts,
                                                            "identityEnvironment": {name: app_id for name in row["identityNames"]},
@@ -21727,6 +21757,7 @@ def validate_public_projection(projection):
     findings = []
     for library_id, library in projection.get("libraries", {}).items():
         field = "applicationLibraries." + library_id
+        nonsecret_values(library.get('resourceDefaults', {}), field + '.resourceDefaults', findings)
         for resource_id, resource in library.get("resources", {}).items():
             nonsecret_values(resource.get("parameters", {}), field + ".resources." + resource_id + ".parameters", findings)
         for instance_id, instance in library.get("instances", {}).items():
@@ -21847,7 +21878,7 @@ def application_operation(action, model):
                 applicationSemanticFingerprint=model['semanticFingerprint'])
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_providers.py","mode":420,"size":22839,"sha256":"51814fbcd9060c4e772836ff787e4c365a4e7889a3e12acb5209cc244ae95309","index":0,"count":1,"encoding":"utf-8","payloadBytes":22839}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_providers.py","mode":420,"size":23241,"sha256":"5ccaed2e4cd7fae3d753f4315d76c1f043408046957430e5ecdc51ba6a25fa79","index":0,"count":1,"encoding":"utf-8","payloadBytes":23241}
 """Target-free provider hook projection. Ansible remains the variable resolver."""
 import hashlib
 import re
@@ -22017,7 +22048,7 @@ def project_providers(rows, snapshot, configuration, desired, catalog):
     try:
         for row in rows:
             key = (row['libraryId'], row['instanceId'])
-            identity = {k: row.get(k) for k in ('resources', 'bindings', 'connectionDefaults')}
+            identity = {k: row.get(k) for k in ('resources', 'bindings', 'connectionDefaults', 'resourceDefaults')}
             identity['accounts'] = row['settings'].get('accounts', {})
             if key in logical and logical[key] != identity:
                 raise ValueError('APPLICATION_PROVIDER_HOST_CONFLICT')
@@ -22055,6 +22086,10 @@ def project_providers(rows, snapshot, configuration, desired, catalog):
                                  ownerMarker=marker(project_id, ref, library_id, 'owner', library_id))
                     claim((ref, 'database', name), (library_id, resource_id), mode)
                     databases[resource_id] = value
+                    if job['serviceType'] == 'clickhouse':
+                        value['tables'] = library.get('tables', {}).get(resource_id, [])
+                        if any(db['name'] == name and db['providerId'] == ref and db.get('tables', []) != value['tables'] for db in job['databases']):
+                            raise ValueError('APPLICATION_PROVIDER_NAME_CONFLICT')
                     job['databases'].append(value)
                     if job['serviceType'] == 'postgresql' and mode == 'managed' and not any(o['name'] == owner for o in job['libraries']):
                         job['libraries'].append({'name': owner, 'marker': value['ownerMarker']})
@@ -32335,7 +32370,7 @@ platform_name_prefix: ''
     quiet: true
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/resolve_application_libraries/tasks/instance.yml","mode":420,"size":5601,"sha256":"97d426290d0ea556d7434a76b785e1963932d816bb1f7cfac163a33ce1c06296","index":0,"count":1,"encoding":"utf-8","payloadBytes":5601}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/resolve_application_libraries/tasks/instance.yml","mode":420,"size":5825,"sha256":"abd5b8362f2d2a6ef4f5152ca48318e9f48a4560313d9b7c2322e0b0ce75651d","index":0,"count":1,"encoding":"utf-8","payloadBytes":5825}
 ---
 - name: Load validated library defaults in an isolated namespace
   ansible.builtin.include_vars:
@@ -32398,6 +32433,8 @@ platform_name_prefix: ''
         'bindings': application_job.deployment.bindings | default({}),
         'vaultRef': application_job.deployment.vault_ref | default({}),
         'resources': application_job.deployment.resources | default({}),
+        'resourceDefaults': _library_package.platform_library_definition.resource_defaults | default({}) |
+          combine(application_job.deployment.resource_defaults | default({}), recursive=true, list_merge='replace'),
         'sharedSecrets': _library_package.platform_library_definition.shared_secrets | default({}) |
           combine(application_job.deployment.shared_secrets | default({}), recursive=true, list_merge='replace'),
         'connectionDefaults': _library_package.platform_library_definition.connection_defaults | default({}) |
@@ -32596,7 +32633,7 @@ all:
       hosts: {}
 
 @@END
-@@PORTABLE {"path":"ansible-core/examples/empty/project.yml","mode":420,"size":481,"sha256":"b650fd02722171d9f5ca83ab46b34d7040fae7b2446bed8a910698cbeb3f4468","index":0,"count":1,"encoding":"utf-8","payloadBytes":481}
+@@PORTABLE {"path":"ansible-core/examples/empty/project.yml","mode":420,"size":481,"sha256":"84b49b9b1f28ed7a9ec8fbde989dd49c28b2f8d910a6cb49d29d4684a94824ea","index":0,"count":1,"encoding":"utf-8","payloadBytes":481}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -32604,7 +32641,7 @@ metadata:
 desiredStateContract: platform.installer/project-desired-state/v2alpha1
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:417be4b10a4dfc81352af03149cd562201a63f46a9a582e9c5adfc17051f3223
+  digest: sha256:6b87cd3eb49b1229ebfd21dd1e24c71e100d7dc5b38f790046762a52f773c28a
   services: {}
 artifactLock:
   apiVersion: platform.installer/artifacts/v1alpha1
@@ -32646,7 +32683,7 @@ all:
           ansible_host: 192.0.2.10
 
 @@END
-@@PORTABLE {"path":"ansible-core/examples/invalid-reference/project.yml","mode":420,"size":617,"sha256":"56a23ac76865f9eeb4286f9a25e7d535e9acf5eeca2f065d443599269141dab1","index":0,"count":1,"encoding":"utf-8","payloadBytes":617}
+@@PORTABLE {"path":"ansible-core/examples/invalid-reference/project.yml","mode":420,"size":617,"sha256":"0eb0a04cc8c9f070e8cd489d4794de6c38b16fc724e74b589d4d04c4b140f380","index":0,"count":1,"encoding":"utf-8","payloadBytes":617}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -32654,7 +32691,7 @@ metadata:
 desiredStateContract: platform.installer/project-desired-state/v2alpha1
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:417be4b10a4dfc81352af03149cd562201a63f46a9a582e9c5adfc17051f3223
+  digest: sha256:6b87cd3eb49b1229ebfd21dd1e24c71e100d7dc5b38f790046762a52f773c28a
   services:
     kafka:
       definitionVersion: 1.0.0-alpha.3
@@ -32701,7 +32738,7 @@ all:
                   roles: [broker, controller]
 
 @@END
-@@PORTABLE {"path":"ansible-core/examples/valid/project.yml","mode":420,"size":662,"sha256":"3761aedb51456c36e432a18da91ca5043dc30a9d25dfc8e21fccecf024f83555","index":0,"count":1,"encoding":"utf-8","payloadBytes":662}
+@@PORTABLE {"path":"ansible-core/examples/valid/project.yml","mode":420,"size":662,"sha256":"288e787d0ac56938df5c95570ad2d915238d4abcfb9b2728f37a9dfe4f73f3fa","index":0,"count":1,"encoding":"utf-8","payloadBytes":662}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -32710,7 +32747,7 @@ metadata:
 desiredStateContract: platform.installer/project-desired-state/v2alpha1
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:417be4b10a4dfc81352af03149cd562201a63f46a9a582e9c5adfc17051f3223
+  digest: sha256:6b87cd3eb49b1229ebfd21dd1e24c71e100d7dc5b38f790046762a52f773c28a
   services:
     kafka:
       definitionVersion: 1.0.0-alpha.3
@@ -40838,7 +40875,7 @@ serviceExecutionPriorities:
   "$id": "https://platform-installer.local/contracts/application-libraries/v1alpha1/application.schema.json"
 }
 @@END
-@@PORTABLE {"path":"contracts/application-libraries/v1alpha1/deployments.schema.json","mode":420,"size":5691,"sha256":"652a72e2638c366a99ba13f01a03202feb3d650304526a0203e56e1818336d43","index":0,"count":1,"encoding":"utf-8","payloadBytes":5691}
+@@PORTABLE {"path":"contracts/application-libraries/v1alpha1/deployments.schema.json","mode":420,"size":5754,"sha256":"003deaf71a2cb1af127725ee94585c32d720a522ab2860fd4d626a7c892d044d","index":0,"count":1,"encoding":"utf-8","payloadBytes":5754}
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Application library deployments v1alpha1",
@@ -41036,6 +41073,9 @@ serviceExecutionPriorities:
       "runtime_directory": {
         "maxLength": 4096,
         "type": "string"
+      },
+      "resource_defaults": {
+        "type": "object"
       }
     },
     "required": [
@@ -41049,7 +41089,7 @@ serviceExecutionPriorities:
 }
 
 @@END
-@@PORTABLE {"path":"contracts/application-libraries/v1alpha1/library.schema.json","mode":420,"size":2618,"sha256":"ac1e71ca3751d20bd04c8639f62b0c7ee49f899e76039204a0fefca48fd90131","index":0,"count":1,"encoding":"utf-8","payloadBytes":2618}
+@@PORTABLE {"path":"contracts/application-libraries/v1alpha1/library.schema.json","mode":420,"size":7408,"sha256":"726f04e06ac5cb812ee40d2bcc66328229b01468f20fc44875b3667d77669c01","index":0,"count":1,"encoding":"utf-8","payloadBytes":7408}
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Library definition defaults v1alpha1",
@@ -41145,6 +41185,9 @@ serviceExecutionPriorities:
     "runtime_directory": {
       "maxLength": 4096,
       "type": "string"
+    },
+    "resource_defaults": {
+      "$ref": "#/$defs/resourceDefaults"
     }
   },
   "required": [
@@ -41153,8 +41196,152 @@ serviceExecutionPriorities:
     "slots"
   ],
   "additionalProperties": false,
-  "$id": "https://platform-installer.local/contracts/application-libraries/v1alpha1/library.schema.json"
+  "$id": "https://platform-installer.local/contracts/application-libraries/v1alpha1/library.schema.json",
+  "$defs": {
+    "resourceDefaults": {
+      "type": "object",
+      "properties": {
+        "clickhouse": {
+          "type": "object",
+          "properties": {
+            "tables": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string",
+                "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+                "maxLength": 128
+              },
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "engine": {
+                    "enum": [
+                      "MergeTree",
+                      "ReplacingMergeTree"
+                    ]
+                  },
+                  "columns": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+                          "maxLength": 128
+                        },
+                        "type": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 8192
+                        },
+                        "codec": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 8192
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "type"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "minItems": 1,
+                    "maxItems": 256
+                  },
+                  "indexes": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+                          "maxLength": 128
+                        },
+                        "expression": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 8192
+                        },
+                        "type": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 8192
+                        },
+                        "granularity": {
+                          "type": "integer",
+                          "minimum": 1
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "expression",
+                        "type",
+                        "granularity"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "maxItems": 128
+                  },
+                  "partition_by": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 8192
+                  },
+                  "primary_key": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 8192
+                  },
+                  "order_by": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 8192
+                  },
+                  "sample_by": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 8192
+                  },
+                  "settings": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+                      "maxLength": 128
+                    },
+                    "additionalProperties": {
+                      "type": [
+                        "string",
+                        "number",
+                        "boolean"
+                      ]
+                    },
+                    "maxProperties": 128
+                  }
+                },
+                "required": [
+                  "engine",
+                  "columns",
+                  "order_by"
+                ],
+                "additionalProperties": false
+              },
+              "maxProperties": 128
+            }
+          },
+          "required": [],
+          "additionalProperties": false
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    }
+  }
 }
+
 @@END
 @@PORTABLE {"path":"contracts/application-libraries/v1alpha1/membership.schema.json","mode":420,"size":1609,"sha256":"d98b51d6d42c9ea5890f607ce46bdc88e2deaffbafcc7f738f41065b6a144dbe","index":0,"count":1,"encoding":"utf-8","payloadBytes":1609}
 {
@@ -49356,17 +49543,17 @@ artifacts: []
 x-conformanceOnly: true
 
 @@END
-@@PORTABLE {"path":"examples/catalog/service-catalog.yml","mode":420,"size":58129,"sha256":"8e67a9ee53843b77165ac4d75573a018a5dead35a6e065242a7885cd086e47a8","index":0,"count":2,"encoding":"utf-8","payloadBytes":49314}
+@@PORTABLE {"path":"examples/catalog/service-catalog.yml","mode":420,"size":58160,"sha256":"dfeaf58da91c3a077bff53cc29fb945a2d57bcfc5d625b5cf154de13a234aa84","index":0,"count":2,"encoding":"utf-8","payloadBytes":49314}
 apiVersion: platform.installer/catalog/v1alpha1
 kind: ServiceCatalog
-digest: sha256:417be4b10a4dfc81352af03149cd562201a63f46a9a582e9c5adfc17051f3223
+digest: sha256:6b87cd3eb49b1229ebfd21dd1e24c71e100d7dc5b38f790046762a52f773c28a
 definitions:
   clickhouse:
     apiVersion: platform.installer/service-manifest/v1alpha1
     kind: ServiceManifest
     metadata:
       id: clickhouse
-      version: 1.0.0-alpha.1
+      version: 1.0.0-alpha.2
       displayName: ClickHouse
       description: TLS-only ClickHouse standalone or one-shard Raft HA with paired Keeper members
       category: database
@@ -49451,6 +49638,7 @@ definitions:
     - service.clickhouse.keeper
     - service.clickhouse.database
     - service.clickhouse.account
+    - service.clickhouse.table
     dependencies: []
     configurationSchema:
       $ref: ../../services/clickhouse/configuration.schema.json
@@ -49629,7 +49817,7 @@ definitions:
       digest: sha256:796874f358d73b96ff8bf04c5aabbf474ea020303eb7d113f1009961739e41c7
       requiredOffline: true
     compatibilityRef: ../../services/clickhouse/compatibility.yml
-    x-definitionDigest: sha256:dc489f76b01196af3bbdeaad8de649148d4c9c148cfaea198578dd404a42a5f8
+    x-definitionDigest: sha256:34239b407c2dada5dd19024e080913ef032de3116bf1ed74fcb695feac7963f6
     x-sourceManifest: services/clickhouse/service.yml
   docker:
     apiVersion: platform.installer/service-manifest/v1alpha1
@@ -51011,10 +51199,10 @@ definitions:
         variablesPrefix: platform_keepalived_
       verify:
         fqcn: platform.keepalived.keepalived
-        variablesPrefix: platfor
+ 
 @@END
-@@PORTABLE {"path":"examples/catalog/service-catalog.yml","mode":420,"size":58129,"sha256":"8e67a9ee53843b77165ac4d75573a018a5dead35a6e065242a7885cd086e47a8","index":1,"count":2,"encoding":"utf-8","payloadBytes":8815}
-m_keepalived_
+@@PORTABLE {"path":"examples/catalog/service-catalog.yml","mode":420,"size":58160,"sha256":"dfeaf58da91c3a077bff53cc29fb945a2d57bcfc5d625b5cf154de13a234aa84","index":1,"count":2,"encoding":"utf-8","payloadBytes":8846}
+       variablesPrefix: platform_keepalived_
     artifacts: []
     runtimeRequirements:
     - id: keepalived
@@ -51348,7 +51536,7 @@ all:
         redos-node1: {}
 
 @@END
-@@PORTABLE {"path":"examples/invalid/invalid-placement/project.yml","mode":420,"size":645,"sha256":"21c7efb089acd2a9ff876cee3b6f1b08a45bffceefc8fbca489b1d56784b4430","index":0,"count":1,"encoding":"utf-8","payloadBytes":645}
+@@PORTABLE {"path":"examples/invalid/invalid-placement/project.yml","mode":420,"size":645,"sha256":"dab15105a62fec74f8565c17a0e6c8060f8dc7eb152edab111074ffacde39477","index":0,"count":1,"encoding":"utf-8","payloadBytes":645}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -51360,7 +51548,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:417be4b10a4dfc81352af03149cd562201a63f46a9a582e9c5adfc17051f3223
+  digest: sha256:6b87cd3eb49b1229ebfd21dd1e24c71e100d7dc5b38f790046762a52f773c28a
   services:
     kafka:
       definitionVersion: 1.0.0-alpha.3
@@ -51403,7 +51591,7 @@ all:
         redos-node1: {}
 
 @@END
-@@PORTABLE {"path":"examples/invalid/missing-host-reference/project.yml","mode":420,"size":651,"sha256":"42e1af7320fd377c2a24a3c8560e6572dce922f712b8d56e5e5eb47bbc061203","index":0,"count":1,"encoding":"utf-8","payloadBytes":651}
+@@PORTABLE {"path":"examples/invalid/missing-host-reference/project.yml","mode":420,"size":651,"sha256":"617cd81c519190109da93aaf349ebb7d665b013f7bed477075f0869917d17e04","index":0,"count":1,"encoding":"utf-8","payloadBytes":651}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -51415,7 +51603,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:417be4b10a4dfc81352af03149cd562201a63f46a9a582e9c5adfc17051f3223
+  digest: sha256:6b87cd3eb49b1229ebfd21dd1e24c71e100d7dc5b38f790046762a52f773c28a
   services:
     kafka:
       definitionVersion: 1.0.0-alpha.3
@@ -51458,7 +51646,7 @@ all:
         redos-node1: {}
 
 @@END
-@@PORTABLE {"path":"examples/invalid/unknown-mode/project.yml","mode":420,"size":641,"sha256":"6723f25b3fe95f54b4b989918bd12e34bba407e5a813e548a5c2ec05ad2f47a7","index":0,"count":1,"encoding":"utf-8","payloadBytes":641}
+@@PORTABLE {"path":"examples/invalid/unknown-mode/project.yml","mode":420,"size":641,"sha256":"352b4f1ba4b40cdc790e38d6c54ec9dd2e97316660c38b857d0065e8d7a74ee0","index":0,"count":1,"encoding":"utf-8","payloadBytes":641}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -51470,7 +51658,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:417be4b10a4dfc81352af03149cd562201a63f46a9a582e9c5adfc17051f3223
+  digest: sha256:6b87cd3eb49b1229ebfd21dd1e24c71e100d7dc5b38f790046762a52f773c28a
   services:
     kafka:
       definitionVersion: 1.0.0-alpha.3
@@ -55496,7 +55684,7 @@ platform_application_libraries:
   sdku-main: {}
 
 @@END
-@@PORTABLE {"path":"examples/sdku/import-catalog.json","mode":420,"size":5579,"sha256":"bf8cd2541d41bb7234d433b4ceb27e1531052c45a9f49a812a4fc48d868c9ac6","index":0,"count":1,"encoding":"utf-8","payloadBytes":5579}
+@@PORTABLE {"path":"examples/sdku/import-catalog.json","mode":420,"size":5579,"sha256":"027d421dd5571c35226b83675370e14923c1b4530d4ca4c4cdf0abbdb1053aab","index":0,"count":1,"encoding":"utf-8","payloadBytes":5579}
 [
   {
     "digest": "sha256:7026e580ff5c2288bae5f015d0750c3643f5897fb6a32b19dcf3f707612c460d",
@@ -55681,7 +55869,7 @@ platform_application_libraries:
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:3b76ba80067cce3b981d817229f8aa3e667f659d5e50682fcb09664978a4d58d",
+    "digest": "sha256:953efbf789ab4fc6ad7bfeda52948118f7c67d88d83681c169698c4782776f72",
     "kind": "library",
     "name": "sdku",
     "sourceDirectory": ".",
@@ -55708,7 +55896,7 @@ platform_application_libraries:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/library-packages/sdku/1.0.0/roles/library_sdku/defaults/main.yml","mode":420,"size":8589,"sha256":"bd082af84c534fc13b50f53bedd64e27b52a727bd31b4965eada4400ac4f5c10","index":0,"count":1,"encoding":"utf-8","payloadBytes":8589}
+@@PORTABLE {"path":"examples/sdku/library-packages/sdku/1.0.0/roles/library_sdku/defaults/main.yml","mode":420,"size":13907,"sha256":"2aa6212b559d0db71ce426310f086d7dec1a8b0941d81ff0ec055646df13da67","index":0,"count":1,"encoding":"utf-8","payloadBytes":13907}
 platform_library_definition:
     runtime_directory: "~/{{ library_instance_id }}"
     connections:
@@ -55920,6 +56108,88 @@ platform_library_definition:
             applicationRef: user-preferences@1.0.0
             required: false
     version: 1.0.0
+
+    resource_defaults:
+        clickhouse:
+            tables:
+                records:
+                    engine: MergeTree
+                    columns:
+                        - {"name":"systemId","type":"UInt32","codec":"T64, LZ4"}
+                        - {"name":"objectId","type":"UInt32","codec":"T64, LZ4"}
+                        - {"name":"parameterId","type":"UInt32","codec":"T64, LZ4"}
+                        - {"name":"attrId","type":"UInt32","codec":"T64, LZ4"}
+                        - {"name":"ts","type":"UInt64","codec":"DoubleDelta, LZ4"}
+                        - {"name":"ts2","type":"Nullable(UInt64)","codec":"DoubleDelta, LZ4"}
+                        - {"name":"quality","type":"Nullable(Int64)","codec":"T64, LZ4"}
+                        - {"name":"invalid","type":"Nullable(Bool)","codec":"LZ4"}
+                        - {"name":"value","type":"Nullable(Float64)","codec":"Gorilla(8), LZ4"}
+                        - {"name":"strValue","type":"Nullable(String)","codec":"LZ4"}
+                        - {"name":"service","type":"LowCardinality(Nullable(String))","codec":"LZ4"}
+                        - {"name":"dt","type":"Date","codec":"DoubleDelta, LZ4"}
+                        - {"name":"ts3","type":"Nullable(UInt64)","codec":"DoubleDelta, LZ4"}
+                        - {"name":"offs","type":"Nullable(Int64)","codec":"DoubleDelta, LZ4"}
+                        - {"name":"tagName","type":"Nullable(String)","codec":"LZ4"}
+                        - {"name":"status","type":"Nullable(Int64)","codec":"T64, LZ4"}
+                    indexes:
+                        - {"name":"idx_set_objectId","expression":"objectId","type":"set(1000)","granularity":1}
+                        - {"name":"idx_set_parameterId","expression":"parameterId","type":"set(1000)","granularity":1}
+                        - {"name":"idx_minmax_h1","expression":"intDiv(ts, 3600000)","type":"minmax","granularity":1}
+                        - {"name":"idx_minmax_offs","expression":"offs","type":"minmax","granularity":1}
+                    partition_by: "toDate(fromUnixTimestamp64Milli(toInt64(ts), 'UTC'))"
+                    primary_key: "(parameterId, objectId, systemId, attrId, ts)"
+                    order_by: "(parameterId, objectId, systemId, attrId, ts, ts2, invalid, quality, value, strValue)"
+                    sample_by: "parameterId"
+                    settings:
+                        index_granularity: 8192
+                        allow_nullable_key: 1
+                        ratio_of_defaults_for_sparse_serialization: 0.95
+                        ttl_only_drop_parts: 0
+                        columns_to_prewarm_mark_cache: "parameterId,objectId,systemId,attrId,ts"
+                        prewarm_mark_cache: 1
+                        prewarm_primary_key_cache: 1
+                        use_primary_key_cache: 1
+                        primary_key_compression_codec: "LZ4"
+                        max_bytes_to_merge_at_max_space_in_pool: 161061273600
+                        max_bytes_to_merge_at_min_space_in_pool: 1048576
+                        max_parts_to_merge_at_once: 100
+                alarm_message:
+                    engine: ReplacingMergeTree
+                    columns:
+                        - {"name":"id","type":"UUID"}
+                        - {"name":"system_id","type":"UInt32"}
+                        - {"name":"object_id","type":"UInt32"}
+                        - {"name":"parameter_id","type":"UInt32"}
+                        - {"name":"detail_nr","type":"UInt32"}
+                        - {"name":"ts","type":"UInt64"}
+                        - {"name":"ts2","type":"UInt64"}
+                        - {"name":"quality","type":"Int64"}
+                        - {"name":"signal_val","type":"String"}
+                        - {"name":"ack_time","type":"UInt64"}
+                        - {"name":"in_time","type":"UInt64"}
+                        - {"name":"ack_state","type":"UInt32"}
+                        - {"name":"alert_class_name","type":"String"}
+                        - {"name":"ackable","type":"Bool"}
+                        - {"name":"direction","type":"Bool"}
+                        - {"name":"text","type":"String"}
+                        - {"name":"comment","type":"String"}
+                        - {"name":"signal_state","type":"UInt32"}
+                        - {"name":"user_name","type":"String"}
+                        - {"name":"description","type":"String"}
+                        - {"name":"text0","type":"String"}
+                        - {"name":"arm","type":"String"}
+                        - {"name":"prior","type":"UInt32"}
+                        - {"name":"invalid","type":"Bool"}
+                        - {"name":"insert_ts","type":"UInt64"}
+                        - {"name":"out_of_service","type":"Bool"}
+                        - {"name":"alert_class","type":"String"}
+                        - {"name":"alert_class_by_group","type":"Map(String, String)"}
+                        - {"name":"tag_name","type":"String"}
+                        - {"name":"responsibility_area","type":"Array(String)"}
+                        - {"name":"control_time","type":"UInt64"}
+                    order_by: "(ts, ts2, id)"
+                    settings:
+                        index_granularity: 8192
 
 @@END
 @@PORTABLE {"path":"examples/sdku/library-packages/sdku/1.0.0/roles/library_sdku/templates/.base_compose.yml.j2","mode":420,"size":1102,"sha256":"2a444d68f63434a3d90cbfb9529b8ec7989585a1469a6af527685a5bf0154296","index":0,"count":1,"encoding":"utf-8","payloadBytes":1102}
@@ -57978,7 +58248,7 @@ all:
         node3: {}
 
 @@END
-@@PORTABLE {"path":"examples/valid/bind-authoritative/project.yml","mode":420,"size":937,"sha256":"7fc1cb9809f0f299d0335d3a7dfd21c7272f37bbd6526e97a13ab9f6ea80a486","index":0,"count":1,"encoding":"utf-8","payloadBytes":937}
+@@PORTABLE {"path":"examples/valid/bind-authoritative/project.yml","mode":420,"size":937,"sha256":"e1b4a8abf60eeaefb344306c623459fdf4aba5e308bb8089a56a9d805396a428","index":0,"count":1,"encoding":"utf-8","payloadBytes":937}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -57990,7 +58260,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:417be4b10a4dfc81352af03149cd562201a63f46a9a582e9c5adfc17051f3223
+  digest: sha256:6b87cd3eb49b1229ebfd21dd1e24c71e100d7dc5b38f790046762a52f773c28a
   services:
     bind:
       definitionVersion: 1.0.0-alpha.2
@@ -58027,7 +58297,7 @@ all:
         bind1: {}
 
 @@END
-@@PORTABLE {"path":"examples/valid/bind-standalone/project.yml","mode":420,"size":646,"sha256":"e8781a348325196b592a2c4ee33287608cb5cffe04223c61f9d29c27e732f517","index":0,"count":1,"encoding":"utf-8","payloadBytes":646}
+@@PORTABLE {"path":"examples/valid/bind-standalone/project.yml","mode":420,"size":646,"sha256":"41941c7d6bf41d7f48bd713b9da45f672d22a7e4bfd83e30a397ca19aeb826be","index":0,"count":1,"encoding":"utf-8","payloadBytes":646}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -58039,7 +58309,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:417be4b10a4dfc81352af03149cd562201a63f46a9a582e9c5adfc17051f3223
+  digest: sha256:6b87cd3eb49b1229ebfd21dd1e24c71e100d7dc5b38f790046762a52f773c28a
   services:
     bind:
       definitionVersion: 1.0.0-alpha.2
@@ -58066,7 +58336,7 @@ all:
       hosts: {}
 
 @@END
-@@PORTABLE {"path":"examples/valid/empty/project.yml","mode":420,"size":494,"sha256":"ce895555f3ca8914221b92e51b7b24b2a963871903fa879756cb47999ace81bb","index":0,"count":1,"encoding":"utf-8","payloadBytes":494}
+@@PORTABLE {"path":"examples/valid/empty/project.yml","mode":420,"size":494,"sha256":"cc5eee6c7303a15b7dffc495e88778f36fb20248bd99eef7dbad1c7f4af20bb1","index":0,"count":1,"encoding":"utf-8","payloadBytes":494}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -58078,7 +58348,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:417be4b10a4dfc81352af03149cd562201a63f46a9a582e9c5adfc17051f3223
+  digest: sha256:6b87cd3eb49b1229ebfd21dd1e24c71e100d7dc5b38f790046762a52f773c28a
   services: {}
 
 @@END
@@ -58172,7 +58442,7 @@ all:
       hosts: {node1: {}, node2: {}, node3: {}}
 
 @@END
-@@PORTABLE {"path":"examples/valid/haproxy-routing/project.yml","mode":420,"size":929,"sha256":"757af1b7cccda1a8cca727dc4734d6da240fccca555a45e6af5532ef18a15402","index":0,"count":1,"encoding":"utf-8","payloadBytes":929}
+@@PORTABLE {"path":"examples/valid/haproxy-routing/project.yml","mode":420,"size":929,"sha256":"b36f83659a31cfae4798cb86071fbf277998e13eefaf46c1570f2595e5fc36ec","index":0,"count":1,"encoding":"utf-8","payloadBytes":929}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -58184,7 +58454,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:417be4b10a4dfc81352af03149cd562201a63f46a9a582e9c5adfc17051f3223
+  digest: sha256:6b87cd3eb49b1229ebfd21dd1e24c71e100d7dc5b38f790046762a52f773c28a
   services:
     haproxy:
       definitionVersion: 1.0.0-alpha.1
@@ -58260,7 +58530,7 @@ all:
         redos-node1: {}
 
 @@END
-@@PORTABLE {"path":"examples/valid/kafka-distributed/project.yml","mode":420,"size":641,"sha256":"fda62eca3222a44983c0e556e90c3638e399a714dcdc1d24eabd58a921269684","index":0,"count":1,"encoding":"utf-8","payloadBytes":641}
+@@PORTABLE {"path":"examples/valid/kafka-distributed/project.yml","mode":420,"size":641,"sha256":"781f506a05ed49c5d70e6da774cecf830f7b173ccd57c0af6c19a9c90be5c60d","index":0,"count":1,"encoding":"utf-8","payloadBytes":641}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -58272,7 +58542,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:417be4b10a4dfc81352af03149cd562201a63f46a9a582e9c5adfc17051f3223
+  digest: sha256:6b87cd3eb49b1229ebfd21dd1e24c71e100d7dc5b38f790046762a52f773c28a
   services:
     kafka:
       definitionVersion: 1.0.0-alpha.3
@@ -58361,7 +58631,7 @@ all:
         node3: {}
 
 @@END
-@@PORTABLE {"path":"examples/valid/kafka-real-multihost/project.yml","mode":420,"size":648,"sha256":"a620394325a1bafc68b867d6383cf35384fba7c4bf9d85dc8f8a3d9cc8da586f","index":0,"count":1,"encoding":"utf-8","payloadBytes":648}
+@@PORTABLE {"path":"examples/valid/kafka-real-multihost/project.yml","mode":420,"size":648,"sha256":"1e2dcc11a567c9eafd259590fe1ce15f95cf863f5c8a304ad41b5fe7d2a02958","index":0,"count":1,"encoding":"utf-8","payloadBytes":648}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -58373,7 +58643,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:417be4b10a4dfc81352af03149cd562201a63f46a9a582e9c5adfc17051f3223
+  digest: sha256:6b87cd3eb49b1229ebfd21dd1e24c71e100d7dc5b38f790046762a52f773c28a
   services:
     kafka:
       definitionVersion: 1.0.0-alpha.3
@@ -58441,7 +58711,7 @@ all:
         redos-node1: {}
 
 @@END
-@@PORTABLE {"path":"examples/valid/kafka-single/project.yml","mode":420,"size":636,"sha256":"f471f9c7fec2693a21da8edaffad30f0cfbc484f65e8a82b24c55c83532bc2ec","index":0,"count":1,"encoding":"utf-8","payloadBytes":636}
+@@PORTABLE {"path":"examples/valid/kafka-single/project.yml","mode":420,"size":636,"sha256":"dd1c33762c717255ef0ffcde971d7d08a808a84d22c6f79876d5fbb9aa150a88","index":0,"count":1,"encoding":"utf-8","payloadBytes":636}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -58453,7 +58723,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:417be4b10a4dfc81352af03149cd562201a63f46a9a582e9c5adfc17051f3223
+  digest: sha256:6b87cd3eb49b1229ebfd21dd1e24c71e100d7dc5b38f790046762a52f773c28a
   services:
     kafka:
       definitionVersion: 1.0.0-alpha.3
@@ -58525,7 +58795,7 @@ all:
         node3: {}
 
 @@END
-@@PORTABLE {"path":"examples/valid/kafka-split-multihost/project.yml","mode":420,"size":657,"sha256":"8f853eb51955d55b22435bd2e5398b30bd177c510cb2d31a9b22c01a57402c62","index":0,"count":1,"encoding":"utf-8","payloadBytes":657}
+@@PORTABLE {"path":"examples/valid/kafka-split-multihost/project.yml","mode":420,"size":657,"sha256":"6011da37e6524a10142e52e47b56e644ff32088f04d629ae50922dc643737417","index":0,"count":1,"encoding":"utf-8","payloadBytes":657}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -58537,7 +58807,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:417be4b10a4dfc81352af03149cd562201a63f46a9a582e9c5adfc17051f3223
+  digest: sha256:6b87cd3eb49b1229ebfd21dd1e24c71e100d7dc5b38f790046762a52f773c28a
   services:
     kafka:
       definitionVersion: 1.0.0-alpha.3
@@ -58662,7 +58932,7 @@ all:
         node3: {}
 
 @@END
-@@PORTABLE {"path":"examples/valid/keepalived-vrrp/project.yml","mode":420,"size":656,"sha256":"52728531aa0e2ba6995f09243559be399dc4b046b8022faecac3eec1a8003a5e","index":0,"count":1,"encoding":"utf-8","payloadBytes":656}
+@@PORTABLE {"path":"examples/valid/keepalived-vrrp/project.yml","mode":420,"size":656,"sha256":"d71e358c7cb2299d2125ce66da0197dce554d6ae2da487b00b63393796d36873","index":0,"count":1,"encoding":"utf-8","payloadBytes":656}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -58674,7 +58944,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:417be4b10a4dfc81352af03149cd562201a63f46a9a582e9c5adfc17051f3223
+  digest: sha256:6b87cd3eb49b1229ebfd21dd1e24c71e100d7dc5b38f790046762a52f773c28a
   services:
     keepalived:
       definitionVersion: 1.0.0-alpha.1
@@ -58755,7 +59025,7 @@ all:
       hosts: {node1: {}, node2: {}, node3: {}}
 
 @@END
-@@PORTABLE {"path":"examples/valid/net-04-2-integration/project.yml","mode":420,"size":1086,"sha256":"a15a23cbc468a74667c05242dfe0facfa86b62f93747364cc35fb539c8250dd4","index":0,"count":1,"encoding":"utf-8","payloadBytes":1086}
+@@PORTABLE {"path":"examples/valid/net-04-2-integration/project.yml","mode":420,"size":1086,"sha256":"a59a116341d7ea544fdcc7e336759cb08c3a34c4f61a6f23f9724128ee45f446","index":0,"count":1,"encoding":"utf-8","payloadBytes":1086}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -58767,7 +59037,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:417be4b10a4dfc81352af03149cd562201a63f46a9a582e9c5adfc17051f3223
+  digest: sha256:6b87cd3eb49b1229ebfd21dd1e24c71e100d7dc5b38f790046762a52f773c28a
   services:
     bind:
       definitionVersion: 1.0.0-alpha.2
@@ -58827,7 +59097,7 @@ all:
         node1: {}
 
 @@END
-@@PORTABLE {"path":"examples/valid/pki-host-scope/project.yml","mode":420,"size":637,"sha256":"f9edf24ee9b8d151b61acc142aa0b7d5b71afb8520848ec8a8fa42e292c7a9df","index":0,"count":1,"encoding":"utf-8","payloadBytes":637}
+@@PORTABLE {"path":"examples/valid/pki-host-scope/project.yml","mode":420,"size":637,"sha256":"90f45d8575b9f10d2c9121284d4c6aaa8a185f928e28bcd2aef2afb39283a384","index":0,"count":1,"encoding":"utf-8","payloadBytes":637}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -58839,7 +59109,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:417be4b10a4dfc81352af03149cd562201a63f46a9a582e9c5adfc17051f3223
+  digest: sha256:6b87cd3eb49b1229ebfd21dd1e24c71e100d7dc5b38f790046762a52f773c28a
   services:
     kafka:
       definitionVersion: 1.0.0-alpha.3
@@ -58904,7 +59174,7 @@ all:
         db-node3: {}
 
 @@END
-@@PORTABLE {"path":"examples/valid/postgresql-patroni/project.yml","mode":420,"size":782,"sha256":"3500e86d54254fb55191eca1b3b91401ff5e8e41b584156a4098ee82e59c3341","index":0,"count":1,"encoding":"utf-8","payloadBytes":782}
+@@PORTABLE {"path":"examples/valid/postgresql-patroni/project.yml","mode":420,"size":782,"sha256":"01e0ab72f9728d6244417bc90586ca3e42c1a32c1e19f134f1280c6da33aa09c","index":0,"count":1,"encoding":"utf-8","payloadBytes":782}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -58916,7 +59186,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:417be4b10a4dfc81352af03149cd562201a63f46a9a582e9c5adfc17051f3223
+  digest: sha256:6b87cd3eb49b1229ebfd21dd1e24c71e100d7dc5b38f790046762a52f773c28a
   services:
     postgresql:
       definitionVersion: 1.0.0-alpha.1
@@ -58961,7 +59231,7 @@ all:
       hosts: {db-node1: {}}
 
 @@END
-@@PORTABLE {"path":"examples/valid/postgresql-standalone/project.yml","mode":420,"size":656,"sha256":"018f4c3487926148b5fe335848d6cbb49bc8779b102b0749eef30014b5dc5aa5","index":0,"count":1,"encoding":"utf-8","payloadBytes":656}
+@@PORTABLE {"path":"examples/valid/postgresql-standalone/project.yml","mode":420,"size":656,"sha256":"d524661d7d862a167f6f3b6d402f21c8025a8b26de87a8dc4dfbda2232cc263a","index":0,"count":1,"encoding":"utf-8","payloadBytes":656}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -58973,7 +59243,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:417be4b10a4dfc81352af03149cd562201a63f46a9a582e9c5adfc17051f3223
+  digest: sha256:6b87cd3eb49b1229ebfd21dd1e24c71e100d7dc5b38f790046762a52f773c28a
   services:
     postgresql:
       definitionVersion: 1.0.0-alpha.1
@@ -59089,7 +59359,7 @@ all:
       hosts: {node1: {}, node2: {}, node3: {}}
 
 @@END
-@@PORTABLE {"path":"examples/valid/ui-project-snapshot/project.yml","mode":420,"size":1353,"sha256":"2aae93e2a4cb5919208cd266ea88728ba941f9c1d10e222529fa69a73ea2ab20","index":0,"count":1,"encoding":"utf-8","payloadBytes":1353}
+@@PORTABLE {"path":"examples/valid/ui-project-snapshot/project.yml","mode":420,"size":1353,"sha256":"846326ec3a9bc9cb5a6f25caff93c1e96fd2e3c8efb76f760cbf9e507924a164","index":0,"count":1,"encoding":"utf-8","payloadBytes":1353}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -59101,7 +59371,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:417be4b10a4dfc81352af03149cd562201a63f46a9a582e9c5adfc17051f3223
+  digest: sha256:6b87cd3eb49b1229ebfd21dd1e24c71e100d7dc5b38f790046762a52f773c28a
   services:
     bind:
       definitionVersion: 1.0.0-alpha.2
@@ -88860,7 +89130,7 @@ export function VerifyProject() {
 }
 
 @@END
-@@PORTABLE {"path":"frontend/wailsjs/go/models.ts","mode":420,"size":114065,"sha256":"ae5cd8f4880a65b780b66b600c5dc411b4925e9143c001b7c614a41972355ea6","index":0,"count":3,"encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"frontend/wailsjs/go/models.ts","mode":420,"size":114259,"sha256":"943ed1145eba0a5cb887b2109448c286bb84770c04ac1434a509d343615f17f1","index":0,"count":3,"encoding":"utf-8","payloadBytes":48000}
 export namespace appconfig {
   export class ServiceExecutionPriority {
     serviceType: string;
@@ -89071,6 +89341,8 @@ export namespace coreadapter {
     }
   }
   export class ApplicationLibrary {
+    tables?: Record<string, Array<number>>;
+    resourceDefaults?: Record<string, Array<number>>;
     topics: Record<string, Array<number>>;
     runtimeDirectory: string;
     connections: Record<string, Array<number>>;
@@ -89086,6 +89358,8 @@ export namespace coreadapter {
 
     constructor(source: any = {}) {
       if ("string" === typeof source) source = JSON.parse(source);
+      this.tables = source["tables"];
+      this.resourceDefaults = source["resourceDefaults"];
       this.topics = source["topics"];
       this.runtimeDirectory = source["runtimeDirectory"];
       this.connections = source["connections"];
@@ -90450,15 +90724,15 @@ export namespace desktop {
     values: Record<string, string>;
 
     static createFrom(source: any = {}) {
-      return new PendingRuntimeSecretValuesInput(source);
+      return new PendingR
+@@END
+@@PORTABLE {"path":"frontend/wailsjs/go/models.ts","mode":420,"size":114259,"sha256":"943ed1145eba0a5cb887b2109448c286bb84770c04ac1434a509d343615f17f1","index":1,"count":3,"encoding":"utf-8","payloadBytes":48000}
+untimeSecretValuesInput(source);
     }
 
     constructor(source: any = {}) {
       if ("string" === typeof source) source = JSON.parse(source);
-      this.serviceDeployment = source["serviceDeplo
-@@END
-@@PORTABLE {"path":"frontend/wailsjs/go/models.ts","mode":420,"size":114065,"sha256":"ae5cd8f4880a65b780b66b600c5dc411b4925e9143c001b7c614a41972355ea6","index":1,"count":3,"encoding":"utf-8","payloadBytes":48000}
-yment"];
+      this.serviceDeployment = source["serviceDeployment"];
       this.values = source["values"];
     }
   }
@@ -92056,13 +92330,13 @@ export namespace installer {
       if ("string" === typeof source) source = JSON.parse(source);
       this.apiVersion = source["apiVersion"];
       this.kind = source["kind"];
-      this.sourceProjectRoot = source["sourceProjectRoot"];
+      this.sourceProjectRoot
+@@END
+@@PORTABLE {"path":"frontend/wailsjs/go/models.ts","mode":420,"size":114259,"sha256":"943ed1145eba0a5cb887b2109448c286bb84770c04ac1434a509d343615f17f1","index":2,"count":3,"encoding":"utf-8","payloadBytes":18259}
+ = source["sourceProjectRoot"];
       this.sourceProjectRevision = source["sourceProjectRevision"];
       this.destinationParent = source["destinationParent"];
-      this.directoryName = source[
-@@END
-@@PORTABLE {"path":"frontend/wailsjs/go/models.ts","mode":420,"size":114065,"sha256":"ae5cd8f4880a65b780b66b600c5dc411b4925e9143c001b7c614a41972355ea6","index":2,"count":3,"encoding":"utf-8","payloadBytes":18065}
-"directoryName"];
+      this.directoryName = source["directoryName"];
       this.destinationRoot = source["destinationRoot"];
       this.documents = this.convertValues(
         source["documents"],
@@ -93936,7 +94210,7 @@ func DecodeSnapshot(data []byte) (*Snapshot, error) {
 }
 
 @@END
-@@PORTABLE {"path":"internal/coreadapter/application_libraries.go","mode":420,"size":5188,"sha256":"8a8b69043a7de09a64dab6f3a8a0c93942b22bdb8d5745734817930f9ae29dd2","index":0,"count":1,"encoding":"utf-8","payloadBytes":5188}
+@@PORTABLE {"path":"internal/coreadapter/application_libraries.go","mode":420,"size":5364,"sha256":"0dbbd706293f78747deba655826ce6e7cf953d40ecc2746355d89532b936ae60","index":0,"count":1,"encoding":"utf-8","payloadBytes":5364}
 package coreadapter
 
 import (
@@ -93954,6 +94228,8 @@ type ApplicationLibraries struct {
 }
 
 type ApplicationLibrary struct {
+	Tables                   map[string]json.RawMessage     `json:"tables,omitempty"`
+	ResourceDefaults         map[string]json.RawMessage     `json:"resourceDefaults,omitempty"`
 	Topics                   map[string]json.RawMessage     `json:"topics"`
 	RuntimeDirectory         string                         `json:"runtimeDirectory"`
 	Connections              map[string]json.RawMessage     `json:"connections"`
@@ -114615,919 +114891,5 @@ func tryProcessFileLock(file *os.File) (func() error, bool, error) {
 	}
 	return func() error { return windows.UnlockFileEx(windows.Handle(file.Fd()), 0, 1, 0, overlapped) }, true, nil
 }
-
-@@END
-@@PORTABLE {"path":"internal/installer/project_export.go","mode":420,"size":19676,"sha256":"53ba8aabaa3a54ec046783fba40ac6f1b98416375dcf372987cb7876b4eb8edd","index":0,"count":1,"encoding":"utf-8","payloadBytes":19676}
-package installer
-
-import (
-	"crypto/sha256"
-	"encoding/hex"
-	"errors"
-	"path"
-	"path/filepath"
-	"sort"
-	"strconv"
-	"strings"
-)
-
-const (
-	projectExportAPIVersion   = "platform.installer/project-export/v1alpha1"
-	maxExportFiles            = 4096
-	maxExportDirectoryEntries = maxExportFiles
-	maxExportFileBytes        = int64(4 * 1024 * 1024)
-	maxExportTotalBytes       = int64(64 * 1024 * 1024)
-	maxExportLogicalBytes     = 512
-)
-
-// ProjectExportDocument is bounded metadata for one portable desired-state
-// document. Content is intentionally never returned across the App/Wails seam.
-type ProjectExportDocument struct {
-	LogicalPath string `json:"logicalPath"`
-	Size        int64  `json:"size"`
-	Digest      string `json:"digest"`
-}
-
-// ProjectExportPlan is an in-memory capability summary, not portable desired
-// state and not a public/versioned project contract.
-type ProjectExportPlan struct {
-	APIVersion            string                  `json:"apiVersion"`
-	Kind                  string                  `json:"kind"`
-	SourceProjectRoot     string                  `json:"sourceProjectRoot"`
-	SourceProjectRevision string                  `json:"sourceProjectRevision"`
-	DestinationParent     string                  `json:"destinationParent"`
-	DirectoryName         string                  `json:"directoryName"`
-	DestinationRoot       string                  `json:"destinationRoot"`
-	Documents             []ProjectExportDocument `json:"documents"`
-	AggregateSize         int64                   `json:"aggregateSize"`
-	ExcludedCategories    []string                `json:"excludedCategories"`
-	PlanDigest            string                  `json:"planDigest"`
-}
-
-type ProjectExportResult struct {
-	APIVersion            string `json:"apiVersion"`
-	Kind                  string `json:"kind"`
-	Status                string `json:"status"`
-	DestinationRoot       string `json:"destinationRoot,omitempty"`
-	SourceProjectRevision string `json:"sourceProjectRevision,omitempty"`
-	DocumentCount         int    `json:"documentCount"`
-	AggregateSize         int64  `json:"aggregateSize"`
-	ErrorCode             string `json:"errorCode,omitempty"`
-}
-
-// ProjectExport retains the two opened filesystem authorities for one preview
-// and exactly one commit attempt. It must be closed when the App invalidates
-// the preview or shuts down.
-type ProjectExport struct {
-	source           *exportDirectory
-	destination      *exportDirectory
-	sourceIdentity   exportIdentity
-	destIdentity     exportIdentity
-	sourceDisplay    string
-	destDisplay      string
-	directoryName    string
-	plan             ProjectExportPlan
-	manifest         exportObservation
-	writeObservation func(*exportDirectory, exportObservation) error
-	closed           bool
-}
-
-func PlanProjectExport(sourceRoot, destinationParent, directoryName string) (*ProjectExport, ProjectExportPlan, error) {
-	name, err := ValidateExportDirectoryName(directoryName)
-	if err != nil {
-		return nil, ProjectExportPlan{}, err
-	}
-	sourceDisplay, err := absoluteExportDisplayPath(sourceRoot)
-	if err != nil {
-		return nil, ProjectExportPlan{}, errors.New("EXPORT_SOURCE_UNSAFE")
-	}
-	destDisplay, err := absoluteExportDisplayPath(destinationParent)
-	if err != nil {
-		return nil, ProjectExportPlan{}, errors.New("EXPORT_DESTINATION_INVALID")
-	}
-	if rootsOverlap(sourceDisplay, filepath.Join(destDisplay, name)) {
-		return nil, ProjectExportPlan{}, errors.New("EXPORT_DESTINATION_INVALID")
-	}
-	source, err := openExportSourceDirectory(sourceDisplay)
-	if err != nil {
-		return nil, ProjectExportPlan{}, errors.New("EXPORT_SOURCE_UNSAFE")
-	}
-	destination, err := openExportDestinationDirectory(destDisplay)
-	if err != nil {
-		source.close()
-		return nil, ProjectExportPlan{}, errors.New("EXPORT_DESTINATION_UNSAFE")
-	}
-	capability := &ProjectExport{source: source, destination: destination, sourceIdentity: source.identity(), destIdentity: destination.identity(), sourceDisplay: sourceDisplay, destDisplay: destDisplay, directoryName: name}
-	observation, err := stableExportObservation(source)
-	if err != nil {
-		capability.Close()
-		return nil, ProjectExportPlan{}, errors.New(exportErrorCode(err, "EXPORT_SOURCE_UNSAFE"))
-	}
-	if exists, existErr := destination.exists(name); existErr != nil || exists {
-		capability.Close()
-		if existErr != nil {
-			return nil, ProjectExportPlan{}, errors.New("EXPORT_DESTINATION_UNSAFE")
-		}
-		return nil, ProjectExportPlan{}, errors.New("EXPORT_DESTINATION_EXISTS")
-	}
-	output, err := namedExportObservation(observation, name)
-	if err != nil {
-		capability.Close()
-		return nil, ProjectExportPlan{}, err
-	}
-	plan := projectExportPlan(sourceDisplay, destDisplay, name, capability.sourceIdentity, capability.destIdentity, output, observation.revision)
-	// The capability retains only integrity metadata between preview and
-	// commit. Exact bytes are re-read through the held source authority during
-	// Commit, after the source has been proven unchanged.
-	capability.plan, capability.manifest = plan, exportObservationMetadata(observation)
-	return capability, cloneProjectExportPlan(plan), nil
-}
-
-func (export *ProjectExport) Plan() ProjectExportPlan { return cloneProjectExportPlan(export.plan) }
-
-func (export *ProjectExport) Close() {
-	if export == nil || export.closed {
-		return
-	}
-	export.closed = true
-	if export.source != nil {
-		export.source.close()
-	}
-	if export.destination != nil {
-		export.destination.close()
-	}
-}
-
-func (export *ProjectExport) Commit(planDigest string) (result ProjectExportResult) {
-	result = ProjectExportResult{APIVersion: projectExportAPIVersion, Kind: "ProjectExportResult", Status: "FAILED", ErrorCode: "EXPORT_PLAN_STALE"}
-	if export == nil || export.closed || planDigest == "" || planDigest != export.plan.PlanDigest {
-		return result
-	}
-	defer export.Close()
-	if export.source.identity() != export.sourceIdentity || export.destination.identity() != export.destIdentity {
-		result.ErrorCode = "PROJECT_CHANGED"
-		return result
-	}
-	observation, err := stableExportObservation(export.source)
-	if err != nil {
-		result.ErrorCode = exportErrorCode(err, "PROJECT_CHANGED")
-		return result
-	}
-	if !sameExportObservation(observation, export.manifest) {
-		result.ErrorCode = "EXPORT_PLAN_STALE"
-		return result
-	}
-	output, err := namedExportObservation(observation, export.directoryName)
-	if err != nil {
-		result.ErrorCode = exportErrorCode(err, "EXPORT_SOURCE_UNSAFE")
-		return result
-	}
-	if exists, existErr := export.destination.exists(export.directoryName); existErr != nil || exists {
-		if existErr != nil {
-			result.ErrorCode = "EXPORT_DESTINATION_UNSAFE"
-		} else {
-			result.ErrorCode = "EXPORT_DESTINATION_EXISTS"
-		}
-		return result
-	}
-	staging, stagingName, err := export.destination.createStaging(export.directoryName)
-	if err != nil {
-		result.ErrorCode = "EXPORT_WRITE_FAILED"
-		return result
-	}
-	published := false
-	defer func() {
-		if !published {
-			if cleanupErr := export.destination.removeOwnedTree(staging, stagingName); cleanupErr != nil {
-				result.ErrorCode = exportErrorCode(cleanupErr, "EXPORT_STAGING_RETAINED")
-			}
-		}
-		staging.close()
-	}()
-	write := writeExportObservation
-	if export.writeObservation != nil {
-		write = export.writeObservation
-	}
-	if err := write(staging, output); err != nil {
-		result.ErrorCode = exportErrorCode(err, "EXPORT_WRITE_FAILED")
-		return result
-	}
-	if err := verifyExportObservation(staging, output); err != nil {
-		result.ErrorCode = "EXPORT_WRITE_FAILED"
-		return result
-	}
-	finalObservation, err := stableExportObservation(export.source)
-	if err != nil || !sameExportObservation(finalObservation, export.manifest) || export.source.identity() != export.sourceIdentity {
-		result.ErrorCode = "PROJECT_CHANGED"
-		return result
-	}
-	if exists, existErr := export.destination.exists(export.directoryName); existErr != nil || exists {
-		if existErr != nil {
-			result.ErrorCode = "EXPORT_DESTINATION_UNSAFE"
-		} else {
-			result.ErrorCode = "EXPORT_DESTINATION_EXISTS"
-		}
-		return result
-	}
-	if err := export.destination.publish(staging, stagingName, export.directoryName); err != nil {
-		result.ErrorCode = "EXPORT_PUBLISH_FAILED"
-		return result
-	}
-	published = true
-	return ProjectExportResult{APIVersion: projectExportAPIVersion, Kind: "ProjectExportResult", Status: "EXPORTED", DestinationRoot: filepath.Join(export.destDisplay, export.directoryName), SourceProjectRevision: observation.revision, DocumentCount: len(output.documents), AggregateSize: output.total}
-}
-
-type exportRecord struct {
-	ProjectExportDocument
-	identity exportFileIdentity
-	content  []byte
-}
-
-type exportObservation struct {
-	documents []exportRecord
-	revision  string
-	total     int64
-}
-
-func exportObservationMetadata(observation exportObservation) exportObservation {
-	metadata := exportObservation{
-		documents: make([]exportRecord, len(observation.documents)),
-		revision:  observation.revision,
-		total:     observation.total,
-	}
-	for index, record := range observation.documents {
-		metadata.documents[index] = exportRecord{
-			ProjectExportDocument: record.ProjectExportDocument,
-			identity:              record.identity,
-		}
-	}
-	return metadata
-}
-
-func stableExportObservation(root *exportDirectory) (exportObservation, error) {
-	first, err := observeExportProject(root)
-	if err != nil {
-		return exportObservation{}, err
-	}
-	second, err := observeExportProject(root)
-	if err != nil {
-		return exportObservation{}, err
-	}
-	if !sameExportObservation(first, second) {
-		return exportObservation{}, errors.New("PROJECT_CHANGED")
-	}
-	return second, nil
-}
-
-func observeExportProject(root *exportDirectory) (exportObservation, error) {
-	if root == nil || root.identity().empty() {
-		return exportObservation{}, errors.New("EXPORT_SOURCE_UNSAFE")
-	}
-	result := exportObservation{}
-	seen := map[string]bool{}
-	caseFolded := map[string]bool{}
-	for _, logical := range []string{"project.yml", "ansible.cfg", "inventory/hosts.yml"} {
-		if err := addExportDocument(root, logical, &result, seen, caseFolded); err != nil {
-			if isExportNotExist(err) {
-				continue
-			}
-			return exportObservation{}, err
-		}
-	}
-	for _, logical := range []string{"inventory/group_vars", "inventory/host_vars", "application-packages", "library-packages"} {
-		directory, err := root.openDirectory(strings.Split(logical, "/"))
-		if isExportNotExist(err) {
-			continue
-		}
-		if err != nil {
-			return exportObservation{}, errors.New("EXPORT_SOURCE_UNSAFE")
-		}
-		err = collectExportDirectory(directory, logical, &result, seen, caseFolded)
-		directory.close()
-		if err != nil {
-			return exportObservation{}, err
-		}
-	}
-	if err := validateExportPackages(result.documents); err != nil {
-		return exportObservation{}, err
-	}
-	sort.Slice(result.documents, func(left, right int) bool {
-		return result.documents[left].LogicalPath < result.documents[right].LogicalPath
-	})
-	result.revision = exportContentRevision(result.documents)
-	return result, nil
-}
-
-func exportContentRevision(documents []exportRecord) string {
-	var revisionInput []byte
-	for _, document := range documents {
-		if document.LogicalPath == generatedDocument {
-			continue
-		}
-		revisionInput = append(revisionInput, []byte(document.LogicalPath)...)
-		revisionInput = append(revisionInput, 0)
-		revisionInput = append(revisionInput, []byte(document.Digest)...)
-		revisionInput = append(revisionInput, 0)
-	}
-	return digestBytes(revisionInput)
-}
-
-func collectExportDirectory(directory *exportDirectory, prefix string, result *exportObservation, seen, caseFolded map[string]bool) error {
-	entries, err := directory.entries()
-	if err != nil {
-		return errors.New("EXPORT_SOURCE_UNSAFE")
-	}
-	for _, entry := range entries {
-		logical := prefix + "/" + entry.name
-		if !safeExportLogicalPath(logical) {
-			return errors.New("EXPORT_SOURCE_UNSAFE")
-		}
-		switch entry.kind {
-		case exportEntryDirectory:
-			child, openErr := directory.openDirectory([]string{entry.name})
-			if openErr != nil {
-				return errors.New("EXPORT_SOURCE_UNSAFE")
-			}
-			recurseErr := collectExportDirectory(child, logical, result, seen, caseFolded)
-			child.close()
-			if recurseErr != nil {
-				return recurseErr
-			}
-		case exportEntryRegular:
-			if logical == generatedDocument {
-				continue
-			}
-			extension := strings.ToLower(path.Ext(entry.name))
-			if strings.HasPrefix(logical, "application-packages/") || strings.HasPrefix(logical, "library-packages/") || extension == ".yml" || extension == ".yaml" || extension == ".json" {
-				if strings.HasPrefix(logical, "application-packages/") || strings.HasPrefix(logical, "library-packages/") {
-					if !safeApplicationPackagePath(logical) {
-						return errors.New("APPLICATION_PACKAGE_PATH_INVALID")
-					}
-				}
-				if err := addExportDocument(directory, entry.name, result, seen, caseFolded, logical); err != nil {
-					return err
-				}
-			}
-		default:
-			return errors.New("EXPORT_SOURCE_UNSAFE")
-		}
-	}
-	return nil
-}
-
-func addExportDocument(root *exportDirectory, logical string, result *exportObservation, seen, caseFolded map[string]bool, explicit ...string) error {
-	parts := strings.Split(logical, "/")
-	storedLogical := logical
-	if len(explicit) == 1 {
-		storedLogical = explicit[0]
-	}
-	if !safeExportLogicalPath(storedLogical) {
-		return errors.New("EXPORT_SOURCE_UNSAFE")
-	}
-	if seen[storedLogical] || caseFolded[strings.ToLower(storedLogical)] {
-		return errors.New("EXPORT_SOURCE_UNSAFE")
-	}
-	content, identity, err := root.readFile(parts, maxExportFileBytes)
-	if err != nil {
-		return err
-	}
-	if len(result.documents) >= maxExportFiles || result.total > maxExportTotalBytes-int64(len(content)) {
-		return errors.New("EXPORT_LIMIT_EXCEEDED")
-	}
-	seen[storedLogical], caseFolded[strings.ToLower(storedLogical)] = true, true
-	record := exportRecord{ProjectExportDocument: ProjectExportDocument{LogicalPath: storedLogical, Size: int64(len(content)), Digest: digestBytes(content)}, identity: identity, content: content}
-	result.documents = append(result.documents, record)
-	result.total += int64(len(content))
-	return nil
-}
-
-func safeExportLogicalPath(logical string) bool {
-	if logical == "" || len([]byte(logical)) > maxExportLogicalBytes || strings.Contains(logical, "\\") || path.Clean(logical) != logical || strings.HasPrefix(logical, "/") {
-		return false
-	}
-	for _, part := range strings.Split(logical, "/") {
-		if part == "" || part == "." || part == ".." {
-			return false
-		}
-	}
-	return true
-}
-
-func sameExportObservation(left, right exportObservation) bool {
-	if left.revision != right.revision || left.total != right.total || len(left.documents) != len(right.documents) {
-		return false
-	}
-	for index := range left.documents {
-		leftDocument, rightDocument := left.documents[index], right.documents[index]
-		if leftDocument.LogicalPath != rightDocument.LogicalPath || leftDocument.Size != rightDocument.Size || leftDocument.Digest != rightDocument.Digest || leftDocument.identity != rightDocument.identity {
-			return false
-		}
-	}
-	return true
-}
-
-func sameExportContentObservation(left, right exportObservation) bool {
-	if left.revision != right.revision || left.total != right.total || len(left.documents) != len(right.documents) {
-		return false
-	}
-	for index := range left.documents {
-		leftDocument, rightDocument := left.documents[index], right.documents[index]
-		if leftDocument.LogicalPath != rightDocument.LogicalPath || leftDocument.Size != rightDocument.Size || leftDocument.Digest != rightDocument.Digest {
-			return false
-		}
-	}
-	return true
-}
-
-func projectExportPlan(sourceRoot, destinationParent, name string, sourceIdentity, destinationIdentity exportIdentity, observation exportObservation, sourceRevision string) ProjectExportPlan {
-	documents := make([]ProjectExportDocument, len(observation.documents))
-	for index, document := range observation.documents {
-		documents[index] = document.ProjectExportDocument
-	}
-	plan := ProjectExportPlan{APIVersion: projectExportAPIVersion, Kind: "ProjectExportPlan", SourceProjectRoot: sourceRoot, SourceProjectRevision: sourceRevision, DestinationParent: destinationParent, DirectoryName: name, DestinationRoot: filepath.Join(destinationParent, name), Documents: documents, AggregateSize: observation.total, ExcludedCategories: []string{"DRAFT", "RUNTIME_CREDENTIALS", "GENERATED_STATE", "RUNTIME_STATE", "PLANS", "FACTS", "LOGS", "RESULTS", "VERIFICATION_EVIDENCE"}}
-	input := []byte(plan.APIVersion + "\x00" + sourceIdentity.String() + "\x00" + destinationIdentity.String() + "\x00" + plan.SourceProjectRevision + "\x00" + plan.DestinationRoot + "\x00")
-	for _, document := range documents {
-		input = append(input, []byte(document.LogicalPath)...)
-		input = append(input, 0)
-		input = append(input, []byte(document.Digest)...)
-		input = append(input, 0)
-		input = append(input, []byte(strconv.FormatInt(document.Size, 10))...)
-		input = append(input, 0)
-	}
-	sum := sha256.Sum256(input)
-	plan.PlanDigest = "sha256:" + hex.EncodeToString(sum[:])
-	return plan
-}
-
-func cloneProjectExportPlan(plan ProjectExportPlan) ProjectExportPlan {
-	plan.Documents = append([]ProjectExportDocument(nil), plan.Documents...)
-	plan.ExcludedCategories = append([]string(nil), plan.ExcludedCategories...)
-	return plan
-}
-
-func absoluteExportDisplayPath(value string) (string, error) {
-	if value == "" {
-		return "", errors.New("invalid path")
-	}
-	absolute, err := filepath.Abs(value)
-	if err != nil {
-		return "", err
-	}
-	return filepath.Clean(absolute), nil
-}
-
-func rootsOverlap(left, right string) bool {
-	leftToRight, leftErr := filepath.Rel(left, right)
-	rightToLeft, rightErr := filepath.Rel(right, left)
-	leftContainsRight := leftErr == nil && (leftToRight == "." || (leftToRight != ".." && !strings.HasPrefix(leftToRight, ".."+string(filepath.Separator))))
-	rightContainsLeft := rightErr == nil && (rightToLeft == "." || (rightToLeft != ".." && !strings.HasPrefix(rightToLeft, ".."+string(filepath.Separator))))
-	return leftContainsRight || rightContainsLeft
-}
-
-func writeExportObservation(staging *exportDirectory, observation exportObservation) error {
-	created := map[string]*exportDirectory{"": staging}
-	defer func() {
-		for logical, directory := range created {
-			if logical != "" {
-				directory.close()
-			}
-		}
-	}()
-	for _, document := range observation.documents {
-		parent := path.Dir(document.LogicalPath)
-		directory, err := ensureExportDirectory(staging, parent, created)
-		if err != nil {
-			return err
-		}
-		if err := directory.writeFile(path.Base(document.LogicalPath), document.content); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func ensureExportDirectory(root *exportDirectory, logical string, created map[string]*exportDirectory) (*exportDirectory, error) {
-	if logical == "." || logical == "" {
-		return root, nil
-	}
-	current, currentLogical := root, ""
-	for _, part := range strings.Split(logical, "/") {
-		if currentLogical == "" {
-			currentLogical = part
-		} else {
-			currentLogical += "/" + part
-		}
-		if known, ok := created[currentLogical]; ok {
-			current = known
-			continue
-		}
-		next, err := current.createDirectory(part)
-		if err != nil {
-			return nil, err
-		}
-		created[currentLogical], current = next, next
-	}
-	return current, nil
-}
-
-func verifyExportObservation(staging *exportDirectory, expected exportObservation) error {
-	actual, err := observeExportProject(staging)
-	if err != nil || !sameExportContentObservation(actual, expected) {
-		return errors.New("EXPORT_WRITE_FAILED")
-	}
-	return nil
-}
-
-func exportErrorCode(err error, fallback string) string {
-	if err == nil {
-		return fallback
-	}
-	for _, code := range []string{"PROJECT_CHANGED", "EXPORT_LIMIT_EXCEEDED", "EXPORT_SOURCE_UNSAFE", "EXPORT_DESTINATION_UNSAFE", "EXPORT_WRITE_FAILED", "EXPORT_STAGING_RETAINED"} {
-		if err.Error() == code {
-			return code
-		}
-	}
-	return fallback
-}
-
-@@END
-@@PORTABLE {"path":"internal/installer/project_export_other.go","mode":420,"size":1998,"sha256":"0d6df1155578328acdc61ddae29368e25b02be2591f97d23cbf3041a44ef55e9","index":0,"count":1,"encoding":"utf-8","payloadBytes":1998}
-//go:build !windows && !linux
-
-package installer
-
-import "errors"
-
-type exportIdentity struct{}
-
-func (exportIdentity) empty() bool    { return true }
-func (exportIdentity) String() string { return "" }
-
-type exportFileIdentity struct{}
-type exportDirectory struct{}
-type exportEntryKind uint8
-
-const (
-	exportEntryDirectory exportEntryKind = iota + 1
-	exportEntryRegular
-)
-
-type exportEntry struct {
-	name string
-	kind exportEntryKind
-}
-
-func openExportSourceDirectory(string) (*exportDirectory, error) {
-	return nil, errors.New("EXPORT_SOURCE_UNSAFE")
-}
-func openExportDestinationDirectory(string) (*exportDirectory, error) {
-	return nil, errors.New("EXPORT_DESTINATION_UNSAFE")
-}
-func (directory *exportDirectory) close()                   {}
-func (directory *exportDirectory) identity() exportIdentity { return exportIdentity{} }
-func (directory *exportDirectory) openDirectory([]string) (*exportDirectory, error) {
-	return nil, errors.New("unsupported")
-}
-func (directory *exportDirectory) entries() ([]exportEntry, error) {
-	return nil, errors.New("unsupported")
-}
-func (directory *exportDirectory) readFile([]string, int64) ([]byte, exportFileIdentity, error) {
-	return nil, exportFileIdentity{}, errors.New("unsupported")
-}
-func (directory *exportDirectory) exists(string) (bool, error) {
-	return false, errors.New("unsupported")
-}
-func (directory *exportDirectory) createStaging(string) (*exportDirectory, string, error) {
-	return nil, "", errors.New("unsupported")
-}
-func (directory *exportDirectory) createDirectory(string) (*exportDirectory, error) {
-	return nil, errors.New("unsupported")
-}
-func (directory *exportDirectory) writeFile(string, []byte) error { return errors.New("unsupported") }
-func (directory *exportDirectory) publish(*exportDirectory, string, string) error {
-	return errors.New("unsupported")
-}
-func (directory *exportDirectory) removeOwnedTree(*exportDirectory, string) error {
-	return errors.New("unsupported")
-}
-func isExportNotExist(error) bool { return false }
-
-@@END
-@@PORTABLE {"path":"internal/installer/project_export_unix.go","mode":420,"size":9965,"sha256":"fb38db635788dfbff693df8f7755f319770a1783004d4f34fe4006b400ef896f","index":0,"count":1,"encoding":"utf-8","payloadBytes":9965}
-//go:build linux
-
-package installer
-
-import (
-	"crypto/rand"
-	"encoding/hex"
-	"errors"
-	"io"
-	"os"
-	"path/filepath"
-	"sort"
-	"strings"
-
-	"golang.org/x/sys/unix"
-)
-
-type exportIdentity struct {
-	device uint64
-	inode  uint64
-}
-
-func (identity exportIdentity) empty() bool { return identity.device == 0 && identity.inode == 0 }
-func (identity exportIdentity) String() string {
-	return hex.EncodeToString([]byte{byte(identity.device), byte(identity.device >> 8), byte(identity.device >> 16), byte(identity.device >> 24), byte(identity.device >> 32), byte(identity.device >> 40), byte(identity.device >> 48), byte(identity.device >> 56), byte(identity.inode), byte(identity.inode >> 8), byte(identity.inode >> 16), byte(identity.inode >> 24), byte(identity.inode >> 32), byte(identity.inode >> 40), byte(identity.inode >> 48), byte(identity.inode >> 56)})
-}
-
-type exportFileIdentity struct {
-	exportIdentity
-	links uint64
-}
-
-type exportDirectory struct{ fd int }
-
-type exportEntryKind uint8
-
-const (
-	exportEntryDirectory exportEntryKind = iota + 1
-	exportEntryRegular
-)
-
-type exportEntry struct {
-	name string
-	kind exportEntryKind
-}
-
-func openExportSourceDirectory(root string) (*exportDirectory, error) {
-	return openExportUnixRoot(root)
-}
-func openExportDestinationDirectory(root string) (*exportDirectory, error) {
-	return openExportUnixRoot(root)
-}
-
-func openExportUnixRoot(root string) (*exportDirectory, error) {
-	if !filepath.IsAbs(root) {
-		return nil, errors.New("unsafe export root")
-	}
-	fd, err := unix.Open("/", unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
-	if err != nil {
-		return nil, err
-	}
-	directory := &exportDirectory{fd: fd}
-	if err := directory.verify(); err != nil {
-		directory.close()
-		return nil, err
-	}
-	relative := strings.TrimPrefix(filepath.Clean(root), string(filepath.Separator))
-	if relative == "" {
-		directory.close()
-		return nil, errors.New("unsafe export root")
-	}
-	opened, err := directory.openDirectory(strings.Split(relative, string(filepath.Separator)))
-	directory.close()
-	return opened, err
-}
-
-func (directory *exportDirectory) close() {
-	if directory != nil && directory.fd >= 0 {
-		_ = unix.Close(directory.fd)
-		directory.fd = -1
-	}
-}
-
-func (directory *exportDirectory) verify() error {
-	var stat unix.Stat_t
-	if directory == nil || directory.fd < 0 || unix.Fstat(directory.fd, &stat) != nil || stat.Mode&unix.S_IFMT != unix.S_IFDIR {
-		return errors.New("unsafe export directory")
-	}
-	return nil
-}
-
-func (directory *exportDirectory) identity() exportIdentity {
-	var stat unix.Stat_t
-	if directory == nil || directory.fd < 0 || unix.Fstat(directory.fd, &stat) != nil {
-		return exportIdentity{}
-	}
-	return exportIdentity{device: uint64(stat.Dev), inode: stat.Ino}
-}
-
-func (directory *exportDirectory) openDirectory(parts []string) (*exportDirectory, error) {
-	if directory == nil || directory.fd < 0 {
-		return nil, errors.New("unsafe export directory")
-	}
-	current, owned := directory.fd, false
-	for _, part := range parts {
-		next, err := unix.Openat(current, part, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
-		if err != nil {
-			if owned {
-				_ = unix.Close(current)
-			}
-			return nil, exportUnixNotExist(err)
-		}
-		if owned {
-			_ = unix.Close(current)
-		}
-		current, owned = next, true
-	}
-	if !owned {
-		return nil, errors.New("unsafe export directory")
-	}
-	child := &exportDirectory{fd: current}
-	if err := child.verify(); err != nil {
-		child.close()
-		return nil, err
-	}
-	return child, nil
-}
-
-func (directory *exportDirectory) entries() ([]exportEntry, error) {
-	duplicate, err := unix.Dup(directory.fd)
-	if err != nil {
-		return nil, err
-	}
-	file := os.NewFile(uintptr(duplicate), "export-directory")
-	if file == nil {
-		_ = unix.Close(duplicate)
-		return nil, errors.New("unsafe export directory")
-	}
-	entries, err := file.ReadDir(maxExportDirectoryEntries + 1)
-	closeErr := file.Close()
-	if (err != nil && !errors.Is(err, io.EOF)) || closeErr != nil || len(entries) > maxExportDirectoryEntries {
-		return nil, errors.New("unsafe export directory")
-	}
-	result := make([]exportEntry, 0, len(entries))
-	for _, entry := range entries {
-		name := entry.Name()
-		if name == "" || name == "." || name == ".." {
-			return nil, errors.New("unsafe export directory")
-		}
-		child, directoryErr := directory.openDirectory([]string{name})
-		if directoryErr == nil {
-			child.close()
-			result = append(result, exportEntry{name: name, kind: exportEntryDirectory})
-			continue
-		}
-		fd, fileErr := unix.Openat(directory.fd, name, unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
-		if fileErr != nil {
-			return nil, errors.New("unsafe export directory")
-		}
-		var stat unix.Stat_t
-		valid := unix.Fstat(fd, &stat) == nil && stat.Mode&unix.S_IFMT == unix.S_IFREG
-		_ = unix.Close(fd)
-		if !valid {
-			return nil, errors.New("unsafe export directory")
-		}
-		result = append(result, exportEntry{name: name, kind: exportEntryRegular})
-	}
-	sort.Slice(result, func(left, right int) bool { return result[left].name < result[right].name })
-	return result, nil
-}
-
-func (directory *exportDirectory) readFile(parts []string, limit int64) ([]byte, exportFileIdentity, error) {
-	if len(parts) == 0 {
-		return nil, exportFileIdentity{}, errors.New("unsafe export file")
-	}
-	parent := directory
-	var owned *exportDirectory
-	if len(parts) > 1 {
-		var err error
-		owned, err = directory.openDirectory(parts[:len(parts)-1])
-		if err != nil {
-			return nil, exportFileIdentity{}, err
-		}
-		defer owned.close()
-		parent = owned
-	}
-	fd, err := unix.Openat(parent.fd, parts[len(parts)-1], unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
-	if err != nil {
-		return nil, exportFileIdentity{}, exportUnixNotExist(err)
-	}
-	file := os.NewFile(uintptr(fd), parts[len(parts)-1])
-	if file == nil {
-		_ = unix.Close(fd)
-		return nil, exportFileIdentity{}, errors.New("unsafe export file")
-	}
-	defer file.Close()
-	identity, size, err := exportUnixFileIdentity(fd)
-	if err != nil || identity.links != 1 {
-		return nil, exportFileIdentity{}, errors.New("unsafe export file")
-	}
-	if size > limit {
-		return nil, exportFileIdentity{}, errors.New("EXPORT_LIMIT_EXCEEDED")
-	}
-	data, err := io.ReadAll(io.LimitReader(file, limit+1))
-	if err != nil || int64(len(data)) != size {
-		return nil, exportFileIdentity{}, errors.New("unsafe export file")
-	}
-	after, afterSize, afterErr := exportUnixFileIdentity(fd)
-	if afterErr != nil || after != identity || afterSize != size {
-		return nil, exportFileIdentity{}, errors.New("PROJECT_CHANGED")
-	}
-	return data, identity, nil
-}
-
-func (directory *exportDirectory) exists(name string) (bool, error) {
-	child, directoryErr := directory.openDirectory([]string{name})
-	if directoryErr == nil {
-		child.close()
-		return true, nil
-	}
-	fd, fileErr := unix.Openat(directory.fd, name, unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
-	if fileErr == nil {
-		_ = unix.Close(fd)
-		return true, nil
-	}
-	if isExportNotExist(exportUnixNotExist(directoryErr)) && isExportNotExist(exportUnixNotExist(fileErr)) {
-		return false, nil
-	}
-	return false, errors.New("unsafe export destination")
-}
-
-func (directory *exportDirectory) createStaging(_ string) (*exportDirectory, string, error) {
-	for attempt := 0; attempt < 16; attempt++ {
-		value := make([]byte, 12)
-		if _, err := rand.Read(value); err != nil {
-			return nil, "", err
-		}
-		name := ".platform-export-" + hex.EncodeToString(value)
-		if err := unix.Mkdirat(directory.fd, name, 0o700); err == nil {
-			staging, openErr := directory.openDirectory([]string{name})
-			if openErr != nil {
-				return nil, "", openErr
-			}
-			return staging, name, nil
-		} else if !errors.Is(err, unix.EEXIST) {
-			return nil, "", err
-		}
-	}
-	return nil, "", errors.New("staging name collision")
-}
-
-func (directory *exportDirectory) createDirectory(name string) (*exportDirectory, error) {
-	if err := unix.Mkdirat(directory.fd, name, 0o700); err != nil {
-		return nil, err
-	}
-	return directory.openDirectory([]string{name})
-}
-
-func (directory *exportDirectory) writeFile(name string, content []byte) error {
-	fd, err := unix.Openat(directory.fd, name, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0o600)
-	if err != nil {
-		return err
-	}
-	file := os.NewFile(uintptr(fd), name)
-	if file == nil {
-		_ = unix.Close(fd)
-		return errors.New("unsafe export file")
-	}
-	if _, err := file.Write(content); err != nil {
-		_ = file.Close()
-		return err
-	}
-	if err := file.Sync(); err != nil {
-		_ = file.Close()
-		return err
-	}
-	return file.Close()
-}
-
-func (directory *exportDirectory) publish(_ *exportDirectory, stagingName, destination string) error {
-	return unix.Renameat2(directory.fd, stagingName, directory.fd, destination, unix.RENAME_NOREPLACE)
-}
-
-func (directory *exportDirectory) removeOwnedTree(staging *exportDirectory, stagingName string) error {
-	linked, err := directory.openDirectory([]string{stagingName})
-	if err != nil {
-		return err
-	}
-	linkedIdentity, stagingIdentity := linked.identity(), staging.identity()
-	linked.close()
-	if linkedIdentity != stagingIdentity {
-		return errors.New("EXPORT_STAGING_RETAINED")
-	}
-	// Linux has no unlink-by-open-directory-handle primitive. A pathname-based
-	// recursive cleanup could delete a sibling swapped in after the identity
-	// check above, so fail closed and leave staging for operator cleanup.
-	return errors.New("EXPORT_STAGING_RETAINED")
-}
-
-func exportUnixFileIdentity(fd int) (exportFileIdentity, int64, error) {
-	var stat unix.Stat_t
-	if err := unix.Fstat(fd, &stat); err != nil || stat.Mode&unix.S_IFMT != unix.S_IFREG {
-		return exportFileIdentity{}, 0, errors.New("unsafe export file")
-	}
-	return exportFileIdentity{exportIdentity: exportIdentity{device: uint64(stat.Dev), inode: stat.Ino}, links: uint64(stat.Nlink)}, stat.Size, nil
-}
-
-func exportUnixNotExist(err error) error {
-	if errors.Is(err, unix.ENOENT) || errors.Is(err, unix.ENOTDIR) {
-		return os.ErrNotExist
-	}
-	return err
-}
-
-func isExportNotExist(err error) bool { return errors.Is(err, os.ErrNotExist) }
 
 @@END
