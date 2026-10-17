@@ -599,6 +599,9 @@ class ActionModule(ActionBase):
                     definition = {"name": row["applicationName"], "version": "1.0.0", "defaults": row["settings"],
                                   "connections": row["connections"], "identity_environment": row["identityNames"]}
                     resolved_findings.extend(validator.validate(definition, os.path.join(repo_root, "contracts", "application-libraries", "v1alpha1", "application.schema.json")))
+                    resolved_findings.extend(validator.validate(
+                        dict(name=row['libraryId'], version='1.0.0', slots={}, resource_defaults=row.get('resourceDefaults', {})),
+                        os.path.join(repo_root, 'contracts', 'application-libraries', 'v1alpha1', 'library.schema.json')))
                 applications = project_application_libraries(
                     task_vars["platform_application_rows"], materialized, configuration, catalog, hosts,
                     metadata.get("id", os.path.basename(project_root)),

@@ -10,7 +10,7 @@ for service in ('redis', 'clickhouse'):
     sys.path.insert(0, os.path.join(ROOT, 'services', service))
 sys.path.insert(0, os.path.join(ROOT, 'ansible-core/collections/ansible_collections/platform/core/plugins/module_utils'))
 from application_providers import project_providers, normalize_grants, identifier, normalize_redis_grants, normalize_clickhouse_grants
-from application_libraries import resolve_topics
+from application_libraries import resolve_topics, resolve_tables
 
 
 class ApplicationProvidersTest(unittest.TestCase):
@@ -298,6 +298,44 @@ class ApplicationProvidersTest(unittest.TestCase):
         self.assertEqual([], result['libraryJobs'][0]['accounts'])
         self.assertEqual([], result['libraryJobs'][0]['libraries'])
         self.assertEqual('analytics', result['instanceJobs'][0]['accounts'][0]['grants'][0]['database'])
+        # Every selected database gets tables, including existing databases with
+        # no account/application connection referring to them.
+        original_accounts = copy.deepcopy(self.accounts)
+        self.accounts.clear()
+        self.resources['external'] = dict(kind='clickhouse.database', binding='pg', mode='existing', parameters={'name': 'external'})
+        library = self.snapshot['applicationLibraries']['libraries']['lib']
+        library['resourceDefaults'] = {'clickhouse': {'tables': {
+            'records': dict(engine='MergeTree', columns=[dict(name='systemId', type='UInt32')], order_by='systemId'),
+            'alarm_message': dict(engine='ReplacingMergeTree', columns=[dict(name='id', type='UUID')], order_by='id')}}}
+        self.catalog['definitions']['clickhouse']['capabilities'].append('service.clickhouse.table')
+        for mode in ('standalone', 'raft-ha'):
+            self.desired['serviceDeployments']['pg']['mode'] = mode
+            library['tables'] = resolve_tables(self.resources, self.rows[0]['bindings'], self.desired, library['resourceDefaults'], self.catalog, self.snapshot['project']['id'])
+            result = self.resolve()
+            self.assertEqual('PASS', result['status'], result['findings'])
+            self.assertEqual([], result['instanceJobs'])
+            dbs = result['libraryJobs'][0]['databases']
+            self.assertTrue(all(len(db['tables']) == 2 for db in dbs))
+            self.assertEqual('ReplicatedMergeTree' if mode == 'raft-ha' else 'MergeTree', dbs[0]['tables'][1]['engine'])
+            self.assertNotEqual(dbs[0]['tables'][0]['replicationPath'], dbs[1]['tables'][0]['replicationPath'])
+        self.resources['db']['mode'] = 'existing'
+        other = copy.deepcopy(library)
+        other['resourceDefaults']['clickhouse']['tables']['records']['settings'] = {'index_granularity': 4096}
+        other['tables'] = resolve_tables(self.resources, self.rows[0]['bindings'], self.desired, other['resourceDefaults'], self.catalog, self.snapshot['project']['id'])
+        self.snapshot['applicationLibraries']['libraries']['other'] = other
+        count = len(self.rows)
+        self.rows.extend(dict(copy.deepcopy(row), libraryId='other') for row in self.rows[:count])
+        self.assertEqual('APPLICATION_PROVIDER_NAME_CONFLICT', self.resolve()['findings'][0]['code'])
+        del self.rows[count:]
+        del self.snapshot['applicationLibraries']['libraries']['other']
+        self.resources['db'].pop('mode')
+        self.catalog['definitions']['clickhouse']['capabilities'].remove('service.clickhouse.table')
+        with self.assertRaisesRegex(ValueError, 'APPLICATION_TABLE_CAPABILITY_UNSUPPORTED'):
+            resolve_tables(self.resources, self.rows[0]['bindings'], self.desired, library['resourceDefaults'], self.catalog, self.snapshot['project']['id'])
+        self.accounts.update(original_accounts)
+        library.pop('resourceDefaults')
+        library.pop('tables')
+        self.desired['serviceDeployments']['pg']['mode'] = 'standalone'
         self.resources['retired'] = {'kind': 'clickhouse.database', 'binding': 'pg', 'parameters': {'name': 'archive'}}
         self.resources['external'] = {'kind': 'clickhouse.database', 'binding': 'pg', 'mode':'existing', 'parameters': {'name': 'external'}}
         self.accounts['postgres']['grants'] = []

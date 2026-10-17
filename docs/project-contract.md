@@ -238,6 +238,29 @@ application-aware planning and the mixed execution barrier; the original A1
 rejection is historical, not a current restriction.
 See [A1 implementation notes](work/application-libraries/milestones/a1/evidence/a1-test-journal.md).
 
+### File-only ClickHouse base tables
+
+Library defaults files may declare `platform_library_definition.resource_defaults.clickhouse.tables`.
+The same `resource_defaults` subtree on a library deployment in group_vars is a
+file-only override. Ansible recursively merges maps and replaces lists. It is
+separate from application common defaults and is not inherited into application
+ENV or configuration. UI exposes no schema editor and preserves this subtree
+when saving unrelated library/resource edits.
+
+SDKU declares records and alarm_message with ordered columns, codecs/indexes,
+keys and explicit table settings. Every selected ClickHouse database receives
+this set, including existing-mode databases and resources unreferenced by accounts.
+Standalone uses MergeTree/ReplacingMergeTree; raft-ha uses their Replicated
+counterparts through the selected provider's cluster. Core projects tables and
+Keeper paths by project/deployment/database/table before execution. Changes to
+defaults or overrides participate in the saved revision and plan fingerprint.
+
+Capability `service.clickhouse.table` is required. Existing databases retain
+their ownership/mode; table creation is an explicit child-resource operation.
+Only missing tables are created. Verify is read-only on every replica and reports
+structural drift; no automatic ALTER, DROP, migration or application opt-in.
+See the [plan](work/application-libraries/clickhouse-base-tables-plan.md).
+
 ### Kafka topic resources
 
 A library resource may declare `kind: kafka.topic`, a Kafka `binding`,
@@ -290,7 +313,9 @@ and deleting DML access does not claim to remove that owner authority. No
 ownership transfer or elevated role attributes are performed by this feature.
 
 ClickHouse retains its existing grants format, supporting databaseRef plus
-tables `['*']` and SELECT/INSERT. For managed accounts, these direct privileges
+tables `['*']` and SELECT/INSERT. The UI grants access on the selected database's
+`database.*`, covering existing and future objects without requiring individual
+tables to exist when grants are applied. For managed accounts, these direct privileges
 in the same library's managed databases are authoritative. The existing
 UUID/marker witness must verify both account and every database before a
 calculated REVOKE. Foreign database grants, roles, grant option, column grants

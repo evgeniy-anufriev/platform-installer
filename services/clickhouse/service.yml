@@ -2,7 +2,7 @@ apiVersion: platform.installer/service-manifest/v1alpha1
 kind: ServiceManifest
 metadata:
   id: clickhouse
-  version: "1.0.0-alpha.1"
+  version: "1.0.0-alpha.2"
   displayName: ClickHouse
   description: TLS-only ClickHouse standalone or one-shard Raft HA with paired Keeper members
   category: database
@@ -41,7 +41,7 @@ listeners:
 endpoint: {}
 x-haproxyBackendDefaults: {balance: roundrobin, check: true, fall: 3, rise: 2, ssl: true, sslVerify: required}
 x-backendClientListener: {listener: client, allocation: {kind: HOST_LOCAL_ORDINAL, stride: 1}}
-capabilities: [service.clickhouse.https, service.clickhouse.keeper, service.clickhouse.database, service.clickhouse.account]
+capabilities: [service.clickhouse.https, service.clickhouse.keeper, service.clickhouse.database, service.clickhouse.account, service.clickhouse.table]
 dependencies: []
 configurationSchema: {$ref: configuration.schema.json}
 configuration:

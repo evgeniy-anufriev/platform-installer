@@ -83,6 +83,42 @@ func b2Command(revision, op string) EditCommand {
 	return EditCommand{APIVersion: EditCommandAPIVersionV11, Kind: "EditCommand", BaseProjectRevision: revision, Operation: op, DeploymentID: "sdku"}
 }
 
+func TestLibraryFileOnlyResourceDefaultsSurviveUnrelatedUISave(t *testing.T) {
+	root, b, revision := b2Project(t)
+	create := b2Command(revision, "CreateApplicationLibraryDeployment")
+	create.Entity = map[string]any{"libraryRef": "sdku@1.0.0", "runtimeRef": "kafka-main"}
+	commitStructuralForTest(t, b, root, projectlifecycle.ClassificationManaged, revision, []EditCommand{create})
+	path := filepath.Join(root, filepath.FromSlash(desiredDocument))
+	document, err := parseManagedYAML(mustRead(t, path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	library := asMap(asMap(asMap(document["platform_desired_state"])["applicationLibraryDeployments"])["sdku"])
+	library["resource_defaults"] = map[string]any{"clickhouse": map[string]any{"tables": map[string]any{"records": map[string]any{"settings": map[string]any{"index_granularity": 4096}}}}}
+	content, err := deterministicYAML(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, content, 0600); err != nil {
+		t.Fatal(err)
+	}
+	revision, err = ProjectRevision(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	update := b2Command(revision, "UpdateApplicationLibraryDeployment")
+	update.Entity = map[string]any{"runtime_directory": "/data/sdk"}
+	commitStructuralForTest(t, b, root, projectlifecycle.ClassificationManaged, revision, []EditCommand{update})
+	view, err := ReadManagedProjectView(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings := asMap(asMap(asMap(asMap(view.ApplicationLibraries["sdku"]["resource_defaults"])["clickhouse"])["tables"])["records"])
+	if asMap(settings["settings"])["index_granularity"] != 4096 {
+		t.Fatal("file-only table override lost during unrelated Save")
+	}
+}
+
 func TestApplicationTopicBindingSaveReopenAndReset(t *testing.T) {
 	root, b, revision := b2Project(t)
 	create := b2Command(revision, "CreateApplicationLibraryDeployment")

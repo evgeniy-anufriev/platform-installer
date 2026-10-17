@@ -1,5 +1,11 @@
 # V2 roadmap and milestone gates
 
+The owner-approved [ClickHouse library table extension](work/application-libraries/clickhouse-base-tables-plan.md)
+adds file-only resource defaults and base-table creation/Verify to existing provider
+stages. Gates cover default/override preservation, target-free projection, native
+DDL parsing and real Core/UI planning. Server table mutation and application
+installation are excluded from the currently authorized implementation/QA scope.
+
 The owner-approved [Kafka library topic extension](work/application-libraries/kafka-topics-plan.md)
 adds topic resources to existing library provider stages and instance Startup bindings.
 Gates cover deployment-derived RF/minISR, native tasks, real React/Wails/Core

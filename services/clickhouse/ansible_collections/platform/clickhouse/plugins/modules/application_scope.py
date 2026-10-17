@@ -1,11 +1,12 @@
 #!/usr/bin/python
 """One library resource batch or logical instance account/grant batch."""
 import json
+import time
 from subprocess import SubprocessError
 from ansible.module_utils.basic import AnsibleModule
 from ansible_collections.platform.clickhouse.plugins.module_utils.application_sql import (
     NativeClient, ProviderFailure, custody, publish, state, identifier,
-    required_grants, user_batch, verify_login, managed_grant_delta)
+    required_grants, user_batch, verify_login, managed_grant_delta, table_matches)
 
 DOCUMENTATION = r'''
 module: application_scope
@@ -18,6 +19,7 @@ options:
   directory: {type: path, required: true}
   admin_password: {type: str, required: true}
   passwords: {type: dict, default: {}}
+  tables: {type: list, elements: dict, default: []}
   phase: {type: str, choices: [preflight, resources, accounts, verify], required: true}
   lock_timeout: {type: int, default: 15}
   query_timeout: {type: int, default: 60}
@@ -53,9 +55,10 @@ def main():
         'job': {'type': 'dict', 'required': True}, 'directory': {'type': 'path', 'required': True},
         'admin_password': {'type': 'str', 'required': True, 'no_log': True},
         'passwords': {'type': 'dict', 'default': {}, 'no_log': True},
+        'tables': {'type': 'list', 'elements': 'dict', 'default': []},
         'phase': {'choices': ['preflight', 'resources', 'accounts', 'verify'], 'required': True},
         'lock_timeout': {'type': 'int', 'default': 15}, 'query_timeout': {'type': 'int', 'default': 60}})
-    args, clients, changed = module.params, [], False
+    args, clients, changed, active_table = module.params, [], False, {}
     try:
         job, phase, directory = args['job'], args['phase'], args['directory']
         if not 1 <= args['lock_timeout'] <= 120 or not 1 <= args['query_timeout'] <= 120:
@@ -86,6 +89,14 @@ def main():
                     raise ProviderFailure('CLICKHOUSE_APPLICATION_CLUSTER_INVALID')
             observed = {target['memberId']: state(client, databases, accounts) for target, client in zip(targets, clients)}
             resource_sql = {target['memberId']: [] for target in targets}
+            missing_tables = []
+            if phase != 'accounts':
+                for active_table in args['tables']:
+                    present = [table_matches(client, active_table['database'], active_table['definition']) for client in clients]
+                    if not all(present):
+                        if phase == 'verify':
+                            raise ProviderFailure('CLICKHOUSE_APPLICATION_TABLE_MISSING')
+                        missing_tables.append(active_table)
             for database in databases:
                 actual = {member: identity(rows, 'database', database['name']) for member, rows in observed.items()}
                 check_owner(witness, 'database/' + database['name'], database['marker'], actual, database['mode'], phase)
@@ -100,6 +111,29 @@ def main():
                     client.query('\n'.join(statements))
                     changed = True
             account_sql = []
+            # Persist newly created database ownership before a table error can
+            # interrupt the scope; retry must not treat our database as foreign.
+            if phase == 'resources' and changed:
+                for database in databases:
+                    ids = {target['memberId']: identity(state(client, [database], []), 'database', database['name'])
+                           for target, client in zip(targets, clients)}
+                    if any(value is None for value in ids.values()):
+                        raise ProviderFailure('CLICKHOUSE_APPLICATION_OBJECT_MISSING')
+                    if any(identity(observed[member], 'database', database['name']) not in (None, value) for member, value in ids.items()):
+                        raise ProviderFailure('CLICKHOUSE_APPLICATION_OWNERSHIP_DRIFT')
+                    if database['mode'] == 'managed':
+                        witness['database/' + database['name']] = dict(marker=database['marker'], ids=ids)
+                publish(directory, witness)
+                original_witness = dict(witness)
+            if phase == 'resources':
+                for active_table in missing_tables:
+                    clients[0].query('SET distributed_ddl_task_timeout = 30;\n' + active_table['sql'])
+                    changed = True
+                    deadline = time.monotonic() + args['query_timeout']
+                    while not all(table_matches(client, active_table['database'], active_table['definition']) for client in clients):
+                        if time.monotonic() >= deadline:
+                            raise ProviderFailure('CLICKHOUSE_APPLICATION_TABLE_NOT_READY')
+                        time.sleep(1)
             for account in accounts:
                 actual = {member: identity(rows, 'user', account['name']) for member, rows in observed.items()}
                 existing = check_owner(witness, 'user/' + account['name'], account['marker'], actual, account['mode'], phase)
@@ -166,7 +200,7 @@ def main():
                     publish(directory, witness)
         module.exit_json(changed=changed)
     except ProviderFailure as error:
-        module.fail_json(msg=str(error))
+        module.fail_json(msg=str(error), database=active_table.get('database', ''), table=active_table.get('definition', {}).get('name', ''))
     except (ValueError, OSError, TypeError, KeyError, SubprocessError):
         module.fail_json(msg='CLICKHOUSE_APPLICATION_SCOPE_FAILED')
     finally:

@@ -10,9 +10,22 @@
     fail_msg: APPLICATION_PROVIDER_SECRET_FILE_INVALID
   no_log: true
 
+- name: Initialize rendered library table declarations
+  ansible.builtin.set_fact:
+    clickhouse_application_tables: []
+
+- name: Render declared tables with ordinary Ansible templates
+  ansible.builtin.set_fact:
+    clickhouse_application_tables: "{{ clickhouse_application_tables + [{'database': item.0.name, 'definition': item.1, 'sql': lookup('ansible.builtin.template', 'application-table.sql.j2')}] }}"
+  loop: "{{ platform_clickhouse_application_job.databases | subelements('tables', skip_missing=true) }}"
+  loop_control:
+    label: "{{ item.0.name }}.{{ item.1.name }}"
+  no_log: true
+
 - name: Execute one ClickHouse library or instance scope with native TLS
   platform.clickhouse.application_scope:
     job: "{{ platform_clickhouse_application_job }}"
+    tables: "{{ clickhouse_application_tables }}"
     directory: "{{ hostvars[clickhouse_application_target.hostId].platform_clickhouse_config_root | default(platform_clickhouse_config_root) }}/{{ platform_clickhouse_application_job.providerId }}/{{ clickhouse_application_target.memberId }}"
     admin_password: "{{ lookup('ansible.builtin.file', platform_clickhouse_application_credential_files[platform_clickhouse_application_job.adminPasswordRef], rstrip=false) }}"
     passwords: "{{ dict(clickhouse_application_password_refs | zip(query('ansible.builtin.file', *clickhouse_application_password_paths, rstrip=false))) }}"
@@ -27,3 +40,17 @@
   become: true
   become_user: "{{ hostvars[clickhouse_application_target.hostId].platform_clickhouse_user | default(platform_clickhouse_user) }}"
   no_log: true
+  register: clickhouse_application_result
+  failed_when: false
+
+- name: Report safe ClickHouse resource or account failure
+  ansible.builtin.assert:
+    that: clickhouse_application_result.msg is not defined
+    fail_msg: "{{ clickhouse_application_diagnostic | to_json }}"
+  vars:
+    clickhouse_application_diagnostic:
+      code: "{{ clickhouse_application_result.msg | default('') | regex_search('^CLICKHOUSE_APPLICATION_[A-Z0-9_]+$') | default('CLICKHOUSE_APPLICATION_SCOPE_FAILED', true) }}"
+      provider: "{{ platform_clickhouse_application_job.providerId }}"
+      operation: "{{ platform_clickhouse_application_phase }}"
+      database: "{{ clickhouse_application_result.database | default('') }}"
+      table: "{{ clickhouse_application_result.table | default('') }}"

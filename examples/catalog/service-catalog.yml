@@ -1,13 +1,13 @@
 apiVersion: platform.installer/catalog/v1alpha1
 kind: ServiceCatalog
-digest: sha256:417be4b10a4dfc81352af03149cd562201a63f46a9a582e9c5adfc17051f3223
+digest: sha256:6b87cd3eb49b1229ebfd21dd1e24c71e100d7dc5b38f790046762a52f773c28a
 definitions:
   clickhouse:
     apiVersion: platform.installer/service-manifest/v1alpha1
     kind: ServiceManifest
     metadata:
       id: clickhouse
-      version: 1.0.0-alpha.1
+      version: 1.0.0-alpha.2
       displayName: ClickHouse
       description: TLS-only ClickHouse standalone or one-shard Raft HA with paired Keeper members
       category: database
@@ -92,6 +92,7 @@ definitions:
     - service.clickhouse.keeper
     - service.clickhouse.database
     - service.clickhouse.account
+    - service.clickhouse.table
     dependencies: []
     configurationSchema:
       $ref: ../../services/clickhouse/configuration.schema.json
@@ -270,7 +271,7 @@ definitions:
       digest: sha256:796874f358d73b96ff8bf04c5aabbf474ea020303eb7d113f1009961739e41c7
       requiredOffline: true
     compatibilityRef: ../../services/clickhouse/compatibility.yml
-    x-definitionDigest: sha256:dc489f76b01196af3bbdeaad8de649148d4c9c148cfaea198578dd404a42a5f8
+    x-definitionDigest: sha256:34239b407c2dada5dd19024e080913ef032de3116bf1ed74fcb695feac7963f6
     x-sourceManifest: services/clickhouse/service.yml
   docker:
     apiVersion: platform.installer/service-manifest/v1alpha1

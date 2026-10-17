@@ -14,15 +14,116 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest.mock import patch
+from contextlib import nullcontext
 import xml.etree.ElementTree as ET
 
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from ansible_collections.platform.clickhouse.plugins.module_utils.application_sql import NativeClient, user_batch, ProviderFailure, managed_grant_delta
+from ansible_collections.platform.clickhouse.plugins.module_utils.application_sql import NativeClient, user_batch, ProviderFailure, managed_grant_delta, table_matches
+from ansible_collections.platform.clickhouse.plugins.modules import application_scope as scope
 
 
 class ApplicationProviderTests(unittest.TestCase):
+    def test_table_metadata_drift_and_replication_identity_without_mutations(self):
+        table = dict(name='records', engine='MergeTree', columns=[dict(name='systemId', type='UInt32', codec='T64, LZ4')], order_by='systemId',
+                     settings={'index_granularity': 8192, 'columns_to_prewarm_mark_cache': 'systemId,ts'})
+        metadata = dict(engine='MergeTree', partition_key='', primary_key='systemId', sorting_key='systemId', sampling_key='',
+                        create_table_query="CREATE TABLE records SETTINGS index_granularity = 8192, columns_to_prewarm_mark_cache = 'systemId,ts'")
+        columns = [dict(name='systemId', type='UInt32', compression_codec='CODEC(T64, LZ4)')]
+        class Client:
+            def query(self, sql):
+                if 'FROM system.tables' in sql:
+                    return json.dumps(metadata) if metadata else ''
+                if 'FROM system.columns' in sql:
+                    return '\n'.join(map(json.dumps, columns))
+                if 'FROM system.data_skipping_indices' in sql:
+                    return ''
+                if 'arrayMap' in sql:
+                    return json.dumps(dict(expressions=['normalized', 'normalized'] * 3))
+                if 'FROM system.replicas' in sql:
+                    return json.dumps(dict(zookeeper_path='/qa/1/analytics/records', replica_name='r1', shard='1', replica='r1'))
+                raise AssertionError('Unexpected query (must remain read-only)')
+        client = Client()
+        self.assertTrue(table_matches(client, 'analytics', table))
+        for field, wrong in [('engine', 'ReplacingMergeTree'), ('sorting_key', ''), ('create_table_query', 'SETTINGS index_granularity = 4096')]:
+            original = metadata[field]
+            metadata[field] = wrong
+            with self.subTest(field=field), self.assertRaises(ProviderFailure):
+                table_matches(client, 'analytics', table)
+            metadata[field] = original
+        columns[0]['type'] = 'UInt64'
+        with self.assertRaisesRegex(ProviderFailure, 'COLUMNS_DRIFT'):
+            table_matches(client, 'analytics', table)
+        columns[0]['type'] = 'UInt32'
+        table.update(engine='ReplicatedMergeTree', replicationPath='/qa/{shard}/analytics/records')
+        metadata['engine'] = table['engine']
+        self.assertTrue(table_matches(client, 'analytics', table))
+        table['replicationPath'] = '/foreign/{shard}/analytics/records'
+        with self.assertRaisesRegex(ProviderFailure, 'REPLICATION_DRIFT'):
+            table_matches(client, 'analytics', table)
+        metadata.clear()
+        self.assertFalse(table_matches(client, 'analytics', table))
+
+    def test_table_resource_retry_preserves_database_ownership_and_verify_never_writes(self):
+        witness, present, writes = {}, set(), []
+        database = dict(name='analytics', mode='managed', marker='platform.application/v1:qa:ch:lib:db')
+        job = dict(serviceType='clickhouse', mode='standalone', candidates=[dict(memberId='ch1', hostId='localhost')], databases=[database], accounts=[])
+        table = dict(database='analytics', definition=dict(name='records'), sql='CREATE TABLE IF NOT EXISTS analytics.records;')
+        args = dict(job=job, tables=[table], directory='/unused', admin_password='qa-secret-canary', passwords={},
+                    phase='preflight', lock_timeout=15, query_timeout=1)
+        class Finished(Exception):
+            pass
+        class Module:
+            params = args
+            def exit_json(self, **value):
+                raise Finished(value)
+            def fail_json(self, **value):
+                raise Finished(dict(value, failed=True))
+        class Client:
+            fail = False
+            def query(self, sql):
+                writes.append(sql)
+                if sql.startswith('CREATE DATABASE'):
+                    present.add('database')
+                if 'CREATE TABLE' in sql:
+                    if self.fail:
+                        raise ProviderFailure('CLICKHOUSE_APPLICATION_QUERY_FAILED_123')
+                    present.add('table')
+                return ''
+            def close(self):
+                pass
+        def state(*unused):
+            return [dict(kind='database', name='analytics', id='stable-id')] if 'database' in present else []
+        client = Client()
+        with patch.object(scope, 'AnsibleModule', return_value=Module()), patch.object(scope, 'NativeClient', return_value=client), \
+                patch.object(scope, 'custody', return_value=nullcontext(witness)), patch.object(scope, 'publish'), \
+                patch.object(scope, 'state', side_effect=state), patch.object(scope, 'table_matches', side_effect=lambda *a: 'table' in present):
+            def run(phase):
+                args['phase'] = phase
+                with self.assertRaises(Finished) as done:
+                    scope.main()
+                return done.exception.args[0]
+            self.assertFalse(run('preflight')['changed'])
+            self.assertEqual([], writes)
+            client.fail = True
+            self.assertTrue(run('resources')['failed'])
+            self.assertEqual({'ch1': 'stable-id'}, witness['database/analytics']['ids'])
+            client.fail = False
+            self.assertTrue(run('resources')['changed'])
+            writes.clear()
+            self.assertFalse(run('resources')['changed'])
+            self.assertFalse(run('verify')['changed'])
+            self.assertEqual([], writes)
+            present.remove('table')
+            self.assertIn('TABLE_MISSING', run('verify')['msg'])
+            self.assertEqual([], writes)
+            database['mode'] = 'existing'
+            witness.clear()
+            self.assertTrue(run('resources')['changed'])
+            self.assertTrue(all('CREATE TABLE' in statement for statement in writes))
+
     def test_revoke_delta_is_limited_to_witnessed_library_databases(self):
         account = {'name':'app','marker':'platform.application/v1:qa:ch:lib:account:app/ch','grants':[]}
         database = {'name':'analytics','mode':'managed','marker':'platform.application/v1:qa:ch:lib:clickhouse.database:db'}

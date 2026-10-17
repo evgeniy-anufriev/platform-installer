@@ -93,6 +93,9 @@
     "runtime_directory": {
       "maxLength": 4096,
       "type": "string"
+    },
+    "resource_defaults": {
+      "$ref": "#/$defs/resourceDefaults"
     }
   },
   "required": [
@@ -101,5 +104,148 @@
     "slots"
   ],
   "additionalProperties": false,
-  "$id": "https://platform-installer.local/contracts/application-libraries/v1alpha1/library.schema.json"
+  "$id": "https://platform-installer.local/contracts/application-libraries/v1alpha1/library.schema.json",
+  "$defs": {
+    "resourceDefaults": {
+      "type": "object",
+      "properties": {
+        "clickhouse": {
+          "type": "object",
+          "properties": {
+            "tables": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string",
+                "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+                "maxLength": 128
+              },
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "engine": {
+                    "enum": [
+                      "MergeTree",
+                      "ReplacingMergeTree"
+                    ]
+                  },
+                  "columns": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+                          "maxLength": 128
+                        },
+                        "type": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 8192
+                        },
+                        "codec": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 8192
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "type"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "minItems": 1,
+                    "maxItems": 256
+                  },
+                  "indexes": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+                          "maxLength": 128
+                        },
+                        "expression": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 8192
+                        },
+                        "type": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 8192
+                        },
+                        "granularity": {
+                          "type": "integer",
+                          "minimum": 1
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "expression",
+                        "type",
+                        "granularity"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "maxItems": 128
+                  },
+                  "partition_by": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 8192
+                  },
+                  "primary_key": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 8192
+                  },
+                  "order_by": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 8192
+                  },
+                  "sample_by": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 8192
+                  },
+                  "settings": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+                      "maxLength": 128
+                    },
+                    "additionalProperties": {
+                      "type": [
+                        "string",
+                        "number",
+                        "boolean"
+                      ]
+                    },
+                    "maxProperties": 128
+                  }
+                },
+                "required": [
+                  "engine",
+                  "columns",
+                  "order_by"
+                ],
+                "additionalProperties": false
+              },
+              "maxProperties": 128
+            }
+          },
+          "required": [],
+          "additionalProperties": false
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    }
+  }
 }

@@ -208,6 +208,8 @@ export namespace coreadapter {
     }
   }
   export class ApplicationLibrary {
+    tables?: Record<string, Array<number>>;
+    resourceDefaults?: Record<string, Array<number>>;
     topics: Record<string, Array<number>>;
     runtimeDirectory: string;
     connections: Record<string, Array<number>>;
@@ -223,6 +225,8 @@ export namespace coreadapter {
 
     constructor(source: any = {}) {
       if ("string" === typeof source) source = JSON.parse(source);
+      this.tables = source["tables"];
+      this.resourceDefaults = source["resourceDefaults"];
       this.topics = source["topics"];
       this.runtimeDirectory = source["runtimeDirectory"];
       this.connections = source["connections"];

@@ -195,6 +195,9 @@
       "runtime_directory": {
         "maxLength": 4096,
         "type": "string"
+      },
+      "resource_defaults": {
+        "type": "object"
       }
     },
     "required": [

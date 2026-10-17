@@ -5,12 +5,63 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+import yaml
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 FIXTURE = os.path.join(REPO, "examples/valid/application-libraries")
 
 
 class StandaloneLibrariesQA(unittest.TestCase):
+    def test_table_defaults_merge_reset_and_native_ddl_render_without_execution(self):
+        source = os.path.join(REPO, 'examples/sdku/library-packages/sdku/1.0.0/roles/library_sdku/defaults/main.yml')
+        with open(source) as stream:
+            defaults = yaml.safe_load(stream)['platform_library_definition']['resource_defaults']
+        path = os.path.join(self.root, 'library-packages/sdku/1.0.0/roles/library_sdku/defaults/main.yml')
+        self.edit(path, lambda d: d['platform_library_definition'].update(resource_defaults=defaults))
+        def resource_defaults():
+            snapshot = self.snapshot()
+            self.assertEqual('PASS', snapshot['status'], [(f['code'], f.get('field')) for f in snapshot['findings']])
+            return snapshot['applicationLibraries']['libraries']['sdku']['resourceDefaults']
+        self.assertEqual(8192, resource_defaults()['clickhouse']['tables']['records']['settings']['index_granularity'])
+        self.edit(self.vars, lambda d: d['platform_desired_state']['applicationLibraryDeployments']['sdku'].update(
+            resource_defaults={'clickhouse': {'tables': {'records': {'settings': {'index_granularity': 4096}}}}}))
+        self.assertEqual(4096, resource_defaults()['clickhouse']['tables']['records']['settings']['index_granularity'])
+        self.edit(self.vars, lambda d: d['platform_desired_state']['applicationLibraryDeployments']['sdku'].pop('resource_defaults'))
+        self.assertEqual(8192, resource_defaults()['clickhouse']['tables']['records']['settings']['index_granularity'])
+        template = os.path.join(REPO, 'services/clickhouse/ansible_collections/platform/clickhouse/roles/application_provider/templates/application-table.sql.j2')
+        for mode in ('standalone', 'raft-ha'):
+            for name, table in defaults['clickhouse']['tables'].items():
+                table = dict(table, name=name, engine=('Replicated' if mode == 'raft-ha' else '') + table['engine'], replicationPath='/clickhouse/tables/qa/ch/{shard}/analytics/' + name)
+                output = os.path.join(self.tmp.name, mode + '-' + name + '.sql')
+                play = [dict(hosts='localhost', connection='local', gather_facts=False,
+                    vars=dict(item=[dict(name='analytics'), table], platform_clickhouse_application_job=dict(mode=mode)),
+                    tasks=[{'ansible.builtin.template': dict(src=template, dest=output)}])]
+                play_path = os.path.join(self.tmp.name, 'render.json')
+                with open(play_path, 'w') as stream:
+                    json.dump(play, stream)
+                rendered = subprocess.run(['ansible-playbook', '-i', 'localhost,', play_path], capture_output=True, timeout=30)
+                self.assertEqual(0, rendered.returncode, rendered.stdout.decode(errors='replace')[-1600:])
+                with open(output) as stream:
+                    sql = stream.read()
+                self.assertIn('`analytics`.`' + name + '`', sql)
+                self.assertEqual(mode == 'raft-ha', 'ON CLUSTER default' in sql)
+                self.assertNotIn('ALTER ', sql)
+                if shutil.which('clickhouse'):
+                    parsed = subprocess.run(['clickhouse', 'format', '--query', sql], capture_output=True, timeout=30)
+                    self.assertEqual(0, parsed.returncode, parsed.stderr.decode(errors='replace')[-1000:])
+        if shutil.which('clickhouse'):
+            # SELECT-only local process; it neither connects to a server nor executes DDL.
+            probe = subprocess.run(['clickhouse', 'local', '--query',
+                "SELECT arrayMap(x -> formatQuerySingleLine(x), ['SELECT (a,b)', 'SELECT (a, b)']) AS expressions FORMAT JSONEachRow"], capture_output=True, timeout=30)
+            self.assertEqual(0, probe.returncode, probe.stderr.decode(errors='replace')[-1000:])
+            values = json.loads(probe.stdout)['expressions']
+            self.assertEqual(values[0], values[1])
+            names = sorted(defaults['clickhouse']['tables']['records']['settings'])
+            settings = subprocess.run(['clickhouse', 'local', '--query',
+                'SELECT name FROM system.merge_tree_settings WHERE name IN (' + ','.join("'" + n + "'" for n in names) + ') FORMAT JSONEachRow'], capture_output=True, timeout=30)
+            self.assertEqual(0, settings.returncode, settings.stderr.decode(errors='replace')[-1000:])
+            self.assertEqual(set(names), {json.loads(line)['name'] for line in settings.stdout.splitlines()})
+
     def test_topic_tasks_create_once_verify_and_sanitize_errors(self):
         # Exercise the production tasks with a bounded CLI fixture, not a Kafka acceptance substitute.
         cli = os.path.join(self.tmp.name, 'cli')

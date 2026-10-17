@@ -96,6 +96,14 @@ remain readable without automatic defaults or rewrites.
 
 ## Application libraries editor — C design proposal (2026-10-15)
 
+### ClickHouse table schemas (owner-authorized 2026-10-17)
+
+The existing Resources flow selects ClickHouse databases. Base table definitions
+in library resource_defaults and their group_vars overrides are file-only: do not
+display DDL/schema controls or include them in common application parameters.
+Unrelated UI Save must preserve those authored fields. Core resolves table sets,
+engines and fingerprints. Verification/plan diagnostics use the existing flow.
+
 ### Kafka topic resources (owner-authorized 2026-10-17)
 
 The library Resources tab adds Kafka topic creation/editing beside databases:

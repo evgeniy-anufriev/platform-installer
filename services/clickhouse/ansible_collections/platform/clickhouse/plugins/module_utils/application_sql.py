@@ -26,6 +26,55 @@ def literal(value):
     return "'" + value.replace('\\', '\\\\').replace("'", "\\'") + "'"
 
 
+def table_matches(client, database, table):
+    """Read only declared schema; ClickHouse normalizes expressions, not a SQL parser here."""
+    where = 'database = %s AND name = %s' % (literal(database), literal(table['name']))
+    rows = [json.loads(line) for line in client.query(
+        'SELECT engine, partition_key, primary_key, sorting_key, sampling_key, create_table_query '
+        'FROM system.tables WHERE ' + where + ' FORMAT JSONEachRow;').splitlines() if line.strip()]
+    if not rows:
+        return False
+    actual = rows[0]
+    if actual['engine'] != table['engine']:
+        raise ProviderFailure('CLICKHOUSE_APPLICATION_TABLE_ENGINE_DRIFT')
+    columns = [json.loads(line) for line in client.query(
+        'SELECT name, type, compression_codec FROM system.columns WHERE database = %s AND table = %s '
+        'ORDER BY position FORMAT JSONEachRow;' % (literal(database), literal(table['name']))).splitlines() if line.strip()]
+    if [(c['name'], c['type']) for c in columns] != [(c['name'], c['type']) for c in table['columns']]:
+        raise ProviderFailure('CLICKHOUSE_APPLICATION_TABLE_COLUMNS_DRIFT')
+    pairs = [('CODEC(' + c['codec'] + ')', a['compression_codec']) for c, a in zip(table['columns'], columns) if c.get('codec')]
+    for desired, observed in [('partition_by', 'partition_key'), ('primary_key', 'primary_key'),
+                              ('order_by', 'sorting_key'), ('sample_by', 'sampling_key')]:
+        expected = table.get(desired, table['order_by'] if desired == 'primary_key' else '')
+        value = actual[observed]
+        if bool(expected) != bool(value):
+            raise ProviderFailure('CLICKHOUSE_APPLICATION_TABLE_KEYS_DRIFT')
+        if expected:
+            pairs.append((expected, '(' + value + ')'))
+    indexes = [json.loads(line) for line in client.query(
+        'SELECT name, expr, type_full, granularity FROM system.data_skipping_indices WHERE database = %s AND table = %s '
+        'ORDER BY name FORMAT JSONEachRow;' % (literal(database), literal(table['name']))).splitlines() if line.strip()]
+    expected_indexes = sorted(table.get('indexes', []), key=lambda i: i['name'])
+    if [(i['name'], i['type_full'], i['granularity']) for i in indexes] != [(i['name'], i['type'], i['granularity']) for i in expected_indexes]:
+        raise ProviderFailure('CLICKHOUSE_APPLICATION_TABLE_INDEX_DRIFT')
+    pairs.extend((e['expression'], a['expr']) for e, a in zip(expected_indexes, indexes))
+    expressions = ','.join(literal('SELECT ' + value) for pair in pairs for value in pair)
+    normalized = json.loads(client.query('SELECT arrayMap(x -> formatQuerySingleLine(x), [' + expressions + ']) AS expressions FORMAT JSONEachRow;'))['expressions']
+    if any(normalized[i] != normalized[i + 1] for i in range(0, len(normalized), 2)):
+        raise ProviderFailure('CLICKHOUSE_APPLICATION_TABLE_EXPRESSION_DRIFT')
+    for key, value in table.get('settings', {}).items():
+        value = literal(value) if isinstance(value, str) else str(int(value) if isinstance(value, bool) or float(value).is_integer() else value)
+        if not re.search(r'\b' + re.escape(key) + r'\s*=\s*' + re.escape(value) + r'\s*(?:,|$)', actual['create_table_query']):
+            raise ProviderFailure('CLICKHOUSE_APPLICATION_TABLE_SETTINGS_DRIFT')
+    if table['engine'].startswith('Replicated'):
+        replicas = [json.loads(line) for line in client.query(
+            'SELECT zookeeper_path, replica_name, getMacro(\'shard\') AS shard, getMacro(\'replica\') AS replica '
+            'FROM system.replicas WHERE database = %s AND table = %s FORMAT JSONEachRow;' % (literal(database), literal(table['name']))).splitlines() if line.strip()]
+        if len(replicas) != 1 or replicas[0]['zookeeper_path'] != table['replicationPath'].replace('{shard}', replicas[0]['shard']) or replicas[0]['replica_name'] != replicas[0]['replica']:
+            raise ProviderFailure('CLICKHOUSE_APPLICATION_TABLE_REPLICATION_DRIFT')
+    return True
+
+
 class NativeClient:
     def __init__(self, target, directory, password, username='default', timeout=60):
         descriptor, self.path = tempfile.mkstemp(prefix='.application-client-', suffix='.xml', dir=directory)

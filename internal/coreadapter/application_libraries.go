@@ -15,6 +15,8 @@ type ApplicationLibraries struct {
 }
 
 type ApplicationLibrary struct {
+	Tables                   map[string]json.RawMessage     `json:"tables,omitempty"`
+	ResourceDefaults         map[string]json.RawMessage     `json:"resourceDefaults,omitempty"`
 	Topics                   map[string]json.RawMessage     `json:"topics"`
 	RuntimeDirectory         string                         `json:"runtimeDirectory"`
 	Connections              map[string]json.RawMessage     `json:"connections"`

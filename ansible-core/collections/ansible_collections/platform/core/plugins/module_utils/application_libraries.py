@@ -381,6 +381,25 @@ def resolve_topics(resources, bindings, desired):
     return topics
 
 
+def resolve_tables(resources, bindings, desired, defaults, catalog, project_id):
+    result = {}
+    for resource_id, resource in resources.items():
+        if resource['kind'] != 'clickhouse.database':
+            continue
+        ref = bindings[resource['binding']]['deploymentRef']
+        deployment = desired['serviceDeployments'][ref]
+        if deployment['serviceType'] != 'clickhouse' or deployment['mode'] not in ('standalone', 'raft-ha'):
+            raise ValueError('APPLICATION_TABLE_PROVIDER_INVALID')
+        specs = defaults.get('clickhouse', {}).get('tables', {})
+        if specs and 'service.clickhouse.table' not in catalog['definitions']['clickhouse'].get('capabilities', []):
+            raise ValueError('APPLICATION_TABLE_CAPABILITY_UNSUPPORTED')
+        result[resource_id] = [dict(spec, name=name,
+            engine=('Replicated' if deployment['mode'] == 'raft-ha' else '') + spec['engine'],
+            replicationPath='/clickhouse/tables/%s/%s/{shard}/%s/%s' % (project_id, ref, resource['parameters']['name'], name))
+            for name, spec in sorted(specs.items())]
+    return result
+
+
 def project(rows, desired, configuration, catalog, hosts, project_id="ansible-project"):
     findings, libraries, ports = [], {}, set()
     if not isinstance(project_id, str) or not ID.fullmatch(project_id):
@@ -509,6 +528,14 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
         if library['connections'] != shared_connections or library['runtimeDirectory'] != row.get('runtimeDirectory', '~/' + library_id):
             findings.append(finding('APPLICATION_HOST_RESOURCE_CONFLICT', field))
         library["packages"][row["applicationName"]] = row["packageIdentity"]
+        try:
+            tables = resolve_tables(row['resources'], row['bindings'], desired, row.get('resourceDefaults', {}), catalog, project_id)
+            if library.setdefault('tables', tables) != tables:
+                findings.append(finding('APPLICATION_HOST_RESOURCE_CONFLICT', field))
+        except (KeyError, ValueError, TypeError):
+            findings.append(finding('APPLICATION_TABLE_RESOURCE_INVALID', field))
+        if library.setdefault('resourceDefaults', row.get('resourceDefaults', {})) != row.get('resourceDefaults', {}):
+            findings.append(finding('APPLICATION_HOST_RESOURCE_CONFLICT', field))
         instance = library["instances"].setdefault(app_id, {"applicationName": row["applicationName"], "slotId": row["slotId"], "placements": {},
                                                            "connections": connections, 'topics': topic_bindings, "credentialRequirements": accounts,
                                                            "identityEnvironment": {name: app_id for name in row["identityNames"]},
@@ -559,6 +586,7 @@ def validate_public_projection(projection):
     findings = []
     for library_id, library in projection.get("libraries", {}).items():
         field = "applicationLibraries." + library_id
+        nonsecret_values(library.get('resourceDefaults', {}), field + '.resourceDefaults', findings)
         for resource_id, resource in library.get("resources", {}).items():
             nonsecret_values(resource.get("parameters", {}), field + ".resources." + resource_id + ".parameters", findings)
         for instance_id, instance in library.get("instances", {}).items():

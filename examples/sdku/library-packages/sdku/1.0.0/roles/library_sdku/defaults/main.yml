@@ -209,3 +209,85 @@ platform_library_definition:
             applicationRef: user-preferences@1.0.0
             required: false
     version: 1.0.0
+
+    resource_defaults:
+        clickhouse:
+            tables:
+                records:
+                    engine: MergeTree
+                    columns:
+                        - {"name":"systemId","type":"UInt32","codec":"T64, LZ4"}
+                        - {"name":"objectId","type":"UInt32","codec":"T64, LZ4"}
+                        - {"name":"parameterId","type":"UInt32","codec":"T64, LZ4"}
+                        - {"name":"attrId","type":"UInt32","codec":"T64, LZ4"}
+                        - {"name":"ts","type":"UInt64","codec":"DoubleDelta, LZ4"}
+                        - {"name":"ts2","type":"Nullable(UInt64)","codec":"DoubleDelta, LZ4"}
+                        - {"name":"quality","type":"Nullable(Int64)","codec":"T64, LZ4"}
+                        - {"name":"invalid","type":"Nullable(Bool)","codec":"LZ4"}
+                        - {"name":"value","type":"Nullable(Float64)","codec":"Gorilla(8), LZ4"}
+                        - {"name":"strValue","type":"Nullable(String)","codec":"LZ4"}
+                        - {"name":"service","type":"LowCardinality(Nullable(String))","codec":"LZ4"}
+                        - {"name":"dt","type":"Date","codec":"DoubleDelta, LZ4"}
+                        - {"name":"ts3","type":"Nullable(UInt64)","codec":"DoubleDelta, LZ4"}
+                        - {"name":"offs","type":"Nullable(Int64)","codec":"DoubleDelta, LZ4"}
+                        - {"name":"tagName","type":"Nullable(String)","codec":"LZ4"}
+                        - {"name":"status","type":"Nullable(Int64)","codec":"T64, LZ4"}
+                    indexes:
+                        - {"name":"idx_set_objectId","expression":"objectId","type":"set(1000)","granularity":1}
+                        - {"name":"idx_set_parameterId","expression":"parameterId","type":"set(1000)","granularity":1}
+                        - {"name":"idx_minmax_h1","expression":"intDiv(ts, 3600000)","type":"minmax","granularity":1}
+                        - {"name":"idx_minmax_offs","expression":"offs","type":"minmax","granularity":1}
+                    partition_by: "toDate(fromUnixTimestamp64Milli(toInt64(ts), 'UTC'))"
+                    primary_key: "(parameterId, objectId, systemId, attrId, ts)"
+                    order_by: "(parameterId, objectId, systemId, attrId, ts, ts2, invalid, quality, value, strValue)"
+                    sample_by: "parameterId"
+                    settings:
+                        index_granularity: 8192
+                        allow_nullable_key: 1
+                        ratio_of_defaults_for_sparse_serialization: 0.95
+                        ttl_only_drop_parts: 0
+                        columns_to_prewarm_mark_cache: "parameterId,objectId,systemId,attrId,ts"
+                        prewarm_mark_cache: 1
+                        prewarm_primary_key_cache: 1
+                        use_primary_key_cache: 1
+                        primary_key_compression_codec: "LZ4"
+                        max_bytes_to_merge_at_max_space_in_pool: 161061273600
+                        max_bytes_to_merge_at_min_space_in_pool: 1048576
+                        max_parts_to_merge_at_once: 100
+                alarm_message:
+                    engine: ReplacingMergeTree
+                    columns:
+                        - {"name":"id","type":"UUID"}
+                        - {"name":"system_id","type":"UInt32"}
+                        - {"name":"object_id","type":"UInt32"}
+                        - {"name":"parameter_id","type":"UInt32"}
+                        - {"name":"detail_nr","type":"UInt32"}
+                        - {"name":"ts","type":"UInt64"}
+                        - {"name":"ts2","type":"UInt64"}
+                        - {"name":"quality","type":"Int64"}
+                        - {"name":"signal_val","type":"String"}
+                        - {"name":"ack_time","type":"UInt64"}
+                        - {"name":"in_time","type":"UInt64"}
+                        - {"name":"ack_state","type":"UInt32"}
+                        - {"name":"alert_class_name","type":"String"}
+                        - {"name":"ackable","type":"Bool"}
+                        - {"name":"direction","type":"Bool"}
+                        - {"name":"text","type":"String"}
+                        - {"name":"comment","type":"String"}
+                        - {"name":"signal_state","type":"UInt32"}
+                        - {"name":"user_name","type":"String"}
+                        - {"name":"description","type":"String"}
+                        - {"name":"text0","type":"String"}
+                        - {"name":"arm","type":"String"}
+                        - {"name":"prior","type":"UInt32"}
+                        - {"name":"invalid","type":"Bool"}
+                        - {"name":"insert_ts","type":"UInt64"}
+                        - {"name":"out_of_service","type":"Bool"}
+                        - {"name":"alert_class","type":"String"}
+                        - {"name":"alert_class_by_group","type":"Map(String, String)"}
+                        - {"name":"tag_name","type":"String"}
+                        - {"name":"responsibility_area","type":"Array(String)"}
+                        - {"name":"control_time","type":"UInt64"}
+                    order_by: "(ts, ts2, id)"
+                    settings:
+                        index_granularity: 8192

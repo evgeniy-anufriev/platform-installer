@@ -167,7 +167,7 @@ def project_providers(rows, snapshot, configuration, desired, catalog):
     try:
         for row in rows:
             key = (row['libraryId'], row['instanceId'])
-            identity = {k: row.get(k) for k in ('resources', 'bindings', 'connectionDefaults')}
+            identity = {k: row.get(k) for k in ('resources', 'bindings', 'connectionDefaults', 'resourceDefaults')}
             identity['accounts'] = row['settings'].get('accounts', {})
             if key in logical and logical[key] != identity:
                 raise ValueError('APPLICATION_PROVIDER_HOST_CONFLICT')
@@ -205,6 +205,10 @@ def project_providers(rows, snapshot, configuration, desired, catalog):
                                  ownerMarker=marker(project_id, ref, library_id, 'owner', library_id))
                     claim((ref, 'database', name), (library_id, resource_id), mode)
                     databases[resource_id] = value
+                    if job['serviceType'] == 'clickhouse':
+                        value['tables'] = library.get('tables', {}).get(resource_id, [])
+                        if any(db['name'] == name and db['providerId'] == ref and db.get('tables', []) != value['tables'] for db in job['databases']):
+                            raise ValueError('APPLICATION_PROVIDER_NAME_CONFLICT')
                     job['databases'].append(value)
                     if job['serviceType'] == 'postgresql' and mode == 'managed' and not any(o['name'] == owner for o in job['libraries']):
                         job['libraries'].append({'name': owner, 'marker': value['ownerMarker']})

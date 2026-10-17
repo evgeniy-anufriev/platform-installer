@@ -60,6 +60,8 @@
         'bindings': application_job.deployment.bindings | default({}),
         'vaultRef': application_job.deployment.vault_ref | default({}),
         'resources': application_job.deployment.resources | default({}),
+        'resourceDefaults': _library_package.platform_library_definition.resource_defaults | default({}) |
+          combine(application_job.deployment.resource_defaults | default({}), recursive=true, list_merge='replace'),
         'sharedSecrets': _library_package.platform_library_definition.shared_secrets | default({}) |
           combine(application_job.deployment.shared_secrets | default({}), recursive=true, list_merge='replace'),
         'connectionDefaults': _library_package.platform_library_definition.connection_defaults | default({}) |

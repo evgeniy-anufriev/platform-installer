@@ -95,6 +95,12 @@ containers. A3/A4 add PostgreSQL library resources/accounts, protected Vault
 secret publication and container Agent/PKI materialization. A5 extends the same
 provider jobs with Redis/Sentinel ACLs and ClickHouse databases/accounts; Verify
 adds read-only provider checks after inspect without repeating provider preflight.
+ClickHouse capability `service.clickhouse.table` adds file-only library table specs
+to every selected database job. Ansible owns merge/rendering; the existing protected
+native module checks metadata, creates missing tables and verifies all members.
+Database ownership is persisted before table writes so partial creation can retry.
+See [file-only table contract](project-contract.md#file-only-clickhouse-base-tables).
+
 Kafka library resources reuse these stages with capability `service.kafka.topic`.
 Core projects topic defaults from the selected deployment's mode and broker members;
 the Kafka role uses builtin command/template/assert tasks and its installed CLI.
