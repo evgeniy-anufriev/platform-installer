@@ -39,7 +39,6 @@ platform_application_definition:
             SERVER_ALLOWED_ORIGINS: '*'
             SPRING_APPLICATION_NAME: data-manager
             SPRING_JPA_PROPERTIES_JAKARTA_PERSISTENCE_QUERY_TIMEOUT: 2000
-            SPRING_KAFKA_SCHEMA_REGISTRY_URL: '{{ application_parameters.source_variables.KAFKA_SCHEMA_REGISTRY_URL | default(undef(hint=''Configure SDKU KAFKA_SCHEMA_REGISTRY_URL''), true) }}'
             SQL_INIT_MODE: always
             STATIC_FILES_FOLDER: /usr/local/app/static/
             TN_SCADA_DATA_MANAGER_INITIALIZATION_BATCH_SIZE: 50000
@@ -51,7 +50,6 @@ platform_application_definition:
         parameters:
             database_name: tn-scada
             source_variables:
-                KAFKA_SCHEMA_REGISTRY_URL: ""
                 REDIS_ALERT_CLASS_TOPIC: alert-class
                 REDIS_ALERT_HANDLER_TOPIC: alert-hdl
                 REDIS_CONNECTION_TYPE: Standalone

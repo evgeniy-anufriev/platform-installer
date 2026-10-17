@@ -105,7 +105,10 @@ def validate_compose(config, job, instance_path, digest):
     if config.get("name") != job["placement"]["composeProject"] or set(services) != {job["instanceId"]}:
         raise ValueError("APPLICATION_COMPOSE_IDENTITY_INVALID")
     service = services[job["instanceId"]]
-    if (service.get("image") != job["authority"]["requirement"]["localReference"] or
+    reference = job['settings']['image']
+    if '@' in reference:
+        reference = job['authority']['requirement']['localReference']
+    if (service.get("image") != reference or
             service.get("container_name") != job["placement"]["containerName"]):
         raise ValueError("APPLICATION_COMPOSE_IDENTITY_INVALID")
     launch = service.get("entrypoint") or service.get("command")

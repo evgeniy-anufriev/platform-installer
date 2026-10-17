@@ -8,10 +8,12 @@ try:
     from .project_validation import canonical_digest
     from .schema_validation import SchemaValidator
     from .kafka_listener_resolution import project_member_listeners
+    from .kafka_schema_registry import registry_projection
 except ImportError:
     from project_validation import canonical_digest
     from schema_validation import SchemaValidator
     from kafka_listener_resolution import project_member_listeners
+    from kafka_schema_registry import registry_projection
 
 CONTRACT = "platform.installer/project-desired-state/v3alpha1"
 ID = re.compile(r"^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$")
@@ -219,8 +221,29 @@ def resolve_connection(deployment_id, declaration, selector, desired, configurat
     effective = configuration.get("services", {}).get(deployment_id, {})
     members = deployment.get("members", {})
     purpose = declaration.get("purpose", "client")
+    if service_type == 'redis' and selector in ('client', 'sentinel'):
+        purpose = selector
     targets = []
-    if service_type == "kafka":
+    if service_type == 'kafka' and purpose == 'schema-registry':
+        if _value(effective.get('configuration', {}), 'schemaRegistryEnabled') is not True:
+            raise ValueError('Schema Registry disabled')
+        inputs = []
+        for member_id, member in sorted(members.items()):
+            config = effective.get('members', {}).get(member_id, {}).get('configuration', {})
+            inputs.append(dict(member, id=member_id, deployment_id=deployment_id,
+                advertised_host=hosts[member['host']]['ansibleHost'],
+                listeners=_value(config, 'listeners') or _value(effective.get('configuration', {}), 'listeners'),
+                schema_registry={'http_port': _value(config, 'schemaRegistryHttpPort') or _value(effective.get('configuration', {}), 'schemaRegistryHttpPort'),
+                                 'https_port': _value(config, 'schemaRegistryHttpsPort') or _value(effective.get('configuration', {}), 'schemaRegistryHttpsPort'),
+                                 'tls_profile': _value(config, 'tlsProfile') or _value(effective.get('configuration', {}), 'tlsProfile')}))
+        projection = registry_projection(inputs, listener=_value(effective.get('configuration', {}), 'schemaRegistryKafkaListener'))
+        if projection['findings']:
+            raise ValueError('Schema Registry unresolved')
+        targets = [{'hostId': item['host'], 'memberId': item['id'], 'address': item['advertised_host'],
+                    'port': item['https_port'], 'protocol': 'https', 'tlsProfileRef': item['tls_profile']}
+                   for item in projection['instances']]
+        selector = 'schema-registry'
+    elif service_type == "kafka":
         if not selector:
             raise ValueError("Kafka selector required")
         listeners = _value(effective.get("configuration", {}), "listeners")
@@ -425,7 +448,20 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
             if key in ports:
                 findings.append(finding("APPLICATION_PORT_COLLISION", field + ".ports." + listener))
             ports.add(key)
-        library = libraries.setdefault(library_id, {"libraryRef": row["libraryRef"], "packages": {}, "instances": {}, "resources": row["resources"], "sharedSecretRequirements": row["sharedSecrets"]})
+        shared_connections = {}
+        for name, declaration in row.get('libraryConnections', {}).items():
+            reference = row['bindings'].get(declaration['library_binding'], {}).get('deploymentRef')
+            if not reference:
+                continue
+            try:
+                service_type = desired['serviceDeployments'][reference]['serviceType']
+                selector = row['connectionDefaults'].get(service_type, {}).get('connectionRef')
+                shared_connections[name] = resolve_connection(reference, declaration, selector, desired, configuration, catalog, hosts)
+            except (ValueError, KeyError, TypeError):
+                findings.append(finding('APPLICATION_CONNECTION_INVALID', field + '.libraryConnections.' + name))
+        library = libraries.setdefault(library_id, {"libraryRef": row["libraryRef"], "packages": {}, "instances": {}, "resources": row["resources"], "sharedSecretRequirements": row["sharedSecrets"], 'connections': shared_connections, 'runtimeDirectory': row.get('runtimeDirectory', '~/' + library_id)})
+        if library['connections'] != shared_connections or library['runtimeDirectory'] != row.get('runtimeDirectory', '~/' + library_id):
+            findings.append(finding('APPLICATION_HOST_RESOURCE_CONFLICT', field))
         library["packages"][row["applicationName"]] = row["packageIdentity"]
         instance = library["instances"].setdefault(app_id, {"applicationName": row["applicationName"], "slotId": row["slotId"], "placements": {},
                                                            "connections": connections, "credentialRequirements": accounts,
@@ -457,8 +493,8 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
                                           "ports": settings.get("ports", {}), "endpoint": settings.get("endpoint", {}),
                                           "containerName": "%s-%s-%s" % (project_id, app_id, host),
                                           "composeProject": compose_project,
-                                          "runtimePath": "applications/%s/%s/%s/%s" % (project_id, library_id, app_id, host),
-                                          "libraryEnvPath": "applications/%s/%s/%s/.env" % (project_id, library_id, host)}
+                                          "runtimeDirectory": library['runtimeDirectory'],
+                                          "runtimePath": app_id, "libraryEnvPath": '.env'}
     for library in libraries.values():
         used = {binding["source"]["library_secret"] for instance in library["instances"].values()
                 for binding in instance.get("secretBindings", {}).values() if "library_secret" in binding["source"]}

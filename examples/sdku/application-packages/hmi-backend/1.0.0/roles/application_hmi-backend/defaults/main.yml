@@ -30,7 +30,6 @@ platform_application_definition:
             GAAUDIT_URL_ROOT: '{{ application_parameters.source_variables.GRANT_ACCESS_AUDIT_URL | default(undef(hint=''Configure SDKU GRANT_ACCESS_AUDIT_URL''), true) }}'
             JAVA_OPTS: -Xmx4048m
             SERVER_ALLOWED_ORIGINS: '*'
-            SPRING_KAFKA_SCHEMA_REGISTRY_URL: '{{ application_parameters.source_variables.KAFKA_SCHEMA_REGISTRY_URL | default(undef(hint=''Configure SDKU KAFKA_SCHEMA_REGISTRY_URL''), true) }}'
             TN_SCADA_DATA_MANAGER_URL_ROOT: '{{ application_parameters.source_variables.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
             TN_SCADA_METADATA_TARGET_PROJECT: TNSV
             TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
@@ -57,7 +56,6 @@ platform_application_definition:
                 ALARM_TOPIC_COMPACT: sdku-alarms-compact
                 DATA_MANAGER_URL_ROOT: ""
                 GRANT_ACCESS_AUDIT_URL: ""
-                KAFKA_SCHEMA_REGISTRY_URL: ""
                 MAIN_TOPIC: sdku-main
                 REDIS_SENTINEL_MASTER: ""
         ports:

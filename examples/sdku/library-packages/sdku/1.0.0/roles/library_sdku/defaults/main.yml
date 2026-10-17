@@ -1,4 +1,9 @@
 platform_library_definition:
+    runtime_directory: "~/{{ library_instance_id }}"
+    connections:
+        kafka: {library_binding: messaging, protocol: tcp}
+        redis: {library_binding: cache, protocol: tcp}
+        schema-registry: {library_binding: messaging, purpose: schema-registry, protocol: https}
     connection_defaults:
         kafka:
             connectionRef: CLIENT_SSL

@@ -150,6 +150,26 @@ async function selectSlot() {
   await userEvent.click(screen.getByRole("button", { name: "↳ gateway" }));
 }
 describe("application editor", () => {
+  it("edits the library runtime directory and resets it without an app override", async () => {
+    const user = userEvent.setup();
+    const calls: ApplicationIntent[] = [];
+    render(<Harness calls={calls} />);
+    await user.click(screen.getByRole("button", { name: /^sdku/ }));
+    const field = screen.getByLabelText("Каталог библиотеки");
+    await user.type(field, "/data/scada/sdku");
+    await user.tab();
+    expect(calls.at(-1)).toMatchObject({
+      operation: "UpdateApplicationLibraryDeployment",
+      deploymentId: "sdku",
+      entity: { runtime_directory: "/data/scada/sdku" },
+    });
+    await user.click(screen.getByRole("button", { name: "По умолчанию" }));
+    expect(calls.at(-1)).toMatchObject({ entity: { runtime_directory: "" } });
+    expect(
+      applicationDraft(managed, calls).libraries.sdku.runtime_directory,
+    ).toBe("");
+  });
+
   it("resets common overrides at library scope without creating a slot", async () => {
     const view = structuredClone(managed);
     objectValue(

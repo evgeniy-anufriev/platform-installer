@@ -709,6 +709,45 @@ export function ApplicationsPage({
                             ))}
                         </select>
                       </label>
+                      <label>
+                        Каталог библиотеки
+                        <input
+                          aria-label="Каталог библиотеки"
+                          defaultValue={String(library.runtime_directory ?? "")}
+                          key={
+                            selected + String(library.runtime_directory ?? "")
+                          }
+                          placeholder={
+                            resolved?.runtimeDirectory ||
+                            "По умолчанию из пакета: ~/<ID библиотеки>"
+                          }
+                          disabled={busy}
+                          onBlur={(e) => {
+                            if (
+                              e.target.value !==
+                              String(library.runtime_directory ?? "")
+                            )
+                              void send({
+                                operation: "UpdateApplicationLibraryDeployment",
+                                deploymentId: selected,
+                                entity: { runtime_directory: e.target.value },
+                              });
+                          }}
+                        />
+                      </label>
+                      <button
+                        className="outline"
+                        disabled={busy || !library.runtime_directory}
+                        onClick={() =>
+                          void send({
+                            operation: "UpdateApplicationLibraryDeployment",
+                            deploymentId: selected,
+                            entity: { runtime_directory: "" },
+                          })
+                        }
+                      >
+                        По умолчанию
+                      </button>
                       <p className="muted">
                         Пакет: {String(library.libraryRef)} · ID задаётся при
                         создании

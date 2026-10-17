@@ -11,6 +11,46 @@ FIXTURE = os.path.join(REPO, "examples/valid/application-libraries")
 
 
 class StandaloneLibrariesQA(unittest.TestCase):
+    def test_shared_runtime_paths_with_builtin_tasks_and_no_target_writes(self):
+        tasks = os.path.join(REPO, 'ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/resolve_paths.yml')
+        for directory, previous, expected in [
+                ('~/sdku', [], '/home/docker-qa/sdku'),
+                ('/data/scada/sdku', [], '/data/scada/sdku'),
+                ('~/../foreign', [], None),
+                ('~/sdku', [{'libraryId': 'other', 'libraryPath': '/home/docker-qa/sdku'}], None),
+                ('/data/sdk/api-a', [{'libraryId': 'other', 'libraryPath': '/data/sdk'}], None),
+                ('/data/sdk', [{'libraryId': 'other', 'libraryPath': '/data/sdk/api-a'}], None),
+                ('/data/sdk-a', [{'libraryId': 'other', 'libraryPath': '/data/sdk'}], '/data/sdk-a'),
+                ('~/sdku', [{'libraryId': 'sdku', 'libraryPath': '/home/docker-qa/sdku'}], '/home/docker-qa/sdku')]:
+            play = [{'hosts': 'localhost', 'gather_facts': False, 'connection': 'local',
+                     'vars': {'application_path_home': '/home/docker-qa',
+                              'platform_application_preflight_jobs': previous,
+                              'application_runtime_job': {'libraryId': 'sdku', 'placement': {'runtimeDirectory': directory, 'runtimePath': 'dm-sdku'}}},
+                     'tasks': [{'ansible.builtin.include_tasks': tasks}]}]
+            if expected:
+                play[0]['tasks'].append({'ansible.builtin.assert': {'that': [
+                    'application_library_path == ' + json.dumps(expected),
+                    'application_instance_path == ' + json.dumps(expected + '/dm-sdku')]}})
+            path = os.path.join(self.tmp.name, 'paths.json')
+            with open(path, 'w') as stream:
+                json.dump(play, stream)
+            result = subprocess.run(['ansible-playbook', '-i', 'localhost,', path], capture_output=True, timeout=30)
+            self.assertEqual(0 if expected else 2, result.returncode, 'Native builtin path tasks failed')
+
+    def test_library_runtime_directory_default_override_and_reset(self):
+        def directory():
+            library = self.snapshot()['applicationLibraries']['libraries']['sdku']
+            placements = library['instances']['apigateway-sdku']['placements']
+            self.assertTrue(all(p['runtimeDirectory'] == library['runtimeDirectory'] for p in placements.values()))
+            return library['runtimeDirectory']
+        self.assertEqual('~/sdku', directory())
+        self.edit(self.vars, lambda data: data['platform_desired_state']['applicationLibraryDeployments']['sdku'].update(
+            runtime_directory='/data/scada/sdku'))
+        self.assertEqual('/data/scada/sdku', directory())
+        self.edit(self.vars, lambda data: data['platform_desired_state']['applicationLibraryDeployments']['sdku'].update(
+            runtime_directory=''))
+        self.assertEqual('~/sdku', directory())
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(prefix="a1-standalone-")
         self.addCleanup(self.tmp.cleanup)

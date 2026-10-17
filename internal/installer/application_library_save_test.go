@@ -8,6 +8,24 @@ import (
 	"testing"
 )
 
+func TestLibraryRuntimeDirectorySaveAndDefault(t *testing.T) {
+	root, b, revision := b2Project(t)
+	c := b2Command(revision, "CreateApplicationLibraryDeployment")
+	c.Entity = map[string]any{"libraryRef": "sdku@1.0.0", "runtimeRef": "kafka-main", "runtime_directory": "/data/scada/sdku"}
+	r := commitStructuralForTest(t, b, root, projectlifecycle.ClassificationManaged, revision, []EditCommand{c})
+	v, err := ReadManagedProjectView(root)
+	if err != nil || v.ApplicationLibraries["sdku"]["runtime_directory"] != "/data/scada/sdku" {
+		t.Fatalf("directory save: %v", err)
+	}
+	c = b2Command(r.NewProjectRevision, "UpdateApplicationLibraryDeployment")
+	c.Entity = map[string]any{"runtime_directory": ""}
+	commitStructuralForTest(t, b, root, projectlifecycle.ClassificationManaged, r.NewProjectRevision, []EditCommand{c})
+	v, err = ReadManagedProjectView(root)
+	if err != nil || v.ApplicationLibraries["sdku"]["runtime_directory"] != "" {
+		t.Fatalf("directory reset: %v", err)
+	}
+}
+
 func TestLibraryCommonOverridesSaveAndReset(t *testing.T) {
 	root, b, revision := b2Project(t)
 	create := b2Command(revision, "CreateApplicationLibraryDeployment")

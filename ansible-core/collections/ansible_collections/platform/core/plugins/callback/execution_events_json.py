@@ -177,17 +177,6 @@ class CallbackModule(CallbackBase):
     def v2_runner_on_failed(self, result, ignore_errors=False):
         del ignore_errors
         self._emit("TASK_COMPLETED", "FAILED", result._task, result)
-        try:
-            from infrastructure_verification import record_application_failure
-            # Only a successful daemon inspect followed by the fixed managed
-            # instance-state predicate is application-only. No stdout parsing.
-            application_only = (self._role(result._task) == 'platform.core.application_runtime' and
-                'platform_application_instance_state' in getattr(result._task, 'tags', []) and
-                type(result._result.get('rc')) is int and result._result['rc'] == 0)
-            record_application_failure(self._journal(), application_only, self._context()['actionId'])
-        except Exception:
-            # Missing proof is UNKNOWN, so reuse fails closed on terminal.
-            pass
 
     def v2_runner_on_unreachable(self, result):
         self.v2_runner_on_failed(result)

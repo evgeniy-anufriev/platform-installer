@@ -1,8 +1,8 @@
 services:
   {{ application_instance_id }}:
     extends:
-      file: {{ application_runtime.base_compose_path | to_json }}
-      service: backend
+      "file": {{ application_runtime.base_compose_path | to_json }}
+      "service": backend
     image: {{ application_runtime.image | to_json }}
     container_name: {{ application_runtime.container_name | to_json }}
     command: []
@@ -19,16 +19,12 @@ services:
       {{ name | to_json }}: {{ (value | string) | to_json }}
 {% endif %}
 {% endfor %}
-{% set targets = library_runtime.connections['kafka'].targets %}
-      SPRING_KAFKA_BOOTSTRAP_SERVERS: {% for t in targets %}{{ t.address }}:{{ t.port }}{% if not loop.last %},{% endif %}{% endfor %}{{ '\n' }}
-{% set targets = library_runtime.connections['redis'].targets %}
-      TN_SCADA_REDIS_ADDRESS: {% for t in targets %}{{ t.address }}:{{ t.port }}{% if not loop.last %},{% endif %}{% endfor %}{{ '\n' }}
     labels:
-      platform.installer.project: {{ application_project_id | to_json }}
-      platform.installer.library: {{ library_runtime.library_id | to_json }}
-      platform.installer.instance: {{ application_instance_id | to_json }}
-      platform.installer.host: {{ library_runtime.host_id | to_json }}
-      platform.installer.config-digest: {{ application_config_digest | to_json }}
+      "platform.installer.project": {{ application_project_id | to_json }}
+      "platform.installer.library": {{ library_runtime.library_id | to_json }}
+      "platform.installer.instance": {{ application_instance_id | to_json }}
+      "platform.installer.host": {{ library_runtime.host_id | to_json }}
+      "platform.installer.config-digest": {{ application_config_digest | to_json }}
     ports:
 {% for port in application_effective.ports.values() %}
       - "{{ port.published }}:{{ port.container }}"
@@ -39,6 +35,6 @@ services:
       - {{ ((application_effective.parameters.mount_sources['mount-1'] | default(undef(hint='Configure SDKU mount /usr/local/app/project-libs'), true)) ~ ':/usr/local/app/project-libs:ro') | to_json }}
       - {{ ((application_effective.parameters.mount_sources['mount-2'] | default(undef(hint='Configure SDKU mount /usr/local/app/imitator'), true)) ~ ':/usr/local/app/imitator:ro') | to_json }}
     deploy:
-      resources:
+      "resources":
           limits:
               memory: 4G

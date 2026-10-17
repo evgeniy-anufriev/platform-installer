@@ -33,7 +33,8 @@ class ActionModule(ActionBase):
                 if tools not in sys.path:
                     sys.path.insert(0, tools)
                 from infrastructure_verification import scope_plan
-                result = scope_plan(result, mode, self._task.args.get("pki_state_root"))
+                result = scope_plan(result, mode, self._task.args.get("pki_state_root"),
+                                    self._task.args.get('skip_infrastructure_verify', False))
             destination = os.environ.get("PLATFORM_EXECUTION_MANIFEST_OUTPUT")
             manifest = result["executionManifest"]
             if destination and manifest:

@@ -1,0 +1,507 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/plan/v1alpha6/schema.json",
+  "title": "Application-aware target-free deployment plan",
+  "type": "object",
+  "required": [
+    "apiVersion",
+    "kind",
+    "id",
+    "createdAt",
+    "projectIdentity",
+    "projectRevision",
+    "planner",
+    "runtimeRelease",
+    "fingerprints",
+    "status",
+    "readiness",
+    "artifactRequirements",
+    "phases",
+    "findings",
+    "executionMode",
+    "infrastructureVerification",
+    "skipInfrastructureVerify"
+  ],
+  "properties": {
+    "apiVersion": {
+      "const": "platform.installer/plan/v1alpha6"
+    },
+    "kind": {
+      "const": "DeploymentPlan"
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "projectIdentity": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "projectRevision": {
+      "$ref": "#/$defs/digest"
+    },
+    "planner": {
+      "type": "object",
+      "required": [
+        "coreVersion",
+        "planningProtocol"
+      ],
+      "properties": {
+        "coreVersion": {
+          "type": "string",
+          "minLength": 1
+        },
+        "planningProtocol": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "runtimeRelease": {
+      "$ref": "#/$defs/runtimeRelease"
+    },
+    "fingerprints": {
+      "$ref": "#/$defs/fingerprints"
+    },
+    "status": {
+      "enum": [
+        "EXECUTABLE",
+        "BLOCKED"
+      ]
+    },
+    "readiness": {
+      "enum": [
+        "REQUIRES_PREPARATION",
+        "BLOCKED"
+      ]
+    },
+    "artifactRequirements": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/artifact"
+      }
+    },
+    "phases": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/phase"
+      }
+    },
+    "requiredCredentials": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "requirementRef",
+          "purpose",
+          "hosts"
+        ],
+        "properties": {
+          "requirementRef": {
+            "type": "string"
+          },
+          "purpose": {
+            "type": "string"
+          },
+          "hosts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "acknowledgements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "code",
+          "summary"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9_]*$"
+          },
+          "summary": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "$ref": "../../finding/v1alpha1/schema.json"
+      }
+    },
+    "executionMode": {
+      "enum": [
+        "FULL_PROJECT",
+        "APPLICATION_LIBRARIES_ONLY",
+        "INFRASTRUCTURE_VERIFY_ONLY"
+      ]
+    },
+    "infrastructureVerification": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "enum": [
+            null,
+            "INFRA_VERIFY_MISSING",
+            "INFRA_VERIFY_STALE",
+            "INFRA_EVIDENCE_UNAVAILABLE"
+          ]
+        },
+        "status": {
+          "enum": [
+            "PASS",
+            "BLOCKED",
+            "UNKNOWN"
+          ]
+        },
+        "evidenceRevision": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "deployments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "sourceRunId": {
+                "minLength": 1,
+                "type": "string",
+                "maxLength": 128
+              },
+              "deploymentId": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9-]{0,127}$"
+              },
+              "verifiedAt": {
+                "type": "string",
+                "maxLength": 40,
+                "format": "date-time"
+              },
+              "coverageDigest": {
+                "type": "string",
+                "pattern": "^sha256:[a-f0-9]{64}$"
+              }
+            },
+            "required": [
+              "deploymentId",
+              "sourceRunId",
+              "coverageDigest",
+              "verifiedAt"
+            ]
+          },
+          "maxItems": 256
+        },
+        "infrastructureFingerprint": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "status",
+        "infrastructureFingerprint",
+        "evidenceRevision",
+        "deployments",
+        "code"
+      ]
+    },
+    "skipInfrastructureVerify": {
+      "const": true
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "runtimeRelease": {
+      "type": "object",
+      "required": [
+        "bundleDigest",
+        "coreVersion",
+        "catalogDigest",
+        "planningProtocol"
+      ],
+      "properties": {
+        "bundleDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "coreVersion": {
+          "type": "string"
+        },
+        "catalogDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "planningProtocol": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "fingerprints": {
+      "type": "object",
+      "required": [
+        "project",
+        "catalog",
+        "artifacts",
+        "core",
+        "plan"
+      ],
+      "properties": {
+        "project": {
+          "$ref": "#/$defs/digest"
+        },
+        "catalog": {
+          "$ref": "#/$defs/digest"
+        },
+        "artifacts": {
+          "$ref": "#/$defs/digest"
+        },
+        "core": {
+          "$ref": "#/$defs/digest"
+        },
+        "plan": {
+          "$ref": "#/$defs/digest"
+        }
+      },
+      "additionalProperties": false
+    },
+    "artifact": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/serviceArtifact"
+        },
+        {
+          "$ref": "#/$defs/imageArtifact"
+        }
+      ]
+    },
+    "phase": {
+      "type": "object",
+      "required": [
+        "id",
+        "order",
+        "actions"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "order": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "actions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/action"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "action": {
+      "type": "object",
+      "required": [
+        "id",
+        "type",
+        "targets",
+        "dependsOn",
+        "mutating",
+        "reboot",
+        "summary"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]*$",
+          "enum": [
+            "PKI_APPLY",
+            "PKI_REISSUE",
+            "SERVICE_APPLY",
+            "SERVICE_VERIFY",
+            "APPLICATION_LIBRARIES_APPLY",
+            "APPLICATION_LIBRARIES_VERIFY"
+          ]
+        },
+        "serviceDeployment": {
+          "type": "string"
+        },
+        "targets": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        },
+        "dependsOn": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        },
+        "mutating": {
+          "type": "boolean"
+        },
+        "reboot": {
+          "enum": [
+            "NONE",
+            "RECOMMENDED",
+            "REQUIRED"
+          ]
+        },
+        "summary": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "serviceArtifact": {
+      "type": "object",
+      "required": [
+        "id",
+        "serviceDeployment",
+        "serviceType",
+        "requirementId",
+        "version",
+        "digest",
+        "requiredOffline"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "serviceDeployment": {
+          "type": "string"
+        },
+        "serviceType": {
+          "type": "string"
+        },
+        "requirementId": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "os": {
+          "type": "string"
+        },
+        "architecture": {
+          "type": "string"
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "requiredOffline": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "imageArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "applicationLibrary": {
+          "type": "string"
+        },
+        "platform": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "variant": {
+              "type": "string"
+            },
+            "architecture": {
+              "enum": [
+                "amd64",
+                "arm64"
+              ]
+            },
+            "os": {
+              "const": "linux"
+            }
+          },
+          "required": [
+            "os",
+            "architecture"
+          ]
+        },
+        "instanceId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "localReference": {
+          "type": "string",
+          "pattern": "^platform-application:sha256-[a-f0-9]{64}$"
+        },
+        "sourcePolicy": {
+          "const": "REPOSITORY_THEN_OFFLINE"
+        },
+        "hosts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        },
+        "name": {
+          "type": "string"
+        },
+        "imageId": {
+          "$ref": "#/$defs/digest"
+        },
+        "artifactType": {
+          "const": "container-image"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "artifactType",
+        "imageId",
+        "platform",
+        "localReference",
+        "applicationLibrary",
+        "instanceId",
+        "hosts",
+        "sourcePolicy"
+      ]
+    }
+  }
+}

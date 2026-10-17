@@ -15,6 +15,8 @@ type ApplicationLibraries struct {
 }
 
 type ApplicationLibrary struct {
+	RuntimeDirectory         string                         `json:"runtimeDirectory"`
+	Connections              map[string]json.RawMessage     `json:"connections"`
 	LibraryRef               string                         `json:"libraryRef"`
 	Packages                 map[string]json.RawMessage     `json:"packages"`
 	Instances                map[string]ApplicationInstance `json:"instances"`
@@ -38,6 +40,7 @@ type ApplicationInstance struct {
 }
 
 type ApplicationPlacement struct {
+	RuntimeDirectory string                     `json:"runtimeDirectory"`
 	CommonDefaults   map[string]json.RawMessage `json:"commonDefaults,omitempty"`
 	Inherited        map[string]json.RawMessage `json:"inherited,omitempty"`
 	ServerID         string                     `json:"SERVER_ID"`

@@ -10,13 +10,20 @@
   "additionalProperties": {
     "type": "object",
     "properties": {
-      "overrides": {"$ref": "settings.schema.json#/$defs/common"},
+      "overrides": {
+        "$ref": "settings.schema.json#/$defs/common"
+      },
       "vault_ref": {
         "type": "object",
         "properties": {
-          "binding": {"type": "string", "pattern": "^[a-z][a-z0-9_.-]*$"}
+          "binding": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_.-]*$"
+          }
         },
-        "required": ["binding"],
+        "required": [
+          "binding"
+        ],
         "additionalProperties": false
       },
       "libraryRef": {
@@ -80,7 +87,10 @@
               "type": "object"
             },
             "mode": {
-              "enum": ["managed", "existing"]
+              "enum": [
+                "managed",
+                "existing"
+              ]
             },
             "databaseRef": {
               "type": "string",
@@ -180,6 +190,10 @@
           "additionalProperties": false
         },
         "maxProperties": 128
+      },
+      "runtime_directory": {
+        "maxLength": 4096,
+        "type": "string"
       }
     },
     "required": [

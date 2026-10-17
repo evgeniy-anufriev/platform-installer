@@ -61,6 +61,7 @@ const (
 )
 
 type DeploymentPlan struct {
+	SkipInfrastructureVerify   bool
 	ExecutionMode              ExecutionMode
 	InfrastructureVerification *InfrastructureVerification
 	ID                         string
@@ -130,15 +131,16 @@ type TargetHostTrustStager interface {
 type TargetHostTrustProvider func(DeploymentPlan) ([]TargetHostKeyApproval, error)
 
 type PlanRecord struct {
-	mode            ExecutionMode
-	vaultSources    map[string]string
-	ID              string
-	Plan            DeploymentPlan
-	DeploymentOrder []string
-	CreatedAt       time.Time
-	ExpiresAt       time.Time
-	Approved        bool
-	Consumed        bool
+	skipInfrastructureVerify bool
+	mode                     ExecutionMode
+	vaultSources             map[string]string
+	ID                       string
+	Plan                     DeploymentPlan
+	DeploymentOrder          []string
+	CreatedAt                time.Time
+	ExpiresAt                time.Time
+	Approved                 bool
+	Consumed                 bool
 }
 
 type PlanBuilder interface {
@@ -146,7 +148,7 @@ type PlanBuilder interface {
 }
 
 type ModePlanBuilder interface {
-	BuildDeploymentPlanForMode(context.Context, Node, string, map[string]any, []string, ExecutionMode, map[string]string) (DeploymentPlan, error)
+	BuildDeploymentPlanForMode(context.Context, Node, string, map[string]any, []string, ExecutionMode, map[string]string, ...bool) (DeploymentPlan, error)
 }
 
 type ExecutionClient interface {
@@ -286,14 +288,14 @@ func (s *ExecutionService) CreatePlanWithOrder(ctx context.Context, node Node, p
 
 // Explicit modes share the ordinary approval/Start lifecycle. An older builder
 // is never silently substituted for a mode-aware request.
-func (s *ExecutionService) CreatePlanForMode(ctx context.Context, node Node, projectRoot string, runtimeRelease map[string]any, deploymentOrder []string, mode ExecutionMode, vaultSources map[string]string) (PlanRecord, error) {
+func (s *ExecutionService) CreatePlanForMode(ctx context.Context, node Node, projectRoot string, runtimeRelease map[string]any, deploymentOrder []string, mode ExecutionMode, vaultSources map[string]string, skipInfrastructureVerify ...bool) (PlanRecord, error) {
 	if !validModePlanInput(append([]string{}, deploymentOrder...), mode, vaultSources) {
 		return PlanRecord{}, errors.New("DEPLOYMENT_PLAN_INPUT_INVALID")
 	}
-	return s.createPlan(ctx, node, projectRoot, runtimeRelease, deploymentOrder, mode, vaultSources)
+	return s.createPlan(ctx, node, projectRoot, runtimeRelease, deploymentOrder, mode, vaultSources, skipInfrastructureVerify...)
 }
 
-func (s *ExecutionService) buildPlan(ctx context.Context, node Node, root string, release map[string]any, order []string, mode ExecutionMode, sources map[string]string) (DeploymentPlan, error) {
+func (s *ExecutionService) buildPlan(ctx context.Context, node Node, root string, release map[string]any, order []string, mode ExecutionMode, sources map[string]string, skipInfrastructureVerify ...bool) (DeploymentPlan, error) {
 	if mode == "" {
 		return s.builder.BuildDeploymentPlan(ctx, node, root, release, slices.Clone(order))
 	}
@@ -301,8 +303,8 @@ func (s *ExecutionService) buildPlan(ctx context.Context, node Node, root string
 	if !ok {
 		return DeploymentPlan{}, errors.New("EXECUTION_MODE_RUNTIME_UNSUPPORTED")
 	}
-	plan, err := builder.BuildDeploymentPlanForMode(ctx, node, root, release, append([]string{}, order...), mode, cloneVaultSources(sources))
-	if err == nil && (plan.ExecutionMode != mode || plan.InfrastructureVerification == nil || !plan.InfrastructureVerification.Validate()) {
+	plan, err := builder.BuildDeploymentPlanForMode(ctx, node, root, release, append([]string{}, order...), mode, cloneVaultSources(sources), skipInfrastructureVerify...)
+	if err == nil && (plan.ExecutionMode != mode || plan.SkipInfrastructureVerify != (len(skipInfrastructureVerify) > 0 && skipInfrastructureVerify[0]) || plan.InfrastructureVerification == nil || !plan.InfrastructureVerification.Validate()) {
 		return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
 	}
 	return plan, err
@@ -316,11 +318,11 @@ func cloneVaultSources(source map[string]string) map[string]string {
 	return result
 }
 
-func (s *ExecutionService) createPlan(ctx context.Context, node Node, projectRoot string, runtimeRelease map[string]any, deploymentOrder []string, mode ExecutionMode, vaultSources map[string]string) (PlanRecord, error) {
+func (s *ExecutionService) createPlan(ctx context.Context, node Node, projectRoot string, runtimeRelease map[string]any, deploymentOrder []string, mode ExecutionMode, vaultSources map[string]string, skipInfrastructureVerify ...bool) (PlanRecord, error) {
 	if s == nil || s.builder == nil || projectRoot == "" {
 		return PlanRecord{}, errors.New("EXECUTION_PLAN_INPUT_INVALID")
 	}
-	plan, err := s.buildPlan(ctx, node, projectRoot, runtimeRelease, deploymentOrder, mode, vaultSources)
+	plan, err := s.buildPlan(ctx, node, projectRoot, runtimeRelease, deploymentOrder, mode, vaultSources, skipInfrastructureVerify...)
 	if err != nil {
 		return PlanRecord{}, err
 	}
@@ -328,7 +330,7 @@ func (s *ExecutionService) createPlan(ctx context.Context, node Node, projectRoo
 		return PlanRecord{}, errors.New("DEPLOYMENT_PLAN_INVALID")
 	}
 	now := s.now().UTC()
-	record := PlanRecord{mode: mode, vaultSources: cloneVaultSources(vaultSources), ID: plan.ID, Plan: cloneDeploymentPlan(plan), DeploymentOrder: slices.Clone(deploymentOrder), CreatedAt: now, ExpiresAt: now.Add(s.ttl)}
+	record := PlanRecord{skipInfrastructureVerify: len(skipInfrastructureVerify) > 0 && skipInfrastructureVerify[0], mode: mode, vaultSources: cloneVaultSources(vaultSources), ID: plan.ID, Plan: cloneDeploymentPlan(plan), DeploymentOrder: slices.Clone(deploymentOrder), CreatedAt: now, ExpiresAt: now.Add(s.ttl)}
 	s.mu.Lock()
 	s.plans[record.ID] = record
 	s.projectRoots[record.ID] = projectRoot
@@ -473,7 +475,7 @@ func (s *ExecutionService) start(ctx context.Context, node Node, planID string, 
 	if len(record.Plan.RuntimeRelease) == 0 {
 		return ExecutionRun{}, errors.New("EXECUTION_PLAN_RUNTIME_RELEASE_MISSING")
 	}
-	fresh, err := s.buildPlan(ctx, node, projectRoot, record.Plan.RuntimeRelease, record.DeploymentOrder, record.mode, record.vaultSources)
+	fresh, err := s.buildPlan(ctx, node, projectRoot, record.Plan.RuntimeRelease, record.DeploymentOrder, record.mode, record.vaultSources, record.skipInfrastructureVerify)
 	if err != nil {
 		return ExecutionRun{}, err
 	}

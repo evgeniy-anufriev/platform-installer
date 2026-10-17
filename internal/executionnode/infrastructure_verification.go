@@ -85,11 +85,18 @@ func decodeInfrastructureVerification(raw any) (*InfrastructureVerification, err
 }
 
 func b0PlanCapabilitySupported(c map[string]any) bool {
-	if !closedKeys(c, "apiVersion", "kind", "bootstrapProtocol", "coreVersion", "catalogDigest", "schemaDigest", "runtime", "supportedOperations", "executionStart", "targetCredentialLease", "runtimeSecretDescriptors", "serviceConfigurationPreview", "deploymentPlanRequestVersions", "projectSnapshotRequestVersions", "applicationExecution", "infrastructureVerification") {
+	keys := []string{"apiVersion", "kind", "bootstrapProtocol", "coreVersion", "catalogDigest", "schemaDigest", "runtime", "supportedOperations", "executionStart", "targetCredentialLease", "runtimeSecretDescriptors", "serviceConfigurationPreview", "deploymentPlanRequestVersions", "projectSnapshotRequestVersions", "applicationExecution", "infrastructureVerification"}
+	if c["apiVersion"] == "platform.installer/execution-capabilities/v1alpha9" {
+		keys = append(keys, "skipInfrastructureVerify")
+		if c["skipInfrastructureVerify"] != true || !contains(c["deploymentPlanRequestVersions"], "platform.installer/execution-runtime/v1alpha5") {
+			return false
+		}
+	}
+	if !closedKeys(c, keys...) {
 		return false
 	}
 	v, ok := c["infrastructureVerification"].(map[string]any)
-	return c["apiVersion"] == "platform.installer/execution-capabilities/v1alpha8" && c["kind"] == "ExecutionCapabilities" && contains(c["supportedOperations"], "BuildDeploymentPlan") && contains(c["deploymentPlanRequestVersions"], "platform.installer/execution-runtime/v1alpha4") && ok && closedKeys(v, "protocol", "executionModes", "requiredPlanRequestVersion", "manifestContract", "planContract") && v["protocol"] == "InfrastructureVerification/v1alpha1" && v["requiredPlanRequestVersion"] == "platform.installer/execution-runtime/v1alpha4" && v["manifestContract"] == "platform.installer/execution-manifest/v1alpha3" && v["planContract"] == "platform.installer/plan/v1alpha5" && validExecutionModes(v["executionModes"])
+	return (c["apiVersion"] == "platform.installer/execution-capabilities/v1alpha8" || c["apiVersion"] == "platform.installer/execution-capabilities/v1alpha9") && c["kind"] == "ExecutionCapabilities" && contains(c["supportedOperations"], "BuildDeploymentPlan") && contains(c["deploymentPlanRequestVersions"], "platform.installer/execution-runtime/v1alpha4") && ok && closedKeys(v, "protocol", "executionModes", "requiredPlanRequestVersion", "manifestContract", "planContract") && v["protocol"] == "InfrastructureVerification/v1alpha1" && v["requiredPlanRequestVersion"] == "platform.installer/execution-runtime/v1alpha4" && v["manifestContract"] == "platform.installer/execution-manifest/v1alpha3" && v["planContract"] == "platform.installer/plan/v1alpha5" && validExecutionModes(v["executionModes"])
 }
 
 // ReadApplicationLibraries uses the existing target-free snapshot path. It
@@ -107,21 +114,30 @@ func (t OpenSSHTransport) ReadApplicationLibraries(ctx context.Context, node Nod
 
 // BuildDeploymentPlanForMode reuses ordinary staging and the fixed Core operation.
 // Unsupported runtimes fail before staging; there is no full-project fallback.
-func (t OpenSSHTransport) BuildDeploymentPlanForMode(ctx context.Context, node Node, projectRoot string, release map[string]any, order []string, mode ExecutionMode, vaultSources map[string]string) (DeploymentPlan, error) {
+func (t OpenSSHTransport) BuildDeploymentPlanForMode(ctx context.Context, node Node, projectRoot string, release map[string]any, order []string, mode ExecutionMode, vaultSources map[string]string, skipInfrastructureVerify ...bool) (DeploymentPlan, error) {
 	if projectRoot == "" || len(release) == 0 || !validModePlanInput(order, mode, vaultSources) {
 		return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_INPUT_INVALID")
 	}
-	c, err := t.runtimeProtocol(ctx, node, map[string]any{"apiVersion": "platform.installer/execution-runtime/v1alpha4", "operation": "GetCapabilities"})
+	version := "platform.installer/execution-runtime/v1alpha4"
+	skip := len(skipInfrastructureVerify) > 0 && skipInfrastructureVerify[0]
+	if skip {
+		version = "platform.installer/execution-runtime/v1alpha5"
+	}
+	c, err := t.runtimeProtocol(ctx, node, map[string]any{"apiVersion": version, "operation": "GetCapabilities"})
 	if err != nil {
 		return DeploymentPlan{}, err
 	}
-	if !b0PlanCapabilitySupported(c) {
+	if !b0PlanCapabilitySupported(c) || skip && (c["apiVersion"] != "platform.installer/execution-capabilities/v1alpha9" || c["skipInfrastructureVerify"] != true) {
 		return DeploymentPlan{}, errors.New("EXECUTION_MODE_RUNTIME_UNSUPPORTED")
 	}
 	if vaultSources == nil {
 		vaultSources = map[string]string{}
 	}
-	return t.buildDeploymentPlanRequest(ctx, node, projectRoot, map[string]any{"apiVersion": "platform.installer/execution-runtime/v1alpha4", "runtimeRelease": release, "deploymentOrder": order, "executionMode": string(mode), "applicationVaultSources": vaultSources})
+	request := map[string]any{"apiVersion": version, "runtimeRelease": release, "deploymentOrder": order, "executionMode": string(mode), "applicationVaultSources": vaultSources}
+	if skip {
+		request["skipInfrastructureVerify"] = true
+	}
+	return t.buildDeploymentPlanRequest(ctx, node, projectRoot, request)
 }
 
 func validExecutionModes(raw any) bool {

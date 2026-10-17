@@ -22,7 +22,6 @@ platform_application_definition:
             LOGGER_LEVEL: INFO
             SPRING_KAFKA_APPLICATION_ID: kafka-history-writer
             SPRING_KAFKA_LISTENER_GROUP_ID: kafka-history-writer
-            SPRING_KAFKA_SCHEMA_REGISTRY_URL: '{{ application_parameters.source_variables.KAFKA_SCHEMA_REGISTRY_URL | default(undef(hint=''Configure SDKU KAFKA_SCHEMA_REGISTRY_URL''), true) }}'
             TARGET_TOPICS: '{{ application_parameters.source_variables.MAIN_TOPIC | default(undef(hint=''Configure SDKU MAIN_TOPIC''), true) }}'
             TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
             TZ: Europe/Moscow
@@ -30,7 +29,6 @@ platform_application_definition:
         image: evoscada-docker.artifacts.tn.tngrp.ru/kafka-history-writer:0.0.67-412ebcbf-redos
         parameters:
             source_variables:
-                KAFKA_SCHEMA_REGISTRY_URL: ""
                 MAIN_TOPIC: sdku-main
                 REDIS_SENTINEL_MASTER: ""
         ports:

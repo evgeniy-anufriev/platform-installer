@@ -8,17 +8,21 @@ import (
 )
 
 type modeLifecycleBuilder struct {
+	skips    []bool
+	dropSkip bool
 	lifecycleBuilder
 	modes                               []ExecutionMode
 	sources                             []map[string]string
 	wrongMode, blocked, missingEvidence bool
 }
 
-func (b *modeLifecycleBuilder) BuildDeploymentPlanForMode(ctx context.Context, n Node, root string, release map[string]any, order []string, mode ExecutionMode, sources map[string]string) (DeploymentPlan, error) {
+func (b *modeLifecycleBuilder) BuildDeploymentPlanForMode(ctx context.Context, n Node, root string, release map[string]any, order []string, mode ExecutionMode, sources map[string]string, skipInfrastructureVerify ...bool) (DeploymentPlan, error) {
 	b.modes = append(b.modes, mode)
 	b.sources = append(b.sources, cloneVaultSources(sources))
 	p, err := b.lifecycleBuilder.BuildDeploymentPlan(ctx, n, root, release, order)
 	p.ExecutionMode = mode
+	p.SkipInfrastructureVerify = len(skipInfrastructureVerify) > 0 && skipInfrastructureVerify[0] && !b.dropSkip
+	b.skips = append(b.skips, p.SkipInfrastructureVerify)
 	p.InfrastructureVerification = &InfrastructureVerification{Status: "PASS", Deployments: []InfrastructureDeploymentVerification{}}
 	if b.wrongMode {
 		p.ExecutionMode = FullProject
@@ -31,6 +35,30 @@ func (b *modeLifecycleBuilder) BuildDeploymentPlanForMode(ctx context.Context, n
 	}
 	return p, err
 }
+func TestSkipInfrastructureVerifySurvivesRebuildAndRejectsChangedResponse(t *testing.T) {
+	for _, tamper := range []bool{false, true} {
+		b := &modeLifecycleBuilder{}
+		c := &lifecycleClient{}
+		s := NewExecutionService(b, c)
+		p, err := s.CreatePlanForMode(context.Background(), Node{}, "project", map[string]any{"bundleDigest": "sha256:x"}, nil, ApplicationLibrariesOnly, nil, true)
+		if err != nil || !p.Plan.SkipInfrastructureVerify {
+			t.Fatalf("skip lost: %v", err)
+		}
+		if err = s.ApprovePlan(p.ID, []string{"ACK_RISK"}); err != nil {
+			t.Fatal(err)
+		}
+		b.dropSkip = tamper
+		_, err = s.Start(context.Background(), Node{}, p.ID)
+		if tamper {
+			if err == nil || c.starts != 0 {
+				t.Fatal("changed skip dispatched")
+			}
+		} else if err != nil || c.starts != 1 || len(b.skips) != 2 || !b.skips[1] {
+			t.Fatalf("skip rebuild failed: %v", err)
+		}
+	}
+}
+
 func TestB3ModeLifecycleRebuildsExactRequestAndDoesNotShareObservation(t *testing.T) {
 	for _, mode := range []ExecutionMode{FullProject, ApplicationLibrariesOnly, InfrastructureVerifyOnly} {
 		t.Run(string(mode), func(t *testing.T) {

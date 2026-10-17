@@ -21,7 +21,6 @@ platform_application_definition:
             SET_INVALID_BIT: 2
             SMOOTH: false
             SPRING_CONFIG_ADDITIONAL_LOCATION: /usr/local/config/connection.yml
-            SPRING_KAFKA_SCHEMA_REGISTRY_URL: '{{ application_parameters.source_variables.KAFKA_SCHEMA_REGISTRY_URL | default(undef(hint=''Configure SDKU KAFKA_SCHEMA_REGISTRY_URL''), true) }}'
             TN_SCADA_DRIVER_GROUP_ID: iec-1
             TN_SCADA_METADATA_TARGET_PROJECT: TNSV
             TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
@@ -35,7 +34,6 @@ platform_application_definition:
             mount_sources:
                 mount-6: ""
             source_variables:
-                KAFKA_SCHEMA_REGISTRY_URL: ""
                 REDIS_SENTINEL_MASTER: ""
         ports: {}
         provisioner:

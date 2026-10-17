@@ -26,7 +26,6 @@ platform_application_definition:
             INCOMING_FILE_DIR: /usr/local/app/data
             JAVA_OPTS: -Xmx15000m
             RESULT_FILE_DIR: /usr/local/app/data
-            SPRING_KAFKA_SCHEMA_REGISTRY_URL: '{{ application_parameters.source_variables.KAFKA_SCHEMA_REGISTRY_URL | default(undef(hint=''Configure SDKU KAFKA_SCHEMA_REGISTRY_URL''), true) }}'
             TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
             WEB_CLIENT_CONNECTION_TIMEOUT: 100000
             WEB_CLIENT_RESPONSE_TIMEOUT: 30000
@@ -38,7 +37,6 @@ platform_application_definition:
                 ALARM_VIEW_SERVICE_URL: ""
                 DATA_MANAGER_URL_ROOT: ""
                 HMI_BACKEND_URL: ""
-                KAFKA_SCHEMA_REGISTRY_URL: ""
                 REDIS_SENTINEL_MASTER: ""
         ports:
             port-1:

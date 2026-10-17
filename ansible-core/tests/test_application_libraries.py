@@ -24,6 +24,27 @@ def load(path):
 
 
 class ApplicationLibrariesTest(unittest.TestCase):
+    def test_registry_connection_projects_all_brokers_and_member_ports(self):
+        desired = {'serviceDeployments': {'kafka': {'serviceType': 'kafka', 'members': {
+            'kafka-%d' % n: {'host': 'node%d' % n, 'roles': ['broker'], 'node_id': n} for n in (1, 2, 3)}}}}
+        config = {'schemaRegistryEnabled': {'state': 'RESOLVED', 'value': True},
+                  'schemaRegistryHttpPort': 8081, 'schemaRegistryHttpsPort': 8082,
+                  'schemaRegistryKafkaListener': 'SSL', 'tlsProfile': 'application-tls',
+                  'listeners': {'SSL': {'purpose': 'interBroker', 'securityProtocol': 'SSL', 'port': 9094}}}
+        config = {key: value if key == 'schemaRegistryEnabled' else {'state': 'RESOLVED', 'value': value}
+                  for key, value in config.items()}
+        effective = {'services': {'kafka': {'configuration': config, 'members': {
+            'kafka-2': {'configuration': {'schemaRegistryHttpsPort': {'state': 'RESOLVED', 'value': 18082}}}}}}}
+        hosts = {'node%d' % n: {'ansibleHost': '192.0.2.%d' % n} for n in (1, 2, 3)}
+        result = APP.resolve_connection('kafka', {'purpose': 'schema-registry', 'protocol': 'https'},
+                                        'CLIENT_SSL', desired, effective, {}, hosts)
+        self.assertEqual([8082, 18082, 8082], [t['port'] for t in result['targets']])
+        self.assertEqual(['192.0.2.1', '192.0.2.2', '192.0.2.3'], [t['address'] for t in result['targets']])
+        self.assertTrue(all(t['tlsProfileRef'] == 'application-tls' for t in result['targets']))
+        config['schemaRegistryEnabled'] = False
+        with self.assertRaises(ValueError):
+            APP.resolve_connection('kafka', {'purpose': 'schema-registry'}, 'SSL', desired, effective, {}, hosts)
+
     def test_account_policy_switch_is_atomic_without_replacing_credentials(self):
         base = {'accounts': {'pg': {'databaseRef': 'db', 'grants': [{'schema':'api','privileges':['USAGE']}],
                                     'credentials': {'username': 'unchanged'}}}}

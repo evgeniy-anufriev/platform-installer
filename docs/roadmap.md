@@ -834,3 +834,12 @@ Owner-requested unified read-only server check: confirm SSH key, direct Go infor
 ## EXECUTION-NODE-PASSWORD-AUTH-01
 
 Owner-authorized password authentication for the common Execution Node SSH/SCP transport, alongside PEM, with unchanged explicit host-key trust and plan approval. Active-run authorization survives ordinary session expiry only for the exact run. See [plan](work/execution-node-password-auth/execution-node-password-auth-plan.md), ADR-032 and current acceptance status in CURRENT_STATE.
+
+## SDKU post-deployment corrections
+
+Owner-approved scope: shared library connections/base Compose and all Registry
+targets; original image reference with locked-ID verification; uniform ENV quoting;
+configurable library runtime directory; infrastructure-stage proof retention;
+explicit plan-bound library-only Infra Verify skip. Follow the [technical plan](work/application-libraries/sdku-post-deployment-corrections-plan.md)
+and ADR-045. Sequential execution is the supported guarantee; no extra daemon
+guard. Source implementation does not authorize activation or target installation.

@@ -193,7 +193,7 @@ class ApplicationRuntimeTests(unittest.TestCase):
         job = {"instanceId": "api-sdku", "projectId": "project", "libraryId": "sdku", "hostId": "node1",
                "placement": {"composeProject": "project-sdku-api-node1", "containerName": "project-api-node1"},
                "authority": {"requirement": {"localReference": "probe:locked"}},
-               "settings": {"command": ["/usr/bin/probe"], "ports": {"http": {"published": 28180, "container": 8080}},
+               "settings": {"image": "probe:locked", "command": ["/usr/bin/probe"], "ports": {"http": {"published": 28180, "container": 8080}},
                             "environment": {"CORE_OPTION": "resolved"}},
                "identityNames": ["EVO_MANAGER_APP_ID"], "configs": []}
         service = {"image": "probe:locked", "container_name": "project-api-node1", "command": ["/usr/bin/probe"],
@@ -206,6 +206,11 @@ class ApplicationRuntimeTests(unittest.TestCase):
         config = {"name": "project-sdku-api-node1", "services": {"api-sdku": service},
                   "volumes": {"user-data": {"driver": "local"}}, "x-user-extension": {"custom": True}}
         self.assertTrue(validate_compose(config, dict(job, configs=[]), "/private/api", "c" * 64))
+        digest_job = dict(job, settings=dict(job["settings"], image="registry.example/probe@" + DIGEST))
+        self.assertTrue(validate_compose(config, digest_job, "/private/api", "c" * 64))
+        tagged_job = dict(job, settings=dict(job["settings"], image="registry.example/probe:SNAPSHOT"))
+        tagged_config = dict(config, services={"api-sdku": dict(service, image="registry.example/probe:SNAPSHOT")})
+        self.assertTrue(validate_compose(tagged_config, tagged_job, "/private/api", "c" * 64))
         service["ports"][0]["host_ip"] = "0.0.0.0"
         self.assertTrue(validate_compose(config, dict(job, configs=[]), "/private/api", "c" * 64))
         changed = dict(service, image="unlocked:latest")

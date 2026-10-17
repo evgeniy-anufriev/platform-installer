@@ -39,11 +39,9 @@ platform_application_definition:
             KAFKA_SECURITY_PROTOCOL: PLAINTEXT
             KAFKA_SIGNAL_TOPIC: '{{ application_parameters.source_variables.MAIN_TOPIC | default(undef(hint=''Configure SDKU MAIN_TOPIC''), true) }}'
             LOGGER_LEVEL: DEBUG
-            SCHEMA_REGISTRY_URL_CONFIG: '{{ application_parameters.source_variables.KAFKA_SCHEMA_REGISTRY_URL | default(undef(hint=''Configure SDKU KAFKA_SCHEMA_REGISTRY_URL''), true) }}'
             SERVER_ALLOWED_ORIGINS: '*'
             SIM_DELAY: "1000"
             SLEUTH_TRACE_ENABLED: false
-            SPRING_KAFKA_SCHEMA_REGISTRY_URL: '{{ application_parameters.source_variables.KAFKA_SCHEMA_REGISTRY_URL | default(undef(hint=''Configure SDKU KAFKA_SCHEMA_REGISTRY_URL''), true) }}'
             SPRING_PROFILES_ACTIVE: sdku
             SQL_INIT_MODE: never
             TIME_STAMP_PATTERN: yyyy.MM.dd HH:mm:ss.SSS
@@ -55,7 +53,6 @@ platform_application_definition:
             database_name: tn-scada-alarms
             source_variables:
                 ALARM_TOPIC: sdku-alarms
-                KAFKA_SCHEMA_REGISTRY_URL: ""
                 MAIN_TOPIC: sdku-main
                 REDIS_ALERT_CLASS_TOPIC: alert-class
                 REDIS_ALERT_HANDLER_TOPIC: alert-hdl

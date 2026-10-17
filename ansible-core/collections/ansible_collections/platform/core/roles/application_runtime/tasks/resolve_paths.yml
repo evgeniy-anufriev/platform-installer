@@ -1,0 +1,32 @@
+---
+- name: Resolve the library directory against the target Docker account HOME
+  ansible.builtin.set_fact:
+    application_root: "{{ application_runtime_job.placement.runtimeDirectory | regex_replace('^~(?=/|$)', application_path_home) }}"
+  no_log: true
+
+- name: Require a bounded library directory
+  ansible.builtin.assert:
+    that:
+      - application_path_home is match('^/[a-zA-Z0-9_./-]+$')
+      - application_root is match('^/[a-zA-Z0-9_.-]+(/[a-zA-Z0-9_.-]+)*$')
+      - "'..' not in application_root.split('/')"
+      - "'.' not in application_root.split('/')"
+      - application_root != application_path_home
+    fail_msg: APPLICATION_RUNTIME_ROOT_INVALID
+
+- name: Require disjoint directories for different libraries before materialization
+  ansible.builtin.assert:
+    that:
+      - application_root != item.libraryPath
+      - not application_root.startswith(item.libraryPath + '/')
+      - not item.libraryPath.startswith(application_root + '/')
+    fail_msg: APPLICATION_LIBRARY_PATH_OVERLAP
+  loop: "{{ platform_application_preflight_jobs | default([]) }}"
+  when: item.libraryId != application_runtime_job.libraryId
+  no_log: true
+
+- name: Bind shared placement paths for Apply and Verify
+  ansible.builtin.set_fact:
+    application_library_path: "{{ application_root }}"
+    application_instance_path: "{{ application_root }}/{{ application_runtime_job.placement.runtimePath }}"
+  no_log: true

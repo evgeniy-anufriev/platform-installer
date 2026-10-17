@@ -27,8 +27,10 @@ class MemberProjectionTests(unittest.TestCase):
         hosts = {key: {'ansibleHost': '192.0.2.' + str(index + 1)} for index, key in enumerate(['h1', 'h2'])}
         targets = resolve_connection('r', {'purpose': 'sentinel'}, None, desired, config, {}, hosts)['targets']
         self.assertEqual([('r-2', 26380)], [(item['memberId'], item['port']) for item in targets])
-        with self.assertRaises(ValueError):
-            resolve_connection('r', {'purpose': 'sentinel'}, 'client', desired, config, {}, hosts)
+        selected = resolve_connection('r', {'purpose': 'sentinel'}, 'client', desired, config, {}, hosts)
+        self.assertEqual('client', selected['connectionRef'])
+        self.assertEqual([('r-1', 6379), ('r-2', 6380)],
+                         [(item['memberId'], item['port']) for item in selected['targets']])
 
     def test_clickhouse_host_ordinals_explicit_https_and_keeper_exclusion(self):
         members = [{'id': 'c-3', 'host': 'h2', 'roles': ['server']},

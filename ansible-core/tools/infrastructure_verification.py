@@ -18,6 +18,8 @@ from execution_lifecycle import Journal, LifecycleError, digest, validate_owners
 MODES = ('FULL_PROJECT', 'APPLICATION_LIBRARIES_ONLY', 'INFRASTRUCTURE_VERIFY_ONLY')
 MANIFEST_VERSION = 'platform.installer/execution-manifest/v1alpha3'
 PLAN_VERSION = 'platform.installer/plan/v1alpha5'
+SKIP_MANIFEST_VERSION = 'platform.installer/execution-manifest/v1alpha4'
+SKIP_PLAN_VERSION = 'platform.installer/plan/v1alpha6'
 MAX_BYTES = 16 * 1024 * 1024
 
 
@@ -175,6 +177,9 @@ def summary(root, project, expected):
 
 
 def assert_admission(root, manifest, run_id=None):
+    if manifest.get('skipInfrastructureVerify') is True:
+        validate_manifest(manifest)
+        return
     binding = manifest.get('infrastructureVerification', {})
     if manifest.get('executionMode') != 'APPLICATION_LIBRARIES_ONLY':
         return
@@ -193,6 +198,10 @@ def assert_admission(root, manifest, run_id=None):
 
 
 def validate_manifest(manifest):
+    skip = manifest.get('skipInfrastructureVerify', False)
+    if (type(skip) is not bool or skip and (manifest.get('apiVersion') != SKIP_MANIFEST_VERSION or
+            manifest.get('executionMode') != 'APPLICATION_LIBRARIES_ONLY' or has_library_verify_prefix(manifest))):
+        raise LifecycleError('EXECUTION_MANIFEST_INVALID')
     binding = manifest.get('infrastructureVerification')
     if (manifest.get('executionMode') not in MODES or not isinstance(binding, dict) or
             set(binding) != {'model', 'evidenceRevision'} or
@@ -226,8 +235,8 @@ def validate_manifest(manifest):
         service_inputs = manifest['runtimeSecretInputs']
         if (not apps or [op['operation'] for op in apps] != ['APPLICATION_LIBRARIES_APPLY', 'APPLICATION_LIBRARIES_VERIFY'] or
                 (combined_verify and not has_library_verify_prefix(manifest)) or
-                (not combined_verify and not isinstance(binding['evidenceRevision'], str)) or
-                (not combined_verify and not re.fullmatch(r'sha256:[a-f0-9]{64}', binding['evidenceRevision'])) or
+                (not combined_verify and not skip and not isinstance(binding['evidenceRevision'], str)) or
+                (not combined_verify and not skip and not re.fullmatch(r'sha256:[a-f0-9]{64}', binding['evidenceRevision'])) or
                 (combined_verify and binding['evidenceRevision'] is not None and
                  not re.fullmatch(r'sha256:[a-f0-9]{64}', binding['evidenceRevision'])) or
                 (combined_verify and (any(item.get('purpose') not in ('SERVICE_PASSWORD', 'PKI_STORE_PASSWORD') for item in service_requirements) or
@@ -330,7 +339,7 @@ def record_stats(journal, action_id, stats):
     """Only bounded numeric Ansible recap counters, never task payloads."""
     manifest = _read(os.path.join(journal.directory, 'manifest.json'))
     validate_ownership(journal)
-    if (manifest.get('apiVersion') != MANIFEST_VERSION or journal.status().get('state') != 'RUNNING' or
+    if (manifest.get('apiVersion') not in (MANIFEST_VERSION, SKIP_MANIFEST_VERSION) or journal.status().get('state') != 'RUNNING' or
             not any(op['operationId'] == action_id and op['operation'] == 'SERVICE_VERIFY' for op in manifest['operations']) or
             not isinstance(stats, dict) or len(stats) > 257):
         raise LifecycleError('INFRA_VERIFY_COVERAGE_INCOMPLETE')
@@ -349,40 +358,11 @@ def publish(journal, manifest):
         _publish(journal, manifest)
 
 
-def before_terminal(journal, manifest, state):
-    # Revoke while the run is still ACTIVE, before another Start can be admitted.
-    if manifest.get('apiVersion') != MANIFEST_VERSION or state == 'SUCCEEDED':
-        return
-    application_started = (manifest.get('executionMode') == 'APPLICATION_LIBRARIES_ONLY' and
-                           not has_library_verify_prefix(manifest)) or any(
-        event.get('eventType') == 'ACTION_STARTED' and event.get('actionId') == 'applications:apply'
-        for event in journal.events())
-    if application_started:
-        with _admission_lock(journal.root):
-            path = _path(journal.root, manifest['projectIdentity'])
-            _revoke_library_failure(journal, manifest, path, _index(path))
-
-
-def _revoke_library_failure(journal, manifest, path, index):
-    if manifest['executionMode'] == 'APPLICATION_LIBRARIES_ONLY':
-        if digest(index) != manifest['infrastructureVerification']['evidenceRevision']:
-            return
-    else:
-        proof = _read(os.path.join(journal.directory, 'infrastructure-verifies.json'))
-        if index['generation'] != proof['generation']:
-            return
-    try:
-        failure = _read(os.path.join(journal.directory, 'application-failure-domain.json'))
-    except (OSError, ValueError):
-        failure = None
-    if not isinstance(failure, dict) or failure.get('domain') != 'APPLICATION_ONLY':
-        index.update(generation=os.urandom(16).hex(), verifies={})
-        _write(path, index)
-
-
 def _publish(journal, manifest):
     """Optional derived index publication after durable terminal; never replay work."""
-    if manifest.get('apiVersion') != MANIFEST_VERSION:
+    if manifest.get('apiVersion') not in (MANIFEST_VERSION, SKIP_MANIFEST_VERSION):
+        return
+    if manifest.get('skipInfrastructureVerify') is True:
         return
     path = _path(journal.root, manifest['projectIdentity'])
     index = _index(path)
@@ -391,8 +371,6 @@ def _publish(journal, manifest):
         return
     has_verify_prefix = has_library_verify_prefix(manifest)
     if manifest.get('executionMode') == 'APPLICATION_LIBRARIES_ONLY' and not has_verify_prefix:
-        if result['state'] != 'SUCCEEDED':
-            _revoke_library_failure(journal, manifest, path, index)
         return
     proof = _read(os.path.join(journal.directory, 'infrastructure-verifies.json'))
     if (
@@ -405,34 +383,17 @@ def _publish(journal, manifest):
     _write(path, index)
 
 
-def record_application_failure(journal, application_only=False, action_id=None):
-    """Called by the trusted task callback; unknown/provider failures dominate."""
-    validate_ownership(journal)
-    manifest = _read(os.path.join(journal.directory, 'manifest.json'))
-    if (manifest.get('executionMode') not in ('APPLICATION_LIBRARIES_ONLY', 'FULL_PROJECT') or
-            journal.status()['state'] != 'RUNNING' or
-            (manifest.get('executionMode') == 'FULL_PROJECT' and action_id not in ('applications:apply', 'applications:verify'))):
-        return
-    path = os.path.join(journal.directory, 'application-failure-domain.json')
-    descriptor = journal.event_lock()
-    try:
-        try:
-            previous = _read(path)
-        except FileNotFoundError:
-            previous = None
-        domain = 'APPLICATION_ONLY' if application_only and (previous is None or previous.get('domain') == 'APPLICATION_ONLY') else 'UNKNOWN'
-        _write(path, dict(domain=domain))
-    finally:
-        os.close(descriptor)
-
-
-def scope_plan(result, mode, root):
+def scope_plan(result, mode, root, skip_infrastructure_verify=False):
     """Project the already resolved full plan into a fixed B0 scope."""
     if mode not in MODES:
         raise LifecycleError('EXECUTION_MODE_UNSUPPORTED')
+    if type(skip_infrastructure_verify) is not bool or skip_infrastructure_verify and mode != 'APPLICATION_LIBRARIES_ONLY':
+        raise LifecycleError('INFRA_VERIFY_SKIP_INVALID')
     result = copy.deepcopy(result)
     plan, manifest = result['deploymentPlan'], result['executionManifest']
     plan['apiVersion'] = PLAN_VERSION
+    if skip_infrastructure_verify:
+        plan.update(apiVersion=SKIP_PLAN_VERSION, skipInfrastructureVerify=True)
     plan['executionMode'] = mode
     plan['infrastructureVerification'] = dict(status='UNKNOWN', infrastructureFingerprint=None,
         evidenceRevision=None, deployments=[], code='INFRA_EVIDENCE_UNAVAILABLE')
@@ -442,6 +403,8 @@ def scope_plan(result, mode, root):
     observation = summary(root, manifest['projectIdentity'], expected)
     binding = dict(model=expected, evidenceRevision=observation['evidenceRevision'])
     manifest.update(apiVersion=MANIFEST_VERSION, executionMode=mode, infrastructureVerification=binding)
+    if skip_infrastructure_verify:
+        manifest.update(apiVersion=SKIP_MANIFEST_VERSION, skipInfrastructureVerify=True)
     manifest.setdefault('applicationSecretRequirements', [])
     if mode == 'APPLICATION_LIBRARIES_ONLY':
         if any(item['source'] != 'RUNTIME_INPUT' for item in manifest['applicationSecretRequirements']):
@@ -449,7 +412,7 @@ def scope_plan(result, mode, root):
         application_phases = [p for p in plan['phases'] if p['id'] == 'applications']
         if not application_phases:
             raise LifecycleError('APPLICATION_LIBRARIES_REQUIRED')
-        verify_in_plan = observation['status'] != 'PASS'
+        verify_in_plan = observation['status'] != 'PASS' and not skip_infrastructure_verify
         if verify_in_plan:
             service_phases = [p for p in plan['phases'] if p['id'] == 'services']
             if not service_phases:
@@ -526,7 +489,8 @@ def scope_plan(result, mode, root):
     plan['requiredCredentials'] = manifest['requiredCredentials']
     plan['artifactRequirements'] = manifest['artifactRequirements']
     plan['infrastructureVerification'] = observation
-    fingerprint = digest(dict(previous=plan['fingerprints']['plan'], mode=mode, binding=binding, phases=phases))
+    fingerprint = digest(dict(previous=plan['fingerprints']['plan'], mode=mode, binding=binding, phases=phases,
+                              skipInfrastructureVerify=skip_infrastructure_verify))
     plan['fingerprints']['plan'] = manifest['planFingerprint'] = fingerprint
     plan['id'] = 'plan-' + fingerprint.split(':')[1][:24]
     result['executionManifestDigest'] = digest(manifest) if result['executionManifest'] else None

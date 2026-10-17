@@ -20,7 +20,6 @@ platform_application_definition:
         environment:
             ALARMS_TOPIC: '{{ application_parameters.source_variables.ALARM_TOPIC | default(undef(hint=''Configure SDKU ALARM_TOPIC''), true) }}'
             JAVA_OPTS: -Xmx1024m
-            SPRING_KAFKA_SCHEMA_REGISTRY_URL: '{{ application_parameters.source_variables.KAFKA_SCHEMA_REGISTRY_URL | default(undef(hint=''Configure SDKU KAFKA_SCHEMA_REGISTRY_URL''), true) }}'
             TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
             TZ: Europe/Moscow
             server.max-http-request-header-size: 100MB
@@ -28,7 +27,6 @@ platform_application_definition:
         parameters:
             source_variables:
                 ALARM_TOPIC: sdku-alarms
-                KAFKA_SCHEMA_REGISTRY_URL: ""
                 REDIS_SENTINEL_MASTER: ""
         ports:
             port-1:

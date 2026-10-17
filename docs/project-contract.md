@@ -301,8 +301,11 @@ For standalone A2, the existing `platform_artifact_lock` carries the typed
 `x-container-images` extension described by artifact-source/v1alpha2. It is not
 a separate desired-state lock file. Each image records its config/image digest,
 platform and optional registry platform-manifest and offline archive descriptors;
-these digests identify different objects. The runtime startup reference is derived
-from the full image ID. A supplied `localReference` must equal that reference.
+these digests identify different objects. The internal delivery reference is derived
+from the full image ID; a supplied `localReference` must equal that reference.
+Compose preserves the original settings.image exactly. Standard Docker tasks tag
+the verified imageId with that reference and verify it before startup; container
+Verify still checks the actual imageId. Supported managed execution is sequential.
 Node-approved compatible registry delivery wins; selected offline fallback bytes
 are verified only when fallback is needed. An unused archive need not exist.
 Rendered files, ownership/config labels and Docker observations are derived state.
@@ -348,3 +351,23 @@ Execution Node selection, package or artifact-source selection.
 - required secret references exist without exposing values;
 - catalog and artifacts satisfy their locks;
 - generated projections are deterministic.
+
+## SDKU deployment correction: library connections and paths
+
+Library definitions may declare shared connections using the application connection
+shape and existing bindings/connection_defaults. Core resolves a library-wide
+projection for base Compose; application-specific connections remain separate.
+Schema Registry uses purpose schema-registry and HTTPS, with all eligible broker
+members and actual Registry member ports from the existing provider projection.
+
+Library runtime_directory belongs to package defaults and the library deployment
+in group_vars. Its default is ~/<library instance ID>; target Ansible expands ~
+against the selected Docker account HOME. A deployment empty value resets to the
+package default. Files are <library-root>/.base_compose.yml and
+<library-root>/<app-instance>/{compose.yml,config,vault,pki}; Apply/Verify/Vault use
+one placement. Existing ownership/symlink checks remain; old paths are never
+automatically moved or deleted.
+
+Original-tag preservation applies to tagged references, including uppercase tags.
+Existing @sha256 inputs retain their immutable local startup alias: Docker cannot
+assign a RepoDigest using docker tag, and offline loads need not retain it.

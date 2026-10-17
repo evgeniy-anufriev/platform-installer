@@ -714,3 +714,35 @@ No account/password control tokens are accepted through command rules. This adds
 permission resolver, persistence or UI-specific policy. See the
 [bounded plan](work/application-libraries/redis-command-policy-plan.md) and
 [category amendment](work/application-libraries/redis-acl-rules-plan.md).
+
+## ADR-045: Library deployment corrections and explicit Infra Verify skip
+
+Owner decision 2026-10-17. Shared library connections belong to Core-resolved
+library context and one base Compose, reusing service projections. Registry
+connections include all enabled HTTPS targets. Original image reference is
+preserved in Compose; locked imageId/platform/source authority still govern
+acquisition and verification. Owner rejected SDKU-PC-P01: supported executions
+are sequential. No additional daemon/tag guard is authorized.
+
+Library runtime_directory is portable desired state, defaulting to target
+Docker-account HOME/library ID, with package defaults and group_vars precedence.
+The UI edits this existing project state through the guarded writer. Resolved
+paths and generated Compose remain derived; no path manager or automatic migration.
+
+Completed infrastructure Verify is superseded by actual infrastructure operations,
+not failure/cancel of application Apply/Verify or endpoint publication. Remove
+application task-domain persistence; no replacement classification store.
+
+skipInfrastructureVerify is explicit per-plan intent, false by default and only
+for APPLICATION_LIBRARIES_ONLY. Negotiated Build v1alpha5, plan v1alpha6,
+manifest v1alpha4 and capabilities v1alpha9 make the bypass visible and bind it
+to ordinary fresh Build/Approve/Start. It skips only the evidence/Verify prefix,
+never trust, revision/fingerprint, artifacts, PKI/secrets or application preflight.
+No successful evidence is fabricated or published. Existing requests keep the
+normal saved-PASS-or-Verify behavior. Implementation prefers builtin Ansible
+tasks; existing Python remains necessary only for target-free projection and
+execution protocol/admission semantics. No deployment is authorized here.
+
+Compatibility clarification for ADR-045: source SDKU image tags stay exact.
+Existing @sha256 inputs keep the previous immutable startup alias; assigning
+a RepoDigest with docker tag is unsupported and must not break offline delivery.

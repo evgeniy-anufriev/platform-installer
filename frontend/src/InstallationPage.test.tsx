@@ -46,6 +46,50 @@ const currentPlanState = (
 });
 
 describe("InstallationPage", () => {
+  it("requires explicit risky Infra Verify skip and sends it only in a fresh library plan", async () => {
+    const user = userEvent.setup();
+    const create = vi.fn();
+    const props = {
+      state: {
+        ...state,
+        status: "READY_TO_PLAN" as const,
+        prerequisites: [],
+        executionNode: { status: "READY" },
+      },
+      selectedExecutionMode: "APPLICATION_LIBRARIES_ONLY" as const,
+      onTabChange: vi.fn(),
+      busy: false,
+      onOpenServers: vi.fn(),
+      onCreatePlan: create,
+      onApprovePlan: vi.fn(),
+    };
+    const view = render(<InstallationPage {...props} tab="summary" />);
+    let flag = screen.getByRole("checkbox", {
+      name: "Пропустить проверку инфраструктуры — принимаю риски",
+    });
+    expect((flag as HTMLInputElement).checked).toBe(false);
+    await user.click(flag);
+    view.rerender(<InstallationPage {...props} tab="plan" />);
+    await user.click(
+      screen.getByRole("button", { name: "Сформировать свежий план" }),
+    );
+    expect(create).toHaveBeenLastCalledWith(
+      [],
+      "APPLICATION_LIBRARIES_ONLY",
+      true,
+    );
+    view.rerender(<InstallationPage {...props} tab="summary" />);
+    flag = screen.getByRole("checkbox", {
+      name: "Пропустить проверку инфраструктуры — принимаю риски",
+    });
+    await user.click(flag);
+    view.rerender(<InstallationPage {...props} tab="plan" />);
+    await user.click(
+      screen.getByRole("button", { name: "Сформировать свежий план" }),
+    );
+    expect(create).toHaveBeenLastCalledWith([], "APPLICATION_LIBRARIES_ONLY");
+  });
+
   it("orders services by priority, preserves YAML order for ties, then orders deployments by ID", () => {
     expect(
       deploymentOrderFromPriorities(
@@ -493,7 +537,9 @@ describe("InstallationPage", () => {
     ).toBeTruthy();
     expect(screen.getByText("Проверка swap")).toBeTruthy();
     expect(screen.queryByText("Детали события")).toBeNull();
-    expect(screen.getByRole("heading", { name: "Действия плана" })).toBeTruthy();
+    expect(
+      screen.getByRole("heading", { name: "Действия плана" }),
+    ).toBeTruthy();
     expect(
       screen.queryByText(/Последняя завершённая задача: Следующая задача/),
     ).toBeNull();
@@ -812,9 +858,19 @@ describe("InstallationPage", () => {
       screen.getByRole("button", { name: "Начать выполнение" }),
     ).toHaveProperty("disabled", true);
     expect(screen.queryByRole("button", { name: /Сертификаты/ })).toBeNull();
-    const blockers = screen.getByRole("list", { name: "Причины недоступности запуска" });
-    expect(within(blockers).getByText("В сеансе не задан пароль хранилищ PKCS#12, необходимый плану.")).toBeTruthy();
-    expect(within(blockers).getByText("Проверка проекта выявила ошибки; план установки заблокирован.")).toBeTruthy();
+    const blockers = screen.getByRole("list", {
+      name: "Причины недоступности запуска",
+    });
+    expect(
+      within(blockers).getByText(
+        "В сеансе не задан пароль хранилищ PKCS#12, необходимый плану.",
+      ),
+    ).toBeTruthy();
+    expect(
+      within(blockers).getByText(
+        "Проверка проекта выявила ошибки; план установки заблокирован.",
+      ),
+    ).toBeTruthy();
     expect(onStart).not.toHaveBeenCalled();
   });
 
@@ -856,13 +912,23 @@ describe("InstallationPage", () => {
         }}
       />,
     );
-    const heading = screen.getByRole("heading", { name: "Новый план установки" });
+    const heading = screen.getByRole("heading", {
+      name: "Новый план установки",
+    });
     const alert = screen.getByRole("alert");
     const output = screen.getByText(/Защищённые выходные файлы/);
-    expect(within(alert).getByText("INSTALLATION_SECRETS_MISSING")).toBeTruthy();
-    expect(alert.textContent).toContain("Задайте пароль сервиса postgres-desktop.");
-    expect(heading.compareDocumentPosition(alert) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(alert.compareDocumentPosition(output) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(
+      within(alert).getByText("INSTALLATION_SECRETS_MISSING"),
+    ).toBeTruthy();
+    expect(alert.textContent).toContain(
+      "Задайте пароль сервиса postgres-desktop.",
+    );
+    expect(
+      heading.compareDocumentPosition(alert) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      alert.compareDocumentPosition(output) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   it("focuses the error card after each failed approval, including the same error twice", () => {
@@ -900,7 +966,9 @@ describe("InstallationPage", () => {
       onApprovePlan: vi.fn(),
       plan: operation,
     };
-    const view = render(<InstallationPage {...common} approvalErrorAttempt={0} />);
+    const view = render(
+      <InstallationPage {...common} approvalErrorAttempt={0} />,
+    );
     const alert = screen.getByRole("alert");
     expect(document.activeElement).not.toBe(alert);
     view.rerender(<InstallationPage {...common} approvalErrorAttempt={1} />);
@@ -1113,7 +1181,9 @@ describe("InstallationPage", () => {
     expect(screen.queryByText(/Состояние: READY/)).toBeNull();
     expect(screen.queryByText(/root token|unseal key/i)).toBeNull();
     await user.click(
-      screen.getByRole("button", { name: "Проверить и сохранить зашифрованные файлы" }),
+      screen.getByRole("button", {
+        name: "Проверить и сохранить зашифрованные файлы",
+      }),
     );
 
     expect(refresh).not.toHaveBeenCalled();
@@ -1122,24 +1192,62 @@ describe("InstallationPage", () => {
 
   it("hides collection after verified local delivery", () => {
     render(
-      <InstallationPage state={state} tab="result" onTabChange={vi.fn()}
-        onOpenServers={vi.fn()} busy={false} onCreatePlan={vi.fn()} onApprovePlan={vi.fn()}
-        secretOutputPackages={{ status: "READY", packages: [{
-          protocol: "SecretOutputDelivery/v1alpha1", packageId: "pkg-safe", projectId: "project-1",
-          deploymentId: "vault-ha", sourceRunId: "run-safe", runtimeDigest: "sha256:runtime",
-          generation: 1, state: "LOCAL_DELIVERED", entries: ["admin-token", "unseal-shares"],
-        }] }} />,
+      <InstallationPage
+        state={state}
+        tab="result"
+        onTabChange={vi.fn()}
+        onOpenServers={vi.fn()}
+        busy={false}
+        onCreatePlan={vi.fn()}
+        onApprovePlan={vi.fn()}
+        secretOutputPackages={{
+          status: "READY",
+          packages: [
+            {
+              protocol: "SecretOutputDelivery/v1alpha1",
+              packageId: "pkg-safe",
+              projectId: "project-1",
+              deploymentId: "vault-ha",
+              sourceRunId: "run-safe",
+              runtimeDigest: "sha256:runtime",
+              generation: 1,
+              state: "LOCAL_DELIVERED",
+              entries: ["admin-token", "unseal-shares"],
+            },
+          ],
+        }}
+      />,
     );
     expect(screen.getByText(/Состояние: Сохранён на инсталлере/)).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Проверить и сохранить зашифрованные файлы" })).toBeNull();
+    expect(
+      screen.queryByRole("button", {
+        name: "Проверить и сохранить зашифрованные файлы",
+      }),
+    ).toBeNull();
     expect(screen.queryByText(/Ожидает получения/)).toBeNull();
   });
 
   it("blocks fresh plan creation while a run is active without a plan snapshot", () => {
-    render(<InstallationPage state={state} tab="plan" onTabChange={vi.fn()}
-      onOpenServers={vi.fn()} busy={false} onCreatePlan={vi.fn()} onApprovePlan={vi.fn()}
-      run={new desktop.InstallationRunOperation({ status: "RUNNING", run: { runId: "run-1", state: "RUNNING", sequence: 1 } })} />);
-    expect(screen.getByRole("button", { name: "Сформировать свежий план" })).toHaveProperty("disabled", true);
+    render(
+      <InstallationPage
+        state={state}
+        tab="plan"
+        onTabChange={vi.fn()}
+        onOpenServers={vi.fn()}
+        busy={false}
+        onCreatePlan={vi.fn()}
+        onApprovePlan={vi.fn()}
+        run={
+          new desktop.InstallationRunOperation({
+            status: "RUNNING",
+            run: { runId: "run-1", state: "RUNNING", sequence: 1 },
+          })
+        }
+      />,
+    );
+    expect(
+      screen.getByRole("button", { name: "Сформировать свежий план" }),
+    ).toHaveProperty("disabled", true);
   });
 
   it("shows a safe delivery failure without exposing transport details", () => {

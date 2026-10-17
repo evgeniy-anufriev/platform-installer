@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 import threading
 import tempfile
 import unittest
@@ -26,6 +27,40 @@ def record_coverage(journal, operation):
     return infra.verified(journal, operation)
 
 class InfrastructureVerificationTests(unittest.TestCase):
+    def test_skip_request_is_typed_and_old_protocol_cannot_ignore_it(self):
+        request = dict(apiVersion=protocol.SKIP_PLAN_REQUEST_VERSION, operation='BuildDeploymentPlan',
+                       runId='installer-request', project={}, runtimeRelease={}, deploymentOrder=[],
+                       applicationVaultSources={}, executionMode='APPLICATION_LIBRARIES_ONLY',
+                       skipInfrastructureVerify=True)
+        with patch('sys.stdin', io.StringIO(json.dumps(request))):
+            self.assertTrue(protocol.request()['skipInfrastructureVerify'])
+        for bad in (1, 'true', None):
+            with patch('sys.stdin', io.StringIO(json.dumps(dict(request, skipInfrastructureVerify=bad)))), self.assertRaises(LifecycleError):
+                protocol.request()
+        request['apiVersion'] = protocol.B0_PLAN_REQUEST_VERSION
+        with patch('sys.stdin', io.StringIO(json.dumps(request))), self.assertRaises(LifecycleError):
+            protocol.request()
+
+    def test_explicit_skip_is_plan_bound_without_fabricating_infrastructure_evidence(self):
+        result = infra.scope_plan(self.base, 'APPLICATION_LIBRARIES_ONLY', self.root, True)
+        plan, manifest = result['deploymentPlan'], result['executionManifest']
+        self.assertTrue(plan['skipInfrastructureVerify'])
+        self.assertNotEqual('PASS', plan['infrastructureVerification']['status'])
+        self.assertEqual(['APPLICATION_LIBRARIES_APPLY', 'APPLICATION_LIBRARIES_VERIFY'],
+                         [op['operation'] for op in manifest['operations']])
+        controller.validate_application_manifest(manifest)
+        infra.assert_admission(self.root, manifest)
+        ordinary = infra.scope_plan(self.base, 'APPLICATION_LIBRARIES_ONLY', self.root)
+        self.assertNotEqual(ordinary['deploymentPlan']['fingerprints']['plan'], plan['fingerprints']['plan'])
+        self.assertFalse(Path(self.root, 'infrastructure-verification').exists())
+        for mode in ('FULL_PROJECT', 'INFRASTRUCTURE_VERIFY_ONLY'):
+            with self.assertRaises(LifecycleError):
+                infra.scope_plan(self.base, mode, self.root, True)
+        tampered = copy.deepcopy(manifest)
+        tampered['skipInfrastructureVerify'] = False
+        with self.assertRaises(LifecycleError):
+            controller.validate_application_manifest(tampered)
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
@@ -358,33 +393,29 @@ class InfrastructureVerificationTests(unittest.TestCase):
         infra.publish(new, manifest)
         self.assertEqual('BLOCKED', self.observation()['status'])
 
-    def test_application_only_failure_retains_but_provider_unknown_revokes(self):
+    def test_application_stage_failure_preserves_evidence_regardless_of_task_domain(self):
         for domain in ('APPLICATION_ONLY', 'UNKNOWN', 'MISSING', 'APP_THEN_PROVIDER'):
             with self.subTest(domain=domain):
                 self.complete(name='installer-baseline-' + domain)
                 manifest = infra.scope_plan(self.base, 'APPLICATION_LIBRARIES_ONLY', self.root)['executionManifest']
                 journal = self.journal(manifest, 'installer-library-' + domain)
-                if domain in ('APPLICATION_ONLY', 'APP_THEN_PROVIDER'):
-                    infra.record_application_failure(journal, True)
-                if domain in ('UNKNOWN', 'APP_THEN_PROVIDER'):
-                    infra.record_application_failure(journal, False)
                 journal.terminal('FAILED', '', '')
                 infra.publish(journal, manifest)
-                self.assertEqual('PASS' if domain == 'APPLICATION_ONLY' else 'BLOCKED', self.observation()['status'])
+                self.assertEqual('PASS', self.observation()['status'])
 
-    def test_library_revoke_precedes_public_terminal(self):
+    def test_library_failure_preserves_evidence_before_and_after_terminal(self):
         self.complete()
         manifest = infra.scope_plan(self.base, 'APPLICATION_LIBRARIES_ONLY', self.root)['executionManifest']
         journal = self.journal(manifest, 'installer-failed-library')
         terminal = controller._terminal
         def observe(*args):
             self.assertEqual('RUNNING', journal.status()['state'])
-            self.assertEqual('BLOCKED', self.observation()['status'])
+            self.assertEqual('PASS', self.observation()['status'])
             return terminal(*args)
         with patch.object(controller, '_terminal', side_effect=observe):
             controller._finish_run_with_outputs(journal, 'FAILED', 'EXECUTION_OPERATION_FAILED', '', manifest, '/unused')
 
-    def test_mixed_application_provider_failure_does_not_publish_prior_infra_success(self):
+    def test_mixed_application_provider_failure_preserves_completed_infra_success(self):
         manifest = self.full['executionManifest']
         journal = self.journal(manifest)
         infra.begin(journal, manifest)
@@ -392,12 +423,12 @@ class InfrastructureVerificationTests(unittest.TestCase):
             if operation['operation'] == 'SERVICE_VERIFY':
                 record_coverage(journal, operation)
         journal.event('ACTION_STARTED', 'RUNNING', '', actionId='applications:apply')
-        infra.record_application_failure(journal, False, 'applications:apply')
         controller._finish_run_with_outputs(journal, 'FAILED', 'EXECUTION_OPERATION_FAILED', '', manifest, '/unused')
-        self.assertEqual('BLOCKED', self.observation()['status'])
+        self.assertEqual('PASS', self.observation()['status'])
 
     def test_callback_failure_domain_requires_managed_tag_role_and_inspect_success(self):
         from types import SimpleNamespace
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'collections'))
         from ansible_collections.platform.core.plugins.callback.execution_events_json import CallbackModule
         self.complete()
         for role, tags, rc, expected in (
@@ -411,7 +442,7 @@ class InfrastructureVerificationTests(unittest.TestCase):
             result = SimpleNamespace(_task=SimpleNamespace(tags=tags), _result={'rc': rc, '_ansible_no_log': True})
             with patch.object(callback, '_emit'), patch.object(callback, '_role', return_value=role), patch.object(callback, '_journal', return_value=journal):
                 callback.v2_runner_on_failed(result)
-            self.assertEqual({'domain': expected}, infra._read(Path(journal.directory, 'application-failure-domain.json')))
+            self.assertFalse(Path(journal.directory, 'application-failure-domain.json').exists())
             journal.terminal('FAILED', '', '')
 
     def test_old_publisher_cannot_overwrite_new_generation(self):

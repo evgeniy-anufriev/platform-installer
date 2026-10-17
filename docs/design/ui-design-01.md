@@ -939,3 +939,15 @@ with their saved revision. General shows a bounded labelled preview, not a new
 UI precedence resolver. Add port accepts name and Host → Container, stages the
 complete pair through existing override intents, and preserves per-side resets.
 When no sources declare ports, show a clear empty state and Add port action.
+
+### Owner amendment: library files and explicit Verify skip (2026-10-17)
+
+Library General adds the library runtime directory with package default,
+group_vars override and Reset; display the Core projection, never resolve HOME
+or Ansible expressions in React. Instance forms do not duplicate this field.
+Installation Summary and Plan expose one unchecked library-only option:
+«Пропустить проверку инфраструктуры — принимаю риски». The existing Approve
+confirms the exact flagged plan. Changing the option invalidates the plan;
+changing project or execution mode clears the selection. Plan/Result retain the
+explicit skip and real verification observation, without a fabricated PASS.
+An older runtime rejects the negotiated feature, with no silent fallback.

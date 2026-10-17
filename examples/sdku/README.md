@@ -122,3 +122,13 @@ Core/Go/UI контракты. Никакого специального SDKU-к
   приложений в текущей работе не подтверждались.
 
 Подробности структурной проверки: [validation.md](validation.md).
+
+Shared Kafka/Redis/Registry addresses are rendered once into the library base
+Compose from Core-resolved bindings. Registry lists all enabled HTTPS targets.
+Application Compose retains only own ENV and explicit differences. Generated ENV
+keys and values use double quotes. Compose preserves the original image name;
+its delivered and running image IDs remain locked and verified.
+
+Library runtime_directory can be overridden in group_vars; by default it is
+~/<library instance ID> under the target Docker account. Empty resets to package
+default. Existing directories are not moved or removed automatically.

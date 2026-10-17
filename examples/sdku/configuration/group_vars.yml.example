@@ -9,6 +9,8 @@ platform_desired_state:
     sdku-main:
       libraryRef: sdku@1.0.0
       runtimeRef: docker-apps
+      # Optional; empty value restores the package default ~/<library instance ID>.
+      runtime_directory: /data/scada/sdku-main
       overrides:
         environment:
           KAFKA_CONSUMER_REQUEST_TIMEOUT_MS: "60000"
@@ -22,6 +24,8 @@ platform_desired_state:
         application-pki: {profileRef: application-pki}
       connection_defaults:
         kafka: {connectionRef: CLIENT_SSL}
+        # Choose sentinel only for a Sentinel-backed Redis connection.
+        redis: {connectionRef: client}
       applications:
         hmi-backend:
           overrides:

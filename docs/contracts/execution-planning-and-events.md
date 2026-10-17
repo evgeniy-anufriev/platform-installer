@@ -461,3 +461,20 @@ their original sequential execution, observer and probe policies.
 The existing v1alpha3/v1alpha4 `runtimeSecretValues` lease map carries values under Core requirementRef keys. Application purposes from the approved plan participate in exact lease-key-set validation; only the approved subset is serialized. The controller's existing application projection maps those references to runtimeReference and checks provider/library/host/operation scope. No new credential store, lease endpoint or plaintext persistence is introduced.
 
 Requirement quantity is not capped at16/32. Existing per-value4096-byte, aggregate value65536-byte, descriptor response65536-byte, typed-input aggregate and total lease payload bounds remain, together with unique IDs, closed types, exact identity/fingerprint and expiry guards. v1alpha3 descriptor capability omits the old maxDescriptors metadata; older capability responses remain conservative for old clients. Secret output package limits and host/library scope bounds are unchanged.
+
+## Owner amendment 2026-10-17: application failure and explicit Verify skip
+
+Completed service Verify evidence survives application-stage failure/cancel/crash,
+including provider/HTTP publication failures. Infrastructure Apply and new
+SERVICE_VERIFY attempts retain their existing evidence invalidation. No task-name
+or role allowlist and no application-failure-domain.json decide proof retention.
+
+An optional skipInfrastructureVerify boolean in the Wails/Go mode request defaults
+to false. True negotiates execution-runtime/v1alpha5 Build and capabilities/v1alpha9
+(skipInfrastructureVerify:true), yielding plan/v1alpha6 and manifest/v1alpha4 with
+the explicit true flag. False retains the ordinary v1alpha4 request and policy.
+Only APPLICATION_LIBRARIES_ONLY may use true. Core omits service operations and
+waives saved infra evidence, preserving its real observation, all other admission
+checks and the full application Apply/Verify. The flag participates in fingerprint,
+stored request and fresh Start rebuild; a changed or unsupported flag is refused.
+Skipping never creates successful infra evidence. No new run lifecycle/store.

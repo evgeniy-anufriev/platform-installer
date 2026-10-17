@@ -250,6 +250,7 @@ export function InstallationPage({
   onCreatePlan: (
     deploymentOrder: string[],
     mode?: InstallationExecutionMode,
+    skipInfrastructureVerify?: boolean,
   ) => void;
   infrastructureObservation?: InfrastructureVerificationView;
   selectedExecutionMode?: InstallationExecutionMode;
@@ -277,10 +278,14 @@ export function InstallationPage({
   onSetRuntimeSecretValues?: (input: RuntimeSecretValuesInput) => Promise<void>;
 }) {
   const [orderError, setOrderError] = useState("");
+  const [skipInfrastructureVerify, setSkipInfrastructureVerify] =
+    useState(false);
+  useEffect(() => setSkipInfrastructureVerify(false), [state?.project?.id]);
   const [localExecutionMode, setLocalExecutionMode] =
     useState<InstallationExecutionMode>("FULL_PROJECT");
   const executionMode = selectedExecutionMode || localExecutionMode;
   const setExecutionMode = (mode: InstallationExecutionMode) => {
+    setSkipInfrastructureVerify(false);
     setLocalExecutionMode(mode);
     onExecutionModeChange?.(mode);
   };
@@ -292,9 +297,13 @@ export function InstallationPage({
     )
       setLocalExecutionMode(plan.plan.executionMode);
   }, [plan?.plan?.id, plan?.plan?.executionMode, selectedExecutionMode]);
+  const skipChanged =
+    !!plan?.plan &&
+    !!plan.plan.skipInfrastructureVerify !== skipInfrastructureVerify;
   const scopeChanged =
     !!plan?.plan &&
-    (plan.plan.executionMode || "FULL_PROJECT") !== executionMode;
+    ((plan.plan.executionMode || "FULL_PROJECT") !== executionMode ||
+      skipChanged);
   const deploymentOrder = useMemo(
     () =>
       deploymentOrderFromPriorities(
@@ -314,6 +323,8 @@ export function InstallationPage({
     }
     setOrderError("");
     if (executionMode === "FULL_PROJECT") onCreatePlan(deploymentOrder.order);
+    else if (skipInfrastructureVerify)
+      onCreatePlan(deploymentOrder.order, executionMode, true);
     else onCreatePlan(deploymentOrder.order, executionMode);
   };
   const node = state?.executionNode;
@@ -367,7 +378,9 @@ export function InstallationPage({
         <p>
           {executionMode === "FULL_PROJECT"
             ? "Полный цикл Apply → Verify инфраструктуры."
-            : "Установка инфраструктуры исключена. При отсутствии актуального Verify Core включит проверку инфраструктуры в этот план перед библиотеками."}
+            : skipInfrastructureVerify
+              ? "Infra Verify явно пропущен. Пользователь принимает риски запуска библиотек без проверки инфраструктуры."
+              : "Установка инфраструктуры исключена. При отсутствии актуального Verify Core включит проверку инфраструктуры в этот план перед библиотеками."}
         </p>
       </div>
       <div>
@@ -375,23 +388,43 @@ export function InstallationPage({
         <p>Полный цикл Apply → Verify.</p>
       </div>
       {executionMode === "APPLICATION_LIBRARIES_ONLY" && (
-        <p>
-          Действия Apply инфраструктуры скрыты только в этом представлении. При
-          одобрении Core сформирует точный план; если Verify отсутствует, он
-          добавит его перед полным циклом библиотек.
-        </p>
+        <label>
+          <input
+            type="checkbox"
+            checked={skipInfrastructureVerify}
+            disabled={busy || runActive}
+            onChange={(event) =>
+              setSkipInfrastructureVerify(event.target.checked)
+            }
+          />
+          Пропустить проверку инфраструктуры — принимаю риски
+        </label>
       )}
+      {executionMode === "APPLICATION_LIBRARIES_ONLY" &&
+        !skipInfrastructureVerify && (
+          <p>
+            Действия Apply инфраструктуры скрыты только в этом представлении.
+            При одобрении Core сформирует точный план; если Verify отсутствует,
+            он добавит его перед полным циклом библиотек.
+          </p>
+        )}
       {cachedObservation}
       {scopeChanged && (
         <p role="status">
-          Состав запуска изменён. Актуальный план будет сформирован при
-          одобрении перед запуском.
+          {skipChanged
+            ? "Параметр Infra Verify изменён. Сформируйте свежий план перед одобрением."
+            : "Состав запуска изменён. Актуальный план будет сформирован при одобрении перед запуском."}
         </p>
       )}
     </div>
   );
   return (
     <section className="installation-page">
+      {displayedPlan?.plan?.skipInfrastructureVerify && tab !== "plan" && (
+        <p role="alert">
+          Infra Verify явно пропущен по принятому пользователем риску.
+        </p>
+      )}
       <div className="title">
         <div>
           <h1>Установка</h1>
@@ -505,6 +538,8 @@ export function InstallationPage({
               )}
             </article>
             <article className="card installation-summary-plan">
+              <h2>Состав запуска</h2>
+              {servicesControl}
               <div className="installation-summary-plan-heading">
                 <div>
                   <h2>План установки</h2>
@@ -591,8 +626,8 @@ export function InstallationPage({
             <PlanStage
               key={plan?.plan?.id || "no-plan"}
               servicesControl={servicesControl}
-              cachedObservation={cachedObservation}
               scopeChanged={!runActive && scopeChanged}
+              skipChanged={!runActive && skipChanged}
               infrastructureExcluded={
                 executionMode === "APPLICATION_LIBRARIES_ONLY"
               }
@@ -655,8 +690,8 @@ export function InstallationPage({
 
 function PlanStage({
   servicesControl,
-  cachedObservation,
   scopeChanged,
+  skipChanged,
   infrastructureExcluded,
   state,
   draftActive,
@@ -672,8 +707,8 @@ function PlanStage({
   onSetOutputEncryptionPassword,
 }: {
   servicesControl: ReactNode;
-  cachedObservation: ReactNode;
   scopeChanged: boolean;
+  skipChanged: boolean;
   infrastructureExcluded: boolean;
   state?: InstallationState;
   draftActive: boolean;
@@ -719,7 +754,7 @@ function PlanStage({
     return (
       <article className="card installation-empty">
         <h2>План</h2>
-        {cachedObservation}
+        {servicesControl}
         <p>
           {operation?.error && (
             <>
@@ -761,6 +796,7 @@ function PlanStage({
         )
       : plan.phases;
   const currentPlan =
+    !skipChanged &&
     !["STARTING", "RUNNING", "CANCELLING"].includes(run?.run?.state || "") &&
     !draftActive &&
     !state?.project?.hasUnsavedChanges &&
@@ -882,6 +918,12 @@ function PlanStage({
       <div className="installation-plan-scroll">
         <article className="card">
           <h2>Новый план установки</h2>
+          {plan.skipInfrastructureVerify && (
+            <p role="alert">
+              Проверка инфраструктуры явно пропущена. Риски приняты
+              пользователем; успешный Verify не подтверждён этим запуском.
+            </p>
+          )}
           {plan.infrastructureVerification && (
             <section aria-label="Проверка инфраструктуры">
               <h3>

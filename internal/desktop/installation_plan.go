@@ -22,12 +22,14 @@ type InstallationPlanOperation struct {
 }
 
 type InstallationPlanRequest struct {
-	ExecutionMode           executionnode.ExecutionMode `json:"executionMode"`
-	DeploymentOrder         []string                    `json:"deploymentOrder"`
-	ApplicationVaultSources map[string]string           `json:"applicationVaultSources"`
+	SkipInfrastructureVerify bool                        `json:"skipInfrastructureVerify"`
+	ExecutionMode            executionnode.ExecutionMode `json:"executionMode"`
+	DeploymentOrder          []string                    `json:"deploymentOrder"`
+	ApplicationVaultSources  map[string]string           `json:"applicationVaultSources"`
 }
 
 type InstallationPlanView struct {
+	SkipInfrastructureVerify              bool                                      `json:"skipInfrastructureVerify"`
 	ExecutionMode                         executionnode.ExecutionMode               `json:"executionMode"`
 	InfrastructureVerification            *executionnode.InfrastructureVerification `json:"infrastructureVerification,omitempty"`
 	InfrastructureObservedAt              string                                    `json:"infrastructureObservedAt,omitempty"`
@@ -123,7 +125,7 @@ func (a *App) createInstallationPlan(request InstallationPlanRequest) Installati
 	if request.ExecutionMode == "" {
 		record, err = binding.plans.CreatePlanWithOrder(ctx, binding.node, a.current.Root, binding.reader.runtimeRelease, request.DeploymentOrder)
 	} else {
-		record, err = binding.plans.CreatePlanForMode(ctx, binding.node, a.current.Root, binding.reader.runtimeRelease, request.DeploymentOrder, request.ExecutionMode, request.ApplicationVaultSources)
+		record, err = binding.plans.CreatePlanForMode(ctx, binding.node, a.current.Root, binding.reader.runtimeRelease, request.DeploymentOrder, request.ExecutionMode, request.ApplicationVaultSources, request.SkipInfrastructureVerify)
 	}
 	if err != nil {
 		if binding.dynamic {
@@ -351,7 +353,7 @@ func installationPlanView(record executionnode.PlanRecord, binding *executionNod
 	if mode == "" {
 		mode = executionnode.FullProject
 	}
-	view := InstallationPlanView{ExecutionMode: mode, InfrastructureVerification: record.Plan.InfrastructureVerification, ID: record.ID, Status: record.Plan.Status, ProjectRevision: record.Plan.ProjectRevision,
+	view := InstallationPlanView{SkipInfrastructureVerify: record.Plan.SkipInfrastructureVerify, ExecutionMode: mode, InfrastructureVerification: record.Plan.InfrastructureVerification, ID: record.ID, Status: record.Plan.Status, ProjectRevision: record.Plan.ProjectRevision,
 		PlanFingerprint: record.Plan.PlanFingerprint, ExecutionNodeID: binding.node.ID, Runtime: runtime,
 		ExpiresAt: record.ExpiresAt.UTC().Format(time.RFC3339), Approved: record.Approved,
 		Acknowledgements: make([]InstallationAcknowledgement, 0, len(record.Plan.AcknowledgementDetails)),

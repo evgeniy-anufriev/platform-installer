@@ -30,6 +30,7 @@ OPERATIONS = ("GetCapabilities", "ValidateProject", "BuildProjectSnapshot", "Bui
 DEPLOYMENT_PLAN_REQUEST_VERSION = "platform.installer/execution-runtime/v1alpha2"
 APPLICATION_PLAN_REQUEST_VERSION = 'platform.installer/execution-runtime/v1alpha3'
 B0_PLAN_REQUEST_VERSION = 'platform.installer/execution-runtime/v1alpha4'
+SKIP_PLAN_REQUEST_VERSION = 'platform.installer/execution-runtime/v1alpha5'
 MAX_DEPLOYMENT_ORDER = 256
 SNAPSHOT_REQUEST_VERSION = "platform.installer/project-snapshot-request/v1alpha1"
 SNAPSHOT_OWNER_FILE = ".snapshot-owner.json"
@@ -121,25 +122,29 @@ def request():
         return value
     if isinstance(value, dict) and value.get("apiVersion") in ("platform.installer/runtime-secret-lease/v1alpha1", "platform.installer/runtime-secret-lease/v1alpha2") and value.get("kind") == "PutRuntimeSecretLeaseRequest":
         return value
-    if not isinstance(value, dict) or value.get("apiVersion") not in ("platform.installer/execution-runtime/v1alpha1", DEPLOYMENT_PLAN_REQUEST_VERSION, APPLICATION_PLAN_REQUEST_VERSION, B0_PLAN_REQUEST_VERSION):
+    if not isinstance(value, dict) or value.get("apiVersion") not in ("platform.installer/execution-runtime/v1alpha1", DEPLOYMENT_PLAN_REQUEST_VERSION, APPLICATION_PLAN_REQUEST_VERSION, B0_PLAN_REQUEST_VERSION, SKIP_PLAN_REQUEST_VERSION):
         raise LifecycleError("EXECUTION_PROTOCOL_INVALID")
     if value.get("operation") not in OPERATIONS:
         raise LifecycleError("EXECUTION_OPERATION_UNSUPPORTED")
     if value.get("operation") == "BuildDeploymentPlan":
-        if value.get("apiVersion") not in (DEPLOYMENT_PLAN_REQUEST_VERSION, APPLICATION_PLAN_REQUEST_VERSION, B0_PLAN_REQUEST_VERSION):
+        if value.get("apiVersion") not in (DEPLOYMENT_PLAN_REQUEST_VERSION, APPLICATION_PLAN_REQUEST_VERSION, B0_PLAN_REQUEST_VERSION, SKIP_PLAN_REQUEST_VERSION):
             raise LifecycleError("DEPLOYMENT_ORDER_REQUEST_VERSION_REQUIRED")
         expected = {"apiVersion", "operation", "runId", "project", "runtimeRelease", "deploymentOrder"}
-        if value['apiVersion'] in (APPLICATION_PLAN_REQUEST_VERSION, B0_PLAN_REQUEST_VERSION):
+        if value['apiVersion'] in (APPLICATION_PLAN_REQUEST_VERSION, B0_PLAN_REQUEST_VERSION, SKIP_PLAN_REQUEST_VERSION):
             expected.add('applicationVaultSources')
             sources = value.get('applicationVaultSources')
             if (not isinstance(sources, dict) or len(sources) > 16 or
                     any(not isinstance(key, str) or re.fullmatch(r'[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*', key) is None or
                         kind not in ('RUNTIME_INPUT', 'CURRENT_RUN_BOOTSTRAP') for key, kind in sources.items())):
                 raise LifecycleError('APPLICATION_VAULT_SOURCE_INVALID')
-        if value['apiVersion'] == B0_PLAN_REQUEST_VERSION:
+        if value['apiVersion'] in (B0_PLAN_REQUEST_VERSION, SKIP_PLAN_REQUEST_VERSION):
             expected.add('executionMode')
             if value.get('executionMode') not in infra.MODES:
                 raise LifecycleError('EXECUTION_MODE_UNSUPPORTED')
+        if value['apiVersion'] == SKIP_PLAN_REQUEST_VERSION:
+            expected.add('skipInfrastructureVerify')
+            if type(value.get('skipInfrastructureVerify')) is not bool or value['skipInfrastructureVerify'] and value['executionMode'] != 'APPLICATION_LIBRARIES_ONLY':
+                raise LifecycleError('INFRA_VERIFY_SKIP_INVALID')
         order = value.get("deploymentOrder")
         if (set(value) != expected or not isinstance(order, list) or len(order) > MAX_DEPLOYMENT_ORDER or
                 any(not isinstance(item, str) or re.fullmatch(r"[a-z0-9][a-z0-9-]{0,127}", item) is None for item in order) or
@@ -172,13 +177,17 @@ def _application_capabilities(args):
     return result
 
 
-def _b0_capabilities(args):
+def _b0_capabilities(args, skip=False):
     result = _application_capabilities(args)
     result['apiVersion'] = 'platform.installer/execution-capabilities/v1alpha8'
     result['deploymentPlanRequestVersions'].append(B0_PLAN_REQUEST_VERSION)
     result['infrastructureVerification'] = dict(protocol='InfrastructureVerification/v1alpha1',
         executionModes=list(infra.MODES), requiredPlanRequestVersion=B0_PLAN_REQUEST_VERSION,
         manifestContract=infra.MANIFEST_VERSION, planContract=infra.PLAN_VERSION)
+    if skip:
+        result['apiVersion'] = 'platform.installer/execution-capabilities/v1alpha9'
+        result['deploymentPlanRequestVersions'].append(SKIP_PLAN_REQUEST_VERSION)
+        result['skipInfrastructureVerify'] = True
     return result
 
 
@@ -745,8 +754,9 @@ def core_operation(value, state_root, runtime_release, operation, runtime_identi
         if operation == "BuildDeploymentPlan":
             extra["platform_execution_deployment_order"] = value["deploymentOrder"]
             extra['platform_execution_application_vault_sources'] = value.get('applicationVaultSources', {})
-            if value.get('apiVersion') == B0_PLAN_REQUEST_VERSION:
+            if value.get('apiVersion') in (B0_PLAN_REQUEST_VERSION, SKIP_PLAN_REQUEST_VERSION):
                 extra['platform_execution_mode'] = value['executionMode']
+                extra['platform_execution_skip_infrastructure_verify'] = value.get('skipInfrastructureVerify', False)
         if operation == "BuildRuntimeSecretDescriptors":
             playbook = "runtime-secret-descriptors.yml"
     else:
@@ -831,7 +841,7 @@ def core_operation(value, state_root, runtime_release, operation, runtime_identi
             plan = json.load(stream)
         if plan.get("status") == "BLOCKED":
             return {"deploymentPlan": plan, "executionManifestDigest": None}
-        if plan.get('apiVersion') == 'platform.installer/plan/v1alpha4' and value.get('apiVersion') not in (APPLICATION_PLAN_REQUEST_VERSION, B0_PLAN_REQUEST_VERSION):
+        if plan.get('apiVersion') == 'platform.installer/plan/v1alpha4' and value.get('apiVersion') not in (APPLICATION_PLAN_REQUEST_VERSION, B0_PLAN_REQUEST_VERSION, SKIP_PLAN_REQUEST_VERSION):
             raise LifecycleError('APPLICATION_PLAN_REQUEST_VERSION_REQUIRED')
         if plan.get("status") != "EXECUTABLE" or not os.path.isfile(os.path.join(journal.directory, "manifest.json")):
             raise LifecycleError("EXECUTION_MANIFEST_MISSING")
@@ -1003,7 +1013,7 @@ def main():
         return reply(put_runtime_secret_lease(value, args.state_root))
     operation = value["operation"]
     if operation == "GetCapabilities":
-        return reply(_b0_capabilities(args) if value['apiVersion'] == B0_PLAN_REQUEST_VERSION else _application_capabilities(args) if value['apiVersion'] == APPLICATION_PLAN_REQUEST_VERSION else _capabilities_v4(args))
+        return reply(_b0_capabilities(args, value['apiVersion'] == SKIP_PLAN_REQUEST_VERSION) if value['apiVersion'] in (B0_PLAN_REQUEST_VERSION, SKIP_PLAN_REQUEST_VERSION) else _application_capabilities(args) if value['apiVersion'] == APPLICATION_PLAN_REQUEST_VERSION else _capabilities_v4(args))
     if operation in ("ValidateProject", "BuildDeploymentPlan"): return reply(core_operation(value, args.state_root, args.runtime_release, operation))
     if operation == "BuildProjectSnapshot":
         candidate = _validated_snapshot_request(value)

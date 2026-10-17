@@ -31,6 +31,7 @@ library = packages[('library','sdku')]
 common = library['definition'].get('defaults', {})
 base = str(package_root/'library-packages/sdku/1.0.0'/library['render']['base_compose_template'])
 rendered = []
+base_contents = set()
 for (kind,name), package in packages.items():
     if kind != 'application': continue
     settings = package['definition']['defaults']
@@ -43,8 +44,8 @@ for (kind,name), package in packages.items():
     variables = dict(application_name=name, application_instance_id=name+'-sdku-main', application_parameters=params,
         sdku_start_commands={name:'/fixture/unavailable-command'}, application_project_id='fixture', application_config_digest='0'*64,
         application_runtime_job={'baseTemplate':base},
-        library_runtime={'library_id':'sdku-main','host_id':'example-host','defaults':common,'connections':{key:{'targets':[{'address':'example.invalid','port':12345}]} for key in package['definition'].get('connections',{})}},
-        application_runtime={'image':settings['image'],'container_name':name+'-sdku-main-example-host','base_compose_path':'/tmp/.base_compose.yml','base_service':'base','vault_path':'/tmp/vault','pki_path':'/tmp/pki'})
+        library_runtime={'library_id':'sdku-main','host_id':'example-host','defaults':common,'connections':{key:{'targets':[{'address':'example.invalid','port':12345}]} for key in library['definition'].get('connections',{})}},
+        application_runtime={'image':settings['image'],'container_name':name+'-sdku-main-example-host','base_compose_path':'/tmp/.base_compose.yml','base_service':'base','vault_path':'/tmp/vault','pki_path':'/tmp/pki', 'connections':{key:{'targets':[{'address':'example.invalid','port':12345}]} for key in package['definition'].get('connections',{})}})
     templar=Templar(loader=DataLoader(),variables=variables)
     settings=templar.template(settings)
     env=dict(common.get('environment', {}) if library['definition']['slots'][name].get('inherit_defaults', True) else {})
@@ -56,11 +57,17 @@ for (kind,name), package in packages.items():
     try:
         result=yaml.safe_load(templar.template(path.read_text()))
         shared=yaml.safe_load(templar.template(pathlib.Path(base).read_text()))
+        base_contents.add(json.dumps(shared, sort_keys=True))
         service=result['services'][name+'-sdku-main']
         assert service['image']==settings['image']
         assert 'environment' in service
+        for name in ('KAFKA_BOOTSTRAP_SERVERS', 'SPRING_KAFKA_BOOTSTRAP_SERVERS',
+                     'REDIS_ADDRESS', 'TN_SCADA_REDIS_ADDRESS', 'SPRING_KAFKA_SCHEMA_REGISTRY_URL'):
+            assert name not in service['environment'], (package['name'], name)
+            assert name in shared['services']['backend']['environment'], name
         rendered.append(name)
     except Exception:
         print('RENDER_FAILED', name)
         raise
-print(json.dumps({'packageSchemasAndDigests':len(packages),'prepareJobs':len(prepared['jobs']),'syntheticComposeRenders':len(rendered),'realTargetExecution':False}))
+assert len(base_contents) == 1, 'Library base depends on consumer'
+print(json.dumps({'packageSchemasAndDigests':len(packages),'prepareJobs':len(prepared['jobs']),'syntheticComposeRenders':len(rendered),'sharedBaseVariants':len(base_contents),'realTargetExecution':False}))

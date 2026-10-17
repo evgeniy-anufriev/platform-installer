@@ -905,6 +905,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
   const createInstallationPlan = async (
     deploymentOrder: string[],
     executionMode: InstallationExecutionMode = "FULL_PROJECT",
+    skipInfrastructureVerify = false,
   ) => {
     if (
       ["STARTING", "RUNNING", "CANCELLING"].includes(
@@ -923,6 +924,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
               executionMode,
               deploymentOrder,
               applicationVaultSources: {},
+              skipInfrastructureVerify,
             })
           : executionMode === "FULL_PROJECT" && api.createInstallationPlan
             ? await api.createInstallationPlan(deploymentOrder)

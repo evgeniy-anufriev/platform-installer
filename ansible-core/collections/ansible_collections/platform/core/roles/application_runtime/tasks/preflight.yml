@@ -12,25 +12,19 @@
   ansible.builtin.set_fact:
     application_uid: "{{ application_runtime_discoveries[application_discovery_key].uid }}"
     application_home: "{{ application_runtime_discoveries[application_discovery_key].home }}"
-    application_root: "{{ application_runtime_discoveries[application_discovery_key].home }}/{{ platform_application_root_relative }}"
     application_project_id: "{{ application_runtime_job.projectId }}"
     application_name: "{{ application_runtime_job.applicationName }}"
     application_instance_id: "{{ application_runtime_job.instanceId }}"
     application_parameters: "{{ application_runtime_job.settings.parameters | default({}) }}"
   no_log: true
 
-- name: Require a bounded application subtree beneath the discovered HOME
-  ansible.builtin.assert:
-    that:
-      - application_home is match('^/[a-zA-Z0-9_./-]+$')
-      - platform_application_root_relative is match('^[a-zA-Z0-9_.-]+(/[a-zA-Z0-9_.-]+)*$')
-      - "'..' not in platform_application_root_relative.split('/')"
-    fail_msg: APPLICATION_RUNTIME_ROOT_INVALID
+- name: Resolve the shared library placement paths
+  ansible.builtin.include_tasks: resolve_paths.yml
+  vars:
+    application_path_home: "{{ application_home }}"
 
 - name: Bind placement paths and private Docker environment
   ansible.builtin.set_fact:
-    application_instance_path: "{{ application_root }}/{{ application_runtime_job.placement.runtimePath }}"
-    application_library_path: "{{ (application_root ~ '/' ~ application_runtime_job.placement.libraryEnvPath) | dirname }}"
     application_docker_environment:
       HOME: "{{ application_home }}"
       XDG_RUNTIME_DIR: "/run/user/{{ application_uid }}"
@@ -153,7 +147,8 @@
     application_effective: "{{ application_runtime_job.settings }}"
     application_environment: "{{ application_runtime_job.settings.environment | default({}) | combine(hostvars['localhost'].application_snapshot.snapshot.applicationLibraries.libraries[application_runtime_job.libraryId].instances[application_runtime_job.instanceId].identityEnvironment) }}"
     application_runtime:
-      image: "{{ application_runtime_job.authority.requirement.localReference }}"
+      image: "{{ application_runtime_job.settings.image if '@' not in application_runtime_job.settings.image else application_runtime_job.authority.requirement.localReference }}"
+      connections: "{{ hostvars['localhost'].application_snapshot.snapshot.applicationLibraries.libraries[application_runtime_job.libraryId].instances[application_runtime_job.instanceId].connections }}"
       container_name: "{{ application_runtime_job.placement.containerName }}"
       base_compose_path: "{{ application_library_path }}/{{ application_runtime_job.baseFilename }}"
       base_service: "{{ application_runtime_job.baseService }}"
@@ -166,7 +161,7 @@
       defaults: "{{ application_runtime_job.commonDefaults | default({}) }}"
       library_id: "{{ application_runtime_job.libraryId }}"
       host_id: "{{ inventory_hostname }}"
-      connections: "{{ hostvars['localhost'].application_snapshot.snapshot.applicationLibraries.libraries[application_runtime_job.libraryId].instances[application_runtime_job.instanceId].connections }}"
+      connections: "{{ hostvars['localhost'].application_snapshot.snapshot.applicationLibraries.libraries[application_runtime_job.libraryId].connections | default(hostvars['localhost'].application_snapshot.snapshot.applicationLibraries.libraries[application_runtime_job.libraryId].instances[application_runtime_job.instanceId].connections, true) }}"
   no_log: true
 
 - name: Render allowlisted Agent configuration without secret values

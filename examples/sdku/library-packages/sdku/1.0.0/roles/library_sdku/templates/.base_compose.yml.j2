@@ -1,3 +1,20 @@
+{% set environment = library_runtime.defaults.environment | combine({}) %}
+{% for connection, names in {
+  'kafka': ['KAFKA_BOOTSTRAP_SERVERS', 'SPRING_KAFKA_BOOTSTRAP_SERVERS', 'BOOTSTRAP_SERVERS_CONFIG'],
+  'redis': ['REDIS_ADDRESS', 'TN_SCADA_REDIS_ADDRESS'],
+  'schema-registry': ['SPRING_KAFKA_SCHEMA_REGISTRY_URL', 'SCHEMA_REGISTRY_URL_CONFIG']
+}.items() %}
+{% if connection in library_runtime.connections %}
+{% set addresses = [] %}
+{% for target in library_runtime.connections[connection].targets %}
+{% set host = '[' ~ target.address ~ ']' if ':' in target.address else target.address %}
+{% set _ = addresses.append(('https://' if connection == 'schema-registry' else '') ~ host ~ ':' ~ (target.port | string)) %}
+{% endfor %}
+{% for name in names if name not in environment %}
+{% set _ = environment.update({name: addresses | join(',')}) %}
+{% endfor %}
+{% endif %}
+{% endfor %}
 services:
   base:
     init: true
@@ -5,4 +22,6 @@ services:
     extends:
       service: base
     environment:
-{{ library_runtime.defaults.environment | to_nice_yaml(indent=2) | indent(6, true) }}
+{% for name, value in environment.items() %}
+      {{ name | to_json }}: {{ (value | string) | to_json }}
+{% endfor %}

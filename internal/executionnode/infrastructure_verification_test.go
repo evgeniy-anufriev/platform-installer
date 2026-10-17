@@ -51,6 +51,7 @@ func TestB0CapabilityVersionAndScope(t *testing.T) {
 }
 
 type b1PlanRunner struct {
+	skipSupported bool
 	protocolRunner
 	request           map[string]any
 	summary           map[string]any
@@ -63,6 +64,13 @@ func (r *b1PlanRunner) RunBounded(ctx context.Context, name string, args []strin
 	_ = json.Unmarshal(input, &request)
 	if request["operation"] == "GetCapabilities" {
 		r.capabilityVersion, _ = request["apiVersion"].(string)
+		if r.capabilityVersion == "platform.installer/execution-runtime/v1alpha5" && r.skipSupported {
+			c := b0Capability()
+			c["apiVersion"] = "platform.installer/execution-capabilities/v1alpha9"
+			c["skipInfrastructureVerify"] = true
+			c["deploymentPlanRequestVersions"] = append(c["deploymentPlanRequestVersions"].([]any), "platform.installer/execution-runtime/v1alpha5")
+			return json.Marshal(c)
+		}
 		if r.capabilityVersion != "platform.installer/execution-runtime/v1alpha4" {
 			return json.Marshal(map[string]any{"apiVersion": "platform.installer/execution-capabilities/v1alpha6"})
 		}
@@ -71,12 +79,40 @@ func (r *b1PlanRunner) RunBounded(ctx context.Context, name string, args []strin
 	if request["operation"] == "BuildDeploymentPlan" {
 		r.request = request
 		mode := request["executionMode"]
+		if request["skipInfrastructureVerify"] == true {
+			return json.Marshal(map[string]any{"deploymentPlan": map[string]any{
+				"apiVersion": "platform.installer/plan/v1alpha6", "executionMode": mode, "skipInfrastructureVerify": true,
+				"infrastructureVerification": r.summary, "id": "plan-skip", "status": "BLOCKED", "projectIdentity": "project-one",
+				"projectRevision": "sha256:" + strings.Repeat("a", 64), "fingerprints": map[string]any{"plan": "sha256:" + strings.Repeat("b", 64)},
+				"runtimeRelease": request["runtimeRelease"], "acknowledgements": []any{}, "phases": []any{}, "requiredCredentials": []any{}, "findings": []any{}}})
+		}
 		if r.wrongMode {
 			mode = "FULL_PROJECT"
 		}
 		return json.Marshal(map[string]any{"deploymentPlan": map[string]any{"apiVersion": "platform.installer/plan/v1alpha5", "executionMode": mode, "infrastructureVerification": r.summary, "id": "plan-one", "status": "BLOCKED", "projectIdentity": "project-one", "projectRevision": "sha256:" + strings.Repeat("a", 64), "fingerprints": map[string]any{"plan": "sha256:" + strings.Repeat("b", 64)}, "runtimeRelease": request["runtimeRelease"], "acknowledgements": []any{}, "phases": []any{}, "requiredCredentials": []any{}, "findings": []any{}}})
 	}
 	return r.protocolRunner.RunBounded(ctx, name, args, input, limit)
+}
+
+func TestSkipVerifyNegotiatesCapabilityAndCannotFallBack(t *testing.T) {
+	for _, supported := range []bool{false, true} {
+		root := t.TempDir()
+		if err := os.Mkdir(filepath.Join(root, "inventory"), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		runner := &b1PlanRunner{summary: testInfrastructureSummary(t), skipSupported: supported}
+		transport := OpenSSHTransport{Identity: fixedIdentity{}, Runner: runner}
+		p, err := transport.BuildDeploymentPlanForMode(context.Background(), testNode(), root, map[string]any{"bundleDigest": "sha256:" + strings.Repeat("b", 64)}, []string{}, ApplicationLibrariesOnly, nil, true)
+		if !supported {
+			if err == nil || runner.request != nil {
+				t.Fatal("skip fell back or staged unsupported plan")
+			}
+			continue
+		}
+		if err != nil || !p.SkipInfrastructureVerify || runner.request["skipInfrastructureVerify"] != true || runner.request["apiVersion"] != "platform.installer/execution-runtime/v1alpha5" {
+			t.Fatalf("skip protocol lost: %v", err)
+		}
+	}
 }
 
 func TestModePlanUsesExistingFixedProtocolAndRejectsWrongMode(t *testing.T) {

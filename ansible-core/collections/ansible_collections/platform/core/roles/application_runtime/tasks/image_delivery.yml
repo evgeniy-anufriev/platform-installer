@@ -91,3 +91,29 @@
       - (application_delivered_image.stdout | from_json)[0].Architecture == application_runtime_job.authority.requirement.platform.architecture
     fail_msg: APPLICATION_IMAGE_IDENTITY_INVALID
   no_log: true
+
+- name: Preserve the original application image reference
+  ansible.builtin.command:
+    argv: [docker, tag, "{{ application_runtime_job.authority.requirement.imageId }}", "{{ application_runtime_job.settings.image }}"]
+  become_user: "{{ application_runtime_job.account }}"
+  environment: "{{ application_runtime_job.dockerEnvironment }}"
+  changed_when: false
+  no_log: true
+  when: "'@' not in application_runtime_job.settings.image"
+
+- name: Inspect the original reference before Compose startup
+  ansible.builtin.command:
+    argv: [docker, image, inspect, "{{ application_runtime_job.settings.image }}"]
+  become_user: "{{ application_runtime_job.account }}"
+  environment: "{{ application_runtime_job.dockerEnvironment }}"
+  register: application_original_image
+  changed_when: false
+  no_log: true
+  when: "'@' not in application_runtime_job.settings.image"
+
+- name: Require the original reference to name the locked image
+  ansible.builtin.assert:
+    that: (application_original_image.stdout | from_json)[0].Id == application_runtime_job.authority.requirement.imageId
+    fail_msg: APPLICATION_IMAGE_IDENTITY_INVALID
+  no_log: true
+  when: "'@' not in application_runtime_job.settings.image"

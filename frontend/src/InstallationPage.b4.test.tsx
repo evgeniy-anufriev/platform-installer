@@ -67,13 +67,13 @@ const fullPlan: InstallationPlanOperation = {
     ],
   },
 };
-it("B4 offers the services checkbox only after a plan is available on the Plan tab", () => {
+it("owner amendment offers execution controls before Build and on Summary", () => {
   const view = render(
     <InstallationPage {...defaults} onCreatePlan={vi.fn()} />,
   );
   expect(
     screen.queryByRole("checkbox", { name: "Устанавливать инфраструктуру" }),
-  ).toBeNull();
+  ).toBeTruthy();
   view.rerender(
     <InstallationPage
       {...defaults}
@@ -84,7 +84,7 @@ it("B4 offers the services checkbox only after a plan is available on the Plan t
   );
   expect(
     screen.queryByRole("checkbox", { name: "Устанавливать инфраструктуру" }),
-  ).toBeNull();
+  ).toBeTruthy();
 });
 it("B4 excludes infrastructure, leaves libraries Apply/Verify and requests only that scope", async () => {
   const create = vi.fn();
@@ -96,8 +96,12 @@ it("B4 excludes infrastructure, leaves libraries Apply/Verify and requests only 
   });
   expect(checkbox).toHaveProperty("checked", true);
   await userEvent.click(checkbox);
-  expect(screen.getByText(/При отсутствии актуального Verify Core включит проверку инфраструктуры/)).toBeTruthy();
-  expect(screen.getAllByRole("checkbox")).toHaveLength(1);
+  expect(
+    screen.getByText(
+      /При отсутствии актуального Verify Core включит проверку инфраструктуры/,
+    ),
+  ).toBeTruthy();
+  expect(screen.getAllByRole("checkbox")).toHaveLength(2);
   expect(screen.queryByText("Установить сервис db")).toBeNull();
   expect(screen.getByText("Проверить сервис db")).toBeTruthy();
   expect(create).not.toHaveBeenCalled();
@@ -109,6 +113,59 @@ it("B4 excludes infrastructure, leaves libraries Apply/Verify and requests only 
   await userEvent.click(screen.getByRole("button", { name: "Одобрить план" }));
   expect(create).not.toHaveBeenCalled();
   expect(defaults.onApprovePlan).toHaveBeenCalledWith("full", []);
+});
+it("requires a fresh plan when Infra Verify skip changes in either direction", async () => {
+  const create = vi.fn();
+  const props = {
+    ...defaults,
+    selectedExecutionMode: "APPLICATION_LIBRARIES_ONLY" as const,
+    onCreatePlan: create,
+  };
+  const plan = {
+    ...fullPlan,
+    plan: {
+      ...fullPlan.plan!,
+      executionMode: "APPLICATION_LIBRARIES_ONLY" as const,
+      skipInfrastructureVerify: false,
+    },
+  };
+  const view = render(<InstallationPage {...props} plan={plan} />);
+  await userEvent.click(
+    screen.getByRole("checkbox", {
+      name: "Пропустить проверку инфраструктуры — принимаю риски",
+    }),
+  );
+  expect(screen.getByRole("button", { name: "Одобрить план" })).toHaveProperty(
+    "disabled",
+    true,
+  );
+  await userEvent.click(
+    screen.getByRole("button", { name: "Сформировать свежий план" }),
+  );
+  expect(create).toHaveBeenLastCalledWith(
+    [],
+    "APPLICATION_LIBRARIES_ONLY",
+    true,
+  );
+  view.rerender(
+    <InstallationPage
+      {...props}
+      plan={{ ...plan, plan: { ...plan.plan, skipInfrastructureVerify: true } }}
+    />,
+  );
+  await userEvent.click(
+    screen.getByRole("checkbox", {
+      name: "Пропустить проверку инфраструктуры — принимаю риски",
+    }),
+  );
+  expect(screen.getByRole("button", { name: "Одобрить план" })).toHaveProperty(
+    "disabled",
+    true,
+  );
+  await userEvent.click(
+    screen.getByRole("button", { name: "Сформировать свежий план" }),
+  );
+  expect(create).toHaveBeenLastCalledWith([], "APPLICATION_LIBRARIES_ONLY");
 });
 it("B4 never filters actions from an authoritative Core plan for the selected scope", () => {
   const libraryModePlan: InstallationPlanOperation = {

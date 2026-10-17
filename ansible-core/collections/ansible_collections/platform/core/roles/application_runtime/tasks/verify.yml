@@ -1,4 +1,10 @@
 ---
+- name: Resolve library paths for standalone Verify without preflight
+  ansible.builtin.include_tasks: resolve_paths.yml
+  vars:
+    application_path_home: "{{ getent_passwd[application_runtime_job.account][4] }}"
+  when: application_runtime_job.instancePath is not defined
+
 - name: Verify exact application image ownership and readiness
   tags: [platform_application_instance_state]
   ansible.builtin.command:
@@ -30,5 +36,5 @@
     name: platform.vault.application_provider
     tasks_from: verify
   vars:
-    application_vault_instance_path: "{{ getent_passwd[application_runtime_job.account][4] }}/{{ platform_application_root_relative }}/{{ application_runtime_job.placement.runtimePath }}"
+    application_vault_instance_path: "{{ application_runtime_job.instancePath | default(application_instance_path) }}"
   when: application_runtime_job.agentTemplate | default(false)

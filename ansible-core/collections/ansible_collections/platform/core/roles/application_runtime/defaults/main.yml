@@ -1,5 +1,5 @@
 ---
 # Effective paths/accounts come from ordinary variables and the selected runtime.
-platform_application_root_relative: .local/share/platform-installer
+
 platform_application_approved_registries: []
 platform_application_registry_config_directory: ''

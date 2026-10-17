@@ -13,7 +13,7 @@ type modeInstallationBuilder struct {
 	requests []InstallationPlanRequest
 }
 
-func (b *modeInstallationBuilder) BuildDeploymentPlanForMode(ctx context.Context, n executionnode.Node, root string, release map[string]any, order []string, mode executionnode.ExecutionMode, sources map[string]string) (executionnode.DeploymentPlan, error) {
+func (b *modeInstallationBuilder) BuildDeploymentPlanForMode(ctx context.Context, n executionnode.Node, root string, release map[string]any, order []string, mode executionnode.ExecutionMode, sources map[string]string, skipInfrastructureVerify ...bool) (executionnode.DeploymentPlan, error) {
 	b.requests = append(b.requests, InstallationPlanRequest{ExecutionMode: mode, DeploymentOrder: order, ApplicationVaultSources: sources})
 	p, err := b.installationPlanBuilder.BuildDeploymentPlan(ctx, n, root, release, order)
 	p.ExecutionMode = mode

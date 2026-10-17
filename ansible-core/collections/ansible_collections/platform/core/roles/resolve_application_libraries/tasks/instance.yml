@@ -17,6 +17,7 @@
   ansible.builtin.set_fact:
     application_name: "{{ application_job.application.name }}"
     application_instance_id: "{{ application_job.application.name }}-{{ application_job.libraryId }}"
+    library_instance_id: "{{ application_job.libraryId }}"
   no_log: true
   become: false
 
@@ -54,6 +55,8 @@
         'applicationVersion': application_job.application.version,
         'hostId': application_job.hostId,
         'runtimeRef': application_job.deployment.runtimeRef,
+        'runtimeDirectory': application_job.deployment.runtime_directory | default(_library_package.platform_library_definition.runtime_directory | default('~/' ~ application_job.libraryId), true),
+        'libraryConnections': _library_package.platform_library_definition.connections | default({}),
         'bindings': application_job.deployment.bindings | default({}),
         'vaultRef': application_job.deployment.vault_ref | default({}),
         'resources': application_job.deployment.resources | default({}),

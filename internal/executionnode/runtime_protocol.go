@@ -283,6 +283,9 @@ func (t OpenSSHTransport) buildDeploymentPlanRequest(ctx context.Context, node N
 	if request["apiVersion"] == "platform.installer/execution-runtime/v1alpha4" && (value["apiVersion"] != "platform.installer/plan/v1alpha5" || value["executionMode"] != request["executionMode"]) {
 		return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
 	}
+	if request["apiVersion"] == "platform.installer/execution-runtime/v1alpha5" && (value["apiVersion"] != "platform.installer/plan/v1alpha6" || value["skipInfrastructureVerify"] != request["skipInfrastructureVerify"] || value["executionMode"] != request["executionMode"]) {
+		return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
+	}
 	plan, err := decodeDeploymentPlan(value)
 	if err != nil {
 		return DeploymentPlan{}, err
@@ -998,7 +1001,13 @@ func validEventCode(value string) bool {
 }
 func decodeDeploymentPlan(value map[string]any) (DeploymentPlan, error) {
 	plan := DeploymentPlan{}
-	if value["apiVersion"] == "platform.installer/plan/v1alpha5" {
+	if value["apiVersion"] == "platform.installer/plan/v1alpha6" {
+		if value["skipInfrastructureVerify"] != true || value["executionMode"] != string(ApplicationLibrariesOnly) {
+			return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
+		}
+		plan.SkipInfrastructureVerify = true
+	}
+	if value["apiVersion"] == "platform.installer/plan/v1alpha5" || value["apiVersion"] == "platform.installer/plan/v1alpha6" {
 		mode, ok := value["executionMode"].(string)
 		plan.ExecutionMode = ExecutionMode(mode)
 		if !ok || !plan.ExecutionMode.valid() {

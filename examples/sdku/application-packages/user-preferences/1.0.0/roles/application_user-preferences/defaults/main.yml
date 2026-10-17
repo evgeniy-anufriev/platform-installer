@@ -20,14 +20,12 @@ platform_application_definition:
             - -jar
             - user-preferences.jar
         environment:
-            SPRING_KAFKA_SCHEMA_REGISTRY_URL: '{{ application_parameters.source_variables.KAFKA_SCHEMA_REGISTRY_URL | default(undef(hint=''Configure SDKU KAFKA_SCHEMA_REGISTRY_URL''), true) }}'
             TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
             server.max-http-request-header-size: 100MB
         image: evoscada-docker.artifacts.tn.tngrp.ru/user-preferences:0.0.4-c707ead9-redos
         parameters:
             database_name: ""
             source_variables:
-                KAFKA_SCHEMA_REGISTRY_URL: ""
                 REDIS_SENTINEL_MASTER: ""
         ports:
             port-1:

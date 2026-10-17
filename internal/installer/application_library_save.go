@@ -29,7 +29,7 @@ func validateApplicationEdit(c EditCommand) error {
 	switch c.Operation {
 	case "CreateApplicationLibraryDeployment", "UpdateApplicationLibraryDeployment":
 		fields = append(fields, "entity")
-		if c.Entity == nil || !applicationKeys(c.Entity, "libraryRef", "runtimeRef", "bindings", "resources", "shared_secrets", "vault_ref", "applications", "overrides") {
+		if c.Entity == nil || !applicationKeys(c.Entity, "libraryRef", "runtimeRef", "runtime_directory", "bindings", "resources", "shared_secrets", "vault_ref", "applications", "overrides") {
 			return invalid
 		}
 		if c.Operation == "CreateApplicationLibraryDeployment" {
@@ -47,6 +47,11 @@ func validateApplicationEdit(c EditCommand) error {
 			if key == "libraryRef" {
 				s, ok := value.(string)
 				if !ok || !exactLibraryRef.MatchString(s) || len(s) > 160 {
+					return invalid
+				}
+			} else if key == "runtime_directory" {
+				s, ok := value.(string)
+				if !ok || len(s) > 4096 {
 					return invalid
 				}
 			} else if key == "runtimeRef" {

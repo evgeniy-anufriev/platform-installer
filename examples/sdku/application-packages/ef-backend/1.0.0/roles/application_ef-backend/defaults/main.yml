@@ -23,7 +23,6 @@ platform_application_definition:
             JAVA_OPTS: -Xmx4096m
             NETWORK_TIMEOUT_MS: 10000
             SERVER_ALLOWED_ORIGINS: '*'
-            SPRING_KAFKA_SCHEMA_REGISTRY_URL: '{{ application_parameters.source_variables.KAFKA_SCHEMA_REGISTRY_URL | default(undef(hint=''Configure SDKU KAFKA_SCHEMA_REGISTRY_URL''), true) }}'
             TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
             logging.charset.console: UTF-8
             server.max-http-header-size: 10MB
@@ -32,7 +31,6 @@ platform_application_definition:
         parameters:
             database_name: ef-store
             source_variables:
-                KAFKA_SCHEMA_REGISTRY_URL: ""
                 REDIS_SENTINEL_MASTER: ""
         ports:
             port-1:
