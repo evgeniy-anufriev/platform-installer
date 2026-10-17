@@ -238,6 +238,29 @@ application-aware planning and the mixed execution barrier; the original A1
 rejection is historical, not a current restriction.
 See [A1 implementation notes](work/application-libraries/milestones/a1/evidence/a1-test-journal.md).
 
+### Kafka topic resources
+
+A library resource may declare `kind: kafka.topic`, a Kafka `binding`,
+`mode: managed|existing` and `parameters: {name, partitions?, replication_factor?, config?}`.
+Partitions default to 1. Core derives automatic replication from the selected
+deployment: standalone RF/minISR are 1/1; distributed RF is min(3, broker members),
+minISR is min(2, effective RF). Controller-only members do not count. Explicit
+values override these defaults; `config.min.insync.replicas` is the minISR setting.
+Other Kafka topic properties are passed as scalar strings. minISR above RF is
+reported as a warning, not rejected as policy.
+
+Application defaults or instance `overrides.topicBindings` map declared Kafka
+connection aliases to arrays of resource IDs in that library. Core requires the
+same Kafka provider. An empty array selects none; removing the override restores
+defaults. Bindings neither grant ACLs nor rewrite application ENV or subscriptions.
+
+Managed topics are created only when missing. Matching existing topics are reused;
+existing mode requires their presence. Requested partition/replica counts and effective
+properties must match. This contract does not alter, reassign or delete topics.
+Physical provider/name conflicts are resolved before resource mutations. Kafka
+packages must declare `service.kafka.topic`; older Core schemas reject this kind.
+Use a matching published runtime rather than expecting an older runtime to omit it.
+
 ### Application account database access
 
 The existing account contract accepts PostgreSQL `databaseAccess`, an array of

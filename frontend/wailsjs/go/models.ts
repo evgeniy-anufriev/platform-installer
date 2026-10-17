@@ -88,6 +88,7 @@ export namespace coreadapter {
     }
   }
   export class ApplicationPlacement {
+    topicBindings: Record<string, Array<string>>;
     runtimeDirectory: string;
     commonDefaults?: Record<string, Array<number>>;
     inherited?: Record<string, Array<number>>;
@@ -111,10 +112,11 @@ export namespace coreadapter {
 
     constructor(source: any = {}) {
       if ("string" === typeof source) source = JSON.parse(source);
+      this.topicBindings = source["topicBindings"];
+      this.runtimeDirectory = source["runtimeDirectory"];
       this.commonDefaults = source["commonDefaults"];
       this.inherited = source["inherited"];
       this.SERVER_ID = source["SERVER_ID"];
-      this.runtimeDirectory = source["runtimeDirectory"];
       this.runtimeRef = source["runtimeRef"];
       this.command = source["command"];
       this.imageRequirement = source["imageRequirement"];
@@ -148,6 +150,7 @@ export namespace coreadapter {
     }
   }
   export class ApplicationInstance {
+    topics: Record<string, Array<number>>;
     applicationName: string;
     slotId: string;
     placements: Record<string, ApplicationPlacement>;
@@ -167,6 +170,7 @@ export namespace coreadapter {
 
     constructor(source: any = {}) {
       if ("string" === typeof source) source = JSON.parse(source);
+      this.topics = source["topics"];
       this.applicationName = source["applicationName"];
       this.slotId = source["slotId"];
       this.placements = this.convertValues(
@@ -204,6 +208,7 @@ export namespace coreadapter {
     }
   }
   export class ApplicationLibrary {
+    topics: Record<string, Array<number>>;
     runtimeDirectory: string;
     connections: Record<string, Array<number>>;
     libraryRef: string;
@@ -218,9 +223,10 @@ export namespace coreadapter {
 
     constructor(source: any = {}) {
       if ("string" === typeof source) source = JSON.parse(source);
-      this.libraryRef = source["libraryRef"];
+      this.topics = source["topics"];
       this.runtimeDirectory = source["runtimeDirectory"];
       this.connections = source["connections"];
+      this.libraryRef = source["libraryRef"];
       this.packages = source["packages"];
       this.instances = this.convertValues(
         source["instances"],
@@ -1148,9 +1154,8 @@ export namespace desktop {
 
     constructor(source: any = {}) {
       if ("string" === typeof source) source = JSON.parse(source);
+      this.skipInfrastructureVerify = source["skipInfrastructureVerify"];
       this.executionMode = source["executionMode"];
-      this.skipInfrastructureVerify =
-        source["skipInfrastructureVerify"] ?? false;
       this.infrastructureVerification = this.convertValues(
         source["infrastructureVerification"],
         executionnode.InfrastructureVerification,
@@ -1249,9 +1254,8 @@ export namespace desktop {
 
     constructor(source: any = {}) {
       if ("string" === typeof source) source = JSON.parse(source);
+      this.skipInfrastructureVerify = source["skipInfrastructureVerify"];
       this.executionMode = source["executionMode"];
-      this.skipInfrastructureVerify =
-        source["skipInfrastructureVerify"] ?? false;
       this.deploymentOrder = source["deploymentOrder"];
       this.applicationVaultSources = source["applicationVaultSources"];
     }

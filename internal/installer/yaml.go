@@ -69,6 +69,9 @@ func scalarNode(value any) (*yaml.Node, error) {
 		if math.IsNaN(typed) || math.IsInf(typed, 0) {
 			return nil, blocked("INVALID_VALUE", "Non-finite numbers are not supported", "command.value")
 		}
+		if math.Trunc(typed) == typed && math.Abs(typed) <= 1<<53 {
+			return &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!int", Value: strconv.FormatFloat(typed, 'f', -1, 64)}, nil
+		}
 		return &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!float", Value: strconv.FormatFloat(typed, 'g', -1, 64)}, nil
 	case json.Number:
 		if _, err := typed.Int64(); err == nil {

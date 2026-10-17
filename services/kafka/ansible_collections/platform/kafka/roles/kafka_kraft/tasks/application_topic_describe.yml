@@ -1,0 +1,98 @@
+---
+- name: Describe only the literal declared topic
+  ansible.builtin.command:
+    argv:
+      - "{{ application_topic_cli_directory }}/bin/kafka-topics.sh"
+      - --bootstrap-server
+      - "{{ application_topic_candidate.address }}:{{ application_topic_candidate.port }}"
+      - --command-config
+      - "{{ application_topic_client.path }}"
+      - --describe
+      - --if-exists
+      - --topic
+      - "{{ '^' ~ (application_topic.name | regex_escape) ~ '$' }}"
+  register: application_topic_description
+  changed_when: false
+  failed_when: false
+  ignore_errors: true
+  no_log: true
+  until: application_topic_description.rc != 0 or not application_topic_must_exist or application_topic_description.stdout | trim | length > 0
+  retries: "{{ platform_kafka_startup_readiness_retries }}"
+  delay: "{{ platform_kafka_startup_readiness_delay }}"
+
+- name: Distinguish missing topics from failed Kafka connections
+  ansible.builtin.assert:
+    that:
+      - application_topic_description.rc == 0
+      - not application_topic_must_exist or application_topic_description.stdout | trim | length > 0
+    fail_msg: "{{ application_topic_diagnostic | to_json }}"
+  vars:
+    application_topic_diagnostic:
+      code: APPLICATION_TOPIC_DESCRIBE_FAILED
+      provider: "{{ platform_kafka_application_job.providerId }}"
+      topic: "{{ application_topic.name }}"
+      address: "{{ application_topic_candidate.address }}:{{ application_topic_candidate.port }}"
+      timeoutMs: "{{ platform_kafka_application_timeout_ms }}"
+      reason: "{{ 'TOPIC_MISSING' if application_topic_description.rc == 0 else (application_topic_description.stderr | regex_search('(TopicAuthorizationException|TimeoutException|SSLHandshakeException)') | default('KAFKA_CLI_FAILED', true)) }}"
+
+- name: Validate existing topic state without changing it
+  when: application_topic_description.stdout | trim | length > 0
+  block:
+    - name: Require the declared partition and replica counts
+      ansible.builtin.assert:
+        that:
+          - application_topic_description.stdout | regex_search('PartitionCount:[ \t]*' ~ application_topic.partitions ~ '(?:[ \t]|$)') is not none
+          - application_topic_description.stdout | regex_findall('(?:^|[ \t])Replicas:[ \t]*([0-9,]+)') | length == application_topic.partitions
+          - application_topic_description.stdout | regex_findall('(?:^|[ \t])Replicas:[ \t]*([0-9,]+)') | map('split', ',') | map('length') | unique | list == [application_topic.replicationFactor]
+        fail_msg: "{{ application_topic_diagnostic | to_json }}"
+      vars:
+        application_topic_diagnostic:
+          code: APPLICATION_TOPIC_DRIFT
+          provider: "{{ platform_kafka_application_job.providerId }}"
+          topic: "{{ application_topic.name }}"
+          expectedPartitions: "{{ application_topic.partitions }}"
+          expectedReplicationFactor: "{{ application_topic.replicationFactor }}"
+          observedPartitions: "{{ application_topic_description.stdout | regex_findall('PartitionCount:[ \t]*([0-9]+)') }}"
+          observedReplicaCounts: "{{ application_topic_description.stdout | regex_findall('(?:^|[ \t])Replicas:[ \t]*([0-9,]+)') | map('split', ',') | map('length') | list }}"
+    - name: Report unavailable leaders separately from a different configured replica count
+      ansible.builtin.assert:
+        that: application_topic_description.stdout | regex_search('Leader:[ \t]*-1(?:[ \t]|$)') is none
+        fail_msg: "{{ application_topic_diagnostic | to_json }}"
+      vars:
+        application_topic_diagnostic:
+          code: APPLICATION_TOPIC_REPLICAS_UNAVAILABLE
+          provider: "{{ platform_kafka_application_job.providerId }}"
+          topic: "{{ application_topic.name }}"
+    - name: Read effective topic properties including broker defaults
+      ansible.builtin.command:
+        argv: ["{{ application_topic_cli_directory }}/bin/kafka-configs.sh", --bootstrap-server, "{{ application_topic_candidate.address }}:{{ application_topic_candidate.port }}", --command-config, "{{ application_topic_client.path }}", --describe, --all, --entity-type, topics, --entity-name, "{{ application_topic.name }}"]
+      register: application_topic_properties
+      changed_when: false
+      failed_when: false
+      no_log: true
+    - name: Distinguish property lookup failures from property drift
+      ansible.builtin.assert:
+        that: application_topic_properties.rc == 0
+        fail_msg: "{{ application_topic_diagnostic | to_json }}"
+      vars:
+        application_topic_diagnostic:
+          code: APPLICATION_TOPIC_CONFIG_READ_FAILED
+          provider: "{{ platform_kafka_application_job.providerId }}"
+          topic: "{{ application_topic.name }}"
+          address: "{{ application_topic_candidate.address }}:{{ application_topic_candidate.port }}"
+          timeoutMs: "{{ platform_kafka_application_timeout_ms }}"
+          reason: "{{ application_topic_properties.stderr | regex_search('(TopicAuthorizationException|TimeoutException|SSLHandshakeException)') | default('KAFKA_CLI_FAILED', true) }}"
+    - name: Require requested effective properties to match
+      ansible.builtin.assert:
+        that:
+          - application_topic_properties.stdout | regex_search('(?m)^[ \t]*' ~ (item.key | regex_escape) ~ '=' ~ (item.value | regex_escape) ~ '[ \t]+sensitive=') is not none
+        fail_msg: "{{ application_topic_diagnostic | to_json }}"
+      vars:
+        application_topic_diagnostic:
+          code: APPLICATION_TOPIC_CONFIG_DRIFT
+          provider: "{{ platform_kafka_application_job.providerId }}"
+          topic: "{{ application_topic.name }}"
+          property: "{{ item.key }}"
+      loop: "{{ application_topic.config | dict2items | sort(attribute='key') }}"
+      loop_control:
+        label: "{{ item.key }}"

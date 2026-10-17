@@ -15,6 +15,7 @@ type ApplicationLibraries struct {
 }
 
 type ApplicationLibrary struct {
+	Topics                   map[string]json.RawMessage     `json:"topics"`
 	RuntimeDirectory         string                         `json:"runtimeDirectory"`
 	Connections              map[string]json.RawMessage     `json:"connections"`
 	LibraryRef               string                         `json:"libraryRef"`
@@ -25,6 +26,7 @@ type ApplicationLibrary struct {
 }
 
 type ApplicationInstance struct {
+	Topics                    map[string]json.RawMessage      `json:"topics"`
 	ApplicationName           string                          `json:"applicationName"`
 	SlotID                    string                          `json:"slotId"`
 	Placements                map[string]ApplicationPlacement `json:"placements"`
@@ -40,6 +42,7 @@ type ApplicationInstance struct {
 }
 
 type ApplicationPlacement struct {
+	TopicBindings    map[string][]string        `json:"topicBindings"`
 	RuntimeDirectory string                     `json:"runtimeDirectory"`
 	CommonDefaults   map[string]json.RawMessage `json:"commonDefaults,omitempty"`
 	Inherited        map[string]json.RawMessage `json:"inherited,omitempty"`

@@ -3348,6 +3348,25 @@ it("shows a safe terminal status when verification binding rejects", async () =>
   expect(screen.queryByText("private transport detail")).toBeNull();
 });
 
+it("refreshes the Core snapshot after successful Project Verify", async () => {
+  const getCurrentProject = vi.fn().mockResolvedValue({
+    ...project,
+    snapshot: { ...project.snapshot, project: { name: "Verified Core" } },
+  });
+  const value = api({
+    verifyProject: vi.fn().mockResolvedValue({ status: "VERIFIED" }),
+    getCurrentProject,
+  });
+  value.chooseProject.mockResolvedValue(project);
+  render(<App api={value} />);
+  await userEvent.click(
+    screen.getByRole("button", { name: "Открыть папку проекта" }),
+  );
+  await userEvent.click(screen.getByRole("button", { name: "Проверить" }));
+  await waitFor(() => expect(getCurrentProject).toHaveBeenCalledOnce());
+  expect(await screen.findByRole("heading", { name: "Verified Core" })).toBeTruthy();
+});
+
 it("explains the READY Execution Node prerequisite after Project Verify", async () => {
   const value = api({
     verifyProject: vi.fn().mockResolvedValue({

@@ -149,6 +149,7 @@
     application_runtime:
       image: "{{ application_runtime_job.settings.image if '@' not in application_runtime_job.settings.image else application_runtime_job.authority.requirement.localReference }}"
       connections: "{{ hostvars['localhost'].application_snapshot.snapshot.applicationLibraries.libraries[application_runtime_job.libraryId].instances[application_runtime_job.instanceId].connections }}"
+      topics: "{{ hostvars['localhost'].application_snapshot.snapshot.applicationLibraries.libraries[application_runtime_job.libraryId].instances[application_runtime_job.instanceId].topics | default({}) }}"
       container_name: "{{ application_runtime_job.placement.containerName }}"
       base_compose_path: "{{ application_library_path }}/{{ application_runtime_job.baseFilename }}"
       base_service: "{{ application_runtime_job.baseService }}"

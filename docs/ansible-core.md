@@ -95,6 +95,17 @@ containers. A3/A4 add PostgreSQL library resources/accounts, protected Vault
 secret publication and container Agent/PKI materialization. A5 extends the same
 provider jobs with Redis/Sentinel ACLs and ClickHouse databases/accounts; Verify
 adds read-only provider checks after inspect without repeating provider preflight.
+Kafka library resources reuse these stages with capability `service.kafka.topic`.
+Core projects topic defaults from the selected deployment's mode and broker members;
+the Kafka role uses builtin command/template/assert tasks and its installed CLI.
+All Kafka resource preflights run before provider mutations. Apply creates missing
+managed topics; existing resources and Verify are read-only. Mismatching counts or
+requested effective properties fail without altering topics. Temporary client
+properties use mode 0600 and always cleanup; raw CLI output is suppressed and
+separate diagnostics expose only provider/topic, address, timeout and safe codes.
+See [topic contract](project-contract.md#kafka-topic-resources) and
+[plan](work/application-libraries/kafka-topics-plan.md).
+
 Each library resource scope precedes logical instance account/grant scopes and
 Vault publication. HA ClickHouse user/grant writes use one ON CLUSTER default
 batch per logical instance, followed by per-server result/login verification.

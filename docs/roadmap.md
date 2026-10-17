@@ -1,5 +1,11 @@
 # V2 roadmap and milestone gates
 
+The owner-approved [Kafka library topic extension](work/application-libraries/kafka-topics-plan.md)
+adds topic resources to existing library provider stages and instance Startup bindings.
+Gates cover deployment-derived RF/minISR, native tasks, real React/Wails/Core
+Save/reset/planning and independent FULL DIFF review. Actual Kafka resource mutation
+requires separately authorized bounded QA; application installation is excluded.
+
 Application libraries follow the [chapter plan](work/application-libraries/implementation-plan.md).
 A8 integrates A1–A7 into one Core plan/run with all-infrastructure Verify before
 library mutation. Its gate covers mixed success/repeat, failure/cancel, protected

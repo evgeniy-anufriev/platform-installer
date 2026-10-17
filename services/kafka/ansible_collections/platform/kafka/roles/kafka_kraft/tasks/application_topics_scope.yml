@@ -1,0 +1,29 @@
+---
+- name: Create private temporary Kafka client configuration
+  ansible.builtin.tempfile:
+    state: file
+    prefix: platform-topics-
+  register: application_topic_client
+  changed_when: false
+
+- name: Use existing Kafka security projection for this topic batch
+  block:
+    - name: Render the projected Kafka client configuration
+      ansible.builtin.template:
+        src: application-topics-client.properties.j2
+        dest: "{{ application_topic_client.path }}"
+        mode: '0600'
+      changed_when: false
+      no_log: true
+    - name: Check or create each declared topic
+      ansible.builtin.include_tasks: application_topic.yml
+      loop: "{{ platform_kafka_application_job.topics }}"
+      loop_control:
+        loop_var: application_topic
+        label: "{{ application_topic.name }}"
+  always:
+    - name: Remove only this invocation's client configuration
+      ansible.builtin.file:
+        path: "{{ application_topic_client.path }}"
+        state: absent
+      changed_when: false

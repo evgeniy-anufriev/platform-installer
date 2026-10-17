@@ -1755,9 +1755,17 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
           message: "Не удалось выполнить проверку проекта.",
         },
       }));
+      const verifiedProject =
+        next.status === "VERIFIED" && api.getCurrentProject
+          ? await api.getCurrentProject()
+          : undefined;
       if (requestToken !== endpointPreviewRequest.current) return;
       setResult(
-        (current) => ({ ...current, verification: next }) as OpenResult,
+        (current) =>
+          ({
+            ...(verifiedProject ?? current),
+            verification: next,
+          }) as OpenResult,
       );
       if (api.getEndpointPreview) {
         const preview = await api.getEndpointPreview();

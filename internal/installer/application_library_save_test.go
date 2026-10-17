@@ -83,6 +83,40 @@ func b2Command(revision, op string) EditCommand {
 	return EditCommand{APIVersion: EditCommandAPIVersionV11, Kind: "EditCommand", BaseProjectRevision: revision, Operation: op, DeploymentID: "sdku"}
 }
 
+func TestApplicationTopicBindingSaveReopenAndReset(t *testing.T) {
+	root, b, revision := b2Project(t)
+	create := b2Command(revision, "CreateApplicationLibraryDeployment")
+	create.Entity = map[string]any{"libraryRef": "sdku@1.0.0", "runtimeRef": "kafka-main",
+		"resources": map[string]any{"events": map[string]any{"kind": "kafka.topic", "binding": "messaging", "parameters": map[string]any{"name": "qa.events", "partitions": float64(3), "replication_factor": float64(2), "config": map[string]any{"min.insync.replicas": float64(1), "min.cleanable.dirty.ratio": 0.5}}}}}
+	result := commitStructuralForTest(t, b, root, projectlifecycle.ClassificationManaged, revision, []EditCommand{create})
+	set := b2Command(result.NewProjectRevision, "SetApplicationLibraryOverride")
+	set.EntityID, set.Setting = "gateway", "topicBindings"
+	set.Value = map[string]any{"kafka": []any{"events"}}
+	result = commitStructuralForTest(t, b, root, projectlifecycle.ClassificationManaged, result.NewProjectRevision, []EditCommand{set})
+	view, err := ReadManagedProjectView(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bindings := asMap(asMap(asMap(asMap(view.ApplicationLibraries["sdku"]["applications"])["gateway"])["overrides"])["topicBindings"])
+	if len(asSlice(bindings["kafka"])) != 1 {
+		t.Fatal("topic binding was not preserved")
+	}
+	parameters := asMap(asMap(asMap(view.ApplicationLibraries["sdku"]["resources"])["events"])["parameters"])
+	if parameters["partitions"] != 3 || parameters["replication_factor"] != 2 || asMap(parameters["config"])["min.insync.replicas"] != 1 || asMap(parameters["config"])["min.cleanable.dirty.ratio"] != 0.5 {
+		t.Fatalf("JSON numeric types were not preserved: %v", parameters)
+	}
+	reset := b2Command(result.NewProjectRevision, "RemoveApplicationLibraryOverride")
+	reset.EntityID, reset.Setting = "gateway", "topicBindings"
+	commitStructuralForTest(t, b, root, projectlifecycle.ClassificationManaged, result.NewProjectRevision, []EditCommand{reset})
+	view, err = ReadManagedProjectView(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if asMap(asMap(asMap(view.ApplicationLibraries["sdku"]["applications"])["gateway"])["overrides"])["topicBindings"] != nil {
+		t.Fatal("reset retained topic override")
+	}
+}
+
 func TestApplicationCreateGrantSaveReopenAndReset(t *testing.T) {
 	root, b, revision := b2Project(t)
 	create := b2Command(revision, "CreateApplicationLibraryDeployment")

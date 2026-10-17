@@ -49,6 +49,24 @@
           loop: "{{ (application_provider_inputs.libraryJobs + application_provider_inputs.instanceJobs) | selectattr('serviceType', 'equalto', 'clickhouse') | list }}"
           loop_control:
             loop_var: platform_clickhouse_application_job
+        - name: Preflight all Kafka topic batches before provider mutations
+          ansible.builtin.include_role:
+            name: platform.kafka.kafka_kraft
+            tasks_from: application_topics
+          vars:
+            platform_kafka_application_phase: preflight
+          loop: "{{ application_provider_inputs.libraryJobs | selectattr('serviceType', 'equalto', 'kafka') | list }}"
+          loop_control:
+            loop_var: platform_kafka_application_job
+        - name: Create Kafka library topics before application instances
+          ansible.builtin.include_role:
+            name: platform.kafka.kafka_kraft
+            tasks_from: application_topics
+          vars:
+            platform_kafka_application_phase: apply
+          loop: "{{ application_provider_inputs.libraryJobs | selectattr('serviceType', 'equalto', 'kafka') | list }}"
+          loop_control:
+            loop_var: platform_kafka_application_job
         - name: Create all library resources before instances
           ansible.builtin.include_role:
             name: platform.postgresql.application_provider

@@ -347,6 +347,40 @@ def account_policies(settings, layers):
     return result
 
 
+def resolve_topics(resources, bindings, desired):
+    """Pure projection; Ansible already resolved resource parameters and topology."""
+    topics = {}
+    for key, resource in resources.items():
+        if resource['kind'] != 'kafka.topic':
+            continue
+        ref = bindings[resource['binding']]['deploymentRef']
+        deployment = desired['serviceDeployments'][ref]
+        if deployment['serviceType'] != 'kafka' or deployment['mode'] not in ('kraft-standalone', 'kraft-distributed'):
+            raise ValueError('APPLICATION_TOPIC_PROVIDER_INVALID')
+        count = sum('broker' in m.get('roles', []) for m in deployment.get('members', {}).values())
+        p = resource['parameters']
+        name = p['name']
+        if (set(p) - {'name', 'partitions', 'replication_factor', 'config'} or
+                not isinstance(name, str) or not re.fullmatch(r'[A-Za-z0-9._-]{1,249}', name) or name in ('.', '..')):
+            raise ValueError('APPLICATION_TOPIC_SETTINGS_INVALID')
+        partitions = p.get('partitions', 1)
+        rf = p.get('replication_factor', 1 if deployment['mode'] == 'kraft-standalone' else min(3, count))
+        config = dict(p.get('config', {}))
+        minimum = config.get('min.insync.replicas', min(2, rf) if type(rf) is int else 0)
+        if isinstance(minimum, str) and minimum.isdecimal():
+            minimum = int(minimum)
+        if (any(type(v) is not int or v < 1 for v in (partitions, rf, minimum)) or rf > count or
+                any(not isinstance(k, str) or not isinstance(v, (str, int, float, bool)) for k, v in config.items())):
+            raise ValueError('APPLICATION_TOPIC_SETTINGS_INVALID')
+        config = {k: str(v).lower() if type(v) is bool else str(v) for k, v in config.items()}
+        config['min.insync.replicas'] = str(minimum)
+        topics[key] = dict(resourceId=key, deploymentRef=ref, name=name,
+                           mode=resource.get('mode', 'managed'), partitions=partitions,
+                           replicationFactor=rf, config=config,
+                           minISRWarning=minimum > rf)
+    return topics
+
+
 def project(rows, desired, configuration, catalog, hosts, project_id="ansible-project"):
     findings, libraries, ports = [], {}, set()
     if not isinstance(project_id, str) or not ID.fullmatch(project_id):
@@ -459,18 +493,32 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
                 shared_connections[name] = resolve_connection(reference, declaration, selector, desired, configuration, catalog, hosts)
             except (ValueError, KeyError, TypeError):
                 findings.append(finding('APPLICATION_CONNECTION_INVALID', field + '.libraryConnections.' + name))
-        library = libraries.setdefault(library_id, {"libraryRef": row["libraryRef"], "packages": {}, "instances": {}, "resources": row["resources"], "sharedSecretRequirements": row["sharedSecrets"], 'connections': shared_connections, 'runtimeDirectory': row.get('runtimeDirectory', '~/' + library_id)})
+        try:
+            topics = resolve_topics(row['resources'], row['bindings'], desired)
+            topic_bindings = {}
+            for alias, refs in settings.get('topicBindings', {}).items():
+                connection = connections[alias]
+                selected = [topics[ref] for ref in refs]
+                if connection['serviceType'] != 'kafka' or any(t['deploymentRef'] != connection['deploymentRef'] for t in selected):
+                    raise ValueError('APPLICATION_TOPIC_BINDING_INVALID')
+                topic_bindings[alias] = selected
+        except (KeyError, TypeError, ValueError):
+            topics, topic_bindings = {}, {}
+            findings.append(finding('APPLICATION_TOPIC_BINDING_INVALID', field + '.topicBindings'))
+        library = libraries.setdefault(library_id, {"libraryRef": row["libraryRef"], "packages": {}, "instances": {}, "resources": row["resources"], 'topics': topics, "sharedSecretRequirements": row["sharedSecrets"], 'connections': shared_connections, 'runtimeDirectory': row.get('runtimeDirectory', '~/' + library_id)})
         if library['connections'] != shared_connections or library['runtimeDirectory'] != row.get('runtimeDirectory', '~/' + library_id):
             findings.append(finding('APPLICATION_HOST_RESOURCE_CONFLICT', field))
         library["packages"][row["applicationName"]] = row["packageIdentity"]
         instance = library["instances"].setdefault(app_id, {"applicationName": row["applicationName"], "slotId": row["slotId"], "placements": {},
-                                                           "connections": connections, "credentialRequirements": accounts,
+                                                           "connections": connections, 'topics': topic_bindings, "credentialRequirements": accounts,
                                                            "identityEnvironment": {name: app_id for name in row["identityNames"]},
                                                            "agentRequired": agent_required, "executionPrerequisites": ["A2_IMAGE_DELIVERY", "A4_PROVIDER_PROVISIONING"] if accounts or agent_required else ["A2_IMAGE_DELIVERY"]})
         if library['resources'] != row['resources'] or library['sharedSecretRequirements'] != row['sharedSecrets']:
             findings.append(finding('APPLICATION_HOST_RESOURCE_CONFLICT', field))
         if instance['connections'] != connections:
             findings.append(finding('APPLICATION_HOST_CONNECTION_CONFLICT', field))
+        if instance['topics'] != topic_bindings:
+            findings.append(finding('APPLICATION_HOST_RESOURCE_CONFLICT', field))
         if instance["credentialRequirements"] != accounts:
             findings.append(finding("APPLICATION_HOST_CREDENTIAL_CONFLICT", field))
         if instance['agentRequired'] != agent_required or ('secretBindings' in instance and instance['secretBindings'] != secret_bindings):
@@ -490,6 +538,7 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
                                                      "applicationPackage": row['applicationName'] + '@' + row['applicationVersion'],
                                                      "libraryPackage": row['libraryRef'], "host": host},
                                           "parameters": settings.get("parameters", {}), "environment": settings.get("environment", {}),
+                                          "topicBindings": settings.get('topicBindings', {}),
                                           "ports": settings.get("ports", {}), "endpoint": settings.get("endpoint", {}),
                                           "containerName": "%s-%s-%s" % (project_id, app_id, host),
                                           "composeProject": compose_project,

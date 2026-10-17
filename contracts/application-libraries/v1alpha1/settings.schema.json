@@ -444,6 +444,14 @@
           "type": "object",
           "additionalProperties": false
         },
+        "topicBindings": {
+          "type": "object",
+          "propertyNames": {"pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$"},
+          "additionalProperties": {
+            "type": "array", "uniqueItems": true,
+            "items": {"type": "string", "pattern": "^[a-z][A-Za-z0-9_-]*$"}
+          }
+        },
         "config_files": {
           "items": {
             "oneOf": [

@@ -24,6 +24,33 @@ def load(path):
 
 
 class ApplicationLibrariesTest(unittest.TestCase):
+    def test_topics_use_the_selected_deployment_mode_and_effective_replication_factor(self):
+        deployments = {'single': {'serviceType': 'kafka', 'mode': 'kraft-standalone',
+                                  'members': {'b': {'roles': ['broker', 'controller'], 'host': 'h'}}}}
+        bindings = {'single': {'deploymentRef': 'single'}, 'cluster': {'deploymentRef': 'cluster'}}
+        resources = {'one': {'kind': 'kafka.topic', 'binding': 'single', 'parameters': {'name': 'SDKU.events'}}}
+        for count in (1, 2, 3, 4):
+            deployments['cluster'] = {'serviceType': 'kafka', 'mode': 'kraft-distributed',
+                                     'members': dict({'b%d' % i: {'roles': ['broker'], 'host': 'h'} for i in range(count)},
+                                                     controller={'roles': ['controller'], 'host': 'other'})}
+            resources['many'] = {'kind': 'kafka.topic', 'binding': 'cluster', 'parameters': {'name': 'cluster.events'}}
+            values = APP.resolve_topics(resources, bindings, {'serviceDeployments': deployments})
+            self.assertEqual((1, '1', 1), (values['one']['replicationFactor'], values['one']['config']['min.insync.replicas'], values['one']['partitions']))
+            self.assertEqual(min(3, count), values['many']['replicationFactor'])
+            self.assertEqual(str(min(2, count)), values['many']['config']['min.insync.replicas'])
+        resources['many']['parameters']['replication_factor'] = 1
+        self.assertEqual('1', APP.resolve_topics(resources, bindings, {'serviceDeployments': deployments})['many']['config']['min.insync.replicas'])
+        resources['many']['parameters'].update(partitions=5, replication_factor=1,
+                                              config={'cleanup.policy': 'compact', 'min.insync.replicas': '3'})
+        result = APP.resolve_topics(resources, bindings, {'serviceDeployments': deployments})['many']
+        self.assertEqual((5, 1, True), (result['partitions'], result['replicationFactor'], result['minISRWarning']))
+        self.assertEqual('compact', result['config']['cleanup.policy'])
+        for change in ({'replication_factor': 5}, {'partitions': 0}, {'partitions': True}, {'name': '..'}):
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                changed = copy.deepcopy(resources)
+                changed['many']['parameters'].update(change)
+                APP.resolve_topics(changed, bindings, {'serviceDeployments': deployments})
+
     def test_registry_connection_projects_all_brokers_and_member_ports(self):
         desired = {'serviceDeployments': {'kafka': {'serviceType': 'kafka', 'members': {
             'kafka-%d' % n: {'host': 'node%d' % n, 'roles': ['broker'], 'node_id': n} for n in (1, 2, 3)}}}}

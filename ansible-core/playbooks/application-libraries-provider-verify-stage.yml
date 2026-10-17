@@ -35,6 +35,15 @@
           loop: "{{ application_vault_inputs.sourceJobs | default([]) }}"
           loop_control:
             loop_var: application_vault_source
+        - name: Verify Kafka library topics without resource mutations
+          ansible.builtin.include_role:
+            name: platform.kafka.kafka_kraft
+            tasks_from: application_topics
+          vars:
+            platform_kafka_application_phase: verify
+          loop: "{{ application_provider_inputs.libraryJobs | selectattr('serviceType', 'equalto', 'kafka') | list }}"
+          loop_control:
+            loop_var: platform_kafka_application_job
         - name: Reset read-only PostgreSQL discovery for this invocation
           ansible.builtin.set_fact:
             platform_application_provider_runtime: {}

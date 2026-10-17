@@ -10,9 +10,46 @@ for service in ('redis', 'clickhouse'):
     sys.path.insert(0, os.path.join(ROOT, 'services', service))
 sys.path.insert(0, os.path.join(ROOT, 'ansible-core/collections/ansible_collections/platform/core/plugins/module_utils'))
 from application_providers import project_providers, normalize_grants, identifier, normalize_redis_grants, normalize_clickhouse_grants
+from application_libraries import resolve_topics
 
 
 class ApplicationProvidersTest(unittest.TestCase):
+    def test_kafka_topics_share_the_library_barrier_and_conflict_check(self):
+        self.resources.clear()
+        self.accounts.clear()
+        self.resources['events'] = dict(kind='kafka.topic', binding='pg', mode='existing', parameters={'name': 'qa.events'})
+        self.desired['serviceDeployments']['pg'] = dict(serviceType='kafka', mode='kraft-standalone')
+        members = {'broker': {'host': 'h1', 'roles': ['broker', 'controller']}}
+        self.snapshot['topology']['resolved']['serviceDeployments']['pg']['members'] = members
+        self.config['services']['pg']['configuration'] = {
+            'listeners': {'state': 'RESOLVED', 'value': {'CLIENT': {'purpose': 'client', 'securityProtocol': 'PLAINTEXT', 'port': 9092}}}}
+        self.catalog['definitions']['kafka'] = {'capabilities': ['service.kafka.topic']}
+        library = self.snapshot['applicationLibraries']['libraries']['lib']
+        library['topics'] = resolve_topics(self.resources, {'pg': {'deploymentRef': 'pg'}},
+                                          {'serviceDeployments': {'pg': dict(self.desired['serviceDeployments']['pg'], members=members)}})
+        result = self.resolve()
+        self.assertEqual('PASS', result['status'], result['findings'])
+        self.assertEqual(1, len(result['libraryJobs']))
+        self.assertEqual([], result['instanceJobs'])
+        self.assertEqual(1, len(result['libraryJobs'][0]['topics']))
+        # A resource-only library must not silently choose a security context.
+        listeners = self.config['services']['pg']['configuration']['listeners']['value']
+        listeners['SSL'] = {'purpose': 'client', 'securityProtocol': 'SSL', 'port': 9095}
+        self.assertEqual('BLOCKED', self.resolve()['status'])
+        for row in self.rows:
+            row['connectionDefaults'] = {'kafka': {'connectionRef': 'SSL'}}
+        explicit = self.resolve()
+        self.assertEqual('PASS', explicit['status'], explicit['findings'])
+        self.assertTrue(explicit['libraryJobs'][0]['candidates'][0]['tls'])
+        for row in self.rows:
+            row.pop('connectionDefaults')
+        del listeners['SSL']
+        self.resources['alias'] = copy.deepcopy(self.resources['events'])
+        library['topics']['alias'] = dict(library['topics']['events'], resourceId='alias')
+        self.assertEqual('PASS', self.resolve()['status'])
+        library['topics']['alias']['partitions'] = 2
+        self.assertEqual('APPLICATION_PROVIDER_NAME_CONFLICT', self.resolve()['findings'][0]['code'])
+
     def test_database_access_multi_database_and_removed_scope(self):
         self.resources['other'] = dict(kind='postgresql.database', binding='pg', parameters={'name':'reports'})
         self.catalog['definitions']['postgresql']['capabilities'].append('service.postgresql.database-access')

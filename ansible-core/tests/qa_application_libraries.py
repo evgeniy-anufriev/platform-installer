@@ -11,6 +11,100 @@ FIXTURE = os.path.join(REPO, "examples/valid/application-libraries")
 
 
 class StandaloneLibrariesQA(unittest.TestCase):
+    def test_topic_tasks_create_once_verify_and_sanitize_errors(self):
+        # Exercise the production tasks with a bounded CLI fixture, not a Kafka acceptance substitute.
+        cli = os.path.join(self.tmp.name, 'cli')
+        os.makedirs(os.path.join(cli, 'bin'))
+        state = os.path.join(self.tmp.name, 'topic-created')
+        failure = os.path.join(self.tmp.name, 'connection-failure')
+        script = '''#!/bin/sh
+set -eu
+action=; partitions=1; topic=
+while [ "$#" -gt 0 ]; do
+ case "$1" in
+ --describe|--create) action=$1; shift;;
+ --partitions) partitions=$2; shift 2;;
+ --topic) topic=$2; shift 2;;
+ --command-config) test "$(stat -c %a "$2")" = 600; shift 2;;
+ --bootstrap-server|--replication-factor|--config|--entity-type|--entity-name) shift 2;;
+ *) shift;;
+ esac
+done
+if [ -e 'FAILURE' ]; then echo SECRET_RESPONSE_CANARY >&2; exit 7; fi
+if [ "$action" = --create ]; then
+ test "$topic" = qa.events
+ printf '%s' "$partitions" > 'STATE'
+ exit 0
+fi
+if [ ! -e 'STATE' ]; then exit 0; fi
+test "$topic" = '^qa\\.events$'
+printf 'Topic: qa.events\\tPartitionCount: %s\\tReplicationFactor: 1\\n' "$(cat 'STATE')"
+i=0
+while [ "$i" -lt "$(cat 'STATE')" ]; do
+ printf 'Topic: qa.events\\tPartition: %s\\tLeader: 1\\tReplicas: 1\\tIsr: 1\\n' "$i"
+ i=$((i+1))
+done
+'''.replace('STATE', state).replace('FAILURE', failure)
+        for name, contents in [('kafka-topics.sh', script), ('kafka-configs.sh',
+                '#!/bin/sh\nprintf "  min.insync.replicas=1 sensitive=false synonyms={}\\n  cleanup.policy=compact sensitive=false synonyms={}\\n"\n')]:
+            path = os.path.join(cli, 'bin', name)
+            with open(path, 'w') as stream:
+                stream.write(contents)
+            os.chmod(path, 0o755)
+        job = dict(providerId='qa', candidates=[dict(hostId='localhost', address='127.0.0.1', port=1, tls=False)],
+                   topics=[dict(name='qa.events', mode='managed', partitions=2, replicationFactor=1,
+                                config={'min.insync.replicas': '1', 'cleanup.policy': 'compact'})])
+        env = dict(os.environ, ANSIBLE_CONFIG=os.path.join(REPO, 'ansible-core/ansible.cfg'),
+                   ANSIBLE_COLLECTIONS_PATH=os.pathsep.join([os.path.join(REPO, 'ansible-core/collections'), os.path.join(REPO, 'services/kafka')]))
+        def run(phase, expected=0):
+            play = [dict(hosts='localhost', gather_facts=False, connection='local',
+                         vars=dict(platform_kafka_install_directory=cli, platform_kafka_application_job=job,
+                                   platform_kafka_application_phase=phase,
+                                   platform_kafka_startup_readiness_retries=1,
+                                   platform_kafka_startup_readiness_delay=0),
+                         tasks=[{'ansible.builtin.include_role': {'name': 'platform.kafka.kafka_kraft', 'tasks_from': 'application_topics'}}])]
+            path = os.path.join(self.tmp.name, 'topics.json')
+            with open(path, 'w') as stream:
+                json.dump(play, stream)
+            result = subprocess.run(['ansible-playbook', '-i', 'localhost,', path], env=env, capture_output=True, timeout=45)
+            self.assertNotIn(b'SECRET_RESPONSE_CANARY', result.stdout + result.stderr)
+            self.assertEqual(expected, result.returncode, (result.stdout + result.stderr).decode(errors='replace').replace('SECRET_RESPONSE_CANARY', '[REDACTED]')[-2400:])
+            return result.stdout
+        run('preflight')
+        self.assertFalse(os.path.exists(state))
+        job['topics'][0]['mode'] = 'existing'
+        self.assertIn(b'TOPIC_MISSING', run('preflight', 2))
+        self.assertIn(b'TOPIC_MISSING', run('verify', 2))
+        job['topics'][0]['mode'] = 'managed'
+        run('apply')
+        self.assertTrue(os.path.exists(state))
+        self.assertIn(b'changed=0', run('apply'))
+        self.assertIn(b'changed=0', run('verify'))
+        job['topics'][0]['partitions'] = 1
+        run('preflight', 2)
+        with open(state) as stream:
+            self.assertEqual('2', stream.read())
+        with open(failure, 'w') as stream:
+            stream.write('fail')
+        run('verify', 2)
+
+    def test_kafka_resource_bindings_use_core_and_reset_to_application_defaults(self):
+        self.edit(self.vars, lambda d: d['platform_desired_state']['applicationLibraryDeployments']['sdku']['resources'].update(
+            events=dict(kind='kafka.topic', binding='messaging', parameters={'name': 'sdku.events'})))
+        self.edit(self.vars, lambda d: d['platform_desired_state']['applicationLibraryDeployments']['cspa']['resources'].update(
+            events=dict(kind='kafka.topic', binding='messaging', parameters={'name': 'cspa.events'})))
+        self.edit(self.defaults, lambda d: d['platform_application_definition']['defaults'].update(topicBindings={'kafka': ['events']}))
+        def projected():
+            value = self.snapshot()
+            self.assertEqual('PASS', value['status'], [(f['code'], f.get('field')) for f in value['findings']])
+            return value['applicationLibraries']['libraries']['sdku']
+        self.assertEqual(1, projected()['topics']['events']['replicationFactor'])
+        self.assertEqual('sdku.events', projected()['instances']['apigateway-sdku']['topics']['kafka'][0]['name'])
+        self.edit(self.vars, lambda d: d['platform_desired_state']['applicationLibraryDeployments']['sdku']['applications']['gateway'].setdefault('overrides', {}).update(topicBindings={'kafka': []}))
+        self.assertEqual([], projected()['instances']['apigateway-sdku']['topics']['kafka'])
+        self.edit(self.vars, lambda d: d['platform_desired_state']['applicationLibraryDeployments']['sdku']['applications']['gateway']['overrides'].pop('topicBindings'))
+        self.assertEqual(1, len(projected()['instances']['apigateway-sdku']['topics']['kafka']))
+
     def test_shared_runtime_paths_with_builtin_tasks_and_no_target_writes(self):
         tasks = os.path.join(REPO, 'ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/resolve_paths.yml')
         for directory, previous, expected in [

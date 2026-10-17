@@ -272,6 +272,7 @@ export const browserBackend: ProjectBackend = {
     return root ? invoke("openProject", [root]) : invoke("currentProject");
   },
   openProject: (root) => invoke("openProject", [root]),
+  getCurrentProject: () => invoke("currentProject"),
   chooseProjectParent: async () =>
     promptExecutionNodePath("Папка, в которой будет создан новый проект"),
   chooseProjectExportParent: async () =>

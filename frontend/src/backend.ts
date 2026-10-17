@@ -10,6 +10,7 @@ import {
   ChooseProjectExportParent,
   ChooseProjectParent,
   CloseProject,
+  CurrentProject,
   CommitStructuralEditPlan,
   CommitProjectExport,
   CreateProject,
@@ -547,6 +548,7 @@ export interface ProjectBackend {
   getApplicationConfig(): Promise<ConfigResult>;
   chooseProject(): Promise<OpenResult>;
   openProject(root: string): Promise<OpenResult>;
+  getCurrentProject?(): Promise<OpenResult>;
   chooseProjectParent(): Promise<string>;
   chooseProjectExportParent?(): Promise<string>;
   createProject(input: {
@@ -671,6 +673,7 @@ export const backend: ProjectBackend = {
   getApplicationConfig: GetApplicationConfig,
   chooseProject: () => ChooseProject() as unknown as Promise<OpenResult>,
   openProject: (root) => OpenProject(root) as unknown as Promise<OpenResult>,
+  getCurrentProject: () => CurrentProject() as unknown as Promise<OpenResult>,
   chooseProjectParent: ChooseProjectParent,
   chooseProjectExportParent: ChooseProjectExportParent,
   createProject: (input) =>

@@ -2,7 +2,7 @@ apiVersion: platform.installer/service-manifest/v1alpha1
 kind: ServiceManifest
 metadata:
   id: kafka
-  version: "1.0.0-alpha.2"
+  version: "1.0.0-alpha.3"
   displayName: Apache Kafka
   description: Apache Kafka using KRaft metadata management
   category: messaging
@@ -38,6 +38,7 @@ listeners:
 capabilities:
   - service.kafka.client
   - service.kafka.kraft
+  - service.kafka.topic
 dependencies: []
 configurationSchema:
   $ref: configuration.schema.json

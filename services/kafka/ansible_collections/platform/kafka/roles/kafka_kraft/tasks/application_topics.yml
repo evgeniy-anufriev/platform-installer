@@ -1,0 +1,10 @@
+---
+- name: Execute the library topic batch on one projected broker
+  ansible.builtin.include_tasks:
+    file: application_topics_scope.yml
+    apply:
+      delegate_to: "{{ application_topic_candidate.hostId }}"
+      become: true
+  vars:
+    application_topic_candidate: "{{ platform_kafka_application_job.candidates | first }}"
+    application_topic_cli_directory: "{{ hostvars[application_topic_candidate.hostId].platform_kafka_install_directory | default(platform_kafka_install_directory) }}"

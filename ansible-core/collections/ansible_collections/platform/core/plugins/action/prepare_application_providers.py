@@ -35,6 +35,13 @@ class ActionModule(ActionBase):
                     for candidate in job['candidates']:
                         plans = [p for p in prepared['pki_materialization'].get('materializationPlans', [])
                                  if p['hostId'] == candidate['hostId'] and p['tlsProfileId'] == candidate.get('tlsProfileRef')]
+                        if job['serviceType'] == 'kafka':
+                            request_ids = {r['id'] for r in prepared['pki_materialization'].get('requests', [])
+                                           if any(c.get('deploymentId') == job['providerId'] and c.get('memberId') == candidate['memberId']
+                                                  for c in r.get('consumers', []))}
+                            plans = [p for p in plans if p['requestId'] in request_ids]
+                            if candidate['tls'] and len(plans) != 1:
+                                raise ValueError('APPLICATION_PROVIDER_PKI_PLAN_REQUIRED')
                         candidate['pkiPlans'] = plans
                         if (job['accounts'] or job['serviceType'] == 'clickhouse') and len(plans) != 1:
                             raise ValueError('APPLICATION_PROVIDER_PKI_PLAN_REQUIRED')

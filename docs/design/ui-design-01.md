@@ -96,6 +96,17 @@ remain readable without automatic defaults or rewrites.
 
 ## Application libraries editor — C design proposal (2026-10-15)
 
+### Kafka topic resources (owner-authorized 2026-10-17)
+
+The library Resources tab adds Kafka topic creation/editing beside databases:
+name, Kafka binding, managed/existing, optional partitions (default 1), automatic
+RF/minISR and arbitrary key=value topic properties. Effective RF/minISR are shown
+only from the fresh Core projection. Startup lists resources compatible with each
+declared Kafka connection. Selection uses ordinary draft/Review/Save; an explicit
+empty selection and Reset to application defaults are distinct. No UI calculation,
+ACL grant, subscription or implicit application ENV edit is introduced. Existing
+resource pages and lifecycle are reused; no additional navigation is required.
+
 ### Library common defaults (owner-authorized 2026-10-17)
 
 The library editor adds a Common parameters tab with ENV and configuration

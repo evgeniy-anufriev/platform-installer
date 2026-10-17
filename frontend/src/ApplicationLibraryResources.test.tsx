@@ -33,6 +33,40 @@ function setup() {
   return { user: userEvent.setup(), save, dirty };
 }
 describe("library resource table", () => {
+  it("stages topic overrides without persisting automatic values", async () => {
+    const save = vi.fn(async () => true),
+      user = userEvent.setup();
+    render(
+      <ApplicationLibraryResources
+        resources={{}}
+        bindings={{ messaging: { deploymentRef: "kafka-main" } }}
+        deployments={{ "kafka-main": { serviceType: "kafka" } }}
+        disabled={false}
+        onSave={save}
+        onDirtyChange={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "Добавить топик" }));
+    await user.type(screen.getByLabelText("Имя топика"), "qa.events");
+    await user.type(screen.getByLabelText("Партиции"), "3");
+    await user.type(
+      screen.getByLabelText("Другие параметры топика · ключ=значение"),
+      "cleanup.policy=compact",
+    );
+    await user.click(screen.getByRole("button", { name: "В черновик" }));
+    expect(save).toHaveBeenCalledWith({
+      topic_qa_events: {
+        kind: "kafka.topic",
+        binding: "messaging",
+        mode: "managed",
+        parameters: {
+          name: "qa.events",
+          partitions: 3,
+          config: { "cleanup.policy": "compact" },
+        },
+      },
+    });
+  });
   it("uses the database name as its key and filters bindings when type changes", async () => {
     const save = vi.fn(async () => true),
       user = userEvent.setup();

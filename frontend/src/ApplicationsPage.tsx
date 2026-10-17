@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { ApplicationLibraryResources } from "./ApplicationLibraryResources";
+import { ApplicationTopicBindings } from "./ApplicationTopicBindings";
 import { ApplicationPorts, type PortSource } from "./ApplicationPorts";
 import { ApplicationReadiness } from "./ApplicationReadiness";
 import { ApplicationSecretInputs } from "./ApplicationSecretInputs";
@@ -991,6 +992,7 @@ export function ApplicationsPage({
                       deployments={managed?.deployments ?? {}}
                       key={selected + "resources"}
                       resources={objectValue(library.resources)}
+                      resolvedTopics={objectValue(resolved?.topics)}
                       bindings={objectValue(library.bindings)}
                       disabled={busy}
                       onDirtyChange={(v) => markChildDirty(v, "resources")}
@@ -1243,6 +1245,17 @@ export function ApplicationsPage({
 
                 {slot && selectedTab === "Запуск" && (
                   <>
+                    <ApplicationTopicBindings
+                      connections={objectValue(appDefinition.connections)}
+                      resources={objectValue(library.resources)}
+                      bindings={objectValue(library.bindings)}
+                      deployments={managed?.deployments ?? {}}
+                      defaults={objectValue(defaults.topicBindings)}
+                      authored={objectValue(overrides.topicBindings)}
+                      disabled={busy}
+                      onSave={(value) => send(override("topicBindings", value))}
+                      onReset={() => send(remove("topicBindings"))}
+                    />
                     {hosts.length > 1 && (
                       <label>
                         Наследуемые значения для сервера

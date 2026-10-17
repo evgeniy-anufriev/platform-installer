@@ -6,6 +6,18 @@ SERVICE-01B also supports multiple logical members on one physical Ansible
 host. The role is standalone and uses only an approved local/offline artifact
 supplied by the caller.
 
+Application library resource `kafka.topic` is supported by capability
+`service.kafka.topic`. Use the existing library provider stages or invoke
+`kafka_kraft` with `tasks_from: application_topics`,
+`platform_kafka_application_job` (resolved candidates/topics) and
+`platform_kafka_application_phase: preflight|apply|verify`.
+The role consumes Core's resolved partition/RF/config values; it never calculates
+them from transient live broker availability. `platform_kafka_application_timeout_ms`
+defaults to 30000. Existing install-directory and startup-readiness variables apply.
+Only missing managed topics are created; matching topics are reused and drift
+fails without modification. No application subscription or ACL is implied.
+See the [portable topic contract](../../docs/project-contract.md#kafka-topic-resources).
+
 The delivery slices are:
 
 - SERVICE-01A: `kraft-standalone`, production single-node KRaft (implemented);

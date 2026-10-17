@@ -8,6 +8,7 @@ export function ApplicationLibraryResources({
   disabled,
   onSave,
   onDirtyChange,
+  resolvedTopics = {},
 }: {
   resources: ObjectValue;
   bindings: ObjectValue;
@@ -15,6 +16,7 @@ export function ApplicationLibraryResources({
   disabled: boolean;
   onSave: (value: ObjectValue) => Promise<boolean>;
   onDirtyChange: (value: boolean) => void;
+  resolvedTopics?: ObjectValue;
 }) {
   const [edit, setEdit] = useState<string | null>(null);
   const [name, setName] = useState("");
@@ -23,6 +25,10 @@ export function ApplicationLibraryResources({
   const [mode, setMode] = useState("managed");
   const [error, setError] = useState("");
   const [page, setPage] = useState(0);
+  const [partitions, setPartitions] = useState("");
+  const [replicationFactor, setReplicationFactor] = useState("");
+  const [minISR, setMinISR] = useState("");
+  const [topicConfig, setTopicConfig] = useState("");
   const compatibleBindings = (type: string) =>
     Object.keys(bindings).filter(
       (key) =>
@@ -46,7 +52,7 @@ export function ApplicationLibraryResources({
     const deployment = String(objectValue(bindings[ref]).deploymentRef ?? ref);
     groups.set(deployment, [...(groups.get(deployment) ?? []), key]);
   }
-  const open = (key: string) => {
+  const open = (key: string, newKind = "postgresql.database") => {
     if (
       edit !== null &&
       !window.confirm("Отбросить несохранённую настройку ресурса?")
@@ -56,10 +62,19 @@ export function ApplicationLibraryResources({
     const row = objectValue(resources[key]);
     setEdit(key);
     setName(String(objectValue(row.parameters).name ?? ""));
-    setKind(String(row.kind ?? "postgresql.database"));
-    const candidates = compatibleBindings(
-      String(row.kind ?? "postgresql.database"),
+    setKind(String(row.kind ?? newKind));
+    const parameters = objectValue(row.parameters);
+    const config = objectValue(parameters.config);
+    setPartitions(String(parameters.partitions ?? ""));
+    setReplicationFactor(String(parameters.replication_factor ?? ""));
+    setMinISR(String(config["min.insync.replicas"] ?? ""));
+    setTopicConfig(
+      Object.entries(config)
+        .filter(([k]) => k !== "min.insync.replicas")
+        .map(([k, v]) => `${k}=${String(v)}`)
+        .join("\n"),
     );
+    const candidates = compatibleBindings(String(row.kind ?? newKind));
     setBinding(
       String(row.binding ?? (candidates.length === 1 ? candidates[0] : "")),
     );
@@ -77,10 +92,15 @@ export function ApplicationLibraryResources({
         <button disabled={disabled} onClick={() => open("")}>
           Добавить БД
         </button>
+        {compatibleBindings("kafka.topic").length > 0 && (
+          <button disabled={disabled} onClick={() => open("", "kafka.topic")}>
+            Добавить топик
+          </button>
+        )}
       </div>
       <p className="muted">
         Общие для приложений библиотеки. Удаление записи и изменение имени не
-        удаляют и не переименовывают установленную БД. Ссылки проверяет Core при
+        удаляют и не переименовывают установленный ресурс. Ссылки проверяет Core при
         проверке проекта.
       </p>
       <table>
@@ -112,10 +132,22 @@ export function ApplicationLibraryResources({
                             "postgresql.database": "PostgreSQL · БД",
                             "postgresql.schema": "PostgreSQL · Схема",
                             "clickhouse.database": "ClickHouse · БД",
+                            "kafka.topic": "Kafka · Топик",
                           } as Record<string, string>
                         )[String(row.kind)] ?? String(row.kind)}
                       </td>
-                      <td>{String(objectValue(row.parameters).name ?? "—")}</td>
+                      <td>
+                        {String(objectValue(row.parameters).name ?? "—")}
+                        {row.kind === "kafka.topic" && (
+                          <small>
+                            {resolvedTopics[key]
+                              ? `Core: partitions=${String(objectValue(resolvedTopics[key]).partitions)}, RF=${String(objectValue(resolvedTopics[key]).replicationFactor)}, minISR=${String(objectValue(objectValue(resolvedTopics[key]).config)["min.insync.replicas"])}`
+                              : "Параметры Core ещё не рассчитаны"}
+                            {objectValue(resolvedTopics[key]).minISRWarning ===
+                              true && " · minISR выше RF"}
+                          </small>
+                        )}
+                      </td>
                       <td>
                         <button
                           className="outline"
@@ -130,7 +162,7 @@ export function ApplicationLibraryResources({
                           onClick={async () => {
                             if (
                               !window.confirm(
-                                `Удалить ресурс ${key} из проекта? Установленная БД сохранится. Связанные ссылки необходимо изменить отдельно.`,
+                                `Удалить ресурс ${key} из проекта? Установленный ресурс сохранится. Связанные ссылки необходимо изменить отдельно.`,
                               )
                             )
                               return;
@@ -173,28 +205,63 @@ export function ApplicationLibraryResources({
         </div>
       )}
       {!Object.keys(resources).length && (
-        <p>Ресурсы не заданы. Добавьте БД и выберите подключение библиотеки.</p>
+        <p>Ресурсы не заданы. Добавьте ресурс и выберите подключение библиотеки.</p>
       )}
       {edit !== null && (
         <form
           className="application-resource-form"
           onSubmit={async (e) => {
             e.preventDefault();
-            const id = edit || name;
+            const id =
+              edit ||
+              (kind === "kafka.topic"
+                ? "topic_" + name.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 122)
+                : name);
             if (
               !/^[a-z][A-Za-z0-9_-]{0,127}$/.test(id) ||
               (!edit && Object.hasOwn(resources, id))
             ) {
               setError(
-                "Укажите уникальное имя БД: латинская буква, цифры, _ или -.",
+                "Укажите уникальное имя ресурса: латинская буква, цифры, _ или -.",
               );
               return;
             }
             if (!availableBindings.includes(binding)) {
-              setError("Выберите сервис, соответствующий типу БД.");
+              setError("Выберите сервис, соответствующий типу ресурса.");
               return;
             }
             const previous = objectValue(resources[edit]);
+            let parameters: ObjectValue = {
+              ...(previous.kind === kind ? objectValue(previous.parameters) : {}),
+              name,
+            };
+            if (kind === "kafka.topic") {
+              const config: ObjectValue = {};
+              for (const line of topicConfig
+                .split("\n")
+                .filter((v) => v.trim())) {
+                const at = line.indexOf("=");
+                if (
+                  at < 1 ||
+                  line.slice(0, at).trim() === "min.insync.replicas"
+                ) {
+                  setError(
+                    "Используйте ключ=значение; min.insync.replicas задаётся полем minISR.",
+                  );
+                  return;
+                }
+                config[line.slice(0, at).trim()] = line.slice(at + 1);
+              }
+              if (minISR) config["min.insync.replicas"] = Number(minISR);
+              parameters = {
+                name,
+                config,
+                ...(partitions ? { partitions: Number(partitions) } : {}),
+                ...(replicationFactor
+                  ? { replication_factor: Number(replicationFactor) }
+                  : {}),
+              };
+            }
             if (
               await onSave({
                 ...resources,
@@ -203,7 +270,7 @@ export function ApplicationLibraryResources({
                   kind,
                   binding,
                   mode,
-                  parameters: { ...objectValue(previous.parameters), name },
+                  parameters,
                 },
               })
             )
@@ -211,7 +278,7 @@ export function ApplicationLibraryResources({
           }}
           onChange={() => onDirtyChange(true)}
         >
-          <h4>{edit ? `Настройка ресурса ${edit}` : "Новая БД"}</h4>
+          <h4>{edit ? `Настройка ресурса ${edit}` : "Новый ресурс"}</h4>
           <label>
             Тип
             <select
@@ -227,6 +294,9 @@ export function ApplicationLibraryResources({
             >
               <option value="postgresql.database">PostgreSQL · БД</option>
               <option value="clickhouse.database">ClickHouse · БД</option>
+              {compatibleBindings("kafka.topic").length > 0 && (
+                <option value="kafka.topic">Kafka · Топик</option>
+              )}
               {kind === "postgresql.schema" && (
                 <option value="postgresql.schema">PostgreSQL · Схема</option>
               )}
@@ -255,7 +325,7 @@ export function ApplicationLibraryResources({
             </select>
           </label>
           <label>
-            Имя БД / схемы
+            {kind === "kafka.topic" ? "Имя топика" : "Имя БД / схемы"}
             <input
               required
               value={name}
@@ -264,6 +334,51 @@ export function ApplicationLibraryResources({
           </label>
           {!edit && (
             <small>Имя также используется как ключ ресурса в библиотеке.</small>
+          )}
+          {kind === "kafka.topic" && (
+            <>
+              <label>
+                Партиции
+                <input
+                  type="number"
+                  min="1"
+                  placeholder="По умолчанию: 1"
+                  value={partitions}
+                  onChange={(e) => setPartitions(e.target.value)}
+                />
+              </label>
+              <label>
+                Replication factor
+                <input
+                  type="number"
+                  min="1"
+                  placeholder="Авто · из Kafka deployment"
+                  value={replicationFactor}
+                  onChange={(e) => setReplicationFactor(e.target.value)}
+                />
+              </label>
+              <label>
+                minISR
+                <input
+                  type="number"
+                  min="1"
+                  placeholder="Авто · из effective RF"
+                  value={minISR}
+                  onChange={(e) => setMinISR(e.target.value)}
+                />
+              </label>
+              <label>
+                Другие параметры топика · ключ=значение
+                <textarea
+                  value={topicConfig}
+                  onChange={(e) => setTopicConfig(e.target.value)}
+                />
+              </label>
+              <p>
+                Очистите поле для значения по умолчанию. Созданные топики
+                автоматически не изменяются; несовпадения покажет Core.
+              </p>
+            </>
           )}
           <label>
             Управление

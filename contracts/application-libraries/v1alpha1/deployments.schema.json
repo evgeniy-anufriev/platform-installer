@@ -75,7 +75,8 @@
               "enum": [
                 "postgresql.database",
                 "postgresql.schema",
-                "clickhouse.database"
+                "clickhouse.database",
+                "kafka.topic"
               ]
             },
             "binding": {

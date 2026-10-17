@@ -3,9 +3,9 @@ import hashlib
 import re
 
 try:
-    from .application_libraries import resolve_connection, finding
+    from .application_libraries import resolve_connection, finding, _value
 except ImportError:
-    from application_libraries import resolve_connection, finding
+    from application_libraries import resolve_connection, finding, _value
 
 NAME = re.compile(r'^[a-z_][a-z0-9_]{0,62}$')
 USER = re.compile(r'^[a-z_][a-z0-9_-]{0,62}$')
@@ -131,20 +131,32 @@ def project_providers(rows, snapshot, configuration, desired, catalog):
         definition = catalog['definitions'][deployment['serviceType']]
         service_type = deployment['serviceType']
         modes = {'postgresql': {'standalone', 'pg_auto_failover'}, 'redis': {'standalone', 'sentinel-ha'},
-                 'clickhouse': {'standalone', 'raft-ha'}}
+                 'clickhouse': {'standalone', 'raft-ha'}, 'kafka': {'kraft-standalone', 'kraft-distributed'}}
         if deployment['mode'] not in modes.get(service_type, set()):
             raise ValueError('APPLICATION_PROVIDER_MODE_UNSUPPORTED')
         capabilities = {'postgresql': {'service.postgresql.database', 'service.postgresql.schema', 'service.postgresql.account'},
-                        'redis': {'service.redis.account'}, 'clickhouse': {'service.clickhouse.database', 'service.clickhouse.account'}}
+                        'redis': {'service.redis.account'}, 'clickhouse': {'service.clickhouse.database', 'service.clickhouse.account'},
+                        'kafka': {'service.kafka.topic'}}
         if not capabilities[service_type] <= set(definition.get('capabilities', [])):
             raise ValueError('APPLICATION_PROVIDER_CAPABILITY_UNSUPPORTED')
         if ref not in jobs:
-            connection = resolve_connection(ref, {'purpose': 'native' if service_type == 'clickhouse' else 'client'}, None, materialized, configuration, catalog, snapshot['hosts'])
+            selector = None
+            if service_type == 'kafka':
+                listeners = _value(configuration['services'][ref]['configuration'], 'listeners') or {}
+                choices = sorted(k for k, v in listeners.items() if v['purpose'] == 'client')
+                selector = row.get('connectionDefaults', {}).get('kafka', {}).get('connectionRef') or (choices[0] if len(choices) == 1 else None)
+            connection = resolve_connection(ref, {'purpose': 'native' if service_type == 'clickhouse' else 'client'}, selector, materialized, configuration, catalog, snapshot['hosts'])
             targets = connection['targets']
+            if service_type == 'kafka':
+                for target in targets:
+                    member_settings = configuration['services'][ref].get('members', {}).get(target['memberId'], {}).get('configuration', {})
+                    target['tlsProfileRef'] = _value(member_settings, 'tlsProfile') or _value(configuration['services'][ref]['configuration'], 'tlsProfile')
             if service_type == 'postgresql' and len(targets) != (1 if deployment['mode'] == 'standalone' else 2):
                 raise ValueError('APPLICATION_PROVIDER_MEMBERS_INVALID')
             jobs[ref] = {'providerId': ref, 'projectId': project_id, 'mode': deployment['mode'],
                          'serviceType': service_type, 'candidates': targets, 'libraries': [], 'databases': [], 'accounts': []}
+            if service_type == 'kafka':
+                jobs[ref]['topics'] = []
         return jobs[ref]
 
     def claim(key, owner, mode):
@@ -168,12 +180,20 @@ def project_providers(rows, snapshot, configuration, desired, catalog):
                 raise ValueError('APPLICATION_PROVIDER_HOST_CONFLICT')
             databases, schemas = {}, []
             for resource_id, resource in sorted(library.get('resources', {}).items()):
-                if resource['kind'] not in {'postgresql.database', 'postgresql.schema', 'clickhouse.database'}:
+                if resource['kind'] not in {'postgresql.database', 'postgresql.schema', 'clickhouse.database', 'kafka.topic'}:
                     raise ValueError('APPLICATION_PROVIDER_CAPABILITY_UNSUPPORTED')
                 ref = row['bindings'].get(resource['binding'], {}).get('deploymentRef')
                 job = provider(ref)
                 if resource['kind'].split('.')[0] != job['serviceType']:
                     raise ValueError('APPLICATION_PROVIDER_RESOURCE_INVALID')
+                if resource['kind'] == 'kafka.topic':
+                    topic = dict(library['topics'][resource_id], libraryId=library_id)
+                    claim((ref, 'topic', topic['name']), (library_id, resource_id), topic['mode'])
+                    previous = [t for t in job['topics'] if t['name'] == topic['name']]
+                    if any(any(t[k] != topic[k] for k in ('partitions', 'replicationFactor', 'config')) for t in previous):
+                        raise ValueError('APPLICATION_PROVIDER_NAME_CONFLICT')
+                    job['topics'].append(topic)
+                    continue
                 if set(resource['parameters']) != {'name'}:
                     raise ValueError('APPLICATION_PROVIDER_RESOURCE_INVALID')
                 name, mode = identifier(resource['parameters']['name']), resource.get('mode', 'managed')
@@ -271,6 +291,11 @@ def split_provider_jobs(providers):
     """Execution boundaries are a library resource batch and one instance hook."""
     library_jobs, instance_jobs = [], []
     for job in providers:
+        if job['serviceType'] == 'kafka':
+            for library_id in sorted({t['libraryId'] for t in job['topics']}):
+                library_jobs.append(dict(job, libraryId=library_id,
+                                         topics=[t for t in job['topics'] if t['libraryId'] == library_id]))
+            continue
         for library_id in sorted({db['libraryId'] for db in job['databases']}):
             databases = [dict(db, accounts=[]) for db in job['databases'] if db['libraryId'] == library_id]
             owners = {db['owner'] for db in databases if db['mode'] == 'managed'}
