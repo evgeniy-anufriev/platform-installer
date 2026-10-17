@@ -1,3 +1,3635 @@
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/crypto/ssh/keys.go","mode":420,"size":52752,"sha256":"32ac8301438c19d1c125a224d380a4703b303f144d2f5ea726bddd521ec67e13","index":0,"count":2,"encoding":"utf-8","payloadBytes":48004}
+// Copyright 2012 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package ssh
+
+import (
+	"bytes"
+	"crypto"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/dsa"
+	"crypto/ecdsa"
+	"crypto/ed25519"
+	"crypto/elliptic"
+	"crypto/md5"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha256"
+	"crypto/x509"
+	"encoding/asn1"
+	"encoding/base64"
+	"encoding/binary"
+	"encoding/hex"
+	"encoding/pem"
+	"errors"
+	"fmt"
+	"io"
+	"math/big"
+	"slices"
+	"strings"
+
+	"golang.org/x/crypto/ssh/internal/bcrypt_pbkdf"
+)
+
+// Public key algorithms names. These values can appear in PublicKey.Type,
+// ClientConfig.HostKeyAlgorithms, Signature.Format, or as AlgorithmSigner
+// arguments.
+const (
+	KeyAlgoRSA = "ssh-rsa"
+	// Deprecated: DSA is only supported at insecure key sizes, and was removed
+	// from major implementations.
+	KeyAlgoDSA = InsecureKeyAlgoDSA
+	// Deprecated: DSA is only supported at insecure key sizes, and was removed
+	// from major implementations.
+	InsecureKeyAlgoDSA = "ssh-dss"
+	KeyAlgoECDSA256    = "ecdsa-sha2-nistp256"
+	KeyAlgoSKECDSA256  = "sk-ecdsa-sha2-nistp256@openssh.com"
+	KeyAlgoECDSA384    = "ecdsa-sha2-nistp384"
+	KeyAlgoECDSA521    = "ecdsa-sha2-nistp521"
+	KeyAlgoED25519     = "ssh-ed25519"
+	KeyAlgoSKED25519   = "sk-ssh-ed25519@openssh.com"
+
+	// KeyAlgoRSASHA256 and KeyAlgoRSASHA512 are only public key algorithms, not
+	// public key formats, so they can't appear as a PublicKey.Type. The
+	// corresponding PublicKey.Type is KeyAlgoRSA. See RFC 8332, Section 2.
+	KeyAlgoRSASHA256 = "rsa-sha2-256"
+	KeyAlgoRSASHA512 = "rsa-sha2-512"
+)
+
+const (
+	// Deprecated: use KeyAlgoRSA.
+	SigAlgoRSA = KeyAlgoRSA
+	// Deprecated: use KeyAlgoRSASHA256.
+	SigAlgoRSASHA2256 = KeyAlgoRSASHA256
+	// Deprecated: use KeyAlgoRSASHA512.
+	SigAlgoRSASHA2512 = KeyAlgoRSASHA512
+)
+
+// parsePubKey parses a public key of the given algorithm.
+// Use ParsePublicKey for keys with prepended algorithm.
+func parsePubKey(in []byte, algo string) (pubKey PublicKey, rest []byte, err error) {
+	switch algo {
+	case KeyAlgoRSA:
+		return parseRSA(in)
+	case InsecureKeyAlgoDSA:
+		return parseDSA(in)
+	case KeyAlgoECDSA256, KeyAlgoECDSA384, KeyAlgoECDSA521:
+		return parseECDSA(in, algo)
+	case KeyAlgoSKECDSA256:
+		return parseSKECDSA(in)
+	case KeyAlgoED25519:
+		return parseED25519(in)
+	case KeyAlgoSKED25519:
+		return parseSKEd25519(in)
+	case CertAlgoRSAv01, InsecureCertAlgoDSAv01, CertAlgoECDSA256v01, CertAlgoECDSA384v01, CertAlgoECDSA521v01, CertAlgoSKECDSA256v01, CertAlgoED25519v01, CertAlgoSKED25519v01:
+		cert, err := parseCert(in, certKeyAlgoNames[algo])
+		if err != nil {
+			return nil, nil, err
+		}
+		return cert, nil, nil
+	}
+	if keyFormat := keyFormatForAlgorithm(algo); keyFormat != "" {
+		return nil, nil, fmt.Errorf("ssh: signature algorithm %q isn't a key format; key is malformed and should be re-encoded with type %q",
+			algo, keyFormat)
+	}
+
+	return nil, nil, fmt.Errorf("ssh: unknown key algorithm: %v", algo)
+}
+
+// parseAuthorizedKey parses a public key in OpenSSH authorized_keys format
+// (see sshd(8) manual page) once the options and key type fields have been
+// removed.
+func parseAuthorizedKey(in []byte) (out PublicKey, comment string, err error) {
+	in = bytes.TrimSpace(in)
+
+	i := bytes.IndexAny(in, " \t")
+	if i == -1 {
+		i = len(in)
+	}
+	base64Key := in[:i]
+
+	key := make([]byte, base64.StdEncoding.DecodedLen(len(base64Key)))
+	n, err := base64.StdEncoding.Decode(key, base64Key)
+	if err != nil {
+		return nil, "", err
+	}
+	key = key[:n]
+	out, err = ParsePublicKey(key)
+	if err != nil {
+		return nil, "", err
+	}
+	comment = string(bytes.TrimSpace(in[i:]))
+	return out, comment, nil
+}
+
+// ParseKnownHosts parses an entry in the format of the known_hosts file.
+//
+// The known_hosts format is documented in the sshd(8) manual page. This
+// function will parse a single entry from in. On successful return, marker
+// will contain the optional marker value (i.e. "cert-authority" or "revoked")
+// or else be empty, hosts will contain the hosts that this entry matches,
+// pubKey will contain the public key and comment will contain any trailing
+// comment at the end of the line. See the sshd(8) manual page for the various
+// forms that a host string can take.
+//
+// The unparsed remainder of the input will be returned in rest. This function
+// can be called repeatedly to parse multiple entries.
+//
+// If no entries were found in the input then err will be io.EOF. Otherwise a
+// non-nil err value indicates a parse error.
+func ParseKnownHosts(in []byte) (marker string, hosts []string, pubKey PublicKey, comment string, rest []byte, err error) {
+	for len(in) > 0 {
+		end := bytes.IndexByte(in, '\n')
+		if end != -1 {
+			rest = in[end+1:]
+			in = in[:end]
+		} else {
+			rest = nil
+		}
+
+		end = bytes.IndexByte(in, '\r')
+		if end != -1 {
+			in = in[:end]
+		}
+
+		in = bytes.TrimSpace(in)
+		if len(in) == 0 || in[0] == '#' {
+			in = rest
+			continue
+		}
+
+		i := bytes.IndexAny(in, " \t")
+		if i == -1 {
+			in = rest
+			continue
+		}
+
+		// Strip out the beginning of the known_host key.
+		// This is either an optional marker or a (set of) hostname(s).
+		keyFields := bytes.Fields(in)
+		if len(keyFields) < 3 || len(keyFields) > 5 {
+			return "", nil, nil, "", nil, errors.New("ssh: invalid entry in known_hosts data")
+		}
+
+		// keyFields[0] is either "@cert-authority", "@revoked" or a comma separated
+		// list of hosts
+		marker := ""
+		if keyFields[0][0] == '@' {
+			marker = string(keyFields[0][1:])
+			keyFields = keyFields[1:]
+		}
+
+		hosts := string(keyFields[0])
+		// keyFields[1] contains the key type (e.g. “ssh-rsa”).
+		// However, that information is duplicated inside the
+		// base64-encoded key and so is ignored here.
+
+		key := bytes.Join(keyFields[2:], []byte(" "))
+		if pubKey, comment, err = parseAuthorizedKey(key); err != nil {
+			return "", nil, nil, "", nil, err
+		}
+
+		return marker, strings.Split(hosts, ","), pubKey, comment, rest, nil
+	}
+
+	return "", nil, nil, "", nil, io.EOF
+}
+
+// ParseAuthorizedKey parses a public key from an authorized_keys file used in
+// OpenSSH according to the sshd(8) manual page. Invalid lines are ignored.
+func ParseAuthorizedKey(in []byte) (out PublicKey, comment string, options []string, rest []byte, err error) {
+	var lastErr error
+	for len(in) > 0 {
+		end := bytes.IndexByte(in, '\n')
+		if end != -1 {
+			rest = in[end+1:]
+			in = in[:end]
+		} else {
+			rest = nil
+		}
+
+		end = bytes.IndexByte(in, '\r')
+		if end != -1 {
+			in = in[:end]
+		}
+
+		in = bytes.TrimSpace(in)
+		if len(in) == 0 || in[0] == '#' {
+			in = rest
+			continue
+		}
+
+		i := bytes.IndexAny(in, " \t")
+		if i == -1 {
+			in = rest
+			continue
+		}
+
+		if out, comment, err = parseAuthorizedKey(in[i:]); err == nil {
+			return out, comment, options, rest, nil
+		} else {
+			lastErr = err
+		}
+
+		// No key type recognised. Maybe there's an options field at
+		// the beginning.
+		var b byte
+		inQuote := false
+		var candidateOptions []string
+		optionStart := 0
+		for i, b = range in {
+			isEnd := !inQuote && (b == ' ' || b == '\t')
+			if (b == ',' && !inQuote) || isEnd {
+				if i-optionStart > 0 {
+					candidateOptions = append(candidateOptions, string(in[optionStart:i]))
+				}
+				optionStart = i + 1
+			}
+			if isEnd {
+				break
+			}
+			if b == '"' && (i == 0 || (i > 0 && in[i-1] != '\\')) {
+				inQuote = !inQuote
+			}
+		}
+		for i < len(in) && (in[i] == ' ' || in[i] == '\t') {
+			i++
+		}
+		if i == len(in) {
+			// Invalid line: unmatched quote
+			in = rest
+			continue
+		}
+
+		in = in[i:]
+		i = bytes.IndexAny(in, " \t")
+		if i == -1 {
+			in = rest
+			continue
+		}
+
+		if out, comment, err = parseAuthorizedKey(in[i:]); err == nil {
+			options = candidateOptions
+			return out, comment, options, rest, nil
+		} else {
+			lastErr = err
+		}
+
+		in = rest
+		continue
+	}
+
+	if lastErr != nil {
+		return nil, "", nil, nil, fmt.Errorf("ssh: no key found; last parsing error for ignored line: %w", lastErr)
+	}
+
+	return nil, "", nil, nil, errors.New("ssh: no key found")
+}
+
+// ParsePublicKey parses an SSH public key or certificate formatted for use in
+// the SSH wire protocol according to RFC 4253, section 6.6.
+func ParsePublicKey(in []byte) (out PublicKey, err error) {
+	algo, in, ok := parseString(in)
+	if !ok {
+		return nil, errShortRead
+	}
+	var rest []byte
+	out, rest, err = parsePubKey(in, string(algo))
+	if len(rest) > 0 {
+		return nil, errors.New("ssh: trailing junk in public key")
+	}
+
+	return out, err
+}
+
+// MarshalAuthorizedKey serializes key for inclusion in an OpenSSH
+// authorized_keys file. The return value ends with newline.
+func MarshalAuthorizedKey(key PublicKey) []byte {
+	b := &bytes.Buffer{}
+	b.WriteString(key.Type())
+	b.WriteByte(' ')
+	e := base64.NewEncoder(base64.StdEncoding, b)
+	e.Write(key.Marshal())
+	e.Close()
+	b.WriteByte('\n')
+	return b.Bytes()
+}
+
+// MarshalPrivateKey returns a PEM block with the private key serialized in the
+// OpenSSH format.
+func MarshalPrivateKey(key crypto.PrivateKey, comment string) (*pem.Block, error) {
+	return marshalOpenSSHPrivateKey(key, comment, unencryptedOpenSSHMarshaler)
+}
+
+// MarshalPrivateKeyWithPassphrase returns a PEM block holding the encrypted
+// private key serialized in the OpenSSH format.
+func MarshalPrivateKeyWithPassphrase(key crypto.PrivateKey, comment string, passphrase []byte) (*pem.Block, error) {
+	return marshalOpenSSHPrivateKey(key, comment, passphraseProtectedOpenSSHMarshaler(passphrase))
+}
+
+// PublicKey represents a public key using an unspecified algorithm.
+//
+// Some PublicKeys provided by this package also implement CryptoPublicKey.
+type PublicKey interface {
+	// Type returns the key format name, e.g. "ssh-rsa".
+	Type() string
+
+	// Marshal returns the serialized key data in SSH wire format, with the name
+	// prefix. To unmarshal the returned data, use the ParsePublicKey function.
+	Marshal() []byte
+
+	// Verify that sig is a signature on the given data using this key. This
+	// method will hash the data appropriately first. sig.Format is allowed to
+	// be any signature algorithm compatible with the key type, the caller
+	// should check if it has more stringent requirements.
+	Verify(data []byte, sig *Signature) error
+}
+
+// CryptoPublicKey, if implemented by a PublicKey,
+// returns the underlying crypto.PublicKey form of the key.
+type CryptoPublicKey interface {
+	CryptoPublicKey() crypto.PublicKey
+}
+
+// A Signer can create signatures that verify against a public key.
+//
+// Some Signers provided by this package also implement MultiAlgorithmSigner.
+type Signer interface {
+	// PublicKey returns the associated PublicKey.
+	PublicKey() PublicKey
+
+	// Sign returns a signature for the given data. This method will hash the
+	// data appropriately first. The signature algorithm is expected to match
+	// the key format returned by the PublicKey.Type method (and not to be any
+	// alternative algorithm supported by the key format).
+	Sign(rand io.Reader, data []byte) (*Signature, error)
+}
+
+// An AlgorithmSigner is a Signer that also supports specifying an algorithm to
+// use for signing.
+//
+// An AlgorithmSigner can't advertise the algorithms it supports, unless it also
+// implements MultiAlgorithmSigner, so it should be prepared to be invoked with
+// every algorithm supported by the public key format.
+type AlgorithmSigner interface {
+	Signer
+
+	// SignWithAlgorithm is like Signer.Sign, but allows specifying a desired
+	// signing algorithm. Callers may pass an empty string for the algorithm in
+	// which case the AlgorithmSigner will use a default algorithm. This default
+	// doesn't currently control any behavior in this package.
+	SignWithAlgorithm(rand io.Reader, data []byte, algorithm string) (*Signature, error)
+}
+
+// MultiAlgorithmSigner is an AlgorithmSigner that also reports the algorithms
+// supported by that signer.
+type MultiAlgorithmSigner interface {
+	AlgorithmSigner
+
+	// Algorithms returns the available algorithms in preference order. The list
+	// must not be empty, and it must not include certificate types.
+	Algorithms() []string
+}
+
+// NewSignerWithAlgorithms returns a signer restricted to the specified
+// algorithms. The algorithms must be set in preference order. The list must not
+// be empty, and it must not include certificate types. An error is returned if
+// the specified algorithms are incompatible with the public key type.
+func NewSignerWithAlgorithms(signer AlgorithmSigner, algorithms []string) (MultiAlgorithmSigner, error) {
+	if len(algorithms) == 0 {
+		return nil, errors.New("ssh: please specify at least one valid signing algorithm")
+	}
+	var signerAlgos []string
+	supportedAlgos := algorithmsForKeyFormat(underlyingAlgo(signer.PublicKey().Type()))
+	if s, ok := signer.(*multiAlgorithmSigner); ok {
+		signerAlgos = s.Algorithms()
+	} else {
+		signerAlgos = supportedAlgos
+	}
+
+	for _, algo := range algorithms {
+		if !slices.Contains(supportedAlgos, algo) {
+			return nil, fmt.Errorf("ssh: algorithm %q is not supported for key type %q",
+				algo, signer.PublicKey().Type())
+		}
+		if !slices.Contains(signerAlgos, algo) {
+			return nil, fmt.Errorf("ssh: algorithm %q is restricted for the provided signer", algo)
+		}
+	}
+	return &multiAlgorithmSigner{
+		AlgorithmSigner:     signer,
+		supportedAlgorithms: algorithms,
+	}, nil
+}
+
+type multiAlgorithmSigner struct {
+	AlgorithmSigner
+	supportedAlgorithms []string
+}
+
+func (s *multiAlgorithmSigner) Algorithms() []string {
+	return s.supportedAlgorithms
+}
+
+func (s *multiAlgorithmSigner) isAlgorithmSupported(algorithm string) bool {
+	if algorithm == "" {
+		algorithm = underlyingAlgo(s.PublicKey().Type())
+	}
+	for _, algo := range s.supportedAlgorithms {
+		if algorithm == algo {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *multiAlgorithmSigner) SignWithAlgorithm(rand io.Reader, data []byte, algorithm string) (*Signature, error) {
+	if !s.isAlgorithmSupported(algorithm) {
+		return nil, fmt.Errorf("ssh: algorithm %q is not supported: %v", algorithm, s.supportedAlgorithms)
+	}
+	return s.AlgorithmSigner.SignWithAlgorithm(rand, data, algorithm)
+}
+
+type rsaPublicKey rsa.PublicKey
+
+func (r *rsaPublicKey) Type() string {
+	return "ssh-rsa"
+}
+
+// parseRSA parses an RSA key according to RFC 4253, section 6.6.
+func parseRSA(in []byte) (out PublicKey, rest []byte, err error) {
+	var w struct {
+		E    *big.Int
+		N    *big.Int
+		Rest []byte `ssh:"rest"`
+	}
+	if err := Unmarshal(in, &w); err != nil {
+		return nil, nil, err
+	}
+
+	// 8192 bits is also the maximum RSA key size accepted by crypto/tls for
+	// signature verification:
+	// https://github.com/golang/go/blob/69801b25/src/crypto/tls/handshake_client.go#L1096
+	if w.N.BitLen() > 8192 {
+		return nil, nil, errors.New("ssh: rsa modulus too large")
+	}
+	if w.E.BitLen() > 24 {
+		return nil, nil, errors.New("ssh: exponent too large")
+	}
+	e := w.E.Int64()
+	if e < 3 || e&1 == 0 {
+		return nil, nil, errors.New("ssh: incorrect exponent")
+	}
+
+	var key rsa.PublicKey
+	key.E = int(e)
+	key.N = w.N
+	return (*rsaPublicKey)(&key), w.Rest, nil
+}
+
+func (r *rsaPublicKey) Marshal() []byte {
+	e := new(big.Int).SetInt64(int64(r.E))
+	// RSA publickey struct layout should match the struct used by
+	// parseRSACert in the x/crypto/ssh/agent package.
+	wirekey := struct {
+		Name string
+		E    *big.Int
+		N    *big.Int
+	}{
+		KeyAlgoRSA,
+		e,
+		r.N,
+	}
+	return Marshal(&wirekey)
+}
+
+func (r *rsaPublicKey) Verify(data []byte, sig *Signature) error {
+	supportedAlgos := algorithmsForKeyFormat(r.Type())
+	if !slices.Contains(supportedAlgos, sig.Format) {
+		return fmt.Errorf("ssh: signature type %s for key type %s", sig.Format, r.Type())
+	}
+	hash, err := hashFunc(sig.Format)
+	if err != nil {
+		return err
+	}
+	h := hash.New()
+	h.Write(data)
+	digest := h.Sum(nil)
+
+	// Signatures in PKCS1v15 must match the key's modulus in
+	// length. However with SSH, some signers provide RSA
+	// signatures which are missing the MSB 0's of the bignum
+	// represented. With ssh-rsa signatures, this is encouraged by
+	// the spec (even though e.g. OpenSSH will give the full
+	// length unconditionally). With rsa-sha2-* signatures, the
+	// verifier is allowed to support these, even though they are
+	// out of spec. See RFC 4253 Section 6.6 for ssh-rsa and RFC
+	// 8332 Section 3 for rsa-sha2-* details.
+	//
+	// In practice:
+	// * OpenSSH always allows "short" signatures:
+	//   https://github.com/openssh/openssh-portable/blob/V_9_8_P1/ssh-rsa.c#L526
+	//   but always generates padded signatures:
+	//   https://github.com/openssh/openssh-portable/blob/V_9_8_P1/ssh-rsa.c#L439
+	//
+	// * PuTTY versions 0.81 and earlier will generate short
+	//   signatures for all RSA signature variants. Note that
+	//   PuTTY is embedded in other software, such as WinSCP and
+	//   FileZilla. At the time of writing, a patch has been
+	//   applied to PuTTY to generate padded signatures for
+	//   rsa-sha2-*, but not yet released:
+	//   https://git.tartarus.org/?p=simon/putty.git;a=commitdiff;h=a5bcf3d384e1bf15a51a6923c3724cbbee022d8e
+	//
+	// * SSH.NET versions 2024.0.0 and earlier will generate short
+	//   signatures for all RSA signature variants, fixed in 2024.1.0:
+	//   https://github.com/sshnet/SSH.NET/releases/tag/2024.1.0
+	//
+	// As a result, we pad these up to the key size by inserting
+	// leading 0's.
+	//
+	// Note that support for short signatures with rsa-sha2-* may
+	// be removed in the future due to such signatures not being
+	// allowed by the spec.
+	blob := sig.Blob
+	keySize := (*rsa.PublicKey)(r).Size()
+	if len(blob) < keySize {
+		padded := make([]byte, keySize)
+		copy(padded[keySize-len(blob):], blob)
+		blob = padded
+	}
+	return rsa.VerifyPKCS1v15((*rsa.PublicKey)(r), hash, digest, blob)
+}
+
+func (r *rsaPublicKey) CryptoPublicKey() crypto.PublicKey {
+	return (*rsa.PublicKey)(r)
+}
+
+type dsaPublicKey dsa.PublicKey
+
+func (k *dsaPublicKey) Type() string {
+	return "ssh-dss"
+}
+
+func checkDSAParams(param *dsa.Parameters) error {
+	// SSH specifies FIPS 186-2, which only provided a single size
+	// (1024 bits) DSA key. FIPS 186-3 allows for larger key
+	// sizes, which would confuse SSH.
+	if l := param.P.BitLen(); l != 1024 {
+		return fmt.Errorf("ssh: unsupported DSA key size %d", l)
+	}
+
+	// FIPS 186-2 specifies that Q must be exactly 160 bits. We must enforce
+	// this to prevent DoS attacks where an attacker sends a huge Q which makes
+	// verification slow.
+	if l := param.Q.BitLen(); l != 160 {
+		return fmt.Errorf("ssh: unsupported DSA sub-prime size %d", l)
+	}
+
+	// The generator G is an element of the group, so it must be strictly less
+	// than the modulus P.
+	if param.G.Cmp(param.P) >= 0 {
+		return errors.New("ssh: DSA generator larger than modulus")
+	}
+
+	// G must be positive.
+	if param.G.Sign() <= 0 {
+		return errors.New("ssh: DSA generator must be positive")
+	}
+
+	return nil
+}
+
+// parseDSA parses an DSA key according to RFC 4253, section 6.6.
+func parseDSA(in []byte) (out PublicKey, rest []byte, err error) {
+	var w struct {
+		P, Q, G, Y *big.Int
+		Rest       []byte `ssh:"rest"`
+	}
+	if err := Unmarshal(in, &w); err != nil {
+		return nil, nil, err
+	}
+
+	param := dsa.Parameters{
+		P: w.P,
+		Q: w.Q,
+		G: w.G,
+	}
+	if err := checkDSAParams(&param); err != nil {
+		return nil, nil, err
+	}
+
+	// The public value Y must be a non-zero element of the group, i.e.
+	// strictly between 0 and P. crypto/dsa.Verify does not range-check Y,
+	// so we reject out-of-range values here to prevent a maliciously
+	// oversized Y from slowing verification.
+	if w.Y.Sign() <= 0 || w.Y.Cmp(w.P) >= 0 {
+		return nil, nil, errors.New("ssh: DSA public value Y out of range")
+	}
+
+	key := &dsaPublicKey{
+		Parameters: param,
+		Y:          w.Y,
+	}
+	return key, w.Rest, nil
+}
+
+func (k *dsaPublicKey) Marshal() []byte {
+	// DSA publickey struct layout should match the struct used by
+	// parseDSACert in the x/crypto/ssh/agent package.
+	w := struct {
+		Name       string
+		P, Q, G, Y *big.Int
+	}{
+		k.Type(),
+		k.P,
+		k.Q,
+		k.G,
+		k.Y,
+	}
+
+	return Marshal(&w)
+}
+
+func (k *dsaPublicKey) Verify(data []byte, sig *Signature) error {
+	if sig.Format != k.Type() {
+		return fmt.Errorf("ssh: signature type %s for key type %s", sig.Format, k.Type())
+	}
+	hash, err := hashFunc(sig.Format)
+	if err != nil {
+		return err
+	}
+	h := hash.New()
+	h.Write(data)
+	digest := h.Sum(nil)
+
+	// Per RFC 4253, section 6.6,
+	// The value for 'dss_signature_blob' is encoded as a string containing
+	// r, followed by s (which are 160-bit integers, without lengths or
+	// padding, unsigned, and in network byte order).
+	// For DSS purposes, sig.Blob should be exactly 40 bytes in length.
+	if len(sig.Blob) != 40 {
+		return errors.New("ssh: DSA signature parse error")
+	}
+	r := new(big.Int).SetBytes(sig.Blob[:20])
+	s := new(big.Int).SetBytes(sig.Blob[20:])
+	if dsa.Verify((*dsa.PublicKey)(k), digest, r, s) {
+		return nil
+	}
+	return errors.New("ssh: signature did not verify")
+}
+
+func (k *dsaPublicKey) CryptoPublicKey() crypto.PublicKey {
+	return (*dsa.PublicKey)(k)
+}
+
+type dsaPrivateKey struct {
+	*dsa.PrivateKey
+}
+
+func (k *dsaPrivateKey) PublicKey() PublicKey {
+	return (*dsaPublicKey)(&k.PrivateKey.PublicKey)
+}
+
+func (k *dsaPrivateKey) Sign(rand io.Reader, data []byte) (*Signature, error) {
+	return k.SignWithAlgorithm(rand, data, k.PublicKey().Type())
+}
+
+func (k *dsaPrivateKey) Algorithms() []string {
+	return []string{k.PublicKey().Type()}
+}
+
+func (k *dsaPrivateKey) SignWithAlgorithm(rand io.Reader, data []byte, algorithm string) (*Signature, error) {
+	if algorithm != "" && algorithm != k.PublicKey().Type() {
+		return nil, fmt.Errorf("ssh: unsupported signature algorithm %s", algorithm)
+	}
+
+	hash, err := hashFunc(k.PublicKey().Type())
+	if err != nil {
+		return nil, err
+	}
+	h := hash.New()
+	h.Write(data)
+	digest := h.Sum(nil)
+	r, s, err := dsa.Sign(rand, k.PrivateKey, digest)
+	if err != nil {
+		return nil, err
+	}
+
+	sig := make([]byte, 40)
+	rb := r.Bytes()
+	sb := s.Bytes()
+
+	copy(sig[20-len(rb):20], rb)
+	copy(sig[40-len(sb):], sb)
+
+	return &Signature{
+		Format: k.PublicKey().Type(),
+		Blob:   sig,
+	}, nil
+}
+
+type ecdsaPublicKey ecdsa.PublicKey
+
+func (k *ecdsaPublicKey) Type() string {
+	return "ecdsa-sha2-" + k.nistID()
+}
+
+func (k *ecdsaPublicKey) nistID() string {
+	switch k.Params().BitSize {
+	case 256:
+		return "nistp256"
+	case 384:
+		return "nistp384"
+	case 521:
+		return "nistp521"
+	}
+	panic("ssh: unsupported ecdsa key size")
+}
+
+type ed25519PublicKey ed25519.PublicKey
+
+func (k ed25519PublicKey) Type() string {
+	return KeyAlgoED25519
+}
+
+func parseED25519(in []byte) (out PublicKey, rest []byte, err error) {
+	var w struct {
+		KeyBytes []byte
+		Rest     []byte `ssh:"rest"`
+	}
+
+	if err := Unmarshal(in, &w); err != nil {
+		return nil, nil, err
+	}
+
+	if l := len(w.KeyBytes); l != ed25519.PublicKeySize {
+		return nil, nil, fmt.Errorf("invalid size %d for Ed25519 public key", l)
+	}
+
+	return ed25519PublicKey(w.KeyBytes), w.Rest, nil
+}
+
+func (k ed25519PublicKey) Marshal() []byte {
+	w := struct {
+		Name     string
+		KeyBytes []byte
+	}{
+		KeyAlgoED25519,
+		[]byte(k),
+	}
+	return Marshal(&w)
+}
+
+func (k ed25519PublicKey) Verify(b []byte, sig *Signature) error {
+	if sig.Format != k.Type() {
+		return fmt.Errorf("ssh: signature type %s for key type %s", sig.Format, k.Type())
+	}
+	if l := len(k); l != ed25519.PublicKeySize {
+		return fmt.Errorf("ssh: invalid size %d for Ed25519 public key", l)
+	}
+
+	if ok := ed25519.Verify(ed25519.PublicKey(k), b, sig.Blob); !ok {
+		return errors.New("ssh: signature did not verify")
+	}
+
+	return nil
+}
+
+func (k ed25519PublicKey) CryptoPublicKey() crypto.PublicKey {
+	return ed25519.PublicKey(k)
+}
+
+func supportedEllipticCurve(curve elliptic.Curve) bool {
+	return curve == elliptic.P256() || curve == elliptic.P384() || curve == elliptic.P521()
+}
+
+// parseECDSA parses an ECDSA key according to RFC 5656, section 3.1.
+func parseECDSA(in []byte, expectedType string) (out PublicKey, rest []byte, err error) {
+	var w struct {
+		Curve    string
+		KeyBytes []byte
+		Rest     []byte `ssh:"rest"`
+	}
+
+	if err := Unmarshal(in, &w); err != nil {
+		return nil, nil, err
+	}
+
+	actualType := "ecdsa-sha2-" + w.Curve
+	if expectedType != actualType {
+		return nil, nil, fmt.Errorf("ssh: algorithm type mismatch: expected %q, found curve %q (type %q)",
+			expectedType, w.Curve, actualType)
+	}
+
+	key := new(ecdsa.PublicKey)
+
+	switch w.Curve {
+	case "nistp256":
+		key.Curve = elliptic.P256()
+	case "nistp384":
+		key.Curve = elliptic.P384()
+	case "nistp521":
+		key.Curve = elliptic.P521()
+	default:
+		return nil, nil, errors.New("ssh: unsupported curve")
+	}
+
+	key.X, key.Y = elliptic.Unmarshal(key.Curve, w.KeyBytes)
+	if key.X == nil || key.Y == nil {
+		return nil, nil, errors.New("ssh: invalid curve point")
+	}
+	return (*ecdsaPublicKey)(key), w.Rest, nil
+}
+
+func (k *ecdsaPublicKey) Marshal() []byte {
+	// See RFC 5656, section 3.1.
+	keyBytes := elliptic.Marshal(k.Curve, k.X, k.Y)
+	// ECDSA publickey struct layout should match the struct used by
+	// parseECDSACert in the x/crypto/ssh/agent package.
+	w := struct {
+		Name string
+		ID   string
+		Key  []byte
+	}{
+		k.Type(),
+		k.nistID(),
+		keyBytes,
+	}
+
+	return Marshal(&w)
+}
+
+func (k *ecdsaPublicKey) Verify(data []byte, sig *Signature) error {
+	if sig.Format != k.Type() {
+		return fmt.Errorf("ssh: signature type %s for key type %s", sig.Format, k.Type())
+	}
+	hash, err := hashFunc(sig.Format)
+	if err != nil {
+		return err
+	}
+	h := hash.New()
+	h.Write(data)
+	digest := h.Sum(nil)
+
+	// Per RFC 5656, section 3.1.2,
+	// The ecdsa_signature_blob value has the following specific encoding:
+	//    mpint    r
+	//    mpint    s
+	var ecSig struct {
+		R *big.Int
+		S *big.Int
+	}
+
+	if err := Unmarshal(sig.Blob, &ecSig); err != nil {
+		return err
+	}
+
+	if ecdsa.Verify((*ecdsa.PublicKey)(k), digest, ecSig.R, ecSig.S) {
+		return nil
+	}
+	return errors.New("ssh: signature did not verify")
+}
+
+func (k *ecdsaPublicKey) CryptoPublicKey() crypto.PublicKey {
+	return (*ecdsa.PublicKey)(k)
+}
+
+// skFields holds the additional fields present in U2F/FIDO2 signatures.
+// See openssh/PROTOCOL.u2f 'SSH U2F Signatures' for details.
+type skFields struct {
+	// Flags contains U2F/FIDO2 flags such as 'user present'
+	Flags byte
+	// Counter is a monotonic signature counter which can be
+	// used to detect concurrent use of a private key, should
+	// it be extracted from hardware.
+	Counter uint32
+}
+
+// flagUserPresence is the "user present" bit (UP) in the SK signature
+// flags, matching the FIDO CTAP2 authenticatorData UP flag. See
+// openssh/PROTOCOL.u2f.
+const flagUserPresence = 0x01
+
+// errSKMissingUserPresence is returned by SK key Verify methods when
+// the signature does not assert user presence and the key was not
+// marked as no-touch-required.
+var errSKMissingUserPresence = errors.New("ssh: signature missing required user presence flag")
+
+type skECDSAPublicKey struct {
+	// application is a URL-like string, typically "ssh:" for SSH.
+	// see openssh/PROTOCOL.u2f for details.
+	application string
+	ecdsa.PublicKey
+	// noTouchRequired, when true, disables the default user-presence
+	// check in Verify. It is set by skKeyWithoutUP on a clone of the
+	// key, never on an instance shared across authentication attempts.
+	noTouchRequired bool
+}
+
+func (k *skECDSAPublicKey) Type() string {
+	return KeyAlgoSKECDSA256
+}
+
+func (k *skECDSAPublicKey) nistID() string {
+	return "nistp256"
+}
+
+func parseSKECDSA(in []byte) (out PublicKey, rest []byte, err error) {
+	var w struct {
+		Curve       string
+		KeyBytes    []byte
+		Application string
+		Rest        []byte `ssh:"rest"`
+	}
+
+	if err := Unmarshal(in, &w); err != nil {
+		return nil, nil, err
+	}
+
+	key := new(skECDSAPublicKey)
+	key.application = w.Application
+
+	if w.Curve != "nistp256" {
+		return nil, nil, errors.New("ssh: unsupported curve")
+	}
+	key.Curve = elliptic.P256()
+
+	key.X, key.Y = elliptic.Unmarshal(key.Curve, w.KeyBytes)
+	if key.X == nil || key.Y == nil {
+		return nil, nil, errors.New("ssh: invalid curve point")
+	}
+
+	return key, w.Rest, nil
+}
+
+func (k *skECDSAPublicKey) Marshal() []byte {
+	// See RFC 5656, section 3.1.
+	keyBytes := elliptic.Marshal(k.Curve, k.X, k.Y)
+	w := struct {
+		Name        string
+		ID          string
+		Key         []byte
+		Application string
+	}{
+		k.Type(),
+		k.nistID(),
+		keyBytes,
+		k.application,
+	}
+
+	return Marshal(&w)
+}
+
+func (k *skECDSAPublicKey) Verify(data []byte, sig *Signature) error {
+	if sig.Format != k.Type() {
+		return fmt.Errorf("ssh: signature type %s for key type %s", sig.Format, k.Type())
+	}
+	hash, err := hashFunc(sig.Format)
+	if err != nil {
+		return err
+	}
+	h := hash.New()
+	h.Write([]byte(k.application))
+	appDigest := h.Sum(nil)
+
+	h.Reset()
+	h.Write(data)
+	dataDigest := h.Sum(nil)
+
+	var ecSig struct {
+		R *big.Int
+		S *big.Int
+	}
+	if err := Unmarshal(sig.Blob, &ecSig); err != nil {
+		return err
+	}
+
+	var skf skFields
+	if err := Unmarshal(sig.Rest, &skf); err != nil {
+		return err
+	}
+
+	if skf.Flags&flagUserPresence == 0 && !k.noTouchRequired {
+		return errSKMissingUserPresence
+	}
+
+	blob := struct {
+		ApplicationDigest []byte `ssh:"rest"`
+		Flags             byte
+		Counter           uint32
+		MessageDigest     []byte `ssh:"rest"`
+	}{
+		appDigest,
+		skf.Flags,
+		skf.Counter,
+		dataDigest,
+	}
+
+	original := Marshal(blob)
+
+	h.Reset()
+	h.Write(original)
+	digest := h.Sum(nil)
+
+	if ecdsa.Verify((*ecdsa.PublicKey)(&k.PublicKey), digest, ecSig.R, ecSig.S) {
+		return nil
+	}
+	return errors.New("ssh: signature did not verify")
+}
+
+func (k *skECDSAPublicKey) CryptoPublicKey() crypto.PublicKey {
+	return &k.PublicKey
+}
+
+type skEd25519PublicKey struct {
+	// application is a URL-like string, typically "ssh:" for SSH.
+	// see openssh/PROTOCOL.u2f for details.
+	application string
+	ed25519.PublicKey
+	// noTouchRequired, when true, disables the default user-presence
+	// check in Verify. It is set by skKeyWithoutUP on a clone of the
+	// key, never on an instance shared across authentication attempts.
+	noTouchRequired bool
+}
+
+func (k *skEd25519PublicKey) Type() string {
+	return KeyAlgoSKED25519
+}
+
+func parseSKEd25519(in []byte) (out PublicKey, rest []byte, err error) {
+	var w struct {
+		KeyBytes    []byte
+		Application string
+		Rest        []byte `ssh:"rest"`
+	}
+
+	if err := Unmarshal(in, &w); err != nil {
+		return nil, nil, err
+	}
+
+	if l := len(w.KeyBytes); l != ed25519.PublicKeySize {
+		return nil, nil, fmt.Errorf("invalid size %d for Ed25519 public key", l)
+	}
+
+	key := new(skEd25519PublicKey)
+	key.application = w.Application
+	key.PublicKey = ed25519.PublicKey(w.KeyBytes)
+
+	return key, w.Rest, nil
+}
+
+func (k *skEd25519PublicKey) Marshal() []byte {
+	w := struct {
+		Name        string
+		KeyBytes    []byte
+		Application string
+	}{
+		KeyAlgoSKED25519,
+		[]byte(k.PublicKey),
+		k.application,
+	}
+	return Marshal(&w)
+}
+
+func (k *skEd25519PublicKey) Verify(data []byte, sig *Signature) error {
+	if sig.Format != k.Type() {
+		return fmt.Errorf("ssh: signature type %s for key type %s", sig.Format, k.Type())
+	}
+	if l := len(k.PublicKey); l != ed25519.PublicKeySize {
+		return fmt.Errorf("invalid size %d for Ed25519 public key", l)
+	}
+
+	hash, err := hashFunc(sig.Format)
+	if err != nil {
+		return err
+	}
+	h := hash.New()
+	h.Write([]byte(k.application))
+	appDigest := h.Sum(nil)
+
+	h.Reset()
+	h.Write(data)
+	dataDigest := h.Sum(nil)
+
+	var edSig struct {
+		Signature []byte `ssh:"rest"`
+	}
+
+	if err := Unmarshal(sig.Blob, &edSig); err != nil {
+		return err
+	}
+
+	var skf skFields
+	if err := Unmarshal(sig.Rest, &skf); err != nil {
+		return err
+	}
+
+	if skf.Flags&flagUserPresence == 0 && !k.noTouchRequired {
+		return errSKMissingUserPresence
+	}
+
+	blob := struct {
+		ApplicationDigest []byte `ssh:"rest"`
+		Flags             byte
+		Counter           uint32
+		MessageDigest     []byte `ssh:"rest"`
+	}{
+		appDigest,
+		skf.Flags,
+		skf.Counter,
+		dataDigest,
+	}
+
+	original := Marshal(blob)
+
+	if ok := ed25519.Verify(k.PublicKey, original, edSig.Signature); !ok {
+		return errors.New("ssh: signature did not verify")
+	}
+
+	return nil
+}
+
+func (k *skEd25519PublicKey) CryptoPublicKey() crypto.PublicKey {
+	return k.PublicKey
+}
+
+// NewSignerFromKey takes an *rsa.PrivateKey, *dsa.PrivateKey,
+// *ecdsa.PrivateKey or any other crypto.Signer and returns a
+// corresponding Signer instance. ECDSA keys must use P-256, P-384 or
+// P-521. DSA keys must use parameter size L1024N160.
+func NewSignerFromKey(key interface{}) (Signer, error) {
+	switch key := key.(type) {
+	case crypto.Signer:
+		return NewSignerFromSigner(key)
+	case *dsa.PrivateKey:
+		return newDSAPrivateKey(key)
+	default:
+		return nil, fmt.Errorf("ssh: unsupported key type %T", key)
+	}
+}
+
+func newDSAPrivateKey(key *dsa.PrivateKey) (Signer, error) {
+	if err := checkDSAParams(&key.PublicKey.Parameters); err != nil {
+		return nil, err
+	}
+
+	return &dsaPrivateKey{key}, nil
+}
+
+type wrappedSigner struct {
+	signer crypto.Signer
+	pubKey PublicKey
+}
+
+// NewSignerFromSigner takes any crypto.Signer implementation and
+// returns a corresponding Signer interface. This can be used, for
+// example, with keys kept in hardware modules.
+func NewSignerFromSigner(signer crypto.Signer) (Signer, error) {
+	pubKey, err := NewPublicKey(signer.Public())
+	if err != nil {
+		return nil, err
+	}
+
+	return &wrappedSigner{signer, pubKey}, nil
+}
+
+func (s *wrappedSigner) PublicKey() PublicKey {
+	return s.pubKey
+}
+
+func (s *wrappedSigner) Sign(rand io.Reader, data []byte) (*Signature, error) {
+	return s.SignWithAlgorithm(rand, data, s.pubKey.Type())
+}
+
+func (s *wrappedSigner) Algorithms() []string {
+	return algorithmsForKeyFormat(s.pubKey.Type())
+}
+
+func (s *wrappedSigner) SignWithAlgorithm(rand io.Reader, data []byte, algorithm string) (*Signature, error) {
+	if algorithm == "" {
+		algorithm = s.pubKey.Type()
+	}
+
+	if !slices.Contains(s.Algorithms(), algorithm) {
+		return nil, fmt.Errorf("ssh: unsupported signature algorithm %q for key format %q", algorithm, s.pubKey.Type())
+	}
+
+	hashFunc, err := hashFunc(algorithm)
+	if err != nil {
+		return nil, err
+	}
+	var digest []byte
+	if hashFunc != 0 {
+		h := hashFunc.New()
+		h.Write(data)
+		digest = h.Sum(nil)
+	} else {
+		digest = data
+	}
+
+	signature, err := s.signer.Sign(rand, digest, hashFunc)
+	if err != nil {
+		return nil, err
+	}
+
+	// crypto.Signer.Sign is expected to return an ASN.1-encoded signature
+	// for ECDSA and DSA, but that's not the encoding expected by SSH, so
+	// re-encode.
+	switch s.pubKey.(type) {
+	case *ecdsaPublicKey, *dsaPublicKey:
+		type asn1Signature struct {
+			R, S *big.Int
+		}
+		asn1Sig := new(asn1Signature)
+		_, err := asn1.Unmarshal(signature, asn1Sig)
+		if err != nil {
+			return nil, err
+		}
+
+		switch s.pubKey.(type) {
+		case *ecdsaPublicKey:
+			signature = Marshal(asn1Sig)
+
+		case *dsaPublicKey:
+			signature = make([]byte, 40)
+			r := asn1Sig.R.Bytes()
+			s := asn1Sig.S.Bytes()
+			copy(signature[20-len(r):20], r)
+			copy(signature[40-len(s):40], s)
+		}
+	}
+
+	return &Signature{
+		Format: algorithm,
+		Blob:   signature,
+	}, nil
+}
+
+// NewPublicKey takes an *rsa.PublicKey, *dsa.PublicKey, *ecdsa.PublicKey,
+// or ed25519.PublicKey returns a corresponding PublicKey instance.
+// ECDSA keys must use P-256, P-384 or P-521.
+func NewPublicKey(key interface{}) (PublicKey, error) {
+	switch key := key.(type) {
+	case *rsa.PublicKey:
+		return (*rsaPublicKey)(key), nil
+	case *ecdsa.PublicKey:
+		if !supportedEllipticCurve(key.Curve) {
+			return nil, errors.New("ssh: only P-256, P-384 and P-521 EC keys are supported")
+		}
+		return (*ecdsaPublicKey)(key), nil
+	case *dsa.PublicKey:
+		return (*dsaPublicKey)(key), nil
+	case ed25519.PublicKey:
+		if l := len(key); l != ed25519.PublicKeySize {
+			return nil, fmt.Errorf("ssh: invalid size %d for Ed25519 public key", l)
+		}
+		return ed25519PublicKey(key), nil
+	default:
+		return nil, fmt.Errorf("ssh: unsupported key type %T", key)
+	}
+}
+
+// ParsePrivateKey returns a Signer from a PEM encoded private key. It supports
+// the same keys as ParseRawPrivateKey. If the private key is encrypted, it
+// will return a PassphraseMissingError.
+func ParsePrivateKey(pemBytes []byte) (Signer, error) {
+	key, err := ParseRawPrivateKey(pemBytes)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewSignerFromKey(key)
+}
+
+// ParsePrivateKeyWithPassphrase returns a Signer from a PEM encoded private
+// key and passphrase. It supports the same keys as
+// ParseRawPrivateKeyWithPassphrase.
+func ParsePrivateKeyWithPassphrase(pemBytes, passphrase []byte) (Signer, error) {
+	key, err := ParseRawPrivateKeyWithPassphrase(pemBytes, passphrase)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewSignerFromKey(key)
+}
+
+// encryptedBlock tells whether a private key is
+// encrypted by examining its Proc-Type header
+// for a mention of ENCRYPTED
+// according to RFC 1421 Section 4.6.1.1.
+func encryptedBlock(block *pem.Block) bool {
+	return strings.Contains(block.Headers["Proc-Type"], "ENCRYPTED")
+}
+
+// A PassphraseMissingError indicates that parsing this private key requires a
+// passphrase. Use ParsePrivateKeyWithPassphrase.
+type PassphraseMissingError struct {
+	// PublicKey will be set if the private key format includes an unencrypted
+	// public key along with the encrypted private key.
+	PublicKey PublicKey
+}
+
+func (*PassphraseMissingError) Error() string {
+	return "ssh: this private key is passphrase protected"
+}
+
+// ParseRawPrivateKey returns a private key from a PEM encoded private key. It supports
+// RSA, DSA, ECDSA, and Ed25519 private keys in PKCS#1, PKCS#8, OpenSSL, and OpenSSH
+// formats. If the private key is encrypted, it will return a PassphraseMissingError.
+func ParseRawPrivateKey(pemBytes []byte) (interface{}, error) {
+	block, _ := pem.Decode(pemBytes)
+	if block == nil {
+		return nil, errors.New("ssh: no key found")
+	}
+
+	if encryptedBlock(block) {
+		return nil, &PassphraseMissingError{}
+	}
+
+	switch block.Type {
+	case "RSA PRIVATE KEY":
+		return x509.ParsePKCS1PrivateKey(block.Bytes)
+	// RFC5208 - https://tools.ietf.org/html/rfc5208
+	case "PRIVATE KEY":
+		return x509.ParsePKCS8PrivateKey(block.Bytes)
+	case "EC PRIVATE KEY":
+		return x509.ParseECPrivateKey(block.Bytes)
+	case "DSA PRIVATE KEY":
+		return ParseDSAPrivateKey(block.Bytes)
+	case "OPENSSH PRIVATE KEY":
+		return parseOpenSSHPrivateKey(block.Bytes, unencryptedOpenSSHKey)
+	default:
+		return nil, fmt.Errorf("ssh: unsupported key type %q", block.Type)
+	}
+}
+
+// ParseRawPrivateKeyWithPassphrase returns a private key decrypted with
+// passphrase from a PEM encoded private key. If the passphrase is wrong, it
+// will return x509.IncorrectPasswordError.
+func ParseRawPrivateKeyWithPassphrase(pemBytes, passphrase []byte) (interface{}, error) {
+	block, _ := pem.Decode(pemBytes)
+	if block == nil {
+		return nil, errors.New("ssh: no key found")
+	}
+
+	if block.Type == "OPENSSH PRIVATE KEY" {
+		return parseOpenSSHPrivateKey(block.Bytes, passphraseProtectedOpenSSHKey(passphrase))
+	}
+
+	if !encryptedBlock(block) || !x509.IsEncryptedPEMBlock(block) {
+		return nil, errors.New("ssh: not an encrypted key")
+	}
+
+	buf, err := x509.DecryptPEMBlock(block, passphrase)
+	if err != nil {
+		if err == x509.IncorrectPasswordError {
+			return nil, err
+		}
+		return nil, fmt.Errorf("ssh: cannot decode encrypted private keys: %v", err)
+	}
+
+	var result interface{}
+
+	switch block.Type {
+	case "RSA PRIVATE KEY":
+		result, err = x509.ParsePKCS1PrivateKey(buf)
+	case "EC PRIVATE KEY":
+		result, err = x509.ParseECPrivateKey(buf)
+	case "DSA PRIVATE KEY":
+		result, err = ParseDSAPrivateKey(buf)
+	default:
+		err = fmt.Errorf("ssh: unsupported key type %q", block.Type)
+	}
+	// Because of deficiencies in the format, DecryptPEMBlock does not always
+	// detect an incorrect password. In these cases decrypted DER bytes is
+	// random noise. If the parsing of the key returns an asn1.StructuralError
+	// we return x509.IncorrectPasswordError.
+	if _, ok := err.(asn1.StructuralError); ok {
+		return nil, x509.IncorrectPasswordError
+	}
+
+	return result, err
+}
+
+// ParseDSAPrivateKey returns a DSA private key from its ASN.1 DER encoding, as
+// specified by the OpenSSL DSA man page.
+func ParseDSAPrivateKey(der []byte) (*dsa.PrivateKey, error) {
+	var k struct {
+		Version int
+		P       *big.Int
+		Q       *big.Int
+		G       *big.Int
+		Pub     *big.Int
+		Priv    *big.Int
+	}
+	rest, err := asn1.Unmarshal(der, &k)
+	if err != nil {
+		return nil, errors.New("ssh: failed to parse DSA key: " + err.Error())
+	}
+	if len(rest) > 0 {
+		return nil, errors.New("ssh: garbage after DSA key")
+	}
+
+	return &dsa.PrivateKey{
+		PublicKey: dsa.PublicKey{
+			Parameters: dsa.Parameters{
+				P: k.P,
+				Q: k.Q,
+				G: k.G,
+			},
+			Y: k.Pub,
+		},
+		X: k.Priv,
+	}, nil
+}
+
+func unencryptedOpenSSHKey(cipherName, kdfName, kdfOpts string, privKeyBlock []byte) ([]byte, error) {
+	if kdfName != "none" || cipherName != "none" {
+		return nil, &PassphraseMissingError{}
+	}
+	if kdfOpts != "" {
+		return nil, errors.New("ssh: invalid openssh private key")
+	}
+	return privKeyBlock, nil
+}
+
+func passphraseProtectedOpenSSHKey(passphrase []byte) openSSHDecryptFunc {
+	return func(cipherName, kdfName, kdfOpts string, privKeyBlock []byte) ([]byte, error) {
+		if kdfName == "none" || cipherName == "none" {
+			return nil, errors.New("ssh: key is not password protected")
+		}
+		if kdfName != "bcrypt" {
+			return nil, fmt.Errorf("ssh: unknown KDF %q, only supports %q", kdfName, "bcrypt")
+		}
+
+		var opts struct {
+			Salt   string
+			Rounds uint32
+		}
+		if err := Unmarshal([]byte(kdfOpts), &opts); err != nil {
+			return nil, err
+		}
+
+		// OpenSSH does not impose an upper bound on the bcrypt round count
+		// stored in the key file, but bcrypt_pbkdf cost is linear in rounds:
+		// the default is 16, ssh-keygen lets users pick anything up to
+		// INT_MAX. Cap at 2048 (128x the default, a few seconds of CPU) so
+		// that an oversized value in the file cannot tie up the caller for
+		// months.
+		const maxRounds = 1 << 11
+		if opts.Rounds > maxRounds {
+			return nil, fmt.Errorf("ssh: bcrypt KDF rounds %d exceed maximum %d", opts.Rounds, maxRounds)
+		}
+
+		k, err := bcrypt_pbkdf.Key(passphrase, []byte(opts.Salt), int(opts.Rounds), 32+16)
+		if err != nil {
+			return nil, err
+		}
+		key, iv := k[:32], k[32:]
+
+		c, err := aes.NewCipher(key)
+		if err != nil {
+			return nil, err
+		}
+		switch cipherName {
+		case "aes256-ctr":
+			ctr := cipher.NewCTR(c, iv)
+			ctr.XORKeyStream(privKeyBlock, privKeyBlock)
+		case "aes256-cbc":
+			if len(privKeyBlock)%c.BlockSize() != 0 {
+				return nil, fmt.Errorf("ssh: invalid encrypted private key length, not a multiple of the block size")
+			}
+			cbc := cipher.NewCBCDecrypter(c, iv)
+			cbc.CryptBlocks(privKeyBlock, privKeyBlock)
+		default:
+			return nil, fmt.Errorf("ssh: unknown cipher %q, only supports %q or %q", cipherName, "aes256-ctr", "aes256-cbc")
+		}
+
+		return privKeyBlock, nil
+	}
+}
+
+func unencryptedOpenSSHMarshaler(privKeyBlock []byte) ([]byte, string, string, string, error) {
+	key := generateOpenSSHPadding(privKeyBlock, 8)
+	return key, "none", "none", "", nil
+}
+
+func passphraseProtectedOpenSSHMarshaler(passphrase []byte) openSSHEncryptFunc {
+	return func(privKeyBlock []byte) ([]byte, string, string, string, error) {
+		salt := make([]byte, 16)
+		if _, err := rand.Read(salt); err != nil {
+			return nil, "", "", "", err
+		}
+
+		opts := struct {
+			Salt   []byte
+			Rounds uint32
+		}{salt, 16}
+
+		// Derive key to encrypt the private key block.
+		k, err := bcrypt_pbkdf.Key(passphrase, salt, int(opts.Rounds), 32+aes.BlockSize)
+		if err != nil {
+			return nil, "", "", "", err
+		}
+
+		// Add padding matching the block size of AES.
+		keyBlock := generateOpenSSHPadding(privKeyBlock, aes.BlockSize)
+
+		// Encrypt the private key using the derived secret.
+
+		dst := make([]byte, len(keyBlock))
+		key, iv := k[:32], k[32:]
+		block, err := aes.NewCipher(key)
+		if err != nil {
+			return nil, "", "", "", err
+		}
+
+		stream := cipher.NewCTR(block, iv)
+		stream.XORKeyStream(dst, keyBlock)
+
+		return dst, "aes256-ctr", "bcrypt", string(Marshal(opts)), nil
+	}
+}
+
+const privateKeyAuthMagic = "openssh-key-v1\x00"
+
+type openSSHDecryptFunc func(CipherName, KdfName, KdfOpts string, PrivKeyBlock []byte) ([]byte, error)
+type openSSHEncryptFunc func(PrivKeyBlock []byte) (ProtectedKeyBlock []byte, cipherName, kdfName, kdfOptions string, err error)
+
+type openSSHEncryptedPrivateKey struct {
+	CipherName   string
+	KdfName      string
+	KdfOpts      string
+	NumKeys      uint32
+	PubKey       []byte
+	PrivKeyBlock []byte
+	Rest         []byte `ssh:"rest"`
+}
+
+type openSSHPrivateKey struct {
+	Check1  uint32
+	Check2  uint32
+	Keytype string
+	Rest    []byte `ssh:"rest"`
+}
+
+type openSSHRSAPrivateKey struct {
+	N       *big.Int
+	E       *big.Int
+	D       *big.Int
+	Iqmp    *big.Int
+	P       *big.Int
+	Q       *big.Int
+	Comment string
+	Pad     []byte `ssh:"rest"`
+}
+
+type openSSHEd25519PrivateKey struct {
+	Pub     []byte
+	Priv    []byte
+	Comment string
+	Pad     []byte `ssh:"rest"`
+}
+
+type openSSHECDSAPrivateKey struct {
+	Curve   string
+	Pub     []byte
+	D       *big.Int
+	Comment string
+	Pad     []byte `ssh:"rest"`
+}
+
+// parseOpenSSHPrivateKey parses an OpenSSH private key, using the decrypt
+// function to unwrap the encrypted portion. unencryptedOpenSSHKey can be used
+// as the decrypt function to parse an unencrypted private key. See
+// https://github.com/openssh/openssh-portable/blob/master/PROTOCOL.key.
+func parseOpenSSHPrivateKey(key []byte, decrypt openSSHDecryptFunc) (crypto.PrivateKey, error) {
+	if len(key) < len(privateKeyAuthMagic) || string(key[:len(privateKeyAuthMagic)]) != privateKeyAuthMagic {
+		return nil, errors.New("ssh: invalid openssh private key format")
+	}
+	remaining := key[len(privateKeyAuthMagic):]
+
+	var w openSSHEncryptedPrivateKey
+	if err := Unmarshal(remaining, &w); err != nil {
+		return nil, err
+	}
+	if w.NumKeys != 1 {
+		// We only support single key files, and so does OpenSSH.
+		// https://github.com/openssh/openssh-portable/blob/4103a3ec7/sshkey.c#L4171
+		return nil, errors.New("ssh: multi-key files are not supported")
+	}
+
+	privKeyBlock, err := decrypt(w.CipherName, w.KdfName, w.KdfOpts, w.PrivKeyBlock)
+	if err != nil {
+		if err, ok := err.(*PassphraseMissingError); ok {
+			pub, errPub := ParsePublicKey(w.PubKey)
+			if errPub != nil {
+				return nil, fmt.Errorf("ssh: failed to parse embedded public key: %v", errPub)
+			}
+			err.PublicKey = pub
+		}
+		return nil, err
+	}
+
+	var pk1 openSSHPrivateKey
+	if err := Unmarshal(privKeyBlock, &pk1); err != nil || pk1.Check1 != pk1.Check2 {
+		if w.CipherName != "none" {
+			return nil, x509.IncorrectPasswordError
+		}
+		return nil, errors.New("ssh: malformed OpenSSH key")
+	}
+
+	switch pk1.Keytype {
+	case KeyAlgoRSA:
+		var key openSSHRSAPrivateKey
+		if err := Unmarshal(pk1.Rest, &key); err != nil {
+			return nil, err
+		}
+
+		if err := checkOpenSSHKeyPadding(key.Pad); err != nil {
+			return nil, err
+		}
+
+		// Mirror the validation done in parseRSA for public keys: cap the
+		// modulus at the same limit enforced by crypto/tls, reject oversized
+		// or invalid exponents, and additionally bound the prime factors to
+		// avoid the expensive CRT coefficient recomputation in pk.Precompute.
+		if key.N.BitLen() > 8192 {
+			return nil, errors.New("ssh: rsa modulus too large")
+		}
+		if key.P.BitLen() > 4096 || key.Q.BitLen() > 4096 {
+			return nil, errors.New("ssh: rsa prime too large")
+		}
+		if key.E.BitLen() > 24 {
+			return nil, errors.New("ssh: exponent too large")
+		}
+		e := key.E.Int64()
+		if e < 3 || e&1 == 0 {
+			return nil, errors.New("ssh: incorrect exponent")
+		}
+
+		pk := &rsa.PrivateKey{
+			PublicKey: rsa.PublicKey{
+				N: key.N,
+				E: int(e),
+			},
+			D:      key.D,
+			Primes: []*big.Int{key.P, key.Q},
+		}
+
+		if err := pk.Validate(); err != nil {
+			return nil, err
+		}
+
+		pk.Precompute()
+
+		return pk, nil
+	case KeyAlgoED25519:
+		var key openSSHEd25519PrivateKey
+		if err := Unmarshal(pk1.Rest, &key); err != nil {
+			return nil, err
+		}
+
+		if len(key.Priv) != ed25519.PrivateKeySize {
+			return nil, errors.New("ssh: private key unexpected length")
+		}
+
+		if err := checkOpenSSHKeyPadding(key.Pad); err != nil {
+			return nil, err
+		}
+
+		pk := ed25519.PrivateKey(make([]byte, ed25519.PrivateKeySize))
+		copy(pk, key.Priv)
+		return &pk, nil
+	case KeyAlgoECDSA256, KeyAlgoECDSA384, KeyAlgoECDSA521:
+		var key openSSHECDSAPrivateKey
+		if err := Unmarshal(pk1.Rest, &key); err != nil {
+			return nil, err
+		}
+
+		if err := checkOpenSSHKeyPadding(key.Pad); err != nil {
+			return nil, err
+		}
+
+		var curve elliptic.Curve
+		switch key.Curve {
+		case "nistp256":
+			curve = elliptic.P256()
+		case "
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/crypto/ssh/keys.go","mode":420,"size":52752,"sha256":"32ac8301438c19d1c125a224d380a4703b303f144d2f5ea726bddd521ec67e13","index":1,"count":2,"encoding":"utf-8","payloadBytes":4748}
+nistp384":
+			curve = elliptic.P384()
+		case "nistp521":
+			curve = elliptic.P521()
+		default:
+			return nil, errors.New("ssh: unhandled elliptic curve: " + key.Curve)
+		}
+
+		X, Y := elliptic.Unmarshal(curve, key.Pub)
+		if X == nil || Y == nil {
+			return nil, errors.New("ssh: failed to unmarshal public key")
+		}
+
+		if key.D.Cmp(curve.Params().N) >= 0 {
+			return nil, errors.New("ssh: scalar is out of range")
+		}
+
+		x, y := curve.ScalarBaseMult(key.D.Bytes())
+		if x.Cmp(X) != 0 || y.Cmp(Y) != 0 {
+			return nil, errors.New("ssh: public key does not match private key")
+		}
+
+		return &ecdsa.PrivateKey{
+			PublicKey: ecdsa.PublicKey{
+				Curve: curve,
+				X:     X,
+				Y:     Y,
+			},
+			D: key.D,
+		}, nil
+	default:
+		return nil, errors.New("ssh: unhandled key type")
+	}
+}
+
+func marshalOpenSSHPrivateKey(key crypto.PrivateKey, comment string, encrypt openSSHEncryptFunc) (*pem.Block, error) {
+	var w openSSHEncryptedPrivateKey
+	var pk1 openSSHPrivateKey
+
+	// Random check bytes.
+	var check uint32
+	if err := binary.Read(rand.Reader, binary.BigEndian, &check); err != nil {
+		return nil, err
+	}
+
+	pk1.Check1 = check
+	pk1.Check2 = check
+	w.NumKeys = 1
+
+	// Use a []byte directly on ed25519 keys.
+	if k, ok := key.(*ed25519.PrivateKey); ok {
+		key = *k
+	}
+
+	switch k := key.(type) {
+	case *rsa.PrivateKey:
+		E := new(big.Int).SetInt64(int64(k.PublicKey.E))
+		// Marshal public key:
+		// E and N are in reversed order in the public and private key.
+		pubKey := struct {
+			KeyType string
+			E       *big.Int
+			N       *big.Int
+		}{
+			KeyAlgoRSA,
+			E, k.PublicKey.N,
+		}
+		w.PubKey = Marshal(pubKey)
+
+		// Marshal private key.
+		key := openSSHRSAPrivateKey{
+			N:       k.PublicKey.N,
+			E:       E,
+			D:       k.D,
+			Iqmp:    k.Precomputed.Qinv,
+			P:       k.Primes[0],
+			Q:       k.Primes[1],
+			Comment: comment,
+		}
+		pk1.Keytype = KeyAlgoRSA
+		pk1.Rest = Marshal(key)
+	case ed25519.PrivateKey:
+		pub := make([]byte, ed25519.PublicKeySize)
+		priv := make([]byte, ed25519.PrivateKeySize)
+		copy(pub, k[32:])
+		copy(priv, k)
+
+		// Marshal public key.
+		pubKey := struct {
+			KeyType string
+			Pub     []byte
+		}{
+			KeyAlgoED25519, pub,
+		}
+		w.PubKey = Marshal(pubKey)
+
+		// Marshal private key.
+		key := openSSHEd25519PrivateKey{
+			Pub:     pub,
+			Priv:    priv,
+			Comment: comment,
+		}
+		pk1.Keytype = KeyAlgoED25519
+		pk1.Rest = Marshal(key)
+	case *ecdsa.PrivateKey:
+		var curve, keyType string
+		switch name := k.Curve.Params().Name; name {
+		case "P-256":
+			curve = "nistp256"
+			keyType = KeyAlgoECDSA256
+		case "P-384":
+			curve = "nistp384"
+			keyType = KeyAlgoECDSA384
+		case "P-521":
+			curve = "nistp521"
+			keyType = KeyAlgoECDSA521
+		default:
+			return nil, errors.New("ssh: unhandled elliptic curve " + name)
+		}
+
+		pub := elliptic.Marshal(k.Curve, k.PublicKey.X, k.PublicKey.Y)
+
+		// Marshal public key.
+		pubKey := struct {
+			KeyType string
+			Curve   string
+			Pub     []byte
+		}{
+			keyType, curve, pub,
+		}
+		w.PubKey = Marshal(pubKey)
+
+		// Marshal private key.
+		key := openSSHECDSAPrivateKey{
+			Curve:   curve,
+			Pub:     pub,
+			D:       k.D,
+			Comment: comment,
+		}
+		pk1.Keytype = keyType
+		pk1.Rest = Marshal(key)
+	default:
+		return nil, fmt.Errorf("ssh: unsupported key type %T", k)
+	}
+
+	var err error
+	// Add padding and encrypt the key if necessary.
+	w.PrivKeyBlock, w.CipherName, w.KdfName, w.KdfOpts, err = encrypt(Marshal(pk1))
+	if err != nil {
+		return nil, err
+	}
+
+	b := Marshal(w)
+	block := &pem.Block{
+		Type:  "OPENSSH PRIVATE KEY",
+		Bytes: append([]byte(privateKeyAuthMagic), b...),
+	}
+	return block, nil
+}
+
+func checkOpenSSHKeyPadding(pad []byte) error {
+	for i, b := range pad {
+		if int(b) != i+1 {
+			return errors.New("ssh: padding not as expected")
+		}
+	}
+	return nil
+}
+
+func generateOpenSSHPadding(block []byte, blockSize int) []byte {
+	for i, l := 0, len(block); (l+i)%blockSize != 0; i++ {
+		block = append(block, byte(i+1))
+	}
+	return block
+}
+
+// FingerprintLegacyMD5 returns the user presentation of the key's
+// fingerprint as described by RFC 4716 section 4.
+func FingerprintLegacyMD5(pubKey PublicKey) string {
+	md5sum := md5.Sum(pubKey.Marshal())
+	hexarray := make([]string, len(md5sum))
+	for i, c := range md5sum {
+		hexarray[i] = hex.EncodeToString([]byte{c})
+	}
+	return strings.Join(hexarray, ":")
+}
+
+// FingerprintSHA256 returns the user presentation of the key's
+// fingerprint as unpadded base64 encoded sha256 hash.
+// This format was introduced from OpenSSH 6.8.
+// https://www.openssh.com/txt/release-6.8
+// https://tools.ietf.org/html/rfc4648#section-3.2 (unpadded base64 encoding)
+func FingerprintSHA256(pubKey PublicKey) string {
+	sha256sum := sha256.Sum256(pubKey.Marshal())
+	hash := base64.RawStdEncoding.EncodeToString(sha256sum[:])
+	return "SHA256:" + hash
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/crypto/ssh/knownhosts/knownhosts.go","mode":420,"size":13130,"sha256":"cf635625f63b6cd07dd737363bad1d49f2e6f325f3d9a501edb1dd279599c281","index":0,"count":1,"encoding":"utf-8","payloadBytes":13130}
+// Copyright 2017 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+// Package knownhosts implements a parser for the OpenSSH known_hosts
+// host key database, and provides utility functions for writing
+// OpenSSH compliant known_hosts files.
+package knownhosts
+
+import (
+	"bufio"
+	"bytes"
+	"crypto/hmac"
+	"crypto/rand"
+	"crypto/sha1"
+	"encoding/base64"
+	"errors"
+	"fmt"
+	"io"
+	"net"
+	"os"
+	"strings"
+
+	"golang.org/x/crypto/ssh"
+)
+
+// See the sshd manpage
+// (http://man.openbsd.org/sshd#SSH_KNOWN_HOSTS_FILE_FORMAT) for
+// background.
+
+type addr struct{ host, port string }
+
+func (a *addr) String() string {
+	h := a.host
+	if strings.Contains(h, ":") {
+		h = "[" + h + "]"
+	}
+	return h + ":" + a.port
+}
+
+type matcher interface {
+	match(addr) bool
+}
+
+type hostPattern struct {
+	negate bool
+	addr   addr
+}
+
+func (p *hostPattern) String() string {
+	n := ""
+	if p.negate {
+		n = "!"
+	}
+
+	return n + p.addr.String()
+}
+
+type hostPatterns []hostPattern
+
+func (ps hostPatterns) match(a addr) bool {
+	matched := false
+	for _, p := range ps {
+		if !p.match(a) {
+			continue
+		}
+		if p.negate {
+			return false
+		}
+		matched = true
+	}
+	return matched
+}
+
+// See
+// https://android.googlesource.com/platform/external/openssh/+/ab28f5495c85297e7a597c1ba62e996416da7c7e/addrmatch.c
+// The matching of * has no regard for separators, unlike filesystem globs
+func wildcardMatch(pat []byte, str []byte) bool {
+	for {
+		if len(pat) == 0 {
+			return len(str) == 0
+		}
+		if len(str) == 0 {
+			return false
+		}
+
+		if pat[0] == '*' {
+			if len(pat) == 1 {
+				return true
+			}
+
+			for j := range str {
+				if wildcardMatch(pat[1:], str[j:]) {
+					return true
+				}
+			}
+			return false
+		}
+
+		if pat[0] == '?' || pat[0] == str[0] {
+			pat = pat[1:]
+			str = str[1:]
+		} else {
+			return false
+		}
+	}
+}
+
+func (p *hostPattern) match(a addr) bool {
+	return wildcardMatch([]byte(p.addr.host), []byte(a.host)) && p.addr.port == a.port
+}
+
+type keyDBLine struct {
+	cert     bool
+	matcher  matcher
+	knownKey KnownKey
+}
+
+func serialize(k ssh.PublicKey) string {
+	return k.Type() + " " + base64.StdEncoding.EncodeToString(k.Marshal())
+}
+
+func (l *keyDBLine) match(a addr) bool {
+	return l.matcher.match(a)
+}
+
+type hostKeyDB struct {
+	// Serialized version of revoked keys
+	revoked map[string]*KnownKey
+	lines   []keyDBLine
+}
+
+func newHostKeyDB() *hostKeyDB {
+	db := &hostKeyDB{
+		revoked: make(map[string]*KnownKey),
+	}
+
+	return db
+}
+
+func keyEq(a, b ssh.PublicKey) bool {
+	return bytes.Equal(a.Marshal(), b.Marshal())
+}
+
+// IsHostAuthority can be used as a callback in ssh.CertChecker
+func (db *hostKeyDB) IsHostAuthority(remote ssh.PublicKey, address string) bool {
+	h, p, err := net.SplitHostPort(address)
+	if err != nil {
+		return false
+	}
+	a := addr{host: h, port: p}
+
+	for _, l := range db.lines {
+		if l.cert && keyEq(l.knownKey.Key, remote) && l.match(a) {
+			return true
+		}
+	}
+	return false
+}
+
+// IsRevoked can be used as a callback in ssh.CertChecker
+func (db *hostKeyDB) IsRevoked(key *ssh.Certificate) bool {
+	if _, ok := db.revoked[string(key.Marshal())]; ok {
+		return true
+	}
+	if _, ok := db.revoked[string(key.SignatureKey.Marshal())]; ok {
+		return true
+	}
+	return false
+}
+
+const markerCert = "@cert-authority"
+const markerRevoked = "@revoked"
+
+func nextWord(line []byte) (string, []byte) {
+	i := bytes.IndexAny(line, "\t ")
+	if i == -1 {
+		return string(line), nil
+	}
+
+	return string(line[:i]), trimSpace(line[i:])
+}
+
+func parseLine(line []byte) (marker, host string, key ssh.PublicKey, err error) {
+	if w, next := nextWord(line); w == markerCert || w == markerRevoked {
+		marker = w
+		line = next
+	}
+
+	host, line = nextWord(line)
+	// If the extracted 'host' starts with '@', it means we either encountered
+	// a second marker (e.g., "@cert-authority @revoked") or an unknown marker
+	// (e.g., "@unknown"). Both are invalid.
+	if len(host) > 0 && host[0] == '@' {
+		return "", "", nil, fmt.Errorf("knownhosts: unexpected marker: %q", host)
+	}
+	if len(line) == 0 {
+		return "", "", nil, errors.New("knownhosts: missing host pattern")
+	}
+
+	wantType, line := nextWord(line)
+	if len(line) == 0 {
+		return "", "", nil, errors.New("knownhosts: missing key type pattern")
+	}
+
+	keyBlob, _ := nextWord(line)
+
+	keyBytes, err := base64.StdEncoding.DecodeString(keyBlob)
+	if err != nil {
+		return "", "", nil, err
+	}
+	key, err = ssh.ParsePublicKey(keyBytes)
+	if err != nil {
+		return "", "", nil, err
+	}
+
+	if key.Type() != wantType {
+		return "", "", nil, fmt.Errorf("knownhosts: key type mismatch: found %q, want %q", key.Type(), wantType)
+	}
+
+	return marker, host, key, nil
+}
+
+func (db *hostKeyDB) parseLine(line []byte, filename string, linenum int) error {
+	marker, pattern, key, err := parseLine(line)
+	if err != nil {
+		return err
+	}
+
+	if marker == markerRevoked {
+		db.revoked[string(key.Marshal())] = &KnownKey{
+			Key:      key,
+			Filename: filename,
+			Line:     linenum,
+		}
+
+		return nil
+	}
+
+	entry := keyDBLine{
+		cert: marker == markerCert,
+		knownKey: KnownKey{
+			Filename: filename,
+			Line:     linenum,
+			Key:      key,
+		},
+	}
+
+	if pattern[0] == '|' {
+		entry.matcher, err = newHashedHost(pattern)
+	} else {
+		entry.matcher, err = newHostnameMatcher(pattern)
+	}
+
+	if err != nil {
+		return err
+	}
+
+	db.lines = append(db.lines, entry)
+	return nil
+}
+
+func newHostnameMatcher(pattern string) (matcher, error) {
+	var hps hostPatterns
+	for _, p := range strings.Split(pattern, ",") {
+		if len(p) == 0 {
+			continue
+		}
+
+		var a addr
+		var negate bool
+		if p[0] == '!' {
+			negate = true
+			p = p[1:]
+		}
+
+		if len(p) == 0 {
+			return nil, errors.New("knownhosts: negation without following hostname")
+		}
+
+		var err error
+		if p[0] == '[' {
+			a.host, a.port, err = net.SplitHostPort(p)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			a.host, a.port, err = net.SplitHostPort(p)
+			if err != nil {
+				a.host = p
+				a.port = "22"
+			}
+		}
+		hps = append(hps, hostPattern{
+			negate: negate,
+			addr:   a,
+		})
+	}
+	return hps, nil
+}
+
+// KnownKey represents a key declared in a known_hosts file.
+type KnownKey struct {
+	Key      ssh.PublicKey
+	Filename string
+	Line     int
+}
+
+func (k *KnownKey) String() string {
+	return fmt.Sprintf("%s:%d: %s", k.Filename, k.Line, serialize(k.Key))
+}
+
+// KeyError is returned if we did not find the key in the host key
+// database, or there was a mismatch.  Typically, in batch
+// applications, this should be interpreted as failure. Interactive
+// applications can offer an interactive prompt to the user.
+type KeyError struct {
+	// Want holds the accepted host keys. For each key algorithm,
+	// there can be multiple hostkeys.  If Want is empty, the host
+	// is unknown. If Want is non-empty, there was a mismatch, which
+	// can signify a MITM attack.
+	Want []KnownKey
+}
+
+func (u *KeyError) Error() string {
+	if len(u.Want) == 0 {
+		return "knownhosts: key is unknown"
+	}
+	return "knownhosts: key mismatch"
+}
+
+// RevokedError is returned if we found a key that was revoked.
+type RevokedError struct {
+	Revoked KnownKey
+}
+
+func (r *RevokedError) Error() string {
+	return "knownhosts: key is revoked"
+}
+
+// check checks a key against the host database. This should not be
+// used for verifying certificates.
+func (db *hostKeyDB) check(address string, remote net.Addr, remoteKey ssh.PublicKey) error {
+	if revoked := db.revoked[string(remoteKey.Marshal())]; revoked != nil {
+		return &RevokedError{Revoked: *revoked}
+	}
+
+	host, port, err := net.SplitHostPort(remote.String())
+	if err != nil {
+		return fmt.Errorf("knownhosts: SplitHostPort(%s): %v", remote, err)
+	}
+
+	hostToCheck := addr{host, port}
+	if address != "" {
+		// Give preference to the hostname if available.
+		host, port, err := net.SplitHostPort(address)
+		if err != nil {
+			return fmt.Errorf("knownhosts: SplitHostPort(%s): %v", address, err)
+		}
+
+		hostToCheck = addr{host, port}
+	}
+
+	return db.checkAddr(hostToCheck, remoteKey)
+}
+
+// checkAddr checks if we can find the given public key for the
+// given address.  If we only find an entry for the IP address,
+// or only the hostname, then this still succeeds.
+func (db *hostKeyDB) checkAddr(a addr, remoteKey ssh.PublicKey) error {
+	// TODO(hanwen): are these the right semantics? What if there
+	// is just a key for the IP address, but not for the
+	// hostname?
+
+	keyErr := &KeyError{}
+
+	for _, l := range db.lines {
+		if !l.match(a) {
+			continue
+		}
+
+		keyErr.Want = append(keyErr.Want, l.knownKey)
+		if keyEq(l.knownKey.Key, remoteKey) {
+			return nil
+		}
+	}
+
+	return keyErr
+}
+
+// The Read function parses file contents.
+func (db *hostKeyDB) Read(r io.Reader, filename string) error {
+	scanner := bufio.NewScanner(r)
+
+	lineNum := 0
+	for scanner.Scan() {
+		lineNum++
+		line := scanner.Bytes()
+		line = trimSpace(line)
+		if len(line) == 0 || line[0] == '#' {
+			continue
+		}
+
+		if err := db.parseLine(line, filename, lineNum); err != nil {
+			return fmt.Errorf("knownhosts: %s:%d: %v", filename, lineNum, err)
+		}
+	}
+	return scanner.Err()
+}
+
+// New creates a host key callback from the given OpenSSH host key
+// files. The returned callback is for use in
+// ssh.ClientConfig.HostKeyCallback. By preference, the key check
+// operates on the hostname if available, i.e. if a server changes its
+// IP address, the host key check will still succeed, even though a
+// record of the new IP address is not available.
+func New(files ...string) (ssh.HostKeyCallback, error) {
+	db := newHostKeyDB()
+	for _, fn := range files {
+		f, err := os.Open(fn)
+		if err != nil {
+			return nil, err
+		}
+		defer f.Close()
+		if err := db.Read(f, fn); err != nil {
+			return nil, err
+		}
+	}
+
+	var certChecker ssh.CertChecker
+	certChecker.IsHostAuthority = db.IsHostAuthority
+	certChecker.IsRevoked = db.IsRevoked
+	certChecker.HostKeyFallback = db.check
+
+	return certChecker.CheckHostKey, nil
+}
+
+// Normalize normalizes an address into the form used in known_hosts. Supports
+// IPv4, hostnames, bracketed IPv6. Any other non-standard formats are returned
+// with minimal transformation.
+func Normalize(address string) string {
+	const defaultSSHPort = "22"
+
+	host, port, err := net.SplitHostPort(address)
+	if err != nil {
+		host = address
+		port = defaultSSHPort
+	}
+
+	if strings.HasPrefix(host, "[") && strings.HasSuffix(host, "]") {
+		host = host[1 : len(host)-1]
+	}
+
+	if port == defaultSSHPort {
+		return host
+	}
+	return "[" + host + "]:" + port
+}
+
+// Line returns a line to add append to the known_hosts files.
+func Line(addresses []string, key ssh.PublicKey) string {
+	var trimmed []string
+	for _, a := range addresses {
+		trimmed = append(trimmed, Normalize(a))
+	}
+
+	return strings.Join(trimmed, ",") + " " + serialize(key)
+}
+
+// HashHostname hashes the given hostname. The hostname is not
+// normalized before hashing.
+func HashHostname(hostname string) string {
+	// TODO(hanwen): check if we can safely normalize this always.
+	salt := make([]byte, sha1.Size)
+
+	_, err := rand.Read(salt)
+	if err != nil {
+		panic(fmt.Sprintf("crypto/rand failure %v", err))
+	}
+
+	hash := hashHost(hostname, salt)
+	return encodeHash(sha1HashType, salt, hash)
+}
+
+func decodeHash(encoded string) (hashType string, salt, hash []byte, err error) {
+	if len(encoded) == 0 || encoded[0] != '|' {
+		err = errors.New("knownhosts: hashed host must start with '|'")
+		return
+	}
+	components := strings.Split(encoded, "|")
+	if len(components) != 4 {
+		err = fmt.Errorf("knownhosts: got %d components, want 3", len(components))
+		return
+	}
+
+	hashType = components[1]
+	if salt, err = base64.StdEncoding.DecodeString(components[2]); err != nil {
+		return
+	}
+	if hash, err = base64.StdEncoding.DecodeString(components[3]); err != nil {
+		return
+	}
+	return
+}
+
+func encodeHash(typ string, salt []byte, hash []byte) string {
+	return strings.Join([]string{"",
+		typ,
+		base64.StdEncoding.EncodeToString(salt),
+		base64.StdEncoding.EncodeToString(hash),
+	}, "|")
+}
+
+// See https://android.googlesource.com/platform/external/openssh/+/ab28f5495c85297e7a597c1ba62e996416da7c7e/hostfile.c#120
+func hashHost(hostname string, salt []byte) []byte {
+	mac := hmac.New(sha1.New, salt)
+	mac.Write([]byte(hostname))
+	return mac.Sum(nil)
+}
+
+type hashedHost struct {
+	salt []byte
+	hash []byte
+}
+
+const sha1HashType = "1"
+
+func newHashedHost(encoded string) (*hashedHost, error) {
+	typ, salt, hash, err := decodeHash(encoded)
+	if err != nil {
+		return nil, err
+	}
+
+	// The type field seems for future algorithm agility, but it's
+	// actually hardcoded in openssh currently, see
+	// https://android.googlesource.com/platform/external/openssh/+/ab28f5495c85297e7a597c1ba62e996416da7c7e/hostfile.c#120
+	if typ != sha1HashType {
+		return nil, fmt.Errorf("knownhosts: got hash type %s, must be '1'", typ)
+	}
+
+	return &hashedHost{salt: salt, hash: hash}, nil
+}
+
+func (h *hashedHost) match(a addr) bool {
+	return bytes.Equal(hashHost(Normalize(a.String()), h.salt), h.hash)
+}
+
+// trimSpace removes leading and trailing ASCII whitespace (space and tab). It
+// is used instead of bytes.TrimSpace to match OpenSSH behavior, which strictly
+// parses only ASCII space (0x20) and tab (0x09) as whitespace.
+func trimSpace(in []byte) []byte {
+	return bytes.Trim(in, " \t")
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/crypto/ssh/mac.go","mode":420,"size":2051,"sha256":"0894452248f590b8b26b97fa38b86116f9ef86305b4404096e4103e40537161c","index":0,"count":1,"encoding":"utf-8","payloadBytes":2051}
+// Copyright 2012 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package ssh
+
+// Message authentication support
+
+import (
+	"crypto/fips140"
+	"crypto/hmac"
+	"crypto/sha1"
+	"crypto/sha256"
+	"crypto/sha512"
+	"hash"
+	"slices"
+)
+
+type macMode struct {
+	keySize int
+	etm     bool
+	new     func(key []byte) hash.Hash
+}
+
+// truncatingMAC wraps around a hash.Hash and truncates the output digest to
+// a given size.
+type truncatingMAC struct {
+	length int
+	hmac   hash.Hash
+}
+
+func (t truncatingMAC) Write(data []byte) (int, error) {
+	return t.hmac.Write(data)
+}
+
+func (t truncatingMAC) Sum(in []byte) []byte {
+	out := t.hmac.Sum(in)
+	return out[:len(in)+t.length]
+}
+
+func (t truncatingMAC) Reset() {
+	t.hmac.Reset()
+}
+
+func (t truncatingMAC) Size() int {
+	return t.length
+}
+
+func (t truncatingMAC) BlockSize() int { return t.hmac.BlockSize() }
+
+// macModes defines the supported MACs. MACs not included are not supported
+// and will not be negotiated, even if explicitly configured. When FIPS mode is
+// enabled, only FIPS-approved algorithms are included.
+var macModes = map[string]*macMode{}
+
+func init() {
+	macModes[HMACSHA512ETM] = &macMode{64, true, func(key []byte) hash.Hash {
+		return hmac.New(sha512.New, key)
+	}}
+	macModes[HMACSHA256ETM] = &macMode{32, true, func(key []byte) hash.Hash {
+		return hmac.New(sha256.New, key)
+	}}
+	macModes[HMACSHA512] = &macMode{64, false, func(key []byte) hash.Hash {
+		return hmac.New(sha512.New, key)
+	}}
+	macModes[HMACSHA256] = &macMode{32, false, func(key []byte) hash.Hash {
+		return hmac.New(sha256.New, key)
+	}}
+
+	if fips140.Enabled() {
+		defaultMACs = slices.DeleteFunc(defaultMACs, func(algo string) bool {
+			_, ok := macModes[algo]
+			return !ok
+		})
+		return
+	}
+
+	macModes[HMACSHA1] = &macMode{20, false, func(key []byte) hash.Hash {
+		return hmac.New(sha1.New, key)
+	}}
+	macModes[InsecureHMACSHA196] = &macMode{20, false, func(key []byte) hash.Hash {
+		return truncatingMAC{12, hmac.New(sha1.New, key)}
+	}}
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/crypto/ssh/messages.go","mode":420,"size":20818,"sha256":"90f2906b4eef9d763fb726e8b3b9238ce19804105e4a0756ded443ca9117a8ea","index":0,"count":1,"encoding":"utf-8","payloadBytes":20818}
+// Copyright 2011 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package ssh
+
+import (
+	"bytes"
+	"encoding/binary"
+	"errors"
+	"fmt"
+	"io"
+	"math/big"
+	"reflect"
+	"strconv"
+	"strings"
+)
+
+// These are SSH message type numbers. They are scattered around several
+// documents but many were taken from [SSH-PARAMETERS].
+const (
+	msgIgnore        = 2
+	msgUnimplemented = 3
+	msgDebug         = 4
+	msgNewKeys       = 21
+)
+
+// SSH messages:
+//
+// These structures mirror the wire format of the corresponding SSH messages.
+// They are marshaled using reflection with the marshal and unmarshal functions
+// in this file. The only wrinkle is that a final member of type []byte with a
+// ssh tag of "rest" receives the remainder of a packet when unmarshaling.
+
+// See RFC 4253, section 11.1.
+const msgDisconnect = 1
+
+// disconnectMsg is the message that signals a disconnect. It is also
+// the error type returned from mux.Wait()
+type disconnectMsg struct {
+	Reason   uint32 `sshtype:"1"`
+	Message  string
+	Language string
+}
+
+func (d *disconnectMsg) Error() string {
+	return fmt.Sprintf("ssh: disconnect, reason %d: %s", d.Reason, d.Message)
+}
+
+// See RFC 4253, section 7.1.
+const msgKexInit = 20
+
+type kexInitMsg struct {
+	Cookie                  [16]byte `sshtype:"20"`
+	KexAlgos                []string
+	ServerHostKeyAlgos      []string
+	CiphersClientServer     []string
+	CiphersServerClient     []string
+	MACsClientServer        []string
+	MACsServerClient        []string
+	CompressionClientServer []string
+	CompressionServerClient []string
+	LanguagesClientServer   []string
+	LanguagesServerClient   []string
+	FirstKexFollows         bool
+	Reserved                uint32
+}
+
+// See RFC 4253, section 8.
+
+// Diffie-Hellman
+const msgKexDHInit = 30
+
+type kexDHInitMsg struct {
+	X *big.Int `sshtype:"30"`
+}
+
+const msgKexECDHInit = 30
+
+type kexECDHInitMsg struct {
+	ClientPubKey []byte `sshtype:"30"`
+}
+
+const msgKexECDHReply = 31
+
+type kexECDHReplyMsg struct {
+	HostKey         []byte `sshtype:"31"`
+	EphemeralPubKey []byte
+	Signature       []byte
+}
+
+const msgKexDHReply = 31
+
+type kexDHReplyMsg struct {
+	HostKey   []byte `sshtype:"31"`
+	Y         *big.Int
+	Signature []byte
+}
+
+// See RFC 4419, section 5.
+const msgKexDHGexGroup = 31
+
+type kexDHGexGroupMsg struct {
+	P *big.Int `sshtype:"31"`
+	G *big.Int
+}
+
+const msgKexDHGexInit = 32
+
+type kexDHGexInitMsg struct {
+	X *big.Int `sshtype:"32"`
+}
+
+const msgKexDHGexReply = 33
+
+type kexDHGexReplyMsg struct {
+	HostKey   []byte `sshtype:"33"`
+	Y         *big.Int
+	Signature []byte
+}
+
+const msgKexDHGexRequest = 34
+
+type kexDHGexRequestMsg struct {
+	MinBits       uint32 `sshtype:"34"`
+	PreferredBits uint32
+	MaxBits       uint32
+}
+
+// See RFC 4253, section 10.
+const msgServiceRequest = 5
+
+type serviceRequestMsg struct {
+	Service string `sshtype:"5"`
+}
+
+// See RFC 4253, section 10.
+const msgServiceAccept = 6
+
+type serviceAcceptMsg struct {
+	Service string `sshtype:"6"`
+}
+
+// See RFC 8308, section 2.3
+const msgExtInfo = 7
+
+type extInfoMsg struct {
+	NumExtensions uint32 `sshtype:"7"`
+	Payload       []byte `ssh:"rest"`
+}
+
+// See RFC 4252, section 5.
+const msgUserAuthRequest = 50
+
+type userAuthRequestMsg struct {
+	User    string `sshtype:"50"`
+	Service string
+	Method  string
+	Payload []byte `ssh:"rest"`
+}
+
+// Used for debug printouts of packets.
+type userAuthSuccessMsg struct {
+}
+
+// See RFC 4252, section 5.1
+const msgUserAuthFailure = 51
+
+type userAuthFailureMsg struct {
+	Methods        []string `sshtype:"51"`
+	PartialSuccess bool
+}
+
+// See RFC 4252, section 5.1
+const msgUserAuthSuccess = 52
+
+// See RFC 4252, section 5.4
+const msgUserAuthBanner = 53
+
+type userAuthBannerMsg struct {
+	Message string `sshtype:"53"`
+	// unused, but required to allow message parsing
+	Language string
+}
+
+// See RFC 4256, section 3.2
+const msgUserAuthInfoRequest = 60
+const msgUserAuthInfoResponse = 61
+
+type userAuthInfoRequestMsg struct {
+	Name        string `sshtype:"60"`
+	Instruction string
+	Language    string
+	NumPrompts  uint32
+	Prompts     []byte `ssh:"rest"`
+}
+
+// See RFC 4254, section 5.1.
+const msgChannelOpen = 90
+
+type channelOpenMsg struct {
+	ChanType         string `sshtype:"90"`
+	PeersID          uint32
+	PeersWindow      uint32
+	MaxPacketSize    uint32
+	TypeSpecificData []byte `ssh:"rest"`
+}
+
+const msgChannelExtendedData = 95
+const msgChannelData = 94
+
+// Used for debug print outs of packets.
+type channelDataMsg struct {
+	PeersID uint32 `sshtype:"94"`
+	Length  uint32
+	Rest    []byte `ssh:"rest"`
+}
+
+// See RFC 4254, section 5.1.
+const msgChannelOpenConfirm = 91
+
+type channelOpenConfirmMsg struct {
+	PeersID          uint32 `sshtype:"91"`
+	MyID             uint32
+	MyWindow         uint32
+	MaxPacketSize    uint32
+	TypeSpecificData []byte `ssh:"rest"`
+}
+
+// See RFC 4254, section 5.1.
+const msgChannelOpenFailure = 92
+
+type channelOpenFailureMsg struct {
+	PeersID  uint32 `sshtype:"92"`
+	Reason   RejectionReason
+	Message  string
+	Language string
+}
+
+const msgChannelRequest = 98
+
+type channelRequestMsg struct {
+	PeersID             uint32 `sshtype:"98"`
+	Request             string
+	WantReply           bool
+	RequestSpecificData []byte `ssh:"rest"`
+}
+
+// See RFC 4254, section 5.4.
+const msgChannelSuccess = 99
+
+type channelRequestSuccessMsg struct {
+	PeersID uint32 `sshtype:"99"`
+}
+
+// See RFC 4254, section 5.4.
+const msgChannelFailure = 100
+
+type channelRequestFailureMsg struct {
+	PeersID uint32 `sshtype:"100"`
+}
+
+// See RFC 4254, section 5.3
+const msgChannelClose = 97
+
+type channelCloseMsg struct {
+	PeersID uint32 `sshtype:"97"`
+}
+
+// See RFC 4254, section 5.3
+const msgChannelEOF = 96
+
+type channelEOFMsg struct {
+	PeersID uint32 `sshtype:"96"`
+}
+
+// See RFC 4254, section 4
+const msgGlobalRequest = 80
+
+type globalRequestMsg struct {
+	Type      string `sshtype:"80"`
+	WantReply bool
+	Data      []byte `ssh:"rest"`
+}
+
+// See RFC 4254, section 4
+const msgRequestSuccess = 81
+
+type globalRequestSuccessMsg struct {
+	Data []byte `ssh:"rest" sshtype:"81"`
+}
+
+// See RFC 4254, section 4
+const msgRequestFailure = 82
+
+type globalRequestFailureMsg struct {
+	Data []byte `ssh:"rest" sshtype:"82"`
+}
+
+// See RFC 4254, section 5.2
+const msgChannelWindowAdjust = 93
+
+type windowAdjustMsg struct {
+	PeersID         uint32 `sshtype:"93"`
+	AdditionalBytes uint32
+}
+
+// See RFC 4252, section 7
+const msgUserAuthPubKeyOk = 60
+
+type userAuthPubKeyOkMsg struct {
+	Algo   string `sshtype:"60"`
+	PubKey []byte
+}
+
+// See RFC 4462, section 3
+const msgUserAuthGSSAPIResponse = 60
+
+type userAuthGSSAPIResponse struct {
+	SupportMech []byte `sshtype:"60"`
+}
+
+const msgUserAuthGSSAPIToken = 61
+
+type userAuthGSSAPIToken struct {
+	Token []byte `sshtype:"61"`
+}
+
+const msgUserAuthGSSAPIMIC = 66
+
+type userAuthGSSAPIMIC struct {
+	MIC []byte `sshtype:"66"`
+}
+
+// See RFC 4462, section 3.9
+const msgUserAuthGSSAPIErrTok = 64
+
+type userAuthGSSAPIErrTok struct {
+	ErrorToken []byte `sshtype:"64"`
+}
+
+// See RFC 4462, section 3.8
+const msgUserAuthGSSAPIError = 65
+
+type userAuthGSSAPIError struct {
+	MajorStatus uint32 `sshtype:"65"`
+	MinorStatus uint32
+	Message     string
+	LanguageTag string
+}
+
+// Transport layer OpenSSH extension. See [PROTOCOL], section 1.9
+const msgPing = 192
+
+type pingMsg struct {
+	Data string `sshtype:"192"`
+}
+
+// Transport layer OpenSSH extension. See [PROTOCOL], section 1.9
+const msgPong = 193
+
+type pongMsg struct {
+	Data string `sshtype:"193"`
+}
+
+// typeTags returns the possible type bytes for the given reflect.Type, which
+// should be a struct. The possible values are separated by a '|' character.
+func typeTags(structType reflect.Type) (tags []byte) {
+	tagStr := structType.Field(0).Tag.Get("sshtype")
+
+	for _, tag := range strings.Split(tagStr, "|") {
+		i, err := strconv.Atoi(tag)
+		if err == nil {
+			tags = append(tags, byte(i))
+		}
+	}
+
+	return tags
+}
+
+func fieldError(t reflect.Type, field int, problem string) error {
+	if problem != "" {
+		problem = ": " + problem
+	}
+	return fmt.Errorf("ssh: unmarshal error for field %s of type %s%s", t.Field(field).Name, t.Name(), problem)
+}
+
+var errShortRead = errors.New("ssh: short read")
+
+// Unmarshal parses data in SSH wire format into a structure. The out
+// argument should be a pointer to struct. If the first member of the
+// struct has the "sshtype" tag set to a '|'-separated set of numbers
+// in decimal, the packet must start with one of those numbers. In
+// case of error, Unmarshal returns a ParseError or
+// UnexpectedMessageError.
+func Unmarshal(data []byte, out interface{}) error {
+	v := reflect.ValueOf(out).Elem()
+	structType := v.Type()
+	expectedTypes := typeTags(structType)
+
+	var expectedType byte
+	if len(expectedTypes) > 0 {
+		expectedType = expectedTypes[0]
+	}
+
+	if len(data) == 0 {
+		return parseError(expectedType)
+	}
+
+	if len(expectedTypes) > 0 {
+		goodType := false
+		for _, e := range expectedTypes {
+			if e > 0 && data[0] == e {
+				goodType = true
+				break
+			}
+		}
+		if !goodType {
+			return fmt.Errorf("ssh: unexpected message type %d (expected one of %v)", data[0], expectedTypes)
+		}
+		data = data[1:]
+	}
+
+	var ok bool
+	for i := 0; i < v.NumField(); i++ {
+		field := v.Field(i)
+		t := field.Type()
+		switch t.Kind() {
+		case reflect.Bool:
+			if len(data) < 1 {
+				return errShortRead
+			}
+			field.SetBool(data[0] != 0)
+			data = data[1:]
+		case reflect.Array:
+			if t.Elem().Kind() != reflect.Uint8 {
+				return fieldError(structType, i, "array of unsupported type")
+			}
+			if len(data) < t.Len() {
+				return errShortRead
+			}
+			for j, n := 0, t.Len(); j < n; j++ {
+				field.Index(j).Set(reflect.ValueOf(data[j]))
+			}
+			data = data[t.Len():]
+		case reflect.Uint64:
+			var u64 uint64
+			if u64, data, ok = parseUint64(data); !ok {
+				return errShortRead
+			}
+			field.SetUint(u64)
+		case reflect.Uint32:
+			var u32 uint32
+			if u32, data, ok = parseUint32(data); !ok {
+				return errShortRead
+			}
+			field.SetUint(uint64(u32))
+		case reflect.Uint8:
+			if len(data) < 1 {
+				return errShortRead
+			}
+			field.SetUint(uint64(data[0]))
+			data = data[1:]
+		case reflect.String:
+			var s []byte
+			if s, data, ok = parseString(data); !ok {
+				return fieldError(structType, i, "")
+			}
+			field.SetString(string(s))
+		case reflect.Slice:
+			switch t.Elem().Kind() {
+			case reflect.Uint8:
+				if structType.Field(i).Tag.Get("ssh") == "rest" {
+					field.Set(reflect.ValueOf(data))
+					data = nil
+				} else {
+					var s []byte
+					if s, data, ok = parseString(data); !ok {
+						return errShortRead
+					}
+					field.Set(reflect.ValueOf(s))
+				}
+			case reflect.String:
+				var nl []string
+				if nl, data, ok = parseNameList(data); !ok {
+					return errShortRead
+				}
+				field.Set(reflect.ValueOf(nl))
+			default:
+				return fieldError(structType, i, "slice of unsupported type")
+			}
+		case reflect.Ptr:
+			if t == bigIntType {
+				var n *big.Int
+				if n, data, ok = parseInt(data); !ok {
+					return errShortRead
+				}
+				field.Set(reflect.ValueOf(n))
+			} else {
+				return fieldError(structType, i, "pointer to unsupported type")
+			}
+		default:
+			return fieldError(structType, i, fmt.Sprintf("unsupported type: %v", t))
+		}
+	}
+
+	if len(data) != 0 {
+		return parseError(expectedType)
+	}
+
+	return nil
+}
+
+// Marshal serializes the message in msg to SSH wire format.  The msg
+// argument should be a struct or pointer to struct. If the first
+// member has the "sshtype" tag set to a number in decimal, that
+// number is prepended to the result. If the last of member has the
+// "ssh" tag set to "rest", its contents are appended to the output.
+func Marshal(msg interface{}) []byte {
+	out := make([]byte, 0, 64)
+	return marshalStruct(out, msg)
+}
+
+func marshalStruct(out []byte, msg interface{}) []byte {
+	v := reflect.Indirect(reflect.ValueOf(msg))
+	msgTypes := typeTags(v.Type())
+	if len(msgTypes) > 0 {
+		out = append(out, msgTypes[0])
+	}
+
+	for i, n := 0, v.NumField(); i < n; i++ {
+		field := v.Field(i)
+		switch t := field.Type(); t.Kind() {
+		case reflect.Bool:
+			var v uint8
+			if field.Bool() {
+				v = 1
+			}
+			out = append(out, v)
+		case reflect.Array:
+			if t.Elem().Kind() != reflect.Uint8 {
+				panic(fmt.Sprintf("array of non-uint8 in field %d: %T", i, field.Interface()))
+			}
+			for j, l := 0, t.Len(); j < l; j++ {
+				out = append(out, uint8(field.Index(j).Uint()))
+			}
+		case reflect.Uint32:
+			out = appendU32(out, uint32(field.Uint()))
+		case reflect.Uint64:
+			out = appendU64(out, uint64(field.Uint()))
+		case reflect.Uint8:
+			out = append(out, uint8(field.Uint()))
+		case reflect.String:
+			s := field.String()
+			out = appendInt(out, len(s))
+			out = append(out, s...)
+		case reflect.Slice:
+			switch t.Elem().Kind() {
+			case reflect.Uint8:
+				if v.Type().Field(i).Tag.Get("ssh") != "rest" {
+					out = appendInt(out, field.Len())
+				}
+				out = append(out, field.Bytes()...)
+			case reflect.String:
+				offset := len(out)
+				out = appendU32(out, 0)
+				if n := field.Len(); n > 0 {
+					for j := 0; j < n; j++ {
+						f := field.Index(j)
+						if j != 0 {
+							out = append(out, ',')
+						}
+						out = append(out, f.String()...)
+					}
+					// overwrite length value
+					binary.BigEndian.PutUint32(out[offset:], uint32(len(out)-offset-4))
+				}
+			default:
+				panic(fmt.Sprintf("slice of unknown type in field %d: %T", i, field.Interface()))
+			}
+		case reflect.Ptr:
+			if t == bigIntType {
+				var n *big.Int
+				nValue := reflect.ValueOf(&n)
+				nValue.Elem().Set(field)
+				needed := intLength(n)
+				oldLength := len(out)
+
+				if cap(out)-len(out) < needed {
+					newOut := make([]byte, len(out), 2*(len(out)+needed))
+					copy(newOut, out)
+					out = newOut
+				}
+				out = out[:oldLength+needed]
+				marshalInt(out[oldLength:], n)
+			} else {
+				panic(fmt.Sprintf("pointer to unknown type in field %d: %T", i, field.Interface()))
+			}
+		}
+	}
+
+	return out
+}
+
+var bigOne = big.NewInt(1)
+
+func parseString(in []byte) (out, rest []byte, ok bool) {
+	if len(in) < 4 {
+		return
+	}
+	length := binary.BigEndian.Uint32(in)
+	in = in[4:]
+	if uint32(len(in)) < length {
+		return
+	}
+	out = in[:length]
+	rest = in[length:]
+	ok = true
+	return
+}
+
+var (
+	comma         = []byte{','}
+	emptyNameList = []string{}
+)
+
+func parseNameList(in []byte) (out []string, rest []byte, ok bool) {
+	contents, rest, ok := parseString(in)
+	if !ok {
+		return
+	}
+	if len(contents) == 0 {
+		out = emptyNameList
+		return
+	}
+	parts := bytes.Split(contents, comma)
+	out = make([]string, len(parts))
+	for i, part := range parts {
+		out[i] = string(part)
+	}
+	return
+}
+
+func parseInt(in []byte) (out *big.Int, rest []byte, ok bool) {
+	contents, rest, ok := parseString(in)
+	if !ok {
+		return
+	}
+	out = new(big.Int)
+
+	if len(contents) > 0 && contents[0]&0x80 == 0x80 {
+		// This is a negative number
+		notBytes := make([]byte, len(contents))
+		for i := range notBytes {
+			notBytes[i] = ^contents[i]
+		}
+		out.SetBytes(notBytes)
+		out.Add(out, bigOne)
+		out.Neg(out)
+	} else {
+		// Positive number
+		out.SetBytes(contents)
+	}
+	ok = true
+	return
+}
+
+func parseUint32(in []byte) (uint32, []byte, bool) {
+	if len(in) < 4 {
+		return 0, nil, false
+	}
+	return binary.BigEndian.Uint32(in), in[4:], true
+}
+
+func parseUint64(in []byte) (uint64, []byte, bool) {
+	if len(in) < 8 {
+		return 0, nil, false
+	}
+	return binary.BigEndian.Uint64(in), in[8:], true
+}
+
+func intLength(n *big.Int) int {
+	length := 4 /* length bytes */
+	if n.Sign() < 0 {
+		nMinus1 := new(big.Int).Neg(n)
+		nMinus1.Sub(nMinus1, bigOne)
+		bitLen := nMinus1.BitLen()
+		if bitLen%8 == 0 {
+			// The number will need 0xff padding
+			length++
+		}
+		length += (bitLen + 7) / 8
+	} else if n.Sign() == 0 {
+		// A zero is the zero length string
+	} else {
+		bitLen := n.BitLen()
+		if bitLen%8 == 0 {
+			// The number will need 0x00 padding
+			length++
+		}
+		length += (bitLen + 7) / 8
+	}
+
+	return length
+}
+
+func marshalUint32(to []byte, n uint32) []byte {
+	binary.BigEndian.PutUint32(to, n)
+	return to[4:]
+}
+
+func marshalUint64(to []byte, n uint64) []byte {
+	binary.BigEndian.PutUint64(to, n)
+	return to[8:]
+}
+
+func marshalInt(to []byte, n *big.Int) []byte {
+	lengthBytes := to
+	to = to[4:]
+	length := 0
+
+	if n.Sign() < 0 {
+		// A negative number has to be converted to two's-complement
+		// form. So we'll subtract 1 and invert. If the
+		// most-significant-bit isn't set then we'll need to pad the
+		// beginning with 0xff in order to keep the number negative.
+		nMinus1 := new(big.Int).Neg(n)
+		nMinus1.Sub(nMinus1, bigOne)
+		bytes := nMinus1.Bytes()
+		for i := range bytes {
+			bytes[i] ^= 0xff
+		}
+		if len(bytes) == 0 || bytes[0]&0x80 == 0 {
+			to[0] = 0xff
+			to = to[1:]
+			length++
+		}
+		nBytes := copy(to, bytes)
+		to = to[nBytes:]
+		length += nBytes
+	} else if n.Sign() == 0 {
+		// A zero is the zero length string
+	} else {
+		bytes := n.Bytes()
+		if len(bytes) > 0 && bytes[0]&0x80 != 0 {
+			// We'll have to pad this with a 0x00 in order to
+			// stop it looking like a negative number.
+			to[0] = 0
+			to = to[1:]
+			length++
+		}
+		nBytes := copy(to, bytes)
+		to = to[nBytes:]
+		length += nBytes
+	}
+
+	lengthBytes[0] = byte(length >> 24)
+	lengthBytes[1] = byte(length >> 16)
+	lengthBytes[2] = byte(length >> 8)
+	lengthBytes[3] = byte(length)
+	return to
+}
+
+func writeInt(w io.Writer, n *big.Int) {
+	length := intLength(n)
+	buf := make([]byte, length)
+	marshalInt(buf, n)
+	w.Write(buf)
+}
+
+func writeString(w io.Writer, s []byte) {
+	var lengthBytes [4]byte
+	lengthBytes[0] = byte(len(s) >> 24)
+	lengthBytes[1] = byte(len(s) >> 16)
+	lengthBytes[2] = byte(len(s) >> 8)
+	lengthBytes[3] = byte(len(s))
+	w.Write(lengthBytes[:])
+	w.Write(s)
+}
+
+func stringLength(n int) int {
+	return 4 + n
+}
+
+func marshalString(to []byte, s []byte) []byte {
+	to[0] = byte(len(s) >> 24)
+	to[1] = byte(len(s) >> 16)
+	to[2] = byte(len(s) >> 8)
+	to[3] = byte(len(s))
+	to = to[4:]
+	copy(to, s)
+	return to[len(s):]
+}
+
+var bigIntType = reflect.TypeFor[*big.Int]()
+
+// Decode a packet into its corresponding message.
+func decode(packet []byte) (interface{}, error) {
+	var msg interface{}
+	switch packet[0] {
+	case msgDisconnect:
+		msg = new(disconnectMsg)
+	case msgServiceRequest:
+		msg = new(serviceRequestMsg)
+	case msgServiceAccept:
+		msg = new(serviceAcceptMsg)
+	case msgExtInfo:
+		msg = new(extInfoMsg)
+	case msgKexInit:
+		msg = new(kexInitMsg)
+	case msgKexDHInit:
+		msg = new(kexDHInitMsg)
+	case msgKexDHReply:
+		msg = new(kexDHReplyMsg)
+	case msgUserAuthRequest:
+		msg = new(userAuthRequestMsg)
+	case msgUserAuthSuccess:
+		return new(userAuthSuccessMsg), nil
+	case msgUserAuthFailure:
+		msg = new(userAuthFailureMsg)
+	case msgUserAuthBanner:
+		msg = new(userAuthBannerMsg)
+	case msgUserAuthPubKeyOk:
+		msg = new(userAuthPubKeyOkMsg)
+	case msgGlobalRequest:
+		msg = new(globalRequestMsg)
+	case msgRequestSuccess:
+		msg = new(globalRequestSuccessMsg)
+	case msgRequestFailure:
+		msg = new(globalRequestFailureMsg)
+	case msgChannelOpen:
+		msg = new(channelOpenMsg)
+	case msgChannelData:
+		msg = new(channelDataMsg)
+	case msgChannelOpenConfirm:
+		msg = new(channelOpenConfirmMsg)
+	case msgChannelOpenFailure:
+		msg = new(channelOpenFailureMsg)
+	case msgChannelWindowAdjust:
+		msg = new(windowAdjustMsg)
+	case msgChannelEOF:
+		msg = new(channelEOFMsg)
+	case msgChannelClose:
+		msg = new(channelCloseMsg)
+	case msgChannelRequest:
+		msg = new(channelRequestMsg)
+	case msgChannelSuccess:
+		msg = new(channelRequestSuccessMsg)
+	case msgChannelFailure:
+		msg = new(channelRequestFailureMsg)
+	case msgUserAuthGSSAPIToken:
+		msg = new(userAuthGSSAPIToken)
+	case msgUserAuthGSSAPIMIC:
+		msg = new(userAuthGSSAPIMIC)
+	case msgUserAuthGSSAPIErrTok:
+		msg = new(userAuthGSSAPIErrTok)
+	case msgUserAuthGSSAPIError:
+		msg = new(userAuthGSSAPIError)
+	default:
+		return nil, unexpectedMessageError(0, packet[0])
+	}
+	if err := Unmarshal(packet, msg); err != nil {
+		return nil, err
+	}
+	return msg, nil
+}
+
+var packetTypeNames = map[byte]string{
+	msgDisconnect:          "disconnectMsg",
+	msgServiceRequest:      "serviceRequestMsg",
+	msgServiceAccept:       "serviceAcceptMsg",
+	msgExtInfo:             "extInfoMsg",
+	msgKexInit:             "kexInitMsg",
+	msgKexDHInit:           "kexDHInitMsg",
+	msgKexDHReply:          "kexDHReplyMsg",
+	msgUserAuthRequest:     "userAuthRequestMsg",
+	msgUserAuthSuccess:     "userAuthSuccessMsg",
+	msgUserAuthFailure:     "userAuthFailureMsg",
+	msgUserAuthPubKeyOk:    "userAuthPubKeyOkMsg",
+	msgGlobalRequest:       "globalRequestMsg",
+	msgRequestSuccess:      "globalRequestSuccessMsg",
+	msgRequestFailure:      "globalRequestFailureMsg",
+	msgChannelOpen:         "channelOpenMsg",
+	msgChannelData:         "channelDataMsg",
+	msgChannelOpenConfirm:  "channelOpenConfirmMsg",
+	msgChannelOpenFailure:  "channelOpenFailureMsg",
+	msgChannelWindowAdjust: "windowAdjustMsg",
+	msgChannelEOF:          "channelEOFMsg",
+	msgChannelClose:        "channelCloseMsg",
+	msgChannelRequest:      "channelRequestMsg",
+	msgChannelSuccess:      "channelRequestSuccessMsg",
+	msgChannelFailure:      "channelRequestFailureMsg",
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/crypto/ssh/mlkem.go","mode":420,"size":4560,"sha256":"0e78c5f3f901d309aab76b40d83d3dc473908d42b4ddf16d67ea72a5e3fd2c35","index":0,"count":1,"encoding":"utf-8","payloadBytes":4560}
+// Copyright 2024 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package ssh
+
+import (
+	"crypto"
+	"crypto/mlkem"
+	"crypto/sha256"
+	"errors"
+	"fmt"
+	"io"
+
+	"golang.org/x/crypto/curve25519"
+)
+
+// mlkem768WithCurve25519sha256 implements the hybrid ML-KEM768 with
+// curve25519-sha256 key exchange method, as described by
+// draft-kampanakis-curdle-ssh-pq-ke-05 section 2.3.3.
+type mlkem768WithCurve25519sha256 struct{}
+
+func (kex *mlkem768WithCurve25519sha256) Client(c packetConn, rand io.Reader, magics *handshakeMagics) (*kexResult, error) {
+	var c25519kp curve25519KeyPair
+	if err := c25519kp.generate(rand); err != nil {
+		return nil, err
+	}
+
+	seed := make([]byte, mlkem.SeedSize)
+	if _, err := io.ReadFull(rand, seed); err != nil {
+		return nil, err
+	}
+
+	mlkemDk, err := mlkem.NewDecapsulationKey768(seed)
+	if err != nil {
+		return nil, err
+	}
+
+	hybridKey := append(mlkemDk.EncapsulationKey().Bytes(), c25519kp.pub[:]...)
+	if err := c.writePacket(Marshal(&kexECDHInitMsg{hybridKey})); err != nil {
+		return nil, err
+	}
+
+	packet, err := c.readPacket()
+	if err != nil {
+		return nil, err
+	}
+
+	var reply kexECDHReplyMsg
+	if err = Unmarshal(packet, &reply); err != nil {
+		return nil, err
+	}
+
+	if len(reply.EphemeralPubKey) != mlkem.CiphertextSize768+32 {
+		return nil, errors.New("ssh: peer's mlkem768x25519 public value has wrong length")
+	}
+
+	// Perform KEM decapsulate operation to obtain shared key from ML-KEM.
+	mlkem768Secret, err := mlkemDk.Decapsulate(reply.EphemeralPubKey[:mlkem.CiphertextSize768])
+	if err != nil {
+		return nil, err
+	}
+
+	// Complete Curve25519 ECDH to obtain its shared key.
+	c25519Secret, err := curve25519.X25519(c25519kp.priv[:], reply.EphemeralPubKey[mlkem.CiphertextSize768:])
+	if err != nil {
+		return nil, fmt.Errorf("ssh: peer's mlkem768x25519 public value is not valid: %w", err)
+	}
+	// Compute actual shared key.
+	h := sha256.New()
+	h.Write(mlkem768Secret)
+	h.Write(c25519Secret)
+	secret := h.Sum(nil)
+
+	h.Reset()
+	magics.write(h)
+	writeString(h, reply.HostKey)
+	writeString(h, hybridKey)
+	writeString(h, reply.EphemeralPubKey)
+
+	K := make([]byte, stringLength(len(secret)))
+	marshalString(K, secret)
+	h.Write(K)
+
+	return &kexResult{
+		H:         h.Sum(nil),
+		K:         K,
+		HostKey:   reply.HostKey,
+		Signature: reply.Signature,
+		Hash:      crypto.SHA256,
+	}, nil
+}
+
+func (kex *mlkem768WithCurve25519sha256) Server(c packetConn, rand io.Reader, magics *handshakeMagics, priv AlgorithmSigner, algo string) (*kexResult, error) {
+	packet, err := c.readPacket()
+	if err != nil {
+		return nil, err
+	}
+
+	var kexInit kexECDHInitMsg
+	if err = Unmarshal(packet, &kexInit); err != nil {
+		return nil, err
+	}
+
+	if len(kexInit.ClientPubKey) != mlkem.EncapsulationKeySize768+32 {
+		return nil, errors.New("ssh: peer's ML-KEM768/curve25519 public value has wrong length")
+	}
+
+	encapsulationKey, err := mlkem.NewEncapsulationKey768(kexInit.ClientPubKey[:mlkem.EncapsulationKeySize768])
+	if err != nil {
+		return nil, fmt.Errorf("ssh: peer's ML-KEM768 encapsulation key is not valid: %w", err)
+	}
+	// Perform KEM encapsulate operation to obtain ciphertext and shared key.
+	mlkem768Secret, mlkem768Ciphertext := encapsulationKey.Encapsulate()
+
+	// Perform server side of Curve25519 ECDH to obtain server public value and
+	// shared key.
+	var c25519kp curve25519KeyPair
+	if err := c25519kp.generate(rand); err != nil {
+		return nil, err
+	}
+	c25519Secret, err := curve25519.X25519(c25519kp.priv[:], kexInit.ClientPubKey[mlkem.EncapsulationKeySize768:])
+	if err != nil {
+		return nil, fmt.Errorf("ssh: peer's ML-KEM768/curve25519 public value is not valid: %w", err)
+	}
+	hybridKey := append(mlkem768Ciphertext, c25519kp.pub[:]...)
+
+	// Compute actual shared key.
+	h := sha256.New()
+	h.Write(mlkem768Secret)
+	h.Write(c25519Secret)
+	secret := h.Sum(nil)
+
+	hostKeyBytes := priv.PublicKey().Marshal()
+
+	h.Reset()
+	magics.write(h)
+	writeString(h, hostKeyBytes)
+	writeString(h, kexInit.ClientPubKey)
+	writeString(h, hybridKey)
+
+	K := make([]byte, stringLength(len(secret)))
+	marshalString(K, secret)
+	h.Write(K)
+
+	H := h.Sum(nil)
+
+	sig, err := signAndMarshal(priv, rand, H, algo)
+	if err != nil {
+		return nil, err
+	}
+
+	reply := kexECDHReplyMsg{
+		EphemeralPubKey: hybridKey,
+		HostKey:         hostKeyBytes,
+		Signature:       sig,
+	}
+	if err := c.writePacket(Marshal(&reply)); err != nil {
+		return nil, err
+	}
+	return &kexResult{
+		H:         H,
+		K:         K,
+		HostKey:   hostKeyBytes,
+		Signature: sig,
+		Hash:      crypto.SHA256,
+	}, nil
+}
+
+@@END
 @@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/crypto/ssh/mux.go","mode":420,"size":8961,"sha256":"a514fd3f8855b8d6b3d1df7fadaadd4e481eeccb01a36cef0d88593e20e0fa1c","index":0,"count":1,"encoding":"utf-8","payloadBytes":8961}
 // Copyright 2013 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
@@ -129668,1917 +133300,6 @@ const (
 	TIOCGPGRP                         = 0x40047477
 	TIOCGSID                          = 0x40047463
 	TIOCGTSTAMP                       = 0x400c745b
-	TIOCGWINSZ                        = 0x40087468
-	TIOCMBIC                          = 0x8004746b
-	TIOCMBIS                          = 0x8004746c
-	TIOCMGET                          = 0x4004746a
-	TIOCMODG                          = 0x4004746a
-	TIOCMODS                          = 0x8004746d
-	TIOCMSET                          = 0x8004746d
-	TIOCM_CAR                         = 0x40
-	TIOCM_CD                          = 0x40
-	TIOCM_CTS                         = 0x20
-	TIOCM_DSR                         = 0x100
-	TIOCM_DTR                         = 0x2
-	TIOCM_LE                          = 0x1
-	TIOCM_RI                          = 0x80
-	TIOCM_RNG                         = 0x80
-	TIOCM_RTS                         = 0x4
-	TIOCM_SR                          = 0x10
-	TIOCM_ST                          = 0x8
-	TIOCNOTTY                         = 0x20007471
-	TIOCNXCL                          = 0x2000740e
-	TIOCOUTQ                          = 0x40047473
-	TIOCPKT                           = 0x80047470
-	TIOCPKT_DATA                      = 0x0
-	TIOCPKT_DOSTOP                    = 0x20
-	TIOCPKT_FLUSHREAD                 = 0x1
-	TIOCPKT_FLUSHWRITE                = 0x2
-	TIOCPKT_IOCTL                     = 0x40
-	TIOCPKT_NOSTOP                    = 0x10
-	TIOCPKT_START                     = 0x8
-	TIOCPKT_STOP                      = 0x4
-	TIOCREMOTE                        = 0x80047469
-	TIOCSBRK                          = 0x2000747b
-	TIOCSCTTY                         = 0x20007461
-	TIOCSDTR                          = 0x20007479
-	TIOCSETA                          = 0x802c7414
-	TIOCSETAF                         = 0x802c7416
-	TIOCSETAW                         = 0x802c7415
-	TIOCSETD                          = 0x8004741b
-	TIOCSETVERAUTH                    = 0x8004741c
-	TIOCSFLAGS                        = 0x8004745c
-	TIOCSIG                           = 0x8004745f
-	TIOCSPGRP                         = 0x80047476
-	TIOCSTART                         = 0x2000746e
-	TIOCSTAT                          = 0x20007465
-	TIOCSTOP                          = 0x2000746f
-	TIOCSTSTAMP                       = 0x8008745a
-	TIOCSWINSZ                        = 0x80087467
-	TIOCUCNTL                         = 0x80047466
-	TIOCUCNTL_CBRK                    = 0x7a
-	TIOCUCNTL_SBRK                    = 0x7b
-	TOSTOP                            = 0x400000
-	UTIME_NOW                         = -0x2
-	UTIME_OMIT                        = -0x1
-	VDISCARD                          = 0xf
-	VDSUSP                            = 0xb
-	VEOF                              = 0x0
-	VEOL                              = 0x1
-	VEOL2                             = 0x2
-	VERASE                            = 0x3
-	VINTR                             = 0x8
-	VKILL                             = 0x5
-	VLNEXT                            = 0xe
-	VMIN                              = 0x10
-	VM_ANONMIN                        = 0x7
-	VM_LOADAVG                        = 0x2
-	VM_MALLOC_CONF                    = 0xc
-	VM_MAXID                          = 0xd
-	VM_MAXSLP                         = 0xa
-	VM_METER                          = 0x1
-	VM_NKMEMPAGES                     = 0x6
-	VM_PSSTRINGS                      = 0x3
-	VM_SWAPENCRYPT                    = 0x5
-	VM_USPACE                         = 0xb
-	VM_UVMEXP                         = 0x4
-	VM_VNODEMIN                       = 0x9
-	VM_VTEXTMIN                       = 0x8
-	VQUIT                             = 0x9
-	VREPRINT                          = 0x6
-	VSTART                            = 0xc
-	VSTATUS                           = 0x12
-	VSTOP                             = 0xd
-	VSUSP                             = 0xa
-	VTIME                             = 0x11
-	VWERASE                           = 0x4
-	WALTSIG                           = 0x4
-	WCONTINUED                        = 0x8
-	WCOREFLAG                         = 0x80
-	WNOHANG                           = 0x1
-	WUNTRACED                         = 0x2
-	XCASE                             = 0x1000000
-)
-
-// Errors
-const (
-	E2BIG           = syscall.Errno(0x7)
-	EACCES          = syscall.Errno(0xd)
-	EADDRINUSE      = syscall.Errno(0x30)
-	EADDRNOTAVAIL   = syscall.Errno(0x31)
-	EAFNOSUPPORT    = syscall.Errno(0x2f)
-	EAGAIN          = syscall.Errno(0x23)
-	EALREADY        = syscall.Errno(0x25)
-	EAUTH           = syscall.Errno(0x50)
-	EBADF           = syscall.Errno(0x9)
-	EBADMSG         = syscall.Errno(0x5c)
-	EBADRPC         = syscall.Errno(0x48)
-	EBUSY           = syscall.Errno(0x10)
-	ECANCELED       = syscall.Errno(0x58)
-	ECHILD          = syscall.Errno(0xa)
-	ECONNABORTED    = syscall.Errno(0x35)
-	ECONNREFUSED    = syscall.Errno(0x3d)
-	ECONNRESET      = syscall.Errno(0x36)
-	EDEADLK         = syscall.Errno(0xb)
-	EDESTADDRREQ    = syscall.Errno(0x27)
-	EDOM            = syscall.Errno(0x21)
-	EDQUOT          = syscall.Errno(0x45)
-	EEXIST          = syscall.Errno(0x11)
-	EFAULT          = syscall.Errno(0xe)
-	EFBIG           = syscall.Errno(0x1b)
-	EFTYPE          = syscall.Errno(0x4f)
-	EHOSTDOWN       = syscall.Errno(0x40)
-	EHOSTUNREACH    = syscall.Errno(0x41)
-	EIDRM           = syscall.Errno(0x59)
-	EILSEQ          = syscall.Errno(0x54)
-	EINPROGRESS     = syscall.Errno(0x24)
-	EINTR           = syscall.Errno(0x4)
-	EINVAL          = syscall.Errno(0x16)
-	EIO             = syscall.Errno(0x5)
-	EIPSEC          = syscall.Errno(0x52)
-	EISCONN         = syscall.Errno(0x38)
-	EISDIR          = syscall.Errno(0x15)
-	ELAST           = syscall.Errno(0x5f)
-	ELOOP           = syscall.Errno(0x3e)
-	EMEDIUMTYPE     = syscall.Errno(0x56)
-	EMFILE          = syscall.Errno(0x18)
-	EMLINK          = syscall.Errno(0x1f)
-	EMSGSIZE        = syscall.Errno(0x28)
-	ENAMETOOLONG    = syscall.Errno(0x3f)
-	ENEEDAUTH       = syscall.Errno(0x51)
-	ENETDOWN        = syscall.Errno(0x32)
-	ENETRESET       = syscall.Errno(0x34)
-	ENETUNREACH     = syscall.Errno(0x33)
-	ENFILE          = syscall.Errno(0x17)
-	ENOATTR         = syscall.Errno(0x53)
-	ENOBUFS         = syscall.Errno(0x37)
-	ENODEV          = syscall.Errno(0x13)
-	ENOENT          = syscall.Errno(0x2)
-	ENOEXEC         = syscall.Errno(0x8)
-	ENOLCK          = syscall.Errno(0x4d)
-	ENOMEDIUM       = syscall.Errno(0x55)
-	ENOMEM          = syscall.Errno(0xc)
-	ENOMSG          = syscall.Errno(0x5a)
-	ENOPROTOOPT     = syscall.Errno(0x2a)
-	ENOSPC          = syscall.Errno(0x1c)
-	ENOSYS          = syscall.Errno(0x4e)
-	ENOTBLK         = syscall.Errno(0xf)
-	ENOTCONN        = syscall.Errno(0x39)
-	ENOTDIR         = syscall.Errno(0x14)
-	ENOTEMPTY       = syscall.Errno(0x42)
-	ENOTRECOVERABLE = syscall.Errno(0x5d)
-	ENOTSOCK        = syscall.Errno(0x26)
-	ENOTSUP         = syscall.Errno(0x5b)
-	ENOTTY          = syscall.Errno(0x19)
-	ENXIO           = syscall.Errno(0x6)
-	EOPNOTSUPP      = syscall.Errno(0x2d)
-	EOVERFLOW       = syscall.Errno(0x57)
-	EOWNERDEAD      = syscall.Errno(0x5e)
-	EPERM           = syscall.Errno(0x1)
-	EPFNOSUPPORT    = syscall.Errno(0x2e)
-	EPIPE           = syscall.Errno(0x20)
-	EPROCLIM        = syscall.Errno(0x43)
-	EPROCUNAVAIL    = syscall.Errno(0x4c)
-	EPROGMISMATCH   = syscall.Errno(0x4b)
-	EPROGUNAVAIL    = syscall.Errno(0x4a)
-	EPROTO          = syscall.Errno(0x5f)
-	EPROTONOSUPPORT = syscall.Errno(0x2b)
-	EPROTOTYPE      = syscall.Errno(0x29)
-	ERANGE          = syscall.Errno(0x22)
-	EREMOTE         = syscall.Errno(0x47)
-	EROFS           = syscall.Errno(0x1e)
-	ERPCMISMATCH    = syscall.Errno(0x49)
-	ESHUTDOWN       = syscall.Errno(0x3a)
-	ESOCKTNOSUPPORT = syscall.Errno(0x2c)
-	ESPIPE          = syscall.Errno(0x1d)
-	ESRCH           = syscall.Errno(0x3)
-	ESTALE          = syscall.Errno(0x46)
-	ETIMEDOUT       = syscall.Errno(0x3c)
-	ETOOMANYREFS    = syscall.Errno(0x3b)
-	ETXTBSY         = syscall.Errno(0x1a)
-	EUSERS          = syscall.Errno(0x44)
-	EWOULDBLOCK     = syscall.Errno(0x23)
-	EXDEV           = syscall.Errno(0x12)
-)
-
-// Signals
-const (
-	SIGABRT   = syscall.Signal(0x6)
-	SIGALRM   = syscall.Signal(0xe)
-	SIGBUS    = syscall.Signal(0xa)
-	SIGCHLD   = syscall.Signal(0x14)
-	SIGCONT   = syscall.Signal(0x13)
-	SIGEMT    = syscall.Signal(0x7)
-	SIGFPE    = syscall.Signal(0x8)
-	SIGHUP    = syscall.Signal(0x1)
-	SIGILL    = syscall.Signal(0x4)
-	SIGINFO   = syscall.Signal(0x1d)
-	SIGINT    = syscall.Signal(0x2)
-	SIGIO     = syscall.Signal(0x17)
-	SIGIOT    = syscall.Signal(0x6)
-	SIGKILL   = syscall.Signal(0x9)
-	SIGPIPE   = syscall.Signal(0xd)
-	SIGPROF   = syscall.Signal(0x1b)
-	SIGQUIT   = syscall.Signal(0x3)
-	SIGSEGV   = syscall.Signal(0xb)
-	SIGSTOP   = syscall.Signal(0x11)
-	SIGSYS    = syscall.Signal(0xc)
-	SIGTERM   = syscall.Signal(0xf)
-	SIGTHR    = syscall.Signal(0x20)
-	SIGTRAP   = syscall.Signal(0x5)
-	SIGTSTP   = syscall.Signal(0x12)
-	SIGTTIN   = syscall.Signal(0x15)
-	SIGTTOU   = syscall.Signal(0x16)
-	SIGURG    = syscall.Signal(0x10)
-	SIGUSR1   = syscall.Signal(0x1e)
-	SIGUSR2   = syscall.Signal(0x1f)
-	SIGVTALRM = syscall.Signal(0x1a)
-	SIGWINCH  = syscall.Signal(0x1c)
-	SIGXCPU   = syscall.Signal(0x18)
-	SIGXFSZ   = syscall.Signal(0x19)
-)
-
-// Error table
-var errorList = [...]struct {
-	num  syscall.Errno
-	name string
-	desc string
-}{
-	{1, "EPERM", "operation not permitted"},
-	{2, "ENOENT", "no such file or directory"},
-	{3, "ESRCH", "no such process"},
-	{4, "EINTR", "interrupted system call"},
-	{5, "EIO", "input/output error"},
-	{6, "ENXIO", "device not configured"},
-	{7, "E2BIG", "argument list too long"},
-	{8, "ENOEXEC", "exec format error"},
-	{9, "EBADF", "bad file descriptor"},
-	{10, "ECHILD", "no child processes"},
-	{11, "EDEADLK", "resource deadlock avoided"},
-	{12, "ENOMEM", "cannot allocate memory"},
-	{13, "EACCES", "permission denied"},
-	{14, "EFAULT", "bad address"},
-	{15, "ENOTBLK", "block device required"},
-	{16, "EBUSY", "device busy"},
-	{17, "EEXIST", "file exists"},
-	{18, "EXDEV", "cross-device link"},
-	{19, "ENODEV", "operation not supported by device"},
-	{20, "ENOTDIR", "not a directory"},
-	{21, "EISDIR", "is a directory"},
-	{22, "EINVAL", "invalid argument"},
-	{23, "ENFILE", "too many open files in system"},
-	{24, "EMFILE", "too many open files"},
-	{25, "ENOTTY", "inappropriate ioctl for device"},
-	{26, "ETXTBSY", "text file busy"},
-	{27, "EFBIG", "file too large"},
-	{28, "ENOSPC", "no space left on device"},
-	{29, "ESPIPE", "illegal seek"},
-	{30, "EROFS", "read-only file system"},
-	{31, "EMLINK", "too many links"},
-	{32, "EPIPE", "broken pipe"},
-	{33, "EDOM", "numerical argument out of domain"},
-	{34, "ERANGE", "result too large"},
-	{35, "EAGAIN", "resource temporarily unavailable"},
-	{36, "EINPROGRESS", "operation now in progress"},
-	{37, "EALREADY", "operation already in progress"},
-	{38, "ENOTSOCK", "socket operation on non-socket"},
-	{39, "EDESTADDRREQ", "destination address required"},
-	{40, "EMSGSIZE", "message too long"},
-	{41, "EPROTOTYPE", "protocol wrong type for socket"},
-	{42, "ENOPROTOOPT", "protocol not available"},
-	{43, "EPROTONOSUPPORT", "protocol not supported"},
-	{44, "ESOCKTNOSUPPORT", "socket type not supported"},
-	{45, "EOPNOTSUPP", "operation not supported"},
-	{46, "EPFNOSUPPORT", "protocol family not supported"},
-	{47, "EAFNOSUPPORT", "address family not supported by protocol family"},
-	{48, "EADDRINUSE", "address already in use"},
-	{49, "EADDRNOTAVAIL", "can't assign requested address"},
-	{50, "ENETDOWN", "network is down"},
-	{51, "ENETUNREACH", "network is unreachable"},
-	{52, "ENETRESET", "network dropped connection on reset"},
-	{53, "ECONNABORTED", "software caused connection abort"},
-	{54, "ECONNRESET", "connection reset by peer"},
-	{55, "ENOBUFS", "no buffer space available"},
-	{56, "EISCONN", "socket is already connected"},
-	{57, "ENOTCONN", "socket is not connected"},
-	{58, "ESHUTDOWN", "can't send after socket shutdown"},
-	{59, "ETOOMANYREFS", "too many references: can't splice"},
-	{60, "ETIMEDOUT", "operation timed out"},
-	{61, "ECONNREFUSED", "connection refused"},
-	{62, "ELOOP", "too many levels of symbolic links"},
-	{63, "ENAMETOOLONG", "file name too long"},
-	{64, "EHOSTDOWN", "host is down"},
-	{65, "EHOSTUNREACH", "no route to host"},
-	{66, "ENOTEMPTY", "directory not empty"},
-	{67, "EPROCLIM", "too many processes"},
-	{68, "EUSERS", "too many users"},
-	{69, "EDQUOT", "disk quota exceeded"},
-	{70, "ESTALE", "stale NFS file handle"},
-	{71, "EREMOTE", "too many levels of remote in path"},
-	{72, "EBADRPC", "RPC struct is bad"},
-	{73, "ERPCMISMATCH", "RPC version wrong"},
-	{74, "EPROGUNAVAIL", "RPC program not available"},
-	{75, "EPROGMISMATCH", "program version wrong"},
-	{76, "EPROCUNAVAIL", "bad procedure for program"},
-	{77, "ENOLCK", "no locks available"},
-	{78, "ENOSYS", "function not implemented"},
-	{79, "EFTYPE", "inappropriate file type or format"},
-	{80, "EAUTH", "authentication error"},
-	{81, "ENEEDAUTH", "need authenticator"},
-	{82, "EIPSEC", "IPsec processing failure"},
-	{83, "ENOATTR", "attribute not found"},
-	{84, "EILSEQ", "illegal byte sequence"},
-	{85, "ENOMEDIUM", "no medium found"},
-	{86, "EMEDIUMTYPE", "wrong medium type"},
-	{87, "EOVERFLOW", "value too large to be stored in data type"},
-	{88, "ECANCELED", "operation canceled"},
-	{89, "EIDRM", "identifier removed"},
-	{90, "ENOMSG", "no message of desired type"},
-	{91, "ENOTSUP", "not supported"},
-	{92, "EBADMSG", "bad message"},
-	{93, "ENOTRECOVERABLE", "state not recoverable"},
-	{94, "EOWNERDEAD", "previous owner died"},
-	{95, "ELAST", "protocol error"},
-}
-
-// Signal table
-var signalList = [...]struct {
-	num  syscall.Signal
-	name string
-	desc string
-}{
-	{1, "SIGHUP", "hangup"},
-	{2, "SIGINT", "interrupt"},
-	{3, "SIGQUIT", "quit"},
-	{4, "SIGILL", "illegal instruction"},
-	{5, "SIGTRAP", "trace/BPT trap"},
-	{6, "SIGIOT", "abort trap"},
-	{7, "SIGEMT", "EMT trap"},
-	{8, "SIGFPE", "floating point exception"},
-	{9, "SIGKILL", "killed"},
-	{10, "SIGBUS", "bus error"},
-	{11, "SIGSEGV", "segmentation fault"},
-	{12, "SIGSYS", "bad system call"},
-	{13, "SIGPIPE", "broken pipe"},
-	{14, "SIGALRM", "alarm clock"},
-	{15, "SIGTERM", "terminated"},
-	{16, "SIGURG", "urgent I/O condition"},
-	{17, "SIGSTOP", "suspended (signal)"},
-	{18, "SIGTSTP", "suspended"},
-	{19, "SIGCONT", "continued"},
-	{20, "SIGCHLD", "child exited"},
-	{21, "SIGTTIN", "stopped (tty input)"},
-	{22, "SIGTTOU", "stopped (tty output)"},
-	{23, "SIGIO", "I/O possible"},
-	{24, "SIGXCPU", "cputime limit exceeded"},
-	{25, "SIGXFSZ", "filesize limit exceeded"},
-	{26, "SIGVTALRM", "virtual timer expired"},
-	{27, "SIGPROF", "profiling timer expired"},
-	{28, "SIGWINCH", "window size changes"},
-	{29, "SIGINFO", "information request"},
-	{30, "SIGUSR1", "user defined signal 1"},
-	{31, "SIGUSR2", "user defined signal 2"},
-	{32, "SIGTHR", "thread AST"},
-	{28672, "SIGSTKSZ", "unknown signal"},
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/sys/unix/zerrors_openbsd_amd64.go","mode":420,"size":80437,"sha256":"0a7627470dce06b95a13b99ed321b89a9b9665e871f500e9ef9a07dd9186e824","index":0,"count":2,"encoding":"utf-8","payloadBytes":48000}
-// mkerrors.sh -m64
-// Code generated by the command above; see README.md. DO NOT EDIT.
-
-//go:build amd64 && openbsd
-
-// Code generated by cmd/cgo -godefs; DO NOT EDIT.
-// cgo -godefs -- -m64 _const.go
-
-package unix
-
-import "syscall"
-
-const (
-	AF_APPLETALK                      = 0x10
-	AF_BLUETOOTH                      = 0x20
-	AF_CCITT                          = 0xa
-	AF_CHAOS                          = 0x5
-	AF_CNT                            = 0x15
-	AF_COIP                           = 0x14
-	AF_DATAKIT                        = 0x9
-	AF_DECnet                         = 0xc
-	AF_DLI                            = 0xd
-	AF_E164                           = 0x1a
-	AF_ECMA                           = 0x8
-	AF_ENCAP                          = 0x1c
-	AF_HYLINK                         = 0xf
-	AF_IMPLINK                        = 0x3
-	AF_INET                           = 0x2
-	AF_INET6                          = 0x18
-	AF_IPX                            = 0x17
-	AF_ISDN                           = 0x1a
-	AF_ISO                            = 0x7
-	AF_KEY                            = 0x1e
-	AF_LAT                            = 0xe
-	AF_LINK                           = 0x12
-	AF_LOCAL                          = 0x1
-	AF_MAX                            = 0x24
-	AF_MPLS                           = 0x21
-	AF_NATM                           = 0x1b
-	AF_NS                             = 0x6
-	AF_OSI                            = 0x7
-	AF_PUP                            = 0x4
-	AF_ROUTE                          = 0x11
-	AF_SIP                            = 0x1d
-	AF_SNA                            = 0xb
-	AF_UNIX                           = 0x1
-	AF_UNSPEC                         = 0x0
-	ALTWERASE                         = 0x200
-	ARPHRD_ETHER                      = 0x1
-	ARPHRD_FRELAY                     = 0xf
-	ARPHRD_IEEE1394                   = 0x18
-	ARPHRD_IEEE802                    = 0x6
-	B0                                = 0x0
-	B110                              = 0x6e
-	B115200                           = 0x1c200
-	B1200                             = 0x4b0
-	B134                              = 0x86
-	B14400                            = 0x3840
-	B150                              = 0x96
-	B1800                             = 0x708
-	B19200                            = 0x4b00
-	B200                              = 0xc8
-	B230400                           = 0x38400
-	B2400                             = 0x960
-	B28800                            = 0x7080
-	B300                              = 0x12c
-	B38400                            = 0x9600
-	B4800                             = 0x12c0
-	B50                               = 0x32
-	B57600                            = 0xe100
-	B600                              = 0x258
-	B7200                             = 0x1c20
-	B75                               = 0x4b
-	B76800                            = 0x12c00
-	B9600                             = 0x2580
-	BIOCFLUSH                         = 0x20004268
-	BIOCGBLEN                         = 0x40044266
-	BIOCGDIRFILT                      = 0x4004427c
-	BIOCGDLT                          = 0x4004426a
-	BIOCGDLTLIST                      = 0xc010427b
-	BIOCGETIF                         = 0x4020426b
-	BIOCGFILDROP                      = 0x40044278
-	BIOCGHDRCMPLT                     = 0x40044274
-	BIOCGRSIG                         = 0x40044273
-	BIOCGRTIMEOUT                     = 0x4010426e
-	BIOCGSTATS                        = 0x4008426f
-	BIOCIMMEDIATE                     = 0x80044270
-	BIOCLOCK                          = 0x20004276
-	BIOCPROMISC                       = 0x20004269
-	BIOCSBLEN                         = 0xc0044266
-	BIOCSDIRFILT                      = 0x8004427d
-	BIOCSDLT                          = 0x8004427a
-	BIOCSETF                          = 0x80104267
-	BIOCSETIF                         = 0x8020426c
-	BIOCSETWF                         = 0x80104277
-	BIOCSFILDROP                      = 0x80044279
-	BIOCSHDRCMPLT                     = 0x80044275
-	BIOCSRSIG                         = 0x80044272
-	BIOCSRTIMEOUT                     = 0x8010426d
-	BIOCVERSION                       = 0x40044271
-	BPF_A                             = 0x10
-	BPF_ABS                           = 0x20
-	BPF_ADD                           = 0x0
-	BPF_ALIGNMENT                     = 0x4
-	BPF_ALU                           = 0x4
-	BPF_AND                           = 0x50
-	BPF_B                             = 0x10
-	BPF_DIRECTION_IN                  = 0x1
-	BPF_DIRECTION_OUT                 = 0x2
-	BPF_DIV                           = 0x30
-	BPF_FILDROP_CAPTURE               = 0x1
-	BPF_FILDROP_DROP                  = 0x2
-	BPF_FILDROP_PASS                  = 0x0
-	BPF_F_DIR_IN                      = 0x10
-	BPF_F_DIR_MASK                    = 0x30
-	BPF_F_DIR_OUT                     = 0x20
-	BPF_F_DIR_SHIFT                   = 0x4
-	BPF_F_FLOWID                      = 0x8
-	BPF_F_PRI_MASK                    = 0x7
-	BPF_H                             = 0x8
-	BPF_IMM                           = 0x0
-	BPF_IND                           = 0x40
-	BPF_JA                            = 0x0
-	BPF_JEQ                           = 0x10
-	BPF_JGE                           = 0x30
-	BPF_JGT                           = 0x20
-	BPF_JMP                           = 0x5
-	BPF_JSET                          = 0x40
-	BPF_K                             = 0x0
-	BPF_LD                            = 0x0
-	BPF_LDX                           = 0x1
-	BPF_LEN                           = 0x80
-	BPF_LSH                           = 0x60
-	BPF_MAJOR_VERSION                 = 0x1
-	BPF_MAXBUFSIZE                    = 0x200000
-	BPF_MAXINSNS                      = 0x200
-	BPF_MEM                           = 0x60
-	BPF_MEMWORDS                      = 0x10
-	BPF_MINBUFSIZE                    = 0x20
-	BPF_MINOR_VERSION                 = 0x1
-	BPF_MISC                          = 0x7
-	BPF_MSH                           = 0xa0
-	BPF_MUL                           = 0x20
-	BPF_NEG                           = 0x80
-	BPF_OR                            = 0x40
-	BPF_RELEASE                       = 0x30bb6
-	BPF_RET                           = 0x6
-	BPF_RND                           = 0xc0
-	BPF_RSH                           = 0x70
-	BPF_ST                            = 0x2
-	BPF_STX                           = 0x3
-	BPF_SUB                           = 0x10
-	BPF_TAX                           = 0x0
-	BPF_TXA                           = 0x80
-	BPF_W                             = 0x0
-	BPF_X                             = 0x8
-	BRKINT                            = 0x2
-	CFLUSH                            = 0xf
-	CLOCAL                            = 0x8000
-	CLOCK_BOOTTIME                    = 0x6
-	CLOCK_MONOTONIC                   = 0x3
-	CLOCK_PROCESS_CPUTIME_ID          = 0x2
-	CLOCK_REALTIME                    = 0x0
-	CLOCK_THREAD_CPUTIME_ID           = 0x4
-	CLOCK_UPTIME                      = 0x5
-	CPUSTATES                         = 0x6
-	CP_IDLE                           = 0x5
-	CP_INTR                           = 0x4
-	CP_NICE                           = 0x1
-	CP_SPIN                           = 0x3
-	CP_SYS                            = 0x2
-	CP_USER                           = 0x0
-	CREAD                             = 0x800
-	CRTSCTS                           = 0x10000
-	CS5                               = 0x0
-	CS6                               = 0x100
-	CS7                               = 0x200
-	CS8                               = 0x300
-	CSIZE                             = 0x300
-	CSTART                            = 0x11
-	CSTATUS                           = 0xff
-	CSTOP                             = 0x13
-	CSTOPB                            = 0x400
-	CSUSP                             = 0x1a
-	CTL_HW                            = 0x6
-	CTL_KERN                          = 0x1
-	CTL_MAXNAME                       = 0xc
-	CTL_NET                           = 0x4
-	DIOCADDQUEUE                      = 0xc110445d
-	DIOCADDRULE                       = 0xcd604404
-	DIOCADDSTATE                      = 0xc1084425
-	DIOCCHANGERULE                    = 0xcd60441a
-	DIOCCLRIFFLAG                     = 0xc028445a
-	DIOCCLRSRCNODES                   = 0x20004455
-	DIOCCLRSTATES                     = 0xc0e04412
-	DIOCCLRSTATUS                     = 0xc0284416
-	DIOCGETLIMIT                      = 0xc0084427
-	DIOCGETQSTATS                     = 0xc1204460
-	DIOCGETQUEUE                      = 0xc110445f
-	DIOCGETQUEUES                     = 0xc110445e
-	DIOCGETRULE                       = 0xcd604407
-	DIOCGETRULES                      = 0xcd604406
-	DIOCGETRULESET                    = 0xc444443b
-	DIOCGETRULESETS                   = 0xc444443a
-	DIOCGETSRCNODES                   = 0xc0104454
-	DIOCGETSTATE                      = 0xc1084413
-	DIOCGETSTATES                     = 0xc0104419
-	DIOCGETSTATUS                     = 0xc1e84415
-	DIOCGETSYNFLWATS                  = 0xc0084463
-	DIOCGETTIMEOUT                    = 0xc008441e
-	DIOCIGETIFACES                    = 0xc0284457
-	DIOCKILLSRCNODES                  = 0xc080445b
-	DIOCKILLSTATES                    = 0xc0e04429
-	DIOCNATLOOK                       = 0xc0504417
-	DIOCOSFPADD                       = 0xc088444f
-	DIOCOSFPFLUSH                     = 0x2000444e
-	DIOCOSFPGET                       = 0xc0884450
-	DIOCRADDADDRS                     = 0xc4504443
-	DIOCRADDTABLES                    = 0xc450443d
-	DIOCRCLRADDRS                     = 0xc4504442
-	DIOCRCLRASTATS                    = 0xc4504448
-	DIOCRCLRTABLES                    = 0xc450443c
-	DIOCRCLRTSTATS                    = 0xc4504441
-	DIOCRDELADDRS                     = 0xc4504444
-	DIOCRDELTABLES                    = 0xc450443e
-	DIOCRGETADDRS                     = 0xc4504446
-	DIOCRGETASTATS                    = 0xc4504447
-	DIOCRGETTABLES                    = 0xc450443f
-	DIOCRGETTSTATS                    = 0xc4504440
-	DIOCRINADEFINE                    = 0xc450444d
-	DIOCRSETADDRS                     = 0xc4504445
-	DIOCRSETTFLAGS                    = 0xc450444a
-	DIOCRTSTADDRS                     = 0xc4504449
-	DIOCSETDEBUG                      = 0xc0044418
-	DIOCSETHOSTID                     = 0xc0044456
-	DIOCSETIFFLAG                     = 0xc0284459
-	DIOCSETLIMIT                      = 0xc0084428
-	DIOCSETREASS                      = 0xc004445c
-	DIOCSETSTATUSIF                   = 0xc0284414
-	DIOCSETSYNCOOKIES                 = 0xc0014462
-	DIOCSETSYNFLWATS                  = 0xc0084461
-	DIOCSETTIMEOUT                    = 0xc008441d
-	DIOCSTART                         = 0x20004401
-	DIOCSTOP                          = 0x20004402
-	DIOCXBEGIN                        = 0xc0104451
-	DIOCXCOMMIT                       = 0xc0104452
-	DIOCXROLLBACK                     = 0xc0104453
-	DLT_ARCNET                        = 0x7
-	DLT_ATM_RFC1483                   = 0xb
-	DLT_AX25                          = 0x3
-	DLT_CHAOS                         = 0x5
-	DLT_C_HDLC                        = 0x68
-	DLT_EN10MB                        = 0x1
-	DLT_EN3MB                         = 0x2
-	DLT_ENC                           = 0xd
-	DLT_FDDI                          = 0xa
-	DLT_IEEE802                       = 0x6
-	DLT_IEEE802_11                    = 0x69
-	DLT_IEEE802_11_RADIO              = 0x7f
-	DLT_LOOP                          = 0xc
-	DLT_MPLS                          = 0xdb
-	DLT_NULL                          = 0x0
-	DLT_OPENFLOW                      = 0x10b
-	DLT_PFLOG                         = 0x75
-	DLT_PFSYNC                        = 0x12
-	DLT_PPP                           = 0x9
-	DLT_PPP_BSDOS                     = 0x10
-	DLT_PPP_ETHER                     = 0x33
-	DLT_PPP_SERIAL                    = 0x32
-	DLT_PRONET                        = 0x4
-	DLT_RAW                           = 0xe
-	DLT_SLIP                          = 0x8
-	DLT_SLIP_BSDOS                    = 0xf
-	DLT_USBPCAP                       = 0xf9
-	DLT_USER0                         = 0x93
-	DLT_USER1                         = 0x94
-	DLT_USER10                        = 0x9d
-	DLT_USER11                        = 0x9e
-	DLT_USER12                        = 0x9f
-	DLT_USER13                        = 0xa0
-	DLT_USER14                        = 0xa1
-	DLT_USER15                        = 0xa2
-	DLT_USER2                         = 0x95
-	DLT_USER3                         = 0x96
-	DLT_USER4                         = 0x97
-	DLT_USER5                         = 0x98
-	DLT_USER6                         = 0x99
-	DLT_USER7                         = 0x9a
-	DLT_USER8                         = 0x9b
-	DLT_USER9                         = 0x9c
-	DT_BLK                            = 0x6
-	DT_CHR                            = 0x2
-	DT_DIR                            = 0x4
-	DT_FIFO                           = 0x1
-	DT_LNK                            = 0xa
-	DT_REG                            = 0x8
-	DT_SOCK                           = 0xc
-	DT_UNKNOWN                        = 0x0
-	ECHO                              = 0x8
-	ECHOCTL                           = 0x40
-	ECHOE                             = 0x2
-	ECHOK                             = 0x4
-	ECHOKE                            = 0x1
-	ECHONL                            = 0x10
-	ECHOPRT                           = 0x20
-	EMT_TAGOVF                        = 0x1
-	EMUL_ENABLED                      = 0x1
-	EMUL_NATIVE                       = 0x2
-	ENDRUNDISC                        = 0x9
-	ETH64_8021_RSVD_MASK              = 0xfffffffffff0
-	ETH64_8021_RSVD_PREFIX            = 0x180c2000000
-	ETHERMIN                          = 0x2e
-	ETHERMTU                          = 0x5dc
-	ETHERTYPE_8023                    = 0x4
-	ETHERTYPE_AARP                    = 0x80f3
-	ETHERTYPE_ACCTON                  = 0x8390
-	ETHERTYPE_AEONIC                  = 0x8036
-	ETHERTYPE_ALPHA                   = 0x814a
-	ETHERTYPE_AMBER                   = 0x6008
-	ETHERTYPE_AMOEBA                  = 0x8145
-	ETHERTYPE_AOE                     = 0x88a2
-	ETHERTYPE_APOLLO                  = 0x80f7
-	ETHERTYPE_APOLLODOMAIN            = 0x8019
-	ETHERTYPE_APPLETALK               = 0x809b
-	ETHERTYPE_APPLITEK                = 0x80c7
-	ETHERTYPE_ARGONAUT                = 0x803a
-	ETHERTYPE_ARP                     = 0x806
-	ETHERTYPE_AT                      = 0x809b
-	ETHERTYPE_ATALK                   = 0x809b
-	ETHERTYPE_ATOMIC                  = 0x86df
-	ETHERTYPE_ATT                     = 0x8069
-	ETHERTYPE_ATTSTANFORD             = 0x8008
-	ETHERTYPE_AUTOPHON                = 0x806a
-	ETHERTYPE_AXIS                    = 0x8856
-	ETHERTYPE_BCLOOP                  = 0x9003
-	ETHERTYPE_BOFL                    = 0x8102
-	ETHERTYPE_CABLETRON               = 0x7034
-	ETHERTYPE_CHAOS                   = 0x804
-	ETHERTYPE_COMDESIGN               = 0x806c
-	ETHERTYPE_COMPUGRAPHIC            = 0x806d
-	ETHERTYPE_COUNTERPOINT            = 0x8062
-	ETHERTYPE_CRONUS                  = 0x8004
-	ETHERTYPE_CRONUSVLN               = 0x8003
-	ETHERTYPE_DCA                     = 0x1234
-	ETHERTYPE_DDE                     = 0x807b
-	ETHERTYPE_DEBNI                   = 0xaaaa
-	ETHERTYPE_DECAM                   = 0x8048
-	ETHERTYPE_DECCUST                 = 0x6006
-	ETHERTYPE_DECDIAG                 = 0x6005
-	ETHERTYPE_DECDNS                  = 0x803c
-	ETHERTYPE_DECDTS                  = 0x803e
-	ETHERTYPE_DECEXPER                = 0x6000
-	ETHERTYPE_DECLAST                 = 0x8041
-	ETHERTYPE_DECLTM                  = 0x803f
-	ETHERTYPE_DECMUMPS                = 0x6009
-	ETHERTYPE_DECNETBIOS              = 0x8040
-	ETHERTYPE_DELTACON                = 0x86de
-	ETHERTYPE_DIDDLE                  = 0x4321
-	ETHERTYPE_DLOG1                   = 0x660
-	ETHERTYPE_DLOG2                   = 0x661
-	ETHERTYPE_DN                      = 0x6003
-	ETHERTYPE_DOGFIGHT                = 0x1989
-	ETHERTYPE_DSMD                    = 0x8039
-	ETHERTYPE_EAPOL                   = 0x888e
-	ETHERTYPE_ECMA                    = 0x803
-	ETHERTYPE_ENCRYPT                 = 0x803d
-	ETHERTYPE_ES                      = 0x805d
-	ETHERTYPE_EXCELAN                 = 0x8010
-	ETHERTYPE_EXPERDATA               = 0x8049
-	ETHERTYPE_FLIP                    = 0x8146
-	ETHERTYPE_FLOWCONTROL             = 0x8808
-	ETHERTYPE_FRARP                   = 0x808
-	ETHERTYPE_GENDYN                  = 0x8068
-	ETHERTYPE_HAYES                   = 0x8130
-	ETHERTYPE_HIPPI_FP                = 0x8180
-	ETHERTYPE_HITACHI                 = 0x8820
-	ETHERTYPE_HP                      = 0x8005
-	ETHERTYPE_IEEEPUP                 = 0xa00
-	ETHERTYPE_IEEEPUPAT               = 0xa01
-	ETHERTYPE_IMLBL                   = 0x4c42
-	ETHERTYPE_IMLBLDIAG               = 0x424c
-	ETHERTYPE_IP                      = 0x800
-	ETHERTYPE_IPAS                    = 0x876c
-	ETHERTYPE_IPV6                    = 0x86dd
-	ETHERTYPE_IPX                     = 0x8137
-	ETHERTYPE_IPXNEW                  = 0x8037
-	ETHERTYPE_KALPANA                 = 0x8582
-	ETHERTYPE_LANBRIDGE               = 0x8038
-	ETHERTYPE_LANPROBE                = 0x8888
-	ETHERTYPE_LAT                     = 0x6004
-	ETHERTYPE_LBACK                   = 0x9000
-	ETHERTYPE_LITTLE                  = 0x8060
-	ETHERTYPE_LLDP                    = 0x88cc
-	ETHERTYPE_LOGICRAFT               = 0x8148
-	ETHERTYPE_LOOPBACK                = 0x9000
-	ETHERTYPE_MACSEC                  = 0x88e5
-	ETHERTYPE_MATRA                   = 0x807a
-	ETHERTYPE_MAX                     = 0xffff
-	ETHERTYPE_MERIT                   = 0x807c
-	ETHERTYPE_MICP                    = 0x873a
-	ETHERTYPE_MOPDL                   = 0x6001
-	ETHERTYPE_MOPRC                   = 0x6002
-	ETHERTYPE_MOTOROLA                = 0x818d
-	ETHERTYPE_MPLS                    = 0x8847
-	ETHERTYPE_MPLS_MCAST              = 0x8848
-	ETHERTYPE_MUMPS                   = 0x813f
-	ETHERTYPE_NBPCC                   = 0x3c04
-	ETHERTYPE_NBPCLAIM                = 0x3c09
-	ETHERTYPE_NBPCLREQ                = 0x3c05
-	ETHERTYPE_NBPCLRSP                = 0x3c06
-	ETHERTYPE_NBPCREQ                 = 0x3c02
-	ETHERTYPE_NBPCRSP                 = 0x3c03
-	ETHERTYPE_NBPDG                   = 0x3c07
-	ETHERTYPE_NBPDGB                  = 0x3c08
-	ETHERTYPE_NBPDLTE                 = 0x3c0a
-	ETHERTYPE_NBPRAR                  = 0x3c0c
-	ETHERTYPE_NBPRAS                  = 0x3c0b
-	ETHERTYPE_NBPRST                  = 0x3c0d
-	ETHERTYPE_NBPSCD                  = 0x3c01
-	ETHERTYPE_NBPVCD                  = 0x3c00
-	ETHERTYPE_NBS                     = 0x802
-	ETHERTYPE_NCD                     = 0x8149
-	ETHERTYPE_NESTAR                  = 0x8006
-	ETHERTYPE_NETBEUI                 = 0x8191
-	ETHERTYPE_NHRP                    = 0x2001
-	ETHERTYPE_NOVELL                  = 0x8138
-	ETHERTYPE_NS                      = 0x600
-	ETHERTYPE_NSAT                    = 0x601
-	ETHERTYPE_NSCOMPAT                = 0x807
-	ETHERTYPE_NSH                     = 0x984f
-	ETHERTYPE_NTRAILER                = 0x10
-	ETHERTYPE_OS9                     = 0x7007
-	ETHERTYPE_OS9NET                  = 0x7009
-	ETHERTYPE_PACER                   = 0x80c6
-	ETHERTYPE_PBB                     = 0x88e7
-	ETHERTYPE_PCS                     = 0x4242
-	ETHERTYPE_PLANNING                = 0x8044
-	ETHERTYPE_PPP                     = 0x880b
-	ETHERTYPE_PPPOE                   = 0x8864
-	ETHERTYPE_PPPOEDISC               = 0x8863
-	ETHERTYPE_PRIMENTS                = 0x7031
-	ETHERTYPE_PUP                     = 0x200
-	ETHERTYPE_PUPAT                   = 0x200
-	ETHERTYPE_QINQ                    = 0x88a8
-	ETHERTYPE_RACAL                   = 0x7030
-	ETHERTYPE_RATIONAL                = 0x8150
-	ETHERTYPE_RAWFR                   = 0x6559
-	ETHERTYPE_RCL                     = 0x1995
-	ETHERTYPE_RDP                     = 0x8739
-	ETHERTYPE_RETIX                   = 0x80f2
-	ETHERTYPE_REVARP                  = 0x8035
-	ETHERTYPE_SCA                     = 0x6007
-	ETHERTYPE_SECTRA                  = 0x86db
-	ETHERTYPE_SECUREDATA              = 0x876d
-	ETHERTYPE_SGITW                   = 0x817e
-	ETHERTYPE_SG_BOUNCE               = 0x8016
-	ETHERTYPE_SG_DIAG                 = 0x8013
-	ETHERTYPE_SG_NETGAMES             = 0x8014
-	ETHERTYPE_SG_RESV                 = 0x8015
-	ETHERTYPE_SIMNET                  = 0x5208
-	ETHERTYPE_SLOW                    = 0x8809
-	ETHERTYPE_SNA                     = 0x80d5
-	ETHERTYPE_SNMP                    = 0x814c
-	ETHERTYPE_SONIX                   = 0xfaf5
-	ETHERTYPE_SPIDER                  = 0x809f
-	ETHERTYPE_SPRITE                  = 0x500
-	ETHERTYPE_STP                     = 0x8181
-	ETHERTYPE_TALARIS                 = 0x812b
-	ETHERTYPE_TALARISMC               = 0x852b
-	ETHERTYPE_TCPCOMP                 = 0x876b
-	ETHERTYPE_TCPSM                   = 0x9002
-	ETHERTYPE_TEC                     = 0x814f
-	ETHERTYPE_TIGAN                   = 0x802f
-	ETHERTYPE_TRAIL                   = 0x1000
-	ETHERTYPE_TRANSETHER              = 0x6558
-	ETHERTYPE_TYMSHARE                = 0x802e
-	ETHERTYPE_UBBST                   = 0x7005
-	ETHERTYPE_UBDEBUG                 = 0x900
-	ETHERTYPE_UBDIAGLOOP              = 0x7002
-	ETHERTYPE_UBDL                    = 0x7000
-	ETHERTYPE_UBNIU                   = 0x7001
-	ETHERTYPE_UBNMC                   = 0x7003
-	ETHERTYPE_VALID                   = 0x1600
-	ETHERTYPE_VARIAN                  = 0x80dd
-	ETHERTYPE_VAXELN                  = 0x803b
-	ETHERTYPE_VEECO                   = 0x8067
-	ETHERTYPE_VEXP                    = 0x805b
-	ETHERTYPE_VGLAB                   = 0x8131
-	ETHERTYPE_VINES                   = 0xbad
-	ETHERTYPE_VINESECHO               = 0xbaf
-	ETHERTYPE_VINESLOOP               = 0xbae
-	ETHERTYPE_VITAL                   = 0xff00
-	ETHERTYPE_VLAN                    = 0x8100
-	ETHERTYPE_VLTLMAN                 = 0x8080
-	ETHERTYPE_VPROD                   = 0x805c
-	ETHERTYPE_VURESERVED              = 0x8147
-	ETHERTYPE_WATERLOO                = 0x8130
-	ETHERTYPE_WELLFLEET               = 0x8103
-	ETHERTYPE_X25                     = 0x805
-	ETHERTYPE_X75                     = 0x801
-	ETHERTYPE_XNSSM                   = 0x9001
-	ETHERTYPE_XTP                     = 0x817d
-	ETHER_ADDR_LEN                    = 0x6
-	ETHER_ALIGN                       = 0x2
-	ETHER_CRC_LEN                     = 0x4
-	ETHER_CRC_POLY_BE                 = 0x4c11db6
-	ETHER_CRC_POLY_LE                 = 0xedb88320
-	ETHER_HDR_LEN                     = 0xe
-	ETHER_MAX_DIX_LEN                 = 0x600
-	ETHER_MAX_HARDMTU_LEN             = 0xff9b
-	ETHER_MAX_LEN                     = 0x5ee
-	ETHER_MIN_LEN                     = 0x40
-	ETHER_TYPE_LEN                    = 0x2
-	ETHER_VLAN_ENCAP_LEN              = 0x4
-	EVFILT_AIO                        = -0x3
-	EVFILT_DEVICE                     = -0x8
-	EVFILT_EXCEPT                     = -0x9
-	EVFILT_PROC                       = -0x5
-	EVFILT_READ                       = -0x1
-	EVFILT_SIGNAL                     = -0x6
-	EVFILT_SYSCOUNT                   = 0x9
-	EVFILT_TIMER                      = -0x7
-	EVFILT_VNODE                      = -0x4
-	EVFILT_WRITE                      = -0x2
-	EVL_ENCAPLEN                      = 0x4
-	EVL_PRIO_BITS                     = 0xd
-	EVL_PRIO_MAX                      = 0x7
-	EVL_VLID_MASK                     = 0xfff
-	EVL_VLID_MAX                      = 0xffe
-	EVL_VLID_MIN                      = 0x1
-	EVL_VLID_NULL                     = 0x0
-	EV_ADD                            = 0x1
-	EV_CLEAR                          = 0x20
-	EV_DELETE                         = 0x2
-	EV_DISABLE                        = 0x8
-	EV_DISPATCH                       = 0x80
-	EV_ENABLE                         = 0x4
-	EV_EOF                            = 0x8000
-	EV_ERROR                          = 0x4000
-	EV_FLAG1                          = 0x2000
-	EV_ONESHOT                        = 0x10
-	EV_RECEIPT                        = 0x40
-	EV_SYSFLAGS                       = 0xf800
-	EXTA                              = 0x4b00
-	EXTB                              = 0x9600
-	EXTPROC                           = 0x800
-	FD_CLOEXEC                        = 0x1
-	FD_SETSIZE                        = 0x400
-	FLUSHO                            = 0x800000
-	F_DUPFD                           = 0x0
-	F_DUPFD_CLOEXEC                   = 0xa
-	F_GETFD                           = 0x1
-	F_GETFL                           = 0x3
-	F_GETLK                           = 0x7
-	F_GETOWN                          = 0x5
-	F_ISATTY                          = 0xb
-	F_OK                              = 0x0
-	F_RDLCK                           = 0x1
-	F_SETFD                           = 0x2
-	F_SETFL                           = 0x4
-	F_SETLK                           = 0x8
-	F_SETLKW                          = 0x9
-	F_SETOWN                          = 0x6
-	F_UNLCK                           = 0x2
-	F_WRLCK                           = 0x3
-	HUPCL                             = 0x4000
-	HW_MACHINE                        = 0x1
-	ICANON                            = 0x100
-	ICMP6_FILTER                      = 0x12
-	ICRNL                             = 0x100
-	IEXTEN                            = 0x400
-	IFAN_ARRIVAL                      = 0x0
-	IFAN_DEPARTURE                    = 0x1
-	IFF_ALLMULTI                      = 0x200
-	IFF_BROADCAST                     = 0x2
-	IFF_CANTCHANGE                    = 0x8e52
-	IFF_DEBUG                         = 0x4
-	IFF_LINK0                         = 0x1000
-	IFF_LINK1                         = 0x2000
-	IFF_LINK2                         = 0x4000
-	IFF_LOOPBACK                      = 0x8
-	IFF_MULTICAST                     = 0x8000
-	IFF_NOARP                         = 0x80
-	IFF_OACTIVE                       = 0x400
-	IFF_POINTOPOINT                   = 0x10
-	IFF_PROMISC                       = 0x100
-	IFF_RUNNING                       = 0x40
-	IFF_SIMPLEX                       = 0x800
-	IFF_STATICARP                     = 0x20
-	IFF_UP                            = 0x1
-	IFNAMSIZ                          = 0x10
-	IFT_1822                          = 0x2
-	IFT_A12MPPSWITCH                  = 0x82
-	IFT_AAL2                          = 0xbb
-	IFT_AAL5                          = 0x31
-	IFT_ADSL                          = 0x5e
-	IFT_AFLANE8023                    = 0x3b
-	IFT_AFLANE8025                    = 0x3c
-	IFT_ARAP                          = 0x58
-	IFT_ARCNET                        = 0x23
-	IFT_ARCNETPLUS                    = 0x24
-	IFT_ASYNC                         = 0x54
-	IFT_ATM                           = 0x25
-	IFT_ATMDXI                        = 0x69
-	IFT_ATMFUNI                       = 0x6a
-	IFT_ATMIMA                        = 0x6b
-	IFT_ATMLOGICAL                    = 0x50
-	IFT_ATMRADIO                      = 0xbd
-	IFT_ATMSUBINTERFACE               = 0x86
-	IFT_ATMVCIENDPT                   = 0xc2
-	IFT_ATMVIRTUAL                    = 0x95
-	IFT_BGPPOLICYACCOUNTING           = 0xa2
-	IFT_BLUETOOTH                     = 0xf8
-	IFT_BRIDGE                        = 0xd1
-	IFT_BSC                           = 0x53
-	IFT_CARP                          = 0xf7
-	IFT_CCTEMUL                       = 0x3d
-	IFT_CEPT                          = 0x13
-	IFT_CES                           = 0x85
-	IFT_CHANNEL                       = 0x46
-	IFT_CNR                           = 0x55
-	IFT_COFFEE                        = 0x84
-	IFT_COMPOSITELINK                 = 0x9b
-	IFT_DCN                           = 0x8d
-	IFT_DIGITALPOWERLINE              = 0x8a
-	IFT_DIGITALWRAPPEROVERHEADCHANNEL = 0xba
-	IFT_DLSW                          = 0x4a
-	IFT_DOCSCABLEDOWNSTREAM           = 0x80
-	IFT_DOCSCABLEMACLAYER             = 0x7f
-	IFT_DOCSCABLEUPSTREAM             = 0x81
-	IFT_DOCSCABLEUPSTREAMCHANNEL      = 0xcd
-	IFT_DS0                           = 0x51
-	IFT_DS0BUNDLE                     = 0x52
-	IFT_DS1FDL                        = 0xaa
-	IFT_DS3                           = 0x1e
-	IFT_DTM                           = 0x8c
-	IFT_DUMMY                         = 0xf1
-	IFT_DVBASILN                      = 0xac
-	IFT_DVBASIOUT                     = 0xad
-	IFT_DVBRCCDOWNSTREAM              = 0x93
-	IFT_DVBRCCMACLAYER                = 0x92
-	IFT_DVBRCCUPSTREAM                = 0x94
-	IFT_ECONET                        = 0xce
-	IFT_ENC                           = 0xf4
-	IFT_EON                           = 0x19
-	IFT_EPLRS                         = 0x57
-	IFT_ESCON                         = 0x49
-	IFT_ETHER                         = 0x6
-	IFT_FAITH                         = 0xf3
-	IFT_FAST                          = 0x7d
-	IFT_FASTETHER                     = 0x3e
-	IFT_FASTETHERFX                   = 0x45
-	IFT_FDDI                          = 0xf
-	IFT_FIBRECHANNEL                  = 0x38
-	IFT_FRAMERELAYINTERCONNECT        = 0x3a
-	IFT_FRAMERELAYMPI                 = 0x5c
-	IFT_FRDLCIENDPT                   = 0xc1
-	IFT_FRELAY                        = 0x20
-	IFT_FRELAYDCE                     = 0x2c
-	IFT_FRF16MFRBUNDLE                = 0xa3
-	IFT_FRFORWARD                     = 0x9e
-	IFT_G703AT2MB                     = 0x43
-	IFT_G703AT64K                     = 0x42
-	IFT_GIF                           = 0xf0
-	IFT_GIGABITETHERNET               = 0x75
-	IFT_GR303IDT                      = 0xb2
-	IFT_GR303RDT                      = 0xb1
-	IFT_H323GATEKEEPER                = 0xa4
-	IFT_H323PROXY                     = 0xa5
-	IFT_HDH1822                       = 0x3
-	IFT_HDLC                          = 0x76
-	IFT_HDSL2                         = 0xa8
-	IFT_HIPERLAN2                     = 0xb7
-	IFT_HIPPI                         = 0x2f
-	IFT_HIPPIINTERFACE                = 0x39
-	IFT_HOSTPAD                       = 0x5a
-	IFT_HSSI                          = 0x2e
-	IFT_HY                            = 0xe
-	IFT_IBM370PARCHAN                 = 0x48
-	IFT_IDSL                          = 0x9a
-	IFT_IEEE1394                      = 0x90
-	IFT_IEEE80211                     = 0x47
-	IFT_IEEE80212                     = 0x37
-	IFT_IEEE8023ADLAG                 = 0xa1
-	IFT_IFGSN                         = 0x91
-	IFT_IMT                           = 0xbe
-	IFT_INFINIBAND                    = 0xc7
-	IFT_INTERLEAVE                    = 0x7c
-	IFT_IP                            = 0x7e
-	IFT_IPFORWARD                     = 0x8e
-	IFT_IPOVERATM                     = 0x72
-	IFT_IPOVERCDLC                    = 0x6d
-	IFT_IPOVERCLAW                    = 0x6e
-	IFT_IPSWITCH                      = 0x4e
-	IFT_ISDN                          = 0x3f
-	IFT_ISDNBASIC                     = 0x14
-	IFT_ISDNPRIMARY                   = 0x15
-	IFT_ISDNS                         = 0x4b
-	IFT_ISDNU                         = 0x4c
-	IFT_ISO88022LLC                   = 0x29
-	IFT_ISO88023                      = 0x7
-	IFT_ISO88024                      = 0x8
-	IFT_ISO88025                      = 0x9
-	IFT_ISO88025CRFPINT               = 0x62
-	IFT_ISO88025DTR                   = 0x56
-	IFT_ISO88025FIBER                 = 0x73
-	IFT_ISO88026                      = 0xa
-	IFT_ISUP                          = 0xb3
-	IFT_L2VLAN                        = 0x87
-	IFT_L3IPVLAN                      = 0x88
-	IFT_L3IPXVLAN                     = 0x89
-	IFT_LAPB                          = 0x10
-	IFT_LAPD                          = 0x4d
-	IFT_LAPF                          = 0x77
-	IFT_LINEGROUP                     = 0xd2
-	IFT_LOCALTALK                     = 0x2a
-	IFT_LOOP                          = 0x18
-	IFT_MBIM                          = 0xfa
-	IFT_MEDIAMAILOVERIP               = 0x8b
-	IFT_MFSIGLINK                     = 0xa7
-	IFT_MIOX25                        = 0x26
-	IFT_MODEM                         = 0x30
-	IFT_MPC                           = 0x71
-	IFT_MPLS                          = 0xa6
-	IFT_MPLSTUNNEL                    = 0x96
-	IFT_MSDSL                         = 0x8f
-	IFT_MVL                           = 0xbf
-	IFT_MYRINET                       = 0x63
-	IFT_NFAS                          = 0xaf
-	IFT_NSIP                          = 0x1b
-	IFT_OPTICALCHANNEL                = 0xc3
-	IFT_OPTICALTRANSPORT              = 0xc4
-	IFT_OTHER                         = 0x1
-	IFT_P10                           = 0xc
-	IFT_P80                           = 0xd
-	IFT_PARA                          = 0x22
-	IFT_PFLOG                         = 0xf5
-	IFT_PFLOW                         = 0xf9
-	IFT_PFSYNC                        = 0xf6
-	IFT_PLC                           = 0xae
-	IFT_PON155                        = 0xcf
-	IFT_PON622                        = 0xd0
-	IFT_POS                           = 0xab
-	IFT_PPP                           = 0x17
-	IFT_PPPMULTILINKBUNDLE            = 0x6c
-	IFT_PROPATM                       = 0xc5
-	IFT_PROPBWAP2MP                   = 0xb8
-	IFT_PROPCNLS                      = 0x59
-	IFT_PROPDOCSWIRELESSDOWNSTREAM    = 0xb5
-	IFT_PROPDOCSWIRELESSMACLAYER      = 0xb4
-	IFT_PROPDOCSWIRELESSUPSTREAM      = 0xb6
-	IFT_PROPMUX                       = 0x36
-	IFT_PROPVIRTUAL                   = 0x35
-	IFT_PROPWIRELESSP2P               = 0x9d
-	IFT_PTPSERIAL                     = 0x16
-	IFT_PVC                           = 0xf2
-	IFT_Q2931                         = 0xc9
-	IFT_QLLC                          = 0x44
-	IFT_RADIOMAC                      = 0xbc
-	IFT_RADSL                         = 0x5f
-	IFT_REACHDSL                      = 0xc0
-	IFT_RFC1483                       = 0x9f
-	IFT_RS232                         = 0x21
-	IFT_RSRB                          = 0x4f
-	IFT_SDLC                          = 0x11
-	IFT_SDSL                          = 0x60
-	IFT_SHDSL                         = 0xa9
-	IFT_SIP                           = 0x1f
-	IFT_SIPSIG                        = 0xcc
-	IFT_SIPTG                         = 0xcb
-	IFT_SLIP                          = 0x1c
-	IFT_SMDSDXI                       = 0x2b
-	IFT_SMDSICIP                      = 0x34
-	IFT_SONET                         = 0x27
-	IFT_SONETOVERHEADCHANNEL          = 0xb9
-	IFT_SONETPATH                     = 0x32
-	IFT_SONETVT                       = 0x33
-	IFT_SRP                           = 0x97
-	IFT_SS7SIGLINK                    = 0x9c
-	IFT_STACKTOSTACK                  = 0x6f
-	IFT_STARLAN                       = 0xb
-	IFT_T1                            = 0x12
-	IFT_TDLC                          = 0x74
-	IFT_TELINK                        = 0xc8
-	IFT_TERMPAD                       = 0x5b
-	IFT_TR008                         = 0xb0
-	IFT_TRANSPHDLC                    = 0x7b
-	IFT_TUNNEL                        = 0x83
-	IFT_ULTRA                         = 0x1d
-	IFT_USB                           = 0xa0
-	IFT_V11                           = 0x40
-	IFT_V35                           = 0x2d
-	IFT_V36                           = 0x41
-	IFT_V37                           = 0x78
-	IFT_VDSL                          = 0x61
-	IFT_VIRTUALIPADDRESS              = 0x70
-	IFT_VIRTUALTG                     = 0xca
-	IFT_VOICEDID                      = 0xd5
-	IFT_VOICEEM                       = 0x64
-	IFT_VOICEEMFGD                    = 0xd3
-	IFT_VOICEENCAP                    = 0x67
-	IFT_VOICEFGDEANA                  = 0xd4
-	IFT_VOICEFXO                      = 0x65
-	IFT_VOICEFXS                      = 0x66
-	IFT_VOICEOVERATM                  = 0x98
-	IFT_VOICEOVERCABLE                = 0xc6
-	IFT_VOICEOVERFRAMERELAY           = 0x99
-	IFT_VOICEOVERIP                   = 0x68
-	IFT_WIREGUARD                     = 0xfb
-	IFT_X213                          = 0x5d
-	IFT_X25                           = 0x5
-	IFT_X25DDN                        = 0x4
-	IFT_X25HUNTGROUP                  = 0x7a
-	IFT_X25MLP                        = 0x79
-	IFT_X25PLE                        = 0x28
-	IFT_XETHER                        = 0x1a
-	IGNBRK                            = 0x1
-	IGNCR                             = 0x80
-	IGNPAR                            = 0x4
-	IMAXBEL                           = 0x2000
-	INLCR                             = 0x40
-	INPCK                             = 0x10
-	IN_CLASSA_HOST                    = 0xffffff
-	IN_CLASSA_MAX                     = 0x80
-	IN_CLASSA_NET                     = 0xff000000
-	IN_CLASSA_NSHIFT                  = 0x18
-	IN_CLASSB_HOST                    = 0xffff
-	IN_CLASSB_MAX                     = 0x10000
-	IN_CLASSB_NET                     = 0xffff0000
-	IN_CLASSB_NSHIFT                  = 0x10
-	IN_CLASSC_HOST                    = 0xff
-	IN_CLASSC_NET                     = 0xffffff00
-	IN_CLASSC_NSHIFT                  = 0x8
-	IN_CLASSD_HOST                    = 0xfffffff
-	IN_CLASSD_NET                     = 0xf0000000
-	IN_CLASSD_NSHIFT                  = 0x1c
-	IN_LOOPBACKNET                    = 0x7f
-	IN_RFC3021_HOST                   = 0x1
-	IN_RFC3021_NET                    = 0xfffffffe
-	IN_RFC3021_NSHIFT                 = 0x1f
-	IPPROTO_AH                        = 0x33
-	IPPROTO_CARP                      = 0x70
-	IPPROTO_DIVERT                    = 0x102
-	IPPROTO_DONE                      = 0x101
-	IPPROTO_DSTOPTS                   = 0x3c
-	IPPROTO_EGP                       = 0x8
-	IPPROTO_ENCAP                     = 0x62
-	IPPROTO_EON                       = 0x50
-	IPPROTO_ESP                       = 0x32
-	IPPROTO_ETHERIP                   = 0x61
-	IPPROTO_FRAGMENT                  = 0x2c
-	IPPROTO_GGP                       = 0x3
-	IPPROTO_GRE                       = 0x2f
-	IPPROTO_HOPOPTS                   = 0x0
-	IPPROTO_ICMP                      = 0x1
-	IPPROTO_ICMPV6                    = 0x3a
-	IPPROTO_IDP                       = 0x16
-	IPPROTO_IGMP                      = 0x2
-	IPPROTO_IP                        = 0x0
-	IPPROTO_IPCOMP                    = 0x6c
-	IPPROTO_IPIP                      = 0x4
-	IPPROTO_IPV4                      = 0x4
-	IPPROTO_IPV6                      = 0x29
-	IPPROTO_MAX                       = 0x100
-	IPPROTO_MAXID                     = 0x103
-	IPPROTO_MOBILE                    = 0x37
-	IPPROTO_MPLS                      = 0x89
-	IPPROTO_NONE                      = 0x3b
-	IPPROTO_PFSYNC                    = 0xf0
-	IPPROTO_PIM                       = 0x67
-	IPPROTO_PUP                       = 0xc
-	IPPROTO_RAW                       = 0xff
-	IPPROTO_ROUTING                   = 0x2b
-	IPPROTO_RSVP                      = 0x2e
-	IPPROTO_SCTP                      = 0x84
-	IPPROTO_TCP                       = 0x6
-	IPPROTO_TP                        = 0x1d
-	IPPROTO_UDP                       = 0x11
-	IPPROTO_UDPLITE                   = 0x88
-	IPV6_AUTH_LEVEL                   = 0x35
-	IPV6_AUTOFLOWLABEL                = 0x3b
-	IPV6_CHECKSUM                     = 0x1a
-	IPV6_DEFAULT_MULTICAST_HOPS       = 0x1
-	IPV6_DEFAULT_MULTICAST_LOOP       = 0x1
-	IPV6_DEFHLIM                      = 0x40
-	IPV6_DONTFRAG                     = 0x3e
-	IPV6_DSTOPTS                      = 0x32
-	IPV6_ESP_NETWORK_LEVEL            = 0x37
-	IPV6_ESP_TRANS_LEVEL              = 0x36
-	IPV6_FAITH                        = 0x1d
-	IPV6_FLOWINFO_MASK                = 0xffffff0f
-	IPV6_FLOWLABEL_MASK               = 0xffff0f00
-	IPV6_FRAGTTL                      = 0x78
-	IPV6_HLIMDEC                      = 0x1
-	IPV6_HOPLIMIT                     = 0x2f
-	IPV6_HOPOPTS                      = 0x31
-	IPV6_IPCOMP_LEVEL                 = 0x3c
-	IPV6_JOIN_GROUP                   = 0xc
-	IPV6_LEAVE_GROUP                  = 0xd
-	IPV6_MAXHLIM                      = 0xff
-	IPV6_MAXPACKET                    = 0xffff
-	IPV6_MINHOPCOUNT                  = 0x41
-	IPV6_MMTU                         = 0x500
-	IPV6_MULTICAST_HOPS               = 0xa
-	IPV6_MULTICAST_IF                 = 0x9
-	IPV6_MULTICAST_LOOP               = 0xb
-	IPV6_NEXTHOP                      = 0x30
-	IPV6_OPTIONS                      = 0x1
-	IPV6_PATHMTU                      = 0x2c
-	IPV6_PIPEX                        = 0x3f
-	IPV6_PKTINFO                      = 0x2e
-	IPV6_PORTRANGE                    = 0xe
-	IPV6_PORTRANGE_DEFAULT            = 0x0
-	IPV6_PORTRANGE_HIGH               = 0x1
-	IPV6_PORTRANGE_LOW                = 0x2
-	IPV6_RECVDSTOPTS                  = 0x28
-	IPV6_RECVDSTPORT                  = 0x40
-	IPV6_RECVHOPLIMIT                 = 0x25
-	IPV6_RECVHOPOPTS                  = 0x27
-	IPV6_RECVPATHMTU                  = 0x2b
-	IPV6_RECVPKTINFO                  = 0x24
-	IPV6_RECVRTHDR                    = 0x26
-	IPV6_RECVTCLASS                   = 0x39
-	IPV6_RTABLE                       = 0x1021
-	IPV6_RTHDR                        = 0x33
-	IPV6_RTHDRDSTOPTS                 = 0x23
-	IPV6_RTHDR_LOOSE                  = 0x0
-	IPV6_RTHDR_STRICT                 = 0x1
-	IPV6_RTHDR_TYPE_0                 = 0x0
-	IPV6_SOCKOPT_RESERVED1            = 0x3
-	IPV6_TCLASS                       = 0x3d
-	IPV6_UNICAST_HOPS                 = 0x4
-	IPV6_USE_MIN_MTU                  = 0x2a
-	IPV6_V6ONLY                       = 0x1b
-	IPV6_VERSION                      = 0x60
-	IPV6_VERSION_MASK                 = 0xf0
-	IP_ADD_MEMBERSHIP                 = 0xc
-	IP_AUTH_LEVEL                     = 0x14
-	IP_DEFAULT_MULTICAST_LOOP         = 0x1
-	IP_DEFAULT_MULTICAST_TTL          = 0x1
-	IP_DF                             = 0x4000
-	IP_DROP_MEMBERSHIP                = 0xd
-	IP_ESP_NETWORK_LEVEL              = 0x16
-	IP_ESP_TRANS_LEVEL                = 0x15
-	IP_HDRINCL                        = 0x2
-	IP_IPCOMP_LEVEL                   = 0x1d
-	IP_IPDEFTTL                       = 0x25
-	IP_IPSECFLOWINFO                  = 0x24
-	IP_IPSEC_LOCAL_AUTH               = 0x1b
-	IP_IPSEC_LOCAL_CRED               = 0x19
-	IP_IPSEC_LOCAL_ID                 = 0x17
-	IP_IPSEC_REMOTE_AUTH              = 0x1c
-	IP_IPSEC_REMOTE_CRED              = 0x1a
-	IP_IPSEC_REMOTE_ID                = 0x18
-	IP_MAXPACKET                      = 0xffff
-	IP_MAX_MEMBERSHIPS                = 0xfff
-	IP_MF                             = 0x2000
-	IP_MINTTL                         = 0x20
-	IP_MIN_MEMBERSHIPS                = 0xf
-	IP_MSS                            = 0x240
-	IP_MULTICAST_IF                   = 0x9
-	IP_MULTICAST_LOOP                 = 0xb
-	IP_MULTICAST_TTL                  = 0xa
-	IP_OFFMASK                        = 0x1fff
-	IP_OPTIONS                        = 0x1
-	IP_PIPEX                          = 0x22
-	IP_PORTRANGE                      = 0x13
-	IP_PORTRANGE_DEFAULT              = 0x0
-	IP_PORTRANGE_HIGH                 = 0x1
-	IP_PORTRANGE_LOW                  = 0x2
-	IP_RECVDSTADDR                    = 0x7
-	IP_RECVDSTPORT                    = 0x21
-	IP_RECVIF                         = 0x1e
-	IP_RECVOPTS                       = 0x5
-	IP_RECVRETOPTS                    = 0x6
-	IP_RECVRTABLE                     = 0x23
-	IP_RECVTTL                        = 0x1f
-	IP_RETOPTS                        = 0x8
-	IP_RF                             = 0x8000
-	IP_RTABLE                         = 0x1021
-	IP_SENDSRCADDR                    = 0x7
-	IP_TOS                            = 0x3
-	IP_TTL                            = 0x4
-	ISIG                              = 0x80
-	ISTRIP                            = 0x20
-	ITIMER_PROF                       = 0x2
-	ITIMER_REAL                       = 0x0
-	ITIMER_VIRTUAL                    = 0x1
-	IUCLC                             = 0x1000
-	IXANY                             = 0x800
-	IXOFF                             = 0x400
-	IXON                              = 0x200
-	KERN_HOSTNAME                     = 0xa
-	KERN_OSRELEASE                    = 0x2
-	KERN_OSTYPE                       = 0x1
-	KERN_VERSION                      = 0x4
-	LCNT_OVERLOAD_FLUSH               = 0x6
-	LOCK_EX                           = 0x2
-	LOCK_NB                           = 0x4
-	LOCK_SH                           = 0x1
-	LOCK_UN                           = 0x8
-	MADV_DONTNEED                     = 0x4
-	MADV_FREE                         = 0x6
-	MADV_NORMAL                       = 0x0
-	MADV_RANDOM                       = 0x1
-	MADV_SEQUENTIAL                   = 0x2
-	MADV_SPACEAVAIL                   = 0x5
-	MADV_WILLNEED                     = 0x3
-	MAP_ANON                          = 0x1000
-	MAP_ANONYMOUS                     = 0x1000
-	MAP_CONCEAL                       = 0x8000
-	MAP_COPY                          = 0x2
-	MAP_FILE                          = 0x0
-	MAP_FIXED                         = 0x10
-	MAP_FLAGMASK                      = 0xfff7
-	MAP_HASSEMAPHORE                  = 0x0
-	MAP_INHERIT                       = 0x0
-	MAP_INHERIT_COPY                  = 0x1
-	MAP_INHERIT_NONE                  = 0x2
-	MAP_INHERIT_SHARE                 = 0x0
-	MAP_INHERIT_ZERO                  = 0x3
-	MAP_NOEXTEND                      = 0x0
-	MAP_NORESERVE                     = 0x0
-	MAP_PRIVATE                       = 0x2
-	MAP_RENAME                        = 0x0
-	MAP_SHARED                        = 0x1
-	MAP_STACK                         = 0x4000
-	MAP_TRYFIXED                      = 0x0
-	MCL_CURRENT                       = 0x1
-	MCL_FUTURE                        = 0x2
-	MNT_ASYNC                         = 0x40
-	MNT_DEFEXPORTED                   = 0x200
-	MNT_DELEXPORT                     = 0x20000
-	MNT_DOOMED                        = 0x8000000
-	MNT_EXPORTANON                    = 0x400
-	MNT_EXPORTED                      = 0x100
-	MNT_EXRDONLY                      = 0x80
-	MNT_FORCE                         = 0x80000
-	MNT_LAZY                          = 0x3
-	MNT_LOCAL                         = 0x1000
-	MNT_NOATIME                       = 0x8000
-	MNT_NODEV                         = 0x10
-	MNT_NOEXEC                        = 0x4
-	MNT_NOPERM                        = 0x20
-	MNT_NOSUID                        = 0x8
-	MNT_NOWAIT                        = 0x2
-	MNT_QUOTA                         = 0x2000
-	MNT_RDONLY                        = 0x1
-	MNT_RELOAD                        = 0x40000
-	MNT_ROOTFS                        = 0x4000
-	MNT_SOFTDEP                       = 0x4000000
-	MNT_STALLED                       = 0x100000
-	MNT_SWAPPABLE                     = 0x200000
-	MNT_SYNCHRONOUS                   = 0x2
-	MNT_UPDATE                        = 0x10000
-	MNT_VISFLAGMASK                   = 0x400ffff
-	MNT_WAIT                          = 0x1
-	MNT_WANTRDWR                      = 0x2000000
-	MNT_WXALLOWED                     = 0x800
-	MOUNT_AFS                         = "afs"
-	MOUNT_CD9660                      = "cd9660"
-	MOUNT_EXT2FS                      = "ext2fs"
-	MOUNT_FFS                         = "ffs"
-	MOUNT_FUSEFS                      = "fuse"
-	MOUNT_MFS                         = "mfs"
-	MOUNT_MSDOS                       = "msdos"
-	MOUNT_NCPFS                       = "ncpfs"
-	MOUNT_NFS                         = "nfs"
-	MOUNT_NTFS                        = "ntfs"
-	MOUNT_TMPFS                       = "tmpfs"
-	MOUNT_UDF                         = "udf"
-	MOUNT_UFS                         = "ffs"
-	MSG_BCAST                         = 0x100
-	MSG_CMSG_CLOEXEC                  = 0x800
-	MSG_CTRUNC                        = 0x20
-	MSG_DONTROUTE                     = 0x4
-	MSG_DONTWAIT                      = 0x80
-	MSG_EOR                           = 0x8
-	MSG_MCAST                         = 0x200
-	MSG_NOSIGNAL                      = 0x400
-	MSG_OOB                           = 0x1
-	MSG_PEEK                          = 0x2
-	MSG_TRUNC                         = 0x10
-	MSG_WAITALL                       = 0x40
-	MSG_WAITFORONE                    = 0x1000
-	MS_ASYNC                          = 0x1
-	MS_INVALIDATE                     = 0x4
-	MS_SYNC                           = 0x2
-	NAME_MAX                          = 0xff
-	NET_RT_DUMP                       = 0x1
-	NET_RT_FLAGS                      = 0x2
-	NET_RT_IFLIST                     = 0x3
-	NET_RT_IFNAMES                    = 0x6
-	NET_RT_MAXID                      = 0x8
-	NET_RT_SOURCE                     = 0x7
-	NET_RT_STATS                      = 0x4
-	NET_RT_TABLE                      = 0x5
-	NFDBITS                           = 0x20
-	NOFLSH                            = 0x80000000
-	NOKERNINFO                        = 0x2000000
-	NOTE_ATTRIB                       = 0x8
-	NOTE_CHANGE                       = 0x1
-	NOTE_CHILD                        = 0x4
-	NOTE_DELETE                       = 0x1
-	NOTE_EOF                          = 0x2
-	NOTE_EXEC                         = 0x20000000
-	NOTE_EXIT                         = 0x80000000
-	NOTE_EXTEND                       = 0x4
-	NOTE_FORK                         = 0x40000000
-	NOTE_LINK                         = 0x10
-	NOTE_LOWAT                        = 0x1
-	NOTE_OOB                          = 0x4
-	NOTE_PCTRLMASK                    = 0xf0000000
-	NOTE_PDATAMASK                    = 0xfffff
-	NOTE_RENAME                       = 0x20
-	NOTE_REVOKE                       = 0x40
-	NOTE_TRACK                        = 0x1
-	NOTE_TRACKERR                     = 0x2
-	NOTE_TRUNCATE                     = 0x80
-	NOTE_WRITE                        = 0x2
-	OCRNL                             = 0x10
-	OLCUC                             = 0x20
-	ONLCR                             = 0x2
-	ONLRET                            = 0x80
-	ONOCR                             = 0x40
-	ONOEOT                            = 0x8
-	OPOST                             = 0x1
-	OXTABS                            = 0x4
-	O_ACCMO
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/sys/unix/zerrors_openbsd_amd64.go","mode":420,"size":80437,"sha256":"0a7627470dce06b95a13b99ed321b89a9b9665e871f500e9ef9a07dd9186e824","index":1,"count":2,"encoding":"utf-8","payloadBytes":32437}
-DE                         = 0x3
-	O_APPEND                          = 0x8
-	O_ASYNC                           = 0x40
-	O_CLOEXEC                         = 0x10000
-	O_CREAT                           = 0x200
-	O_DIRECTORY                       = 0x20000
-	O_DSYNC                           = 0x80
-	O_EXCL                            = 0x800
-	O_EXLOCK                          = 0x20
-	O_FSYNC                           = 0x80
-	O_NDELAY                          = 0x4
-	O_NOCTTY                          = 0x8000
-	O_NOFOLLOW                        = 0x100
-	O_NONBLOCK                        = 0x4
-	O_RDONLY                          = 0x0
-	O_RDWR                            = 0x2
-	O_RSYNC                           = 0x80
-	O_SHLOCK                          = 0x10
-	O_SYNC                            = 0x80
-	O_TRUNC                           = 0x400
-	O_WRONLY                          = 0x1
-	PARENB                            = 0x1000
-	PARMRK                            = 0x8
-	PARODD                            = 0x2000
-	PENDIN                            = 0x20000000
-	PF_FLUSH                          = 0x1
-	PRIO_PGRP                         = 0x1
-	PRIO_PROCESS                      = 0x0
-	PRIO_USER                         = 0x2
-	PROT_EXEC                         = 0x4
-	PROT_NONE                         = 0x0
-	PROT_READ                         = 0x1
-	PROT_WRITE                        = 0x2
-	RLIMIT_CORE                       = 0x4
-	RLIMIT_CPU                        = 0x0
-	RLIMIT_DATA                       = 0x2
-	RLIMIT_FSIZE                      = 0x1
-	RLIMIT_MEMLOCK                    = 0x6
-	RLIMIT_NOFILE                     = 0x8
-	RLIMIT_NPROC                      = 0x7
-	RLIMIT_RSS                        = 0x5
-	RLIMIT_STACK                      = 0x3
-	RLIM_INFINITY                     = 0x7fffffffffffffff
-	RTAX_AUTHOR                       = 0x6
-	RTAX_BFD                          = 0xb
-	RTAX_BRD                          = 0x7
-	RTAX_DNS                          = 0xc
-	RTAX_DST                          = 0x0
-	RTAX_GATEWAY                      = 0x1
-	RTAX_GENMASK                      = 0x3
-	RTAX_IFA                          = 0x5
-	RTAX_IFP                          = 0x4
-	RTAX_LABEL                        = 0xa
-	RTAX_MAX                          = 0xf
-	RTAX_NETMASK                      = 0x2
-	RTAX_SEARCH                       = 0xe
-	RTAX_SRC                          = 0x8
-	RTAX_SRCMASK                      = 0x9
-	RTAX_STATIC                       = 0xd
-	RTA_AUTHOR                        = 0x40
-	RTA_BFD                           = 0x800
-	RTA_BRD                           = 0x80
-	RTA_DNS                           = 0x1000
-	RTA_DST                           = 0x1
-	RTA_GATEWAY                       = 0x2
-	RTA_GENMASK                       = 0x8
-	RTA_IFA                           = 0x20
-	RTA_IFP                           = 0x10
-	RTA_LABEL                         = 0x400
-	RTA_NETMASK                       = 0x4
-	RTA_SEARCH                        = 0x4000
-	RTA_SRC                           = 0x100
-	RTA_SRCMASK                       = 0x200
-	RTA_STATIC                        = 0x2000
-	RTF_ANNOUNCE                      = 0x4000
-	RTF_BFD                           = 0x1000000
-	RTF_BLACKHOLE                     = 0x1000
-	RTF_BROADCAST                     = 0x400000
-	RTF_CACHED                        = 0x20000
-	RTF_CLONED                        = 0x10000
-	RTF_CLONING                       = 0x100
-	RTF_CONNECTED                     = 0x800000
-	RTF_DONE                          = 0x40
-	RTF_DYNAMIC                       = 0x10
-	RTF_FMASK                         = 0x110fc08
-	RTF_GATEWAY                       = 0x2
-	RTF_HOST                          = 0x4
-	RTF_LLINFO                        = 0x400
-	RTF_LOCAL                         = 0x200000
-	RTF_MODIFIED                      = 0x20
-	RTF_MPATH                         = 0x40000
-	RTF_MPLS                          = 0x100000
-	RTF_MULTICAST                     = 0x200
-	RTF_PERMANENT_ARP                 = 0x2000
-	RTF_PROTO1                        = 0x8000
-	RTF_PROTO2                        = 0x4000
-	RTF_PROTO3                        = 0x2000
-	RTF_REJECT                        = 0x8
-	RTF_STATIC                        = 0x800
-	RTF_UP                            = 0x1
-	RTF_USETRAILERS                   = 0x8000
-	RTM_80211INFO                     = 0x15
-	RTM_ADD                           = 0x1
-	RTM_BFD                           = 0x12
-	RTM_CHANGE                        = 0x3
-	RTM_CHGADDRATTR                   = 0x14
-	RTM_DELADDR                       = 0xd
-	RTM_DELETE                        = 0x2
-	RTM_DESYNC                        = 0x10
-	RTM_GET                           = 0x4
-	RTM_IFANNOUNCE                    = 0xf
-	RTM_IFINFO                        = 0xe
-	RTM_INVALIDATE                    = 0x11
-	RTM_LOSING                        = 0x5
-	RTM_MAXSIZE                       = 0x800
-	RTM_MISS                          = 0x7
-	RTM_NEWADDR                       = 0xc
-	RTM_PROPOSAL                      = 0x13
-	RTM_REDIRECT                      = 0x6
-	RTM_RESOLVE                       = 0xb
-	RTM_SOURCE                        = 0x16
-	RTM_VERSION                       = 0x5
-	RTV_EXPIRE                        = 0x4
-	RTV_HOPCOUNT                      = 0x2
-	RTV_MTU                           = 0x1
-	RTV_RPIPE                         = 0x8
-	RTV_RTT                           = 0x40
-	RTV_RTTVAR                        = 0x80
-	RTV_SPIPE                         = 0x10
-	RTV_SSTHRESH                      = 0x20
-	RT_TABLEID_BITS                   = 0x8
-	RT_TABLEID_MASK                   = 0xff
-	RT_TABLEID_MAX                    = 0xff
-	RUSAGE_CHILDREN                   = -0x1
-	RUSAGE_SELF                       = 0x0
-	RUSAGE_THREAD                     = 0x1
-	SCM_RIGHTS                        = 0x1
-	SCM_TIMESTAMP                     = 0x4
-	SEEK_CUR                          = 0x1
-	SEEK_END                          = 0x2
-	SEEK_SET                          = 0x0
-	SHUT_RD                           = 0x0
-	SHUT_RDWR                         = 0x2
-	SHUT_WR                           = 0x1
-	SIOCADDMULTI                      = 0x80206931
-	SIOCAIFADDR                       = 0x8040691a
-	SIOCAIFGROUP                      = 0x80286987
-	SIOCATMARK                        = 0x40047307
-	SIOCBRDGADD                       = 0x8060693c
-	SIOCBRDGADDL                      = 0x80606949
-	SIOCBRDGADDS                      = 0x80606941
-	SIOCBRDGARL                       = 0x808c694d
-	SIOCBRDGDADDR                     = 0x81286947
-	SIOCBRDGDEL                       = 0x8060693d
-	SIOCBRDGDELS                      = 0x80606942
-	SIOCBRDGFLUSH                     = 0x80606948
-	SIOCBRDGFRL                       = 0x808c694e
-	SIOCBRDGGCACHE                    = 0xc0146941
-	SIOCBRDGGFD                       = 0xc0146952
-	SIOCBRDGGHT                       = 0xc0146951
-	SIOCBRDGGIFFLGS                   = 0xc060693e
-	SIOCBRDGGMA                       = 0xc0146953
-	SIOCBRDGGPARAM                    = 0xc0406958
-	SIOCBRDGGPRI                      = 0xc0146950
-	SIOCBRDGGRL                       = 0xc030694f
-	SIOCBRDGGTO                       = 0xc0146946
-	SIOCBRDGIFS                       = 0xc0606942
-	SIOCBRDGRTS                       = 0xc0206943
-	SIOCBRDGSADDR                     = 0xc1286944
-	SIOCBRDGSCACHE                    = 0x80146940
-	SIOCBRDGSFD                       = 0x80146952
-	SIOCBRDGSHT                       = 0x80146951
-	SIOCBRDGSIFCOST                   = 0x80606955
-	SIOCBRDGSIFFLGS                   = 0x8060693f
-	SIOCBRDGSIFPRIO                   = 0x80606954
-	SIOCBRDGSIFPROT                   = 0x8060694a
-	SIOCBRDGSMA                       = 0x80146953
-	SIOCBRDGSPRI                      = 0x80146950
-	SIOCBRDGSPROTO                    = 0x8014695a
-	SIOCBRDGSTO                       = 0x80146945
-	SIOCBRDGSTXHC                     = 0x80146959
-	SIOCDELLABEL                      = 0x80206997
-	SIOCDELMULTI                      = 0x80206932
-	SIOCDIFADDR                       = 0x80206919
-	SIOCDIFGROUP                      = 0x80286989
-	SIOCDIFPARENT                     = 0x802069b4
-	SIOCDIFPHYADDR                    = 0x80206949
-	SIOCDPWE3NEIGHBOR                 = 0x802069de
-	SIOCDVNETID                       = 0x802069af
-	SIOCGETKALIVE                     = 0xc01869a4
-	SIOCGETLABEL                      = 0x8020699a
-	SIOCGETMPWCFG                     = 0xc02069ae
-	SIOCGETPFLOW                      = 0xc02069fe
-	SIOCGETPFSYNC                     = 0xc02069f8
-	SIOCGETSGCNT                      = 0xc0207534
-	SIOCGETVIFCNT                     = 0xc0287533
-	SIOCGETVLAN                       = 0xc0206990
-	SIOCGIFADDR                       = 0xc0206921
-	SIOCGIFBRDADDR                    = 0xc0206923
-	SIOCGIFCONF                       = 0xc0106924
-	SIOCGIFDATA                       = 0xc020691b
-	SIOCGIFDESCR                      = 0xc0206981
-	SIOCGIFDSTADDR                    = 0xc0206922
-	SIOCGIFFLAGS                      = 0xc0206911
-	SIOCGIFGATTR                      = 0xc028698b
-	SIOCGIFGENERIC                    = 0xc020693a
-	SIOCGIFGLIST                      = 0xc028698d
-	SIOCGIFGMEMB                      = 0xc028698a
-	SIOCGIFGROUP                      = 0xc0286988
-	SIOCGIFHARDMTU                    = 0xc02069a5
-	SIOCGIFLLPRIO                     = 0xc02069b6
-	SIOCGIFMEDIA                      = 0xc0406938
-	SIOCGIFMETRIC                     = 0xc0206917
-	SIOCGIFMTU                        = 0xc020697e
-	SIOCGIFNETMASK                    = 0xc0206925
-	SIOCGIFPAIR                       = 0xc02069b1
-	SIOCGIFPARENT                     = 0xc02069b3
-	SIOCGIFPRIORITY                   = 0xc020699c
-	SIOCGIFRDOMAIN                    = 0xc02069a0
-	SIOCGIFRTLABEL                    = 0xc0206983
-	SIOCGIFRXR                        = 0x802069aa
-	SIOCGIFSFFPAGE                    = 0xc1126939
-	SIOCGIFXFLAGS                     = 0xc020699e
-	SIOCGLIFPHYADDR                   = 0xc218694b
-	SIOCGLIFPHYDF                     = 0xc02069c2
-	SIOCGLIFPHYECN                    = 0xc02069c8
-	SIOCGLIFPHYRTABLE                 = 0xc02069a2
-	SIOCGLIFPHYTTL                    = 0xc02069a9
-	SIOCGPGRP                         = 0x40047309
-	SIOCGPWE3                         = 0xc0206998
-	SIOCGPWE3CTRLWORD                 = 0xc02069dc
-	SIOCGPWE3FAT                      = 0xc02069dd
-	SIOCGPWE3NEIGHBOR                 = 0xc21869de
-	SIOCGRXHPRIO                      = 0xc02069db
-	SIOCGSPPPPARAMS                   = 0xc0206994
-	SIOCGTXHPRIO                      = 0xc02069c6
-	SIOCGUMBINFO                      = 0xc02069be
-	SIOCGUMBPARAM                     = 0xc02069c0
-	SIOCGVH                           = 0xc02069f6
-	SIOCGVNETFLOWID                   = 0xc02069c4
-	SIOCGVNETID                       = 0xc02069a7
-	SIOCIFAFATTACH                    = 0x801169ab
-	SIOCIFAFDETACH                    = 0x801169ac
-	SIOCIFCREATE                      = 0x8020697a
-	SIOCIFDESTROY                     = 0x80206979
-	SIOCIFGCLONERS                    = 0xc0106978
-	SIOCSETKALIVE                     = 0x801869a3
-	SIOCSETLABEL                      = 0x80206999
-	SIOCSETMPWCFG                     = 0x802069ad
-	SIOCSETPFLOW                      = 0x802069fd
-	SIOCSETPFSYNC                     = 0x802069f7
-	SIOCSETVLAN                       = 0x8020698f
-	SIOCSIFADDR                       = 0x8020690c
-	SIOCSIFBRDADDR                    = 0x80206913
-	SIOCSIFDESCR                      = 0x80206980
-	SIOCSIFDSTADDR                    = 0x8020690e
-	SIOCSIFFLAGS                      = 0x80206910
-	SIOCSIFGATTR                      = 0x8028698c
-	SIOCSIFGENERIC                    = 0x80206939
-	SIOCSIFLLADDR                     = 0x8020691f
-	SIOCSIFLLPRIO                     = 0x802069b5
-	SIOCSIFMEDIA                      = 0xc0206937
-	SIOCSIFMETRIC                     = 0x80206918
-	SIOCSIFMTU                        = 0x8020697f
-	SIOCSIFNETMASK                    = 0x80206916
-	SIOCSIFPAIR                       = 0x802069b0
-	SIOCSIFPARENT                     = 0x802069b2
-	SIOCSIFPRIORITY                   = 0x8020699b
-	SIOCSIFRDOMAIN                    = 0x8020699f
-	SIOCSIFRTLABEL                    = 0x80206982
-	SIOCSIFXFLAGS                     = 0x8020699d
-	SIOCSLIFPHYADDR                   = 0x8218694a
-	SIOCSLIFPHYDF                     = 0x802069c1
-	SIOCSLIFPHYECN                    = 0x802069c7
-	SIOCSLIFPHYRTABLE                 = 0x802069a1
-	SIOCSLIFPHYTTL                    = 0x802069a8
-	SIOCSPGRP                         = 0x80047308
-	SIOCSPWE3CTRLWORD                 = 0x802069dc
-	SIOCSPWE3FAT                      = 0x802069dd
-	SIOCSPWE3NEIGHBOR                 = 0x821869de
-	SIOCSRXHPRIO                      = 0x802069db
-	SIOCSSPPPPARAMS                   = 0x80206993
-	SIOCSTXHPRIO                      = 0x802069c5
-	SIOCSUMBPARAM                     = 0x802069bf
-	SIOCSVH                           = 0xc02069f5
-	SIOCSVNETFLOWID                   = 0x802069c3
-	SIOCSVNETID                       = 0x802069a6
-	SOCK_CLOEXEC                      = 0x8000
-	SOCK_DGRAM                        = 0x2
-	SOCK_DNS                          = 0x1000
-	SOCK_NONBLOCK                     = 0x4000
-	SOCK_RAW                          = 0x3
-	SOCK_RDM                          = 0x4
-	SOCK_SEQPACKET                    = 0x5
-	SOCK_STREAM                       = 0x1
-	SOL_SOCKET                        = 0xffff
-	SOMAXCONN                         = 0x80
-	SO_ACCEPTCONN                     = 0x2
-	SO_BINDANY                        = 0x1000
-	SO_BROADCAST                      = 0x20
-	SO_DEBUG                          = 0x1
-	SO_DOMAIN                         = 0x1024
-	SO_DONTROUTE                      = 0x10
-	SO_ERROR                          = 0x1007
-	SO_KEEPALIVE                      = 0x8
-	SO_LINGER                         = 0x80
-	SO_NETPROC                        = 0x1020
-	SO_OOBINLINE                      = 0x100
-	SO_PEERCRED                       = 0x1022
-	SO_PROTOCOL                       = 0x1025
-	SO_RCVBUF                         = 0x1002
-	SO_RCVLOWAT                       = 0x1004
-	SO_RCVTIMEO                       = 0x1006
-	SO_REUSEADDR                      = 0x4
-	SO_REUSEPORT                      = 0x200
-	SO_RTABLE                         = 0x1021
-	SO_SNDBUF                         = 0x1001
-	SO_SNDLOWAT                       = 0x1003
-	SO_SNDTIMEO                       = 0x1005
-	SO_SPLICE                         = 0x1023
-	SO_TIMESTAMP                      = 0x800
-	SO_TYPE                           = 0x1008
-	SO_USELOOPBACK                    = 0x40
-	SO_ZEROIZE                        = 0x2000
-	S_BLKSIZE                         = 0x200
-	S_IEXEC                           = 0x40
-	S_IFBLK                           = 0x6000
-	S_IFCHR                           = 0x2000
-	S_IFDIR                           = 0x4000
-	S_IFIFO                           = 0x1000
-	S_IFLNK                           = 0xa000
-	S_IFMT                            = 0xf000
-	S_IFREG                           = 0x8000
-	S_IFSOCK                          = 0xc000
-	S_IREAD                           = 0x100
-	S_IRGRP                           = 0x20
-	S_IROTH                           = 0x4
-	S_IRUSR                           = 0x100
-	S_IRWXG                           = 0x38
-	S_IRWXO                           = 0x7
-	S_IRWXU                           = 0x1c0
-	S_ISGID                           = 0x400
-	S_ISTXT                           = 0x200
-	S_ISUID                           = 0x800
-	S_ISVTX                           = 0x200
-	S_IWGRP                           = 0x10
-	S_IWOTH                           = 0x2
-	S_IWRITE                          = 0x80
-	S_IWUSR                           = 0x80
-	S_IXGRP                           = 0x8
-	S_IXOTH                           = 0x1
-	S_IXUSR                           = 0x40
-	TCIFLUSH                          = 0x1
-	TCIOFF                            = 0x3
-	TCIOFLUSH                         = 0x3
-	TCION                             = 0x4
-	TCOFLUSH                          = 0x2
-	TCOOFF                            = 0x1
-	TCOON                             = 0x2
-	TCPOPT_EOL                        = 0x0
-	TCPOPT_MAXSEG                     = 0x2
-	TCPOPT_NOP                        = 0x1
-	TCPOPT_SACK                       = 0x5
-	TCPOPT_SACK_HDR                   = 0x1010500
-	TCPOPT_SACK_PERMITTED             = 0x4
-	TCPOPT_SACK_PERMIT_HDR            = 0x1010402
-	TCPOPT_SIGNATURE                  = 0x13
-	TCPOPT_TIMESTAMP                  = 0x8
-	TCPOPT_TSTAMP_HDR                 = 0x101080a
-	TCPOPT_WINDOW                     = 0x3
-	TCP_INFO                          = 0x9
-	TCP_MAXSEG                        = 0x2
-	TCP_MAXWIN                        = 0xffff
-	TCP_MAX_SACK                      = 0x3
-	TCP_MAX_WINSHIFT                  = 0xe
-	TCP_MD5SIG                        = 0x4
-	TCP_MSS                           = 0x200
-	TCP_NODELAY                       = 0x1
-	TCP_NOPUSH                        = 0x10
-	TCP_SACKHOLE_LIMIT                = 0x80
-	TCP_SACK_ENABLE                   = 0x8
-	TCSAFLUSH                         = 0x2
-	TIMER_ABSTIME                     = 0x1
-	TIMER_RELTIME                     = 0x0
-	TIOCCBRK                          = 0x2000747a
-	TIOCCDTR                          = 0x20007478
-	TIOCCHKVERAUTH                    = 0x2000741e
-	TIOCCLRVERAUTH                    = 0x2000741d
-	TIOCCONS                          = 0x80047462
-	TIOCDRAIN                         = 0x2000745e
-	TIOCEXCL                          = 0x2000740d
-	TIOCEXT                           = 0x80047460
-	TIOCFLAG_CLOCAL                   = 0x2
-	TIOCFLAG_CRTSCTS                  = 0x4
-	TIOCFLAG_MDMBUF                   = 0x8
-	TIOCFLAG_PPS                      = 0x10
-	TIOCFLAG_SOFTCAR                  = 0x1
-	TIOCFLUSH                         = 0x80047410
-	TIOCGETA                          = 0x402c7413
-	TIOCGETD                          = 0x4004741a
-	TIOCGFLAGS                        = 0x4004745d
-	TIOCGPGRP                         = 0x40047477
-	TIOCGSID                          = 0x40047463
-	TIOCGTSTAMP                       = 0x4010745b
 	TIOCGWINSZ                        = 0x40087468
 	TIOCMBIC                          = 0x8004746b
 	TIOCMBIS                          = 0x8004746c

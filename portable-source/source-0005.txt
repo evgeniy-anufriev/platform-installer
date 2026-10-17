@@ -1,3 +1,1083 @@
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/alecthomas/chroma/v2/lexers/embedded/viml.xml","mode":420,"size":2601,"sha256":"3860d734727d4f521ab2e90a2a276eced3cd4a30db4cb4c750b633fe613b3eb3","index":0,"count":1,"encoding":"utf-8","payloadBytes":2601}
+<lexer>
+  <config>
+    <name>VimL</name>
+    <alias>vim</alias>
+    <filename>*.vim</filename>
+    <filename>.vimrc</filename>
+    <filename>.exrc</filename>
+    <filename>.gvimrc</filename>
+    <filename>_vimrc</filename>
+    <filename>_exrc</filename>
+    <filename>_gvimrc</filename>
+    <filename>vimrc</filename>
+    <filename>gvimrc</filename>
+    <mime_type>text/x-vim</mime_type>
+  </config>
+  <rules>
+    <state name="root">
+      <rule pattern="^([ \t:]*)(py(?:t(?:h(?:o(?:n)?)?)?)?)([ \t]*)(&lt;&lt;)([ \t]*)(.*)((?:\n|.)*)(\6)">
+        <bygroups>
+          <usingself state="root"/>
+          <token type="Keyword"/>
+          <token type="Text"/>
+          <token type="Operator"/>
+          <token type="Text"/>
+          <token type="Text"/>
+          <using lexer="Python"/>
+          <token type="Text"/>
+        </bygroups>
+      </rule>
+      <rule pattern="^([ \t:]*)(py(?:t(?:h(?:o(?:n)?)?)?)?)([ \t])(.*)">
+        <bygroups>
+          <usingself state="root"/>
+          <token type="Keyword"/>
+          <token type="Text"/>
+          <using lexer="Python"/>
+        </bygroups>
+      </rule>
+      <rule pattern="^\s*&#34;.*">
+        <token type="Comment"/>
+      </rule>
+      <rule pattern="[ \t]+">
+        <token type="Text"/>
+      </rule>
+      <rule pattern="/(\\\\|\\/|[^\n/])*/">
+        <token type="LiteralStringRegex"/>
+      </rule>
+      <rule pattern="&#34;(\\\\|\\&#34;|[^\n&#34;])*&#34;">
+        <token type="LiteralStringDouble"/>
+      </rule>
+      <rule pattern="&#39;(&#39;&#39;|[^\n&#39;])*&#39;">
+        <token type="LiteralStringSingle"/>
+      </rule>
+      <rule pattern="(?&lt;=\s)&#34;[^\-:.%#=*].*">
+        <token type="Comment"/>
+      </rule>
+      <rule pattern="-?\d+">
+        <token type="LiteralNumber"/>
+      </rule>
+      <rule pattern="#[0-9a-f]{6}">
+        <token type="LiteralNumberHex"/>
+      </rule>
+      <rule pattern="^:">
+        <token type="Punctuation"/>
+      </rule>
+      <rule pattern="[()&lt;&gt;+=!|,~-]">
+        <token type="Punctuation"/>
+      </rule>
+      <rule pattern="\b(let|if|else|endif|elseif|fun|function|endfunction|set|map|autocmd|filetype|hi(ghlight)?|execute|syntax|colorscheme)\b">
+        <token type="Keyword"/>
+      </rule>
+      <rule pattern="\b(NONE|bold|italic|underline|dark|light)\b">
+        <token type="NameBuiltin"/>
+      </rule>
+      <rule pattern="\b\w+\b">
+        <token type="NameOther"/>
+      </rule>
+      <rule pattern="\n">
+        <token type="Text"/>
+      </rule>
+      <rule pattern=".">
+        <token type="Text"/>
+      </rule>
+    </state>
+  </rules>
+</lexer>
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/alecthomas/chroma/v2/lexers/embedded/vue.xml","mode":420,"size":9400,"sha256":"f339e2ab9633821e57b0b6b0538b36e6446c0672233a9b10bcdcbb8eec9f2178","index":0,"count":1,"encoding":"utf-8","payloadBytes":9400}
+<lexer>
+  <config>
+    <name>vue</name>
+    <alias>vue</alias>
+    <alias>vuejs</alias>
+    <filename>*.vue</filename>
+    <mime_type>text/x-vue</mime_type>
+    <mime_type>application/x-vue</mime_type>
+    <dot_all>true</dot_all>
+  </config>
+  <rules>
+    <state name="interp-inside">
+      <rule pattern="\}">
+        <token type="LiteralStringInterpol"/>
+        <pop depth="1"/>
+      </rule>
+      <rule>
+        <include state="root"/>
+      </rule>
+    </state>
+    <state name="attr">
+      <rule pattern="{">
+        <token type="Punctuation"/>
+        <push state="expression"/>
+      </rule>
+      <rule pattern="&#34;.*?&#34;">
+        <token type="LiteralString"/>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern="&#39;.*?&#39;">
+        <token type="LiteralString"/>
+        <pop depth="1"/>
+      </rule>
+      <rule>
+        <pop depth="1"/>
+      </rule>
+    </state>
+    <state name="interp">
+      <rule pattern="`">
+        <token type="LiteralStringBacktick"/>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern="\\\\">
+        <token type="LiteralStringBacktick"/>
+      </rule>
+      <rule pattern="\\`">
+        <token type="LiteralStringBacktick"/>
+      </rule>
+      <rule pattern="\$\{">
+        <token type="LiteralStringInterpol"/>
+        <push state="interp-inside"/>
+      </rule>
+      <rule pattern="\$">
+        <token type="LiteralStringBacktick"/>
+      </rule>
+      <rule pattern="[^`\\$]+">
+        <token type="LiteralStringBacktick"/>
+      </rule>
+    </state>
+    <state name="tag">
+      <rule pattern="\s+">
+        <token type="Text"/>
+      </rule>
+      <rule pattern="(-)([\w]+)">
+        <token type="NameTag"/>
+      </rule>
+      <rule pattern="(@[\w]+)(=&#34;[\S]+&#34;)(&gt;)">
+        <bygroups>
+          <token type="NameTag"/>
+          <token type="LiteralString"/>
+          <token type="Punctuation"/>
+        </bygroups>
+      </rule>
+      <rule pattern="(@[\w]+)(=&#34;[\S]+&#34;)">
+        <bygroups>
+          <token type="NameTag"/>
+          <token type="LiteralString"/>
+        </bygroups>
+      </rule>
+      <rule pattern="(@[\S]+)(=&#34;[\S]+&#34;)">
+        <bygroups>
+          <token type="NameTag"/>
+          <token type="LiteralString"/>
+        </bygroups>
+      </rule>
+      <rule pattern="(:[\S]+)(=)(&#34;[\S]+&#34;)">
+        <bygroups>
+          <token type="NameTag"/>
+          <token type="Operator"/>
+          <token type="LiteralString"/>
+        </bygroups>
+      </rule>
+      <rule pattern="(:)">
+        <token type="Operator"/>
+      </rule>
+      <rule pattern="(v-b-[\S]+)">
+        <token type="NameTag"/>
+      </rule>
+      <rule pattern="(v-[\w]+)(=&#34;.+)([:][\w]+)(=&#34;[\w]+&#34;)(&gt;)">
+        <bygroups>
+          <token type="NameTag"/>
+          <token type="LiteralString"/>
+          <token type="NameTag"/>
+          <token type="LiteralString"/>
+          <token type="Punctuation"/>
+        </bygroups>
+      </rule>
+      <rule pattern="(v-[\w]+)(=)(&#34;[\S ]+&#34;)(&gt;|\s)">
+        <bygroups>
+          <token type="NameTag"/>
+          <token type="Operator"/>
+          <token type="LiteralString"/>
+          <token type="Punctuation"/>
+        </bygroups>
+      </rule>
+      <rule pattern="(v-[\w]+)(&gt;)">
+        <bygroups>
+          <token type="NameTag"/>
+          <token type="Punctuation"/>
+        </bygroups>
+      </rule>
+      <rule pattern="(v-[\w]+)(=&#34;.+&#34;)(&gt;)">
+        <bygroups>
+          <token type="NameTag"/>
+          <token type="LiteralString"/>
+          <token type="Punctuation"/>
+        </bygroups>
+      </rule>
+      <rule pattern="(&lt;)([\w]+)">
+        <bygroups>
+          <token type="Punctuation"/>
+          <token type="NameTag"/>
+        </bygroups>
+      </rule>
+      <rule pattern="(&lt;)(/)([\w]+)(&gt;)">
+        <bygroups>
+          <token type="Punctuation"/>
+          <token type="Punctuation"/>
+          <token type="NameTag"/>
+          <token type="Punctuation"/>
+        </bygroups>
+      </rule>
+      <rule pattern="([\w]+\s*)(=)(\s*)">
+        <bygroups>
+          <token type="NameAttribute"/>
+          <token type="Operator"/>
+          <token type="Text"/>
+        </bygroups>
+        <push state="attr"/>
+      </rule>
+      <rule pattern="[{}]+">
+        <token type="Punctuation"/>
+      </rule>
+      <rule pattern="[\w\.]+">
+        <token type="NameAttribute"/>
+      </rule>
+      <rule pattern="(/?)(\s*)(&gt;)">
+        <bygroups>
+          <token type="Punctuation"/>
+          <token type="Text"/>
+          <token type="Punctuation"/>
+        </bygroups>
+        <pop depth="1"/>
+      </rule>
+    </state>
+    <state name="slashstartsregex">
+      <rule>
+        <include state="commentsandwhitespace"/>
+      </rule>
+      <rule pattern="/(\\.|[^[/\\\n]|\[(\\.|[^\]\\\n])*])+/([gimuy]+\b|\B)">
+        <token type="LiteralStringRegex"/>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern="(?=/)">
+        <token type="Text"/>
+        <push state="#pop" state="badregex"/>
+      </rule>
+      <rule>
+        <pop depth="1"/>
+      </rule>
+    </state>
+    <state name="root">
+      <rule>
+        <include state="vue"/>
+      </rule>
+      <rule pattern="\A#! ?/.*?\n">
+        <token type="CommentHashbang"/>
+      </rule>
+      <rule pattern="^(?=\s|/|&lt;!--)">
+        <token type="Text"/>
+        <push state="slashstartsregex"/>
+      </rule>
+      <rule>
+        <include state="commentsandwhitespace"/>
+      </rule>
+      <rule pattern="(\.\d+|[0-9]+\.[0-9]*)([eE][-+]?[0-9]+)?">
+        <token type="LiteralNumberFloat"/>
+      </rule>
+      <rule pattern="0[bB][01]+">
+        <token type="LiteralNumberBin"/>
+      </rule>
+      <rule pattern="0[oO][0-7]+">
+        <token type="LiteralNumberOct"/>
+      </rule>
+      <rule pattern="0[xX][0-9a-fA-F]+">
+        <token type="LiteralNumberHex"/>
+      </rule>
+      <rule pattern="[0-9]+">
+        <token type="LiteralNumberInteger"/>
+      </rule>
+      <rule pattern="\.\.\.|=&gt;">
+        <token type="Punctuation"/>
+      </rule>
+      <rule pattern="\+\+|--|~|&amp;&amp;|\?|:|\|\||\\(?=\n)|(&lt;&lt;|&gt;&gt;&gt;?|==?|!=?|[-&lt;&gt;+*%&amp;|^/])=?">
+        <token type="Operator"/>
+        <push state="slashstartsregex"/>
+      </rule>
+      <rule pattern="[{(\[;,]">
+        <token type="Punctuation"/>
+        <push state="slashstartsregex"/>
+      </rule>
+      <rule pattern="[})\].]">
+        <token type="Punctuation"/>
+      </rule>
+      <rule pattern="(for|in|while|do|break|return|continue|switch|case|default|if|else|throw|try|catch|finally|new|delete|typeof|instanceof|void|yield|this|of)\b">
+        <token type="Keyword"/>
+        <push state="slashstartsregex"/>
+      </rule>
+      <rule pattern="(var|let|with|function)\b">
+        <token type="KeywordDeclaration"/>
+        <push state="slashstartsregex"/>
+      </rule>
+      <rule pattern="(abstract|boolean|byte|char|class|const|debugger|double|enum|export|extends|final|float|goto|implements|import|int|interface|long|native|package|private|protected|public|short|static|super|synchronized|throws|transient|volatile)\b">
+        <token type="KeywordReserved"/>
+      </rule>
+      <rule pattern="(true|false|null|NaN|Infinity|undefined)\b">
+        <token type="KeywordConstant"/>
+      </rule>
+      <rule pattern="(Array|Boolean|Date|Error|Function|Math|netscape|Number|Object|Packages|RegExp|String|Promise|Proxy|sun|decodeURI|decodeURIComponent|encodeURI|encodeURIComponent|Error|eval|isFinite|isNaN|isSafeInteger|parseFloat|parseInt|document|this|window)\b">
+        <token type="NameBuiltin"/>
+      </rule>
+      <rule pattern="(?:[$_\p{L}\p{N}]|\\u[a-fA-F0-9]{4})(?:(?:[$\p{L}\p{N}]|\\u[a-fA-F0-9]{4}))*">
+        <token type="NameOther"/>
+      </rule>
+      <rule pattern="&#34;(\\\\|\\&#34;|[^&#34;])*&#34;">
+        <token type="LiteralStringDouble"/>
+      </rule>
+      <rule pattern="&#39;(\\\\|\\&#39;|[^&#39;])*&#39;">
+        <token type="LiteralStringSingle"/>
+      </rule>
+      <rule pattern="`">
+        <token type="LiteralStringBacktick"/>
+        <push state="interp"/>
+      </rule>
+    </state>
+    <state name="badregex">
+      <rule pattern="\n">
+        <token type="Text"/>
+        <pop depth="1"/>
+      </rule>
+    </state>
+    <state name="vue">
+      <rule pattern="(&lt;)([\w-]+)">
+        <bygroups>
+          <token type="Punctuation"/>
+          <token type="NameTag"/>
+        </bygroups>
+        <push state="tag"/>
+      </rule>
+      <rule pattern="(&lt;)(/)([\w-]+)(&gt;)">
+        <bygroups>
+          <token type="Punctuation"/>
+          <token type="Punctuation"/>
+          <token type="NameTag"/>
+          <token type="Punctuation"/>
+        </bygroups>
+      </rule>
+    </state>
+    <state name="expression">
+      <rule pattern="{">
+        <token type="Punctuation"/>
+        <push/>
+      </rule>
+      <rule pattern="}">
+        <token type="Punctuation"/>
+        <pop depth="1"/>
+      </rule>
+      <rule>
+        <include state="root"/>
+      </rule>
+    </state>
+    <state name="commentsandwhitespace">
+      <rule pattern="\s+">
+        <token type="Text"/>
+      </rule>
+      <rule pattern="&lt;!--">
+        <token type="Comment"/>
+      </rule>
+      <rule pattern="//.*?\n">
+        <token type="CommentSingle"/>
+      </rule>
+      <rule pattern="/\*.*?\*/">
+        <token type="CommentMultiline"/>
+      </rule>
+    </state>
+  </rules>
+</lexer>
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/alecthomas/chroma/v2/lexers/embedded/wdte.xml","mode":420,"size":1117,"sha256":"519651e7a4d4d4d37289df817a46b06c94849efbb22ad9b8ac673209febf46d5","index":0,"count":1,"encoding":"utf-8","payloadBytes":1117}
+<lexer>
+  <config>
+    <name>WDTE</name>
+    <filename>*.wdte</filename>
+  </config>
+  <rules>
+    <state name="root">
+      <rule pattern="\n">
+        <token type="Text"/>
+      </rule>
+      <rule pattern="\s+">
+        <token type="Text"/>
+      </rule>
+      <rule pattern="\\\n">
+        <token type="Text"/>
+      </rule>
+      <rule pattern="#(.*?)\n">
+        <token type="CommentSingle"/>
+      </rule>
+      <rule pattern="-?[0-9]+">
+        <token type="LiteralNumberInteger"/>
+      </rule>
+      <rule pattern="-?[0-9]*\.[0-9]+">
+        <token type="LiteralNumberFloat"/>
+      </rule>
+      <rule pattern="&#34;[^&#34;]*&#34;">
+        <token type="LiteralString"/>
+      </rule>
+      <rule pattern="&#39;[^&#39;]*&#39;">
+        <token type="LiteralString"/>
+      </rule>
+      <rule pattern="(default|switch|memo)\b">
+        <token type="KeywordReserved"/>
+      </rule>
+      <rule pattern="{|}|;|-&gt;|=&gt;|\(|\)|\[|\]|\.">
+        <token type="Operator"/>
+      </rule>
+      <rule pattern="[^{};()[\].\s]+">
+        <token type="NameVariable"/>
+      </rule>
+    </state>
+  </rules>
+</lexer>
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/alecthomas/chroma/v2/lexers/embedded/webgpu_shading_language.xml","mode":420,"size":32655,"sha256":"290b460970880c7c99d7a0e4427f92702f8a8caf08b7097e6c3cf97bafec5615","index":0,"count":1,"encoding":"utf-8","payloadBytes":32655}
+<lexer>
+  <config>
+    <name>WebGPU Shading Language</name>
+    <alias>wgsl</alias>
+    <filename>*.wgsl</filename>
+    <mime_type>text/wgsl</mime_type>
+  </config>
+  <rules>
+    <state name="blankspace">
+      <rule pattern="[\u0020\u0009\u000a\u000b\u000c\u000d\u0085\u200e\u200f\u2028\u2029]+">
+        <token type="TextWhitespace"/>
+      </rule>
+    </state>
+    <state name="comments">
+      <rule pattern="//[^\u000a\u000b\u000c\u000d\u0085\u2028\u2029]*\u000d\u000a">
+        <token type="CommentSingle"/>
+      </rule>
+      <rule pattern="//[^\u000a\u000b\u000c\u000d\u0085\u2028\u2029]*[\u000a\u000b\u000c\u000d\u0085\u2028\u2029]">
+        <token type="CommentSingle"/>
+      </rule>
+      <rule pattern="/\*">
+        <token type="CommentMultiline"/>
+        <push state="block_comment"/>
+      </rule>
+    </state>
+    <state name="attribute">
+      <rule>
+        <include state="blankspace"/>
+      </rule>
+      <rule>
+        <include state="comments"/>
+      </rule>
+      <rule pattern="([_A-Z_a-zªµºÀ-ÖØ-öø-ˁˆ-ˑˠ-ˤˬˮͰ-ʹͶ-ͷͻ-ͽͿΆΈ-ΊΌΎ-ΡΣ-ϵϷ-ҁҊ-ԯԱ-Ֆՙՠ-ֈא-תׯ-ײؠ-يٮ-ٯٱ-ۓەۥ-ۦۮ-ۯۺ-ۼۿܐܒ-ܯݍ-ޥޱߊ-ߪߴ-ߵߺࠀ-ࠕࠚࠤࠨࡀ-ࡘࡠ-ࡪࢠ-ࢴࢶ-ࢽऄ-हऽॐक़-ॡॱ-ঀঅ-ঌএ-ঐও-নপ-রলশ-হঽৎড়-ঢ়য়-ৡৰ-ৱৼਅ-ਊਏ-ਐਓ-ਨਪ-ਰਲ-ਲ਼ਵ-ਸ਼ਸ-ਹਖ਼-ੜਫ਼ੲ-ੴઅ-ઍએ-ઑઓ-નપ-રલ-ળવ-હઽૐૠ-ૡૹଅ-ଌଏ-ଐଓ-ନପ-ରଲ-ଳଵ-ହଽଡ଼-ଢ଼ୟ-ୡୱஃஅ-ஊஎ-ஐஒ-கங-சஜஞ-டண-தந-பம-ஹௐఅ-ఌఎ-ఐఒ-నప-హఽౘ-ౚౠ-ౡಀಅ-ಌಎ-ಐಒ-ನಪ-ಳವ-ಹಽೞೠ-ೡೱ-ೲഅ-ഌഎ-ഐഒ-ഺഽൎൔ-ൖൟ-ൡൺ-ൿඅ-ඖක-නඳ-රලව-ෆก-ะาเ-ๆກ-ຂຄງ-ຈຊຍດ-ທນ-ຟມ-ຣລວສ-ຫອ-ະາຽເ-ໄໆໜ-ໟༀཀ-ཇཉ-ཬྈ-ྌက-ဪဿၐ-ၕၚ-ၝၡၥ-ၦၮ-ၰၵ-ႁႎႠ-ჅჇჍა-ჺჼ-ቈቊ-ቍቐ-ቖቘቚ-ቝበ-ኈኊ-ኍነ-ኰኲ-ኵኸ-ኾዀዂ-ዅወ-ዖዘ-ጐጒ-ጕጘ-ፚᎀ-ᎏᎠ-Ᏽᏸ-ᏽᐁ-ᙬᙯ-ᙿᚁ-ᚚᚠ-ᛪᛮ-ᛸᜀ-ᜌᜎ-ᜑᜠ-ᜱᝀ-ᝑᝠ-ᝬᝮ-ᝰក-ឳៗៜᠠ-ᡸᢀ-ᢨᢪᢰ-ᣵᤀ-ᤞᥐ-ᥭᥰ-ᥴᦀ-ᦫᦰ-ᧉᨀ-ᨖᨠ-ᩔᪧᬅ-ᬳᭅ-ᭋᮃ-ᮠᮮ-ᮯᮺ-ᯥᰀ-ᰣᱍ-ᱏᱚ-ᱽᲀ-ᲈᲐ-ᲺᲽ-Ჿᳩ-ᳬᳮ-ᳱᳵ-ᳶᴀ-ᶿḀ-ἕἘ-Ἕἠ-ὅὈ-Ὅὐ-ὗὙὛὝὟ-ώᾀ-ᾴᾶ-ᾼιῂ-ῄῆ-ῌῐ-ΐῖ-Ίῠ-Ῥῲ-ῴῶ-ῼⁱⁿₐ-ₜℂℇℊ-ℓℕ℘-ℝℤΩℨK-ℹℼ-ℿⅅ-ⅉⅎⅠ-ↈⰀ-Ⱞⰰ-ⱞⱠ-ⳤⳫ-ⳮⳲ-ⳳⴀ-ⴥⴧⴭⴰ-ⵧⵯⶀ-ⶖⶠ-ⶦⶨ-ⶮⶰ-ⶶⶸ-ⶾⷀ-ⷆⷈ-ⷎⷐ-ⷖⷘ-ⷞ々-〇〡-〩〱-〵〸-〼ぁ-ゖゝ-ゟァ-ヺー-ヿㄅ-ㄯㄱ-ㆎㆠ-ㆺㇰ-ㇿ㐀-䶵一-鿯ꀀ-ꒌꓐ-ꓽꔀ-ꘌꘐ-ꘟꘪ-ꘫꙀ-ꙮꙿ-ꚝꚠ-ꛯꜗ-ꜟꜢ-ꞈꞋ-ꞹꟷ-ꠁꠃ-ꠅꠇ-ꠊꠌ-ꠢꡀ-ꡳꢂ-ꢳꣲ-ꣷꣻꣽ-ꣾꤊ-ꤥꤰ-ꥆꥠ-ꥼꦄ-ꦲꧏꧠ-ꧤꧦ-ꧯꧺ-ꧾꨀ-ꨨꩀ-ꩂꩄ-ꩋꩠ-ꩶꩺꩾ-ꪯꪱꪵ-ꪶꪹ-ꪽꫀꫂꫛ-ꫝꫠ-ꫪꫲ-ꫴꬁ-ꬆꬉ-ꬎꬑ-ꬖꬠ-ꬦꬨ-ꬮꬰ-ꭚꭜ-ꭥꭰ-ꯢ가-힣ힰ-ퟆퟋ-ퟻ豈-舘並-龎ﬀ-ﬆﬓ-ﬗיִײַ-ﬨשׁ-זּטּ-לּמּנּ-סּףּ-פּצּ-ﮱﯓ-ﱝﱤ-ﴽﵐ-ﶏﶒ-ﷇﷰ-ﷹﹱﹳﹷﹹﹻﹽﹿ-ﻼＡ-Ｚａ-ｚｦ-ﾝﾠ-ﾾￂ-ￇￊ-ￏￒ-ￗￚ-ￜ𐀀-𐀋𐀍-𐀦𐀨-𐀺𐀼-𐀽𐀿-𐁍𐁐-𐁝𐂀-𐃺𐅀-𐅴𐊀-𐊜𐊠-𐋐𐌀-𐌟𐌭-𐍊𐍐-𐍵𐎀-𐎝𐎠-𐏃𐏈-𐏏𐏑-𐏕𐐀-𐒝𐒰-𐓓𐓘-𐓻𐔀-𐔧𐔰-𐕣𐘀-𐜶𐝀-𐝕𐝠-𐝧𐠀-𐠅𐠈𐠊-𐠵𐠷-𐠸𐠼𐠿-𐡕𐡠-𐡶𐢀-𐢞𐣠-𐣲𐣴-𐣵𐤀-𐤕𐤠-𐤹𐦀-𐦷𐦾-𐦿𐨀𐨐-𐨓𐨕-𐨗𐨙-𐨵𐩠-𐩼𐪀-𐪜𐫀-𐫇𐫉-𐫤𐬀-𐬵𐭀-𐭕𐭠-𐭲𐮀-𐮑𐰀-𐱈𐲀-𐲲𐳀-𐳲𐴀-𐴣𐼀-𐼜𐼧𐼰-𐽅𑀃-𑀷𑂃-𑂯𑃐-𑃨𑄃-𑄦𑅄𑅐-𑅲𑅶𑆃-𑆲𑇁-𑇄𑇚𑇜𑈀-𑈑𑈓-𑈫𑊀-𑊆𑊈𑊊-𑊍𑊏-𑊝𑊟-𑊨𑊰-𑋞𑌅-𑌌𑌏-𑌐𑌓-𑌨𑌪-𑌰𑌲-𑌳𑌵-𑌹𑌽𑍐𑍝-𑍡𑐀-𑐴𑑇-𑑊𑒀-𑒯𑓄-𑓅𑓇𑖀-𑖮𑗘-𑗛𑘀-𑘯𑙄𑚀-𑚪𑜀-𑜚𑠀-𑠫𑢠-𑣟𑣿𑨀𑨋-𑨲𑨺𑩐𑩜-𑪃𑪆-𑪉𑪝𑫀-𑫸𑰀-𑰈𑰊-𑰮𑱀𑱲-𑲏𑴀-𑴆𑴈-𑴉𑴋-𑴰𑵆𑵠-𑵥𑵧-𑵨𑵪-𑶉𑶘𑻠-𑻲𒀀-𒎙𒐀-𒑮𒒀-𒕃𓀀-𓐮𔐀-𔙆𖠀-𖨸𖩀-𖩞𖫐-𖫭𖬀-𖬯𖭀-𖭃𖭣-𖭷𖭽-𖮏𖹀-𖹿𖼀-𖽄𖽐𖾓-𖾟𖿠-𖿡𗀀-𘟱𘠀-𘫲𛀀-𛄞𛅰-𛋻𛰀-𛱪𛱰-𛱼𛲀-𛲈𛲐-𛲙𝐀-𝑔𝑖-𝒜𝒞-𝒟𝒢𝒥-𝒦𝒩-𝒬𝒮-𝒹𝒻𝒽-𝓃𝓅-𝔅𝔇-𝔊𝔍-𝔔𝔖-𝔜𝔞-𝔹𝔻-𝔾𝕀-𝕄𝕆𝕊-𝕐𝕒-𝚥𝚨-𝛀𝛂-𝛚𝛜-𝛺𝛼-𝜔𝜖-𝜴𝜶-𝝎𝝐-𝝮𝝰-𝞈𝞊-𝞨𝞪-𝟂𝟄-𝟋𞠀-𞣄𞤀-𞥃𞸀-𞸃𞸅-𞸟𞸡-𞸢𞸤𞸧𞸩-𞸲𞸴-𞸷𞸹𞸻𞹂𞹇𞹉𞹋𞹍-𞹏𞹑-𞹒𞹔𞹗𞹙𞹛𞹝𞹟𞹡-𞹢𞹤𞹧-𞹪𞹬-𞹲𞹴-𞹷𞹹-𞹼𞹾𞺀-𞺉𞺋-𞺛𞺡-𞺣𞺥-𞺩𞺫-𞺻𠀀-𪛖𪜀-𫜴𫝀-𫠝𫠠-𬺡𬺰-𮯠丽-𪘀][0-9A-Z_a-zªµ·ºÀ-ÖØ-öø-ˁˆ-ˑˠ-ˤˬˮ̀-ʹͶ-ͷͻ-ͽͿΆ-ΊΌΎ-ΡΣ-ϵϷ-ҁ҃-҇Ҋ-ԯԱ-Ֆՙՠ-ֈ֑-ֽֿׁ-ׂׄ-ׇׅא-תׯ-ײؐ-ؚؠ-٩ٮ-ۓە-ۜ۟-۪ۨ-ۼۿܐ-݊ݍ-ޱ߀-ߵߺ߽ࠀ-࠭ࡀ-࡛ࡠ-ࡪࢠ-ࢴࢶ-ࢽ࣓-ࣣ࣡-ॣ०-९ॱ-ঃঅ-ঌএ-ঐও-নপ-রলশ-হ়-ৄে-ৈো-ৎৗড়-ঢ়য়-ৣ০-ৱৼ৾ਁ-ਃਅ-ਊਏ-ਐਓ-ਨਪ-ਰਲ-ਲ਼ਵ-ਸ਼ਸ-ਹ਼ਾ-ੂੇ-ੈੋ-੍ੑਖ਼-ੜਫ਼੦-ੵઁ-ઃઅ-ઍએ-ઑઓ-નપ-રલ-ળવ-હ઼-ૅે-ૉો-્ૐૠ-ૣ૦-૯ૹ-૿ଁ-ଃଅ-ଌଏ-ଐଓ-ନପ-ରଲ-ଳଵ-ହ଼-ୄେ-ୈୋ-୍ୖ-ୗଡ଼-ଢ଼ୟ-ୣ୦-୯ୱஂ-ஃஅ-ஊஎ-ஐஒ-கங-சஜஞ-டண-தந-பம-ஹா-ூெ-ைொ-்ௐௗ௦-௯ఀ-ఌఎ-ఐఒ-నప-హఽ-ౄె-ైొ-్ౕ-ౖౘ-ౚౠ-ౣ౦-౯ಀ-ಃಅ-ಌಎ-ಐಒ-ನಪ-ಳವ-ಹ಼-ೄೆ-ೈೊ-್ೕ-ೖೞೠ-ೣ೦-೯ೱ-ೲഀ-ഃഅ-ഌഎ-ഐഒ-ൄെ-ൈൊ-ൎൔ-ൗൟ-ൣ൦-൯ൺ-ൿං-ඃඅ-ඖක-නඳ-රලව-ෆ්ා-ුූෘ-ෟ෦-෯ෲ-ෳก-ฺเ-๎๐-๙ກ-ຂຄງ-ຈຊຍດ-ທນ-ຟມ-ຣລວສ-ຫອ-ູົ-ຽເ-ໄໆ່-ໍ໐-໙ໜ-ໟༀ༘-༙༠-༩༹༵༷༾-ཇཉ-ཬཱ-྄྆-ྗྙ-ྼ࿆က-၉ၐ-ႝႠ-ჅჇჍა-ჺჼ-ቈቊ-ቍቐ-ቖቘቚ-ቝበ-ኈኊ-ኍነ-ኰኲ-ኵኸ-ኾዀዂ-ዅወ-ዖዘ-ጐጒ-ጕጘ-ፚ፝-፟፩-፱ᎀ-ᎏᎠ-Ᏽᏸ-ᏽᐁ-ᙬᙯ-ᙿᚁ-ᚚᚠ-ᛪᛮ-ᛸᜀ-ᜌᜎ-᜔ᜠ-᜴ᝀ-ᝓᝠ-ᝬᝮ-ᝰᝲ-ᝳក-៓ៗៜ-៝០-៩᠋-᠍᠐-᠙ᠠ-ᡸᢀ-ᢪᢰ-ᣵᤀ-ᤞᤠ-ᤫᤰ-᤻᥆-ᥭᥰ-ᥴᦀ-ᦫᦰ-ᧉ᧐-᧚ᨀ-ᨛᨠ-ᩞ᩠-᩿᩼-᪉᪐-᪙ᪧ᪰-᪽ᬀ-ᭋ᭐-᭙᭫-᭳ᮀ-᯳ᰀ-᰷᱀-᱉ᱍ-ᱽᲀ-ᲈᲐ-ᲺᲽ-Ჿ᳐-᳔᳒-᳹ᴀ-᷹᷻-ἕἘ-Ἕἠ-ὅὈ-Ὅὐ-ὗὙὛὝὟ-ώᾀ-ᾴᾶ-ᾼιῂ-ῄῆ-ῌῐ-ΐῖ-Ίῠ-Ῥῲ-ῴῶ-ῼ‿-⁀⁔ⁱⁿₐ-ₜ⃐-⃥⃜⃡-⃰ℂℇℊ-ℓℕ℘-ℝℤΩℨK-ℹℼ-ℿⅅ-ⅉⅎⅠ-ↈⰀ-Ⱞⰰ-ⱞⱠ-ⳤⳫ-ⳳⴀ-ⴥⴧⴭⴰ-ⵧⵯ⵿-ⶖⶠ-ⶦⶨ-ⶮⶰ-ⶶⶸ-ⶾⷀ-ⷆⷈ-ⷎⷐ-ⷖⷘ-ⷞⷠ-ⷿ々-〇〡-〯〱-〵〸-〼ぁ-ゖ゙-゚ゝ-ゟァ-ヺー-ヿㄅ-ㄯㄱ-ㆎㆠ-ㆺㇰ-ㇿ㐀-䶵一-鿯ꀀ-ꒌꓐ-ꓽꔀ-ꘌꘐ-ꘫꙀ-꙯ꙴ-꙽ꙿ-꛱ꜗ-ꜟꜢ-ꞈꞋ-ꞹꟷ-ꠧꡀ-ꡳꢀ-ꣅ꣐-꣙꣠-ꣷꣻꣽ-꤭ꤰ-꥓ꥠ-ꥼꦀ-꧀ꧏ-꧙ꧠ-ꧾꨀ-ꨶꩀ-ꩍ꩐-꩙ꩠ-ꩶꩺ-ꫂꫛ-ꫝꫠ-ꫯꫲ-꫶ꬁ-ꬆꬉ-ꬎꬑ-ꬖꬠ-ꬦꬨ-ꬮꬰ-ꭚꭜ-ꭥꭰ-ꯪ꯬-꯭꯰-꯹가-힣ힰ-ퟆퟋ-ퟻ豈-舘並-龎ﬀ-ﬆﬓ-ﬗיִ-ﬨשׁ-זּטּ-לּמּנּ-סּףּ-פּצּ-ﮱﯓ-ﱝﱤ-ﴽﵐ-ﶏﶒ-ﷇﷰ-ﷹ︀-️︠-︯︳-︴﹍-﹏ﹱﹳﹷﹹﹻﹽﹿ-ﻼ０-９Ａ-Ｚ＿ａ-ｚｦ-ﾾￂ-ￇￊ-ￏￒ-ￗￚ-ￜ𐀀-𐀋𐀍-𐀦𐀨-𐀺𐀼-𐀽𐀿-𐁍𐁐-𐁝𐂀-𐃺𐅀-𐅴𐇽𐊀-𐊜𐊠-𐋐𐋠𐌀-𐌟𐌭-𐍊𐍐-𐍺𐎀-𐎝𐎠-𐏃𐏈-𐏏𐏑-𐏕𐐀-𐒝𐒠-𐒩𐒰-𐓓𐓘-𐓻𐔀-𐔧𐔰-𐕣𐘀-𐜶𐝀-𐝕𐝠-𐝧𐠀-𐠅𐠈𐠊-𐠵𐠷-𐠸𐠼𐠿-𐡕𐡠-𐡶𐢀-𐢞𐣠-𐣲𐣴-𐣵𐤀-𐤕𐤠-𐤹𐦀-𐦷𐦾-𐦿𐨀-𐨃𐨅-𐨆𐨌-𐨓𐨕-𐨗𐨙-𐨵𐨸-𐨿𐨺𐩠-𐩼𐪀-𐪜𐫀-𐫇𐫉-𐫦𐬀-𐬵𐭀-𐭕𐭠-𐭲𐮀-𐮑𐰀-𐱈𐲀-𐲲𐳀-𐳲𐴀-𐴧𐴰-𐴹𐼀-𐼜𐼧𐼰-𐽐𑀀-𑁆𑁦-𑁯𑁿-𑂺𑃐-𑃨𑃰-𑃹𑄀-𑄴𑄶-𑄿𑅄-𑅆𑅐-𑅳𑅶𑆀-𑇄𑇉-𑇌𑇐-𑇚𑇜𑈀-𑈑𑈓-𑈷𑈾𑊀-𑊆𑊈𑊊-𑊍𑊏-𑊝𑊟-𑊨𑊰-𑋪𑋰-𑋹𑌀-𑌃𑌅-𑌌𑌏-𑌐𑌓-𑌨𑌪-𑌰𑌲-𑌳𑌵-𑌹𑌻-𑍄𑍇-𑍈𑍋-𑍍𑍐𑍗𑍝-𑍣𑍦-𑍬𑍰-𑍴𑐀-𑑊𑑐-𑑙𑑞𑒀-𑓅𑓇𑓐-𑓙𑖀-𑖵𑖸-𑗀𑗘-𑗝𑘀-𑙀𑙄𑙐-𑙙𑚀-𑚷𑛀-𑛉𑜀-𑜚𑜝-𑜫𑜰-𑜹𑠀-𑠺𑢠-𑣩𑣿𑨀-𑨾𑩇𑩐-𑪃𑪆-𑪙𑪝𑫀-𑫸𑰀-𑰈𑰊-𑰶𑰸-𑱀𑱐-𑱙𑱲-𑲏𑲒-𑲧𑲩-𑲶𑴀-𑴆𑴈-𑴉𑴋-𑴶𑴺𑴼-𑴽𑴿-𑵇𑵐-𑵙𑵠-𑵥𑵧-𑵨𑵪-𑶎𑶐-𑶑𑶓-𑶘𑶠-𑶩𑻠-𑻶𒀀-𒎙𒐀-𒑮𒒀-𒕃𓀀-𓐮𔐀-𔙆𖠀-𖨸𖩀-𖩞𖩠-𖩩𖫐-𖫭𖫰-𖫴𖬀-𖬶𖭀-𖭃𖭐-𖭙𖭣-𖭷𖭽-𖮏𖹀-𖹿𖼀-𖽄𖽐-𖽾𖾏-𖾟𖿠-𖿡𗀀-𘟱𘠀-𘫲𛀀-𛄞𛅰-𛋻𛰀-𛱪𛱰-𛱼𛲀-𛲈𛲐-𛲙𛲝-𛲞𝅥-𝅩𝅭-𝅲𝅻-𝆂𝆅-𝆋𝆪-𝆭𝉂-𝉄𝐀-𝑔𝑖-𝒜𝒞-𝒟𝒢𝒥-𝒦𝒩-𝒬𝒮-𝒹𝒻𝒽-𝓃𝓅-𝔅𝔇-𝔊𝔍-𝔔𝔖-𝔜𝔞-𝔹𝔻-𝔾𝕀-𝕄𝕆𝕊-𝕐𝕒-𝚥𝚨-𝛀𝛂-𝛚𝛜-𝛺𝛼-𝜔𝜖-𝜴𝜶-𝝎𝝐-𝝮𝝰-𝞈𝞊-𝞨𝞪-𝟂𝟄-𝟋𝟎-𝟿𝨀-𝨶𝨻-𝩬𝩵𝪄𝪛-𝪟𝪡-𝪯𞀀-𞀆𞀈-𞀘𞀛-𞀡𞀣-𞀤𞀦-𞀪𞠀-𞣄𞣐-𞣖𞤀-𞥊𞥐-𞥙𞸀-𞸃𞸅-𞸟𞸡-𞸢𞸤𞸧𞸩-𞸲𞸴-𞸷𞸹𞸻𞹂𞹇𞹉𞹋𞹍-𞹏𞹑-𞹒𞹔𞹗𞹙𞹛𞹝𞹟𞹡-𞹢𞹤𞹧-𞹪𞹬-𞹲𞹴-𞹷𞹹-𞹼𞹾𞺀-𞺉𞺋-𞺛𞺡-𞺣𞺥-𞺩𞺫-𞺻𠀀-𪛖𪜀-𫜴𫝀-𫠝𫠠-𬺡𬺰-𮯠丽-𪘀󠄀-󠇯]+)|[A-Z_a-zªµºÀ-ÖØ-öø-ˁˆ-ˑˠ-ˤˬˮͰ-ʹͶ-ͷͻ-ͽͿΆΈ-ΊΌΎ-ΡΣ-ϵϷ-ҁҊ-ԯԱ-Ֆՙՠ-ֈא-תׯ-ײؠ-يٮ-ٯٱ-ۓەۥ-ۦۮ-ۯۺ-ۼۿܐܒ-ܯݍ-ޥޱߊ-ߪߴ-ߵߺࠀ-ࠕࠚࠤࠨࡀ-ࡘࡠ-ࡪࢠ-ࢴࢶ-ࢽऄ-हऽॐक़-ॡॱ-ঀঅ-ঌএ-ঐও-নপ-রলশ-হঽৎড়-ঢ়য়-ৡৰ-ৱৼਅ-ਊਏ-ਐਓ-ਨਪ-ਰਲ-ਲ਼ਵ-ਸ਼ਸ-ਹਖ਼-ੜਫ਼ੲ-ੴઅ-ઍએ-ઑઓ-નપ-રલ-ળવ-હઽૐૠ-ૡૹଅ-ଌଏ-ଐଓ-ନପ-ରଲ-ଳଵ-ହଽଡ଼-ଢ଼ୟ-ୡୱஃஅ-ஊஎ-ஐஒ-கங-சஜஞ-டண-தந-பம-ஹௐఅ-ఌఎ-ఐఒ-నప-హఽౘ-ౚౠ-ౡಀಅ-ಌಎ-ಐಒ-ನಪ-ಳವ-ಹಽೞೠ-ೡೱ-ೲഅ-ഌഎ-ഐഒ-ഺഽൎൔ-ൖൟ-ൡൺ-ൿඅ-ඖක-නඳ-රලව-ෆก-ะาเ-ๆກ-ຂຄງ-ຈຊຍດ-ທນ-ຟມ-ຣລວສ-ຫອ-ະາຽເ-ໄໆໜ-ໟༀཀ-ཇཉ-ཬྈ-ྌက-ဪဿၐ-ၕၚ-ၝၡၥ-ၦၮ-ၰၵ-ႁႎႠ-ჅჇჍა-ჺჼ-ቈቊ-ቍቐ-ቖቘቚ-ቝበ-ኈኊ-ኍነ-ኰኲ-ኵኸ-ኾዀዂ-ዅወ-ዖዘ-ጐጒ-ጕጘ-ፚᎀ-ᎏᎠ-Ᏽᏸ-ᏽᐁ-ᙬᙯ-ᙿᚁ-ᚚᚠ-ᛪᛮ-ᛸᜀ-ᜌᜎ-ᜑᜠ-ᜱᝀ-ᝑᝠ-ᝬᝮ-ᝰក-ឳៗៜᠠ-ᡸᢀ-ᢨᢪᢰ-ᣵᤀ-ᤞᥐ-ᥭᥰ-ᥴᦀ-ᦫᦰ-ᧉᨀ-ᨖᨠ-ᩔᪧᬅ-ᬳᭅ-ᭋᮃ-ᮠᮮ-ᮯᮺ-ᯥᰀ-ᰣᱍ-ᱏᱚ-ᱽᲀ-ᲈᲐ-ᲺᲽ-Ჿᳩ-ᳬᳮ-ᳱᳵ-ᳶᴀ-ᶿḀ-ἕἘ-Ἕἠ-ὅὈ-Ὅὐ-ὗὙὛὝὟ-ώᾀ-ᾴᾶ-ᾼιῂ-ῄῆ-ῌῐ-ΐῖ-Ίῠ-Ῥῲ-ῴῶ-ῼⁱⁿₐ-ₜℂℇℊ-ℓℕ℘-ℝℤΩℨK-ℹℼ-ℿⅅ-ⅉⅎⅠ-ↈⰀ-Ⱞⰰ-ⱞⱠ-ⳤⳫ-ⳮⳲ-ⳳⴀ-ⴥⴧⴭⴰ-ⵧⵯⶀ-ⶖⶠ-ⶦⶨ-ⶮⶰ-ⶶⶸ-ⶾⷀ-ⷆⷈ-ⷎⷐ-ⷖⷘ-ⷞ々-〇〡-〩〱-〵〸-〼ぁ-ゖゝ-ゟァ-ヺー-ヿㄅ-ㄯㄱ-ㆎㆠ-ㆺㇰ-ㇿ㐀-䶵一-鿯ꀀ-ꒌꓐ-ꓽꔀ-ꘌꘐ-ꘟꘪ-ꘫꙀ-ꙮꙿ-ꚝꚠ-ꛯꜗ-ꜟꜢ-ꞈꞋ-ꞹꟷ-ꠁꠃ-ꠅꠇ-ꠊꠌ-ꠢꡀ-ꡳꢂ-ꢳꣲ-ꣷꣻꣽ-ꣾꤊ-ꤥꤰ-ꥆꥠ-ꥼꦄ-ꦲꧏꧠ-ꧤꧦ-ꧯꧺ-ꧾꨀ-ꨨꩀ-ꩂꩄ-ꩋꩠ-ꩶꩺꩾ-ꪯꪱꪵ-ꪶꪹ-ꪽꫀꫂꫛ-ꫝꫠ-ꫪꫲ-ꫴꬁ-ꬆꬉ-ꬎꬑ-ꬖꬠ-ꬦꬨ-ꬮꬰ-ꭚꭜ-ꭥꭰ-ꯢ가-힣ힰ-ퟆퟋ-ퟻ豈-舘並-龎ﬀ-ﬆﬓ-ﬗיִײַ-ﬨשׁ-זּטּ-לּמּנּ-סּףּ-פּצּ-ﮱﯓ-ﱝﱤ-ﴽﵐ-ﶏﶒ-ﷇﷰ-ﷹﹱﹳﹷﹹﹻﹽﹿ-ﻼＡ-Ｚａ-ｚｦ-ﾝﾠ-ﾾￂ-ￇￊ-ￏￒ-ￗￚ-ￜ𐀀-𐀋𐀍-𐀦𐀨-𐀺𐀼-𐀽𐀿-𐁍𐁐-𐁝𐂀-𐃺𐅀-𐅴𐊀-𐊜𐊠-𐋐𐌀-𐌟𐌭-𐍊𐍐-𐍵𐎀-𐎝𐎠-𐏃𐏈-𐏏𐏑-𐏕𐐀-𐒝𐒰-𐓓𐓘-𐓻𐔀-𐔧𐔰-𐕣𐘀-𐜶𐝀-𐝕𐝠-𐝧𐠀-𐠅𐠈𐠊-𐠵𐠷-𐠸𐠼𐠿-𐡕𐡠-𐡶𐢀-𐢞𐣠-𐣲𐣴-𐣵𐤀-𐤕𐤠-𐤹𐦀-𐦷𐦾-𐦿𐨀𐨐-𐨓𐨕-𐨗𐨙-𐨵𐩠-𐩼𐪀-𐪜𐫀-𐫇𐫉-𐫤𐬀-𐬵𐭀-𐭕𐭠-𐭲𐮀-𐮑𐰀-𐱈𐲀-𐲲𐳀-𐳲𐴀-𐴣𐼀-𐼜𐼧𐼰-𐽅𑀃-𑀷𑂃-𑂯𑃐-𑃨𑄃-𑄦𑅄𑅐-𑅲𑅶𑆃-𑆲𑇁-𑇄𑇚𑇜𑈀-𑈑𑈓-𑈫𑊀-𑊆𑊈𑊊-𑊍𑊏-𑊝𑊟-𑊨𑊰-𑋞𑌅-𑌌𑌏-𑌐𑌓-𑌨𑌪-𑌰𑌲-𑌳𑌵-𑌹𑌽𑍐𑍝-𑍡𑐀-𑐴𑑇-𑑊𑒀-𑒯𑓄-𑓅𑓇𑖀-𑖮𑗘-𑗛𑘀-𑘯𑙄𑚀-𑚪𑜀-𑜚𑠀-𑠫𑢠-𑣟𑣿𑨀𑨋-𑨲𑨺𑩐𑩜-𑪃𑪆-𑪉𑪝𑫀-𑫸𑰀-𑰈𑰊-𑰮𑱀𑱲-𑲏𑴀-𑴆𑴈-𑴉𑴋-𑴰𑵆𑵠-𑵥𑵧-𑵨𑵪-𑶉𑶘𑻠-𑻲𒀀-𒎙𒐀-𒑮𒒀-𒕃𓀀-𓐮𔐀-𔙆𖠀-𖨸𖩀-𖩞𖫐-𖫭𖬀-𖬯𖭀-𖭃𖭣-𖭷𖭽-𖮏𖹀-𖹿𖼀-𖽄𖽐𖾓-𖾟𖿠-𖿡𗀀-𘟱𘠀-𘫲𛀀-𛄞𛅰-𛋻𛰀-𛱪𛱰-𛱼𛲀-𛲈𛲐-𛲙𝐀-𝑔𝑖-𝒜𝒞-𝒟𝒢𝒥-𝒦𝒩-𝒬𝒮-𝒹𝒻𝒽-𝓃𝓅-𝔅𝔇-𝔊𝔍-𝔔𝔖-𝔜𝔞-𝔹𝔻-𝔾𝕀-𝕄𝕆𝕊-𝕐𝕒-𝚥𝚨-𝛀𝛂-𝛚𝛜-𝛺𝛼-𝜔𝜖-𝜴𝜶-𝝎𝝐-𝝮𝝰-𝞈𝞊-𝞨𝞪-𝟂𝟄-𝟋𞠀-𞣄𞤀-𞥃𞸀-𞸃𞸅-𞸟𞸡-𞸢𞸤𞸧𞸩-𞸲𞸴-𞸷𞸹𞸻𞹂𞹇𞹉𞹋𞹍-𞹏𞹑-𞹒𞹔𞹗𞹙𞹛𞹝𞹟𞹡-𞹢𞹤𞹧-𞹪𞹬-𞹲𞹴-𞹷𞹹-𞹼𞹾𞺀-𞺉𞺋-𞺛𞺡-𞺣𞺥-𞺩𞺫-𞺻𠀀-𪛖𪜀-𫜴𫝀-𫠝𫠠-𬺡𬺰-𮯠丽-𪘀]">
+        <token type="NameDecorator"/>
+        <pop depth="1"/>
+      </rule>
+      <rule>
+        <pop depth="1"/>
+      </rule>
+    </state>
+    <state name="root">
+      <rule>
+        <include state="blankspace"/>
+      </rule>
+      <rule>
+        <include state="comments"/>
+      </rule>
+      <rule pattern="@">
+        <token type="NameDecorator"/>
+        <push state="attribute"/>
+      </rule>
+      <rule pattern="(true|false)\b">
+        <token type="KeywordConstant"/>
+      </rule>
+      <rule pattern="(var|let|const|override)\b">
+        <token type="KeywordDeclaration"/>
+      </rule>
+      <rule pattern="(alias|break|case|const_assert|continue|continuing|default|diagnostic|discard|else|enable|false|fn|for|if|loop|requires|return|struct|switch|true|while)\b">
+        <token type="Keyword"/>
+      </rule>
+      <rule pattern="(NULL|Self|abstract|active|alignas|alignof|as|asm|asm_fragment|async|attribute|auto|await|become|binding_array|cast|catch|class|co_await|co_return|co_yield|coherent|column_major|common|compile|compile_fragment|concept|const_cast|consteval|constexpr|constinit|crate|debugger|decltype|delete|demote|demote_to_helper|do|dynamic_cast|enum|explicit|export|extends|extern|external|fallthrough|filter|final|finally|friend|from|fxgroup|get|goto|groupshared|highp|impl|implements|import|inline|instanceof|interface|layout|lowp|macro|macro_rules|match|mediump|meta|mod|module|move|mut|mutable|namespace|new|nil|noexcept|noinline|nointerpolation|noperspective|null|nullptr|of|operator|package|packoffset|partition|pass|patch|pixelfragment|precise|precision|premerge|priv|protected|pub|public|readonly|ref|regardless|register|reinterpret_cast|require|resource|restrict|self|set|shared|sizeof|smooth|snorm|static|static_assert|static_cast|std|subroutine|super|target|template|this|thread_local|throw|trait|try|type|typedef|typeid|typename|typeof|union|unless|unorm|unsafe|unsized|use|using|varying|virtual|volatile|wgsl|where|with|writeonly|yield)\b">
+        <token type="KeywordReserved"/>
+      </rule>
+      <rule pattern="(read|write|read_write|function|private|workgroup|uniform|storage|perspective|linear|flat|center|centroid|sample|vertex_index|instance_index|position|front_facing|frag_depth|local_invocation_id|local_invocation_index|global_invocation_id|workgroup_id|num_workgroups|sample_index|sample_mask|rgba8unorm|rgba8snorm|rgba8uint|rgba8sint|rgba16uint|rgba16sint|rgba16float|r32uint|r32sint|r32float|rg32uint|rg32sint|rg32float|rgba32uint|rgba32sint|rgba32float|bgra8unorm)\b">
+        <token type="NameBuiltin"/>
+      </rule>
+      <rule pattern="(bool|f16|f32|i32|sampler|sampler_comparison|texture_depth_2d|texture_depth_2d_array|texture_depth_cube|texture_depth_cube_array|texture_depth_multisampled_2d|texture_external|texture_external|u32)\b">
+        <token type="NameBuiltin"/>
+      </rule>
+      <rule pattern="(array|atomic|mat2x2|mat2x3|mat2x4|mat3x2|mat3x3|mat3x4|mat4x2|mat4x3|mat4x4|ptr|texture_1d|texture_2d|texture_2d_array|texture_3d|texture_cube|texture_cube_array|texture_multisampled_2d|texture_storage_1d|texture_storage_2d|texture_storage_2d_array|texture_storage_3d|vec2|vec3|vec4)\b">
+        <token type="NameBuiltin"/>
+      </rule>
+      <rule pattern="(vec2i|vec3i|vec4i|vec2u|vec3u|vec4u|vec2f|vec3f|vec4f|vec2h|vec3h|vec4h)\b">
+        <token type="NameBuiltin"/>
+      </rule>
+      <rule pattern="(mat2x2f|mat2x3f|mat2x4f|mat3x2f|mat3x3f|mat3x4f|mat4x2f|mat4x3f|mat4x4f|mat2x2h|mat2x3h|mat2x4h|mat3x2h|mat3x3h|mat3x4h|mat4x2h|mat4x3h|mat4x4h)\b">
+        <token type="NameBuiltin"/>
+      </rule>
+      <rule pattern="0[fh]">
+        <token type="LiteralNumberFloat"/>
+      </rule>
+      <rule pattern="[1-9][0-9]*[fh]">
+        <token type="LiteralNumberFloat"/>
+      </rule>
+      <rule pattern="[0-9]*\.[0-9]+([eE][+-]?[0-9]+)?[fh]?">
+        <token type="LiteralNumberFloat"/>
+      </rule>
+      <rule pattern="[0-9]+\.[0-9]*([eE][+-]?[0-9]+)?[fh]?">
+        <token type="LiteralNumberFloat"/>
+      </rule>
+      <rule pattern="[0-9]+[eE][+-]?[0-9]+[fh]?">
+        <token type="LiteralNumberFloat"/>
+      </rule>
+      <rule pattern="0[xX][0-9a-fA-F]*\.[0-9a-fA-F]+([pP][+-]?[0-9]+[fh]?)?">
+        <token type="LiteralNumberFloat"/>
+      </rule>
+      <rule pattern="0[xX][0-9a-fA-F]+\.[0-9a-fA-F]*([pP][+-]?[0-9]+[fh]?)?">
+        <token type="LiteralNumberFloat"/>
+      </rule>
+      <rule pattern="0[xX][0-9a-fA-F]+[pP][+-]?[0-9]+[fh]?">
+        <token type="LiteralNumberFloat"/>
+      </rule>
+      <rule pattern="0[xX][0-9a-fA-F]+[iu]?">
+        <token type="LiteralNumberHex"/>
+      </rule>
+      <rule pattern="[1-9][0-9]*[iu]?">
+        <token type="LiteralNumberInteger"/>
+      </rule>
+      <rule pattern="0[iu]?">
+        <token type="LiteralNumberInteger"/>
+      </rule>
+      <rule pattern="[{}()\[\],\.;:]">
+        <token type="Punctuation"/>
+      </rule>
+      <rule pattern="-&gt;">
+        <token type="Punctuation"/>
+      </rule>
+      <rule pattern="[+\-*/%&amp;|&lt;&gt;^!~=]">
+        <token type="Operator"/>
+      </rule>
+      <rule pattern="([_A-Z_a-zªµºÀ-ÖØ-öø-ˁˆ-ˑˠ-ˤˬˮͰ-ʹͶ-ͷͻ-ͽͿΆΈ-ΊΌΎ-ΡΣ-ϵϷ-ҁҊ-ԯԱ-Ֆՙՠ-ֈא-תׯ-ײؠ-يٮ-ٯٱ-ۓەۥ-ۦۮ-ۯۺ-ۼۿܐܒ-ܯݍ-ޥޱߊ-ߪߴ-ߵߺࠀ-ࠕࠚࠤࠨࡀ-ࡘࡠ-ࡪࢠ-ࢴࢶ-ࢽऄ-हऽॐक़-ॡॱ-ঀঅ-ঌএ-ঐও-নপ-রলশ-হঽৎড়-ঢ়য়-ৡৰ-ৱৼਅ-ਊਏ-ਐਓ-ਨਪ-ਰਲ-ਲ਼ਵ-ਸ਼ਸ-ਹਖ਼-ੜਫ਼ੲ-ੴઅ-ઍએ-ઑઓ-નપ-રલ-ળવ-હઽૐૠ-ૡૹଅ-ଌଏ-ଐଓ-ନପ-ରଲ-ଳଵ-ହଽଡ଼-ଢ଼ୟ-ୡୱஃஅ-ஊஎ-ஐஒ-கங-சஜஞ-டண-தந-பம-ஹௐఅ-ఌఎ-ఐఒ-నప-హఽౘ-ౚౠ-ౡಀಅ-ಌಎ-ಐಒ-ನಪ-ಳವ-ಹಽೞೠ-ೡೱ-ೲഅ-ഌഎ-ഐഒ-ഺഽൎൔ-ൖൟ-ൡൺ-ൿඅ-ඖක-නඳ-රලව-ෆก-ะาเ-ๆກ-ຂຄງ-ຈຊຍດ-ທນ-ຟມ-ຣລວສ-ຫອ-ະາຽເ-ໄໆໜ-ໟༀཀ-ཇཉ-ཬྈ-ྌက-ဪဿၐ-ၕၚ-ၝၡၥ-ၦၮ-ၰၵ-ႁႎႠ-ჅჇჍა-ჺჼ-ቈቊ-ቍቐ-ቖቘቚ-ቝበ-ኈኊ-ኍነ-ኰኲ-ኵኸ-ኾዀዂ-ዅወ-ዖዘ-ጐጒ-ጕጘ-ፚᎀ-ᎏᎠ-Ᏽᏸ-ᏽᐁ-ᙬᙯ-ᙿᚁ-ᚚᚠ-ᛪᛮ-ᛸᜀ-ᜌᜎ-ᜑᜠ-ᜱᝀ-ᝑᝠ-ᝬᝮ-ᝰក-ឳៗៜᠠ-ᡸᢀ-ᢨᢪᢰ-ᣵᤀ-ᤞᥐ-ᥭᥰ-ᥴᦀ-ᦫᦰ-ᧉᨀ-ᨖᨠ-ᩔᪧᬅ-ᬳᭅ-ᭋᮃ-ᮠᮮ-ᮯᮺ-ᯥᰀ-ᰣᱍ-ᱏᱚ-ᱽᲀ-ᲈᲐ-ᲺᲽ-Ჿᳩ-ᳬᳮ-ᳱᳵ-ᳶᴀ-ᶿḀ-ἕἘ-Ἕἠ-ὅὈ-Ὅὐ-ὗὙὛὝὟ-ώᾀ-ᾴᾶ-ᾼιῂ-ῄῆ-ῌῐ-ΐῖ-Ίῠ-Ῥῲ-ῴῶ-ῼⁱⁿₐ-ₜℂℇℊ-ℓℕ℘-ℝℤΩℨK-ℹℼ-ℿⅅ-ⅉⅎⅠ-ↈⰀ-Ⱞⰰ-ⱞⱠ-ⳤⳫ-ⳮⳲ-ⳳⴀ-ⴥⴧⴭⴰ-ⵧⵯⶀ-ⶖⶠ-ⶦⶨ-ⶮⶰ-ⶶⶸ-ⶾⷀ-ⷆⷈ-ⷎⷐ-ⷖⷘ-ⷞ々-〇〡-〩〱-〵〸-〼ぁ-ゖゝ-ゟァ-ヺー-ヿㄅ-ㄯㄱ-ㆎㆠ-ㆺㇰ-ㇿ㐀-䶵一-鿯ꀀ-ꒌꓐ-ꓽꔀ-ꘌꘐ-ꘟꘪ-ꘫꙀ-ꙮꙿ-ꚝꚠ-ꛯꜗ-ꜟꜢ-ꞈꞋ-ꞹꟷ-ꠁꠃ-ꠅꠇ-ꠊꠌ-ꠢꡀ-ꡳꢂ-ꢳꣲ-ꣷꣻꣽ-ꣾꤊ-ꤥꤰ-ꥆꥠ-ꥼꦄ-ꦲꧏꧠ-ꧤꧦ-ꧯꧺ-ꧾꨀ-ꨨꩀ-ꩂꩄ-ꩋꩠ-ꩶꩺꩾ-ꪯꪱꪵ-ꪶꪹ-ꪽꫀꫂꫛ-ꫝꫠ-ꫪꫲ-ꫴꬁ-ꬆꬉ-ꬎꬑ-ꬖꬠ-ꬦꬨ-ꬮꬰ-ꭚꭜ-ꭥꭰ-ꯢ가-힣ힰ-ퟆퟋ-ퟻ豈-舘並-龎ﬀ-ﬆﬓ-ﬗיִײַ-ﬨשׁ-זּטּ-לּמּנּ-סּףּ-פּצּ-ﮱﯓ-ﱝﱤ-ﴽﵐ-ﶏﶒ-ﷇﷰ-ﷹﹱﹳﹷﹹﹻﹽﹿ-ﻼＡ-Ｚａ-ｚｦ-ﾝﾠ-ﾾￂ-ￇￊ-ￏￒ-ￗￚ-ￜ𐀀-𐀋𐀍-𐀦𐀨-𐀺𐀼-𐀽𐀿-𐁍𐁐-𐁝𐂀-𐃺𐅀-𐅴𐊀-𐊜𐊠-𐋐𐌀-𐌟𐌭-𐍊𐍐-𐍵𐎀-𐎝𐎠-𐏃𐏈-𐏏𐏑-𐏕𐐀-𐒝𐒰-𐓓𐓘-𐓻𐔀-𐔧𐔰-𐕣𐘀-𐜶𐝀-𐝕𐝠-𐝧𐠀-𐠅𐠈𐠊-𐠵𐠷-𐠸𐠼𐠿-𐡕𐡠-𐡶𐢀-𐢞𐣠-𐣲𐣴-𐣵𐤀-𐤕𐤠-𐤹𐦀-𐦷𐦾-𐦿𐨀𐨐-𐨓𐨕-𐨗𐨙-𐨵𐩠-𐩼𐪀-𐪜𐫀-𐫇𐫉-𐫤𐬀-𐬵𐭀-𐭕𐭠-𐭲𐮀-𐮑𐰀-𐱈𐲀-𐲲𐳀-𐳲𐴀-𐴣𐼀-𐼜𐼧𐼰-𐽅𑀃-𑀷𑂃-𑂯𑃐-𑃨𑄃-𑄦𑅄𑅐-𑅲𑅶𑆃-𑆲𑇁-𑇄𑇚𑇜𑈀-𑈑𑈓-𑈫𑊀-𑊆𑊈𑊊-𑊍𑊏-𑊝𑊟-𑊨𑊰-𑋞𑌅-𑌌𑌏-𑌐𑌓-𑌨𑌪-𑌰𑌲-𑌳𑌵-𑌹𑌽𑍐𑍝-𑍡𑐀-𑐴𑑇-𑑊𑒀-𑒯𑓄-𑓅𑓇𑖀-𑖮𑗘-𑗛𑘀-𑘯𑙄𑚀-𑚪𑜀-𑜚𑠀-𑠫𑢠-𑣟𑣿𑨀𑨋-𑨲𑨺𑩐𑩜-𑪃𑪆-𑪉𑪝𑫀-𑫸𑰀-𑰈𑰊-𑰮𑱀𑱲-𑲏𑴀-𑴆𑴈-𑴉𑴋-𑴰𑵆𑵠-𑵥𑵧-𑵨𑵪-𑶉𑶘𑻠-𑻲𒀀-𒎙𒐀-𒑮𒒀-𒕃𓀀-𓐮𔐀-𔙆𖠀-𖨸𖩀-𖩞𖫐-𖫭𖬀-𖬯𖭀-𖭃𖭣-𖭷𖭽-𖮏𖹀-𖹿𖼀-𖽄𖽐𖾓-𖾟𖿠-𖿡𗀀-𘟱𘠀-𘫲𛀀-𛄞𛅰-𛋻𛰀-𛱪𛱰-𛱼𛲀-𛲈𛲐-𛲙𝐀-𝑔𝑖-𝒜𝒞-𝒟𝒢𝒥-𝒦𝒩-𝒬𝒮-𝒹𝒻𝒽-𝓃𝓅-𝔅𝔇-𝔊𝔍-𝔔𝔖-𝔜𝔞-𝔹𝔻-𝔾𝕀-𝕄𝕆𝕊-𝕐𝕒-𝚥𝚨-𝛀𝛂-𝛚𝛜-𝛺𝛼-𝜔𝜖-𝜴𝜶-𝝎𝝐-𝝮𝝰-𝞈𝞊-𝞨𝞪-𝟂𝟄-𝟋𞠀-𞣄𞤀-𞥃𞸀-𞸃𞸅-𞸟𞸡-𞸢𞸤𞸧𞸩-𞸲𞸴-𞸷𞸹𞸻𞹂𞹇𞹉𞹋𞹍-𞹏𞹑-𞹒𞹔𞹗𞹙𞹛𞹝𞹟𞹡-𞹢𞹤𞹧-𞹪𞹬-𞹲𞹴-𞹷𞹹-𞹼𞹾𞺀-𞺉𞺋-𞺛𞺡-𞺣𞺥-𞺩𞺫-𞺻𠀀-𪛖𪜀-𫜴𫝀-𫠝𫠠-𬺡𬺰-𮯠丽-𪘀][0-9A-Z_a-zªµ·ºÀ-ÖØ-öø-ˁˆ-ˑˠ-ˤˬˮ̀-ʹͶ-ͷͻ-ͽͿΆ-ΊΌΎ-ΡΣ-ϵϷ-ҁ҃-҇Ҋ-ԯԱ-Ֆՙՠ-ֈ֑-ֽֿׁ-ׂׄ-ׇׅא-תׯ-ײؐ-ؚؠ-٩ٮ-ۓە-ۜ۟-۪ۨ-ۼۿܐ-݊ݍ-ޱ߀-ߵߺ߽ࠀ-࠭ࡀ-࡛ࡠ-ࡪࢠ-ࢴࢶ-ࢽ࣓-ࣣ࣡-ॣ०-९ॱ-ঃঅ-ঌএ-ঐও-নপ-রলশ-হ়-ৄে-ৈো-ৎৗড়-ঢ়য়-ৣ০-ৱৼ৾ਁ-ਃਅ-ਊਏ-ਐਓ-ਨਪ-ਰਲ-ਲ਼ਵ-ਸ਼ਸ-ਹ਼ਾ-ੂੇ-ੈੋ-੍ੑਖ਼-ੜਫ਼੦-ੵઁ-ઃઅ-ઍએ-ઑઓ-નપ-રલ-ળવ-હ઼-ૅે-ૉો-્ૐૠ-ૣ૦-૯ૹ-૿ଁ-ଃଅ-ଌଏ-ଐଓ-ନପ-ରଲ-ଳଵ-ହ଼-ୄେ-ୈୋ-୍ୖ-ୗଡ଼-ଢ଼ୟ-ୣ୦-୯ୱஂ-ஃஅ-ஊஎ-ஐஒ-கங-சஜஞ-டண-தந-பம-ஹா-ூெ-ைொ-்ௐௗ௦-௯ఀ-ఌఎ-ఐఒ-నప-హఽ-ౄె-ైొ-్ౕ-ౖౘ-ౚౠ-ౣ౦-౯ಀ-ಃಅ-ಌಎ-ಐಒ-ನಪ-ಳವ-ಹ಼-ೄೆ-ೈೊ-್ೕ-ೖೞೠ-ೣ೦-೯ೱ-ೲഀ-ഃഅ-ഌഎ-ഐഒ-ൄെ-ൈൊ-ൎൔ-ൗൟ-ൣ൦-൯ൺ-ൿං-ඃඅ-ඖක-නඳ-රලව-ෆ්ා-ුූෘ-ෟ෦-෯ෲ-ෳก-ฺเ-๎๐-๙ກ-ຂຄງ-ຈຊຍດ-ທນ-ຟມ-ຣລວສ-ຫອ-ູົ-ຽເ-ໄໆ່-ໍ໐-໙ໜ-ໟༀ༘-༙༠-༩༹༵༷༾-ཇཉ-ཬཱ-྄྆-ྗྙ-ྼ࿆က-၉ၐ-ႝႠ-ჅჇჍა-ჺჼ-ቈቊ-ቍቐ-ቖቘቚ-ቝበ-ኈኊ-ኍነ-ኰኲ-ኵኸ-ኾዀዂ-ዅወ-ዖዘ-ጐጒ-ጕጘ-ፚ፝-፟፩-፱ᎀ-ᎏᎠ-Ᏽᏸ-ᏽᐁ-ᙬᙯ-ᙿᚁ-ᚚᚠ-ᛪᛮ-ᛸᜀ-ᜌᜎ-᜔ᜠ-᜴ᝀ-ᝓᝠ-ᝬᝮ-ᝰᝲ-ᝳក-៓ៗៜ-៝០-៩᠋-᠍᠐-᠙ᠠ-ᡸᢀ-ᢪᢰ-ᣵᤀ-ᤞᤠ-ᤫᤰ-᤻᥆-ᥭᥰ-ᥴᦀ-ᦫᦰ-ᧉ᧐-᧚ᨀ-ᨛᨠ-ᩞ᩠-᩿᩼-᪉᪐-᪙ᪧ᪰-᪽ᬀ-ᭋ᭐-᭙᭫-᭳ᮀ-᯳ᰀ-᰷᱀-᱉ᱍ-ᱽᲀ-ᲈᲐ-ᲺᲽ-Ჿ᳐-᳔᳒-᳹ᴀ-᷹᷻-ἕἘ-Ἕἠ-ὅὈ-Ὅὐ-ὗὙὛὝὟ-ώᾀ-ᾴᾶ-ᾼιῂ-ῄῆ-ῌῐ-ΐῖ-Ίῠ-Ῥῲ-ῴῶ-ῼ‿-⁀⁔ⁱⁿₐ-ₜ⃐-⃥⃜⃡-⃰ℂℇℊ-ℓℕ℘-ℝℤΩℨK-ℹℼ-ℿⅅ-ⅉⅎⅠ-ↈⰀ-Ⱞⰰ-ⱞⱠ-ⳤⳫ-ⳳⴀ-ⴥⴧⴭⴰ-ⵧⵯ⵿-ⶖⶠ-ⶦⶨ-ⶮⶰ-ⶶⶸ-ⶾⷀ-ⷆⷈ-ⷎⷐ-ⷖⷘ-ⷞⷠ-ⷿ々-〇〡-〯〱-〵〸-〼ぁ-ゖ゙-゚ゝ-ゟァ-ヺー-ヿㄅ-ㄯㄱ-ㆎㆠ-ㆺㇰ-ㇿ㐀-䶵一-鿯ꀀ-ꒌꓐ-ꓽꔀ-ꘌꘐ-ꘫꙀ-꙯ꙴ-꙽ꙿ-꛱ꜗ-ꜟꜢ-ꞈꞋ-ꞹꟷ-ꠧꡀ-ꡳꢀ-ꣅ꣐-꣙꣠-ꣷꣻꣽ-꤭ꤰ-꥓ꥠ-ꥼꦀ-꧀ꧏ-꧙ꧠ-ꧾꨀ-ꨶꩀ-ꩍ꩐-꩙ꩠ-ꩶꩺ-ꫂꫛ-ꫝꫠ-ꫯꫲ-꫶ꬁ-ꬆꬉ-ꬎꬑ-ꬖꬠ-ꬦꬨ-ꬮꬰ-ꭚꭜ-ꭥꭰ-ꯪ꯬-꯭꯰-꯹가-힣ힰ-ퟆퟋ-ퟻ豈-舘並-龎ﬀ-ﬆﬓ-ﬗיִ-ﬨשׁ-זּטּ-לּמּנּ-סּףּ-פּצּ-ﮱﯓ-ﱝﱤ-ﴽﵐ-ﶏﶒ-ﷇﷰ-ﷹ︀-️︠-︯︳-︴﹍-﹏ﹱﹳﹷﹹﹻﹽﹿ-ﻼ０-９Ａ-Ｚ＿ａ-ｚｦ-ﾾￂ-ￇￊ-ￏￒ-ￗￚ-ￜ𐀀-𐀋𐀍-𐀦𐀨-𐀺𐀼-𐀽𐀿-𐁍𐁐-𐁝𐂀-𐃺𐅀-𐅴𐇽𐊀-𐊜𐊠-𐋐𐋠𐌀-𐌟𐌭-𐍊𐍐-𐍺𐎀-𐎝𐎠-𐏃𐏈-𐏏𐏑-𐏕𐐀-𐒝𐒠-𐒩𐒰-𐓓𐓘-𐓻𐔀-𐔧𐔰-𐕣𐘀-𐜶𐝀-𐝕𐝠-𐝧𐠀-𐠅𐠈𐠊-𐠵𐠷-𐠸𐠼𐠿-𐡕𐡠-𐡶𐢀-𐢞𐣠-𐣲𐣴-𐣵𐤀-𐤕𐤠-𐤹𐦀-𐦷𐦾-𐦿𐨀-𐨃𐨅-𐨆𐨌-𐨓𐨕-𐨗𐨙-𐨵𐨸-𐨿𐨺𐩠-𐩼𐪀-𐪜𐫀-𐫇𐫉-𐫦𐬀-𐬵𐭀-𐭕𐭠-𐭲𐮀-𐮑𐰀-𐱈𐲀-𐲲𐳀-𐳲𐴀-𐴧𐴰-𐴹𐼀-𐼜𐼧𐼰-𐽐𑀀-𑁆𑁦-𑁯𑁿-𑂺𑃐-𑃨𑃰-𑃹𑄀-𑄴𑄶-𑄿𑅄-𑅆𑅐-𑅳𑅶𑆀-𑇄𑇉-𑇌𑇐-𑇚𑇜𑈀-𑈑𑈓-𑈷𑈾𑊀-𑊆𑊈𑊊-𑊍𑊏-𑊝𑊟-𑊨𑊰-𑋪𑋰-𑋹𑌀-𑌃𑌅-𑌌𑌏-𑌐𑌓-𑌨𑌪-𑌰𑌲-𑌳𑌵-𑌹𑌻-𑍄𑍇-𑍈𑍋-𑍍𑍐𑍗𑍝-𑍣𑍦-𑍬𑍰-𑍴𑐀-𑑊𑑐-𑑙𑑞𑒀-𑓅𑓇𑓐-𑓙𑖀-𑖵𑖸-𑗀𑗘-𑗝𑘀-𑙀𑙄𑙐-𑙙𑚀-𑚷𑛀-𑛉𑜀-𑜚𑜝-𑜫𑜰-𑜹𑠀-𑠺𑢠-𑣩𑣿𑨀-𑨾𑩇𑩐-𑪃𑪆-𑪙𑪝𑫀-𑫸𑰀-𑰈𑰊-𑰶𑰸-𑱀𑱐-𑱙𑱲-𑲏𑲒-𑲧𑲩-𑲶𑴀-𑴆𑴈-𑴉𑴋-𑴶𑴺𑴼-𑴽𑴿-𑵇𑵐-𑵙𑵠-𑵥𑵧-𑵨𑵪-𑶎𑶐-𑶑𑶓-𑶘𑶠-𑶩𑻠-𑻶𒀀-𒎙𒐀-𒑮𒒀-𒕃𓀀-𓐮𔐀-𔙆𖠀-𖨸𖩀-𖩞𖩠-𖩩𖫐-𖫭𖫰-𖫴𖬀-𖬶𖭀-𖭃𖭐-𖭙𖭣-𖭷𖭽-𖮏𖹀-𖹿𖼀-𖽄𖽐-𖽾𖾏-𖾟𖿠-𖿡𗀀-𘟱𘠀-𘫲𛀀-𛄞𛅰-𛋻𛰀-𛱪𛱰-𛱼𛲀-𛲈𛲐-𛲙𛲝-𛲞𝅥-𝅩𝅭-𝅲𝅻-𝆂𝆅-𝆋𝆪-𝆭𝉂-𝉄𝐀-𝑔𝑖-𝒜𝒞-𝒟𝒢𝒥-𝒦𝒩-𝒬𝒮-𝒹𝒻𝒽-𝓃𝓅-𝔅𝔇-𝔊𝔍-𝔔𝔖-𝔜𝔞-𝔹𝔻-𝔾𝕀-𝕄𝕆𝕊-𝕐𝕒-𝚥𝚨-𝛀𝛂-𝛚𝛜-𝛺𝛼-𝜔𝜖-𝜴𝜶-𝝎𝝐-𝝮𝝰-𝞈𝞊-𝞨𝞪-𝟂𝟄-𝟋𝟎-𝟿𝨀-𝨶𝨻-𝩬𝩵𝪄𝪛-𝪟𝪡-𝪯𞀀-𞀆𞀈-𞀘𞀛-𞀡𞀣-𞀤𞀦-𞀪𞠀-𞣄𞣐-𞣖𞤀-𞥊𞥐-𞥙𞸀-𞸃𞸅-𞸟𞸡-𞸢𞸤𞸧𞸩-𞸲𞸴-𞸷𞸹𞸻𞹂𞹇𞹉𞹋𞹍-𞹏𞹑-𞹒𞹔𞹗𞹙𞹛𞹝𞹟𞹡-𞹢𞹤𞹧-𞹪𞹬-𞹲𞹴-𞹷𞹹-𞹼𞹾𞺀-𞺉𞺋-𞺛𞺡-𞺣𞺥-𞺩𞺫-𞺻𠀀-𪛖𪜀-𫜴𫝀-𫠝𫠠-𬺡𬺰-𮯠丽-𪘀󠄀-󠇯]+)|[A-Z_a-zªµºÀ-ÖØ-öø-ˁˆ-ˑˠ-ˤˬˮͰ-ʹͶ-ͷͻ-ͽͿΆΈ-ΊΌΎ-ΡΣ-ϵϷ-ҁҊ-ԯԱ-Ֆՙՠ-ֈא-תׯ-ײؠ-يٮ-ٯٱ-ۓەۥ-ۦۮ-ۯۺ-ۼۿܐܒ-ܯݍ-ޥޱߊ-ߪߴ-ߵߺࠀ-ࠕࠚࠤࠨࡀ-ࡘࡠ-ࡪࢠ-ࢴࢶ-ࢽऄ-हऽॐक़-ॡॱ-ঀঅ-ঌএ-ঐও-নপ-রলশ-হঽৎড়-ঢ়য়-ৡৰ-ৱৼਅ-ਊਏ-ਐਓ-ਨਪ-ਰਲ-ਲ਼ਵ-ਸ਼ਸ-ਹਖ਼-ੜਫ਼ੲ-ੴઅ-ઍએ-ઑઓ-નપ-રલ-ળવ-હઽૐૠ-ૡૹଅ-ଌଏ-ଐଓ-ନପ-ରଲ-ଳଵ-ହଽଡ଼-ଢ଼ୟ-ୡୱஃஅ-ஊஎ-ஐஒ-கங-சஜஞ-டண-தந-பம-ஹௐఅ-ఌఎ-ఐఒ-నప-హఽౘ-ౚౠ-ౡಀಅ-ಌಎ-ಐಒ-ನಪ-ಳವ-ಹಽೞೠ-ೡೱ-ೲഅ-ഌഎ-ഐഒ-ഺഽൎൔ-ൖൟ-ൡൺ-ൿඅ-ඖක-නඳ-රලව-ෆก-ะาเ-ๆກ-ຂຄງ-ຈຊຍດ-ທນ-ຟມ-ຣລວສ-ຫອ-ະາຽເ-ໄໆໜ-ໟༀཀ-ཇཉ-ཬྈ-ྌက-ဪဿၐ-ၕၚ-ၝၡၥ-ၦၮ-ၰၵ-ႁႎႠ-ჅჇჍა-ჺჼ-ቈቊ-ቍቐ-ቖቘቚ-ቝበ-ኈኊ-ኍነ-ኰኲ-ኵኸ-ኾዀዂ-ዅወ-ዖዘ-ጐጒ-ጕጘ-ፚᎀ-ᎏᎠ-Ᏽᏸ-ᏽᐁ-ᙬᙯ-ᙿᚁ-ᚚᚠ-ᛪᛮ-ᛸᜀ-ᜌᜎ-ᜑᜠ-ᜱᝀ-ᝑᝠ-ᝬᝮ-ᝰក-ឳៗៜᠠ-ᡸᢀ-ᢨᢪᢰ-ᣵᤀ-ᤞᥐ-ᥭᥰ-ᥴᦀ-ᦫᦰ-ᧉᨀ-ᨖᨠ-ᩔᪧᬅ-ᬳᭅ-ᭋᮃ-ᮠᮮ-ᮯᮺ-ᯥᰀ-ᰣᱍ-ᱏᱚ-ᱽᲀ-ᲈᲐ-ᲺᲽ-Ჿᳩ-ᳬᳮ-ᳱᳵ-ᳶᴀ-ᶿḀ-ἕἘ-Ἕἠ-ὅὈ-Ὅὐ-ὗὙὛὝὟ-ώᾀ-ᾴᾶ-ᾼιῂ-ῄῆ-ῌῐ-ΐῖ-Ίῠ-Ῥῲ-ῴῶ-ῼⁱⁿₐ-ₜℂℇℊ-ℓℕ℘-ℝℤΩℨK-ℹℼ-ℿⅅ-ⅉⅎⅠ-ↈⰀ-Ⱞⰰ-ⱞⱠ-ⳤⳫ-ⳮⳲ-ⳳⴀ-ⴥⴧⴭⴰ-ⵧⵯⶀ-ⶖⶠ-ⶦⶨ-ⶮⶰ-ⶶⶸ-ⶾⷀ-ⷆⷈ-ⷎⷐ-ⷖⷘ-ⷞ々-〇〡-〩〱-〵〸-〼ぁ-ゖゝ-ゟァ-ヺー-ヿㄅ-ㄯㄱ-ㆎㆠ-ㆺㇰ-ㇿ㐀-䶵一-鿯ꀀ-ꒌꓐ-ꓽꔀ-ꘌꘐ-ꘟꘪ-ꘫꙀ-ꙮꙿ-ꚝꚠ-ꛯꜗ-ꜟꜢ-ꞈꞋ-ꞹꟷ-ꠁꠃ-ꠅꠇ-ꠊꠌ-ꠢꡀ-ꡳꢂ-ꢳꣲ-ꣷꣻꣽ-ꣾꤊ-ꤥꤰ-ꥆꥠ-ꥼꦄ-ꦲꧏꧠ-ꧤꧦ-ꧯꧺ-ꧾꨀ-ꨨꩀ-ꩂꩄ-ꩋꩠ-ꩶꩺꩾ-ꪯꪱꪵ-ꪶꪹ-ꪽꫀꫂꫛ-ꫝꫠ-ꫪꫲ-ꫴꬁ-ꬆꬉ-ꬎꬑ-ꬖꬠ-ꬦꬨ-ꬮꬰ-ꭚꭜ-ꭥꭰ-ꯢ가-힣ힰ-ퟆퟋ-ퟻ豈-舘並-龎ﬀ-ﬆﬓ-ﬗיִײַ-ﬨשׁ-זּטּ-לּמּנּ-סּףּ-פּצּ-ﮱﯓ-ﱝﱤ-ﴽﵐ-ﶏﶒ-ﷇﷰ-ﷹﹱﹳﹷﹹﹻﹽﹿ-ﻼＡ-Ｚａ-ｚｦ-ﾝﾠ-ﾾￂ-ￇￊ-ￏￒ-ￗￚ-ￜ𐀀-𐀋𐀍-𐀦𐀨-𐀺𐀼-𐀽𐀿-𐁍𐁐-𐁝𐂀-𐃺𐅀-𐅴𐊀-𐊜𐊠-𐋐𐌀-𐌟𐌭-𐍊𐍐-𐍵𐎀-𐎝𐎠-𐏃𐏈-𐏏𐏑-𐏕𐐀-𐒝𐒰-𐓓𐓘-𐓻𐔀-𐔧𐔰-𐕣𐘀-𐜶𐝀-𐝕𐝠-𐝧𐠀-𐠅𐠈𐠊-𐠵𐠷-𐠸𐠼𐠿-𐡕𐡠-𐡶𐢀-𐢞𐣠-𐣲𐣴-𐣵𐤀-𐤕𐤠-𐤹𐦀-𐦷𐦾-𐦿𐨀𐨐-𐨓𐨕-𐨗𐨙-𐨵𐩠-𐩼𐪀-𐪜𐫀-𐫇𐫉-𐫤𐬀-𐬵𐭀-𐭕𐭠-𐭲𐮀-𐮑𐰀-𐱈𐲀-𐲲𐳀-𐳲𐴀-𐴣𐼀-𐼜𐼧𐼰-𐽅𑀃-𑀷𑂃-𑂯𑃐-𑃨𑄃-𑄦𑅄𑅐-𑅲𑅶𑆃-𑆲𑇁-𑇄𑇚𑇜𑈀-𑈑𑈓-𑈫𑊀-𑊆𑊈𑊊-𑊍𑊏-𑊝𑊟-𑊨𑊰-𑋞𑌅-𑌌𑌏-𑌐𑌓-𑌨𑌪-𑌰𑌲-𑌳𑌵-𑌹𑌽𑍐𑍝-𑍡𑐀-𑐴𑑇-𑑊𑒀-𑒯𑓄-𑓅𑓇𑖀-𑖮𑗘-𑗛𑘀-𑘯𑙄𑚀-𑚪𑜀-𑜚𑠀-𑠫𑢠-𑣟𑣿𑨀𑨋-𑨲𑨺𑩐𑩜-𑪃𑪆-𑪉𑪝𑫀-𑫸𑰀-𑰈𑰊-𑰮𑱀𑱲-𑲏𑴀-𑴆𑴈-𑴉𑴋-𑴰𑵆𑵠-𑵥𑵧-𑵨𑵪-𑶉𑶘𑻠-𑻲𒀀-𒎙𒐀-𒑮𒒀-𒕃𓀀-𓐮𔐀-𔙆𖠀-𖨸𖩀-𖩞𖫐-𖫭𖬀-𖬯𖭀-𖭃𖭣-𖭷𖭽-𖮏𖹀-𖹿𖼀-𖽄𖽐𖾓-𖾟𖿠-𖿡𗀀-𘟱𘠀-𘫲𛀀-𛄞𛅰-𛋻𛰀-𛱪𛱰-𛱼𛲀-𛲈𛲐-𛲙𝐀-𝑔𝑖-𝒜𝒞-𝒟𝒢𝒥-𝒦𝒩-𝒬𝒮-𝒹𝒻𝒽-𝓃𝓅-𝔅𝔇-𝔊𝔍-𝔔𝔖-𝔜𝔞-𝔹𝔻-𝔾𝕀-𝕄𝕆𝕊-𝕐𝕒-𝚥𝚨-𝛀𝛂-𝛚𝛜-𝛺𝛼-𝜔𝜖-𝜴𝜶-𝝎𝝐-𝝮𝝰-𝞈𝞊-𝞨𝞪-𝟂𝟄-𝟋𞠀-𞣄𞤀-𞥃𞸀-𞸃𞸅-𞸟𞸡-𞸢𞸤𞸧𞸩-𞸲𞸴-𞸷𞸹𞸻𞹂𞹇𞹉𞹋𞹍-𞹏𞹑-𞹒𞹔𞹗𞹙𞹛𞹝𞹟𞹡-𞹢𞹤𞹧-𞹪𞹬-𞹲𞹴-𞹷𞹹-𞹼𞹾𞺀-𞺉𞺋-𞺛𞺡-𞺣𞺥-𞺩𞺫-𞺻𠀀-𪛖𪜀-𫜴𫝀-𫠝𫠠-𬺡𬺰-𮯠丽-𪘀]">
+        <token type="Name"/>
+      </rule>
+    </state>
+    <state name="block_comment">
+      <rule pattern="[^*/]+">
+        <token type="CommentMultiline"/>
+      </rule>
+      <rule pattern="/\*">
+        <token type="CommentMultiline"/>
+        <push/>
+      </rule>
+      <rule pattern="\*/">
+        <token type="CommentMultiline"/>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern="[*/]">
+        <token type="CommentMultiline"/>
+      </rule>
+    </state>
+  </rules>
+</lexer>
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/alecthomas/chroma/v2/lexers/embedded/whiley.xml","mode":420,"size":1783,"sha256":"448012db7adc8eb8e991b8fb3ac5bd663c783e826a697ff4254f38b9786f54c2","index":0,"count":1,"encoding":"utf-8","payloadBytes":1783}
+<lexer>
+  <config>
+    <name>Whiley</name>
+    <alias>whiley</alias>
+    <filename>*.whiley</filename>
+    <mime_type>text/x-whiley</mime_type>
+  </config>
+  <rules>
+    <state name="root">
+      <rule pattern="\n">
+        <token type="Text"/>
+      </rule>
+      <rule pattern="\s+">
+        <token type="Text"/>
+      </rule>
+      <rule pattern="\\\n">
+        <token type="Text"/>
+      </rule>
+      <rule pattern="/[*](.|\n)*?[*]/">
+        <token type="CommentMultiline"/>
+      </rule>
+      <rule pattern="//.*?\n">
+        <token type="CommentSingle"/>
+      </rule>      
+      <rule pattern="(function|import|from|method|property|type|with|variant)\b">
+        <token type="KeywordDeclaration"/>
+      </rule>
+      <rule pattern="(assert|assume|all|break|case|continue|debug|default|do|else|ensures|export|fail|final|for|if|in|is|native|no|new|private|protected|public|return|requires|skip|some|switch|unsafe|where|while)\b">
+        <token type="Keyword"/>
+      </rule>
+      <rule pattern="(true|false|null)\b">
+        <token type="KeywordConstant"/>
+      </rule>
+      <rule pattern="(bool|byte|int|void)\b">
+        <token type="KeywordType"/>
+      </rule>
+      <rule pattern="0b(?:_?[01])+">
+        <token type="LiteralNumberBin"/>
+      </rule>      
+      <rule pattern="0[xX][0-9a-fA-F]+">
+        <token type="LiteralNumberHex"/>
+      </rule>
+      <rule pattern="(0|[1-9][0-9]*)">
+        <token type="LiteralNumberInteger"/>
+      </rule>
+      <rule pattern="[a-zA-Z_]\w*">
+        <token type="Name"/>
+      </rule>
+      <rule pattern="[+%=&gt;&lt;|^!?/\-*&amp;~:]">
+        <token type="Operator"/>
+      </rule>      
+      <rule pattern="[{}()\[\],.;\|]">
+        <token type="Punctuation"/>
+      </rule>      
+    </state>
+  </rules>
+</lexer>
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/alecthomas/chroma/v2/lexers/embedded/xml.xml","mode":420,"size":2569,"sha256":"13a2eea04af91954fbef3a89d0d1d4c4db62ed1a6bbc3bc7f9a5c34775a47662","index":0,"count":1,"encoding":"utf-8","payloadBytes":2569}
+<lexer>
+  <config>
+    <name>XML</name>
+    <alias>xml</alias>
+    <filename>*.xml</filename>
+    <filename>*.xsl</filename>
+    <filename>*.rss</filename>
+    <filename>*.xslt</filename>
+    <filename>*.xsd</filename>
+    <filename>*.wsdl</filename>
+    <filename>*.wsf</filename>
+    <filename>*.svg</filename>
+    <filename>*.csproj</filename>
+    <filename>*.vcxproj</filename>
+    <filename>*.fsproj</filename>
+    <mime_type>text/xml</mime_type>
+    <mime_type>application/xml</mime_type>
+    <mime_type>image/svg+xml</mime_type>
+    <mime_type>application/rss+xml</mime_type>
+    <mime_type>application/atom+xml</mime_type>
+    <dot_all>true</dot_all>
+  </config>
+  <rules>
+    <state name="root">
+      <rule pattern="[^&lt;&amp;]+">
+        <token type="Text"/>
+      </rule>
+      <rule pattern="&amp;\S*?;">
+        <token type="NameEntity"/>
+      </rule>
+      <rule pattern="\&lt;\!\[CDATA\[.*?\]\]\&gt;">
+        <token type="CommentPreproc"/>
+      </rule>
+      <rule pattern="&lt;!--">
+        <token type="Comment"/>
+        <push state="comment"/>
+      </rule>
+      <rule pattern="&lt;\?.*?\?&gt;">
+        <token type="CommentPreproc"/>
+      </rule>
+      <rule pattern="&lt;![^&gt;]*&gt;">
+        <token type="CommentPreproc"/>
+      </rule>
+      <rule pattern="&lt;\s*[\w:.-]+">
+        <token type="NameTag"/>
+        <push state="tag"/>
+      </rule>
+      <rule pattern="&lt;\s*/\s*[\w:.-]+\s*&gt;">
+        <token type="NameTag"/>
+      </rule>
+    </state>
+    <state name="comment">
+      <rule pattern="[^-]+">
+        <token type="Comment"/>
+      </rule>
+      <rule pattern="--&gt;">
+        <token type="Comment"/>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern="-">
+        <token type="Comment"/>
+      </rule>
+    </state>
+    <state name="tag">
+      <rule pattern="\s+">
+        <token type="Text"/>
+      </rule>
+      <rule pattern="[\w.:-]+\s*=">
+        <token type="NameAttribute"/>
+        <push state="attr"/>
+      </rule>
+      <rule pattern="/?\s*&gt;">
+        <token type="NameTag"/>
+        <pop depth="1"/>
+      </rule>
+    </state>
+    <state name="attr">
+      <rule pattern="\s+">
+        <token type="Text"/>
+      </rule>
+      <rule pattern="&#34;.*?&#34;">
+        <token type="LiteralString"/>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern="&#39;.*?&#39;">
+        <token type="LiteralString"/>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern="[^\s&gt;]+">
+        <token type="LiteralString"/>
+        <pop depth="1"/>
+      </rule>
+    </state>
+  </rules>
+</lexer>
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/alecthomas/chroma/v2/lexers/embedded/xorg.xml","mode":420,"size":937,"sha256":"587cbb1ed294757f7c16026b43e5ace23e486358fb2772fc8104ceef5ffc611d","index":0,"count":1,"encoding":"utf-8","payloadBytes":937}
+<lexer>
+  <config>
+    <name>Xorg</name>
+    <alias>xorg.conf</alias>
+    <filename>xorg.conf</filename>
+  </config>
+  <rules>
+    <state name="root">
+      <rule pattern="\s+">
+        <token type="TextWhitespace"/>
+      </rule>
+      <rule pattern="#.*$">
+        <token type="Comment"/>
+      </rule>
+      <rule pattern="((|Sub)Section)(\s+)(&#34;\w+&#34;)">
+        <bygroups>
+          <token type="KeywordNamespace"/>
+          <token type="LiteralStringEscape"/>
+          <token type="TextWhitespace"/>
+          <token type="LiteralStringEscape"/>
+        </bygroups>
+      </rule>
+      <rule pattern="(End(|Sub)Section)">
+        <token type="KeywordNamespace"/>
+      </rule>
+      <rule pattern="(\w+)(\s+)([^\n#]+)">
+        <bygroups>
+          <token type="NameKeyword"/>
+          <token type="TextWhitespace"/>
+          <token type="LiteralString"/>
+        </bygroups>
+      </rule>
+    </state>
+  </rules>
+</lexer>
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/alecthomas/chroma/v2/lexers/embedded/yaml.xml","mode":420,"size":3597,"sha256":"cc2b3d88c0cfcc78533fbb1de0ad101680d0b8a475f3fff2fb0ac31c4a698616","index":0,"count":1,"encoding":"utf-8","payloadBytes":3597}
+<lexer>
+  <config>
+    <name>YAML</name>
+    <alias>yaml</alias>
+    <filename>*.yaml</filename>
+    <filename>*.yml</filename>
+    <mime_type>text/x-yaml</mime_type>
+  </config>
+  <rules>
+    <state name="root">
+      <rule>
+        <include state="whitespace"/>
+      </rule>
+      <rule pattern="^---">
+        <token type="NameNamespace"/>
+      </rule>
+      <rule pattern="^\.\.\.">
+        <token type="NameNamespace"/>
+      </rule>
+      <rule pattern="[\n?]?\s*- ">
+        <token type="Text"/>
+      </rule>
+      <rule pattern="#.*$">
+        <token type="Comment"/>
+      </rule>
+      <rule pattern="!![^\s]+">
+        <token type="CommentPreproc"/>
+      </rule>
+      <rule pattern="&amp;[^\s]+">
+        <token type="CommentPreproc"/>
+      </rule>
+      <rule pattern="\*[^\s]+">
+        <token type="CommentPreproc"/>
+      </rule>
+      <rule pattern="^%include\s+[^\n\r]+">
+        <token type="CommentPreproc"/>
+      </rule>
+      <rule>
+        <include state="key"/>
+      </rule>
+      <rule>
+        <include state="value"/>
+      </rule>
+      <rule pattern="[?:,\[\]]">
+        <token type="Punctuation"/>
+      </rule>
+      <rule pattern=".">
+        <token type="Text"/>
+      </rule>
+    </state>
+    <state name="value">
+      <rule pattern="([&gt;|](?:[+-])?)(\n(^ {1,})(?:(?:.*\n*(?:^\3 *).*)+|.*))">
+        <bygroups>
+          <token type="Punctuation"/>
+          <token type="LiteralStringDoc"/>
+          <token type="TextWhitespace"/>
+        </bygroups>
+      </rule>
+      <rule pattern="(false|False|FALSE|true|True|TRUE|null|Off|off|yes|Yes|YES|OFF|On|ON|no|No|on|NO|n|N|Y|y)\b">
+        <token type="KeywordConstant"/>
+      </rule>
+      <rule pattern="&#34;(?:\\.|[^&#34;])*&#34;">
+        <token type="LiteralStringDouble"/>
+      </rule>
+      <rule pattern="&#39;(?:\\.|[^&#39;])*&#39;">
+        <token type="LiteralStringSingle"/>
+      </rule>
+      <rule pattern="\d\d\d\d-\d\d-\d\d([T ]\d\d:\d\d:\d\d(\.\d+)?(Z|\s+[-+]\d+)?)?">
+        <token type="LiteralDate"/>
+      </rule>
+      <rule pattern="\b[+\-]?(0x[\da-f]+|0o[0-7]+|(\d+\.?\d*|\.?\d+)(e[\+\-]?\d+)?|\.inf|\.nan)\b">
+        <token type="LiteralNumber"/>
+      </rule>
+      <rule pattern="([^\{\}\[\]\?,\:\!\-\*&amp;\@].*)( )+(#.*)">
+        <bygroups>
+          <token type="Literal"/>
+          <token type="TextWhitespace"/>
+          <token type="Comment"/>
+        </bygroups>
+      </rule>
+      <rule pattern="[^\{\}\[\]\?,\:\!\-\*&amp;\@].*">
+        <token type="Literal"/>
+      </rule>
+    </state>
+    <state name="key">
+      <rule pattern="&#34;[^&#34;\n].*&#34;: ">
+        <token type="NameTag"/>
+      </rule>
+      <rule pattern="(-)( )([^&#34;\n{]*)(:)( )">
+        <bygroups>
+          <token type="Punctuation"/>
+          <token type="TextWhitespace"/>
+          <token type="NameTag"/>
+          <token type="Punctuation"/>
+          <token type="TextWhitespace"/>
+        </bygroups>
+      </rule>
+      <rule pattern="([^&#34;\n{]*)(:)( )">
+        <bygroups>
+          <token type="NameTag"/>
+          <token type="Punctuation"/>
+          <token type="TextWhitespace"/>
+        </bygroups>
+      </rule>
+      <rule pattern="([^&#34;\n{]*)(:)(\n)">
+        <bygroups>
+          <token type="NameTag"/>
+          <token type="Punctuation"/>
+          <token type="TextWhitespace"/>
+        </bygroups>
+      </rule>
+    </state>
+    <state name="whitespace">
+      <rule pattern="\s+">
+        <token type="TextWhitespace"/>
+      </rule>
+      <rule pattern="\n+">
+        <token type="TextWhitespace"/>
+      </rule>
+    </state>
+  </rules>
+</lexer>
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/alecthomas/chroma/v2/lexers/embedded/yang.xml","mode":420,"size":3698,"sha256":"f33cd5fe2a5da18386e8c7041de641949701fb03eb8215da516b58b8ac4f4dbf","index":0,"count":1,"encoding":"utf-8","payloadBytes":3698}
+<lexer>
+  <config>
+    <name>YANG</name>
+    <alias>yang</alias>
+    <filename>*.yang</filename>
+    <mime_type>application/yang</mime_type>
+  </config>
+  <rules>
+    <state name="root">
+      <rule pattern="\s+">
+        <token type="TextWhitespace"/>
+      </rule>
+      <rule pattern="[\{\}\;]+">
+        <token type="Punctuation"/>
+      </rule>
+      <rule pattern="(?&lt;![\-\w])(and|or|not|\+|\.)(?![\-\w])">
+        <token type="Operator"/>
+      </rule>
+      <rule pattern="&#34;(?:\\&#34;|[^&#34;])*?&#34;">
+        <token type="LiteralStringDouble"/>
+      </rule>
+      <rule pattern="&#39;(?:\\&#39;|[^&#39;])*?&#39;">
+        <token type="LiteralStringSingle"/>
+      </rule>
+      <rule pattern="/\*">
+        <token type="CommentMultiline"/>
+        <push state="comments"/>
+      </rule>
+      <rule pattern="//.*?$">
+        <token type="CommentSingle"/>
+      </rule>
+      <rule pattern="(?:^|(?&lt;=[\s{};]))([\w.-]+)(:)([\w.-]+)(?=[\s{};])">
+        <bygroups>
+          <token type="KeywordNamespace"/>
+          <token type="Punctuation"/>
+          <token type="Text"/>
+        </bygroups>
+      </rule>
+      <rule pattern="([0-9]{4}\-[0-9]{2}\-[0-9]{2})(?=[\s\{\}\;])">
+        <token type="LiteralDate"/>
+      </rule>
+      <rule pattern="([0-9]+\.[0-9]+)(?=[\s\{\}\;])">
+        <token type="LiteralNumberFloat"/>
+      </rule>
+      <rule pattern="([0-9]+)(?=[\s\{\}\;])">
+        <token type="LiteralNumberInteger"/>
+      </rule>
+      <rule pattern="(submodule|module)(?=[^\w\-\:])">
+        <token type="Keyword"/>
+      </rule>
+      <rule pattern="(yang-version|belongs-to|namespace|prefix)(?=[^\w\-\:])">
+        <token type="Keyword"/>
+      </rule>
+      <rule pattern="(organization|description|reference|revision|contact)(?=[^\w\-\:])">
+        <token type="Keyword"/>
+      </rule>
+      <rule pattern="(revision-date|include|import)(?=[^\w\-\:])">
+        <token type="Keyword"/>
+      </rule>
+      <rule pattern="(notification|if-feature|deviation|extension|identity|argument|grouping|typedef|feature|augment|output|action|input|rpc)(?=[^\w\-\:])">
+        <token type="Keyword"/>
+      </rule>
+      <rule pattern="(leaf-list|container|presence|anydata|deviate|choice|config|anyxml|refine|leaf|must|list|case|uses|when)(?=[^\w\-\:])">
+        <token type="Keyword"/>
+      </rule>
+      <rule pattern="(require-instance|fraction-digits|error-app-tag|error-message|min-elements|max-elements|yin-element|ordered-by|position|modifier|default|pattern|length|status|units|value|range|type|path|enum|base|bit)(?=[^\w\-\:])">
+        <token type="Keyword"/>
+      </rule>
+      <rule pattern="(mandatory|unique|key)(?=[^\w\-\:])">
+        <token type="Keyword"/>
+      </rule>
+      <rule pattern="(not-supported|invert-match|deprecated|unbounded|obsolete|current|replace|delete|false|true|user|min|max|add)(?=[^\w\-\:])">
+        <token type="NameClass"/>
+      </rule>
+      <rule pattern="(instance-identifier|identityref|enumeration|decimal64|boolean|leafref|uint64|uint32|string|binary|uint16|int32|int64|int16|empty|uint8|union|int8|bits)(?=[^\w\-\:])">
+        <token type="NameClass"/>
+      </rule>
+      <rule pattern="[^;{}\s\&#39;\&#34;]+">
+        <token type="Text"/>
+      </rule>
+    </state>
+    <state name="comments">
+      <rule pattern="[^*/]">
+        <token type="CommentMultiline"/>
+      </rule>
+      <rule pattern="/\*">
+        <token type="CommentMultiline"/>
+        <push state="comment"/>
+      </rule>
+      <rule pattern="\*/">
+        <token type="CommentMultiline"/>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern="[*/]">
+        <token type="CommentMultiline"/>
+      </rule>
+    </state>
+  </rules>
+</lexer>
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/alecthomas/chroma/v2/lexers/embedded/z80_assembly.xml","mode":420,"size":2316,"sha256":"fb581e00eb28883193071de4b4571ed64f7dd0edc019a52e5023181b345af8d2","index":0,"count":1,"encoding":"utf-8","payloadBytes":2316}
+<lexer>
+  <config>
+    <name>Z80 Assembly</name>
+    <alias>z80</alias>
+    <filename>*.z80</filename>
+    <filename>*.asm</filename>
+    <case_insensitive>true</case_insensitive>
+  </config>
+  <rules>
+    <state name="string">
+      <rule pattern="[^&#34;\\]+">
+        <token type="LiteralString"/>
+      </rule>
+      <rule pattern="\\.">
+        <token type="LiteralStringEscape"/>
+      </rule>
+      <rule pattern="&#34;">
+        <token type="LiteralString"/>
+        <pop depth="1"/>
+      </rule>
+    </state>
+    <state name="root">
+      <rule pattern=";.*?$">
+        <token type="CommentSingle"/>
+      </rule>
+      <rule pattern="^[.\w]+:">
+        <token type="NameLabel"/>
+      </rule>
+      <rule pattern="((0x)|\$)[0-9a-fA-F]+">
+        <token type="LiteralNumberHex"/>
+      </rule>
+      <rule pattern="[0-9][0-9a-fA-F]+h">
+        <token type="LiteralNumberHex"/>
+      </rule>
+      <rule pattern="((0b)|%)[01]+">
+        <token type="LiteralNumberBin"/>
+      </rule>
+      <rule pattern="-?[0-9]+">
+        <token type="LiteralNumberInteger"/>
+      </rule>
+      <rule pattern="&#34;">
+        <token type="LiteralString"/>
+        <push state="string"/>
+      </rule>
+      <rule pattern="&#39;\\?.&#39;">
+        <token type="LiteralStringChar"/>
+      </rule>
+      <rule pattern="[,=()\\]">
+        <token type="Punctuation"/>
+      </rule>
+      <rule pattern="^\s*#\w+">
+        <token type="CommentPreproc"/>
+      </rule>
+      <rule pattern="\.(db|dw|end|org|byte|word|fill|block|addinstr|echo|error|list|nolist|equ|show|option|seek)">
+        <token type="NameBuiltin"/>
+      </rule>
+      <rule pattern="(ex|exx|ld|ldd|lddr|ldi|ldir|pop|push|adc|add|cp|cpd|cpdr|cpi|cpir|cpl|daa|dec|inc|neg|sbc|sub|and|bit|ccf|or|res|scf|set|xor|rl|rla|rlc|rlca|rld|rr|rra|rrc|rrca|rrd|sla|sra|srl|call|djnz|jp|jr|ret|rst|nop|reti|retn|di|ei|halt|im|in|ind|indr|ini|inir|out|outd|otdr|outi|otir)">
+        <token type="Keyword"/>
+      </rule>
+      <rule pattern="(z|nz|c|nc|po|pe|p|m)">
+        <token type="Keyword"/>
+      </rule>
+      <rule pattern="[+-/*~\^&amp;|]">
+        <token type="Operator"/>
+      </rule>
+      <rule pattern="\w+">
+        <token type="Text"/>
+      </rule>
+      <rule pattern="\s+">
+        <token type="Text"/>
+      </rule>
+    </state>
+  </rules>
+</lexer>
+@@END
 @@PORTABLE {"path":"third_party/wails/vendor/github.com/alecthomas/chroma/v2/lexers/embedded/zed.xml","mode":420,"size":1372,"sha256":"c88ff190a3f2795b38455a2748a49f46e8f6b8fc55db7564ca9b5c2acfa41668","index":0,"count":1,"encoding":"utf-8","payloadBytes":1372}
 <lexer>
   <config>
@@ -162797,1881 +163877,4 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/klauspost/cpuid/v2/README.md","mode":420,"size":50585,"sha256":"019aa7b183773e5fddeae0296cbaba837135ecb53bce232d893a0e991c17b593","index":0,"count":2,"encoding":"utf-8","payloadBytes":48004}
-# cpuid
-Package cpuid provides information about the CPU running the current program.
-
-CPU features are detected on startup, and kept for fast access through the life of the application.
-Currently x86 / x64 (AMD64/i386) and ARM (ARM64) is supported, and no external C (cgo) code is used, which should make the library very easy to use.
-
-You can access the CPU information by accessing the shared CPU variable of the cpuid library.
-
-Package home: https://github.com/klauspost/cpuid
-
-[![PkgGoDev](https://pkg.go.dev/badge/github.com/klauspost/cpuid)](https://pkg.go.dev/github.com/klauspost/cpuid/v2)
-[![Go](https://github.com/klauspost/cpuid/actions/workflows/go.yml/badge.svg)](https://github.com/klauspost/cpuid/actions/workflows/go.yml)
-
-## installing
-
-`go get -u github.com/klauspost/cpuid/v2` using modules.
-Drop `v2` for others.
-
-Installing binary:
-
-`go install github.com/klauspost/cpuid/v2/cmd/cpuid@latest`
-
-Or download binaries from release page: https://github.com/klauspost/cpuid/releases
-
-### Homebrew
-
-For macOS/Linux users, you can install via [brew](https://brew.sh/)
-
-```sh
-$ brew install cpuid
-```
-
-## example
-
-```Go
-package main
-
-import (
-	"fmt"
-	"strings"
-
-	. "github.com/klauspost/cpuid/v2"
-)
-
-func main() {
-	// Print basic CPU information:
-	fmt.Println("Name:", CPU.BrandName)
-	fmt.Println("PhysicalCores:", CPU.PhysicalCores)
-	fmt.Println("ThreadsPerCore:", CPU.ThreadsPerCore)
-	fmt.Println("LogicalCores:", CPU.LogicalCores)
-	fmt.Println("Family", CPU.Family, "Model:", CPU.Model, "Vendor ID:", CPU.VendorID)
-	fmt.Println("Features:", strings.Join(CPU.FeatureSet(), ","))
-	fmt.Println("Cacheline bytes:", CPU.CacheLine)
-	fmt.Println("L1 Data Cache:", CPU.Cache.L1D, "bytes")
-	fmt.Println("L1 Instruction Cache:", CPU.Cache.L1I, "bytes")
-	fmt.Println("L2 Cache:", CPU.Cache.L2, "bytes")
-	fmt.Println("L3 Cache:", CPU.Cache.L3, "bytes")
-	fmt.Println("Frequency", CPU.Hz, "hz")
-
-	// Test if we have these specific features:
-	if CPU.Supports(SSE, SSE2) {
-		fmt.Println("We have Streaming SIMD 2 Extensions")
-	}
-}
-```
-
-Sample output:
-```
->go run main.go
-Name: AMD Ryzen 9 3950X 16-Core Processor
-PhysicalCores: 16
-ThreadsPerCore: 2
-LogicalCores: 32
-Family 23 Model: 113 Vendor ID: AMD
-Features: ADX,AESNI,AVX,AVX2,BMI1,BMI2,CLMUL,CMOV,CX16,F16C,FMA3,HTT,HYPERVISOR,LZCNT,MMX,MMXEXT,NX,POPCNT,RDRAND,RDSEED,RDTSCP,SHA,SSE,SSE2,SSE3,SSE4,SSE42,SSE4A,SSSE3
-Cacheline bytes: 64
-L1 Data Cache: 32768 bytes
-L1 Instruction Cache: 32768 bytes
-L2 Cache: 524288 bytes
-L3 Cache: 16777216 bytes
-Frequency 0 hz
-We have Streaming SIMD 2 Extensions
-```
-
-# usage
-
-The `cpuid.CPU` provides access to CPU features. Use `cpuid.CPU.Supports()` to check for CPU features.
-A faster `cpuid.CPU.Has()` is provided which will usually be inlined by the gc compiler.  
-
-To test a larger number of features, they can be combined using `f := CombineFeatures(CMOV, CMPXCHG8, X87, FXSR, MMX, SYSCALL, SSE, SSE2)`, etc.
-This can be using with `cpuid.CPU.HasAll(f)` to quickly test if all features are supported.
-
-Note that for some cpu/os combinations some features will not be detected.
-`amd64` has rather good support and should work reliably on all platforms.
-
-Note that hypervisors may not pass through all CPU features through to the guest OS,
-so even if your host supports a feature it may not be visible on guests.
-
-## arm64 feature detection
-
-Not all operating systems provide ARM features directly 
-and there is no safe way to do so for the rest.
-
-Currently `arm64/linux` and `arm64/freebsd` should be quite reliable. 
-`arm64/darwin` adds features expected from the M1 processor, but a lot remains undetected.
-
-A `DetectARM()` can be used if you are able to control your deployment,
-it will detect CPU features, but may crash if the OS doesn't intercept the calls.
-A `-cpu.arm` flag for detecting unsafe ARM features can be added. See below.
- 
-Note that currently only features are detected on ARM, 
-no additional information is currently available. 
-
-## flags
-
-It is possible to add flags that affects cpu detection.
-
-For this the `Flags()` command is provided.
-
-This must be called *before* `flag.Parse()` AND after the flags have been parsed `Detect()` must be called.
-
-This means that any detection used in `init()` functions will not contain these flags.
-
-Example:
-
-```Go
-package main
-
-import (
-	"flag"
-	"fmt"
-	"strings"
-
-	"github.com/klauspost/cpuid/v2"
-)
-
-func main() {
-	cpuid.Flags()
-	flag.Parse()
-	cpuid.Detect()
-
-	// Test if we have these specific features:
-	if cpuid.CPU.Supports(cpuid.SSE, cpuid.SSE2) {
-		fmt.Println("We have Streaming SIMD 2 Extensions")
-	}
-}
-```
-
-## commandline
-
-Download as binary from: https://github.com/klauspost/cpuid/releases
-
-Install from source:
-
-`go install github.com/klauspost/cpuid/v2/cmd/cpuid@latest`
-
-### Example
-
-```
-λ cpuid
-Name: AMD Ryzen 9 3950X 16-Core Processor
-Vendor String: AuthenticAMD
-Vendor ID: AMD
-PhysicalCores: 16
-Threads Per Core: 2
-Logical Cores: 32
-CPU Family 23 Model: 113
-Features: ADX,AESNI,AVX,AVX2,BMI1,BMI2,CLMUL,CLZERO,CMOV,CMPXCHG8,CPBOOST,CX16,F16C,FMA3,FXSR,FXSROPT,HTT,HYPERVISOR,LAHF,LZCNT,MCAOVERFLOW,MMX,MMXEXT,MOVBE,NX,OSXSAVE,POPCNT,RDRAND,RDSEED,RDTSCP,SCE,SHA,SSE,SSE2,SSE3,SSE4,SSE42,SSE4A,SSSE3,SUCCOR,X87,XSAVE
-Microarchitecture level: 3
-Cacheline bytes: 64
-L1 Instruction Cache: 32768 bytes
-L1 Data Cache: 32768 bytes
-L2 Cache: 524288 bytes
-L3 Cache: 16777216 bytes
-
-```
-### JSON Output:
-
-```
-λ cpuid --json
-{
-  "BrandName": "AMD Ryzen 9 3950X 16-Core Processor",
-  "VendorID": 2,
-  "VendorString": "AuthenticAMD",
-  "PhysicalCores": 16,
-  "ThreadsPerCore": 2,
-  "LogicalCores": 32,
-  "Family": 23,
-  "Model": 113,
-  "CacheLine": 64,
-  "Hz": 0,
-  "BoostFreq": 0,
-  "Cache": {
-    "L1I": 32768,
-    "L1D": 32768,
-    "L2": 524288,
-    "L3": 16777216
-  },
-  "SGX": {
-    "Available": false,
-    "LaunchControl": false,
-    "SGX1Supported": false,
-    "SGX2Supported": false,
-    "MaxEnclaveSizeNot64": 0,
-    "MaxEnclaveSize64": 0,
-    "EPCSections": null
-  },
-  "Features": [
-    "ADX",
-    "AESNI",
-    "AVX",
-    "AVX2",
-    "BMI1",
-    "BMI2",
-    "CLMUL",
-    "CLZERO",
-    "CMOV",
-    "CMPXCHG8",
-    "CPBOOST",
-    "CX16",
-    "F16C",
-    "FMA3",
-    "FXSR",
-    "FXSROPT",
-    "HTT",
-    "HYPERVISOR",
-    "LAHF",
-    "LZCNT",
-    "MCAOVERFLOW",
-    "MMX",
-    "MMXEXT",
-    "MOVBE",
-    "NX",
-    "OSXSAVE",
-    "POPCNT",
-    "RDRAND",
-    "RDSEED",
-    "RDTSCP",
-    "SCE",
-    "SHA",
-    "SSE",
-    "SSE2",
-    "SSE3",
-    "SSE4",
-    "SSE42",
-    "SSE4A",
-    "SSSE3",
-    "SUCCOR",
-    "X87",
-    "XSAVE"
-  ],
-  "X64Level": 3
-}
-```
-
-### Check CPU microarch level
-
-```
-λ cpuid --check-level=3
-2022/03/18 17:04:40 AMD Ryzen 9 3950X 16-Core Processor
-2022/03/18 17:04:40 Microarchitecture level 3 is supported. Max level is 3.
-Exit Code 0
-
-λ cpuid --check-level=4
-2022/03/18 17:06:18 AMD Ryzen 9 3950X 16-Core Processor
-2022/03/18 17:06:18 Microarchitecture level 4 not supported. Max level is 3.
-Exit Code 1
-```
-
-
-## Available flags
-
-### x86 & amd64 
-
-| Feature Flag       | Description                                                                                                                                                                        |
-|--------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| ADX                | Intel ADX (Multi-Precision Add-Carry Instruction Extensions)                                                                                                                       |
-| AESNI              | Advanced Encryption Standard New Instructions                                                                                                                                      |
-| AMD3DNOW           | AMD 3DNOW                                                                                                                                                                          |
-| AMD3DNOWEXT        | AMD 3DNowExt                                                                                                                                                                       |
-| AMXBF16            | Tile computational operations on BFLOAT16 numbers                                                                                                                                  |
-| AMXINT8            | Tile computational operations on 8-bit integers                                                                                                                                    |
-| AMXFP16            | Tile computational operations on FP16 numbers                                                                                                                                      |
-| AMXFP8             | Tile computational operations on FP8 numbers                                                                                                                                       |
-| AMXCOMPLEX         | Tile computational operations on complex numbers                                                                                                                                   |
-| AMXTILE            | Tile architecture                                                                                                                                                                  |
-| AMXTF32            | Matrix Multiplication of TF32 Tiles into Packed Single Precision Tile                                                                                                              |
-| AMXTRANSPOSE       | Tile multiply where the first operand is transposed                                                                                                                                |
-| APX_F              | Intel APX                                                                                                                                                                          |
-| AVX                | AVX functions                                                                                                                                                                      |
-| AVX10              | If set the Intel AVX10 Converged Vector ISA is supported                                                                                                                           |
-| AVX10_128          | If set indicates that AVX10 128-bit vector support is present                                                                                                                      |
-| AVX10_256          | If set indicates that AVX10 256-bit vector support is present                                                                                                                      |
-| AVX10_512          | If set indicates that AVX10 512-bit vector support is present                                                                                                                      |
-| AVX2               | AVX2 functions                                                                                                                                                                     |
-| AVX512BF16         | AVX-512 BFLOAT16 Instructions                                                                                                                                                      |
-| AVX512BITALG       | AVX-512 Bit Algorithms                                                                                                                                                             |
-| AVX512BW           | AVX-512 Byte and Word Instructions                                                                                                                                                 |
-| AVX512CD           | AVX-512 Conflict Detection Instructions                                                                                                                                            |
-| AVX512DQ           | AVX-512 Doubleword and Quadword Instructions                                                                                                                                       |
-| AVX512ER           | AVX-512 Exponential and Reciprocal Instructions                                                                                                                                    |
-| AVX512F            | AVX-512 Foundation                                                                                                                                                                 |
-| AVX512FP16         | AVX-512 FP16 Instructions                                                                                                                                                          |
-| AVX512IFMA         | AVX-512 Integer Fused Multiply-Add Instructions                                                                                                                                    |
-| AVX512PF           | AVX-512 Prefetch Instructions                                                                                                                                                      |
-| AVX512VBMI         | AVX-512 Vector Bit Manipulation Instructions                                                                                                                                       |
-| AVX512VBMI2        | AVX-512 Vector Bit Manipulation Instructions, Version 2                                                                                                                            |
-| AVX512VL           | AVX-512 Vector Length Extensions                                                                                                                                                   |
-| AVX512VNNI         | AVX-512 Vector Neural Network Instructions                                                                                                                                         |
-| AVX512VP2INTERSECT | AVX-512 Intersect for D/Q                                                                                                                                                          |
-| AVX512VPOPCNTDQ    | AVX-512 Vector Population Count Doubleword and Quadword                                                                                                                            |
-| AVXIFMA            | AVX-IFMA instructions                                                                                                                                                              |
-| AVXNECONVERT       | AVX-NE-CONVERT instructions                                                                                                                                                        |
-| AVXSLOW            | Indicates the CPU performs 2 128 bit operations instead of one                                                                                                                     |
-| AVXVNNI            | AVX (VEX encoded) VNNI neural network instructions                                                                                                                                 |
-| AVXVNNIINT8        | AVX-VNNI-INT8 instructions                                                                                                                                                         |
-| AVXVNNIINT16       | AVX-VNNI-INT16 instructions                                                                                                                                                        |
-| BHI_CTRL           | Branch History Injection and Intra-mode Branch Target Injection / CVE-2022-0001, CVE-2022-0002 / INTEL-SA-00598                                                                    |
-| BMI1               | Bit Manipulation Instruction Set 1                                                                                                                                                 |
-| BMI2               | Bit Manipulation Instruction Set 2                                                                                                                                                 |
-| CETIBT             | Intel CET Indirect Branch Tracking                                                                                                                                                 |
-| CETSS              | Intel CET Shadow Stack                                                                                                                                                             |
-| CLDEMOTE           | Cache Line Demote                                                                                                                                                                  |
-| CLMUL              | Carry-less Multiplication                                                                                                                                                          |
-| CLZERO             | CLZERO instruction supported                                                                                                                                                       |
-| CMOV               | i686 CMOV                                                                                                                                                                          |
-| CMPCCXADD          | CMPCCXADD instructions                                                                                                                                                             |
-| CMPSB_SCADBS_SHORT | Fast short CMPSB and SCASB                                                                                                                                                         |
-| CMPXCHG8           | CMPXCHG8 instruction                                                                                                                                                               |
-| CPBOOST            | Core Performance Boost                                                                                                                                                             |
-| CPPC               | AMD: Collaborative Processor Performance Control                                                                                                                                   |
-| CX16               | CMPXCHG16B Instruction                                                                                                                                                             |
-| EFER_LMSLE_UNS     | AMD: =Core::X86::Msr::EFER[LMSLE] is not supported, and MBZ                                                                                                                        |
-| ENQCMD             | Enqueue Command                                                                                                                                                                    |
-| ERMS               | Enhanced REP MOVSB/STOSB                                                                                                                                                           |
-| F16C               | Half-precision floating-point conversion                                                                                                                                           |
-| FLUSH_L1D          | Flush L1D cache                                                                                                                                                                    |
-| FMA3               | Intel FMA 3. Does not imply AVX.                                                                                                                                                   |
-| FMA4               | Bulldozer FMA4 functions                                                                                                                                                           |
-| FP128              | AMD: When set, the internal FP/SIMD execution datapath is 128-bits wide                                                                                                            |
-| FP256              | AMD: When set, the internal FP/SIMD execution datapath is 256-bits wide                                                                                                            |
-| FSRM               | Fast Short Rep Mov                                                                                                                                                                 |
-| FXSR               | FXSAVE, FXRESTOR instructions, CR4 bit 9                                                                                                                                           |
-| FXSROPT            | FXSAVE/FXRSTOR optimizations                                                                                                                                                       |
-| GFNI               | Galois Field New Instructions. May require other features (AVX, AVX512VL,AVX512F) based on usage.                                                                                  |
-| HLE                | Hardware Lock Elision                                                                                                                                                              |
-| HRESET             | If set CPU supports history reset and the IA32_HRESET_ENABLE MSR                                                                                                                   |
-| HTT                | Hyperthreading (enabled)                                                                                                                                                           |
-| HWA                | Hardware assert supported. Indicates support for MSRC001_10                                                                                                                        |
-| HYBRID_CPU         | This part has CPUs of more than one type.                                                                                                                                          |
-| HYPERVISOR         | This bit has been reserved by Intel & AMD for use by hypervisors                                                                                                                   |
-| IA32_ARCH_CAP      | IA32_ARCH_CAPABILITIES MSR (Intel)                                                                                                                                                 |
-| IA32_CORE_CAP      | IA32_CORE_CAPABILITIES MSR                                                                                                                                                         |
-| IBPB               | Indirect Branch Restricted Speculation (IBRS) and Indirect Branch Predictor Barrier (IBPB)                                                                                         |
-| IBRS               | AMD: Indirect Branch Restricted Speculation                                                                                                                                        |
-| IBRS_PREFERRED     | AMD: IBRS is preferred over software solution                                                                                                                                      |
-| IBRS_PROVIDES_SMP  | AMD: IBRS provides Same Mode Protection                                                                                                                                            |
-| IBS                | Instruction Based Sampling (AMD)                                                                                                                                                   |
-| IBSBRNTRGT         | Instruction Based Sampling Feature (AMD)                                                                                                                                           |
-| IBSFETCHSAM        | Instruction Based Sampling Feature (AMD)                                                                                                                                           |
-| IBSFFV             | Instruction Based Sampling Feature (AMD)                                                                                                                                           |
-| IBSOPCNT           | Instruction Based Sampling Feature (AMD)                                                                                                                                           |
-| IBSOPCNTEXT        | Instruction Based Sampling Feature (AMD)                                                                                                                                           |
-| IBSOPSAM           | Instruction Based Sampling Feature (AMD)                                                                                                                                           |
-| IBSRDWROPCNT       | Instruction Based Sampling Feature (AMD)                                                                                                                                           |
-| IBSRIPINVALIDCHK   | Instruction Based Sampling Feature (AMD)                                                                                                                                           |
-| IBS_FETCH_CTLX     | AMD: IBS fetch control extended MSR supported                                                                                                                                      |
-| IBS_OPDATA4        | AMD: IBS op data 4 MSR supported                                                                                                                                                   |
-| IBS_OPFUSE         | AMD: Indicates support for IbsOpFuse                                                                                                                                               |
-| IBS_PREVENTHOST    | Disallowing IBS use by the host supported                                                                                                                                          |
-| IBS_ZEN4           | Fetch and Op IBS support IBS extensions added with Zen4                                                                                                                            |
-| IDPRED_CTRL        | IPRED_DIS                                                                                                                                                                          |
-| INT_WBINVD         | WBINVD/WBNOINVD are interruptible.                                                                                                                                                 |
-| INVLPGB            | NVLPGB and TLBSYNC instruction supported                                                                                                                                           |
-| KEYLOCKER          | Key locker                                                                                                                                                                         |
-| KEYLOCKERW         | Key locker wide                                                                                                                                                                    |
-| LAHF               | LAHF/SAHF in long mode                                                                                                                                                             |
-| LAM                | If set, CPU supports Linear Address Masking                                                                                                                                        |
-| LBRVIRT            | LBR virtualization                                                                                                                                                                 |
-| LZCNT              | LZCNT instruction                                                                                                                                                                  |
-| MCAOVERFLOW        | MCA overflow recovery support.                                                                                                                                                     |
-| MCDT_NO            | Processor do not exhibit MXCSR Configuration Dependent Timing behavior and do not need to mitigate it.                                                                             |
-| MCOMMIT            | MCOMMIT instruction supported                                                                                                                                                      |
-| MD_CLEAR           | VERW clears CPU buffers                                                                                                                                                            |
-| MMX                | standard MMX                                                                                                                                                                       |
-| MMXEXT             | SSE integer functions or AMD MMX ext                                                                                                                                               |
-| MOVBE              | MOVBE instruction (big-endian)                                                                                                                                                     |
-| MOVDIR64B          | Move 64 Bytes as Direct Store                                                                                                                                                      |
-| MOVDIRI            | Move Doubleword as Direct Store                                                                                                                                                    |
-| MOVSB_ZL           | Fast Zero-Length MOVSB                                                                                                                                                             |
-| MPX                | Intel MPX (Memory Protection Extensions)                                                                                                                                           |
-| MOVU               | MOVU SSE instructions are more efficient and should be preferred to SSE	MOVL/MOVH. MOVUPS is more efficient than MOVLPS/MOVHPS. MOVUPD is more efficient than MOVLPD/MOVHPD        |
-| MSRIRC             | Instruction Retired Counter MSR available                                                                                                                                          |
-| MSRLIST            | Read/Write List of Model Specific Registers                                                                                                                                        |
-| MSR_PAGEFLUSH      | Page Flush MSR available                                                                                                                                                           |
-| NRIPS              | Indicates support for NRIP save on VMEXIT                                                                                                                                          |
-| NX                 | NX (No-Execute) bit                                                                                                                                                                |
-| OSXSAVE            | XSAVE enabled by OS                                                                                                                                                                |
-| PCONFIG            | PCONFIG for Intel Multi-Key Total Memory Encryption                                                                                                                                |
-| POPCNT             | POPCNT instruction                                                                                                                                                                 |
-| PPIN               | AMD: Protected Processor Inventory Number support. Indicates that Protected Processor Inventory Number (PPIN) capability can be enabled                                            |
-| PREFETCHI          | PREFETCHIT0/1 instructions                                                                                                                                                         |
-| PSFD               | Predictive Store Forward Disable                                                                                                                                                   |
-| RDPRU              | RDPRU instruction supported                                                                                                                                                        |
-| RDRAND             | RDRAND instruction is available                                                                                                                                                    |
-| RDSEED             | RDSEED instruction is available                                                                                                                                                    |
-| RDTSCP             | RDTSCP Instruction                                                                                                                                                                 |
-| RRSBA_CTRL         | Restricted RSB Alternate                                                                                                                                                           |
-| RTM                | Restricted Transactional Memory                                                                                                                                                    |
-| RTM_ALWAYS_ABORT   | Indicates that the loaded microcode is forcing RTM abort.                                                                                                                          |
-| SERIALIZE          | Serialize Instruction Execution                                                                                                                                                    |
-| SEV                | AMD Secure Encrypted Virtualization supported                                                                                                                                      |
-| SEV_64BIT          | AMD SEV guest execution only allowed from a 64-bit host                                                                                                                            |
-| SEV_ALTERNATIVE    | AMD SEV Alternate Injection supported                                                                                                                                              |
-| SEV_DEBUGSWAP      | Full debug state swap supported for SEV-ES guests                                                                                                                                  |
-| SEV_ES             | AMD SEV Encrypted State supported                                                                                                                                                  |
-| SEV_RESTRICTED     | AMD SEV Restricted Injection supported                                                                                                                                             |
-| SEV_SNP            | AMD SEV Secure Nested Paging supported                                                                                                                                             |
-| SGX                | Software Guard Extensions                                                                                                                                                          |
-| SGXLC              | Software Guard Extensions Launch Control                                                                                                                                           |
-| SGXPQC             | Software Guard Extensions 256-bit Encryption                                                                                                                                       |
-| SHA                | Intel SHA Extensions                                                                                                                                                               |
-| SME                | AMD Secure Memory Encryption supported                                                                                                                                             |
-| SME_COHERENT       | AMD Hardware cache coherency across encryption domains enforced                                                                                                                    |
-| SM3_X86            | SM3 instructions                                                                                                                                                                   |
-| SM4_X86            | SM4 instructions                                                                                                                                                                   |
-| SPEC_CTRL_SSBD     | Speculative Store Bypass Disable                                                                                                                                                   |
-| SRBDS_CTRL         | SRBDS mitigation MSR available                                                                                                                                                     |
-| SSE                | SSE functions                                                                                                                                                                      |
-| SSE2               | P4 SSE functions                                                                                                                                                                   |
-| SSE3               | Prescott SSE3 functions                                                                                                                                                            |
-| SSE4               | Penryn SSE4.1 functions                                                                                                                                                            |
-| SSE42              | Nehalem SSE4.2 functions                                                                                                                                                           |
-| SSE4A              | AMD Barcelona microarchitecture SSE4a instructions                                                                                                                                 |
-| SSSE3              | Conroe SSSE3 functions                                                                                                                                                             |
-| STIBP              | Single Thread Indirect Branch Predictors                                                                                                                                           |
-| STIBP_ALWAYSON     | AMD: Single Thread Indirect Branch Prediction Mode has Enhanced Performance and may be left Always On                                                                              |
-| STOSB_SHORT        | Fast short STOSB                                                                                                                                                                   |
-| SUCCOR             | Software uncorrectable error containment and recovery capability.                                                                                                                  |
-| SVM                | AMD Secure Virtual Machine                                                                                                                                                         |
-| SVMDA              | Indicates support for the SVM decode assists.                                                                                                                                      |
-| SVMFBASID          | SVM, Indicates that TLB flush events, including CR3 writes and CR4.PGE toggles, flush only the current ASID's TLB entries. Also indicates support for the extended VMCBTLB_Control |
-| SVML               | AMD SVM lock. Indicates support for SVM-Lock.                                                                                                                                      |
-| SVMNP              | AMD SVM nested paging                                                                                                                                                              |
-| SVMPF              | SVM pause intercept filter. Indicates support for the pause intercept filter                                                                                                       |
-| SVMPFT             | SVM PAUSE filter threshold. Indicates support for the PAUSE filter cycle count threshold                                                                                           |
-| SYSCALL            | System-Call Extension (SCE): SYSCALL and SYSRET instructions.                                                                                                                      |
-| SYSEE              | SYSENTER and SYSEXIT instructions                                                                                                                                                  |
-| TBM                | AMD Trailing Bit Manipulation                                                                                                                                                      |
-| TDX_GUEST          | Intel Trust Domain Extensions Guest                                                                                                                                                |
-| TLB_FLUSH_NESTED   | AMD: Flushing includes all the nested translations for guest translations                                                                                                          |
-| TME                | Intel Total Memory Encryption. The following MSRs are supported: IA32_TME_CAPABILITY, IA32_TME_ACTIVATE, IA32_TME_EXCLUDE_MASK, and IA32_TME_EXCLUDE_BASE.                         |
-| TOPEXT             | TopologyExtensions: topology extensions support. Indicates support for CPUID Fn8000_001D_EAX_x[N:0]-CPUID Fn8000_001E_EDX.                                                         |
-| TSA_L1_NO          | AMD only: Not vulnerable to TSA-L1                                                                                                                                                 |
-| TSA_SQ_NO          | AMD only: Not vulnerable to TSA-SQ                                                                                                                                                 |
-| TSA_VERW_CLEAR     | AMD: If set, the memory form of the VERW instruction may be used to help mitigate TSA                                                                                              |
-| TSCRATEMSR         | MSR based TSC rate control. Indicates support for MSR TSC ratio MSRC000_0104                                                                                                       |
-| TSXLDTRK           | Intel TSX Suspend Load Address Tracking                                                                                                                                            |
-| VAES               | Vector AES. AVX(512) versions requires additional checks.                                                                                                                          |
-| VMCBCLEAN          | VMCB clean bits. Indicates support for VMCB clean bits.                                                                                                                            |
-| VMPL               | AMD VM Permission Levels supported                                                                                                                                                 |
-| VMSA_REGPROT       | AMD VMSA Register Protection supported                                                                                                                                             |
-| VMX                | Virtual Machine Extensions                                                                                                                                                         |
-| VPCLMULQDQ         | Carry-Less Multiplication Quadword. Requires AVX for 3 register versions.                                                                                                          |
-| VTE                | AMD Virtual Transparent Encryption supported                                                                                                                                       |
-| WAITPKG            | TPAUSE, UMONITOR, UMWAIT                                                                                                                                                           |
-| WBNOINVD           | Write Back and Do Not Invalidate Cache                                                                                                                                             |
-| WRMSRNS            | Non-Serializing Write to Model Specific Register                                                                                                                                   |
-| X87                | FPU                                                                                                                                                                                |
-| XGETBV1            | Supports XGETBV with ECX = 1                                                                                                                                                       |
-| XOP                | Bulldozer XOP functions                                                                                                                                                            |
-| XSAVE              | XSAVE, XRESTOR, XSETBV, XGETBV                                                                                                                                                     |
-| XSAVEC             | Supports XSAVEC and the compacted form of XRSTOR.                                                                                                                                  |
-| XSAVEOPT           | XSAVEOPT available                                                                                                                                                                 |
-| XSAVES             | Supports XSAVES/XRSTORS and IA32_XSS                                                                                                                                               |
-
-# ARM features:
-
-| Feature Flag | Description       
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/klauspost/cpuid/v2/README.md","mode":420,"size":50585,"sha256":"019aa7b183773e5fddeae0296cbaba837135ecb53bce232d893a0e991c17b593","index":1,"count":2,"encoding":"utf-8","payloadBytes":2581}
-                                               |
-|--------------|------------------------------------------------------------------|
-| AESARM       | AES instructions                                                 |
-| ARMCPUID     | Some CPU ID registers readable at user-level                     |
-| ASIMD        | Advanced SIMD                                                    |
-| ASIMDDP      | SIMD Dot Product                                                 |
-| ASIMDHP      | Advanced SIMD half-precision floating point                      |
-| ASIMDRDM     | Rounding Double Multiply Accumulate/Subtract (SQRDMLAH/SQRDMLSH) |
-| ATOMICS      | Large System Extensions (LSE)                                    |
-| CRC32        | CRC32/CRC32C instructions                                        |
-| DCPOP        | Data cache clean to Point of Persistence (DC CVAP)               |
-| EVTSTRM      | Generic timer                                                    |
-| FCMA         | Floatin point complex number addition and multiplication         |
-| FHM          | FMLAL and FMLSL instructions                                     |
-| FP           | Single-precision and double-precision floating point             |
-| FPHP         | Half-precision floating point                                    |
-| GPA          | Generic Pointer Authentication                                   |
-| JSCVT        | Javascript-style double->int convert (FJCVTZS)                   |
-| LRCPC        | Weaker release consistency (LDAPR, etc)                          |
-| PMULL        | Polynomial Multiply instructions (PMULL/PMULL2)                  |
-| RNDR         | Random Number instructions                                       |
-| TLB          | Outer Shareable and TLB range maintenance instructions           |
-| TS           | Flag manipulation instructions                                   |
-| SHA1         | SHA-1 instructions (SHA1C, etc)                                  |
-| SHA2         | SHA-2 instructions (SHA256H, etc)                                |
-| SHA3         | SHA-3 instructions (EOR3, RAXI, XAR, BCAX)                       |
-| SHA512       | SHA512 instructions                                              |
-| SM3          | SM3 instructions                                                 |
-| SM4          | SM4 instructions                                                 |
-| SVE          | Scalable Vector Extension                                        |
-
-# license
-
-This code is published under an MIT license. See LICENSE file for more information.
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/klauspost/cpuid/v2/cpuid.go","mode":420,"size":58614,"sha256":"7d2af0c24f1883a7b68bbeed62ae086b762d9e2fbf064156ca4bd3117d3533dc","index":0,"count":2,"encoding":"utf-8","payloadBytes":48008}
-// Copyright (c) 2015 Klaus Post, released under MIT License. See LICENSE file.
-
-// Package cpuid provides information about the CPU running the current program.
-//
-// CPU features are detected on startup, and kept for fast access through the life of the application.
-// Currently x86 / x64 (AMD64) as well as arm64 is supported.
-//
-// You can access the CPU information by accessing the shared CPU variable of the cpuid library.
-//
-// Package home: https://github.com/klauspost/cpuid
-package cpuid
-
-import (
-	"flag"
-	"fmt"
-	"math"
-	"math/bits"
-	"os"
-	"runtime"
-	"strings"
-)
-
-// AMD refererence: https://www.amd.com/system/files/TechDocs/25481.pdf
-// and Processor Programming Reference (PPR)
-
-// Vendor is a representation of a CPU vendor.
-type Vendor int
-
-const (
-	VendorUnknown Vendor = iota
-	Intel
-	AMD
-	VIA
-	Transmeta
-	NSC
-	KVM  // Kernel-based Virtual Machine
-	MSVM // Microsoft Hyper-V or Windows Virtual PC
-	VMware
-	XenHVM
-	Bhyve
-	Hygon
-	SiS
-	RDC
-
-	Ampere
-	ARM
-	Broadcom
-	Cavium
-	DEC
-	Fujitsu
-	Infineon
-	Motorola
-	NVIDIA
-	AMCC
-	Qualcomm
-	Marvell
-
-	QEMU
-	QNX
-	ACRN
-	SRE
-	Apple
-
-	lastVendor
-)
-
-//go:generate stringer -type=FeatureID,Vendor
-
-// FeatureID is the ID of a specific cpu feature.
-type FeatureID int
-
-const (
-	// Keep index -1 as unknown
-	UNKNOWN = -1
-
-	// x86 features
-	ADX                 FeatureID = iota // Intel ADX (Multi-Precision Add-Carry Instruction Extensions)
-	AESNI                                // Advanced Encryption Standard New Instructions
-	AMD3DNOW                             // AMD 3DNOW
-	AMD3DNOWEXT                          // AMD 3DNowExt
-	AMXBF16                              // Tile computational operations on BFLOAT16 numbers
-	AMXFP16                              // Tile computational operations on FP16 numbers
-	AMXINT8                              // Tile computational operations on 8-bit integers
-	AMXFP8                               // Tile computational operations on FP8 numbers
-	AMXTILE                              // Tile architecture
-	AMXTF32                              // Tile architecture
-	AMXCOMPLEX                           // Matrix Multiplication of TF32 Tiles into Packed Single Precision Tile
-	AMXTRANSPOSE                         // Tile multiply where the first operand is transposed
-	APX_F                                // Intel APX
-	AVX                                  // AVX functions
-	AVX10                                // If set the Intel AVX10 Converged Vector ISA is supported
-	AVX10_128                            // If set indicates that AVX10 128-bit vector support is present
-	AVX10_256                            // If set indicates that AVX10 256-bit vector support is present
-	AVX10_512                            // If set indicates that AVX10 512-bit vector support is present
-	AVX2                                 // AVX2 functions
-	AVX512BF16                           // AVX-512 BFLOAT16 Instructions
-	AVX512BITALG                         // AVX-512 Bit Algorithms
-	AVX512BW                             // AVX-512 Byte and Word Instructions
-	AVX512CD                             // AVX-512 Conflict Detection Instructions
-	AVX512DQ                             // AVX-512 Doubleword and Quadword Instructions
-	AVX512ER                             // AVX-512 Exponential and Reciprocal Instructions
-	AVX512F                              // AVX-512 Foundation
-	AVX512FP16                           // AVX-512 FP16 Instructions
-	AVX512IFMA                           // AVX-512 Integer Fused Multiply-Add Instructions
-	AVX512PF                             // AVX-512 Prefetch Instructions
-	AVX512VBMI                           // AVX-512 Vector Bit Manipulation Instructions
-	AVX512VBMI2                          // AVX-512 Vector Bit Manipulation Instructions, Version 2
-	AVX512VL                             // AVX-512 Vector Length Extensions
-	AVX512VNNI                           // AVX-512 Vector Neural Network Instructions
-	AVX512VP2INTERSECT                   // AVX-512 Intersect for D/Q
-	AVX512VPOPCNTDQ                      // AVX-512 Vector Population Count Doubleword and Quadword
-	AVXIFMA                              // AVX-IFMA instructions
-	AVXNECONVERT                         // AVX-NE-CONVERT instructions
-	AVXSLOW                              // Indicates the CPU performs 2 128 bit operations instead of one
-	AVXVNNI                              // AVX (VEX encoded) VNNI neural network instructions
-	AVXVNNIINT8                          // AVX-VNNI-INT8 instructions
-	AVXVNNIINT16                         // AVX-VNNI-INT16 instructions
-	BHI_CTRL                             // Branch History Injection and Intra-mode Branch Target Injection / CVE-2022-0001, CVE-2022-0002 / INTEL-SA-00598
-	BMI1                                 // Bit Manipulation Instruction Set 1
-	BMI2                                 // Bit Manipulation Instruction Set 2
-	CETIBT                               // Intel CET Indirect Branch Tracking
-	CETSS                                // Intel CET Shadow Stack
-	CLDEMOTE                             // Cache Line Demote
-	CLMUL                                // Carry-less Multiplication
-	CLZERO                               // CLZERO instruction supported
-	CMOV                                 // i686 CMOV
-	CMPCCXADD                            // CMPCCXADD instructions
-	CMPSB_SCADBS_SHORT                   // Fast short CMPSB and SCASB
-	CMPXCHG8                             // CMPXCHG8 instruction
-	CPBOOST                              // Core Performance Boost
-	CPPC                                 // AMD: Collaborative Processor Performance Control
-	CX16                                 // CMPXCHG16B Instruction
-	EFER_LMSLE_UNS                       // AMD: =Core::X86::Msr::EFER[LMSLE] is not supported, and MBZ
-	ENQCMD                               // Enqueue Command
-	ERMS                                 // Enhanced REP MOVSB/STOSB
-	F16C                                 // Half-precision floating-point conversion
-	FLUSH_L1D                            // Flush L1D cache
-	FMA3                                 // Intel FMA 3. Does not imply AVX.
-	FMA4                                 // Bulldozer FMA4 functions
-	FP128                                // AMD: When set, the internal FP/SIMD execution datapath is no more than 128-bits wide
-	FP256                                // AMD: When set, the internal FP/SIMD execution datapath is no more than 256-bits wide
-	FSRM                                 // Fast Short Rep Mov
-	FXSR                                 // FXSAVE, FXRESTOR instructions, CR4 bit 9
-	FXSROPT                              // FXSAVE/FXRSTOR optimizations
-	GFNI                                 // Galois Field New Instructions. May require other features (AVX, AVX512VL,AVX512F) based on usage.
-	HLE                                  // Hardware Lock Elision
-	HRESET                               // If set CPU supports history reset and the IA32_HRESET_ENABLE MSR
-	HTT                                  // Hyperthreading (enabled)
-	HWA                                  // Hardware assert supported. Indicates support for MSRC001_10
-	HYBRID_CPU                           // This part has CPUs of more than one type.
-	HYPERVISOR                           // This bit has been reserved by Intel & AMD for use by hypervisors
-	IA32_ARCH_CAP                        // IA32_ARCH_CAPABILITIES MSR (Intel)
-	IA32_CORE_CAP                        // IA32_CORE_CAPABILITIES MSR
-	IBPB                                 // Indirect Branch Restricted Speculation (IBRS) and Indirect Branch Predictor Barrier (IBPB)
-	IBPB_BRTYPE                          // Indicates that MSR 49h (PRED_CMD) bit 0 (IBPB) flushes	all branch type predictions from the CPU branch predictor
-	IBRS                                 // AMD: Indirect Branch Restricted Speculation
-	IBRS_PREFERRED                       // AMD: IBRS is preferred over software solution
-	IBRS_PROVIDES_SMP                    // AMD: IBRS provides Same Mode Protection
-	IBS                                  // Instruction Based Sampling (AMD)
-	IBSBRNTRGT                           // Instruction Based Sampling Feature (AMD)
-	IBSFETCHSAM                          // Instruction Based Sampling Feature (AMD)
-	IBSFFV                               // Instruction Based Sampling Feature (AMD)
-	IBSOPCNT                             // Instruction Based Sampling Feature (AMD)
-	IBSOPCNTEXT                          // Instruction Based Sampling Feature (AMD)
-	IBSOPSAM                             // Instruction Based Sampling Feature (AMD)
-	IBSRDWROPCNT                         // Instruction Based Sampling Feature (AMD)
-	IBSRIPINVALIDCHK                     // Instruction Based Sampling Feature (AMD)
-	IBS_FETCH_CTLX                       // AMD: IBS fetch control extended MSR supported
-	IBS_OPDATA4                          // AMD: IBS op data 4 MSR supported
-	IBS_OPFUSE                           // AMD: Indicates support for IbsOpFuse
-	IBS_PREVENTHOST                      // Disallowing IBS use by the host supported
-	IBS_ZEN4                             // AMD: Fetch and Op IBS support IBS extensions added with Zen4
-	IDPRED_CTRL                          // IPRED_DIS
-	INT_WBINVD                           // WBINVD/WBNOINVD are interruptible.
-	INVLPGB                              // NVLPGB and TLBSYNC instruction supported
-	KEYLOCKER                            // Key locker
-	KEYLOCKERW                           // Key locker wide
-	LAHF                                 // LAHF/SAHF in long mode
-	LAM                                  // If set, CPU supports Linear Address Masking
-	LBRVIRT                              // LBR virtualization
-	LZCNT                                // LZCNT instruction
-	MCAOVERFLOW                          // MCA overflow recovery support.
-	MCDT_NO                              // Processor do not exhibit MXCSR Configuration Dependent Timing behavior and do not need to mitigate it.
-	MCOMMIT                              // MCOMMIT instruction supported
-	MD_CLEAR                             // VERW clears CPU buffers
-	MMX                                  // standard MMX
-	MMXEXT                               // SSE integer functions or AMD MMX ext
-	MOVBE                                // MOVBE instruction (big-endian)
-	MOVDIR64B                            // Move 64 Bytes as Direct Store
-	MOVDIRI                              // Move Doubleword as Direct Store
-	MOVSB_ZL                             // Fast Zero-Length MOVSB
-	MOVU                                 // AMD: MOVU SSE instructions are more efficient and should be preferred to SSE	MOVL/MOVH. MOVUPS is more efficient than MOVLPS/MOVHPS. MOVUPD is more efficient than MOVLPD/MOVHPD
-	MPX                                  // Intel MPX (Memory Protection Extensions)
-	MSRIRC                               // Instruction Retired Counter MSR available
-	MSRLIST                              // Read/Write List of Model Specific Registers
-	MSR_PAGEFLUSH                        // Page Flush MSR available
-	NRIPS                                // Indicates support for NRIP save on VMEXIT
-	NX                                   // NX (No-Execute) bit
-	OSXSAVE                              // XSAVE enabled by OS
-	PCONFIG                              // PCONFIG for Intel Multi-Key Total Memory Encryption
-	POPCNT                               // POPCNT instruction
-	PPIN                                 // AMD: Protected Processor Inventory Number support. Indicates that Protected Processor Inventory Number (PPIN) capability can be enabled
-	PREFETCHI                            // PREFETCHIT0/1 instructions
-	PSFD                                 // Predictive Store Forward Disable
-	RDPRU                                // RDPRU instruction supported
-	RDRAND                               // RDRAND instruction is available
-	RDSEED                               // RDSEED instruction is available
-	RDTSCP                               // RDTSCP Instruction
-	RRSBA_CTRL                           // Restricted RSB Alternate
-	RTM                                  // Restricted Transactional Memory
-	RTM_ALWAYS_ABORT                     // Indicates that the loaded microcode is forcing RTM abort.
-	SBPB                                 // Indicates support for the Selective Branch Predictor Barrier
-	SERIALIZE                            // Serialize Instruction Execution
-	SEV                                  // AMD Secure Encrypted Virtualization supported
-	SEV_64BIT                            // AMD SEV guest execution only allowed from a 64-bit host
-	SEV_ALTERNATIVE                      // AMD SEV Alternate Injection supported
-	SEV_DEBUGSWAP                        // Full debug state swap supported for SEV-ES guests
-	SEV_ES                               // AMD SEV Encrypted State supported
-	SEV_RESTRICTED                       // AMD SEV Restricted Injection supported
-	SEV_SNP                              // AMD SEV Secure Nested Paging supported
-	SGX                                  // Software Guard Extensions
-	SGXLC                                // Software Guard Extensions Launch Control
-	SGXPQC                               // Software Guard Extensions 256-bit Encryption
-	SHA                                  // Intel SHA Extensions
-	SME                                  // AMD Secure Memory Encryption supported
-	SME_COHERENT                         // AMD Hardware cache coherency across encryption domains enforced
-	SM3_X86                              // SM3 instructions
-	SM4_X86                              // SM4 instructions
-	SPEC_CTRL_SSBD                       // Speculative Store Bypass Disable
-	SRBDS_CTRL                           // SRBDS mitigation MSR available
-	SRSO_MSR_FIX                         // Indicates that software may use MSR BP_CFG[BpSpecReduce] to mitigate SRSO.
-	SRSO_NO                              // Indicates the CPU is not subject to the SRSO vulnerability
-	SRSO_USER_KERNEL_NO                  // Indicates the CPU is not subject to the SRSO vulnerability across user/kernel boundaries
-	SSE                                  // SSE functions
-	SSE2                                 // P4 SSE functions
-	SSE3                                 // Prescott SSE3 functions
-	SSE4                                 // Penryn SSE4.1 functions
-	SSE42                                // Nehalem SSE4.2 functions
-	SSE4A                                // AMD Barcelona microarchitecture SSE4a instructions
-	SSSE3                                // Conroe SSSE3 functions
-	STIBP                                // Single Thread Indirect Branch Predictors
-	STIBP_ALWAYSON                       // AMD: Single Thread Indirect Branch Prediction Mode has Enhanced Performance and may be left Always On
-	STOSB_SHORT                          // Fast short STOSB
-	SUCCOR                               // Software uncorrectable error containment and recovery capability.
-	SVM                                  // AMD Secure Virtual Machine
-	SVMDA                                // Indicates support for the SVM decode assists.
-	SVMFBASID                            // SVM, Indicates that TLB flush events, including CR3 writes and CR4.PGE toggles, flush only the current ASID's TLB entries. Also indicates support for the extended VMCBTLB_Control
-	SVML                                 // AMD SVM lock. Indicates support for SVM-Lock.
-	SVMNP                                // AMD SVM nested paging
-	SVMPF                                // SVM pause intercept filter. Indicates support for the pause intercept filter
-	SVMPFT                               // SVM PAUSE filter threshold. Indicates support for the PAUSE filter cycle count threshold
-	SYSCALL                              // System-Call Extension (SCE): SYSCALL and SYSRET instructions.
-	SYSEE                                // SYSENTER and SYSEXIT instructions
-	TBM                                  // AMD Trailing Bit Manipulation
-	TDX_GUEST                            // Intel Trust Domain Extensions Guest
-	TLB_FLUSH_NESTED                     // AMD: Flushing includes all the nested translations for guest translations
-	TME                                  // Intel Total Memory Encryption. The following MSRs are supported: IA32_TME_CAPABILITY, IA32_TME_ACTIVATE, IA32_TME_EXCLUDE_MASK, and IA32_TME_EXCLUDE_BASE.
-	TOPEXT                               // TopologyExtensions: topology extensions support. Indicates support for CPUID Fn8000_001D_EAX_x[N:0]-CPUID Fn8000_001E_EDX.
-	TSA_L1_NO                            // AMD only: Not vulnerable to TSA-L1
-	TSA_SQ_NO                            // AM onlyD: Not vulnerable to TSA-SQ
-	TSA_VERW_CLEAR                       // If set, the memory form of the VERW instruction may be used to help mitigate TSA
-	TSCRATEMSR                           // MSR based TSC rate control. Indicates support for MSR TSC ratio MSRC000_0104
-	TSXLDTRK                             // Intel TSX Suspend Load Address Tracking
-	VAES                                 // Vector AES. AVX(512) versions requires additional checks.
-	VMCBCLEAN                            // VMCB clean bits. Indicates support for VMCB clean bits.
-	VMPL                                 // AMD VM Permission Levels supported
-	VMSA_REGPROT                         // AMD VMSA Register Protection supported
-	VMX                                  // Virtual Machine Extensions
-	VPCLMULQDQ                           // Carry-Less Multiplication Quadword. Requires AVX for 3 register versions.
-	VTE                                  // AMD Virtual Transparent Encryption supported
-	WAITPKG                              // TPAUSE, UMONITOR, UMWAIT
-	WBNOINVD                             // Write Back and Do Not Invalidate Cache
-	WRMSRNS                              // Non-Serializing Write to Model Specific Register
-	X87                                  // FPU
-	XGETBV1                              // Supports XGETBV with ECX = 1
-	XOP                                  // Bulldozer XOP functions
-	XSAVE                                // XSAVE, XRESTOR, XSETBV, XGETBV
-	XSAVEC                               // Supports XSAVEC and the compacted form of XRSTOR.
-	XSAVEOPT                             // XSAVEOPT available
-	XSAVES                               // Supports XSAVES/XRSTORS and IA32_XSS
-
-	// ARM features:
-	AESARM   // AES instructions
-	ARMCPUID // Some CPU ID registers readable at user-level
-	ASIMD    // Advanced SIMD
-	ASIMDDP  // SIMD Dot Product
-	ASIMDHP  // Advanced SIMD half-precision floating point
-	ASIMDRDM // Rounding Double Multiply Accumulate/Subtract (SQRDMLAH/SQRDMLSH)
-	ATOMICS  // Large System Extensions (LSE)
-	CRC32    // CRC32/CRC32C instructions
-	DCPOP    // Data cache clean to Point of Persistence (DC CVAP)
-	EVTSTRM  // Generic timer
-	FCMA     // Floating point complex number addition and multiplication
-	FHM      // FMLAL and FMLSL instructions
-	FP       // Single-precision and double-precision floating point
-	FPHP     // Half-precision floating point
-	GPA      // Generic Pointer Authentication
-	JSCVT    // Javascript-style double->int convert (FJCVTZS)
-	LRCPC    // Weaker release consistency (LDAPR, etc)
-	PMULL    // Polynomial Multiply instructions (PMULL/PMULL2)
-	RNDR     // Random Number instructions
-	TLB      // Outer Shareable and TLB range maintenance instructions
-	TS       // Flag manipulation instructions
-	SHA1     // SHA-1 instructions (SHA1C, etc)
-	SHA2     // SHA-2 instructions (SHA256H, etc)
-	SHA3     // SHA-3 instructions (EOR3, RAXI, XAR, BCAX)
-	SHA512   // SHA512 instructions
-	SM3      // SM3 instructions
-	SM4      // SM4 instructions
-	SVE      // Scalable Vector Extension
-
-	// PMU
-	PMU_FIXEDCOUNTER_CYCLES
-	PMU_FIXEDCOUNTER_REFCYCLES
-	PMU_FIXEDCOUNTER_INSTRUCTIONS
-	PMU_FIXEDCOUNTER_TOPDOWN_SLOTS
-
-	// Keep it last. It automatically defines the size of []flagSet
-	lastID
-
-	firstID FeatureID = UNKNOWN + 1
-)
-
-// CPUInfo contains information about the detected system CPU.
-type CPUInfo struct {
-	BrandName              string  // Brand name reported by the CPU
-	VendorID               Vendor  // Comparable CPU vendor ID
-	VendorString           string  // Raw vendor string.
-	HypervisorVendorID     Vendor  // Hypervisor vendor
-	HypervisorVendorString string  // Raw hypervisor vendor string
-	featureSet             flagSet // Features of the CPU
-	PhysicalCores          int     // Number of physical processor cores in your CPU. Will be 0 if undetectable.
-	ThreadsPerCore         int     // Number of threads per physical core. Will be 1 if undetectable.
-	LogicalCores           int     // Number of physical cores times threads that can run on each core through the use of hyperthreading. Will be 0 if undetectable.
-	Family                 int     // CPU family number
-	Model                  int     // CPU model number
-	Stepping               int     // CPU stepping info
-	CacheLine              int     // Cache line size in bytes. Will be 0 if undetectable.
-	Hz                     int64   // Clock speed, if known, 0 otherwise. Will attempt to contain base clock speed.
-	BoostFreq              int64   // Max clock speed, if known, 0 otherwise
-	Cache                  struct {
-		L1I int // L1 Instruction Cache (per core or shared). Will be -1 if undetected
-		L1D int // L1 Data Cache (per core or shared). Will be -1 if undetected
-		L2  int // L2 Cache (per core or shared). Will be -1 if undetected
-		L3  int // L3 Cache (per core, per ccx or shared). Will be -1 if undetected
-	}
-	SGX              SGXSupport
-	AMDMemEncryption AMDMemEncryptionSupport
-	AVX10Level       uint8
-	PMU              PerformanceMonitoringInfo //  holds information about the PMU
-
-	maxFunc   uint32
-	maxExFunc uint32
-}
-
-// PerformanceMonitoringInfo holds information about CPU performance monitoring capabilities.
-// This is primarily populated from CPUID leaf 0xAh on x86
-type PerformanceMonitoringInfo struct {
-	// VersionID (x86 only): Version ID of architectural performance monitoring.
-	// A value of 0 means architectural performance monitoring is not supported or information is unavailable.
-	VersionID uint8
-	// NumGPPMC: Number of General-Purpose Performance Monitoring Counters per logical processor.
-	// On ARM, this is derived from PMCR_EL0.N (number of event counters).
-	NumGPCounters uint8
-	// GPPMCWidth: Bit width of General-Purpose Performance Monitoring Counters.
-	// On ARM, typically 64 for PMU event counters.
-	GPPMCWidth uint8
-	// NumFixedPMC: Number of Fixed-Function Performance Counters.
-	// Valid on x86 if VersionID > 1. On ARM, this typically includes at least the cycle counter (PMCCNTR_EL0).
-	NumFixedPMC uint8
-	// FixedPMCWidth: Bit width of Fixed-Function Performance Counters.
-	// Valid on x86 if VersionID > 1. On ARM, the cycle counter (PMCCNTR_EL0) is 64-bit.
-	FixedPMCWidth uint8
-	// Raw register output from CPUID leaf 0xAh.
-	RawEBX uint32
-	RawEAX uint32
-	RawEDX uint32
-}
-
-var cpuid func(op uint32) (eax, ebx, ecx, edx uint32)
-var cpuidex func(op, op2 uint32) (eax, ebx, ecx, edx uint32)
-var xgetbv func(index uint32) (eax, edx uint32)
-var rdtscpAsm func() (eax, ebx, ecx, edx uint32)
-var darwinHasAVX512 = func() bool { return false }
-
-// CPU contains information about the CPU as detected on startup,
-// or when Detect last was called.
-//
-// Use this as the primary entry point to you data.
-var CPU CPUInfo
-
-func init() {
-	initCPU()
-	Detect()
-}
-
-// Detect will re-detect current CPU info.
-// This will replace the content of the exported CPU variable.
-//
-// Unless you expect the CPU to change while you are running your program
-// you should not need to call this function.
-// If you call this, you must ensure that no other goroutine is accessing the
-// exported CPU variable.
-func Detect() {
-	// Set defaults
-	CPU.ThreadsPerCore = 1
-	CPU.Cache.L1I = -1
-	CPU.Cache.L1D = -1
-	CPU.Cache.L2 = -1
-	CPU.Cache.L3 = -1
-	safe := true
-	if detectArmFlag != nil {
-		safe = !*detectArmFlag
-	}
-	addInfo(&CPU, safe)
-	if displayFeats != nil && *displayFeats {
-		fmt.Println("cpu features:", strings.Join(CPU.FeatureSet(), ","))
-		// Exit with non-zero so tests will print value.
-		os.Exit(1)
-	}
-	if disableFlag != nil {
-		s := strings.Split(*disableFlag, ",")
-		for _, feat := range s {
-			feat := ParseFeature(strings.TrimSpace(feat))
-			if feat != UNKNOWN {
-				CPU.featureSet.unset(feat)
-			}
-		}
-	}
-}
-
-// DetectARM will detect ARM64 features.
-// This is NOT done automatically since it can potentially crash
-// if the OS does not handle the command.
-// If in the future this can be done safely this function may not
-// do anything.
-func DetectARM() {
-	addInfo(&CPU, false)
-}
-
-var detectArmFlag *bool
-var displayFeats *bool
-var disableFlag *string
-
-// Flags will enable flags.
-// This must be called *before* flag.Parse AND
-// Detect must be called after the flags have been parsed.
-// Note that this means that any detection used in init() functions
-// will not contain these flags.
-func Flags() {
-	disableFlag = flag.String("cpu.disable", "", "disable cpu features; comma separated list")
-	displayFeats = flag.Bool("cpu.features", false, "lists cpu features and exits")
-	detectArmFlag = flag.Bool("cpu.arm", false, "allow ARM features to be detected; can potentially crash")
-}
-
-// Supports returns whether the CPU supports all of the requested features.
-func (c CPUInfo) Supports(ids ...FeatureID) bool {
-	for _, id := range ids {
-		if !c.featureSet.inSet(id) {
-			return false
-		}
-	}
-	return true
-}
-
-// Has allows for checking a single feature.
-// Should be inlined by the compiler.
-func (c *CPUInfo) Has(id FeatureID) bool {
-	return c.featureSet.inSet(id)
-}
-
-// AnyOf returns whether the CPU supports one or more of the requested features.
-func (c CPUInfo) AnyOf(ids ...FeatureID) bool {
-	for _, id := range ids {
-		if c.featureSet.inSet(id) {
-			return true
-		}
-	}
-	return false
-}
-
-// Features contains several features combined for a fast check using
-// CpuInfo.HasAll
-type Features *flagSet
-
-// CombineFeatures allows to combine several features for a close to constant time lookup.
-func CombineFeatures(ids ...FeatureID) Features {
-	var v flagSet
-	for _, id := range ids {
-		v.set(id)
-	}
-	return &v
-}
-
-func (c *CPUInfo) HasAll(f Features) bool {
-	return c.featureSet.hasSetP(f)
-}
-
-// https://en.wikipedia.org/wiki/X86-64#Microarchitecture_levels
-var oneOfLevel = CombineFeatures(SYSEE, SYSCALL)
-var level1Features = CombineFeatures(CMOV, CMPXCHG8, X87, FXSR, MMX, SSE, SSE2)
-var level2Features = CombineFeatures(CMOV, CMPXCHG8, X87, FXSR, MMX, SSE, SSE2, CX16, LAHF, POPCNT, SSE3, SSE4, SSE42, SSSE3)
-var level3Features = CombineFeatures(CMOV, CMPXCHG8, X87, FXSR, MMX, SSE, SSE2, CX16, LAHF, POPCNT, SSE3, SSE4, SSE42, SSSE3, AVX, AVX2, BMI1, BMI2, F16C, FMA3, LZCNT, MOVBE, OSXSAVE)
-var level4Features = CombineFeatures(CMOV, CMPXCHG8, X87, FXSR, MMX, SSE, SSE2, CX16, LAHF, POPCNT, SSE3, SSE4, SSE42, SSSE3, AVX, AVX2, BMI1, BMI2, F16C, FMA3, LZCNT, MOVBE, OSXSAVE, AVX512F, AVX512BW, AVX512CD, AVX512DQ, AVX512VL)
-
-// X64Level returns the microarchitecture level detected on the CPU.
-// If features are lacking or non x64 mode, 0 is returned.
-// See https://en.wikipedia.org/wiki/X86-64#Microarchitecture_levels
-func (c CPUInfo) X64Level() int {
-	if !c.featureSet.hasOneOf(oneOfLevel) {
-		return 0
-	}
-	if c.featureSet.hasSetP(level4Features) {
-		return 4
-	}
-	if c.featureSet.hasSetP(level3Features) {
-		return 3
-	}
-	if c.featureSet.hasSetP(level2Features) {
-		return 2
-	}
-	if c.featureSet.hasSetP(level1Features) {
-		return 1
-	}
-	return 0
-}
-
-// Disable will disable one or several features.
-func (c *CPUInfo) Disable(ids ...FeatureID) bool {
-	for _, id := range ids {
-		c.featureSet.unset(id)
-	}
-	return true
-}
-
-// Enable will disable one or several features even if they were undetected.
-// This is of course not recommended for obvious reasons.
-func (c *CPUInfo) Enable(ids ...FeatureID) bool {
-	for _, id := range ids {
-		c.featureSet.set(id)
-	}
-	return true
-}
-
-// IsVendor returns true if vendor is recognized as Intel
-func (c CPUInfo) IsVendor(v Vendor) bool {
-	return c.VendorID == v
-}
-
-// FeatureSet returns all available features as strings.
-func (c CPUInfo) FeatureSet() []string {
-	s := make([]string, 0, c.featureSet.nEnabled())
-	s = append(s, c.featureSet.Strings()...)
-	return s
-}
-
-// RTCounter returns the 64-bit time-stamp counter
-// Uses the RDTSCP instruction. The value 0 is returned
-// if the CPU does not support the instruction.
-func (c CPUInfo) RTCounter() uint64 {
-	if !c.Has(RDTSCP) {
-		return 0
-	}
-	a, _, _, d := rdtscpAsm()
-	return uint64(a) | (uint64(d) << 32)
-}
-
-// Ia32TscAux returns the IA32_TSC_AUX part of the RDTSCP.
-// This variable is OS dependent, but on Linux contains information
-// about the current cpu/core the code is running on.
-// If the RDTSCP instruction isn't supported on the CPU, the value 0 is returned.
-func (c CPUInfo) Ia32TscAux() uint32 {
-	if !c.Has(RDTSCP) {
-		return 0
-	}
-	_, _, ecx, _ := rdtscpAsm()
-	return ecx
-}
-
-// SveLengths returns arm SVE vector and predicate lengths in bits.
-// Will return 0, 0 if SVE is not enabled or otherwise unable to detect.
-func (c CPUInfo) SveLengths() (vl, pl uint64) {
-	if !c.Has(SVE) {
-		return 0, 0
-	}
-	return getVectorLength()
-}
-
-// LogicalCPU will return the Logical CPU the code is currently executing on.
-// This is likely to change when the OS re-schedules the running thread
-// to another CPU.
-// If the current core cannot be detected, -1 will be returned.
-func (c CPUInfo) LogicalCPU() int {
-	if c.maxFunc < 1 {
-		return -1
-	}
-	_, ebx, _, _ := cpuid(1)
-	return int(ebx >> 24)
-}
-
-// frequencies tries to compute the clock speed of the CPU. If leaf 15 is
-// supported, use it, otherwise parse the brand string. Yes, really.
-func (c *CPUInfo) frequencies() {
-	c.Hz, c.BoostFreq = 0, 0
-	mfi := maxFunctionID()
-	if mfi >= 0x15 {
-		eax, ebx, ecx, _ := cpuid(0x15)
-		if eax != 0 && ebx != 0 && ecx != 0 {
-			c.Hz = (int64(ecx) * int64(ebx)) / int64(eax)
-		}
-	}
-	if mfi >= 0x16 {
-		a, b, _, _ := cpuid(0x16)
-		// Base...
-		if a&0xffff > 0 {
-			c.Hz = int64(a&0xffff) * 1_000_000
-		}
-		// Boost...
-		if b&0xffff > 0 {
-			c.BoostFreq = int64(b&0xffff) * 1_000_000
-		}
-	}
-	if c.Hz > 0 {
-		return
-	}
-
-	// computeHz determines the official rated speed of a CPU from its brand
-	// string. This insanity is *actually the official documented way to do
-	// this according to Intel*, prior to leaf 0x15 existing. The official
-	// documentation only shows this working for exactly `x.xx` or `xxxx`
-	// cases, e.g., `2.50GHz` or `1300MHz`; this parser will accept other
-	// sizes.
-	model := c.BrandName
-	hz := strings.LastIndex(model, "Hz")
-	if hz < 3 {
-		return
-	}
-	var multiplier int64
-	switch model[hz-1] {
-	case 'M':
-		multiplier = 1000 * 1000
-	case 'G':
-		multiplier = 1000 * 1000 * 1000
-	case 'T':
-		multiplier = 1000 * 1000 * 1000 * 1000
-	}
-	if multiplier == 0 {
-		return
-	}
-	freq := int64(0)
-	divisor := int64(0)
-	decimalShift := int64(1)
-	var i int
-	for i = hz - 2; i >= 0 && model[i] != ' '; i-- {
-		if model[i] >= '0' && model[i] <= '9' {
-			freq += int64(model[i]-'0') * decimalShift
-			decimalShift *= 10
-		} else if model[i] == '.' {
-			if divisor != 0 {
-				return
-			}
-			divisor = decimalShift
-		} else {
-			return
-		}
-	}
-	// we didn't find a space
-	if i < 0 {
-		return
-	}
-	if divisor != 0 {
-		c.Hz = (freq * multiplier) / divisor
-		return
-	}
-	c.Hz = freq * multiplier
-}
-
-// VM Will return true if the cpu id indicates we are in
-// a virtual machine.
-func (c CPUInfo) VM() bool {
-	return CPU.featureSet.inSet(HYPERVISOR)
-}
-
-// flags contains detected cpu features and characteristics
-type flags uint64
-
-// log2(bits_in_uint64)
-const flagBitsLog2 = 6
-const flagBits = 1 << flagBitsLog2
-const flagMask = flagBits - 1
-
-// flagSet contains detected cpu features and characteristics in an array of flags
-type flagSet [(lastID + flagMask) / flagBits]flags
-
-func (s *flagSet) inSet(feat FeatureID) bool {
-	return s[feat>>flagBitsLog2]&(1<<(feat&flagMask)) != 0
-}
-
-func (s *flagSet) set(feat FeatureID) {
-	s[feat>>flagBitsLog2] |= 1 << (feat & flagMask)
-}
-
-// setIf will set a feature if boolean is true.
-func (s *flagSet) setIf(cond bool, features ...FeatureID) {
-	if cond {
-		for _, offset := range features {
-			s[offset>>flagBitsLog2] |= 1 << (offset & flagMask)
-		}
-	}
-}
-
-func (s *flagSet) unset(offset FeatureID) {
-	bit := flags(1 << (offset & flagMask))
-	s[offset>>flagBitsLog2] = s[offset>>flagBitsLog2] & ^bit
-}
-
-// or with another flagset.
-func (s *flagSet) or(other flagSet) {
-	for i, v := range other[:] {
-		s[i] |= v
-	}
-}
-
-// hasSet returns whether all features are present.
-func (s *flagSet) hasSet(other flagSet) bool {
-	for i, v := range other[:] {
-		if s[i]&v != v {
-			return false
-		}
-	}
-	return true
-}
-
-// hasSet returns whether all features are present.
-func (s *flagSet) hasSetP(other *flagSet) bool {
-	for i, v := range other[:] {
-		if s[i]&v != v {
-			return false
-		}
-	}
-	return true
-}
-
-// hasOneOf returns whether one or more features are present.
-func (s *flagSet) hasOneOf(other *flagSet) bool {
-	for i, v := range other[:] {
-		if s[i]&v != 0 {
-			return true
-		}
-	}
-	return false
-}
-
-// nEnabled will return the number of enabled flags.
-func (s *flagSet) nEnabled() (n int) {
-	for _, v := range s[:] {
-		n += bits.OnesCount64(uint64(v))
-	}
-	return n
-}
-
-func flagSetWith(feat ...FeatureID) flagSet {
-	var res flagSet
-	for _, f := range feat {
-		res.set(f)
-	}
-	return res
-}
-
-// ParseFeature will parse the string and return the ID of the matching feature.
-// Will return UNKNOWN if not found.
-func ParseFeature(s string) FeatureID {
-	s = strings.ToUpper(s)
-	for i := firstID; i < lastID; i++ {
-		if i.String() == s {
-			return i
-		}
-	}
-	return UNKNOWN
-}
-
-// Strings returns an array of the detected features for FlagsSet.
-func (s flagSet) Strings() []string {
-	if len(s) == 0 {
-		return []string{""}
-	}
-	r := make([]string, 0)
-	for i := firstID; i < lastID; i++ {
-		if s.inSet(i) {
-			r = append(r, i.String())
-		}
-	}
-	return r
-}
-
-func maxExtendedFunction() uint32 {
-	eax, _, _, _ := cpuid(0x80000000)
-	return eax
-}
-
-func maxFunctionID() uint32 {
-	a, _, _, _ := cpuid(0)
-	return a
-}
-
-func brandName() string {
-	if maxExtendedFunction() >= 0x80000004 {
-		v := make([]uint32, 0, 48)
-		for i := uint32(0); i < 3; i++ {
-			a, b, c, d := cpuid(0x80000002 + i)
-			v = append(v, a, b, c, d)
-		}
-		return strings.Trim(string(valAsString(v...)), " ")
-	}
-	return "unknown"
-}
-
-func threadsPerCore() int {
-	mfi := maxFunctionID()
-	vend, _ := vendorID()
-
-	if mfi < 0x4 || (vend != Intel && vend != AMD) {
-		return 1
-	}
-
-	if mfi < 0xb {
-		if vend != Intel {
-			return 1
-		}
-		_, b, _, d := cpuid(1)
-		if (d & (1 << 28)) != 0 {
-			// v will contain logical core count
-			v := (b >> 16) & 255
-			if v > 1 {
-				a4, _, _, _ := cpuid(4)
-				// physical cores
-				v2 := (a4 >> 26) + 1
-				if v2 > 0 {
-					return int(v) / int(v2)
-				}
-			}
-		}
-		return 1
-	}
-	_, b, _, _ := cpuidex(0xb, 0)
-	if b&0xffff == 0 {
-		if vend == AMD {
-			// if >= Zen 2 0x8000001e EBX 15-8 bits means threads per core.
-			// The number of threads per core is ThreadsPerCore+1
-			// See PPR for AMD Family 17h Models 00h-0Fh (page 82)
-			fam, _, _ := familyModel()
-			_, _, _, d := cpuid(1)
-			if (d&(1<<28)) != 0 && fam >= 23 {
-				if maxExtendedFunction() >= 0x8000001e {
-					_, b, _, _ := cpuid(0x8000001e)
-					return int((b>>8)&0xff) + 1
-				}
-				return 2
-			}
-		}
-		return 1
-	}
-	return int(b & 0xffff)
-}
-
-func logicalCores() int {
-	mfi := maxFunctionID()
-	v, _ := vendorID()
-	switch v {
-	case Intel:
-		// Use this on old Intel processors
-		if mfi < 0xb {
-			if mfi < 1 {
-				return 0
-			}
-			// CPUID.1:EBX[23:16] represents the maximum number of addressable IDs (initial APIC ID)
-			// that can be assigned to logical processors in a physical package.
-			// The value may not be the same as the number of logical processors that are present in the hardware of a physical package.
-			_, ebx, _, _ := cpuid(1)
-			logical := (ebx >> 16) & 0xff
-			return int(logical)
-		}
-		_, b, _, _ := cpuidex(0xb, 1)
-		return int(b & 0xffff)
-	case AMD, Hygon:
-		_, b, _, _ := cpuid(1)
-		return int((b >> 16) & 0xff)
-	default:
-		return 0
-	}
-}
-
-func familyModel() (family, model, stepping int) {
-	if maxFunctionID() < 0x1 {
-		return 0, 0, 0
-	}
-	eax, _, _, _ := cpuid(1)
-	// If BaseFamily[3:0] is less than Fh then ExtendedFamily[7:0] is reserved and Family is equal to BaseFamily[3:0].
-	family = int((eax >> 8) & 0xf)
-	extFam := family == 0x6 // Intel is 0x6, needs extended model.
-	if family == 0xf {
-		// Add ExtFamily
-		family += int((eax >> 20) & 0xff)
-		extFam = true
-	}
-	// If BaseFamily[3:0] is less than 0Fh then ExtendedModel[3:0] is reserved and Model is equal to BaseModel[3:0].
-	model = int((eax >> 4) & 0xf)
-	if extFam {
-		// Add ExtModel
-		model += int((eax >> 12) & 0xf0)
-	}
-	stepping = int(eax & 0xf)
-	return family, model, stepping
-}
-
-func physicalCores() int {
-	v, _ := vendorID()
-	switch v {
-	case Intel:
-		lc := logicalCores()
-		tpc := threadsPerCore()
-		if lc > 0 && tpc > 0 {
-			return lc / tpc
-		}
-		return 0
-	case AMD, Hygon:
-		lc := logicalCores()
-		tpc := threadsPerCore()
-		if lc > 0 && tpc > 0 {
-			return lc / tpc
-		}
-
-		// The following is inaccurate on AMD EPYC 7742 64-Core Processor
-		if maxExtendedFunction() >= 0x80000008 {
-			_, _, c, _ := cpuid(0x80000008)
-			if c&0xff > 0 {
-				return int(c&0xff) + 1
-			}
-		}
-	}
-	return 0
-}
-
-// Except from http://en.wikipedia.org/wiki/CPUID#EAX.3D0:_Get_vendor_ID
-var vendorMapping = map[string]Vendor{
-	"AMDisbetter!": AMD,
-	"AuthenticAMD": AMD,
-	"CentaurHauls": VIA,
-	"GenuineIntel": Intel,
-	"TransmetaCPU": Transmeta,
-	"GenuineTMx86": Transmeta,
-	"Geode by NSC": NSC,
-	"VIA VIA VIA ": VIA,
-	"KVMKVMKVM":    KVM,
-	"Linux KVM Hv": KVM,
-	"TCGTCGTCGTCG": QEMU,
-	"Microsoft Hv": MSVM,
-	"VMwareVMware": VMware,
-	"XenVMMXenVMM": XenHVM,
-	"bhyve bhyve ": Bhyve,
-	"HygonGenuine": Hygon,
-	"Vortex86 SoC": SiS,
-	"SiS SiS SiS ": SiS,
-	"RiseRiseRise": SiS,
-	"Genuine  RDC": RDC,
-	"QNXQVMBSQG":   QNX,
-	"ACRNACRNACRN": ACRN,
-	"SRESRESRESRE": SRE,
-	"Apple VZ":     Apple,
-}
-
-func vendorID() (Vendor, string) {
-	_, b, c, d := cpuid(0)
-	v := string(valAsString(b, d, c))
-	vend, ok := vendorMapping[v]
-	if !ok {
-		return VendorUnknown, v
-	}
-	return vend, v
-}
-
-func hypervisorVendorID() (Vendor, string) {
-	// https://lwn.net/Articles/301888/
-	_, b, c, d := cpuid(0x40000000)
-	v := string(valAsString(b, c, d))
-	vend, ok := vendorMapping[v]
-	if !ok {
-		return VendorUnknown, v
-	}
-	return vend, v
-}
-
-func cacheLine() int {
-	if maxFunctionID() < 0x1 {
-		return 0
-	}
-
-	_, ebx, _, _ := cpuid(1)
-	cache := (ebx & 0xff00) >> 5 // cflush size
-	if cache == 0 && maxExtendedFunction() >= 0x80000006 {
-		_, _, ecx, _ := cpuid(0x80000006)
-		cache = ecx & 0xff // cacheline size
-	}
-	// TODO: Read from Cache and TLB Information
-	return int(cache)
-}
-
-func (c *CPUInfo) cacheSize() {
-	c.Cache.L1D = -1
-	c.Cache.L1I = -1
-	c.Cache.L2 = -1
-	c.Cache.L3 = -1
-	vendor, _ := vendorID()
-	switch vendor {
-	case Intel:
-		if maxFunctionID() < 4 {
-			return
-		}
-		c.Cache.L1I, c.Cache.L1D, c.Cache.L2, c.Cache.L3 = 0, 0, 0, 0
-		for i := uint32(0); ; i++ {
-			eax, ebx, ecx, _ := cpuidex(4, i)
-			cacheType := eax & 15
-			if cacheType == 0 {
-				break
-			}
-			cacheLevel := (eax >> 5) & 7
-			coherency := int(ebx&0xfff) + 1
-			partitions := int((ebx>>12)&0x3ff) + 1
-			associativity := int((ebx>>22)&0x3ff) + 1
-			sets := int(ecx) + 1
-			size := associativity * partitions * coherency * sets
-			switch cacheLevel {
-			case 1:
-				if cacheType == 1 {
-					// 1 = Data Cache
-					c.Cache.L1D = size
-				} else if cacheType == 2 {
-					// 2 = Instruction Cache
-					c.Cache.L1I = size
-				} else {
-					if c.Cache.L1D < 0 {
-						c.Cache.L1I = size
-					}
-					if c.Cache.L1I < 0 {
-						c.Cache.L1I = size
-					}
-				}
-			case 2:
-				c.Cache.L2 = size
-			case 3:
-				c.Cache.L3 = size
-			}
-		}
-	case AMD, Hygon:
-		// Untested.
-		if maxExtendedFunction() < 0x80000005 {
-			return
-		}
-		_, _, ecx, edx := cpuid(0x80000005)
-		c.Cache.L1D = int(((ecx >> 24) & 0xFF) * 1024)
-		c.Cache.L1I = int(((edx >> 24) & 0xFF) * 1024)
-
-		if maxExtendedFunction() < 0x80000006 {
-			return
-		}
-		_, _, ecx, _ = cpuid(0x80000006)
-		c.Cache.L2 = int(((ecx >> 16) & 0xFFFF) * 1024)
-
-		// CPUID Fn8000_001D_EAX_x[N:0] Cache Properties
-		if maxExtendedFunction() < 0x8000001D || !c.Has(TOPEXT) {
-			return
-		}
-
-		// Xen Hypervisor is buggy and returns the same entry no matter ECX value.
-		// Hack: When we encounter the same entry 100 times we break.
-		nSame := 0
-		var last uint32
-		for i := uint32(0); i < math.MaxUint32; i++ {
-			eax, ebx, ecx, _ := cpuidex(0x8000001D, i)
-
-			level := (eax >> 5) & 7
-			cacheNumSets := ecx + 1
-			cacheLineSize := 1 + (ebx & 2047)
-			cachePhysPartitions := 1 + ((ebx >> 12) & 511)
-			cacheNumWays := 1 + ((ebx >> 22) & 511)
-
-			typ := eax & 15
-			size := int(cacheNumSets * cacheLineSize * cachePhysPartitions * cacheNumWays)
-			if typ == 0 {
-				return
-			}
-
-			// Check for the same value repeated.
-			comb := eax ^ ebx ^ ecx
-			if comb == last {
-				nSame++
-				if nSame == 100 {
-					return
-				}
-			}
-			last = comb
-
-			switch level {
-			case 1:
-				switch typ {
-				case 1:
-					// Data cache
-					c.Cache.L1D = size
-				case 2:
-					// Inst cache
-					c.Cache.L1I = size
-				default:
-					if c.Cache.L1D < 0 {
-						c.Cache.L1I = size
-					}
-					if c.Cache.L1I < 0 {
-						c.Cache.L1I = size
-					}
-				}
-			case 2:
-				c.Cache.L2 = size
-			case 3:
-				c.Cache.L3 = size
-			}
-		}
-	}
-}
-
-type SGXEPCSection struct {
-	BaseAddress uint64
-	EPCSize     uint64
-}
-
-type SGXSupport struct {
-	Available           bool
-	LaunchControl       bool
-	SGX1Supported       bool
-	SGX2Supported       bool
-	MaxEnclaveSizeNot64 int64
-	MaxEnclaveSize64    int64
-	EPCSections         []SGXEPCSection
-}
-
-func hasSGX(available, lc bool) (rval SGXSupport) {
-	rval.Available = available
-
-	if !available {
-		return
-	}
-
-	rval.LaunchControl = lc
-
-	a, _, _, d := cpuidex(0x12, 0)
-	rval.SGX1Supported = a&0x01 != 0
-	rval.SGX2Supported = a&0x02 != 0
-	rval.MaxEnclaveSizeNot64 = 1 << (d & 0xFF)     // pow 2
-	rval.MaxEnclaveSize64 = 1 << ((d >> 8) & 0xFF) // pow 2
-	rval.EPCSections = make([]SGXEPCSection, 0)
-
-	for subleaf := uint32(2); subleaf < 2+8; subleaf++ {
-		eax, ebx, ecx, edx := cpuidex(0x12, subleaf)
-		leafType := eax & 0xf
-
-		if leafType == 0 {
-			// Invalid subleaf, stop iterating
-			break
-		} else if leafType == 1 {
-			// EPC Section subleaf
-			baseAddress := uint64(eax&0xfffff000) + (uint64(ebx&0x000fffff) << 32)
-			size := uint64(ecx&0xfffff000) + (uint64(edx&0x000fffff) << 32)
-
-			section := SGXEPCSection{BaseAddress: baseAddress, EPCSize: size}
-			rval.EPCSections = append(rval.EPCSections, section)
-		}
-	}
-
-	return
-}
-
-type AMDMemEncryptionSupport struct {
-	Available          bool
-	CBitPossition      uint32
-	NumVMPL            uint32
-	PhysAddrReduction  uint32
-	NumEntryptedGuests uint32
-	MinSevNoEsAsid     uint32
-}
-
-func hasAMDMemEncryption(available bool) (rval AMDMemEncryptionSupport) {
-	rval.Available = available
-	if !available {
-		return
-	}
-
-	_, b, c, d := cpuidex(0x8000001f, 0)
-
-	rval.CBitPossition = b & 0x3f
-	rval.PhysAddrReduction = (b >> 6) & 0x3F
-	rval.NumVMPL = (b >> 12) & 0xf
-	rval.NumEntryptedGuests = c
-	rval.MinSevNoEsAsid = d
-
-	return
-}
-
-func support() flagSet {
-	var fs flagSet
-	mfi := maxFunctionID()
-	vend, _ := vendorID()
-	if mfi < 0x1 {
-		return fs
-	}
-	family, model, _ := familyModel()
-
-	_, _, c, d := cpuid(1)
-	fs.setIf((d&(1<<0)) != 0, X87)
-	fs.setIf((d&(1<<8)) != 0, CMPXCHG8)
-	fs.setIf((d&(1<<11)) != 0, SYSEE)
-	fs.setIf((d&(1<<15)) != 0, CMOV)
-	fs.setIf((d&(1<<23)) != 0, MMX)
-	fs.setIf((d&(1<<24)) != 0, FXSR)
-	fs.setIf((d&(1<<25)) != 0, FXSROPT)
-	fs.setIf((d&(1<<25)) != 0, SSE)
-	fs.setIf((d&(1<<26)) != 0, SSE2)
-	fs.setIf((c&1) != 0, SSE3)
-	fs.setIf((c&(1<<5)) != 0, VMX)
-	fs.setIf((c&(1<<9)) != 0, SSSE3)
-	fs.setIf((c&(1<<19)) != 0, SSE4)
-	fs.setIf((c&(1<<20)) != 0, SSE42)
-	fs.setIf((c&(1<<25)) != 0, AESNI)
-	fs.setIf((c&(1<<1)) != 0, CLMUL)
-	fs.setIf(c&(1<<22) != 0, MOVBE)
-	fs.setIf(c&(1<<23) != 0, POPCNT)
-	fs.setIf(c&(1<<30) != 0, RDRAND)
-
-	// This bit has been reserved by Intel & AMD for use by hypervisors,
-	// and indicates the presence of a hypervisor.
-	fs.setIf(c&(1<<31) != 0, HYPERVISOR)
-	fs.setIf(c&(1<<29) != 0, F16C)
-	fs.setIf(c&(1<<13) != 0, CX16)
-
-	if vend == Intel && (d&(1<<28)) != 0 && mfi >= 4 {
-		fs.setIf(threadsPerCore() > 1, HTT)
-	}
-	if vend == AMD && (d&(1<<28)) != 0 && mfi >= 4 {
-		fs.setIf(threadsPerCore() > 1, HTT)
-	}
-	fs.setIf(c&1<<26 != 0, XSAVE)
-	fs.setIf(c&1<<27 != 0, OSXSAVE)
-	// Check XGETBV/XSAVE (26), OXSAVE (27) and AVX (28) bits
-	const avxCheck = 1<<26 | 1<<27 | 1<<28
-	if c&avxCheck == avxCheck {
-		// Check for OS support
-		eax, _ := xgetbv(0)
-		if (eax & 0x6) == 0x6 {
-			fs.set(AVX)
-			switch vend {
-			case Intel:
-				// Older than Haswell.
-				fs.setIf(family == 6 && model < 60, AVXSLOW)
-			case AMD:
-				// Older than Zen 2
-				fs.setIf(family < 23 || (family == 23 && model < 49), AVXSLOW)
-			}
-		}
-	}
-	// FMA3 can be used with SSE registers, so no OS support is strictly needed.
-	// fma3 and OSXSAVE needed.
-	const fma3Check = 1<<12 | 1<<27
-	fs.setIf(c&fma3Check == fma3Check, FMA3)
-
-	// Check AVX2, AVX2 requires OS support, but BMI1/2 don't.
-	if mfi >= 7 {
-		_, ebx, ecx, edx := cpuidex(7, 0)
-		if fs.inSet(AVX) && (ebx&0x00000020) != 0 {
-			fs.set(AVX2)
-		}
-		// CPUID.(EAX=7, ECX=0).EBX
-		if (ebx & 0x00000008) != 0 {
-			fs.set(BMI1)
-			fs.setIf((ebx&0x00000100) != 0, BMI2)
-		}
-		fs.setIf(ebx&(1<<2) != 0, SGX)
-		fs.setIf(ebx&(1<<4) != 0, HLE)
-		fs.setIf(ebx&(1<<9) != 0, ERMS)
-		fs.setIf(ebx&(1<<11) != 0, RTM)
-		fs.setIf(ebx&(1<<14) != 0, MPX)
-		fs.setIf(ebx&(1<<18) != 0, RDSEED)
-		fs.setIf(ebx&(1<<19) != 0, ADX)
-		fs.setIf(ebx&(1<<29) != 0, SHA)
-
-		// CPUID.(EAX=7, ECX=0).ECX
-		fs.setIf(ecx&(1<<5) != 0, WAITPKG)
-		fs.setIf(ecx&(1<<7) != 0, CETSS)
-		fs.setIf(ecx&(1<<8) != 0, GFNI)
-		fs.setIf(ecx&(1<<9) != 0, VAES)
-		fs.setIf(ecx&(1<<10) != 0, VPCLMULQDQ)
-		fs.setIf(ecx&(1<<13) != 0, TME)
-		fs.setIf(ecx&(1<<25) != 0, CLDEMOTE)
-		fs.setIf(ecx&(1<<23) != 0, KEYLOCKER)
-		fs.setIf(ecx&(1<<27) != 0, MOVDIRI)
-		fs.setIf(ecx&(1<<28) != 0, MOVDIR64B)
-		fs.setIf(ecx&(1<<29) != 0, ENQCMD)
-		fs.setIf(ecx&(1<<30) != 0, SGXLC)
-
-		// CPUID.(EAX=7, ECX=0).EDX
-		fs.setIf(edx&(1<<4) != 0, FSRM)
-		fs.setIf(edx&(1<<9) != 0, SRBDS_CTRL)
-		fs.setIf(edx&(1<<10) != 0, MD_CLEAR)
-		fs.setIf(edx&(1<<11) != 0, RTM_ALWAYS_ABORT)
-		fs.setIf(edx&(1<<14) != 0, SERIALIZE)
-		fs.setIf(edx&(1<<15) != 0, HYBRID_CPU)
-		fs.setIf(edx&(1<<16) != 0, TSXLDTRK)
-		fs.setIf(edx&(1<<18) != 0, PCONFIG)
-		fs.setIf(edx&(1<<20) != 0, CETIBT)
-		fs.setIf(edx&(1<<26) != 0, IBPB)
-		fs.setIf(edx&(1<<27) != 0, STIBP)
-		fs.setIf(edx&(1<<28) != 0, FLUSH_L1D)
-		fs.setIf(edx&(1<<29) != 0, IA32_ARCH_CAP)
-		fs.setIf(edx&(1<<30) != 0, IA32_CORE_CAP)
-		fs.setIf(edx&(1<<31) != 0, SPEC_CTRL_SSBD)
-
-		// CPUID.(EAX=7, ECX=1).EAX
-		eax1, _, _, edx1 := cpuidex(7, 1)
-		fs.setIf(fs.inSet(AVX) && eax1&(1<<4) != 0, AVXVNNI)
-		fs.setIf(eax1&(1<<1) != 0, SM3_X86)
-		fs.setIf(eax1&(1<<2) != 0, SM4_X86)
-		fs.setIf(eax1&(1<<7) != 0, CMPCCXADD)
-		fs.setIf(eax1&(1<<10) != 0, MOVSB_ZL)
-		fs.setIf(eax1&(1<<11) != 0, STOSB_SHORT)
-		fs.setIf(eax1&(1<<12) != 0, CMPSB_SCADBS_SHORT)
-		fs.setIf(eax1&(1<<22) != 0, HRESET)
-		fs.setIf(eax1&(1<<23) != 0, AVXIFMA)
-		fs.setIf(eax1&(1<<26) != 0, LAM)
-
-		// CPUID.(EAX=7, ECX=1).EDX
-		fs.setIf(edx1&(1<<4) != 0, AVXVNNIINT8)
-		fs.setIf(edx1&(1<<5) != 0, AVXNECONVERT)
-		fs.setIf(edx1&(1<<6) != 0, AMXTRANSPOSE)
-		fs.setIf(edx1&(1<<7) != 0, AMXTF32)
-		fs.setIf(edx1&(1<<8) != 0, AMXCOMPLEX)
-		fs.setIf(edx1&(1<<10) != 0, AVXVNNIINT16)
-		fs.setIf(edx1&(1<<14) != 0, PREFETCHI)
-		fs.setIf(edx1&(1<<19) != 0, AVX10)
-		fs.setIf(edx1&(1<<21) != 0, APX_F)
-
-		// Only detect AVX-512 features if XGETBV is supported
-		if c&((1<<26)|(1<<27)) == (1<<26)|(1<<27) {
-			// Check for OS support
-			eax, _ := xgetbv(0)
-
-			// Verify that XCR0[7:5] = ‘111b’ (OPMASK state, upper 256-bit of ZMM0-ZMM15 and
-			// ZMM16-ZMM31 state are enabled by OS)
-			/// and that XCR0[2:1] = ‘11b’ (XMM state and YMM state are enabled by OS).
-			hasAVX512 := (eax>>5)&7 == 7 && (eax>>1)&3 == 3
-			if runtime.GOOS == "darwin" {
-				hasAVX512 = fs.inSet(AVX
 @@END

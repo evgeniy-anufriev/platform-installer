@@ -1,3 +1,950 @@
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/sys/windows/zerrors_windows.go","mode":420,"size":945502,"sha256":"fdf634bbd093494501a9aec0660aa53b434fdc2c2bb989e8d0925323e511358d","index":8,"count":20,"encoding":"utf-8","payloadBytes":48000}
+ED                                                    Handle        = 0x8009002F
+	NTE_DEVICE_NOT_READY                                                      Handle        = 0x80090030
+	NTE_AUTHENTICATION_IGNORED                                                Handle        = 0x80090031
+	NTE_VALIDATION_FAILED                                                     Handle        = 0x80090032
+	NTE_INCORRECT_PASSWORD                                                    Handle        = 0x80090033
+	NTE_ENCRYPTION_FAILURE                                                    Handle        = 0x80090034
+	NTE_DEVICE_NOT_FOUND                                                      Handle        = 0x80090035
+	NTE_USER_CANCELLED                                                        Handle        = 0x80090036
+	NTE_PASSWORD_CHANGE_REQUIRED                                              Handle        = 0x80090037
+	NTE_NOT_ACTIVE_CONSOLE                                                    Handle        = 0x80090038
+	SEC_E_INSUFFICIENT_MEMORY                                                 Handle        = 0x80090300
+	SEC_E_INVALID_HANDLE                                                      Handle        = 0x80090301
+	SEC_E_UNSUPPORTED_FUNCTION                                                Handle        = 0x80090302
+	SEC_E_TARGET_UNKNOWN                                                      Handle        = 0x80090303
+	SEC_E_INTERNAL_ERROR                                                      Handle        = 0x80090304
+	SEC_E_SECPKG_NOT_FOUND                                                    Handle        = 0x80090305
+	SEC_E_NOT_OWNER                                                           Handle        = 0x80090306
+	SEC_E_CANNOT_INSTALL                                                      Handle        = 0x80090307
+	SEC_E_INVALID_TOKEN                                                       Handle        = 0x80090308
+	SEC_E_CANNOT_PACK                                                         Handle        = 0x80090309
+	SEC_E_QOP_NOT_SUPPORTED                                                   Handle        = 0x8009030A
+	SEC_E_NO_IMPERSONATION                                                    Handle        = 0x8009030B
+	SEC_E_LOGON_DENIED                                                        Handle        = 0x8009030C
+	SEC_E_UNKNOWN_CREDENTIALS                                                 Handle        = 0x8009030D
+	SEC_E_NO_CREDENTIALS                                                      Handle        = 0x8009030E
+	SEC_E_MESSAGE_ALTERED                                                     Handle        = 0x8009030F
+	SEC_E_OUT_OF_SEQUENCE                                                     Handle        = 0x80090310
+	SEC_E_NO_AUTHENTICATING_AUTHORITY                                         Handle        = 0x80090311
+	SEC_I_CONTINUE_NEEDED                                                     Handle        = 0x00090312
+	SEC_I_COMPLETE_NEEDED                                                     Handle        = 0x00090313
+	SEC_I_COMPLETE_AND_CONTINUE                                               Handle        = 0x00090314
+	SEC_I_LOCAL_LOGON                                                         Handle        = 0x00090315
+	SEC_I_GENERIC_EXTENSION_RECEIVED                                          Handle        = 0x00090316
+	SEC_E_BAD_PKGID                                                           Handle        = 0x80090316
+	SEC_E_CONTEXT_EXPIRED                                                     Handle        = 0x80090317
+	SEC_I_CONTEXT_EXPIRED                                                     Handle        = 0x00090317
+	SEC_E_INCOMPLETE_MESSAGE                                                  Handle        = 0x80090318
+	SEC_E_INCOMPLETE_CREDENTIALS                                              Handle        = 0x80090320
+	SEC_E_BUFFER_TOO_SMALL                                                    Handle        = 0x80090321
+	SEC_I_INCOMPLETE_CREDENTIALS                                              Handle        = 0x00090320
+	SEC_I_RENEGOTIATE                                                         Handle        = 0x00090321
+	SEC_E_WRONG_PRINCIPAL                                                     Handle        = 0x80090322
+	SEC_I_NO_LSA_CONTEXT                                                      Handle        = 0x00090323
+	SEC_E_TIME_SKEW                                                           Handle        = 0x80090324
+	SEC_E_UNTRUSTED_ROOT                                                      Handle        = 0x80090325
+	SEC_E_ILLEGAL_MESSAGE                                                     Handle        = 0x80090326
+	SEC_E_CERT_UNKNOWN                                                        Handle        = 0x80090327
+	SEC_E_CERT_EXPIRED                                                        Handle        = 0x80090328
+	SEC_E_ENCRYPT_FAILURE                                                     Handle        = 0x80090329
+	SEC_E_DECRYPT_FAILURE                                                     Handle        = 0x80090330
+	SEC_E_ALGORITHM_MISMATCH                                                  Handle        = 0x80090331
+	SEC_E_SECURITY_QOS_FAILED                                                 Handle        = 0x80090332
+	SEC_E_UNFINISHED_CONTEXT_DELETED                                          Handle        = 0x80090333
+	SEC_E_NO_TGT_REPLY                                                        Handle        = 0x80090334
+	SEC_E_NO_IP_ADDRESSES                                                     Handle        = 0x80090335
+	SEC_E_WRONG_CREDENTIAL_HANDLE                                             Handle        = 0x80090336
+	SEC_E_CRYPTO_SYSTEM_INVALID                                               Handle        = 0x80090337
+	SEC_E_MAX_REFERRALS_EXCEEDED                                              Handle        = 0x80090338
+	SEC_E_MUST_BE_KDC                                                         Handle        = 0x80090339
+	SEC_E_STRONG_CRYPTO_NOT_SUPPORTED                                         Handle        = 0x8009033A
+	SEC_E_TOO_MANY_PRINCIPALS                                                 Handle        = 0x8009033B
+	SEC_E_NO_PA_DATA                                                          Handle        = 0x8009033C
+	SEC_E_PKINIT_NAME_MISMATCH                                                Handle        = 0x8009033D
+	SEC_E_SMARTCARD_LOGON_REQUIRED                                            Handle        = 0x8009033E
+	SEC_E_SHUTDOWN_IN_PROGRESS                                                Handle        = 0x8009033F
+	SEC_E_KDC_INVALID_REQUEST                                                 Handle        = 0x80090340
+	SEC_E_KDC_UNABLE_TO_REFER                                                 Handle        = 0x80090341
+	SEC_E_KDC_UNKNOWN_ETYPE                                                   Handle        = 0x80090342
+	SEC_E_UNSUPPORTED_PREAUTH                                                 Handle        = 0x80090343
+	SEC_E_DELEGATION_REQUIRED                                                 Handle        = 0x80090345
+	SEC_E_BAD_BINDINGS                                                        Handle        = 0x80090346
+	SEC_E_MULTIPLE_ACCOUNTS                                                   Handle        = 0x80090347
+	SEC_E_NO_KERB_KEY                                                         Handle        = 0x80090348
+	SEC_E_CERT_WRONG_USAGE                                                    Handle        = 0x80090349
+	SEC_E_DOWNGRADE_DETECTED                                                  Handle        = 0x80090350
+	SEC_E_SMARTCARD_CERT_REVOKED                                              Handle        = 0x80090351
+	SEC_E_ISSUING_CA_UNTRUSTED                                                Handle        = 0x80090352
+	SEC_E_REVOCATION_OFFLINE_C                                                Handle        = 0x80090353
+	SEC_E_PKINIT_CLIENT_FAILURE                                               Handle        = 0x80090354
+	SEC_E_SMARTCARD_CERT_EXPIRED                                              Handle        = 0x80090355
+	SEC_E_NO_S4U_PROT_SUPPORT                                                 Handle        = 0x80090356
+	SEC_E_CROSSREALM_DELEGATION_FAILURE                                       Handle        = 0x80090357
+	SEC_E_REVOCATION_OFFLINE_KDC                                              Handle        = 0x80090358
+	SEC_E_ISSUING_CA_UNTRUSTED_KDC                                            Handle        = 0x80090359
+	SEC_E_KDC_CERT_EXPIRED                                                    Handle        = 0x8009035A
+	SEC_E_KDC_CERT_REVOKED                                                    Handle        = 0x8009035B
+	SEC_I_SIGNATURE_NEEDED                                                    Handle        = 0x0009035C
+	SEC_E_INVALID_PARAMETER                                                   Handle        = 0x8009035D
+	SEC_E_DELEGATION_POLICY                                                   Handle        = 0x8009035E
+	SEC_E_POLICY_NLTM_ONLY                                                    Handle        = 0x8009035F
+	SEC_I_NO_RENEGOTIATION                                                    Handle        = 0x00090360
+	SEC_E_NO_CONTEXT                                                          Handle        = 0x80090361
+	SEC_E_PKU2U_CERT_FAILURE                                                  Handle        = 0x80090362
+	SEC_E_MUTUAL_AUTH_FAILED                                                  Handle        = 0x80090363
+	SEC_I_MESSAGE_FRAGMENT                                                    Handle        = 0x00090364
+	SEC_E_ONLY_HTTPS_ALLOWED                                                  Handle        = 0x80090365
+	SEC_I_CONTINUE_NEEDED_MESSAGE_OK                                          Handle        = 0x00090366
+	SEC_E_APPLICATION_PROTOCOL_MISMATCH                                       Handle        = 0x80090367
+	SEC_I_ASYNC_CALL_PENDING                                                  Handle        = 0x00090368
+	SEC_E_INVALID_UPN_NAME                                                    Handle        = 0x80090369
+	SEC_E_EXT_BUFFER_TOO_SMALL                                                Handle        = 0x8009036A
+	SEC_E_INSUFFICIENT_BUFFERS                                                Handle        = 0x8009036B
+	SEC_E_NO_SPM                                                                            = SEC_E_INTERNAL_ERROR
+	SEC_E_NOT_SUPPORTED                                                                     = SEC_E_UNSUPPORTED_FUNCTION
+	CRYPT_E_MSG_ERROR                                                         Handle        = 0x80091001
+	CRYPT_E_UNKNOWN_ALGO                                                      Handle        = 0x80091002
+	CRYPT_E_OID_FORMAT                                                        Handle        = 0x80091003
+	CRYPT_E_INVALID_MSG_TYPE                                                  Handle        = 0x80091004
+	CRYPT_E_UNEXPECTED_ENCODING                                               Handle        = 0x80091005
+	CRYPT_E_AUTH_ATTR_MISSING                                                 Handle        = 0x80091006
+	CRYPT_E_HASH_VALUE                                                        Handle        = 0x80091007
+	CRYPT_E_INVALID_INDEX                                                     Handle        = 0x80091008
+	CRYPT_E_ALREADY_DECRYPTED                                                 Handle        = 0x80091009
+	CRYPT_E_NOT_DECRYPTED                                                     Handle        = 0x8009100A
+	CRYPT_E_RECIPIENT_NOT_FOUND                                               Handle        = 0x8009100B
+	CRYPT_E_CONTROL_TYPE                                                      Handle        = 0x8009100C
+	CRYPT_E_ISSUER_SERIALNUMBER                                               Handle        = 0x8009100D
+	CRYPT_E_SIGNER_NOT_FOUND                                                  Handle        = 0x8009100E
+	CRYPT_E_ATTRIBUTES_MISSING                                                Handle        = 0x8009100F
+	CRYPT_E_STREAM_MSG_NOT_READY                                              Handle        = 0x80091010
+	CRYPT_E_STREAM_INSUFFICIENT_DATA                                          Handle        = 0x80091011
+	CRYPT_I_NEW_PROTECTION_REQUIRED                                           Handle        = 0x00091012
+	CRYPT_E_BAD_LEN                                                           Handle        = 0x80092001
+	CRYPT_E_BAD_ENCODE                                                        Handle        = 0x80092002
+	CRYPT_E_FILE_ERROR                                                        Handle        = 0x80092003
+	CRYPT_E_NOT_FOUND                                                         Handle        = 0x80092004
+	CRYPT_E_EXISTS                                                            Handle        = 0x80092005
+	CRYPT_E_NO_PROVIDER                                                       Handle        = 0x80092006
+	CRYPT_E_SELF_SIGNED                                                       Handle        = 0x80092007
+	CRYPT_E_DELETED_PREV                                                      Handle        = 0x80092008
+	CRYPT_E_NO_MATCH                                                          Handle        = 0x80092009
+	CRYPT_E_UNEXPECTED_MSG_TYPE                                               Handle        = 0x8009200A
+	CRYPT_E_NO_KEY_PROPERTY                                                   Handle        = 0x8009200B
+	CRYPT_E_NO_DECRYPT_CERT                                                   Handle        = 0x8009200C
+	CRYPT_E_BAD_MSG                                                           Handle        = 0x8009200D
+	CRYPT_E_NO_SIGNER                                                         Handle        = 0x8009200E
+	CRYPT_E_PENDING_CLOSE                                                     Handle        = 0x8009200F
+	CRYPT_E_REVOKED                                                           Handle        = 0x80092010
+	CRYPT_E_NO_REVOCATION_DLL                                                 Handle        = 0x80092011
+	CRYPT_E_NO_REVOCATION_CHECK                                               Handle        = 0x80092012
+	CRYPT_E_REVOCATION_OFFLINE                                                Handle        = 0x80092013
+	CRYPT_E_NOT_IN_REVOCATION_DATABASE                                        Handle        = 0x80092014
+	CRYPT_E_INVALID_NUMERIC_STRING                                            Handle        = 0x80092020
+	CRYPT_E_INVALID_PRINTABLE_STRING                                          Handle        = 0x80092021
+	CRYPT_E_INVALID_IA5_STRING                                                Handle        = 0x80092022
+	CRYPT_E_INVALID_X500_STRING                                               Handle        = 0x80092023
+	CRYPT_E_NOT_CHAR_STRING                                                   Handle        = 0x80092024
+	CRYPT_E_FILERESIZED                                                       Handle        = 0x80092025
+	CRYPT_E_SECURITY_SETTINGS                                                 Handle        = 0x80092026
+	CRYPT_E_NO_VERIFY_USAGE_DLL                                               Handle        = 0x80092027
+	CRYPT_E_NO_VERIFY_USAGE_CHECK                                             Handle        = 0x80092028
+	CRYPT_E_VERIFY_USAGE_OFFLINE                                              Handle        = 0x80092029
+	CRYPT_E_NOT_IN_CTL                                                        Handle        = 0x8009202A
+	CRYPT_E_NO_TRUSTED_SIGNER                                                 Handle        = 0x8009202B
+	CRYPT_E_MISSING_PUBKEY_PARA                                               Handle        = 0x8009202C
+	CRYPT_E_OBJECT_LOCATOR_OBJECT_NOT_FOUND                                   Handle        = 0x8009202D
+	CRYPT_E_OSS_ERROR                                                         Handle        = 0x80093000
+	OSS_MORE_BUF                                                              Handle        = 0x80093001
+	OSS_NEGATIVE_UINTEGER                                                     Handle        = 0x80093002
+	OSS_PDU_RANGE                                                             Handle        = 0x80093003
+	OSS_MORE_INPUT                                                            Handle        = 0x80093004
+	OSS_DATA_ERROR                                                            Handle        = 0x80093005
+	OSS_BAD_ARG                                                               Handle        = 0x80093006
+	OSS_BAD_VERSION                                                           Handle        = 0x80093007
+	OSS_OUT_MEMORY                                                            Handle        = 0x80093008
+	OSS_PDU_MISMATCH                                                          Handle        = 0x80093009
+	OSS_LIMITED                                                               Handle        = 0x8009300A
+	OSS_BAD_PTR                                                               Handle        = 0x8009300B
+	OSS_BAD_TIME                                                              Handle        = 0x8009300C
+	OSS_INDEFINITE_NOT_SUPPORTED                                              Handle        = 0x8009300D
+	OSS_MEM_ERROR                                                             Handle        = 0x8009300E
+	OSS_BAD_TABLE                                                             Handle        = 0x8009300F
+	OSS_TOO_LONG                                                              Handle        = 0x80093010
+	OSS_CONSTRAINT_VIOLATED                                                   Handle        = 0x80093011
+	OSS_FATAL_ERROR                                                           Handle        = 0x80093012
+	OSS_ACCESS_SERIALIZATION_ERROR                                            Handle        = 0x80093013
+	OSS_NULL_TBL                                                              Handle        = 0x80093014
+	OSS_NULL_FCN                                                              Handle        = 0x80093015
+	OSS_BAD_ENCRULES                                                          Handle        = 0x80093016
+	OSS_UNAVAIL_ENCRULES                                                      Handle        = 0x80093017
+	OSS_CANT_OPEN_TRACE_WINDOW                                                Handle        = 0x80093018
+	OSS_UNIMPLEMENTED                                                         Handle        = 0x80093019
+	OSS_OID_DLL_NOT_LINKED                                                    Handle        = 0x8009301A
+	OSS_CANT_OPEN_TRACE_FILE                                                  Handle        = 0x8009301B
+	OSS_TRACE_FILE_ALREADY_OPEN                                               Handle        = 0x8009301C
+	OSS_TABLE_MISMATCH                                                        Handle        = 0x8009301D
+	OSS_TYPE_NOT_SUPPORTED                                                    Handle        = 0x8009301E
+	OSS_REAL_DLL_NOT_LINKED                                                   Handle        = 0x8009301F
+	OSS_REAL_CODE_NOT_LINKED                                                  Handle        = 0x80093020
+	OSS_OUT_OF_RANGE                                                          Handle        = 0x80093021
+	OSS_COPIER_DLL_NOT_LINKED                                                 Handle        = 0x80093022
+	OSS_CONSTRAINT_DLL_NOT_LINKED                                             Handle        = 0x80093023
+	OSS_COMPARATOR_DLL_NOT_LINKED                                             Handle        = 0x80093024
+	OSS_COMPARATOR_CODE_NOT_LINKED                                            Handle        = 0x80093025
+	OSS_MEM_MGR_DLL_NOT_LINKED                                                Handle        = 0x80093026
+	OSS_PDV_DLL_NOT_LINKED                                                    Handle        = 0x80093027
+	OSS_PDV_CODE_NOT_LINKED                                                   Handle        = 0x80093028
+	OSS_API_DLL_NOT_LINKED                                                    Handle        = 0x80093029
+	OSS_BERDER_DLL_NOT_LINKED                                                 Handle        = 0x8009302A
+	OSS_PER_DLL_NOT_LINKED                                                    Handle        = 0x8009302B
+	OSS_OPEN_TYPE_ERROR                                                       Handle        = 0x8009302C
+	OSS_MUTEX_NOT_CREATED                                                     Handle        = 0x8009302D
+	OSS_CANT_CLOSE_TRACE_FILE                                                 Handle        = 0x8009302E
+	CRYPT_E_ASN1_ERROR                                                        Handle        = 0x80093100
+	CRYPT_E_ASN1_INTERNAL                                                     Handle        = 0x80093101
+	CRYPT_E_ASN1_EOD                                                          Handle        = 0x80093102
+	CRYPT_E_ASN1_CORRUPT                                                      Handle        = 0x80093103
+	CRYPT_E_ASN1_LARGE                                                        Handle        = 0x80093104
+	CRYPT_E_ASN1_CONSTRAINT                                                   Handle        = 0x80093105
+	CRYPT_E_ASN1_MEMORY                                                       Handle        = 0x80093106
+	CRYPT_E_ASN1_OVERFLOW                                                     Handle        = 0x80093107
+	CRYPT_E_ASN1_BADPDU                                                       Handle        = 0x80093108
+	CRYPT_E_ASN1_BADARGS                                                      Handle        = 0x80093109
+	CRYPT_E_ASN1_BADREAL                                                      Handle        = 0x8009310A
+	CRYPT_E_ASN1_BADTAG                                                       Handle        = 0x8009310B
+	CRYPT_E_ASN1_CHOICE                                                       Handle        = 0x8009310C
+	CRYPT_E_ASN1_RULE                                                         Handle        = 0x8009310D
+	CRYPT_E_ASN1_UTF8                                                         Handle        = 0x8009310E
+	CRYPT_E_ASN1_PDU_TYPE                                                     Handle        = 0x80093133
+	CRYPT_E_ASN1_NYI                                                          Handle        = 0x80093134
+	CRYPT_E_ASN1_EXTENDED                                                     Handle        = 0x80093201
+	CRYPT_E_ASN1_NOEOD                                                        Handle        = 0x80093202
+	CERTSRV_E_BAD_REQUESTSUBJECT                                              Handle        = 0x80094001
+	CERTSRV_E_NO_REQUEST                                                      Handle        = 0x80094002
+	CERTSRV_E_BAD_REQUESTSTATUS                                               Handle        = 0x80094003
+	CERTSRV_E_PROPERTY_EMPTY                                                  Handle        = 0x80094004
+	CERTSRV_E_INVALID_CA_CERTIFICATE                                          Handle        = 0x80094005
+	CERTSRV_E_SERVER_SUSPENDED                                                Handle        = 0x80094006
+	CERTSRV_E_ENCODING_LENGTH                                                 Handle        = 0x80094007
+	CERTSRV_E_ROLECONFLICT                                                    Handle        = 0x80094008
+	CERTSRV_E_RESTRICTEDOFFICER                                               Handle        = 0x80094009
+	CERTSRV_E_KEY_ARCHIVAL_NOT_CONFIGURED                                     Handle        = 0x8009400A
+	CERTSRV_E_NO_VALID_KRA                                                    Handle        = 0x8009400B
+	CERTSRV_E_BAD_REQUEST_KEY_ARCHIVAL                                        Handle        = 0x8009400C
+	CERTSRV_E_NO_CAADMIN_DEFINED                                              Handle        = 0x8009400D
+	CERTSRV_E_BAD_RENEWAL_CERT_ATTRIBUTE                                      Handle        = 0x8009400E
+	CERTSRV_E_NO_DB_SESSIONS                                                  Handle        = 0x8009400F
+	CERTSRV_E_ALIGNMENT_FAULT                                                 Handle        = 0x80094010
+	CERTSRV_E_ENROLL_DENIED                                                   Handle        = 0x80094011
+	CERTSRV_E_TEMPLATE_DENIED                                                 Handle        = 0x80094012
+	CERTSRV_E_DOWNLEVEL_DC_SSL_OR_UPGRADE                                     Handle        = 0x80094013
+	CERTSRV_E_ADMIN_DENIED_REQUEST                                            Handle        = 0x80094014
+	CERTSRV_E_NO_POLICY_SERVER                                                Handle        = 0x80094015
+	CERTSRV_E_WEAK_SIGNATURE_OR_KEY                                           Handle        = 0x80094016
+	CERTSRV_E_KEY_ATTESTATION_NOT_SUPPORTED                                   Handle        = 0x80094017
+	CERTSRV_E_ENCRYPTION_CERT_REQUIRED                                        Handle        = 0x80094018
+	CERTSRV_E_UNSUPPORTED_CERT_TYPE                                           Handle        = 0x80094800
+	CERTSRV_E_NO_CERT_TYPE                                                    Handle        = 0x80094801
+	CERTSRV_E_TEMPLATE_CONFLICT                                               Handle        = 0x80094802
+	CERTSRV_E_SUBJECT_ALT_NAME_REQUIRED                                       Handle        = 0x80094803
+	CERTSRV_E_ARCHIVED_KEY_REQUIRED                                           Handle        = 0x80094804
+	CERTSRV_E_SMIME_REQUIRED                                                  Handle        = 0x80094805
+	CERTSRV_E_BAD_RENEWAL_SUBJECT                                             Handle        = 0x80094806
+	CERTSRV_E_BAD_TEMPLATE_VERSION                                            Handle        = 0x80094807
+	CERTSRV_E_TEMPLATE_POLICY_REQUIRED                                        Handle        = 0x80094808
+	CERTSRV_E_SIGNATURE_POLICY_REQUIRED                                       Handle        = 0x80094809
+	CERTSRV_E_SIGNATURE_COUNT                                                 Handle        = 0x8009480A
+	CERTSRV_E_SIGNATURE_REJECTED                                              Handle        = 0x8009480B
+	CERTSRV_E_ISSUANCE_POLICY_REQUIRED                                        Handle        = 0x8009480C
+	CERTSRV_E_SUBJECT_UPN_REQUIRED                                            Handle        = 0x8009480D
+	CERTSRV_E_SUBJECT_DIRECTORY_GUID_REQUIRED                                 Handle        = 0x8009480E
+	CERTSRV_E_SUBJECT_DNS_REQUIRED                                            Handle        = 0x8009480F
+	CERTSRV_E_ARCHIVED_KEY_UNEXPECTED                                         Handle        = 0x80094810
+	CERTSRV_E_KEY_LENGTH                                                      Handle        = 0x80094811
+	CERTSRV_E_SUBJECT_EMAIL_REQUIRED                                          Handle        = 0x80094812
+	CERTSRV_E_UNKNOWN_CERT_TYPE                                               Handle        = 0x80094813
+	CERTSRV_E_CERT_TYPE_OVERLAP                                               Handle        = 0x80094814
+	CERTSRV_E_TOO_MANY_SIGNATURES                                             Handle        = 0x80094815
+	CERTSRV_E_RENEWAL_BAD_PUBLIC_KEY                                          Handle        = 0x80094816
+	CERTSRV_E_INVALID_EK                                                      Handle        = 0x80094817
+	CERTSRV_E_INVALID_IDBINDING                                               Handle        = 0x80094818
+	CERTSRV_E_INVALID_ATTESTATION                                             Handle        = 0x80094819
+	CERTSRV_E_KEY_ATTESTATION                                                 Handle        = 0x8009481A
+	CERTSRV_E_CORRUPT_KEY_ATTESTATION                                         Handle        = 0x8009481B
+	CERTSRV_E_EXPIRED_CHALLENGE                                               Handle        = 0x8009481C
+	CERTSRV_E_INVALID_RESPONSE                                                Handle        = 0x8009481D
+	CERTSRV_E_INVALID_REQUESTID                                               Handle        = 0x8009481E
+	CERTSRV_E_REQUEST_PRECERTIFICATE_MISMATCH                                 Handle        = 0x8009481F
+	CERTSRV_E_PENDING_CLIENT_RESPONSE                                         Handle        = 0x80094820
+	XENROLL_E_KEY_NOT_EXPORTABLE                                              Handle        = 0x80095000
+	XENROLL_E_CANNOT_ADD_ROOT_CERT                                            Handle        = 0x80095001
+	XENROLL_E_RESPONSE_KA_HASH_NOT_FOUND                                      Handle        = 0x80095002
+	XENROLL_E_RESPONSE_UNEXPECTED_KA_HASH                                     Handle        = 0x80095003
+	XENROLL_E_RESPONSE_KA_HASH_MISMATCH                                       Handle        = 0x80095004
+	XENROLL_E_KEYSPEC_SMIME_MISMATCH                                          Handle        = 0x80095005
+	TRUST_E_SYSTEM_ERROR                                                      Handle        = 0x80096001
+	TRUST_E_NO_SIGNER_CERT                                                    Handle        = 0x80096002
+	TRUST_E_COUNTER_SIGNER                                                    Handle        = 0x80096003
+	TRUST_E_CERT_SIGNATURE                                                    Handle        = 0x80096004
+	TRUST_E_TIME_STAMP                                                        Handle        = 0x80096005
+	TRUST_E_BAD_DIGEST                                                        Handle        = 0x80096010
+	TRUST_E_MALFORMED_SIGNATURE                                               Handle        = 0x80096011
+	TRUST_E_BASIC_CONSTRAINTS                                                 Handle        = 0x80096019
+	TRUST_E_FINANCIAL_CRITERIA                                                Handle        = 0x8009601E
+	MSSIPOTF_E_OUTOFMEMRANGE                                                  Handle        = 0x80097001
+	MSSIPOTF_E_CANTGETOBJECT                                                  Handle        = 0x80097002
+	MSSIPOTF_E_NOHEADTABLE                                                    Handle        = 0x80097003
+	MSSIPOTF_E_BAD_MAGICNUMBER                                                Handle        = 0x80097004
+	MSSIPOTF_E_BAD_OFFSET_TABLE                                               Handle        = 0x80097005
+	MSSIPOTF_E_TABLE_TAGORDER                                                 Handle        = 0x80097006
+	MSSIPOTF_E_TABLE_LONGWORD                                                 Handle        = 0x80097007
+	MSSIPOTF_E_BAD_FIRST_TABLE_PLACEMENT                                      Handle        = 0x80097008
+	MSSIPOTF_E_TABLES_OVERLAP                                                 Handle        = 0x80097009
+	MSSIPOTF_E_TABLE_PADBYTES                                                 Handle        = 0x8009700A
+	MSSIPOTF_E_FILETOOSMALL                                                   Handle        = 0x8009700B
+	MSSIPOTF_E_TABLE_CHECKSUM                                                 Handle        = 0x8009700C
+	MSSIPOTF_E_FILE_CHECKSUM                                                  Handle        = 0x8009700D
+	MSSIPOTF_E_FAILED_POLICY                                                  Handle        = 0x80097010
+	MSSIPOTF_E_FAILED_HINTS_CHECK                                             Handle        = 0x80097011
+	MSSIPOTF_E_NOT_OPENTYPE                                                   Handle        = 0x80097012
+	MSSIPOTF_E_FILE                                                           Handle        = 0x80097013
+	MSSIPOTF_E_CRYPT                                                          Handle        = 0x80097014
+	MSSIPOTF_E_BADVERSION                                                     Handle        = 0x80097015
+	MSSIPOTF_E_DSIG_STRUCTURE                                                 Handle        = 0x80097016
+	MSSIPOTF_E_PCONST_CHECK                                                   Handle        = 0x80097017
+	MSSIPOTF_E_STRUCTURE                                                      Handle        = 0x80097018
+	ERROR_CRED_REQUIRES_CONFIRMATION                                          Handle        = 0x80097019
+	NTE_OP_OK                                                                 syscall.Errno = 0
+	TRUST_E_PROVIDER_UNKNOWN                                                  Handle        = 0x800B0001
+	TRUST_E_ACTION_UNKNOWN                                                    Handle        = 0x800B0002
+	TRUST_E_SUBJECT_FORM_UNKNOWN                                              Handle        = 0x800B0003
+	TRUST_E_SUBJECT_NOT_TRUSTED                                               Handle        = 0x800B0004
+	DIGSIG_E_ENCODE                                                           Handle        = 0x800B0005
+	DIGSIG_E_DECODE                                                           Handle        = 0x800B0006
+	DIGSIG_E_EXTENSIBILITY                                                    Handle        = 0x800B0007
+	DIGSIG_E_CRYPTO                                                           Handle        = 0x800B0008
+	PERSIST_E_SIZEDEFINITE                                                    Handle        = 0x800B0009
+	PERSIST_E_SIZEINDEFINITE                                                  Handle        = 0x800B000A
+	PERSIST_E_NOTSELFSIZING                                                   Handle        = 0x800B000B
+	TRUST_E_NOSIGNATURE                                                       Handle        = 0x800B0100
+	CERT_E_EXPIRED                                                            Handle        = 0x800B0101
+	CERT_E_VALIDITYPERIODNESTING                                              Handle        = 0x800B0102
+	CERT_E_ROLE                                                               Handle        = 0x800B0103
+	CERT_E_PATHLENCONST                                                       Handle        = 0x800B0104
+	CERT_E_CRITICAL                                                           Handle        = 0x800B0105
+	CERT_E_PURPOSE                                                            Handle        = 0x800B0106
+	CERT_E_ISSUERCHAINING                                                     Handle        = 0x800B0107
+	CERT_E_MALFORMED                                                          Handle        = 0x800B0108
+	CERT_E_UNTRUSTEDROOT                                                      Handle        = 0x800B0109
+	CERT_E_CHAINING                                                           Handle        = 0x800B010A
+	TRUST_E_FAIL                                                              Handle        = 0x800B010B
+	CERT_E_REVOKED                                                            Handle        = 0x800B010C
+	CERT_E_UNTRUSTEDTESTROOT                                                  Handle        = 0x800B010D
+	CERT_E_REVOCATION_FAILURE                                                 Handle        = 0x800B010E
+	CERT_E_CN_NO_MATCH                                                        Handle        = 0x800B010F
+	CERT_E_WRONG_USAGE                                                        Handle        = 0x800B0110
+	TRUST_E_EXPLICIT_DISTRUST                                                 Handle        = 0x800B0111
+	CERT_E_UNTRUSTEDCA                                                        Handle        = 0x800B0112
+	CERT_E_INVALID_POLICY                                                     Handle        = 0x800B0113
+	CERT_E_INVALID_NAME                                                       Handle        = 0x800B0114
+	SPAPI_E_EXPECTED_SECTION_NAME                                             Handle        = 0x800F0000
+	SPAPI_E_BAD_SECTION_NAME_LINE                                             Handle        = 0x800F0001
+	SPAPI_E_SECTION_NAME_TOO_LONG                                             Handle        = 0x800F0002
+	SPAPI_E_GENERAL_SYNTAX                                                    Handle        = 0x800F0003
+	SPAPI_E_WRONG_INF_STYLE                                                   Handle        = 0x800F0100
+	SPAPI_E_SECTION_NOT_FOUND                                                 Handle        = 0x800F0101
+	SPAPI_E_LINE_NOT_FOUND                                                    Handle        = 0x800F0102
+	SPAPI_E_NO_BACKUP                                                         Handle        = 0x800F0103
+	SPAPI_E_NO_ASSOCIATED_CLASS                                               Handle        = 0x800F0200
+	SPAPI_E_CLASS_MISMATCH                                                    Handle        = 0x800F0201
+	SPAPI_E_DUPLICATE_FOUND                                                   Handle        = 0x800F0202
+	SPAPI_E_NO_DRIVER_SELECTED                                                Handle        = 0x800F0203
+	SPAPI_E_KEY_DOES_NOT_EXIST                                                Handle        = 0x800F0204
+	SPAPI_E_INVALID_DEVINST_NAME                                              Handle        = 0x800F0205
+	SPAPI_E_INVALID_CLASS                                                     Handle        = 0x800F0206
+	SPAPI_E_DEVINST_ALREADY_EXISTS                                            Handle        = 0x800F0207
+	SPAPI_E_DEVINFO_NOT_REGISTERED                                            Handle        = 0x800F0208
+	SPAPI_E_INVALID_REG_PROPERTY                                              Handle        = 0x800F0209
+	SPAPI_E_NO_INF                                                            Handle        = 0x800F020A
+	SPAPI_E_NO_SUCH_DEVINST                                                   Handle        = 0x800F020B
+	SPAPI_E_CANT_LOAD_CLASS_ICON                                              Handle        = 0x800F020C
+	SPAPI_E_INVALID_CLASS_INSTALLER                                           Handle        = 0x800F020D
+	SPAPI_E_DI_DO_DEFAULT                                                     Handle        = 0x800F020E
+	SPAPI_E_DI_NOFILECOPY                                                     Handle        = 0x800F020F
+	SPAPI_E_INVALID_HWPROFILE                                                 Handle        = 0x800F0210
+	SPAPI_E_NO_DEVICE_SELECTED                                                Handle        = 0x800F0211
+	SPAPI_E_DEVINFO_LIST_LOCKED                                               Handle        = 0x800F0212
+	SPAPI_E_DEVINFO_DATA_LOCKED                                               Handle        = 0x800F0213
+	SPAPI_E_DI_BAD_PATH                                                       Handle        = 0x800F0214
+	SPAPI_E_NO_CLASSINSTALL_PARAMS                                            Handle        = 0x800F0215
+	SPAPI_E_FILEQUEUE_LOCKED                                                  Handle        = 0x800F0216
+	SPAPI_E_BAD_SERVICE_INSTALLSECT                                           Handle        = 0x800F0217
+	SPAPI_E_NO_CLASS_DRIVER_LIST                                              Handle        = 0x800F0218
+	SPAPI_E_NO_ASSOCIATED_SERVICE                                             Handle        = 0x800F0219
+	SPAPI_E_NO_DEFAULT_DEVICE_INTERFACE                                       Handle        = 0x800F021A
+	SPAPI_E_DEVICE_INTERFACE_ACTIVE                                           Handle        = 0x800F021B
+	SPAPI_E_DEVICE_INTERFACE_REMOVED                                          Handle        = 0x800F021C
+	SPAPI_E_BAD_INTERFACE_INSTALLSECT                                         Handle        = 0x800F021D
+	SPAPI_E_NO_SUCH_INTERFACE_CLASS                                           Handle        = 0x800F021E
+	SPAPI_E_INVALID_REFERENCE_STRING                                          Handle        = 0x800F021F
+	SPAPI_E_INVALID_MACHINENAME                                               Handle        = 0x800F0220
+	SPAPI_E_REMOTE_COMM_FAILURE                                               Handle        = 0x800F0221
+	SPAPI_E_MACHINE_UNAVAILABLE                                               Handle        = 0x800F0222
+	SPAPI_E_NO_CONFIGMGR_SERVICES                                             Handle        = 0x800F0223
+	SPAPI_E_INVALID_PROPPAGE_PROVIDER                                         Handle        = 0x800F0224
+	SPAPI_E_NO_SUCH_DEVICE_INTERFACE                                          Handle        = 0x800F0225
+	SPAPI_E_DI_POSTPROCESSING_REQUIRED                                        Handle        = 0x800F0226
+	SPAPI_E_INVALID_COINSTALLER                                               Handle        = 0x800F0227
+	SPAPI_E_NO_COMPAT_DRIVERS                                                 Handle        = 0x800F0228
+	SPAPI_E_NO_DEVICE_ICON                                                    Handle        = 0x800F0229
+	SPAPI_E_INVALID_INF_LOGCONFIG                                             Handle        = 0x800F022A
+	SPAPI_E_DI_DONT_INSTALL                                                   Handle        = 0x800F022B
+	SPAPI_E_INVALID_FILTER_DRIVER                                             Handle        = 0x800F022C
+	SPAPI_E_NON_WINDOWS_NT_DRIVER                                             Handle        = 0x800F022D
+	SPAPI_E_NON_WINDOWS_DRIVER                                                Handle        = 0x800F022E
+	SPAPI_E_NO_CATALOG_FOR_OEM_INF                                            Handle        = 0x800F022F
+	SPAPI_E_DEVINSTALL_QUEUE_NONNATIVE                                        Handle        = 0x800F0230
+	SPAPI_E_NOT_DISABLEABLE                                                   Handle        = 0x800F0231
+	SPAPI_E_CANT_REMOVE_DEVINST                                               Handle        = 0x800F0232
+	SPAPI_E_INVALID_TARGET                                                    Handle        = 0x800F0233
+	SPAPI_E_DRIVER_NONNATIVE                                                  Handle        = 0x800F0234
+	SPAPI_E_IN_WOW64                                                          Handle        = 0x800F0235
+	SPAPI_E_SET_SYSTEM_RESTORE_POINT                                          Handle        = 0x800F0236
+	SPAPI_E_INCORRECTLY_COPIED_INF                                            Handle        = 0x800F0237
+	SPAPI_E_SCE_DISABLED                                                      Handle        = 0x800F0238
+	SPAPI_E_UNKNOWN_EXCEPTION                                                 Handle        = 0x800F0239
+	SPAPI_E_PNP_REGISTRY_ERROR                                                Handle        = 0x800F023A
+	SPAPI_E_REMOTE_REQUEST_UNSUPPORTED                                        Handle        = 0x800F023B
+	SPAPI_E_NOT_AN_INSTALLED_OEM_INF                                          Handle        = 0x800F023C
+	SPAPI_E_INF_IN_USE_BY_DEVICES                                             Handle        = 0x800F023D
+	SPAPI_E_DI_FUNCTION_OBSOLETE                                              Handle        = 0x800F023E
+	SPAPI_E_NO_AUTHENTICODE_CATALOG                                           Handle        = 0x800F023F
+	SPAPI_E_AUTHENTICODE_DISALLOWED                                           Handle        = 0x800F0240
+	SPAPI_E_AUTHENTICODE_TRUSTED_PUBLISHER                                    Handle        = 0x800F0241
+	SPAPI_E_AUTHENTICODE_TRUST_NOT_ESTABLISHED                                Handle        = 0x800F0242
+	SPAPI_E_AUTHENTICODE_PUBLISHER_NOT_TRUSTED                                Handle        = 0x800F0243
+	SPAPI_E_SIGNATURE_OSATTRIBUTE_MISMATCH                                    Handle        = 0x800F0244
+	SPAPI_E_ONLY_VALIDATE_VIA_AUTHENTICODE                                    Handle        = 0x800F0245
+	SPAPI_E_DEVICE_INSTALLER_NOT_READY                                        Handle        = 0x800F0246
+	SPAPI_E_DRIVER_STORE_ADD_FAILED                                           Handle        = 0x800F0247
+	SPAPI_E_DEVICE_INSTALL_BLOCKED                                            Handle        = 0x800F0248
+	SPAPI_E_DRIVER_INSTALL_BLOCKED                                            Handle        = 0x800F0249
+	SPAPI_E_WRONG_INF_TYPE                                                    Handle        = 0x800F024A
+	SPAPI_E_FILE_HASH_NOT_IN_CATALOG                                          Handle        = 0x800F024B
+	SPAPI_E_DRIVER_STORE_DELETE_FAILED                                        Handle        = 0x800F024C
+	SPAPI_E_UNRECOVERABLE_STACK_OVERFLOW                                      Handle        = 0x800F0300
+	SPAPI_E_ERROR_NOT_INSTALLED                                               Handle        = 0x800F1000
+	SCARD_S_SUCCESS                                                                         = S_OK
+	SCARD_F_INTERNAL_ERROR                                                    Handle        = 0x80100001
+	SCARD_E_CANCELLED                                                         Handle        = 0x80100002
+	SCARD_E_INVALID_HANDLE                                                    Handle        = 0x80100003
+	SCARD_E_INVALID_PARAMETER                                                 Handle        = 0x80100004
+	SCARD_E_INVALID_TARGET                                                    Handle        = 0x80100005
+	SCARD_E_NO_MEMORY                                                         Handle        = 0x80100006
+	SCARD_F_WAITED_TOO_LONG                                                   Handle        = 0x80100007
+	SCARD_E_INSUFFICIENT_BUFFER                                               Handle        = 0x80100008
+	SCARD_E_UNKNOWN_READER                                                    Handle        = 0x80100009
+	SCARD_E_TIMEOUT                                                           Handle        = 0x8010000A
+	SCARD_E_SHARING_VIOLATION                                                 Handle        = 0x8010000B
+	SCARD_E_NO_SMARTCARD                                                      Handle        = 0x8010000C
+	SCARD_E_UNKNOWN_CARD                                                      Handle        = 0x8010000D
+	SCARD_E_CANT_DISPOSE                                                      Handle        = 0x8010000E
+	SCARD_E_PROTO_MISMATCH                                                    Handle        = 0x8010000F
+	SCARD_E_NOT_READY                                                         Handle        = 0x80100010
+	SCARD_E_INVALID_VALUE                                                     Handle        = 0x80100011
+	SCARD_E_SYSTEM_CANCELLED                                                  Handle        = 0x80100012
+	SCARD_F_COMM_ERROR                                                        Handle        = 0x80100013
+	SCARD_F_UNKNOWN_ERROR                                                     Handle        = 0x80100014
+	SCARD_E_INVALID_ATR                                                       Handle        = 0x80100015
+	SCARD_E_NOT_TRANSACTED                                                    Handle        = 0x80100016
+	SCARD_E_READER_UNAVAILABLE                                                Handle        = 0x80100017
+	SCARD_P_SHUTDOWN                                                          Handle        = 0x80100018
+	SCARD_E_PCI_TOO_SMALL                                                     Handle        = 0x80100019
+	SCARD_E_READER_UNSUPPORTED                                                Handle        = 0x8010001A
+	SCARD_E_DUPLICATE_READER                                                  Handle        = 0x8010001B
+	SCARD_E_CARD_UNSUPPORTED                                                  Handle        = 0x8010001C
+	SCARD_E_NO_SERVICE                                                        Handle        = 0x8010001D
+	SCARD_E_SERVICE_STOPPED                                                   Handle        = 0x8010001E
+	SCARD_E_UNEXPECTED                                                        Handle        = 0x8010001F
+	SCARD_E_ICC_INSTALLATION                                                  Handle        = 0x80100020
+	SCARD_E_ICC_CREATEORDER                                              
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/sys/windows/zerrors_windows.go","mode":420,"size":945502,"sha256":"fdf634bbd093494501a9aec0660aa53b434fdc2c2bb989e8d0925323e511358d","index":9,"count":20,"encoding":"utf-8","payloadBytes":48000}
+     Handle        = 0x80100021
+	SCARD_E_UNSUPPORTED_FEATURE                                               Handle        = 0x80100022
+	SCARD_E_DIR_NOT_FOUND                                                     Handle        = 0x80100023
+	SCARD_E_FILE_NOT_FOUND                                                    Handle        = 0x80100024
+	SCARD_E_NO_DIR                                                            Handle        = 0x80100025
+	SCARD_E_NO_FILE                                                           Handle        = 0x80100026
+	SCARD_E_NO_ACCESS                                                         Handle        = 0x80100027
+	SCARD_E_WRITE_TOO_MANY                                                    Handle        = 0x80100028
+	SCARD_E_BAD_SEEK                                                          Handle        = 0x80100029
+	SCARD_E_INVALID_CHV                                                       Handle        = 0x8010002A
+	SCARD_E_UNKNOWN_RES_MNG                                                   Handle        = 0x8010002B
+	SCARD_E_NO_SUCH_CERTIFICATE                                               Handle        = 0x8010002C
+	SCARD_E_CERTIFICATE_UNAVAILABLE                                           Handle        = 0x8010002D
+	SCARD_E_NO_READERS_AVAILABLE                                              Handle        = 0x8010002E
+	SCARD_E_COMM_DATA_LOST                                                    Handle        = 0x8010002F
+	SCARD_E_NO_KEY_CONTAINER                                                  Handle        = 0x80100030
+	SCARD_E_SERVER_TOO_BUSY                                                   Handle        = 0x80100031
+	SCARD_E_PIN_CACHE_EXPIRED                                                 Handle        = 0x80100032
+	SCARD_E_NO_PIN_CACHE                                                      Handle        = 0x80100033
+	SCARD_E_READ_ONLY_CARD                                                    Handle        = 0x80100034
+	SCARD_W_UNSUPPORTED_CARD                                                  Handle        = 0x80100065
+	SCARD_W_UNRESPONSIVE_CARD                                                 Handle        = 0x80100066
+	SCARD_W_UNPOWERED_CARD                                                    Handle        = 0x80100067
+	SCARD_W_RESET_CARD                                                        Handle        = 0x80100068
+	SCARD_W_REMOVED_CARD                                                      Handle        = 0x80100069
+	SCARD_W_SECURITY_VIOLATION                                                Handle        = 0x8010006A
+	SCARD_W_WRONG_CHV                                                         Handle        = 0x8010006B
+	SCARD_W_CHV_BLOCKED                                                       Handle        = 0x8010006C
+	SCARD_W_EOF                                                               Handle        = 0x8010006D
+	SCARD_W_CANCELLED_BY_USER                                                 Handle        = 0x8010006E
+	SCARD_W_CARD_NOT_AUTHENTICATED                                            Handle        = 0x8010006F
+	SCARD_W_CACHE_ITEM_NOT_FOUND                                              Handle        = 0x80100070
+	SCARD_W_CACHE_ITEM_STALE                                                  Handle        = 0x80100071
+	SCARD_W_CACHE_ITEM_TOO_BIG                                                Handle        = 0x80100072
+	COMADMIN_E_OBJECTERRORS                                                   Handle        = 0x80110401
+	COMADMIN_E_OBJECTINVALID                                                  Handle        = 0x80110402
+	COMADMIN_E_KEYMISSING                                                     Handle        = 0x80110403
+	COMADMIN_E_ALREADYINSTALLED                                               Handle        = 0x80110404
+	COMADMIN_E_APP_FILE_WRITEFAIL                                             Handle        = 0x80110407
+	COMADMIN_E_APP_FILE_READFAIL                                              Handle        = 0x80110408
+	COMADMIN_E_APP_FILE_VERSION                                               Handle        = 0x80110409
+	COMADMIN_E_BADPATH                                                        Handle        = 0x8011040A
+	COMADMIN_E_APPLICATIONEXISTS                                              Handle        = 0x8011040B
+	COMADMIN_E_ROLEEXISTS                                                     Handle        = 0x8011040C
+	COMADMIN_E_CANTCOPYFILE                                                   Handle        = 0x8011040D
+	COMADMIN_E_NOUSER                                                         Handle        = 0x8011040F
+	COMADMIN_E_INVALIDUSERIDS                                                 Handle        = 0x80110410
+	COMADMIN_E_NOREGISTRYCLSID                                                Handle        = 0x80110411
+	COMADMIN_E_BADREGISTRYPROGID                                              Handle        = 0x80110412
+	COMADMIN_E_AUTHENTICATIONLEVEL                                            Handle        = 0x80110413
+	COMADMIN_E_USERPASSWDNOTVALID                                             Handle        = 0x80110414
+	COMADMIN_E_CLSIDORIIDMISMATCH                                             Handle        = 0x80110418
+	COMADMIN_E_REMOTEINTERFACE                                                Handle        = 0x80110419
+	COMADMIN_E_DLLREGISTERSERVER                                              Handle        = 0x8011041A
+	COMADMIN_E_NOSERVERSHARE                                                  Handle        = 0x8011041B
+	COMADMIN_E_DLLLOADFAILED                                                  Handle        = 0x8011041D
+	COMADMIN_E_BADREGISTRYLIBID                                               Handle        = 0x8011041E
+	COMADMIN_E_APPDIRNOTFOUND                                                 Handle        = 0x8011041F
+	COMADMIN_E_REGISTRARFAILED                                                Handle        = 0x80110423
+	COMADMIN_E_COMPFILE_DOESNOTEXIST                                          Handle        = 0x80110424
+	COMADMIN_E_COMPFILE_LOADDLLFAIL                                           Handle        = 0x80110425
+	COMADMIN_E_COMPFILE_GETCLASSOBJ                                           Handle        = 0x80110426
+	COMADMIN_E_COMPFILE_CLASSNOTAVAIL                                         Handle        = 0x80110427
+	COMADMIN_E_COMPFILE_BADTLB                                                Handle        = 0x80110428
+	COMADMIN_E_COMPFILE_NOTINSTALLABLE                                        Handle        = 0x80110429
+	COMADMIN_E_NOTCHANGEABLE                                                  Handle        = 0x8011042A
+	COMADMIN_E_NOTDELETEABLE                                                  Handle        = 0x8011042B
+	COMADMIN_E_SESSION                                                        Handle        = 0x8011042C
+	COMADMIN_E_COMP_MOVE_LOCKED                                               Handle        = 0x8011042D
+	COMADMIN_E_COMP_MOVE_BAD_DEST                                             Handle        = 0x8011042E
+	COMADMIN_E_REGISTERTLB                                                    Handle        = 0x80110430
+	COMADMIN_E_SYSTEMAPP                                                      Handle        = 0x80110433
+	COMADMIN_E_COMPFILE_NOREGISTRAR                                           Handle        = 0x80110434
+	COMADMIN_E_COREQCOMPINSTALLED                                             Handle        = 0x80110435
+	COMADMIN_E_SERVICENOTINSTALLED                                            Handle        = 0x80110436
+	COMADMIN_E_PROPERTYSAVEFAILED                                             Handle        = 0x80110437
+	COMADMIN_E_OBJECTEXISTS                                                   Handle        = 0x80110438
+	COMADMIN_E_COMPONENTEXISTS                                                Handle        = 0x80110439
+	COMADMIN_E_REGFILE_CORRUPT                                                Handle        = 0x8011043B
+	COMADMIN_E_PROPERTY_OVERFLOW                                              Handle        = 0x8011043C
+	COMADMIN_E_NOTINREGISTRY                                                  Handle        = 0x8011043E
+	COMADMIN_E_OBJECTNOTPOOLABLE                                              Handle        = 0x8011043F
+	COMADMIN_E_APPLID_MATCHES_CLSID                                           Handle        = 0x80110446
+	COMADMIN_E_ROLE_DOES_NOT_EXIST                                            Handle        = 0x80110447
+	COMADMIN_E_START_APP_NEEDS_COMPONENTS                                     Handle        = 0x80110448
+	COMADMIN_E_REQUIRES_DIFFERENT_PLATFORM                                    Handle        = 0x80110449
+	COMADMIN_E_CAN_NOT_EXPORT_APP_PROXY                                       Handle        = 0x8011044A
+	COMADMIN_E_CAN_NOT_START_APP                                              Handle        = 0x8011044B
+	COMADMIN_E_CAN_NOT_EXPORT_SYS_APP                                         Handle        = 0x8011044C
+	COMADMIN_E_CANT_SUBSCRIBE_TO_COMPONENT                                    Handle        = 0x8011044D
+	COMADMIN_E_EVENTCLASS_CANT_BE_SUBSCRIBER                                  Handle        = 0x8011044E
+	COMADMIN_E_LIB_APP_PROXY_INCOMPATIBLE                                     Handle        = 0x8011044F
+	COMADMIN_E_BASE_PARTITION_ONLY                                            Handle        = 0x80110450
+	COMADMIN_E_START_APP_DISABLED                                             Handle        = 0x80110451
+	COMADMIN_E_CAT_DUPLICATE_PARTITION_NAME                                   Handle        = 0x80110457
+	COMADMIN_E_CAT_INVALID_PARTITION_NAME                                     Handle        = 0x80110458
+	COMADMIN_E_CAT_PARTITION_IN_USE                                           Handle        = 0x80110459
+	COMADMIN_E_FILE_PARTITION_DUPLICATE_FILES                                 Handle        = 0x8011045A
+	COMADMIN_E_CAT_IMPORTED_COMPONENTS_NOT_ALLOWED                            Handle        = 0x8011045B
+	COMADMIN_E_AMBIGUOUS_APPLICATION_NAME                                     Handle        = 0x8011045C
+	COMADMIN_E_AMBIGUOUS_PARTITION_NAME                                       Handle        = 0x8011045D
+	COMADMIN_E_REGDB_NOTINITIALIZED                                           Handle        = 0x80110472
+	COMADMIN_E_REGDB_NOTOPEN                                                  Handle        = 0x80110473
+	COMADMIN_E_REGDB_SYSTEMERR                                                Handle        = 0x80110474
+	COMADMIN_E_REGDB_ALREADYRUNNING                                           Handle        = 0x80110475
+	COMADMIN_E_MIG_VERSIONNOTSUPPORTED                                        Handle        = 0x80110480
+	COMADMIN_E_MIG_SCHEMANOTFOUND                                             Handle        = 0x80110481
+	COMADMIN_E_CAT_BITNESSMISMATCH                                            Handle        = 0x80110482
+	COMADMIN_E_CAT_UNACCEPTABLEBITNESS                                        Handle        = 0x80110483
+	COMADMIN_E_CAT_WRONGAPPBITNESS                                            Handle        = 0x80110484
+	COMADMIN_E_CAT_PAUSE_RESUME_NOT_SUPPORTED                                 Handle        = 0x80110485
+	COMADMIN_E_CAT_SERVERFAULT                                                Handle        = 0x80110486
+	COMQC_E_APPLICATION_NOT_QUEUED                                            Handle        = 0x80110600
+	COMQC_E_NO_QUEUEABLE_INTERFACES                                           Handle        = 0x80110601
+	COMQC_E_QUEUING_SERVICE_NOT_AVAILABLE                                     Handle        = 0x80110602
+	COMQC_E_NO_IPERSISTSTREAM                                                 Handle        = 0x80110603
+	COMQC_E_BAD_MESSAGE                                                       Handle        = 0x80110604
+	COMQC_E_UNAUTHENTICATED                                                   Handle        = 0x80110605
+	COMQC_E_UNTRUSTED_ENQUEUER                                                Handle        = 0x80110606
+	MSDTC_E_DUPLICATE_RESOURCE                                                Handle        = 0x80110701
+	COMADMIN_E_OBJECT_PARENT_MISSING                                          Handle        = 0x80110808
+	COMADMIN_E_OBJECT_DOES_NOT_EXIST                                          Handle        = 0x80110809
+	COMADMIN_E_APP_NOT_RUNNING                                                Handle        = 0x8011080A
+	COMADMIN_E_INVALID_PARTITION                                              Handle        = 0x8011080B
+	COMADMIN_E_SVCAPP_NOT_POOLABLE_OR_RECYCLABLE                              Handle        = 0x8011080D
+	COMADMIN_E_USER_IN_SET                                                    Handle        = 0x8011080E
+	COMADMIN_E_CANTRECYCLELIBRARYAPPS                                         Handle        = 0x8011080F
+	COMADMIN_E_CANTRECYCLESERVICEAPPS                                         Handle        = 0x80110811
+	COMADMIN_E_PROCESSALREADYRECYCLED                                         Handle        = 0x80110812
+	COMADMIN_E_PAUSEDPROCESSMAYNOTBERECYCLED                                  Handle        = 0x80110813
+	COMADMIN_E_CANTMAKEINPROCSERVICE                                          Handle        = 0x80110814
+	COMADMIN_E_PROGIDINUSEBYCLSID                                             Handle        = 0x80110815
+	COMADMIN_E_DEFAULT_PARTITION_NOT_IN_SET                                   Handle        = 0x80110816
+	COMADMIN_E_RECYCLEDPROCESSMAYNOTBEPAUSED                                  Handle        = 0x80110817
+	COMADMIN_E_PARTITION_ACCESSDENIED                                         Handle        = 0x80110818
+	COMADMIN_E_PARTITION_MSI_ONLY                                             Handle        = 0x80110819
+	COMADMIN_E_LEGACYCOMPS_NOT_ALLOWED_IN_1_0_FORMAT                          Handle        = 0x8011081A
+	COMADMIN_E_LEGACYCOMPS_NOT_ALLOWED_IN_NONBASE_PARTITIONS                  Handle        = 0x8011081B
+	COMADMIN_E_COMP_MOVE_SOURCE                                               Handle        = 0x8011081C
+	COMADMIN_E_COMP_MOVE_DEST                                                 Handle        = 0x8011081D
+	COMADMIN_E_COMP_MOVE_PRIVATE                                              Handle        = 0x8011081E
+	COMADMIN_E_BASEPARTITION_REQUIRED_IN_SET                                  Handle        = 0x8011081F
+	COMADMIN_E_CANNOT_ALIAS_EVENTCLASS                                        Handle        = 0x80110820
+	COMADMIN_E_PRIVATE_ACCESSDENIED                                           Handle        = 0x80110821
+	COMADMIN_E_SAFERINVALID                                                   Handle        = 0x80110822
+	COMADMIN_E_REGISTRY_ACCESSDENIED                                          Handle        = 0x80110823
+	COMADMIN_E_PARTITIONS_DISABLED                                            Handle        = 0x80110824
+	WER_S_REPORT_DEBUG                                                        Handle        = 0x001B0000
+	WER_S_REPORT_UPLOADED                                                     Handle        = 0x001B0001
+	WER_S_REPORT_QUEUED                                                       Handle        = 0x001B0002
+	WER_S_DISABLED                                                            Handle        = 0x001B0003
+	WER_S_SUSPENDED_UPLOAD                                                    Handle        = 0x001B0004
+	WER_S_DISABLED_QUEUE                                                      Handle        = 0x001B0005
+	WER_S_DISABLED_ARCHIVE                                                    Handle        = 0x001B0006
+	WER_S_REPORT_ASYNC                                                        Handle        = 0x001B0007
+	WER_S_IGNORE_ASSERT_INSTANCE                                              Handle        = 0x001B0008
+	WER_S_IGNORE_ALL_ASSERTS                                                  Handle        = 0x001B0009
+	WER_S_ASSERT_CONTINUE                                                     Handle        = 0x001B000A
+	WER_S_THROTTLED                                                           Handle        = 0x001B000B
+	WER_S_REPORT_UPLOADED_CAB                                                 Handle        = 0x001B000C
+	WER_E_CRASH_FAILURE                                                       Handle        = 0x801B8000
+	WER_E_CANCELED                                                            Handle        = 0x801B8001
+	WER_E_NETWORK_FAILURE                                                     Handle        = 0x801B8002
+	WER_E_NOT_INITIALIZED                                                     Handle        = 0x801B8003
+	WER_E_ALREADY_REPORTING                                                   Handle        = 0x801B8004
+	WER_E_DUMP_THROTTLED                                                      Handle        = 0x801B8005
+	WER_E_INSUFFICIENT_CONSENT                                                Handle        = 0x801B8006
+	WER_E_TOO_HEAVY                                                           Handle        = 0x801B8007
+	ERROR_FLT_IO_COMPLETE                                                     Handle        = 0x001F0001
+	ERROR_FLT_NO_HANDLER_DEFINED                                              Handle        = 0x801F0001
+	ERROR_FLT_CONTEXT_ALREADY_DEFINED                                         Handle        = 0x801F0002
+	ERROR_FLT_INVALID_ASYNCHRONOUS_REQUEST                                    Handle        = 0x801F0003
+	ERROR_FLT_DISALLOW_FAST_IO                                                Handle        = 0x801F0004
+	ERROR_FLT_INVALID_NAME_REQUEST                                            Handle        = 0x801F0005
+	ERROR_FLT_NOT_SAFE_TO_POST_OPERATION                                      Handle        = 0x801F0006
+	ERROR_FLT_NOT_INITIALIZED                                                 Handle        = 0x801F0007
+	ERROR_FLT_FILTER_NOT_READY                                                Handle        = 0x801F0008
+	ERROR_FLT_POST_OPERATION_CLEANUP                                          Handle        = 0x801F0009
+	ERROR_FLT_INTERNAL_ERROR                                                  Handle        = 0x801F000A
+	ERROR_FLT_DELETING_OBJECT                                                 Handle        = 0x801F000B
+	ERROR_FLT_MUST_BE_NONPAGED_POOL                                           Handle        = 0x801F000C
+	ERROR_FLT_DUPLICATE_ENTRY                                                 Handle        = 0x801F000D
+	ERROR_FLT_CBDQ_DISABLED                                                   Handle        = 0x801F000E
+	ERROR_FLT_DO_NOT_ATTACH                                                   Handle        = 0x801F000F
+	ERROR_FLT_DO_NOT_DETACH                                                   Handle        = 0x801F0010
+	ERROR_FLT_INSTANCE_ALTITUDE_COLLISION                                     Handle        = 0x801F0011
+	ERROR_FLT_INSTANCE_NAME_COLLISION                                         Handle        = 0x801F0012
+	ERROR_FLT_FILTER_NOT_FOUND                                                Handle        = 0x801F0013
+	ERROR_FLT_VOLUME_NOT_FOUND                                                Handle        = 0x801F0014
+	ERROR_FLT_INSTANCE_NOT_FOUND                                              Handle        = 0x801F0015
+	ERROR_FLT_CONTEXT_ALLOCATION_NOT_FOUND                                    Handle        = 0x801F0016
+	ERROR_FLT_INVALID_CONTEXT_REGISTRATION                                    Handle        = 0x801F0017
+	ERROR_FLT_NAME_CACHE_MISS                                                 Handle        = 0x801F0018
+	ERROR_FLT_NO_DEVICE_OBJECT                                                Handle        = 0x801F0019
+	ERROR_FLT_VOLUME_ALREADY_MOUNTED                                          Handle        = 0x801F001A
+	ERROR_FLT_ALREADY_ENLISTED                                                Handle        = 0x801F001B
+	ERROR_FLT_CONTEXT_ALREADY_LINKED                                          Handle        = 0x801F001C
+	ERROR_FLT_NO_WAITER_FOR_REPLY                                             Handle        = 0x801F0020
+	ERROR_FLT_REGISTRATION_BUSY                                               Handle        = 0x801F0023
+	ERROR_HUNG_DISPLAY_DRIVER_THREAD                                          Handle        = 0x80260001
+	DWM_E_COMPOSITIONDISABLED                                                 Handle        = 0x80263001
+	DWM_E_REMOTING_NOT_SUPPORTED                                              Handle        = 0x80263002
+	DWM_E_NO_REDIRECTION_SURFACE_AVAILABLE                                    Handle        = 0x80263003
+	DWM_E_NOT_QUEUING_PRESENTS                                                Handle        = 0x80263004
+	DWM_E_ADAPTER_NOT_FOUND                                                   Handle        = 0x80263005
+	DWM_S_GDI_REDIRECTION_SURFACE                                             Handle        = 0x00263005
+	DWM_E_TEXTURE_TOO_LARGE                                                   Handle        = 0x80263007
+	DWM_S_GDI_REDIRECTION_SURFACE_BLT_VIA_GDI                                 Handle        = 0x00263008
+	ERROR_MONITOR_NO_DESCRIPTOR                                               Handle        = 0x00261001
+	ERROR_MONITOR_UNKNOWN_DESCRIPTOR_FORMAT                                   Handle        = 0x00261002
+	ERROR_MONITOR_INVALID_DESCRIPTOR_CHECKSUM                                 Handle        = 0xC0261003
+	ERROR_MONITOR_INVALID_STANDARD_TIMING_BLOCK                               Handle        = 0xC0261004
+	ERROR_MONITOR_WMI_DATABLOCK_REGISTRATION_FAILED                           Handle        = 0xC0261005
+	ERROR_MONITOR_INVALID_SERIAL_NUMBER_MONDSC_BLOCK                          Handle        = 0xC0261006
+	ERROR_MONITOR_INVALID_USER_FRIENDLY_MONDSC_BLOCK                          Handle        = 0xC0261007
+	ERROR_MONITOR_NO_MORE_DESCRIPTOR_DATA                                     Handle        = 0xC0261008
+	ERROR_MONITOR_INVALID_DETAILED_TIMING_BLOCK                               Handle        = 0xC0261009
+	ERROR_MONITOR_INVALID_MANUFACTURE_DATE                                    Handle        = 0xC026100A
+	ERROR_GRAPHICS_NOT_EXCLUSIVE_MODE_OWNER                                   Handle        = 0xC0262000
+	ERROR_GRAPHICS_INSUFFICIENT_DMA_BUFFER                                    Handle        = 0xC0262001
+	ERROR_GRAPHICS_INVALID_DISPLAY_ADAPTER                                    Handle        = 0xC0262002
+	ERROR_GRAPHICS_ADAPTER_WAS_RESET                                          Handle        = 0xC0262003
+	ERROR_GRAPHICS_INVALID_DRIVER_MODEL                                       Handle        = 0xC0262004
+	ERROR_GRAPHICS_PRESENT_MODE_CHANGED                                       Handle        = 0xC0262005
+	ERROR_GRAPHICS_PRESENT_OCCLUDED                                           Handle        = 0xC0262006
+	ERROR_GRAPHICS_PRESENT_DENIED                                             Handle        = 0xC0262007
+	ERROR_GRAPHICS_CANNOTCOLORCONVERT                                         Handle        = 0xC0262008
+	ERROR_GRAPHICS_DRIVER_MISMATCH                                            Handle        = 0xC0262009
+	ERROR_GRAPHICS_PARTIAL_DATA_POPULATED                                     Handle        = 0x4026200A
+	ERROR_GRAPHICS_PRESENT_REDIRECTION_DISABLED                               Handle        = 0xC026200B
+	ERROR_GRAPHICS_PRESENT_UNOCCLUDED                                         Handle        = 0xC026200C
+	ERROR_GRAPHICS_WINDOWDC_NOT_AVAILABLE                                     Handle        = 0xC026200D
+	ERROR_GRAPHICS_WINDOWLESS_PRESENT_DISABLED                                Handle        = 0xC026200E
+	ERROR_GRAPHICS_PRESENT_INVALID_WINDOW                                     Handle        = 0xC026200F
+	ERROR_GRAPHICS_PRESENT_BUFFER_NOT_BOUND                                   Handle        = 0xC0262010
+	ERROR_GRAPHICS_VAIL_STATE_CHANGED                                         Handle        = 0xC0262011
+	ERROR_GRAPHICS_INDIRECT_DISPLAY_ABANDON_SWAPCHAIN                         Handle        = 0xC0262012
+	ERROR_GRAPHICS_INDIRECT_DISPLAY_DEVICE_STOPPED                            Handle        = 0xC0262013
+	ERROR_GRAPHICS_NO_VIDEO_MEMORY                                            Handle        = 0xC0262100
+	ERROR_GRAPHICS_CANT_LOCK_MEMORY                                           Handle        = 0xC0262101
+	ERROR_GRAPHICS_ALLOCATION_BUSY                                            Handle        = 0xC0262102
+	ERROR_GRAPHICS_TOO_MANY_REFERENCES                                        Handle        = 0xC0262103
+	ERROR_GRAPHICS_TRY_AGAIN_LATER                                            Handle        = 0xC0262104
+	ERROR_GRAPHICS_TRY_AGAIN_NOW                                              Handle        = 0xC0262105
+	ERROR_GRAPHICS_ALLOCATION_INVALID                                         Handle        = 0xC0262106
+	ERROR_GRAPHICS_UNSWIZZLING_APERTURE_UNAVAILABLE                           Handle        = 0xC0262107
+	ERROR_GRAPHICS_UNSWIZZLING_APERTURE_UNSUPPORTED                           Handle        = 0xC0262108
+	ERROR_GRAPHICS_CANT_EVICT_PINNED_ALLOCATION                               Handle        = 0xC0262109
+	ERROR_GRAPHICS_INVALID_ALLOCATION_USAGE                                   Handle        = 0xC0262110
+	ERROR_GRAPHICS_CANT_RENDER_LOCKED_ALLOCATION                              Handle        = 0xC0262111
+	ERROR_GRAPHICS_ALLOCATION_CLOSED                                          Handle        = 0xC0262112
+	ERROR_GRAPHICS_INVALID_ALLOCATION_INSTANCE                                Handle        = 0xC0262113
+	ERROR_GRAPHICS_INVALID_ALLOCATION_HANDLE                                  Handle        = 0xC0262114
+	ERROR_GRAPHICS_WRONG_ALLOCATION_DEVICE                                    Handle        = 0xC0262115
+	ERROR_GRAPHICS_ALLOCATION_CONTENT_LOST                                    Handle        = 0xC0262116
+	ERROR_GRAPHICS_GPU_EXCEPTION_ON_DEVICE                                    Handle        = 0xC0262200
+	ERROR_GRAPHICS_SKIP_ALLOCATION_PREPARATION                                Handle        = 0x40262201
+	ERROR_GRAPHICS_INVALID_VIDPN_TOPOLOGY                                     Handle        = 0xC0262300
+	ERROR_GRAPHICS_VIDPN_TOPOLOGY_NOT_SUPPORTED                               Handle        = 0xC0262301
+	ERROR_GRAPHICS_VIDPN_TOPOLOGY_CURRENTLY_NOT_SUPPORTED                     Handle        = 0xC0262302
+	ERROR_GRAPHICS_INVALID_VIDPN                                              Handle        = 0xC0262303
+	ERROR_GRAPHICS_INVALID_VIDEO_PRESENT_SOURCE                               Handle        = 0xC0262304
+	ERROR_GRAPHICS_INVALID_VIDEO_PRESENT_TARGET                               Handle        = 0xC0262305
+	ERROR_GRAPHICS_VIDPN_MODALITY_NOT_SUPPORTED                               Handle        = 0xC0262306
+	ERROR_GRAPHICS_MODE_NOT_PINNED                                            Handle        = 0x00262307
+	ERROR_GRAPHICS_INVALID_VIDPN_SOURCEMODESET                                Handle        = 0xC0262308
+	ERROR_GRAPHICS_INVALID_VIDPN_TARGETMODESET                                Handle        = 0xC0262309
+	ERROR_GRAPHICS_INVALID_FREQUENCY                                          Handle        = 0xC026230A
+	ERROR_GRAPHICS_INVALID_ACTIVE_REGION                                      Handle        = 0xC026230B
+	ERROR_GRAPHICS_INVALID_TOTAL_REGION                                       Handle        = 0xC026230C
+	ERROR_GRAPHICS_INVALID_VIDEO_PRESENT_SOURCE_MODE                          Handle        = 0xC0262310
+	ERROR_GRAPHICS_INVALID_VIDEO_PRESENT_TARGET_MODE                          Handle        = 0xC0262311
+	ERROR_GRAPHICS_PINNED_MODE_MUST_REMAIN_IN_SET                             Handle        = 0xC0262312
+	ERROR_GRAPHICS_PATH_ALREADY_IN_TOPOLOGY                                   Handle        = 0xC0262313
+	ERROR_GRAPHICS_MODE_ALREADY_IN_MODESET                                    Handle        = 0xC0262314
+	ERROR_GRAPHICS_INVALID_VIDEOPRESENTSOURCESET                              Handle        = 0xC0262315
+	ERROR_GRAPHICS_INVALID_VIDEOPRESENTTARGETSET                              Handle        = 0xC0262316
+	ERROR_GRAPHICS_SOURCE_ALREADY_IN_SET                                      Handle        = 0xC0262317
+	ERROR_GRAPHICS_TARGET_ALREADY_IN_SET                                      Handle        = 0xC0262318
+	ERROR_GRAPHICS_INVALID_VIDPN_PRESENT_PATH                                 Handle        = 0xC0262319
+	ERROR_GRAPHICS_NO_RECOMMENDED_VIDPN_TOPOLOGY                              Handle        = 0xC026231A
+	ERROR_GRAPHICS_INVALID_MONITOR_FREQUENCYRANGESET                          Handle        = 0xC026231B
+	ERROR_GRAPHICS_INVALID_MONITOR_FREQUENCYRANGE                             Handle        = 0xC026231C
+	ERROR_GRAPHICS_FREQUENCYRANGE_NOT_IN_SET                                  Handle        = 0xC026231D
+	ERROR_GRAPHICS_NO_PREFERRED_MODE                                          Handle        = 0x0026231E
+	ERROR_GRAPHICS_FREQUENCYRANGE_ALREADY_IN_SET                              Handle        = 0xC026231F
+	ERROR_GRAPHICS_STALE_MODESET                                              Handle        = 0xC0262320
+	ERROR_GRAPHICS_INVALID_MONITOR_SOURCEMODESET                              Handle        = 0xC0262321
+	ERROR_GRAPHICS_INVALID_MONITOR_SOURCE_MODE                                Handle        = 0xC0262322
+	ERROR_GRAPHICS_NO_RECOMMENDED_FUNCTIONAL_VIDPN                            Handle        = 0xC0262323
+	ERROR_GRAPHICS_MODE_ID_MUST_BE_UNIQUE                                     Handle        = 0xC0262324
+	ERROR_GRAPHICS_EMPTY_ADAPTER_MONITOR_MODE_SUPPORT_INTERSECTION            Handle        = 0xC0262325
+	ERROR_GRAPHICS_VIDEO_PRESENT_TARGETS_LESS_THAN_SOURCES                    Handle        = 0xC0262326
+	ERROR_GRAPHICS_PATH_NOT_IN_TOPOLOGY                                       Handle        = 0xC0262327
+	ERROR_GRAPHICS_ADAPTER_MUST_HAVE_AT_LEAST_ONE_SOURCE                      Handle        = 0xC0262328
+	ERROR_GRAPHICS_ADAPTER_MUST_HAVE_AT_LEAST_ONE_TARGET                      Handle        = 0xC0262329
+	ERROR_GRAPHICS_INVALID_MONITORDESCRIPTORSET                               Handle        = 0xC026232A
+	ERROR_GRAPHICS_INVALID_MONITORDESCRIPTOR                                  Handle        = 0xC026232B
+	ERROR_GRAPHICS_MONITORDESCRIPTOR_NOT_IN_SET                               Handle        = 0xC026232C
+	ERROR_GRAPHICS_MONITORDESCRIPTOR_ALREADY_IN_SET                           Handle        = 0xC026232D
+	ERROR_GRAPHICS_MONITORDESCRIPTOR_ID_MUST_BE_UNIQUE                        Handle        = 0xC026232E
+	ERROR_GRAPHICS_INVALID_VIDPN_TARGET_SUBSET_TYPE                           Handle        = 0xC026232F
+	ERROR_GRAPHICS_RESOURCES_NOT_RELATED                                      Handle        = 0xC0262330
+	ERROR_GRAPHICS_SOURCE_ID_MUST_BE_UNIQUE                                   Handle        = 0xC0262331
+	ERROR_GRAPHICS_TARGET_ID_MUST_BE_UNIQUE                                   Handle        = 0xC0262332
+	ERROR_GRAPHICS_NO_AVAILABLE_VIDPN_TARGET                                  Handle        = 0xC0262333
+	ERROR_GRAPHICS_MONITOR_COULD_NOT_BE_ASSOCIATED_WITH_ADAPTER               Handle        = 0xC0262334
+	ERROR_GRAPHICS_NO_VIDPNMGR                                                Handle        = 0xC0262335
+	ERROR_GRAPHICS_NO_ACTIVE_VIDPN                                            Handle        = 0xC0262336
+	ERROR_GRAPHICS_STALE_VIDPN_TOPOLOGY                                       Handle        = 0xC0262337
+	ERROR_GRAPHICS_MONITOR_NOT_CONNECTED                                      Handle        = 0xC0262338
+	ERROR_GRAPHICS_SOURCE_NOT_IN_TOPOLOGY                                     Handle        = 0xC0262339
+	ERROR_GRAPHICS_INVALID_PRIMARYSURFACE_SIZE                                Handle        = 0xC026233A
+	ERROR_GRAPHICS_INVALID_VISIBLEREGION_SIZE                                 Handle        = 0xC026233B
+	ERROR_GRAPHICS_INVALID_STRIDE                                             Handle        = 0xC026233C
+	ERROR_GRAPHICS_INVALID_PIXELFORMAT                                        Handle        = 0xC026233D
+	ERROR_GRAPHICS_INVALID_COLORBASIS                                         Handle        = 0xC026233E
+	ERROR_GRAPHICS_INVALID_PIXELVALUEACCESSMODE                               Handle        = 0xC026233F
+	ERROR_GRAPHICS_TARGET_NOT_IN_TOPOLOGY                                     Handle        = 0xC0262340
+	ERROR_GRAPHICS_NO_DISPLAY_MODE_MANAGEMENT_SUPPORT                         Handle        = 0xC0262341
+	ERROR_GRAPHICS_VIDPN_SOURCE_IN_USE                                        Handle        = 0xC0262342
+	ERROR_GRAPHICS_CANT_ACCESS_ACTIVE_VIDPN                                   Handle        = 0xC0262343
+	ERROR_GRAPHICS_INVALID_PATH_IMPORTANCE_ORDINAL                            Handle        = 0xC0262344
+	ERROR_GRAPHICS_INVALID_PATH_CONTENT_GEOMETRY_TRANSFORMATION               Handle        = 0xC0262345
+	ERROR_GRAPHICS_PATH_CONTENT_GEOMETRY_TRANSFORMATION_NOT_SUPPORTED         Handle        = 0xC0262346
+	ERROR_GRAPHICS_INVALID_GAMMA_RAMP                                         Handle        = 0xC0262347
+	ERROR_GRAPHICS_GAMMA_RAMP_NOT_SUPPORTED                                   Handle        = 0xC0262348
+	ERROR_GRAPHICS_MULTISAMPLING_NOT_SUPPORTED                                Handle        = 0xC0262349
+	ERROR_GRAPHICS_MODE_NOT_IN_MODESET                                        Handle        = 0xC026234A
+	ERROR_GRAPHICS_DATASET_IS_EMPTY                                           Handle        = 0x0026234B
+	ERROR_GRAPHICS_NO_MORE_ELEMENTS_IN_DATASET                                Handle        = 0x0026234C
+	ERROR_GRAPHICS_INVALID_VIDPN_TOPOLOGY_RECOMMENDATION_REASON               Handle        = 0xC026234D
+	ERROR_GRAPHICS_INVALID_PATH_CONTENT_TYPE                                  Handle        = 0xC026234E
+	ERROR_GRAPHICS_INVALID_COPYPROTECTION_TYPE                                Handle        = 0xC026234F
+	ERROR_GRAPHICS_UNASSIGNED_MODESET_ALREADY_EXISTS                          Handle        = 0xC0262350
+	ERROR_GRAPHICS_PATH_CONTENT_GEOMETRY_TRANSFORMATION_NOT_PINNED            Handle        = 0x00262351
+	ERROR_GRAPHICS_INVALID_SCANLINE_ORDERING                                  Handle        = 0xC0262352
+	ERROR_GRAPHICS_TOPOLOGY_CHANGES_NOT_ALLOWED                               Handle        = 0xC0262353
+	ERROR_GRAPHICS_NO_AVAILABLE_IMPORTANCE_ORDINALS                           Handle        = 0xC0262354
+	ERROR_GRAPHICS_INCOMPATIBLE_PRIVATE_FORMAT                                Handle        = 0xC0262355
+	ERROR_GRAPHICS_INVALID_MODE_PRUNING_ALGORITHM                             Handle        = 0xC0262356
+	ERROR_GRAPHICS_INVALID_MONITOR_CAPABILITY_ORIGIN                          Handle        = 0xC0262357
+	ERROR_GRAPHICS_INVALID_MONITOR_FREQUENCYRANGE_CONSTRAINT                  Handle        = 0xC0262358
+	ERROR_GRAPHICS_MAX_NUM_PATHS_REACHED                                      Handle        = 0xC0262359
+	ERROR_GRAPHICS_CANCEL_VIDPN_TOPOLOGY_AUGMENTATION                         Handle        = 0xC026235A
+	ERROR_GRAPHICS_INVALID_CLIENT_TYPE                                        Handle        = 0xC026235B
+	ERROR_GRAPHICS_CLIENTVIDPN_NOT_SET                                        Handle        = 0xC026235C
+	ERROR_GRAPHICS_SPECIFIED_CHILD_ALREADY_CONNECTED                          Handle        = 0xC0262400
+	ERROR_GRAPHICS_CHILD_DESCRIPTOR_NOT_SUPPORTED                             Handle        = 0xC0262401
+	ERROR_GRAPHICS_UNKNOWN_CHILD_STATUS                                       Handle        = 0x4026242F
+	ERROR_GRAPHICS_NOT_A_LINKED_ADAPTER                                       Handle        = 0xC0262430
+	ERROR_GRAPHICS_LEADLINK_NOT_ENUMERATED                                    Handle        = 0xC0262431
+	ERROR_GRAPHICS_CHAINLINKS_NOT_ENUMERATED                                  Handle        = 0xC0262432
+	ERROR_GRAPHICS_ADAPTER_CHAIN_NOT_READY                                    Handle        = 0xC0262433
+	ERROR_GRAPHICS_CHAINLINKS_NOT_STARTED                                     Handle        = 0xC0262434
+	ERROR_GRAPHICS_CHAINLINKS_NOT_POWERED_ON                                  Handle        = 0xC0262435
+	ERROR_GRAPHICS_INCONSISTENT_DEVICE_LINK_STATE                             Handle        = 0xC0262436
+	ERROR_GRAPHICS_LEADLINK_START_DEFERRED                                    Handle        = 0x40262437
+	ERROR_GRAPHICS_NOT_POST_DEVICE_DRIVER                                     Handle        = 0xC0262438
+	ERROR_GRAPHICS_POLLING_TOO_FREQUENTLY                                     Handle        = 0x40262439
+	ERROR_GRAPHICS_START_DEFERRED                                             Handle        = 0x4026243A
+	ERROR_GRAPHICS_ADAPTER_ACCESS_NOT_EXCLUDED                                Handle        = 0xC026243B
+	ERROR_GRAPHICS_DEPENDABLE_CHILD_STATUS                                    Handle        = 0x4026243C
+	ERROR_GRAPHICS_OPM_NOT_SUPPORTED                                          Handle        = 0xC0262500
+	ERROR_GRAPHICS_COPP_NOT_SUPPORTED                                         Handle        = 0xC0262501
+	ERROR_GRAPHICS_UAB_NOT_SUPPORTED                                          Handle        = 0xC0262502
+	ERROR_GRAPHICS_OPM_INVALID_ENCRYPTED_PARAMETERS                           Handle        = 0xC0262503
+	ERROR_GRAPHICS_OPM_NO_VIDEO_OUTPUTS_EXIST                                 Handle        = 0xC0262505
+	ERROR_GRAPHICS_OPM_INTERNAL_ERROR                                         Handle        = 0xC026250B
+	ERROR_GRAPHICS_OPM_INVALID_HANDLE                                         Handle        = 0xC026250C
+	ERROR_GRAPHICS_PVP_INVALID_CERTIFICATE_LENGTH                             Handle        = 0xC026250E
+	ERROR_GRAPHICS_OPM_SPANNING_MODE_ENABLED                                  Handle        = 0xC026250F
+	ERROR_GRAPHICS_OPM_THEATER_MODE_ENABLED                                   Handle        = 0xC0262510
+	ERROR_GRAPHICS_PVP_HFS_FAILED                                             Handle        = 0xC0262511
+	ERROR_GRAPHICS_OPM_INVALID_SRM                                            Handle        = 0xC0262512
+	ERROR_GRAPHICS_OPM_OUTPUT_DOES_NOT_SUPPORT_HDCP                           Handle        = 0xC0262513
+	ERROR_GRAPHICS_OPM_OUTPUT_DOES_NOT_SUPPORT_ACP                            Handle        = 0xC0262514
+	ERROR_GRAPHICS_OPM_OUTPUT_DOES_NOT_SUPPORT_CGMSA                          Handle        = 0xC0262515
+	ERROR_GRAPHICS_OPM_HDCP_SRM_NEVER_SET                                     Handle        = 0xC0262516
+	ERROR_GRAPHICS_OPM_RESOLUTION_TOO_HIGH                                    Handle        = 0xC0262517
+	ERROR_GRAPHICS_OPM_ALL_HDCP_HARDWARE_ALREADY_IN_USE                       Handle        = 0xC0262518
+	ERROR_GRAPHICS_OPM_VIDEO_OUTPUT_NO_LONGER_EXISTS                          Handle        = 0xC026251A
+	ERROR_GRAPHICS_OPM_SESSION_TYPE_CHANGE_IN_PROGRESS                        Handle        = 0xC026251B
+	ERROR_GRAPHICS_OPM_VIDEO_OUTPUT_DOES_NOT_HAVE_COPP_SEMANTICS              Handle        = 0xC026251C
+	ERROR_GRAPHICS_OPM_INVALID_INFORMATION_REQUEST                            Handle        = 0xC026251D
+	ERROR_GRAPHICS_OPM_DRIVER_INTERNAL_ERROR                                  Handle        = 0xC026251E
+	ERROR_GRAPHICS_OPM_VIDEO_OUTPUT_DOES_NOT_HAVE_OPM_SEMANTICS               Handle        = 0xC026251F
+	ERROR_GRAPHICS_OPM_SIGNALING_NOT_SUPPORTED                                Handle        = 0xC0262520
+	ERROR_GRAPHICS_OPM_INVALID_CONFIGURATION_REQUEST                          Handle        = 0xC0262521
+	ERROR_GRAPHICS_I2C_NOT_SUPPORTED                                          Handle        = 0xC0262580
+	ERROR_GRAPHICS_I2C_DEVICE_DOES_NOT_EXIST                                  Handle        = 0xC0262581
+	ERROR_GRAPHICS_I2C_ERROR_TRANSMITTING_DATA                                Handle        = 0xC0262582
+	ERROR_GRAPHICS_I2C_ERROR_RECEIVING_DATA                                   Handle        = 0xC0262583
+	ERROR_GRAPHICS_DDCCI_VCP_NOT_SUPPORTED                                    Handle        = 0xC0262584
+	ERROR_GRAPHICS_DDCCI_INVALID_DATA                                         Handle        = 0xC0262585
+	ERROR_GRAPHICS_DDCCI_MONITOR_RETURNED_INVALID_TIMING_STATUS_BYTE          Handle        = 0xC0262586
+	ERROR_GRAPHICS_MCA_INVALID_CAPABILITIES_STRING                            Handle        = 0xC0262587
+	ERROR_GRAPHICS_MCA_INTERNAL_ERROR                                         Handle        = 0xC0262588
+	ERROR_GRAPHICS_DDCCI_INVALID_MESSAGE_COMMAND                              Handle        = 0xC0262589
+	ERROR_GRAPHICS_DDCCI_INVALID_MESSAGE_LENGTH                               Handle        = 0xC026258A
+	ERROR_GRAPHICS_DDCCI_INVALID_MESSAGE_CHECKSUM                             Handle        = 0xC026258B
+	ERROR_GRAPHICS_INVALID_PHYSICAL_MONITOR_HANDLE                            Handle        = 0xC026258C
+	ERROR_GRAPHICS_MONITOR_NO_LONGER_EXISTS                                   Handle        = 0xC026258D
+	ERROR_GRAPHICS_DDCCI_CURRENT_CURRENT_VALUE_GREATER_THAN_MAXIMUM_VALUE     Handle        = 0xC02625D8
+	ERROR_GRAPHICS_MCA_INVALID_VCP_VERSION                                    Handle        = 0xC02625D9
+	ERROR_GRAPHICS_MCA_MONITOR_VIOLATES_MCCS_SPECIFICATION                    Handle        = 0xC02625DA
+	ERROR_GRAPHICS_MCA_MCCS_VERSION_MISMATCH                                  Handle        = 0xC02625DB
+	ERROR_GRAPHICS_MCA_UNSUPPORTED_MCCS_VERSION                               Handle        = 0xC02625DC
+	ERROR_GRAPHICS_MCA_INVALID_TECHNOLOGY_TYPE_RETURNED                       Handle        = 0xC02625DE
+	ERROR_GRAPHICS_MCA_UNSUPPORTED_COLOR_TEMPERATURE                          Handle        = 0xC02625DF
+	ERROR_GRAPHICS_ONLY_CONSOLE_SESSION_SUPPORTED                             Handle        = 0xC02625E0
+	ERROR_GRAPHICS_NO_DISPLAY_DEVICE_CORRESPONDS_TO_NAME                      Handle        = 0xC02625E1
+	ERROR_GRAPHICS_DISPLAY_DEVICE_NOT_ATTACHED_TO_DESKTOP                     Handle        = 0xC02625E2
+	ERROR_GRAPHICS_MIRRORING_DEVICES_NOT_SUPPORTED                            Handle        = 0xC02625E3
+	ERROR_GRAPHICS_INVALID_POINTER                                            Handle        = 0xC02625E4
+	ERROR_GRAPHICS_NO_MONITORS_CORRESPOND_TO_DISPLAY_DEVICE                   Handle        = 0xC02625E5
+	ERROR_GRAPHICS_PARAMETER_ARRAY_TOO_SMALL                                  Handle        = 0xC02625E6
+	ERROR_GRAPHICS_INTERNAL_ERROR                                             Handle        = 0xC02625E7
+	ERROR_GRAPHICS_SESSION_TYPE_CHANGE_IN_PROGRESS                            Handle        = 0xC02605E8
+	NAP_E_INVALID_PACKET                                                      Handle        = 0x80270001
+	NAP_E_MISSING_SOH                                                         Handle        = 0x80270002
+	NAP_E_CONFLICTING_ID                                                      Handle        = 0x80270003
+	NAP_E_NO_CACHED_SOH                                                       Handle        = 0x80270004
+	NAP_E_STILL_BOUND                                                         Handle        = 0x80270005
+	NAP_E_NOT_REGISTERED                                                      Handle        = 0x80270006
+	NAP_E_NOT_INITIALIZED                                                     Handle        = 0x80270007
+	NAP_E_MISMATCHED_ID                                                       Handle        = 0x80270008
+	NAP_E_NOT_PENDING                                                         Handle        = 0x80270009
+	NAP_E_ID_NOT_FOUND                                                        Handle        = 0x8027000A
+	NAP_E_MAXSIZE_TOO_SMALL                                                   Handle        = 0x8027000B
+	NAP_E_SERVICE_NOT_RUNNING                                                 Handle        = 0x8027000C
+	NAP_S_CERT_ALREADY_PRESENT                                                Handle        = 0x0027000D
+	NAP_E_ENTITY_DISABLED                                                     Handle        = 0x8027000E
+	NAP_E_NETSH_GROUPPOLICY_ERROR                                             Handle        = 0x8027000F
+	NAP_E_TOO_MANY_CALLS                                                      Handle        = 0x80270010
+	NAP_E_SHV_CONFIG_EXISTED                                                  Handle        = 0x80270011
+	NAP_E_SHV_CONFIG_NOT_FOUND                                                Handle        = 0x80270012
+	NAP_E_SHV_TIMEOUT                                                         Handle        = 0x80270013
+	TPM_E_ERROR_MASK                                                          Handle        = 0x80280000
+	TPM_E_AUTHFAIL                                                            Handle        = 0x80280001
+	TPM_E_BADINDEX                                                            Handle        = 0x80280002
+	TPM_E_BAD_PARAMETER                                                       Handle        = 0x80280003
+	TPM_E_AUDITFAILURE                                                        Handle        = 0x80280004
+	TPM_E_CLEAR_DISABLED                                                      Handle        = 0x80280005
+	TPM_E_DEACTIVATED                                                         Handle        = 0x80280006
+	TPM_E_DISABLED                                                            Handle        = 0x80280007
+	TPM_E_DISABLED_CMD                                                        Handle        = 0x80280008
+	TPM_E_FAIL                                                                Handle        = 0x80280009
+	TPM_E_BAD_ORDINAL                                                         Handle        = 0x8028000A
+	TPM_E_INSTALL_DISABLED                                                    Handle        = 0x8028000B
+	TPM_E_INVALID_KEYHANDLE                                                   Handle        = 0x8028000C
+	TPM_E_KEYNOTFOUND                                                         Handle        = 0x8028000D
+	TPM_E_INAPPROPRIATE_ENC                                                   Handle        = 0x8028000E
+	TPM_E_MIGRATEFAIL                                                         Handle        = 0x8028000F
+	TPM_E_INVALID_PCR_INFO                                                    Handle        = 0x80280010
+	TPM_E_NOSPACE                                                             Handle        = 0x80280011
+	TPM_E_NOSRK                                                               Handle        = 0x80280012
+	TPM_E_NOTSEALED_BLOB                                                      Handle        = 0x80280013
+	TPM_E_OWNER_SET                                                           Handle        = 0x80280014
+	TPM_E_RESOURCES                                                           Handle        = 0x80280015
+	TPM_E_SHORTRANDOM                                                         Handle        = 0x80280016
+	TPM_E_SIZE                                                                Handle        = 0x80280017
+	TPM_E_WRONGPCRVAL                                                         Handle        = 0x80280018
+	TPM_E_BAD_PARAM_SIZE                                                      Handle        = 0x80280019
+	TPM_E_SHA_THREAD                                                          Handle        = 0x8028001A
+	TPM_E_SHA_ERROR                                                           Handle        = 0x8028001B
+	TPM_E_FAILEDSELFTEST                                                      Handle        = 0x8028001C
+	TPM_E_AUTH2FAIL                                                           Handle        = 0x8028001D
+	TPM_E_BADTAG                                                              Handle        = 0x8028001E
+	TPM_E_IOERROR                                                             Handle        = 0x8028001F
+	TPM_E_ENCRYPT_ERROR                                                       Handle        = 0x80280020
+	TPM_E_DECRYPT_ERROR        
+@@END
 @@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/sys/windows/zerrors_windows.go","mode":420,"size":945502,"sha256":"fdf634bbd093494501a9aec0660aa53b434fdc2c2bb989e8d0925323e511358d","index":10,"count":20,"encoding":"utf-8","payloadBytes":48000}
                                                Handle        = 0x80280021
 	TPM_E_INVALID_AUTHHANDLE                                                  Handle        = 0x80280022
@@ -126228,3364 +127175,6 @@ func errstr(errno int) string {
 	for ; n > 0 && (b[n-1] == '\n' || b[n-1] == '\r'); n-- {
 	}
 	return string(utf16.Decode(b[:n]))
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/go-ole/go-ole/guid.go","mode":420,"size":8124,"sha256":"23b14a57822fa618097de2bb6fd3d59516b2d6b78e65238798dd434a1192aa94","index":0,"count":1,"encoding":"utf-8","payloadBytes":8124}
-package ole
-
-var (
-	// IID_NULL is null Interface ID, used when no other Interface ID is known.
-	IID_NULL = NewGUID("{00000000-0000-0000-0000-000000000000}")
-
-	// IID_IUnknown is for IUnknown interfaces.
-	IID_IUnknown = NewGUID("{00000000-0000-0000-C000-000000000046}")
-
-	// IID_IDispatch is for IDispatch interfaces.
-	IID_IDispatch = NewGUID("{00020400-0000-0000-C000-000000000046}")
-
-	// IID_IEnumVariant is for IEnumVariant interfaces
-	IID_IEnumVariant = NewGUID("{00020404-0000-0000-C000-000000000046}")
-
-	// IID_IConnectionPointContainer is for IConnectionPointContainer interfaces.
-	IID_IConnectionPointContainer = NewGUID("{B196B284-BAB4-101A-B69C-00AA00341D07}")
-
-	// IID_IConnectionPoint is for IConnectionPoint interfaces.
-	IID_IConnectionPoint = NewGUID("{B196B286-BAB4-101A-B69C-00AA00341D07}")
-
-	// IID_IInspectable is for IInspectable interfaces.
-	IID_IInspectable = NewGUID("{AF86E2E0-B12D-4C6A-9C5A-D7AA65101E90}")
-
-	// IID_IProvideClassInfo is for IProvideClassInfo interfaces.
-	IID_IProvideClassInfo = NewGUID("{B196B283-BAB4-101A-B69C-00AA00341D07}")
-)
-
-// These are for testing and not part of any library.
-var (
-	// IID_ICOMTestString is for ICOMTestString interfaces.
-	//
-	// {E0133EB4-C36F-469A-9D3D-C66B84BE19ED}
-	IID_ICOMTestString = NewGUID("{E0133EB4-C36F-469A-9D3D-C66B84BE19ED}")
-
-	// IID_ICOMTestInt8 is for ICOMTestInt8 interfaces.
-	//
-	// {BEB06610-EB84-4155-AF58-E2BFF53680B4}
-	IID_ICOMTestInt8 = NewGUID("{BEB06610-EB84-4155-AF58-E2BFF53680B4}")
-
-	// IID_ICOMTestInt16 is for ICOMTestInt16 interfaces.
-	//
-	// {DAA3F9FA-761E-4976-A860-8364CE55F6FC}
-	IID_ICOMTestInt16 = NewGUID("{DAA3F9FA-761E-4976-A860-8364CE55F6FC}")
-
-	// IID_ICOMTestInt32 is for ICOMTestInt32 interfaces.
-	//
-	// {E3DEDEE7-38A2-4540-91D1-2EEF1D8891B0}
-	IID_ICOMTestInt32 = NewGUID("{E3DEDEE7-38A2-4540-91D1-2EEF1D8891B0}")
-
-	// IID_ICOMTestInt64 is for ICOMTestInt64 interfaces.
-	//
-	// {8D437CBC-B3ED-485C-BC32-C336432A1623}
-	IID_ICOMTestInt64 = NewGUID("{8D437CBC-B3ED-485C-BC32-C336432A1623}")
-
-	// IID_ICOMTestFloat is for ICOMTestFloat interfaces.
-	//
-	// {BF1ED004-EA02-456A-AA55-2AC8AC6B054C}
-	IID_ICOMTestFloat = NewGUID("{BF1ED004-EA02-456A-AA55-2AC8AC6B054C}")
-
-	// IID_ICOMTestDouble is for ICOMTestDouble interfaces.
-	//
-	// {BF908A81-8687-4E93-999F-D86FAB284BA0}
-	IID_ICOMTestDouble = NewGUID("{BF908A81-8687-4E93-999F-D86FAB284BA0}")
-
-	// IID_ICOMTestBoolean is for ICOMTestBoolean interfaces.
-	//
-	// {D530E7A6-4EE8-40D1-8931-3D63B8605010}
-	IID_ICOMTestBoolean = NewGUID("{D530E7A6-4EE8-40D1-8931-3D63B8605010}")
-
-	// IID_ICOMEchoTestObject is for ICOMEchoTestObject interfaces.
-	//
-	// {6485B1EF-D780-4834-A4FE-1EBB51746CA3}
-	IID_ICOMEchoTestObject = NewGUID("{6485B1EF-D780-4834-A4FE-1EBB51746CA3}")
-
-	// IID_ICOMTestTypes is for ICOMTestTypes interfaces.
-	//
-	// {CCA8D7AE-91C0-4277-A8B3-FF4EDF28D3C0}
-	IID_ICOMTestTypes = NewGUID("{CCA8D7AE-91C0-4277-A8B3-FF4EDF28D3C0}")
-
-	// CLSID_COMEchoTestObject is for COMEchoTestObject class.
-	//
-	// {3C24506A-AE9E-4D50-9157-EF317281F1B0}
-	CLSID_COMEchoTestObject = NewGUID("{3C24506A-AE9E-4D50-9157-EF317281F1B0}")
-
-	// CLSID_COMTestScalarClass is for COMTestScalarClass class.
-	//
-	// {865B85C5-0334-4AC6-9EF6-AACEC8FC5E86}
-	CLSID_COMTestScalarClass = NewGUID("{865B85C5-0334-4AC6-9EF6-AACEC8FC5E86}")
-)
-
-const hextable = "0123456789ABCDEF"
-const emptyGUID = "{00000000-0000-0000-0000-000000000000}"
-
-// GUID is Windows API specific GUID type.
-//
-// This exists to match Windows GUID type for direct passing for COM.
-// Format is in xxxxxxxx-xxxx-xxxx-xxxxxxxxxxxxxxxx.
-type GUID struct {
-	Data1 uint32
-	Data2 uint16
-	Data3 uint16
-	Data4 [8]byte
-}
-
-// NewGUID converts the given string into a globally unique identifier that is
-// compliant with the Windows API.
-//
-// The supplied string may be in any of these formats:
-//
-//  XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-//  XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX
-//  {XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}
-//
-// The conversion of the supplied string is not case-sensitive.
-func NewGUID(guid string) *GUID {
-	d := []byte(guid)
-	var d1, d2, d3, d4a, d4b []byte
-
-	switch len(d) {
-	case 38:
-		if d[0] != '{' || d[37] != '}' {
-			return nil
-		}
-		d = d[1:37]
-		fallthrough
-	case 36:
-		if d[8] != '-' || d[13] != '-' || d[18] != '-' || d[23] != '-' {
-			return nil
-		}
-		d1 = d[0:8]
-		d2 = d[9:13]
-		d3 = d[14:18]
-		d4a = d[19:23]
-		d4b = d[24:36]
-	case 32:
-		d1 = d[0:8]
-		d2 = d[8:12]
-		d3 = d[12:16]
-		d4a = d[16:20]
-		d4b = d[20:32]
-	default:
-		return nil
-	}
-
-	var g GUID
-	var ok1, ok2, ok3, ok4 bool
-	g.Data1, ok1 = decodeHexUint32(d1)
-	g.Data2, ok2 = decodeHexUint16(d2)
-	g.Data3, ok3 = decodeHexUint16(d3)
-	g.Data4, ok4 = decodeHexByte64(d4a, d4b)
-	if ok1 && ok2 && ok3 && ok4 {
-		return &g
-	}
-	return nil
-}
-
-func decodeHexUint32(src []byte) (value uint32, ok bool) {
-	var b1, b2, b3, b4 byte
-	var ok1, ok2, ok3, ok4 bool
-	b1, ok1 = decodeHexByte(src[0], src[1])
-	b2, ok2 = decodeHexByte(src[2], src[3])
-	b3, ok3 = decodeHexByte(src[4], src[5])
-	b4, ok4 = decodeHexByte(src[6], src[7])
-	value = (uint32(b1) << 24) | (uint32(b2) << 16) | (uint32(b3) << 8) | uint32(b4)
-	ok = ok1 && ok2 && ok3 && ok4
-	return
-}
-
-func decodeHexUint16(src []byte) (value uint16, ok bool) {
-	var b1, b2 byte
-	var ok1, ok2 bool
-	b1, ok1 = decodeHexByte(src[0], src[1])
-	b2, ok2 = decodeHexByte(src[2], src[3])
-	value = (uint16(b1) << 8) | uint16(b2)
-	ok = ok1 && ok2
-	return
-}
-
-func decodeHexByte64(s1 []byte, s2 []byte) (value [8]byte, ok bool) {
-	var ok1, ok2, ok3, ok4, ok5, ok6, ok7, ok8 bool
-	value[0], ok1 = decodeHexByte(s1[0], s1[1])
-	value[1], ok2 = decodeHexByte(s1[2], s1[3])
-	value[2], ok3 = decodeHexByte(s2[0], s2[1])
-	value[3], ok4 = decodeHexByte(s2[2], s2[3])
-	value[4], ok5 = decodeHexByte(s2[4], s2[5])
-	value[5], ok6 = decodeHexByte(s2[6], s2[7])
-	value[6], ok7 = decodeHexByte(s2[8], s2[9])
-	value[7], ok8 = decodeHexByte(s2[10], s2[11])
-	ok = ok1 && ok2 && ok3 && ok4 && ok5 && ok6 && ok7 && ok8
-	return
-}
-
-func decodeHexByte(c1, c2 byte) (value byte, ok bool) {
-	var n1, n2 byte
-	var ok1, ok2 bool
-	n1, ok1 = decodeHexChar(c1)
-	n2, ok2 = decodeHexChar(c2)
-	value = (n1 << 4) | n2
-	ok = ok1 && ok2
-	return
-}
-
-func decodeHexChar(c byte) (byte, bool) {
-	switch {
-	case '0' <= c && c <= '9':
-		return c - '0', true
-	case 'a' <= c && c <= 'f':
-		return c - 'a' + 10, true
-	case 'A' <= c && c <= 'F':
-		return c - 'A' + 10, true
-	}
-
-	return 0, false
-}
-
-// String converts the GUID to string form. It will adhere to this pattern:
-//
-//  {XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}
-//
-// If the GUID is nil, the string representation of an empty GUID is returned:
-//
-//  {00000000-0000-0000-0000-000000000000}
-func (guid *GUID) String() string {
-	if guid == nil {
-		return emptyGUID
-	}
-
-	var c [38]byte
-	c[0] = '{'
-	putUint32Hex(c[1:9], guid.Data1)
-	c[9] = '-'
-	putUint16Hex(c[10:14], guid.Data2)
-	c[14] = '-'
-	putUint16Hex(c[15:19], guid.Data3)
-	c[19] = '-'
-	putByteHex(c[20:24], guid.Data4[0:2])
-	c[24] = '-'
-	putByteHex(c[25:37], guid.Data4[2:8])
-	c[37] = '}'
-	return string(c[:])
-}
-
-func putUint32Hex(b []byte, v uint32) {
-	b[0] = hextable[byte(v>>24)>>4]
-	b[1] = hextable[byte(v>>24)&0x0f]
-	b[2] = hextable[byte(v>>16)>>4]
-	b[3] = hextable[byte(v>>16)&0x0f]
-	b[4] = hextable[byte(v>>8)>>4]
-	b[5] = hextable[byte(v>>8)&0x0f]
-	b[6] = hextable[byte(v)>>4]
-	b[7] = hextable[byte(v)&0x0f]
-}
-
-func putUint16Hex(b []byte, v uint16) {
-	b[0] = hextable[byte(v>>8)>>4]
-	b[1] = hextable[byte(v>>8)&0x0f]
-	b[2] = hextable[byte(v)>>4]
-	b[3] = hextable[byte(v)&0x0f]
-}
-
-func putByteHex(dst, src []byte) {
-	for i := 0; i < len(src); i++ {
-		dst[i*2] = hextable[src[i]>>4]
-		dst[i*2+1] = hextable[src[i]&0x0f]
-	}
-}
-
-// IsEqualGUID compares two GUID.
-//
-// Not constant time comparison.
-func IsEqualGUID(guid1 *GUID, guid2 *GUID) bool {
-	return guid1.Data1 == guid2.Data1 &&
-		guid1.Data2 == guid2.Data2 &&
-		guid1.Data3 == guid2.Data3 &&
-		guid1.Data4[0] == guid2.Data4[0] &&
-		guid1.Data4[1] == guid2.Data4[1] &&
-		guid1.Data4[2] == guid2.Data4[2] &&
-		guid1.Data4[3] == guid2.Data4[3] &&
-		guid1.Data4[4] == guid2.Data4[4] &&
-		guid1.Data4[5] == guid2.Data4[5] &&
-		guid1.Data4[6] == guid2.Data4[6] &&
-		guid1.Data4[7] == guid2.Data4[7]
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/go-ole/go-ole/iconnectionpoint.go","mode":420,"size":434,"sha256":"8df7ec0c9656581b44e4a3c4bcae43235cb324895033cdd18b5c9486624dcc25","index":0,"count":1,"encoding":"utf-8","payloadBytes":434}
-package ole
-
-import "unsafe"
-
-type IConnectionPoint struct {
-	IUnknown
-}
-
-type IConnectionPointVtbl struct {
-	IUnknownVtbl
-	GetConnectionInterface      uintptr
-	GetConnectionPointContainer uintptr
-	Advise                      uintptr
-	Unadvise                    uintptr
-	EnumConnections             uintptr
-}
-
-func (v *IConnectionPoint) VTable() *IConnectionPointVtbl {
-	return (*IConnectionPointVtbl)(unsafe.Pointer(v.RawVTable))
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/go-ole/go-ole/iconnectionpoint_func.go","mode":420,"size":450,"sha256":"dca1cb035b4c59302339586ab299892e513c4ef8660634f4f02d10d164e70650","index":0,"count":1,"encoding":"utf-8","payloadBytes":450}
-// +build !windows
-
-package ole
-
-import "unsafe"
-
-func (v *IConnectionPoint) GetConnectionInterface(piid **GUID) int32 {
-	return int32(0)
-}
-
-func (v *IConnectionPoint) Advise(unknown *IUnknown) (uint32, error) {
-	return uint32(0), NewError(E_NOTIMPL)
-}
-
-func (v *IConnectionPoint) Unadvise(cookie uint32) error {
-	return NewError(E_NOTIMPL)
-}
-
-func (v *IConnectionPoint) EnumConnections(p *unsafe.Pointer) (err error) {
-	return NewError(E_NOTIMPL)
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/go-ole/go-ole/iconnectionpoint_windows.go","mode":420,"size":864,"sha256":"fa870009191467093a3f3f2ddae441740c225893b138ed14d0eeb52108cf953f","index":0,"count":1,"encoding":"utf-8","payloadBytes":864}
-// +build windows
-
-package ole
-
-import (
-	"syscall"
-	"unsafe"
-)
-
-func (v *IConnectionPoint) GetConnectionInterface(piid **GUID) int32 {
-	// XXX: This doesn't look like it does what it's supposed to
-	return release((*IUnknown)(unsafe.Pointer(v)))
-}
-
-func (v *IConnectionPoint) Advise(unknown *IUnknown) (cookie uint32, err error) {
-	hr, _, _ := syscall.Syscall(
-		v.VTable().Advise,
-		3,
-		uintptr(unsafe.Pointer(v)),
-		uintptr(unsafe.Pointer(unknown)),
-		uintptr(unsafe.Pointer(&cookie)))
-	if hr != 0 {
-		err = NewError(hr)
-	}
-	return
-}
-
-func (v *IConnectionPoint) Unadvise(cookie uint32) (err error) {
-	hr, _, _ := syscall.Syscall(
-		v.VTable().Unadvise,
-		2,
-		uintptr(unsafe.Pointer(v)),
-		uintptr(cookie),
-		0)
-	if hr != 0 {
-		err = NewError(hr)
-	}
-	return
-}
-
-func (v *IConnectionPoint) EnumConnections(p *unsafe.Pointer) error {
-	return NewError(E_NOTIMPL)
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/go-ole/go-ole/iconnectionpointcontainer.go","mode":420,"size":354,"sha256":"e6a35f60ab034929e28b890e3e512d9ab14f1d834836578d975bd7ed5b946a96","index":0,"count":1,"encoding":"utf-8","payloadBytes":354}
-package ole
-
-import "unsafe"
-
-type IConnectionPointContainer struct {
-	IUnknown
-}
-
-type IConnectionPointContainerVtbl struct {
-	IUnknownVtbl
-	EnumConnectionPoints uintptr
-	FindConnectionPoint  uintptr
-}
-
-func (v *IConnectionPointContainer) VTable() *IConnectionPointContainerVtbl {
-	return (*IConnectionPointContainerVtbl)(unsafe.Pointer(v.RawVTable))
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/go-ole/go-ole/iconnectionpointcontainer_func.go","mode":420,"size":280,"sha256":"1da02f8a4147262f06ad1896a5137d5d8d22217315d5a740858bd35ec2f87747","index":0,"count":1,"encoding":"utf-8","payloadBytes":280}
-// +build !windows
-
-package ole
-
-func (v *IConnectionPointContainer) EnumConnectionPoints(points interface{}) error {
-	return NewError(E_NOTIMPL)
-}
-
-func (v *IConnectionPointContainer) FindConnectionPoint(iid *GUID, point **IConnectionPoint) error {
-	return NewError(E_NOTIMPL)
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/go-ole/go-ole/iconnectionpointcontainer_windows.go","mode":420,"size":501,"sha256":"31200f0325f4abb9ddb373029c08d9faecc8a84cb926802dce3d609a9c4f01b0","index":0,"count":1,"encoding":"utf-8","payloadBytes":501}
-// +build windows
-
-package ole
-
-import (
-	"syscall"
-	"unsafe"
-)
-
-func (v *IConnectionPointContainer) EnumConnectionPoints(points interface{}) error {
-	return NewError(E_NOTIMPL)
-}
-
-func (v *IConnectionPointContainer) FindConnectionPoint(iid *GUID, point **IConnectionPoint) (err error) {
-	hr, _, _ := syscall.Syscall(
-		v.VTable().FindConnectionPoint,
-		3,
-		uintptr(unsafe.Pointer(v)),
-		uintptr(unsafe.Pointer(iid)),
-		uintptr(unsafe.Pointer(point)))
-	if hr != 0 {
-		err = NewError(hr)
-	}
-	return
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/go-ole/go-ole/idispatch.go","mode":420,"size":2980,"sha256":"0dae90d0e328e8791395f5474ef8736484026f605527aa4f86c70e2ebd2bb105","index":0,"count":1,"encoding":"utf-8","payloadBytes":2980}
-package ole
-
-import "unsafe"
-
-type IDispatch struct {
-	IUnknown
-}
-
-type IDispatchVtbl struct {
-	IUnknownVtbl
-	GetTypeInfoCount uintptr
-	GetTypeInfo      uintptr
-	GetIDsOfNames    uintptr
-	Invoke           uintptr
-}
-
-func (v *IDispatch) VTable() *IDispatchVtbl {
-	return (*IDispatchVtbl)(unsafe.Pointer(v.RawVTable))
-}
-
-func (v *IDispatch) GetIDsOfName(names []string) (dispid []int32, err error) {
-	dispid, err = getIDsOfName(v, names)
-	return
-}
-
-func (v *IDispatch) Invoke(dispid int32, dispatch int16, params ...interface{}) (result *VARIANT, err error) {
-	result, err = invoke(v, dispid, dispatch, params...)
-	return
-}
-
-func (v *IDispatch) GetTypeInfoCount() (c uint32, err error) {
-	c, err = getTypeInfoCount(v)
-	return
-}
-
-func (v *IDispatch) GetTypeInfo() (tinfo *ITypeInfo, err error) {
-	tinfo, err = getTypeInfo(v)
-	return
-}
-
-// GetSingleIDOfName is a helper that returns single display ID for IDispatch name.
-//
-// This replaces the common pattern of attempting to get a single name from the list of available
-// IDs. It gives the first ID, if it is available.
-func (v *IDispatch) GetSingleIDOfName(name string) (displayID int32, err error) {
-	var displayIDs []int32
-	displayIDs, err = v.GetIDsOfName([]string{name})
-	if err != nil {
-		return
-	}
-	displayID = displayIDs[0]
-	return
-}
-
-// InvokeWithOptionalArgs accepts arguments as an array, works like Invoke.
-//
-// Accepts name and will attempt to retrieve Display ID to pass to Invoke.
-//
-// Passing params as an array is a workaround that could be fixed in later versions of Go that
-// prevent passing empty params. During testing it was discovered that this is an acceptable way of
-// getting around not being able to pass params normally.
-func (v *IDispatch) InvokeWithOptionalArgs(name string, dispatch int16, params []interface{}) (result *VARIANT, err error) {
-	displayID, err := v.GetSingleIDOfName(name)
-	if err != nil {
-		return
-	}
-
-	if len(params) < 1 {
-		result, err = v.Invoke(displayID, dispatch)
-	} else {
-		result, err = v.Invoke(displayID, dispatch, params...)
-	}
-
-	return
-}
-
-// CallMethod invokes named function with arguments on object.
-func (v *IDispatch) CallMethod(name string, params ...interface{}) (*VARIANT, error) {
-	return v.InvokeWithOptionalArgs(name, DISPATCH_METHOD, params)
-}
-
-// GetProperty retrieves the property with the name with the ability to pass arguments.
-//
-// Most of the time you will not need to pass arguments as most objects do not allow for this
-// feature. Or at least, should not allow for this feature. Some servers don't follow best practices
-// and this is provided for those edge cases.
-func (v *IDispatch) GetProperty(name string, params ...interface{}) (*VARIANT, error) {
-	return v.InvokeWithOptionalArgs(name, DISPATCH_PROPERTYGET, params)
-}
-
-// PutProperty attempts to mutate a property in the object.
-func (v *IDispatch) PutProperty(name string, params ...interface{}) (*VARIANT, error) {
-	return v.InvokeWithOptionalArgs(name, DISPATCH_PROPERTYPUT, params)
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/go-ole/go-ole/idispatch_func.go","mode":420,"size":473,"sha256":"22423127746864e4bd6cbabfab2ede2476a7ed16ccf3b2dc762a429e9f82cb11","index":0,"count":1,"encoding":"utf-8","payloadBytes":473}
-// +build !windows
-
-package ole
-
-func getIDsOfName(disp *IDispatch, names []string) ([]int32, error) {
-	return []int32{}, NewError(E_NOTIMPL)
-}
-
-func getTypeInfoCount(disp *IDispatch) (uint32, error) {
-	return uint32(0), NewError(E_NOTIMPL)
-}
-
-func getTypeInfo(disp *IDispatch) (*ITypeInfo, error) {
-	return nil, NewError(E_NOTIMPL)
-}
-
-func invoke(disp *IDispatch, dispid int32, dispatch int16, params ...interface{}) (*VARIANT, error) {
-	return nil, NewError(E_NOTIMPL)
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/go-ole/go-ole/idispatch_windows.go","mode":420,"size":6646,"sha256":"0a562cd4cccef2f4bede79aebd33ee4ff230cb1b814ddf67ff092ce7417295c7","index":0,"count":1,"encoding":"utf-8","payloadBytes":6646}
-//go:build windows
-// +build windows
-
-package ole
-
-import (
-	"math/big"
-	"syscall"
-	"time"
-	"unsafe"
-)
-
-func getIDsOfName(disp *IDispatch, names []string) (dispid []int32, err error) {
-	wnames := make([]*uint16, len(names))
-	for i := 0; i < len(names); i++ {
-		wnames[i] = syscall.StringToUTF16Ptr(names[i])
-	}
-	dispid = make([]int32, len(names))
-	namelen := uint32(len(names))
-	hr, _, _ := syscall.Syscall6(
-		disp.VTable().GetIDsOfNames,
-		6,
-		uintptr(unsafe.Pointer(disp)),
-		uintptr(unsafe.Pointer(IID_NULL)),
-		uintptr(unsafe.Pointer(&wnames[0])),
-		uintptr(namelen),
-		uintptr(GetUserDefaultLCID()),
-		uintptr(unsafe.Pointer(&dispid[0])))
-	if hr != 0 {
-		err = NewError(hr)
-	}
-	return
-}
-
-func getTypeInfoCount(disp *IDispatch) (c uint32, err error) {
-	hr, _, _ := syscall.Syscall(
-		disp.VTable().GetTypeInfoCount,
-		2,
-		uintptr(unsafe.Pointer(disp)),
-		uintptr(unsafe.Pointer(&c)),
-		0)
-	if hr != 0 {
-		err = NewError(hr)
-	}
-	return
-}
-
-func getTypeInfo(disp *IDispatch) (tinfo *ITypeInfo, err error) {
-	hr, _, _ := syscall.Syscall(
-		disp.VTable().GetTypeInfo,
-		3,
-		uintptr(unsafe.Pointer(disp)),
-		uintptr(GetUserDefaultLCID()),
-		uintptr(unsafe.Pointer(&tinfo)))
-	if hr != 0 {
-		err = NewError(hr)
-	}
-	return
-}
-
-func invoke(disp *IDispatch, dispid int32, dispatch int16, params ...interface{}) (result *VARIANT, err error) {
-	var dispparams DISPPARAMS
-
-	if dispatch&DISPATCH_PROPERTYPUT != 0 {
-		dispnames := [1]int32{DISPID_PROPERTYPUT}
-		dispparams.rgdispidNamedArgs = uintptr(unsafe.Pointer(&dispnames[0]))
-		dispparams.cNamedArgs = 1
-	} else if dispatch&DISPATCH_PROPERTYPUTREF != 0 {
-		dispnames := [1]int32{DISPID_PROPERTYPUT}
-		dispparams.rgdispidNamedArgs = uintptr(unsafe.Pointer(&dispnames[0]))
-		dispparams.cNamedArgs = 1
-	}
-	var vargs []VARIANT
-	if len(params) > 0 {
-		vargs = make([]VARIANT, len(params))
-		for i, v := range params {
-			//n := len(params)-i-1
-			n := len(params) - i - 1
-			VariantInit(&vargs[n])
-			switch vv := v.(type) {
-			case bool:
-				if vv {
-					vargs[n] = NewVariant(VT_BOOL, 0xffff)
-				} else {
-					vargs[n] = NewVariant(VT_BOOL, 0)
-				}
-			case *bool:
-				vargs[n] = NewVariant(VT_BOOL|VT_BYREF, int64(uintptr(unsafe.Pointer(v.(*bool)))))
-			case uint8:
-				vargs[n] = NewVariant(VT_I1, int64(v.(uint8)))
-			case *uint8:
-				vargs[n] = NewVariant(VT_I1|VT_BYREF, int64(uintptr(unsafe.Pointer(v.(*uint8)))))
-			case int8:
-				vargs[n] = NewVariant(VT_I1, int64(v.(int8)))
-			case *int8:
-				vargs[n] = NewVariant(VT_I1|VT_BYREF, int64(uintptr(unsafe.Pointer(v.(*int8)))))
-			case int16:
-				vargs[n] = NewVariant(VT_I2, int64(v.(int16)))
-			case *int16:
-				vargs[n] = NewVariant(VT_I2|VT_BYREF, int64(uintptr(unsafe.Pointer(v.(*int16)))))
-			case uint16:
-				vargs[n] = NewVariant(VT_UI2, int64(v.(uint16)))
-			case *uint16:
-				vargs[n] = NewVariant(VT_UI2|VT_BYREF, int64(uintptr(unsafe.Pointer(v.(*uint16)))))
-			case int32:
-				vargs[n] = NewVariant(VT_I4, int64(v.(int32)))
-			case *int32:
-				vargs[n] = NewVariant(VT_I4|VT_BYREF, int64(uintptr(unsafe.Pointer(v.(*int32)))))
-			case uint32:
-				vargs[n] = NewVariant(VT_UI4, int64(v.(uint32)))
-			case *uint32:
-				vargs[n] = NewVariant(VT_UI4|VT_BYREF, int64(uintptr(unsafe.Pointer(v.(*uint32)))))
-			case int64:
-				vargs[n] = NewVariant(VT_I8, int64(v.(int64)))
-			case *int64:
-				vargs[n] = NewVariant(VT_I8|VT_BYREF, int64(uintptr(unsafe.Pointer(v.(*int64)))))
-			case uint64:
-				vargs[n] = NewVariant(VT_UI8, int64(uintptr(v.(uint64))))
-			case *uint64:
-				vargs[n] = NewVariant(VT_UI8|VT_BYREF, int64(uintptr(unsafe.Pointer(v.(*uint64)))))
-			case int:
-				vargs[n] = NewVariant(VT_I4, int64(v.(int)))
-			case *int:
-				vargs[n] = NewVariant(VT_I4|VT_BYREF, int64(uintptr(unsafe.Pointer(v.(*int)))))
-			case uint:
-				vargs[n] = NewVariant(VT_UI4, int64(v.(uint)))
-			case *uint:
-				vargs[n] = NewVariant(VT_UI4|VT_BYREF, int64(uintptr(unsafe.Pointer(v.(*uint)))))
-			case float32:
-				vargs[n] = NewVariant(VT_R4, *(*int64)(unsafe.Pointer(&vv)))
-			case *float32:
-				vargs[n] = NewVariant(VT_R4|VT_BYREF, int64(uintptr(unsafe.Pointer(v.(*float32)))))
-			case float64:
-				vargs[n] = NewVariant(VT_R8, *(*int64)(unsafe.Pointer(&vv)))
-			case *float64:
-				vargs[n] = NewVariant(VT_R8|VT_BYREF, int64(uintptr(unsafe.Pointer(v.(*float64)))))
-			case *big.Int:
-				vargs[n] = NewVariant(VT_DECIMAL, v.(*big.Int).Int64())
-			case string:
-				vargs[n] = NewVariant(VT_BSTR, int64(uintptr(unsafe.Pointer(SysAllocStringLen(v.(string))))))
-			case *string:
-				vargs[n] = NewVariant(VT_BSTR|VT_BYREF, int64(uintptr(unsafe.Pointer(v.(*string)))))
-			case time.Time:
-				s := vv.Format("2006-01-02 15:04:05")
-				vargs[n] = NewVariant(VT_BSTR, int64(uintptr(unsafe.Pointer(SysAllocStringLen(s)))))
-			case *time.Time:
-				s := vv.Format("2006-01-02 15:04:05")
-				vargs[n] = NewVariant(VT_BSTR|VT_BYREF, int64(uintptr(unsafe.Pointer(&s))))
-			case *IDispatch:
-				vargs[n] = NewVariant(VT_DISPATCH, int64(uintptr(unsafe.Pointer(v.(*IDispatch)))))
-			case **IDispatch:
-				vargs[n] = NewVariant(VT_DISPATCH|VT_BYREF, int64(uintptr(unsafe.Pointer(v.(**IDispatch)))))
-			case nil:
-				vargs[n] = NewVariant(VT_NULL, 0)
-			case *VARIANT:
-				vargs[n] = NewVariant(VT_VARIANT|VT_BYREF, int64(uintptr(unsafe.Pointer(v.(*VARIANT)))))
-			case []byte:
-				safeByteArray := safeArrayFromByteSlice(v.([]byte))
-				vargs[n] = NewVariant(VT_ARRAY|VT_UI1, int64(uintptr(unsafe.Pointer(safeByteArray))))
-				defer VariantClear(&vargs[n])
-			case []string:
-				safeByteArray := safeArrayFromStringSlice(v.([]string))
-				vargs[n] = NewVariant(VT_ARRAY|VT_BSTR, int64(uintptr(unsafe.Pointer(safeByteArray))))
-				defer VariantClear(&vargs[n])
-			default:
-				panic("unknown type")
-			}
-		}
-		dispparams.rgvarg = uintptr(unsafe.Pointer(&vargs[0]))
-		dispparams.cArgs = uint32(len(params))
-	}
-
-	result = new(VARIANT)
-	var excepInfo EXCEPINFO
-	VariantInit(result)
-	hr, _, _ := syscall.Syscall9(
-		disp.VTable().Invoke,
-		9,
-		uintptr(unsafe.Pointer(disp)),
-		uintptr(dispid),
-		uintptr(unsafe.Pointer(IID_NULL)),
-		uintptr(GetUserDefaultLCID()),
-		uintptr(dispatch),
-		uintptr(unsafe.Pointer(&dispparams)),
-		uintptr(unsafe.Pointer(result)),
-		uintptr(unsafe.Pointer(&excepInfo)),
-		0)
-	if hr != 0 {
-		excepInfo.renderStrings()
-		excepInfo.Clear()
-		err = NewErrorWithSubError(hr, excepInfo.description, excepInfo)
-	}
-	for i, varg := range vargs {
-		n := len(params) - i - 1
-		if varg.VT == VT_BSTR && varg.Val != 0 {
-			SysFreeString(((*int16)(unsafe.Pointer(uintptr(varg.Val)))))
-		}
-		if varg.VT == (VT_BSTR|VT_BYREF) && varg.Val != 0 {
-			*(params[n].(*string)) = LpOleStrToString(*(**uint16)(unsafe.Pointer(uintptr(varg.Val))))
-		}
-	}
-	return
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/go-ole/go-ole/ienumvariant.go","mode":420,"size":289,"sha256":"47f7afe907295755c6bcedb8a625ce7a51993ff9d392b0d65f43ddfef6c307cf","index":0,"count":1,"encoding":"utf-8","payloadBytes":289}
-package ole
-
-import "unsafe"
-
-type IEnumVARIANT struct {
-	IUnknown
-}
-
-type IEnumVARIANTVtbl struct {
-	IUnknownVtbl
-	Next  uintptr
-	Skip  uintptr
-	Reset uintptr
-	Clone uintptr
-}
-
-func (v *IEnumVARIANT) VTable() *IEnumVARIANTVtbl {
-	return (*IEnumVARIANTVtbl)(unsafe.Pointer(v.RawVTable))
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/go-ole/go-ole/ienumvariant_func.go","mode":420,"size":413,"sha256":"bdce6400adc4a208669af05c936ead6012b99f267e65c60e64d23eec9357a9a8","index":0,"count":1,"encoding":"utf-8","payloadBytes":413}
-// +build !windows
-
-package ole
-
-func (enum *IEnumVARIANT) Clone() (*IEnumVARIANT, error) {
-	return nil, NewError(E_NOTIMPL)
-}
-
-func (enum *IEnumVARIANT) Reset() error {
-	return NewError(E_NOTIMPL)
-}
-
-func (enum *IEnumVARIANT) Skip(celt uint) error {
-	return NewError(E_NOTIMPL)
-}
-
-func (enum *IEnumVARIANT) Next(celt uint) (VARIANT, uint, error) {
-	return NewVariant(VT_NULL, int64(0)), 0, NewError(E_NOTIMPL)
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/go-ole/go-ole/ienumvariant_windows.go","mode":420,"size":1052,"sha256":"c663dede99fb203b174df2a10ecb4e35cbef9fc9123f1339958d00a97ea5f55c","index":0,"count":1,"encoding":"utf-8","payloadBytes":1052}
-// +build windows
-
-package ole
-
-import (
-	"syscall"
-	"unsafe"
-)
-
-func (enum *IEnumVARIANT) Clone() (cloned *IEnumVARIANT, err error) {
-	hr, _, _ := syscall.Syscall(
-		enum.VTable().Clone,
-		2,
-		uintptr(unsafe.Pointer(enum)),
-		uintptr(unsafe.Pointer(&cloned)),
-		0)
-	if hr != 0 {
-		err = NewError(hr)
-	}
-	return
-}
-
-func (enum *IEnumVARIANT) Reset() (err error) {
-	hr, _, _ := syscall.Syscall(
-		enum.VTable().Reset,
-		1,
-		uintptr(unsafe.Pointer(enum)),
-		0,
-		0)
-	if hr != 0 {
-		err = NewError(hr)
-	}
-	return
-}
-
-func (enum *IEnumVARIANT) Skip(celt uint) (err error) {
-	hr, _, _ := syscall.Syscall(
-		enum.VTable().Skip,
-		2,
-		uintptr(unsafe.Pointer(enum)),
-		uintptr(celt),
-		0)
-	if hr != 0 {
-		err = NewError(hr)
-	}
-	return
-}
-
-func (enum *IEnumVARIANT) Next(celt uint) (array VARIANT, length uint, err error) {
-	hr, _, _ := syscall.Syscall6(
-		enum.VTable().Next,
-		4,
-		uintptr(unsafe.Pointer(enum)),
-		uintptr(celt),
-		uintptr(unsafe.Pointer(&array)),
-		uintptr(unsafe.Pointer(&length)),
-		0,
-		0)
-	if hr != 0 {
-		err = NewError(hr)
-	}
-	return
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/go-ole/go-ole/iinspectable.go","mode":420,"size":316,"sha256":"b62aa829ffb1e22e252ace723cfcc8bb9fe0f23f6d0f377ac1932ef25d27d90e","index":0,"count":1,"encoding":"utf-8","payloadBytes":316}
-package ole
-
-import "unsafe"
-
-type IInspectable struct {
-	IUnknown
-}
-
-type IInspectableVtbl struct {
-	IUnknownVtbl
-	GetIIds             uintptr
-	GetRuntimeClassName uintptr
-	GetTrustLevel       uintptr
-}
-
-func (v *IInspectable) VTable() *IInspectableVtbl {
-	return (*IInspectableVtbl)(unsafe.Pointer(v.RawVTable))
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/go-ole/go-ole/iinspectable_func.go","mode":420,"size":323,"sha256":"9834a517cf057ae36e1e80c1349078c8c3543d5e0ab36eab342f161034c7bf77","index":0,"count":1,"encoding":"utf-8","payloadBytes":323}
-// +build !windows
-
-package ole
-
-func (v *IInspectable) GetIids() ([]*GUID, error) {
-	return []*GUID{}, NewError(E_NOTIMPL)
-}
-
-func (v *IInspectable) GetRuntimeClassName() (string, error) {
-	return "", NewError(E_NOTIMPL)
-}
-
-func (v *IInspectable) GetTrustLevel() (uint32, error) {
-	return uint32(0), NewError(E_NOTIMPL)
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/go-ole/go-ole/iinspectable_windows.go","mode":420,"size":1437,"sha256":"516122b356e40e3127970f205939a2268082e154e0599deeeadd8b632a72930a","index":0,"count":1,"encoding":"utf-8","payloadBytes":1437}
-// +build windows
-
-package ole
-
-import (
-	"bytes"
-	"encoding/binary"
-	"reflect"
-	"syscall"
-	"unsafe"
-)
-
-func (v *IInspectable) GetIids() (iids []*GUID, err error) {
-	var count uint32
-	var array uintptr
-	hr, _, _ := syscall.Syscall(
-		v.VTable().GetIIds,
-		3,
-		uintptr(unsafe.Pointer(v)),
-		uintptr(unsafe.Pointer(&count)),
-		uintptr(unsafe.Pointer(&array)))
-	if hr != 0 {
-		err = NewError(hr)
-		return
-	}
-	defer CoTaskMemFree(array)
-
-	iids = make([]*GUID, count)
-	byteCount := count * uint32(unsafe.Sizeof(GUID{}))
-	slicehdr := reflect.SliceHeader{Data: array, Len: int(byteCount), Cap: int(byteCount)}
-	byteSlice := *(*[]byte)(unsafe.Pointer(&slicehdr))
-	reader := bytes.NewReader(byteSlice)
-	for i := range iids {
-		guid := GUID{}
-		err = binary.Read(reader, binary.LittleEndian, &guid)
-		if err != nil {
-			return
-		}
-		iids[i] = &guid
-	}
-	return
-}
-
-func (v *IInspectable) GetRuntimeClassName() (s string, err error) {
-	var hstring HString
-	hr, _, _ := syscall.Syscall(
-		v.VTable().GetRuntimeClassName,
-		2,
-		uintptr(unsafe.Pointer(v)),
-		uintptr(unsafe.Pointer(&hstring)),
-		0)
-	if hr != 0 {
-		err = NewError(hr)
-		return
-	}
-	s = hstring.String()
-	DeleteHString(hstring)
-	return
-}
-
-func (v *IInspectable) GetTrustLevel() (level uint32, err error) {
-	hr, _, _ := syscall.Syscall(
-		v.VTable().GetTrustLevel,
-		2,
-		uintptr(unsafe.Pointer(v)),
-		uintptr(unsafe.Pointer(&level)),
-		0)
-	if hr != 0 {
-		err = NewError(hr)
-	}
-	return
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/go-ole/go-ole/iprovideclassinfo.go","mode":420,"size":392,"sha256":"ce9bee59201c83f9b2616b09b7f09c3f12a7eba4387ffdac9d44bbf90fab8dca","index":0,"count":1,"encoding":"utf-8","payloadBytes":392}
-package ole
-
-import "unsafe"
-
-type IProvideClassInfo struct {
-	IUnknown
-}
-
-type IProvideClassInfoVtbl struct {
-	IUnknownVtbl
-	GetClassInfo uintptr
-}
-
-func (v *IProvideClassInfo) VTable() *IProvideClassInfoVtbl {
-	return (*IProvideClassInfoVtbl)(unsafe.Pointer(v.RawVTable))
-}
-
-func (v *IProvideClassInfo) GetClassInfo() (cinfo *ITypeInfo, err error) {
-	cinfo, err = getClassInfo(v)
-	return
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/go-ole/go-ole/iprovideclassinfo_func.go","mode":420,"size":143,"sha256":"2effffcbcf6512c607b78f4148e4ebaa5b7f50227af588805fef1a1e332ab9ea","index":0,"count":1,"encoding":"utf-8","payloadBytes":143}
-// +build !windows
-
-package ole
-
-func getClassInfo(disp *IProvideClassInfo) (tinfo *ITypeInfo, err error) {
-	return nil, NewError(E_NOTIMPL)
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/go-ole/go-ole/iprovideclassinfo_windows.go","mode":420,"size":326,"sha256":"109aaa8067ff4e2c1d1cbef6088d7a11c0c317db01f4ec748f933a414940175d","index":0,"count":1,"encoding":"utf-8","payloadBytes":326}
-// +build windows
-
-package ole
-
-import (
-	"syscall"
-	"unsafe"
-)
-
-func getClassInfo(disp *IProvideClassInfo) (tinfo *ITypeInfo, err error) {
-	hr, _, _ := syscall.Syscall(
-		disp.VTable().GetClassInfo,
-		2,
-		uintptr(unsafe.Pointer(disp)),
-		uintptr(unsafe.Pointer(&tinfo)),
-		0)
-	if hr != 0 {
-		err = NewError(hr)
-	}
-	return
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/go-ole/go-ole/itypeinfo.go","mode":420,"size":784,"sha256":"7967e6c80c41066cbbec0b416f13b23861c62e974bba631263fe10ad8b162b0e","index":0,"count":1,"encoding":"utf-8","payloadBytes":784}
-package ole
-
-import "unsafe"
-
-type ITypeInfo struct {
-	IUnknown
-}
-
-type ITypeInfoVtbl struct {
-	IUnknownVtbl
-	GetTypeAttr          uintptr
-	GetTypeComp          uintptr
-	GetFuncDesc          uintptr
-	GetVarDesc           uintptr
-	GetNames             uintptr
-	GetRefTypeOfImplType uintptr
-	GetImplTypeFlags     uintptr
-	GetIDsOfNames        uintptr
-	Invoke               uintptr
-	GetDocumentation     uintptr
-	GetDllEntry          uintptr
-	GetRefTypeInfo       uintptr
-	AddressOfMember      uintptr
-	CreateInstance       uintptr
-	GetMops              uintptr
-	GetContainingTypeLib uintptr
-	ReleaseTypeAttr      uintptr
-	ReleaseFuncDesc      uintptr
-	ReleaseVarDesc       uintptr
-}
-
-func (v *ITypeInfo) VTable() *ITypeInfoVtbl {
-	return (*ITypeInfoVtbl)(unsafe.Pointer(v.RawVTable))
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/go-ole/go-ole/itypeinfo_func.go","mode":420,"size":123,"sha256":"a70d4f7084373a4357da1ea4781eb8901bb675e3fffbc25e566e99517756905f","index":0,"count":1,"encoding":"utf-8","payloadBytes":123}
-// +build !windows
-
-package ole
-
-func (v *ITypeInfo) GetTypeAttr() (*TYPEATTR, error) {
-	return nil, NewError(E_NOTIMPL)
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/go-ole/go-ole/itypeinfo_windows.go","mode":420,"size":318,"sha256":"f9d68b7712237233fa544b3aad905889b6f463c7385765c91c8713029445866f","index":0,"count":1,"encoding":"utf-8","payloadBytes":318}
-// +build windows
-
-package ole
-
-import (
-	"syscall"
-	"unsafe"
-)
-
-func (v *ITypeInfo) GetTypeAttr() (tattr *TYPEATTR, err error) {
-	hr, _, _ := syscall.Syscall(
-		uintptr(v.VTable().GetTypeAttr),
-		2,
-		uintptr(unsafe.Pointer(v)),
-		uintptr(unsafe.Pointer(&tattr)),
-		0)
-	if hr != 0 {
-		err = NewError(hr)
-	}
-	return
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/go-ole/go-ole/iunknown.go","mode":420,"size":1222,"sha256":"1b10774e5b130d74dc87d27fcf522fe45497f18fd020525b4a9dc7ff8e7bc6ff","index":0,"count":1,"encoding":"utf-8","payloadBytes":1222}
-package ole
-
-import "unsafe"
-
-type IUnknown struct {
-	RawVTable *interface{}
-}
-
-type IUnknownVtbl struct {
-	QueryInterface uintptr
-	AddRef         uintptr
-	Release        uintptr
-}
-
-type UnknownLike interface {
-	QueryInterface(iid *GUID) (disp *IDispatch, err error)
-	AddRef() int32
-	Release() int32
-}
-
-func (v *IUnknown) VTable() *IUnknownVtbl {
-	return (*IUnknownVtbl)(unsafe.Pointer(v.RawVTable))
-}
-
-func (v *IUnknown) PutQueryInterface(interfaceID *GUID, obj interface{}) error {
-	return reflectQueryInterface(v, v.VTable().QueryInterface, interfaceID, obj)
-}
-
-func (v *IUnknown) IDispatch(interfaceID *GUID) (dispatch *IDispatch, err error) {
-	err = v.PutQueryInterface(interfaceID, &dispatch)
-	return
-}
-
-func (v *IUnknown) IEnumVARIANT(interfaceID *GUID) (enum *IEnumVARIANT, err error) {
-	err = v.PutQueryInterface(interfaceID, &enum)
-	return
-}
-
-func (v *IUnknown) QueryInterface(iid *GUID) (*IDispatch, error) {
-	return queryInterface(v, iid)
-}
-
-func (v *IUnknown) MustQueryInterface(iid *GUID) (disp *IDispatch) {
-	unk, err := queryInterface(v, iid)
-	if err != nil {
-		panic(err)
-	}
-	return unk
-}
-
-func (v *IUnknown) AddRef() int32 {
-	return addRef(v)
-}
-
-func (v *IUnknown) Release() int32 {
-	return release(v)
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/go-ole/go-ole/iunknown_func.go","mode":420,"size":384,"sha256":"4a633d89d76fc71ac8ac41530b0e00b0d33ad20278ea716f80aad35b21448830","index":0,"count":1,"encoding":"utf-8","payloadBytes":384}
-// +build !windows
-
-package ole
-
-func reflectQueryInterface(self interface{}, method uintptr, interfaceID *GUID, obj interface{}) (err error) {
-	return NewError(E_NOTIMPL)
-}
-
-func queryInterface(unk *IUnknown, iid *GUID) (disp *IDispatch, err error) {
-	return nil, NewError(E_NOTIMPL)
-}
-
-func addRef(unk *IUnknown) int32 {
-	return 0
-}
-
-func release(unk *IUnknown) int32 {
-	return 0
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/go-ole/go-ole/iunknown_windows.go","mode":420,"size":1068,"sha256":"2704864c227eb3f806b5989f56cada805a663589399c088891bb06c3440e7f93","index":0,"count":1,"encoding":"utf-8","payloadBytes":1068}
-// +build windows
-
-package ole
-
-import (
-	"reflect"
-	"syscall"
-	"unsafe"
-)
-
-func reflectQueryInterface(self interface{}, method uintptr, interfaceID *GUID, obj interface{}) (err error) {
-	selfValue := reflect.ValueOf(self).Elem()
-	objValue := reflect.ValueOf(obj).Elem()
-
-	hr, _, _ := syscall.Syscall(
-		method,
-		3,
-		selfValue.UnsafeAddr(),
-		uintptr(unsafe.Pointer(interfaceID)),
-		objValue.Addr().Pointer())
-	if hr != 0 {
-		err = NewError(hr)
-	}
-	return
-}
-
-func queryInterface(unk *IUnknown, iid *GUID) (disp *IDispatch, err error) {
-	hr, _, _ := syscall.Syscall(
-		unk.VTable().QueryInterface,
-		3,
-		uintptr(unsafe.Pointer(unk)),
-		uintptr(unsafe.Pointer(iid)),
-		uintptr(unsafe.Pointer(&disp)))
-	if hr != 0 {
-		err = NewError(hr)
-	}
-	return
-}
-
-func addRef(unk *IUnknown) int32 {
-	ret, _, _ := syscall.Syscall(
-		unk.VTable().AddRef,
-		1,
-		uintptr(unsafe.Pointer(unk)),
-		0,
-		0)
-	return int32(ret)
-}
-
-func release(unk *IUnknown) int32 {
-	ret, _, _ := syscall.Syscall(
-		unk.VTable().Release,
-		1,
-		uintptr(unsafe.Pointer(unk)),
-		0,
-		0)
-	return int32(ret)
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/go-ole/go-ole/ole.go","mode":420,"size":4044,"sha256":"17d0fe48340970b605deb392bb9b075e14828bce756fd0fcc8ca9a55ca386140","index":0,"count":1,"encoding":"utf-8","payloadBytes":4044}
-package ole
-
-import (
-	"fmt"
-	"strings"
-	"unsafe"
-)
-
-// DISPPARAMS are the arguments that passed to methods or property.
-type DISPPARAMS struct {
-	rgvarg            uintptr
-	rgdispidNamedArgs uintptr
-	cArgs             uint32
-	cNamedArgs        uint32
-}
-
-// EXCEPINFO defines exception info.
-type EXCEPINFO struct {
-	wCode             uint16
-	wReserved         uint16
-	bstrSource        *uint16
-	bstrDescription   *uint16
-	bstrHelpFile      *uint16
-	dwHelpContext     uint32
-	pvReserved        uintptr
-	pfnDeferredFillIn uintptr
-	scode             uint32
-
-	// Go-specific part. Don't move upper cos it'll break structure layout for native code.
-	rendered    bool
-	source      string
-	description string
-	helpFile    string
-}
-
-// renderStrings translates BSTR strings to Go ones so `.Error` and `.String`
-// could be safely called after `.Clear`. We need this when we can't rely on
-// a caller to call `.Clear`.
-func (e *EXCEPINFO) renderStrings() {
-	e.rendered = true
-	if e.bstrSource == nil {
-		e.source = "<nil>"
-	} else {
-		e.source = BstrToString(e.bstrSource)
-	}
-	if e.bstrDescription == nil {
-		e.description = "<nil>"
-	} else {
-		e.description = BstrToString(e.bstrDescription)
-	}
-	if e.bstrHelpFile == nil {
-		e.helpFile = "<nil>"
-	} else {
-		e.helpFile = BstrToString(e.bstrHelpFile)
-	}
-}
-
-// Clear frees BSTR strings inside an EXCEPINFO and set it to NULL.
-func (e *EXCEPINFO) Clear() {
-	freeBSTR := func(s *uint16) {
-		// SysFreeString don't return errors and is safe for call's on NULL.
-		// https://docs.microsoft.com/en-us/windows/win32/api/oleauto/nf-oleauto-sysfreestring
-		_ = SysFreeString((*int16)(unsafe.Pointer(s)))
-	}
-
-	if e.bstrSource != nil {
-		freeBSTR(e.bstrSource)
-		e.bstrSource = nil
-	}
-	if e.bstrDescription != nil {
-		freeBSTR(e.bstrDescription)
-		e.bstrDescription = nil
-	}
-	if e.bstrHelpFile != nil {
-		freeBSTR(e.bstrHelpFile)
-		e.bstrHelpFile = nil
-	}
-}
-
-// WCode return wCode in EXCEPINFO.
-func (e EXCEPINFO) WCode() uint16 {
-	return e.wCode
-}
-
-// SCODE return scode in EXCEPINFO.
-func (e EXCEPINFO) SCODE() uint32 {
-	return e.scode
-}
-
-// String convert EXCEPINFO to string.
-func (e EXCEPINFO) String() string {
-	if !e.rendered {
-		e.renderStrings()
-	}
-	return fmt.Sprintf(
-		"wCode: %#x, bstrSource: %v, bstrDescription: %v, bstrHelpFile: %v, dwHelpContext: %#x, scode: %#x",
-		e.wCode, e.source, e.description, e.helpFile, e.dwHelpContext, e.scode,
-	)
-}
-
-// Error implements error interface and returns error string.
-func (e EXCEPINFO) Error() string {
-	if !e.rendered {
-		e.renderStrings()
-	}
-
-	if e.description != "<nil>" {
-		return strings.TrimSpace(e.description)
-	}
-
-	code := e.scode
-	if e.wCode != 0 {
-		code = uint32(e.wCode)
-	}
-	return fmt.Sprintf("%v: %#x", e.source, code)
-}
-
-// PARAMDATA defines parameter data type.
-type PARAMDATA struct {
-	Name *int16
-	Vt   uint16
-}
-
-// METHODDATA defines method info.
-type METHODDATA struct {
-	Name     *uint16
-	Data     *PARAMDATA
-	Dispid   int32
-	Meth     uint32
-	CC       int32
-	CArgs    uint32
-	Flags    uint16
-	VtReturn uint32
-}
-
-// INTERFACEDATA defines interface info.
-type INTERFACEDATA struct {
-	MethodData *METHODDATA
-	CMembers   uint32
-}
-
-// Point is 2D vector type.
-type Point struct {
-	X int32
-	Y int32
-}
-
-// Msg is message between processes.
-type Msg struct {
-	Hwnd    uint32
-	Message uint32
-	Wparam  int32
-	Lparam  int32
-	Time    uint32
-	Pt      Point
-}
-
-// TYPEDESC defines data type.
-type TYPEDESC struct {
-	Hreftype uint32
-	VT       uint16
-}
-
-// IDLDESC defines IDL info.
-type IDLDESC struct {
-	DwReserved uint32
-	WIDLFlags  uint16
-}
-
-// TYPEATTR defines type info.
-type TYPEATTR struct {
-	Guid             GUID
-	Lcid             uint32
-	dwReserved       uint32
-	MemidConstructor int32
-	MemidDestructor  int32
-	LpstrSchema      *uint16
-	CbSizeInstance   uint32
-	Typekind         int32
-	CFuncs           uint16
-	CVars            uint16
-	CImplTypes       uint16
-	CbSizeVft        uint16
-	CbAlignment      uint16
-	WTypeFlags       uint16
-	WMajorVerNum     uint16
-	WMinorVerNum     uint16
-	TdescAlias       TYPEDESC
-	IdldescType      IDLDESC
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/go-ole/go-ole/safearray.go","mode":420,"size":638,"sha256":"14ebc245caefb7294c1ef633c612af6a100e779d8202930f0f7e844c71b672ba","index":0,"count":1,"encoding":"utf-8","payloadBytes":638}
-// Package is meant to retrieve and process safe array data returned from COM.
-
-package ole
-
-// SafeArrayBound defines the SafeArray boundaries.
-type SafeArrayBound struct {
-	Elements   uint32
-	LowerBound int32
-}
-
-// SafeArray is how COM handles arrays.
-type SafeArray struct {
-	Dimensions   uint16
-	FeaturesFlag uint16
-	ElementsSize uint32
-	LocksAmount  uint32
-	Data         uint32
-	Bounds       [16]byte
-}
-
-// SAFEARRAY is obsolete, exists for backwards compatibility.
-// Use SafeArray
-type SAFEARRAY SafeArray
-
-// SAFEARRAYBOUND is obsolete, exists for backwards compatibility.
-// Use SafeArrayBound
-type SAFEARRAYBOUND SafeArrayBound
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/go-ole/go-ole/safearray_func.go","mode":420,"size":6280,"sha256":"8a94f630e29b5a6c7d95feb04416c631db1e16d15e538d9cf3e31571218c38cb","index":0,"count":1,"encoding":"utf-8","payloadBytes":6280}
-// +build !windows
-
-package ole
-
-import (
-	"unsafe"
-)
-
-// safeArrayAccessData returns raw array pointer.
-//
-// AKA: SafeArrayAccessData in Windows API.
-func safeArrayAccessData(safearray *SafeArray) (uintptr, error) {
-	return uintptr(0), NewError(E_NOTIMPL)
-}
-
-// safeArrayUnaccessData releases raw array.
-//
-// AKA: SafeArrayUnaccessData in Windows API.
-func safeArrayUnaccessData(safearray *SafeArray) error {
-	return NewError(E_NOTIMPL)
-}
-
-// safeArrayAllocData allocates SafeArray.
-//
-// AKA: SafeArrayAllocData in Windows API.
-func safeArrayAllocData(safearray *SafeArray) error {
-	return NewError(E_NOTIMPL)
-}
-
-// safeArrayAllocDescriptor allocates SafeArray.
-//
-// AKA: SafeArrayAllocDescriptor in Windows API.
-func safeArrayAllocDescriptor(dimensions uint32) (*SafeArray, error) {
-	return nil, NewError(E_NOTIMPL)
-}
-
-// safeArrayAllocDescriptorEx allocates SafeArray.
-//
-// AKA: SafeArrayAllocDescriptorEx in Windows API.
-func safeArrayAllocDescriptorEx(variantType VT, dimensions uint32) (*SafeArray, error) {
-	return nil, NewError(E_NOTIMPL)
-}
-
-// safeArrayCopy returns copy of SafeArray.
-//
-// AKA: SafeArrayCopy in Windows API.
-func safeArrayCopy(original *SafeArray) (*SafeArray, error) {
-	return nil, NewError(E_NOTIMPL)
-}
-
-// safeArrayCopyData duplicates SafeArray into another SafeArray object.
-//
-// AKA: SafeArrayCopyData in Windows API.
-func safeArrayCopyData(original *SafeArray, duplicate *SafeArray) error {
-	return NewError(E_NOTIMPL)
-}
-
-// safeArrayCreate creates SafeArray.
-//
-// AKA: SafeArrayCreate in Windows API.
-func safeArrayCreate(variantType VT, dimensions uint32, bounds *SafeArrayBound) (*SafeArray, error) {
-	return nil, NewError(E_NOTIMPL)
-}
-
-// safeArrayCreateEx creates SafeArray.
-//
-// AKA: SafeArrayCreateEx in Windows API.
-func safeArrayCreateEx(variantType VT, dimensions uint32, bounds *SafeArrayBound, extra uintptr) (*SafeArray, error) {
-	return nil, NewError(E_NOTIMPL)
-}
-
-// safeArrayCreateVector creates SafeArray.
-//
-// AKA: SafeArrayCreateVector in Windows API.
-func safeArrayCreateVector(variantType VT, lowerBound int32, length uint32) (*SafeArray, error) {
-	return nil, NewError(E_NOTIMPL)
-}
-
-// safeArrayCreateVectorEx creates SafeArray.
-//
-// AKA: SafeArrayCreateVectorEx in Windows API.
-func safeArrayCreateVectorEx(variantType VT, lowerBound int32, length uint32, extra uintptr) (*SafeArray, error) {
-	return nil, NewError(E_NOTIMPL)
-}
-
-// safeArrayDestroy destroys SafeArray object.
-//
-// AKA: SafeArrayDestroy in Windows API.
-func safeArrayDestroy(safearray *SafeArray) error {
-	return NewError(E_NOTIMPL)
-}
-
-// safeArrayDestroyData destroys SafeArray object.
-//
-// AKA: SafeArrayDestroyData in Windows API.
-func safeArrayDestroyData(safearray *SafeArray) error {
-	return NewError(E_NOTIMPL)
-}
-
-// safeArrayDestroyDescriptor destroys SafeArray object.
-//
-// AKA: SafeArrayDestroyDescriptor in Windows API.
-func safeArrayDestroyDescriptor(safearray *SafeArray) error {
-	return NewError(E_NOTIMPL)
-}
-
-// safeArrayGetDim is the amount of dimensions in the SafeArray.
-//
-// SafeArrays may have multiple dimensions. Meaning, it could be
-// multidimensional array.
-//
-// AKA: SafeArrayGetDim in Windows API.
-func safeArrayGetDim(safearray *SafeArray) (*uint32, error) {
-	u := uint32(0)
-	return &u, NewError(E_NOTIMPL)
-}
-
-// safeArrayGetElementSize is the element size in bytes.
-//
-// AKA: SafeArrayGetElemsize in Windows API.
-func safeArrayGetElementSize(safearray *SafeArray) (*uint32, error) {
-	u := uint32(0)
-	return &u, NewError(E_NOTIMPL)
-}
-
-// safeArrayGetElement retrieves element at given index.
-func safeArrayGetElement(safearray *SafeArray, index int32, pv unsafe.Pointer) error {
-	return NewError(E_NOTIMPL)
-}
-
-// safeArrayGetElement retrieves element at given index and converts to string.
-func safeArrayGetElementString(safearray *SafeArray, index int32) (string, error) {
-	return "", NewError(E_NOTIMPL)
-}
-
-// safeArrayGetIID is the InterfaceID of the elements in the SafeArray.
-//
-// AKA: SafeArrayGetIID in Windows API.
-func safeArrayGetIID(safearray *SafeArray) (*GUID, error) {
-	return nil, NewError(E_NOTIMPL)
-}
-
-// safeArrayGetLBound returns lower bounds of SafeArray.
-//
-// SafeArrays may have multiple dimensions. Meaning, it could be
-// multidimensional array.
-//
-// AKA: SafeArrayGetLBound in Windows API.
-func safeArrayGetLBound(safearray *SafeArray, dimension uint32) (int32, error) {
-	return int32(0), NewError(E_NOTIMPL)
-}
-
-// safeArrayGetUBound returns upper bounds of SafeArray.
-//
-// SafeArrays may have multiple dimensions. Meaning, it could be
-// multidimensional array.
-//
-// AKA: SafeArrayGetUBound in Windows API.
-func safeArrayGetUBound(safearray *SafeArray, dimension uint32) (int32, error) {
-	return int32(0), NewError(E_NOTIMPL)
-}
-
-// safeArrayGetVartype returns data type of SafeArray.
-//
-// AKA: SafeArrayGetVartype in Windows API.
-func safeArrayGetVartype(safearray *SafeArray) (uint16, error) {
-	return uint16(0), NewError(E_NOTIMPL)
-}
-
-// safeArrayLock locks SafeArray for reading to modify SafeArray.
-//
-// This must be called during some calls to ensure that another process does not
-// read or write to the SafeArray during editing.
-//
-// AKA: SafeArrayLock in Windows API.
-func safeArrayLock(safearray *SafeArray) error {
-	return NewError(E_NOTIMPL)
-}
-
-// safeArrayUnlock unlocks SafeArray for reading.
-//
-// AKA: SafeArrayUnlock in Windows API.
-func safeArrayUnlock(safearray *SafeArray) error {
-	return NewError(E_NOTIMPL)
-}
-
-// safeArrayPutElement stores the data element at the specified location in the
-// array.
-//
-// AKA: SafeArrayPutElement in Windows API.
-func safeArrayPutElement(safearray *SafeArray, index int64, element uintptr) error {
-	return NewError(E_NOTIMPL)
-}
-
-// safeArrayGetRecordInfo accesses IRecordInfo info for custom types.
-//
-// AKA: SafeArrayGetRecordInfo in Windows API.
-//
-// XXX: Must implement IRecordInfo interface for this to return.
-func safeArrayGetRecordInfo(safearray *SafeArray) (interface{}, error) {
-	return nil, NewError(E_NOTIMPL)
-}
-
-// safeArraySetRecordInfo mutates IRecordInfo info for custom types.
-//
-// AKA: SafeArraySetRecordInfo in Windows API.
-//
-// XXX: Must implement IRecordInfo interface for this to return.
-func safeArraySetRecordInfo(safearray *SafeArray, recordInfo interface{}) error {
-	return NewError(E_NOTIMPL)
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/go-ole/go-ole/safearray_windows.go","mode":420,"size":11909,"sha256":"00e17dff6788c7aef7bd3c1cd757e3cf3250844e4fa2d9ca55e797655177882a","index":0,"count":1,"encoding":"utf-8","payloadBytes":11909}
-// +build windows
-
-package ole
-
-import (
-	"unsafe"
-)
-
-var (
-	procSafeArrayAccessData        = modoleaut32.NewProc("SafeArrayAccessData")
-	procSafeArrayAllocData         = modoleaut32.NewProc("SafeArrayAllocData")
-	procSafeArrayAllocDescriptor   = modoleaut32.NewProc("SafeArrayAllocDescriptor")
-	procSafeArrayAllocDescriptorEx = modoleaut32.NewProc("SafeArrayAllocDescriptorEx")
-	procSafeArrayCopy              = modoleaut32.NewProc("SafeArrayCopy")
-	procSafeArrayCopyData          = modoleaut32.NewProc("SafeArrayCopyData")
-	procSafeArrayCreate            = modoleaut32.NewProc("SafeArrayCreate")
-	procSafeArrayCreateEx          = modoleaut32.NewProc("SafeArrayCreateEx")
-	procSafeArrayCreateVector      = modoleaut32.NewProc("SafeArrayCreateVector")
-	procSafeArrayCreateVectorEx    = modoleaut32.NewProc("SafeArrayCreateVectorEx")
-	procSafeArrayDestroy           = modoleaut32.NewProc("SafeArrayDestroy")
-	procSafeArrayDestroyData       = modoleaut32.NewProc("SafeArrayDestroyData")
-	procSafeArrayDestroyDescriptor = modoleaut32.NewProc("SafeArrayDestroyDescriptor")
-	procSafeArrayGetDim            = modoleaut32.NewProc("SafeArrayGetDim")
-	procSafeArrayGetElement        = modoleaut32.NewProc("SafeArrayGetElement")
-	procSafeArrayGetElemsize       = modoleaut32.NewProc("SafeArrayGetElemsize")
-	procSafeArrayGetIID            = modoleaut32.NewProc("SafeArrayGetIID")
-	procSafeArrayGetLBound         = modoleaut32.NewProc("SafeArrayGetLBound")
-	procSafeArrayGetUBound         = modoleaut32.NewProc("SafeArrayGetUBound")
-	procSafeArrayGetVartype        = modoleaut32.NewProc("SafeArrayGetVartype")
-	procSafeArrayLock              = modoleaut32.NewProc("SafeArrayLock")
-	procSafeArrayPtrOfIndex        = modoleaut32.NewProc("SafeArrayPtrOfIndex")
-	procSafeArrayUnaccessData      = modoleaut32.NewProc("SafeArrayUnaccessData")
-	procSafeArrayUnlock            = modoleaut32.NewProc("SafeArrayUnlock")
-	procSafeArrayPutElement        = modoleaut32.NewProc("SafeArrayPutElement")
-	//procSafeArrayRedim             = modoleaut32.NewProc("SafeArrayRedim") // TODO
-	//procSafeArraySetIID            = modoleaut32.NewProc("SafeArraySetIID") // TODO
-	procSafeArrayGetRecordInfo = modoleaut32.NewProc("SafeArrayGetRecordInfo")
-	procSafeArraySetRecordInfo = modoleaut32.NewProc("SafeArraySetRecordInfo")
-)
-
-// safeArrayAccessData returns raw array pointer.
-//
-// AKA: SafeArrayAccessData in Windows API.
-// Todo: Test
-func safeArrayAccessData(safearray *SafeArray) (element uintptr, err error) {
-	err = convertHresultToError(
-		procSafeArrayAccessData.Call(
-			uintptr(unsafe.Pointer(safearray)),
-			uintptr(unsafe.Pointer(&element))))
-	return
-}
-
-// safeArrayUnaccessData releases raw array.
-//
-// AKA: SafeArrayUnaccessData in Windows API.
-func safeArrayUnaccessData(safearray *SafeArray) (err error) {
-	err = convertHresultToError(procSafeArrayUnaccessData.Call(uintptr(unsafe.Pointer(safearray))))
-	return
-}
-
-// safeArrayAllocData allocates SafeArray.
-//
-// AKA: SafeArrayAllocData in Windows API.
-func safeArrayAllocData(safearray *SafeArray) (err error) {
-	err = convertHresultToError(procSafeArrayAllocData.Call(uintptr(unsafe.Pointer(safearray))))
-	return
-}
-
-// safeArrayAllocDescriptor allocates SafeArray.
-//
-// AKA: SafeArrayAllocDescriptor in Windows API.
-func safeArrayAllocDescriptor(dimensions uint32) (safearray *SafeArray, err error) {
-	err = convertHresultToError(
-		procSafeArrayAllocDescriptor.Call(uintptr(dimensions), uintptr(unsafe.Pointer(&safearray))))
-	return
-}
-
-// safeArrayAllocDescriptorEx allocates SafeArray.
-//
-// AKA: SafeArrayAllocDescriptorEx in Windows API.
-func safeArrayAllocDescriptorEx(variantType VT, dimensions uint32) (safearray *SafeArray, err error) {
-	err = convertHresultToError(
-		procSafeArrayAllocDescriptorEx.Call(
-			uintptr(variantType),
-			uintptr(dimensions),
-			uintptr(unsafe.Pointer(&safearray))))
-	return
-}
-
-// safeArrayCopy returns copy of SafeArray.
-//
-// AKA: SafeArrayCopy in Windows API.
-func safeArrayCopy(original *SafeArray) (safearray *SafeArray, err error) {
-	err = convertHresultToError(
-		procSafeArrayCopy.Call(
-			uintptr(unsafe.Pointer(original)),
-			uintptr(unsafe.Pointer(&safearray))))
-	return
-}
-
-// safeArrayCopyData duplicates SafeArray into another SafeArray object.
-//
-// AKA: SafeArrayCopyData in Windows API.
-func safeArrayCopyData(original *SafeArray, duplicate *SafeArray) (err error) {
-	err = convertHresultToError(
-		procSafeArrayCopyData.Call(
-			uintptr(unsafe.Pointer(original)),
-			uintptr(unsafe.Pointer(duplicate))))
-	return
-}
-
-// safeArrayCreate creates SafeArray.
-//
-// AKA: SafeArrayCreate in Windows API.
-func safeArrayCreate(variantType VT, dimensions uint32, bounds *SafeArrayBound) (safearray *SafeArray, err error) {
-	sa, _, err := procSafeArrayCreate.Call(
-		uintptr(variantType),
-		uintptr(dimensions),
-		uintptr(unsafe.Pointer(bounds)))
-	safearray = (*SafeArray)(unsafe.Pointer(&sa))
-	return
-}
-
-// safeArrayCreateEx creates SafeArray.
-//
-// AKA: SafeArrayCreateEx in Windows API.
-func safeArrayCreateEx(variantType VT, dimensions uint32, bounds *SafeArrayBound, extra uintptr) (safearray *SafeArray, err error) {
-	sa, _, err := procSafeArrayCreateEx.Call(
-		uintptr(variantType),
-		uintptr(dimensions),
-		uintptr(unsafe.Pointer(bounds)),
-		extra)
-	safearray = (*SafeArray)(unsafe.Pointer(sa))
-	return
-}
-
-// safeArrayCreateVector creates SafeArray.
-//
-// AKA: SafeArrayCreateVector in Windows API.
-func safeArrayCreateVector(variantType VT, lowerBound int32, length uint32) (safearray *SafeArray, err error) {
-	sa, _, err := procSafeArrayCreateVector.Call(
-		uintptr(variantType),
-		uintptr(lowerBound),
-		uintptr(length))
-	safearray = (*SafeArray)(unsafe.Pointer(sa))
-	return
-}
-
-// safeArrayCreateVectorEx creates SafeArray.
-//
-// AKA: SafeArrayCreateVectorEx in Windows API.
-func safeArrayCreateVectorEx(variantType VT, lowerBound int32, length uint32, extra uintptr) (safearray *SafeArray, err error) {
-	sa, _, err := procSafeArrayCreateVectorEx.Call(
-		uintptr(variantType),
-		uintptr(lowerBound),
-		uintptr(length),
-		extra)
-	safearray = (*SafeArray)(unsafe.Pointer(sa))
-	return
-}
-
-// safeArrayDestroy destroys SafeArray object.
-//
-// AKA: SafeArrayDestroy in Windows API.
-func safeArrayDestroy(safearray *SafeArray) (err error) {
-	err = convertHresultToError(procSafeArrayDestroy.Call(uintptr(unsafe.Pointer(safearray))))
-	return
-}
-
-// safeArrayDestroyData destroys SafeArray object.
-//
-// AKA: SafeArrayDestroyData in Windows API.
-func safeArrayDestroyData(safearray *SafeArray) (err error) {
-	err = convertHresultToError(procSafeArrayDestroyData.Call(uintptr(unsafe.Pointer(safearray))))
-	return
-}
-
-// safeArrayDestroyDescriptor destroys SafeArray object.
-//
-// AKA: SafeArrayDestroyDescriptor in Windows API.
-func safeArrayDestroyDescriptor(safearray *SafeArray) (err error) {
-	err = convertHresultToError(procSafeArrayDestroyDescriptor.Call(uintptr(unsafe.Pointer(safearray))))
-	return
-}
-
-// safeArrayGetDim is the amount of dimensions in the SafeArray.
-//
-// SafeArrays may have multiple dimensions. Meaning, it could be
-// multidimensional array.
-//
-// AKA: SafeArrayGetDim in Windows API.
-func safeArrayGetDim(safearray *SafeArray) (dimensions *uint32, err error) {
-	l, _, err := procSafeArrayGetDim.Call(uintptr(unsafe.Pointer(safearray)))
-	dimensions = (*uint32)(unsafe.Pointer(l))
-	return
-}
-
-// safeArrayGetElementSize is the element size in bytes.
-//
-// AKA: SafeArrayGetElemsize in Windows API.
-func safeArrayGetElementSize(safearray *SafeArray) (length *uint32, err error) {
-	l, _, err := procSafeArrayGetElemsize.Call(uintptr(unsafe.Pointer(safearray)))
-	length = (*uint32)(unsafe.Pointer(l))
-	return
-}
-
-// safeArrayGetElement retrieves element at given index.
-func safeArrayGetElement(safearray *SafeArray, index int32, pv unsafe.Pointer) error {
-	return convertHresultToError(
-		procSafeArrayGetElement.Call(
-			uintptr(unsafe.Pointer(safearray)),
-			uintptr(unsafe.Pointer(&index)),
-			uintptr(pv)))
-}
-
-// safeArrayGetElementString retrieves element at given index and converts to string.
-func safeArrayGetElementString(safearray *SafeArray, index int32) (str string, err error) {
-	var element *int16
-	err = convertHresultToError(
-		procSafeArrayGetElement.Call(
-			uintptr(unsafe.Pointer(safearray)),
-			uintptr(unsafe.Pointer(&index)),
-			uintptr(unsafe.Pointer(&element))))
-	str = BstrToString(*(**uint16)(unsafe.Pointer(&element)))
-	SysFreeString(element)
-	return
-}
-
-// safeArrayGetIID is the InterfaceID of the elements in the SafeArray.
-//
-// AKA: SafeArrayGetIID in Windows API.
-func safeArrayGetIID(safearray *SafeArray) (guid *GUID, err error) {
-	err = convertHresultToError(
-		procSafeArrayGetIID.Call(
-			uintptr(unsafe.Pointer(safearray)),
-			uintptr(unsafe.Pointer(&guid))))
-	return
-}
-
-// safeArrayGetLBound returns lower bounds of SafeArray.
-//
-// SafeArrays may have multiple dimensions. Meaning, it could be
-// multidimensional array.
-//
-// AKA: SafeArrayGetLBound in Windows API.
-func safeArrayGetLBound(safearray *SafeArray, dimension uint32) (lowerBound int32, err error) {
-	err = convertHresultToError(
-		procSafeArrayGetLBound.Call(
-			uintptr(unsafe.Pointer(safearray)),
-			uintptr(dimension),
-			uintptr(unsafe.Pointer(&lowerBound))))
-	return
-}
-
-// safeArrayGetUBound returns upper bounds of SafeArray.
-//
-// SafeArrays may have multiple dimensions. Meaning, it could be
-// multidimensional array.
-//
-// AKA: SafeArrayGetUBound in Windows API.
-func safeArrayGetUBound(safearray *SafeArray, dimension uint32) (upperBound int32, err error) {
-	err = convertHresultToError(
-		procSafeArrayGetUBound.Call(
-			uintptr(unsafe.Pointer(safearray)),
-			uintptr(dimension),
-			uintptr(unsafe.Pointer(&upperBound))))
-	return
-}
-
-// safeArrayGetVartype returns data type of SafeArray.
-//
-// AKA: SafeArrayGetVartype in Windows API.
-func safeArrayGetVartype(safearray *SafeArray) (varType uint16, err error) {
-	err = convertHresultToError(
-		procSafeArrayGetVartype.Call(
-			uintptr(unsafe.Pointer(safearray)),
-			uintptr(unsafe.Pointer(&varType))))
-	return
-}
-
-// safeArrayLock locks SafeArray for reading to modify SafeArray.
-//
-// This must be called during some calls to ensure that another process does not
-// read or write to the SafeArray during editing.
-//
-// AKA: SafeArrayLock in Windows API.
-func safeArrayLock(safearray *SafeArray) (err error) {
-	err = convertHresultToError(procSafeArrayLock.Call(uintptr(unsafe.Pointer(safearray))))
-	return
-}
-
-// safeArrayUnlock unlocks SafeArray for reading.
-//
-// AKA: SafeArrayUnlock in Windows API.
-func safeArrayUnlock(safearray *SafeArray) (err error) {
-	err = convertHresultToError(procSafeArrayUnlock.Call(uintptr(unsafe.Pointer(safearray))))
-	return
-}
-
-// safeArrayPutElement stores the data element at the specified location in the
-// array.
-//
-// AKA: SafeArrayPutElement in Windows API.
-func safeArrayPutElement(safearray *SafeArray, index int64, element uintptr) (err error) {
-	err = convertHresultToError(
-		procSafeArrayPutElement.Call(
-			uintptr(unsafe.Pointer(safearray)),
-			uintptr(unsafe.Pointer(&index)),
-			uintptr(unsafe.Pointer(element))))
-	return
-}
-
-// safeArrayGetRecordInfo accesses IRecordInfo info for custom types.
-//
-// AKA: SafeArrayGetRecordInfo in Windows API.
-//
-// XXX: Must implement IRecordInfo interface for this to return.
-func safeArrayGetRecordInfo(safearray *SafeArray) (recordInfo interface{}, err error) {
-	err = convertHresultToError(
-		procSafeArrayGetRecordInfo.Call(
-			uintptr(unsafe.Pointer(safearray)),
-			uintptr(unsafe.Pointer(&recordInfo))))
-	return
-}
-
-// safeArraySetRecordInfo mutates IRecordInfo info for custom types.
-//
-// AKA: SafeArraySetRecordInfo in Windows API.
-//
-// XXX: Must implement IRecordInfo interface for this to return.
-func safeArraySetRecordInfo(safearray *SafeArray, recordInfo interface{}) (err error) {
-	err = convertHresultToError(
-		procSafeArraySetRecordInfo.Call(
-			uintptr(unsafe.Pointer(safearray)),
-			uintptr(unsafe.Pointer(&recordInfo))))
-	return
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/go-ole/go-ole/safearrayconversion.go","mode":420,"size":3246,"sha256":"f9f1d8ab946fc8873197a8062c82cf84090c5ca4e549ab20646b10c015c2a07e","index":0,"count":1,"encoding":"utf-8","payloadBytes":3246}
-// Helper for converting SafeArray to array of objects.
-
-package ole
-
-import (
-	"unsafe"
-)
-
-type SafeArrayConversion struct {
-	Array *SafeArray
-}
-
-func (sac *SafeArrayConversion) ToStringArray() (strings []string) {
-	totalElements, _ := sac.TotalElements(0)
-	strings = make([]string, totalElements)
-
-	for i := int32(0); i < totalElements; i++ {
-		strings[int32(i)], _ = safeArrayGetElementString(sac.Array, i)
-	}
-
-	return
-}
-
-func (sac *SafeArrayConversion) ToByteArray() (bytes []byte) {
-	totalElements, _ := sac.TotalElements(0)
-	bytes = make([]byte, totalElements)
-
-	for i := int32(0); i < totalElements; i++ {
-		safeArrayGetElement(sac.Array, i, unsafe.Pointer(&bytes[int32(i)]))
-	}
-
-	return
-}
-
-func (sac *SafeArrayConversion) ToValueArray() (values []interface{}) {
-	totalElements, _ := sac.TotalElements(0)
-	values = make([]interface{}, totalElements)
-	vt, _ := safeArrayGetVartype(sac.Array)
-
-	for i := int32(0); i < totalElements; i++ {
-		switch VT(vt) {
-		case VT_BOOL:
-			var v bool
-			safeArrayGetElement(sac.Array, i, unsafe.Pointer(&v))
-			values[i] = v
-		case VT_I1:
-			var v int8
-			safeArrayGetElement(sac.Array, i, unsafe.Pointer(&v))
-			values[i] = v
-		case VT_I2:
-			var v int16
-			safeArrayGetElement(sac.Array, i, unsafe.Pointer(&v))
-			values[i] = v
-		case VT_I4:
-			var v int32
-			safeArrayGetElement(sac.Array, i, unsafe.Pointer(&v))
-			values[i] = v
-		case VT_I8:
-			var v int64
-			safeArrayGetElement(sac.Array, i, unsafe.Pointer(&v))
-			values[i] = v
-		case VT_UI1:
-			var v uint8
-			safeArrayGetElement(sac.Array, i, unsafe.Pointer(&v))
-			values[i] = v
-		case VT_UI2:
-			var v uint16
-			safeArrayGetElement(sac.Array, i, unsafe.Pointer(&v))
-			values[i] = v
-		case VT_UI4:
-			var v uint32
-			safeArrayGetElement(sac.Array, i, unsafe.Pointer(&v))
-			values[i] = v
-		case VT_UI8:
-			var v uint64
-			safeArrayGetElement(sac.Array, i, unsafe.Pointer(&v))
-			values[i] = v
-		case VT_R4:
-			var v float32
-			safeArrayGetElement(sac.Array, i, unsafe.Pointer(&v))
-			values[i] = v
-		case VT_R8:
-			var v float64
-			safeArrayGetElement(sac.Array, i, unsafe.Pointer(&v))
-			values[i] = v
-		case VT_BSTR:
-			v , _ := safeArrayGetElementString(sac.Array, i)
-			values[i] = v
-		case VT_VARIANT:
-			var v VARIANT
-			safeArrayGetElement(sac.Array, i, unsafe.Pointer(&v))
-			values[i] = v.Value()
-			v.Clear()
-		default:
-			// TODO
-		}
-	}
-
-	return
-}
-
-func (sac *SafeArrayConversion) GetType() (varType uint16, err error) {
-	return safeArrayGetVartype(sac.Array)
-}
-
-func (sac *SafeArrayConversion) GetDimensions() (dimensions *uint32, err error) {
-	return safeArrayGetDim(sac.Array)
-}
-
-func (sac *SafeArrayConversion) GetSize() (length *uint32, err error) {
-	return safeArrayGetElementSize(sac.Array)
-}
-
-func (sac *SafeArrayConversion) TotalElements(index uint32) (totalElements int32, err error) {
-	if index < 1 {
-		index = 1
-	}
-
-	// Get array bounds
-	var LowerBounds int32
-	var UpperBounds int32
-
-	LowerBounds, err = safeArrayGetLBound(sac.Array, index)
-	if err != nil {
-		return
-	}
-
-	UpperBounds, err = safeArrayGetUBound(sac.Array, index)
-	if err != nil {
-		return
-	}
-
-	totalElements = UpperBounds - LowerBounds + 1
-	return
-}
-
-// Release Safe Array memory
-func (sac *SafeArrayConversion) Release() {
-	safeArrayDestroy(sac.Array)
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/go-ole/go-ole/safearrayslices.go","mode":420,"size":720,"sha256":"0f8fac82320744982ca783a90746910956cce9c8e8b4494083e22f0f9afbe95d","index":0,"count":1,"encoding":"utf-8","payloadBytes":720}
-// +build windows
-
-package ole
-
-import (
-	"unsafe"
-)
-
-func safeArrayFromByteSlice(slice []byte) *SafeArray {
-	array, _ := safeArrayCreateVector(VT_UI1, 0, uint32(len(slice)))
-
-	if array == nil {
-		panic("Could not convert []byte to SAFEARRAY")
-	}
-
-	for i, v := range slice {
-		safeArrayPutElement(array, int64(i), uintptr(unsafe.Pointer(&v)))
-	}
-	return array
-}
-
-func safeArrayFromStringSlice(slice []string) *SafeArray {
-	array, _ := safeArrayCreateVector(VT_BSTR, 0, uint32(len(slice)))
-
-	if array == nil {
-		panic("Could not convert []string to SAFEARRAY")
-	}
-	// SysAllocStringLen(s)
-	for i, v := range slice {
-		safeArrayPutElement(array, int64(i), uintptr(unsafe.Pointer(SysAllocStringLen(v))))
-	}
-	return array
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/go-ole/go-ole/utility.go","mode":420,"size":2173,"sha256":"81a60e148cf555f997dd98e7442c1758cd95d955c5fd75a558770ba2568e7d4d","index":0,"count":1,"encoding":"utf-8","payloadBytes":2173}
-package ole
-
-import (
-	"unicode/utf16"
-	"unsafe"
-)
-
-// ClassIDFrom retrieves class ID whether given is program ID or application string.
-//
-// Helper that provides check against both Class ID from Program ID and Class ID from string. It is
-// faster, if you know which you are using, to use the individual functions, but this will check
-// against available functions for you.
-func ClassIDFrom(programID string) (classID *GUID, err error) {
-	classID, err = CLSIDFromProgID(programID)
-	if err != nil {
-		classID, err = CLSIDFromString(programID)
-		if err != nil {
-			return
-		}
-	}
-	return
-}
-
-// BytePtrToString converts byte pointer to a Go string.
-func BytePtrToString(p *byte) string {
-	a := (*[10000]uint8)(unsafe.Pointer(p))
-	i := 0
-	for a[i] != 0 {
-		i++
-	}
-	return string(a[:i])
-}
-
-// UTF16PtrToString is alias for LpOleStrToString.
-//
-// Kept for compatibility reasons.
-func UTF16PtrToString(p *uint16) string {
-	return LpOleStrToString(p)
-}
-
-// LpOleStrToString converts COM Unicode to Go string.
-func LpOleStrToString(p *uint16) string {
-	if p == nil {
-		return ""
-	}
-
-	length := lpOleStrLen(p)
-	a := make([]uint16, length)
-
-	ptr := unsafe.Pointer(p)
-
-	for i := 0; i < int(length); i++ {
-		a[i] = *(*uint16)(ptr)
-		ptr = unsafe.Pointer(uintptr(ptr) + 2)
-	}
-
-	return string(utf16.Decode(a))
-}
-
-// BstrToString converts COM binary string to Go string.
-func BstrToString(p *uint16) string {
-	if p == nil {
-		return ""
-	}
-	length := SysStringLen((*int16)(unsafe.Pointer(p)))
-	a := make([]uint16, length)
-
-	ptr := unsafe.Pointer(p)
-
-	for i := 0; i < int(length); i++ {
-		a[i] = *(*uint16)(ptr)
-		ptr = unsafe.Pointer(uintptr(ptr) + 2)
-	}
-	return string(utf16.Decode(a))
-}
-
-// lpOleStrLen returns the length of Unicode string.
-func lpOleStrLen(p *uint16) (length int64) {
-	if p == nil {
-		return 0
-	}
-
-	ptr := unsafe.Pointer(p)
-
-	for i := 0; ; i++ {
-		if 0 == *(*uint16)(ptr) {
-			length = int64(i)
-			break
-		}
-		ptr = unsafe.Pointer(uintptr(ptr) + 2)
-	}
-	return
-}
-
-// convertHresultToError converts syscall to error, if call is unsuccessful.
-func convertHresultToError(hr uintptr, r2 uintptr, ignore error) (err error) {
-	if hr != 0 {
-		err = NewError(hr)
-	}
-	return
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/go-ole/go-ole/variables.go","mode":420,"size":354,"sha256":"4ea7cc8f29a0040c6441bf1bb7a144ec5650b5f4d2b2329cde726f4de3355765","index":0,"count":1,"encoding":"utf-8","payloadBytes":354}
-// +build windows
-
-package ole
-
-import (
-	"golang.org/x/sys/windows"
-)
-
-var (
-	modcombase  = windows.NewLazySystemDLL("combase.dll")
-	modkernel32 = windows.NewLazySystemDLL("kernel32.dll")
-	modole32    = windows.NewLazySystemDLL("ole32.dll")
-	modoleaut32 = windows.NewLazySystemDLL("oleaut32.dll")
-	moduser32   = windows.NewLazySystemDLL("user32.dll")
-)
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/go-ole/go-ole/variant.go","mode":420,"size":2430,"sha256":"1ef88348df80a9eb23a4ba57142d3b24114b13e6400a107c2758d0e2b09c69ee","index":0,"count":1,"encoding":"utf-8","payloadBytes":2430}
-package ole
-
-import "unsafe"
-
-// NewVariant returns new variant based on type and value.
-func NewVariant(vt VT, val int64) VARIANT {
-	return VARIANT{VT: vt, Val: val}
-}
-
-// ToIUnknown converts Variant to Unknown object.
-func (v *VARIANT) ToIUnknown() *IUnknown {
-	if v.VT != VT_UNKNOWN {
-		return nil
-	}
-	return (*IUnknown)(unsafe.Pointer(uintptr(v.Val)))
-}
-
-// ToIDispatch converts variant to dispatch object.
-func (v *VARIANT) ToIDispatch() *IDispatch {
-	if v.VT != VT_DISPATCH {
-		return nil
-	}
-	return (*IDispatch)(unsafe.Pointer(uintptr(v.Val)))
-}
-
-// ToArray converts variant to SafeArray helper.
-func (v *VARIANT) ToArray() *SafeArrayConversion {
-	if v.VT != VT_SAFEARRAY {
-		if v.VT&VT_ARRAY == 0 {
-			return nil
-		}
-	}
-	var safeArray *SafeArray = (*SafeArray)(unsafe.Pointer(uintptr(v.Val)))
-	return &SafeArrayConversion{safeArray}
-}
-
-// ToString converts variant to Go string.
-func (v *VARIANT) ToString() string {
-	if v.VT != VT_BSTR {
-		return ""
-	}
-	return BstrToString(*(**uint16)(unsafe.Pointer(&v.Val)))
-}
-
-// Clear the memory of variant object.
-func (v *VARIANT) Clear() error {
-	return VariantClear(v)
-}
-
-// Value returns variant value based on its type.
-//
-// Currently supported types: 2- and 4-byte integers, strings, bools.
-// Note that 64-bit integers, datetimes, and other types are stored as strings
-// and will be returned as strings.
-//
-// Needs to be further converted, because this returns an interface{}.
-func (v *VARIANT) Value() interface{} {
-	switch v.VT {
-	case VT_I1:
-		return int8(v.Val)
-	case VT_UI1:
-		return uint8(v.Val)
-	case VT_I2:
-		return int16(v.Val)
-	case VT_UI2:
-		return uint16(v.Val)
-	case VT_I4:
-		return int32(v.Val)
-	case VT_UI4:
-		return uint32(v.Val)
-	case VT_I8:
-		return int64(v.Val)
-	case VT_UI8:
-		return uint64(v.Val)
-	case VT_INT:
-		return int(v.Val)
-	case VT_UINT:
-		return uint(v.Val)
-	case VT_INT_PTR:
-		return uintptr(v.Val) // TODO
-	case VT_UINT_PTR:
-		return uintptr(v.Val)
-	case VT_R4:
-		return *(*float32)(unsafe.Pointer(&v.Val))
-	case VT_R8:
-		return *(*float64)(unsafe.Pointer(&v.Val))
-	case VT_BSTR:
-		return v.ToString()
-	case VT_DATE:
-		// VT_DATE type will either return float64 or time.Time.
-		d := uint64(v.Val)
-		date, err := GetVariantDate(d)
-		if err != nil {
-			return float64(v.Val)
-		}
-		return date
-	case VT_UNKNOWN:
-		return v.ToIUnknown()
-	case VT_DISPATCH:
-		return v.ToIDispatch()
-	case VT_BOOL:
-		return (v.Val & 0xffff) != 0
-	}
-	return nil
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/go-ole/go-ole/variant_386.go","mode":420,"size":177,"sha256":"2b39f36e1c5adab6d11e7a8138b7811fe376b03cdbc57812c9f4c5fbccf28c40","index":0,"count":1,"encoding":"utf-8","payloadBytes":177}
-// +build 386
-
-package ole
-
-type VARIANT struct {
-	VT         VT     //  2
-	wReserved1 uint16 //  4
-	wReserved2 uint16 //  6
-	wReserved3 uint16 //  8
-	Val        int64  // 16
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/go-ole/go-ole/variant_amd64.go","mode":420,"size":210,"sha256":"0d443c625b58796932a1f17c6570d2a135bca36f7d7b86c575dd0157597ae752","index":0,"count":1,"encoding":"utf-8","payloadBytes":210}
-// +build amd64
-
-package ole
-
-type VARIANT struct {
-	VT         VT      //  2
-	wReserved1 uint16  //  4
-	wReserved2 uint16  //  6
-	wReserved3 uint16  //  8
-	Val        int64   // 16
-	_          [8]byte // 24
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/go-ole/go-ole/variant_arm.go","mode":420,"size":177,"sha256":"eeb09cbf6102ab88b7565c5a210d5f282ba5fe274517f1a0b88cd71eefa2d4ae","index":0,"count":1,"encoding":"utf-8","payloadBytes":177}
-// +build arm
-
-package ole
-
-type VARIANT struct {
-	VT         VT     //  2
-	wReserved1 uint16 //  4
-	wReserved2 uint16 //  6
-	wReserved3 uint16 //  8
-	Val        int64  // 16
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/go-ole/go-ole/variant_arm64.go","mode":420,"size":227,"sha256":"173f7d13e95eff9cc9dce605d08488f2d2159ca2a0eaea239a98afe284cef953","index":0,"count":1,"encoding":"utf-8","payloadBytes":227}
-//go:build arm64
-// +build arm64
-
-package ole
-
-type VARIANT struct {
-	VT         VT      //  2
-	wReserved1 uint16  //  4
-	wReserved2 uint16  //  6
-	wReserved3 uint16  //  8
-	Val        int64   // 16
-	_          [8]byte // 24
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/go-ole/go-ole/variant_date_386.go","mode":420,"size":642,"sha256":"4f9f8cc9073fa1f454c02cf9d2d9f4a6dca0c138e21860451785ef0f5754779a","index":0,"count":1,"encoding":"utf-8","payloadBytes":642}
-// +build windows,386
-
-package ole
-
-import (
-	"errors"
-	"syscall"
-	"time"
-	"unsafe"
-)
-
-// GetVariantDate converts COM Variant Time value to Go time.Time.
-func GetVariantDate(value uint64) (time.Time, error) {
-	var st syscall.Systemtime
-	v1 := uint32(value)
-	v2 := uint32(value >> 32)
-	r, _, _ := procVariantTimeToSystemTime.Call(uintptr(v1), uintptr(v2), uintptr(unsafe.Pointer(&st)))
-	if r != 0 {
-		return time.Date(int(st.Year), time.Month(st.Month), int(st.Day), int(st.Hour), int(st.Minute), int(st.Second), int(st.Milliseconds/1000), time.UTC), nil
-	}
-	return time.Now(), errors.New("Could not convert to time, passing current time.")
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/go-ole/go-ole/variant_date_amd64.go","mode":420,"size":586,"sha256":"2d52203d65dd75bee11bdca75d58eb0affcf9474bf9ae0cbcf0e7e0008375c53","index":0,"count":1,"encoding":"utf-8","payloadBytes":586}
-// +build windows,amd64
-
-package ole
-
-import (
-	"errors"
-	"syscall"
-	"time"
-	"unsafe"
-)
-
-// GetVariantDate converts COM Variant Time value to Go time.Time.
-func GetVariantDate(value uint64) (time.Time, error) {
-	var st syscall.Systemtime
-	r, _, _ := procVariantTimeToSystemTime.Call(uintptr(value), uintptr(unsafe.Pointer(&st)))
-	if r != 0 {
-		return time.Date(int(st.Year), time.Month(st.Month), int(st.Day), int(st.Hour), int(st.Minute), int(st.Second), int(st.Milliseconds/1000), time.UTC), nil
-	}
-	return time.Now(), errors.New("Could not convert to time, passing current time.")
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/go-ole/go-ole/variant_date_arm.go","mode":420,"size":642,"sha256":"ff08bd327488b1ae1df59ee7fcdf5eb36c6c5ab961d333264ccb3ddb843c8df4","index":0,"count":1,"encoding":"utf-8","payloadBytes":642}
-// +build windows,arm
-
-package ole
-
-import (
-	"errors"
-	"syscall"
-	"time"
-	"unsafe"
-)
-
-// GetVariantDate converts COM Variant Time value to Go time.Time.
-func GetVariantDate(value uint64) (time.Time, error) {
-	var st syscall.Systemtime
-	v1 := uint32(value)
-	v2 := uint32(value >> 32)
-	r, _, _ := procVariantTimeToSystemTime.Call(uintptr(v1), uintptr(v2), uintptr(unsafe.Pointer(&st)))
-	if r != 0 {
-		return time.Date(int(st.Year), time.Month(st.Month), int(st.Day), int(st.Hour), int(st.Minute), int(st.Second), int(st.Milliseconds/1000), time.UTC), nil
-	}
-	return time.Now(), errors.New("Could not convert to time, passing current time.")
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/go-ole/go-ole/variant_date_arm64.go","mode":420,"size":672,"sha256":"d3f03e19f39b6186ec3733b34f7d040da1383c718b3cb5ff8208ef3021c8d007","index":0,"count":1,"encoding":"utf-8","payloadBytes":672}
-//go:build windows && arm64
-// +build windows,arm64
-
-package ole
-
-import (
-	"errors"
-	"syscall"
-	"time"
-	"unsafe"
-)
-
-// GetVariantDate converts COM Variant Time value to Go time.Time.
-func GetVariantDate(value uint64) (time.Time, error) {
-	var st syscall.Systemtime
-	v1 := uint32(value)
-	v2 := uint32(value >> 32)
-	r, _, _ := procVariantTimeToSystemTime.Call(uintptr(v1), uintptr(v2), uintptr(unsafe.Pointer(&st)))
-	if r != 0 {
-		return time.Date(int(st.Year), time.Month(st.Month), int(st.Day), int(st.Hour), int(st.Minute), int(st.Second), int(st.Milliseconds/1000), time.UTC), nil
-	}
-	return time.Now(), errors.New("Could not convert to time, passing current time.")
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/go-ole/go-ole/variant_ppc64le.go","mode":420,"size":212,"sha256":"ecce11a5cc5ffa435d0800d1d7242e65b81623d4f26bd9b498c7575488f6d82e","index":0,"count":1,"encoding":"utf-8","payloadBytes":212}
-// +build ppc64le
-
-package ole
-
-type VARIANT struct {
-	VT         VT      //  2
-	wReserved1 uint16  //  4
-	wReserved2 uint16  //  6
-	wReserved3 uint16  //  8
-	Val        int64   // 16
-	_          [8]byte // 24
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/go-ole/go-ole/variant_s390x.go","mode":420,"size":210,"sha256":"766d4f6d5702d4fe3adc030a5febf1bdf8ecb28ef22ad22207ce010df933c50b","index":0,"count":1,"encoding":"utf-8","payloadBytes":210}
-// +build s390x
-
-package ole
-
-type VARIANT struct {
-	VT         VT      //  2
-	wReserved1 uint16  //  4
-	wReserved2 uint16  //  6
-	wReserved3 uint16  //  8
-	Val        int64   // 16
-	_          [8]byte // 24
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/go-ole/go-ole/vt_string.go","mode":420,"size":1824,"sha256":"141d2c12745dd1004ca0a2117e7ac1d639f0cf4626307dd4b57d459fbf411d6d","index":0,"count":1,"encoding":"utf-8","payloadBytes":1824}
-// generated by stringer -output vt_string.go -type VT; DO NOT EDIT
-
-package ole
-
-import "fmt"
-
-const (
-	_VT_name_0 = "VT_EMPTYVT_NULLVT_I2VT_I4VT_R4VT_R8VT_CYVT_DATEVT_BSTRVT_DISPATCHVT_ERRORVT_BOOLVT_VARIANTVT_UNKNOWNVT_DECIMAL"
-	_VT_name_1 = "VT_I1VT_UI1VT_UI2VT_UI4VT_I8VT_UI8VT_INTVT_UINTVT_VOIDVT_HRESULTVT_PTRVT_SAFEARRAYVT_CARRAYVT_USERDEFINEDVT_LPSTRVT_LPWSTR"
-	_VT_name_2 = "VT_RECORDVT_INT_PTRVT_UINT_PTR"
-	_VT_name_3 = "VT_FILETIMEVT_BLOBVT_STREAMVT_STORAGEVT_STREAMED_OBJECTVT_STORED_OBJECTVT_BLOB_OBJECTVT_CFVT_CLSID"
-	_VT_name_4 = "VT_BSTR_BLOBVT_VECTOR"
-	_VT_name_5 = "VT_ARRAY"
-	_VT_name_6 = "VT_BYREF"
-	_VT_name_7 = "VT_RESERVED"
-	_VT_name_8 = "VT_ILLEGAL"
-)
-
-var (
-	_VT_index_0 = [...]uint8{0, 8, 15, 20, 25, 30, 35, 40, 47, 54, 65, 73, 80, 90, 100, 110}
-	_VT_index_1 = [...]uint8{0, 5, 11, 17, 23, 28, 34, 40, 47, 54, 64, 70, 82, 91, 105, 113, 122}
-	_VT_index_2 = [...]uint8{0, 9, 19, 30}
-	_VT_index_3 = [...]uint8{0, 11, 18, 27, 37, 55, 71, 85, 90, 98}
-	_VT_index_4 = [...]uint8{0, 12, 21}
-	_VT_index_5 = [...]uint8{0, 8}
-	_VT_index_6 = [...]uint8{0, 8}
-	_VT_index_7 = [...]uint8{0, 11}
-	_VT_index_8 = [...]uint8{0, 10}
-)
-
-func (i VT) String() string {
-	switch {
-	case 0 <= i && i <= 14:
-		return _VT_name_0[_VT_index_0[i]:_VT_index_0[i+1]]
-	case 16 <= i && i <= 31:
-		i -= 16
-		return _VT_name_1[_VT_index_1[i]:_VT_index_1[i+1]]
-	case 36 <= i && i <= 38:
-		i -= 36
-		return _VT_name_2[_VT_index_2[i]:_VT_index_2[i+1]]
-	case 64 <= i && i <= 72:
-		i -= 64
-		return _VT_name_3[_VT_index_3[i]:_VT_index_3[i+1]]
-	case 4095 <= i && i <= 4096:
-		i -= 4095
-		return _VT_name_4[_VT_index_4[i]:_VT_index_4[i+1]]
-	case i == 8192:
-		return _VT_name_5
-	case i == 16384:
-		return _VT_name_6
-	case i == 32768:
-		return _VT_name_7
-	case i == 65535:
-		return _VT_name_8
-	default:
-		return fmt.Sprintf("VT(%d)", i)
-	}
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/go-ole/go-ole/winrt.go","mode":420,"size":2432,"sha256":"39c948f8b63d6c6f2c48e6833a346f86cfcab4f815485f4f75171f025518ba04","index":0,"count":1,"encoding":"utf-8","payloadBytes":2432}
-// +build windows
-
-package ole
-
-import (
-	"reflect"
-	"syscall"
-	"unicode/utf8"
-	"unsafe"
-)
-
-var (
-	procRoInitialize              = modcombase.NewProc("RoInitialize")
-	procRoActivateInstance        = modcombase.NewProc("RoActivateInstance")
-	procRoGetActivationFactory    = modcombase.NewProc("RoGetActivationFactory")
-	procWindowsCreateString       = modcombase.NewProc("WindowsCreateString")
-	procWindowsDeleteString       = modcombase.NewProc("WindowsDeleteString")
-	procWindowsGetStringRawBuffer = modcombase.NewProc("WindowsGetStringRawBuffer")
-)
-
-func RoInitialize(thread_type uint32) (err error) {
-	hr, _, _ := procRoInitialize.Call(uintptr(thread_type))
-	if hr != 0 {
-		err = NewError(hr)
-	}
-	return
-}
-
-func RoActivateInstance(clsid string) (ins *IInspectable, err error) {
-	hClsid, err := NewHString(clsid)
-	if err != nil {
-		return nil, err
-	}
-	defer DeleteHString(hClsid)
-
-	hr, _, _ := procRoActivateInstance.Call(
-		uintptr(unsafe.Pointer(hClsid)),
-		uintptr(unsafe.Pointer(&ins)))
-	if hr != 0 {
-		err = NewError(hr)
-	}
-	return
-}
-
-func RoGetActivationFactory(clsid string, iid *GUID) (ins *IInspectable, err error) {
-	hClsid, err := NewHString(clsid)
-	if err != nil {
-		return nil, err
-	}
-	defer DeleteHString(hClsid)
-
-	hr, _, _ := procRoGetActivationFactory.Call(
-		uintptr(unsafe.Pointer(hClsid)),
-		uintptr(unsafe.Pointer(iid)),
-		uintptr(unsafe.Pointer(&ins)))
-	if hr != 0 {
-		err = NewError(hr)
-	}
-	return
-}
-
-// HString is handle string for pointers.
-type HString uintptr
-
-// NewHString returns a new HString for Go string.
-func NewHString(s string) (hstring HString, err error) {
-	u16 := syscall.StringToUTF16Ptr(s)
-	len := uint32(utf8.RuneCountInString(s))
-	hr, _, _ := procWindowsCreateString.Call(
-		uintptr(unsafe.Pointer(u16)),
-		uintptr(len),
-		uintptr(unsafe.Pointer(&hstring)))
-	if hr != 0 {
-		err = NewError(hr)
-	}
-	return
-}
-
-// DeleteHString deletes HString.
-func DeleteHString(hstring HString) (err error) {
-	hr, _, _ := procWindowsDeleteString.Call(uintptr(hstring))
-	if hr != 0 {
-		err = NewError(hr)
-	}
-	return
-}
-
-// String returns Go string value of HString.
-func (h HString) String() string {
-	var u16buf uintptr
-	var u16len uint32
-	u16buf, _, _ = procWindowsGetStringRawBuffer.Call(
-		uintptr(h),
-		uintptr(unsafe.Pointer(&u16len)))
-
-	u16hdr := reflect.SliceHeader{Data: u16buf, Len: int(u16len), Cap: int(u16len)}
-	u16 := *(*[]uint16)(unsafe.Pointer(&u16hdr))
-	return syscall.UTF16ToString(u16)
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/go-ole/go-ole/winrt_doc.go","mode":420,"size":842,"sha256":"cdba1ccb29736ec70c93aa1ec24fa19877fa8d38ffb8d4691a7ae7601885cd5d","index":0,"count":1,"encoding":"utf-8","payloadBytes":842}
-// +build !windows
-
-package ole
-
-// RoInitialize
-func RoInitialize(thread_type uint32) (err error) {
-	return NewError(E_NOTIMPL)
-}
-
-// RoActivateInstance
-func RoActivateInstance(clsid string) (ins *IInspectable, err error) {
-	return nil, NewError(E_NOTIMPL)
-}
-
-// RoGetActivationFactory
-func RoGetActivationFactory(clsid string, iid *GUID) (ins *IInspectable, err error) {
-	return nil, NewError(E_NOTIMPL)
-}
-
-// HString is handle string for pointers.
-type HString uintptr
-
-// NewHString returns a new HString for Go string.
-func NewHString(s string) (hstring HString, err error) {
-	return HString(uintptr(0)), NewError(E_NOTIMPL)
-}
-
-// DeleteHString deletes HString.
-func DeleteHString(hstring HString) (err error) {
-	return NewError(E_NOTIMPL)
-}
-
-// String returns Go string value of HString.
-func (h HString) String() string {
-	return ""
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/godbus/dbus/v5/LICENSE","mode":420,"size":1328,"sha256":"e4646a82a976369d7ae8f6ed5c11d35dc0af18433a8ccc24c85b459ad8b95128","index":0,"count":1,"encoding":"utf-8","payloadBytes":1328}
-Copyright (c) 2013, Georg Reinke (<guelfey at gmail dot com>), Google
-All rights reserved.
-
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions
-are met:
-
-1. Redistributions of source code must retain the above copyright notice,
-this list of conditions and the following disclaimer.
-
-2. Redistributions in binary form must reproduce the above copyright
-notice, this list of conditions and the following disclaimer in the
-documentation and/or other materials provided with the distribution.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED
-TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
-PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
-LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
-NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/godbus/dbus/v5/MAINTAINERS","mode":420,"size":143,"sha256":"f989a216e49e8522859029e7f80b9b4b92039976f2753e4898f0c3e1bc75cb01","index":0,"count":1,"encoding":"utf-8","payloadBytes":143}
-Brandon Philips <brandon@ifup.org> (@philips)
-Brian Waldon <brian@waldon.cc> (@bcwaldon)
-John Southworth <jsouthwo@brocade.com> (@jsouthworth)
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/godbus/dbus/v5/auth.go","mode":420,"size":6919,"sha256":"338c0e88d324fdebe6a51a8add731833294863c1305e3c7479eafa7ce041f976","index":0,"count":1,"encoding":"utf-8","payloadBytes":6919}
-package dbus
-
-import (
-	"bufio"
-	"bytes"
-	"errors"
-	"io"
-	"os"
-	"strconv"
-)
-
-// AuthStatus represents the Status of an authentication mechanism.
-type AuthStatus byte
-
-const (
-	// AuthOk signals that authentication is finished; the next command
-	// from the server should be an OK.
-	AuthOk AuthStatus = iota
-
-	// AuthContinue signals that additional data is needed; the next command
-	// from the server should be a DATA.
-	AuthContinue
-
-	// AuthError signals an error; the server sent invalid data or some
-	// other unexpected thing happened and the current authentication
-	// process should be aborted.
-	AuthError
-)
-
-type authState byte
-
-const (
-	waitingForData authState = iota
-	waitingForOk
-	waitingForReject
-)
-
-// Auth defines the behaviour of an authentication mechanism.
-type Auth interface {
-	// Return the name of the mechanism, the argument to the first AUTH command
-	// and the next status.
-	FirstData() (name, resp []byte, status AuthStatus)
-
-	// Process the given DATA command, and return the argument to the DATA
-	// command and the next status. If len(resp) == 0, no DATA command is sent.
-	HandleData(data []byte) (resp []byte, status AuthStatus)
-}
-
-// Auth authenticates the connection, trying the given list of authentication
-// mechanisms (in that order). If nil is passed, the EXTERNAL and
-// DBUS_COOKIE_SHA1 mechanisms are tried for the current user. For private
-// connections, this method must be called before sending any messages to the
-// bus. Auth must not be called on shared connections.
-func (conn *Conn) Auth(methods []Auth) error {
-	if methods == nil {
-		uid := strconv.Itoa(os.Geteuid())
-		methods = []Auth{AuthExternal(uid), AuthCookieSha1(uid, getHomeDir())}
-	}
-	in := bufio.NewReader(conn.transport)
-	err := conn.transport.SendNullByte()
-	if err != nil {
-		return err
-	}
-	err = authWriteLine(conn.transport, []byte("AUTH"))
-	if err != nil {
-		return err
-	}
-	s, err := authReadLine(in)
-	if err != nil {
-		return err
-	}
-	if len(s) < 2 || !bytes.Equal(s[0], []byte("REJECTED")) {
-		return errors.New("dbus: authentication protocol error")
-	}
-	s = s[1:]
-	for _, v := range s {
-		for _, m := range methods {
-			if name, _, status := m.FirstData(); bytes.Equal(v, name) {
-				var ok bool
-				err = authWriteLine(conn.transport, []byte("AUTH"), v)
-				if err != nil {
-					return err
-				}
-				switch status {
-				case AuthOk:
-					err, ok = conn.tryAuth(m, waitingForOk, in)
-				case AuthContinue:
-					err, ok = conn.tryAuth(m, waitingForData, in)
-				default:
-					panic("dbus: invalid authentication status")
-				}
-				if err != nil {
-					return err
-				}
-				if ok {
-					if conn.transport.SupportsUnixFDs() {
-						err = authWriteLine(conn, []byte("NEGOTIATE_UNIX_FD"))
-						if err != nil {
-							return err
-						}
-						line, err := authReadLine(in)
-						if err != nil {
-							return err
-						}
-						switch {
-						case bytes.Equal(line[0], []byte("AGREE_UNIX_FD")):
-							conn.EnableUnixFDs()
-							conn.unixFD = true
-						case bytes.Equal(line[0], []byte("ERROR")):
-						default:
-							return errors.New("dbus: authentication protocol error")
-						}
-					}
-					err = authWriteLine(conn.transport, []byte("BEGIN"))
-					if err != nil {
-						return err
-					}
-					go conn.inWorker()
-					return nil
-				}
-			}
-		}
-	}
-	return errors.New("dbus: authentication failed")
-}
-
-// tryAuth tries to authenticate with m as the mechanism, using state as the
-// initial authState and in for reading input. It returns (nil, true) on
-// success, (nil, false) on a REJECTED and (someErr, false) if some other
-// error occurred.
-func (conn *Conn) tryAuth(m Auth, state authState, in *bufio.Reader) (error, bool) {
-	for {
-		s, err := authReadLine(in)
-		if err != nil {
-			return err, false
-		}
-		switch {
-		case state == waitingForData && string(s[0]) == "DATA":
-			if len(s) != 2 {
-				err = authWriteLine(conn.transport, []byte("ERROR"))
-				if err != nil {
-					return err, false
-				}
-				continue
-			}
-			data, status := m.HandleData(s[1])
-			switch status {
-			case AuthOk, AuthContinue:
-				if len(data) != 0 {
-					err = authWriteLine(conn.transport, []byte("DATA"), data)
-					if err != nil {
-						return err, false
-					}
-				}
-				if status == AuthOk {
-					state = waitingForOk
-				}
-			case AuthError:
-				err = authWriteLine(conn.transport, []byte("ERROR"))
-				if err != nil {
-					return err, false
-				}
-			}
-		case state == waitingForData && string(s[0]) == "REJECTED":
-			return nil, false
-		case state == waitingForData && string(s[0]) == "ERROR":
-			err = authWriteLine(conn.transport, []byte("CANCEL"))
-			if err != nil {
-				return err, false
-			}
-			state = waitingForReject
-		case state == waitingForData && string(s[0]) == "OK":
-			if len(s) != 2 {
-				err = authWriteLine(conn.transport, []byte("CANCEL"))
-				if err != nil {
-					return err, false
-				}
-				state = waitingForReject
-			} else {
-				conn.uuid = string(s[1])
-				return nil, true
-			}
-		case state == waitingForData:
-			err = authWriteLine(conn.transport, []byte("ERROR"))
-			if err != nil {
-				return err, false
-			}
-		case state == waitingForOk && string(s[0]) == "OK":
-			if len(s) != 2 {
-				err = authWriteLine(conn.transport, []byte("CANCEL"))
-				if err != nil {
-					return err, false
-				}
-				state = waitingForReject
-			} else {
-				conn.uuid = string(s[1])
-				return nil, true
-			}
-		case state == waitingForOk && string(s[0]) == "DATA":
-			err = authWriteLine(conn.transport, []byte("DATA"))
-			if err != nil {
-				return err, false
-			}
-		case state == waitingForOk && string(s[0]) == "REJECTED":
-			return nil, false
-		case state == waitingForOk && string(s[0]) == "ERROR":
-			err = authWriteLine(conn.transport, []byte("CANCEL"))
-			if err != nil {
-				return err, false
-			}
-			state = waitingForReject
-		case state == waitingForOk:
-			err = authWriteLine(conn.transport, []byte("ERROR"))
-			if err != nil {
-				return err, false
-			}
-		case state == waitingForReject && string(s[0]) == "REJECTED":
-			return nil, false
-		case state == waitingForReject:
-			return errors.New("dbus: authentication protocol error"), false
-		default:
-			panic("dbus: invalid auth state")
-		}
-	}
-}
-
-// authReadLine reads a line and separates it into its fields.
-func authReadLine(in *bufio.Reader) ([][]byte, error) {
-	data, err := in.ReadBytes('\n')
-	if err != nil {
-		return nil, err
-	}
-	data = bytes.TrimSuffix(data, []byte("\r\n"))
-	return bytes.Split(data, []byte{' '}), nil
-}
-
-// authWriteLine writes the given line in the authentication protocol format
-// (elements of data separated by a " " and terminated by "\r\n").
-func authWriteLine(out io.Writer, data ...[]byte) error {
-	buf := make([]byte, 0)
-	for i, v := range data {
-		buf = append(buf, v...)
-		if i != len(data)-1 {
-			buf = append(buf, ' ')
-		}
-	}
-	buf = append(buf, '\r')
-	buf = append(buf, '\n')
-	n, err := out.Write(buf)
-	if err != nil {
-		return err
-	}
-	if n != len(buf) {
-		return io.ErrUnexpectedEOF
-	}
-	return nil
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/godbus/dbus/v5/auth_anonymous.go","mode":420,"size":396,"sha256":"3e950a69a6dcd638dc6dcdff21279bc4fe7522e76291f347a7b012128f31bfb9","index":0,"count":1,"encoding":"utf-8","payloadBytes":396}
-package dbus
-
-// AuthAnonymous returns an Auth that uses the ANONYMOUS mechanism.
-func AuthAnonymous() Auth {
-	return &authAnonymous{}
-}
-
-type authAnonymous struct{}
-
-func (a *authAnonymous) FirstData() (name, resp []byte, status AuthStatus) {
-	return []byte("ANONYMOUS"), nil, AuthOk
-}
-
-func (a *authAnonymous) HandleData(data []byte) (resp []byte, status AuthStatus) {
-	return nil, AuthError
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/godbus/dbus/v5/auth_external.go","mode":420,"size":582,"sha256":"8998f9b4f916025eeb6f65cb696438d8ed1f6ca552588d53c88e24e8477174e3","index":0,"count":1,"encoding":"utf-8","payloadBytes":582}
-package dbus
-
-import (
-	"encoding/hex"
-)
-
-// AuthExternal returns an Auth that authenticates as the given user with the
-// EXTERNAL mechanism.
-func AuthExternal(user string) Auth {
-	return authExternal{user}
-}
-
-// AuthExternal implements the EXTERNAL authentication mechanism.
-type authExternal struct {
-	user string
-}
-
-func (a authExternal) FirstData() ([]byte, []byte, AuthStatus) {
-	b := make([]byte, 2*len(a.user))
-	hex.Encode(b, []byte(a.user))
-	return []byte("EXTERNAL"), b, AuthOk
-}
-
-func (a authExternal) HandleData(b []byte) ([]byte, AuthStatus) {
-	return nil, AuthError
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/godbus/dbus/v5/auth_sha1.go","mode":420,"size":2445,"sha256":"14fdf99ad7db493b6f13564eebc4e13907d6730909f021af6f92b5a828672f80","index":0,"count":1,"encoding":"utf-8","payloadBytes":2445}
-package dbus
-
-import (
-	"bufio"
-	"bytes"
-	"crypto/rand"
-	"crypto/sha1"
-	"encoding/hex"
-	"os"
-)
-
-// AuthCookieSha1 returns an Auth that authenticates as the given user with the
-// DBUS_COOKIE_SHA1 mechanism. The home parameter should specify the home
-// directory of the user.
-func AuthCookieSha1(user, home string) Auth {
-	return authCookieSha1{user, home}
-}
-
-type authCookieSha1 struct {
-	user, home string
-}
-
-func (a authCookieSha1) FirstData() ([]byte, []byte, AuthStatus) {
-	b := make([]byte, 2*len(a.user))
-	hex.Encode(b, []byte(a.user))
-	return []byte("DBUS_COOKIE_SHA1"), b, AuthContinue
-}
-
-func (a authCookieSha1) HandleData(data []byte) ([]byte, AuthStatus) {
-	challenge := make([]byte, len(data)/2)
-	_, err := hex.Decode(challenge, data)
-	if err != nil {
-		return nil, AuthError
-	}
-	b := bytes.Split(challenge, []byte{' '})
-	if len(b) != 3 {
-		return nil, AuthError
-	}
-	context := b[0]
-	id := b[1]
-	svchallenge := b[2]
-	cookie := a.getCookie(context, id)
-	if cookie == nil {
-		return nil, AuthError
-	}
-	clchallenge := a.generateChallenge()
-	if clchallenge == nil {
-		return nil, AuthError
-	}
-	hash := sha1.New()
-	hash.Write(bytes.Join([][]byte{svchallenge, clchallenge, cookie}, []byte{':'}))
-	hexhash := make([]byte, 2*hash.Size())
-	hex.Encode(hexhash, hash.Sum(nil))
-	data = append(clchallenge, ' ')
-	data = append(data, hexhash...)
-	resp := make([]byte, 2*len(data))
-	hex.Encode(resp, data)
-	return resp, AuthOk
-}
-
-// getCookie searches for the cookie identified by id in context and returns
-// the cookie content or nil. (Since HandleData can't return a specific error,
-// but only whether an error occurred, this function also doesn't bother to
-// return an error.)
-func (a authCookieSha1) getCookie(context, id []byte) []byte {
-	file, err := os.Open(a.home + "/.dbus-keyrings/" + string(context))
-	if err != nil {
-		return nil
-	}
-	defer file.Close()
-	rd := bufio.NewReader(file)
-	for {
-		line, err := rd.ReadBytes('\n')
-		if err != nil {
-			return nil
-		}
-		line = line[:len(line)-1]
-		b := bytes.Split(line, []byte{' '})
-		if len(b) != 3 {
-			return nil
-		}
-		if bytes.Equal(b[0], id) {
-			return b[2]
-		}
-	}
-}
-
-// generateChallenge returns a random, hex-encoded challenge, or nil on error
-// (see above).
-func (a authCookieSha1) generateChallenge() []byte {
-	b := make([]byte, 16)
-	n, err := rand.Read(b)
-	if err != nil {
-		return nil
-	}
-	if n != 16 {
-		return nil
-	}
-	enc := make([]byte, 32)
-	hex.Encode(enc, b)
-	return enc
-}
-
-@@END
-@@PORTABLE {"path":"vendor/github.com/godbus/dbus/v5/call.go","mode":420,"size":1772,"sha256":"8acde70654409725b91bfd2cad383d93e929122795a250227b5829e280d9d0c9","index":0,"count":1,"encoding":"utf-8","payloadBytes":1772}
-package dbus
-
-import (
-	"context"
-	"errors"
-)
-
-var errSignature = errors.New("dbus: mismatched signature")
-
-// Call represents a pending or completed method call.
-type Call struct {
-	Destination string
-	Path        ObjectPath
-	Method      string
-	Args        []interface{}
-
-	// Strobes when the call is complete.
-	Done chan *Call
-
-	// After completion, the error status. If this is non-nil, it may be an
-	// error message from the peer (with Error as its type) or some other error.
-	Err error
-
-	// Holds the response once the call is done.
-	Body []interface{}
-
-	// ResponseSequence stores the sequence number of the DBus message containing
-	// the call response (or error). This can be compared to the sequence number
-	// of other call responses and signals on this connection to determine their
-	// relative ordering on the underlying DBus connection.
-	// For errors, ResponseSequence is populated only if the error came from a
-	// DBusMessage that was received or if there was an error receiving. In case of
-	// failure to make the call, ResponseSequence will be NoSequence.
-	ResponseSequence Sequence
-
-	// tracks context and canceler
-	ctx         context.Context
-	ctxCanceler context.CancelFunc
-}
-
-func (c *Call) Context() context.Context {
-	if c.ctx == nil {
-		return context.Background()
-	}
-
-	return c.ctx
-}
-
-func (c *Call) ContextCancel() {
-	if c.ctxCanceler != nil {
-		c.ctxCanceler()
-	}
-}
-
-// Store stores the body of the reply into the provided pointers. It returns
-// an error if the signatures of the body and retvalues don't match, or if
-// the error status is not nil.
-func (c *Call) Store(retvalues ...interface{}) error {
-	if c.Err != nil {
-		return c.Err
-	}
-
-	return Store(c.Body, retvalues...)
-}
-
-func (c *Call) done() {
-	c.Done <- c
-	c.ContextCancel()
 }
 
 @@END

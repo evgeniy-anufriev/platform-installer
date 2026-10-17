@@ -358,7 +358,7 @@ class ActionModule(ActionBase):
         return dict(result, changed=False)
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/prepare_application_providers.py","mode":420,"size":3072,"sha256":"d00ea5bd434e8cf03a2c7d4984337ee84e07663ad4d79755fb664abfcde7cd3e","index":0,"count":1,"encoding":"utf-8","payloadBytes":3072}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/prepare_application_providers.py","mode":420,"size":3714,"sha256":"a8203ec21431ac868e32cbd36cc8c4d14845e7600b6690aa7c361e37646ad295","index":0,"count":1,"encoding":"utf-8","payloadBytes":3714}
 """Resolve provider-only hooks without image authority or target contacts."""
 from ansible.plugins.action import ActionBase
 from ansible_collections.platform.core.plugins.module_utils.application_providers import project_providers
@@ -396,6 +396,13 @@ class ActionModule(ActionBase):
                     for candidate in job['candidates']:
                         plans = [p for p in prepared['pki_materialization'].get('materializationPlans', [])
                                  if p['hostId'] == candidate['hostId'] and p['tlsProfileId'] == candidate.get('tlsProfileRef')]
+                        if job['serviceType'] == 'kafka':
+                            request_ids = {r['id'] for r in prepared['pki_materialization'].get('requests', [])
+                                           if any(c.get('deploymentId') == job['providerId'] and c.get('memberId') == candidate['memberId']
+                                                  for c in r.get('consumers', []))}
+                            plans = [p for p in plans if p['requestId'] in request_ids]
+                            if candidate['tls'] and len(plans) != 1:
+                                raise ValueError('APPLICATION_PROVIDER_PKI_PLAN_REQUIRED')
                         candidate['pkiPlans'] = plans
                         if (job['accounts'] or job['serviceType'] == 'clickhouse') and len(plans) != 1:
                             raise ValueError('APPLICATION_PROVIDER_PKI_PLAN_REQUIRED')
@@ -21158,7 +21165,7 @@ def project_endpoint_sources(rows, desired, hosts):
     return sources
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_libraries.py","mode":420,"size":34782,"sha256":"7952e87ba1a606135b62afa6916c06e1ec5a32cd71b4f5984423df45065ea6f7","index":0,"count":1,"encoding":"utf-8","payloadBytes":34782}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_libraries.py","mode":420,"size":37908,"sha256":"c17ed5d2fffde03a4639e66399a14bb33bbe7f532d5c67eabc6ac679f0c0f341","index":0,"count":1,"encoding":"utf-8","payloadBytes":37908}
 """Read-only application contract checks. Ansible owns composition and templating."""
 import hashlib
 import json
@@ -21508,6 +21515,40 @@ def account_policies(settings, layers):
     return result
 
 
+def resolve_topics(resources, bindings, desired):
+    """Pure projection; Ansible already resolved resource parameters and topology."""
+    topics = {}
+    for key, resource in resources.items():
+        if resource['kind'] != 'kafka.topic':
+            continue
+        ref = bindings[resource['binding']]['deploymentRef']
+        deployment = desired['serviceDeployments'][ref]
+        if deployment['serviceType'] != 'kafka' or deployment['mode'] not in ('kraft-standalone', 'kraft-distributed'):
+            raise ValueError('APPLICATION_TOPIC_PROVIDER_INVALID')
+        count = sum('broker' in m.get('roles', []) for m in deployment.get('members', {}).values())
+        p = resource['parameters']
+        name = p['name']
+        if (set(p) - {'name', 'partitions', 'replication_factor', 'config'} or
+                not isinstance(name, str) or not re.fullmatch(r'[A-Za-z0-9._-]{1,249}', name) or name in ('.', '..')):
+            raise ValueError('APPLICATION_TOPIC_SETTINGS_INVALID')
+        partitions = p.get('partitions', 1)
+        rf = p.get('replication_factor', 1 if deployment['mode'] == 'kraft-standalone' else min(3, count))
+        config = dict(p.get('config', {}))
+        minimum = config.get('min.insync.replicas', min(2, rf) if type(rf) is int else 0)
+        if isinstance(minimum, str) and minimum.isdecimal():
+            minimum = int(minimum)
+        if (any(type(v) is not int or v < 1 for v in (partitions, rf, minimum)) or rf > count or
+                any(not isinstance(k, str) or not isinstance(v, (str, int, float, bool)) for k, v in config.items())):
+            raise ValueError('APPLICATION_TOPIC_SETTINGS_INVALID')
+        config = {k: str(v).lower() if type(v) is bool else str(v) for k, v in config.items()}
+        config['min.insync.replicas'] = str(minimum)
+        topics[key] = dict(resourceId=key, deploymentRef=ref, name=name,
+                           mode=resource.get('mode', 'managed'), partitions=partitions,
+                           replicationFactor=rf, config=config,
+                           minISRWarning=minimum > rf)
+    return topics
+
+
 def project(rows, desired, configuration, catalog, hosts, project_id="ansible-project"):
     findings, libraries, ports = [], {}, set()
     if not isinstance(project_id, str) or not ID.fullmatch(project_id):
@@ -21620,18 +21661,32 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
                 shared_connections[name] = resolve_connection(reference, declaration, selector, desired, configuration, catalog, hosts)
             except (ValueError, KeyError, TypeError):
                 findings.append(finding('APPLICATION_CONNECTION_INVALID', field + '.libraryConnections.' + name))
-        library = libraries.setdefault(library_id, {"libraryRef": row["libraryRef"], "packages": {}, "instances": {}, "resources": row["resources"], "sharedSecretRequirements": row["sharedSecrets"], 'connections': shared_connections, 'runtimeDirectory': row.get('runtimeDirectory', '~/' + library_id)})
+        try:
+            topics = resolve_topics(row['resources'], row['bindings'], desired)
+            topic_bindings = {}
+            for alias, refs in settings.get('topicBindings', {}).items():
+                connection = connections[alias]
+                selected = [topics[ref] for ref in refs]
+                if connection['serviceType'] != 'kafka' or any(t['deploymentRef'] != connection['deploymentRef'] for t in selected):
+                    raise ValueError('APPLICATION_TOPIC_BINDING_INVALID')
+                topic_bindings[alias] = selected
+        except (KeyError, TypeError, ValueError):
+            topics, topic_bindings = {}, {}
+            findings.append(finding('APPLICATION_TOPIC_BINDING_INVALID', field + '.topicBindings'))
+        library = libraries.setdefault(library_id, {"libraryRef": row["libraryRef"], "packages": {}, "instances": {}, "resources": row["resources"], 'topics': topics, "sharedSecretRequirements": row["sharedSecrets"], 'connections': shared_connections, 'runtimeDirectory': row.get('runtimeDirectory', '~/' + library_id)})
         if library['connections'] != shared_connections or library['runtimeDirectory'] != row.get('runtimeDirectory', '~/' + library_id):
             findings.append(finding('APPLICATION_HOST_RESOURCE_CONFLICT', field))
         library["packages"][row["applicationName"]] = row["packageIdentity"]
         instance = library["instances"].setdefault(app_id, {"applicationName": row["applicationName"], "slotId": row["slotId"], "placements": {},
-                                                           "connections": connections, "credentialRequirements": accounts,
+                                                           "connections": connections, 'topics': topic_bindings, "credentialRequirements": accounts,
                                                            "identityEnvironment": {name: app_id for name in row["identityNames"]},
                                                            "agentRequired": agent_required, "executionPrerequisites": ["A2_IMAGE_DELIVERY", "A4_PROVIDER_PROVISIONING"] if accounts or agent_required else ["A2_IMAGE_DELIVERY"]})
         if library['resources'] != row['resources'] or library['sharedSecretRequirements'] != row['sharedSecrets']:
             findings.append(finding('APPLICATION_HOST_RESOURCE_CONFLICT', field))
         if instance['connections'] != connections:
             findings.append(finding('APPLICATION_HOST_CONNECTION_CONFLICT', field))
+        if instance['topics'] != topic_bindings:
+            findings.append(finding('APPLICATION_HOST_RESOURCE_CONFLICT', field))
         if instance["credentialRequirements"] != accounts:
             findings.append(finding("APPLICATION_HOST_CREDENTIAL_CONFLICT", field))
         if instance['agentRequired'] != agent_required or ('secretBindings' in instance and instance['secretBindings'] != secret_bindings):
@@ -21651,6 +21706,7 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
                                                      "applicationPackage": row['applicationName'] + '@' + row['applicationVersion'],
                                                      "libraryPackage": row['libraryRef'], "host": host},
                                           "parameters": settings.get("parameters", {}), "environment": settings.get("environment", {}),
+                                          "topicBindings": settings.get('topicBindings', {}),
                                           "ports": settings.get("ports", {}), "endpoint": settings.get("endpoint", {}),
                                           "containerName": "%s-%s-%s" % (project_id, app_id, host),
                                           "composeProject": compose_project,
@@ -21791,15 +21847,15 @@ def application_operation(action, model):
                 applicationSemanticFingerprint=model['semanticFingerprint'])
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_providers.py","mode":420,"size":20898,"sha256":"a8cc83fda85e63bc3c3d9f84cb883368faf73f3b4348ccef9695338940481059","index":0,"count":1,"encoding":"utf-8","payloadBytes":20898}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_providers.py","mode":420,"size":22839,"sha256":"51814fbcd9060c4e772836ff787e4c365a4e7889a3e12acb5209cc244ae95309","index":0,"count":1,"encoding":"utf-8","payloadBytes":22839}
 """Target-free provider hook projection. Ansible remains the variable resolver."""
 import hashlib
 import re
 
 try:
-    from .application_libraries import resolve_connection, finding
+    from .application_libraries import resolve_connection, finding, _value
 except ImportError:
-    from application_libraries import resolve_connection, finding
+    from application_libraries import resolve_connection, finding, _value
 
 NAME = re.compile(r'^[a-z_][a-z0-9_]{0,62}$')
 USER = re.compile(r'^[a-z_][a-z0-9_-]{0,62}$')
@@ -21925,20 +21981,32 @@ def project_providers(rows, snapshot, configuration, desired, catalog):
         definition = catalog['definitions'][deployment['serviceType']]
         service_type = deployment['serviceType']
         modes = {'postgresql': {'standalone', 'pg_auto_failover'}, 'redis': {'standalone', 'sentinel-ha'},
-                 'clickhouse': {'standalone', 'raft-ha'}}
+                 'clickhouse': {'standalone', 'raft-ha'}, 'kafka': {'kraft-standalone', 'kraft-distributed'}}
         if deployment['mode'] not in modes.get(service_type, set()):
             raise ValueError('APPLICATION_PROVIDER_MODE_UNSUPPORTED')
         capabilities = {'postgresql': {'service.postgresql.database', 'service.postgresql.schema', 'service.postgresql.account'},
-                        'redis': {'service.redis.account'}, 'clickhouse': {'service.clickhouse.database', 'service.clickhouse.account'}}
+                        'redis': {'service.redis.account'}, 'clickhouse': {'service.clickhouse.database', 'service.clickhouse.account'},
+                        'kafka': {'service.kafka.topic'}}
         if not capabilities[service_type] <= set(definition.get('capabilities', [])):
             raise ValueError('APPLICATION_PROVIDER_CAPABILITY_UNSUPPORTED')
         if ref not in jobs:
-            connection = resolve_connection(ref, {'purpose': 'native' if service_type == 'clickhouse' else 'client'}, None, materialized, configuration, catalog, snapshot['hosts'])
+            selector = None
+            if service_type == 'kafka':
+                listeners = _value(configuration['services'][ref]['configuration'], 'listeners') or {}
+                choices = sorted(k for k, v in listeners.items() if v['purpose'] == 'client')
+                selector = row.get('connectionDefaults', {}).get('kafka', {}).get('connectionRef') or (choices[0] if len(choices) == 1 else None)
+            connection = resolve_connection(ref, {'purpose': 'native' if service_type == 'clickhouse' else 'client'}, selector, materialized, configuration, catalog, snapshot['hosts'])
             targets = connection['targets']
+            if service_type == 'kafka':
+                for target in targets:
+                    member_settings = configuration['services'][ref].get('members', {}).get(target['memberId'], {}).get('configuration', {})
+                    target['tlsProfileRef'] = _value(member_settings, 'tlsProfile') or _value(configuration['services'][ref]['configuration'], 'tlsProfile')
             if service_type == 'postgresql' and len(targets) != (1 if deployment['mode'] == 'standalone' else 2):
                 raise ValueError('APPLICATION_PROVIDER_MEMBERS_INVALID')
             jobs[ref] = {'providerId': ref, 'projectId': project_id, 'mode': deployment['mode'],
                          'serviceType': service_type, 'candidates': targets, 'libraries': [], 'databases': [], 'accounts': []}
+            if service_type == 'kafka':
+                jobs[ref]['topics'] = []
         return jobs[ref]
 
     def claim(key, owner, mode):
@@ -21962,12 +22030,20 @@ def project_providers(rows, snapshot, configuration, desired, catalog):
                 raise ValueError('APPLICATION_PROVIDER_HOST_CONFLICT')
             databases, schemas = {}, []
             for resource_id, resource in sorted(library.get('resources', {}).items()):
-                if resource['kind'] not in {'postgresql.database', 'postgresql.schema', 'clickhouse.database'}:
+                if resource['kind'] not in {'postgresql.database', 'postgresql.schema', 'clickhouse.database', 'kafka.topic'}:
                     raise ValueError('APPLICATION_PROVIDER_CAPABILITY_UNSUPPORTED')
                 ref = row['bindings'].get(resource['binding'], {}).get('deploymentRef')
                 job = provider(ref)
                 if resource['kind'].split('.')[0] != job['serviceType']:
                     raise ValueError('APPLICATION_PROVIDER_RESOURCE_INVALID')
+                if resource['kind'] == 'kafka.topic':
+                    topic = dict(library['topics'][resource_id], libraryId=library_id)
+                    claim((ref, 'topic', topic['name']), (library_id, resource_id), topic['mode'])
+                    previous = [t for t in job['topics'] if t['name'] == topic['name']]
+                    if any(any(t[k] != topic[k] for k in ('partitions', 'replicationFactor', 'config')) for t in previous):
+                        raise ValueError('APPLICATION_PROVIDER_NAME_CONFLICT')
+                    job['topics'].append(topic)
+                    continue
                 if set(resource['parameters']) != {'name'}:
                     raise ValueError('APPLICATION_PROVIDER_RESOURCE_INVALID')
                 name, mode = identifier(resource['parameters']['name']), resource.get('mode', 'managed')
@@ -22065,6 +22141,11 @@ def split_provider_jobs(providers):
     """Execution boundaries are a library resource batch and one instance hook."""
     library_jobs, instance_jobs = [], []
     for job in providers:
+        if job['serviceType'] == 'kafka':
+            for library_id in sorted({t['libraryId'] for t in job['topics']}):
+                library_jobs.append(dict(job, libraryId=library_id,
+                                         topics=[t for t in job['topics'] if t['libraryId'] == library_id]))
+            continue
         for library_id in sorted({db['libraryId'] for db in job['databases']}):
             databases = [dict(db, accounts=[]) for db in job['databases'] if db['libraryId'] == library_id]
             owners = {db['owner'] for db in databases if db['mode'] == 'managed'}
@@ -29611,7 +29692,7 @@ platform_application_registry_config_directory: ''
   when: "'@' not in application_runtime_job.settings.image"
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/preflight.yml","mode":420,"size":17968,"sha256":"dd97074e21673a032885fc1f73902492a05bcb7d6a3de8e089594fbf2996e08e","index":0,"count":1,"encoding":"utf-8","payloadBytes":17968}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/preflight.yml","mode":420,"size":18175,"sha256":"b359e03ce68997fc012b35452799e561963801b22c9a56dc430abdb9a8db5bb5","index":0,"count":1,"encoding":"utf-8","payloadBytes":18175}
 ---
 - name: Bind this operation's account and Docker configuration discovery key
   ansible.builtin.set_fact:
@@ -29763,6 +29844,7 @@ platform_application_registry_config_directory: ''
     application_runtime:
       image: "{{ application_runtime_job.settings.image if '@' not in application_runtime_job.settings.image else application_runtime_job.authority.requirement.localReference }}"
       connections: "{{ hostvars['localhost'].application_snapshot.snapshot.applicationLibraries.libraries[application_runtime_job.libraryId].instances[application_runtime_job.instanceId].connections }}"
+      topics: "{{ hostvars['localhost'].application_snapshot.snapshot.applicationLibraries.libraries[application_runtime_job.libraryId].instances[application_runtime_job.instanceId].topics | default({}) }}"
       container_name: "{{ application_runtime_job.placement.containerName }}"
       base_compose_path: "{{ application_library_path }}/{{ application_runtime_job.baseFilename }}"
       base_service: "{{ application_runtime_job.baseService }}"
@@ -32514,7 +32596,7 @@ all:
       hosts: {}
 
 @@END
-@@PORTABLE {"path":"ansible-core/examples/empty/project.yml","mode":420,"size":481,"sha256":"d203e31275db3c592dcd2be7d4601a3c95ed5dbe851f0a23334ba768e415bb09","index":0,"count":1,"encoding":"utf-8","payloadBytes":481}
+@@PORTABLE {"path":"ansible-core/examples/empty/project.yml","mode":420,"size":481,"sha256":"b650fd02722171d9f5ca83ab46b34d7040fae7b2446bed8a910698cbeb3f4468","index":0,"count":1,"encoding":"utf-8","payloadBytes":481}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -32522,7 +32604,7 @@ metadata:
 desiredStateContract: platform.installer/project-desired-state/v2alpha1
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:711214971b92478128881d29b656bec555371626ff23cebbbfa55a721caae2cf
+  digest: sha256:417be4b10a4dfc81352af03149cd562201a63f46a9a582e9c5adfc17051f3223
   services: {}
 artifactLock:
   apiVersion: platform.installer/artifacts/v1alpha1
@@ -32564,7 +32646,7 @@ all:
           ansible_host: 192.0.2.10
 
 @@END
-@@PORTABLE {"path":"ansible-core/examples/invalid-reference/project.yml","mode":420,"size":617,"sha256":"bec868113bce0bbf9f378ae6ddea43e8a6ac37a2ef1be7cfc9c1dfc91f6de919","index":0,"count":1,"encoding":"utf-8","payloadBytes":617}
+@@PORTABLE {"path":"ansible-core/examples/invalid-reference/project.yml","mode":420,"size":617,"sha256":"56a23ac76865f9eeb4286f9a25e7d535e9acf5eeca2f065d443599269141dab1","index":0,"count":1,"encoding":"utf-8","payloadBytes":617}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -32572,11 +32654,11 @@ metadata:
 desiredStateContract: platform.installer/project-desired-state/v2alpha1
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:711214971b92478128881d29b656bec555371626ff23cebbbfa55a721caae2cf
+  digest: sha256:417be4b10a4dfc81352af03149cd562201a63f46a9a582e9c5adfc17051f3223
   services:
     kafka:
-      definitionVersion: 1.0.0-alpha.2
-      digest: sha256:9160c04e161a924fe7c96e06a99f0de34d3bee6b7285b8e49f5702b4ad09818f
+      definitionVersion: 1.0.0-alpha.3
+      digest: sha256:cb351fe279390a1dfb3b20d105972c89b67b588ffd85c11b1ba0d176a2402a9c
 artifactLock:
   apiVersion: platform.installer/artifacts/v1alpha1
   digest: sha256:2222222222222222222222222222222222222222222222222222222222222222
@@ -32619,7 +32701,7 @@ all:
                   roles: [broker, controller]
 
 @@END
-@@PORTABLE {"path":"ansible-core/examples/valid/project.yml","mode":420,"size":662,"sha256":"7d1d380f6e403f3170ef136456a15ce4d92c1218b4b498cf5f4bf42a23c7ae7e","index":0,"count":1,"encoding":"utf-8","payloadBytes":662}
+@@PORTABLE {"path":"ansible-core/examples/valid/project.yml","mode":420,"size":662,"sha256":"3761aedb51456c36e432a18da91ca5043dc30a9d25dfc8e21fccecf024f83555","index":0,"count":1,"encoding":"utf-8","payloadBytes":662}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -32628,11 +32710,11 @@ metadata:
 desiredStateContract: platform.installer/project-desired-state/v2alpha1
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:711214971b92478128881d29b656bec555371626ff23cebbbfa55a721caae2cf
+  digest: sha256:417be4b10a4dfc81352af03149cd562201a63f46a9a582e9c5adfc17051f3223
   services:
     kafka:
-      definitionVersion: 1.0.0-alpha.2
-      digest: sha256:9160c04e161a924fe7c96e06a99f0de34d3bee6b7285b8e49f5702b4ad09818f
+      definitionVersion: 1.0.0-alpha.3
+      digest: sha256:cb351fe279390a1dfb3b20d105972c89b67b588ffd85c11b1ba0d176a2402a9c
 artifactLock:
   apiVersion: platform.installer/artifacts/v1alpha1
   digest: sha256:2222222222222222222222222222222222222222222222222222222222222222
@@ -32741,7 +32823,7 @@ artifactLock:
         loop_var: application_runtime_job
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-provider-stage.yml","mode":420,"size":5799,"sha256":"80ef835b016542bf988e671fdfb9a4a393fde209a48644865f832de06394c2f0","index":0,"count":1,"encoding":"utf-8","payloadBytes":5799}
+@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-provider-stage.yml","mode":420,"size":6736,"sha256":"7090beb73f6c2f877e258fe0aa340a18cfb69e89ab05d47bce8ebb4b7ea38410","index":0,"count":1,"encoding":"utf-8","payloadBytes":6736}
 ---
 - name: Run preflighted library then instance provider hooks
   hosts: localhost
@@ -32793,6 +32875,24 @@ artifactLock:
           loop: "{{ (application_provider_inputs.libraryJobs + application_provider_inputs.instanceJobs) | selectattr('serviceType', 'equalto', 'clickhouse') | list }}"
           loop_control:
             loop_var: platform_clickhouse_application_job
+        - name: Preflight all Kafka topic batches before provider mutations
+          ansible.builtin.include_role:
+            name: platform.kafka.kafka_kraft
+            tasks_from: application_topics
+          vars:
+            platform_kafka_application_phase: preflight
+          loop: "{{ application_provider_inputs.libraryJobs | selectattr('serviceType', 'equalto', 'kafka') | list }}"
+          loop_control:
+            loop_var: platform_kafka_application_job
+        - name: Create Kafka library topics before application instances
+          ansible.builtin.include_role:
+            name: platform.kafka.kafka_kraft
+            tasks_from: application_topics
+          vars:
+            platform_kafka_application_phase: apply
+          loop: "{{ application_provider_inputs.libraryJobs | selectattr('serviceType', 'equalto', 'kafka') | list }}"
+          loop_control:
+            loop_var: platform_kafka_application_job
         - name: Create all library resources before instances
           ansible.builtin.include_role:
             name: platform.postgresql.application_provider
@@ -32852,7 +32952,7 @@ artifactLock:
           no_log: true
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-provider-verify-stage.yml","mode":420,"size":4553,"sha256":"7463e55311d4408a58ce1774a5e17431c0ae0aafce4df8e7baa7bfe7398ee429","index":0,"count":1,"encoding":"utf-8","payloadBytes":4553}
+@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-provider-verify-stage.yml","mode":420,"size":5017,"sha256":"b873230819ef804e4daf76700c24b5e4413c9b560e12496229fd7e4d8a4d0f71","index":0,"count":1,"encoding":"utf-8","payloadBytes":5017}
 ---
 - name: Verify application providers without service mutation
   hosts: localhost
@@ -32890,6 +32990,15 @@ artifactLock:
           loop: "{{ application_vault_inputs.sourceJobs | default([]) }}"
           loop_control:
             loop_var: application_vault_source
+        - name: Verify Kafka library topics without resource mutations
+          ansible.builtin.include_role:
+            name: platform.kafka.kafka_kraft
+            tasks_from: application_topics
+          vars:
+            platform_kafka_application_phase: verify
+          loop: "{{ application_provider_inputs.libraryJobs | selectattr('serviceType', 'equalto', 'kafka') | list }}"
+          loop_control:
+            loop_var: platform_kafka_application_job
         - name: Reset read-only PostgreSQL discovery for this invocation
           ansible.builtin.set_fact:
             platform_application_provider_runtime: {}
@@ -40729,7 +40838,7 @@ serviceExecutionPriorities:
   "$id": "https://platform-installer.local/contracts/application-libraries/v1alpha1/application.schema.json"
 }
 @@END
-@@PORTABLE {"path":"contracts/application-libraries/v1alpha1/deployments.schema.json","mode":420,"size":5659,"sha256":"657115bd3eaab13eaf37a9caf54b1e1f1024927b8641ab87625f44754ba5c2a4","index":0,"count":1,"encoding":"utf-8","payloadBytes":5659}
+@@PORTABLE {"path":"contracts/application-libraries/v1alpha1/deployments.schema.json","mode":420,"size":5691,"sha256":"652a72e2638c366a99ba13f01a03202feb3d650304526a0203e56e1818336d43","index":0,"count":1,"encoding":"utf-8","payloadBytes":5691}
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Application library deployments v1alpha1",
@@ -40807,7 +40916,8 @@ serviceExecutionPriorities:
               "enum": [
                 "postgresql.database",
                 "postgresql.schema",
-                "clickhouse.database"
+                "clickhouse.database",
+                "kafka.topic"
               ]
             },
             "binding": {
@@ -40937,6 +41047,7 @@ serviceExecutionPriorities:
   "maxProperties": 128,
   "$id": "https://platform-installer.local/contracts/application-libraries/v1alpha1/deployments.schema.json"
 }
+
 @@END
 @@PORTABLE {"path":"contracts/application-libraries/v1alpha1/library.schema.json","mode":420,"size":2618,"sha256":"ac1e71ca3751d20bd04c8639f62b0c7ee49f899e76039204a0fefca48fd90131","index":0,"count":1,"encoding":"utf-8","payloadBytes":2618}
 {
@@ -41198,7 +41309,7 @@ serviceExecutionPriorities:
 }
 
 @@END
-@@PORTABLE {"path":"contracts/application-libraries/v1alpha1/settings.schema.json","mode":420,"size":14508,"sha256":"a007c4e55f9ab768c283db0ffd2a7c829bbb51b1b43f986e0a2cdcab37dc1bc5","index":0,"count":1,"encoding":"utf-8","payloadBytes":14508}
+@@PORTABLE {"path":"contracts/application-libraries/v1alpha1/settings.schema.json","mode":420,"size":14827,"sha256":"0cd8cfbf237341b253067db37c6aaad9bab4d575ac08c6008ab453c81fc9def0","index":0,"count":1,"encoding":"utf-8","payloadBytes":14827}
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://platform-installer.local/contracts/application-libraries/v1alpha1/settings.schema.json",
@@ -41644,6 +41755,14 @@ serviceExecutionPriorities:
           ],
           "type": "object",
           "additionalProperties": false
+        },
+        "topicBindings": {
+          "type": "object",
+          "propertyNames": {"pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$"},
+          "additionalProperties": {
+            "type": "array", "uniqueItems": true,
+            "items": {"type": "string", "pattern": "^[a-z][A-Za-z0-9_-]*$"}
+          }
         },
         "config_files": {
           "items": {
@@ -49237,10 +49356,10 @@ artifacts: []
 x-conformanceOnly: true
 
 @@END
-@@PORTABLE {"path":"examples/catalog/service-catalog.yml","mode":420,"size":58103,"sha256":"5d66f87d0203a165f552b400dd22c6a706578868ce989aa61b9f3bfd5f34e173","index":0,"count":2,"encoding":"utf-8","payloadBytes":49314}
+@@PORTABLE {"path":"examples/catalog/service-catalog.yml","mode":420,"size":58129,"sha256":"8e67a9ee53843b77165ac4d75573a018a5dead35a6e065242a7885cd086e47a8","index":0,"count":2,"encoding":"utf-8","payloadBytes":49314}
 apiVersion: platform.installer/catalog/v1alpha1
 kind: ServiceCatalog
-digest: sha256:711214971b92478128881d29b656bec555371626ff23cebbbfa55a721caae2cf
+digest: sha256:417be4b10a4dfc81352af03149cd562201a63f46a9a582e9c5adfc17051f3223
 definitions:
   clickhouse:
     apiVersion: platform.installer/service-manifest/v1alpha1
@@ -49687,7 +49806,7 @@ definitions:
     kind: ServiceManifest
     metadata:
       id: kafka
-      version: 1.0.0-alpha.2
+      version: 1.0.0-alpha.3
       displayName: Apache Kafka
       description: Apache Kafka using KRaft metadata management
       category: messaging
@@ -49741,6 +49860,7 @@ definitions:
     capabilities:
     - service.kafka.client
     - service.kafka.kraft
+    - service.kafka.topic
     dependencies: []
     configurationSchema:
       $ref: ../../services/kafka/configuration.schema.json
@@ -50012,7 +50132,7 @@ definitions:
       sasl: unsupported
       mtls: deferred
       customListeners: implemented-service-02a
-    x-definitionDigest: sha256:9160c04e161a924fe7c96e06a99f0de34d3bee6b7285b8e49f5702b4ad09818f
+    x-definitionDigest: sha256:cb351fe279390a1dfb3b20d105972c89b67b588ffd85c11b1ba0d176a2402a9c
     x-sourceManifest: services/kafka/service.yml
   postgresql:
     apiVersion: platform.installer/service-manifest/v1alpha1
@@ -50891,11 +51011,11 @@ definitions:
         variablesPrefix: platform_keepalived_
       verify:
         fqcn: platform.keepalived.keepalived
-        variablesPrefix: platform_keepalived_
-    artifact
+        variablesPrefix: platfor
 @@END
-@@PORTABLE {"path":"examples/catalog/service-catalog.yml","mode":420,"size":58103,"sha256":"5d66f87d0203a165f552b400dd22c6a706578868ce989aa61b9f3bfd5f34e173","index":1,"count":2,"encoding":"utf-8","payloadBytes":8789}
-s: []
+@@PORTABLE {"path":"examples/catalog/service-catalog.yml","mode":420,"size":58129,"sha256":"8e67a9ee53843b77165ac4d75573a018a5dead35a6e065242a7885cd086e47a8","index":1,"count":2,"encoding":"utf-8","payloadBytes":8815}
+m_keepalived_
+    artifacts: []
     runtimeRequirements:
     - id: keepalived
       name: keepalived
@@ -51228,7 +51348,7 @@ all:
         redos-node1: {}
 
 @@END
-@@PORTABLE {"path":"examples/invalid/invalid-placement/project.yml","mode":420,"size":645,"sha256":"b0118ed49d8f335ad479c4f7e9ba0cdc7459720a496c82fc472fd66e5deb08cf","index":0,"count":1,"encoding":"utf-8","payloadBytes":645}
+@@PORTABLE {"path":"examples/invalid/invalid-placement/project.yml","mode":420,"size":645,"sha256":"21c7efb089acd2a9ff876cee3b6f1b08a45bffceefc8fbca489b1d56784b4430","index":0,"count":1,"encoding":"utf-8","payloadBytes":645}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -51240,11 +51360,11 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:711214971b92478128881d29b656bec555371626ff23cebbbfa55a721caae2cf
+  digest: sha256:417be4b10a4dfc81352af03149cd562201a63f46a9a582e9c5adfc17051f3223
   services:
     kafka:
-      definitionVersion: 1.0.0-alpha.2
-      digest: sha256:9160c04e161a924fe7c96e06a99f0de34d3bee6b7285b8e49f5702b4ad09818f
+      definitionVersion: 1.0.0-alpha.3
+      digest: sha256:cb351fe279390a1dfb3b20d105972c89b67b588ffd85c11b1ba0d176a2402a9c
 
 @@END
 @@PORTABLE {"path":"examples/invalid/missing-host-reference/expected.yml","mode":420,"size":120,"sha256":"a5109b4720cfa766aa9f567ce751f85e1f2d1af79db5257feed38e5a7a83a59c","index":0,"count":1,"encoding":"utf-8","payloadBytes":120}
@@ -51283,7 +51403,7 @@ all:
         redos-node1: {}
 
 @@END
-@@PORTABLE {"path":"examples/invalid/missing-host-reference/project.yml","mode":420,"size":651,"sha256":"b911b03c667e93ef2d880eaca32ad92803f95d8953e685501b43c4af15b0af2c","index":0,"count":1,"encoding":"utf-8","payloadBytes":651}
+@@PORTABLE {"path":"examples/invalid/missing-host-reference/project.yml","mode":420,"size":651,"sha256":"42e1af7320fd377c2a24a3c8560e6572dce922f712b8d56e5e5eb47bbc061203","index":0,"count":1,"encoding":"utf-8","payloadBytes":651}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -51295,11 +51415,11 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:711214971b92478128881d29b656bec555371626ff23cebbbfa55a721caae2cf
+  digest: sha256:417be4b10a4dfc81352af03149cd562201a63f46a9a582e9c5adfc17051f3223
   services:
     kafka:
-      definitionVersion: 1.0.0-alpha.2
-      digest: sha256:9160c04e161a924fe7c96e06a99f0de34d3bee6b7285b8e49f5702b4ad09818f
+      definitionVersion: 1.0.0-alpha.3
+      digest: sha256:cb351fe279390a1dfb3b20d105972c89b67b588ffd85c11b1ba0d176a2402a9c
 
 @@END
 @@PORTABLE {"path":"examples/invalid/unknown-mode/expected.yml","mode":420,"size":107,"sha256":"6effb8d7c8113f6e855f55cde819e28546be8f67579642ea595e4b04182a05b8","index":0,"count":1,"encoding":"utf-8","payloadBytes":107}
@@ -51338,7 +51458,7 @@ all:
         redos-node1: {}
 
 @@END
-@@PORTABLE {"path":"examples/invalid/unknown-mode/project.yml","mode":420,"size":641,"sha256":"fb367f5cd18a3531b48579f391ebabdf2defc9ffdfb08d34284715cd415aa935","index":0,"count":1,"encoding":"utf-8","payloadBytes":641}
+@@PORTABLE {"path":"examples/invalid/unknown-mode/project.yml","mode":420,"size":641,"sha256":"6723f25b3fe95f54b4b989918bd12e34bba407e5a813e548a5c2ec05ad2f47a7","index":0,"count":1,"encoding":"utf-8","payloadBytes":641}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -51350,11 +51470,11 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:711214971b92478128881d29b656bec555371626ff23cebbbfa55a721caae2cf
+  digest: sha256:417be4b10a4dfc81352af03149cd562201a63f46a9a582e9c5adfc17051f3223
   services:
     kafka:
-      definitionVersion: 1.0.0-alpha.2
-      digest: sha256:9160c04e161a924fe7c96e06a99f0de34d3bee6b7285b8e49f5702b4ad09818f
+      definitionVersion: 1.0.0-alpha.3
+      digest: sha256:cb351fe279390a1dfb3b20d105972c89b67b588ffd85c11b1ba0d176a2402a9c
 
 @@END
 @@PORTABLE {"path":"examples/sdku/application-packages/alarm-service/1.0.0/application.yml","mode":420,"size":533,"sha256":"5348bc4beab46b93e6ddeb3ad923096ed8d0bc47791ea0beed0a1cabcd95c6d8","index":0,"count":1,"encoding":"utf-8","payloadBytes":533}
@@ -57858,7 +57978,7 @@ all:
         node3: {}
 
 @@END
-@@PORTABLE {"path":"examples/valid/bind-authoritative/project.yml","mode":420,"size":937,"sha256":"a247760378ca0cc36912f4bd4dbd5982eca44c06b229e4f50ca2aeea7686e941","index":0,"count":1,"encoding":"utf-8","payloadBytes":937}
+@@PORTABLE {"path":"examples/valid/bind-authoritative/project.yml","mode":420,"size":937,"sha256":"7fc1cb9809f0f299d0335d3a7dfd21c7272f37bbd6526e97a13ab9f6ea80a486","index":0,"count":1,"encoding":"utf-8","payloadBytes":937}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -57870,7 +57990,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:711214971b92478128881d29b656bec555371626ff23cebbbfa55a721caae2cf
+  digest: sha256:417be4b10a4dfc81352af03149cd562201a63f46a9a582e9c5adfc17051f3223
   services:
     bind:
       definitionVersion: 1.0.0-alpha.2
@@ -57907,7 +58027,7 @@ all:
         bind1: {}
 
 @@END
-@@PORTABLE {"path":"examples/valid/bind-standalone/project.yml","mode":420,"size":646,"sha256":"5b43e845cd435707d47f04dfbc7b522de1ca1c6c5bf75726d94cae062822a631","index":0,"count":1,"encoding":"utf-8","payloadBytes":646}
+@@PORTABLE {"path":"examples/valid/bind-standalone/project.yml","mode":420,"size":646,"sha256":"e8781a348325196b592a2c4ee33287608cb5cffe04223c61f9d29c27e732f517","index":0,"count":1,"encoding":"utf-8","payloadBytes":646}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -57919,7 +58039,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:711214971b92478128881d29b656bec555371626ff23cebbbfa55a721caae2cf
+  digest: sha256:417be4b10a4dfc81352af03149cd562201a63f46a9a582e9c5adfc17051f3223
   services:
     bind:
       definitionVersion: 1.0.0-alpha.2
@@ -57946,7 +58066,7 @@ all:
       hosts: {}
 
 @@END
-@@PORTABLE {"path":"examples/valid/empty/project.yml","mode":420,"size":494,"sha256":"1a065bd3b84059a336485a81dabd4a63a1e09066da334b38c2c3691440470519","index":0,"count":1,"encoding":"utf-8","payloadBytes":494}
+@@PORTABLE {"path":"examples/valid/empty/project.yml","mode":420,"size":494,"sha256":"ce895555f3ca8914221b92e51b7b24b2a963871903fa879756cb47999ace81bb","index":0,"count":1,"encoding":"utf-8","payloadBytes":494}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -57958,7 +58078,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:711214971b92478128881d29b656bec555371626ff23cebbbfa55a721caae2cf
+  digest: sha256:417be4b10a4dfc81352af03149cd562201a63f46a9a582e9c5adfc17051f3223
   services: {}
 
 @@END
@@ -58052,7 +58172,7 @@ all:
       hosts: {node1: {}, node2: {}, node3: {}}
 
 @@END
-@@PORTABLE {"path":"examples/valid/haproxy-routing/project.yml","mode":420,"size":929,"sha256":"e2b43a1c665e6b98680e5010afcfabfa0304bbcd46bf0ca2afdcb1784f2c3a99","index":0,"count":1,"encoding":"utf-8","payloadBytes":929}
+@@PORTABLE {"path":"examples/valid/haproxy-routing/project.yml","mode":420,"size":929,"sha256":"757af1b7cccda1a8cca727dc4734d6da240fccca555a45e6af5532ef18a15402","index":0,"count":1,"encoding":"utf-8","payloadBytes":929}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -58064,7 +58184,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:711214971b92478128881d29b656bec555371626ff23cebbbfa55a721caae2cf
+  digest: sha256:417be4b10a4dfc81352af03149cd562201a63f46a9a582e9c5adfc17051f3223
   services:
     haproxy:
       definitionVersion: 1.0.0-alpha.1
@@ -58140,7 +58260,7 @@ all:
         redos-node1: {}
 
 @@END
-@@PORTABLE {"path":"examples/valid/kafka-distributed/project.yml","mode":420,"size":641,"sha256":"8545563a52922218ae3d9e9334ed69c2caef94860f3d40848888304698da92e1","index":0,"count":1,"encoding":"utf-8","payloadBytes":641}
+@@PORTABLE {"path":"examples/valid/kafka-distributed/project.yml","mode":420,"size":641,"sha256":"fda62eca3222a44983c0e556e90c3638e399a714dcdc1d24eabd58a921269684","index":0,"count":1,"encoding":"utf-8","payloadBytes":641}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -58152,11 +58272,11 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:711214971b92478128881d29b656bec555371626ff23cebbbfa55a721caae2cf
+  digest: sha256:417be4b10a4dfc81352af03149cd562201a63f46a9a582e9c5adfc17051f3223
   services:
     kafka:
-      definitionVersion: 1.0.0-alpha.2
-      digest: sha256:9160c04e161a924fe7c96e06a99f0de34d3bee6b7285b8e49f5702b4ad09818f
+      definitionVersion: 1.0.0-alpha.3
+      digest: sha256:cb351fe279390a1dfb3b20d105972c89b67b588ffd85c11b1ba0d176a2402a9c
 
 @@END
 @@PORTABLE {"path":"examples/valid/kafka-real-multihost/inventory/group_vars/all/platform-state.yml","mode":420,"size":548,"sha256":"4fd3237ef0960f3d58369bfbcfdae6c4a2418ae595cc829dc2cd960248415d41","index":0,"count":1,"encoding":"utf-8","payloadBytes":548}
@@ -58241,7 +58361,7 @@ all:
         node3: {}
 
 @@END
-@@PORTABLE {"path":"examples/valid/kafka-real-multihost/project.yml","mode":420,"size":648,"sha256":"933e4797d34dfd5deeeb340e2c5d56ee7b9edd7a1eaeb549995f09f08de3e69b","index":0,"count":1,"encoding":"utf-8","payloadBytes":648}
+@@PORTABLE {"path":"examples/valid/kafka-real-multihost/project.yml","mode":420,"size":648,"sha256":"a620394325a1bafc68b867d6383cf35384fba7c4bf9d85dc8f8a3d9cc8da586f","index":0,"count":1,"encoding":"utf-8","payloadBytes":648}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -58253,11 +58373,11 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:711214971b92478128881d29b656bec555371626ff23cebbbfa55a721caae2cf
+  digest: sha256:417be4b10a4dfc81352af03149cd562201a63f46a9a582e9c5adfc17051f3223
   services:
     kafka:
-      definitionVersion: 1.0.0-alpha.2
-      digest: sha256:9160c04e161a924fe7c96e06a99f0de34d3bee6b7285b8e49f5702b4ad09818f
+      definitionVersion: 1.0.0-alpha.3
+      digest: sha256:cb351fe279390a1dfb3b20d105972c89b67b588ffd85c11b1ba0d176a2402a9c
 
 @@END
 @@PORTABLE {"path":"examples/valid/kafka-single/inventory/group_vars/all/platform-state.yml","mode":420,"size":324,"sha256":"0dde96064d8c99c068e71e6fd06fdf90e9129afb300fd33c29aaac08556f407c","index":0,"count":1,"encoding":"utf-8","payloadBytes":324}
@@ -58321,7 +58441,7 @@ all:
         redos-node1: {}
 
 @@END
-@@PORTABLE {"path":"examples/valid/kafka-single/project.yml","mode":420,"size":636,"sha256":"c52125bf1fd0dfe5d3309cefe90a5141db5f6265971bfeed4704d1d0b2d24136","index":0,"count":1,"encoding":"utf-8","payloadBytes":636}
+@@PORTABLE {"path":"examples/valid/kafka-single/project.yml","mode":420,"size":636,"sha256":"f471f9c7fec2693a21da8edaffad30f0cfbc484f65e8a82b24c55c83532bc2ec","index":0,"count":1,"encoding":"utf-8","payloadBytes":636}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -58333,11 +58453,11 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:711214971b92478128881d29b656bec555371626ff23cebbbfa55a721caae2cf
+  digest: sha256:417be4b10a4dfc81352af03149cd562201a63f46a9a582e9c5adfc17051f3223
   services:
     kafka:
-      definitionVersion: 1.0.0-alpha.2
-      digest: sha256:9160c04e161a924fe7c96e06a99f0de34d3bee6b7285b8e49f5702b4ad09818f
+      definitionVersion: 1.0.0-alpha.3
+      digest: sha256:cb351fe279390a1dfb3b20d105972c89b67b588ffd85c11b1ba0d176a2402a9c
 
 @@END
 @@PORTABLE {"path":"examples/valid/kafka-split-multihost/inventory/group_vars/all/platform-state.yml","mode":420,"size":564,"sha256":"20213d45c458e49971532206f0e8dbd319021c91a7b4c673eda4cb15f66b4b64","index":0,"count":1,"encoding":"utf-8","payloadBytes":564}
@@ -58405,7 +58525,7 @@ all:
         node3: {}
 
 @@END
-@@PORTABLE {"path":"examples/valid/kafka-split-multihost/project.yml","mode":420,"size":657,"sha256":"22f94937855bc7164c9b8094f82784b334e192dbcb1db0bc9ba91a37faa5e822","index":0,"count":1,"encoding":"utf-8","payloadBytes":657}
+@@PORTABLE {"path":"examples/valid/kafka-split-multihost/project.yml","mode":420,"size":657,"sha256":"8f853eb51955d55b22435bd2e5398b30bd177c510cb2d31a9b22c01a57402c62","index":0,"count":1,"encoding":"utf-8","payloadBytes":657}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -58417,11 +58537,11 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:711214971b92478128881d29b656bec555371626ff23cebbbfa55a721caae2cf
+  digest: sha256:417be4b10a4dfc81352af03149cd562201a63f46a9a582e9c5adfc17051f3223
   services:
     kafka:
-      definitionVersion: 1.0.0-alpha.2
-      digest: sha256:9160c04e161a924fe7c96e06a99f0de34d3bee6b7285b8e49f5702b4ad09818f
+      definitionVersion: 1.0.0-alpha.3
+      digest: sha256:cb351fe279390a1dfb3b20d105972c89b67b588ffd85c11b1ba0d176a2402a9c
 
 @@END
 @@PORTABLE {"path":"examples/valid/kafka-ssl-single/inventory/group_vars/all/platform-state.yml","mode":420,"size":29,"sha256":"11303937afacdde65ceec76daa99d305d4d4e30eda1935934af5d7eda4258be3","index":0,"count":1,"encoding":"utf-8","payloadBytes":29}
@@ -58542,7 +58662,7 @@ all:
         node3: {}
 
 @@END
-@@PORTABLE {"path":"examples/valid/keepalived-vrrp/project.yml","mode":420,"size":656,"sha256":"f097f7cd68dbd9756ff0eec46f141a158f7b3292a03e531b7a1bd3d4b786b098","index":0,"count":1,"encoding":"utf-8","payloadBytes":656}
+@@PORTABLE {"path":"examples/valid/keepalived-vrrp/project.yml","mode":420,"size":656,"sha256":"52728531aa0e2ba6995f09243559be399dc4b046b8022faecac3eec1a8003a5e","index":0,"count":1,"encoding":"utf-8","payloadBytes":656}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -58554,7 +58674,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:711214971b92478128881d29b656bec555371626ff23cebbbfa55a721caae2cf
+  digest: sha256:417be4b10a4dfc81352af03149cd562201a63f46a9a582e9c5adfc17051f3223
   services:
     keepalived:
       definitionVersion: 1.0.0-alpha.1
@@ -58635,7 +58755,7 @@ all:
       hosts: {node1: {}, node2: {}, node3: {}}
 
 @@END
-@@PORTABLE {"path":"examples/valid/net-04-2-integration/project.yml","mode":420,"size":1086,"sha256":"5c7e8cabb4dd8e4c2d9b70ec323a014743d83e49646b00d67212571c264e44a3","index":0,"count":1,"encoding":"utf-8","payloadBytes":1086}
+@@PORTABLE {"path":"examples/valid/net-04-2-integration/project.yml","mode":420,"size":1086,"sha256":"a15a23cbc468a74667c05242dfe0facfa86b62f93747364cc35fb539c8250dd4","index":0,"count":1,"encoding":"utf-8","payloadBytes":1086}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -58647,7 +58767,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:711214971b92478128881d29b656bec555371626ff23cebbbfa55a721caae2cf
+  digest: sha256:417be4b10a4dfc81352af03149cd562201a63f46a9a582e9c5adfc17051f3223
   services:
     bind:
       definitionVersion: 1.0.0-alpha.2
@@ -58707,7 +58827,7 @@ all:
         node1: {}
 
 @@END
-@@PORTABLE {"path":"examples/valid/pki-host-scope/project.yml","mode":420,"size":637,"sha256":"220d310c32e1c049dcdd85a3b54c0cc1882d0403de189ab04eacc1aa57aeacb6","index":0,"count":1,"encoding":"utf-8","payloadBytes":637}
+@@PORTABLE {"path":"examples/valid/pki-host-scope/project.yml","mode":420,"size":637,"sha256":"f9edf24ee9b8d151b61acc142aa0b7d5b71afb8520848ec8a8fa42e292c7a9df","index":0,"count":1,"encoding":"utf-8","payloadBytes":637}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -58719,11 +58839,11 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:711214971b92478128881d29b656bec555371626ff23cebbbfa55a721caae2cf
+  digest: sha256:417be4b10a4dfc81352af03149cd562201a63f46a9a582e9c5adfc17051f3223
   services:
     kafka:
-      definitionVersion: 1.0.0-alpha.2
-      digest: sha256:9160c04e161a924fe7c96e06a99f0de34d3bee6b7285b8e49f5702b4ad09818f
+      definitionVersion: 1.0.0-alpha.3
+      digest: sha256:cb351fe279390a1dfb3b20d105972c89b67b588ffd85c11b1ba0d176a2402a9c
 
 @@END
 @@PORTABLE {"path":"examples/valid/postgresql-patroni/inventory/group_vars/all/platform.yml","mode":420,"size":970,"sha256":"39c2b02c126160e2d9fa970face8bf08e80a4120dfe0c6ff31a50592dfa02e25","index":0,"count":1,"encoding":"utf-8","payloadBytes":970}
@@ -58784,7 +58904,7 @@ all:
         db-node3: {}
 
 @@END
-@@PORTABLE {"path":"examples/valid/postgresql-patroni/project.yml","mode":420,"size":782,"sha256":"3b37374ede28515974a711742d10a911b0ffd4f25185fd18820e06383383a5e9","index":0,"count":1,"encoding":"utf-8","payloadBytes":782}
+@@PORTABLE {"path":"examples/valid/postgresql-patroni/project.yml","mode":420,"size":782,"sha256":"3500e86d54254fb55191eca1b3b91401ff5e8e41b584156a4098ee82e59c3341","index":0,"count":1,"encoding":"utf-8","payloadBytes":782}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -58796,7 +58916,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:711214971b92478128881d29b656bec555371626ff23cebbbfa55a721caae2cf
+  digest: sha256:417be4b10a4dfc81352af03149cd562201a63f46a9a582e9c5adfc17051f3223
   services:
     postgresql:
       definitionVersion: 1.0.0-alpha.1
@@ -58841,7 +58961,7 @@ all:
       hosts: {db-node1: {}}
 
 @@END
-@@PORTABLE {"path":"examples/valid/postgresql-standalone/project.yml","mode":420,"size":656,"sha256":"d12d66e6348aaca2a837a609114e726d068abdfeaf990c66c505cfae41b0a70b","index":0,"count":1,"encoding":"utf-8","payloadBytes":656}
+@@PORTABLE {"path":"examples/valid/postgresql-standalone/project.yml","mode":420,"size":656,"sha256":"018f4c3487926148b5fe335848d6cbb49bc8779b102b0749eef30014b5dc5aa5","index":0,"count":1,"encoding":"utf-8","payloadBytes":656}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -58853,7 +58973,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:711214971b92478128881d29b656bec555371626ff23cebbbfa55a721caae2cf
+  digest: sha256:417be4b10a4dfc81352af03149cd562201a63f46a9a582e9c5adfc17051f3223
   services:
     postgresql:
       definitionVersion: 1.0.0-alpha.1
@@ -58969,7 +59089,7 @@ all:
       hosts: {node1: {}, node2: {}, node3: {}}
 
 @@END
-@@PORTABLE {"path":"examples/valid/ui-project-snapshot/project.yml","mode":420,"size":1353,"sha256":"330f383562e89278aec9621d17a9a2dc55748432554d161c830294ce5580e4c7","index":0,"count":1,"encoding":"utf-8","payloadBytes":1353}
+@@PORTABLE {"path":"examples/valid/ui-project-snapshot/project.yml","mode":420,"size":1353,"sha256":"2aae93e2a4cb5919208cd266ea88728ba941f9c1d10e222529fa69a73ea2ab20","index":0,"count":1,"encoding":"utf-8","payloadBytes":1353}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -58981,7 +59101,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:711214971b92478128881d29b656bec555371626ff23cebbbfa55a721caae2cf
+  digest: sha256:417be4b10a4dfc81352af03149cd562201a63f46a9a582e9c5adfc17051f3223
   services:
     bind:
       definitionVersion: 1.0.0-alpha.2
@@ -58993,8 +59113,8 @@ catalogLock:
       definitionVersion: 1.0.0-alpha.1
       digest: sha256:fbb7260777f57459fb77adaa0d4afb4efe88af8bd76774e483d490afdb42984e
     kafka:
-      definitionVersion: 1.0.0-alpha.2
-      digest: sha256:9160c04e161a924fe7c96e06a99f0de34d3bee6b7285b8e49f5702b4ad09818f
+      definitionVersion: 1.0.0-alpha.3
+      digest: sha256:cb351fe279390a1dfb3b20d105972c89b67b588ffd85c11b1ba0d176a2402a9c
     keepalived:
       definitionVersion: 1.0.0-alpha.1
       digest: sha256:5b721ee5a5f5667f9cb6ccd1b40b3afe00693890aec3f2500e5a8fc9f5dad444
@@ -62482,7 +62602,7 @@ catalogLock:
 })();
 
 @@END
-@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":117480,"sha256":"4b2fbf55ad1038134fa5aa5cb60709a02a1308240704ceca0ea135ea486ef9c1","index":0,"count":3,"encoding":"utf-8","payloadBytes":49414}
+@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":117701,"sha256":"d7492e2b7ed80537cfe240ca8d9cde8f3587f84fe1f3b25c9ddb8a82e45b31bd","index":0,"count":3,"encoding":"utf-8","payloadBytes":49414}
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   EditResult,
@@ -63918,7 +64038,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
       }
      
 @@END
-@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":117480,"sha256":"4b2fbf55ad1038134fa5aa5cb60709a02a1308240704ceca0ea135ea486ef9c1","index":1,"count":3,"encoding":"utf-8","payloadBytes":49763}
+@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":117701,"sha256":"d7492e2b7ed80537cfe240ca8d9cde8f3587f84fe1f3b25c9ddb8a82e45b31bd","index":1,"count":3,"encoding":"utf-8","payloadBytes":49763}
  setExportOperation((current) =>
         current
           ? {
@@ -64243,9 +64363,17 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
           message: "Не удалось выполнить проверку проекта.",
         },
       }));
+      const verifiedProject =
+        next.status === "VERIFIED" && api.getCurrentProject
+          ? await api.getCurrentProject()
+          : undefined;
       if (requestToken !== endpointPreviewRequest.current) return;
       setResult(
-        (current) => ({ ...current, verification: next }) as OpenResult,
+        (current) =>
+          ({
+            ...(verifiedProject ?? current),
+            verification: next,
+          }) as OpenResult,
       );
       if (api.getEndpointPreview) {
         const preview = await api.getEndpointPreview();
@@ -65201,16 +65329,16 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
             />
           )}
           {exportDialog && (
-            <ProjectExportDialog
+            <ProjectExpor
+@@END
+@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":117701,"sha256":"d7492e2b7ed80537cfe240ca8d9cde8f3587f84fe1f3b25c9ddb8a82e45b31bd","index":2,"count":3,"encoding":"utf-8","payloadBytes":18524}
+tDialog
               parent={exportParent}
               name={exportName}
               operation={exportOperation}
               busy={exportBusy}
               onParentChange={setExportParent}
-              onNameChan
-@@END
-@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":117480,"sha256":"4b2fbf55ad1038134fa5aa5cb60709a02a1308240704ceca0ea135ea486ef9c1","index":2,"count":3,"encoding":"utf-8","payloadBytes":18303}
-ge={setExportName}
+              onNameChange={setExportName}
               onChooseParent={chooseExportParent}
               onPreview={previewExport}
               onCommit={commitExport}
@@ -67000,7 +67128,7 @@ export function ApplicationFileSettings({
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/ApplicationLibraryResources.tsx","mode":420,"size":11013,"sha256":"b76d4f4b0ae1a03d78ec376a2070212248cbdcf308520ddd2282590d7d06ab76","index":0,"count":1,"encoding":"utf-8","payloadBytes":11013}
+@@PORTABLE {"path":"frontend/src/ApplicationLibraryResources.tsx","mode":420,"size":16056,"sha256":"6fcc5df2bf82839c5f5c88557442748b98eb8d6328269afaa0d6e3aaf44394c7","index":0,"count":1,"encoding":"utf-8","payloadBytes":16056}
 import { Fragment, useState, type ReactNode } from "react";
 import { objectValue, type ObjectValue } from "./application-draft";
 
@@ -67011,6 +67139,7 @@ export function ApplicationLibraryResources({
   disabled,
   onSave,
   onDirtyChange,
+  resolvedTopics = {},
 }: {
   resources: ObjectValue;
   bindings: ObjectValue;
@@ -67018,6 +67147,7 @@ export function ApplicationLibraryResources({
   disabled: boolean;
   onSave: (value: ObjectValue) => Promise<boolean>;
   onDirtyChange: (value: boolean) => void;
+  resolvedTopics?: ObjectValue;
 }) {
   const [edit, setEdit] = useState<string | null>(null);
   const [name, setName] = useState("");
@@ -67026,6 +67156,10 @@ export function ApplicationLibraryResources({
   const [mode, setMode] = useState("managed");
   const [error, setError] = useState("");
   const [page, setPage] = useState(0);
+  const [partitions, setPartitions] = useState("");
+  const [replicationFactor, setReplicationFactor] = useState("");
+  const [minISR, setMinISR] = useState("");
+  const [topicConfig, setTopicConfig] = useState("");
   const compatibleBindings = (type: string) =>
     Object.keys(bindings).filter(
       (key) =>
@@ -67049,7 +67183,7 @@ export function ApplicationLibraryResources({
     const deployment = String(objectValue(bindings[ref]).deploymentRef ?? ref);
     groups.set(deployment, [...(groups.get(deployment) ?? []), key]);
   }
-  const open = (key: string) => {
+  const open = (key: string, newKind = "postgresql.database") => {
     if (
       edit !== null &&
       !window.confirm("Отбросить несохранённую настройку ресурса?")
@@ -67059,10 +67193,19 @@ export function ApplicationLibraryResources({
     const row = objectValue(resources[key]);
     setEdit(key);
     setName(String(objectValue(row.parameters).name ?? ""));
-    setKind(String(row.kind ?? "postgresql.database"));
-    const candidates = compatibleBindings(
-      String(row.kind ?? "postgresql.database"),
+    setKind(String(row.kind ?? newKind));
+    const parameters = objectValue(row.parameters);
+    const config = objectValue(parameters.config);
+    setPartitions(String(parameters.partitions ?? ""));
+    setReplicationFactor(String(parameters.replication_factor ?? ""));
+    setMinISR(String(config["min.insync.replicas"] ?? ""));
+    setTopicConfig(
+      Object.entries(config)
+        .filter(([k]) => k !== "min.insync.replicas")
+        .map(([k, v]) => `${k}=${String(v)}`)
+        .join("\n"),
     );
+    const candidates = compatibleBindings(String(row.kind ?? newKind));
     setBinding(
       String(row.binding ?? (candidates.length === 1 ? candidates[0] : "")),
     );
@@ -67080,10 +67223,15 @@ export function ApplicationLibraryResources({
         <button disabled={disabled} onClick={() => open("")}>
           Добавить БД
         </button>
+        {compatibleBindings("kafka.topic").length > 0 && (
+          <button disabled={disabled} onClick={() => open("", "kafka.topic")}>
+            Добавить топик
+          </button>
+        )}
       </div>
       <p className="muted">
         Общие для приложений библиотеки. Удаление записи и изменение имени не
-        удаляют и не переименовывают установленную БД. Ссылки проверяет Core при
+        удаляют и не переименовывают установленный ресурс. Ссылки проверяет Core при
         проверке проекта.
       </p>
       <table>
@@ -67115,10 +67263,22 @@ export function ApplicationLibraryResources({
                             "postgresql.database": "PostgreSQL · БД",
                             "postgresql.schema": "PostgreSQL · Схема",
                             "clickhouse.database": "ClickHouse · БД",
+                            "kafka.topic": "Kafka · Топик",
                           } as Record<string, string>
                         )[String(row.kind)] ?? String(row.kind)}
                       </td>
-                      <td>{String(objectValue(row.parameters).name ?? "—")}</td>
+                      <td>
+                        {String(objectValue(row.parameters).name ?? "—")}
+                        {row.kind === "kafka.topic" && (
+                          <small>
+                            {resolvedTopics[key]
+                              ? `Core: partitions=${String(objectValue(resolvedTopics[key]).partitions)}, RF=${String(objectValue(resolvedTopics[key]).replicationFactor)}, minISR=${String(objectValue(objectValue(resolvedTopics[key]).config)["min.insync.replicas"])}`
+                              : "Параметры Core ещё не рассчитаны"}
+                            {objectValue(resolvedTopics[key]).minISRWarning ===
+                              true && " · minISR выше RF"}
+                          </small>
+                        )}
+                      </td>
                       <td>
                         <button
                           className="outline"
@@ -67133,7 +67293,7 @@ export function ApplicationLibraryResources({
                           onClick={async () => {
                             if (
                               !window.confirm(
-                                `Удалить ресурс ${key} из проекта? Установленная БД сохранится. Связанные ссылки необходимо изменить отдельно.`,
+                                `Удалить ресурс ${key} из проекта? Установленный ресурс сохранится. Связанные ссылки необходимо изменить отдельно.`,
                               )
                             )
                               return;
@@ -67176,28 +67336,63 @@ export function ApplicationLibraryResources({
         </div>
       )}
       {!Object.keys(resources).length && (
-        <p>Ресурсы не заданы. Добавьте БД и выберите подключение библиотеки.</p>
+        <p>Ресурсы не заданы. Добавьте ресурс и выберите подключение библиотеки.</p>
       )}
       {edit !== null && (
         <form
           className="application-resource-form"
           onSubmit={async (e) => {
             e.preventDefault();
-            const id = edit || name;
+            const id =
+              edit ||
+              (kind === "kafka.topic"
+                ? "topic_" + name.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 122)
+                : name);
             if (
               !/^[a-z][A-Za-z0-9_-]{0,127}$/.test(id) ||
               (!edit && Object.hasOwn(resources, id))
             ) {
               setError(
-                "Укажите уникальное имя БД: латинская буква, цифры, _ или -.",
+                "Укажите уникальное имя ресурса: латинская буква, цифры, _ или -.",
               );
               return;
             }
             if (!availableBindings.includes(binding)) {
-              setError("Выберите сервис, соответствующий типу БД.");
+              setError("Выберите сервис, соответствующий типу ресурса.");
               return;
             }
             const previous = objectValue(resources[edit]);
+            let parameters: ObjectValue = {
+              ...(previous.kind === kind ? objectValue(previous.parameters) : {}),
+              name,
+            };
+            if (kind === "kafka.topic") {
+              const config: ObjectValue = {};
+              for (const line of topicConfig
+                .split("\n")
+                .filter((v) => v.trim())) {
+                const at = line.indexOf("=");
+                if (
+                  at < 1 ||
+                  line.slice(0, at).trim() === "min.insync.replicas"
+                ) {
+                  setError(
+                    "Используйте ключ=значение; min.insync.replicas задаётся полем minISR.",
+                  );
+                  return;
+                }
+                config[line.slice(0, at).trim()] = line.slice(at + 1);
+              }
+              if (minISR) config["min.insync.replicas"] = Number(minISR);
+              parameters = {
+                name,
+                config,
+                ...(partitions ? { partitions: Number(partitions) } : {}),
+                ...(replicationFactor
+                  ? { replication_factor: Number(replicationFactor) }
+                  : {}),
+              };
+            }
             if (
               await onSave({
                 ...resources,
@@ -67206,7 +67401,7 @@ export function ApplicationLibraryResources({
                   kind,
                   binding,
                   mode,
-                  parameters: { ...objectValue(previous.parameters), name },
+                  parameters,
                 },
               })
             )
@@ -67214,7 +67409,7 @@ export function ApplicationLibraryResources({
           }}
           onChange={() => onDirtyChange(true)}
         >
-          <h4>{edit ? `Настройка ресурса ${edit}` : "Новая БД"}</h4>
+          <h4>{edit ? `Настройка ресурса ${edit}` : "Новый ресурс"}</h4>
           <label>
             Тип
             <select
@@ -67230,6 +67425,9 @@ export function ApplicationLibraryResources({
             >
               <option value="postgresql.database">PostgreSQL · БД</option>
               <option value="clickhouse.database">ClickHouse · БД</option>
+              {compatibleBindings("kafka.topic").length > 0 && (
+                <option value="kafka.topic">Kafka · Топик</option>
+              )}
               {kind === "postgresql.schema" && (
                 <option value="postgresql.schema">PostgreSQL · Схема</option>
               )}
@@ -67258,7 +67456,7 @@ export function ApplicationLibraryResources({
             </select>
           </label>
           <label>
-            Имя БД / схемы
+            {kind === "kafka.topic" ? "Имя топика" : "Имя БД / схемы"}
             <input
               required
               value={name}
@@ -67267,6 +67465,51 @@ export function ApplicationLibraryResources({
           </label>
           {!edit && (
             <small>Имя также используется как ключ ресурса в библиотеке.</small>
+          )}
+          {kind === "kafka.topic" && (
+            <>
+              <label>
+                Партиции
+                <input
+                  type="number"
+                  min="1"
+                  placeholder="По умолчанию: 1"
+                  value={partitions}
+                  onChange={(e) => setPartitions(e.target.value)}
+                />
+              </label>
+              <label>
+                Replication factor
+                <input
+                  type="number"
+                  min="1"
+                  placeholder="Авто · из Kafka deployment"
+                  value={replicationFactor}
+                  onChange={(e) => setReplicationFactor(e.target.value)}
+                />
+              </label>
+              <label>
+                minISR
+                <input
+                  type="number"
+                  min="1"
+                  placeholder="Авто · из effective RF"
+                  value={minISR}
+                  onChange={(e) => setMinISR(e.target.value)}
+                />
+              </label>
+              <label>
+                Другие параметры топика · ключ=значение
+                <textarea
+                  value={topicConfig}
+                  onChange={(e) => setTopicConfig(e.target.value)}
+                />
+              </label>
+              <p>
+                Очистите поле для значения по умолчанию. Созданные топики
+                автоматически не изменяются; несовпадения покажет Core.
+              </p>
+            </>
           )}
           <label>
             Управление
@@ -68330,6 +68573,121 @@ export function ApplicationSecretInputs({
 }
 
 @@END
+@@PORTABLE {"path":"frontend/src/ApplicationTopicBindings.tsx","mode":420,"size":3743,"sha256":"510f114bc9c3e9adcfbf855660cf3c2ad4931b76a2da49e210f395ca109a47b6","index":0,"count":1,"encoding":"utf-8","payloadBytes":3743}
+import { objectValue, type ObjectValue } from "./application-draft";
+
+export function ApplicationTopicBindings({
+  connections,
+  resources,
+  bindings,
+  deployments,
+  defaults,
+  authored,
+  disabled,
+  onSave,
+  onReset,
+}: {
+  connections: ObjectValue;
+  resources: ObjectValue;
+  bindings: ObjectValue;
+  deployments: Record<string, { serviceType: string }>;
+  defaults: ObjectValue;
+  authored: ObjectValue;
+  disabled: boolean;
+  onSave: (value: ObjectValue) => Promise<boolean>;
+  onReset: () => Promise<boolean>;
+}) {
+  const kafka = Object.entries(connections).filter(
+    ([, raw]) =>
+      deployments[
+        String(
+          objectValue(bindings[String(objectValue(raw).library_binding)])
+            .deploymentRef,
+        )
+      ]?.serviceType === "kafka",
+  );
+  if (!kafka.length) return null;
+  return (
+    <section className="application-section">
+      <h3>Топики Kafka</h3>
+      <p>
+        Выберите ресурсы библиотеки для каждого подключения. Выбор не создаёт
+        ACL и не меняет ENV приложения автоматически.
+      </p>
+      {kafka.map(([alias, raw]) => {
+        const provider = objectValue(
+          bindings[String(objectValue(raw).library_binding)],
+        ).deploymentRef;
+        const inherited = defaults[alias];
+        const selected = Array.isArray(authored[alias] ?? inherited)
+          ? ((authored[alias] ?? inherited) as string[])
+          : [];
+        const available = Object.entries(resources).filter(([, value]) => {
+          const r = objectValue(value);
+          return (
+            r.kind === "kafka.topic" &&
+            objectValue(bindings[String(r.binding)]).deploymentRef === provider
+          );
+        });
+        return (
+          <fieldset key={alias}>
+            <legend>
+              {alias} · {String(provider)}
+            </legend>
+            <small>
+              {Object.hasOwn(authored, alias)
+                ? "Переопределение экземпляра"
+                : "Из defaults приложения"}
+            </small>
+            {available.map(([id, rawResource]) => (
+              <label key={id}>
+                <input
+                  type="checkbox"
+                  checked={selected.includes(id)}
+                  disabled={disabled}
+                  onChange={(e) =>
+                    void onSave({
+                      ...authored,
+                      [alias]: e.target.checked
+                        ? [...selected, id]
+                        : selected.filter((x) => x !== id),
+                    })
+                  }
+                />
+                {String(
+                  objectValue(objectValue(rawResource).parameters).name ?? id,
+                )}{" "}
+                · {id}
+              </label>
+            ))}
+            {selected
+              .filter((id) => !available.some(([key]) => key === id))
+              .map((id) => (
+                <p key={id}>Недоступный ресурс: {id}</p>
+              ))}
+            {!available.length && (
+              <p>Совместимые топики библиотеки не заданы.</p>
+            )}
+            <button
+              type="button"
+              className="outline"
+              disabled={disabled || !Object.hasOwn(authored, alias)}
+              onClick={() => {
+                const next = { ...authored };
+                delete next[alias];
+                void (Object.keys(next).length ? onSave(next) : onReset());
+              }}
+            >
+              Сбросить топики · {alias}
+            </button>
+          </fieldset>
+        );
+      })}
+    </section>
+  );
+}
+
+@@END
 @@PORTABLE {"path":"frontend/src/ApplicationValueFields.tsx","mode":420,"size":12379,"sha256":"caed5c4c2cf447130a37594044509801197db357028964815cd6f34f4f8d32fc","index":0,"count":1,"encoding":"utf-8","payloadBytes":12379}
 import { useRef, useState } from "react";
 import { objectValue } from "./application-draft";
@@ -68741,9 +69099,10 @@ export function inferParameterValue(text: string): string | number | boolean {
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/ApplicationsPage.tsx","mode":420,"size":64281,"sha256":"cdf1b81ab4bf4991a4bd5095bd586def84cc7ff83d8bde7a111422a556291776","index":0,"count":2,"encoding":"utf-8","payloadBytes":50026}
+@@PORTABLE {"path":"frontend/src/ApplicationsPage.tsx","mode":420,"size":65082,"sha256":"3dfbda83f329bf4968a99f974f1b2c633f6600382df3082e9df4a57c0c9dad1b","index":0,"count":2,"encoding":"utf-8","payloadBytes":50026}
 import { useRef, useState } from "react";
 import { ApplicationLibraryResources } from "./ApplicationLibraryResources";
+import { ApplicationTopicBindings } from "./ApplicationTopicBindings";
 import { ApplicationPorts, type PortSource } from "./ApplicationPorts";
 import { ApplicationReadiness } from "./ApplicationReadiness";
 import { ApplicationSecretInputs } from "./ApplicationSecretInputs";
@@ -69735,6 +70094,7 @@ export function ApplicationsPage({
                       deployments={managed?.deployments ?? {}}
                       key={selected + "resources"}
                       resources={objectValue(library.resources)}
+                      resolvedTopics={objectValue(resolved?.topics)}
                       bindings={objectValue(library.bindings)}
                       disabled={busy}
                       onDirtyChange={(v) => markChildDirty(v, "resources")}
@@ -69949,12 +70309,12 @@ export function ApplicationsPage({
                                     return send(
                                       Object.keys(remaining).length
                                         ? override(listener, remaining, "ports")
-                                        : remove(listener, "ports"),
-                                    );
-                                 
+ 
 @@END
-@@PORTABLE {"path":"frontend/src/ApplicationsPage.tsx","mode":420,"size":64281,"sha256":"cdf1b81ab4bf4991a4bd5095bd586def84cc7ff83d8bde7a111422a556291776","index":1,"count":2,"encoding":"utf-8","payloadBytes":14255}
- },
+@@PORTABLE {"path":"frontend/src/ApplicationsPage.tsx","mode":420,"size":65082,"sha256":"3dfbda83f329bf4968a99f974f1b2c633f6600382df3082e9df4a57c0c9dad1b","index":1,"count":2,"encoding":"utf-8","payloadBytes":15056}
+                                       : remove(listener, "ports"),
+                                    );
+                                  },
                                   "number",
                                 ),
                               )}
@@ -69990,6 +70350,17 @@ export function ApplicationsPage({
 
                 {slot && selectedTab === "Запуск" && (
                   <>
+                    <ApplicationTopicBindings
+                      connections={objectValue(appDefinition.connections)}
+                      resources={objectValue(library.resources)}
+                      bindings={objectValue(library.bindings)}
+                      deployments={managed?.deployments ?? {}}
+                      defaults={objectValue(defaults.topicBindings)}
+                      authored={objectValue(overrides.topicBindings)}
+                      disabled={busy}
+                      onSave={(value) => send(override("topicBindings", value))}
+                      onReset={() => send(remove("topicBindings"))}
+                    />
                     {hosts.length > 1 && (
                       <label>
                         Наследуемые значения для сервера
@@ -82008,7 +82379,7 @@ export function applicationDraft(
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/backend.ts","mode":420,"size":27340,"sha256":"3af875b4f1912a27be46b05ca6f62e38c899ef6e562cc72cb4e44ca6bdf909f7","index":0,"count":1,"encoding":"utf-8","payloadBytes":27340}
+@@PORTABLE {"path":"frontend/src/backend.ts","mode":420,"size":27482,"sha256":"0b94aeba46445e7e363ff260b479788feed7310f71699b6ad4f9483164b0f742","index":0,"count":1,"encoding":"utf-8","payloadBytes":27482}
 import {
   ProbeServerInformation,
   CheckServerInformation,
@@ -82021,6 +82392,7 @@ import {
   ChooseProjectExportParent,
   ChooseProjectParent,
   CloseProject,
+  CurrentProject,
   CommitStructuralEditPlan,
   CommitProjectExport,
   CreateProject,
@@ -82558,6 +82930,7 @@ export interface ProjectBackend {
   getApplicationConfig(): Promise<ConfigResult>;
   chooseProject(): Promise<OpenResult>;
   openProject(root: string): Promise<OpenResult>;
+  getCurrentProject?(): Promise<OpenResult>;
   chooseProjectParent(): Promise<string>;
   chooseProjectExportParent?(): Promise<string>;
   createProject(input: {
@@ -82682,6 +83055,7 @@ export const backend: ProjectBackend = {
   getApplicationConfig: GetApplicationConfig,
   chooseProject: () => ChooseProject() as unknown as Promise<OpenResult>,
   openProject: (root) => OpenProject(root) as unknown as Promise<OpenResult>,
+  getCurrentProject: () => CurrentProject() as unknown as Promise<OpenResult>,
   chooseProjectParent: ChooseProjectParent,
   chooseProjectExportParent: ChooseProjectExportParent,
   createProject: (input) =>
@@ -82849,7 +83223,7 @@ void window.__PI_BROWSER_READY__
   .catch(() => undefined);
 
 @@END
-@@PORTABLE {"path":"frontend/src/browser_backend.ts","mode":420,"size":13561,"sha256":"208f89ff9684a5a50929472bf0c95f16a5e49b456545aa1698fe811dbb27a5df","index":0,"count":1,"encoding":"utf-8","payloadBytes":13561}
+@@PORTABLE {"path":"frontend/src/browser_backend.ts","mode":420,"size":13614,"sha256":"5e674857416c723eccbdc22438b69ec4dfa47d78ba3a338e156e1439cfa6d467","index":0,"count":1,"encoding":"utf-8","payloadBytes":13614}
 import type { InstallationEventView, ProjectBackend } from "./backend";
 
 declare global {
@@ -83124,6 +83498,7 @@ export const browserBackend: ProjectBackend = {
     return root ? invoke("openProject", [root]) : invoke("currentProject");
   },
   openProject: (root) => invoke("openProject", [root]),
+  getCurrentProject: () => invoke("currentProject"),
   chooseProjectParent: async () =>
     promptExecutionNodePath("Папка, в которой будет создан новый проект"),
   chooseProjectExportParent: async () =>
@@ -88485,7 +88860,7 @@ export function VerifyProject() {
 }
 
 @@END
-@@PORTABLE {"path":"frontend/wailsjs/go/models.ts","mode":420,"size":113835,"sha256":"d5aa7b2975372ace2a351fb9fe49cf0b83c73b1a9dc388c247320b9b95455cf2","index":0,"count":3,"encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"frontend/wailsjs/go/models.ts","mode":420,"size":114065,"sha256":"ae5cd8f4880a65b780b66b600c5dc411b4925e9143c001b7c614a41972355ea6","index":0,"count":3,"encoding":"utf-8","payloadBytes":48000}
 export namespace appconfig {
   export class ServiceExecutionPriority {
     serviceType: string;
@@ -88576,6 +88951,7 @@ export namespace coreadapter {
     }
   }
   export class ApplicationPlacement {
+    topicBindings: Record<string, Array<string>>;
     runtimeDirectory: string;
     commonDefaults?: Record<string, Array<number>>;
     inherited?: Record<string, Array<number>>;
@@ -88599,10 +88975,11 @@ export namespace coreadapter {
 
     constructor(source: any = {}) {
       if ("string" === typeof source) source = JSON.parse(source);
+      this.topicBindings = source["topicBindings"];
+      this.runtimeDirectory = source["runtimeDirectory"];
       this.commonDefaults = source["commonDefaults"];
       this.inherited = source["inherited"];
       this.SERVER_ID = source["SERVER_ID"];
-      this.runtimeDirectory = source["runtimeDirectory"];
       this.runtimeRef = source["runtimeRef"];
       this.command = source["command"];
       this.imageRequirement = source["imageRequirement"];
@@ -88636,6 +89013,7 @@ export namespace coreadapter {
     }
   }
   export class ApplicationInstance {
+    topics: Record<string, Array<number>>;
     applicationName: string;
     slotId: string;
     placements: Record<string, ApplicationPlacement>;
@@ -88655,6 +89033,7 @@ export namespace coreadapter {
 
     constructor(source: any = {}) {
       if ("string" === typeof source) source = JSON.parse(source);
+      this.topics = source["topics"];
       this.applicationName = source["applicationName"];
       this.slotId = source["slotId"];
       this.placements = this.convertValues(
@@ -88692,6 +89071,7 @@ export namespace coreadapter {
     }
   }
   export class ApplicationLibrary {
+    topics: Record<string, Array<number>>;
     runtimeDirectory: string;
     connections: Record<string, Array<number>>;
     libraryRef: string;
@@ -88706,9 +89086,10 @@ export namespace coreadapter {
 
     constructor(source: any = {}) {
       if ("string" === typeof source) source = JSON.parse(source);
-      this.libraryRef = source["libraryRef"];
+      this.topics = source["topics"];
       this.runtimeDirectory = source["runtimeDirectory"];
       this.connections = source["connections"];
+      this.libraryRef = source["libraryRef"];
       this.packages = source["packages"];
       this.instances = this.convertValues(
         source["instances"],
@@ -89636,9 +90017,8 @@ export namespace desktop {
 
     constructor(source: any = {}) {
       if ("string" === typeof source) source = JSON.parse(source);
+      this.skipInfrastructureVerify = source["skipInfrastructureVerify"];
       this.executionMode = source["executionMode"];
-      this.skipInfrastructureVerify =
-        source["skipInfrastructureVerify"] ?? false;
       this.infrastructureVerification = this.convertValues(
         source["infrastructureVerification"],
         executionnode.InfrastructureVerification,
@@ -89737,9 +90117,8 @@ export namespace desktop {
 
     constructor(source: any = {}) {
       if ("string" === typeof source) source = JSON.parse(source);
+      this.skipInfrastructureVerify = source["skipInfrastructureVerify"];
       this.executionMode = source["executionMode"];
-      this.skipInfrastructureVerify =
-        source["skipInfrastructureVerify"] ?? false;
       this.deploymentOrder = source["deploymentOrder"];
       this.applicationVaultSources = source["applicationVaultSources"];
     }
@@ -90076,7 +90455,10 @@ export namespace desktop {
 
     constructor(source: any = {}) {
       if ("string" === typeof source) source = JSON.parse(source);
-      this.serviceDeployment = source["serviceDeployment"];
+      this.serviceDeployment = source["serviceDeplo
+@@END
+@@PORTABLE {"path":"frontend/wailsjs/go/models.ts","mode":420,"size":114065,"sha256":"ae5cd8f4880a65b780b66b600c5dc411b4925e9143c001b7c614a41972355ea6","index":1,"count":3,"encoding":"utf-8","payloadBytes":48000}
+yment"];
       this.values = source["values"];
     }
   }
@@ -90084,10 +90466,7 @@ export namespace desktop {
     status: string;
     plan?: installer.ProjectExportPlan;
     result?: installer.ProjectExportResult;
-    error?: ProjectOpen
-@@END
-@@PORTABLE {"path":"frontend/wailsjs/go/models.ts","mode":420,"size":113835,"sha256":"d5aa7b2975372ace2a351fb9fe49cf0b83c73b1a9dc388c247320b9b95455cf2","index":1,"count":3,"encoding":"utf-8","payloadBytes":48000}
-Error;
+    error?: ProjectOpenError;
 
     static createFrom(source: any = {}) {
       return new ProjectExportOperationResult(source);
@@ -91680,16 +92059,16 @@ export namespace installer {
       this.sourceProjectRoot = source["sourceProjectRoot"];
       this.sourceProjectRevision = source["sourceProjectRevision"];
       this.destinationParent = source["destinationParent"];
-      this.directoryName = source["directoryName"];
+      this.directoryName = source[
+@@END
+@@PORTABLE {"path":"frontend/wailsjs/go/models.ts","mode":420,"size":114065,"sha256":"ae5cd8f4880a65b780b66b600c5dc411b4925e9143c001b7c614a41972355ea6","index":2,"count":3,"encoding":"utf-8","payloadBytes":18065}
+"directoryName"];
       this.destinationRoot = source["destinationRoot"];
       this.documents = this.convertValues(
         source["documents"],
         ProjectExportDocument,
       );
-      this.aggregateSize = source["aggregate
-@@END
-@@PORTABLE {"path":"frontend/wailsjs/go/models.ts","mode":420,"size":113835,"sha256":"d5aa7b2975372ace2a351fb9fe49cf0b83c73b1a9dc388c247320b9b95455cf2","index":2,"count":3,"encoding":"utf-8","payloadBytes":17835}
-Size"];
+      this.aggregateSize = source["aggregateSize"];
       this.excludedCategories = source["excludedCategories"];
       this.planDigest = source["planDigest"];
     }
@@ -93557,7 +93936,7 @@ func DecodeSnapshot(data []byte) (*Snapshot, error) {
 }
 
 @@END
-@@PORTABLE {"path":"internal/coreadapter/application_libraries.go","mode":420,"size":4972,"sha256":"c13900529b36bbf0d701c519ffc288d4a7d3aadc1bed9eb8f16235baa830ddaa","index":0,"count":1,"encoding":"utf-8","payloadBytes":4972}
+@@PORTABLE {"path":"internal/coreadapter/application_libraries.go","mode":420,"size":5188,"sha256":"8a8b69043a7de09a64dab6f3a8a0c93942b22bdb8d5745734817930f9ae29dd2","index":0,"count":1,"encoding":"utf-8","payloadBytes":5188}
 package coreadapter
 
 import (
@@ -93575,6 +93954,7 @@ type ApplicationLibraries struct {
 }
 
 type ApplicationLibrary struct {
+	Topics                   map[string]json.RawMessage     `json:"topics"`
 	RuntimeDirectory         string                         `json:"runtimeDirectory"`
 	Connections              map[string]json.RawMessage     `json:"connections"`
 	LibraryRef               string                         `json:"libraryRef"`
@@ -93585,6 +93965,7 @@ type ApplicationLibrary struct {
 }
 
 type ApplicationInstance struct {
+	Topics                    map[string]json.RawMessage      `json:"topics"`
 	ApplicationName           string                          `json:"applicationName"`
 	SlotID                    string                          `json:"slotId"`
 	Placements                map[string]ApplicationPlacement `json:"placements"`
@@ -93600,6 +93981,7 @@ type ApplicationInstance struct {
 }
 
 type ApplicationPlacement struct {
+	TopicBindings    map[string][]string        `json:"topicBindings"`
 	RuntimeDirectory string                     `json:"runtimeDirectory"`
 	CommonDefaults   map[string]json.RawMessage `json:"commonDefaults,omitempty"`
 	Inherited        map[string]json.RawMessage `json:"inherited,omitempty"`
@@ -109796,7 +110178,7 @@ func (t OpenSSHTransport) withSudoInput(ctx context.Context, program string, arg
 }
 
 @@END
-@@PORTABLE {"path":"internal/installer/application_library_save.go","mode":420,"size":16867,"sha256":"80deb346ab52e7d973fe3b5cd6d2b31589038650ea98d2d69b98395e8cc1ac61","index":0,"count":1,"encoding":"utf-8","payloadBytes":16867}
+@@PORTABLE {"path":"internal/installer/application_library_save.go","mode":420,"size":16884,"sha256":"12bd490cfb35f9a633f546295e0c58872527454d0b5b27efb5203c70e5e7dd18","index":0,"count":1,"encoding":"utf-8","payloadBytes":16884}
 package installer
 
 import (
@@ -109807,7 +110189,7 @@ import (
 
 var libraryInputID = regexp.MustCompile(`^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$`)
 var exactLibraryRef = regexp.MustCompile(`^[a-z][a-z0-9-]*@[0-9]+\.[0-9]+\.[0-9]+$`)
-var applicationSettingKeys = []string{"image", "command", "user", "restart", "parameters", "environment", "ports", "endpoint", "accounts", "provisioner", "readiness", "config_files"}
+var applicationSettingKeys = []string{"image", "command", "user", "restart", "parameters", "environment", "ports", "endpoint", "accounts", "provisioner", "readiness", "config_files", "topicBindings"}
 
 func applicationEditOperation(op string) bool {
 	switch op {
@@ -115141,429 +115523,6 @@ func exportUnixFileIdentity(fd int) (exportFileIdentity, int64, error) {
 
 func exportUnixNotExist(err error) error {
 	if errors.Is(err, unix.ENOENT) || errors.Is(err, unix.ENOTDIR) {
-		return os.ErrNotExist
-	}
-	return err
-}
-
-func isExportNotExist(err error) bool { return errors.Is(err, os.ErrNotExist) }
-
-@@END
-@@PORTABLE {"path":"internal/installer/project_export_windows.go","mode":420,"size":15514,"sha256":"b976e5e04524321f2b8079a752ca07fb428dc48a71ef8a76393149d6a24c1f28","index":0,"count":1,"encoding":"utf-8","payloadBytes":15514}
-//go:build windows
-
-package installer
-
-import (
-	"crypto/rand"
-	"encoding/hex"
-	"errors"
-	"io"
-	"os"
-	"path/filepath"
-	"sort"
-	"strings"
-	"unsafe"
-
-	"golang.org/x/sys/windows"
-)
-
-type exportIdentity struct {
-	volume uint32
-	index  uint64
-}
-
-func (identity exportIdentity) empty() bool { return identity.volume == 0 && identity.index == 0 }
-func (identity exportIdentity) String() string {
-	return hex.EncodeToString([]byte{byte(identity.volume), byte(identity.volume >> 8), byte(identity.volume >> 16), byte(identity.volume >> 24), byte(identity.index), byte(identity.index >> 8), byte(identity.index >> 16), byte(identity.index >> 24), byte(identity.index >> 32), byte(identity.index >> 40), byte(identity.index >> 48), byte(identity.index >> 56)})
-}
-
-type exportFileIdentity struct {
-	exportIdentity
-	links uint32
-}
-
-type exportDirectory struct{ handle windows.Handle }
-
-type exportEntryKind uint8
-
-const (
-	exportEntryDirectory exportEntryKind = iota + 1
-	exportEntryRegular
-)
-
-type exportEntry struct {
-	name string
-	kind exportEntryKind
-}
-
-func openExportSourceDirectory(root string) (*exportDirectory, error) {
-	return openExportWindowsRoot(root, windows.FILE_GENERIC_READ)
-}
-
-func openExportDestinationDirectory(root string) (*exportDirectory, error) {
-	return openExportWindowsRoot(root, windows.FILE_GENERIC_READ|windows.FILE_GENERIC_WRITE|windows.FILE_TRAVERSE|windows.DELETE)
-}
-
-func openExportWindowsRoot(root string, access uint32) (*exportDirectory, error) {
-	volume := filepath.VolumeName(root)
-	if volume == "" || strings.HasPrefix(volume, `\\`) {
-		return nil, errors.New("unsafe export root")
-	}
-	logicalAnchor := volume + "\\"
-	anchor := `\\?\` + logicalAnchor
-	pointer, err := windows.UTF16PtrFromString(anchor)
-	if err != nil {
-		return nil, err
-	}
-	// A drive root is the trusted, non-replaceable traversal anchor. It is not a
-	// reparse point itself, so avoid OPEN_REPARSE_POINT here; every untrusted
-	// component below it is opened with the no-follow relative helper.
-	handle, err := windows.CreateFile(pointer, windows.FILE_GENERIC_READ, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, nil, windows.OPEN_EXISTING, windows.FILE_FLAG_BACKUP_SEMANTICS, 0)
-	if err != nil {
-		return nil, err
-	}
-	directory := &exportDirectory{handle: handle}
-	if err := directory.verify(); err != nil {
-		directory.close()
-		return nil, err
-	}
-	relative, err := filepath.Rel(logicalAnchor, root)
-	if err != nil || relative == "." || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
-		directory.close()
-		return nil, errors.New("unsafe export root")
-	}
-	components := strings.Split(relative, string(filepath.Separator))
-	opened, err := directory.openDirectoryWithAccess(components, access)
-	directory.close()
-	return opened, err
-}
-
-func (directory *exportDirectory) close() {
-	if directory != nil && directory.handle != 0 {
-		_ = windows.CloseHandle(directory.handle)
-		directory.handle = 0
-	}
-}
-
-func (directory *exportDirectory) verify() error {
-	var info windows.ByHandleFileInformation
-	if directory == nil || directory.handle == 0 || windows.GetFileInformationByHandle(directory.handle, &info) != nil || info.FileAttributes&windows.FILE_ATTRIBUTE_REPARSE_POINT != 0 || info.FileAttributes&windows.FILE_ATTRIBUTE_DIRECTORY == 0 {
-		return errors.New("unsafe export directory")
-	}
-	return nil
-}
-
-func (directory *exportDirectory) identity() exportIdentity {
-	var info windows.ByHandleFileInformation
-	if directory == nil || directory.handle == 0 || windows.GetFileInformationByHandle(directory.handle, &info) != nil {
-		return exportIdentity{}
-	}
-	return exportIdentity{volume: info.VolumeSerialNumber, index: uint64(info.FileIndexHigh)<<32 | uint64(info.FileIndexLow)}
-}
-
-func (directory *exportDirectory) openDirectory(parts []string) (*exportDirectory, error) {
-	return directory.openDirectoryWithAccess(parts, windows.FILE_GENERIC_READ)
-}
-
-func (directory *exportDirectory) openDirectoryWithAccess(parts []string, access uint32) (*exportDirectory, error) {
-	if directory == nil || directory.handle == 0 {
-		return nil, errors.New("unsafe export directory")
-	}
-	current := directory.handle
-	owned := false
-	for index, part := range parts {
-		partAccess := uint32(windows.FILE_GENERIC_READ)
-		if index == len(parts)-1 {
-			partAccess = access
-		}
-		next, err := openExportWindowsRelative(current, part, true, partAccess, windows.FILE_OPEN)
-		if err != nil {
-			if owned {
-				_ = windows.CloseHandle(current)
-			}
-			return nil, exportWindowsNotExist(err)
-		}
-		if owned {
-			_ = windows.CloseHandle(current)
-		}
-		current, owned = next, true
-	}
-	if !owned {
-		return nil, errors.New("unsafe export directory")
-	}
-	return &exportDirectory{handle: current}, nil
-}
-
-func (directory *exportDirectory) entries() ([]exportEntry, error) {
-	duplicate, err := duplicateExportWindowsHandle(directory.handle)
-	if err != nil {
-		return nil, err
-	}
-	file := os.NewFile(uintptr(duplicate), "export-directory")
-	if file == nil {
-		_ = windows.CloseHandle(duplicate)
-		return nil, errors.New("unsafe export directory")
-	}
-	entries, err := file.ReadDir(maxExportDirectoryEntries + 1)
-	closeErr := file.Close()
-	if (err != nil && !errors.Is(err, io.EOF)) || closeErr != nil || len(entries) > maxExportDirectoryEntries {
-		return nil, errors.New("unsafe export directory")
-	}
-	result := make([]exportEntry, 0, len(entries))
-	for _, entry := range entries {
-		name := entry.Name()
-		if name == "" || name == "." || name == ".." {
-			return nil, errors.New("unsafe export directory")
-		}
-		child, directoryErr := openExportWindowsRelative(directory.handle, name, true, windows.FILE_GENERIC_READ, windows.FILE_OPEN)
-		if directoryErr == nil {
-			_ = windows.CloseHandle(child)
-			result = append(result, exportEntry{name: name, kind: exportEntryDirectory})
-			continue
-		}
-		child, fileErr := openExportWindowsRelative(directory.handle, name, false, windows.FILE_GENERIC_READ, windows.FILE_OPEN)
-		if fileErr != nil {
-			return nil, errors.New("unsafe export directory")
-		}
-		_ = windows.CloseHandle(child)
-		result = append(result, exportEntry{name: name, kind: exportEntryRegular})
-	}
-	sort.Slice(result, func(left, right int) bool { return result[left].name < result[right].name })
-	return result, nil
-}
-
-func (directory *exportDirectory) readFile(parts []string, limit int64) ([]byte, exportFileIdentity, error) {
-	if len(parts) == 0 {
-		return nil, exportFileIdentity{}, errors.New("unsafe export file")
-	}
-	parent := directory
-	var owned *exportDirectory
-	if len(parts) > 1 {
-		var err error
-		owned, err = directory.openDirectory(parts[:len(parts)-1])
-		if err != nil {
-			return nil, exportFileIdentity{}, err
-		}
-		defer owned.close()
-		parent = owned
-	}
-	handle, err := openExportWindowsRelative(parent.handle, parts[len(parts)-1], false, windows.FILE_GENERIC_READ, windows.FILE_OPEN)
-	if err != nil {
-		return nil, exportFileIdentity{}, exportWindowsNotExist(err)
-	}
-	file := os.NewFile(uintptr(handle), parts[len(parts)-1])
-	if file == nil {
-		_ = windows.CloseHandle(handle)
-		return nil, exportFileIdentity{}, errors.New("unsafe export file")
-	}
-	defer file.Close()
-	identity, size, err := exportWindowsFileIdentity(handle)
-	if err != nil || identity.links != 1 {
-		return nil, exportFileIdentity{}, errors.New("unsafe export file")
-	}
-	if size > limit {
-		return nil, exportFileIdentity{}, errors.New("EXPORT_LIMIT_EXCEEDED")
-	}
-	data, err := io.ReadAll(io.LimitReader(file, limit+1))
-	if err != nil || int64(len(data)) != size {
-		return nil, exportFileIdentity{}, errors.New("unsafe export file")
-	}
-	after, afterSize, afterErr := exportWindowsFileIdentity(handle)
-	if afterErr != nil || after != identity || afterSize != size {
-		return nil, exportFileIdentity{}, errors.New("PROJECT_CHANGED")
-	}
-	return data, identity, nil
-}
-
-func (directory *exportDirectory) exists(name string) (bool, error) {
-	handle, directoryErr := openExportWindowsRelative(directory.handle, name, true, windows.FILE_GENERIC_READ, windows.FILE_OPEN)
-	if directoryErr == nil {
-		_ = windows.CloseHandle(handle)
-		return true, nil
-	}
-	handle, fileErr := openExportWindowsRelative(directory.handle, name, false, windows.FILE_GENERIC_READ, windows.FILE_OPEN)
-	if fileErr == nil {
-		_ = windows.CloseHandle(handle)
-		return true, nil
-	}
-	if isExportNotExist(exportWindowsNotExist(directoryErr)) && isExportNotExist(exportWindowsNotExist(fileErr)) {
-		return false, nil
-	}
-	return false, errors.New("unsafe export destination")
-}
-
-func (directory *exportDirectory) createStaging(_ string) (*exportDirectory, string, error) {
-	for attempt := 0; attempt < 16; attempt++ {
-		value := make([]byte, 12)
-		if _, err := rand.Read(value); err != nil {
-			return nil, "", err
-		}
-		name := ".platform-export-" + hex.EncodeToString(value)
-		handle, err := openExportWindowsRelative(directory.handle, name, true, windows.FILE_GENERIC_READ|windows.FILE_GENERIC_WRITE|windows.DELETE, windows.FILE_CREATE)
-		if err == nil {
-			return &exportDirectory{handle: handle}, name, nil
-		}
-		if !errors.Is(err, windows.ERROR_FILE_EXISTS) && !errors.Is(err, windows.ERROR_ALREADY_EXISTS) {
-			return nil, "", err
-		}
-	}
-	return nil, "", errors.New("staging name collision")
-}
-
-func (directory *exportDirectory) createDirectory(name string) (*exportDirectory, error) {
-	handle, err := openExportWindowsRelative(directory.handle, name, true, windows.FILE_GENERIC_READ|windows.FILE_GENERIC_WRITE|windows.DELETE, windows.FILE_CREATE)
-	if err != nil {
-		return nil, err
-	}
-	return &exportDirectory{handle: handle}, nil
-}
-
-func (directory *exportDirectory) writeFile(name string, content []byte) error {
-	handle, err := openExportWindowsRelative(directory.handle, name, false, windows.FILE_GENERIC_READ|windows.FILE_GENERIC_WRITE|windows.DELETE, windows.FILE_CREATE)
-	if err != nil {
-		return err
-	}
-	file := os.NewFile(uintptr(handle), name)
-	if file == nil {
-		_ = windows.CloseHandle(handle)
-		return errors.New("unsafe export file")
-	}
-	if _, err := file.Write(content); err != nil {
-		_ = file.Close()
-		return err
-	}
-	if err := file.Sync(); err != nil {
-		_ = file.Close()
-		return err
-	}
-	return file.Close()
-}
-
-func (directory *exportDirectory) publish(staging *exportDirectory, _ string, destination string) error {
-	name, err := windows.UTF16FromString(destination)
-	if err != nil {
-		return err
-	}
-	type renameHeader struct {
-		ReplaceIfExists byte
-		_               [7]byte
-		RootDirectory   windows.Handle
-		FileNameLength  uint32
-		FileName        uint16
-	}
-	headerSize := int(unsafe.Offsetof(renameHeader{}.FileName))
-	buffer := make([]byte, headerSize+len(name)*2)
-	header := (*renameHeader)(unsafe.Pointer(&buffer[0]))
-	header.RootDirectory = directory.handle
-	header.FileNameLength = uint32((len(name) - 1) * 2)
-	copy(buffer[headerSize:], unsafe.Slice((*byte)(unsafe.Pointer(&name[0])), len(name)*2))
-	var status windows.IO_STATUS_BLOCK
-	// SetFileInformationByHandle(FileRenameInfo) rejects a non-nil
-	// RootDirectory on current Windows despite the documented relative-name
-	// shape. NtSetInformationFile's FileRenameInformation class preserves the
-	// retained parent-handle authority required by UI-01I.
-	return windows.NtSetInformationFile(staging.handle, &status, &buffer[0], uint32(len(buffer)), 10)
-}
-
-func (directory *exportDirectory) removeOwnedTree(staging *exportDirectory, _ string) error {
-	if staging == nil || staging.identity().empty() {
-		return nil
-	}
-	if err := removeExportWindowsDirectory(staging); err != nil {
-		return err
-	}
-	return markExportWindowsDelete(staging.handle)
-}
-
-func removeExportWindowsDirectory(directory *exportDirectory) error {
-	entries, err := directory.entries()
-	if err != nil {
-		return err
-	}
-	for _, entry := range entries {
-		if entry.kind == exportEntryDirectory {
-			child, openErr := directory.openDirectory([]string{entry.name})
-			if openErr != nil {
-				return openErr
-			}
-			err = removeExportWindowsDirectory(child)
-			if err == nil {
-				err = markExportWindowsDelete(child.handle)
-			}
-			child.close()
-			if err != nil {
-				return err
-			}
-			continue
-		}
-		handle, openErr := openExportWindowsRelative(directory.handle, entry.name, false, windows.DELETE, windows.FILE_OPEN)
-		if openErr != nil {
-			return openErr
-		}
-		err = markExportWindowsDelete(handle)
-		_ = windows.CloseHandle(handle)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func markExportWindowsDelete(handle windows.Handle) error {
-	buffer := []byte{1}
-	return windows.SetFileInformationByHandle(handle, windows.FileDispositionInfo, &buffer[0], uint32(len(buffer)))
-}
-
-func openExportWindowsRelative(root windows.Handle, name string, directory bool, access, disposition uint32) (windows.Handle, error) {
-	nameValue, err := windows.NewNTUnicodeString(name)
-	if err != nil {
-		return 0, err
-	}
-	options := uint32(windows.FILE_SYNCHRONOUS_IO_NONALERT | windows.FILE_OPEN_REPARSE_POINT)
-	if directory {
-		options |= windows.FILE_DIRECTORY_FILE
-	} else {
-		options |= windows.FILE_NON_DIRECTORY_FILE
-	}
-	object := windows.OBJECT_ATTRIBUTES{Length: uint32(unsafe.Sizeof(windows.OBJECT_ATTRIBUTES{})), RootDirectory: root, ObjectName: nameValue, Attributes: windows.OBJ_CASE_INSENSITIVE | windows.OBJ_DONT_REPARSE}
-	var handle windows.Handle
-	var status windows.IO_STATUS_BLOCK
-	if err := windows.NtCreateFile(&handle, access, &object, &status, nil, 0, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, disposition, options, 0, 0); err != nil {
-		return 0, err
-	}
-	if err := verifyExportWindowsHandle(handle, directory); err != nil {
-		_ = windows.CloseHandle(handle)
-		return 0, err
-	}
-	return handle, nil
-}
-
-func verifyExportWindowsHandle(handle windows.Handle, directory bool) error {
-	var info windows.ByHandleFileInformation
-	if err := windows.GetFileInformationByHandle(handle, &info); err != nil || info.FileAttributes&windows.FILE_ATTRIBUTE_REPARSE_POINT != 0 || (info.FileAttributes&windows.FILE_ATTRIBUTE_DIRECTORY != 0) != directory {
-		return errors.New("unsafe export object")
-	}
-	return nil
-}
-
-func exportWindowsFileIdentity(handle windows.Handle) (exportFileIdentity, int64, error) {
-	var info windows.ByHandleFileInformation
-	if err := windows.GetFileInformationByHandle(handle, &info); err != nil || info.FileAttributes&windows.FILE_ATTRIBUTE_REPARSE_POINT != 0 || info.FileAttributes&windows.FILE_ATTRIBUTE_DIRECTORY != 0 {
-		return exportFileIdentity{}, 0, errors.New("unsafe export file")
-	}
-	identity := exportFileIdentity{exportIdentity: exportIdentity{volume: info.VolumeSerialNumber, index: uint64(info.FileIndexHigh)<<32 | uint64(info.FileIndexLow)}, links: info.NumberOfLinks}
-	return identity, int64(uint64(info.FileSizeHigh)<<32 | uint64(info.FileSizeLow)), nil
-}
-
-func duplicateExportWindowsHandle(handle windows.Handle) (windows.Handle, error) {
-	var duplicate windows.Handle
-	err := windows.DuplicateHandle(windows.CurrentProcess(), handle, windows.CurrentProcess(), &duplicate, 0, false, windows.DUPLICATE_SAME_ACCESS)
-	return duplicate, err
-}
-
-func exportWindowsNotExist(err error) error {
-	if err == windows.ERROR_FILE_NOT_FOUND || err == windows.ERROR_PATH_NOT_FOUND || err == windows.STATUS_OBJECT_NAME_NOT_FOUND || err == windows.STATUS_OBJECT_PATH_NOT_FOUND || errors.Is(err, windows.ERROR_FILE_NOT_FOUND) || errors.Is(err, windows.ERROR_PATH_NOT_FOUND) || errors.Is(err, windows.STATUS_OBJECT_NAME_NOT_FOUND) || errors.Is(err, windows.STATUS_OBJECT_PATH_NOT_FOUND) {
 		return os.ErrNotExist
 	}
 	return err
