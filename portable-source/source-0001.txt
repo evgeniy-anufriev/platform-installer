@@ -1307,7 +1307,7 @@ class CallbackModule(CallbackBase):
         self._write(payload, "PLATFORM_CORE_DIAGNOSTIC_OUTPUT")
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/callback/execution_events_json.py","mode":420,"size":8512,"sha256":"037d73c3aae306f8a462133cc860eaddc562b56a7f3a68a84a2be1bac6e6c60a","index":0,"count":1,"encoding":"utf-8","payloadBytes":8512}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/callback/execution_events_json.py","mode":420,"size":9307,"sha256":"217f82d188710a96f210cdc8f55e41f134c68d61a7a6ec3cc6c886db6af21d0b","index":0,"count":1,"encoding":"utf-8","payloadBytes":9307}
 from __future__ import absolute_import, division, print_function
 
 import os
@@ -1433,6 +1433,14 @@ class CallbackModule(CallbackBase):
                 failure_result=getattr(result, "_result", {}) if status == "FAILED" else None,
                 **self._context()
             )
+            # Only the tagged assertion's closed diagnostic grammar is public.
+            if (result is not None and not no_log and
+                    getattr(task, 'action', '') == 'ansible.builtin.assert' and
+                    'platform_http_backend_diagnostic' in getattr(task, 'tags', [])):
+                message = getattr(result, '_result', {}).get('msg', '')
+                if isinstance(message, str) and re.fullmatch(
+                        r'HTTP backend (?:[A-Za-z0-9.:\[\]-]{1,253}|<invalid>):[0-9]{1,5}; expected=[0-9]{3}; actual=-?[0-9]{1,3}; timeout=[0-9]{1,10}s; reason=(?:OK|HTTP_STATUS_MISMATCH|TIMEOUT|CONNECTION_REFUSED|DNS_FAILURE|NETWORK_FAILURE|REQUEST_FAILED)', message):
+                    self._journal().event('DIAGNOSTIC', status, message, **self._context())
         except Exception:
             try:
                 self._journal().mark_task_observability_degraded("TASK_EVENT_WRITE_FAILED")

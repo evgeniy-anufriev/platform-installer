@@ -8604,7 +8604,46 @@ platform_haproxy_full_reconcile: false
   changed_when: false
 
 @@END
-@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/check_targets.yml","mode":420,"size":3249,"sha256":"075ac676510ebac800e9e6e91136c72880c1d67b57eba3a701ff053402060b9d","index":0,"count":1,"encoding":"utf-8","payloadBytes":3249}
+@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/check_http_target.yml","mode":420,"size":2394,"sha256":"def2e7ab876a5a2c359717c2e81046a3beee32398eac378863a05d7bef078cfb","index":0,"count":1,"encoding":"utf-8","payloadBytes":2394}
+---
+- name: Request HTTP backend without exposing response or request metadata
+  ansible.builtin.uri:
+    url: "http://{{ _platform_http_target.1.address }}:{{ _platform_http_target.1.port }}{{ _platform_http_target.0.probe.path }}"
+    headers:
+      Host: "{{ _platform_http_target.0.endpoint.fqdn }}"
+    status_code: "{{ _platform_http_target.0.probe.expected_status }}"
+    timeout: "{{ _platform_http_target.0.probe.timeout }}"
+    validate_certs: true
+    follow_redirects: none
+    return_content: false
+  register: _platform_http_response
+  changed_when: false
+  failed_when: false
+  no_log: true
+
+- name: Require the expected HTTP backend response
+  ansible.builtin.assert:
+    that:
+      - _platform_http_response.status | default(-1) | int == _platform_http_target.0.probe.expected_status | int
+    success_msg: "{{ _platform_http_diagnostic }}"
+    fail_msg: "{{ _platform_http_diagnostic }}"
+  vars:
+    # Only host/port, numbers and a closed reason vocabulary are public.
+    _platform_http_address: "{{ _platform_http_target.1.address if _platform_http_target.1.address is match('^[A-Za-z0-9.:\\[\\]-]{1,253}$') else '<invalid>' }}"
+    _platform_http_reason: >-
+      {{ 'OK' if _platform_http_response.status | default(-1) | int == _platform_http_target.0.probe.expected_status | int
+         else 'HTTP_STATUS_MISMATCH' if _platform_http_response.status | default(-1) | int >= 100
+         else 'TIMEOUT' if _platform_http_response.msg | default('') is search('(?i)timed out|timeout')
+         else 'CONNECTION_REFUSED' if _platform_http_response.msg | default('') is search('(?i)connection refused')
+         else 'DNS_FAILURE' if _platform_http_response.msg | default('') is search('(?i)name or service not known|temporary failure in name resolution|nodename nor servname')
+         else 'NETWORK_FAILURE' if _platform_http_response.msg | default('') is search('(?i)no route to host|network is unreachable|connection reset|connection closed')
+         else 'REQUEST_FAILED' }}
+    _platform_http_diagnostic: >-
+      HTTP backend {{ _platform_http_address }}:{{ _platform_http_target.1.port | int }}; expected={{ _platform_http_target.0.probe.expected_status | int }}; actual={{ _platform_http_response.status | default(-1) | int }}; timeout={{ _platform_http_target.0.probe.timeout | int }}s; reason={{ _platform_http_reason }}
+  tags: [platform_http_backend_diagnostic]
+
+@@END
+@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/check_targets.yml","mode":420,"size":2959,"sha256":"f677e8750b8ca109c073a653ae47a2f719bbb3df68172f19ca08faa2d72b861f","index":0,"count":1,"encoding":"utf-8","payloadBytes":2959}
 ---
 - name: Probe actual backend TLS identities before HAProxy candidate activation
   ansible.builtin.command:
@@ -8677,17 +8716,10 @@ platform_haproxy_full_reconcile: false
   no_log: true
 
 - name: Require reachable HTTP targets before candidate publication
-  ansible.builtin.uri:
-    url: "{{ 'https' if item.0.settings.ssl else 'http' }}://{{ item.1.address }}:{{ item.1.port }}{{ item.0.probe.path }}"
-    headers:
-      Host: "{{ item.0.endpoint.fqdn }}"
-    status_code: "{{ item.0.probe.expected_status }}"
-    timeout: "{{ item.0.probe.timeout }}"
-    validate_certs: true
-    follow_redirects: none
-    return_content: false
+  ansible.builtin.include_tasks: check_http_target.yml
   loop: "{{ platform_haproxy_application_backends | selectattr('probe', 'defined') | selectattr('settings.ssl', 'equalto', false) | subelements('targets') }}"
-  changed_when: false
+  loop_control:
+    loop_var: _platform_http_target
   no_log: true
 
 @@END
