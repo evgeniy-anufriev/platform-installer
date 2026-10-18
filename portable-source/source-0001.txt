@@ -29710,7 +29710,7 @@ platform_application_registry_config_directory: ''
   when: "'@' not in application_runtime_job.settings.image"
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/preflight.yml","mode":420,"size":18175,"sha256":"b359e03ce68997fc012b35452799e561963801b22c9a56dc430abdb9a8db5bb5","index":0,"count":1,"encoding":"utf-8","payloadBytes":18175}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/preflight.yml","mode":420,"size":18079,"sha256":"3c217f096df37e59e65dade6447d17a4afeb94c1e6ab0ad468d5bd778f5cd889","index":0,"count":1,"encoding":"utf-8","payloadBytes":18079}
 ---
 - name: Bind this operation's account and Docker configuration discovery key
   ansible.builtin.set_fact:
@@ -29900,7 +29900,7 @@ platform_application_registry_config_directory: ''
   ansible.builtin.set_fact:
     application_compose_content: "{{ lookup('ansible.builtin.template', application_runtime_job.appTemplate) }}"
     application_base_content: "{{ lookup('ansible.builtin.template', application_runtime_job.baseTemplate) }}"
-    application_env_content: "{{ (lookup('ansible.builtin.file', application_runtime_job.envSource, rstrip=false) if application_runtime_job.envSource else '') ~ '\nSERVER_ID=' ~ inventory_hostname ~ '\n' }}"
+    application_env_content: "{{ lookup('ansible.builtin.template', role_path ~ '/templates/library.env.j2') }}"
   no_log: true
 
 - name: Require the shared env to remain bounded and nonsecret
@@ -30137,6 +30137,16 @@ platform_application_registry_config_directory: ''
   vars:
     application_vault_instance_path: "{{ application_runtime_job.instancePath | default(application_instance_path) }}"
   when: application_runtime_job.agentTemplate | default(false)
+
+@@END
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/templates/library.env.j2","mode":420,"size":500,"sha256":"c46d1eb761aaab79f44ba77567a90f0c896688d105c51b36eefeed7487d347bb","index":0,"count":1,"encoding":"utf-8","payloadBytes":500}
+{{ lookup('ansible.builtin.file', application_runtime_job.envSource, rstrip=false) if application_runtime_job.envSource else '' }}
+SERVER_ID={{ inventory_hostname }}
+{% for server in groups['all'] | reject('equalto', 'localhost') | sort %}
+SERVER_{{ loop.index }}_ID={{ server }}
+SERVER_{{ loop.index }}_IP={{ hostvars[server].ansible_host | default(server) }}
+SERVER_{{ loop.index }}_HOSTNAME={{ (hostvars[server].platform_host | default({})).desiredHostname | default(server, true) }}
+{% endfor %}
 
 @@END
 @@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/artifact_delivery/defaults/main.yml","mode":420,"size":240,"sha256":"6347f7b3304ed068642c1c9f643034b52db51a6e7c5d6cfd551b8d46085c92fc","index":0,"count":1,"encoding":"utf-8","payloadBytes":240}
@@ -55655,7 +55665,7 @@ platform_application_libraries:
   sdku-main: {}
 
 @@END
-@@PORTABLE {"path":"examples/sdku/import-catalog.json","mode":420,"size":5579,"sha256":"7d875497fc0574b207fa3d89ba1d9d21c7ba0c9c51b5fd20ed7132007b9484b3","index":0,"count":1,"encoding":"utf-8","payloadBytes":5579}
+@@PORTABLE {"path":"examples/sdku/import-catalog.json","mode":420,"size":5579,"sha256":"afa98b613781ffccc4a0dbc365667cf0542827442dec72d401355e2fe7fc6983","index":0,"count":1,"encoding":"utf-8","payloadBytes":5579}
 [
   {
     "digest": "sha256:3470717ec177df63a6d1a3b770b4e186b02c1474436f751922651c65079dc196",
@@ -55840,7 +55850,7 @@ platform_application_libraries:
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:74dba78d406f59627d0bfae4892676a88f12db6afc3caa2635b236e2e0b62ddd",
+    "digest": "sha256:542c8cfc3b70e73c769139b492f0409fd11bdb79baed01acc25566fdb4d9bcd0",
     "kind": "library",
     "name": "sdku",
     "sourceDirectory": ".",
@@ -56184,8 +56194,9 @@ platform_library_definition:
                         index_granularity: 8192
 
 @@END
-@@PORTABLE {"path":"examples/sdku/library-packages/sdku/1.0.0/roles/library_sdku/templates/.base_compose.yml.j2","mode":420,"size":1255,"sha256":"60c67c1d93333b8efdbff540a73a81e18ecd7f6be270a8f823836b4be6adb31c","index":0,"count":1,"encoding":"utf-8","payloadBytes":1255}
+@@PORTABLE {"path":"examples/sdku/library-packages/sdku/1.0.0/roles/library_sdku/templates/.base_compose.yml.j2","mode":420,"size":1665,"sha256":"9063e9d0fc424f8f8b9bbc6be35e9009c1d6fc0f911612246c7c437750d776c1","index":0,"count":1,"encoding":"utf-8","payloadBytes":1665}
 {% set environment = library_runtime.defaults.environment | combine({}) %}
+{% set server_ids = groups['all'] | reject('equalto', 'localhost') | sort | list %}
 {% for connection, names in {
   'kafka': ['KAFKA_BOOTSTRAP_SERVERS', 'SPRING_KAFKA_BOOTSTRAP_SERVERS', 'BOOTSTRAP_SERVERS_CONFIG'],
   'postgres': ['POSTGRES_ADDRESS'],
@@ -56196,8 +56207,12 @@ platform_library_definition:
 {% if connection in library_runtime.connections %}
 {% set addresses = [] %}
 {% set targets = library_runtime.connections[connection].targets %}
-{% for target in (targets[:1] if connection == 'clickhouse' else targets) %}
-{% set host = '[' ~ target.address ~ ']' if ':' in target.address else target.address %}
+{% for target in targets %}
+{% set server = hostvars[target.hostId] %}
+{% set ip = server.ansible_host | default(target.hostId) %}
+{% set hostname = (server.platform_host | default({})).desiredHostname | default(target.hostId, true) %}
+{% set address = '${SERVER_' ~ (server_ids.index(target.hostId) + 1) ~ ('_IP}' if target.address == ip else '_HOSTNAME}') if target.address in [ip, hostname] else target.address %}
+{% set host = '[' ~ address ~ ']' if ':' in target.address else address %}
 {% set _ = addresses.append(('https://' if connection == 'schema-registry' else '') ~ host ~ ':' ~ (target.port | string)) %}
 {% endfor %}
 {% for name in names if name not in environment %}
@@ -114885,540 +114900,6 @@ func tryProcessFileLock(file *os.File) (func() error, bool, error) {
 		return nil, false, err
 	}
 	return func() error { return windows.UnlockFileEx(windows.Handle(file.Fd()), 0, 1, 0, overlapped) }, true, nil
-}
-
-@@END
-@@PORTABLE {"path":"internal/installer/project_export.go","mode":420,"size":19676,"sha256":"53ba8aabaa3a54ec046783fba40ac6f1b98416375dcf372987cb7876b4eb8edd","index":0,"count":1,"encoding":"utf-8","payloadBytes":19676}
-package installer
-
-import (
-	"crypto/sha256"
-	"encoding/hex"
-	"errors"
-	"path"
-	"path/filepath"
-	"sort"
-	"strconv"
-	"strings"
-)
-
-const (
-	projectExportAPIVersion   = "platform.installer/project-export/v1alpha1"
-	maxExportFiles            = 4096
-	maxExportDirectoryEntries = maxExportFiles
-	maxExportFileBytes        = int64(4 * 1024 * 1024)
-	maxExportTotalBytes       = int64(64 * 1024 * 1024)
-	maxExportLogicalBytes     = 512
-)
-
-// ProjectExportDocument is bounded metadata for one portable desired-state
-// document. Content is intentionally never returned across the App/Wails seam.
-type ProjectExportDocument struct {
-	LogicalPath string `json:"logicalPath"`
-	Size        int64  `json:"size"`
-	Digest      string `json:"digest"`
-}
-
-// ProjectExportPlan is an in-memory capability summary, not portable desired
-// state and not a public/versioned project contract.
-type ProjectExportPlan struct {
-	APIVersion            string                  `json:"apiVersion"`
-	Kind                  string                  `json:"kind"`
-	SourceProjectRoot     string                  `json:"sourceProjectRoot"`
-	SourceProjectRevision string                  `json:"sourceProjectRevision"`
-	DestinationParent     string                  `json:"destinationParent"`
-	DirectoryName         string                  `json:"directoryName"`
-	DestinationRoot       string                  `json:"destinationRoot"`
-	Documents             []ProjectExportDocument `json:"documents"`
-	AggregateSize         int64                   `json:"aggregateSize"`
-	ExcludedCategories    []string                `json:"excludedCategories"`
-	PlanDigest            string                  `json:"planDigest"`
-}
-
-type ProjectExportResult struct {
-	APIVersion            string `json:"apiVersion"`
-	Kind                  string `json:"kind"`
-	Status                string `json:"status"`
-	DestinationRoot       string `json:"destinationRoot,omitempty"`
-	SourceProjectRevision string `json:"sourceProjectRevision,omitempty"`
-	DocumentCount         int    `json:"documentCount"`
-	AggregateSize         int64  `json:"aggregateSize"`
-	ErrorCode             string `json:"errorCode,omitempty"`
-}
-
-// ProjectExport retains the two opened filesystem authorities for one preview
-// and exactly one commit attempt. It must be closed when the App invalidates
-// the preview or shuts down.
-type ProjectExport struct {
-	source           *exportDirectory
-	destination      *exportDirectory
-	sourceIdentity   exportIdentity
-	destIdentity     exportIdentity
-	sourceDisplay    string
-	destDisplay      string
-	directoryName    string
-	plan             ProjectExportPlan
-	manifest         exportObservation
-	writeObservation func(*exportDirectory, exportObservation) error
-	closed           bool
-}
-
-func PlanProjectExport(sourceRoot, destinationParent, directoryName string) (*ProjectExport, ProjectExportPlan, error) {
-	name, err := ValidateExportDirectoryName(directoryName)
-	if err != nil {
-		return nil, ProjectExportPlan{}, err
-	}
-	sourceDisplay, err := absoluteExportDisplayPath(sourceRoot)
-	if err != nil {
-		return nil, ProjectExportPlan{}, errors.New("EXPORT_SOURCE_UNSAFE")
-	}
-	destDisplay, err := absoluteExportDisplayPath(destinationParent)
-	if err != nil {
-		return nil, ProjectExportPlan{}, errors.New("EXPORT_DESTINATION_INVALID")
-	}
-	if rootsOverlap(sourceDisplay, filepath.Join(destDisplay, name)) {
-		return nil, ProjectExportPlan{}, errors.New("EXPORT_DESTINATION_INVALID")
-	}
-	source, err := openExportSourceDirectory(sourceDisplay)
-	if err != nil {
-		return nil, ProjectExportPlan{}, errors.New("EXPORT_SOURCE_UNSAFE")
-	}
-	destination, err := openExportDestinationDirectory(destDisplay)
-	if err != nil {
-		source.close()
-		return nil, ProjectExportPlan{}, errors.New("EXPORT_DESTINATION_UNSAFE")
-	}
-	capability := &ProjectExport{source: source, destination: destination, sourceIdentity: source.identity(), destIdentity: destination.identity(), sourceDisplay: sourceDisplay, destDisplay: destDisplay, directoryName: name}
-	observation, err := stableExportObservation(source)
-	if err != nil {
-		capability.Close()
-		return nil, ProjectExportPlan{}, errors.New(exportErrorCode(err, "EXPORT_SOURCE_UNSAFE"))
-	}
-	if exists, existErr := destination.exists(name); existErr != nil || exists {
-		capability.Close()
-		if existErr != nil {
-			return nil, ProjectExportPlan{}, errors.New("EXPORT_DESTINATION_UNSAFE")
-		}
-		return nil, ProjectExportPlan{}, errors.New("EXPORT_DESTINATION_EXISTS")
-	}
-	output, err := namedExportObservation(observation, name)
-	if err != nil {
-		capability.Close()
-		return nil, ProjectExportPlan{}, err
-	}
-	plan := projectExportPlan(sourceDisplay, destDisplay, name, capability.sourceIdentity, capability.destIdentity, output, observation.revision)
-	// The capability retains only integrity metadata between preview and
-	// commit. Exact bytes are re-read through the held source authority during
-	// Commit, after the source has been proven unchanged.
-	capability.plan, capability.manifest = plan, exportObservationMetadata(observation)
-	return capability, cloneProjectExportPlan(plan), nil
-}
-
-func (export *ProjectExport) Plan() ProjectExportPlan { return cloneProjectExportPlan(export.plan) }
-
-func (export *ProjectExport) Close() {
-	if export == nil || export.closed {
-		return
-	}
-	export.closed = true
-	if export.source != nil {
-		export.source.close()
-	}
-	if export.destination != nil {
-		export.destination.close()
-	}
-}
-
-func (export *ProjectExport) Commit(planDigest string) (result ProjectExportResult) {
-	result = ProjectExportResult{APIVersion: projectExportAPIVersion, Kind: "ProjectExportResult", Status: "FAILED", ErrorCode: "EXPORT_PLAN_STALE"}
-	if export == nil || export.closed || planDigest == "" || planDigest != export.plan.PlanDigest {
-		return result
-	}
-	defer export.Close()
-	if export.source.identity() != export.sourceIdentity || export.destination.identity() != export.destIdentity {
-		result.ErrorCode = "PROJECT_CHANGED"
-		return result
-	}
-	observation, err := stableExportObservation(export.source)
-	if err != nil {
-		result.ErrorCode = exportErrorCode(err, "PROJECT_CHANGED")
-		return result
-	}
-	if !sameExportObservation(observation, export.manifest) {
-		result.ErrorCode = "EXPORT_PLAN_STALE"
-		return result
-	}
-	output, err := namedExportObservation(observation, export.directoryName)
-	if err != nil {
-		result.ErrorCode = exportErrorCode(err, "EXPORT_SOURCE_UNSAFE")
-		return result
-	}
-	if exists, existErr := export.destination.exists(export.directoryName); existErr != nil || exists {
-		if existErr != nil {
-			result.ErrorCode = "EXPORT_DESTINATION_UNSAFE"
-		} else {
-			result.ErrorCode = "EXPORT_DESTINATION_EXISTS"
-		}
-		return result
-	}
-	staging, stagingName, err := export.destination.createStaging(export.directoryName)
-	if err != nil {
-		result.ErrorCode = "EXPORT_WRITE_FAILED"
-		return result
-	}
-	published := false
-	defer func() {
-		if !published {
-			if cleanupErr := export.destination.removeOwnedTree(staging, stagingName); cleanupErr != nil {
-				result.ErrorCode = exportErrorCode(cleanupErr, "EXPORT_STAGING_RETAINED")
-			}
-		}
-		staging.close()
-	}()
-	write := writeExportObservation
-	if export.writeObservation != nil {
-		write = export.writeObservation
-	}
-	if err := write(staging, output); err != nil {
-		result.ErrorCode = exportErrorCode(err, "EXPORT_WRITE_FAILED")
-		return result
-	}
-	if err := verifyExportObservation(staging, output); err != nil {
-		result.ErrorCode = "EXPORT_WRITE_FAILED"
-		return result
-	}
-	finalObservation, err := stableExportObservation(export.source)
-	if err != nil || !sameExportObservation(finalObservation, export.manifest) || export.source.identity() != export.sourceIdentity {
-		result.ErrorCode = "PROJECT_CHANGED"
-		return result
-	}
-	if exists, existErr := export.destination.exists(export.directoryName); existErr != nil || exists {
-		if existErr != nil {
-			result.ErrorCode = "EXPORT_DESTINATION_UNSAFE"
-		} else {
-			result.ErrorCode = "EXPORT_DESTINATION_EXISTS"
-		}
-		return result
-	}
-	if err := export.destination.publish(staging, stagingName, export.directoryName); err != nil {
-		result.ErrorCode = "EXPORT_PUBLISH_FAILED"
-		return result
-	}
-	published = true
-	return ProjectExportResult{APIVersion: projectExportAPIVersion, Kind: "ProjectExportResult", Status: "EXPORTED", DestinationRoot: filepath.Join(export.destDisplay, export.directoryName), SourceProjectRevision: observation.revision, DocumentCount: len(output.documents), AggregateSize: output.total}
-}
-
-type exportRecord struct {
-	ProjectExportDocument
-	identity exportFileIdentity
-	content  []byte
-}
-
-type exportObservation struct {
-	documents []exportRecord
-	revision  string
-	total     int64
-}
-
-func exportObservationMetadata(observation exportObservation) exportObservation {
-	metadata := exportObservation{
-		documents: make([]exportRecord, len(observation.documents)),
-		revision:  observation.revision,
-		total:     observation.total,
-	}
-	for index, record := range observation.documents {
-		metadata.documents[index] = exportRecord{
-			ProjectExportDocument: record.ProjectExportDocument,
-			identity:              record.identity,
-		}
-	}
-	return metadata
-}
-
-func stableExportObservation(root *exportDirectory) (exportObservation, error) {
-	first, err := observeExportProject(root)
-	if err != nil {
-		return exportObservation{}, err
-	}
-	second, err := observeExportProject(root)
-	if err != nil {
-		return exportObservation{}, err
-	}
-	if !sameExportObservation(first, second) {
-		return exportObservation{}, errors.New("PROJECT_CHANGED")
-	}
-	return second, nil
-}
-
-func observeExportProject(root *exportDirectory) (exportObservation, error) {
-	if root == nil || root.identity().empty() {
-		return exportObservation{}, errors.New("EXPORT_SOURCE_UNSAFE")
-	}
-	result := exportObservation{}
-	seen := map[string]bool{}
-	caseFolded := map[string]bool{}
-	for _, logical := range []string{"project.yml", "ansible.cfg", "inventory/hosts.yml"} {
-		if err := addExportDocument(root, logical, &result, seen, caseFolded); err != nil {
-			if isExportNotExist(err) {
-				continue
-			}
-			return exportObservation{}, err
-		}
-	}
-	for _, logical := range []string{"inventory/group_vars", "inventory/host_vars", "application-packages", "library-packages"} {
-		directory, err := root.openDirectory(strings.Split(logical, "/"))
-		if isExportNotExist(err) {
-			continue
-		}
-		if err != nil {
-			return exportObservation{}, errors.New("EXPORT_SOURCE_UNSAFE")
-		}
-		err = collectExportDirectory(directory, logical, &result, seen, caseFolded)
-		directory.close()
-		if err != nil {
-			return exportObservation{}, err
-		}
-	}
-	if err := validateExportPackages(result.documents); err != nil {
-		return exportObservation{}, err
-	}
-	sort.Slice(result.documents, func(left, right int) bool {
-		return result.documents[left].LogicalPath < result.documents[right].LogicalPath
-	})
-	result.revision = exportContentRevision(result.documents)
-	return result, nil
-}
-
-func exportContentRevision(documents []exportRecord) string {
-	var revisionInput []byte
-	for _, document := range documents {
-		if document.LogicalPath == generatedDocument {
-			continue
-		}
-		revisionInput = append(revisionInput, []byte(document.LogicalPath)...)
-		revisionInput = append(revisionInput, 0)
-		revisionInput = append(revisionInput, []byte(document.Digest)...)
-		revisionInput = append(revisionInput, 0)
-	}
-	return digestBytes(revisionInput)
-}
-
-func collectExportDirectory(directory *exportDirectory, prefix string, result *exportObservation, seen, caseFolded map[string]bool) error {
-	entries, err := directory.entries()
-	if err != nil {
-		return errors.New("EXPORT_SOURCE_UNSAFE")
-	}
-	for _, entry := range entries {
-		logical := prefix + "/" + entry.name
-		if !safeExportLogicalPath(logical) {
-			return errors.New("EXPORT_SOURCE_UNSAFE")
-		}
-		switch entry.kind {
-		case exportEntryDirectory:
-			child, openErr := directory.openDirectory([]string{entry.name})
-			if openErr != nil {
-				return errors.New("EXPORT_SOURCE_UNSAFE")
-			}
-			recurseErr := collectExportDirectory(child, logical, result, seen, caseFolded)
-			child.close()
-			if recurseErr != nil {
-				return recurseErr
-			}
-		case exportEntryRegular:
-			if logical == generatedDocument {
-				continue
-			}
-			extension := strings.ToLower(path.Ext(entry.name))
-			if strings.HasPrefix(logical, "application-packages/") || strings.HasPrefix(logical, "library-packages/") || extension == ".yml" || extension == ".yaml" || extension == ".json" {
-				if strings.HasPrefix(logical, "application-packages/") || strings.HasPrefix(logical, "library-packages/") {
-					if !safeApplicationPackagePath(logical) {
-						return errors.New("APPLICATION_PACKAGE_PATH_INVALID")
-					}
-				}
-				if err := addExportDocument(directory, entry.name, result, seen, caseFolded, logical); err != nil {
-					return err
-				}
-			}
-		default:
-			return errors.New("EXPORT_SOURCE_UNSAFE")
-		}
-	}
-	return nil
-}
-
-func addExportDocument(root *exportDirectory, logical string, result *exportObservation, seen, caseFolded map[string]bool, explicit ...string) error {
-	parts := strings.Split(logical, "/")
-	storedLogical := logical
-	if len(explicit) == 1 {
-		storedLogical = explicit[0]
-	}
-	if !safeExportLogicalPath(storedLogical) {
-		return errors.New("EXPORT_SOURCE_UNSAFE")
-	}
-	if seen[storedLogical] || caseFolded[strings.ToLower(storedLogical)] {
-		return errors.New("EXPORT_SOURCE_UNSAFE")
-	}
-	content, identity, err := root.readFile(parts, maxExportFileBytes)
-	if err != nil {
-		return err
-	}
-	if len(result.documents) >= maxExportFiles || result.total > maxExportTotalBytes-int64(len(content)) {
-		return errors.New("EXPORT_LIMIT_EXCEEDED")
-	}
-	seen[storedLogical], caseFolded[strings.ToLower(storedLogical)] = true, true
-	record := exportRecord{ProjectExportDocument: ProjectExportDocument{LogicalPath: storedLogical, Size: int64(len(content)), Digest: digestBytes(content)}, identity: identity, content: content}
-	result.documents = append(result.documents, record)
-	result.total += int64(len(content))
-	return nil
-}
-
-func safeExportLogicalPath(logical string) bool {
-	if logical == "" || len([]byte(logical)) > maxExportLogicalBytes || strings.Contains(logical, "\\") || path.Clean(logical) != logical || strings.HasPrefix(logical, "/") {
-		return false
-	}
-	for _, part := range strings.Split(logical, "/") {
-		if part == "" || part == "." || part == ".." {
-			return false
-		}
-	}
-	return true
-}
-
-func sameExportObservation(left, right exportObservation) bool {
-	if left.revision != right.revision || left.total != right.total || len(left.documents) != len(right.documents) {
-		return false
-	}
-	for index := range left.documents {
-		leftDocument, rightDocument := left.documents[index], right.documents[index]
-		if leftDocument.LogicalPath != rightDocument.LogicalPath || leftDocument.Size != rightDocument.Size || leftDocument.Digest != rightDocument.Digest || leftDocument.identity != rightDocument.identity {
-			return false
-		}
-	}
-	return true
-}
-
-func sameExportContentObservation(left, right exportObservation) bool {
-	if left.revision != right.revision || left.total != right.total || len(left.documents) != len(right.documents) {
-		return false
-	}
-	for index := range left.documents {
-		leftDocument, rightDocument := left.documents[index], right.documents[index]
-		if leftDocument.LogicalPath != rightDocument.LogicalPath || leftDocument.Size != rightDocument.Size || leftDocument.Digest != rightDocument.Digest {
-			return false
-		}
-	}
-	return true
-}
-
-func projectExportPlan(sourceRoot, destinationParent, name string, sourceIdentity, destinationIdentity exportIdentity, observation exportObservation, sourceRevision string) ProjectExportPlan {
-	documents := make([]ProjectExportDocument, len(observation.documents))
-	for index, document := range observation.documents {
-		documents[index] = document.ProjectExportDocument
-	}
-	plan := ProjectExportPlan{APIVersion: projectExportAPIVersion, Kind: "ProjectExportPlan", SourceProjectRoot: sourceRoot, SourceProjectRevision: sourceRevision, DestinationParent: destinationParent, DirectoryName: name, DestinationRoot: filepath.Join(destinationParent, name), Documents: documents, AggregateSize: observation.total, ExcludedCategories: []string{"DRAFT", "RUNTIME_CREDENTIALS", "GENERATED_STATE", "RUNTIME_STATE", "PLANS", "FACTS", "LOGS", "RESULTS", "VERIFICATION_EVIDENCE"}}
-	input := []byte(plan.APIVersion + "\x00" + sourceIdentity.String() + "\x00" + destinationIdentity.String() + "\x00" + plan.SourceProjectRevision + "\x00" + plan.DestinationRoot + "\x00")
-	for _, document := range documents {
-		input = append(input, []byte(document.LogicalPath)...)
-		input = append(input, 0)
-		input = append(input, []byte(document.Digest)...)
-		input = append(input, 0)
-		input = append(input, []byte(strconv.FormatInt(document.Size, 10))...)
-		input = append(input, 0)
-	}
-	sum := sha256.Sum256(input)
-	plan.PlanDigest = "sha256:" + hex.EncodeToString(sum[:])
-	return plan
-}
-
-func cloneProjectExportPlan(plan ProjectExportPlan) ProjectExportPlan {
-	plan.Documents = append([]ProjectExportDocument(nil), plan.Documents...)
-	plan.ExcludedCategories = append([]string(nil), plan.ExcludedCategories...)
-	return plan
-}
-
-func absoluteExportDisplayPath(value string) (string, error) {
-	if value == "" {
-		return "", errors.New("invalid path")
-	}
-	absolute, err := filepath.Abs(value)
-	if err != nil {
-		return "", err
-	}
-	return filepath.Clean(absolute), nil
-}
-
-func rootsOverlap(left, right string) bool {
-	leftToRight, leftErr := filepath.Rel(left, right)
-	rightToLeft, rightErr := filepath.Rel(right, left)
-	leftContainsRight := leftErr == nil && (leftToRight == "." || (leftToRight != ".." && !strings.HasPrefix(leftToRight, ".."+string(filepath.Separator))))
-	rightContainsLeft := rightErr == nil && (rightToLeft == "." || (rightToLeft != ".." && !strings.HasPrefix(rightToLeft, ".."+string(filepath.Separator))))
-	return leftContainsRight || rightContainsLeft
-}
-
-func writeExportObservation(staging *exportDirectory, observation exportObservation) error {
-	created := map[string]*exportDirectory{"": staging}
-	defer func() {
-		for logical, directory := range created {
-			if logical != "" {
-				directory.close()
-			}
-		}
-	}()
-	for _, document := range observation.documents {
-		parent := path.Dir(document.LogicalPath)
-		directory, err := ensureExportDirectory(staging, parent, created)
-		if err != nil {
-			return err
-		}
-		if err := directory.writeFile(path.Base(document.LogicalPath), document.content); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func ensureExportDirectory(root *exportDirectory, logical string, created map[string]*exportDirectory) (*exportDirectory, error) {
-	if logical == "." || logical == "" {
-		return root, nil
-	}
-	current, currentLogical := root, ""
-	for _, part := range strings.Split(logical, "/") {
-		if currentLogical == "" {
-			currentLogical = part
-		} else {
-			currentLogical += "/" + part
-		}
-		if known, ok := created[currentLogical]; ok {
-			current = known
-			continue
-		}
-		next, err := current.createDirectory(part)
-		if err != nil {
-			return nil, err
-		}
-		created[currentLogical], current = next, next
-	}
-	return current, nil
-}
-
-func verifyExportObservation(staging *exportDirectory, expected exportObservation) error {
-	actual, err := observeExportProject(staging)
-	if err != nil || !sameExportContentObservation(actual, expected) {
-		return errors.New("EXPORT_WRITE_FAILED")
-	}
-	return nil
-}
-
-func exportErrorCode(err error, fallback string) string {
-	if err == nil {
-		return fallback
-	}
-	for _, code := range []string{"PROJECT_CHANGED", "EXPORT_LIMIT_EXCEEDED", "EXPORT_SOURCE_UNSAFE", "EXPORT_DESTINATION_UNSAFE", "EXPORT_WRITE_FAILED", "EXPORT_STAGING_RETAINED"} {
-		if err.Error() == code {
-			return code
-		}
-	}
-	return fallback
 }
 
 @@END
