@@ -1,4 +1,4 @@
-@@PORTABLE {"path":".gitattributes","mode":420,"size":244,"sha256":"cfc1f45d8c414ab5a8034c954dda404a6bfa000502b7423789e23e6b45e18908","index":0,"count":1,"encoding":"utf-8","payloadBytes":244}
+@@PORTABLE {"path":".gitattributes","mode":420,"size":278,"sha256":"9446626a28580d3ab8a231d59a2aa21bfb6594484f3b7bf2068593cd6cd6b5b6","index":0,"count":1,"encoding":"utf-8","payloadBytes":278}
 * text=auto
 *.md text eol=lf
 *.yml text eol=lf
@@ -6,6 +6,7 @@
 *.json text eol=lf
 *.py text eol=lf
 *.sh text eol=lf
+examples/sdku/**/*.j2 text eol=lf
 services/docker/** text eol=lf
 
 # Portable records preserve byte-counted source payloads.
@@ -21168,7 +21169,7 @@ def project_endpoint_sources(rows, desired, hosts):
     return sources
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_libraries.py","mode":420,"size":39759,"sha256":"f74ce68e9afe9d43360087f60852290ddb98431d87edd042e053d5f60e266f44","index":0,"count":1,"encoding":"utf-8","payloadBytes":39759}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_libraries.py","mode":420,"size":39744,"sha256":"f2c401c94f4e693f1d9f8fa548dfcd8cf3e5b870be7e731ec0f49b0c9517e47a","index":0,"count":1,"encoding":"utf-8","payloadBytes":39744}
 """Read-only application contract checks. Ansible owns composition and templating."""
 import hashlib
 import json
@@ -21738,7 +21739,7 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
                                           "parameters": settings.get("parameters", {}), "environment": settings.get("environment", {}),
                                           "topicBindings": settings.get('topicBindings', {}),
                                           "ports": settings.get("ports", {}), "endpoint": settings.get("endpoint", {}),
-                                          "containerName": "%s-%s-%s" % (project_id, app_id, host),
+                                          "containerName": "%s-%s" % (app_id, host),
                                           "composeProject": compose_project,
                                           "runtimeDirectory": library['runtimeDirectory'],
                                           "runtimePath": app_id, "libraryEnvPath": '.env'}
@@ -22205,7 +22206,7 @@ def split_provider_jobs(providers):
     return library_jobs, instance_jobs
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_runtime.py","mode":420,"size":16078,"sha256":"a7614b06c8f35c50dc9409a98f5e8a637ae98e364b48d52ee03e350eafffe55a","index":0,"count":1,"encoding":"utf-8","payloadBytes":16078}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_runtime.py","mode":420,"size":16093,"sha256":"c5668e747662b588fbdb429a5ca4854d90f99b2243bd0a0160a7eafe7370e227","index":0,"count":1,"encoding":"utf-8","payloadBytes":16093}
 """Typed A2 preflight. Ansible owns precedence, templates and target execution."""
 import hashlib
 import os
@@ -22375,7 +22376,7 @@ def prepare_runtime(root, snapshot, rows, desired, lock, validator, loader):
         instance = library["instances"][app_id]
         placement = instance["placements"][host]
         settings = row["settings"]
-        if (any(r['kind'] not in {'postgresql.database', 'postgresql.schema', 'clickhouse.database'} for r in row['resources'].values()) or
+        if (any(r['kind'] not in {'postgresql.database', 'postgresql.schema', 'clickhouse.database', 'kafka.topic'} for r in row['resources'].values()) or
                 any(instance['connections'].get(k, {}).get('serviceType') not in {'postgresql', 'redis', 'clickhouse'} for k in instance['credentialRequirements']) or
                 any(x.get("tls") for x in instance["connections"].values())):
             raise ValueError("APPLICATION_RUNTIME_DEFERRED_FEATURE")
@@ -29501,7 +29502,7 @@ platform_application_registry_config_directory: ''
   no_log: true
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/apply_library.yml","mode":420,"size":2895,"sha256":"1250ea906eac2bdd560dee6cdd8e426c256b51cfcd8800e7ca2b5255a54238d0","index":0,"count":1,"encoding":"utf-8","payloadBytes":2895}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/apply_library.yml","mode":420,"size":2226,"sha256":"4b266e5c49f6d177ed60de1d91b1b39fdc5bc7cc1924c2e05499de61c6fdc386","index":0,"count":1,"encoding":"utf-8","payloadBytes":2226}
 ---
 - name: Bind all placements consuming this one library-host projection
   ansible.builtin.set_fact:
@@ -29523,24 +29524,6 @@ platform_application_registry_config_directory: ''
     state: directory
     owner: "{{ application_library_jobs[0].account }}"
     mode: '0700'
-
-- name: Acquire one atomic library-host execution guard
-  ansible.builtin.command:
-    argv: [mkdir, "{{ application_library_jobs[0].libraryPath }}/.apply-lock"]
-  become_user: "{{ application_library_jobs[0].account }}"
-  register: application_library_lock
-  changed_when: false
-  failed_when: false
-
-- name: Refuse a concurrent or abandoned library-host lock
-  ansible.builtin.assert:
-    that: application_library_lock.rc == 0
-    fail_msg: APPLICATION_LIBRARY_HOST_LOCKED
-
-- name: Record only the guard acquired by this operation
-  ansible.builtin.set_fact:
-    application_held_locks: "{{ application_held_locks + [application_library_jobs[0]] }}"
-  no_log: true
 
 - name: Materialize the library and its exact selected instances
   block:
@@ -32370,7 +32353,7 @@ platform_name_prefix: ''
     quiet: true
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/resolve_application_libraries/tasks/instance.yml","mode":420,"size":5825,"sha256":"abd5b8362f2d2a6ef4f5152ca48318e9f48a4560313d9b7c2322e0b0ce75651d","index":0,"count":1,"encoding":"utf-8","payloadBytes":5825}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/resolve_application_libraries/tasks/instance.yml","mode":420,"size":6907,"sha256":"ead6f47d953deec157813a4922e4ccd8b36455f6ee6f5b878e563888fa644e3b","index":0,"count":1,"encoding":"utf-8","payloadBytes":6907}
 ---
 - name: Load validated library defaults in an isolated namespace
   ansible.builtin.include_vars:
@@ -32391,6 +32374,18 @@ platform_name_prefix: ''
     application_name: "{{ application_job.application.name }}"
     application_instance_id: "{{ application_job.application.name }}-{{ application_job.libraryId }}"
     library_instance_id: "{{ application_job.libraryId }}"
+  no_log: true
+  become: false
+
+- name: Seed parameter context before expanding dependent application settings
+  ansible.builtin.set_fact:
+    application_parameters: >-
+      {{ (application_job.commonDefaults.parameters | default({}) if application_job.slot.inherit_defaults | default(true) else {}) |
+         combine(vars['_application_package_' ~ ((application_job.libraryId ~ application_job.slotId ~ application_job.hostId) | hash('sha256'))].platform_application_definition.defaults.parameters | default({}), recursive=true, list_merge='replace') |
+         combine(application_job.slot.overrides.parameters | default({}), recursive=true, list_merge='replace') |
+         combine(application_job.commonOverrides.parameters | default({}) if application_job.slot.inherit_defaults | default(true) else {}, recursive=true, list_merge='replace') |
+         combine(application_job.instance.overrides.parameters | default({}), recursive=true, list_merge='replace') |
+         combine(application_job.hostOverride.parameters | default({}), recursive=true, list_merge='replace') }}
   no_log: true
   become: false
 
@@ -32757,7 +32752,7 @@ artifactLock:
   digest: sha256:2222222222222222222222222222222222222222222222222222222222222222
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-apply.yml","mode":420,"size":1718,"sha256":"e74a741ebbb421d2541d2d88707bb0e03e8eeb267d5f3b1d7e6e4c05f658223c","index":0,"count":1,"encoding":"utf-8","payloadBytes":1718}
+@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-apply.yml","mode":420,"size":1141,"sha256":"6a9b98338504122b7aea9a5c04b8b568afbfa880ac56f051273b868a2b3034c1","index":0,"count":1,"encoding":"utf-8","payloadBytes":1141}
 ---
 - import_playbook: application-libraries-preflight.yml
 - import_playbook: application-libraries-vault-preflight.yml
@@ -32769,32 +32764,20 @@ artifactLock:
   become: true
   any_errors_fatal: true
   tasks:
-    - name: Initialize guards acquired by this operation
-      ansible.builtin.set_fact:
-        application_held_locks: []
-    - name: Materialize all selected Compose inputs before any image or container mutation
-      block:
-        - name: Materialize and validate each library in its acquired host-local scope
-          ansible.builtin.include_role:
-            name: platform.core.application_runtime
-            tasks_from: apply_library
-          loop: "{{ platform_application_preflight_jobs | default([]) | map(attribute='libraryId') | unique | list }}"
-          loop_control:
-            loop_var: application_library_id
-        - name: Activate only after all selected placements passed Compose validation
-          ansible.builtin.include_role:
-            name: platform.core.application_runtime
-            tasks_from: activate_instance
-          loop: "{{ platform_application_preflight_jobs | default([]) }}"
-          loop_control:
-            loop_var: application_runtime_job
-      always:
-        - name: Release only this operation's acquired library-host guards
-          ansible.builtin.command:
-            argv: [rmdir, "{{ item.libraryPath }}/.apply-lock"]
-          become_user: "{{ item.account }}"
-          loop: "{{ application_held_locks }}"
-          changed_when: false
+    - name: Materialize and validate all selected libraries before any image or container mutation
+      ansible.builtin.include_role:
+        name: platform.core.application_runtime
+        tasks_from: apply_library
+      loop: "{{ platform_application_preflight_jobs | default([]) | map(attribute='libraryId') | unique | list }}"
+      loop_control:
+        loop_var: application_library_id
+    - name: Activate only after all selected placements passed Compose validation
+      ansible.builtin.include_role:
+        name: platform.core.application_runtime
+        tasks_from: activate_instance
+      loop: "{{ platform_application_preflight_jobs | default([]) }}"
+      loop_control:
+        loop_var: application_runtime_job
 
 - import_playbook: application-libraries-endpoint-stage.yml
 
@@ -51683,7 +51666,7 @@ catalogLock:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/alarm-service/1.0.0/roles/application_alarm-service/defaults/main.yml","mode":420,"size":5152,"sha256":"45e264abfddbe2b5afee3d56f9520c8e7c86386ff994b0def6e903131a250cd1","index":0,"count":1,"encoding":"utf-8","payloadBytes":5152}
+@@PORTABLE {"path":"examples/sdku/application-packages/alarm-service/1.0.0/roles/application_alarm-service/defaults/main.yml","mode":420,"size":5261,"sha256":"4d767a87f75e148f8bdd92c873897521030c5e84f184c225b6748a8e9916753a","index":0,"count":1,"encoding":"utf-8","payloadBytes":5261}
 platform_application_definition:
     connections:
         clickhouse:
@@ -51706,6 +51689,7 @@ platform_application_definition:
             - -jar
             - alarm-service.jar
         environment:
+            HISTORY_DATASOURCE_CLICKHOUSE_JDBCURL: "$${CLICKHOUSE_HTTP_ENDPOINT}?$${CLICKHOUSE_SSL_OPTIONS}"
             ALERT_CLASS_TOPIC: '{{ application_parameters.source_variables.REDIS_ALERT_CLASS_TOPIC | default(undef(hint=''Configure SDKU REDIS_ALERT_CLASS_TOPIC''), true) }}'
             ALERT_HANDLER_TOPIC: '{{ application_parameters.source_variables.REDIS_ALERT_HANDLER_TOPIC | default(undef(hint=''Configure SDKU REDIS_ALERT_HANDLER_TOPIC''), true) }}'
             AUTO_ACK_DELAY: "600000"
@@ -51804,7 +51788,7 @@ platform_application_definition:
 {{ application_runtime | platform.core.application_agent_config }}
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/alarm-service/1.0.0/roles/application_alarm-service/templates/compose.yml.j2","mode":420,"size":2355,"sha256":"6a463c4b8d2332d9017607f8fd82dede5ddaf7da46c408592cf22804ac9806f2","index":0,"count":1,"encoding":"utf-8","payloadBytes":2355}
+@@PORTABLE {"path":"examples/sdku/application-packages/alarm-service/1.0.0/roles/application_alarm-service/templates/compose.yml.j2","mode":420,"size":2153,"sha256":"390cd602342caee1cb0f25cb210b24c2a94059ca4959f33db81a0704d1b51bc2","index":0,"count":1,"encoding":"utf-8","payloadBytes":2153}
 services:
   {{ application_instance_id }}:
     extends:
@@ -51827,8 +51811,6 @@ services:
 {% endif %}
 {% endfor %}
       "WEB_SERVER_PORT": {{ (application_effective.ports['port-1'].container | string) | to_json }}
-{% set targets = application_runtime.connections['clickhouse'].targets %}
-      "HISTORY_DATASOURCE_CLICKHOUSE_JDBCURL": "https://{{ targets[0].address }}:{{ targets[0].port }}?ssl=true&sslmode=strict"
       "TNT_DEMO_CLIENT_PORT": {{ (application_effective.ports['port-1'].container | string) | to_json }}
     labels:
       "platform.installer.project": {{ application_project_id | to_json }}
@@ -51873,7 +51855,7 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/alarm-view-service/1.0.0/roles/application_alarm-view-service/defaults/main.yml","mode":420,"size":5614,"sha256":"89d00d296773e86a36cdc678363e3378bb66d4023eff6e65ae61e9dee873e543","index":0,"count":1,"encoding":"utf-8","payloadBytes":5614}
+@@PORTABLE {"path":"examples/sdku/application-packages/alarm-view-service/1.0.0/roles/application_alarm-view-service/defaults/main.yml","mode":420,"size":5909,"sha256":"23bedd9c5012b09c343f2550878a1fd9ce5f00c22bd8d23870b32abca451d5c8","index":0,"count":1,"encoding":"utf-8","payloadBytes":5909}
 platform_application_definition:
     connections:
         clickhouse:
@@ -51897,6 +51879,8 @@ platform_application_definition:
             - -jar
             - alarm-view-service.jar
         environment:
+            DB_CONNECTION_STRING: "$${POSTGRES_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${POSTGRES_SSL_OPTIONS}"
+            HISTORY_DATASOURCE_CLICKHOUSE_JDBCURL: "$${CLICKHOUSE_HTTP_ENDPOINT}?$${CLICKHOUSE_SSL_OPTIONS}"
             ALERT_CLASS_TOPIC: '{{ application_parameters.source_variables.REDIS_ALERT_CLASS_TOPIC | default(undef(hint=''Configure SDKU REDIS_ALERT_CLASS_TOPIC''), true) }}'
             ALERT_HANDLER_TOPIC: '{{ application_parameters.source_variables.REDIS_ALERT_HANDLER_TOPIC | default(undef(hint=''Configure SDKU REDIS_ALERT_HANDLER_TOPIC''), true) }}'
             AUTO_ACK_DELAY: "600000"
@@ -52004,7 +51988,7 @@ platform_application_definition:
 {{ application_runtime | platform.core.application_agent_config }}
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/alarm-view-service/1.0.0/roles/application_alarm-view-service/templates/compose.yml.j2","mode":420,"size":2707,"sha256":"5328d2e2363911046651bdc09a0d11ada90343d8956eb29c34794fb1b46b62aa","index":0,"count":1,"encoding":"utf-8","payloadBytes":2707}
+@@PORTABLE {"path":"examples/sdku/application-packages/alarm-view-service/1.0.0/roles/application_alarm-view-service/templates/compose.yml.j2","mode":420,"size":2153,"sha256":"2343625d0bbffaa148fe5d1e27e051c0c21778942f5396d87b8c30a4a26f6475","index":0,"count":1,"encoding":"utf-8","payloadBytes":2153}
 services:
   {{ application_instance_id }}:
     extends:
@@ -52028,10 +52012,6 @@ services:
 {% endfor %}
       "TNT_DEMO_CLIENT_PORT": {{ (application_effective.ports['port-1'].container | string) | to_json }}
       "WEB_SERVER_PORT": {{ (application_effective.ports['port-1'].container | string) | to_json }}
-{% set targets = application_runtime.connections['postgres'].targets %}
-      "DB_CONNECTION_STRING": "jdbc:postgresql://{{ targets[0].address }}:{{ targets[0].port }}/{{ application_effective.parameters.database_name | default(undef(hint='Configure database_name'), true) }}?ssl=true&sslmode=verify-full&sslrootcert=/opt/application/pki/ca-chain.pem"
-{% set targets = application_runtime.connections['clickhouse'].targets %}
-      "HISTORY_DATASOURCE_CLICKHOUSE_JDBCURL": "https://{{ targets[0].address }}:{{ targets[0].port }}?ssl=true&sslmode=strict"
     labels:
       "platform.installer.project": {{ application_project_id | to_json }}
       "platform.installer.library": {{ library_runtime.library_id | to_json }}
@@ -52075,7 +52055,7 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/data-manager/1.0.0/roles/application_data-manager/defaults/main.yml","mode":420,"size":5970,"sha256":"9f665e1a898ae89c91e99d4dd321a678b5fd530c0af7c73e873e85ecf130abad","index":0,"count":1,"encoding":"utf-8","payloadBytes":5970}
+@@PORTABLE {"path":"examples/sdku/application-packages/data-manager/1.0.0/roles/application_data-manager/defaults/main.yml","mode":420,"size":5968,"sha256":"ca88148c815d15ab747c9c9838cd03d2cea049d975eb34fe5b3bb3e8e620df48","index":0,"count":1,"encoding":"utf-8","payloadBytes":5968}
 platform_application_definition:
     connections:
         kafka:
@@ -52098,6 +52078,7 @@ platform_application_definition:
             - -jar
             - data-manager.jar
         environment:
+            DB_CONNECTION_STRING: "$${POSTGRES_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${POSTGRES_SSL_OPTIONS}"
             ALERT_CLASS_TOPIC: '{{ application_parameters.source_variables.REDIS_ALERT_CLASS_TOPIC | default(undef(hint=''Configure SDKU REDIS_ALERT_CLASS_TOPIC''), true) }}'
             ALERT_HANDLER_TOPIC: '{{ application_parameters.source_variables.REDIS_ALERT_HANDLER_TOPIC | default(undef(hint=''Configure SDKU REDIS_ALERT_HANDLER_TOPIC''), true) }}'
             JAVA_OPTS: -Xmx8192m
@@ -52107,12 +52088,9 @@ platform_application_definition:
             LOGGER_TOTAL_SIZE_CAP: 200Mb
             LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_JDBC: DEBUG
             PROFILES_ACTIVE: specversion, development
-            REDIS_CONNECTION_SSL: "false"
             REDIS_CONNECTION_TYPE: '{{ application_parameters.source_variables.REDIS_CONNECTION_TYPE | default(undef(hint=''Configure SDKU REDIS_CONNECTION_TYPE''), true) }}'
-            REDIS_KEYSTORE_LOCATION: /opt/application/pki/keystore.p12
             REDIS_METADATA_TOPIC: '{{ application_parameters.source_variables.REDIS_METADATA_TOPIC | default(undef(hint=''Configure SDKU REDIS_METADATA_TOPIC''), true) }}'
             REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
-            REDIS_TRUSTSTORE_LOCATION: /opt/application/pki/truststore.p12
             SEARCH_ITEMS_LIMIT: "200"
             SERVER_ALLOWED_ORIGINS: '*'
             SPRING_APPLICATION_NAME: data-manager
@@ -52213,7 +52191,7 @@ platform_application_definition:
 {{ application_runtime | platform.core.application_agent_config }}
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/data-manager/1.0.0/roles/application_data-manager/templates/compose.yml.j2","mode":420,"size":2396,"sha256":"aa731f5d5ff43c9fbc82e245871e94971b353d9dbdb1d038b4822ada0a8e23b4","index":0,"count":1,"encoding":"utf-8","payloadBytes":2396}
+@@PORTABLE {"path":"examples/sdku/application-packages/data-manager/1.0.0/roles/application_data-manager/templates/compose.yml.j2","mode":420,"size":2044,"sha256":"253f9f724c4f91c0ef626b31d6710bcf54d1e0113cf08949cd9a93bf6f4b8bef","index":0,"count":1,"encoding":"utf-8","payloadBytes":2044}
 services:
   {{ application_instance_id }}:
     extends:
@@ -52236,8 +52214,6 @@ services:
 {% endif %}
 {% endfor %}
       "WEB_SERVER_PORT": {{ (application_effective.ports['port-1'].container | string) | to_json }}
-{% set targets = application_runtime.connections['postgres'].targets %}
-      "DB_CONNECTION_STRING": "jdbc:postgresql://{{ targets[0].address }}:{{ targets[0].port }}/{{ application_effective.parameters.database_name | default(undef(hint='Configure database_name'), true) }}?ssl=true&sslmode=verify-full&sslrootcert=/opt/application/pki/ca-chain.pem"
     labels:
       "platform.installer.project": {{ application_project_id | to_json }}
       "platform.installer.library": {{ library_runtime.library_id | to_json }}
@@ -52282,7 +52258,7 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/ef-backend/1.0.0/roles/application_ef-backend/defaults/main.yml","mode":420,"size":3377,"sha256":"2b5bfb061f74ccd234b2b01810ddefa81723b8c93664f2b6660bbb7ea83ebc93","index":0,"count":1,"encoding":"utf-8","payloadBytes":3377}
+@@PORTABLE {"path":"examples/sdku/application-packages/ef-backend/1.0.0/roles/application_ef-backend/defaults/main.yml","mode":420,"size":3563,"sha256":"10366f44b75eee1a41f205648cf72b272077920a36ffa28644a41c4f7d8a96aa","index":0,"count":1,"encoding":"utf-8","payloadBytes":3563}
 platform_application_definition:
     connections:
         kafka:
@@ -52304,6 +52280,7 @@ platform_application_definition:
             - -jar
             - ef-backend.jar
         environment:
+            DB_CONNECTION_STRING: "$${POSTGRES_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${POSTGRES_SSL_OPTIONS}"
             DB_CONNECTION_SSL: "true"
             JAVA_OPTS: -Xmx4096m
             NETWORK_TIMEOUT_MS: 10000
@@ -52379,7 +52356,7 @@ platform_application_definition:
 {{ application_runtime | platform.core.application_agent_config }}
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/ef-backend/1.0.0/roles/application_ef-backend/templates/compose.yml.j2","mode":420,"size":2517,"sha256":"8abfc1dc6c16f7b9ebb82e58448688fece2bc10846af79dde721843871db2f66","index":0,"count":1,"encoding":"utf-8","payloadBytes":2517}
+@@PORTABLE {"path":"examples/sdku/application-packages/ef-backend/1.0.0/roles/application_ef-backend/templates/compose.yml.j2","mode":420,"size":2165,"sha256":"5ff08ce0950f2d4b018198063c4d106dc0700e7709d52584b02211c3985c6636","index":0,"count":1,"encoding":"utf-8","payloadBytes":2165}
 services:
   {{ application_instance_id }}:
     extends:
@@ -52403,8 +52380,6 @@ services:
 {% endfor %}
       "server.port": {{ (application_effective.ports['port-1'].container | string) | to_json }}
       "WEB_SERVER_PORT": {{ (application_effective.ports['port-1'].container | string) | to_json }}
-{% set targets = application_runtime.connections['postgres'].targets %}
-      "DB_CONNECTION_STRING": "jdbc:postgresql://{{ targets[0].address }}:{{ targets[0].port }}/{{ application_effective.parameters.database_name | default(undef(hint='Configure database_name'), true) }}?ssl=true&sslmode=verify-full&sslrootcert=/opt/application/pki/ca-chain.pem"
     labels:
       "platform.installer.project": {{ application_project_id | to_json }}
       "platform.installer.library": {{ library_runtime.library_id | to_json }}
@@ -52449,9 +52424,12 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/evo-manager/1.0.0/roles/application_evo-manager/defaults/main.yml","mode":420,"size":5861,"sha256":"98cea7f1f469892c1327ce1833cde5054737703c0a32332caead1de0faa4640d","index":0,"count":1,"encoding":"utf-8","payloadBytes":5861}
+@@PORTABLE {"path":"examples/sdku/application-packages/evo-manager/1.0.0/roles/application_evo-manager/defaults/main.yml","mode":420,"size":5436,"sha256":"98989b853a65db704949ff0344c514ff922155c992e74ba3cc4bfe15cffc5328","index":0,"count":1,"encoding":"utf-8","payloadBytes":5436}
 platform_application_definition:
     connections:
+        clickhouse:
+            library_binding: analytics
+            protocol: https
         kafka:
             library_binding: messaging
             protocol: tcp
@@ -52468,6 +52446,7 @@ platform_application_definition:
             - -jar
             - evo-manager.jar
         environment:
+            TN_SCADA_DATASOURCE_URL: "$${CLICKHOUSE_HTTP_ENDPOINT}?$${CLICKHOUSE_SSL_OPTIONS}"
             ALARM_SERVICE_API_TYPE: mock
             DATA_MANAGER_ROOT_URL: '{{ application_parameters.source_variables.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
             EVO_MANAGER_HISTORY_SERVICE_MOCK: true
@@ -52475,21 +52454,14 @@ platform_application_definition:
             EVO_MANAGER_MAIN_CLASS: tnt.tnscada.Imitator
             EVO_MANAGER_SOURCE_PATH: /usr/local/app/imitator/src/main/java
             EVO_SERVICES_CONSENSUS_SERVICE_MOCK: true
-            KAFKA_ENABLE_SSL: "false"
-            KAFKA_KEYSTORE_LOCATION: /opt/application/pki/keystore.p12
-            KAFKA_TRUSTSTORE_LOCATION: /opt/application/pki/truststore.p12
             LOGGER_OUTPUT_PATTERN_CONFIG: '''%d{ISO8601} [%X{requestId}] [%-15.15t] %highlight(%-5level) %yellow(%30.30C{1}) %msg%n%throwable'''
             LOGGER_ROOT_LEVEL: INFO
             PRESSURES_CSV: /usr/local/app/imitator/data/pressures.csv
-            REDIS_ENABLE_SSL: "false"
-            REDIS_KEYSTORE_LOCATION: /opt/application/pki/keystore.p12
             REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
-            REDIS_TRUSTSTORE_LOCATION: /opt/application/pki/truststore.p12
             SPRING_KAFKA_APPLICATION_ID: evo-manager-{{ application_instance_id }}
             SPRING_KAFKA_LISTENER_GROUP_ID: evo-manager-{{ application_instance_id }}
             SPRING_MAIN_WEB_APPLICATION_TYPE: NONE
             TN_SCADA_DATA_MANAGER_URL_ROOT: '{{ application_parameters.source_variables.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
-            TN_SCADA_DATASOURCE_URL: '{{ application_parameters.source_variables.CLICKHOUSE_SSL_URL | default(undef(hint=''Configure SDKU CLICKHOUSE_SSL_URL''), true) }}:8443?ssl=true&sslmode=strict'
             TN_SCADA_METADATA_LOAD_PROJECTS: TNSVHYDRO
             TN_SCADA_METADATA_TARGET_PROJECT: TNSVHYDRO
             TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
@@ -52500,7 +52472,6 @@ platform_application_definition:
                 mount-1: ""
                 mount-2: ""
             source_variables:
-                CLICKHOUSE_SSL_URL: ""
                 DATA_MANAGER_URL_ROOT: ""
                 REDIS_SENTINEL_MASTER: ""
         ports: {}
@@ -52640,7 +52611,7 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/evo-scheduler/1.0.0/roles/application_evo-scheduler/defaults/main.yml","mode":420,"size":4047,"sha256":"252b76414f78e4a6ab5243fca5d27831a9ad684648e4e6d1a1997625d5f1dec4","index":0,"count":1,"encoding":"utf-8","payloadBytes":4047}
+@@PORTABLE {"path":"examples/sdku/application-packages/evo-scheduler/1.0.0/roles/application_evo-scheduler/defaults/main.yml","mode":420,"size":4233,"sha256":"8a8d58bc609e4f5a0ff0d254a3e7dc84e4eebcb42080750865372acebdd73d47","index":0,"count":1,"encoding":"utf-8","payloadBytes":4233}
 platform_application_definition:
     connections:
         kafka:
@@ -52661,6 +52632,7 @@ platform_application_definition:
             - -jar
             - evo-scheduler.jar
         environment:
+            DB_CONNECTION_STRING: "$${POSTGRES_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${POSTGRES_SSL_OPTIONS}"
             ALARM_VIEW_SERVICE_ROOT_URL: '{{ application_parameters.source_variables.ALARM_VIEW_SERVICE_URL | default(undef(hint=''Configure SDKU ALARM_VIEW_SERVICE_URL''), true) }}'
             DATA_MANAGER_CERTIFICATE_VALIDATION: false
             DATA_MANAGER_DTO_PORTION_SIZE: 300
@@ -52743,7 +52715,7 @@ platform_application_definition:
 {{ application_runtime | platform.core.application_agent_config }}
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/evo-scheduler/1.0.0/roles/application_evo-scheduler/templates/compose.yml.j2","mode":420,"size":2167,"sha256":"939d2ffc3683f65cb3fa9d2b64e392aa156c7084cbdcc830c805d8e65b854243","index":0,"count":1,"encoding":"utf-8","payloadBytes":2167}
+@@PORTABLE {"path":"examples/sdku/application-packages/evo-scheduler/1.0.0/roles/application_evo-scheduler/templates/compose.yml.j2","mode":420,"size":1815,"sha256":"b56f6fe4196772c84a598a166c82fb1d890350da3e814811a7e690fac591d684","index":0,"count":1,"encoding":"utf-8","payloadBytes":1815}
 services:
   {{ application_instance_id }}:
     extends:
@@ -52766,8 +52738,6 @@ services:
 {% endif %}
 {% endfor %}
       "WEB_SERVER_PORT": {{ (application_effective.ports['port-1'].container | string) | to_json }}
-{% set targets = application_runtime.connections['postgres'].targets %}
-      "DB_CONNECTION_STRING": "jdbc:postgresql://{{ targets[0].address }}:{{ targets[0].port }}/{{ application_effective.parameters.database_name | default(undef(hint='Configure database_name'), true) }}?ssl=true&sslmode=verify-full&sslrootcert=/opt/application/pki/ca-chain.pem"
     labels:
       "platform.installer.project": {{ application_project_id | to_json }}
       "platform.installer.library": {{ library_runtime.library_id | to_json }}
@@ -52805,7 +52775,7 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/ham-backend/1.0.0/roles/application_ham-backend/defaults/main.yml","mode":420,"size":6623,"sha256":"efe85ca470dc03ee3d02cb4ec913cde878a882e1ca4d0197490f52fae1ebf9e5","index":0,"count":1,"encoding":"utf-8","payloadBytes":6623}
+@@PORTABLE {"path":"examples/sdku/application-packages/ham-backend/1.0.0/roles/application_ham-backend/defaults/main.yml","mode":420,"size":6715,"sha256":"37c2aba34fd4c772b5b54d382b0557078af5b51bb7122ff37b865eb72e635113","index":0,"count":1,"encoding":"utf-8","payloadBytes":6715}
 platform_application_definition:
     connections:
         clickhouse:
@@ -52824,6 +52794,7 @@ platform_application_definition:
         command:
             - '{{ sdku_start_commands[''ham-backend''] | mandatory }}'
         environment:
+            DB_CONNECTION_STRING: "$${CLICKHOUSE_HTTP_ENDPOINT}?$${CLICKHOUSE_SSL_OPTIONS}"
             ALARM_TOPIC: '{{ application_parameters.source_variables.ALARM_TOPIC_COMPACT | default(undef(hint=''Configure SDKU ALARM_TOPIC_COMPACT''), true) }}'
             ALARMSERVICE_URL_ROOT: '{{ application_parameters.source_variables.ALARM_SERVICE_URL | default(undef(hint=''Configure SDKU ALARM_SERVICE_URL''), true) }}'
             CSPA_TOPIC_ROUTE_ROOT: '{{ application_parameters.source_variables.MAIN_TOPIC | default(undef(hint=''Configure SDKU MAIN_TOPIC''), true) }}'
@@ -52929,7 +52900,7 @@ platform_application_definition:
 {{ application_runtime | platform.core.application_agent_config }}
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/ham-backend/1.0.0/roles/application_ham-backend/templates/compose.yml.j2","mode":420,"size":2305,"sha256":"4d7a811bca127ba1afc4930eb4f9e0185f77b5dcd7b1e98dd738e5b545597470","index":0,"count":1,"encoding":"utf-8","payloadBytes":2305}
+@@PORTABLE {"path":"examples/sdku/application-packages/ham-backend/1.0.0/roles/application_ham-backend/templates/compose.yml.j2","mode":420,"size":2120,"sha256":"8acf5f0e295dc553a72038766a010b722d3516deccb0b39fc8f88ca39edfb77b","index":0,"count":1,"encoding":"utf-8","payloadBytes":2120}
 services:
   {{ application_instance_id }}:
     extends:
@@ -52952,8 +52923,6 @@ services:
 {% endfor %}
       "server.port": {{ (application_effective.ports['port-1'].container | string) | to_json }}
       "WEB_SERVER_PORT": {{ (application_effective.ports['port-1'].container | string) | to_json }}
-{% set targets = application_runtime.connections['clickhouse'].targets %}
-      "DB_CONNECTION_STRING": "https://{{ targets[0].address }}:{{ targets[0].port }}?ssl=true&sslmode=strict"
     labels:
       "platform.installer.project": {{ application_project_id | to_json }}
       "platform.installer.library": {{ library_runtime.library_id | to_json }}
@@ -52998,7 +52967,7 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/hmi-backend/1.0.0/roles/application_hmi-backend/defaults/main.yml","mode":420,"size":6555,"sha256":"a22960072842c3418c756bcfa67917aafd119fde33c8cf2ba967646891e8317e","index":0,"count":1,"encoding":"utf-8","payloadBytes":6555}
+@@PORTABLE {"path":"examples/sdku/application-packages/hmi-backend/1.0.0/roles/application_hmi-backend/defaults/main.yml","mode":420,"size":7102,"sha256":"393cc29b1e111ffecd32e63305c42976682a61ae712f41187b61db35a8c9f87d","index":0,"count":1,"encoding":"utf-8","payloadBytes":7102}
 platform_application_definition:
     connections:
         clickhouse:
@@ -53021,31 +52990,33 @@ platform_application_definition:
             - -jar
             - hmi-backend.jar
         environment:
+            DB_CONNECTION_STRING: "$${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0"
             ALARM_TOPIC: '{{ application_parameters.source_variables.ALARM_TOPIC_COMPACT | default(undef(hint=''Configure SDKU ALARM_TOPIC_COMPACT''), true) }}'
-            ALARMSERVICE_URL_ROOT: '{{ application_parameters.source_variables.ALARM_SERVICE_URL | default(undef(hint=''Configure SDKU ALARM_SERVICE_URL''), true) }}'
-            CSPA_TOPIC_ROUTE_ROOT: '{{ application_parameters.source_variables.MAIN_TOPIC | default(undef(hint=''Configure SDKU MAIN_TOPIC''), true) }}'
-            CSPA_TOPICS: '{{ application_parameters.source_variables.MAIN_TOPIC | default(undef(hint=''Configure SDKU MAIN_TOPIC''), true) }}'
+            ALARMSERVICE_URL_ROOT: '{{ application_parameters.source_variables.ALARM_SERVICE_URL | default("", true) }}'
+            CSPA_TOPIC_ROUTE_ROOT: '{{ application_parameters.source_variables.MAIN_TOPIC_BASE | default(undef(hint=''Configure SDKU MAIN_TOPIC_BASE''), true) }}'
+            CSPA_TOPICS: '{{ application_parameters.source_variables.MAIN_TOPIC_BASE | default(undef(hint=''Configure SDKU MAIN_TOPIC_BASE''), true) }}'
             DATAMANAGER_ROOT_URL: '{{ application_parameters.source_variables.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
             DB_TYPE: clickhouse
-            EVO_MANAGER_HOT_TOPICS: '{{ application_parameters.source_variables.MAIN_TOPIC | default(undef(hint=''Configure SDKU MAIN_TOPIC''), true) }}'
-            GAAUDIT_URL_ROOT: '{{ application_parameters.source_variables.GRANT_ACCESS_AUDIT_URL | default(undef(hint=''Configure SDKU GRANT_ACCESS_AUDIT_URL''), true) }}'
+            EVO_MANAGER_HOT_TOPICS: '{{ application_parameters.source_variables.MAIN_TOPIC_BASE | default(undef(hint=''Configure SDKU MAIN_TOPIC_BASE''), true) }}'
+            GAAUDIT_URL_ROOT: '{{ application_parameters.source_variables.GRANT_ACCESS_AUDIT_URL | default("", true) }}'
+            MAIN_TOPIC: '{{ application_parameters.source_variables.MAIN_TOPIC }}'
             JAVA_OPTS: -Xmx4048m
             SERVER_ALLOWED_ORIGINS: '*'
             TN_SCADA_DATA_MANAGER_URL_ROOT: '{{ application_parameters.source_variables.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
             TN_SCADA_METADATA_TARGET_PROJECT: TNSV
             TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
             USER_ACTION_TAGNAME: _MaskCauseList.Description
-            evo-manager.alarm-subscription.topic: '{{ application_parameters.source_variables.ALARM_TOPIC_CAMPACT | default(undef(hint=''Configure SDKU ALARM_TOPIC_CAMPACT''), true) }}'
+            evo-manager.alarm-subscription.topic: '{{ application_parameters.source_variables.ALARM_TOPIC_COMPACT }}'
             logging.charset.console: UTF-8
             management.endpoint.health.show-details: always
             server.max-http-request-header-size: 1MB
             tn-scada.alarm.topic: '{{ application_parameters.source_variables.ALARM_TOPIC_COMPACT | default(undef(hint=''Configure SDKU ALARM_TOPIC_COMPACT''), true) }}'
             tn-scada.cspa.topic-route.root.descentRule: rcv
             tn-scada.cspa.topic-route.root.project.TNSV.root.descentRule: rcv
-            tn-scada.cspa.topic-route.root.project.TNSV.root.topic: '{{ application_parameters.source_variables.MAIN_TOPIC | default(undef(hint=''Configure SDKU MAIN_TOPIC''), true) }}'
+            tn-scada.cspa.topic-route.root.project.TNSV.root.topic: '{{ application_parameters.source_variables.MAIN_TOPIC_BASE | default(undef(hint=''Configure SDKU MAIN_TOPIC_BASE''), true) }}'
             tn-scada.cspa.topic-route.root.project.TNSVHYDRO.root.descentRule: rcv
-            tn-scada.cspa.topic-route.root.project.TNSVHYDRO.root.topic: '{{ application_parameters.source_variables.MAIN_TOPIC | default(undef(hint=''Configure SDKU MAIN_TOPIC''), true) }}'
-            tn-scada.cspa.topic-route.root.topic: '{{ application_parameters.source_variables.MAIN_TOPIC | default(undef(hint=''Configure SDKU MAIN_TOPIC''), true) }}'
+            tn-scada.cspa.topic-route.root.project.TNSVHYDRO.root.topic: '{{ application_parameters.source_variables.MAIN_TOPIC_BASE | default(undef(hint=''Configure SDKU MAIN_TOPIC_BASE''), true) }}'
+            tn-scada.cspa.topic-route.root.topic: '{{ application_parameters.source_variables.MAIN_TOPIC_BASE | default(undef(hint=''Configure SDKU MAIN_TOPIC_BASE''), true) }}'
             tn-scada.data-manager.url: '{{ application_parameters.source_variables.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
             tn-scada.metadata.dontShowTargetProjectInNames: false
             tn-scada.metadata.load-projects: TNSV,TNSVHYDRO
@@ -53053,11 +53024,11 @@ platform_application_definition:
         parameters:
             source_variables:
                 ALARM_SERVICE_URL: ""
-                ALARM_TOPIC_CAMPACT: ""
-                ALARM_TOPIC_COMPACT: sdku-alarms-compact
-                DATA_MANAGER_URL_ROOT: ""
+                ALARM_TOPIC_COMPACT: alarms-main-compact
+                DATA_MANAGER_URL_ROOT: "{{ 'https://data-manager-' ~ library_instance_id ~ '.' ~ platform_desired_state.endpointGroups[platform_desired_state.applicationLibraryDeployments[library_instance_id].applications['data-manager'].overrides.endpoint.endpoint_group].address.domain }}"
                 GRANT_ACCESS_AUDIT_URL: ""
-                MAIN_TOPIC: sdku-main
+                MAIN_TOPIC: sdku-main-compact
+                MAIN_TOPIC_BASE: sdku-main
                 REDIS_SENTINEL_MASTER: ""
         ports:
             port-1:
@@ -53112,6 +53083,8 @@ platform_application_definition:
             retries: 30
         restart: always
         user: 1000:1000
+        topicBindings:
+            kafka: [sdku-main, sdku-main-compact, alarms-main, alarms-main-compact]
     identity_environment:
         - EVO_MANAGER_APP_ID
         - KAFKA_APPLICATION_ID_CONFIG
@@ -53124,7 +53097,7 @@ platform_application_definition:
 {{ application_runtime | platform.core.application_agent_config }}
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/hmi-backend/1.0.0/roles/application_hmi-backend/templates/compose.yml.j2","mode":420,"size":2340,"sha256":"3ec1e796aafd756309efe90773d3d4f016f663e1af7b959d068dc9d6fe63948d","index":0,"count":1,"encoding":"utf-8","payloadBytes":2340}
+@@PORTABLE {"path":"examples/sdku/application-packages/hmi-backend/1.0.0/roles/application_hmi-backend/templates/compose.yml.j2","mode":420,"size":2155,"sha256":"20ac8dacc7e302972e39f6d2913d3ca195cfa31c4af2b737a4e15515b0ccadcf","index":0,"count":1,"encoding":"utf-8","payloadBytes":2155}
 services:
   {{ application_instance_id }}:
     extends:
@@ -53148,8 +53121,6 @@ services:
 {% endfor %}
       "server.port": {{ (application_effective.ports['port-1'].container | string) | to_json }}
       "WEB_SERVER_PORT": {{ (application_effective.ports['port-1'].container | string) | to_json }}
-{% set targets = application_runtime.connections['clickhouse'].targets %}
-      "DB_CONNECTION_STRING": "https://{{ targets[0].address }}:{{ targets[0].port }}?ssl=true&sslmode=strict"
     labels:
       "platform.installer.project": {{ application_project_id | to_json }}
       "platform.installer.library": {{ library_runtime.library_id | to_json }}
@@ -53908,7 +53879,7 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/kafka-ch-replicator/1.0.0/roles/application_kafka-ch-replicator/defaults/main.yml","mode":420,"size":3361,"sha256":"79f0ce1493fb68a1b03a59a4d3b48b41b69efc145875004dbf8edfbcf572c263","index":0,"count":1,"encoding":"utf-8","payloadBytes":3361}
+@@PORTABLE {"path":"examples/sdku/application-packages/kafka-ch-replicator/1.0.0/roles/application_kafka-ch-replicator/defaults/main.yml","mode":420,"size":3453,"sha256":"98090fb706bd7b8b65b23993206ea15250fa701f63b09cda30d0eb98f511cf40","index":0,"count":1,"encoding":"utf-8","payloadBytes":3453}
 platform_application_definition:
     connections:
         clickhouse:
@@ -53929,6 +53900,7 @@ platform_application_definition:
             - -jar
             - kafka-ch-replicatior.jar
         environment:
+            DB_CONNECTION_STRING: "$${CLICKHOUSE_HTTP_ENDPOINT}?$${CLICKHOUSE_SSL_OPTIONS}"
             ALARMS_TOPIC: '{{ application_parameters.source_variables.ALARM_TOPIC | default(undef(hint=''Configure SDKU ALARM_TOPIC''), true) }}'
             JAVA_OPTS: -Xmx1024m
             TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
@@ -54002,7 +53974,7 @@ platform_application_definition:
 {{ application_runtime | platform.core.application_agent_config }}
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/kafka-ch-replicator/1.0.0/roles/application_kafka-ch-replicator/templates/compose.yml.j2","mode":420,"size":2209,"sha256":"1f07cdbfda72e2b74fe30bbfccdd90ec4f8d3554e0f32de9557f2c6f3fecd6d9","index":0,"count":1,"encoding":"utf-8","payloadBytes":2209}
+@@PORTABLE {"path":"examples/sdku/application-packages/kafka-ch-replicator/1.0.0/roles/application_kafka-ch-replicator/templates/compose.yml.j2","mode":420,"size":2024,"sha256":"57d75fbd6dd11e3262fe70115247b827822ca3462a7869d07e844803e69d4be1","index":0,"count":1,"encoding":"utf-8","payloadBytes":2024}
 services:
   {{ application_instance_id }}:
     extends:
@@ -54025,8 +53997,6 @@ services:
 {% endif %}
 {% endfor %}
       "WEB_SERVER_PORT": {{ (application_effective.ports['port-1'].container | string) | to_json }}
-{% set targets = application_runtime.connections['clickhouse'].targets %}
-      "DB_CONNECTION_STRING": "https://{{ targets[0].address }}:{{ targets[0].port }}?ssl=true&sslmode=strict"
     labels:
       "platform.installer.project": {{ application_project_id | to_json }}
       "platform.installer.library": {{ library_runtime.library_id | to_json }}
@@ -54070,7 +54040,7 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/kafka-history-writer/1.0.0/roles/application_kafka-history-writer/defaults/main.yml","mode":420,"size":3496,"sha256":"dcda1ad8408902a39665da6d16bf6abf75f27922b1dac471bc7294effe1b058c","index":0,"count":1,"encoding":"utf-8","payloadBytes":3496}
+@@PORTABLE {"path":"examples/sdku/application-packages/kafka-history-writer/1.0.0/roles/application_kafka-history-writer/defaults/main.yml","mode":420,"size":3588,"sha256":"6dda134d6ff3028c541d45fe5010dc9580d21c19e8d2ec8472238108d3ba3cb8","index":0,"count":1,"encoding":"utf-8","payloadBytes":3588}
 platform_application_definition:
     connections:
         clickhouse:
@@ -54091,6 +54061,7 @@ platform_application_definition:
             - -jar
             - kafka-history-writer.jar
         environment:
+            DB_CONNECTION_STRING: "$${CLICKHOUSE_HTTP_ENDPOINT}?$${CLICKHOUSE_SSL_OPTIONS}"
             KAFKA_CONSUMER_GROUP_ID: kafka-history-writer
             LOGGER_LEVEL: INFO
             SPRING_KAFKA_APPLICATION_ID: kafka-history-writer
@@ -54166,7 +54137,7 @@ platform_application_definition:
 {{ application_runtime | platform.core.application_agent_config }}
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/kafka-history-writer/1.0.0/roles/application_kafka-history-writer/templates/compose.yml.j2","mode":420,"size":1999,"sha256":"a1aaa27222eeb04e876babc2c24a8dcb1dab7e204608ed9096a76676d52fa90c","index":0,"count":1,"encoding":"utf-8","payloadBytes":1999}
+@@PORTABLE {"path":"examples/sdku/application-packages/kafka-history-writer/1.0.0/roles/application_kafka-history-writer/templates/compose.yml.j2","mode":420,"size":1814,"sha256":"57a9e7c77e554d7ce9eecb21c8cc740ecd18b163a23735be2fabea0d2fed995d","index":0,"count":1,"encoding":"utf-8","payloadBytes":1814}
 services:
   {{ application_instance_id }}:
     extends:
@@ -54189,8 +54160,6 @@ services:
 {% endif %}
 {% endfor %}
       "WEB_SERVER_PORT": {{ (application_effective.ports['port-1'].container | string) | to_json }}
-{% set targets = application_runtime.connections['clickhouse'].targets %}
-      "DB_CONNECTION_STRING": "https://{{ targets[0].address }}:{{ targets[0].port }}?ssl=true&sslmode=strict"
     labels:
       "platform.installer.project": {{ application_project_id | to_json }}
       "platform.installer.library": {{ library_runtime.library_id | to_json }}
@@ -54228,7 +54197,7 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/opc-ua-server/1.0.0/roles/application_opc-ua-server/defaults/main.yml","mode":420,"size":6130,"sha256":"a148391422bf7d4d86519c7054da12d9e267ff59cb964acb563d4361d265a667","index":0,"count":1,"encoding":"utf-8","payloadBytes":6130}
+@@PORTABLE {"path":"examples/sdku/application-packages/opc-ua-server/1.0.0/roles/application_opc-ua-server/defaults/main.yml","mode":420,"size":5856,"sha256":"6617cc30d8c8deece198f0ad3a1cb8aae422166ad21ec338e160de1a823a20c5","index":0,"count":1,"encoding":"utf-8","payloadBytes":5856}
 platform_application_definition:
     connections:
         clickhouse:
@@ -54253,19 +54222,14 @@ platform_application_definition:
             - --spring.config.additional-location=/usr/local/config/opcua.yml
             - -Djavax.net.ssl.trustStore=/usr/local/certs/TN-SCADA OPC UA Server [61511528719CFF008A751C1D9F8165129F07C977].der
         environment:
+            DB_CONNECTION_STRING: "$${CLICKHOUSE_HTTP_ENDPOINT}?$${CLICKHOUSE_SSL_OPTIONS}"
             DB_TYPE: clickhouse
-            KAFKA_ENABLE_SSL: "true"
-            KAFKA_KEYSTORE_LOCATION: /opt/application/pki/keystore.p12
-            KAFKA_TRUSTSTORE_LOCATION: /opt/application/pki/truststore.p12
             LOGGER_ROOT_LEVEL: WARN
             OPCUA_APP_TYPE: server
             OPCUA_CONFIG: /usr/local/config/opcua.yml
             OPCUA_VIEW: EVO_VIEW
             OPCUA_VIEW_SOURCE: csv
-            REDIS_ENABLE_SSL: "true"
-            REDIS_KEYSTORE_LOCATION: /opt/application/pki/keystore.p12
             REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
-            REDIS_TRUSTSTORE_LOCATION: /opt/application/pki/truststore.p12
             REDU_DISABLE: "true"
             REDU_GROUP_ID: opcua-server
             REDU_MANAGER_ID: 1
@@ -54379,7 +54343,7 @@ platform_application_definition:
 {{ application_runtime | platform.core.application_agent_config }}
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/opc-ua-server/1.0.0/roles/application_opc-ua-server/templates/compose.yml.j2","mode":420,"size":2542,"sha256":"d5e94373458a3ffcf093366e65648723f0f2466879a009e7d06516c49ee1b66d","index":0,"count":1,"encoding":"utf-8","payloadBytes":2542}
+@@PORTABLE {"path":"examples/sdku/application-packages/opc-ua-server/1.0.0/roles/application_opc-ua-server/templates/compose.yml.j2","mode":420,"size":2357,"sha256":"cabaf9267b85553b44ca54dcd21165d83a0cb5a173345b37c740558024137565","index":0,"count":1,"encoding":"utf-8","payloadBytes":2357}
 services:
   {{ application_instance_id }}:
     extends:
@@ -54401,8 +54365,6 @@ services:
 {% endif %}
 {% endfor %}
       "WEB_SERVER_PORT": {{ (application_effective.ports['port-1'].container | string) | to_json }}
-{% set targets = application_runtime.connections['clickhouse'].targets %}
-      "DB_CONNECTION_STRING": "https://{{ targets[0].address }}:{{ targets[0].port }}?ssl=true&sslmode=strict"
     labels:
       "platform.installer.project": {{ application_project_id | to_json }}
       "platform.installer.library": {{ library_runtime.library_id | to_json }}
@@ -54523,9 +54485,12 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/sdku-knp/1.0.0/roles/application_sdku-knp/defaults/main.yml","mode":420,"size":6334,"sha256":"4a039cfc931a8c20418b4a8c4d44fc01c860da00c2f76f7692003e05f55ca994","index":0,"count":1,"encoding":"utf-8","payloadBytes":6334}
+@@PORTABLE {"path":"examples/sdku/application-packages/sdku-knp/1.0.0/roles/application_sdku-knp/defaults/main.yml","mode":420,"size":6276,"sha256":"c0c87d8bfddbca6f4e8fa13f4754b076500f46c35529d763722e9cf0fde43ab3","index":0,"count":1,"encoding":"utf-8","payloadBytes":6276}
 platform_application_definition:
     connections:
+        clickhouse:
+            library_binding: analytics
+            protocol: https
         kafka:
             library_binding: messaging
             protocol: tcp
@@ -54539,6 +54504,7 @@ platform_application_definition:
         command:
             - '{{ sdku_start_commands[''sdku-knp''] | mandatory }}'
         environment:
+            TN_SCADA_DATASOURCE_URL: "$${CLICKHOUSE_HTTP_ENDPOINT}?$${CLICKHOUSE_SSL_OPTIONS}"
             ALARM_SERVICE_API_ROOT_URI: '{{ application_parameters.source_variables.ALARM_SERVICE_URL | default(undef(hint=''Configure SDKU ALARM_SERVICE_URL''), true) }}'
             ALARM_SERVICE_API_SERVER_PATH: /generate-alarm
             ALARM_SERVICE_API_TYPE: buffered
@@ -54558,7 +54524,6 @@ platform_application_definition:
             HISTORY_CONNECTION_SSL: "true"
             TN_SCADA_DATA_MANAGER_URL: '{{ application_parameters.source_variables.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
             TN_SCADA_DATA_MANAGER_URL_ROOT: '{{ application_parameters.source_variables.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
-            TN_SCADA_DATASOURCE_URL: '{{ application_parameters.source_variables.CLICKHOUSE_SSL_URL | default(undef(hint=''Configure SDKU CLICKHOUSE_SSL_URL''), true) }}:8443?ssl=true&sslmode=strict"'
             TN_SCADA_METADATA_TERGET_PROJECT: TNSV
             TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
             TN_SCADA_USER_PREFERENCES_URL_ROOT: '{{ application_parameters.source_variables.USER_PREFERENCES_URL_ROOT | default(undef(hint=''Configure SDKU USER_PREFERENCES_URL_ROOT''), true) }}'
@@ -54571,7 +54536,6 @@ platform_application_definition:
             source_variables:
                 ALARM_SERVICE_URL: ""
                 ALARM_TOPIC_COMPACT: sdku-alarms-compact
-                CLICKHOUSE_SSL_URL: ""
                 DATA_MANAGER_URL_ROOT: ""
                 OTHER_SERVER_ID_1: ""
                 REDIS_SENTINEL_MASTER: ""
@@ -54703,9 +54667,12 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/sdku-status-calculation/1.0.0/roles/application_sdku-status-calculation/defaults/main.yml","mode":420,"size":4406,"sha256":"a5bf7998ceb36f23f3dd6361cfb70429bc6a8c2bb171d0f281e3248eb01c1dc3","index":0,"count":1,"encoding":"utf-8","payloadBytes":4406}
+@@PORTABLE {"path":"examples/sdku/application-packages/sdku-status-calculation/1.0.0/roles/application_sdku-status-calculation/defaults/main.yml","mode":420,"size":4349,"sha256":"7d4d16455a5b725f6504c231e2a4a931a1f41dfa3ec074e0cb57c1c37bc5ee40","index":0,"count":1,"encoding":"utf-8","payloadBytes":4349}
 platform_application_definition:
     connections:
+        clickhouse:
+            library_binding: analytics
+            protocol: https
         kafka:
             library_binding: messaging
             protocol: tcp
@@ -54721,6 +54688,7 @@ platform_application_definition:
             - -jar
             - sdku-status-calculation.jar
         environment:
+            TN_SCADA_DATASOURCE_URL: "$${CLICKHOUSE_HTTP_ENDPOINT}?$${CLICKHOUSE_SSL_OPTIONS}"
             ALARM_SERVICE_API_READ_TIMEOUT: 5000
             ALARM_SERVICE_API_ROOT_URI: '{{ application_parameters.source_variables.ALARM_SERVICE_URL | default(undef(hint=''Configure SDKU ALARM_SERVICE_URL''), true) }}'
             ALARM_SERVICE_API_SERVER_PATH: /generate-alarm
@@ -54728,7 +54696,6 @@ platform_application_definition:
             ALARM_TOPIC: '{{ application_parameters.source_variables.ALARM_TOPIC_COMPACT | default(undef(hint=''Configure SDKU ALARM_TOPIC_COMPACT''), true) }}'
             EVO_SERVICES_CONSENSUS_SERVICE_MOCK: true
             TN_SCADA_DATA_MANAGER_URL_ROOT: '{{ application_parameters.source_variables.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
-            TN_SCADA_DATASOURCE_URL: '{{ application_parameters.source_variables.CLICKHOUSE_SSL_URL | default(undef(hint=''Configure SDKU CLICKHOUSE_SSL_URL''), true) }}:8443?ssl=true&sslmode=strict'
             TN_SCADA_METADATA_TARGET_PROJECT: TNSV
             TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
             server.max-http-header-size: 10MB
@@ -54740,7 +54707,6 @@ platform_application_definition:
             source_variables:
                 ALARM_SERVICE_URL: ""
                 ALARM_TOPIC_COMPACT: sdku-alarms-compact
-                CLICKHOUSE_SSL_URL: ""
                 DATA_MANAGER_URL_ROOT: ""
                 REDIS_SENTINEL_MASTER: ""
         ports:
@@ -54872,9 +54838,12 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/sdku-tank-farm/1.0.0/roles/application_sdku-tank-farm/defaults/main.yml","mode":420,"size":5907,"sha256":"2d01d7a3c7ec07227bdc2527e09c9d245e1fb8059548df39dd3e2441f373f4c1","index":0,"count":1,"encoding":"utf-8","payloadBytes":5907}
+@@PORTABLE {"path":"examples/sdku/application-packages/sdku-tank-farm/1.0.0/roles/application_sdku-tank-farm/defaults/main.yml","mode":420,"size":5850,"sha256":"8377d23340d29a4538be5f9c5c0a24c9e406009668852f76e2de977463c9a8e4","index":0,"count":1,"encoding":"utf-8","payloadBytes":5850}
 platform_application_definition:
     connections:
+        clickhouse:
+            library_binding: analytics
+            protocol: https
         kafka:
             library_binding: messaging
             protocol: tcp
@@ -54890,6 +54859,7 @@ platform_application_definition:
             - -jar
             - sdku-tank-farm.jar
         environment:
+            TN_SCADA_DATASOURCE_URL: "$${CLICKHOUSE_HTTP_ENDPOINT}?$${CLICKHOUSE_SSL_OPTIONS}"
             ALARM_SERVICE_API_READ_TIMEOUT: 5000
             ALARM_SERVICE_API_ROOT_URI: '{{ application_parameters.source_variables.ALARM_SERVICE_URL | default(undef(hint=''Configure SDKU ALARM_SERVICE_URL''), true) }}'
             ALARM_SERVICE_API_SERVER_PATH: /generate-alarm
@@ -54908,7 +54878,6 @@ platform_application_definition:
             EVO_SERVICES_CONSENSUS_SERVICE_WORKLOAD: LOW
             TANK_CONFIG_PATH: /usr/local/app/config/tank_config.yaml
             TN_SCADA_DATA_MANAGER_URL_ROOT: '{{ application_parameters.source_variables.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
-            TN_SCADA_DATASOURCE_URL: '{{ application_parameters.source_variables.CLICKHOUSE_SSL_URL | default(undef(hint=''Configure SDKU CLICKHOUSE_SSL_URL''), true) }}:8443?ssl=true&sslmode=strict'
             TN_SCADA_METADATA_TARGET_PROJECT: TNSV
             TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
             TZ: Europe/Moscow
@@ -54921,7 +54890,6 @@ platform_application_definition:
             source_variables:
                 ALARM_SERVICE_URL: ""
                 ALARM_TOPIC_COMPACT: sdku-alarms-compact
-                CLICKHOUSE_SSL_URL: ""
                 DATA_MANAGER_URL_ROOT: ""
                 OTHER_SERVER_ID_1: ""
                 REDIS_SENTINEL_MASTER: ""
@@ -55053,9 +55021,12 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/sdku-telemechanics/1.0.0/roles/application_sdku-telemechanics/defaults/main.yml","mode":420,"size":5759,"sha256":"a01859ccdaef8db5bf13eb98cf056ffaf7812111d89095e34d22238a0be10978","index":0,"count":1,"encoding":"utf-8","payloadBytes":5759}
+@@PORTABLE {"path":"examples/sdku/application-packages/sdku-telemechanics/1.0.0/roles/application_sdku-telemechanics/defaults/main.yml","mode":420,"size":5702,"sha256":"7fecaf7595cb2a656607da6efb6a1f8b43e450e38e2a95e76d8596651b109ba8","index":0,"count":1,"encoding":"utf-8","payloadBytes":5702}
 platform_application_definition:
     connections:
+        clickhouse:
+            library_binding: analytics
+            protocol: https
         kafka:
             library_binding: messaging
             protocol: tcp
@@ -55071,6 +55042,7 @@ platform_application_definition:
             - -jar
             - sdku-telemechanics.jar
         environment:
+            TN_SCADA_DATASOURCE_URL: "$${CLICKHOUSE_HTTP_ENDPOINT}?$${CLICKHOUSE_SSL_OPTIONS}"
             ALARM_SERVICE_API_READ_TIMEOUT: 5000
             ALARM_SERVICE_API_ROOT_URI: '{{ application_parameters.source_variables.ALARM_SERVICE_URL | default(undef(hint=''Configure SDKU ALARM_SERVICE_URL''), true) }}'
             ALARM_SERVICE_API_SERVER_PATH: /generate-alarm
@@ -55090,7 +55062,6 @@ platform_application_definition:
             TELEMECHANICS_CONFIG_PATH: /usr/local/app/config/telemechanics_config.yaml
             TELEMECHANICS_LOGGER_LEVEL: DEBUG
             TN_SCADA_DATA_MANAGER_URL_ROOT: '{{ application_parameters.source_variables.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
-            TN_SCADA_DATASOURCE_URL: '{{ application_parameters.source_variables.CLICKHOUSE_SSL_URL | default(undef(hint=''Configure SDKU CLICKHOUSE_SSL_URL''), true) }}:8443?ssl=true&sslmode=strict'
             TN_SCADA_METADATA_TARGET_PROJECT: TNSV
             TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
             server.max-http-header-size: 10MB
@@ -55102,7 +55073,6 @@ platform_application_definition:
             source_variables:
                 ALARM_SERVICE_URL: ""
                 ALARM_TOPIC_COMPACT: sdku-alarms-compact
-                CLICKHOUSE_SSL_URL: ""
                 DATA_MANAGER_URL_ROOT: ""
                 OTHER_SERVER_ID_1: ""
                 REDIS_SENTINEL_MASTER: ""
@@ -55307,9 +55277,12 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/sdku-vtor/1.0.0/roles/application_sdku-vtor/defaults/main.yml","mode":420,"size":6117,"sha256":"ebc2f1b7de9927da6afd0d42e136cad14405e1ccefa69c05ec5c2ef7def6a115","index":0,"count":1,"encoding":"utf-8","payloadBytes":6117}
+@@PORTABLE {"path":"examples/sdku/application-packages/sdku-vtor/1.0.0/roles/application_sdku-vtor/defaults/main.yml","mode":420,"size":6060,"sha256":"4347831a6a3f07a9bde4f3af2edaf7f0a3d0a9bb88c83c88b90ad0f55494f14a","index":0,"count":1,"encoding":"utf-8","payloadBytes":6060}
 platform_application_definition:
     connections:
+        clickhouse:
+            library_binding: analytics
+            protocol: https
         kafka:
             library_binding: messaging
             protocol: tcp
@@ -55327,6 +55300,7 @@ platform_application_definition:
             - -jar
             - sdku-vtor.jar
         environment:
+            TN_SCADA_DATASOURCE_URL: "$${CLICKHOUSE_HTTP_ENDPOINT}?$${CLICKHOUSE_SSL_OPTIONS}"
             ALARM_SERVICE_API_READ_TIMEOUT: 5000
             ALARM_SERVICE_API_ROOT_URI: '{{ application_parameters.source_variables.ALARM_SERVICE_URL | default(undef(hint=''Configure SDKU ALARM_SERVICE_URL''), true) }}'
             ALARM_SERVICE_API_SERVER_PATH: /generate-alarm
@@ -55343,7 +55317,6 @@ platform_application_definition:
             EVO_SERVICES_CONSENSUS_SERVICE_TIMER_INTERVAL: 500
             EVO_SERVICES_CONSENSUS_SERVICE_WORKLOAD: LOW
             TN_SCADA_DATA_MANAGER_URL_ROOT: '{{ application_parameters.source_variables.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
-            TN_SCADA_DATASOURCE_URL: '{{ application_parameters.source_variables.CLICKHOUSE_SSL_URL | default(undef(hint=''Configure SDKU CLICKHOUSE_SSL_URL''), true) }}:8443?ssl=true&sslmode=strict'
             TN_SCADA_METADATA_TARGET_PROJECT: TNSV
             TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
             TN_SCADA_USER_PREFERENCES_URL_ROOT: '{{ application_parameters.source_variables.USER_PREFERENCES_URL_ROOT | default(undef(hint=''Configure SDKU USER_PREFERENCES_URL_ROOT''), true) }}'
@@ -55359,7 +55332,6 @@ platform_application_definition:
             source_variables:
                 ALARM_SERVICE_URL: ""
                 ALARM_TOPIC_COMPACT: sdku-alarms-compact
-                CLICKHOUSE_SSL_URL: ""
                 DATA_MANAGER_URL_ROOT: ""
                 OTHER_SERVER_ID_1: ""
                 REDIS_SENTINEL_MASTER: ""
@@ -55492,7 +55464,7 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/user-preferences/1.0.0/roles/application_user-preferences/defaults/main.yml","mode":420,"size":3179,"sha256":"5e8c915a3f0ac80562d438c9a00e35555f004558215ddf5c3cd1bb3a5331eb7e","index":0,"count":1,"encoding":"utf-8","payloadBytes":3179}
+@@PORTABLE {"path":"examples/sdku/application-packages/user-preferences/1.0.0/roles/application_user-preferences/defaults/main.yml","mode":420,"size":3365,"sha256":"1864b489ee113c278d3f9a5dca4e8d59d8220010916432fbc8a47f2f085d68d8","index":0,"count":1,"encoding":"utf-8","payloadBytes":3365}
 platform_application_definition:
     connections:
         kafka:
@@ -55515,6 +55487,7 @@ platform_application_definition:
             - -jar
             - user-preferences.jar
         environment:
+            DB_CONNECTION_STRING: "$${POSTGRES_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${POSTGRES_SSL_OPTIONS}"
             TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
             server.max-http-request-header-size: 100MB
         image: evoscada-docker.artifacts.tn.tngrp.ru/user-preferences:0.0.4-c707ead9-redos
@@ -55584,7 +55557,7 @@ platform_application_definition:
 {{ application_runtime | platform.core.application_agent_config }}
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/user-preferences/1.0.0/roles/application_user-preferences/templates/compose.yml.j2","mode":420,"size":2486,"sha256":"6fdf6ecd105762d7a34ef2af4bb6da8c04b051f8752f70dcd4170b7965f26db1","index":0,"count":1,"encoding":"utf-8","payloadBytes":2486}
+@@PORTABLE {"path":"examples/sdku/application-packages/user-preferences/1.0.0/roles/application_user-preferences/templates/compose.yml.j2","mode":420,"size":2134,"sha256":"c46eac8b7b7b7d8434b38144d6cf1ff7e458fda20e1bbf93da8cc24b12a6d070","index":0,"count":1,"encoding":"utf-8","payloadBytes":2134}
 services:
   {{ application_instance_id }}:
     extends:
@@ -55608,8 +55581,6 @@ services:
 {% endfor %}
       "server.port": {{ (application_effective.ports['port-1'].container | string) | to_json }}
       "WEB_SERVER_PORT": {{ (application_effective.ports['port-1'].container | string) | to_json }}
-{% set targets = application_runtime.connections['postgres'].targets %}
-      "DB_CONNECTION_STRING": "jdbc:postgresql://{{ targets[0].address }}:{{ targets[0].port }}/{{ application_effective.parameters.database_name | default(undef(hint='Configure database_name'), true) }}?ssl=true&sslmode=verify-full&sslrootcert=/opt/application/pki/ca-chain.pem"
     labels:
       "platform.installer.project": {{ application_project_id | to_json }}
       "platform.installer.library": {{ library_runtime.library_id | to_json }}
@@ -55684,59 +55655,59 @@ platform_application_libraries:
   sdku-main: {}
 
 @@END
-@@PORTABLE {"path":"examples/sdku/import-catalog.json","mode":420,"size":5579,"sha256":"027d421dd5571c35226b83675370e14923c1b4530d4ca4c4cdf0abbdb1053aab","index":0,"count":1,"encoding":"utf-8","payloadBytes":5579}
+@@PORTABLE {"path":"examples/sdku/import-catalog.json","mode":420,"size":5579,"sha256":"7d875497fc0574b207fa3d89ba1d9d21c7ba0c9c51b5fd20ed7132007b9484b3","index":0,"count":1,"encoding":"utf-8","payloadBytes":5579}
 [
   {
-    "digest": "sha256:7026e580ff5c2288bae5f015d0750c3643f5897fb6a32b19dcf3f707612c460d",
+    "digest": "sha256:3470717ec177df63a6d1a3b770b4e186b02c1474436f751922651c65079dc196",
     "kind": "application",
     "name": "alarm-service",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:4fec718ea1a549ff3f7cb7cff730eea90a4118000b9919e73aa890591eb7d5ae",
+    "digest": "sha256:421a7b7e35a6c10850e4d1ceec6fe405b8abd1099d33245d2061edabc49522c6",
     "kind": "application",
     "name": "alarm-view-service",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:62134c8d12bdbedb3515bed2f4431243110e795416d68d96eae1ebcef18a6be5",
+    "digest": "sha256:36eb43b4cd325e219a70937c162edeb86a451c3631fa0e19ddcccfba79e883bd",
     "kind": "application",
     "name": "data-manager",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:df0c80809956e1744dd4756dc50bfbc95eba27a7b59378c09cf9098477a8c457",
+    "digest": "sha256:c52ff5a754afceaaafc69b720b65d8b75ad578b5fcbdf20f50b62d44412f8855",
     "kind": "application",
     "name": "ef-backend",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:c0330873e3e1dc755e6457cb44299a1538ef2c1588848034522a130fa8648605",
+    "digest": "sha256:e9f9e4e38bebd03b874f35fd8cabfc428747aa8d6fecf116991f061f51f5fffd",
     "kind": "application",
     "name": "evo-manager",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:dd2c0793957817a8d72b255427009c1eb69ea984d19f9adef4a444250d7a4809",
+    "digest": "sha256:f347222a1796fe9589b8f9191f562b71b32635bfaec92b18feb5548986c51808",
     "kind": "application",
     "name": "evo-scheduler",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:cd8018ffaa0107b81f0931d35fd6882b77b7d7032e0a9cbae8eacd6fb87272c9",
+    "digest": "sha256:350dde76afcd190eaeb1a66ad19809cd4f6a7627531eb5e04d570195a7906aed",
     "kind": "application",
     "name": "ham-backend",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:11cf4fbf783744e825c417c7f9fc1958172d185f357e05351ff5163dc98685a4",
+    "digest": "sha256:dd4fd3621f9d2ebb92e5996fb3be7f86d027c0be5bae77ae1a86ab4d4178d98b",
     "kind": "application",
     "name": "hmi-backend",
     "sourceDirectory": ".",
@@ -55792,21 +55763,21 @@ platform_application_libraries:
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:c5e1a3cdbcd3c3e539512ea29c4ec0476eb8bf568f53ae3caf24743b8e003f03",
+    "digest": "sha256:1983cf68935c6e3034841c87e379e848f3db377c0bee587bf847aaf7e0249ee4",
     "kind": "application",
     "name": "kafka-ch-replicator",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:863a3f5f6994894812fb2ecdf93290e81d12f5703dbb4d2b096f97d4da8f5cac",
+    "digest": "sha256:67f98c9163ff807827a6b150507df37746708756f4c4808238a0334e88180acb",
     "kind": "application",
     "name": "kafka-history-writer",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:1beb2f490b93d107e5d59f19d6d85cb0bf351a275cf299f91dfb24af065620e2",
+    "digest": "sha256:b4af603f1165fb6574dea991bfac0bf779d1ba1f1c36ccc040ae02f42f227774",
     "kind": "application",
     "name": "opc-ua-server",
     "sourceDirectory": ".",
@@ -55820,28 +55791,28 @@ platform_application_libraries:
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:50b66ec61fa06d9b8b24bb82180df3033d817ea518c9033c20d90885fc568fe9",
+    "digest": "sha256:27ba4c69f9ad384f911a41e79652f54e39265d47eec6b5fec58acd79fa5ed248",
     "kind": "application",
     "name": "sdku-knp",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:e43f056734d56d67be89ca51ade5d2530caa5094634b634a71d4f9d59a0ff276",
+    "digest": "sha256:14299c3e24a8a2baef8b14bd6d95114233ce063cfa0ecb471a9b8b1d1f398152",
     "kind": "application",
     "name": "sdku-status-calculation",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:588665c7f095894426a28ea7a53776923f650b77af8c0bf73443d0fee5a5d59f",
+    "digest": "sha256:3fa665c8001e9f55bd8d02b392ee8e0e1b9c41ab2a598dd1579a0d4b627e3fa5",
     "kind": "application",
     "name": "sdku-tank-farm",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:4c4dce31ea9fb50a1679ad77937363611a4e186857ba9102d21bebe609512571",
+    "digest": "sha256:1e2f08b7d99c4acfa5a4a4d78aa251437da6a803d0bc95d64ec50ca1cb5e7b5d",
     "kind": "application",
     "name": "sdku-telemechanics",
     "sourceDirectory": ".",
@@ -55855,21 +55826,21 @@ platform_application_libraries:
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:fe43c9a26b69113c730323d13ef682001e6ea0e90ffc79d4766c7c54ddf4db7e",
+    "digest": "sha256:70c96743d08a2c7ecfef34811bfcd19e8e0832b6c4f593412237c3475a137765",
     "kind": "application",
     "name": "sdku-vtor",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:5c797adc5995978adeefddc639c4142a45f1e2e9b2494eeb8bc3adce625ce6fc",
+    "digest": "sha256:98c2914f4704e91fb9712de34d1cdd2ee36623e5f0b9739931f88c679ec2aa34",
     "kind": "application",
     "name": "user-preferences",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:953efbf789ab4fc6ad7bfeda52948118f7c67d88d83681c169698c4782776f72",
+    "digest": "sha256:74dba78d406f59627d0bfae4892676a88f12db6afc3caa2635b236e2e0b62ddd",
     "kind": "library",
     "name": "sdku",
     "sourceDirectory": ".",
@@ -55896,10 +55867,12 @@ platform_application_libraries:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/library-packages/sdku/1.0.0/roles/library_sdku/defaults/main.yml","mode":420,"size":13907,"sha256":"2aa6212b559d0db71ce426310f086d7dec1a8b0941d81ff0ec055646df13da67","index":0,"count":1,"encoding":"utf-8","payloadBytes":13907}
+@@PORTABLE {"path":"examples/sdku/library-packages/sdku/1.0.0/roles/library_sdku/defaults/main.yml","mode":420,"size":15438,"sha256":"6813695a6f286b1a068be938912e6bfcf2e61d643d1429e8b0147257035f7ecf","index":0,"count":1,"encoding":"utf-8","payloadBytes":15438}
 platform_library_definition:
     runtime_directory: "~/{{ library_instance_id }}"
     connections:
+        postgres: {library_binding: database, protocol: tcp}
+        clickhouse: {library_binding: analytics, protocol: https}
         kafka: {library_binding: messaging, protocol: tcp}
         redis: {library_binding: cache, protocol: tcp}
         schema-registry: {library_binding: messaging, purpose: schema-registry, protocol: https}
@@ -55908,6 +55881,19 @@ platform_library_definition:
             connectionRef: CLIENT_SSL
     defaults:
         environment:
+            POSTGRES_JDBC_ENDPOINT: "jdbc:postgresql://$${POSTGRES_ADDRESS}"
+            POSTGRES_SSL_OPTIONS: "targetServerType=primary&ssl=true&sslmode=verify-full&sslrootcert=/opt/application/pki/ca-chain.pem"
+            CLICKHOUSE_JDBC_ENDPOINT: "jdbc:clickhouse://$${CLICKHOUSE_ADDRESS}"
+            CLICKHOUSE_HTTP_ENDPOINT: "https://$${CLICKHOUSE_ADDRESS}"
+            CLICKHOUSE_SSL_OPTIONS: "ssl=true&sslmode=strict&sslrootcert=$${CLICKHOUSE_SSL_ROOT_CERT}"
+            KAFKA_ENABLE_SSL: "false"
+            KAFKA_KEYSTORE_LOCATION: "/opt/application/pki/keystore.p12"
+            KAFKA_TRUSTSTORE_LOCATION: "/opt/application/pki/truststore.p12"
+            REDIS_ENABLE_SSL: "false"
+            REDIS_CONNECTION_SSL: "false"
+            REDIS_KEYSTORE_LOCATION: "/opt/application/pki/keystore.p12"
+            REDIS_TRUSTSTORE_LOCATION: "/opt/application/pki/truststore.p12"
+            CLICKHOUSE_SSL_ROOT_CERT: /opt/application/pki/ca-chain.pem
             KAFKA_CONSUMER_DEFAULT_API_TIMEOUT_MS: "3500"
             KAFKA_CONSUMER_HEARTBEAT_INTERVAL_MS: "500"
             KAFKA_CONSUMER_REQUEST_TIMEOUT_MS: "3000"
@@ -55924,6 +55910,8 @@ platform_library_definition:
             KAFKA_PRODUCER_SOCKET_CONNECTION_SETUP_TIMEOUT_MS: "1500"
             SPRING_KAFKA_SSL_ENABLE_SSL: "false"
             SPRING_KAFKA_SSL_KEY_STORE_LOCATION: /opt/application/pki/keystore.p12
+            SPRING_KAFKA_SSL_KEY_STORE_TYPE: PKCS12
+            SPRING_KAFKA_SSL_TRUST_STORE_TYPE: PKCS12
             SPRING_KAFKA_SSL_TRUST_STORE_LOCATION: /opt/application/pki/truststore.p12
             SPRING_KAFKA_STREAMS_DEFAULT_API_TIMEOUT_MS: "90000000"
             SPRING_KAFKA_STREAMS_DELIVERY_TIMEOUT_MS: "3500"
@@ -55939,6 +55927,10 @@ platform_library_definition:
             TN_SCADA_REDIS_SSL_PROPERTIES_SSL: "false"
             TN_SCADA_REDIS_SSL_PROPERTIES_TRUST_STORE_LOCATION: /opt/application/pki/truststore.p12
             VAULT_CACERT: /opt/application/pki/ca-chain.pem
+            kafka.consumer.schema.registry.ssl.truststore.type: PEM
+            kafka.consumer.schema.registry.ssl.truststore.location: /opt/application/pki/ca-chain.pem
+            kafka.producer.schema.registry.ssl.truststore.type: PEM
+            kafka.producer.schema.registry.ssl.truststore.location: /opt/application/pki/ca-chain.pem
             kafka.consumer.default.api.timeout.ms: "3500"
             kafka.consumer.heartbeat.interval.ms: "500"
             kafka.consumer.http.connect.timeout.ms: "1000"
@@ -56192,16 +56184,19 @@ platform_library_definition:
                         index_granularity: 8192
 
 @@END
-@@PORTABLE {"path":"examples/sdku/library-packages/sdku/1.0.0/roles/library_sdku/templates/.base_compose.yml.j2","mode":420,"size":1102,"sha256":"2a444d68f63434a3d90cbfb9529b8ec7989585a1469a6af527685a5bf0154296","index":0,"count":1,"encoding":"utf-8","payloadBytes":1102}
+@@PORTABLE {"path":"examples/sdku/library-packages/sdku/1.0.0/roles/library_sdku/templates/.base_compose.yml.j2","mode":420,"size":1255,"sha256":"60c67c1d93333b8efdbff540a73a81e18ecd7f6be270a8f823836b4be6adb31c","index":0,"count":1,"encoding":"utf-8","payloadBytes":1255}
 {% set environment = library_runtime.defaults.environment | combine({}) %}
 {% for connection, names in {
   'kafka': ['KAFKA_BOOTSTRAP_SERVERS', 'SPRING_KAFKA_BOOTSTRAP_SERVERS', 'BOOTSTRAP_SERVERS_CONFIG'],
+  'postgres': ['POSTGRES_ADDRESS'],
+  'clickhouse': ['CLICKHOUSE_ADDRESS'],
   'redis': ['REDIS_ADDRESS', 'TN_SCADA_REDIS_ADDRESS'],
   'schema-registry': ['SPRING_KAFKA_SCHEMA_REGISTRY_URL', 'SCHEMA_REGISTRY_URL_CONFIG']
 }.items() %}
 {% if connection in library_runtime.connections %}
 {% set addresses = [] %}
-{% for target in library_runtime.connections[connection].targets %}
+{% set targets = library_runtime.connections[connection].targets %}
+{% for target in (targets[:1] if connection == 'clickhouse' else targets) %}
 {% set host = '[' ~ target.address ~ ']' if ':' in target.address else target.address %}
 {% set _ = addresses.append(('https://' if connection == 'schema-registry' else '') ~ host ~ ':' ~ (target.port | string)) %}
 {% endfor %}
@@ -114890,6 +114885,540 @@ func tryProcessFileLock(file *os.File) (func() error, bool, error) {
 		return nil, false, err
 	}
 	return func() error { return windows.UnlockFileEx(windows.Handle(file.Fd()), 0, 1, 0, overlapped) }, true, nil
+}
+
+@@END
+@@PORTABLE {"path":"internal/installer/project_export.go","mode":420,"size":19676,"sha256":"53ba8aabaa3a54ec046783fba40ac6f1b98416375dcf372987cb7876b4eb8edd","index":0,"count":1,"encoding":"utf-8","payloadBytes":19676}
+package installer
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
+	"path"
+	"path/filepath"
+	"sort"
+	"strconv"
+	"strings"
+)
+
+const (
+	projectExportAPIVersion   = "platform.installer/project-export/v1alpha1"
+	maxExportFiles            = 4096
+	maxExportDirectoryEntries = maxExportFiles
+	maxExportFileBytes        = int64(4 * 1024 * 1024)
+	maxExportTotalBytes       = int64(64 * 1024 * 1024)
+	maxExportLogicalBytes     = 512
+)
+
+// ProjectExportDocument is bounded metadata for one portable desired-state
+// document. Content is intentionally never returned across the App/Wails seam.
+type ProjectExportDocument struct {
+	LogicalPath string `json:"logicalPath"`
+	Size        int64  `json:"size"`
+	Digest      string `json:"digest"`
+}
+
+// ProjectExportPlan is an in-memory capability summary, not portable desired
+// state and not a public/versioned project contract.
+type ProjectExportPlan struct {
+	APIVersion            string                  `json:"apiVersion"`
+	Kind                  string                  `json:"kind"`
+	SourceProjectRoot     string                  `json:"sourceProjectRoot"`
+	SourceProjectRevision string                  `json:"sourceProjectRevision"`
+	DestinationParent     string                  `json:"destinationParent"`
+	DirectoryName         string                  `json:"directoryName"`
+	DestinationRoot       string                  `json:"destinationRoot"`
+	Documents             []ProjectExportDocument `json:"documents"`
+	AggregateSize         int64                   `json:"aggregateSize"`
+	ExcludedCategories    []string                `json:"excludedCategories"`
+	PlanDigest            string                  `json:"planDigest"`
+}
+
+type ProjectExportResult struct {
+	APIVersion            string `json:"apiVersion"`
+	Kind                  string `json:"kind"`
+	Status                string `json:"status"`
+	DestinationRoot       string `json:"destinationRoot,omitempty"`
+	SourceProjectRevision string `json:"sourceProjectRevision,omitempty"`
+	DocumentCount         int    `json:"documentCount"`
+	AggregateSize         int64  `json:"aggregateSize"`
+	ErrorCode             string `json:"errorCode,omitempty"`
+}
+
+// ProjectExport retains the two opened filesystem authorities for one preview
+// and exactly one commit attempt. It must be closed when the App invalidates
+// the preview or shuts down.
+type ProjectExport struct {
+	source           *exportDirectory
+	destination      *exportDirectory
+	sourceIdentity   exportIdentity
+	destIdentity     exportIdentity
+	sourceDisplay    string
+	destDisplay      string
+	directoryName    string
+	plan             ProjectExportPlan
+	manifest         exportObservation
+	writeObservation func(*exportDirectory, exportObservation) error
+	closed           bool
+}
+
+func PlanProjectExport(sourceRoot, destinationParent, directoryName string) (*ProjectExport, ProjectExportPlan, error) {
+	name, err := ValidateExportDirectoryName(directoryName)
+	if err != nil {
+		return nil, ProjectExportPlan{}, err
+	}
+	sourceDisplay, err := absoluteExportDisplayPath(sourceRoot)
+	if err != nil {
+		return nil, ProjectExportPlan{}, errors.New("EXPORT_SOURCE_UNSAFE")
+	}
+	destDisplay, err := absoluteExportDisplayPath(destinationParent)
+	if err != nil {
+		return nil, ProjectExportPlan{}, errors.New("EXPORT_DESTINATION_INVALID")
+	}
+	if rootsOverlap(sourceDisplay, filepath.Join(destDisplay, name)) {
+		return nil, ProjectExportPlan{}, errors.New("EXPORT_DESTINATION_INVALID")
+	}
+	source, err := openExportSourceDirectory(sourceDisplay)
+	if err != nil {
+		return nil, ProjectExportPlan{}, errors.New("EXPORT_SOURCE_UNSAFE")
+	}
+	destination, err := openExportDestinationDirectory(destDisplay)
+	if err != nil {
+		source.close()
+		return nil, ProjectExportPlan{}, errors.New("EXPORT_DESTINATION_UNSAFE")
+	}
+	capability := &ProjectExport{source: source, destination: destination, sourceIdentity: source.identity(), destIdentity: destination.identity(), sourceDisplay: sourceDisplay, destDisplay: destDisplay, directoryName: name}
+	observation, err := stableExportObservation(source)
+	if err != nil {
+		capability.Close()
+		return nil, ProjectExportPlan{}, errors.New(exportErrorCode(err, "EXPORT_SOURCE_UNSAFE"))
+	}
+	if exists, existErr := destination.exists(name); existErr != nil || exists {
+		capability.Close()
+		if existErr != nil {
+			return nil, ProjectExportPlan{}, errors.New("EXPORT_DESTINATION_UNSAFE")
+		}
+		return nil, ProjectExportPlan{}, errors.New("EXPORT_DESTINATION_EXISTS")
+	}
+	output, err := namedExportObservation(observation, name)
+	if err != nil {
+		capability.Close()
+		return nil, ProjectExportPlan{}, err
+	}
+	plan := projectExportPlan(sourceDisplay, destDisplay, name, capability.sourceIdentity, capability.destIdentity, output, observation.revision)
+	// The capability retains only integrity metadata between preview and
+	// commit. Exact bytes are re-read through the held source authority during
+	// Commit, after the source has been proven unchanged.
+	capability.plan, capability.manifest = plan, exportObservationMetadata(observation)
+	return capability, cloneProjectExportPlan(plan), nil
+}
+
+func (export *ProjectExport) Plan() ProjectExportPlan { return cloneProjectExportPlan(export.plan) }
+
+func (export *ProjectExport) Close() {
+	if export == nil || export.closed {
+		return
+	}
+	export.closed = true
+	if export.source != nil {
+		export.source.close()
+	}
+	if export.destination != nil {
+		export.destination.close()
+	}
+}
+
+func (export *ProjectExport) Commit(planDigest string) (result ProjectExportResult) {
+	result = ProjectExportResult{APIVersion: projectExportAPIVersion, Kind: "ProjectExportResult", Status: "FAILED", ErrorCode: "EXPORT_PLAN_STALE"}
+	if export == nil || export.closed || planDigest == "" || planDigest != export.plan.PlanDigest {
+		return result
+	}
+	defer export.Close()
+	if export.source.identity() != export.sourceIdentity || export.destination.identity() != export.destIdentity {
+		result.ErrorCode = "PROJECT_CHANGED"
+		return result
+	}
+	observation, err := stableExportObservation(export.source)
+	if err != nil {
+		result.ErrorCode = exportErrorCode(err, "PROJECT_CHANGED")
+		return result
+	}
+	if !sameExportObservation(observation, export.manifest) {
+		result.ErrorCode = "EXPORT_PLAN_STALE"
+		return result
+	}
+	output, err := namedExportObservation(observation, export.directoryName)
+	if err != nil {
+		result.ErrorCode = exportErrorCode(err, "EXPORT_SOURCE_UNSAFE")
+		return result
+	}
+	if exists, existErr := export.destination.exists(export.directoryName); existErr != nil || exists {
+		if existErr != nil {
+			result.ErrorCode = "EXPORT_DESTINATION_UNSAFE"
+		} else {
+			result.ErrorCode = "EXPORT_DESTINATION_EXISTS"
+		}
+		return result
+	}
+	staging, stagingName, err := export.destination.createStaging(export.directoryName)
+	if err != nil {
+		result.ErrorCode = "EXPORT_WRITE_FAILED"
+		return result
+	}
+	published := false
+	defer func() {
+		if !published {
+			if cleanupErr := export.destination.removeOwnedTree(staging, stagingName); cleanupErr != nil {
+				result.ErrorCode = exportErrorCode(cleanupErr, "EXPORT_STAGING_RETAINED")
+			}
+		}
+		staging.close()
+	}()
+	write := writeExportObservation
+	if export.writeObservation != nil {
+		write = export.writeObservation
+	}
+	if err := write(staging, output); err != nil {
+		result.ErrorCode = exportErrorCode(err, "EXPORT_WRITE_FAILED")
+		return result
+	}
+	if err := verifyExportObservation(staging, output); err != nil {
+		result.ErrorCode = "EXPORT_WRITE_FAILED"
+		return result
+	}
+	finalObservation, err := stableExportObservation(export.source)
+	if err != nil || !sameExportObservation(finalObservation, export.manifest) || export.source.identity() != export.sourceIdentity {
+		result.ErrorCode = "PROJECT_CHANGED"
+		return result
+	}
+	if exists, existErr := export.destination.exists(export.directoryName); existErr != nil || exists {
+		if existErr != nil {
+			result.ErrorCode = "EXPORT_DESTINATION_UNSAFE"
+		} else {
+			result.ErrorCode = "EXPORT_DESTINATION_EXISTS"
+		}
+		return result
+	}
+	if err := export.destination.publish(staging, stagingName, export.directoryName); err != nil {
+		result.ErrorCode = "EXPORT_PUBLISH_FAILED"
+		return result
+	}
+	published = true
+	return ProjectExportResult{APIVersion: projectExportAPIVersion, Kind: "ProjectExportResult", Status: "EXPORTED", DestinationRoot: filepath.Join(export.destDisplay, export.directoryName), SourceProjectRevision: observation.revision, DocumentCount: len(output.documents), AggregateSize: output.total}
+}
+
+type exportRecord struct {
+	ProjectExportDocument
+	identity exportFileIdentity
+	content  []byte
+}
+
+type exportObservation struct {
+	documents []exportRecord
+	revision  string
+	total     int64
+}
+
+func exportObservationMetadata(observation exportObservation) exportObservation {
+	metadata := exportObservation{
+		documents: make([]exportRecord, len(observation.documents)),
+		revision:  observation.revision,
+		total:     observation.total,
+	}
+	for index, record := range observation.documents {
+		metadata.documents[index] = exportRecord{
+			ProjectExportDocument: record.ProjectExportDocument,
+			identity:              record.identity,
+		}
+	}
+	return metadata
+}
+
+func stableExportObservation(root *exportDirectory) (exportObservation, error) {
+	first, err := observeExportProject(root)
+	if err != nil {
+		return exportObservation{}, err
+	}
+	second, err := observeExportProject(root)
+	if err != nil {
+		return exportObservation{}, err
+	}
+	if !sameExportObservation(first, second) {
+		return exportObservation{}, errors.New("PROJECT_CHANGED")
+	}
+	return second, nil
+}
+
+func observeExportProject(root *exportDirectory) (exportObservation, error) {
+	if root == nil || root.identity().empty() {
+		return exportObservation{}, errors.New("EXPORT_SOURCE_UNSAFE")
+	}
+	result := exportObservation{}
+	seen := map[string]bool{}
+	caseFolded := map[string]bool{}
+	for _, logical := range []string{"project.yml", "ansible.cfg", "inventory/hosts.yml"} {
+		if err := addExportDocument(root, logical, &result, seen, caseFolded); err != nil {
+			if isExportNotExist(err) {
+				continue
+			}
+			return exportObservation{}, err
+		}
+	}
+	for _, logical := range []string{"inventory/group_vars", "inventory/host_vars", "application-packages", "library-packages"} {
+		directory, err := root.openDirectory(strings.Split(logical, "/"))
+		if isExportNotExist(err) {
+			continue
+		}
+		if err != nil {
+			return exportObservation{}, errors.New("EXPORT_SOURCE_UNSAFE")
+		}
+		err = collectExportDirectory(directory, logical, &result, seen, caseFolded)
+		directory.close()
+		if err != nil {
+			return exportObservation{}, err
+		}
+	}
+	if err := validateExportPackages(result.documents); err != nil {
+		return exportObservation{}, err
+	}
+	sort.Slice(result.documents, func(left, right int) bool {
+		return result.documents[left].LogicalPath < result.documents[right].LogicalPath
+	})
+	result.revision = exportContentRevision(result.documents)
+	return result, nil
+}
+
+func exportContentRevision(documents []exportRecord) string {
+	var revisionInput []byte
+	for _, document := range documents {
+		if document.LogicalPath == generatedDocument {
+			continue
+		}
+		revisionInput = append(revisionInput, []byte(document.LogicalPath)...)
+		revisionInput = append(revisionInput, 0)
+		revisionInput = append(revisionInput, []byte(document.Digest)...)
+		revisionInput = append(revisionInput, 0)
+	}
+	return digestBytes(revisionInput)
+}
+
+func collectExportDirectory(directory *exportDirectory, prefix string, result *exportObservation, seen, caseFolded map[string]bool) error {
+	entries, err := directory.entries()
+	if err != nil {
+		return errors.New("EXPORT_SOURCE_UNSAFE")
+	}
+	for _, entry := range entries {
+		logical := prefix + "/" + entry.name
+		if !safeExportLogicalPath(logical) {
+			return errors.New("EXPORT_SOURCE_UNSAFE")
+		}
+		switch entry.kind {
+		case exportEntryDirectory:
+			child, openErr := directory.openDirectory([]string{entry.name})
+			if openErr != nil {
+				return errors.New("EXPORT_SOURCE_UNSAFE")
+			}
+			recurseErr := collectExportDirectory(child, logical, result, seen, caseFolded)
+			child.close()
+			if recurseErr != nil {
+				return recurseErr
+			}
+		case exportEntryRegular:
+			if logical == generatedDocument {
+				continue
+			}
+			extension := strings.ToLower(path.Ext(entry.name))
+			if strings.HasPrefix(logical, "application-packages/") || strings.HasPrefix(logical, "library-packages/") || extension == ".yml" || extension == ".yaml" || extension == ".json" {
+				if strings.HasPrefix(logical, "application-packages/") || strings.HasPrefix(logical, "library-packages/") {
+					if !safeApplicationPackagePath(logical) {
+						return errors.New("APPLICATION_PACKAGE_PATH_INVALID")
+					}
+				}
+				if err := addExportDocument(directory, entry.name, result, seen, caseFolded, logical); err != nil {
+					return err
+				}
+			}
+		default:
+			return errors.New("EXPORT_SOURCE_UNSAFE")
+		}
+	}
+	return nil
+}
+
+func addExportDocument(root *exportDirectory, logical string, result *exportObservation, seen, caseFolded map[string]bool, explicit ...string) error {
+	parts := strings.Split(logical, "/")
+	storedLogical := logical
+	if len(explicit) == 1 {
+		storedLogical = explicit[0]
+	}
+	if !safeExportLogicalPath(storedLogical) {
+		return errors.New("EXPORT_SOURCE_UNSAFE")
+	}
+	if seen[storedLogical] || caseFolded[strings.ToLower(storedLogical)] {
+		return errors.New("EXPORT_SOURCE_UNSAFE")
+	}
+	content, identity, err := root.readFile(parts, maxExportFileBytes)
+	if err != nil {
+		return err
+	}
+	if len(result.documents) >= maxExportFiles || result.total > maxExportTotalBytes-int64(len(content)) {
+		return errors.New("EXPORT_LIMIT_EXCEEDED")
+	}
+	seen[storedLogical], caseFolded[strings.ToLower(storedLogical)] = true, true
+	record := exportRecord{ProjectExportDocument: ProjectExportDocument{LogicalPath: storedLogical, Size: int64(len(content)), Digest: digestBytes(content)}, identity: identity, content: content}
+	result.documents = append(result.documents, record)
+	result.total += int64(len(content))
+	return nil
+}
+
+func safeExportLogicalPath(logical string) bool {
+	if logical == "" || len([]byte(logical)) > maxExportLogicalBytes || strings.Contains(logical, "\\") || path.Clean(logical) != logical || strings.HasPrefix(logical, "/") {
+		return false
+	}
+	for _, part := range strings.Split(logical, "/") {
+		if part == "" || part == "." || part == ".." {
+			return false
+		}
+	}
+	return true
+}
+
+func sameExportObservation(left, right exportObservation) bool {
+	if left.revision != right.revision || left.total != right.total || len(left.documents) != len(right.documents) {
+		return false
+	}
+	for index := range left.documents {
+		leftDocument, rightDocument := left.documents[index], right.documents[index]
+		if leftDocument.LogicalPath != rightDocument.LogicalPath || leftDocument.Size != rightDocument.Size || leftDocument.Digest != rightDocument.Digest || leftDocument.identity != rightDocument.identity {
+			return false
+		}
+	}
+	return true
+}
+
+func sameExportContentObservation(left, right exportObservation) bool {
+	if left.revision != right.revision || left.total != right.total || len(left.documents) != len(right.documents) {
+		return false
+	}
+	for index := range left.documents {
+		leftDocument, rightDocument := left.documents[index], right.documents[index]
+		if leftDocument.LogicalPath != rightDocument.LogicalPath || leftDocument.Size != rightDocument.Size || leftDocument.Digest != rightDocument.Digest {
+			return false
+		}
+	}
+	return true
+}
+
+func projectExportPlan(sourceRoot, destinationParent, name string, sourceIdentity, destinationIdentity exportIdentity, observation exportObservation, sourceRevision string) ProjectExportPlan {
+	documents := make([]ProjectExportDocument, len(observation.documents))
+	for index, document := range observation.documents {
+		documents[index] = document.ProjectExportDocument
+	}
+	plan := ProjectExportPlan{APIVersion: projectExportAPIVersion, Kind: "ProjectExportPlan", SourceProjectRoot: sourceRoot, SourceProjectRevision: sourceRevision, DestinationParent: destinationParent, DirectoryName: name, DestinationRoot: filepath.Join(destinationParent, name), Documents: documents, AggregateSize: observation.total, ExcludedCategories: []string{"DRAFT", "RUNTIME_CREDENTIALS", "GENERATED_STATE", "RUNTIME_STATE", "PLANS", "FACTS", "LOGS", "RESULTS", "VERIFICATION_EVIDENCE"}}
+	input := []byte(plan.APIVersion + "\x00" + sourceIdentity.String() + "\x00" + destinationIdentity.String() + "\x00" + plan.SourceProjectRevision + "\x00" + plan.DestinationRoot + "\x00")
+	for _, document := range documents {
+		input = append(input, []byte(document.LogicalPath)...)
+		input = append(input, 0)
+		input = append(input, []byte(document.Digest)...)
+		input = append(input, 0)
+		input = append(input, []byte(strconv.FormatInt(document.Size, 10))...)
+		input = append(input, 0)
+	}
+	sum := sha256.Sum256(input)
+	plan.PlanDigest = "sha256:" + hex.EncodeToString(sum[:])
+	return plan
+}
+
+func cloneProjectExportPlan(plan ProjectExportPlan) ProjectExportPlan {
+	plan.Documents = append([]ProjectExportDocument(nil), plan.Documents...)
+	plan.ExcludedCategories = append([]string(nil), plan.ExcludedCategories...)
+	return plan
+}
+
+func absoluteExportDisplayPath(value string) (string, error) {
+	if value == "" {
+		return "", errors.New("invalid path")
+	}
+	absolute, err := filepath.Abs(value)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Clean(absolute), nil
+}
+
+func rootsOverlap(left, right string) bool {
+	leftToRight, leftErr := filepath.Rel(left, right)
+	rightToLeft, rightErr := filepath.Rel(right, left)
+	leftContainsRight := leftErr == nil && (leftToRight == "." || (leftToRight != ".." && !strings.HasPrefix(leftToRight, ".."+string(filepath.Separator))))
+	rightContainsLeft := rightErr == nil && (rightToLeft == "." || (rightToLeft != ".." && !strings.HasPrefix(rightToLeft, ".."+string(filepath.Separator))))
+	return leftContainsRight || rightContainsLeft
+}
+
+func writeExportObservation(staging *exportDirectory, observation exportObservation) error {
+	created := map[string]*exportDirectory{"": staging}
+	defer func() {
+		for logical, directory := range created {
+			if logical != "" {
+				directory.close()
+			}
+		}
+	}()
+	for _, document := range observation.documents {
+		parent := path.Dir(document.LogicalPath)
+		directory, err := ensureExportDirectory(staging, parent, created)
+		if err != nil {
+			return err
+		}
+		if err := directory.writeFile(path.Base(document.LogicalPath), document.content); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func ensureExportDirectory(root *exportDirectory, logical string, created map[string]*exportDirectory) (*exportDirectory, error) {
+	if logical == "." || logical == "" {
+		return root, nil
+	}
+	current, currentLogical := root, ""
+	for _, part := range strings.Split(logical, "/") {
+		if currentLogical == "" {
+			currentLogical = part
+		} else {
+			currentLogical += "/" + part
+		}
+		if known, ok := created[currentLogical]; ok {
+			current = known
+			continue
+		}
+		next, err := current.createDirectory(part)
+		if err != nil {
+			return nil, err
+		}
+		created[currentLogical], current = next, next
+	}
+	return current, nil
+}
+
+func verifyExportObservation(staging *exportDirectory, expected exportObservation) error {
+	actual, err := observeExportProject(staging)
+	if err != nil || !sameExportContentObservation(actual, expected) {
+		return errors.New("EXPORT_WRITE_FAILED")
+	}
+	return nil
+}
+
+func exportErrorCode(err error, fallback string) string {
+	if err == nil {
+		return fallback
+	}
+	for _, code := range []string{"PROJECT_CHANGED", "EXPORT_LIMIT_EXCEEDED", "EXPORT_SOURCE_UNSAFE", "EXPORT_DESTINATION_UNSAFE", "EXPORT_WRITE_FAILED", "EXPORT_STAGING_RETAINED"} {
+		if err.Error() == code {
+			return code
+		}
+	}
+	return fallback
 }
 
 @@END
