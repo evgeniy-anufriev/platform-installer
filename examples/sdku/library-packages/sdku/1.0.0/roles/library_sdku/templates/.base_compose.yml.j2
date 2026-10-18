@@ -1,4 +1,5 @@
 {% set environment = library_runtime.defaults.environment | combine({}) %}
+{% set server_ids = groups['all'] | reject('equalto', 'localhost') | sort | list %}
 {% for connection, names in {
   'kafka': ['KAFKA_BOOTSTRAP_SERVERS', 'SPRING_KAFKA_BOOTSTRAP_SERVERS', 'BOOTSTRAP_SERVERS_CONFIG'],
   'postgres': ['POSTGRES_ADDRESS'],
@@ -9,8 +10,12 @@
 {% if connection in library_runtime.connections %}
 {% set addresses = [] %}
 {% set targets = library_runtime.connections[connection].targets %}
-{% for target in (targets[:1] if connection == 'clickhouse' else targets) %}
-{% set host = '[' ~ target.address ~ ']' if ':' in target.address else target.address %}
+{% for target in targets %}
+{% set server = hostvars[target.hostId] %}
+{% set ip = server.ansible_host | default(target.hostId) %}
+{% set hostname = (server.platform_host | default({})).desiredHostname | default(target.hostId, true) %}
+{% set address = '${SERVER_' ~ (server_ids.index(target.hostId) + 1) ~ ('_IP}' if target.address == ip else '_HOSTNAME}') if target.address in [ip, hostname] else target.address %}
+{% set host = '[' ~ address ~ ']' if ':' in target.address else address %}
 {% set _ = addresses.append(('https://' if connection == 'schema-registry' else '') ~ host ~ ':' ~ (target.port | string)) %}
 {% endfor %}
 {% for name in names if name not in environment %}

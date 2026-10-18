@@ -360,6 +360,22 @@ apigateway-sdku-${SERVER_ID}` остаётся шаблоном Compose и да�
 `${SERVER_ID}` каждому service. На одном хосте все приложения библиотеки получают
 один SERVER_ID; различие логических экземпляров задаёт их instance ID.
 
+SDKU использует все targets выбранного подключения, включая все ClickHouse
+servers. В производном `.env` Core дополнительно материализует
+`SERVER_1_ID`, `SERVER_1_IP`, `SERVER_1_HOSTNAME` … `SERVER_N_*` для серверов
+inventory (без `localhost`), отсортированных по inventory ID. IP берётся из
+`ansible_host`, hostname — из `platform_host.desiredHostname`, с fallback на ID.
+Нумерация одинакова на всех хостах и не зависит от порядка членов подключения.
+Добавление/удаление сервера может изменить номера; редактировать их вручную не нужно.
+Base-compose содержит, например,
+`CLICKHOUSE_ADDRESS: "${SERVER_1_IP}:8443,${SERVER_2_IP}:8443"`.
+Тот же принцип применяется к Kafka, Schema Registry, Redis/Sentinel и PostgreSQL.
+Порты, протокол и состав targets остаются из существующей проекции подключения.
+Если advertised address совпадает с hostname, используется `SERVER_N_HOSTNAME`;
+отдельный явно заданный advertised alias сохраняется буквально. IPv6 обрамляется
+квадратными скобками. Явные environment overrides по-прежнему имеют приоритет.
+Этот `.env` — несекретный результат материализации, а не новое хранилище настроек.
+
 ## Endpoint
 
 Backend defaults принадлежат приложению и переопределяются в instance overrides.

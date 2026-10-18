@@ -182,7 +182,7 @@
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:74dba78d406f59627d0bfae4892676a88f12db6afc3caa2635b236e2e0b62ddd",
+    "digest": "sha256:542c8cfc3b70e73c769139b492f0409fd11bdb79baed01acc25566fdb4d9bcd0",
     "kind": "library",
     "name": "sdku",
     "sourceDirectory": ".",

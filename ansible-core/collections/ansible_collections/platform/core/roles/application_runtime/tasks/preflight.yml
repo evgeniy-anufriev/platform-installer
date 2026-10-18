@@ -187,7 +187,7 @@
   ansible.builtin.set_fact:
     application_compose_content: "{{ lookup('ansible.builtin.template', application_runtime_job.appTemplate) }}"
     application_base_content: "{{ lookup('ansible.builtin.template', application_runtime_job.baseTemplate) }}"
-    application_env_content: "{{ (lookup('ansible.builtin.file', application_runtime_job.envSource, rstrip=false) if application_runtime_job.envSource else '') ~ '\nSERVER_ID=' ~ inventory_hostname ~ '\n' }}"
+    application_env_content: "{{ lookup('ansible.builtin.template', role_path ~ '/templates/library.env.j2') }}"
   no_log: true
 
 - name: Require the shared env to remain bounded and nonsecret

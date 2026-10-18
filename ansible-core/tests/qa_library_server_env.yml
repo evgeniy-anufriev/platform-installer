@@ -1,0 +1,105 @@
+---
+- hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    application_runtime_job: {envSource: null}
+    application_runtime_role: "{{ playbook_dir }}/../collections/ansible_collections/platform/core/roles/application_runtime"
+    sdku_role: "{{ playbook_dir }}/../../examples/sdku/library-packages/sdku/1.0.0/roles/library_sdku"
+    targets:
+      - {hostId: node1, address: 192.0.2.11, port: 8443}
+      - {hostId: node2, address: 192.0.2.12, port: 8444}
+      - {hostId: node3, address: '2001:db8::13', port: 8445}
+    library_runtime:
+      defaults: {environment: {OPERATOR_VALUE: preserved}}
+      connections:
+        clickhouse: {targets: "{{ targets }}"}
+        postgres: {targets: "{{ targets }}"}
+        kafka: {targets: "{{ targets }}"}
+        redis: {targets: "{{ targets }}"}
+        schema-registry: {targets: "{{ targets }}"}
+  tasks:
+    - name: Create only in-memory inventory in deliberately unsorted order
+      ansible.builtin.add_host:
+        name: "{{ item.id }}"
+        ansible_host: "{{ item.ip }}"
+        platform_host: {desiredHostname: "{{ item.hostname }}"}
+      loop:
+        - {id: node3, ip: '2001:db8::13', hostname: node3.example.test}
+        - {id: node1, ip: 192.0.2.11, hostname: node1.example.test}
+        - {id: node2, ip: 192.0.2.12, hostname: node2.example.test}
+
+    - name: Render the production env and base templates without server writes
+      ansible.builtin.set_fact:
+        rendered_env: "{{ lookup('ansible.builtin.template', application_runtime_role ~ '/templates/library.env.j2') }}"
+        rendered_base: "{{ lookup('ansible.builtin.template', sdku_role ~ '/templates/.base_compose.yml.j2') | from_yaml }}"
+
+    - name: Check stable ordinals, full target lists, IPv6 and preserved defaults
+      ansible.builtin.assert:
+        that:
+          - "'SERVER_1_ID=node1' in rendered_env"
+          - "'SERVER_2_IP=192.0.2.12' in rendered_env"
+          - "'SERVER_3_HOSTNAME=node3.example.test' in rendered_env"
+          - "'SERVER_3_IP=2001:db8::13' in rendered_env"
+          - "'SERVER_4_ID' not in rendered_env"
+          - rendered_base.services.backend.environment.CLICKHOUSE_ADDRESS == '${SERVER_1_IP}:8443,${SERVER_2_IP}:8444,[${SERVER_3_IP}]:8445'
+          - rendered_base.services.backend.environment.POSTGRES_ADDRESS == rendered_base.services.backend.environment.CLICKHOUSE_ADDRESS
+          - rendered_base.services.backend.environment.KAFKA_BOOTSTRAP_SERVERS == rendered_base.services.backend.environment.CLICKHOUSE_ADDRESS
+          - rendered_base.services.backend.environment.REDIS_ADDRESS == rendered_base.services.backend.environment.CLICKHOUSE_ADDRESS
+          - rendered_base.services.backend.environment.TN_SCADA_REDIS_ADDRESS == rendered_base.services.backend.environment.CLICKHOUSE_ADDRESS
+          - rendered_base.services.backend.environment.SCHEMA_REGISTRY_URL_CONFIG == 'https://${SERVER_1_IP}:8443,https://${SERVER_2_IP}:8444,https://[${SERVER_3_IP}]:8445'
+          - rendered_base.services.backend.environment.OPERATOR_VALUE == 'preserved'
+
+    - name: Allocate isolated Compose configuration test directory
+      ansible.builtin.tempfile:
+        state: directory
+        prefix: library-server-env-
+      register: compose_test
+
+    - name: Check native Compose interpolation without starting containers
+      block:
+        - ansible.builtin.copy:
+            dest: "{{ compose_test.path }}/{{ item.name }}"
+            content: "{{ item.content }}"
+            mode: '0600'
+          loop:
+            - {name: .env, content: "{{ rendered_env }}"}
+            - name: compose.yml
+              content: "{{ rendered_base | combine({'services': {'base': {'image': 'busybox:latest'}}}, recursive=true) | to_nice_yaml }}"
+          loop_control:
+            label: "{{ item.name }}"
+        - ansible.builtin.command:
+            argv: [docker, compose, --env-file, "{{ compose_test.path }}/.env", -f, "{{ compose_test.path }}/compose.yml", config, --format, json]
+          changed_when: false
+          register: compose_config
+        - ansible.builtin.assert:
+            that:
+              - env.CLICKHOUSE_ADDRESS == '192.0.2.11:8443,192.0.2.12:8444,[2001:db8::13]:8445'
+              - env.KAFKA_BOOTSTRAP_SERVERS == env.CLICKHOUSE_ADDRESS
+              - env.SCHEMA_REGISTRY_URL_CONFIG == 'https://192.0.2.11:8443,https://192.0.2.12:8444,https://[2001:db8::13]:8445'
+          vars:
+            env: "{{ (compose_config.stdout | from_json).services.backend.environment }}"
+      always:
+        - ansible.builtin.file:
+            path: "{{ compose_test.path }}"
+            state: absent
+
+    - name: Check standalone, Sentinel port, hostname and advertised alias
+      ansible.builtin.assert:
+        that:
+          - value.services.backend.environment.CLICKHOUSE_ADDRESS == '${SERVER_2_IP}:8444'
+          - value.services.backend.environment.REDIS_ADDRESS == '${SERVER_1_IP}:26379'
+          - value.services.backend.environment.KAFKA_BOOTSTRAP_SERVERS == '${SERVER_2_HOSTNAME}:9094,external.example.test:9095'
+          - value.services.backend.environment.POSTGRES_ADDRESS == 'operator.example.test:5432'
+      vars:
+        value: "{{ lookup('ansible.builtin.template', sdku_role ~ '/templates/.base_compose.yml.j2') | from_yaml }}"
+        library_runtime:
+          defaults: {environment: {POSTGRES_ADDRESS: 'operator.example.test:5432'}}
+          connections:
+            clickhouse: {targets: [{hostId: node2, address: 192.0.2.12, port: 8444}]}
+            redis: {targets: [{hostId: node1, address: 192.0.2.11, port: 26379}]}
+            postgres: {targets: "{{ targets }}"}
+            kafka:
+              targets:
+                - {hostId: node2, address: node2.example.test, port: 9094}
+                - {hostId: node1, address: external.example.test, port: 9095}

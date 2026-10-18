@@ -559,3 +559,84 @@ naming baselines; no full Core-suite PASS claim. No visual or business-load PASS
 Independent read-only evidence: .runtime/qa/sdku-final18-node1.log through node3.log;
 original-image/HTTP proof script reports6/6 images and12/12 HTTP200 checks.
 RootlessKit DHCP address-change cause remains outside this task and unrepaired.
+
+## Shared server variables and all ClickHouse targets — 2026-10-18
+
+Owner requested all selected ClickHouse servers and shared SERVER_N references for
+Kafka, Schema Registry, Redis/Sentinel, ClickHouse and PostgreSQL connections.
+The SDKU base template previously explicitly sliced ClickHouse targets to [:1].
+Removed this slice. Core renders the existing shared .env using a native Jinja
+template: SERVER_ID remains local; SERVER_N_ID/IP/HOSTNAME cover inventory servers
+in sorted ID order, excluding localhost. Addresses use ansible_host and desiredHostname.
+SDKU base-compose references those variables for matching projected addresses;
+ports and protocols still come from the existing targets. Explicit advertised
+aliases and environment overrides remain intact. No new Python or desired-state store.
+
+Focused native Ansible QA on RED OS .102 from qa-sync current sources passed:
+cluster three targets, standalone, Sentinel port, IPv6, hostname/advertised alias,
+operator override and native Docker Compose 5.3.1 interpolation; nine tasks,
+failed=0. Compose config only: no pull/start, application restart, infrastructure
+change or table mutation. SDKU import-byte test and diff check passed. This is
+source/template acceptance; no new React/Wails Apply or deployment acceptance is
+claimed. Installed runtime18 and the earlier successful deployment remain unchanged.
+
+
+## SERVER_N/all-ClickHouse real Apply/Verify acceptance — 2026-10-18
+
+Owner authorized library Apply/Verify from a fresh plan to restart installed DM/HMI.
+Runtime19 digest: sha256:be47d85b69e6e9192ac3c641a867960d46422a315eae1d60e81e38a75b12a5f5.
+Built from current-tree qa-sync on trusted acquisition node102, 904 components;
+902 matching verified runtime18 files reused locally, two changed/new files fetched;
+all hashes checked, standard ValidateRoot and publish-bundle passed. Standard
+preparation activated19 on103. Runtime18 remains preserved locally and on103.
+Inactive server runtime17 removed only after validating its preserved local copy,
+matching manifest hash and confirming active runtime18. Source workspace cleaned.
+
+Only SDKU base template copied into existing project; library's Sentinel purpose,
+DM's separate client/Sentinel accounts, shared TLS, original images, topic defaults
+and installation overrides retained. Native and compatibility artifact locks aligned.
+Plan: plan-6dfea2cbc22930b7cbcbbbac. Saved revision: sha256:f45db359a896c25c079ca2ca3bc98c36098ac1f5eecd1f7312679b5f2e637b51.
+Run: installer-a10ef4c7a70cdc1d57e1d7ab5ad53d9e.
+Actual React handlers/real Wails Go Build/Approve/Start: PASS.
+skipInfrastructureVerify=true. Exactly APPLICATION_LIBRARIES_APPLY and
+APPLICATION_LIBRARIES_VERIFY; no infrastructure Apply or infrastructure Verify.
+- applications:apply: SUCCESS, seq2269, 2026-10-18T11:43:06Z.
+- applications:verify: SUCCESS, seq2981, 2026-10-18T11:47:54Z.
+Controller terminal seq2982: SUCCEEDED 2026-10-18 11:47:54 UTC / 14:47:54 MSK.
+Fresh post-run unstarted skip=true plan EXECUTABLE; Infra proof BLOCKED remains
+explicit and is not reported as a successful infrastructure verification.
+
+Observed on all three hosts: .env SERVER_1/2/3 ID/IP/HOSTNAME consistently map
+node1/2/3 to101/102/103 and their desired hostnames. Base-compose references
+SERVER_N_IP for all existing shared connections. ClickHouse contains all three
+8443 targets; PostgreSQL contains DB members102/103 (101 is monitor); Sentinel
+26379/26380/26381, Kafka9094 and all three Registry HTTPS8082 addresses preserved.
+All six Docker environments contain three concrete ClickHouse addresses.
+
+All six containers recreated (IDs and start timestamps changed), all healthy;
+all six original image references and image IDs preserved:
+- 101: /data-manager-sdku-dm-node1 new container 22f08fc87b2ebfd1eee2498e1f4a7c6386d6c829997205cd4d83f06fff443628, started 2026-10-18T11:36:42.571592749Z, running healthy.
+- 101: /hmi-backend-sdku-dm-node1 new container b5bf6e82cc84b6ead68802a865773fa634316545169db1292ff853408edbb933, started 2026-10-18T11:38:41.935473865Z, running healthy.
+- 102: /data-manager-sdku-dm-node2 new container 707fde66d456623f5ec643ad8853f83e93973e3a60131255e924a6329506f4cc, started 2026-10-18T11:26:42.791031555Z, running healthy.
+- 102: /hmi-backend-sdku-dm-node2 new container 7c55678a8d58fe85def161600a7b788e28b3cac2cb237bb3dd8f76fd13065400, started 2026-10-18T11:28:50.985453368Z, running healthy.
+- 103: /data-manager-sdku-dm-node3 new container bd7f6756d392f0bf7beea8c78e597a24820ccedd5b818132d2451665e47b30aa, started 2026-10-18T11:31:12.351045749Z, running healthy.
+- 103: /hmi-backend-sdku-dm-node3 new container 3cfab91784716d43955dbcfe656d2f697b5a467ffa570c2b58624d6797727c6d, started 2026-10-18T11:34:00.499807929Z, running healthy.
+
+Post-publication independent checks:12/12 HTTP200 (direct HTTP and trusted
+public HTTPS, both apps from each host), TLS verified with CA and no -k.
+No response body/cookies/secrets collected. New HMI logs on all3: warmup complete,
+HmiEvoService started, zero PKIX/partition errors. New DM logs on all3: zero
+WRONGPASS/PKIX/unresolved-placeholder errors. Optional empty integration warnings
+are not claimed resolved; no business-load or visual acceptance claimed.
+
+Pre-start diagnostics retained: obsolete QA promotion binary used old bootstrap
+path and failed permission check; rebuilt current helper and resumed standard
+preparation without changing directory permissions. First UI attempt got stale
+host-fingerprint dialog, next read-only Verify failed in the older running Wails
+binary. Current Go transport returned snapshot PASS; rebuilt actual Wails from
+current source, repeated real UI flow and Project Verify PASS. Neither failed
+pre-start attempt launched an execution or changed containers. No guard disabled.
+
+Runtime-only evidence: sdku-server-env-run.json, sdku-server-env-watch19 event
+mirror, before/after snapshots, safe per-host logs and sdku-server-env-proof.cjs.
+No production scripts added for this test; no commit performed.
