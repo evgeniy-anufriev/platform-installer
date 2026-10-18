@@ -20,8 +20,6 @@ services:
 {% endif %}
 {% endfor %}
       "WEB_SERVER_PORT": {{ (application_effective.ports['port-1'].container | string) | to_json }}
-{% set targets = application_runtime.connections['postgres'].targets %}
-      "DB_CONNECTION_STRING": "jdbc:postgresql://{{ targets[0].address }}:{{ targets[0].port }}/{{ application_effective.parameters.database_name | default(undef(hint='Configure database_name'), true) }}?ssl=true&sslmode=verify-full&sslrootcert=/opt/application/pki/ca-chain.pem"
     labels:
       "platform.installer.project": {{ application_project_id | to_json }}
       "platform.installer.library": {{ library_runtime.library_id | to_json }}

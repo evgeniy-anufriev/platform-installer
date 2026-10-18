@@ -9,31 +9,19 @@
   become: true
   any_errors_fatal: true
   tasks:
-    - name: Initialize guards acquired by this operation
-      ansible.builtin.set_fact:
-        application_held_locks: []
-    - name: Materialize all selected Compose inputs before any image or container mutation
-      block:
-        - name: Materialize and validate each library in its acquired host-local scope
-          ansible.builtin.include_role:
-            name: platform.core.application_runtime
-            tasks_from: apply_library
-          loop: "{{ platform_application_preflight_jobs | default([]) | map(attribute='libraryId') | unique | list }}"
-          loop_control:
-            loop_var: application_library_id
-        - name: Activate only after all selected placements passed Compose validation
-          ansible.builtin.include_role:
-            name: platform.core.application_runtime
-            tasks_from: activate_instance
-          loop: "{{ platform_application_preflight_jobs | default([]) }}"
-          loop_control:
-            loop_var: application_runtime_job
-      always:
-        - name: Release only this operation's acquired library-host guards
-          ansible.builtin.command:
-            argv: [rmdir, "{{ item.libraryPath }}/.apply-lock"]
-          become_user: "{{ item.account }}"
-          loop: "{{ application_held_locks }}"
-          changed_when: false
+    - name: Materialize and validate all selected libraries before any image or container mutation
+      ansible.builtin.include_role:
+        name: platform.core.application_runtime
+        tasks_from: apply_library
+      loop: "{{ platform_application_preflight_jobs | default([]) | map(attribute='libraryId') | unique | list }}"
+      loop_control:
+        loop_var: application_library_id
+    - name: Activate only after all selected placements passed Compose validation
+      ansible.builtin.include_role:
+        name: platform.core.application_runtime
+        tasks_from: activate_instance
+      loop: "{{ platform_application_preflight_jobs | default([]) }}"
+      loop_control:
+        loop_var: application_runtime_job
 
 - import_playbook: application-libraries-endpoint-stage.yml

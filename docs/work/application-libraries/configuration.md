@@ -285,6 +285,14 @@ application ID, его defaults должны явно задать правил�
 `application_instance_id` и `SERVER_ID`; нельзя молча добавлять суффикс ко всем
 переменным, особенно к Kafka application/group ID.
 
+В SDKU общие подключения Kafka, Redis, Schema Registry, PostgreSQL и ClickHouse
+объявлены в `connections` библиотеки. Адреса, пути сертификатов, типы хранилищ и
+SSL-параметры материализуются в backend base-compose. Приложение объявляет,
+какие подключения использует, выбирает нужный URL и добавляет имя своей БД.
+Ссылки Spring на общие ENV в defaults записываются как `$${POSTGRES_JDBC_ENDPOINT}`:
+`$$` сохраняет `${POSTGRES_JDBC_ENDPOINT}` для приложения после обработки Compose.
+Пароли по-прежнему передаёт Vault Agent.
+
 Шаблон пакета материализует service key через Jinja, а не `${...}` в YAML-ключе:
 
 ```yaml

@@ -50,7 +50,7 @@ def table_matches(client, database, table):
         if bool(expected) != bool(value):
             raise ProviderFailure('CLICKHOUSE_APPLICATION_TABLE_KEYS_DRIFT')
         if expected:
-            pairs.append((expected, '(' + value + ')'))
+            pairs.append((expected, '(' + value + ')' if expected.lstrip().startswith('(') else value))
     indexes = [json.loads(line) for line in client.query(
         'SELECT name, expr, type_full, granularity FROM system.data_skipping_indices WHERE database = %s AND table = %s '
         'ORDER BY name FORMAT JSONEachRow;' % (literal(database), literal(table['name']))).splitlines() if line.strip()]

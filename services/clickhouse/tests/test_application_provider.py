@@ -41,10 +41,12 @@ class ApplicationProviderTests(unittest.TestCase):
                 if 'FROM system.data_skipping_indices' in sql:
                     return ''
                 if 'arrayMap' in sql:
+                    self_test.assertNotIn('SELECT (systemId)', sql)
                     return json.dumps(dict(expressions=['normalized', 'normalized'] * 3))
                 if 'FROM system.replicas' in sql:
                     return json.dumps(dict(zookeeper_path='/qa/1/analytics/records', replica_name='r1', shard='1', replica='r1'))
                 raise AssertionError('Unexpected query (must remain read-only)')
+        self_test = self
         client = Client()
         self.assertTrue(table_matches(client, 'analytics', table))
         for field, wrong in [('engine', 'ReplacingMergeTree'), ('sorting_key', ''), ('create_table_query', 'SETTINGS index_granularity = 4096')]:

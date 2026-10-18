@@ -567,7 +567,7 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
                                           "parameters": settings.get("parameters", {}), "environment": settings.get("environment", {}),
                                           "topicBindings": settings.get('topicBindings', {}),
                                           "ports": settings.get("ports", {}), "endpoint": settings.get("endpoint", {}),
-                                          "containerName": "%s-%s-%s" % (project_id, app_id, host),
+                                          "containerName": "%s-%s" % (app_id, host),
                                           "composeProject": compose_project,
                                           "runtimeDirectory": library['runtimeDirectory'],
                                           "runtimePath": app_id, "libraryEnvPath": '.env'}

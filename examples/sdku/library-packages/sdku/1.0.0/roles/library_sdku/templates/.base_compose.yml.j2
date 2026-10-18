@@ -1,12 +1,15 @@
 {% set environment = library_runtime.defaults.environment | combine({}) %}
 {% for connection, names in {
   'kafka': ['KAFKA_BOOTSTRAP_SERVERS', 'SPRING_KAFKA_BOOTSTRAP_SERVERS', 'BOOTSTRAP_SERVERS_CONFIG'],
+  'postgres': ['POSTGRES_ADDRESS'],
+  'clickhouse': ['CLICKHOUSE_ADDRESS'],
   'redis': ['REDIS_ADDRESS', 'TN_SCADA_REDIS_ADDRESS'],
   'schema-registry': ['SPRING_KAFKA_SCHEMA_REGISTRY_URL', 'SCHEMA_REGISTRY_URL_CONFIG']
 }.items() %}
 {% if connection in library_runtime.connections %}
 {% set addresses = [] %}
-{% for target in library_runtime.connections[connection].targets %}
+{% set targets = library_runtime.connections[connection].targets %}
+{% for target in (targets[:1] if connection == 'clickhouse' else targets) %}
 {% set host = '[' ~ target.address ~ ']' if ':' in target.address else target.address %}
 {% set _ = addresses.append(('https://' if connection == 'schema-registry' else '') ~ host ~ ':' ~ (target.port | string)) %}
 {% endfor %}

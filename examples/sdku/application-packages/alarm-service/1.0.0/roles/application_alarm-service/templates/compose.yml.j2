@@ -20,8 +20,6 @@ services:
 {% endif %}
 {% endfor %}
       "WEB_SERVER_PORT": {{ (application_effective.ports['port-1'].container | string) | to_json }}
-{% set targets = application_runtime.connections['clickhouse'].targets %}
-      "HISTORY_DATASOURCE_CLICKHOUSE_JDBCURL": "https://{{ targets[0].address }}:{{ targets[0].port }}?ssl=true&sslmode=strict"
       "TNT_DEMO_CLIENT_PORT": {{ (application_effective.ports['port-1'].container | string) | to_json }}
     labels:
       "platform.installer.project": {{ application_project_id | to_json }}

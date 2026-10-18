@@ -20,6 +20,7 @@ platform_application_definition:
             - -jar
             - data-manager.jar
         environment:
+            DB_CONNECTION_STRING: "$${POSTGRES_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${POSTGRES_SSL_OPTIONS}"
             ALERT_CLASS_TOPIC: '{{ application_parameters.source_variables.REDIS_ALERT_CLASS_TOPIC | default(undef(hint=''Configure SDKU REDIS_ALERT_CLASS_TOPIC''), true) }}'
             ALERT_HANDLER_TOPIC: '{{ application_parameters.source_variables.REDIS_ALERT_HANDLER_TOPIC | default(undef(hint=''Configure SDKU REDIS_ALERT_HANDLER_TOPIC''), true) }}'
             JAVA_OPTS: -Xmx8192m
@@ -29,12 +30,9 @@ platform_application_definition:
             LOGGER_TOTAL_SIZE_CAP: 200Mb
             LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_JDBC: DEBUG
             PROFILES_ACTIVE: specversion, development
-            REDIS_CONNECTION_SSL: "false"
             REDIS_CONNECTION_TYPE: '{{ application_parameters.source_variables.REDIS_CONNECTION_TYPE | default(undef(hint=''Configure SDKU REDIS_CONNECTION_TYPE''), true) }}'
-            REDIS_KEYSTORE_LOCATION: /opt/application/pki/keystore.p12
             REDIS_METADATA_TOPIC: '{{ application_parameters.source_variables.REDIS_METADATA_TOPIC | default(undef(hint=''Configure SDKU REDIS_METADATA_TOPIC''), true) }}'
             REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
-            REDIS_TRUSTSTORE_LOCATION: /opt/application/pki/truststore.p12
             SEARCH_ITEMS_LIMIT: "200"
             SERVER_ALLOWED_ORIGINS: '*'
             SPRING_APPLICATION_NAME: data-manager

@@ -13,11 +13,13 @@ ROLE = Path(__file__).resolve().parents[1] / "ansible_collections/platform/hapro
 
 
 class PartialOptimizationTests(unittest.TestCase):
-    def test_unready_backend_preserves_prior_candidate_and_can_retry(self):
+    def test_http_backend_is_not_probed_before_candidate_publication(self):
         class Handler(BaseHTTPRequestHandler):
             status = 503
+            requests = 0
 
             def do_GET(self):
+                Handler.requests += 1
                 self.send_response(self.status)
                 self.end_headers()
 
@@ -54,12 +56,8 @@ class PartialOptimizationTests(unittest.TestCase):
                                                 'tasks': selected}]))
                 result = subprocess.run(['ansible-playbook', '-i', 'localhost,', str(path)],
                                         capture_output=True, text=True, timeout=30)
-                self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
-                self.assertEqual(marker.read_text(), 'last successful graph')
-                Handler.status = 200
-                result = subprocess.run(['ansible-playbook', '-i', 'localhost,', str(path)],
-                                        capture_output=True, text=True, timeout=30)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertEqual(Handler.requests, 0)
                 self.assertFalse(marker.exists())
                 self.assertTrue((candidate / 'conf.d').is_dir())
         finally:

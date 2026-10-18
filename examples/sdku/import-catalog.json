@@ -1,55 +1,55 @@
 [
   {
-    "digest": "sha256:7026e580ff5c2288bae5f015d0750c3643f5897fb6a32b19dcf3f707612c460d",
+    "digest": "sha256:3470717ec177df63a6d1a3b770b4e186b02c1474436f751922651c65079dc196",
     "kind": "application",
     "name": "alarm-service",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:4fec718ea1a549ff3f7cb7cff730eea90a4118000b9919e73aa890591eb7d5ae",
+    "digest": "sha256:421a7b7e35a6c10850e4d1ceec6fe405b8abd1099d33245d2061edabc49522c6",
     "kind": "application",
     "name": "alarm-view-service",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:62134c8d12bdbedb3515bed2f4431243110e795416d68d96eae1ebcef18a6be5",
+    "digest": "sha256:36eb43b4cd325e219a70937c162edeb86a451c3631fa0e19ddcccfba79e883bd",
     "kind": "application",
     "name": "data-manager",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:df0c80809956e1744dd4756dc50bfbc95eba27a7b59378c09cf9098477a8c457",
+    "digest": "sha256:c52ff5a754afceaaafc69b720b65d8b75ad578b5fcbdf20f50b62d44412f8855",
     "kind": "application",
     "name": "ef-backend",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:c0330873e3e1dc755e6457cb44299a1538ef2c1588848034522a130fa8648605",
+    "digest": "sha256:e9f9e4e38bebd03b874f35fd8cabfc428747aa8d6fecf116991f061f51f5fffd",
     "kind": "application",
     "name": "evo-manager",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:dd2c0793957817a8d72b255427009c1eb69ea984d19f9adef4a444250d7a4809",
+    "digest": "sha256:f347222a1796fe9589b8f9191f562b71b32635bfaec92b18feb5548986c51808",
     "kind": "application",
     "name": "evo-scheduler",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:cd8018ffaa0107b81f0931d35fd6882b77b7d7032e0a9cbae8eacd6fb87272c9",
+    "digest": "sha256:350dde76afcd190eaeb1a66ad19809cd4f6a7627531eb5e04d570195a7906aed",
     "kind": "application",
     "name": "ham-backend",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:11cf4fbf783744e825c417c7f9fc1958172d185f357e05351ff5163dc98685a4",
+    "digest": "sha256:dd4fd3621f9d2ebb92e5996fb3be7f86d027c0be5bae77ae1a86ab4d4178d98b",
     "kind": "application",
     "name": "hmi-backend",
     "sourceDirectory": ".",
@@ -105,21 +105,21 @@
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:c5e1a3cdbcd3c3e539512ea29c4ec0476eb8bf568f53ae3caf24743b8e003f03",
+    "digest": "sha256:1983cf68935c6e3034841c87e379e848f3db377c0bee587bf847aaf7e0249ee4",
     "kind": "application",
     "name": "kafka-ch-replicator",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:863a3f5f6994894812fb2ecdf93290e81d12f5703dbb4d2b096f97d4da8f5cac",
+    "digest": "sha256:67f98c9163ff807827a6b150507df37746708756f4c4808238a0334e88180acb",
     "kind": "application",
     "name": "kafka-history-writer",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:1beb2f490b93d107e5d59f19d6d85cb0bf351a275cf299f91dfb24af065620e2",
+    "digest": "sha256:b4af603f1165fb6574dea991bfac0bf779d1ba1f1c36ccc040ae02f42f227774",
     "kind": "application",
     "name": "opc-ua-server",
     "sourceDirectory": ".",
@@ -133,28 +133,28 @@
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:50b66ec61fa06d9b8b24bb82180df3033d817ea518c9033c20d90885fc568fe9",
+    "digest": "sha256:27ba4c69f9ad384f911a41e79652f54e39265d47eec6b5fec58acd79fa5ed248",
     "kind": "application",
     "name": "sdku-knp",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:e43f056734d56d67be89ca51ade5d2530caa5094634b634a71d4f9d59a0ff276",
+    "digest": "sha256:14299c3e24a8a2baef8b14bd6d95114233ce063cfa0ecb471a9b8b1d1f398152",
     "kind": "application",
     "name": "sdku-status-calculation",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:588665c7f095894426a28ea7a53776923f650b77af8c0bf73443d0fee5a5d59f",
+    "digest": "sha256:3fa665c8001e9f55bd8d02b392ee8e0e1b9c41ab2a598dd1579a0d4b627e3fa5",
     "kind": "application",
     "name": "sdku-tank-farm",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:4c4dce31ea9fb50a1679ad77937363611a4e186857ba9102d21bebe609512571",
+    "digest": "sha256:1e2f08b7d99c4acfa5a4a4d78aa251437da6a803d0bc95d64ec50ca1cb5e7b5d",
     "kind": "application",
     "name": "sdku-telemechanics",
     "sourceDirectory": ".",
@@ -168,21 +168,21 @@
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:fe43c9a26b69113c730323d13ef682001e6ea0e90ffc79d4766c7c54ddf4db7e",
+    "digest": "sha256:70c96743d08a2c7ecfef34811bfcd19e8e0832b6c4f593412237c3475a137765",
     "kind": "application",
     "name": "sdku-vtor",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:5c797adc5995978adeefddc639c4142a45f1e2e9b2494eeb8bc3adce625ce6fc",
+    "digest": "sha256:98c2914f4704e91fb9712de34d1cdd2ee36623e5f0b9739931f88c679ec2aa34",
     "kind": "application",
     "name": "user-preferences",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:953efbf789ab4fc6ad7bfeda52948118f7c67d88d83681c169698c4782776f72",
+    "digest": "sha256:74dba78d406f59627d0bfae4892676a88f12db6afc3caa2635b236e2e0b62ddd",
     "kind": "library",
     "name": "sdku",
     "sourceDirectory": ".",

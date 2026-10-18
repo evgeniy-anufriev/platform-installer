@@ -102,6 +102,14 @@ class ApplicationRuntimeTests(unittest.TestCase):
         self.assertEqual(2, loads.call_count)
         self.assertEqual(2, len({(call.args[2], call.args[1]) for call in loads.call_args_list}))
 
+    def test_runtime_preparation_accepts_declared_library_kafka_topics(self):
+        inputs = self.runtime_fixture()
+        inputs[2][0]['resources']['events'] = dict(kind='kafka.topic', binding='kafka', mode='managed',
+                                                  parameters=dict(name='sdku-main'))
+        jobs = prepare_runtime(*inputs)
+        self.assertEqual(1, len(jobs))
+        self.assertEqual('kafka.topic', jobs[0]['resources']['events']['kind'])
+
     def test_runtime_preparation_rechecks_changed_bytes_in_next_invocation(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

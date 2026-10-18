@@ -12,6 +12,19 @@ FIXTURE = os.path.join(REPO, "examples/valid/application-libraries")
 
 
 class StandaloneLibrariesQA(unittest.TestCase):
+    def test_required_environment_resolves_after_package_parameter_defaults(self):
+        def defaults(data):
+            settings = data['platform_application_definition']['defaults']
+            settings['parameters']['package_only'] = '{{ application_instance_id }}'
+            settings['environment']['REQUIRED_PARAMETER'] = '{{ application_parameters.package_only }}'
+        self.edit(self.defaults, defaults)
+        result = self.snapshot()
+        self.assertEqual('PASS', result['status'], [(f['code'], f.get('field')) for f in result['findings']])
+        for library in ('sdku', 'cspa'):
+            instance = result['applicationLibraries']['libraries'][library]['instances']['apigateway-' + library]
+            for row in instance['placements'].values():
+                self.assertEqual('apigateway-' + library, row['environment']['REQUIRED_PARAMETER'])
+
     def test_table_defaults_merge_reset_and_native_ddl_render_without_execution(self):
         source = os.path.join(REPO, 'examples/sdku/library-packages/sdku/1.0.0/roles/library_sdku/defaults/main.yml')
         with open(source) as stream:
@@ -249,6 +262,7 @@ done
         self.assertEqual("postgres-cspa", cspa["connections"]["postgres"]["deploymentRef"])
         self.assertEqual("node2", sdku["placements"]["node2"]["SERVER_ID"])
         self.assertEqual("project-sdku-apigateway-sdku-node1", sdku["placements"]["node1"]["composeProject"])
+        self.assertEqual("apigateway-sdku-node1", sdku["placements"]["node1"]["containerName"])
         self.assertEqual("CLIENT_SSL", sdku["connections"]["kafka"]["connectionRef"])
         self.assertTrue(sdku["agentRequired"])
         self.assertEqual({"account": "redis", "field": "password"}, sdku["secretBindings"]["REDIS_PASSWORD"]["source"])

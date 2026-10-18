@@ -21,6 +21,18 @@
   no_log: true
   become: false
 
+- name: Seed parameter context before expanding dependent application settings
+  ansible.builtin.set_fact:
+    application_parameters: >-
+      {{ (application_job.commonDefaults.parameters | default({}) if application_job.slot.inherit_defaults | default(true) else {}) |
+         combine(vars['_application_package_' ~ ((application_job.libraryId ~ application_job.slotId ~ application_job.hostId) | hash('sha256'))].platform_application_definition.defaults.parameters | default({}), recursive=true, list_merge='replace') |
+         combine(application_job.slot.overrides.parameters | default({}), recursive=true, list_merge='replace') |
+         combine(application_job.commonOverrides.parameters | default({}) if application_job.slot.inherit_defaults | default(true) else {}, recursive=true, list_merge='replace') |
+         combine(application_job.instance.overrides.parameters | default({}), recursive=true, list_merge='replace') |
+         combine(application_job.hostOverride.parameters | default({}), recursive=true, list_merge='replace') }}
+  no_log: true
+  become: false
+
 - name: Resolve parameters after this placement identity is available
   ansible.builtin.set_fact:
     application_parameters: >-

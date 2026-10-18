@@ -1,5 +1,8 @@
 platform_application_definition:
     connections:
+        clickhouse:
+            library_binding: analytics
+            protocol: https
         kafka:
             library_binding: messaging
             protocol: tcp
@@ -15,6 +18,7 @@ platform_application_definition:
             - -jar
             - sdku-status-calculation.jar
         environment:
+            TN_SCADA_DATASOURCE_URL: "$${CLICKHOUSE_HTTP_ENDPOINT}?$${CLICKHOUSE_SSL_OPTIONS}"
             ALARM_SERVICE_API_READ_TIMEOUT: 5000
             ALARM_SERVICE_API_ROOT_URI: '{{ application_parameters.source_variables.ALARM_SERVICE_URL | default(undef(hint=''Configure SDKU ALARM_SERVICE_URL''), true) }}'
             ALARM_SERVICE_API_SERVER_PATH: /generate-alarm
@@ -22,7 +26,6 @@ platform_application_definition:
             ALARM_TOPIC: '{{ application_parameters.source_variables.ALARM_TOPIC_COMPACT | default(undef(hint=''Configure SDKU ALARM_TOPIC_COMPACT''), true) }}'
             EVO_SERVICES_CONSENSUS_SERVICE_MOCK: true
             TN_SCADA_DATA_MANAGER_URL_ROOT: '{{ application_parameters.source_variables.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
-            TN_SCADA_DATASOURCE_URL: '{{ application_parameters.source_variables.CLICKHOUSE_SSL_URL | default(undef(hint=''Configure SDKU CLICKHOUSE_SSL_URL''), true) }}:8443?ssl=true&sslmode=strict'
             TN_SCADA_METADATA_TARGET_PROJECT: TNSV
             TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
             server.max-http-header-size: 10MB
@@ -34,7 +37,6 @@ platform_application_definition:
             source_variables:
                 ALARM_SERVICE_URL: ""
                 ALARM_TOPIC_COMPACT: sdku-alarms-compact
-                CLICKHOUSE_SSL_URL: ""
                 DATA_MANAGER_URL_ROOT: ""
                 REDIS_SENTINEL_MASTER: ""
         ports:

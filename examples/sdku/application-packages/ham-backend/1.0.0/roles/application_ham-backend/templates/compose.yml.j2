@@ -20,8 +20,6 @@ services:
 {% endfor %}
       "server.port": {{ (application_effective.ports['port-1'].container | string) | to_json }}
       "WEB_SERVER_PORT": {{ (application_effective.ports['port-1'].container | string) | to_json }}
-{% set targets = application_runtime.connections['clickhouse'].targets %}
-      "DB_CONNECTION_STRING": "https://{{ targets[0].address }}:{{ targets[0].port }}?ssl=true&sslmode=strict"
     labels:
       "platform.installer.project": {{ application_project_id | to_json }}
       "platform.installer.library": {{ library_runtime.library_id | to_json }}

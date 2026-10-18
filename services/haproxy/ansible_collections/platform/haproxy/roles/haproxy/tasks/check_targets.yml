@@ -68,10 +68,3 @@
   loop_control:
     label: "{{ item.item.0.targetDeploymentId }}/{{ item.item.1.serverName }}"
   no_log: true
-
-- name: Require reachable HTTP targets before candidate publication
-  ansible.builtin.include_tasks: check_http_target.yml
-  loop: "{{ platform_haproxy_application_backends | selectattr('probe', 'defined') | selectattr('settings.ssl', 'equalto', false) | subelements('targets') }}"
-  loop_control:
-    loop_var: _platform_http_target
-  no_log: true

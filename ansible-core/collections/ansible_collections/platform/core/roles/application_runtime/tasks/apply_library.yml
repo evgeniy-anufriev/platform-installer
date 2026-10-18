@@ -20,24 +20,6 @@
     owner: "{{ application_library_jobs[0].account }}"
     mode: '0700'
 
-- name: Acquire one atomic library-host execution guard
-  ansible.builtin.command:
-    argv: [mkdir, "{{ application_library_jobs[0].libraryPath }}/.apply-lock"]
-  become_user: "{{ application_library_jobs[0].account }}"
-  register: application_library_lock
-  changed_when: false
-  failed_when: false
-
-- name: Refuse a concurrent or abandoned library-host lock
-  ansible.builtin.assert:
-    that: application_library_lock.rc == 0
-    fail_msg: APPLICATION_LIBRARY_HOST_LOCKED
-
-- name: Record only the guard acquired by this operation
-  ansible.builtin.set_fact:
-    application_held_locks: "{{ application_held_locks + [application_library_jobs[0]] }}"
-  no_log: true
-
 - name: Materialize the library and its exact selected instances
   block:
     - name: Record library host ownership as derived runtime state

@@ -22,19 +22,14 @@ platform_application_definition:
             - --spring.config.additional-location=/usr/local/config/opcua.yml
             - -Djavax.net.ssl.trustStore=/usr/local/certs/TN-SCADA OPC UA Server [61511528719CFF008A751C1D9F8165129F07C977].der
         environment:
+            DB_CONNECTION_STRING: "$${CLICKHOUSE_HTTP_ENDPOINT}?$${CLICKHOUSE_SSL_OPTIONS}"
             DB_TYPE: clickhouse
-            KAFKA_ENABLE_SSL: "true"
-            KAFKA_KEYSTORE_LOCATION: /opt/application/pki/keystore.p12
-            KAFKA_TRUSTSTORE_LOCATION: /opt/application/pki/truststore.p12
             LOGGER_ROOT_LEVEL: WARN
             OPCUA_APP_TYPE: server
             OPCUA_CONFIG: /usr/local/config/opcua.yml
             OPCUA_VIEW: EVO_VIEW
             OPCUA_VIEW_SOURCE: csv
-            REDIS_ENABLE_SSL: "true"
-            REDIS_KEYSTORE_LOCATION: /opt/application/pki/keystore.p12
             REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
-            REDIS_TRUSTSTORE_LOCATION: /opt/application/pki/truststore.p12
             REDU_DISABLE: "true"
             REDU_GROUP_ID: opcua-server
             REDU_MANAGER_ID: 1

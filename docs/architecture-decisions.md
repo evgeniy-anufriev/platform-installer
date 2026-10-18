@@ -724,6 +724,12 @@ preserved in Compose; locked imageId/platform/source authority still govern
 acquisition and verification. Owner rejected SDKU-PC-P01: supported executions
 are sequential. No additional daemon/tag guard is authorized.
 
+Owner decision 2026-10-18: remove the library-host .apply-lock directory guard
+from application Apply. Supported Installer executions remain sequential; external
+concurrent standalone Apply to the same library directory is operator-coordinated.
+No replacement lock or cancellation recovery mechanism is introduced. Ownership
+checks and validation of all selected Compose inputs before activation remain.
+
 Library runtime_directory is portable desired state, defaulting to target
 Docker-account HOME/library ID, with package defaults and group_vars precedence.
 The UI edits this existing project state through the guarded writer. Resolved

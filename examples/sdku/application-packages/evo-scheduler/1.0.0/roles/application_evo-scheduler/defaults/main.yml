@@ -18,6 +18,7 @@ platform_application_definition:
             - -jar
             - evo-scheduler.jar
         environment:
+            DB_CONNECTION_STRING: "$${POSTGRES_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${POSTGRES_SSL_OPTIONS}"
             ALARM_VIEW_SERVICE_ROOT_URL: '{{ application_parameters.source_variables.ALARM_VIEW_SERVICE_URL | default(undef(hint=''Configure SDKU ALARM_VIEW_SERVICE_URL''), true) }}'
             DATA_MANAGER_CERTIFICATE_VALIDATION: false
             DATA_MANAGER_DTO_PORTION_SIZE: 300

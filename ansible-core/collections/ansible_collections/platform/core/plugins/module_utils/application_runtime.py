@@ -167,7 +167,7 @@ def prepare_runtime(root, snapshot, rows, desired, lock, validator, loader):
         instance = library["instances"][app_id]
         placement = instance["placements"][host]
         settings = row["settings"]
-        if (any(r['kind'] not in {'postgresql.database', 'postgresql.schema', 'clickhouse.database'} for r in row['resources'].values()) or
+        if (any(r['kind'] not in {'postgresql.database', 'postgresql.schema', 'clickhouse.database', 'kafka.topic'} for r in row['resources'].values()) or
                 any(instance['connections'].get(k, {}).get('serviceType') not in {'postgresql', 'redis', 'clickhouse'} for k in instance['credentialRequirements']) or
                 any(x.get("tls") for x in instance["connections"].values())):
             raise ValueError("APPLICATION_RUNTIME_DEFERRED_FEATURE")

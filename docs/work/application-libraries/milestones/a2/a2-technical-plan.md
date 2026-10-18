@@ -373,11 +373,10 @@ container_name либо небезопасный directory блокирует Ap
   не удаляется автоматически; retry сохраняет его работающий container.
 - Удаление instance, rename/move, down и clearing не включаются в A2. Обнаруженные
   лишние managed containers отметить как drift, не удалять автоматически.
-- Конкурирующие Apply к одному project/library-host subtree не поддерживаются:
-  до mutations получить один host-local lock этого subtree существующим lock
-  primitive либо atomic mkdir; при занятости BLOCK. Освободить в always; crash
-  recovery требует явной проверки abandoned owner, не автоматического takeover.
-  Это bounded execution guard, не второй scheduler или desired-state store.
+- Решение владельца 2026-10-18 отменяет прежнее требование host-local .apply-lock:
+  lock удалён из Apply. Поддерживаемые запуски Installer последовательны; внешние
+  конкурентные standalone Apply координирует оператор. Замена lock не вводится.
+  Ownership/source guards и валидация всех Compose до activation сохранены.
 
 ## 7. Изменяемые файлы и порядок реализации
 

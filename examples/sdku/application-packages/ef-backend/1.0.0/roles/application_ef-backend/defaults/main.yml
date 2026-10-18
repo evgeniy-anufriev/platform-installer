@@ -19,6 +19,7 @@ platform_application_definition:
             - -jar
             - ef-backend.jar
         environment:
+            DB_CONNECTION_STRING: "$${POSTGRES_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${POSTGRES_SSL_OPTIONS}"
             DB_CONNECTION_SSL: "true"
             JAVA_OPTS: -Xmx4096m
             NETWORK_TIMEOUT_MS: 10000
