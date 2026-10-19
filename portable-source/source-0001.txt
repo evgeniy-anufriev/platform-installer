@@ -52977,7 +52977,7 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/evo-scheduler/1.0.0/roles/application_evo-scheduler/defaults/main.yml","mode":420,"size":6119,"sha256":"f262997f2f36729931b4edf6f726e688c0e21fc6ed0d786f321a9a0522e48585","index":0,"count":1,"encoding":"utf-8","payloadBytes":6119}
+@@PORTABLE {"path":"examples/sdku/application-packages/evo-scheduler/1.0.0/roles/application_evo-scheduler/defaults/main.yml","mode":420,"size":6235,"sha256":"5848fa6fb68dcd263919bceeb99b640595861a930137ab503178442e067f648f","index":0,"count":1,"encoding":"utf-8","payloadBytes":6235}
 platform_application_definition:
     connections:
         kafka:
@@ -53047,6 +53047,8 @@ platform_application_definition:
             JAVA_OPTS: -Xmx15000m
             RESULT_FILE_DIR: /usr/local/app/data
             SERVER_PORT: 12080
+            SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "10"
+            SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
             SPRING_KAFKA_CLIENT_ID: '{{ application_instance_id }}-$${SERVER_ID}'
             TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
             WEB_CLIENT_CONNECTION_TIMEOUT: 100000
@@ -55202,7 +55204,7 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/sdku-knp/1.0.0/roles/application_sdku-knp/defaults/main.yml","mode":420,"size":8771,"sha256":"d634ad13561375f5a71e1b701e94632f7f7c88073aca6e0c08202cf2df7191c9","index":0,"count":1,"encoding":"utf-8","payloadBytes":8771}
+@@PORTABLE {"path":"examples/sdku/application-packages/sdku-knp/1.0.0/roles/application_sdku-knp/defaults/main.yml","mode":420,"size":9889,"sha256":"40059f5cb624c2e134f58df1391da6fd577bad45467caaab6e4329b869a092ae","index":0,"count":1,"encoding":"utf-8","payloadBytes":9889}
 platform_application_definition:
     connections:
         clickhouse:
@@ -55258,7 +55260,22 @@ platform_application_definition:
                         - '*'
                 mode: managed
         command:
-            - '{{ sdku_start_commands[''sdku-knp''] | mandatory }}'
+            - java
+            - -jar
+            - sdku-knp.jar
+        parameters:
+            database_name: ""
+            source_variables:
+                ALARM_SERVICE_URL: ""
+                ALARM_TOPIC_COMPACT: sdku-alarms-compact
+                DATA_MANAGER_URL_ROOT: ""
+                REDIS_SENTINEL_MASTER: ""
+                SDKU_KNP_CONSENSUS_TCP_PORT: &consensus_tcp_port >-
+                    {{ ((application_job.application.definition.defaults.ports | default({})) |
+                    combine(application_job.slot.overrides.ports | default({}), recursive=true) |
+                    combine(application_job.instance.overrides.ports | default({}), recursive=true) |
+                    combine(application_job.hostOverride.ports | default({}), recursive=true))['port-2'].container }}
+                USER_PREFERENCES_URL_ROOT: ""
         environment:
             ALARM_SERVICE_API_ROOT_URI: '{{ application_parameters.source_variables.ALARM_SERVICE_URL | default(undef(hint=''Configure SDKU ALARM_SERVICE_URL''), true) }}'
             ALARM_SERVICE_API_SERVER_PATH: /generate-alarm
@@ -55271,10 +55288,25 @@ platform_application_definition:
             EVO_SERVICES_CONSENSUS_SERVICE_HEALTH_CHECK_INTERVAL: 1000
             EVO_SERVICES_CONSENSUS_SERVICE_HEALTH_CHECK_TIMEOUT: 999
             EVO_SERVICES_CONSENSUS_SERVICE_HEARTBEAT_INTERVAL: 500
-            EVO_SERVICES_CONSENSUS_SERVICE_INSTANCE_NAME: sdku-knp-{{ application_instance_id }}
-            EVO_SERVICES_CONSENSUS_SERVICE_LISTEN_PORT: '{{ application_parameters.source_variables.SDKU_KNP_CONSENSUS_TCP_PORT | default(undef(hint=''Configure SDKU SDKU_KNP_CONSENSUS_TCP_PORT''), true) }}'
-            EVO_SERVICES_CONSENSUS_SERVICE_MOCK: true
-            EVO_SERVICES_CONSENSUS_SERVICE_OTHER_INSTANCES: sdku-knp-{{ application_parameters.source_variables.OTHER_SERVER_ID_1 | default(undef(hint='Configure SDKU OTHER_SERVER_ID_1'), true) }}={{ application_parameters.source_variables.SERVER_REPLICAS_1 | default(undef(hint='Configure SDKU SERVER_REPLICAS_1'), true) }}:{{ application_parameters.source_variables.SDKU_KNP_CONSENSUS_TCP_PORT | default(undef(hint='Configure SDKU SDKU_KNP_CONSENSUS_TCP_PORT'), true) }}
+            EVO_SERVICES_CONSENSUS_SERVICE_INSTANCE_NAME: '{{ application_job.hostId }}'
+            EVO_SERVICES_CONSENSUS_SERVICE_LISTEN_PORT: *consensus_tcp_port
+            EVO_SERVICES_CONSENSUS_SERVICE_MOCK: >-
+                {{ (_application_inputs.jobs | selectattr('libraryId', 'equalto', library_instance_id) |
+                    selectattr('slotId', 'equalto', application_job.slotId) | list | length) < 2 }}
+            EVO_SERVICES_CONSENSUS_SERVICE_MODE: DYNAMIC
+            EVO_SERVICES_CONSENSUS_SERVICE_OTHER_INSTANCES: >-
+                {%- set peers = [] -%}
+                {%- set server_ids = groups['all'] | reject('equalto', 'localhost') | sort | list -%}
+                {%- for placement in _application_inputs.jobs |
+                    selectattr('libraryId', 'equalto', library_instance_id) |
+                    selectattr('slotId', 'equalto', application_job.slotId) | sort(attribute='hostId') if placement.hostId != application_job.hostId -%}
+                {%- set ports = (placement.application.definition.defaults.ports | default({})) |
+                    combine(placement.slot.overrides.ports | default({}), recursive=true) |
+                    combine(placement.instance.overrides.ports | default({}), recursive=true) |
+                    combine(placement.hostOverride.ports | default({}), recursive=true) -%}
+                {%- set _ = peers.append(placement.hostId ~ '=$${SERVER_' ~ (server_ids.index(placement.hostId) + 1) ~ '_IP}:' ~ (ports['port-2'].published | string)) -%}
+                {%- endfor -%}
+                {{- peers | join(',') -}}
             EVO_SERVICES_CONSENSUS_SERVICE_TERM_LIFESPAN: 2000
             EVO_SERVICES_CONSENSUS_SERVICE_TIMER_INTERVAL: 500
             EVO_SERVICES_CONSENSUS_SERVICE_WORKLOAD: LOW
@@ -55293,18 +55325,7 @@ platform_application_definition:
             server.max-http-header-size: 10MB
             server.max-http-request-header-size: 10MB
             tn-scada.metadata.load-projects: TNSV
-        image: evoscada-docker.artifacts.tn.tngrp.ru/sdku-knp:0.2.5-10437ccc-redos
-        parameters:
-            database_name: ""
-            source_variables:
-                ALARM_SERVICE_URL: ""
-                ALARM_TOPIC_COMPACT: sdku-alarms-compact
-                DATA_MANAGER_URL_ROOT: ""
-                OTHER_SERVER_ID_1: ""
-                REDIS_SENTINEL_MASTER: ""
-                SDKU_KNP_CONSENSUS_TCP_PORT: "40281"
-                SERVER_REPLICAS_1: ""
-                USER_PREFERENCES_URL_ROOT: ""
+        image: evoscada-docker.artifacts.tn.tngrp.ru/sdku-knp:0.2.4-a4568c87-redos
         ports:
             port-1:
                 container: 10281
@@ -55442,7 +55463,7 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/sdku-status-calculation/1.0.0/roles/application_sdku-status-calculation/defaults/main.yml","mode":420,"size":6844,"sha256":"0dcc55ad5ed99c44848dea93c70c2fc510fe8000146dc87e8f54b100a54771f6","index":0,"count":1,"encoding":"utf-8","payloadBytes":6844}
+@@PORTABLE {"path":"examples/sdku/application-packages/sdku-status-calculation/1.0.0/roles/application_sdku-status-calculation/defaults/main.yml","mode":420,"size":9157,"sha256":"f7da72fcc0ba7ba106a4a4a4872ae8e128ea9b375f7355a3c37e42ff7ed0ecff","index":0,"count":1,"encoding":"utf-8","payloadBytes":9157}
 platform_application_definition:
     connections:
         clickhouse:
@@ -55501,6 +55522,18 @@ platform_application_definition:
             - java
             - -jar
             - sdku-status-calculation.jar
+        parameters:
+            database_name: ""
+            source_variables:
+                SDKU_STATUS_CALCULATION_CONSENSUS_TCP_PORT: &consensus_tcp_port >-
+                    {{ ((application_job.application.definition.defaults.ports | default({})) |
+                    combine(application_job.slot.overrides.ports | default({}), recursive=true) |
+                    combine(application_job.instance.overrides.ports | default({}), recursive=true) |
+                    combine(application_job.hostOverride.ports | default({}), recursive=true))['port-2'].container }}
+                ALARM_SERVICE_URL: ""
+                ALARM_TOPIC_COMPACT: sdku-alarms-compact
+                DATA_MANAGER_URL_ROOT: ""
+                REDIS_SENTINEL_MASTER: ""
         environment:
             ALARM_SERVICE_API_READ_TIMEOUT: 5000
             ALARM_SERVICE_API_ROOT_URI: '{{ application_parameters.source_variables.ALARM_SERVICE_URL | default(undef(hint=''Configure SDKU ALARM_SERVICE_URL''), true) }}'
@@ -55509,10 +55542,30 @@ platform_application_definition:
             ALARM_TOPIC: '{{ application_parameters.source_variables.ALARM_TOPIC_COMPACT | default(undef(hint=''Configure SDKU ALARM_TOPIC_COMPACT''), true) }}'
             DB_CONNECTION_STRING: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
             DB_TYPE: clickhouse
-            EVO_SERVICES_CONSENSUS_SERVICE_MOCK: true
+            DATA_MANAGER_ROOT_URL: '{{ application_parameters.source_variables.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
+            EVO_MANAGER_APP_ID: 'cst-{{ ((application_instance_id ~ ''-'' ~ application_job.hostId) | hash(''sha256''))[:20] }}'
+            EVO_SERVICES_CONSENSUS_SERVICE_MOCK: >-
+                {{ (_application_inputs.jobs | selectattr('libraryId', 'equalto', library_instance_id) |
+                    selectattr('slotId', 'equalto', application_job.slotId) | list | length) < 2 }}
+            EVO_SERVICES_CONSENSUS_SERVICE_MODE: DYNAMIC
+            EVO_SERVICES_CONSENSUS_SERVICE_OTHER_INSTANCES: >-
+                {%- set peers = [] -%}
+                {%- set server_ids = groups['all'] | reject('equalto', 'localhost') | sort | list -%}
+                {%- for placement in _application_inputs.jobs |
+                    selectattr('libraryId', 'equalto', library_instance_id) |
+                    selectattr('slotId', 'equalto', application_job.slotId) | sort(attribute='hostId') if placement.hostId != application_job.hostId -%}
+                {%- set ports = (placement.application.definition.defaults.ports | default({})) |
+                    combine(placement.slot.overrides.ports | default({}), recursive=true) |
+                    combine(placement.instance.overrides.ports | default({}), recursive=true) |
+                    combine(placement.hostOverride.ports | default({}), recursive=true) -%}
+                {%- set _ = peers.append(placement.hostId ~ '=$${SERVER_' ~ (server_ids.index(placement.hostId) + 1) ~ '_IP}:' ~ (ports['port-2'].published | string)) -%}
+                {%- endfor -%}
+                {{- peers | join(',') -}}
+            EVO_SERVICES_CONSENSUS_SERVICE_LISTEN_PORT: *consensus_tcp_port
+            EVO_SERVICES_CONSENSUS_SERVICE_INSTANCE_NAME: '{{ application_job.hostId }}'
             SERVER_PORT: 10361
             SPRING_KAFKA_CLIENT_ID: '{{ application_instance_id }}-$${SERVER_ID}'
-            TN_SCADA_DATA_MANAGER_URL_ROOT: '{{ application_parameters.source_variables.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
+            TN_SCADA_DATA_MANAGER_URL: '{{ application_parameters.source_variables.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
             TN_SCADA_DATASOURCE_URL: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
             TN_SCADA_METADATA_TARGET_PROJECT: TNSV
             TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
@@ -55523,23 +55576,16 @@ platform_application_definition:
             tn-scada.metadata.dontShowTargetProjectInNames: true
             tn-scada.metadata.load-projects: TNSV
         image: evoscada-docker.artifacts.tn.tngrp.ru/sdku-status-calculation:0.5.0-1508923e-redos
-        parameters:
-            database_name: ""
-            source_variables:
-                ALARM_SERVICE_URL: ""
-                ALARM_TOPIC_COMPACT: sdku-alarms-compact
-                DATA_MANAGER_URL_ROOT: ""
-                REDIS_SENTINEL_MASTER: ""
         ports:
             port-1:
-                container: 15016
-                published: 15016
-            port-2:
                 container: 10361
                 published: 10361
-            port-3:
+            port-2:
                 container: 40361
                 published: 40361
+            port-3:
+                container: 15016
+                published: 15016
             port-4:
                 container: 40362
                 published: 40362
@@ -55599,7 +55645,6 @@ platform_application_definition:
         restart: always
         user: 1000:1000
     identity_environment:
-        - EVO_MANAGER_APP_ID
         - KAFKA_APPLICATION_ID_CONFIG
         - KAFKA_LISTENER_ID_CONFIG
     name: sdku-status-calculation
@@ -55610,7 +55655,7 @@ platform_application_definition:
 {{ application_runtime | platform.core.application_agent_config }}
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/sdku-status-calculation/1.0.0/roles/application_sdku-status-calculation/templates/compose.yml.j2","mode":420,"size":1924,"sha256":"448e796aa5d96099cf96461e481e363260c6e82304bcaf172cc00cdb1884293b","index":0,"count":1,"encoding":"utf-8","payloadBytes":1924}
+@@PORTABLE {"path":"examples/sdku/application-packages/sdku-status-calculation/1.0.0/roles/application_sdku-status-calculation/templates/compose.yml.j2","mode":420,"size":1924,"sha256":"2f07303fe4869f6d31ff1cbfff5940c5bed7161e0d3e35735613db49358a4c4e","index":0,"count":1,"encoding":"utf-8","payloadBytes":1924}
 services:
   {{ application_instance_id }}:
     extends:
@@ -55632,8 +55677,8 @@ services:
       {{ name | to_json }}: {{ (value | string) | to_json }}
 {% endif %}
 {% endfor %}
-      "server.port": {{ (application_effective.ports['port-2'].container | string) | to_json }}
-      "WEB_SERVER_PORT": {{ (application_effective.ports['port-2'].container | string) | to_json }}
+      "server.port": {{ (application_effective.ports['port-1'].container | string) | to_json }}
+      "WEB_SERVER_PORT": {{ (application_effective.ports['port-1'].container | string) | to_json }}
     labels:
       "platform.installer.project": {{ application_project_id | to_json }}
       "platform.installer.library": {{ library_runtime.library_id | to_json }}
@@ -55653,13 +55698,14 @@ services:
               memory: 4G
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/sdku-tank-farm/1.0.0/application.yml","mode":420,"size":539,"sha256":"b02f0ab216d3122a49528bae158bc317853d1fc9545c602cd103670acddcf4d1","index":0,"count":1,"encoding":"utf-8","payloadBytes":539}
+@@PORTABLE {"path":"examples/sdku/application-packages/sdku-tank-farm/1.0.0/application.yml","mode":420,"size":577,"sha256":"045c4093c7a0a1038c20585d5bb6b626fa4ec72fea5f00ef756d7d8e551770f6","index":0,"count":1,"encoding":"utf-8","payloadBytes":577}
 {
   "apiVersion": "platform.installer/application-package/v1alpha1",
   "files": [
     "roles/application_sdku-tank-farm/defaults/main.yml",
     "roles/application_sdku-tank-farm/templates/compose.yml.j2",
-    "roles/application_sdku-tank-farm/templates/agent.hcl.j2"
+    "roles/application_sdku-tank-farm/templates/agent.hcl.j2",
+    "assets/config/tank_config.yaml"
   ],
   "kind": "ApplicationPackage",
   "name": "sdku-tank-farm",
@@ -55671,7 +55717,20 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/sdku-tank-farm/1.0.0/roles/application_sdku-tank-farm/defaults/main.yml","mode":420,"size":8345,"sha256":"43a2bd3be672cf9d51abfd5f4ae376a616ac7ba7885be8e3046bff4aae05bd75","index":0,"count":1,"encoding":"utf-8","payloadBytes":8345}
+@@PORTABLE {"path":"examples/sdku/application-packages/sdku-tank-farm/1.0.0/assets/config/tank_config.yaml","mode":420,"size":392,"sha256":"fd8631126a715d0afcd3ba2ba644ede9d86eebe5892f3e46d5ec6a958de36db5","index":0,"count":1,"encoding":"utf-8","payloadBytes":392}
+# Конфигурационный файл для модуля расчёта резервуарных парков
+ignoreRZVObjects:       #Список резервуаров соседних ОСТ
+  - PRI_RP__RZV_1
+  - PRI_RP__RZV_2
+tanksWithoutAlerts:     #Список резервуаров c неактивными алертами TI.H.Hoil
+  - UHT_RP_1_RZV_2
+  - UHT_RP_1_RZV_3
+
+
+
+
+@@END
+@@PORTABLE {"path":"examples/sdku/application-packages/sdku-tank-farm/1.0.0/roles/application_sdku-tank-farm/defaults/main.yml","mode":420,"size":9578,"sha256":"39d5d38e9e6aac86089383e990697d11b33d464e29f8a25085ccd4789e21f500","index":0,"count":1,"encoding":"utf-8","payloadBytes":9578}
 platform_application_definition:
     connections:
         clickhouse:
@@ -55730,6 +55789,22 @@ platform_application_definition:
             - java
             - -jar
             - sdku-tank-farm.jar
+        config_files:
+            - source: assets/config/tank_config.yaml
+              destination: config/tank_config.yaml
+              mode: '0644'
+        parameters:
+            database_name: ""
+            source_variables:
+                ALARM_SERVICE_URL: ""
+                ALARM_TOPIC_COMPACT: sdku-alarms-compact
+                DATA_MANAGER_URL_ROOT: ""
+                REDIS_SENTINEL_MASTER: ""
+                SDKU_TANK_FARM_CONSENSUS_TCP_PORT: &consensus_tcp_port >-
+                    {{ ((application_job.application.definition.defaults.ports | default({})) |
+                    combine(application_job.slot.overrides.ports | default({}), recursive=true) |
+                    combine(application_job.instance.overrides.ports | default({}), recursive=true) |
+                    combine(application_job.hostOverride.ports | default({}), recursive=true))['port-2'].container }}
         environment:
             ALARM_SERVICE_API_READ_TIMEOUT: 5000
             ALARM_SERVICE_API_ROOT_URI: '{{ application_parameters.source_variables.ALARM_SERVICE_URL | default(undef(hint=''Configure SDKU ALARM_SERVICE_URL''), true) }}'
@@ -55742,17 +55817,32 @@ platform_application_definition:
             EVO_SERVICES_CONSENSUS_SERVICE_HEALTH_CHECK_INTERVAL: 1000
             EVO_SERVICES_CONSENSUS_SERVICE_HEALTH_CHECK_TIMEOUT: 999
             EVO_SERVICES_CONSENSUS_SERVICE_HEARTBEAT_INTERVAL: 500
-            EVO_SERVICES_CONSENSUS_SERVICE_INSTANCE_NAME: sdku-tank-farm-{{ application_instance_id }}
-            EVO_SERVICES_CONSENSUS_SERVICE_LISTEN_PORT: '{{ application_parameters.source_variables.SDKU_TANK_FARM_CONSENSUS_TCP_PORT | default(undef(hint=''Configure SDKU SDKU_TANK_FARM_CONSENSUS_TCP_PORT''), true) }}'
-            EVO_SERVICES_CONSENSUS_SERVICE_MOCK: true
-            EVO_SERVICES_CONSENSUS_SERVICE_OTHER_INSTANCES: sdku-tank-farm-{{ application_parameters.source_variables.OTHER_SERVER_ID_1 | default(undef(hint='Configure SDKU OTHER_SERVER_ID_1'), true) }}={{ application_parameters.source_variables.SERVER_REPLICAS_1 | default(undef(hint='Configure SDKU SERVER_REPLICAS_1'), true) }}:{{ application_parameters.source_variables.SDKU_TANK_FARM_CONSENSUS_TCP_PORT | default(undef(hint='Configure SDKU SDKU_TANK_FARM_CONSENSUS_TCP_PORT'), true) }}
+            EVO_SERVICES_CONSENSUS_SERVICE_INSTANCE_NAME: '{{ application_job.hostId }}'
+            EVO_SERVICES_CONSENSUS_SERVICE_LISTEN_PORT: *consensus_tcp_port
+            EVO_SERVICES_CONSENSUS_SERVICE_MOCK: >-
+                {{ (_application_inputs.jobs | selectattr('libraryId', 'equalto', library_instance_id) |
+                    selectattr('slotId', 'equalto', application_job.slotId) | list | length) < 2 }}
+            EVO_SERVICES_CONSENSUS_SERVICE_MODE: DYNAMIC
+            EVO_SERVICES_CONSENSUS_SERVICE_OTHER_INSTANCES: >-
+                {%- set peers = [] -%}
+                {%- set server_ids = groups['all'] | reject('equalto', 'localhost') | sort | list -%}
+                {%- for placement in _application_inputs.jobs |
+                    selectattr('libraryId', 'equalto', library_instance_id) |
+                    selectattr('slotId', 'equalto', application_job.slotId) | sort(attribute='hostId') if placement.hostId != application_job.hostId -%}
+                {%- set ports = (placement.application.definition.defaults.ports | default({})) |
+                    combine(placement.slot.overrides.ports | default({}), recursive=true) |
+                    combine(placement.instance.overrides.ports | default({}), recursive=true) |
+                    combine(placement.hostOverride.ports | default({}), recursive=true) -%}
+                {%- set _ = peers.append(placement.hostId ~ '=$${SERVER_' ~ (server_ids.index(placement.hostId) + 1) ~ '_IP}:' ~ (ports['port-2'].published | string)) -%}
+                {%- endfor -%}
+                {{- peers | join(',') -}}
             EVO_SERVICES_CONSENSUS_SERVICE_TERM_LIFESPAN: 2000
             EVO_SERVICES_CONSENSUS_SERVICE_TIMER_INTERVAL: 500
             EVO_SERVICES_CONSENSUS_SERVICE_WORKLOAD: LOW
             SERVER_PORT: 10261
             SPRING_KAFKA_CLIENT_ID: '{{ application_instance_id }}-$${SERVER_ID}'
             TANK_CONFIG_PATH: /usr/local/app/config/tank_config.yaml
-            TN_SCADA_DATA_MANAGER_URL_ROOT: '{{ application_parameters.source_variables.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
+            TN_SCADA_DATA_MANAGER_URL: '{{ application_parameters.source_variables.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
             TN_SCADA_DATASOURCE_URL: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
             TN_SCADA_METADATA_TARGET_PROJECT: TNSV
             TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
@@ -55764,16 +55854,6 @@ platform_application_definition:
             tn-scada.metadata.dontShowTargetProjectInNames: false
             tn-scada.metadata.load-projects: TNSV
         image: evoscada-docker.artifacts.tn.tngrp.ru/sdku-tank-farm:1.2.1-3091dc07-redos
-        parameters:
-            database_name: ""
-            source_variables:
-                ALARM_SERVICE_URL: ""
-                ALARM_TOPIC_COMPACT: sdku-alarms-compact
-                DATA_MANAGER_URL_ROOT: ""
-                OTHER_SERVER_ID_1: ""
-                REDIS_SENTINEL_MASTER: ""
-                SDKU_TANK_FARM_CONSENSUS_TCP_PORT: "40261"
-                SERVER_REPLICAS_1: ""
         ports:
             port-1:
                 container: 10261
@@ -55851,7 +55931,7 @@ platform_application_definition:
 {{ application_runtime | platform.core.application_agent_config }}
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/sdku-tank-farm/1.0.0/roles/application_sdku-tank-farm/templates/compose.yml.j2","mode":420,"size":1924,"sha256":"cc65e321a2a41e0ffbc077014b7ed68155813d76ea66c814dad26abe156c6ef1","index":0,"count":1,"encoding":"utf-8","payloadBytes":1924}
+@@PORTABLE {"path":"examples/sdku/application-packages/sdku-tank-farm/1.0.0/roles/application_sdku-tank-farm/templates/compose.yml.j2","mode":420,"size":2127,"sha256":"04a6868bdee195162c5fb612e4f6e31afbbce52eb11e4d2c791cdbb813dd1a9c","index":0,"count":1,"encoding":"utf-8","payloadBytes":2127}
 services:
   {{ application_instance_id }}:
     extends:
@@ -55888,19 +55968,23 @@ services:
     volumes:
       - {{ (application_runtime.vault_path ~ ':/opt/vault:ro') | to_json }}
       - {{ (application_runtime.pki_path ~ ':/opt/application/pki:ro') | to_json }}
+{% for config in application_effective.config_files %}
+      - {{ (application_runtime.config_path ~ '/' ~ config.destination ~ ':/usr/local/app/' ~ config.destination ~ ':ro') | to_json }}
+{% endfor %}
     deploy:
       "resources":
           limits:
               memory: 2G
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/sdku-telemechanics/1.0.0/application.yml","mode":420,"size":563,"sha256":"73b461e3fff54bdd66e44068e05194cf6a6fc61a7eaed4ae6e68405eac67873e","index":0,"count":1,"encoding":"utf-8","payloadBytes":563}
+@@PORTABLE {"path":"examples/sdku/application-packages/sdku-telemechanics/1.0.0/application.yml","mode":420,"size":610,"sha256":"f95200dd8a70da1782b9894711c3cde1b443bc080046b36d782a1011a2f73ab4","index":0,"count":1,"encoding":"utf-8","payloadBytes":610}
 {
   "apiVersion": "platform.installer/application-package/v1alpha1",
   "files": [
     "roles/application_sdku-telemechanics/defaults/main.yml",
     "roles/application_sdku-telemechanics/templates/compose.yml.j2",
-    "roles/application_sdku-telemechanics/templates/agent.hcl.j2"
+    "roles/application_sdku-telemechanics/templates/agent.hcl.j2",
+    "assets/config/telemechanics_config.yaml"
   ],
   "kind": "ApplicationPackage",
   "name": "sdku-telemechanics",
@@ -55912,7 +55996,44 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/sdku-telemechanics/1.0.0/roles/application_sdku-telemechanics/defaults/main.yml","mode":420,"size":8197,"sha256":"53fe1baf64e059b50bf58d325583124b569d57fda6a8545281897e6561c282d2","index":0,"count":1,"encoding":"utf-8","payloadBytes":8197}
+@@PORTABLE {"path":"examples/sdku/application-packages/sdku-telemechanics/1.0.0/assets/config/telemechanics_config.yaml","mode":420,"size":2118,"sha256":"70d75367f229c566321b943cc810e4fb22c3e1600f50b51e00f16d303ab51e9b","index":0,"count":1,"encoding":"utf-8","payloadBytes":2118}
+# Конфигурационный файл для модуля телемеханики
+# Настройки для циклического общего опроса драйверов
+configGI:
+  active: false                      # Активность алгоритма
+  objectTypes:                      # Типы объекта
+    - _IecConnection
+  parameter: .Control.GQ            # Тег сигнала (без имени точки)
+  sendDelay: 60_000                 # мс Время между отправками общего опроса
+  offset: 100                       # мс Смещение записи по времени
+  value: 10                         # Значение
+#Настройка синхронизации времени по протоколу МЭК 104
+configTS:
+  active: false                      # Активность алгоритма
+  objectTypes:                      # Типы объекта
+    - _IecConnection
+  parameter: .Control.ClockSync     # Тег сигнала (без имени точки)
+  sendDelay: 60_000                 # мс Время между отправками синхронизации времени
+# Настройка контроля команд
+configCC:
+  active: true                     # Активность алгоритма
+  alertClass: AC1                   #
+  waitingTime: 10_000               # Таймаут ожидания подтверждения команды
+  repeatCount: 3                    # Число повторных команд
+  tags:                             # Перечень тегов с повторной отправкой команды
+    - VTORYAR_MN_2057_ZDV_515.TU.Open
+    - YAR_SARD___1.TR.UstIn
+    - YAR_SARD___1.TR.UstOut
+  tagsSARDWithTIControl:            # Перечень тегов САРД с подтверждением через сигналы ТИ
+    - YAR_SARD___1.TR.UstIn
+# Настройка сброса команд ТУ с Modbus адресом
+configCM:
+  active: false                      # Активность алгоритма
+
+
+
+@@END
+@@PORTABLE {"path":"examples/sdku/application-packages/sdku-telemechanics/1.0.0/roles/application_sdku-telemechanics/defaults/main.yml","mode":420,"size":9524,"sha256":"38fca0565ae937c17d67f0a72699a756860aa4e808cabd19307732bca408b702","index":0,"count":1,"encoding":"utf-8","payloadBytes":9524}
 platform_application_definition:
     connections:
         clickhouse:
@@ -55967,10 +56088,26 @@ platform_application_definition:
                     keys:
                         - '*'
                 mode: managed
+        config_files:
+            - source: assets/config/telemechanics_config.yaml
+              destination: config/telemechanics_config.yaml
+              mode: '0644'
         command:
             - java
             - -jar
             - sdku-telemechanics.jar
+        parameters:
+            database_name: ""
+            source_variables:
+                ALARM_SERVICE_URL: ""
+                ALARM_TOPIC_COMPACT: sdku-alarms-compact
+                DATA_MANAGER_URL_ROOT: ""
+                REDIS_SENTINEL_MASTER: ""
+                SDKU_TELEMECHANICS_CONSENSUS_TCP_PORT: &consensus_tcp_port >-
+                    {{ ((application_job.application.definition.defaults.ports | default({})) |
+                    combine(application_job.slot.overrides.ports | default({}), recursive=true) |
+                    combine(application_job.instance.overrides.ports | default({}), recursive=true) |
+                    combine(application_job.hostOverride.ports | default({}), recursive=true))['port-2'].container }}
         environment:
             ALARM_SERVICE_API_READ_TIMEOUT: 5000
             ALARM_SERVICE_API_ROOT_URI: '{{ application_parameters.source_variables.ALARM_SERVICE_URL | default(undef(hint=''Configure SDKU ALARM_SERVICE_URL''), true) }}'
@@ -55979,13 +56116,29 @@ platform_application_definition:
             ALARM_TOPIC: '{{ application_parameters.source_variables.ALARM_TOPIC_COMPACT | default(undef(hint=''Configure SDKU ALARM_TOPIC_COMPACT''), true) }}'
             DB_CONNECTION_STRING: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
             DB_TYPE: clickhouse
+            EVO_MANAGER_APP_ID: 'stm-{{ ((application_instance_id ~ ''-'' ~ application_job.hostId) | hash(''sha256''))[:20] }}'
             EVO_SERVICES_CONSENSUS_SERVICE_HEALTH_CHECK_INTERVAL: 1000
             EVO_SERVICES_CONSENSUS_SERVICE_HEALTH_CHECK_TIMEOUT: 999
             EVO_SERVICES_CONSENSUS_SERVICE_HEARTBEAT_INTERVAL: 500
-            EVO_SERVICES_CONSENSUS_SERVICE_INSTANCE_NAME: sdku-telemechanics-{{ application_instance_id }}
-            EVO_SERVICES_CONSENSUS_SERVICE_LISTEN_PORT: '{{ application_parameters.source_variables.SDKU_TELEMECHANICS_CONSENSUS_TCP_PORT | default(undef(hint=''Configure SDKU SDKU_TELEMECHANICS_CONSENSUS_TCP_PORT''), true) }}'
-            EVO_SERVICES_CONSENSUS_SERVICE_MOCK: true
-            EVO_SERVICES_CONSENSUS_SERVICE_OTHER_INSTANCES: sdku-telemechanics-{{ application_parameters.source_variables.OTHER_SERVER_ID_1 | default(undef(hint='Configure SDKU OTHER_SERVER_ID_1'), true) }}={{ application_parameters.source_variables.SERVER_REPLICAS_1 | default(undef(hint='Configure SDKU SERVER_REPLICAS_1'), true) }}:{{ application_parameters.source_variables.SDKU_TELEMECHANICS_CONSENSUS_TCP_PORT | default(undef(hint='Configure SDKU SDKU_TELEMECHANICS_CONSENSUS_TCP_PORT'), true) }}
+            EVO_SERVICES_CONSENSUS_SERVICE_INSTANCE_NAME: '{{ application_job.hostId }}'
+            EVO_SERVICES_CONSENSUS_SERVICE_LISTEN_PORT: *consensus_tcp_port
+            EVO_SERVICES_CONSENSUS_SERVICE_MOCK: >-
+                {{ (_application_inputs.jobs | selectattr('libraryId', 'equalto', library_instance_id) |
+                    selectattr('slotId', 'equalto', application_job.slotId) | list | length) < 2 }}
+            EVO_SERVICES_CONSENSUS_SERVICE_MODE: DYNAMIC
+            EVO_SERVICES_CONSENSUS_SERVICE_OTHER_INSTANCES: >-
+                {%- set peers = [] -%}
+                {%- set server_ids = groups['all'] | reject('equalto', 'localhost') | sort | list -%}
+                {%- for placement in _application_inputs.jobs |
+                    selectattr('libraryId', 'equalto', library_instance_id) |
+                    selectattr('slotId', 'equalto', application_job.slotId) | sort(attribute='hostId') if placement.hostId != application_job.hostId -%}
+                {%- set ports = (placement.application.definition.defaults.ports | default({})) |
+                    combine(placement.slot.overrides.ports | default({}), recursive=true) |
+                    combine(placement.instance.overrides.ports | default({}), recursive=true) |
+                    combine(placement.hostOverride.ports | default({}), recursive=true) -%}
+                {%- set _ = peers.append(placement.hostId ~ '=$${SERVER_' ~ (server_ids.index(placement.hostId) + 1) ~ '_IP}:' ~ (ports['port-2'].published | string)) -%}
+                {%- endfor -%}
+                {{- peers | join(',') -}}
             EVO_SERVICES_CONSENSUS_SERVICE_TERM_LIFESPAN: 2000
             EVO_SERVICES_CONSENSUS_SERVICE_TIMER_INTERVAL: 500
             EVO_SERVICES_CONSENSUS_SERVICE_WORKLOAD: LOW
@@ -55994,7 +56147,7 @@ platform_application_definition:
             SPRING_KAFKA_CLIENT_ID: '{{ application_instance_id }}-$${SERVER_ID}'
             TELEMECHANICS_CONFIG_PATH: /usr/local/app/config/telemechanics_config.yaml
             TELEMECHANICS_LOGGER_LEVEL: DEBUG
-            TN_SCADA_DATA_MANAGER_URL_ROOT: '{{ application_parameters.source_variables.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
+            TN_SCADA_DATA_MANAGER_URL: '{{ application_parameters.source_variables.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
             TN_SCADA_DATASOURCE_URL: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
             TN_SCADA_METADATA_TARGET_PROJECT: TNSV
             TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
@@ -56005,16 +56158,6 @@ platform_application_definition:
             tn-scada.metadata.dontShowTargetProjectInNames: true
             tn-scada.metadata.load-projects: TNSV
         image: evoscada-docker.artifacts.tn.tngrp.ru/sdku-telemechanics:1.2.3-6aa0b4a0-redos
-        parameters:
-            database_name: ""
-            source_variables:
-                ALARM_SERVICE_URL: ""
-                ALARM_TOPIC_COMPACT: sdku-alarms-compact
-                DATA_MANAGER_URL_ROOT: ""
-                OTHER_SERVER_ID_1: ""
-                REDIS_SENTINEL_MASTER: ""
-                SDKU_TELEMECHANICS_CONSENSUS_TCP_PORT: "40251"
-                SERVER_REPLICAS_1: ""
         ports:
             port-1:
                 container: 10251
@@ -56078,7 +56221,6 @@ platform_application_definition:
         restart: on-failure
         user: 1000:1000
     identity_environment:
-        - EVO_MANAGER_APP_ID
         - KAFKA_APPLICATION_ID_CONFIG
         - KAFKA_LISTENER_ID_CONFIG
     name: sdku-telemechanics
@@ -56089,7 +56231,7 @@ platform_application_definition:
 {{ application_runtime | platform.core.application_agent_config }}
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/sdku-telemechanics/1.0.0/roles/application_sdku-telemechanics/templates/compose.yml.j2","mode":420,"size":1925,"sha256":"bfe23a671015aa243cb6f607832e15484b65c49951385ab1f72c814db3f26c9d","index":0,"count":1,"encoding":"utf-8","payloadBytes":1925}
+@@PORTABLE {"path":"examples/sdku/application-packages/sdku-telemechanics/1.0.0/roles/application_sdku-telemechanics/templates/compose.yml.j2","mode":420,"size":2128,"sha256":"7f8db3a57a70bcf608e7174b24a3e3b5a000d64f70ed58fb947efe110367eab5","index":0,"count":1,"encoding":"utf-8","payloadBytes":2128}
 services:
   {{ application_instance_id }}:
     extends:
@@ -56126,6 +56268,9 @@ services:
     volumes:
       - {{ (application_runtime.vault_path ~ ':/opt/vault:ro') | to_json }}
       - {{ (application_runtime.pki_path ~ ':/opt/application/pki:ro') | to_json }}
+{% for config in application_effective.config_files %}
+      - {{ (application_runtime.config_path ~ '/' ~ config.destination ~ ':/usr/local/app/' ~ config.destination ~ ':ro') | to_json }}
+{% endfor %}
     deploy:
       "resources":
           limits:
@@ -56208,13 +56353,14 @@ services:
               memory: 2G
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/sdku-vtor/1.0.0/application.yml","mode":420,"size":509,"sha256":"cfb9c5f73075db3a86b54a5221d471b0ffba2cc71bc23813362700926e735938","index":0,"count":1,"encoding":"utf-8","payloadBytes":509}
+@@PORTABLE {"path":"examples/sdku/application-packages/sdku-vtor/1.0.0/application.yml","mode":420,"size":547,"sha256":"fc4eeb1aebe70220364dad9a3bfa1f41a95367b976a1cc91a403abb607e51f99","index":0,"count":1,"encoding":"utf-8","payloadBytes":547}
 {
   "apiVersion": "platform.installer/application-package/v1alpha1",
   "files": [
     "roles/application_sdku-vtor/defaults/main.yml",
     "roles/application_sdku-vtor/templates/compose.yml.j2",
-    "roles/application_sdku-vtor/templates/agent.hcl.j2"
+    "roles/application_sdku-vtor/templates/agent.hcl.j2",
+    "assets/config/vtor_config.yaml"
   ],
   "kind": "ApplicationPackage",
   "name": "sdku-vtor",
@@ -56226,7 +56372,19 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/sdku-vtor/1.0.0/roles/application_sdku-vtor/defaults/main.yml","mode":420,"size":8555,"sha256":"edf66db31b56c385fb59423a8b636cba60cf4ee2925296cd718f5ec5257001d2","index":0,"count":1,"encoding":"utf-8","payloadBytes":8555}
+@@PORTABLE {"path":"examples/sdku/application-packages/sdku-vtor/1.0.0/assets/config/vtor_config.yaml","mode":420,"size":484,"sha256":"73306d0b19f4c74cddfcce56fb3775f0d5958bac2123938bbb2f6014fe1d2118","index":0,"count":1,"encoding":"utf-8","payloadBytes":484}
+# не используется, пример для шаблона
+vtor:
+  ignore-objects: #Список объектов, которые не обрабатываются модулем ВТОР
+    - VLAD_PRL___
+  sortingObject:  #Список объектов в необходимо последовательности сортировки для расположения в дереве ВТОР
+    - STAROLVTORNEW_LU___
+    - STAROLVTORNEW_LU___2
+    - STAROLVTORNEW_LU___3
+
+
+@@END
+@@PORTABLE {"path":"examples/sdku/application-packages/sdku-vtor/1.0.0/roles/application_sdku-vtor/defaults/main.yml","mode":420,"size":9818,"sha256":"9222698211dcbbbdea6e877ecd6b83e19604fed0396446015acd58adde7e3b23","index":0,"count":1,"encoding":"utf-8","payloadBytes":9818}
 platform_application_definition:
     connections:
         clickhouse:
@@ -56281,12 +56439,29 @@ platform_application_definition:
                     keys:
                         - '*'
                 mode: managed
+        config_files:
+            - source: assets/config/vtor_config.yaml
+              destination: config/vtor_config.yaml
+              mode: '0644'
         command:
             - java
             - -javaagent:/usr/local/app/opentelemetry-javaagent.jar
             - -XX:MaxRAMPercentage=70.0
             - -jar
             - sdku-vtor.jar
+        parameters:
+            database_name: ""
+            source_variables:
+                ALARM_SERVICE_URL: ""
+                ALARM_TOPIC_COMPACT: sdku-alarms-compact
+                DATA_MANAGER_URL_ROOT: ""
+                REDIS_SENTINEL_MASTER: ""
+                SDKU_VTOR_CONSENSUS_TCP_PORT: &consensus_tcp_port >-
+                    {{ ((application_job.application.definition.defaults.ports | default({})) |
+                    combine(application_job.slot.overrides.ports | default({}), recursive=true) |
+                    combine(application_job.instance.overrides.ports | default({}), recursive=true) |
+                    combine(application_job.hostOverride.ports | default({}), recursive=true))['port-2'].container }}
+                USER_PREFERENCES_URL_ROOT: ""
         environment:
             ALARM_SERVICE_API_READ_TIMEOUT: 5000
             ALARM_SERVICE_API_ROOT_URI: '{{ application_parameters.source_variables.ALARM_SERVICE_URL | default(undef(hint=''Configure SDKU ALARM_SERVICE_URL''), true) }}'
@@ -56298,16 +56473,31 @@ platform_application_definition:
             EVO_SERVICES_CONSENSUS_SERVICE_HEALTH_CHECK_INTERVAL: 1000
             EVO_SERVICES_CONSENSUS_SERVICE_HEALTH_CHECK_TIMEOUT: 999
             EVO_SERVICES_CONSENSUS_SERVICE_HEARTBEAT_INTERVAL: 500
-            EVO_SERVICES_CONSENSUS_SERVICE_INSTANCE_NAME: sdku-vtor-{{ application_instance_id }}
-            EVO_SERVICES_CONSENSUS_SERVICE_LISTEN_PORT: '{{ application_parameters.source_variables.SDKU_VTOR_CONSENSUS_TCP_PORT | default(undef(hint=''Configure SDKU SDKU_VTOR_CONSENSUS_TCP_PORT''), true) }}'
-            EVO_SERVICES_CONSENSUS_SERVICE_MOCK: true
-            EVO_SERVICES_CONSENSUS_SERVICE_OTHER_INSTANCES: sdku-vtor-{{ application_parameters.source_variables.OTHER_SERVER_ID_1 | default(undef(hint='Configure SDKU OTHER_SERVER_ID_1'), true) }}={{ application_parameters.source_variables.SERVER_REPLICAS_1 | default(undef(hint='Configure SDKU SERVER_REPLICAS_1'), true) }}:{{ application_parameters.source_variables.SDKU_VTOR_CONSENSUS_TCP_PORT | default(undef(hint='Configure SDKU SDKU_VTOR_CONSENSUS_TCP_PORT'), true) }}
+            EVO_SERVICES_CONSENSUS_SERVICE_INSTANCE_NAME: '{{ application_job.hostId }}'
+            EVO_SERVICES_CONSENSUS_SERVICE_LISTEN_PORT: *consensus_tcp_port
+            EVO_SERVICES_CONSENSUS_SERVICE_MOCK: >-
+                {{ (_application_inputs.jobs | selectattr('libraryId', 'equalto', library_instance_id) |
+                    selectattr('slotId', 'equalto', application_job.slotId) | list | length) < 2 }}
+            EVO_SERVICES_CONSENSUS_SERVICE_MODE: DYNAMIC
+            EVO_SERVICES_CONSENSUS_SERVICE_OTHER_INSTANCES: >-
+                {%- set peers = [] -%}
+                {%- set server_ids = groups['all'] | reject('equalto', 'localhost') | sort | list -%}
+                {%- for placement in _application_inputs.jobs |
+                    selectattr('libraryId', 'equalto', library_instance_id) |
+                    selectattr('slotId', 'equalto', application_job.slotId) | sort(attribute='hostId') if placement.hostId != application_job.hostId -%}
+                {%- set ports = (placement.application.definition.defaults.ports | default({})) |
+                    combine(placement.slot.overrides.ports | default({}), recursive=true) |
+                    combine(placement.instance.overrides.ports | default({}), recursive=true) |
+                    combine(placement.hostOverride.ports | default({}), recursive=true) -%}
+                {%- set _ = peers.append(placement.hostId ~ '=$${SERVER_' ~ (server_ids.index(placement.hostId) + 1) ~ '_IP}:' ~ (ports['port-2'].published | string)) -%}
+                {%- endfor -%}
+                {{- peers | join(',') -}}
             EVO_SERVICES_CONSENSUS_SERVICE_TERM_LIFESPAN: 2000
             EVO_SERVICES_CONSENSUS_SERVICE_TIMER_INTERVAL: 500
             EVO_SERVICES_CONSENSUS_SERVICE_WORKLOAD: LOW
             SERVER_PORT: 10301
             SPRING_KAFKA_CLIENT_ID: '{{ application_instance_id }}-$${SERVER_ID}'
-            TN_SCADA_DATA_MANAGER_URL_ROOT: '{{ application_parameters.source_variables.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
+            TN_SCADA_DATA_MANAGER_URL: '{{ application_parameters.source_variables.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
             TN_SCADA_DATASOURCE_URL: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
             TN_SCADA_METADATA_TARGET_PROJECT: TNSV
             TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
@@ -56322,27 +56512,16 @@ platform_application_definition:
             tn-scada.metadata.load-projects: TNSV
             vtor.debug.addDebugUser: true
         image: evoscada-docker.artifacts.tn.tngrp.ru/sdku-vtor:1.2.8-c8f4f8a5-redos
-        parameters:
-            database_name: ""
-            source_variables:
-                ALARM_SERVICE_URL: ""
-                ALARM_TOPIC_COMPACT: sdku-alarms-compact
-                DATA_MANAGER_URL_ROOT: ""
-                OTHER_SERVER_ID_1: ""
-                REDIS_SENTINEL_MASTER: ""
-                SDKU_VTOR_CONSENSUS_TCP_PORT: "40301"
-                SERVER_REPLICAS_1: ""
-                USER_PREFERENCES_URL_ROOT: ""
         ports:
             port-1:
-                container: 15017
-                published: 15017
-            port-2:
                 container: 10301
                 published: 10301
-            port-3:
+            port-2:
                 container: 40301
                 published: 40301
+            port-3:
+                container: 15017
+                published: 15017
         provisioner:
             approle:
                 bind_secret_id: false
@@ -56410,7 +56589,7 @@ platform_application_definition:
 {{ application_runtime | platform.core.application_agent_config }}
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/sdku-vtor/1.0.0/roles/application_sdku-vtor/templates/compose.yml.j2","mode":420,"size":1924,"sha256":"448e796aa5d96099cf96461e481e363260c6e82304bcaf172cc00cdb1884293b","index":0,"count":1,"encoding":"utf-8","payloadBytes":1924}
+@@PORTABLE {"path":"examples/sdku/application-packages/sdku-vtor/1.0.0/roles/application_sdku-vtor/templates/compose.yml.j2","mode":420,"size":2127,"sha256":"609282f8666b7154490bce314041c73904a82bbcae85786c9be6d5128e2cb621","index":0,"count":1,"encoding":"utf-8","payloadBytes":2127}
 services:
   {{ application_instance_id }}:
     extends:
@@ -56432,8 +56611,8 @@ services:
       {{ name | to_json }}: {{ (value | string) | to_json }}
 {% endif %}
 {% endfor %}
-      "server.port": {{ (application_effective.ports['port-2'].container | string) | to_json }}
-      "WEB_SERVER_PORT": {{ (application_effective.ports['port-2'].container | string) | to_json }}
+      "server.port": {{ (application_effective.ports['port-1'].container | string) | to_json }}
+      "WEB_SERVER_PORT": {{ (application_effective.ports['port-1'].container | string) | to_json }}
     labels:
       "platform.installer.project": {{ application_project_id | to_json }}
       "platform.installer.library": {{ library_runtime.library_id | to_json }}
@@ -56447,6 +56626,9 @@ services:
     volumes:
       - {{ (application_runtime.vault_path ~ ':/opt/vault:ro') | to_json }}
       - {{ (application_runtime.pki_path ~ ':/opt/application/pki:ro') | to_json }}
+{% for config in application_effective.config_files %}
+      - {{ (application_runtime.config_path ~ '/' ~ config.destination ~ ':/usr/local/app/' ~ config.destination ~ ':ro') | to_json }}
+{% endfor %}
     deploy:
       "resources":
           limits:
@@ -56711,7 +56893,7 @@ platform_application_libraries:
   sdku-main: {}
 
 @@END
-@@PORTABLE {"path":"examples/sdku/import-catalog.json","mode":420,"size":5579,"sha256":"07fa409a5d5a093e53202598f2c4d1b6fcd79bb26b73aef60340d41c3853f901","index":0,"count":1,"encoding":"utf-8","payloadBytes":5579}
+@@PORTABLE {"path":"examples/sdku/import-catalog.json","mode":420,"size":5579,"sha256":"228120b3134ddef63ec2b061fee37008f05bf566caebb28377064c90597b9fdc","index":0,"count":1,"encoding":"utf-8","payloadBytes":5579}
 [
   {
     "digest": "sha256:b6b4600f4e5b761cef2305505a63e861c1177b0a3460f9b340e8001200a32148",
@@ -56749,7 +56931,7 @@ platform_application_libraries:
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:65423d1fd523f200d343d5fc323f0f13b514858cf59324c6567c6d7d3ceb77bc",
+    "digest": "sha256:a890b3324ac7cd3ded78fab1fc84b9fbd85312968e7f1abd402c31efe2090b8e",
     "kind": "application",
     "name": "evo-scheduler",
     "sourceDirectory": ".",
@@ -56847,28 +57029,28 @@ platform_application_libraries:
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:3594124dc5fb8f78ceda6cdce58472e2bfca393b43c32d1395ccd751077c4998",
+    "digest": "sha256:ec1f81f598ff2b3aac8a05a319a32e752ff68832b9a1a7bb9b83d42f4daa04dd",
     "kind": "application",
     "name": "sdku-knp",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:8e6a2e3289eab3d9067e898606309af5ce0c65c9ddb18600ebd91c7a35112d8d",
+    "digest": "sha256:6183fa898217b184e8d7de686ba649b4f694822f272d15fd8c9d56c2c27405e5",
     "kind": "application",
     "name": "sdku-status-calculation",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:bf4b663740be814e2402bf87d92ea9744bd5b446865ca0c5a7b8bee19e2d81bb",
+    "digest": "sha256:e479362d5df0c65fa11d9cd1777493d7778ed43d5a088671ffbcf6ae59b4d05b",
     "kind": "application",
     "name": "sdku-tank-farm",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:249bbce7cba0fb5c9f7f4ff3a131ea213ef91eb15c828d519a48e58480336c4c",
+    "digest": "sha256:6ff0c6ca633d5d644d0f925493d29bd0be6e4c0d90e5f21834d00f86cef958bc",
     "kind": "application",
     "name": "sdku-telemechanics",
     "sourceDirectory": ".",
@@ -56882,7 +57064,7 @@ platform_application_libraries:
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:5ed4bb9f4cf34502f6b9ba6302b27accfece0980c4a127a9843841e25704ee1c",
+    "digest": "sha256:37a455e10d9fdec905ccc392b680d2efb438b786c571746f88f1bd7786693969",
     "kind": "application",
     "name": "sdku-vtor",
     "sourceDirectory": ".",
@@ -56896,7 +57078,7 @@ platform_application_libraries:
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:389dd0e6223bcdff03635a7ae4e5fe33e654f0347188f7ad94f9b92fe77d31f4",
+    "digest": "sha256:9fef859e881411913aa97474a90b8de418b4cb486a89a5ad759acc2cb10a27d2",
     "kind": "library",
     "name": "sdku",
     "sourceDirectory": ".",
@@ -57185,7 +57367,7 @@ platform_library_definition:
                         index_granularity: 8192
 
 @@END
-@@PORTABLE {"path":"examples/sdku/library-packages/sdku/1.0.0/roles/library_sdku/templates/.base_compose.yml.j2","mode":420,"size":1699,"sha256":"cfdec3b57b8fe384769e6c745de2345da2772effb766c955ab16b2001333088e","index":0,"count":1,"encoding":"utf-8","payloadBytes":1699}
+@@PORTABLE {"path":"examples/sdku/library-packages/sdku/1.0.0/roles/library_sdku/templates/.base_compose.yml.j2","mode":420,"size":1814,"sha256":"47e059983c9a29faac80918af35576233824250570737c440e605e6cb1390f3b","index":0,"count":1,"encoding":"utf-8","payloadBytes":1814}
 {% set environment = library_runtime.defaults.environment | combine({}) %}
 {% set server_ids = groups['all'] | reject('equalto', 'localhost') | sort | list %}
 {% for connection, names in {
@@ -57219,6 +57401,9 @@ services:
       service: base
     environment:
       "SERVER_ID": "${SERVER_ID}"
+{% for server_id in server_ids %}
+      "SERVER_{{ loop.index }}_IP": "${SERVER_{{ loop.index }}_IP}"
+{% endfor %}
 {% for name, value in environment.items() %}
       {{ name | to_json }}: {{ (value | string) | to_json }}
 {% endfor %}
@@ -114623,586 +114808,6 @@ func presentBeforeDigest(document DocumentChange) string {
 		return document.Before.Digest
 	}
 	return document.BeforeDigest
-}
-
-@@END
-@@PORTABLE {"path":"internal/installer/local_save.go","mode":420,"size":24018,"sha256":"3a0a09386f711b7058a8060b5c339d7a8cf2d2f1e00ee6220c3d3115de33d9ad","index":0,"count":1,"encoding":"utf-8","payloadBytes":24018}
-package installer
-
-import (
-	"context"
-	"errors"
-	"net/netip"
-	"os"
-	"path/filepath"
-	"sort"
-	"strings"
-
-	"platform-installer/internal/projectlifecycle"
-)
-
-const (
-	maxManagedDocumentBytes  int64 = 4 * 1024 * 1024
-	maxManagedAggregateBytes int64 = 64 * 1024 * 1024
-	maxManagedHostDocuments        = 4096
-	maxManagedEntities             = 4096
-	maxManagedPlacements           = 16384
-	maxManagedRoles                = 128
-)
-
-// ReadManagedProjectView reads only directly Installer-owned canonical fields.
-// It does not implement Ansible precedence, service validation or derived
-// provider/VIP semantics.
-func ReadManagedProjectView(projectRoot string) (*ManagedProjectView, error) {
-	return ReadManagedProjectViewWithCatalog(projectRoot, nil)
-}
-
-// ReadManagedProjectViewWithCatalog joins direct owned values only with the
-// exact READY catalog selected by the caller. Without it the projection keeps
-// stable setting identities and presence, but never exposes raw values.
-func ReadManagedProjectViewWithCatalog(projectRoot string, catalog *projectlifecycle.ProjectCatalogView) (*ManagedProjectView, error) {
-	root, err := cleanRoot(projectRoot)
-	if err != nil {
-		return nil, err
-	}
-	before, err := ProjectRevision(root)
-	if err != nil {
-		return nil, err
-	}
-	read := managedReadBudget{}
-	document, _, err := read.ownedDocument(root, managedInventoryDocument)
-	if err != nil {
-		return nil, err
-	}
-	all := asMap(document["all"])
-	hosts := asMap(all["hosts"])
-	targets := asMap(asMap(asMap(all["children"])["platform_targets"])["hosts"])
-	if all == nil || hosts == nil || targets == nil {
-		return nil, blocked("MANAGED_DOCUMENT_INVALID", "Managed inventory roots are missing or malformed", managedInventoryDocument)
-	}
-	view := &ManagedProjectView{Servers: make(map[string]ManagedServer), Deployments: make(map[string]ManagedDeployment), EndpointGroups: make(map[string]ManagedEndpointGroup), MemberPlacements: []ManagedMemberPlacement{}, HostPlacements: []ManagedHostPlacement{}, PKI: ManagedPKI{Authorities: map[string]map[string]any{}, Profiles: map[string]map[string]any{}, TLSProfiles: map[string]map[string]any{}, Scopes: map[string]map[string]any{}}}
-	for hostID := range targets {
-		if len(view.Servers) >= maxManagedEntities || !identifierPattern.MatchString(hostID) {
-			return nil, managedReadError("Managed server collection is invalid or exceeds its limit", managedInventoryDocument)
-		}
-		host := asMap(hosts[hostID])
-		if host == nil {
-			return nil, blocked("MANAGED_DOCUMENT_INVALID", "Managed target is missing its canonical host record", managedInventoryDocument)
-		}
-		platformHost := asMap(host["platform_host"])
-		server := ManagedServer{HostID: hostID}
-		server.Address, _ = host["ansible_host"].(string)
-		server.Type, _ = platformHost["type"].(string)
-		server.DesiredHostname, _ = platformHost["desiredHostname"].(string)
-		if raw, found := host["ansible_port"]; found {
-			port, ok := yamlInteger(raw)
-			if !ok || port < 1 || port > 65535 {
-				return nil, blocked("MANAGED_DOCUMENT_INVALID", "Managed server SSH port is invalid", managedInventoryDocument)
-			}
-			server.SSHPort = &port
-		}
-		view.Servers[hostID] = server
-	}
-	if err := readManagedDesiredState(root, &read, view, catalog); err != nil {
-		return nil, err
-	}
-	if err := readManagedHostPlacements(root, &read, view, catalog); err != nil {
-		return nil, err
-	}
-	sortManagedView(view)
-	view.ApplicationPackages, err = readManagedApplicationPackages(root)
-	if err != nil {
-		return nil, err
-	}
-	view.ProjectRevision, err = ProjectRevision(root)
-	if err == nil && view.ProjectRevision != before {
-		return nil, blocked("PROJECT_CHANGED", "Project changed while reading its managed view", "project")
-	}
-	return view, err
-}
-
-type managedReadBudget struct{ total int64 }
-
-func (budget *managedReadBudget) ownedDocument(root, logical string) (map[string]any, []byte, error) {
-	content, err := readF1OwnedDocument(root, logical)
-	if err != nil || int64(len(content)) > maxManagedDocumentBytes || budget.total+int64(len(content)) > maxManagedAggregateBytes {
-		return nil, nil, managedReadError("Managed document is unsafe, malformed, or exceeds the read limit", logical)
-	}
-	budget.total += int64(len(content))
-	document, err := parseManagedYAML(content)
-	if err != nil {
-		return nil, nil, err
-	}
-	return document, content, nil
-}
-
-func (budget *managedReadBudget) ownedDocumentOptional(root, logical string) (map[string]any, bool, error) {
-	document, _, exists, err := budget.ownedDocumentOptionalBytes(root, logical)
-	return document, exists, err
-}
-
-func (budget *managedReadBudget) ownedDocumentOptionalBytes(root, logical string) (map[string]any, []byte, bool, error) {
-	content, err := readF1OwnedDocument(root, logical)
-	if errors.Is(err, os.ErrNotExist) || os.IsNotExist(err) {
-		return nil, nil, false, nil
-	}
-	// This is only an absence classification after the authoritative
-	// handle-bound read failed. It never authorizes a later pathname read.
-	if err != nil {
-		if _, statErr := os.Lstat(filepath.Join(root, filepath.FromSlash(logical))); errors.Is(statErr, os.ErrNotExist) {
-			return nil, nil, false, nil
-		}
-	}
-	if err != nil || int64(len(content)) > maxManagedDocumentBytes || budget.total+int64(len(content)) > maxManagedAggregateBytes {
-		return nil, nil, false, managedReadError("Managed document is unsafe, malformed, or exceeds the read limit", logical)
-	}
-	budget.total += int64(len(content))
-	document, err := parseManagedYAML(content)
-	if err != nil {
-		return nil, nil, false, err
-	}
-	return document, content, true, nil
-}
-
-func managedReadError(message, field string) error {
-	return blocked("MANAGED_DOCUMENT_INVALID", message, field)
-}
-
-func readManagedDesiredState(root string, budget *managedReadBudget, view *ManagedProjectView, catalog *projectlifecycle.ProjectCatalogView) error {
-	document, _, err := budget.ownedDocument(root, desiredDocument)
-	if err != nil {
-		return err
-	}
-	state := asMap(document["platform_desired_state"])
-	view.ApplicationLibraries = map[string]map[string]any{}
-	view.ApplicationPlacements = map[string]map[string]any{}
-	for id, raw := range asMap(state["applicationLibraryDeployments"]) {
-		value := asMap(raw)
-		if !validLibraryInputID(id) || value == nil || safeApplicationInput(value, 0) != nil {
-			return managedReadError("Managed application library input is unsafe", desiredDocument)
-		}
-		view.ApplicationLibraries[id] = asMap(deepCopy(value))
-	}
-	view.DataRootDirectory = "/var/lib"
-	if raw, found := document["platform_data_root_directory"]; found {
-		value, ok := raw.(string)
-		if !ok || !validProjectSetting("platform_data_root_directory", value) {
-			return managedReadError("Managed service data root is invalid", desiredDocument)
-		}
-		view.DataRootDirectory = value
-	}
-	if raw, found := document["platform_name_prefix"]; found {
-		value, ok := raw.(string)
-		if !ok || !validProjectSetting("platform_name_prefix", value) {
-			return managedReadError("Managed resource name prefix is invalid", desiredDocument)
-		}
-		view.NamePrefix = value
-	}
-	deployments := asMap(state["serviceDeployments"])
-	groups := asMap(state["endpointGroups"])
-	if state == nil || deployments == nil {
-		return managedReadError("Managed desired-state roots are missing or malformed", desiredDocument)
-	}
-	if groups == nil {
-		groups = map[string]any{}
-	}
-	for id, raw := range deployments {
-		if len(view.Deployments) >= maxManagedEntities || !identifierPattern.MatchString(id) {
-			return managedReadError("Managed deployment collection is invalid or exceeds its limit", desiredDocument)
-		}
-		deployment := asMap(raw)
-		serviceType, serviceOK := deployment["serviceType"].(string)
-		mode, modeOK := deployment["mode"].(string)
-		endpointGroup, endpointOK := optionalString(deployment, "endpointGroup")
-		if deployment == nil || !serviceOK || !validDesiredStateIdentifier(serviceType) || !modeOK || !validDesiredStateIdentifier(mode) || !endpointOK || (endpointGroup != "" && !identifierPattern.MatchString(endpointGroup)) {
-			return managedReadError("Managed deployment is malformed", desiredDocument)
-		}
-		provider, providerErr := managedProviderProjection(deployment)
-		if providerErr != nil {
-			return providerErr
-		}
-		configuration, configurationErr := managedConfigurationProjection(deployment, serviceType, catalog, desiredDocument)
-		if configurationErr != nil {
-			return configurationErr
-		}
-		view.Deployments[id] = ManagedDeployment{DeploymentID: id, ServiceType: serviceType, Mode: mode, EndpointGroup: endpointGroup,
-			EndpointGroupRef: provider.endpointGroupRef, VirtualRouterID: provider.virtualRouterID,
-			VirtualAddresses: provider.virtualAddresses, ProviderEditState: provider.editState, Configuration: configuration}
-	}
-	for id, raw := range groups {
-		if len(view.EndpointGroups) >= maxManagedEntities || !identifierPattern.MatchString(id) {
-			return managedReadError("Managed endpoint-group collection is invalid or exceeds its limit", desiredDocument)
-		}
-		group := asMap(raw)
-		address := asMap(group["address"])
-		domain, domainOK := address["domain"].(string)
-		wildcard, wildcardOK := address["wildcard"].(bool)
-		if group == nil || address == nil || !domainOK || domain == "" || !wildcardOK {
-			return managedReadError("Managed endpoint group is malformed", desiredDocument)
-		}
-		view.EndpointGroups[id] = ManagedEndpointGroup{EndpointGroupID: id, Domain: domain, Wildcard: wildcard}
-	}
-	for _, entry := range []struct {
-		key       string
-		target    map[string]map[string]any
-		operation string
-	}{{"certificateAuthorities", view.PKI.Authorities, "CreateCertificateAuthority"}, {"certificateProfiles", view.PKI.Profiles, "CreateCertificateProfile"}, {"tlsProfiles", view.PKI.TLSProfiles, "CreateTLSProfile"}, {"certificateScopes", view.PKI.Scopes, "CreateCertificateScope"}} {
-		rawValues := state[entry.key]
-		if rawValues == nil {
-			continue
-		}
-		values := asMap(rawValues)
-		if values == nil || len(values) > maxManagedEntities {
-			return managedReadError("Managed PKI collection is malformed or exceeds its limit", desiredDocument)
-		}
-		for id, raw := range values {
-			entity := asMap(raw)
-			if !validDesiredStateIdentifier(id) || validPKIEntity(entry.operation, entity) != nil {
-				return managedReadError("Managed PKI entity is malformed", desiredDocument)
-			}
-			entry.target[id] = deepCopy(entity).(map[string]any)
-		}
-	}
-	return nil
-}
-
-type managedProviderView struct {
-	endpointGroupRef string
-	virtualRouterID  *int
-	virtualAddresses []VirtualAddress
-	editState        string
-}
-
-func managedProviderProjection(deployment map[string]any) (managedProviderView, error) {
-	result := managedProviderView{virtualAddresses: []VirtualAddress{}, editState: "NONE"}
-	refRaw, hasRef := deployment["endpointGroupRef"]
-	routerRaw, hasRouter := deployment["virtualRouterId"]
-	addressesRaw, hasAddresses := deployment["virtualAddresses"]
-	if !hasRef && !hasRouter && !hasAddresses {
-		return result, nil
-	}
-	if hasRef {
-		ref, ok := refRaw.(string)
-		if !ok {
-			return result, managedReadError("Managed provider endpoint-group reference is malformed", desiredDocument)
-		}
-		result.endpointGroupRef = ref
-	}
-	if hasRouter {
-		routerID, ok := yamlInteger(routerRaw)
-		if !ok {
-			return result, managedReadError("Managed provider virtual router ID is malformed", desiredDocument)
-		}
-		result.virtualRouterID = &routerID
-	}
-	if hasAddresses {
-		values := asSlice(addressesRaw)
-		if values == nil || len(values) > maxManagedEntities {
-			return result, managedReadError("Managed provider address collection is malformed or exceeds its limit", desiredDocument)
-		}
-		result.virtualAddresses = make([]VirtualAddress, 0, len(values))
-		for _, raw := range values {
-			value := asMap(raw)
-			address, addressOK := value["address"].(string)
-			iface, interfaceOK := value["interface"].(string)
-			if value == nil || len(value) != 2 || !addressOK || !interfaceOK {
-				return result, managedReadError("Managed provider virtual address is malformed", desiredDocument)
-			}
-			result.virtualAddresses = append(result.virtualAddresses, VirtualAddress{Address: address, Interface: iface})
-		}
-	}
-
-	unsupported := len(result.virtualAddresses) > 64
-	complete := hasRef && hasRouter && hasAddresses && result.endpointGroupRef != "" && result.virtualRouterID != nil && *result.virtualRouterID >= 1 && *result.virtualRouterID <= 255 && len(result.virtualAddresses) != 0
-	if result.endpointGroupRef != "" && !identifierPattern.MatchString(result.endpointGroupRef) {
-		unsupported = true
-	}
-	for _, value := range result.virtualAddresses {
-		address, addressErr := netip.ParseAddr(value.Address)
-		if addressErr != nil || !address.Is4() || value.Interface == "" || !virtualAddressInterfacePattern.MatchString(value.Interface) {
-			complete = false
-		}
-		if len(value.Interface) > 128 {
-			unsupported = true
-		}
-	}
-	if unsupported {
-		result.editState = "UNSUPPORTED"
-		return result, nil
-	}
-	if complete {
-		result.editState = "EDITABLE"
-		return result, nil
-	}
-	result.editState = "INCOMPLETE"
-	return result, nil
-}
-
-func readManagedHostPlacements(root string, budget *managedReadBudget, view *ManagedProjectView, catalog *projectlifecycle.ProjectCatalogView) error {
-	hostIDs := make([]string, 0, len(view.Servers))
-	for hostID := range view.Servers {
-		hostIDs = append(hostIDs, hostID)
-	}
-	sort.Strings(hostIDs)
-	if len(hostIDs) > maxManagedHostDocuments {
-		return managedReadError("Managed host document collection exceeds its limit", "inventory/host_vars")
-	}
-	for _, hostID := range hostIDs {
-		logical := managedHostDocument(hostID)
-		document, exists, documentErr := budget.ownedDocumentOptional(root, logical)
-		if documentErr != nil {
-			// A server without an owned host-vars document has no direct placement.
-			// Do not inspect an unbound pathname merely to distinguish absence.
-			return documentErr
-		}
-		if !exists {
-			continue
-		}
-		if placements := asMap(document["platform_application_libraries"]); placements != nil {
-			if safeApplicationInput(placements, 0) != nil {
-				return managedReadError("Managed application placement is unsafe", logical)
-			}
-			view.ApplicationPlacements[hostID] = asMap(deepCopy(placements))
-		}
-		placements := asMap(document["platform_deployments"])
-		if placements == nil {
-			return managedReadError("Managed placement root is missing or malformed", logical)
-		}
-		for deploymentID, raw := range placements {
-			if !identifierPattern.MatchString(deploymentID) {
-				return managedReadError("Managed placement deployment identifier is invalid", logical)
-			}
-			placement := asMap(raw)
-			if placement == nil {
-				return managedReadError("Managed placement is malformed", logical)
-			}
-			members, hasMembers := placement["members"]
-			_, hasRoles := placement["roles"]
-			if hasMembers && hasRoles {
-				return managedReadError("Managed placement ambiguously mixes member and host forms", logical)
-			}
-			if hasMembers {
-				memberMap := asMap(members)
-				if memberMap == nil {
-					return managedReadError("Managed member placement is malformed", logical)
-				}
-				for memberID, memberRaw := range memberMap {
-					member := asMap(memberRaw)
-					roles, rolesErr := managedRoles(member["roles"], logical)
-					if rolesErr != nil || !identifierPattern.MatchString(memberID) || len(view.MemberPlacements)+len(view.HostPlacements) >= maxManagedPlacements {
-						return managedReadError("Managed member placement is invalid or exceeds its limit", logical)
-					}
-					deployment := view.Deployments[deploymentID]
-					configuration, configurationErr := managedConfigurationProjection(member, deployment.ServiceType, catalog, logical)
-					if configurationErr != nil {
-						return configurationErr
-					}
-					view.MemberPlacements = append(view.MemberPlacements, ManagedMemberPlacement{DeploymentID: deploymentID, MemberID: memberID, HostID: hostID, Roles: roles, Configuration: configuration})
-				}
-				continue
-			}
-			roles, rolesErr := managedRoles(placement["roles"], logical)
-			if rolesErr != nil || len(view.MemberPlacements)+len(view.HostPlacements) >= maxManagedPlacements {
-				return managedReadError("Managed host placement is invalid or exceeds its limit", logical)
-			}
-			var priority *int
-			if rawPriority, present := placement["priority"]; present {
-				value, valid := yamlInteger(rawPriority)
-				if !valid || value < 1 || value > 254 {
-					return managedReadError("Managed host placement priority is invalid", logical)
-				}
-				priority = &value
-			}
-			view.HostPlacements = append(view.HostPlacements, ManagedHostPlacement{DeploymentID: deploymentID, HostID: hostID, Roles: roles, Priority: priority})
-		}
-	}
-	return nil
-}
-
-func managedConfigurationProjection(owner map[string]any, serviceType string, catalog *projectlifecycle.ProjectCatalogView, field string) ([]ManagedConfigurationOverride, error) {
-	raw, present := owner["configuration"]
-	if !present {
-		return []ManagedConfigurationOverride{}, nil
-	}
-	configuration := asMap(raw)
-	if configuration == nil || len(configuration) > maxManagedEntities {
-		return nil, managedReadError("Managed configuration is malformed or exceeds its limit", field)
-	}
-	result := make([]ManagedConfigurationOverride, 0, len(configuration))
-	for settingID, value := range configuration {
-		if len(settingID) > 128 || !configurationSettingPattern.MatchString(settingID) {
-			return nil, managedReadError("Managed configuration setting identifier is invalid", field)
-		}
-		entry := ManagedConfigurationOverride{Setting: settingID, OverridePresent: true, State: "UNKNOWN"}
-		if catalog != nil && catalog.Status == "READY" {
-			descriptor, found := catalogConfigurationSetting(catalog, serviceType, settingID)
-			if !found || descriptor.Kind != "MANAGED" || descriptor.EditorShape == "UNSUPPORTED" {
-				entry.State = "UNSUPPORTED"
-			} else {
-				if err := validateConfigurationValue(descriptor, value); err != nil {
-					return nil, managedReadError("Managed configuration value does not match its catalog descriptor", field)
-				}
-				entry.State, entry.Value = "EDITABLE", deepCopy(value)
-			}
-		}
-		result = append(result, entry)
-	}
-	sort.Slice(result, func(left, right int) bool { return result[left].Setting < result[right].Setting })
-	return result, nil
-}
-
-func optionalString(value map[string]any, key string) (string, bool) {
-	raw, found := value[key]
-	if !found {
-		return "", true
-	}
-	text, ok := raw.(string)
-	return text, ok
-}
-
-func managedRoles(raw any, field string) ([]string, error) {
-	if raw == nil {
-		return []string{}, nil
-	}
-	values := asSlice(raw)
-	if values == nil || len(values) > maxManagedRoles {
-		return nil, managedReadError("Managed placement roles are malformed or exceed their limit", field)
-	}
-	seen := make(map[string]bool, len(values))
-	roles := make([]string, 0, len(values))
-	for _, rawRole := range values {
-		role, ok := rawRole.(string)
-		if !ok || !identifierPattern.MatchString(role) || seen[role] {
-			return nil, managedReadError("Managed placement roles are invalid", field)
-		}
-		seen[role] = true
-		roles = append(roles, role)
-	}
-	sort.Strings(roles)
-	return roles, nil
-}
-
-func sortManagedView(view *ManagedProjectView) {
-	sort.Slice(view.MemberPlacements, func(left, right int) bool {
-		leftValue, rightValue := view.MemberPlacements[left], view.MemberPlacements[right]
-		return leftValue.DeploymentID+"\x00"+leftValue.MemberID+"\x00"+leftValue.HostID < rightValue.DeploymentID+"\x00"+rightValue.MemberID+"\x00"+rightValue.HostID
-	})
-	sort.Slice(view.HostPlacements, func(left, right int) bool {
-		leftValue, rightValue := view.HostPlacements[left], view.HostPlacements[right]
-		return leftValue.DeploymentID+"\x00"+leftValue.HostID < rightValue.DeploymentID+"\x00"+rightValue.HostID
-	})
-}
-
-func yamlInteger(value any) (int, bool) {
-	switch typed := value.(type) {
-	case int:
-		return typed, true
-	case int64:
-		return int(typed), int64(int(typed)) == typed
-	case uint64:
-		return int(typed), uint64(int(typed)) == typed
-	default:
-		return 0, false
-	}
-}
-
-func blockedStructuralPlan(revision string, err error) *StructuralEditPlan {
-	plan := &StructuralEditPlan{APIVersion: StructuralPlanAPIVersion, Kind: "StructuralEditPlan", Status: "BLOCKED",
-		BaseProjectRevision: revision, SemanticChanges: []SemanticChange{}, AffectedEntities: []string{},
-		AffectedDocuments: []DocumentChange{}, SaveAllowed: false}
-	if typed, ok := err.(*writerError); ok {
-		finding := typed.finding()
-		plan.Finding = &finding
-	}
-	return plan
-}
-
-// PlanStructuralSave builds a bounded local preview for server and topology intents and
-// stores its candidate bytes in the existing opaque plan store.
-func (b *Backend) PlanStructuralSave(ctx context.Context, projectRoot, classification, revision string, commands []EditCommand) (*StructuralEditPlan, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	if len(commands) == 0 {
-		return blockedStructuralPlan(revision, blocked("EDIT_SESSION_EMPTY", "Edit session contains no commands", "session")), nil
-	}
-	if len(commands) > 16 {
-		return blockedStructuralPlan(revision, blocked("EDIT_SESSION_COMMANDS_UNSUPPORTED", "This edit set must be split", "session")), nil
-	}
-	for _, command := range commands {
-		if command.Operation != "CreateServer" && command.Operation != "UpdateServer" && command.Operation != "DeleteServer" && !topologyOperation(command.Operation) {
-			return blockedStructuralPlan(revision, blocked("EDIT_OPERATION_NOT_AVAILABLE", "Edit operation is not available in this editor", "command.operation")), nil
-		}
-		if err := b.validateCommand(command); err != nil {
-			return blockedStructuralPlan(revision, err), nil
-		}
-	}
-	root, err := cleanRoot(projectRoot)
-	if err != nil {
-		return blockedStructuralPlan(revision, err), nil
-	}
-	return b.planStructuralCandidate(ctx, root, classification, revision, commands)
-}
-
-func (b *Backend) storeStructuralPlan(root, revision string, changes []SemanticChange, documents []storedDocument) (*StructuralEditPlan, error) {
-	if len(documents) == 0 {
-		return &StructuralEditPlan{APIVersion: StructuralPlanAPIVersion, Kind: "StructuralEditPlan", Status: "NO_CHANGE", BaseProjectRevision: revision,
-			SemanticChanges: []SemanticChange{}, AffectedEntities: []string{}, AffectedDocuments: []DocumentChange{}, SaveAllowed: false}, nil
-	}
-	documentChanges := make([]DocumentChange, 0, len(documents))
-	diffs := make([]string, 0, len(documents))
-	for _, document := range documents {
-		before := &DocumentState{State: "ABSENT"}
-		if document.Existed {
-			before = &DocumentState{State: "PRESENT", Digest: digestBytes(document.Before)}
-		}
-		documentChanges = append(documentChanges, DocumentChange{LogicalPath: document.LogicalPath, Before: before,
-			After: &DocumentState{State: "PRESENT", Digest: digestBytes(document.After)}})
-		diffs = append(diffs, boundedDiff(document.LogicalPath, document.Before, document.After))
-	}
-	plan := StructuralEditPlan{APIVersion: StructuralPlanAPIVersion, Kind: "StructuralEditPlan", Status: "READY", BaseProjectRevision: revision,
-		SemanticChanges: changes, AffectedEntities: affectedEntities(changes), AffectedDocuments: documentChanges,
-		ReviewDiff: strings.Join(diffs, ""), SaveAllowed: true, ExpiresAt: b.now().Add(b.planTTL)}
-	internal := EditPlan{APIVersion: EditPlanAPIVersionV2, Kind: "EditPlan", Status: "READY", BaseProjectRevision: revision,
-		AffectedDocuments: documentChanges, CommitAllowed: true, ApplyRequired: true}
-	id, err := b.plans.Put(storedPlan{Created: b.now(), ProjectRoot: root, Public: internal, LocalOnly: true, Documents: documents})
-	if err != nil {
-		return nil, err
-	}
-	plan.PlanID = id
-	return &plan, nil
-}
-
-func (b *Backend) CommitStructuralSave(ctx context.Context, planID string) StructuralSaveResult {
-	result := b.CommitEditPlanV2(ctx, planID)
-	return StructuralSaveResult{APIVersion: StructuralResultAPIVersion, Kind: "StructuralSaveResult", Status: result.Status,
-		Changed: result.Changed, Finding: result.Finding, OldProjectRevision: result.OldProjectRevision,
-		NewProjectRevision: result.NewProjectRevision, AffectedDocuments: result.AffectedDocuments, Timing: result.Timing, Managed: result.Managed}
-}
-
-@@END
-@@PORTABLE {"path":"internal/installer/managed_host_enumerator.go","mode":420,"size":845,"sha256":"f1b85dc617c6f1dba39932db11787891e452fd0b36722a92d877d836a3df7695","index":0,"count":1,"encoding":"utf-8","payloadBytes":845}
-package installer
-
-import "sort"
-
-// enumerateManagedHostDocuments discovers only fixed managed host-var
-// candidates. Content and ownership are verified later from the exact opened
-// file object by managedReadBudget.ownedDocumentOptional.
-func enumerateManagedHostDocuments(root string) ([]string, error) {
-	names, err := enumerateManagedHostDirectories(root, maxManagedHostDocuments)
-	if err != nil {
-		return nil, managedReadError("Managed host document collection is unsafe or exceeds its limit", "inventory/host_vars")
-	}
-	paths := make([]string, 0, len(names))
-	for _, name := range names {
-		if !identifierPattern.MatchString(name) {
-			return nil, managedReadError("Managed host document identifier is invalid", "inventory/host_vars")
-		}
-		paths = append(paths, managedHostDocument(name))
-	}
-	sort.Strings(paths)
-	return paths, nil
 }
 
 @@END
