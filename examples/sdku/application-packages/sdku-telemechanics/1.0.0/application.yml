@@ -3,7 +3,8 @@
   "files": [
     "roles/application_sdku-telemechanics/defaults/main.yml",
     "roles/application_sdku-telemechanics/templates/compose.yml.j2",
-    "roles/application_sdku-telemechanics/templates/agent.hcl.j2"
+    "roles/application_sdku-telemechanics/templates/agent.hcl.j2",
+    "assets/config/telemechanics_config.yaml"
   ],
   "kind": "ApplicationPackage",
   "name": "sdku-telemechanics",

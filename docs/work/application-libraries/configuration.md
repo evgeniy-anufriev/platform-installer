@@ -378,6 +378,19 @@ Base-compose содержит, например,
 
 ## Endpoint
 
+У пяти backend-пакетов `sdku-*` консенсус рассчитывается в defaults для
+размещений того же приложения в том же экземпляре библиотеки. Одно размещение
+включает mock, два и более — реальный режим DYNAMIC. Имя участника — server ID;
+список `name=host:port` содержит только соседей, адреса используют `${SERVER_N_IP}`.
+В Compose эти Spring placeholders записаны как `$${SERVER_N_IP}`; base-compose
+передаёт соответствующие `SERVER_N_IP` из `.env` в backend. Это сохраняет
+точную проекцию ENV при `compose config`, затем Spring раскрывает адреса.
+`SDKU_*_CONSENSUS_TCP_PORT` сохраняется в `parameters.source_variables` манифеста
+и вычисляется из эффективного `port-2.container`; ENV listener использует то же
+YAML-выражение через alias. Порты переопределяются штатно через `ports`, адрес
+каждого соседа использует его `port-2.published`. У status-calculation и vtor
+HTTP теперь обозначен `port-1`, consensus — `port-2`; номера портов сохранены.
+
 Backend defaults принадлежат приложению и переопределяются в instance overrides.
 Не создавать второй renderer HAProxy: значения отображаются в существующий
 provider contract. Host/port выводятся из placement и published port listener.

@@ -3,7 +3,8 @@
   "files": [
     "roles/application_sdku-vtor/defaults/main.yml",
     "roles/application_sdku-vtor/templates/compose.yml.j2",
-    "roles/application_sdku-vtor/templates/agent.hcl.j2"
+    "roles/application_sdku-vtor/templates/agent.hcl.j2",
+    "assets/config/vtor_config.yaml"
   ],
   "kind": "ApplicationPackage",
   "name": "sdku-vtor",

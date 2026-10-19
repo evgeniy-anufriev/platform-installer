@@ -67,6 +67,8 @@ platform_application_definition:
             JAVA_OPTS: -Xmx15000m
             RESULT_FILE_DIR: /usr/local/app/data
             SERVER_PORT: 12080
+            SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "10"
+            SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
             SPRING_KAFKA_CLIENT_ID: '{{ application_instance_id }}-$${SERVER_ID}'
             TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
             WEB_CLIENT_CONNECTION_TIMEOUT: 100000

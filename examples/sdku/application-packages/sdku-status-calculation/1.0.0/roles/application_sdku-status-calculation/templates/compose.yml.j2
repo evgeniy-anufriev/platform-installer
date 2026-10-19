@@ -19,8 +19,8 @@ services:
       {{ name | to_json }}: {{ (value | string) | to_json }}
 {% endif %}
 {% endfor %}
-      "server.port": {{ (application_effective.ports['port-2'].container | string) | to_json }}
-      "WEB_SERVER_PORT": {{ (application_effective.ports['port-2'].container | string) | to_json }}
+      "server.port": {{ (application_effective.ports['port-1'].container | string) | to_json }}
+      "WEB_SERVER_PORT": {{ (application_effective.ports['port-1'].container | string) | to_json }}
     labels:
       "platform.installer.project": {{ application_project_id | to_json }}
       "platform.installer.library": {{ library_runtime.library_id | to_json }}

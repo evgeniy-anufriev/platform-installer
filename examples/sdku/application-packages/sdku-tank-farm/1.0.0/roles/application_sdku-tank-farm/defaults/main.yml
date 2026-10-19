@@ -56,6 +56,22 @@ platform_application_definition:
             - java
             - -jar
             - sdku-tank-farm.jar
+        config_files:
+            - source: assets/config/tank_config.yaml
+              destination: config/tank_config.yaml
+              mode: '0644'
+        parameters:
+            database_name: ""
+            source_variables:
+                ALARM_SERVICE_URL: ""
+                ALARM_TOPIC_COMPACT: sdku-alarms-compact
+                DATA_MANAGER_URL_ROOT: ""
+                REDIS_SENTINEL_MASTER: ""
+                SDKU_TANK_FARM_CONSENSUS_TCP_PORT: &consensus_tcp_port >-
+                    {{ ((application_job.application.definition.defaults.ports | default({})) |
+                    combine(application_job.slot.overrides.ports | default({}), recursive=true) |
+                    combine(application_job.instance.overrides.ports | default({}), recursive=true) |
+                    combine(application_job.hostOverride.ports | default({}), recursive=true))['port-2'].container }}
         environment:
             ALARM_SERVICE_API_READ_TIMEOUT: 5000
             ALARM_SERVICE_API_ROOT_URI: '{{ application_parameters.source_variables.ALARM_SERVICE_URL | default(undef(hint=''Configure SDKU ALARM_SERVICE_URL''), true) }}'
@@ -68,17 +84,32 @@ platform_application_definition:
             EVO_SERVICES_CONSENSUS_SERVICE_HEALTH_CHECK_INTERVAL: 1000
             EVO_SERVICES_CONSENSUS_SERVICE_HEALTH_CHECK_TIMEOUT: 999
             EVO_SERVICES_CONSENSUS_SERVICE_HEARTBEAT_INTERVAL: 500
-            EVO_SERVICES_CONSENSUS_SERVICE_INSTANCE_NAME: sdku-tank-farm-{{ application_instance_id }}
-            EVO_SERVICES_CONSENSUS_SERVICE_LISTEN_PORT: '{{ application_parameters.source_variables.SDKU_TANK_FARM_CONSENSUS_TCP_PORT | default(undef(hint=''Configure SDKU SDKU_TANK_FARM_CONSENSUS_TCP_PORT''), true) }}'
-            EVO_SERVICES_CONSENSUS_SERVICE_MOCK: true
-            EVO_SERVICES_CONSENSUS_SERVICE_OTHER_INSTANCES: sdku-tank-farm-{{ application_parameters.source_variables.OTHER_SERVER_ID_1 | default(undef(hint='Configure SDKU OTHER_SERVER_ID_1'), true) }}={{ application_parameters.source_variables.SERVER_REPLICAS_1 | default(undef(hint='Configure SDKU SERVER_REPLICAS_1'), true) }}:{{ application_parameters.source_variables.SDKU_TANK_FARM_CONSENSUS_TCP_PORT | default(undef(hint='Configure SDKU SDKU_TANK_FARM_CONSENSUS_TCP_PORT'), true) }}
+            EVO_SERVICES_CONSENSUS_SERVICE_INSTANCE_NAME: '{{ application_job.hostId }}'
+            EVO_SERVICES_CONSENSUS_SERVICE_LISTEN_PORT: *consensus_tcp_port
+            EVO_SERVICES_CONSENSUS_SERVICE_MOCK: >-
+                {{ (_application_inputs.jobs | selectattr('libraryId', 'equalto', library_instance_id) |
+                    selectattr('slotId', 'equalto', application_job.slotId) | list | length) < 2 }}
+            EVO_SERVICES_CONSENSUS_SERVICE_MODE: DYNAMIC
+            EVO_SERVICES_CONSENSUS_SERVICE_OTHER_INSTANCES: >-
+                {%- set peers = [] -%}
+                {%- set server_ids = groups['all'] | reject('equalto', 'localhost') | sort | list -%}
+                {%- for placement in _application_inputs.jobs |
+                    selectattr('libraryId', 'equalto', library_instance_id) |
+                    selectattr('slotId', 'equalto', application_job.slotId) | sort(attribute='hostId') if placement.hostId != application_job.hostId -%}
+                {%- set ports = (placement.application.definition.defaults.ports | default({})) |
+                    combine(placement.slot.overrides.ports | default({}), recursive=true) |
+                    combine(placement.instance.overrides.ports | default({}), recursive=true) |
+                    combine(placement.hostOverride.ports | default({}), recursive=true) -%}
+                {%- set _ = peers.append(placement.hostId ~ '=$${SERVER_' ~ (server_ids.index(placement.hostId) + 1) ~ '_IP}:' ~ (ports['port-2'].published | string)) -%}
+                {%- endfor -%}
+                {{- peers | join(',') -}}
             EVO_SERVICES_CONSENSUS_SERVICE_TERM_LIFESPAN: 2000
             EVO_SERVICES_CONSENSUS_SERVICE_TIMER_INTERVAL: 500
             EVO_SERVICES_CONSENSUS_SERVICE_WORKLOAD: LOW
             SERVER_PORT: 10261
             SPRING_KAFKA_CLIENT_ID: '{{ application_instance_id }}-$${SERVER_ID}'
             TANK_CONFIG_PATH: /usr/local/app/config/tank_config.yaml
-            TN_SCADA_DATA_MANAGER_URL_ROOT: '{{ application_parameters.source_variables.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
+            TN_SCADA_DATA_MANAGER_URL: '{{ application_parameters.source_variables.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
             TN_SCADA_DATASOURCE_URL: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
             TN_SCADA_METADATA_TARGET_PROJECT: TNSV
             TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
@@ -90,16 +121,6 @@ platform_application_definition:
             tn-scada.metadata.dontShowTargetProjectInNames: false
             tn-scada.metadata.load-projects: TNSV
         image: evoscada-docker.artifacts.tn.tngrp.ru/sdku-tank-farm:1.2.1-3091dc07-redos
-        parameters:
-            database_name: ""
-            source_variables:
-                ALARM_SERVICE_URL: ""
-                ALARM_TOPIC_COMPACT: sdku-alarms-compact
-                DATA_MANAGER_URL_ROOT: ""
-                OTHER_SERVER_ID_1: ""
-                REDIS_SENTINEL_MASTER: ""
-                SDKU_TANK_FARM_CONSENSUS_TCP_PORT: "40261"
-                SERVER_REPLICAS_1: ""
         ports:
             port-1:
                 container: 10261

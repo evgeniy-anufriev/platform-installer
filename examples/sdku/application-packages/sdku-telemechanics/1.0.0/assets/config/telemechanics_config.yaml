@@ -1,0 +1,34 @@
+# Конфигурационный файл для модуля телемеханики
+# Настройки для циклического общего опроса драйверов
+configGI:
+  active: false                      # Активность алгоритма
+  objectTypes:                      # Типы объекта
+    - _IecConnection
+  parameter: .Control.GQ            # Тег сигнала (без имени точки)
+  sendDelay: 60_000                 # мс Время между отправками общего опроса
+  offset: 100                       # мс Смещение записи по времени
+  value: 10                         # Значение
+#Настройка синхронизации времени по протоколу МЭК 104
+configTS:
+  active: false                      # Активность алгоритма
+  objectTypes:                      # Типы объекта
+    - _IecConnection
+  parameter: .Control.ClockSync     # Тег сигнала (без имени точки)
+  sendDelay: 60_000                 # мс Время между отправками синхронизации времени
+# Настройка контроля команд
+configCC:
+  active: true                     # Активность алгоритма
+  alertClass: AC1                   #
+  waitingTime: 10_000               # Таймаут ожидания подтверждения команды
+  repeatCount: 3                    # Число повторных команд
+  tags:                             # Перечень тегов с повторной отправкой команды
+    - VTORYAR_MN_2057_ZDV_515.TU.Open
+    - YAR_SARD___1.TR.UstIn
+    - YAR_SARD___1.TR.UstOut
+  tagsSARDWithTIControl:            # Перечень тегов САРД с подтверждением через сигналы ТИ
+    - YAR_SARD___1.TR.UstIn
+# Настройка сброса команд ТУ с Modbus адресом
+configCM:
+  active: false                      # Активность алгоритма
+
+

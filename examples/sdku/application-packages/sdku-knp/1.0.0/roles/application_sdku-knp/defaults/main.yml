@@ -53,7 +53,22 @@ platform_application_definition:
                         - '*'
                 mode: managed
         command:
-            - '{{ sdku_start_commands[''sdku-knp''] | mandatory }}'
+            - java
+            - -jar
+            - sdku-knp.jar
+        parameters:
+            database_name: ""
+            source_variables:
+                ALARM_SERVICE_URL: ""
+                ALARM_TOPIC_COMPACT: sdku-alarms-compact
+                DATA_MANAGER_URL_ROOT: ""
+                REDIS_SENTINEL_MASTER: ""
+                SDKU_KNP_CONSENSUS_TCP_PORT: &consensus_tcp_port >-
+                    {{ ((application_job.application.definition.defaults.ports | default({})) |
+                    combine(application_job.slot.overrides.ports | default({}), recursive=true) |
+                    combine(application_job.instance.overrides.ports | default({}), recursive=true) |
+                    combine(application_job.hostOverride.ports | default({}), recursive=true))['port-2'].container }}
+                USER_PREFERENCES_URL_ROOT: ""
         environment:
             ALARM_SERVICE_API_ROOT_URI: '{{ application_parameters.source_variables.ALARM_SERVICE_URL | default(undef(hint=''Configure SDKU ALARM_SERVICE_URL''), true) }}'
             ALARM_SERVICE_API_SERVER_PATH: /generate-alarm
@@ -66,10 +81,25 @@ platform_application_definition:
             EVO_SERVICES_CONSENSUS_SERVICE_HEALTH_CHECK_INTERVAL: 1000
             EVO_SERVICES_CONSENSUS_SERVICE_HEALTH_CHECK_TIMEOUT: 999
             EVO_SERVICES_CONSENSUS_SERVICE_HEARTBEAT_INTERVAL: 500
-            EVO_SERVICES_CONSENSUS_SERVICE_INSTANCE_NAME: sdku-knp-{{ application_instance_id }}
-            EVO_SERVICES_CONSENSUS_SERVICE_LISTEN_PORT: '{{ application_parameters.source_variables.SDKU_KNP_CONSENSUS_TCP_PORT | default(undef(hint=''Configure SDKU SDKU_KNP_CONSENSUS_TCP_PORT''), true) }}'
-            EVO_SERVICES_CONSENSUS_SERVICE_MOCK: true
-            EVO_SERVICES_CONSENSUS_SERVICE_OTHER_INSTANCES: sdku-knp-{{ application_parameters.source_variables.OTHER_SERVER_ID_1 | default(undef(hint='Configure SDKU OTHER_SERVER_ID_1'), true) }}={{ application_parameters.source_variables.SERVER_REPLICAS_1 | default(undef(hint='Configure SDKU SERVER_REPLICAS_1'), true) }}:{{ application_parameters.source_variables.SDKU_KNP_CONSENSUS_TCP_PORT | default(undef(hint='Configure SDKU SDKU_KNP_CONSENSUS_TCP_PORT'), true) }}
+            EVO_SERVICES_CONSENSUS_SERVICE_INSTANCE_NAME: '{{ application_job.hostId }}'
+            EVO_SERVICES_CONSENSUS_SERVICE_LISTEN_PORT: *consensus_tcp_port
+            EVO_SERVICES_CONSENSUS_SERVICE_MOCK: >-
+                {{ (_application_inputs.jobs | selectattr('libraryId', 'equalto', library_instance_id) |
+                    selectattr('slotId', 'equalto', application_job.slotId) | list | length) < 2 }}
+            EVO_SERVICES_CONSENSUS_SERVICE_MODE: DYNAMIC
+            EVO_SERVICES_CONSENSUS_SERVICE_OTHER_INSTANCES: >-
+                {%- set peers = [] -%}
+                {%- set server_ids = groups['all'] | reject('equalto', 'localhost') | sort | list -%}
+                {%- for placement in _application_inputs.jobs |
+                    selectattr('libraryId', 'equalto', library_instance_id) |
+                    selectattr('slotId', 'equalto', application_job.slotId) | sort(attribute='hostId') if placement.hostId != application_job.hostId -%}
+                {%- set ports = (placement.application.definition.defaults.ports | default({})) |
+                    combine(placement.slot.overrides.ports | default({}), recursive=true) |
+                    combine(placement.instance.overrides.ports | default({}), recursive=true) |
+                    combine(placement.hostOverride.ports | default({}), recursive=true) -%}
+                {%- set _ = peers.append(placement.hostId ~ '=$${SERVER_' ~ (server_ids.index(placement.hostId) + 1) ~ '_IP}:' ~ (ports['port-2'].published | string)) -%}
+                {%- endfor -%}
+                {{- peers | join(',') -}}
             EVO_SERVICES_CONSENSUS_SERVICE_TERM_LIFESPAN: 2000
             EVO_SERVICES_CONSENSUS_SERVICE_TIMER_INTERVAL: 500
             EVO_SERVICES_CONSENSUS_SERVICE_WORKLOAD: LOW
@@ -88,18 +118,7 @@ platform_application_definition:
             server.max-http-header-size: 10MB
             server.max-http-request-header-size: 10MB
             tn-scada.metadata.load-projects: TNSV
-        image: evoscada-docker.artifacts.tn.tngrp.ru/sdku-knp:0.2.5-10437ccc-redos
-        parameters:
-            database_name: ""
-            source_variables:
-                ALARM_SERVICE_URL: ""
-                ALARM_TOPIC_COMPACT: sdku-alarms-compact
-                DATA_MANAGER_URL_ROOT: ""
-                OTHER_SERVER_ID_1: ""
-                REDIS_SENTINEL_MASTER: ""
-                SDKU_KNP_CONSENSUS_TCP_PORT: "40281"
-                SERVER_REPLICAS_1: ""
-                USER_PREFERENCES_URL_ROOT: ""
+        image: evoscada-docker.artifacts.tn.tngrp.ru/sdku-knp:0.2.4-a4568c87-redos
         ports:
             port-1:
                 container: 10281

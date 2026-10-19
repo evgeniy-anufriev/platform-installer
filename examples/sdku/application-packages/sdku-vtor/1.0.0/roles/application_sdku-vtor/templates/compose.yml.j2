@@ -19,8 +19,8 @@ services:
       {{ name | to_json }}: {{ (value | string) | to_json }}
 {% endif %}
 {% endfor %}
-      "server.port": {{ (application_effective.ports['port-2'].container | string) | to_json }}
-      "WEB_SERVER_PORT": {{ (application_effective.ports['port-2'].container | string) | to_json }}
+      "server.port": {{ (application_effective.ports['port-1'].container | string) | to_json }}
+      "WEB_SERVER_PORT": {{ (application_effective.ports['port-1'].container | string) | to_json }}
     labels:
       "platform.installer.project": {{ application_project_id | to_json }}
       "platform.installer.library": {{ library_runtime.library_id | to_json }}
@@ -34,6 +34,9 @@ services:
     volumes:
       - {{ (application_runtime.vault_path ~ ':/opt/vault:ro') | to_json }}
       - {{ (application_runtime.pki_path ~ ':/opt/application/pki:ro') | to_json }}
+{% for config in application_effective.config_files %}
+      - {{ (application_runtime.config_path ~ '/' ~ config.destination ~ ':/usr/local/app/' ~ config.destination ~ ':ro') | to_json }}
+{% endfor %}
     deploy:
       "resources":
           limits:

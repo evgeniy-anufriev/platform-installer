@@ -3,7 +3,8 @@
   "files": [
     "roles/application_sdku-tank-farm/defaults/main.yml",
     "roles/application_sdku-tank-farm/templates/compose.yml.j2",
-    "roles/application_sdku-tank-farm/templates/agent.hcl.j2"
+    "roles/application_sdku-tank-farm/templates/agent.hcl.j2",
+    "assets/config/tank_config.yaml"
   ],
   "kind": "ApplicationPackage",
   "name": "sdku-tank-farm",

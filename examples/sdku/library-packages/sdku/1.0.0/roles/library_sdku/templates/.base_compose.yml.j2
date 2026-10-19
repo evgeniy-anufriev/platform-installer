@@ -31,6 +31,9 @@ services:
       service: base
     environment:
       "SERVER_ID": "${SERVER_ID}"
+{% for server_id in server_ids %}
+      "SERVER_{{ loop.index }}_IP": "${SERVER_{{ loop.index }}_IP}"
+{% endfor %}
 {% for name, value in environment.items() %}
       {{ name | to_json }}: {{ (value | string) | to_json }}
 {% endfor %}

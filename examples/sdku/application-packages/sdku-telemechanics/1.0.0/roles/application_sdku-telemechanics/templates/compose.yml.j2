@@ -34,6 +34,9 @@ services:
     volumes:
       - {{ (application_runtime.vault_path ~ ':/opt/vault:ro') | to_json }}
       - {{ (application_runtime.pki_path ~ ':/opt/application/pki:ro') | to_json }}
+{% for config in application_effective.config_files %}
+      - {{ (application_runtime.config_path ~ '/' ~ config.destination ~ ':/usr/local/app/' ~ config.destination ~ ':ro') | to_json }}
+{% endfor %}
     deploy:
       "resources":
           limits:

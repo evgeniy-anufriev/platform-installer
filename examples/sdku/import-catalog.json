@@ -35,7 +35,7 @@
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:65423d1fd523f200d343d5fc323f0f13b514858cf59324c6567c6d7d3ceb77bc",
+    "digest": "sha256:a890b3324ac7cd3ded78fab1fc84b9fbd85312968e7f1abd402c31efe2090b8e",
     "kind": "application",
     "name": "evo-scheduler",
     "sourceDirectory": ".",
@@ -133,28 +133,28 @@
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:3594124dc5fb8f78ceda6cdce58472e2bfca393b43c32d1395ccd751077c4998",
+    "digest": "sha256:ec1f81f598ff2b3aac8a05a319a32e752ff68832b9a1a7bb9b83d42f4daa04dd",
     "kind": "application",
     "name": "sdku-knp",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:8e6a2e3289eab3d9067e898606309af5ce0c65c9ddb18600ebd91c7a35112d8d",
+    "digest": "sha256:6183fa898217b184e8d7de686ba649b4f694822f272d15fd8c9d56c2c27405e5",
     "kind": "application",
     "name": "sdku-status-calculation",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:bf4b663740be814e2402bf87d92ea9744bd5b446865ca0c5a7b8bee19e2d81bb",
+    "digest": "sha256:e479362d5df0c65fa11d9cd1777493d7778ed43d5a088671ffbcf6ae59b4d05b",
     "kind": "application",
     "name": "sdku-tank-farm",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:249bbce7cba0fb5c9f7f4ff3a131ea213ef91eb15c828d519a48e58480336c4c",
+    "digest": "sha256:6ff0c6ca633d5d644d0f925493d29bd0be6e4c0d90e5f21834d00f86cef958bc",
     "kind": "application",
     "name": "sdku-telemechanics",
     "sourceDirectory": ".",
@@ -168,7 +168,7 @@
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:5ed4bb9f4cf34502f6b9ba6302b27accfece0980c4a127a9843841e25704ee1c",
+    "digest": "sha256:37a455e10d9fdec905ccc392b680d2efb438b786c571746f88f1bd7786693969",
     "kind": "application",
     "name": "sdku-vtor",
     "sourceDirectory": ".",
@@ -182,7 +182,7 @@
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:389dd0e6223bcdff03635a7ae4e5fe33e654f0347188f7ad94f9b92fe77d31f4",
+    "digest": "sha256:9fef859e881411913aa97474a90b8de418b4cb486a89a5ad759acc2cb10a27d2",
     "kind": "library",
     "name": "sdku",
     "sourceDirectory": ".",
