@@ -1,3 +1,625 @@
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/kevinburke/ssh_config/parser.go","mode":420,"size":4815,"sha256":"9e0999ecc000e86b9caa0e87718ed71cee0a43f915a7ac269c8314dcdea8adf7","index":0,"count":1,"encoding":"utf-8","payloadBytes":4815}
+package ssh_config
+
+import (
+	"fmt"
+	"strings"
+	"unicode"
+)
+
+type sshParser struct {
+	flow          chan token
+	config        *Config
+	tokensBuffer  []token
+	currentTable  []string
+	seenTableKeys []string
+	// /etc/ssh parser or local parser - used to find the default for relative
+	// filepaths in the Include directive
+	system bool
+	depth  uint8
+}
+
+type sshParserStateFn func() sshParserStateFn
+
+// Formats and panics an error message based on a token
+func (p *sshParser) raiseErrorf(tok *token, msg string, args ...interface{}) {
+	// TODO this format is ugly
+	panic(tok.Position.String() + ": " + fmt.Sprintf(msg, args...))
+}
+
+func (p *sshParser) raiseError(tok *token, err error) {
+	if err == ErrDepthExceeded {
+		panic(err)
+	}
+	// TODO this format is ugly
+	panic(tok.Position.String() + ": " + err.Error())
+}
+
+func (p *sshParser) run() {
+	for state := p.parseStart; state != nil; {
+		state = state()
+	}
+}
+
+func (p *sshParser) peek() *token {
+	if len(p.tokensBuffer) != 0 {
+		return &(p.tokensBuffer[0])
+	}
+
+	tok, ok := <-p.flow
+	if !ok {
+		return nil
+	}
+	p.tokensBuffer = append(p.tokensBuffer, tok)
+	return &tok
+}
+
+func (p *sshParser) getToken() *token {
+	if len(p.tokensBuffer) != 0 {
+		tok := p.tokensBuffer[0]
+		p.tokensBuffer = p.tokensBuffer[1:]
+		return &tok
+	}
+	tok, ok := <-p.flow
+	if !ok {
+		return nil
+	}
+	return &tok
+}
+
+func (p *sshParser) parseStart() sshParserStateFn {
+	tok := p.peek()
+
+	// end of stream, parsing is finished
+	if tok == nil {
+		return nil
+	}
+
+	switch tok.typ {
+	case tokenComment, tokenEmptyLine:
+		return p.parseComment
+	case tokenKey:
+		return p.parseKV
+	case tokenEOF:
+		return nil
+	default:
+		p.raiseErrorf(tok, fmt.Sprintf("unexpected token %q\n", tok))
+	}
+	return nil
+}
+
+func (p *sshParser) parseKV() sshParserStateFn {
+	key := p.getToken()
+	hasEquals := false
+	val := p.getToken()
+	if val.typ == tokenEquals {
+		hasEquals = true
+		val = p.getToken()
+	}
+	comment := ""
+	tok := p.peek()
+	if tok == nil {
+		tok = &token{typ: tokenEOF}
+	}
+	if tok.typ == tokenComment && tok.Position.Line == val.Position.Line {
+		tok = p.getToken()
+		comment = tok.val
+	}
+	if strings.ToLower(key.val) == "match" {
+		// https://github.com/kevinburke/ssh_config/issues/6
+		p.raiseErrorf(val, "ssh_config: Match directive parsing is unsupported")
+		return nil
+	}
+	if strings.ToLower(key.val) == "host" {
+		strPatterns := strings.Split(val.val, " ")
+		patterns := make([]*Pattern, 0)
+		for i := range strPatterns {
+			if strPatterns[i] == "" {
+				continue
+			}
+			pat, err := NewPattern(strPatterns[i])
+			if err != nil {
+				p.raiseErrorf(val, "Invalid host pattern: %v", err)
+				return nil
+			}
+			patterns = append(patterns, pat)
+		}
+		// val.val at this point could be e.g. "example.com       "
+		hostval := strings.TrimRightFunc(val.val, unicode.IsSpace)
+		spaceBeforeComment := val.val[len(hostval):]
+		val.val = hostval
+		p.config.Hosts = append(p.config.Hosts, &Host{
+			Patterns:           patterns,
+			Nodes:              make([]Node, 0),
+			EOLComment:         comment,
+			spaceBeforeComment: spaceBeforeComment,
+			hasEquals:          hasEquals,
+		})
+		return p.parseStart
+	}
+	lastHost := p.config.Hosts[len(p.config.Hosts)-1]
+	if strings.ToLower(key.val) == "include" {
+		inc, err := NewInclude(strings.Split(val.val, " "), hasEquals, key.Position, comment, p.system, p.depth+1)
+		if err == ErrDepthExceeded {
+			p.raiseError(val, err)
+			return nil
+		}
+		if err != nil {
+			p.raiseErrorf(val, "Error parsing Include directive: %v", err)
+			return nil
+		}
+		lastHost.Nodes = append(lastHost.Nodes, inc)
+		return p.parseStart
+	}
+	shortval := strings.TrimRightFunc(val.val, unicode.IsSpace)
+	spaceAfterValue := val.val[len(shortval):]
+	kv := &KV{
+		Key:             key.val,
+		Value:           shortval,
+		spaceAfterValue: spaceAfterValue,
+		Comment:         comment,
+		hasEquals:       hasEquals,
+		leadingSpace:    key.Position.Col - 1,
+		position:        key.Position,
+	}
+	lastHost.Nodes = append(lastHost.Nodes, kv)
+	return p.parseStart
+}
+
+func (p *sshParser) parseComment() sshParserStateFn {
+	comment := p.getToken()
+	lastHost := p.config.Hosts[len(p.config.Hosts)-1]
+	lastHost.Nodes = append(lastHost.Nodes, &Empty{
+		Comment: comment.val,
+		// account for the "#" as well
+		leadingSpace: comment.Position.Col - 2,
+		position:     comment.Position,
+	})
+	return p.parseStart
+}
+
+func parseSSH(flow chan token, system bool, depth uint8) *Config {
+	// Ensure we consume tokens to completion even if parser exits early
+	defer func() {
+		for range flow {
+		}
+	}()
+
+	result := newConfig()
+	result.position = Position{1, 1}
+	parser := &sshParser{
+		flow:          flow,
+		config:        result,
+		tokensBuffer:  make([]token, 0),
+		currentTable:  make([]string, 0),
+		seenTableKeys: make([]string, 0),
+		system:        system,
+		depth:         depth,
+	}
+	parser.run()
+	return result
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/kevinburke/ssh_config/position.go","mode":420,"size":711,"sha256":"a35ba5a2384156d0aff83849c69c18fbf767a42575a639dc0c8cc18d5379191a","index":0,"count":1,"encoding":"utf-8","payloadBytes":711}
+package ssh_config
+
+import "fmt"
+
+// Position of a document element within a SSH document.
+//
+// Line and Col are both 1-indexed positions for the element's line number and
+// column number, respectively.  Values of zero or less will cause Invalid(),
+// to return true.
+type Position struct {
+	Line int // line within the document
+	Col  int // column within the line
+}
+
+// String representation of the position.
+// Displays 1-indexed line and column numbers.
+func (p Position) String() string {
+	return fmt.Sprintf("(%d, %d)", p.Line, p.Col)
+}
+
+// Invalid returns whether or not the position is valid (i.e. with negative or
+// null values)
+func (p Position) Invalid() bool {
+	return p.Line <= 0 || p.Col <= 0
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/kevinburke/ssh_config/token.go","mode":420,"size":847,"sha256":"a94a0a751c2ba38946ffd198cd2d9e4c97b5f5cd1b9ec091f25d2678ba70b1ee","index":0,"count":1,"encoding":"utf-8","payloadBytes":847}
+package ssh_config
+
+import "fmt"
+
+type token struct {
+	Position
+	typ tokenType
+	val string
+}
+
+func (t token) String() string {
+	switch t.typ {
+	case tokenEOF:
+		return "EOF"
+	}
+	return fmt.Sprintf("%q", t.val)
+}
+
+type tokenType int
+
+const (
+	eof = -(iota + 1)
+)
+
+const (
+	tokenError tokenType = iota
+	tokenEOF
+	tokenEmptyLine
+	tokenComment
+	tokenKey
+	tokenEquals
+	tokenString
+)
+
+func isSpace(r rune) bool {
+	return r == ' ' || r == '\t'
+}
+
+func isKeyStartChar(r rune) bool {
+	return !(isSpace(r) || r == '\r' || r == '\n' || r == eof)
+}
+
+// I'm not sure that this is correct
+func isKeyChar(r rune) bool {
+	// Keys start with the first character that isn't whitespace or [ and end
+	// with the last non-whitespace character before the equals sign. Keys
+	// cannot contain a # character."
+	return !(r == '\r' || r == '\n' || r == eof || r == '=')
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/kevinburke/ssh_config/validators.go","mode":420,"size":8979,"sha256":"1493c1302a29694f607bfe942ddcd05e9ca65048b858cd7e5317fe1e95b6bf47","index":0,"count":1,"encoding":"utf-8","payloadBytes":8979}
+package ssh_config
+
+import (
+	"fmt"
+	"strconv"
+	"strings"
+)
+
+// Default returns the default value for the given keyword, for example "22" if
+// the keyword is "Port". Default returns the empty string if the keyword has no
+// default, or if the keyword is unknown. Keyword matching is case-insensitive.
+//
+// Default values are provided by OpenSSH_7.4p1 on a Mac.
+func Default(keyword string) string {
+	return defaults[strings.ToLower(keyword)]
+}
+
+// Arguments where the value must be "yes" or "no" and *only* yes or no.
+var yesnos = map[string]bool{
+	strings.ToLower("BatchMode"):                        true,
+	strings.ToLower("CanonicalizeFallbackLocal"):        true,
+	strings.ToLower("ChallengeResponseAuthentication"):  true,
+	strings.ToLower("CheckHostIP"):                      true,
+	strings.ToLower("ClearAllForwardings"):              true,
+	strings.ToLower("Compression"):                      true,
+	strings.ToLower("EnableSSHKeysign"):                 true,
+	strings.ToLower("ExitOnForwardFailure"):             true,
+	strings.ToLower("ForwardAgent"):                     true,
+	strings.ToLower("ForwardX11"):                       true,
+	strings.ToLower("ForwardX11Trusted"):                true,
+	strings.ToLower("GatewayPorts"):                     true,
+	strings.ToLower("GSSAPIAuthentication"):             true,
+	strings.ToLower("GSSAPIDelegateCredentials"):        true,
+	strings.ToLower("HostbasedAuthentication"):          true,
+	strings.ToLower("IdentitiesOnly"):                   true,
+	strings.ToLower("KbdInteractiveAuthentication"):     true,
+	strings.ToLower("NoHostAuthenticationForLocalhost"): true,
+	strings.ToLower("PasswordAuthentication"):           true,
+	strings.ToLower("PermitLocalCommand"):               true,
+	strings.ToLower("PubkeyAuthentication"):             true,
+	strings.ToLower("RhostsRSAAuthentication"):          true,
+	strings.ToLower("RSAAuthentication"):                true,
+	strings.ToLower("StreamLocalBindUnlink"):            true,
+	strings.ToLower("TCPKeepAlive"):                     true,
+	strings.ToLower("UseKeychain"):                      true,
+	strings.ToLower("UsePrivilegedPort"):                true,
+	strings.ToLower("VisualHostKey"):                    true,
+}
+
+var uints = map[string]bool{
+	strings.ToLower("CanonicalizeMaxDots"):     true,
+	strings.ToLower("CompressionLevel"):        true, // 1 to 9
+	strings.ToLower("ConnectionAttempts"):      true,
+	strings.ToLower("ConnectTimeout"):          true,
+	strings.ToLower("NumberOfPasswordPrompts"): true,
+	strings.ToLower("Port"):                    true,
+	strings.ToLower("ServerAliveCountMax"):     true,
+	strings.ToLower("ServerAliveInterval"):     true,
+}
+
+func mustBeYesOrNo(lkey string) bool {
+	return yesnos[lkey]
+}
+
+func mustBeUint(lkey string) bool {
+	return uints[lkey]
+}
+
+func validate(key, val string) error {
+	lkey := strings.ToLower(key)
+	if mustBeYesOrNo(lkey) && (val != "yes" && val != "no") {
+		return fmt.Errorf("ssh_config: value for key %q must be 'yes' or 'no', got %q", key, val)
+	}
+	if mustBeUint(lkey) {
+		_, err := strconv.ParseUint(val, 10, 64)
+		if err != nil {
+			return fmt.Errorf("ssh_config: %v", err)
+		}
+	}
+	return nil
+}
+
+var defaults = map[string]string{
+	strings.ToLower("AddKeysToAgent"):                  "no",
+	strings.ToLower("AddressFamily"):                   "any",
+	strings.ToLower("BatchMode"):                       "no",
+	strings.ToLower("CanonicalizeFallbackLocal"):       "yes",
+	strings.ToLower("CanonicalizeHostname"):            "no",
+	strings.ToLower("CanonicalizeMaxDots"):             "1",
+	strings.ToLower("ChallengeResponseAuthentication"): "yes",
+	strings.ToLower("CheckHostIP"):                     "yes",
+	// TODO is this still the correct cipher
+	strings.ToLower("Cipher"):                    "3des",
+	strings.ToLower("Ciphers"):                   "chacha20-poly1305@openssh.com,aes128-ctr,aes192-ctr,aes256-ctr,aes128-gcm@openssh.com,aes256-gcm@openssh.com,aes128-cbc,aes192-cbc,aes256-cbc",
+	strings.ToLower("ClearAllForwardings"):       "no",
+	strings.ToLower("Compression"):               "no",
+	strings.ToLower("CompressionLevel"):          "6",
+	strings.ToLower("ConnectionAttempts"):        "1",
+	strings.ToLower("ControlMaster"):             "no",
+	strings.ToLower("EnableSSHKeysign"):          "no",
+	strings.ToLower("EscapeChar"):                "~",
+	strings.ToLower("ExitOnForwardFailure"):      "no",
+	strings.ToLower("FingerprintHash"):           "sha256",
+	strings.ToLower("ForwardAgent"):              "no",
+	strings.ToLower("ForwardX11"):                "no",
+	strings.ToLower("ForwardX11Timeout"):         "20m",
+	strings.ToLower("ForwardX11Trusted"):         "no",
+	strings.ToLower("GatewayPorts"):              "no",
+	strings.ToLower("GlobalKnownHostsFile"):      "/etc/ssh/ssh_known_hosts /etc/ssh/ssh_known_hosts2",
+	strings.ToLower("GSSAPIAuthentication"):      "no",
+	strings.ToLower("GSSAPIDelegateCredentials"): "no",
+	strings.ToLower("HashKnownHosts"):            "no",
+	strings.ToLower("HostbasedAuthentication"):   "no",
+
+	strings.ToLower("HostbasedKeyTypes"): "ecdsa-sha2-nistp256-cert-v01@openssh.com,ecdsa-sha2-nistp384-cert-v01@openssh.com,ecdsa-sha2-nistp521-cert-v01@openssh.com,ssh-ed25519-cert-v01@openssh.com,ssh-rsa-cert-v01@openssh.com,ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,ssh-ed25519,ssh-rsa",
+	strings.ToLower("HostKeyAlgorithms"): "ecdsa-sha2-nistp256-cert-v01@openssh.com,ecdsa-sha2-nistp384-cert-v01@openssh.com,ecdsa-sha2-nistp521-cert-v01@openssh.com,ssh-ed25519-cert-v01@openssh.com,ssh-rsa-cert-v01@openssh.com,ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,ssh-ed25519,ssh-rsa",
+	// HostName has a dynamic default (the value passed at the command line).
+
+	strings.ToLower("IdentitiesOnly"): "no",
+	strings.ToLower("IdentityFile"):   "~/.ssh/identity",
+
+	// IPQoS has a dynamic default based on interactive or non-interactive
+	// sessions.
+
+	strings.ToLower("KbdInteractiveAuthentication"): "yes",
+
+	strings.ToLower("KexAlgorithms"): "curve25519-sha256,curve25519-sha256@libssh.org,ecdh-sha2-nistp256,ecdh-sha2-nistp384,ecdh-sha2-nistp521,diffie-hellman-group-exchange-sha256,diffie-hellman-group-exchange-sha1,diffie-hellman-group14-sha1",
+	strings.ToLower("LogLevel"):      "INFO",
+	strings.ToLower("MACs"):          "umac-64-etm@openssh.com,umac-128-etm@openssh.com,hmac-sha2-256-etm@openssh.com,hmac-sha2-512-etm@openssh.com,hmac-sha1-etm@openssh.com,umac-64@openssh.com,umac-128@openssh.com,hmac-sha2-256,hmac-sha2-512,hmac-sha1",
+
+	strings.ToLower("NoHostAuthenticationForLocalhost"): "no",
+	strings.ToLower("NumberOfPasswordPrompts"):          "3",
+	strings.ToLower("PasswordAuthentication"):           "yes",
+	strings.ToLower("PermitLocalCommand"):               "no",
+	strings.ToLower("Port"):                             "22",
+
+	strings.ToLower("PreferredAuthentications"): "gssapi-with-mic,hostbased,publickey,keyboard-interactive,password",
+	strings.ToLower("Protocol"):                 "2",
+	strings.ToLower("ProxyUseFdpass"):           "no",
+	strings.ToLower("PubkeyAcceptedKeyTypes"):   "ecdsa-sha2-nistp256-cert-v01@openssh.com,ecdsa-sha2-nistp384-cert-v01@openssh.com,ecdsa-sha2-nistp521-cert-v01@openssh.com,ssh-ed25519-cert-v01@openssh.com,ssh-rsa-cert-v01@openssh.com,ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,ssh-ed25519,ssh-rsa",
+	strings.ToLower("PubkeyAuthentication"):     "yes",
+	strings.ToLower("RekeyLimit"):               "default none",
+	strings.ToLower("RhostsRSAAuthentication"):  "no",
+	strings.ToLower("RSAAuthentication"):        "yes",
+
+	strings.ToLower("ServerAliveCountMax"):   "3",
+	strings.ToLower("ServerAliveInterval"):   "0",
+	strings.ToLower("StreamLocalBindMask"):   "0177",
+	strings.ToLower("StreamLocalBindUnlink"): "no",
+	strings.ToLower("StrictHostKeyChecking"): "ask",
+	strings.ToLower("TCPKeepAlive"):          "yes",
+	strings.ToLower("Tunnel"):                "no",
+	strings.ToLower("TunnelDevice"):          "any:any",
+	strings.ToLower("UpdateHostKeys"):        "no",
+	strings.ToLower("UseKeychain"):           "no",
+	strings.ToLower("UsePrivilegedPort"):     "no",
+
+	strings.ToLower("UserKnownHostsFile"): "~/.ssh/known_hosts ~/.ssh/known_hosts2",
+	strings.ToLower("VerifyHostKeyDNS"):   "no",
+	strings.ToLower("VisualHostKey"):      "no",
+	strings.ToLower("XAuthLocation"):      "/usr/X11R6/bin/xauth",
+}
+
+// these identities are used for SSH protocol 2
+var defaultProtocol2Identities = []string{
+	"~/.ssh/id_dsa",
+	"~/.ssh/id_ecdsa",
+	"~/.ssh/id_ed25519",
+	"~/.ssh/id_rsa",
+}
+
+// these directives support multiple items that can be collected
+// across multiple files
+var pluralDirectives = map[string]bool{
+	"CertificateFile": true,
+	"IdentityFile":    true,
+	"DynamicForward":  true,
+	"RemoteForward":   true,
+	"SendEnv":         true,
+	"SetEnv":          true,
+}
+
+// SupportsMultiple reports whether a directive can be specified multiple times.
+func SupportsMultiple(key string) bool {
+	return pluralDirectives[strings.ToLower(key)]
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/klauspost/cpuid/v2/.gitignore","mode":420,"size":266,"sha256":"cb568f716e3315bcebfc75bbc274b56577c2734ec3da6729ffac15919f416240","index":0,"count":1,"encoding":"utf-8","payloadBytes":266}
+# Compiled Object files, Static and Dynamic libs (Shared Objects)
+*.o
+*.a
+*.so
+
+# Folders
+_obj
+_test
+
+# Architecture specific extensions/prefixes
+*.[568vq]
+[568vq].out
+
+*.cgo1.go
+*.cgo2.c
+_cgo_defun.c
+_cgo_gotypes.go
+_cgo_export.*
+
+_testmain.go
+
+*.exe
+*.test
+*.prof
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/klauspost/cpuid/v2/.goreleaser.yml","mode":420,"size":1022,"sha256":"efb93985f0bbc28e686b4d0eacdf59d72137d765522056b1479af12346b92856","index":0,"count":1,"encoding":"utf-8","payloadBytes":1022}
+version: 2
+
+builds:
+  -
+    id: "cpuid"
+    binary: cpuid
+    main: ./cmd/cpuid/main.go
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -ldflags=-s -w
+    goos:
+      - aix
+      - linux
+      - freebsd
+      - netbsd
+      - windows
+      - darwin
+    goarch:
+      - 386
+      - amd64
+      - arm64
+    goarm:
+      - 7
+
+archives:
+  -
+    id: cpuid
+    name_template: "cpuid-{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}"
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - LICENSE
+checksum:
+  name_template: 'checksums.txt'
+changelog:
+  sort: asc
+  filters:
+    exclude:
+    - '^doc:'
+    - '^docs:'
+    - '^test:'
+    - '^tests:'
+    - '^Update\sREADME.md'
+
+nfpms:
+  -
+    file_name_template: "cpuid_package_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}"
+    vendor: Klaus Post
+    homepage: https://github.com/klauspost/cpuid
+    maintainer: Klaus Post <klauspost@gmail.com>
+    description: CPUID Tool
+    license: BSD 3-Clause
+    formats:
+      - deb
+      - rpm
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/klauspost/cpuid/v2/CONTRIBUTING.txt","mode":420,"size":1372,"sha256":"92c836bb5fe46f2cc808875c6e588ef477cc82332b214f357a65d9c327452a0b","index":0,"count":1,"encoding":"utf-8","payloadBytes":1372}
+Developer Certificate of Origin
+Version 1.1
+
+Copyright (C) 2015- Klaus Post & Contributors.
+Email: klauspost@gmail.com
+
+Everyone is permitted to copy and distribute verbatim copies of this
+license document, but changing it is not allowed.
+
+
+Developer's Certificate of Origin 1.1
+
+By making a contribution to this project, I certify that:
+
+(a) The contribution was created in whole or in part by me and I
+    have the right to submit it under the open source license
+    indicated in the file; or
+
+(b) The contribution is based upon previous work that, to the best
+    of my knowledge, is covered under an appropriate open source
+    license and I have the right under that license to submit that
+    work with modifications, whether created in whole or in part
+    by me, under the same open source license (unless I am
+    permitted to submit under a different license), as indicated
+    in the file; or
+
+(c) The contribution was provided directly to me by some other
+    person who certified (a), (b) or (c) and I have not modified
+    it.
+
+(d) I understand and agree that this project and the contribution
+    are public and that a record of the contribution (including all
+    personal information I submit with it, including my sign-off) is
+    maintained indefinitely and may be redistributed consistent with
+    this project or the open source license(s) involved.
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/klauspost/cpuid/v2/LICENSE","mode":420,"size":1078,"sha256":"5d966570d7a442d4e969892860a914e542c97f262c873baee8f0aa48e1f40212","index":0,"count":1,"encoding":"utf-8","payloadBytes":1078}
+The MIT License (MIT)
+
+Copyright (c) 2015 Klaus Post
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+
+@@END
 @@PORTABLE {"path":"third_party/wails/vendor/github.com/klauspost/cpuid/v2/README.md","mode":420,"size":50585,"sha256":"019aa7b183773e5fddeae0296cbaba837135ecb53bce232d893a0e991c17b593","index":0,"count":2,"encoding":"utf-8","payloadBytes":48004}
 # cpuid
 Package cpuid provides information about the CPU running the current program.
@@ -79518,796 +80140,5 @@ func (i Operation) String() string {
 	}
 	return _Operation_name[_Operation_index[i]:_Operation_index[i+1]]
 }
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/sergi/go-diff/diffmatchpatch/patch.go","mode":420,"size":17817,"sha256":"42f98d003c4b2bf42cb44e9c73486e0a454c8fa3809d7a668fa273ceacd6deaa","index":0,"count":1,"encoding":"utf-8","payloadBytes":17817}
-// Copyright (c) 2012-2016 The go-diff authors. All rights reserved.
-// https://github.com/sergi/go-diff
-// See the included LICENSE file for license details.
-//
-// go-diff is a Go implementation of Google's Diff, Match, and Patch library
-// Original library is Copyright (c) 2006 Google Inc.
-// http://code.google.com/p/google-diff-match-patch/
-
-package diffmatchpatch
-
-import (
-	"bytes"
-	"errors"
-	"math"
-	"net/url"
-	"regexp"
-	"strconv"
-	"strings"
-)
-
-// Patch represents one patch operation.
-type Patch struct {
-	diffs   []Diff
-	Start1  int
-	Start2  int
-	Length1 int
-	Length2 int
-}
-
-// String emulates GNU diff's format.
-// Header: @@ -382,8 +481,9 @@
-// Indices are printed as 1-based, not 0-based.
-func (p *Patch) String() string {
-	var coords1, coords2 string
-
-	if p.Length1 == 0 {
-		coords1 = strconv.Itoa(p.Start1) + ",0"
-	} else if p.Length1 == 1 {
-		coords1 = strconv.Itoa(p.Start1 + 1)
-	} else {
-		coords1 = strconv.Itoa(p.Start1+1) + "," + strconv.Itoa(p.Length1)
-	}
-
-	if p.Length2 == 0 {
-		coords2 = strconv.Itoa(p.Start2) + ",0"
-	} else if p.Length2 == 1 {
-		coords2 = strconv.Itoa(p.Start2 + 1)
-	} else {
-		coords2 = strconv.Itoa(p.Start2+1) + "," + strconv.Itoa(p.Length2)
-	}
-
-	var text bytes.Buffer
-	_, _ = text.WriteString("@@ -" + coords1 + " +" + coords2 + " @@\n")
-
-	// Escape the body of the patch with %xx notation.
-	for _, aDiff := range p.diffs {
-		switch aDiff.Type {
-		case DiffInsert:
-			_, _ = text.WriteString("+")
-		case DiffDelete:
-			_, _ = text.WriteString("-")
-		case DiffEqual:
-			_, _ = text.WriteString(" ")
-		}
-
-		_, _ = text.WriteString(strings.Replace(url.QueryEscape(aDiff.Text), "+", " ", -1))
-		_, _ = text.WriteString("\n")
-	}
-
-	return unescaper.Replace(text.String())
-}
-
-// PatchAddContext increases the context until it is unique, but doesn't let the pattern expand beyond MatchMaxBits.
-func (dmp *DiffMatchPatch) PatchAddContext(patch Patch, text string) Patch {
-	if len(text) == 0 {
-		return patch
-	}
-
-	pattern := text[patch.Start2 : patch.Start2+patch.Length1]
-	padding := 0
-
-	// Look for the first and last matches of pattern in text.  If two different matches are found, increase the pattern length.
-	for strings.Index(text, pattern) != strings.LastIndex(text, pattern) &&
-		len(pattern) < dmp.MatchMaxBits-2*dmp.PatchMargin {
-		padding += dmp.PatchMargin
-		maxStart := max(0, patch.Start2-padding)
-		minEnd := min(len(text), patch.Start2+patch.Length1+padding)
-		pattern = text[maxStart:minEnd]
-	}
-	// Add one chunk for good luck.
-	padding += dmp.PatchMargin
-
-	// Add the prefix.
-	prefix := text[max(0, patch.Start2-padding):patch.Start2]
-	if len(prefix) != 0 {
-		patch.diffs = append([]Diff{Diff{DiffEqual, prefix}}, patch.diffs...)
-	}
-	// Add the suffix.
-	suffix := text[patch.Start2+patch.Length1 : min(len(text), patch.Start2+patch.Length1+padding)]
-	if len(suffix) != 0 {
-		patch.diffs = append(patch.diffs, Diff{DiffEqual, suffix})
-	}
-
-	// Roll back the start points.
-	patch.Start1 -= len(prefix)
-	patch.Start2 -= len(prefix)
-	// Extend the lengths.
-	patch.Length1 += len(prefix) + len(suffix)
-	patch.Length2 += len(prefix) + len(suffix)
-
-	return patch
-}
-
-// PatchMake computes a list of patches.
-func (dmp *DiffMatchPatch) PatchMake(opt ...interface{}) []Patch {
-	if len(opt) == 1 {
-		diffs, _ := opt[0].([]Diff)
-		text1 := dmp.DiffText1(diffs)
-		return dmp.PatchMake(text1, diffs)
-	} else if len(opt) == 2 {
-		text1 := opt[0].(string)
-		switch t := opt[1].(type) {
-		case string:
-			diffs := dmp.DiffMain(text1, t, true)
-			if len(diffs) > 2 {
-				diffs = dmp.DiffCleanupSemantic(diffs)
-				diffs = dmp.DiffCleanupEfficiency(diffs)
-			}
-			return dmp.PatchMake(text1, diffs)
-		case []Diff:
-			return dmp.patchMake2(text1, t)
-		}
-	} else if len(opt) == 3 {
-		return dmp.PatchMake(opt[0], opt[2])
-	}
-	return []Patch{}
-}
-
-// patchMake2 computes a list of patches to turn text1 into text2.
-// text2 is not provided, diffs are the delta between text1 and text2.
-func (dmp *DiffMatchPatch) patchMake2(text1 string, diffs []Diff) []Patch {
-	// Check for null inputs not needed since null can't be passed in C#.
-	patches := []Patch{}
-	if len(diffs) == 0 {
-		return patches // Get rid of the null case.
-	}
-
-	patch := Patch{}
-	charCount1 := 0 // Number of characters into the text1 string.
-	charCount2 := 0 // Number of characters into the text2 string.
-	// Start with text1 (prepatchText) and apply the diffs until we arrive at text2 (postpatchText). We recreate the patches one by one to determine context info.
-	prepatchText := text1
-	postpatchText := text1
-
-	for i, aDiff := range diffs {
-		if len(patch.diffs) == 0 && aDiff.Type != DiffEqual {
-			// A new patch starts here.
-			patch.Start1 = charCount1
-			patch.Start2 = charCount2
-		}
-
-		switch aDiff.Type {
-		case DiffInsert:
-			patch.diffs = append(patch.diffs, aDiff)
-			patch.Length2 += len(aDiff.Text)
-			postpatchText = postpatchText[:charCount2] +
-				aDiff.Text + postpatchText[charCount2:]
-		case DiffDelete:
-			patch.Length1 += len(aDiff.Text)
-			patch.diffs = append(patch.diffs, aDiff)
-			postpatchText = postpatchText[:charCount2] + postpatchText[charCount2+len(aDiff.Text):]
-		case DiffEqual:
-			if len(aDiff.Text) <= 2*dmp.PatchMargin &&
-				len(patch.diffs) != 0 && i != len(diffs)-1 {
-				// Small equality inside a patch.
-				patch.diffs = append(patch.diffs, aDiff)
-				patch.Length1 += len(aDiff.Text)
-				patch.Length2 += len(aDiff.Text)
-			}
-			if len(aDiff.Text) >= 2*dmp.PatchMargin {
-				// Time for a new patch.
-				if len(patch.diffs) != 0 {
-					patch = dmp.PatchAddContext(patch, prepatchText)
-					patches = append(patches, patch)
-					patch = Patch{}
-					// Unlike Unidiff, our patch lists have a rolling context. http://code.google.com/p/google-diff-match-patch/wiki/Unidiff Update prepatch text & pos to reflect the application of the just completed patch.
-					prepatchText = postpatchText
-					charCount1 = charCount2
-				}
-			}
-		}
-
-		// Update the current character count.
-		if aDiff.Type != DiffInsert {
-			charCount1 += len(aDiff.Text)
-		}
-		if aDiff.Type != DiffDelete {
-			charCount2 += len(aDiff.Text)
-		}
-	}
-
-	// Pick up the leftover patch if not empty.
-	if len(patch.diffs) != 0 {
-		patch = dmp.PatchAddContext(patch, prepatchText)
-		patches = append(patches, patch)
-	}
-
-	return patches
-}
-
-// PatchDeepCopy returns an array that is identical to a given an array of patches.
-func (dmp *DiffMatchPatch) PatchDeepCopy(patches []Patch) []Patch {
-	patchesCopy := []Patch{}
-	for _, aPatch := range patches {
-		patchCopy := Patch{}
-		for _, aDiff := range aPatch.diffs {
-			patchCopy.diffs = append(patchCopy.diffs, Diff{
-				aDiff.Type,
-				aDiff.Text,
-			})
-		}
-		patchCopy.Start1 = aPatch.Start1
-		patchCopy.Start2 = aPatch.Start2
-		patchCopy.Length1 = aPatch.Length1
-		patchCopy.Length2 = aPatch.Length2
-		patchesCopy = append(patchesCopy, patchCopy)
-	}
-	return patchesCopy
-}
-
-// PatchApply merges a set of patches onto the text.  Returns a patched text, as well as an array of true/false values indicating which patches were applied.
-func (dmp *DiffMatchPatch) PatchApply(patches []Patch, text string) (string, []bool) {
-	if len(patches) == 0 {
-		return text, []bool{}
-	}
-
-	// Deep copy the patches so that no changes are made to originals.
-	patches = dmp.PatchDeepCopy(patches)
-
-	nullPadding := dmp.PatchAddPadding(patches)
-	text = nullPadding + text + nullPadding
-	patches = dmp.PatchSplitMax(patches)
-
-	x := 0
-	// delta keeps track of the offset between the expected and actual location of the previous patch.  If there are patches expected at positions 10 and 20, but the first patch was found at 12, delta is 2 and the second patch has an effective expected position of 22.
-	delta := 0
-	results := make([]bool, len(patches))
-	for _, aPatch := range patches {
-		expectedLoc := aPatch.Start2 + delta
-		text1 := dmp.DiffText1(aPatch.diffs)
-		var startLoc int
-		endLoc := -1
-		if len(text1) > dmp.MatchMaxBits {
-			// PatchSplitMax will only provide an oversized pattern in the case of a monster delete.
-			startLoc = dmp.MatchMain(text, text1[:dmp.MatchMaxBits], expectedLoc)
-			if startLoc != -1 {
-				endLoc = dmp.MatchMain(text,
-					text1[len(text1)-dmp.MatchMaxBits:], expectedLoc+len(text1)-dmp.MatchMaxBits)
-				if endLoc == -1 || startLoc >= endLoc {
-					// Can't find valid trailing context.  Drop this patch.
-					startLoc = -1
-				}
-			}
-		} else {
-			startLoc = dmp.MatchMain(text, text1, expectedLoc)
-		}
-		if startLoc == -1 {
-			// No match found.  :(
-			results[x] = false
-			// Subtract the delta for this failed patch from subsequent patches.
-			delta -= aPatch.Length2 - aPatch.Length1
-		} else {
-			// Found a match.  :)
-			results[x] = true
-			delta = startLoc - expectedLoc
-			var text2 string
-			if endLoc == -1 {
-				text2 = text[startLoc:int(math.Min(float64(startLoc+len(text1)), float64(len(text))))]
-			} else {
-				text2 = text[startLoc:int(math.Min(float64(endLoc+dmp.MatchMaxBits), float64(len(text))))]
-			}
-			if text1 == text2 {
-				// Perfect match, just shove the Replacement text in.
-				text = text[:startLoc] + dmp.DiffText2(aPatch.diffs) + text[startLoc+len(text1):]
-			} else {
-				// Imperfect match.  Run a diff to get a framework of equivalent indices.
-				diffs := dmp.DiffMain(text1, text2, false)
-				if len(text1) > dmp.MatchMaxBits && float64(dmp.DiffLevenshtein(diffs))/float64(len(text1)) > dmp.PatchDeleteThreshold {
-					// The end points match, but the content is unacceptably bad.
-					results[x] = false
-				} else {
-					diffs = dmp.DiffCleanupSemanticLossless(diffs)
-					index1 := 0
-					for _, aDiff := range aPatch.diffs {
-						if aDiff.Type != DiffEqual {
-							index2 := dmp.DiffXIndex(diffs, index1)
-							if aDiff.Type == DiffInsert {
-								// Insertion
-								text = text[:startLoc+index2] + aDiff.Text + text[startLoc+index2:]
-							} else if aDiff.Type == DiffDelete {
-								// Deletion
-								startIndex := startLoc + index2
-								text = text[:startIndex] +
-									text[startIndex+dmp.DiffXIndex(diffs, index1+len(aDiff.Text))-index2:]
-							}
-						}
-						if aDiff.Type != DiffDelete {
-							index1 += len(aDiff.Text)
-						}
-					}
-				}
-			}
-		}
-		x++
-	}
-	// Strip the padding off.
-	text = text[len(nullPadding) : len(nullPadding)+(len(text)-2*len(nullPadding))]
-	return text, results
-}
-
-// PatchAddPadding adds some padding on text start and end so that edges can match something.
-// Intended to be called only from within patchApply.
-func (dmp *DiffMatchPatch) PatchAddPadding(patches []Patch) string {
-	paddingLength := dmp.PatchMargin
-	nullPadding := ""
-	for x := 1; x <= paddingLength; x++ {
-		nullPadding += string(rune(x))
-	}
-
-	// Bump all the patches forward.
-	for i := range patches {
-		patches[i].Start1 += paddingLength
-		patches[i].Start2 += paddingLength
-	}
-
-	// Add some padding on start of first diff.
-	if len(patches[0].diffs) == 0 || patches[0].diffs[0].Type != DiffEqual {
-		// Add nullPadding equality.
-		patches[0].diffs = append([]Diff{Diff{DiffEqual, nullPadding}}, patches[0].diffs...)
-		patches[0].Start1 -= paddingLength // Should be 0.
-		patches[0].Start2 -= paddingLength // Should be 0.
-		patches[0].Length1 += paddingLength
-		patches[0].Length2 += paddingLength
-	} else if paddingLength > len(patches[0].diffs[0].Text) {
-		// Grow first equality.
-		extraLength := paddingLength - len(patches[0].diffs[0].Text)
-		patches[0].diffs[0].Text = nullPadding[len(patches[0].diffs[0].Text):] + patches[0].diffs[0].Text
-		patches[0].Start1 -= extraLength
-		patches[0].Start2 -= extraLength
-		patches[0].Length1 += extraLength
-		patches[0].Length2 += extraLength
-	}
-
-	// Add some padding on end of last diff.
-	last := len(patches) - 1
-	if len(patches[last].diffs) == 0 || patches[last].diffs[len(patches[last].diffs)-1].Type != DiffEqual {
-		// Add nullPadding equality.
-		patches[last].diffs = append(patches[last].diffs, Diff{DiffEqual, nullPadding})
-		patches[last].Length1 += paddingLength
-		patches[last].Length2 += paddingLength
-	} else if paddingLength > len(patches[last].diffs[len(patches[last].diffs)-1].Text) {
-		// Grow last equality.
-		lastDiff := patches[last].diffs[len(patches[last].diffs)-1]
-		extraLength := paddingLength - len(lastDiff.Text)
-		patches[last].diffs[len(patches[last].diffs)-1].Text += nullPadding[:extraLength]
-		patches[last].Length1 += extraLength
-		patches[last].Length2 += extraLength
-	}
-
-	return nullPadding
-}
-
-// PatchSplitMax looks through the patches and breaks up any which are longer than the maximum limit of the match algorithm.
-// Intended to be called only from within patchApply.
-func (dmp *DiffMatchPatch) PatchSplitMax(patches []Patch) []Patch {
-	patchSize := dmp.MatchMaxBits
-	for x := 0; x < len(patches); x++ {
-		if patches[x].Length1 <= patchSize {
-			continue
-		}
-		bigpatch := patches[x]
-		// Remove the big old patch.
-		patches = append(patches[:x], patches[x+1:]...)
-		x--
-
-		Start1 := bigpatch.Start1
-		Start2 := bigpatch.Start2
-		precontext := ""
-		for len(bigpatch.diffs) != 0 {
-			// Create one of several smaller patches.
-			patch := Patch{}
-			empty := true
-			patch.Start1 = Start1 - len(precontext)
-			patch.Start2 = Start2 - len(precontext)
-			if len(precontext) != 0 {
-				patch.Length1 = len(precontext)
-				patch.Length2 = len(precontext)
-				patch.diffs = append(patch.diffs, Diff{DiffEqual, precontext})
-			}
-			for len(bigpatch.diffs) != 0 && patch.Length1 < patchSize-dmp.PatchMargin {
-				diffType := bigpatch.diffs[0].Type
-				diffText := bigpatch.diffs[0].Text
-				if diffType == DiffInsert {
-					// Insertions are harmless.
-					patch.Length2 += len(diffText)
-					Start2 += len(diffText)
-					patch.diffs = append(patch.diffs, bigpatch.diffs[0])
-					bigpatch.diffs = bigpatch.diffs[1:]
-					empty = false
-				} else if diffType == DiffDelete && len(patch.diffs) == 1 && patch.diffs[0].Type == DiffEqual && len(diffText) > 2*patchSize {
-					// This is a large deletion.  Let it pass in one chunk.
-					patch.Length1 += len(diffText)
-					Start1 += len(diffText)
-					empty = false
-					patch.diffs = append(patch.diffs, Diff{diffType, diffText})
-					bigpatch.diffs = bigpatch.diffs[1:]
-				} else {
-					// Deletion or equality.  Only take as much as we can stomach.
-					diffText = diffText[:min(len(diffText), patchSize-patch.Length1-dmp.PatchMargin)]
-
-					patch.Length1 += len(diffText)
-					Start1 += len(diffText)
-					if diffType == DiffEqual {
-						patch.Length2 += len(diffText)
-						Start2 += len(diffText)
-					} else {
-						empty = false
-					}
-					patch.diffs = append(patch.diffs, Diff{diffType, diffText})
-					if diffText == bigpatch.diffs[0].Text {
-						bigpatch.diffs = bigpatch.diffs[1:]
-					} else {
-						bigpatch.diffs[0].Text =
-							bigpatch.diffs[0].Text[len(diffText):]
-					}
-				}
-			}
-			// Compute the head context for the next patch.
-			precontext = dmp.DiffText2(patch.diffs)
-			precontext = precontext[max(0, len(precontext)-dmp.PatchMargin):]
-
-			postcontext := ""
-			// Append the end context for this patch.
-			if len(dmp.DiffText1(bigpatch.diffs)) > dmp.PatchMargin {
-				postcontext = dmp.DiffText1(bigpatch.diffs)[:dmp.PatchMargin]
-			} else {
-				postcontext = dmp.DiffText1(bigpatch.diffs)
-			}
-
-			if len(postcontext) != 0 {
-				patch.Length1 += len(postcontext)
-				patch.Length2 += len(postcontext)
-				if len(patch.diffs) != 0 && patch.diffs[len(patch.diffs)-1].Type == DiffEqual {
-					patch.diffs[len(patch.diffs)-1].Text += postcontext
-				} else {
-					patch.diffs = append(patch.diffs, Diff{DiffEqual, postcontext})
-				}
-			}
-			if !empty {
-				x++
-				patches = append(patches[:x], append([]Patch{patch}, patches[x:]...)...)
-			}
-		}
-	}
-	return patches
-}
-
-// PatchToText takes a list of patches and returns a textual representation.
-func (dmp *DiffMatchPatch) PatchToText(patches []Patch) string {
-	var text bytes.Buffer
-	for _, aPatch := range patches {
-		_, _ = text.WriteString(aPatch.String())
-	}
-	return text.String()
-}
-
-// PatchFromText parses a textual representation of patches and returns a List of Patch objects.
-func (dmp *DiffMatchPatch) PatchFromText(textline string) ([]Patch, error) {
-	patches := []Patch{}
-	if len(textline) == 0 {
-		return patches, nil
-	}
-	text := strings.Split(textline, "\n")
-	textPointer := 0
-	patchHeader := regexp.MustCompile("^@@ -(\\d+),?(\\d*) \\+(\\d+),?(\\d*) @@$")
-
-	var patch Patch
-	var sign uint8
-	var line string
-	for textPointer < len(text) {
-
-		if !patchHeader.MatchString(text[textPointer]) {
-			return patches, errors.New("Invalid patch string: " + text[textPointer])
-		}
-
-		patch = Patch{}
-		m := patchHeader.FindStringSubmatch(text[textPointer])
-
-		patch.Start1, _ = strconv.Atoi(m[1])
-		if len(m[2]) == 0 {
-			patch.Start1--
-			patch.Length1 = 1
-		} else if m[2] == "0" {
-			patch.Length1 = 0
-		} else {
-			patch.Start1--
-			patch.Length1, _ = strconv.Atoi(m[2])
-		}
-
-		patch.Start2, _ = strconv.Atoi(m[3])
-
-		if len(m[4]) == 0 {
-			patch.Start2--
-			patch.Length2 = 1
-		} else if m[4] == "0" {
-			patch.Length2 = 0
-		} else {
-			patch.Start2--
-			patch.Length2, _ = strconv.Atoi(m[4])
-		}
-		textPointer++
-
-		for textPointer < len(text) {
-			if len(text[textPointer]) > 0 {
-				sign = text[textPointer][0]
-			} else {
-				textPointer++
-				continue
-			}
-
-			line = text[textPointer][1:]
-			line = strings.Replace(line, "+", "%2b", -1)
-			line, _ = url.QueryUnescape(line)
-			if sign == '-' {
-				// Deletion.
-				patch.diffs = append(patch.diffs, Diff{DiffDelete, line})
-			} else if sign == '+' {
-				// Insertion.
-				patch.diffs = append(patch.diffs, Diff{DiffInsert, line})
-			} else if sign == ' ' {
-				// Minor equality.
-				patch.diffs = append(patch.diffs, Diff{DiffEqual, line})
-			} else if sign == '@' {
-				// Start of next patch.
-				break
-			} else {
-				// WTF?
-				return patches, errors.New("Invalid patch mode '" + string(sign) + "' in: " + string(line))
-			}
-			textPointer++
-		}
-
-		patches = append(patches, patch)
-	}
-	return patches, nil
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/sergi/go-diff/diffmatchpatch/stringutil.go","mode":420,"size":5586,"sha256":"aa34f370ca64e440a05139b74736213323f27b90cf54de586c0f7f55d6abf75f","index":0,"count":1,"encoding":"utf-8","payloadBytes":5586}
-// Copyright (c) 2012-2016 The go-diff authors. All rights reserved.
-// https://github.com/sergi/go-diff
-// See the included LICENSE file for license details.
-//
-// go-diff is a Go implementation of Google's Diff, Match, and Patch library
-// Original library is Copyright (c) 2006 Google Inc.
-// http://code.google.com/p/google-diff-match-patch/
-
-package diffmatchpatch
-
-import (
-	"fmt"
-	"strings"
-	"unicode/utf8"
-)
-
-const UNICODE_INVALID_RANGE_START = 0xD800
-const UNICODE_INVALID_RANGE_END = 0xDFFF
-const UNICODE_INVALID_RANGE_DELTA = UNICODE_INVALID_RANGE_END - UNICODE_INVALID_RANGE_START + 1
-const UNICODE_RANGE_MAX = 0x10FFFF
-
-// unescaper unescapes selected chars for compatibility with JavaScript's encodeURI.
-// In speed critical applications this could be dropped since the receiving application will certainly decode these fine. Note that this function is case-sensitive.  Thus "%3F" would not be unescaped.  But this is ok because it is only called with the output of HttpUtility.UrlEncode which returns lowercase hex. Example: "%3f" -> "?", "%24" -> "$", etc.
-var unescaper = strings.NewReplacer(
-	"%21", "!", "%7E", "~", "%27", "'",
-	"%28", "(", "%29", ")", "%3B", ";",
-	"%2F", "/", "%3F", "?", "%3A", ":",
-	"%40", "@", "%26", "&", "%3D", "=",
-	"%2B", "+", "%24", "$", "%2C", ",", "%23", "#", "%2A", "*")
-
-// indexOf returns the first index of pattern in str, starting at str[i].
-func indexOf(str string, pattern string, i int) int {
-	if i > len(str)-1 {
-		return -1
-	}
-	if i <= 0 {
-		return strings.Index(str, pattern)
-	}
-	ind := strings.Index(str[i:], pattern)
-	if ind == -1 {
-		return -1
-	}
-	return ind + i
-}
-
-// lastIndexOf returns the last index of pattern in str, starting at str[i].
-func lastIndexOf(str string, pattern string, i int) int {
-	if i < 0 {
-		return -1
-	}
-	if i >= len(str) {
-		return strings.LastIndex(str, pattern)
-	}
-	_, size := utf8.DecodeRuneInString(str[i:])
-	return strings.LastIndex(str[:i+size], pattern)
-}
-
-// runesIndexOf returns the index of pattern in target, starting at target[i].
-func runesIndexOf(target, pattern []rune, i int) int {
-	if i > len(target)-1 {
-		return -1
-	}
-	if i <= 0 {
-		return runesIndex(target, pattern)
-	}
-	ind := runesIndex(target[i:], pattern)
-	if ind == -1 {
-		return -1
-	}
-	return ind + i
-}
-
-func runesEqual(r1, r2 []rune) bool {
-	if len(r1) != len(r2) {
-		return false
-	}
-	for i, c := range r1 {
-		if c != r2[i] {
-			return false
-		}
-	}
-	return true
-}
-
-// runesIndex is the equivalent of strings.Index for rune slices.
-func runesIndex(r1, r2 []rune) int {
-	last := len(r1) - len(r2)
-	for i := 0; i <= last; i++ {
-		if runesEqual(r1[i:i+len(r2)], r2) {
-			return i
-		}
-	}
-	return -1
-}
-
-func intArrayToString(ns []uint32) string {
-	if len(ns) == 0 {
-		return ""
-	}
-
-	b := []rune{}
-	for _, n := range ns {
-		b = append(b, intToRune(n))
-	}
-	return string(b)
-}
-
-// These constants define the number of bits representable
-// in 1,2,3,4 byte utf8 sequences, respectively.
-const ONE_BYTE_BITS = 7
-const TWO_BYTE_BITS = 11
-const THREE_BYTE_BITS = 16
-const FOUR_BYTE_BITS = 21
-
-// Helper for getting a sequence of bits from an integer.
-func getBits(i uint32, cnt byte, from byte) byte {
-	return byte((i >> from) & ((1 << cnt) - 1))
-}
-
-// Converts an integer in the range 0~1112060 into a rune.
-// Based on the ranges table in https://en.wikipedia.org/wiki/UTF-8
-func intToRune(i uint32) rune {
-	if i < (1 << ONE_BYTE_BITS) {
-		return rune(i)
-	}
-
-	if i < (1 << TWO_BYTE_BITS) {
-		r, size := utf8.DecodeRune([]byte{0b11000000 | getBits(i, 5, 6), 0b10000000 | getBits(i, 6, 0)})
-		if size != 2 || r == utf8.RuneError {
-			panic(fmt.Sprintf("Error encoding an int %d with size 2, got rune %v and size %d", size, r, i))
-		}
-		return r
-	}
-
-	// Last -3 here needed because for some reason 3rd to last codepoint 65533 in this range
-	// was returning utf8.RuneError during encoding.
-	if i < ((1 << THREE_BYTE_BITS) - UNICODE_INVALID_RANGE_DELTA - 3) {
-		if i >= UNICODE_INVALID_RANGE_START {
-			i += UNICODE_INVALID_RANGE_DELTA
-		}
-
-		r, size := utf8.DecodeRune([]byte{0b11100000 | getBits(i, 4, 12), 0b10000000 | getBits(i, 6, 6), 0b10000000 | getBits(i, 6, 0)})
-		if size != 3 || r == utf8.RuneError {
-			panic(fmt.Sprintf("Error encoding an int %d with size 3, got rune %v and size %d", size, r, i))
-		}
-		return r
-	}
-
-	if i < (1<<FOUR_BYTE_BITS - UNICODE_INVALID_RANGE_DELTA - 3) {
-		i += UNICODE_INVALID_RANGE_DELTA + 3
-		r, size := utf8.DecodeRune([]byte{0b11110000 | getBits(i, 3, 18), 0b10000000 | getBits(i, 6, 12), 0b10000000 | getBits(i, 6, 6), 0b10000000 | getBits(i, 6, 0)})
-		if size != 4 || r == utf8.RuneError {
-			panic(fmt.Sprintf("Error encoding an int %d with size 4, got rune %v and size %d", size, r, i))
-		}
-		return r
-	}
-	panic(fmt.Sprintf("The integer %d is too large for runeToInt()", i))
-}
-
-// Converts a rune generated by intToRune back to an integer
-func runeToInt(r rune) uint32 {
-	i := uint32(r)
-	if i < (1 << ONE_BYTE_BITS) {
-		return i
-	}
-
-	bytes := []byte{0, 0, 0, 0}
-
-	size := utf8.EncodeRune(bytes, r)
-
-	if size == 2 {
-		return uint32(bytes[0]&0b11111)<<6 | uint32(bytes[1]&0b111111)
-	}
-
-	if size == 3 {
-		result := uint32(bytes[0]&0b1111)<<12 | uint32(bytes[1]&0b111111)<<6 | uint32(bytes[2]&0b111111)
-		if result >= UNICODE_INVALID_RANGE_END {
-			return result - UNICODE_INVALID_RANGE_DELTA
-		}
-
-		return result
-	}
-
-	if size == 4 {
-		result := uint32(bytes[0]&0b111)<<18 | uint32(bytes[1]&0b111111)<<12 | uint32(bytes[2]&0b111111)<<6 | uint32(bytes[3]&0b111111)
-		return result - UNICODE_INVALID_RANGE_DELTA - 3
-	}
-
-	panic(fmt.Sprintf("Unexpected state decoding rune=%v size=%d", r, size))
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/skeema/knownhosts/CONTRIBUTING.md","mode":420,"size":3027,"sha256":"23f78c0661b0b025e96dd1b1dfd5502d8bb929dc1303236d5ebf020ec047c418","index":0,"count":1,"encoding":"utf-8","payloadBytes":3027}
-# Contributing to skeema/knownhosts
-
-Thank you for your interest in contributing! This document provides guidelines for submitting pull requests.
-
-### Link to an issue
-
-Before starting the pull request process, initial discussion should take place on a GitHub issue first. For bug reports, the issue should track the open bug and confirm it is reproducible. For feature requests, the issue should cover why the feature is necessary.
-
-In the issue comments, discuss your suggested approach for a fix/implementation, and please wait to get feedback before opening a pull request.
-
-### Test coverage
-
-In general, please provide reasonably thorough test coverage. Whenever possible, your PR should aim to match or improve the overall test coverage percentage of the package. You can run tests and check coverage locally using `go test -cover`. We also have CI automation in GitHub Actions which will comment on each pull request with a coverage percentage.
-
-That said, it is fine to submit an initial draft / work-in-progress PR without coverage, if you are waiting on implementation feedback before writing the tests.
-
-We intentionally avoid hard-coding SSH keys or known_hosts files into the test logic. Instead, the tests generate new keys and then use them to generate a known_hosts file, which is then cached/reused for that overall test run, in order to keep performance reasonable.
-
-### Documentation
-
-Exported types require doc comments. The linter CI step will catch this if missing.
-
-### Backwards compatibility
-
-Because this package is imported by [nearly 7000 repos on GitHub](https://github.com/skeema/knownhosts/network/dependents), we must be very strict about backwards compatibility of exported symbols and function signatures.
-
-Backwards compatibility can be very tricky in some situations. In this case, a maintainer may need to add additional commits to your branch to adjust the approach. Please do not take offense if this occurs; it is sometimes simply faster to implement a refactor on our end directly. When the PR/branch is merged, a merge commit will be used, to ensure your commits appear as-is in the repo history and are still properly credited to you.
-
-### Avoid rewriting core x/crypto/ssh/knownhosts logic
-
-skeema/knownhosts is intended to be a relatively thin *wrapper* around x/crypto/ssh/knownhosts, without duplicating or re-implementing the core known_hosts file parsing and host key handling logic. Importers of this package should be confident that it can be used as a nearly-drop-in replacement for x/crypto/ssh/knownhosts without introducing substantial risk, security flaws, parser differentials, or unexpected behavior changes.
-
-To solve shortcomings in x/crypto/ssh/knownhosts, we try to come up with workarounds that still utilize x/crypto/ssh/knownhosts functionality whenever possible.
-
-Some bugs in x/crypto/ssh/knownhosts do require re-reading the known_hosts file here to solve, but we make that *optional* by offering separate constructors/types with and without that behavior.
-
 
 @@END

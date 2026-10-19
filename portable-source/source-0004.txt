@@ -1,3 +1,767 @@
+@@PORTABLE {"path":"third_party/wails/pkg/templates/templates/preact/frontend/wailsjs/runtime/runtime.d.ts","mode":420,"size":9060,"sha256":"283bbd43e93ac509070e0f7796a98724575c016de026904a0bc74ba572d81c77","index":0,"count":1,"encoding":"utf-8","payloadBytes":9060}
+/*
+ _       __      _ __
+| |     / /___ _(_) /____
+| | /| / / __ `/ / / ___/
+| |/ |/ / /_/ / / (__  )
+|__/|__/\__,_/_/_/____/
+The electron alternative for Go
+(c) Lea Anthony 2019-present
+*/
+
+export interface Position {
+    x: number;
+    y: number;
+}
+
+export interface Size {
+    w: number;
+    h: number;
+}
+
+export interface Screen {
+    isCurrent: boolean;
+    isPrimary: boolean;
+    width: number
+    height: number
+}
+
+// Environment information such as platform, buildtype, ...
+export interface EnvironmentInfo {
+    buildType: string;
+    platform: string;
+    arch: string;
+}
+
+// [EventsEmit](https://wails.io/docs/reference/runtime/events#eventsemit)
+// emits the given event. Optional data may be passed with the event.
+// This will trigger any event listeners.
+export function EventsEmit(eventName: string, ...data: any): void;
+
+// [EventsOn](https://wails.io/docs/reference/runtime/events#eventson) sets up a listener for the given event name.
+export function EventsOn(eventName: string, callback: (...data: any) => void): void;
+
+// [EventsOnMultiple](https://wails.io/docs/reference/runtime/events#eventsonmultiple)
+// sets up a listener for the given event name, but will only trigger a given number times.
+export function EventsOnMultiple(eventName: string, callback: (...data: any) => void, maxCallbacks: number): void;
+
+// [EventsOnce](https://wails.io/docs/reference/runtime/events#eventsonce)
+// sets up a listener for the given event name, but will only trigger once.
+export function EventsOnce(eventName: string, callback: (...data: any) => void): void;
+
+// [EventsOff](https://wails.io/docs/reference/runtime/events#eventsff)
+// unregisters the listener for the given event name.
+export function EventsOff(eventName: string): void;
+
+// [EventsOffAll](https://wails.io/docs/reference/runtime/events#eventsoffall)
+// unregisters all event listeners.
+export function EventsOffAll(): void;
+
+// [LogPrint](https://wails.io/docs/reference/runtime/log#logprint)
+// logs the given message as a raw message
+export function LogPrint(message: string): void;
+
+// [LogTrace](https://wails.io/docs/reference/runtime/log#logtrace)
+// logs the given message at the `trace` log level.
+export function LogTrace(message: string): void;
+
+// [LogDebug](https://wails.io/docs/reference/runtime/log#logdebug)
+// logs the given message at the `debug` log level.
+export function LogDebug(message: string): void;
+
+// [LogError](https://wails.io/docs/reference/runtime/log#logerror)
+// logs the given message at the `error` log level.
+export function LogError(message: string): void;
+
+// [LogFatal](https://wails.io/docs/reference/runtime/log#logfatal)
+// logs the given message at the `fatal` log level.
+// The application will quit after calling this method.
+export function LogFatal(message: string): void;
+
+// [LogInfo](https://wails.io/docs/reference/runtime/log#loginfo)
+// logs the given message at the `info` log level.
+export function LogInfo(message: string): void;
+
+// [LogWarning](https://wails.io/docs/reference/runtime/log#logwarning)
+// logs the given message at the `warning` log level.
+export function LogWarning(message: string): void;
+
+// [WindowReload](https://wails.io/docs/reference/runtime/window#windowreload)
+// Forces a reload by the main application as well as connected browsers.
+export function WindowReload(): void;
+
+// [WindowReloadApp](https://wails.io/docs/reference/runtime/window#windowreloadapp)
+// Reloads the application frontend.
+export function WindowReloadApp(): void;
+
+// [WindowSetAlwaysOnTop](https://wails.io/docs/reference/runtime/window#windowsetalwaysontop)
+// Sets the window AlwaysOnTop or not on top.
+export function WindowSetAlwaysOnTop(b: boolean): void;
+
+// [WindowSetSystemDefaultTheme](https://wails.io/docs/next/reference/runtime/window#windowsetsystemdefaulttheme)
+// *Windows only*
+// Sets window theme to system default (dark/light).
+export function WindowSetSystemDefaultTheme(): void;
+
+// [WindowSetLightTheme](https://wails.io/docs/next/reference/runtime/window#windowsetlighttheme)
+// *Windows only*
+// Sets window to light theme.
+export function WindowSetLightTheme(): void;
+
+// [WindowSetDarkTheme](https://wails.io/docs/next/reference/runtime/window#windowsetdarktheme)
+// *Windows only*
+// Sets window to dark theme.
+export function WindowSetDarkTheme(): void;
+
+// [WindowCenter](https://wails.io/docs/reference/runtime/window#windowcenter)
+// Centers the window on the monitor the window is currently on.
+export function WindowCenter(): void;
+
+// [WindowSetTitle](https://wails.io/docs/reference/runtime/window#windowsettitle)
+// Sets the text in the window title bar.
+export function WindowSetTitle(title: string): void;
+
+// [WindowFullscreen](https://wails.io/docs/reference/runtime/window#windowfullscreen)
+// Makes the window full screen.
+export function WindowFullscreen(): void;
+
+// [WindowUnfullscreen](https://wails.io/docs/reference/runtime/window#windowunfullscreen)
+// Restores the previous window dimensions and position prior to full screen.
+export function WindowUnfullscreen(): void;
+
+// [WindowSetSize](https://wails.io/docs/reference/runtime/window#windowsetsize)
+// Sets the width and height of the window.
+export function WindowSetSize(width: number, height: number): void;
+
+// [WindowGetSize](https://wails.io/docs/reference/runtime/window#windowgetsize)
+// Gets the width and height of the window.
+export function WindowGetSize(): Promise<Size>;
+
+// [WindowSetMaxSize](https://wails.io/docs/reference/runtime/window#windowsetmaxsize)
+// Sets the maximum window size. Will resize the window if the window is currently larger than the given dimensions.
+// Setting a size of 0,0 will disable this constraint.
+export function WindowSetMaxSize(width: number, height: number): void;
+
+// [WindowSetMinSize](https://wails.io/docs/reference/runtime/window#windowsetminsize)
+// Sets the minimum window size. Will resize the window if the window is currently smaller than the given dimensions.
+// Setting a size of 0,0 will disable this constraint.
+export function WindowSetMinSize(width: number, height: number): void;
+
+// [WindowSetPosition](https://wails.io/docs/reference/runtime/window#windowsetposition)
+// Sets the window position relative to the monitor the window is currently on.
+export function WindowSetPosition(x: number, y: number): void;
+
+// [WindowGetPosition](https://wails.io/docs/reference/runtime/window#windowgetposition)
+// Gets the window position relative to the monitor the window is currently on.
+export function WindowGetPosition(): Promise<Position>;
+
+// [WindowHide](https://wails.io/docs/reference/runtime/window#windowhide)
+// Hides the window.
+export function WindowHide(): void;
+
+// [WindowShow](https://wails.io/docs/reference/runtime/window#windowshow)
+// Shows the window, if it is currently hidden.
+export function WindowShow(): void;
+
+// [WindowMaximise](https://wails.io/docs/reference/runtime/window#windowmaximise)
+// Maximises the window to fill the screen.
+export function WindowMaximise(): void;
+
+// [WindowToggleMaximise](https://wails.io/docs/reference/runtime/window#windowtogglemaximise)
+// Toggles between Maximised and UnMaximised.
+export function WindowToggleMaximise(): void;
+
+// [WindowUnmaximise](https://wails.io/docs/reference/runtime/window#windowunmaximise)
+// Restores the window to the dimensions and position prior to maximising.
+export function WindowUnmaximise(): void;
+
+// [WindowMinimise](https://wails.io/docs/reference/runtime/window#windowminimise)
+// Minimises the window.
+export function WindowMinimise(): void;
+
+// [WindowUnminimise](https://wails.io/docs/reference/runtime/window#windowunminimise)
+// Restores the window to the dimensions and position prior to minimising.
+export function WindowUnminimise(): void;
+
+// [WindowSetBackgroundColour](https://wails.io/docs/reference/runtime/window#windowsetbackgroundcolour)
+// Sets the background colour of the window to the given RGBA colour definition. This colour will show through for all transparent pixels.
+export function WindowSetBackgroundColour(R: number, G: number, B: number, A: number): void;
+
+// [ScreenGetAll](https://wails.io/docs/reference/runtime/window#screengetall)
+// Gets the all screens. Call this anew each time you want to refresh data from the underlying windowing system.
+export function ScreenGetAll(): Promise<Screen[]>;
+
+// [BrowserOpenURL](https://wails.io/docs/reference/runtime/browser#browseropenurl)
+// Opens the given URL in the system browser.
+export function BrowserOpenURL(url: string): void;
+
+// [Environment](https://wails.io/docs/reference/runtime/intro#environment)
+// Returns information about the environment
+export function Environment(): Promise<EnvironmentInfo>;
+
+// [Quit](https://wails.io/docs/reference/runtime/intro#quit)
+// Quits the application.
+export function Quit(): void;
+
+// [Hide](https://wails.io/docs/reference/runtime/intro#hide)
+// Hides the application.
+export function Hide(): void;
+
+// [Show](https://wails.io/docs/reference/runtime/intro#show)
+// Shows the application.
+export function Show(): void;
+
+@@END
+@@PORTABLE {"path":"third_party/wails/pkg/templates/templates/preact/frontend/wailsjs/runtime/runtime.js","mode":420,"size":3826,"sha256":"65c58ea7e1987e45ec6e60d90afe3a2cf8703d6d363d5c0209399bc61295443a","index":0,"count":1,"encoding":"utf-8","payloadBytes":3826}
+/*
+ _       __      _ __
+| |     / /___ _(_) /____
+| | /| / / __ `/ / / ___/
+| |/ |/ / /_/ / / (__  )
+|__/|__/\__,_/_/_/____/
+The electron alternative for Go
+(c) Lea Anthony 2019-present
+*/
+
+export function LogPrint(message) {
+    window.runtime.LogPrint(message);
+}
+
+export function LogTrace(message) {
+    window.runtime.LogTrace(message);
+}
+
+export function LogDebug(message) {
+    window.runtime.LogDebug(message);
+}
+
+export function LogInfo(message) {
+    window.runtime.LogInfo(message);
+}
+
+export function LogWarning(message) {
+    window.runtime.LogWarning(message);
+}
+
+export function LogError(message) {
+    window.runtime.LogError(message);
+}
+
+export function LogFatal(message) {
+    window.runtime.LogFatal(message);
+}
+
+export function EventsOnMultiple(eventName, callback, maxCallbacks) {
+    window.runtime.EventsOnMultiple(eventName, callback, maxCallbacks);
+}
+
+export function EventsOn(eventName, callback) {
+    EventsOnMultiple(eventName, callback, -1);
+}
+
+export function EventsOff(eventName) {
+    return window.runtime.EventsOff(eventName);
+}
+
+export function EventsOffAll() {
+    return window.runtime.EventsOffAll();
+}
+
+export function EventsOnce(eventName, callback) {
+    EventsOnMultiple(eventName, callback, 1);
+}
+
+export function EventsEmit(eventName) {
+    let args = [eventName].slice.call(arguments);
+    return window.runtime.EventsEmit.apply(null, args);
+}
+
+export function WindowReload() {
+    window.runtime.WindowReload();
+}
+
+export function WindowReloadApp() {
+    window.runtime.WindowReloadApp();
+}
+
+export function WindowSetAlwaysOnTop(b) {
+    window.runtime.WindowSetAlwaysOnTop(b);
+}
+
+export function WindowSetSystemDefaultTheme() {
+    window.runtime.WindowSetSystemDefaultTheme();
+}
+
+export function WindowSetLightTheme() {
+    window.runtime.WindowSetLightTheme();
+}
+
+export function WindowSetDarkTheme() {
+    window.runtime.WindowSetDarkTheme();
+}
+
+export function WindowCenter() {
+    window.runtime.WindowCenter();
+}
+
+export function WindowSetTitle(title) {
+    window.runtime.WindowSetTitle(title);
+}
+
+export function WindowFullscreen() {
+    window.runtime.WindowFullscreen();
+}
+
+export function WindowUnfullscreen() {
+    window.runtime.WindowUnfullscreen();
+}
+
+export function WindowGetSize() {
+    return window.runtime.WindowGetSize();
+}
+
+export function WindowSetSize(width, height) {
+    window.runtime.WindowSetSize(width, height);
+}
+
+export function WindowSetMaxSize(width, height) {
+    window.runtime.WindowSetMaxSize(width, height);
+}
+
+export function WindowSetMinSize(width, height) {
+    window.runtime.WindowSetMinSize(width, height);
+}
+
+export function WindowSetPosition(x, y) {
+    window.runtime.WindowSetPosition(x, y);
+}
+
+export function WindowGetPosition() {
+    return window.runtime.WindowGetPosition();
+}
+
+export function WindowHide() {
+    window.runtime.WindowHide();
+}
+
+export function WindowShow() {
+    window.runtime.WindowShow();
+}
+
+export function WindowMaximise() {
+    window.runtime.WindowMaximise();
+}
+
+export function WindowToggleMaximise() {
+    window.runtime.WindowToggleMaximise();
+}
+
+export function WindowUnmaximise() {
+    window.runtime.WindowUnmaximise();
+}
+
+export function WindowMinimise() {
+    window.runtime.WindowMinimise();
+}
+
+export function WindowUnminimise() {
+    window.runtime.WindowUnminimise();
+}
+
+export function WindowSetBackgroundColour(R, G, B, A) {
+    window.runtime.WindowSetBackgroundColour(R, G, B, A);
+}
+
+export function ScreenGetAll() {
+    return window.runtime.ScreenGetAll();
+}
+
+export function BrowserOpenURL(url) {
+    window.runtime.BrowserOpenURL(url);
+}
+
+export function Environment() {
+    return window.runtime.Environment();
+}
+
+export function Quit() {
+    window.runtime.Quit();
+}
+
+export function Hide() {
+    window.runtime.Hide();
+}
+
+export function Show() {
+    window.runtime.Show();
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/pkg/templates/templates/preact/go.mod.tmpl","mode":420,"size":164,"sha256":"3d6aa1252c7c45fc4a2d1660149f4687ee398423e1aa5ae0e11e4b2dc0a9d3e8","index":0,"count":1,"encoding":"utf-8","payloadBytes":164}
+module changeme
+
+go 1.23.0
+
+require github.com/wailsapp/wails/v2 {{.WailsVersion}}
+
+// replace github.com/wailsapp/wails/v2 {{.WailsVersion}} => {{.WailsDirectory}}
+@@END
+@@PORTABLE {"path":"third_party/wails/pkg/templates/templates/preact/main.go.tmpl","mode":420,"size":675,"sha256":"bb8b8a5ae4074945ad5bd573e01f990deaf6fff699a93726ba265db41fa2f989","index":0,"count":1,"encoding":"utf-8","payloadBytes":675}
+package main
+
+import (
+	"embed"
+
+	"github.com/wailsapp/wails/v2"
+	"github.com/wailsapp/wails/v2/pkg/options"
+	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+)
+
+//go:embed all:frontend/dist
+var assets embed.FS
+
+func main() {
+	// Create an instance of the app structure
+	app := NewApp()
+
+	// Create application with options
+	err := wails.Run(&options.App{
+		Title:  "{{.ProjectName}}",
+		Width:  1024,
+		Height: 768,
+		AssetServer: &assetserver.Options{
+			Assets: assets,
+		},
+		BackgroundColour: &options.RGBA{R: 27, G: 38, B: 54, A: 1},
+		OnStartup:        app.startup,
+		Bind: []interface{}{
+			app,
+		},
+	})
+
+	if err != nil {
+		println("Error:", err.Error())
+	}
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/pkg/templates/templates/preact/template.json","mode":420,"size":167,"sha256":"49a21cc3f85224d8dce47d42822f38cf0b1ccc7fa53e3550beb5e782051dc4ce","index":0,"count":1,"encoding":"utf-8","payloadBytes":167}
+{
+  "name": "Preact + Vite",
+  "shortname": "preact",
+  "author": "Lea Anthony",
+  "description": "Preact + Vite development server",
+  "helpurl": "https://wails.io"
+}
+@@END
+@@PORTABLE {"path":"third_party/wails/pkg/templates/templates/preact/wails.tmpl.json","mode":420,"size":361,"sha256":"e48a96c7253e19f1552c197b95f394d251b1c664c63c6549f828ef6effd6ac89","index":0,"count":1,"encoding":"utf-8","payloadBytes":361}
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "{{.ProjectName}}",
+  "outputfilename": "{{.BinaryName}}",
+  "frontend:install": "npm install",
+  "frontend:build": "npm run build",
+  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:serverUrl": "auto",
+  "author": {
+    "name": "{{.AuthorName}}",
+    "email": "{{.AuthorEmail}}"
+  }
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/pkg/templates/templates/react-ts/.gitignore.tmpl","mode":420,"size":37,"sha256":"ac769a4478bee4b28f28889b67317a3c1ed0ded0a46af0bf05ee164286570b8c","index":0,"count":1,"encoding":"utf-8","payloadBytes":37}
+build/bin
+node_modules
+frontend/dist
+
+@@END
+@@PORTABLE {"path":"third_party/wails/pkg/templates/templates/react-ts/README.md","mode":420,"size":734,"sha256":"6bf3d50434ff84c1dc62670def5ddbf3dd05d6e6c205ce20048cd266ec33e4ee","index":0,"count":1,"encoding":"utf-8","payloadBytes":734}
+# README
+
+## About
+
+This is the official Wails React-TS template.
+
+You can configure the project by editing `wails.json`. More information about the project settings can be found
+here: https://wails.io/docs/reference/project-config
+
+## Live Development
+
+To run in live development mode, run `wails dev` in the project directory. This will run a Vite development
+server that will provide very fast hot reload of your frontend changes. If you want to develop in a browser
+and have access to your Go methods, there is also a dev server that runs on http://localhost:34115. Connect
+to this in your browser, and you can call your Go code from devtools.
+
+## Building
+
+To build a redistributable, production mode package, use `wails build`.
+
+@@END
+@@PORTABLE {"path":"third_party/wails/pkg/templates/templates/react-ts/app.tmpl.go","mode":420,"size":494,"sha256":"12fb434f3744a8b93f8a7cd572954252504c11f64388221ad443a97c9913c374","index":0,"count":1,"encoding":"utf-8","payloadBytes":494}
+package main
+
+import (
+	"context"
+	"fmt"
+)
+
+// App struct
+type App struct {
+	ctx context.Context
+}
+
+// NewApp creates a new App application struct
+func NewApp() *App {
+	return &App{}
+}
+
+// startup is called when the app starts. The context is saved
+// so we can call the runtime methods
+func (a *App) startup(ctx context.Context) {
+	a.ctx = ctx
+}
+
+// Greet returns a greeting for the given name
+func (a *App) Greet(name string) string {
+	return fmt.Sprintf("Hello %s, It's show time!", name)
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/pkg/templates/templates/react-ts/frontend/dist/gitkeep","mode":420,"size":0,"sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855","index":0,"count":1,"encoding":"utf-8","payloadBytes":0}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/pkg/templates/templates/react-ts/frontend/index.tmpl.html","mode":420,"size":287,"sha256":"660be74395c577bdc3f536df2bd74e3de7dc7a3a37fbf9bfbfcdc19d76e07a8a","index":0,"count":1,"encoding":"utf-8","payloadBytes":287}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>{{.ProjectName}}</title>
+</head>
+<body>
+<div id="root"></div>
+<script src="./src/main.tsx" type="module"></script>
+</body>
+</html>
+
+
+@@END
+@@PORTABLE {"path":"third_party/wails/pkg/templates/templates/react-ts/frontend/package.json","mode":420,"size":445,"sha256":"1156f25bd9bfe84b6539752ac121a4b65fb8fa1252b8f19ef805ec664df2b303","index":0,"count":1,"encoding":"utf-8","payloadBytes":445}
+{
+  "name": "frontend",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "typescript": "^5.6.3",
+    "vite": "^7.0.0"
+  }
+}
+@@END
+@@PORTABLE {"path":"third_party/wails/pkg/templates/templates/react-ts/frontend/src/App.css","mode":420,"size":1094,"sha256":"f91f0bb0350036b5c2c373e891946021ce23bae98aa8f96f036678a6f9fb8723","index":0,"count":1,"encoding":"utf-8","payloadBytes":1094}
+#app {
+    height: 100vh;
+    text-align: center;
+}
+
+#logo {
+    display: block;
+    width: 50%;
+    height: 50%;
+    margin: auto;
+    padding: 10% 0 0;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: 100% 100%;
+    background-origin: content-box;
+}
+
+.result {
+    height: 20px;
+    line-height: 20px;
+    margin: 1.5rem auto;
+}
+
+.input-box .btn {
+    width: 60px;
+    height: 30px;
+    line-height: 30px;
+    border-radius: 3px;
+    border: none;
+    margin: 0 0 0 20px;
+    padding: 0 8px;
+    cursor: pointer;
+}
+
+.input-box .btn:hover {
+    background-image: linear-gradient(to top, #cfd9df 0%, #e2ebf0 100%);
+    color: #333333;
+}
+
+.input-box .input {
+    border: none;
+    border-radius: 3px;
+    outline: none;
+    height: 30px;
+    line-height: 30px;
+    padding: 0 10px;
+    background-color: rgba(240, 240, 240, 1);
+    -webkit-font-smoothing: antialiased;
+}
+
+.input-box .input:hover {
+    border: none;
+    background-color: rgba(255, 255, 255, 1);
+}
+
+.input-box .input:focus {
+    border: none;
+    background-color: rgba(255, 255, 255, 1);
+}
+@@END
+@@PORTABLE {"path":"third_party/wails/pkg/templates/templates/react-ts/frontend/src/App.tsx","mode":420,"size":964,"sha256":"c61a2ec9dac88105244f6b1cc91337228306692a07bc49bdae20da8fe8e5d567","index":0,"count":1,"encoding":"utf-8","payloadBytes":964}
+import {useState} from 'react';
+import logo from './assets/images/logo-universal.png';
+import './App.css';
+import {Greet} from "../wailsjs/go/main/App";
+
+function App() {
+    const [resultText, setResultText] = useState("Please enter your name below 👇");
+    const [name, setName] = useState('');
+    const updateName = (e: any) => setName(e.target.value);
+    const updateResultText = (result: string) => setResultText(result);
+
+    function greet() {
+        Greet(name).then(updateResultText);
+    }
+
+    return (
+        <div id="App">
+            <img src={logo} id="logo" alt="logo"/>
+            <div id="result" className="result">{resultText}</div>
+            <div id="input" className="input-box">
+                <input id="name" className="input" onChange={updateName} autoComplete="off" name="input" type="text"/>
+                <button className="btn" onClick={greet}>Greet</button>
+            </div>
+        </div>
+    )
+}
+
+export default App
+
+@@END
+@@PORTABLE {"path":"third_party/wails/pkg/templates/templates/react-ts/frontend/src/assets/fonts/OFL.txt","mode":420,"size":4371,"sha256":"8656c2a27357b3140047a39b27e3cd928256544ad8a004ef77087f761358208c","index":0,"count":1,"encoding":"utf-8","payloadBytes":4371}
+Copyright 2016 The Nunito Project Authors (contact@sansoxygen.com),
+
+This Font Software is licensed under the SIL Open Font License, Version 1.1.
+This license is copied below, and is also available with a FAQ at:
+http://scripts.sil.org/OFL
+
+
+-----------------------------------------------------------
+SIL OPEN FONT LICENSE Version 1.1 - 26 February 2007
+-----------------------------------------------------------
+
+PREAMBLE
+The goals of the Open Font License (OFL) are to stimulate worldwide
+development of collaborative font projects, to support the font creation
+efforts of academic and linguistic communities, and to provide a free and
+open framework in which fonts may be shared and improved in partnership
+with others.
+
+The OFL allows the licensed fonts to be used, studied, modified and
+redistributed freely as long as they are not sold by themselves. The
+fonts, including any derivative works, can be bundled, embedded, 
+redistributed and/or sold with any software provided that any reserved
+names are not used by derivative works. The fonts and derivatives,
+however, cannot be released under any other type of license. The
+requirement for fonts to remain under this license does not apply
+to any document created using the fonts or their derivatives.
+
+DEFINITIONS
+"Font Software" refers to the set of files released by the Copyright
+Holder(s) under this license and clearly marked as such. This may
+include source files, build scripts and documentation.
+
+"Reserved Font Name" refers to any names specified as such after the
+copyright statement(s).
+
+"Original Version" refers to the collection of Font Software components as
+distributed by the Copyright Holder(s).
+
+"Modified Version" refers to any derivative made by adding to, deleting,
+or substituting -- in part or in whole -- any of the components of the
+Original Version, by changing formats or by porting the Font Software to a
+new environment.
+
+"Author" refers to any designer, engineer, programmer, technical
+writer or other person who contributed to the Font Software.
+
+PERMISSION & CONDITIONS
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of the Font Software, to use, study, copy, merge, embed, modify,
+redistribute, and sell modified and unmodified copies of the Font
+Software, subject to the following conditions:
+
+1) Neither the Font Software nor any of its individual components,
+in Original or Modified Versions, may be sold by itself.
+
+2) Original or Modified Versions of the Font Software may be bundled,
+redistributed and/or sold with any software, provided that each copy
+contains the above copyright notice and this license. These can be
+included either as stand-alone text files, human-readable headers or
+in the appropriate machine-readable metadata fields within text or
+binary files as long as those fields can be easily viewed by the user.
+
+3) No Modified Version of the Font Software may use the Reserved Font
+Name(s) unless explicit written permission is granted by the corresponding
+Copyright Holder. This restriction only applies to the primary font name as
+presented to the users.
+
+4) The name(s) of the Copyright Holder(s) or the Author(s) of the Font
+Software shall not be used to promote, endorse or advertise any
+Modified Version, except to acknowledge the contribution(s) of the
+Copyright Holder(s) and the Author(s) or with their explicit written
+permission.
+
+5) The Font Software, modified or unmodified, in part or in whole,
+must be distributed entirely under this license, and must not be
+distributed under any other license. The requirement for fonts to
+remain under this license does not apply to any document created
+using the Font Software.
+
+TERMINATION
+This license becomes null and void if any of the above conditions are
+not met.
+
+DISCLAIMER
+THE FONT SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT
+OF COPYRIGHT, PATENT, TRADEMARK, OR OTHER RIGHT. IN NO EVENT SHALL THE
+COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+INCLUDING ANY GENERAL, SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL
+DAMAGES, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM
+OTHER DEALINGS IN THE FONT SOFTWARE.
+
+@@END
+@@PORTABLE {"path":"third_party/wails/pkg/templates/templates/react-ts/frontend/src/assets/fonts/nunito-v16-latin-regular.woff2","mode":420,"size":18972,"sha256":"06f3af3fe52542d40ad9bc14ec03e04deaabd09ec369221cc8f536db1c72bf55","index":0,"count":1,"encoding":"base64","payloadBytes":25296}
+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
+@@END
 @@PORTABLE {"path":"third_party/wails/pkg/templates/templates/react-ts/frontend/src/assets/images/logo-universal.png","mode":420,"size":139695,"sha256":"dc2038243f0efaefc70fcd0ad863202610c64d36b6c023df6f8d1a29aad9f906","index":0,"count":3,"encoding":"base64","payloadBytes":64000}
 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
 @@END
@@ -76404,1353 +77168,6 @@ ufixed56x64|ufixed56x63|ufixed56x62|ufixed56x61|ufixed56x60|ufixed56x59|ufixed56
         <push state="interp"/>
       </rule>
     </state>
-  </rules>
-</lexer>
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/alecthomas/chroma/v2/lexers/embedded/v.xml","mode":420,"size":13763,"sha256":"88a28f6954f8aaf1e540394d26e26dc6dbeb981282f75216e0dabf5262f30df2","index":0,"count":1,"encoding":"utf-8","payloadBytes":13763}
-<lexer>
-  <config>
-    <name>V</name>
-    <alias>v</alias>
-    <alias>vlang</alias>
-    <filename>*.v</filename>
-    <filename>*.vv</filename>
-    <filename>v.mod</filename>
-    <mime_type>text/x-v</mime_type>
-    <ensure_nl>true</ensure_nl>
-  </config>
-  <rules>
-    <state name="root">
-      <rule pattern="\n">
-        <token type="Text"/>
-      </rule>
-      <rule pattern="\s+">
-        <token type="Text"/>
-      </rule>
-      <rule pattern="\\\n">
-        <token type="Text"/>
-      </rule>
-      <rule pattern="(?&lt;=module\s+\w[^\n]*\s+)(//[^\n]+\n)+(?=\n)">
-        <token type="LiteralStringDoc"/>
-      </rule>
-      <rule pattern="(// *)(\w+)([^\n]+\n)(?=(?://[^\n]*\n)* *(?:pub +)?(?:fn|struct|union|type|interface|enum|const) +\2\b)">
-        <bygroups>
-          <token type="LiteralStringDoc"/>
-          <token type="GenericEmph"/>
-          <token type="LiteralStringDoc"/>
-        </bygroups>
-        <push state="string-doc"/>
-      </rule>
-      <rule pattern="//[^\n]*\n">
-        <token type="CommentSingle"/>
-      </rule>
-      <rule pattern="/\*(?:(?:/\*(?:.|\n)*?\*/)*|.|\n)*\*/">
-        <token type="CommentMultiline"/>
-      </rule>
-      <rule pattern="\b(import|module)\b">
-        <token type="KeywordNamespace"/>
-      </rule>
-      <rule pattern="\b(fn|struct|union|map|chan|type|interface|enum|const|mut|shared|pub|__global)\b">
-        <token type="KeywordDeclaration"/>
-      </rule>
-      <rule pattern="\?">
-        <token type="KeywordDeclaration"/>
-      </rule>
-      <rule pattern="(?&lt;=\)\s*)!">
-        <token type="KeywordDeclaration"/>
-      </rule>
-      <rule pattern="[ \t]*#include[^\n]+">
-        <using lexer="c"/>
-      </rule>
-      <rule pattern="[ \t]*#\w[^\n]*">
-        <token type="CommentPreproc"/>
-      </rule>
-      <rule pattern="(sql)(\s+)(\w+)(\s+)({)([^}]*?)(})">
-        <bygroups>
-          <token type="Keyword"/>
-          <token type="Text"/>
-          <token type="Name"/>
-          <token type="Text"/>
-          <token type="Punctuation"/>
-          <using lexer="sql"/>
-          <token type="Punctuation"/>
-        </bygroups>
-      </rule>
-      <rule pattern="\$(?=\w)">
-        <token type="Operator"/>
-      </rule>
-      <rule pattern="(?&lt;=\$)(?:embed_file|pkgconfig|tmpl|env|compile_error|compile_warn)">
-        <token type="NameBuiltin"/>
-      </rule>
-      <rule pattern="(asm)(\s+)(\w+)(\s*)({)([^}]*?)(})">
-        <bygroups>
-          <token type="Keyword"/>
-          <token type="Text"/>
-          <token type="KeywordType"/>
-          <token type="Text"/>
-          <token type="Punctuation"/>
-          <using lexer="nasm"/>
-          <token type="Punctuation"/>
-        </bygroups>
-      </rule>
-      <rule pattern="\b_(?:un)?likely_(?=\()">
-        <token type="NameFunctionMagic"/>
-      </rule>
-      <rule pattern="(?&lt;=\$if.+?(?:&amp;&amp;|\|\|)?)((no_segfault_handler|no_bounds_checking|little_endian|freestanding|no_backtrace|big_endian|cplusplus|dragonfly|prealloc|android|windows|no_main|solaris|darwin|clang|tinyc|glibc|mingw|haiku|macos|amd64|arm64|debug|linux|prod|msvc|test|hpux|mach|x32|x64|gcc|qnx|gnu|ios|mac|js))+">
-        <token type="NameBuiltin"/>
-      </rule>
-      <rule pattern="@(VMOD_FILE|VEXEROOT|VMODROOT|METHOD|STRUCT|COLUMN|VHASH|FILE|LINE|VEXE|MOD|FN)\b">
-        <token type="NameVariableMagic"/>
-      </rule>
-      <rule pattern="\b(?&lt;!@)(__offsetof|isreftype|continue|volatile|typeof|static|unsafe|return|assert|sizeof|atomic|select|match|break|defer|rlock|lock|else|goto|for|in|is|as|or|if|go)\b">
-        <token type="Keyword"/>
-      </rule>
-      <rule pattern="\b(?&lt;!@)(none|true|false|si_s_code|si_g32_code|si_g64_code)\b">
-        <token type="KeywordConstant"/>
-      </rule>
-      <rule pattern="\b(?&lt;!@)(vstring_literal_with_len|utf8_str_visible_length|get_str_intp_u64_format|get_str_intp_u32_format|utf32_decode_to_buffer|utf32_to_str_no_malloc|panic_optional_not_set|panic_result_not_set|contains_any_substr|strip_margin_custom|starts_with_capital|cstring_to_vstring|winapi_lasterr_str|c_error_number_str|panic_error_number|substr_with_check|string_from_wide2|sort_with_compare|trim_string_right|string_from_wide|sort_ignore_case|trim_string_left|reverse_in_place|split_into_lines|vstring_with_len|compare_strings|all_before_last|print_backtrace|repeat_to_depth|length_in_bytes|error_with_code|vstring_literal|gc_check_leaks|clone_to_depth|vcalloc_noscan|all_after_last|utf8_char_len|panic_lasterr|memdup_noscan|malloc_noscan|str_intp_rune|last_index_u8|utf8_to_utf32|flush_stderr|flush_stdout|str_intp_sub|replace_each|replace_once|vstrlen_char|utf8_getchar|str_intp_g64|contains_any|find_between|realloc_data|strip_margin|utf32_to_str|is_bin_digit|is_hex_digit|is_oct_digit|proc_pidpath|str_intp_g32|delete_many|delete_last|str_escaped|index_after|sort_by_len|str_intp_sq|starts_with|trim_space|last_index|parse_uint|is_capital|trim_right|join_lines|capitalize|all_before|after_char|match_glob|utf32_code|eq_epsilon|tos_clone|substr_ni|v_realloc|push_many|is_letter|split_nth|split_any|trim_left|index_any|ascii_str|parse_int|all_after|ends_with|is_title|contains|eprintln|is_space|index_u8|is_digit|vmemmove|byterune|is_alnum|pointers|grow_len|is_lower|grow_cap|str_intp|to_upper|hex_full|len_utf8|is_upper|try_push|to_lower|compare|vmemset|try_pop|vcalloc|reverse|vmemcmp|vstring|replace|ptr_str|strlong|to_wide|bytestr|f32_abs|f32_max|println|f32_min|f64_max|vmemcpy|vstrlen|prepend|vbytes|strsci|substr|string|insert|eprint|filter|delete|repeat|malloc|memdup|fields|before|reduce|string|isize|count|index|title|bytes|clone|usize|error|after|split|runes|print|panic|first|close|limit|isnil|bool|rune|tos3|u128|hex2|i128|hash|code|tos4|free|exit|keys|tos2|last|trim|strg|tos5|move|copy|drop|sort|dump|join|free|cap|int|any|all|any|len|map|pop|hex|f64|f32|u16|msg|i64|i16|u32|str|tos|u64|i8|u8)(?=\()">
-        <token type="NameBuiltin"/>
-      </rule>
-      <rule pattern="\b(?&lt;!@)(StrIntpCgenData|VAssertMetaInfo|StructAttribute|AttributeKind|FunctionData|StrIntpData|StrIntpType|MethodArgs|StrIntpMem|ArrayFlags|FieldData|SortedMap|ChanState|string|array|Error|map)\b">
-        <token type="NameBuiltin"/>
-      </rule>
-      <rule pattern="\b(?&lt;!@)(voidptr|string|error|isize|usize|i128|u128|bool|rune|int|f32|f64|i64|i16|u64|any|u32|u16|i8|u8)\b">
-        <token type="KeywordType"/>
-      </rule>
-      <rule pattern="\bit\b">
-        <token type="NameVariableMagic"/>
-      </rule>
-      <rule pattern="(?&lt;!fn\s+)(?&lt;=\w+\s+|^)\[(?=:if +)?(?=\w+)">
-        <token type="Punctuation"/>
-        <push state="attribute"/>
-      </rule>
-      <rule pattern="(&lt;&lt;=|&gt;&gt;=|&gt;&gt;&gt;=|&gt;&gt;&gt;|&lt;&lt;|&gt;&gt;|&lt;=|&gt;=|\^=|\+=|-=|\*=|/=|%=|&amp;=|\|=|&amp;&amp;|\|\||&lt;-|\+\+|--|==|!=|:=|\.\.\.|\.\.|[+\-*/%&amp;|^~=#@!])">
-        <token type="Operator"/>
-      </rule>
-      <rule pattern="[\d_]+(\.\d+e[+\-]?\d+|\.\d+|e[+\-]?\d+)">
-        <token type="LiteralNumberFloat"/>
-      </rule>
-      <rule pattern="\.\d+(e[+\-]?\d+)?">
-        <token type="LiteralNumberFloat"/>
-      </rule>
-      <rule pattern="0o[0-7_]+">
-        <token type="LiteralNumberOct"/>
-      </rule>
-      <rule pattern="0x[0-9a-fA-F_]+">
-        <token type="LiteralNumberHex"/>
-      </rule>
-      <rule pattern="0b[01_]+">
-        <token type="LiteralNumberBin"/>
-      </rule>
-      <rule pattern="(0|[1-9][0-9_]*)">
-        <token type="LiteralNumberInteger"/>
-      </rule>
-      <rule pattern="`">
-        <token type="LiteralStringChar"/>
-        <push state="char"/>
-      </rule>
-      <rule>
-        <include state="strings"/>
-      </rule>
-      <rule pattern="@?[A-Z]\w*">
-        <token type="NameClass"/>
-      </rule>
-      <rule pattern="(?&lt;=[^\W\d]\w*)(&lt;)([A-Z]\w*)(&gt;)">
-        <bygroups>
-          <token type="Punctuation"/>
-          <token type="NameClass"/>
-          <token type="Punctuation"/>
-        </bygroups>
-      </rule>
-      <rule pattern="@?[^\W\d]\w*(?=\()">
-        <token type="NameFunction"/>
-      </rule>
-      <rule pattern="(?&lt;=fn\s+)@?[^\W\d]\w*(?=\s*\()">
-        <token type="NameFunction"/>
-      </rule>
-      <rule pattern="(?&lt;=(?:continue|break|goto)\s+)\w+">
-        <token type="NameLabel"/>
-      </rule>
-      <rule pattern="\b[^\W\d]\w*(?=:(?:$|\s+for))">
-        <token type="NameLabel"/>
-      </rule>
-      <rule pattern="[&lt;&gt;()\[\]{}.,;:]">
-        <token type="Punctuation"/>
-      </rule>
-      <rule pattern="@?[^\W\d]\w*">
-        <token type="NameVariable"/>
-      </rule>
-    </state>
-    <state name="char">
-      <rule pattern="`">
-        <token type="LiteralStringChar"/>
-        <pop depth="1"/>
-      </rule>
-      <rule>
-        <include state="char-escape"/>
-      </rule>
-      <rule pattern="[^\\]">
-        <token type="LiteralStringChar"/>
-      </rule>
-    </state>
-    <state name="string-doc">
-      <rule pattern="(// *)(#+ [^\n]+)(\n)">
-        <bygroups>
-          <token type="LiteralStringDoc"/>
-          <token type="GenericHeading"/>
-          <token type="Text"/>
-        </bygroups>
-      </rule>
-      <rule pattern="// *([=_*~-])\1{2,}\n">
-        <token type="LiteralStringDelimiter"/>
-      </rule>
-      <rule pattern="//[^\n]*\n">
-        <token type="LiteralStringDoc"/>
-      </rule>
-      <rule>
-        <mutators>
-          <pop depth="1"/>
-        </mutators>
-      </rule>
-    </state>
-    <state name="string-curly-interpolation">
-      <rule pattern="}">
-        <token type="Punctuation"/>
-        <pop depth="1"/>
-      </rule>
-      <rule>
-        <include state="strings"/>
-      </rule>
-      <rule pattern="(:)( *?)([ 0&#39;#+-])?(?:(\.)?([0-9]+))?([fFgeEGxXobsd])?">
-        <bygroups>
-          <token type="Punctuation"/>
-          <token type="Text"/>
-          <token type="Operator"/>
-          <token type="Punctuation"/>
-          <token type="LiteralNumber"/>
-          <token type="LiteralStringAffix"/>
-        </bygroups>
-      </rule>
-      <rule pattern="[^}&#34;&#39;:]+">
-        <usingself state="root"/>
-      </rule>
-    </state>
-    <state name="attribute">
-      <rule pattern="\]">
-        <token type="Punctuation"/>
-        <pop depth="1"/>
-      </rule>
-      <rule pattern="&#39;">
-        <token type="Punctuation"/>
-        <push state="string-single"/>
-      </rule>
-      <rule pattern="&#34;">
-        <token type="Punctuation"/>
-        <push state="string-double"/>
-      </rule>
-      <rule pattern="[;:]">
-        <token type="Punctuation"/>
-      </rule>
-      <rule pattern="(?&lt;=\[)if\b">
-        <token type="Keyword"/>
-      </rule>
-      <rule pattern="\s+">
-        <token type="Text"/>
-      </rule>
-      <rule pattern="(?&lt;=: *)\w+">
-        <token type="LiteralString"/>
-      </rule>
-      <rule pattern="[^\W\d]\w*">
-        <token type="NameAttribute"/>
-      </rule>
-    </state>
-    <state name="strings">
-      <rule pattern="(c)?(&#34;)">
-        <bygroups>
-          <token type="LiteralStringAffix"/>
-          <token type="LiteralStringDouble"/>
-        </bygroups>
-        <push state="string-double"/>
-      </rule>
-      <rule pattern="(c)?(&#39;)">
-        <bygroups>
-          <token type="LiteralStringAffix"/>
-          <token type="LiteralStringSingle"/>
-        </bygroups>
-        <push state="string-single"/>
-      </rule>
-      <rule pattern="(r)(&#34;[^&#34;]+&#34;)">
-        <bygroups>
-          <token type="LiteralStringAffix"/>
-          <token type="LiteralString"/>
-        </bygroups>
-      </rule>
-      <rule pattern="(r)(&#39;[^&#39;]+&#39;)">
-        <bygroups>
-          <token type="LiteralStringAffix"/>
-          <token type="LiteralString"/>
-        </bygroups>
-      </rule>
-    </state>
-    <state name="string-double">
-      <rule pattern="&#34;">
-        <token type="LiteralStringDouble"/>
-        <pop depth="1"/>
-      </rule>
-      <rule>
-        <include state="char-escape"/>
-      </rule>
-      <rule pattern="(\$)((?!\\){)">
-        <bygroups>
-          <token type="Operator"/>
-          <token type="Punctuation"/>
-        </bygroups>
-        <push state="string-curly-interpolation"/>
-      </rule>
-      <rule pattern="\$">
-        <token type="Operator"/>
-        <push state="string-interpolation"/>
-      </rule>
-      <rule pattern="[^&#34;]+?">
-        <token type="LiteralStringDouble"/>
-      </rule>
-    </state>
-    <state name="string-single">
-      <rule pattern="&#39;">
-        <token type="LiteralStringSingle"/>
-        <pop depth="1"/>
-      </rule>
-      <rule>
-        <include state="char-escape"/>
-      </rule>
-      <rule pattern="(\$)((?!\\){)">
-        <bygroups>
-          <token type="Operator"/>
-          <token type="Punctuation"/>
-        </bygroups>
-        <push state="string-curly-interpolation"/>
-      </rule>
-      <rule pattern="\$">
-        <token type="Operator"/>
-        <push state="string-interpolation"/>
-      </rule>
-      <rule pattern="[^&#39;]+?">
-        <token type="LiteralStringSingle"/>
-      </rule>
-    </state>
-    <state name="char-escape">
-      <rule pattern="\\[`&#39;&#34;\\abfnrtv$]|\\x[0-9a-fA-F]{2}|\\[0-7]{1,3}|\\u[0-9a-fA-F]{4}|\\U[0-9a-fA-F]{8}">
-        <token type="LiteralStringEscape"/>
-      </rule>
-    </state>
-    <state name="string-interpolation">
-      <rule pattern="(\.)?(@)?(?:([^\W\d]\w*)(\()([^)]*)(\))|([^\W\d]\w*))">
-        <bygroups>
-          <token type="Punctuation"/>
-          <token type="Operator"/>
-          <token type="NameFunction"/>
-          <token type="Punctuation"/>
-          <usingself state="root"/>
-          <token type="Punctuation"/>
-          <token type="NameVariable"/>
-        </bygroups>
-      </rule>
-      <rule>
-        <mutators>
-          <pop depth="1"/>
-        </mutators>
-      </rule>
-    </state>
-  </rules>
-</lexer>
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/alecthomas/chroma/v2/lexers/embedded/v_shell.xml","mode":420,"size":16063,"sha256":"613a6d5398c23273a7c68791eaeebe223773eecc1f0b22419c5bbbcb51df0814","index":0,"count":1,"encoding":"utf-8","payloadBytes":16063}
-<lexer>
-  <config>
-    <name>V shell</name>
-    <alias>vsh</alias>
-    <alias>vshell</alias>
-    <filename>*.vsh</filename>
-    <mime_type>text/x-vsh</mime_type>
-    <ensure_nl>true</ensure_nl>
-  </config>
-  <rules>
-    <state name="attribute">
-      <rule pattern="\]">
-        <token type="Punctuation"/>
-        <pop depth="1"/>
-      </rule>
-      <rule pattern="&#39;">
-        <token type="Punctuation"/>
-        <push state="string-single"/>
-      </rule>
-      <rule pattern="&#34;">
-        <token type="Punctuation"/>
-        <push state="string-double"/>
-      </rule>
-      <rule pattern="[;:]">
-        <token type="Punctuation"/>
-      </rule>
-      <rule pattern="(?&lt;=\[)if\b">
-        <token type="Keyword"/>
-      </rule>
-      <rule pattern="\s+">
-        <token type="Text"/>
-      </rule>
-      <rule pattern="(?&lt;=: *)\w+">
-        <token type="LiteralString"/>
-      </rule>
-      <rule pattern="[^\W\d]\w*">
-        <token type="NameAttribute"/>
-      </rule>
-    </state>
-    <state name="string-double">
-      <rule pattern="&#34;">
-        <token type="LiteralStringDouble"/>
-        <pop depth="1"/>
-      </rule>
-      <rule>
-        <include state="char-escape"/>
-      </rule>
-      <rule pattern="(\$)((?!\\){)">
-        <bygroups>
-          <token type="Operator"/>
-          <token type="Punctuation"/>
-        </bygroups>
-        <push state="string-curly-interpolation"/>
-      </rule>
-      <rule pattern="\$">
-        <token type="Operator"/>
-        <push state="string-interpolation"/>
-      </rule>
-      <rule pattern="[^&#34;]+?">
-        <token type="LiteralStringDouble"/>
-      </rule>
-    </state>
-    <state name="char">
-      <rule pattern="`">
-        <token type="LiteralStringChar"/>
-        <pop depth="1"/>
-      </rule>
-      <rule>
-        <include state="char-escape"/>
-      </rule>
-      <rule pattern="[^\\]">
-        <token type="LiteralStringChar"/>
-      </rule>
-    </state>
-    <state name="string-doc">
-      <rule pattern="(// *)(#+ [^\n]+)(\n)">
-        <bygroups>
-          <token type="LiteralStringDoc"/>
-          <token type="GenericHeading"/>
-          <token type="Text"/>
-        </bygroups>
-      </rule>
-      <rule pattern="// *([=_*~-])\1{2,}\n">
-        <token type="LiteralStringDelimiter"/>
-      </rule>
-      <rule pattern="//[^\n]*\n">
-        <token type="LiteralStringDoc"/>
-      </rule>
-      <rule>
-        <mutators>
-          <pop depth="1"/>
-        </mutators>
-      </rule>
-    </state>
-    <state name="string-interpolation">
-      <rule pattern="(\.)?(@)?(?:([^\W\d]\w*)(\()([^)]*)(\))|([^\W\d]\w*))">
-        <bygroups>
-          <token type="Punctuation"/>
-          <token type="Operator"/>
-          <token type="NameFunction"/>
-          <token type="Punctuation"/>
-          <usingself state="root"/>
-          <token type="Punctuation"/>
-          <token type="NameVariable"/>
-        </bygroups>
-      </rule>
-      <rule>
-        <mutators>
-          <pop depth="1"/>
-        </mutators>
-      </rule>
-    </state>
-    <state name="string-curly-interpolation">
-      <rule pattern="}">
-        <token type="Punctuation"/>
-        <pop depth="1"/>
-      </rule>
-      <rule>
-        <include state="strings"/>
-      </rule>
-      <rule pattern="(:)( *?)([ 0&#39;#+-])?(?:(\.)?([0-9]+))?([fFgeEGxXobsd])?">
-        <bygroups>
-          <token type="Punctuation"/>
-          <token type="Text"/>
-          <token type="Operator"/>
-          <token type="Punctuation"/>
-          <token type="LiteralNumber"/>
-          <token type="LiteralStringAffix"/>
-        </bygroups>
-      </rule>
-      <rule pattern="[^}&#34;&#39;:]+">
-        <usingself state="root"/>
-      </rule>
-    </state>
-    <state name="root">
-      <rule pattern="^#![^\n]*\n">
-        <token type="CommentHashbang"/>
-      </rule>
-      <rule pattern="\b(path_delimiter|path_separator|wd_at_startup|max_path_len|sys_write|sys_close|sys_mkdir|sys_creat|sys_open|s_iflnk|s_irusr|s_ifdir|s_ixoth|s_isuid|s_isgid|s_isvtx|s_iwoth|s_iwusr|s_ixusr|s_irgrp|s_iwgrp|s_ixgrp|s_iroth|s_ifmt|args)\b">
-        <token type="NameConstant"/>
-      </rule>
-      <rule pattern="\b(ExecutableNotFoundError|FileNotOpenedError|SizeOfTypeIs0Error|ProcessState|SeekMode|Command|Process|Signal|Result|Uname|File)\b">
-        <token type="NameBuiltin"/>
-      </rule>
-      <rule pattern="\b(find_abs_path_of_executable|posix_set_permission_bit|read_bytes_into_newline|sigint_to_signal_name|exists_in_system_path|get_raw_lines_joined|expand_tilde_to_home|posix_get_error_msg|set_redirect_stdio|is_writable_folder|file_last_mod_unix|walk_with_context|resource_abs_path|debugger_present|write_file_array|join_path_single|execute_or_panic|get_lines_joined|set_environment|read_bytes_into|read_file_array|execute_or_exit|signal_continue|write_struct_at|read_struct_at|vmodules_paths|get_error_msg|signal_pgkill|read_into_ptr|read_bytes_at|existing_path|is_executable|get_raw_stdin|is_dir_empty|write_struct|vmodules_dir|stdout_slurp|write_raw_at|write_string|get_raw_line|stderr_slurp|signal_kill|stderr_read|signal_stop|quoted_path|stdin_write|stdout_read|open_append|new_process|args_before|read_struct|is_writable|is_readable|is_abs_path|read_raw_at|write_file|getenv_opt|args_after|read_lines|read_bytes|signal_opt|config_dir|last_error|executable|file_name|file_size|rmdir_all|write_raw|real_path|join_path|input_opt|norm_path|read_from|get_lines|loginname|read_file|cache_dir|mkdir_all|read_line|open_file|home_dir|hostname|fd_slurp|fd_close|mv_by_cp|open_uri|file_ext|walk_ext|unsetenv|write_to|fd_write|abs_path|read_raw|is_alive|get_line|truncate|temp_dir|set_args|geteuid|is_file|getppid|bitmask|is_atty|execute|symlink|environ|fd_read|is_link|writeln|getegid|user_os|is_dir|stdout|create|fileno|cp_all|system|getenv|vfopen|execve|getgid|stderr|getuid|execvp|exists|setenv|getpid|flush|getwd|input|stdin|mkdir|chdir|chmod|start|chown|rmdir|uname|write|close|utime|inode|wait|seek|base|fork|open|link|glob|read|tell|walk|msg|dir|run|log|cp|mv|rm|ls)(?=\()">
-        <token type="NameBuiltin"/>
-      </rule>
-      <rule pattern="\n">
-        <token type="Text"/>
-      </rule>
-      <rule pattern="\s+">
-        <token type="Text"/>
-      </rule>
-      <rule pattern="\\\n">
-        <token type="Text"/>
-      </rule>
-      <rule pattern="(?&lt;=module\s+\w[^\n]*\s+)(//[^\n]+\n)+(?=\n)">
-        <token type="LiteralStringDoc"/>
-      </rule>
-      <rule pattern="(// *)(\w+)([^\n]+\n)(?=(?://[^\n]*\n)* *(?:pub +)?(?:fn|struct|union|type|interface|enum|const) +\2\b)">
-        <bygroups>
-          <token type="LiteralStringDoc"/>
-          <token type="GenericEmph"/>
-          <token type="LiteralStringDoc"/>
-        </bygroups>
-        <push state="string-doc"/>
-      </rule>
-      <rule pattern="//[^\n]*\n">
-        <token type="CommentSingle"/>
-      </rule>
-      <rule pattern="/\*(?:(?:/\*(?:.|\n)*?\*/)*|.|\n)*\*/">
-        <token type="CommentMultiline"/>
-      </rule>
-      <rule pattern="\b(import|module)\b">
-        <token type="KeywordNamespace"/>
-      </rule>
-      <rule pattern="\b(fn|struct|union|map|chan|type|interface|enum|const|mut|shared|pub|__global)\b">
-        <token type="KeywordDeclaration"/>
-      </rule>
-      <rule pattern="\?">
-        <token type="KeywordDeclaration"/>
-      </rule>
-      <rule pattern="(?&lt;=\)\s*)!">
-        <token type="KeywordDeclaration"/>
-      </rule>
-      <rule pattern="[ \t]*#include[^\n]+">
-        <using lexer="c"/>
-      </rule>
-      <rule pattern="[ \t]*#\w[^\n]*">
-        <token type="CommentPreproc"/>
-      </rule>
-      <rule pattern="(sql)(\s+)(\w+)(\s+)({)([^}]*?)(})">
-        <bygroups>
-          <token type="Keyword"/>
-          <token type="Text"/>
-          <token type="Name"/>
-          <token type="Text"/>
-          <token type="Punctuation"/>
-          <using lexer="sql"/>
-          <token type="Punctuation"/>
-        </bygroups>
-      </rule>
-      <rule pattern="\$(?=\w)">
-        <token type="Operator"/>
-      </rule>
-      <rule pattern="(?&lt;=\$)(?:embed_file|pkgconfig|tmpl|env|compile_error|compile_warn)">
-        <token type="NameBuiltin"/>
-      </rule>
-      <rule pattern="(asm)(\s+)(\w+)(\s*)({)([^}]*?)(})">
-        <bygroups>
-          <token type="Keyword"/>
-          <token type="Text"/>
-          <token type="KeywordType"/>
-          <token type="Text"/>
-          <token type="Punctuation"/>
-          <using lexer="nasm"/>
-          <token type="Punctuation"/>
-        </bygroups>
-      </rule>
-      <rule pattern="\b_(?:un)?likely_(?=\()">
-        <token type="NameFunctionMagic"/>
-      </rule>
-      <rule pattern="(?&lt;=\$if.+?(?:&amp;&amp;|\|\|)?)((no_segfault_handler|no_bounds_checking|little_endian|freestanding|no_backtrace|big_endian|cplusplus|dragonfly|prealloc|android|windows|no_main|solaris|darwin|clang|tinyc|glibc|mingw|haiku|macos|amd64|arm64|debug|linux|prod|msvc|test|hpux|mach|x32|x64|gcc|qnx|gnu|ios|mac|js))+">
-        <token type="NameBuiltin"/>
-      </rule>
-      <rule pattern="@(VMOD_FILE|VEXEROOT|VMODROOT|METHOD|STRUCT|COLUMN|VHASH|FILE|LINE|VEXE|MOD|FN)\b">
-        <token type="NameVariableMagic"/>
-      </rule>
-      <rule pattern="\b(?&lt;!@)(__offsetof|isreftype|continue|volatile|typeof|static|unsafe|return|assert|sizeof|atomic|select|match|break|defer|rlock|lock|else|goto|for|in|is|as|or|if|go)\b">
-        <token type="Keyword"/>
-      </rule>
-      <rule pattern="\b(?&lt;!@)(none|true|false|si_s_code|si_g32_code|si_g64_code)\b">
-        <token type="KeywordConstant"/>
-      </rule>
-      <rule pattern="\b(?&lt;!@)(vstring_literal_with_len|utf8_str_visible_length|get_str_intp_u64_format|get_str_intp_u32_format|utf32_decode_to_buffer|utf32_to_str_no_malloc|panic_optional_not_set|panic_result_not_set|contains_any_substr|strip_margin_custom|starts_with_capital|cstring_to_vstring|winapi_lasterr_str|c_error_number_str|panic_error_number|substr_with_check|string_from_wide2|sort_with_compare|trim_string_right|string_from_wide|sort_ignore_case|trim_string_left|reverse_in_place|split_into_lines|vstring_with_len|compare_strings|all_before_last|print_backtrace|repeat_to_depth|length_in_bytes|error_with_code|vstring_literal|gc_check_leaks|clone_to_depth|vcalloc_noscan|all_after_last|utf8_char_len|panic_lasterr|memdup_noscan|malloc_noscan|str_intp_rune|last_index_u8|utf8_to_utf32|flush_stderr|flush_stdout|str_intp_sub|replace_each|replace_once|vstrlen_char|utf8_getchar|str_intp_g64|contains_any|find_between|realloc_data|strip_margin|utf32_to_str|is_bin_digit|is_hex_digit|is_oct_digit|proc_pidpath|str_intp_g32|delete_many|delete_last|str_escaped|index_after|sort_by_len|str_intp_sq|starts_with|trim_space|last_index|parse_uint|is_capital|trim_right|join_lines|capitalize|all_before|after_char|match_glob|utf32_code|eq_epsilon|tos_clone|substr_ni|v_realloc|push_many|is_letter|split_nth|split_any|trim_left|index_any|ascii_str|parse_int|all_after|ends_with|is_title|contains|eprintln|is_space|index_u8|is_digit|vmemmove|byterune|is_alnum|pointers|grow_len|is_lower|grow_cap|str_intp|to_upper|hex_full|len_utf8|is_upper|try_push|to_lower|compare|vmemset|try_pop|vcalloc|reverse|vmemcmp|vstring|replace|ptr_str|strlong|to_wide|bytestr|f32_abs|f32_max|println|f32_min|f64_max|vmemcpy|vstrlen|prepend|vbytes|strsci|substr|string|insert|eprint|filter|delete|repeat|malloc|memdup|fields|before|reduce|string|isize|count|index|title|bytes|clone|usize|error|after|split|runes|print|panic|first|close|limit|isnil|bool|rune|tos3|u128|hex2|i128|hash|code|tos4|free|exit|keys|tos2|last|trim|strg|tos5|move|copy|drop|sort|dump|join|free|cap|int|any|all|any|len|map|pop|hex|f64|f32|u16|msg|i64|i16|u32|str|tos|u64|i8|u8)(?=\()">
-        <token type="NameBuiltin"/>
-      </rule>
-      <rule pattern="\b(?&lt;!@)(StrIntpCgenData|VAssertMetaInfo|StructAttribute|AttributeKind|FunctionData|StrIntpData|StrIntpType|MethodArgs|StrIntpMem|ArrayFlags|FieldData|SortedMap|ChanState|string|array|Error|map)\b">
-        <token type="NameBuiltin"/>
-      </rule>
-      <rule pattern="\b(?&lt;!@)(voidptr|string|error|isize|usize|i128|u128|bool|rune|int|f32|f64|i64|i16|u64|any|u32|u16|i8|u8)\b">
-        <token type="KeywordType"/>
-      </rule>
-      <rule pattern="\bit\b">
-        <token type="NameVariableMagic"/>
-      </rule>
-      <rule pattern="(?&lt;!fn\s+)(?&lt;=\w+\s+|^)\[(?=:if +)?(?=\w+)">
-        <token type="Punctuation"/>
-        <push state="attribute"/>
-      </rule>
-      <rule pattern="(&lt;&lt;=|&gt;&gt;=|&gt;&gt;&gt;=|&gt;&gt;&gt;|&lt;&lt;|&gt;&gt;|&lt;=|&gt;=|\^=|\+=|-=|\*=|/=|%=|&amp;=|\|=|&amp;&amp;|\|\||&lt;-|\+\+|--|==|!=|:=|\.\.\.|\.\.|[+\-*/%&amp;|^~=#@!])">
-        <token type="Operator"/>
-      </rule>
-      <rule pattern="[\d_]+(\.\d+e[+\-]?\d+|\.\d+|e[+\-]?\d+)">
-        <token type="LiteralNumberFloat"/>
-      </rule>
-      <rule pattern="\.\d+(e[+\-]?\d+)?">
-        <token type="LiteralNumberFloat"/>
-      </rule>
-      <rule pattern="0o[0-7_]+">
-        <token type="LiteralNumberOct"/>
-      </rule>
-      <rule pattern="0x[0-9a-fA-F_]+">
-        <token type="LiteralNumberHex"/>
-      </rule>
-      <rule pattern="0b[01_]+">
-        <token type="LiteralNumberBin"/>
-      </rule>
-      <rule pattern="(0|[1-9][0-9_]*)">
-        <token type="LiteralNumberInteger"/>
-      </rule>
-      <rule pattern="`">
-        <token type="LiteralStringChar"/>
-        <push state="char"/>
-      </rule>
-      <rule>
-        <include state="strings"/>
-      </rule>
-      <rule pattern="@?[A-Z]\w*">
-        <token type="NameClass"/>
-      </rule>
-      <rule pattern="(?&lt;=[^\W\d]\w*)(&lt;)([A-Z]\w*)(&gt;)">
-        <bygroups>
-          <token type="Punctuation"/>
-          <token type="NameClass"/>
-          <token type="Punctuation"/>
-        </bygroups>
-      </rule>
-      <rule pattern="@?[^\W\d]\w*(?=\()">
-        <token type="NameFunction"/>
-      </rule>
-      <rule pattern="(?&lt;=fn\s+)@?[^\W\d]\w*(?=\s*\()">
-        <token type="NameFunction"/>
-      </rule>
-      <rule pattern="(?&lt;=(?:continue|break|goto)\s+)\w+">
-        <token type="NameLabel"/>
-      </rule>
-      <rule pattern="\b[^\W\d]\w*(?=:(?:$|\s+for))">
-        <token type="NameLabel"/>
-      </rule>
-      <rule pattern="[&lt;&gt;()\[\]{}.,;:]">
-        <token type="Punctuation"/>
-      </rule>
-      <rule pattern="@?[^\W\d]\w*">
-        <token type="NameVariable"/>
-      </rule>
-    </state>
-    <state name="strings">
-      <rule pattern="(c)?(&#34;)">
-        <bygroups>
-          <token type="LiteralStringAffix"/>
-          <token type="LiteralStringDouble"/>
-        </bygroups>
-        <push state="string-double"/>
-      </rule>
-      <rule pattern="(c)?(&#39;)">
-        <bygroups>
-          <token type="LiteralStringAffix"/>
-          <token type="LiteralStringSingle"/>
-        </bygroups>
-        <push state="string-single"/>
-      </rule>
-      <rule pattern="(r)(&#34;[^&#34;]+&#34;)">
-        <bygroups>
-          <token type="LiteralStringAffix"/>
-          <token type="LiteralString"/>
-        </bygroups>
-      </rule>
-      <rule pattern="(r)(&#39;[^&#39;]+&#39;)">
-        <bygroups>
-          <token type="LiteralStringAffix"/>
-          <token type="LiteralString"/>
-        </bygroups>
-      </rule>
-    </state>
-    <state name="string-single">
-      <rule pattern="&#39;">
-        <token type="LiteralStringSingle"/>
-        <pop depth="1"/>
-      </rule>
-      <rule>
-        <include state="char-escape"/>
-      </rule>
-      <rule pattern="(\$)((?!\\){)">
-        <bygroups>
-          <token type="Operator"/>
-          <token type="Punctuation"/>
-        </bygroups>
-        <push state="string-curly-interpolation"/>
-      </rule>
-      <rule pattern="\$">
-        <token type="Operator"/>
-        <push state="string-interpolation"/>
-      </rule>
-      <rule pattern="[^&#39;]+?">
-        <token type="LiteralStringSingle"/>
-      </rule>
-    </state>
-    <state name="char-escape">
-      <rule pattern="\\[`&#39;&#34;\\abfnrtv$]|\\x[0-9a-fA-F]{2}|\\[0-7]{1,3}|\\u[0-9a-fA-F]{4}|\\U[0-9a-fA-F]{8}">
-        <token type="LiteralStringEscape"/>
-      </rule>
-    </state>
-  </rules>
-</lexer>
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/alecthomas/chroma/v2/lexers/embedded/vala.xml","mode":420,"size":4798,"sha256":"3b7f8cc81583c2b51a040efe6b52a073fc1ad25b157c7557277ca4ab5ab8264f","index":0,"count":1,"encoding":"utf-8","payloadBytes":4798}
-
-<lexer>
-  <config>
-    <name>Vala</name>
-    <alias>vala</alias>
-    <alias>vapi</alias>
-    <filename>*.vala</filename>
-    <filename>*.vapi</filename>
-    <mime_type>text/x-vala</mime_type>
-  </config>
-  <rules>
-    <state name="whitespace">
-      <rule pattern="^\s*#if\s+0"><token type="CommentPreproc"/><push state="if0"/></rule>
-      <rule pattern="\n"><token type="TextWhitespace"/></rule>
-      <rule pattern="\s+"><token type="TextWhitespace"/></rule>
-      <rule pattern="\\\n"><token type="Text"/></rule>
-      <rule pattern="//(\n|(.|\n)*?[^\\]\n)"><token type="CommentSingle"/></rule>
-      <rule pattern="/(\\\n)?[*](.|\n)*?[*](\\\n)?/"><token type="CommentMultiline"/></rule>
-    </state>
-    <state name="statements">
-      <rule pattern="[L@]?&quot;"><token type="LiteralString"/><push state="string"/></rule>
-      <rule pattern="L?&#x27;(\\.|\\[0-7]{1,3}|\\x[a-fA-F0-9]{1,2}|[^\\\&#x27;\n])&#x27;"><token type="LiteralStringChar"/></rule>
-      <rule pattern="(?s)&quot;&quot;&quot;.*?&quot;&quot;&quot;"><token type="LiteralString"/></rule>
-      <rule pattern="(\d+\.\d*|\.\d+|\d+)[eE][+-]?\d+[lL]?"><token type="LiteralNumberFloat"/></rule>
-      <rule pattern="(\d+\.\d*|\.\d+|\d+[fF])[fF]?"><token type="LiteralNumberFloat"/></rule>
-      <rule pattern="0x[0-9a-fA-F]+[Ll]?"><token type="LiteralNumberHex"/></rule>
-      <rule pattern="0[0-7]+[Ll]?"><token type="LiteralNumberOct"/></rule>
-      <rule pattern="\d+[Ll]?"><token type="LiteralNumberInteger"/></rule>
-      <rule pattern="[~!%^&amp;*+=|?:&lt;&gt;/-]"><token type="Operator"/></rule>
-      <rule pattern="(\[)(Compact|Immutable|(?:Boolean|Simple)Type)(\])"><bygroups><token type="Punctuation"/><token type="NameDecorator"/><token type="Punctuation"/></bygroups></rule>
-      <rule pattern="(\[)(CCode|(?:Integer|Floating)Type)"><bygroups><token type="Punctuation"/><token type="NameDecorator"/></bygroups></rule>
-      <rule pattern="[()\[\],.]"><token type="Punctuation"/></rule>
-      <rule pattern="(as|base|break|case|catch|construct|continue|default|delete|do|else|enum|finally|for|foreach|get|if|in|is|lock|new|out|params|return|set|sizeof|switch|this|throw|try|typeof|while|yield)\b"><token type="Keyword"/></rule>
-      <rule pattern="(abstract|const|delegate|dynamic|ensures|extern|inline|internal|override|owned|private|protected|public|ref|requires|signal|static|throws|unowned|var|virtual|volatile|weak|yields)\b"><token type="KeywordDeclaration"/></rule>
-      <rule pattern="(namespace|using)(\s+)"><bygroups><token type="KeywordNamespace"/><token type="TextWhitespace"/></bygroups><push state="namespace"/></rule>
-      <rule pattern="(class|errordomain|interface|struct)(\s+)"><bygroups><token type="KeywordDeclaration"/><token type="TextWhitespace"/></bygroups><push state="class"/></rule>
-      <rule pattern="(\.)([a-zA-Z_]\w*)"><bygroups><token type="Operator"/><token type="NameAttribute"/></bygroups></rule>
-      <rule pattern="(void|bool|char|double|float|int|int8|int16|int32|int64|long|short|size_t|ssize_t|string|time_t|uchar|uint|uint8|uint16|uint32|uint64|ulong|unichar|ushort)\b"><token type="KeywordType"/></rule>
-      <rule pattern="(true|false|null)\b"><token type="NameBuiltin"/></rule>
-      <rule pattern="[a-zA-Z_]\w*"><token type="Name"/></rule>
-    </state>
-    <state name="root">
-      <rule><include state="whitespace"/></rule>
-      <rule><push state="statement"/></rule>
-    </state>
-    <state name="statement">
-      <rule><include state="whitespace"/></rule>
-      <rule><include state="statements"/></rule>
-      <rule pattern="[{}]"><token type="Punctuation"/></rule>
-      <rule pattern=";"><token type="Punctuation"/><pop depth="1"/></rule>
-    </state>
-    <state name="string">
-      <rule pattern="&quot;"><token type="LiteralString"/><pop depth="1"/></rule>
-      <rule pattern="\\([\\abfnrtv&quot;\&#x27;]|x[a-fA-F0-9]{2,4}|[0-7]{1,3})"><token type="LiteralStringEscape"/></rule>
-      <rule pattern="[^\\&quot;\n]+"><token type="LiteralString"/></rule>
-      <rule pattern="\\\n"><token type="LiteralString"/></rule>
-      <rule pattern="\\"><token type="LiteralString"/></rule>
-    </state>
-    <state name="if0">
-      <rule pattern="^\s*#if.*?(?&lt;!\\)\n"><token type="CommentPreproc"/><push/></rule>
-      <rule pattern="^\s*#el(?:se|if).*\n"><token type="CommentPreproc"/><pop depth="1"/></rule>
-      <rule pattern="^\s*#endif.*?(?&lt;!\\)\n"><token type="CommentPreproc"/><pop depth="1"/></rule>
-      <rule pattern=".*?\n"><token type="Comment"/></rule>
-    </state>
-    <state name="class">
-      <rule pattern="[a-zA-Z_]\w*"><token type="NameClass"/><pop depth="1"/></rule>
-    </state>
-    <state name="namespace">
-      <rule pattern="[a-zA-Z_][\w.]*"><token type="NameNamespace"/><pop depth="1"/></rule>
-    </state>
-  </rules>
-</lexer>
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/alecthomas/chroma/v2/lexers/embedded/vb_net.xml","mode":420,"size":5638,"sha256":"f5c235045fa33176f45182b2ffff454b13d7d3cb93534e970baaf296b2534313","index":0,"count":1,"encoding":"utf-8","payloadBytes":5638}
-<lexer>
-  <config>
-    <name>VB.net</name>
-    <alias>vb.net</alias>
-    <alias>vbnet</alias>
-    <filename>*.vb</filename>
-    <filename>*.bas</filename>
-    <mime_type>text/x-vbnet</mime_type>
-    <mime_type>text/x-vba</mime_type>
-    <case_insensitive>true</case_insensitive>
-  </config>
-  <rules>
-    <state name="dim">
-      <rule pattern="[_\w][\w]*">
-        <token type="NameVariable"/>
-        <pop depth="1"/>
-      </rule>
-      <rule>
-        <pop depth="1"/>
-      </rule>
-    </state>
-    <state name="funcname">
-      <rule pattern="[_\w][\w]*">
-        <token type="NameFunction"/>
-        <pop depth="1"/>
-      </rule>
-    </state>
-    <state name="classname">
-      <rule pattern="[_\w][\w]*">
-        <token type="NameClass"/>
-        <pop depth="1"/>
-      </rule>
-    </state>
-    <state name="namespace">
-      <rule pattern="[_\w][\w]*">
-        <token type="NameNamespace"/>
-      </rule>
-      <rule pattern="\.">
-        <token type="NameNamespace"/>
-      </rule>
-      <rule>
-        <pop depth="1"/>
-      </rule>
-    </state>
-    <state name="end">
-      <rule pattern="\s+">
-        <token type="Text"/>
-      </rule>
-      <rule pattern="(Function|Sub|Property|Class|Structure|Enum|Module|Namespace)\b">
-        <token type="Keyword"/>
-        <pop depth="1"/>
-      </rule>
-      <rule>
-        <pop depth="1"/>
-      </rule>
-    </state>
-    <state name="root">
-      <rule pattern="^\s*&lt;.*?&gt;">
-        <token type="NameAttribute"/>
-      </rule>
-      <rule pattern="\s+">
-        <token type="Text"/>
-      </rule>
-      <rule pattern="\n">
-        <token type="Text"/>
-      </rule>
-      <rule pattern="rem\b.*?\n">
-        <token type="Comment"/>
-      </rule>
-      <rule pattern="&#39;.*?\n">
-        <token type="Comment"/>
-      </rule>
-      <rule pattern="#If\s.*?\sThen|#ElseIf\s.*?\sThen|#Else|#End\s+If|#Const|#ExternalSource.*?\n|#End\s+ExternalSource|#Region.*?\n|#End\s+Region|#ExternalChecksum">
-        <token type="CommentPreproc"/>
-      </rule>
-      <rule pattern="[(){}!#,.:]">
-        <token type="Punctuation"/>
-      </rule>
-      <rule pattern="Option\s+(Strict|Explicit|Compare)\s+(On|Off|Binary|Text)">
-        <token type="KeywordDeclaration"/>
-      </rule>
-      <rule pattern="(?&lt;!\.)(NotOverridable|NotInheritable|RemoveHandler|MustOverride|Overridable|MustInherit|Implements|RaiseEvent|AddHandler|ParamArray|WithEvents|DirectCast|Overrides|Overloads|Protected|WriteOnly|Interface|Narrowing|Inherits|Widening|SyncLock|ReadOnly|Operator|Continue|Delegate|Optional|MyClass|Declare|CUShort|Handles|Default|Shadows|TryCast|Finally|Private|Nothing|Partial|CSByte|Select|Option|Return|Friend|Resume|ElseIf|MyBase|Shared|Single|Public|CShort|Static|Global|Catch|CType|Error|CUInt|Using|While|GoSub|False|CDate|Throw|Event|CChar|CULng|CBool|Erase|ByVal|ByRef|Alias|EndIf|CByte|ReDim|Stop|Call|Wend|Next|CLng|Loop|True|CDec|With|Then|GoTo|CObj|CSng|Exit|CStr|Else|Each|Case|CInt|Step|When|CDbl|Set|For|Let|Lib|Try|New|Not|Get|On|To|Do|If|Of|Me)\b">
-        <token type="Keyword"/>
-      </rule>
-      <rule pattern="(?&lt;!\.)End\b">
-        <token type="Keyword"/>
-        <push state="end"/>
-      </rule>
-      <rule pattern="(?&lt;!\.)(Dim|Const)\b">
-        <token type="Keyword"/>
-        <push state="dim"/>
-      </rule>
-      <rule pattern="(?&lt;!\.)(Function|Sub|Property)(\s+)">
-        <bygroups>
-          <token type="Keyword"/>
-          <token type="Text"/>
-        </bygroups>
-        <push state="funcname"/>
-      </rule>
-      <rule pattern="(?&lt;!\.)(Class|Structure|Enum)(\s+)">
-        <bygroups>
-          <token type="Keyword"/>
-          <token type="Text"/>
-        </bygroups>
-        <push state="classname"/>
-      </rule>
-      <rule pattern="(?&lt;!\.)(Module|Namespace|Imports)(\s+)">
-        <bygroups>
-          <token type="Keyword"/>
-          <token type="Text"/>
-        </bygroups>
-        <push state="namespace"/>
-      </rule>
-      <rule pattern="(?&lt;!\.)(Boolean|Byte|Char|Date|Decimal|Double|Integer|Long|Object|SByte|Short|Single|String|Variant|UInteger|ULong|UShort)\b">
-        <token type="KeywordType"/>
-      </rule>
-      <rule pattern="(?&lt;!\.)(AddressOf|And|AndAlso|As|GetType|In|Is|IsNot|Like|Mod|Or|OrElse|TypeOf|Xor)\b">
-        <token type="OperatorWord"/>
-      </rule>
-      <rule pattern="&amp;=|[*]=|/=|\\=|\^=|\+=|-=|&lt;&lt;=|&gt;&gt;=|&lt;&lt;|&gt;&gt;|:=|&lt;=|&gt;=|&lt;&gt;|[-&amp;*/\\^+=&lt;&gt;\[\]]">
-        <token type="Operator"/>
-      </rule>
-      <rule pattern="&#34;">
-        <token type="LiteralString"/>
-        <push state="string"/>
-      </rule>
-      <rule pattern="_\n">
-        <token type="Text"/>
-      </rule>
-      <rule pattern="[_\w][\w]*">
-        <token type="Name"/>
-      </rule>
-      <rule pattern="#.*?#">
-        <token type="LiteralDate"/>
-      </rule>
-      <rule pattern="(\d+\.\d*|\d*\.\d+)(F[+-]?[0-9]+)?">
-        <token type="LiteralNumberFloat"/>
-      </rule>
-      <rule pattern="\d+([SILDFR]|US|UI|UL)?">
-        <token type="LiteralNumberInteger"/>
-      </rule>
-      <rule pattern="&amp;H[0-9a-f]+([SILDFR]|US|UI|UL)?">
-        <token type="LiteralNumberInteger"/>
-      </rule>
-      <rule pattern="&amp;O[0-7]+([SILDFR]|US|UI|UL)?">
-        <token type="LiteralNumberInteger"/>
-      </rule>
-    </state>
-    <state name="string">
-      <rule pattern="&#34;&#34;">
-        <token type="LiteralString"/>
-      </rule>
-      <rule pattern="&#34;C?">
-        <token type="LiteralString"/>
-        <pop depth="1"/>
-      </rule>
-      <rule pattern="[^&#34;]+">
-        <token type="LiteralString"/>
-      </rule>
-    </state>
-  </rules>
-</lexer>
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/alecthomas/chroma/v2/lexers/embedded/verilog.xml","mode":420,"size":6238,"sha256":"f539f6b6b81f5e8c74ae4a3d9009851e4b6e447e50558fde03b0a7b0297b4adf","index":0,"count":1,"encoding":"utf-8","payloadBytes":6238}
-<lexer>
-  <config>
-    <name>verilog</name>
-    <alias>verilog</alias>
-    <alias>v</alias>
-    <filename>*.v</filename>
-    <mime_type>text/x-verilog</mime_type>
-    <ensure_nl>true</ensure_nl>
-  </config>
-  <rules>
-    <state name="root">
-      <rule pattern="^\s*`define">
-        <token type="CommentPreproc"/>
-        <push state="macro"/>
-      </rule>
-      <rule pattern="\n">
-        <token type="Text"/>
-      </rule>
-      <rule pattern="\s+">
-        <token type="Text"/>
-      </rule>
-      <rule pattern="\\\n">
-        <token type="Text"/>
-      </rule>
-      <rule pattern="/(\\\n)?/(\n|(.|\n)*?[^\\]\n)">
-        <token type="CommentSingle"/>
-      </rule>
-      <rule pattern="/(\\\n)?[*](.|\n)*?[*](\\\n)?/">
-        <token type="CommentMultiline"/>
-      </rule>
-      <rule pattern="[{}#@]">
-        <token type="Punctuation"/>
-      </rule>
-      <rule pattern="L?&#34;">
-        <token type="LiteralString"/>
-        <push state="string"/>
-      </rule>
-      <rule pattern="L?&#39;(\\.|\\[0-7]{1,3}|\\x[a-fA-F0-9]{1,2}|[^\\\&#39;\n])&#39;">
-        <token type="LiteralStringChar"/>
-      </rule>
-      <rule pattern="(\d+\.\d*|\.\d+|\d+)[eE][+-]?\d+[lL]?">
-        <token type="LiteralNumberFloat"/>
-      </rule>
-      <rule pattern="(\d+\.\d*|\.\d+|\d+[fF])[fF]?">
-        <token type="LiteralNumberFloat"/>
-      </rule>
-      <rule pattern="([0-9]+)|(\&#39;h)[0-9a-fA-F]+">
-        <token type="LiteralNumberHex"/>
-      </rule>
-      <rule pattern="([0-9]+)|(\&#39;b)[01]+">
-        <token type="LiteralNumberBin"/>
-      </rule>
-      <rule pattern="([0-9]+)|(\&#39;d)[0-9]+">
-        <token type="LiteralNumberInteger"/>
-      </rule>
-      <rule pattern="([0-9]+)|(\&#39;o)[0-7]+">
-        <token type="LiteralNumberOct"/>
-      </rule>
-      <rule pattern="\&#39;[01xz]">
-        <token type="LiteralNumber"/>
-      </rule>
-      <rule pattern="\d+[Ll]?">
-        <token type="LiteralNumberInteger"/>
-      </rule>
-      <rule pattern="\*/">
-        <token type="Error"/>
-      </rule>
-      <rule pattern="[~!%^&amp;*+=|?:&lt;&gt;/-]">
-        <token type="Operator"/>
-      </rule>
-      <rule pattern="[()\[\],.;\&#39;]">
-        <token type="Punctuation"/>
-      </rule>
-      <rule pattern="`[a-zA-Z_]\w*">
-        <token type="NameConstant"/>
-      </rule>
-      <rule pattern="^(\s*)(package)(\s+)">
-        <bygroups>
-          <token type="Text"/>
-          <token type="KeywordNamespace"/>
-          <token type="Text"/>
-        </bygroups>
-      </rule>
-      <rule pattern="^(\s*)(import)(\s+)">
-        <bygroups>
-          <token type="Text"/>
-          <token type="KeywordNamespace"/>
-          <token type="Text"/>
-        </bygroups>
-        <push state="import"/>
-      </rule>
-      <rule pattern="(endprimitive|always_latch|macromodule|always_comb|endgenerate|endfunction|endpackage|endspecify|localparam|parameter|primitive|always_ff|automatic|specparam|endmodule|rtranif1|scalared|continue|deassign|endtable|defparam|function|strength|generate|pulldown|vectored|rtranif0|unsigned|specify|endcase|negedge|strong0|disable|default|endtask|posedge|strong1|typedef|tranif1|integer|forever|release|initial|tranif0|highz0|genvar|highz1|pullup|notif0|bufif1|bufif0|repeat|medium|return|struct|assign|signed|module|packed|string|output|notif1|always|final|casex|while|table|const|large|break|begin|input|pull0|pull1|inout|weak1|rcmos|weak0|casez|force|small|rnmos|rpmos|rtran|event|type|void|enum|wait|fork|join|else|edge|pmos|nand|cmos|nmos|task|xnor|case|tran|buf|ref|end|var|and|xor|for|nor|not|do|if|or)\b">
-        <token type="Keyword"/>
-      </rule>
-      <rule pattern="`(autoexpand_vectornets|nounconnected_drive|noexpand_vectornets|noremove_gatenames|unconnected_drive|noremove_netnames|expand_vectornets|remove_gatenames|default_nettype|remove_netnames|endcelldefine|noaccelerate|endprotected|accelerate|celldefine|endprotect|protected|timescale|resetall|protect|include|ifndef|ifdef|endif|elsif|undef|else)\b">
-        <token type="CommentPreproc"/>
-      </rule>
-      <rule pattern="\$(shortrealtobits|bitstoshortreal|printtimescale|showvariables|countdrivers|reset_value|reset_count|getpattern|showscopes|realtobits|bitstoreal|monitoroff|timeformat|sreadmemh|monitoron|sreadmemb|fmonitor|showvars|fdisplay|realtime|readmemb|readmemh|monitor|history|fstrobe|display|restart|incsave|strobe|fwrite|finish|random|fclose|stime|nokey|fopen|floor|nolog|scale|scope|input|reset|write|rtoi|bits|list|stop|itor|time|save|key|log)\b">
-        <token type="NameBuiltin"/>
-      </rule>
-      <rule pattern="(woshortreal|shortint|realtime|longint|integer|supply0|supply1|triand|trireg|uwire|logic|trior|byte|wand|tri0|tri1|time|real|wire|reg|bit|int|tri)\b">
-        <token type="KeywordType"/>
-      </rule>
-      <rule pattern="[a-zA-Z_]\w*:(?!:)">
-        <token type="NameLabel"/>
-      </rule>
-      <rule pattern="\$?[a-zA-Z_]\w*">
-        <token type="Name"/>
-      </rule>
-    </state>
-    <state name="string">
-      <rule pattern="&#34;">
-        <token type="LiteralString"/>
-        <pop depth="1"/>
-      </rule>
-      <rule pattern="\\([\\abfnrtv&#34;\&#39;]|x[a-fA-F0-9]{2,4}|[0-7]{1,3})">
-        <token type="LiteralStringEscape"/>
-      </rule>
-      <rule pattern="[^\\&#34;\n]+">
-        <token type="LiteralString"/>
-      </rule>
-      <rule pattern="\\\n">
-        <token type="LiteralString"/>
-      </rule>
-      <rule pattern="\\">
-        <token type="LiteralString"/>
-      </rule>
-    </state>
-    <state name="macro">
-      <rule pattern="[^/\n]+">
-        <token type="CommentPreproc"/>
-      </rule>
-      <rule pattern="/[*](.|\n)*?[*]/">
-        <token type="CommentMultiline"/>
-      </rule>
-      <rule pattern="//.*?\n">
-        <token type="CommentSingle"/>
-        <pop depth="1"/>
-      </rule>
-      <rule pattern="/">
-        <token type="CommentPreproc"/>
-      </rule>
-      <rule pattern="(?&lt;=\\)\n">
-        <token type="CommentPreproc"/>
-      </rule>
-      <rule pattern="\n">
-        <token type="CommentPreproc"/>
-        <pop depth="1"/>
-      </rule>
-    </state>
-    <state name="import">
-      <rule pattern="[\w:]+\*?">
-        <token type="NameNamespace"/>
-        <pop depth="1"/>
-      </rule>
-    </state>
-  </rules>
-</lexer>
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/alecthomas/chroma/v2/lexers/embedded/vhdl.xml","mode":420,"size":5552,"sha256":"185e83870ef924ba0f94f3af16e36adbac729c109245615c929cdd7791677d9a","index":0,"count":1,"encoding":"utf-8","payloadBytes":5552}
-<lexer>
-  <config>
-    <name>VHDL</name>
-    <alias>vhdl</alias>
-    <filename>*.vhdl</filename>
-    <filename>*.vhd</filename>
-    <mime_type>text/x-vhdl</mime_type>
-    <case_insensitive>true</case_insensitive>
-  </config>
-  <rules>
-    <state name="root">
-      <rule pattern="\n">
-        <token type="Text"/>
-      </rule>
-      <rule pattern="\s+">
-        <token type="Text"/>
-      </rule>
-      <rule pattern="\\\n">
-        <token type="Text"/>
-      </rule>
-      <rule pattern="--.*?$">
-        <token type="CommentSingle"/>
-      </rule>
-      <rule pattern="&#39;(U|X|0|1|Z|W|L|H|-)&#39;">
-        <token type="LiteralStringChar"/>
-      </rule>
-      <rule pattern="[~!%^&amp;*+=|?:&lt;&gt;/-]">
-        <token type="Operator"/>
-      </rule>
-      <rule pattern="&#39;[a-z_]\w*">
-        <token type="NameAttribute"/>
-      </rule>
-      <rule pattern="[()\[\],.;\&#39;]">
-        <token type="Punctuation"/>
-      </rule>
-      <rule pattern="&#34;[^\n\\&#34;]*&#34;">
-        <token type="LiteralString"/>
-      </rule>
-      <rule pattern="(library)(\s+)([a-z_]\w*)">
-        <bygroups>
-          <token type="Keyword"/>
-          <token type="Text"/>
-          <token type="NameNamespace"/>
-        </bygroups>
-      </rule>
-      <rule pattern="(use)(\s+)(entity)">
-        <bygroups>
-          <token type="Keyword"/>
-          <token type="Text"/>
-          <token type="Keyword"/>
-        </bygroups>
-      </rule>
-      <rule pattern="(use)(\s+)([a-z_][\w.]*\.)(all)">
-        <bygroups>
-          <token type="Keyword"/>
-          <token type="Text"/>
-          <token type="NameNamespace"/>
-          <token type="Keyword"/>
-        </bygroups>
-      </rule>
-      <rule pattern="(use)(\s+)([a-z_][\w.]*)">
-        <bygroups>
-          <token type="Keyword"/>
-          <token type="Text"/>
-          <token type="NameNamespace"/>
-        </bygroups>
-      </rule>
-      <rule pattern="(std|ieee)(\.[a-z_]\w*)">
-        <bygroups>
-          <token type="NameNamespace"/>
-          <token type="NameNamespace"/>
-        </bygroups>
-      </rule>
-      <rule pattern="(ieee|work|std)\b">
-        <token type="NameNamespace"/>
-      </rule>
-      <rule pattern="(entity|component)(\s+)([a-z_]\w*)">
-        <bygroups>
-          <token type="Keyword"/>
-          <token type="Text"/>
-          <token type="NameClass"/>
-        </bygroups>
-      </rule>
-      <rule pattern="(architecture|configuration)(\s+)([a-z_]\w*)(\s+)(of)(\s+)([a-z_]\w*)(\s+)(is)">
-        <bygroups>
-          <token type="Keyword"/>
-          <token type="Text"/>
-          <token type="NameClass"/>
-          <token type="Text"/>
-          <token type="Keyword"/>
-          <token type="Text"/>
-          <token type="NameClass"/>
-          <token type="Text"/>
-          <token type="Keyword"/>
-        </bygroups>
-      </rule>
-      <rule pattern="([a-z_]\w*)(:)(\s+)(process|for)">
-        <bygroups>
-          <token type="NameClass"/>
-          <token type="Operator"/>
-          <token type="Text"/>
-          <token type="Keyword"/>
-        </bygroups>
-      </rule>
-      <rule pattern="(end)(\s+)">
-        <bygroups>
-          <token type="Keyword"/>
-          <token type="Text"/>
-        </bygroups>
-        <push state="endblock"/>
-      </rule>
-      <rule>
-        <include state="types"/>
-      </rule>
-      <rule>
-        <include state="keywords"/>
-      </rule>
-      <rule>
-        <include state="numbers"/>
-      </rule>
-      <rule pattern="[a-z_]\w*">
-        <token type="Name"/>
-      </rule>
-    </state>
-    <state name="endblock">
-      <rule>
-        <include state="keywords"/>
-      </rule>
-      <rule pattern="[a-z_]\w*">
-        <token type="NameClass"/>
-      </rule>
-      <rule pattern="(\s+)">
-        <token type="Text"/>
-      </rule>
-      <rule pattern=";">
-        <token type="Punctuation"/>
-        <pop depth="1"/>
-      </rule>
-    </state>
-    <state name="types">
-      <rule pattern="(std_ulogic_vector|file_open_status|std_logic_vector|severity_level|file_open_kind|delay_length|std_ulogic|bit_vector|character|std_logic|positive|unsigned|boolean|natural|integer|signed|string|time|bit)\b">
-        <token type="KeywordType"/>
-      </rule>
-    </state>
-    <state name="keywords">
-      <rule pattern="(configuration|architecture|disconnect|attribute|transport|postponed|procedure|component|function|variable|severity|constant|generate|register|inertial|package|library|guarded|linkage|generic|subtype|process|literal|record|entity|others|shared|signal|downto|access|assert|return|reject|buffer|impure|select|elsif|inout|until|label|range|group|units|begin|array|alias|after|block|while|null|next|file|when|wait|open|nand|exit|then|case|port|type|loop|else|pure|with|xnor|body|not|rem|bus|rol|ror|xor|abs|end|and|sla|sll|sra|srl|all|out|nor|mod|map|for|new|use|or|on|of|in|if|is|to)\b">
-        <token type="Keyword"/>
-      </rule>
-    </state>
-    <state name="numbers">
-      <rule pattern="\d{1,2}#[0-9a-f_]+#?">
-        <token type="LiteralNumberInteger"/>
-      </rule>
-      <rule pattern="\d+">
-        <token type="LiteralNumberInteger"/>
-      </rule>
-      <rule pattern="(\d+\.\d*|\.\d+|\d+)E[+-]?\d+">
-        <token type="LiteralNumberFloat"/>
-      </rule>
-      <rule pattern="X&#34;[0-9a-f_]+&#34;">
-        <token type="LiteralNumberHex"/>
-      </rule>
-      <rule pattern="O&#34;[0-7_]+&#34;">
-        <token type="LiteralNumberOct"/>
-      </rule>
-      <rule pattern="B&#34;[01_]+&#34;">
-        <token type="LiteralNumberBin"/>
-      </rule>
-    </state>
-  </rules>
-</lexer>
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/alecthomas/chroma/v2/lexers/embedded/vhs.xml","mode":420,"size":1386,"sha256":"c59e48c618ce05e5da49574cdeead639dc5190b900cca0703a72af2f30bbac42","index":0,"count":1,"encoding":"utf-8","payloadBytes":1386}
-<lexer>
-  <config>
-    <name>VHS</name>
-	<alias>vhs</alias>
-	<alias>tape</alias>
-	<alias>cassette</alias>
-	<filename>*.tape</filename>
-  </config>
-  <rules>
-    <state name="root">
-      <rule pattern="(Output)(\s+)(.*)(\s+)">
-	    <bygroups>
-	      <token type="Keyword"/>
-	      <token type="TextWhitespace"/>
-	      <token type="LiteralString"/>
-	      <token type="TextWhitespace"/>
-		</bygroups>
-      </rule>
-      <rule pattern="\b(Set|Type|Left|Right|Up|Down|Backspace|Enter|Tab|Space|Ctrl|Sleep|Hide|Show|Escape)\b">
-        <token type="Keyword"/>
-      </rule>
-      <rule pattern="\b(FontFamily|FontSize|Framerate|Height|Width|Theme|Padding|TypingSpeed|PlaybackSpeed|LineHeight|Framerate|LetterSpacing)\b">
-        <token type="NameBuiltin"/>
-      </rule>
-      <rule pattern="#.*(\S|$)">
-        <token type="Comment"/>
-      </rule>
-      <rule pattern="(?s)&#34;.*&#34;">
-        <token type="LiteralStringDouble"/>
-      </rule>
-      <rule pattern="(?s)&#39;.*&#39;">
-        <token type="LiteralStringSingle"/>
-      </rule>
-      <rule pattern="(@|\+)">
-        <token type="Punctuation"/>
-      </rule>
-      <rule pattern="\d+">
-        <token type="LiteralNumber"/>
-      </rule>
-      <rule pattern="\s+">
-        <token type="TextWhitespace"/>
-      </rule>
-      <rule pattern="(ms|s)">
-        <token type="Text"/>
-      </rule>
-	</state>
   </rules>
 </lexer>
 

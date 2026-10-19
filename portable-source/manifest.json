@@ -1,51 +1,51 @@
 {
   "format": "platform-installer-portable-source-v2",
   "maxPartBytes": 5000000,
-  "sourceRevision": "8c56893026c0e83bee77f7b351109c483a46c14f",
-  "files": 6272,
-  "sourceBytes": 66942012,
-  "textFiles": 6184,
+  "sourceRevision": "a05e37a0b94f038073eb314629b31344522a9ef6",
+  "files": 6275,
+  "sourceBytes": 66986292,
+  "textFiles": 6187,
   "binaryFiles": 88,
   "parts": [
     {
       "name": "source-0001.txt",
-      "bytes": 4980712,
-      "sha256": "f18093cec25107ebd67d0bde3a4e79b375c1a4fabf9828c1f3b28fdd1a8a5f30"
+      "bytes": 4998567,
+      "sha256": "fbb8d4091ac37506dae1c444cdf7a4b22c6e92f54c72834120b0519a2de97d5e"
     },
     {
       "name": "source-0002.txt",
-      "bytes": 4986101,
-      "sha256": "397c975353622b3e0df3d260beede5f55cf1c2157b3b2c701b670ffae734131a"
+      "bytes": 4949035,
+      "sha256": "15b1d3a73cde9110d1328badfe5d85dcd26222054830a03ea396b27496ed39d6"
     },
     {
       "name": "source-0003.txt",
-      "bytes": 4983093,
-      "sha256": "07a621cf33e355d36d96cd4fc12dae464371a7e8d2e607f8509f17ee9c97b569"
+      "bytes": 4995246,
+      "sha256": "0e4016ddab5cee07fe5edf2a562f1b91e98f3e2497b2e1eef8d1b791570208e2"
     },
     {
       "name": "source-0004.txt",
-      "bytes": 4999853,
-      "sha256": "d008fe4c16a282aa336757ee8b019eb71ce083397d1eb71b18c075e3684c6a03"
+      "bytes": 4996639,
+      "sha256": "0faf508b3bf208b173ce046538ab4c98f0a712b8d942de698507d84416cb5aed"
     },
     {
       "name": "source-0005.txt",
-      "bytes": 4961526,
-      "sha256": "d1132616b58fa5f56c8cc939fd52f94a599d2b9e207e41eba52e728f5aba8c89"
+      "bytes": 4995726,
+      "sha256": "c043bfbaa912f559a1ddd3a263239bb6683a5b34fc3999494d1718206fce6099"
     },
     {
       "name": "source-0006.txt",
-      "bytes": 4993441,
-      "sha256": "f497ee48d7053b3462365fc1b07211e5e42448b9a5832e241716d949f486b4a1"
+      "bytes": 4987354,
+      "sha256": "ded518ba20d8a9649a311d5e93a6ec8ab1c5bed5597a080f42690e51f6bc6d2a"
     },
     {
       "name": "source-0007.txt",
-      "bytes": 4990370,
-      "sha256": "c153ac85a5705e8dae4b2037d1704ec8eae22ffc711b858b565310b8e7d94d1e"
+      "bytes": 4992225,
+      "sha256": "5affc1e6440bf1f7d163883f1ef743a2cc32cf46c2d61ed3375922bca27a8749"
     },
     {
       "name": "source-0008.txt",
-      "bytes": 4972815,
-      "sha256": "809bd2a8b99f4324315126b54272b15f570dfc2f9f7382992a3fc9c26604f8a5"
+      "bytes": 4998176,
+      "sha256": "f21073c10addcec328d9d6f0d35a8945ea806eb5580ff64f8ab0e23663d32576"
     },
     {
       "name": "source-0009.txt",

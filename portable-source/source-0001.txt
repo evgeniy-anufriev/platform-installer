@@ -21169,7 +21169,7 @@ def project_endpoint_sources(rows, desired, hosts):
     return sources
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_libraries.py","mode":420,"size":39744,"sha256":"f2c401c94f4e693f1d9f8fa548dfcd8cf3e5b870be7e731ec0f49b0c9517e47a","index":0,"count":1,"encoding":"utf-8","payloadBytes":39744}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_libraries.py","mode":420,"size":39748,"sha256":"f4ab56249235788b2df085620db536381a9137d569340a45f243a800f2f50591","index":0,"count":1,"encoding":"utf-8","payloadBytes":39748}
 """Read-only application contract checks. Ansible owns composition and templating."""
 import hashlib
 import json
@@ -21226,7 +21226,7 @@ def checked_file(root, relative):
             raise ValueError("Package symlinks are forbidden")
     if os.path.commonpath((os.path.realpath(root), os.path.realpath(current))) != os.path.realpath(root):
         raise ValueError("Package path escapes project")
-    if not os.path.isfile(current) or os.path.getsize(current) > 1024 * 1024:
+    if not os.path.isfile(current) or os.path.getsize(current) > 8 * 1024 * 1024:
         raise ValueError("Package file missing or oversized")
     return current
 
@@ -21879,7 +21879,7 @@ def application_operation(action, model):
                 applicationSemanticFingerprint=model['semanticFingerprint'])
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_providers.py","mode":420,"size":23241,"sha256":"5ccaed2e4cd7fae3d753f4315d76c1f043408046957430e5ecdc51ba6a25fa79","index":0,"count":1,"encoding":"utf-8","payloadBytes":23241}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_providers.py","mode":420,"size":23257,"sha256":"8e544f19ceeff75a307abfa2b9f318c3aab79eaac48931fcfcdf6f19cd67614e","index":0,"count":1,"encoding":"utf-8","payloadBytes":23257}
 """Target-free provider hook projection. Ansible remains the variable resolver."""
 import hashlib
 import re
@@ -21925,7 +21925,7 @@ def normalize_clickhouse_grants(values, databases, provider_id):
         tables, privileges = value['tables'], value['privileges']
         if (not database or database['providerId'] != provider_id or not isinstance(tables, list) or not tables or len(tables) > 256
                 or not isinstance(privileges, list) or not privileges or any(not isinstance(item, str) for item in privileges)
-                or not set(privileges) <= {'SELECT', 'INSERT'}):
+                or not set(privileges) <= {'SELECT', 'INSERT', 'CREATE TABLE'}):
             raise ValueError('APPLICATION_PROVIDER_GRANTS_INVALID')
         for table in tables:
             name = '*' if table == '*' else identifier(table)
@@ -22206,8 +22206,9 @@ def split_provider_jobs(providers):
     return library_jobs, instance_jobs
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_runtime.py","mode":420,"size":16093,"sha256":"c5668e747662b588fbdb429a5ca4854d90f99b2243bd0a0160a7eafe7370e227","index":0,"count":1,"encoding":"utf-8","payloadBytes":16093}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_runtime.py","mode":420,"size":16516,"sha256":"ea31f32e5bf9ef7a438b1b1c2e1202011c341bbcd7f332483766b24d76001be9","index":0,"count":1,"encoding":"utf-8","payloadBytes":16516}
 """Typed A2 preflight. Ansible owns precedence, templates and target execution."""
+import base64
 import hashlib
 import os
 import re
@@ -22441,7 +22442,14 @@ def prepare_runtime(root, snapshot, rows, desired, lock, validator, loader):
 def validate_config_contents(configs):
     for item in configs:
         content = item["content"]
-        if not isinstance(content, str) or len(content.encode("utf-8")) > 1024 * 1024:
+        if not isinstance(content, str):
+            raise ValueError("APPLICATION_CONFIG_CONTENT_INVALID")
+        if item.get("encoding") == "base64":
+            raw = base64.b64decode(content, validate=True)
+            if len(raw) > 8 * 1024 * 1024 or hashlib.sha256(raw).hexdigest() != item['sha256']:
+                raise ValueError("APPLICATION_CONFIG_CONTENT_INVALID")
+            content = raw.decode("utf-8", errors="replace")
+        elif len(content.encode("utf-8")) > 1024 * 1024:
             raise ValueError("APPLICATION_CONFIG_CONTENT_INVALID")
         findings = []
         nonsecret_values(content, "config", findings)
@@ -29440,7 +29448,7 @@ platform_application_registry_config_directory: ''
     not (application_container_before.stdout | from_json)[0].State.Running
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/apply_instance.yml","mode":420,"size":3115,"sha256":"c9bf77df08f01730dd0b3a83c9dfb957791c2cc4adf951e464405180aab0ce03","index":0,"count":1,"encoding":"utf-8","payloadBytes":3115}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/apply_instance.yml","mode":420,"size":3196,"sha256":"db62ba0721f70c96eb3cdc7ab70b04f3ad35c917de2f735bc497ff830e1f4929","index":0,"count":1,"encoding":"utf-8","payloadBytes":3196}
 ---
 - name: Create the exact instance configuration directories
   ansible.builtin.file:
@@ -29459,7 +29467,8 @@ platform_application_registry_config_directory: ''
 
 - name: Materialize declared instance config bytes
   ansible.builtin.copy:
-    content: "{{ item.content }}"
+    src: "{{ item.path | default(omit) }}"
+    content: "{{ item.content if item.path is not defined else omit }}"
     dest: "{{ application_runtime_job.instancePath }}/config/{{ item.destination }}"
     owner: "{{ application_runtime_job.account }}"
     mode: "{{ item.mode }}"
@@ -29710,7 +29719,7 @@ platform_application_registry_config_directory: ''
   when: "'@' not in application_runtime_job.settings.image"
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/preflight.yml","mode":420,"size":18079,"sha256":"3c217f096df37e59e65dade6447d17a4afeb94c1e6ab0ad468d5bd778f5cd889","index":0,"count":1,"encoding":"utf-8","payloadBytes":18079}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/preflight.yml","mode":420,"size":18277,"sha256":"76b96083fd872cea8298db0cf26d072fc8146932127cb3bff196d870b47a9648","index":0,"count":1,"encoding":"utf-8","payloadBytes":18277}
 ---
 - name: Bind this operation's account and Docker configuration discovery key
   ansible.builtin.set_fact:
@@ -29831,10 +29840,19 @@ platform_application_registry_config_directory: ''
   ansible.builtin.set_fact:
     application_config_contents: "{{ application_config_contents + [{'destination': application_config.destination, 'content': _application_config_content, 'sha256': (_application_config_content | hash('sha256')), 'mode': application_config.mode | default('0644')}] }}"
   vars:
-    _application_config_content: "{{ lookup('ansible.builtin.template', application_config.path) if application_config.template is defined else lookup('ansible.builtin.file', application_config.path, rstrip=false) }}"
+    _application_config_content: "{{ lookup('ansible.builtin.template', application_config.path) }}"
   loop: "{{ application_runtime_job.configs }}"
   loop_control:
     loop_var: application_config
+  when: application_config.template is defined
+  no_log: true
+
+- name: Read declared source files without text conversion
+  ansible.builtin.include_tasks: source_config.yml
+  loop: "{{ application_runtime_job.configs }}"
+  loop_control:
+    loop_var: application_config
+  when: application_config.source is defined
   no_log: true
 
 - name: Require bounded nonsecret rendered config contents before any file write
@@ -30093,6 +30111,31 @@ platform_application_registry_config_directory: ''
   ansible.builtin.set_fact:
     application_library_path: "{{ application_root }}"
     application_instance_path: "{{ application_root }}/{{ application_runtime_job.placement.runtimePath }}"
+  no_log: true
+
+@@END
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/source_config.yml","mode":420,"size":886,"sha256":"11c9bb7ffdb28c058a0de660276f5aa9babe1cde6973fd1aa901074c384cef78","index":0,"count":1,"encoding":"utf-8","payloadBytes":886}
+---
+- name: Hash source bytes on the Execution Node
+  ansible.builtin.stat:
+    path: "{{ application_config.path }}"
+    checksum_algorithm: sha256
+  delegate_to: localhost
+  become: false
+  register: application_source_stat
+  no_log: true
+
+- name: Read source bytes for private nonsecret validation
+  ansible.builtin.slurp:
+    src: "{{ application_config.path }}"
+  delegate_to: localhost
+  become: false
+  register: application_source_bytes
+  no_log: true
+
+- name: Retain source path and byte digest for ordinary copy
+  ansible.builtin.set_fact:
+    application_config_contents: "{{ application_config_contents + [{'destination': application_config.destination, 'path': application_config.path, 'content': application_source_bytes.content, 'encoding': 'base64', 'sha256': application_source_stat.stat.checksum, 'mode': application_config.mode | default('0644')}] }}"
   no_log: true
 
 @@END
@@ -36336,7 +36379,7 @@ def _secret_output_retention_pending(root, journal):
     return False
 
 @@END
-@@PORTABLE {"path":"ansible-core/tools/execution_protocol.py","mode":420,"size":66493,"sha256":"8ecff031db54eb6e416b6d128174dc6157ff595b040b9676ccdd4f82568cedee","index":0,"count":2,"encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"ansible-core/tools/execution_protocol.py","mode":420,"size":66424,"sha256":"c10e98cabec1e3063650d2b65e46a7d6d1bfd706beec1ef4520de74223daa3fc","index":0,"count":2,"encoding":"utf-8","payloadBytes":48000}
 #!/usr/bin/env python3
 """Fixed JSON protocol for the activated Execution Node runtime.
 
@@ -36742,9 +36785,7 @@ def _candidate_logical_path(name):
             return True
         if kind == 'library' and relative == 'files/.env':
             return True
-        return (relative.startswith((role + 'templates/', 'configuration/', 'assets/')) and
-                os.path.splitext(parts[-1])[1].lower() in
-                ('.j2', '.yml', '.yaml', '.json', '.conf', '.cfg', '.hcl', '.txt', '.properties', '.xml', '.crt', '.pem'))
+        return relative.startswith((role + 'templates/', 'configuration/', 'assets/'))
     if len(parts) < 3 or parts[0] != "inventory" or parts[1] not in ("group_vars", "host_vars"):
         return False
     return os.path.splitext(parts[-1])[1].lower() in (".yml", ".yaml", ".json")
@@ -36760,7 +36801,8 @@ def _candidate_members(archive):
     for member in members:
         if not member.isreg() or member.linkname or member.sparse is not None or not _candidate_logical_path(member.name):
             raise LifecycleError("PROJECT_CANDIDATE_ARCHIVE_UNSAFE")
-        if member.size < 0 or member.size > MAX_CANDIDATE_FILE_BYTES:
+        limit = 8 * 1024 * 1024 if member.name.startswith(('application-packages/', 'library-packages/')) else MAX_CANDIDATE_FILE_BYTES
+        if member.size < 0 or member.size > limit:
             raise LifecycleError("PROJECT_CANDIDATE_LIMIT_EXCEEDED")
         total += member.size
         if total > MAX_CANDIDATE_TOTAL_BYTES:
@@ -37110,11 +37152,11 @@ def core_operation(value, state_root, runtime_release, operation, runtime_identi
             if candidate:
                 environment = _candidate_ansible_environment(project, release, os.path.join(journal.directory, "project-snapshot.json"))
             else:
-                environment = dict(os.environ, ANSIBLE_CONFIG=os.path.join(release, "ansible-core", "ansible.cfg"), ANSIBLE_COLLECTIONS_PATH=_collection_path(release), ANSIBLE_CALLBACKS_ENABLED="platform.core.project_snapshot_json", PLATFORM_PROJECT_SNAPSHOT_OUTPUT=os.path.
+                environment = dict(os.environ, ANSIBLE_CONFIG=os.path.join(release, "ansible-core", "ansible.cfg"), ANSIBLE_COLLECTIONS_PATH=_collection_path(release), ANSIBLE_CALLBACKS_ENABLED="platform.core.project_snapshot_json", PLATFORM_PROJECT_SNAPSHOT_OUTPUT=os.path.join(journal.directory, "project-snapshot.json"))
+        elif operat
 @@END
-@@PORTABLE {"path":"ansible-core/tools/execution_protocol.py","mode":420,"size":66493,"sha256":"8ecff031db54eb6e416b6d128174dc6157ff595b040b9676ccdd4f82568cedee","index":1,"count":2,"encoding":"utf-8","payloadBytes":18493}
-join(journal.directory, "project-snapshot.json"))
-        elif operation == "BuildRuntimeSecretDescriptors":
+@@PORTABLE {"path":"ansible-core/tools/execution_protocol.py","mode":420,"size":66424,"sha256":"c10e98cabec1e3063650d2b65e46a7d6d1bfd706beec1ef4520de74223daa3fc","index":1,"count":2,"encoding":"utf-8","payloadBytes":18424}
+ion == "BuildRuntimeSecretDescriptors":
             environment = dict(os.environ, ANSIBLE_CONFIG=os.path.join(release, "ansible-core", "ansible.cfg"), ANSIBLE_COLLECTIONS_PATH=_collection_path(release), ANSIBLE_CALLBACKS_ENABLED="platform.core.runtime_secret_descriptors_json", PLATFORM_RUNTIME_SECRET_DESCRIPTORS_OUTPUT=os.path.join(journal.directory, "runtime-secret-descriptors.json"), PLATFORM_CORE_DIAGNOSTIC_OUTPUT=diagnostic_path)
         else:
             environment = dict(os.environ, ANSIBLE_CONFIG=os.path.join(release, "ansible-core", "ansible.cfg"), ANSIBLE_COLLECTIONS_PATH=_collection_path(release), ANSIBLE_CALLBACKS_ENABLED="platform.core.deployment_plan_json", PLATFORM_DEPLOYMENT_PLAN_OUTPUT=os.path.join(journal.directory, "deployment-plan.json"), PLATFORM_EXECUTION_MANIFEST_OUTPUT=os.path.join(journal.directory, "manifest.json"), PLATFORM_CORE_DIAGNOSTIC_OUTPUT=diagnostic_path)
@@ -51676,7 +51718,7 @@ catalogLock:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/alarm-service/1.0.0/roles/application_alarm-service/defaults/main.yml","mode":420,"size":5261,"sha256":"4d767a87f75e148f8bdd92c873897521030c5e84f184c225b6748a8e9916753a","index":0,"count":1,"encoding":"utf-8","payloadBytes":5261}
+@@PORTABLE {"path":"examples/sdku/application-packages/alarm-service/1.0.0/roles/application_alarm-service/defaults/main.yml","mode":420,"size":7293,"sha256":"15ef5255bf5fc6ba318a008a92e980addf51dbb918cdbe6df63a6467a25ff281","index":0,"count":1,"encoding":"utf-8","payloadBytes":7293}
 platform_application_definition:
     connections:
         clickhouse:
@@ -51692,6 +51734,45 @@ platform_application_definition:
             library_binding: secrets
             protocol: https
     defaults:
+        accounts:
+            clickhouse:
+                credentials:
+                    password:
+                        source:
+                            kind: runtime_secret_ref
+                            ref: '{{ application_instance_id }}-clickhouse-password'
+                    username:
+                        source:
+                            kind: literal
+                            value: '{{ application_instance_id | replace(''-'', ''_'') }}'
+                databaseRef: analytics
+                grants:
+                    - databaseRef: analytics
+                      privileges:
+                        - SELECT
+                        - INSERT
+                      tables:
+                        - '*'
+                mode: managed
+            redis:
+                credentials:
+                    password:
+                        source:
+                            kind: runtime_secret_ref
+                            ref: '{{ application_instance_id }}-redis-password'
+                    username:
+                        source:
+                            kind: literal
+                            value: '{{ application_instance_id | replace(''-'', ''_'') }}'
+                grants:
+                    channels:
+                        - '*'
+                    commands:
+                        - +@all
+                        - -@admin
+                    keys:
+                        - '*'
+                mode: managed
         command:
             - java
             - -XX:MaxRAMPercentage=70.0
@@ -51699,12 +51780,12 @@ platform_application_definition:
             - -jar
             - alarm-service.jar
         environment:
-            HISTORY_DATASOURCE_CLICKHOUSE_JDBCURL: "$${CLICKHOUSE_HTTP_ENDPOINT}?$${CLICKHOUSE_SSL_OPTIONS}"
             ALERT_CLASS_TOPIC: '{{ application_parameters.source_variables.REDIS_ALERT_CLASS_TOPIC | default(undef(hint=''Configure SDKU REDIS_ALERT_CLASS_TOPIC''), true) }}'
             ALERT_HANDLER_TOPIC: '{{ application_parameters.source_variables.REDIS_ALERT_HANDLER_TOPIC | default(undef(hint=''Configure SDKU REDIS_ALERT_HANDLER_TOPIC''), true) }}'
             AUTO_ACK_DELAY: "600000"
             AUTO_ACK_TIME: PT2H
             ENABLE_CUSTOM_TIMESTAMP: "false"
+            HISTORY_DATASOURCE_CLICKHOUSE_JDBCURL: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
             JAVA_OPTS: -Xmx4096m
             KAFKA_ALARM_COMPACT_TOPIC: '{{ application_parameters.source_variables.ALARM_TOPIC | default(undef(hint=''Configure SDKU ALARM_TOPIC''), true) }}-compact'
             KAFKA_ALARM_GROUP: alarm-service-group
@@ -51716,17 +51797,22 @@ platform_application_definition:
             REDIS_CONNECT_TIMEOUT: 1000
             REDIS_TIMEOUT: 1000
             SERVER_ALLOWED_ORIGINS: '*'
+            SERVER_PORT: 10011
             SIM_DELAY: "1000"
+            SPRING_KAFKA_CLIENT_ID: '{{ application_instance_id }}-$${SERVER_ID}'
             SPRING_PROFILES_ACTIVE: sdku
             SQL_INIT_MODE: never
             TIME_STAMP_PATTERN: yyyy.MM.dd HH:mm:ss.SSS
             TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
             alarm-service.is-generate-additional-alarm-flags: "false"
-            kafka.consumer.group.instance.id: alarm-service-{{ application_instance_id }}
+            kafka.consumer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-consumer'
+            kafka.consumer.group.instance.id: alarm-service-{{ application_instance_id }}-$${SERVER_ID}
+            kafka.producer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-producer'
             server.max-http-request-header-size: 100MB
             tn-scada.kafka.listener.seekToEnd: false
         image: evoscada-docker.artifacts.tn.tngrp.ru/alarm-service:0.4.2-3a1d508c-redos
         parameters:
+            database_name: ""
             source_variables:
                 ALARM_TOPIC: sdku-alarms
                 MAIN_TOPIC: sdku-main
@@ -51746,10 +51832,12 @@ platform_application_definition:
             secret_bindings:
                 HISTORY_DATASOURCE_CLICKHOUSE_PASSWORD:
                     source:
-                        library_secret: clickhouse_scada_password
+                        account: clickhouse
+                        field: password
                 HISTORY_DATASOURCE_CLICKHOUSE_USERNAME:
                     source:
-                        library_secret: clickhouse_scada_username
+                        account: clickhouse
+                        field: username
                 JAVA_KEYSTORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password
@@ -51761,16 +51849,20 @@ platform_application_definition:
                         library_secret: java_keystore_password
                 TN_SCADA_REDIS_ACL_PASSWORD:
                     source:
-                        library_secret: redis_password
+                        account: redis
+                        field: password
                 TN_SCADA_REDIS_ACL_SENTINEL_PASSWORD:
                     source:
-                        library_secret: redis_sentinel_password
+                        account: redis
+                        field: password
                 TN_SCADA_REDIS_ACL_SENTINEL_USERNAME:
                     source:
-                        library_secret: redis_sentinel_username
+                        account: redis
+                        field: username
                 TN_SCADA_REDIS_ACL_USERNAME:
                     source:
-                        library_secret: redis_username
+                        account: redis
+                        field: username
                 TN_SCADA_REDIS_SSL_PROPERTIES_KEY_STORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password
@@ -51798,7 +51890,7 @@ platform_application_definition:
 {{ application_runtime | platform.core.application_agent_config }}
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/alarm-service/1.0.0/roles/application_alarm-service/templates/compose.yml.j2","mode":420,"size":2153,"sha256":"390cd602342caee1cb0f25cb210b24c2a94059ca4959f33db81a0704d1b51bc2","index":0,"count":1,"encoding":"utf-8","payloadBytes":2153}
+@@PORTABLE {"path":"examples/sdku/application-packages/alarm-service/1.0.0/roles/application_alarm-service/templates/compose.yml.j2","mode":420,"size":2160,"sha256":"c545c2f5d55b6000bc45a74319662c0d47f65884f0c13a1acfb835f247f5fcc4","index":0,"count":1,"encoding":"utf-8","payloadBytes":2160}
 services:
   {{ application_instance_id }}:
     extends:
@@ -51839,7 +51931,7 @@ services:
       "interval": 30s
       "test":
           - CMD-SHELL
-          - curl http://localhost:{{ application_effective.ports['port-1'].container }}/actuator/health | grep UP
+          - curl --fail http://localhost:{{ application_effective.ports['port-1'].container }}/actuator/health | grep UP
       "timeout": 15s
     deploy:
       "resources":
@@ -51865,7 +51957,7 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/alarm-view-service/1.0.0/roles/application_alarm-view-service/defaults/main.yml","mode":420,"size":5909,"sha256":"23bedd9c5012b09c343f2550878a1fd9ce5f00c22bd8d23870b32abca451d5c8","index":0,"count":1,"encoding":"utf-8","payloadBytes":5909}
+@@PORTABLE {"path":"examples/sdku/application-packages/alarm-view-service/1.0.0/roles/application_alarm-view-service/defaults/main.yml","mode":420,"size":9900,"sha256":"05672e8cb190b3ca0af05bda8867a389b751c6fbc235a1c693aabb3eeb412f6d","index":0,"count":1,"encoding":"utf-8","payloadBytes":9900}
 platform_application_definition:
     connections:
         clickhouse:
@@ -51884,22 +51976,81 @@ platform_application_definition:
             library_binding: secrets
             protocol: https
     defaults:
+        accounts:
+            clickhouse:
+                credentials:
+                    password:
+                        source:
+                            kind: runtime_secret_ref
+                            ref: '{{ application_instance_id }}-clickhouse-password'
+                    username:
+                        source:
+                            kind: literal
+                            value: '{{ application_instance_id | replace(''-'', ''_'') }}'
+                databaseRef: analytics
+                grants:
+                    - databaseRef: analytics
+                      privileges:
+                        - SELECT
+                        - INSERT
+                      tables:
+                        - '*'
+                mode: managed
+            postgres:
+                credentials:
+                    password:
+                        source:
+                            kind: runtime_secret_ref
+                            ref: '{{ application_instance_id }}-postgres-password'
+                    username:
+                        source:
+                            kind: literal
+                            value: '{{ application_instance_id | replace(''-'', ''_'') }}'
+                databaseAccess:
+                    - databaseRef: database
+                      privileges:
+                        - SELECT
+                        - INSERT
+                        - UPDATE
+                        - DELETE
+                        - CREATE
+                mode: managed
+            redis:
+                credentials:
+                    password:
+                        source:
+                            kind: runtime_secret_ref
+                            ref: '{{ application_instance_id }}-redis-password'
+                    username:
+                        source:
+                            kind: literal
+                            value: '{{ application_instance_id | replace(''-'', ''_'') }}'
+                grants:
+                    channels:
+                        - '*'
+                    commands:
+                        - +@all
+                        - -@admin
+                    keys:
+                        - '*'
+                mode: managed
         command:
             - java
             - -jar
             - alarm-view-service.jar
         environment:
-            DB_CONNECTION_STRING: "$${POSTGRES_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${POSTGRES_SSL_OPTIONS}"
-            HISTORY_DATASOURCE_CLICKHOUSE_JDBCURL: "$${CLICKHOUSE_HTTP_ENDPOINT}?$${CLICKHOUSE_SSL_OPTIONS}"
             ALERT_CLASS_TOPIC: '{{ application_parameters.source_variables.REDIS_ALERT_CLASS_TOPIC | default(undef(hint=''Configure SDKU REDIS_ALERT_CLASS_TOPIC''), true) }}'
             ALERT_HANDLER_TOPIC: '{{ application_parameters.source_variables.REDIS_ALERT_HANDLER_TOPIC | default(undef(hint=''Configure SDKU REDIS_ALERT_HANDLER_TOPIC''), true) }}'
             AUTO_ACK_DELAY: "600000"
             AUTO_ACK_TIME: PT2H
+            DB_CONNECTION_STRING: $${POSTGRES_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${POSTGRES_SSL_OPTIONS}
             DB_ROOT_CERT: /opt/application/pki/ca-chain.pem
+            HISTORY_DATASOURCE_CLICKHOUSE_JDBCURL: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
             JAVA_OPTS: -Xmx4096m
             KAFKA_ACK_ALARM_TOPIC: dev-ack-alarm
             KAFKA_ALARM_COMPACT_TOPIC: '{{ application_parameters.source_variables.ALARM_TOPIC | default(undef(hint=''Configure SDKU ALARM_TOPIC''), true) }}-compact'
-            KAFKA_ALARM_CONSUMER_ID: alarm-view-service-{{ application_instance_id }}
+            KAFKA_ALARM_CONSUMER_ID: '{{ application_instance_id }}-$${SERVER_ID}-alarm-consumer'
+            KAFKA_ALARM_PRODUCER_ID: '{{ application_instance_id }}-$${SERVER_ID}-alarm-producer'
             KAFKA_ALARM_GROUP: alarm-view-service-{{ application_instance_id }}
             KAFKA_ALARM_GROUP_WS: alarm-view-service-{{ application_instance_id }}
             KAFKA_ALARM_HISTORY_TOPIC: '{{ application_parameters.source_variables.ALARM_TOPIC | default(undef(hint=''Configure SDKU ALARM_TOPIC''), true) }}'
@@ -51910,12 +52061,16 @@ platform_application_definition:
             KAFKA_SIGNAL_TOPIC: '{{ application_parameters.source_variables.MAIN_TOPIC | default(undef(hint=''Configure SDKU MAIN_TOPIC''), true) }}'
             LOGGER_LEVEL: DEBUG
             SERVER_ALLOWED_ORIGINS: '*'
+            SERVER_PORT: 10021
             SIM_DELAY: "1000"
             SLEUTH_TRACE_ENABLED: false
+            SPRING_KAFKA_CLIENT_ID: '{{ application_instance_id }}-$${SERVER_ID}'
             SPRING_PROFILES_ACTIVE: sdku
             SQL_INIT_MODE: never
             TIME_STAMP_PATTERN: yyyy.MM.dd HH:mm:ss.SSS
             TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
+            kafka.consumer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-consumer'
+            kafka.producer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-producer'
             logging.level.ru.tnt.transneft.alarmservice.processor: WARN
             server.max-http-request-header-size: 100MB
         image: evoscada-docker.artifacts.tn.tngrp.ru/alarm-view-service:0.4.0-96e90ee0-redos
@@ -51938,18 +52093,50 @@ platform_application_definition:
                 method: approle
             mode: process-supervisor
             secret_bindings:
+                KAFKA_KEYSTORE_PASSWORD:
+                    source:
+                        library_secret: java_keystore_password
+                KAFKA_TRUSTSTORE_PASSWORD:
+                    source:
+                        library_secret: java_keystore_password
+                REDIS_USERNAME:
+                    source:
+                        account: redis
+                        field: username
+                REDIS_PASSWORD:
+                    source:
+                        account: redis
+                        field: password
+                REDIS_SENTINEL_USERNAME:
+                    source:
+                        account: redis
+                        field: username
+                REDIS_SENTINEL_PASSWORD:
+                    source:
+                        account: redis
+                        field: password
+                REDIS_KEYSTORE_PASSWORD:
+                    source:
+                        library_secret: java_keystore_password
+                REDIS_TRUSTSTORE_PASSWORD:
+                    source:
+                        library_secret: java_keystore_password
                 DB_PASSWORD:
                     source:
-                        library_secret: postgres_scada_password
+                        account: postgres
+                        field: password
                 DB_USERNAME:
                     source:
-                        library_secret: postgres_scada_user
+                        account: postgres
+                        field: username
                 HISTORY_DATASOURCE_CLICKHOUSE_PASSWORD:
                     source:
-                        library_secret: clickhouse_scada_password
+                        account: clickhouse
+                        field: password
                 HISTORY_DATASOURCE_CLICKHOUSE_USERNAME:
                     source:
-                        library_secret: clickhouse_scada_username
+                        account: clickhouse
+                        field: username
                 JAVA_KEYSTORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password
@@ -51961,16 +52148,20 @@ platform_application_definition:
                         library_secret: java_keystore_password
                 TN_SCADA_REDIS_ACL_PASSWORD:
                     source:
-                        library_secret: redis_password
+                        account: redis
+                        field: password
                 TN_SCADA_REDIS_ACL_SENTINEL_PASSWORD:
                     source:
-                        library_secret: redis_sentinel_password
+                        account: redis
+                        field: password
                 TN_SCADA_REDIS_ACL_SENTINEL_USERNAME:
                     source:
-                        library_secret: redis_sentinel_username
+                        account: redis
+                        field: username
                 TN_SCADA_REDIS_ACL_USERNAME:
                     source:
-                        library_secret: redis_username
+                        account: redis
+                        field: username
                 TN_SCADA_REDIS_SSL_PROPERTIES_KEY_STORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password
@@ -51998,7 +52189,7 @@ platform_application_definition:
 {{ application_runtime | platform.core.application_agent_config }}
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/alarm-view-service/1.0.0/roles/application_alarm-view-service/templates/compose.yml.j2","mode":420,"size":2153,"sha256":"2343625d0bbffaa148fe5d1e27e051c0c21778942f5396d87b8c30a4a26f6475","index":0,"count":1,"encoding":"utf-8","payloadBytes":2153}
+@@PORTABLE {"path":"examples/sdku/application-packages/alarm-view-service/1.0.0/roles/application_alarm-view-service/templates/compose.yml.j2","mode":420,"size":2160,"sha256":"1df7e2b9485bb300622d71dfb550f53391f98d57e11d8847f44b591e17dc5e48","index":0,"count":1,"encoding":"utf-8","payloadBytes":2160}
 services:
   {{ application_instance_id }}:
     extends:
@@ -52039,7 +52230,7 @@ services:
       "interval": 30s
       "test":
           - CMD-SHELL
-          - curl http://localhost:{{ application_effective.ports['port-1'].container }}/actuator/health | grep UP
+          - curl --fail http://localhost:{{ application_effective.ports['port-1'].container }}/actuator/health | grep UP
       "timeout": 15s
     deploy:
       "resources":
@@ -52065,7 +52256,7 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/data-manager/1.0.0/roles/application_data-manager/defaults/main.yml","mode":420,"size":5968,"sha256":"ca88148c815d15ab747c9c9838cd03d2cea049d975eb34fe5b3bb3e8e620df48","index":0,"count":1,"encoding":"utf-8","payloadBytes":5968}
+@@PORTABLE {"path":"examples/sdku/application-packages/data-manager/1.0.0/roles/application_data-manager/defaults/main.yml","mode":420,"size":7932,"sha256":"acab7acf8ef65989666d99a92029a762e1b689cc7559c37b6193e60ec3489b51","index":0,"count":1,"encoding":"utf-8","payloadBytes":7932}
 platform_application_definition:
     connections:
         kafka:
@@ -52081,6 +52272,45 @@ platform_application_definition:
             library_binding: secrets
             protocol: https
     defaults:
+        accounts:
+            postgres:
+                credentials:
+                    password:
+                        source:
+                            kind: runtime_secret_ref
+                            ref: '{{ application_instance_id }}-postgres-password'
+                    username:
+                        source:
+                            kind: literal
+                            value: '{{ application_instance_id | replace(''-'', ''_'') }}'
+                databaseAccess:
+                    - databaseRef: database
+                      privileges:
+                        - SELECT
+                        - INSERT
+                        - UPDATE
+                        - DELETE
+                        - CREATE
+                mode: managed
+            redis:
+                credentials:
+                    password:
+                        source:
+                            kind: runtime_secret_ref
+                            ref: '{{ application_instance_id }}-redis-password'
+                    username:
+                        source:
+                            kind: literal
+                            value: '{{ application_instance_id | replace(''-'', ''_'') }}'
+                grants:
+                    channels:
+                        - '*'
+                    commands:
+                        - +@all
+                        - -@admin
+                    keys:
+                        - '*'
+                mode: managed
         command:
             - java
             - -XX:+HeapDumpOnOutOfMemoryError
@@ -52088,9 +52318,9 @@ platform_application_definition:
             - -jar
             - data-manager.jar
         environment:
-            DB_CONNECTION_STRING: "$${POSTGRES_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${POSTGRES_SSL_OPTIONS}"
             ALERT_CLASS_TOPIC: '{{ application_parameters.source_variables.REDIS_ALERT_CLASS_TOPIC | default(undef(hint=''Configure SDKU REDIS_ALERT_CLASS_TOPIC''), true) }}'
             ALERT_HANDLER_TOPIC: '{{ application_parameters.source_variables.REDIS_ALERT_HANDLER_TOPIC | default(undef(hint=''Configure SDKU REDIS_ALERT_HANDLER_TOPIC''), true) }}'
+            DB_CONNECTION_STRING: $${POSTGRES_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${POSTGRES_SSL_OPTIONS}
             JAVA_OPTS: -Xmx8192m
             LOGGER_DATAMANAGER_LEVEL: INFO
             LOGGER_FILE_MAX_SIZE: 150Mb
@@ -52103,12 +52333,16 @@ platform_application_definition:
             REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
             SEARCH_ITEMS_LIMIT: "200"
             SERVER_ALLOWED_ORIGINS: '*'
+            SERVER_PORT: 10041
             SPRING_APPLICATION_NAME: data-manager
             SPRING_JPA_PROPERTIES_JAKARTA_PERSISTENCE_QUERY_TIMEOUT: 2000
+            SPRING_KAFKA_CLIENT_ID: '{{ application_instance_id }}-$${SERVER_ID}'
             SQL_INIT_MODE: always
             STATIC_FILES_FOLDER: /usr/local/app/static/
             TN_SCADA_DATA_MANAGER_INITIALIZATION_BATCH_SIZE: 50000
             TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
+            kafka.consumer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-consumer'
+            kafka.producer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-producer'
             server.max-http-request-header-size: 100MB
             spring.servlet.multipart.max-file-size: 50MB
             spring.servlet.multipart.max-request-size: 50MB
@@ -52134,10 +52368,12 @@ platform_application_definition:
             secret_bindings:
                 DB_PASSWORD:
                     source:
-                        library_secret: postgres_scada_password
+                        account: postgres
+                        field: password
                 DB_USERNAME:
                     source:
-                        library_secret: postgres_scada_user
+                        account: postgres
+                        field: username
                 JAVA_KEYSTORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password
@@ -52146,19 +52382,23 @@ platform_application_definition:
                         library_secret: java_keystore_password
                 REDIS_PASSWORD:
                     source:
-                        library_secret: redis_password
+                        account: redis
+                        field: password
                 REDIS_SENTINEL_PASSWORD:
                     source:
-                        library_secret: redis_sentinel_password
+                        account: redis
+                        field: password
                 REDIS_SENTINEL_USERNAME:
                     source:
-                        library_secret: redis_sentinel_username
+                        account: redis
+                        field: username
                 REDIS_TRUSTSTORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password
                 REDIS_USERNAME:
                     source:
-                        library_secret: redis_username
+                        account: redis
+                        field: username
                 SPRING_KAFKA_SSL_KEY_STORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password
@@ -52167,16 +52407,20 @@ platform_application_definition:
                         library_secret: java_keystore_password
                 TN_SCADA_REDIS_ACL_PASSWORD:
                     source:
-                        library_secret: redis_password
+                        account: redis
+                        field: password
                 TN_SCADA_REDIS_ACL_SENTINEL_PASSWORD:
                     source:
-                        library_secret: redis_sentinel_password
+                        account: redis
+                        field: password
                 TN_SCADA_REDIS_ACL_SENTINEL_USERNAME:
                     source:
-                        library_secret: redis_sentinel_username
+                        account: redis
+                        field: username
                 TN_SCADA_REDIS_ACL_USERNAME:
                     source:
-                        library_secret: redis_username
+                        account: redis
+                        field: username
                 TN_SCADA_REDIS_SSL_PROPERTIES_KEY_STORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password
@@ -52201,7 +52445,7 @@ platform_application_definition:
 {{ application_runtime | platform.core.application_agent_config }}
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/data-manager/1.0.0/roles/application_data-manager/templates/compose.yml.j2","mode":420,"size":2044,"sha256":"253f9f724c4f91c0ef626b31d6710bcf54d1e0113cf08949cd9a93bf6f4b8bef","index":0,"count":1,"encoding":"utf-8","payloadBytes":2044}
+@@PORTABLE {"path":"examples/sdku/application-packages/data-manager/1.0.0/roles/application_data-manager/templates/compose.yml.j2","mode":420,"size":2051,"sha256":"2b859034ebeb8c54a49017cf27f65f5fca25584a34e079cd94f5af0da3701121","index":0,"count":1,"encoding":"utf-8","payloadBytes":2051}
 services:
   {{ application_instance_id }}:
     extends:
@@ -52242,7 +52486,7 @@ services:
       "retries": 10
       "test":
           - CMD-SHELL
-          - curl http://localhost:{{ application_effective.ports['port-1'].container }}/actuator/health | grep UP
+          - curl --fail http://localhost:{{ application_effective.ports['port-1'].container }}/actuator/health | grep UP
       "timeout": 15s
     deploy:
       "resources":
@@ -52268,7 +52512,7 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/ef-backend/1.0.0/roles/application_ef-backend/defaults/main.yml","mode":420,"size":3563,"sha256":"10366f44b75eee1a41f205648cf72b272077920a36ffa28644a41c4f7d8a96aa","index":0,"count":1,"encoding":"utf-8","payloadBytes":3563}
+@@PORTABLE {"path":"examples/sdku/application-packages/ef-backend/1.0.0/roles/application_ef-backend/defaults/main.yml","mode":420,"size":5447,"sha256":"683391a4ee2ce00bc39bcf30ff78eeca5f599be6168bafcd59102b800ba451dd","index":0,"count":1,"encoding":"utf-8","payloadBytes":5447}
 platform_application_definition:
     connections:
         kafka:
@@ -52284,18 +52528,61 @@ platform_application_definition:
             library_binding: secrets
             protocol: https
     defaults:
+        accounts:
+            postgres:
+                credentials:
+                    password:
+                        source:
+                            kind: runtime_secret_ref
+                            ref: '{{ application_instance_id }}-postgres-password'
+                    username:
+                        source:
+                            kind: literal
+                            value: '{{ application_instance_id | replace(''-'', ''_'') }}'
+                databaseAccess:
+                    - databaseRef: database
+                      privileges:
+                        - SELECT
+                        - INSERT
+                        - UPDATE
+                        - DELETE
+                        - CREATE
+                mode: managed
+            redis:
+                credentials:
+                    password:
+                        source:
+                            kind: runtime_secret_ref
+                            ref: '{{ application_instance_id }}-redis-password'
+                    username:
+                        source:
+                            kind: literal
+                            value: '{{ application_instance_id | replace(''-'', ''_'') }}'
+                grants:
+                    channels:
+                        - '*'
+                    commands:
+                        - +@all
+                        - -@admin
+                    keys:
+                        - '*'
+                mode: managed
         command:
             - java
             - -javaagent:/usr/local/app/opentelemetry-javaagent.jar
             - -jar
             - ef-backend.jar
         environment:
-            DB_CONNECTION_STRING: "$${POSTGRES_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${POSTGRES_SSL_OPTIONS}"
             DB_CONNECTION_SSL: "true"
+            DB_CONNECTION_STRING: $${POSTGRES_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${POSTGRES_SSL_OPTIONS}
             JAVA_OPTS: -Xmx4096m
             NETWORK_TIMEOUT_MS: 10000
             SERVER_ALLOWED_ORIGINS: '*'
+            SERVER_PORT: 10341
+            SPRING_KAFKA_CLIENT_ID: '{{ application_instance_id }}-$${SERVER_ID}'
             TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
+            kafka.consumer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-consumer'
+            kafka.producer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-producer'
             logging.charset.console: UTF-8
             server.max-http-header-size: 10MB
             server.max-http-request-header-size: 10MB
@@ -52317,10 +52604,12 @@ platform_application_definition:
             secret_bindings:
                 DB_PASSWORD:
                     source:
-                        library_secret: ef_backend_db_password
+                        account: postgres
+                        field: password
                 DB_USERNAME:
                     source:
-                        library_secret: ef_backend_db_username
+                        account: postgres
+                        field: username
                 JAVA_KEYSTORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password
@@ -52332,16 +52621,20 @@ platform_application_definition:
                         library_secret: java_keystore_password
                 TN_SCADA_REDIS_ACL_PASSWORD:
                     source:
-                        library_secret: redis_password
+                        account: redis
+                        field: password
                 TN_SCADA_REDIS_ACL_SENTINEL_PASSWORD:
                     source:
-                        library_secret: redis_sentinel_password
+                        account: redis
+                        field: password
                 TN_SCADA_REDIS_ACL_SENTINEL_USERNAME:
                     source:
-                        library_secret: redis_sentinel_username
+                        account: redis
+                        field: username
                 TN_SCADA_REDIS_ACL_USERNAME:
                     source:
-                        library_secret: redis_username
+                        account: redis
+                        field: username
                 TN_SCADA_REDIS_SSL_PROPERTIES_KEY_STORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password
@@ -52366,7 +52659,7 @@ platform_application_definition:
 {{ application_runtime | platform.core.application_agent_config }}
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/ef-backend/1.0.0/roles/application_ef-backend/templates/compose.yml.j2","mode":420,"size":2165,"sha256":"5ff08ce0950f2d4b018198063c4d106dc0700e7709d52584b02211c3985c6636","index":0,"count":1,"encoding":"utf-8","payloadBytes":2165}
+@@PORTABLE {"path":"examples/sdku/application-packages/ef-backend/1.0.0/roles/application_ef-backend/templates/compose.yml.j2","mode":420,"size":2172,"sha256":"f9a3950bea79e3f6add6aa298cedb8651153436e40a5d20e1591d5a7838d6d39","index":0,"count":1,"encoding":"utf-8","payloadBytes":2172}
 services:
   {{ application_instance_id }}:
     extends:
@@ -52408,7 +52701,7 @@ services:
       "retries": 10
       "test":
           - CMD-SHELL
-          - curl http://localhost:{{ application_effective.ports['port-1'].container }}/swagger-ui/index.html | grep Swagger
+          - curl --fail http://localhost:{{ application_effective.ports['port-1'].container }}/swagger-ui/index.html | grep Swagger
       "timeout": 15s
     deploy:
       "resources":
@@ -52434,7 +52727,7 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/evo-manager/1.0.0/roles/application_evo-manager/defaults/main.yml","mode":420,"size":5436,"sha256":"98989b853a65db704949ff0344c514ff922155c992e74ba3cc4bfe15cffc5328","index":0,"count":1,"encoding":"utf-8","payloadBytes":5436}
+@@PORTABLE {"path":"examples/sdku/application-packages/evo-manager/1.0.0/roles/application_evo-manager/defaults/main.yml","mode":420,"size":7974,"sha256":"9a5271d6f36518e81c66b7020b7a2946015e9b2442d772bf660cc7001c22e8cf","index":0,"count":1,"encoding":"utf-8","payloadBytes":7974}
 platform_application_definition:
     connections:
         clickhouse:
@@ -52450,15 +52743,56 @@ platform_application_definition:
             library_binding: secrets
             protocol: https
     defaults:
+        accounts:
+            clickhouse:
+                credentials:
+                    password:
+                        source:
+                            kind: runtime_secret_ref
+                            ref: '{{ application_instance_id }}-clickhouse-password'
+                    username:
+                        source:
+                            kind: literal
+                            value: '{{ application_instance_id | replace(''-'', ''_'') }}'
+                databaseRef: analytics
+                grants:
+                    - databaseRef: analytics
+                      privileges:
+                        - SELECT
+                        - INSERT
+                      tables:
+                        - '*'
+                mode: managed
+            redis:
+                credentials:
+                    password:
+                        source:
+                            kind: runtime_secret_ref
+                            ref: '{{ application_instance_id }}-redis-password'
+                    username:
+                        source:
+                            kind: literal
+                            value: '{{ application_instance_id | replace(''-'', ''_'') }}'
+                grants:
+                    channels:
+                        - '*'
+                    commands:
+                        - +@all
+                        - -@admin
+                    keys:
+                        - '*'
+                mode: managed
         command:
             - java
             - -XX:MaxRAMPercentage=70.0
             - -jar
             - evo-manager.jar
         environment:
-            TN_SCADA_DATASOURCE_URL: "$${CLICKHOUSE_HTTP_ENDPOINT}?$${CLICKHOUSE_SSL_OPTIONS}"
             ALARM_SERVICE_API_TYPE: mock
             DATA_MANAGER_ROOT_URL: '{{ application_parameters.source_variables.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
+            DB_CONNECTION_STRING: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
+            DB_TYPE: clickhouse
+            tn-scada.clickhouse.health.enabled: false
             EVO_MANAGER_HISTORY_SERVICE_MOCK: true
             EVO_MANAGER_JAR_PATH: /usr/local/app/imitator/lib
             EVO_MANAGER_MAIN_CLASS: tnt.tnscada.Imitator
@@ -52469,18 +52803,21 @@ platform_application_definition:
             PRESSURES_CSV: /usr/local/app/imitator/data/pressures.csv
             REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
             SPRING_KAFKA_APPLICATION_ID: evo-manager-{{ application_instance_id }}
+            SPRING_KAFKA_CLIENT_ID: '{{ application_instance_id }}-$${SERVER_ID}'
             SPRING_KAFKA_LISTENER_GROUP_ID: evo-manager-{{ application_instance_id }}
             SPRING_MAIN_WEB_APPLICATION_TYPE: NONE
             TN_SCADA_DATA_MANAGER_URL_ROOT: '{{ application_parameters.source_variables.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
+            TN_SCADA_DATASOURCE_URL: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
             TN_SCADA_METADATA_LOAD_PROJECTS: TNSVHYDRO
             TN_SCADA_METADATA_TARGET_PROJECT: TNSVHYDRO
             TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
+            kafka.consumer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-consumer'
+            kafka.producer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-producer'
             server.max-http-request-header-size: 100MB
         image: evoscada-docker.artifacts.tn.tngrp.ru/evo-manager:3.10.21-eedea228-redos
+        config_files: []
         parameters:
-            mount_sources:
-                mount-1: ""
-                mount-2: ""
+            database_name: ""
             source_variables:
                 DATA_MANAGER_URL_ROOT: ""
                 REDIS_SENTINEL_MASTER: ""
@@ -52492,6 +52829,14 @@ platform_application_definition:
                 method: approle
             mode: process-supervisor
             secret_bindings:
+                DB_PASSWORD:
+                    source:
+                        account: clickhouse
+                        field: password
+                DB_USERNAME:
+                    source:
+                        account: clickhouse
+                        field: username
                 JAVA_KEYSTORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password
@@ -52506,19 +52851,23 @@ platform_application_definition:
                         library_secret: java_keystore_password
                 REDIS_PASSWORD:
                     source:
-                        library_secret: redis_password
+                        account: redis
+                        field: password
                 REDIS_SENTINEL_PASSWORD:
                     source:
-                        library_secret: redis_sentinel_password
+                        account: redis
+                        field: password
                 REDIS_SENTINEL_USERNAME:
                     source:
-                        library_secret: redis_sentinel_username
+                        account: redis
+                        field: username
                 REDIS_TRUSTSTORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password
                 REDIS_USERNAME:
                     source:
-                        library_secret: redis_username
+                        account: redis
+                        field: username
                 SPRING_KAFKA_SSL_KEY_STORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password
@@ -52527,16 +52876,20 @@ platform_application_definition:
                         library_secret: java_keystore_password
                 TN_SCADA_REDIS_ACL_PASSWORD:
                     source:
-                        library_secret: redis_password
+                        account: redis
+                        field: password
                 TN_SCADA_REDIS_ACL_SENTINEL_PASSWORD:
                     source:
-                        library_secret: redis_sentinel_password
+                        account: redis
+                        field: password
                 TN_SCADA_REDIS_ACL_SENTINEL_USERNAME:
                     source:
-                        library_secret: redis_sentinel_username
+                        account: redis
+                        field: username
                 TN_SCADA_REDIS_ACL_USERNAME:
                     source:
-                        library_secret: redis_username
+                        account: redis
+                        field: username
                 TN_SCADA_REDIS_SSL_PROPERTIES_KEY_STORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password
@@ -52560,7 +52913,7 @@ platform_application_definition:
 {{ application_runtime | platform.core.application_agent_config }}
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/evo-manager/1.0.0/roles/application_evo-manager/templates/compose.yml.j2","mode":420,"size":2072,"sha256":"a7c8fe310dcf817fc4e566aafbb279a94631d22ac169312d83b5c95f099123e1","index":0,"count":1,"encoding":"utf-8","payloadBytes":2072}
+@@PORTABLE {"path":"examples/sdku/application-packages/evo-manager/1.0.0/roles/application_evo-manager/templates/compose.yml.j2","mode":420,"size":1928,"sha256":"3e8ee4c1b760df034915785ef8c49fb7cbfd897984ab23a7c07835e20f2704a0","index":0,"count":1,"encoding":"utf-8","payloadBytes":1928}
 services:
   {{ application_instance_id }}:
     extends:
@@ -52588,15 +52941,18 @@ services:
       "platform.installer.instance": {{ application_instance_id | to_json }}
       "platform.installer.host": {{ library_runtime.host_id | to_json }}
       "platform.installer.config-digest": {{ application_config_digest | to_json }}
+{% if application_effective.ports %}
     ports:
 {% for port in application_effective.ports.values() %}
       - "{{ port.published }}:{{ port.container }}"
 {% endfor %}
+{% endif %}
     volumes:
       - {{ (application_runtime.vault_path ~ ':/opt/vault:ro') | to_json }}
       - {{ (application_runtime.pki_path ~ ':/opt/application/pki:ro') | to_json }}
-      - {{ ((application_effective.parameters.mount_sources['mount-1'] | default(undef(hint='Configure SDKU mount /usr/local/app/project-libs'), true)) ~ ':/usr/local/app/project-libs:ro') | to_json }}
-      - {{ ((application_effective.parameters.mount_sources['mount-2'] | default(undef(hint='Configure SDKU mount /usr/local/app/imitator'), true)) ~ ':/usr/local/app/imitator:ro') | to_json }}
+{% for config in application_effective.config_files %}
+      - {{ (application_runtime.config_path ~ '/' ~ config.destination ~ ':/usr/local/app/' ~ config.destination ~ ':ro') | to_json }}
+{% endfor %}
     deploy:
       "resources":
           limits:
@@ -52621,7 +52977,7 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/evo-scheduler/1.0.0/roles/application_evo-scheduler/defaults/main.yml","mode":420,"size":4233,"sha256":"8a8d58bc609e4f5a0ff0d254a3e7dc84e4eebcb42080750865372acebdd73d47","index":0,"count":1,"encoding":"utf-8","payloadBytes":4233}
+@@PORTABLE {"path":"examples/sdku/application-packages/evo-scheduler/1.0.0/roles/application_evo-scheduler/defaults/main.yml","mode":420,"size":6119,"sha256":"f262997f2f36729931b4edf6f726e688c0e21fc6ed0d786f321a9a0522e48585","index":0,"count":1,"encoding":"utf-8","payloadBytes":6119}
 platform_application_definition:
     connections:
         kafka:
@@ -52637,23 +52993,66 @@ platform_application_definition:
             library_binding: secrets
             protocol: https
     defaults:
+        accounts:
+            postgres:
+                credentials:
+                    password:
+                        source:
+                            kind: runtime_secret_ref
+                            ref: '{{ application_instance_id }}-postgres-password'
+                    username:
+                        source:
+                            kind: literal
+                            value: '{{ application_instance_id | replace(''-'', ''_'') }}'
+                databaseAccess:
+                    - databaseRef: database
+                      privileges:
+                        - SELECT
+                        - INSERT
+                        - UPDATE
+                        - DELETE
+                        - CREATE
+                mode: managed
+            redis:
+                credentials:
+                    password:
+                        source:
+                            kind: runtime_secret_ref
+                            ref: '{{ application_instance_id }}-redis-password'
+                    username:
+                        source:
+                            kind: literal
+                            value: '{{ application_instance_id | replace(''-'', ''_'') }}'
+                grants:
+                    channels:
+                        - '*'
+                    commands:
+                        - +@all
+                        - -@admin
+                    keys:
+                        - '*'
+                mode: managed
         command:
             - java
             - -jar
             - evo-scheduler.jar
         environment:
-            DB_CONNECTION_STRING: "$${POSTGRES_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${POSTGRES_SSL_OPTIONS}"
             ALARM_VIEW_SERVICE_ROOT_URL: '{{ application_parameters.source_variables.ALARM_VIEW_SERVICE_URL | default(undef(hint=''Configure SDKU ALARM_VIEW_SERVICE_URL''), true) }}'
             DATA_MANAGER_CERTIFICATE_VALIDATION: false
             DATA_MANAGER_DTO_PORTION_SIZE: 300
             DATA_MANAGER_ROOT_URL: '{{ application_parameters.source_variables.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
+            DB_CONNECTION_STRING: $${POSTGRES_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${POSTGRES_SSL_OPTIONS}
             HMI_BACKEND_ROOT_URL: '{{ application_parameters.source_variables.HMI_BACKEND_URL | default(undef(hint=''Configure SDKU HMI_BACKEND_URL''), true) }}'
             INCOMING_FILE_DIR: /usr/local/app/data
             JAVA_OPTS: -Xmx15000m
             RESULT_FILE_DIR: /usr/local/app/data
+            SERVER_PORT: 12080
+            SPRING_KAFKA_CLIENT_ID: '{{ application_instance_id }}-$${SERVER_ID}'
             TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
             WEB_CLIENT_CONNECTION_TIMEOUT: 100000
             WEB_CLIENT_RESPONSE_TIMEOUT: 30000
+            kafka.consumer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-consumer'
+            kafka.producer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-producer'
             server.max-http-request-header-size: 100MB
         image: evoscada-docker.artifacts.tn.tngrp.ru/evo-scheduler:0.1.1-SNAPSHOT-078b0422-redos
         parameters:
@@ -52676,10 +53075,12 @@ platform_application_definition:
             secret_bindings:
                 DB_PASSWORD:
                     source:
-                        library_secret: postgres_scada_password
+                        account: postgres
+                        field: password
                 DB_USERNAME:
                     source:
-                        library_secret: postgres_scada_user
+                        account: postgres
+                        field: username
                 JAVA_KEYSTORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password
@@ -52691,16 +53092,20 @@ platform_application_definition:
                         library_secret: java_keystore_password
                 TN_SCADA_REDIS_ACL_PASSWORD:
                     source:
-                        library_secret: redis_password
+                        account: redis
+                        field: password
                 TN_SCADA_REDIS_ACL_SENTINEL_PASSWORD:
                     source:
-                        library_secret: redis_sentinel_password
+                        account: redis
+                        field: password
                 TN_SCADA_REDIS_ACL_SENTINEL_USERNAME:
                     source:
-                        library_secret: redis_sentinel_username
+                        account: redis
+                        field: username
                 TN_SCADA_REDIS_ACL_USERNAME:
                     source:
-                        library_secret: redis_username
+                        account: redis
+                        field: username
                 TN_SCADA_REDIS_SSL_PROPERTIES_KEY_STORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password
@@ -52785,7 +53190,7 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/ham-backend/1.0.0/roles/application_ham-backend/defaults/main.yml","mode":420,"size":6715,"sha256":"37c2aba34fd4c772b5b54d382b0557078af5b51bb7122ff37b865eb72e635113","index":0,"count":1,"encoding":"utf-8","payloadBytes":6715}
+@@PORTABLE {"path":"examples/sdku/application-packages/ham-backend/1.0.0/roles/application_ham-backend/defaults/main.yml","mode":420,"size":8733,"sha256":"2c2e7cbb5477e94370a1716dd6ad9b3f6de19aeb8f45b697b34282c3b78aa752","index":0,"count":1,"encoding":"utf-8","payloadBytes":8733}
 platform_application_definition:
     connections:
         clickhouse:
@@ -52801,15 +53206,54 @@ platform_application_definition:
             library_binding: secrets
             protocol: https
     defaults:
+        accounts:
+            clickhouse:
+                credentials:
+                    password:
+                        source:
+                            kind: runtime_secret_ref
+                            ref: '{{ application_instance_id }}-clickhouse-password'
+                    username:
+                        source:
+                            kind: literal
+                            value: '{{ application_instance_id | replace(''-'', ''_'') }}'
+                databaseRef: analytics
+                grants:
+                    - databaseRef: analytics
+                      privileges:
+                        - SELECT
+                        - INSERT
+                      tables:
+                        - '*'
+                mode: managed
+            redis:
+                credentials:
+                    password:
+                        source:
+                            kind: runtime_secret_ref
+                            ref: '{{ application_instance_id }}-redis-password'
+                    username:
+                        source:
+                            kind: literal
+                            value: '{{ application_instance_id | replace(''-'', ''_'') }}'
+                grants:
+                    channels:
+                        - '*'
+                    commands:
+                        - +@all
+                        - -@admin
+                    keys:
+                        - '*'
+                mode: managed
         command:
             - '{{ sdku_start_commands[''ham-backend''] | mandatory }}'
         environment:
-            DB_CONNECTION_STRING: "$${CLICKHOUSE_HTTP_ENDPOINT}?$${CLICKHOUSE_SSL_OPTIONS}"
             ALARM_TOPIC: '{{ application_parameters.source_variables.ALARM_TOPIC_COMPACT | default(undef(hint=''Configure SDKU ALARM_TOPIC_COMPACT''), true) }}'
             ALARMSERVICE_URL_ROOT: '{{ application_parameters.source_variables.ALARM_SERVICE_URL | default(undef(hint=''Configure SDKU ALARM_SERVICE_URL''), true) }}'
             CSPA_TOPIC_ROUTE_ROOT: '{{ application_parameters.source_variables.MAIN_TOPIC | default(undef(hint=''Configure SDKU MAIN_TOPIC''), true) }}'
             CSPA_TOPICS: '{{ application_parameters.source_variables.MAIN_TOPIC | default(undef(hint=''Configure SDKU MAIN_TOPIC''), true) }}'
             DATAMANAGER_ROOT_URL: '{{ application_parameters.source_variables.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
+            DB_CONNECTION_STRING: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
             DB_TYPE: clickhouse
             EVO_MANAGER_HOT_TOPICS: '{{ application_parameters.source_variables.MAIN_TOPIC | default(undef(hint=''Configure SDKU MAIN_TOPIC''), true) }}'
             GAAUDIT_URL_ROOT: '{{ application_parameters.source_variables.GRANT_ACCESS_AUDIT_URL | default(undef(hint=''Configure SDKU GRANT_ACCESS_AUDIT_URL''), true) }}'
@@ -52817,12 +53261,16 @@ platform_application_definition:
             GRANT_ACCESS_AUDIT: https://nginx.evo-sdku.tnsv-dp.tn/grant-access-audit
             JAVA_OPTS: -Xmx4048m
             SERVER_ALLOWED_ORIGINS: '*'
+            SERVER_PORT: 10101
+            SPRING_KAFKA_CLIENT_ID: '{{ application_instance_id }}-$${SERVER_ID}'
             TN_SCADA_DATA_MANAGER_URL_ROOT: '{{ application_parameters.source_variables.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
             TN_SCADA_METADATA_TARGET_PROJECT: TNSV
             TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
             USER_ACTION_TAGNAME: _MaskCauseList.Description
             evo-manager.alarm-subscription.topic: '{{ application_parameters.source_variables.ALARM_TOPIC_COMPACT | default(undef(hint=''Configure SDKU ALARM_TOPIC_COMPACT''), true) }}'
             evo-manager.subscription.ignoreOldValues: false
+            kafka.consumer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-consumer'
+            kafka.producer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-producer'
             logging.charset.console: UTF-8
             management.endpoint.health.show-details: always
             server.max-http-request-header-size: 1MB
@@ -52838,6 +53286,7 @@ platform_application_definition:
             tn-scada.metadata.hookTopic: sdku-main
         image: evoscada-docker.artifacts.tn.tngrp.ru/hmi-backend:1.2.11-d414e0ef-redos
         parameters:
+            database_name: ""
             source_variables:
                 ALARM_SERVICE_URL: ""
                 ALARM_TOPIC_COMPACT: sdku-alarms-compact
@@ -52858,10 +53307,12 @@ platform_application_definition:
             secret_bindings:
                 DB_PASSWORD:
                     source:
-                        library_secret: clickhouse_scada_password
+                        account: clickhouse
+                        field: password
                 DB_USERNAME:
                     source:
-                        library_secret: clickhouse_scada_username
+                        account: clickhouse
+                        field: username
                 JAVA_KEYSTORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password
@@ -52873,16 +53324,20 @@ platform_application_definition:
                         library_secret: java_keystore_password
                 TN_SCADA_REDIS_ACL_PASSWORD:
                     source:
-                        library_secret: redis_password
+                        account: redis
+                        field: password
                 TN_SCADA_REDIS_ACL_SENTINEL_PASSWORD:
                     source:
-                        library_secret: redis_sentinel_password
+                        account: redis
+                        field: password
                 TN_SCADA_REDIS_ACL_SENTINEL_USERNAME:
                     source:
-                        library_secret: redis_sentinel_username
+                        account: redis
+                        field: username
                 TN_SCADA_REDIS_ACL_USERNAME:
                     source:
-                        library_secret: redis_username
+                        account: redis
+                        field: username
                 TN_SCADA_REDIS_SSL_PROPERTIES_KEY_STORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password
@@ -52910,7 +53365,7 @@ platform_application_definition:
 {{ application_runtime | platform.core.application_agent_config }}
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/ham-backend/1.0.0/roles/application_ham-backend/templates/compose.yml.j2","mode":420,"size":2120,"sha256":"8acf5f0e295dc553a72038766a010b722d3516deccb0b39fc8f88ca39edfb77b","index":0,"count":1,"encoding":"utf-8","payloadBytes":2120}
+@@PORTABLE {"path":"examples/sdku/application-packages/ham-backend/1.0.0/roles/application_ham-backend/templates/compose.yml.j2","mode":420,"size":2127,"sha256":"26d16e2ba1e51f1516fcd7ae0b97094299150481e918bccea93bb8d3f7654b90","index":0,"count":1,"encoding":"utf-8","payloadBytes":2127}
 services:
   {{ application_instance_id }}:
     extends:
@@ -52951,7 +53406,7 @@ services:
       "retries": 10
       "test":
           - CMD-SHELL
-          - curl http://localhost:{{ application_effective.ports['port-1'].container }}/actuator/health | grep UP
+          - curl --fail http://localhost:{{ application_effective.ports['port-1'].container }}/actuator/health | grep UP
       "timeout": 15s
     deploy:
       "resources":
@@ -52977,7 +53432,7 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/hmi-backend/1.0.0/roles/application_hmi-backend/defaults/main.yml","mode":420,"size":7102,"sha256":"393cc29b1e111ffecd32e63305c42976682a61ae712f41187b61db35a8c9f87d","index":0,"count":1,"encoding":"utf-8","payloadBytes":7102}
+@@PORTABLE {"path":"examples/sdku/application-packages/hmi-backend/1.0.0/roles/application_hmi-backend/defaults/main.yml","mode":420,"size":9176,"sha256":"f6e6208e4eb5d3bd7ab17f2029cca97c0b75c000bbab892be5f3ecf9fdee8e95","index":0,"count":1,"encoding":"utf-8","payloadBytes":9176}
 platform_application_definition:
     connections:
         clickhouse:
@@ -52993,6 +53448,45 @@ platform_application_definition:
             library_binding: secrets
             protocol: https
     defaults:
+        accounts:
+            clickhouse:
+                credentials:
+                    password:
+                        source:
+                            kind: runtime_secret_ref
+                            ref: '{{ application_instance_id }}-clickhouse-password'
+                    username:
+                        source:
+                            kind: literal
+                            value: '{{ application_instance_id | replace(''-'', ''_'') }}'
+                databaseRef: analytics
+                grants:
+                    - databaseRef: analytics
+                      privileges:
+                        - SELECT
+                        - INSERT
+                      tables:
+                        - '*'
+                mode: managed
+            redis:
+                credentials:
+                    password:
+                        source:
+                            kind: runtime_secret_ref
+                            ref: '{{ application_instance_id }}-redis-password'
+                    username:
+                        source:
+                            kind: literal
+                            value: '{{ application_instance_id | replace(''-'', ''_'') }}'
+                grants:
+                    channels:
+                        - '*'
+                    commands:
+                        - +@all
+                        - -@admin
+                    keys:
+                        - '*'
+                mode: managed
         command:
             - java
             - -XX:MaxRAMPercentage=70.0
@@ -53000,23 +53494,27 @@ platform_application_definition:
             - -jar
             - hmi-backend.jar
         environment:
-            DB_CONNECTION_STRING: "$${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0"
             ALARM_TOPIC: '{{ application_parameters.source_variables.ALARM_TOPIC_COMPACT | default(undef(hint=''Configure SDKU ALARM_TOPIC_COMPACT''), true) }}'
             ALARMSERVICE_URL_ROOT: '{{ application_parameters.source_variables.ALARM_SERVICE_URL | default("", true) }}'
             CSPA_TOPIC_ROUTE_ROOT: '{{ application_parameters.source_variables.MAIN_TOPIC_BASE | default(undef(hint=''Configure SDKU MAIN_TOPIC_BASE''), true) }}'
             CSPA_TOPICS: '{{ application_parameters.source_variables.MAIN_TOPIC_BASE | default(undef(hint=''Configure SDKU MAIN_TOPIC_BASE''), true) }}'
             DATAMANAGER_ROOT_URL: '{{ application_parameters.source_variables.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
+            DB_CONNECTION_STRING: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
             DB_TYPE: clickhouse
             EVO_MANAGER_HOT_TOPICS: '{{ application_parameters.source_variables.MAIN_TOPIC_BASE | default(undef(hint=''Configure SDKU MAIN_TOPIC_BASE''), true) }}'
             GAAUDIT_URL_ROOT: '{{ application_parameters.source_variables.GRANT_ACCESS_AUDIT_URL | default("", true) }}'
-            MAIN_TOPIC: '{{ application_parameters.source_variables.MAIN_TOPIC }}'
             JAVA_OPTS: -Xmx4048m
+            MAIN_TOPIC: '{{ application_parameters.source_variables.MAIN_TOPIC }}'
             SERVER_ALLOWED_ORIGINS: '*'
+            SERVER_PORT: 10101
+            SPRING_KAFKA_CLIENT_ID: '{{ application_instance_id }}-$${SERVER_ID}'
             TN_SCADA_DATA_MANAGER_URL_ROOT: '{{ application_parameters.source_variables.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
             TN_SCADA_METADATA_TARGET_PROJECT: TNSV
             TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
             USER_ACTION_TAGNAME: _MaskCauseList.Description
             evo-manager.alarm-subscription.topic: '{{ application_parameters.source_variables.ALARM_TOPIC_COMPACT }}'
+            kafka.consumer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-consumer'
+            kafka.producer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-producer'
             logging.charset.console: UTF-8
             management.endpoint.health.show-details: always
             server.max-http-request-header-size: 1MB
@@ -53035,7 +53533,7 @@ platform_application_definition:
             source_variables:
                 ALARM_SERVICE_URL: ""
                 ALARM_TOPIC_COMPACT: alarms-main-compact
-                DATA_MANAGER_URL_ROOT: "{{ 'https://data-manager-' ~ library_instance_id ~ '.' ~ platform_desired_state.endpointGroups[platform_desired_state.applicationLibraryDeployments[library_instance_id].applications['data-manager'].overrides.endpoint.endpoint_group].address.domain }}"
+                DATA_MANAGER_URL_ROOT: '{{ (''https://data-manager-'' ~ library_instance_id ~ ''.'' ~ platform_desired_state.endpointGroups[platform_desired_state.applicationLibraryDeployments[library_instance_id].applications[''data-manager''].overrides.endpoint.endpoint_group].address.domain) if ''data-manager'' in platform_desired_state.applicationLibraryDeployments[library_instance_id].applications else '''' }}'
                 GRANT_ACCESS_AUDIT_URL: ""
                 MAIN_TOPIC: sdku-main-compact
                 MAIN_TOPIC_BASE: sdku-main
@@ -53053,10 +53551,12 @@ platform_application_definition:
             secret_bindings:
                 DB_PASSWORD:
                     source:
-                        library_secret: clickhouse_scada_password
+                        account: clickhouse
+                        field: password
                 DB_USERNAME:
                     source:
-                        library_secret: clickhouse_scada_username
+                        account: clickhouse
+                        field: username
                 JAVA_KEYSTORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password
@@ -53068,16 +53568,20 @@ platform_application_definition:
                         library_secret: java_keystore_password
                 TN_SCADA_REDIS_ACL_PASSWORD:
                     source:
-                        library_secret: redis_password
+                        account: redis
+                        field: password
                 TN_SCADA_REDIS_ACL_SENTINEL_PASSWORD:
                     source:
-                        library_secret: redis_sentinel_password
+                        account: redis
+                        field: password
                 TN_SCADA_REDIS_ACL_SENTINEL_USERNAME:
                     source:
-                        library_secret: redis_sentinel_username
+                        account: redis
+                        field: username
                 TN_SCADA_REDIS_ACL_USERNAME:
                     source:
-                        library_secret: redis_username
+                        account: redis
+                        field: username
                 TN_SCADA_REDIS_SSL_PROPERTIES_KEY_STORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password
@@ -53092,9 +53596,13 @@ platform_application_definition:
             mode: healthcheck
             retries: 30
         restart: always
-        user: 1000:1000
         topicBindings:
-            kafka: [sdku-main, sdku-main-compact, alarms-main, alarms-main-compact]
+            kafka:
+                - sdku-main
+                - sdku-main-compact
+                - alarms-main
+                - alarms-main-compact
+        user: 1000:1000
     identity_environment:
         - EVO_MANAGER_APP_ID
         - KAFKA_APPLICATION_ID_CONFIG
@@ -53107,7 +53615,7 @@ platform_application_definition:
 {{ application_runtime | platform.core.application_agent_config }}
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/hmi-backend/1.0.0/roles/application_hmi-backend/templates/compose.yml.j2","mode":420,"size":2155,"sha256":"20ac8dacc7e302972e39f6d2913d3ca195cfa31c4af2b737a4e15515b0ccadcf","index":0,"count":1,"encoding":"utf-8","payloadBytes":2155}
+@@PORTABLE {"path":"examples/sdku/application-packages/hmi-backend/1.0.0/roles/application_hmi-backend/templates/compose.yml.j2","mode":420,"size":2162,"sha256":"ed35c9da2dc6019352df2657e4dad874714c3d613fd7cef02df56af27fc31a0d","index":0,"count":1,"encoding":"utf-8","payloadBytes":2162}
 services:
   {{ application_instance_id }}:
     extends:
@@ -53149,7 +53657,7 @@ services:
       "retries": 10
       "test":
           - CMD-SHELL
-          - curl http://localhost:{{ application_effective.ports['port-1'].container }}/actuator/health | grep UP
+          - curl --fail http://localhost:{{ application_effective.ports['port-1'].container }}/actuator/health | grep UP
       "timeout": 15s
     deploy:
       "resources":
@@ -53173,7 +53681,7 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/hmi-frontend-alarms/1.0.0/roles/application_hmi-frontend-alarms/defaults/main.yml","mode":420,"size":2189,"sha256":"09c308b40c52fbbb5fddff4df4c62d595e5189dfd31f75107981378a989bb9ed","index":0,"count":1,"encoding":"utf-8","payloadBytes":2189}
+@@PORTABLE {"path":"examples/sdku/application-packages/hmi-frontend-alarms/1.0.0/roles/application_hmi-frontend-alarms/defaults/main.yml","mode":420,"size":2221,"sha256":"ed47494644350467e2bdb276b3d579c20d3bf18be5cf985db5cbbe0d0c31fa1b","index":0,"count":1,"encoding":"utf-8","payloadBytes":2221}
 platform_application_definition:
     connections: {}
     defaults:
@@ -53213,6 +53721,7 @@ platform_application_definition:
                 mount-1: ""
                 mount-2: ""
             source_variables:
+                PUBLIC_HOST: ""
                 URL_ROOT: ""
         ports:
             port-1:
@@ -53229,7 +53738,7 @@ platform_application_definition:
     version: 1.0.0
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/hmi-frontend-alarms/1.0.0/roles/application_hmi-frontend-alarms/templates/compose.yml.j2","mode":420,"size":1835,"sha256":"9ed9feceb831dc0bbafbefd602658b4d1f4dd11a6df5ef4d47f4bd0808ee53d9","index":0,"count":1,"encoding":"utf-8","payloadBytes":1835}
+@@PORTABLE {"path":"examples/sdku/application-packages/hmi-frontend-alarms/1.0.0/roles/application_hmi-frontend-alarms/templates/compose.yml.j2","mode":420,"size":2205,"sha256":"ff5be53678af8aeb7040c5a7b2fc26174e744e218087b3cb2feaaeb29547ece7","index":0,"count":1,"encoding":"utf-8","payloadBytes":2205}
 services:
   {{ application_instance_id }}:
     extends:
@@ -53262,7 +53771,11 @@ services:
       "interval": 30s
       "test":
           - CMD-SHELL
-          - curl http://localhost:{{ application_effective.ports['port-1'].container }}
+          - >-
+            curl --fail --silent --show-error --output /dev/null
+            --cacert /etc/nginx/server.crt
+            --resolve {{ application_parameters.source_variables.PUBLIC_HOST | default(undef(hint='Configure SDKU PUBLIC_HOST'), true) }}:{{ application_effective.ports['port-1'].container }}:127.0.0.1
+            https://{{ application_parameters.source_variables.PUBLIC_HOST }}:{{ application_effective.ports['port-1'].container }}/
       "timeout": 15s
     deploy:
       "resources":
@@ -53286,7 +53799,7 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/hmi-frontend-para/1.0.0/roles/application_hmi-frontend-para/defaults/main.yml","mode":420,"size":1131,"sha256":"bb9df41f66095710b1b12fc773328a2545c09e40e1098ed30c5d900ef96460b1","index":0,"count":1,"encoding":"utf-8","payloadBytes":1131}
+@@PORTABLE {"path":"examples/sdku/application-packages/hmi-frontend-para/1.0.0/roles/application_hmi-frontend-para/defaults/main.yml","mode":420,"size":1163,"sha256":"60f7aa15505ca4155a216c34fc4a48cd0dba0064c97dd5c707100443416fb91e","index":0,"count":1,"encoding":"utf-8","payloadBytes":1163}
 platform_application_definition:
     connections: {}
     defaults:
@@ -53306,6 +53819,7 @@ platform_application_definition:
                 mount-1: ""
                 mount-2: ""
             source_variables:
+                PUBLIC_HOST: ""
                 URL_ROOT: ""
         ports:
             port-1:
@@ -53322,7 +53836,7 @@ platform_application_definition:
     version: 1.0.0
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/hmi-frontend-para/1.0.0/roles/application_hmi-frontend-para/templates/compose.yml.j2","mode":420,"size":1847,"sha256":"2e0d34c4664003314fe0abd1036b51707da2d74afdb6e957d9bd45a68f6bc408","index":0,"count":1,"encoding":"utf-8","payloadBytes":1847}
+@@PORTABLE {"path":"examples/sdku/application-packages/hmi-frontend-para/1.0.0/roles/application_hmi-frontend-para/templates/compose.yml.j2","mode":420,"size":2215,"sha256":"cebb443a1f843c48728ecc05fffae9f42b29ae96cdd72465b0266f74315cd3d8","index":0,"count":1,"encoding":"utf-8","payloadBytes":2215}
 services:
   {{ application_instance_id }}:
     extends:
@@ -53356,7 +53870,11 @@ services:
       "retries": 10
       "test":
           - CMD-SHELL
-          - curl http://localhost:{{ application_effective.ports['port-1'].container }}
+          - >-
+            curl --fail --silent --show-error --output /dev/null
+            --cacert /etc/nginx/host.crt
+            --resolve {{ application_parameters.source_variables.PUBLIC_HOST | default(undef(hint='Configure SDKU PUBLIC_HOST'), true) }}:{{ application_effective.ports['port-1'].container }}:127.0.0.1
+            https://{{ application_parameters.source_variables.PUBLIC_HOST }}:{{ application_effective.ports['port-1'].container }}/
       "timeout": 15s
     deploy:
       "resources":
@@ -53737,7 +54255,7 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/iec60870/1.0.0/roles/application_iec60870/defaults/main.yml","mode":420,"size":3368,"sha256":"f13c673230f131b52961b74b3c612190ac6e9d30a7242ecb2c60adbecc8ea1b2","index":0,"count":1,"encoding":"utf-8","payloadBytes":3368}
+@@PORTABLE {"path":"examples/sdku/application-packages/iec60870/1.0.0/roles/application_iec60870/defaults/main.yml","mode":420,"size":4517,"sha256":"e4734d027e45d6aeee58a92bdbe8a171c66ecbfd293c8f7580e443846239e236","index":0,"count":1,"encoding":"utf-8","payloadBytes":4517}
 platform_application_definition:
     connections:
         kafka:
@@ -53750,6 +54268,26 @@ platform_application_definition:
             library_binding: secrets
             protocol: https
     defaults:
+        accounts:
+            redis:
+                credentials:
+                    password:
+                        source:
+                            kind: runtime_secret_ref
+                            ref: '{{ application_instance_id }}-redis-password'
+                    username:
+                        source:
+                            kind: literal
+                            value: '{{ application_instance_id | replace(''-'', ''_'') }}'
+                grants:
+                    channels:
+                        - '*'
+                    commands:
+                        - +@all
+                        - -@admin
+                    keys:
+                        - '*'
+                mode: managed
         command:
             - '{{ sdku_start_commands[''iec60870''] | mandatory }}'
         environment:
@@ -53761,11 +54299,14 @@ platform_application_definition:
             SET_INVALID_BIT: 2
             SMOOTH: false
             SPRING_CONFIG_ADDITIONAL_LOCATION: /usr/local/config/connection.yml
+            SPRING_KAFKA_CLIENT_ID: '{{ application_instance_id }}-$${SERVER_ID}'
             TN_SCADA_DRIVER_GROUP_ID: iec-1
             TN_SCADA_METADATA_TARGET_PROJECT: TNSV
             TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
             TNSCADA_PROXY_IMPL: dist-proxy.direct
             WEB_SERVER_PORT: 8088
+            kafka.consumer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-consumer'
+            kafka.producer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-producer'
             server.max-http-request-header-size: 100MB
             tn-scada.metadata.dontShowTargetProjectInNames: true
             tn-scada.metadata.load-projects: TNSV
@@ -53775,7 +54316,10 @@ platform_application_definition:
                 mount-6: ""
             source_variables:
                 REDIS_SENTINEL_MASTER: ""
-        ports: {}
+        ports:
+            port-1:
+                container: 8088
+                published: 8088
         provisioner:
             approle:
                 bind_secret_id: false
@@ -53794,16 +54338,20 @@ platform_application_definition:
                         library_secret: java_keystore_password
                 TN_SCADA_REDIS_ACL_PASSWORD:
                     source:
-                        library_secret: redis_password
+                        account: redis
+                        field: password
                 TN_SCADA_REDIS_ACL_SENTINEL_PASSWORD:
                     source:
-                        library_secret: redis_sentinel_password
+                        account: redis
+                        field: password
                 TN_SCADA_REDIS_ACL_SENTINEL_USERNAME:
                     source:
-                        library_secret: redis_sentinel_username
+                        account: redis
+                        field: username
                 TN_SCADA_REDIS_ACL_USERNAME:
                     source:
-                        library_secret: redis_username
+                        account: redis
+                        field: username
                 TN_SCADA_REDIS_SSL_PROPERTIES_KEY_STORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password
@@ -53889,7 +54437,7 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/kafka-ch-replicator/1.0.0/roles/application_kafka-ch-replicator/defaults/main.yml","mode":420,"size":3453,"sha256":"98090fb706bd7b8b65b23993206ea15250fa701f63b09cda30d0eb98f511cf40","index":0,"count":1,"encoding":"utf-8","payloadBytes":3453}
+@@PORTABLE {"path":"examples/sdku/application-packages/kafka-ch-replicator/1.0.0/roles/application_kafka-ch-replicator/defaults/main.yml","mode":420,"size":5651,"sha256":"925d94a236d3b870ba1ee80664abf607be30577b49ecd40395280820131f1da1","index":0,"count":1,"encoding":"utf-8","payloadBytes":5651}
 platform_application_definition:
     connections:
         clickhouse:
@@ -53905,19 +54453,66 @@ platform_application_definition:
             library_binding: secrets
             protocol: https
     defaults:
+        accounts:
+            clickhouse:
+                credentials:
+                    password:
+                        source:
+                            kind: runtime_secret_ref
+                            ref: '{{ application_instance_id }}-clickhouse-password'
+                    username:
+                        source:
+                            kind: literal
+                            value: '{{ application_instance_id | replace(''-'', ''_'') }}'
+                databaseRef: analytics
+                grants:
+                    - databaseRef: analytics
+                      privileges:
+                        - SELECT
+                        - INSERT
+                        - CREATE TABLE
+                      tables:
+                        - '*'
+                mode: managed
+            redis:
+                credentials:
+                    password:
+                        source:
+                            kind: runtime_secret_ref
+                            ref: '{{ application_instance_id }}-redis-password'
+                    username:
+                        source:
+                            kind: literal
+                            value: '{{ application_instance_id | replace(''-'', ''_'') }}'
+                grants:
+                    channels:
+                        - '*'
+                    commands:
+                        - +@all
+                        - -@admin
+                    keys:
+                        - '*'
+                mode: managed
         command:
             - java
             - -jar
             - kafka-ch-replicatior.jar
         environment:
-            DB_CONNECTION_STRING: "$${CLICKHOUSE_HTTP_ENDPOINT}?$${CLICKHOUSE_SSL_OPTIONS}"
             ALARMS_TOPIC: '{{ application_parameters.source_variables.ALARM_TOPIC | default(undef(hint=''Configure SDKU ALARM_TOPIC''), true) }}'
+            DB_CONNECTION_STRING: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
             JAVA_OPTS: -Xmx1024m
+            SERVER_PORT: 10031
+            SPRING_KAFKA_CLIENT_ID: '{{ application_instance_id }}-$${SERVER_ID}'
             TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
             TZ: Europe/Moscow
+            # SDK database-1.0.4 health cannot parse a JDBC URL with multiple hosts.
+            tn-scada.clickhouse.health.enabled: "false"
+            kafka.consumer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-consumer'
+            kafka.producer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-producer'
             server.max-http-request-header-size: 100MB
         image: evoscada-docker.artifacts.tn.tngrp.ru/kafka-ch-replicatior:0.0.5-SNAPSHOT-14953056-redos
         parameters:
+            database_name: ""
             source_variables:
                 ALARM_TOPIC: sdku-alarms
                 REDIS_SENTINEL_MASTER: ""
@@ -53934,10 +54529,12 @@ platform_application_definition:
             secret_bindings:
                 DB_PASSWORD:
                     source:
-                        library_secret: clickhouse_scada_password
+                        account: clickhouse
+                        field: password
                 DB_USERNAME:
                     source:
-                        library_secret: clickhouse_scada_username
+                        account: clickhouse
+                        field: username
                 JAVA_KEYSTORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password
@@ -53949,16 +54546,20 @@ platform_application_definition:
                         library_secret: java_keystore_password
                 TN_SCADA_REDIS_ACL_PASSWORD:
                     source:
-                        library_secret: redis_password
+                        account: redis
+                        field: password
                 TN_SCADA_REDIS_ACL_SENTINEL_PASSWORD:
                     source:
-                        library_secret: redis_sentinel_password
+                        account: redis
+                        field: password
                 TN_SCADA_REDIS_ACL_SENTINEL_USERNAME:
                     source:
-                        library_secret: redis_sentinel_username
+                        account: redis
+                        field: username
                 TN_SCADA_REDIS_ACL_USERNAME:
                     source:
-                        library_secret: redis_username
+                        account: redis
+                        field: username
                 TN_SCADA_REDIS_SSL_PROPERTIES_KEY_STORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password
@@ -53984,7 +54585,7 @@ platform_application_definition:
 {{ application_runtime | platform.core.application_agent_config }}
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/kafka-ch-replicator/1.0.0/roles/application_kafka-ch-replicator/templates/compose.yml.j2","mode":420,"size":2024,"sha256":"57d75fbd6dd11e3262fe70115247b827822ca3462a7869d07e844803e69d4be1","index":0,"count":1,"encoding":"utf-8","payloadBytes":2024}
+@@PORTABLE {"path":"examples/sdku/application-packages/kafka-ch-replicator/1.0.0/roles/application_kafka-ch-replicator/templates/compose.yml.j2","mode":420,"size":2031,"sha256":"98146fa325ceb3e9f416a2bc86350abb0cd4f2308da01aa3474941a88d88bff0","index":0,"count":1,"encoding":"utf-8","payloadBytes":2031}
 services:
   {{ application_instance_id }}:
     extends:
@@ -54024,7 +54625,7 @@ services:
       "interval": 30s
       "test":
           - CMD-SHELL
-          - curl http://localhost:{{ application_effective.ports['port-1'].container }}/actuator/health | grep UP
+          - curl --fail http://localhost:{{ application_effective.ports['port-1'].container }}/actuator/health | grep UP
       "timeout": 15s
     deploy:
       "resources":
@@ -54050,7 +54651,7 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/kafka-history-writer/1.0.0/roles/application_kafka-history-writer/defaults/main.yml","mode":420,"size":3588,"sha256":"6dda134d6ff3028c541d45fe5010dc9580d21c19e8d2ec8472238108d3ba3cb8","index":0,"count":1,"encoding":"utf-8","payloadBytes":3588}
+@@PORTABLE {"path":"examples/sdku/application-packages/kafka-history-writer/1.0.0/roles/application_kafka-history-writer/defaults/main.yml","mode":420,"size":5747,"sha256":"eda9a080ff1c0a183f3ec386a4f0241baeea39ea5012f841d1534346527a6f7f","index":0,"count":1,"encoding":"utf-8","payloadBytes":5747}
 platform_application_definition:
     connections:
         clickhouse:
@@ -54066,22 +54667,68 @@ platform_application_definition:
             library_binding: secrets
             protocol: https
     defaults:
+        accounts:
+            clickhouse:
+                credentials:
+                    password:
+                        source:
+                            kind: runtime_secret_ref
+                            ref: '{{ application_instance_id }}-clickhouse-password'
+                    username:
+                        source:
+                            kind: literal
+                            value: '{{ application_instance_id | replace(''-'', ''_'') }}'
+                databaseRef: analytics
+                grants:
+                    - databaseRef: analytics
+                      privileges:
+                        - SELECT
+                        - INSERT
+                      tables:
+                        - '*'
+                mode: managed
+            redis:
+                credentials:
+                    password:
+                        source:
+                            kind: runtime_secret_ref
+                            ref: '{{ application_instance_id }}-redis-password'
+                    username:
+                        source:
+                            kind: literal
+                            value: '{{ application_instance_id | replace(''-'', ''_'') }}'
+                grants:
+                    channels:
+                        - '*'
+                    commands:
+                        - +@all
+                        - -@admin
+                    keys:
+                        - '*'
+                mode: managed
         command:
             - java
             - -jar
             - kafka-history-writer.jar
         environment:
-            DB_CONNECTION_STRING: "$${CLICKHOUSE_HTTP_ENDPOINT}?$${CLICKHOUSE_SSL_OPTIONS}"
+            DB_CONNECTION_STRING: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
             KAFKA_CONSUMER_GROUP_ID: kafka-history-writer
             LOGGER_LEVEL: INFO
+            SERVER_PORT: 10241
             SPRING_KAFKA_APPLICATION_ID: kafka-history-writer
+            SPRING_KAFKA_CLIENT_ID: '{{ application_instance_id }}-$${SERVER_ID}'
             SPRING_KAFKA_LISTENER_GROUP_ID: kafka-history-writer
             TARGET_TOPICS: '{{ application_parameters.source_variables.MAIN_TOPIC | default(undef(hint=''Configure SDKU MAIN_TOPIC''), true) }}'
             TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
             TZ: Europe/Moscow
+            # SDK database-1.0.4 health cannot parse a JDBC URL with multiple hosts.
+            tn-scada.clickhouse.health.enabled: "false"
+            kafka.consumer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-consumer'
+            kafka.producer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-producer'
             server.max-http-request-header-size: 100MB
         image: evoscada-docker.artifacts.tn.tngrp.ru/kafka-history-writer:0.0.67-412ebcbf-redos
         parameters:
+            database_name: ""
             source_variables:
                 MAIN_TOPIC: sdku-main
                 REDIS_SENTINEL_MASTER: ""
@@ -54098,10 +54745,12 @@ platform_application_definition:
             secret_bindings:
                 DB_PASSWORD:
                     source:
-                        library_secret: clickhouse_scada_password
+                        account: clickhouse
+                        field: password
                 DB_USERNAME:
                     source:
-                        library_secret: clickhouse_scada_username
+                        account: clickhouse
+                        field: username
                 JAVA_KEYSTORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password
@@ -54113,16 +54762,20 @@ platform_application_definition:
                         library_secret: java_keystore_password
                 TN_SCADA_REDIS_ACL_PASSWORD:
                     source:
-                        library_secret: redis_password
+                        account: redis
+                        field: password
                 TN_SCADA_REDIS_ACL_SENTINEL_PASSWORD:
                     source:
-                        library_secret: redis_sentinel_password
+                        account: redis
+                        field: password
                 TN_SCADA_REDIS_ACL_SENTINEL_USERNAME:
                     source:
-                        library_secret: redis_sentinel_username
+                        account: redis
+                        field: username
                 TN_SCADA_REDIS_ACL_USERNAME:
                     source:
-                        library_secret: redis_username
+                        account: redis
+                        field: username
                 TN_SCADA_REDIS_SSL_PROPERTIES_KEY_STORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password
@@ -54207,7 +54860,7 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/opc-ua-server/1.0.0/roles/application_opc-ua-server/defaults/main.yml","mode":420,"size":5856,"sha256":"6617cc30d8c8deece198f0ad3a1cb8aae422166ad21ec338e160de1a823a20c5","index":0,"count":1,"encoding":"utf-8","payloadBytes":5856}
+@@PORTABLE {"path":"examples/sdku/application-packages/opc-ua-server/1.0.0/roles/application_opc-ua-server/defaults/main.yml","mode":420,"size":7952,"sha256":"eaa4a6c0f96bf3012abff909084b6c29838803252de474982acc00ddc1cae74c","index":0,"count":1,"encoding":"utf-8","payloadBytes":7952}
 platform_application_definition:
     connections:
         clickhouse:
@@ -54223,6 +54876,45 @@ platform_application_definition:
             library_binding: secrets
             protocol: https
     defaults:
+        accounts:
+            clickhouse:
+                credentials:
+                    password:
+                        source:
+                            kind: runtime_secret_ref
+                            ref: '{{ application_instance_id }}-clickhouse-password'
+                    username:
+                        source:
+                            kind: literal
+                            value: '{{ application_instance_id | replace(''-'', ''_'') }}'
+                databaseRef: analytics
+                grants:
+                    - databaseRef: analytics
+                      privileges:
+                        - SELECT
+                        - INSERT
+                      tables:
+                        - '*'
+                mode: managed
+            redis:
+                credentials:
+                    password:
+                        source:
+                            kind: runtime_secret_ref
+                            ref: '{{ application_instance_id }}-redis-password'
+                    username:
+                        source:
+                            kind: literal
+                            value: '{{ application_instance_id | replace(''-'', ''_'') }}'
+                grants:
+                    channels:
+                        - '*'
+                    commands:
+                        - +@all
+                        - -@admin
+                    keys:
+                        - '*'
+                mode: managed
         command:
             - java
             - -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:15005
@@ -54232,7 +54924,7 @@ platform_application_definition:
             - --spring.config.additional-location=/usr/local/config/opcua.yml
             - -Djavax.net.ssl.trustStore=/usr/local/certs/TN-SCADA OPC UA Server [61511528719CFF008A751C1D9F8165129F07C977].der
         environment:
-            DB_CONNECTION_STRING: "$${CLICKHOUSE_HTTP_ENDPOINT}?$${CLICKHOUSE_SSL_OPTIONS}"
+            DB_CONNECTION_STRING: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
             DB_TYPE: clickhouse
             LOGGER_ROOT_LEVEL: WARN
             OPCUA_APP_TYPE: server
@@ -54243,11 +54935,15 @@ platform_application_definition:
             REDU_DISABLE: "true"
             REDU_GROUP_ID: opcua-server
             REDU_MANAGER_ID: 1
+            SERVER_PORT: 10391
             SERVER_VIEW_CONFIG: /usr/local/config/view.csv
+            SPRING_KAFKA_CLIENT_ID: '{{ application_instance_id }}-$${SERVER_ID}'
             TN_SCADA_DATA_MANAGER_URL_ROOT: '{{ application_parameters.source_variables.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
             TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
             TNSCADA_LOGGER_LEVEL: WARN
             TZ: Europe/Moscow
+            kafka.consumer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-consumer'
+            kafka.producer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-producer'
             logging.level.org.eclipse.milo: TRACE
             logging.level.tnt.tnscada.drivers.opcua: INFO
             opc-ua.server.limits.minSamplingInterval: 0
@@ -54256,6 +54952,7 @@ platform_application_definition:
             spring.config.additional-location: /usr/local/config/opcua.yml
         image: evoscada-docker.artifacts.tn.tngrp.ru/opc-ua-server:1.1.2-67bad727-redos
         parameters:
+            database_name: ""
             mount_sources:
                 mount-1: ""
                 mount-2: ""
@@ -54279,10 +54976,12 @@ platform_application_definition:
             secret_bindings:
                 DB_PASSWORD:
                     source:
-                        library_secret: opc_ua_server_db_password
+                        account: clickhouse
+                        field: password
                 DB_USERNAME:
                     source:
-                        library_secret: opc_ua_server_db_username
+                        account: clickhouse
+                        field: username
                 JAVA_KEYSTORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password
@@ -54297,19 +54996,23 @@ platform_application_definition:
                         library_secret: java_keystore_password
                 REDIS_PASSWORD:
                     source:
-                        library_secret: redis_password
+                        account: redis
+                        field: password
                 REDIS_SENTINEL_PASSWORD:
                     source:
-                        library_secret: redis_sentinel_password
+                        account: redis
+                        field: password
                 REDIS_SENTINEL_USERNAME:
                     source:
-                        library_secret: redis_sentinel_username
+                        account: redis
+                        field: username
                 REDIS_TRUSTSTORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password
                 REDIS_USERNAME:
                     source:
-                        library_secret: redis_username
+                        account: redis
+                        field: username
                 SPRING_KAFKA_SSL_KEY_STORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password
@@ -54318,16 +55021,20 @@ platform_application_definition:
                         library_secret: java_keystore_password
                 TN_SCADA_REDIS_ACL_PASSWORD:
                     source:
-                        library_secret: redis_password
+                        account: redis
+                        field: password
                 TN_SCADA_REDIS_ACL_SENTINEL_PASSWORD:
                     source:
-                        library_secret: redis_sentinel_password
+                        account: redis
+                        field: password
                 TN_SCADA_REDIS_ACL_SENTINEL_USERNAME:
                     source:
-                        library_secret: redis_sentinel_username
+                        account: redis
+                        field: username
                 TN_SCADA_REDIS_ACL_USERNAME:
                     source:
-                        library_secret: redis_username
+                        account: redis
+                        field: username
                 TN_SCADA_REDIS_SSL_PROPERTIES_KEY_STORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password
@@ -54495,7 +55202,7 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/sdku-knp/1.0.0/roles/application_sdku-knp/defaults/main.yml","mode":420,"size":6276,"sha256":"c0c87d8bfddbca6f4e8fa13f4754b076500f46c35529d763722e9cf0fde43ab3","index":0,"count":1,"encoding":"utf-8","payloadBytes":6276}
+@@PORTABLE {"path":"examples/sdku/application-packages/sdku-knp/1.0.0/roles/application_sdku-knp/defaults/main.yml","mode":420,"size":8771,"sha256":"d634ad13561375f5a71e1b701e94632f7f7c88073aca6e0c08202cf2df7191c9","index":0,"count":1,"encoding":"utf-8","payloadBytes":8771}
 platform_application_definition:
     connections:
         clickhouse:
@@ -54511,14 +55218,54 @@ platform_application_definition:
             library_binding: secrets
             protocol: https
     defaults:
+        accounts:
+            clickhouse:
+                credentials:
+                    password:
+                        source:
+                            kind: runtime_secret_ref
+                            ref: '{{ application_instance_id }}-clickhouse-password'
+                    username:
+                        source:
+                            kind: literal
+                            value: '{{ application_instance_id | replace(''-'', ''_'') }}'
+                databaseRef: analytics
+                grants:
+                    - databaseRef: analytics
+                      privileges:
+                        - SELECT
+                        - INSERT
+                      tables:
+                        - '*'
+                mode: managed
+            redis:
+                credentials:
+                    password:
+                        source:
+                            kind: runtime_secret_ref
+                            ref: '{{ application_instance_id }}-redis-password'
+                    username:
+                        source:
+                            kind: literal
+                            value: '{{ application_instance_id | replace(''-'', ''_'') }}'
+                grants:
+                    channels:
+                        - '*'
+                    commands:
+                        - +@all
+                        - -@admin
+                    keys:
+                        - '*'
+                mode: managed
         command:
             - '{{ sdku_start_commands[''sdku-knp''] | mandatory }}'
         environment:
-            TN_SCADA_DATASOURCE_URL: "$${CLICKHOUSE_HTTP_ENDPOINT}?$${CLICKHOUSE_SSL_OPTIONS}"
             ALARM_SERVICE_API_ROOT_URI: '{{ application_parameters.source_variables.ALARM_SERVICE_URL | default(undef(hint=''Configure SDKU ALARM_SERVICE_URL''), true) }}'
             ALARM_SERVICE_API_SERVER_PATH: /generate-alarm
             ALARM_SERVICE_API_TYPE: buffered
             ALARM_TOPIC: '{{ application_parameters.source_variables.ALARM_TOPIC_COMPACT | default(undef(hint=''Configure SDKU ALARM_TOPIC_COMPACT''), true) }}'
+            DB_CONNECTION_STRING: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
+            DB_TYPE: clickhouse
             EVO_MANAGER_ALARM_TOPIC: '{{ application_parameters.source_variables.ALARM_TOPIC_COMPACT | default(undef(hint=''Configure SDKU ALARM_TOPIC_COMPACT''), true) }}'
             EVO_MANAGER_DATA_MANAGER_URL: '{{ application_parameters.source_variables.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
             EVO_SERVICES_CONSENSUS_SERVICE_HEALTH_CHECK_INTERVAL: 1000
@@ -54532,17 +55279,23 @@ platform_application_definition:
             EVO_SERVICES_CONSENSUS_SERVICE_TIMER_INTERVAL: 500
             EVO_SERVICES_CONSENSUS_SERVICE_WORKLOAD: LOW
             HISTORY_CONNECTION_SSL: "true"
+            SERVER_PORT: 10281
+            SPRING_KAFKA_CLIENT_ID: '{{ application_instance_id }}-$${SERVER_ID}'
             TN_SCADA_DATA_MANAGER_URL: '{{ application_parameters.source_variables.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
             TN_SCADA_DATA_MANAGER_URL_ROOT: '{{ application_parameters.source_variables.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
+            TN_SCADA_DATASOURCE_URL: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
             TN_SCADA_METADATA_TERGET_PROJECT: TNSV
             TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
             TN_SCADA_USER_PREFERENCES_URL_ROOT: '{{ application_parameters.source_variables.USER_PREFERENCES_URL_ROOT | default(undef(hint=''Configure SDKU USER_PREFERENCES_URL_ROOT''), true) }}'
             alarm-service-api.read-timeout: 5000
+            kafka.consumer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-consumer'
+            kafka.producer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-producer'
             server.max-http-header-size: 10MB
             server.max-http-request-header-size: 10MB
             tn-scada.metadata.load-projects: TNSV
         image: evoscada-docker.artifacts.tn.tngrp.ru/sdku-knp:0.2.5-10437ccc-redos
         parameters:
+            database_name: ""
             source_variables:
                 ALARM_SERVICE_URL: ""
                 ALARM_TOPIC_COMPACT: sdku-alarms-compact
@@ -54569,6 +55322,14 @@ platform_application_definition:
                 method: approle
             mode: process-supervisor
             secret_bindings:
+                DB_PASSWORD:
+                    source:
+                        account: clickhouse
+                        field: password
+                DB_USERNAME:
+                    source:
+                        account: clickhouse
+                        field: username
                 JAVA_KEYSTORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password
@@ -54580,16 +55341,20 @@ platform_application_definition:
                         library_secret: java_keystore_password
                 TN_SCADA_REDIS_ACL_PASSWORD:
                     source:
-                        library_secret: redis_password
+                        account: redis
+                        field: password
                 TN_SCADA_REDIS_ACL_SENTINEL_PASSWORD:
                     source:
-                        library_secret: redis_sentinel_password
+                        account: redis
+                        field: password
                 TN_SCADA_REDIS_ACL_SENTINEL_USERNAME:
                     source:
-                        library_secret: redis_sentinel_username
+                        account: redis
+                        field: username
                 TN_SCADA_REDIS_ACL_USERNAME:
                     source:
-                        library_secret: redis_username
+                        account: redis
+                        field: username
                 TN_SCADA_REDIS_SSL_PROPERTIES_KEY_STORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password
@@ -54677,7 +55442,7 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/sdku-status-calculation/1.0.0/roles/application_sdku-status-calculation/defaults/main.yml","mode":420,"size":4349,"sha256":"7d4d16455a5b725f6504c231e2a4a931a1f41dfa3ec074e0cb57c1c37bc5ee40","index":0,"count":1,"encoding":"utf-8","payloadBytes":4349}
+@@PORTABLE {"path":"examples/sdku/application-packages/sdku-status-calculation/1.0.0/roles/application_sdku-status-calculation/defaults/main.yml","mode":420,"size":6844,"sha256":"0dcc55ad5ed99c44848dea93c70c2fc510fe8000146dc87e8f54b100a54771f6","index":0,"count":1,"encoding":"utf-8","payloadBytes":6844}
 platform_application_definition:
     connections:
         clickhouse:
@@ -54693,27 +55458,73 @@ platform_application_definition:
             library_binding: secrets
             protocol: https
     defaults:
+        accounts:
+            clickhouse:
+                credentials:
+                    password:
+                        source:
+                            kind: runtime_secret_ref
+                            ref: '{{ application_instance_id }}-clickhouse-password'
+                    username:
+                        source:
+                            kind: literal
+                            value: '{{ application_instance_id | replace(''-'', ''_'') }}'
+                databaseRef: analytics
+                grants:
+                    - databaseRef: analytics
+                      privileges:
+                        - SELECT
+                        - INSERT
+                      tables:
+                        - '*'
+                mode: managed
+            redis:
+                credentials:
+                    password:
+                        source:
+                            kind: runtime_secret_ref
+                            ref: '{{ application_instance_id }}-redis-password'
+                    username:
+                        source:
+                            kind: literal
+                            value: '{{ application_instance_id | replace(''-'', ''_'') }}'
+                grants:
+                    channels:
+                        - '*'
+                    commands:
+                        - +@all
+                        - -@admin
+                    keys:
+                        - '*'
+                mode: managed
         command:
             - java
             - -jar
             - sdku-status-calculation.jar
         environment:
-            TN_SCADA_DATASOURCE_URL: "$${CLICKHOUSE_HTTP_ENDPOINT}?$${CLICKHOUSE_SSL_OPTIONS}"
             ALARM_SERVICE_API_READ_TIMEOUT: 5000
             ALARM_SERVICE_API_ROOT_URI: '{{ application_parameters.source_variables.ALARM_SERVICE_URL | default(undef(hint=''Configure SDKU ALARM_SERVICE_URL''), true) }}'
             ALARM_SERVICE_API_SERVER_PATH: /generate-alarm
             ALARM_SERVICE_API_TYPE: buffered
             ALARM_TOPIC: '{{ application_parameters.source_variables.ALARM_TOPIC_COMPACT | default(undef(hint=''Configure SDKU ALARM_TOPIC_COMPACT''), true) }}'
+            DB_CONNECTION_STRING: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
+            DB_TYPE: clickhouse
             EVO_SERVICES_CONSENSUS_SERVICE_MOCK: true
+            SERVER_PORT: 10361
+            SPRING_KAFKA_CLIENT_ID: '{{ application_instance_id }}-$${SERVER_ID}'
             TN_SCADA_DATA_MANAGER_URL_ROOT: '{{ application_parameters.source_variables.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
+            TN_SCADA_DATASOURCE_URL: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
             TN_SCADA_METADATA_TARGET_PROJECT: TNSV
             TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
+            kafka.consumer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-consumer'
+            kafka.producer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-producer'
             server.max-http-header-size: 10MB
             server.max-http-request-header-size: 10MB
             tn-scada.metadata.dontShowTargetProjectInNames: true
             tn-scada.metadata.load-projects: TNSV
         image: evoscada-docker.artifacts.tn.tngrp.ru/sdku-status-calculation:0.5.0-1508923e-redos
         parameters:
+            database_name: ""
             source_variables:
                 ALARM_SERVICE_URL: ""
                 ALARM_TOPIC_COMPACT: sdku-alarms-compact
@@ -54739,6 +55550,14 @@ platform_application_definition:
                 method: approle
             mode: process-supervisor
             secret_bindings:
+                DB_PASSWORD:
+                    source:
+                        account: clickhouse
+                        field: password
+                DB_USERNAME:
+                    source:
+                        account: clickhouse
+                        field: username
                 JAVA_KEYSTORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password
@@ -54750,16 +55569,20 @@ platform_application_definition:
                         library_secret: java_keystore_password
                 TN_SCADA_REDIS_ACL_PASSWORD:
                     source:
-                        library_secret: redis_password
+                        account: redis
+                        field: password
                 TN_SCADA_REDIS_ACL_SENTINEL_PASSWORD:
                     source:
-                        library_secret: redis_sentinel_password
+                        account: redis
+                        field: password
                 TN_SCADA_REDIS_ACL_SENTINEL_USERNAME:
                     source:
-                        library_secret: redis_sentinel_username
+                        account: redis
+                        field: username
                 TN_SCADA_REDIS_ACL_USERNAME:
                     source:
-                        library_secret: redis_username
+                        account: redis
+                        field: username
                 TN_SCADA_REDIS_SSL_PROPERTIES_KEY_STORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password
@@ -54848,7 +55671,7 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/sdku-tank-farm/1.0.0/roles/application_sdku-tank-farm/defaults/main.yml","mode":420,"size":5850,"sha256":"8377d23340d29a4538be5f9c5c0a24c9e406009668852f76e2de977463c9a8e4","index":0,"count":1,"encoding":"utf-8","payloadBytes":5850}
+@@PORTABLE {"path":"examples/sdku/application-packages/sdku-tank-farm/1.0.0/roles/application_sdku-tank-farm/defaults/main.yml","mode":420,"size":8345,"sha256":"43a2bd3be672cf9d51abfd5f4ae376a616ac7ba7885be8e3046bff4aae05bd75","index":0,"count":1,"encoding":"utf-8","payloadBytes":8345}
 platform_application_definition:
     connections:
         clickhouse:
@@ -54864,18 +55687,58 @@ platform_application_definition:
             library_binding: secrets
             protocol: https
     defaults:
+        accounts:
+            clickhouse:
+                credentials:
+                    password:
+                        source:
+                            kind: runtime_secret_ref
+                            ref: '{{ application_instance_id }}-clickhouse-password'
+                    username:
+                        source:
+                            kind: literal
+                            value: '{{ application_instance_id | replace(''-'', ''_'') }}'
+                databaseRef: analytics
+                grants:
+                    - databaseRef: analytics
+                      privileges:
+                        - SELECT
+                        - INSERT
+                      tables:
+                        - '*'
+                mode: managed
+            redis:
+                credentials:
+                    password:
+                        source:
+                            kind: runtime_secret_ref
+                            ref: '{{ application_instance_id }}-redis-password'
+                    username:
+                        source:
+                            kind: literal
+                            value: '{{ application_instance_id | replace(''-'', ''_'') }}'
+                grants:
+                    channels:
+                        - '*'
+                    commands:
+                        - +@all
+                        - -@admin
+                    keys:
+                        - '*'
+                mode: managed
         command:
             - java
             - -jar
             - sdku-tank-farm.jar
         environment:
-            TN_SCADA_DATASOURCE_URL: "$${CLICKHOUSE_HTTP_ENDPOINT}?$${CLICKHOUSE_SSL_OPTIONS}"
             ALARM_SERVICE_API_READ_TIMEOUT: 5000
             ALARM_SERVICE_API_ROOT_URI: '{{ application_parameters.source_variables.ALARM_SERVICE_URL | default(undef(hint=''Configure SDKU ALARM_SERVICE_URL''), true) }}'
             ALARM_SERVICE_API_SERVER_PATH: /generate-alarm
             ALARM_SERVICE_API_TYPE: mock
             ALARM_TOPIC: '{{ application_parameters.source_variables.ALARM_TOPIC_COMPACT | default(undef(hint=''Configure SDKU ALARM_TOPIC_COMPACT''), true) }}'
             DATA_MANAGER_ROOT_URL: '{{ application_parameters.source_variables.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
+            DB_CONNECTION_STRING: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
+            DB_TYPE: clickhouse
             EVO_SERVICES_CONSENSUS_SERVICE_HEALTH_CHECK_INTERVAL: 1000
             EVO_SERVICES_CONSENSUS_SERVICE_HEALTH_CHECK_TIMEOUT: 999
             EVO_SERVICES_CONSENSUS_SERVICE_HEARTBEAT_INTERVAL: 500
@@ -54886,17 +55749,23 @@ platform_application_definition:
             EVO_SERVICES_CONSENSUS_SERVICE_TERM_LIFESPAN: 2000
             EVO_SERVICES_CONSENSUS_SERVICE_TIMER_INTERVAL: 500
             EVO_SERVICES_CONSENSUS_SERVICE_WORKLOAD: LOW
+            SERVER_PORT: 10261
+            SPRING_KAFKA_CLIENT_ID: '{{ application_instance_id }}-$${SERVER_ID}'
             TANK_CONFIG_PATH: /usr/local/app/config/tank_config.yaml
             TN_SCADA_DATA_MANAGER_URL_ROOT: '{{ application_parameters.source_variables.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
+            TN_SCADA_DATASOURCE_URL: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
             TN_SCADA_METADATA_TARGET_PROJECT: TNSV
             TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
             TZ: Europe/Moscow
+            kafka.consumer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-consumer'
+            kafka.producer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-producer'
             server.max-http-header-size: 10MB
             server.max-http-request-header-size: 10MB
             tn-scada.metadata.dontShowTargetProjectInNames: false
             tn-scada.metadata.load-projects: TNSV
         image: evoscada-docker.artifacts.tn.tngrp.ru/sdku-tank-farm:1.2.1-3091dc07-redos
         parameters:
+            database_name: ""
             source_variables:
                 ALARM_SERVICE_URL: ""
                 ALARM_TOPIC_COMPACT: sdku-alarms-compact
@@ -54922,6 +55791,14 @@ platform_application_definition:
                 method: approle
             mode: process-supervisor
             secret_bindings:
+                DB_PASSWORD:
+                    source:
+                        account: clickhouse
+                        field: password
+                DB_USERNAME:
+                    source:
+                        account: clickhouse
+                        field: username
                 JAVA_KEYSTORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password
@@ -54933,16 +55810,20 @@ platform_application_definition:
                         library_secret: java_keystore_password
                 TN_SCADA_REDIS_ACL_PASSWORD:
                     source:
-                        library_secret: redis_password
+                        account: redis
+                        field: password
                 TN_SCADA_REDIS_ACL_SENTINEL_PASSWORD:
                     source:
-                        library_secret: redis_sentinel_password
+                        account: redis
+                        field: password
                 TN_SCADA_REDIS_ACL_SENTINEL_USERNAME:
                     source:
-                        library_secret: redis_sentinel_username
+                        account: redis
+                        field: username
                 TN_SCADA_REDIS_ACL_USERNAME:
                     source:
-                        library_secret: redis_username
+                        account: redis
+                        field: username
                 TN_SCADA_REDIS_SSL_PROPERTIES_KEY_STORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password
@@ -55031,7 +55912,7 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/sdku-telemechanics/1.0.0/roles/application_sdku-telemechanics/defaults/main.yml","mode":420,"size":5702,"sha256":"7fecaf7595cb2a656607da6efb6a1f8b43e450e38e2a95e76d8596651b109ba8","index":0,"count":1,"encoding":"utf-8","payloadBytes":5702}
+@@PORTABLE {"path":"examples/sdku/application-packages/sdku-telemechanics/1.0.0/roles/application_sdku-telemechanics/defaults/main.yml","mode":420,"size":8197,"sha256":"53fe1baf64e059b50bf58d325583124b569d57fda6a8545281897e6561c282d2","index":0,"count":1,"encoding":"utf-8","payloadBytes":8197}
 platform_application_definition:
     connections:
         clickhouse:
@@ -55047,17 +55928,57 @@ platform_application_definition:
             library_binding: secrets
             protocol: https
     defaults:
+        accounts:
+            clickhouse:
+                credentials:
+                    password:
+                        source:
+                            kind: runtime_secret_ref
+                            ref: '{{ application_instance_id }}-clickhouse-password'
+                    username:
+                        source:
+                            kind: literal
+                            value: '{{ application_instance_id | replace(''-'', ''_'') }}'
+                databaseRef: analytics
+                grants:
+                    - databaseRef: analytics
+                      privileges:
+                        - SELECT
+                        - INSERT
+                      tables:
+                        - '*'
+                mode: managed
+            redis:
+                credentials:
+                    password:
+                        source:
+                            kind: runtime_secret_ref
+                            ref: '{{ application_instance_id }}-redis-password'
+                    username:
+                        source:
+                            kind: literal
+                            value: '{{ application_instance_id | replace(''-'', ''_'') }}'
+                grants:
+                    channels:
+                        - '*'
+                    commands:
+                        - +@all
+                        - -@admin
+                    keys:
+                        - '*'
+                mode: managed
         command:
             - java
             - -jar
             - sdku-telemechanics.jar
         environment:
-            TN_SCADA_DATASOURCE_URL: "$${CLICKHOUSE_HTTP_ENDPOINT}?$${CLICKHOUSE_SSL_OPTIONS}"
             ALARM_SERVICE_API_READ_TIMEOUT: 5000
             ALARM_SERVICE_API_ROOT_URI: '{{ application_parameters.source_variables.ALARM_SERVICE_URL | default(undef(hint=''Configure SDKU ALARM_SERVICE_URL''), true) }}'
             ALARM_SERVICE_API_SERVER_PATH: /generate-alarm
             ALARM_SERVICE_API_TYPE: mock
             ALARM_TOPIC: '{{ application_parameters.source_variables.ALARM_TOPIC_COMPACT | default(undef(hint=''Configure SDKU ALARM_TOPIC_COMPACT''), true) }}'
+            DB_CONNECTION_STRING: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
+            DB_TYPE: clickhouse
             EVO_SERVICES_CONSENSUS_SERVICE_HEALTH_CHECK_INTERVAL: 1000
             EVO_SERVICES_CONSENSUS_SERVICE_HEALTH_CHECK_TIMEOUT: 999
             EVO_SERVICES_CONSENSUS_SERVICE_HEARTBEAT_INTERVAL: 500
@@ -55069,17 +55990,23 @@ platform_application_definition:
             EVO_SERVICES_CONSENSUS_SERVICE_TIMER_INTERVAL: 500
             EVO_SERVICES_CONSENSUS_SERVICE_WORKLOAD: LOW
             LOGGING_LEVEL_PLUGIN: DEBUG
+            SERVER_PORT: 10251
+            SPRING_KAFKA_CLIENT_ID: '{{ application_instance_id }}-$${SERVER_ID}'
             TELEMECHANICS_CONFIG_PATH: /usr/local/app/config/telemechanics_config.yaml
             TELEMECHANICS_LOGGER_LEVEL: DEBUG
             TN_SCADA_DATA_MANAGER_URL_ROOT: '{{ application_parameters.source_variables.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
+            TN_SCADA_DATASOURCE_URL: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
             TN_SCADA_METADATA_TARGET_PROJECT: TNSV
             TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
+            kafka.consumer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-consumer'
+            kafka.producer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-producer'
             server.max-http-header-size: 10MB
             server.max-http-request-header-size: 10MB
             tn-scada.metadata.dontShowTargetProjectInNames: true
             tn-scada.metadata.load-projects: TNSV
         image: evoscada-docker.artifacts.tn.tngrp.ru/sdku-telemechanics:1.2.3-6aa0b4a0-redos
         parameters:
+            database_name: ""
             source_variables:
                 ALARM_SERVICE_URL: ""
                 ALARM_TOPIC_COMPACT: sdku-alarms-compact
@@ -55102,6 +56029,14 @@ platform_application_definition:
                 method: approle
             mode: process-supervisor
             secret_bindings:
+                DB_PASSWORD:
+                    source:
+                        account: clickhouse
+                        field: password
+                DB_USERNAME:
+                    source:
+                        account: clickhouse
+                        field: username
                 JAVA_KEYSTORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password
@@ -55113,16 +56048,20 @@ platform_application_definition:
                         library_secret: java_keystore_password
                 TN_SCADA_REDIS_ACL_PASSWORD:
                     source:
-                        library_secret: redis_password
+                        account: redis
+                        field: password
                 TN_SCADA_REDIS_ACL_SENTINEL_PASSWORD:
                     source:
-                        library_secret: redis_sentinel_password
+                        account: redis
+                        field: password
                 TN_SCADA_REDIS_ACL_SENTINEL_USERNAME:
                     source:
-                        library_secret: redis_sentinel_username
+                        account: redis
+                        field: username
                 TN_SCADA_REDIS_ACL_USERNAME:
                     source:
-                        library_secret: redis_username
+                        account: redis
+                        field: username
                 TN_SCADA_REDIS_SSL_PROPERTIES_KEY_STORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password
@@ -55287,7 +56226,7 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/sdku-vtor/1.0.0/roles/application_sdku-vtor/defaults/main.yml","mode":420,"size":6060,"sha256":"4347831a6a3f07a9bde4f3af2edaf7f0a3d0a9bb88c83c88b90ad0f55494f14a","index":0,"count":1,"encoding":"utf-8","payloadBytes":6060}
+@@PORTABLE {"path":"examples/sdku/application-packages/sdku-vtor/1.0.0/roles/application_sdku-vtor/defaults/main.yml","mode":420,"size":8555,"sha256":"edf66db31b56c385fb59423a8b636cba60cf4ee2925296cd718f5ec5257001d2","index":0,"count":1,"encoding":"utf-8","payloadBytes":8555}
 platform_application_definition:
     connections:
         clickhouse:
@@ -55303,6 +56242,45 @@ platform_application_definition:
             library_binding: secrets
             protocol: https
     defaults:
+        accounts:
+            clickhouse:
+                credentials:
+                    password:
+                        source:
+                            kind: runtime_secret_ref
+                            ref: '{{ application_instance_id }}-clickhouse-password'
+                    username:
+                        source:
+                            kind: literal
+                            value: '{{ application_instance_id | replace(''-'', ''_'') }}'
+                databaseRef: analytics
+                grants:
+                    - databaseRef: analytics
+                      privileges:
+                        - SELECT
+                        - INSERT
+                      tables:
+                        - '*'
+                mode: managed
+            redis:
+                credentials:
+                    password:
+                        source:
+                            kind: runtime_secret_ref
+                            ref: '{{ application_instance_id }}-redis-password'
+                    username:
+                        source:
+                            kind: literal
+                            value: '{{ application_instance_id | replace(''-'', ''_'') }}'
+                grants:
+                    channels:
+                        - '*'
+                    commands:
+                        - +@all
+                        - -@admin
+                    keys:
+                        - '*'
+                mode: managed
         command:
             - java
             - -javaagent:/usr/local/app/opentelemetry-javaagent.jar
@@ -55310,12 +56288,13 @@ platform_application_definition:
             - -jar
             - sdku-vtor.jar
         environment:
-            TN_SCADA_DATASOURCE_URL: "$${CLICKHOUSE_HTTP_ENDPOINT}?$${CLICKHOUSE_SSL_OPTIONS}"
             ALARM_SERVICE_API_READ_TIMEOUT: 5000
             ALARM_SERVICE_API_ROOT_URI: '{{ application_parameters.source_variables.ALARM_SERVICE_URL | default(undef(hint=''Configure SDKU ALARM_SERVICE_URL''), true) }}'
             ALARM_SERVICE_API_SERVER_PATH: /generate-alarm
             ALARM_SERVICE_API_TYPE: buffered
             ALARM_TOPIC: '{{ application_parameters.source_variables.ALARM_TOPIC_COMPACT | default(undef(hint=''Configure SDKU ALARM_TOPIC_COMPACT''), true) }}'
+            DB_CONNECTION_STRING: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
+            DB_TYPE: clickhouse
             EVO_SERVICES_CONSENSUS_SERVICE_HEALTH_CHECK_INTERVAL: 1000
             EVO_SERVICES_CONSENSUS_SERVICE_HEALTH_CHECK_TIMEOUT: 999
             EVO_SERVICES_CONSENSUS_SERVICE_HEARTBEAT_INTERVAL: 500
@@ -55326,11 +56305,16 @@ platform_application_definition:
             EVO_SERVICES_CONSENSUS_SERVICE_TERM_LIFESPAN: 2000
             EVO_SERVICES_CONSENSUS_SERVICE_TIMER_INTERVAL: 500
             EVO_SERVICES_CONSENSUS_SERVICE_WORKLOAD: LOW
+            SERVER_PORT: 10301
+            SPRING_KAFKA_CLIENT_ID: '{{ application_instance_id }}-$${SERVER_ID}'
             TN_SCADA_DATA_MANAGER_URL_ROOT: '{{ application_parameters.source_variables.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
+            TN_SCADA_DATASOURCE_URL: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
             TN_SCADA_METADATA_TARGET_PROJECT: TNSV
             TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
             TN_SCADA_USER_PREFERENCES_URL_ROOT: '{{ application_parameters.source_variables.USER_PREFERENCES_URL_ROOT | default(undef(hint=''Configure SDKU USER_PREFERENCES_URL_ROOT''), true) }}'
             VTOR_CONFIG_PATH: /usr/local/app/config/vtor_config.yaml
+            kafka.consumer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-consumer'
+            kafka.producer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-producer'
             logging.level.tnt.evo.services.BufferedServiceBase: WARN
             server.max-http-header-size: 10MB
             server.max-http-request-header-size: 10MB
@@ -55339,6 +56323,7 @@ platform_application_definition:
             vtor.debug.addDebugUser: true
         image: evoscada-docker.artifacts.tn.tngrp.ru/sdku-vtor:1.2.8-c8f4f8a5-redos
         parameters:
+            database_name: ""
             source_variables:
                 ALARM_SERVICE_URL: ""
                 ALARM_TOPIC_COMPACT: sdku-alarms-compact
@@ -55365,6 +56350,14 @@ platform_application_definition:
                 method: approle
             mode: process-supervisor
             secret_bindings:
+                DB_PASSWORD:
+                    source:
+                        account: clickhouse
+                        field: password
+                DB_USERNAME:
+                    source:
+                        account: clickhouse
+                        field: username
                 JAVA_KEYSTORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password
@@ -55376,16 +56369,20 @@ platform_application_definition:
                         library_secret: java_keystore_password
                 TN_SCADA_REDIS_ACL_PASSWORD:
                     source:
-                        library_secret: redis_password
+                        account: redis
+                        field: password
                 TN_SCADA_REDIS_ACL_SENTINEL_PASSWORD:
                     source:
-                        library_secret: redis_sentinel_password
+                        account: redis
+                        field: password
                 TN_SCADA_REDIS_ACL_SENTINEL_USERNAME:
                     source:
-                        library_secret: redis_sentinel_username
+                        account: redis
+                        field: username
                 TN_SCADA_REDIS_ACL_USERNAME:
                     source:
-                        library_secret: redis_username
+                        account: redis
+                        field: username
                 TN_SCADA_REDIS_SSL_PROPERTIES_KEY_STORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password
@@ -55474,7 +56471,7 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/user-preferences/1.0.0/roles/application_user-preferences/defaults/main.yml","mode":420,"size":3365,"sha256":"1864b489ee113c278d3f9a5dca4e8d59d8220010916432fbc8a47f2f085d68d8","index":0,"count":1,"encoding":"utf-8","payloadBytes":3365}
+@@PORTABLE {"path":"examples/sdku/application-packages/user-preferences/1.0.0/roles/application_user-preferences/defaults/main.yml","mode":420,"size":5231,"sha256":"8fdadea281f2b704ea1c6d22a4b801661ddaba57161ff49fc8b2e67d92fa0dfa","index":0,"count":1,"encoding":"utf-8","payloadBytes":5231}
 platform_application_definition:
     connections:
         kafka:
@@ -55490,6 +56487,45 @@ platform_application_definition:
             library_binding: secrets
             protocol: https
     defaults:
+        accounts:
+            postgres:
+                credentials:
+                    password:
+                        source:
+                            kind: runtime_secret_ref
+                            ref: '{{ application_instance_id }}-postgres-password'
+                    username:
+                        source:
+                            kind: literal
+                            value: '{{ application_instance_id | replace(''-'', ''_'') }}'
+                databaseAccess:
+                    - databaseRef: database
+                      privileges:
+                        - SELECT
+                        - INSERT
+                        - UPDATE
+                        - DELETE
+                        - CREATE
+                mode: managed
+            redis:
+                credentials:
+                    password:
+                        source:
+                            kind: runtime_secret_ref
+                            ref: '{{ application_instance_id }}-redis-password'
+                    username:
+                        source:
+                            kind: literal
+                            value: '{{ application_instance_id | replace(''-'', ''_'') }}'
+                grants:
+                    channels:
+                        - '*'
+                    commands:
+                        - +@all
+                        - -@admin
+                    keys:
+                        - '*'
+                mode: managed
         command:
             - java
             - -XX:+HeapDumpOnOutOfMemoryError
@@ -55497,8 +56533,12 @@ platform_application_definition:
             - -jar
             - user-preferences.jar
         environment:
-            DB_CONNECTION_STRING: "$${POSTGRES_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${POSTGRES_SSL_OPTIONS}"
+            DB_CONNECTION_STRING: $${POSTGRES_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${POSTGRES_SSL_OPTIONS}
+            SERVER_PORT: 10501
+            SPRING_KAFKA_CLIENT_ID: '{{ application_instance_id }}-$${SERVER_ID}'
             TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
+            kafka.consumer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-consumer'
+            kafka.producer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-producer'
             server.max-http-request-header-size: 100MB
         image: evoscada-docker.artifacts.tn.tngrp.ru/user-preferences:0.0.4-c707ead9-redos
         parameters:
@@ -55518,10 +56558,12 @@ platform_application_definition:
             secret_bindings:
                 DB_PASSWORD:
                     source:
-                        library_secret: postgres_userpreferences_password
+                        account: postgres
+                        field: password
                 DB_USERNAME:
                     source:
-                        library_secret: postgres_userpreferences_user
+                        account: postgres
+                        field: username
                 JAVA_KEYSTORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password
@@ -55533,16 +56575,20 @@ platform_application_definition:
                         library_secret: java_keystore_password
                 TN_SCADA_REDIS_ACL_PASSWORD:
                     source:
-                        library_secret: redis_password
+                        account: redis
+                        field: password
                 TN_SCADA_REDIS_ACL_SENTINEL_PASSWORD:
                     source:
-                        library_secret: redis_sentinel_password
+                        account: redis
+                        field: password
                 TN_SCADA_REDIS_ACL_SENTINEL_USERNAME:
                     source:
-                        library_secret: redis_sentinel_username
+                        account: redis
+                        field: username
                 TN_SCADA_REDIS_ACL_USERNAME:
                     source:
-                        library_secret: redis_username
+                        account: redis
+                        field: username
                 TN_SCADA_REDIS_SSL_PROPERTIES_KEY_STORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password
@@ -55567,7 +56613,7 @@ platform_application_definition:
 {{ application_runtime | platform.core.application_agent_config }}
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/user-preferences/1.0.0/roles/application_user-preferences/templates/compose.yml.j2","mode":420,"size":2134,"sha256":"c46eac8b7b7b7d8434b38144d6cf1ff7e458fda20e1bbf93da8cc24b12a6d070","index":0,"count":1,"encoding":"utf-8","payloadBytes":2134}
+@@PORTABLE {"path":"examples/sdku/application-packages/user-preferences/1.0.0/roles/application_user-preferences/templates/compose.yml.j2","mode":420,"size":2141,"sha256":"c48c0a4696e9329b8610e166c0e20a41ecc79e21a5876a4686ac89c8b06fafce","index":0,"count":1,"encoding":"utf-8","payloadBytes":2141}
 services:
   {{ application_instance_id }}:
     extends:
@@ -55608,7 +56654,7 @@ services:
       "interval": 30s
       "test":
           - CMD-SHELL
-          - curl http://localhost:{{ application_effective.ports['port-1'].container }}/actuator/health | grep UP
+          - curl --fail http://localhost:{{ application_effective.ports['port-1'].container }}/actuator/health | grep UP
       "timeout": 15s
     deploy:
       "resources":
@@ -55665,73 +56711,73 @@ platform_application_libraries:
   sdku-main: {}
 
 @@END
-@@PORTABLE {"path":"examples/sdku/import-catalog.json","mode":420,"size":5579,"sha256":"afa98b613781ffccc4a0dbc365667cf0542827442dec72d401355e2fe7fc6983","index":0,"count":1,"encoding":"utf-8","payloadBytes":5579}
+@@PORTABLE {"path":"examples/sdku/import-catalog.json","mode":420,"size":5579,"sha256":"07fa409a5d5a093e53202598f2c4d1b6fcd79bb26b73aef60340d41c3853f901","index":0,"count":1,"encoding":"utf-8","payloadBytes":5579}
 [
   {
-    "digest": "sha256:3470717ec177df63a6d1a3b770b4e186b02c1474436f751922651c65079dc196",
+    "digest": "sha256:b6b4600f4e5b761cef2305505a63e861c1177b0a3460f9b340e8001200a32148",
     "kind": "application",
     "name": "alarm-service",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:421a7b7e35a6c10850e4d1ceec6fe405b8abd1099d33245d2061edabc49522c6",
+    "digest": "sha256:77249a0799304bbda2ff1b35f868d4329c401d21bc544de458b695d1e62cf8d7",
     "kind": "application",
     "name": "alarm-view-service",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:36eb43b4cd325e219a70937c162edeb86a451c3631fa0e19ddcccfba79e883bd",
+    "digest": "sha256:e93ece05d765cb96dcaf1ef4a9b096570cbf091c478c8a7a12c7a408f0761cf4",
     "kind": "application",
     "name": "data-manager",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:c52ff5a754afceaaafc69b720b65d8b75ad578b5fcbdf20f50b62d44412f8855",
+    "digest": "sha256:e757942fb4fcaa7b0b08c9c404c3fd78eb3e6b6b4dc2e5cfd8a2d54f0532e7dd",
     "kind": "application",
     "name": "ef-backend",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:e9f9e4e38bebd03b874f35fd8cabfc428747aa8d6fecf116991f061f51f5fffd",
+    "digest": "sha256:727a5668a3c70cdc0b516ace117a54ceb3f9ed8473c9459578ccf2ee37db9925",
     "kind": "application",
     "name": "evo-manager",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:f347222a1796fe9589b8f9191f562b71b32635bfaec92b18feb5548986c51808",
+    "digest": "sha256:65423d1fd523f200d343d5fc323f0f13b514858cf59324c6567c6d7d3ceb77bc",
     "kind": "application",
     "name": "evo-scheduler",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:350dde76afcd190eaeb1a66ad19809cd4f6a7627531eb5e04d570195a7906aed",
+    "digest": "sha256:fa3c24255fbaacc51655430b83cc1f3660d25dc176c1a6e8d84599edf9ed3683",
     "kind": "application",
     "name": "ham-backend",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:dd4fd3621f9d2ebb92e5996fb3be7f86d027c0be5bae77ae1a86ab4d4178d98b",
+    "digest": "sha256:d17cda2fbd412d28632021e58cab17766749d28fc5b918619e532e241f6601b8",
     "kind": "application",
     "name": "hmi-backend",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:725ccbdf607629d3f28816fb2aa56a110ff570b088d76a17f1194e52dd06808f",
+    "digest": "sha256:c6a7342c20464a6d82f2f6712c47b50c4bf60c1ee4d0b053020308bae78eb932",
     "kind": "application",
     "name": "hmi-frontend-alarms",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:c8bb11371346c64eb63d402aa96bdbdd69238c8968ea8ac36688a91502057b38",
+    "digest": "sha256:31f5ea82c42d032d09f0018e8d7bacacc0ee965a308a15324ec4b22ffef465ea",
     "kind": "application",
     "name": "hmi-frontend-para",
     "sourceDirectory": ".",
@@ -55766,28 +56812,28 @@ platform_application_libraries:
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:3b2faa9769b9dae30602da68f7c963ff2c18ad0709ae81b4a694d4712b7a284a",
+    "digest": "sha256:aa12cb5ce7fef988a46bd3afbe1403553b0f2eee0460ce1c3fdaa496bd626ae6",
     "kind": "application",
     "name": "iec60870",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:1983cf68935c6e3034841c87e379e848f3db377c0bee587bf847aaf7e0249ee4",
+    "digest": "sha256:e20b29f4b6d50ea236184f83ba5d90abe0a1714a722e2e8651744176f18386e7",
     "kind": "application",
     "name": "kafka-ch-replicator",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:67f98c9163ff807827a6b150507df37746708756f4c4808238a0334e88180acb",
+    "digest": "sha256:1f3c66f478d0286b2063a8a650835dd54cb5838ee1204957cf16b6f080aa7aec",
     "kind": "application",
     "name": "kafka-history-writer",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:b4af603f1165fb6574dea991bfac0bf779d1ba1f1c36ccc040ae02f42f227774",
+    "digest": "sha256:bf436ef3870d97142a70110d64c58dbe7d574cfcb4f9a148fcc3f74faf8ec892",
     "kind": "application",
     "name": "opc-ua-server",
     "sourceDirectory": ".",
@@ -55801,28 +56847,28 @@ platform_application_libraries:
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:27ba4c69f9ad384f911a41e79652f54e39265d47eec6b5fec58acd79fa5ed248",
+    "digest": "sha256:3594124dc5fb8f78ceda6cdce58472e2bfca393b43c32d1395ccd751077c4998",
     "kind": "application",
     "name": "sdku-knp",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:14299c3e24a8a2baef8b14bd6d95114233ce063cfa0ecb471a9b8b1d1f398152",
+    "digest": "sha256:8e6a2e3289eab3d9067e898606309af5ce0c65c9ddb18600ebd91c7a35112d8d",
     "kind": "application",
     "name": "sdku-status-calculation",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:3fa665c8001e9f55bd8d02b392ee8e0e1b9c41ab2a598dd1579a0d4b627e3fa5",
+    "digest": "sha256:bf4b663740be814e2402bf87d92ea9744bd5b446865ca0c5a7b8bee19e2d81bb",
     "kind": "application",
     "name": "sdku-tank-farm",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:1e2f08b7d99c4acfa5a4a4d78aa251437da6a803d0bc95d64ec50ca1cb5e7b5d",
+    "digest": "sha256:249bbce7cba0fb5c9f7f4ff3a131ea213ef91eb15c828d519a48e58480336c4c",
     "kind": "application",
     "name": "sdku-telemechanics",
     "sourceDirectory": ".",
@@ -55836,21 +56882,21 @@ platform_application_libraries:
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:70c96743d08a2c7ecfef34811bfcd19e8e0832b6c4f593412237c3475a137765",
+    "digest": "sha256:5ed4bb9f4cf34502f6b9ba6302b27accfece0980c4a127a9843841e25704ee1c",
     "kind": "application",
     "name": "sdku-vtor",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:98c2914f4704e91fb9712de34d1cdd2ee36623e5f0b9739931f88c679ec2aa34",
+    "digest": "sha256:87f96bd005257d98dd314d000283f48d1aed3fc63cfe70f55d3918bcd9d68c6c",
     "kind": "application",
     "name": "user-preferences",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:542c8cfc3b70e73c769139b492f0409fd11bdb79baed01acc25566fdb4d9bcd0",
+    "digest": "sha256:389dd0e6223bcdff03635a7ae4e5fe33e654f0347188f7ad94f9b92fe77d31f4",
     "kind": "library",
     "name": "sdku",
     "sourceDirectory": ".",
@@ -55877,7 +56923,7 @@ platform_application_libraries:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/library-packages/sdku/1.0.0/roles/library_sdku/defaults/main.yml","mode":420,"size":15438,"sha256":"6813695a6f286b1a068be938912e6bfcf2e61d643d1429e8b0147257035f7ecf","index":0,"count":1,"encoding":"utf-8","payloadBytes":15438}
+@@PORTABLE {"path":"examples/sdku/library-packages/sdku/1.0.0/roles/library_sdku/defaults/main.yml","mode":420,"size":13559,"sha256":"d5acb00aae399a0f61e344e60d75d6e182196809885ab08976e0ecf8a7911465","index":0,"count":1,"encoding":"utf-8","payloadBytes":13559}
 platform_library_definition:
     runtime_directory: "~/{{ library_instance_id }}"
     connections:
@@ -55907,7 +56953,7 @@ platform_library_definition:
             KAFKA_CONSUMER_DEFAULT_API_TIMEOUT_MS: "3500"
             KAFKA_CONSUMER_HEARTBEAT_INTERVAL_MS: "500"
             KAFKA_CONSUMER_REQUEST_TIMEOUT_MS: "3000"
-            KAFKA_CONSUMER_SESSION_TIMEOUT_MS: "2500"
+            KAFKA_CONSUMER_SESSION_TIMEOUT_MS: "10000"
             KAFKA_CONSUMER_SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS: "5000"
             KAFKA_CONSUMER_SOCKET_CONNECTION_SETUP_TIMEOUT_MS: "1500"
             KAFKA_PRODUCER_DELIVERY_TIMEOUT_MS: "20000"
@@ -55915,7 +56961,7 @@ platform_library_definition:
             KAFKA_PRODUCER_LINGER_MS: "15"
             KAFKA_PRODUCER_MAX_BLOCK_MS: "2500"
             KAFKA_PRODUCER_REQUEST_TIMEOUT_MS: "3000"
-            KAFKA_PRODUCER_SESSION_TIMEOUT_MS: "2500"
+            KAFKA_PRODUCER_SESSION_TIMEOUT_MS: "10000"
             KAFKA_PRODUCER_SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS: "5000"
             KAFKA_PRODUCER_SOCKET_CONNECTION_SETUP_TIMEOUT_MS: "1500"
             SPRING_KAFKA_SSL_ENABLE_SSL: "false"
@@ -55928,11 +56974,12 @@ platform_library_definition:
             SPRING_KAFKA_STREAMS_HEARTBEAT_INTERVAL_MS: "500"
             SPRING_KAFKA_STREAMS_MAX_BLOCK_MS: "2500"
             SPRING_KAFKA_STREAMS_REQUEST_TIMEOUT_MS: "3000"
-            SPRING_KAFKA_STREAMS_SESSION_TIMEOUT_MS: "2500"
+            SPRING_KAFKA_STREAMS_SESSION_TIMEOUT_MS: "10000"
             SPRING_KAFKA_STREAMS_SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS: "5000"
             SPRING_KAFKA_STREAMS_SOCKET_CONNECTION_SETUP_TIMEOUT_MS: "1500"
             TN_SCADA_METADATA_TOPIC: dm-meta
             TN_SCADA_REDIS_CONNECTION_TYPE: Standalone
+            tn-scada.kafka.listener.store-id: "$${SERVER_ID}"
             TN_SCADA_REDIS_SSL_PROPERTIES_KEY_STORE_LOCATION: /opt/application/pki/keystore.p12
             TN_SCADA_REDIS_SSL_PROPERTIES_SSL: "false"
             TN_SCADA_REDIS_SSL_PROPERTIES_TRUST_STORE_LOCATION: /opt/application/pki/truststore.p12
@@ -55947,7 +56994,7 @@ platform_library_definition:
             kafka.consumer.http.read.timeout.ms: "1000"
             kafka.consumer.max.poll.interval.ms: "10000"
             kafka.consumer.request.timeout.ms: "3000"
-            kafka.consumer.session.timeout.ms: "2500"
+            kafka.consumer.session.timeout.ms: "10000"
             kafka.consumer.socket.connection.setup.timeout.max.ms: "5000"
             kafka.consumer.socket.connection.setup.timeout.ms: "1500"
             kafka.producer.heartbeat.interval.ms: "500"
@@ -55955,73 +57002,17 @@ platform_library_definition:
             kafka.producer.http.read.timeout.ms: "1000"
             kafka.producer.max.block.ms: "2500"
             kafka.producer.request.timeout.ms: "3000"
-            kafka.producer.session.timeout.ms: "2500"
+            kafka.producer.session.timeout.ms: "10000"
             kafka.producer.socket.connection.setup.timeout.max.ms: "5000"
             kafka.producer.socket.connection.setup.timeout.ms: "1500"
         parameters: {}
     name: sdku
     shared_secrets:
-        clickhouse_scada_password:
-            source:
-                kind: runtime_secret_ref
-                ref: clickhouse_scada_password
-        clickhouse_scada_username:
-            source:
-                kind: runtime_secret_ref
-                ref: clickhouse_scada_username
-        ef_backend_db_password:
-            source:
-                kind: runtime_secret_ref
-                ref: ef_backend_db_password
-        ef_backend_db_username:
-            source:
-                kind: runtime_secret_ref
-                ref: ef_backend_db_username
         java_keystore_password:
             source:
                 binding: application-pki
                 credential: java_keystore_password
                 kind: pki_credential
-        opc_ua_server_db_password:
-            source:
-                kind: runtime_secret_ref
-                ref: opc_ua_server_db_password
-        opc_ua_server_db_username:
-            source:
-                kind: runtime_secret_ref
-                ref: opc_ua_server_db_username
-        postgres_scada_password:
-            source:
-                kind: runtime_secret_ref
-                ref: postgres_scada_password
-        postgres_scada_user:
-            source:
-                kind: runtime_secret_ref
-                ref: postgres_scada_user
-        postgres_userpreferences_password:
-            source:
-                kind: runtime_secret_ref
-                ref: postgres_userpreferences_password
-        postgres_userpreferences_user:
-            source:
-                kind: runtime_secret_ref
-                ref: postgres_userpreferences_user
-        redis_password:
-            source:
-                kind: runtime_secret_ref
-                ref: redis_password
-        redis_sentinel_password:
-            source:
-                kind: runtime_secret_ref
-                ref: redis_sentinel_password
-        redis_sentinel_username:
-            source:
-                kind: runtime_secret_ref
-                ref: redis_sentinel_username
-        redis_username:
-            source:
-                kind: runtime_secret_ref
-                ref: redis_username
     slots:
         alarm-service:
             applicationRef: alarm-service@1.0.0
@@ -56194,7 +57185,7 @@ platform_library_definition:
                         index_granularity: 8192
 
 @@END
-@@PORTABLE {"path":"examples/sdku/library-packages/sdku/1.0.0/roles/library_sdku/templates/.base_compose.yml.j2","mode":420,"size":1665,"sha256":"9063e9d0fc424f8f8b9bbc6be35e9009c1d6fc0f911612246c7c437750d776c1","index":0,"count":1,"encoding":"utf-8","payloadBytes":1665}
+@@PORTABLE {"path":"examples/sdku/library-packages/sdku/1.0.0/roles/library_sdku/templates/.base_compose.yml.j2","mode":420,"size":1699,"sha256":"cfdec3b57b8fe384769e6c745de2345da2772effb766c955ab16b2001333088e","index":0,"count":1,"encoding":"utf-8","payloadBytes":1699}
 {% set environment = library_runtime.defaults.environment | combine({}) %}
 {% set server_ids = groups['all'] | reject('equalto', 'localhost') | sort | list %}
 {% for connection, names in {
@@ -56227,9 +57218,23 @@ services:
     extends:
       service: base
     environment:
+      "SERVER_ID": "${SERVER_ID}"
 {% for name, value in environment.items() %}
       {{ name | to_json }}: {{ (value | string) | to_json }}
 {% endfor %}
+
+@@END
+@@PORTABLE {"path":"examples/sdku/qa/evo-manager/src/qa/sdku/StartupMock.java","mode":420,"size":258,"sha256":"a00566a8f5fccbc514cc788e4baf40af1f9f5960ec4a1c5f360b28163138e2cb","index":0,"count":1,"encoding":"utf-8","payloadBytes":258}
+package qa.sdku;
+
+import tnt.evoscada.api.Evo;
+
+/** QA-only user script: no tag lookups, subscriptions or data mutations. */
+public final class StartupMock {
+    public static void main(Evo evo) {
+        System.out.println("SDKU_EVO_MOCK_STARTED");
+    }
+}
 
 @@END
 @@PORTABLE {"path":"examples/sdku/source-inventory.json","mode":420,"size":11193,"sha256":"75248b78c09429b07abf7db2d3d6d159bcfaaf5ae0b085c5c6d2241aecfcce94","index":0,"count":1,"encoding":"utf-8","payloadBytes":11193}
@@ -106081,7 +107086,7 @@ func validModePlanInput(order []string, mode ExecutionMode, sources map[string]s
 }
 
 @@END
-@@PORTABLE {"path":"internal/executionnode/openssh.go","mode":420,"size":42749,"sha256":"de41b1a350f9123efe7de977a4835de17682897d949298d109bdb03a5214d342","index":0,"count":1,"encoding":"utf-8","payloadBytes":42749}
+@@PORTABLE {"path":"internal/executionnode/openssh.go","mode":420,"size":42845,"sha256":"3828c2130102b443167473b452d02614a157ece66e4501412c08fe905369ee9d","index":0,"count":1,"encoding":"utf-8","payloadBytes":42845}
 package executionnode
 
 // This adapter is deliberately semantic: all remote paths and shell programs
@@ -106833,7 +107838,7 @@ func createCandidateProjectArchive(root string) (string, error) {
 		}
 		limits.files++
 		limits.bytes += int64(len(content))
-		if limits.files > 4096 || len(content) > 4*1024*1024 || limits.bytes > 64*1024*1024 {
+		if limits.files > 4096 || limits.bytes > 64*1024*1024 {
 			return cleanup(errors.New("PROJECT_CANDIDATE_LIMIT_EXCEEDED"))
 		}
 		header := &tar.Header{Name: logical, Mode: 0o600, Size: int64(len(content)), Typeflag: tar.TypeReg, Format: tar.FormatPAX}
@@ -106886,7 +107891,11 @@ func readStableCandidateFile(root, logical string) ([]byte, error) {
 	if err != nil || !before.Mode().IsRegular() || isUnsafeFilesystemLink(before) {
 		return nil, errors.New("PROJECT_CANDIDATE_FILE_UNSAFE")
 	}
-	if before.Size() > 4*1024*1024 {
+	fileLimit := int64(4 * 1024 * 1024)
+	if installer.ApplicationPackagePathAllowed(logical) {
+		fileLimit = 8 * 1024 * 1024
+	}
+	if before.Size() > fileLimit {
 		return nil, errors.New("PROJECT_CANDIDATE_LIMIT_EXCEEDED")
 	}
 	input, err := os.Open(absolute)
@@ -106920,8 +107929,8 @@ func readStableCandidateFile(root, logical string) ([]byte, error) {
 			}
 		}
 	}
-	content, err := io.ReadAll(io.LimitReader(input, 4*1024*1024+1))
-	if err != nil || len(content) > 4*1024*1024 {
+	content, err := io.ReadAll(io.LimitReader(input, fileLimit+1))
+	if err != nil || int64(len(content)) > fileLimit {
 		return nil, errors.New("PROJECT_CANDIDATE_LIMIT_EXCEEDED")
 	}
 	after, err := input.Stat()
@@ -111024,7 +112033,7 @@ func applicationWritePaths(c EditCommand) []string {
 }
 
 @@END
-@@PORTABLE {"path":"internal/installer/application_package_import.go","mode":420,"size":10747,"sha256":"355cb57b55ff590e6a4155725a5f067c6c38fc28efaa56e2e6d75c09004ef0ec","index":0,"count":1,"encoding":"utf-8","payloadBytes":10747}
+@@PORTABLE {"path":"internal/installer/application_package_import.go","mode":420,"size":10627,"sha256":"d5079dfdb996b5cb6bbd2b9c2a99c68dbb2a778eb915f88fb8f1d89e001bcee1","index":0,"count":1,"encoding":"utf-8","payloadBytes":10627}
 package installer
 
 import (
@@ -111034,7 +112043,6 @@ import (
 	"gopkg.in/yaml.v3"
 	"io"
 	"os"
-	"path"
 	"platform-installer/internal/projectlifecycle"
 	"regexp"
 	"sort"
@@ -111042,14 +112050,15 @@ import (
 )
 
 const maxApplicationPackageFiles = 512
-const maxApplicationPackageFileBytes = 1024 * 1024
+const maxApplicationPackageFileBytes = 8 * 1024 * 1024
 
 var packageVersion = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+$`)
 var packageComponent = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
 var packageEnvName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
 // Fixed data-only destinations. Neither the caller nor a manifest can add
-// tasks, plugins, hooks, roles from another package, or executable files.
+// tasks, plugins, hooks or roles from another package. JARs are application
+// inputs; they are never executed on the controller.
 func safeApplicationPackagePath(logical string) bool {
 	if !safeExportLogicalPath(logical) {
 		return false
@@ -111078,11 +112087,7 @@ func safeApplicationPackagePath(logical string) bool {
 	if !strings.HasPrefix(short, role+"templates/") && !strings.HasPrefix(short, "configuration/") && !strings.HasPrefix(short, "assets/") {
 		return false
 	}
-	switch strings.ToLower(path.Ext(short)) {
-	case ".j2", ".yml", ".yaml", ".json", ".conf", ".cfg", ".hcl", ".txt", ".properties", ".xml", ".crt", ".pem":
-		return true
-	}
-	return false
+	return true
 }
 
 // ApplicationPackagePathAllowed exposes the existing data-only package path
@@ -114198,708 +115203,6 @@ func enumerateManagedHostDocuments(root string) ([]string, error) {
 	}
 	sort.Strings(paths)
 	return paths, nil
-}
-
-@@END
-@@PORTABLE {"path":"internal/installer/managed_host_enumerator_unix.go","mode":420,"size":1548,"sha256":"69441998a81be917d122b74350c9b792b05bc821a513174e1215762d41c200ce","index":0,"count":1,"encoding":"utf-8","payloadBytes":1548}
-//go:build !windows
-
-package installer
-
-import (
-	"errors"
-	"os"
-
-	"golang.org/x/sys/unix"
-)
-
-func enumerateManagedHostDirectories(root string, limit int) ([]string, error) {
-	rootFD, err := unix.Open(root, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
-	if err != nil {
-		return nil, err
-	}
-	defer unix.Close(rootFD)
-	inventoryFD, err := unix.Openat(rootFD, "inventory", unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
-	if err != nil {
-		if errors.Is(err, unix.ENOENT) {
-			return []string{}, nil
-		}
-		return nil, err
-	}
-	defer unix.Close(inventoryFD)
-	hostVarsFD, err := unix.Openat(inventoryFD, "host_vars", unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
-	if err != nil {
-		if errors.Is(err, unix.ENOENT) {
-			return []string{}, nil
-		}
-		return nil, err
-	}
-	file := os.NewFile(uintptr(hostVarsFD), "host_vars")
-	if file == nil {
-		return nil, errors.New("managed host directory open failed")
-	}
-	// file owns hostVarsFD from this point.
-	hostVarsFD = -1
-	defer file.Close()
-	entries, err := file.ReadDir(limit + 1)
-	if err != nil {
-		return nil, err
-	}
-	if len(entries) > limit {
-		return nil, errors.New("managed host directory limit exceeded")
-	}
-	names := make([]string, 0, len(entries))
-	for _, entry := range entries {
-		child, openErr := unix.Openat(int(file.Fd()), entry.Name(), unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
-		if openErr != nil {
-			return nil, openErr
-		}
-		_ = unix.Close(child)
-		names = append(names, entry.Name())
-	}
-	return names, nil
-}
-
-@@END
-@@PORTABLE {"path":"internal/installer/managed_host_enumerator_windows.go","mode":420,"size":2384,"sha256":"6dea178886e799b6135d445573ec0f72e06f6dd5622bc0264b672742d2aedbff","index":0,"count":1,"encoding":"utf-8","payloadBytes":2384}
-//go:build windows
-
-package installer
-
-import (
-	"errors"
-	"os"
-	"path/filepath"
-
-	"golang.org/x/sys/windows"
-)
-
-func enumerateManagedHostDirectories(root string, limit int) ([]string, error) {
-	pointer, err := windows.UTF16PtrFromString(root)
-	if err != nil {
-		return nil, err
-	}
-	rootHandle, err := windows.CreateFile(pointer, windows.FILE_GENERIC_READ, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, nil, windows.OPEN_EXISTING, windows.FILE_FLAG_BACKUP_SEMANTICS|windows.FILE_FLAG_OPEN_REPARSE_POINT, 0)
-	if err != nil {
-		return nil, err
-	}
-	defer windows.CloseHandle(rootHandle)
-	if err := verifyF1WindowsHandle(rootHandle, true); err != nil {
-		return nil, err
-	}
-	inventory, err := openF1WindowsRelative(rootHandle, "inventory", true)
-	if err != nil {
-		if errors.Is(err, windows.ERROR_FILE_NOT_FOUND) || errors.Is(err, windows.ERROR_PATH_NOT_FOUND) || managedDirectoryAbsent(root, "inventory") {
-			return []string{}, nil
-		}
-		return nil, err
-	}
-	defer windows.CloseHandle(inventory)
-	hostVars, err := openF1WindowsRelative(inventory, "host_vars", true)
-	if err != nil {
-		if errors.Is(err, windows.ERROR_FILE_NOT_FOUND) || errors.Is(err, windows.ERROR_PATH_NOT_FOUND) || managedDirectoryAbsent(root, "inventory", "host_vars") {
-			return []string{}, nil
-		}
-		return nil, err
-	}
-	file := os.NewFile(uintptr(hostVars), "host_vars")
-	if file == nil {
-		_ = windows.CloseHandle(hostVars)
-		return nil, errors.New("managed host directory open failed")
-	}
-	// file owns hostVars from this point.
-	hostVars = 0
-	defer file.Close()
-	entries, err := file.ReadDir(limit + 1)
-	if err != nil {
-		return nil, err
-	}
-	if len(entries) > limit {
-		return nil, errors.New("managed host directory limit exceeded")
-	}
-	names := make([]string, 0, len(entries))
-	for _, entry := range entries {
-		child, openErr := openF1WindowsRelative(windows.Handle(file.Fd()), entry.Name(), true)
-		if openErr != nil {
-			return nil, openErr
-		}
-		_ = windows.CloseHandle(child)
-		names = append(names, entry.Name())
-	}
-	return names, nil
-}
-
-// A pathname check is used only to classify an already-failed handle-relative
-// open as absence. It never authorizes a subsequent read from that pathname.
-func managedDirectoryAbsent(root string, parts ...string) bool {
-	_, err := os.Lstat(filepath.Join(append([]string{root}, parts...)...))
-	return errors.Is(err, os.ErrNotExist)
-}
-
-@@END
-@@PORTABLE {"path":"internal/installer/path_safety_unix.go","mode":420,"size":140,"sha256":"563766f8bed83efc234ef960e74981bbca661af5fb5548370a827210b678e628","index":0,"count":1,"encoding":"utf-8","payloadBytes":140}
-//go:build !windows
-
-package installer
-
-import "os"
-
-func pathEntryUnsafe(info os.FileInfo) bool { return info.Mode()&os.ModeSymlink != 0 }
-
-@@END
-@@PORTABLE {"path":"internal/installer/path_safety_windows.go","mode":420,"size":306,"sha256":"6c63da5e3b73667128751c1c1147b71f478c259825ded04ae907abb4586d1574","index":0,"count":1,"encoding":"utf-8","payloadBytes":306}
-//go:build windows
-
-package installer
-
-import (
-	"os"
-	"syscall"
-)
-
-func pathEntryUnsafe(info os.FileInfo) bool {
-	if info.Mode()&os.ModeSymlink != 0 {
-		return true
-	}
-	data, ok := info.Sys().(*syscall.Win32FileAttributeData)
-	return !ok || data.FileAttributes&syscall.FILE_ATTRIBUTE_REPARSE_POINT != 0
-}
-
-@@END
-@@PORTABLE {"path":"internal/installer/pki_save.go","mode":420,"size":14363,"sha256":"ee1d297038d12c01f70eeffd2bf65898d758f7cf120f0913833b0e7a7443505e","index":0,"count":1,"encoding":"utf-8","payloadBytes":14363}
-package installer
-
-import (
-	"encoding/json"
-	"math"
-	"net/netip"
-	"regexp"
-	"strconv"
-)
-
-// desiredStateIdentifierPattern is deliberately separate from the shorter
-// Installer command ID grammar. PKI references are desired-state fields and
-// must use the grammar published by project/v2alpha1.
-var desiredStateIdentifierPattern = regexp.MustCompile(`^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$`)
-
-func pkiOperation(operation string) bool {
-	switch operation {
-	case "CreateCertificateAuthority", "UpdateCertificateAuthority", "DeleteCertificateAuthority", "CreateCertificateProfile", "UpdateCertificateProfile", "DeleteCertificateProfile", "CreateTLSProfile", "UpdateTLSProfile", "DeleteTLSProfile", "CreateCertificateScope", "UpdateCertificateScope", "DeleteCertificateScope":
-		return true
-	}
-	return false
-}
-
-func pkiMap(state map[string]any, key string) map[string]any {
-	value := asMap(state[key])
-	if value == nil {
-		value = map[string]any{}
-		state[key] = value
-	}
-	return value
-}
-
-func reducePKICommand(state map[string]any, command EditCommand, mutations topologyMutationSet) error {
-	var values map[string]any
-	var deleted map[string]bool
-	switch command.Operation {
-	case "CreateCertificateAuthority", "UpdateCertificateAuthority", "DeleteCertificateAuthority":
-		values, deleted = pkiMap(state, "certificateAuthorities"), mutations.deletedAuthorities
-	case "CreateCertificateProfile", "UpdateCertificateProfile", "DeleteCertificateProfile":
-		values, deleted = pkiMap(state, "certificateProfiles"), mutations.deletedProfiles
-	case "CreateTLSProfile", "UpdateTLSProfile", "DeleteTLSProfile":
-		values, deleted = pkiMap(state, "tlsProfiles"), mutations.deletedTLSProfiles
-	case "CreateCertificateScope", "UpdateCertificateScope", "DeleteCertificateScope":
-		values = pkiMap(state, "certificateScopes")
-	}
-	if values == nil {
-		return blocked("INVALID_EDIT_COMMAND", "PKI operation is unsupported", "command.operation")
-	}
-	if command.APIVersion != EditCommandAPIVersionV7 && command.APIVersion != EditCommandAPIVersionV8 && command.APIVersion != EditCommandAPIVersionV9 && command.APIVersion != EditCommandAPIVersionV10 {
-		return blocked("EDIT_OPERATION_UNAVAILABLE", "PKI editing requires v1alpha7 or a compatible later contract", "command.apiVersion")
-	}
-	if command.Operation[:6] == "Create" {
-		if values[command.EntityID] != nil {
-			return blocked("INVALID_EDIT_COMMAND", "PKI entity already exists", "command.entityId")
-		}
-		if err := validPKIEntity(command.Operation, command.Entity); err != nil {
-			return err
-		}
-		values[command.EntityID] = deepCopy(command.Entity)
-		return nil
-	}
-	if command.Operation[:6] == "Update" {
-		if values[command.EntityID] == nil {
-			return blocked("INVALID_EDIT_COMMAND", "PKI entity does not exist", "command.entityId")
-		}
-		if err := validPKIEntity(command.Operation, command.Entity); err != nil {
-			return err
-		}
-		next := deepCopy(command.Entity).(map[string]any)
-		for key, value := range asMap(values[command.EntityID]) {
-			if _, supplied := next[key]; extensionKeyPattern.MatchString(key) && !supplied {
-				next[key] = deepCopy(value)
-			}
-		}
-		values[command.EntityID] = next
-		return nil
-	}
-	if values[command.EntityID] == nil {
-		return blocked("INVALID_EDIT_COMMAND", "PKI entity does not exist", "command.entityId")
-	}
-	delete(values, command.EntityID)
-	if deleted != nil {
-		deleted[command.EntityID] = true
-	}
-	return nil
-}
-
-func validPKIEntity(operation string, value map[string]any) error {
-	if value == nil {
-		return blocked("INVALID_VALUE", "PKI entity is required", "command.entity")
-	}
-	if operation == "CreateCertificateAuthority" || operation == "UpdateCertificateAuthority" {
-		if err := validPKIObjectKeys(value, []string{"mode", "displayName", "commonName", "validityDays"}, "command.entity"); err != nil {
-			return err
-		}
-		if value["mode"] != "MANAGED" {
-			return blocked("INVALID_VALUE", "Only MANAGED certificate authorities are supported", "command.entity.mode")
-		}
-		if name, ok := value["commonName"].(string); !ok || name == "" || len(name) > 128 {
-			return blocked("INVALID_VALUE", "Certificate authority common name is invalid", "command.entity.commonName")
-		}
-		if err := validOptionalString(value, "displayName", 1, 0); err != nil {
-			return err
-		}
-		return validOptionalInteger(value, "validityDays", 1, "command.entity.validityDays")
-	}
-	if operation == "CreateCertificateProfile" || operation == "UpdateCertificateProfile" {
-		if err := validPKIObjectKeys(value, []string{"displayName", "authorityRef", "keyAlgorithm", "keySize", "validityDays", "usages", "sanPolicy", "subject"}, "command.entity"); err != nil {
-			return err
-		}
-		if ref, ok := value["authorityRef"].(string); !ok || !validDesiredStateIdentifier(ref) || asMap(value["sanPolicy"]) == nil {
-			return blocked("INVALID_VALUE", "Certificate profile is invalid", "command.entity")
-		}
-		if err := validOptionalString(value, "displayName", 1, 0); err != nil {
-			return err
-		}
-		if err := validOptionalInteger(value, "keySize", 2048, "command.entity.keySize"); err != nil {
-			return err
-		}
-		if err := validOptionalInteger(value, "validityDays", 1, "command.entity.validityDays"); err != nil {
-			return err
-		}
-		if algorithm, present := value["keyAlgorithm"]; present && algorithm != "RSA" && algorithm != "EC" {
-			return blocked("INVALID_VALUE", "Certificate profile key algorithm is invalid", "command.entity.keyAlgorithm")
-		}
-		if raw, present := value["usages"]; present {
-			if err := validPKIEnumList(raw, "command.entity.usages", []string{"serverAuth", "clientAuth"}, maxManagedEntities); err != nil {
-				return err
-			}
-		}
-		if err := validClosedBoolMap(asMap(value["sanPolicy"]), []string{"includeHostDns", "includeHostIp", "includeEndpointFqdns", "includeEndpointWildcard", "includeEndpointVip"}, "command.entity.sanPolicy"); err != nil {
-			return err
-		}
-		if raw, present := value["subject"]; present {
-			subject := asMap(raw)
-			if subject == nil {
-				return blocked("INVALID_VALUE", "Certificate subject is invalid", "command.entity.subject")
-			}
-			return validSubjectDN(subject)
-		}
-		return nil
-	}
-	if operation == "CreateTLSProfile" || operation == "UpdateTLSProfile" {
-		if err := validPKIObjectKeys(value, []string{"certificateProfileRef", "scope", "storePasswordSecretRef"}, "command.entity"); err != nil {
-			return err
-		}
-		if ref, ok := value["certificateProfileRef"].(string); !ok || !validDesiredStateIdentifier(ref) {
-			return blocked("INVALID_VALUE", "TLS profile certificate reference is invalid", "command.entity.certificateProfileRef")
-		}
-		if ref, ok := value["storePasswordSecretRef"].(string); !ok || !runtimeRefPattern.MatchString(ref) {
-			return blocked("SECRET_REFERENCE_INVALID", "TLS profile requires an opaque runtime secret reference", "command.entity.storePasswordSecretRef")
-		}
-		if err := validOptionalScope(value, "scope", "command.entity.scope"); err != nil {
-			return err
-		}
-		return nil
-	}
-	if operation != "CreateCertificateScope" && operation != "UpdateCertificateScope" {
-		return blocked("INVALID_VALUE", "PKI operation is unsupported", "command.operation")
-	}
-	if err := validPKIObjectKeys(value, []string{"displayName", "profile", "scope", "sources"}, "command.entity"); err != nil {
-		return err
-	}
-	if ref, ok := value["profile"].(string); !ok || !validDesiredStateIdentifier(ref) || asMap(value["sources"]) == nil {
-		return blocked("INVALID_VALUE", "Certificate scope is invalid", "command.entity")
-	}
-	if err := validOptionalString(value, "displayName", 1, 0); err != nil {
-		return err
-	}
-	if err := validOptionalScope(value, "scope", "command.entity.scope"); err != nil {
-		return err
-	}
-	return validScopeSources(asMap(value["sources"]))
-}
-
-func validPKIObjectKeys(value map[string]any, keys []string, field string) error {
-	allowed := map[string]bool{}
-	for _, key := range keys {
-		allowed[key] = true
-	}
-	for key := range value {
-		if !allowed[key] && !extensionKeyPattern.MatchString(key) {
-			return blocked("INVALID_VALUE", "PKI entity contains an unknown field", field)
-		}
-	}
-	return nil
-}
-
-func validOptionalString(value map[string]any, key string, min, max int) error {
-	raw, present := value[key]
-	if !present {
-		return nil
-	}
-	text, ok := raw.(string)
-	if !ok || (min > 0 && len(text) < min) || (max > 0 && len(text) > max) {
-		return blocked("INVALID_VALUE", "PKI string field is invalid", "command.entity."+key)
-	}
-	return nil
-}
-
-func validOptionalInteger(value map[string]any, key string, min int, field string) error {
-	raw, present := value[key]
-	if !present {
-		return nil
-	}
-	number, ok := pkiInteger(raw)
-	if !ok || number < min {
-		return blocked("INVALID_VALUE", "PKI integer field is invalid", field)
-	}
-	return nil
-}
-
-func pkiInteger(value any) (int, bool) {
-	if number, ok := yamlInteger(value); ok {
-		return number, true
-	}
-	var number float64
-	switch typed := value.(type) {
-	case float64:
-		number = typed
-	case json.Number:
-		parsed, err := strconv.ParseFloat(string(typed), 64)
-		if err != nil {
-			return 0, false
-		}
-		number = parsed
-	default:
-		return 0, false
-	}
-	// A decoded float64 has at most 53 exact integer bits. Do not round a JSON
-	// number or convert an out-of-range value to the platform int type.
-	if math.IsNaN(number) || math.IsInf(number, 0) || math.Trunc(number) != number || number < float64(-maxIntValue()) || number > float64(maxIntValue()) || number > 1<<53 || number < -(1<<53) {
-		return 0, false
-	}
-	return int(number), true
-}
-
-func maxIntValue() int {
-	return int(^uint(0) >> 1)
-}
-
-func validDesiredStateIdentifier(value string) bool {
-	return len(value) >= 1 && len(value) <= 128 && desiredStateIdentifierPattern.MatchString(value)
-}
-
-func validOptionalScope(value map[string]any, key, field string) error {
-	raw, present := value[key]
-	if !present {
-		return nil
-	}
-	if raw != "HOST" && raw != "MEMBER" && raw != "DEPLOYMENT" {
-		return blocked("INVALID_VALUE", "PKI scope is invalid", field)
-	}
-	return nil
-}
-
-func validClosedBoolMap(value map[string]any, keys []string, field string) error {
-	if value == nil {
-		return blocked("INVALID_VALUE", "PKI object is invalid", field)
-	}
-	allowed := map[string]bool{}
-	for _, key := range keys {
-		allowed[key] = true
-	}
-	for key, raw := range value {
-		if !allowed[key] {
-			return blocked("INVALID_VALUE", "PKI object contains an unknown field", field)
-		}
-		if _, ok := raw.(bool); !ok {
-			return blocked("INVALID_VALUE", "PKI policy value is invalid", field)
-		}
-	}
-	return nil
-}
-
-func validSubjectDN(value map[string]any) error {
-	if value == nil {
-		return nil
-	}
-	limits := map[string]int{"C": 2, "ST": 128, "L": 128, "O": 128, "OU": 128}
-	for key, raw := range value {
-		limit, allowed := limits[key]
-		text, ok := raw.(string)
-		if !allowed || !ok || len(text) > limit {
-			return blocked("INVALID_VALUE", "Certificate subject is invalid", "command.entity.subject")
-		}
-	}
-	return nil
-}
-
-func validPKIEnumList(value any, field string, allowedValues []string, limit int) error {
-	values := asSlice(value)
-	if values == nil || len(values) > limit {
-		return blocked("INVALID_VALUE", "PKI list is invalid", field)
-	}
-	allowed := map[string]bool{}
-	for _, item := range allowedValues {
-		allowed[item] = true
-	}
-	seen := map[string]bool{}
-	for _, raw := range values {
-		item, ok := raw.(string)
-		if !ok || !allowed[item] || seen[item] {
-			return blocked("INVALID_VALUE", "PKI list item is invalid", field)
-		}
-		seen[item] = true
-	}
-	return nil
-}
-
-func validScopeSources(value map[string]any) error {
-	if err := validPKIObjectKeys(value, []string{"serviceDeployments", "hosts", "members", "explicitDnsNames", "explicitIpAddresses"}, "command.entity.sources"); err != nil {
-		return err
-	}
-	if raw, present := value["serviceDeployments"]; present {
-		if err := validIdentifierList(raw, "command.entity.sources.serviceDeployments", maxManagedEntities); err != nil {
-			return err
-		}
-	}
-	if raw, present := value["hosts"]; present {
-		if err := validIdentifierList(raw, "command.entity.sources.hosts", maxManagedEntities); err != nil {
-			return err
-		}
-	}
-	if raw, present := value["members"]; present {
-		if err := validMemberReferenceList(raw); err != nil {
-			return err
-		}
-	}
-	if raw, present := value["explicitDnsNames"]; present {
-		if err := validStringList(raw, "command.entity.sources.explicitDnsNames", false); err != nil {
-			return err
-		}
-	}
-	if raw, present := value["explicitIpAddresses"]; present {
-		return validStringList(raw, "command.entity.sources.explicitIpAddresses", true)
-	}
-	return nil
-}
-
-func validIdentifierList(value any, field string, limit int) error {
-	values := asSlice(value)
-	if values == nil || len(values) > limit {
-		return blocked("INVALID_VALUE", "PKI identifier list is invalid", field)
-	}
-	seen := map[string]bool{}
-	for _, raw := range values {
-		item, ok := raw.(string)
-		if !ok || !validDesiredStateIdentifier(item) || seen[item] {
-			return blocked("INVALID_VALUE", "PKI identifier list item is invalid", field)
-		}
-		seen[item] = true
-	}
-	return nil
-}
-
-func validMemberReferenceList(value any) error {
-	values := asSlice(value)
-	if values == nil || len(values) > maxManagedPlacements {
-		return blocked("INVALID_VALUE", "PKI member list is invalid", "command.entity.sources.members")
-	}
-	seen := map[string]bool{}
-	for _, raw := range values {
-		member := asMap(raw)
-		deploymentID, deploymentOK := member["deploymentId"].(string)
-		memberID, memberOK := member["memberId"].(string)
-		key := deploymentID + "\x00" + memberID
-		if len(member) != 2 || !deploymentOK || !memberOK || !validDesiredStateIdentifier(deploymentID) || !validDesiredStateIdentifier(memberID) || seen[key] {
-			return blocked("INVALID_VALUE", "PKI member reference is invalid", "command.entity.sources.members")
-		}
-		seen[key] = true
-	}
-	return nil
-}
-
-func validStringList(value any, field string, requireIP bool) error {
-	values := asSlice(value)
-	if values == nil || len(values) > maxManagedEntities {
-		return blocked("INVALID_VALUE", "PKI string list is invalid", field)
-	}
-	seen := map[string]bool{}
-	for _, raw := range values {
-		text, ok := raw.(string)
-		if !ok || text == "" || seen[text] {
-			return blocked("INVALID_VALUE", "PKI string list item is invalid", field)
-		}
-		if requireIP {
-			if _, err := netip.ParseAddr(text); err != nil {
-				return blocked("INVALID_VALUE", "Explicit IP address is invalid", field)
-			}
-		}
-		seen[text] = true
-	}
-	return nil
-}
-
-@@END
-@@PORTABLE {"path":"internal/installer/plan_store.go","mode":420,"size":2085,"sha256":"735c14af233a6c253a95d7ba5fc919df046f9ddc84365e31135b4965b00269c9","index":0,"count":1,"encoding":"utf-8","payloadBytes":2085}
-package installer
-
-import (
-	"crypto/rand"
-	"encoding/hex"
-	"sync"
-	"time"
-)
-
-type storedDocument struct {
-	LogicalPath string
-	Before      []byte
-	After       []byte
-	Existed     bool
-}
-
-type storedPlan struct {
-	Created     time.Time
-	ProjectRoot string
-	Public      EditPlan
-	LocalOnly   bool
-	Documents   []storedDocument
-}
-
-type PlanStore interface {
-	Put(plan storedPlan) (string, error)
-	Get(id string) (storedPlan, bool)
-	Discard(id string) bool
-}
-
-type MemoryPlanStore struct {
-	mu    sync.Mutex
-	ttl   time.Duration
-	now   func() time.Time
-	plans map[string]storedPlan
-}
-
-func NewMemoryPlanStore(ttl time.Duration) *MemoryPlanStore {
-	return &MemoryPlanStore{ttl: ttl, now: time.Now, plans: make(map[string]storedPlan)}
-}
-
-func cloneStoredPlan(plan storedPlan) storedPlan {
-	copyPlan := plan
-	copyPlan.Public.AffectedDocuments = append([]DocumentChange(nil), plan.Public.AffectedDocuments...)
-	copyPlan.Public.SemanticChanges = append([]SemanticChange(nil), plan.Public.SemanticChanges...)
-	copyPlan.Documents = make([]storedDocument, len(plan.Documents))
-	for index, document := range plan.Documents {
-		copyPlan.Documents[index] = document
-		copyPlan.Documents[index].Before = append([]byte(nil), document.Before...)
-		copyPlan.Documents[index].After = append([]byte(nil), document.After...)
-	}
-	return copyPlan
-}
-
-func (s *MemoryPlanStore) Put(plan storedPlan) (string, error) {
-	identifier := make([]byte, 16)
-	if _, err := rand.Read(identifier); err != nil {
-		return "", err
-	}
-	id := hex.EncodeToString(identifier)
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.plans[id] = cloneStoredPlan(plan)
-	return id, nil
-}
-
-func (s *MemoryPlanStore) Get(id string) (storedPlan, bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	plan, found := s.plans[id]
-	if !found {
-		return storedPlan{}, false
-	}
-	if s.ttl > 0 && s.now().Sub(plan.Created) > s.ttl {
-		delete(s.plans, id)
-		return storedPlan{}, false
-	}
-	return cloneStoredPlan(plan), true
-}
-
-func (s *MemoryPlanStore) Discard(id string) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	_, found := s.plans[id]
-	delete(s.plans, id)
-	return found
-}
-
-@@END
-@@PORTABLE {"path":"internal/installer/process_lock_unix.go","mode":420,"size":423,"sha256":"f8dd6a1c96e2a162d204d8dec28acfb30c2d4cdb9c0c77e256bb77869e4d1887","index":0,"count":1,"encoding":"utf-8","payloadBytes":423}
-//go:build !windows
-
-package installer
-
-import (
-	"errors"
-	"os"
-
-	"golang.org/x/sys/unix"
-)
-
-func tryProcessFileLock(file *os.File) (func() error, bool, error) {
-	err := unix.Flock(int(file.Fd()), unix.LOCK_EX|unix.LOCK_NB)
-	if errors.Is(err, unix.EWOULDBLOCK) {
-		return nil, false, nil
-	}
-	if err != nil {
-		return nil, false, err
-	}
-	return func() error { return unix.Flock(int(file.Fd()), unix.LOCK_UN) }, true, nil
-}
-
-@@END
-@@PORTABLE {"path":"internal/installer/process_lock_windows.go","mode":420,"size":582,"sha256":"f2a34e4d2112c3f57126d0fd88c08e8b33af5fdc793a8aff8cdd670f6e075d40","index":0,"count":1,"encoding":"utf-8","payloadBytes":582}
-//go:build windows
-
-package installer
-
-import (
-	"errors"
-	"os"
-
-	"golang.org/x/sys/windows"
-)
-
-func tryProcessFileLock(file *os.File) (func() error, bool, error) {
-	overlapped := &windows.Overlapped{}
-	err := windows.LockFileEx(windows.Handle(file.Fd()), windows.LOCKFILE_EXCLUSIVE_LOCK|windows.LOCKFILE_FAIL_IMMEDIATELY, 0, 1, 0, overlapped)
-	if errors.Is(err, windows.ERROR_LOCK_VIOLATION) {
-		return nil, false, nil
-	}
-	if err != nil {
-		return nil, false, err
-	}
-	return func() error { return windows.UnlockFileEx(windows.Handle(file.Fd()), 0, 1, 0, overlapped) }, true, nil
 }
 
 @@END
