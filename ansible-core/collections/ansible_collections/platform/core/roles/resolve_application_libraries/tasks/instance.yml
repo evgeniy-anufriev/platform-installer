@@ -21,6 +21,72 @@
   no_log: true
   become: false
 
+- name: Reset resources and topic context for this placement
+  ansible.builtin.set_fact:
+    application_topics: {}
+    application_databases: {}
+    _application_connections: {}
+    _application_resources: {}
+    _application_resource_defaults: >-
+      {{ _library_package.platform_library_definition.resource_defaults | default({}) |
+         combine(application_job.deployment.resource_defaults | default({}), recursive=true, list_merge='replace') }}
+    _application_topic_bindings: >-
+      {{ (application_job.commonDefaults.topicBindings | default({}) if application_job.slot.inherit_defaults | default(true) else {}) |
+         combine(application_job.application.definition.defaults.topicBindings | default({}), recursive=true, list_merge='replace') |
+         combine(application_job.slot.overrides.topicBindings | default({}), recursive=true, list_merge='replace') |
+         combine(application_job.commonOverrides.topicBindings | default({}) if application_job.slot.inherit_defaults | default(true) else {}, recursive=true, list_merge='replace') |
+         combine(application_job.instance.overrides.topicBindings | default({}), recursive=true, list_merge='replace') |
+         combine(application_job.hostOverride.topicBindings | default({}), recursive=true, list_merge='replace') }}
+  no_log: true
+  become: false
+
+- name: Require selected keys to exist in library connection declarations
+  ansible.builtin.assert:
+    that:
+      - application_job.application.definition.connections | difference(application_job.library.definition.connections | default({}) | list) | length == 0
+    fail_msg: "Unknown library connection: {{ application_job.libraryId }}/{{ application_job.slotId }}"
+    quiet: true
+  when: application_job.application.definition.connections | default({}) is not mapping
+  become: false
+
+- name: Resolve selected library connections or retain legacy declarations
+  ansible.builtin.set_fact:
+    _application_connections: >-
+      {{ _application_connections | combine({item:
+         application_job.application.definition.connections[item] if application_job.application.definition.connections is mapping else
+         application_job.library.definition.connections[item]}) }}
+  loop: "{{ application_job.application.definition.connections | default({}) | list }}"
+  no_log: true
+  become: false
+
+- name: Merge selected resource parameters with library defaults
+  ansible.builtin.set_fact:
+    _application_resources: >-
+      {{ _application_resources | combine({item.key: item.value | combine({'parameters':
+         ((_application_resource_defaults.kafka.topics[item.key] | default({})) if item.value.kind == 'kafka.topic' else
+          (_application_resource_defaults.postgresql.databases[item.key] | default({})) if item.value.kind == 'postgresql.database' else
+          (_application_resource_defaults.clickhouse.databases[item.key] | default({})) if item.value.kind == 'clickhouse.database' else {}) |
+         combine(item.value.parameters, recursive=true, list_merge='replace')})}) }}
+  loop: "{{ application_job.deployment.resources | default({}) | dict2items }}"
+  no_log: true
+  become: false
+
+- name: Expose selected resource keys before expanding parameters and environment
+  ansible.builtin.include_tasks: resource_context.yml
+  loop: "{{ _application_connections | dict2items }}"
+  loop_control:
+    loop_var: resource_connection
+    label: "{{ resource_connection.key }}"
+  when: resource_connection.value.library_binding | default('') in application_job.deployment.bindings
+
+- name: Bind legacy topic roles after direct keys
+  ansible.builtin.include_tasks: topic_roles.yml
+  loop: "{{ _application_topic_bindings | dict2items }}"
+  loop_control:
+    loop_var: topic_connection
+    label: "{{ topic_connection.key }}"
+  when: topic_connection.value is mapping
+
 - name: Seed parameter context before expanding dependent application settings
   ansible.builtin.set_fact:
     application_parameters: >-
@@ -71,14 +137,13 @@
         'libraryConnections': _library_package.platform_library_definition.connections | default({}),
         'bindings': application_job.deployment.bindings | default({}),
         'vaultRef': application_job.deployment.vault_ref | default({}),
-        'resources': application_job.deployment.resources | default({}),
-        'resourceDefaults': _library_package.platform_library_definition.resource_defaults | default({}) |
-          combine(application_job.deployment.resource_defaults | default({}), recursive=true, list_merge='replace'),
+        'resources': _application_resources,
+        'resourceDefaults': _application_resource_defaults,
         'sharedSecrets': _library_package.platform_library_definition.shared_secrets | default({}) |
           combine(application_job.deployment.shared_secrets | default({}), recursive=true, list_merge='replace'),
         'connectionDefaults': _library_package.platform_library_definition.connection_defaults | default({}) |
           combine(application_job.deployment.connection_defaults | default({}), recursive=true, list_merge='replace'),
-        'connections': _application_package.platform_application_definition.connections | default({}),
+        'connections': _application_connections,
         'identityNames': _application_package.platform_application_definition.identity_environment | default([]),
         'packageIdentity': {'application': application_job.application.digest, 'library': application_job.library.digest},
         'commonDefaults': application_job.commonDefaults | combine(application_job.commonOverrides, recursive=true, list_merge='replace'),

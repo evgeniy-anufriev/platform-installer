@@ -33,6 +33,161 @@ function setup() {
   return { user: userEvent.setup(), save, dirty };
 }
 describe("library resource table", () => {
+  it("selects PostgreSQL defaults and resets only the physical name", async () => {
+    const save = vi.fn(async () => true),
+      user = userEvent.setup();
+    const props = {
+      resources: {},
+      bindings: { pg: { deploymentRef: "postgres" } },
+      deployments: { postgres: { serviceType: "postgresql" } },
+      databaseDefaults: { "ef-store": { name: "ef-store" } },
+      disabled: false,
+      onSave: save,
+      onDirtyChange: vi.fn(),
+    };
+    const view = render(<ApplicationLibraryResources {...props} />);
+    await user.click(
+      screen.getByRole("button", { name: "Добавить из defaults · ef-store" }),
+    );
+    await user.click(screen.getByRole("button", { name: "В черновик" }));
+    expect(save).toHaveBeenLastCalledWith({
+      "ef-store": {
+        kind: "postgresql.database",
+        binding: "pg",
+        mode: "managed",
+        parameters: {},
+      },
+    });
+    view.rerender(
+      <ApplicationLibraryResources
+        {...props}
+        resources={{
+          "ef-store": {
+            kind: "postgresql.database",
+            binding: "pg",
+            parameters: { name: "custom-db" },
+          },
+        }}
+        resolvedResources={{
+          "ef-store": { parameters: { name: "custom-db" } },
+        }}
+      />,
+    );
+    expect(screen.getByText("custom-db")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Настроить" }));
+    await user.clear(screen.getByLabelText("Имя БД / схемы"));
+    await user.click(screen.getByRole("button", { name: "В черновик" }));
+    expect(save).toHaveBeenLastCalledWith({
+      "ef-store": {
+        kind: "postgresql.database",
+        binding: "pg",
+        mode: "managed",
+        parameters: {},
+      },
+    });
+  });
+  it("selects ClickHouse defaults and resets only the physical name", async () => {
+    const save = vi.fn(async () => true),
+      user = userEvent.setup();
+    const props = {
+      resources: {},
+      bindings: { pg: { deploymentRef: "postgres" } },
+      deployments: { postgres: { serviceType: "clickhouse" } },
+      clickhouseDefaults: { history: { name: "history" } },
+      disabled: false,
+      onSave: save,
+      onDirtyChange: vi.fn(),
+    };
+    const view = render(<ApplicationLibraryResources {...props} />);
+    await user.click(
+      screen.getByRole("button", { name: "Добавить из defaults · history" }),
+    );
+    await user.click(screen.getByRole("button", { name: "В черновик" }));
+    expect(save).toHaveBeenLastCalledWith({
+      history: {
+        kind: "clickhouse.database",
+        binding: "pg",
+        mode: "managed",
+        parameters: {},
+      },
+    });
+    view.rerender(
+      <ApplicationLibraryResources
+        {...props}
+        resources={{
+          history: {
+            kind: "clickhouse.database",
+            binding: "pg",
+            parameters: { name: "custom-db" },
+          },
+        }}
+        resolvedResources={{
+          history: { parameters: { name: "custom-db" } },
+        }}
+      />,
+    );
+    expect(screen.getByText("custom-db")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Настроить" }));
+    await user.clear(screen.getByLabelText("Имя БД / схемы"));
+    await user.click(screen.getByRole("button", { name: "В черновик" }));
+    expect(save).toHaveBeenLastCalledWith({
+      history: {
+        kind: "clickhouse.database",
+        binding: "pg",
+        mode: "managed",
+        parameters: {},
+      },
+    });
+  });
+  it("selects a default ID without copying inherited parameters and clears a name override", async () => {
+    const save = vi.fn(async () => true),
+      user = userEvent.setup();
+    const props = {
+      resources: {},
+      bindings: { messaging: { deploymentRef: "kafka" } },
+      deployments: { kafka: { serviceType: "kafka" } },
+      topicDefaults: { events: { name: "inherited.events" } },
+      disabled: false,
+      onSave: save,
+      onDirtyChange: vi.fn(),
+    };
+    const view = render(<ApplicationLibraryResources {...props} />);
+    await user.click(
+      screen.getByRole("button", { name: "Добавить из defaults · events" }),
+    );
+    await user.click(screen.getByRole("button", { name: "В черновик" }));
+    expect(save).toHaveBeenLastCalledWith({
+      events: {
+        kind: "kafka.topic",
+        binding: "messaging",
+        mode: "managed",
+        parameters: { config: {} },
+      },
+    });
+    view.rerender(
+      <ApplicationLibraryResources
+        {...props}
+        resources={{
+          events: {
+            kind: "kafka.topic",
+            binding: "messaging",
+            parameters: { name: "override.events" },
+          },
+        }}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "Настроить" }));
+    await user.clear(screen.getByLabelText("Имя топика"));
+    await user.click(screen.getByRole("button", { name: "В черновик" }));
+    expect(save).toHaveBeenLastCalledWith({
+      events: {
+        kind: "kafka.topic",
+        binding: "messaging",
+        mode: "managed",
+        parameters: { config: {} },
+      },
+    });
+  });
   it("stages topic overrides without persisting automatic values", async () => {
     const save = vi.fn(async () => true),
       user = userEvent.setup();

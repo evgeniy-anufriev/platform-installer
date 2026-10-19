@@ -1,18 +1,9 @@
 platform_application_definition:
-    connections:
-        clickhouse:
-            library_binding: analytics
-            protocol: https
-        kafka:
-            library_binding: messaging
-            protocol: tcp
-        redis:
-            library_binding: cache
-            protocol: tcp
-        vault:
-            library_binding: secrets
-            protocol: https
+    name: evo-manager
+    version: 1.0.0
     defaults:
+        image: evoscada-docker.artifacts.tn.tngrp.ru/evo-manager:3.10.21-eedea228-redos
+        restart: unless-stopped
         accounts:
             clickhouse:
                 credentials:
@@ -24,9 +15,9 @@ platform_application_definition:
                         source:
                             kind: literal
                             value: '{{ application_instance_id | replace(''-'', ''_'') }}'
-                databaseRef: analytics
+                databaseRef: history
                 grants:
-                    - databaseRef: analytics
+                    - databaseRef: history
                       privileges:
                         - SELECT
                         - INSERT
@@ -59,8 +50,8 @@ platform_application_definition:
             - evo-manager.jar
         environment:
             ALARM_SERVICE_API_TYPE: mock
-            DATA_MANAGER_ROOT_URL: '{{ application_parameters.source_variables.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
-            DB_CONNECTION_STRING: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
+            DATA_MANAGER_ROOT_URL: '{{ application_parameters.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
+            DB_CONNECTION_STRING: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_databases.clickhouse.history.name }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
             DB_TYPE: clickhouse
             tn-scada.clickhouse.health.enabled: false
             EVO_MANAGER_HISTORY_SERVICE_MOCK: true
@@ -71,26 +62,23 @@ platform_application_definition:
             LOGGER_OUTPUT_PATTERN_CONFIG: '''%d{ISO8601} [%X{requestId}] [%-15.15t] %highlight(%-5level) %yellow(%30.30C{1}) %msg%n%throwable'''
             LOGGER_ROOT_LEVEL: INFO
             PRESSURES_CSV: /usr/local/app/imitator/data/pressures.csv
-            REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
+            REDIS_SENTINEL_MASTER: '{{ application_parameters.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
             SPRING_KAFKA_APPLICATION_ID: evo-manager-{{ application_instance_id }}
             SPRING_KAFKA_CLIENT_ID: '{{ application_instance_id }}-$${SERVER_ID}'
             SPRING_KAFKA_LISTENER_GROUP_ID: evo-manager-{{ application_instance_id }}
             SPRING_MAIN_WEB_APPLICATION_TYPE: NONE
-            TN_SCADA_DATA_MANAGER_URL_ROOT: '{{ application_parameters.source_variables.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
-            TN_SCADA_DATASOURCE_URL: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
+            TN_SCADA_DATA_MANAGER_URL_ROOT: '{{ application_parameters.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
+            TN_SCADA_DATASOURCE_URL: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_databases.clickhouse.history.name }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
             TN_SCADA_METADATA_LOAD_PROJECTS: TNSVHYDRO
             TN_SCADA_METADATA_TARGET_PROJECT: TNSVHYDRO
-            TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
+            TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
             kafka.consumer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-consumer'
             kafka.producer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-producer'
             server.max-http-request-header-size: 100MB
-        image: evoscada-docker.artifacts.tn.tngrp.ru/evo-manager:3.10.21-eedea228-redos
         config_files: []
         parameters:
-            database_name: ""
-            source_variables:
-                DATA_MANAGER_URL_ROOT: ""
-                REDIS_SENTINEL_MASTER: ""
+            DATA_MANAGER_URL_ROOT: ""
+            REDIS_SENTINEL_MASTER: ""
         ports: {}
         provisioner:
             approle:
@@ -173,7 +161,4 @@ platform_application_definition:
             delay: 2
             mode: container
             retries: 30
-        restart: unless-stopped
-    identity_environment: []
-    name: evo-manager
-    version: 1.0.0
+    connections: [clickhouse, kafka, redis, vault]

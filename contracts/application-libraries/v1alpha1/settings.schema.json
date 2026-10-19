@@ -447,10 +447,17 @@
         "topicBindings": {
           "type": "object",
           "propertyNames": {"pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$"},
-          "additionalProperties": {
-            "type": "array", "uniqueItems": true,
-            "items": {"type": "string", "pattern": "^[a-z][A-Za-z0-9_-]*$"}
-          }
+          "additionalProperties": {"oneOf": [
+            {
+              "type": "array", "uniqueItems": true,
+              "items": {"type": "string", "pattern": "^[a-z][A-Za-z0-9_-]*$"}
+            },
+            {
+              "type": "object", "maxProperties": 128,
+              "propertyNames": {"pattern": "^[a-z][A-Za-z0-9_-]*$", "maxLength": 128},
+              "additionalProperties": {"type": "string", "pattern": "^(?:[a-z][A-Za-z0-9_-]*)?$", "maxLength": 128}
+            }
+          ]}
         },
         "config_files": {
           "items": {

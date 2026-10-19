@@ -9,6 +9,10 @@ export function ApplicationLibraryResources({
   onSave,
   onDirtyChange,
   resolvedTopics = {},
+  topicDefaults = {},
+  databaseDefaults = {},
+  clickhouseDefaults = {},
+  resolvedResources = {},
 }: {
   resources: ObjectValue;
   bindings: ObjectValue;
@@ -17,6 +21,10 @@ export function ApplicationLibraryResources({
   onSave: (value: ObjectValue) => Promise<boolean>;
   onDirtyChange: (value: boolean) => void;
   resolvedTopics?: ObjectValue;
+  topicDefaults?: ObjectValue;
+  databaseDefaults?: ObjectValue;
+  clickhouseDefaults?: ObjectValue;
+  resolvedResources?: ObjectValue;
 }) {
   const [edit, setEdit] = useState<string | null>(null);
   const [name, setName] = useState("");
@@ -36,6 +44,12 @@ export function ApplicationLibraryResources({
           ?.serviceType === type.split(".")[0],
     );
   const availableBindings = compatibleBindings(kind);
+  const defaultsByKind: Record<string, ObjectValue> = {
+    "kafka.topic": topicDefaults,
+    "postgresql.database": databaseDefaults,
+    "clickhouse.database": clickhouseDefaults,
+  };
+  const hasDefault = Object.hasOwn(defaultsByKind[kind] ?? {}, edit ?? "");
   const allIds = Object.keys(resources);
   const currentPage = Math.min(
     page,
@@ -98,10 +112,23 @@ export function ApplicationLibraryResources({
           </button>
         )}
       </div>
+      {Object.entries(defaultsByKind).flatMap(([resourceKind, defaults]) =>
+        Object.keys(defaults)
+          .filter((id) => !Object.hasOwn(resources, id))
+          .map((id) => (
+            <button
+              key={resourceKind + id}
+              disabled={disabled}
+              onClick={() => open(id, resourceKind)}
+            >
+              Добавить из defaults · {id}
+            </button>
+          )),
+      )}
       <p className="muted">
         Общие для приложений библиотеки. Удаление записи и изменение имени не
-        удаляют и не переименовывают установленный ресурс. Ссылки проверяет Core при
-        проверке проекта.
+        удаляют и не переименовывают установленный ресурс. Ссылки проверяет Core
+        при проверке проекта.
       </p>
       <table>
         <thead>
@@ -137,7 +164,14 @@ export function ApplicationLibraryResources({
                         )[String(row.kind)] ?? String(row.kind)}
                       </td>
                       <td>
-                        {String(objectValue(row.parameters).name ?? "—")}
+                        {String(
+                          objectValue(resolvedTopics[key]).name ??
+                            objectValue(
+                              objectValue(resolvedResources[key]).parameters,
+                            ).name ??
+                            objectValue(row.parameters).name ??
+                            "—",
+                        )}
                         {row.kind === "kafka.topic" && (
                           <small>
                             {resolvedTopics[key]
@@ -205,7 +239,9 @@ export function ApplicationLibraryResources({
         </div>
       )}
       {!Object.keys(resources).length && (
-        <p>Ресурсы не заданы. Добавьте ресурс и выберите подключение библиотеки.</p>
+        <p>
+          Ресурсы не заданы. Добавьте ресурс и выберите подключение библиотеки.
+        </p>
       )}
       {edit !== null && (
         <form
@@ -232,9 +268,12 @@ export function ApplicationLibraryResources({
             }
             const previous = objectValue(resources[edit]);
             let parameters: ObjectValue = {
-              ...(previous.kind === kind ? objectValue(previous.parameters) : {}),
+              ...(previous.kind === kind
+                ? objectValue(previous.parameters)
+                : {}),
               name,
             };
+            if (!name && hasDefault) delete parameters.name;
             if (kind === "kafka.topic") {
               const config: ObjectValue = {};
               for (const line of topicConfig
@@ -254,7 +293,7 @@ export function ApplicationLibraryResources({
               }
               if (minISR) config["min.insync.replicas"] = Number(minISR);
               parameters = {
-                name,
+                ...(name ? { name } : {}),
                 config,
                 ...(partitions ? { partitions: Number(partitions) } : {}),
                 ...(replicationFactor
@@ -327,8 +366,9 @@ export function ApplicationLibraryResources({
           <label>
             {kind === "kafka.topic" ? "Имя топика" : "Имя БД / схемы"}
             <input
-              required
+              required={!hasDefault}
               value={name}
+              placeholder={hasDefault ? "Из defaults библиотеки" : ""}
               onChange={(e) => setName(e.target.value)}
             />
           </label>

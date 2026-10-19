@@ -1,6 +1,10 @@
 platform_application_definition:
-    connections: {}
+    name: hmi-frontend-svg-editor
+    version: 1.0.0
     defaults:
+        image: evoscada-docker.artifacts.tn.tngrp.ru/hmi-frontend-svg-editor:0.0.1-cf3ed45c
+        user: 1000:1000
+        restart: always
         command:
             - /app/docker-entrypoint.sh
         environment:
@@ -13,18 +17,15 @@ platform_application_definition:
             GRANT_ACCESS_AUDIT: grant-access-audit
             HMI_BACK: hmi-backend
             HMI_WS: hmi-backend
-            NGINX_URL: '{{ application_parameters.source_variables.PUBLIC_HOST | default(undef(hint=''Configure SDKU PUBLIC_HOST''), true) }}'
+            NGINX_URL: ""
             TRENDS_SERVICE: hmi-frontend-trends
             USER_ACTION_ATTEMPTS: 1
             USER_PREFERENCES_SERVICE: user-preferences
             VTOR_SERVICE: sdku-vtor-ui
-        image: evoscada-docker.artifacts.tn.tngrp.ru/hmi-frontend-svg-editor:0.0.1-cf3ed45c
         parameters:
             mount_sources:
                 mount-1: ""
                 mount-2: ""
-            source_variables:
-                PUBLIC_HOST: ""
         ports:
             port-1:
                 container: 10211
@@ -33,8 +34,4 @@ platform_application_definition:
             delay: 2
             mode: container
             retries: 30
-        restart: always
-        user: 1000:1000
-    identity_environment: []
-    name: hmi-frontend-svg-editor
-    version: 1.0.0
+    connections: []

@@ -51,8 +51,8 @@ def normalize_clickhouse_grants(values, databases, provider_id):
     return [dict(database=key[0], table=key[1], privileges=sorted(value)) for key, value in sorted(merged.items())]
 
 
-def identifier(value, username=False):
-    if (not isinstance(value, str) or not (USER if username else NAME).fullmatch(value)
+def identifier(value, username=False, database=False):
+    if (not isinstance(value, str) or not (USER if username or database else NAME).fullmatch(value)
             or value.startswith('pg_') or value in {'postgres', 'template0', 'template1', 'public'}):
         raise ValueError('APPLICATION_PROVIDER_IDENTIFIER_INVALID')
     return value
@@ -196,7 +196,7 @@ def project_providers(rows, snapshot, configuration, desired, catalog):
                     continue
                 if set(resource['parameters']) != {'name'}:
                     raise ValueError('APPLICATION_PROVIDER_RESOURCE_INVALID')
-                name, mode = identifier(resource['parameters']['name']), resource.get('mode', 'managed')
+                name, mode = identifier(resource['parameters']['name'], database=resource['kind'] == 'postgresql.database'), resource.get('mode', 'managed')
                 value = dict(resourceId=resource_id, name=name, mode=mode,
                              marker=marker(project_id, ref, library_id, resource['kind'], resource_id))
                 if resource['kind'] in {'postgresql.database', 'clickhouse.database'}:

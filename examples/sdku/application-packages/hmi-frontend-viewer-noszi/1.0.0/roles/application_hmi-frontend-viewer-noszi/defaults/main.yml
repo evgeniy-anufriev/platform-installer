@@ -1,6 +1,10 @@
 platform_application_definition:
-    connections: {}
+    name: hmi-frontend-viewer-noszi
+    version: 1.0.0
     defaults:
+        image: evoscada-docker.artifacts.tn.tngrp.ru/hmi-frontend-viewer:0.0.0-89658527
+        user: 1000:1000
+        restart: always
         command:
             - '{{ sdku_start_commands[''hmi-frontend-viewer-noszi''] | mandatory }}'
         environment:
@@ -14,12 +18,10 @@ platform_application_definition:
             NGINX_URL: ""
             TRENDS_URL: https://hmi-frontend-trends.tnsv.tn.tngrp.ru
             VTOR_URL: https://sdku-vtor-ui.tnsv.tn.tngrp.ru
-        image: evoscada-docker.artifacts.tn.tngrp.ru/hmi-frontend-viewer:0.0.0-89658527
         parameters:
             mount_sources:
                 mount-1: ""
                 mount-2: ""
-            source_variables: {}
         ports:
             port-1:
                 container: 10211
@@ -28,8 +30,4 @@ platform_application_definition:
             delay: 2
             mode: container
             retries: 30
-        restart: always
-        user: 1000:1000
-    identity_environment: []
-    name: hmi-frontend-viewer-noszi
-    version: 1.0.0
+    connections: []

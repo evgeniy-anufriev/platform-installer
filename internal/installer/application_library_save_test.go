@@ -8,6 +8,39 @@ import (
 	"testing"
 )
 
+func TestNamedTopicRolesSaveIncompleteAndResetWithoutCore(t *testing.T) {
+	root, b, revision := b2Project(t)
+	create := b2Command(revision, "CreateApplicationLibraryDeployment")
+	create.Entity = map[string]any{"libraryRef": "sdku@1.0.0", "runtimeRef": "kafka-main", "resources": map[string]any{
+		"events": map[string]any{"kind": "kafka.topic", "binding": "messaging", "parameters": map[string]any{}},
+	}}
+	result := commitStructuralForTest(t, b, root, projectlifecycle.ClassificationManaged, revision, []EditCommand{create})
+	for _, resource := range []string{"events", ""} {
+		set := b2Command(result.NewProjectRevision, "SetApplicationLibraryOverride")
+		set.EntityID, set.Setting = "gateway", "topicBindings"
+		set.Value = map[string]any{"kafka": map[string]any{"main": resource}}
+		result = commitStructuralForTest(t, b, root, projectlifecycle.ClassificationManaged, result.NewProjectRevision, []EditCommand{set})
+		view, err := ReadManagedProjectView(root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		bindings := asMap(asMap(asMap(asMap(view.ApplicationLibraries["sdku"]["applications"])["gateway"])["overrides"])["topicBindings"])
+		if asMap(bindings["kafka"])["main"] != resource {
+			t.Fatal("named role was not preserved")
+		}
+	}
+	reset := b2Command(result.NewProjectRevision, "RemoveApplicationLibraryOverride")
+	reset.EntityID, reset.Setting = "gateway", "topicBindings"
+	commitStructuralForTest(t, b, root, projectlifecycle.ClassificationManaged, result.NewProjectRevision, []EditCommand{reset})
+	view, err := ReadManagedProjectView(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if asMap(asMap(asMap(view.ApplicationLibraries["sdku"]["applications"])["gateway"])["overrides"])["topicBindings"] != nil {
+		t.Fatal("reset retained named role override")
+	}
+}
+
 func TestLibraryRuntimeDirectorySaveAndDefault(t *testing.T) {
 	root, b, revision := b2Project(t)
 	c := b2Command(revision, "CreateApplicationLibraryDeployment")

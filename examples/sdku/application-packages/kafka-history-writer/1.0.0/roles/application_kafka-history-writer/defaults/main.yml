@@ -1,18 +1,10 @@
 platform_application_definition:
-    connections:
-        clickhouse:
-            library_binding: analytics
-            protocol: https
-        kafka:
-            library_binding: messaging
-            protocol: tcp
-        redis:
-            library_binding: cache
-            protocol: tcp
-        vault:
-            library_binding: secrets
-            protocol: https
+    name: kafka-history-writer
+    version: 1.0.0
     defaults:
+        image: evoscada-docker.artifacts.tn.tngrp.ru/kafka-history-writer:0.0.67-412ebcbf-redos
+        user: 1000:1000
+        restart: on-failure
         accounts:
             clickhouse:
                 credentials:
@@ -24,9 +16,9 @@ platform_application_definition:
                         source:
                             kind: literal
                             value: '{{ application_instance_id | replace(''-'', ''_'') }}'
-                databaseRef: analytics
+                databaseRef: history
                 grants:
-                    - databaseRef: analytics
+                    - databaseRef: history
                       privileges:
                         - SELECT
                         - INSERT
@@ -57,27 +49,26 @@ platform_application_definition:
             - -jar
             - kafka-history-writer.jar
         environment:
-            DB_CONNECTION_STRING: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
+            SERVER_PORT: &web_server_port >-
+                {{ ((application_job.application.definition.defaults.ports | default({})) |
+                combine(application_job.slot.overrides.ports | default({}), recursive=true) |
+                combine(application_job.instance.overrides.ports | default({}), recursive=true) |
+                combine(application_job.hostOverride.ports | default({}), recursive=true))['port-1'].container }}
+            WEB_SERVER_PORT: *web_server_port
+            DB_CONNECTION_STRING: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_databases.clickhouse.history.name }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
             KAFKA_CONSUMER_GROUP_ID: kafka-history-writer
             LOGGER_LEVEL: INFO
-            SERVER_PORT: 10241
             SPRING_KAFKA_APPLICATION_ID: kafka-history-writer
             SPRING_KAFKA_CLIENT_ID: '{{ application_instance_id }}-$${SERVER_ID}'
             SPRING_KAFKA_LISTENER_GROUP_ID: kafka-history-writer
-            TARGET_TOPICS: '{{ application_parameters.source_variables.MAIN_TOPIC | default(undef(hint=''Configure SDKU MAIN_TOPIC''), true) }}'
-            TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
+            TARGET_TOPICS: '{{ application_topics.kafka.main.name }}'
+            TN_SCADA_REDIS_SENTINEL_MASTER: ""
             TZ: Europe/Moscow
             # SDK database-1.0.4 health cannot parse a JDBC URL with multiple hosts.
             tn-scada.clickhouse.health.enabled: "false"
             kafka.consumer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-consumer'
             kafka.producer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-producer'
             server.max-http-request-header-size: 100MB
-        image: evoscada-docker.artifacts.tn.tngrp.ru/kafka-history-writer:0.0.67-412ebcbf-redos
-        parameters:
-            database_name: ""
-            source_variables:
-                MAIN_TOPIC: sdku-main
-                REDIS_SENTINEL_MASTER: ""
         ports:
             port-1:
                 container: 10241
@@ -135,8 +126,4 @@ platform_application_definition:
             delay: 2
             mode: container
             retries: 30
-        restart: on-failure
-        user: 1000:1000
-    identity_environment: []
-    name: kafka-history-writer
-    version: 1.0.0
+    connections: [clickhouse, kafka, redis, vault]

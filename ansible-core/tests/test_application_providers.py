@@ -224,9 +224,14 @@ class ApplicationProvidersTest(unittest.TestCase):
 
     def test_identifiers_fail_without_truncation(self):
         self.assertEqual('gateway-lib', identifier('gateway-lib', True))
+        self.assertEqual('tn-scada-alarms', identifier('tn-scada-alarms', database=True))
+        with self.assertRaises(ValueError):
+            identifier('tn-scada-alarms')
         for name in ('postgres', 'pg_authid', 'template0', 'x' * 64, 'x;drop role y', 'api"'):
             with self.subTest(name=name), self.assertRaises(ValueError):
                 identifier(name)
+            with self.subTest(database=name), self.assertRaises(ValueError):
+                identifier(name, database=True)
 
     def test_redis_acl_typed_grants_and_operator_selected_commands(self):
         result = normalize_redis_grants({'commands': ['set', 'ping', 'ping'], 'keys': ['sdku:*']})

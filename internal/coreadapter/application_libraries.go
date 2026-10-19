@@ -44,7 +44,7 @@ type ApplicationInstance struct {
 }
 
 type ApplicationPlacement struct {
-	TopicBindings    map[string][]string        `json:"topicBindings"`
+	TopicBindings    map[string]any             `json:"topicBindings"`
 	RuntimeDirectory string                     `json:"runtimeDirectory"`
 	CommonDefaults   map[string]json.RawMessage `json:"commonDefaults,omitempty"`
 	Inherited        map[string]json.RawMessage `json:"inherited,omitempty"`

@@ -33,8 +33,8 @@ services:
           - >-
             curl --fail --silent --show-error --output /dev/null
             --cacert /etc/nginx/server.crt
-            --resolve {{ application_parameters.source_variables.PUBLIC_HOST | default(undef(hint='Configure SDKU PUBLIC_HOST'), true) }}:{{ application_effective.ports['port-1'].container }}:127.0.0.1
-            https://{{ application_parameters.source_variables.PUBLIC_HOST }}:{{ application_effective.ports['port-1'].container }}/
+            --resolve {{ application_parameters.PUBLIC_HOST | default(undef(hint='Configure SDKU PUBLIC_HOST'), true) }}:{{ application_effective.ports['port-1'].container }}:127.0.0.1
+            https://{{ application_parameters.PUBLIC_HOST }}:{{ application_effective.ports['port-1'].container }}/
       "timeout": 15s
     deploy:
       "resources":

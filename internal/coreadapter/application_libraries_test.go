@@ -1,9 +1,24 @@
 package coreadapter
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
+
+func TestApplicationSnapshotPreservesNamedAndLegacyTopicBindings(t *testing.T) {
+	for _, bindings := range []string{`{"kafka":{"main":"events"}}`, `{"kafka":["events"]}`} {
+		data := strings.Replace(applicationSnapshot, `"SERVER_ID":"node1"`, `"topicBindings":`+bindings+`,"SERVER_ID":"node1"`, 1)
+		s, err := DecodeSnapshot([]byte(data))
+		if err != nil {
+			t.Fatal(err)
+		}
+		result, err := json.Marshal(s.ApplicationLibraries.Libraries["sdku"].Instances["gateway-sdku"].Placements["node1"].TopicBindings)
+		if err != nil || string(result) != bindings {
+			t.Fatal("topic binding shape changed")
+		}
+	}
+}
 
 const applicationSnapshot = `{"apiVersion":"platform.installer/project-snapshot/v2alpha1","applicationLibraries":{"apiVersion":"platform.installer/application-libraries/v1alpha1","status":"PASS","libraries":{"sdku":{"libraryRef":"sdku@1.0.0","instances":{"gateway-sdku":{"applicationName":"gateway","slotId":"gateway","runtimeSecretRequirements":["db-password"],"placements":{"node1":{"SERVER_ID":"node1","runtimeRef":"docker-main","origin":{"host":"node1","resolution":"ANSIBLE","precision":"RESOLUTION_SCOPE"}}}}}}},"findings":[]}}`
 

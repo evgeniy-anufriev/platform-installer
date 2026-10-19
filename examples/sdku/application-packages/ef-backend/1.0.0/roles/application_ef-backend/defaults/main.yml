@@ -1,18 +1,10 @@
 platform_application_definition:
-    connections:
-        kafka:
-            library_binding: messaging
-            protocol: tcp
-        postgres:
-            library_binding: database
-            protocol: tcp
-        redis:
-            library_binding: cache
-            protocol: tcp
-        vault:
-            library_binding: secrets
-            protocol: https
+    name: ef-backend
+    version: 1.0.0
     defaults:
+        image: evoscada-docker.artifacts.tn.tngrp.ru/ef-backend:1.0.4-SNAPSHOT-11cc4fa1-redos
+        user: 1000:1000
+        restart: on-failure
         accounts:
             postgres:
                 credentials:
@@ -25,7 +17,7 @@ platform_application_definition:
                             kind: literal
                             value: '{{ application_instance_id | replace(''-'', ''_'') }}'
                 databaseAccess:
-                    - databaseRef: database
+                    - databaseRef: ef-store
                       privileges:
                         - SELECT
                         - INSERT
@@ -58,24 +50,25 @@ platform_application_definition:
             - -jar
             - ef-backend.jar
         environment:
+            SERVER_PORT: &web_server_port >-
+                {{ ((application_job.application.definition.defaults.ports | default({})) |
+                combine(application_job.slot.overrides.ports | default({}), recursive=true) |
+                combine(application_job.instance.overrides.ports | default({}), recursive=true) |
+                combine(application_job.hostOverride.ports | default({}), recursive=true))['port-1'].container }}
+            server.port: *web_server_port
+            WEB_SERVER_PORT: *web_server_port
             DB_CONNECTION_SSL: "true"
-            DB_CONNECTION_STRING: $${POSTGRES_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${POSTGRES_SSL_OPTIONS}
+            DB_CONNECTION_STRING: $${POSTGRES_JDBC_ENDPOINT}/{{ application_databases.postgres['ef-store'].name }}?$${POSTGRES_SSL_OPTIONS}
             JAVA_OPTS: -Xmx4096m
             NETWORK_TIMEOUT_MS: 10000
             SERVER_ALLOWED_ORIGINS: '*'
-            SERVER_PORT: 10341
             SPRING_KAFKA_CLIENT_ID: '{{ application_instance_id }}-$${SERVER_ID}'
-            TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
+            TN_SCADA_REDIS_SENTINEL_MASTER: ""
             kafka.consumer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-consumer'
             kafka.producer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-producer'
             logging.charset.console: UTF-8
             server.max-http-header-size: 10MB
             server.max-http-request-header-size: 10MB
-        image: evoscada-docker.artifacts.tn.tngrp.ru/ef-backend:1.0.4-SNAPSHOT-11cc4fa1-redos
-        parameters:
-            database_name: ef-store
-            source_variables:
-                REDIS_SENTINEL_MASTER: ""
         ports:
             port-1:
                 container: 10341
@@ -133,8 +126,4 @@ platform_application_definition:
             delay: 2
             mode: healthcheck
             retries: 30
-        restart: on-failure
-        user: 1000:1000
-    identity_environment: []
-    name: ef-backend
-    version: 1.0.0
+    connections: [kafka, postgres, redis, vault]

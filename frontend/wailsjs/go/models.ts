@@ -88,7 +88,7 @@ export namespace coreadapter {
     }
   }
   export class ApplicationPlacement {
-    topicBindings: Record<string, Array<string>>;
+    topicBindings: Record<string, any>;
     runtimeDirectory: string;
     commonDefaults?: Record<string, Array<number>>;
     inherited?: Record<string, Array<number>>;

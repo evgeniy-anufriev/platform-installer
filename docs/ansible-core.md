@@ -112,6 +112,15 @@ separate diagnostics expose only provider/topic, address, timeout and safe codes
 See [topic contract](project-contract.md#kafka-topic-resources) and
 [plan](work/application-libraries/kafka-topics-plan.md).
 
+Library `resource_defaults.kafka.topics` supplies parameters for explicitly
+selected resource IDs before RF/minISR calculation. Standard resolver tasks
+merge package/instance/resource values and bind `application_topics.<alias>.<role>`
+before application parameters/ENV expand. The same normalized resources feed
+provider jobs. Named role maps and legacy list bindings keep their corresponding
+snapshot/runtime shapes; missing/cleared/wrong-provider roles cannot execute.
+Logical resource IDs let shared applications consume each library's physical
+names. See [role/default plan](work/application-libraries/topic-role-bindings-plan.md).
+
 Each library resource scope precedes logical instance account/grant scopes and
 Vault publication. HA ClickHouse user/grant writes use one ON CLUSTER default
 batch per logical instance, followed by per-server result/login verification.
@@ -353,3 +362,50 @@ SHA256 provides integrity but not authenticity. Artifact and Core manifests ther
 - verification policy and evidence output.
 
 The concrete signature technology can be selected later without changing artifact lookup or project semantics.
+
+### Direct library resource keys
+
+Standard Ansible tasks merge library package resource_defaults, instance
+resource_defaults and explicit selected resource.parameters, in that order.
+Kafka uses resource_defaults.kafka.topics; PostgreSQL uses
+resource_defaults.postgresql.databases. Defaults alone select/create nothing.
+Before parameters and ENV expand, each placement receives
+application_topics.<connection>.<resourceId>.name and
+application_databases.<connection>.<resourceId>.name (plus resourceId).
+Only selected resources of the matching kind on that connection's provider are
+exposed; contexts reset per placement. Missing keys fail instead of falling back.
+The same merged resources feed provider jobs and plan identities. PostgreSQL
+account databaseAccess.databaseRef remains the resource ID, sharing the JDBC
+name without an additional binding map. PostgreSQL database names allow hyphens;
+existing identifier, ownership and SQL quoting checks remain.
+
+SDKU uses direct keys without topicBindings. Legacy topicBindings lists/maps
+remain supported; explicit legacy maps overwrite colliding direct keys. Removing
+those maps restores direct access. Migration must remove old authored SDKU maps.
+Resource IDs are unique across kinds: SDKU Kafka alarms and PostgreSQL alarms_db
+are distinct. PostgreSQL ef-store retains its own database. No UI/Go resolver or
+second desired-state store is introduced.
+
+### Library-owned connection declarations and ClickHouse history
+
+Applications may select a unique list of library connection keys, e.g.
+connections: [clickhouse, kafka, redis, vault]. Library connections remains a map
+of full library_binding/protocol/purpose declarations. Old application declaration
+maps remain supported. Standard Ansible tasks validate keys and resolve one map
+before resource contexts and parameters/ENV; providers and accounts reuse it.
+Accounts, usernames, privileges and ENV remain application-owned. No per-app
+connection inference from credentials/ENV or independent UI/Go resolver is added.
+
+resource_defaults.clickhouse.databases.history.name defaults to
+{{ library_instance_id | replace('-', '_') }}. It is resolved on the Execution
+Node after binding the current library identity. Library instance resource_defaults
+in group_vars overrides the package; selected resource.parameters overrides both.
+Defaults alone create nothing. ClickHouse JDBC and account databaseRef use history,
+ENV reads application_databases.clickhouse.history.name. The same normalized DB
+name feeds provider jobs; existing table templates, grants and standalone/cluster
+engine selection are unchanged. Tables are created for selected ClickHouse DBs.
+
+Resources supports selecting history from defaults, explicit name/clear-reset and
+fresh-only Core name display. UI never evaluates the default expression. Existing
+installed resource IDs/ownership must be preserved via account/ENV/name overrides;
+key changes do not migrate/adopt installed objects. No automatic project migration.

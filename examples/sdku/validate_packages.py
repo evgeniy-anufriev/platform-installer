@@ -32,25 +32,38 @@ common = library['definition'].get('defaults', {})
 base = str(package_root/'library-packages/sdku/1.0.0'/library['render']['base_compose_template'])
 rendered = []
 base_contents = set()
+jobs = [dict(application={'definition': {'defaults': {'ports': p['definition']['defaults'].get('ports', {})}}},
+             libraryId='sdku-main', slotId=n, hostId='example-host',
+             slot={'overrides': {}}, instance={'overrides': {}}, hostOverride={})
+        for (kind, n), p in packages.items() if kind == 'application']
 for (kind,name), package in packages.items():
     if kind != 'application': continue
     settings = package['definition']['defaults']
     params = settings.get('parameters', {})
-    if 'database_name' in params and not params['database_name']:
+    if not params.get('database_name'):
         params['database_name'] = 'fixture_database'
-    for group in ('source_variables','mount_sources'):
-        for key,value in params.get(group, {}).items():
-            if not value: params[group][key] = '/tmp/sdku-fixture' if group == 'mount_sources' else 'example.invalid'
+    for key,value in params.items():
+        if isinstance(value, str) and (not value or 'platform_desired_state' in value):
+            params[key] = 'example.invalid'
+    for key,value in params.get('mount_sources', {}).items():
+        if not value: params['mount_sources'][key] = '/tmp/sdku-fixture'
     variables = dict(application_name=name, application_instance_id=name+'-sdku-main', application_parameters=params,
+        application_topics={'kafka': {ref: dict(resourceId=ref, name=value['name'])
+                            for ref, value in library['definition']['resource_defaults']['kafka']['topics'].items()}},
+        application_databases={'postgres': {ref: dict(resourceId=ref, name=value['name'])
+                              for ref, value in library['definition']['resource_defaults']['postgresql']['databases'].items()},
+                              'clickhouse': {'history': dict(resourceId='history', name='sdku_main')}},
+        library_instance_id='sdku-main', application_job=next(j for j in jobs if j['slotId'] == name),
+        _application_inputs={'jobs': jobs}, groups={'all': ['example-host']},
+        hostvars={'example-host': {'ansible_host': 'example.invalid'}},
         sdku_start_commands={name:'/fixture/unavailable-command'}, application_project_id='fixture', application_config_digest='0'*64,
         application_runtime_job={'baseTemplate':base},
-        library_runtime={'library_id':'sdku-main','host_id':'example-host','defaults':common,'connections':{key:{'targets':[{'address':'example.invalid','port':12345}]} for key in library['definition'].get('connections',{})}},
-        application_runtime={'image':settings['image'],'container_name':name+'-sdku-main-example-host','base_compose_path':'/tmp/.base_compose.yml','base_service':'base','vault_path':'/tmp/vault','pki_path':'/tmp/pki', 'connections':{key:{'targets':[{'address':'example.invalid','port':12345}]} for key in package['definition'].get('connections',{})}})
+        library_runtime={'library_id':'sdku-main','host_id':'example-host','defaults':common,'connections':{key:{'targets':[{'hostId':'example-host','address':'example.invalid','port':12345}]} for key in library['definition'].get('connections',{})}},
+        application_runtime={'image':settings['image'],'container_name':name+'-sdku-main-example-host','base_compose_path':'/tmp/.base_compose.yml','base_service':'base','vault_path':'/tmp/vault','pki_path':'/tmp/pki', 'config_path':'/tmp/config', 'connections':{key:{'targets':[{'address':'example.invalid','port':12345}]} for key in package['definition'].get('connections',{})}})
     templar=Templar(loader=DataLoader(),variables=variables)
     settings=templar.template(settings)
     env=dict(common.get('environment', {}) if library['definition']['slots'][name].get('inherit_defaults', True) else {})
     env.update(settings.get('environment',{}))
-    env.update({key:name+'-sdku-main' for key in package['definition'].get('identity_environment',[])})
     variables.update(application_effective=settings,application_environment=env)
     templar.available_variables=variables
     path=package_root/'application-packages'/name/'1.0.0'/package['render']['compose_template']

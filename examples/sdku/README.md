@@ -50,9 +50,27 @@ library-packages/sdku/1.0.0/
 2. Defaults приложения: собственные ENV/parameters, образ, команда, ports, readiness, secret bindings.
 3. `group_vars`: общие `applicationLibraryDeployments.<library>.overrides`.
 4. `group_vars`: индивидуальные `applications.<slot>.overrides`.
-5. Вычисляемая Core identity. Размещение — membership в host_vars.
+5. Размещение и его переопределения — membership в host_vars.
 
-В `platform_library_definition.defaults.environment` находятся 48 общих ENV.
+Все обычные ENV объявляются в `defaults.environment`: в том числе логические
+ID через `{{ application_instance_id }}` и client ID через
+`{{ application_instance_id }}-$${SERVER_ID}`. `identity_environment` в SDKU
+не используется. Секреты по-прежнему поступают из защищённых Vault bindings.
+
+В `parameters` остаются только общие настройки для нескольких ENV или шаблонов:
+например, `ALARM_TOPIC_COMPACT`, `DATA_MANAGER_URL_ROOT`, `history` и
+`mount_sources`. Обёртка `source_variables` удалена. Одноразовые URL, темы и
+другие значения задаются непосредственно в соответствующей ENV.
+
+При обновлении существующего проекта перенесите overrides вручную: например,
+`parameters.source_variables.DATA_MANAGER_URL_ROOT` у KNP становится
+`parameters.DATA_MANAGER_URL_ROOT`, а `REDIS_SENTINEL_MASTER` —
+`environment.TN_SCADA_REDIS_SENTINEL_MASTER`. Для frontend ENV с адресом
+указывается полный URL, а не прежний доменный суффикс. Старые group_vars
+автоматически не переписываются; рабочие проекты и серверы этим рефакторингом
+не изменяются.
+
+В `platform_library_definition.defaults.environment` находятся общие ENV.
 В 26 slots нет overrides; 8 frontend-слотов явно задают inherit_defaults=false.
 Собственный JAVA_OPTS сохраняется в defaults соответствующего приложения.
 Base Compose получает общую карту через Core projection
@@ -102,13 +120,13 @@ Core/Go/UI контракты. Никакого специального SDKU-к
 
 ## Перед будущим запуском
 
-- Для `ham-backend`, `hmi-frontend-viewer-noszi`, `iec60870`, `sdku-knp` точная
+- Для `ham-backend`, `hmi-frontend-viewer-noszi`, `iec60870` точная
   команда указанной версии образа не найдена. Указать **argv-массив** в
   `overrides.command` после проверки именно этого образа. Заглушка намеренно
   требует `sdku_start_commands`, без выдуманной команды и автоматического pull.
-- Заполнить пустые `parameters.source_variables`: внешние URL, Schema Registry,
-  адреса приложений и другие исходные `${VAR}`. Пустое обязательное значение
-  останавливает разрешение, а не возвращает адрес старого стенда.
+- Настроить ENV и общие `parameters`: внешние URL, темы и адреса приложений.
+  Неизвестные одиночные ENV оставлены пустыми; это не готовые подключения.
+  Повторно используемые обязательные параметры сохраняют проверки в выражениях.
 - Заполнить `parameters.mount_sources` для файлов/данных. Для frontend нужны
   корректные существующие TLS-файлы; приватные ключи с источника не переносились.
 - Выбрать bindings `database`, `analytics`, `cache`, `messaging`, `secrets` и
@@ -156,3 +174,70 @@ required. Set the matching main class and source/JAR paths for the chosen inputs
 The QA-only `qa/evo-manager/src/qa/sdku/StartupMock.java` logs
 `SDKU_EVO_MOCK_STARTED` through `main(Evo)` without accessing tags or Kafka data.
 It does not replace the original Evo image or production scripts.
+
+Kafka, PostgreSQL and ClickHouse names are selected by direct logical resource keys.
+Library resource_defaults.kafka.topics holds main/main_compact/alarms/alarms_compact;
+resource_defaults.postgresql.databases holds model (tn-scada), alarms_db
+(tn-scada-alarms), preferences (user-preferences) and ef-store (ef-store).
+Select each required ID and provider under resources. Defaults alone create nothing.
+Resource IDs are unique across types; alarms_db avoids collision with Kafka alarms.
+
+ENV uses {{ application_topics.kafka.main.name }} and
+{{ application_databases.postgres.model.name }}; ef-backend uses
+{{ application_databases.postgres['ef-store'].name }}. Account databaseRef uses
+the same resource ID. A CSPA library can supply different physical names without
+changing application packages. No topicBindings map is needed in SDKU.
+
+To change sdku-main to sdku-main-2, override resources.main.parameters.name
+(or resource_defaults.kafka.topics.main.name). To select a different logical ID
+for one application, edit that application's ENV template to reference that key.
+Clear a resource name override in Resources to restore defaults; RF/minISR still
+follow the actual Kafka deployment.
+
+Migration is explicit: import updated packages with the matching runtime, select
+required resources, update account databaseRef overrides, and remove obsolete
+SDKU topicBindings from group_vars. Legacy explicit bindings remain supported and
+win on colliding keys, so leaving an old map changes direct-key behavior.
+Remove obsolete database_name and topic parameter overrides when replacing their
+ENV consumers with resource references. Preserve provider/account/secret settings. Remove explicit
+JDBC/topic ENV overrides only where direct defaults should take effect. Save,
+Verify, then build a fresh plan. Working projects are never rewritten or deployed
+automatically. Legacy topic selection controls appear only for declared or
+authored bindings.
+
+For already managed resources, preserve installed resource IDs/ownership markers.
+Keep their existing keys and set JDBC/topic ENV templates and account databaseRef
+overrides to those keys when adopting updated packages. Renaming a selected key
+is not an ownership migration; do not keep two IDs for the same physical object.
+
+### Library-owned connection declarations and ClickHouse history
+
+Applications may select a unique list of library connection keys, e.g.
+connections: [clickhouse, kafka, redis, vault]. Library connections remains a map
+of full library_binding/protocol/purpose declarations. Old application declaration
+maps remain supported. Standard Ansible tasks validate keys and resolve one map
+before resource contexts and parameters/ENV; providers and accounts reuse it.
+Accounts, usernames, privileges and ENV remain application-owned. No per-app
+connection inference from credentials/ENV or independent UI/Go resolver is added.
+
+resource_defaults.clickhouse.databases.history.name defaults to
+{{ library_instance_id | replace('-', '_') }}. It is resolved on the Execution
+Node after binding the current library identity. Library instance resource_defaults
+in group_vars overrides the package; selected resource.parameters overrides both.
+Defaults alone create nothing. ClickHouse JDBC and account databaseRef use history,
+ENV reads application_databases.clickhouse.history.name. The same normalized DB
+name feeds provider jobs; existing table templates, grants and standalone/cluster
+engine selection are unchanged. Tables are created for selected ClickHouse DBs.
+
+Resources supports selecting history from defaults, explicit name/clear-reset and
+fresh-only Core name display. UI never evaluates the default expression. Existing
+installed resource IDs/ownership must be preserved via account/ENV/name overrides;
+key changes do not migrate/adopt installed objects. No automatic project migration.
+
+The history database resource key differs from connection key clickhouse and
+provider binding analytics. Library instance sdku-main defaults to DB sdku_main;
+override resource_defaults.clickhouse.databases.history.name or
+resources.history.parameters.name in group_vars when an existing/custom DB name
+must be kept. Remove obsolete ClickHouse database_name overrides when replacing
+the corresponding JDBC ENV with the resource reference. Preserve existing users,
+grants, secrets and installed resource markers.

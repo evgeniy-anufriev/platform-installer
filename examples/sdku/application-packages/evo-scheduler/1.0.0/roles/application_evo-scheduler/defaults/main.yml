@@ -1,18 +1,10 @@
 platform_application_definition:
-    connections:
-        kafka:
-            library_binding: messaging
-            protocol: tcp
-        postgres:
-            library_binding: database
-            protocol: tcp
-        redis:
-            library_binding: cache
-            protocol: tcp
-        vault:
-            library_binding: secrets
-            protocol: https
+    name: evo-scheduler
+    version: 1.0.0
     defaults:
+        image: evoscada-docker.artifacts.tn.tngrp.ru/evo-scheduler:0.1.1-SNAPSHOT-078b0422-redos
+        user: 1000:1000
+        restart: always
         accounts:
             postgres:
                 credentials:
@@ -25,7 +17,7 @@ platform_application_definition:
                             kind: literal
                             value: '{{ application_instance_id | replace(''-'', ''_'') }}'
                 databaseAccess:
-                    - databaseRef: database
+                    - databaseRef: model
                       privileges:
                         - SELECT
                         - INSERT
@@ -57,33 +49,30 @@ platform_application_definition:
             - -jar
             - evo-scheduler.jar
         environment:
-            ALARM_VIEW_SERVICE_ROOT_URL: '{{ application_parameters.source_variables.ALARM_VIEW_SERVICE_URL | default(undef(hint=''Configure SDKU ALARM_VIEW_SERVICE_URL''), true) }}'
+            SERVER_PORT: &web_server_port >-
+                {{ ((application_job.application.definition.defaults.ports | default({})) |
+                combine(application_job.slot.overrides.ports | default({}), recursive=true) |
+                combine(application_job.instance.overrides.ports | default({}), recursive=true) |
+                combine(application_job.hostOverride.ports | default({}), recursive=true))['port-1'].container }}
+            WEB_SERVER_PORT: *web_server_port
+            ALARM_VIEW_SERVICE_ROOT_URL: ""
             DATA_MANAGER_CERTIFICATE_VALIDATION: false
             DATA_MANAGER_DTO_PORTION_SIZE: 300
-            DATA_MANAGER_ROOT_URL: '{{ application_parameters.source_variables.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
-            DB_CONNECTION_STRING: $${POSTGRES_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${POSTGRES_SSL_OPTIONS}
-            HMI_BACKEND_ROOT_URL: '{{ application_parameters.source_variables.HMI_BACKEND_URL | default(undef(hint=''Configure SDKU HMI_BACKEND_URL''), true) }}'
+            DATA_MANAGER_ROOT_URL: ""
+            DB_CONNECTION_STRING: $${POSTGRES_JDBC_ENDPOINT}/{{ application_databases.postgres.model.name }}?$${POSTGRES_SSL_OPTIONS}
+            HMI_BACKEND_ROOT_URL: ""
             INCOMING_FILE_DIR: /usr/local/app/data
             JAVA_OPTS: -Xmx15000m
             RESULT_FILE_DIR: /usr/local/app/data
-            SERVER_PORT: 12080
             SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "10"
             SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
             SPRING_KAFKA_CLIENT_ID: '{{ application_instance_id }}-$${SERVER_ID}'
-            TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
+            TN_SCADA_REDIS_SENTINEL_MASTER: ""
             WEB_CLIENT_CONNECTION_TIMEOUT: 100000
             WEB_CLIENT_RESPONSE_TIMEOUT: 30000
             kafka.consumer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-consumer'
             kafka.producer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-producer'
             server.max-http-request-header-size: 100MB
-        image: evoscada-docker.artifacts.tn.tngrp.ru/evo-scheduler:0.1.1-SNAPSHOT-078b0422-redos
-        parameters:
-            database_name: tn-scada
-            source_variables:
-                ALARM_VIEW_SERVICE_URL: ""
-                DATA_MANAGER_URL_ROOT: ""
-                HMI_BACKEND_URL: ""
-                REDIS_SENTINEL_MASTER: ""
         ports:
             port-1:
                 container: 12080
@@ -141,8 +130,4 @@ platform_application_definition:
             delay: 2
             mode: container
             retries: 30
-        restart: always
-        user: 1000:1000
-    identity_environment: []
-    name: evo-scheduler
-    version: 1.0.0
+    connections: [kafka, postgres, redis, vault]

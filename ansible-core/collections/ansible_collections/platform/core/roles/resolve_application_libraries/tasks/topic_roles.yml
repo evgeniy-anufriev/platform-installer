@@ -1,0 +1,30 @@
+---
+- name: Validate named Kafka role resource and provider
+  ansible.builtin.assert:
+    that:
+      - topic_role.value in _application_resources
+      - _application_resources[topic_role.value].kind == 'kafka.topic'
+      - _application_resources[topic_role.value].parameters.name | default('') | length > 0
+      - topic_connection.key in _application_connections
+      - _application_resources[topic_role.value].binding in application_job.deployment.bindings
+      - _application_connections[topic_connection.key].library_binding in application_job.deployment.bindings
+      - application_job.deployment.bindings[_application_resources[topic_role.value].binding].deploymentRef == application_job.deployment.bindings[_application_connections[topic_connection.key].library_binding].deploymentRef
+    fail_msg: "Invalid Kafka topic role: {{ application_job.libraryId }}/{{ application_job.slotId }}/{{ topic_connection.key }}/{{ topic_role.key }}"
+    quiet: true
+  loop: "{{ topic_connection.value | dict2items }}"
+  loop_control:
+    loop_var: topic_role
+    label: "{{ topic_role.key }}"
+  become: false
+
+- name: Expose selected names to application templates
+  ansible.builtin.set_fact:
+    application_topics: >-
+      {{ application_topics | combine({topic_connection.key:
+         application_topics[topic_connection.key] | default({}) | combine({topic_role.key: {
+           'resourceId': topic_role.value, 'name': _application_resources[topic_role.value].parameters.name}})}) }}
+  loop: "{{ topic_connection.value | dict2items }}"
+  loop_control:
+    loop_var: topic_role
+  no_log: true
+  become: false

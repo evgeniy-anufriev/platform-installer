@@ -1,18 +1,10 @@
 platform_application_definition:
-    connections:
-        kafka:
-            library_binding: messaging
-            protocol: tcp
-        postgres:
-            library_binding: database
-            protocol: tcp
-        redis:
-            library_binding: cache
-            protocol: tcp
-        vault:
-            library_binding: secrets
-            protocol: https
+    name: user-preferences
+    version: 1.0.0
     defaults:
+        image: evoscada-docker.artifacts.tn.tngrp.ru/user-preferences:0.0.4-c707ead9-redos
+        user: 1000:1000
+        restart: on-failure
         accounts:
             postgres:
                 credentials:
@@ -25,7 +17,7 @@ platform_application_definition:
                             kind: literal
                             value: '{{ application_instance_id | replace(''-'', ''_'') }}'
                 databaseAccess:
-                    - databaseRef: database
+                    - databaseRef: preferences
                       privileges:
                         - SELECT
                         - INSERT
@@ -59,18 +51,19 @@ platform_application_definition:
             - -jar
             - user-preferences.jar
         environment:
-            DB_CONNECTION_STRING: $${POSTGRES_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${POSTGRES_SSL_OPTIONS}
-            SERVER_PORT: 10501
+            SERVER_PORT: &web_server_port >-
+                {{ ((application_job.application.definition.defaults.ports | default({})) |
+                combine(application_job.slot.overrides.ports | default({}), recursive=true) |
+                combine(application_job.instance.overrides.ports | default({}), recursive=true) |
+                combine(application_job.hostOverride.ports | default({}), recursive=true))['port-1'].container }}
+            server.port: *web_server_port
+            WEB_SERVER_PORT: *web_server_port
+            DB_CONNECTION_STRING: $${POSTGRES_JDBC_ENDPOINT}/{{ application_databases.postgres.preferences.name }}?$${POSTGRES_SSL_OPTIONS}
             SPRING_KAFKA_CLIENT_ID: '{{ application_instance_id }}-$${SERVER_ID}'
-            TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
+            TN_SCADA_REDIS_SENTINEL_MASTER: ""
             kafka.consumer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-consumer'
             kafka.producer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-producer'
             server.max-http-request-header-size: 100MB
-        image: evoscada-docker.artifacts.tn.tngrp.ru/user-preferences:0.0.4-c707ead9-redos
-        parameters:
-            database_name: ""
-            source_variables:
-                REDIS_SENTINEL_MASTER: ""
         ports:
             port-1:
                 container: 10501
@@ -128,8 +121,4 @@ platform_application_definition:
             delay: 2
             mode: healthcheck
             retries: 30
-        restart: on-failure
-        user: 1000:1000
-    identity_environment: []
-    name: user-preferences
-    version: 1.0.0
+    connections: [kafka, postgres, redis, vault]

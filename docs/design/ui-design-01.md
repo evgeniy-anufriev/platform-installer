@@ -112,8 +112,14 @@ RF/minISR and arbitrary key=value topic properties. Effective RF/minISR are show
 only from the fresh Core projection. Startup lists resources compatible with each
 declared Kafka connection. Selection uses ordinary draft/Review/Save; an explicit
 empty selection and Reset to application defaults are distinct. No UI calculation,
-ACL grant, subscription or implicit application ENV edit is introduced. Existing
-resource pages and lifecycle are reused; no additional navigation is required.
+ACL grant or implicit authored ENV edit is introduced. Named role maps use a
+resource select per declared role; ENV templates consume those roles in Core.
+Reset removes only that role override; explicit clear remains incomplete.
+Legacy lists retain checkboxes. Resources may select a declared resource_defaults
+ID and provider without copying inherited parameters. Empty override fields
+restore defaults; names/settings are shown from Core, unresolved without a fresh
+projection. Default table schemas remain hidden. Existing resource pages and
+lifecycle are reused; no additional navigation is required.
 
 ### Library common defaults (owner-authorized 2026-10-17)
 
@@ -970,3 +976,23 @@ confirms the exact flagged plan. Changing the option invalidates the plan;
 changing project or execution mode clears the selection. Plan/Result retain the
 explicit skip and real verification observation, without a fabricated PASS.
 An older runtime rejects the negotiated feature, with no silent fallback.
+
+### Direct resource keys (2026-10-19)
+
+Resources selects Kafka topics or PostgreSQL databases from declared default IDs.
+Empty name inherits; clearing an override deletes only parameters.name. Show the
+Core-resolved name only for a fresh saved revision without drafts. No Ansible
+merge or physical-name calculation occurs in React. Schema definitions remain
+file-only. Topic binding controls are legacy-only: display them only when the
+package or instance declares bindings. SDKU ENV references resource keys directly.
+
+### Library connection keys and ClickHouse history (2026-10-19)
+
+Application connection summary and account/secret controls accept selected library
+connection keys and show the existing library declarations by direct reference.
+No application binding/protocol/purpose editor is added. Missing keys have no
+fallback and are blocked by Core. Legacy declaration maps retain their UI.
+Resources also selects ClickHouse DB defaults (history), supports physical-name
+override and clear/reset, and displays only fresh Core effective names. Library
+identity expressions and table structures remain file-only and are not evaluated
+in React. Existing screens/Save/reopen/Verify/plan controls are reused.

@@ -2,7 +2,7 @@
 # Merge this fragment into the project's ordinary inventory/group_vars.
 # References below must name existing deployments of THAT project.
 # This is not a standalone runnable inventory.
-# Requires a runtime containing the library common defaults Core extension.
+# Requires a runtime containing direct Kafka/PostgreSQL resource keys.
 
 platform_desired_state:
   applicationLibraryDeployments:
@@ -26,14 +26,27 @@ platform_desired_state:
         kafka: {connectionRef: CLIENT_SSL}
         # Choose sentinel only for a Sentinel-backed Redis connection.
         redis: {connectionRef: client}
+      resources:
+        history: {kind: clickhouse.database, binding: analytics, parameters: {}}
+        model: {kind: postgresql.database, binding: database, parameters: {}}
+        alarms_db: {kind: postgresql.database, binding: database, parameters: {}}
+        preferences: {kind: postgresql.database, binding: database, parameters: {}}
+        ef-store: {kind: postgresql.database, binding: database, parameters: {}}
+        main: {kind: kafka.topic, binding: messaging, parameters: {}}
+        main_compact: {kind: kafka.topic, binding: messaging, parameters: {}}
+        alarms: {kind: kafka.topic, binding: messaging, parameters: {}}
+        alarms_compact: {kind: kafka.topic, binding: messaging, parameters: {}}
       applications:
         hmi-backend:
           overrides:
+            environment:
+              ALARMSERVICE_URL_ROOT: ""
+              GAAUDIT_URL_ROOT: ""
             ports:
               port-1: {container: 10101, published: 18101}
         data-manager:
           overrides:
             environment:
               JAVA_OPTS: "-Xmx2048m"
-# Complete source_variables, secret sources, resources and mounts before Verify.
+# Configure environment, shared parameters, secret sources, resources and mounts before Verify.
 # Library ID is sdku-main; instance overrides use slot keys, not computed IDs.

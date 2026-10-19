@@ -22,6 +22,7 @@ import {
   applicationDraft,
   objectValue,
   type ApplicationIntent,
+  type ObjectValue,
 } from "./application-draft";
 export {
   isApplicationIntent,
@@ -132,6 +133,15 @@ export function ApplicationsPage({
       objectValue(packages[kind + ":" + String(reference)]).definition,
     );
   const definition = packageDefinition("library", library.libraryRef);
+  const declaredConnections = (value: unknown): ObjectValue =>
+    Array.isArray(value)
+      ? Object.fromEntries(
+          value.map((key) => [
+            String(key),
+            objectValue(objectValue(definition.connections)[String(key)]),
+          ]),
+        )
+      : objectValue(value);
   const recipe = objectValue(definition.slots);
   const bindingHints: Record<string, string> = {};
   for (const raw of Object.values(recipe)) {
@@ -139,7 +149,9 @@ export function ApplicationsPage({
       "application",
       objectValue(raw).applicationRef,
     );
-    for (const connection of Object.values(objectValue(def.connections))) {
+    for (const connection of Object.values(
+      declaredConnections(def.connections),
+    )) {
       const name = objectValue(connection).library_binding;
       if (typeof name === "string") bindingHints[name] = "deployment";
     }
@@ -154,6 +166,7 @@ export function ApplicationsPage({
     "application",
     slotDefinition.applicationRef,
   );
+  const appConnections = declaredConnections(appDefinition.connections);
   const defaults = objectValue(appDefinition.defaults);
   const authored = objectValue(objectValue(library.applications)[slot]);
   const overrides = objectValue(authored.overrides);
@@ -364,6 +377,14 @@ export function ApplicationsPage({
     : ["Общее", "Общие параметры", "Подключения", "Ресурсы и секреты"];
   const selectedTab = tabs.includes(tab) ? tab : tabs[0];
   const resolved = snapshot?.applicationLibraries?.libraries?.[selected];
+  const resolvedTopics =
+    !draftActive && snapshot?.projectRevision === managed?.projectRevision
+      ? objectValue(resolved?.topics)
+      : {};
+  const resolvedResources =
+    !draftActive && snapshot?.projectRevision === managed?.projectRevision
+      ? objectValue(resolved?.resources)
+      : {};
   const [baselineHost, setBaselineHost] = useState("");
   const instancePlacements =
     Object.values(resolved?.instances ?? {}).find(
@@ -992,7 +1013,23 @@ export function ApplicationsPage({
                       deployments={managed?.deployments ?? {}}
                       key={selected + "resources"}
                       resources={objectValue(library.resources)}
-                      resolvedTopics={objectValue(resolved?.topics)}
+                      resolvedTopics={resolvedTopics}
+                      resolvedResources={resolvedResources}
+                      databaseDefaults={objectValue(
+                        objectValue(
+                          objectValue(definition.resource_defaults).postgresql,
+                        ).databases,
+                      )}
+                      clickhouseDefaults={objectValue(
+                        objectValue(
+                          objectValue(definition.resource_defaults).clickhouse,
+                        ).databases,
+                      )}
+                      topicDefaults={objectValue(
+                        objectValue(
+                          objectValue(definition.resource_defaults).kafka,
+                        ).topics,
+                      )}
                       bindings={objectValue(library.bindings)}
                       disabled={busy}
                       onDirtyChange={(v) => markChildDirty(v, "resources")}
@@ -1111,11 +1148,9 @@ export function ApplicationsPage({
                         </dd>
                         <dt>Подключения</dt>
                         <dd>
-                          {Object.entries(
-                            objectValue(appDefinition.connections),
-                          ).map(([name, raw]) => {
+                          {Object.entries(appConnections).map(([name, raw]) => {
                             const binding = String(
-                              objectValue(raw).library_binding ?? name,
+                              objectValue(raw).library_binding ?? "",
                             );
                             const target = objectValue(
                               objectValue(library.bindings)[binding],
@@ -1246,7 +1281,8 @@ export function ApplicationsPage({
                 {slot && selectedTab === "Запуск" && (
                   <>
                     <ApplicationTopicBindings
-                      connections={objectValue(appDefinition.connections)}
+                      resolvedTopics={resolvedTopics}
+                      connections={appConnections}
                       resources={objectValue(library.resources)}
                       bindings={objectValue(library.bindings)}
                       deployments={managed?.deployments ?? {}}
@@ -1412,7 +1448,7 @@ export function ApplicationsPage({
                       onDirtyChange={markChildDirty}
                       defaults={defaults}
                       authored={authored}
-                      connections={objectValue(appDefinition.connections)}
+                      connections={appConnections}
                       disabled={busy}
                       onSave={(accounts) =>
                         send({

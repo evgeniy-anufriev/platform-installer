@@ -1,0 +1,17 @@
+---
+- name: Expose selected resources on this connection provider
+  ansible.builtin.set_fact:
+    "{{ 'application_topics' if _application_resources[resource_id].kind == 'kafka.topic' else 'application_databases' }}": >-
+      {{ (application_topics if _application_resources[resource_id].kind == 'kafka.topic' else application_databases) |
+         combine({resource_connection.key:
+           ((application_topics if _application_resources[resource_id].kind == 'kafka.topic' else application_databases)[resource_connection.key] | default({})) |
+           combine({resource_id: {'resourceId': resource_id, 'name': _application_resources[resource_id].parameters.name}})}) }}
+  loop: "{{ _application_resources.keys() | list }}"
+  loop_control:
+    loop_var: resource_id
+  when:
+    - _application_resources[resource_id].kind in ['kafka.topic', 'postgresql.database', 'clickhouse.database']
+    - _application_resources[resource_id].binding in application_job.deployment.bindings
+    - application_job.deployment.bindings[_application_resources[resource_id].binding].deploymentRef == application_job.deployment.bindings[resource_connection.value.library_binding].deploymentRef
+  no_log: true
+  become: false

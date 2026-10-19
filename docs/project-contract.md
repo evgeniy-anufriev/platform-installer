@@ -272,10 +272,25 @@ values override these defaults; `config.min.insync.replicas` is the minISR setti
 Other Kafka topic properties are passed as scalar strings. minISR above RF is
 reported as a warning, not rejected as policy.
 
+Library `resource_defaults.kafka.topics.<resourceId>` supplies Kafka parameter
+defaults. The same subtree in library instance group_vars overrides the package;
+`resources.<resourceId>.parameters` overrides both (recursive config merge).
+Only selected `resources` are created. Defaults alone create nothing. Effective
+RF/minISR are calculated after merging against the selected deployment.
+
 Application defaults or instance `overrides.topicBindings` map declared Kafka
-connection aliases to arrays of resource IDs in that library. Core requires the
-same Kafka provider. An empty array selects none; removing the override restores
-defaults. Bindings neither grant ACLs nor rewrite application ENV or subscriptions.
+connection aliases to named roles, e.g. `kafka: {main: events}`. Values are library
+resource IDs; Core requires the same Kafka provider. Before parameters/ENV expand,
+Ansible exposes `application_topics.kafka.main.resourceId` and `.name`. ENV can
+use `MAIN_TOPIC: '{{ application_topics.kafka.main.name }}'`. Snapshot/runtime
+`topics.kafka.main` contains the complete resolved topic. No startup lookup or
+ACL is introduced. An empty role value is a saveable incomplete draft but Core
+rejects it before execution; removing a role override restores its default.
+
+Legacy alias-to-array bindings remain supported with their list projection.
+An empty array selects none. Lists do not rewrite ENV automatically. Existing
+projects are never silently migrated to roles. Use a matching Core runtime for
+new role/default declarations; local structural Save does not prove resolution.
 
 Managed topics are created only when missing. Matching existing topics are reused;
 existing mode requires their presence. Requested partition/replica counts and effective
@@ -420,3 +435,50 @@ automatically moved or deleted.
 Original-tag preservation applies to tagged references, including uppercase tags.
 Existing @sha256 inputs retain their immutable local startup alias: Docker cannot
 assign a RepoDigest using docker tag, and offline loads need not retain it.
+
+### Direct library resource keys
+
+Standard Ansible tasks merge library package resource_defaults, instance
+resource_defaults and explicit selected resource.parameters, in that order.
+Kafka uses resource_defaults.kafka.topics; PostgreSQL uses
+resource_defaults.postgresql.databases. Defaults alone select/create nothing.
+Before parameters and ENV expand, each placement receives
+application_topics.<connection>.<resourceId>.name and
+application_databases.<connection>.<resourceId>.name (plus resourceId).
+Only selected resources of the matching kind on that connection's provider are
+exposed; contexts reset per placement. Missing keys fail instead of falling back.
+The same merged resources feed provider jobs and plan identities. PostgreSQL
+account databaseAccess.databaseRef remains the resource ID, sharing the JDBC
+name without an additional binding map. PostgreSQL database names allow hyphens;
+existing identifier, ownership and SQL quoting checks remain.
+
+SDKU uses direct keys without topicBindings. Legacy topicBindings lists/maps
+remain supported; explicit legacy maps overwrite colliding direct keys. Removing
+those maps restores direct access. Migration must remove old authored SDKU maps.
+Resource IDs are unique across kinds: SDKU Kafka alarms and PostgreSQL alarms_db
+are distinct. PostgreSQL ef-store retains its own database. No UI/Go resolver or
+second desired-state store is introduced.
+
+### Library-owned connection declarations and ClickHouse history
+
+Applications may select a unique list of library connection keys, e.g.
+connections: [clickhouse, kafka, redis, vault]. Library connections remains a map
+of full library_binding/protocol/purpose declarations. Old application declaration
+maps remain supported. Standard Ansible tasks validate keys and resolve one map
+before resource contexts and parameters/ENV; providers and accounts reuse it.
+Accounts, usernames, privileges and ENV remain application-owned. No per-app
+connection inference from credentials/ENV or independent UI/Go resolver is added.
+
+resource_defaults.clickhouse.databases.history.name defaults to
+{{ library_instance_id | replace('-', '_') }}. It is resolved on the Execution
+Node after binding the current library identity. Library instance resource_defaults
+in group_vars overrides the package; selected resource.parameters overrides both.
+Defaults alone create nothing. ClickHouse JDBC and account databaseRef use history,
+ENV reads application_databases.clickhouse.history.name. The same normalized DB
+name feeds provider jobs; existing table templates, grants and standalone/cluster
+engine selection are unchanged. Tables are created for selected ClickHouse DBs.
+
+Resources supports selecting history from defaults, explicit name/clear-reset and
+fresh-only Core name display. UI never evaluates the default expression. Existing
+installed resource IDs/ownership must be preserved via account/ENV/name overrides;
+key changes do not migrate/adopt installed objects. No automatic project migration.

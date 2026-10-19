@@ -1,18 +1,10 @@
 platform_application_definition:
-    connections:
-        clickhouse:
-            library_binding: analytics
-            protocol: https
-        kafka:
-            library_binding: messaging
-            protocol: tcp
-        redis:
-            library_binding: cache
-            protocol: tcp
-        vault:
-            library_binding: secrets
-            protocol: https
+    name: opc-ua-server
+    version: 1.0.0
     defaults:
+        image: evoscada-docker.artifacts.tn.tngrp.ru/opc-ua-server:1.1.2-67bad727-redos
+        user: 1000:1000
+        restart: always
         accounts:
             clickhouse:
                 credentials:
@@ -24,9 +16,9 @@ platform_application_definition:
                         source:
                             kind: literal
                             value: '{{ application_instance_id | replace(''-'', ''_'') }}'
-                databaseRef: analytics
+                databaseRef: history
                 grants:
-                    - databaseRef: analytics
+                    - databaseRef: history
                       privileges:
                         - SELECT
                         - INSERT
@@ -61,22 +53,27 @@ platform_application_definition:
             - --spring.config.additional-location=/usr/local/config/opcua.yml
             - -Djavax.net.ssl.trustStore=/usr/local/certs/TN-SCADA OPC UA Server [61511528719CFF008A751C1D9F8165129F07C977].der
         environment:
-            DB_CONNECTION_STRING: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
+            SERVER_PORT: &web_server_port >-
+                {{ ((application_job.application.definition.defaults.ports | default({})) |
+                combine(application_job.slot.overrides.ports | default({}), recursive=true) |
+                combine(application_job.instance.overrides.ports | default({}), recursive=true) |
+                combine(application_job.hostOverride.ports | default({}), recursive=true))['port-1'].container }}
+            WEB_SERVER_PORT: *web_server_port
+            DB_CONNECTION_STRING: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_databases.clickhouse.history.name }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
             DB_TYPE: clickhouse
             LOGGER_ROOT_LEVEL: WARN
             OPCUA_APP_TYPE: server
             OPCUA_CONFIG: /usr/local/config/opcua.yml
             OPCUA_VIEW: EVO_VIEW
             OPCUA_VIEW_SOURCE: csv
-            REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
+            REDIS_SENTINEL_MASTER: '{{ application_parameters.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
             REDU_DISABLE: "true"
             REDU_GROUP_ID: opcua-server
             REDU_MANAGER_ID: 1
-            SERVER_PORT: 10391
             SERVER_VIEW_CONFIG: /usr/local/config/view.csv
             SPRING_KAFKA_CLIENT_ID: '{{ application_instance_id }}-$${SERVER_ID}'
-            TN_SCADA_DATA_MANAGER_URL_ROOT: '{{ application_parameters.source_variables.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
-            TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
+            TN_SCADA_DATA_MANAGER_URL_ROOT: ""
+            TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
             TNSCADA_LOGGER_LEVEL: WARN
             TZ: Europe/Moscow
             kafka.consumer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-consumer'
@@ -87,16 +84,13 @@ platform_application_definition:
             opc-ua.server.security-dir: /usr/local/PKI
             server.max-http-request-header-size: 100MB
             spring.config.additional-location: /usr/local/config/opcua.yml
-        image: evoscada-docker.artifacts.tn.tngrp.ru/opc-ua-server:1.1.2-67bad727-redos
+            KAFKA_LISTENER_ID_CONFIG: '{{ application_instance_id }}'
         parameters:
-            database_name: ""
             mount_sources:
                 mount-1: ""
                 mount-2: ""
                 mount-7: ""
-            source_variables:
-                DATA_MANAGER_URL_ROOT: ""
-                REDIS_SENTINEL_MASTER: ""
+            REDIS_SENTINEL_MASTER: ""
         ports:
             port-1:
                 container: 10391
@@ -185,9 +179,4 @@ platform_application_definition:
             delay: 2
             mode: container
             retries: 30
-        restart: always
-        user: 1000:1000
-    identity_environment:
-        - KAFKA_LISTENER_ID_CONFIG
-    name: opc-ua-server
-    version: 1.0.0
+    connections: [clickhouse, kafka, redis, vault]

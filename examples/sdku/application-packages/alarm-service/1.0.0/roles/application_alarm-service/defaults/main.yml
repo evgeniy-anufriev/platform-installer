@@ -1,18 +1,10 @@
 platform_application_definition:
-    connections:
-        clickhouse:
-            library_binding: analytics
-            protocol: https
-        kafka:
-            library_binding: messaging
-            protocol: tcp
-        redis:
-            library_binding: cache
-            protocol: tcp
-        vault:
-            library_binding: secrets
-            protocol: https
+    name: alarm-service
+    version: 1.0.0
     defaults:
+        image: evoscada-docker.artifacts.tn.tngrp.ru/alarm-service:0.4.2-3a1d508c-redos
+        user: 1000:1000
+        restart: on-failure
         accounts:
             clickhouse:
                 credentials:
@@ -24,9 +16,9 @@ platform_application_definition:
                         source:
                             kind: literal
                             value: '{{ application_instance_id | replace(''-'', ''_'') }}'
-                databaseRef: analytics
+                databaseRef: history
                 grants:
-                    - databaseRef: analytics
+                    - databaseRef: history
                       privileges:
                         - SELECT
                         - INSERT
@@ -59,45 +51,44 @@ platform_application_definition:
             - -jar
             - alarm-service.jar
         environment:
-            ALERT_CLASS_TOPIC: '{{ application_parameters.source_variables.REDIS_ALERT_CLASS_TOPIC | default(undef(hint=''Configure SDKU REDIS_ALERT_CLASS_TOPIC''), true) }}'
-            ALERT_HANDLER_TOPIC: '{{ application_parameters.source_variables.REDIS_ALERT_HANDLER_TOPIC | default(undef(hint=''Configure SDKU REDIS_ALERT_HANDLER_TOPIC''), true) }}'
+            SERVER_PORT: &web_server_port >-
+                {{ ((application_job.application.definition.defaults.ports | default({})) |
+                combine(application_job.slot.overrides.ports | default({}), recursive=true) |
+                combine(application_job.instance.overrides.ports | default({}), recursive=true) |
+                combine(application_job.hostOverride.ports | default({}), recursive=true))['port-1'].container }}
+            WEB_SERVER_PORT: *web_server_port
+            ALERT_CLASS_TOPIC: alert-class
+            ALERT_HANDLER_TOPIC: alert-hdl
             AUTO_ACK_DELAY: "600000"
             AUTO_ACK_TIME: PT2H
             ENABLE_CUSTOM_TIMESTAMP: "false"
-            HISTORY_DATASOURCE_CLICKHOUSE_JDBCURL: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
+            HISTORY_DATASOURCE_CLICKHOUSE_JDBCURL: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_databases.clickhouse.history.name }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
             JAVA_OPTS: -Xmx4096m
-            KAFKA_ALARM_COMPACT_TOPIC: '{{ application_parameters.source_variables.ALARM_TOPIC | default(undef(hint=''Configure SDKU ALARM_TOPIC''), true) }}-compact'
+            KAFKA_ALARM_COMPACT_TOPIC: '{{ application_topics.kafka.alarms_compact.name }}'
             KAFKA_ALARM_GROUP: alarm-service-group
-            KAFKA_ALARM_HISTORY_TOPIC: '{{ application_parameters.source_variables.ALARM_TOPIC | default(undef(hint=''Configure SDKU ALARM_TOPIC''), true) }}'
+            KAFKA_ALARM_HISTORY_TOPIC: '{{ application_topics.kafka.alarms.name }}'
             KAFKA_ALARM_PRODUCER_ID: alarm-service-producer
             KAFKA_CONSUMER_ENABLE_AUTO_COMMIT: true
-            KAFKA_SIGNAL_TOPIC: '{{ application_parameters.source_variables.MAIN_TOPIC | default(undef(hint=''Configure SDKU MAIN_TOPIC''), true) }}'
+            KAFKA_SIGNAL_TOPIC: '{{ application_topics.kafka.main.name }}'
             LOGGER_LEVEL: DEBUG
             REDIS_CONNECT_TIMEOUT: 1000
             REDIS_TIMEOUT: 1000
             SERVER_ALLOWED_ORIGINS: '*'
-            SERVER_PORT: 10011
             SIM_DELAY: "1000"
             SPRING_KAFKA_CLIENT_ID: '{{ application_instance_id }}-$${SERVER_ID}'
             SPRING_PROFILES_ACTIVE: sdku
             SQL_INIT_MODE: never
             TIME_STAMP_PATTERN: yyyy.MM.dd HH:mm:ss.SSS
-            TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
+            TN_SCADA_REDIS_SENTINEL_MASTER: ""
             alarm-service.is-generate-additional-alarm-flags: "false"
             kafka.consumer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-consumer'
             kafka.consumer.group.instance.id: alarm-service-{{ application_instance_id }}-$${SERVER_ID}
             kafka.producer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-producer'
             server.max-http-request-header-size: 100MB
             tn-scada.kafka.listener.seekToEnd: false
-        image: evoscada-docker.artifacts.tn.tngrp.ru/alarm-service:0.4.2-3a1d508c-redos
-        parameters:
-            database_name: ""
-            source_variables:
-                ALARM_TOPIC: sdku-alarms
-                MAIN_TOPIC: sdku-main
-                REDIS_ALERT_CLASS_TOPIC: alert-class
-                REDIS_ALERT_HANDLER_TOPIC: alert-hdl
-                REDIS_SENTINEL_MASTER: ""
+            EVO_MANAGER_APP_ID: '{{ application_instance_id }}'
+            KAFKA_APPLICATION_ID_CONFIG: '{{ application_instance_id }}'
+            KAFKA_LISTENER_ID_CONFIG: '{{ application_instance_id }}'
         ports:
             port-1:
                 container: 10011
@@ -155,11 +146,4 @@ platform_application_definition:
             delay: 2
             mode: healthcheck
             retries: 30
-        restart: on-failure
-        user: 1000:1000
-    identity_environment:
-        - EVO_MANAGER_APP_ID
-        - KAFKA_APPLICATION_ID_CONFIG
-        - KAFKA_LISTENER_ID_CONFIG
-    name: alarm-service
-    version: 1.0.0
+    connections: [clickhouse, kafka, redis, vault]

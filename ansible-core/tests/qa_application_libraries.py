@@ -12,6 +12,153 @@ FIXTURE = os.path.join(REPO, "examples/valid/application-libraries")
 
 
 class StandaloneLibrariesQA(unittest.TestCase):
+    def test_library_connection_keys_and_clickhouse_history_defaults(self):
+        with open(self.defaults) as stream:
+            connections = json.load(stream)['platform_application_definition']['connections']
+        connections['archive'] = dict(connections['clickhouse'])
+        for library in ('sdku', 'cspa'):
+            path = os.path.join(self.root, 'library-packages', library, '1.0.0/roles/library_' + library + '/defaults/main.yml')
+            self.edit(path, lambda d: d['platform_library_definition'].update(
+                connections=connections, resource_defaults={'clickhouse': {'databases': {
+                    'history': {'name': "{{ library_instance_id | replace('-', '_') }}"},
+                    'unused': {'name': 'not_created'}}}}))
+        def setup(d):
+            for lib in d['platform_desired_state']['applicationLibraryDeployments'].values():
+                lib['resources']['history'] = dict(kind='clickhouse.database', binding='analytics', parameters={})
+        self.edit(self.vars, setup)
+        def app(d):
+            definition = d['platform_application_definition']
+            definition['connections'] = list(connections)
+            definition['defaults']['environment'].update(
+                HISTORY_DB='{{ application_databases.clickhouse.history.name }}',
+                ARCHIVE_DB='{{ application_databases.archive.history.name }}')
+            definition['defaults']['accounts']['clickhouse']['databaseAccess'] = [dict(databaseRef='history', privileges=['SELECT'])]
+        self.edit(self.defaults, app)
+        def projected(expected='sdku'):
+            result = self.snapshot()
+            self.assertEqual('PASS', result['status'], [(f['code'], f.get('field')) for f in result['findings']])
+            for key, library in result['applicationLibraries']['libraries'].items():
+                name = expected if key == 'sdku' else 'cspa'
+                self.assertNotIn('unused', library['resources'])
+                self.assertEqual(name, library['resources']['history']['parameters']['name'])
+                instance = library['instances']['apigateway-' + key]
+                self.assertEqual('clickhouse', instance['connections']['archive']['serviceType'])
+                for placement in instance['placements'].values():
+                    self.assertEqual(name, placement['environment']['HISTORY_DB'])
+                    self.assertEqual(name, placement['environment']['ARCHIVE_DB'])
+            return result
+        projected()
+        self.edit(self.vars, lambda d: d['platform_desired_state']['applicationLibraryDeployments']['sdku'].update(
+            resource_defaults={'clickhouse': {'databases': {'history': {'name': 'group_history'}}}}))
+        projected('group_history')
+        self.edit(self.vars, lambda d: d['platform_desired_state']['applicationLibraryDeployments']['sdku']['resources']['history']['parameters'].update(name='resource_history'))
+        projected('resource_history')
+        self.edit(self.vars, lambda d: d['platform_desired_state']['applicationLibraryDeployments']['sdku']['resources']['history']['parameters'].pop('name'))
+        projected('group_history')
+        self.edit(self.vars, lambda d: d['platform_desired_state']['applicationLibraryDeployments']['sdku'].pop('resource_defaults'))
+        projected()
+        self.edit(self.defaults, lambda d: d['platform_application_definition']['connections'].append('missing'))
+        self.snapshot(expected_error='Unknown library connection:')
+
+    def test_direct_resource_keys_and_legacy_collision_reset(self):
+        for library in ('sdku', 'cspa'):
+            path = os.path.join(self.root, 'library-packages', library, '1.0.0/roles/library_' + library + '/defaults/main.yml')
+            self.edit(path, lambda d: d['platform_library_definition'].update(resource_defaults={
+                'kafka': {'topics': {'main': {'name': 'package.events'}, 'unused': {'name': 'not.created'}}},
+                'postgresql': {'databases': {'model': {'name': 'package-db'}, 'unused_db': {'name': 'not-created'}}}}))
+        def setup(d):
+            for key, lib in d['platform_desired_state']['applicationLibraryDeployments'].items():
+                lib['resources']['model'] = lib['resources'].pop('applicationDatabase')
+                lib['resources']['model']['parameters'] = {}
+                lib['resources'].update(main={'kind': 'kafka.topic', 'binding': 'messaging', 'parameters': {}},
+                                        alternate={'kind': 'kafka.topic', 'binding': 'messaging', 'parameters': {'name': key + '.alternate'}})
+                lib['resource_defaults'] = {'postgresql': {'databases': {'model': {'name': key + '-db'}}}}
+        self.edit(self.vars, setup)
+        def defaults(d):
+            app = d['platform_application_definition']
+            app['connections']['pg_alias'] = dict(library_binding='database', protocol='tcp')
+            app['defaults']['environment'].update(
+                MAIN_TOPIC='{{ application_topics.kafka.main.name }}',
+                DB_NAME='{{ application_databases.postgres.model.name }}',
+                DB_ALIAS='{{ application_databases.pg_alias.model.name }}')
+            app['defaults']['accounts']['postgres']['databaseAccess'] = [dict(databaseRef='model', privileges=['SELECT'])]
+        self.edit(self.defaults, defaults)
+        def projected(topic='package.events', database='sdku-db'):
+            result = self.snapshot()
+            self.assertEqual('PASS', result['status'], [(f['code'], f.get('field')) for f in result['findings']])
+            for key, lib in result['applicationLibraries']['libraries'].items():
+                self.assertNotIn('unused', lib['resources'])
+                self.assertNotIn('unused_db', lib['resources'])
+                db = database if key == 'sdku' else key + '-db'
+                self.assertEqual(db, lib['resources']['model']['parameters']['name'])
+                for row in lib['instances']['apigateway-' + key]['placements'].values():
+                    self.assertEqual(topic if key == 'sdku' else 'package.events', row['environment']['MAIN_TOPIC'])
+                    self.assertEqual(db, row['environment']['DB_NAME'])
+                    self.assertEqual(db, row['environment']['DB_ALIAS'])
+            return result
+        projected()
+        def resources(d):
+            return d['platform_desired_state']['applicationLibraryDeployments']['sdku']['resources']
+        self.edit(self.vars, lambda d: resources(d)['model']['parameters'].update(name='explicit-db'))
+        projected(database='explicit-db')
+        self.edit(self.vars, lambda d: resources(d)['model']['parameters'].pop('name'))
+        projected()
+        self.edit(self.vars, lambda d: d['platform_desired_state']['applicationLibraryDeployments']['sdku']['applications']['gateway'].setdefault('overrides', {}).update(topicBindings={'kafka': {'main': 'alternate'}}))
+        projected(topic='sdku.alternate')
+        self.edit(self.vars, lambda d: d['platform_desired_state']['applicationLibraryDeployments']['sdku']['applications']['gateway']['overrides'].pop('topicBindings'))
+        projected()
+        self.edit(self.vars, lambda d: resources(d)['main'].update(binding='database'))
+        self.snapshot(expected_error='FAILED!')
+        self.edit(self.vars, lambda d: resources(d).pop('main'))
+        self.snapshot(expected_error='FAILED!')
+
+    def test_named_topic_roles_inherit_names_and_reset_without_target_writes(self):
+        library_defaults = os.path.join(self.root, 'library-packages/sdku/1.0.0/roles/library_sdku/defaults/main.yml')
+        self.edit(library_defaults, lambda d: d['platform_library_definition'].update(resource_defaults={'kafka': {'topics': {
+            'events': {'name': 'package.events', 'partitions': 2, 'config': {'cleanup.policy': 'compact', 'retention.ms': 1000}},
+            'unused': {'name': 'not.created'}}}}))
+        def resources(d):
+            for key, lib in d['platform_desired_state']['applicationLibraryDeployments'].items():
+                lib['resources'].update(events={'kind': 'kafka.topic', 'binding': 'messaging', 'parameters': {}},
+                                        alternate={'kind': 'kafka.topic', 'binding': 'messaging', 'parameters': {'name': key + '.alternate'}})
+                lib['resource_defaults'] = {'kafka': {'topics': {'events': {'name': key + '.events', 'config': {'retention.ms': 2000}}}}}
+        self.edit(self.vars, resources)
+        self.edit(self.defaults, lambda d: d['platform_application_definition']['defaults'].update(
+            topicBindings={'kafka': {'main': 'events'}}, environment={'MAIN_TOPIC': '{{ application_topics.kafka.main.name }}'}))
+        def projected():
+            value = self.snapshot()
+            self.assertEqual('PASS', value['status'], [(f['code'], f.get('field')) for f in value['findings']])
+            for key, lib in value['applicationLibraries']['libraries'].items():
+                self.assertNotIn('unused', lib['topics'])
+                instance = lib['instances']['apigateway-' + key]
+                name = instance['topics']['kafka']['main']['name']
+                self.assertTrue(all(p['environment']['MAIN_TOPIC'] == name for p in instance['placements'].values()))
+            return value['applicationLibraries']['libraries']['sdku']
+        lib = projected()
+        self.assertEqual(('sdku.events', 2, 'compact', '2000'), (lib['topics']['events']['name'], lib['topics']['events']['partitions'],
+                         lib['topics']['events']['config']['cleanup.policy'], lib['topics']['events']['config']['retention.ms']))
+        self.edit(self.vars, lambda d: d['platform_desired_state']['applicationLibraryDeployments']['sdku']['resources']['events']['parameters'].update(name='resource.events'))
+        self.assertEqual('resource.events', projected()['instances']['apigateway-sdku']['topics']['kafka']['main']['name'])
+        self.edit(self.vars, lambda d: d['platform_desired_state']['applicationLibraryDeployments']['sdku']['applications']['gateway'].setdefault('overrides', {}).update(topicBindings={'kafka': {'main': 'alternate'}}))
+        self.assertEqual('sdku.alternate', projected()['instances']['apigateway-sdku']['topics']['kafka']['main']['name'])
+        self.edit(self.vars, lambda d: d['platform_desired_state']['applicationLibraryDeployments']['sdku']['applications']['gateway']['overrides'].pop('topicBindings'))
+        self.assertEqual('resource.events', projected()['instances']['apigateway-sdku']['topics']['kafka']['main']['name'])
+        self.edit(self.vars, lambda d: d['platform_desired_state']['applicationLibraryDeployments']['sdku']['resources']['events']['parameters'].pop('name'))
+        self.assertEqual('sdku.events', projected()['topics']['events']['name'])
+        # An ordinary ENV override remains independent; removing it restores the role template.
+        self.edit(self.vars, lambda d: d['platform_desired_state']['applicationLibraryDeployments']['sdku']['applications']['gateway'].setdefault('overrides', {}).update(environment={'MAIN_TOPIC': 'explicit.env'}))
+        value = self.snapshot()
+        instance = value['applicationLibraries']['libraries']['sdku']['instances']['apigateway-sdku']
+        self.assertTrue(all(p['environment']['MAIN_TOPIC'] == 'explicit.env' for p in instance['placements'].values()))
+        self.edit(self.vars, lambda d: d['platform_desired_state']['applicationLibraryDeployments']['sdku']['applications']['gateway']['overrides'].pop('environment'))
+        projected()
+        for ref in ('', 'missing'):
+            self.edit(self.vars, lambda d: d['platform_desired_state']['applicationLibraryDeployments']['sdku']['applications']['gateway']['overrides'].update(topicBindings={'kafka': {'main': ref}}))
+            self.snapshot(expected_error='Invalid Kafka topic role: sdku/gateway/kafka/main')
+        self.edit(self.vars, lambda d: d['platform_desired_state']['applicationLibraryDeployments']['sdku']['applications']['gateway']['overrides'].pop('topicBindings'))
+        self.edit(self.vars, lambda d: d['platform_desired_state']['applicationLibraryDeployments']['sdku']['resources']['events'].update(binding='wrong'))
+        self.snapshot(expected_error='Invalid Kafka topic role: sdku/gateway/kafka/main')
+
     def test_required_environment_resolves_after_package_parameter_defaults(self):
         def defaults(data):
             settings = data['platform_application_definition']['defaults']
@@ -419,10 +566,10 @@ done
         with open(output) as stream:
             self.assertEqual("PASS", json.load(stream)["status"])
 
-    def test_plaintext_never_returned_in_projection(self):
-        self.edit(self.vars, lambda data: data["platform_desired_state"]["applicationLibraryDeployments"]["sdku"]["applications"]["gateway"]["overrides"]["parameters"].update(password="DO-NOT-PRINT"))
+    def test_private_key_never_returned_in_projection(self):
+        self.edit(self.vars, lambda data: data["platform_desired_state"]["applicationLibraryDeployments"]["sdku"]["applications"]["gateway"]["overrides"]["parameters"].update(password="-----BEGIN PRIVATE KEY-----DO-NOT-PRINT"))
         snapshot = self.snapshot()
-        self.assertNotIn("DO-NOT-PRINT", json.dumps(snapshot))
+        self.assertNotIn("-----BEGIN PRIVATE KEY-----DO-NOT-PRINT", json.dumps(snapshot))
         self.assertIn("APPLICATION_PLAINTEXT_FORBIDDEN", [f["code"] for f in snapshot["findings"]])
 
     def test_free_resources_grants_endpoint_never_leak_secrets(self):
@@ -437,13 +584,13 @@ done
                 with open(self.defaults, "w") as stream:
                     json.dump(original_defaults, stream)
                 if section == "resources":
-                    self.edit(self.vars, lambda data: data["platform_desired_state"]["applicationLibraryDeployments"]["sdku"]["resources"]["applicationDatabase"]["parameters"].update(password="DO-NOT-PRINT"))
+                    self.edit(self.vars, lambda data: data["platform_desired_state"]["applicationLibraryDeployments"]["sdku"]["resources"]["applicationDatabase"]["parameters"].update(password="-----BEGIN PRIVATE KEY-----DO-NOT-PRINT"))
                 elif section == "grants":
-                    self.edit(self.defaults, lambda data: data["platform_application_definition"]["defaults"]["accounts"]["redis"].update(grants=[{"token": "DO-NOT-PRINT"}]))
+                    self.edit(self.defaults, lambda data: data["platform_application_definition"]["defaults"]["accounts"]["redis"].update(grants=[{"token": "-----BEGIN PRIVATE KEY-----DO-NOT-PRINT"}]))
                 else:
-                    self.edit(self.vars, lambda data: data["platform_desired_state"]["applicationLibraryDeployments"]["sdku"]["applications"]["gateway"]["overrides"].update(endpoint={"enabled": False, "haproxy": {"password": "DO-NOT-PRINT"}}))
+                    self.edit(self.vars, lambda data: data["platform_desired_state"]["applicationLibraryDeployments"]["sdku"]["applications"]["gateway"]["overrides"].update(endpoint={"enabled": False, "haproxy": {"password": "-----BEGIN PRIVATE KEY-----DO-NOT-PRINT"}}))
                 snapshot = self.snapshot()
-                self.assertNotIn("DO-NOT-PRINT", json.dumps(snapshot))
+                self.assertNotIn("-----BEGIN PRIVATE KEY-----DO-NOT-PRINT", json.dumps(snapshot))
                 self.assertEqual("BLOCKED", snapshot["applicationLibraries"]["status"])
                 self.assertEqual({}, snapshot["applicationLibraries"]["libraries"])
 

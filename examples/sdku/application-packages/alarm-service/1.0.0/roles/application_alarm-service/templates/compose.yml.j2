@@ -15,12 +15,10 @@ services:
     environment:
 {% set common_environment = library_runtime.defaults.environment %}
 {% for name, value in application_environment.items() %}
-{% if name not in ["TNT_DEMO_CLIENT_PORT", "WEB_SERVER_PORT"] and (name not in common_environment or (value | string) != (common_environment[name] | string)) %}
+{% if name not in common_environment or (value | string) != (common_environment[name] | string) %}
       {{ name | to_json }}: {{ (value | string) | to_json }}
 {% endif %}
 {% endfor %}
-      "WEB_SERVER_PORT": {{ (application_effective.ports['port-1'].container | string) | to_json }}
-      "TNT_DEMO_CLIENT_PORT": {{ (application_effective.ports['port-1'].container | string) | to_json }}
     labels:
       "platform.installer.project": {{ application_project_id | to_json }}
       "platform.installer.library": {{ library_runtime.library_id | to_json }}

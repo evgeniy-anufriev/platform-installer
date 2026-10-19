@@ -88,7 +88,14 @@
       "maxProperties": 128
     },
     "connections": {
-      "$ref": "application.schema.json#/properties/connections"
+      "allOf": [
+        {
+          "$ref": "application.schema.json#/properties/connections"
+        },
+        {
+          "type": "object"
+        }
+      ]
     },
     "runtime_directory": {
       "maxLength": 4096,
@@ -238,10 +245,103 @@
                 "additionalProperties": false
               },
               "maxProperties": 128
+            },
+            "databases": {
+              "type": "object",
+              "maxProperties": 128,
+              "propertyNames": {
+                "pattern": "^[a-z][A-Za-z0-9_-]*$",
+                "maxLength": 128
+              },
+              "additionalProperties": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 63
+                  }
+                }
+              }
             }
           },
           "required": [],
           "additionalProperties": false
+        },
+        "kafka": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "topics": {
+              "type": "object",
+              "maxProperties": 128,
+              "propertyNames": {
+                "pattern": "^[a-z][A-Za-z0-9_-]*$",
+                "maxLength": 128
+              },
+              "additionalProperties": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 249,
+                    "pattern": "^[A-Za-z0-9._-]+$"
+                  },
+                  "partitions": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "replication_factor": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "config": {
+                    "type": "object",
+                    "maxProperties": 128,
+                    "propertyNames": {
+                      "pattern": "^[A-Za-z0-9._-]+$",
+                      "maxLength": 128
+                    },
+                    "additionalProperties": {
+                      "type": [
+                        "string",
+                        "number",
+                        "boolean"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "postgresql": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "databases": {
+              "type": "object",
+              "maxProperties": 128,
+              "propertyNames": {
+                "pattern": "^[a-z][A-Za-z0-9_-]*$",
+                "maxLength": 128
+              },
+              "additionalProperties": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 63
+                  }
+                }
+              }
+            }
+          }
         }
       },
       "required": [],

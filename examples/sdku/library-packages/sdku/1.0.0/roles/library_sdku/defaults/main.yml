@@ -1,10 +1,14 @@
 platform_library_definition:
+    name: sdku
+    version: 1.0.0
+
     runtime_directory: "~/{{ library_instance_id }}"
     connections:
-        postgres: {library_binding: database, protocol: tcp}
-        clickhouse: {library_binding: analytics, protocol: https}
-        kafka: {library_binding: messaging, protocol: tcp}
-        redis: {library_binding: cache, protocol: tcp}
+        postgres: {library_binding: database, protocol: tcp, purpose: client}
+        clickhouse: {library_binding: analytics, protocol: https, purpose: client}
+        kafka: {library_binding: messaging, protocol: tcp, purpose: client}
+        redis: {library_binding: cache, protocol: tcp, purpose: client}
+        vault: {library_binding: secrets, protocol: https, purpose: client}
         schema-registry: {library_binding: messaging, purpose: schema-registry, protocol: https}
     connection_defaults:
         kafka:
@@ -80,7 +84,6 @@ platform_library_definition:
             kafka.producer.socket.connection.setup.timeout.max.ms: "5000"
             kafka.producer.socket.connection.setup.timeout.ms: "1500"
         parameters: {}
-    name: sdku
     shared_secrets:
         java_keystore_password:
             source:
@@ -174,10 +177,35 @@ platform_library_definition:
         user-preferences:
             applicationRef: user-preferences@1.0.0
             required: false
-    version: 1.0.0
-
     resource_defaults:
+        postgresql:
+            databases:
+                model: {name: tn-scada}
+                alarms_db: {name: tn-scada-alarms}
+                preferences: {name: user-preferences}
+                ef-store: {name: ef-store}
+        kafka:
+            topics:
+                main:
+                    name: sdku-main
+                    partitions: 1
+                    config: {cleanup.policy: delete}
+                main_compact:
+                    name: sdku-main-compact
+                    partitions: 1
+                    config: {cleanup.policy: compact}
+                alarms:
+                    name: sdku-alarms
+                    partitions: 1
+                    config: {cleanup.policy: delete}
+                alarms_compact:
+                    name: sdku-alarms-compact
+                    partitions: 1
+                    config: {cleanup.policy: compact}
         clickhouse:
+            databases:
+                history:
+                    name: "{{ library_instance_id | replace('-', '_') }}"
             tables:
                 records:
                     engine: MergeTree

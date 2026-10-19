@@ -1,18 +1,10 @@
 platform_application_definition:
-    connections:
-        kafka:
-            library_binding: messaging
-            protocol: tcp
-        postgres:
-            library_binding: database
-            protocol: tcp
-        redis:
-            library_binding: cache
-            protocol: tcp
-        vault:
-            library_binding: secrets
-            protocol: https
+    name: data-manager
+    version: 1.0.0
     defaults:
+        image: evoscada-docker.artifacts.tn.tngrp.ru/data-manager:1.5.0-SNAPSHOT-7a795dc1-redos
+        user: 1000:1000
+        restart: on-failure
         accounts:
             postgres:
                 credentials:
@@ -25,7 +17,7 @@ platform_application_definition:
                             kind: literal
                             value: '{{ application_instance_id | replace(''-'', ''_'') }}'
                 databaseAccess:
-                    - databaseRef: database
+                    - databaseRef: model
                       privileges:
                         - SELECT
                         - INSERT
@@ -59,9 +51,15 @@ platform_application_definition:
             - -jar
             - data-manager.jar
         environment:
-            ALERT_CLASS_TOPIC: '{{ application_parameters.source_variables.REDIS_ALERT_CLASS_TOPIC | default(undef(hint=''Configure SDKU REDIS_ALERT_CLASS_TOPIC''), true) }}'
-            ALERT_HANDLER_TOPIC: '{{ application_parameters.source_variables.REDIS_ALERT_HANDLER_TOPIC | default(undef(hint=''Configure SDKU REDIS_ALERT_HANDLER_TOPIC''), true) }}'
-            DB_CONNECTION_STRING: $${POSTGRES_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${POSTGRES_SSL_OPTIONS}
+            SERVER_PORT: &web_server_port >-
+                {{ ((application_job.application.definition.defaults.ports | default({})) |
+                combine(application_job.slot.overrides.ports | default({}), recursive=true) |
+                combine(application_job.instance.overrides.ports | default({}), recursive=true) |
+                combine(application_job.hostOverride.ports | default({}), recursive=true))['port-1'].container }}
+            WEB_SERVER_PORT: *web_server_port
+            ALERT_CLASS_TOPIC: alert-class
+            ALERT_HANDLER_TOPIC: alert-hdl
+            DB_CONNECTION_STRING: $${POSTGRES_JDBC_ENDPOINT}/{{ application_databases.postgres.model.name }}?$${POSTGRES_SSL_OPTIONS}
             JAVA_OPTS: -Xmx8192m
             LOGGER_DATAMANAGER_LEVEL: INFO
             LOGGER_FILE_MAX_SIZE: 150Mb
@@ -69,33 +67,25 @@ platform_application_definition:
             LOGGER_TOTAL_SIZE_CAP: 200Mb
             LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_JDBC: DEBUG
             PROFILES_ACTIVE: specversion, development
-            REDIS_CONNECTION_TYPE: '{{ application_parameters.source_variables.REDIS_CONNECTION_TYPE | default(undef(hint=''Configure SDKU REDIS_CONNECTION_TYPE''), true) }}'
-            REDIS_METADATA_TOPIC: '{{ application_parameters.source_variables.REDIS_METADATA_TOPIC | default(undef(hint=''Configure SDKU REDIS_METADATA_TOPIC''), true) }}'
-            REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
+            REDIS_CONNECTION_TYPE: Standalone
+            REDIS_METADATA_TOPIC: dm-meta
+            REDIS_SENTINEL_MASTER: '{{ application_parameters.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
             SEARCH_ITEMS_LIMIT: "200"
             SERVER_ALLOWED_ORIGINS: '*'
-            SERVER_PORT: 10041
             SPRING_APPLICATION_NAME: data-manager
             SPRING_JPA_PROPERTIES_JAKARTA_PERSISTENCE_QUERY_TIMEOUT: 2000
             SPRING_KAFKA_CLIENT_ID: '{{ application_instance_id }}-$${SERVER_ID}'
             SQL_INIT_MODE: always
             STATIC_FILES_FOLDER: /usr/local/app/static/
             TN_SCADA_DATA_MANAGER_INITIALIZATION_BATCH_SIZE: 50000
-            TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
+            TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
             kafka.consumer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-consumer'
             kafka.producer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-producer'
             server.max-http-request-header-size: 100MB
             spring.servlet.multipart.max-file-size: 50MB
             spring.servlet.multipart.max-request-size: 50MB
-        image: evoscada-docker.artifacts.tn.tngrp.ru/data-manager:1.5.0-SNAPSHOT-7a795dc1-redos
         parameters:
-            database_name: tn-scada
-            source_variables:
-                REDIS_ALERT_CLASS_TOPIC: alert-class
-                REDIS_ALERT_HANDLER_TOPIC: alert-hdl
-                REDIS_CONNECTION_TYPE: Standalone
-                REDIS_METADATA_TOPIC: dm-meta
-                REDIS_SENTINEL_MASTER: ""
+            REDIS_SENTINEL_MASTER: ""
         ports:
             port-1:
                 container: 10041
@@ -175,8 +165,4 @@ platform_application_definition:
             delay: 2
             mode: healthcheck
             retries: 30
-        restart: on-failure
-        user: 1000:1000
-    identity_environment: []
-    name: data-manager
-    version: 1.0.0
+    connections: [kafka, postgres, redis, vault]

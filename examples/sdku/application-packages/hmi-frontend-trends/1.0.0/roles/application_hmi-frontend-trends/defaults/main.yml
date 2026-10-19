@@ -1,6 +1,9 @@
 platform_application_definition:
-    connections: {}
+    name: hmi-frontend-trends
+    version: 1.0.0
     defaults:
+        image: evoscada-docker.artifacts.tn.tngrp.ru/hmi-frontend-trends:0.0.1-f878fe7c
+        restart: on-failure
         command:
             - /app/docker-entrypoint.sh
         environment:
@@ -9,13 +12,9 @@ platform_application_definition:
             EVO_SCHEDULER: evo-scheduler
             EVO_SCHEDULER_WAITING_TIME: 60000
             GRANT_ACCESS_AUDIT: grant-access-audit
-            NGINX_URL: https://nginx.{{ application_parameters.source_variables.URL_ROOT | default(undef(hint='Configure SDKU URL_ROOT'), true) }}
+            NGINX_URL: ""
             ORS_TREE: ""
             TRENDS_FRONT: hmi-frontend-trends
-        image: evoscada-docker.artifacts.tn.tngrp.ru/hmi-frontend-trends:0.0.1-f878fe7c
-        parameters:
-            source_variables:
-                URL_ROOT: ""
         ports:
             port-1:
                 container: 10181
@@ -24,7 +23,4 @@ platform_application_definition:
             delay: 2
             mode: container
             retries: 30
-        restart: on-failure
-    identity_environment: []
-    name: hmi-frontend-trends
-    version: 1.0.0
+    connections: []

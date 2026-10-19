@@ -24,6 +24,23 @@ def load(path):
 
 
 class ApplicationLibrariesTest(unittest.TestCase):
+    def test_application_connection_keys_keep_library_declarations_complete(self):
+        validator = SchemaValidator(CONTRACTS)
+        app = load(os.path.join(FIXTURE, 'application-packages/apigateway/1.0.0/roles/application_apigateway/defaults/main.yml'))['platform_application_definition']
+        library = load(os.path.join(FIXTURE, 'library-packages/sdku/1.0.0/roles/library_sdku/defaults/main.yml'))['platform_library_definition']
+        app_schema = os.path.join(CONTRACTS, 'application-libraries/v1alpha1/application.schema.json')
+        library_schema = os.path.join(CONTRACTS, 'application-libraries/v1alpha1/library.schema.json')
+        declarations = app['connections']
+        self.assertFalse(validator.validate(app, app_schema))
+        app['connections'] = list(declarations)
+        self.assertFalse(validator.validate(app, app_schema))
+        library['connections'] = declarations
+        self.assertFalse(validator.validate(library, library_schema))
+        library['connections'] = list(declarations)
+        self.assertTrue(validator.validate(library, library_schema))
+        app['connections'] = ['kafka', 'kafka']
+        self.assertTrue(validator.validate(app, app_schema))
+
     def test_topics_use_the_selected_deployment_mode_and_effective_replication_factor(self):
         deployments = {'single': {'serviceType': 'kafka', 'mode': 'kraft-standalone',
                                   'members': {'b': {'roles': ['broker', 'controller'], 'host': 'h'}}}}

@@ -1,15 +1,17 @@
 platform_application_definition:
-    connections: {}
+    name: sdku-vtor-ui
+    version: 1.0.0
     defaults:
+        image: evoscada-docker.artifacts.tn.tngrp.ru/sdku-vtor-ui:0.1.0-e5633c83
+        user: 1000:1000
+        restart: on-failure
         command:
             - /app/docker-entrypoint.sh
         environment:
-            REACT_APP_VTOR_HOST_URL: https://nginx.{{ application_parameters.source_variables.URL_ROOT | default(undef(hint='Configure SDKU URL_ROOT'), true) }}/sdku-vtor
-            REACT_APP_VTOR_HOST_URL_WS: wss://nginx.{{ application_parameters.source_variables.URL_ROOT | default(undef(hint='Configure SDKU URL_ROOT'), true) }}/sdku-vtor
-        image: evoscada-docker.artifacts.tn.tngrp.ru/sdku-vtor-ui:0.1.0-e5633c83
+            REACT_APP_VTOR_HOST_URL: https://nginx.{{ application_parameters.URL_ROOT | default(undef(hint='Configure SDKU URL_ROOT'), true) }}/sdku-vtor
+            REACT_APP_VTOR_HOST_URL_WS: wss://nginx.{{ application_parameters.URL_ROOT | default(undef(hint='Configure SDKU URL_ROOT'), true) }}/sdku-vtor
         parameters:
-            source_variables:
-                URL_ROOT: ""
+            URL_ROOT: ""
         ports:
             port-1:
                 container: 10311
@@ -18,8 +20,4 @@ platform_application_definition:
             delay: 2
             mode: container
             retries: 30
-        restart: on-failure
-        user: 1000:1000
-    identity_environment: []
-    name: sdku-vtor-ui
-    version: 1.0.0
+    connections: []

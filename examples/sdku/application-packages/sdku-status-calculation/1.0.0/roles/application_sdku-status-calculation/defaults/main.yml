@@ -1,18 +1,10 @@
 platform_application_definition:
-    connections:
-        clickhouse:
-            library_binding: analytics
-            protocol: https
-        kafka:
-            library_binding: messaging
-            protocol: tcp
-        redis:
-            library_binding: cache
-            protocol: tcp
-        vault:
-            library_binding: secrets
-            protocol: https
+    name: sdku-status-calculation
+    version: 1.0.0
     defaults:
+        image: evoscada-docker.artifacts.tn.tngrp.ru/sdku-status-calculation:0.5.0-1508923e-redos
+        user: 1000:1000
+        restart: always
         accounts:
             clickhouse:
                 credentials:
@@ -24,9 +16,9 @@ platform_application_definition:
                         source:
                             kind: literal
                             value: '{{ application_instance_id | replace(''-'', ''_'') }}'
-                databaseRef: analytics
+                databaseRef: history
                 grants:
-                    - databaseRef: analytics
+                    - databaseRef: history
                       privileges:
                         - SELECT
                         - INSERT
@@ -57,26 +49,25 @@ platform_application_definition:
             - -jar
             - sdku-status-calculation.jar
         parameters:
-            database_name: ""
-            source_variables:
-                SDKU_STATUS_CALCULATION_CONSENSUS_TCP_PORT: &consensus_tcp_port >-
-                    {{ ((application_job.application.definition.defaults.ports | default({})) |
-                    combine(application_job.slot.overrides.ports | default({}), recursive=true) |
-                    combine(application_job.instance.overrides.ports | default({}), recursive=true) |
-                    combine(application_job.hostOverride.ports | default({}), recursive=true))['port-2'].container }}
-                ALARM_SERVICE_URL: ""
-                ALARM_TOPIC_COMPACT: sdku-alarms-compact
-                DATA_MANAGER_URL_ROOT: ""
-                REDIS_SENTINEL_MASTER: ""
+            DATA_MANAGER_URL_ROOT: ""
         environment:
+            SDKU_STATUS_CALCULATION_CONSENSUS_TCP_PORT: &consensus_tcp_port >-
+                {{ ((application_job.application.definition.defaults.ports | default({})) | combine(application_job.slot.overrides.ports | default({}), recursive=true) | combine(application_job.instance.overrides.ports | default({}), recursive=true) | combine(application_job.hostOverride.ports | default({}), recursive=true))['port-2'].container }}
+            SERVER_PORT: &web_server_port >-
+                {{ ((application_job.application.definition.defaults.ports | default({})) |
+                combine(application_job.slot.overrides.ports | default({}), recursive=true) |
+                combine(application_job.instance.overrides.ports | default({}), recursive=true) |
+                combine(application_job.hostOverride.ports | default({}), recursive=true))['port-1'].container }}
+            server.port: *web_server_port
+            WEB_SERVER_PORT: *web_server_port
             ALARM_SERVICE_API_READ_TIMEOUT: 5000
-            ALARM_SERVICE_API_ROOT_URI: '{{ application_parameters.source_variables.ALARM_SERVICE_URL | default(undef(hint=''Configure SDKU ALARM_SERVICE_URL''), true) }}'
+            ALARM_SERVICE_API_ROOT_URI: ""
             ALARM_SERVICE_API_SERVER_PATH: /generate-alarm
             ALARM_SERVICE_API_TYPE: buffered
-            ALARM_TOPIC: '{{ application_parameters.source_variables.ALARM_TOPIC_COMPACT | default(undef(hint=''Configure SDKU ALARM_TOPIC_COMPACT''), true) }}'
-            DB_CONNECTION_STRING: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
+            ALARM_TOPIC: '{{ application_topics.kafka.alarms_compact.name }}'
+            DB_CONNECTION_STRING: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_databases.clickhouse.history.name }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
             DB_TYPE: clickhouse
-            DATA_MANAGER_ROOT_URL: '{{ application_parameters.source_variables.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
+            DATA_MANAGER_ROOT_URL: '{{ application_parameters.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
             EVO_MANAGER_APP_ID: 'cst-{{ ((application_instance_id ~ ''-'' ~ application_job.hostId) | hash(''sha256''))[:20] }}'
             EVO_SERVICES_CONSENSUS_SERVICE_MOCK: >-
                 {{ (_application_inputs.jobs | selectattr('libraryId', 'equalto', library_instance_id) |
@@ -97,19 +88,19 @@ platform_application_definition:
                 {{- peers | join(',') -}}
             EVO_SERVICES_CONSENSUS_SERVICE_LISTEN_PORT: *consensus_tcp_port
             EVO_SERVICES_CONSENSUS_SERVICE_INSTANCE_NAME: '{{ application_job.hostId }}'
-            SERVER_PORT: 10361
             SPRING_KAFKA_CLIENT_ID: '{{ application_instance_id }}-$${SERVER_ID}'
-            TN_SCADA_DATA_MANAGER_URL: '{{ application_parameters.source_variables.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
-            TN_SCADA_DATASOURCE_URL: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
+            TN_SCADA_DATA_MANAGER_URL: '{{ application_parameters.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
+            TN_SCADA_DATASOURCE_URL: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_databases.clickhouse.history.name }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
             TN_SCADA_METADATA_TARGET_PROJECT: TNSV
-            TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
+            TN_SCADA_REDIS_SENTINEL_MASTER: ""
             kafka.consumer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-consumer'
             kafka.producer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-producer'
             server.max-http-header-size: 10MB
             server.max-http-request-header-size: 10MB
             tn-scada.metadata.dontShowTargetProjectInNames: true
             tn-scada.metadata.load-projects: TNSV
-        image: evoscada-docker.artifacts.tn.tngrp.ru/sdku-status-calculation:0.5.0-1508923e-redos
+            KAFKA_APPLICATION_ID_CONFIG: '{{ application_instance_id }}'
+            KAFKA_LISTENER_ID_CONFIG: '{{ application_instance_id }}'
         ports:
             port-1:
                 container: 10361
@@ -176,10 +167,4 @@ platform_application_definition:
             delay: 2
             mode: container
             retries: 30
-        restart: always
-        user: 1000:1000
-    identity_environment:
-        - KAFKA_APPLICATION_ID_CONFIG
-        - KAFKA_LISTENER_ID_CONFIG
-    name: sdku-status-calculation
-    version: 1.0.0
+    connections: [clickhouse, kafka, redis, vault]

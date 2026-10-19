@@ -26,41 +26,55 @@
       ]
     },
     "connections": {
-      "type": "object",
-      "propertyNames": {
-        "type": "string",
-        "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$",
-        "maxLength": 128
-      },
-      "additionalProperties": {
-        "type": "object",
-        "properties": {
-          "library_binding": {
+      "oneOf": [
+        {
+          "type": "object",
+          "propertyNames": {
             "type": "string",
             "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$",
             "maxLength": 128
           },
-          "purpose": {
-            "enum": [
-              "client",
-              "sentinel",
-              "schema-registry"
-            ]
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "library_binding": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$",
+                "maxLength": 128
+              },
+              "purpose": {
+                "enum": [
+                  "client",
+                  "sentinel",
+                  "schema-registry"
+                ]
+              },
+              "protocol": {
+                "enum": [
+                  "tcp",
+                  "https",
+                  "http"
+                ]
+              }
+            },
+            "required": [
+              "library_binding"
+            ],
+            "additionalProperties": false
           },
-          "protocol": {
-            "enum": [
-              "tcp",
-              "https",
-              "http"
-            ]
-          }
+          "maxProperties": 128
         },
-        "required": [
-          "library_binding"
-        ],
-        "additionalProperties": false
-      },
-      "maxProperties": 128
+        {
+          "type": "array",
+          "maxItems": 128,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$",
+            "maxLength": 128
+          }
+        }
+      ]
     },
     "identity_environment": {
       "type": "array",

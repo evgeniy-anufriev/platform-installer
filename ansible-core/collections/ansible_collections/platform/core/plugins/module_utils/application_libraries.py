@@ -517,8 +517,9 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
             topic_bindings = {}
             for alias, refs in settings.get('topicBindings', {}).items():
                 connection = connections[alias]
-                selected = [topics[ref] for ref in refs]
-                if connection['serviceType'] != 'kafka' or any(t['deploymentRef'] != connection['deploymentRef'] for t in selected):
+                selected = {role: topics[ref] for role, ref in refs.items()} if isinstance(refs, dict) else [topics[ref] for ref in refs]
+                values = selected.values() if isinstance(selected, dict) else selected
+                if connection['serviceType'] != 'kafka' or any(t['deploymentRef'] != connection['deploymentRef'] for t in values):
                     raise ValueError('APPLICATION_TOPIC_BINDING_INVALID')
                 topic_bindings[alias] = selected
         except (KeyError, TypeError, ValueError):
