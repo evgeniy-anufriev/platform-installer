@@ -30,6 +30,7 @@ services:
     extends:
       service: base
     environment:
+      "SERVER_ID": "${SERVER_ID}"
 {% for name, value in environment.items() %}
       {{ name | to_json }}: {{ (value | string) | to_json }}
 {% endfor %}

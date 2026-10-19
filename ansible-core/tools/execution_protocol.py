@@ -403,9 +403,7 @@ def _candidate_logical_path(name):
             return True
         if kind == 'library' and relative == 'files/.env':
             return True
-        return (relative.startswith((role + 'templates/', 'configuration/', 'assets/')) and
-                os.path.splitext(parts[-1])[1].lower() in
-                ('.j2', '.yml', '.yaml', '.json', '.conf', '.cfg', '.hcl', '.txt', '.properties', '.xml', '.crt', '.pem'))
+        return relative.startswith((role + 'templates/', 'configuration/', 'assets/'))
     if len(parts) < 3 or parts[0] != "inventory" or parts[1] not in ("group_vars", "host_vars"):
         return False
     return os.path.splitext(parts[-1])[1].lower() in (".yml", ".yaml", ".json")
@@ -421,7 +419,8 @@ def _candidate_members(archive):
     for member in members:
         if not member.isreg() or member.linkname or member.sparse is not None or not _candidate_logical_path(member.name):
             raise LifecycleError("PROJECT_CANDIDATE_ARCHIVE_UNSAFE")
-        if member.size < 0 or member.size > MAX_CANDIDATE_FILE_BYTES:
+        limit = 8 * 1024 * 1024 if member.name.startswith(('application-packages/', 'library-packages/')) else MAX_CANDIDATE_FILE_BYTES
+        if member.size < 0 or member.size > limit:
             raise LifecycleError("PROJECT_CANDIDATE_LIMIT_EXCEEDED")
         total += member.size
         if total > MAX_CANDIDATE_TOTAL_BYTES:

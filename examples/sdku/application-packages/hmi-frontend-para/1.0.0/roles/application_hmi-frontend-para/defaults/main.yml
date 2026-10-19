@@ -17,6 +17,7 @@ platform_application_definition:
                 mount-1: ""
                 mount-2: ""
             source_variables:
+                PUBLIC_HOST: ""
                 URL_ROOT: ""
         ports:
             port-1:

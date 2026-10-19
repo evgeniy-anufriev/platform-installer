@@ -118,10 +118,19 @@
   ansible.builtin.set_fact:
     application_config_contents: "{{ application_config_contents + [{'destination': application_config.destination, 'content': _application_config_content, 'sha256': (_application_config_content | hash('sha256')), 'mode': application_config.mode | default('0644')}] }}"
   vars:
-    _application_config_content: "{{ lookup('ansible.builtin.template', application_config.path) if application_config.template is defined else lookup('ansible.builtin.file', application_config.path, rstrip=false) }}"
+    _application_config_content: "{{ lookup('ansible.builtin.template', application_config.path) }}"
   loop: "{{ application_runtime_job.configs }}"
   loop_control:
     loop_var: application_config
+  when: application_config.template is defined
+  no_log: true
+
+- name: Read declared source files without text conversion
+  ansible.builtin.include_tasks: source_config.yml
+  loop: "{{ application_runtime_job.configs }}"
+  loop_control:
+    loop_var: application_config
+  when: application_config.source is defined
   no_log: true
 
 - name: Require bounded nonsecret rendered config contents before any file write

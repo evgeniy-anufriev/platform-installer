@@ -38,7 +38,7 @@ services:
       "interval": 30s
       "test":
           - CMD-SHELL
-          - curl http://localhost:{{ application_effective.ports['port-1'].container }}/actuator/health | grep UP
+          - curl --fail http://localhost:{{ application_effective.ports['port-1'].container }}/actuator/health | grep UP
       "timeout": 15s
     deploy:
       "resources":

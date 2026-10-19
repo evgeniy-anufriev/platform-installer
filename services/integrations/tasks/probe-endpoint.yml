@@ -9,7 +9,6 @@
   changed_when: false
   failed_when: false
   no_log: true
-
 - name: Require every source endpoint hostname to resolve
   ansible.builtin.assert:
     that:
@@ -45,6 +44,37 @@
   failed_when: false
   no_log: true
 
+  retries: 3
+  delay: 2
+  until:
+    - _platform_integration_endpoint_http.status | default(-1) | int >= 100
+    - _platform_integration_endpoint_http.status | default(-1) | int <= 599
+    - _platform_integration_endpoint_http.status | default(-1) | int not in [502, 503]
+    - (_platform_integration_probe | default({})).expected_status is not defined or _platform_integration_endpoint_http.status | default(-1) | int == _platform_integration_probe.expected_status | int
+  # Preserve the final response for safe diagnostics and the assertion below.
+  ignore_errors: true
+
+- name: Report safe public endpoint HTTP diagnostics
+  ansible.builtin.debug:
+    msg:
+      url: "{{ response.url | default('https://' ~ response.item) | regex_replace('[?#].*$', '') }}"
+      expected_status: "{{ (_platform_integration_probe | default({})).expected_status | default('100..599 except 502/503') }}"
+      actual_status: "{{ response.status | default(-1) }}"
+      timeout: "{{ (_platform_integration_probe | default({})).timeout | default(10) }}"
+      attempts: "{{ response.attempts | default(1) }}"
+      reason: "{{ (response.msg | default('')) | regex_search('CERTIFICATE_VERIFY_FAILED|timed out|Name or service not known|Temporary failure in name resolution|Connection refused|HTTP Error [0-9]+: [A-Za-z ]+') | default('HTTP_STATUS_RECEIVED' if (response.status | default(-1) | int) >= 100 else 'REQUEST_FAILED', true) }}"
+  loop: "{{ range(0, _platform_integration_endpoint_http.results | default([]) | length) | list }}"
+  loop_control:
+    label: "{{ response.item }}"
+  vars:
+    response: "{{ _platform_integration_endpoint_http.results[item] }}"
+
+- name: Publish safe endpoint results through the existing diagnostic event
+  ansible.builtin.include_tasks: report-endpoint-http.yml
+  loop: "{{ range(0, _platform_integration_endpoint_http.results | default([]) | length) | list }}"
+  loop_control:
+    loop_var: _platform_probe_response_index
+  when: (_platform_integration_probe | default({})).expected_status is defined
 - name: Require a routed HTTP response other than HAProxy unavailable statuses
   ansible.builtin.assert:
     that:

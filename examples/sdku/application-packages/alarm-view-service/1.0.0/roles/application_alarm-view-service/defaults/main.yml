@@ -16,22 +16,81 @@ platform_application_definition:
             library_binding: secrets
             protocol: https
     defaults:
+        accounts:
+            clickhouse:
+                credentials:
+                    password:
+                        source:
+                            kind: runtime_secret_ref
+                            ref: '{{ application_instance_id }}-clickhouse-password'
+                    username:
+                        source:
+                            kind: literal
+                            value: '{{ application_instance_id | replace(''-'', ''_'') }}'
+                databaseRef: analytics
+                grants:
+                    - databaseRef: analytics
+                      privileges:
+                        - SELECT
+                        - INSERT
+                      tables:
+                        - '*'
+                mode: managed
+            postgres:
+                credentials:
+                    password:
+                        source:
+                            kind: runtime_secret_ref
+                            ref: '{{ application_instance_id }}-postgres-password'
+                    username:
+                        source:
+                            kind: literal
+                            value: '{{ application_instance_id | replace(''-'', ''_'') }}'
+                databaseAccess:
+                    - databaseRef: database
+                      privileges:
+                        - SELECT
+                        - INSERT
+                        - UPDATE
+                        - DELETE
+                        - CREATE
+                mode: managed
+            redis:
+                credentials:
+                    password:
+                        source:
+                            kind: runtime_secret_ref
+                            ref: '{{ application_instance_id }}-redis-password'
+                    username:
+                        source:
+                            kind: literal
+                            value: '{{ application_instance_id | replace(''-'', ''_'') }}'
+                grants:
+                    channels:
+                        - '*'
+                    commands:
+                        - +@all
+                        - -@admin
+                    keys:
+                        - '*'
+                mode: managed
         command:
             - java
             - -jar
             - alarm-view-service.jar
         environment:
-            DB_CONNECTION_STRING: "$${POSTGRES_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${POSTGRES_SSL_OPTIONS}"
-            HISTORY_DATASOURCE_CLICKHOUSE_JDBCURL: "$${CLICKHOUSE_HTTP_ENDPOINT}?$${CLICKHOUSE_SSL_OPTIONS}"
             ALERT_CLASS_TOPIC: '{{ application_parameters.source_variables.REDIS_ALERT_CLASS_TOPIC | default(undef(hint=''Configure SDKU REDIS_ALERT_CLASS_TOPIC''), true) }}'
             ALERT_HANDLER_TOPIC: '{{ application_parameters.source_variables.REDIS_ALERT_HANDLER_TOPIC | default(undef(hint=''Configure SDKU REDIS_ALERT_HANDLER_TOPIC''), true) }}'
             AUTO_ACK_DELAY: "600000"
             AUTO_ACK_TIME: PT2H
+            DB_CONNECTION_STRING: $${POSTGRES_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${POSTGRES_SSL_OPTIONS}
             DB_ROOT_CERT: /opt/application/pki/ca-chain.pem
+            HISTORY_DATASOURCE_CLICKHOUSE_JDBCURL: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
             JAVA_OPTS: -Xmx4096m
             KAFKA_ACK_ALARM_TOPIC: dev-ack-alarm
             KAFKA_ALARM_COMPACT_TOPIC: '{{ application_parameters.source_variables.ALARM_TOPIC | default(undef(hint=''Configure SDKU ALARM_TOPIC''), true) }}-compact'
-            KAFKA_ALARM_CONSUMER_ID: alarm-view-service-{{ application_instance_id }}
+            KAFKA_ALARM_CONSUMER_ID: '{{ application_instance_id }}-$${SERVER_ID}-alarm-consumer'
+            KAFKA_ALARM_PRODUCER_ID: '{{ application_instance_id }}-$${SERVER_ID}-alarm-producer'
             KAFKA_ALARM_GROUP: alarm-view-service-{{ application_instance_id }}
             KAFKA_ALARM_GROUP_WS: alarm-view-service-{{ application_instance_id }}
             KAFKA_ALARM_HISTORY_TOPIC: '{{ application_parameters.source_variables.ALARM_TOPIC | default(undef(hint=''Configure SDKU ALARM_TOPIC''), true) }}'
@@ -42,12 +101,16 @@ platform_application_definition:
             KAFKA_SIGNAL_TOPIC: '{{ application_parameters.source_variables.MAIN_TOPIC | default(undef(hint=''Configure SDKU MAIN_TOPIC''), true) }}'
             LOGGER_LEVEL: DEBUG
             SERVER_ALLOWED_ORIGINS: '*'
+            SERVER_PORT: 10021
             SIM_DELAY: "1000"
             SLEUTH_TRACE_ENABLED: false
+            SPRING_KAFKA_CLIENT_ID: '{{ application_instance_id }}-$${SERVER_ID}'
             SPRING_PROFILES_ACTIVE: sdku
             SQL_INIT_MODE: never
             TIME_STAMP_PATTERN: yyyy.MM.dd HH:mm:ss.SSS
             TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
+            kafka.consumer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-consumer'
+            kafka.producer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-producer'
             logging.level.ru.tnt.transneft.alarmservice.processor: WARN
             server.max-http-request-header-size: 100MB
         image: evoscada-docker.artifacts.tn.tngrp.ru/alarm-view-service:0.4.0-96e90ee0-redos
@@ -70,18 +133,50 @@ platform_application_definition:
                 method: approle
             mode: process-supervisor
             secret_bindings:
+                KAFKA_KEYSTORE_PASSWORD:
+                    source:
+                        library_secret: java_keystore_password
+                KAFKA_TRUSTSTORE_PASSWORD:
+                    source:
+                        library_secret: java_keystore_password
+                REDIS_USERNAME:
+                    source:
+                        account: redis
+                        field: username
+                REDIS_PASSWORD:
+                    source:
+                        account: redis
+                        field: password
+                REDIS_SENTINEL_USERNAME:
+                    source:
+                        account: redis
+                        field: username
+                REDIS_SENTINEL_PASSWORD:
+                    source:
+                        account: redis
+                        field: password
+                REDIS_KEYSTORE_PASSWORD:
+                    source:
+                        library_secret: java_keystore_password
+                REDIS_TRUSTSTORE_PASSWORD:
+                    source:
+                        library_secret: java_keystore_password
                 DB_PASSWORD:
                     source:
-                        library_secret: postgres_scada_password
+                        account: postgres
+                        field: password
                 DB_USERNAME:
                     source:
-                        library_secret: postgres_scada_user
+                        account: postgres
+                        field: username
                 HISTORY_DATASOURCE_CLICKHOUSE_PASSWORD:
                     source:
-                        library_secret: clickhouse_scada_password
+                        account: clickhouse
+                        field: password
                 HISTORY_DATASOURCE_CLICKHOUSE_USERNAME:
                     source:
-                        library_secret: clickhouse_scada_username
+                        account: clickhouse
+                        field: username
                 JAVA_KEYSTORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password
@@ -93,16 +188,20 @@ platform_application_definition:
                         library_secret: java_keystore_password
                 TN_SCADA_REDIS_ACL_PASSWORD:
                     source:
-                        library_secret: redis_password
+                        account: redis
+                        field: password
                 TN_SCADA_REDIS_ACL_SENTINEL_PASSWORD:
                     source:
-                        library_secret: redis_sentinel_password
+                        account: redis
+                        field: password
                 TN_SCADA_REDIS_ACL_SENTINEL_USERNAME:
                     source:
-                        library_secret: redis_sentinel_username
+                        account: redis
+                        field: username
                 TN_SCADA_REDIS_ACL_USERNAME:
                     source:
-                        library_secret: redis_username
+                        account: redis
+                        field: username
                 TN_SCADA_REDIS_SSL_PROPERTIES_KEY_STORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password

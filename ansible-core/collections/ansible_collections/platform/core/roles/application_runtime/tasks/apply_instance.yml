@@ -16,7 +16,8 @@
 
 - name: Materialize declared instance config bytes
   ansible.builtin.copy:
-    content: "{{ item.content }}"
+    src: "{{ item.path | default(omit) }}"
+    content: "{{ item.content if item.path is not defined else omit }}"
     dest: "{{ application_runtime_job.instancePath }}/config/{{ item.destination }}"
     owner: "{{ application_runtime_job.account }}"
     mode: "{{ item.mode }}"

@@ -1,4 +1,5 @@
 """Typed A2 preflight. Ansible owns precedence, templates and target execution."""
+import base64
 import hashlib
 import os
 import re
@@ -232,7 +233,14 @@ def prepare_runtime(root, snapshot, rows, desired, lock, validator, loader):
 def validate_config_contents(configs):
     for item in configs:
         content = item["content"]
-        if not isinstance(content, str) or len(content.encode("utf-8")) > 1024 * 1024:
+        if not isinstance(content, str):
+            raise ValueError("APPLICATION_CONFIG_CONTENT_INVALID")
+        if item.get("encoding") == "base64":
+            raw = base64.b64decode(content, validate=True)
+            if len(raw) > 8 * 1024 * 1024 or hashlib.sha256(raw).hexdigest() != item['sha256']:
+                raise ValueError("APPLICATION_CONFIG_CONTENT_INVALID")
+            content = raw.decode("utf-8", errors="replace")
+        elif len(content.encode("utf-8")) > 1024 * 1024:
             raise ValueError("APPLICATION_CONFIG_CONTENT_INVALID")
         findings = []
         nonsecret_values(content, "config", findings)

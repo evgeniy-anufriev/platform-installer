@@ -367,7 +367,11 @@ func addExportDocument(root *exportDirectory, logical string, result *exportObse
 	if seen[storedLogical] || caseFolded[strings.ToLower(storedLogical)] {
 		return errors.New("EXPORT_SOURCE_UNSAFE")
 	}
-	content, identity, err := root.readFile(parts, maxExportFileBytes)
+	limit := maxExportFileBytes
+	if safeApplicationPackagePath(storedLogical) {
+		limit = maxApplicationPackageFileBytes
+	}
+	content, identity, err := root.readFile(parts, limit)
 	if err != nil {
 		return err
 	}

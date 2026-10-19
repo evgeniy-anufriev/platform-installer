@@ -13,15 +13,56 @@ platform_application_definition:
             library_binding: secrets
             protocol: https
     defaults:
+        accounts:
+            clickhouse:
+                credentials:
+                    password:
+                        source:
+                            kind: runtime_secret_ref
+                            ref: '{{ application_instance_id }}-clickhouse-password'
+                    username:
+                        source:
+                            kind: literal
+                            value: '{{ application_instance_id | replace(''-'', ''_'') }}'
+                databaseRef: analytics
+                grants:
+                    - databaseRef: analytics
+                      privileges:
+                        - SELECT
+                        - INSERT
+                      tables:
+                        - '*'
+                mode: managed
+            redis:
+                credentials:
+                    password:
+                        source:
+                            kind: runtime_secret_ref
+                            ref: '{{ application_instance_id }}-redis-password'
+                    username:
+                        source:
+                            kind: literal
+                            value: '{{ application_instance_id | replace(''-'', ''_'') }}'
+                grants:
+                    channels:
+                        - '*'
+                    commands:
+                        - +@all
+                        - -@admin
+                    keys:
+                        - '*'
+                mode: managed
         command:
             - java
             - -XX:MaxRAMPercentage=70.0
             - -jar
             - evo-manager.jar
         environment:
-            TN_SCADA_DATASOURCE_URL: "$${CLICKHOUSE_HTTP_ENDPOINT}?$${CLICKHOUSE_SSL_OPTIONS}"
             ALARM_SERVICE_API_TYPE: mock
             DATA_MANAGER_ROOT_URL: '{{ application_parameters.source_variables.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
+            DB_CONNECTION_STRING: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
+            DB_TYPE: clickhouse
+            tn-scada.clickhouse.health.enabled: false
             EVO_MANAGER_HISTORY_SERVICE_MOCK: true
             EVO_MANAGER_JAR_PATH: /usr/local/app/imitator/lib
             EVO_MANAGER_MAIN_CLASS: tnt.tnscada.Imitator
@@ -32,18 +73,21 @@ platform_application_definition:
             PRESSURES_CSV: /usr/local/app/imitator/data/pressures.csv
             REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
             SPRING_KAFKA_APPLICATION_ID: evo-manager-{{ application_instance_id }}
+            SPRING_KAFKA_CLIENT_ID: '{{ application_instance_id }}-$${SERVER_ID}'
             SPRING_KAFKA_LISTENER_GROUP_ID: evo-manager-{{ application_instance_id }}
             SPRING_MAIN_WEB_APPLICATION_TYPE: NONE
             TN_SCADA_DATA_MANAGER_URL_ROOT: '{{ application_parameters.source_variables.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
+            TN_SCADA_DATASOURCE_URL: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
             TN_SCADA_METADATA_LOAD_PROJECTS: TNSVHYDRO
             TN_SCADA_METADATA_TARGET_PROJECT: TNSVHYDRO
             TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
+            kafka.consumer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-consumer'
+            kafka.producer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-producer'
             server.max-http-request-header-size: 100MB
         image: evoscada-docker.artifacts.tn.tngrp.ru/evo-manager:3.10.21-eedea228-redos
+        config_files: []
         parameters:
-            mount_sources:
-                mount-1: ""
-                mount-2: ""
+            database_name: ""
             source_variables:
                 DATA_MANAGER_URL_ROOT: ""
                 REDIS_SENTINEL_MASTER: ""
@@ -55,6 +99,14 @@ platform_application_definition:
                 method: approle
             mode: process-supervisor
             secret_bindings:
+                DB_PASSWORD:
+                    source:
+                        account: clickhouse
+                        field: password
+                DB_USERNAME:
+                    source:
+                        account: clickhouse
+                        field: username
                 JAVA_KEYSTORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password
@@ -69,19 +121,23 @@ platform_application_definition:
                         library_secret: java_keystore_password
                 REDIS_PASSWORD:
                     source:
-                        library_secret: redis_password
+                        account: redis
+                        field: password
                 REDIS_SENTINEL_PASSWORD:
                     source:
-                        library_secret: redis_sentinel_password
+                        account: redis
+                        field: password
                 REDIS_SENTINEL_USERNAME:
                     source:
-                        library_secret: redis_sentinel_username
+                        account: redis
+                        field: username
                 REDIS_TRUSTSTORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password
                 REDIS_USERNAME:
                     source:
-                        library_secret: redis_username
+                        account: redis
+                        field: username
                 SPRING_KAFKA_SSL_KEY_STORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password
@@ -90,16 +146,20 @@ platform_application_definition:
                         library_secret: java_keystore_password
                 TN_SCADA_REDIS_ACL_PASSWORD:
                     source:
-                        library_secret: redis_password
+                        account: redis
+                        field: password
                 TN_SCADA_REDIS_ACL_SENTINEL_PASSWORD:
                     source:
-                        library_secret: redis_sentinel_password
+                        account: redis
+                        field: password
                 TN_SCADA_REDIS_ACL_SENTINEL_USERNAME:
                     source:
-                        library_secret: redis_sentinel_username
+                        account: redis
+                        field: username
                 TN_SCADA_REDIS_ACL_USERNAME:
                     source:
-                        library_secret: redis_username
+                        account: redis
+                        field: username
                 TN_SCADA_REDIS_SSL_PROPERTIES_KEY_STORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password

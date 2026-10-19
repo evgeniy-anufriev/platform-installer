@@ -128,12 +128,18 @@ removed access stays in the hook's bounded reconciliation scope. An explicit
 grant-policy switch is normalized after ordinary Ansible combine; no Go/UI
 precedence resolver is added. Object owner authority is preserved when the
 operator assigns ownership to the application account. ClickHouse managed
-SELECT/INSERT deltas are reconciled only for the witnessed account and its
+SELECT/INSERT/CREATE TABLE deltas are reconciled only for the witnessed account and its
 library's witnessed managed DBs; cluster revokes/grants share the existing native
 batch and per-server verification. Verify performs no grants or probe DDL.
 The [canonical project contract](project-contract.md#application-account-database-access)
 defines authority and compatibility; capability gating prevents stale runtimes
 from silently ignoring the new PostgreSQL policy.
+
+Public HTTPS endpoint verification retains its DNS, TLS and expected-status
+policy, with bounded request retries after provider updates. Only the address,
+expected/actual status, timeout and closed reason enter the existing HTTP
+diagnostic event. Raw responses, headers, cookies and bodies remain private;
+the Ansible display additionally reports attempts and omits URL query/fragment.
 
 A7 adds target-free application descriptions to the existing machine plan and
 runtime-secret descriptor entrypoints. Nonempty libraries use plan v1alpha4 and

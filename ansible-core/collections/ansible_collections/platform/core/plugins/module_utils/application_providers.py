@@ -43,7 +43,7 @@ def normalize_clickhouse_grants(values, databases, provider_id):
         tables, privileges = value['tables'], value['privileges']
         if (not database or database['providerId'] != provider_id or not isinstance(tables, list) or not tables or len(tables) > 256
                 or not isinstance(privileges, list) or not privileges or any(not isinstance(item, str) for item in privileges)
-                or not set(privileges) <= {'SELECT', 'INSERT'}):
+                or not set(privileges) <= {'SELECT', 'INSERT', 'CREATE TABLE'}):
             raise ValueError('APPLICATION_PROVIDER_GRANTS_INVALID')
         for table in tables:
             name = '*' if table == '*' else identifier(table)

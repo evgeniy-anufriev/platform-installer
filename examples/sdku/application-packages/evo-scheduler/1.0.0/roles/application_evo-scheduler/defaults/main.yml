@@ -13,23 +13,66 @@ platform_application_definition:
             library_binding: secrets
             protocol: https
     defaults:
+        accounts:
+            postgres:
+                credentials:
+                    password:
+                        source:
+                            kind: runtime_secret_ref
+                            ref: '{{ application_instance_id }}-postgres-password'
+                    username:
+                        source:
+                            kind: literal
+                            value: '{{ application_instance_id | replace(''-'', ''_'') }}'
+                databaseAccess:
+                    - databaseRef: database
+                      privileges:
+                        - SELECT
+                        - INSERT
+                        - UPDATE
+                        - DELETE
+                        - CREATE
+                mode: managed
+            redis:
+                credentials:
+                    password:
+                        source:
+                            kind: runtime_secret_ref
+                            ref: '{{ application_instance_id }}-redis-password'
+                    username:
+                        source:
+                            kind: literal
+                            value: '{{ application_instance_id | replace(''-'', ''_'') }}'
+                grants:
+                    channels:
+                        - '*'
+                    commands:
+                        - +@all
+                        - -@admin
+                    keys:
+                        - '*'
+                mode: managed
         command:
             - java
             - -jar
             - evo-scheduler.jar
         environment:
-            DB_CONNECTION_STRING: "$${POSTGRES_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${POSTGRES_SSL_OPTIONS}"
             ALARM_VIEW_SERVICE_ROOT_URL: '{{ application_parameters.source_variables.ALARM_VIEW_SERVICE_URL | default(undef(hint=''Configure SDKU ALARM_VIEW_SERVICE_URL''), true) }}'
             DATA_MANAGER_CERTIFICATE_VALIDATION: false
             DATA_MANAGER_DTO_PORTION_SIZE: 300
             DATA_MANAGER_ROOT_URL: '{{ application_parameters.source_variables.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
+            DB_CONNECTION_STRING: $${POSTGRES_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${POSTGRES_SSL_OPTIONS}
             HMI_BACKEND_ROOT_URL: '{{ application_parameters.source_variables.HMI_BACKEND_URL | default(undef(hint=''Configure SDKU HMI_BACKEND_URL''), true) }}'
             INCOMING_FILE_DIR: /usr/local/app/data
             JAVA_OPTS: -Xmx15000m
             RESULT_FILE_DIR: /usr/local/app/data
+            SERVER_PORT: 12080
+            SPRING_KAFKA_CLIENT_ID: '{{ application_instance_id }}-$${SERVER_ID}'
             TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
             WEB_CLIENT_CONNECTION_TIMEOUT: 100000
             WEB_CLIENT_RESPONSE_TIMEOUT: 30000
+            kafka.consumer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-consumer'
+            kafka.producer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-producer'
             server.max-http-request-header-size: 100MB
         image: evoscada-docker.artifacts.tn.tngrp.ru/evo-scheduler:0.1.1-SNAPSHOT-078b0422-redos
         parameters:
@@ -52,10 +95,12 @@ platform_application_definition:
             secret_bindings:
                 DB_PASSWORD:
                     source:
-                        library_secret: postgres_scada_password
+                        account: postgres
+                        field: password
                 DB_USERNAME:
                     source:
-                        library_secret: postgres_scada_user
+                        account: postgres
+                        field: username
                 JAVA_KEYSTORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password
@@ -67,16 +112,20 @@ platform_application_definition:
                         library_secret: java_keystore_password
                 TN_SCADA_REDIS_ACL_PASSWORD:
                     source:
-                        library_secret: redis_password
+                        account: redis
+                        field: password
                 TN_SCADA_REDIS_ACL_SENTINEL_PASSWORD:
                     source:
-                        library_secret: redis_sentinel_password
+                        account: redis
+                        field: password
                 TN_SCADA_REDIS_ACL_SENTINEL_USERNAME:
                     source:
-                        library_secret: redis_sentinel_username
+                        account: redis
+                        field: username
                 TN_SCADA_REDIS_ACL_USERNAME:
                     source:
-                        library_secret: redis_username
+                        account: redis
+                        field: username
                 TN_SCADA_REDIS_SSL_PROPERTIES_KEY_STORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password

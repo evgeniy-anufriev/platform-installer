@@ -251,6 +251,9 @@ class ApplicationProvidersTest(unittest.TestCase):
                   {'databaseRef': 'analytics', 'tables': ['events'], 'privileges': ['INSERT']}]
         self.assertEqual([{'database': 'sdku', 'table': 'events', 'privileges': ['INSERT', 'SELECT']}],
                          normalize_clickhouse_grants(grants, databases, 'ch'))
+        self.assertEqual([{'database': 'sdku', 'table': '*', 'privileges': ['CREATE TABLE', 'INSERT', 'SELECT']}],
+                         normalize_clickhouse_grants([dict(grants[0], tables=['*'],
+                             privileges=['SELECT', 'INSERT', 'CREATE TABLE'])], databases, 'ch'))
         for value in [dict(grants[0], privileges=['ALL']), dict(grants[0], databaseRef='foreign'),
                       dict(grants[0], tables=['events;DROP']), dict(grants[0], sql='GRANT ALL')]:
             with self.subTest(value=value), self.assertRaises(ValueError):

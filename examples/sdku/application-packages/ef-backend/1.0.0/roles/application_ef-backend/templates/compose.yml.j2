@@ -39,7 +39,7 @@ services:
       "retries": 10
       "test":
           - CMD-SHELL
-          - curl http://localhost:{{ application_effective.ports['port-1'].container }}/swagger-ui/index.html | grep Swagger
+          - curl --fail http://localhost:{{ application_effective.ports['port-1'].container }}/swagger-ui/index.html | grep Swagger
       "timeout": 15s
     deploy:
       "resources":

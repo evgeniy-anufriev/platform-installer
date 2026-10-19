@@ -313,7 +313,8 @@ and deleting DML access does not claim to remove that owner authority. No
 ownership transfer or elevated role attributes are performed by this feature.
 
 ClickHouse retains its existing grants format, supporting databaseRef plus
-tables `['*']` and SELECT/INSERT. The UI grants access on the selected database's
+tables `['*']` and SELECT/INSERT, with optional CREATE TABLE in defaults/group_vars
+for applications that initialize tables. The UI grants access on the selected database's
 `database.*`, covering existing and future objects without requiring individual
 tables to exist when grants are applied. For managed accounts, these direct privileges
 in the same library's managed databases are authoritative. The existing

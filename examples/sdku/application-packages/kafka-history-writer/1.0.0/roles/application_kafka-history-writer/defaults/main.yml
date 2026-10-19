@@ -13,22 +13,68 @@ platform_application_definition:
             library_binding: secrets
             protocol: https
     defaults:
+        accounts:
+            clickhouse:
+                credentials:
+                    password:
+                        source:
+                            kind: runtime_secret_ref
+                            ref: '{{ application_instance_id }}-clickhouse-password'
+                    username:
+                        source:
+                            kind: literal
+                            value: '{{ application_instance_id | replace(''-'', ''_'') }}'
+                databaseRef: analytics
+                grants:
+                    - databaseRef: analytics
+                      privileges:
+                        - SELECT
+                        - INSERT
+                      tables:
+                        - '*'
+                mode: managed
+            redis:
+                credentials:
+                    password:
+                        source:
+                            kind: runtime_secret_ref
+                            ref: '{{ application_instance_id }}-redis-password'
+                    username:
+                        source:
+                            kind: literal
+                            value: '{{ application_instance_id | replace(''-'', ''_'') }}'
+                grants:
+                    channels:
+                        - '*'
+                    commands:
+                        - +@all
+                        - -@admin
+                    keys:
+                        - '*'
+                mode: managed
         command:
             - java
             - -jar
             - kafka-history-writer.jar
         environment:
-            DB_CONNECTION_STRING: "$${CLICKHOUSE_HTTP_ENDPOINT}?$${CLICKHOUSE_SSL_OPTIONS}"
+            DB_CONNECTION_STRING: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
             KAFKA_CONSUMER_GROUP_ID: kafka-history-writer
             LOGGER_LEVEL: INFO
+            SERVER_PORT: 10241
             SPRING_KAFKA_APPLICATION_ID: kafka-history-writer
+            SPRING_KAFKA_CLIENT_ID: '{{ application_instance_id }}-$${SERVER_ID}'
             SPRING_KAFKA_LISTENER_GROUP_ID: kafka-history-writer
             TARGET_TOPICS: '{{ application_parameters.source_variables.MAIN_TOPIC | default(undef(hint=''Configure SDKU MAIN_TOPIC''), true) }}'
             TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
             TZ: Europe/Moscow
+            # SDK database-1.0.4 health cannot parse a JDBC URL with multiple hosts.
+            tn-scada.clickhouse.health.enabled: "false"
+            kafka.consumer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-consumer'
+            kafka.producer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-producer'
             server.max-http-request-header-size: 100MB
         image: evoscada-docker.artifacts.tn.tngrp.ru/kafka-history-writer:0.0.67-412ebcbf-redos
         parameters:
+            database_name: ""
             source_variables:
                 MAIN_TOPIC: sdku-main
                 REDIS_SENTINEL_MASTER: ""
@@ -45,10 +91,12 @@ platform_application_definition:
             secret_bindings:
                 DB_PASSWORD:
                     source:
-                        library_secret: clickhouse_scada_password
+                        account: clickhouse
+                        field: password
                 DB_USERNAME:
                     source:
-                        library_secret: clickhouse_scada_username
+                        account: clickhouse
+                        field: username
                 JAVA_KEYSTORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password
@@ -60,16 +108,20 @@ platform_application_definition:
                         library_secret: java_keystore_password
                 TN_SCADA_REDIS_ACL_PASSWORD:
                     source:
-                        library_secret: redis_password
+                        account: redis
+                        field: password
                 TN_SCADA_REDIS_ACL_SENTINEL_PASSWORD:
                     source:
-                        library_secret: redis_sentinel_password
+                        account: redis
+                        field: password
                 TN_SCADA_REDIS_ACL_SENTINEL_USERNAME:
                     source:
-                        library_secret: redis_sentinel_username
+                        account: redis
+                        field: username
                 TN_SCADA_REDIS_ACL_USERNAME:
                     source:
-                        library_secret: redis_username
+                        account: redis
+                        field: username
                 TN_SCADA_REDIS_SSL_PROPERTIES_KEY_STORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password

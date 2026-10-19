@@ -13,19 +13,66 @@ platform_application_definition:
             library_binding: secrets
             protocol: https
     defaults:
+        accounts:
+            clickhouse:
+                credentials:
+                    password:
+                        source:
+                            kind: runtime_secret_ref
+                            ref: '{{ application_instance_id }}-clickhouse-password'
+                    username:
+                        source:
+                            kind: literal
+                            value: '{{ application_instance_id | replace(''-'', ''_'') }}'
+                databaseRef: analytics
+                grants:
+                    - databaseRef: analytics
+                      privileges:
+                        - SELECT
+                        - INSERT
+                        - CREATE TABLE
+                      tables:
+                        - '*'
+                mode: managed
+            redis:
+                credentials:
+                    password:
+                        source:
+                            kind: runtime_secret_ref
+                            ref: '{{ application_instance_id }}-redis-password'
+                    username:
+                        source:
+                            kind: literal
+                            value: '{{ application_instance_id | replace(''-'', ''_'') }}'
+                grants:
+                    channels:
+                        - '*'
+                    commands:
+                        - +@all
+                        - -@admin
+                    keys:
+                        - '*'
+                mode: managed
         command:
             - java
             - -jar
             - kafka-ch-replicatior.jar
         environment:
-            DB_CONNECTION_STRING: "$${CLICKHOUSE_HTTP_ENDPOINT}?$${CLICKHOUSE_SSL_OPTIONS}"
             ALARMS_TOPIC: '{{ application_parameters.source_variables.ALARM_TOPIC | default(undef(hint=''Configure SDKU ALARM_TOPIC''), true) }}'
+            DB_CONNECTION_STRING: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
             JAVA_OPTS: -Xmx1024m
+            SERVER_PORT: 10031
+            SPRING_KAFKA_CLIENT_ID: '{{ application_instance_id }}-$${SERVER_ID}'
             TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
             TZ: Europe/Moscow
+            # SDK database-1.0.4 health cannot parse a JDBC URL with multiple hosts.
+            tn-scada.clickhouse.health.enabled: "false"
+            kafka.consumer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-consumer'
+            kafka.producer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-producer'
             server.max-http-request-header-size: 100MB
         image: evoscada-docker.artifacts.tn.tngrp.ru/kafka-ch-replicatior:0.0.5-SNAPSHOT-14953056-redos
         parameters:
+            database_name: ""
             source_variables:
                 ALARM_TOPIC: sdku-alarms
                 REDIS_SENTINEL_MASTER: ""
@@ -42,10 +89,12 @@ platform_application_definition:
             secret_bindings:
                 DB_PASSWORD:
                     source:
-                        library_secret: clickhouse_scada_password
+                        account: clickhouse
+                        field: password
                 DB_USERNAME:
                     source:
-                        library_secret: clickhouse_scada_username
+                        account: clickhouse
+                        field: username
                 JAVA_KEYSTORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password
@@ -57,16 +106,20 @@ platform_application_definition:
                         library_secret: java_keystore_password
                 TN_SCADA_REDIS_ACL_PASSWORD:
                     source:
-                        library_secret: redis_password
+                        account: redis
+                        field: password
                 TN_SCADA_REDIS_ACL_SENTINEL_PASSWORD:
                     source:
-                        library_secret: redis_sentinel_password
+                        account: redis
+                        field: password
                 TN_SCADA_REDIS_ACL_SENTINEL_USERNAME:
                     source:
-                        library_secret: redis_sentinel_username
+                        account: redis
+                        field: username
                 TN_SCADA_REDIS_ACL_USERNAME:
                     source:
-                        library_secret: redis_username
+                        account: redis
+                        field: username
                 TN_SCADA_REDIS_SSL_PROPERTIES_KEY_STORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password

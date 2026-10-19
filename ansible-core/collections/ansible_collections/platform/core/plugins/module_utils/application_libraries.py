@@ -54,7 +54,7 @@ def checked_file(root, relative):
             raise ValueError("Package symlinks are forbidden")
     if os.path.commonpath((os.path.realpath(root), os.path.realpath(current))) != os.path.realpath(root):
         raise ValueError("Package path escapes project")
-    if not os.path.isfile(current) or os.path.getsize(current) > 1024 * 1024:
+    if not os.path.isfile(current) or os.path.getsize(current) > 8 * 1024 * 1024:
         raise ValueError("Package file missing or oversized")
     return current
 

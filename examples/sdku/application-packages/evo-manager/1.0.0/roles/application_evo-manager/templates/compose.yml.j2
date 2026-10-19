@@ -25,15 +25,18 @@ services:
       "platform.installer.instance": {{ application_instance_id | to_json }}
       "platform.installer.host": {{ library_runtime.host_id | to_json }}
       "platform.installer.config-digest": {{ application_config_digest | to_json }}
+{% if application_effective.ports %}
     ports:
 {% for port in application_effective.ports.values() %}
       - "{{ port.published }}:{{ port.container }}"
 {% endfor %}
+{% endif %}
     volumes:
       - {{ (application_runtime.vault_path ~ ':/opt/vault:ro') | to_json }}
       - {{ (application_runtime.pki_path ~ ':/opt/application/pki:ro') | to_json }}
-      - {{ ((application_effective.parameters.mount_sources['mount-1'] | default(undef(hint='Configure SDKU mount /usr/local/app/project-libs'), true)) ~ ':/usr/local/app/project-libs:ro') | to_json }}
-      - {{ ((application_effective.parameters.mount_sources['mount-2'] | default(undef(hint='Configure SDKU mount /usr/local/app/imitator'), true)) ~ ':/usr/local/app/imitator:ro') | to_json }}
+{% for config in application_effective.config_files %}
+      - {{ (application_runtime.config_path ~ '/' ~ config.destination ~ ':/usr/local/app/' ~ config.destination ~ ':ro') | to_json }}
+{% endfor %}
     deploy:
       "resources":
           limits:

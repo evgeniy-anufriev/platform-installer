@@ -178,14 +178,14 @@ def required_grants(account):
         identifier(grant['database'])
         if grant['table'] != '*':
             identifier(grant['table'])
-        if not set(grant['privileges']) <= {'SELECT', 'INSERT'}:
+        if not set(grant['privileges']) <= {'SELECT', 'INSERT', 'CREATE TABLE'}:
             raise ProviderFailure('CLICKHOUSE_APPLICATION_GRANTS_INVALID')
         values.update((grant['database'], grant['table'], privilege) for privilege in grant['privileges'])
     return values
 
 
 def managed_grant_delta(account, rows, databases):
-    """Reconcile only direct SELECT/INSERT on this account's witnessed library DBs.
+    """Reconcile direct SELECT/INSERT/CREATE TABLE on this account's witnessed library DBs.
 
     Custody and UUID/marker checks remain the caller's prerequisite. Anything
     outside that limited authority remains a conflict, not a cleanup candidate.
@@ -200,7 +200,7 @@ def managed_grant_delta(account, rows, databases):
     expected = required_grants(account)
     removed = current - expected
     for database, table, privilege in removed:
-        if database not in owned or privilege not in {'SELECT', 'INSERT'}:
+        if database not in owned or privilege not in {'SELECT', 'INSERT', 'CREATE TABLE'}:
             raise ProviderFailure('CLICKHOUSE_APPLICATION_GRANTS_DRIFT')
         if table != '*':
             identifier(table)
@@ -215,12 +215,12 @@ def user_batch(account, password, missing, create, clustered, revoked=()):
         verifier = hashlib.sha256(password.encode()).hexdigest()
         statements.append("CREATE USER %s%s IDENTIFIED WITH sha256_hash BY '%s' DEFAULT ROLE NONE;" % (name, cluster, verifier))
     for database, table, privilege in sorted(revoked):
-        if privilege not in {'SELECT', 'INSERT'}:
+        if privilege not in {'SELECT', 'INSERT', 'CREATE TABLE'}:
             raise ProviderFailure('CLICKHOUSE_APPLICATION_GRANTS_INVALID')
         scope = identifier(database) + '.' + ('*' if table == '*' else identifier(table))
         statements.append('REVOKE%s %s ON %s FROM %s;' % (cluster, privilege, scope, name))
     for database, table, privilege in sorted(missing):
-        if privilege not in {'SELECT', 'INSERT'}:
+        if privilege not in {'SELECT', 'INSERT', 'CREATE TABLE'}:
             raise ProviderFailure('CLICKHOUSE_APPLICATION_GRANTS_INVALID')
         scope = identifier(database) + '.' + ('*' if table == '*' else identifier(table))
         statements.append('GRANT%s %s ON %s TO %s;' % (cluster, privilege, scope, name))

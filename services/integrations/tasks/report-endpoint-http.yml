@@ -1,0 +1,13 @@
+---
+- name: Publish the safe endpoint result through the existing diagnostic event
+  ansible.builtin.assert:
+    that: true
+    quiet: true
+    success_msg: >-
+      HTTP backend {{ response.item if response.item is match('^[A-Za-z0-9.:\[\]-]{1,253}$') else '<invalid>' }}:{{ _platform_integration_probe_port_override | default(443) }};
+      expected={{ _platform_integration_probe.expected_status }}; actual={{ response.status | default(-1) }};
+      timeout={{ _platform_integration_probe.timeout | default(10) }}s;
+      reason={{ 'OK' if response.status | default(-1) | int == _platform_integration_probe.expected_status | int else 'HTTP_STATUS_MISMATCH' if response.status | default(-1) | int >= 100 else 'TIMEOUT' if 'timed out' in (response.msg | default('')) else 'CONNECTION_REFUSED' if 'Connection refused' in (response.msg | default('')) else 'DNS_FAILURE' if 'Name or service not known' in (response.msg | default('')) else 'REQUEST_FAILED' }}
+  vars:
+    response: "{{ _platform_integration_endpoint_http.results[_platform_probe_response_index] }}"
+  tags: [platform_http_backend_diagnostic]

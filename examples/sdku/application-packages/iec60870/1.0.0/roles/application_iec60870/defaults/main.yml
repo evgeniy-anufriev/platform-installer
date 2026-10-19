@@ -10,6 +10,26 @@ platform_application_definition:
             library_binding: secrets
             protocol: https
     defaults:
+        accounts:
+            redis:
+                credentials:
+                    password:
+                        source:
+                            kind: runtime_secret_ref
+                            ref: '{{ application_instance_id }}-redis-password'
+                    username:
+                        source:
+                            kind: literal
+                            value: '{{ application_instance_id | replace(''-'', ''_'') }}'
+                grants:
+                    channels:
+                        - '*'
+                    commands:
+                        - +@all
+                        - -@admin
+                    keys:
+                        - '*'
+                mode: managed
         command:
             - '{{ sdku_start_commands[''iec60870''] | mandatory }}'
         environment:
@@ -21,11 +41,14 @@ platform_application_definition:
             SET_INVALID_BIT: 2
             SMOOTH: false
             SPRING_CONFIG_ADDITIONAL_LOCATION: /usr/local/config/connection.yml
+            SPRING_KAFKA_CLIENT_ID: '{{ application_instance_id }}-$${SERVER_ID}'
             TN_SCADA_DRIVER_GROUP_ID: iec-1
             TN_SCADA_METADATA_TARGET_PROJECT: TNSV
             TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
             TNSCADA_PROXY_IMPL: dist-proxy.direct
             WEB_SERVER_PORT: 8088
+            kafka.consumer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-consumer'
+            kafka.producer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-producer'
             server.max-http-request-header-size: 100MB
             tn-scada.metadata.dontShowTargetProjectInNames: true
             tn-scada.metadata.load-projects: TNSV
@@ -35,7 +58,10 @@ platform_application_definition:
                 mount-6: ""
             source_variables:
                 REDIS_SENTINEL_MASTER: ""
-        ports: {}
+        ports:
+            port-1:
+                container: 8088
+                published: 8088
         provisioner:
             approle:
                 bind_secret_id: false
@@ -54,16 +80,20 @@ platform_application_definition:
                         library_secret: java_keystore_password
                 TN_SCADA_REDIS_ACL_PASSWORD:
                     source:
-                        library_secret: redis_password
+                        account: redis
+                        field: password
                 TN_SCADA_REDIS_ACL_SENTINEL_PASSWORD:
                     source:
-                        library_secret: redis_sentinel_password
+                        account: redis
+                        field: password
                 TN_SCADA_REDIS_ACL_SENTINEL_USERNAME:
                     source:
-                        library_secret: redis_sentinel_username
+                        account: redis
+                        field: username
                 TN_SCADA_REDIS_ACL_USERNAME:
                     source:
-                        library_secret: redis_username
+                        account: redis
+                        field: username
                 TN_SCADA_REDIS_SSL_PROPERTIES_KEY_STORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password

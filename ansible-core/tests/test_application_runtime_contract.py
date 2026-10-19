@@ -18,6 +18,8 @@ from schema_validation import SchemaValidator
 from application_libraries import load_package
 import application_libraries as APP
 import hashlib
+import base64
+import subprocess
 
 spec = importlib.util.spec_from_file_location("artifact_source_a2", UTILS.parent / "filter/artifact_source.py")
 SOURCE = importlib.util.module_from_spec(spec)
@@ -196,6 +198,51 @@ class ApplicationRuntimeTests(unittest.TestCase):
         for content in ("password=example", "PG_TOKEN: example", "role_id=example", "x" * (1024 * 1024 + 1)):
             with self.assertRaises(ValueError):
                 validate_config_contents([{"content": content}])
+
+    def test_binary_source_bytes_digest_bound_and_secret_checks(self):
+        def source(raw):
+            return {"content": base64.b64encode(raw).decode("ascii"), "encoding": "base64",
+                    "sha256": hashlib.sha256(raw).hexdigest()}
+        self.assertTrue(validate_config_contents([source(b"PK\x00\xff" * (1024 * 1024))]))
+        for raw in (b"\x00password=example\xff", b"PRIVATE KEY-----", b"x" * (8 * 1024 * 1024 + 1)):
+            with self.assertRaises(ValueError):
+                validate_config_contents([source(raw)])
+        with self.assertRaises(ValueError):
+            validate_config_contents([dict(source(b"data"), sha256="0" * 64)])
+        with self.assertRaises(ValueError):
+            validate_config_contents([{"content": "!invalid", "encoding": "base64"}])
+
+    @unittest.skipUnless(os.environ.get("PLATFORM_QA_CONFIG_INVENTORY"), "requires explicitly selected SSH QA target")
+    def test_native_source_delivery_and_repeat(self):
+        import yaml
+        tasks = ROOT / "ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks"
+        with tempfile.TemporaryDirectory(prefix="sdku-source-file-") as temporary:
+            source = Path(temporary) / "mock.jar"
+            raw = b"PK\x00\xff" * (1024 * 1024)
+            source.write_bytes(raw)
+            destination = temporary + "-target"
+            materialize = yaml.safe_load((tasks / "apply_instance.yml").read_text())[:3]
+            play = [{"hosts": "config_qa", "gather_facts": False, "vars": {
+                "application_config": {"path": str(source), "destination": "lib/mock.jar", "mode": "0644"},
+                "application_config_contents": [], "application_runtime_job": {
+                    "instancePath": destination, "account": "platform-automation", "projectId": "qa",
+                    "libraryId": "qa", "instanceId": "mock", "configContents": "{{ application_config_contents }}"}},
+                "tasks": [{"include_tasks": str(tasks / "source_config.yml")},
+                          {"assert": {"that": "application_config_contents | platform.core.application_validate_configs"}}]
+                         + materialize + [{"stat": {"path": destination + "/config/lib/mock.jar", "checksum_algorithm": "sha256"}, "register": "actual"},
+                           {"assert": {"that": "actual.stat.checksum == '" + hashlib.sha256(raw).hexdigest() + "'"}}],
+                "post_tasks": [{"file": {"path": destination, "state": "absent"}, "when": "qa_cleanup | default(false) | bool"}]}]
+            filename = Path(temporary) / "test.json"
+            filename.write_text(json.dumps(play))
+            env = dict(os.environ, ANSIBLE_COLLECTIONS_PATHS=str(ROOT / "ansible-core/collections"))
+            for repeat in (False, True):
+                command = ["ansible-playbook", "-i", os.environ["PLATFORM_QA_CONFIG_INVENTORY"], str(filename)]
+                result = subprocess.run(command, env=env, capture_output=True, text=True)
+                self.assertEqual(0, result.returncode, result.stdout[-4000:] + result.stderr[-1000:])
+                if repeat:
+                    self.assertIn("changed=0", result.stdout)
+            cleanup = subprocess.run(command + ["-e", "qa_cleanup=true"], env=env, capture_output=True, text=True)
+            self.assertEqual(0, cleanup.returncode, cleanup.stdout[-1000:])
 
     def test_compose_checks_core_projection_but_allows_user_fields_and_bind_address(self):
         job = {"instanceId": "api-sdku", "projectId": "project", "libraryId": "sdku", "hostId": "node1",

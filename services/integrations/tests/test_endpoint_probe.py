@@ -5,6 +5,7 @@ import shutil
 import socket
 import ssl
 import subprocess
+import sys
 import tempfile
 import threading
 import unittest
@@ -13,14 +14,21 @@ import yaml
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 TASK_FILE = os.path.join(ROOT, "services", "integrations", "tasks", "probe-endpoint.yml")
+sys.path.insert(0, os.path.join(ROOT, 'ansible-core', 'tools'))
+from execution_lifecycle import Journal, digest
 
 
 class _StatusHandler(http.server.BaseHTTPRequestHandler):
     status_code = 200
+    statuses = []
+    requests = 0
 
     def do_GET(self):
-        self.send_response(self.status_code)
+        type(self).requests += 1
+        self.send_response(type(self).statuses.pop(0) if type(self).statuses else self.status_code)
+        self.send_header('Set-Cookie', 'session=endpoint-cookie-secret')
         self.end_headers()
+        self.wfile.write(b'endpoint-response-body-secret')
 
     def log_message(self, _format, *_args):
         return
@@ -82,7 +90,7 @@ class EndpointProbeTests(unittest.TestCase):
         if hasattr(cls, "temp_dir"):
             cls.temp_dir.cleanup()
 
-    def run_probe(self, hostname="localhost", port=None, expected_addresses=None):
+    def run_probe(self, hostname="localhost", port=None, expected_addresses=None, policy=None, environment=None):
         if port is None:
             port = self.port
         if expected_addresses is None:
@@ -105,12 +113,16 @@ class EndpointProbeTests(unittest.TestCase):
             "port": port,
             "task_file": json.dumps(TASK_FILE.replace(os.sep, "/")),
         }
+        if policy is not None:
+            play = yaml.safe_load(playbook)
+            play[0]['vars']['_platform_integration_probe'] = policy
+            playbook = yaml.safe_dump(play)
         playbook_path = os.path.join(self.temp_dir.name, "probe.yml")
         with open(playbook_path, "w", encoding="utf-8") as handle:
             handle.write(playbook)
         return subprocess.run(
             [self.ansible_playbook, "-i", "localhost,", "-c", "local", playbook_path],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True, text=True, timeout=30, env=environment,
         )
 
     def test_accepts_any_http_status_except_502_and_503(self):
@@ -127,6 +139,52 @@ class EndpointProbeTests(unittest.TestCase):
                 result = self.run_probe()
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn("SERVICE_ENDPOINT_UNAVAILABLE", result.stdout + result.stderr)
+                self.assertIn('actual_status', result.stdout)
+                self.assertIn('expected_status', result.stdout)
+                self.assertIn('timeout', result.stdout)
+                self.assertIn('reason', result.stdout)
+                self.assertNotIn('endpoint-cookie-secret', result.stdout + result.stderr)
+                self.assertNotIn('endpoint-response-body-secret', result.stdout + result.stderr)
+
+    def test_waits_for_transient_route_readiness(self):
+        _StatusHandler.status_code = 200
+        _StatusHandler.statuses = [503, 502]
+        _StatusHandler.requests = 0
+        result = self.run_probe()
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        self.assertEqual(3, _StatusHandler.requests)
+        self.assertIn('actual_status', result.stdout)
+        self.assertNotIn('endpoint-cookie-secret', result.stdout + result.stderr)
+        self.assertNotIn('endpoint-response-body-secret', result.stdout + result.stderr)
+
+    def test_safe_diagnostic_reaches_real_core_callback_journal(self):
+        _StatusHandler.status_code = 200
+        manifest = {'projectIdentity': 'project-probe', 'planFingerprint': 'sha256:' + 'a' * 64,
+                    'runtimeRelease': {'bundleDigest': 'sha256:' + 'b' * 64}, 'operations': []}
+        root = os.path.join(self.temp_dir.name, 'journal')
+        journal = Journal(root, 'run-probe')
+        journal.initialize({'runId': 'run-probe', 'projectIdentity': 'project-probe',
+            'planFingerprint': manifest['planFingerprint'], 'manifestDigest': digest(manifest),
+            'runtimeRelease': manifest['runtimeRelease']['bundleDigest'], 'unit': 'platform-installer-run-run-probe.service'})
+        manifest_path = os.path.join(journal.directory, 'manifest.json')
+        with open(manifest_path, 'w') as stream:
+            json.dump(manifest, stream)
+        os.chmod(manifest_path, 0o600)
+        journal.transition('RUNNING', 'diagnostic test')
+        environment = dict(os.environ, ANSIBLE_CONFIG=os.path.join(ROOT, 'ansible-core', 'ansible.cfg'),
+            ANSIBLE_COLLECTIONS_PATH=os.path.join(ROOT, 'ansible-core', 'collections'),
+            ANSIBLE_COLLECTIONS_PATHS=os.path.join(ROOT, 'ansible-core', 'collections'),
+            ANSIBLE_CALLBACKS_ENABLED='platform.core.execution_events_json',
+            PLATFORM_EXECUTION_STATE_ROOT=root, PLATFORM_EXECUTION_RUN_ID='run-probe')
+        result = self.run_probe(policy={'expected_status': 200, 'timeout': 3,
+            'path': '/health?token=endpoint-query-secret'}, environment=environment)
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        events = journal.events()
+        diagnostics = [e for e in events if e['eventType'] == 'DIAGNOSTIC' and e['safeMessage'].startswith('HTTP backend ')]
+        self.assertEqual(1, len(diagnostics), result.stdout + result.stderr)
+        self.assertIn('expected=200; actual=200; timeout=3s; reason=OK', diagnostics[0]['safeMessage'])
+        for secret in ('endpoint-query-secret', 'endpoint-cookie-secret', 'endpoint-response-body-secret'):
+            self.assertNotIn(secret, json.dumps(events) + result.stdout + result.stderr)
 
     def test_rejects_unresolvable_endpoint_name(self):
         result = self.run_probe("endpoint-does-not-exist.invalid")

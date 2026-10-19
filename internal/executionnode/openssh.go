@@ -749,7 +749,7 @@ func createCandidateProjectArchive(root string) (string, error) {
 		}
 		limits.files++
 		limits.bytes += int64(len(content))
-		if limits.files > 4096 || len(content) > 4*1024*1024 || limits.bytes > 64*1024*1024 {
+		if limits.files > 4096 || limits.bytes > 64*1024*1024 {
 			return cleanup(errors.New("PROJECT_CANDIDATE_LIMIT_EXCEEDED"))
 		}
 		header := &tar.Header{Name: logical, Mode: 0o600, Size: int64(len(content)), Typeflag: tar.TypeReg, Format: tar.FormatPAX}
@@ -802,7 +802,11 @@ func readStableCandidateFile(root, logical string) ([]byte, error) {
 	if err != nil || !before.Mode().IsRegular() || isUnsafeFilesystemLink(before) {
 		return nil, errors.New("PROJECT_CANDIDATE_FILE_UNSAFE")
 	}
-	if before.Size() > 4*1024*1024 {
+	fileLimit := int64(4 * 1024 * 1024)
+	if installer.ApplicationPackagePathAllowed(logical) {
+		fileLimit = 8 * 1024 * 1024
+	}
+	if before.Size() > fileLimit {
 		return nil, errors.New("PROJECT_CANDIDATE_LIMIT_EXCEEDED")
 	}
 	input, err := os.Open(absolute)
@@ -836,8 +840,8 @@ func readStableCandidateFile(root, logical string) ([]byte, error) {
 			}
 		}
 	}
-	content, err := io.ReadAll(io.LimitReader(input, 4*1024*1024+1))
-	if err != nil || len(content) > 4*1024*1024 {
+	content, err := io.ReadAll(io.LimitReader(input, fileLimit+1))
+	if err != nil || int64(len(content)) > fileLimit {
 		return nil, errors.New("PROJECT_CANDIDATE_LIMIT_EXCEEDED")
 	}
 	after, err := input.Stat()

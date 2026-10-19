@@ -13,17 +13,57 @@ platform_application_definition:
             library_binding: secrets
             protocol: https
     defaults:
+        accounts:
+            clickhouse:
+                credentials:
+                    password:
+                        source:
+                            kind: runtime_secret_ref
+                            ref: '{{ application_instance_id }}-clickhouse-password'
+                    username:
+                        source:
+                            kind: literal
+                            value: '{{ application_instance_id | replace(''-'', ''_'') }}'
+                databaseRef: analytics
+                grants:
+                    - databaseRef: analytics
+                      privileges:
+                        - SELECT
+                        - INSERT
+                      tables:
+                        - '*'
+                mode: managed
+            redis:
+                credentials:
+                    password:
+                        source:
+                            kind: runtime_secret_ref
+                            ref: '{{ application_instance_id }}-redis-password'
+                    username:
+                        source:
+                            kind: literal
+                            value: '{{ application_instance_id | replace(''-'', ''_'') }}'
+                grants:
+                    channels:
+                        - '*'
+                    commands:
+                        - +@all
+                        - -@admin
+                    keys:
+                        - '*'
+                mode: managed
         command:
             - java
             - -jar
             - sdku-telemechanics.jar
         environment:
-            TN_SCADA_DATASOURCE_URL: "$${CLICKHOUSE_HTTP_ENDPOINT}?$${CLICKHOUSE_SSL_OPTIONS}"
             ALARM_SERVICE_API_READ_TIMEOUT: 5000
             ALARM_SERVICE_API_ROOT_URI: '{{ application_parameters.source_variables.ALARM_SERVICE_URL | default(undef(hint=''Configure SDKU ALARM_SERVICE_URL''), true) }}'
             ALARM_SERVICE_API_SERVER_PATH: /generate-alarm
             ALARM_SERVICE_API_TYPE: mock
             ALARM_TOPIC: '{{ application_parameters.source_variables.ALARM_TOPIC_COMPACT | default(undef(hint=''Configure SDKU ALARM_TOPIC_COMPACT''), true) }}'
+            DB_CONNECTION_STRING: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
+            DB_TYPE: clickhouse
             EVO_SERVICES_CONSENSUS_SERVICE_HEALTH_CHECK_INTERVAL: 1000
             EVO_SERVICES_CONSENSUS_SERVICE_HEALTH_CHECK_TIMEOUT: 999
             EVO_SERVICES_CONSENSUS_SERVICE_HEARTBEAT_INTERVAL: 500
@@ -35,17 +75,23 @@ platform_application_definition:
             EVO_SERVICES_CONSENSUS_SERVICE_TIMER_INTERVAL: 500
             EVO_SERVICES_CONSENSUS_SERVICE_WORKLOAD: LOW
             LOGGING_LEVEL_PLUGIN: DEBUG
+            SERVER_PORT: 10251
+            SPRING_KAFKA_CLIENT_ID: '{{ application_instance_id }}-$${SERVER_ID}'
             TELEMECHANICS_CONFIG_PATH: /usr/local/app/config/telemechanics_config.yaml
             TELEMECHANICS_LOGGER_LEVEL: DEBUG
             TN_SCADA_DATA_MANAGER_URL_ROOT: '{{ application_parameters.source_variables.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
+            TN_SCADA_DATASOURCE_URL: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
             TN_SCADA_METADATA_TARGET_PROJECT: TNSV
             TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
+            kafka.consumer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-consumer'
+            kafka.producer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-producer'
             server.max-http-header-size: 10MB
             server.max-http-request-header-size: 10MB
             tn-scada.metadata.dontShowTargetProjectInNames: true
             tn-scada.metadata.load-projects: TNSV
         image: evoscada-docker.artifacts.tn.tngrp.ru/sdku-telemechanics:1.2.3-6aa0b4a0-redos
         parameters:
+            database_name: ""
             source_variables:
                 ALARM_SERVICE_URL: ""
                 ALARM_TOPIC_COMPACT: sdku-alarms-compact
@@ -68,6 +114,14 @@ platform_application_definition:
                 method: approle
             mode: process-supervisor
             secret_bindings:
+                DB_PASSWORD:
+                    source:
+                        account: clickhouse
+                        field: password
+                DB_USERNAME:
+                    source:
+                        account: clickhouse
+                        field: username
                 JAVA_KEYSTORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password
@@ -79,16 +133,20 @@ platform_application_definition:
                         library_secret: java_keystore_password
                 TN_SCADA_REDIS_ACL_PASSWORD:
                     source:
-                        library_secret: redis_password
+                        account: redis
+                        field: password
                 TN_SCADA_REDIS_ACL_SENTINEL_PASSWORD:
                     source:
-                        library_secret: redis_sentinel_password
+                        account: redis
+                        field: password
                 TN_SCADA_REDIS_ACL_SENTINEL_USERNAME:
                     source:
-                        library_secret: redis_sentinel_username
+                        account: redis
+                        field: username
                 TN_SCADA_REDIS_ACL_USERNAME:
                     source:
-                        library_secret: redis_username
+                        account: redis
+                        field: username
                 TN_SCADA_REDIS_SSL_PROPERTIES_KEY_STORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password

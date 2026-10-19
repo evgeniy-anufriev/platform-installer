@@ -13,18 +13,61 @@ platform_application_definition:
             library_binding: secrets
             protocol: https
     defaults:
+        accounts:
+            postgres:
+                credentials:
+                    password:
+                        source:
+                            kind: runtime_secret_ref
+                            ref: '{{ application_instance_id }}-postgres-password'
+                    username:
+                        source:
+                            kind: literal
+                            value: '{{ application_instance_id | replace(''-'', ''_'') }}'
+                databaseAccess:
+                    - databaseRef: database
+                      privileges:
+                        - SELECT
+                        - INSERT
+                        - UPDATE
+                        - DELETE
+                        - CREATE
+                mode: managed
+            redis:
+                credentials:
+                    password:
+                        source:
+                            kind: runtime_secret_ref
+                            ref: '{{ application_instance_id }}-redis-password'
+                    username:
+                        source:
+                            kind: literal
+                            value: '{{ application_instance_id | replace(''-'', ''_'') }}'
+                grants:
+                    channels:
+                        - '*'
+                    commands:
+                        - +@all
+                        - -@admin
+                    keys:
+                        - '*'
+                mode: managed
         command:
             - java
             - -javaagent:/usr/local/app/opentelemetry-javaagent.jar
             - -jar
             - ef-backend.jar
         environment:
-            DB_CONNECTION_STRING: "$${POSTGRES_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${POSTGRES_SSL_OPTIONS}"
             DB_CONNECTION_SSL: "true"
+            DB_CONNECTION_STRING: $${POSTGRES_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${POSTGRES_SSL_OPTIONS}
             JAVA_OPTS: -Xmx4096m
             NETWORK_TIMEOUT_MS: 10000
             SERVER_ALLOWED_ORIGINS: '*'
+            SERVER_PORT: 10341
+            SPRING_KAFKA_CLIENT_ID: '{{ application_instance_id }}-$${SERVER_ID}'
             TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
+            kafka.consumer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-consumer'
+            kafka.producer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-producer'
             logging.charset.console: UTF-8
             server.max-http-header-size: 10MB
             server.max-http-request-header-size: 10MB
@@ -46,10 +89,12 @@ platform_application_definition:
             secret_bindings:
                 DB_PASSWORD:
                     source:
-                        library_secret: ef_backend_db_password
+                        account: postgres
+                        field: password
                 DB_USERNAME:
                     source:
-                        library_secret: ef_backend_db_username
+                        account: postgres
+                        field: username
                 JAVA_KEYSTORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password
@@ -61,16 +106,20 @@ platform_application_definition:
                         library_secret: java_keystore_password
                 TN_SCADA_REDIS_ACL_PASSWORD:
                     source:
-                        library_secret: redis_password
+                        account: redis
+                        field: password
                 TN_SCADA_REDIS_ACL_SENTINEL_PASSWORD:
                     source:
-                        library_secret: redis_sentinel_password
+                        account: redis
+                        field: password
                 TN_SCADA_REDIS_ACL_SENTINEL_USERNAME:
                     source:
-                        library_secret: redis_sentinel_username
+                        account: redis
+                        field: username
                 TN_SCADA_REDIS_ACL_USERNAME:
                     source:
-                        library_secret: redis_username
+                        account: redis
+                        field: username
                 TN_SCADA_REDIS_SSL_PROPERTIES_KEY_STORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password

@@ -1,6 +1,7 @@
 package installer
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"os"
@@ -8,6 +9,68 @@ import (
 	"strings"
 	"testing"
 )
+
+func TestApplicationSourceBinaryImportPreservesBytesAndLimits(t *testing.T) {
+	root, b, revision := b2Project(t)
+	source, _ := b2Package(t)
+	manifest := filepath.Join(source, "application.yml")
+	data, err := os.ReadFile(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data = bytes.Replace(data, []byte("files:\n"), []byte("files:\n  - assets/mock.jar\n"), 1)
+	if err = os.WriteFile(manifest, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	payload := bytes.Repeat([]byte{0, 255, 80, 75}, 5*1024*1024/4)
+	if err = os.MkdirAll(filepath.Join(source, "assets"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(filepath.Join(source, "assets/mock.jar"), payload, 0600); err != nil {
+		t.Fatal(err)
+	}
+	directory, err := openExportSourceDirectory(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer directory.close()
+	observation := exportObservation{}
+	if err = collectExportDirectory(directory, "application-packages/gateway/1.0.0", &observation, map[string]bool{}, map[string]bool{}); err != nil {
+		t.Fatal(err)
+	}
+	digest, err := checkPackageManifest(observation.documents, "application", "gateway", "1.0.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, err := b.PlanApplicationPackageImport(context.Background(), root, source, revision, "application", "gateway", "1.0.0", digest)
+	if err != nil || plan.Status != "READY" {
+		t.Fatalf("%v %+v", err, plan)
+	}
+	if result := b.CommitStructuralSave(context.Background(), plan.PlanID); !result.Changed {
+		t.Fatalf("%+v", result)
+	}
+	actual, err := os.ReadFile(filepath.Join(root, "application-packages/gateway/1.0.0/assets/mock.jar"))
+	if err != nil || !bytes.Equal(payload, actual) {
+		t.Fatal("binary bytes changed", err)
+	}
+	for _, ext := range []string{"jar", "java", "csv", "dat", "sh", "exe", "unknown"} {
+		if !safeApplicationPackagePath("application-packages/gateway/1.0.0/assets/input." + ext) {
+			t.Fatal(ext)
+		}
+	}
+	if !safeApplicationPackagePath("application-packages/gateway/1.0.0/assets/noextension") {
+		t.Fatal("file without extension rejected")
+	}
+	if safeApplicationPackagePath("application-packages/gateway/1.0.0/roles/application_gateway/tasks/hook.sh") {
+		t.Fatal("controller task path accepted")
+	}
+	if err = os.WriteFile(filepath.Join(source, "assets/mock.jar"), make([]byte, maxApplicationPackageFileBytes+1), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err = collectExportDirectory(directory, "application-packages/gateway/1.0.0", &exportObservation{}, map[string]bool{}, map[string]bool{}); err == nil {
+		t.Fatal("oversized source accepted")
+	}
+}
 
 func b2Package(t *testing.T) (string, string) {
 	t.Helper()

@@ -149,6 +149,25 @@ class ApplicationProviderTests(unittest.TestCase):
         self.assertIn(hashlib.sha256(password.encode()).hexdigest(), text)
         self.assertNotIn('OR REPLACE', text)
 
+    def test_create_table_grant_delta_batch_verify_and_revoke(self):
+        account = {'name': 'app', 'marker': 'platform.application/v1:qa:ch:lib:account:app',
+                   'grants': [{'database': 'analytics', 'table': '*', 'privileges': ['CREATE TABLE']}]}
+        database = {'name': 'analytics', 'mode': 'managed',
+                    'marker': 'platform.application/v1:qa:ch:lib:clickhouse.database:db'}
+        grant = ('analytics', '*', 'CREATE TABLE')
+        self.assertEqual(({grant}, set()), managed_grant_delta(account, [], [database]))
+        self.assertEqual('GRANT ON CLUSTER default CREATE TABLE ON `analytics`.* TO `app`;',
+                         user_batch(account, 'unused', {grant}, False, True))
+        row = {'kind': 'grant', 'name': 'app', 'database': 'analytics', 'table': '*',
+               'privilege': 'CREATE TABLE', 'column': None, 'is_partial_revoke': False, 'grant_option': False}
+        self.assertEqual((set(), set()), managed_grant_delta(account, [row], [database]))
+        account['grants'] = []
+        self.assertEqual((set(), {grant}), managed_grant_delta(account, [row], [database]))
+        self.assertEqual('REVOKE ON CLUSTER default CREATE TABLE ON `analytics`.* FROM `app`;',
+                         user_batch(account, 'unused', set(), False, True, {grant}))
+        with self.assertRaises(ProviderFailure):
+            managed_grant_delta(account, [dict(row, database='foreign')], [database])
+
     def test_native_standalone_resources_accounts_repeat_verify_and_foreign_denial(self):
         self.native_scope(False)
 
@@ -358,9 +377,18 @@ class ApplicationProviderTests(unittest.TestCase):
                 # SEC-D02: one owned account, two owned databases; exact revoke
                 # and neighbor isolation on standalone and all cluster members.
                 original_grants = account['grants']
-                account['grants'] = [{'database': name,'table':'*','privileges':['SELECT','INSERT']}
+                account['grants'] = [{'database': name,'table':'*','privileges':['SELECT','INSERT','CREATE TABLE']}
                                      for name in ('analytics','archive')]
                 role('accounts')
+                for member in targets:
+                    client = NativeClient(member, str(directory), user_password, 'api-lib')
+                    try:
+                        self.assertEqual('1', client.query('CHECK GRANT CREATE TABLE ON analytics.*;').strip())
+                        client.query('CREATE TABLE IF NOT EXISTS analytics.events (id UInt64) ENGINE=Memory;')
+                    finally:
+                        client.close()
+                self.assertIn('changed=0', role('accounts'))
+                self.assertIn('changed=0', role('verify'))
                 cluster = ' ON CLUSTER default' if clustered else ''
                 admin.query('CREATE USER neighbor%s IDENTIFIED WITH sha256_hash BY \'%s\'; GRANT%s SELECT ON archive.* TO neighbor;' %
                             (cluster,hashlib.sha256(user_password.encode()).hexdigest(),cluster))
@@ -376,6 +404,7 @@ class ApplicationProviderTests(unittest.TestCase):
                 for member in targets:
                     client = NativeClient(member,str(directory),user_password,'api-lib')
                     try:
+                        self.assertEqual('0', client.query('CHECK GRANT CREATE TABLE ON analytics.*;').strip())
                         self.assertEqual('0',client.query('SELECT count() FROM analytics.future;').strip())
                         with self.assertRaises(ProviderFailure): client.query('INSERT INTO analytics.future VALUES (1);')
                         client.query('INSERT INTO archive.future VALUES (1);')

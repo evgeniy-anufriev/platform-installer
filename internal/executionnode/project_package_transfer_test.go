@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"platform-installer/internal/installer"
@@ -20,6 +21,7 @@ func TestProjectArchivePreservesApplicationPackageRevision(t *testing.T) {
 		"library-packages/demo/1.0.0/files/.env":                                                "USER_PARAMETER=kept\n",
 		"application-packages/gateway/1.0.0/application.yml":                                    "name: gateway\n",
 		"application-packages/gateway/1.0.0/roles/application_gateway/templates/compose.yml.j2": "services: {{ applications }}\n",
+		"application-packages/gateway/1.0.0/assets/mock.jar":                                    strings.Repeat("PK\x00\xff", 5*1024*1024/4),
 	}
 	for logical, content := range files {
 		file := filepath.Join(root, filepath.FromSlash(logical))

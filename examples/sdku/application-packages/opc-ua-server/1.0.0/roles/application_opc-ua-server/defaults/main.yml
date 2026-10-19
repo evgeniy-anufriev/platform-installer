@@ -13,6 +13,45 @@ platform_application_definition:
             library_binding: secrets
             protocol: https
     defaults:
+        accounts:
+            clickhouse:
+                credentials:
+                    password:
+                        source:
+                            kind: runtime_secret_ref
+                            ref: '{{ application_instance_id }}-clickhouse-password'
+                    username:
+                        source:
+                            kind: literal
+                            value: '{{ application_instance_id | replace(''-'', ''_'') }}'
+                databaseRef: analytics
+                grants:
+                    - databaseRef: analytics
+                      privileges:
+                        - SELECT
+                        - INSERT
+                      tables:
+                        - '*'
+                mode: managed
+            redis:
+                credentials:
+                    password:
+                        source:
+                            kind: runtime_secret_ref
+                            ref: '{{ application_instance_id }}-redis-password'
+                    username:
+                        source:
+                            kind: literal
+                            value: '{{ application_instance_id | replace(''-'', ''_'') }}'
+                grants:
+                    channels:
+                        - '*'
+                    commands:
+                        - +@all
+                        - -@admin
+                    keys:
+                        - '*'
+                mode: managed
         command:
             - java
             - -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:15005
@@ -22,7 +61,7 @@ platform_application_definition:
             - --spring.config.additional-location=/usr/local/config/opcua.yml
             - -Djavax.net.ssl.trustStore=/usr/local/certs/TN-SCADA OPC UA Server [61511528719CFF008A751C1D9F8165129F07C977].der
         environment:
-            DB_CONNECTION_STRING: "$${CLICKHOUSE_HTTP_ENDPOINT}?$${CLICKHOUSE_SSL_OPTIONS}"
+            DB_CONNECTION_STRING: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_parameters.database_name | default(undef(hint='Configure database_name'), true) }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
             DB_TYPE: clickhouse
             LOGGER_ROOT_LEVEL: WARN
             OPCUA_APP_TYPE: server
@@ -33,11 +72,15 @@ platform_application_definition:
             REDU_DISABLE: "true"
             REDU_GROUP_ID: opcua-server
             REDU_MANAGER_ID: 1
+            SERVER_PORT: 10391
             SERVER_VIEW_CONFIG: /usr/local/config/view.csv
+            SPRING_KAFKA_CLIENT_ID: '{{ application_instance_id }}-$${SERVER_ID}'
             TN_SCADA_DATA_MANAGER_URL_ROOT: '{{ application_parameters.source_variables.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
             TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.source_variables.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
             TNSCADA_LOGGER_LEVEL: WARN
             TZ: Europe/Moscow
+            kafka.consumer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-consumer'
+            kafka.producer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-producer'
             logging.level.org.eclipse.milo: TRACE
             logging.level.tnt.tnscada.drivers.opcua: INFO
             opc-ua.server.limits.minSamplingInterval: 0
@@ -46,6 +89,7 @@ platform_application_definition:
             spring.config.additional-location: /usr/local/config/opcua.yml
         image: evoscada-docker.artifacts.tn.tngrp.ru/opc-ua-server:1.1.2-67bad727-redos
         parameters:
+            database_name: ""
             mount_sources:
                 mount-1: ""
                 mount-2: ""
@@ -69,10 +113,12 @@ platform_application_definition:
             secret_bindings:
                 DB_PASSWORD:
                     source:
-                        library_secret: opc_ua_server_db_password
+                        account: clickhouse
+                        field: password
                 DB_USERNAME:
                     source:
-                        library_secret: opc_ua_server_db_username
+                        account: clickhouse
+                        field: username
                 JAVA_KEYSTORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password
@@ -87,19 +133,23 @@ platform_application_definition:
                         library_secret: java_keystore_password
                 REDIS_PASSWORD:
                     source:
-                        library_secret: redis_password
+                        account: redis
+                        field: password
                 REDIS_SENTINEL_PASSWORD:
                     source:
-                        library_secret: redis_sentinel_password
+                        account: redis
+                        field: password
                 REDIS_SENTINEL_USERNAME:
                     source:
-                        library_secret: redis_sentinel_username
+                        account: redis
+                        field: username
                 REDIS_TRUSTSTORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password
                 REDIS_USERNAME:
                     source:
-                        library_secret: redis_username
+                        account: redis
+                        field: username
                 SPRING_KAFKA_SSL_KEY_STORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password
@@ -108,16 +158,20 @@ platform_application_definition:
                         library_secret: java_keystore_password
                 TN_SCADA_REDIS_ACL_PASSWORD:
                     source:
-                        library_secret: redis_password
+                        account: redis
+                        field: password
                 TN_SCADA_REDIS_ACL_SENTINEL_PASSWORD:
                     source:
-                        library_secret: redis_sentinel_password
+                        account: redis
+                        field: password
                 TN_SCADA_REDIS_ACL_SENTINEL_USERNAME:
                     source:
-                        library_secret: redis_sentinel_username
+                        account: redis
+                        field: username
                 TN_SCADA_REDIS_ACL_USERNAME:
                     source:
-                        library_secret: redis_username
+                        account: redis
+                        field: username
                 TN_SCADA_REDIS_SSL_PROPERTIES_KEY_STORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password

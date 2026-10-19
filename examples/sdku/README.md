@@ -2,9 +2,11 @@
 
 Источник: `192.168.56.107:/data/manifests/scada`, прочитан по SSH 2026-10-16.
 Пароль SSH и значения секретов в комплект не включены. Исходные контейнеры не
-изменялись. **Текущие исходники Core/UI поддерживают library defaults; ранее
-опубликованный runtime bundle этой поддержки ещё не содержит.** Установка и проверка запуска
-исключены из текущей работы.
+изменялись. Core/UI и проверенный runtime поддерживают library defaults.
+Текущее состояние установки описано в [CURRENT_STATE](../../CURRENT_STATE.md),
+результаты последовательных запусков на101/102/103 — в
+[журнале SDKU](../../docs/work/application-libraries/evidence/sdku-sequential-applications-journal.md).
+По указанию владельца frontend исключён из текущего прогона.
 
 ## Состав
 
@@ -77,11 +79,14 @@ Agent получает AppRole/политику/путь KV и CA из Core и �
 образа в режиме process supervisor. Frontend сохраняет исходную команду образа.
 
 Секретные переменные передаются дочернему процессу через Agent. Их значений нет
-в Compose, package defaults и исходном `.env`. Общие ссылки находятся в
-`shared_secrets`; переопределять источники можно существующими runtime_secret_ref
-или vault_ref. Совпадающие исходные переменные credentials объединены в 15
-источников; пароль Java stores использует существующий PKI credential binding.
-Значения runtime_secret_ref вводятся только через установленный runtime lease.
+в Compose, package defaults и исходном `.env`. Каждый backend объявляет собственные
+managed accounts и grants для используемых БД и Redis client.
+Для развёртывания с Sentinel экземпляр дополнительно задаёт его connection alias,
+managed account/grants и привязки Sentinel ENV в group_vars; standalone не требует Sentinel.
+Secret bindings ссылаются на account/field. УЗ создаёт штатный утверждённый план;
+индивидуальные пароли runtime_secret_ref вводятся только через runtime lease.
+Имя УЗ по умолчанию выводится из имени экземпляра приложения; параметры экземпляра
+можно переопределить в group_vars. Общим остаётся пароль Java stores из PKI binding.
 
 ## Импорт в UI
 
@@ -129,6 +134,25 @@ Application Compose retains only own ENV and explicit differences. Generated ENV
 keys and values use double quotes. Compose preserves the original image name;
 its delivered and running image IDs remain locked and verified.
 
+Existing generated `SERVER_ID` is passed from `.env` through base-compose.
+Kafka client IDs include the application instance and `SERVER_ID`; alarm-service
+static `group.instance.id` also includes `SERVER_ID`. Consumer `group.id` and
+Streams `application.id` remain shared by replicas of the same application.
+`tn-scada.kafka.listener.store-id` uses `SERVER_ID` to separate manually assigned
+compact loaders from the main consumer group; their offset commits must not
+reuse the active subscription group's membership.
+HTTP container healthchecks use `curl --fail`, so an HTTP503 response cannot
+pass merely because one component in its JSON body has status UP.
+
 Library runtime_directory can be overridden in group_vars; by default it is
 ~/<library instance ID> under the target Docker account. Empty resets to package
 default. Existing directories are not moved or removed automatically.
+
+Evo user inputs use the application's «Файлы» / `config_files` list. Source paths
+are relative to the package allowlist; destination `imitator/lib/user.jar`, for
+example, is delivered under the instance's `config/` and mounted read-only at
+`/usr/local/app/imitator/lib/user.jar`. No manually prepared host directories are
+required. Set the matching main class and source/JAR paths for the chosen inputs.
+The QA-only `qa/evo-manager/src/qa/sdku/StartupMock.java` logs
+`SDKU_EVO_MOCK_STARTED` through `main(Evo)` without accessing tags or Kafka data.
+It does not replace the original Evo image or production scripts.

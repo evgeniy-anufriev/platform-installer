@@ -7,7 +7,6 @@ import (
 	"gopkg.in/yaml.v3"
 	"io"
 	"os"
-	"path"
 	"platform-installer/internal/projectlifecycle"
 	"regexp"
 	"sort"
@@ -15,14 +14,15 @@ import (
 )
 
 const maxApplicationPackageFiles = 512
-const maxApplicationPackageFileBytes = 1024 * 1024
+const maxApplicationPackageFileBytes = 8 * 1024 * 1024
 
 var packageVersion = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+$`)
 var packageComponent = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
 var packageEnvName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
 // Fixed data-only destinations. Neither the caller nor a manifest can add
-// tasks, plugins, hooks, roles from another package, or executable files.
+// tasks, plugins, hooks or roles from another package. JARs are application
+// inputs; they are never executed on the controller.
 func safeApplicationPackagePath(logical string) bool {
 	if !safeExportLogicalPath(logical) {
 		return false
@@ -51,11 +51,7 @@ func safeApplicationPackagePath(logical string) bool {
 	if !strings.HasPrefix(short, role+"templates/") && !strings.HasPrefix(short, "configuration/") && !strings.HasPrefix(short, "assets/") {
 		return false
 	}
-	switch strings.ToLower(path.Ext(short)) {
-	case ".j2", ".yml", ".yaml", ".json", ".conf", ".cfg", ".hcl", ".txt", ".properties", ".xml", ".crt", ".pem":
-		return true
-	}
-	return false
+	return true
 }
 
 // ApplicationPackagePathAllowed exposes the existing data-only package path
