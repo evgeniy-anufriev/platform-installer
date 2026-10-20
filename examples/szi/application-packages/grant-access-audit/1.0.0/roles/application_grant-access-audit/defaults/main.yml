@@ -1,0 +1,44 @@
+platform_application_definition:
+  name: grant-access-audit
+  version: 1.0.0
+  defaults:
+    image: evoscada-docker.artifacts.tn.tngrp.ru/grant-access-audit:2.0.5-6-20260908-1640-da1ca55a-redos
+    user: "1000:1000"
+    restart: always
+    command:
+      - java
+      - -XX:+ExitOnOutOfMemoryError
+      - -Dhazelcast.rest.enabled=true
+      - -Xmx6096M
+      - -jar
+      - grant-access-audit.jar
+    environment:
+      TZ: Europe/Moscow
+      WEB_SERVER_PORT: "8031"
+      proxyUrl: '{{ application_parameters.PROXY_URL | default(undef(hint=''Configure SZI audit proxy URL''), true) }}'
+      audit.keycloak.clientId: admin-cli
+      audit.keycloak.host: '{{ application_parameters.KEYCLOAK_HOST | default(undef(hint=''Configure SZI audit Keycloak endpoint''), true) }}'
+      audit.keycloak.realm: '{{ application_parameters.SZI_REALM }}'
+      DB_CONNECTION_STRING: "jdbc:postgresql://{{ application_parameters.POSTGRES_JDBC_HOSTS | default(undef(hint='Configure SZI audit PostgreSQL hosts'), true) }}/{{ application_parameters.POSTGRES_AUDIT_DB | default(undef(hint='Configure SZI audit database name'), true) }}?targetServerType=primary&hostRecheckSeconds=2&sslmode=verify-ca&sslrootcert=/usr/local/app/ca.pem"
+      SERVER_MAX_HTTP_REQUEST_HEADER_SIZE: "48000"
+    parameters:
+      PROXY_URL: ""
+      KEYCLOAK_HOST: ""
+      POSTGRES_JDBC_HOSTS: ""
+      POSTGRES_AUDIT_DB: ""
+    ports:
+      port-1:
+        container: 8031
+        published: 8031
+    readiness:
+      mode: healthcheck
+      delay: 2
+      retries: 30
+    provisioner:
+      type: vault-agent
+      mode: process-supervisor
+      auth:
+        method: approle
+      approle:
+        bind_secret_id: false
+  connections: [postgres, vault]

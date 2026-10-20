@@ -1,0 +1,36 @@
+services:
+  {{ application_instance_id }}:
+    extends:
+      file: {{ application_runtime.base_compose_path | to_json }}
+      service: {{ application_runtime.base_service | to_json }}
+    image: {{ application_runtime.image | to_json }}
+    container_name: {{ application_runtime.container_name | to_json }}
+    command: []
+    entrypoint: ["/usr/bin/vault", "agent", "--config", "/opt/vault/agent.hcl"]
+    user: {{ application_effective.user | to_json }}
+    restart: {{ application_effective.restart | to_json }}
+    environment:
+{{ application_environment | to_nice_yaml(indent=2) | indent(6, true) }}
+    labels:
+      "platform.installer.project": {{ application_project_id | to_json }}
+      "platform.installer.library": {{ library_runtime.library_id | to_json }}
+      "platform.installer.instance": {{ application_instance_id | to_json }}
+      "platform.installer.host": {{ library_runtime.host_id | to_json }}
+      "platform.installer.config-digest": {{ application_config_digest | to_json }}
+    ports:
+{% for port in application_effective.ports.values() %}
+      - "{{ port.published }}:{{ port.container }}"
+{% endfor %}
+    volumes:
+      - {{ (application_runtime.config_path ~ "/roles-of-realm.json:/usr/local/app/roles-of-realm.json:ro") | to_json }}
+      - {{ (application_runtime.vault_path ~ ":/opt/vault:ro") | to_json }}
+      - {{ (application_runtime.pki_path ~ "/ca-chain.pem:/usr/local/app/ca.pem:ro") | to_json }}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8011/"]
+      interval: 30s
+      timeout: 15s
+      retries: 10
+    deploy:
+      resources:
+        limits:
+          memory: 9G

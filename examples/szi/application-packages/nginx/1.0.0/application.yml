@@ -1,0 +1,16 @@
+{
+  "apiVersion": "platform.installer/application-package/v1alpha1",
+  "kind": "ApplicationPackage",
+  "name": "nginx",
+  "version": "1.0.0",
+  "files": [
+    "assets/data.env",
+    "assets/scada-lawellet.conf",
+    "assets/script.lua",
+    "roles/application_nginx/defaults/main.yml",
+    "roles/application_nginx/templates/compose.yml.j2"
+  ],
+  "render": {
+    "compose_template": "roles/application_nginx/templates/compose.yml.j2"
+  }
+}

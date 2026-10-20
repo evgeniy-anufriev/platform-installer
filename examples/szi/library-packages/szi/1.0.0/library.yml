@@ -1,0 +1,15 @@
+{
+  "apiVersion": "platform.installer/application-package/v1alpha1",
+  "kind": "LibraryPackage",
+  "name": "szi",
+  "version": "1.0.0",
+  "files": [
+    "roles/library_szi/defaults/main.yml",
+    "roles/library_szi/templates/.base_compose.yml.j2"
+  ],
+  "render": {
+    "base_compose_template": "roles/library_szi/templates/.base_compose.yml.j2",
+    "base_compose_filename": ".base_compose.yml",
+    "base_service": "base"
+  }
+}

@@ -1,0 +1,118 @@
+platform_application_definition:
+  name: keycloak
+  version: 1.0.0
+  defaults:
+    image: evoscada-docker.artifacts.tn.tngrp.ru/alt/c10f/keycloak:26.4.0-05082026-1220-92d3b787-vault
+    user: "1000:1000"
+    restart: always
+    command:
+      - /usr/lib/keycloak/bin/kc.sh
+      - start
+    config_files:
+      - source: assets/conf/cache-ispn.xml
+        destination: conf/cache-ispn.xml
+        mode: "0644"
+      - source: assets/providers/keycloak-brute-message-plugin-df31476a.jar
+        destination: providers/keycloak-brute-message-plugin-df31476a.jar
+        mode: "0644"
+      - source: assets/providers/keycloak-dmz-provision-plugin-4d87cb4f.jar
+        destination: providers/keycloak-dmz-provision-plugin-4d87cb4f.jar
+        mode: "0644"
+      - source: assets/providers/keycloak-login-logout-event-plugin-df31476a.jar
+        destination: providers/keycloak-login-logout-event-plugin-df31476a.jar
+        mode: "0644"
+      - source: assets/providers/keycloak-password-policy-plugin-df31476a.jar
+        destination: providers/keycloak-password-policy-plugin-df31476a.jar
+        mode: "0644"
+      - source: assets/providers/keycloak-plugin-last-login-time-df31476a.jar
+        destination: providers/keycloak-plugin-last-login-time-df31476a.jar
+        mode: "0644"
+      - source: assets/providers/keycloak-plugin-otp-condition-df31476a.jar
+        destination: providers/keycloak-plugin-otp-condition-df31476a.jar
+        mode: "0644"
+      - source: assets/providers/keycloak-plugin-password-change-time-df31476a.jar
+        destination: providers/keycloak-plugin-password-change-time-df31476a.jar
+        mode: "0644"
+      - source: assets/providers/keycloak-plugin-password-expire-reminder-9291024b.jar
+        destination: providers/keycloak-plugin-password-expire-reminder-9291024b.jar
+        mode: "0644"
+      - source: assets/providers/keycloak-user-disabled-lastlogin-time-df31476a.jar
+        destination: providers/keycloak-user-disabled-lastlogin-time-df31476a.jar
+        mode: "0644"
+    environment:
+      KC_SPI_EVENTS_LISTENER_PASSWORD_EXPIRE_REMINDER_EXPIRE_THRESHOLD: "14"
+      KC_HEALTH_ENABLED: "true"
+      KC_METRICS_ENABLED: "true"
+      KC_PROXY: edge
+      KC_DB: postgres
+      KC_DB_URL_DATABASE: keycloak
+      KC_DB_URL: "jdbc:postgresql://{{ application_parameters.POSTGRES_JDBC_HOSTS | default(undef(hint='Configure SZI PostgreSQL hosts'), true) }}/keycloak?targetServerType=primary&hostRecheckSeconds=2&sslmode=verify-ca&sslrootcert=/usr/lib/keycloak/ssl/ca.pem"
+      KC_HOSTNAME_STRICT: "false"
+      JGROUPS_DISCOVERY_PROTOCOL: TCPPING
+      JGROUPS_DISCOVERY_EXTERNAL_IP: '{{ application_parameters.KEYCLOAK_DISCOVERY_IP | default(undef(hint=''Configure Keycloak discovery address''), true) }}'
+      KC_HTTPS_CERTIFICATE_FILE: /usr/lib/keycloak/ssl/host.pem
+      KC_HTTPS_CERTIFICATE_KEY_FILE: /usr/lib/keycloak/ssl/host.key
+      KC_HTTPS_PORT: "8051"
+      KC_LOG_LEVEL: INFO
+      QUARKUS_DATASOURCE_JDBC_ACQUISITION_TIMEOUT: 1s
+      KC_SPI_EVENTS_LISTENER_DMZ_PROVISION_PROVISION_HOST: '{{ application_parameters.DMZ_PROVISION_URL | default(undef(hint=''Configure DMZ provisioning endpoint''), true) }}'
+      KC_SPI_EVENTS_LISTENER_DMZ_PROVISION_REALM_PARTIAL_IMPORT_RESOURCE: /realm-partial-import
+      KC_SPI_EVENTS_LISTENER_DMZ_PROVISION_REALM_RESOURCE: /realms
+      KC_SPI_EVENTS_LISTENER_DMZ_PROVISION_CLIENT_RESOURCE: /clients
+      KC_SPI_EVENTS_LISTENER_DMZ_PROVISION_CLIENT_SCOPE_RESOURCE: /scopes
+      KC_SPI_EVENTS_LISTENER_DMZ_PROVISION_GROUP_RESOURCE: /groups
+      KC_SPI_EVENTS_LISTENER_DMZ_PROVISION_ROLE_RESOURCE: /roles
+      KC_SPI_EVENTS_LISTENER_DMZ_PROVISION_USER_RESOURCE: /users
+      KC_SPI_EVENTS_LISTENER_DMZ_PROVISION_PROTECTED_USER_NAMES: '{{ application_parameters.PROTECTED_USER_NAMES | default(undef(hint=''Configure protected Keycloak users''), true) }}'
+      KC_SPI_EVENTS_LISTENER_DMZ_PROVISION_EXPORT_INTERVAL_MILLIS: "359900"
+      KC_SPI_EVENTS_LISTENER_DMZ_PROVISION_USERS_EXPORT_INTERVAL_MILLIS: "1500000"
+      KC_SPI_EVENTS_LISTENER_JBOSS_LOGGING_SUCCESS_LEVEL: DEBUG
+      KC_SPI_EVENTS_LISTENER_JBOSS_LOGGING_ERROR_LEVEL: DEBUG
+      KC_SPI_TRUSTSTORE_FILE_FILE: /usr/lib/keycloak/ssl/cacerts
+      KC_PROXY_HEADERS: xforwarded
+      KC_SPI_STICKY_SESSION_ENCODER_INFINISPAN_NODE_NAME: '{{ application_parameters.KEYCLOAK_NODE_NAME | default(undef(hint=''Configure Keycloak cluster node name''), true) }}'
+      KC_TRUSTSTORE_PATHS: /usr/lib/keycloak/ssl/ca.pem
+      KC_CACHE_CONFIG_MUTATE: "true"
+      KC_CACHE: ispn
+      KC_CACHE_STACK: jdbc-ping
+      KC_EXTERNAL_ADDR: '{{ application_parameters.KEYCLOAK_DISCOVERY_IP | default(undef(hint=''Configure Keycloak discovery address''), true) }}'
+      KC_BIND_ADDR: '{{ application_parameters.KEYCLOAK_BIND_IP | default(undef(hint=''Configure Keycloak bind address''), true) }}'
+      KC_BIND_PORT: "7800"
+      KC_INITIAL_HOSTS: '{{ application_parameters.KEYCLOAK_INITIAL_HOSTS | default(undef(hint=''Configure Keycloak cluster members''), true) }}'
+      JDK_JAVA_OPTIONS: '-Djgroups.bind.address=global -Djgroups.external_addr={{ application_parameters.KEYCLOAK_DISCOVERY_IP | default(undef(hint=''Configure Keycloak discovery address''), true) }} -Djgroups.bind.port=7800 -Xms8g -Xmx8g -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:InitiatingHeapOccupancyPercent=45 -XX:+ExitOnOutOfMemoryError'
+    parameters:
+      POSTGRES_JDBC_HOSTS: ""
+      KEYCLOAK_DISCOVERY_IP: ""
+      KEYCLOAK_BIND_IP: ""
+      KEYCLOAK_INITIAL_HOSTS: ""
+      KEYCLOAK_NODE_NAME: ""
+      DMZ_PROVISION_URL: ""
+      PROTECTED_USER_NAMES: ""
+    ports:
+      port-1:
+        container: 8051
+        published: 10411
+      port-2:
+        container: 7800
+        published: 7800
+      port-3:
+        container: 8080
+        published: 8090
+      port-4:
+        container: 57800
+        published: 57800
+      port-5:
+        container: 9000
+        published: 9000
+    readiness:
+      mode: healthcheck
+      delay: 2
+      retries: 30
+    provisioner:
+      type: vault-agent
+      mode: process-supervisor
+      auth:
+        method: approle
+      approle:
+        bind_secret_id: false
+  connections: [postgres, vault]

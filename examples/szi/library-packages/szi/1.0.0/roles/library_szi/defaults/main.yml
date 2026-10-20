@@ -1,0 +1,42 @@
+platform_library_definition:
+  name: szi
+  version: 1.0.0
+  instance_id_strategy: application-name
+  defaults:
+    environment: {}
+    parameters:
+      SZI_REALM: master
+      HZ_CLUSTERNAME: '{{ library_instance_id }}'
+  connections:
+    postgres:
+      library_binding: database
+      protocol: tcp
+      purpose: client
+    redis:
+      library_binding: cache
+      protocol: tcp
+      purpose: client
+    sentinel:
+      library_binding: cache
+      protocol: tcp
+      purpose: sentinel
+    vault:
+      library_binding: secrets
+      protocol: https
+      purpose: client
+  slots:
+    keycloak:
+      applicationRef: keycloak@1.0.0
+      required: true
+    grant-access:
+      applicationRef: grant-access@1.0.0
+      required: true
+    grant-access-front:
+      applicationRef: grant-access-front@1.0.0
+      required: true
+    grant-access-audit:
+      applicationRef: grant-access-audit@1.0.0
+      required: true
+    nginx:
+      applicationRef: nginx@1.0.0
+      required: true

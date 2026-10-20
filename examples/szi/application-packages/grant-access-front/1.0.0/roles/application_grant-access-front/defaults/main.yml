@@ -1,0 +1,25 @@
+platform_application_definition:
+  name: grant-access-front
+  version: 1.0.0
+  defaults:
+    image: evoscada-docker.artifacts.tn.tngrp.ru/grant-access-front:1.0.0-73f96255
+    user: "1000:1000"
+    restart: always
+    command:
+      - nginx
+      - -g
+      - daemon off;
+    config_files:
+      - source: assets/config.json
+        destination: config.json
+        mode: "0644"
+    environment: {}
+    ports:
+      port-1:
+        container: 8021
+        published: 8021
+    readiness:
+      mode: container
+      delay: 2
+      retries: 30
+  connections: []

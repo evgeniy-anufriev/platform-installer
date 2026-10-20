@@ -1,0 +1,13 @@
+{
+  "apiVersion": "platform.installer/application-package/v1alpha1",
+  "kind": "ApplicationPackage",
+  "name": "grant-access-audit",
+  "version": "1.0.0",
+  "files": [
+    "roles/application_grant-access-audit/defaults/main.yml",
+    "roles/application_grant-access-audit/templates/compose.yml.j2"
+  ],
+  "render": {
+    "compose_template": "roles/application_grant-access-audit/templates/compose.yml.j2"
+  }
+}

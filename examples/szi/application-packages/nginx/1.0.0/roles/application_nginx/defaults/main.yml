@@ -1,0 +1,37 @@
+platform_application_definition:
+  name: nginx
+  version: 1.0.0
+  defaults:
+    image: evoscada-docker.artifacts.tn.tngrp.ru/nginx-docker-szi:794a4663
+    user: "1000:1000"
+    restart: always
+    command:
+      - nginx
+      - -g
+      - daemon off;
+    config_files:
+      - source: assets/script.lua
+        destination: script.lua
+        mode: "0644"
+      - source: assets/data.env
+        destination: data.env
+        mode: "0644"
+      - source: assets/scada-lawellet.conf
+        destination: scada-lawellet.conf
+        mode: "0644"
+    environment:
+      NGINX_HOST: '{{ application_parameters.NGINX_HOST | default(undef(hint=''Configure SZI nginx hostname''), true) }}'
+      REALM: '{{ application_parameters.SZI_REALM }}'
+      GA_HOST: '{{ application_parameters.GRANT_ACCESS_HOST | default(undef(hint=''Configure SZI grant-access endpoint''), true) }}'
+    parameters:
+      NGINX_HOST: ""
+      GRANT_ACCESS_HOST: ""
+    ports:
+      port-1:
+        container: 18443
+        published: 10543
+    readiness:
+      mode: container
+      delay: 2
+      retries: 30
+  connections: []

@@ -1,0 +1,2 @@
+# Preserve the source assets byte-for-byte, including all Keycloak themes.
+application-packages/**/assets/** -text

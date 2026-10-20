@@ -1,0 +1,294 @@
+[
+  {
+    "description": "конфигурирование",
+    "name": "NAVIGATOR_configuration"
+  },
+  {
+    "description": "настройка отображения панелей в главном окне клиентской части сервиса АСК «Гидроуклон»",
+    "name": "GU_configuring_panels"
+  },
+  {
+    "description": "Телеуправление/телерегулирование диспетчерское",
+    "name": "SDKU_EF_dispatcher_control_commands"
+  },
+  {
+    "description": "ручной ввод значений плотностей и расходов",
+    "name": "GU_manual_density_expense_values"
+  },
+  {
+    "description": "разрешает открыть окно, экранную форму, запустить модуль.",
+    "name": "SDKU_ALARMS_open_form_window"
+  },
+  {
+    "description": "настройка отображения сообщений о событиях сервиса АСК «Гидроуклон»",
+    "name": "GU_configuring_display_alarms"
+  },
+  {
+    "description": "Постановка на контроль",
+    "name": "SDKU_EF_enabling_control"
+  },
+  {
+    "description": "настройка отображения панели фреймов клиентской части сервиса АСК «Гидроуклон»",
+    "name": "GU_configuring_frame_panel"
+  },
+  {
+    "description": "разрешение комментировать алармы",
+    "name": "GU_commenting_alarms"
+  },
+  {
+    "description": "разрешает закрыть окно, экранную форму, модуль.",
+    "name": "SDKU_KNP_close_form_window"
+  },
+  {
+    "description": "постановка технологических участков МТ на контроль и снятие их с контроля",
+    "name": "GU_enabling_control"
+  },
+  {
+    "description": "настройка интервала проигрывания истории изменений показателей напоров/давлений",
+    "name": "GU_setting_interval_playing_story"
+  },
+  {
+    "description": "конфигурирование (открытие настроек)",
+    "name": "SDKU_ALARMS_configuration"
+  },
+  {
+    "description": "Квитирование",
+    "name": "SDKU_EF_acknowledging_alarms"
+  },
+  {
+    "description": "разрешает открыть окно, экранную форму, запустить модуль.",
+    "name": "NAVIGATOR_open_form_window"
+  },
+  {
+    "description": "Просмотр отчетов",
+    "name": "VTOR_viewing_reports"
+  },
+  {
+    "description": "экспорт конфигурации проекта",
+    "name": "CSPA_export_project_configuration"
+  },
+  {
+    "description": "настройка отображения сообщений о событиях",
+    "name": "SDKU_ALARMS_configuring_display_alarms"
+  },
+  {
+    "description": "корректировка настроек защит ЦСПА",
+    "name": "CSPA_defenses_correction"
+  },
+  {
+    "description": "Открыть/Запустить (просмотр технологических данных)",
+    "name": "SDKU_EF_open_form_window"
+  },
+  {
+    "description": "разрешает открыть окно, экранную форму, запустить модуль.",
+    "name": "SDKU_TRENDS_open_form_window"
+  },
+  {
+    "description": "конфигурирование (настройка спискоф объеков, сейчас нет в интерфейсе)",
+    "name": "SDKU_KNP_configuration"
+  },
+  {
+    "description": "просмотр истории данных о состоянии МТ с функцией моделирования",
+    "name": "GU_modeling_function"
+  },
+  {
+    "description": "Просмотр информации о ремонте",
+    "name": "VTOR_viewing_repairs"
+  },
+  {
+    "description": "разрешает закрыть окно, экранную форму, модуль.",
+    "name": "SDKU_TRENDS_close_form_window"
+  },
+  {
+    "description": "просмотр оперативных даннных",
+    "name": "CSPA_viewing_realtime_data"
+  },
+  {
+    "description": "Закрыть/Завершить",
+    "name": "SDKU_EF_close_form_window"
+  },
+  {
+    "description": "просмотр истории (тренды)",
+    "name": "CSPA_viewing_history_data"
+  },
+  {
+    "description": "квитирование сообщений о событиях сервиса АСК «Гидроуклон»",
+    "name": "GU_acknowledging_alarms"
+  },
+  {
+    "description": "разрешает открыть окно, экранную форму, запустить модуль.",
+    "name": "SDKU_KNP_open_form_window"
+  },
+  {
+    "description": "может быть установлено у администратора для вывода всех управляющих кнопок без возможности ТУ",
+    "name": "SDKU_TRENDS_showing_control_buttons"
+  },
+  {
+    "description": "сброс контрольных сумм",
+    "name": "CSPA_resetting_checksums"
+  },
+  {
+    "description": "Телеуправление/телерегулирование для СБ",
+    "name": "SDKU_EF_security_control_commands"
+  },
+  {
+    "description": "может быть установлено у администратора для вывода всех управляющих кнопок без возможности ТУ",
+    "name": "SDKU_KNP_showing_control_buttons"
+  },
+  {
+    "description": "возможность настройки блокировки маскирования",
+    "name": "CSPA_blocking_mask"
+  },
+  {
+    "description": "разрешает закрыть окно, экранную форму, модуль.",
+    "name": "SDKU_ALARMS_close_form_window"
+  },
+  {
+    "description": "Ручной ввод / Изменение пределов для сообщений",
+    "name": "SDKU_EF_commenting_alarms"
+  },
+  {
+    "description": "Запросы (создание, изменение) на вывод в ремонт, ввод в работу",
+    "name": "VTOR_repair_request"
+  },
+  {
+    "description": "Телеуправление/телерегулирование для энергодиспетчеров",
+    "name": "SDKU_EF_energy_dispatcher_control_commands"
+  },
+  {
+    "description": "временное отключение контроля по одному или нескольким датчикам давления",
+    "name": "GU_disabling_sensor"
+  },
+  {
+    "description": "разрешение экспортировать алармы",
+    "name": "GU_exporting_alarms"
+  },
+  {
+    "description": "постановка на контроль",
+    "name": "SDKU_KNP_enabling_control"
+  },
+  {
+    "description": "просмотр оперативных данных о состоянии МТ",
+    "name": "GU_viewing_realtime_data"
+  },
+  {
+    "description": "корректировка высоты установки датчиков",
+    "name": "GU_setting_height_sensor"
+  },
+  {
+    "description": "Управляющие элементы",
+    "name": "SDKU_EF_showing_control_buttons"
+  },
+  {
+    "description": "временное изменение максимально допустимых рабочих давлений на участках трубопровода",
+    "name": "GU_change_maximum_pressures"
+  },
+  {
+    "description": "конфигурирование",
+    "name": "SDKU_TRENDS_configuration"
+  },
+  {
+    "description": "разрешение экспортировать алармы",
+    "name": "SDKU_ALARMS_exporting_alarms"
+  },
+  {
+    "description": "квитирование сообщений о событиях",
+    "name": "SDKU_ALARMS_acknowledging_alarms"
+  },
+  {
+    "description": "чтение журнала оперативных сообщений",
+    "name": "CSPA_viewing_message_journal"
+  },
+  {
+    "description": "Запросы (подтверждение) на вывод в ремонт, ввод в работу",
+    "name": "VTOR_confirmation_repair_request"
+  },
+  {
+    "description": "просмотр пользователей, групп пользователей, прав пользователей в прикладном ПО",
+    "name": "CSPA_user_management"
+  },
+  {
+    "description": "может быть установлено у администратора для вывода всех управляющих кнопок без возможности ТУ",
+    "name": "SDKU_ALARMS_showing_control_buttons"
+  },
+  {
+    "description": "администрирование (фильтрация)",
+    "name": "SDKU_ALARMS_administration"
+  },
+  {
+    "description": "изменение признаков маскирования входов и выходов защит ЦСПА",
+    "name": "CSPA_changing_masking_features"
+  },
+  {
+    "description": "редактировать информацию о системе в отчетах",
+    "name": "CSPA_edit_system_information_reports"
+  },
+  {
+    "description": "администрирование (внесение правок в кнп - нет сейчас в интерфейсе)",
+    "name": "SDKU_KNP_administration"
+  },
+  {
+    "description": "просмотр истории данных о состоянии МТ",
+    "name": "GU_viewing_history_data"
+  },
+  {
+    "description": "Ручной ввод, изменение пределов для сообщений, комментирование",
+    "name": "SDKU_ALARMS_commenting_alarms"
+  },
+  {
+    "description": "администрирование",
+    "name": "SDKU_TRENDS_administration"
+  },
+  {
+    "description": "администрирование",
+    "name": "NAVIGATOR_administration"
+  },
+  {
+    "description": "квитирование сообщений о событиях",
+    "name": "SDKU_KNP_acknowledging_alarms"
+  },
+  {
+    "description": "активирует кнопки управления, разрешает отправлять команды телеуправления и телерегулирования для диспетчера",
+    "name": "SDKU_TRENDS_dispatcher_control_commands"
+  },
+  {
+    "description": "Отмена запроса",
+    "name": "VTOR_canceling_request"
+  },
+  {
+    "description": "отчет по действиям пользователей",
+    "name": "CSPA_report_user_actions"
+  },
+  {
+    "description": "разрешает закрыть окно, экранную форму, модуль.",
+    "name": "NAVIGATOR_close_form_window"
+  },
+  {
+    "description": "Вывод в ремонт, ввод в работу, изменение ремонта",
+    "name": "VTOR_repair_management"
+  },
+  {
+    "description": "Телеуправление/телерегулирование для инженеров",
+    "name": "SDKU_EF_engineer_control_commands"
+  },
+  {
+    "description": "Проигрывание плеера истории",
+    "name": "SDKU_EF_history_player"
+  },
+  {
+    "description": "Открыть/Запустить модуль отчетов",
+    "name": "SDKU_WEB_REPORTS_open_form_window"
+  },  
+  {
+    "description": "Администрирование модуля отчетов",
+    "name": "SDKU_WEB_REPORTS_administrate"
+  },
+  {
+    "description": "Импорт отчетов из модуля отчетов",
+    "name": "SDKU_WEB_REPORTS_input"
+  },
+  {
+    "description": "Конфигурирование модуля отчетов",
+    "name": "SDKU_WEB_REPORTS_configure"
+  }
+]

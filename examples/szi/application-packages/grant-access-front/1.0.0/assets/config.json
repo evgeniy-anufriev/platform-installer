@@ -1,0 +1,16 @@
+{
+        "production": true,
+        "apiHost": "https://nginx.tnsv.tn.tngrp.ru",
+        "keycloakHost": "https://sso.tnsv.tn.tngrp.ru",
+        "auditHost": "https://nginx.tnsv.tn.tngrp.ru/grant-access-audit",
+        "visibilityZone": "https://nginx.tnsv.tn.tngrp.ru/data-manager",
+        "nginxLogoutHost": "https://nginx.tnsv.tn.tngrp.ru/grant-access-front/logout",
+        "withoutPasswordEdition": false,
+        "grantAccessNginxPath": "/grant-access",
+        "canary": false,
+        "enableUserMultiGroup": false,
+        "filterGroups": true,
+        "heartbeatEnabled": false,
+        "heartbeatIntervalSec": 60,
+        "showHeaderButtons": true
+}

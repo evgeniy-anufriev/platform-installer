@@ -24,6 +24,35 @@ def load(path):
 
 
 class ApplicationLibrariesTest(unittest.TestCase):
+    def test_application_name_identity_rejects_cross_library_collision(self):
+        def row(library_id):
+            return {
+                "libraryId": library_id, "slotId": "keycloak", "instanceId": "keycloak",
+                "instanceIdStrategy": "application-name", "applicationName": "keycloak",
+                "applicationVersion": "1.0.0", "hostId": "node1", "runtimeRef": "docker",
+                "libraryRef": "szi@1.0.0", "settings": {"image": "example/keycloak:1"},
+                "resources": {}, "connections": {}, "bindings": {}, "sharedSecrets": {},
+                "identityNames": [], "packageIdentity": {"application": "app", "library": "lib"},
+            }
+
+        desired = {"serviceDeployments": {"docker": {"serviceType": "docker", "members": {"node1": {"host": "node1"}}}}}
+        hosts = {"node1": {"platformDeployments": {"docker": {}}}}
+        single = APP.project([row("szi-main")], desired, {}, {}, hosts)
+        self.assertFalse(any(f["code"] == "APPLICATION_IDENTITY_INVALID" for f in single["findings"]))
+        duplicate = APP.project([row("szi-main"), row("other")], desired, {}, {}, hosts)
+        self.assertIn("APPLICATION_IDENTITY_DUPLICATE", [f["code"] for f in duplicate["findings"]])
+
+    def test_library_instance_id_strategy_is_explicit_and_bounded(self):
+        validator = SchemaValidator(CONTRACTS)
+        schema = os.path.join(CONTRACTS, "application-libraries/v1alpha1/library.schema.json")
+        library = load(os.path.join(FIXTURE, "library-packages/sdku/1.0.0/roles/library_sdku/defaults/main.yml"))["platform_library_definition"]
+        self.assertFalse(validator.validate(library, schema))
+        for strategy in ("qualified", "application-name"):
+            library["instance_id_strategy"] = strategy
+            self.assertFalse(validator.validate(library, schema))
+        library["instance_id_strategy"] = "arbitrary-template"
+        self.assertTrue(validator.validate(library, schema))
+
     def test_redis_key_references_do_not_accept_data_lifecycle_fields(self):
         schema = os.path.join(CONTRACTS, 'application-libraries/v1alpha1/deployments.schema.json')
         validator = SchemaValidator(CONTRACTS)

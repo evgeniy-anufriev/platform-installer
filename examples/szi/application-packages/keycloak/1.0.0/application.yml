@@ -1,0 +1,24 @@
+{
+  "apiVersion": "platform.installer/application-package/v1alpha1",
+  "kind": "ApplicationPackage",
+  "name": "keycloak",
+  "version": "1.0.0",
+  "files": [
+    "assets/conf/cache-ispn.xml",
+    "assets/providers/keycloak-brute-message-plugin-df31476a.jar",
+    "assets/providers/keycloak-dmz-provision-plugin-4d87cb4f.jar",
+    "assets/providers/keycloak-login-logout-event-plugin-df31476a.jar",
+    "assets/providers/keycloak-password-policy-plugin-df31476a.jar",
+    "assets/providers/keycloak-plugin-last-login-time-df31476a.jar",
+    "assets/providers/keycloak-plugin-otp-condition-df31476a.jar",
+    "assets/providers/keycloak-plugin-password-change-time-df31476a.jar",
+    "assets/providers/keycloak-plugin-password-expire-reminder-9291024b.jar",
+    "assets/providers/keycloak-user-disabled-lastlogin-time-df31476a.jar",
+    "assets/themes.tar.gz",
+    "roles/application_keycloak/defaults/main.yml",
+    "roles/application_keycloak/templates/compose.yml.j2"
+  ],
+  "render": {
+    "compose_template": "roles/application_keycloak/templates/compose.yml.j2"
+  }
+}

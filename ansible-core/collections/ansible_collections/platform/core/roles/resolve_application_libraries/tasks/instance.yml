@@ -16,7 +16,10 @@
 - name: Bind identities and parameter context independently for this placement
   ansible.builtin.set_fact:
     application_name: "{{ application_job.application.name }}"
-    application_instance_id: "{{ application_job.application.name }}-{{ application_job.libraryId }}"
+    application_instance_id: >-
+      {{ application_job.application.name if
+         (_library_package.platform_library_definition.instance_id_strategy | default('qualified')) == 'application-name'
+         else application_job.application.name ~ '-' ~ application_job.libraryId }}
     library_instance_id: "{{ application_job.libraryId }}"
   no_log: true
   become: false
@@ -182,6 +185,7 @@
         'libraryRef': application_job.deployment.libraryRef,
         'slotId': application_job.slotId,
         'instanceId': application_instance_id,
+        'instanceIdStrategy': _library_package.platform_library_definition.instance_id_strategy | default('qualified'),
         'applicationName': application_name,
         'applicationVersion': application_job.application.version,
         'hostId': application_job.hostId,

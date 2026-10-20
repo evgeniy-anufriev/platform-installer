@@ -248,6 +248,12 @@ desired-state validation and v1alpha1 snapshots without application packages.
 Applications produce snapshot v2alpha1. A7/A8 extend the execution planner with
 application-aware planning and the mixed execution barrier; the original A1
 rejection is historical, not a current restriction.
+Library packages may declare `instance_id_strategy: application-name`; Core then
+uses the application's package name as its `instanceId` in the endpoint,
+Compose and execution projections. The omitted/default `qualified` strategy
+continues to use `<application-name>-<library-id>`. IDs must be unique across
+selected libraries. SZI selects `application-name` because a project has one
+SZI library deployment.
 See [A1 implementation notes](work/application-libraries/milestones/a1/evidence/a1-test-journal.md).
 
 ### File-only ClickHouse base tables

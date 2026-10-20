@@ -1,0 +1,4 @@
+# Keycloak binary inputs are kept locally and supplied separately.
+/application-packages/keycloak/*/assets/themes/
+/application-packages/keycloak/*/assets/themes.tar.gz
+/application-packages/keycloak/*/assets/providers/*.jar

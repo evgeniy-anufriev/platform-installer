@@ -1,0 +1,14 @@
+{
+  "apiVersion": "platform.installer/application-package/v1alpha1",
+  "kind": "ApplicationPackage",
+  "name": "grant-access",
+  "version": "1.0.0",
+  "files": [
+    "assets/roles-of-realm.json",
+    "roles/application_grant-access/defaults/main.yml",
+    "roles/application_grant-access/templates/compose.yml.j2"
+  ],
+  "render": {
+    "compose_template": "roles/application_grant-access/templates/compose.yml.j2"
+  }
+}

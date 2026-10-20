@@ -1,0 +1,7 @@
+services:
+  base:
+    init: true
+    environment:
+{% for server in groups['all'] | reject('equalto', 'localhost') | sort %}
+      "SERVER_{{ loop.index }}_IP": "${SERVER_{{ loop.index }}_IP}"
+{% endfor %}

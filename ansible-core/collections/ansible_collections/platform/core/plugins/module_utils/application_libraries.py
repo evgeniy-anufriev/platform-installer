@@ -406,6 +406,7 @@ def resolve_tables(resources, bindings, desired, defaults, catalog, project_id):
 
 def project(rows, desired, configuration, catalog, hosts, project_id="ansible-project"):
     findings, libraries, ports = [], {}, set()
+    instance_owners = {}
     if not isinstance(project_id, str) or not ID.fullmatch(project_id):
         return {"apiVersion": "platform.installer/application-libraries/v1alpha1", "status": "BLOCKED", "libraries": {},
                 "findings": [finding("APPLICATION_PROJECT_ID_INVALID", "project.id")]}
@@ -416,8 +417,14 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
             findings.append(finding("APPLICATION_COMPOSE_PROJECT_INVALID", "applicationLibraryDeployments." + library_id + ".placements." + host + ".composeProject"))
             continue
         field = "applicationLibraryDeployments.%s.applications.%s" % (library_id, row["slotId"])
+        owner = (library_id, row["slotId"])
+        if app_id in instance_owners and instance_owners[app_id] != owner:
+            findings.append(finding("APPLICATION_IDENTITY_DUPLICATE", field))
+        instance_owners[app_id] = owner
         settings = row["settings"]
-        if app_id != row["applicationName"] + "-" + library_id or host not in hosts or not ID.fullmatch(app_id) or len(app_id) > 128:
+        strategy = row.get("instanceIdStrategy", "qualified")
+        expected_id = row["applicationName"] if strategy == "application-name" else row["applicationName"] + "-" + library_id
+        if strategy not in ("qualified", "application-name") or app_id != expected_id or host not in hosts or not ID.fullmatch(app_id) or len(app_id) > 128:
             findings.append(finding("APPLICATION_IDENTITY_INVALID", field))
         for section in ("parameters", "environment", "command"):
             nonsecret_values(settings.get(section, {}), field + "." + section, findings)

@@ -76,6 +76,9 @@ adds library ENV/parameters, instance group_vars overrides and Core-projected
 inheritance/Reset in the existing editor. Target-free checks and real local
 React/Wails Save/reopen are its gates; service installation and bundle publication
 are separate owner-authorized work.
+The SZI package draft uses the library contract's optional application-name
+instance ID strategy; acceptance must verify one ID across endpoint publication,
+container runtime and integration inputs, including collision rejection.
 
 [A2](work/application-libraries/milestones/a2/a2-technical-plan.md) covers explicit standalone
 rendering, pinned image delivery and rootless Compose Apply/Verify. Its exit gates

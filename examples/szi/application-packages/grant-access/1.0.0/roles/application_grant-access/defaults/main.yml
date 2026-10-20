@@ -1,0 +1,108 @@
+platform_application_definition:
+  name: grant-access
+  version: 1.0.0
+  defaults:
+    image: evoscada-docker.artifacts.tn.tngrp.ru/grant-access:2.0.5-22-20261008-1710-3575288d-redos
+    user: "1000:1000"
+    restart: always
+    command:
+      - java
+      - -XX:+ExitOnOutOfMemoryError
+      - -Dhazelcast.rest.enabled=true
+      - -Duser.timezone=Europe/Moscow
+      - -Xmx6096M
+      - -jar
+      - grant-access.jar
+    config_files:
+      - source: assets/roles-of-realm.json
+        destination: roles-of-realm.json
+        mode: "0644"
+    environment:
+      TZ: Europe/Moscow
+      KILL_EXPIRED_USER_SESSIONS_ENABLED: "false"
+      JAVA_OPTS: -Xmx3500m
+      SERVER_PORT: >-
+        {{ ((application_job.application.definition.defaults.ports | default({})) |
+            combine(application_job.slot.overrides.ports | default({}), recursive=true) |
+            combine(application_job.instance.overrides.ports | default({}), recursive=true) |
+            combine(application_job.hostOverride.ports | default({}), recursive=true))['port-1'].container }}
+      USE_GROUP_PATTERS: "true"
+      APIPROVIDER_CLIENT_ID: '{{ application_job.application.name }}'
+      KEYCLOAK_CLIENT_HOST: >-
+        https://keycloak.{{ platform_desired_state.endpointGroups[platform_desired_state.applicationLibraryDeployments[library_instance_id].applications['keycloak'].overrides.endpoint.endpoint_group].address.domain }}
+      KEYCLOAK_CLIENT_REALM: '{{ application_parameters.SZI_REALM }}'
+      NGINX_URL: >-
+        https://nginx.{{ platform_desired_state.endpointGroups[platform_desired_state.applicationLibraryDeployments[library_instance_id].applications['nginx'].overrides.endpoint.endpoint_group].address.domain }}
+      CUSTOM_PASSWORD_POLICY_ENABLED: "true"
+      PASSWORD_POLICY_ALLOWED: "true"
+      CREATE_UPDATE_DELETE_ACCOUNT_ENABLED: "true"
+      ENABLE_MULTIPLE_GROUPS: "false"
+      AUTH_FLOW_NAME: browser limited session
+      AUTH_FLOW_OTP_EXECUTION_ID: otp-group-condition
+      AUTH_FLOW_OTP_GROUPS_VAR: tnt_groups
+      FONT_FOR_PDF_TTF: /usr/local/app/arial.ttf
+      APP_OPEN_SEARCH_INTEGRATION_ENABLED: "false"
+      KEYCLOAK_CLIENT_ID: admin-cli
+      SERVICE_ADMIN_GROUP: Администратор подключаемого сервиса
+      SUPER_ADMIN_GROUP: Администратор системы
+      KURATOR_IB_GROUP: Куратор ИБ
+      ROOT_GROUP_LEVEL_0: Администратор ЭВО СЗИ
+      ROOT_GROUP_LEVEL_0_ROLE: Администратор ЭВО СЗИ
+      ROOT_GROUP_LEVEL_1: Администратор системы,Администратор СДКУ,Администратор_ЦСПА
+      ROOT_GROUP_LEVEL_1_ROLE: Администратор системы
+      ROOT_GROUP_LEVEL_2: Администратор подключаемого сервиса
+      ROOT_GROUP_LEVEL_2_ROLE: Администратор подключаемого сервиса
+      ACCESS_LIST_OF_USERS_BY_GROUP: Администратор СДКУ,Администратор ЭВО СЗИ,Администратор системы,Администратор_ЦСПА,Куратор ИБ,Администратор подключаемого сервиса
+      ACCOUNT_EXCLUDE_GROUP_LIST: ТУЗ
+      ALLOW_CLIENT_CACHE_CLEARING: "false"
+      HZ_CLUSTERNAME: '{{ application_parameters.HZ_CLUSTERNAME }}'
+      HZ_NETWORK_PUBLICADDRESS: >-
+        {%- set server_ids = groups['all'] | reject('equalto', 'localhost') | sort | list -%}
+        {%- set ports = (application_job.application.definition.defaults.ports | default({})) |
+            combine(application_job.slot.overrides.ports | default({}), recursive=true) |
+            combine(application_job.instance.overrides.ports | default({}), recursive=true) |
+            combine(application_job.hostOverride.ports | default({}), recursive=true) -%}
+        $${SERVER_{{ server_ids.index(application_job.hostId) + 1 }}_IP}:{{ ports['port-2'].published }}
+      HZ_NETWORK_PORT: >-
+        {{ ((application_job.application.definition.defaults.ports | default({})) |
+            combine(application_job.slot.overrides.ports | default({}), recursive=true) |
+            combine(application_job.instance.overrides.ports | default({}), recursive=true) |
+            combine(application_job.hostOverride.ports | default({}), recursive=true))['port-2'].container }}
+      HZ_NETWORK_JOIN_TCPIP_MEMBERS: >-
+        {%- set members = [] -%}
+        {%- set server_ids = groups['all'] | reject('equalto', 'localhost') | sort | list -%}
+        {%- for placement in _application_inputs.jobs |
+            selectattr('libraryId', 'equalto', library_instance_id) |
+            selectattr('slotId', 'equalto', application_job.slotId) | sort(attribute='hostId') -%}
+        {%- set ports = (placement.application.definition.defaults.ports | default({})) |
+            combine(placement.slot.overrides.ports | default({}), recursive=true) |
+            combine(placement.instance.overrides.ports | default({}), recursive=true) |
+            combine(placement.hostOverride.ports | default({}), recursive=true) -%}
+        {%- set _ = members.append('$${SERVER_' ~ (server_ids.index(placement.hostId) + 1) ~ '_IP}:' ~ (ports['port-2'].published | string)) -%}
+        {%- endfor -%}
+        {{- members | join(',') -}}
+      KILL_EXPIRED_USER_SESSIONS_JOB_RATE: "60000"
+      KILL_EXPIRED_USER_SESSIONS_LIVE_TIME: "120000"
+      SPRING_PROFILES_ACTIVE: swagger,dev,redis-sentinel
+    ports:
+      port-1:
+        container: 8011
+        published: 8011
+      port-2:
+        container: 5701
+        published: 5701
+      port-3:
+        container: 5702
+        published: 5702
+    readiness:
+      mode: healthcheck
+      delay: 2
+      retries: 30
+    provisioner:
+      type: vault-agent
+      mode: process-supervisor
+      auth:
+        method: approle
+      approle:
+        bind_secret_id: false
+  connections: [redis, sentinel, vault]
