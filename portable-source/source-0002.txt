@@ -24780,7 +24780,7 @@ tags: [kafka, kraft, offline]
 dependencies: {}
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/defaults/main.yml","mode":420,"size":3244,"sha256":"d17971951bb7bebaf7c55c1bc6216c22d42a7fca4b0fcaf20153a952702aba5c","index":0,"count":1,"encoding":"utf-8","payloadBytes":3244}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/defaults/main.yml","mode":420,"size":3241,"sha256":"78b5b24aab7bc3c1f4b3f06da75dd310a0f05185b7a56f4e9a9c4e2c2ae55023","index":0,"count":1,"encoding":"utf-8","payloadBytes":3241}
 ---
 platform_kafka_version: "4.3.1"
 platform_kafka_application_timeout_ms: 30000
@@ -24850,7 +24850,7 @@ platform_pki_materialization_plans: []
 # Kafka consumer material is copied to platform_kafka_pki_directory instead.
 platform_pki_secret_files: {}
 platform_kafka_pki_directory: ''
-platform_kafka_store_type: PKCS12
+platform_kafka_store_type: PEM
 platform_kafka_clear_stop_retries: 15
 platform_kafka_clear_stop_delay: 2
 
@@ -24998,7 +24998,7 @@ dependencies: []
     application_kafka_credentials: "{{ platform_application_secret_files | default({}) | combine(platform_application_credential_files | default({})) }}"
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/application_accounts_scope.yml","mode":420,"size":1040,"sha256":"bc039b6f2f1a3564235eda70bbaa76682e14fb9f5a8fb1d82a062dd1703b0fc8","index":0,"count":1,"encoding":"utf-8","payloadBytes":1040}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/application_accounts_scope.yml","mode":420,"size":1214,"sha256":"ea49f30affab7beecaf9ac9a1f23cf34d583576e7211c06c4556c80a899054f9","index":0,"count":1,"encoding":"utf-8","payloadBytes":1214}
 ---
 - name: Create an invocation-private Kafka account directory
   ansible.builtin.tempfile:
@@ -25009,6 +25009,9 @@ dependencies: []
 
 - name: Run bounded SCRAM and ACL operations
   block:
+    - name: Prepare the invocation-private PEM client identity
+      ansible.builtin.include_tasks: application_client_tls.yml
+      when: platform_kafka_store_type == 'PEM'
     - name: Render the dedicated administrative SASL configuration
       ansible.builtin.template:
         src: application-topics-client.properties.j2
@@ -25081,6 +25084,26 @@ dependencies: []
     that: application_kafka_acl_creation.rc == 0
     fail_msg: APPLICATION_KAFKA_ACL_CREATE_FAILED
   when: application_kafka_acl_creation is not skipped
+
+@@END
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/application_client_tls.yml","mode":420,"size":709,"sha256":"eeaee797612ab42b319b069832c0c8428f32ad69d3c8e49c59b34971336d160a","index":0,"count":1,"encoding":"utf-8","payloadBytes":709}
+---
+- name: Require exact authoritative PEM inputs for this invocation
+  ansible.builtin.assert:
+    that:
+      - application_topic_candidate.pkiPlans | length == 1
+      - "'PEM' in application_topic_candidate.pkiPlans[0].formats"
+    fail_msg: APPLICATION_PROVIDER_PKI_PLAN_REQUIRED
+
+- name: Prepare only an invocation-private PEM bundle for the Kafka CLI
+  ansible.builtin.include_tasks: pem_identity.yml
+  vars:
+    kafka_pem_source_directory: "{{ application_topic_candidate.pkiPlans[0].targetDirectory }}"
+    kafka_pem_identity_path: "{{ application_kafka_private.path }}/identity.pem"
+    kafka_pem_owner: root
+    kafka_pem_group: root
+    kafka_pem_verify_only: false
+    kafka_pem_ephemeral: true
 
 @@END
 @@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/application_topic.yml","mode":420,"size":2559,"sha256":"b170a728342fbc7bfdf9fbe9e5255cffb7406f030ead01c0d1dca49f154a896a","index":0,"count":1,"encoding":"utf-8","payloadBytes":2559}
@@ -25242,17 +25265,27 @@ dependencies: []
     application_topic_cli_directory: "{{ hostvars[application_topic_candidate.hostId].platform_kafka_install_directory | default(platform_kafka_install_directory) }}"
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/application_topics_scope.yml","mode":420,"size":1005,"sha256":"0bc6b57e9ee655b7cbd1bdc2157ade5ab68951d5ab9c46e0d852e8be3e79e927","index":0,"count":1,"encoding":"utf-8","payloadBytes":1005}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/application_topics_scope.yml","mode":420,"size":1450,"sha256":"04384f3c131e79223099f37dc6be82b32e1c059f6e733d3620302f7ea03f458b","index":0,"count":1,"encoding":"utf-8","payloadBytes":1450}
 ---
 - name: Create private temporary Kafka client configuration
   ansible.builtin.tempfile:
-    state: file
+    state: directory
     prefix: platform-topics-
-  register: application_topic_client
+  register: application_kafka_private
+  changed_when: false
+
+- name: Select this invocation's client configuration path
+  ansible.builtin.set_fact:
+    application_topic_client: "{{ {'path': application_kafka_private.path ~ '/client.properties'} }}"
   changed_when: false
 
 - name: Use existing Kafka security projection for this topic batch
   block:
+    - name: Prepare the invocation-private PEM client identity
+      ansible.builtin.include_tasks: application_client_tls.yml
+      when:
+        - application_topic_candidate.tls
+        - platform_kafka_store_type == 'PEM'
     - name: Render the projected Kafka client configuration
       ansible.builtin.template:
         src: application-topics-client.properties.j2
@@ -25269,7 +25302,7 @@ dependencies: []
   always:
     - name: Remove only this invocation's client configuration
       ansible.builtin.file:
-        path: "{{ application_topic_client.path }}"
+        path: "{{ application_kafka_private.path }}"
         state: absent
       changed_when: false
 
@@ -25439,7 +25472,7 @@ dependencies: []
   no_log: true
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/authorization_setup.yml","mode":420,"size":4861,"sha256":"db52a083d1077292f02990e89fbc5accab4b55939f377681edd56e577970e601","index":0,"count":1,"encoding":"utf-8","payloadBytes":4861}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/authorization_setup.yml","mode":420,"size":5038,"sha256":"0ea37c832f78c9685fbc52d1f94ecb45020aaf96f69225e43e1c4fc3fcd93a40","index":0,"count":1,"encoding":"utf-8","payloadBytes":5038}
 ---
 - name: Resolve the existing bootstrap TLS connection
   ansible.builtin.include_tasks: resolve_cli_connection.yml
@@ -25489,6 +25522,9 @@ dependencies: []
 
 - name: Authenticate admin before changing compatibility or internal ACLs
   block:
+    - name: Prepare the invocation-private bootstrap PEM identity
+      ansible.builtin.include_tasks: application_client_tls.yml
+      when: platform_kafka_store_type == 'PEM'
     - name: Render either the temporary certificate bootstrap or final admin connection
       ansible.builtin.template:
         src: application-topics-client.properties.j2
@@ -26795,6 +26831,107 @@ dependencies: []
     _platform_kafka_instances: "{{ _platform_kafka_instances + [_platform_kafka_normalized_member] }}"
 
 @@END
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/pem_identity.yml","mode":420,"size":4374,"sha256":"3d66a9bedde05fd305a8517d5b4d8180b463a3d46ea82880b9128bbbee8229e4","index":0,"count":1,"encoding":"utf-8","payloadBytes":4374}
+---
+- name: Inspect authoritative PEM inputs without following links
+  ansible.builtin.stat:
+    path: "{{ kafka_pem_source_directory }}/{{ item }}"
+    follow: false
+    get_checksum: false
+  loop: [private-key.pem, certificate.pem, ca-chain.pem]
+  register: _platform_kafka_pem_input_stats
+
+- name: Require complete regular PEM source files
+  ansible.builtin.assert:
+    that:
+      - item.stat.isreg | default(false)
+      - not (item.stat.islnk | default(false))
+    fail_msg: KAFKA_PEM_INPUT_INVALID
+  loop: "{{ _platform_kafka_pem_input_stats.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+
+- name: Read PKCS8 identity and certificate chain without logging
+  ansible.builtin.slurp:
+    src: "{{ kafka_pem_source_directory }}/{{ item }}"
+  loop: [private-key.pem, certificate.pem, ca-chain.pem]
+  register: _platform_kafka_pem_inputs
+  no_log: true
+
+- name: Require unencrypted PKCS8 material
+  ansible.builtin.assert:
+    that:
+      - "(_platform_kafka_pem_inputs.results[0].content | b64decode) is search('-----BEGIN PRIVATE KEY-----')"
+      - "(_platform_kafka_pem_inputs.results[1].content | b64decode) is search('-----BEGIN CERTIFICATE-----')"
+      - "(_platform_kafka_pem_inputs.results[2].content | b64decode) is search('-----BEGIN CERTIFICATE-----')"
+    fail_msg: KAFKA_PEM_PKCS8_REQUIRED
+  no_log: true
+
+- name: Read certificate public key
+  ansible.builtin.command:
+    argv: [openssl, x509, -in, "{{ kafka_pem_source_directory }}/certificate.pem", -pubkey, -noout]
+  register: _platform_kafka_pem_certificate_key
+  changed_when: false
+
+- name: Read private key public component
+  ansible.builtin.command:
+    argv: [openssl, pkey, -in, "{{ kafka_pem_source_directory }}/private-key.pem", -pubout]
+  register: _platform_kafka_pem_private_key
+  changed_when: false
+  no_log: true
+
+- name: Require matching certificate and private key
+  ansible.builtin.assert:
+    that: _platform_kafka_pem_certificate_key.stdout == _platform_kafka_pem_private_key.stdout
+    fail_msg: KAFKA_PEM_KEY_CERT_MISMATCH
+  no_log: true
+
+- name: Materialize a protected PEM identity only during Apply or temporary CLI use
+  ansible.builtin.copy:
+    content: "{{ (_platform_kafka_pem_inputs.results | map(attribute='content') | map('b64decode') | map('trim') | join('\n')) ~ '\n' }}"
+    dest: "{{ kafka_pem_identity_path }}"
+    owner: "{{ kafka_pem_owner }}"
+    group: "{{ kafka_pem_group }}"
+    mode: '0600'
+  register: _platform_kafka_pem_identity_write
+  changed_when: _platform_kafka_pem_identity_write.changed and not (kafka_pem_ephemeral | default(false) | bool)
+  no_log: true
+  diff: false
+  when: not (kafka_pem_verify_only | default(false) | bool)
+
+- name: Inspect existing consumer PEM identity and trust without repair
+  ansible.builtin.stat:
+    path: "{{ item }}"
+    follow: false
+    checksum_algorithm: sha256
+  loop: ["{{ kafka_pem_identity_path }}", "{{ kafka_pem_ca_path | default(kafka_pem_source_directory ~ '/ca-chain.pem') }}"]
+  register: _platform_kafka_pem_consumer_stats
+  no_log: true
+  when: kafka_pem_verify_only | default(false) | bool
+
+- name: Require exact PEM consumer files and private identity custody
+  ansible.builtin.assert:
+    that:
+      - _platform_kafka_pem_consumer_stats.results[0].stat.isreg | default(false)
+      - not (_platform_kafka_pem_consumer_stats.results[0].stat.islnk | default(false))
+      - _platform_kafka_pem_consumer_stats.results[0].stat.mode == '0600'
+      - _platform_kafka_pem_consumer_stats.results[0].stat.pw_name == kafka_pem_owner
+      - _platform_kafka_pem_consumer_stats.results[0].stat.gr_name == kafka_pem_group
+      - _platform_kafka_pem_consumer_stats.results[0].stat.checksum == (((_platform_kafka_pem_inputs.results | map(attribute='content') | map('b64decode') | map('trim') | join('\n')) ~ '\n') | hash('sha256'))
+      - _platform_kafka_pem_consumer_stats.results[1].stat.isreg | default(false)
+      - not (_platform_kafka_pem_consumer_stats.results[1].stat.islnk | default(false))
+      - _platform_kafka_pem_consumer_stats.results[1].stat.checksum == ((_platform_kafka_pem_inputs.results[2].content | b64decode) | hash('sha256'))
+    fail_msg: KAFKA_PEM_CONSUMER_DRIFT
+  no_log: true
+  when: kafka_pem_verify_only | default(false) | bool
+
+- name: Discard run-local PEM buffers
+  ansible.builtin.set_fact:
+    _platform_kafka_pem_inputs: {}
+  no_log: true
+  changed_when: false
+
+@@END
 @@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/prepare_host.yml","mode":420,"size":1598,"sha256":"38c4ce8b503f5d1421c59e5e08a57e089ab47b36a45cb193f92c8a7b2e5fba11","index":0,"count":1,"encoding":"utf-8","payloadBytes":1598}
 ---
 - name: Install host-wide Java prerequisite
@@ -27034,7 +27171,7 @@ dependencies: []
   when: _platform_kafka_cli_connection.securityProtocol == 'SSL'
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/resolve_tls_runtime.yml","mode":420,"size":4424,"sha256":"fcca1371077fdf4178cd7b7631e0b6897fcc21673e239a64c4b66a89a2813e72","index":0,"count":1,"encoding":"utf-8","payloadBytes":4424}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/resolve_tls_runtime.yml","mode":420,"size":5027,"sha256":"83de19bfa2882cd6acc91d933ed1d2b60f4ded88f8467e251b6780ba14642443","index":0,"count":1,"encoding":"utf-8","payloadBytes":5027}
 ---
 - name: Select effective PKI-01 request and plan collections
   ansible.builtin.set_fact:
@@ -27093,11 +27230,19 @@ dependencies: []
       - _platform_kafka_tls_runtime_requests | length == 1
       - "'serverAuth' in _platform_kafka_tls_runtime_requests[0].usages"
       - "'clientAuth' in _platform_kafka_tls_runtime_requests[0].usages"
+      - platform_kafka_store_type in ['PEM', 'PKCS12']
+      - "'PEM' in _platform_kafka_tls_runtime_plans[0].formats"
+    fail_msg: 'BLOCKED: Kafka TLS requires exact PKI-01 serverAuth/clientAuth material and PEM or PKCS12 store type'
+
+- name: Require a runtime store SecretRef only for explicit PKCS12
+  ansible.builtin.assert:
+    that:
+      - "['PKCS12_KEYSTORE', 'PKCS12_TRUSTSTORE'] | difference(_platform_kafka_tls_runtime_plans[0].formats) | length == 0"
       - _platform_kafka_tls_runtime_plans[0].storePasswordSecretRef is defined
       - _platform_kafka_tls_runtime_plans[0].storePasswordSecretRef in (platform_pki_secret_files | default(hostvars['localhost'].platform_pki_secret_files | default({}), true))
       - (platform_pki_secret_files | default(hostvars['localhost'].platform_pki_secret_files | default({}), true))[_platform_kafka_tls_runtime_plans[0].storePasswordSecretRef] | length > 0
-      - platform_kafka_store_type | string | length > 0
-    fail_msg: 'BLOCKED: Kafka TLS requires PKI-01 serverAuth and clientAuth material plus a runtime store SecretRef'
+    fail_msg: 'BLOCKED: explicit PKCS12 requires PKI stores and a runtime store SecretRef'
+  when: platform_kafka_store_type == 'PKCS12'
 
 - name: Build Kafka TLS runtime projection without secret values
   ansible.builtin.set_fact:
@@ -27109,17 +27254,17 @@ dependencies: []
              else (kafka_tls_member.config_directory ~ '/pki')),
            'keystorePath': ((platform_kafka_pki_directory
              if (platform_kafka_pki_directory | default('', true) | length > 0)
-             else (kafka_tls_member.config_directory ~ '/pki')) ~ '/keystore.p12'),
+             else (kafka_tls_member.config_directory ~ '/pki')) ~ ('/identity.pem' if platform_kafka_store_type == 'PEM' else '/keystore.p12')),
            'truststorePath': ((platform_kafka_pki_directory
              if (platform_kafka_pki_directory | default('', true) | length > 0)
-             else (kafka_tls_member.config_directory ~ '/pki')) ~ '/truststore.p12'),
+             else (kafka_tls_member.config_directory ~ '/pki')) ~ ('/ca-chain.pem' if platform_kafka_store_type == 'PEM' else '/truststore.p12')),
            'storeType': platform_kafka_store_type,
-           'storePasswordSecretRef': _platform_kafka_tls_runtime_plans[0].storePasswordSecretRef
+           'storePasswordSecretRef': (_platform_kafka_tls_runtime_plans[0].storePasswordSecretRef if platform_kafka_store_type == 'PKCS12' else none)
          } }}
   changed_when: false
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/run_cli_command.yml","mode":420,"size":3734,"sha256":"fb661a85b8097d2bb82d75992dd061781204c0a4ced2808575e8355bfb2511ac","index":0,"count":1,"encoding":"utf-8","payloadBytes":3734}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/run_cli_command.yml","mode":420,"size":3992,"sha256":"90144c7fb6958d893c49b2e0b62bfcf57e2b15581b72ff9896670f057d7caf83","index":0,"count":1,"encoding":"utf-8","payloadBytes":3992}
 ---
 - name: Require supported projected Kafka CLI protocol
   ansible.builtin.assert:
@@ -27150,7 +27295,9 @@ dependencies: []
           {{ (platform_pki_secret_files
               | default(hostvars['localhost'].platform_pki_secret_files | default({}, true), true))[kafka_cli_connection.tls.storePasswordSecretRef] }}
       no_log: true
-      when: kafka_cli_connection.securityProtocol == 'SSL'
+      when:
+        - kafka_cli_connection.securityProtocol == 'SSL'
+        - kafka_cli_connection.tls.truststoreType == 'PKCS12'
 
     - name: Render projected SSL Kafka CLI command configuration
       ansible.builtin.copy:
@@ -27158,11 +27305,15 @@ dependencies: []
           security.protocol={{ kafka_cli_connection.securityProtocol }}
           ssl.truststore.location={{ kafka_cli_connection.tls.truststorePath }}
           ssl.truststore.type={{ kafka_cli_connection.tls.truststoreType }}
+          {% if kafka_cli_connection.tls.truststoreType == 'PKCS12' %}
           ssl.truststore.password={{ lookup('ansible.builtin.file', _platform_kafka_cli_password_file) | trim | platform.core.platform_java_properties_value }}
+          {% endif %}
           ssl.keystore.location={{ kafka_cli_connection.tls.keystorePath }}
           ssl.keystore.type={{ kafka_cli_connection.tls.truststoreType }}
+          {% if kafka_cli_connection.tls.truststoreType == 'PKCS12' %}
           ssl.keystore.password={{ lookup('ansible.builtin.file', _platform_kafka_cli_password_file) | trim | platform.core.platform_java_properties_value }}
           ssl.key.password={{ lookup('ansible.builtin.file', _platform_kafka_cli_password_file) | trim | platform.core.platform_java_properties_value }}
+          {% endif %}
         dest: "{{ _platform_kafka_cli_command_config.path }}"
         mode: '0600'
       changed_when: false
@@ -27410,7 +27561,7 @@ dependencies: []
   when: _platform_kafka_registry_clear_units.changed
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/schema_registry_member.yml","mode":420,"size":7601,"sha256":"4e6f6987a692989e4d2789bb25e65e4d3bf86dc1698ca6a0625dc52ff4a9ef91","index":0,"count":1,"encoding":"utf-8","payloadBytes":7601}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/schema_registry_member.yml","mode":420,"size":8733,"sha256":"655c3b989b8fa27066ee391c82c5b41aa3ab7e9a83a2269dbfef6e6ae196351b","index":0,"count":1,"encoding":"utf-8","payloadBytes":8733}
 ---
 - name: Resolve exact Kafka member PKI for Registry server and client
   ansible.builtin.include_tasks: resolve_tls_runtime.yml
@@ -27453,10 +27604,26 @@ dependencies: []
     owner: "{{ platform_kafka_schema_registry_user }}"
     group: "{{ platform_kafka_schema_registry_group }}"
     mode: '0600'
-  loop: [keystore.p12, truststore.p12, ca-chain.pem, materialization-fingerprint]
+  loop: "{{ ['ca-chain.pem', 'materialization-fingerprint'] + (['keystore.p12', 'truststore.p12'] if _platform_kafka_tls_runtime.storeType == 'PKCS12' else []) }}"
   register: _platform_kafka_registry_pki_copy
   no_log: true
   when: not platform_kafka_verify_only
+
+- name: Materialize or verify the Registry-owned PEM identity
+  ansible.builtin.include_tasks: pem_identity.yml
+  vars:
+    kafka_pem_source_directory: "{{ _platform_kafka_tls_runtime.targetDirectory }}"
+    kafka_pem_identity_path: "{{ registry_instance.config_directory }}/pki/identity.pem"
+    kafka_pem_ca_path: "{{ registry_instance.config_directory }}/pki/ca-chain.pem"
+    kafka_pem_owner: "{{ platform_kafka_schema_registry_user }}"
+    kafka_pem_group: "{{ platform_kafka_schema_registry_group }}"
+    kafka_pem_verify_only: "{{ platform_kafka_verify_only }}"
+  when: _platform_kafka_tls_runtime.storeType == 'PEM'
+
+- name: Preserve the Registry PEM change signal
+  ansible.builtin.set_fact:
+    _platform_kafka_registry_pem_changed: "{{ _platform_kafka_tls_runtime.storeType == 'PEM' and (_platform_kafka_pem_identity_write.changed | default(false) | bool) }}"
+  changed_when: false
 
 - name: Load runtime-only store password without logging
   ansible.builtin.set_fact:
@@ -27464,6 +27631,7 @@ dependencies: []
       {{ lookup('ansible.builtin.file',
           (platform_pki_secret_files | default(hostvars['localhost'].platform_pki_secret_files | default({}), true))[_platform_kafka_tls_runtime.storePasswordSecretRef]) | trim }}
   no_log: true
+  when: _platform_kafka_tls_runtime.storeType == 'PKCS12'
 
 - name: Require a properties-safe store password
   ansible.builtin.assert:
@@ -27471,6 +27639,7 @@ dependencies: []
       - _platform_kafka_registry_password | length > 0
     fail_msg: SCHEMA_REGISTRY_STORE_PASSWORD_FORMAT_UNSUPPORTED
   no_log: true
+  when: _platform_kafka_tls_runtime.storeType == 'PKCS12'
 
 - name: Render protected Registry and Kafka CLI properties
   ansible.builtin.template:
@@ -27542,7 +27711,7 @@ dependencies: []
     name: "{{ registry_instance.unit_name }}"
     daemon_reload: "{{ _platform_kafka_registry_unit.changed }}"
     enabled: true
-    state: "{{ 'restarted' if (_platform_kafka_registry_unit.changed or _platform_kafka_registry_properties.changed or _platform_kafka_registry_pki_copy.changed) else 'started' }}"
+    state: "{{ 'restarted' if (_platform_kafka_registry_unit.changed or _platform_kafka_registry_properties.changed or _platform_kafka_registry_pki_copy.changed or _platform_kafka_registry_pem_changed) else 'started' }}"
   when: not platform_kafka_verify_only
 
 - name: Verify Registry unit is active
@@ -27840,7 +28009,7 @@ dependencies: []
     fail_msg: Kafka member config, runtime, data and log paths must be isolated per physical host
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/validate_ssl_listener.yml","mode":420,"size":3603,"sha256":"8aa8ab62fbae30f0850b195b51a5f23e9a1b9d1ce4d2dc0b3b645212f733277e","index":0,"count":1,"encoding":"utf-8","payloadBytes":3603}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/validate_ssl_listener.yml","mode":420,"size":4772,"sha256":"f8c619fe2b04eb0e5c2ec92fb696acb50d3276498e4d706a768125119635b6bf","index":0,"count":1,"encoding":"utf-8","payloadBytes":4772}
 ---
 - name: Resolve Kafka TLS runtime projection for SSL listener
   ansible.builtin.include_tasks: resolve_tls_runtime.yml
@@ -27853,7 +28022,7 @@ dependencies: []
     get_mime: false
     get_attributes: false
     get_checksum: false
-  loop: [keystore.p12, truststore.p12, materialization-fingerprint]
+  loop: "{{ ['private-key.pem', 'certificate.pem', 'ca-chain.pem', 'materialization-fingerprint'] + (['keystore.p12', 'truststore.p12'] if _platform_kafka_tls_runtime.storeType == 'PKCS12' else []) }}"
   register: platform_kafka_ssl_store_state
 
 - name: Require complete PKI-01 stores before Kafka mutation
@@ -27874,6 +28043,8 @@ dependencies: []
     _platform_kafka_ssl_password_file: >-
       {{ (platform_pki_secret_files
           | default(hostvars['localhost'].platform_pki_secret_files | default({}, true), true))[_platform_kafka_tls_runtime.storePasswordSecretRef] }}
+  no_log: true
+  when: _platform_kafka_tls_runtime.storeType == 'PKCS12'
 
 - name: Copy PKI material into Kafka-owned consumer directory
   ansible.builtin.copy:
@@ -27892,26 +28063,46 @@ dependencies: []
     - {name: materialization-fingerprint, mode: '0600'}
   register: _platform_kafka_copied_pki_material
   no_log: true
+  when: _platform_kafka_tls_runtime.storeType == 'PKCS12' or item.name not in ['keystore.p12', 'truststore.p12']
+
+- name: Materialize the Kafka-owned PEM identity from the exact PKI plan
+  ansible.builtin.include_tasks: pem_identity.yml
+  vars:
+    kafka_pem_source_directory: "{{ _platform_kafka_tls_runtime.targetDirectory }}"
+    kafka_pem_identity_path: "{{ _platform_kafka_tls_runtime.keystorePath }}"
+    kafka_pem_owner: "{{ platform_kafka_user }}"
+    kafka_pem_group: "{{ platform_kafka_group }}"
+    kafka_pem_verify_only: false
+  when: _platform_kafka_tls_runtime.storeType == 'PEM'
 
 - name: Aggregate Kafka member PKI change signal
   ansible.builtin.set_fact:
     platform_kafka_member_pki_changed: >-
       {{ (platform_kafka_member_pki_changed | default(false) | bool) or
-         (_platform_kafka_copied_pki_material.changed | default(false) | bool) }}
+         (_platform_kafka_copied_pki_material.changed | default(false) | bool) or
+         (_platform_kafka_tls_runtime.storeType == 'PEM' and (_platform_kafka_pem_identity_write.changed | default(false) | bool)) }}
 
-- name: Add listener-scoped PKCS12 properties without exposing secret values
+- name: Add listener-scoped TLS paths and selected store type
   ansible.builtin.set_fact:
     kafka_effective_config: >-
       {{ kafka_effective_config | combine({
         ('listener.name.' ~ (kafka_ssl_listener.name | lower) ~ '.ssl.client.auth'): ('requested' if (_platform_kafka_scram_enabled | default(false)) and kafka_ssl_listener.securityProtocol == 'SSL' else 'none'),
         ('listener.name.' ~ (kafka_ssl_listener.name | lower) ~ '.ssl.keystore.location'): _platform_kafka_tls_runtime.keystorePath,
         ('listener.name.' ~ (kafka_ssl_listener.name | lower) ~ '.ssl.keystore.type'): _platform_kafka_tls_runtime.storeType,
-        ('listener.name.' ~ (kafka_ssl_listener.name | lower) ~ '.ssl.keystore.password'): (lookup('ansible.builtin.file', _platform_kafka_ssl_password_file) | trim),
         ('listener.name.' ~ (kafka_ssl_listener.name | lower) ~ '.ssl.truststore.location'): _platform_kafka_tls_runtime.truststorePath,
-        ('listener.name.' ~ (kafka_ssl_listener.name | lower) ~ '.ssl.truststore.type'): _platform_kafka_tls_runtime.storeType,
+        ('listener.name.' ~ (kafka_ssl_listener.name | lower) ~ '.ssl.truststore.type'): _platform_kafka_tls_runtime.storeType
+      }) }}
+  no_log: true
+
+- name: Add passwords only for explicit PKCS12 compatibility
+  ansible.builtin.set_fact:
+    kafka_effective_config: >-
+      {{ kafka_effective_config | combine({
+        ('listener.name.' ~ (kafka_ssl_listener.name | lower) ~ '.ssl.keystore.password'): (lookup('ansible.builtin.file', _platform_kafka_ssl_password_file) | trim),
         ('listener.name.' ~ (kafka_ssl_listener.name | lower) ~ '.ssl.truststore.password'): (lookup('ansible.builtin.file', _platform_kafka_ssl_password_file) | trim)
       }) }}
   no_log: true
+  when: _platform_kafka_tls_runtime.storeType == 'PKCS12'
 
 @@END
 @@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/verify.yml","mode":420,"size":5223,"sha256":"2958c28c1f9a434ea96542b5a9f52334aa93509c2e082ed1df427b4c48f5de98","index":0,"count":1,"encoding":"utf-8","payloadBytes":5223}
@@ -28091,12 +28282,44 @@ dependencies: []
   when: kafka_member.listeners | default({}) | length > 0
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/verify_ssl_listener.yml","mode":420,"size":1461,"sha256":"1cce203e14c0d4c4440f6bb17685e2849bf1edd34fa87b9ffef29da93005439b","index":0,"count":1,"encoding":"utf-8","payloadBytes":1461}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/verify_ssl_listener.yml","mode":420,"size":3504,"sha256":"a75a9ca32915fdf22acf169d82431110c88a937b38a5d1167b6a61c47ad2cca6","index":0,"count":1,"encoding":"utf-8","payloadBytes":3504}
 ---
 - name: Resolve Kafka TLS runtime projection for SSL verification
   ansible.builtin.include_tasks: resolve_tls_runtime.yml
   vars:
     kafka_tls_member: "{{ kafka_member }}"
+
+- name: Verify existing Kafka PEM consumer without modifying it
+  ansible.builtin.include_tasks: pem_identity.yml
+  vars:
+    kafka_pem_source_directory: "{{ _platform_kafka_tls_runtime.targetDirectory }}"
+    kafka_pem_identity_path: "{{ _platform_kafka_tls_runtime.keystorePath }}"
+    kafka_pem_ca_path: "{{ _platform_kafka_tls_runtime.truststorePath }}"
+    kafka_pem_owner: "{{ platform_kafka_user }}"
+    kafka_pem_group: "{{ platform_kafka_group }}"
+    kafka_pem_verify_only: true
+  when: _platform_kafka_tls_runtime.storeType == 'PEM'
+
+- name: Read the installed member configuration without disclosing it
+  ansible.builtin.slurp:
+    src: "{{ kafka_member.config_directory }}/server.properties"
+  register: _platform_kafka_pem_member_config
+  no_log: true
+  when: _platform_kafka_tls_runtime.storeType == 'PEM'
+
+- name: Require installed listener configuration to use the selected PEM material
+  ansible.builtin.assert:
+    that:
+      - "('listener.name.' ~ (kafka_ssl_listener.name | lower) ~ '.ssl.keystore.type=PEM') in (_platform_kafka_pem_member_config.content | b64decode).splitlines()"
+      - "('listener.name.' ~ (kafka_ssl_listener.name | lower) ~ '.ssl.truststore.type=PEM') in (_platform_kafka_pem_member_config.content | b64decode).splitlines()"
+      - "('listener.name.' ~ (kafka_ssl_listener.name | lower) ~ '.ssl.keystore.location=' ~ _platform_kafka_tls_runtime.keystorePath) in (_platform_kafka_pem_member_config.content | b64decode).splitlines()"
+      - "('listener.name.' ~ (kafka_ssl_listener.name | lower) ~ '.ssl.truststore.location=' ~ _platform_kafka_tls_runtime.truststorePath) in (_platform_kafka_pem_member_config.content | b64decode).splitlines()"
+      - >-
+        (_platform_kafka_pem_member_config.content | b64decode).splitlines()
+        | select('match', '^listener\\.name\\.' ~ (kafka_ssl_listener.name | lower) ~ '\\.ssl\\.(key|keystore|truststore)\\.password=') | list | length == 0
+    fail_msg: KAFKA_PEM_CONFIG_DRIFT
+  no_log: true
+  when: _platform_kafka_tls_runtime.storeType == 'PEM'
 
 - name: Perform real TLS handshake for Kafka listener
   ansible.builtin.shell: |
@@ -28139,7 +28362,7 @@ sasl.mechanism=SCRAM-SHA-512
 sasl.jaas.config={{ jaas | platform.core.platform_java_properties_value }}
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/templates/application-topics-client.properties.j2","mode":420,"size":1569,"sha256":"2a3702261b822889a661a9a9c2980fa83bf8aa9e4c912f45d946b0ebdcca9d83","index":0,"count":1,"encoding":"utf-8","payloadBytes":1569}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/templates/application-topics-client.properties.j2","mode":420,"size":1791,"sha256":"60970cdab38cb77667ea0fdd13ddf33dd9f317564ce2f4a731a6a344698d39a5","index":0,"count":1,"encoding":"utf-8","payloadBytes":1791}
 security.protocol={{ application_topic_candidate.securityProtocol | default('SSL' if application_topic_candidate.tls else 'PLAINTEXT') }}
 {% if application_topic_candidate.securityProtocol | default('') == 'SASL_SSL' %}
 sasl.mechanism=SCRAM-SHA-512
@@ -28152,15 +28375,17 @@ request.timeout.ms={{ platform_kafka_application_timeout_ms }}
 default.api.timeout.ms={{ platform_kafka_application_timeout_ms }}
 {% if application_topic_candidate.tls %}
 {% set plan = application_topic_candidate.pkiPlans[0] %}
-{% set password = lookup('ansible.builtin.file', platform_pki_secret_files[plan.storePasswordSecretRef], rstrip=false) | trim | platform.core.platform_java_properties_value %}
 ssl.endpoint.identification.algorithm=https
-ssl.truststore.location={{ plan.targetDirectory }}/truststore.p12
+ssl.truststore.location={{ plan.targetDirectory }}/{{ 'ca-chain.pem' if platform_kafka_store_type == 'PEM' else 'truststore.p12' }}
 ssl.truststore.type={{ platform_kafka_store_type }}
-ssl.truststore.password={{ password }}
-ssl.keystore.location={{ plan.targetDirectory }}/keystore.p12
+ssl.keystore.location={{ application_kafka_private.path ~ '/identity.pem' if platform_kafka_store_type == 'PEM' else plan.targetDirectory ~ '/keystore.p12' }}
 ssl.keystore.type={{ platform_kafka_store_type }}
+{% if platform_kafka_store_type == 'PKCS12' %}
+{% set password = lookup('ansible.builtin.file', platform_pki_secret_files[plan.storePasswordSecretRef], rstrip=false) | trim | platform.core.platform_java_properties_value %}
+ssl.truststore.password={{ password }}
 ssl.keystore.password={{ password }}
 ssl.key.password={{ password }}
+{% endif %}
 {% endif %}
 
 @@END
@@ -28185,21 +28410,23 @@ LimitNOFILE=100000
 WantedBy=multi-user.target
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/templates/schema-registry-client.properties.j2","mode":420,"size":784,"sha256":"b9e59485b9e60ae5f36a355c8e4f2a213f8f5c326b93e6d87d4b3a4e1cb0c4ed","index":0,"count":1,"encoding":"utf-8","payloadBytes":784}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/templates/schema-registry-client.properties.j2","mode":420,"size":1011,"sha256":"a1b7a5d8ca11c8a4311b890470f09286ccaa87977f2b50efec1936e55566d6ff","index":0,"count":1,"encoding":"utf-8","payloadBytes":1011}
 security.protocol={{ registry_instance.security_protocol }}
 {% if registry_instance.security_protocol == 'SSL' %}
 ssl.endpoint.identification.algorithm=https
-ssl.truststore.location={{ registry_instance.config_directory }}/pki/truststore.p12
+ssl.truststore.location={{ registry_instance.config_directory }}/pki/{{ 'ca-chain.pem' if _platform_kafka_tls_runtime.storeType == 'PEM' else 'truststore.p12' }}
 ssl.truststore.type={{ _platform_kafka_tls_runtime.storeType }}
-ssl.truststore.password={{ _platform_kafka_registry_password | platform.core.platform_java_properties_value }}
-ssl.keystore.location={{ registry_instance.config_directory }}/pki/keystore.p12
+ssl.keystore.location={{ registry_instance.config_directory }}/pki/{{ 'identity.pem' if _platform_kafka_tls_runtime.storeType == 'PEM' else 'keystore.p12' }}
 ssl.keystore.type={{ _platform_kafka_tls_runtime.storeType }}
+{% if _platform_kafka_tls_runtime.storeType == 'PKCS12' %}
+ssl.truststore.password={{ _platform_kafka_registry_password | platform.core.platform_java_properties_value }}
 ssl.keystore.password={{ _platform_kafka_registry_password | platform.core.platform_java_properties_value }}
 ssl.key.password={{ _platform_kafka_registry_password | platform.core.platform_java_properties_value }}
 {% endif %}
+{% endif %}
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/templates/schema-registry.properties.j2","mode":420,"size":2050,"sha256":"deea705839dff2aee965149388a3a73d727b3fd12a3f4bb63fab8db90ead84ae","index":0,"count":1,"encoding":"utf-8","payloadBytes":2050}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/templates/schema-registry.properties.j2","mode":420,"size":2504,"sha256":"398d83214dbed8899ba3e10423f3b9bbf96f5a295b3937f8285302f61e2c836f","index":0,"count":1,"encoding":"utf-8","payloadBytes":2504}
 # Managed runtime properties. This entire file is protected secret material.
 listeners=http://0.0.0.0:{{ registry_instance.http_port }},https://0.0.0.0:{{ registry_instance.https_port }}
 host.name={{ registry_instance.advertised_host }}
@@ -28211,21 +28438,25 @@ kafkastore.topic=_schemas
 kafkastore.topic.replication.factor={{ registry_instance.replication_factor }}
 kafkastore.ssl.endpoint.identification.algorithm=https
 {% if registry_instance.security_protocol == 'SSL' %}
-kafkastore.ssl.truststore.location={{ registry_instance.config_directory }}/pki/truststore.p12
+kafkastore.ssl.truststore.location={{ registry_instance.config_directory }}/pki/{{ 'ca-chain.pem' if _platform_kafka_tls_runtime.storeType == 'PEM' else 'truststore.p12' }}
 kafkastore.ssl.truststore.type={{ _platform_kafka_tls_runtime.storeType }}
-kafkastore.ssl.truststore.password={{ _platform_kafka_registry_password | platform.core.platform_java_properties_value }}
-kafkastore.ssl.keystore.location={{ registry_instance.config_directory }}/pki/keystore.p12
+kafkastore.ssl.keystore.location={{ registry_instance.config_directory }}/pki/{{ 'identity.pem' if _platform_kafka_tls_runtime.storeType == 'PEM' else 'keystore.p12' }}
 kafkastore.ssl.keystore.type={{ _platform_kafka_tls_runtime.storeType }}
+{% if _platform_kafka_tls_runtime.storeType == 'PKCS12' %}
+kafkastore.ssl.truststore.password={{ _platform_kafka_registry_password | platform.core.platform_java_properties_value }}
 kafkastore.ssl.keystore.password={{ _platform_kafka_registry_password | platform.core.platform_java_properties_value }}
 kafkastore.ssl.key.password={{ _platform_kafka_registry_password | platform.core.platform_java_properties_value }}
 {% endif %}
-ssl.keystore.location={{ registry_instance.config_directory }}/pki/keystore.p12
+{% endif %}
+ssl.keystore.location={{ registry_instance.config_directory }}/pki/{{ 'identity.pem' if _platform_kafka_tls_runtime.storeType == 'PEM' else 'keystore.p12' }}
 ssl.keystore.type={{ _platform_kafka_tls_runtime.storeType }}
+ssl.truststore.location={{ registry_instance.config_directory }}/pki/{{ 'ca-chain.pem' if _platform_kafka_tls_runtime.storeType == 'PEM' else 'truststore.p12' }}
+ssl.truststore.type={{ _platform_kafka_tls_runtime.storeType }}
+{% if _platform_kafka_tls_runtime.storeType == 'PKCS12' %}
 ssl.keystore.password={{ _platform_kafka_registry_password | platform.core.platform_java_properties_value }}
 ssl.key.password={{ _platform_kafka_registry_password | platform.core.platform_java_properties_value }}
-ssl.truststore.location={{ registry_instance.config_directory }}/pki/truststore.p12
-ssl.truststore.type={{ _platform_kafka_tls_runtime.storeType }}
 ssl.truststore.password={{ _platform_kafka_registry_password | platform.core.platform_java_properties_value }}
+{% endif %}
 ssl.client.authentication=NONE
 
 @@END
