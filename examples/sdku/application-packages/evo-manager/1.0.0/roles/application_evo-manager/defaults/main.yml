@@ -5,6 +5,21 @@ platform_application_definition:
         image: evoscada-docker.artifacts.tn.tngrp.ru/evo-manager:3.10.21-eedea228-redos
         restart: unless-stopped
         accounts:
+            kafka:
+                mode: managed
+                credentials:
+                    username:
+                        source: {kind: literal, value: '{{ application_instance_id | replace(''-'', ''_'') }}'}
+                    password:
+                        source: {kind: runtime_secret_ref, ref: '{{ application_instance_id }}-kafka-password'}
+                grants:
+                    - {topicRef: main, operations: [Read, Write, Describe]}
+                    - {topicRef: main_compact, operations: [Read, Write, Describe]}
+                    - {topicRef: alarms, operations: [Read, Write, Describe]}
+                    - {topicRef: alarms_compact, operations: [Read, Write, Describe]}
+                    - {resourceType: group, name: '{{ application_instance_id }}', patternType: prefixed, operations: [Read, Describe]}
+                    - {resourceType: group, name: 'evo-manager-{{ application_instance_id }}', patternType: prefixed, operations: [Read, Describe]}
+                    - {resourceType: cluster, name: kafka-cluster, operations: [Describe, IdempotentWrite]}
             clickhouse:
                 credentials:
                     password:
@@ -49,6 +64,20 @@ platform_application_definition:
             - -jar
             - evo-manager.jar
         environment:
+            KAFKA_ENABLE_SSL: "true"
+            SPRING_KAFKA_SSL_ENABLE_SSL: "true"
+            KAFKA_SECURITY_PROTOCOL: SASL_SSL
+            KAFKA_SASL_MECHANISM: SCRAM-SHA-512
+            kafka.consumer.security.protocol: SASL_SSL
+            kafka.producer.security.protocol: SASL_SSL
+            kafka.consumer.sasl.mechanism: SCRAM-SHA-512
+            kafka.producer.sasl.mechanism: SCRAM-SHA-512
+            kafka.consumer.sasl.jaas.config: '$${KAFKA_CONSUMER_SASL_JAAS_CONFIG}'
+            kafka.producer.sasl.jaas.config: '$${KAFKA_PRODUCER_SASL_JAAS_CONFIG}'
+            spring.kafka.ssl.properties.security.protocol: SASL_SSL
+            spring.kafka.ssl.properties.sasl.mechanism: SCRAM-SHA-512
+            spring.kafka.ssl.properties.sasl.jaas.config: '$${KAFKA_CONSUMER_SASL_JAAS_CONFIG}'
+            logging.level.tnt.tnscada.core.kafkamanager.kafka.config.KafkaManagerConfig: INFO
             ALARM_SERVICE_API_TYPE: mock
             DATA_MANAGER_ROOT_URL: '{{ application_parameters.DATA_MANAGER_URL_ROOT | default(undef(hint=''Configure SDKU DATA_MANAGER_URL_ROOT''), true) }}'
             DB_CONNECTION_STRING: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_databases.clickhouse.history.name }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
@@ -87,6 +116,12 @@ platform_application_definition:
                 method: approle
             mode: process-supervisor
             secret_bindings:
+                KAFKA_PRODUCER_SASL_JAAS_CONFIG:
+                    source: {account: kafka, field: password}
+                    format: kafka_scram_jaas
+                KAFKA_CONSUMER_SASL_JAAS_CONFIG:
+                    source: {account: kafka, field: password}
+                    format: kafka_scram_jaas
                 DB_PASSWORD:
                     source:
                         account: clickhouse

@@ -32,7 +32,7 @@ class ActionModule(ActionBase):
                             if credential.get('state') != 'RESOLVED' or not credential.get('value', {}).get('passwordSecretRef'):
                                 raise ValueError('APPLICATION_PROVIDER_ADMIN_CREDENTIAL_REQUIRED')
                             account['adminPasswordRef'] = credential['value']['passwordSecretRef']
-                    for candidate in job['candidates']:
+                    for candidate in job['candidates'] + job.get('adminCandidates', []):
                         plans = [p for p in prepared['pki_materialization'].get('materializationPlans', [])
                                  if p['hostId'] == candidate['hostId'] and p['tlsProfileId'] == candidate.get('tlsProfileRef')]
                         if job['serviceType'] == 'kafka':

@@ -243,9 +243,10 @@ def _start_v2(value, state_root, runtime_release, controller, active_bundle_dige
     for requirement in requirements:
         reference = requirement.get("runtimeReference") if isinstance(requirement, dict) else None
         requirement_ref = requirement.get("requirementRef") if isinstance(requirement, dict) else None
-        if not isinstance(requirement, dict) or not isinstance(requirement.get("hosts"), list) or len(requirement["hosts"]) > 256 or not isinstance(reference, str) or not isinstance(requirement_ref, str) or reference in references or requirement_ref in requirement_refs:
+        scoped_reference = (requirement.get('serviceDeployment'), reference) if isinstance(requirement, dict) else None
+        if not isinstance(requirement, dict) or not isinstance(requirement.get("hosts"), list) or len(requirement["hosts"]) > 256 or not isinstance(reference, str) or not isinstance(requirement_ref, str) or (requirement.get('serviceDeployment') is not None and not isinstance(requirement.get('serviceDeployment'), str)) or scoped_reference in references or requirement_ref in requirement_refs:
             raise LifecycleError("EXECUTION_MANIFEST_INVALID")
-        references.add(reference); requirement_refs.add(requirement_ref)
+        references.add(scoped_reference); requirement_refs.add(requirement_ref)
         if requirement.get("purpose") == "PKI_STORE_PASSWORD" and set(requirement) == {"requirementRef", "purpose", "hosts", "runtimeReference"} and requirement.get("requirementRef") == "pki-store-password" and requirement.get("runtimeReference") == "runtime:pki-store-password":
             pki.append(requirement)
         elif requirement.get("purpose") == "SERVICE_PASSWORD" and set(requirement) == {"requirementRef", "purpose", "hosts", "runtimeReference", "serviceDeployment"} and re.fullmatch(r"[a-z][a-z0-9-]{0,63}", requirement.get("requirementRef", "")) and re.fullmatch(r"runtime:[a-z][a-z0-9-]{0,127}", requirement.get("runtimeReference", "")) and re.fullmatch(r"[a-z0-9][a-z0-9-]{0,127}", requirement.get("serviceDeployment", "")):

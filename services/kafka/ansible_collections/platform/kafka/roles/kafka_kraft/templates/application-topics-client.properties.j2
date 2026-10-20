@@ -1,4 +1,11 @@
-security.protocol={{ 'SSL' if application_topic_candidate.tls else 'PLAINTEXT' }}
+security.protocol={{ application_topic_candidate.securityProtocol | default('SSL' if application_topic_candidate.tls else 'PLAINTEXT') }}
+{% if application_topic_candidate.securityProtocol | default('') == 'SASL_SSL' %}
+sasl.mechanism=SCRAM-SHA-512
+{% set files = platform_application_secret_files | default({}) | combine(platform_application_credential_files | default({})) %}
+{% set admin_password = lookup('ansible.builtin.file', files[platform_kafka_application_job.adminPasswordRef], rstrip=false) %}
+{% set admin_jaas = 'org.apache.kafka.common.security.scram.ScramLoginModule required username="admin" password=' ~ (admin_password | to_json(ensure_ascii=false)) ~ ';' %}
+sasl.jaas.config={{ admin_jaas | platform.core.platform_java_properties_value }}
+{% endif %}
 request.timeout.ms={{ platform_kafka_application_timeout_ms }}
 default.api.timeout.ms={{ platform_kafka_application_timeout_ms }}
 {% if application_topic_candidate.tls %}

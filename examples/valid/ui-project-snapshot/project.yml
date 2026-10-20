@@ -9,7 +9,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:6b87cd3eb49b1229ebfd21dd1e24c71e100d7dc5b38f790046762a52f773c28a
+  digest: sha256:0312ef6d691d72d2a9aca03b208632391045191dffaed8f83b76e0e6f95524ad
   services:
     bind:
       definitionVersion: 1.0.0-alpha.2
@@ -22,7 +22,7 @@ catalogLock:
       digest: sha256:fbb7260777f57459fb77adaa0d4afb4efe88af8bd76774e483d490afdb42984e
     kafka:
       definitionVersion: 1.0.0-alpha.3
-      digest: sha256:cb351fe279390a1dfb3b20d105972c89b67b588ffd85c11b1ba0d176a2402a9c
+      digest: sha256:61fbfde75c130b9479fd03ef128a40b2d52d541343323b51b5233bf214268b5b
     keepalived:
       definitionVersion: 1.0.0-alpha.1
       digest: sha256:5b721ee5a5f5667f9cb6ccd1b40b3afe00693890aec3f2500e5a8fc9f5dad444

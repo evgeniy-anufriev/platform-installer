@@ -56,6 +56,46 @@ function Harness({
   );
 }
 describe("application secret bindings", () => {
+  it("preserves the packaged JAAS formatter when overriding its source", async () => {
+    const save = vi.fn(async () => true);
+    const variable = "KAFKA_PRODUCER_SASL_JAAS_CONFIG";
+    render(
+      <ApplicationSecretBindings
+        value={{}}
+        defaults={{
+          secret_bindings: {
+            [variable]: {
+              source: { account: "kafka", field: "password" },
+              format: "kafka_scram_jaas",
+            },
+          },
+        }}
+        accounts={[{ kafka: accounts.postgres, otherKafka: accounts.postgres }]}
+        disabled={false}
+        onSave={save}
+        onDirtyChange={vi.fn()}
+      />,
+    );
+    const row = within(screen.getByRole("group", { name: variable }));
+    await userEvent.click(
+      row.getByRole("button", { name: `Переопределить ${variable}` }),
+    );
+    await userEvent.selectOptions(
+      row.getByLabelText(`Источник ${variable}`),
+      "otherKafka:password",
+    );
+    await userEvent.click(row.getByRole("button", { name: "В черновик" }));
+    expect(save).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        secret_bindings: {
+          [variable]: {
+            source: { account: "otherKafka", field: "password" },
+            format: "kafka_scram_jaas",
+          },
+        },
+      }),
+    );
+  });
   it("edits credential variables inline and resets only that credential", async () => {
     const save = vi.fn(async () => true);
     const props = {

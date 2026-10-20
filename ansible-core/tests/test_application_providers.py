@@ -9,11 +9,29 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
 for service in ('redis', 'clickhouse'):
     sys.path.insert(0, os.path.join(ROOT, 'services', service))
 sys.path.insert(0, os.path.join(ROOT, 'ansible-core/collections/ansible_collections/platform/core/plugins/module_utils'))
-from application_providers import project_providers, normalize_grants, identifier, normalize_redis_grants, normalize_clickhouse_grants
-from application_libraries import resolve_topics, resolve_tables
+from application_providers import project_providers, normalize_grants, identifier, normalize_redis_grants, normalize_clickhouse_grants, normalize_kafka_grants
+from application_libraries import resolve_topics, resolve_tables, resolve_connection
 
 
 class ApplicationProvidersTest(unittest.TestCase):
+    def test_kafka_grants_resolve_only_same_provider_topics_and_explicit_groups(self):
+        topics = {'events': {'deploymentRef': 'kafka', 'name': 'library-events'}}
+        grants = normalize_kafka_grants([
+            {'topicRef': 'events', 'operations': ['Write', 'Read']},
+            {'resourceType': 'group', 'name': 'app-', 'patternType': 'prefixed', 'operations': ['Read']},
+        ], topics, 'kafka')
+        self.assertEqual('library-events', grants[0]['name'])
+        self.assertEqual('prefixed', grants[1]['patternType'])
+        internal = normalize_kafka_grants([{'resourceType': 'topic', 'name': 'replicator-', 'patternType': 'prefixed',
+                                           'operations': ['Create', 'Read', 'Write']}], topics, 'kafka')
+        self.assertEqual('replicator-', internal[0]['name'])
+        for resource, operations in [('group', ['AlterConfigs']), ('cluster', ['All']), ('transactional-id', ['Create'])]:
+            with self.assertRaisesRegex(ValueError, 'GRANTS_INVALID'):
+                normalize_kafka_grants([{'resourceType': resource, 'name': 'kafka-cluster', 'operations': operations}], topics, 'kafka')
+        with self.assertRaisesRegex(ValueError, 'GRANTS_INVALID'):
+            normalize_kafka_grants([{'topicRef': 'events', 'operations': ['Read']}], topics, 'other')
+        with self.assertRaisesRegex(ValueError, 'GRANTS_INVALID'):
+            normalize_kafka_grants([{'resourceType': 'group', 'name': '*', 'operations': ['Invented']}], topics, 'kafka')
     def test_kafka_topics_share_the_library_barrier_and_conflict_check(self):
         self.resources.clear()
         self.accounts.clear()
@@ -351,6 +369,88 @@ class ApplicationProvidersTest(unittest.TestCase):
         self.assertEqual('PASS',result['status'],result['findings'])
         self.assertEqual({'analytics','archive'}, {db['name'] for db in result['instanceJobs'][0]['databases']})
         self.assertEqual([],result['instanceJobs'][0]['accounts'][0]['grants'])
+
+
+class KafkaAdminSelectionTest(unittest.TestCase):
+    def fixture(self, sasl_first=False, mode='managed', accounts=True):
+        ref = 'kafka-main'
+        listeners = {
+            'INTERNAL': dict(purpose='interBroker', securityProtocol='SSL', port=9094),
+            'CONTROLLER': dict(purpose='controller', securityProtocol='SSL', port=9093),
+            'CLIENT_SSL': dict(purpose='client', securityProtocol='SSL', port=9095),
+            'SASL_SSL': dict(purpose='client', securityProtocol='SASL_SSL', port=9096)}
+        resolved = lambda value: dict(state='RESOLVED', value=value)
+        configuration = {'services': {ref: {'configuration': {
+            'listeners': resolved(listeners), 'tlsProfile': resolved('infra'),
+            'adminCredential': resolved(dict(passwordSecretRef='runtime:kafka-admin-password'))}}}}
+        desired = {'serviceDeployments': {ref: dict(serviceType='kafka', mode='kraft-standalone')}}
+        catalog = {'definitions': {'kafka': {'capabilities': ['service.kafka.topic', 'service.kafka.account'],
+            'configuration': {'settings': {'adminCredential': {'x-runtimeSecretDeploymentBound': True,
+                'ui': {'x-runtimeSecretRequirement': {'requirementRef': 'kafka-admin-password', 'purpose': 'SERVICE_PASSWORD'}}}}}}}}
+        members = {'member': dict(host='h1', roles=['broker', 'controller'])}
+        snapshot = dict(project={'id': 'qa'}, hosts={'h1': {'ansibleHost': '192.0.2.1'}},
+            topology={'resolved': {'serviceDeployments': {ref: {'members': members}}}},
+            applicationLibraries={'status': 'PASS', 'libraries': {}})
+        materialized = {'serviceDeployments': {ref: dict(desired['serviceDeployments'][ref], members=members)}}
+        rows = []
+        for index, library_id in enumerate(('a', 'b')):
+            selector = 'SASL_SSL' if (index == 0) == sasl_first else 'CLIENT_SSL'
+            resources = {'events': dict(kind='kafka.topic', binding='messaging', parameters={'name': library_id + '-events'})}
+            topics = {'events': dict(resourceId='events', deploymentRef=ref, name=library_id + '-events',
+                                    mode='managed', partitions=1, replicationFactor=1, config={})}
+            credentials = {}
+            if selector == 'SASL_SSL' and accounts:
+                credentials['kafka'] = dict(mode=mode, credentials={
+                    'username': {'source': dict(kind='literal', value='app_' + library_id)},
+                    'password': {'source': dict(kind='runtime_secret_ref', ref='app-' + library_id + '-password')}},
+                    grants=[dict(topicRef='events', operations=['Read', 'Write'])])
+            connection = resolve_connection(ref, {'purpose': 'client'}, selector, materialized, configuration, catalog, snapshot['hosts'])
+            snapshot['applicationLibraries']['libraries'][library_id] = dict(resources=resources, topics=topics,
+                instances={'app-' + library_id: dict(connections={'kafka': connection}, credentialRequirements=credentials)})
+            rows.append(dict(libraryId=library_id, instanceId='app-' + library_id, hostId='h1', resources=resources,
+                             bindings={'messaging': {'deploymentRef': ref}},
+                             connectionDefaults={'kafka': {'connectionRef': selector}}, settings={'accounts': credentials}))
+        return rows, snapshot, configuration, desired, catalog
+
+    def test_mixed_library_orders_and_account_modes_use_the_same_admin_transport(self):
+        admin_connections = []
+        for sasl_first in (False, True):
+            for mode in ('managed', 'existing'):
+                with self.subTest(sasl_first=sasl_first, mode=mode):
+                    inputs = self.fixture(sasl_first, mode)
+                    result = project_providers(*inputs)
+                    self.assertEqual('PASS', result['status'], result['findings'])
+                    self.assertEqual(2, len(result['libraryJobs']))
+                    self.assertEqual(1, len(result['instanceJobs']))
+                    job = result['instanceJobs'][0]
+                    admin_connections.append((job['adminCandidates'], job['adminPasswordRef']))
+                    self.assertEqual('SASL_SSL', job['adminCandidates'][0]['securityProtocol'])
+                    self.assertEqual(9096, job['adminCandidates'][0]['port'])
+                    self.assertEqual(mode, job['accounts'][0]['mode'])
+                    self.assertEqual(9096, job['accounts'][0]['candidates'][0]['port'])
+                    clients = [library['instances']['app-' + name]['connections']['kafka']['targets'][0]['port']
+                               for name, library in inputs[1]['applicationLibraries']['libraries'].items()]
+                    self.assertEqual([9096, 9095] if sasl_first else [9095, 9096], clients)
+        self.assertTrue(all(value == admin_connections[0] for value in admin_connections))
+
+    def test_topic_only_legacy_scope_does_not_require_an_admin_connection(self):
+        inputs = self.fixture(accounts=False)
+        for row in inputs[0]:
+            row['connectionDefaults']['kafka']['connectionRef'] = 'CLIENT_SSL'
+        result = project_providers(*inputs)
+        self.assertEqual('PASS', result['status'], result['findings'])
+        self.assertEqual([], result['instanceJobs'])
+        self.assertEqual(2, len(result['libraryJobs']))
+        self.assertNotIn('adminCandidates', result['jobs'][0])
+        self.assertNotIn('adminPasswordRef', result['jobs'][0])
+
+    def test_accounts_require_one_unambiguous_service_admin_listener(self):
+        inputs = self.fixture()
+        listeners = inputs[2]['services']['kafka-main']['configuration']['listeners']['value']
+        listeners['ANOTHER_SASL'] = dict(purpose='client', securityProtocol='SASL_SSL', port=9097)
+        result = project_providers(*inputs)
+        self.assertEqual('BLOCKED', result['status'])
+        self.assertEqual('APPLICATION_PROVIDER_ADMIN_LISTENER_AMBIGUOUS', result['findings'][0]['code'])
 
 
 if __name__ == '__main__':

@@ -12,6 +12,15 @@ def segment(value):
     return value
 
 
+def jaas_field(field):
+    """Quote a JAAS string with native template functions, preserving Unicode/HTML."""
+    expression = '.Data.data.' + field
+    for source, target in [('\\', '\\\\'), ('"', '\\"'), ('\n', '\\n'), ('\r', '\\r'),
+                           ('\t', '\\t'), ('\b', '\\b'), ('\f', '\\f')]:
+        expression += ' | replaceAll %s %s' % (json.dumps(source), json.dumps(target))
+    return '"{{ ' + expression + ' }}"'
+
+
 def kv_source(source, row):
     if source.get('kind') == 'vault_ref':
         ref = row['bindings'].get(source['binding'], {}).get('deploymentRef')
@@ -144,6 +153,20 @@ def project_vault(rows, prepared):
                 # Supervisor templates are keyed by contents. Distinct env names
                 # reading one field need a no-output comment to remain distinct.
                 contents = '{{/* %s */}}{{ with secret %s }}{{ .Data.data.%s }}{{ end }}' % (name, json.dumps(path), location['field'])
+                if binding.get('format') == 'kafka_scram_jaas':
+                    if (source.get('field') != 'password'
+                            or instance['connections'][source['account']]['serviceType'] != 'kafka'):
+                        raise ValueError('APPLICATION_VAULT_AGENT_FIELD_INVALID')
+                    user = locations[(source['account'], 'username')]
+                    if not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', user['field']):
+                        raise ValueError('APPLICATION_VAULT_AGENT_FIELD_INVALID')
+                    user_path = user['mount']+'/data/'+user['document']
+                    paths.add(user_path)
+                    read_fields.setdefault(user_path, []).append(user['field'])
+                    contents = ('{{/* %s */}}org.apache.kafka.common.security.scram.ScramLoginModule required '
+                                'username={{ with secret %s }}%s{{ end }} '
+                                'password={{ with secret %s }}%s{{ end }};') % (
+                                    name, json.dumps(user_path), jaas_field(user['field']), json.dumps(path), jaas_field(location['field']))
                 envs.append(dict(name=name, contents=contents))
             identity = 'pla-'+hashlib.sha256((':'.join((project, library_id, instance_id))).encode()).hexdigest()[:32]
             owner = 'platform.application/v1:'+':'.join((project, library_id, instance_id))

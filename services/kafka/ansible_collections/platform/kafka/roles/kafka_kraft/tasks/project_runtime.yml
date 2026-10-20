@@ -65,6 +65,7 @@
 
 - name: Project each Kafka deployment
   ansible.builtin.set_fact:
+    platform_kafka_admin_credential: "{{ _platform_kafka_managed_deployment.value.configuration.adminCredential | default(platform_kafka_admin_credential) }}"
     platform_kafka_schema_registry_enabled: "{{ _platform_kafka_managed_deployment.value.configuration.schemaRegistryEnabled | default(platform_kafka_schema_registry_enabled) }}"
     platform_kafka_schema_registry_kafka_listener: "{{ _platform_kafka_managed_deployment.value.configuration.schemaRegistryKafkaListener | default(platform_kafka_schema_registry_kafka_listener) }}"
 

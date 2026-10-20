@@ -3,6 +3,19 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
+    "adminCredential": {
+      "additionalProperties": false,
+      "properties": {
+        "passwordSecretRef": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "passwordSecretRef"
+      ],
+      "type": "object"
+    },
     "advancedConfig": {
       "additionalProperties": true,
       "type": "object"
@@ -44,7 +57,8 @@
           "securityProtocol": {
             "enum": [
               "PLAINTEXT",
-              "SSL"
+              "SSL",
+              "SASL_SSL"
             ],
             "type": "string"
           }

@@ -54,6 +54,19 @@ class KafkaListenerResolutionTests(unittest.TestCase):
         result = resolution.normalize_listeners({}, self.member)
         self.assertEqual("BLOCKED", result["status"])
 
+    def test_scram_is_a_separate_client_listener_and_never_an_internal_protocol(self):
+        listeners = {
+            'CLIENT': {'purpose': 'client', 'securityProtocol': 'SASL_SSL', 'port': 9096},
+            'SSL': {'purpose': 'interBroker', 'securityProtocol': 'SSL', 'port': 9094},
+            'CONTROLLER': {'purpose': 'controller', 'securityProtocol': 'SSL', 'port': 9093},
+        }
+        result = resolution.listener_runtime_properties({'listeners': listeners}, self.member)
+        self.assertEqual('PASS', result['status'])
+        self.assertIn('CLIENT:SASL_SSL', result['properties']['listener.security.protocol.map'])
+        self.assertEqual('SSL', result['properties']['inter.broker.listener.name'])
+        listeners['CLIENT']['purpose'] = 'interBroker'
+        self.assertEqual('BLOCKED', resolution.normalize_listeners({'listeners': listeners}, self.member)['status'])
+
     def test_role_defaults_provide_plaintext_and_ssl_listeners(self):
         defaults_path = Path(__file__).parents[2] / "services" / "kafka" / "ansible_collections" / "platform" / "kafka" / "roles" / "kafka_kraft" / "defaults" / "main.yml"
         defaults = yaml.safe_load(defaults_path.read_text(encoding="utf-8"))

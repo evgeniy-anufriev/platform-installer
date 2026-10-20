@@ -484,3 +484,48 @@ Resources supports selecting history from defaults, explicit name/clear-reset an
 fresh-only Core name display. UI never evaluates the default expression. Existing
 installed resource IDs/ownership must be preserved via account/ENV/name overrides;
 key changes do not migrate/adopt installed objects. No automatic project migration.
+
+
+### Kafka SCRAM accounts and listener selection
+
+Kafka adds a client `SASL_SSL` listener (default port 9096) with `SCRAM-SHA-512`.
+Existing SSL/internal listeners remain. Library `connection_defaults.kafka`
+selects `connectionRef: SASL_SSL`; the existing connection override/Reset flow
+selects an explicitly declared listener. SCRAM account hooks require SASL targets;
+an incompatible listener/account combination fails validation.
+
+Save `adminCredential.passwordSecretRef: runtime:kafka-admin-password` in the
+Kafka deployment configuration and enter its value through the existing runtime
+secret dialog/channel. Core requires this saved reference before planning.
+The reference contains no password. Each Kafka deployment has a separate opaque
+runtime requirement, even when their logical SecretRefs match. The service role
+consumes `platform_kafka_admin_credential` and protected
+`platform_kafka_secret_files` from the same approved runtime projection.
+
+Application `accounts.kafka` uses the existing credentials/mode contract.
+Topic grants select library `topicRef`; explicit group/transactional-id grants
+select literal or prefixed names. A prefixed topic grant supports declared Kafka
+Streams internal resources. Application Cluster grants are limited to Describe
+and IdempotentWrite. Account name `admin` is reserved. Missing managed users are
+created during approved Apply; existing credentials must authenticate and are
+never silently reset. Grants are additive; Verify requires the declared state.
+
+The existing Vault hooks publish application credentials. Secret bindings named
+`KAFKA_PRODUCER_SASL_JAAS_CONFIG` and `KAFKA_CONSUMER_SASL_JAAS_CONFIG` use
+`source: {account: kafka, field: password}` and `format: kafka_scram_jaas`.
+Agent renders the complete JAAS value using both username and password. Package
+Kafka property maps refer to those ENV values; Compose preserves deferred
+placeholders with `$$`. No JAAS file, shell wrapper or plaintext `.env` is added.
+Keep KafkaManagerConfig logging at INFO to avoid its TRACE property-map logging.
+
+Final super.users contains only User:admin. Approved bootstrap temporarily uses
+exact member certificate identities and must prove each running process loaded
+the final configuration before success. Anonymous retains legacy topic/group
+data operations; it receives no Cluster Alter/All security administration.
+Conflicting preexisting administrative ACLs block the transition, with no implicit
+ACL deletion. See the [plan](kafka-scram-plan.md) for migration and acceptance gates.
+
+Principal mapping and principal builder remain operator-configurable. The exact
+member-DN and sole-admin guarantees above describe the default configuration.
+Custom mapping/builder settings determine the effective authenticated identities;
+the owner explicitly rejected additional restrictions on these settings (KS-D02).

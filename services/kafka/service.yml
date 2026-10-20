@@ -8,6 +8,7 @@ metadata:
   category: messaging
 modes:
   kraft-standalone:
+    x-requiredRuntimeSecretSettings: [adminCredential]
     displayName: Single-node KRaft
     description: One combined broker and controller member
     memberRoles: [broker, controller]
@@ -21,6 +22,7 @@ modes:
         controller: {minimum: 1, maximum: 1}
     x-maturity: implemented-service-01a
   kraft-distributed:
+    x-requiredRuntimeSecretSettings: [adminCredential]
     displayName: Distributed KRaft
     description: Explicit controller and broker placements
     memberRoles: [broker, controller]
@@ -39,12 +41,28 @@ capabilities:
   - service.kafka.client
   - service.kafka.kraft
   - service.kafka.topic
+  - service.kafka.account
 dependencies: []
 configurationSchema:
   $ref: configuration.schema.json
 configuration:
   additionalProperties: false
   settings:
+    adminCredential:
+      kind: MANAGED
+      x-runtimeSecretRequired: true
+      x-runtimeSecretDeploymentBound: true
+      roleVariable: platform_kafka_admin_credential
+      type: object
+      scopes: [deployment]
+      validation: {required: [passwordSecretRef]}
+      schema:
+        type: object
+        additionalProperties: false
+        required: [passwordSecretRef]
+        properties:
+          passwordSecretRef: {type: string, minLength: 1}
+      ui: {label: Kafka admin password, section: Credentials, order: 40, x-runtimeSecretRequirement: {requirementRef: kafka-admin-password, purpose: SERVICE_PASSWORD}}
     schemaRegistryEnabled:
       kind: MANAGED
       roleVariable: platform_kafka_schema_registry_enabled
@@ -104,7 +122,7 @@ configuration:
           required: [purpose, securityProtocol, port]
           properties:
             purpose: {type: string, enum: [client, interBroker, controller]}
-            securityProtocol: {type: string, enum: [PLAINTEXT, SSL]}
+            securityProtocol: {type: string, enum: [PLAINTEXT, SSL, SASL_SSL]}
             port: {type: integer, minimum: 1, maximum: 65535}
             bindAddress: {type: string, minLength: 1}
             advertisedAddress: {type: string, minLength: 1}
@@ -169,6 +187,12 @@ x-reservedAdvancedProperties:
   - log.dirs
   - listener.security.protocol.map
   - inter.broker.listener.name
+  - authorizer.class.name
+  - super.users
+  - allow.everyone.if.no.acl.found
+  - listener.name.*.sasl.*
+  - listener.name.*.scram-sha-512.sasl.jaas.config
+  - listener.name.*.ssl.client.auth
   - listener.name.*.ssl.keystore.location
   - listener.name.*.ssl.truststore.location
 x-dataDirectoryProjection: {deploymentSetting: dataDirectory, memberSetting: dataDirectory, rootVariable: platform_data_root_directory, appendMemberIdWhenCoLocated: true}
@@ -205,6 +229,6 @@ runtimeRequirements:
     requiredOffline: false
 compatibilityRef: compatibility.yml
 x-initialSecurityScope:
-  sasl: unsupported
+  sasl: SCRAM-SHA-512
   mtls: deferred
   customListeners: implemented-service-02a

@@ -8,8 +8,10 @@ import json
 import re
 
 try:
+    from .runtime_secret_identity import secret_input_requirement_ref as _secret_input_requirement_ref
     from .artifact_authority import assemble_authority
 except ImportError:
+    from runtime_secret_identity import secret_input_requirement_ref as _secret_input_requirement_ref
     from artifact_authority import assemble_authority
 
 try:
@@ -311,8 +313,9 @@ def _service_runtime_secret_requirements(deployments, definitions, hosts):
         definition = definitions.get(service_type) if isinstance(definitions, dict) else None
         settings = ((definition.get("configuration") or {}).get("settings") if isinstance(definition, dict) else None)
         values = deployment.get("configuration") if isinstance(deployment, dict) else None
-        if not isinstance(settings, dict) or not isinstance(values, dict):
+        if not isinstance(settings, dict):
             continue
+        values = values if isinstance(values, dict) else {}
         for setting_id, setting in sorted(settings.items()):
             ui = setting.get("ui") if isinstance(setting, dict) else None
             extension = ui.get("x-runtimeSecretRequirement") if isinstance(ui, dict) else None
@@ -333,28 +336,26 @@ def _service_runtime_secret_requirements(deployments, definitions, hosts):
                 findings.append(_finding("RUNTIME_SECRET_REQUIREMENT_SCHEMA_INVALID", "catalog.definitions.%s.configuration.settings.%s" % (service_type, setting_id), "Runtime secret requirement setting schema is incompatible"))
                 continue
             if value is None:
+                if setting.get('x-runtimeSecretRequired') is True:
+                    findings.append(_finding("RUNTIME_SECRET_REFERENCE_REQUIRED", "serviceDeployments.%s.configuration.%s" % (deployment_id, setting_id), "Required service credential reference must be saved before planning"))
                 continue
             reference = value.get("passwordSecretRef") if isinstance(value, dict) else None
             if not isinstance(reference, str) or re.fullmatch(r"runtime:[a-z][a-z0-9-]{0,127}", reference) is None:
                 findings.append(_finding("RUNTIME_SECRET_REFERENCE_INVALID", "serviceDeployments.%s.configuration.%s" % (deployment_id, setting_id), "Runtime secret reference is invalid"))
                 continue
-            item = {"requirementRef": extension["requirementRef"], "purpose": "SERVICE_PASSWORD", "hosts": sorted(hosts)}
+            requirement_ref = (_secret_input_requirement_ref(deployment_id, extension["requirementRef"], "SERVICE_PASSWORD")
+                               if setting.get('x-runtimeSecretDeploymentBound') is True else extension["requirementRef"])
+            item = {"requirementRef": requirement_ref, "purpose": "SERVICE_PASSWORD", "hosts": sorted(hosts)}
             public.append(item)
             private.append(dict(item, runtimeReference=reference, serviceDeployment=deployment_id))
     refs, runtime_refs = set(), set()
     for item in private:
-        if item["requirementRef"] in refs or item["runtimeReference"] in runtime_refs:
+        scoped_reference = (item['serviceDeployment'], item['runtimeReference'])
+        if item["requirementRef"] in refs or scoped_reference in runtime_refs:
             findings.append(_finding("RUNTIME_SECRET_REQUIREMENT_DUPLICATE", "serviceDeployments", "Runtime secret requirements must be unique"))
             return [], [], findings
-        refs.add(item["requirementRef"]); runtime_refs.add(item["runtimeReference"])
+        refs.add(item["requirementRef"]); runtime_refs.add(scoped_reference)
     return public, private, findings
-
-
-def _secret_input_requirement_ref(service_deployment, manifest_requirement_ref, purpose):
-    """Return the public opaque ref for a typed service input."""
-    encoded = json.dumps([service_deployment, manifest_requirement_ref, purpose], ensure_ascii=False,
-                         sort_keys=True, separators=(",", ":")).encode("utf-8")
-    return "si-" + hashlib.sha256(encoded).hexdigest()[:40]
 
 
 def _service_input_requirements(deployments, definitions, resolved_topology):
@@ -440,7 +441,9 @@ def build_runtime_secret_descriptors(snapshot, catalog, pki_materialization=None
             ui = setting.get("ui") if isinstance(setting, dict) else None
             extension = ui.get("x-runtimeSecretRequirement") if isinstance(ui, dict) else None
             if isinstance(extension, dict) and isinstance(extension.get("requirementRef"), str):
-                labels[(deployment_id, extension["requirementRef"])] = ui.get("label")
+                ref = (_secret_input_requirement_ref(deployment_id, extension['requirementRef'], 'SERVICE_PASSWORD')
+                       if setting.get('x-runtimeSecretDeploymentBound') is True else extension['requirementRef'])
+                labels[(deployment_id, ref)] = ui.get("label")
     descriptors = []
     for item in pki_private:
         descriptors.append({"requirementRef": item["requirementRef"], "purpose": item["purpose"],
@@ -696,7 +699,7 @@ def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at
         required_credentials.extend({key: item[key] for key in ('requirementRef', 'purpose', 'hosts')}
                                     for item in application_model['runtimeSecretRequirements'] if item['source'] == 'RUNTIME_INPUT')
     runtime_secret_requirements = pki_private + service_private
-    if len({item["requirementRef"] for item in runtime_secret_requirements + service_input_private}) != len(runtime_secret_requirements) + len(service_input_private) or len({item["runtimeReference"] for item in runtime_secret_requirements if "runtimeReference" in item}) != len([item for item in runtime_secret_requirements if "runtimeReference" in item]):
+    if len({item["requirementRef"] for item in runtime_secret_requirements + service_input_private}) != len(runtime_secret_requirements) + len(service_input_private) or len({(item.get('serviceDeployment'), item["runtimeReference"]) for item in runtime_secret_requirements if "runtimeReference" in item}) != len([item for item in runtime_secret_requirements if "runtimeReference" in item]):
         service_secret_findings.append(_finding("RUNTIME_SECRET_REQUIREMENT_DUPLICATE", "runtimeSecrets", "Runtime secret requirements must be unique"))
     findings.extend(pki_secret_findings + service_secret_findings + service_input_findings)
     required_credentials.sort(key=lambda item: item["requirementRef"])

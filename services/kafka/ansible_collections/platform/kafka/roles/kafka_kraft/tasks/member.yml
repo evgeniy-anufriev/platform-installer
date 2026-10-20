@@ -51,8 +51,9 @@
     that:
       - "'controller' not in kafka_member.roles or (_platform_kafka_member_named_listeners | selectattr('purpose', 'equalto', 'controller') | list | length > 0)"
       - "'broker' not in kafka_member.roles or (_platform_kafka_member_named_listeners | selectattr('purpose', 'equalto', 'interBroker') | list | length > 0)"
-      - "(_platform_kafka_member_named_listeners | selectattr('securityProtocol', 'equalto', 'SSL') | list | length) == 0 or (kafka_member.tls_profile | default('') | length > 0)"
+      - "(_platform_kafka_member_named_listeners | selectattr('securityProtocol', 'in', ['SSL', 'SASL_SSL']) | list | length) == 0 or (kafka_member.tls_profile | default('') | length > 0)"
       - "(_platform_kafka_member_named_listeners | map(attribute='port') | list | unique | length) == (_platform_kafka_member_named_listeners | length)"
+      - "(_platform_kafka_member_named_listeners | selectattr('securityProtocol', 'equalto', 'SASL_SSL') | rejectattr('purpose', 'equalto', 'client') | list | length) == 0"
     fail_msg: 'BLOCKED: named Kafka listeners are invalid for this member role or collide on ports'
   when: kafka_member.listeners | default({}) | length > 0
 
@@ -82,13 +83,26 @@
 
 - name: Validate PKI-01 readiness for SSL listeners
   ansible.builtin.include_tasks: validate_ssl_listener.yml
-  loop: "{{ _platform_kafka_member_named_listeners | selectattr('securityProtocol', 'equalto', 'SSL') | list }}"
+  loop: "{{ _platform_kafka_member_named_listeners | selectattr('securityProtocol', 'in', ['SSL', 'SASL_SSL']) | list }}"
   loop_control:
     loop_var: kafka_ssl_listener
     label: "{{ kafka_member.id }}:{{ kafka_ssl_listener.name }}"
   when:
     - not (platform_kafka_verify_only | bool)
     - kafka_member.listeners | default({}) | length > 0
+
+- name: Configure listener-scoped SCRAM without broker passwords
+  ansible.builtin.set_fact:
+    kafka_effective_config: "{{ kafka_effective_config | combine({('listener.name.' ~ (item.name | lower) ~ '.sasl.enabled.mechanisms'): 'SCRAM-SHA-512', ('listener.name.' ~ (item.name | lower) ~ '.scram-sha-512.sasl.jaas.config'): 'org.apache.kafka.common.security.scram.ScramLoginModule required;'}) }}"
+  loop: "{{ _platform_kafka_member_named_listeners | selectattr('securityProtocol', 'equalto', 'SASL_SSL') | list }}"
+  when: not (platform_kafka_verify_only | bool)
+
+- name: Enable KRaft authorization with exact trusted member identities
+  ansible.builtin.set_fact:
+    kafka_effective_config: "{{ kafka_effective_config | combine({'authorizer.class.name': 'org.apache.kafka.metadata.authorizer.StandardAuthorizer', 'super.users': (['User:admin'] + (_platform_kafka_admin_principals if _platform_kafka_authorization_bootstrap else [])) | join(';'), 'allow.everyone.if.no.acl.found': false}) }}"
+  when:
+    - not (platform_kafka_verify_only | bool)
+    - _platform_kafka_scram_enabled
 
 - name: Add broker effective configuration
   ansible.builtin.set_fact:
@@ -140,7 +154,7 @@
     that: >-
       ((_platform_kafka_member_advanced_config.keys() | list |
        intersect(_platform_kafka_reserved_config_keys)) | length) == 0
-      and (_platform_kafka_member_advanced_config.keys() | select('match', '^listener\\.name\\..*\\.ssl\\.') | list | length) == 0
+      and (_platform_kafka_member_advanced_config.keys() | select('match', '^listener\\.name\\..*\\.(ssl|sasl|scram-sha-512)\\.') | list | length) == 0
     fail_msg: 'ADVANCED_SETTING_RESERVED: BLOCKED; member advanced configuration contains reserved Kafka keys'
   when: not (platform_kafka_verify_only | bool)
 
@@ -257,6 +271,19 @@
   ansible.builtin.systemd:
     daemon_reload: true
   when: not (platform_kafka_verify_only | bool)
+
+- name: Cross the config write second before a SCRAM member restart
+  ansible.builtin.wait_for:
+    timeout: 1
+  changed_when: false
+  when:
+    - _platform_kafka_scram_enabled | default(false) | bool
+    - not (platform_kafka_verify_only | bool)
+    - >-
+      platform_kafka_member_config.changed or
+      platform_kafka_member_environment.changed or
+      (platform_kafka_member_pki_changed | default(false) | bool) or
+      (platform_pki_material_changed | default(false) | bool)
 
 - name: Restart changed Kafka member only
   ansible.builtin.systemd:

@@ -140,6 +140,18 @@ Not stored in the portable desired project:
 
 These are separate snapshots or derived outputs tied to fingerprints.
 
+Package-declared `SERVICE_PASSWORD` settings may opt into
+`x-runtimeSecretRequired: true` (a saved reference is required before planning)
+and `x-runtimeSecretDeploymentBound: true` (Core issues an opaque requirement
+identity bound to deployment, logical manifest requirement and purpose).
+Kafka admin uses both. Its logical `runtime:kafka-admin-password` reference
+stays in desired configuration; plaintext stays only in the existing runtime
+Broker/lease custody. Each deployment receives a separate protected file, even
+when logical references match. Library provider hooks address its unambiguous
+Core-issued runtime alias. No second secret transport or desired-state store
+is introduced. The existing pre-Core dialog supports one deployment-bound
+password setting per deployment; Kafka declares exactly one admin credential.
+
 ## Service deployments and modes
 
 Modes are defined in the pinned service manifest. The project selects a mode but does not redefine its rules.

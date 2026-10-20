@@ -1,0 +1,6 @@
+{% include 'application-topics-client.properties.j2' %}
+security.protocol=SASL_SSL
+sasl.mechanism=SCRAM-SHA-512
+{% set password = lookup('ansible.builtin.file', application_kafka_credentials[application_kafka_account.passwordRef], rstrip=false) %}
+{% set jaas = 'org.apache.kafka.common.security.scram.ScramLoginModule required username=' ~ (application_kafka_account.name | to_json) ~ ' password=' ~ (password | to_json(ensure_ascii=false)) ~ ';' %}
+sasl.jaas.config={{ jaas | platform.core.platform_java_properties_value }}

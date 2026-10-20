@@ -13,6 +13,22 @@ from schema_validation import SchemaValidator
 
 
 class ApplicationVaultTest(unittest.TestCase):
+    def test_scram_jaas_uses_existing_agent_env_and_both_credential_locations(self):
+        self.instance['connections']['postgres'] = {'serviceType': 'kafka'}
+        self.instance['secretBindings'] = {
+            name: {'source': {'account': 'postgres', 'field': 'password'}, 'format': 'kafka_scram_jaas'}
+            for name in ('KAFKA_PRODUCER_SASL_JAAS_CONFIG', 'KAFKA_CONSUMER_SASL_JAAS_CONFIG')}
+        result = project_vault(self.rows, self.prepared)
+        job = result['instanceJobs'][0]
+        self.assertEqual(2, len(job['envTemplates']))
+        for entry in job['envTemplates']:
+            self.assertIn('ScramLoginModule required', entry['contents'])
+            self.assertIn('.Data.data.username | replaceAll', entry['contents'])
+            self.assertIn('.Data.data.password | replaceAll', entry['contents'])
+            self.assertNotIn('toJSON', entry['contents'])
+            self.assertNotIn('test-user', entry['contents'])
+        self.assertEqual({'username', 'password'}, {f for fields in job['readFields'].values() for f in fields})
+
     def setUp(self):
         credential = {'credentials': {'username': {'source': {'kind':'literal','value':'test-user'}},
                                     'password': {'source': {'kind':'runtime_secret_ref','ref':'app-password'}}}}

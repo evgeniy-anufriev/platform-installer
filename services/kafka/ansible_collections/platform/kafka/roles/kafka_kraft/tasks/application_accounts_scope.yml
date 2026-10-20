@@ -1,0 +1,29 @@
+---
+- name: Create an invocation-private Kafka account directory
+  ansible.builtin.tempfile:
+    state: directory
+    prefix: platform-kafka-accounts-
+  register: application_kafka_private
+  changed_when: false
+
+- name: Run bounded SCRAM and ACL operations
+  block:
+    - name: Render the dedicated administrative SASL configuration
+      ansible.builtin.template:
+        src: application-topics-client.properties.j2
+        dest: "{{ application_kafka_private.path }}/admin.properties"
+        mode: '0600'
+      no_log: true
+      changed_when: false
+    - name: Check or ensure each logical account
+      ansible.builtin.include_tasks: application_account.yml
+      loop: "{{ platform_kafka_application_job.accounts }}"
+      loop_control:
+        loop_var: application_kafka_account
+        label: "{{ application_kafka_account.accountId }}"
+  always:
+    - name: Remove this invocation's credential files
+      ansible.builtin.file:
+        path: "{{ application_kafka_private.path }}"
+        state: absent
+      changed_when: false

@@ -36,7 +36,11 @@
           security.protocol={{ kafka_cli_connection.securityProtocol }}
           ssl.truststore.location={{ kafka_cli_connection.tls.truststorePath }}
           ssl.truststore.type={{ kafka_cli_connection.tls.truststoreType }}
-          ssl.truststore.password={{ lookup('ansible.builtin.file', _platform_kafka_cli_password_file) | trim }}
+          ssl.truststore.password={{ lookup('ansible.builtin.file', _platform_kafka_cli_password_file) | trim | platform.core.platform_java_properties_value }}
+          ssl.keystore.location={{ kafka_cli_connection.tls.keystorePath }}
+          ssl.keystore.type={{ kafka_cli_connection.tls.truststoreType }}
+          ssl.keystore.password={{ lookup('ansible.builtin.file', _platform_kafka_cli_password_file) | trim | platform.core.platform_java_properties_value }}
+          ssl.key.password={{ lookup('ansible.builtin.file', _platform_kafka_cli_password_file) | trim | platform.core.platform_java_properties_value }}
         dest: "{{ _platform_kafka_cli_command_config.path }}"
         mode: '0600'
       changed_when: false

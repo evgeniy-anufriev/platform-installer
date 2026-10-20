@@ -140,6 +140,7 @@ type ProjectCatalogSetting struct {
 	ReferenceKind                 string   `json:"referenceKind,omitempty"`
 	RuntimeSecretRequirementRef   string   `json:"runtimeSecretRequirementRef,omitempty"`
 	RuntimeSecretUsernameRequired bool     `json:"runtimeSecretUsernameRequired,omitempty"`
+	RuntimeSecretDeploymentBound  bool     `json:"runtimeSecretDeploymentBound,omitempty"`
 	Minimum                       *float64 `json:"minimum,omitempty"`
 	Maximum                       *float64 `json:"maximum,omitempty"`
 	MinLength                     *int     `json:"minLength,omitempty"`
@@ -417,13 +418,14 @@ type definition struct {
 }
 
 type catalogSetting struct {
-	Kind         string         `yaml:"kind"`
-	RoleVariable string         `yaml:"roleVariable"`
-	Type         string         `yaml:"type"`
-	Scopes       []string       `yaml:"scopes"`
-	Validation   map[string]any `yaml:"validation"`
-	Schema       map[string]any `yaml:"schema"`
-	UI           struct {
+	XRuntimeSecretDeploymentBound bool           `yaml:"x-runtimeSecretDeploymentBound"`
+	Kind                          string         `yaml:"kind"`
+	RoleVariable                  string         `yaml:"roleVariable"`
+	Type                          string         `yaml:"type"`
+	Scopes                        []string       `yaml:"scopes"`
+	Validation                    map[string]any `yaml:"validation"`
+	Schema                        map[string]any `yaml:"schema"`
+	UI                            struct {
 		Label                     string         `yaml:"label"`
 		Description               string         `yaml:"description"`
 		Section                   string         `yaml:"section"`
@@ -941,6 +943,7 @@ func projectCatalogSetting(id string, source catalogSetting) ProjectCatalogSetti
 			result.EditorShape = "RUNTIME_SECRET_REFERENCE_OBJECT"
 			result.RuntimeSecretRequirementRef = requirement
 			result.RuntimeSecretUsernameRequired = usernameRequired
+			result.RuntimeSecretDeploymentBound = source.XRuntimeSecretDeploymentBound
 		}
 		return result
 	}

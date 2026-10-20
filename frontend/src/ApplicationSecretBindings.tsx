@@ -67,7 +67,11 @@ export function ApplicationSecretBindings({
     return item
       ? save({
           ...authored,
-          [variable]: { source: { account: item.account, field: item.field } },
+          [variable]: {
+            ...objectValue(base[variable]),
+            ...objectValue(authored[variable]),
+            source: { account: item.account, field: item.field },
+          },
         })
       : Promise.resolve(false);
   };

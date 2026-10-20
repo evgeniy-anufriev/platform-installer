@@ -408,6 +408,13 @@ export function ApplicationCredentials({
                   </tbody>
                 </table>
               )}
+              {serviceType === "kafka" && (
+                <p className="muted">
+                  Kafka SCRAM: grants ссылаются на ресурсы topics и имена
+                  consumer groups. Снятие декларации не отзывает уже выданные
+                  ACL. Producer/consumer JAAS доставляет Vault Agent.
+                </p>
+              )}
               <ApplicationAccountAccess
                 key={
                   name +

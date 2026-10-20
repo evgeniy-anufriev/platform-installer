@@ -57,6 +57,11 @@
   hosts: platform_targets
   become: true
   gather_facts: true
+  pre_tasks:
+    - name: Apply trusted runtime Kafka configuration
+      ansible.builtin.include_role:
+        name: platform.core.runtime_role_variables
+      when: platform_execution_role_variables_by_host is defined
   roles:
     - role: platform.kafka.kafka_kraft
       platform_kafka_verify_only: false

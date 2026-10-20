@@ -1163,6 +1163,31 @@ class ExecutionLifecycleTests(unittest.TestCase):
             self.assertEqual("test-only-value", Path(path).read_text(encoding="utf-8"))
             self.assertNotIn("postgresql-admin-password", projection["platform_postgresql_secret_files"])
 
+    def test_runtime_projection_keeps_two_deployment_admin_files_separate(self):
+        with tempfile.TemporaryDirectory() as root:
+            journal = Journal(root, 'run-1')
+            names = ('kafka-one', 'kafka-two')
+            manifest = dict(artifactRequirements=[], artifactSourceAuthorities=[], pkiMaterializationPlans=[],
+                operations=[dict(operation='SERVICE_APPLY', operationId='apply:' + name, serviceType='kafka',
+                                 serviceDeployment=name, roleVariablesPrefix='platform_kafka_') for name in names],
+                runtimeSecretRequirements=[dict(requirementRef='si-' + name, purpose='SERVICE_PASSWORD', hosts=['node1'],
+                                               runtimeReference='runtime:kafka-admin-password', serviceDeployment=name) for name in names])
+            current = metadata(); current['manifestDigest'] = digest(manifest)
+            journal.initialize(current)
+            values = {'si-' + name: 'synthetic-' + name for name in names}
+            with mock.patch.object(execution_controller.execution_secret_lease, 'target_username_for_run', return_value='qa'), \
+                    mock.patch.object(execution_controller.execution_secret_lease, 'runtime_secret_values_for_run', return_value=values):
+                execution_controller._materialize_runtime_projection(journal, current, manifest)
+            paths = []
+            for name in names:
+                filename = '.runtime-projection-' + hashlib.sha256(('apply:' + name).encode()).hexdigest() + '.json'
+                projection = json.loads(Path(journal.directory, filename).read_text())
+                path = projection['platform_kafka_secret_files']['runtime:kafka-admin-password']
+                self.assertEqual('synthetic-' + name, Path(path).read_text())
+                self.assertEqual(0o600, os.stat(path).st_mode & 0o777)
+                paths.append(path)
+            self.assertEqual(2, len(set(paths)))
+
     def test_generated_state_path_is_stable_per_project_not_run(self):
         with tempfile.TemporaryDirectory() as root:
             first = execution_controller._generated_state_path(root, metadata("run-1")["projectIdentity"])

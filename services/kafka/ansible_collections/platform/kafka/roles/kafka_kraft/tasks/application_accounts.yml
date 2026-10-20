@@ -1,0 +1,26 @@
+---
+- name: Validate private Kafka account credential custody
+  ansible.builtin.assert:
+    that:
+      - platform_kafka_application_phase in ['preflight', 'apply', 'verify']
+      - platform_kafka_application_job.adminCandidates | default([]) | length > 0
+      - platform_kafka_application_job.adminCandidates | rejectattr('securityProtocol', 'equalto', 'SASL_SSL') | list | length == 0
+      - platform_kafka_application_job.adminPasswordRef is defined
+      - >-
+        (platform_application_secret_files | default({}) | combine(platform_application_credential_files | default({})))
+        | platform.core.application_protected_secret_files(
+          (platform_kafka_application_job.accounts | map(attribute='passwordRef') | list) + ([platform_kafka_application_job.adminPasswordRef] if platform_kafka_application_job.adminPasswordRef is defined else []),
+          platform_application_secret_root)
+    fail_msg: APPLICATION_PROVIDER_SECRET_FILE_INVALID
+  no_log: true
+
+- name: Execute the instance account hook on its projected administrative broker
+  ansible.builtin.include_tasks:
+    file: application_accounts_scope.yml
+    apply:
+      delegate_to: "{{ application_topic_candidate.hostId }}"
+      become: true
+  vars:
+    application_topic_candidate: "{{ platform_kafka_application_job.adminCandidates | first }}"
+    application_topic_cli_directory: "{{ hostvars[application_topic_candidate.hostId].platform_kafka_install_directory | default(platform_kafka_install_directory) }}"
+    application_kafka_credentials: "{{ platform_application_secret_files | default({}) | combine(platform_application_credential_files | default({})) }}"

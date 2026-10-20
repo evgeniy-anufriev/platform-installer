@@ -9,7 +9,7 @@ except ImportError:
 
 
 SUPPORTED_PURPOSES = ("client", "interBroker", "controller")
-SUPPORTED_PROTOCOLS = ("PLAINTEXT", "SSL")
+SUPPORTED_PROTOCOLS = ("PLAINTEXT", "SSL", "SASL_SSL")
 
 
 def _finding(code, path, message, details=None):
@@ -52,7 +52,9 @@ def normalize_listeners(configuration, member, path="configuration.listeners"):
         if purpose not in SUPPORTED_PURPOSES:
             findings.append(_finding("LISTENER_PURPOSE_INVALID", item_path + ".purpose", "Unsupported listener purpose"))
         if protocol not in SUPPORTED_PROTOCOLS:
-            findings.append(_finding("LISTENER_PROTOCOL_INVALID", item_path + ".securityProtocol", "Only PLAINTEXT and SSL are supported"))
+            findings.append(_finding("LISTENER_PROTOCOL_INVALID", item_path + ".securityProtocol", "Only PLAINTEXT, SSL and SASL_SSL are supported"))
+        if protocol == "SASL_SSL" and purpose != "client":
+            findings.append(_finding("LISTENER_PURPOSE_INVALID", item_path + ".purpose", "SCRAM is supported on client listeners only"))
         if not isinstance(port, int) or isinstance(port, bool) or not 1 <= port <= 65535:
             findings.append(_finding("LISTENER_PORT_INVALID", item_path + ".port", "Listener port must be an integer from 1 through 65535"))
         listeners[name] = listener

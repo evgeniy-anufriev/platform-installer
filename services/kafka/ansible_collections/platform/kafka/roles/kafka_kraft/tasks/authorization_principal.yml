@@ -1,0 +1,21 @@
+---
+- name: Bind the explicit non-administrative compatibility principal
+  ansible.builtin.set_fact:
+    application_kafka_account:
+      name: "{{ kafka_authorization_principal }}"
+      mode: managed
+    kafka_authorization_grants:
+      - {resourceType: topic, name: '*', patternType: literal, operations: [All]}
+      - {resourceType: group, name: '*', patternType: literal, operations: [All]}
+      - {resourceType: transactional-id, name: '*', patternType: literal, operations: [All]}
+      - resourceType: cluster
+        name: kafka-cluster
+        patternType: literal
+        operations: "{{ kafka_authorization_cluster_operations }}"
+  changed_when: false
+
+- name: Check or ensure each explicitly scoped compatibility resource
+  ansible.builtin.include_tasks: application_acl.yml
+  loop: "{{ kafka_authorization_grants }}"
+  loop_control:
+    loop_var: application_kafka_grant

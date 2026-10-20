@@ -352,6 +352,7 @@
               "additionalProperties": {
                 "type": "object",
                 "properties": {
+                  "format": {"enum": ["raw", "kafka_scram_jaas"]},
                   "source": {
                     "type": "object",
                     "properties": {

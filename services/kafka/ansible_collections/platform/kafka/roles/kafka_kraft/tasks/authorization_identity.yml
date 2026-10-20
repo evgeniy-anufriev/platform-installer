@@ -1,0 +1,26 @@
+---
+- name: Bind the exact planned member TLS material
+  ansible.builtin.include_tasks: resolve_tls_runtime.yml
+  vars:
+    kafka_tls_member: "{{ kafka_authorization_member }}"
+
+- name: Read the RFC2253 subject of this selected member certificate
+  ansible.builtin.command:
+    argv: [openssl, x509, -in, "{{ _platform_kafka_tls_runtime.targetDirectory }}/certificate.pem", -noout, -subject, -nameopt, RFC2253]
+  delegate_to: "{{ kafka_authorization_member.host }}"
+  become: true
+  register: kafka_authorization_subject
+  changed_when: false
+
+- name: Require an unambiguous non-anonymous certificate principal
+  ansible.builtin.assert:
+    that:
+      - kafka_authorization_subject.stdout is match('^subject=')
+      - "';' not in kafka_authorization_subject.stdout"
+      - "'\n' not in kafka_authorization_subject.stdout"
+    fail_msg: KAFKA_ADMIN_CERTIFICATE_PRINCIPAL_INVALID
+
+- name: Collect selected member identities for privileged bootstrap and internal traffic
+  ansible.builtin.set_fact:
+    _platform_kafka_admin_principals: "{{ (_platform_kafka_admin_principals + ['User:' ~ (kafka_authorization_subject.stdout | regex_replace('^subject=\\s*', ''))]) | unique | sort }}"
+  changed_when: false

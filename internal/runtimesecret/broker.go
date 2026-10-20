@@ -143,7 +143,7 @@ func (b *Broker) SetPendingServiceSecretInput(binding Binding, deployment, purpo
 	}
 	input := RuntimeSecretInput{Purpose: purpose, ServiceDeployment: deployment}
 	switch purpose {
-	case "SERVICE_ADMIN_TOKEN":
+	case "SERVICE_ADMIN_TOKEN", "SERVICE_PASSWORD":
 		if len(value) == 0 || len(value) > 4096 || len(shares) != 0 || !utf8.Valid(value) {
 			return errors.New("RUNTIME_SECRET_INPUT_INVALID")
 		}
@@ -209,10 +209,17 @@ func (b *Broker) BindPendingServiceSecretInputs(binding Binding, descriptors []R
 		allowed[key] = descriptor
 	}
 	attached := make([]RuntimeSecretInput, 0, len(b.pending.typed))
+	passwords := cloneSecretMap(b.lease.runtimeSecretValues)
+	defer func() { zeroSecretMap(passwords) }()
 	for key, pending := range b.pending.typed {
 		descriptor, ok := allowed[key]
 		if !ok {
 			return errors.New("RUNTIME_SECRET_DESCRIPTORS_STALE")
+		}
+		if descriptor.Purpose == "SERVICE_PASSWORD" {
+			zero(passwords[descriptor.RequirementRef])
+			passwords[descriptor.RequirementRef] = append([]byte(nil), pending.Value...)
+			continue
 		}
 		descriptor.Value = append([]byte(nil), pending.Value...)
 		descriptor.Shares = cloneSecretSlices(pending.Shares)
@@ -223,6 +230,9 @@ func (b *Broker) BindPendingServiceSecretInputs(binding Binding, descriptors []R
 		zeroRuntimeSecretInput(old)
 	}
 	b.lease.runtimeSecretInputs = attached
+	zeroSecretMap(b.lease.runtimeSecretValues)
+	b.lease.runtimeSecretValues = passwords
+	passwords = nil
 	return nil
 }
 
@@ -231,7 +241,7 @@ func validTypedDescriptor(value RuntimeSecretInput) bool {
 		return false
 	}
 	switch value.Purpose {
-	case "SERVICE_ADMIN_TOKEN":
+	case "SERVICE_ADMIN_TOKEN", "SERVICE_PASSWORD":
 		return len(value.Operations) == 2 && value.Operations[0] == "SERVICE_APPLY" && value.Operations[1] == "SERVICE_VERIFY"
 	case "SERVICE_UNSEAL_SHARES":
 		return len(value.Operations) == 1 && value.Operations[0] == "SERVICE_APPLY"
@@ -674,6 +684,9 @@ func (b *Broker) ServiceSecretsPresent(binding Binding, requirements []RuntimeSe
 		if requirement.Purpose == "SERVICE_PASSWORD" {
 			present = (valid && len(b.lease.runtimeSecretValues[requirement.RequirementRef]) > 0) ||
 				(pendingValid && len(b.pending.values[requirement.RequirementRef]) > 0)
+			if pendingValid {
+				present = present || len(b.pending.typed[typedSecretKey(requirement.ServiceDeployment, requirement.Purpose)].Value) > 0
+			}
 		} else {
 			if pendingValid {
 				input := b.pending.typed[typedSecretKey(requirement.ServiceDeployment, requirement.Purpose)]

@@ -6,6 +6,17 @@ platform_application_definition:
         user: 1000:1000
         restart: on-failure
         accounts:
+            kafka:
+                mode: managed
+                credentials:
+                    username:
+                        source: {kind: literal, value: '{{ application_instance_id | replace(''-'', ''_'') }}'}
+                    password:
+                        source: {kind: runtime_secret_ref, ref: '{{ application_instance_id }}-kafka-password'}
+                grants:
+                    - {topicRef: alarms_compact, operations: [Read, Write, Describe]}
+                    - {resourceType: group, name: '{{ application_instance_id }}', patternType: prefixed, operations: [Read, Describe]}
+                    - {resourceType: cluster, name: kafka-cluster, operations: [Describe, IdempotentWrite]}
             clickhouse:
                 credentials:
                     password:
@@ -55,6 +66,20 @@ platform_application_definition:
         parameters:
             DATA_MANAGER_URL_ROOT: ""
         environment:
+            KAFKA_ENABLE_SSL: "true"
+            SPRING_KAFKA_SSL_ENABLE_SSL: "true"
+            KAFKA_SECURITY_PROTOCOL: SASL_SSL
+            KAFKA_SASL_MECHANISM: SCRAM-SHA-512
+            kafka.consumer.security.protocol: SASL_SSL
+            kafka.producer.security.protocol: SASL_SSL
+            kafka.consumer.sasl.mechanism: SCRAM-SHA-512
+            kafka.producer.sasl.mechanism: SCRAM-SHA-512
+            kafka.consumer.sasl.jaas.config: '$${KAFKA_CONSUMER_SASL_JAAS_CONFIG}'
+            kafka.producer.sasl.jaas.config: '$${KAFKA_PRODUCER_SASL_JAAS_CONFIG}'
+            spring.kafka.ssl.properties.security.protocol: SASL_SSL
+            spring.kafka.ssl.properties.sasl.mechanism: SCRAM-SHA-512
+            spring.kafka.ssl.properties.sasl.jaas.config: '$${KAFKA_CONSUMER_SASL_JAAS_CONFIG}'
+            logging.level.tnt.tnscada.core.kafkamanager.kafka.config.KafkaManagerConfig: INFO
             SDKU_TANK_FARM_CONSENSUS_TCP_PORT: &consensus_tcp_port >-
                 {{ ((application_job.application.definition.defaults.ports | default({})) | combine(application_job.slot.overrides.ports | default({}), recursive=true) | combine(application_job.instance.overrides.ports | default({}), recursive=true) | combine(application_job.hostOverride.ports | default({}), recursive=true))['port-2'].container }}
             SERVER_PORT: &web_server_port >-
@@ -130,6 +155,12 @@ platform_application_definition:
                 method: approle
             mode: process-supervisor
             secret_bindings:
+                KAFKA_PRODUCER_SASL_JAAS_CONFIG:
+                    source: {account: kafka, field: password}
+                    format: kafka_scram_jaas
+                KAFKA_CONSUMER_SASL_JAAS_CONFIG:
+                    source: {account: kafka, field: password}
+                    format: kafka_scram_jaas
                 DB_PASSWORD:
                     source:
                         account: clickhouse

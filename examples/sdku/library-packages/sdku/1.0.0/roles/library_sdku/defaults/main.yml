@@ -12,7 +12,7 @@ platform_library_definition:
         schema-registry: {library_binding: messaging, purpose: schema-registry, protocol: https}
     connection_defaults:
         kafka:
-            connectionRef: CLIENT_SSL
+            connectionRef: SASL_SSL
     defaults:
         environment:
             POSTGRES_JDBC_ENDPOINT: "jdbc:postgresql://$${POSTGRES_ADDRESS}"

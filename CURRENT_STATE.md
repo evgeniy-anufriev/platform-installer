@@ -1,6 +1,6 @@
 # Current state
 
-Updated 2026-10-19. This file is the sole current milestone/status source.
+Updated 2026-10-20. This file is the sole current milestone/status source.
 Detailed historical checkpoints are archived under [docs/history](docs/history/si11-state-20261008.md).
 Read the applicable plan and evidence for the task; an implementation or direct
 Ansible PASS does not imply complete UI acceptance. A next gated milestone or
@@ -10,6 +10,7 @@ new destructive operation still requires explicit owner authorization.
 
 | Work | Current status | Evidence and next step |
 | --- | --- | --- |
+| KAFKA-SCRAM | Реализация завершена, стендовая приёмка ожидается | [Plan](docs/work/application-libraries/kafka-scram-plan.md), [journal](docs/work/application-libraries/evidence/kafka-scram-journal.md), [targeted review](docs/work/application-libraries/reviews/kafka-scram-d01-targeted-recheck.md). KS-P04/KS-P05 closed by PLAN recheck. Owner accepted D01 fix: dedicated administrative SASL candidates/exact PKI binding independent of library data listener. Reviewer APPROVE in D01 scope, zero blockers; historical FULL BLOCK retained. Owner rejected D02 restrictions: arbitrary operator principal mapping/builder configuration remains available; not technically resolved/reviewer-approved. Provider23/action4 and four syntax checks PASS; native D03 process proof2 PASS (389.968s); Kafka-only staged source QA161 PASS, packages27/renders26/base1 PASS; latest target-free SCRAM snapshot1 PASS (8.280s) on primary RED OS .101, unchanged timeout60s; prior two .102 timeouts retained in journal. Prior focused Core222 (221PASS/one skip), native process2/Agent-parser1/target-free snapshot1, SDKU schemas/renders, Go/frontend checks PASS. Four excluded app defaults hash-unchanged; follow-up QA source workspace cleanup recorded in journal. Real React/Wails, bundle publication and stand acceptance remain open. No Kafka installation, SERVICE_APPLY, migration or app startup authorized/performed by this work. |
 | LIBRARY-CONNECTIONS-HISTORY | Implemented; Core/UI plan acceptance PASS; FULL DIFF APPROVE | [Plan](docs/work/application-libraries/library-connections-history-plan.md), [FULL DIFF](docs/work/application-libraries/reviews/library-connections-history-diff-review.md), [journal](docs/work/application-libraries/evidence/library-connections-history-journal.md). Library owns binding/protocol/purpose; SDKU apps select connection keys, own accounts/grants/ENV and legacy maps retained. CH history defaults to library_instance_id with dash-to-underscore; group_vars/resource override/reset and JDBC agreement verified. Core83:82 PASS/one existing skip; initial timeout rerun PASS, cause unproved. Focused22, native26/497 tasks,27 schemas/digests/26 renders, frontend261/build/lint and Go/vet PASS. Runtime43 45db1921 verified/published/prepared. Actual React/Wails default/override/reset/Save/reopen PASS; revision28ea629b, planfe1c3abf EXECUTABLE Library Apply/Verify/skip=true, not approved or started. FULL DIFF APPROVE, zero blockers, final40 hasha340398e; QA workspace cleaned. No visual acceptance, applications/SQL/Kafka writes or working-project migration. Included in accumulated SDKU commit. |
 | DIRECT-RESOURCE-KEYS | Implemented; Core/UI acceptance PASS; FULL DIFF APPROVE | [Plan](docs/work/application-libraries/direct-resource-keys-plan.md), [review](docs/work/application-libraries/reviews/direct-resource-keys-diff-review.md), [journal](docs/work/application-libraries/evidence/direct-resource-keys-journal.md). Standard Ansible resource-default merge and direct Kafka/PostgreSQL contexts before ENV; SDKU maps removed, legacy maps preserved. PG keys model/alarms_db/preferences/ef-store, JDBC/account refs aligned; independent ClickHouse settings preserved. Existing Resources UI PG add/default/override/reset and fresh Core names. Core81 (80 PASS/one skip), native26/440 tasks,27 schemas/digests/26 renders, Go/vet, frontend260/build/lint PASS. Runtime42 2dbefe8b verified/published/prepared; actual React/Wails five save/Verify points and reopen PASS, final73736eea, plan92ab0cae EXECUTABLE Library Apply/Verify/skip=true, not approved or started. FULL DIFF APPROVE, zero blockers, final31 hash881ce20a. Owned QA workspace cleaned; previous context-loss not claimed fixed, visual/target resource creation not performed. No application installation, SQL/Kafka writes or working-project migration. Included in accumulated SDKU commit. |
 | KAFKA-TOPIC-ROLES | Implemented; focused Core/UI acceptance PASS; FULL DIFF APPROVE | [Plan](docs/work/application-libraries/topic-role-bindings-plan.md), [review](docs/work/application-libraries/reviews/topic-role-bindings-diff-review.md), [journal](docs/work/application-libraries/evidence/topic-role-bindings-journal.md). Existing resource_defaults.kafka.topics; standard Ansible merge/context before ENV; named roles plus legacy lists; Go/Wails transport and UI selection/reset. Owner-approved logical IDs main/main_compact/alarms/alarms_compact, physical sdku-* names only in library name fields, reusable CSPA apps. Core59/one skip, final logical native26/378 tasks,27 schemas/digests/26 renders, Go/vet and frontend258/build/lint PASS. Runtime41 e6ac4557 verified/published/prepared; real React/Wails add/select/rename/Reset/reopen/Verify PASS, final32fd489a, planbc8e8e3d EXECUTABLE Library Apply/Verify/skip=true. No Approve/Start/application/Kafka writes. One ordinary node3 rebind required after observed Save context loss; cause unproved, previous READY preservation not claimed. FULL DIFF source63 hash9dd6f60f, TOPIC-D01 RESOLVED, zero blockers. Six QA source workspaces cleaned; uncommitted. |
@@ -60,6 +61,22 @@ new destructive operation still requires explicit owner authorization.
 | SERVICE-INSTALL-09 ClickHouse | PARTIAL ACCEPTANCE, NOT DONE | [Plan](docs/work/clickhouse/service-install-09-clickhouse-architecture.md). Direct 1/1, 3/1, 3/3 and endpoint evidence passed; formal terminal real-bridge PASS and strict repeat remain unclosed. Owner previously declined another cumulative SI09 run. |
 | EXEC-PLAN-SCOPE-01 | NOT STARTED / deferred by owner | [Acceptance sequence](docs/work/services/service-install-acceptance.md), [roadmap](docs/roadmap.md). Separate request required; current full plans are not selective provider reconcile. |
 | BROWSER-REMOTE-01/02 | HTTP restricted to explicit dev; HTTPS deferred to version 1.0 | [Remote plan](docs/work/browser/browser-mode-remote-plan.md), ADR-028. Production transport/credential acceptance is not complete. |
+
+## Kafka SCRAM: оставшиеся проверки
+
+- Проверенный runtime bundle и его стандартная публикация перед зависимыми проверками.
+- Реальные React/Wails flows: default/override/Reset, accounts/grants, Save/reopen,
+  Project Verify и свежий revision/runtime-bound plan.
+- Standalone и три brokers: SCRAM, положительные/отрицательные ACL tests,
+  anonymous topics/groups и sole admin при штатной конфигурации.
+- Bootstrap/finalization, прерывания/восстановление, Apply/Verify/repeat и cleanup.
+- Все Kafka factory paths 11 приложений, JAAS через Vault Agent, Streams resources,
+  Registry/internal connections и отсутствие секретов в логах при global TRACE.
+- Визуальная проверка отдельно от функциональных результатов.
+
+Подробные условия — [в плане](docs/work/application-libraries/kafka-scram-plan.md#оставшиеся-проверки).
+Эти проверки остаются открытыми. Установка на стенде, миграция и запуск приложений
+пока не разрешены; обновление статуса не разрешает их выполнение.
 
 ## SI11 current evidence and open cases
 

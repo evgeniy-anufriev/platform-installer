@@ -4,6 +4,7 @@
     _platform_kafka_cli_listener_matches: >-
       {{ kafka_cli_member.listener_endpoints
          | selectattr('purpose', 'equalto', kafka_cli_purpose)
+         | rejectattr('security_protocol', 'equalto', 'SASL_SSL')
          | list }}
   changed_when: false
 
@@ -40,6 +41,7 @@
     _platform_kafka_cli_connection: >-
       {{ _platform_kafka_cli_connection | combine({
            'tls': {
+             'keystorePath': _platform_kafka_tls_runtime.keystorePath,
              'truststorePath': _platform_kafka_tls_runtime.truststorePath,
              'truststoreType': _platform_kafka_tls_runtime.storeType,
              'storePasswordSecretRef': _platform_kafka_tls_runtime.storePasswordSecretRef

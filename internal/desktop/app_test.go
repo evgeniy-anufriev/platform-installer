@@ -248,6 +248,53 @@ func TestPendingServiceSecretDescriptorAcceptsExactUsernameReference(t *testing.
 	}
 }
 
+func TestPendingDeploymentBoundAdminPasswordsRemainIndependent(t *testing.T) {
+	app := NewApp(snapshotReaderStub{}, lifecycleStub{})
+	defer app.secrets.Clear()
+	app.current = ProjectOpenResult{
+		Status: "OPEN", Root: t.TempDir(), Project: &projectlifecycle.Project{ID: "project-aaaaaaaaaaaaaaaa"},
+		Managed: &installer.ManagedProjectView{Deployments: map[string]installer.ManagedDeployment{
+			"kafka-one": {DeploymentID: "kafka-one", ServiceType: "kafka", Mode: "kraft-standalone"},
+			"kafka-two": {DeploymentID: "kafka-two", ServiceType: "kafka", Mode: "kraft-standalone"},
+		}},
+		Catalog: &projectlifecycle.ProjectCatalogView{Status: "READY", Services: []projectlifecycle.ProjectCatalogService{{
+			ID: "kafka", Modes: []projectlifecycle.ProjectCatalogMode{{ID: "kraft-standalone", RequiredRuntimeSecretSettings: []string{"adminCredential"}}},
+			ConfigurationSettings: []projectlifecycle.ProjectCatalogSetting{{ID: "adminCredential", EditorShape: "RUNTIME_SECRET_REFERENCE_OBJECT", RuntimeSecretRequirementRef: "kafka-admin-password", RuntimeSecretDeploymentBound: true, Label: "Kafka admin password"}},
+		}}},
+	}
+	for _, deployment := range []string{"kafka-one", "kafka-two"} {
+		operation := app.GetPendingRuntimeSecretDescriptors(deployment)
+		if operation.Status != "READY" || len(operation.Descriptors) != 1 || !operation.Descriptors[0].DeploymentBound {
+			t.Fatal("deployment-bound prompt unavailable")
+		}
+		if err := app.SetPendingDeploymentRuntimeSecretValues(PendingRuntimeSecretValuesInput{ServiceDeployment: deployment, Values: map[string]string{"kafka-admin-password": "synthetic-" + deployment}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := app.SetSessionCredential(runtimesecret.Input{Username: "installer", SSHMode: runtimesecret.SSHPassword, SSHPassword: "synthetic-ssh"}); err != nil {
+		t.Fatal(err)
+	}
+	binding, err := app.credentialBindingLocked()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var inputs []runtimesecret.RuntimeSecretInput
+	for _, deployment := range []string{"kafka-one", "kafka-two"} {
+		inputs = append(inputs, runtimesecret.RuntimeSecretInput{RequirementRef: "si-" + deployment, Purpose: "SERVICE_PASSWORD", ServiceDeployment: deployment, Operations: []string{"SERVICE_APPLY", "SERVICE_VERIFY"}})
+	}
+	if err := app.secrets.BindPendingServiceSecretInputs(binding, inputs); err != nil {
+		t.Fatal(err)
+	}
+	if err := app.secrets.WithTargetCredential(binding, func(value runtimesecret.TargetCredential) error {
+		if len(value.RuntimeSecretValues) != 2 || string(value.RuntimeSecretValues["si-kafka-one"]) != "synthetic-kafka-one" || string(value.RuntimeSecretValues["si-kafka-two"]) != "synthetic-kafka-two" {
+			t.Fatal("passwords crossed deployment boundaries")
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
 type lifecycleStub struct {
 	result projectlifecycle.Result
 	err    error

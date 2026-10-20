@@ -912,10 +912,15 @@ def _materialize_application_projection(journal, manifest):
             except (OSError, ValueError, execution_secret_output.OutputWireError):
                 raise LifecycleError('APPLICATION_BOOTSTRAP_OUTPUT_REQUIRED') from None
     files = dict(payload['platform_pki_secret_files'])
+    service_references = [item['runtimeReference'] for item in manifest.get('runtimeSecretRequirements', [])
+                          if item.get('purpose') == 'SERVICE_PASSWORD']
     for item in manifest.get('runtimeSecretRequirements', []):
         if item.get('purpose') == 'SERVICE_PASSWORD':
-            files[item['runtimeReference']] = os.path.join(journal.directory, '.runtime-secret-' +
+            path = os.path.join(journal.directory, '.runtime-secret-' +
                 hashlib.sha256((item['serviceDeployment'] + '\0' + item['runtimeReference']).encode()).hexdigest())
+            files['runtime:' + item['requirementRef']] = path
+            if service_references.count(item['runtimeReference']) == 1:
+                files[item['runtimeReference']] = path
     inputs = []
     for item in requirements:
         if not set(item['applicationLibraries']).issubset(operations[0]['applicationLibraries']):

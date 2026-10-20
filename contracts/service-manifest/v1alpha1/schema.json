@@ -276,6 +276,8 @@
         "validation": { "type": "object" },
         "schema": { "type": "object" },
         "x-memberInputOnly": { "type": "boolean", "description": "Keep member values in ordinary member input; do not flatten them into host-wide execution variables." },
+        "x-runtimeSecretRequired": { "type": "boolean", "description": "Require a saved catalog-declared runtime credential reference before planning." },
+        "x-runtimeSecretDeploymentBound": { "type": "boolean", "description": "Bind the public service-password requirement identity to its deployment; the logical desired reference is unchanged." },
         "ui": {
           "type": "object",
           "properties": {

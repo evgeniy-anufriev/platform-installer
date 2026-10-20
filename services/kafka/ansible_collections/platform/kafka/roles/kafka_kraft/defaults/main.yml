@@ -37,6 +37,10 @@ platform_kafka_listeners:
     purpose: interBroker
     securityProtocol: SSL
     port: 9094
+  SASL_SSL:
+    purpose: client
+    securityProtocol: SASL_SSL
+    port: 9096
   CONTROLLER:
     purpose: controller
     securityProtocol: SSL
@@ -48,6 +52,9 @@ platform_kafka_name: "{{ (platform_name_prefix | default('') ~ '-') if (platform
 platform_kafka_deployment_id: "{{ platform_execution_service_deployment | default(platform_kafka_service_name, true) }}"
 platform_kafka_advertised_host: "{{ ansible_host | default(inventory_hostname) }}"
 platform_kafka_verify_only: false
+platform_kafka_admin_credential:
+  passwordSecretRef: ''
+platform_kafka_secret_files: {}
 platform_kafka_startup_readiness_retries: 30
 platform_kafka_startup_readiness_delay: 2
 platform_kafka_instances: []

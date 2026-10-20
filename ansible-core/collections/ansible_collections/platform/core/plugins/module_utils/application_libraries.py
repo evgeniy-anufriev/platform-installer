@@ -263,7 +263,9 @@ def resolve_connection(deployment_id, declaration, selector, desired, configurat
                 raise ValueError("Kafka client listener missing")
             for item in selected:
                 targets.append({"hostId": member["host"], "memberId": member_id, "address": item["advertisedAddress"],
-                                "port": item["port"], "protocol": "tcp", "tls": item["securityProtocol"] == "SSL"})
+                                "port": item["port"], "protocol": "tcp", "tls": item["securityProtocol"] in {"SSL", "SASL_SSL"},
+                                "securityProtocol": item["securityProtocol"],
+                                "saslMechanism": "SCRAM-SHA-512" if item["securityProtocol"] == "SASL_SSL" else None})
     else:
         mapping = {"postgresql": {"client": ("port", "tcp")}, "redis": {"client": ("redisPort", "tcp"), "sentinel": ("sentinelPort", "tcp")},
                    "clickhouse": {"client": ("port", "https"), "native": ("nativePort", "tcp")}, "vault": {"client": ("port", "https")}}
@@ -470,7 +472,9 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
             if name not in connections:
                 findings.append(finding("APPLICATION_ACCOUNT_PROVIDER_MISSING", field + ".accounts." + name))
             if name in connections and connections[name]["serviceType"] == "kafka":
-                findings.append(finding("APPLICATION_ACCOUNT_CAPABILITY_UNSUPPORTED", field + ".accounts." + name))
+                if ('service.kafka.account' not in catalog['definitions']['kafka'].get('capabilities', [])
+                        or any(t.get('securityProtocol') != 'SASL_SSL' for t in connections[name]['targets'])):
+                    findings.append(finding("APPLICATION_ACCOUNT_CAPABILITY_UNSUPPORTED", field + ".accounts." + name))
         if (accounts or agent_required) and "vault" not in connections:
             findings.append(finding("APPLICATION_VAULT_REQUIRED", field))
         for binding_id, binding in row["bindings"].items():
@@ -485,6 +489,11 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
                 findings.append(finding("APPLICATION_RESOURCE_PROVIDER_INVALID", field + ".resources." + resource_id))
         for variable, binding in secret_bindings.items():
             source = binding["source"]
+            if binding.get('format') == 'kafka_scram_jaas':
+                connection = connections.get(source.get('account'), {})
+                if (connection.get('serviceType') != 'kafka' or source.get('field') != 'password'
+                        or source.get('account') not in accounts):
+                    findings.append(finding("APPLICATION_SECRET_BINDING_INVALID", field + ".secret_bindings." + variable))
             if source.get("account") and (source["account"] not in accounts or source.get("field") not in accounts[source["account"]]["credentials"]):
                 findings.append(finding("APPLICATION_SECRET_BINDING_INVALID", field + ".secret_bindings." + variable))
             if source.get("library_secret") and source["library_secret"] not in row["sharedSecrets"]:

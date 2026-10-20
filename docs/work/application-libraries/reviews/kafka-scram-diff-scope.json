@@ -1,0 +1,380 @@
+{
+  "mode": "FULL DIFF",
+  "head": "930d5f71a83e3be99901ea40e2af6464394526f5",
+  "context": "Dirty tree; Kafka SCRAM scope only; unrelated existing changes preserved. File fingerprints include surrounding existing content; review Kafka hunks and direct boundaries.",
+  "ownerDecisions": "No stand installation; existing provider/Vault Agent mechanisms; two JAAS ENV; required admin; final User:admin only; anonymous data; temporary exact member certificate bootstrap; accepted KS-P04/KS-P05; four apps excluded.",
+  "files": [
+    {
+      "path": "ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_libraries.py",
+      "sha256": "37176e2e1af69074a09231bfb61b9e4e86ad18cbbbccd764c4d4ff13d9452536"
+    },
+    {
+      "path": "ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_providers.py",
+      "sha256": "1bbec27440ca17de894fb4288804febd0d4bb850884f8befc184d98645f309ac"
+    },
+    {
+      "path": "ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_vault.py",
+      "sha256": "ae86dba02afad341b7077a08166f5daebb4d6e3f9c965b463634fd49a1743a63"
+    },
+    {
+      "path": "ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/deployment_plan.py",
+      "sha256": "0de77b4a2719519a6f8e9abf02879fe262047421d49a9bfb4b67d4041b9eed8d"
+    },
+    {
+      "path": "ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/kafka_listener_resolution.py",
+      "sha256": "afb7d4fc14ea92dc7a38a0c71cf010f3fa5002bedb29a83cd7bfe8c763e1b049"
+    },
+    {
+      "path": "ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/kafka_schema_registry.py",
+      "sha256": "d76ffc75a5c234ebaa6b11bbda367bff24a0e0160a3d6113541f099bfb29e9bb"
+    },
+    {
+      "path": "ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/runtime_secret_identity.py",
+      "sha256": "a9f0e4f8dc26381f6e27ee7ffa890757f90f0680fba39741ddef2a0c104565db"
+    },
+    {
+      "path": "ansible-core/examples/empty/project.yml",
+      "sha256": "20a2f066d014f4a9d4edae0b7aa04703963703ebf3b00794ba770ba84ea05a68"
+    },
+    {
+      "path": "ansible-core/examples/invalid-reference/project.yml",
+      "sha256": "c6caf565b47d0e44ef962b3dfc778db559d54231358b0e3423b0f6d69120ac32"
+    },
+    {
+      "path": "ansible-core/examples/valid/project.yml",
+      "sha256": "5a359454f005713f1b92226da48b8d67f915ecca0050ff732bf0133fd2e4ba51"
+    },
+    {
+      "path": "ansible-core/playbooks/application-libraries-provider-stage.yml",
+      "sha256": "80052a50ceb0b1adf1bd33f32a59e6489b7807c31da3e27217cff26301a396c4"
+    },
+    {
+      "path": "ansible-core/playbooks/application-libraries-provider-verify-stage.yml",
+      "sha256": "ec00d8f3135adf4ff7f5e0de7600fadc6f755ec3ee22cb3e56a7f822d1783ed8"
+    },
+    {
+      "path": "ansible-core/tests/qa_application_libraries.py",
+      "sha256": "95dc269309e7de81090de20a718d060fe7c47a1276e91e6c0669dcd546e55b22"
+    },
+    {
+      "path": "ansible-core/tests/qa_kafka_authorization_status.py",
+      "sha256": "bfc7e7a0c3a97a862b5dccb691c6f243a549afe1f0c2f4af0c16216a241135ad"
+    },
+    {
+      "path": "ansible-core/tests/qa_kafka_scram_templates.py",
+      "sha256": "5daa0866ab5ce4f5771d5e13cea60f5405625c01ebf0ec911e000b73a2b424e3"
+    },
+    {
+      "path": "ansible-core/tests/test_application_mixed_execution.py",
+      "sha256": "fedf19602575998d3db78bd816e70fa4c797992e9a84ff399f667ec5782c7978"
+    },
+    {
+      "path": "ansible-core/tests/test_application_providers.py",
+      "sha256": "d60e1b33266bf1467a456731252e1891a6bbfcad3bff687f45fabe00a6a14fec"
+    },
+    {
+      "path": "ansible-core/tests/test_application_vault.py",
+      "sha256": "aeb0da4db28e239c0df085dae30396dc46514fa59f4e40ede31b924553527a71"
+    },
+    {
+      "path": "ansible-core/tests/test_deployment_plan.py",
+      "sha256": "026a24376c80da0950ee138767e043c89bf5e359ab8cf27cdde6556efdd26daf"
+    },
+    {
+      "path": "ansible-core/tests/test_execution_lifecycle.py",
+      "sha256": "6acfe14db61b43571aa1ee1ff65ce23882948341a2b7969b8138e0e9bf97dec7"
+    },
+    {
+      "path": "ansible-core/tests/test_kafka_listener_resolution.py",
+      "sha256": "1c25bfde46b262847c577f08c7dcb6f45b7eb05c68bbe2c5cd55fdfa63d72e07"
+    },
+    {
+      "path": "ansible-core/tools/execution_controller.py",
+      "sha256": "95cd947eea6215f3f8dc86b20266933410f26c2d7e007da1687645d2bc9c8ebc"
+    },
+    {
+      "path": "ansible-core/tools/execution_protocol.py",
+      "sha256": "d307ee1a6e9ba3da85b9bfeb25d4d287120d39aa0daab725821016d52c74526c"
+    },
+    {
+      "path": "contracts/application-libraries/v1alpha1/settings.schema.json",
+      "sha256": "f7fd64b90d2af3c71367ac430d1e51b6ae4c8526287eea1e5b534f1f57ad4aab"
+    },
+    {
+      "path": "contracts/service-manifest/v1alpha1/schema.json",
+      "sha256": "0c7e7bd9f59105afc565cc8ff357421adef6cbd6cc65446de4c59fc1893f73a4"
+    },
+    {
+      "path": "docs/project-contract.md",
+      "sha256": "d497327cd3b74466087d05e66a1f9576af3306dd39c3dc9766d68ee8f6e7d598"
+    },
+    {
+      "path": "docs/work/application-libraries/configuration.md",
+      "sha256": "17d38f6027bccc1bd5e9deb694079faa8b0dd9be8b5ef15f687cf00c4651ab13"
+    },
+    {
+      "path": "docs/work/application-libraries/kafka-scram-plan.md",
+      "sha256": "273262e0e617ddbcd377243da232a847ed96d1a32ed641107ad0662d68219c59"
+    },
+    {
+      "path": "examples/catalog/service-catalog.yml",
+      "sha256": "4d81ecdc326de707b13873b5c2163d01c5e21234890475654821afd372d62c41"
+    },
+    {
+      "path": "examples/invalid/invalid-placement/project.yml",
+      "sha256": "299d6066d6d441f406fd9c3561505fbb7de7028ac09b108e7722c9b0c2a961b9"
+    },
+    {
+      "path": "examples/invalid/missing-host-reference/project.yml",
+      "sha256": "d899ea9d802091263210eedab8d99f2719a9b3b8204d0cb9921167a74e872de0"
+    },
+    {
+      "path": "examples/invalid/unknown-mode/project.yml",
+      "sha256": "0d6371531a53971112b21de85d569c4224a7778622e2a7527b735ab59deefcba"
+    },
+    {
+      "path": "examples/sdku/application-packages/alarm-service/1.0.0/roles/application_alarm-service/defaults/main.yml",
+      "sha256": "dfce6ae8c4ca3b9aff95bedd9d118414f282a7978ca0a063209725eb6c291e84"
+    },
+    {
+      "path": "examples/sdku/application-packages/alarm-view-service/1.0.0/roles/application_alarm-view-service/defaults/main.yml",
+      "sha256": "5c97c0d66e52b28426fcca2ca868f3ef4459170e7828607d66d9d9c4ff3d946f"
+    },
+    {
+      "path": "examples/sdku/application-packages/evo-manager/1.0.0/roles/application_evo-manager/defaults/main.yml",
+      "sha256": "20caf5a5bdf140e1d872a3367d2304ee43271922295e12bd933896b39419778f"
+    },
+    {
+      "path": "examples/sdku/application-packages/hmi-backend/1.0.0/roles/application_hmi-backend/defaults/main.yml",
+      "sha256": "cd76cd7f3cd44c80189f2d74ab8a5d08446477cfd5bcbcb0fd9d9616cf889c91"
+    },
+    {
+      "path": "examples/sdku/application-packages/kafka-ch-replicator/1.0.0/roles/application_kafka-ch-replicator/defaults/main.yml",
+      "sha256": "3eabb136cc3e0eca6d6d93730c2785ec86245f7fab8e9e7bf6b002dbfa33d0c9"
+    },
+    {
+      "path": "examples/sdku/application-packages/kafka-history-writer/1.0.0/roles/application_kafka-history-writer/defaults/main.yml",
+      "sha256": "603b033efcfebb1c264ae65732f02f306c79b5e6ed7e644444a75f3f960ba4c5"
+    },
+    {
+      "path": "examples/sdku/application-packages/sdku-knp/1.0.0/roles/application_sdku-knp/defaults/main.yml",
+      "sha256": "2c9c59f3fa12f47ca5b3d43bcd9876eb3cf5775f0f4b13b7a1b23c32bbc14faa"
+    },
+    {
+      "path": "examples/sdku/application-packages/sdku-status-calculation/1.0.0/roles/application_sdku-status-calculation/defaults/main.yml",
+      "sha256": "b450dffe02185964e6a61e26e5b04312d50414c319761a888ec463a657827f0d"
+    },
+    {
+      "path": "examples/sdku/application-packages/sdku-tank-farm/1.0.0/roles/application_sdku-tank-farm/defaults/main.yml",
+      "sha256": "c155e63940d745f3589a7c6fcfef90162f1f1594d595829c83f5960e267993b5"
+    },
+    {
+      "path": "examples/sdku/application-packages/sdku-telemechanics/1.0.0/roles/application_sdku-telemechanics/defaults/main.yml",
+      "sha256": "c115f8222465f7343518410d32c61f3e9a8ec32dac087d4c238672d3a4e4ef0c"
+    },
+    {
+      "path": "examples/sdku/application-packages/sdku-vtor/1.0.0/roles/application_sdku-vtor/defaults/main.yml",
+      "sha256": "1c44925236fb857f4411f6c3ef7bd96d7ce12aab46dabfc3c0c127a5dea12362"
+    },
+    {
+      "path": "examples/sdku/import-catalog.json",
+      "sha256": "ea31c2ffc471ab6e57673770f44297f94bade24476e5392ca8814e0cc3d47b7f"
+    },
+    {
+      "path": "examples/sdku/library-packages/sdku/1.0.0/roles/library_sdku/defaults/main.yml",
+      "sha256": "44fb4aaa8f16dbbe1afb6a4ce21b05dceb36392c8939e2941a70d0f9babe512d"
+    },
+    {
+      "path": "examples/valid/bind-authoritative/project.yml",
+      "sha256": "44ee3487612644722a9d7b3ee04f8507cf0e18aec39b6d0be91b95675dd113e0"
+    },
+    {
+      "path": "examples/valid/bind-standalone/project.yml",
+      "sha256": "1aaad0fcf9a6e103147f46e01a875fd24a7a1961d6b1315f895aa054aef2e6ae"
+    },
+    {
+      "path": "examples/valid/empty/project.yml",
+      "sha256": "9a634883da8ea4ad150ac4b95dacd22d8b38162007d25cb68ae6d9931047165c"
+    },
+    {
+      "path": "examples/valid/haproxy-routing/project.yml",
+      "sha256": "fd6c61b105b4d4658a6e09bd9b6ba7d4fe6ea6abfb0b068290b499404b80c84c"
+    },
+    {
+      "path": "examples/valid/kafka-distributed/project.yml",
+      "sha256": "1852ebe58c56c3587701c4c7e665eb7c2be9e6766b2aa76d1eaffc722b1f919c"
+    },
+    {
+      "path": "examples/valid/kafka-real-multihost/project.yml",
+      "sha256": "7baa2855a5b8172e05e84534a6e27d83fff3d070ae1758fcfbc26c3e4f2fd9a9"
+    },
+    {
+      "path": "examples/valid/kafka-single/project.yml",
+      "sha256": "cc5e157eb2a345b8b4e5a97741d98c3bea1cc81a108001500caff50bc23fae9c"
+    },
+    {
+      "path": "examples/valid/kafka-split-multihost/project.yml",
+      "sha256": "7a5e3ddd2869eb8d8717a635e8f9a59cdbace28dec44d3ec40ce10568a98f176"
+    },
+    {
+      "path": "examples/valid/keepalived-vrrp/project.yml",
+      "sha256": "e4f3a9cb7f089aff20db272763205be2491fb94ffde59701b30bee0af5b7d393"
+    },
+    {
+      "path": "examples/valid/net-04-2-integration/project.yml",
+      "sha256": "8bc0f2601005c401e207a830bc37fa01a49262612c1d68fa3b817f146abe6a2e"
+    },
+    {
+      "path": "examples/valid/pki-host-scope/project.yml",
+      "sha256": "6c8a498003803fcae0a6695a2080de244bea8ba973502f08e6bfc3ec2e256e3f"
+    },
+    {
+      "path": "examples/valid/postgresql-patroni/project.yml",
+      "sha256": "e01c46c0dccecb135516bb163ccedb8a567c280f5e38392b35bb415c928eb20a"
+    },
+    {
+      "path": "examples/valid/postgresql-standalone/project.yml",
+      "sha256": "a035e3db9b5b1ced033c3c3fa9ff287e11e01fce281b83235c5c7dce9b58064c"
+    },
+    {
+      "path": "examples/valid/ui-project-snapshot/project.yml",
+      "sha256": "37b68c60f0aa42dd454e9471b344f898c576ef64f3fafdd9ed2d15973c41b15a"
+    },
+    {
+      "path": "frontend/src/ApplicationCredentials.tsx",
+      "sha256": "004906a783881c7fd874b114815e0df99a218153bb4ea9772c5734148734a852"
+    },
+    {
+      "path": "frontend/src/ApplicationSecretBindings.test.tsx",
+      "sha256": "6053c960dc9a67948f9ecdccd413d6c814ba3ba725a043bd026f05ad871e1e11"
+    },
+    {
+      "path": "frontend/src/ApplicationSecretBindings.tsx",
+      "sha256": "37825e9a8aae18ad1bfbe5bc2f5200b98863b378ad5750c3387b8bf197016d0f"
+    },
+    {
+      "path": "internal/desktop/app_test.go",
+      "sha256": "df6252b293888db5e43d209b16852c15a77aacc53c0e9e182b7a49025f78746b"
+    },
+    {
+      "path": "internal/desktop/app.go",
+      "sha256": "41c7af0a12cc092995ffecfe2b0c2838d4fe82e7c5c8cc19c58450622c92dd73"
+    },
+    {
+      "path": "internal/projectlifecycle/lifecycle.go",
+      "sha256": "83b266718d20a4142bd4ee1824cac3ed35cee3c12b6b07c5a5aa00f4ce82cc80"
+    },
+    {
+      "path": "internal/runtimesecret/broker_test.go",
+      "sha256": "7a0dbef7110e3f04e9706560296ad7d153b6a2ce1a2a244e4c9caac1d53422fe"
+    },
+    {
+      "path": "internal/runtimesecret/broker.go",
+      "sha256": "9659e9df12288664bcbe04ff281fcd7bfa81df21f5a35b0cf3b78f67c4cb35b6"
+    },
+    {
+      "path": "services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/defaults/main.yml",
+      "sha256": "d17971951bb7bebaf7c55c1bc6216c22d42a7fca4b0fcaf20153a952702aba5c"
+    },
+    {
+      "path": "services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/application_account.yml",
+      "sha256": "8ccfa8b300b202cd730cc605b6141275e039b86d5bdd403453217ed0237586dd"
+    },
+    {
+      "path": "services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/application_accounts_scope.yml",
+      "sha256": "53c5ea76a3260ee2946c91bebdbe887bc66a7fe699b779cf16436d38b481bb8e"
+    },
+    {
+      "path": "services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/application_accounts.yml",
+      "sha256": "259f31df3c55e891f9baa8e4f1c321d345a7591c94d95b68fddd77c3b455a6a4"
+    },
+    {
+      "path": "services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/application_acl.yml",
+      "sha256": "c192331fd0dde5a27f2a253aa7bdf8ae3d3fa7509315fe2dbf3bb42aa6253a98"
+    },
+    {
+      "path": "services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/authorization_confirm.yml",
+      "sha256": "66631650b652bb3348874fccdfa6bed4b9b9cd6f3da1ef56b2dc262201e9a8e6"
+    },
+    {
+      "path": "services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/authorization_identity.yml",
+      "sha256": "899811d689ae5a8173b43ae9c5c366cc95e085aede5437cd2d7a098c88c4f60b"
+    },
+    {
+      "path": "services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/authorization_inputs.yml",
+      "sha256": "95ff028780ab2d76e1aa69863d646629a8ba1e55895560b102476bb7584300cd"
+    },
+    {
+      "path": "services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/authorization_observe.yml",
+      "sha256": "ee9da566c520283f769ddcf1b27b156306057aba3ebf8ebe8d8d601a20ce0079"
+    },
+    {
+      "path": "services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/authorization_principal.yml",
+      "sha256": "77454e226759a4031c729575a608d4e15e50d881fcc816991b1451c6ad7d0b89"
+    },
+    {
+      "path": "services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/authorization_security_guard.yml",
+      "sha256": "94ee895d7306b793f2b4deb436839a2b2f04c1ff43a4e44097668c23ac25b09d"
+    },
+    {
+      "path": "services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/authorization_setup.yml",
+      "sha256": "4111040fc970885e62b4c5cd9348a811e22c6dece78d6cac1638e27fc8d92353"
+    },
+    {
+      "path": "services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/authorization_status.yml",
+      "sha256": "a6105e31b2e7f925279caaffed788b1fc456f6736a003a20d96122de93b4cb86"
+    },
+    {
+      "path": "services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/main.yml",
+      "sha256": "5628f2ae52f110129de6e7f9674ce0db8662ec87cb3200b278ba625cb6dab625"
+    },
+    {
+      "path": "services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/member.yml",
+      "sha256": "a60deee6d62c7477539eb3a6254b6dbebc26932017cc428e639648df7d22d26f"
+    },
+    {
+      "path": "services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/project_runtime.yml",
+      "sha256": "d9f3000b8e48a5f2e6b44036785b2f5763f1b9711722df32b9dd3325c35e9799"
+    },
+    {
+      "path": "services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/resolve_cli_connection.yml",
+      "sha256": "5985f75b26d49c28b29de7349b434cdd49f948b92dec15eb58885ee93742db6b"
+    },
+    {
+      "path": "services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/run_cli_command.yml",
+      "sha256": "fb661a85b8097d2bb82d75992dd061781204c0a4ced2808575e8355bfb2511ac"
+    },
+    {
+      "path": "services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/validate_ssl_listener.yml",
+      "sha256": "8aa8ab62fbae30f0850b195b51a5f23e9a1b9d1ce4d2dc0b3b645212f733277e"
+    },
+    {
+      "path": "services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/verify_member.yml",
+      "sha256": "ea84b73fbe3f257129380db45a1e09b5c95728ca25691837c2e93a7d6b0d41be"
+    },
+    {
+      "path": "services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/templates/application-account-client.properties.j2",
+      "sha256": "5284f28b69a7baf98c2509ce70920d8b9143b3dd7d8b44f37dda0bb24c924168"
+    },
+    {
+      "path": "services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/templates/application-topics-client.properties.j2",
+      "sha256": "2a3702261b822889a661a9a9c2980fa83bf8aa9e4c912f45d946b0ebdcca9d83"
+    },
+    {
+      "path": "services/kafka/configuration.schema.json",
+      "sha256": "ace7f2d6217e2b847566fcdc1ee402120a77318f15f33a59f797f2a8762939f4"
+    },
+    {
+      "path": "services/kafka/playbooks/apply.yml",
+      "sha256": "61a5a766f58badd91819f1dad96c10e0aa875071353b5aa7927180452b123d5c"
+    },
+    {
+      "path": "services/kafka/playbooks/verify.yml",
+      "sha256": "49e81f3e0f86c7683ec4cc87579c55cdc742b8ef95a0a7fe579bbeba4d9dc702"
+    },
+    {
+      "path": "services/kafka/service.yml",
+      "sha256": "65d81c9f0a2ab16ea5af00c8f5f698f2e425af8d53bd2c3b4c136537539a3fe6"
+    }
+  ]
+}

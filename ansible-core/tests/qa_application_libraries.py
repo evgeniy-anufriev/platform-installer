@@ -12,6 +12,38 @@ FIXTURE = os.path.join(REPO, "examples/valid/application-libraries")
 
 
 class StandaloneLibrariesQA(unittest.TestCase):
+    def test_scram_listener_accounts_and_jaas_bindings_resolve_target_free(self):
+        def desired(data):
+            state = data['platform_desired_state']
+            configuration = state['serviceDeployments']['kafka-main']['configuration']
+            configuration['listeners']['SASL_SSL'] = dict(purpose='client', securityProtocol='SASL_SSL', port=9096)
+            configuration['adminCredential'] = dict(passwordSecretRef='runtime:kafka-admin-password')
+            for key, library in state['applicationLibraryDeployments'].items():
+                library.setdefault('resources', {})['events'] = dict(kind='kafka.topic', binding='messaging', parameters=dict(name=key + '-events'))
+        self.edit(self.vars, desired)
+        for library in ('sdku', 'cspa'):
+            path = os.path.join(self.root, 'library-packages', library, '1.0.0/roles/library_' + library + '/defaults/main.yml')
+            self.edit(path, lambda data: data['platform_library_definition'].update(
+                connection_defaults={'kafka': {'connectionRef': 'SASL_SSL'}}))
+        def application(data):
+            defaults = data['platform_application_definition']['defaults']
+            defaults['accounts']['kafka'] = dict(mode='managed', credentials={
+                'username': dict(source=dict(kind='literal', value="{{ application_instance_id | replace('-', '_') }}")),
+                'password': dict(source=dict(kind='runtime_secret_ref', ref='{{ application_instance_id }}-kafka-password'))},
+                grants=[dict(topicRef='events', operations=['Read', 'Write'])])
+            for name in ('KAFKA_PRODUCER_SASL_JAAS_CONFIG', 'KAFKA_CONSUMER_SASL_JAAS_CONFIG'):
+                defaults['provisioner']['secret_bindings'][name] = dict(source=dict(account='kafka', field='password'), format='kafka_scram_jaas')
+        self.edit(self.defaults, application)
+        result = self.snapshot()
+        self.assertEqual('PASS', result['status'], result['findings'])
+        for library in ('sdku', 'cspa'):
+            instance = result['applicationLibraries']['libraries'][library]['instances']['apigateway-' + library]
+            self.assertEqual('SASL_SSL', instance['connections']['kafka']['connectionRef'])
+            self.assertTrue(all(target['securityProtocol'] == 'SASL_SSL' and target['port'] == 9096
+                                for target in instance['connections']['kafka']['targets']))
+            self.assertIn('kafka', instance['credentialRequirements'])
+            self.assertEqual('kafka_scram_jaas', instance['secretBindings']['KAFKA_PRODUCER_SASL_JAAS_CONFIG']['format'])
+
     def test_library_connection_keys_and_clickhouse_history_defaults(self):
         with open(self.defaults) as stream:
             connections = json.load(stream)['platform_application_definition']['connections']

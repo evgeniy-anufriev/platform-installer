@@ -285,13 +285,16 @@
       - log.dirs
       - listener.security.protocol.map
       - inter.broker.listener.name
+      - authorizer.class.name
+      - super.users
+      - allow.everyone.if.no.acl.found
 
 - name: Reject reserved advanced Kafka settings
   ansible.builtin.assert:
     that: >-
       (platform_kafka_advanced_config.keys() | list |
        intersect(_platform_kafka_reserved_config_keys) | length) == 0
-      and (platform_kafka_advanced_config.keys() | select('match', '^listener\\.name\\..*\\.ssl\\.') | list | length) == 0
+      and (platform_kafka_advanced_config.keys() | select('match', '^listener\\.name\\..*\\.(ssl|sasl|scram-sha-512)\\.') | list | length) == 0
     fail_msg: 'ADVANCED_SETTING_RESERVED: BLOCKED; reserved Kafka keys are controlled by the role'
 
 - name: Validate resolved Kafka artifact sources before mutation
@@ -375,11 +378,27 @@
     - platform_kafka_clean_install | bool
     - _platform_kafka_local_instances | length > 0
 
+- name: Detect deployment-wide SCRAM authorization requirement
+  ansible.builtin.set_fact:
+    _platform_kafka_scram_enabled: "{{ _platform_kafka_instances | map(attribute='listeners') | map('dict2items') | flatten | selectattr('value.securityProtocol', 'equalto', 'SASL_SSL') | list | length > 0 }}"
+    _platform_kafka_admin_principals: []
+
+- name: Validate admin custody and determine bootstrap before host mutations
+  ansible.builtin.include_tasks: authorization_inputs.yml
+  when: _platform_kafka_scram_enabled
+
 - name: Prepare Kafka host prerequisites once
   ansible.builtin.include_tasks: prepare_host.yml
   when:
     - not (platform_kafka_verify_only | bool) and platform_kafka_phase != 'schema_registry'
     - _platform_kafka_local_instances | length > 0
+
+- name: Resolve trusted member certificate identities before authorizer activation
+  ansible.builtin.include_tasks: authorization_identity.yml
+  loop: "{{ _platform_kafka_instances }}"
+  loop_control:
+    loop_var: kafka_authorization_member
+  when: _platform_kafka_scram_enabled
 
 - name: Apply local Kafka members in deterministic node order
   ansible.builtin.include_tasks: member.yml
@@ -399,6 +418,71 @@
   loop_control:
     label: "{{ item.0.id }}:{{ item.1 }}"
   when: not (platform_kafka_verify_only | bool) and platform_kafka_phase != 'schema_registry'
+
+- name: Provision or verify admin and explicit compatibility rights once per deployment
+  ansible.builtin.include_tasks:
+    file: authorization_setup.yml
+    apply:
+      delegate_to: "{{ (_platform_kafka_broker_instances | first).host }}"
+      become: true
+  run_once: true
+  when:
+    - _platform_kafka_scram_enabled
+    - platform_kafka_phase != 'schema_registry'
+
+- name: Finalize each local member with admin as the only superuser
+  ansible.builtin.lineinfile:
+    path: "{{ item.config_directory }}/server.properties"
+    regexp: '^super\.users='
+    line: super.users=User:admin
+  loop: "{{ _platform_kafka_local_instances }}"
+  register: kafka_authorization_finalized
+  no_log: true
+  when:
+    - _platform_kafka_scram_enabled
+    - not (platform_kafka_verify_only | bool)
+    - _platform_kafka_authorization_bootstrap
+    - platform_kafka_phase != 'schema_registry'
+
+- name: Cross the final config write second before revocation restart
+  ansible.builtin.wait_for:
+    timeout: 1
+  changed_when: false
+  when:
+    - _platform_kafka_scram_enabled
+    - not (platform_kafka_verify_only | bool)
+    - _platform_kafka_authorization_bootstrap
+    - platform_kafka_phase != 'schema_registry'
+
+- name: Restart every bootstrap member including interrupted finalizations
+  ansible.builtin.systemd:
+    name: "{{ item.systemd_unit_name }}"
+    state: restarted
+  loop: "{{ _platform_kafka_local_instances }}"
+  when:
+    - _platform_kafka_scram_enabled
+    - not (platform_kafka_verify_only | bool)
+    - _platform_kafka_authorization_bootstrap
+    - platform_kafka_phase != 'schema_registry'
+
+- name: Wait for finalized local listeners
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: "{{ item.1 }}"
+    timeout: 120
+  loop: "{{ _platform_kafka_local_instances | subelements('listener_ports', skip_missing=True) }}"
+  when:
+    - _platform_kafka_scram_enabled
+    - not (platform_kafka_verify_only | bool)
+    - _platform_kafka_authorization_bootstrap
+    - platform_kafka_phase != 'schema_registry'
+
+- name: Require demonstrated runtime finalization before any following stage
+  ansible.builtin.include_tasks: authorization_confirm.yml
+  loop: "{{ _platform_kafka_local_instances }}"
+  loop_control:
+    loop_var: kafka_authorization_member
+  when: _platform_kafka_scram_enabled
 
 - name: Verify local Kafka members and cluster
   ansible.builtin.include_tasks: verify.yml

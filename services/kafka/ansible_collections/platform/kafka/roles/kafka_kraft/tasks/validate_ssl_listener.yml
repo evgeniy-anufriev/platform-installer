@@ -60,6 +60,7 @@
   ansible.builtin.set_fact:
     kafka_effective_config: >-
       {{ kafka_effective_config | combine({
+        ('listener.name.' ~ (kafka_ssl_listener.name | lower) ~ '.ssl.client.auth'): ('requested' if (_platform_kafka_scram_enabled | default(false)) and kafka_ssl_listener.securityProtocol == 'SSL' else 'none'),
         ('listener.name.' ~ (kafka_ssl_listener.name | lower) ~ '.ssl.keystore.location'): _platform_kafka_tls_runtime.keystorePath,
         ('listener.name.' ~ (kafka_ssl_listener.name | lower) ~ '.ssl.keystore.type'): _platform_kafka_tls_runtime.storeType,
         ('listener.name.' ~ (kafka_ssl_listener.name | lower) ~ '.ssl.keystore.password'): (lookup('ansible.builtin.file', _platform_kafka_ssl_password_file) | trim),

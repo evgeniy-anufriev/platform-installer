@@ -3,8 +3,10 @@ import hashlib
 import re
 
 try:
+    from .runtime_secret_identity import secret_input_requirement_ref
     from .application_libraries import resolve_connection, finding, _value
 except ImportError:
+    from runtime_secret_identity import secret_input_requirement_ref
     from application_libraries import resolve_connection, finding, _value
 
 NAME = re.compile(r'^[a-z_][a-z0-9_]{0,62}$')
@@ -126,7 +128,7 @@ def project_providers(rows, snapshot, configuration, desired, catalog):
                                                  for key, value in desired.get('serviceDeployments', {}).items()})
     project_id = snapshot['project']['id']
 
-    def provider(ref):
+    def provider(ref, security=False):
         deployment = materialized['serviceDeployments'][ref]
         definition = catalog['definitions'][deployment['serviceType']]
         service_type = deployment['serviceType']
@@ -157,6 +159,30 @@ def project_providers(rows, snapshot, configuration, desired, catalog):
                          'serviceType': service_type, 'candidates': targets, 'libraries': [], 'databases': [], 'accounts': []}
             if service_type == 'kafka':
                 jobs[ref]['topics'] = []
+        job = jobs[ref]
+        if service_type == 'kafka' and (security or any(t.get('securityProtocol') == 'SASL_SSL' for t in job['candidates'])) and 'adminCandidates' not in job:
+            settings = configuration['services'][ref]['configuration']
+            listeners = _value(settings, 'listeners') or {}
+            selectors = [key for key, value in listeners.items()
+                         if value['purpose'] == 'client' and value['securityProtocol'] == 'SASL_SSL']
+            if len(selectors) != 1:
+                raise ValueError('APPLICATION_PROVIDER_ADMIN_LISTENER_AMBIGUOUS')
+            targets = resolve_connection(ref, {'purpose': 'client'}, selectors[0], materialized,
+                                         configuration, catalog, snapshot['hosts'])['targets']
+            for target in targets:
+                member_settings = configuration['services'][ref].get('members', {}).get(target['memberId'], {}).get('configuration', {})
+                target['tlsProfileRef'] = _value(member_settings, 'tlsProfile') or _value(settings, 'tlsProfile')
+            if not targets or any(t.get('securityProtocol') != 'SASL_SSL' for t in targets):
+                raise ValueError('APPLICATION_PROVIDER_ADMIN_LISTENER_AMBIGUOUS')
+            admin = _value(settings, 'adminCredential')
+            if not isinstance(admin, dict) or not re.fullmatch(r'runtime:[a-z][a-z0-9-]{0,127}', admin.get('passwordSecretRef', '')):
+                raise ValueError('APPLICATION_PROVIDER_ADMIN_CREDENTIAL_REQUIRED')
+            setting = definition.get('configuration', {}).get('settings', {}).get('adminCredential', {})
+            metadata = setting.get('ui', {}).get('x-runtimeSecretRequirement', {})
+            if setting.get('x-runtimeSecretDeploymentBound') is not True or not isinstance(metadata.get('requirementRef'), str):
+                raise ValueError('APPLICATION_PROVIDER_ADMIN_CREDENTIAL_REQUIRED')
+            job['adminPasswordRef'] = 'runtime:' + secret_input_requirement_ref(ref, metadata['requirementRef'], 'SERVICE_PASSWORD')
+            job['adminCandidates'] = targets
         return jobs[ref]
 
     def claim(key, owner, mode):
@@ -224,16 +250,16 @@ def project_providers(rows, snapshot, configuration, desired, catalog):
                 for account_id, account in sorted(instance.get('credentialRequirements', {}).items()):
                     connection = instance['connections'].get(account_id, {})
                     service_type = connection.get('serviceType')
-                    if service_type not in {'postgresql', 'redis', 'clickhouse'}:
+                    if service_type not in {'postgresql', 'redis', 'clickhouse', 'kafka'}:
                         raise ValueError('APPLICATION_PROVIDER_CAPABILITY_UNSUPPORTED')
                     ref = connection['deploymentRef']
-                    job = provider(ref)
+                    job = provider(ref, security=service_type == 'kafka')
                     database = databases.get(account.get('databaseRef'))
                     bulk_access = 'databaseAccess' in account
                     if bulk_access and (service_type != 'postgresql' or account['mode'] != 'managed'
                                         or 'service.postgresql.database-access' not in catalog['definitions']['postgresql'].get('capabilities', [])):
                         raise ValueError('APPLICATION_PROVIDER_CAPABILITY_UNSUPPORTED')
-                    if not bulk_access and service_type != 'redis' and (not database or database['providerId'] != ref or (account['mode'] == 'managed' and database['mode'] != 'managed')):
+                    if not bulk_access and service_type not in {'redis', 'kafka'} and (not database or database['providerId'] != ref or (account['mode'] == 'managed' and database['mode'] != 'managed')):
                         raise ValueError('APPLICATION_PROVIDER_DATABASE_REF_INVALID')
                     credentials = account['credentials']
                     if set(credentials) != {'username', 'password'} or credentials['username']['source']['kind'] != 'literal':
@@ -242,10 +268,16 @@ def project_providers(rows, snapshot, configuration, desired, catalog):
                         raise ValueError('APPLICATION_PROVIDER_CREDENTIAL_SOURCE_DEFERRED')
                     username = identifier(credentials['username']['source']['value'], True)
                     admin = configuration['services'][ref]['configuration'].get('adminSuperuser', {}).get('value', {}).get('username')
-                    if username in {admin, 'default', 'autoctl_node', 'pgautofailover_replicator'}:
+                    if username in {admin, 'default', 'autoctl_node', 'pgautofailover_replicator'} or (service_type == 'kafka' and username == 'admin'):
                         raise ValueError('APPLICATION_PROVIDER_IDENTIFIER_INVALID')
                     listener = connection.get('connectionRef', 'client')
-                    if service_type == 'redis':
+                    if service_type == 'kafka':
+                        if ('service.kafka.account' not in catalog['definitions']['kafka'].get('capabilities', [])
+                                or any(t.get('securityProtocol') != 'SASL_SSL' for t in connection['targets'])
+                                or 'databaseRef' in account or bulk_access):
+                            raise ValueError('APPLICATION_PROVIDER_CAPABILITY_UNSUPPORTED')
+                        grants = normalize_kafka_grants(account.get('grants', []), library.get('topics', {}), ref)
+                    elif service_type == 'redis':
                         if listener == 'sentinel' and 'service.redis.sentinel.account' not in catalog['definitions']['redis'].get('capabilities', []):
                             raise ValueError('APPLICATION_PROVIDER_CAPABILITY_UNSUPPORTED')
                         grants = normalize_redis_grants(account.get('grants', {}))
@@ -291,6 +323,46 @@ def project_providers(rows, snapshot, configuration, desired, catalog):
             'libraryJobs': library_jobs, 'instanceJobs': instance_jobs, 'findings': findings}
 
 
+def normalize_kafka_grants(values, topics, provider_id):
+    """Resolve declared library topic references; never infer privileges from selection."""
+    allowed = {'Read', 'Write', 'Create', 'Delete', 'Alter', 'Describe',
+               'DescribeConfigs', 'AlterConfigs', 'IdempotentWrite', 'All'}
+    result = []
+    if not isinstance(values, list) or len(values) > 256:
+        raise ValueError('APPLICATION_PROVIDER_GRANTS_INVALID')
+    for grant in values:
+        if not isinstance(grant, dict) or set(grant) - {'topicRef', 'resourceType', 'name', 'patternType', 'operations'}:
+            raise ValueError('APPLICATION_PROVIDER_GRANTS_INVALID')
+        if 'topicRef' in grant:
+            topic = topics.get(grant['topicRef'])
+            if not topic or topic['deploymentRef'] != provider_id or set(grant) != {'topicRef', 'operations'}:
+                raise ValueError('APPLICATION_PROVIDER_GRANTS_INVALID')
+            kind, name, pattern = 'topic', topic['name'], 'literal'
+        else:
+            kind, name, pattern = grant.get('resourceType'), grant.get('name'), grant.get('patternType', 'literal')
+            if kind not in {'topic', 'group', 'transactional-id', 'cluster'} or pattern not in {'literal', 'prefixed'}:
+                raise ValueError('APPLICATION_PROVIDER_GRANTS_INVALID')
+            if not isinstance(name, str) or not re.fullmatch(r'[A-Za-z0-9_.-]{1,249}|\*', name):
+                raise ValueError('APPLICATION_PROVIDER_GRANTS_INVALID')
+            if kind == 'cluster' and (name != 'kafka-cluster' or pattern != 'literal'):
+                raise ValueError('APPLICATION_PROVIDER_GRANTS_INVALID')
+            if kind == 'topic' and (pattern != 'prefixed' or name == '*'):
+                raise ValueError('APPLICATION_PROVIDER_GRANTS_INVALID')
+        operations = grant.get('operations')
+        if not isinstance(operations, list) or not operations or any(op not in allowed for op in operations):
+            raise ValueError('APPLICATION_PROVIDER_GRANTS_INVALID')
+        if kind == 'cluster' and not set(operations) <= {'Describe', 'IdempotentWrite'}:
+            raise ValueError('APPLICATION_PROVIDER_GRANTS_INVALID')
+        valid_operations = {'topic': allowed - {'IdempotentWrite'},
+                            'group': {'Read', 'Delete', 'Describe', 'All'},
+                            'transactional-id': {'Write', 'Describe', 'All'},
+                            'cluster': {'Describe', 'IdempotentWrite'}}
+        if not set(operations) <= valid_operations[kind]:
+            raise ValueError('APPLICATION_PROVIDER_GRANTS_INVALID')
+        result.append(dict(resourceType=kind, name=name, patternType=pattern, operations=sorted(set(operations))))
+    return result
+
+
 def split_provider_jobs(providers):
     """Execution boundaries are a library resource batch and one instance hook."""
     library_jobs, instance_jobs = [], []
@@ -298,7 +370,10 @@ def split_provider_jobs(providers):
         if job['serviceType'] == 'kafka':
             for library_id in sorted({t['libraryId'] for t in job['topics']}):
                 library_jobs.append(dict(job, libraryId=library_id,
-                                         topics=[t for t in job['topics'] if t['libraryId'] == library_id]))
+                                         topics=[t for t in job['topics'] if t['libraryId'] == library_id], accounts=[]))
+            for library_id, instance_id in sorted({(a['libraryId'], a['instanceId']) for a in job['accounts']}):
+                instance_jobs.append(dict(job, libraryId=library_id, instanceId=instance_id, topics=[],
+                                          accounts=[a for a in job['accounts'] if (a['libraryId'], a['instanceId']) == (library_id, instance_id)]))
             continue
         for library_id in sorted({db['libraryId'] for db in job['databases']}):
             databases = [dict(db, accounts=[]) for db in job['databases'] if db['libraryId'] == library_id]

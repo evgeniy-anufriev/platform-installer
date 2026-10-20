@@ -1,0 +1,55 @@
+{
+  "mode": "TARGETED_RECHECK",
+  "head": "930d5f71a83e3be99901ea40e2af6464394526f5",
+  "priorScope": "B2180611562B78362006A6A65A9D358827A3009484DAA8907F053DDCC20EAEF3",
+  "findingIds": [
+    "KS-D01"
+  ],
+  "ownerDisposition": "KS-D01 correction accepted. KS-D02 rejected by owner; preserve operator configuration freedom, no added principal mapping/builder guards. D03 nonblocking reliability correction.",
+  "files": [
+    {
+      "path": "ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_providers.py",
+      "sha256": "a2813d2c429ece11788c3033756dee31f2f7255b643438c53b363664f20b0ee7"
+    },
+    {
+      "path": "ansible-core/collections/ansible_collections/platform/core/plugins/action/prepare_application_providers.py",
+      "sha256": "b1376e663e7b943b903497f0774044f1ff0306c60afc1177a31e8c8dd614998d"
+    },
+    {
+      "path": "services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/application_accounts.yml",
+      "sha256": "4eeff84de8abf028a9613e303f8e99ccf1101944ed007a52ea4112074e5dacbb"
+    },
+    {
+      "path": "services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/application_accounts_scope.yml",
+      "sha256": "f80cc56b38d325c78984e762056d98671e624e0df8666b45cb31acf08970565d"
+    },
+    {
+      "path": "services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/member.yml",
+      "sha256": "3a3fcb9d9ec850e3cfdf5dda24246ce7c147106f5f85001bd6932e4f62d9c20d"
+    },
+    {
+      "path": "services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/main.yml",
+      "sha256": "007e82647b4f379845ffd6ced264728b73b2f0c984f434cfdbdf3a3bad652a27"
+    },
+    {
+      "path": "ansible-core/tests/test_application_providers.py",
+      "sha256": "c859cc326a7cf15a6b4089cc555d663934121423f14ef678559a4feaadab2ae8"
+    },
+    {
+      "path": "ansible-core/tests/qa_kafka_admin_provider.py",
+      "sha256": "8e1c30f4929f850e58de0a1b0e85f4c3b3cd2fe86fe2f93b4e0811e8686a9613"
+    },
+    {
+      "path": "ansible-core/tests/qa_kafka_authorization_status.py",
+      "sha256": "1e7f16cedb9a67c228ebb64fe86028ba973ecb694a53e803ac331548db68bc0b"
+    },
+    {
+      "path": "docs/work/application-libraries/kafka-scram-plan.md",
+      "sha256": "2ff519e39fbf91a25c77486eeb4be9715cf125da40da1ef344ecf78376cf9b14"
+    },
+    {
+      "path": "docs/work/application-libraries/configuration.md",
+      "sha256": "90b0f84f6df791350b66e0c4045cfca3a3ee6e72a49601622ff294586e21a7dd"
+    }
+  ]
+}

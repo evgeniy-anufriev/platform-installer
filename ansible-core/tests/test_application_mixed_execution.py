@@ -35,6 +35,25 @@ def mixed(vault=False, source='RUNTIME_INPUT'):
 
 
 class MixedExecutionTests(unittest.TestCase):
+    def test_same_logical_service_reference_has_distinct_library_runtime_aliases(self):
+        manifest = mixed()['executionManifest']
+        manifest['applicationSecretRequirements'] = []
+        manifest['runtimeSecretRequirements'] = [dict(requirementRef='si-' + name, purpose='SERVICE_PASSWORD',
+            hosts=['node1'], runtimeReference='runtime:kafka-admin-password', serviceDeployment=name)
+            for name in ('kafka-one', 'kafka-two')]
+        with tempfile.TemporaryDirectory() as root:
+            journal = Journal(root, 'installer-test')
+            os.makedirs(journal.directory, exist_ok=True)
+            Path(journal.directory, 'runtime-projection.json').write_text(json.dumps({'platform_pki_secret_files': {}}))
+            with patch.object(controller.execution_secret_lease, 'application_secret_values_for_operation', return_value={}):
+                controller._materialize_application_projection(journal, manifest)
+            operation_id = manifest['operations'][-2]['operationId']
+            projection = Path(journal.directory, '.runtime-projection-' + controller.hashlib.sha256(operation_id.encode()).hexdigest() + '.json')
+            files = json.loads(projection.read_text())['platform_application_secret_files']
+            self.assertNotIn('runtime:kafka-admin-password', files)
+            self.assertNotEqual(files['runtime:si-kafka-one'], files['runtime:si-kafka-two'])
+            self.assertTrue(all(value.startswith(journal.directory + '/') for value in files.values()))
+
     def test_closed_manifest_rejects_reorder_missing_verify_and_unknown_field(self):
         valid = mixed()['executionManifest']
         controller.validate_application_manifest(valid)

@@ -326,6 +326,29 @@ class DeploymentPlanTests(unittest.TestCase):
         self.assertEqual(("provider", "runtime:provider-password"), (private["serviceDeployment"], private["runtimeReference"]))
         self.assertNotIn("runtime:provider-password", json.dumps(result["deploymentPlan"]))
 
+    def test_required_password_identity_and_descriptors_are_deployment_bound(self):
+        definition = {'configuration': {'settings': {'adminCredential': {
+            'x-runtimeSecretRequired': True, 'x-runtimeSecretDeploymentBound': True,
+            'schema': {'type': 'object', 'additionalProperties': False,
+                       'required': ['passwordSecretRef'], 'properties': {'passwordSecretRef': {'type': 'string'}}},
+            'ui': {'label': 'Kafka admin password', 'x-runtimeSecretRequirement': {
+                'requirementRef': 'kafka-admin-password', 'purpose': 'SERVICE_PASSWORD'}}}}}}
+        deployments = {key: {'serviceType': 'kafka', 'configuration': {
+            'adminCredential': {'passwordSecretRef': 'runtime:kafka-admin-password'}}} for key in ['kafka-one', 'kafka-two']}
+        public, private, findings = PLAN._service_runtime_secret_requirements(deployments, {'kafka': definition}, ['node1'])
+        self.assertEqual([], findings)
+        self.assertEqual(2, len({item['requirementRef'] for item in public}))
+        self.assertEqual({'kafka-one', 'kafka-two'}, {item['serviceDeployment'] for item in private})
+        state = snapshot()
+        state['serviceDeployments'] = deployments
+        descriptors = PLAN.build_runtime_secret_descriptors(state, {'definitions': {'kafka': definition}})['descriptors']
+        self.assertEqual({item['requirementRef'] for item in public}, {item['requirementRef'] for item in descriptors})
+        self.assertTrue(all(item['displayLabel'] == 'Kafka admin password' for item in descriptors))
+        deployments['kafka-two'].pop('configuration')
+        _, _, findings = PLAN._service_runtime_secret_requirements(deployments, {'kafka': definition}, ['node1'])
+        self.assertEqual(['RUNTIME_SECRET_REFERENCE_REQUIRED'], [item['code'] for item in findings])
+        self.assertIn('kafka-two', findings[0]['field'])
+
     def test_typed_service_inputs_are_target_free_opaque_and_bound_to_deployment_hosts(self):
         value, state = catalog(), snapshot()
         value["definitions"]["vault"] = {

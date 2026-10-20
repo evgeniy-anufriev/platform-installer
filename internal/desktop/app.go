@@ -158,6 +158,7 @@ type ApplicationConfigResult struct {
 }
 
 type RuntimeSecretDescriptorView struct {
+	DeploymentBound     bool     `json:"deploymentBound,omitempty"`
 	RequirementRef      string   `json:"requirementRef"`
 	Purpose             string   `json:"purpose"`
 	ServiceDeployment   string   `json:"serviceDeployment,omitempty"`
@@ -847,6 +848,12 @@ func (a *App) SetPendingDeploymentRuntimeSecretValues(input PendingRuntimeSecret
 	}
 	requirements := make([]string, 0, len(descriptors))
 	for _, descriptor := range descriptors {
+		if descriptor.DeploymentBound {
+			if len(descriptors) != 1 || descriptor.Purpose != "SERVICE_PASSWORD" || len(input.Values) != 1 || input.Values[descriptor.RequirementRef] == "" {
+				return errors.New("RUNTIME_SECRET_INPUT_INVALID")
+			}
+			return a.secrets.SetPendingServiceSecretInput(binding, input.ServiceDeployment, descriptor.Purpose, []byte(input.Values[descriptor.RequirementRef]), nil)
+		}
 		requirements = append(requirements, descriptor.RequirementRef)
 	}
 	return a.secrets.SetPendingRuntimeSecretValuesForRequirements(binding, requirements, input.Values)
@@ -1020,7 +1027,7 @@ func (a *App) pendingRuntimeSecretDescriptorsLocked(serviceDeployment string) ([
 			}
 			break
 		}
-		result = append(result, RuntimeSecretDescriptorView{RequirementRef: setting.RuntimeSecretRequirementRef, Purpose: "SERVICE_PASSWORD", ServiceDeployment: serviceDeployment, Setting: settingID, DisplayLabel: setting.Label, ReferenceConfigured: referenceConfigured})
+		result = append(result, RuntimeSecretDescriptorView{RequirementRef: setting.RuntimeSecretRequirementRef, Purpose: "SERVICE_PASSWORD", ServiceDeployment: serviceDeployment, Setting: settingID, DisplayLabel: setting.Label, ReferenceConfigured: referenceConfigured, DeploymentBound: setting.RuntimeSecretDeploymentBound})
 	}
 	for _, input := range service.SecretInputs {
 		if !runtimeSecretDescriptorRequirement.MatchString(input.RequirementRef) || input.DisplayLabel == "" || (input.Purpose != secretfiles.PurposeAdminToken && input.Purpose != secretfiles.PurposeUnsealShares) || input.RequiredWhen == "" || len(input.Operations) == 0 {
@@ -1217,6 +1224,10 @@ func (a *App) getRuntimeSecretDescriptorsLocked(clearAttached bool) RuntimeSecre
 	for _, descriptor := range view.Descriptors {
 		if descriptor.Purpose == "SERVICE_PASSWORD" {
 			requirements = append(requirements, descriptor.RequirementRef)
+			pending, pendingErr := a.pendingRuntimeSecretDescriptorsLocked(descriptor.ServiceDeployment)
+			if pendingErr == nil && len(pending) == 1 && pending[0].DeploymentBound {
+				typedRequirements = append(typedRequirements, runtimesecret.RuntimeSecretInput{RequirementRef: descriptor.RequirementRef, Purpose: descriptor.Purpose, ServiceDeployment: descriptor.ServiceDeployment, Operations: append([]string(nil), descriptor.Operations...)})
+			}
 		}
 		if descriptor.Purpose == secretfiles.PurposeAdminToken || descriptor.Purpose == secretfiles.PurposeUnsealShares {
 			typedRequirements = append(typedRequirements, runtimesecret.RuntimeSecretInput{RequirementRef: descriptor.RequirementRef, Purpose: descriptor.Purpose, ServiceDeployment: descriptor.ServiceDeployment, Operations: append([]string(nil), descriptor.Operations...)})

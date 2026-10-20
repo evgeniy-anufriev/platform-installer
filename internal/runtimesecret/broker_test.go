@@ -42,6 +42,35 @@ func TestServiceSecretsPresentScopesAndExpiry(t *testing.T) {
 	}
 }
 
+func TestDeploymentPasswordsBindOnlyToCoreAttestedReferences(t *testing.T) {
+	broker := NewBroker()
+	defer broker.Clear()
+	binding := Binding{Root: `C:\projects\one`, ID: "project-one"}
+	if _, err := broker.Set(binding, Input{Username: "installer", SSHMode: SSHPassword, SSHPassword: "synthetic-ssh"}); err != nil {
+		t.Fatal(err)
+	}
+	for deployment, value := range map[string]string{"kafka-one": "synthetic-one", "kafka-two": "synthetic-two"} {
+		if err := broker.SetPendingServiceSecretInput(binding, deployment, "SERVICE_PASSWORD", []byte(value), nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	descriptors := []RuntimeSecretInput{
+		{RequirementRef: "si-one", Purpose: "SERVICE_PASSWORD", ServiceDeployment: "kafka-one", Operations: []string{"SERVICE_APPLY", "SERVICE_VERIFY"}},
+		{RequirementRef: "si-two", Purpose: "SERVICE_PASSWORD", ServiceDeployment: "kafka-two", Operations: []string{"SERVICE_APPLY", "SERVICE_VERIFY"}},
+	}
+	if err := broker.BindPendingServiceSecretInputs(binding, descriptors[:1]); err == nil {
+		t.Fatal("missing deployment descriptor accepted")
+	}
+	if err := broker.BindPendingServiceSecretInputs(binding, descriptors); err != nil {
+		t.Fatal(err)
+	}
+	broker.mu.Lock()
+	defer broker.mu.Unlock()
+	if string(broker.lease.runtimeSecretValues["si-one"]) != "synthetic-one" || string(broker.lease.runtimeSecretValues["si-two"]) != "synthetic-two" || len(broker.lease.runtimeSecretInputs) != 0 {
+		t.Fatal("deployment password binding mismatch")
+	}
+}
+
 func TestBrokerSetReplaceClearAndBinding(t *testing.T) {
 	broker := NewBroker()
 	first := Binding{Root: `C:\projects\one`, ID: "project-one"}

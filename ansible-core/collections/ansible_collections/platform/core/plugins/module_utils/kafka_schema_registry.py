@@ -12,8 +12,19 @@ def resolved_value(configuration, name, default=None):
 
 def properties_value(value):
     """Escape one Java properties value without interpreting its contents."""
-    return (str(value).replace("\\", "\\\\").replace("\r", "\\r").replace("\n", "\\n")
-            .replace("\t", "\\t").replace(" ", "\\ ").replace("=", "\\=").replace(":", "\\:"))
+    escaped = (str(value).replace("\\", "\\\\").replace("\r", "\\r").replace("\n", "\\n")
+               .replace("\t", "\\t").replace(" ", "\\ ").replace("=", "\\=").replace(":", "\\:"))
+    # Kafka Utils.loadProps uses Properties.load(InputStream), whose file
+    # encoding is ISO-8859-1. Emit ASCII with Java UTF-16 escapes so credentials
+    # retain their exact Unicode value, including supplementary characters.
+    result = []
+    for char in escaped:
+        if ord(char) < 128:
+            result.append(char)
+        else:
+            units = char.encode('utf-16-be')
+            result.extend('\\u%04x' % int.from_bytes(units[i:i + 2], 'big') for i in range(0, len(units), 2))
+    return ''.join(result)
 
 
 def registry_projection(members, enabled=True, listener="SSL", http_port=8081,
