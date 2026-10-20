@@ -317,7 +317,7 @@ class ActionModule(ActionBase):
             return {'changed': False, 'status': 'BLOCKED', 'sources': {}, 'findings': [{'code': code}]}
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/prepare_application_libraries.py","mode":420,"size":2207,"sha256":"6aa94b2f1d74bb788920d8f448d214af97b2305609b2af28a7074ac0fd90d009","index":0,"count":1,"encoding":"utf-8","payloadBytes":2207}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/prepare_application_libraries.py","mode":420,"size":2840,"sha256":"9376cc2218e2a9685ccc9a1fd415f91a7f13c782b243bdf5e1620eb734fa002d","index":0,"count":1,"encoding":"utf-8","payloadBytes":2840}
 """Validate local package closure before Ansible loads/expands its defaults."""
 import os
 
@@ -332,6 +332,24 @@ class ActionModule(ActionBase):
     def run(self, tmp=None, task_vars=None):
         task_vars = task_vars or {}
         args = self._task.args
+        if args.get('shared_defaults') or args.get('resource_defaults'):
+            try:
+                variables = dict(task_vars)
+                variables.update(task_vars['hostvars'].raw_get(args['host_id']))
+                for name in list(variables):
+                    if name.startswith(('application_', '_application_', '_library_')) or name in ('hostvars', 'vars', 'ansible_facts', 'library_runtime', 'library_resources', 'platform_application_rows', 'platform_application_findings'):
+                        variables.pop(name)
+                variables['library_instance_id'] = args['library_id']
+                if args.get('shared_defaults'):
+                    variables['library_resources'] = task_vars['library_resources']
+                templar = self._templar.copy_with_new_env(available_variables=variables)
+                field = 'resource_defaults' if args.get('resource_defaults') else 'defaults'
+                defaults = self._loader.load_from_file(args['defaults_path'])['platform_library_definition'].get(field, {})
+                overrides = task_vars['platform_desired_state']['applicationLibraryDeployments'][args['library_id']].get(
+                    'resource_defaults' if args.get('resource_defaults') else 'overrides', {})
+                return dict(defaults=templar.template(defaults), overrides=templar.template(overrides), changed=False)
+            except (ValueError, OSError, KeyError, TypeError, AnsibleError):
+                return dict(defaults={}, overrides={}, findings=[finding('APPLICATION_INPUT_INVALID', 'applicationLibraryDeployments')], changed=False)
         root = os.path.realpath(args["project_root"])
         memberships = {host: task_vars["hostvars"][host].get("platform_application_libraries", {})
                        for host in task_vars.get("groups", {}).get("platform_targets", [])}
@@ -339,21 +357,6 @@ class ActionModule(ActionBase):
             result = prepare(root, task_vars.get("platform_desired_state", {}), memberships,
                              task_vars.get("platform_desired_state_contract"),
                              lambda path: self._loader.load_from_file(path), args["contracts_root"])
-            common = {}
-            for job in result['jobs']:
-                key = (job['libraryId'], job['hostId'])
-                if key not in common:
-                    variables = dict(task_vars)
-                    variables.update(task_vars['hostvars'].raw_get(job['hostId']))
-                    for name in list(variables):
-                        if name.startswith(('application_', '_application_')) or name in ('hostvars', 'vars', 'ansible_facts', 'library_runtime'):
-                            variables.pop(name)
-                    variables['library_instance_id'] = job['libraryId']
-                    templar = self._templar.copy_with_new_env(available_variables=variables)
-                    common[key] = (
-                        templar.template(job['library']['definition'].get('defaults', {})),
-                        templar.template(job['deployment'].get('overrides', {})))
-                job['commonDefaults'], job['commonOverrides'] = common[key]
         except (ValueError, OSError, KeyError, TypeError, AnsibleError):
             result = {"jobs": [], "findings": [finding("APPLICATION_INPUT_INVALID", "applicationLibraryDeployments")]}
         return dict(result, changed=False)
@@ -21889,7 +21892,7 @@ def application_operation(action, model):
                 applicationSemanticFingerprint=model['semanticFingerprint'])
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_providers.py","mode":420,"size":29361,"sha256":"1d9bbc258e09067698c6c51639da7d9f9e52440b0cd82c55371b236cdc51a8ad","index":0,"count":1,"encoding":"utf-8","payloadBytes":29361}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_providers.py","mode":420,"size":29929,"sha256":"a2813d2c429ece11788c3033756dee31f2f7255b643438c53b363664f20b0ee7","index":0,"count":1,"encoding":"utf-8","payloadBytes":29929}
 """Target-free provider hook projection. Ansible remains the variable resolver."""
 import hashlib
 import re
@@ -22098,6 +22101,13 @@ def project_providers(rows, snapshot, configuration, desired, catalog):
                 raise ValueError('APPLICATION_PROVIDER_HOST_CONFLICT')
             databases, schemas = {}, []
             for resource_id, resource in sorted(library.get('resources', {}).items()):
+                if resource['kind'] == 'redis.key':
+                    ref = row['bindings'].get(resource['binding'], {}).get('deploymentRef')
+                    if (desired['serviceDeployments'].get(ref, {}).get('serviceType') != 'redis'
+                            or set(resource['parameters']) != {'name'} or not isinstance(resource['parameters']['name'], str)
+                            or not resource['parameters']['name'] or 'mode' in resource):
+                        raise ValueError('APPLICATION_PROVIDER_RESOURCE_INVALID')
+                    continue
                 if resource['kind'] not in {'postgresql.database', 'postgresql.schema', 'clickhouse.database', 'kafka.topic'}:
                     raise ValueError('APPLICATION_PROVIDER_CAPABILITY_UNSUPPORTED')
                 ref = row['bindings'].get(resource['binding'], {}).get('deploymentRef')
@@ -22291,7 +22301,7 @@ def split_provider_jobs(providers):
     return library_jobs, instance_jobs
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_runtime.py","mode":420,"size":16516,"sha256":"ea31f32e5bf9ef7a438b1b1c2e1202011c341bbcd7f332483766b24d76001be9","index":0,"count":1,"encoding":"utf-8","payloadBytes":16516}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_runtime.py","mode":420,"size":16529,"sha256":"9c56f66adc7ca9387cca367870a8b30c10ad54d33ecbc6927c83eee7f0b2aecf","index":0,"count":1,"encoding":"utf-8","payloadBytes":16529}
 """Typed A2 preflight. Ansible owns precedence, templates and target execution."""
 import base64
 import hashlib
@@ -22462,7 +22472,7 @@ def prepare_runtime(root, snapshot, rows, desired, lock, validator, loader):
         instance = library["instances"][app_id]
         placement = instance["placements"][host]
         settings = row["settings"]
-        if (any(r['kind'] not in {'postgresql.database', 'postgresql.schema', 'clickhouse.database', 'kafka.topic'} for r in row['resources'].values()) or
+        if (any(r['kind'] not in {'postgresql.database', 'postgresql.schema', 'clickhouse.database', 'kafka.topic', 'redis.key'} for r in row['resources'].values()) or
                 any(instance['connections'].get(k, {}).get('serviceType') not in {'postgresql', 'redis', 'clickhouse'} for k in instance['credentialRequirements']) or
                 any(x.get("tls") for x in instance["connections"].values())):
             raise ValueError("APPLICATION_RUNTIME_DEFERRED_FEATURE")
@@ -32542,7 +32552,7 @@ platform_name_prefix: ''
     quiet: true
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/resolve_application_libraries/tasks/instance.yml","mode":420,"size":10477,"sha256":"d77ec818988b1d1cca749f25a502815a90b19d9610441e93ecd3cacca03fdf63","index":0,"count":1,"encoding":"utf-8","payloadBytes":10477}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/resolve_application_libraries/tasks/instance.yml","mode":420,"size":12354,"sha256":"7086335d23f7ce7b4eab00f9a099a286cffa9845dab7ea7acfed4255e0eeb421","index":0,"count":1,"encoding":"utf-8","payloadBytes":12354}
 ---
 - name: Load validated library defaults in an isolated namespace
   ansible.builtin.include_vars:
@@ -32572,16 +32582,8 @@ platform_name_prefix: ''
     application_databases: {}
     _application_connections: {}
     _application_resources: {}
-    _application_resource_defaults: >-
-      {{ _library_package.platform_library_definition.resource_defaults | default({}) |
-         combine(application_job.deployment.resource_defaults | default({}), recursive=true, list_merge='replace') }}
-    _application_topic_bindings: >-
-      {{ (application_job.commonDefaults.topicBindings | default({}) if application_job.slot.inherit_defaults | default(true) else {}) |
-         combine(application_job.application.definition.defaults.topicBindings | default({}), recursive=true, list_merge='replace') |
-         combine(application_job.slot.overrides.topicBindings | default({}), recursive=true, list_merge='replace') |
-         combine(application_job.commonOverrides.topicBindings | default({}) if application_job.slot.inherit_defaults | default(true) else {}, recursive=true, list_merge='replace') |
-         combine(application_job.instance.overrides.topicBindings | default({}), recursive=true, list_merge='replace') |
-         combine(application_job.hostOverride.topicBindings | default({}), recursive=true, list_merge='replace') }}
+    library_resources: {}
+    _application_resource_defaults: {}
   no_log: true
   become: false
 
@@ -32604,15 +32606,76 @@ platform_name_prefix: ''
   no_log: true
   become: false
 
+- name: Resolve upstream resource templates in the isolated library context
+  platform.core.prepare_application_libraries:
+    resource_defaults: true
+    library_id: "{{ application_job.libraryId }}"
+    host_id: "{{ application_job.hostId }}"
+    defaults_path: "{{ application_job.library.defaultsPath }}"
+  register: _application_resource_inputs
+  no_log: true
+  become: false
+
+- name: Require valid upstream library resource templates
+  ansible.builtin.assert:
+    that: _application_resource_inputs.findings | default([]) | length == 0
+    fail_msg: "PROJECT_SNAPSHOT_INPUT_INVALID: Unable to resolve isolated library resource defaults"
+    quiet: true
+  become: false
+
+- name: Merge package and instance resource defaults with ordinary Ansible precedence
+  ansible.builtin.set_fact:
+    _application_resource_defaults: >-
+      {{ _application_resource_inputs.defaults |
+         combine(_application_resource_inputs.overrides, recursive=true, list_merge='replace') }}
+  no_log: true
+  become: false
+
 - name: Merge selected resource parameters with library defaults
   ansible.builtin.set_fact:
     _application_resources: >-
       {{ _application_resources | combine({item.key: item.value | combine({'parameters':
          ((_application_resource_defaults.kafka.topics[item.key] | default({})) if item.value.kind == 'kafka.topic' else
           (_application_resource_defaults.postgresql.databases[item.key] | default({})) if item.value.kind == 'postgresql.database' else
-          (_application_resource_defaults.clickhouse.databases[item.key] | default({})) if item.value.kind == 'clickhouse.database' else {}) |
+          (_application_resource_defaults.clickhouse.databases[item.key] | default({})) if item.value.kind == 'clickhouse.database' else
+          (_application_resource_defaults.redis['keys'][item.key] | default({})) if item.value.kind == 'redis.key' else {}) |
          combine(item.value.parameters, recursive=true, list_merge='replace')})}) }}
   loop: "{{ application_job.deployment.resources | default({}) | dict2items }}"
+  no_log: true
+  become: false
+
+- name: Bind normalized resources for shared library templates
+  ansible.builtin.set_fact:
+    library_resources: "{{ _application_resources }}"
+  no_log: true
+  become: false
+
+- name: Resolve isolated shared defaults after native resource normalization
+  platform.core.prepare_application_libraries:
+    shared_defaults: true
+    library_id: "{{ application_job.libraryId }}"
+    host_id: "{{ application_job.hostId }}"
+    defaults_path: "{{ application_job.library.defaultsPath }}"
+  register: _application_shared
+  no_log: true
+  become: false
+
+- name: Require valid isolated shared library templates
+  ansible.builtin.assert:
+    that: _application_shared.findings | default([]) | length == 0
+    fail_msg: "PROJECT_SNAPSHOT_INPUT_INVALID: Unable to resolve isolated shared library defaults"
+    quiet: true
+  become: false
+
+- name: Bind legacy topic selections after shared defaults
+  ansible.builtin.set_fact:
+    _application_topic_bindings: >-
+      {{ (_application_shared.defaults.topicBindings | default({}) if application_job.slot.inherit_defaults | default(true) else {}) |
+         combine(application_job.application.definition.defaults.topicBindings | default({}), recursive=true, list_merge='replace') |
+         combine(application_job.slot.overrides.topicBindings | default({}), recursive=true, list_merge='replace') |
+         combine(_application_shared.overrides.topicBindings | default({}) if application_job.slot.inherit_defaults | default(true) else {}, recursive=true, list_merge='replace') |
+         combine(application_job.instance.overrides.topicBindings | default({}), recursive=true, list_merge='replace') |
+         combine(application_job.hostOverride.topicBindings | default({}), recursive=true, list_merge='replace') }}
   no_log: true
   become: false
 
@@ -32635,10 +32698,10 @@ platform_name_prefix: ''
 - name: Seed parameter context before expanding dependent application settings
   ansible.builtin.set_fact:
     application_parameters: >-
-      {{ (application_job.commonDefaults.parameters | default({}) if application_job.slot.inherit_defaults | default(true) else {}) |
+      {{ (_application_shared.defaults.parameters | default({}) if application_job.slot.inherit_defaults | default(true) else {}) |
          combine(vars['_application_package_' ~ ((application_job.libraryId ~ application_job.slotId ~ application_job.hostId) | hash('sha256'))].platform_application_definition.defaults.parameters | default({}), recursive=true, list_merge='replace') |
          combine(application_job.slot.overrides.parameters | default({}), recursive=true, list_merge='replace') |
-         combine(application_job.commonOverrides.parameters | default({}) if application_job.slot.inherit_defaults | default(true) else {}, recursive=true, list_merge='replace') |
+         combine(_application_shared.overrides.parameters | default({}) if application_job.slot.inherit_defaults | default(true) else {}, recursive=true, list_merge='replace') |
          combine(application_job.instance.overrides.parameters | default({}), recursive=true, list_merge='replace') |
          combine(application_job.hostOverride.parameters | default({}), recursive=true, list_merge='replace') }}
   no_log: true
@@ -32647,10 +32710,10 @@ platform_name_prefix: ''
 - name: Resolve parameters after this placement identity is available
   ansible.builtin.set_fact:
     application_parameters: >-
-      {{ (application_job.commonDefaults.parameters | default({}) if application_job.slot.inherit_defaults | default(true) else {}) |
+      {{ (_application_shared.defaults.parameters | default({}) if application_job.slot.inherit_defaults | default(true) else {}) |
          combine(_application_package.platform_application_definition.defaults.parameters | default({}), recursive=true, list_merge='replace') |
          combine(application_job.slot.overrides.parameters | default({}), recursive=true, list_merge='replace') |
-         combine(application_job.commonOverrides.parameters | default({}) if application_job.slot.inherit_defaults | default(true) else {}, recursive=true, list_merge='replace') |
+         combine(_application_shared.overrides.parameters | default({}) if application_job.slot.inherit_defaults | default(true) else {}, recursive=true, list_merge='replace') |
          combine(application_job.instance.overrides.parameters | default({}), recursive=true, list_merge='replace') |
          combine(application_job.hostOverride.parameters | default({}), recursive=true, list_merge='replace') }}
   no_log: true
@@ -32659,10 +32722,10 @@ platform_name_prefix: ''
 - name: Resolve inherited settings without this application's explicit overrides
   ansible.builtin.set_fact:
     application_inherited: >-
-      {{ (application_job.commonDefaults if application_job.slot.inherit_defaults | default(true) else {}) |
+      {{ (_application_shared.defaults if application_job.slot.inherit_defaults | default(true) else {}) |
          combine(_application_package.platform_application_definition.defaults, recursive=true, list_merge='replace') |
          combine(application_job.slot.overrides | default({}), recursive=true, list_merge='replace') |
-         combine(application_job.commonOverrides if application_job.slot.inherit_defaults | default(true) else {}, recursive=true, list_merge='replace') }}
+         combine(_application_shared.overrides if application_job.slot.inherit_defaults | default(true) else {}, recursive=true, list_merge='replace') }}
   no_log: true
   become: false
 
@@ -32691,7 +32754,7 @@ platform_name_prefix: ''
         'connections': _application_connections,
         'identityNames': _application_package.platform_application_definition.identity_environment | default([]),
         'packageIdentity': {'application': application_job.application.digest, 'library': application_job.library.digest},
-        'commonDefaults': application_job.commonDefaults | combine(application_job.commonOverrides, recursive=true, list_merge='replace'),
+        'commonDefaults': _application_shared.defaults | combine(_application_shared.overrides, recursive=true, list_merge='replace'),
         'inherited': {'environment': application_inherited.environment | default({}), 'parameters': application_inherited.parameters | default({})},
         'settings': application_inherited |
           combine(application_job.instance.overrides | default({}), recursive=true, list_merge='replace') |
@@ -41212,7 +41275,7 @@ serviceExecutionPriorities:
 }
 
 @@END
-@@PORTABLE {"path":"contracts/application-libraries/v1alpha1/deployments.schema.json","mode":420,"size":5754,"sha256":"003deaf71a2cb1af127725ee94585c32d720a522ab2860fd4d626a7c892d044d","index":0,"count":1,"encoding":"utf-8","payloadBytes":5754}
+@@PORTABLE {"path":"contracts/application-libraries/v1alpha1/deployments.schema.json","mode":420,"size":6896,"sha256":"9192ca5ce35c771458f7344c440d5152e54f9034b37f4e7719bf3061ff41b2f5","index":0,"count":1,"encoding":"utf-8","payloadBytes":6896}
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Application library deployments v1alpha1",
@@ -41291,7 +41354,8 @@ serviceExecutionPriorities:
                 "postgresql.database",
                 "postgresql.schema",
                 "clickhouse.database",
-                "kafka.topic"
+                "kafka.topic",
+                "redis.key"
               ]
             },
             "binding": {
@@ -41319,7 +41383,49 @@ serviceExecutionPriorities:
             "binding",
             "parameters"
           ],
-          "additionalProperties": false
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "kind": {
+                    "const": "redis.key"
+                  }
+                },
+                "required": [
+                  "kind"
+                ]
+              },
+              "then": {
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "mode"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "databaseRef"
+                      ]
+                    }
+                  ]
+                },
+                "properties": {
+                  "parameters": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          ]
         },
         "maxProperties": 128
       },
@@ -41426,7 +41532,7 @@ serviceExecutionPriorities:
 }
 
 @@END
-@@PORTABLE {"path":"contracts/application-libraries/v1alpha1/library.schema.json","mode":420,"size":10376,"sha256":"8177c59fdec3f7c71df049cbe2199316d351c96767b106ca97cbed092a1ef919","index":0,"count":1,"encoding":"utf-8","payloadBytes":10376}
+@@PORTABLE {"path":"contracts/application-libraries/v1alpha1/library.schema.json","mode":420,"size":11060,"sha256":"f1d9c8155969bea35d30fe0b58cd12e0ded3cf28dd4d32799829a8bd098b4b93","index":0,"count":1,"encoding":"utf-8","payloadBytes":11060}
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Library definition defaults v1alpha1",
@@ -41766,6 +41872,30 @@ serviceExecutionPriorities:
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 63
+                  }
+                }
+              }
+            }
+          }
+        },
+        "redis": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "keys": {
+              "type": "object",
+              "maxProperties": 128,
+              "propertyNames": {
+                "pattern": "^[a-z][A-Za-z0-9_-]*$",
+                "maxLength": 128
+              },
+              "additionalProperties": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
                   }
                 }
               }
@@ -52169,7 +52299,7 @@ catalogLock:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/alarm-service/1.0.0/roles/application_alarm-service/defaults/main.yml","mode":420,"size":8757,"sha256":"56fa6fe5e14d75d5cdde61828ca180854f2cc8282915f8648972ef77f0a22e66","index":0,"count":1,"encoding":"utf-8","payloadBytes":8757}
+@@PORTABLE {"path":"examples/sdku/application-packages/alarm-service/1.0.0/roles/application_alarm-service/defaults/main.yml","mode":420,"size":8671,"sha256":"dfce6ae8c4ca3b9aff95bedd9d118414f282a7978ca0a063209725eb6c291e84","index":0,"count":1,"encoding":"utf-8","payloadBytes":8671}
 platform_application_definition:
     name: alarm-service
     version: 1.0.0
@@ -52257,8 +52387,6 @@ platform_application_definition:
                 combine(application_job.instance.overrides.ports | default({}), recursive=true) |
                 combine(application_job.hostOverride.ports | default({}), recursive=true))['port-1'].container }}
             WEB_SERVER_PORT: *web_server_port
-            ALERT_CLASS_TOPIC: alert-class
-            ALERT_HANDLER_TOPIC: alert-hdl
             AUTO_ACK_DELAY: "600000"
             AUTO_ACK_TIME: PT2H
             ENABLE_CUSTOM_TIMESTAMP: "false"
@@ -52424,7 +52552,7 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/alarm-view-service/1.0.0/roles/application_alarm-view-service/defaults/main.yml","mode":420,"size":11664,"sha256":"875d37cb2ab45ccce4947513e6e61f1fbc02c0fa4ca3a73001fee9edb6ac6167","index":0,"count":1,"encoding":"utf-8","payloadBytes":11664}
+@@PORTABLE {"path":"examples/sdku/application-packages/alarm-view-service/1.0.0/roles/application_alarm-view-service/defaults/main.yml","mode":420,"size":10827,"sha256":"4519f83ee0be7dfae48908e691d4919618161bd8447a6d43f5f7c021b2540a7a","index":0,"count":1,"encoding":"utf-8","payloadBytes":10827}
 platform_application_definition:
     name: alarm-view-service
     version: 1.0.0
@@ -52433,21 +52561,6 @@ platform_application_definition:
         user: 1000:1000
         restart: always
         accounts:
-            kafka:
-                mode: managed
-                credentials:
-                    username:
-                        source: {kind: literal, value: '{{ application_instance_id | replace(''-'', ''_'') }}'}
-                    password:
-                        source: {kind: runtime_secret_ref, ref: '{{ application_instance_id }}-kafka-password'}
-                grants:
-                    - {topicRef: alarms, operations: [Read, Write, Describe]}
-                    - {topicRef: alarms_compact, operations: [Read, Write, Describe]}
-                    - {topicRef: main, operations: [Read, Write, Describe]}
-                    - {resourceType: group, name: '{{ application_instance_id }}', patternType: prefixed, operations: [Read, Describe]}
-                    - {resourceType: group, name: 'alarm-view-service-{{ application_instance_id }}', patternType: prefixed, operations: [Read, Describe]}
-                    - {resourceType: group, name: 'alarm-view-service-{{ application_instance_id }}', patternType: prefixed, operations: [Read, Describe]}
-                    - {resourceType: cluster, name: kafka-cluster, operations: [Describe, IdempotentWrite]}
             clickhouse:
                 credentials:
                     password:
@@ -52505,70 +52618,80 @@ platform_application_definition:
                     keys:
                         - '*'
                 mode: managed
+            sentinel:
+                credentials:
+                    password:
+                        source:
+                            kind: runtime_secret_ref
+                            ref: '{{ application_instance_id }}-sentinel-password'
+                    username:
+                        source:
+                            kind: literal
+                            value: '{{ application_instance_id | replace(''-'', ''_'') }}'
+                grants:
+                    channels:
+                        - '*'
+                    commands:
+                        - ping
+                        - auth
+                        - hello
+                        - sentinel|get-master-addr-by-name
+                        - sentinel|master
+                        - sentinel|replicas
+                        - sentinel|slaves
+                        - sentinel|sentinels
+                        - psubscribe
+                mode: managed
         command:
             - java
             - -jar
             - alarm-view-service.jar
+        endpoint:
+            enabled: true
+            endpoint_group: qa-shared-endpoint
+            listener: port-1
+            probe:
+                expected_status: 200
+                path: /actuator/health
+                timeout: 10
+            protocol: http
         environment:
-            custom-kafka.ssl.enable-ssl: "true"
-            custom-kafka.ssl.properties.security.protocol: SASL_SSL
-            custom-kafka.ssl.properties.sasl.mechanism: SCRAM-SHA-512
-            custom-kafka.ssl.properties.sasl.jaas.config: '$${KAFKA_CONSUMER_SASL_JAAS_CONFIG}'
-            KAFKA_ENABLE_SSL: "true"
-            SPRING_KAFKA_SSL_ENABLE_SSL: "true"
-            KAFKA_SECURITY_PROTOCOL: SASL_SSL
-            KAFKA_SASL_MECHANISM: SCRAM-SHA-512
-            kafka.consumer.security.protocol: SASL_SSL
-            kafka.producer.security.protocol: SASL_SSL
-            kafka.consumer.sasl.mechanism: SCRAM-SHA-512
-            kafka.producer.sasl.mechanism: SCRAM-SHA-512
-            kafka.consumer.sasl.jaas.config: '$${KAFKA_CONSUMER_SASL_JAAS_CONFIG}'
-            kafka.producer.sasl.jaas.config: '$${KAFKA_PRODUCER_SASL_JAAS_CONFIG}'
-            spring.kafka.ssl.properties.security.protocol: SASL_SSL
-            spring.kafka.ssl.properties.sasl.mechanism: SCRAM-SHA-512
-            spring.kafka.ssl.properties.sasl.jaas.config: '$${KAFKA_CONSUMER_SASL_JAAS_CONFIG}'
-            logging.level.tnt.tnscada.core.kafkamanager.kafka.config.KafkaManagerConfig: INFO
-            SERVER_PORT: &web_server_port >-
-                {{ ((application_job.application.definition.defaults.ports | default({})) |
-                combine(application_job.slot.overrides.ports | default({}), recursive=true) |
-                combine(application_job.instance.overrides.ports | default({}), recursive=true) |
-                combine(application_job.hostOverride.ports | default({}), recursive=true))['port-1'].container }}
-            TNT_DEMO_CLIENT_PORT: *web_server_port
-            WEB_SERVER_PORT: *web_server_port
-            ALERT_CLASS_TOPIC: alert-class
-            ALERT_HANDLER_TOPIC: alert-hdl
             AUTO_ACK_DELAY: "600000"
             AUTO_ACK_TIME: PT2H
             DB_CONNECTION_STRING: $${POSTGRES_JDBC_ENDPOINT}/{{ application_databases.postgres.alarms_db.name }}?$${POSTGRES_SSL_OPTIONS}
             DB_ROOT_CERT: /opt/application/pki/ca-chain.pem
+            EVO_MANAGER_APP_ID: '{{ application_instance_id }}'
             HISTORY_DATASOURCE_CLICKHOUSE_JDBCURL: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_databases.clickhouse.history.name }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
             JAVA_OPTS: -Xmx4096m
-            KAFKA_ACK_ALARM_TOPIC: dev-ack-alarm
+            KAFKA_ACK_ALARM_TOPIC: '{{ application_topics.kafka.ack_alarm.name }}'
             KAFKA_ALARM_COMPACT_TOPIC: '{{ application_topics.kafka.alarms_compact.name }}'
             KAFKA_ALARM_CONSUMER_ID: '{{ application_instance_id }}-$${SERVER_ID}-alarm-consumer'
-            KAFKA_ALARM_PRODUCER_ID: '{{ application_instance_id }}-$${SERVER_ID}-alarm-producer'
             KAFKA_ALARM_GROUP: alarm-view-service-{{ application_instance_id }}
             KAFKA_ALARM_GROUP_WS: alarm-view-service-{{ application_instance_id }}
             KAFKA_ALARM_HISTORY_TOPIC: '{{ application_topics.kafka.alarms.name }}'
+            KAFKA_ALARM_PRODUCER_ID: '{{ application_instance_id }}-$${SERVER_ID}-alarm-producer'
+            KAFKA_APPLICATION_ID_CONFIG: '{{ application_instance_id }}'
             KAFKA_LISTENER_CONCURRENCY: "1"
+            KAFKA_LISTENER_ID_CONFIG: '{{ application_instance_id }}'
             KAFKA_MANAGER_LISTENER_ID: alarm-view-service-{{ application_instance_id }}
+            KAFKA_SASL_MECHANISM: PLAIN
+            KAFKA_SECURITY_PROTOCOL: SSL
             KAFKA_SIGNAL_TOPIC: '{{ application_topics.kafka.main.name }}'
             LOGGER_LEVEL: DEBUG
             SERVER_ALLOWED_ORIGINS: '*'
+            SERVER_PORT: '{{ ((application_job.application.definition.defaults.ports | default({})) | combine(application_job.slot.overrides.ports | default({}), recursive=true) | combine(application_job.instance.overrides.ports | default({}), recursive=true) | combine(application_job.hostOverride.ports | default({}), recursive=true))[''port-1''].container }}'
             SIM_DELAY: "1000"
             SLEUTH_TRACE_ENABLED: false
             SPRING_KAFKA_CLIENT_ID: '{{ application_instance_id }}-$${SERVER_ID}'
             SPRING_PROFILES_ACTIVE: sdku
             SQL_INIT_MODE: never
             TIME_STAMP_PATTERN: yyyy.MM.dd HH:mm:ss.SSS
-            TN_SCADA_REDIS_SENTINEL_MASTER: ""
+            TNT_DEMO_CLIENT_PORT: '{{ ((application_job.application.definition.defaults.ports | default({})) | combine(application_job.slot.overrides.ports | default({}), recursive=true) | combine(application_job.instance.overrides.ports | default({}), recursive=true) | combine(application_job.hostOverride.ports | default({}), recursive=true))[''port-1''].container }}'
+            WEB_SERVER_PORT: '{{ ((application_job.application.definition.defaults.ports | default({})) | combine(application_job.slot.overrides.ports | default({}), recursive=true) | combine(application_job.instance.overrides.ports | default({}), recursive=true) | combine(application_job.hostOverride.ports | default({}), recursive=true))[''port-1''].container }}'
             kafka.consumer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-consumer'
             kafka.producer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-producer'
             logging.level.ru.tnt.transneft.alarmservice.processor: WARN
             server.max-http-request-header-size: 100MB
-            EVO_MANAGER_APP_ID: '{{ application_instance_id }}'
-            KAFKA_APPLICATION_ID_CONFIG: '{{ application_instance_id }}'
-            KAFKA_LISTENER_ID_CONFIG: '{{ application_instance_id }}'
         ports:
             port-1:
                 container: 10021
@@ -52580,40 +52703,6 @@ platform_application_definition:
                 method: approle
             mode: process-supervisor
             secret_bindings:
-                KAFKA_PRODUCER_SASL_JAAS_CONFIG:
-                    source: {account: kafka, field: password}
-                    format: kafka_scram_jaas
-                KAFKA_CONSUMER_SASL_JAAS_CONFIG:
-                    source: {account: kafka, field: password}
-                    format: kafka_scram_jaas
-                KAFKA_KEYSTORE_PASSWORD:
-                    source:
-                        library_secret: java_keystore_password
-                KAFKA_TRUSTSTORE_PASSWORD:
-                    source:
-                        library_secret: java_keystore_password
-                REDIS_USERNAME:
-                    source:
-                        account: redis
-                        field: username
-                REDIS_PASSWORD:
-                    source:
-                        account: redis
-                        field: password
-                REDIS_SENTINEL_USERNAME:
-                    source:
-                        account: redis
-                        field: username
-                REDIS_SENTINEL_PASSWORD:
-                    source:
-                        account: redis
-                        field: password
-                REDIS_KEYSTORE_PASSWORD:
-                    source:
-                        library_secret: java_keystore_password
-                REDIS_TRUSTSTORE_PASSWORD:
-                    source:
-                        library_secret: java_keystore_password
                 DB_PASSWORD:
                     source:
                         account: postgres
@@ -52633,6 +52722,34 @@ platform_application_definition:
                 JAVA_KEYSTORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password
+                KAFKA_KEYSTORE_PASSWORD:
+                    source:
+                        library_secret: java_keystore_password
+                KAFKA_TRUSTSTORE_PASSWORD:
+                    source:
+                        library_secret: java_keystore_password
+                REDIS_KEYSTORE_PASSWORD:
+                    source:
+                        library_secret: java_keystore_password
+                REDIS_PASSWORD:
+                    source:
+                        account: redis
+                        field: password
+                REDIS_SENTINEL_PASSWORD:
+                    source:
+                        account: sentinel
+                        field: password
+                REDIS_SENTINEL_USERNAME:
+                    source:
+                        account: sentinel
+                        field: username
+                REDIS_TRUSTSTORE_PASSWORD:
+                    source:
+                        library_secret: java_keystore_password
+                REDIS_USERNAME:
+                    source:
+                        account: redis
+                        field: username
                 SPRING_KAFKA_SSL_KEY_STORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password
@@ -52645,11 +52762,11 @@ platform_application_definition:
                         field: password
                 TN_SCADA_REDIS_ACL_SENTINEL_PASSWORD:
                     source:
-                        account: redis
+                        account: sentinel
                         field: password
                 TN_SCADA_REDIS_ACL_SENTINEL_USERNAME:
                     source:
-                        account: redis
+                        account: sentinel
                         field: username
                 TN_SCADA_REDIS_ACL_USERNAME:
                     source:
@@ -52662,13 +52779,19 @@ platform_application_definition:
                     source:
                         library_secret: java_keystore_password
             secrets:
-                mount: applications
+                mount: secret
             type: vault-agent
         readiness:
             delay: 2
             mode: healthcheck
             retries: 30
-    connections: [clickhouse, kafka, postgres, redis, vault]
+    connections:
+        - clickhouse
+        - kafka
+        - postgres
+        - redis
+        - vault
+        - sentinel
 
 @@END
 @@PORTABLE {"path":"examples/sdku/application-packages/alarm-view-service/1.0.0/roles/application_alarm-view-service/templates/agent.hcl.j2","mode":420,"size":67,"sha256":"1b163ae457995a1a7658fc778a5e850f29c9b3570a8754e058e66091ae949723","index":0,"count":1,"encoding":"utf-8","payloadBytes":67}
@@ -52740,7 +52863,7 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/data-manager/1.0.0/roles/application_data-manager/defaults/main.yml","mode":420,"size":7187,"sha256":"ed6f9177f055425116e503fe9035d3a7cae6a608af1bfdc52e4b32aab0ef817e","index":0,"count":1,"encoding":"utf-8","payloadBytes":7187}
+@@PORTABLE {"path":"examples/sdku/application-packages/data-manager/1.0.0/roles/application_data-manager/defaults/main.yml","mode":420,"size":7059,"sha256":"721b851950c800c2c832f37a748941e6d7ab792de7d5ef1023bb3b32c36dd033","index":0,"count":1,"encoding":"utf-8","payloadBytes":7059}
 platform_application_definition:
     name: data-manager
     version: 1.0.0
@@ -52800,8 +52923,6 @@ platform_application_definition:
                 combine(application_job.instance.overrides.ports | default({}), recursive=true) |
                 combine(application_job.hostOverride.ports | default({}), recursive=true))['port-1'].container }}
             WEB_SERVER_PORT: *web_server_port
-            ALERT_CLASS_TOPIC: alert-class
-            ALERT_HANDLER_TOPIC: alert-hdl
             DB_CONNECTION_STRING: $${POSTGRES_JDBC_ENDPOINT}/{{ application_databases.postgres.model.name }}?$${POSTGRES_SSL_OPTIONS}
             JAVA_OPTS: -Xmx8192m
             LOGGER_DATAMANAGER_LEVEL: INFO
@@ -52811,7 +52932,6 @@ platform_application_definition:
             LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_JDBC: DEBUG
             PROFILES_ACTIVE: specversion, development
             REDIS_CONNECTION_TYPE: Standalone
-            REDIS_METADATA_TOPIC: dm-meta
             REDIS_SENTINEL_MASTER: '{{ application_parameters.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
             SEARCH_ITEMS_LIMIT: "200"
             SERVER_ALLOWED_ORIGINS: '*'
@@ -57341,7 +57461,7 @@ services:
               memory: 2G
 
 @@END
-@@PORTABLE {"path":"examples/sdku/configuration/group_vars.yml.example","mode":420,"size":2398,"sha256":"5732a2845e82517333d0d8c5806dca1f4e23886cafcf136d618e31ed6ef4bab3","index":0,"count":1,"encoding":"utf-8","payloadBytes":2398}
+@@PORTABLE {"path":"examples/sdku/configuration/group_vars.yml.example","mode":420,"size":2605,"sha256":"b3c90d35905e9488f71009a4ef9f0d7d0e1db90a5fb02968d919acae735802fb","index":0,"count":1,"encoding":"utf-8","payloadBytes":2605}
 ---
 # Merge this fragment into the project's ordinary inventory/group_vars.
 # References below must name existing deployments of THAT project.
@@ -57371,6 +57491,9 @@ platform_desired_state:
         # Choose sentinel only for a Sentinel-backed Redis connection.
         redis: {connectionRef: client}
       resources:
+        dm-meta: {kind: redis.key, binding: cache, parameters: {}}
+        alert-hdl: {kind: redis.key, binding: cache, parameters: {}}
+        alert-class: {kind: redis.key, binding: cache, parameters: {}}
         history: {kind: clickhouse.database, binding: analytics, parameters: {}}
         model: {kind: postgresql.database, binding: database, parameters: {}}
         alarms_db: {kind: postgresql.database, binding: database, parameters: {}}
@@ -57403,24 +57526,24 @@ platform_application_libraries:
   sdku-main: {}
 
 @@END
-@@PORTABLE {"path":"examples/sdku/import-catalog.json","mode":420,"size":5579,"sha256":"19dbc7bd403bb07369e026fabcce87152bace01ed0859c034bb0075ab27c782f","index":0,"count":1,"encoding":"utf-8","payloadBytes":5579}
+@@PORTABLE {"path":"examples/sdku/import-catalog.json","mode":420,"size":5771,"sha256":"96b8b2ec0277cfbc037d07adcedd8575b88a7bdeb8542b6f6bfe99b2fe7dec47","index":0,"count":1,"encoding":"utf-8","payloadBytes":5771}
 [
   {
-    "digest": "sha256:fc91fb862b7e21fb278e332a7edd7dec627127517034e3b792ae158052353d5e",
+    "digest": "sha256:51a85d8d0276e47498b98243d47d2a7e17d354d239f7467b4822ed4d64e9f021",
     "kind": "application",
     "name": "alarm-service",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:ffc9222c0b6340020e2567e428afebd4e9af401588329b2df1862b2f01d05301",
+    "digest": "sha256:13b9109f7bbfadca8c847ac982ea4439c88e5b12746d4134b77a43db5da4a932",
     "kind": "application",
     "name": "alarm-view-service",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:fbcdaebc02237ad77b475899fbced9bed993d45b84445acbc5a9300e4d4d8c18",
+    "digest": "sha256:920c81e6529d4ee005c2bb6da3c7a8c7a9e673e15b0e22e4198edbade3b69378",
     "kind": "application",
     "name": "data-manager",
     "sourceDirectory": ".",
@@ -57490,16 +57613,16 @@ platform_application_libraries:
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:e9cbc52f21af43e7cb61ed6fdd1eb044df36664851482374abc9e57a7e25820f",
+    "digest": "sha256:fbaafc443748772e1187a90b83ec93579c13cb128ca70ec7cd2850d73edd7f87",
     "kind": "application",
-    "name": "hmi-frontend-viewer-noszi",
+    "name": "hmi-frontend-viewer",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:fbaafc443748772e1187a90b83ec93579c13cb128ca70ec7cd2850d73edd7f87",
+    "digest": "sha256:e9cbc52f21af43e7cb61ed6fdd1eb044df36664851482374abc9e57a7e25820f",
     "kind": "application",
-    "name": "hmi-frontend-viewer",
+    "name": "hmi-frontend-viewer-noszi",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
@@ -57532,16 +57655,16 @@ platform_application_libraries:
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:c14392d1d9284830643fef174ced6408c10af7dbab6a15dced8c99b3c25d6f81",
+    "digest": "sha256:d6405d6682e922f1dd82a87f466e63c869e2d69d81c83cb00b4a68a8ff7c82b8",
     "kind": "application",
-    "name": "sdku-knp-ui",
+    "name": "sdku-knp",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:d6405d6682e922f1dd82a87f466e63c869e2d69d81c83cb00b4a68a8ff7c82b8",
+    "digest": "sha256:c14392d1d9284830643fef174ced6408c10af7dbab6a15dced8c99b3c25d6f81",
     "kind": "application",
-    "name": "sdku-knp",
+    "name": "sdku-knp-ui",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
@@ -57560,9 +57683,16 @@ platform_application_libraries:
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:16bc98b6ea2f2e5325e39384ca7419bc4625626e6ebbdc6b646db2fb7f9d1eb1",
+    "digest": "sha256:01173e81739c7253b0881def7d3d7f22d2435f880a1a353417f376ea22530de7",
     "kind": "application",
     "name": "sdku-telemechanics",
+    "sourceDirectory": ".",
+    "version": "1.0.0"
+  },
+  {
+    "digest": "sha256:efe89c437b2310c77980112f03866d6da0d6d770e01be1cda7c0ff8a5bfd307a",
+    "kind": "application",
+    "name": "sdku-vtor",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
@@ -57574,13 +57704,6 @@ platform_application_libraries:
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:296c4188f8cfad17f8cbe9a9a3e23871bd6bbbb3cc25605ef3528cd92c658a9e",
-    "kind": "application",
-    "name": "sdku-vtor",
-    "sourceDirectory": ".",
-    "version": "1.0.0"
-  },
-  {
     "digest": "sha256:f26a5c291728097e5a7e8d67581d5a72c9738ff02531df06dd389c600eb04bf4",
     "kind": "application",
     "name": "user-preferences",
@@ -57588,7 +57711,14 @@ platform_application_libraries:
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:7eed74a9d680987715f3143ff5d93092d942a0df566dbef2bf3cfbc9361d9d19",
+    "kind": "library",
+    "name": "cspa",
+    "version": "1.0.0",
+    "sourceDirectory": ".",
+    "digest": "sha256:9b0715e7d43595a86e0ce6d81d579ac34af490b05c84aca563d5fff0219cf328"
+  },
+  {
+    "digest": "sha256:08a7b2c01868d74963dee09fabd2c438b0a7354361e658b2eb91bbf6529b772a",
     "kind": "library",
     "name": "sdku",
     "sourceDirectory": ".",
@@ -57597,54 +57727,67 @@ platform_application_libraries:
 ]
 
 @@END
-@@PORTABLE {"path":"examples/sdku/library-packages/sdku/1.0.0/library.yml","mode":420,"size":434,"sha256":"8b0ac68410fc928976b945bb7c3ef4749c744ab961db346fbb91e0ac32eef679","index":0,"count":1,"encoding":"utf-8","payloadBytes":434}
+@@PORTABLE {"path":"examples/sdku/library-packages/cspa/1.0.0/library.yml","mode":420,"size":434,"sha256":"0024a15dec80bb4e3a7da90b2226a8bc3681e40e411aa12717df5044de09899f","index":0,"count":1,"encoding":"utf-8","payloadBytes":434}
 {
   "apiVersion": "platform.installer/application-package/v1alpha1",
   "files": [
-    "roles/library_sdku/defaults/main.yml",
-    "roles/library_sdku/templates/.base_compose.yml.j2"
+    "roles/library_cspa/defaults/main.yml",
+    "roles/library_cspa/templates/.base_compose.yml.j2"
   ],
   "kind": "LibraryPackage",
-  "name": "sdku",
+  "name": "cspa",
   "render": {
     "base_compose_filename": ".base_compose.yml",
-    "base_compose_template": "roles/library_sdku/templates/.base_compose.yml.j2",
+    "base_compose_template": "roles/library_cspa/templates/.base_compose.yml.j2",
     "base_service": "base"
   },
   "version": "1.0.0"
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/library-packages/sdku/1.0.0/roles/library_sdku/defaults/main.yml","mode":420,"size":14711,"sha256":"2a71ee994cf2967d7a832b5fb9583a454be472fc4a6c41000351d7a76b59ddcc","index":0,"count":1,"encoding":"utf-8","payloadBytes":14711}
+@@PORTABLE {"path":"examples/sdku/library-packages/cspa/1.0.0/roles/library_cspa/defaults/main.yml","mode":420,"size":17611,"sha256":"2be437e38819b4b2a10d986f240769de37ebb77f88fbab10cf666590f19609da","index":0,"count":1,"encoding":"utf-8","payloadBytes":17611}
 platform_library_definition:
-    name: sdku
+    name: cspa
     version: 1.0.0
-
-    runtime_directory: "~/{{ library_instance_id }}"
-    connections:
-        postgres: {library_binding: database, protocol: tcp, purpose: client}
-        clickhouse: {library_binding: analytics, protocol: https, purpose: client}
-        kafka: {library_binding: messaging, protocol: tcp, purpose: client}
-        redis: {library_binding: cache, protocol: tcp, purpose: client}
-        vault: {library_binding: secrets, protocol: https, purpose: client}
-        schema-registry: {library_binding: messaging, purpose: schema-registry, protocol: https}
     connection_defaults:
         kafka:
-            connectionRef: SASL_SSL
+            connectionRef: SSL
+    connections:
+        clickhouse:
+            library_binding: analytics
+            protocol: https
+            purpose: client
+        kafka:
+            library_binding: messaging
+            protocol: tcp
+            purpose: client
+        postgres:
+            library_binding: database
+            protocol: tcp
+            purpose: client
+        redis:
+            library_binding: cache
+            protocol: tcp
+            purpose: client
+        schema-registry:
+            library_binding: messaging
+            protocol: https
+            purpose: schema-registry
+        sentinel:
+            library_binding: cache
+            protocol: tcp
+            purpose: sentinel
+        vault:
+            library_binding: secrets
+            protocol: https
+            purpose: client
     defaults:
         environment:
-            POSTGRES_JDBC_ENDPOINT: "jdbc:postgresql://$${POSTGRES_ADDRESS}"
-            POSTGRES_SSL_OPTIONS: "targetServerType=primary&ssl=true&sslmode=verify-full&sslrootcert=/opt/application/pki/ca-chain.pem"
-            CLICKHOUSE_JDBC_ENDPOINT: "jdbc:clickhouse://$${CLICKHOUSE_ADDRESS}"
-            CLICKHOUSE_HTTP_ENDPOINT: "https://$${CLICKHOUSE_ADDRESS}"
-            CLICKHOUSE_SSL_OPTIONS: "ssl=true&sslmode=strict&sslrootcert=$${CLICKHOUSE_SSL_ROOT_CERT}"
-            KAFKA_ENABLE_SSL: "false"
-            KAFKA_KEYSTORE_LOCATION: "/opt/application/pki/keystore.p12"
-            KAFKA_TRUSTSTORE_LOCATION: "/opt/application/pki/truststore.p12"
-            REDIS_ENABLE_SSL: "false"
-            REDIS_CONNECTION_SSL: "false"
-            REDIS_KEYSTORE_LOCATION: "/opt/application/pki/keystore.p12"
-            REDIS_TRUSTSTORE_LOCATION: "/opt/application/pki/truststore.p12"
+            ALERT_CLASS_TOPIC: '{{ library_resources[''alert-class''].parameters.name }}'
+            ALERT_HANDLER_TOPIC: '{{ library_resources[''alert-hdl''].parameters.name }}'
+            CLICKHOUSE_HTTP_ENDPOINT: https://$${CLICKHOUSE_ADDRESS}
+            CLICKHOUSE_JDBC_ENDPOINT: jdbc:clickhouse://$${CLICKHOUSE_ADDRESS}
+            CLICKHOUSE_SSL_OPTIONS: ssl=true&sslmode=strict&sslrootcert=$${CLICKHOUSE_SSL_ROOT_CERT}
             CLICKHOUSE_SSL_ROOT_CERT: /opt/application/pki/ca-chain.pem
             KAFKA_CONSUMER_DEFAULT_API_TIMEOUT_MS: "3500"
             KAFKA_CONSUMER_HEARTBEAT_INTERVAL_MS: "500"
@@ -57652,6 +57795,8 @@ platform_library_definition:
             KAFKA_CONSUMER_SESSION_TIMEOUT_MS: "10000"
             KAFKA_CONSUMER_SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS: "5000"
             KAFKA_CONSUMER_SOCKET_CONNECTION_SETUP_TIMEOUT_MS: "1500"
+            KAFKA_ENABLE_SSL: "true"
+            KAFKA_KEYSTORE_LOCATION: /opt/application/pki/keystore.p12
             KAFKA_PRODUCER_DELIVERY_TIMEOUT_MS: "20000"
             KAFKA_PRODUCER_HEARTBEAT_INTERVAL_MS: "500"
             KAFKA_PRODUCER_LINGER_MS: "15"
@@ -57660,11 +57805,22 @@ platform_library_definition:
             KAFKA_PRODUCER_SESSION_TIMEOUT_MS: "10000"
             KAFKA_PRODUCER_SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS: "5000"
             KAFKA_PRODUCER_SOCKET_CONNECTION_SETUP_TIMEOUT_MS: "1500"
-            SPRING_KAFKA_SSL_ENABLE_SSL: "false"
+            KAFKA_TRUSTSTORE_LOCATION: /opt/application/pki/truststore.p12
+            POSTGRES_JDBC_ENDPOINT: jdbc:postgresql://$${POSTGRES_ADDRESS}
+            POSTGRES_SSL_OPTIONS: targetServerType=primary&ssl=true&sslmode=verify-full&sslrootcert=/opt/application/pki/ca-chain.pem
+            REDIS_CONNECTION_SSL: "true"
+            REDIS_CONNECTION_TYPE: Sentinel
+            REDIS_ENABLE_SSL: "true"
+            REDIS_KEYSTORE_LOCATION: /opt/application/pki/keystore.p12
+            REDIS_METADATA_TOPIC: '{{ library_resources[''dm-meta''].parameters.name }}'
+            REDIS_SENTINEL_MASTER: redis-1
+            REDIS_TRUSTSTORE_LOCATION: /opt/application/pki/truststore.p12
+            SPRING_KAFKA_SECURITY_PROTOCOL: SSL
+            SPRING_KAFKA_SSL_ENABLE_SSL: "true"
             SPRING_KAFKA_SSL_KEY_STORE_LOCATION: /opt/application/pki/keystore.p12
             SPRING_KAFKA_SSL_KEY_STORE_TYPE: PKCS12
-            SPRING_KAFKA_SSL_TRUST_STORE_TYPE: PKCS12
             SPRING_KAFKA_SSL_TRUST_STORE_LOCATION: /opt/application/pki/truststore.p12
+            SPRING_KAFKA_SSL_TRUST_STORE_TYPE: PKCS12
             SPRING_KAFKA_STREAMS_DEFAULT_API_TIMEOUT_MS: "90000000"
             SPRING_KAFKA_STREAMS_DELIVERY_TIMEOUT_MS: "3500"
             SPRING_KAFKA_STREAMS_HEARTBEAT_INTERVAL_MS: "500"
@@ -57673,23 +57829,21 @@ platform_library_definition:
             SPRING_KAFKA_STREAMS_SESSION_TIMEOUT_MS: "10000"
             SPRING_KAFKA_STREAMS_SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS: "5000"
             SPRING_KAFKA_STREAMS_SOCKET_CONNECTION_SETUP_TIMEOUT_MS: "1500"
-            TN_SCADA_METADATA_TOPIC: dm-meta
-            TN_SCADA_REDIS_CONNECTION_TYPE: Standalone
-            tn-scada.kafka.listener.store-id: "$${SERVER_ID}"
+            TN_SCADA_METADATA_TOPIC: '{{ library_resources[''dm-meta''].parameters.name }}'
+            TN_SCADA_REDIS_CONNECTION_TYPE: Sentinel
+            TN_SCADA_REDIS_SENTINEL_MASTER: redis-1
             TN_SCADA_REDIS_SSL_PROPERTIES_KEY_STORE_LOCATION: /opt/application/pki/keystore.p12
-            TN_SCADA_REDIS_SSL_PROPERTIES_SSL: "false"
+            TN_SCADA_REDIS_SSL_PROPERTIES_SSL: "true"
             TN_SCADA_REDIS_SSL_PROPERTIES_TRUST_STORE_LOCATION: /opt/application/pki/truststore.p12
             VAULT_CACERT: /opt/application/pki/ca-chain.pem
-            kafka.consumer.schema.registry.ssl.truststore.type: PEM
-            kafka.consumer.schema.registry.ssl.truststore.location: /opt/application/pki/ca-chain.pem
-            kafka.producer.schema.registry.ssl.truststore.type: PEM
-            kafka.producer.schema.registry.ssl.truststore.location: /opt/application/pki/ca-chain.pem
             kafka.consumer.default.api.timeout.ms: "3500"
             kafka.consumer.heartbeat.interval.ms: "500"
             kafka.consumer.http.connect.timeout.ms: "1000"
             kafka.consumer.http.read.timeout.ms: "1000"
             kafka.consumer.max.poll.interval.ms: "10000"
             kafka.consumer.request.timeout.ms: "3000"
+            kafka.consumer.schema.registry.ssl.truststore.location: /opt/application/pki/ca-chain.pem
+            kafka.consumer.schema.registry.ssl.truststore.type: PEM
             kafka.consumer.session.timeout.ms: "10000"
             kafka.consumer.socket.connection.setup.timeout.max.ms: "5000"
             kafka.consumer.socket.connection.setup.timeout.ms: "1500"
@@ -57698,10 +57852,218 @@ platform_library_definition:
             kafka.producer.http.read.timeout.ms: "1000"
             kafka.producer.max.block.ms: "2500"
             kafka.producer.request.timeout.ms: "3000"
+            kafka.producer.schema.registry.ssl.truststore.location: /opt/application/pki/ca-chain.pem
+            kafka.producer.schema.registry.ssl.truststore.type: PEM
             kafka.producer.session.timeout.ms: "10000"
             kafka.producer.socket.connection.setup.timeout.max.ms: "5000"
             kafka.producer.socket.connection.setup.timeout.ms: "1500"
+            tn-scada.kafka.listener.store-id: $${SERVER_ID}
         parameters: {}
+    resource_defaults:
+        clickhouse:
+            databases:
+                history:
+                    name: '{{ library_instance_id | replace(''-'', ''_'') }}'
+            tables:
+                alarm_message:
+                    columns:
+                        - name: id
+                          type: UUID
+                        - name: system_id
+                          type: UInt32
+                        - name: object_id
+                          type: UInt32
+                        - name: parameter_id
+                          type: UInt32
+                        - name: detail_nr
+                          type: UInt32
+                        - name: ts
+                          type: UInt64
+                        - name: ts2
+                          type: UInt64
+                        - name: quality
+                          type: Int64
+                        - name: signal_val
+                          type: String
+                        - name: ack_time
+                          type: UInt64
+                        - name: in_time
+                          type: UInt64
+                        - name: ack_state
+                          type: UInt32
+                        - name: alert_class_name
+                          type: String
+                        - name: ackable
+                          type: Bool
+                        - name: direction
+                          type: Bool
+                        - name: text
+                          type: String
+                        - name: comment
+                          type: String
+                        - name: signal_state
+                          type: UInt32
+                        - name: user_name
+                          type: String
+                        - name: description
+                          type: String
+                        - name: text0
+                          type: String
+                        - name: arm
+                          type: String
+                        - name: prior
+                          type: UInt32
+                        - name: invalid
+                          type: Bool
+                        - name: insert_ts
+                          type: UInt64
+                        - name: out_of_service
+                          type: Bool
+                        - name: alert_class
+                          type: String
+                        - name: alert_class_by_group
+                          type: Map(String, String)
+                        - name: tag_name
+                          type: String
+                        - name: responsibility_area
+                          type: Array(String)
+                        - name: control_time
+                          type: UInt64
+                    engine: ReplacingMergeTree
+                    order_by: (ts, ts2, id)
+                    settings:
+                        index_granularity: 8192
+                records:
+                    columns:
+                        - codec: T64, LZ4
+                          name: systemId
+                          type: UInt32
+                        - codec: T64, LZ4
+                          name: objectId
+                          type: UInt32
+                        - codec: T64, LZ4
+                          name: parameterId
+                          type: UInt32
+                        - codec: T64, LZ4
+                          name: attrId
+                          type: UInt32
+                        - codec: DoubleDelta, LZ4
+                          name: ts
+                          type: UInt64
+                        - codec: DoubleDelta, LZ4
+                          name: ts2
+                          type: Nullable(UInt64)
+                        - codec: T64, LZ4
+                          name: quality
+                          type: Nullable(Int64)
+                        - codec: LZ4
+                          name: invalid
+                          type: Nullable(Bool)
+                        - codec: Gorilla(8), LZ4
+                          name: value
+                          type: Nullable(Float64)
+                        - codec: LZ4
+                          name: strValue
+                          type: Nullable(String)
+                        - codec: LZ4
+                          name: service
+                          type: LowCardinality(Nullable(String))
+                        - codec: DoubleDelta, LZ4
+                          name: dt
+                          type: Date
+                        - codec: DoubleDelta, LZ4
+                          name: ts3
+                          type: Nullable(UInt64)
+                        - codec: DoubleDelta, LZ4
+                          name: offs
+                          type: Nullable(Int64)
+                        - codec: LZ4
+                          name: tagName
+                          type: Nullable(String)
+                        - codec: T64, LZ4
+                          name: status
+                          type: Nullable(Int64)
+                    engine: MergeTree
+                    indexes:
+                        - expression: objectId
+                          granularity: 1
+                          name: idx_set_objectId
+                          type: set(1000)
+                        - expression: parameterId
+                          granularity: 1
+                          name: idx_set_parameterId
+                          type: set(1000)
+                        - expression: intDiv(ts, 3600000)
+                          granularity: 1
+                          name: idx_minmax_h1
+                          type: minmax
+                        - expression: offs
+                          granularity: 1
+                          name: idx_minmax_offs
+                          type: minmax
+                    order_by: (parameterId, objectId, systemId, attrId, ts, ts2, invalid, quality, value, strValue)
+                    partition_by: toDate(fromUnixTimestamp64Milli(toInt64(ts), 'UTC'))
+                    primary_key: (parameterId, objectId, systemId, attrId, ts)
+                    sample_by: parameterId
+                    settings:
+                        allow_nullable_key: 1
+                        columns_to_prewarm_mark_cache: parameterId,objectId,systemId,attrId,ts
+                        index_granularity: 8192
+                        max_bytes_to_merge_at_max_space_in_pool: 1.610612736e+11
+                        max_bytes_to_merge_at_min_space_in_pool: 1.048576e+06
+                        max_parts_to_merge_at_once: 100
+                        prewarm_mark_cache: 1
+                        prewarm_primary_key_cache: 1
+                        primary_key_compression_codec: LZ4
+                        ratio_of_defaults_for_sparse_serialization: 0.95
+                        ttl_only_drop_parts: 0
+                        use_primary_key_cache: 1
+        kafka:
+            topics:
+                ack_alarm:
+                    config:
+                        cleanup.policy: delete
+                    name: cspa-ack-alarm
+                    partitions: 1
+                alarms:
+                    config:
+                        cleanup.policy: delete
+                    name: cspa-alarms
+                    partitions: 1
+                alarms_compact:
+                    config:
+                        cleanup.policy: compact
+                    name: cspa-alarms-compact
+                    partitions: 1
+                main:
+                    config:
+                        cleanup.policy: delete
+                    name: cspa-main
+                    partitions: 1
+                main_compact:
+                    config:
+                        cleanup.policy: compact
+                    name: cspa-main-compact
+                    partitions: 1
+        postgresql:
+            databases:
+                alarms_db:
+                    name: cspa_alarm_view
+                ef-store:
+                    name: cspa_ef_store
+                model:
+                    name: cspa_tn_scada
+                preferences:
+                    name: cspa_user_preferences
+        redis:
+            keys:
+                alert-class:
+                    name: '{{ library_instance_id }}-alert-class'
+                alert-hdl:
+                    name: '{{ library_instance_id }}-alert-hdl'
+                dm-meta:
+                    name: '{{ library_instance_id }}-meta'
+    runtime_directory: ~/{{ library_instance_id }}
     shared_secrets:
         java_keystore_password:
             source:
@@ -57795,117 +58157,9 @@ platform_library_definition:
         user-preferences:
             applicationRef: user-preferences@1.0.0
             required: false
-    resource_defaults:
-        postgresql:
-            databases:
-                model: {name: tn-scada}
-                alarms_db: {name: tn-scada-alarms}
-                preferences: {name: user-preferences}
-                ef-store: {name: ef-store}
-        kafka:
-            topics:
-                main:
-                    name: sdku-main
-                    partitions: 1
-                    config: {cleanup.policy: delete}
-                main_compact:
-                    name: sdku-main-compact
-                    partitions: 1
-                    config: {cleanup.policy: compact}
-                alarms:
-                    name: sdku-alarms
-                    partitions: 1
-                    config: {cleanup.policy: delete}
-                alarms_compact:
-                    name: sdku-alarms-compact
-                    partitions: 1
-                    config: {cleanup.policy: compact}
-        clickhouse:
-            databases:
-                history:
-                    name: "{{ library_instance_id | replace('-', '_') }}"
-            tables:
-                records:
-                    engine: MergeTree
-                    columns:
-                        - {"name":"systemId","type":"UInt32","codec":"T64, LZ4"}
-                        - {"name":"objectId","type":"UInt32","codec":"T64, LZ4"}
-                        - {"name":"parameterId","type":"UInt32","codec":"T64, LZ4"}
-                        - {"name":"attrId","type":"UInt32","codec":"T64, LZ4"}
-                        - {"name":"ts","type":"UInt64","codec":"DoubleDelta, LZ4"}
-                        - {"name":"ts2","type":"Nullable(UInt64)","codec":"DoubleDelta, LZ4"}
-                        - {"name":"quality","type":"Nullable(Int64)","codec":"T64, LZ4"}
-                        - {"name":"invalid","type":"Nullable(Bool)","codec":"LZ4"}
-                        - {"name":"value","type":"Nullable(Float64)","codec":"Gorilla(8), LZ4"}
-                        - {"name":"strValue","type":"Nullable(String)","codec":"LZ4"}
-                        - {"name":"service","type":"LowCardinality(Nullable(String))","codec":"LZ4"}
-                        - {"name":"dt","type":"Date","codec":"DoubleDelta, LZ4"}
-                        - {"name":"ts3","type":"Nullable(UInt64)","codec":"DoubleDelta, LZ4"}
-                        - {"name":"offs","type":"Nullable(Int64)","codec":"DoubleDelta, LZ4"}
-                        - {"name":"tagName","type":"Nullable(String)","codec":"LZ4"}
-                        - {"name":"status","type":"Nullable(Int64)","codec":"T64, LZ4"}
-                    indexes:
-                        - {"name":"idx_set_objectId","expression":"objectId","type":"set(1000)","granularity":1}
-                        - {"name":"idx_set_parameterId","expression":"parameterId","type":"set(1000)","granularity":1}
-                        - {"name":"idx_minmax_h1","expression":"intDiv(ts, 3600000)","type":"minmax","granularity":1}
-                        - {"name":"idx_minmax_offs","expression":"offs","type":"minmax","granularity":1}
-                    partition_by: "toDate(fromUnixTimestamp64Milli(toInt64(ts), 'UTC'))"
-                    primary_key: "(parameterId, objectId, systemId, attrId, ts)"
-                    order_by: "(parameterId, objectId, systemId, attrId, ts, ts2, invalid, quality, value, strValue)"
-                    sample_by: "parameterId"
-                    settings:
-                        index_granularity: 8192
-                        allow_nullable_key: 1
-                        ratio_of_defaults_for_sparse_serialization: 0.95
-                        ttl_only_drop_parts: 0
-                        columns_to_prewarm_mark_cache: "parameterId,objectId,systemId,attrId,ts"
-                        prewarm_mark_cache: 1
-                        prewarm_primary_key_cache: 1
-                        use_primary_key_cache: 1
-                        primary_key_compression_codec: "LZ4"
-                        max_bytes_to_merge_at_max_space_in_pool: 161061273600
-                        max_bytes_to_merge_at_min_space_in_pool: 1048576
-                        max_parts_to_merge_at_once: 100
-                alarm_message:
-                    engine: ReplacingMergeTree
-                    columns:
-                        - {"name":"id","type":"UUID"}
-                        - {"name":"system_id","type":"UInt32"}
-                        - {"name":"object_id","type":"UInt32"}
-                        - {"name":"parameter_id","type":"UInt32"}
-                        - {"name":"detail_nr","type":"UInt32"}
-                        - {"name":"ts","type":"UInt64"}
-                        - {"name":"ts2","type":"UInt64"}
-                        - {"name":"quality","type":"Int64"}
-                        - {"name":"signal_val","type":"String"}
-                        - {"name":"ack_time","type":"UInt64"}
-                        - {"name":"in_time","type":"UInt64"}
-                        - {"name":"ack_state","type":"UInt32"}
-                        - {"name":"alert_class_name","type":"String"}
-                        - {"name":"ackable","type":"Bool"}
-                        - {"name":"direction","type":"Bool"}
-                        - {"name":"text","type":"String"}
-                        - {"name":"comment","type":"String"}
-                        - {"name":"signal_state","type":"UInt32"}
-                        - {"name":"user_name","type":"String"}
-                        - {"name":"description","type":"String"}
-                        - {"name":"text0","type":"String"}
-                        - {"name":"arm","type":"String"}
-                        - {"name":"prior","type":"UInt32"}
-                        - {"name":"invalid","type":"Bool"}
-                        - {"name":"insert_ts","type":"UInt64"}
-                        - {"name":"out_of_service","type":"Bool"}
-                        - {"name":"alert_class","type":"String"}
-                        - {"name":"alert_class_by_group","type":"Map(String, String)"}
-                        - {"name":"tag_name","type":"String"}
-                        - {"name":"responsibility_area","type":"Array(String)"}
-                        - {"name":"control_time","type":"UInt64"}
-                    order_by: "(ts, ts2, id)"
-                    settings:
-                        index_granularity: 8192
 
 @@END
-@@PORTABLE {"path":"examples/sdku/library-packages/sdku/1.0.0/roles/library_sdku/templates/.base_compose.yml.j2","mode":420,"size":1814,"sha256":"47e059983c9a29faac80918af35576233824250570737c440e605e6cb1390f3b","index":0,"count":1,"encoding":"utf-8","payloadBytes":1814}
+@@PORTABLE {"path":"examples/sdku/library-packages/cspa/1.0.0/roles/library_cspa/templates/.base_compose.yml.j2","mode":420,"size":1935,"sha256":"2f540b33d1b0d5bdb4300cd3af66a9353f58d5bd05d47938d5cd3598edd9a6b9","index":0,"count":1,"encoding":"utf-8","payloadBytes":1935}
 {% set environment = library_runtime.defaults.environment | combine({}) %}
 {% set server_ids = groups['all'] | reject('equalto', 'localhost') | sort | list %}
 {% for connection, names in {
@@ -57915,6 +58169,482 @@ platform_library_definition:
   'redis': ['REDIS_ADDRESS', 'TN_SCADA_REDIS_ADDRESS'],
   'schema-registry': ['SPRING_KAFKA_SCHEMA_REGISTRY_URL', 'SCHEMA_REGISTRY_URL_CONFIG']
 }.items() %}
+{% set connection = 'sentinel' if connection == 'redis' and 'sentinel' in library_runtime.connections else connection %}
+{% if connection in library_runtime.connections %}
+{% set addresses = [] %}
+{% set targets = library_runtime.connections[connection].targets %}
+{% for target in targets %}
+{% set server = hostvars[target.hostId] %}
+{% set ip = server.ansible_host | default(target.hostId) %}
+{% set hostname = (server.platform_host | default({})).desiredHostname | default(target.hostId, true) %}
+{% set address = '${SERVER_' ~ (server_ids.index(target.hostId) + 1) ~ ('_IP}' if target.address == ip else '_HOSTNAME}') if target.address in [ip, hostname] else target.address %}
+{% set host = '[' ~ address ~ ']' if ':' in target.address else address %}
+{% set _ = addresses.append(('https://' if connection == 'schema-registry' else '') ~ host ~ ':' ~ (target.port | string)) %}
+{% endfor %}
+{% for name in names if name not in environment %}
+{% set _ = environment.update({name: addresses | join(',')}) %}
+{% endfor %}
+{% endif %}
+{% endfor %}
+services:
+  base:
+    init: true
+  backend:
+    extends:
+      service: base
+    environment:
+      "SERVER_ID": "${SERVER_ID}"
+{% for server_id in server_ids %}
+      "SERVER_{{ loop.index }}_IP": "${SERVER_{{ loop.index }}_IP}"
+{% endfor %}
+{% for name, value in environment.items() %}
+      {{ name | to_json }}: {{ (value | string) | to_json }}
+{% endfor %}
+
+@@END
+@@PORTABLE {"path":"examples/sdku/library-packages/sdku/1.0.0/library.yml","mode":420,"size":434,"sha256":"8b0ac68410fc928976b945bb7c3ef4749c744ab961db346fbb91e0ac32eef679","index":0,"count":1,"encoding":"utf-8","payloadBytes":434}
+{
+  "apiVersion": "platform.installer/application-package/v1alpha1",
+  "files": [
+    "roles/library_sdku/defaults/main.yml",
+    "roles/library_sdku/templates/.base_compose.yml.j2"
+  ],
+  "kind": "LibraryPackage",
+  "name": "sdku",
+  "render": {
+    "base_compose_filename": ".base_compose.yml",
+    "base_compose_template": "roles/library_sdku/templates/.base_compose.yml.j2",
+    "base_service": "base"
+  },
+  "version": "1.0.0"
+}
+
+@@END
+@@PORTABLE {"path":"examples/sdku/library-packages/sdku/1.0.0/roles/library_sdku/defaults/main.yml","mode":420,"size":17588,"sha256":"9a59fb8b75d81785c34cdda357cc5442a4b055725bea5455c4782d4dd8ce4026","index":0,"count":1,"encoding":"utf-8","payloadBytes":17588}
+platform_library_definition:
+    name: sdku
+    version: 1.0.0
+    connection_defaults:
+        kafka:
+            connectionRef: SSL
+    connections:
+        clickhouse:
+            library_binding: analytics
+            protocol: https
+            purpose: client
+        kafka:
+            library_binding: messaging
+            protocol: tcp
+            purpose: client
+        postgres:
+            library_binding: database
+            protocol: tcp
+            purpose: client
+        redis:
+            library_binding: cache
+            protocol: tcp
+            purpose: client
+        schema-registry:
+            library_binding: messaging
+            protocol: https
+            purpose: schema-registry
+        sentinel:
+            library_binding: cache
+            protocol: tcp
+            purpose: sentinel
+        vault:
+            library_binding: secrets
+            protocol: https
+            purpose: client
+    defaults:
+        environment:
+            ALERT_CLASS_TOPIC: '{{ library_resources[''alert-class''].parameters.name }}'
+            ALERT_HANDLER_TOPIC: '{{ library_resources[''alert-hdl''].parameters.name }}'
+            CLICKHOUSE_HTTP_ENDPOINT: https://$${CLICKHOUSE_ADDRESS}
+            CLICKHOUSE_JDBC_ENDPOINT: jdbc:clickhouse://$${CLICKHOUSE_ADDRESS}
+            CLICKHOUSE_SSL_OPTIONS: ssl=true&sslmode=strict&sslrootcert=$${CLICKHOUSE_SSL_ROOT_CERT}
+            CLICKHOUSE_SSL_ROOT_CERT: /opt/application/pki/ca-chain.pem
+            KAFKA_CONSUMER_DEFAULT_API_TIMEOUT_MS: "3500"
+            KAFKA_CONSUMER_HEARTBEAT_INTERVAL_MS: "500"
+            KAFKA_CONSUMER_REQUEST_TIMEOUT_MS: "3000"
+            KAFKA_CONSUMER_SESSION_TIMEOUT_MS: "10000"
+            KAFKA_CONSUMER_SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS: "5000"
+            KAFKA_CONSUMER_SOCKET_CONNECTION_SETUP_TIMEOUT_MS: "1500"
+            KAFKA_ENABLE_SSL: "true"
+            KAFKA_KEYSTORE_LOCATION: /opt/application/pki/keystore.p12
+            KAFKA_PRODUCER_DELIVERY_TIMEOUT_MS: "20000"
+            KAFKA_PRODUCER_HEARTBEAT_INTERVAL_MS: "500"
+            KAFKA_PRODUCER_LINGER_MS: "15"
+            KAFKA_PRODUCER_MAX_BLOCK_MS: "2500"
+            KAFKA_PRODUCER_REQUEST_TIMEOUT_MS: "3000"
+            KAFKA_PRODUCER_SESSION_TIMEOUT_MS: "10000"
+            KAFKA_PRODUCER_SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS: "5000"
+            KAFKA_PRODUCER_SOCKET_CONNECTION_SETUP_TIMEOUT_MS: "1500"
+            KAFKA_TRUSTSTORE_LOCATION: /opt/application/pki/truststore.p12
+            POSTGRES_JDBC_ENDPOINT: jdbc:postgresql://$${POSTGRES_ADDRESS}
+            POSTGRES_SSL_OPTIONS: targetServerType=primary&ssl=true&sslmode=verify-full&sslrootcert=/opt/application/pki/ca-chain.pem
+            REDIS_CONNECTION_SSL: "true"
+            REDIS_CONNECTION_TYPE: Sentinel
+            REDIS_ENABLE_SSL: "true"
+            REDIS_KEYSTORE_LOCATION: /opt/application/pki/keystore.p12
+            REDIS_METADATA_TOPIC: '{{ library_resources[''dm-meta''].parameters.name }}'
+            REDIS_SENTINEL_MASTER: redis-1
+            REDIS_TRUSTSTORE_LOCATION: /opt/application/pki/truststore.p12
+            SPRING_KAFKA_SECURITY_PROTOCOL: SSL
+            SPRING_KAFKA_SSL_ENABLE_SSL: "true"
+            SPRING_KAFKA_SSL_KEY_STORE_LOCATION: /opt/application/pki/keystore.p12
+            SPRING_KAFKA_SSL_KEY_STORE_TYPE: PKCS12
+            SPRING_KAFKA_SSL_TRUST_STORE_LOCATION: /opt/application/pki/truststore.p12
+            SPRING_KAFKA_SSL_TRUST_STORE_TYPE: PKCS12
+            SPRING_KAFKA_STREAMS_DEFAULT_API_TIMEOUT_MS: "90000000"
+            SPRING_KAFKA_STREAMS_DELIVERY_TIMEOUT_MS: "3500"
+            SPRING_KAFKA_STREAMS_HEARTBEAT_INTERVAL_MS: "500"
+            SPRING_KAFKA_STREAMS_MAX_BLOCK_MS: "2500"
+            SPRING_KAFKA_STREAMS_REQUEST_TIMEOUT_MS: "3000"
+            SPRING_KAFKA_STREAMS_SESSION_TIMEOUT_MS: "10000"
+            SPRING_KAFKA_STREAMS_SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS: "5000"
+            SPRING_KAFKA_STREAMS_SOCKET_CONNECTION_SETUP_TIMEOUT_MS: "1500"
+            TN_SCADA_METADATA_TOPIC: '{{ library_resources[''dm-meta''].parameters.name }}'
+            TN_SCADA_REDIS_CONNECTION_TYPE: Sentinel
+            TN_SCADA_REDIS_SENTINEL_MASTER: redis-1
+            TN_SCADA_REDIS_SSL_PROPERTIES_KEY_STORE_LOCATION: /opt/application/pki/keystore.p12
+            TN_SCADA_REDIS_SSL_PROPERTIES_SSL: "true"
+            TN_SCADA_REDIS_SSL_PROPERTIES_TRUST_STORE_LOCATION: /opt/application/pki/truststore.p12
+            VAULT_CACERT: /opt/application/pki/ca-chain.pem
+            kafka.consumer.default.api.timeout.ms: "3500"
+            kafka.consumer.heartbeat.interval.ms: "500"
+            kafka.consumer.http.connect.timeout.ms: "1000"
+            kafka.consumer.http.read.timeout.ms: "1000"
+            kafka.consumer.max.poll.interval.ms: "10000"
+            kafka.consumer.request.timeout.ms: "3000"
+            kafka.consumer.schema.registry.ssl.truststore.location: /opt/application/pki/ca-chain.pem
+            kafka.consumer.schema.registry.ssl.truststore.type: PEM
+            kafka.consumer.session.timeout.ms: "10000"
+            kafka.consumer.socket.connection.setup.timeout.max.ms: "5000"
+            kafka.consumer.socket.connection.setup.timeout.ms: "1500"
+            kafka.producer.heartbeat.interval.ms: "500"
+            kafka.producer.http.connect.timeout.ms: "1000"
+            kafka.producer.http.read.timeout.ms: "1000"
+            kafka.producer.max.block.ms: "2500"
+            kafka.producer.request.timeout.ms: "3000"
+            kafka.producer.schema.registry.ssl.truststore.location: /opt/application/pki/ca-chain.pem
+            kafka.producer.schema.registry.ssl.truststore.type: PEM
+            kafka.producer.session.timeout.ms: "10000"
+            kafka.producer.socket.connection.setup.timeout.max.ms: "5000"
+            kafka.producer.socket.connection.setup.timeout.ms: "1500"
+            tn-scada.kafka.listener.store-id: $${SERVER_ID}
+        parameters: {}
+    resource_defaults:
+        clickhouse:
+            databases:
+                history:
+                    name: '{{ library_instance_id | replace(''-'', ''_'') }}'
+            tables:
+                alarm_message:
+                    columns:
+                        - name: id
+                          type: UUID
+                        - name: system_id
+                          type: UInt32
+                        - name: object_id
+                          type: UInt32
+                        - name: parameter_id
+                          type: UInt32
+                        - name: detail_nr
+                          type: UInt32
+                        - name: ts
+                          type: UInt64
+                        - name: ts2
+                          type: UInt64
+                        - name: quality
+                          type: Int64
+                        - name: signal_val
+                          type: String
+                        - name: ack_time
+                          type: UInt64
+                        - name: in_time
+                          type: UInt64
+                        - name: ack_state
+                          type: UInt32
+                        - name: alert_class_name
+                          type: String
+                        - name: ackable
+                          type: Bool
+                        - name: direction
+                          type: Bool
+                        - name: text
+                          type: String
+                        - name: comment
+                          type: String
+                        - name: signal_state
+                          type: UInt32
+                        - name: user_name
+                          type: String
+                        - name: description
+                          type: String
+                        - name: text0
+                          type: String
+                        - name: arm
+                          type: String
+                        - name: prior
+                          type: UInt32
+                        - name: invalid
+                          type: Bool
+                        - name: insert_ts
+                          type: UInt64
+                        - name: out_of_service
+                          type: Bool
+                        - name: alert_class
+                          type: String
+                        - name: alert_class_by_group
+                          type: Map(String, String)
+                        - name: tag_name
+                          type: String
+                        - name: responsibility_area
+                          type: Array(String)
+                        - name: control_time
+                          type: UInt64
+                    engine: ReplacingMergeTree
+                    order_by: (ts, ts2, id)
+                    settings:
+                        index_granularity: 8192
+                records:
+                    columns:
+                        - codec: T64, LZ4
+                          name: systemId
+                          type: UInt32
+                        - codec: T64, LZ4
+                          name: objectId
+                          type: UInt32
+                        - codec: T64, LZ4
+                          name: parameterId
+                          type: UInt32
+                        - codec: T64, LZ4
+                          name: attrId
+                          type: UInt32
+                        - codec: DoubleDelta, LZ4
+                          name: ts
+                          type: UInt64
+                        - codec: DoubleDelta, LZ4
+                          name: ts2
+                          type: Nullable(UInt64)
+                        - codec: T64, LZ4
+                          name: quality
+                          type: Nullable(Int64)
+                        - codec: LZ4
+                          name: invalid
+                          type: Nullable(Bool)
+                        - codec: Gorilla(8), LZ4
+                          name: value
+                          type: Nullable(Float64)
+                        - codec: LZ4
+                          name: strValue
+                          type: Nullable(String)
+                        - codec: LZ4
+                          name: service
+                          type: LowCardinality(Nullable(String))
+                        - codec: DoubleDelta, LZ4
+                          name: dt
+                          type: Date
+                        - codec: DoubleDelta, LZ4
+                          name: ts3
+                          type: Nullable(UInt64)
+                        - codec: DoubleDelta, LZ4
+                          name: offs
+                          type: Nullable(Int64)
+                        - codec: LZ4
+                          name: tagName
+                          type: Nullable(String)
+                        - codec: T64, LZ4
+                          name: status
+                          type: Nullable(Int64)
+                    engine: MergeTree
+                    indexes:
+                        - expression: objectId
+                          granularity: 1
+                          name: idx_set_objectId
+                          type: set(1000)
+                        - expression: parameterId
+                          granularity: 1
+                          name: idx_set_parameterId
+                          type: set(1000)
+                        - expression: intDiv(ts, 3600000)
+                          granularity: 1
+                          name: idx_minmax_h1
+                          type: minmax
+                        - expression: offs
+                          granularity: 1
+                          name: idx_minmax_offs
+                          type: minmax
+                    order_by: (parameterId, objectId, systemId, attrId, ts, ts2, invalid, quality, value, strValue)
+                    partition_by: toDate(fromUnixTimestamp64Milli(toInt64(ts), 'UTC'))
+                    primary_key: (parameterId, objectId, systemId, attrId, ts)
+                    sample_by: parameterId
+                    settings:
+                        allow_nullable_key: 1
+                        columns_to_prewarm_mark_cache: parameterId,objectId,systemId,attrId,ts
+                        index_granularity: 8192
+                        max_bytes_to_merge_at_max_space_in_pool: 161061273600
+                        max_bytes_to_merge_at_min_space_in_pool: 1048576
+                        max_parts_to_merge_at_once: 100
+                        prewarm_mark_cache: 1
+                        prewarm_primary_key_cache: 1
+                        primary_key_compression_codec: LZ4
+                        ratio_of_defaults_for_sparse_serialization: 0.95
+                        ttl_only_drop_parts: 0
+                        use_primary_key_cache: 1
+        kafka:
+            topics:
+                ack_alarm:
+                    config:
+                        cleanup.policy: delete
+                    name: sdku-ack-alarm
+                    partitions: 1
+                alarms:
+                    config:
+                        cleanup.policy: delete
+                    name: sdku-alarms
+                    partitions: 1
+                alarms_compact:
+                    config:
+                        cleanup.policy: compact
+                    name: sdku-alarms-compact
+                    partitions: 1
+                main:
+                    config:
+                        cleanup.policy: delete
+                    name: sdku-main
+                    partitions: 1
+                main_compact:
+                    config:
+                        cleanup.policy: compact
+                    name: sdku-main-compact
+                    partitions: 1
+        postgresql:
+            databases:
+                alarms_db:
+                    name: sdku_alarm_view
+                ef-store:
+                    name: ef-store
+                model:
+                    name: tn-scada
+                preferences:
+                    name: user-preferences
+        redis:
+            keys:
+                alert-class:
+                    name: '{{ library_instance_id }}-alert-class'
+                alert-hdl:
+                    name: '{{ library_instance_id }}-alert-hdl'
+                dm-meta:
+                    name: '{{ library_instance_id }}-meta'
+    runtime_directory: ~/{{ library_instance_id }}
+    shared_secrets:
+        java_keystore_password:
+            source:
+                binding: application-pki
+                credential: java_keystore_password
+                kind: pki_credential
+    slots:
+        alarm-service:
+            applicationRef: alarm-service@1.0.0
+            required: false
+        alarm-view-service:
+            applicationRef: alarm-view-service@1.0.0
+            required: false
+        data-manager:
+            applicationRef: data-manager@1.0.0
+            required: false
+        ef-backend:
+            applicationRef: ef-backend@1.0.0
+            required: false
+        evo-manager:
+            applicationRef: evo-manager@1.0.0
+            required: false
+        evo-scheduler:
+            applicationRef: evo-scheduler@1.0.0
+            required: false
+        ham-backend:
+            applicationRef: ham-backend@1.0.0
+            required: false
+        hmi-backend:
+            applicationRef: hmi-backend@1.0.0
+            required: false
+        hmi-frontend-alarms:
+            applicationRef: hmi-frontend-alarms@1.0.0
+            inherit_defaults: false
+            required: false
+        hmi-frontend-para:
+            applicationRef: hmi-frontend-para@1.0.0
+            inherit_defaults: false
+            required: false
+        hmi-frontend-svg-editor:
+            applicationRef: hmi-frontend-svg-editor@1.0.0
+            inherit_defaults: false
+            required: false
+        hmi-frontend-trends:
+            applicationRef: hmi-frontend-trends@1.0.0
+            inherit_defaults: false
+            required: false
+        hmi-frontend-viewer:
+            applicationRef: hmi-frontend-viewer@1.0.0
+            inherit_defaults: false
+            required: false
+        hmi-frontend-viewer-noszi:
+            applicationRef: hmi-frontend-viewer-noszi@1.0.0
+            inherit_defaults: false
+            required: false
+        iec60870:
+            applicationRef: iec60870@1.0.0
+            required: false
+        kafka-ch-replicator:
+            applicationRef: kafka-ch-replicator@1.0.0
+            required: false
+        kafka-history-writer:
+            applicationRef: kafka-history-writer@1.0.0
+            required: false
+        opc-ua-server:
+            applicationRef: opc-ua-server@1.0.0
+            required: false
+        sdku-knp:
+            applicationRef: sdku-knp@1.0.0
+            required: false
+        sdku-knp-ui:
+            applicationRef: sdku-knp-ui@1.0.0
+            inherit_defaults: false
+            required: false
+        sdku-status-calculation:
+            applicationRef: sdku-status-calculation@1.0.0
+            required: false
+        sdku-tank-farm:
+            applicationRef: sdku-tank-farm@1.0.0
+            required: false
+        sdku-telemechanics:
+            applicationRef: sdku-telemechanics@1.0.0
+            required: false
+        sdku-vtor:
+            applicationRef: sdku-vtor@1.0.0
+            required: false
+        sdku-vtor-ui:
+            applicationRef: sdku-vtor-ui@1.0.0
+            inherit_defaults: false
+            required: false
+        user-preferences:
+            applicationRef: user-preferences@1.0.0
+            required: false
+
+@@END
+@@PORTABLE {"path":"examples/sdku/library-packages/sdku/1.0.0/roles/library_sdku/templates/.base_compose.yml.j2","mode":420,"size":1935,"sha256":"2f540b33d1b0d5bdb4300cd3af66a9353f58d5bd05d47938d5cd3598edd9a6b9","index":0,"count":1,"encoding":"utf-8","payloadBytes":1935}
+{% set environment = library_runtime.defaults.environment | combine({}) %}
+{% set server_ids = groups['all'] | reject('equalto', 'localhost') | sort | list %}
+{% for connection, names in {
+  'kafka': ['KAFKA_BOOTSTRAP_SERVERS', 'SPRING_KAFKA_BOOTSTRAP_SERVERS', 'BOOTSTRAP_SERVERS_CONFIG'],
+  'postgres': ['POSTGRES_ADDRESS'],
+  'clickhouse': ['CLICKHOUSE_ADDRESS'],
+  'redis': ['REDIS_ADDRESS', 'TN_SCADA_REDIS_ADDRESS'],
+  'schema-registry': ['SPRING_KAFKA_SCHEMA_REGISTRY_URL', 'SCHEMA_REGISTRY_URL_CONFIG']
+}.items() %}
+{% set connection = 'sentinel' if connection == 'redis' and 'sentinel' in library_runtime.connections else connection %}
 {% if connection in library_runtime.connections %}
 {% set addresses = [] %}
 {% set targets = library_runtime.connections[connection].targets %}
@@ -58237,7 +58967,7 @@ public final class StartupMock {
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/validate_packages.py","mode":420,"size":5926,"sha256":"2461e748a4339bcd83c959c6a5976de085a9deeefed43f90ae7c5f439f90ac93","index":0,"count":1,"encoding":"utf-8","payloadBytes":5926}
+@@PORTABLE {"path":"examples/sdku/validate_packages.py","mode":420,"size":6149,"sha256":"00e35fad6535a9bbd890bc129d5723cc3f8d175e27d5c4b3d0c2a450b2a80b13","index":0,"count":1,"encoding":"utf-8","payloadBytes":6149}
 import sys, json, pathlib, yaml
 from ansible.parsing.dataloader import DataLoader
 from ansible.template import Templar
@@ -58293,6 +59023,8 @@ for (kind,name), package in packages.items():
         application_databases={'postgres': {ref: dict(resourceId=ref, name=value['name'])
                               for ref, value in library['definition']['resource_defaults']['postgresql']['databases'].items()},
                               'clickhouse': {'history': dict(resourceId='history', name='sdku_main')}},
+        library_resources={ref: dict(kind='redis.key', parameters={'name':'sdku-main-'+suffix})
+                           for ref, suffix in [('dm-meta','meta'), ('alert-hdl','alert-hdl'), ('alert-class','alert-class')]},
         library_instance_id='sdku-main', application_job=next(j for j in jobs if j['slotId'] == name),
         _application_inputs={'jobs': jobs}, groups={'all': ['example-host']},
         hostvars={'example-host': {'ansible_host': 'example.invalid'}},
@@ -69156,7 +69888,7 @@ export function ApplicationFileSettings({
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/ApplicationLibraryResources.tsx","mode":420,"size":17538,"sha256":"aca886b0a71ebad51e6f1f434eaa92b99a4c711bd4d85201401ae99a8676f82a","index":0,"count":1,"encoding":"utf-8","payloadBytes":17538}
+@@PORTABLE {"path":"frontend/src/ApplicationLibraryResources.tsx","mode":420,"size":18264,"sha256":"5bf775b9009677b0d70ee2011cccff4fc2c90ef2469d95989c0e4a7098371406","index":0,"count":1,"encoding":"utf-8","payloadBytes":18264}
 import { Fragment, useState, type ReactNode } from "react";
 import { objectValue, type ObjectValue } from "./application-draft";
 
@@ -69171,6 +69903,7 @@ export function ApplicationLibraryResources({
   topicDefaults = {},
   databaseDefaults = {},
   clickhouseDefaults = {},
+  redisDefaults = {},
   resolvedResources = {},
 }: {
   resources: ObjectValue;
@@ -69183,6 +69916,7 @@ export function ApplicationLibraryResources({
   topicDefaults?: ObjectValue;
   databaseDefaults?: ObjectValue;
   clickhouseDefaults?: ObjectValue;
+  redisDefaults?: ObjectValue;
   resolvedResources?: ObjectValue;
 }) {
   const [edit, setEdit] = useState<string | null>(null);
@@ -69207,6 +69941,7 @@ export function ApplicationLibraryResources({
     "kafka.topic": topicDefaults,
     "postgresql.database": databaseDefaults,
     "clickhouse.database": clickhouseDefaults,
+    "redis.key": redisDefaults,
   };
   const hasDefault = Object.hasOwn(defaultsByKind[kind] ?? {}, edit ?? "");
   const allIds = Object.keys(resources);
@@ -69271,6 +70006,11 @@ export function ApplicationLibraryResources({
           </button>
         )}
       </div>
+      {compatibleBindings("redis.key").length > 0 && (
+        <button disabled={disabled} onClick={() => open("", "redis.key")}>
+          Добавить ключ Redis
+        </button>
+      )}
       {Object.entries(defaultsByKind).flatMap(([resourceKind, defaults]) =>
         Object.keys(defaults)
           .filter((id) => !Object.hasOwn(resources, id))
@@ -69319,6 +70059,7 @@ export function ApplicationLibraryResources({
                             "postgresql.schema": "PostgreSQL · Схема",
                             "clickhouse.database": "ClickHouse · БД",
                             "kafka.topic": "Kafka · Топик",
+                            "redis.key": "Redis · Ключ",
                           } as Record<string, string>
                         )[String(row.kind)] ?? String(row.kind)}
                       </td>
@@ -69409,8 +70150,9 @@ export function ApplicationLibraryResources({
             e.preventDefault();
             const id =
               edit ||
-              (kind === "kafka.topic"
-                ? "topic_" + name.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 122)
+              (kind === "kafka.topic" || kind === "redis.key"
+                ? (kind === "redis.key" ? "key_" : "topic_") +
+                  name.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 122)
                 : name);
             if (
               !/^[a-z][A-Za-z0-9_-]{0,127}$/.test(id) ||
@@ -69460,19 +70202,17 @@ export function ApplicationLibraryResources({
                   : {}),
               };
             }
-            if (
-              await onSave({
-                ...resources,
-                [id]: {
-                  ...previous,
-                  kind,
-                  binding,
-                  mode,
-                  parameters,
-                },
-              })
-            )
-              close();
+            const resource: ObjectValue = {
+              ...previous,
+              kind,
+              binding,
+              parameters,
+            };
+            if (kind === "redis.key") {
+              delete resource.mode;
+              delete resource.databaseRef;
+            } else resource.mode = mode;
+            if (await onSave({ ...resources, [id]: resource })) close();
           }}
           onChange={() => onDirtyChange(true)}
         >
@@ -69492,6 +70232,7 @@ export function ApplicationLibraryResources({
             >
               <option value="postgresql.database">PostgreSQL · БД</option>
               <option value="clickhouse.database">ClickHouse · БД</option>
+              <option value="redis.key">Redis · Ключ</option>
               {compatibleBindings("kafka.topic").length > 0 && (
                 <option value="kafka.topic">Kafka · Топик</option>
               )}
@@ -69523,7 +70264,11 @@ export function ApplicationLibraryResources({
             </select>
           </label>
           <label>
-            {kind === "kafka.topic" ? "Имя топика" : "Имя БД / схемы"}
+            {kind === "kafka.topic"
+              ? "Имя топика"
+              : kind === "redis.key"
+                ? "Имя ключа Redis"
+                : "Имя БД / схемы"}
             <input
               required={!hasDefault}
               value={name}
@@ -69532,7 +70277,7 @@ export function ApplicationLibraryResources({
             />
           </label>
           {!edit && (
-            <small>Имя также используется как ключ ресурса в библиотеке.</small>
+            <small>ID ресурса в библиотеке формируется из имени.</small>
           )}
           {kind === "kafka.topic" && (
             <>
@@ -69579,13 +70324,15 @@ export function ApplicationLibraryResources({
               </p>
             </>
           )}
-          <label>
-            Управление
-            <select value={mode} onChange={(e) => setMode(e.target.value)}>
-              <option value="managed">Создавать и проверять</option>
-              <option value="existing">Использовать существующую</option>
-            </select>
-          </label>
+          {kind !== "redis.key" && (
+            <label>
+              Управление
+              <select value={mode} onChange={(e) => setMode(e.target.value)}>
+                <option value="managed">Создавать и проверять</option>
+                <option value="existing">Использовать существующую</option>
+              </select>
+            </label>
+          )}
           {error && <p role="alert">{error}</p>}
           <div className="row">
             <button disabled={disabled}>В черновик</button>
@@ -71244,7 +71991,7 @@ export function inferParameterValue(text: string): string | number | boolean {
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/ApplicationsPage.tsx","mode":420,"size":66456,"sha256":"b2073630219fb0a1cdc42916b196a3facfa1b317abb2ea071729cd82f2564095","index":0,"count":2,"encoding":"utf-8","payloadBytes":50003}
+@@PORTABLE {"path":"frontend/src/ApplicationsPage.tsx","mode":420,"size":66675,"sha256":"515027bfdcb2b14b08d9adc70a26a03c28bcdac6aa34a73b0c0d73148bb2bc0b","index":0,"count":2,"encoding":"utf-8","payloadBytes":50003}
 import { useRef, useState } from "react";
 import { ApplicationLibraryResources } from "./ApplicationLibraryResources";
 import { ApplicationTopicBindings } from "./ApplicationTopicBindings";
@@ -72262,6 +73009,11 @@ export function ApplicationsPage({
                       resources={objectValue(library.resources)}
                       resolvedTopics={resolvedTopics}
                       resolvedResources={resolvedResources}
+                      redisDefaults={objectValue(
+                        objectValue(
+                          objectValue(definition.resource_defaults).redis,
+                        ).keys,
+                      )}
                       databaseDefaults={objectValue(
                         objectValue(
                           objectValue(definition.resource_defaults).postgresql,
@@ -72457,15 +73209,15 @@ export function ApplicationsPage({
                         }).map(([listener, raw]) => {
                           const d = objectValue(
                             objectValue(defaults.ports)[listener],
-                          );
+    
+@@END
+@@PORTABLE {"path":"frontend/src/ApplicationsPage.tsx","mode":420,"size":66675,"sha256":"515027bfdcb2b14b08d9adc70a26a03c28bcdac6aa34a73b0c0d73148bb2bc0b","index":1,"count":2,"encoding":"utf-8","payloadBytes":16672}
+                      );
                           const a = objectValue(
                             objectValue(overrides.ports)[listener],
                           );
                           return (
-             
-@@END
-@@PORTABLE {"path":"frontend/src/ApplicationsPage.tsx","mode":420,"size":66456,"sha256":"b2073630219fb0a1cdc42916b196a3facfa1b317abb2ea071729cd82f2564095","index":1,"count":2,"encoding":"utf-8","payloadBytes":16453}
-               <fieldset key={listener}>
+                            <fieldset key={listener}>
                               <legend>{listener}</legend>
                               {(
                                 [

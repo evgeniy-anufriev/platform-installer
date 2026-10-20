@@ -15179,7 +15179,7 @@ class FilterModule:
         return {'platform_clickhouse_members': project_members}
 
 @@END
-@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/plugins/module_utils/application_sql.py","mode":420,"size":13526,"sha256":"5f5d281391b9eb1f95fbfd056574e3bc6a072a092e25e1528c9905f59768e625","index":0,"count":1,"encoding":"utf-8","payloadBytes":13526}
+@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/plugins/module_utils/application_sql.py","mode":420,"size":13670,"sha256":"e3b1746a767e6fdedc51cf73f35f1bdb9b0ad874573f2db5f1ed3c88ff6d3608","index":0,"count":1,"encoding":"utf-8","payloadBytes":13670}
 """Private native-client execution for library and logical instance scopes."""
 import contextlib
 import fcntl
@@ -15245,8 +15245,10 @@ def table_matches(client, database, table):
     if any(normalized[i] != normalized[i + 1] for i in range(0, len(normalized), 2)):
         raise ProviderFailure('CLICKHOUSE_APPLICATION_TABLE_EXPRESSION_DRIFT')
     for key, value in table.get('settings', {}).items():
+        integral = isinstance(value, (int, float)) and float(value).is_integer()
         value = literal(value) if isinstance(value, str) else str(int(value) if isinstance(value, bool) or float(value).is_integer() else value)
-        if not re.search(r'\b' + re.escape(key) + r'\s*=\s*' + re.escape(value) + r'\s*(?:,|$)', actual['create_table_query']):
+        pattern = re.escape(value) + (r'(?:\.0*)?' if integral else '')
+        if not re.search(r'\b' + re.escape(key) + r'\s*=\s*' + pattern + r'\s*(?:,|$)', actual['create_table_query']):
             raise ProviderFailure('CLICKHOUSE_APPLICATION_TABLE_SETTINGS_DRIFT')
     if table['engine'].startswith('Replicated'):
         replicas = [json.loads(line) for line in client.query(
