@@ -40,10 +40,26 @@
     owner: "{{ platform_kafka_schema_registry_user }}"
     group: "{{ platform_kafka_schema_registry_group }}"
     mode: '0600'
-  loop: [keystore.p12, truststore.p12, ca-chain.pem, materialization-fingerprint]
+  loop: "{{ ['ca-chain.pem', 'materialization-fingerprint'] + (['keystore.p12', 'truststore.p12'] if _platform_kafka_tls_runtime.storeType == 'PKCS12' else []) }}"
   register: _platform_kafka_registry_pki_copy
   no_log: true
   when: not platform_kafka_verify_only
+
+- name: Materialize or verify the Registry-owned PEM identity
+  ansible.builtin.include_tasks: pem_identity.yml
+  vars:
+    kafka_pem_source_directory: "{{ _platform_kafka_tls_runtime.targetDirectory }}"
+    kafka_pem_identity_path: "{{ registry_instance.config_directory }}/pki/identity.pem"
+    kafka_pem_ca_path: "{{ registry_instance.config_directory }}/pki/ca-chain.pem"
+    kafka_pem_owner: "{{ platform_kafka_schema_registry_user }}"
+    kafka_pem_group: "{{ platform_kafka_schema_registry_group }}"
+    kafka_pem_verify_only: "{{ platform_kafka_verify_only }}"
+  when: _platform_kafka_tls_runtime.storeType == 'PEM'
+
+- name: Preserve the Registry PEM change signal
+  ansible.builtin.set_fact:
+    _platform_kafka_registry_pem_changed: "{{ _platform_kafka_tls_runtime.storeType == 'PEM' and (_platform_kafka_pem_identity_write.changed | default(false) | bool) }}"
+  changed_when: false
 
 - name: Load runtime-only store password without logging
   ansible.builtin.set_fact:
@@ -51,6 +67,7 @@
       {{ lookup('ansible.builtin.file',
           (platform_pki_secret_files | default(hostvars['localhost'].platform_pki_secret_files | default({}), true))[_platform_kafka_tls_runtime.storePasswordSecretRef]) | trim }}
   no_log: true
+  when: _platform_kafka_tls_runtime.storeType == 'PKCS12'
 
 - name: Require a properties-safe store password
   ansible.builtin.assert:
@@ -58,6 +75,7 @@
       - _platform_kafka_registry_password | length > 0
     fail_msg: SCHEMA_REGISTRY_STORE_PASSWORD_FORMAT_UNSUPPORTED
   no_log: true
+  when: _platform_kafka_tls_runtime.storeType == 'PKCS12'
 
 - name: Render protected Registry and Kafka CLI properties
   ansible.builtin.template:
@@ -129,7 +147,7 @@
     name: "{{ registry_instance.unit_name }}"
     daemon_reload: "{{ _platform_kafka_registry_unit.changed }}"
     enabled: true
-    state: "{{ 'restarted' if (_platform_kafka_registry_unit.changed or _platform_kafka_registry_properties.changed or _platform_kafka_registry_pki_copy.changed) else 'started' }}"
+    state: "{{ 'restarted' if (_platform_kafka_registry_unit.changed or _platform_kafka_registry_properties.changed or _platform_kafka_registry_pki_copy.changed or _platform_kafka_registry_pem_changed) else 'started' }}"
   when: not platform_kafka_verify_only
 
 - name: Verify Registry unit is active

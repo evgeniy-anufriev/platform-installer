@@ -28,7 +28,9 @@
           {{ (platform_pki_secret_files
               | default(hostvars['localhost'].platform_pki_secret_files | default({}, true), true))[kafka_cli_connection.tls.storePasswordSecretRef] }}
       no_log: true
-      when: kafka_cli_connection.securityProtocol == 'SSL'
+      when:
+        - kafka_cli_connection.securityProtocol == 'SSL'
+        - kafka_cli_connection.tls.truststoreType == 'PKCS12'
 
     - name: Render projected SSL Kafka CLI command configuration
       ansible.builtin.copy:
@@ -36,11 +38,15 @@
           security.protocol={{ kafka_cli_connection.securityProtocol }}
           ssl.truststore.location={{ kafka_cli_connection.tls.truststorePath }}
           ssl.truststore.type={{ kafka_cli_connection.tls.truststoreType }}
+          {% if kafka_cli_connection.tls.truststoreType == 'PKCS12' %}
           ssl.truststore.password={{ lookup('ansible.builtin.file', _platform_kafka_cli_password_file) | trim | platform.core.platform_java_properties_value }}
+          {% endif %}
           ssl.keystore.location={{ kafka_cli_connection.tls.keystorePath }}
           ssl.keystore.type={{ kafka_cli_connection.tls.truststoreType }}
+          {% if kafka_cli_connection.tls.truststoreType == 'PKCS12' %}
           ssl.keystore.password={{ lookup('ansible.builtin.file', _platform_kafka_cli_password_file) | trim | platform.core.platform_java_properties_value }}
           ssl.key.password={{ lookup('ansible.builtin.file', _platform_kafka_cli_password_file) | trim | platform.core.platform_java_properties_value }}
+          {% endif %}
         dest: "{{ _platform_kafka_cli_command_config.path }}"
         mode: '0600'
       changed_when: false

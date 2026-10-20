@@ -10,13 +10,15 @@ request.timeout.ms={{ platform_kafka_application_timeout_ms }}
 default.api.timeout.ms={{ platform_kafka_application_timeout_ms }}
 {% if application_topic_candidate.tls %}
 {% set plan = application_topic_candidate.pkiPlans[0] %}
-{% set password = lookup('ansible.builtin.file', platform_pki_secret_files[plan.storePasswordSecretRef], rstrip=false) | trim | platform.core.platform_java_properties_value %}
 ssl.endpoint.identification.algorithm=https
-ssl.truststore.location={{ plan.targetDirectory }}/truststore.p12
+ssl.truststore.location={{ plan.targetDirectory }}/{{ 'ca-chain.pem' if platform_kafka_store_type == 'PEM' else 'truststore.p12' }}
 ssl.truststore.type={{ platform_kafka_store_type }}
-ssl.truststore.password={{ password }}
-ssl.keystore.location={{ plan.targetDirectory }}/keystore.p12
+ssl.keystore.location={{ application_kafka_private.path ~ '/identity.pem' if platform_kafka_store_type == 'PEM' else plan.targetDirectory ~ '/keystore.p12' }}
 ssl.keystore.type={{ platform_kafka_store_type }}
+{% if platform_kafka_store_type == 'PKCS12' %}
+{% set password = lookup('ansible.builtin.file', platform_pki_secret_files[plan.storePasswordSecretRef], rstrip=false) | trim | platform.core.platform_java_properties_value %}
+ssl.truststore.password={{ password }}
 ssl.keystore.password={{ password }}
 ssl.key.password={{ password }}
+{% endif %}
 {% endif %}

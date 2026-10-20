@@ -1,13 +1,23 @@
 ---
 - name: Create private temporary Kafka client configuration
   ansible.builtin.tempfile:
-    state: file
+    state: directory
     prefix: platform-topics-
-  register: application_topic_client
+  register: application_kafka_private
+  changed_when: false
+
+- name: Select this invocation's client configuration path
+  ansible.builtin.set_fact:
+    application_topic_client: "{{ {'path': application_kafka_private.path ~ '/client.properties'} }}"
   changed_when: false
 
 - name: Use existing Kafka security projection for this topic batch
   block:
+    - name: Prepare the invocation-private PEM client identity
+      ansible.builtin.include_tasks: application_client_tls.yml
+      when:
+        - application_topic_candidate.tls
+        - platform_kafka_store_type == 'PEM'
     - name: Render the projected Kafka client configuration
       ansible.builtin.template:
         src: application-topics-client.properties.j2
@@ -24,6 +34,6 @@
   always:
     - name: Remove only this invocation's client configuration
       ansible.builtin.file:
-        path: "{{ application_topic_client.path }}"
+        path: "{{ application_kafka_private.path }}"
         state: absent
       changed_when: false

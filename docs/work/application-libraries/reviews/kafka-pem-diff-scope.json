@@ -1,0 +1,92 @@
+{
+  "mode": "FULL DIFF",
+  "head": "6e04b15a52ebf269d434a0d56649618f1b182bb5",
+  "scope": "Kafka/Registry PEM consumer roles and isolated QA only",
+  "ownerDecisions": "PEM instead of PKCS12 passwords in configs; Registry stays SSL; existing PKI plans/identities/ACL policy; explicit PKCS12 override; no installed service operations; global PKI and Java app stores unchanged",
+  "files": [
+    {
+      "path": "CURRENT_STATE.md",
+      "sha256": "6984643eeca40f5e35cecd583194465053f606fdd47933a88e8c04aea99f23c0"
+    },
+    {
+      "path": "docs/work/application-libraries/evidence/kafka-pem-journal.md",
+      "sha256": "11cf6c0e3cf65949d782e62322e47f20b729ca5b6d3a1981839cd9241fcdd701"
+    },
+    {
+      "path": "docs/work/application-libraries/kafka-pem-plan.md",
+      "sha256": "8bfb414af11cb23df33a493bdde13634a3326d38fc2dd5cde37d898b0fce6478"
+    },
+    {
+      "path": "docs/work/application-libraries/reviews/kafka-pem-plan-review.md",
+      "sha256": "cbf08e17c8452be65cf374466585c166174af310f16f2fcc411d0d50badc6c4f"
+    },
+    {
+      "path": "services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/defaults/main.yml",
+      "sha256": "78b5b24aab7bc3c1f4b3f06da75dd310a0f05185b7a56f4e9a9c4e2c2ae55023"
+    },
+    {
+      "path": "services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/application_accounts_scope.yml",
+      "sha256": "ea49f30affab7beecaf9ac9a1f23cf34d583576e7211c06c4556c80a899054f9"
+    },
+    {
+      "path": "services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/application_client_tls.yml",
+      "sha256": "eeaee797612ab42b319b069832c0c8428f32ad69d3c8e49c59b34971336d160a"
+    },
+    {
+      "path": "services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/application_topics_scope.yml",
+      "sha256": "04384f3c131e79223099f37dc6be82b32e1c059f6e733d3620302f7ea03f458b"
+    },
+    {
+      "path": "services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/authorization_setup.yml",
+      "sha256": "0ea37c832f78c9685fbc52d1f94ecb45020aaf96f69225e43e1c4fc3fcd93a40"
+    },
+    {
+      "path": "services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/pem_identity.yml",
+      "sha256": "3d66a9bedde05fd305a8517d5b4d8180b463a3d46ea82880b9128bbbee8229e4"
+    },
+    {
+      "path": "services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/resolve_tls_runtime.yml",
+      "sha256": "83de19bfa2882cd6acc91d933ed1d2b60f4ded88f8467e251b6780ba14642443"
+    },
+    {
+      "path": "services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/run_cli_command.yml",
+      "sha256": "90144c7fb6958d893c49b2e0b62bfcf57e2b15581b72ff9896670f057d7caf83"
+    },
+    {
+      "path": "services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/schema_registry_member.yml",
+      "sha256": "66234b02a47437d7852044f12510f9f0ab6c727ff271c6f13eb362cea6a23f9a"
+    },
+    {
+      "path": "services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/validate_ssl_listener.yml",
+      "sha256": "f8c619fe2b04eb0e5c2ec92fb696acb50d3276498e4d706a768125119635b6bf"
+    },
+    {
+      "path": "services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/verify_ssl_listener.yml",
+      "sha256": "a75a9ca32915fdf22acf169d82431110c88a937b38a5d1167b6a61c47ad2cca6"
+    },
+    {
+      "path": "services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/templates/application-topics-client.properties.j2",
+      "sha256": "3273ed332187d6cc7453f3cc3b732e46d2ab8401f74a0ec397f441385100c5db"
+    },
+    {
+      "path": "services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/templates/schema-registry-client.properties.j2",
+      "sha256": "f39435af5e16c1780dabafd64dc8a709c2bb2d68e05cadd5d1ae680fa2ec872f"
+    },
+    {
+      "path": "services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/templates/schema-registry.properties.j2",
+      "sha256": "1338bf51887178bbd19a53b74cc751347c7ee0e951a3628d725b0cd31d5d1a24"
+    },
+    {
+      "path": "services/kafka/README.md",
+      "sha256": "deb271669b95a3e115ecdd359427c96089fd3a3322b0a7e2c4b9f0958c19f41f"
+    },
+    {
+      "path": "services/kafka/tests/PemTlsProbe.java",
+      "sha256": "831f6f0499ccc33d00b6ea7a19ab4a7b473f13a706cc003c9f6e8a633dd52462"
+    },
+    {
+      "path": "services/kafka/tests/qa_pem_tls.py",
+      "sha256": "8e4c8d70024a1a93f1edee13a8b7d3a5b495c31136ad073a9646cbca2914b331"
+    }
+  ]
+}

@@ -1,11 +1,13 @@
 security.protocol={{ registry_instance.security_protocol }}
 {% if registry_instance.security_protocol == 'SSL' %}
 ssl.endpoint.identification.algorithm=https
-ssl.truststore.location={{ registry_instance.config_directory }}/pki/truststore.p12
+ssl.truststore.location={{ registry_instance.config_directory }}/pki/{{ 'ca-chain.pem' if _platform_kafka_tls_runtime.storeType == 'PEM' else 'truststore.p12' }}
 ssl.truststore.type={{ _platform_kafka_tls_runtime.storeType }}
-ssl.truststore.password={{ _platform_kafka_registry_password | platform.core.platform_java_properties_value }}
-ssl.keystore.location={{ registry_instance.config_directory }}/pki/keystore.p12
+ssl.keystore.location={{ registry_instance.config_directory }}/pki/{{ 'identity.pem' if _platform_kafka_tls_runtime.storeType == 'PEM' else 'keystore.p12' }}
 ssl.keystore.type={{ _platform_kafka_tls_runtime.storeType }}
+{% if _platform_kafka_tls_runtime.storeType == 'PKCS12' %}
+ssl.truststore.password={{ _platform_kafka_registry_password | platform.core.platform_java_properties_value }}
 ssl.keystore.password={{ _platform_kafka_registry_password | platform.core.platform_java_properties_value }}
 ssl.key.password={{ _platform_kafka_registry_password | platform.core.platform_java_properties_value }}
+{% endif %}
 {% endif %}

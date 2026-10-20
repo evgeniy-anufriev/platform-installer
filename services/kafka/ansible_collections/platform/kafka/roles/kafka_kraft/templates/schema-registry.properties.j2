@@ -9,19 +9,23 @@ kafkastore.topic=_schemas
 kafkastore.topic.replication.factor={{ registry_instance.replication_factor }}
 kafkastore.ssl.endpoint.identification.algorithm=https
 {% if registry_instance.security_protocol == 'SSL' %}
-kafkastore.ssl.truststore.location={{ registry_instance.config_directory }}/pki/truststore.p12
+kafkastore.ssl.truststore.location={{ registry_instance.config_directory }}/pki/{{ 'ca-chain.pem' if _platform_kafka_tls_runtime.storeType == 'PEM' else 'truststore.p12' }}
 kafkastore.ssl.truststore.type={{ _platform_kafka_tls_runtime.storeType }}
-kafkastore.ssl.truststore.password={{ _platform_kafka_registry_password | platform.core.platform_java_properties_value }}
-kafkastore.ssl.keystore.location={{ registry_instance.config_directory }}/pki/keystore.p12
+kafkastore.ssl.keystore.location={{ registry_instance.config_directory }}/pki/{{ 'identity.pem' if _platform_kafka_tls_runtime.storeType == 'PEM' else 'keystore.p12' }}
 kafkastore.ssl.keystore.type={{ _platform_kafka_tls_runtime.storeType }}
+{% if _platform_kafka_tls_runtime.storeType == 'PKCS12' %}
+kafkastore.ssl.truststore.password={{ _platform_kafka_registry_password | platform.core.platform_java_properties_value }}
 kafkastore.ssl.keystore.password={{ _platform_kafka_registry_password | platform.core.platform_java_properties_value }}
 kafkastore.ssl.key.password={{ _platform_kafka_registry_password | platform.core.platform_java_properties_value }}
 {% endif %}
-ssl.keystore.location={{ registry_instance.config_directory }}/pki/keystore.p12
+{% endif %}
+ssl.keystore.location={{ registry_instance.config_directory }}/pki/{{ 'identity.pem' if _platform_kafka_tls_runtime.storeType == 'PEM' else 'keystore.p12' }}
 ssl.keystore.type={{ _platform_kafka_tls_runtime.storeType }}
+ssl.truststore.location={{ registry_instance.config_directory }}/pki/{{ 'ca-chain.pem' if _platform_kafka_tls_runtime.storeType == 'PEM' else 'truststore.p12' }}
+ssl.truststore.type={{ _platform_kafka_tls_runtime.storeType }}
+{% if _platform_kafka_tls_runtime.storeType == 'PKCS12' %}
 ssl.keystore.password={{ _platform_kafka_registry_password | platform.core.platform_java_properties_value }}
 ssl.key.password={{ _platform_kafka_registry_password | platform.core.platform_java_properties_value }}
-ssl.truststore.location={{ registry_instance.config_directory }}/pki/truststore.p12
-ssl.truststore.type={{ _platform_kafka_tls_runtime.storeType }}
 ssl.truststore.password={{ _platform_kafka_registry_password | platform.core.platform_java_properties_value }}
+{% endif %}
 ssl.client.authentication=NONE

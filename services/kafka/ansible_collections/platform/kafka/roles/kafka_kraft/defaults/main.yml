@@ -67,6 +67,6 @@ platform_pki_materialization_plans: []
 # Kafka consumer material is copied to platform_kafka_pki_directory instead.
 platform_pki_secret_files: {}
 platform_kafka_pki_directory: ''
-platform_kafka_store_type: PKCS12
+platform_kafka_store_type: PEM
 platform_kafka_clear_stop_retries: 15
 platform_kafka_clear_stop_delay: 2

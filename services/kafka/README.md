@@ -38,3 +38,27 @@ removes installed Kafka runtime, state and unit files. It is not normal apply
 or desired-state configuration, and requires the exact runtime acknowledgement
 `RESET_ALL_KAFKA_RUNTIME_ON_TARGET_HOSTS`. The approved controller-side offline
 payload and execution identity are outside its reset paths.
+
+## PEM TLS material
+
+Kafka and its broker-bound Schema Registry use `platform_kafka_store_type: PEM`
+by default. Existing exact PKI-01 plans supply PKCS#8 `private-key.pem`,
+`certificate.pem` and `ca-chain.pem`; the role derives a protected `identity.pem`
+inside the service-owned PKI directory. The directory is0700 and identity0600,
+owned by the corresponding service. The private key is unencrypted and remains
+secret material. Properties contain paths, not private key contents or PKCS12
+passwords. CA/hostname checks and certificate identities/ACLs remain in force.
+
+Registry continues to use its configured SSL Kafka listener; its HTTPS and
+inter-instance TLS also use PEM. Library topic/account hooks and SCRAM bootstrap
+create PEM bundles only in invocation-private directories and always remove them;
+authoritative PKI output is never changed by these hooks.
+
+Explicit `platform_kafka_store_type: PKCS12` retains the previous format and
+runtime store-password input. There is no automatic fallback. Verify does not
+migrate an installed PKCS12 service or create missing PEM files: retain the
+explicit old format or authorize a separate Apply transition. Old files are not
+silently deleted. The shared PKI pipeline and Java application PKCS12 delivery
+are unchanged, so they can still require their existing runtime store password.
+
+See [PEM implementation/isolated QA](../../docs/work/application-libraries/kafka-pem-plan.md).

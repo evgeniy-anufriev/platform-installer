@@ -10,7 +10,7 @@
     get_mime: false
     get_attributes: false
     get_checksum: false
-  loop: [keystore.p12, truststore.p12, materialization-fingerprint]
+  loop: "{{ ['private-key.pem', 'certificate.pem', 'ca-chain.pem', 'materialization-fingerprint'] + (['keystore.p12', 'truststore.p12'] if _platform_kafka_tls_runtime.storeType == 'PKCS12' else []) }}"
   register: platform_kafka_ssl_store_state
 
 - name: Require complete PKI-01 stores before Kafka mutation
@@ -31,6 +31,8 @@
     _platform_kafka_ssl_password_file: >-
       {{ (platform_pki_secret_files
           | default(hostvars['localhost'].platform_pki_secret_files | default({}, true), true))[_platform_kafka_tls_runtime.storePasswordSecretRef] }}
+  no_log: true
+  when: _platform_kafka_tls_runtime.storeType == 'PKCS12'
 
 - name: Copy PKI material into Kafka-owned consumer directory
   ansible.builtin.copy:
@@ -49,23 +51,43 @@
     - {name: materialization-fingerprint, mode: '0600'}
   register: _platform_kafka_copied_pki_material
   no_log: true
+  when: _platform_kafka_tls_runtime.storeType == 'PKCS12' or item.name not in ['keystore.p12', 'truststore.p12']
+
+- name: Materialize the Kafka-owned PEM identity from the exact PKI plan
+  ansible.builtin.include_tasks: pem_identity.yml
+  vars:
+    kafka_pem_source_directory: "{{ _platform_kafka_tls_runtime.targetDirectory }}"
+    kafka_pem_identity_path: "{{ _platform_kafka_tls_runtime.keystorePath }}"
+    kafka_pem_owner: "{{ platform_kafka_user }}"
+    kafka_pem_group: "{{ platform_kafka_group }}"
+    kafka_pem_verify_only: false
+  when: _platform_kafka_tls_runtime.storeType == 'PEM'
 
 - name: Aggregate Kafka member PKI change signal
   ansible.builtin.set_fact:
     platform_kafka_member_pki_changed: >-
       {{ (platform_kafka_member_pki_changed | default(false) | bool) or
-         (_platform_kafka_copied_pki_material.changed | default(false) | bool) }}
+         (_platform_kafka_copied_pki_material.changed | default(false) | bool) or
+         (_platform_kafka_tls_runtime.storeType == 'PEM' and (_platform_kafka_pem_identity_write.changed | default(false) | bool)) }}
 
-- name: Add listener-scoped PKCS12 properties without exposing secret values
+- name: Add listener-scoped TLS paths and selected store type
   ansible.builtin.set_fact:
     kafka_effective_config: >-
       {{ kafka_effective_config | combine({
         ('listener.name.' ~ (kafka_ssl_listener.name | lower) ~ '.ssl.client.auth'): ('requested' if (_platform_kafka_scram_enabled | default(false)) and kafka_ssl_listener.securityProtocol == 'SSL' else 'none'),
         ('listener.name.' ~ (kafka_ssl_listener.name | lower) ~ '.ssl.keystore.location'): _platform_kafka_tls_runtime.keystorePath,
         ('listener.name.' ~ (kafka_ssl_listener.name | lower) ~ '.ssl.keystore.type'): _platform_kafka_tls_runtime.storeType,
-        ('listener.name.' ~ (kafka_ssl_listener.name | lower) ~ '.ssl.keystore.password'): (lookup('ansible.builtin.file', _platform_kafka_ssl_password_file) | trim),
         ('listener.name.' ~ (kafka_ssl_listener.name | lower) ~ '.ssl.truststore.location'): _platform_kafka_tls_runtime.truststorePath,
-        ('listener.name.' ~ (kafka_ssl_listener.name | lower) ~ '.ssl.truststore.type'): _platform_kafka_tls_runtime.storeType,
+        ('listener.name.' ~ (kafka_ssl_listener.name | lower) ~ '.ssl.truststore.type'): _platform_kafka_tls_runtime.storeType
+      }) }}
+  no_log: true
+
+- name: Add passwords only for explicit PKCS12 compatibility
+  ansible.builtin.set_fact:
+    kafka_effective_config: >-
+      {{ kafka_effective_config | combine({
+        ('listener.name.' ~ (kafka_ssl_listener.name | lower) ~ '.ssl.keystore.password'): (lookup('ansible.builtin.file', _platform_kafka_ssl_password_file) | trim),
         ('listener.name.' ~ (kafka_ssl_listener.name | lower) ~ '.ssl.truststore.password'): (lookup('ansible.builtin.file', _platform_kafka_ssl_password_file) | trim)
       }) }}
   no_log: true
+  when: _platform_kafka_tls_runtime.storeType == 'PKCS12'

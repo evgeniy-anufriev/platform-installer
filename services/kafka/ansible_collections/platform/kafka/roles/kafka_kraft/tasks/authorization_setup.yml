@@ -47,6 +47,9 @@
 
 - name: Authenticate admin before changing compatibility or internal ACLs
   block:
+    - name: Prepare the invocation-private bootstrap PEM identity
+      ansible.builtin.include_tasks: application_client_tls.yml
+      when: platform_kafka_store_type == 'PEM'
     - name: Render either the temporary certificate bootstrap or final admin connection
       ansible.builtin.template:
         src: application-topics-client.properties.j2

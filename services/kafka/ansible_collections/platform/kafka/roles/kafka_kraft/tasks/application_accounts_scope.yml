@@ -8,6 +8,9 @@
 
 - name: Run bounded SCRAM and ACL operations
   block:
+    - name: Prepare the invocation-private PEM client identity
+      ansible.builtin.include_tasks: application_client_tls.yml
+      when: platform_kafka_store_type == 'PEM'
     - name: Render the dedicated administrative SASL configuration
       ansible.builtin.template:
         src: application-topics-client.properties.j2
