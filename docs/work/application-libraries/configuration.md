@@ -558,3 +558,46 @@ Principal mapping and principal builder remain operator-configurable. The exact
 member-DN and sole-admin guarantees above describe the default configuration.
 Custom mapping/builder settings determine the effective authenticated identities;
 the owner explicitly rejected additional restrictions on these settings (KS-D02).
+
+## Image selection and runtime registry access
+
+Application package `application.yml` keeps the initial image:
+
+```yaml
+defaults:
+  image: registry.example/team/gateway:1.0.0
+```
+
+An installation overrides only the image and optionally assigns runtime access
+at library level in `inventory/group_vars/all/platform-installer.yml`:
+
+```yaml
+platform_desired_state:
+  applicationLibraryDeployments:
+    sdku-main:
+      applications:
+        gateway:
+          overrides:
+            image: registry.example/team/gateway:1.1.0
+      registry_credentials:
+        registry.example:
+          username:
+            source: {kind: runtime_secret_ref, ref: registry-main-user}
+          password:
+            source: {kind: runtime_secret_ref, ref: registry-main-password}
+```
+
+The existing node-approved registry policy still applies; a credential assignment
+does not add a registry to that policy. Library General edits these references
+through ordinary Review/Save. Enter actual values in the existing session form
+after Save. They are used on targets during metadata preparation and temporary
+Docker probe/pull authentication, without overwriting node login configuration.
+With no explicit assignment, node credentials or anonymous access remain usable.
+
+Image ID/platform and the registry manifest digest are calculated from manifest
+and config bytes on the selected target network context. For offline delivery,
+the bundle builder indexes Docker-save archives with repeatable
+`--application-image registry.example/team/gateway:1.1.0 artifacts/gateway.tar`.
+The index references existing archive SHA/size records. A new image selection
+does not require adding `x-container-images` to group_vars. Existing explicit
+locks continue to pin old projects; they are not removed or migrated on Save.

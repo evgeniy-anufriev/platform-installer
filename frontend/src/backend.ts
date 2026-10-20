@@ -436,7 +436,11 @@ export type RuntimeSecretDescriptorOperation = {
   descriptors?: RuntimeSecretDescriptor[];
   applicationInputs?: Array<{
     requirementRef: string;
-    purpose: "APPLICATION_SECRET" | "APPLICATION_VAULT_ADMIN_TOKEN";
+    purpose:
+      | "APPLICATION_SECRET"
+      | "APPLICATION_VAULT_ADMIN_TOKEN"
+      | "APPLICATION_REGISTRY_USERNAME"
+      | "APPLICATION_REGISTRY_PASSWORD";
     providerDeployment: string | null;
     applicationLibraries: string[];
     hosts: string[];

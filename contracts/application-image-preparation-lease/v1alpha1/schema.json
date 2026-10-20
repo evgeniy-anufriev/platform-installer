@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/application-image-preparation-lease/v1alpha1/schema.json",
+  "type": "object", "required": ["apiVersion", "binding", "payload", "approvals"], "additionalProperties": false,
+  "properties": {
+    "apiVersion": {"const": "platform.installer/application-image-preparation-lease/v1alpha1"},
+    "binding": {
+      "type": "object", "additionalProperties": false,
+      "required": ["preparationId", "inputsDigest", "projectIdentity", "projectRevision", "runtimeRelease", "descriptorSetFingerprint"],
+      "properties": {
+        "preparationId": {"type": "string", "pattern": "^installer-(?:[0-9]{1,39}|[0-9a-f]{32})$"},
+        "inputsDigest": {"$ref": "../../artifact-source/v1alpha2/image-lock.schema.json#/$defs/digest"},
+        "projectIdentity": {"type": "string"},
+        "projectRevision": {"$ref": "../../artifact-source/v1alpha2/image-lock.schema.json#/$defs/digest"},
+        "descriptorSetFingerprint": {"$ref": "../../artifact-source/v1alpha2/image-lock.schema.json#/$defs/digest"},
+        "runtimeRelease": {"$ref": "../../execution-runtime/v1alpha6/build-deployment-plan.schema.json#/properties/runtimeRelease"}
+      }
+    },
+    "payload": {"$ref": "../../target-credential-payload/v1alpha4/schema.json"},
+    "approvals": {
+      "type": "array", "maxItems": 256,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["hostId", "address", "port", "keyType", "publicKey"],
+        "properties": {
+          "hostId": {"type": "string"}, "address": {"type": "string"},
+          "port": {"type": "integer", "minimum": 1, "maximum": 65535},
+          "keyType": {"type": "string"}, "publicKey": {"type": "string"}
+        }
+      }
+    }
+  }
+}

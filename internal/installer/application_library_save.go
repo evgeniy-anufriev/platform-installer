@@ -8,6 +8,7 @@ import (
 
 var libraryInputID = regexp.MustCompile(`^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$`)
 var exactLibraryRef = regexp.MustCompile(`^[a-z][a-z0-9-]*@[0-9]+\.[0-9]+\.[0-9]+$`)
+var registryAuthority = regexp.MustCompile(`^[a-z0-9][a-z0-9.-]*(?::[0-9]+)?$`)
 var applicationSettingKeys = []string{"image", "command", "user", "restart", "parameters", "environment", "ports", "endpoint", "accounts", "provisioner", "readiness", "config_files", "topicBindings"}
 
 func applicationEditOperation(op string) bool {
@@ -29,7 +30,7 @@ func validateApplicationEdit(c EditCommand) error {
 	switch c.Operation {
 	case "CreateApplicationLibraryDeployment", "UpdateApplicationLibraryDeployment":
 		fields = append(fields, "entity")
-		if c.Entity == nil || !applicationKeys(c.Entity, "libraryRef", "runtimeRef", "runtime_directory", "bindings", "resources", "shared_secrets", "vault_ref", "applications", "overrides") {
+		if c.Entity == nil || !applicationKeys(c.Entity, "libraryRef", "runtimeRef", "runtime_directory", "bindings", "resources", "shared_secrets", "vault_ref", "applications", "overrides", "registry_credentials") {
 			return invalid
 		}
 		if c.Operation == "CreateApplicationLibraryDeployment" {
@@ -201,6 +202,25 @@ func safeApplicationInput(v any, depth int) error {
 			return blocked("INVALID_VALUE", "Application input exceeds its limit", "command")
 		}
 		for key, item := range value {
+			if key == "registry_credentials" {
+				if asMap(item) == nil {
+					return blocked("SECRET_REFERENCE_INVALID", "Registry credentials must contain runtime references", "command")
+				}
+				for registry, entry := range asMap(item) {
+					if !registryAuthority.MatchString(registry) {
+						return blocked("REGISTRY_AUTHORITY_INVALID", "Registry must be a host or host:port without scheme, path or credentials", "command")
+					}
+					pair := asMap(entry)
+					if len(pair) != 2 || !applicationKeys(pair, "username", "password") {
+						return blocked("SECRET_REFERENCE_INVALID", "Registry credentials require username and password references", "command")
+					}
+					for _, name := range []string{"username", "password"} {
+						if !validApplicationCredential(pair[name], false) || asMap(asMap(pair[name])["source"])["kind"] != "runtime_secret_ref" {
+							return blocked("SECRET_REFERENCE_INVALID", "Registry credentials accept runtime references only", "command")
+						}
+					}
+				}
+			}
 			if key == "shared_secrets" {
 				if asMap(item) == nil {
 					return blocked("SECRET_REFERENCE_INVALID", "Shared secret descriptors must be a map", "command")

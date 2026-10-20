@@ -302,7 +302,7 @@ def application_secret_values_for_operation(state_root, run_id, operation, requi
             raise LifecycleError('EXECUTION_MANIFEST_INVALID')
         if item.get('source') == 'CURRENT_RUN_BOOTSTRAP' and item.get('purpose') != 'APPLICATION_VAULT_ADMIN_TOKEN':
             raise LifecycleError('EXECUTION_MANIFEST_INVALID')
-        if (item['purpose'] not in ('APPLICATION_SECRET', 'APPLICATION_VAULT_ADMIN_TOKEN') or
+        if (item['purpose'] not in ('APPLICATION_SECRET', 'APPLICATION_VAULT_ADMIN_TOKEN', 'APPLICATION_REGISTRY_USERNAME', 'APPLICATION_REGISTRY_PASSWORD') or
                 item['operations'] != allowed or
                 not isinstance(item['requirementRef'], str) or
                 re.fullmatch(r'application-secret-[a-f0-9]{32}', item['requirementRef']) is None or
@@ -317,7 +317,7 @@ def application_secret_values_for_operation(state_root, run_id, operation, requi
                     values != sorted(set(values))):
                 raise LifecycleError('EXECUTION_MANIFEST_INVALID')
         provider = item['providerDeployment']
-        if ((item['purpose'] == 'APPLICATION_SECRET' and provider is not None) or
+        if ((item['purpose'] != 'APPLICATION_VAULT_ADMIN_TOKEN' and provider is not None) or
                 (item['purpose'] == 'APPLICATION_VAULT_ADMIN_TOKEN' and
                  (not isinstance(provider, str) or item['runtimeReference'] != 'vault-admin-token-' + provider)) or
                 item['requirementRef'] in refs or item['runtimeReference'] in names):

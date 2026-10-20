@@ -15,7 +15,7 @@ func validApplicationSecretDescriptor(item executionnode.ApplicationSecretDescri
 		!slices.Equal(item.Operations, []string{"APPLICATION_LIBRARIES_APPLY", "APPLICATION_LIBRARIES_VERIFY"}) {
 		return false
 	}
-	if item.Purpose == "APPLICATION_SECRET" {
+	if item.Purpose == "APPLICATION_SECRET" || item.Purpose == "APPLICATION_REGISTRY_USERNAME" || item.Purpose == "APPLICATION_REGISTRY_PASSWORD" {
 		if item.ProviderDeployment != nil {
 			return false
 		}

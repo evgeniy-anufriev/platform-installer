@@ -33,6 +33,7 @@ Kafka SASL/principal/ACL является отдельным security scope; SSL
 
 | Документ | Назначение |
 | --- | --- |
+| [application-image-metadata-plan.md](application-image-metadata-plan.md) | Утверждённый владельцем план автоматических image metadata из bundle/registry и runtime credentials экземпляра библиотеки; реализация в отдельном worktree, acceptance отражён в CURRENT_STATE |
 | [architecture.md](architecture.md) | Сущности, хранение и ownership |
 | [configuration.md](configuration.md) | Пакеты, defaults, экземпляры и Compose |
 | [execution.md](execution.md) | Provider hooks, порядок и будущая интеграция |

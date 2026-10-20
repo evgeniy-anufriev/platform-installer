@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/execution-runtime/v1alpha6/prepare-application-images.schema.json",
+  "type": "object", "additionalProperties": false,
+  "required": ["apiVersion", "operation", "runId", "runtimeRelease", "phase"],
+  "properties": {
+    "apiVersion": {"const": "platform.installer/execution-runtime/v1alpha6"},
+    "operation": {"const": "PrepareApplicationImages"},
+    "runId": {"type": "string"},
+    "runtimeRelease": {"$ref": "build-deployment-plan.schema.json#/properties/runtimeRelease"},
+    "phase": {"enum": ["DESCRIBE", "PREPARE"]},
+    "executionMode": {"$ref": "build-deployment-plan.schema.json#/properties/executionMode"},
+    "deploymentOrder": {"$ref": "build-deployment-plan.schema.json#/properties/deploymentOrder"},
+    "skipInfrastructureVerify": {"type": "boolean"},
+    "inputsDigest": {"$ref": "../../artifact-source/v1alpha2/image-lock.schema.json#/$defs/digest"},
+    "preparationLease": {"$ref": "../../application-image-preparation-lease/v1alpha1/schema.json"}
+  },
+  "allOf": [
+    {"if": {"properties": {"phase": {"const": "DESCRIBE"}}}, "then": {"required": ["executionMode", "deploymentOrder", "skipInfrastructureVerify"]}},
+    {"if": {"properties": {"phase": {"const": "PREPARE"}}}, "then": {"required": ["inputsDigest"]}}
+  ]
+}

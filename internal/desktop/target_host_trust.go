@@ -136,13 +136,6 @@ func (a *App) configureTargetHostTrust() {
 func (a *App) approvedTargetKeysForPlan(plan executionnode.DeploymentPlan) ([]executionnode.TargetHostKeyApproval, error) {
 	a.editMu.Lock()
 	defer a.editMu.Unlock()
-	if a.current.Status != "OPEN" || a.current.Project == nil || a.current.Managed == nil || a.activeSession != "" || a.current.Project.ID != plan.ProjectIdentity {
-		return nil, errors.New("TARGET_HOST_TRUST_REQUIRED")
-	}
-	revision, err := a.projectRevision(a.current.Root)
-	if err != nil || revision != plan.ProjectRevision || a.current.Managed.ProjectRevision != revision {
-		return nil, errors.New("TARGET_HOST_TRUST_STALE")
-	}
 	targets := map[string]bool{}
 	for _, phase := range plan.Phases {
 		for _, action := range phase.Actions {
@@ -156,13 +149,24 @@ func (a *App) approvedTargetKeysForPlan(plan executionnode.DeploymentPlan) ([]ex
 		ids = append(ids, hostID)
 	}
 	sort.Strings(ids)
+	return a.approvedTargetKeysForHostsLocked(plan.ProjectIdentity, plan.ProjectRevision, ids)
+}
+
+func (a *App) approvedTargetKeysForHostsLocked(projectID, revision string, ids []string) ([]executionnode.TargetHostKeyApproval, error) {
+	if a.current.Status != "OPEN" || a.current.Project == nil || a.current.Managed == nil || a.activeSession != "" || a.current.Project.ID != projectID {
+		return nil, errors.New("TARGET_HOST_TRUST_REQUIRED")
+	}
+	currentRevision, err := a.projectRevision(a.current.Root)
+	if err != nil || currentRevision != revision || a.current.Managed.ProjectRevision != revision {
+		return nil, errors.New("TARGET_HOST_TRUST_STALE")
+	}
 	if len(ids) == 0 || len(ids) > 256 {
 		return nil, errors.New("TARGET_HOST_TRUST_INVALID")
 	}
 	result := make([]executionnode.TargetHostKeyApproval, 0, len(ids))
 	for _, hostID := range ids {
 		pin, ok := a.approvedTargetHostKeys[hostID]
-		if !ok || pin.root != a.current.Root || pin.projectID != plan.ProjectIdentity || pin.revision != revision {
+		if !ok || pin.root != a.current.Root || pin.projectID != projectID || pin.revision != revision {
 			return nil, errors.New("TARGET_HOST_TRUST_REQUIRED")
 		}
 		address, port, _, err := a.savedTargetServerLocked(hostID)

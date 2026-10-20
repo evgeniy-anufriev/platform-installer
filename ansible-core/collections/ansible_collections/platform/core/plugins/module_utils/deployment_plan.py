@@ -416,7 +416,7 @@ def _service_input_requirements(deployments, definitions, resolved_topology):
     return public, private, findings
 
 
-def build_runtime_secret_descriptors(snapshot, catalog, pki_materialization=None):
+def build_runtime_secret_descriptors(snapshot, catalog, pki_materialization=None, application_image_lock=None):
     """Build the closed safe v1alpha2 descriptor response from trusted Core data."""
     if not isinstance(snapshot, dict) or not isinstance(catalog, dict):
         raise ValueError("RUNTIME_SECRET_DESCRIPTORS_INPUT_INVALID")
@@ -471,14 +471,23 @@ def build_runtime_secret_descriptors(snapshot, catalog, pki_materialization=None
             "projectRevision": revision, "descriptors": descriptors,
             "descriptorSetFingerprint": canonical_digest([{key: item[key] for key in fields} for item in descriptors])}
     if snapshot.get('apiVersion') == 'platform.installer/project-snapshot/v2alpha1':
-        model = application_execution_model(snapshot)
+        model = application_execution_model(snapshot, application_image_lock)
         app_inputs = [dict({key: item[key] for key in ('requirementRef', 'purpose', 'providerDeployment',
                                                      'applicationLibraries', 'hosts', 'operations')},
                            sourceRef=item['runtimeReference'], displayLabel=item['runtimeReference'])
                       for item in model['runtimeSecretRequirements']]
+        for item in app_inputs:
+            if item['purpose'].startswith('APPLICATION_REGISTRY_'):
+                field = 'username' if item['purpose'].endswith('_USERNAME') else 'password'
+                for library_id in item['applicationLibraries']:
+                    for registry, pair in snapshot['applicationLibraries']['libraries'][library_id].get('registryCredentials', {}).items():
+                        if pair[field]['source']['ref'] == item['sourceRef']:
+                            label = ('Логин: ' if field == 'username' else 'Пароль: ') + registry
+                            item['displayLabel'] = label.encode('utf-8')[:256].decode('utf-8', 'ignore')
         if any(len(item['hosts']) > 256 for item in app_inputs):
             raise ValueError('RUNTIME_SECRET_DESCRIPTORS_BLOCKED')
-        result.update(apiVersion='BuildRuntimeSecretDescriptors/v1alpha3', applicationInputs=app_inputs)
+        registry_inputs = any(item['purpose'].startswith('APPLICATION_REGISTRY_') for item in app_inputs)
+        result.update(apiVersion='BuildRuntimeSecretDescriptors/v1alpha4' if registry_inputs else 'BuildRuntimeSecretDescriptors/v1alpha3', applicationInputs=app_inputs)
         result['descriptorSetFingerprint'] = canonical_digest(dict(
             serviceInputs=[{key: item[key] for key in fields} for item in descriptors], applicationInputs=app_inputs))
     if len(json.dumps(result, ensure_ascii=True, separators=(',', ':')).encode('utf-8')) > 65536:

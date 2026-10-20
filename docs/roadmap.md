@@ -855,3 +855,13 @@ configurable library runtime directory; infrastructure-stage proof retention;
 explicit plan-bound library-only Infra Verify skip. Follow the [technical plan](work/application-libraries/sdku-post-deployment-corrections-plan.md)
 and ADR-045. Sequential execution is the supported guarantee; no extra daemon
 guard. Source implementation does not authorize activation or target installation.
+
+## APPLICATION-IMAGE-METADATA
+
+Owner-approved automatic image metadata and library-scoped runtime registry
+credentials. Package defaults and ordinary image overrides remain desired state;
+bundle indexing and target-side Ansible preparation produce private frozen plan
+authority. Reuse synchronous Build/Approve/Start and session-secret transport.
+No operator-authored image SHA/size, new persistence or planning daemon. See the
+[implementation plan](work/application-libraries/application-image-metadata-plan.md)
+and ADR-046; current gates and blockers are recorded only in CURRENT_STATE.

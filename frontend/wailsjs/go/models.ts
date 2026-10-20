@@ -208,6 +208,8 @@ export namespace coreadapter {
     }
   }
   export class ApplicationLibrary {
+    registryCredentials?: Record<string, Array<number>>;
+    registries?: string[];
     tables?: Record<string, Array<number>>;
     resourceDefaults?: Record<string, Array<number>>;
     topics: Record<string, Array<number>>;
@@ -239,6 +241,8 @@ export namespace coreadapter {
       );
       this.resources = source["resources"];
       this.sharedSecretRequirements = source["sharedSecretRequirements"];
+      this.registryCredentials = source["registryCredentials"];
+      this.registries = source["registries"];
     }
 
     convertValues(a: any, classs: any, asMap: boolean = false): any {

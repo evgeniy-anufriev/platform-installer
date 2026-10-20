@@ -1,0 +1,51 @@
+---
+- name: Bind the selected image targets without changing operator inventory
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Add only the derived preparation group
+      ansible.builtin.add_host:
+        name: "{{ item }}"
+        groups: platform_image_targets
+        platform_application_image_inputs: "{{ hostvars['localhost'].platform_application_image_inputs }}"
+        platform_application_image_bundle: "{{ hostvars['localhost'].platform_application_image_bundle }}"
+      loop: "{{ platform_application_image_inputs.targetConnections | list }}"
+
+- name: Read image metadata from each selected target network context
+  hosts: platform_image_targets
+  gather_facts: false
+  any_errors_fatal: true
+  tasks:
+    - name: Discover target OS and architecture without Docker
+      ansible.builtin.setup:
+        gather_subset: ['!all', 'min']
+        filter: ['ansible_system', 'ansible_architecture']
+    - name: Initialize target preparation results
+      ansible.builtin.set_fact:
+        platform_application_image_preparations: {}
+        _image_registry_cache: {}
+    - name: Prepare each selected image using ordinary Ansible tasks
+      ansible.builtin.include_role:
+        name: platform.core.prepare_application_images
+      loop: "{{ platform_application_image_inputs.placements | selectattr('hostId', 'equalto', inventory_hostname) | list }}"
+      loop_control:
+        loop_var: application_image_input
+
+- name: Freeze the selected image metadata on the Execution Node
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Retain complete native preparation without secret values
+      ansible.builtin.set_fact:
+        platform_prepared_application_images: >-
+          {{ {'apiVersion': 'platform.installer/container-images/v1alpha2',
+              'placements': platform_application_image_inputs.ready |
+                combine((hostvars | platform.core.application_prepared_image_lock).placements)} }}
+    - name: Persist the complete preparation for the fixed machine protocol
+      ansible.builtin.copy:
+        content: "{{ platform_prepared_application_images | to_json }}"
+        dest: "{{ platform_application_image_result_path }}"
+        mode: '0600'
+      when: platform_application_image_result_path is defined

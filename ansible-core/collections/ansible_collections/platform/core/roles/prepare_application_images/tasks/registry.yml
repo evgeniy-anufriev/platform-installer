@@ -1,0 +1,136 @@
+---
+- name: Read the requested manifest without downloading image layers
+  ansible.builtin.uri:
+    url: "https://{{ application_image_input.request.endpoint }}/v2/{{ application_image_input.request.repository }}/manifests/{{ application_image_input.request.version }}"
+    method: GET
+    headers:
+      Accept: application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json
+    url_username: "{{ _image_username | default(omit, true) }}"
+    url_password: "{{ _image_password | default(omit, true) }}"
+    force_basic_auth: true
+    follow_redirects: none
+    return_content: true
+    timeout: 20
+    status_code: [200, 401, 404]
+  register: _image_manifest_response
+  no_log: true
+
+- name: Resolve a Bearer challenge using bounded read-only repository scope
+  when: _image_manifest_response.status == 401
+  block:
+    - name: Require the supported registry authentication challenge
+      ansible.builtin.assert:
+        that: _image_manifest_response.www_authenticate | default('') is match('Bearer ')
+        fail_msg: APPLICATION_REGISTRY_AUTH_FAILED
+      no_log: true
+    - name: Bind the authentication realm and service
+      ansible.builtin.set_fact:
+        _image_auth_realm: >-
+          {{ (_image_manifest_response.www_authenticate | regex_findall('realm="([^"]+)"')) | first }}
+        _image_auth_service: >-
+          {{ ((_image_manifest_response.www_authenticate | regex_findall('service="([^"]+)"')) | first) | default('') }}
+      no_log: true
+    - name: Keep authentication credentials within the approved registry origin
+      ansible.builtin.assert:
+        that:
+          - _image_auth_realm is match('https://')
+          - _image_username == '' or (_image_auth_realm | urlsplit('netloc')) == application_image_input.request.endpoint or (application_image_input.request.registry == 'docker.io' and (_image_auth_realm | urlsplit('netloc')) == 'auth.docker.io')
+        fail_msg: APPLICATION_REGISTRY_AUTH_ORIGIN_INVALID
+      no_log: true
+    - name: Obtain only a pull-scoped token from the trusted auth realm
+      ansible.builtin.uri:
+        url: "{{ _image_auth_realm }}{{ '&' if '?' in _image_auth_realm else '?' }}service={{ _image_auth_service | urlencode }}&scope={{ ('repository:' ~ application_image_input.request.repository ~ ':pull') | urlencode }}"
+        url_username: "{{ _image_username | default(omit, true) }}"
+        url_password: "{{ _image_password | default(omit, true) }}"
+        force_basic_auth: true
+        follow_redirects: none
+        return_content: true
+        timeout: 20
+      register: _image_token_response
+      no_log: true
+    - name: Bind the token without publishing its response
+      ansible.builtin.set_fact:
+        _image_token: "{{ _image_token_response.json.token | default(_image_token_response.json.access_token) }}"
+      no_log: true
+    - name: Read the requested manifest with the issued registry token
+      ansible.builtin.uri:
+        url: "https://{{ application_image_input.request.endpoint }}/v2/{{ application_image_input.request.repository }}/manifests/{{ application_image_input.request.version }}"
+        headers:
+          Authorization: "Bearer {{ _image_token }}"
+          Accept: application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json
+        return_content: true
+        follow_redirects: none
+        timeout: 20
+        status_code: [200, 404]
+      register: _image_authenticated_manifest
+      no_log: true
+
+- name: Select the target platform from the verified manifest bytes
+  ansible.builtin.set_fact:
+    _image_manifest: "{{ _image_authenticated_manifest if _image_manifest_response.status == 401 else _image_manifest_response }}"
+    _image_authorization: "{{ ('Bearer ' ~ _image_token) if _image_token else ('Basic ' ~ ((_image_username ~ ':' ~ _image_password) | b64encode)) if _image_username else '' }}"
+  no_log: true
+
+- name: Verify and resolve the selected registry manifest and config
+  when: _image_manifest.status == 200
+  block:
+    - name: Verify manifest content and select a platform descriptor
+      ansible.builtin.set_fact:
+        _image_descriptor: "{{ _image_manifest.content | platform.core.application_registry_manifest(_image_platform, application_image_input.request.digest) }}"
+      no_log: true
+    - name: Fetch the exact platform manifest selected from an index
+      ansible.builtin.uri:
+        url: "https://{{ application_image_input.request.endpoint }}/v2/{{ application_image_input.request.repository }}/manifests/{{ _image_descriptor.manifestDigest }}"
+        headers:
+          Authorization: "{{ _image_authorization | default(omit, true) }}"
+          Accept: application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json
+        return_content: true
+        follow_redirects: none
+        timeout: 20
+      register: _image_platform_response
+      when: _image_descriptor.index
+      no_log: true
+    - name: Verify exact platform manifest content
+      ansible.builtin.set_fact:
+        _image_descriptor: "{{ _image_platform_response.content | platform.core.application_registry_manifest(_image_platform, _image_descriptor.manifestDigest) }}"
+      when: _image_descriptor.index
+      no_log: true
+    - name: Read the exact image config without its layers
+      ansible.builtin.uri:
+        url: "https://{{ application_image_input.request.endpoint }}/v2/{{ application_image_input.request.repository }}/blobs/{{ _image_descriptor.configDigest }}"
+        headers:
+          Authorization: "{{ _image_authorization | default(omit, true) }}"
+        return_content: true
+        follow_redirects: none
+        timeout: 20
+        status_code: [200, 301, 302, 303, 307, 308]
+      register: _image_config_response
+      when: _image_descriptor.configDigest | length > 0
+      no_log: true
+    - name: Follow a registry-issued HTTPS blob location without forwarding auth
+      when:
+        - _image_descriptor.configDigest | length > 0
+        - _image_config_response.status in [301, 302, 303, 307, 308]
+      block:
+        - name: Require TLS on the storage endpoint
+          ansible.builtin.assert:
+            that: _image_config_response.location is match('https://')
+            fail_msg: APPLICATION_REGISTRY_BLOB_LOCATION_INVALID
+          no_log: true
+        - name: Read the config from its registry-issued storage URL
+          ansible.builtin.uri:
+            url: "{{ _image_config_response.location }}"
+            return_content: true
+            follow_redirects: none
+            timeout: 20
+          register: _image_redirected_config
+          no_log: true
+        - name: Bind redirected config bytes for the same digest verification
+          ansible.builtin.set_fact:
+            _image_config_response: "{{ _image_redirected_config }}"
+          no_log: true
+    - name: Bind the verified registry identity
+      ansible.builtin.set_fact:
+        _image_registry: "{{ _image_config_response.content | platform.core.application_registry_config(_image_descriptor, application_image_input.reference, _image_platform, application_image_input.legacy) }}"
+      when: _image_descriptor.configDigest | length > 0
+      no_log: true

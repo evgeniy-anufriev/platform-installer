@@ -792,7 +792,8 @@ def _materialize_runtime_projection(journal, metadata, manifest):
 
 def validate_application_manifest(manifest):
     """Closed mixed manifest admission, used by Build, Start and the controller."""
-    if manifest.get('apiVersion') in (infra.MANIFEST_VERSION, infra.SKIP_MANIFEST_VERSION):
+    image_metadata = manifest.get('apiVersion') == 'platform.installer/execution-manifest/v1alpha5'
+    if manifest.get('apiVersion') in (infra.MANIFEST_VERSION, infra.SKIP_MANIFEST_VERSION, 'platform.installer/execution-manifest/v1alpha5'):
         module_utils = os.path.abspath(os.path.join(os.path.dirname(__file__),
             '../collections/ansible_collections/platform/core/plugins/module_utils'))
         if module_utils not in sys.path:
@@ -820,7 +821,7 @@ def validate_application_manifest(manifest):
                         (item['purpose'] == 'APPLICATION_VAULT_ADMIN_TOKEN' and
                          (item['providerDeployment'] not in manifest['infrastructureVerification']['model']['coverage'] or
                           item['runtimeReference'] != 'vault-admin-token-' + item['providerDeployment'])) or
-                        (item['purpose'] == 'APPLICATION_SECRET' and item['providerDeployment'] is not None)):
+                        (item['purpose'] != 'APPLICATION_VAULT_ADMIN_TOKEN' and item['providerDeployment'] is not None)):
                     raise LifecycleError('EXECUTION_MANIFEST_INVALID')
                 refs.add(item['requirementRef'])
                 names.add(item['runtimeReference'])
@@ -828,6 +829,8 @@ def validate_application_manifest(manifest):
         manifest = dict(manifest)
         manifest['apiVersion'] = 'platform.installer/execution-manifest/v1alpha2'
         del manifest['executionMode'], manifest['infrastructureVerification']
+        if image_metadata:
+            manifest.pop('skipInfrastructureVerify', None)
     if manifest.get('apiVersion') != 'platform.installer/execution-manifest/v1alpha2':
         if any(item.get('operation') in ('APPLICATION_LIBRARIES_APPLY', 'APPLICATION_LIBRARIES_VERIFY')
                for item in manifest.get('operations', [])):
@@ -839,7 +842,7 @@ def validate_application_manifest(manifest):
         sys.path.insert(0, module_utils)
     from schema_validation import SchemaValidator
     contracts = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../contracts'))
-    if SchemaValidator(contracts).validate(manifest, os.path.join(contracts, 'execution-manifest/v1alpha2/schema.json')):
+    if not image_metadata and SchemaValidator(contracts).validate(manifest, os.path.join(contracts, 'execution-manifest/v1alpha2/schema.json')):
         raise LifecycleError('EXECUTION_MANIFEST_INVALID')
     identifiers = [item['operationId'] for item in manifest['operations']]
     if len(identifiers) != len(set(identifiers)):
@@ -940,6 +943,9 @@ def _materialize_application_projection(journal, manifest):
                       platform_application_secret_files=files, platform_runtime_secret_inputs=inputs,
                       platform_application_expected_fingerprint=operation['applicationSemanticFingerprint'],
                       platform_application_expected_library_ids=operation['applicationLibraries'])
+        prepared_path = os.path.join(journal.directory, 'application-images.json')
+        if os.path.isfile(prepared_path):
+            scoped['platform_prepared_application_images'] = execution_secret_lease._read(prepared_path)
         destination = os.path.join(journal.directory, '.runtime-projection-' + hashlib.sha256(operation['operationId'].encode()).hexdigest() + '.json')
         descriptor = os.open(destination, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
         with os.fdopen(descriptor, 'w') as stream:

@@ -7,9 +7,11 @@ import re
 try:
     from .application_libraries import checked_file, invocation_package_loader, nonsecret_values
     from .artifact_authority import assemble_authority
+    from .application_images import selected_image, registry_request
 except ImportError:
     from application_libraries import checked_file, invocation_package_loader, nonsecret_values
     from artifact_authority import assemble_authority
+    from application_images import selected_image, registry_request
 
 DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 REFERENCE = re.compile(r"^[a-z0-9][a-z0-9._:/-]*(?::[A-Za-z0-9_][A-Za-z0-9_.-]*)?(?:@sha256:[0-9a-f]{64})?$")
@@ -52,11 +54,18 @@ def image_requirement(instance_id, image_name, image):
                 imageId=image['imageId'], platform=image['platform'], localReference=reference)
 
 
-def resolve_image_lock(native_lock, manifest_lock):
+def resolve_image_lock(native_lock, manifest_lock, prepared=None):
     """Existing standalone lock conflict rule, shared by snapshot and runtime."""
     if native_lock is not None and manifest_lock is not None and native_lock != manifest_lock:
         raise ValueError('APPLICATION_ARTIFACT_LOCK_CONFLICT')
-    return (native_lock or manifest_lock or {}).get('x-container-images', {})
+    legacy = (native_lock or manifest_lock or {}).get('x-container-images', {})
+    if prepared is not None:
+        for entry in prepared.get('placements', {}).values():
+            original = selected_image(legacy, entry['reference'], '', '', '')
+            if original is not None and original != entry['image']:
+                raise ValueError('APPLICATION_ARTIFACT_LOCK_CONFLICT')
+        return prepared
+    return legacy
 
 
 def bundle_archive(root, digest, record, loader):
@@ -156,8 +165,9 @@ def prepare_runtime(root, snapshot, rows, desired, lock, validator, loader):
     libraries = snapshot.get("applicationLibraries", {})
     if snapshot.get("validation", {}).get("status") != "PASS" or libraries.get("status") != "PASS":
         raise ValueError("APPLICATION_RUNTIME_PROJECT_BLOCKED")
-    schema = os.path.join(validator.schema_root, "artifact-source/v1alpha2/image-lock.schema.json")
     image_lock = lock.get("x-container-images", {}) if isinstance(lock, dict) else {}
+    schema = os.path.join(validator.schema_root, 'artifact-source/v1alpha2/' +
+                          ('prepared-images.schema.json' if image_lock.get('apiVersion') == 'platform.installer/container-images/v1alpha2' else 'image-lock.schema.json'))
     if validator.validate(image_lock, schema) or not DIGEST.fullmatch(lock.get("digest", "")):
         raise ValueError("APPLICATION_IMAGE_LOCK_INVALID")
     jobs = []
@@ -195,7 +205,7 @@ def prepare_runtime(root, snapshot, rows, desired, lock, validator, loader):
             configs.append(dict(config, path=checked_file(root, app["logicalPath"] + "/" + name)))
         if len({x["destination"] for x in configs}) != len(configs):
             raise ValueError("APPLICATION_CONFIG_DESTINATION_COLLISION")
-        image = image_lock["images"].get(settings["image"])
+        image = selected_image(image_lock, settings['image'], lib_id, app_id, host)
         if not image:
             raise ValueError("APPLICATION_IMAGE_NOT_LOCKED")
         reference = runtime_reference(image["imageId"])
@@ -220,7 +230,8 @@ def prepare_runtime(root, snapshot, rows, desired, lock, validator, loader):
             offline = dict(offline, kind="OFFLINE_BUNDLE", type="archive", bundleDigest=lock["digest"])
         requirement = image_requirement(app_id, settings['image'], image)
         authority = assemble_authority(requirement, offline, dict(registry or {}, kind="REPOSITORY"), image=True)
-        jobs.append(dict(row, placement=placement, account=account, configs=configs,
+        registry_credentials = row.get('registryCredentials', {}).get(registry_request(registry['reference'])['registry'], {}) if registry else {}
+        jobs.append(dict(row, placement=placement, account=account, configs=configs, registryCredentials=registry_credentials,
                          agentTemplate=checked_file(root, app['logicalPath']+'/'+agent_template) if agent_template else None,
                          appTemplate=checked_file(root, app["logicalPath"] + "/" + app_render["compose_template"]),
                          baseTemplate=checked_file(root, lib["logicalPath"] + "/" + lib_render["base_compose_template"]),

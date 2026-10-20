@@ -22,6 +22,7 @@ import yaml
 REPOSITORY = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPOSITORY / "ansible-core" / "collections"))
 from ansible_collections.platform.core.plugins.module_utils.service_configuration_preview import ordinary_presentation_value
+from ansible_collections.platform.core.plugins.module_utils.application_images import docker_save_image
 SOURCE_ROOTS = (
     ("ansible-core", REPOSITORY / "ansible-core"),
     ("services", REPOSITORY / "services"),
@@ -283,7 +284,27 @@ def artifact_sources(root):
     return sorted(result, key=lambda item: (item["serviceType"], item["requirementId"], item["ref"]))
 
 
-def build(output, runtime, bundle_version, core_version, platforms=None):
+def container_images(root, declarations):
+    images = {}
+    for reference, relative in declarations or []:
+        path = Path(relative)
+        if path.is_absolute() or any(part in ('', '.', '..') for part in relative.split('/')) or '\\' in relative:
+            raise ValueError('APPLICATION_IMAGE_ARCHIVE_PATH_INVALID')
+        archive = root / 'runtime' / path
+        if not relative.startswith('artifacts/') or not archive.is_file() or any(p.is_symlink() for p in (archive, *archive.parents)):
+            raise ValueError('APPLICATION_IMAGE_ARCHIVE_PATH_INVALID')
+        before = archive.stat()
+        image = dict(docker_save_image(archive, reference), archiveRef='runtime/' + relative)
+        if (before.st_size, before.st_mtime_ns) != (archive.stat().st_size, archive.stat().st_mtime_ns):
+            raise ValueError('APPLICATION_IMAGE_ARCHIVE_CHANGED')
+        key = (image['reference'], json.dumps(image['platform'], sort_keys=True))
+        if key in images and images[key] != image:
+            raise ValueError('APPLICATION_IMAGE_ARCHIVE_AMBIGUOUS')
+        images[key] = image
+    return [images[key] for key in sorted(images)]
+
+
+def build(output, runtime, bundle_version, core_version, platforms=None, application_images=None):
     output = output.resolve()
     if output.exists():
         raise ValueError("output already exists: %s" % output)
@@ -311,6 +332,9 @@ def build(output, runtime, bundle_version, core_version, platforms=None):
             "artifactSources": artifact_sources(temporary),
             "components": components(temporary),
         }
+        images = container_images(temporary, application_images)
+        if images:
+            manifest['containerImages'] = images
         (temporary / "manifest.yaml").write_text(
             yaml.safe_dump(manifest, allow_unicode=True, default_flow_style=False, sort_keys=False),
             encoding="utf-8",
@@ -328,11 +352,13 @@ def main():
     parser.add_argument("--runtime-input", type=Path, required=True)
     parser.add_argument("--bundle-version", required=True)
     parser.add_argument("--core-version", default="0.1.0")
+    parser.add_argument('--application-image', action='append', nargs=2, default=[], metavar=('IMAGE', 'RUNTIME_ARCHIVE'),
+                        help='index an existing Docker-save archive, relative to runtime-input; repeat per image')
     parser.add_argument("--platform", action="append", default=[], metavar="OS:VERSION:ARCH",
                         help="explicit platform; repeat for multiple targets, otherwise infer populated packages or Linux os-release")
     args = parser.parse_args()
     try:
-        build(args.output, args.runtime_input.resolve(), args.bundle_version, args.core_version, args.platform)
+        build(args.output, args.runtime_input.resolve(), args.bundle_version, args.core_version, args.platform, args.application_image)
     except ValueError as error:
         print("execution runtime bundle blocked: %s" % error, file=sys.stderr)
         return 2

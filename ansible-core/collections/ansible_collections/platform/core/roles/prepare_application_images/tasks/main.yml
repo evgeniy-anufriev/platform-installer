@@ -1,0 +1,66 @@
+---
+- name: Bind this placement's platform and source inputs
+  ansible.builtin.set_fact:
+    _image_platform:
+      os: "{{ ansible_facts.system | lower }}"
+      architecture: "{{ {'x86_64': 'amd64', 'aarch64': 'arm64'}.get(ansible_facts.architecture, ansible_facts.architecture) }}"
+    _image_registry: {}
+    _image_username: ''
+    _image_password: ''
+    _image_token: ''
+    _image_request_key: "{{ [application_image_input.request, application_image_input.credentials, application_image_input.account, application_image_input.configDirectory] | to_json | hash('sha256') }}"
+  no_log: true
+
+- name: Reuse identical registry observations only within this target preparation
+  ansible.builtin.set_fact:
+    _image_registry: "{{ (_image_registry_cache | default({})).get(_image_request_key, {}) }}"
+  no_log: true
+
+- name: Require assigned runtime credentials before contacting a registry
+  ansible.builtin.assert:
+    that:
+      - application_image_input.credentials.username.source.ref in platform_application_image_secret_values
+      - application_image_input.credentials.password.source.ref in platform_application_image_secret_values
+    fail_msg: APPLICATION_REGISTRY_RUNTIME_SECRET_REQUIRED
+  when: application_image_input.credentials | length > 0
+  no_log: true
+
+- name: Bind explicitly assigned registry session inputs
+  ansible.builtin.set_fact:
+    _image_username: "{{ platform_application_image_secret_values[application_image_input.credentials.username.source.ref] }}"
+    _image_password: "{{ platform_application_image_secret_values[application_image_input.credentials.password.source.ref] }}"
+  when: application_image_input.credentials | length > 0
+  no_log: true
+
+- name: Retain existing node Docker credentials when no library source was assigned
+  ansible.builtin.include_tasks: node_credentials.yml
+  when:
+    - application_image_input.credentials | length == 0
+    - application_image_input.request.registry in (platform_application_approved_registries | default([]))
+    - _image_request_key not in (_image_registry_cache | default({}))
+
+- name: Read metadata from the approved registry in this node's network context
+  ansible.builtin.include_tasks: registry.yml
+  when:
+    - application_image_input.request.registry in (platform_application_approved_registries | default([]))
+    - _image_request_key not in (_image_registry_cache | default({}))
+
+- name: Retain nonsecret registry metadata for repeated placements on this target
+  ansible.builtin.set_fact:
+    _image_registry_cache: "{{ (_image_registry_cache | default({})) | combine({_image_request_key: _image_registry}) }}"
+  when: application_image_input.request.registry in (platform_application_approved_registries | default([]))
+  no_log: true
+
+- name: Match fallback metadata against the exact selected image
+  ansible.builtin.set_fact:
+    _image_offline: "{{ platform_application_image_bundle | platform.core.application_offline_image(application_image_input.reference, _image_platform, application_image_input.legacy) }}"
+  no_log: true
+
+- name: Freeze the selected identity and only an equivalent fallback
+  ansible.builtin.set_fact:
+    platform_application_image_preparations: >-
+      {{ platform_application_image_preparations | combine({
+        (application_image_input | platform.core.application_image_key): {
+          'reference': application_image_input.reference,
+          'image': _image_registry | platform.core.application_prepared_image(_image_offline, application_image_input.legacy)}}) }}
+  no_log: true

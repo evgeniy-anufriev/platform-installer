@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/execution-runtime/v1alpha6/build-deployment-plan.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "apiVersion",
+    "operation",
+    "runId",
+    "project",
+    "runtimeRelease",
+    "deploymentOrder",
+    "applicationVaultSources",
+    "executionMode",
+    "skipInfrastructureVerify",
+    "applicationImagePreparation"
+  ],
+  "properties": {
+    "apiVersion": {
+      "const": "platform.installer/execution-runtime/v1alpha6"
+    },
+    "operation": {
+      "const": "BuildDeploymentPlan"
+    },
+    "runId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "project": {
+      "type": "object"
+    },
+    "runtimeRelease": {
+      "$ref": "../../plan/v1alpha4/schema.json#/properties/runtimeRelease"
+    },
+    "deploymentOrder": {
+      "type": "array",
+      "maxItems": 256,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9][a-z0-9-]{0,127}$"
+      }
+    },
+    "applicationVaultSources": {
+      "type": "object",
+      "maxProperties": 16,
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$"
+      },
+      "additionalProperties": {
+        "enum": [
+          "RUNTIME_INPUT",
+          "CURRENT_RUN_BOOTSTRAP"
+        ]
+      }
+    },
+    "executionMode": {
+      "enum": [
+        "FULL_PROJECT",
+        "APPLICATION_LIBRARIES_ONLY",
+        "INFRASTRUCTURE_VERIFY_ONLY"
+      ]
+    },
+    "skipInfrastructureVerify": {
+      "type": "boolean"
+    },
+    "applicationImagePreparation": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    }
+  }
+}

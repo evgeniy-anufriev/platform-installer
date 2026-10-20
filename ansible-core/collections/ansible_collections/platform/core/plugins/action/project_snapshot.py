@@ -619,7 +619,8 @@ class ActionModule(ActionBase):
                 snapshot["apiVersion"] = "platform.installer/project-snapshot/v2alpha1"
                 snapshot["applicationLibraries"] = applications
                 private_image_lock = resolve_image_lock(task_vars.get('platform_artifact_lock'),
-                                                        (manifest or {}).get('artifactLock'))
+                                                        (manifest or {}).get('artifactLock'),
+                                                        task_vars.get('platform_prepared_application_images'))
                 if task_vars.get('platform_application_expected_fingerprint'):
                     model = application_execution_model(snapshot, private_image_lock)
                     if (model['semanticFingerprint'] != task_vars['platform_application_expected_fingerprint'] or

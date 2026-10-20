@@ -9,11 +9,13 @@ try:
     from .schema_validation import SchemaValidator
     from .kafka_listener_resolution import project_member_listeners
     from .kafka_schema_registry import registry_projection
+    from .application_images import registry_request
 except ImportError:
     from project_validation import canonical_digest
     from schema_validation import SchemaValidator
     from kafka_listener_resolution import project_member_listeners
     from kafka_schema_registry import registry_projection
+    from application_images import registry_request
 
 CONTRACT = "platform.installer/project-desired-state/v3alpha1"
 ID = re.compile(r"^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$")
@@ -535,6 +537,14 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
             topics, topic_bindings = {}, {}
             findings.append(finding('APPLICATION_TOPIC_BINDING_INVALID', field + '.topicBindings'))
         library = libraries.setdefault(library_id, {"libraryRef": row["libraryRef"], "packages": {}, "instances": {}, "resources": row["resources"], 'topics': topics, "sharedSecretRequirements": row["sharedSecrets"], 'connections': shared_connections, 'runtimeDirectory': row.get('runtimeDirectory', '~/' + library_id)})
+        if library.setdefault('registryCredentials', row.get('registryCredentials', {})) != row.get('registryCredentials', {}):
+            findings.append(finding('APPLICATION_HOST_RESOURCE_CONFLICT', field))
+        registries = library.setdefault('registries', [])
+        if row['settings'].get('image'):
+            registry = registry_request(row['settings']['image'])['registry']
+            if registry not in registries:
+                registries.append(registry)
+                registries.sort()
         if library['connections'] != shared_connections or library['runtimeDirectory'] != row.get('runtimeDirectory', '~/' + library_id):
             findings.append(finding('APPLICATION_HOST_RESOURCE_CONFLICT', field))
         library["packages"][row["applicationName"]] = row["packageIdentity"]

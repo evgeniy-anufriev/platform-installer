@@ -1004,3 +1004,16 @@ Resources also selects ClickHouse DB defaults (history), supports physical-name
 override and clear/reset, and displays only fresh Core effective names. Library
 identity expressions and table structures remain file-only and are not evaluated
 in React. Existing screens/Save/reopen/Verify/plan controls are reused.
+
+### Application images and library registry credentials (approved 2026-10-20)
+
+Instance General retains one image override/reset. Library General adds the
+registry host[:port] and a runtime-access assignment. Review/Save persists only
+username/password runtime references in registry_credentials; the existing
+session-secret form accepts values after Save. Values are never edit-session
+project data. Removing an assignment removes its references from desired state.
+The list of suggested registries comes from Core; React does not parse images.
+Create Plan stays synchronous and uses the shared busy indication «Подготовка
+образов и плана…». Registry discovery occurs during that operation, without
+network requests on image input or Save. Image digest/size are not form fields.
+Real React/Wails/Core acceptance and visual inspection are separate gates.

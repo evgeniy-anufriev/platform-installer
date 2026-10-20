@@ -373,7 +373,7 @@ portable export. Save remains local and does not prove Core validity or admissio
 See the [B2 writer contract](contracts/application-library-writer.md) and additive
 [project-edit v1alpha11](../contracts/project-edit/v1alpha11/schema.json).
 
-For standalone A2, the existing `platform_artifact_lock` carries the typed
+For legacy standalone A2 projects, the existing `platform_artifact_lock` carries the typed
 `x-container-images` extension described by artifact-source/v1alpha2. It is not
 a separate desired-state lock file. Each image records its config/image digest,
 platform and optional registry platform-manifest and offline archive descriptors;
@@ -389,6 +389,25 @@ Standalone A2 entrypoints remain independently usable. Their existence does not
 authorize Installer execution, which requires the current versioned Core plan,
 approval and Start contract. See
 [fixture contract](../examples/valid/application-runtime/README.md).
+
+New image selection uses application `defaults.image` and the ordinary instance
+override only. Operators do not enter imageId, archive digest or size. The bundle
+builder indexes Docker-save inputs in manifest `containerImages`; `archiveRef`
+points to the existing component record, which owns archive SHA-256 and size.
+Registry metadata is prepared by Ansible on the selected target nodes before the
+target-free deployment planner. The resulting per-placement image authority is
+derived private plan state, never a new project lock or an application default.
+Legacy image locks remain pinned and are not rewritten automatically.
+
+Library `registry_credentials` maps a registry host[:port] to username/password
+`runtime_secret_ref` descriptors. Only references are saved; values use the
+existing runtime session and request-scoped preparation lease. An explicit pair
+is required when assigned. Otherwise existing node Docker credentials or anonymous
+access remain available. Target TLS/auth/transport failures block preparation;
+an absent compatible registry image may use an indexed offline image. Apply and
+Verify reuse the selected identity and a private transient Docker configuration.
+Preparation does not authorize execution. Fresh Build/Approve/Start remain
+mandatory. See the [implementation plan](work/application-libraries/application-image-metadata-plan.md).
 
 ## Server type metadata
 

@@ -4,6 +4,7 @@ import { ApplicationTopicBindings } from "./ApplicationTopicBindings";
 import { ApplicationPorts, type PortSource } from "./ApplicationPorts";
 import { ApplicationReadiness } from "./ApplicationReadiness";
 import { ApplicationSecretInputs } from "./ApplicationSecretInputs";
+import { ApplicationRegistryCredentials } from "./ApplicationRegistryCredentials";
 import { ApplicationBindings } from "./ApplicationBindings";
 import { ApplicationSecretBindings } from "./ApplicationSecretBindings";
 import { ApplicationCredentials } from "./ApplicationCredentials";
@@ -775,6 +776,23 @@ export function ApplicationsPage({
                         создании
                       </p>
                     </section>
+                    <ApplicationRegistryCredentials
+                      key={selected}
+                      libraryId={selected}
+                      value={library.registry_credentials}
+                      registries={resolved?.registries ?? []}
+                      disabled={busy}
+                      runtimeDisabled={busy || draftActive || dirty}
+                      onChange={(value) =>
+                        void send({
+                          operation: "UpdateApplicationLibraryDeployment",
+                          deploymentId: selected,
+                          entity: { registry_credentials: value },
+                        })
+                      }
+                      load={loadSecrets ? loadApplicationSecrets : undefined}
+                      save={saveSecrets ? saveApplicationSecrets : undefined}
+                    />
                     <section className="application-library-placement">
                       <h3>Размещение</h3>
                       <p className="muted">

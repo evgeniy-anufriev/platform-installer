@@ -644,7 +644,7 @@ func planRuntimeSecretRequirements(plan DeploymentPlan) []string {
 
 // RuntimeSecretValuePurpose identifies values carried in the existing lease map.
 func RuntimeSecretValuePurpose(purpose string) bool {
-	return purpose == "SERVICE_PASSWORD" || purpose == "APPLICATION_SECRET" || purpose == "APPLICATION_VAULT_ADMIN_TOKEN"
+	return purpose == "SERVICE_PASSWORD" || purpose == "APPLICATION_SECRET" || purpose == "APPLICATION_VAULT_ADMIN_TOKEN" || purpose == "APPLICATION_REGISTRY_USERNAME" || purpose == "APPLICATION_REGISTRY_PASSWORD"
 }
 
 func planRuntimeSecretInputRequirements(plan DeploymentPlan) []RuntimeSecretInputRequirement {

@@ -121,6 +121,7 @@ func (a *App) createInstallationPlan(request InstallationPlanRequest) Installati
 	}
 	ctx, cancel := a.operationContext(2 * time.Minute)
 	defer cancel()
+	ctx = executionnode.WithImagePreparationCredentials(ctx, a.imagePreparationCredentialsLocked)
 	var record executionnode.PlanRecord
 	if request.ExecutionMode == "" {
 		record, err = binding.plans.CreatePlanWithOrder(ctx, binding.node, a.current.Root, binding.reader.runtimeRelease, request.DeploymentOrder)

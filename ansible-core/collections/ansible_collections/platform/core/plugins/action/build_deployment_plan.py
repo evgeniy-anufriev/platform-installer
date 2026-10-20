@@ -25,7 +25,7 @@ class ActionModule(ActionBase):
                     isinstance(snapshot.get("validation"), dict) and snapshot["validation"].get("status") == "PASS"):
                 reissue = inspect_reissue(self._task.args.get("pki_state_root"), project.get("id"), pki.get("requests", []))
             result = build_deployment_plan(snapshot, self._task.args.get("service_catalog"), self._task.args.get("runtime_release"), self._task.args.get("created_at", "1970-01-01T00:00:00Z"), self._task.args.get("bundle_artifact_sources"), pki, self._task.args.get("execution_configuration"), self._task.args.get("execution_connections"), reissue, self._task.args.get("deployment_order"), application_image_lock=self._task.args.get("application_image_lock"), application_vault_sources=self._task.args.get("application_vault_sources"))
-            mode = self._task.args.get("execution_mode")
+            mode = self._task.args.get("execution_mode") or ('FULL_PROJECT' if self._task.args.get('application_image_metadata') else None)
             if mode is not None:
                 import sys
                 from pathlib import Path
@@ -35,6 +35,12 @@ class ActionModule(ActionBase):
                 from infrastructure_verification import scope_plan
                 result = scope_plan(result, mode, self._task.args.get("pki_state_root"),
                                     self._task.args.get('skip_infrastructure_verify', False))
+            if self._task.args.get('application_image_metadata'):
+                result['deploymentPlan'].update(apiVersion='platform.installer/plan/v1alpha7',
+                    skipInfrastructureVerify=self._task.args.get('skip_infrastructure_verify', False))
+                if result.get('executionManifest'):
+                    result['executionManifest'].update(apiVersion='platform.installer/execution-manifest/v1alpha5',
+                        skipInfrastructureVerify=self._task.args.get('skip_infrastructure_verify', False))
             destination = os.environ.get("PLATFORM_EXECUTION_MANIFEST_OUTPUT")
             manifest = result["executionManifest"]
             if destination and manifest:

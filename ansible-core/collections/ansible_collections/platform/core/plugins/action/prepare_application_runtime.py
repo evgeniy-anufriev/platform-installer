@@ -17,7 +17,10 @@ class ActionModule(ActionBase):
             manifest = self._loader.load_from_file(manifest_path) if os.path.isfile(manifest_path) else {}
             native_lock = values.get("platform_artifact_lock")
             manifest_lock = (manifest or {}).get("artifactLock")
-            resolve_image_lock(native_lock, manifest_lock)
+            resolve_image_lock(native_lock, manifest_lock, values.get('platform_prepared_application_images'))
+            if values.get('platform_prepared_application_images') is not None:
+                native_lock = dict(native_lock or manifest_lock or {}, **{
+                    'x-container-images': values['platform_prepared_application_images']})
             snapshot = args["snapshot"]
             jobs = prepare_runtime(root, snapshot, values["platform_application_rows"],
                                    values["platform_desired_state"], native_lock or manifest_lock or {},

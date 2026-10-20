@@ -154,14 +154,14 @@
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:01173e81739c7253b0881def7d3d7f22d2435f880a1a353417f376ea22530de7",
+    "digest": "sha256:16bc98b6ea2f2e5325e39384ca7419bc4625626e6ebbdc6b646db2fb7f9d1eb1",
     "kind": "application",
     "name": "sdku-telemechanics",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:efe89c437b2310c77980112f03866d6da0d6d770e01be1cda7c0ff8a5bfd307a",
+    "digest": "sha256:296c4188f8cfad17f8cbe9a9a3e23871bd6bbbb3cc25605ef3528cd92c658a9e",
     "kind": "application",
     "name": "sdku-vtor",
     "sourceDirectory": ".",

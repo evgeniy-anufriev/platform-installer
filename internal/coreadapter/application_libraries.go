@@ -15,6 +15,8 @@ type ApplicationLibraries struct {
 }
 
 type ApplicationLibrary struct {
+	RegistryCredentials      map[string]json.RawMessage     `json:"registryCredentials,omitempty"`
+	Registries               []string                       `json:"registries,omitempty"`
 	Tables                   map[string]json.RawMessage     `json:"tables,omitempty"`
 	ResourceDefaults         map[string]json.RawMessage     `json:"resourceDefaults,omitempty"`
 	Topics                   map[string]json.RawMessage     `json:"topics"`

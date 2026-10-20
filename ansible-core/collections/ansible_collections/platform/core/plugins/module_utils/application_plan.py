@@ -4,11 +4,13 @@ try:
     from .project_validation import canonical_digest
     from .application_libraries import finding, ID
     from .application_runtime import image_requirement
+    from .application_images import selected_image, registry_request
     from .schema_validation import SchemaValidator
 except ImportError:
     from project_validation import canonical_digest
     from application_libraries import finding, ID
     from application_runtime import image_requirement
+    from application_images import selected_image, registry_request
     from schema_validation import SchemaValidator
 
 OPERATIONS = ['APPLICATION_LIBRARIES_APPLY', 'APPLICATION_LIBRARIES_VERIFY']
@@ -24,25 +26,35 @@ def application_execution_model(snapshot, image_lock=None):
     images = image_lock.get('images', {}) if isinstance(image_lock, dict) else {}
     contracts = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../../../../../contracts'))
     invalid_lock = bool(libraries) and bool(SchemaValidator(contracts).validate(
-        image_lock or {}, os.path.join(contracts, 'artifact-source/v1alpha2/image-lock.schema.json')))
+        image_lock or {}, os.path.join(contracts, 'artifact-source/v1alpha2/' +
+        ('prepared-images.schema.json' if (image_lock or {}).get('apiVersion') == 'platform.installer/container-images/v1alpha2' else 'image-lock.schema.json'))))
     if invalid_lock:
         findings.append(finding('APPLICATION_IMAGE_LOCK_INVALID', 'artifactLock.x-container-images'))
         images = {}
 
-    def secret(source, library_id, placements, field, purpose='APPLICATION_SECRET', provider=None):
+    def secret(source, library_id, placements, field, purpose='APPLICATION_SECRET', provider=None, scope=None):
         if source.get('kind') != 'runtime_secret_ref':
             return
         ref = source.get('ref')
         if not isinstance(ref, str) or not ID.fullmatch(ref):
             findings.append(finding('APPLICATION_SECRET_REF_INVALID', field))
             return
-        key = 'application-secret-' + canonical_digest([purpose, ref]).split(':')[1][:32]
-        item = secrets.setdefault((purpose, ref), dict(requirementRef=key, purpose=purpose,
+        key = 'application-secret-' + canonical_digest([purpose, ref] if scope is None else [purpose, ref, scope]).split(':')[1][:32]
+        item = secrets.setdefault((purpose, ref, scope), dict(requirementRef=key, purpose=purpose,
                                             providerDeployment=provider,
                                             runtimeReference=ref, applicationLibraries=[], hosts=[],
                                             operations=list(OPERATIONS)))
         item['applicationLibraries'] = sorted(set(item['applicationLibraries']) | {library_id})
         item['hosts'] = sorted(set(item['hosts']) | set(placements))
+
+    def registry_for(reference, library_id, instance_id, host):
+        try:
+            image = selected_image(image_lock or {}, reference, library_id, instance_id, host)
+            if image is not None and not image.get('registry'):
+                return None
+            return registry_request(image['registry']['reference'] if image else reference)['registry']
+        except ValueError:
+            return registry_request(reference)['registry']  # The image finding still blocks execution.
 
     for library_id, library in sorted(libraries.items()):
         library_hosts = set()
@@ -53,11 +65,20 @@ def application_execution_model(snapshot, image_lock=None):
             for host in placements:
                 image_name = instance['placements'][host].get('imageRequirement', instance.get('imageRequirement', {})).get('image')
                 try:
-                    requirement = image_requirement(instance_id + ':' + host, image_name, images.get(image_name))
+                    image = selected_image(image_lock or {}, image_name, library_id, instance_id, host)
+                    requirement = image_requirement(instance_id + ':' + host, image_name, image)
                     requirements.append(dict(requirement, applicationLibrary=library_id, instanceId=instance_id,
                                              hosts=[host], sourcePolicy='REPOSITORY_THEN_OFFLINE'))
                 except (ValueError, KeyError, TypeError):
                     findings.append(finding('APPLICATION_IMAGE_LOCK_INVALID', field + '.placements.' + host + '.image'))
+            for registry, pair in library.get('registryCredentials', {}).items():
+                registry_hosts = [host for host in placements if registry_for(
+                    instance['placements'][host].get('imageRequirement', instance.get('imageRequirement', {})).get('image'), library_id, instance_id, host) == registry]
+                if not registry_hosts:
+                    continue
+                for name in ('username', 'password'):
+                    secret(pair[name]['source'], library_id, registry_hosts, field + '.registry_credentials.' + registry,
+                           purpose='APPLICATION_REGISTRY_' + name.upper(), scope=library_id + ':' + registry)
             for name, account in sorted(instance.get('credentialRequirements', {}).items()):
                 for credential, value in sorted(account.get('credentials', {}).items()):
                     secret(value['source'], library_id, placements, field + '.accounts.' + name + '.' + credential)

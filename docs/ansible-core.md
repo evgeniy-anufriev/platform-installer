@@ -416,3 +416,31 @@ shared ENV and app grants read the normalized library_resources map. Redis data
 lifecycle is excluded; existing account ACL jobs are unchanged. See
 [Redis key bindings](work/application-libraries/configuration.md#redis-key-name-bindings)
 for precedence, isolated evaluation order and template variables.
+
+### Automatic application image metadata
+
+Application `defaults.image` remains the packaged image selection. An installation
+may override `platform_desired_state.applicationLibraryDeployments.<id>.applications.<slot>.overrides.image`.
+No parallel image_artifact/reference or operator-authored SHA/size is required.
+`build_execution_runtime_bundle.py --application-image IMAGE artifacts/app.tar`
+indexes a Docker-save archive without loading it. Its image ID is the config
+digest; its archive digest and size belong to `components`, not the image entry.
+Docker-save archives do not prove a registry manifest digest for an @digest alias.
+
+The native `application-images-inputs.yml` and `application-images-prepare.yml`
+playbooks resolve inputs locally, then use built-in setup/uri tasks on selected
+targets. They require no Docker daemon for metadata inspection. Config/manifest
+parsing and hashing use small filters; networking, node credentials and delivery
+remain ordinary Ansible tasks. `application-images-plan.yml` composes these steps
+with the existing target-free machine planner. Supply the normal project/catalog,
+bundle, runtime-release and deployment-order variables. For a manual invocation,
+pass session-only registry values by runtime reference through a private extra-vars
+file (`platform_application_image_secret_values`), never tracked inventory.
+
+Installer negotiation uses PrepareApplicationImages in execution-runtime v1alpha6,
+capabilities v1alpha10, plan v1alpha7 and execution-manifest v1alpha5. Preparation
+binds to the saved revision/runtime; the fixed protocol then feeds frozen metadata
+to BuildDeploymentPlan and the existing execution path. No Go/UI registry resolver,
+new planning worker or persistent secret store is introduced. An older runtime
+retains its explicit legacy-lock path. Source/identity policy and verification
+remain in Core. See [the plan](work/application-libraries/application-image-metadata-plan.md).

@@ -190,6 +190,7 @@
         'libraryConnections': _library_package.platform_library_definition.connections | default({}),
         'bindings': application_job.deployment.bindings | default({}),
         'vaultRef': application_job.deployment.vault_ref | default({}),
+        'registryCredentials': application_job.deployment.registry_credentials | default({}),
         'resources': _application_resources,
         'resourceDefaults': _application_resource_defaults,
         'sharedSecrets': _library_package.platform_library_definition.shared_secrets | default({}) |

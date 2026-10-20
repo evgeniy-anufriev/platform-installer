@@ -199,7 +199,7 @@ def assert_admission(root, manifest, run_id=None):
 
 def validate_manifest(manifest):
     skip = manifest.get('skipInfrastructureVerify', False)
-    if (type(skip) is not bool or skip and (manifest.get('apiVersion') != SKIP_MANIFEST_VERSION or
+    if (type(skip) is not bool or skip and (manifest.get('apiVersion') not in (SKIP_MANIFEST_VERSION, 'platform.installer/execution-manifest/v1alpha5') or
             manifest.get('executionMode') != 'APPLICATION_LIBRARIES_ONLY' or has_library_verify_prefix(manifest))):
         raise LifecycleError('EXECUTION_MANIFEST_INVALID')
     binding = manifest.get('infrastructureVerification')
@@ -339,7 +339,7 @@ def record_stats(journal, action_id, stats):
     """Only bounded numeric Ansible recap counters, never task payloads."""
     manifest = _read(os.path.join(journal.directory, 'manifest.json'))
     validate_ownership(journal)
-    if (manifest.get('apiVersion') not in (MANIFEST_VERSION, SKIP_MANIFEST_VERSION) or journal.status().get('state') != 'RUNNING' or
+    if (manifest.get('apiVersion') not in (MANIFEST_VERSION, SKIP_MANIFEST_VERSION, 'platform.installer/execution-manifest/v1alpha5') or journal.status().get('state') != 'RUNNING' or
             not any(op['operationId'] == action_id and op['operation'] == 'SERVICE_VERIFY' for op in manifest['operations']) or
             not isinstance(stats, dict) or len(stats) > 257):
         raise LifecycleError('INFRA_VERIFY_COVERAGE_INCOMPLETE')
@@ -360,7 +360,7 @@ def publish(journal, manifest):
 
 def _publish(journal, manifest):
     """Optional derived index publication after durable terminal; never replay work."""
-    if manifest.get('apiVersion') not in (MANIFEST_VERSION, SKIP_MANIFEST_VERSION):
+    if manifest.get('apiVersion') not in (MANIFEST_VERSION, SKIP_MANIFEST_VERSION, 'platform.installer/execution-manifest/v1alpha5'):
         return
     if manifest.get('skipInfrastructureVerify') is True:
         return

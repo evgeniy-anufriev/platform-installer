@@ -1,0 +1,192 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/execution-capabilities/v1alpha10/schema.json",
+  "title": "Execution capabilities with ordered deployment planning",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "apiVersion",
+    "kind",
+    "bootstrapProtocol",
+    "coreVersion",
+    "catalogDigest",
+    "schemaDigest",
+    "runtime",
+    "supportedOperations",
+    "executionStart",
+    "runtimeSecretDescriptors",
+    "targetCredentialLease",
+    "serviceConfigurationPreview",
+    "deploymentPlanRequestVersions",
+    "applicationExecution",
+    "infrastructureVerification",
+    "skipInfrastructureVerify",
+    "applicationImages"
+  ],
+  "properties": {
+    "apiVersion": {
+      "const": "platform.installer/execution-capabilities/v1alpha10"
+    },
+    "kind": {
+      "const": "ExecutionCapabilities"
+    },
+    "bootstrapProtocol": {
+      "$ref": "../v1alpha5/schema.json#/properties/bootstrapProtocol"
+    },
+    "coreVersion": {
+      "$ref": "../v1alpha5/schema.json#/properties/coreVersion"
+    },
+    "catalogDigest": {
+      "$ref": "../v1alpha5/schema.json#/properties/catalogDigest"
+    },
+    "schemaDigest": {
+      "$ref": "../v1alpha5/schema.json#/properties/schemaDigest"
+    },
+    "runtime": {
+      "$ref": "../v1alpha5/schema.json#/properties/runtime"
+    },
+    "supportedOperations": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "GetCapabilities",
+          "ValidateProject",
+          "BuildProjectSnapshot",
+          "BuildServiceConfigurationPreview",
+          "BuildRuntimeSecretDescriptors",
+          "BuildDeploymentPlan",
+          "StartExecution",
+          "GetExecution",
+          "GetEvents",
+          "CancelExecution",
+          "PutRuntimeSecretLease",
+          "PrepareApplicationImages"
+        ]
+      },
+      "contains": {
+        "const": "BuildServiceConfigurationPreview"
+      }
+    },
+    "projectSnapshotRequestVersions": {
+      "$ref": "../v1alpha5/schema.json#/properties/projectSnapshotRequestVersions"
+    },
+    "executionStart": {
+      "$ref": "../v1alpha5/schema.json#/properties/executionStart"
+    },
+    "targetCredentialLease": {
+      "$ref": "../v1alpha5/schema.json#/properties/targetCredentialLease"
+    },
+    "runtimeSecretDescriptors": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol",
+        "maxHostsPerDescriptor",
+        "maxResponseBytes"
+      ],
+      "properties": {
+        "protocol": {
+          "const": "BuildRuntimeSecretDescriptors/v1alpha4"
+        },
+        "maxDescriptors": {
+          "const": 16
+        },
+        "maxHostsPerDescriptor": {
+          "const": 256
+        },
+        "maxResponseBytes": {
+          "const": 65536
+        }
+      }
+    },
+    "serviceConfigurationPreview": {
+      "$ref": "../v1alpha5/schema.json#/properties/serviceConfigurationPreview"
+    },
+    "deploymentPlanRequestVersions": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "applicationExecution": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "manifestContract",
+        "planContract",
+        "requiredPlanRequestVersion"
+      ],
+      "properties": {
+        "requiredPlanRequestVersion": {
+          "const": "platform.installer/execution-runtime/v1alpha3"
+        },
+        "manifestContract": {
+          "const": "platform.installer/execution-manifest/v1alpha2"
+        },
+        "planContract": {
+          "const": "platform.installer/plan/v1alpha4"
+        }
+      }
+    },
+    "infrastructureVerification": {
+      "required": [
+        "protocol",
+        "executionModes",
+        "requiredPlanRequestVersion",
+        "manifestContract",
+        "planContract"
+      ],
+      "properties": {
+        "executionModes": {
+          "const": [
+            "FULL_PROJECT",
+            "APPLICATION_LIBRARIES_ONLY",
+            "INFRASTRUCTURE_VERIFY_ONLY"
+          ]
+        },
+        "planContract": {
+          "const": "platform.installer/plan/v1alpha5"
+        },
+        "requiredPlanRequestVersion": {
+          "const": "platform.installer/execution-runtime/v1alpha4"
+        },
+        "protocol": {
+          "const": "InfrastructureVerification/v1alpha1"
+        },
+        "manifestContract": {
+          "const": "platform.installer/execution-manifest/v1alpha3"
+        }
+      },
+      "type": "object",
+      "additionalProperties": false
+    },
+    "skipInfrastructureVerify": {
+      "type": "boolean"
+    },
+    "applicationImages": {
+      "required": [
+        "protocol",
+        "leaseProtocol",
+        "planContract",
+        "manifestContract"
+      ],
+      "properties": {
+        "protocol": {
+          "const": "PrepareApplicationImages/v1alpha1"
+        },
+        "leaseProtocol": {
+          "const": "platform.installer/application-image-preparation-lease/v1alpha1"
+        },
+        "manifestContract": {
+          "const": "platform.installer/execution-manifest/v1alpha5"
+        },
+        "planContract": {
+          "const": "platform.installer/plan/v1alpha7"
+        }
+      },
+      "type": "object",
+      "additionalProperties": false
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/artifact-source/v1alpha2/prepared-images.schema.json",
+  "type": "object",
+  "required": ["apiVersion", "placements"],
+  "additionalProperties": false,
+  "properties": {
+    "apiVersion": {"const": "platform.installer/container-images/v1alpha2"},
+    "placements": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object", "required": ["reference", "image"], "additionalProperties": false,
+        "properties": {
+          "reference": {"type": "string"},
+          "image": {"$ref": "image-lock.schema.json#/$defs/image"}
+        }
+      }
+    }
+  }
+}

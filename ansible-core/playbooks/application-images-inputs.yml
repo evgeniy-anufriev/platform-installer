@@ -1,0 +1,38 @@
+---
+- name: Resolve image preparation inputs without contacting targets
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Load ordinary project settings
+      ansible.builtin.include_role:
+        name: platform.core.project_settings
+    - name: Resolve application defaults and overrides
+      ansible.builtin.include_role:
+        name: platform.core.resolve_application_libraries
+      when: platform_desired_state.applicationLibraryDeployments is defined
+    - name: Resolve authoritative project and target connection inputs
+      platform.core.project_snapshot:
+        project_root: "{{ platform_project_root }}"
+        service_catalog_path: "{{ platform_service_catalog_path }}"
+      register: platform_image_snapshot
+    - name: Assemble bounded image preparation inputs
+      platform.core.prepare_application_images:
+        project_root: "{{ platform_project_root }}"
+        bundle_root: "{{ platform_execution_bundle_root }}"
+        snapshot: "{{ platform_image_snapshot.snapshot }}"
+        connections: "{{ platform_image_snapshot.execution_connections }}"
+      register: platform_image_inputs
+    - name: Keep native preparation inputs for subsequent standalone plays
+      ansible.builtin.set_fact:
+        platform_application_image_inputs: "{{ platform_image_inputs.inputs }}"
+    - name: Load the selected immutable bundle's image index
+      ansible.builtin.include_vars:
+        file: "{{ platform_execution_bundle_root }}/manifest.yaml"
+        name: platform_application_image_bundle
+    - name: Persist private preparation inputs for this request
+      ansible.builtin.copy:
+        content: "{{ platform_image_inputs.inputs | to_json }}"
+        dest: "{{ platform_application_image_inputs_path }}"
+        mode: '0600'
+      when: platform_application_image_inputs_path is defined

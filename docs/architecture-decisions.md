@@ -752,3 +752,30 @@ execution protocol/admission semantics. No deployment is authorized here.
 Compatibility clarification for ADR-045: source SDKU image tags stay exact.
 Existing @sha256 inputs keep the previous immutable startup alias; assigning
 a RepoDigest with docker tag is unsupported and must not break offline delivery.
+
+## ADR-046: Derived image authority and target-side registry preparation
+
+Owner approved 2026-10-20. Application defaults and ordinary image overrides own
+image selection. Image metadata is derived from the immutable bundle index or
+target-side registry manifest/config inspection. Archive SHA/size belong to
+bundle components. Legacy explicit image locks remain pinned and compatible.
+
+Ansible built-in tasks own network inspection and target authentication. Python
+is limited to byte parsing/hashing, target-free plan projection and the existing
+fixed execution protocol. Go coordinates one synchronous preparation before Build;
+React edits project references and session inputs. Preparation uses request-scoped
+credentials bound to saved revision/runtime, independently of execution leases.
+It cannot approve or start an execution. Frozen plan authority governs delivery.
+
+Library registry_credentials stores only runtime_secret_ref pairs. Secret values
+remain in the existing session broker/runtime identity path. Target Docker auth
+is transient and scoped to the selected registry. No background planning worker,
+new desired-state store, automatic project migration or persistent Docker login.
+See the [approved plan](work/application-libraries/application-image-metadata-plan.md).
+
+Owner review decision 2026-10-20: AIM-D01 and AIM-D03 are rejected; current
+deployments use amd64 and identical image identity may come from either source.
+No extra platform discovery or sourceRef uniqueness mechanism is introduced.
+Existing runtime identity verification and source policy remain. AIM-D02 and
+AIM-D04 are to be corrected; AIM-D05 real Wails/Core QA is authorized, including
+its isolated QA runtime publication/preparation, without application Approve/Start.

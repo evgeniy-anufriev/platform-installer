@@ -11,11 +11,13 @@ export function ApplicationSecretInputs({
   save,
   libraryId,
   title = "Секреты библиотек",
+  registryOnly = false,
 }: {
   disabled: boolean;
   inline?: boolean;
   libraryId?: string;
   title?: string;
+  registryOnly?: boolean;
   load: () => Promise<RuntimeSecretDescriptorOperation>;
   save: (input: RuntimeSecretValuesInput) => Promise<void>;
 }) {
@@ -40,7 +42,9 @@ export function ApplicationSecretInputs({
         return;
       }
       const inputs = result.applicationInputs?.filter(
-        (item) => !libraryId || item.applicationLibraries.includes(libraryId),
+        (item) =>
+          (!libraryId || item.applicationLibraries.includes(libraryId)) &&
+          item.purpose.startsWith("APPLICATION_REGISTRY_") === registryOnly,
       );
       if (!inputs?.length) {
         setMessage("Секреты библиотек не требуются");
@@ -85,8 +89,9 @@ export function ApplicationSecretInputs({
     >
       <h2>{title}</h2>
       <p className="muted">
-        Значения остаются только в памяти и передаются через runtime lease для
-        одобренного плана.
+        {registryOnly
+          ? "Логин и пароль остаются только в runtime-сессии и применяются на целевых серверах."
+          : "Значения остаются только в памяти и передаются через runtime lease для одобренного плана."}
       </p>
       {operation?.applicationInputs?.map((item) => (
         <label key={item.requirementRef}>
@@ -94,12 +99,18 @@ export function ApplicationSecretInputs({
           {inline && (
             <small>
               Источник: {item.sourceRef} ·{" "}
-              {item.providerDeployment ?? "Приложение"}
+              {registryOnly
+                ? "Registry"
+                : (item.providerDeployment ?? "Приложение")}
             </small>
           )}
           <input
             aria-label={item.displayLabel}
-            type="password"
+            type={
+              item.purpose === "APPLICATION_REGISTRY_USERNAME"
+                ? "text"
+                : "password"
+            }
             autoComplete="new-password"
             required
             disabled={disabled || busy}

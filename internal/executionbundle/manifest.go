@@ -34,6 +34,21 @@ type Manifest struct {
 	// only: Core owns requirement matching and no absolute host path appears in
 	// the index.
 	ArtifactSources []ArtifactSource `yaml:"artifactSources,omitempty" json:"artifactSources,omitempty"`
+	ContainerImages []ContainerImage `yaml:"containerImages,omitempty" json:"containerImages,omitempty"`
+}
+
+type ImagePlatform struct {
+	OS           string `yaml:"os" json:"os"`
+	Architecture string `yaml:"architecture" json:"architecture"`
+	Variant      string `yaml:"variant,omitempty" json:"variant,omitempty"`
+}
+
+// ArchiveRef points to Components, which alone owns archive size/checksum.
+type ContainerImage struct {
+	Reference  string        `yaml:"reference" json:"reference"`
+	ImageID    string        `yaml:"imageId" json:"imageId"`
+	Platform   ImagePlatform `yaml:"platform" json:"platform"`
+	ArchiveRef string        `yaml:"archiveRef" json:"archiveRef"`
 }
 
 type Platform struct {
@@ -134,6 +149,16 @@ func ValidateRoot(root string) (Verified, error) {
 	}
 	if err := validateArtifactSources(manifest.ArtifactSources, manifest.Components); err != nil {
 		return Verified{}, err
+	}
+	seenImages := map[string]bool{}
+	for _, image := range manifest.ContainerImages {
+		key := image.Reference + "\x00" + image.Platform.OS + "\x00" + image.Platform.Architecture + "\x00" + image.Platform.Variant
+		if image.Reference == "" || !digestValid(image.ImageID) || image.Platform.OS != "linux" ||
+			(image.Platform.Architecture != "amd64" && image.Platform.Architecture != "arm64") ||
+			!paths[image.ArchiveRef] || !strings.HasPrefix(image.ArchiveRef, "runtime/artifacts/") || seenImages[key] {
+			return Verified{}, errors.New("EXECUTION_BUNDLE_CONTAINER_IMAGE_INVALID")
+		}
+		seenImages[key] = true
 	}
 	return Verified{Root: root, Manifest: manifest, Digest: bytesDigest(data), rootIdentity: rootIdentity}, nil
 }
