@@ -85,8 +85,6 @@ platform_application_definition:
                 combine(application_job.instance.overrides.ports | default({}), recursive=true) |
                 combine(application_job.hostOverride.ports | default({}), recursive=true))['port-1'].container }}
             WEB_SERVER_PORT: *web_server_port
-            ALERT_CLASS_TOPIC: alert-class
-            ALERT_HANDLER_TOPIC: alert-hdl
             AUTO_ACK_DELAY: "600000"
             AUTO_ACK_TIME: PT2H
             ENABLE_CUSTOM_TIMESTAMP: "false"

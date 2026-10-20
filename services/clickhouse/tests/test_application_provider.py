@@ -49,6 +49,20 @@ class ApplicationProviderTests(unittest.TestCase):
         self_test = self
         client = Client()
         self.assertTrue(table_matches(client, 'analytics', table))
+        # A copied YAML default may be a float in scientific notation; ClickHouse
+        # preserves its integral value with a trailing decimal point in SHOW CREATE.
+        table['settings']['max_bytes_to_merge_at_min_space_in_pool'] = 1.048576e6
+        original_query = metadata['create_table_query']
+        for value in ['1048576', '1048576.', '1048576.0']:
+            metadata['create_table_query'] = original_query + ', max_bytes_to_merge_at_min_space_in_pool = ' + value
+            with self.subTest(integral_setting=value):
+                self.assertTrue(table_matches(client, 'analytics', table))
+        for value in ['1048577.', '1048576.1', '10485760']:
+            metadata['create_table_query'] = original_query + ', max_bytes_to_merge_at_min_space_in_pool = ' + value
+            with self.subTest(different_setting=value), self.assertRaisesRegex(ProviderFailure, 'SETTINGS_DRIFT'):
+                table_matches(client, 'analytics', table)
+        metadata['create_table_query'] = original_query
+        del table['settings']['max_bytes_to_merge_at_min_space_in_pool']
         for field, wrong in [('engine', 'ReplacingMergeTree'), ('sorting_key', ''), ('create_table_query', 'SETTINGS index_granularity = 4096')]:
             original = metadata[field]
             metadata[field] = wrong

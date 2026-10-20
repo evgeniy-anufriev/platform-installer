@@ -112,6 +112,15 @@ class ApplicationRuntimeTests(unittest.TestCase):
         self.assertEqual(1, len(jobs))
         self.assertEqual('kafka.topic', jobs[0]['resources']['events']['kind'])
 
+    def test_runtime_preparation_accepts_library_redis_name_references(self):
+        inputs = self.runtime_fixture()
+        resources = inputs[2][0]['resources']
+        for key in ('dm-meta', 'alert-hdl', 'alert-class'):
+            resources[key] = dict(kind='redis.key', binding='cache', parameters=dict(name='sdku-' + key))
+        jobs = prepare_runtime(*inputs)
+        self.assertEqual(1, len(jobs))
+        self.assertEqual(resources, jobs[0]['resources'])
+
     def test_runtime_preparation_rechecks_changed_bytes_in_next_invocation(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

@@ -206,6 +206,13 @@ def project_providers(rows, snapshot, configuration, desired, catalog):
                 raise ValueError('APPLICATION_PROVIDER_HOST_CONFLICT')
             databases, schemas = {}, []
             for resource_id, resource in sorted(library.get('resources', {}).items()):
+                if resource['kind'] == 'redis.key':
+                    ref = row['bindings'].get(resource['binding'], {}).get('deploymentRef')
+                    if (desired['serviceDeployments'].get(ref, {}).get('serviceType') != 'redis'
+                            or set(resource['parameters']) != {'name'} or not isinstance(resource['parameters']['name'], str)
+                            or not resource['parameters']['name'] or 'mode' in resource):
+                        raise ValueError('APPLICATION_PROVIDER_RESOURCE_INVALID')
+                    continue
                 if resource['kind'] not in {'postgresql.database', 'postgresql.schema', 'clickhouse.database', 'kafka.topic'}:
                     raise ValueError('APPLICATION_PROVIDER_CAPABILITY_UNSUPPORTED')
                 ref = row['bindings'].get(resource['binding'], {}).get('deploymentRef')

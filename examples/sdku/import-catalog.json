@@ -1,20 +1,20 @@
 [
   {
-    "digest": "sha256:fc91fb862b7e21fb278e332a7edd7dec627127517034e3b792ae158052353d5e",
+    "digest": "sha256:51a85d8d0276e47498b98243d47d2a7e17d354d239f7467b4822ed4d64e9f021",
     "kind": "application",
     "name": "alarm-service",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:ffc9222c0b6340020e2567e428afebd4e9af401588329b2df1862b2f01d05301",
+    "digest": "sha256:13b9109f7bbfadca8c847ac982ea4439c88e5b12746d4134b77a43db5da4a932",
     "kind": "application",
     "name": "alarm-view-service",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:fbcdaebc02237ad77b475899fbced9bed993d45b84445acbc5a9300e4d4d8c18",
+    "digest": "sha256:920c81e6529d4ee005c2bb6da3c7a8c7a9e673e15b0e22e4198edbade3b69378",
     "kind": "application",
     "name": "data-manager",
     "sourceDirectory": ".",
@@ -84,16 +84,16 @@
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:e9cbc52f21af43e7cb61ed6fdd1eb044df36664851482374abc9e57a7e25820f",
+    "digest": "sha256:fbaafc443748772e1187a90b83ec93579c13cb128ca70ec7cd2850d73edd7f87",
     "kind": "application",
-    "name": "hmi-frontend-viewer-noszi",
+    "name": "hmi-frontend-viewer",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:fbaafc443748772e1187a90b83ec93579c13cb128ca70ec7cd2850d73edd7f87",
+    "digest": "sha256:e9cbc52f21af43e7cb61ed6fdd1eb044df36664851482374abc9e57a7e25820f",
     "kind": "application",
-    "name": "hmi-frontend-viewer",
+    "name": "hmi-frontend-viewer-noszi",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
@@ -126,16 +126,16 @@
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:c14392d1d9284830643fef174ced6408c10af7dbab6a15dced8c99b3c25d6f81",
+    "digest": "sha256:d6405d6682e922f1dd82a87f466e63c869e2d69d81c83cb00b4a68a8ff7c82b8",
     "kind": "application",
-    "name": "sdku-knp-ui",
+    "name": "sdku-knp",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:d6405d6682e922f1dd82a87f466e63c869e2d69d81c83cb00b4a68a8ff7c82b8",
+    "digest": "sha256:c14392d1d9284830643fef174ced6408c10af7dbab6a15dced8c99b3c25d6f81",
     "kind": "application",
-    "name": "sdku-knp",
+    "name": "sdku-knp-ui",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
@@ -154,9 +154,16 @@
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:16bc98b6ea2f2e5325e39384ca7419bc4625626e6ebbdc6b646db2fb7f9d1eb1",
+    "digest": "sha256:01173e81739c7253b0881def7d3d7f22d2435f880a1a353417f376ea22530de7",
     "kind": "application",
     "name": "sdku-telemechanics",
+    "sourceDirectory": ".",
+    "version": "1.0.0"
+  },
+  {
+    "digest": "sha256:efe89c437b2310c77980112f03866d6da0d6d770e01be1cda7c0ff8a5bfd307a",
+    "kind": "application",
+    "name": "sdku-vtor",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
@@ -168,13 +175,6 @@
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:296c4188f8cfad17f8cbe9a9a3e23871bd6bbbb3cc25605ef3528cd92c658a9e",
-    "kind": "application",
-    "name": "sdku-vtor",
-    "sourceDirectory": ".",
-    "version": "1.0.0"
-  },
-  {
     "digest": "sha256:f26a5c291728097e5a7e8d67581d5a72c9738ff02531df06dd389c600eb04bf4",
     "kind": "application",
     "name": "user-preferences",
@@ -182,7 +182,14 @@
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:7eed74a9d680987715f3143ff5d93092d942a0df566dbef2bf3cfbc9361d9d19",
+    "kind": "library",
+    "name": "cspa",
+    "version": "1.0.0",
+    "sourceDirectory": ".",
+    "digest": "sha256:9b0715e7d43595a86e0ce6d81d579ac34af490b05c84aca563d5fff0219cf328"
+  },
+  {
+    "digest": "sha256:08a7b2c01868d74963dee09fabd2c438b0a7354361e658b2eb91bbf6529b772a",
     "kind": "library",
     "name": "sdku",
     "sourceDirectory": ".",

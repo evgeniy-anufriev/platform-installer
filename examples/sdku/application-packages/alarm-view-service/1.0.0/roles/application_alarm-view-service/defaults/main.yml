@@ -6,21 +6,6 @@ platform_application_definition:
         user: 1000:1000
         restart: always
         accounts:
-            kafka:
-                mode: managed
-                credentials:
-                    username:
-                        source: {kind: literal, value: '{{ application_instance_id | replace(''-'', ''_'') }}'}
-                    password:
-                        source: {kind: runtime_secret_ref, ref: '{{ application_instance_id }}-kafka-password'}
-                grants:
-                    - {topicRef: alarms, operations: [Read, Write, Describe]}
-                    - {topicRef: alarms_compact, operations: [Read, Write, Describe]}
-                    - {topicRef: main, operations: [Read, Write, Describe]}
-                    - {resourceType: group, name: '{{ application_instance_id }}', patternType: prefixed, operations: [Read, Describe]}
-                    - {resourceType: group, name: 'alarm-view-service-{{ application_instance_id }}', patternType: prefixed, operations: [Read, Describe]}
-                    - {resourceType: group, name: 'alarm-view-service-{{ application_instance_id }}', patternType: prefixed, operations: [Read, Describe]}
-                    - {resourceType: cluster, name: kafka-cluster, operations: [Describe, IdempotentWrite]}
             clickhouse:
                 credentials:
                     password:
@@ -78,70 +63,80 @@ platform_application_definition:
                     keys:
                         - '*'
                 mode: managed
+            sentinel:
+                credentials:
+                    password:
+                        source:
+                            kind: runtime_secret_ref
+                            ref: '{{ application_instance_id }}-sentinel-password'
+                    username:
+                        source:
+                            kind: literal
+                            value: '{{ application_instance_id | replace(''-'', ''_'') }}'
+                grants:
+                    channels:
+                        - '*'
+                    commands:
+                        - ping
+                        - auth
+                        - hello
+                        - sentinel|get-master-addr-by-name
+                        - sentinel|master
+                        - sentinel|replicas
+                        - sentinel|slaves
+                        - sentinel|sentinels
+                        - psubscribe
+                mode: managed
         command:
             - java
             - -jar
             - alarm-view-service.jar
+        endpoint:
+            enabled: true
+            endpoint_group: qa-shared-endpoint
+            listener: port-1
+            probe:
+                expected_status: 200
+                path: /actuator/health
+                timeout: 10
+            protocol: http
         environment:
-            custom-kafka.ssl.enable-ssl: "true"
-            custom-kafka.ssl.properties.security.protocol: SASL_SSL
-            custom-kafka.ssl.properties.sasl.mechanism: SCRAM-SHA-512
-            custom-kafka.ssl.properties.sasl.jaas.config: '$${KAFKA_CONSUMER_SASL_JAAS_CONFIG}'
-            KAFKA_ENABLE_SSL: "true"
-            SPRING_KAFKA_SSL_ENABLE_SSL: "true"
-            KAFKA_SECURITY_PROTOCOL: SASL_SSL
-            KAFKA_SASL_MECHANISM: SCRAM-SHA-512
-            kafka.consumer.security.protocol: SASL_SSL
-            kafka.producer.security.protocol: SASL_SSL
-            kafka.consumer.sasl.mechanism: SCRAM-SHA-512
-            kafka.producer.sasl.mechanism: SCRAM-SHA-512
-            kafka.consumer.sasl.jaas.config: '$${KAFKA_CONSUMER_SASL_JAAS_CONFIG}'
-            kafka.producer.sasl.jaas.config: '$${KAFKA_PRODUCER_SASL_JAAS_CONFIG}'
-            spring.kafka.ssl.properties.security.protocol: SASL_SSL
-            spring.kafka.ssl.properties.sasl.mechanism: SCRAM-SHA-512
-            spring.kafka.ssl.properties.sasl.jaas.config: '$${KAFKA_CONSUMER_SASL_JAAS_CONFIG}'
-            logging.level.tnt.tnscada.core.kafkamanager.kafka.config.KafkaManagerConfig: INFO
-            SERVER_PORT: &web_server_port >-
-                {{ ((application_job.application.definition.defaults.ports | default({})) |
-                combine(application_job.slot.overrides.ports | default({}), recursive=true) |
-                combine(application_job.instance.overrides.ports | default({}), recursive=true) |
-                combine(application_job.hostOverride.ports | default({}), recursive=true))['port-1'].container }}
-            TNT_DEMO_CLIENT_PORT: *web_server_port
-            WEB_SERVER_PORT: *web_server_port
-            ALERT_CLASS_TOPIC: alert-class
-            ALERT_HANDLER_TOPIC: alert-hdl
             AUTO_ACK_DELAY: "600000"
             AUTO_ACK_TIME: PT2H
             DB_CONNECTION_STRING: $${POSTGRES_JDBC_ENDPOINT}/{{ application_databases.postgres.alarms_db.name }}?$${POSTGRES_SSL_OPTIONS}
             DB_ROOT_CERT: /opt/application/pki/ca-chain.pem
+            EVO_MANAGER_APP_ID: '{{ application_instance_id }}'
             HISTORY_DATASOURCE_CLICKHOUSE_JDBCURL: $${CLICKHOUSE_JDBC_ENDPOINT}/{{ application_databases.clickhouse.history.name }}?$${CLICKHOUSE_SSL_OPTIONS}&compress=0
             JAVA_OPTS: -Xmx4096m
-            KAFKA_ACK_ALARM_TOPIC: dev-ack-alarm
+            KAFKA_ACK_ALARM_TOPIC: '{{ application_topics.kafka.ack_alarm.name }}'
             KAFKA_ALARM_COMPACT_TOPIC: '{{ application_topics.kafka.alarms_compact.name }}'
             KAFKA_ALARM_CONSUMER_ID: '{{ application_instance_id }}-$${SERVER_ID}-alarm-consumer'
-            KAFKA_ALARM_PRODUCER_ID: '{{ application_instance_id }}-$${SERVER_ID}-alarm-producer'
             KAFKA_ALARM_GROUP: alarm-view-service-{{ application_instance_id }}
             KAFKA_ALARM_GROUP_WS: alarm-view-service-{{ application_instance_id }}
             KAFKA_ALARM_HISTORY_TOPIC: '{{ application_topics.kafka.alarms.name }}'
+            KAFKA_ALARM_PRODUCER_ID: '{{ application_instance_id }}-$${SERVER_ID}-alarm-producer'
+            KAFKA_APPLICATION_ID_CONFIG: '{{ application_instance_id }}'
             KAFKA_LISTENER_CONCURRENCY: "1"
+            KAFKA_LISTENER_ID_CONFIG: '{{ application_instance_id }}'
             KAFKA_MANAGER_LISTENER_ID: alarm-view-service-{{ application_instance_id }}
+            KAFKA_SASL_MECHANISM: PLAIN
+            KAFKA_SECURITY_PROTOCOL: SSL
             KAFKA_SIGNAL_TOPIC: '{{ application_topics.kafka.main.name }}'
             LOGGER_LEVEL: DEBUG
             SERVER_ALLOWED_ORIGINS: '*'
+            SERVER_PORT: '{{ ((application_job.application.definition.defaults.ports | default({})) | combine(application_job.slot.overrides.ports | default({}), recursive=true) | combine(application_job.instance.overrides.ports | default({}), recursive=true) | combine(application_job.hostOverride.ports | default({}), recursive=true))[''port-1''].container }}'
             SIM_DELAY: "1000"
             SLEUTH_TRACE_ENABLED: false
             SPRING_KAFKA_CLIENT_ID: '{{ application_instance_id }}-$${SERVER_ID}'
             SPRING_PROFILES_ACTIVE: sdku
             SQL_INIT_MODE: never
             TIME_STAMP_PATTERN: yyyy.MM.dd HH:mm:ss.SSS
-            TN_SCADA_REDIS_SENTINEL_MASTER: ""
+            TNT_DEMO_CLIENT_PORT: '{{ ((application_job.application.definition.defaults.ports | default({})) | combine(application_job.slot.overrides.ports | default({}), recursive=true) | combine(application_job.instance.overrides.ports | default({}), recursive=true) | combine(application_job.hostOverride.ports | default({}), recursive=true))[''port-1''].container }}'
+            WEB_SERVER_PORT: '{{ ((application_job.application.definition.defaults.ports | default({})) | combine(application_job.slot.overrides.ports | default({}), recursive=true) | combine(application_job.instance.overrides.ports | default({}), recursive=true) | combine(application_job.hostOverride.ports | default({}), recursive=true))[''port-1''].container }}'
             kafka.consumer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-consumer'
             kafka.producer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-producer'
             logging.level.ru.tnt.transneft.alarmservice.processor: WARN
             server.max-http-request-header-size: 100MB
-            EVO_MANAGER_APP_ID: '{{ application_instance_id }}'
-            KAFKA_APPLICATION_ID_CONFIG: '{{ application_instance_id }}'
-            KAFKA_LISTENER_ID_CONFIG: '{{ application_instance_id }}'
         ports:
             port-1:
                 container: 10021
@@ -153,40 +148,6 @@ platform_application_definition:
                 method: approle
             mode: process-supervisor
             secret_bindings:
-                KAFKA_PRODUCER_SASL_JAAS_CONFIG:
-                    source: {account: kafka, field: password}
-                    format: kafka_scram_jaas
-                KAFKA_CONSUMER_SASL_JAAS_CONFIG:
-                    source: {account: kafka, field: password}
-                    format: kafka_scram_jaas
-                KAFKA_KEYSTORE_PASSWORD:
-                    source:
-                        library_secret: java_keystore_password
-                KAFKA_TRUSTSTORE_PASSWORD:
-                    source:
-                        library_secret: java_keystore_password
-                REDIS_USERNAME:
-                    source:
-                        account: redis
-                        field: username
-                REDIS_PASSWORD:
-                    source:
-                        account: redis
-                        field: password
-                REDIS_SENTINEL_USERNAME:
-                    source:
-                        account: redis
-                        field: username
-                REDIS_SENTINEL_PASSWORD:
-                    source:
-                        account: redis
-                        field: password
-                REDIS_KEYSTORE_PASSWORD:
-                    source:
-                        library_secret: java_keystore_password
-                REDIS_TRUSTSTORE_PASSWORD:
-                    source:
-                        library_secret: java_keystore_password
                 DB_PASSWORD:
                     source:
                         account: postgres
@@ -206,6 +167,34 @@ platform_application_definition:
                 JAVA_KEYSTORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password
+                KAFKA_KEYSTORE_PASSWORD:
+                    source:
+                        library_secret: java_keystore_password
+                KAFKA_TRUSTSTORE_PASSWORD:
+                    source:
+                        library_secret: java_keystore_password
+                REDIS_KEYSTORE_PASSWORD:
+                    source:
+                        library_secret: java_keystore_password
+                REDIS_PASSWORD:
+                    source:
+                        account: redis
+                        field: password
+                REDIS_SENTINEL_PASSWORD:
+                    source:
+                        account: sentinel
+                        field: password
+                REDIS_SENTINEL_USERNAME:
+                    source:
+                        account: sentinel
+                        field: username
+                REDIS_TRUSTSTORE_PASSWORD:
+                    source:
+                        library_secret: java_keystore_password
+                REDIS_USERNAME:
+                    source:
+                        account: redis
+                        field: username
                 SPRING_KAFKA_SSL_KEY_STORE_PASSWORD:
                     source:
                         library_secret: java_keystore_password
@@ -218,11 +207,11 @@ platform_application_definition:
                         field: password
                 TN_SCADA_REDIS_ACL_SENTINEL_PASSWORD:
                     source:
-                        account: redis
+                        account: sentinel
                         field: password
                 TN_SCADA_REDIS_ACL_SENTINEL_USERNAME:
                     source:
-                        account: redis
+                        account: sentinel
                         field: username
                 TN_SCADA_REDIS_ACL_USERNAME:
                     source:
@@ -235,10 +224,16 @@ platform_application_definition:
                     source:
                         library_secret: java_keystore_password
             secrets:
-                mount: applications
+                mount: secret
             type: vault-agent
         readiness:
             delay: 2
             mode: healthcheck
             retries: 30
-    connections: [clickhouse, kafka, postgres, redis, vault]
+    connections:
+        - clickhouse
+        - kafka
+        - postgres
+        - redis
+        - vault
+        - sentinel

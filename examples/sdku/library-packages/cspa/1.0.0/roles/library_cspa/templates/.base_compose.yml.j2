@@ -1,0 +1,40 @@
+{% set environment = library_runtime.defaults.environment | combine({}) %}
+{% set server_ids = groups['all'] | reject('equalto', 'localhost') | sort | list %}
+{% for connection, names in {
+  'kafka': ['KAFKA_BOOTSTRAP_SERVERS', 'SPRING_KAFKA_BOOTSTRAP_SERVERS', 'BOOTSTRAP_SERVERS_CONFIG'],
+  'postgres': ['POSTGRES_ADDRESS'],
+  'clickhouse': ['CLICKHOUSE_ADDRESS'],
+  'redis': ['REDIS_ADDRESS', 'TN_SCADA_REDIS_ADDRESS'],
+  'schema-registry': ['SPRING_KAFKA_SCHEMA_REGISTRY_URL', 'SCHEMA_REGISTRY_URL_CONFIG']
+}.items() %}
+{% set connection = 'sentinel' if connection == 'redis' and 'sentinel' in library_runtime.connections else connection %}
+{% if connection in library_runtime.connections %}
+{% set addresses = [] %}
+{% set targets = library_runtime.connections[connection].targets %}
+{% for target in targets %}
+{% set server = hostvars[target.hostId] %}
+{% set ip = server.ansible_host | default(target.hostId) %}
+{% set hostname = (server.platform_host | default({})).desiredHostname | default(target.hostId, true) %}
+{% set address = '${SERVER_' ~ (server_ids.index(target.hostId) + 1) ~ ('_IP}' if target.address == ip else '_HOSTNAME}') if target.address in [ip, hostname] else target.address %}
+{% set host = '[' ~ address ~ ']' if ':' in target.address else address %}
+{% set _ = addresses.append(('https://' if connection == 'schema-registry' else '') ~ host ~ ':' ~ (target.port | string)) %}
+{% endfor %}
+{% for name in names if name not in environment %}
+{% set _ = environment.update({name: addresses | join(',')}) %}
+{% endfor %}
+{% endif %}
+{% endfor %}
+services:
+  base:
+    init: true
+  backend:
+    extends:
+      service: base
+    environment:
+      "SERVER_ID": "${SERVER_ID}"
+{% for server_id in server_ids %}
+      "SERVER_{{ loop.index }}_IP": "${SERVER_{{ loop.index }}_IP}"
+{% endfor %}
+{% for name, value in environment.items() %}
+      {{ name | to_json }}: {{ (value | string) | to_json }}
+{% endfor %}

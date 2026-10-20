@@ -1,0 +1,411 @@
+platform_library_definition:
+    name: cspa
+    version: 1.0.0
+    connection_defaults:
+        kafka:
+            connectionRef: SSL
+    connections:
+        clickhouse:
+            library_binding: analytics
+            protocol: https
+            purpose: client
+        kafka:
+            library_binding: messaging
+            protocol: tcp
+            purpose: client
+        postgres:
+            library_binding: database
+            protocol: tcp
+            purpose: client
+        redis:
+            library_binding: cache
+            protocol: tcp
+            purpose: client
+        schema-registry:
+            library_binding: messaging
+            protocol: https
+            purpose: schema-registry
+        sentinel:
+            library_binding: cache
+            protocol: tcp
+            purpose: sentinel
+        vault:
+            library_binding: secrets
+            protocol: https
+            purpose: client
+    defaults:
+        environment:
+            ALERT_CLASS_TOPIC: '{{ library_resources[''alert-class''].parameters.name }}'
+            ALERT_HANDLER_TOPIC: '{{ library_resources[''alert-hdl''].parameters.name }}'
+            CLICKHOUSE_HTTP_ENDPOINT: https://$${CLICKHOUSE_ADDRESS}
+            CLICKHOUSE_JDBC_ENDPOINT: jdbc:clickhouse://$${CLICKHOUSE_ADDRESS}
+            CLICKHOUSE_SSL_OPTIONS: ssl=true&sslmode=strict&sslrootcert=$${CLICKHOUSE_SSL_ROOT_CERT}
+            CLICKHOUSE_SSL_ROOT_CERT: /opt/application/pki/ca-chain.pem
+            KAFKA_CONSUMER_DEFAULT_API_TIMEOUT_MS: "3500"
+            KAFKA_CONSUMER_HEARTBEAT_INTERVAL_MS: "500"
+            KAFKA_CONSUMER_REQUEST_TIMEOUT_MS: "3000"
+            KAFKA_CONSUMER_SESSION_TIMEOUT_MS: "10000"
+            KAFKA_CONSUMER_SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS: "5000"
+            KAFKA_CONSUMER_SOCKET_CONNECTION_SETUP_TIMEOUT_MS: "1500"
+            KAFKA_ENABLE_SSL: "true"
+            KAFKA_KEYSTORE_LOCATION: /opt/application/pki/keystore.p12
+            KAFKA_PRODUCER_DELIVERY_TIMEOUT_MS: "20000"
+            KAFKA_PRODUCER_HEARTBEAT_INTERVAL_MS: "500"
+            KAFKA_PRODUCER_LINGER_MS: "15"
+            KAFKA_PRODUCER_MAX_BLOCK_MS: "2500"
+            KAFKA_PRODUCER_REQUEST_TIMEOUT_MS: "3000"
+            KAFKA_PRODUCER_SESSION_TIMEOUT_MS: "10000"
+            KAFKA_PRODUCER_SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS: "5000"
+            KAFKA_PRODUCER_SOCKET_CONNECTION_SETUP_TIMEOUT_MS: "1500"
+            KAFKA_TRUSTSTORE_LOCATION: /opt/application/pki/truststore.p12
+            POSTGRES_JDBC_ENDPOINT: jdbc:postgresql://$${POSTGRES_ADDRESS}
+            POSTGRES_SSL_OPTIONS: targetServerType=primary&ssl=true&sslmode=verify-full&sslrootcert=/opt/application/pki/ca-chain.pem
+            REDIS_CONNECTION_SSL: "true"
+            REDIS_CONNECTION_TYPE: Sentinel
+            REDIS_ENABLE_SSL: "true"
+            REDIS_KEYSTORE_LOCATION: /opt/application/pki/keystore.p12
+            REDIS_METADATA_TOPIC: '{{ library_resources[''dm-meta''].parameters.name }}'
+            REDIS_SENTINEL_MASTER: redis-1
+            REDIS_TRUSTSTORE_LOCATION: /opt/application/pki/truststore.p12
+            SPRING_KAFKA_SECURITY_PROTOCOL: SSL
+            SPRING_KAFKA_SSL_ENABLE_SSL: "true"
+            SPRING_KAFKA_SSL_KEY_STORE_LOCATION: /opt/application/pki/keystore.p12
+            SPRING_KAFKA_SSL_KEY_STORE_TYPE: PKCS12
+            SPRING_KAFKA_SSL_TRUST_STORE_LOCATION: /opt/application/pki/truststore.p12
+            SPRING_KAFKA_SSL_TRUST_STORE_TYPE: PKCS12
+            SPRING_KAFKA_STREAMS_DEFAULT_API_TIMEOUT_MS: "90000000"
+            SPRING_KAFKA_STREAMS_DELIVERY_TIMEOUT_MS: "3500"
+            SPRING_KAFKA_STREAMS_HEARTBEAT_INTERVAL_MS: "500"
+            SPRING_KAFKA_STREAMS_MAX_BLOCK_MS: "2500"
+            SPRING_KAFKA_STREAMS_REQUEST_TIMEOUT_MS: "3000"
+            SPRING_KAFKA_STREAMS_SESSION_TIMEOUT_MS: "10000"
+            SPRING_KAFKA_STREAMS_SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS: "5000"
+            SPRING_KAFKA_STREAMS_SOCKET_CONNECTION_SETUP_TIMEOUT_MS: "1500"
+            TN_SCADA_METADATA_TOPIC: '{{ library_resources[''dm-meta''].parameters.name }}'
+            TN_SCADA_REDIS_CONNECTION_TYPE: Sentinel
+            TN_SCADA_REDIS_SENTINEL_MASTER: redis-1
+            TN_SCADA_REDIS_SSL_PROPERTIES_KEY_STORE_LOCATION: /opt/application/pki/keystore.p12
+            TN_SCADA_REDIS_SSL_PROPERTIES_SSL: "true"
+            TN_SCADA_REDIS_SSL_PROPERTIES_TRUST_STORE_LOCATION: /opt/application/pki/truststore.p12
+            VAULT_CACERT: /opt/application/pki/ca-chain.pem
+            kafka.consumer.default.api.timeout.ms: "3500"
+            kafka.consumer.heartbeat.interval.ms: "500"
+            kafka.consumer.http.connect.timeout.ms: "1000"
+            kafka.consumer.http.read.timeout.ms: "1000"
+            kafka.consumer.max.poll.interval.ms: "10000"
+            kafka.consumer.request.timeout.ms: "3000"
+            kafka.consumer.schema.registry.ssl.truststore.location: /opt/application/pki/ca-chain.pem
+            kafka.consumer.schema.registry.ssl.truststore.type: PEM
+            kafka.consumer.session.timeout.ms: "10000"
+            kafka.consumer.socket.connection.setup.timeout.max.ms: "5000"
+            kafka.consumer.socket.connection.setup.timeout.ms: "1500"
+            kafka.producer.heartbeat.interval.ms: "500"
+            kafka.producer.http.connect.timeout.ms: "1000"
+            kafka.producer.http.read.timeout.ms: "1000"
+            kafka.producer.max.block.ms: "2500"
+            kafka.producer.request.timeout.ms: "3000"
+            kafka.producer.schema.registry.ssl.truststore.location: /opt/application/pki/ca-chain.pem
+            kafka.producer.schema.registry.ssl.truststore.type: PEM
+            kafka.producer.session.timeout.ms: "10000"
+            kafka.producer.socket.connection.setup.timeout.max.ms: "5000"
+            kafka.producer.socket.connection.setup.timeout.ms: "1500"
+            tn-scada.kafka.listener.store-id: $${SERVER_ID}
+        parameters: {}
+    resource_defaults:
+        clickhouse:
+            databases:
+                history:
+                    name: '{{ library_instance_id | replace(''-'', ''_'') }}'
+            tables:
+                alarm_message:
+                    columns:
+                        - name: id
+                          type: UUID
+                        - name: system_id
+                          type: UInt32
+                        - name: object_id
+                          type: UInt32
+                        - name: parameter_id
+                          type: UInt32
+                        - name: detail_nr
+                          type: UInt32
+                        - name: ts
+                          type: UInt64
+                        - name: ts2
+                          type: UInt64
+                        - name: quality
+                          type: Int64
+                        - name: signal_val
+                          type: String
+                        - name: ack_time
+                          type: UInt64
+                        - name: in_time
+                          type: UInt64
+                        - name: ack_state
+                          type: UInt32
+                        - name: alert_class_name
+                          type: String
+                        - name: ackable
+                          type: Bool
+                        - name: direction
+                          type: Bool
+                        - name: text
+                          type: String
+                        - name: comment
+                          type: String
+                        - name: signal_state
+                          type: UInt32
+                        - name: user_name
+                          type: String
+                        - name: description
+                          type: String
+                        - name: text0
+                          type: String
+                        - name: arm
+                          type: String
+                        - name: prior
+                          type: UInt32
+                        - name: invalid
+                          type: Bool
+                        - name: insert_ts
+                          type: UInt64
+                        - name: out_of_service
+                          type: Bool
+                        - name: alert_class
+                          type: String
+                        - name: alert_class_by_group
+                          type: Map(String, String)
+                        - name: tag_name
+                          type: String
+                        - name: responsibility_area
+                          type: Array(String)
+                        - name: control_time
+                          type: UInt64
+                    engine: ReplacingMergeTree
+                    order_by: (ts, ts2, id)
+                    settings:
+                        index_granularity: 8192
+                records:
+                    columns:
+                        - codec: T64, LZ4
+                          name: systemId
+                          type: UInt32
+                        - codec: T64, LZ4
+                          name: objectId
+                          type: UInt32
+                        - codec: T64, LZ4
+                          name: parameterId
+                          type: UInt32
+                        - codec: T64, LZ4
+                          name: attrId
+                          type: UInt32
+                        - codec: DoubleDelta, LZ4
+                          name: ts
+                          type: UInt64
+                        - codec: DoubleDelta, LZ4
+                          name: ts2
+                          type: Nullable(UInt64)
+                        - codec: T64, LZ4
+                          name: quality
+                          type: Nullable(Int64)
+                        - codec: LZ4
+                          name: invalid
+                          type: Nullable(Bool)
+                        - codec: Gorilla(8), LZ4
+                          name: value
+                          type: Nullable(Float64)
+                        - codec: LZ4
+                          name: strValue
+                          type: Nullable(String)
+                        - codec: LZ4
+                          name: service
+                          type: LowCardinality(Nullable(String))
+                        - codec: DoubleDelta, LZ4
+                          name: dt
+                          type: Date
+                        - codec: DoubleDelta, LZ4
+                          name: ts3
+                          type: Nullable(UInt64)
+                        - codec: DoubleDelta, LZ4
+                          name: offs
+                          type: Nullable(Int64)
+                        - codec: LZ4
+                          name: tagName
+                          type: Nullable(String)
+                        - codec: T64, LZ4
+                          name: status
+                          type: Nullable(Int64)
+                    engine: MergeTree
+                    indexes:
+                        - expression: objectId
+                          granularity: 1
+                          name: idx_set_objectId
+                          type: set(1000)
+                        - expression: parameterId
+                          granularity: 1
+                          name: idx_set_parameterId
+                          type: set(1000)
+                        - expression: intDiv(ts, 3600000)
+                          granularity: 1
+                          name: idx_minmax_h1
+                          type: minmax
+                        - expression: offs
+                          granularity: 1
+                          name: idx_minmax_offs
+                          type: minmax
+                    order_by: (parameterId, objectId, systemId, attrId, ts, ts2, invalid, quality, value, strValue)
+                    partition_by: toDate(fromUnixTimestamp64Milli(toInt64(ts), 'UTC'))
+                    primary_key: (parameterId, objectId, systemId, attrId, ts)
+                    sample_by: parameterId
+                    settings:
+                        allow_nullable_key: 1
+                        columns_to_prewarm_mark_cache: parameterId,objectId,systemId,attrId,ts
+                        index_granularity: 8192
+                        max_bytes_to_merge_at_max_space_in_pool: 1.610612736e+11
+                        max_bytes_to_merge_at_min_space_in_pool: 1.048576e+06
+                        max_parts_to_merge_at_once: 100
+                        prewarm_mark_cache: 1
+                        prewarm_primary_key_cache: 1
+                        primary_key_compression_codec: LZ4
+                        ratio_of_defaults_for_sparse_serialization: 0.95
+                        ttl_only_drop_parts: 0
+                        use_primary_key_cache: 1
+        kafka:
+            topics:
+                ack_alarm:
+                    config:
+                        cleanup.policy: delete
+                    name: cspa-ack-alarm
+                    partitions: 1
+                alarms:
+                    config:
+                        cleanup.policy: delete
+                    name: cspa-alarms
+                    partitions: 1
+                alarms_compact:
+                    config:
+                        cleanup.policy: compact
+                    name: cspa-alarms-compact
+                    partitions: 1
+                main:
+                    config:
+                        cleanup.policy: delete
+                    name: cspa-main
+                    partitions: 1
+                main_compact:
+                    config:
+                        cleanup.policy: compact
+                    name: cspa-main-compact
+                    partitions: 1
+        postgresql:
+            databases:
+                alarms_db:
+                    name: cspa_alarm_view
+                ef-store:
+                    name: cspa_ef_store
+                model:
+                    name: cspa_tn_scada
+                preferences:
+                    name: cspa_user_preferences
+        redis:
+            keys:
+                alert-class:
+                    name: '{{ library_instance_id }}-alert-class'
+                alert-hdl:
+                    name: '{{ library_instance_id }}-alert-hdl'
+                dm-meta:
+                    name: '{{ library_instance_id }}-meta'
+    runtime_directory: ~/{{ library_instance_id }}
+    shared_secrets:
+        java_keystore_password:
+            source:
+                binding: application-pki
+                credential: java_keystore_password
+                kind: pki_credential
+    slots:
+        alarm-service:
+            applicationRef: alarm-service@1.0.0
+            required: false
+        alarm-view-service:
+            applicationRef: alarm-view-service@1.0.0
+            required: false
+        data-manager:
+            applicationRef: data-manager@1.0.0
+            required: false
+        ef-backend:
+            applicationRef: ef-backend@1.0.0
+            required: false
+        evo-manager:
+            applicationRef: evo-manager@1.0.0
+            required: false
+        evo-scheduler:
+            applicationRef: evo-scheduler@1.0.0
+            required: false
+        ham-backend:
+            applicationRef: ham-backend@1.0.0
+            required: false
+        hmi-backend:
+            applicationRef: hmi-backend@1.0.0
+            required: false
+        hmi-frontend-alarms:
+            applicationRef: hmi-frontend-alarms@1.0.0
+            inherit_defaults: false
+            required: false
+        hmi-frontend-para:
+            applicationRef: hmi-frontend-para@1.0.0
+            inherit_defaults: false
+            required: false
+        hmi-frontend-svg-editor:
+            applicationRef: hmi-frontend-svg-editor@1.0.0
+            inherit_defaults: false
+            required: false
+        hmi-frontend-trends:
+            applicationRef: hmi-frontend-trends@1.0.0
+            inherit_defaults: false
+            required: false
+        hmi-frontend-viewer:
+            applicationRef: hmi-frontend-viewer@1.0.0
+            inherit_defaults: false
+            required: false
+        hmi-frontend-viewer-noszi:
+            applicationRef: hmi-frontend-viewer-noszi@1.0.0
+            inherit_defaults: false
+            required: false
+        iec60870:
+            applicationRef: iec60870@1.0.0
+            required: false
+        kafka-ch-replicator:
+            applicationRef: kafka-ch-replicator@1.0.0
+            required: false
+        kafka-history-writer:
+            applicationRef: kafka-history-writer@1.0.0
+            required: false
+        opc-ua-server:
+            applicationRef: opc-ua-server@1.0.0
+            required: false
+        sdku-knp:
+            applicationRef: sdku-knp@1.0.0
+            required: false
+        sdku-knp-ui:
+            applicationRef: sdku-knp-ui@1.0.0
+            inherit_defaults: false
+            required: false
+        sdku-status-calculation:
+            applicationRef: sdku-status-calculation@1.0.0
+            required: false
+        sdku-tank-farm:
+            applicationRef: sdku-tank-farm@1.0.0
+            required: false
+        sdku-telemechanics:
+            applicationRef: sdku-telemechanics@1.0.0
+            required: false
+        sdku-vtor:
+            applicationRef: sdku-vtor@1.0.0
+            required: false
+        sdku-vtor-ui:
+            applicationRef: sdku-vtor-ui@1.0.0
+            inherit_defaults: false
+            required: false
+        user-preferences:
+            applicationRef: user-preferences@1.0.0
+            required: false

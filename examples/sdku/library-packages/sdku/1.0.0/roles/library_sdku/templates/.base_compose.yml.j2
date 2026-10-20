@@ -7,6 +7,7 @@
   'redis': ['REDIS_ADDRESS', 'TN_SCADA_REDIS_ADDRESS'],
   'schema-registry': ['SPRING_KAFKA_SCHEMA_REGISTRY_URL', 'SCHEMA_REGISTRY_URL_CONFIG']
 }.items() %}
+{% set connection = 'sentinel' if connection == 'redis' and 'sentinel' in library_runtime.connections else connection %}
 {% if connection in library_runtime.connections %}
 {% set addresses = [] %}
 {% set targets = library_runtime.connections[connection].targets %}

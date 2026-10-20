@@ -409,3 +409,10 @@ Resources supports selecting history from defaults, explicit name/clear-reset an
 fresh-only Core name display. UI never evaluates the default expression. Existing
 installed resource IDs/ownership must be preserved via account/ENV/name overrides;
 key changes do not migrate/adopt installed objects. No automatic project migration.
+
+
+Redis name references use resource_defaults.redis.keys and redis.key selections;
+shared ENV and app grants read the normalized library_resources map. Redis data
+lifecycle is excluded; existing account ACL jobs are unchanged. See
+[Redis key bindings](work/application-libraries/configuration.md#redis-key-name-bindings)
+for precedence, isolated evaluation order and template variables.

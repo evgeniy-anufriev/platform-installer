@@ -1015,6 +1015,11 @@ export function ApplicationsPage({
                       resources={objectValue(library.resources)}
                       resolvedTopics={resolvedTopics}
                       resolvedResources={resolvedResources}
+                      redisDefaults={objectValue(
+                        objectValue(
+                          objectValue(definition.resource_defaults).redis,
+                        ).keys,
+                      )}
                       databaseDefaults={objectValue(
                         objectValue(
                           objectValue(definition.resource_defaults).postgresql,

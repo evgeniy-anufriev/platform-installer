@@ -44,6 +44,59 @@ class StandaloneLibrariesQA(unittest.TestCase):
             self.assertIn('kafka', instance['credentialRequirements'])
             self.assertEqual('kafka_scram_jaas', instance['secretBindings']['KAFKA_PRODUCER_SASL_JAAS_CONFIG']['format'])
 
+    def test_shared_defaults_cannot_read_previous_library_rows(self):
+        path = os.path.join(self.root, 'library-packages/sdku/1.0.0/roles/library_sdku/defaults/main.yml')
+        self.edit(path, lambda d: d['platform_library_definition'].update(defaults={
+            'environment': {'INVALID': '{{ platform_application_rows[0].instanceId }}'}}))
+        self.snapshot(expected_error='PROJECT_SNAPSHOT_INPUT_INVALID')
+
+    def test_redis_keys_resolve_before_shared_env_and_account_grants(self):
+        for library in ('sdku', 'cspa'):
+            path = os.path.join(self.root, 'library-packages', library, '1.0.0/roles/library_' + library + '/defaults/main.yml')
+            def definition(d):
+                value = d['platform_library_definition']
+                value['resource_defaults'] = {'redis': {'keys': {
+                    key: {'name': '{{ library_instance_id }}-' + key}
+                    for key in ('dm-meta', 'alert-hdl', 'alert-class')}}}
+                value.setdefault('defaults', {})['environment'] = {
+                    'REDIS_METADATA_TOPIC': "{{ library_resources['dm-meta'].parameters.name }}",
+                    'TN_SCADA_METADATA_TOPIC': "{{ library_resources['dm-meta'].parameters.name }}",
+                    'ALERT_HANDLER_TOPIC': "{{ library_resources['alert-hdl'].parameters.name }}",
+                    'ALERT_CLASS_TOPIC': "{{ library_resources['alert-class'].parameters.name }}"}
+            self.edit(path, definition)
+        def selections(d):
+            for lib in d['platform_desired_state']['applicationLibraryDeployments'].values():
+                lib['resources'].update({key: dict(kind='redis.key', binding='cache', parameters={})
+                                         for key in ('dm-meta', 'alert-hdl', 'alert-class')})
+        self.edit(self.vars, selections)
+        self.edit(self.defaults, lambda d: d['platform_application_definition']['defaults']['accounts']['redis'].update(
+            grants={'keys': ["{{ library_resources['dm-meta'].parameters.name }}"],
+                    'channels': ["{{ library_resources['alert-hdl'].parameters.name }}"], 'commands': ['+@all', '-@admin']}))
+        def projected(expected='sdku-dm-meta'):
+            result = self.snapshot()
+            self.assertEqual('PASS', result['status'], [(f['code'], f.get('field')) for f in result['findings']])
+            for key, library in result['applicationLibraries']['libraries'].items():
+                name = expected if key == 'sdku' else 'cspa-dm-meta'
+                self.assertEqual(name, library['resources']['dm-meta']['parameters']['name'])
+                self.assertNotIn('mode', library['resources']['dm-meta'])
+                instance = library['instances']['apigateway-' + key]
+                self.assertEqual([name], instance['credentialRequirements']['redis']['grants']['keys'])
+                for placement in instance['placements'].values():
+                    self.assertEqual(name, placement['environment']['REDIS_METADATA_TOPIC'])
+                    self.assertEqual(name, placement['environment']['TN_SCADA_METADATA_TOPIC'])
+                    self.assertEqual(key + '-alert-hdl', placement['environment']['ALERT_HANDLER_TOPIC'])
+            return result
+        projected()
+        self.edit(self.vars, lambda d: d['platform_desired_state']['applicationLibraryDeployments']['sdku'].update(
+            resource_defaults={'redis': {'keys': {'dm-meta': {'name': 'group_meta'}}}}))
+        projected('group_meta')
+        self.edit(self.vars, lambda d: d['platform_desired_state']['applicationLibraryDeployments']['sdku']['resources']['dm-meta']['parameters'].update(name='explicit_meta'))
+        projected('explicit_meta')
+        self.edit(self.vars, lambda d: d['platform_desired_state']['applicationLibraryDeployments']['sdku']['resources']['dm-meta']['parameters'].pop('name'))
+        projected('group_meta')
+        self.edit(self.vars, lambda d: d['platform_desired_state']['applicationLibraryDeployments']['sdku']['resources'].pop('dm-meta'))
+        self.snapshot(expected_error='FAILED!')
+
     def test_library_connection_keys_and_clickhouse_history_defaults(self):
         with open(self.defaults) as stream:
             connections = json.load(stream)['platform_application_definition']['connections']

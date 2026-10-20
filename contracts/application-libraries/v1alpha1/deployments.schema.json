@@ -76,7 +76,8 @@
                 "postgresql.database",
                 "postgresql.schema",
                 "clickhouse.database",
-                "kafka.topic"
+                "kafka.topic",
+                "redis.key"
               ]
             },
             "binding": {
@@ -104,7 +105,49 @@
             "binding",
             "parameters"
           ],
-          "additionalProperties": false
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "kind": {
+                    "const": "redis.key"
+                  }
+                },
+                "required": [
+                  "kind"
+                ]
+              },
+              "then": {
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "mode"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "databaseRef"
+                      ]
+                    }
+                  ]
+                },
+                "properties": {
+                  "parameters": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          ]
         },
         "maxProperties": 128
       },

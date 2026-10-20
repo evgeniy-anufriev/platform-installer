@@ -486,6 +486,35 @@ installed resource IDs/ownership must be preserved via account/ENV/name override
 key changes do not migrate/adopt installed objects. No automatic project migration.
 
 
+### Redis key name bindings
+
+Redis keys use resource_defaults.redis.keys and selected resources of kind
+redis.key (binding plus parameters.name). Precedence is package -> library
+instance resource_defaults -> selected resource.parameters. Clear removes the
+explicit name override. Redis key references have no mode or databaseRef; manually
+supplying those fields is invalid. Defaults alone select nothing.
+
+library_resources exposes the normalized selected map to library/application
+templates. SDKU declares dm-meta, alert-hdl, alert-class. Shared library ENV uses,
+for example, {{ library_resources['dm-meta'].parameters.name }} for both
+REDIS_METADATA_TOPIC and TN_SCADA_METADATA_TOPIC. ALERT_HANDLER_TOPIC and
+ALERT_CLASS_TOPIC use their corresponding references. METADATA_TOPIC remains a
+separate Kafka setting. App-owned grants.keys/channels may reference the same
+names; identities and privileges stay with the application.
+
+Core validates raw inputs, binds library identity, renders upstream resource
+inputs in an isolated context, merges resources in native Ansible, binds fresh
+library_resources, then renders isolated shared defaults before app ENV/grants.
+The existing action's raw host context/sanitized templar is reused only for
+isolation; it does not merge precedence. Application/previous-placement variables
+and library_resources are unavailable to upstream resource defaults.
+
+The plan creates/verifies accounts and ACLs, not Redis key data. redis.key produces
+no provider creation job, ownership marker, existence check, SET/HSET, DEL or
+expiry/type management. Applications create real values. Resources UI reuses
+selection from defaults, explicit names/reset and fresh Core preview; no mode,
+SQL or Kafka settings are exposed for Redis keys. No UI/Go resolver or migration.
+
 ### Kafka SCRAM accounts and listener selection
 
 Kafka adds a client `SASL_SSL` listener (default port 9096) with `SCRAM-SHA-512`.

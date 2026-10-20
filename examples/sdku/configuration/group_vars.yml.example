@@ -27,6 +27,9 @@ platform_desired_state:
         # Choose sentinel only for a Sentinel-backed Redis connection.
         redis: {connectionRef: client}
       resources:
+        dm-meta: {kind: redis.key, binding: cache, parameters: {}}
+        alert-hdl: {kind: redis.key, binding: cache, parameters: {}}
+        alert-class: {kind: redis.key, binding: cache, parameters: {}}
         history: {kind: clickhouse.database, binding: analytics, parameters: {}}
         model: {kind: postgresql.database, binding: database, parameters: {}}
         alarms_db: {kind: postgresql.database, binding: database, parameters: {}}

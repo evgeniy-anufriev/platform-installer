@@ -32,6 +32,19 @@ class ApplicationProvidersTest(unittest.TestCase):
             normalize_kafka_grants([{'topicRef': 'events', 'operations': ['Read']}], topics, 'other')
         with self.assertRaisesRegex(ValueError, 'GRANTS_INVALID'):
             normalize_kafka_grants([{'resourceType': 'group', 'name': '*', 'operations': ['Invented']}], topics, 'kafka')
+    def test_redis_key_references_produce_no_provider_data_jobs(self):
+        self.accounts.clear()
+        self.resources.clear()
+        self.resources['dm-meta'] = dict(kind='redis.key', binding='pg', parameters={'name': 'qa-meta'})
+        self.desired['serviceDeployments']['pg']['serviceType'] = 'redis'
+        result = self.resolve()
+        self.assertEqual('PASS', result['status'], result['findings'])
+        self.assertEqual([], result['jobs'])
+        self.assertEqual([], result['libraryJobs'])
+        self.assertEqual([], result['instanceJobs'])
+        self.desired['serviceDeployments']['pg']['serviceType'] = 'postgresql'
+        self.assertEqual('BLOCKED', self.resolve()['status'])
+
     def test_kafka_topics_share_the_library_barrier_and_conflict_check(self):
         self.resources.clear()
         self.accounts.clear()

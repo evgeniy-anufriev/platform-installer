@@ -27,16 +27,8 @@
     application_databases: {}
     _application_connections: {}
     _application_resources: {}
-    _application_resource_defaults: >-
-      {{ _library_package.platform_library_definition.resource_defaults | default({}) |
-         combine(application_job.deployment.resource_defaults | default({}), recursive=true, list_merge='replace') }}
-    _application_topic_bindings: >-
-      {{ (application_job.commonDefaults.topicBindings | default({}) if application_job.slot.inherit_defaults | default(true) else {}) |
-         combine(application_job.application.definition.defaults.topicBindings | default({}), recursive=true, list_merge='replace') |
-         combine(application_job.slot.overrides.topicBindings | default({}), recursive=true, list_merge='replace') |
-         combine(application_job.commonOverrides.topicBindings | default({}) if application_job.slot.inherit_defaults | default(true) else {}, recursive=true, list_merge='replace') |
-         combine(application_job.instance.overrides.topicBindings | default({}), recursive=true, list_merge='replace') |
-         combine(application_job.hostOverride.topicBindings | default({}), recursive=true, list_merge='replace') }}
+    library_resources: {}
+    _application_resource_defaults: {}
   no_log: true
   become: false
 
@@ -59,15 +51,76 @@
   no_log: true
   become: false
 
+- name: Resolve upstream resource templates in the isolated library context
+  platform.core.prepare_application_libraries:
+    resource_defaults: true
+    library_id: "{{ application_job.libraryId }}"
+    host_id: "{{ application_job.hostId }}"
+    defaults_path: "{{ application_job.library.defaultsPath }}"
+  register: _application_resource_inputs
+  no_log: true
+  become: false
+
+- name: Require valid upstream library resource templates
+  ansible.builtin.assert:
+    that: _application_resource_inputs.findings | default([]) | length == 0
+    fail_msg: "PROJECT_SNAPSHOT_INPUT_INVALID: Unable to resolve isolated library resource defaults"
+    quiet: true
+  become: false
+
+- name: Merge package and instance resource defaults with ordinary Ansible precedence
+  ansible.builtin.set_fact:
+    _application_resource_defaults: >-
+      {{ _application_resource_inputs.defaults |
+         combine(_application_resource_inputs.overrides, recursive=true, list_merge='replace') }}
+  no_log: true
+  become: false
+
 - name: Merge selected resource parameters with library defaults
   ansible.builtin.set_fact:
     _application_resources: >-
       {{ _application_resources | combine({item.key: item.value | combine({'parameters':
          ((_application_resource_defaults.kafka.topics[item.key] | default({})) if item.value.kind == 'kafka.topic' else
           (_application_resource_defaults.postgresql.databases[item.key] | default({})) if item.value.kind == 'postgresql.database' else
-          (_application_resource_defaults.clickhouse.databases[item.key] | default({})) if item.value.kind == 'clickhouse.database' else {}) |
+          (_application_resource_defaults.clickhouse.databases[item.key] | default({})) if item.value.kind == 'clickhouse.database' else
+          (_application_resource_defaults.redis['keys'][item.key] | default({})) if item.value.kind == 'redis.key' else {}) |
          combine(item.value.parameters, recursive=true, list_merge='replace')})}) }}
   loop: "{{ application_job.deployment.resources | default({}) | dict2items }}"
+  no_log: true
+  become: false
+
+- name: Bind normalized resources for shared library templates
+  ansible.builtin.set_fact:
+    library_resources: "{{ _application_resources }}"
+  no_log: true
+  become: false
+
+- name: Resolve isolated shared defaults after native resource normalization
+  platform.core.prepare_application_libraries:
+    shared_defaults: true
+    library_id: "{{ application_job.libraryId }}"
+    host_id: "{{ application_job.hostId }}"
+    defaults_path: "{{ application_job.library.defaultsPath }}"
+  register: _application_shared
+  no_log: true
+  become: false
+
+- name: Require valid isolated shared library templates
+  ansible.builtin.assert:
+    that: _application_shared.findings | default([]) | length == 0
+    fail_msg: "PROJECT_SNAPSHOT_INPUT_INVALID: Unable to resolve isolated shared library defaults"
+    quiet: true
+  become: false
+
+- name: Bind legacy topic selections after shared defaults
+  ansible.builtin.set_fact:
+    _application_topic_bindings: >-
+      {{ (_application_shared.defaults.topicBindings | default({}) if application_job.slot.inherit_defaults | default(true) else {}) |
+         combine(application_job.application.definition.defaults.topicBindings | default({}), recursive=true, list_merge='replace') |
+         combine(application_job.slot.overrides.topicBindings | default({}), recursive=true, list_merge='replace') |
+         combine(_application_shared.overrides.topicBindings | default({}) if application_job.slot.inherit_defaults | default(true) else {}, recursive=true, list_merge='replace') |
+         combine(application_job.instance.overrides.topicBindings | default({}), recursive=true, list_merge='replace') |
+         combine(application_job.hostOverride.topicBindings | default({}), recursive=true, list_merge='replace') }}
   no_log: true
   become: false
 
@@ -90,10 +143,10 @@
 - name: Seed parameter context before expanding dependent application settings
   ansible.builtin.set_fact:
     application_parameters: >-
-      {{ (application_job.commonDefaults.parameters | default({}) if application_job.slot.inherit_defaults | default(true) else {}) |
+      {{ (_application_shared.defaults.parameters | default({}) if application_job.slot.inherit_defaults | default(true) else {}) |
          combine(vars['_application_package_' ~ ((application_job.libraryId ~ application_job.slotId ~ application_job.hostId) | hash('sha256'))].platform_application_definition.defaults.parameters | default({}), recursive=true, list_merge='replace') |
          combine(application_job.slot.overrides.parameters | default({}), recursive=true, list_merge='replace') |
-         combine(application_job.commonOverrides.parameters | default({}) if application_job.slot.inherit_defaults | default(true) else {}, recursive=true, list_merge='replace') |
+         combine(_application_shared.overrides.parameters | default({}) if application_job.slot.inherit_defaults | default(true) else {}, recursive=true, list_merge='replace') |
          combine(application_job.instance.overrides.parameters | default({}), recursive=true, list_merge='replace') |
          combine(application_job.hostOverride.parameters | default({}), recursive=true, list_merge='replace') }}
   no_log: true
@@ -102,10 +155,10 @@
 - name: Resolve parameters after this placement identity is available
   ansible.builtin.set_fact:
     application_parameters: >-
-      {{ (application_job.commonDefaults.parameters | default({}) if application_job.slot.inherit_defaults | default(true) else {}) |
+      {{ (_application_shared.defaults.parameters | default({}) if application_job.slot.inherit_defaults | default(true) else {}) |
          combine(_application_package.platform_application_definition.defaults.parameters | default({}), recursive=true, list_merge='replace') |
          combine(application_job.slot.overrides.parameters | default({}), recursive=true, list_merge='replace') |
-         combine(application_job.commonOverrides.parameters | default({}) if application_job.slot.inherit_defaults | default(true) else {}, recursive=true, list_merge='replace') |
+         combine(_application_shared.overrides.parameters | default({}) if application_job.slot.inherit_defaults | default(true) else {}, recursive=true, list_merge='replace') |
          combine(application_job.instance.overrides.parameters | default({}), recursive=true, list_merge='replace') |
          combine(application_job.hostOverride.parameters | default({}), recursive=true, list_merge='replace') }}
   no_log: true
@@ -114,10 +167,10 @@
 - name: Resolve inherited settings without this application's explicit overrides
   ansible.builtin.set_fact:
     application_inherited: >-
-      {{ (application_job.commonDefaults if application_job.slot.inherit_defaults | default(true) else {}) |
+      {{ (_application_shared.defaults if application_job.slot.inherit_defaults | default(true) else {}) |
          combine(_application_package.platform_application_definition.defaults, recursive=true, list_merge='replace') |
          combine(application_job.slot.overrides | default({}), recursive=true, list_merge='replace') |
-         combine(application_job.commonOverrides if application_job.slot.inherit_defaults | default(true) else {}, recursive=true, list_merge='replace') }}
+         combine(_application_shared.overrides if application_job.slot.inherit_defaults | default(true) else {}, recursive=true, list_merge='replace') }}
   no_log: true
   become: false
 
@@ -146,7 +199,7 @@
         'connections': _application_connections,
         'identityNames': _application_package.platform_application_definition.identity_environment | default([]),
         'packageIdentity': {'application': application_job.application.digest, 'library': application_job.library.digest},
-        'commonDefaults': application_job.commonDefaults | combine(application_job.commonOverrides, recursive=true, list_merge='replace'),
+        'commonDefaults': _application_shared.defaults | combine(_application_shared.overrides, recursive=true, list_merge='replace'),
         'inherited': {'environment': application_inherited.environment | default({}), 'parameters': application_inherited.parameters | default({})},
         'settings': application_inherited |
           combine(application_job.instance.overrides | default({}), recursive=true, list_merge='replace') |

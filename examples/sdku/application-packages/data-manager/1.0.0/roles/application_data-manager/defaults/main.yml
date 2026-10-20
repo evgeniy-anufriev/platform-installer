@@ -57,8 +57,6 @@ platform_application_definition:
                 combine(application_job.instance.overrides.ports | default({}), recursive=true) |
                 combine(application_job.hostOverride.ports | default({}), recursive=true))['port-1'].container }}
             WEB_SERVER_PORT: *web_server_port
-            ALERT_CLASS_TOPIC: alert-class
-            ALERT_HANDLER_TOPIC: alert-hdl
             DB_CONNECTION_STRING: $${POSTGRES_JDBC_ENDPOINT}/{{ application_databases.postgres.model.name }}?$${POSTGRES_SSL_OPTIONS}
             JAVA_OPTS: -Xmx8192m
             LOGGER_DATAMANAGER_LEVEL: INFO
@@ -68,7 +66,6 @@ platform_application_definition:
             LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_JDBC: DEBUG
             PROFILES_ACTIVE: specversion, development
             REDIS_CONNECTION_TYPE: Standalone
-            REDIS_METADATA_TOPIC: dm-meta
             REDIS_SENTINEL_MASTER: '{{ application_parameters.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
             SEARCH_ITEMS_LIMIT: "200"
             SERVER_ALLOWED_ORIGINS: '*'

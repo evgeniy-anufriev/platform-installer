@@ -12,6 +12,7 @@ export function ApplicationLibraryResources({
   topicDefaults = {},
   databaseDefaults = {},
   clickhouseDefaults = {},
+  redisDefaults = {},
   resolvedResources = {},
 }: {
   resources: ObjectValue;
@@ -24,6 +25,7 @@ export function ApplicationLibraryResources({
   topicDefaults?: ObjectValue;
   databaseDefaults?: ObjectValue;
   clickhouseDefaults?: ObjectValue;
+  redisDefaults?: ObjectValue;
   resolvedResources?: ObjectValue;
 }) {
   const [edit, setEdit] = useState<string | null>(null);
@@ -48,6 +50,7 @@ export function ApplicationLibraryResources({
     "kafka.topic": topicDefaults,
     "postgresql.database": databaseDefaults,
     "clickhouse.database": clickhouseDefaults,
+    "redis.key": redisDefaults,
   };
   const hasDefault = Object.hasOwn(defaultsByKind[kind] ?? {}, edit ?? "");
   const allIds = Object.keys(resources);
@@ -112,6 +115,11 @@ export function ApplicationLibraryResources({
           </button>
         )}
       </div>
+      {compatibleBindings("redis.key").length > 0 && (
+        <button disabled={disabled} onClick={() => open("", "redis.key")}>
+          Добавить ключ Redis
+        </button>
+      )}
       {Object.entries(defaultsByKind).flatMap(([resourceKind, defaults]) =>
         Object.keys(defaults)
           .filter((id) => !Object.hasOwn(resources, id))
@@ -160,6 +168,7 @@ export function ApplicationLibraryResources({
                             "postgresql.schema": "PostgreSQL · Схема",
                             "clickhouse.database": "ClickHouse · БД",
                             "kafka.topic": "Kafka · Топик",
+                            "redis.key": "Redis · Ключ",
                           } as Record<string, string>
                         )[String(row.kind)] ?? String(row.kind)}
                       </td>
@@ -250,8 +259,9 @@ export function ApplicationLibraryResources({
             e.preventDefault();
             const id =
               edit ||
-              (kind === "kafka.topic"
-                ? "topic_" + name.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 122)
+              (kind === "kafka.topic" || kind === "redis.key"
+                ? (kind === "redis.key" ? "key_" : "topic_") +
+                  name.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 122)
                 : name);
             if (
               !/^[a-z][A-Za-z0-9_-]{0,127}$/.test(id) ||
@@ -301,19 +311,17 @@ export function ApplicationLibraryResources({
                   : {}),
               };
             }
-            if (
-              await onSave({
-                ...resources,
-                [id]: {
-                  ...previous,
-                  kind,
-                  binding,
-                  mode,
-                  parameters,
-                },
-              })
-            )
-              close();
+            const resource: ObjectValue = {
+              ...previous,
+              kind,
+              binding,
+              parameters,
+            };
+            if (kind === "redis.key") {
+              delete resource.mode;
+              delete resource.databaseRef;
+            } else resource.mode = mode;
+            if (await onSave({ ...resources, [id]: resource })) close();
           }}
           onChange={() => onDirtyChange(true)}
         >
@@ -333,6 +341,7 @@ export function ApplicationLibraryResources({
             >
               <option value="postgresql.database">PostgreSQL · БД</option>
               <option value="clickhouse.database">ClickHouse · БД</option>
+              <option value="redis.key">Redis · Ключ</option>
               {compatibleBindings("kafka.topic").length > 0 && (
                 <option value="kafka.topic">Kafka · Топик</option>
               )}
@@ -364,7 +373,11 @@ export function ApplicationLibraryResources({
             </select>
           </label>
           <label>
-            {kind === "kafka.topic" ? "Имя топика" : "Имя БД / схемы"}
+            {kind === "kafka.topic"
+              ? "Имя топика"
+              : kind === "redis.key"
+                ? "Имя ключа Redis"
+                : "Имя БД / схемы"}
             <input
               required={!hasDefault}
               value={name}
@@ -373,7 +386,7 @@ export function ApplicationLibraryResources({
             />
           </label>
           {!edit && (
-            <small>Имя также используется как ключ ресурса в библиотеке.</small>
+            <small>ID ресурса в библиотеке формируется из имени.</small>
           )}
           {kind === "kafka.topic" && (
             <>
@@ -420,13 +433,15 @@ export function ApplicationLibraryResources({
               </p>
             </>
           )}
-          <label>
-            Управление
-            <select value={mode} onChange={(e) => setMode(e.target.value)}>
-              <option value="managed">Создавать и проверять</option>
-              <option value="existing">Использовать существующую</option>
-            </select>
-          </label>
+          {kind !== "redis.key" && (
+            <label>
+              Управление
+              <select value={mode} onChange={(e) => setMode(e.target.value)}>
+                <option value="managed">Создавать и проверять</option>
+                <option value="existing">Использовать существующую</option>
+              </select>
+            </label>
+          )}
           {error && <p role="alert">{error}</p>}
           <div className="row">
             <button disabled={disabled}>В черновик</button>

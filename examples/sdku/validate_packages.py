@@ -53,6 +53,8 @@ for (kind,name), package in packages.items():
         application_databases={'postgres': {ref: dict(resourceId=ref, name=value['name'])
                               for ref, value in library['definition']['resource_defaults']['postgresql']['databases'].items()},
                               'clickhouse': {'history': dict(resourceId='history', name='sdku_main')}},
+        library_resources={ref: dict(kind='redis.key', parameters={'name':'sdku-main-'+suffix})
+                           for ref, suffix in [('dm-meta','meta'), ('alert-hdl','alert-hdl'), ('alert-class','alert-class')]},
         library_instance_id='sdku-main', application_job=next(j for j in jobs if j['slotId'] == name),
         _application_inputs={'jobs': jobs}, groups={'all': ['example-host']},
         hostvars={'example-host': {'ansible_host': 'example.invalid'}},

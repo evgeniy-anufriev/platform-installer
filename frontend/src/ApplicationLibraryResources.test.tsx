@@ -33,6 +33,88 @@ function setup() {
   return { user: userEvent.setup(), save, dirty };
 }
 describe("library resource table", () => {
+  it("keeps Redis physical names separate from safe resource IDs", async () => {
+    const save = vi.fn(async () => true),
+      user = userEvent.setup();
+    render(
+      <ApplicationLibraryResources
+        resources={{}}
+        bindings={{ cache: { deploymentRef: "redis" } }}
+        deployments={{ redis: { serviceType: "redis" } }}
+        disabled={false}
+        onSave={save}
+        onDirtyChange={vi.fn()}
+      />,
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Добавить ключ Redis" }),
+    );
+    await user.type(
+      screen.getByLabelText("Имя ключа Redis"),
+      "tenant:metadata",
+    );
+    await user.click(screen.getByRole("button", { name: "В черновик" }));
+    expect(save).toHaveBeenCalledWith({
+      key_tenant_metadata: {
+        kind: "redis.key",
+        binding: "cache",
+        parameters: { name: "tenant:metadata" },
+      },
+    });
+  });
+  it("selects and resets Redis names without lifecycle settings", async () => {
+    const save = vi.fn(async () => true),
+      user = userEvent.setup();
+    const props = {
+      resources: {},
+      bindings: { cache: { deploymentRef: "redis" } },
+      deployments: { redis: { serviceType: "redis" } },
+      redisDefaults: { "dm-meta": { name: "metadata" } },
+      disabled: false,
+      onSave: save,
+      onDirtyChange: vi.fn(),
+    };
+    const view = render(<ApplicationLibraryResources {...props} />);
+    await user.click(
+      screen.getByRole("button", { name: "Добавить из defaults · dm-meta" }),
+    );
+    expect(screen.queryByLabelText("Управление")).toBeNull();
+    expect(screen.queryByLabelText("Партиции")).toBeNull();
+    await user.click(screen.getByRole("button", { name: "В черновик" }));
+    expect(save).toHaveBeenLastCalledWith({
+      "dm-meta": {
+        kind: "redis.key",
+        binding: "cache",
+        parameters: {},
+      },
+    });
+    view.rerender(
+      <ApplicationLibraryResources
+        {...props}
+        resources={{
+          "dm-meta": {
+            kind: "redis.key",
+            binding: "cache",
+            parameters: { name: "custom-meta" },
+          },
+        }}
+        resolvedResources={{
+          "dm-meta": { parameters: { name: "custom-meta" } },
+        }}
+      />,
+    );
+    expect(screen.getByText("custom-meta")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Настроить" }));
+    await user.clear(screen.getByLabelText("Имя ключа Redis"));
+    await user.click(screen.getByRole("button", { name: "В черновик" }));
+    expect(save).toHaveBeenLastCalledWith({
+      "dm-meta": {
+        kind: "redis.key",
+        binding: "cache",
+        parameters: {},
+      },
+    });
+  });
   it("selects PostgreSQL defaults and resets only the physical name", async () => {
     const save = vi.fn(async () => true),
       user = userEvent.setup();

@@ -11,7 +11,7 @@
 ## Состав
 
 - `application-packages/<name>/1.0.0/` — 26 независимых пакетов приложений.
-- `library-packages/sdku/1.0.0/` — рецепт библиотеки с необязательными слотами.
+- `library-packages/{sdku,cspa}/1.0.0/` — два рецепта с общими пакетами приложений и необязательными слотами.
 - `import-catalog.json` — kind/name/version и SHA-256 каждого пакета для импорта.
 - `source-inventory.json` — соответствие исходным манифестам, образам и известные
   незаполненные параметры. Image ID — наблюдение источника, не offline image lock.
@@ -24,6 +24,30 @@ hydro-calculation, hydro-history-and-model, hmi-frontend-hydrocyclone.
 пакеты. Не включайте альтернативы одновременно без проверки портов и назначения.
 Исправлено имя пакета `kafka-ch-replicator`; ссылка на исходный образ с именем
 `kafka-ch-replicatior` сохранена буквально.
+
+### Проверенные SDKU/CSPA и alarm-view-service
+
+Библиотеки SDKU/CSPA и общий `alarm-view-service` перенесены из тестового
+проекта 2026-10-20. Они проверены совместно на 101/102/103: отдельные PostgreSQL
+и ClickHouse БД, Kafka topics и Redis names, собственные УЗ PostgreSQL,
+ClickHouse, Redis client и Sentinel. Рецепты библиотек различаются только
+именем и `resource_defaults`; приложения остаются общими.
+
+Эта проверенная конфигурация использует Kafka listener `SSL`, Redis Sentinel
+с TLS и Vault KV mount `secret`. `alarm-view-service` также использует SSL для
+собственных ACK-клиентов Kafka. Значения секретов и настройки тестовых
+экземпляров из group_vars сюда не копируются. Endpoint group
+`qa-shared-endpoint` в defaults приложения следует заменить для другого
+проекта через group_vars. В тесте оба экземпляра имели `-Xmx768m`, Hikari
+`maximum-pool-size=10`/`minimum-idle=2`, health timeout 5000ms и readiness
+60×5s; CSPA использовал port-1=10022.
+
+Остальные 25 application-пакетов не заменены QA-копиями. Их текущие настройки
+SASL/SCRAM сохранены; при их выборе требуется соответствующий Kafka listener
+в библиотечных `connection_defaults`. Проверка двух экземпляров не является
+приёмкой всех слотов или полной бизнес-обработки. Состояние публикации endpoints
+и остановки контейнеров — в
+[журнале](../../docs/work/application-libraries/evidence/sdku-cspa-alarm-view-journal.md).
 
 ## Структура и переопределения
 
@@ -241,3 +265,9 @@ resources.history.parameters.name in group_vars when an existing/custom DB name
 must be kept. Remove obsolete ClickHouse database_name overrides when replacing
 the corresponding JDBC ENV with the resource reference. Preserve existing users,
 grants, secrets and installed resource markers.
+
+
+Redis metadata names are library resources: dm-meta, alert-hdl and alert-class.
+Select each as redis.key on cache; defaults derive physical names from library_instance_id.
+Shared ENV reads library_resources; application-owned key/channel grants can use
+the same names. These selections never create empty Redis data.

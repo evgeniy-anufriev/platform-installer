@@ -104,6 +104,14 @@ display DDL/schema controls or include them in common application parameters.
 Unrelated UI Save must preserve those authored fields. Core resolves table sets,
 engines and fingerprints. Verification/plan diagnostics use the existing flow.
 
+### Redis key references (owner-authorized 2026-10-19)
+
+Resources adds Redis key names from resource_defaults.redis.keys. Reuse existing
+provider selection, explicit name/clear reset and fresh Core preview. Hide SQL,
+Kafka and management-mode fields; omit mode on Save. The selection describes a
+name used by shared ENV/application ACL, not key data creation or ownership.
+Existing draft/Review/Save/reopen and secret sessions remain unchanged.
+
 ### Kafka topic resources (owner-authorized 2026-10-17)
 
 The library Resources tab adds Kafka topic creation/editing beside databases:

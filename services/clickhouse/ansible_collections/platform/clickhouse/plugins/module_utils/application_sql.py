@@ -63,8 +63,10 @@ def table_matches(client, database, table):
     if any(normalized[i] != normalized[i + 1] for i in range(0, len(normalized), 2)):
         raise ProviderFailure('CLICKHOUSE_APPLICATION_TABLE_EXPRESSION_DRIFT')
     for key, value in table.get('settings', {}).items():
+        integral = isinstance(value, (int, float)) and float(value).is_integer()
         value = literal(value) if isinstance(value, str) else str(int(value) if isinstance(value, bool) or float(value).is_integer() else value)
-        if not re.search(r'\b' + re.escape(key) + r'\s*=\s*' + re.escape(value) + r'\s*(?:,|$)', actual['create_table_query']):
+        pattern = re.escape(value) + (r'(?:\.0*)?' if integral else '')
+        if not re.search(r'\b' + re.escape(key) + r'\s*=\s*' + pattern + r'\s*(?:,|$)', actual['create_table_query']):
             raise ProviderFailure('CLICKHOUSE_APPLICATION_TABLE_SETTINGS_DRIFT')
     if table['engine'].startswith('Replicated'):
         replicas = [json.loads(line) for line in client.query(

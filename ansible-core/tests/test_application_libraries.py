@@ -24,6 +24,19 @@ def load(path):
 
 
 class ApplicationLibrariesTest(unittest.TestCase):
+    def test_redis_key_references_do_not_accept_data_lifecycle_fields(self):
+        schema = os.path.join(CONTRACTS, 'application-libraries/v1alpha1/deployments.schema.json')
+        validator = SchemaValidator(CONTRACTS)
+        values = load(os.path.join(FIXTURE, 'inventory/group_vars/all/platform-installer.yml'))['platform_desired_state']['applicationLibraryDeployments']
+        resource = dict(kind='redis.key', binding='cache', parameters={})
+        values['sdku']['resources']['dm-meta'] = resource
+        self.assertFalse(validator.validate(values, schema))
+        resource['mode'] = 'existing'
+        self.assertTrue(validator.validate(values, schema))
+        resource.pop('mode')
+        resource['parameters']['ttl'] = 30
+        self.assertTrue(validator.validate(values, schema))
+
     def test_application_connection_keys_keep_library_declarations_complete(self):
         validator = SchemaValidator(CONTRACTS)
         app = load(os.path.join(FIXTURE, 'application-packages/apigateway/1.0.0/roles/application_apigateway/defaults/main.yml'))['platform_application_definition']
