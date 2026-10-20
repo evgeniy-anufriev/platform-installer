@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-func TestApplicationSourceBinaryImportPreservesBytesAndLimits(t *testing.T) {
+func TestApplicationDirectoryImportPreservesLargeAssetsAndLimits(t *testing.T) {
 	root, b, revision := b2Project(t)
 	source, _ := b2Package(t)
 	manifest := filepath.Join(source, "application.yml")
@@ -18,15 +18,19 @@ func TestApplicationSourceBinaryImportPreservesBytesAndLimits(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	data = bytes.Replace(data, []byte("files:\n"), []byte("files:\n  - assets/mock.jar\n"), 1)
+	data = bytes.Replace(data, []byte("files:\n"), []byte("files:\n  - assets/providers/\n  - assets/themes.tar.gz\n"), 1)
 	if err = os.WriteFile(manifest, data, 0600); err != nil {
 		t.Fatal(err)
 	}
-	payload := bytes.Repeat([]byte{0, 255, 80, 75}, 5*1024*1024/4)
-	if err = os.MkdirAll(filepath.Join(source, "assets"), 0700); err != nil {
+	payload := bytes.Repeat([]byte{0, 255, 80, 75}, 16*1024*1024/4)
+	if err = os.MkdirAll(filepath.Join(source, "assets/providers"), 0700); err != nil {
 		t.Fatal(err)
 	}
-	if err = os.WriteFile(filepath.Join(source, "assets/mock.jar"), payload, 0600); err != nil {
+	if err = os.WriteFile(filepath.Join(source, "assets/providers/mock.jar"), payload, 0600); err != nil {
+		t.Fatal(err)
+	}
+	archive := bytes.Repeat([]byte{0, 255, 80, 75}, 9*1024*1024/4)
+	if err = os.WriteFile(filepath.Join(source, "assets/themes.tar.gz"), archive, 0600); err != nil {
 		t.Fatal(err)
 	}
 	directory, err := openExportSourceDirectory(source)
@@ -49,9 +53,29 @@ func TestApplicationSourceBinaryImportPreservesBytesAndLimits(t *testing.T) {
 	if result := b.CommitStructuralSave(context.Background(), plan.PlanID); !result.Changed {
 		t.Fatalf("%+v", result)
 	}
-	actual, err := os.ReadFile(filepath.Join(root, "application-packages/gateway/1.0.0/assets/mock.jar"))
+	actual, err := os.ReadFile(filepath.Join(root, "application-packages/gateway/1.0.0/assets/providers/mock.jar"))
 	if err != nil || !bytes.Equal(payload, actual) {
 		t.Fatal("binary bytes changed", err)
+	}
+	actualArchive, err := os.ReadFile(filepath.Join(root, "application-packages/gateway/1.0.0/assets/themes.tar.gz"))
+	if err != nil || !bytes.Equal(archive, actualArchive) {
+		t.Fatal("archive bytes changed", err)
+	}
+	export, _, err := PlanProjectExport(root, t.TempDir(), "szi-copy")
+	if err != nil {
+		t.Fatal("large package export failed", err)
+	}
+	export.Close()
+	if err = os.WriteFile(filepath.Join(source, "assets/providers/new.jar"), []byte("new"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	updated := exportObservation{}
+	if err = collectExportDirectory(directory, "application-packages/gateway/1.0.0", &updated, map[string]bool{}, map[string]bool{}); err != nil {
+		t.Fatal(err)
+	}
+	updatedDigest, err := checkPackageManifest(updated.documents, "application", "gateway", "1.0.0")
+	if err != nil || updatedDigest == digest {
+		t.Fatalf("directory member did not change package digest: %v", err)
 	}
 	for _, ext := range []string{"jar", "java", "csv", "dat", "sh", "exe", "unknown"} {
 		if !safeApplicationPackagePath("application-packages/gateway/1.0.0/assets/input." + ext) {
@@ -64,7 +88,14 @@ func TestApplicationSourceBinaryImportPreservesBytesAndLimits(t *testing.T) {
 	if safeApplicationPackagePath("application-packages/gateway/1.0.0/roles/application_gateway/tasks/hook.sh") {
 		t.Fatal("controller task path accepted")
 	}
-	if err = os.WriteFile(filepath.Join(source, "assets/mock.jar"), make([]byte, maxApplicationPackageFileBytes+1), 0600); err != nil {
+	oversized, err := os.OpenFile(filepath.Join(source, "assets/providers/mock.jar"), os.O_RDWR, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = oversized.Truncate(maxApplicationPackageFileBytes + 1); err != nil {
+		t.Fatal(err)
+	}
+	if err = oversized.Close(); err != nil {
 		t.Fatal(err)
 	}
 	if err = collectExportDirectory(directory, "application-packages/gateway/1.0.0", &exportObservation{}, map[string]bool{}, map[string]bool{}); err == nil {

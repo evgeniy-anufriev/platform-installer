@@ -14,7 +14,10 @@ import (
 )
 
 const maxApplicationPackageFiles = 512
-const maxApplicationPackageFileBytes = 8 * 1024 * 1024
+
+// Package assets may consume the existing aggregate project budget. There is
+// no separate per-file ceiling for declared configuration archives.
+const maxApplicationPackageFileBytes = 64 * 1024 * 1024
 
 var packageVersion = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+$`)
 var packageComponent = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
@@ -116,11 +119,30 @@ func checkPackageManifest(records []exportRecord, kind, name, version string) (s
 		return "", invalid
 	}
 	listed := map[string]bool{kind + ".yml": true}
+	declared := map[string]bool{}
 	for _, file := range m.Files {
-		if listed[strings.ToLower(file)] || !safeApplicationPackagePath(prefix+file) {
+		folded := strings.ToLower(file)
+		if declared[folded] {
 			return "", invalid
 		}
-		listed[strings.ToLower(file)] = true
+		declared[folded] = true
+		if strings.HasSuffix(file, "/") {
+			// A trailing slash is one allowlist entry for all files below it.
+			// Validate the directory as a package data path; records remain files.
+			if !safeApplicationPackagePath(prefix + file + "member") {
+				return "", invalid
+			}
+			for member := range byPath {
+				if strings.HasPrefix(member, file) {
+					listed[strings.ToLower(member)] = true
+				}
+			}
+			continue
+		}
+		if !safeApplicationPackagePath(prefix + file) {
+			return "", invalid
+		}
+		listed[folded] = true
 		if _, ok := byPath[file]; !ok {
 			return "", invalid
 		}

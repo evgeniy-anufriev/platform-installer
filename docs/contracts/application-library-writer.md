@@ -56,14 +56,14 @@ material in declared configuration; ordinary words such as `password` and
 `token` do not classify content as a secret. Compressed archive contents are
 not inspected. Source config digests use SHA256 of the original bytes.
 
-Limits for the current Go writer/import path: 512 package files, 8 MiB/file,
-existing 64 MiB aggregate/1024 transaction
+Limits for the Go writer/import path: 512 package files, the existing 64 MiB
+aggregate project budget and 1024 transaction
 document limits. Edits are bounded to 64 KiB/depth16 and existing structural session
 limits. Explicit credential/shared-secret descriptors use the closed source shapes of
 settings.schema.json: required fields, no extra source or descriptor fields.
-Core no longer applies the 8 MiB per-file limit to declared package assets or
-configuration. The Go writer/import limit still prevents direct UI import of
-larger archives until its separate contract is updated.
+Core and Go no longer apply an 8 MiB per-file limit to package assets or
+declared configuration. The aggregate project budget remains; the candidate
+tar archive sent to the Execution Node has a separate 32 MiB limit.
 Literal username is permitted; literal password/shared-secret payload is not.
 Generated/runtime/Vault/PKI references remain available as declared by Core.
 Private keys remain runtime material. User-defined environment,

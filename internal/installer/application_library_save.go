@@ -9,7 +9,7 @@ import (
 var libraryInputID = regexp.MustCompile(`^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$`)
 var exactLibraryRef = regexp.MustCompile(`^[a-z][a-z0-9-]*@[0-9]+\.[0-9]+\.[0-9]+$`)
 var registryAuthority = regexp.MustCompile(`^[a-z0-9][a-z0-9.-]*(?::[0-9]+)?$`)
-var applicationSettingKeys = []string{"image", "command", "user", "restart", "parameters", "environment", "ports", "endpoint", "accounts", "provisioner", "readiness", "config_files", "topicBindings"}
+var applicationSettingKeys = []string{"image", "command", "user", "restart", "parameters", "environment", "ports", "endpoint", "accounts", "provisioner", "readiness", "config_files", "config_directories", "config_archives", "topicBindings"}
 
 func applicationEditOperation(op string) bool {
 	switch op {
@@ -248,7 +248,7 @@ func safeApplicationInput(v any, depth int) error {
 				}
 			}
 			next := safeApplicationInput
-			if key == "environment" || key == "parameters" || key == "grants" || key == "endpoint" || key == "config_files" {
+			if key == "environment" || key == "parameters" || key == "grants" || key == "endpoint" || key == "config_files" || key == "config_directories" || key == "config_archives" {
 				next = boundedApplicationInput
 			}
 			if err := next(item, depth+1); err != nil {

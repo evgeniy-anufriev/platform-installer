@@ -491,7 +491,9 @@ Core also supports package-declared `config_directories` and `config_archives`
 as common application settings. The package allowlist expands a directory into
 hashed files; an archive remains one hashed source and is staged on target before
 replacement. This stays inside Ansible Core Apply/Verify and adds no SZI-only
-runtime path. The Go package importer retains its separate 8 MiB file limit.
+runtime path. Go import/export and candidate transfer use the existing 64 MiB
+aggregate project budget without a separate 8 MiB package-file limit. The
+candidate tar archive has a separate 32 MiB transfer limit.
 
 Owner-authorized common defaults extension (2026-10-17): library packages may
 declare defaults.environment/parameters; application-owned defaults remain in

@@ -116,6 +116,30 @@ func b2Command(revision, op string) EditCommand {
 	return EditCommand{APIVersion: EditCommandAPIVersionV11, Kind: "EditCommand", BaseProjectRevision: revision, Operation: op, DeploymentID: "sdku"}
 }
 
+func TestApplicationConfigurationTreeOverridesSaveAndReopen(t *testing.T) {
+	root, backend, revision := b2Project(t)
+	create := b2Command(revision, "CreateApplicationLibraryDeployment")
+	create.Entity = map[string]any{"libraryRef": "sdku@1.0.0", "runtimeRef": "kafka-main"}
+	result := commitStructuralForTest(t, backend, root, projectlifecycle.ClassificationManaged, revision, []EditCommand{create})
+	for setting, descriptor := range map[string]map[string]any{
+		"config_directories": {"source": "assets/providers", "destination": "providers", "file_mode": "0644", "directory_mode": "0755"},
+		"config_archives":    {"source": "assets/themes.tar.gz", "format": "tar.gz", "destination": "themes"},
+	} {
+		command := b2Command(result.NewProjectRevision, "SetApplicationLibraryOverride")
+		command.EntityID, command.Setting, command.Value = "gateway", setting, []any{descriptor}
+		result = commitStructuralForTest(t, backend, root, projectlifecycle.ClassificationManaged, result.NewProjectRevision, []EditCommand{command})
+		view, err := ReadManagedProjectView(root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		overrides := asMap(asMap(asMap(view.ApplicationLibraries["sdku"]["applications"])["gateway"])["overrides"])
+		values, ok := overrides[setting].([]any)
+		if !ok || len(values) != 1 || asMap(values[0])["destination"] != descriptor["destination"] {
+			t.Fatalf("configuration tree override not retained: %s", setting)
+		}
+	}
+}
+
 func TestLibraryFileOnlyResourceDefaultsSurviveUnrelatedUISave(t *testing.T) {
 	root, b, revision := b2Project(t)
 	create := b2Command(revision, "CreateApplicationLibraryDeployment")

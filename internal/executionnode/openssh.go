@@ -804,7 +804,7 @@ func readStableCandidateFile(root, logical string) ([]byte, error) {
 	}
 	fileLimit := int64(4 * 1024 * 1024)
 	if installer.ApplicationPackagePathAllowed(logical) {
-		fileLimit = 8 * 1024 * 1024
+		fileLimit = 64 * 1024 * 1024
 	}
 	if before.Size() > fileLimit {
 		return nil, errors.New("PROJECT_CANDIDATE_LIMIT_EXCEEDED")
