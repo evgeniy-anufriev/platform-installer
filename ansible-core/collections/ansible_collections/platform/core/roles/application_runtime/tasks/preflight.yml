@@ -31,6 +31,8 @@
       DOCKER_HOST: "unix:///run/user/{{ application_uid }}/docker.sock"
       DOCKER_CONFIG: "{{ platform_application_registry_config_directory if platform_application_registry_config_directory else application_home ~ '/.docker' }}"
     application_config_contents: []
+    application_archive_pairs: []
+    application_archive_checksums: {}
   no_log: true
 
 - name: Prove actual namespace mapping and private identity paths before provider writes
@@ -144,6 +146,20 @@
   when: application_config.source is defined
   no_log: true
 
+- name: Read files declared through configuration directories
+  ansible.builtin.include_tasks: source_config.yml
+  loop: "{{ application_runtime_job.directoryConfigs | map(attribute='members') | flatten | list }}"
+  loop_control:
+    loop_var: application_config
+  no_log: true
+
+- name: Inspect declared configuration archives on the Execution Node
+  ansible.builtin.include_tasks: source_archive.yml
+  loop: "{{ application_runtime_job.archiveConfigs }}"
+  loop_control:
+    loop_var: application_archive
+  no_log: true
+
 - name: Require bounded nonsecret rendered config contents before any file write
   ansible.builtin.assert:
     that: "{{ application_config_contents | platform.core.application_validate_configs }}"
@@ -159,6 +175,11 @@
   ansible.builtin.set_fact:
     application_config_pairs: "{{ application_config_pairs + [[item.destination, item.sha256]] }}"
   loop: "{{ application_config_contents | sort(attribute='destination') }}"
+  no_log: true
+
+- name: Include archive bytes in the configuration fingerprint
+  ansible.builtin.set_fact:
+    application_config_pairs: "{{ (application_config_pairs + application_archive_pairs) | sort(attribute=0) }}"
   no_log: true
 
 - name: Bind the reserved digest and template context
@@ -223,7 +244,7 @@
     get_checksum: false
     get_mime: false
     get_attributes: false
-  loop: "{{ ([application_library_path, application_instance_path ~ '/config'] + (application_runtime_job.configs | map(attribute='destination') | map('regex_replace', '^', application_instance_path ~ '/config/') | map('dirname') | list)) | platform.core.application_parent_paths }}"
+  loop: "{{ ([application_library_path, application_instance_path ~ '/config'] + (application_runtime_job.configs | map(attribute='destination') | map('regex_replace', '^', application_instance_path ~ '/config/') | map('dirname') | list) + (application_runtime_job.directoryConfigs | map(attribute='destination') | map('regex_replace', '^', application_instance_path ~ '/config/') | map('dirname') | list) + (application_runtime_job.archiveConfigs | map(attribute='destination') | map('regex_replace', '^', application_instance_path ~ '/config/') | map('dirname') | list)) | platform.core.application_parent_paths }}"
   register: application_ancestors
   no_log: true
 
@@ -296,6 +317,27 @@
   loop: "{{ application_output_files.results }}"
   no_log: true
 
+- name: Inspect existing configuration directory roots
+  ansible.builtin.stat:
+    path: "{{ application_instance_path }}/config/{{ item.destination }}"
+    follow: false
+    get_checksum: false
+    get_mime: false
+    get_attributes: false
+  loop: "{{ application_runtime_job.directoryConfigs + application_runtime_job.archiveConfigs }}"
+  register: application_output_directories
+  no_log: true
+
+- name: Reject foreign configuration directories before replacement
+  ansible.builtin.assert:
+    that:
+      - not item.stat.exists or item.stat.isdir
+      - not (item.stat.islnk | default(false))
+      - not item.stat.exists or item.stat.uid | string == application_uid | string
+    fail_msg: APPLICATION_RUNTIME_FILE_OWNERSHIP_INVALID
+  loop: "{{ application_output_directories.results }}"
+  no_log: true
+
 - name: Inspect the exact container without disclosing environment
   ansible.builtin.command:
     argv: [docker, container, inspect, "{{ application_runtime_job.placement.containerName }}"]
@@ -336,6 +378,7 @@
         'instancePath': application_instance_path, 'libraryPath': application_library_path,
         'dockerEnvironment': application_docker_environment, 'source': application_image_source,
         'configContents': application_config_contents, 'configDigest': application_config_digest,
+        'archiveChecksums': application_archive_checksums,
         'archivePath': application_selected_archive_path,
         'composeContent': application_compose_content, 'baseContent': application_base_content, 'agentContent': application_agent_content,
         'composeArgv': ['docker', 'compose', '--project-name', application_runtime_job.placement.composeProject,

@@ -1,0 +1,61 @@
+---
+- name: Inspect any interrupted archive replacement
+  ansible.builtin.stat:
+    path: "{{ item }}"
+    follow: false
+  loop:
+    - "{{ application_runtime_job.instancePath }}/config/{{ application_archive.destination }}"
+    - "{{ application_runtime_job.instancePath }}/config/.archive-previous-{{ application_archive.destination | hash('sha256') }}"
+  register: application_archive_recovery
+  no_log: true
+
+- name: Remove an incomplete new archive before restoring the previous one
+  ansible.builtin.file:
+    path: "{{ application_runtime_job.instancePath }}/config/{{ application_archive.destination }}"
+    state: absent
+  when: >-
+    (application_archive_recovery.results[1].stat.isdir | default(false)) and
+    (application_archive_recovery.results[0].stat.exists | default(false))
+  no_log: true
+
+- name: Restore the previous archive after an interrupted replacement
+  ansible.builtin.command:
+    argv:
+      - mv
+      - -T
+      - "{{ application_runtime_job.instancePath }}/config/.archive-previous-{{ application_archive.destination | hash('sha256') }}"
+      - "{{ application_runtime_job.instancePath }}/config/{{ application_archive.destination }}"
+  when: application_archive_recovery.results[1].stat.isdir | default(false)
+  no_log: true
+
+- name: Invalidate the digest marker after recovery
+  ansible.builtin.file:
+    path: "{{ application_runtime_job.instancePath }}/config/.archive-{{ application_archive.destination | hash('sha256') }}.sha256"
+    state: absent
+  when: application_archive_recovery.results[1].stat.isdir | default(false)
+  no_log: true
+
+- name: Inspect installed archive directory and digest marker
+  ansible.builtin.stat:
+    path: "{{ item }}"
+    follow: false
+  loop:
+    - "{{ application_runtime_job.instancePath }}/config/{{ application_archive.destination }}"
+    - "{{ application_runtime_job.instancePath }}/config/.archive-{{ application_archive.destination | hash('sha256') }}.sha256"
+  register: application_archive_installed
+  no_log: true
+
+- name: Read the installed archive digest marker
+  ansible.builtin.slurp:
+    src: "{{ application_runtime_job.instancePath }}/config/.archive-{{ application_archive.destination | hash('sha256') }}.sha256"
+  when: application_archive_installed.results[1].stat.isreg | default(false)
+  register: application_archive_marker
+  no_log: true
+
+- name: Replace archive content only when its digest or directory changed
+  ansible.builtin.include_tasks: replace_archive.yml
+  when: >-
+    not (application_archive_installed.results[0].stat.isdir | default(false)) or
+    not (application_archive_installed.results[1].stat.isreg | default(false)) or
+    (application_archive_marker.content | default('') | b64decode | trim) != application_runtime_job.archiveChecksums[application_archive.destination]
+  no_log: true

@@ -5,6 +5,7 @@ import shutil
 import sys
 import tempfile
 import unittest
+import yaml
 from unittest.mock import patch
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
@@ -24,6 +25,18 @@ def load(path):
 
 
 class ApplicationLibrariesTest(unittest.TestCase):
+    def test_szi_keycloak_uses_directory_and_archive_settings(self):
+        package = os.path.join(REPO, "examples/szi/application-packages/keycloak/1.0.0")
+        with open(os.path.join(package, "roles/application_keycloak/defaults/main.yml"), encoding="utf-8") as stream:
+            definition = yaml.safe_load(stream)["platform_application_definition"]
+        manifest = load(os.path.join(package, "application.yml"))
+        validator = SchemaValidator(CONTRACTS)
+        schema = os.path.join(CONTRACTS, "application-libraries/v1alpha1/application.schema.json")
+        self.assertEqual([], validator.validate(definition, schema))
+        self.assertIn("assets/providers/", manifest["files"])
+        self.assertEqual("assets/providers", definition["defaults"]["config_directories"][0]["source"])
+        self.assertEqual("assets/themes.tar.gz", definition["defaults"]["config_archives"][0]["source"])
+
     def test_application_name_identity_rejects_cross_library_collision(self):
         def row(library_id):
             return {
@@ -220,6 +233,29 @@ class ApplicationLibrariesTest(unittest.TestCase):
             with open(os.path.join(app, "unlisted"), "w") as stream:
                 stream.write("extra")
             self.assertTrue(self.prepare(directory)["findings"])
+
+    def test_directory_allowlist_expands_members_and_changes_package_digest(self):
+        with tempfile.TemporaryDirectory() as directory:
+            shutil.copytree(FIXTURE, directory, dirs_exist_ok=True)
+            app = os.path.join(directory, "application-packages/apigateway/1.0.0")
+            provider = os.path.join(app, "assets/providers")
+            os.makedirs(provider)
+            first = os.path.join(provider, "first.jar")
+            with open(first, "wb") as stream:
+                stream.write(b"first")
+            manifest_path = os.path.join(app, "application.yml")
+            manifest = load(manifest_path)
+            manifest["files"].append("assets/providers/")
+            with open(manifest_path, "w", encoding="utf-8") as stream:
+                json.dump(manifest, stream)
+            validator = SchemaValidator(CONTRACTS)
+            before = APP.load_package(directory, "apigateway@1.0.0", "application", load, validator)
+            self.assertIn("assets/providers/first.jar", before["files"])
+            self.assertIn("assets/providers/", before["directoryEntries"])
+            with open(first, "wb") as stream:
+                stream.write(b"second")
+            after = APP.load_package(directory, "apigateway@1.0.0", "application", load, validator)
+            self.assertNotEqual(before["digest"], after["digest"])
 
     def test_dotenv_reserved_identity_rejected_and_user_password_allowed(self):
         for key in ("SERVER_ID", "REDIS_PASSWORD"):

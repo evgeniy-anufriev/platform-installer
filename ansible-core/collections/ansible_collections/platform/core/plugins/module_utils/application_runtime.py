@@ -147,7 +147,8 @@ def validate_compose(config, job, instance_path, digest):
     ports = service.get("ports", [])
     if sorted((str(x["published"]), x["target"]) for x in ports) != expected_ports:
         raise ValueError("APPLICATION_COMPOSE_PORT_INVALID")
-    expected_mounts = {os.path.join(instance_path, "config", x["destination"]): None for x in job["configs"]}
+    expected_mounts = {os.path.join(instance_path, "config", x["destination"]): None
+                       for x in job["configs"] + job.get("directoryConfigs", []) + job.get("archiveConfigs", [])}
     core_mounts = {os.path.join(instance_path, 'vault'): '/opt/vault'} if job.get('agentTemplate') else {}
     if job.get('vault', {}).get('pkiPlans'):
         core_mounts[os.path.join(instance_path, 'pki')] = '/opt/application/pki'
@@ -203,6 +204,24 @@ def prepare_runtime(root, snapshot, rows, desired, lock, validator, loader):
             if name not in app["files"] or not safe_relative(config["destination"]):
                 raise ValueError("APPLICATION_CONFIG_NOT_ALLOWLISTED")
             configs.append(dict(config, path=checked_file(root, app["logicalPath"] + "/" + name)))
+        directories = []
+        for config in settings.get("config_directories", []):
+            source = config["source"].rstrip("/") + "/"
+            if source not in app["directoryEntries"] or not safe_relative(config["destination"]):
+                raise ValueError("APPLICATION_CONFIG_NOT_ALLOWLISTED")
+            members = [name for name in app["files"] if name.startswith(source)]
+            subdirectories = sorted({config["destination"] + "/" + os.path.dirname(name[len(source):])
+                                     for name in members if os.path.dirname(name[len(source):])})
+            directories.append(dict(config, source=source, members=[dict(
+                destination=config["destination"] + "/" + name[len(source):],
+                path=checked_file(root, app["logicalPath"] + "/" + name),
+                mode=config.get("file_mode", "0644")) for name in members],
+                subdirectories=subdirectories))
+        archives = []
+        for config in settings.get("config_archives", []):
+            if config["source"] not in app["files"] or not safe_relative(config["destination"]):
+                raise ValueError("APPLICATION_CONFIG_NOT_ALLOWLISTED")
+            archives.append(dict(config, path=checked_file(root, app["logicalPath"] + "/" + config["source"])))
         if len({x["destination"] for x in configs}) != len(configs):
             raise ValueError("APPLICATION_CONFIG_DESTINATION_COLLISION")
         image = selected_image(image_lock, settings['image'], lib_id, app_id, host)
@@ -231,7 +250,8 @@ def prepare_runtime(root, snapshot, rows, desired, lock, validator, loader):
         requirement = image_requirement(app_id, settings['image'], image)
         authority = assemble_authority(requirement, offline, dict(registry or {}, kind="REPOSITORY"), image=True)
         registry_credentials = row.get('registryCredentials', {}).get(registry_request(registry['reference'])['registry'], {}) if registry else {}
-        jobs.append(dict(row, placement=placement, account=account, configs=configs, registryCredentials=registry_credentials,
+        jobs.append(dict(row, placement=placement, account=account, configs=configs,
+                         directoryConfigs=directories, archiveConfigs=archives, registryCredentials=registry_credentials,
                          agentTemplate=checked_file(root, app['logicalPath']+'/'+agent_template) if agent_template else None,
                          appTemplate=checked_file(root, app["logicalPath"] + "/" + app_render["compose_template"]),
                          baseTemplate=checked_file(root, lib["logicalPath"] + "/" + lib_render["base_compose_template"]),
@@ -248,14 +268,14 @@ def validate_config_contents(configs):
             raise ValueError("APPLICATION_CONFIG_CONTENT_INVALID")
         if item.get("encoding") == "base64":
             raw = base64.b64decode(content, validate=True)
-            if len(raw) > 8 * 1024 * 1024 or hashlib.sha256(raw).hexdigest() != item['sha256']:
+            if hashlib.sha256(raw).hexdigest() != item['sha256']:
                 raise ValueError("APPLICATION_CONFIG_CONTENT_INVALID")
             content = raw.decode("utf-8", errors="replace")
-        elif len(content.encode("utf-8")) > 1024 * 1024:
+        elif len(content.encode("utf-8")) > 1024 * 1024 and item.get("destination") is None:
             raise ValueError("APPLICATION_CONFIG_CONTENT_INVALID")
         findings = []
         nonsecret_values(content, "config", findings)
-        if findings or re.search(r"(?:password|passphrase|token|secret|role.?id)\s*[:=]", content, re.I):
+        if findings:
             raise ValueError("APPLICATION_CONFIG_SECRET_FORBIDDEN")
     return True
 

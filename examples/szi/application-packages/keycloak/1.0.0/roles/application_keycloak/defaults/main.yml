@@ -12,33 +12,15 @@ platform_application_definition:
       - source: assets/conf/cache-ispn.xml
         destination: conf/cache-ispn.xml
         mode: "0644"
-      - source: assets/providers/keycloak-brute-message-plugin-df31476a.jar
-        destination: providers/keycloak-brute-message-plugin-df31476a.jar
-        mode: "0644"
-      - source: assets/providers/keycloak-dmz-provision-plugin-4d87cb4f.jar
-        destination: providers/keycloak-dmz-provision-plugin-4d87cb4f.jar
-        mode: "0644"
-      - source: assets/providers/keycloak-login-logout-event-plugin-df31476a.jar
-        destination: providers/keycloak-login-logout-event-plugin-df31476a.jar
-        mode: "0644"
-      - source: assets/providers/keycloak-password-policy-plugin-df31476a.jar
-        destination: providers/keycloak-password-policy-plugin-df31476a.jar
-        mode: "0644"
-      - source: assets/providers/keycloak-plugin-last-login-time-df31476a.jar
-        destination: providers/keycloak-plugin-last-login-time-df31476a.jar
-        mode: "0644"
-      - source: assets/providers/keycloak-plugin-otp-condition-df31476a.jar
-        destination: providers/keycloak-plugin-otp-condition-df31476a.jar
-        mode: "0644"
-      - source: assets/providers/keycloak-plugin-password-change-time-df31476a.jar
-        destination: providers/keycloak-plugin-password-change-time-df31476a.jar
-        mode: "0644"
-      - source: assets/providers/keycloak-plugin-password-expire-reminder-9291024b.jar
-        destination: providers/keycloak-plugin-password-expire-reminder-9291024b.jar
-        mode: "0644"
-      - source: assets/providers/keycloak-user-disabled-lastlogin-time-df31476a.jar
-        destination: providers/keycloak-user-disabled-lastlogin-time-df31476a.jar
-        mode: "0644"
+    config_directories:
+      - source: assets/providers
+        destination: providers
+        file_mode: "0644"
+        directory_mode: "0755"
+    config_archives:
+      - source: assets/themes.tar.gz
+        format: tar.gz
+        destination: themes
     environment:
       KC_SPI_EVENTS_LISTENER_PASSWORD_EXPIRE_REMINDER_EXPIRE_THRESHOLD: "14"
       KC_HEALTH_ENABLED: "true"

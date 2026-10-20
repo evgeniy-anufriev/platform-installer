@@ -56,8 +56,8 @@ def checked_file(root, relative):
             raise ValueError("Package symlinks are forbidden")
     if os.path.commonpath((os.path.realpath(root), os.path.realpath(current))) != os.path.realpath(root):
         raise ValueError("Package path escapes project")
-    if not os.path.isfile(current) or os.path.getsize(current) > 8 * 1024 * 1024:
-        raise ValueError("Package file missing or oversized")
+    if not os.path.isfile(current):
+        raise ValueError("Package file missing")
     return current
 
 
@@ -112,18 +112,30 @@ def load_package(root, reference, kind, loader, validator, inputs=None):
     defaults_path = "roles/%s_%s/defaults/main.yml" % (kind, name)
     if defaults_path not in manifest["files"]:
         raise ValueError("Defaults absent from allowlist")
-    listed = set(manifest["files"]) | {kind + ".yml"}
+    input_paths = package_inputs(root) if inputs is None else inputs
+    listed = {kind + ".yml"}
+    for entry in manifest["files"]:
+        if entry.endswith("/"):
+            prefix = entry[:-1]
+            if not prefix or not all(part not in ("", ".", "..") and ":" not in part for part in prefix.split("/")):
+                raise ValueError("Invalid package directory")
+            listed.update(relative[len(folder) + 1:] for relative in input_paths
+                          if relative.startswith(folder + "/" + entry))
+        else:
+            listed.add(entry)
     discovered = set()
     digest = []
-    for relative in package_inputs(root) if inputs is None else inputs:
+    for relative in input_paths:
         if not relative.startswith(folder + "/"):
             continue
         short = relative[len(folder) + 1:]
         discovered.add(short)
         path = checked_file(root, relative)
+        checksum = hashlib.sha256()
         with open(path, "rb") as stream:
-            content = stream.read()
-        digest.append([short, hashlib.sha256(content).hexdigest()])
+            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                checksum.update(chunk)
+        digest.append([short, checksum.hexdigest()])
     if discovered != listed:
         raise ValueError("Package allowlist mismatch")
     defaults = loader(checked_file(root, folder + "/" + defaults_path))
@@ -148,7 +160,8 @@ def load_package(root, reference, kind, loader, validator, inputs=None):
                 env_keys.add(match_env[1])
     return {"name": name, "version": version, "defaultsPath": os.path.join(root, folder, defaults_path),
             "definition": definition, "digest": canonical_digest(sorted(digest)), "logicalPath": folder,
-            "render": manifest.get("render", {}), "files": manifest["files"]}
+            "render": manifest.get("render", {}), "files": sorted(listed - {kind + ".yml"}),
+            "directoryEntries": [entry for entry in manifest["files"] if entry.endswith("/")]}
 
 
 def invocation_package_loader(root, loader, validator):

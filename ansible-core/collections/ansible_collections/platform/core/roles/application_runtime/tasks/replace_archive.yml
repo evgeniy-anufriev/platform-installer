@@ -1,0 +1,107 @@
+---
+- name: Remove only this archive's previous staging directory
+  ansible.builtin.file:
+    path: "{{ application_runtime_job.instancePath }}/config/.archive-stage-{{ application_archive.destination | hash('sha256') }}"
+    state: absent
+
+- name: Create a private archive staging directory
+  ansible.builtin.file:
+    path: "{{ application_runtime_job.instancePath }}/config/.archive-stage-{{ application_archive.destination | hash('sha256') }}"
+    state: directory
+    owner: "{{ application_runtime_job.account }}"
+    mode: '0700'
+
+- name: Transfer the declared archive into private staging
+  ansible.builtin.copy:
+    src: "{{ application_archive.path }}"
+    dest: "{{ application_runtime_job.instancePath }}/config/.archive-stage-{{ application_archive.destination | hash('sha256') }}/archive.tar.gz"
+    owner: "{{ application_runtime_job.account }}"
+    mode: '0600'
+
+- name: Hash transferred archive bytes on target
+  ansible.builtin.stat:
+    path: "{{ application_runtime_job.instancePath }}/config/.archive-stage-{{ application_archive.destination | hash('sha256') }}/archive.tar.gz"
+    checksum_algorithm: sha256
+  register: application_target_archive
+
+- name: Require the transferred archive digest
+  ansible.builtin.assert:
+    that: application_target_archive.stat.checksum == application_runtime_job.archiveChecksums[application_archive.destination]
+    fail_msg: APPLICATION_CONFIG_ARCHIVE_CHANGED
+
+- name: Extract verified archive bytes into staging
+  ansible.builtin.unarchive:
+    src: "{{ application_runtime_job.instancePath }}/config/.archive-stage-{{ application_archive.destination | hash('sha256') }}/archive.tar.gz"
+    dest: "{{ application_runtime_job.instancePath }}/config/.archive-stage-{{ application_archive.destination | hash('sha256') }}"
+    owner: "{{ application_runtime_job.account }}"
+    remote_src: true
+
+- name: Require the archive's declared root directory
+  ansible.builtin.stat:
+    path: "{{ application_runtime_job.instancePath }}/config/.archive-stage-{{ application_archive.destination | hash('sha256') }}/{{ application_archive.destination | basename }}"
+    follow: false
+  register: application_archive_root
+
+- name: Reject archives without the declared root directory
+  ansible.builtin.assert:
+    that: application_archive_root.stat.isdir | default(false)
+    fail_msg: APPLICATION_CONFIG_ARCHIVE_ROOT_INVALID
+
+- name: Replace the archive directory with rollback on failure
+  block:
+    - name: Preserve the previous archive directory
+      ansible.builtin.command:
+        argv:
+          - mv
+          - -T
+          - "{{ application_runtime_job.instancePath }}/config/{{ application_archive.destination }}"
+          - "{{ application_runtime_job.instancePath }}/config/.archive-previous-{{ application_archive.destination | hash('sha256') }}"
+      when: application_archive_installed.results[0].stat.isdir | default(false)
+
+    - name: Install the extracted archive directory
+      ansible.builtin.command:
+        argv:
+          - mv
+          - -T
+          - "{{ application_runtime_job.instancePath }}/config/.archive-stage-{{ application_archive.destination | hash('sha256') }}/{{ application_archive.destination | basename }}"
+          - "{{ application_runtime_job.instancePath }}/config/{{ application_archive.destination }}"
+
+    - name: Record the installed archive digest
+      ansible.builtin.copy:
+        content: "{{ application_runtime_job.archiveChecksums[application_archive.destination] }}\n"
+        dest: "{{ application_runtime_job.instancePath }}/config/.archive-{{ application_archive.destination | hash('sha256') }}.sha256"
+        owner: "{{ application_runtime_job.account }}"
+        mode: '0600'
+  rescue:
+    - name: Remove the failed replacement's directory
+      ansible.builtin.file:
+        path: "{{ application_runtime_job.instancePath }}/config/{{ application_archive.destination }}"
+        state: absent
+
+    - name: Restore the previous archive directory
+      ansible.builtin.command:
+        argv:
+          - mv
+          - -T
+          - "{{ application_runtime_job.instancePath }}/config/.archive-previous-{{ application_archive.destination | hash('sha256') }}"
+          - "{{ application_runtime_job.instancePath }}/config/{{ application_archive.destination }}"
+      when: application_archive_installed.results[0].stat.isdir | default(false)
+
+    - name: Invalidate the archive digest after rollback
+      ansible.builtin.file:
+        path: "{{ application_runtime_job.instancePath }}/config/.archive-{{ application_archive.destination | hash('sha256') }}.sha256"
+        state: absent
+
+    - name: Report unsuccessful archive replacement
+      ansible.builtin.fail:
+        msg: APPLICATION_CONFIG_ARCHIVE_REPLACE_FAILED
+
+- name: Remove only this archive's staging directory
+  ansible.builtin.file:
+    path: "{{ application_runtime_job.instancePath }}/config/.archive-stage-{{ application_archive.destination | hash('sha256') }}"
+    state: absent
+
+- name: Remove the previous archive after successful replacement
+  ansible.builtin.file:
+    path: "{{ application_runtime_job.instancePath }}/config/.archive-previous-{{ application_archive.destination | hash('sha256') }}"
+    state: absent

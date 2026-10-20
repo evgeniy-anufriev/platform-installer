@@ -51,14 +51,19 @@ data import policy, not an Ansible resolver or arbitrary-template execution sand
 Files of any extension, including no extension, are allowed within the existing
 assets/configuration/template paths as trusted application inputs;
 they are not executed by the controller. `config_files.source` uses byte-preserving
-Ansible copy, while `template` remains text rendering. Raw source bytes retain
-the existing private-key/credential-marker checks; compressed archive contents
-are not inspected. Source config digests use SHA256 of the original bytes.
+Ansible copy, while `template` remains text rendering. Core rejects private-key
+material in declared configuration; ordinary words such as `password` and
+`token` do not classify content as a secret. Compressed archive contents are
+not inspected. Source config digests use SHA256 of the original bytes.
 
-Limits: 512 package files, 8 MiB/file (rendered templates remain 1 MiB), existing 64 MiB aggregate/1024 transaction
+Limits for the current Go writer/import path: 512 package files, 8 MiB/file,
+existing 64 MiB aggregate/1024 transaction
 document limits. Edits are bounded to 64 KiB/depth16 and existing structural session
 limits. Explicit credential/shared-secret descriptors use the closed source shapes of
 settings.schema.json: required fields, no extra source or descriptor fields.
+Core no longer applies the 8 MiB per-file limit to declared package assets or
+configuration. The Go writer/import limit still prevents direct UI import of
+larger archives until its separate contract is updated.
 Literal username is permitted; literal password/shared-secret payload is not.
 Generated/runtime/Vault/PKI references remain available as declared by Core.
 Private keys remain runtime material. User-defined environment,

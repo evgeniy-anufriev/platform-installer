@@ -29,7 +29,12 @@ services:
 {% for config in application_effective.config_files %}
       - {{ (application_runtime.config_path ~ "/" ~ config.destination ~ ":" ~ ("/etc/keycloak/cache-ispn.xml" if config.destination == "conf/cache-ispn.xml" else "/usr/lib/keycloak/" ~ config.destination) ~ ":ro") | to_json }}
 {% endfor %}
-      - {{ (application_runtime.config_path ~ "/themes:/usr/lib/keycloak/themes:ro") | to_json }}
+{% for config in application_effective.config_directories | default([]) %}
+      - {{ (application_runtime.config_path ~ "/" ~ config.destination ~ ":/usr/lib/keycloak/" ~ config.destination ~ ":ro") | to_json }}
+{% endfor %}
+{% for config in application_effective.config_archives | default([]) %}
+      - {{ (application_runtime.config_path ~ "/" ~ config.destination ~ ":/usr/lib/keycloak/" ~ config.destination ~ ":ro") | to_json }}
+{% endfor %}
     healthcheck:
       test: ["CMD-SHELL", "curl -k https://localhost:9000/health/ready | grep -q UP"]
       interval: 30s

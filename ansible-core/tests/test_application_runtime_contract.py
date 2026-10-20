@@ -202,20 +202,24 @@ class ApplicationRuntimeTests(unittest.TestCase):
             self.assertFalse(safe_relative(path))
         self.assertTrue(safe_relative("dir/file.conf"))
 
-    def test_shared_env_and_config_reject_plaintext_secrets_and_unbounded_bytes(self):
+    def test_shared_env_remains_bounded_but_declared_configs_accept_ordinary_values(self):
         self.assertTrue(validate_config_contents([{"content": "REQUEST_TIMEOUT_MS=30000\nSERVER_ID=node1\n"}]))
-        for content in ("password=example", "PG_TOKEN: example", "role_id=example", "x" * (1024 * 1024 + 1)):
-            with self.assertRaises(ValueError):
-                validate_config_contents([{"content": content}])
+        self.assertTrue(validate_config_contents([{"destination": "script.lua", "content": "token=example\npassword=example"}]))
+        self.assertTrue(validate_config_contents([{"destination": "large.conf", "content": "x" * (1024 * 1024 + 1)}]))
+        with self.assertRaises(ValueError):
+            validate_config_contents([{"content": "x" * (1024 * 1024 + 1)}])
+        with self.assertRaises(ValueError):
+            validate_config_contents([{"destination": "key.pem", "content": "-----BEGIN PRIVATE KEY-----"}])
 
-    def test_binary_source_bytes_digest_bound_and_secret_checks(self):
+    def test_binary_source_bytes_digest_bound_without_fixed_config_limit(self):
         def source(raw):
             return {"content": base64.b64encode(raw).decode("ascii"), "encoding": "base64",
                     "sha256": hashlib.sha256(raw).hexdigest()}
         self.assertTrue(validate_config_contents([source(b"PK\x00\xff" * (1024 * 1024))]))
-        for raw in (b"\x00password=example\xff", b"PRIVATE KEY-----", b"x" * (8 * 1024 * 1024 + 1)):
-            with self.assertRaises(ValueError):
-                validate_config_contents([source(raw)])
+        self.assertTrue(validate_config_contents([source(b"\x00password=example\xff")]))
+        self.assertTrue(validate_config_contents([source(b"x" * (8 * 1024 * 1024 + 1))]))
+        with self.assertRaises(ValueError):
+            validate_config_contents([source(b"PRIVATE KEY-----")])
         with self.assertRaises(ValueError):
             validate_config_contents([dict(source(b"data"), sha256="0" * 64)])
         with self.assertRaises(ValueError):

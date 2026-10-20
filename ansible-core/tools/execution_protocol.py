@@ -452,7 +452,7 @@ def _candidate_members(archive):
     for member in members:
         if not member.isreg() or member.linkname or member.sparse is not None or not _candidate_logical_path(member.name):
             raise LifecycleError("PROJECT_CANDIDATE_ARCHIVE_UNSAFE")
-        limit = 8 * 1024 * 1024 if member.name.startswith(('application-packages/', 'library-packages/')) else MAX_CANDIDATE_FILE_BYTES
+        limit = MAX_CANDIDATE_TOTAL_BYTES if member.name.startswith(('application-packages/', 'library-packages/')) else MAX_CANDIDATE_FILE_BYTES
         if member.size < 0 or member.size > limit:
             raise LifecycleError("PROJECT_CANDIDATE_LIMIT_EXCEEDED")
         total += member.size

@@ -241,6 +241,20 @@ Application libraries opt into desired state v3alpha1 through ordinary group var
 `platform_desired_state.applicationLibraryDeployments` references exact local
 `application-packages/<name>/<version>` and `library-packages/<name>/<version>`;
 their manifest file allowlists and content digests participate in project revision.
+An application manifest may list a directory with a trailing `/` (for example,
+`assets/providers/`). Core expands that entry to its files, hashes each relative
+path and content, and requires the resulting set to match the package contents.
+Application settings may declare `config_directories` with a source directory,
+target destination, file mode and directory mode, or `config_archives` with an
+allowlisted `tar.gz` source and target destination. The archive contains one
+top-level directory named after the destination's final path component. Both
+forms produce read-only directory mounts. Apply reconciles changed directory
+members and removes stale members; archive extraction is staged and replaced
+when its source digest changes. Verify requires the declared directory mounts.
+Archive reconciliation trusts a machine-owned digest marker for an unchanged
+archive; Verify checks that the mounted directory exists but does not hash every
+extracted file. External edits inside the extracted directory are outside this
+bounded repeat-Apply check.
 Host membership is `platform_application_libraries.<library-id>` in host_vars.
 Ansible resolves namespaces/defaults/overrides before Core validates the derived
 rows. No project.yml is required. Infrastructure-only projects retain v2alpha1

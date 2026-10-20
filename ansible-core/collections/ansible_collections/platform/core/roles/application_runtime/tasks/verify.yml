@@ -5,6 +5,24 @@
     application_path_home: "{{ getent_passwd[application_runtime_job.account][4] }}"
   when: application_runtime_job.instancePath is not defined
 
+- name: Inspect declared configuration tree mounts during Verify
+  ansible.builtin.stat:
+    path: "{{ application_runtime_job.instancePath | default(application_instance_path) }}/config/{{ item.destination }}"
+    follow: false
+    get_checksum: false
+  loop: "{{ (application_runtime_job.directoryConfigs | default([])) + (application_runtime_job.archiveConfigs | default([])) }}"
+  register: application_verified_config_trees
+  no_log: true
+
+- name: Require declared configuration trees to exist as directories
+  ansible.builtin.assert:
+    that:
+      - item.stat.isdir | default(false)
+      - not (item.stat.islnk | default(false))
+    fail_msg: APPLICATION_CONFIG_TREE_MISSING
+  loop: "{{ application_verified_config_trees.results }}"
+  no_log: true
+
 - name: Verify exact application image ownership and readiness
   tags: [platform_application_instance_state]
   ansible.builtin.command:

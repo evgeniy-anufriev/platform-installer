@@ -5,7 +5,32 @@
     state: directory
     owner: "{{ application_runtime_job.account }}"
     mode: '0700'
-  loop: "{{ ([application_runtime_job.instancePath ~ '/config'] + (application_runtime_job.configContents | map(attribute='destination') | map('dirname') | map('regex_replace', '^', application_runtime_job.instancePath ~ '/config/') | list)) | map('regex_replace', '/+$', '') | unique | list }}"
+  loop: "{{ ([application_runtime_job.instancePath ~ '/config'] + (application_runtime_job.configs | map(attribute='destination') | map('dirname') | map('regex_replace', '^', application_runtime_job.instancePath ~ '/config/') | list) + (application_runtime_job.directoryConfigs | map(attribute='destination') | map('dirname') | map('regex_replace', '^', application_runtime_job.instancePath ~ '/config/') | list) + (application_runtime_job.archiveConfigs | map(attribute='destination') | map('dirname') | map('regex_replace', '^', application_runtime_job.instancePath ~ '/config/') | list)) | map('regex_replace', '/+$', '') | unique | list }}"
+
+- name: Apply declared directory modes to mounted configuration directories
+  ansible.builtin.file:
+    path: "{{ application_runtime_job.instancePath }}/config/{{ item.destination }}"
+    state: directory
+    owner: "{{ application_runtime_job.account }}"
+    mode: "{{ item.directory_mode | default('0755') }}"
+  loop: "{{ application_runtime_job.directoryConfigs }}"
+  no_log: true
+
+- name: Apply declared directory modes to nested configuration directories
+  ansible.builtin.file:
+    path: "{{ application_runtime_job.instancePath }}/config/{{ item.1 }}"
+    state: directory
+    owner: "{{ application_runtime_job.account }}"
+    mode: "{{ item.0.directory_mode | default('0755') }}"
+  loop: "{{ application_runtime_job.directoryConfigs | subelements('subdirectories') }}"
+  no_log: true
+
+- name: Remove files no longer declared in configuration directories
+  ansible.builtin.include_tasks: apply_directory.yml
+  loop: "{{ application_runtime_job.directoryConfigs }}"
+  loop_control:
+    loop_var: application_directory
+  no_log: true
 
 - name: Record instance ownership as derived runtime state
   ansible.builtin.copy:
@@ -22,6 +47,13 @@
     owner: "{{ application_runtime_job.account }}"
     mode: "{{ item.mode }}"
   loop: "{{ application_runtime_job.configContents }}"
+  no_log: true
+
+- name: Stage and replace declared configuration archives
+  ansible.builtin.include_tasks: apply_archive.yml
+  loop: "{{ application_runtime_job.archiveConfigs }}"
+  loop_control:
+    loop_var: application_archive
   no_log: true
 
 - name: Materialize instance Compose including its automatic config-digest label

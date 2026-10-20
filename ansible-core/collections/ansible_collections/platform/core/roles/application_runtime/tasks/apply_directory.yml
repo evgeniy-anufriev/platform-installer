@@ -1,0 +1,22 @@
+---
+- name: List the existing declared configuration directory
+  ansible.builtin.find:
+    paths: "{{ application_runtime_job.instancePath }}/config/{{ application_directory.destination }}"
+    recurse: true
+    file_type: any
+    hidden: true
+    follow: false
+  register: application_directory_existing
+  no_log: true
+
+- name: Remove only files and directories absent from the declared package
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  vars:
+    application_directory_allowed: >-
+      {{ (application_directory.members | map(attribute='destination') | map('regex_replace', '^', application_runtime_job.instancePath ~ '/config/') | list) +
+         (application_directory.subdirectories | map('regex_replace', '^', application_runtime_job.instancePath ~ '/config/') | list) }}
+  loop: "{{ application_directory_existing.files | sort(attribute='path', reverse=true) }}"
+  when: item.path not in application_directory_allowed
+  no_log: true
