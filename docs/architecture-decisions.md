@@ -487,6 +487,11 @@ instance ID consistently in endpoint and runtime projections and rejects
 cross-library collisions. The default `qualified` strategy preserves existing
 `<application-name>-<library-id>` identities. SZI opts in because only one SZI
 library deployment is allowed per project; no SZI-specific Core branch is added.
+Core also supports package-declared `config_directories` and `config_archives`
+as common application settings. The package allowlist expands a directory into
+hashed files; an archive remains one hashed source and is staged on target before
+replacement. This stays inside Ansible Core Apply/Verify and adds no SZI-only
+runtime path. The Go package importer retains its separate 8 MiB file limit.
 
 Owner-authorized common defaults extension (2026-10-17): library packages may
 declare defaults.environment/parameters; application-owned defaults remain in

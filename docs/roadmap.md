@@ -79,6 +79,9 @@ are separate owner-authorized work.
 The SZI package draft uses the library contract's optional application-name
 instance ID strategy; acceptance must verify one ID across endpoint publication,
 container runtime and integration inputs, including collision rejection.
+Its Keycloak package uses the common Core directory/archive configuration
+contracts. End-to-end SZI acceptance still requires lifting the Go import limit
+for the themes archive and exercising the real Installer/target flow.
 
 [A2](work/application-libraries/milestones/a2/a2-technical-plan.md) covers explicit standalone
 rendering, pinned image delivery and rootless Compose Apply/Verify. Its exit gates
