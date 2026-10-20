@@ -27,13 +27,15 @@ versioned schemas, service packages или accepted substage scope.
 
 Последующие Go и UI описываются в [общем плане](implementation-plan.md).
 Kafka SASL/principal/ACL является отдельным security scope; SSL-only probe
-не доказывает authenticated access.
+не доказывает authenticated access. План расширения с результатами проверки Java:
+[Kafka SASL SCRAM](kafka-scram-plan.md).
 
 ## Проектные предложения и уточнения
 
 | Документ | Назначение |
 | --- | --- |
 | [application-image-metadata-plan.md](application-image-metadata-plan.md) | Утверждённый владельцем план автоматических image metadata из bundle/registry и runtime credentials экземпляра библиотеки; реализация в отдельном worktree, acceptance отражён в CURRENT_STATE |
+| [kafka-scram-plan.md](kafka-scram-plan.md) | План SASL_SSL/SCRAM listener, existing application accounts/ACL и JAAS через Vault Agent; scope 11 проверенных Java-приложений, четыре исключены владельцем; реализация требует согласования |
 | [architecture.md](architecture.md) | Сущности, хранение и ownership |
 | [configuration.md](configuration.md) | Пакеты, defaults, экземпляры и Compose |
 | [execution.md](execution.md) | Provider hooks, порядок и будущая интеграция |
