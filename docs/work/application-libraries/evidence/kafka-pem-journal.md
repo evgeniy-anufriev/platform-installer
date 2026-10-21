@@ -185,8 +185,94 @@ node1 266/changed9, node2/3 159/changed0; failed/unreachable0. First failure's r
 stderr was protected by production no_log; newline correction and successful
 retry are evidence, not a claim of separately captured parser diagnostics.
 
-Finalization now uses serial1: remove temporary certificate superuser, restart
-one member, verify real admin SCRAM and ready metadata quorum before continuing.
-Then execute the existing Registry-only role phase and full read-only role Verify
-with original-PKI/data-identity checksum comparison. These final stages are still
-running at this checkpoint; final result and cleanup will be recorded here.
+Serial1 finalization PASS: remove temporary certificate superuser, restart one
+member, verify real admin SCRAM and metadata quorum before continuing. Recap7
+tasks/changed2 on each host, failed0. Existing Registry-only phase PASS:
+localhost28/changed0, node1 217/changed3, node2/3 214/changed3, failed0.
+
+Independent immutable-input verification PASS,3 tasks/changed0 on each host:
+all original CA/leaf/key/PKCS12/marker files and meta.properties remain byte-identical.
+Direct final-state audit PASS on all3: both units active, SASL_SSL9096, StandardAuthorizer,
+super.users=User:admin, Kafka/Registry PEM, Registry Kafka protocol SSL, private
+identities0600 with service owners, zero password= entries in broker/Registry/client
+properties. Protected execution-log scan found no admin value/private-key bodies.
+
+## Live findings in the unmodified production tasks
+
+The stock Verify did NOT pass. Manual installation success must not be reported
+as acceptance of the ordinary Installer Apply/Verify path. Production source and
+immutable runtime were not patched; manual checks retain actual process evidence,
+resource-aware security restrictions and immutable-file comparisons.
+
+- **KAFKA-M01:** failed run_once admin creation on node1 did not stop peer hosts
+  from revoking bootstrap privileges. Actual peer listener timeouts and
+  AuthorizerNotReadyException required the bounded recovery above. Deployment-wide
+  failure propagation before revocation needs correction/testing.
+- **KAFKA-M02:** authorization_inputs computes AnsibleUnsafeText containing False;
+  stock Verify treats the nonempty string as true and rejects finalized hosts.
+  Actual process observations were final=true on all3; guarded diagnostic
+  normalization accepted only a false string AND demonstrated final runtime.
+- **KAFKA-M03:** Kafka4.3.1 --list --cluster --resource-pattern-type match also
+  returned wildcard TOPIC/GROUP/TRANSACTIONAL_ID blocks. The stock security guard
+  mistook their legitimate ALL operations for CLUSTER administration. Actual
+  CLUSTER block contains only ANONYMOUS Describe/IdempotentWrite and certificate
+  principal ClusterAction/Describe/IdempotentWrite; no non-admin management grant.
+- **KAFKA-M04:** stock ACL Verify reported missing IdempotentWrite despite actual
+  IDEMPOTENT_WRITE ALLOW on CLUSTER. Manual verification matches explicit uppercase
+  operations within the exact resource/principal block; no ACL was added merely
+  to satisfy this false negative.
+- **KAFKA-M05:** verify_member drops listener keys when passing dict values to
+  the PEM verifier, which expects kafka_ssl_listener.name. Manual runtime metadata
+  retains the canonical name alongside unchanged listener settings; actual config
+  is not rewritten to work around the checker.
+- **KAFKA-M06:** the stock controller quorum diagnostic uses certificate SSL;
+  Kafka returns ClusterAuthorizationException / needs ALTER permission. Granting
+  ALTER to that principal would violate the owner-selected boundary. Manual quorum
+  diagnostics use the already authenticated admin on SASL_SSL broker listeners.
+
+Shared account templates also need the existing generic runtime secret-file map
+in post-bootstrap SASL mode; manual invocation supplies the same file map under
+platform_application_secret_files, without duplicating secret values.
+
+Final manual component verification PASS. Original per-member runtime/storage
+and all9 Kafka listener TLS handshakes passed with retained listener-name metadata.
+Final verify-complete.yml then checked exact11 real ACL bindings, sole-admin
+management restrictions, actual SCRAM login, quorum and unfenced brokers through
+each of the3 SASL bootstrap addresses, original Registry ownership/PEM/configuration/
+readiness checks and immutable-input comparisons. Quorum keeps cluster ID
+3N6GP_oL7fty118ZQ_4AVw, voters1/2/3, ready leader1; direct status showed follower lag0.
+Final recap: localhost28, node1 179, node2/3 167; changed0, failed0, unreachable0,
+rescued0 on every host. The earlier stock Verify failures are retained above;
+this PASS applies to the explicit manual component checks, not the stock entrypoint.
+Normal automated acceptance and cold-start/failure-path tests remain open.
+
+Manual invocation corrections also included the generic secret-file alias for
+shared templates, explicit original-host bootstrap addresses and running the
+remaining administrative diagnostics sequentially on node1. Failed intermediate
+diagnostic wrappers did not repair or mutate infrastructure. Source and immutable
+runtime were not modified to hide the stock checker failures.
+
+Neighbor preservation:35 certificate/marker/neighbor configuration hashes match
+the pre-update snapshot. qa-sr-wails unit PIDs remained unchanged. The older
+srqa Kafka/Registry qa-schema-registry-20261012 units on node2 changed PIDs through
+automatic restarts (counters exceed1000/300); their configs/certificates were not
+changed. Public leaf AND isolated CA expired Oct14 10:18:11 UTC, before this task.
+Their restart cause is not attributed solely from these observations; no repair,
+stop/start or cleanup of those neighboring deployments was performed.
+
+## Final artifacts and cleanup
+
+Local evidence: .runtime/qa/kafka-manual-evidence-20261020 (36 public wrapper/log
+files, including retained failures and final successful recap), final safe state
+.runtime/qa/kafka-scram-pem-final-state.json, preservation comparison
+.runtime/qa/kafka-scram-pem-preservation.json. Final log scan: no admin password
+value or private-key bodies. No credential/property files were exported.
+
+Removed the execution-only SSH key, password, JAAS/admin/SSL client properties and
+private diagnostic copies; the execution .runtime/secrets directory is now absent.
+Original protected local runtime input remains in the established secret store.
+Removed only the empty failed preparation directory under execution/manual-kafka;
+retained public execution evidence. Source/build workspace e81497d6 on node2
+cleaned using qa-sync -Cleanup. Prior runtime47 remains preserved outside cache;
+current runtime190ae47e and separate project's verified bundle remain available.
+No source-code commit/push or neighboring service repair was performed.
