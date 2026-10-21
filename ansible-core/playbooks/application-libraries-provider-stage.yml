@@ -49,24 +49,6 @@
           loop: "{{ (application_provider_inputs.libraryJobs + application_provider_inputs.instanceJobs) | selectattr('serviceType', 'equalto', 'clickhouse') | list }}"
           loop_control:
             loop_var: platform_clickhouse_application_job
-        - name: Preflight all Kafka topic batches before provider mutations
-          ansible.builtin.include_role:
-            name: platform.kafka.kafka_kraft
-            tasks_from: application_topics
-          vars:
-            platform_kafka_application_phase: preflight
-          loop: "{{ application_provider_inputs.libraryJobs | selectattr('serviceType', 'equalto', 'kafka') | list }}"
-          loop_control:
-            loop_var: platform_kafka_application_job
-        - name: Preflight Kafka account credentials before provider mutations
-          ansible.builtin.include_role:
-            name: platform.kafka.kafka_kraft
-            tasks_from: application_accounts
-          vars:
-            platform_kafka_application_phase: preflight
-          loop: "{{ application_provider_inputs.instanceJobs | selectattr('serviceType', 'equalto', 'kafka') | list }}"
-          loop_control:
-            loop_var: platform_kafka_application_job
         - name: Create Kafka library topics before application instances
           ansible.builtin.include_role:
             name: platform.kafka.kafka_kraft
@@ -118,13 +100,13 @@
           loop: "{{ application_provider_inputs.instanceJobs | selectattr('serviceType', 'equalto', 'clickhouse') | list }}"
           loop_control:
             loop_var: platform_clickhouse_application_job
-        - name: Ensure and authenticate each Kafka instance before Vault publication
+        - name: Ensure Kafka deployment accounts before Vault publication
           ansible.builtin.include_role:
             name: platform.kafka.kafka_kraft
             tasks_from: application_accounts
           vars:
             platform_kafka_application_phase: apply
-          loop: "{{ application_provider_inputs.instanceJobs | selectattr('serviceType', 'equalto', 'kafka') | list }}"
+          loop: "{{ application_provider_inputs.jobs | selectattr('serviceType', 'equalto', 'kafka') | selectattr('accounts') | list }}"
           loop_control:
             loop_var: platform_kafka_application_job
         - name: Publish each instance credentials and AppRole once

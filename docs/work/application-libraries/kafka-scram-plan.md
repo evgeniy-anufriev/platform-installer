@@ -201,6 +201,16 @@ Protocol/mechanism/bootstrap настройки остаются обычной 
 включённого приложения. Обновление Java images для этого пути не планируется;
 runtime acceptance должно подтвердить статические выводы.
 
+Уточнение владельца 2026-10-20 после ручной проверки alarm-view: сохранять в Vault
+username/password, JAAS собирать existing Agent env_template. Для проверенного
+JAR alarm-view legacy-флаги KAFKA_ENABLE_SSL, SPRING_KAFKA_SSL_ENABLE_SSL и
+spring.kafka.ssl.enable-ssl не задавать: WS factory при true принудительно
+выставляет SSL/PLAIN. В выбранных SASL SDKU/CSPA runtime-library defaults эти
+флаги убраны; TLS задаётся явными Kafka security.protocol=SASL_SSL и
+ssl.truststore.*. Проверка одного CSPA-контейнера подтвердила все factory paths,
+SCRAM, truststore и HTTPS hostname validation; это не закрывает normal-plan
+и остальные application acceptance gates. Подробности в SDKU/CSPA journal.
+
 ## 6. Decision gate: cluster-wide authorization и переход SSL
 
 `StandardAuthorizer` действует на кластер, а не только на новый SASL listener.

@@ -37,4 +37,6 @@
     tasks_from: verify
   vars:
     application_vault_instance_path: "{{ application_runtime_job.instancePath | default(application_instance_path) }}"
-  when: application_runtime_job.agentTemplate | default(false)
+  when:
+    - application_runtime_job.agentTemplate | default(false)
+    - application_runtime_verify_vault | default(true)

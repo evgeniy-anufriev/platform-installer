@@ -1,0 +1,38 @@
+---
+- name: Bind the exact declared topic selection for this invocation
+  ansible.builtin.set_fact:
+    application_topic_batch_pattern: "{{ '^(' ~ (platform_kafka_application_job.topics | map(attribute='name') | map('regex_escape') | join('|')) ~ ')$' }}"
+    application_topic_required_names: "{{ (platform_kafka_application_job.topics if platform_kafka_application_phase == 'verify' else platform_kafka_application_job.topics | selectattr('mode', 'equalto', 'existing') | list) | map(attribute='name') | list }}"
+  changed_when: false
+
+- name: Describe the declared topic batch once
+  ansible.builtin.command:
+    argv: ["{{ application_topic_cli_directory }}/bin/kafka-topics.sh", --bootstrap-server, "{{ application_topic_candidate.address }}:{{ application_topic_candidate.port }}", --command-config, "{{ application_topic_client.path }}", --describe, --if-exists, --topic, "{{ application_topic_batch_pattern }}"]
+  register: application_topic_batch_description
+  changed_when: false
+  failed_when: false
+  ignore_errors: true
+  no_log: true
+  until: >-
+    application_topic_batch_description.rc != 0 or
+    application_topic_required_names | difference(application_topic_batch_description.stdout | regex_findall('(?m)^[ \t]*Topic:[ \t]*([^ \t\r\n]+)[^\r\n]*PartitionCount:')) | length == 0
+  retries: "{{ platform_kafka_startup_readiness_retries }}"
+  delay: "{{ platform_kafka_startup_readiness_delay }}"
+
+- name: Require readable topic batch metadata
+  ansible.builtin.assert:
+    that: application_topic_batch_description.rc == 0
+    fail_msg: APPLICATION_TOPIC_DESCRIBE_FAILED
+
+- name: Read effective topic configurations once for this invocation
+  ansible.builtin.command:
+    argv: ["{{ application_topic_cli_directory }}/bin/kafka-configs.sh", --bootstrap-server, "{{ application_topic_candidate.address }}:{{ application_topic_candidate.port }}", --command-config, "{{ application_topic_client.path }}", --describe, --all, --entity-type, topics]
+  register: application_topic_batch_properties
+  changed_when: false
+  failed_when: false
+  no_log: true
+
+- name: Require readable effective topic configurations
+  ansible.builtin.assert:
+    that: application_topic_batch_properties.rc == 0
+    fail_msg: APPLICATION_TOPIC_CONFIG_READ_FAILED

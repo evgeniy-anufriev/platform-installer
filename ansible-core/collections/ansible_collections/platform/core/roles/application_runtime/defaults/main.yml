@@ -3,3 +3,7 @@
 
 platform_application_approved_registries: []
 platform_application_registry_config_directory: ''
+
+# Direct role Verify also verifies AppRole secret reads; container activation
+# and library Verify disable this additional probe.
+application_runtime_verify_vault: true

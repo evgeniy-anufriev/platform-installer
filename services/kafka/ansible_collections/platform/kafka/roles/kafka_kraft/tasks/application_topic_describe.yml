@@ -11,19 +11,37 @@
       - --if-exists
       - --topic
       - "{{ '^' ~ (application_topic.name | regex_escape) ~ '$' }}"
-  register: application_topic_description
+  register: application_topic_single_description
   changed_when: false
   failed_when: false
   ignore_errors: true
   no_log: true
-  until: application_topic_description.rc != 0 or not application_topic_must_exist or application_topic_description.stdout | trim | length > 0
+  until: application_topic_single_description.rc != 0 or not application_topic_must_exist or application_topic_single_description.stdout | trim | length > 0
   retries: "{{ platform_kafka_startup_readiness_retries }}"
   delay: "{{ platform_kafka_startup_readiness_delay }}"
+  when: application_topic_readback | default(false)
+
+- name: Bind freshly described topic metadata after creation
+  ansible.builtin.set_fact:
+    application_topic_description: "{{ application_topic_single_description }}"
+  changed_when: false
+  no_log: true
+  when: application_topic_readback | default(false)
+
+- name: Select exact topic metadata from this invocation's batch
+  ansible.builtin.set_fact:
+    application_topic_description:
+      rc: "{{ application_topic_batch_description.rc }}"
+      stdout: "{{ application_topic_batch_description.stdout_lines | select('match', '^[ \\t]*Topic:[ \\t]*' ~ (application_topic.name | regex_escape) ~ '[ \\t]') | join('\n') }}"
+      stderr: "{{ application_topic_batch_description.stderr | default('') }}"
+  changed_when: false
+  no_log: true
+  when: not application_topic_readback | default(false)
 
 - name: Distinguish missing topics from failed Kafka connections
   ansible.builtin.assert:
     that:
-      - application_topic_description.rc == 0
+      - application_topic_description.rc | int == 0
       - not application_topic_must_exist or application_topic_description.stdout | trim | length > 0
     fail_msg: "{{ application_topic_diagnostic | to_json }}"
   vars:
@@ -33,7 +51,7 @@
       topic: "{{ application_topic.name }}"
       address: "{{ application_topic_candidate.address }}:{{ application_topic_candidate.port }}"
       timeoutMs: "{{ platform_kafka_application_timeout_ms }}"
-      reason: "{{ 'TOPIC_MISSING' if application_topic_description.rc == 0 else (application_topic_description.stderr | regex_search('(TopicAuthorizationException|TimeoutException|SSLHandshakeException)') | default('KAFKA_CLI_FAILED', true)) }}"
+      reason: "{{ 'TOPIC_MISSING' if application_topic_description.rc | int == 0 else (application_topic_description.stderr | regex_search('(TopicAuthorizationException|TimeoutException|SSLHandshakeException)') | default('KAFKA_CLI_FAILED', true)) }}"
 
 - name: Validate existing topic state without changing it
   when: application_topic_description.stdout | trim | length > 0
@@ -66,13 +84,35 @@
     - name: Read effective topic properties including broker defaults
       ansible.builtin.command:
         argv: ["{{ application_topic_cli_directory }}/bin/kafka-configs.sh", --bootstrap-server, "{{ application_topic_candidate.address }}:{{ application_topic_candidate.port }}", --command-config, "{{ application_topic_client.path }}", --describe, --all, --entity-type, topics, --entity-name, "{{ application_topic.name }}"]
-      register: application_topic_properties
+      register: application_topic_single_properties
       changed_when: false
       failed_when: false
       no_log: true
+      when: application_topic_readback | default(false)
+    - name: Bind freshly read effective properties after creation
+      ansible.builtin.set_fact:
+        application_topic_properties: "{{ application_topic_single_properties }}"
+      changed_when: false
+      no_log: true
+      when: application_topic_readback | default(false)
+    - name: Select only this topic's effective configuration block
+      ansible.builtin.set_fact:
+        application_topic_properties:
+          rc: "{{ application_topic_batch_properties.rc }}"
+          stdout: "{{ application_topic_batch_properties.stdout | regex_findall(application_topic_properties_pattern) | join('\n') }}"
+          stderr: "{{ application_topic_batch_properties.stderr | default('') }}"
+      vars:
+        application_topic_properties_pattern: '(?ms)^All configs for topic {{ application_topic.name | regex_escape }} are:[ \t]*\r?\n(.*?)(?=^All configs for topic |\Z)'
+      changed_when: false
+      no_log: true
+      when: not application_topic_readback | default(false)
+    - name: Require the exact topic configuration response to be present
+      ansible.builtin.assert:
+        that: application_topic_properties.stdout | trim | length > 0
+        fail_msg: APPLICATION_TOPIC_CONFIG_READ_FAILED
     - name: Distinguish property lookup failures from property drift
       ansible.builtin.assert:
-        that: application_topic_properties.rc == 0
+        that: application_topic_properties.rc | int == 0
         fail_msg: "{{ application_topic_diagnostic | to_json }}"
       vars:
         application_topic_diagnostic:

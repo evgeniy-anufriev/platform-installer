@@ -16,6 +16,16 @@
       ansible.builtin.include_role:
         name: platform.core.application_runtime
         tasks_from: preflight
+      vars:
+        application_runtime_defer_archive_verification: true
       loop: "{{ hostvars['localhost'].application_runtime_inputs.jobs | selectattr('hostId', 'equalto', inventory_hostname) | list }}"
       loop_control:
         loop_var: application_runtime_job
+
+- name: Verify selected offline archives once before any provider mutation
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  any_errors_fatal: true
+  tasks:
+    - ansible.builtin.import_tasks: tasks/application-libraries-offline-archives.yml

@@ -108,6 +108,15 @@
   ansible.builtin.set_fact:
     application_selected_archive_path: "{{ platform_execution_bundle_root | default('') | platform.core.application_selected_archive(application_image_source.source, application_runtime_job.authority.offlineBundle) }}"
   no_log: true
+  when: not (application_runtime_defer_archive_verification | default(false) | bool)
+
+- name: Bind selected archive path pending the common preflight integrity barrier
+  ansible.builtin.set_fact:
+    application_selected_archive_path: >-
+      {{ ((platform_execution_bundle_root | default('') | regex_replace('/+$', '')) ~ '/' ~ application_runtime_job.authority.offlineBundle.ref)
+         if application_image_source.source == 'OFFLINE_BUNDLE' else none }}
+  when: application_runtime_defer_archive_verification | default(false) | bool
+  no_log: true
 
 - name: Inspect the digest-bound managed reference without mutation
   ansible.builtin.command:

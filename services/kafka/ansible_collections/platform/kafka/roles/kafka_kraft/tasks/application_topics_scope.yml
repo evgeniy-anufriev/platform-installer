@@ -25,6 +25,9 @@
         mode: '0600'
       changed_when: false
       no_log: true
+    - name: Read topic metadata and effective configurations once for the library batch
+      ansible.builtin.include_tasks: application_topics_read.yml
+      when: platform_kafka_application_job.topics | length > 0
     - name: Check or create each declared topic
       ansible.builtin.include_tasks: application_topic.yml
       loop: "{{ platform_kafka_application_job.topics }}"

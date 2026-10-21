@@ -1,0 +1,25 @@
+---
+- name: Initialize selected offline archive records for this invocation
+  ansible.builtin.set_fact:
+    application_selected_offline_archives: []
+
+- name: Collect only archives selected by target preflight
+  ansible.builtin.set_fact:
+    application_selected_offline_archives: >-
+      {{ (application_selected_offline_archives +
+          (hostvars[item].platform_application_preflight_jobs | default([])
+           | selectattr('source.source', 'equalto', 'OFFLINE_BUNDLE')
+           | map(attribute='authority.offlineBundle') | list)) | unique | list }}
+  loop: "{{ groups['platform_targets'] | default([]) }}"
+  no_log: true
+
+- name: Verify each unique selected offline archive before mutations
+  ansible.builtin.assert:
+    that: >-
+      (platform_execution_bundle_root | default('')
+       | platform.core.application_selected_archive('OFFLINE_BUNDLE', item)) is string
+    fail_msg: APPLICATION_IMAGE_ARCHIVE_INVALID
+  loop: "{{ application_selected_offline_archives }}"
+  loop_control:
+    label: "{{ item.ref }}"
+  no_log: true

@@ -18,6 +18,8 @@
         mode: '0600'
       no_log: true
       changed_when: false
+    - name: Read deployment SCRAM metadata and ACL inventory once before accounts
+      ansible.builtin.include_tasks: application_accounts_read.yml
     - name: Check or ensure each logical account
       ansible.builtin.include_tasks: application_account.yml
       loop: "{{ platform_kafka_application_job.accounts }}"
