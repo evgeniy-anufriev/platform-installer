@@ -1,9 +1,14 @@
 # Kafka и Schema Registry: PEM без паролей PKCS12 в properties
 
-Дата: 2026-10-20. Реализация и isolated QA разрешены владельцем.
-Статус: реализация и изолированная проверка завершены; стендовая приёмка ожидается.
-Установка на стенде, service Apply, миграция установленных сервисов, запуск
-приложений и публикация bundle не разрешены.
+Дата: 2026-10-20. Реализация и isolated QA завершены. Позже владелец разрешил
+отдельное ручное обновление существующего qa-kafka-structure без перевыпуска PKI.
+Kafka/Registry на трёх узлах обновлены; ручные компонентные проверки PASS.
+Штатная автоматическая приёмка остаётся открытой: реальные ошибки KAFKA-M01–M06
+перечислены в [журнале](evidence/kafka-pem-journal.md). В рамках ручного запуска production-код не исправлялся.
+Последующим отдельным заданием исправлены штатные Ansible tasks M01–M06 и
+admin inventory; изолированные проверки и review описаны в том же журнале.
+Реальная штатная установка с этими исправлениями пока не запускалась. Приложения и соседние deployment
+этот запуск не обновлял.
 
 ## Scope и существующая основа
 
@@ -69,4 +74,14 @@ APPROVE_WITH_CHANGES, blockers0. Необязательное PEM-D01 испра
 Результаты и ограничения isolated QA: [журнал](evidence/kafka-pem-journal.md).
 99 тестов и четыре syntax checks PASS; после PEM-D01 повторно выполнены два
 native PEM/PKCS12 теста, PASS (208.561s).
-Стендовая приёмка ожидается; установка и миграция не запускались.
+Впоследствии выполнено разрешённое ручное обновление на трёх узлах, с прежними
+сертификатами/ключами/CA и неизменными идентификаторами данных. Штатный отдельный
+план не одобрялся и не запускался: его PKI reissue противоречил условию сохранения
+сертификатов. Полный Installer Apply/Verify, cold-start и failure-path acceptance
+не закрыты; ручной PASS не заменяет эти gates.
+
+Read-only стендовая проверка текущей роли 2026-10-21 PASS на трёх узлах:
+changed=0/failed=0/unreachable=0, admin SCRAM/ACL, PEM/TLS, quorum, broker
+registration, Registry HTTP/HTTPS и исходные PKI/data checksums. Apply, rolling
+bootstrap, cold-start/recovery и реальный Installer flow не запускались;
+подробности и границы в [журнале](evidence/kafka-pem-journal.md#read-only-stand-verify-of-existing-qa-kafka-structure--2026-10-21).

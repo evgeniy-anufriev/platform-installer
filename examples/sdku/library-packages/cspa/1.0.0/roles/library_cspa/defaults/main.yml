@@ -275,7 +275,7 @@ platform_library_definition:
                 ack_alarm:
                     config:
                         cleanup.policy: delete
-                    name: cspa-ack-alarm
+                    name: ack-alarm-cspa
                     partitions: 1
                 alarms:
                     config:

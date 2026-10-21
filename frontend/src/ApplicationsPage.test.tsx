@@ -1,6 +1,12 @@
 import { useState } from "react";
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import {
+  render,
+  screen,
+  within,
+  waitFor,
+  fireEvent,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ApplicationsPage } from "./ApplicationsPage";
 import {
@@ -150,6 +156,145 @@ async function selectSlot() {
   await userEvent.click(screen.getByRole("button", { name: "↳ gateway" }));
 }
 describe("application editor", () => {
+  it("uses compact endpoint rows on the application General tab with the existing writer", async () => {
+    const view = structuredClone(managed);
+    objectValue(
+      objectValue(
+        view.applicationPackages["application:gateway@1.0.0"].definition,
+      ).defaults,
+    ).endpoint = { enabled: true, protocol: "http" };
+    const calls: ApplicationIntent[] = [];
+    render(<Harness calls={calls} view={view} />);
+    await selectSlot();
+    await userEvent.click(
+      screen.getByText("Endpoint · публикация HAProxy / DNS"),
+    );
+    const input = screen.getByLabelText("protocol");
+    expect(input.closest(".application-value-row")).toBeTruthy();
+    fireEvent.change(input, { target: { value: "https" } });
+    await userEvent.click(
+      within(input.closest(".application-value-row")!).getByRole("button", {
+        name: "В черновик",
+      }),
+    );
+    expect(calls.at(-1)).toMatchObject({
+      operation: "SetApplicationLibraryOverride",
+      entityId: "gateway",
+      setting: "endpoint",
+      value: { protocol: "https" },
+    });
+  });
+  it("uses compact ENV rows and header Add for library common parameters", async () => {
+    const view = structuredClone(managed);
+    objectValue(
+      view.applicationPackages["library:sdku@1.0.0"].definition,
+    ).defaults = { environment: { LIB_ENV: "default" } };
+    const calls: ApplicationIntent[] = [];
+    render(<Harness calls={calls} view={view} />);
+    await userEvent.click(screen.getByRole("button", { name: /^sdku/ }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Общие параметры" }),
+    );
+    const input = screen.getByLabelText("LIB_ENV") as HTMLInputElement;
+    expect(input.closest(".application-value-row")).toBeTruthy();
+    expect(input.value).toBe("default");
+    const add = screen.getByRole("button", { name: "Добавить параметр" });
+    expect(add.closest("header")).toBeTruthy();
+    expect(
+      screen.queryByRole("button", { name: "Добавить параметр · Общие ENV" }),
+    ).toBeNull();
+    fireEvent.change(input, { target: { value: "false" } });
+    await userEvent.click(
+      within(input.closest(".application-value-row")!).getByRole("button", {
+        name: "В черновик",
+      }),
+    );
+    expect(calls.at(-1)).toMatchObject({
+      operation: "SetApplicationLibraryOverride",
+      entityId: "",
+      setting: "environment",
+      value: { LIB_ENV: false },
+    });
+    expect((screen.getByLabelText("LIB_ENV") as HTMLInputElement).value).toBe(
+      "false",
+    );
+    await userEvent.click(
+      within(
+        screen.getByLabelText("LIB_ENV").closest(".application-value-row")!,
+      ).getByRole("button", { name: "Сбросить к default" }),
+    );
+    expect((screen.getByLabelText("LIB_ENV") as HTMLInputElement).value).toBe(
+      "default",
+    );
+  });
+  it("retains application package ENV declarations while common defaults await Core verification", async () => {
+    const view = structuredClone(managed);
+    objectValue(
+      view.applicationPackages["library:sdku@1.0.0"].definition,
+    ).defaults = { environment: { LIBRARY_ONLY: "common" } };
+    objectValue(
+      objectValue(
+        view.applicationPackages["application:gateway@1.0.0"].definition,
+      ).defaults,
+    ).environment = { PACKAGE_ENV: "{{ application_instance_id }}" };
+    const calls: ApplicationIntent[] = [];
+    render(<Harness calls={calls} view={view} />);
+    await selectSlot();
+    await userEvent.click(screen.getByRole("button", { name: "Запуск" }));
+    expect(
+      (screen.getByLabelText("PACKAGE_ENV") as HTMLInputElement).value,
+    ).toBe("{{ application_instance_id }}");
+    expect(
+      screen.getByText(/ENV показывают исходные defaults пакета/),
+    ).toBeTruthy();
+    expect(screen.queryByLabelText("LIBRARY_ONLY")).toBeNull();
+    expect(calls).toEqual([]);
+  });
+  it("adds Startup ENV from the instance header and stages automatically typed values", async () => {
+    const calls: ApplicationIntent[] = [];
+    render(<Harness calls={calls} />);
+    await selectSlot();
+    expect(
+      screen.queryByRole("button", { name: "Добавить параметр" }),
+    ).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Запуск" }));
+    const add = screen.getByRole("button", {
+      name: "Добавить параметр",
+    });
+    expect(
+      add.closest("header")?.contains(
+        screen.getByRole("button", {
+          name: "Сбросить настройки",
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      screen.queryByRole("button", {
+        name: "Добавить параметр · Переменные окружения (ENV)",
+      }),
+    ).toBeNull();
+    await userEvent.click(add);
+    await userEvent.type(screen.getByLabelText("Имя параметра"), "WORKERS");
+    await userEvent.click(screen.getByRole("button", { name: "Добавить" }));
+    const input = screen.getByLabelText("WORKERS", { exact: true });
+    await userEvent.type(input, "3");
+    const row = within(input.closest(".application-value-row")!);
+    expect(row.queryByText("Дополнительно")).toBeNull();
+    await userEvent.click(row.getByRole("button", { name: "В черновик" }));
+    expect(calls.at(-1)).toMatchObject({
+      operation: "SetApplicationLibraryOverride",
+      setting: "environment",
+      value: { WORKERS: 3 },
+    });
+    await userEvent.click(
+      within(
+        screen
+          .getByLabelText("WORKERS", { exact: true })
+          .closest(".application-value-row")!,
+      ).getByRole("button", { name: "Сбросить к default" }),
+    );
+    expect(screen.queryByLabelText("WORKERS", { exact: true })).toBeNull();
+  });
   it("edits the library runtime directory and resets it without an app override", async () => {
     const user = userEvent.setup();
     const calls: ApplicationIntent[] = [];
@@ -191,7 +336,7 @@ describe("application editor", () => {
       within(
         screen
           .getByLabelText("COMMON")
-          .closest(".application-field") as HTMLElement,
+          .closest(".application-field, .application-value-row") as HTMLElement,
       ).getByRole("button", { name: "Сбросить к default" }),
     );
     expect((screen.getByLabelText("COMMON") as HTMLInputElement).value).toBe(
@@ -226,6 +371,11 @@ describe("application editor", () => {
                 slotId: "gateway",
                 placements: {
                   node1: {
+                    environment: {
+                      COMMON: "core-instance",
+                      ONLY_INHERITED: "core-effective",
+                      CORE_ONLY: false,
+                    },
                     inherited: {
                       environment: {
                         COMMON: "site",
@@ -253,11 +403,23 @@ describe("application editor", () => {
     await selectSlot();
     await userEvent.click(screen.getByRole("button", { name: "Запуск" }));
     expect((screen.getByLabelText("COMMON") as HTMLInputElement).value).toBe(
-      "instance",
+      "core-instance",
     );
     expect(
       (screen.getByLabelText("ONLY_INHERITED") as HTMLInputElement).value,
-    ).toBe("from-core");
+    ).toBe("core-effective");
+    expect((screen.getByLabelText("CORE_ONLY") as HTMLInputElement).value).toBe(
+      "false",
+    );
+    await userEvent.click(screen.getByLabelText("COMMON"));
+    expect((screen.getByLabelText("COMMON") as HTMLInputElement).value).toBe(
+      "instance",
+    );
+    await userEvent.tab();
+    expect((screen.getByLabelText("COMMON") as HTMLInputElement).value).toBe(
+      "core-instance",
+    );
+    expect(calls).toEqual([]);
     await userEvent.selectOptions(
       screen.getByLabelText("Наследуемые значения для сервера"),
       "node2",
@@ -297,7 +459,7 @@ describe("application editor", () => {
       within(
         screen
           .getByLabelText("COMMON")
-          .closest(".application-field") as HTMLElement,
+          .closest(".application-value-row") as HTMLElement,
       ).getByRole("button", { name: "Сбросить к default" }),
     );
     expect(calls.at(-1)).toMatchObject({
@@ -489,8 +651,45 @@ describe("application editor", () => {
       })),
     }));
     const save = vi.fn().mockResolvedValue(undefined);
+    const snapshotForRevision = () =>
+      ({
+        projectRevision: revision,
+        applicationLibraries: {
+          libraries: Object.fromEntries(
+            ["sdku", "cspa"].map((lib) => [
+              lib,
+              {
+                instances: {
+                  gateway: {
+                    slotId: "gateway",
+                    placements: {},
+                    credentialRequirements: {
+                      postgres: {
+                        credentials: {
+                          password: {
+                            source: { kind: "runtime_secret_ref", ref: lib },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            ]),
+          ),
+        },
+      }) as unknown as OpenResult["snapshot"];
+    let present = false;
+    const availability = vi.fn(
+      async (): Promise<RuntimeSecretDescriptorOperation> => ({
+        status: "READY",
+        projectRevision: revision,
+        descriptorSetFingerprint: "fingerprint",
+        applicationSecretAvailability: { sdku: present, cspa: present },
+      }),
+    );
     const props = {
-      snapshot: undefined,
+      snapshot: snapshotForRevision(),
       intents: [],
       busy: false,
       draftActive: false,
@@ -502,6 +701,7 @@ describe("application editor", () => {
       onImport: vi.fn(),
       loadSecrets: load,
       saveSecrets: save,
+      loadSecretAvailability: availability,
     };
     const rendered = render(<ApplicationsPage {...props} managed={view} />);
     for (const lib of ["sdku", "cspa"]) {
@@ -512,15 +712,19 @@ describe("application editor", () => {
         within(group).getByRole("button", { name: "↳ gateway" }),
       );
       await userEvent.click(screen.getByRole("button", { name: "Секреты" }));
-      await userEvent.click(
-        screen.getByRole("button", { name: "Секреты: " + lib + " / gateway" }),
-      );
+      expect(
+        screen.queryByRole("button", {
+          name: "Секреты: " + lib + " / gateway",
+        }),
+      ).toBeNull();
       await userEvent.type(
-        await screen.findByLabelText(lib + " input"),
+        await screen.findByLabelText("postgres: Пароль"),
         "synthetic-only",
       );
       await userEvent.click(
-        screen.getByRole("button", { name: "Сохранить в сессии" }),
+        screen.getByRole("button", {
+          name: "Сохранить в сессии: postgres: Пароль",
+        }),
       );
     }
     expect(load).toHaveBeenCalledTimes(1);
@@ -528,20 +732,104 @@ describe("application editor", () => {
       "sdku",
       "cspa",
     ]);
+    await screen.findByText("Секрет не задан");
+    expect(screen.getByText("Секрет не задан").closest("h3")).toBeTruthy();
+    expect(screen.getByText("Секрет не задан").closest("table")).toBeNull();
+    present = true;
+    fireEvent(window, new Event("focus"));
+    await screen.findByText("Секрет задан");
+    present = false;
+    fireEvent(window, new Event("focus"));
+    await screen.findByText("Секрет не задан");
+    expect(load).toHaveBeenCalledTimes(1);
+    let resolveOld!: (value: RuntimeSecretDescriptorOperation) => void;
+    const oldRevision = revision;
+    const beforeOldRequest = availability.mock.calls.length;
+    availability.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveOld = resolve;
+        }),
+    );
+    fireEvent(window, new Event("focus"));
+    await waitFor(() =>
+      expect(availability.mock.calls.length).toBe(beforeOldRequest + 1),
+    );
     revision = "new-revision";
     rendered.rerender(
       <ApplicationsPage
         {...props}
+        snapshot={snapshotForRevision()}
         managed={Object.assign(structuredClone(view), {
           projectRevision: revision,
         })}
       />,
     );
-    await userEvent.click(
-      screen.getByRole("button", { name: "Секреты: cspa / gateway" }),
+    expect(screen.queryByText("Секрет задан")).toBeNull();
+    resolveOld({
+      status: "READY",
+      projectRevision: oldRevision,
+      descriptorSetFingerprint: "fingerprint",
+      applicationSecretAvailability: { sdku: true, cspa: true },
+    });
+    await waitFor(() => expect(load).toHaveBeenCalledTimes(2));
+    await screen.findByText("Секрет не задан");
+    expect(screen.queryByText("Секрет задан")).toBeNull();
+    const descriptors = await load.mock.results.at(-1)!.value;
+    let resolveOldDescriptors!: (
+      value: RuntimeSecretDescriptorOperation,
+    ) => void;
+    load.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveOldDescriptors = resolve;
+        }),
     );
-    await screen.findByLabelText("cspa input");
-    expect(load).toHaveBeenCalledTimes(2);
+    const contextView = (executionContextKey: string) => (
+      <ApplicationsPage
+        {...props}
+        executionContextKey={executionContextKey}
+        snapshot={snapshotForRevision()}
+        managed={Object.assign(structuredClone(view), {
+          projectRevision: revision,
+        })}
+      />
+    );
+    rendered.rerender(contextView("node2/runtime2/READY"));
+    await waitFor(() => expect(load).toHaveBeenCalledTimes(3));
+    await userEvent.type(
+      screen.getByLabelText("postgres: Пароль"),
+      "discard-on-context-change",
+    );
+    rendered.rerender(contextView("node3/runtime3/READY"));
+    expect(
+      (screen.getByLabelText("postgres: Пароль") as HTMLInputElement).value,
+    ).toBe("");
+    await waitFor(() => expect(load).toHaveBeenCalledTimes(4));
+    await screen.findByText("Секрет не задан");
+    resolveOldDescriptors({
+      ...descriptors,
+      descriptorSetFingerprint: "old-runtime-fingerprint",
+    });
+    const beforeRefresh = availability.mock.calls.length;
+    fireEvent(window, new Event("focus"));
+    await waitFor(() =>
+      expect(availability.mock.calls.length).toBeGreaterThan(beforeRefresh),
+    );
+    await screen.findByText("Секрет не задан");
+    await userEvent.type(
+      screen.getByLabelText("postgres: Пароль"),
+      "synthetic-new-context",
+    );
+    await userEvent.click(
+      screen.getByRole("button", {
+        name: "Сохранить в сессии: postgres: Пароль",
+      }),
+    );
+    expect(load).toHaveBeenCalledTimes(4);
+    expect(save.mock.calls.at(-1)![0].descriptorSetFingerprint).toBe(
+      "fingerprint",
+    );
   });
   it("defaults a new library ID from its package without replacing a custom ID", async () => {
     render(<Harness calls={[]} />);

@@ -553,3 +553,633 @@ its sampled window. The preserved project package also has PLAINTEXT; the exact
 historical effective custom-client protocol and why the old observation did not
 show OOM are not established. Prior health/HTTP PASS alone cannot prove all custom
 Kafka consumers worked. Do not retroactively invent a clean full-data-path PASS.
+
+### Owner-authorized SASL plan retry, 2026-10-20
+
+Owner selected the project from thread 01a1464e-676a-7f41-a0fc-12ee5aaa2350:
+`.runtime/qa/sdku-cspa-alarm-view-project`, two alarm-view-service instances
+(SDKU/CSPA), three placements each. Owner explicitly requested
+`skipInfrastructureVerify=true`; execution scope must remain exactly Library
+Apply/Verify. No infrastructure Apply or certificate reissue is requested.
+
+Only this runtime project's desired configuration was adapted: Kafka SASL_SSL9096
+and existing admin runtime reference; library Kafka connection defaults SASL_SSL;
+per-instance managed SCRAM accounts and topic/group ACLs; producer/consumer JAAS
+secret bindings through the existing Vault Agent supervisor; Spring/common/custom
+Kafka factory properties select SCRAM-SHA-512. Existing image, resource isolation,
+heap/readiness settings and PKI parameters retained. Original desired files backed
+up under `.runtime/qa/alarm-view-sasl-before`; no production package changes.
+
+Actual React/Wails Project Verify VERIFIED on runtime48. Initial library-only
+plan BLOCKED on three missing offline service artifacts; not approved/started.
+Full runtime49 built on trusted node2 from current qa-sync sources and preserved
+runtime47 local inputs, without downloads, verified and published normally:
+`sha256:470580863f6d418c73954534df75de75d5f378d1389f81038c885cd1c29c3c98`.
+Source workspace: `/var/tmp/platform-installer-qa-f9b69d66c6ff4db5b05d78677239c340`.
+Original compressed application archive/identity retained with its existing
+legacy lock; optional new archive indexing attempt rejected compressed input
+before publication. No image loaded/pulled by preparation.
+
+Project runtime locks normalized consistently in project.yml/native inventory;
+normal rebind requires catalogLock before artifactLock, so top-level blocks were
+reordered without changing their values. Real UI rebind49 UPDATED. Five-minute
+desktop Prepare returned BLOCKED/EXECUTION_NODE_UNAVAILABLE after staging the
+large bundle; no library run started. SSH remained available; existing Kafka and
+Registry active. Standard CLI preparation (existing 30-minute operation context)
+returned READY/Changed=false on the exact digest; the runtime was already ready,
+so no repeat activation was needed. The five-minute desktop context and elapsed
+time make a timeout likely, but its original exception was sanitized and cannot
+be stated as proven. This is not a claim of successful desktop preparation.
+Public pre-run hash baseline:41 files,
+`.runtime/qa/alarm-view-sasl-preserve-before.json`. Final execution acceptance
+pending. Source/build workspace f9b69d66 cleaned with qa-sync -Cleanup after
+verified bundle publication; prior runtimes retained outside the active cache.
+
+Fresh actual React/Wails context READY and Project Verify VERIFIED on runtime49.
+Plan `plan-5ae0b0bbc8cf02a17f31f932`, saved revision
+`sha256:b7203cc870510b4dd73b0f66802e9695fe1801cfa457ba44af5dce56e3222866`,
+approved and started through the real handlers. Exactly
+APPLICATION_LIBRARIES_APPLY/VERIFY, skipInfrastructureVerify=true. Run
+`installer-a8909032e442344d3b40a912d7f4d837` FAILED at sequence348/350,
+2026-10-20T17:09:54Z, Require successful standalone authority preparation.
+No account/resource/container/endpoint mutation phase was reached; all41 public
+configuration/PKI hashes remain unchanged. Failure retained in runtime evidence.
+
+Bounded corrections in the existing approved SCRAM path:
+
+- `application_runtime.prepare_runtime` retained an obsolete account-provider
+  whitelist excluding Kafka, despite existing snapshot/provider support. Added
+  Kafka to that guard; resource/unknown-provider/TLS deferral guards unchanged.
+  Runtime contract22 tests:21 PASS/one existing skip, including positive SCRAM
+  and negative unsupported-provider cases, on primary RED OS.
+- A native read-only probe of the exact application ACL task reproduced a false
+  missing IdempotentWrite: YAML double-quoted backreference escaping corrupted
+  CamelCase normalization. Changed only the expression's YAML scalar quoting.
+  Native3 tests PASS for existing CamelCase operations, missing operations and
+  rejecting other principals/hosts/DENY. No grant or security boundary widened.
+  Other stock Kafka service Apply/Verify defects remain outside this correction.
+
+Source workspace3d389748 synchronized and verified with qa-sync; native tests use
+those exact current files. These are compatibility corrections to the approved
+account/ACL contract, with no new owner/persistence/security architecture.
+Runtime50 rebuild/publication completed and a fresh actual UI plan started as
+recorded below; first plan is not reused. User-selected
+skipInfrastructureVerify=true remains mandatory.
+
+Runtime50 verified/published normally:
+`sha256:d7c911caa3f435fc3cdc3933f2a6cf7548bc0271e7f2a5e06f0dd828892bd786`.
+Same approved local inputs, unused probe image excluded; original alarm-view
+archive retained. Standard CLI Prepare READY/Changed=true; actual React/Wails
+rebind UPDATED, context READY, Project Verify VERIFIED. Source/provider23 and
+native administrative provider4 additional tests PASS. qa-sync final source
+verification PASS, workspace3d389748 cleaned with standard helper.
+
+Additional raw-project standalone resolution probe on node2 failed at snapshot
+before runtime preparation; safe diagnostic attempt also failed before exposing
+its code. No target mutations, no PASS claim for those probes. Temporary QA-only
+diagnostic instrumentation restored in finally; source verification afterwards
+PASS. Actual saved-project UI/Execution Node validation on runtime50 VERIFIED.
+
+Fresh plan `plan-184ca6dc279249763076d13e`, revision
+`sha256:4afcb8ef15409f722a14fa9639b5cbc14a8076ca5ed753ddd092fe935d235895`,
+approved/started via real handlers. Run
+`installer-d9b527d605c09c3e97e270c27128255e` FAILED at sequence2542,
+Check only Core-projected Compose values, after provider resources/accounts/ACLs
+and Vault publication but before container activation. Exactly Library
+Apply/Verify, skipInfrastructureVerify=true. Compose consumed unescaped JAAS
+references before Agent startup. Four JAAS references in the runtime project now
+use `$$`; no weakening of the Core Compose projection guard. Final normal
+SASL/application/endpoint acceptance remains open.
+
+### Owner-authorized single-container Agent demonstration, 2026-10-20
+
+Owner requested direct startup without an Installer plan before further normal
+execution. Scope is only `alarm-view-service-cspa-node2` on node2. No new plan
+approved/started; this demonstration does not replace React/Wails acceptance.
+Existing image loaded from the already approved local archive, exact image ID
+`sha256:b433d1444aa820debe45e69c69b4e3ab7963d72d855df5b6e554788f2ca36b8f`;
+no registry pull or acquisition. Existing SCRAM user/password and PKI retained.
+
+Simple Ansible tasks read the owned existing account document over verified
+HTTPS, generate complete producer/consumer JAAS in private provisioning memory
+and add the two same-named Vault fields with CAS, preserving existing fields.
+Agent env_templates now read those fields directly. The admin token uses a
+private temporary runtime secret file removed by a shell trap; no token in argv
+or public artifacts. Original instance Compose/Agent files preserved privately
+on the host for recovery. Shared base-compose is not edited.
+
+First startup exposed unsupported `spring.kafka.ssl.properties.*` and
+`custom-kafka.ssl.properties.*`: SslProperties.getProperties() computes a map,
+not a writable binding. Those six runtime-project values were removed. A second
+startup became healthy but exposed a separate WS consumer using SSL/PLAIN on
+9096. Read-only inspection of this exact JAR confirmed
+KafkaListenerFactoryConfiguration.alarmMessageConsumerFactoryWS hardcodes those
+values when the shared legacy SSL helper is enabled. Disable only
+the shared legacy SSL flags and provide explicit truststore properties in both
+Kafka maps; network protocol remains SASL_SSL and materialized PKI is unchanged.
+Setting only the dotted property did not suppress the inherited true aliases;
+the final service-specific overrides are KAFKA_ENABLE_SSL=false,
+SPRING_KAFKA_SSL_ENABLE_SSL=false and spring.kafka.ssl.enable-ssl=false.
+The original application JAR SHA256 matches the inspected JAR exactly:
+`ac619895ab5ce125112c107cae689a4e38ada4a9d17065345e14addd510172e1`.
+
+Final corrected container started at 2026-10-20T18:55:58Z, healthy/restarts0,
+OOM=false. All9 logged producer/admin/consumer configurations, including WS,
+use SASL_SSL/SCRAM-SHA-512 on9096. Six successful group joins and7 assignment
+messages; application Kafka health reports true. No authentication/authorization
+errors, no Kafka password in Docker inspect or logs, both Java JAAS values match
+the existing protected credentials. Two startup ERROR lines concern the existing
+3500ms committed-offset timeout; retained, not claimed error-free startup. Final
+30-second observation:0 bootstrap disconnects,0 ERROR,0 TimeoutException.
+Business message/WS semantics and normal six-container plan acceptance remain
+open; only this single manual container has been started in this follow-up.
+
+Public runtime evidence is under
+`.runtime/qa/alarm-view-agent-manual-evidence/`: Compose, base-compose, Agent HCL,
+sanitized Docker inspect ENV and boolean-only secret checks. Earlier failed
+observations retained separately. Verified so far: Java receives both exact
+JAAS credentials, Docker inspect contains references but neither JAAS ENV value
+nor Kafka password. Kafka/Registry and neighbor public configuration/PKI hash41
+comparison unchanged.
+
+Owner additionally removed Kafka topic preflight from the library provider
+stage; topic Apply and final Verify remain. Current-source provider23 and
+provider-stage native syntax PASS on node2. This change is not yet bundled or
+executed through a new normal plan. New runtime51 was not built/published.
+The ready-JAAS provisioner source adaptation was not implemented. The owner
+subsequently chose the original Agent-side assembly instead, as recorded below.
+
+### Owner revision: Agent JAAS assembly and omitted legacy SSL flags
+
+Owner requested username/password-only Vault storage and no explicit ssl=false
+configuration. The existing `format: kafka_scram_jaas` implementation already
+supports this: restore its two original env_templates with JAAS quoting, keeping
+all other Agent bindings/supervisor settings identical. Fifteen current-source
+Vault/Agent projection tests PASS on node2 in qa-sync workspace3d261613.
+
+The selected SASL library defaults in the runtime project (SDKU/CSPA) no longer
+declare KAFKA_ENABLE_SSL or SPRING_KAFKA_SSL_ENABLE_SSL. Alarm-view no longer
+declares either alias or spring.kafka.ssl.enable-ssl. For this single manual
+CSPA placement, remove the same keys from shared base-compose and instance
+Compose; explicit Kafka SASL_SSL/SCRAM-SHA-512 and truststore properties remain.
+No empty/null flag substitutions, hidden false flags or JAR/image modifications.
+The four excluded application default files are SHA256-unchanged.
+
+Simple Ansible tasks preserved the previous working files and restored exact
+existing Agent formatting bytes after checking all other nonblank content.
+The first comparison rejected only added blank separators and stopped before
+configuration/Vault mutations; normalized comparison retained identical content
+outside the two expected JAAS blocks. CAS then removed only the two derived
+JAAS fields: current KV v2 version3 has username, password and owner; existing
+credentials unchanged. Earlier KV history is preserved. Only the selected
+container was recreated; no Installer plan or infrastructure Apply launched.
+Final single-container check PASS: healthy/restarts0, no authentication,
+authorization, heap or ERROR messages in this corrected start. All9 logged
+client configurations use SASL_SSL/SCRAM-SHA-512, the existing PKCS12 truststore
+and ssl.endpoint.identification.algorithm=https. Six group joins and6 assignment
+messages observed. The three legacy flags are absent from Compose, base-compose,
+Docker inspect and Java ENV; no SSL=false ENV variables remain. Both Java JAAS
+values match the unchanged protected credentials; no Kafka password in inspect,
+the public files or logs. Agent reads username/password and formats both values;
+it does not read ready-JAAS Vault fields. No source provisioner adaptation is now
+required: the originally implemented format is reused. Secret current shape is
+recorded redacted beside the refreshed runtime configuration evidence.
+Final qa-sync source verification PASS; workspace3d261613 cleaned with the
+standard helper. Final Kafka/Registry/neighbor public hash41 comparison unchanged;
+four excluded application-default hashes unchanged. No commit or bundle build.
+
+### Fresh normal retry authorized after the accepted Agent/SSL correction
+
+Owner requested removal of topic preflight and a fresh normal plan. The existing
+working-tree removal is exactly the nine-line Kafka topic preflight include;
+topic Apply/Verify and account credential/ACL preflight remain. Current-source
+provider23 and provider-stage native syntax PASS on node2, qa-sync identity
+verification PASS. Runtime51 built on trusted node2 from the same approved local
+inputs and published through the standard publisher:
+`sha256:6978cd89ce7ec135a0aa2437ab24db2b48788434caa19d2c44197c77408c1b94`,
+version `alarm-view-sasl-20261020-51`. Source/build workspacee71c552e cleaned
+through the standard helper after verified transfer. Prior runtime50 preserved.
+Standard CLI Prepare READY/Changed=true for the exact published digest. Actual
+React/Wails rebind UPDATED, Project Verify VERIFIED, all6 placements assert
+SASL/SCRAM/truststore and omitted legacy flags. Fresh plan
+`plan-d3869c2dee3e6094bd7c720b`, saved revision
+`sha256:206153d0dfaa1bf20326c8400a69f6f8566a5ed5036aa280bfc6d4f5e380dff6`,
+approved/started by the real handlers. Run
+`installer-8b1d1f65df08e5ea7b9392361f3e7ede` terminal FAILED at endpoint Verify
+on 2026-10-21T06:10:26Z; details below.
+The retry is restricted to Library Apply/Verify, skip=true, same two
+instances/six placements, original image and PKI, Agent username/password JAAS
+formatting and omitted legacy SSL flags.
+
+### Runtime51 terminal and owner-authorized optimization, 2026-10-21
+
+Apply SUCCESS: 2026-10-20T19:34:25Z–20:44:32Z, 70m07s including preflight.
+Stage intervals from the public event journal (sequential, no nested sums):
+
+| Stage | Duration |
+| --- | --- |
+| Preparation and preflight | 18m06s |
+| Ten Kafka topics | 9m25s |
+| Other provider resources/accounts and library secrets | 1m42s |
+| Kafka instance users/ACL in Apply | 8m54s |
+| Instance Vault/AppRole and Compose preparation | 2m30s |
+| Six-container image delivery, activation and readiness | 24m14s |
+| HAProxy/DNS/HTTPS publication and checks | 5m16s |
+
+Within container activation: exact image/ownership/readiness tasks 11m56s;
+archive copies 2m52s; docker load 4m56s. Preflight16 ACL reads total373s;
+preflight+Apply32 ACL reads total716s. Ten topic descriptions and ten effective
+config reads total484s. These are measurements of runtime51, not predictions
+of optimized performance. Night workstation/VM suspension interrupted Verify;
+its raw wall-clock duration is not a valid performance benchmark.
+
+Final Verify FAILED: event5088 reports SDKU endpoint actual503/expected200;
+event5090 fails `Require a routed HTTP response other than HAProxy unavailable
+statuses`; result EXECUTION_OPERATION_FAILED at 2026-10-21T06:10:26Z. All10
+topics, both SCRAM logins and16 final ACL checks had passed before this failure.
+The original browser observer froze at seq4341 across the workstation pause;
+terminal/status/result and public events were independently read from the same
+Execution Node run (seq5092). No replacement plan/start was issued.
+
+Independent six-container observation before the pause: six healthy/restarts0;
+54 logged client configurations all SASL_SSL/SCRAM-SHA-512 with expected truststore
+and HTTPS hostname validation. Exact Agent JAAS values/identities matched; no
+legacy SSL flags, Kafka password in inspect or logs. This did NOT prove full
+application acceptance: five containers logged topic authorization errors;
+CSPA node2 requested sdku-ack-alarm. Both libraries use the same fixed ACK group
+alarm-view-service-ack-alarm-listener despite separate users/topics; group
+collision is a suspected cause, not an independently proven root cause.
+
+Owner then observed SDKU node1 Exited128. Read-only Docker inspection confirmed
+stopped at 2026-10-21T06:01:59.768Z, OOMKilled=false; State.Error is
+`failed to create task for container: failed to create shim task: OCI runtime
+create failed: runc create failed: container with given ID already exists`.
+CSPA node1 stopped at the same second and restarted at06:02:13Z, later healthy.
+The restart initiator and cause of stale runc state are not established. The
+earlier six-container healthy observation is not current readiness acceptance.
+No container/runtime repair was performed during this observation.
+
+Post-run Kafka/Registry/neighbor public hashes41 unchanged; initial public
+evidence scan2/0 findings PASS. Four excluded applications remain out of scope.
+Owner authorized after terminal: batch ACL reads in preflight/Apply, batch
+topic discovery/config reads, and narrowing library Verify to container
+identity/running/healthcheck and endpoint only. Implementation and isolated QA
+are recorded below; no new deployment or bundle activation is implied.
+
+### Batch discovery and bounded library Verify: source/isolated QA complete
+
+Implementation uses builtin Ansible command/set_fact/assert/include tasks;
+no production Python helper was added. Library Verify no longer imports the
+provider verification stage and disables the runtime role's Vault verification
+only for this entrypoint. Exact image/ownership/running/configured healthcheck
+and endpoint checks remain. Apply/direct role use defaults to Vault verification;
+explicit provider Verify tasks remain available. No infrastructure Verify change.
+
+ACL inventory is read once per principal in each invocation, including the
+existing compatibility-principal helper. Grants select exact resource type/name/
+pattern before matching principal, wildcard host, ALLOW and operations. Additions
+remain per missing declared resource; unrelated ACLs are not removed. Kafka topic
+metadata is read once with an escaped anchored union of declared names; configs
+are read once including inherited defaults and isolated by exact topic header.
+Required topics retain readiness retries. Missing managed topics are created
+individually and freshly described/config-read; existing-topic drift still fails
+without mutation. The creation decision is frozen before read-back updates the
+observed metadata, avoiding inherited block conditions skipping validation.
+
+RED OS node2 current-tree workspace
+`/var/tmp/platform-installer-qa-c295a258911242359fdac9a413e91dd5`:
+7 native batch/entrypoint checks +4 native ACL predicate checks +23 provider
+projection tests +4 admin-provider tests +22 runtime-contract cases:
+59 PASS/one pre-existing skip. Additional native Agent-enabled lean-container
+Verify check PASS without Vault/provider credentials, total60 PASS/one skip.
+Two playbook syntax checks PASS. Native CLI stubs run in private temporary
+directories; no Kafka/target resources are mutated. Successful matching-topic
+batch uses exactly2 commands; two ACL grants use exactly1 inventory command;
+new-topic creation includes both fresh metadata/config reads and repeat is
+read-only. Negative cases cover failed metadata, missing existing topic,
+neighbour-topic config drift and resource/pattern/principal/host/DENY isolation.
+Earlier failed native runs (type normalization and inherited creation condition)
+are retained in local QA logs, corrected before the passing run.
+
+For these two libraries, existing-topic Apply discovery drops from20 to4 CLI
+calls; ACL preflight+Apply reads drop from32 to4. Separate library Verify no
+longer performs these provider reads. These are verified command counts, not
+measured new deployment durations. No updated bundle build/publication/rebind,
+fresh React/Wails execution, live performance benchmark, restart or container
+repair was performed. HTTP503/Exited128 and ACK-group/application authorization
+acceptance remain open; source optimization does not repair them retroactively.
+Final qa-sync source identity verification PASS; the temporary node2 workspace
+was removed with the standard cleanup helper. Public evidence scan6/0 findings,
+four excluded application-default hashes unchanged, git diff --check PASS.
+
+### Owner-authorized recovery and fresh optimized retry preparation, 2026-10-21
+
+Owner requested recovery of SDKU node1, ACK-group isolation and a fresh optimized
+Library Apply/Verify plan with skipInfrastructureVerify=true. A direct Docker
+start reproduced the stale-runc-ID failure. The affected container alone was
+recreated through its existing Compose project
+`project-b46aa3f5f57a495f-sdku-dm-alarm-view-service-sdku-dm-node1`, existing
+image, env file, volumes and manifests. A preliminary Compose invocation used
+the short project name and failed on the existing container name without replacing
+it; its newly created empty network was removed. No other container or daemon
+was restarted. Final direct status healthy; strict-CA HTTPS SDKU endpoint returned
+403 rather than503. This proves routing recovery, not an authenticated business
+response.
+
+Exact original JAR SHA256
+`ac619895ab5ce125112c107cae689a4e38ada4a9d17065345e14addd510172e1`
+contains `AckAlarmMessageListener` with annotation groupId literal
+`alarm-view-service-ack-alarm-listener`. It contains no configuration placeholder
+for this groupId. General consumer ENV group settings cannot override this
+annotation. Choice requested from owner: a derivative local image parameterizing
+the ACK group, or an application-supplied corrected image. No image/JAR change
+or fresh plan start before that choice. Runtime52 source staging and independent
+current-source QA proceed on node2 in temporary qa-sync workspace
+`/var/tmp/platform-installer-qa-8e036ea7535341c9bb84f401e8ba0cfc`; original
+approved offline input50 is reused, no online acquisition.
+Fresh current-source native repeat8 batch/container +4 ACL tests PASS; qa-sync
+identity verification PASS. The1.4G offline input transfer completed. Workspace
+is retained for the pending runtime build after the image choice; no runtime52
+bundle has been built/published and no fresh plan has been approved/started.
+
+Owner superseded the image choice with an explicit ACL solution. Live Docker ENV
+and actual subscription logs were read for all6 placements: SDKU subscribes only
+to sdku-ack-alarm, CSPA only to cspa-ack-alarm. The topics are not swapped. Logs
+show both cross-topic metadata authorization failures, including SDKU node2 on
+cspa-ack-alarm and CSPA nodes on sdku-ack-alarm, with the same fixed group.
+Project group_vars now explicitly retains the8 original grants for each account
+and adds only Describe on the other ACK topic (no cross-topic Read/Write).
+The shared group and original image remain; consumer-group isolation was
+superseded by owner-approved metadata visibility. No direct ACL mutation occurred
+before the fresh plan.
+
+Runtime52 built from current source, same approved input and original archive;
+an initial optional image reindex rejected the compressed archive (the inspector
+accepts plain tar). The normal builder path used by runtime51 was then reused,
+retaining the existing native x-container-images lock. Full standard publisher
+verification PASS, digest
+`sha256:6da92a23e78692a220b1c90bbf6ea6657860b7d08ec1c640d09e98dd59dd9bd6`,
+version alarm-view-sasl-20261021-52. Standard node1 preparation is in progress;
+new Plan/Approve/Start still pending at this checkpoint.
+
+### Owner stopped execution preparation; ACK prefix default revision
+
+Runtime52 preparation failed at staging before Plan/Start; node1 had about1.7G
+free when inspected. Low space is observed, not a confirmed root cause of the
+sanitized staging failure. Owner stopped work; no new plan or live ACL changes
+were executed. The diagnostic command was stopped; no disk cleanup was performed.
+
+Owner subsequently chose common-prefix ACK names instead of cross-library grant
+overrides. Source SDKU/CSPA library defaults and the same two working-project
+library defaults now use ack-alarm-sdku and ack-alarm-cspa respectively. In the
+working SASL application's existing Kafka account defaults, one prefixed topic
+grant ack-alarm- provides Describe only; Read/Write still come from the exact
+ack_alarm topicRef. Both pending cross-topic grant lists in project group_vars
+were removed, preserving the unrelated existing ClickHouse account selection.
+Main example application defaults do not yet declare a Kafka account, so no
+new SCRAM account or listener migration was introduced there by this name edit.
+
+Current-source RED OS read-only validation PASS: four library YAML definitions,
+prefix grant normalized by the existing provider resolver, two inventory grant
+overrides absent, and KAFKA_ACK_ALARM_TOPIC still references the resolved topic.
+Four excluded application-default hashes unchanged; git diff --check PASS.
+No Kafka connection, topic creation/deletion, data migration, live grant mutation,
+bundle rebuild, rebind or installation was performed for this revision. Existing
+stand topic names and messages remain unchanged until an explicitly resumed plan.
+
+### Fresh owner-authorized ACK-prefix run, 2026-10-21
+
+Owner resumed execution for SDKU/CSPA alarm-view only, new ACK topics, optimized
+runtime and skipInfrastructureVerify=true. Prior runtime52 staging failure was
+resolved before execution: no running installer controller referenced runtimes49/50;
+both exact full local bundles passed standard validate-bundle, manifest digests
+matched their remote copies, and only those two obsolete chat-owned releases
+were removed from node1 after guarding the unchanged active runtime51. Free
+space increased1.7G to4.9G. Current release/data/run journals were preserved.
+Normal Prepare then returned READY/Changed=true for exact runtime52 digest
+6da92a23e78692a220b1c90bbf6ea6657860b7d08ec1c640d09e98dd59dd9bd6.
+
+Prior project bundle51 preserved separately; project imported the verified
+runtime52 bundle. Actual React/Wails Rebind UPDATED, fresh SSH fingerprint
+confirmation on3 hosts and Project Verify VERIFIED. Core snapshot asserts all6
+placements use SASL_SSL/SCRAM, explicit truststore and no legacy SSL flags;
+ACK ENV resolves to ack-alarm-sdku / ack-alarm-cspa on the intended libraries.
+Fresh real-handler approved plan
+`plan-8d80364c2eff8715772ff473`, saved revision
+`sha256:4db17c3d100833786cb298b10b8340dca6d2b6eea7933081073b526ece83d85e`.
+Exactly APPLICATION_LIBRARIES_APPLY + APPLICATION_LIBRARIES_VERIFY;
+skipInfrastructureVerify=true, no infrastructure Apply/Verify or PKI reissue.
+Start returned STARTED, run
+`installer-bbc4aca2bfd5a29db7800643fc96f540`, Apply started
+2026-10-21T07:12:10Z, terminal SUCCEEDED at2026-10-21T08:11:54Z.
+
+### Runtime52 terminal and six-placement bounded acceptance PASS
+
+Same real React/Wails run bbc4aca2 completed SUCCEEDED, result.error=null;
+remote public result/status/events independently confirmed terminal at seq4428.
+Apply SUCCESS 07:12:10Z–08:06:54Z (54m44s); Verify SUCCESS
+08:06:55Z–08:11:54Z (4m59s); full observed run59m44s. No workstation sleep
+interruption during this run. Source/runtime/protocol guards were not changed.
+
+| Apply interval | Duration |
+| --- | --- |
+| Preparation/preflight | 12m26s |
+| Kafka topics (including creation/read-back of two new ACK topics) | 6m35s |
+| Other provider resources/accounts | 2m15s |
+| Kafka instance accounts/ACL | 5m56s |
+| Vault/Compose preparation | 2m42s |
+| Six-container activation/readiness | 19m23s |
+| Endpoint publication/checks | 5m27s |
+
+Live event evidence confirms4 ACL inventory reads total (two preflight, two
+Apply),2 batch metadata reads and2 batch effective-config reads,2 fresh metadata
+read-backs for the new ACK topics (with fresh configs), and4 missing ACL resource
+additions (prefix Describe and exact own new-topic grants for each principal).
+There were zero provider/SCRAM/ACL/topic/Vault-secret-read probes during separate
+Library Verify. Existing old ACK topics and their data were not deleted or moved.
+Runtime51 timing had matching topics already present; these two observations
+are evidence from different runs/states, not a controlled performance benchmark.
+
+Endpoint probes in both Apply and Verify returned actual200/expected200, reasonOK:
+CSPA events3703/4405, SDKU events3722/4424. Strict HTTPS/CA policy retained.
+Initial post-activation and final post-terminal independent observations both
+PASS:6 running/healthy, restarts0/OOM0, all54 logged client configurations
+SASL_SSL/SCRAM-SHA-512 with PKCS12 truststore and HTTPS hostname validation.
+SDKU subscribes to ack-alarm-sdku, CSPA to ack-alarm-cspa; all6 log successful
+ACK-group joins/syncs/partition assignments. Auth errors0 and ERROR lines0 in
+the fresh containers, with no extra recovery restart needed after this plan.
+Both exact JAAS values/identities match the unchanged protected credentials;
+legacy SSL flags absent, no Kafka passwords in Docker inspect or logs.
+
+Final Kafka/Schema Registry/neighbor public configuration and PKI hashes41
+unchanged; four excluded application-default hashes unchanged. Public evidence
+scan10files/0findings PASS. Current-source qa-sync verification PASS and node2
+workspace8e036ea7 removed by the standard cleanup helper after runtime activation.
+Full prior bundles49/50 and prior project bundle51 remain preserved locally;
+active target runtime is52. No Git commit/push or infrastructure service Apply/
+Verify/PKI reissue. Other Java apps, business alarm/ACK message transactions,
+visual inspection, cold-start and failure-path acceptance are not claimed.
+
+### Follow-up: remove repeated post-readiness Vault probe
+
+Owner requested removal of the additional Vault check after each container and
+inspection of other repeated tasks. Container activation now disables the
+optional Vault probe in its included Verify, as the final Library Verify already
+does. Preflight, Vault publication/ownership/CAS and container readiness remain.
+The previous run spent 138s across six placements in this removed segment.
+No deployment/restart or runtime52 replacement was performed for this follow-up.
+
+[Repeated-action audit](application-repeat-audit-20261021.md) records remaining
+Kafka, ClickHouse, Docker image and projection candidates, measured command
+counts/durations and guards that must be preserved. Other candidates have not
+been changed. Native RED OS node2 current-source checks:4 PASS/26.767s,
+including Agent activation without probe credentials and unhealthy rejection;
+Apply syntax and git diff --check PASS. Changed-runtime real React/Wails/target
+acceptance has not been repeated; prior runtime52 PASS remains historical.
+
+### Follow-up: Kafka checks only in Apply, without cache
+
+Owner rejected preflight-result caching and requested the simpler single-pass
+flow. Removed the Kafka account preflight include from the standard provider
+stage; topic preflight was already removed earlier. Apply retains SCRAM metadata,
+creation of missing managed users, credential authentication, one ACL inventory
+per principal and missing managed-grant additions before Vault instance
+publication and container startup. Direct role preflight/Verify remain available.
+The unfinished cache implementation, its flags/facts/fingerprints/cleanup and
+its failing interrupted test file were removed; no cache was deployed.
+
+For two existing principals with grants, expected metadata/login/ACL CLI calls
+are6 instead of12. The removed preflight calls took167.794s in runtime52; actual
+changed-runtime speedup has not been measured. Credential conflicts now fail in
+Apply, after possible library-resource creation, as accepted by owner.
+
+Current-source RED OS node2 QA:41 PASS in79.034s (native batch10, ACL4,
+provider23, admin-provider4); Apply/Verify syntax checks PASS, source-sync
+verification and git diff --check PASS. QA ran isolated fake CLI/container
+checks without accessing deployed Kafka/Vault/containers. Temporary source
+workspaces from this and the stopped cache attempt cleaned with qa-sync.
+No new runtime publication, React/Wails execution, deployment, restart,
+commit/push or changes to the four excluded applications.
+
+### Follow-up: deployment-wide SCRAM metadata and ACL inventory
+
+Owner requested common reads for all users. Account Apply and explicit provider
+Verify now consume Core's existing `application_provider_inputs.jobs` Kafka
+deployment jobs with nonempty accounts, rather than one invocation per instance.
+Inside each role invocation, one `kafka-configs --describe --entity-type users`
+and one `kafka-acls --list --resource-pattern-type any` precede the account loop.
+Each account selects its exact metadata header; the existing exact resource and
+principal ACL predicate is retained. Partial/failed inventory blocks mutations.
+New managed users still authenticate after creation; existing credentials are
+never reset. Standalone invocations read fresh state, without preflight caches.
+Compatibility ACL hooks keep their separate explicit-principal scope.
+
+Two existing users in one deployment now require4 read/login CLI calls instead
+of6: shared metadata1, shared ACL1, separate logins2. Runtime52 Apply logins took
+24.349s and23.829s (48.178s total); obsolete preflight logins took27.195s and
+27.425s (54.620s total). These are logical-user CLI tasks, not per-placement
+checks, and include JVM/Ansible/SSH overhead; no handshake-only timing or cause
+of the24s task duration is established. Full breakdown is in the repeat audit.
+
+RED OS node2 current-source focused QA: new native8 PASS/95.255s, ACL/provider/
+admin-provider31 PASS/15.176s, Apply and explicit provider Verify syntax PASS,
+source-sync verification and git diff --check PASS. Initial native8 run had2
+fixture failures: fake login read the first administrative JAAS entry rather
+than the application override. Fixture corrected; final8 PASS, production code
+unchanged by that correction. Tests cover shared command counts/two logins,
+exact user/resource isolation, new-user creation/login/grants, wrong password,
+metadata command/partial-output failures, ACL failure and read-only Verify.
+Temporary QA workspaces cleaned with qa-sync. No runtime publication,
+React/Wails/target acceptance rerun, stand changes, commit/push or excluded-app
+edits. The previous runtime52 results remain historical; new timing unmeasured.
+
+### Runtime53: common offline archive barrier — full-plan acceptance PASS
+
+Owner authorized one verification per unique selected offline archive and a full
+alarm-view SDKU/CSPA plan with `skipInfrastructureVerify=true`. Target preflight
+now selects sources without repeating the archive hash; a common Execution Node
+barrier verifies unique full records before Vault/provider stages. Direct role
+preflight retains immediate validation by default; target copy hash/size checks
+before Docker load remain. No persistent verification cache.
+
+Source QA on current qa-sync node2:28 tests/61.387s, OK(one existing skip):
+native6 PASS plus runtime contract21 PASS/one skip; Apply syntax, source sync and
+git diff --check PASS. [Independent FULL DIFF](../reviews/offline-archive-diff-review.md)
+APPROVE_WITH_CHANGES, blocking0; OAR-D01 remains a nonblocking instrumentation/
+mutation-sentinel coverage recommendation.
+
+Runtime53 built on trusted node2, standard validate/publish/prepare PASS:
+`sha256:babc408943933b6dc1dd30d043295ded963d1df6d59ba72cbc985d3747bf16a1`,
+version `alarm-view-sasl-20261021-53`. Node1 READY. Local bundle52 and previous
+project bundle52 preserved; node2 build/test workspace876dc5c9 cleaned.
+Fresh neighbor/PKI public-hash baseline41 retained.
+
+Initial real React/Wails rebind UPDATED, Project Verify VERIFIED and all six
+SASL/ACK/TLS assertions PASS. First Build returned EXECUTION_NODE_UNAVAILABLE
+before Apply. Direct SSH remained available, credential session PRESENT and
+node1 free disk2.2GB; underlying transport failure cause unconfirmed. Backend
+invalidated dynamic binding and cleared runtime inputs. A partial-resume QA
+driver could not navigate its fresh frontend without loading the project; it
+did not execute an installation.
+
+Full UI reopen/trust/context/input flow restored READY and VERIFIED. Next Build
+took70.381s and produced approved plan `plan-0c460d1f472fd27eff988518`, revision
+`sha256:be3c233e9156e3040fbe69ca917b223dd54bcb9c1a45a9cfc6eb4875b18d395f`.
+Only Library Apply/Verify, skip=true. QA driver held before Start because its
+explicit start environment flag was absent; this plan did not execute.
+
+Final full real React/Wails flow with the existing QA start flag enabled:
+fresh Build71.756s, plan `plan-0c460d1f472fd27eff988518`, same saved revisionbe3c233e
+above, actual Approve/Start PASS. Run
+`installer-85ecd43062556b60ffbecc5e32f3f350` RUNNING; Library Apply started
+`2026-10-21T09:44:28Z` /12:44:28MSK. Exactly Library Apply/Verify, skip=true.
+Second Kafka login assertion failed before Vault/container activation. Terminal success acceptance is pending. Evidence prefix:
+`sdku-cspa-alarm-view-sasl53-run`; prior first/resume/retry evidence preserved
+separately. No commit/push or infrastructure service Apply/Verify in this scope.
+
+Live archive checkpoint PASS: six original per-placement integrity tasks SKIPPED;
+common unique-record integrity task SUCCESS at seq926,09:51:03Z, elapsed14.158s.
+The actual execution project's native image lock contains one image and one
+unique archive record(ref/sha256/size), bundle digest matches runtime53.
+This source-lock observation plus the successful nonempty unique-record loop
+confirms one shared archive verification. Resolved Ansible facts are not stored
+in runtime-projection.json; the safe metadata proof reads the actual copied
+project lock instead, never emits private projection or credentials.
+This is a call-count proof, not a controlled cold/warm performance benchmark.
+
+Follow-up diagnostics: both live Kafka credentials authenticate successfully (CSPA13.416s, SDKU12.882s); existing six containers healthy/restarts0/authErrors0, JAAS inputs match protected local runtime inputs. Public neighbor/PKI hashes41 unchanged. No password reset or production change. Cause of the single login failure remains unconfirmed. Fresh full React/Wails retry uses the same runtime53 with a QA-only equality audit of the two Kafka input payloads before forwarding unchanged to the real binding: both match. Build76.233s, same plan/revision, Library Apply/Verify only, skip=true; Start/terminal pending.
+
+Additional distinct-password single-batch native test PASS21.413s. Full nine-test repeat: seven PASS, two subprocess timeouts60s (354.392s total); retained as FAILED, no production timeout changed. Repeat the two timed-out tests after the active installation to avoid concurrent QA load.
+
+Fresh full UI retry actual Start PASS: installer-f217c7d0abb725c01d4f32bc31e930ef, Apply started2026-10-21T10:31:10Z /13:31:10MSK. Same plan0c460d1f/revisionbe3c233e/runtime53, only Library Apply/Verify, skipInfrastructureVerify=true. Terminal acceptance pending. Evidence prefix sdku-cspa-alarm-view-sasl53-confirm.
+
+Confirm-run checkpoints: archive barrier one SUCCESS37.744s; both Kafka login assertions SUCCESS; first-run login failure not reproduced. Shared SCRAM metadata and ACL inventory completed before Vault instance publication. No existing credentials reset. Terminal acceptance remains pending.
+
+Final actual React/Wails confirm run `installer-f217c7d0abb725c01d4f32bc31e930ef` **SUCCEEDED**, completed2026-10-21T11:15:26Z /14:15:26MSK. Fresh Build/Approve/Start used plan0c460d1f/revisionbe3c233e/runtime53 identified above. Exactly Library Apply and Library Verify, skipInfrastructureVerify=true.
+
+| Stage | Duration |
+| --- | --- |
+| Apply | 37m36s |
+| Preparation/preflight and preceding ownership checks, until Kafka topics | 11m35s |
+| Kafka topics | 4m44s |
+| Other library resources | 2m24s |
+| Kafka users and ACL | 6m35s |
+| Vault instance publication and Compose validation | 3m20s |
+| Activation/readiness of six placements | 2m38s |
+| Endpoint publication/checks | 6m20s |
+| Final Library Verify | 6m39s |
+| Total Apply + Verify, including transition | 44m17s |
+
+Stage boundaries use public TASK_STARTED timestamps, action boundaries use ACTION_STARTED/COMPLETED; elapsed sums are not isolated service latency. The preparation row includes ownership checks after placement preflight.
+
+Observed archive behavior: six deferred placement checks; one shared integrity task SUCCESS37.744s for the single locked image/archive, before all provider mutations. Target-side delivery integrity remains enabled. Topic metadata/config inventories2+2, topic mutations0. SCRAM metadata1/63.439s, global ACL inventory1/84.421s, two login commands69.876s+32.917s, both login assertions SUCCESS. No password reset. Container readiness SUCCESS6 in Apply and6 in Verify; post-readiness Vault login/read probes0; provider audits in final Verify0. Both endpoint HTTP200 in Apply and Verify.
+
+Post-run read-only observation: six containers running/healthy, restarts0/OOM0; all54 observed Kafka client configurations SASL_SSL/SCRAM-SHA-512 with TLS validation. Producer/consumer JAAS match protected runtime inputs; no Kafka password in docker inspect ENV or logs, legacy SSL flags absent, ACK subscriptions ack-alarm-sdku/ack-alarm-cspa. All41 public Kafka/Registry/neighbor configuration/PKI hashes unchanged; four excluded application defaults unchanged.
+
+Limitation: Kafka timeout/disconnect ERROR events occurred during the run; auth/ACL/heap errors0. The successful plan and current health do not prove error-free business message delivery. First-run second-login failure remains unconfirmed and was not reproduced; no guard bypass or credential change. This repeat reused existing deployments, whereas runtime52 created topics/recreated containers: total-duration difference is not a controlled speedup measurement. Visual, other applications, cold-start/failure-path and business-message acceptance are not claimed. No infrastructure installation, PKI reissue, commit or push.
+
+Final diagnostics: all six containers show successful consumer-group join/sync after their last observed ERROR. Timeout/disconnect events and one node2 CSPA listener IllegalStateException remain recorded; auth/ACL errors0, no business-message proof. Additional two-test repeat initially failed due missing explicit Kafka collection path in the QA command (no production failure); corrected environment repeat: one PASS, distinct-password test timeout60s, total108.905s. Earlier distinct-password isolated PASS21.413s retained; full nine-test suite is not claimed PASS. Production timeouts unchanged. qa-sync final source verification PASS.
+
+Final cleanup: node2 QA source workspaceffb79646 removed with standard qa-sync cleanup after source verification. Final public secret scan10 files/findings0; git diff --check PASS. Runtime53 immutable bundle and local evidence retained. No commit/push.
+
+Commit preparation: ACK rename required refreshing only the sdku/cspa library package digests in examples/sdku/import-catalog.json from canonical LF package bytes. Initial TestSDKUImportPackageBytes failed for those two entries; after refresh all28 packages PASS via current local Go test. Documentation corrected to reflect omitted Kafka preflight and deployment-wide ACL inventory. No runtime source behavior changed.

@@ -268,12 +268,17 @@ function CredentialVariableNames({
   };
   return (
     <div className="application-credential-variables">
-      {inherited.map((name) => (
-        <code key={name} title="Из пакета">
-          {name}
-        </code>
-      ))}
-      {!editing && aliases.map((name) => <code key={name}>{name}</code>)}
+      <span
+        className="application-credential-variable-names"
+        title={[...inherited, ...(!editing ? aliases : [])].join(", ")}
+      >
+        {inherited.map((name) => (
+          <code key={name} title={`Из пакета: ${name}`}>
+            {name}
+          </code>
+        ))}
+        {!editing && aliases.map((name) => <code key={name}>{name}</code>)}
+      </span>
       {editing ? (
         <>
           <input

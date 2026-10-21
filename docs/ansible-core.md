@@ -93,8 +93,28 @@ healthcheck. It does not inspect file/config digests or Compose hashes, and its
 standalone entrypoint skips target/source preflight. It never starts or loads
 containers. A3/A4 add PostgreSQL library resources/accounts, protected Vault
 secret publication and container Agent/PKI materialization. A5 extends the same
-provider jobs with Redis/Sentinel ACLs and ClickHouse databases/accounts; Verify
-adds read-only provider checks after inspect without repeating provider preflight.
+provider jobs with Redis/Sentinel ACLs and ClickHouse databases/accounts.
+Owner clarification 2026-10-21: library Verify checks container identity,
+Running/configured healthcheck and endpoint availability; it does not repeat
+provider resource/account/ACL or Vault AppRole/secret checks. Apply retains its
+preflight/provider checks; container activation does not repeat AppRole login
+and secret reads after readiness. The runtime role's
+`application_runtime_verify_vault` defaults to true for direct Verify use;
+container activation and the library Verify entrypoint set it to false. Explicit standalone provider
+Verify tasks remain available for resource audits.
+Kafka library topic/account hooks run only in Apply, without a preceding Kafka
+live preflight or observation cache. Metadata, application authentication and
+ACL inventory are checked before instance credential publication and startup;
+conflicts may be detected after library resources have already been created.
+Kafka account Apply and explicit provider Verify consume the existing
+deployment-level provider jobs: one shared SCRAM metadata read and ACL list,
+with exact principal/resource selection and separate per-account authentication.
+Library target preflight selects image sources per placement; its final
+Execution Node barrier verifies each unique full selected offline archive record
+once before Vault/provider mutations. Existing manifest/component/digest/size/
+symlink checks remain, repository-selected fallback bytes are not read, direct
+role preflight still validates immediately by default, and target archive copies
+remain independently checked before Docker load. No cross-run verification cache.
 ClickHouse capability `service.clickhouse.table` adds file-only library table specs
 to every selected database job. Ansible owns merge/rendering; the existing protected
 native module checks metadata, creates missing tables and verifies all members.
@@ -119,8 +139,11 @@ managed `restore_on_create` is part of the existing provider stage.
 Kafka library resources reuse these stages with capability `service.kafka.topic`.
 Core projects topic defaults from the selected deployment's mode and broker members;
 the Kafka role uses builtin command/template/assert tasks and its installed CLI.
-All Kafka resource preflights run before provider mutations. Apply creates missing
-managed topics; existing resources and Verify are read-only. Mismatching counts or
+Kafka topic/account preflight is omitted from the standard library pipeline.
+Apply reads each declared topic batch once and its
+effective configs once, then creates only missing managed topics with a fresh
+read-back. ACL inventory is read once per deployment invocation. Existing
+resources and explicit provider Verify are read-only. Mismatching counts or
 requested effective properties fail without altering topics. Temporary client
 properties use mode 0600 and always cleanup; raw CLI output is suppressed and
 separate diagnostics expose only provider/topic, address, timeout and safe codes.

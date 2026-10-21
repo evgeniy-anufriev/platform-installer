@@ -400,8 +400,7 @@ describe("library resource table", () => {
     expect(save).not.toHaveBeenCalled();
     expect(screen.getByRole("alert")).toBeTruthy();
   });
-  it("pages the resource list while retaining deployment grouping", async () => {
-    const user = userEvent.setup();
+  it("shows every resource in the scroll region while retaining deployment grouping", () => {
     render(
       <ApplicationLibraryResources
         deployments={{ "qa-postgresql": { serviceType: "postgresql" } }}
@@ -415,10 +414,34 @@ describe("library resource table", () => {
         onDirtyChange={vi.fn()}
       />,
     );
-    expect(screen.queryByText("extra_db")).toBeNull();
-    await user.click(screen.getByText("Далее"));
     expect(screen.getByText("extra_db")).toBeTruthy();
+    expect(screen.getByText("app_db")).toBeTruthy();
+    expect(screen.queryByText("Далее")).toBeNull();
+    expect(
+      screen
+        .getByRole("region", { name: "Ресурсы библиотеки" })
+        .contains(screen.getByText("extra_db")),
+    ).toBe(true);
     expect(screen.getByText("qa-postgresql")).toBeTruthy();
+  });
+  it("hides all add actions including defaults while retaining existing rows and editing", () => {
+    render(
+      <ApplicationLibraryResources
+        resources={resources}
+        bindings={{ pg: { deploymentRef: "qa-postgresql" } }}
+        deployments={{ "qa-postgresql": { serviceType: "postgresql" } }}
+        disabled={false}
+        databaseDefaults={{ unselected: { name: "not_selected" } }}
+        showAddActions={false}
+        onSave={vi.fn()}
+        onDirtyChange={vi.fn()}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: /^Добавить/ })).toBeNull();
+    expect(screen.getByText("app_db")).toBeTruthy();
+    expect(
+      screen.getAllByRole("button", { name: "Настроить" }).length,
+    ).toBeGreaterThan(0);
   });
   it("retains edits and dirty state when staging is rejected", async () => {
     const save = vi.fn(async () => false),

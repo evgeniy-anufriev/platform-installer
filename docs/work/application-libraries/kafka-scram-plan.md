@@ -201,6 +201,16 @@ Protocol/mechanism/bootstrap настройки остаются обычной 
 включённого приложения. Обновление Java images для этого пути не планируется;
 runtime acceptance должно подтвердить статические выводы.
 
+Уточнение владельца 2026-10-20 после ручной проверки alarm-view: сохранять в Vault
+username/password, JAAS собирать existing Agent env_template. Для проверенного
+JAR alarm-view legacy-флаги KAFKA_ENABLE_SSL, SPRING_KAFKA_SSL_ENABLE_SSL и
+spring.kafka.ssl.enable-ssl не задавать: WS factory при true принудительно
+выставляет SSL/PLAIN. В выбранных SASL SDKU/CSPA runtime-library defaults эти
+флаги убраны; TLS задаётся явными Kafka security.protocol=SASL_SSL и
+ssl.truststore.*. Проверка одного CSPA-контейнера подтвердила все factory paths,
+SCRAM, truststore и HTTPS hostname validation; это не закрывает normal-plan
+и остальные application acceptance gates. Подробности в SDKU/CSPA journal.
+
 ## 6. Decision gate: cluster-wide authorization и переход SSL
 
 `StandardAuthorizer` действует на кластер, а не только на новый SASL listener.
@@ -439,3 +449,20 @@ KS-D02 не пересматривался и не получил reviewer-resol
 нагрузкой. Подробности и предыдущие timeout попытки сохранены в
 [журнале](evidence/kafka-scram-journal.md#target-free-scram-repeat-after-load-check--2026-10-20).
 Production sources не менялись; стендовая установка и real acceptance не выполнялись.
+
+
+### Штатные Kafka Apply/Verify: исправления 2026-10-21
+
+Отдельно разрешены исправления M01–M06 и подготовки admin inventory обычными
+Ansible tasks, с изолированной проверкой. Сохраняются sole-admin и anonymous
+data-access policy, runtime SecretRef и существующая PKI. Последовательная
+финализация проверяет admin/quorum перед отзывом следующего member. Подробности,
+QA и ограничения: [PEM journal](evidence/kafka-pem-journal.md#kafka-m01m06-source-repairs-and-admin-inventory--2026-10-21).
+Штатная стендовая приёмка и cold-start/recovery остаются открыты; новая установка
+или публикация runtime этим заданием не разрешены.
+
+Read-only стендовая проверка текущей роли 2026-10-21 PASS на трёх узлах:
+changed=0/failed=0/unreachable=0, admin SCRAM/ACL, PEM/TLS, quorum, broker
+registration, Registry HTTP/HTTPS и исходные PKI/data checksums. Apply, rolling
+bootstrap, cold-start/recovery и реальный Installer flow не запускались;
+подробности и границы в [журнале](evidence/kafka-pem-journal.md#read-only-stand-verify-of-existing-qa-kafka-structure--2026-10-21).

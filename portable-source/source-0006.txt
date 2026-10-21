@@ -1,3 +1,655 @@
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/jackmordaunt/icns/readme.md","mode":420,"size":2180,"sha256":"b855554cad88a2c61c2516ae958f2d9026e1266340550c386abccbeed9019dac","index":0,"count":1,"encoding":"utf-8","payloadBytes":2180}
+# icns
+
+Easily convert `.jpg` and `.png` to `.icns` with the command line tool `icnsify`, or use the library to convert from any `image.Image` to `.icns`.
+
+`go get github.com/jackmordaunt/icns`
+
+`icns` files allow for high resolution icons to make your apps look sexy. The most common ways to generate icns files are:
+
+1. `iconutil`, which is a Mac native cli utility.
+2. `ImageMagick` which adds a large dependency to your project for such a simple use case.
+
+With this library you can use pure Go to create `icns` files from any source image, given that you can decode it into an `image.Image`, without any heavyweight dependencies or subprocessing required. You can also use it to create icns files on windows and linux (thanks Go).
+
+A small CLI app `icnsify` is provided allowing you to create icns files using this library from the command line. It supports piping, which is something `iconutil` does not do, making it substantially easier to wrap or chuck into a shell pipeline.
+
+Note: All icons within the `icns` are sized for high dpi retina screens, using the appropriate `icns` OSTypes.
+
+## Command Line
+
+Pipe it
+
+`cat icon.png | icnsify | cat > icon.icns`
+
+`cat icon.icns | icnsify | cat > icon.png`
+
+Standard
+
+`icnsify -i icon.png -o icon.icns`
+
+`icnsify -i icon.icns -o icon.png`
+
+## Library Usage
+
+```go
+func main() {
+        pngf, err := os.Open("path/to/icon.png")
+        if err != nil {
+                log.Fatalf("opening source image: %v", err)
+        }
+        defer pngf.Close()
+        srcImg, _, err := image.Decode(pngf)
+        if err != nil {
+                log.Fatalf("decoding source image: %v", err)
+        }
+        dest, err := os.Create("path/to/icon.icns")
+        if err != nil {
+                log.Fatalf("opening destination file: %v", err)
+        }
+        defer dest.Close()
+        if err := icns.Encode(dest, srcImg); err != nil {
+                log.Fatalf("encoding icns: %v", err)
+        }
+}
+```
+
+## Roadmap
+
+* [x] Encoder: `image.Image -> .icns`
+* [x] Command Line Interface
+  * [x] Encoding
+  * [x] Pipe support
+  * [x] Decoding
+* [x] Implement Decoder: `.icns -> image.Image`
+* [ ] Symmetric test: `decode(encode(img)) == img`
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/jackmordaunt/icns/writer.go","mode":420,"size":2676,"sha256":"3fd3e43c1266353ef0fd2bbf1cbc048d65ef5de32f4b213444dd0323f530863f","index":0,"count":1,"encoding":"utf-8","payloadBytes":2676}
+package icns
+
+import (
+	"bytes"
+	"image"
+	"image/png"
+	"io"
+)
+
+// Icon encodes an icns icon.
+type Icon struct {
+	Type  OsType
+	Image image.Image
+
+	header    [8]byte
+	headerSet bool
+	data      []byte
+}
+
+// WriteTo encodes the icon into wr.
+func (i *Icon) WriteTo(wr io.Writer) (int64, error) {
+	var written int64
+	if err := i.encodeImage(); err != nil {
+		return written, err
+	}
+	size, err := i.writeHeader(wr)
+	written += size
+	if err != nil {
+		return written, err
+	}
+	size, err = i.writeData(wr)
+	written += size
+	if err != nil {
+		return written, err
+	}
+	return written, nil
+}
+
+func (i *Icon) encodeImage() error {
+	if len(i.data) > 0 {
+		return nil
+	}
+	data, err := encodeImage(i.Image)
+	if err != nil {
+		return err
+	}
+	i.data = data
+	return nil
+}
+
+func encodeImage(img image.Image) ([]byte, error) {
+	buf := bytes.NewBuffer(nil)
+	if err := png.Encode(buf, img); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+func (i *Icon) writeHeader(wr io.Writer) (int64, error) {
+	if !i.headerSet {
+		defer func() { i.headerSet = true }()
+		i.header[0] = i.Type.ID[0]
+		i.header[1] = i.Type.ID[1]
+		i.header[2] = i.Type.ID[2]
+		i.header[3] = i.Type.ID[3]
+		length := uint32(len(i.data) + 8)
+		writeUint32(i.header[4:8], length)
+	}
+	written, err := wr.Write(i.header[:8])
+	return int64(written), err
+}
+
+func (i *Icon) writeData(wr io.Writer) (int64, error) {
+	written, err := wr.Write(i.data)
+	return int64(written), err
+}
+
+// IconSet encodes a set of icons into an ICNS file.
+type IconSet struct {
+	Icons []*Icon
+
+	header    [8]byte
+	headerSet bool
+	data      []byte
+}
+
+// WriteTo writes the ICNS file to wr.
+func (s *IconSet) WriteTo(wr io.Writer) (int64, error) {
+	var written int64
+	if err := s.encodeIcons(); err != nil {
+		return written, err
+	}
+	size, err := s.writeHeader(wr)
+	written += size
+	if err != nil {
+		return written, err
+	}
+	size, err = s.writeData(wr)
+	written += size
+	if err != nil {
+		return written, err
+	}
+	return written, nil
+}
+
+func (s *IconSet) encodeIcons() error {
+	if len(s.data) > 0 {
+		return nil
+	}
+	buf := bytes.NewBuffer(nil)
+	for _, icon := range s.Icons {
+		if _, err := icon.WriteTo(buf); err != nil {
+			return err
+		}
+	}
+	s.data = buf.Bytes()
+	return nil
+}
+
+func (s *IconSet) writeHeader(wr io.Writer) (int64, error) {
+	if !s.headerSet {
+		defer func() { s.headerSet = true }()
+		s.header[0] = 'i'
+		s.header[1] = 'c'
+		s.header[2] = 'n'
+		s.header[3] = 's'
+		length := uint32(len(s.data) + 8)
+		writeUint32(s.header[4:8], length)
+	}
+	written, err := wr.Write(s.header[:8])
+	return int64(written), err
+}
+
+func (s *IconSet) writeData(wr io.Writer) (int64, error) {
+	written, err := wr.Write(s.data)
+	return int64(written), err
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/jaypipes/ghw/.gitignore","mode":420,"size":28,"sha256":"75142b11635706946c017546989213fbe62f2f0505e8ffa5016d490b376ef691","index":0,"count":1,"encoding":"utf-8","payloadBytes":28}
+vendor/
+coverage*.*
+*~
+bin/
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/jaypipes/ghw/CODE_OF_CONDUCT.md","mode":420,"size":5491,"sha256":"5401d6dc967ed69158888149b18deab551ffd4aea13bacc130381692da5e244d","index":0,"count":1,"encoding":"utf-8","payloadBytes":5491}
+
+# Contributor Covenant Code of Conduct
+
+## Our Pledge
+
+We as members, contributors, and leaders pledge to make participation in our
+community a harassment-free experience for everyone, regardless of age, body
+size, visible or invisible disability, ethnicity, sex characteristics, gender
+identity and expression, level of experience, education, socio-economic status,
+nationality, personal appearance, race, caste, color, religion, or sexual identity
+and orientation.
+
+We pledge to act and interact in ways that contribute to an open, welcoming,
+diverse, inclusive, and healthy community.
+
+## Our Standards
+
+Examples of behavior that contributes to a positive environment for our
+community include:
+
+* Demonstrating empathy and kindness toward other people
+* Being respectful of differing opinions, viewpoints, and experiences
+* Giving and gracefully accepting constructive feedback
+* Accepting responsibility and apologizing to those affected by our mistakes,
+  and learning from the experience
+* Focusing on what is best not just for us as individuals, but for the
+  overall community
+
+Examples of unacceptable behavior include:
+
+* The use of sexualized language or imagery, and sexual attention or
+  advances of any kind
+* Trolling, insulting or derogatory comments, and personal or political attacks
+* Public or private harassment
+* Publishing others' private information, such as a physical or email
+  address, without their explicit permission
+* Other conduct which could reasonably be considered inappropriate in a
+  professional setting
+
+## Enforcement Responsibilities
+
+Community leaders are responsible for clarifying and enforcing our standards of
+acceptable behavior and will take appropriate and fair corrective action in
+response to any behavior that they deem inappropriate, threatening, offensive,
+or harmful.
+
+Community leaders have the right and responsibility to remove, edit, or reject
+comments, commits, code, wiki edits, issues, and other contributions that are
+not aligned to this Code of Conduct, and will communicate reasons for moderation
+decisions when appropriate.
+
+## Scope
+
+This Code of Conduct applies within all community spaces, and also applies when
+an individual is officially representing the community in public spaces.
+Examples of representing our community include using an official e-mail address,
+posting via an official social media account, or acting as an appointed
+representative at an online or offline event.
+
+## Enforcement
+
+Instances of abusive, harassing, or otherwise unacceptable behavior may be
+reported to the community leaders responsible for enforcement at
+[INSERT CONTACT METHOD].
+All complaints will be reviewed and investigated promptly and fairly.
+
+All community leaders are obligated to respect the privacy and security of the
+reporter of any incident.
+
+## Enforcement Guidelines
+
+Community leaders will follow these Community Impact Guidelines in determining
+the consequences for any action they deem in violation of this Code of Conduct:
+
+### 1. Correction
+
+**Community Impact**: Use of inappropriate language or other behavior deemed
+unprofessional or unwelcome in the community.
+
+**Consequence**: A private, written warning from community leaders, providing
+clarity around the nature of the violation and an explanation of why the
+behavior was inappropriate. A public apology may be requested.
+
+### 2. Warning
+
+**Community Impact**: A violation through a single incident or series
+of actions.
+
+**Consequence**: A warning with consequences for continued behavior. No
+interaction with the people involved, including unsolicited interaction with
+those enforcing the Code of Conduct, for a specified period of time. This
+includes avoiding interactions in community spaces as well as external channels
+like social media. Violating these terms may lead to a temporary or
+permanent ban.
+
+### 3. Temporary Ban
+
+**Community Impact**: A serious violation of community standards, including
+sustained inappropriate behavior.
+
+**Consequence**: A temporary ban from any sort of interaction or public
+communication with the community for a specified period of time. No public or
+private interaction with the people involved, including unsolicited interaction
+with those enforcing the Code of Conduct, is allowed during this period.
+Violating these terms may lead to a permanent ban.
+
+### 4. Permanent Ban
+
+**Community Impact**: Demonstrating a pattern of violation of community
+standards, including sustained inappropriate behavior,  harassment of an
+individual, or aggression toward or disparagement of classes of individuals.
+
+**Consequence**: A permanent ban from any sort of public interaction within
+the community.
+
+## Attribution
+
+This Code of Conduct is adapted from the [Contributor Covenant][homepage],
+version 2.1, available at
+[https://www.contributor-covenant.org/version/2/1/code_of_conduct.html][v2.1].
+
+Community Impact Guidelines were inspired by
+[Mozilla's code of conduct enforcement ladder][Mozilla CoC].
+
+For answers to common questions about this code of conduct, see the FAQ at
+[https://www.contributor-covenant.org/faq][FAQ]. Translations are available
+at [https://www.contributor-covenant.org/translations][translations].
+
+[homepage]: https://www.contributor-covenant.org
+[v2.1]: https://www.contributor-covenant.org/version/2/1/code_of_conduct.html
+[Mozilla CoC]: https://github.com/mozilla/diversity
+[FAQ]: https://www.contributor-covenant.org/faq
+[translations]: https://www.contributor-covenant.org/translations
+
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/jaypipes/ghw/CONTRIBUTING.md","mode":420,"size":2137,"sha256":"7d6ea3a270c4b768752feaaa78e32f9585298b5bac27837402d3deb33f11f742","index":0,"count":1,"encoding":"utf-8","payloadBytes":2137}
+# How to Contribute
+
+We welcome any and all contributions to `ghw`! Filing [bug reports][gh-issues],
+asking questions and submitting patches are all encouraged.
+
+[gh-issues]: https://github.com/jaypipes/ghw/issues
+
+## Submitting patches via pull requests
+
+We use GitHub pull requests to review code submissions.
+
+Consult [GitHub Help][pr-help] for more information on using pull requests.
+
+[pr-help]: https://help.github.com/articles/about-pull-requests/
+
+We ask that contributors submitting a pull request sign their commits and
+attest to the Developer Certificate of Origin (DCO).
+
+## Developer Certificate of Origin
+
+The DCO is a lightweight way for contributors to certify that they wrote or
+otherwise have the right to submit the code they are contributing to the
+project. Here is the [full text of the DCO][dco], reformatted for readability:
+
+> By making a contribution to this project, I certify that:
+> 
+> a. The contribution was created in whole or in part by me and I have the
+> right to submit it under the open source license indicated in the file; or
+> 
+> b. The contribution is based upon previous work that, to the best of my
+> knowledge, is covered under an appropriate open source license and I have the
+> right under that license to submit that work with modifications, whether
+> created in whole or in part by me, under the same open source license (unless
+> I am permitted to submit under a different license), as indicated in the
+> file; or
+> 
+> c. The contribution was provided directly to me by some other person who
+> certified (a), (b) or (c) and I have not modified it.
+> 
+> d. I understand and agree that this project and the contribution are public
+> and that a record of the contribution (including all personal information I
+> submit with it, including my sign-off) is maintained indefinitely and may be
+> redistributed consistent with this project or the open source license(s)
+> involved.
+
+[dco]: https://developercertificate.org/
+
+You can sign your commits using `git commit -s` before pushing commits to
+Github and creating a pull request.
+
+## Community Guidelines
+
+1. Be kind.
+2. Seriously, that's it.
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/jaypipes/ghw/COPYING","mode":420,"size":10143,"sha256":"5df2a0d87d6c562f0ea11c688ac52532aa28d744cabc7994ff0537f64b3b3320","index":0,"count":1,"encoding":"utf-8","payloadBytes":10143}
+
+                                 Apache License
+                           Version 2.0, January 2004
+                        http://www.apache.org/licenses/
+
+   TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
+
+   1. Definitions.
+
+      "License" shall mean the terms and conditions for use, reproduction,
+      and distribution as defined by Sections 1 through 9 of this document.
+
+      "Licensor" shall mean the copyright owner or entity authorized by
+      the copyright owner that is granting the License.
+
+      "Legal Entity" shall mean the union of the acting entity and all
+      other entities that control, are controlled by, or are under common
+      control with that entity. For the purposes of this definition,
+      "control" means (i) the power, direct or indirect, to cause the
+      direction or management of such entity, whether by contract or
+      otherwise, or (ii) ownership of fifty percent (50%) or more of the
+      outstanding shares, or (iii) beneficial ownership of such entity.
+
+      "You" (or "Your") shall mean an individual or Legal Entity
+      exercising permissions granted by this License.
+
+      "Source" form shall mean the preferred form for making modifications,
+      including but not limited to software source code, documentation
+      source, and configuration files.
+
+      "Object" form shall mean any form resulting from mechanical
+      transformation or translation of a Source form, including but
+      not limited to compiled object code, generated documentation,
+      and conversions to other media types.
+
+      "Work" shall mean the work of authorship, whether in Source or
+      Object form, made available under the License, as indicated by a
+      copyright notice that is included in or attached to the work
+      (an example is provided in the Appendix below).
+
+      "Derivative Works" shall mean any work, whether in Source or Object
+      form, that is based on (or derived from) the Work and for which the
+      editorial revisions, annotations, elaborations, or other modifications
+      represent, as a whole, an original work of authorship. For the purposes
+      of this License, Derivative Works shall not include works that remain
+      separable from, or merely link (or bind by name) to the interfaces of,
+      the Work and Derivative Works thereof.
+
+      "Contribution" shall mean any work of authorship, including
+      the original version of the Work and any modifications or additions
+      to that Work or Derivative Works thereof, that is intentionally
+      submitted to Licensor for inclusion in the Work by the copyright owner
+      or by an individual or Legal Entity authorized to submit on behalf of
+      the copyright owner. For the purposes of this definition, "submitted"
+      means any form of electronic, verbal, or written communication sent
+      to the Licensor or its representatives, including but not limited to
+      communication on electronic mailing lists, source code control systems,
+      and issue tracking systems that are managed by, or on behalf of, the
+      Licensor for the purpose of discussing and improving the Work, but
+      excluding communication that is conspicuously marked or otherwise
+      designated in writing by the copyright owner as "Not a Contribution."
+
+      "Contributor" shall mean Licensor and any individual or Legal Entity
+      on behalf of whom a Contribution has been received by Licensor and
+      subsequently incorporated within the Work.
+
+   2. Grant of Copyright License. Subject to the terms and conditions of
+      this License, each Contributor hereby grants to You a perpetual,
+      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+      copyright license to reproduce, prepare Derivative Works of,
+      publicly display, publicly perform, sublicense, and distribute the
+      Work and such Derivative Works in Source or Object form.
+
+   3. Grant of Patent License. Subject to the terms and conditions of
+      this License, each Contributor hereby grants to You a perpetual,
+      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+      (except as stated in this section) patent license to make, have made,
+      use, offer to sell, sell, import, and otherwise transfer the Work,
+      where such license applies only to those patent claims licensable
+      by such Contributor that are necessarily infringed by their
+      Contribution(s) alone or by combination of their Contribution(s)
+      with the Work to which such Contribution(s) was submitted. If You
+      institute patent litigation against any entity (including a
+      cross-claim or counterclaim in a lawsuit) alleging that the Work
+      or a Contribution incorporated within the Work constitutes direct
+      or contributory patent infringement, then any patent licenses
+      granted to You under this License for that Work shall terminate
+      as of the date such litigation is filed.
+
+   4. Redistribution. You may reproduce and distribute copies of the
+      Work or Derivative Works thereof in any medium, with or without
+      modifications, and in Source or Object form, provided that You
+      meet the following conditions:
+
+      (a) You must give any other recipients of the Work or
+          Derivative Works a copy of this License; and
+
+      (b) You must cause any modified files to carry prominent notices
+          stating that You changed the files; and
+
+      (c) You must retain, in the Source form of any Derivative Works
+          that You distribute, all copyright, patent, trademark, and
+          attribution notices from the Source form of the Work,
+          excluding those notices that do not pertain to any part of
+          the Derivative Works; and
+
+      (d) If the Work includes a "NOTICE" text file as part of its
+          distribution, then any Derivative Works that You distribute must
+          include a readable copy of the attribution notices contained
+          within such NOTICE file, excluding those notices that do not
+          pertain to any part of the Derivative Works, in at least one
+          of the following places: within a NOTICE text file distributed
+          as part of the Derivative Works; within the Source form or
+          documentation, if provided along with the Derivative Works; or,
+          within a display generated by the Derivative Works, if and
+          wherever such third-party notices normally appear. The contents
+          of the NOTICE file are for informational purposes only and
+          do not modify the License. You may add Your own attribution
+          notices within Derivative Works that You distribute, alongside
+          or as an addendum to the NOTICE text from the Work, provided
+          that such additional attribution notices cannot be construed
+          as modifying the License.
+
+      You may add Your own copyright statement to Your modifications and
+      may provide additional or different license terms and conditions
+      for use, reproduction, or distribution of Your modifications, or
+      for any such Derivative Works as a whole, provided Your use,
+      reproduction, and distribution of the Work otherwise complies with
+      the conditions stated in this License.
+
+   5. Submission of Contributions. Unless You explicitly state otherwise,
+      any Contribution intentionally submitted for inclusion in the Work
+      by You to the Licensor shall be under the terms and conditions of
+      this License, without any additional terms or conditions.
+      Notwithstanding the above, nothing herein shall supersede or modify
+      the terms of any separate license agreement you may have executed
+      with Licensor regarding such Contributions.
+
+   6. Trademarks. This License does not grant permission to use the trade
+      names, trademarks, service marks, or product names of the Licensor,
+      except as required for reasonable and customary use in describing the
+      origin of the Work and reproducing the content of the NOTICE file.
+
+   7. Disclaimer of Warranty. Unless required by applicable law or
+      agreed to in writing, Licensor provides the Work (and each
+      Contributor provides its Contributions) on an "AS IS" BASIS,
+      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+      implied, including, without limitation, any warranties or conditions
+      of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A
+      PARTICULAR PURPOSE. You are solely responsible for determining the
+      appropriateness of using or redistributing the Work and assume any
+      risks associated with Your exercise of permissions under this License.
+
+   8. Limitation of Liability. In no event and under no legal theory,
+      whether in tort (including negligence), contract, or otherwise,
+      unless required by applicable law (such as deliberate and grossly
+      negligent acts) or agreed to in writing, shall any Contributor be
+      liable to You for damages, including any direct, indirect, special,
+      incidental, or consequential damages of any character arising as a
+      result of this License or out of the use or inability to use the
+      Work (including but not limited to damages for loss of goodwill,
+      work stoppage, computer failure or malfunction, or any and all
+      other commercial damages or losses), even if such Contributor
+      has been advised of the possibility of such damages.
+
+   9. Accepting Warranty or Additional Liability. While redistributing
+      the Work or Derivative Works thereof, You may choose to offer,
+      and charge a fee for, acceptance of support, warranty, indemnity,
+      or other liability obligations and/or rights consistent with this
+      License. However, in accepting such obligations, You may act only
+      on Your own behalf and on Your sole responsibility, not on behalf
+      of any other Contributor, and only if You agree to indemnify,
+      defend, and hold each Contributor harmless for any liability
+      incurred by, or claims asserted against, such Contributor by reason
+      of your accepting any such warranty or additional liability.
+
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/jaypipes/ghw/Dockerfile","mode":420,"size":533,"sha256":"55be11ad30c12c55e6746022f23fbd6a96948da65423ecf378aa4a6fb5287398","index":0,"count":1,"encoding":"utf-8","payloadBytes":533}
+FROM golang:1.21-buster as builder
+WORKDIR /go/src/github.com/jaypipes/ghw
+
+ENV GOPROXY=direct
+
+# go.mod and go.sum go into their own layers.
+COPY go.mod .
+COPY go.sum .
+
+# This ensures `go mod download` happens only when go.mod and go.sum change.
+RUN go mod download
+
+COPY . .
+
+RUN CGO_ENABLED=0 go build -o ghwc ./cmd/ghwc/
+
+FROM alpine:3.7@sha256:8421d9a84432575381bfabd248f1eb56f3aa21d9d7cd2511583c68c9b7511d10
+RUN apk add --no-cache ethtool
+
+WORKDIR /bin
+
+COPY --from=builder /go/src/github.com/jaypipes/ghw/ghwc /bin
+
+CMD ghwc
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/jaypipes/ghw/Makefile","mode":420,"size":697,"sha256":"640144060140ad7af98800a379482b16a14271a934cb8d6e9e9c25ac6d04b69b","index":0,"count":1,"encoding":"utf-8","payloadBytes":697}
+VERSION ?= $(shell git describe --tags --always --dirty)
+
+.PHONY: test clean vet fmt fmtcheck build run
+
+bin/ghwc:
+	@cd cmd/ghwc && go build -o ../../bin/ghwc main.go && cd ../../
+
+# If the first argument is "run"...
+ifeq (run,$(firstword $(MAKECMDGOALS)))
+  # use the rest as arguments for "run"
+  RUN_ARGS := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
+  # ...and turn them into do-nothing targets
+  $(eval $(RUN_ARGS):;@:)
+endif
+
+build: clean bin/ghwc
+
+run: build
+	@bin/ghwc $(RUN_ARGS)
+
+test: vet
+	go test -v ./...
+
+fmt:
+	@echo "Running gofmt on all sources..."
+	@gofmt -s -l -w .
+
+fmtcheck:
+	@bash -c "diff -u <(echo -n) <(gofmt -d .)"
+
+vet:
+	go vet ./...
+
+clean:
+	@rm -f bin/ghwc
+
+@@END
 @@PORTABLE {"path":"third_party/wails/vendor/github.com/jaypipes/ghw/README.md","mode":420,"size":53068,"sha256":"0c7216cc2759e027356d8e6c2dfbb88418cfcb00d5b70107899cd0cfa877f879","index":0,"count":2,"encoding":"utf-8","payloadBytes":48000}
 # `ghw` - Go HardWare discovery/inspection library
 
@@ -80964,505 +81616,4 @@ func FirstWordInString(str string, state int) (word, rest string, newState int) 
 	}
 }
 
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/rivo/uniseg/wordproperties.go","mode":420,"size":187876,"sha256":"10136e6c3c8ea619276428d59278e312aa4ce33b2e50d98f3a618f162b3a5864","index":0,"count":4,"encoding":"utf-8","payloadBytes":48006}
-// Code generated via go generate from gen_properties.go. DO NOT EDIT.
-
-package uniseg
-
-// workBreakCodePoints are taken from
-// https://www.unicode.org/Public/15.0.0/ucd/auxiliary/WordBreakProperty.txt
-// and
-// https://unicode.org/Public/15.0.0/ucd/emoji/emoji-data.txt
-// ("Extended_Pictographic" only)
-// on September 5, 2023. See https://www.unicode.org/license.html for the Unicode
-// license agreement.
-var workBreakCodePoints = [][3]int{
-	{0x000A, 0x000A, prLF},                     // Cc       <control-000A>
-	{0x000B, 0x000C, prNewline},                // Cc   [2] <control-000B>..<control-000C>
-	{0x000D, 0x000D, prCR},                     // Cc       <control-000D>
-	{0x0020, 0x0020, prWSegSpace},              // Zs       SPACE
-	{0x0022, 0x0022, prDoubleQuote},            // Po       QUOTATION MARK
-	{0x0027, 0x0027, prSingleQuote},            // Po       APOSTROPHE
-	{0x002C, 0x002C, prMidNum},                 // Po       COMMA
-	{0x002E, 0x002E, prMidNumLet},              // Po       FULL STOP
-	{0x0030, 0x0039, prNumeric},                // Nd  [10] DIGIT ZERO..DIGIT NINE
-	{0x003A, 0x003A, prMidLetter},              // Po       COLON
-	{0x003B, 0x003B, prMidNum},                 // Po       SEMICOLON
-	{0x0041, 0x005A, prALetter},                // L&  [26] LATIN CAPITAL LETTER A..LATIN CAPITAL LETTER Z
-	{0x005F, 0x005F, prExtendNumLet},           // Pc       LOW LINE
-	{0x0061, 0x007A, prALetter},                // L&  [26] LATIN SMALL LETTER A..LATIN SMALL LETTER Z
-	{0x0085, 0x0085, prNewline},                // Cc       <control-0085>
-	{0x00A9, 0x00A9, prExtendedPictographic},   // E0.6   [1] (©️)       copyright
-	{0x00AA, 0x00AA, prALetter},                // Lo       FEMININE ORDINAL INDICATOR
-	{0x00AD, 0x00AD, prFormat},                 // Cf       SOFT HYPHEN
-	{0x00AE, 0x00AE, prExtendedPictographic},   // E0.6   [1] (®️)       registered
-	{0x00B5, 0x00B5, prALetter},                // L&       MICRO SIGN
-	{0x00B7, 0x00B7, prMidLetter},              // Po       MIDDLE DOT
-	{0x00BA, 0x00BA, prALetter},                // Lo       MASCULINE ORDINAL INDICATOR
-	{0x00C0, 0x00D6, prALetter},                // L&  [23] LATIN CAPITAL LETTER A WITH GRAVE..LATIN CAPITAL LETTER O WITH DIAERESIS
-	{0x00D8, 0x00F6, prALetter},                // L&  [31] LATIN CAPITAL LETTER O WITH STROKE..LATIN SMALL LETTER O WITH DIAERESIS
-	{0x00F8, 0x01BA, prALetter},                // L& [195] LATIN SMALL LETTER O WITH STROKE..LATIN SMALL LETTER EZH WITH TAIL
-	{0x01BB, 0x01BB, prALetter},                // Lo       LATIN LETTER TWO WITH STROKE
-	{0x01BC, 0x01BF, prALetter},                // L&   [4] LATIN CAPITAL LETTER TONE FIVE..LATIN LETTER WYNN
-	{0x01C0, 0x01C3, prALetter},                // Lo   [4] LATIN LETTER DENTAL CLICK..LATIN LETTER RETROFLEX CLICK
-	{0x01C4, 0x0293, prALetter},                // L& [208] LATIN CAPITAL LETTER DZ WITH CARON..LATIN SMALL LETTER EZH WITH CURL
-	{0x0294, 0x0294, prALetter},                // Lo       LATIN LETTER GLOTTAL STOP
-	{0x0295, 0x02AF, prALetter},                // L&  [27] LATIN LETTER PHARYNGEAL VOICED FRICATIVE..LATIN SMALL LETTER TURNED H WITH FISHHOOK AND TAIL
-	{0x02B0, 0x02C1, prALetter},                // Lm  [18] MODIFIER LETTER SMALL H..MODIFIER LETTER REVERSED GLOTTAL STOP
-	{0x02C2, 0x02C5, prALetter},                // Sk   [4] MODIFIER LETTER LEFT ARROWHEAD..MODIFIER LETTER DOWN ARROWHEAD
-	{0x02C6, 0x02D1, prALetter},                // Lm  [12] MODIFIER LETTER CIRCUMFLEX ACCENT..MODIFIER LETTER HALF TRIANGULAR COLON
-	{0x02D2, 0x02D7, prALetter},                // Sk   [6] MODIFIER LETTER CENTRED RIGHT HALF RING..MODIFIER LETTER MINUS SIGN
-	{0x02DE, 0x02DF, prALetter},                // Sk   [2] MODIFIER LETTER RHOTIC HOOK..MODIFIER LETTER CROSS ACCENT
-	{0x02E0, 0x02E4, prALetter},                // Lm   [5] MODIFIER LETTER SMALL GAMMA..MODIFIER LETTER SMALL REVERSED GLOTTAL STOP
-	{0x02E5, 0x02EB, prALetter},                // Sk   [7] MODIFIER LETTER EXTRA-HIGH TONE BAR..MODIFIER LETTER YANG DEPARTING TONE MARK
-	{0x02EC, 0x02EC, prALetter},                // Lm       MODIFIER LETTER VOICING
-	{0x02ED, 0x02ED, prALetter},                // Sk       MODIFIER LETTER UNASPIRATED
-	{0x02EE, 0x02EE, prALetter},                // Lm       MODIFIER LETTER DOUBLE APOSTROPHE
-	{0x02EF, 0x02FF, prALetter},                // Sk  [17] MODIFIER LETTER LOW DOWN ARROWHEAD..MODIFIER LETTER LOW LEFT ARROW
-	{0x0300, 0x036F, prExtend},                 // Mn [112] COMBINING GRAVE ACCENT..COMBINING LATIN SMALL LETTER X
-	{0x0370, 0x0373, prALetter},                // L&   [4] GREEK CAPITAL LETTER HETA..GREEK SMALL LETTER ARCHAIC SAMPI
-	{0x0374, 0x0374, prALetter},                // Lm       GREEK NUMERAL SIGN
-	{0x0376, 0x0377, prALetter},                // L&   [2] GREEK CAPITAL LETTER PAMPHYLIAN DIGAMMA..GREEK SMALL LETTER PAMPHYLIAN DIGAMMA
-	{0x037A, 0x037A, prALetter},                // Lm       GREEK YPOGEGRAMMENI
-	{0x037B, 0x037D, prALetter},                // L&   [3] GREEK SMALL REVERSED LUNATE SIGMA SYMBOL..GREEK SMALL REVERSED DOTTED LUNATE SIGMA SYMBOL
-	{0x037E, 0x037E, prMidNum},                 // Po       GREEK QUESTION MARK
-	{0x037F, 0x037F, prALetter},                // L&       GREEK CAPITAL LETTER YOT
-	{0x0386, 0x0386, prALetter},                // L&       GREEK CAPITAL LETTER ALPHA WITH TONOS
-	{0x0387, 0x0387, prMidLetter},              // Po       GREEK ANO TELEIA
-	{0x0388, 0x038A, prALetter},                // L&   [3] GREEK CAPITAL LETTER EPSILON WITH TONOS..GREEK CAPITAL LETTER IOTA WITH TONOS
-	{0x038C, 0x038C, prALetter},                // L&       GREEK CAPITAL LETTER OMICRON WITH TONOS
-	{0x038E, 0x03A1, prALetter},                // L&  [20] GREEK CAPITAL LETTER UPSILON WITH TONOS..GREEK CAPITAL LETTER RHO
-	{0x03A3, 0x03F5, prALetter},                // L&  [83] GREEK CAPITAL LETTER SIGMA..GREEK LUNATE EPSILON SYMBOL
-	{0x03F7, 0x0481, prALetter},                // L& [139] GREEK CAPITAL LETTER SHO..CYRILLIC SMALL LETTER KOPPA
-	{0x0483, 0x0487, prExtend},                 // Mn   [5] COMBINING CYRILLIC TITLO..COMBINING CYRILLIC POKRYTIE
-	{0x0488, 0x0489, prExtend},                 // Me   [2] COMBINING CYRILLIC HUNDRED THOUSANDS SIGN..COMBINING CYRILLIC MILLIONS SIGN
-	{0x048A, 0x052F, prALetter},                // L& [166] CYRILLIC CAPITAL LETTER SHORT I WITH TAIL..CYRILLIC SMALL LETTER EL WITH DESCENDER
-	{0x0531, 0x0556, prALetter},                // L&  [38] ARMENIAN CAPITAL LETTER AYB..ARMENIAN CAPITAL LETTER FEH
-	{0x0559, 0x0559, prALetter},                // Lm       ARMENIAN MODIFIER LETTER LEFT HALF RING
-	{0x055A, 0x055C, prALetter},                // Po   [3] ARMENIAN APOSTROPHE..ARMENIAN EXCLAMATION MARK
-	{0x055E, 0x055E, prALetter},                // Po       ARMENIAN QUESTION MARK
-	{0x055F, 0x055F, prMidLetter},              // Po       ARMENIAN ABBREVIATION MARK
-	{0x0560, 0x0588, prALetter},                // L&  [41] ARMENIAN SMALL LETTER TURNED AYB..ARMENIAN SMALL LETTER YI WITH STROKE
-	{0x0589, 0x0589, prMidNum},                 // Po       ARMENIAN FULL STOP
-	{0x058A, 0x058A, prALetter},                // Pd       ARMENIAN HYPHEN
-	{0x0591, 0x05BD, prExtend},                 // Mn  [45] HEBREW ACCENT ETNAHTA..HEBREW POINT METEG
-	{0x05BF, 0x05BF, prExtend},                 // Mn       HEBREW POINT RAFE
-	{0x05C1, 0x05C2, prExtend},                 // Mn   [2] HEBREW POINT SHIN DOT..HEBREW POINT SIN DOT
-	{0x05C4, 0x05C5, prExtend},                 // Mn   [2] HEBREW MARK UPPER DOT..HEBREW MARK LOWER DOT
-	{0x05C7, 0x05C7, prExtend},                 // Mn       HEBREW POINT QAMATS QATAN
-	{0x05D0, 0x05EA, prHebrewLetter},           // Lo  [27] HEBREW LETTER ALEF..HEBREW LETTER TAV
-	{0x05EF, 0x05F2, prHebrewLetter},           // Lo   [4] HEBREW YOD TRIANGLE..HEBREW LIGATURE YIDDISH DOUBLE YOD
-	{0x05F3, 0x05F3, prALetter},                // Po       HEBREW PUNCTUATION GERESH
-	{0x05F4, 0x05F4, prMidLetter},              // Po       HEBREW PUNCTUATION GERSHAYIM
-	{0x0600, 0x0605, prFormat},                 // Cf   [6] ARABIC NUMBER SIGN..ARABIC NUMBER MARK ABOVE
-	{0x060C, 0x060D, prMidNum},                 // Po   [2] ARABIC COMMA..ARABIC DATE SEPARATOR
-	{0x0610, 0x061A, prExtend},                 // Mn  [11] ARABIC SIGN SALLALLAHOU ALAYHE WASSALLAM..ARABIC SMALL KASRA
-	{0x061C, 0x061C, prFormat},                 // Cf       ARABIC LETTER MARK
-	{0x0620, 0x063F, prALetter},                // Lo  [32] ARABIC LETTER KASHMIRI YEH..ARABIC LETTER FARSI YEH WITH THREE DOTS ABOVE
-	{0x0640, 0x0640, prALetter},                // Lm       ARABIC TATWEEL
-	{0x0641, 0x064A, prALetter},                // Lo  [10] ARABIC LETTER FEH..ARABIC LETTER YEH
-	{0x064B, 0x065F, prExtend},                 // Mn  [21] ARABIC FATHATAN..ARABIC WAVY HAMZA BELOW
-	{0x0660, 0x0669, prNumeric},                // Nd  [10] ARABIC-INDIC DIGIT ZERO..ARABIC-INDIC DIGIT NINE
-	{0x066B, 0x066B, prNumeric},                // Po       ARABIC DECIMAL SEPARATOR
-	{0x066C, 0x066C, prMidNum},                 // Po       ARABIC THOUSANDS SEPARATOR
-	{0x066E, 0x066F, prALetter},                // Lo   [2] ARABIC LETTER DOTLESS BEH..ARABIC LETTER DOTLESS QAF
-	{0x0670, 0x0670, prExtend},                 // Mn       ARABIC LETTER SUPERSCRIPT ALEF
-	{0x0671, 0x06D3, prALetter},                // Lo  [99] ARABIC LETTER ALEF WASLA..ARABIC LETTER YEH BARREE WITH HAMZA ABOVE
-	{0x06D5, 0x06D5, prALetter},                // Lo       ARABIC LETTER AE
-	{0x06D6, 0x06DC, prExtend},                 // Mn   [7] ARABIC SMALL HIGH LIGATURE SAD WITH LAM WITH ALEF MAKSURA..ARABIC SMALL HIGH SEEN
-	{0x06DD, 0x06DD, prFormat},                 // Cf       ARABIC END OF AYAH
-	{0x06DF, 0x06E4, prExtend},                 // Mn   [6] ARABIC SMALL HIGH ROUNDED ZERO..ARABIC SMALL HIGH MADDA
-	{0x06E5, 0x06E6, prALetter},                // Lm   [2] ARABIC SMALL WAW..ARABIC SMALL YEH
-	{0x06E7, 0x06E8, prExtend},                 // Mn   [2] ARABIC SMALL HIGH YEH..ARABIC SMALL HIGH NOON
-	{0x06EA, 0x06ED, prExtend},                 // Mn   [4] ARABIC EMPTY CENTRE LOW STOP..ARABIC SMALL LOW MEEM
-	{0x06EE, 0x06EF, prALetter},                // Lo   [2] ARABIC LETTER DAL WITH INVERTED V..ARABIC LETTER REH WITH INVERTED V
-	{0x06F0, 0x06F9, prNumeric},                // Nd  [10] EXTENDED ARABIC-INDIC DIGIT ZERO..EXTENDED ARABIC-INDIC DIGIT NINE
-	{0x06FA, 0x06FC, prALetter},                // Lo   [3] ARABIC LETTER SHEEN WITH DOT BELOW..ARABIC LETTER GHAIN WITH DOT BELOW
-	{0x06FF, 0x06FF, prALetter},                // Lo       ARABIC LETTER HEH WITH INVERTED V
-	{0x070F, 0x070F, prFormat},                 // Cf       SYRIAC ABBREVIATION MARK
-	{0x0710, 0x0710, prALetter},                // Lo       SYRIAC LETTER ALAPH
-	{0x0711, 0x0711, prExtend},                 // Mn       SYRIAC LETTER SUPERSCRIPT ALAPH
-	{0x0712, 0x072F, prALetter},                // Lo  [30] SYRIAC LETTER BETH..SYRIAC LETTER PERSIAN DHALATH
-	{0x0730, 0x074A, prExtend},                 // Mn  [27] SYRIAC PTHAHA ABOVE..SYRIAC BARREKH
-	{0x074D, 0x07A5, prALetter},                // Lo  [89] SYRIAC LETTER SOGDIAN ZHAIN..THAANA LETTER WAAVU
-	{0x07A6, 0x07B0, prExtend},                 // Mn  [11] THAANA ABAFILI..THAANA SUKUN
-	{0x07B1, 0x07B1, prALetter},                // Lo       THAANA LETTER NAA
-	{0x07C0, 0x07C9, prNumeric},                // Nd  [10] NKO DIGIT ZERO..NKO DIGIT NINE
-	{0x07CA, 0x07EA, prALetter},                // Lo  [33] NKO LETTER A..NKO LETTER JONA RA
-	{0x07EB, 0x07F3, prExtend},                 // Mn   [9] NKO COMBINING SHORT HIGH TONE..NKO COMBINING DOUBLE DOT ABOVE
-	{0x07F4, 0x07F5, prALetter},                // Lm   [2] NKO HIGH TONE APOSTROPHE..NKO LOW TONE APOSTROPHE
-	{0x07F8, 0x07F8, prMidNum},                 // Po       NKO COMMA
-	{0x07FA, 0x07FA, prALetter},                // Lm       NKO LAJANYALAN
-	{0x07FD, 0x07FD, prExtend},                 // Mn       NKO DANTAYALAN
-	{0x0800, 0x0815, prALetter},                // Lo  [22] SAMARITAN LETTER ALAF..SAMARITAN LETTER TAAF
-	{0x0816, 0x0819, prExtend},                 // Mn   [4] SAMARITAN MARK IN..SAMARITAN MARK DAGESH
-	{0x081A, 0x081A, prALetter},                // Lm       SAMARITAN MODIFIER LETTER EPENTHETIC YUT
-	{0x081B, 0x0823, prExtend},                 // Mn   [9] SAMARITAN MARK EPENTHETIC YUT..SAMARITAN VOWEL SIGN A
-	{0x0824, 0x0824, prALetter},                // Lm       SAMARITAN MODIFIER LETTER SHORT A
-	{0x0825, 0x0827, prExtend},                 // Mn   [3] SAMARITAN VOWEL SIGN SHORT A..SAMARITAN VOWEL SIGN U
-	{0x0828, 0x0828, prALetter},                // Lm       SAMARITAN MODIFIER LETTER I
-	{0x0829, 0x082D, prExtend},                 // Mn   [5] SAMARITAN VOWEL SIGN LONG I..SAMARITAN MARK NEQUDAA
-	{0x0840, 0x0858, prALetter},                // Lo  [25] MANDAIC LETTER HALQA..MANDAIC LETTER AIN
-	{0x0859, 0x085B, prExtend},                 // Mn   [3] MANDAIC AFFRICATION MARK..MANDAIC GEMINATION MARK
-	{0x0860, 0x086A, prALetter},                // Lo  [11] SYRIAC LETTER MALAYALAM NGA..SYRIAC LETTER MALAYALAM SSA
-	{0x0870, 0x0887, prALetter},                // Lo  [24] ARABIC LETTER ALEF WITH ATTACHED FATHA..ARABIC BASELINE ROUND DOT
-	{0x0889, 0x088E, prALetter},                // Lo   [6] ARABIC LETTER NOON WITH INVERTED SMALL V..ARABIC VERTICAL TAIL
-	{0x0890, 0x0891, prFormat},                 // Cf   [2] ARABIC POUND MARK ABOVE..ARABIC PIASTRE MARK ABOVE
-	{0x0898, 0x089F, prExtend},                 // Mn   [8] ARABIC SMALL HIGH WORD AL-JUZ..ARABIC HALF MADDA OVER MADDA
-	{0x08A0, 0x08C8, prALetter},                // Lo  [41] ARABIC LETTER BEH WITH SMALL V BELOW..ARABIC LETTER GRAF
-	{0x08C9, 0x08C9, prALetter},                // Lm       ARABIC SMALL FARSI YEH
-	{0x08CA, 0x08E1, prExtend},                 // Mn  [24] ARABIC SMALL HIGH FARSI YEH..ARABIC SMALL HIGH SIGN SAFHA
-	{0x08E2, 0x08E2, prFormat},                 // Cf       ARABIC DISPUTED END OF AYAH
-	{0x08E3, 0x0902, prExtend},                 // Mn  [32] ARABIC TURNED DAMMA BELOW..DEVANAGARI SIGN ANUSVARA
-	{0x0903, 0x0903, prExtend},                 // Mc       DEVANAGARI SIGN VISARGA
-	{0x0904, 0x0939, prALetter},                // Lo  [54] DEVANAGARI LETTER SHORT A..DEVANAGARI LETTER HA
-	{0x093A, 0x093A, prExtend},                 // Mn       DEVANAGARI VOWEL SIGN OE
-	{0x093B, 0x093B, prExtend},                 // Mc       DEVANAGARI VOWEL SIGN OOE
-	{0x093C, 0x093C, prExtend},                 // Mn       DEVANAGARI SIGN NUKTA
-	{0x093D, 0x093D, prALetter},                // Lo       DEVANAGARI SIGN AVAGRAHA
-	{0x093E, 0x0940, prExtend},                 // Mc   [3] DEVANAGARI VOWEL SIGN AA..DEVANAGARI VOWEL SIGN II
-	{0x0941, 0x0948, prExtend},                 // Mn   [8] DEVANAGARI VOWEL SIGN U..DEVANAGARI VOWEL SIGN AI
-	{0x0949, 0x094C, prExtend},                 // Mc   [4] DEVANAGARI VOWEL SIGN CANDRA O..DEVANAGARI VOWEL SIGN AU
-	{0x094D, 0x094D, prExtend},                 // Mn       DEVANAGARI SIGN VIRAMA
-	{0x094E, 0x094F, prExtend},                 // Mc   [2] DEVANAGARI VOWEL SIGN PRISHTHAMATRA E..DEVANAGARI VOWEL SIGN AW
-	{0x0950, 0x0950, prALetter},                // Lo       DEVANAGARI OM
-	{0x0951, 0x0957, prExtend},                 // Mn   [7] DEVANAGARI STRESS SIGN UDATTA..DEVANAGARI VOWEL SIGN UUE
-	{0x0958, 0x0961, prALetter},                // Lo  [10] DEVANAGARI LETTER QA..DEVANAGARI LETTER VOCALIC LL
-	{0x0962, 0x0963, prExtend},                 // Mn   [2] DEVANAGARI VOWEL SIGN VOCALIC L..DEVANAGARI VOWEL SIGN VOCALIC LL
-	{0x0966, 0x096F, prNumeric},                // Nd  [10] DEVANAGARI DIGIT ZERO..DEVANAGARI DIGIT NINE
-	{0x0971, 0x0971, prALetter},                // Lm       DEVANAGARI SIGN HIGH SPACING DOT
-	{0x0972, 0x0980, prALetter},                // Lo  [15] DEVANAGARI LETTER CANDRA A..BENGALI ANJI
-	{0x0981, 0x0981, prExtend},                 // Mn       BENGALI SIGN CANDRABINDU
-	{0x0982, 0x0983, prExtend},                 // Mc   [2] BENGALI SIGN ANUSVARA..BENGALI SIGN VISARGA
-	{0x0985, 0x098C, prALetter},                // Lo   [8] BENGALI LETTER A..BENGALI LETTER VOCALIC L
-	{0x098F, 0x0990, prALetter},                // Lo   [2] BENGALI LETTER E..BENGALI LETTER AI
-	{0x0993, 0x09A8, prALetter},                // Lo  [22] BENGALI LETTER O..BENGALI LETTER NA
-	{0x09AA, 0x09B0, prALetter},                // Lo   [7] BENGALI LETTER PA..BENGALI LETTER RA
-	{0x09B2, 0x09B2, prALetter},                // Lo       BENGALI LETTER LA
-	{0x09B6, 0x09B9, prALetter},                // Lo   [4] BENGALI LETTER SHA..BENGALI LETTER HA
-	{0x09BC, 0x09BC, prExtend},                 // Mn       BENGALI SIGN NUKTA
-	{0x09BD, 0x09BD, prALetter},                // Lo       BENGALI SIGN AVAGRAHA
-	{0x09BE, 0x09C0, prExtend},                 // Mc   [3] BENGALI VOWEL SIGN AA..BENGALI VOWEL SIGN II
-	{0x09C1, 0x09C4, prExtend},                 // Mn   [4] BENGALI VOWEL SIGN U..BENGALI VOWEL SIGN VOCALIC RR
-	{0x09C7, 0x09C8, prExtend},                 // Mc   [2] BENGALI VOWEL SIGN E..BENGALI VOWEL SIGN AI
-	{0x09CB, 0x09CC, prExtend},                 // Mc   [2] BENGALI VOWEL SIGN O..BENGALI VOWEL SIGN AU
-	{0x09CD, 0x09CD, prExtend},                 // Mn       BENGALI SIGN VIRAMA
-	{0x09CE, 0x09CE, prALetter},                // Lo       BENGALI LETTER KHANDA TA
-	{0x09D7, 0x09D7, prExtend},                 // Mc       BENGALI AU LENGTH MARK
-	{0x09DC, 0x09DD, prALetter},                // Lo   [2] BENGALI LETTER RRA..BENGALI LETTER RHA
-	{0x09DF, 0x09E1, prALetter},                // Lo   [3] BENGALI LETTER YYA..BENGALI LETTER VOCALIC LL
-	{0x09E2, 0x09E3, prExtend},                 // Mn   [2] BENGALI VOWEL SIGN VOCALIC L..BENGALI VOWEL SIGN VOCALIC LL
-	{0x09E6, 0x09EF, prNumeric},                // Nd  [10] BENGALI DIGIT ZERO..BENGALI DIGIT NINE
-	{0x09F0, 0x09F1, prALetter},                // Lo   [2] BENGALI LETTER RA WITH MIDDLE DIAGONAL..BENGALI LETTER RA WITH LOWER DIAGONAL
-	{0x09FC, 0x09FC, prALetter},                // Lo       BENGALI LETTER VEDIC ANUSVARA
-	{0x09FE, 0x09FE, prExtend},                 // Mn       BENGALI SANDHI MARK
-	{0x0A01, 0x0A02, prExtend},                 // Mn   [2] GURMUKHI SIGN ADAK BINDI..GURMUKHI SIGN BINDI
-	{0x0A03, 0x0A03, prExtend},                 // Mc       GURMUKHI SIGN VISARGA
-	{0x0A05, 0x0A0A, prALetter},                // Lo   [6] GURMUKHI LETTER A..GURMUKHI LETTER UU
-	{0x0A0F, 0x0A10, prALetter},                // Lo   [2] GURMUKHI LETTER EE..GURMUKHI LETTER AI
-	{0x0A13, 0x0A28, prALetter},                // Lo  [22] GURMUKHI LETTER OO..GURMUKHI LETTER NA
-	{0x0A2A, 0x0A30, prALetter},                // Lo   [7] GURMUKHI LETTER PA..GURMUKHI LETTER RA
-	{0x0A32, 0x0A33, prALetter},                // Lo   [2] GURMUKHI LETTER LA..GURMUKHI LETTER LLA
-	{0x0A35, 0x0A36, prALetter},                // Lo   [2] GURMUKHI LETTER VA..GURMUKHI LETTER SHA
-	{0x0A38, 0x0A39, prALetter},                // Lo   [2] GURMUKHI LETTER SA..GURMUKHI LETTER HA
-	{0x0A3C, 0x0A3C, prExtend},                 // Mn       GURMUKHI SIGN NUKTA
-	{0x0A3E, 0x0A40, prExtend},                 // Mc   [3] GURMUKHI VOWEL SIGN AA..GURMUKHI VOWEL SIGN II
-	{0x0A41, 0x0A42, prExtend},                 // Mn   [2] GURMUKHI VOWEL SIGN U..GURMUKHI VOWEL SIGN UU
-	{0x0A47, 0x0A48, prExtend},                 // Mn   [2] GURMUKHI VOWEL SIGN EE..GURMUKHI VOWEL SIGN AI
-	{0x0A4B, 0x0A4D, prExtend},                 // Mn   [3] GURMUKHI VOWEL SIGN OO..GURMUKHI SIGN VIRAMA
-	{0x0A51, 0x0A51, prExtend},                 // Mn       GURMUKHI SIGN UDAAT
-	{0x0A59, 0x0A5C, prALetter},                // Lo   [4] GURMUKHI LETTER KHHA..GURMUKHI LETTER RRA
-	{0x0A5E, 0x0A5E, prALetter},                // Lo       GURMUKHI LETTER FA
-	{0x0A66, 0x0A6F, prNumeric},                // Nd  [10] GURMUKHI DIGIT ZERO..GURMUKHI DIGIT NINE
-	{0x0A70, 0x0A71, prExtend},                 // Mn   [2] GURMUKHI TIPPI..GURMUKHI ADDAK
-	{0x0A72, 0x0A74, prALetter},                // Lo   [3] GURMUKHI IRI..GURMUKHI EK ONKAR
-	{0x0A75, 0x0A75, prExtend},                 // Mn       GURMUKHI SIGN YAKASH
-	{0x0A81, 0x0A82, prExtend},                 // Mn   [2] GUJARATI SIGN CANDRABINDU..GUJARATI SIGN ANUSVARA
-	{0x0A83, 0x0A83, prExtend},                 // Mc       GUJARATI SIGN VISARGA
-	{0x0A85, 0x0A8D, prALetter},                // Lo   [9] GUJARATI LETTER A..GUJARATI VOWEL CANDRA E
-	{0x0A8F, 0x0A91, prALetter},                // Lo   [3] GUJARATI LETTER E..GUJARATI VOWEL CANDRA O
-	{0x0A93, 0x0AA8, prALetter},                // Lo  [22] GUJARATI LETTER O..GUJARATI LETTER NA
-	{0x0AAA, 0x0AB0, prALetter},                // Lo   [7] GUJARATI LETTER PA..GUJARATI LETTER RA
-	{0x0AB2, 0x0AB3, prALetter},                // Lo   [2] GUJARATI LETTER LA..GUJARATI LETTER LLA
-	{0x0AB5, 0x0AB9, prALetter},                // Lo   [5] GUJARATI LETTER VA..GUJARATI LETTER HA
-	{0x0ABC, 0x0ABC, prExtend},                 // Mn       GUJARATI SIGN NUKTA
-	{0x0ABD, 0x0ABD, prALetter},                // Lo       GUJARATI SIGN AVAGRAHA
-	{0x0ABE, 0x0AC0, prExtend},                 // Mc   [3] GUJARATI VOWEL SIGN AA..GUJARATI VOWEL SIGN II
-	{0x0AC1, 0x0AC5, prExtend},                 // Mn   [5] GUJARATI VOWEL SIGN U..GUJARATI VOWEL SIGN CANDRA E
-	{0x0AC7, 0x0AC8, prExtend},                 // Mn   [2] GUJARATI VOWEL SIGN E..GUJARATI VOWEL SIGN AI
-	{0x0AC9, 0x0AC9, prExtend},                 // Mc       GUJARATI VOWEL SIGN CANDRA O
-	{0x0ACB, 0x0ACC, prExtend},                 // Mc   [2] GUJARATI VOWEL SIGN O..GUJARATI VOWEL SIGN AU
-	{0x0ACD, 0x0ACD, prExtend},                 // Mn       GUJARATI SIGN VIRAMA
-	{0x0AD0, 0x0AD0, prALetter},                // Lo       GUJARATI OM
-	{0x0AE0, 0x0AE1, prALetter},                // Lo   [2] GUJARATI LETTER VOCALIC RR..GUJARATI LETTER VOCALIC LL
-	{0x0AE2, 0x0AE3, prExtend},                 // Mn   [2] GUJARATI VOWEL SIGN VOCALIC L..GUJARATI VOWEL SIGN VOCALIC LL
-	{0x0AE6, 0x0AEF, prNumeric},                // Nd  [10] GUJARATI DIGIT ZERO..GUJARATI DIGIT NINE
-	{0x0AF9, 0x0AF9, prALetter},                // Lo       GUJARATI LETTER ZHA
-	{0x0AFA, 0x0AFF, prExtend},                 // Mn   [6] GUJARATI SIGN SUKUN..GUJARATI SIGN TWO-CIRCLE NUKTA ABOVE
-	{0x0B01, 0x0B01, prExtend},                 // Mn       ORIYA SIGN CANDRABINDU
-	{0x0B02, 0x0B03, prExtend},                 // Mc   [2] ORIYA SIGN ANUSVARA..ORIYA SIGN VISARGA
-	{0x0B05, 0x0B0C, prALetter},                // Lo   [8] ORIYA LETTER A..ORIYA LETTER VOCALIC L
-	{0x0B0F, 0x0B10, prALetter},                // Lo   [2] ORIYA LETTER E..ORIYA LETTER AI
-	{0x0B13, 0x0B28, prALetter},                // Lo  [22] ORIYA LETTER O..ORIYA LETTER NA
-	{0x0B2A, 0x0B30, prALetter},                // Lo   [7] ORIYA LETTER PA..ORIYA LETTER RA
-	{0x0B32, 0x0B33, prALetter},                // Lo   [2] ORIYA LETTER LA..ORIYA LETTER LLA
-	{0x0B35, 0x0B39, prALetter},                // Lo   [5] ORIYA LETTER VA..ORIYA LETTER HA
-	{0x0B3C, 0x0B3C, prExtend},                 // Mn       ORIYA SIGN NUKTA
-	{0x0B3D, 0x0B3D, prALetter},                // Lo       ORIYA SIGN AVAGRAHA
-	{0x0B3E, 0x0B3E, prExtend},                 // Mc       ORIYA VOWEL SIGN AA
-	{0x0B3F, 0x0B3F, prExtend},                 // Mn       ORIYA VOWEL SIGN I
-	{0x0B40, 0x0B40, prExtend},                 // Mc       ORIYA VOWEL SIGN II
-	{0x0B41, 0x0B44, prExtend},                 // Mn   [4] ORIYA VOWEL SIGN U..ORIYA VOWEL SIGN VOCALIC RR
-	{0x0B47, 0x0B48, prExtend},                 // Mc   [2] ORIYA VOWEL SIGN E..ORIYA VOWEL SIGN AI
-	{0x0B4B, 0x0B4C, prExtend},                 // Mc   [2] ORIYA VOWEL SIGN O..ORIYA VOWEL SIGN AU
-	{0x0B4D, 0x0B4D, prExtend},                 // Mn       ORIYA SIGN VIRAMA
-	{0x0B55, 0x0B56, prExtend},                 // Mn   [2] ORIYA SIGN OVERLINE..ORIYA AI LENGTH MARK
-	{0x0B57, 0x0B57, prExtend},                 // Mc       ORIYA AU LENGTH MARK
-	{0x0B5C, 0x0B5D, prALetter},                // Lo   [2] ORIYA LETTER RRA..ORIYA LETTER RHA
-	{0x0B5F, 0x0B61, prALetter},                // Lo   [3] ORIYA LETTER YYA..ORIYA LETTER VOCALIC LL
-	{0x0B62, 0x0B63, prExtend},                 // Mn   [2] ORIYA VOWEL SIGN VOCALIC L..ORIYA VOWEL SIGN VOCALIC LL
-	{0x0B66, 0x0B6F, prNumeric},                // Nd  [10] ORIYA DIGIT ZERO..ORIYA DIGIT NINE
-	{0x0B71, 0x0B71, prALetter},                // Lo       ORIYA LETTER WA
-	{0x0B82, 0x0B82, prExtend},                 // Mn       TAMIL SIGN ANUSVARA
-	{0x0B83, 0x0B83, prALetter},                // Lo       TAMIL SIGN VISARGA
-	{0x0B85, 0x0B8A, prALetter},                // Lo   [6] TAMIL LETTER A..TAMIL LETTER UU
-	{0x0B8E, 0x0B90, prALetter},                // Lo   [3] TAMIL LETTER E..TAMIL LETTER AI
-	{0x0B92, 0x0B95, prALetter},                // Lo   [4] TAMIL LETTER O..TAMIL LETTER KA
-	{0x0B99, 0x0B9A, prALetter},                // Lo   [2] TAMIL LETTER NGA..TAMIL LETTER CA
-	{0x0B9C, 0x0B9C, prALetter},                // Lo       TAMIL LETTER JA
-	{0x0B9E, 0x0B9F, prALetter},                // Lo   [2] TAMIL LETTER NYA..TAMIL LETTER TTA
-	{0x0BA3, 0x0BA4, prALetter},                // Lo   [2] TAMIL LETTER NNA..TAMIL LETTER TA
-	{0x0BA8, 0x0BAA, prALetter},                // Lo   [3] TAMIL LETTER NA..TAMIL LETTER PA
-	{0x0BAE, 0x0BB9, prALetter},                // Lo  [12] TAMIL LETTER MA..TAMIL LETTER HA
-	{0x0BBE, 0x0BBF, prExtend},                 // Mc   [2] TAMIL VOWEL SIGN AA..TAMIL VOWEL SIGN I
-	{0x0BC0, 0x0BC0, prExtend},                 // Mn       TAMIL VOWEL SIGN II
-	{0x0BC1, 0x0BC2, prExtend},                 // Mc   [2] TAMIL VOWEL SIGN U..TAMIL VOWEL SIGN UU
-	{0x0BC6, 0x0BC8, prExtend},                 // Mc   [3] TAMIL VOWEL SIGN E..TAMIL VOWEL SIGN AI
-	{0x0BCA, 0x0BCC, prExtend},                 // Mc   [3] TAMIL VOWEL SIGN O..TAMIL VOWEL SIGN AU
-	{0x0BCD, 0x0BCD, prExtend},                 // Mn       TAMIL SIGN VIRAMA
-	{0x0BD0, 0x0BD0, prALetter},                // Lo       TAMIL OM
-	{0x0BD7, 0x0BD7, prExtend},                 // Mc       TAMIL AU LENGTH MARK
-	{0x0BE6, 0x0BEF, prNumeric},                // Nd  [10] TAMIL DIGIT ZERO..TAMIL DIGIT NINE
-	{0x0C00, 0x0C00, prExtend},                 // Mn       TELUGU SIGN COMBINING CANDRABINDU ABOVE
-	{0x0C01, 0x0C03, prExtend},                 // Mc   [3] TELUGU SIGN CANDRABINDU..TELUGU SIGN VISARGA
-	{0x0C04, 0x0C04, prExtend},                 // Mn       TELUGU SIGN COMBINING ANUSVARA ABOVE
-	{0x0C05, 0x0C0C, prALetter},                // Lo   [8] TELUGU LETTER A..TELUGU LETTER VOCALIC L
-	{0x0C0E, 0x0C10, prALetter},                // Lo   [3] TELUGU LETTER E..TELUGU LETTER AI
-	{0x0C12, 0x0C28, prALetter},                // Lo  [23] TELUGU LETTER O..TELUGU LETTER NA
-	{0x0C2A, 0x0C39, prALetter},                // Lo  [16] TELUGU LETTER PA..TELUGU LETTER HA
-	{0x0C3C, 0x0C3C, prExtend},                 // Mn       TELUGU SIGN NUKTA
-	{0x0C3D, 0x0C3D, prALetter},                // Lo       TELUGU SIGN AVAGRAHA
-	{0x0C3E, 0x0C40, prExtend},                 // Mn   [3] TELUGU VOWEL SIGN AA..TELUGU VOWEL SIGN II
-	{0x0C41, 0x0C44, prExtend},                 // Mc   [4] TELUGU VOWEL SIGN U..TELUGU VOWEL SIGN VOCALIC RR
-	{0x0C46, 0x0C48, prExtend},                 // Mn   [3] TELUGU VOWEL SIGN E..TELUGU VOWEL SIGN AI
-	{0x0C4A, 0x0C4D, prExtend},                 // Mn   [4] TELUGU VOWEL SIGN O..TELUGU SIGN VIRAMA
-	{0x0C55, 0x0C56, prExtend},                 // Mn   [2] TELUGU LENGTH MARK..TELUGU AI LENGTH MARK
-	{0x0C58, 0x0C5A, prALetter},                // Lo   [3] TELUGU LETTER TSA..TELUGU LETTER RRRA
-	{0x0C5D, 0x0C5D, prALetter},                // Lo       TELUGU LETTER NAKAARA POLLU
-	{0x0C60, 0x0C61, prALetter},                // Lo   [2] TELUGU LETTER VOCALIC RR..TELUGU LETTER VOCALIC LL
-	{0x0C62, 0x0C63, prExtend},                 // Mn   [2] TELUGU VOWEL SIGN VOCALIC L..TELUGU VOWEL SIGN VOCALIC LL
-	{0x0C66, 0x0C6F, prNumeric},                // Nd  [10] TELUGU DIGIT ZERO..TELUGU DIGIT NINE
-	{0x0C80, 0x0C80, prALetter},                // Lo       KANNADA SIGN SPACING CANDRABINDU
-	{0x0C81, 0x0C81, prExtend},                 // Mn       KANNADA SIGN CANDRABINDU
-	{0x0C82, 0x0C83, prExtend},                 // Mc   [2] KANNADA SIGN ANUSVARA..KANNADA SIGN VISARGA
-	{0x0C85, 0x0C8C, prALetter},                // Lo   [8] KANNADA LETTER A..KANNADA LETTER VOCALIC L
-	{0x0C8E, 0x0C90, prALetter},                // Lo   [3] KANNADA LETTER E..KANNADA LETTER AI
-	{0x0C92, 0x0CA8, prALetter},                // Lo  [23] KANNADA LETTER O..KANNADA LETTER NA
-	{0x0CAA, 0x0CB3, prALetter},                // Lo  [10] KANNADA LETTER PA..KANNADA LETTER LLA
-	{0x0CB5, 0x0CB9, prALetter},                // Lo   [5] KANNADA LETTER VA..KANNADA LETTER HA
-	{0x0CBC, 0x0CBC, prExtend},                 // Mn       KANNADA SIGN NUKTA
-	{0x0CBD, 0x0CBD, prALetter},                // Lo       KANNADA SIGN AVAGRAHA
-	{0x0CBE, 0x0CBE, prExtend},                 // Mc       KANNADA VOWEL SIGN AA
-	{0x0CBF, 0x0CBF, prExtend},                 // Mn       KANNADA VOWEL SIGN I
-	{0x0CC0, 0x0CC4, prExtend},                 // Mc   [5] KANNADA VOWEL SIGN II..KANNADA VOWEL SIGN VOCALIC RR
-	{0x0CC6, 0x0CC6, prExtend},                 // Mn       KANNADA VOWEL SIGN E
-	{0x0CC7, 0x0CC8, prExtend},                 // Mc   [2] KANNADA VOWEL SIGN EE..KANNADA VOWEL SIGN AI
-	{0x0CCA, 0x0CCB, prExtend},                 // Mc   [2] KANNADA VOWEL SIGN O..KANNADA VOWEL SIGN OO
-	{0x0CCC, 0x0CCD, prExtend},                 // Mn   [2] KANNADA VOWEL SIGN AU..KANNADA SIGN VIRAMA
-	{0x0CD5, 0x0CD6, prExtend},                 // Mc   [2] KANNADA LENGTH MARK..KANNADA AI LENGTH MARK
-	{0x0CDD, 0x0CDE, prALetter},                // Lo   [2] KANNADA LETTER NAKAARA POLLU..KANNADA LETTER FA
-	{0x0CE0, 0x0CE1, prALetter},                // Lo   [2] KANNADA LETTER VOCALIC RR..KANNADA LETTER VOCALIC LL
-	{0x0CE2, 0x0CE3, prExtend},                 // Mn   [2] KANNADA VOWEL SIGN VOCALIC L..KANNADA VOWEL SIGN VOCALIC LL
-	{0x0CE6, 0x0CEF, prNumeric},                // Nd  [10] KANNADA DIGIT ZERO..KANNADA DIGIT NINE
-	{0x0CF1, 0x0CF2, prALetter},                // Lo   [2] KANNADA SIGN JIHVAMULIYA..KANNADA SIGN UPADHMANIYA
-	{0x0CF3, 0x0CF3, prExtend},                 // Mc       KANNADA SIGN COMBINING ANUSVARA ABOVE RIGHT
-	{0x0D00, 0x0D01, prExtend},                 // Mn   [2] MALAYALAM SIGN COMBINING ANUSVARA ABOVE..MALAYALAM SIGN CANDRABINDU
-	{0x0D02, 0x0D03, prExtend},                 // Mc   [2] MALAYALAM SIGN ANUSVARA..MALAYALAM SIGN VISARGA
-	{0x0D04, 0x0D0C, prALetter},                // Lo   [9] MALAYALAM LETTER VEDIC ANUSVARA..MALAYALAM LETTER VOCALIC L
-	{0x0D0E, 0x0D10, prALetter},                // Lo   [3] MALAYALAM LETTER E..MALAYALAM LETTER AI
-	{0x0D12, 0x0D3A, prALetter},                // Lo  [41] MALAYALAM LETTER O..MALAYALAM LETTER TTTA
-	{0x0D3B, 0x0D3C, prExtend},                 // Mn   [2] MALAYALAM SIGN VERTICAL BAR VIRAMA..MALAYALAM SIGN CIRCULAR VIRAMA
-	{0x0D3D, 0x0D3D, prALetter},                // Lo       MALAYALAM SIGN AVAGRAHA
-	{0x0D3E, 0x0D40, prExtend},                 // Mc   [3] MALAYALAM VOWEL SIGN AA..MALAYALAM VOWEL SIGN II
-	{0x0D41, 0x0D44, prExtend},                 // Mn   [4] MALAYALAM VOWEL SIGN U..MALAYALAM VOWEL SIGN VOCALIC RR
-	{0x0D46, 0x0D48, prExtend},                 // Mc   [3] MALAYALAM VOWEL SIGN E..MALAYALAM VOWEL SIGN AI
-	{0x0D4A, 0x0D4C, prExtend},                 // Mc   [3] MALAYALAM VOWEL SIGN O..MALAYALAM VOWEL SIGN AU
-	{0x0D4D, 0x0D4D, prExtend},                 // Mn       MALAYALAM SIGN VIRAMA
-	{0x0D4E, 0x0D4E, prALetter},                // Lo       MALAYALAM LETTER DOT REPH
-	{0x0D54, 0x0D56, prALetter},                // Lo   [3] MALAYALAM LETTER CHILLU M..MALAYALAM LETTER CHILLU LLL
-	{0x0D57, 0x0D57, prExtend},                 // Mc       MALAYALAM AU LENGTH MARK
-	{0x0D5F, 0x0D61, prALetter},                // Lo   [3] MALAYALAM LETTER ARCHAIC II..MALAYALAM LETTER VOCALIC LL
-	{0x0D62, 0x0D63, prExtend},                 // Mn   [2] MALAYALAM VOWEL SIGN VOCALIC L..MALAYALAM VOWEL SIGN VOCALIC LL
-	{0x0D66, 0x0D6F, prNumeric},                // Nd  [10] MALAYALAM DIGIT ZERO..MALAYALAM DIGIT NINE
-	{0x0D7A, 0x0D7F, prALetter},                // Lo   [6] MALAYALAM LETTER CHILLU NN..MALAYALAM LETTER CHILLU K
-	{0x0D81, 0x0D81, prExtend},                 // Mn       SINHALA SIGN CANDRABINDU
-	{0x0D82, 0x0D83, prExtend},                 // Mc   [2] SINHALA SIGN ANUSVARAYA..SINHALA SIGN VISARGAYA
-	{0x0D85, 0x0D96, prALetter},                // Lo  [18] SINHALA LETTER AYANNA..SINHALA LETTER AUYANNA
-	{0x0D9A, 0x0DB1, prALetter},                // Lo  [24] SINHALA LETTER ALPAPRAANA KAYANNA..SINHALA LETTER DANTAJA NAYANNA
-	{0x0DB3, 0x0DBB, prALetter},                // Lo   [9] SINHALA LETTER SANYAKA DAYANNA..SINHALA LETTER RAYANNA
-	{0x0DBD, 0x0DBD, prALetter},                // Lo       SINHALA LETTER DANTAJA LAYANNA
-	{0x0DC0, 0x0DC6, prALetter},                // Lo   [7] SINHALA LETTER VAYANNA..SINHALA LETTER FAYANNA
-	{0x0DCA, 0x0DCA, prExtend},                 // Mn       SINHALA SIGN AL-LAKUNA
-	{0x0DCF, 0x0DD1, prExtend},                 // Mc   [3] SINHALA VOWEL SIGN AELA-PILLA..SINHALA VOWEL SIGN DIGA AEDA-PILLA
-	{0x0DD2, 0x0DD4, prExtend},                 // Mn   [3] SINHALA VOWEL SIGN KETTI IS-PILLA..SINHALA VOWEL SIGN KETTI PAA-PILLA
-	{0x0DD6, 0x0DD6, prExtend},                 // Mn       SINHALA VOWEL SIGN DIGA PAA-PILLA
-	{0x0DD8, 0x0DDF, prExtend},                 // Mc   [8] SINHALA VOWEL SIGN GAETTA-PILLA..SINHALA VOWEL SIGN GAYANUKITTA
-	{0x0DE6, 0x0DEF, prNumeric},                // Nd  [10] SINHALA LITH DIGIT ZERO..SINHALA LITH DIGIT NINE
-	{0x0DF2, 0x0DF3, prExtend},                 // Mc   [2] SINHALA VOWEL SIGN DIGA GAETTA-PILLA..SINHALA VOWEL SIGN DIGA GAYANUKITTA
-	{0x0E31, 0x0E31, prExtend},                 // Mn       THAI CHARACTER MAI HAN-AKAT
-	{0x0E34, 0x0E3A, prExtend},                 // Mn   [7] THAI CHARACTER SARA I..THAI CHARACTER PHINTHU
-	{0x0E47, 0x0E4E, prExtend},                 // Mn   [8] THAI CHARACTER MAITAIKHU..THAI CHARACTER YAMAKKAN
-	{0x0E50, 0x0E59, prNumeric},                // Nd  [10] THAI DIGIT ZERO..THAI DIGIT NINE
-	{0x0EB1, 0x0EB1, prExtend},                 // Mn       LAO VOWEL SIGN MAI KAN
-	{0x0EB4, 0x0EBC, prExtend},                 // Mn   [9] LAO VOWEL SIGN I..LAO SEMIVOWEL SIGN LO
-	{0x0EC8, 0x0ECE, prExtend},                 // Mn   [7] LAO TONE MAI EK..LAO YAMAKKAN
-	{0x0ED0, 0x0ED9, prNumeric},                // Nd  [10] LAO DIGIT ZERO..LAO DIGIT NINE
-	{0x0F00, 0x0F00, prALetter},                // Lo       TIBETAN SYLLABLE OM
-	{0x0F18, 0x0F19, prExtend},                 // Mn   [2] TIBETAN ASTROLOGICAL SIGN -KHYUD PA..TIBETAN ASTROLOGICAL SIGN SDONG TSHUGS
-	{0x0F20, 0x0F29, prNumeric},                // Nd  [10] TIBETAN DIGIT ZERO..TIBETAN DIGIT NINE
-	{0x0F35, 0x0F35, prExtend},                 // Mn       TIBETAN MARK NGAS BZUNG NYI ZLA
-	{0x0F37, 0x0F37, prExtend},                 // Mn       TIBETAN MARK NGAS BZUNG SGOR RTAGS
-	{0x0F39, 0x0F39, prExtend},                 // Mn       TIBETAN MARK TSA -PHRU
-	{0x0F3E, 0x0F3F, prExtend},                 // Mc   [2] TIBETAN SIGN YAR TSHES..TIBETAN SIGN MAR TSHES
-	{0x0F40, 0x0F47, prALetter},                // Lo   [8] TIBETAN LETTER KA..TIBETAN LETTER JA
-	{0x0F49, 0x0F6C, prALetter},                // Lo  [36] TIBETAN LETTER NYA..TIBETAN LETTER RRA
-	{0x0F71, 0x0F7E, prExtend},                 // Mn  [14] TIBETAN VOWEL SIGN AA..TIBETAN SIGN RJES SU NGA RO
-	{0x0F7F, 0x0F7F, prExtend},                 // Mc       TIBETAN SIGN RNAM BCAD
-	{0x0F80, 0x0F84, prExtend},                 // Mn   [5] TIBETAN VOWEL SIGN REVERSED I..TIBETAN MARK HALANTA
-	{0x0F86, 0x0F87, prExtend},                 // Mn   [2] TIBETAN SIGN LCI RTAGS..TIBETAN SIGN YANG RTAGS
-	{0x0F88, 0x0F8C, prALetter},                // Lo   [5] TIBETAN SIGN LCE TSA CAN..TIBETAN SIGN INVERTED MCHU CAN
-	{0x0F8D, 0x0F97, prExtend},                 // Mn  [11] TIBETAN SUBJOINED SIGN LCE TSA CAN..TIBETAN SUBJOINED LETTER JA
-	{0x0F99, 0x0FBC, prExtend},                 // Mn  [36] TIBETAN SUBJOINED LETTER NYA..TIBETAN SUBJOINED LETTER FIXED-FORM RA
-	{0x0FC6, 0x0FC6, prExtend},                 // Mn       TIBETAN SYMBOL PADMA GDAN
-	{0x102B, 0x102C, prExtend},                 // Mc   [2] MYANMAR VOWEL SIGN TALL AA..MYANMAR VOWEL SIGN AA
-	{0x102D, 0x1030, prExtend},                 // Mn   [4] MYANMAR VOWEL SIGN I..MYANMAR VOWEL SIGN UU
-	{0x1031, 0x1031, prExtend},                 // Mc       MYANMAR VOWEL SIGN E
-	{0x1032, 0x1037, prExtend},                 // Mn   [6] MYANMAR VOWEL SIGN AI..MYANMAR SIGN DOT BELOW
-	{0x1038, 0x1038, prExtend},                 // Mc       MYANMAR SIGN VISARGA
-	{0x1039, 0x103A, prExtend},                 // Mn   [2] MYANMAR SIGN VIRAMA..MYANMAR SIGN ASAT
-	{0x103B, 0x103C, prExtend},                 // Mc   [2] MYANMAR CONSONANT SIGN MEDIAL YA..MYANMAR CONSONANT SIGN MEDIAL RA
-	{0x103D, 0x103E, prExtend},                 // Mn   [2] MYANMAR CONSONANT SIGN MEDIAL WA..MYANMAR CONSONANT SIGN MEDIAL HA
-	{0x1040, 0x1049, prNumeric},                // Nd  [10] MYANMAR DIGIT ZERO..MYANMAR DIGIT NINE
-	{0x1056, 0x1057, prExtend},                 // Mc   [2] MYANMAR VOWEL SIGN VOCALIC R..MYANMAR VOWEL SIGN VOCALIC RR
-	{0x1058, 0x1059, prExtend},                 // Mn   [2] MYANMAR VOWEL SIGN VOCALIC L..MYANMAR VOWEL SIGN VOCALIC LL
-	{0x105E, 0x1060, prExtend},                 // Mn   [3] MYANMAR CONSONANT SIGN MON MEDIAL NA..MYANMAR CONSONANT SIGN MON MEDIAL LA
-	{0x1062, 0x1064, prExtend},                 // Mc   [3] MYANMAR VOWEL SIGN SGAW KAREN EU..MYANMAR TONE MARK SGAW KAREN KE PHO
-	{0x1067, 0x106D, prExtend},                 // Mc   [7] MYANMAR VOWEL SIGN WESTERN PWO KAREN EU..MYANMAR SIGN WESTERN PWO KAREN TONE-5
-	{0x1071, 0x1074, prExtend},                 // Mn   [4] MYANMAR VOWEL SIGN GEBA KAREN I..MYANMAR VOWEL SIGN KAYAH EE
-	{0x1082, 0x1082, prExtend},                 // Mn       MYANMAR CONSONANT SIGN SHAN MEDIAL WA
-	{0x1083, 0x1084, prExtend},                 // Mc   [2] MYANMAR VOWEL SIGN SHAN AA..MYANMAR VOWEL SIGN SHAN E
-	{0x1085, 0x1086, prExtend},                 // Mn   [2] MYANMAR VOWEL SIGN SHAN E ABOVE..MYANMAR VOWEL SIGN SHAN FINAL Y
-	{0x1087, 0x108C, prExtend},                 // Mc   [6] MYANMAR SIGN SHAN TONE-2..MYANMAR SIGN SHAN COUNCIL TONE-3
-	{0x108D, 0x108D, prExtend},                 // Mn       MYANMAR SIGN SHAN COUNCIL EMPHATIC TONE
-	{0x108F, 0x108F, prExtend},                 // Mc       MYANMAR SIGN RUMAI PALAUNG TONE-5
-	{0x1090, 0x1099, prNumeric},                // Nd  [10] MYANMAR SHAN DIGIT ZERO..MYANMAR SHAN DIGIT NINE
-	{0x109A, 0x109C, prExtend},                 // Mc   [3] MYANMAR SIGN KHAMTI TONE-1..MYANMAR VOWEL SIGN AITON A
-	{0x109D, 0x109D, prExtend},                 // Mn       MYANMAR VOWEL SIGN AITON AI
-	{0x10A0, 0x10C5, prALetter},                // L&  [38] GEORGIAN CAPITAL LETTER AN..GEORGIAN CAPITAL LETTER HOE
-	{0x10C7, 0x10C7, prALetter},                // L&       GEORGIAN CAPITAL LETTER YN
-	{0x10CD, 0x10CD, prALetter},                // L&       GEORGIAN CAPITAL LETTER AEN
-	{0x10D0, 0x10FA, prALetter},                // L&  [43] GEORGIAN LETTER AN..GEORGIAN LETTER AIN
-	{0x10FC, 0x10FC, prALetter},                // Lm       MODIFIER LETTER GEORGIAN NAR
-	{0x10FD, 0x10FF, prALetter},                // L&   [3] GEORGIAN LETTER AEN..GEORGIAN LETTER LABIAL SIGN
-	{0x1100, 0x1248, prALetter},                // Lo [329] HANGUL CHOSEONG KIYEOK..ETHIOPIC SYLLABLE QWA
-	{0x124A, 0x124D, prALetter},                // Lo   [4] ETHIOPIC SYLLABLE QWI..ETHIOPIC SYLLABLE QWE
-	{0x1250, 0x1256, prALetter},                // Lo   [7] ETHIOPIC SYLLABLE QHA..ETHIOPIC SYLLABLE QHO
-	{0x1258, 0x1258, prALetter},                // Lo       ETHIOPIC SYLLABLE QHWA
-	{0x125A, 0x125D, prALetter},                // Lo   [4] ETHIOPIC SYLLABLE QHWI..ETHIOPIC SYLLABLE QHWE
-	{0x1260, 0x1288, prALetter},                // Lo  [41] ETHIOPIC SYLLABLE BA..ETHIOPIC SYLLABLE XWA
-	{0x128A, 0x128D, prALetter},                // Lo   [4] ETHIOPIC SYLLABLE XWI..ETHIOPIC SYLLABLE XWE
-	{0x1290, 0x12B0, prALetter},                // Lo  [33] ETHIOPIC SYLLABLE NA..ETHIOPIC SYLLABLE KWA
-	{0x12B2, 0x12B5, prALetter},                // Lo   [4] ETHIOPIC SYLLABLE KWI..ETHIOPIC SYLLABLE KWE
-	{0x12B8, 0x12BE, prALetter},                // Lo   [7] ETHIOPIC SYLLABLE KXA..ETHIOPIC SYLLABLE KXO
-	{0x12C0, 0x12C0, prALetter},                // Lo       ETHIOPIC SYLLABLE KXWA
-	{0x12C2, 0x12C5, prALetter},                // Lo   [4] ETHIOPIC SYLLABLE KXWI..ETHIOPIC SYLLABLE KXWE
-	{0x12C8, 0x12D6, prALetter},                // Lo  [15] ETHIOPIC SYLLABLE WA..ETHIOPIC SYLLABLE PHARYNGEAL O
-	{0x12D8, 0x1310, prALetter},                // Lo  [57] ETHIOPIC SYLLABLE ZA..ETHIOPIC SYLLABLE GWA
-	{0x1312, 0x1315, prALetter},                // Lo   [4] ETHIOPIC SYLLABLE GWI..ETHIOPIC SYLLABLE GWE
-	{0x1318, 0x135A, prALetter},                // Lo  [67] ETHIOPIC SYLLABLE GGA..ETHIOPIC SYLLABLE FYA
-	{0x135D, 0x135F, prExtend},                 // Mn   [3] ETHIOPIC COMBINING GEMINATION AND VOWEL LENGTH MARK..ETHIOPIC COMBINING GEMINATION MARK
-	{0x1380, 0x138F, prALetter},                // Lo  [16] ETHIOPIC SYLLABLE SEBATBEIT MWA..ETHIOPIC SYLLABLE PWE
-	{0x13A0, 0x13F5, prALetter},                // L&  [86] CHEROKEE LETTER A..CHEROKEE LETTER MV
-	{0x13F8, 0x13FD, prALetter},                // L&   [6] CHEROKEE SMALL LETTER YE..CHEROKEE SMALL LETTER MV
-	{0x1401, 0x166C, prALetter},                // Lo [620] CANADIAN SYLLABICS E..CANADIAN SYLLABICS CARRIER TTSA
-	{0x166F, 0x167F, prALetter},                // Lo  [17] CANADIAN SYLLABICS QAI..CANADIAN SYLLABICS BLACKFOOT W
-	{0x1680, 0x1680, prWSegSpace},              // Zs       OGHAM SPACE MARK
-	{0x1681, 0x169A, prALetter},                // Lo  [26] OGHAM LETTER BEITH..OGHAM LETTER PEITH
-	{0x16A0, 0x16EA, prALetter},                // Lo  [75] RUNIC LETTER FEHU FEOH FE F..RUNIC LETTER X
-	{0x16EE, 0x16F0, prALetter},                // Nl   [3] RUNIC ARLAUG SYMBOL..RUNIC BELGTHOR SYMBOL
-	{0x16F1, 0x16F8, prALetter},                // Lo   [8] RUNIC LETTER K..RUNIC LETTER FRANKS CASKET AESC
-	{0x1700, 0x1711, prALetter},                // Lo  [18] TAGALOG LETTER A..TAGALOG LETTER HA
-	{0x1712, 0x1714, prExtend},                 // Mn   [3] TAGALOG VOWEL SIGN I..TAGALOG SIGN VIRAMA
-	{0x1715, 0x1715, prExtend},                 // Mc       TAGALOG SIGN PAMUDPOD
-	{0x171F, 0x1731, prALetter},                // Lo  [19] TAGALOG LETTER ARCHAIC RA..HANUNOO LETTER HA
-	{0x1732, 0x1733, prExtend},                 // Mn   [2] HANUNOO VOWEL SIGN I..HANUNOO VOWEL SIGN U
-	{0x1734, 0x1734, prExtend},                 // Mc       HANUNOO SIGN PAMUDPOD
-	{0x1740, 0x1751, prALetter},                // Lo  [18] BUHID LETTER A..BUHID LETTER HA
-	{0x1752, 0x1753, prExtend},                 // Mn   [2] BUHID VOWEL SIGN I..BUHID VOWEL SIGN U
-	{0x1760, 0x176C, prALetter},                // Lo  [13] TAGBANWA LETTER A..TAGBANWA LETTER YA
-	{0x176E, 0x1770, prALetter},                // Lo   [3] TAGBANWA LETTER LA..TAGBANWA LETTER SA
-	{0x1772, 0x1773, prExtend},                 // Mn   [2] TAGBANWA VOWEL SIGN I..TAGBANWA VOWEL SIGN U
-	{0x17B4, 0x17B5, prExtend},                 // Mn   [2] KHMER VOWEL INHERENT AQ..KHMER VOWEL INHERENT AA
-	{0x17B6, 0x17B6, prExtend},                 // Mc       KHMER VOWEL SIGN AA
-	{0x17B7, 0x17BD, prExtend},                 // Mn   [7] KHMER VOWEL SIGN I..KHMER VOWEL SIGN UA
-	{0x17BE, 0x17C5, prExtend},                 // Mc   [8] KHMER VOWEL SIGN OE..KHMER VOWEL SIGN AU
-	{0x17C6, 0x17C6, prExtend},                 // Mn       KHMER SIGN NIKAHIT
-	{0x17C7, 0x17C8, prExtend},                 // Mc   [2] KHMER SIGN REAHMUK..KHMER SIGN YUUKALEAPINTU
-	{0x17C9, 0x17D3, prExtend},                 // Mn  [11] KHMER SIGN MUUSIKATOAN..KHMER SIGN BATHAMASAT
-	{0x17DD, 0x17DD, prExtend},                 // Mn       KHMER SIGN ATTHACAN
-	{0x17E0, 0x17E9, prNumeric},                // Nd  [10] KHMER DIGIT ZERO..KHMER DIGIT NINE
-	{0x180B, 0x180D, prExtend},                 // Mn   [3] MONGOLIAN FREE VARIATION SELECTOR ONE..MONGOLIAN FREE VARIATION SELECTOR THREE
-	{0x180E, 0x180E, prFormat},                 // Cf       MONGOLIAN VOWEL SEPARATOR
-	{0x180F, 0x180F, prExtend},                 // Mn       MONGOLIAN FREE VARIATION SELECTOR FOUR
-	{0x1810, 0x1819, prNumeric},                // Nd  [10] MONGOLIAN DIGIT ZERO..MONGOLIAN DIGIT NINE
-	{0x1820, 0x1842, prALetter},                // Lo  [35] MONGOLIAN LETTER A..MONGOLIAN LETTER CHI
-	{0x1843, 0x1843, prALetter},                // Lm       MONGOLIAN LETTER TODO LONG VOWEL SIGN
-	{0x1844, 0x1878, prALetter},                // Lo  [53] MONGOLIAN LETTER TODO E..MONGOLIAN LETTER CHA WITH TWO DOTS
-	{0x1880, 0x1884, prALetter},                // Lo   [5] MONGOLIAN LETTER ALI GALI ANUSVARA ONE..MONGOLIAN LETTER ALI GALI INVERTED UBADAMA
-	{0x1885, 0x1886, prExtend},                 // Mn   [2] MONGOLIAN LETTER ALI GALI BALUDA..MONGOLIAN LETTER ALI GALI THREE BALUDA
-	{0x1887, 0x18A8, prALetter},                // Lo  [34] MONGOLIAN LETTER ALI GALI A..MONGOLIAN LETTER MANCHU ALI GALI BHA
-	{0x18A9, 0x18A9, prExtend},                 // Mn       MONGOLIAN LETTER ALI GALI DAGALGA
-	{0x18AA, 0x18AA, prALetter},                // Lo       MONGOLIAN LETTER MANCHU ALI GALI LHA
-	{0x18B0, 0x18F5, prALetter},                // Lo  [70] CANADIAN SYLLABICS OY..CANADIAN SYLLABICS CARRIER DENTAL S
-	{0x1900, 0x191E, prALetter},                // Lo  [31] LIMBU VOWEL-CARRIER LETTER..LIMBU LETTER TRA
-	{0x1920, 0x1922, prExtend},                 // Mn   [3] LIMBU VOWEL SIGN A..LIMBU VOWEL SIGN U
-	{0x1923, 0x1926, prExtend},                 // Mc   [4] LIMBU VOWEL SIGN EE..LIMBU VOWEL SIGN AU
-	{0x1927, 0x1928, prExtend},                 // Mn   [2] LIMBU VOWEL SIGN E..LIMBU VOWEL SIGN O
-	{0x1929, 0x192B, prExtend},                 // Mc   [3] LIMBU SUBJOINED LETTER YA..LIMBU SUBJOINED LETTER WA
-	{0x1930, 0x1931, prExtend},                 // Mc   [2] LIMBU SMALL LETTER KA..LIMBU SMALL LETTER NGA
-	{0x1932, 0x1932, prExtend},                 // Mn       LIMBU SMALL LETTER ANUSVARA
-	{0x1933, 0x1938, prExtend},                 // Mc   [6] LIMBU SMALL LETTER TA..LIMBU SMALL LETTER LA
-	{0x1939, 0x193B, prExtend},                 // Mn   [3] LIMBU SIGN MUKPHRENG..LIMBU SIGN SA-I
-	{0x1946, 0x194F, prNumeric},                // Nd  [10] LIMBU DIGIT ZERO..LIMBU DIGIT NINE
-	{0x19D0, 0x19D9, prNumeric},                // Nd  [10] NEW TAI LUE DIGIT ZERO..NEW TAI LUE DIGIT NINE
-	{0x1A00, 0x1A16, prALetter},                // Lo  [23] BUGINESE LETTER KA..BUGINESE LETTER HA
-	{0x1A17, 0x1A18, prExtend},                 // Mn   [2] BUGINESE VOWEL SIGN I..BUGINESE VOWEL SIGN U
-	{0x1A19, 0x1A1A, prExtend},                 // Mc   [2] BUGINESE VOWEL SIGN E..BUGINESE VOWEL SIGN O
-	{0x1A1B, 0x1A1B, prExtend},                 // Mn       BUGINESE VOWEL SIGN AE
-	{0x1A55, 0x1A55, prExtend},                 // Mc       TAI THAM CONSONANT SIGN MEDIAL RA
-	{0x1A56, 0x1A56, prExtend},                 // Mn       TAI THAM CONSONANT SIGN MEDIAL LA
-	{0x1A57, 0x1A57, prExtend},                 // Mc       TAI THAM CONSONANT SIGN LA TANG LAI
-	{0x1A58, 0x1A5E, prExtend},                 // Mn   [7] TAI THAM SIGN MAI KANG LAI..TAI THAM CONSONANT SIGN SA
-	{0x1A60, 0x1A60, prExtend},                 // Mn       TAI THAM SIGN SAKOT
-	{0x1A61, 0x1A61, prExtend},                 // Mc       TAI THAM VOWEL SIGN A
-	{0x1A62, 0x1A62, prExtend},                 // Mn       TAI THAM VOWEL SIGN MAI SAT
-	{0x1A63, 0x1A64, prExtend},                 // Mc   [2] TAI THAM VOWEL SIGN AA..TAI THAM VOWEL SIGN TALL AA
-	{0x1A65, 0x1A6C, prExtend},                 // Mn   [8] TAI THAM VOWEL SIGN I..TAI THAM VOWEL SIGN OA BELOW
-	{0x1A6D, 0x1A72, prExtend},                 // Mc   [6] TAI THAM VOWEL SIGN OY..TAI THAM VOWEL SIGN THAM AI
-	{0x1A73, 0x1A7C, prExtend},                 // Mn  [10] TAI THAM VOWEL SIGN OA ABOVE..TAI THAM SIGN KHUEN-LUE KARAN
-	{0x1A7F, 0x1A7F, prExtend},                 // Mn       TAI THAM COMBINING CRYPTOGRAMMIC DOT
-	{0x1A80, 0x1A89, prNumeric},                // Nd  [10] TAI THAM HORA DIGIT ZERO..TAI THAM HORA DIGIT NINE
-	{0x1A90, 0x1A99, prNumeric},                // Nd  [10] TAI THAM THAM DIGIT ZERO..TAI THAM THAM DIGIT NINE
-	{0x1AB0, 0x1ABD, prExtend},                 // Mn  [14] COMBINING DOUBLED CIRCUMFLEX ACCENT..COMBINING PARENTHE
 @@END

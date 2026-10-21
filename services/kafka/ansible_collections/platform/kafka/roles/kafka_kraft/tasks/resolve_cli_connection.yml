@@ -2,10 +2,12 @@
 - name: Select Kafka CLI listener by semantic purpose
   ansible.builtin.set_fact:
     _platform_kafka_cli_listener_matches: >-
-      {{ kafka_cli_member.listener_endpoints
-         | selectattr('purpose', 'equalto', kafka_cli_purpose)
-         | rejectattr('security_protocol', 'equalto', 'SASL_SSL')
-         | list }}
+      {{ (kafka_cli_member.listener_endpoints
+          | selectattr('security_protocol', 'equalto', 'SASL_SSL') | list)
+         if kafka_cli_purpose == 'admin' else
+         (kafka_cli_member.listener_endpoints
+          | selectattr('purpose', 'equalto', kafka_cli_purpose)
+          | rejectattr('security_protocol', 'equalto', 'SASL_SSL') | list) }}
   changed_when: false
 
 - name: Require one Kafka CLI listener for the requested purpose
@@ -34,7 +36,7 @@
   ansible.builtin.include_tasks: resolve_tls_runtime.yml
   vars:
     kafka_tls_member: "{{ kafka_cli_member }}"
-  when: _platform_kafka_cli_connection.securityProtocol == 'SSL'
+  when: _platform_kafka_cli_connection.securityProtocol in ['SSL', 'SASL_SSL']
 
 - name: Add TLS projection to Kafka CLI connection without secret values
   ansible.builtin.set_fact:
@@ -48,4 +50,10 @@
            }
          }) }}
   changed_when: false
-  when: _platform_kafka_cli_connection.securityProtocol == 'SSL'
+  when: _platform_kafka_cli_connection.securityProtocol in ['SSL', 'SASL_SSL']
+
+- name: Bind the planned admin runtime SecretRef without copying its value
+  ansible.builtin.set_fact:
+    _platform_kafka_cli_connection: "{{ _platform_kafka_cli_connection | combine({'adminPasswordRef': platform_kafka_admin_credential.passwordSecretRef}) }}"
+  changed_when: false
+  when: kafka_cli_purpose == 'admin'

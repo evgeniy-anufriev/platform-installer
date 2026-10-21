@@ -5,24 +5,24 @@
     application_kafka_acl_operations: []
   changed_when: false
 
-- name: List current ACLs for this resource and principal
-  ansible.builtin.command:
-    argv: "{{ [application_topic_cli_directory ~ '/bin/kafka-acls.sh', '--bootstrap-server', application_topic_candidate.address ~ ':' ~ application_topic_candidate.port, '--command-config', application_kafka_private.path ~ '/admin.properties', '--list', '--principal', 'User:' ~ application_kafka_account.name] + application_kafka_acl_args }}"
-  register: application_kafka_acl_actual
+- name: Select only this exact resource from the principal ACL inventory
+  ansible.builtin.set_fact:
+    application_kafka_acl_actual:
+      stdout: "{{ application_kafka_acl_inventory.stdout | regex_findall(application_kafka_acl_block_pattern) | join('\n') }}"
+  vars:
+    application_kafka_acl_resource: "{{ 'ResourcePattern(resourceType=' ~ (application_kafka_grant.resourceType | replace('-', '_') | upper) ~ ', name=' ~ application_kafka_grant.name ~ ', patternType=' ~ (application_kafka_grant.patternType | upper) ~ ')' }}"
+    application_kafka_acl_block_pattern: '(?ms)^Current ACLs for resource \x60{{ application_kafka_acl_resource | regex_escape }}\x60:[ \t]*\r?\n(.*?)(?=^Current ACLs for resource |\Z)'
   changed_when: false
-  failed_when: false
   no_log: true
-
-- name: Require readable ACL state
-  ansible.builtin.assert:
-    that: application_kafka_acl_actual.rc == 0
-    fail_msg: APPLICATION_KAFKA_ACL_READ_FAILED
 
 - name: Select missing exact ALLOW operations with wildcard host
   ansible.builtin.set_fact:
     application_kafka_acl_operations: "{{ application_kafka_acl_operations + ['--operation', item] }}"
   loop: "{{ application_kafka_grant.operations }}"
-  when: "('principal=User:' ~ application_kafka_account.name ~ ', host=*, operation=' ~ (item | regex_replace('([a-z])([A-Z])', '\\1_\\2') | upper) ~ ', permissionType=ALLOW') not in application_kafka_acl_actual.stdout"
+  when: >-
+    ('principal=User:' ~ application_kafka_account.name ~ ', host=*, operation=' ~
+    (item | regex_replace('([a-z])([A-Z])', '\\1_\\2') | upper) ~
+    ', permissionType=ALLOW') not in application_kafka_acl_actual.stdout
   changed_when: false
 
 - name: Require existing and Verify accounts to already have the requested ACLs

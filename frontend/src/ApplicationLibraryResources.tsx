@@ -14,6 +14,7 @@ export function ApplicationLibraryResources({
   clickhouseDefaults = {},
   redisDefaults = {},
   resolvedResources = {},
+  showAddActions = true,
 }: {
   resources: ObjectValue;
   bindings: ObjectValue;
@@ -27,6 +28,7 @@ export function ApplicationLibraryResources({
   clickhouseDefaults?: ObjectValue;
   redisDefaults?: ObjectValue;
   resolvedResources?: ObjectValue;
+  showAddActions?: boolean;
 }) {
   const [edit, setEdit] = useState<string | null>(null);
   const [name, setName] = useState("");
@@ -34,7 +36,6 @@ export function ApplicationLibraryResources({
   const [binding, setBinding] = useState("");
   const [mode, setMode] = useState("managed");
   const [error, setError] = useState("");
-  const [page, setPage] = useState(0);
   const [partitions, setPartitions] = useState("");
   const [replicationFactor, setReplicationFactor] = useState("");
   const [minISR, setMinISR] = useState("");
@@ -53,12 +54,6 @@ export function ApplicationLibraryResources({
     "redis.key": redisDefaults,
   };
   const hasDefault = Object.hasOwn(defaultsByKind[kind] ?? {}, edit ?? "");
-  const allIds = Object.keys(resources);
-  const currentPage = Math.min(
-    page,
-    Math.max(0, Math.ceil(allIds.length / 2) - 1),
-  );
-  const visible = new Set(allIds.slice(currentPage * 2, currentPage * 2 + 2));
   const groups = new Map<string, string[]>();
   for (const key of Object.keys(bindings)) {
     const deployment = String(objectValue(bindings[key]).deploymentRef ?? key);
@@ -106,152 +101,142 @@ export function ApplicationLibraryResources({
     <section className="application-library-resources">
       <div className="row">
         <h3>Общие ресурсы</h3>
-        <button disabled={disabled} onClick={() => open("")}>
-          Добавить БД
-        </button>
-        {compatibleBindings("kafka.topic").length > 0 && (
-          <button disabled={disabled} onClick={() => open("", "kafka.topic")}>
-            Добавить топик
-          </button>
+        {showAddActions && (
+          <>
+            <button disabled={disabled} onClick={() => open("")}>
+              Добавить БД
+            </button>
+            {compatibleBindings("kafka.topic").length > 0 && (
+              <button
+                disabled={disabled}
+                onClick={() => open("", "kafka.topic")}
+              >
+                Добавить топик
+              </button>
+            )}
+          </>
         )}
       </div>
-      {compatibleBindings("redis.key").length > 0 && (
-        <button disabled={disabled} onClick={() => open("", "redis.key")}>
-          Добавить ключ Redis
-        </button>
-      )}
-      {Object.entries(defaultsByKind).flatMap(([resourceKind, defaults]) =>
-        Object.keys(defaults)
-          .filter((id) => !Object.hasOwn(resources, id))
-          .map((id) => (
-            <button
-              key={resourceKind + id}
-              disabled={disabled}
-              onClick={() => open(id, resourceKind)}
-            >
-              Добавить из defaults · {id}
+      {showAddActions && (
+        <>
+          {compatibleBindings("redis.key").length > 0 && (
+            <button disabled={disabled} onClick={() => open("", "redis.key")}>
+              Добавить ключ Redis
             </button>
-          )),
+          )}
+        </>
       )}
+      {showAddActions &&
+        Object.entries(defaultsByKind).flatMap(([resourceKind, defaults]) =>
+          Object.keys(defaults)
+            .filter((id) => !Object.hasOwn(resources, id))
+            .map((id) => (
+              <button
+                key={resourceKind + id}
+                disabled={disabled}
+                onClick={() => open(id, resourceKind)}
+              >
+                Добавить из defaults · {id}
+              </button>
+            )),
+        )}
       <p className="muted">
         Общие для приложений библиотеки. Удаление записи и изменение имени не
         удаляют и не переименовывают установленный ресурс. Ссылки проверяет Core
         при проверке проекта.
       </p>
-      <table>
-        <thead>
-          <tr>
-            <th>Ресурс</th>
-            <th>Тип</th>
-            <th>Имя</th>
-            <th>Действия</th>
-          </tr>
-        </thead>
-        <tbody>
-          {[...groups]
-            .map(([deployment, keys]): [string, string[]] => [
-              deployment,
-              keys.filter((key) => visible.has(key)),
-            ])
-            .filter(([, keys]) => keys.length)
-            .map(([deployment, keys]) => (
-              <Group key={deployment} title={deployment}>
-                {keys.map((key) => {
-                  const row = objectValue(resources[key]);
-                  return (
-                    <tr key={key}>
-                      <td>{key}</td>
-                      <td>
-                        {(
-                          {
-                            "postgresql.database": "PostgreSQL · БД",
-                            "postgresql.schema": "PostgreSQL · Схема",
-                            "clickhouse.database": "ClickHouse · БД",
-                            "kafka.topic": "Kafka · Топик",
-                            "redis.key": "Redis · Ключ",
-                          } as Record<string, string>
-                        )[String(row.kind)] ?? String(row.kind)}
-                      </td>
-                      <td>
-                        {String(
-                          objectValue(resolvedTopics[key]).name ??
-                            objectValue(
-                              objectValue(resolvedResources[key]).parameters,
-                            ).name ??
-                            objectValue(row.parameters).name ??
-                            "—",
-                        )}
-                        {row.kind === "kafka.topic" && (
-                          <small>
-                            {resolvedTopics[key]
-                              ? `Core: partitions=${String(objectValue(resolvedTopics[key]).partitions)}, RF=${String(objectValue(resolvedTopics[key]).replicationFactor)}, minISR=${String(objectValue(objectValue(resolvedTopics[key]).config)["min.insync.replicas"])}`
-                              : "Параметры Core ещё не рассчитаны"}
-                            {objectValue(resolvedTopics[key]).minISRWarning ===
-                              true && " · minISR выше RF"}
-                          </small>
-                        )}
-                      </td>
-                      <td>
-                        <button
-                          className="outline"
-                          disabled={disabled}
-                          onClick={() => open(key)}
-                        >
-                          Настроить
-                        </button>{" "}
-                        <button
-                          className="outline"
-                          disabled={disabled}
-                          onClick={async () => {
-                            if (
-                              !window.confirm(
-                                `Удалить ресурс ${key} из проекта? Установленный ресурс сохранится. Связанные ссылки необходимо изменить отдельно.`,
+      <div
+        className="application-resources-scroll"
+        role="region"
+        aria-label="Ресурсы библиотеки"
+        tabIndex={0}
+      >
+        <table>
+          <thead>
+            <tr>
+              <th>Ресурс</th>
+              <th>Тип</th>
+              <th>Имя</th>
+              <th>Действия</th>
+            </tr>
+          </thead>
+          <tbody>
+            {[...groups]
+              .filter(([, keys]) => keys.length)
+              .map(([deployment, keys]) => (
+                <Group key={deployment} title={deployment}>
+                  {keys.map((key) => {
+                    const row = objectValue(resources[key]);
+                    return (
+                      <tr key={key}>
+                        <td>{key}</td>
+                        <td>
+                          {(
+                            {
+                              "postgresql.database": "PostgreSQL · БД",
+                              "postgresql.schema": "PostgreSQL · Схема",
+                              "clickhouse.database": "ClickHouse · БД",
+                              "kafka.topic": "Kafka · Топик",
+                              "redis.key": "Redis · Ключ",
+                            } as Record<string, string>
+                          )[String(row.kind)] ?? String(row.kind)}
+                        </td>
+                        <td>
+                          {String(
+                            objectValue(resolvedTopics[key]).name ??
+                              objectValue(
+                                objectValue(resolvedResources[key]).parameters,
+                              ).name ??
+                              objectValue(row.parameters).name ??
+                              "—",
+                          )}
+                          {row.kind === "kafka.topic" && (
+                            <small>
+                              {resolvedTopics[key]
+                                ? `Core: partitions=${String(objectValue(resolvedTopics[key]).partitions)}, RF=${String(objectValue(resolvedTopics[key]).replicationFactor)}, minISR=${String(objectValue(objectValue(resolvedTopics[key]).config)["min.insync.replicas"])}`
+                                : "Параметры Core ещё не рассчитаны"}
+                              {objectValue(resolvedTopics[key])
+                                .minISRWarning === true && " · minISR выше RF"}
+                            </small>
+                          )}
+                        </td>
+                        <td>
+                          <button
+                            className="outline"
+                            disabled={disabled}
+                            onClick={() => open(key)}
+                          >
+                            Настроить
+                          </button>{" "}
+                          <button
+                            className="outline"
+                            disabled={disabled}
+                            onClick={async () => {
+                              if (
+                                !window.confirm(
+                                  `Удалить ресурс ${key} из проекта? Установленный ресурс сохранится. Связанные ссылки необходимо изменить отдельно.`,
+                                )
                               )
-                            )
-                              return;
-                            const next = { ...resources };
-                            delete next[key];
-                            if (await onSave(next)) {
-                              if (edit === key) close();
-                            }
-                          }}
-                        >
-                          Удалить
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </Group>
-            ))}
-        </tbody>
-      </table>
-      {allIds.length > 2 && (
-        <div className="row" aria-label="Страницы ресурсов">
-          <button
-            className="outline"
-            disabled={currentPage === 0}
-            onClick={() => setPage(currentPage - 1)}
-          >
-            Назад
-          </button>
-          <span>
-            {currentPage + 1} / {Math.ceil(allIds.length / 2)}
-          </span>
-          <button
-            className="outline"
-            disabled={(currentPage + 1) * 2 >= allIds.length}
-            onClick={() => setPage(currentPage + 1)}
-          >
-            Далее
-          </button>
-        </div>
-      )}
-      {!Object.keys(resources).length && (
-        <p>
-          Ресурсы не заданы. Добавьте ресурс и выберите подключение библиотеки.
-        </p>
-      )}
+                                return;
+                              const next = { ...resources };
+                              delete next[key];
+                              if (await onSave(next)) {
+                                if (edit === key) close();
+                              }
+                            }}
+                          >
+                            Удалить
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </Group>
+              ))}
+          </tbody>
+        </table>
+      </div>
+      {!Object.keys(resources).length && <p>Ресурсы библиотеки не заданы.</p>}
       {edit !== null && (
         <form
           className="application-resource-form"

@@ -8,6 +8,110 @@ import {
 } from "./ApplicationCredentials";
 
 describe("application connection settings", () => {
+  it("displays the Core username but edits and saves only the authored source", async () => {
+    const save = vi.fn().mockResolvedValue(true);
+    const template = "{{ application_instance_id | replace('-', '_') }}";
+    render(
+      <ApplicationCredentials
+        defaults={{
+          accounts: {
+            postgres: {
+              mode: "existing",
+              credentials: {
+                username: { source: { kind: "literal", value: template } },
+              },
+            },
+          },
+        }}
+        authored={{ accounts: { postgres: { mode: "existing" } } }}
+        resolvedAccounts={{
+          postgres: {
+            credentials: {
+              username: { source: { kind: "literal", value: "gateway_cspa" } },
+            },
+          },
+        }}
+        connections={{}}
+        bindings={{}}
+        disabled={false}
+        onSave={save}
+        onDirtyChange={vi.fn()}
+      />,
+    );
+    const input = screen.getByRole("textbox", { name: "Имя пользователя" });
+    expect((input as HTMLInputElement).value).toBe("gateway_cspa");
+    await userEvent.click(input);
+    expect((input as HTMLInputElement).value).toBe(template);
+    await userEvent.tab();
+    expect((input as HTMLInputElement).value).toBe("gateway_cspa");
+    expect(save).not.toHaveBeenCalled();
+    await userEvent.click(input);
+    await userEvent.clear(input);
+    await userEvent.type(input, "custom-user");
+    await userEvent.click(
+      screen.getByRole("button", { name: "В черновик" }),
+    );
+    expect(save).toHaveBeenCalledWith({
+      postgres: {
+        mode: "existing",
+        credentials: {
+          username: { source: { kind: "literal", value: "custom-user" } },
+        },
+      },
+    });
+  });
+  it("drops a resolved username when current Core evidence is removed", () => {
+    const props = {
+      label: "Имя пользователя",
+      source: {},
+      packageSource: {
+        kind: "literal",
+        value: "{{ application_instance_id }}",
+      },
+      allowLiteral: true,
+      disabled: false,
+      onSave: vi.fn(),
+      onReset: vi.fn(),
+      onDirtyChange: vi.fn(),
+    };
+    const view = render(
+      <CredentialSourceEditor {...props} resolvedLiteralValue="gateway-cspa" />,
+    );
+    expect((screen.getByRole("textbox") as HTMLInputElement).value).toBe(
+      "gateway-cspa",
+    );
+    view.rerender(<CredentialSourceEditor {...props} />);
+    expect((screen.getByRole("textbox") as HTMLInputElement).value).toBe(
+      "{{ application_instance_id }}",
+    );
+  });
+  it("creates a runtime reference automatically when switching the resource source", async () => {
+    const save = vi.fn().mockResolvedValue(true);
+    render(
+      <CredentialSourceEditor
+        label="Пароль"
+        source={{}}
+        packageSource={{ kind: "generated" }}
+        runtimeInput={<span>Ввод в строке ресурса</span>}
+        allowLiteral={false}
+        disabled={false}
+        onSave={save}
+        onReset={vi.fn()}
+        onDirtyChange={vi.fn()}
+      />,
+    );
+    await userEvent.selectOptions(
+      screen.getByLabelText("Источник"),
+      "runtime_secret_ref",
+    );
+    expect(screen.queryByLabelText(/имя ссылки/)).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "В черновик" }));
+    expect(save).toHaveBeenCalledWith({
+      kind: "runtime_secret_ref",
+      ref: expect.stringMatching(/^application-[a-f0-9-]{36}$/),
+    });
+    expect(Object.keys(save.mock.calls[0][0]).sort()).toEqual(["kind", "ref"]);
+  });
   it("resets only account management mode and preserves credentials and rights", async () => {
     const save = vi.fn().mockResolvedValue(true);
     const credentials = {

@@ -52,8 +52,10 @@
 
 - name: Verify SSL listeners with a real TLS handshake
   ansible.builtin.include_tasks: verify_ssl_listener.yml
-  loop: "{{ kafka_member.listeners | default({}) | dict2items | map(attribute='value') | selectattr('securityProtocol', 'in', ['SSL', 'SASL_SSL']) | rejectattr('purpose', 'equalto', 'controller') | list if 'controller' not in kafka_member.roles else kafka_member.listeners | default({}) | dict2items | map(attribute='value') | selectattr('securityProtocol', 'in', ['SSL', 'SASL_SSL']) | list }}"
+  vars:
+    kafka_ssl_listener: "{{ kafka_ssl_listener_entry.value | combine({'name': kafka_ssl_listener_entry.key}) }}"
+  loop: "{{ kafka_member.listeners | default({}) | dict2items | selectattr('value.securityProtocol', 'in', ['SSL', 'SASL_SSL']) | rejectattr('value.purpose', 'equalto', 'controller') | list if 'controller' not in kafka_member.roles else kafka_member.listeners | default({}) | dict2items | selectattr('value.securityProtocol', 'in', ['SSL', 'SASL_SSL']) | list }}"
   loop_control:
-    loop_var: kafka_ssl_listener
-    label: "{{ kafka_member.id }}:{{ kafka_ssl_listener.name | default('SSL') }}"
+    loop_var: kafka_ssl_listener_entry
+    label: "{{ kafka_member.id }}:{{ kafka_ssl_listener_entry.key }}"
   when: kafka_member.listeners | default({}) | length > 0

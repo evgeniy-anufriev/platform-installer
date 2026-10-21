@@ -275,7 +275,7 @@ platform_library_definition:
                 ack_alarm:
                     config:
                         cleanup.policy: delete
-                    name: sdku-ack-alarm
+                    name: ack-alarm-sdku
                     partitions: 1
                 alarms:
                     config:

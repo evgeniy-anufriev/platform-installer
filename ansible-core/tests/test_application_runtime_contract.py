@@ -112,6 +112,26 @@ class ApplicationRuntimeTests(unittest.TestCase):
         self.assertEqual(1, len(jobs))
         self.assertEqual('kafka.topic', jobs[0]['resources']['events']['kind'])
 
+    def test_runtime_preparation_accepts_projected_kafka_scram_account(self):
+        inputs = self.runtime_fixture()
+        instance = inputs[1]['applicationLibraries']['libraries']['sdku']['instances']['apigateway-sdku']
+        instance['credentialRequirements'] = {'kafka': {}}
+        instance['connections']['kafka'] = dict(serviceType='kafka', securityProtocol='SASL_SSL',
+                                                saslMechanism='SCRAM-SHA-512')
+        jobs = prepare_runtime(*inputs)
+        self.assertEqual(1, len(jobs))
+        self.assertEqual(inputs[2][0]['instanceId'], jobs[0]['instanceId'])
+
+    def test_runtime_preparation_still_rejects_unsupported_account_provider(self):
+        for service_type in ('vault', 'unsupported'):
+            with self.subTest(service_type=service_type):
+                inputs = self.runtime_fixture()
+                instance = inputs[1]['applicationLibraries']['libraries']['sdku']['instances']['apigateway-sdku']
+                instance['credentialRequirements'] = {'other': {}}
+                instance['connections']['other'] = dict(serviceType=service_type)
+                with self.assertRaisesRegex(ValueError, 'APPLICATION_RUNTIME_DEFERRED_FEATURE'):
+                    prepare_runtime(*inputs)
+
     def test_runtime_preparation_accepts_library_redis_name_references(self):
         inputs = self.runtime_fixture()
         resources = inputs[2][0]['resources']

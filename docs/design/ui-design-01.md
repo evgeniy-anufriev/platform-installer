@@ -219,6 +219,16 @@ the browser check; 1440x900 was rendered and visually inspected as well.
 Owner baseline: 1440 and 1024 CSS pixels are the primary desktop widths. Below
 1024 keep a minimum 1024-pixel layout with horizontal scrolling; do not add a
 smaller/mobile composition. This is the acceptance rule for subsequent UI work.
+Owner refinement (2026-10-21): each application secret username/password row
+stays on one line, including variable names, source controls and actions.
+Long variable names use ellipsis with full names on hover; multi-parameter
+sources use horizontal scrolling when needed. Inline secret status/shared-use
+messages use an accessible information indicator with the full tooltip.
+For a literal username, show the value projected by the current Core snapshot
+when the field is unfocused and unchanged. Focus opens the authored/package
+source for editing; leaving an unchanged field restores the Core value.
+Only the authored input enters draft/Review. Without current Core evidence,
+show the original source; React never evaluates Ansible/Jinja expressions.
 Production follow-up integrates the compact General layout and removes instance
 Ports/Connections tabs while retaining Parameters. Source provenance stays
 expandable and separate, with the existing per-side port writer/reset. Library
@@ -230,6 +240,43 @@ Owner follow-up merges instance Parameters into Startup: ENV and Configuration
 settings are distinct blocks using their existing environment/parameters writer
 settings. Configuration settings are hidden when both package and authored
 parameters are empty. The instance now has five tabs; library tabs are unchanged.
+
+Owner refinement (2026-10-21): Startup ENV uses one row per scalar:
+key | value | stage to draft | reset to default. Long keys use ellipsis with
+the complete key on hover. Type and inheritance information is available on
+hover over the value; there is no Advanced/manual-type/structure chooser for
+ENV. Existing input inference converts canonical finite safe numbers and
+true/false automatically; leading-zero identifiers, oversized numbers, IPs,
+versions and Ansible expressions stay strings. This is UI input conversion,
+not Ansible evaluation. The Add parameter button sits in the instance header
+beside Reset settings and is shown on Startup. It adds an ENV key through the
+existing environment override writer; draft/Review/Save/reset are unchanged.
+
+Owner follow-ups (2026-10-21): application Startup ENV retains package-declared
+defaults even when shared inheritance awaits Verify. Label these as source
+declarations; do not merge library precedence in React. With a fresh saved
+revision and selected placement, show Core placement.environment as the current
+value, including inherited keys. An unchanged, unfocused field shows Core;
+focus edits the existing source, and blur restores Core. Dirty/stale/draft
+contexts stop showing the projection as current. Only authored text enters
+Review/Save; preserved templates in Core remain preserved in the UI.
+Default values are available in key/value tooltips. Per-key library/application
+origin labels and a Core provenance extension were explicitly declined.
+
+The command/user/restart block uses three columns at both1440 and1024 widths.
+Library Common parameters ENV and application General Endpoint use the same
+compact key/value/draft/reset rows; nested Endpoint fields keep their hierarchy
+and also use compact rows. The library ENV Add parameter button is in its header.
+These are refinements of the existing editors and writers, not new contracts.
+
+Owner temporarily hides database/topic/Redis/from-default resource add actions
+in the library Resources and secrets screen. Existing configured resources and
+their edit/remove actions remain. The full selected list is grouped by deployment
+inside a vertically scrollable420px table with sticky headings; no pagination.
+resource_defaults describes parameter templates, not implicitly selected
+resources. Hiding add actions does not activate those templates or create new
+desired resources. The older HTML prototype does not show these refinements;
+the owner requests resolve that layout discrepancy.
 
 The production Secrets tab edits `overrides.provisioner.secret_bindings` through
 the existing writer. A row binds a process variable to an account's `username`
@@ -251,11 +298,46 @@ account per database. Add/Edit/Delete stages ordinary account settings; PG offer
 SELECT/INSERT/UPDATE/DELETE/CREATE, CH SELECT/INSERT. CREATE creates objects inside user schemas of the selected library-managed database; it does not grant database CREATE, ownership or membership. PG rights apply to all user schemas
 and existing/future objects for the owner and explicit creator roles. An explicit
 legacy-policy switch requires confirmation and Review; opening never broadens
-grants. Ownership is permitted: the UI states that removing DML does not remove
-owner authority. Redis/Sentinel use the existing structured commands/keys/channels
+grants. Ownership is permitted; removing DML does not remove owner authority.
+Owner refinement (2026-10-21) removes the verbose schema/CREATE/ownership help
+from the access block without changing these semantics.
+The database column and access selector display the current Core resource's
+database name (`parameters.name`), with authored name/reference as fallback
+when no current projection is available. Option values and saved databaseRef
+remain resource keys; displaying a name never rewrites the binding.
+Redis/Sentinel use the existing structured commands/keys/channels
 editor, preserving provider restrictions. Runtime input remains inline through
 the existing lease; no KV rename/new secret store is implied. Current evidence
 and outstanding gates are in the Secrets access journal, not this design section.
+
+Owner refinement (2026-10-21): Kafka accounts show an ACL table directly in
+Secrets, including topic references/names, consumer groups, matching pattern and
+operations. Other declared ACL resource types remain visible and are preserved.
+Use the current saved-revision Core credentialRequirements projection; without
+fresh evidence label the authored/package declarations as unresolved. Explicit
+override edits the existing account grants list through draft/Review/Save; reset
+removes only grants. Existing authored expressions remain editable as source.
+Starting an override from Core explicitly copies its effective list; projected
+values then become authored values. Core retains validation/provider authority.
+The table describes desired grants, not observed broker permissions. Removing a
+declaration does not revoke an already issued ACL. The HTML prototype has no
+Kafka ACL table; this owner-authorized production refinement extends its existing
+Redis/access layout without introducing new contract fields or execution flows.
+
+### Inline resource secret entry (2026-10-21)
+
+On the application instance Secrets tab, runtime credential rows accept the
+secret value directly. Existing references stay authored as before; selecting
+a new runtime source stages an automatic opaque reference through the existing
+writer. Values go only to the session Broker after Save and a fresh Core snapshot.
+Core snapshot credentialRequirements and descriptors provide the exact mapping;
+React never resolves templates. The lower instance-wide secret form is removed.
+The resource header displays deployment, service type and one aggregate presence
+chip: all required runtime values present / at least one missing / unavailable.
+The Save/Core prerequisite hint also appears in this header, not per field.
+Presence is read from Broker without exposing values or renewing TTL. Shared
+references warn that replacement affects all consumers. Separate existing
+Installation and registry flows keep their full-set API.
 
 ## 1. Product principle
 

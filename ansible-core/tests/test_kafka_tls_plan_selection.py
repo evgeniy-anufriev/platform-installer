@@ -44,8 +44,8 @@ class KafkaTLSPlanSelectionTests(unittest.TestCase):
                         platform_pki_secret_files:
                           runtime:pki-store-password: /run/secrets/pki-store-password
                         platform_pki_materialization_plans:
-                          - {id: proxy-plan, requestId: proxy-request, tlsProfileId: shared-tls, hostId: node1, targetDirectory: /pki/proxy, storePasswordSecretRef: 'runtime:pki-store-password'}
-                          - {id: kafka-plan, requestId: kafka-request, tlsProfileId: shared-tls, hostId: node1, targetDirectory: /pki/kafka, storePasswordSecretRef: 'runtime:pki-store-password'}
+                          - {id: proxy-plan, requestId: proxy-request, tlsProfileId: shared-tls, hostId: node1, targetDirectory: /pki/proxy, formats: [PEM, PKCS12_KEYSTORE, PKCS12_TRUSTSTORE], storePasswordSecretRef: 'runtime:pki-store-password'}
+                          - {id: kafka-plan, requestId: kafka-request, tlsProfileId: shared-tls, hostId: node1, targetDirectory: /pki/kafka, formats: [PEM, PKCS12_KEYSTORE, PKCS12_TRUSTSTORE], storePasswordSecretRef: 'runtime:pki-store-password'}
                         platform_pki_requests:
                           - id: proxy-request
                             usages: [serverAuth, clientAuth]

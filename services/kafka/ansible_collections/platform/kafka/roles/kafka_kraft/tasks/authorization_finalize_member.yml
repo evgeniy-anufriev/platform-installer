@@ -1,0 +1,41 @@
+---
+- name: Require this invocation's administrative readiness before revocation
+  ansible.builtin.assert:
+    that: kafka_authorization_admin_ready | default(false) | bool
+    fail_msg: KAFKA_ADMIN_NOT_READY_FOR_FINALIZATION
+
+- name: Finalize this member with admin as the only superuser
+  ansible.builtin.lineinfile:
+    path: "{{ kafka_authorization_member.config_directory }}/server.properties"
+    regexp: '^super\.users='
+    line: super.users=User:admin
+  no_log: true
+
+- name: Cross the final config write second before revocation restart
+  ansible.builtin.wait_for:
+    timeout: 1
+  changed_when: false
+
+- name: Restart this bootstrap member including an interrupted finalization
+  ansible.builtin.systemd:
+    name: "{{ kafka_authorization_member.systemd_unit_name }}"
+    state: restarted
+
+- name: Wait for this finalized member's listeners
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: "{{ item }}"
+    timeout: 120
+  loop: "{{ kafka_authorization_member.listener_ports }}"
+
+- name: Confirm that this process loaded admin-only superusers
+  ansible.builtin.include_tasks: authorization_confirm.yml
+
+- name: Authenticate admin and check quorum before revoking the next member
+  ansible.builtin.include_tasks:
+    file: verify_quorum.yml
+    apply:
+      delegate_to: "{{ (_platform_kafka_broker_instances | first).host }}"
+      become: true
+  vars:
+    kafka_quorum_diagnostic_member: "{{ _platform_kafka_broker_instances | first }}"

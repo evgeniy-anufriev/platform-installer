@@ -4,11 +4,13 @@
   vars:
     application_topic_must_exist: "{{ platform_kafka_application_phase == 'verify' or application_topic.mode == 'existing' }}"
 
+- name: Bind the creation decision before read-back updates observed state
+  ansible.builtin.set_fact:
+    application_topic_creation_required: "{{ platform_kafka_application_phase == 'apply' and application_topic.mode == 'managed' and application_topic_description.stdout | trim | length == 0 }}"
+  changed_when: false
+
 - name: Create the missing managed topic
-  when:
-    - platform_kafka_application_phase == 'apply'
-    - application_topic.mode == 'managed'
-    - application_topic_description.stdout | trim | length == 0
+  when: application_topic_creation_required | bool
   block:
     - name: Initialize explicit topic property arguments
       ansible.builtin.set_fact:
@@ -40,3 +42,4 @@
       ansible.builtin.include_tasks: application_topic_describe.yml
       vars:
         application_topic_must_exist: true
+        application_topic_readback: true

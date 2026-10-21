@@ -16,6 +16,22 @@ them from transient live broker availability. `platform_kafka_application_timeou
 defaults to 30000. Existing install-directory and startup-readiness variables apply.
 Only missing managed topics are created; matching topics are reused and drift
 fails without modification. No application subscription or ACL is implied.
+Metadata is read once for the exact declared topic-name regex; effective
+configurations (including broker defaults) are read once for the deployment and
+selected by exact topic name. Newly created topics get an individual read-back.
+SCRAM account hooks describe all user metadata and list all ACLs once per
+deployment invocation, then select the exact principal and resource
+type/name/pattern; only missing managed ALLOW grants are added. The standard
+Apply and explicit provider Verify use Core's existing deployment-level account
+jobs. Each account still authenticates separately with its own credentials.
+These read results live only within the invocation. Library Verify checks
+container/readiness/endpoint; explicit provider Verify remains available.
+The library provider stage invokes Kafka topic/account hooks only in Apply:
+metadata, credential authentication and ACL discovery run once before Vault
+credential publication and container startup. No preflight observation cache is
+used. Credential or principal conflicts therefore fail during Apply, possibly
+after library resources have been created. Direct preflight/verify role calls
+remain available and read fresh state.
 See the [portable topic contract](../../docs/project-contract.md#kafka-topic-resources).
 
 The delivery slices are:

@@ -10,6 +10,7 @@ export function ApplicationAccountAccess({
   serviceType,
   deployment,
   resources,
+  resolvedResources = {},
   bindings,
   account,
   inherited,
@@ -20,6 +21,7 @@ export function ApplicationAccountAccess({
   serviceType: string;
   deployment: string;
   resources: ObjectValue;
+  resolvedResources?: ObjectValue;
   bindings: ObjectValue;
   account: ObjectValue;
   inherited: ObjectValue;
@@ -34,6 +36,12 @@ export function ApplicationAccountAccess({
   const [error, setError] = useState("");
   const pg = serviceType === "postgresql",
     ch = serviceType === "clickhouse";
+  const databaseName = (ref: string) =>
+    String(
+      objectValue(objectValue(resolvedResources[ref]).parameters).name ??
+        objectValue(objectValue(resources[ref]).parameters).name ??
+        ref,
+    );
   const source = Object.hasOwn(account, pg ? "databaseAccess" : "grants")
     ? account
     : inherited;
@@ -123,17 +131,6 @@ export function ApplicationAccountAccess({
           ＋ Добавить доступ
         </button>
       </header>
-      <p className="muted">
-        Все пользовательские схемы и объекты БД, существующие и будущие.
-        {pg &&
-          " CREATE разрешает создавать объекты внутри схем этой БД. Будущие объекты: владелец библиотеки и указанные роли миграций; членство не заменяет SET ROLE."}
-      </p>
-      {pg && (
-        <p className="muted">
-          Снятие прав не меняет владельца объектов. Если эта УЗ владеет
-          объектами, её полномочия владельца сохраняются.
-        </p>
-      )}
       <table>
         <thead>
           <tr>
@@ -145,13 +142,7 @@ export function ApplicationAccountAccess({
         <tbody>
           {rows.map((row, i) => (
             <tr key={row.databaseRef}>
-              <td>
-                {String(
-                  objectValue(
-                    objectValue(resources[row.databaseRef]).parameters,
-                  ).name ?? row.databaseRef,
-                )}
-              </td>
+              <td title={row.databaseRef}>{databaseName(row.databaseRef)}</td>
               <td>
                 {row.privileges.join(" · ")}
                 {row.additionalCreatorRoles?.length ? (
@@ -205,11 +196,9 @@ export function ApplicationAccountAccess({
                       (row, i) => row.databaseRef === id && i !== edit,
                     ),
                 )
-                .map(([id, resource]) => (
+                .map(([id]) => (
                   <option key={id} value={id}>
-                    {String(
-                      objectValue(objectValue(resource).parameters).name ?? id,
-                    )}
+                    {databaseName(id)}
                   </option>
                 ))}
             </select>
@@ -327,30 +316,28 @@ export function ApplicationRedisAccess({
   return (
     <fieldset className="application-redis-access">
       <legend>ACL {sentinel ? "Sentinel" : "Redis"}</legend>
-      {["commands", "keys", "channels"].map(
-        (key) => (
-          <label key={key}>
+      {["commands", "keys", "channels"].map((key) => (
+        <label key={key}>
+          {
             {
-              {
-                commands: "Команды",
-                keys: "Шаблоны ключей",
-                channels: "Шаблоны каналов",
-              }[key]
-            }
-            <input
-              aria-label={`ACL ${key}`}
-              disabled={disabled}
-              value={fields[key]}
-              placeholder="Значения через запятую"
-              onChange={(event) => {
-                setFields({ ...fields, [key]: event.target.value });
-                setDirty(true);
-                onDirtyChange(true);
-              }}
-            />
-          </label>
-        ),
-      )}
+              commands: "Команды",
+              keys: "Шаблоны ключей",
+              channels: "Шаблоны каналов",
+            }[key]
+          }
+          <input
+            aria-label={`ACL ${key}`}
+            disabled={disabled}
+            value={fields[key]}
+            placeholder="Значения через запятую"
+            onChange={(event) => {
+              setFields({ ...fields, [key]: event.target.value });
+              setDirty(true);
+              onDirtyChange(true);
+            }}
+          />
+        </label>
+      ))}
       <p className="muted">
         Права задаются списком команд и шаблонов. Core проверит формат данных.
       </p>
@@ -358,15 +345,13 @@ export function ApplicationRedisAccess({
         disabled={disabled || !dirty || !fields.commands.trim()}
         onClick={() => {
           const next = Object.fromEntries(
-            ["commands", "keys", "channels"].map(
-              (key) => [
-                key,
-                fields[key]
-                  .split(",")
-                  .map((v) => v.trim())
-                  .filter(Boolean),
-              ],
-            ),
+            ["commands", "keys", "channels"].map((key) => [
+              key,
+              fields[key]
+                .split(",")
+                .map((v) => v.trim())
+                .filter(Boolean),
+            ]),
           );
           void onSave(next).then((ok) => {
             if (ok) {

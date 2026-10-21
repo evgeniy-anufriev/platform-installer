@@ -14,6 +14,9 @@
         operations: "{{ kafka_authorization_cluster_operations }}"
   changed_when: false
 
+- name: Read this compatibility principal's ACLs once before checking resources
+  ansible.builtin.include_tasks: application_acls_read.yml
+
 - name: Check or ensure each explicitly scoped compatibility resource
   ansible.builtin.include_tasks: application_acl.yml
   loop: "{{ kafka_authorization_grants }}"

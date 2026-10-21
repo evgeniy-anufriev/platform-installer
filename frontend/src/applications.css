@@ -78,6 +78,61 @@
   gap: 6px;
   margin: 14px 0;
 }
+.application-value-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+}
+.application-startup-policy-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+.application-startup-policy-fields .application-field {
+  min-width: 0;
+  margin: 0;
+}
+.application-startup-policy-fields input,
+.application-startup-policy-fields textarea {
+  min-width: 0;
+  width: 100%;
+}
+.application-startup-policy-fields .row {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.application-value-row .application-value-key {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.8fr) minmax(140px, 1.2fr);
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  margin: 0;
+}
+.application-value-key > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+.application-value-row input {
+  min-width: 0;
+  width: 100%;
+}
+.application-value-row > button {
+  white-space: nowrap;
+  margin: 0;
+}
+.application-compact-values {
+  min-width: 0;
+  overflow-x: auto;
+}
+.application-compact-values .application-value-row {
+  min-width: 530px;
+}
 .application-field label,
 .application-editor > label {
   display: grid;
@@ -359,6 +414,8 @@
 .application-account-card > h3 {
   grid-column: 1;
   display: flex;
+  align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
   margin: 0;
 }
@@ -382,8 +439,17 @@
   font-weight: 400;
   color: #65758b;
 }
+.application-account-card > h3 .application-secret-prerequisite {
+  flex-basis: 100%;
+  font-size: 11px;
+}
+.application-credential-scroll {
+  overflow-x: auto;
+}
 .application-credential-table {
   width: 100%;
+  min-width: 550px;
+  table-layout: fixed;
   border-collapse: collapse;
   margin: 6px 0;
 }
@@ -391,11 +457,31 @@
 .application-credential-table td {
   padding: 5px 6px;
   text-align: left;
-  vertical-align: top;
+  vertical-align: middle;
   border-bottom: 1px solid #dce4ee;
 }
 .application-credential-table th {
   font-weight: 500;
+}
+.application-credential-table th:first-child {
+  width: 70px;
+  white-space: nowrap;
+}
+.application-credential-table th:nth-child(2) {
+  width: 30%;
+}
+.application-credential-table td:nth-child(2),
+.application-credential-source > small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.application-credential-table td > code {
+  display: inline;
+  white-space: nowrap;
+}
+.application-credential-table:has(.application-credential-source-expanded) {
+  min-width: 950px;
 }
 .application-credential-table code {
   display: block;
@@ -405,23 +491,36 @@
 .application-credential-variables {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 4px;
 }
+.application-credential-variable-names {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .application-credential-variables code {
+  display: inline;
   margin: 0;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+}
+.application-credential-variables code + code::before {
+  content: ", ";
 }
 .application-credential-variables button {
+  flex-shrink: 0;
   padding: 3px 6px;
 }
 .application-credential-variables input {
+  flex: 1;
   width: 100%;
   min-width: 0;
 }
 .application-credential-table .application-credential-source {
   display: grid;
-  grid-template-columns: minmax(140px, 0.9fr) minmax(160px, 1.3fr) auto;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.3fr) auto;
   align-items: center;
   gap: 6px;
   border: 0;
@@ -453,7 +552,9 @@
   padding: 5px;
 }
 .application-credential-table .application-credential-source-expanded {
-  grid-template-columns: repeat(2, minmax(140px, 1fr));
+  grid-template-columns: none;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(80px, 1fr);
 }
 .application-credential-source-expanded .application-credential-actions {
   justify-content: flex-end;
@@ -468,8 +569,27 @@
   margin: 0;
   color: #65758b;
 }
-.application-credential-table td:last-child {
-  width: 60%;
+.application-runtime-secret {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.application-runtime-secret-entry {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 4px;
+}
+.application-runtime-secret-entry button {
+  padding: 5px;
+  min-width: 28px;
+}
+.application-runtime-secret small {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: #65758b;
 }
 .application-account-card > fieldset {
   display: grid;
@@ -546,6 +666,19 @@
   display: grid;
   gap: 10px;
 }
+.application-account-card > .application-kafka-access {
+  display: block;
+}
+.application-kafka-access td {
+  min-width: 100px;
+}
+.application-kafka-access td input,
+.application-kafka-access td select {
+  min-width: 130px;
+}
+.application-kafka-access > button {
+  margin: 6px 6px 0 0;
+}
 .application-legacy-grants {
   margin: 12px 0;
 }
@@ -564,6 +697,16 @@
   width: 100%;
   border-collapse: collapse;
   font-size: 12px;
+}
+.application-resources-scroll {
+  max-height: 420px;
+  overflow: auto;
+}
+.application-resources-scroll thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #fff;
 }
 .application-library-resources td,
 .application-library-resources th {

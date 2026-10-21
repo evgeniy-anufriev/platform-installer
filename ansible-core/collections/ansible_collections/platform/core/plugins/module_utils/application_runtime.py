@@ -182,7 +182,7 @@ def prepare_runtime(root, snapshot, rows, desired, lock, validator, loader):
         placement = instance["placements"][host]
         settings = row["settings"]
         if (any(r['kind'] not in {'postgresql.database', 'postgresql.schema', 'clickhouse.database', 'kafka.topic', 'redis.key'} for r in row['resources'].values()) or
-                any(instance['connections'].get(k, {}).get('serviceType') not in {'postgresql', 'redis', 'clickhouse'} for k in instance['credentialRequirements']) or
+                any(instance['connections'].get(k, {}).get('serviceType') not in {'postgresql', 'redis', 'clickhouse', 'kafka'} for k in instance['credentialRequirements']) or
                 any(x.get("tls") for x in instance["connections"].values())):
             raise ValueError("APPLICATION_RUNTIME_DEFERRED_FEATURE")
         # Recheck packages after native variable composition, before any rendering.

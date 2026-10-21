@@ -19,6 +19,8 @@
 
 - name: Verify the observed instance after reconciliation
   ansible.builtin.include_tasks: verify.yml
+  vars:
+    application_runtime_verify_vault: false
 
 - name: Report actual creation replacement or start of the managed container
   ansible.builtin.debug:

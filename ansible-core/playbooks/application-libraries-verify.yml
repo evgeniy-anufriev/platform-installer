@@ -16,6 +16,7 @@
         name: platform.core.application_runtime
         tasks_from: verify
       vars:
+        application_runtime_verify_vault: false
         application_runtime_job: >-
           {{ application_verify_input | combine({'dockerEnvironment': {
             'HOME': getent_passwd[application_verify_input.account][4],
@@ -25,8 +26,6 @@
       loop: "{{ hostvars['localhost'].application_runtime_inputs.jobs | selectattr('hostId', 'equalto', inventory_hostname) | list }}"
       loop_control:
         loop_var: application_verify_input
-
-- import_playbook: application-libraries-provider-verify-stage.yml
 
 - import_playbook: application-libraries-endpoint-stage.yml
   vars:

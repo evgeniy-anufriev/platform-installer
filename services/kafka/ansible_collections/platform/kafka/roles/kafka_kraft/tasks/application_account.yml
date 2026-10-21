@@ -1,26 +1,20 @@
 ---
-- name: Describe SCRAM metadata without reading passwords
-  ansible.builtin.command:
-    argv:
-      - "{{ application_topic_cli_directory }}/bin/kafka-configs.sh"
-      - --bootstrap-server
-      - "{{ application_topic_candidate.address }}:{{ application_topic_candidate.port }}"
-      - --command-config
-      - "{{ application_kafka_private.path }}/admin.properties"
-      - --describe
-      - --entity-type
-      - users
-      - --entity-name
-      - "{{ application_kafka_account.name }}"
-  register: application_kafka_description
-  failed_when: false
+- name: Select only this exact principal from deployment SCRAM metadata
+  ansible.builtin.set_fact:
+    application_kafka_description:
+      rc: "{{ application_kafka_user_inventory.rc }}"
+      stdout: "{{ application_kafka_user_lines | join('\n') }}"
+      stdout_lines: "{{ application_kafka_user_lines }}"
+  vars:
+    application_kafka_user_prefix: "SCRAM credential configs for user-principal '{{ application_kafka_account.name }}' are "
+    application_kafka_user_lines: "{{ application_kafka_user_inventory.stdout_lines | select('match', '^' ~ (application_kafka_user_prefix | regex_escape)) | list }}"
   changed_when: false
   no_log: true
 
 - name: Reject unavailable metadata and existing accounts with an incompatible mechanism
   ansible.builtin.assert:
     that:
-      - application_kafka_description.rc == 0
+      - application_kafka_description.rc | int == 0
       - >-
         application_kafka_description.stdout_lines
         | select('search', '^Error retrieving SCRAM credential configs')

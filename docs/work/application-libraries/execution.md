@@ -87,9 +87,54 @@ library mutations. План и approval общие; отдельного скр�
 11. Общий endpoint-hook публикует готовые host targets в HAProxy/DNS;
     проверяется внешний endpoint.
 
+Owner clarification 2026-10-21: отдельный `APPLICATION_LIBRARIES_VERIFY`
+проверяет точные контейнеры (image ID, project/library/instance/host labels,
+running и заданный healthcheck/readiness) и доступность endpoint через HAProxy/DNS.
+Он не повторяет сверку provider accounts, ACL, topics, databases/grants или
+AppRole/secret reads. После readiness в Apply повторный AppRole login и чтение
+секретов также не выполняются: сохраняются preflight и подготовка Vault
+policy/AppRole/секретов, а Agent получает секреты при запуске приложения.
+Отдельные provider Verify tasks остаются доступны для явной проверки
+ресурсов; инфраструктурный Verify этим уточнением не меняется.
+
+Kafka CLI discovery в пределах одного provider invocation выполняется пакетно:
+один общий SCRAM metadata и ACL inventory на deployment с точным выбором
+principal и resource type/name/pattern,
+один describe объявленных topics и одно чтение эффективных topic configs
+(включая broker defaults). Kafka configs CLI без entity-name читает configs
+топиков deployment; при сравнении выбирается только точный объявленный topic.
+Это read-only discovery, а не общий mutation batch. Создание недостающих managed
+topics и добавление ACL остаются адресными; новый topic обязательно читается
+повторно после создания. Snapshot не переиспользуется между preflight/Apply
+или независимыми provider Verify invocation.
+
+Owner clarification 2026-10-21: штатный provider stage не вызывает Kafka
+topic/account hooks в preflight. Metadata, SCRAM login и ACL inventory проверяются
+один раз в Apply; создание пользователя и недостающих grants выполняется там же,
+до публикации instance credentials в Vault и запуска контейнеров. Кеша результатов
+preflight нет. Ошибка credentials или конфликт пользователя обнаруживается в
+Apply, когда библиотечные ресурсы уже могли быть созданы. Явные standalone
+preflight/Verify вызовы Kafka-роли сохранены и читают актуальное состояние.
+Apply и явный provider Verify передают Kafka-роли существующий deployment job
+со всеми accounts. Общие списки читаются до цикла пользователей и не содержат
+паролей. Неполный/ошибочный ответ блокирует mutations. Аутентификация остаётся
+отдельной для каждого account; новый managed user проверяется входом после
+создания. Общие данные не сохраняются между вызовами или стадиями.
+
 Общие ресурсы библиотеки и provider accounts не создаются повторно для каждого
 Docker-хоста. Отказ одного размещения виден отдельно и не превращает частично
 готовую библиотеку в успешную; автоматический failover/rollback не предполагается.
+
+Offline image integrity: после выбора source всеми размещениями общий preflight
+барьер на Execution Node проверяет каждый уникальный полный `offlineBundle`
+record один раз, до Vault/provider mutations. Проверяются прежние manifest digest,
+component lock, size/SHA256 и symlink guards; одинаковые bytes по разным путям
+не объединяются. Неиспользованный fallback при source=REPOSITORY не читается.
+Прямой role preflight по умолчанию проверяет архив немедленно; внутренний
+`application_runtime_defer_archive_verification` используется штатным playbook
+только для переноса проверки в общий барьер. Target copy перед Docker load
+по-прежнему отдельно проверяется по size/SHA256. Результат между запусками
+не сохраняется.
 
 Provider hooks БД/УЗ/endpoint во втором этапе используют уже установленную
 инфраструктуру, а не повторно устанавливают её. Для standalone с ранее

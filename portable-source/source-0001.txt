@@ -22629,7 +22629,7 @@ def split_provider_jobs(providers):
     return library_jobs, instance_jobs
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_runtime.py","mode":420,"size":17396,"sha256":"617b9d0ad6290dc21fc27082f4e0414652b5d127f80e7d355664dbf619ea6084","index":0,"count":1,"encoding":"utf-8","payloadBytes":17396}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_runtime.py","mode":420,"size":17405,"sha256":"2188b5e74ae48d5351b3dbba2bf6fb1892f5f0c4414f7b30286760076d576b87","index":0,"count":1,"encoding":"utf-8","payloadBytes":17405}
 """Typed A2 preflight. Ansible owns precedence, templates and target execution."""
 import base64
 import hashlib
@@ -22811,7 +22811,7 @@ def prepare_runtime(root, snapshot, rows, desired, lock, validator, loader):
         placement = instance["placements"][host]
         settings = row["settings"]
         if (any(r['kind'] not in {'postgresql.database', 'postgresql.schema', 'clickhouse.database', 'kafka.topic', 'redis.key'} for r in row['resources'].values()) or
-                any(instance['connections'].get(k, {}).get('serviceType') not in {'postgresql', 'redis', 'clickhouse'} for k in instance['credentialRequirements']) or
+                any(instance['connections'].get(k, {}).get('serviceType') not in {'postgresql', 'redis', 'clickhouse', 'kafka'} for k in instance['credentialRequirements']) or
                 any(x.get("tls") for x in instance["connections"].values())):
             raise ValueError("APPLICATION_RUNTIME_DEFERRED_FEATURE")
         # Recheck packages after native variable composition, before any rendering.
@@ -29899,15 +29899,19 @@ if __name__ == "__main__":
     main()
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/defaults/main.yml","mode":420,"size":183,"sha256":"e2447fda6bf661dccb590d784bbcee58f07ba81e096e56586c4b260ae79f3445","index":0,"count":1,"encoding":"utf-8","payloadBytes":183}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/defaults/main.yml","mode":420,"size":353,"sha256":"0114e04174f34f7cb2d8504d4fafa814a708ef2e8e1c00aea3639eadd5255c0c","index":0,"count":1,"encoding":"utf-8","payloadBytes":353}
 ---
 # Effective paths/accounts come from ordinary variables and the selected runtime.
 
 platform_application_approved_registries: []
 platform_application_registry_config_directory: ''
 
+# Direct role Verify also verifies AppRole secret reads; container activation
+# and library Verify disable this additional probe.
+application_runtime_verify_vault: true
+
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/activate_instance.yml","mode":420,"size":1454,"sha256":"ba431b227c38d0de21a8df578691cee94c41d1a5cb5b58cf8a7cdb3322c4770d","index":0,"count":1,"encoding":"utf-8","payloadBytes":1454}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/activate_instance.yml","mode":420,"size":1506,"sha256":"f9b7a911c14f9b402c1a25fd33ea7fbbb539fd870600fc59215265e01f0b6ba9","index":0,"count":1,"encoding":"utf-8","payloadBytes":1506}
 ---
 - name: Deliver the authorized image into the exact selected daemon
   ansible.builtin.include_tasks: image_delivery.yml
@@ -29932,6 +29936,8 @@ platform_application_registry_config_directory: ''
 
 - name: Verify the observed instance after reconciliation
   ansible.builtin.include_tasks: verify.yml
+  vars:
+    application_runtime_verify_vault: false
 
 - name: Report actual creation replacement or start of the managed container
   ansible.builtin.debug:
@@ -30213,7 +30219,7 @@ platform_application_registry_config_directory: ''
   when: "'@' not in application_runtime_job.settings.image"
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/preflight.yml","mode":420,"size":18763,"sha256":"efcd0af82a2bf2e38a4058567a7e50ceb2c9c49b53029f745d0ef5ce377cf247","index":0,"count":1,"encoding":"utf-8","payloadBytes":18763}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/preflight.yml","mode":420,"size":19317,"sha256":"dfb1fac6320a37968bfc63a8f797f9779d64435d425809ef7bb0538e34954d58","index":0,"count":1,"encoding":"utf-8","payloadBytes":19317}
 ---
 - name: Bind this operation's account and Docker configuration discovery key
   ansible.builtin.set_fact:
@@ -30323,6 +30329,15 @@ platform_application_registry_config_directory: ''
 - name: Verify fallback bytes only for the selected offline source before mutations
   ansible.builtin.set_fact:
     application_selected_archive_path: "{{ platform_execution_bundle_root | default('') | platform.core.application_selected_archive(application_image_source.source, application_runtime_job.authority.offlineBundle) }}"
+  no_log: true
+  when: not (application_runtime_defer_archive_verification | default(false) | bool)
+
+- name: Bind selected archive path pending the common preflight integrity barrier
+  ansible.builtin.set_fact:
+    application_selected_archive_path: >-
+      {{ ((platform_execution_bundle_root | default('') | regex_replace('/+$', '')) ~ '/' ~ application_runtime_job.authority.offlineBundle.ref)
+         if application_image_source.source == 'OFFLINE_BUNDLE' else none }}
+  when: application_runtime_defer_archive_verification | default(false) | bool
   no_log: true
 
 - name: Inspect the digest-bound managed reference without mutation
@@ -30707,7 +30722,7 @@ platform_application_registry_config_directory: ''
   no_log: true
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/verify.yml","mode":420,"size":2320,"sha256":"050d33d372485736ab90432171f3a927b6d26c89659cd05d559f01bddb8d650e","index":0,"count":1,"encoding":"utf-8","payloadBytes":2320}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/verify.yml","mode":420,"size":2381,"sha256":"e3dac2c8071566cee6865a1e05614a0cba2a65c90976d33584b3e0f1f844dcb0","index":0,"count":1,"encoding":"utf-8","payloadBytes":2381}
 ---
 - name: Resolve library paths for standalone Verify without preflight
   ansible.builtin.include_tasks: resolve_paths.yml
@@ -30747,7 +30762,9 @@ platform_application_registry_config_directory: ''
     tasks_from: verify
   vars:
     application_vault_instance_path: "{{ application_runtime_job.instancePath | default(application_instance_path) }}"
-  when: application_runtime_job.agentTemplate | default(false)
+  when:
+    - application_runtime_job.agentTemplate | default(false)
+    - application_runtime_verify_vault | default(true)
 
 @@END
 @@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/templates/library.env.j2","mode":420,"size":500,"sha256":"c46d1eb761aaab79f44ba77567a90f0c896688d105c51b36eefeed7487d347bb","index":0,"count":1,"encoding":"utf-8","payloadBytes":500}
@@ -33990,7 +34007,7 @@ artifactLock:
       when: hostvars['localhost'].platform_endpoint_sources | default({}) | length > 0
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-preflight.yml","mode":420,"size":825,"sha256":"df794ed9cbacfad554d4a72e02890bfad3159251865138315bd111e0b0a939a3","index":0,"count":1,"encoding":"utf-8","payloadBytes":825}
+@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-preflight.yml","mode":420,"size":1154,"sha256":"6ed06be8c565ee507bfd21b7fe27ad2d80deaddee415aa3ea2e1e71f3f344d66","index":0,"count":1,"encoding":"utf-8","payloadBytes":1154}
 ---
 - import_playbook: application-libraries-resolve-runtime.yml
 
@@ -34009,12 +34026,22 @@ artifactLock:
       ansible.builtin.include_role:
         name: platform.core.application_runtime
         tasks_from: preflight
+      vars:
+        application_runtime_defer_archive_verification: true
       loop: "{{ hostvars['localhost'].application_runtime_inputs.jobs | selectattr('hostId', 'equalto', inventory_hostname) | list }}"
       loop_control:
         loop_var: application_runtime_job
 
+- name: Verify selected offline archives once before any provider mutation
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  any_errors_fatal: true
+  tasks:
+    - ansible.builtin.import_tasks: tasks/application-libraries-offline-archives.yml
+
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-provider-stage.yml","mode":420,"size":7693,"sha256":"80052a50ceb0b1adf1bd33f32a59e6489b7807c31da3e27217cff26301a396c4","index":0,"count":1,"encoding":"utf-8","payloadBytes":7693}
+@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-provider-stage.yml","mode":420,"size":6750,"sha256":"3c7b0b090f6ec06c9a08735ab22974cc221a254e54e2c9c67120d3ef9a4f4f44","index":0,"count":1,"encoding":"utf-8","payloadBytes":6750}
 ---
 - name: Run preflighted library then instance provider hooks
   hosts: localhost
@@ -34066,24 +34093,6 @@ artifactLock:
           loop: "{{ (application_provider_inputs.libraryJobs + application_provider_inputs.instanceJobs) | selectattr('serviceType', 'equalto', 'clickhouse') | list }}"
           loop_control:
             loop_var: platform_clickhouse_application_job
-        - name: Preflight all Kafka topic batches before provider mutations
-          ansible.builtin.include_role:
-            name: platform.kafka.kafka_kraft
-            tasks_from: application_topics
-          vars:
-            platform_kafka_application_phase: preflight
-          loop: "{{ application_provider_inputs.libraryJobs | selectattr('serviceType', 'equalto', 'kafka') | list }}"
-          loop_control:
-            loop_var: platform_kafka_application_job
-        - name: Preflight Kafka account credentials before provider mutations
-          ansible.builtin.include_role:
-            name: platform.kafka.kafka_kraft
-            tasks_from: application_accounts
-          vars:
-            platform_kafka_application_phase: preflight
-          loop: "{{ application_provider_inputs.instanceJobs | selectattr('serviceType', 'equalto', 'kafka') | list }}"
-          loop_control:
-            loop_var: platform_kafka_application_job
         - name: Create Kafka library topics before application instances
           ansible.builtin.include_role:
             name: platform.kafka.kafka_kraft
@@ -34135,13 +34144,13 @@ artifactLock:
           loop: "{{ application_provider_inputs.instanceJobs | selectattr('serviceType', 'equalto', 'clickhouse') | list }}"
           loop_control:
             loop_var: platform_clickhouse_application_job
-        - name: Ensure and authenticate each Kafka instance before Vault publication
+        - name: Ensure Kafka deployment accounts before Vault publication
           ansible.builtin.include_role:
             name: platform.kafka.kafka_kraft
             tasks_from: application_accounts
           vars:
             platform_kafka_application_phase: apply
-          loop: "{{ application_provider_inputs.instanceJobs | selectattr('serviceType', 'equalto', 'kafka') | list }}"
+          loop: "{{ application_provider_inputs.jobs | selectattr('serviceType', 'equalto', 'kafka') | selectattr('accounts') | list }}"
           loop_control:
             loop_var: platform_kafka_application_job
         - name: Publish each instance credentials and AppRole once
@@ -34161,7 +34170,7 @@ artifactLock:
           no_log: true
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-provider-verify-stage.yml","mode":420,"size":5494,"sha256":"ec00d8f3135adf4ff7f5e0de7600fadc6f755ec3ee22cb3e56a7f822d1783ed8","index":0,"count":1,"encoding":"utf-8","payloadBytes":5494}
+@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-provider-verify-stage.yml","mode":420,"size":5511,"sha256":"844910c0fe7c17a9c2872c224f4fecdd1986880b52e4628e1eaea6b726274be5","index":0,"count":1,"encoding":"utf-8","payloadBytes":5511}
 ---
 - name: Verify application providers without service mutation
   hosts: localhost
@@ -34214,7 +34223,7 @@ artifactLock:
             tasks_from: application_accounts
           vars:
             platform_kafka_application_phase: verify
-          loop: "{{ application_provider_inputs.instanceJobs | selectattr('serviceType', 'equalto', 'kafka') | list }}"
+          loop: "{{ application_provider_inputs.jobs | selectattr('serviceType', 'equalto', 'kafka') | selectattr('accounts') | list }}"
           loop_control:
             loop_var: platform_kafka_application_job
         - name: Reset read-only PostgreSQL discovery for this invocation
@@ -34504,7 +34513,7 @@ artifactLock:
         loop_var: platform_vault_application_job
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-verify.yml","mode":420,"size":1630,"sha256":"8d291e5c457e46eea30323f65b6866a12c7d7637265a9444fb7a12d82b48abc1","index":0,"count":1,"encoding":"utf-8","payloadBytes":1630}
+@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-verify.yml","mode":420,"size":1610,"sha256":"bc8f02877737e9001751c3c3e45326716ba5bd85fd2710f9a2d453abbffcaa89","index":0,"count":1,"encoding":"utf-8","payloadBytes":1610}
 ---
 - import_playbook: application-libraries-resolve-runtime.yml
 
@@ -34523,6 +34532,7 @@ artifactLock:
         name: platform.core.application_runtime
         tasks_from: verify
       vars:
+        application_runtime_verify_vault: false
         application_runtime_job: >-
           {{ application_verify_input | combine({'dockerEnvironment': {
             'HOME': getent_passwd[application_verify_input.account][4],
@@ -34532,8 +34542,6 @@ artifactLock:
       loop: "{{ hostvars['localhost'].application_runtime_inputs.jobs | selectattr('hostId', 'equalto', inventory_hostname) | list }}"
       loop_control:
         loop_var: application_verify_input
-
-- import_playbook: application-libraries-provider-verify-stage.yml
 
 - import_playbook: application-libraries-endpoint-stage.yml
   vars:
@@ -34834,6 +34842,34 @@ artifactLock:
           - platform_effective_uid.rc == 0
           - platform_effective_uid.stdout | trim == '0'
         fail_msg: Centralized Ansible target execution lacks working elevation
+
+@@END
+@@PORTABLE {"path":"ansible-core/playbooks/tasks/application-libraries-offline-archives.yml","mode":420,"size":1043,"sha256":"0a9f9eea60faa06468921ce62886b44fcaab1fca3a2936edbe2e8655a0026c5c","index":0,"count":1,"encoding":"utf-8","payloadBytes":1043}
+---
+- name: Initialize selected offline archive records for this invocation
+  ansible.builtin.set_fact:
+    application_selected_offline_archives: []
+
+- name: Collect only archives selected by target preflight
+  ansible.builtin.set_fact:
+    application_selected_offline_archives: >-
+      {{ (application_selected_offline_archives +
+          (hostvars[item].platform_application_preflight_jobs | default([])
+           | selectattr('source.source', 'equalto', 'OFFLINE_BUNDLE')
+           | map(attribute='authority.offlineBundle') | list)) | unique | list }}
+  loop: "{{ groups['platform_targets'] | default([]) }}"
+  no_log: true
+
+- name: Verify each unique selected offline archive before mutations
+  ansible.builtin.assert:
+    that: >-
+      (platform_execution_bundle_root | default('')
+       | platform.core.application_selected_archive('OFFLINE_BUNDLE', item)) is string
+    fail_msg: APPLICATION_IMAGE_ARCHIVE_INVALID
+  loop: "{{ application_selected_offline_archives }}"
+  loop_control:
+    label: "{{ item.ref }}"
+  no_log: true
 
 @@END
 @@PORTABLE {"path":"ansible-core/playbooks/validate.yml","mode":420,"size":5791,"sha256":"f27eee2685999648279003ebe5afa37632bd88575ef3f71e7df9efea5f55dc3f","index":0,"count":1,"encoding":"utf-8","payloadBytes":5791}
@@ -60013,7 +60049,7 @@ platform_application_libraries:
   sdku-main: {}
 
 @@END
-@@PORTABLE {"path":"examples/sdku/import-catalog.json","mode":420,"size":5771,"sha256":"4caa225b09f11bc0b280617348e6d0169308424ba55dba05c437575d59868114","index":0,"count":1,"encoding":"utf-8","payloadBytes":5771}
+@@PORTABLE {"path":"examples/sdku/import-catalog.json","mode":420,"size":5771,"sha256":"ca680c498ee69de602ec8bb86bd61f7d6d7eeac5edc0a5f4293a4032bc62405b","index":0,"count":1,"encoding":"utf-8","payloadBytes":5771}
 [
   {
     "digest": "sha256:51a85d8d0276e47498b98243d47d2a7e17d354d239f7467b4822ed4d64e9f021",
@@ -60202,10 +60238,10 @@ platform_application_libraries:
     "name": "cspa",
     "version": "1.0.0",
     "sourceDirectory": ".",
-    "digest": "sha256:9b0715e7d43595a86e0ce6d81d579ac34af490b05c84aca563d5fff0219cf328"
+    "digest": "sha256:0892188e6b0fe0d3d03f27277f6778ee33e46183e60146057faa806a80fbac27"
   },
   {
-    "digest": "sha256:08a7b2c01868d74963dee09fabd2c438b0a7354361e658b2eb91bbf6529b772a",
+    "digest": "sha256:5693d68cf1b4015748e7b1881d7e57ef127d0f38ca0ccda91490cfaacbaa156f",
     "kind": "library",
     "name": "sdku",
     "sourceDirectory": ".",
@@ -60232,7 +60268,7 @@ platform_application_libraries:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/library-packages/cspa/1.0.0/roles/library_cspa/defaults/main.yml","mode":420,"size":17611,"sha256":"2be437e38819b4b2a10d986f240769de37ebb77f88fbab10cf666590f19609da","index":0,"count":1,"encoding":"utf-8","payloadBytes":17611}
+@@PORTABLE {"path":"examples/sdku/library-packages/cspa/1.0.0/roles/library_cspa/defaults/main.yml","mode":420,"size":17611,"sha256":"1b5778c362116aa6efc83406cf64f4864279ecdcfa34e18c960e264075195bf8","index":0,"count":1,"encoding":"utf-8","payloadBytes":17611}
 platform_library_definition:
     name: cspa
     version: 1.0.0
@@ -60510,7 +60546,7 @@ platform_library_definition:
                 ack_alarm:
                     config:
                         cleanup.policy: delete
-                    name: cspa-ack-alarm
+                    name: ack-alarm-cspa
                     partitions: 1
                 alarms:
                     config:
@@ -60707,7 +60743,7 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/library-packages/sdku/1.0.0/roles/library_sdku/defaults/main.yml","mode":420,"size":17588,"sha256":"9a59fb8b75d81785c34cdda357cc5442a4b055725bea5455c4782d4dd8ce4026","index":0,"count":1,"encoding":"utf-8","payloadBytes":17588}
+@@PORTABLE {"path":"examples/sdku/library-packages/sdku/1.0.0/roles/library_sdku/defaults/main.yml","mode":420,"size":17588,"sha256":"fcbb4a9a539d0419c244acd5466d2858e461af27e8f819f18675bb6038034458","index":0,"count":1,"encoding":"utf-8","payloadBytes":17588}
 platform_library_definition:
     name: sdku
     version: 1.0.0
@@ -60985,7 +61021,7 @@ platform_library_definition:
                 ack_alarm:
                     config:
                         cleanup.policy: delete
-                    name: sdku-ack-alarm
+                    name: ack-alarm-sdku
                     partitions: 1
                 alarms:
                     config:
@@ -70514,7 +70550,7 @@ catalogLock:
 })();
 
 @@END
-@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":117701,"sha256":"d7492e2b7ed80537cfe240ca8d9cde8f3587f84fe1f3b25c9ddb8a82e45b31bd","index":0,"count":3,"encoding":"utf-8","payloadBytes":49414}
+@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":118064,"sha256":"96aa449541db6538bd1bec457f98b5d3fd4e5d78ae157b73557f4538ead2b2bd","index":0,"count":3,"encoding":"utf-8","payloadBytes":49414}
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   EditResult,
@@ -71950,7 +71986,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
       }
      
 @@END
-@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":117701,"sha256":"d7492e2b7ed80537cfe240ca8d9cde8f3587f84fe1f3b25c9ddb8a82e45b31bd","index":1,"count":3,"encoding":"utf-8","payloadBytes":49763}
+@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":118064,"sha256":"96aa449541db6538bd1bec457f98b5d3fd4e5d78ae157b73557f4538ead2b2bd","index":1,"count":3,"encoding":"utf-8","payloadBytes":49763}
  setExportOperation((current) =>
         current
           ? {
@@ -72960,7 +72996,16 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
               draftActive={!!sessionId}
               backendError={editError?.message}
               loadSecrets={api.getRuntimeSecretDescriptors}
+              executionContextKey={JSON.stringify([
+                executionNode?.selectionKind,
+                executionNode?.selectedHostId,
+                executionNode?.runtimeDigest,
+                executionNode?.status,
+              ])}
               saveSecrets={api.setDeploymentRuntimeSecretValues}
+              loadSecretAvailability={
+                api.getApplicationRuntimeSecretAvailability
+              }
             />
           )}
           {!loading && !creating && projectOpen && page === "services" && (
@@ -73228,7 +73273,10 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
               edit={edit}
               error={editError}
               busy={editBusy}
-              onClose={() => {
+              onClose={() => 
+@@END
+@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":118064,"sha256":"96aa449541db6538bd1bec457f98b5d3fd4e5d78ae157b73557f4538ead2b2bd","index":2,"count":3,"encoding":"utf-8","payloadBytes":18887}
+{
                 setReviewOpen(false);
                 if (importReview) {
                   void discard();
@@ -73241,10 +73289,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
             />
           )}
           {exportDialog && (
-            <ProjectExpor
-@@END
-@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":117701,"sha256":"d7492e2b7ed80537cfe240ca8d9cde8f3587f84fe1f3b25c9ddb8a82e45b31bd","index":2,"count":3,"encoding":"utf-8","payloadBytes":18524}
-tDialog
+            <ProjectExportDialog
               parent={exportParent}
               name={exportName}
               operation={exportOperation}
@@ -73773,7 +73818,7 @@ function Stat({ label, value }: { label: string; value: number | string }) {
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/ApplicationAccountAccess.tsx","mode":420,"size":12720,"sha256":"e2790e851b7c41d378331981247f2cc56c985f6ea81b3b70464939eef416938f","index":0,"count":1,"encoding":"utf-8","payloadBytes":12720}
+@@PORTABLE {"path":"frontend/src/ApplicationAccountAccess.tsx","mode":420,"size":11892,"sha256":"3077fc4eb1d1bae436f399f74732583ff2f1e1f11c89024b063184ae4e6fbe19","index":0,"count":1,"encoding":"utf-8","payloadBytes":11892}
 import { useState } from "react";
 import { objectValue, type ObjectValue } from "./application-draft";
 
@@ -73786,6 +73831,7 @@ export function ApplicationAccountAccess({
   serviceType,
   deployment,
   resources,
+  resolvedResources = {},
   bindings,
   account,
   inherited,
@@ -73796,6 +73842,7 @@ export function ApplicationAccountAccess({
   serviceType: string;
   deployment: string;
   resources: ObjectValue;
+  resolvedResources?: ObjectValue;
   bindings: ObjectValue;
   account: ObjectValue;
   inherited: ObjectValue;
@@ -73810,6 +73857,12 @@ export function ApplicationAccountAccess({
   const [error, setError] = useState("");
   const pg = serviceType === "postgresql",
     ch = serviceType === "clickhouse";
+  const databaseName = (ref: string) =>
+    String(
+      objectValue(objectValue(resolvedResources[ref]).parameters).name ??
+        objectValue(objectValue(resources[ref]).parameters).name ??
+        ref,
+    );
   const source = Object.hasOwn(account, pg ? "databaseAccess" : "grants")
     ? account
     : inherited;
@@ -73899,17 +73952,6 @@ export function ApplicationAccountAccess({
           ＋ Добавить доступ
         </button>
       </header>
-      <p className="muted">
-        Все пользовательские схемы и объекты БД, существующие и будущие.
-        {pg &&
-          " CREATE разрешает создавать объекты внутри схем этой БД. Будущие объекты: владелец библиотеки и указанные роли миграций; членство не заменяет SET ROLE."}
-      </p>
-      {pg && (
-        <p className="muted">
-          Снятие прав не меняет владельца объектов. Если эта УЗ владеет
-          объектами, её полномочия владельца сохраняются.
-        </p>
-      )}
       <table>
         <thead>
           <tr>
@@ -73921,13 +73963,7 @@ export function ApplicationAccountAccess({
         <tbody>
           {rows.map((row, i) => (
             <tr key={row.databaseRef}>
-              <td>
-                {String(
-                  objectValue(
-                    objectValue(resources[row.databaseRef]).parameters,
-                  ).name ?? row.databaseRef,
-                )}
-              </td>
+              <td title={row.databaseRef}>{databaseName(row.databaseRef)}</td>
               <td>
                 {row.privileges.join(" · ")}
                 {row.additionalCreatorRoles?.length ? (
@@ -73981,11 +74017,9 @@ export function ApplicationAccountAccess({
                       (row, i) => row.databaseRef === id && i !== edit,
                     ),
                 )
-                .map(([id, resource]) => (
+                .map(([id]) => (
                   <option key={id} value={id}>
-                    {String(
-                      objectValue(objectValue(resource).parameters).name ?? id,
-                    )}
+                    {databaseName(id)}
                   </option>
                 ))}
             </select>
@@ -74103,30 +74137,28 @@ export function ApplicationRedisAccess({
   return (
     <fieldset className="application-redis-access">
       <legend>ACL {sentinel ? "Sentinel" : "Redis"}</legend>
-      {["commands", "keys", "channels"].map(
-        (key) => (
-          <label key={key}>
+      {["commands", "keys", "channels"].map((key) => (
+        <label key={key}>
+          {
             {
-              {
-                commands: "Команды",
-                keys: "Шаблоны ключей",
-                channels: "Шаблоны каналов",
-              }[key]
-            }
-            <input
-              aria-label={`ACL ${key}`}
-              disabled={disabled}
-              value={fields[key]}
-              placeholder="Значения через запятую"
-              onChange={(event) => {
-                setFields({ ...fields, [key]: event.target.value });
-                setDirty(true);
-                onDirtyChange(true);
-              }}
-            />
-          </label>
-        ),
-      )}
+              commands: "Команды",
+              keys: "Шаблоны ключей",
+              channels: "Шаблоны каналов",
+            }[key]
+          }
+          <input
+            aria-label={`ACL ${key}`}
+            disabled={disabled}
+            value={fields[key]}
+            placeholder="Значения через запятую"
+            onChange={(event) => {
+              setFields({ ...fields, [key]: event.target.value });
+              setDirty(true);
+              onDirtyChange(true);
+            }}
+          />
+        </label>
+      ))}
       <p className="muted">
         Права задаются списком команд и шаблонов. Core проверит формат данных.
       </p>
@@ -74134,15 +74166,13 @@ export function ApplicationRedisAccess({
         disabled={disabled || !dirty || !fields.commands.trim()}
         onClick={() => {
           const next = Object.fromEntries(
-            ["commands", "keys", "channels"].map(
-              (key) => [
-                key,
-                fields[key]
-                  .split(",")
-                  .map((v) => v.trim())
-                  .filter(Boolean),
-              ],
-            ),
+            ["commands", "keys", "channels"].map((key) => [
+              key,
+              fields[key]
+                .split(",")
+                .map((v) => v.trim())
+                .filter(Boolean),
+            ]),
           );
           void onSave(next).then((ok) => {
             if (ok) {
@@ -74429,10 +74459,16 @@ function BindingRow({
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/ApplicationCredentials.tsx","mode":420,"size":17461,"sha256":"004906a783881c7fd874b114815e0df99a218153bb4ea9772c5734148734a852","index":0,"count":1,"encoding":"utf-8","payloadBytes":17461}
+@@PORTABLE {"path":"frontend/src/ApplicationCredentials.tsx","mode":420,"size":24282,"sha256":"aafb0ba50363ed7fa5df46bba380e2f452d8a1e3af707e8340ab71677e080811","index":0,"count":1,"encoding":"utf-8","payloadBytes":24282}
 import { useRef, useState, type ReactNode } from "react";
 import { objectValue } from "./application-draft";
 import { ApplicationValueFields } from "./ApplicationValueFields";
+import { ApplicationKafkaAccess } from "./ApplicationKafkaAccess";
+import {
+  ApplicationRuntimeSecretField,
+  ApplicationSecretAvailabilityBadge,
+  type ApplicationSecretSession,
+} from "./ApplicationRuntimeSecretField";
 import {
   ApplicationAccountAccess,
   ApplicationRedisAccess,
@@ -74449,6 +74485,8 @@ export function CredentialSourceEditor({
   onReset,
   onDirtyChange,
   compact = false,
+  runtimeInput,
+  resolvedLiteralValue,
 }: {
   label: string;
   source: Obj;
@@ -74459,6 +74497,8 @@ export function CredentialSourceEditor({
   onReset: () => Promise<boolean>;
   onDirtyChange: (dirty: boolean) => void;
   compact?: boolean;
+  runtimeInput?: ReactNode;
+  resolvedLiteralValue?: string;
 }) {
   const initial = Object.keys(source).length ? source : packageSource;
   const [kind, setKind] = useState(
@@ -74466,6 +74506,12 @@ export function CredentialSourceEditor({
   );
   const [values, setValues] = useState<Obj>({ ...initial });
   const [dirty, setDirty] = useState(false);
+  const [valueFocused, setValueFocused] = useState(false);
+  const showResolvedLiteral =
+    kind === "literal" &&
+    !dirty &&
+    !valueFocused &&
+    resolvedLiteralValue !== undefined;
   const fields: Record<string, string[]> = {
     generated: [],
     runtime_secret_ref: ["ref"],
@@ -74522,7 +74568,17 @@ export function CredentialSourceEditor({
           value={kind}
           onChange={(e) => {
             setKind(e.target.value);
-            setValues({});
+            setValues(
+              e.target.value === "runtime_secret_ref" &&
+                runtimeInput !== undefined
+                ? {
+                    ref:
+                      initial.kind === "runtime_secret_ref" && initial.ref
+                        ? initial.ref
+                        : `application-${crypto.randomUUID()}`,
+                  }
+                : {},
+            );
             change();
           }}
         >
@@ -74533,29 +74589,50 @@ export function CredentialSourceEditor({
           {allowLiteral && <option value="literal">Имя пользователя</option>}
         </select>
       </label>
-      {keys.map((key) => (
-        <label key={key}>
-          <span
-            className={
-              compact && keys.length <= 1
-                ? "application-credential-label"
-                : undefined
-            }
-          >
-            {labels[key]}
-          </span>
-          <input
-            placeholder={compact ? labels[key] : undefined}
-            disabled={disabled}
-            value={String(values[key] ?? "")}
-            autoComplete="off"
-            onChange={(e) => {
-              setValues((v) => ({ ...v, [key]: e.target.value }));
-              change();
-            }}
-          />
-        </label>
-      ))}
+      {kind === "runtime_secret_ref" && runtimeInput !== undefined ? (
+        dirty ? (
+          <small>
+            Сохраните источник в черновик и проект перед вводом секрета.
+          </small>
+        ) : (
+          runtimeInput
+        )
+      ) : (
+        keys.map((key) => (
+          <label key={key}>
+            <span
+              className={compact ? "application-credential-label" : undefined}
+            >
+              {labels[key]}
+            </span>
+            <input
+              placeholder={compact ? labels[key] : undefined}
+              disabled={disabled}
+              value={
+                key === "value" && showResolvedLiteral
+                  ? resolvedLiteralValue
+                  : String(values[key] ?? "")
+              }
+              title={
+                key === "value" && resolvedLiteralValue !== undefined
+                  ? `Вычислено Core: ${resolvedLiteralValue}. Для редактирования исходного значения нажмите на поле.`
+                  : undefined
+              }
+              autoComplete="off"
+              onFocus={() => {
+                if (key === "value") setValueFocused(true);
+              }}
+              onBlur={() => {
+                if (key === "value") setValueFocused(false);
+              }}
+              onChange={(e) => {
+                setValues((v) => ({ ...v, [key]: e.target.value }));
+                change();
+              }}
+            />
+          </label>
+        ))
+      )}
       <div
         className={
           compact
@@ -74563,23 +74640,27 @@ export function CredentialSourceEditor({
             : "application-credential-actions-default"
         }
       >
-        <button
-          aria-label="В черновик"
-          title="В черновик"
-          disabled={
-            disabled ||
-            !dirty ||
-            keys.some((k) => !String(values[k] ?? "").trim())
-          }
-          onClick={() =>
-            void onSave({
-              kind,
-              ...Object.fromEntries(keys.map((k) => [k, values[k]])),
-            }).then(finish)
-          }
-        >
-          {compact ? "✓" : "В черновик"}
-        </button>
+        {(kind !== "runtime_secret_ref" ||
+          runtimeInput === undefined ||
+          dirty) && (
+          <button
+            aria-label="В черновик"
+            title="В черновик"
+            disabled={
+              disabled ||
+              !dirty ||
+              keys.some((k) => !String(values[k] ?? "").trim())
+            }
+            onClick={() =>
+              void onSave({
+                kind,
+                ...Object.fromEntries(keys.map((k) => [k, values[k]])),
+              }).then(finish)
+            }
+          >
+            {compact ? "✓" : "В черновик"}
+          </button>
+        )}
         <button
           aria-label="Сбросить к default"
           title="Сбросить к default"
@@ -74603,9 +74684,13 @@ export function ApplicationCredentials({
   onDirtyChange,
   bindings,
   resources = {},
+  resolvedResources = {},
   deploymentTypes = {},
   variableBindings = {},
   renderVariables,
+  secretSession,
+  resolvedAccounts = {},
+  sharedSecretRefs = [],
 }: {
   defaults: Obj;
   authored: Obj;
@@ -74615,9 +74700,13 @@ export function ApplicationCredentials({
   onDirtyChange: (dirty: boolean) => void;
   bindings: Obj;
   resources?: Obj;
+  resolvedResources?: Obj;
   deploymentTypes?: Record<string, string>;
   variableBindings?: Obj;
   renderVariables?: (account: string, field: string) => ReactNode;
+  secretSession?: ApplicationSecretSession;
+  resolvedAccounts?: Obj;
+  sharedSecretRefs?: string[];
 }) {
   const dirtyFields = useRef(new Set<string>());
   const mark = (key: string, dirty: boolean) => {
@@ -74672,6 +74761,34 @@ export function ApplicationCredentials({
             <section className="application-account-card" key={name}>
               <h3 title={`Подключение: ${binding}`}>
                 {deployment || name} <small>{serviceType}</small>
+                {secretSession && (
+                  <ApplicationSecretAvailabilityBadge
+                    session={secretSession}
+                    resolved={
+                      Object.keys(objectValue(resolvedAccounts[name])).length >
+                      0
+                    }
+                    sourceRefs={Object.values(
+                      objectValue(
+                        objectValue(resolvedAccounts[name]).credentials,
+                      ),
+                    )
+                      .map((credential) =>
+                        objectValue(objectValue(credential).source),
+                      )
+                      .filter((source) => source.kind === "runtime_secret_ref")
+                      .map((source) => String(source.ref ?? ""))}
+                  />
+                )}
+                {secretSession &&
+                  (secretSession.disabled ||
+                    !Object.keys(objectValue(resolvedAccounts[name]))
+                      .length) && (
+                    <small className="application-secret-prerequisite">
+                      Сохраните проект и получите актуальную проверку Core перед
+                      вводом секрета.
+                    </small>
+                  )}
               </h3>
               <details className="application-account-settings">
                 <summary>Настройки</summary>
@@ -74758,94 +74875,152 @@ export function ApplicationCredentials({
                   bindings библиотеки.
                 </p>
               ) : (
-                <table className="application-credential-table">
-                  <thead>
-                    <tr>
-                      <th>Поле</th>
-                      <th>Переменные приложения</th>
-                      <th>Источник и значение / ссылка</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(["username", "password"] as const)
-                      .filter(
-                        (field) =>
-                          Object.hasOwn(base, field) ||
-                          Object.hasOwn(credentials, field),
-                      )
-                      .map((field) => {
-                        const source = objectValue(
-                          objectValue(credentials[field]).source,
-                        );
-                        return (
-                          <tr key={name + field + JSON.stringify(source)}>
-                            <th>{field}</th>
-                            <td>
-                              {renderVariables
-                                ? renderVariables(name, field)
-                                : Object.entries(variableBindings)
-                                    .filter(([, value]) => {
-                                      const binding = objectValue(
-                                        objectValue(value).source,
-                                      );
-                                      return (
-                                        binding.account === name &&
-                                        binding.field === field
-                                      );
+                <div className="application-credential-scroll">
+                  <table className="application-credential-table">
+                    <thead>
+                      <tr>
+                        <th>Поле</th>
+                        <th>Переменные приложения</th>
+                        <th>Источник и значение / ссылка</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(["username", "password"] as const)
+                        .filter(
+                          (field) =>
+                            Object.hasOwn(base, field) ||
+                            Object.hasOwn(credentials, field),
+                        )
+                        .map((field) => {
+                          const source = objectValue(
+                            objectValue(credentials[field]).source,
+                          );
+                          const resolvedSource = objectValue(
+                            objectValue(
+                              objectValue(
+                                objectValue(resolvedAccounts[name]).credentials,
+                              )[field],
+                            ).source,
+                          );
+                          return (
+                            <tr key={name + field + JSON.stringify(source)}>
+                              <th>{field}</th>
+                              <td>
+                                {renderVariables
+                                  ? renderVariables(name, field)
+                                  : Object.entries(variableBindings)
+                                      .filter(([, value]) => {
+                                        const binding = objectValue(
+                                          objectValue(value).source,
+                                        );
+                                        return (
+                                          binding.account === name &&
+                                          binding.field === field
+                                        );
+                                      })
+                                      .map(([variable]) => (
+                                        <code key={variable}>{variable} </code>
+                                      ))}
+                              </td>
+                              <td>
+                                <CredentialSourceEditor
+                                  resolvedLiteralValue={
+                                    field === "username" &&
+                                    resolvedSource.kind === "literal" &&
+                                    typeof resolvedSource.value === "string"
+                                      ? resolvedSource.value
+                                      : undefined
+                                  }
+                                  runtimeInput={
+                                    secretSession ? (
+                                      <ApplicationRuntimeSecretField
+                                        session={secretSession}
+                                        label={`${name}: ${field === "password" ? "Пароль" : "Секрет имени пользователя"}`}
+                                        sourceRef={String(
+                                          objectValue(
+                                            objectValue(
+                                              objectValue(
+                                                objectValue(
+                                                  resolvedAccounts[name],
+                                                ).credentials,
+                                              )[field],
+                                            ).source,
+                                          ).ref ?? "",
+                                        )}
+                                        shared={sharedSecretRefs.includes(
+                                          String(
+                                            objectValue(
+                                              objectValue(
+                                                objectValue(
+                                                  objectValue(
+                                                    resolvedAccounts[name],
+                                                  ).credentials,
+                                                )[field],
+                                              ).source,
+                                            ).ref ?? "",
+                                          ),
+                                        )}
+                                      />
+                                    ) : undefined
+                                  }
+                                  compact
+                                  label={
+                                    field === "username"
+                                      ? "Имя пользователя"
+                                      : "Пароль"
+                                  }
+                                  source={source}
+                                  packageSource={objectValue(
+                                    objectValue(base[field]).source,
+                                  )}
+                                  allowLiteral={field === "username"}
+                                  disabled={disabled || !account.mode}
+                                  onDirtyChange={(dirty) =>
+                                    mark(name + field, dirty)
+                                  }
+                                  onSave={(source) =>
+                                    save({
+                                      ...account,
+                                      credentials: {
+                                        ...credentials,
+                                        [field]: { source },
+                                      },
                                     })
-                                    .map(([variable]) => (
-                                      <code key={variable}>{variable} </code>
-                                    ))}
-                            </td>
-                            <td>
-                              <CredentialSourceEditor
-                                compact
-                                label={
-                                  field === "username"
-                                    ? "Имя пользователя"
-                                    : "Пароль"
-                                }
-                                source={source}
-                                packageSource={objectValue(
-                                  objectValue(base[field]).source,
-                                )}
-                                allowLiteral={field === "username"}
-                                disabled={disabled || !account.mode}
-                                onDirtyChange={(dirty) =>
-                                  mark(name + field, dirty)
-                                }
-                                onSave={(source) =>
-                                  save({
-                                    ...account,
-                                    credentials: {
-                                      ...credentials,
-                                      [field]: { source },
-                                    },
-                                  })
-                                }
-                                onReset={() => {
-                                  const nextCredentials = { ...credentials };
-                                  delete nextCredentials[field];
-                                  const nextAccount = { ...account };
-                                  if (Object.keys(nextCredentials).length)
-                                    nextAccount.credentials = nextCredentials;
-                                  else delete nextAccount.credentials;
-                                  return save(nextAccount);
-                                }}
-                              />
-                            </td>
-                          </tr>
-                        );
-                      })}
-                  </tbody>
-                </table>
+                                  }
+                                  onReset={() => {
+                                    const nextCredentials = { ...credentials };
+                                    delete nextCredentials[field];
+                                    const nextAccount = { ...account };
+                                    if (Object.keys(nextCredentials).length)
+                                      nextAccount.credentials = nextCredentials;
+                                    else delete nextAccount.credentials;
+                                    return save(nextAccount);
+                                  }}
+                                />
+                              </td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                  </table>
+                </div>
               )}
               {serviceType === "kafka" && (
-                <p className="muted">
-                  Kafka SCRAM: grants ссылаются на ресурсы topics и имена
-                  consumer groups. Снятие декларации не отзывает уже выданные
-                  ACL. Producer/consumer JAAS доставляет Vault Agent.
-                </p>
+                <ApplicationKafkaAccess
+                  key={name + JSON.stringify(account.grants)}
+                  account={account}
+                  inherited={packageAccount}
+                  resolved={objectValue(resolvedAccounts[name])}
+                  resolvedResources={resolvedResources}
+                  disabled={disabled || !account.mode}
+                  onDirtyChange={(dirty) => mark(name + "acl", dirty)}
+                  onSave={(grants) => {
+                    const next = { ...account };
+                    if (grants === undefined) delete next.grants;
+                    else next.grants = grants;
+                    return save(next);
+                  }}
+                />
               )}
               <ApplicationAccountAccess
                 key={
@@ -74855,6 +75030,7 @@ export function ApplicationCredentials({
                 serviceType={serviceType}
                 deployment={deployment}
                 resources={resources}
+                resolvedResources={resolvedResources}
                 bindings={bindings}
                 account={account}
                 inherited={packageAccount}
@@ -75047,7 +75223,277 @@ export function ApplicationFileSettings({
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/ApplicationLibraryResources.tsx","mode":420,"size":18264,"sha256":"5bf775b9009677b0d70ee2011cccff4fc2c90ef2469d95989c0e4a7098371406","index":0,"count":1,"encoding":"utf-8","payloadBytes":18264}
+@@PORTABLE {"path":"frontend/src/ApplicationKafkaAccess.tsx","mode":420,"size":10278,"sha256":"712ecd2fbd61f238b7716ed575c8fe6d409f49a196fc5e90e742b9db75810688","index":0,"count":1,"encoding":"utf-8","payloadBytes":10278}
+import { useState } from "react";
+import { objectValue, type ObjectValue } from "./application-draft";
+
+// Core resolves identities and validates ACLs. This editor only stages the existing grants list.
+export function ApplicationKafkaAccess({
+  account,
+  inherited,
+  resolved,
+  resolvedResources,
+  disabled,
+  onSave,
+  onDirtyChange,
+}: {
+  account: ObjectValue;
+  inherited: ObjectValue;
+  resolved: ObjectValue;
+  resolvedResources: ObjectValue;
+  disabled: boolean;
+  onSave: (grants: ObjectValue[] | undefined) => Promise<boolean>;
+  onDirtyChange: (dirty: boolean) => void;
+}) {
+  const [editing, setEditing] = useState<ObjectValue[] | null>(null);
+  const [error, setError] = useState("");
+  const current = Array.isArray(resolved.grants) ? resolved.grants : undefined;
+  const source = Object.hasOwn(account, "grants")
+    ? account.grants
+    : inherited.grants;
+  const rows =
+    editing ??
+    (current ?? (Array.isArray(source) ? source : [])).map(objectValue);
+  const finish = async (grants: ObjectValue[] | undefined) => {
+    if (await onSave(grants)) {
+      setEditing(null);
+      setError("");
+      onDirtyChange(false);
+    } else setError("Не удалось добавить ACL в черновик.");
+  };
+  const change = (index: number, value: ObjectValue) =>
+    setEditing(rows.map((row, i) => (i === index ? value : row)));
+  return (
+    <fieldset className="application-kafka-access">
+      <legend>ACL Kafka</legend>
+      <p className="muted">
+        {editing
+          ? "Переопределение списка ACL"
+          : current
+            ? "Текущая проекция Core"
+            : "Нет актуальной проекции Core — показаны исходные декларации. Сохраните проект и выполните проверку."}
+        {Object.hasOwn(account, "grants")
+          ? " · Переопределено"
+          : " · Наследуется"}
+      </p>
+      <div className="application-table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Ресурс</th>
+              <th>Имя / ссылка</th>
+              <th>Сопоставление</th>
+              <th>Операции</th>
+              {editing && <th>Действия</th>}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, index) => {
+              const topicRef = Object.hasOwn(row, "topicRef");
+              const name = topicRef
+                ? (objectValue(
+                    objectValue(resolvedResources[String(row.topicRef)])
+                      .parameters,
+                  ).name ?? row.topicRef)
+                : row.name;
+              return (
+                <tr key={index}>
+                  <td>
+                    {editing ? (
+                      <select
+                        aria-label={`Ресурс ACL ${index + 1}`}
+                        disabled={disabled}
+                        value={
+                          topicRef
+                            ? "topicRef"
+                            : String(row.resourceType ?? "group")
+                        }
+                        onChange={(e) => {
+                          const next = { ...row };
+                          delete next.topicRef;
+                          delete next.resourceType;
+                          delete next.name;
+                          delete next.patternType;
+                          change(
+                            index,
+                            e.target.value === "topicRef"
+                              ? { ...next, topicRef: "" }
+                              : {
+                                  ...next,
+                                  resourceType: e.target.value,
+                                  name: "",
+                                  patternType: "literal",
+                                },
+                          );
+                        }}
+                      >
+                        <option value="topicRef">Топик · ссылка</option>
+                        <option value="topic">Топики · префикс</option>
+                        <option value="group">Consumer group</option>
+                        <option value="transactional-id">
+                          Transactional ID
+                        </option>
+                        <option value="cluster">Cluster</option>
+                      </select>
+                    ) : topicRef || row.resourceType === "topic" ? (
+                      "Топик"
+                    ) : row.resourceType === "group" ? (
+                      "Consumer group"
+                    ) : (
+                      String(row.resourceType ?? "—")
+                    )}
+                  </td>
+                  <td>
+                    {editing ? (
+                      <input
+                        aria-label={`Имя или ссылка ACL ${index + 1}`}
+                        disabled={disabled}
+                        value={String(
+                          (topicRef ? row.topicRef : row.name) ?? "",
+                        )}
+                        onChange={(e) =>
+                          change(index, {
+                            ...row,
+                            [topicRef ? "topicRef" : "name"]: e.target.value,
+                          })
+                        }
+                      />
+                    ) : (
+                      String(name ?? "—")
+                    )}
+                  </td>
+                  <td>
+                    {editing && !topicRef ? (
+                      <select
+                        aria-label={`Сопоставление ACL ${index + 1}`}
+                        disabled={disabled}
+                        value={String(row.patternType ?? "literal")}
+                        onChange={(e) =>
+                          change(index, { ...row, patternType: e.target.value })
+                        }
+                      >
+                        <option value="literal">literal</option>
+                        <option value="prefixed">prefixed</option>
+                      </select>
+                    ) : (
+                      String(row.patternType ?? "literal")
+                    )}
+                  </td>
+                  <td>
+                    {editing ? (
+                      <input
+                        aria-label={`Операции ACL ${index + 1}`}
+                        disabled={disabled}
+                        value={
+                          Array.isArray(row.operations)
+                            ? row.operations.join(", ")
+                            : ""
+                        }
+                        onChange={(e) =>
+                          change(index, {
+                            ...row,
+                            operations: e.target.value
+                              .split(",")
+                              .map((s) => s.trim()),
+                          })
+                        }
+                      />
+                    ) : Array.isArray(row.operations) ? (
+                      row.operations.join(", ")
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                  {editing && (
+                    <td>
+                      <button
+                        className="outline"
+                        disabled={disabled}
+                        aria-label={`Удалить ACL ${index + 1}`}
+                        onClick={() =>
+                          setEditing(rows.filter((_, i) => i !== index))
+                        }
+                      >
+                        Удалить
+                      </button>
+                    </td>
+                  )}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      {!rows.length && <p>ACL не объявлены.</p>}
+      <p className="muted">
+        Снятие декларации не отзывает уже выданные ACL. Допустимость ресурсов и
+        операций проверяет Core.
+      </p>
+      {editing ? (
+        <>
+          <p className="muted">
+            Операции — через запятую. Имя или ссылка сохраняются как введены,
+            без вычисления шаблонов. Переопределение заменяет весь список;
+            значения из проекции Core становятся явными.
+          </p>
+          <button
+            className="outline"
+            disabled={disabled}
+            onClick={() =>
+              setEditing([...rows, { topicRef: "", operations: [] }])
+            }
+          >
+            Добавить ACL
+          </button>
+          <button disabled={disabled} onClick={() => void finish(rows)}>
+            В черновик
+          </button>
+          <button
+            className="outline"
+            disabled={disabled}
+            onClick={() => {
+              setEditing(null);
+              setError("");
+              onDirtyChange(false);
+            }}
+          >
+            Отмена
+          </button>
+        </>
+      ) : (
+        <>
+          <button
+            className="outline"
+            disabled={disabled || (!current && !Array.isArray(account.grants))}
+            onClick={() => {
+              // Keep authored expressions when already overridden; otherwise explicitly copy the Core projection.
+              setEditing(
+                (Array.isArray(account.grants)
+                  ? account.grants
+                  : (current ?? [])
+                ).map((row) => ({ ...objectValue(row) })),
+              );
+              onDirtyChange(true);
+            }}
+          >
+            Переопределить ACL
+          </button>
+          <button
+            className="outline"
+            disabled={disabled || !Object.hasOwn(account, "grants")}
+            onClick={() => void finish(undefined)}
+          >
+            Сбросить ACL к наследованию
+          </button>
+        </>
+      )}
+      {error && <p role="alert">{error}</p>}
+    </fieldset>
+  );
+}
+
+@@END
+@@PORTABLE {"path":"frontend/src/ApplicationLibraryResources.tsx","mode":420,"size":17767,"sha256":"9f23a6efee673d02debcd39a1ed0d07d9bb78782193abd2a3473a9216ad41d1e","index":0,"count":1,"encoding":"utf-8","payloadBytes":17767}
 import { Fragment, useState, type ReactNode } from "react";
 import { objectValue, type ObjectValue } from "./application-draft";
 
@@ -75064,6 +75510,7 @@ export function ApplicationLibraryResources({
   clickhouseDefaults = {},
   redisDefaults = {},
   resolvedResources = {},
+  showAddActions = true,
 }: {
   resources: ObjectValue;
   bindings: ObjectValue;
@@ -75077,6 +75524,7 @@ export function ApplicationLibraryResources({
   clickhouseDefaults?: ObjectValue;
   redisDefaults?: ObjectValue;
   resolvedResources?: ObjectValue;
+  showAddActions?: boolean;
 }) {
   const [edit, setEdit] = useState<string | null>(null);
   const [name, setName] = useState("");
@@ -75084,7 +75532,6 @@ export function ApplicationLibraryResources({
   const [binding, setBinding] = useState("");
   const [mode, setMode] = useState("managed");
   const [error, setError] = useState("");
-  const [page, setPage] = useState(0);
   const [partitions, setPartitions] = useState("");
   const [replicationFactor, setReplicationFactor] = useState("");
   const [minISR, setMinISR] = useState("");
@@ -75103,12 +75550,6 @@ export function ApplicationLibraryResources({
     "redis.key": redisDefaults,
   };
   const hasDefault = Object.hasOwn(defaultsByKind[kind] ?? {}, edit ?? "");
-  const allIds = Object.keys(resources);
-  const currentPage = Math.min(
-    page,
-    Math.max(0, Math.ceil(allIds.length / 2) - 1),
-  );
-  const visible = new Set(allIds.slice(currentPage * 2, currentPage * 2 + 2));
   const groups = new Map<string, string[]>();
   for (const key of Object.keys(bindings)) {
     const deployment = String(objectValue(bindings[key]).deploymentRef ?? key);
@@ -75156,152 +75597,142 @@ export function ApplicationLibraryResources({
     <section className="application-library-resources">
       <div className="row">
         <h3>Общие ресурсы</h3>
-        <button disabled={disabled} onClick={() => open("")}>
-          Добавить БД
-        </button>
-        {compatibleBindings("kafka.topic").length > 0 && (
-          <button disabled={disabled} onClick={() => open("", "kafka.topic")}>
-            Добавить топик
-          </button>
+        {showAddActions && (
+          <>
+            <button disabled={disabled} onClick={() => open("")}>
+              Добавить БД
+            </button>
+            {compatibleBindings("kafka.topic").length > 0 && (
+              <button
+                disabled={disabled}
+                onClick={() => open("", "kafka.topic")}
+              >
+                Добавить топик
+              </button>
+            )}
+          </>
         )}
       </div>
-      {compatibleBindings("redis.key").length > 0 && (
-        <button disabled={disabled} onClick={() => open("", "redis.key")}>
-          Добавить ключ Redis
-        </button>
-      )}
-      {Object.entries(defaultsByKind).flatMap(([resourceKind, defaults]) =>
-        Object.keys(defaults)
-          .filter((id) => !Object.hasOwn(resources, id))
-          .map((id) => (
-            <button
-              key={resourceKind + id}
-              disabled={disabled}
-              onClick={() => open(id, resourceKind)}
-            >
-              Добавить из defaults · {id}
+      {showAddActions && (
+        <>
+          {compatibleBindings("redis.key").length > 0 && (
+            <button disabled={disabled} onClick={() => open("", "redis.key")}>
+              Добавить ключ Redis
             </button>
-          )),
+          )}
+        </>
       )}
+      {showAddActions &&
+        Object.entries(defaultsByKind).flatMap(([resourceKind, defaults]) =>
+          Object.keys(defaults)
+            .filter((id) => !Object.hasOwn(resources, id))
+            .map((id) => (
+              <button
+                key={resourceKind + id}
+                disabled={disabled}
+                onClick={() => open(id, resourceKind)}
+              >
+                Добавить из defaults · {id}
+              </button>
+            )),
+        )}
       <p className="muted">
         Общие для приложений библиотеки. Удаление записи и изменение имени не
         удаляют и не переименовывают установленный ресурс. Ссылки проверяет Core
         при проверке проекта.
       </p>
-      <table>
-        <thead>
-          <tr>
-            <th>Ресурс</th>
-            <th>Тип</th>
-            <th>Имя</th>
-            <th>Действия</th>
-          </tr>
-        </thead>
-        <tbody>
-          {[...groups]
-            .map(([deployment, keys]): [string, string[]] => [
-              deployment,
-              keys.filter((key) => visible.has(key)),
-            ])
-            .filter(([, keys]) => keys.length)
-            .map(([deployment, keys]) => (
-              <Group key={deployment} title={deployment}>
-                {keys.map((key) => {
-                  const row = objectValue(resources[key]);
-                  return (
-                    <tr key={key}>
-                      <td>{key}</td>
-                      <td>
-                        {(
-                          {
-                            "postgresql.database": "PostgreSQL · БД",
-                            "postgresql.schema": "PostgreSQL · Схема",
-                            "clickhouse.database": "ClickHouse · БД",
-                            "kafka.topic": "Kafka · Топик",
-                            "redis.key": "Redis · Ключ",
-                          } as Record<string, string>
-                        )[String(row.kind)] ?? String(row.kind)}
-                      </td>
-                      <td>
-                        {String(
-                          objectValue(resolvedTopics[key]).name ??
-                            objectValue(
-                              objectValue(resolvedResources[key]).parameters,
-                            ).name ??
-                            objectValue(row.parameters).name ??
-                            "—",
-                        )}
-                        {row.kind === "kafka.topic" && (
-                          <small>
-                            {resolvedTopics[key]
-                              ? `Core: partitions=${String(objectValue(resolvedTopics[key]).partitions)}, RF=${String(objectValue(resolvedTopics[key]).replicationFactor)}, minISR=${String(objectValue(objectValue(resolvedTopics[key]).config)["min.insync.replicas"])}`
-                              : "Параметры Core ещё не рассчитаны"}
-                            {objectValue(resolvedTopics[key]).minISRWarning ===
-                              true && " · minISR выше RF"}
-                          </small>
-                        )}
-                      </td>
-                      <td>
-                        <button
-                          className="outline"
-                          disabled={disabled}
-                          onClick={() => open(key)}
-                        >
-                          Настроить
-                        </button>{" "}
-                        <button
-                          className="outline"
-                          disabled={disabled}
-                          onClick={async () => {
-                            if (
-                              !window.confirm(
-                                `Удалить ресурс ${key} из проекта? Установленный ресурс сохранится. Связанные ссылки необходимо изменить отдельно.`,
+      <div
+        className="application-resources-scroll"
+        role="region"
+        aria-label="Ресурсы библиотеки"
+        tabIndex={0}
+      >
+        <table>
+          <thead>
+            <tr>
+              <th>Ресурс</th>
+              <th>Тип</th>
+              <th>Имя</th>
+              <th>Действия</th>
+            </tr>
+          </thead>
+          <tbody>
+            {[...groups]
+              .filter(([, keys]) => keys.length)
+              .map(([deployment, keys]) => (
+                <Group key={deployment} title={deployment}>
+                  {keys.map((key) => {
+                    const row = objectValue(resources[key]);
+                    return (
+                      <tr key={key}>
+                        <td>{key}</td>
+                        <td>
+                          {(
+                            {
+                              "postgresql.database": "PostgreSQL · БД",
+                              "postgresql.schema": "PostgreSQL · Схема",
+                              "clickhouse.database": "ClickHouse · БД",
+                              "kafka.topic": "Kafka · Топик",
+                              "redis.key": "Redis · Ключ",
+                            } as Record<string, string>
+                          )[String(row.kind)] ?? String(row.kind)}
+                        </td>
+                        <td>
+                          {String(
+                            objectValue(resolvedTopics[key]).name ??
+                              objectValue(
+                                objectValue(resolvedResources[key]).parameters,
+                              ).name ??
+                              objectValue(row.parameters).name ??
+                              "—",
+                          )}
+                          {row.kind === "kafka.topic" && (
+                            <small>
+                              {resolvedTopics[key]
+                                ? `Core: partitions=${String(objectValue(resolvedTopics[key]).partitions)}, RF=${String(objectValue(resolvedTopics[key]).replicationFactor)}, minISR=${String(objectValue(objectValue(resolvedTopics[key]).config)["min.insync.replicas"])}`
+                                : "Параметры Core ещё не рассчитаны"}
+                              {objectValue(resolvedTopics[key])
+                                .minISRWarning === true && " · minISR выше RF"}
+                            </small>
+                          )}
+                        </td>
+                        <td>
+                          <button
+                            className="outline"
+                            disabled={disabled}
+                            onClick={() => open(key)}
+                          >
+                            Настроить
+                          </button>{" "}
+                          <button
+                            className="outline"
+                            disabled={disabled}
+                            onClick={async () => {
+                              if (
+                                !window.confirm(
+                                  `Удалить ресурс ${key} из проекта? Установленный ресурс сохранится. Связанные ссылки необходимо изменить отдельно.`,
+                                )
                               )
-                            )
-                              return;
-                            const next = { ...resources };
-                            delete next[key];
-                            if (await onSave(next)) {
-                              if (edit === key) close();
-                            }
-                          }}
-                        >
-                          Удалить
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </Group>
-            ))}
-        </tbody>
-      </table>
-      {allIds.length > 2 && (
-        <div className="row" aria-label="Страницы ресурсов">
-          <button
-            className="outline"
-            disabled={currentPage === 0}
-            onClick={() => setPage(currentPage - 1)}
-          >
-            Назад
-          </button>
-          <span>
-            {currentPage + 1} / {Math.ceil(allIds.length / 2)}
-          </span>
-          <button
-            className="outline"
-            disabled={(currentPage + 1) * 2 >= allIds.length}
-            onClick={() => setPage(currentPage + 1)}
-          >
-            Далее
-          </button>
-        </div>
-      )}
-      {!Object.keys(resources).length && (
-        <p>
-          Ресурсы не заданы. Добавьте ресурс и выберите подключение библиотеки.
-        </p>
-      )}
+                                return;
+                              const next = { ...resources };
+                              delete next[key];
+                              if (await onSave(next)) {
+                                if (edit === key) close();
+                              }
+                            }}
+                          >
+                            Удалить
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </Group>
+              ))}
+          </tbody>
+        </table>
+      </div>
+      {!Object.keys(resources).length && <p>Ресурсы библиотеки не заданы.</p>}
       {edit !== null && (
         <form
           className="application-resource-form"
@@ -76113,7 +76544,219 @@ export function ApplicationRegistryCredentials({
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/ApplicationSecretBindings.tsx","mode":420,"size":12527,"sha256":"37825e9a8aae18ad1bfbe5bc2f5200b98863b378ad5750c3387b8bf197016d0f","index":0,"count":1,"encoding":"utf-8","payloadBytes":12527}
+@@PORTABLE {"path":"frontend/src/ApplicationRuntimeSecretField.tsx","mode":420,"size":6417,"sha256":"e7ebaef54d4cf97e93526e48e5f8f7aaa685c700a9f10c656202dc6b4bd81424","index":0,"count":1,"encoding":"utf-8","payloadBytes":6417}
+import { useState } from "react";
+import type {
+  RuntimeSecretDescriptorOperation,
+  RuntimeSecretValuesInput,
+} from "./backend";
+
+type Session = {
+  projectRevision: string;
+  contextKey?: string;
+  libraryId: string;
+  disabled: boolean;
+  availability?: RuntimeSecretDescriptorOperation;
+  load: () => Promise<RuntimeSecretDescriptorOperation>;
+  save: (input: RuntimeSecretValuesInput) => Promise<void>;
+};
+export type ApplicationSecretSession = Session;
+
+export function ApplicationSecretAvailabilityBadge({
+  session,
+  sourceRefs,
+  resolved,
+}: {
+  session: Session;
+  sourceRefs: string[];
+  resolved: boolean;
+}) {
+  const evidence = session.availability;
+  const states = sourceRefs.map((sourceRef) => {
+    const matches = evidence?.applicationInputs?.filter(
+      (item) =>
+        item.purpose === "APPLICATION_SECRET" &&
+        item.sourceRef === sourceRef &&
+        item.applicationLibraries.includes(session.libraryId),
+    );
+    return matches?.length === 1
+      ? evidence?.applicationSecretAvailability?.[matches[0].requirementRef]
+      : undefined;
+  });
+  const current =
+    !session.disabled &&
+    resolved &&
+    evidence?.status === "READY" &&
+    evidence.projectRevision === session.projectRevision;
+  const present =
+    current && states.length > 0 && states.every((state) => state === true);
+  const missing = current && states.some((state) => state === false);
+  const unneeded = !session.disabled && resolved && sourceRefs.length === 0;
+  return (
+    <span
+      className={`status-chip status-chip--${present ? "success" : missing ? "warning" : "neutral"}`}
+      role="status"
+    >
+      <span className="status-chip-symbol" aria-hidden="true">
+        {present ? "✓" : missing ? "!" : "?"}
+      </span>
+      {present
+        ? "Секрет задан"
+        : missing
+          ? "Секрет не задан"
+          : unneeded
+            ? "Сессионный секрет не требуется"
+            : "Статус секрета недоступен"}
+    </span>
+  );
+}
+
+export function ApplicationRuntimeSecretField({
+  session,
+  sourceRef,
+  label,
+  shared = false,
+}: {
+  session: Session;
+  sourceRef: string;
+  label: string;
+  shared?: boolean;
+}) {
+  // A context change must discard unsubmitted values and previous success messages.
+  return (
+    <RuntimeSecretField
+      key={JSON.stringify([
+        session.projectRevision,
+        session.contextKey,
+        session.libraryId,
+        session.disabled,
+        sourceRef,
+        label,
+      ])}
+      session={session}
+      sourceRef={sourceRef}
+      label={label}
+      shared={shared}
+    />
+  );
+}
+
+function RuntimeSecretField({
+  session,
+  sourceRef,
+  label,
+  shared,
+}: {
+  session: Session;
+  sourceRef: string;
+  label: string;
+  shared: boolean;
+}) {
+  const [value, setValue] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const disabled = session.disabled || busy || !sourceRef;
+  const submit = async () => {
+    if (disabled || !value) return;
+    const submitted = value;
+    setValue("");
+    setMessage("");
+    setBusy(true);
+    try {
+      const operation = await session.load();
+      const matches = operation.applicationInputs?.filter(
+        (item) =>
+          item.purpose === "APPLICATION_SECRET" &&
+          item.sourceRef === sourceRef &&
+          item.applicationLibraries.includes(session.libraryId),
+      );
+      if (
+        operation.status !== "READY" ||
+        operation.projectRevision !== session.projectRevision ||
+        !operation.descriptorSetFingerprint ||
+        matches?.length !== 1
+      )
+        throw new Error("RUNTIME_SECRET_DESCRIPTOR_UNAVAILABLE");
+      const requirementRef = matches[0].requirementRef;
+      await session.save({
+        projectRevision: operation.projectRevision,
+        descriptorSetFingerprint: operation.descriptorSetFingerprint,
+        serviceDeployment: "",
+        applicationLibrary: session.libraryId,
+        applicationRequirementRef: requirementRef,
+        values: { [requirementRef]: submitted },
+      });
+      setMessage("Секрет отправлен в сессию");
+    } catch {
+      setMessage(
+        "Не удалось сохранить секрет; проверьте актуальность проекта и runtime-сессии",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="application-runtime-secret">
+      <div className="application-runtime-secret-entry">
+        <label>
+          <span className="application-credential-label">{label}</span>
+          <input
+            type="password"
+            aria-label={label}
+            autoComplete="new-password"
+            placeholder="Введите секрет"
+            value={value}
+            disabled={disabled}
+            onChange={(event) => {
+              setValue(event.target.value);
+              setMessage("");
+            }}
+          />
+        </label>
+        <button
+          type="button"
+          title="Сохранить в сессии"
+          aria-label={`Сохранить в сессии: ${label}`}
+          disabled={disabled || !value}
+          onClick={() => void submit()}
+        >
+          ✓
+        </button>
+        <button
+          type="button"
+          className="outline"
+          title="Очистить ввод"
+          aria-label={`Очистить ввод: ${label}`}
+          disabled={busy || !value}
+          onClick={() => {
+            setValue("");
+            setMessage("");
+          }}
+        >
+          ×
+        </button>
+      </div>
+      {shared && (
+        <small title="Один секрет используется несколькими ресурсами; замена действует на всех потребителей.">
+          <span className="application-credential-label">
+            Один секрет используется несколькими ресурсами; замена действует на
+            всех потребителей.
+          </span>
+          <span aria-hidden="true">ⓘ</span>
+        </small>
+      )}
+      {message && (
+        <small role="status" title={message}>
+          <span className="application-credential-label">{message}</span>
+          <span aria-hidden="true">ⓘ</span>
+        </small>
+      )}
+    </div>
+  );
+}
+
+@@END
+@@PORTABLE {"path":"frontend/src/ApplicationSecretBindings.tsx","mode":420,"size":12714,"sha256":"fb9085c5283edca851a3afabbf1931ccc9291ece3f59d09d4cb88b01d7005f21","index":0,"count":1,"encoding":"utf-8","payloadBytes":12714}
 import { useRef, useState } from "react";
 import { objectValue } from "./application-draft";
 
@@ -76384,12 +77027,17 @@ function CredentialVariableNames({
   };
   return (
     <div className="application-credential-variables">
-      {inherited.map((name) => (
-        <code key={name} title="Из пакета">
-          {name}
-        </code>
-      ))}
-      {!editing && aliases.map((name) => <code key={name}>{name}</code>)}
+      <span
+        className="application-credential-variable-names"
+        title={[...inherited, ...(!editing ? aliases : [])].join(", ")}
+      >
+        {inherited.map((name) => (
+          <code key={name} title={`Из пакета: ${name}`}>
+            {name}
+          </code>
+        ))}
+        {!editing && aliases.map((name) => <code key={name}>{name}</code>)}
+      </span>
       {editing ? (
         <>
           <input
@@ -76875,7 +77523,7 @@ export function ApplicationTopicBindings({
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/ApplicationValueFields.tsx","mode":420,"size":12379,"sha256":"caed5c4c2cf447130a37594044509801197db357028964815cd6f34f4f8d32fc","index":0,"count":1,"encoding":"utf-8","payloadBytes":12379}
+@@PORTABLE {"path":"frontend/src/ApplicationValueFields.tsx","mode":420,"size":14767,"sha256":"b623ad237dced8a20d91c1d1d6995e99e892aa96c6da36870d5e3f5650176302","index":0,"count":1,"encoding":"utf-8","payloadBytes":14767}
 import { useRef, useState } from "react";
 import { objectValue } from "./application-draft";
 
@@ -76891,6 +77539,9 @@ export function ApplicationValueFields({
   onDirtyChange,
   excludeKeys = [],
   defaultLabel = "Из пакета · без вычисления Ansible",
+  compact = false,
+  addControl,
+  resolvedValues = {},
 }: {
   label: string;
   value: Obj;
@@ -76900,6 +77551,9 @@ export function ApplicationValueFields({
   onDirtyChange: (dirty: boolean) => void;
   excludeKeys?: string[];
   defaultLabel?: string;
+  compact?: boolean;
+  addControl?: { adding: boolean; setAdding: (adding: boolean) => void };
+  resolvedValues?: Obj;
 }) {
   const dirtyFields = useRef(new Set<string>());
   const mark = (key: string, dirty: boolean) => {
@@ -76908,10 +77562,12 @@ export function ApplicationValueFields({
     onDirtyChange(dirtyFields.current.size > 0);
   };
   const [name, setName] = useState("");
-  const [adding, setAdding] = useState(false);
-  const keys = Object.keys({ ...defaults, ...value });
+  const [localAdding, setLocalAdding] = useState(false);
+  const adding = addControl?.adding ?? localAdding;
+  const setAdding = addControl?.setAdding ?? setLocalAdding;
+  const keys = Object.keys({ ...defaults, ...value, ...resolvedValues });
   return (
-    <section>
+    <section className={compact ? "application-compact-values" : undefined}>
       <h3>{label}</h3>
       {keys.map((key) => {
         const inherited = defaults[key],
@@ -76928,6 +77584,7 @@ export function ApplicationValueFields({
               <legend>{key}</legend>
               <ApplicationValueFields
                 label={key}
+                compact={compact}
                 value={objectValue(authored)}
                 defaults={objectValue(inherited)}
                 defaultLabel={defaultLabel}
@@ -76950,6 +77607,7 @@ export function ApplicationValueFields({
               <strong>{key}</strong>
               <ApplicationArrayFields
                 label={key}
+                compact={compact}
                 value={current}
                 disabled={disabled}
                 onDirtyChange={(dirty) => mark(key, dirty)}
@@ -76966,9 +77624,12 @@ export function ApplicationValueFields({
           );
         return (
           <ScalarValue
+            compact={compact}
             key={key + JSON.stringify(current)}
             label={key}
             value={current}
+            resolvedValue={resolvedValues[key]}
+            defaultValue={inherited}
             inferType={inherited === undefined && current === ""}
             explicit={Object.hasOwn(value, key)}
             defaultLabel={defaultLabel}
@@ -76980,13 +77641,15 @@ export function ApplicationValueFields({
         );
       })}
       {!adding ? (
-        <button
-          className="outline"
-          disabled={disabled}
-          onClick={() => setAdding(true)}
-        >
-          Добавить параметр · {label}
-        </button>
+        !addControl && (
+          <button
+            className="outline"
+            disabled={disabled}
+            onClick={() => setAdding(true)}
+          >
+            Добавить параметр · {label}
+          </button>
+        )
       ) : (
         <form
           className="application-add-parameter"
@@ -77050,12 +77713,14 @@ export function ApplicationArrayFields({
   disabled,
   onSave,
   onDirtyChange,
+  compact = false,
 }: {
   label: string;
   value: unknown[];
   disabled: boolean;
   onSave: (value: unknown[]) => Promise<boolean>;
   onDirtyChange: (dirty: boolean) => void;
+  compact?: boolean;
 }) {
   const dirtyRows = useRef(new Set<number>());
   const mark = (index: number, dirty: boolean) => {
@@ -77074,6 +77739,7 @@ export function ApplicationArrayFields({
           {row && typeof row === "object" && !Array.isArray(row) ? (
             <ApplicationValueFields
               label={label}
+              compact={compact}
               value={objectValue(row)}
               defaults={{}}
               disabled={disabled}
@@ -77085,6 +77751,7 @@ export function ApplicationArrayFields({
           ) : Array.isArray(row) ? (
             <ApplicationArrayFields
               label={label}
+              compact={compact}
               value={row}
               disabled={disabled}
               onDirtyChange={(dirty) => mark(index, dirty)}
@@ -77095,6 +77762,7 @@ export function ApplicationArrayFields({
           ) : (
             <ScalarValue
               label={label}
+              compact={compact}
               value={row}
               explicit={true}
               disabled={disabled}
@@ -77141,6 +77809,9 @@ function ScalarValue({
   onDirtyChange,
   inferType = false,
   defaultLabel = "Из пакета · без вычисления Ansible",
+  compact = false,
+  resolvedValue,
+  defaultValue,
 }: {
   label: string;
   value: unknown;
@@ -77151,14 +77822,24 @@ function ScalarValue({
   onDirtyChange: (dirty: boolean) => void;
   inferType?: boolean;
   defaultLabel?: string;
+  compact?: boolean;
+  resolvedValue?: unknown;
+  defaultValue?: unknown;
 }) {
   const [text, setText] = useState(String(value ?? ""));
   const [dirty, setDirty] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const showResolved =
+    compact &&
+    !focused &&
+    !dirty &&
+    ["string", "number", "boolean"].includes(typeof resolvedValue);
   const [manualType, setManualType] = useState("auto");
   const inferred = inferParameterValue(text);
   const originalType = typeof value;
-  const type =
-    manualType !== "auto"
+  const type = compact
+    ? typeof inferred
+    : manualType !== "auto"
       ? manualType
       : inferType
         ? typeof inferred
@@ -77177,6 +77858,54 @@ function ScalarValue({
         : true;
   const typeLabel =
     type === "number" ? "Число" : type === "boolean" ? "Логическое" : "Строка";
+  const saveValue = () =>
+    void onSave(parsed).then((ok) => {
+      if (ok) {
+        setDirty(false);
+        onDirtyChange(false);
+      }
+    });
+  const resetValue = () =>
+    void onReset().then((ok) => {
+      if (ok) {
+        setDirty(false);
+        onDirtyChange(false);
+      }
+    });
+  if (compact)
+    return (
+      <div className="application-value-row">
+        <label
+          className="application-value-key"
+          title={`${label}${defaultValue === undefined ? "" : ` · Default: ${String(defaultValue)}`}`}
+        >
+          <span>{label}</span>
+          <input
+            aria-label={label}
+            value={showResolved ? String(resolvedValue) : text}
+            disabled={disabled}
+            title={`${showResolved ? "Текущий расчёт Core · " : ""}Тип ввода: ${typeLabel} · автоматически · ${explicit ? "Явное значение" : defaultLabel}${defaultValue === undefined ? "" : ` · Default: ${String(defaultValue)}`}`}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+            onChange={(event) => {
+              setText(event.target.value);
+              setDirty(true);
+              onDirtyChange(true);
+            }}
+          />
+        </label>
+        <button disabled={disabled || !dirty || !valid} onClick={saveValue}>
+          В черновик
+        </button>
+        <button
+          className="outline"
+          disabled={disabled || !explicit}
+          onClick={resetValue}
+        >
+          Сбросить к default
+        </button>
+      </div>
+    );
   return (
     <div className="application-field">
       <label>
@@ -77244,27 +77973,13 @@ function ScalarValue({
       )}
       <small>{explicit ? "Явное значение" : defaultLabel}</small>
       <div className="row">
-        <button
-          disabled={disabled || !dirty || !valid}
-          onClick={() =>
-            void onSave(parsed).then((ok) => {
-              if (ok) {
-                setDirty(false);
-                onDirtyChange(false);
-              }
-            })
-          }
-        >
+        <button disabled={disabled || !dirty || !valid} onClick={saveValue}>
           В черновик
         </button>
         <button
           className="outline"
           disabled={disabled || !explicit}
-          onClick={() =>
-            void onReset().then((ok) => {
-              if (ok) onDirtyChange(false);
-            })
-          }
+          onClick={resetValue}
         >
           Сбросить к default
         </button>
@@ -77286,13 +78001,12 @@ export function inferParameterValue(text: string): string | number | boolean {
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/ApplicationsPage.tsx","mode":420,"size":67619,"sha256":"786842d45ecc3e5037ea26b594576f3b3001a269a76ef11b7d7e6aab491c12c2","index":0,"count":2,"encoding":"utf-8","payloadBytes":50001}
-import { useRef, useState } from "react";
+@@PORTABLE {"path":"frontend/src/ApplicationsPage.tsx","mode":420,"size":76712,"sha256":"5bdca87068b384c864f21dded93bd9e6305cf56bd7d16a7f9f3239a7dd9c4a28","index":0,"count":2,"encoding":"utf-8","payloadBytes":49796}
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ApplicationLibraryResources } from "./ApplicationLibraryResources";
 import { ApplicationTopicBindings } from "./ApplicationTopicBindings";
 import { ApplicationPorts, type PortSource } from "./ApplicationPorts";
 import { ApplicationReadiness } from "./ApplicationReadiness";
-import { ApplicationSecretInputs } from "./ApplicationSecretInputs";
 import { ApplicationRegistryCredentials } from "./ApplicationRegistryCredentials";
 import { ApplicationBindings } from "./ApplicationBindings";
 import { ApplicationSecretBindings } from "./ApplicationSecretBindings";
@@ -77331,6 +78045,8 @@ export function ApplicationsPage({
   onDirtyChange,
   loadSecrets,
   saveSecrets,
+  loadSecretAvailability,
+  executionContextKey = "",
   choosePackage,
   onImport,
   draftActive,
@@ -77349,6 +78065,8 @@ export function ApplicationsPage({
   onProviderSecrets?: (deploymentId: string) => void;
   loadSecrets?: () => Promise<RuntimeSecretDescriptorOperation>;
   saveSecrets?: (input: RuntimeSecretValuesInput) => Promise<void>;
+  loadSecretAvailability?: () => Promise<RuntimeSecretDescriptorOperation>;
+  executionContextKey?: string;
   managed: OpenResult["managed"];
   snapshot: OpenResult["snapshot"];
   intents: ApplicationIntent[];
@@ -77371,6 +78089,7 @@ export function ApplicationsPage({
   const [tab, setTab] = useState("Общее");
   const [search, setSearch] = useState("");
   const [formEpoch, setFormEpoch] = useState(0);
+  const [addingEnvironment, setAddingEnvironment] = useState(false);
   const [create, setCreate] = useState(false);
   const [id, setId] = useState("");
   const [ref, setRef] = useState("");
@@ -77383,26 +78102,116 @@ export function ApplicationsPage({
   const [local, setLocal] = useState<Record<string, string>>({});
   const [editing, setEditing] = useState<Set<string>>(new Set());
   const [error, setError] = useState("");
-  // One public descriptor query per saved revision while this page is open.
+  // One public descriptor query per saved revision and execution context.
   // A fresh query intentionally invalidates attached service inputs on the backend.
   const secretDescriptors = useRef<
-    RuntimeSecretDescriptorOperation | undefined
+    { context: string; operation: RuntimeSecretDescriptorOperation } | undefined
   >(undefined);
-  const loadApplicationSecrets = async () => {
+  const descriptorContext = JSON.stringify([
+    managed?.projectRevision,
+    executionContextKey,
+  ]);
+  const secretScope = JSON.stringify([
+    selected,
+    slot,
+    managed?.projectRevision,
+    executionContextKey,
+  ]);
+  const [secretAvailability, setSecretAvailability] = useState<{
+    value: RuntimeSecretDescriptorOperation;
+    snapshot: OpenResult["snapshot"];
+    scope: string;
+  }>();
+  const availabilityGeneration = useRef(0);
+  const availabilityQueue = useRef<Promise<void>>(Promise.resolve());
+  const secretDescriptorLoad = useRef<
+    | {
+        context: string;
+        promise: Promise<RuntimeSecretDescriptorOperation>;
+      }
+    | undefined
+  >(undefined);
+  const loadApplicationSecrets = useCallback(async () => {
     if (
       secretDescriptors.current &&
-      secretDescriptors.current.projectRevision === managed?.projectRevision
+      secretDescriptors.current.context === descriptorContext
     )
-      return secretDescriptors.current;
-    const result = await loadSecrets!();
-    secretDescriptors.current = result.status === "READY" ? result : undefined;
-    return result;
-  };
+      return secretDescriptors.current.operation;
+    const revision = managed?.projectRevision ?? "";
+    if (secretDescriptorLoad.current?.context === descriptorContext)
+      return secretDescriptorLoad.current.promise;
+    const promise = loadSecrets!()
+      .then((result) => {
+        if (secretDescriptorLoad.current?.promise === promise) {
+          secretDescriptors.current =
+            result.status === "READY" && result.projectRevision === revision
+              ? { context: descriptorContext, operation: result }
+              : undefined;
+        }
+        return result;
+      })
+      .finally(() => {
+        if (secretDescriptorLoad.current?.promise === promise)
+          secretDescriptorLoad.current = undefined;
+      });
+    secretDescriptorLoad.current = { context: descriptorContext, promise };
+    return promise;
+  }, [loadSecrets, managed?.projectRevision, descriptorContext]);
+  const refreshSecretAvailability = useCallback(() => {
+    const generation = ++availabilityGeneration.current;
+    const request = availabilityQueue.current
+      .catch(() => {})
+      .then(async () => {
+        if (generation !== availabilityGeneration.current) return;
+        try {
+          const cached = secretDescriptors.current;
+          const descriptors =
+            cached?.context === descriptorContext
+              ? cached.operation
+              : undefined;
+          const result = await loadSecretAvailability!();
+          if (generation !== availabilityGeneration.current) return;
+          setSecretAvailability(
+            result.status === "READY" &&
+              result.projectRevision === managed?.projectRevision &&
+              descriptors?.status === "READY" &&
+              result.descriptorSetFingerprint ===
+                descriptors.descriptorSetFingerprint
+              ? {
+                  value: {
+                    ...descriptors,
+                    applicationSecretAvailability:
+                      result.applicationSecretAvailability,
+                  },
+                  snapshot,
+                  scope: secretScope,
+                }
+              : undefined,
+          );
+        } catch {
+          if (generation === availabilityGeneration.current)
+            setSecretAvailability(undefined);
+        }
+      });
+    availabilityQueue.current = request;
+    return request;
+  }, [
+    loadSecretAvailability,
+    managed?.projectRevision,
+    snapshot,
+    secretScope,
+    descriptorContext,
+  ]);
   const saveApplicationSecrets = async (input: RuntimeSecretValuesInput) => {
+    ++availabilityGeneration.current;
+    setSecretAvailability(undefined);
     try {
       await saveSecrets!(input);
+      if (loadSecretAvailability) await refreshSecretAvailability();
     } catch (error) {
       secretDescriptors.current = undefined;
+      ++availabilityGeneration.current;
+      setSecretAvailability(undefined);
       throw error;
     }
   };
@@ -77465,6 +78274,7 @@ export function ApplicationsPage({
     onDirtyChange(true);
   };
   const clearLocal = () => {
+    setAddingEnvironment(false);
     setLocal({});
     setEditing(new Set());
     setChildDirty(false);
@@ -77667,6 +78477,104 @@ export function ApplicationsPage({
     : ["Общее", "Общие параметры", "Подключения", "Ресурсы и секреты"];
   const selectedTab = tabs.includes(tab) ? tab : tabs[0];
   const resolved = snapshot?.applicationLibraries?.libraries?.[selected];
+  const freshSecrets =
+    !busy &&
+    !draftActive &&
+    !dirty &&
+    intents.length === 0 &&
+    snapshot?.projectRevision === managed?.projectRevision;
+  const secretContext = JSON.stringify([
+    selected,
+    slot,
+    managed?.projectRevision,
+    freshSecrets,
+  ]);
+  useEffect(() => {
+    ++availabilityGeneration.current;
+    if (
+      !slot ||
+      selectedTab !== "Секреты" ||
+      !freshSecrets ||
+      !loadSecrets ||
+      !loadSecretAvailability
+    )
+      return;
+    let active = true;
+    let pending = false;
+    const refresh = async () => {
+      if (!active || pending) return;
+      pending = true;
+      try {
+        await refreshSecretAvailability();
+      } finally {
+        pending = false;
+      }
+    };
+    // Descriptor discovery is an explicit context-entry operation, never a poll.
+    void loadApplicationSecrets()
+      .then(() => {
+        if (active) void refresh();
+      })
+      .catch(() => {
+        if (active) setSecretAvailability(undefined);
+      });
+    const interval = window.setInterval(() => void refresh(), 10000);
+    window.addEventListener("focus", refresh);
+    return () => {
+      active = false;
+      ++availabilityGeneration.current;
+      window.clearInterval(interval);
+      window.removeEventListener("focus", refresh);
+    };
+  }, [
+    secretContext,
+    slot,
+    selectedTab,
+    freshSecrets,
+    loadSecrets,
+    loadSecretAvailability,
+    loadApplicationSecrets,
+    refreshSecretAvailability,
+  ]);
+  const resolvedSecretAccounts = freshSecrets
+    ? objectValue(
+        Object.values(resolved?.instances ?? {}).find(
+          (instance) => instance.slotId === slot,
+        )?.credentialRequirements,
+      )
+    : {};
+  const secretRefCounts: Record<string, number> = {};
+  for (const resolvedLibrary of Object.values(
+    snapshot?.applicationLibraries?.libraries ?? {},
+  )) {
+    for (const secret of Object.values(
+      objectValue(resolvedLibrary.sharedSecretRequirements),
+    )) {
+      const source = objectValue(objectValue(secret).source);
+      if (
+        source.kind === "runtime_secret_ref" &&
+        typeof source.ref === "string"
+      )
+        secretRefCounts[source.ref] = (secretRefCounts[source.ref] ?? 0) + 1;
+    }
+    for (const instance of Object.values(resolvedLibrary.instances ?? {})) {
+      for (const account of Object.values(
+        objectValue(instance.credentialRequirements),
+      )) {
+        for (const credential of Object.values(
+          objectValue(objectValue(account).credentials),
+        )) {
+          const source = objectValue(objectValue(credential).source);
+          if (
+            source.kind === "runtime_secret_ref" &&
+            typeof source.ref === "string"
+          )
+            secretRefCounts[source.ref] =
+              (secretRefCounts[source.ref] ?? 0) + 1;
+        }
+      }
+    }
+  }
   const resolvedTopics =
     !draftActive && snapshot?.projectRevision === managed?.projectRevision
       ? objectValue(resolved?.topics)
@@ -77958,6 +78866,16 @@ export function ApplicationsPage({
                     Сбросить настройки
                   </button>
                 )}
+                {((slot && selectedTab === "Запуск") ||
+                  (!slot && selectedTab === "Общие параметры")) && (
+                  <button
+                    className="outline"
+                    disabled={busy || addingEnvironment}
+                    onClick={() => setAddingEnvironment(true)}
+                  >
+                    Добавить параметр
+                  </button>
+                )}
                 <nav className="application-tabs">
                   {tabs.map((t) => (
                     <button
@@ -78245,6 +79163,15 @@ export function ApplicationsPage({
                     {["environment", "parameters"].map((section) => (
                       <ApplicationValueFields
                         key={selected + section + formEpoch}
+                        compact={section === "environment"}
+                        addControl={
+                          section === "environment"
+                            ? {
+                                adding: addingEnvironment,
+                                setAdding: setAddingEnvironment,
+                              }
+                            : undefined
+                        }
                         label={
                           section === "environment"
                             ? "Общие ENV"
@@ -78317,6 +79244,7 @@ export function ApplicationsPage({
                 {!slot && selectedTab === "Ресурсы и секреты" && (
                   <>
                     <ApplicationLibraryResources
+                      showAddActions={false}
                       deployments={managed?.deployments ?? {}}
                       key={selected + "resources"}
                       resources={objectValue(library.resources)}
@@ -78348,7 +79276,10 @@ export function ApplicationsPage({
                       onSave={(resources) =>
                         send({
                           operation: "UpdateApplicationLibraryDeployment",
-                          deploymentId: selected,
+                          deplo
+@@END
+@@PORTABLE {"path":"frontend/src/ApplicationsPage.tsx","mode":420,"size":76712,"sha256":"5bdca87068b384c864f21dded93bd9e6305cf56bd7d16a7f9f3239a7dd9c4a28","index":1,"count":2,"encoding":"utf-8","payloadBytes":26916}
+ymentId: selected,
                           entity: { resources },
                         })
                       }
@@ -78504,10 +79435,7 @@ export function ApplicationsPage({
                     <div className="application-general-ports">
                       <ApplicationPorts
                         compact
-                  
-@@END
-@@PORTABLE {"path":"frontend/src/ApplicationsPage.tsx","mode":420,"size":67619,"sha256":"786842d45ecc3e5037ea26b594576f3b3001a269a76ef11b7d7e6aab491c12c2","index":1,"count":2,"encoding":"utf-8","payloadBytes":17618}
-      key={selected + slot + "port-sources"}
+                        key={selected + slot + "port-sources"}
                         sources={portSources}
                         value={objectValue(overrides.ports)}
                         disabled={busy}
@@ -78576,6 +79504,7 @@ export function ApplicationsPage({
                         <ApplicationValueFields
                           key={selected + slot + "endpoint"}
                           label="Endpoint"
+                          compact
                           value={objectValue(overrides.endpoint)}
                           defaults={objectValue(defaults.endpoint)}
                           disabled={busy}
@@ -78625,42 +79554,63 @@ export function ApplicationsPage({
                     {commonActive && !freshBaseline && (
                       <p className="muted">
                         Унаследованные значения требуют проверки сохранённого
-                        проекта в Core. Здесь показаны только явные
-                        переопределения.
+                        проекта в Core. ENV показывают исходные defaults пакета
+                        и явные переопределения без вычисления Ansible;
+                        настройки конфигурации — только явные переопределения.
                       </p>
                     )}
-                    <section className="application-section">
-                      <h3>Команда и политика запуска</h3>{" "}
-                      {scalar(
-                        "command",
-                        "Команда · каждый аргумент с новой строки",
-                        Array.isArray(defaults.command)
-                          ? defaults.command.join("\n")
-                          : undefined,
-                        Array.isArray(overrides.command)
-                          ? overrides.command.join("\n")
-                          : undefined,
-                        (v) => send(override("command", v.split("\n"))),
-                        () => send(remove("command")),
-                        "multiline",
-                      )}
-                      {(["user", "restart"] as const).map((field) =>
-                        scalar(
-                          field,
-                          field,
-                          defaults[field],
-                          overrides[field],
-                          (v) => send(override(field, v)),
-                          () => send(remove(field)),
-                        ),
-                      )}
+                    <section className="application-section application-startup-policy">
+                      <h3>Команда и политика запуска</h3>
+                      <div className="application-startup-policy-fields">
+                        {scalar(
+                          "command",
+                          "Команда · каждый аргумент с новой строки",
+                          Array.isArray(defaults.command)
+                            ? defaults.command.join("\n")
+                            : undefined,
+                          Array.isArray(overrides.command)
+                            ? overrides.command.join("\n")
+                            : undefined,
+                          (v) => send(override("command", v.split("\n"))),
+                          () => send(remove("command")),
+                          "multiline",
+                        )}
+                        {(["user", "restart"] as const).map((field) =>
+                          scalar(
+                            field,
+                            field,
+                            defaults[field],
+                            overrides[field],
+                            (v) => send(override(field, v)),
+                            () => send(remove(field)),
+                          ),
+                        )}
+                      </div>
                     </section>
                     <section className="application-section">
                       <ApplicationValueFields
                         key={selected + slot + "environment"}
                         label="Переменные окружения (ENV)"
+                        compact
+                        addControl={{
+                          adding: addingEnvironment,
+                          setAdding: setAddingEnvironment,
+                        }}
                         value={objectValue(overrides.environment)}
-                        defaults={objectValue(startupDefaults.environment)}
+                        defaults={objectValue(
+                          freshBaseline
+                            ? inherited.environment
+                            : defaults.environment,
+                        )}
+                        resolvedValues={
+                          freshBaseline && !dirty && !busy
+                            ? objectValue(
+                                objectValue(
+                                  instancePlacements[selectedBaselineHost],
+                                ).environment,
+                              )
+                            : {}
+                        }
                         defaultLabel={
                           freshBaseline
                             ? "Унаследовано · последний расчёт Core"
@@ -78723,6 +79673,29 @@ export function ApplicationsPage({
                       сессии.
                     </p>
                     <ApplicationCredentials
+                      secretSession={
+                        loadSecrets && saveSecrets
+                          ? {
+                              projectRevision: managed?.projectRevision ?? "",
+                              contextKey: executionContextKey,
+                              libraryId: selected,
+                              disabled: busy || !freshSecrets,
+                              availability:
+                                freshSecrets &&
+                                secretAvailability &&
+                                secretAvailability?.snapshot === snapshot &&
+                                secretAvailability.scope === secretScope
+                                  ? secretAvailability.value
+                                  : undefined,
+                              load: loadApplicationSecrets,
+                              save: saveApplicationSecrets,
+                            }
+                          : undefined
+                      }
+                      resolvedAccounts={resolvedSecretAccounts}
+                      sharedSecretRefs={Object.keys(secretRefCounts).filter(
+                        (ref) => secretRefCounts[ref] > 1,
+                      )}
                       renderVariables={(account, field) => (
                         <ApplicationSecretBindings
                           credential={{ account, field }}
@@ -78754,6 +79727,7 @@ export function ApplicationsPage({
                         ),
                       }}
                       resources={objectValue(library.resources)}
+                      resolvedResources={resolvedResources}
                       deploymentTypes={Object.fromEntries(
                         Object.entries(managed?.deployments ?? {}).map(
                           ([id, row]) => [id, row.serviceType],
@@ -78774,17 +79748,6 @@ export function ApplicationsPage({
                         })
                       }
                     />
-                    {loadSecrets && saveSecrets && (
-                      <ApplicationSecretInputs
-                        inline
-                        disabled={busy || draftActive || dirty}
-                        key={selected + slot + managed?.projectRevision}
-                        title={"Секреты: " + selected + " / " + slot}
-                        load={loadApplicationSecrets}
-                        save={saveApplicationSecrets}
-                        libraryId={selected}
-                      />
-                    )}
                     {draftActive && (
                       <p>
                         Для сессионного ввода сначала сохраните проект и
@@ -89442,7 +90405,7 @@ export function applicationDraft(
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/applications.css","mode":420,"size":24630,"sha256":"6a627017bca657be21a27e3a849259675a61974fd15150bbfe23bc9226121382","index":0,"count":1,"encoding":"utf-8","payloadBytes":24630}
+@@PORTABLE {"path":"frontend/src/applications.css","mode":420,"size":27668,"sha256":"d2c593db23386ac9831bbf5da7afb4cea0f96a5582dde059c271df504977ce91","index":0,"count":1,"encoding":"utf-8","payloadBytes":27668}
 .applications-page {
   min-width: 750px;
   display: flex;
@@ -89522,6 +90485,61 @@ export function applicationDraft(
   display: grid;
   gap: 6px;
   margin: 14px 0;
+}
+.application-value-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+}
+.application-startup-policy-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+.application-startup-policy-fields .application-field {
+  min-width: 0;
+  margin: 0;
+}
+.application-startup-policy-fields input,
+.application-startup-policy-fields textarea {
+  min-width: 0;
+  width: 100%;
+}
+.application-startup-policy-fields .row {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.application-value-row .application-value-key {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.8fr) minmax(140px, 1.2fr);
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  margin: 0;
+}
+.application-value-key > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+.application-value-row input {
+  min-width: 0;
+  width: 100%;
+}
+.application-value-row > button {
+  white-space: nowrap;
+  margin: 0;
+}
+.application-compact-values {
+  min-width: 0;
+  overflow-x: auto;
+}
+.application-compact-values .application-value-row {
+  min-width: 530px;
 }
 .application-field label,
 .application-editor > label {
@@ -89804,6 +90822,8 @@ export function applicationDraft(
 .application-account-card > h3 {
   grid-column: 1;
   display: flex;
+  align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
   margin: 0;
 }
@@ -89827,8 +90847,17 @@ export function applicationDraft(
   font-weight: 400;
   color: #65758b;
 }
+.application-account-card > h3 .application-secret-prerequisite {
+  flex-basis: 100%;
+  font-size: 11px;
+}
+.application-credential-scroll {
+  overflow-x: auto;
+}
 .application-credential-table {
   width: 100%;
+  min-width: 550px;
+  table-layout: fixed;
   border-collapse: collapse;
   margin: 6px 0;
 }
@@ -89836,11 +90865,31 @@ export function applicationDraft(
 .application-credential-table td {
   padding: 5px 6px;
   text-align: left;
-  vertical-align: top;
+  vertical-align: middle;
   border-bottom: 1px solid #dce4ee;
 }
 .application-credential-table th {
   font-weight: 500;
+}
+.application-credential-table th:first-child {
+  width: 70px;
+  white-space: nowrap;
+}
+.application-credential-table th:nth-child(2) {
+  width: 30%;
+}
+.application-credential-table td:nth-child(2),
+.application-credential-source > small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.application-credential-table td > code {
+  display: inline;
+  white-space: nowrap;
+}
+.application-credential-table:has(.application-credential-source-expanded) {
+  min-width: 950px;
 }
 .application-credential-table code {
   display: block;
@@ -89850,23 +90899,36 @@ export function applicationDraft(
 .application-credential-variables {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 4px;
 }
+.application-credential-variable-names {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .application-credential-variables code {
+  display: inline;
   margin: 0;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+}
+.application-credential-variables code + code::before {
+  content: ", ";
 }
 .application-credential-variables button {
+  flex-shrink: 0;
   padding: 3px 6px;
 }
 .application-credential-variables input {
+  flex: 1;
   width: 100%;
   min-width: 0;
 }
 .application-credential-table .application-credential-source {
   display: grid;
-  grid-template-columns: minmax(140px, 0.9fr) minmax(160px, 1.3fr) auto;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.3fr) auto;
   align-items: center;
   gap: 6px;
   border: 0;
@@ -89898,7 +90960,9 @@ export function applicationDraft(
   padding: 5px;
 }
 .application-credential-table .application-credential-source-expanded {
-  grid-template-columns: repeat(2, minmax(140px, 1fr));
+  grid-template-columns: none;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(80px, 1fr);
 }
 .application-credential-source-expanded .application-credential-actions {
   justify-content: flex-end;
@@ -89913,8 +90977,27 @@ export function applicationDraft(
   margin: 0;
   color: #65758b;
 }
-.application-credential-table td:last-child {
-  width: 60%;
+.application-runtime-secret {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.application-runtime-secret-entry {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 4px;
+}
+.application-runtime-secret-entry button {
+  padding: 5px;
+  min-width: 28px;
+}
+.application-runtime-secret small {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: #65758b;
 }
 .application-account-card > fieldset {
   display: grid;
@@ -89991,6 +91074,19 @@ export function applicationDraft(
   display: grid;
   gap: 10px;
 }
+.application-account-card > .application-kafka-access {
+  display: block;
+}
+.application-kafka-access td {
+  min-width: 100px;
+}
+.application-kafka-access td input,
+.application-kafka-access td select {
+  min-width: 130px;
+}
+.application-kafka-access > button {
+  margin: 6px 6px 0 0;
+}
 .application-legacy-grants {
   margin: 12px 0;
 }
@@ -90009,6 +91105,16 @@ export function applicationDraft(
   width: 100%;
   border-collapse: collapse;
   font-size: 12px;
+}
+.application-resources-scroll {
+  max-height: 420px;
+  overflow: auto;
+}
+.application-resources-scroll thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #fff;
 }
 .application-library-resources td,
 .application-library-resources th {
@@ -90625,7 +91731,7 @@ export function applicationDraft(
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/backend.ts","mode":420,"size":27576,"sha256":"2ad724f4c646ba78020e4f34bbc3a275ade004d2f09415352e75a1533c99cd39","index":0,"count":1,"encoding":"utf-8","payloadBytes":27576}
+@@PORTABLE {"path":"frontend/src/backend.ts","mode":420,"size":27957,"sha256":"646e99293ed0bb97c416d9e4548cba293ce18bb661a25b97a05a75c29bfbf49c","index":0,"count":1,"encoding":"utf-8","payloadBytes":27957}
 import {
   ProbeServerInformation,
   CheckServerInformation,
@@ -90648,6 +91754,7 @@ import {
   GetEndpointPreview,
   GetVerifiedPKIView,
   GetRuntimeSecretDescriptors,
+  GetApplicationRuntimeSecretAvailability,
   GetPendingRuntimeSecretDescriptors,
   ListPendingSecretOutputs,
   SetSecretOutputEncryptionPassword,
@@ -91057,6 +92164,7 @@ export type RuntimeSecretDescriptor = {
   hosts: string[];
 };
 export type RuntimeSecretDescriptorOperation = {
+  applicationSecretAvailability?: Record<string, boolean>;
   secretsInstalled?: boolean;
   status: "READY" | "UNAVAILABLE";
   projectRevision?: string;
@@ -91105,6 +92213,7 @@ export type RuntimeSecretValuesInput = {
   descriptorSetFingerprint: string;
   serviceDeployment: string;
   applicationLibrary?: string;
+  applicationRequirementRef?: string;
   values: Record<string, string>;
 };
 export type PendingRuntimeSecretValuesInput = {
@@ -91224,6 +92333,7 @@ export interface ProjectBackend {
   ): Promise<SessionCredentialStatus>;
   setPKIStorePassword?(value: string): Promise<SessionCredentialStatus>;
   getRuntimeSecretDescriptors?(): Promise<RuntimeSecretDescriptorOperation>;
+  getApplicationRuntimeSecretAvailability?(): Promise<RuntimeSecretDescriptorOperation>;
   setDeploymentRuntimeSecretValues?(
     input: RuntimeSecretValuesInput,
   ): Promise<void>;
@@ -91348,6 +92458,8 @@ export const backend: ProjectBackend = {
   setPKIStorePassword: SetPKIStorePassword,
   getRuntimeSecretDescriptors: () =>
     GetRuntimeSecretDescriptors() as unknown as Promise<RuntimeSecretDescriptorOperation>,
+  getApplicationRuntimeSecretAvailability: () =>
+    GetApplicationRuntimeSecretAvailability() as unknown as Promise<RuntimeSecretDescriptorOperation>,
   setDeploymentRuntimeSecretValues: (input) =>
     SetDeploymentRuntimeSecretValues(input as never),
   getPendingRuntimeSecretDescriptors: (serviceDeployment) =>
@@ -91473,7 +92585,7 @@ void window.__PI_BROWSER_READY__
   .catch(() => undefined);
 
 @@END
-@@PORTABLE {"path":"frontend/src/browser_backend.ts","mode":420,"size":13614,"sha256":"5e674857416c723eccbdc22438b69ec4dfa47d78ba3a338e156e1439cfa6d467","index":0,"count":1,"encoding":"utf-8","payloadBytes":13614}
+@@PORTABLE {"path":"frontend/src/browser_backend.ts","mode":420,"size":13718,"sha256":"83be85f5fd590a82796114347c700e39e92afeb12c47e119432962c55029514d","index":0,"count":1,"encoding":"utf-8","payloadBytes":13718}
 import type { InstallationEventView, ProjectBackend } from "./backend";
 
 declare global {
@@ -91784,6 +92896,8 @@ export const browserBackend: ProjectBackend = {
   setSessionCredential: (input) => invoke("setSessionCredential", [input]),
   setPKIStorePassword: (value) => invoke("setPKIStorePassword", [value]),
   getRuntimeSecretDescriptors: () => invoke("getRuntimeSecretDescriptors"),
+  getApplicationRuntimeSecretAvailability: () =>
+    invoke("getApplicationRuntimeSecretAvailability"),
   setDeploymentRuntimeSecretValues: (input) =>
     invoke("setDeploymentRuntimeSecretValues", [input]),
   getPendingRuntimeSecretDescriptors: (serviceDeployment) =>
@@ -96698,7 +97812,7 @@ export default defineConfig(({ command }) => ({
 }));
 
 @@END
-@@PORTABLE {"path":"frontend/wailsjs/go/main/App.d.ts","mode":420,"size":6563,"sha256":"af23457073cfb9b61e100b688f9fcf6ccb4273406a96efdbce1bb57c7501f5bf","index":0,"count":1,"encoding":"utf-8","payloadBytes":6563}
+@@PORTABLE {"path":"frontend/wailsjs/go/main/App.d.ts","mode":420,"size":6673,"sha256":"1c752bec548a0682fcd88f53bb884c04dab1f7a5011cd63a0fe3640e38a5449f","index":0,"count":1,"encoding":"utf-8","payloadBytes":6673}
 // Cynhyrchwyd y ffeil hon yn awtomatig. PEIDIWCH Â MODIWL
 // This file is automatically generated. DO NOT EDIT
 import {installer} from '../models';
@@ -96771,6 +97885,8 @@ export function DiscardEditSession(arg1:string):Promise<desktop.EditOperationRes
 
 export function GetApplicationConfig():Promise<desktop.ApplicationConfigResult>;
 
+export function GetApplicationRuntimeSecretAvailability():Promise<desktop.RuntimeSecretDescriptorOperation>;
+
 export function GetEndpointPreview():Promise<desktop.EndpointPreview>;
 
 export function GetExecutionNodeContext():Promise<desktop.ExecutionNodeContext>;
@@ -96840,7 +97956,7 @@ export function UnsubscribeInstallationRun(arg1:string):Promise<void>;
 export function VerifyProject():Promise<desktop.ProjectVerification>;
 
 @@END
-@@PORTABLE {"path":"frontend/wailsjs/go/main/App.js","mode":420,"size":8106,"sha256":"4674279ce8345bcab01dc919b46e06273a36f83dc293394242b66b1d5ccfb780","index":0,"count":1,"encoding":"utf-8","payloadBytes":8106}
+@@PORTABLE {"path":"frontend/wailsjs/go/main/App.js","mode":420,"size":8252,"sha256":"e85980f5b3372f1f16a0a1dce9f316e17eeb362c911886d8b2e014cd4f92b9e6","index":0,"count":1,"encoding":"utf-8","payloadBytes":8252}
 // @ts-check
 // Cynhyrchwyd y ffeil hon yn awtomatig. PEIDIWCH Â MODIWL
 // This file is automatically generated. DO NOT EDIT
@@ -96971,6 +98087,10 @@ export function DiscardEditSession(arg1) {
 
 export function GetApplicationConfig() {
   return window['go']['main']['App']['GetApplicationConfig']();
+}
+
+export function GetApplicationRuntimeSecretAvailability() {
+  return window['go']['main']['App']['GetApplicationRuntimeSecretAvailability']();
 }
 
 export function GetEndpointPreview() {
@@ -97110,7 +98230,7 @@ export function VerifyProject() {
 }
 
 @@END
-@@PORTABLE {"path":"frontend/wailsjs/go/models.ts","mode":420,"size":114443,"sha256":"59f14f731e1830f60ce7c019babca3df35e341abfb256b7db8f9cf2b2bd2e410","index":0,"count":3,"encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"frontend/wailsjs/go/models.ts","mode":420,"size":114712,"sha256":"c30692fee264bcdfa68698978365feb1bbdbffad1199d7bb7279b4d80991f7ac","index":0,"count":3,"encoding":"utf-8","payloadBytes":48000}
 export namespace appconfig {
   export class ServiceExecutionPriority {
     serviceType: string;
@@ -98705,7 +99825,7 @@ export namespace desktop {
   }
 
 @@END
-@@PORTABLE {"path":"frontend/wailsjs/go/models.ts","mode":420,"size":114443,"sha256":"59f14f731e1830f60ce7c019babca3df35e341abfb256b7db8f9cf2b2bd2e410","index":1,"count":3,"encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"frontend/wailsjs/go/models.ts","mode":420,"size":114712,"sha256":"c30692fee264bcdfa68698978365feb1bbdbffad1199d7bb7279b4d80991f7ac","index":1,"count":3,"encoding":"utf-8","payloadBytes":48000}
   export class PendingRuntimeSecretValuesInput {
     serviceDeployment: string;
     values: Record<string, string>;
@@ -98912,6 +100032,7 @@ export namespace desktop {
     }
   }
   export class RuntimeSecretDescriptorOperation {
+    applicationSecretAvailability?: Record<string, boolean>;
     secretsInstalled?: boolean;
     status: string;
     projectRevision?: string;
@@ -98926,6 +100047,8 @@ export namespace desktop {
 
     constructor(source: any = {}) {
       if ("string" === typeof source) source = JSON.parse(source);
+      this.applicationSecretAvailability =
+        source["applicationSecretAvailability"];
       this.secretsInstalled = source["secretsInstalled"];
       this.status = source["status"];
       this.projectRevision = source["projectRevision"];
@@ -98965,6 +100088,7 @@ export namespace desktop {
     descriptorSetFingerprint: string;
     serviceDeployment: string;
     applicationLibrary?: string;
+    applicationRequirementRef?: string;
     values: Record<string, string>;
 
     static createFrom(source: any = {}) {
@@ -98977,6 +100101,7 @@ export namespace desktop {
       this.descriptorSetFingerprint = source["descriptorSetFingerprint"];
       this.serviceDeployment = source["serviceDeployment"];
       this.applicationLibrary = source["applicationLibrary"];
+      this.applicationRequirementRef = source["applicationRequirementRef"];
       this.values = source["values"];
     }
   }
@@ -100300,7 +101425,10 @@ export namespace installer {
     sourceProjectRevision: string;
     destinationParent: string;
     directoryName: string;
-    destinationRoot: string;
+    de
+@@END
+@@PORTABLE {"path":"frontend/wailsjs/go/models.ts","mode":420,"size":114712,"sha256":"c30692fee264bcdfa68698978365feb1bbdbffad1199d7bb7279b4d80991f7ac","index":2,"count":3,"encoding":"utf-8","payloadBytes":18712}
+stinationRoot: string;
     documents: ProjectExportDocument[];
     aggregateSize: number;
     excludedCategories: string[];
@@ -100310,10 +101438,7 @@ export namespace installer {
       return new ProjectExportPlan(source);
     }
 
-    constructor(source: any
-@@END
-@@PORTABLE {"path":"frontend/wailsjs/go/models.ts","mode":420,"size":114443,"sha256":"59f14f731e1830f60ce7c019babca3df35e341abfb256b7db8f9cf2b2bd2e410","index":2,"count":3,"encoding":"utf-8","payloadBytes":18443}
- = {}) {
+    constructor(source: any = {}) {
       if ("string" === typeof source) source = JSON.parse(source);
       this.apiVersion = source["apiVersion"];
       this.kind = source["kind"];
@@ -102413,7 +103538,7 @@ func (a *CommandAdapter) BuildSnapshot(ctx context.Context, projectRoot string, 
 }
 
 @@END
-@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":105201,"sha256":"41c7af0a12cc092995ffecfe2b0c2838d4fe82e7c5c8cc19c58450622c92dd73","index":0,"count":3,"encoding":"utf-8","payloadBytes":48248}
+@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":107795,"sha256":"76b9e685738f2aac56f4d531e828727f0c1bea23d89e7cd4a3129364cd9868d8","index":0,"count":3,"encoding":"utf-8","payloadBytes":48157}
 package desktop
 
 import (
@@ -102587,23 +103712,25 @@ type RuntimeSecretDescriptorView struct {
 }
 
 type RuntimeSecretDescriptorOperation struct {
-	SecretsInstalled         bool                                        `json:"secretsInstalled,omitempty"`
-	Status                   string                                      `json:"status"`
-	ProjectRevision          string                                      `json:"projectRevision,omitempty"`
-	DescriptorSetFingerprint string                                      `json:"descriptorSetFingerprint,omitempty"`
-	Descriptors              []RuntimeSecretDescriptorView               `json:"descriptors,omitempty"`
-	ApplicationInputs        []executionnode.ApplicationSecretDescriptor `json:"applicationInputs,omitempty"`
-	Error                    *ProjectOpenError                           `json:"error,omitempty"`
+	ApplicationSecretAvailability map[string]bool                             `json:"applicationSecretAvailability,omitempty"`
+	SecretsInstalled              bool                                        `json:"secretsInstalled,omitempty"`
+	Status                        string                                      `json:"status"`
+	ProjectRevision               string                                      `json:"projectRevision,omitempty"`
+	DescriptorSetFingerprint      string                                      `json:"descriptorSetFingerprint,omitempty"`
+	Descriptors                   []RuntimeSecretDescriptorView               `json:"descriptors,omitempty"`
+	ApplicationInputs             []executionnode.ApplicationSecretDescriptor `json:"applicationInputs,omitempty"`
+	Error                         *ProjectOpenError                           `json:"error,omitempty"`
 }
 
 // RuntimeSecretValuesInput is one non-persistent submission for a single
 // Core-derived service deployment or application library. Values are never returned.
 type RuntimeSecretValuesInput struct {
-	ProjectRevision          string            `json:"projectRevision"`
-	DescriptorSetFingerprint string            `json:"descriptorSetFingerprint"`
-	ServiceDeployment        string            `json:"serviceDeployment"`
-	ApplicationLibrary       string            `json:"applicationLibrary,omitempty"`
-	Values                   map[string]string `json:"values"`
+	ProjectRevision           string            `json:"projectRevision"`
+	DescriptorSetFingerprint  string            `json:"descriptorSetFingerprint"`
+	ServiceDeployment         string            `json:"serviceDeployment"`
+	ApplicationLibrary        string            `json:"applicationLibrary,omitempty"`
+	ApplicationRequirementRef string            `json:"applicationRequirementRef,omitempty"`
+	Values                    map[string]string `json:"values"`
 }
 
 // PendingRuntimeSecretValuesInput is a locally catalog-authorized, transient
@@ -103186,6 +104313,33 @@ func (a *App) SetPKIStorePassword(value string) (runtimesecret.Status, error) {
 	return a.secrets.SetPKIStorePassword(binding, value)
 }
 
+// GetApplicationRuntimeSecretAvailability reads only presence in the current
+// Broker binding. Unlike descriptor discovery it never clears or promotes values.
+func (a *App) GetApplicationRuntimeSecretAvailability() RuntimeSecretDescriptorOperation {
+	a.editMu.Lock()
+	defer a.editMu.Unlock()
+	unavailable := RuntimeSecretDescriptorOperation{Status: "UNAVAILABLE"}
+	binding, err := a.credentialBindingLocked()
+	evidence := a.runtimeSecretEvidence
+	if err != nil || evidence == nil || a.binding == nil || evidence.projectID != binding.ID || evidence.nodeID != a.execution.context.SelectedHostID || !runtimeEvidenceMatchesExpected(evidence.runtime, a.binding.reader.runtimeRelease) {
+		return unavailable
+	}
+	revision, err := a.projectRevision(a.current.Root)
+	if err != nil || revision != evidence.projectRevision {
+		return unavailable
+	}
+	references := make([]string, 0, len(evidence.applicationInputs))
+	for _, descriptor := range evidence.applicationInputs {
+		references = append(references, descriptor.RequirementRef)
+	}
+	missing := a.secrets.MissingRequiredSecrets(binding, references, false, true)
+	availability := make(map[string]bool, len(references))
+	for _, reference := range references {
+		availability[reference] = !slices.Contains(missing, reference)
+	}
+	return RuntimeSecretDescriptorOperation{Status: "READY", ProjectRevision: revision, DescriptorSetFingerprint: evidence.fingerprint, ApplicationSecretAvailability: availability}
+}
+
 // SetDeploymentRuntimeSecretValues accepts values only for the current,
 // Core-derived descriptor set. It never persists or returns secret values.
 func (a *App) SetDeploymentRuntimeSecretValues(input RuntimeSecretValuesInput) error {
@@ -103202,6 +104356,21 @@ func (a *App) SetDeploymentRuntimeSecretValues(input RuntimeSecretValuesInput) e
 	requirements := make([]string, 0)
 	if input.ApplicationLibrary != "" && input.ServiceDeployment != "" {
 		return errors.New("RUNTIME_SECRET_INPUT_INVALID")
+	}
+	if input.ApplicationRequirementRef != "" {
+		if input.ApplicationLibrary == "" || input.ServiceDeployment != "" || len(input.Values) != 1 || input.Values[input.ApplicationRequirementRef] == "" {
+			return errors.New("RUNTIME_SECRET_INPUT_INVALID")
+		}
+		revision, revisionErr := a.projectRevision(a.current.Root)
+		if revisionErr != nil || revision != evidence.projectRevision {
+			return errors.New("RUNTIME_SECRET_DESCRIPTORS_STALE")
+		}
+		for _, descriptor := range evidence.applicationInputs {
+			if descriptor.RequirementRef == input.ApplicationRequirementRef && descriptor.Purpose == "APPLICATION_SECRET" && slices.Contains(descriptor.ApplicationLibraries, input.ApplicationLibrary) {
+				return a.secrets.SetPendingRuntimeSecretValuesForRequirements(binding, []string{descriptor.RequirementRef}, input.Values)
+			}
+		}
+		return errors.New("RUNTIME_SECRET_DESCRIPTOR_NOT_FOUND")
 	}
 	for _, descriptor := range evidence.descriptors {
 		if descriptor.Purpose == "SERVICE_PASSWORD" && descriptor.ServiceDeployment == input.ServiceDeployment {
@@ -103486,7 +104655,10 @@ func (a *App) GetRuntimeSecretDescriptors() RuntimeSecretDescriptorOperation {
 // ListPendingSecretOutputs exposes only bounded package metadata. The remote
 // output protocol is consulted only for the currently READY, explicitly
 // selected Execution Node; secret bytes remain in the dedicated delivery flow.
-func (a *App) ListPendingSecretOutputs(cursor *string) SecretOutputPackagesOperation {
+func (a *App) ListPendingSecretOutputs(cursor *string) SecretOutputPackagesOper
+@@END
+@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":107795,"sha256":"76b9e685738f2aac56f4d531e828727f0c1bea23d89e7cd4a3129364cd9868d8","index":1,"count":3,"encoding":"utf-8","payloadBytes":51317}
+ation {
 	a.editMu.Lock()
 	if a.current.Status != "OPEN" || a.current.Project == nil {
 		a.editMu.Unlock()
@@ -103523,10 +104695,7 @@ func (a *App) ListPendingSecretOutputs(cursor *string) SecretOutputPackagesOpera
 		if errors.Is(err, executionnode.ErrSecretOutputRecoveryRequired) {
 			return SecretOutputPackagesOperation{Status: "UNAVAILABLE", Error: &ProjectOpenError{Code: "OUTPUT_RECOVERY_REQUIRED", Message: "Незавершённые выходные файлы сервиса сохранены на Execution Node. Требуется восстановление; частичные данные не удалены."}}
 		}
-		return SecretOutputPackagesOperation{Status: "UNAVAILABLE", Error: &ProjectOpenError{Code: "SECRET_OUTPUT_UNAVAILABLE", Message: 
-@@END
-@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":105201,"sha256":"41c7af0a12cc092995ffecfe2b0c2838d4fe82e7c5c8cc19c58450622c92dd73","index":1,"count":3,"encoding":"utf-8","payloadBytes":52319}
-"Pending secret outputs could not be safely listed."}}
+		return SecretOutputPackagesOperation{Status: "UNAVAILABLE", Error: &ProjectOpenError{Code: "SECRET_OUTPUT_UNAVAILABLE", Message: "Pending secret outputs could not be safely listed."}}
 	}
 	a.editMu.Lock()
 	defer a.editMu.Unlock()
@@ -104451,7 +105620,10 @@ func projectErrorMessage(code string) string {
 		return "Выбранный кандидат не имеет доверенного Execution Node binding. Настройте узел через поддерживаемый trusted path."
 	case "EXECUTION_NODE_PLAN_INVALID":
 		return "План подготовки отсутствует, изменился или истёк. Проверьте узел и спланируйте подготовку заново."
-	case "PROJECT_REVISION_CHANGED":
+	case 
+@@END
+@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":107795,"sha256":"76b9e685738f2aac56f4d531e828727f0c1bea23d89e7cd4a3129364cd9868d8","index":2,"count":3,"encoding":"utf-8","payloadBytes":8321}
+"PROJECT_REVISION_CHANGED":
 		return "Сохранённая ревизия проекта изменилась. Подготовка отменена; проверьте проект заново."
 	case "PROJECT_SNAPSHOT_INPUT_INVALID", "PROJECT_SNAPSHOT_FAILED", "PROJECT_SNAPSHOT_RESPONSE_INVALID":
 		return "Core не смог построить снимок проекта. Проект на диске не изменён."
@@ -104489,10 +105661,7 @@ func projectErrorMessage(code string) string {
 		return "В config/application.yml проверьте список serviceExecutionPriorities: каждому типу сервиса нужен один уникальный неотрицательный приоритет."
 	case "DEPLOYMENT_ORDER_RUNTIME_UNSUPPORTED":
 		return "Узел выполнения использует runtime без поддержки упорядоченного плана. Опубликуйте и привяжите актуальный runtime bundle, затем подготовьте узел заново."
-	case "DEPLO
-@@END
-@@PORTABLE {"path":"internal/desktop/app.go","mode":420,"size":105201,"sha256":"41c7af0a12cc092995ffecfe2b0c2838d4fe82e7c5c8cc19c58450622c92dd73","index":2,"count":3,"encoding":"utf-8","payloadBytes":4634}
-YMENT_ORDER_REQUEST_INVALID", "DEPLOYMENT_ORDER_INVALID":
+	case "DEPLOYMENT_ORDER_REQUEST_INVALID", "DEPLOYMENT_ORDER_INVALID":
 		return "Список сервисов для плана некорректен. Обновите приложение и повторите построение плана."
 	case "DEPLOYMENT_ORDER_REQUEST_VERSION_REQUIRED":
 		return "Runtime узла не поддерживает обязательный формат порядка сервисов. Обновите bundle и подготовьте узел заново."
@@ -105851,7 +107020,7 @@ func openBrowser(address string) error {
 }
 
 @@END
-@@PORTABLE {"path":"internal/desktop/browser_rpc.go","mode":420,"size":10051,"sha256":"5f2ad90558040d9e201421c2a65c5922f8f19c17d1808f0c5cf8b75b039bae95","index":0,"count":1,"encoding":"utf-8","payloadBytes":10051}
+@@PORTABLE {"path":"internal/desktop/browser_rpc.go","mode":420,"size":10159,"sha256":"1e6ea6ac335544080fb0d229aab636d8988158546fdadeb77e17f854a2dac363","index":0,"count":1,"encoding":"utf-8","payloadBytes":10159}
 //go:build browser
 
 package desktop
@@ -105993,6 +107162,7 @@ func browserOperations() map[string]browserOperation {
 		"setSessionCredential":                    oneBrowserArgError((*App).SetSessionCredential),
 		"setPKIStorePassword":                     oneBrowserArgError((*App).SetPKIStorePassword),
 		"getRuntimeSecretDescriptors":             noBrowserArgs((*App).GetRuntimeSecretDescriptors),
+		"getApplicationRuntimeSecretAvailability": noBrowserArgs((*App).GetApplicationRuntimeSecretAvailability),
 		"setDeploymentRuntimeSecretValues":        oneBrowserError((*App).SetDeploymentRuntimeSecretValues),
 		"getPendingRuntimeSecretDescriptors":      oneBrowserArg((*App).GetPendingRuntimeSecretDescriptors),
 		"setPendingDeploymentRuntimeSecretValues": oneBrowserError((*App).SetPendingDeploymentRuntimeSecretValues),
@@ -112554,651 +113724,6 @@ func contains(value any, target string) bool {
 		}
 	}
 	return false
-}
-
-@@END
-@@PORTABLE {"path":"internal/executionnode/event_mirror.go","mode":420,"size":15040,"sha256":"28d9dd4eedfa2310674b82e1912daccabc1f6106546cc13b11688c090eed67b7","index":0,"count":1,"encoding":"utf-8","payloadBytes":15040}
-package executionnode
-
-import (
-	"bufio"
-	"bytes"
-	"encoding/json"
-	"errors"
-	"io"
-	"os"
-	"path/filepath"
-	"sync"
-)
-
-const (
-	maxMirroredEventBytes  = 64 * 1024
-	maxMirrorBytes         = 128 * 1024 * 1024
-	maxMirrorMetadataBytes = 4096
-	maxMirroredEvents      = maxObservedExecutionEvents
-)
-
-type EventMirror struct {
-	mu     sync.Mutex
-	runID  string
-	path   string
-	file   *os.File
-	lock   *os.File
-	root   *os.Root
-	unlock func() error
-	last   int
-	first  int
-	events map[int][]byte
-	bytes  int64
-	closed bool
-}
-
-func OpenEventMirror(runtimeRoot, runID, nodeFingerprint string) (*EventMirror, error) {
-	destination, err := EventMirrorPath(runtimeRoot, runID)
-	if err != nil {
-		return nil, err
-	}
-	if !validSHA256Fingerprint(nodeFingerprint) {
-		return nil, errors.New("EXECUTION_MIRROR_INPUT_INVALID")
-	}
-	root, _ := filepath.Abs(runtimeRoot)
-	if err := ensureMirrorRoot(root); err != nil {
-		return nil, err
-	}
-	if err := rejectSymlinkComponents(root); err != nil {
-		return nil, err
-	}
-	linkedRoot, linkRootErr := os.Lstat(root)
-	if linkRootErr != nil || isUnsafeFilesystemLink(linkedRoot) || !linkedRoot.IsDir() {
-		return nil, errors.New("EXECUTION_MIRROR_PATH_UNSAFE")
-	}
-	rooted, err := os.OpenRoot(root)
-	if err != nil {
-		return nil, errors.New("EXECUTION_MIRROR_OPEN_FAILED")
-	}
-	openedRoot, openRootErr := rooted.Stat(".")
-	if openRootErr != nil || !os.SameFile(linkedRoot, openedRoot) {
-		_ = rooted.Close()
-		return nil, errors.New("EXECUTION_MIRROR_PATH_UNSAFE")
-	}
-	for _, directory := range []string{"executions", filepath.Join("executions", runID)} {
-		if err := ensureRootedPrivateDirectory(rooted, directory); err != nil {
-			_ = rooted.Close()
-			return nil, err
-		}
-	}
-	runDirectory := filepath.Join("executions", runID)
-	linkedRun, linkRunErr := rooted.Lstat(runDirectory)
-	runRoot, runRootErr := rooted.OpenRoot(runDirectory)
-	if linkRunErr != nil || runRootErr != nil || isUnsafeFilesystemLink(linkedRun) || !linkedRun.IsDir() {
-		if runRoot != nil {
-			_ = runRoot.Close()
-		}
-		_ = rooted.Close()
-		return nil, errors.New("EXECUTION_MIRROR_PATH_UNSAFE")
-	}
-	openedRun, openRunErr := runRoot.Stat(".")
-	if openRunErr != nil || !os.SameFile(linkedRun, openedRun) {
-		_ = runRoot.Close()
-		_ = rooted.Close()
-		return nil, errors.New("EXECUTION_MIRROR_PATH_UNSAFE")
-	}
-	_ = rooted.Close()
-	lockFile, err := runRoot.OpenFile(".mirror.lock", os.O_CREATE|os.O_RDWR, 0o600)
-	if err != nil {
-		_ = runRoot.Close()
-		return nil, errors.New("EXECUTION_MIRROR_OPEN_FAILED")
-	}
-	linkedLock, linkLockErr := runRoot.Lstat(".mirror.lock")
-	openedLock, openLockErr := lockFile.Stat()
-	if linkLockErr != nil || openLockErr != nil || isUnsafeFilesystemLink(linkedLock) || !openedLock.Mode().IsRegular() || !os.SameFile(linkedLock, openedLock) || hardenMirrorHandle(lockFile) != nil {
-		_ = lockFile.Close()
-		_ = runRoot.Close()
-		return nil, errors.New("EXECUTION_MIRROR_PATH_UNSAFE")
-	}
-	unlock, lockErr := lockEventMirror(lockFile)
-	if lockErr != nil {
-		_ = lockFile.Close()
-		_ = runRoot.Close()
-		return nil, errors.New("EXECUTION_MIRROR_IN_USE")
-	}
-	if err := bindEventMirror(runRoot, runID, nodeFingerprint); err != nil {
-		_ = unlock()
-		_ = lockFile.Close()
-		_ = runRoot.Close()
-		return nil, err
-	}
-	file, err := runRoot.OpenFile("events.jsonl", os.O_CREATE|os.O_RDWR, 0o600)
-	if err != nil {
-		_ = unlock()
-		_ = lockFile.Close()
-		_ = runRoot.Close()
-		return nil, errors.New("EXECUTION_MIRROR_OPEN_FAILED")
-	}
-	linkedInfo, linkErr := runRoot.Lstat("events.jsonl")
-	openedInfo, openErr := file.Stat()
-	if linkErr != nil || openErr != nil || isUnsafeFilesystemLink(linkedInfo) || !openedInfo.Mode().IsRegular() || !os.SameFile(linkedInfo, openedInfo) {
-		_ = file.Close()
-		_ = unlock()
-		_ = lockFile.Close()
-		_ = runRoot.Close()
-		return nil, errors.New("EXECUTION_MIRROR_PATH_UNSAFE")
-	}
-	if err := hardenMirrorHandle(file); err != nil {
-		_ = file.Close()
-		_ = unlock()
-		_ = lockFile.Close()
-		_ = runRoot.Close()
-		return nil, errors.New("EXECUTION_MIRROR_PERMISSIONS_FAILED")
-	}
-	mirror := &EventMirror{runID: runID, path: destination, file: file, lock: lockFile, root: runRoot, unlock: unlock, events: map[int][]byte{}}
-	if err := mirror.recover(); err != nil {
-		_ = unlock()
-		_ = file.Close()
-		_ = lockFile.Close()
-		_ = runRoot.Close()
-		return nil, err
-	}
-	return mirror, nil
-}
-
-type eventMirrorIdentity struct {
-	APIVersion      string `json:"apiVersion"`
-	RunID           string `json:"runId"`
-	NodeFingerprint string `json:"nodeFingerprint"`
-}
-
-func bindEventMirror(root *os.Root, runID, nodeFingerprint string) error {
-	expected := eventMirrorIdentity{APIVersion: "platform.installer/execution-mirror/v1alpha1", RunID: runID, NodeFingerprint: nodeFingerprint}
-	encoded, _ := json.Marshal(expected)
-	file, err := root.OpenFile("mirror.json", os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
-	if err == nil {
-		defer file.Close()
-		if hardenMirrorHandle(file) != nil {
-			return errors.New("EXECUTION_MIRROR_PERMISSIONS_FAILED")
-		}
-		if written, writeErr := file.Write(append(encoded, '\n')); writeErr != nil || written != len(encoded)+1 || file.Sync() != nil {
-			return errors.New("EXECUTION_MIRROR_WRITE_FAILED")
-		}
-		return nil
-	}
-	if !os.IsExist(err) {
-		return errors.New("EXECUTION_MIRROR_OPEN_FAILED")
-	}
-	file, err = root.Open("mirror.json")
-	if err != nil {
-		return errors.New("EXECUTION_MIRROR_OPEN_FAILED")
-	}
-	defer file.Close()
-	linked, linkErr := root.Lstat("mirror.json")
-	opened, openErr := file.Stat()
-	if linkErr != nil || openErr != nil || isUnsafeFilesystemLink(linked) || !opened.Mode().IsRegular() || !os.SameFile(linked, opened) || hardenMirrorHandle(file) != nil {
-		return errors.New("EXECUTION_MIRROR_PATH_UNSAFE")
-	}
-	data, readErr := io.ReadAll(io.LimitReader(file, maxMirrorMetadataBytes+1))
-	if readErr != nil || len(data) > maxMirrorMetadataBytes {
-		return errors.New("EXECUTION_MIRROR_IDENTITY_INVALID")
-	}
-	actual := eventMirrorIdentity{}
-	if json.Unmarshal(data, &actual) != nil || actual != expected || !bytes.Equal(bytes.TrimSpace(data), encoded) {
-		return errors.New("EXECUTION_MIRROR_NODE_CONFLICT")
-	}
-	return nil
-}
-
-func ensureMirrorRoot(root string) error {
-	if _, err := os.Lstat(root); err == nil {
-		return nil
-	} else if !os.IsNotExist(err) {
-		return errors.New("EXECUTION_MIRROR_PATH_INVALID")
-	}
-	parent := filepath.Dir(root)
-	if parent == root || filepath.Base(root) == "." || filepath.Base(root) == string(filepath.Separator) {
-		return errors.New("EXECUTION_MIRROR_PATH_INVALID")
-	}
-	if err := rejectSymlinkComponents(parent); err != nil {
-		return err
-	}
-	linkedParent, err := os.Lstat(parent)
-	if err != nil || isUnsafeFilesystemLink(linkedParent) || !linkedParent.IsDir() {
-		return errors.New("EXECUTION_MIRROR_PATH_UNSAFE")
-	}
-	parentRoot, err := os.OpenRoot(parent)
-	if err != nil {
-		return errors.New("EXECUTION_MIRROR_OPEN_FAILED")
-	}
-	defer parentRoot.Close()
-	openedParent, err := parentRoot.Stat(".")
-	if err != nil || !os.SameFile(linkedParent, openedParent) {
-		return errors.New("EXECUTION_MIRROR_PATH_UNSAFE")
-	}
-	name := filepath.Base(root)
-	if err := parentRoot.Mkdir(name, 0o700); err != nil && !os.IsExist(err) {
-		return errors.New("EXECUTION_MIRROR_PATH_INVALID")
-	}
-	linkedRoot, linkErr := parentRoot.Lstat(name)
-	openedRoot, openErr := parentRoot.OpenRoot(name)
-	if linkErr != nil || openErr != nil || isUnsafeFilesystemLink(linkedRoot) || !linkedRoot.IsDir() {
-		if openedRoot != nil {
-			_ = openedRoot.Close()
-		}
-		return errors.New("EXECUTION_MIRROR_PATH_UNSAFE")
-	}
-	openedInfo, statErr := openedRoot.Stat(".")
-	_ = openedRoot.Close()
-	if statErr != nil || !os.SameFile(linkedRoot, openedInfo) {
-		return errors.New("EXECUTION_MIRROR_PATH_UNSAFE")
-	}
-	return nil
-}
-
-func EventMirrorPath(runtimeRoot, runID string) (string, error) {
-	if runtimeRoot == "" || !validRuntimeToken(runID) {
-		return "", errors.New("EXECUTION_MIRROR_INPUT_INVALID")
-	}
-	root, err := filepath.Abs(runtimeRoot)
-	if err != nil {
-		return "", errors.New("EXECUTION_MIRROR_PATH_INVALID")
-	}
-	destination := filepath.Join(root, "executions", runID, "events.jsonl")
-	if !containedPath(root, destination) {
-		return "", errors.New("EXECUTION_MIRROR_PATH_INVALID")
-	}
-	return destination, nil
-}
-
-func (m *EventMirror) Path() string { return m.path }
-
-func (m *EventMirror) LastSequence() int {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.last
-}
-
-func (m *EventMirror) knownEvents() map[int][]byte {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	result := make(map[int][]byte, len(m.events))
-	for sequence, encoded := range m.events {
-		result[sequence] = append([]byte(nil), encoded...)
-	}
-	return result
-}
-
-func (m *EventMirror) Append(event ExecutionEvent) (bool, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if m.closed {
-		return false, errors.New("EXECUTION_MIRROR_CLOSED")
-	}
-	if validateExecutionEvent(event, m.runID) != nil {
-		return false, errors.New("EXECUTION_MIRROR_EVENT_INVALID")
-	}
-	encoded, err := canonicalEvent(event)
-	if err != nil || len(encoded)+1 > maxMirroredEventBytes {
-		return false, errors.New("EXECUTION_MIRROR_EVENT_INVALID")
-	}
-	if prior, ok := m.events[event.Sequence]; ok {
-		if bytes.Equal(prior, encoded) {
-			return false, nil
-		}
-		return false, errors.New("EXECUTION_MIRROR_DUPLICATE_CONFLICT")
-	}
-	if m.last != 0 && event.Sequence != m.last+1 {
-		return false, errors.New("EXECUTION_MIRROR_SEQUENCE_GAP")
-	}
-	if m.bytes+int64(len(encoded)+1) > maxMirrorBytes {
-		return false, errors.New("EXECUTION_MIRROR_LIMIT")
-	}
-	if len(m.events) >= maxMirroredEvents {
-		return false, errors.New("EXECUTION_MIRROR_LIMIT")
-	}
-	line := append(encoded, '\n')
-	if _, err := m.file.Seek(0, io.SeekEnd); err != nil {
-		return false, errors.New("EXECUTION_MIRROR_WRITE_FAILED")
-	}
-	written, err := m.file.Write(line)
-	if err != nil || written != len(line) {
-		return false, errors.New("EXECUTION_MIRROR_WRITE_FAILED")
-	}
-	if err := m.file.Sync(); err != nil {
-		return false, errors.New("EXECUTION_MIRROR_SYNC_FAILED")
-	}
-	m.events[event.Sequence] = append([]byte(nil), encoded...)
-	if m.first == 0 {
-		m.first = event.Sequence
-	}
-	m.last = event.Sequence
-	m.bytes += int64(len(line))
-	return true, nil
-}
-
-func (m *EventMirror) Events(after int) []ExecutionEvent {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	result := make([]ExecutionEvent, 0)
-	start := after + 1
-	if start < m.first {
-		start = m.first
-	}
-	for sequence := start; sequence <= m.last; sequence++ {
-		var event ExecutionEvent
-		if err := json.Unmarshal(m.events[sequence], &event); err == nil {
-			result = append(result, event)
-		}
-	}
-	return result
-}
-
-func (m *EventMirror) Reset() error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if m.closed {
-		return errors.New("EXECUTION_MIRROR_CLOSED")
-	}
-	if err := m.file.Truncate(0); err != nil {
-		return errors.New("EXECUTION_MIRROR_WRITE_FAILED")
-	}
-	if _, err := m.file.Seek(0, io.SeekStart); err != nil || m.file.Sync() != nil {
-		return errors.New("EXECUTION_MIRROR_SYNC_FAILED")
-	}
-	m.last = 0
-	m.first = 0
-	m.bytes = 0
-	m.events = map[int][]byte{}
-	return nil
-}
-
-func (m *EventMirror) Close() error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if m.closed {
-		return nil
-	}
-	m.closed = true
-	unlockErr := m.unlock()
-	lockErr := m.lock.Close()
-	fileErr := m.file.Close()
-	rootErr := m.root.Close()
-	if unlockErr != nil {
-		return unlockErr
-	}
-	if lockErr != nil {
-		return lockErr
-	}
-	if fileErr != nil {
-		return fileErr
-	}
-	return rootErr
-}
-
-func (m *EventMirror) recover() error {
-	info, err := m.file.Stat()
-	if err != nil || info.Size() > maxMirrorBytes {
-		return errors.New("EXECUTION_MIRROR_LIMIT")
-	}
-	data, err := io.ReadAll(io.LimitReader(m.file, maxMirrorBytes+1))
-	if err != nil || int64(len(data)) > maxMirrorBytes {
-		return errors.New("EXECUTION_MIRROR_READ_FAILED")
-	}
-	if len(data) > 0 && data[len(data)-1] != '\n' {
-		complete := bytes.LastIndexByte(data, '\n')
-		truncateAt := int64(0)
-		if complete >= 0 {
-			truncateAt = int64(complete + 1)
-		}
-		if err := m.file.Truncate(truncateAt); err != nil || m.file.Sync() != nil {
-			return errors.New("EXECUTION_MIRROR_RECOVERY_FAILED")
-		}
-		data = data[:truncateAt]
-	}
-	scanner := bufio.NewScanner(bytes.NewReader(data))
-	scanner.Buffer(make([]byte, 4096), maxMirroredEventBytes)
-	for scanner.Scan() {
-		encoded := append([]byte(nil), scanner.Bytes()...)
-		var event ExecutionEvent
-		if json.Unmarshal(encoded, &event) != nil || validateExecutionEvent(event, m.runID) != nil {
-			return errors.New("EXECUTION_MIRROR_CORRUPT")
-		}
-		canonical, err := canonicalEvent(event)
-		if err != nil || !bytes.Equal(canonical, encoded) || m.last != 0 && event.Sequence != m.last+1 {
-			return errors.New("EXECUTION_MIRROR_CORRUPT")
-		}
-		m.events[event.Sequence] = canonical
-		if len(m.events) > maxMirroredEvents {
-			return errors.New("EXECUTION_MIRROR_LIMIT")
-		}
-		if m.first == 0 {
-			m.first = event.Sequence
-		}
-		m.last = event.Sequence
-	}
-	if err := scanner.Err(); err != nil {
-		return errors.New("EXECUTION_MIRROR_CORRUPT")
-	}
-	m.bytes = int64(len(data))
-	_, err = m.file.Seek(0, io.SeekEnd)
-	return err
-}
-
-func canonicalEvent(event ExecutionEvent) ([]byte, error) {
-	if err := validateExecutionEvent(event, event.RunID); err != nil {
-		return nil, err
-	}
-	return json.Marshal(event)
-}
-
-func ensureRootedPrivateDirectory(root *os.Root, relative string) error {
-	if err := root.Mkdir(relative, 0o700); err != nil && !os.IsExist(err) {
-		return errors.New("EXECUTION_MIRROR_PATH_INVALID")
-	}
-	info, err := root.Lstat(relative)
-	if err != nil || isUnsafeFilesystemLink(info) || !info.IsDir() || !mirrorDirectoryPrivate(info) {
-		return errors.New("EXECUTION_MIRROR_PATH_UNSAFE")
-	}
-	directory, err := root.Open(relative)
-	if err != nil {
-		return errors.New("EXECUTION_MIRROR_PATH_UNSAFE")
-	}
-	defer directory.Close()
-	opened, err := directory.Stat()
-	if err != nil || !os.SameFile(info, opened) || hardenMirrorHandle(directory) != nil {
-		return errors.New("EXECUTION_MIRROR_PERMISSIONS_FAILED")
-	}
-	return nil
-}
-
-func rejectSymlinkComponents(candidate string) error {
-	clean := filepath.Clean(candidate)
-	volume := filepath.VolumeName(clean)
-	remainder := clean[len(volume):]
-	current := volume + string(filepath.Separator)
-	for _, part := range splitPath(remainder) {
-		current = filepath.Join(current, part)
-		info, err := os.Lstat(current)
-		if os.IsNotExist(err) {
-			return nil
-		}
-		if err != nil {
-			return errors.New("EXECUTION_MIRROR_PATH_INVALID")
-		}
-		if isUnsafeFilesystemLink(info) {
-			return errors.New("EXECUTION_MIRROR_PATH_UNSAFE")
-		}
-	}
-	return nil
-}
-
-func splitPath(value string) []string {
-	result := []string{}
-	for _, part := range bytes.FieldsFunc([]byte(value), func(r rune) bool { return r == '/' || r == '\\' }) {
-		result = append(result, string(part))
-	}
-	return result
-}
-
-func containedPath(root, candidate string) bool {
-	relative, err := filepath.Rel(filepath.Clean(root), filepath.Clean(candidate))
-	return err == nil && relative != ".." && !filepath.IsAbs(relative) && relative != "" && !startsWithParent(relative)
-}
-
-func startsWithParent(relative string) bool {
-	return len(relative) >= 3 && relative[:3] == ".."+string(filepath.Separator)
-}
-
-@@END
-@@PORTABLE {"path":"internal/executionnode/event_mirror_lock_unix.go","mode":420,"size":398,"sha256":"fb3b9d5013a8710bf9da11b2ead32616f2985c3c0fb2f76983f776d243e2f142","index":0,"count":1,"encoding":"utf-8","payloadBytes":398}
-//go:build aix || darwin || dragonfly || freebsd || linux || netbsd || openbsd || solaris
-
-package executionnode
-
-import (
-	"os"
-	"syscall"
-)
-
-func lockEventMirror(file *os.File) (func() error, error) {
-	if err := syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
-		return nil, err
-	}
-	return func() error { return syscall.Flock(int(file.Fd()), syscall.LOCK_UN) }, nil
-}
-
-@@END
-@@PORTABLE {"path":"internal/executionnode/event_mirror_lock_windows.go","mode":420,"size":843,"sha256":"835b1bad9bd930ca8bb674d3f8b3c19fe486fa3ae0d542bd0476a2788ca3677f","index":0,"count":1,"encoding":"utf-8","payloadBytes":843}
-package executionnode
-
-import (
-	"os"
-	"syscall"
-	"unsafe"
-)
-
-const (
-	lockfileFailImmediately = 0x00000001
-	lockfileExclusiveLock   = 0x00000002
-)
-
-var (
-	kernel32LockFileEx   = syscall.NewLazyDLL("kernel32.dll").NewProc("LockFileEx")
-	kernel32UnlockFileEx = syscall.NewLazyDLL("kernel32.dll").NewProc("UnlockFileEx")
-)
-
-func lockEventMirror(file *os.File) (func() error, error) {
-	overlapped := &syscall.Overlapped{}
-	result, _, callErr := kernel32LockFileEx.Call(file.Fd(), lockfileExclusiveLock|lockfileFailImmediately, 0, 0xffffffff, 0xffffffff, uintptr(unsafe.Pointer(overlapped)))
-	if result == 0 {
-		return nil, callErr
-	}
-	return func() error {
-		result, _, callErr := kernel32UnlockFileEx.Call(file.Fd(), 0, 0xffffffff, 0xffffffff, uintptr(unsafe.Pointer(overlapped)))
-		if result == 0 {
-			return callErr
-		}
-		return nil
-	}, nil
-}
-
-@@END
-@@PORTABLE {"path":"internal/executionnode/event_mirror_path_unix.go","mode":420,"size":530,"sha256":"2ace053ec47ec47ab8f9f8b41e306c03c55ade270fc6f0c369fcfc1a0dbe521d","index":0,"count":1,"encoding":"utf-8","payloadBytes":530}
-//go:build aix || darwin || dragonfly || freebsd || linux || netbsd || openbsd || solaris
-
-package executionnode
-
-import "os"
-
-func isUnsafeFilesystemLink(info os.FileInfo) bool {
-	return info == nil || info.Mode()&os.ModeSymlink != 0
-}
-
-func mirrorDirectoryPrivate(info os.FileInfo) bool {
-	return info != nil && info.Mode().Perm()&0o077 == 0
-}
-
-func hardenMirrorHandle(file *os.File) error {
-	info, err := file.Stat()
-	if err != nil {
-		return err
-	}
-	if info.IsDir() {
-		return file.Chmod(0o700)
-	}
-	return file.Chmod(0o600)
-}
-
-@@END
-@@PORTABLE {"path":"internal/executionnode/event_mirror_path_windows.go","mode":420,"size":2008,"sha256":"735a902d5aa80151a5712c53cbe14beb039eda0b869504785134413939e8ec71","index":0,"count":1,"encoding":"utf-8","payloadBytes":2008}
-package executionnode
-
-import (
-	"errors"
-	"os"
-	"path/filepath"
-	"syscall"
-	"unsafe"
-)
-
-var (
-	convertStringSecurityDescriptor = syscall.NewLazyDLL("advapi32.dll").NewProc("ConvertStringSecurityDescriptorToSecurityDescriptorW")
-	setFileSecurity                 = syscall.NewLazyDLL("advapi32.dll").NewProc("SetFileSecurityW")
-)
-
-const protectedDACLInformation = 0x80000004
-
-func isUnsafeFilesystemLink(info os.FileInfo) bool {
-	if info == nil || info.Mode()&os.ModeSymlink != 0 {
-		return true
-	}
-	data, ok := info.Sys().(*syscall.Win32FileAttributeData)
-	return !ok || data.FileAttributes&syscall.FILE_ATTRIBUTE_REPARSE_POINT != 0
-}
-
-func mirrorDirectoryPrivate(info os.FileInfo) bool {
-	return info != nil
-}
-
-func hardenMirrorHandle(file *os.File) error {
-	token, err := syscall.OpenCurrentProcessToken()
-	if err != nil {
-		return err
-	}
-	defer token.Close()
-	user, err := token.GetTokenUser()
-	if err != nil {
-		return err
-	}
-	sid, err := user.User.Sid.String()
-	if err != nil {
-		return err
-	}
-	sddl, err := syscall.UTF16PtrFromString("D:P(A;;FA;;;" + sid + ")(A;;FA;;;SY)(A;;FA;;;BA)")
-	if err != nil {
-		return err
-	}
-	var descriptor uintptr
-	var size uint32
-	result, _, callErr := convertStringSecurityDescriptor.Call(uintptr(unsafe.Pointer(sddl)), 1, uintptr(unsafe.Pointer(&descriptor)), uintptr(unsafe.Pointer(&size)))
-	if result == 0 {
-		return callErr
-	}
-	if descriptor == 0 {
-		return errors.New("EXECUTION_MIRROR_DACL_INVALID")
-	}
-	defer syscall.LocalFree(syscall.Handle(descriptor))
-	path, err := syscall.UTF16PtrFromString(filepath.Clean(file.Name()))
-	if err != nil {
-		return err
-	}
-	result, _, callErr = setFileSecurity.Call(uintptr(unsafe.Pointer(path)), protectedDACLInformation, descriptor)
-	if result == 0 {
-		return callErr
-	}
-	opened, openErr := file.Stat()
-	linked, linkErr := os.Lstat(file.Name())
-	if openErr != nil || linkErr != nil || isUnsafeFilesystemLink(linked) || !os.SameFile(opened, linked) {
-		return errors.New("EXECUTION_MIRROR_DACL_TARGET_CHANGED")
-	}
-	return nil
 }
 
 @@END

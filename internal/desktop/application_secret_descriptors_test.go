@@ -7,11 +7,45 @@ import (
 	"platform-installer/internal/runtimesecret"
 	"strings"
 	"testing"
+	"time"
 )
 
 type applicationDescriptorTransport struct {
 	typedSecretDescriptorTransport
 	inputs []executionnode.ApplicationSecretDescriptor
+}
+
+func TestApplicationPresenceExpiryAndContextAreReadOnly(t *testing.T) {
+	app, _, _ := installationPlanApp(t, false)
+	now := time.Now()
+	app.secrets.Clear()
+	app.secrets = runtimesecret.NewBroker(runtimesecret.WithClock(func() time.Time { return now }), runtimesecret.WithTTL(time.Hour))
+	defer app.secrets.Clear()
+	app.execution.context.SelectedHostID = "node-1"
+	app.binding.reader.transport = applicationDescriptorTransport{}
+	evidence := app.getRuntimeSecretDescriptorsLocked(true)
+	if evidence.Status != "READY" {
+		t.Fatal("descriptor setup failed")
+	}
+	ref := evidence.ApplicationInputs[0].RequirementRef
+	if app.GetApplicationRuntimeSecretAvailability().ApplicationSecretAvailability[ref] {
+		t.Fatal("empty broker reported present")
+	}
+	if err := app.SetDeploymentRuntimeSecretValues(RuntimeSecretValuesInput{ProjectRevision: evidence.ProjectRevision, DescriptorSetFingerprint: evidence.DescriptorSetFingerprint, ApplicationLibrary: "sdku", ApplicationRequirementRef: ref, Values: map[string]string{ref: "synthetic"}}); err != nil {
+		t.Fatal(err)
+	}
+	now = now.Add(59 * time.Minute)
+	if !app.GetApplicationRuntimeSecretAvailability().ApplicationSecretAvailability[ref] {
+		t.Fatal("pending secret missing before expiry")
+	}
+	now = now.Add(2 * time.Minute)
+	if app.GetApplicationRuntimeSecretAvailability().ApplicationSecretAvailability[ref] {
+		t.Fatal("presence query renewed expired pending secret")
+	}
+	app.execution.context.SelectedHostID = "other-node"
+	if app.GetApplicationRuntimeSecretAvailability().Status != "UNAVAILABLE" {
+		t.Fatal("wrong node evidence accepted")
+	}
 }
 
 func (transport applicationDescriptorTransport) BuildRuntimeSecretDescriptors(ctx context.Context, node executionnode.Node, root string, runtime map[string]any, request executionnode.RuntimeSecretDescriptorRequest) (executionnode.RuntimeSecretDescriptorResult, error) {
@@ -91,6 +125,109 @@ func TestApplicationLibraryInputExactScopeAndMerge(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func TestApplicationSingletonInputScopeMergeAndPromotion(t *testing.T) {
+	app, _, _ := installationPlanApp(t, false)
+	app.execution.context.SelectedHostID = "node-1"
+	provider := "vault-main"
+	inputs := []executionnode.ApplicationSecretDescriptor{
+		{RequirementRef: "application-secret-" + strings.Repeat("a", 32), Purpose: "APPLICATION_SECRET", SourceRef: "password-a", DisplayLabel: "Password A", ApplicationLibraries: []string{"sdku"}, Hosts: []string{"node-1"}, Operations: []string{"APPLICATION_LIBRARIES_APPLY", "APPLICATION_LIBRARIES_VERIFY"}},
+		{RequirementRef: "application-secret-" + strings.Repeat("b", 32), Purpose: "APPLICATION_SECRET", SourceRef: "password-b", DisplayLabel: "Password B", ApplicationLibraries: []string{"cspa", "sdku"}, Hosts: []string{"node-1"}, Operations: []string{"APPLICATION_LIBRARIES_APPLY", "APPLICATION_LIBRARIES_VERIFY"}},
+		{RequirementRef: "application-secret-" + strings.Repeat("c", 32), Purpose: "APPLICATION_VAULT_ADMIN_TOKEN", SourceRef: "vault-admin-token-vault-main", ProviderDeployment: &provider, DisplayLabel: "Vault", ApplicationLibraries: []string{"sdku"}, Hosts: []string{"node-1"}, Operations: []string{"APPLICATION_LIBRARIES_APPLY", "APPLICATION_LIBRARIES_VERIFY"}},
+	}
+	app.binding.reader.transport = applicationDescriptorTransport{inputs: inputs}
+	evidence := app.getRuntimeSecretDescriptorsLocked(true)
+	if evidence.Status != "READY" {
+		t.Fatal("descriptor setup failed")
+	}
+	request := RuntimeSecretValuesInput{ProjectRevision: evidence.ProjectRevision, DescriptorSetFingerprint: evidence.DescriptorSetFingerprint, ApplicationLibrary: "sdku", ApplicationRequirementRef: inputs[0].RequirementRef, Values: map[string]string{inputs[0].RequirementRef: "synthetic-inline"}}
+	for _, tc := range []struct {
+		name   string
+		change func(*RuntimeSecretValuesInput)
+	}{
+		{"no library", func(v *RuntimeSecretValuesInput) { v.ApplicationLibrary = "" }},
+		{"foreign library", func(v *RuntimeSecretValuesInput) { v.ApplicationLibrary = "cspa" }},
+		{"mixed scopes", func(v *RuntimeSecretValuesInput) { v.ServiceDeployment = "redis-main" }},
+		{"stale fingerprint", func(v *RuntimeSecretValuesInput) { v.DescriptorSetFingerprint = "stale" }},
+		{"stale revision", func(v *RuntimeSecretValuesInput) { v.ProjectRevision = "stale" }},
+		{"empty value", func(v *RuntimeSecretValuesInput) { v.Values = map[string]string{inputs[0].RequirementRef: ""} }},
+		{"wrong key", func(v *RuntimeSecretValuesInput) { v.Values = map[string]string{inputs[1].RequirementRef: "synthetic"} }},
+		{"extra value", func(v *RuntimeSecretValuesInput) {
+			v.Values = map[string]string{inputs[0].RequirementRef: "synthetic", inputs[1].RequirementRef: "synthetic"}
+		}},
+		{"admin requirement", func(v *RuntimeSecretValuesInput) {
+			v.ApplicationRequirementRef = inputs[2].RequirementRef
+			v.Values = map[string]string{inputs[2].RequirementRef: "synthetic"}
+		}},
+		{"unknown requirement", func(v *RuntimeSecretValuesInput) {
+			v.ApplicationRequirementRef = "application-secret-" + strings.Repeat("d", 32)
+			v.Values = map[string]string{v.ApplicationRequirementRef: "synthetic"}
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			v := request
+			tc.change(&v)
+			if app.SetDeploymentRuntimeSecretValues(v) == nil {
+				t.Fatal("invalid singleton accepted")
+			}
+		})
+	}
+	// Pending input is intentionally accepted without an SSH credential lease.
+	if err := app.SetDeploymentRuntimeSecretValues(request); err != nil {
+		t.Fatal(err)
+	}
+	presence := app.GetApplicationRuntimeSecretAvailability()
+	if presence.Status != "READY" || !presence.ApplicationSecretAvailability[inputs[0].RequirementRef] || presence.ApplicationSecretAvailability[inputs[1].RequirementRef] {
+		t.Fatal("presence must describe independent pending requirements")
+	}
+	second := request
+	second.ApplicationRequirementRef = inputs[1].RequirementRef
+	second.Values = map[string]string{inputs[1].RequirementRef: "synthetic-neighbor"}
+	if err := app.SetDeploymentRuntimeSecretValues(second); err != nil {
+		t.Fatal(err)
+	}
+	request.Values = map[string]string{inputs[0].RequirementRef: "synthetic-replacement"}
+	if err := app.SetDeploymentRuntimeSecretValues(request); err != nil {
+		t.Fatal(err)
+	}
+	// The existing full form can still set shared/admin/account inputs together.
+	full := request
+	full.ApplicationRequirementRef = ""
+	full.Values = map[string]string{inputs[0].RequirementRef: "synthetic-full", inputs[1].RequirementRef: "synthetic-neighbor", inputs[2].RequirementRef: "synthetic-admin"}
+	if err := app.SetDeploymentRuntimeSecretValues(full); err != nil {
+		t.Fatal(err)
+	}
+	binding, _ := app.credentialBindingLocked()
+	if _, err := app.secrets.Set(binding, runtimesecret.Input{Username: "operator", SSHMode: runtimesecret.SSHPassword, SSHPassword: "synthetic-transport", ElevationMode: runtimesecret.ElevationNone}); err != nil {
+		t.Fatal(err)
+	}
+	if app.getRuntimeSecretDescriptorsLocked(false).Status != "READY" {
+		t.Fatal("reattestation failed")
+	}
+	retained := app.runtimeSecretEvidence
+	if status := app.GetApplicationRuntimeSecretAvailability(); status.Status != "READY" || !status.ApplicationSecretAvailability[inputs[0].RequirementRef] || app.runtimeSecretEvidence != retained {
+		t.Fatal("presence query changed descriptor evidence or lost attached input")
+	}
+	if err := app.secrets.WithTargetCredential(binding, func(value runtimesecret.TargetCredential) error {
+		for i, want := range []string{"synthetic-full", "synthetic-neighbor", "synthetic-admin"} {
+			if string(value.RuntimeSecretValues[inputs[i].RequirementRef]) != want {
+				t.Fatal("scoped save or promotion lost an input")
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	previous := app.projectRevision
+	app.projectRevision = func(string) (string, error) { return "changed-on-disk", nil }
+	if app.SetDeploymentRuntimeSecretValues(request) == nil {
+		t.Fatal("external saved revision change accepted")
+	}
+	if app.GetApplicationRuntimeSecretAvailability().Status != "UNAVAILABLE" {
+		t.Fatal("presence used stale saved revision")
+	}
+	app.projectRevision = previous
 }
 
 func TestApplicationInputReattestationAndStaleBinding(t *testing.T) {

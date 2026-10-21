@@ -1819,6 +1819,7 @@ export namespace desktop {
     }
   }
   export class RuntimeSecretDescriptorOperation {
+    applicationSecretAvailability?: Record<string, boolean>;
     secretsInstalled?: boolean;
     status: string;
     projectRevision?: string;
@@ -1833,6 +1834,8 @@ export namespace desktop {
 
     constructor(source: any = {}) {
       if ("string" === typeof source) source = JSON.parse(source);
+      this.applicationSecretAvailability =
+        source["applicationSecretAvailability"];
       this.secretsInstalled = source["secretsInstalled"];
       this.status = source["status"];
       this.projectRevision = source["projectRevision"];
@@ -1872,6 +1875,7 @@ export namespace desktop {
     descriptorSetFingerprint: string;
     serviceDeployment: string;
     applicationLibrary?: string;
+    applicationRequirementRef?: string;
     values: Record<string, string>;
 
     static createFrom(source: any = {}) {
@@ -1884,6 +1888,7 @@ export namespace desktop {
       this.descriptorSetFingerprint = source["descriptorSetFingerprint"];
       this.serviceDeployment = source["serviceDeployment"];
       this.applicationLibrary = source["applicationLibrary"];
+      this.applicationRequirementRef = source["applicationRequirementRef"];
       this.values = source["values"];
     }
   }

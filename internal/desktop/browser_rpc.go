@@ -139,6 +139,7 @@ func browserOperations() map[string]browserOperation {
 		"setSessionCredential":                    oneBrowserArgError((*App).SetSessionCredential),
 		"setPKIStorePassword":                     oneBrowserArgError((*App).SetPKIStorePassword),
 		"getRuntimeSecretDescriptors":             noBrowserArgs((*App).GetRuntimeSecretDescriptors),
+		"getApplicationRuntimeSecretAvailability": noBrowserArgs((*App).GetApplicationRuntimeSecretAvailability),
 		"setDeploymentRuntimeSecretValues":        oneBrowserError((*App).SetDeploymentRuntimeSecretValues),
 		"getPendingRuntimeSecretDescriptors":      oneBrowserArg((*App).GetPendingRuntimeSecretDescriptors),
 		"setPendingDeploymentRuntimeSecretValues": oneBrowserError((*App).SetPendingDeploymentRuntimeSecretValues),
