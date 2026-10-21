@@ -7,12 +7,21 @@
   changed_when: false
   no_log: true
 
+- name: Select only cluster resource blocks before checking administrative rights
+  ansible.builtin.set_fact:
+    kafka_authorization_cluster_bindings: >-
+      {{ kafka_authorization_cluster_acls.stdout
+         | regex_findall('(?ms)^Current ACLs for resource \x60ResourcePattern\(resourceType=CLUSTER, name=[^\r\n]*, patternType=[A-Z_]+\)\x60:[ \t]*\r?\n(.*?)(?=^Current ACLs for resource |\Z)')
+         | join('\n') }}
+  changed_when: false
+  no_log: true
+
 - name: Reject preexisting security administration rights outside the sole admin
   ansible.builtin.assert:
     that:
       - kafka_authorization_cluster_acls.rc == 0
       - >-
-        kafka_authorization_cluster_acls.stdout_lines
+        kafka_authorization_cluster_bindings.splitlines()
         | select('search', 'operation=(ALL|ALTER|CREATE_TOKENS|DESCRIBE_TOKENS), permissionType=ALLOW')
         | reject('search', 'principal=User:admin,') | list | length == 0
     fail_msg: KAFKA_NON_ADMIN_SECURITY_ACL_CONFLICT

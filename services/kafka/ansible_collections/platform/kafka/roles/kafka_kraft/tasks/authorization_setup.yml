@@ -46,6 +46,8 @@
   changed_when: false
 
 - name: Authenticate admin before changing compatibility or internal ACLs
+  vars:
+    platform_application_secret_files: "{{ platform_kafka_secret_files }}"
   block:
     - name: Prepare the invocation-private bootstrap PEM identity
       ansible.builtin.include_tasks: application_client_tls.yml
@@ -55,10 +57,14 @@
         src: application-topics-client.properties.j2
         dest: "{{ application_kafka_private.path }}/admin.properties"
         mode: '0600'
-      vars:
-        platform_application_secret_files: "{{ platform_kafka_secret_files }}"
       no_log: true
       changed_when: false
+    - name: Read fresh SCRAM metadata for the bootstrap or finalized admin
+      ansible.builtin.include_tasks: application_accounts_read.yml
+      vars:
+        platform_kafka_application_job:
+          accounts:
+            - grants: []
     - name: Check or create the exact plan-declared admin credential
       ansible.builtin.include_tasks: application_account.yml
     - name: Use the successfully authenticated admin for all security mutations

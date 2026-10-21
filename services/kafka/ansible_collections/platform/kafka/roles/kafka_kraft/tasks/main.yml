@@ -419,62 +419,10 @@
     label: "{{ item.0.id }}:{{ item.1 }}"
   when: not (platform_kafka_verify_only | bool) and platform_kafka_phase != 'schema_registry'
 
-- name: Provision or verify admin and explicit compatibility rights once per deployment
-  ansible.builtin.include_tasks:
-    file: authorization_setup.yml
-    apply:
-      delegate_to: "{{ (_platform_kafka_broker_instances | first).host }}"
-      become: true
-  run_once: true
+- name: Establish admin before serialized bootstrap revocation
+  ansible.builtin.include_tasks: authorization_transition.yml
   when:
     - _platform_kafka_scram_enabled
-    - platform_kafka_phase != 'schema_registry'
-
-- name: Finalize each local member with admin as the only superuser
-  ansible.builtin.lineinfile:
-    path: "{{ item.config_directory }}/server.properties"
-    regexp: '^super\.users='
-    line: super.users=User:admin
-  loop: "{{ _platform_kafka_local_instances }}"
-  register: kafka_authorization_finalized
-  no_log: true
-  when:
-    - _platform_kafka_scram_enabled
-    - not (platform_kafka_verify_only | bool)
-    - _platform_kafka_authorization_bootstrap
-    - platform_kafka_phase != 'schema_registry'
-
-- name: Cross the final config write second before revocation restart
-  ansible.builtin.wait_for:
-    timeout: 1
-  changed_when: false
-  when:
-    - _platform_kafka_scram_enabled
-    - not (platform_kafka_verify_only | bool)
-    - _platform_kafka_authorization_bootstrap
-    - platform_kafka_phase != 'schema_registry'
-
-- name: Restart every bootstrap member including interrupted finalizations
-  ansible.builtin.systemd:
-    name: "{{ item.systemd_unit_name }}"
-    state: restarted
-  loop: "{{ _platform_kafka_local_instances }}"
-  when:
-    - _platform_kafka_scram_enabled
-    - not (platform_kafka_verify_only | bool)
-    - _platform_kafka_authorization_bootstrap
-    - platform_kafka_phase != 'schema_registry'
-
-- name: Wait for finalized local listeners
-  ansible.builtin.wait_for:
-    host: 127.0.0.1
-    port: "{{ item.1 }}"
-    timeout: 120
-  loop: "{{ _platform_kafka_local_instances | subelements('listener_ports', skip_missing=True) }}"
-  when:
-    - _platform_kafka_scram_enabled
-    - not (platform_kafka_verify_only | bool)
-    - _platform_kafka_authorization_bootstrap
     - platform_kafka_phase != 'schema_registry'
 
 - name: Require demonstrated runtime finalization before any following stage

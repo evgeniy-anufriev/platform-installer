@@ -1,0 +1,46 @@
+---
+- name: Reset this invocation's administrative readiness barrier
+  ansible.builtin.set_fact:
+    kafka_authorization_admin_ready: false
+  changed_when: false
+
+- name: Stop every host if admin setup or member finalization fails
+  any_errors_fatal: true
+  block:
+    - name: Provision or verify admin and explicit compatibility rights once per deployment
+      ansible.builtin.include_tasks:
+        file: authorization_setup.yml
+        apply:
+          delegate_to: "{{ (_platform_kafka_broker_instances | first).host }}"
+          become: true
+      run_once: true
+
+    - name: Release revocation only after successful admin login and ACL setup
+      ansible.builtin.set_fact:
+        kafka_authorization_admin_ready: true
+      changed_when: false
+
+    - name: Require every deployment host in the play before delegated revocation
+      ansible.builtin.assert:
+        that: >-
+          (_platform_kafka_instances | map(attribute='host') | unique | list
+           | difference(ansible_play_hosts_all)) | length == 0
+        fail_msg: KAFKA_FINALIZATION_REQUIRES_ALL_DEPLOYMENT_HOSTS
+      when:
+        - not (platform_kafka_verify_only | bool)
+        - _platform_kafka_authorization_bootstrap | bool
+
+    - name: Finalize members sequentially with quorum checks between revocations
+      ansible.builtin.include_tasks:
+        file: authorization_finalize_member.yml
+        apply:
+          delegate_to: "{{ kafka_authorization_member.host }}"
+          become: true
+      loop: "{{ _platform_kafka_instances | sort(attribute='node_id') }}"
+      loop_control:
+        loop_var: kafka_authorization_member
+        label: "{{ kafka_authorization_member.id }}"
+      run_once: true
+      when:
+        - not (platform_kafka_verify_only | bool)
+        - _platform_kafka_authorization_bootstrap | bool

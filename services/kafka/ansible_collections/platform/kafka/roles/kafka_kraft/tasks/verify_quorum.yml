@@ -1,0 +1,39 @@
+---
+- name: Resolve controller quorum Kafka CLI connection from runtime projection
+  ansible.builtin.include_tasks: resolve_cli_connection.yml
+  vars:
+    kafka_cli_member: "{{ kafka_quorum_diagnostic_member }}"
+    kafka_cli_purpose: "{{ 'admin' if _platform_kafka_scram_enabled | default(false) | bool else 'controller' }}"
+
+- name: Query Kafka controller quorum status through projected CLI connection
+  ansible.builtin.include_tasks: run_cli_command.yml
+  vars:
+    kafka_cli_connection: "{{ _platform_kafka_cli_connection }}"
+    kafka_cli_command_prefix:
+      - "{{ platform_kafka_install_directory }}/bin/kafka-metadata-quorum.sh"
+      - "{{ '--bootstrap-server' if _platform_kafka_scram_enabled | default(false) | bool else '--bootstrap-controller' }}"
+      - "{{ _platform_kafka_cli_connection.bootstrapHost }}:{{ _platform_kafka_cli_connection.bootstrapPort }}"
+    kafka_cli_command_suffix: [describe, --status]
+    kafka_cli_expected_controller_ids: >-
+      {{ _platform_kafka_controller_instances | map(attribute='node_id') | list }}
+
+- name: Require projected controller quorum diagnostic command to succeed
+  ansible.builtin.assert:
+    that: platform_kafka_cli_command_result.rc == 0
+    fail_msg: Kafka controller quorum diagnostic command failed
+
+- name: Assert Kafka controller quorum leader and membership
+  ansible.builtin.assert:
+    that:
+      - >-
+        platform_kafka_cli_command_result.stdout is search(
+        'LeaderId:\s*(' ~
+        (_platform_kafka_controller_instances | map(attribute='node_id') | map('string') | join('|')) ~
+        ')(?:\s|$)')
+      - >-
+        platform_kafka_cli_command_result.stdout is search(
+        '"id":\s*' ~ (item.node_id | string) ~ ',')
+    fail_msg: Kafka controller quorum does not represent exactly the expected controller members
+  loop: "{{ _platform_kafka_controller_instances }}"
+  loop_control:
+    label: "{{ item.id }}"

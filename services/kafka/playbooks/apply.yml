@@ -55,6 +55,7 @@
 
 - name: Apply Kafka KRaft members
   hosts: platform_targets
+  any_errors_fatal: true
   become: true
   gather_facts: true
   pre_tasks:

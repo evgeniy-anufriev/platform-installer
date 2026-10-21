@@ -51,15 +51,20 @@
     _platform_kafka_authorization_bootstrap: >-
       {% set state = namespace(bootstrap=false) %}
       {% for host in _platform_kafka_instances | map(attribute='host') | unique %}
-      {% if not (hostvars[host].kafka_authorization_local_final | default(false)) %}
+      {% if not (hostvars[host].kafka_authorization_local_final | default(false) | bool) %}
       {% set state.bootstrap = true %}
       {% endif %}
       {% endfor %}
       {{ state.bootstrap }}
   changed_when: false
 
+- name: Normalize the observed bootstrap decision to a boolean
+  ansible.builtin.set_fact:
+    _platform_kafka_authorization_bootstrap: "{{ _platform_kafka_authorization_bootstrap | trim | bool }}"
+  changed_when: false
+
 - name: Verify requires finalized admin-only superuser configuration
   ansible.builtin.assert:
-    that: not _platform_kafka_authorization_bootstrap
+    that: not (_platform_kafka_authorization_bootstrap | bool)
     fail_msg: KAFKA_AUTHORIZATION_FINALIZATION_REQUIRED
   when: platform_kafka_verify_only | bool

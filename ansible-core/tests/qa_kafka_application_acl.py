@@ -71,6 +71,30 @@ class KafkaApplicationAclTests(unittest.TestCase):
                            for value in operations.values())
         self.check_operations(actual, list(operations), [])
 
+    def test_cluster_idempotent_write_is_selected_from_full_inventory(self):
+        tasks = yaml.safe_load((ROOT / 'services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/application_acl.yml').read_text())
+        select = next(t for t in tasks if t['name'] == 'Select only this exact resource from the principal ACL inventory')
+        predicate = next(t for t in tasks if t['name'] == 'Select missing exact ALLOW operations with wildcard host')
+        actual = '\n'.join([
+            'Current ACLs for resource `ResourcePattern(resourceType=TOPIC, name=*, patternType=LITERAL)`:',
+            '  (principal=User:qa_probe, host=*, operation=ALL, permissionType=ALLOW)',
+            'Current ACLs for resource `ResourcePattern(resourceType=CLUSTER, name=kafka-cluster, patternType=LITERAL)`:',
+            '  (principal=User:other, host=*, operation=ALL, permissionType=ALLOW)',
+            '  (principal=User:qa_probe, host=*, operation=IDEMPOTENT_WRITE, permissionType=ALLOW)',
+            '  (principal=User:qa_probe, host=*, operation=CLUSTER_ACTION, permissionType=ALLOW)',
+        ])
+        with tempfile.TemporaryDirectory() as directory:
+            probe = Path(directory, 'probe.yml')
+            probe.write_text(yaml.safe_dump([dict(hosts='localhost', connection='local', gather_facts=False,
+                vars=dict(application_kafka_account=dict(name='qa_probe'), application_kafka_acl_inventory=dict(stdout=actual),
+                    application_kafka_acl_operations=[], application_kafka_grant=dict(resourceType='cluster',
+                        name='kafka-cluster', patternType='literal', operations=['IdempotentWrite', 'ClusterAction'])),
+                tasks=[select, predicate, {'ansible.builtin.assert': dict(that=['application_kafka_acl_operations | length == 0'])}])], sort_keys=False))
+            result = subprocess.run(['ansible-playbook', '-i', 'localhost,', str(probe)],
+                env=dict(os.environ, ANSIBLE_CONFIG=str(ROOT / 'ansible-core/ansible.cfg')),
+                capture_output=True, text=True, timeout=45)
+            self.assertEqual(0, result.returncode, (result.stdout + result.stderr)[-1800:])
+
     def test_only_missing_operations_are_added_in_original_cli_spelling(self):
         actual = 'principal=User:qa_probe, host=*, operation=DESCRIBE, permissionType=ALLOW'
         self.check_operations(actual, ['Describe', 'IdempotentWrite'], ['IdempotentWrite'])

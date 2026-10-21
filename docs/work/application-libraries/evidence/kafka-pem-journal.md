@@ -276,3 +276,143 @@ retained public execution evidence. Source/build workspace e81497d6 on node2
 cleaned using qa-sync -Cleanup. Prior runtime47 remains preserved outside cache;
 current runtime190ae47e and separate project's verified bundle remain available.
 No source-code commit/push or neighboring service repair was performed.
+
+
+## KAFKA-M01–M06 source repairs and admin inventory — 2026-10-21
+
+Owner authorized source corrections, isolated RED OS QA and documentation only.
+No stand installation, Kafka/Registry restart, certificate issuance or bundle
+publication. Earlier manual execution and stock failures above remain historical
+evidence; source repairs do not turn that run into a stock Apply/Verify PASS.
+
+Production remains ordinary Ansible tasks and existing templates/SecretRefs:
+
+| Finding | Source correction |
+| --- | --- |
+| M01 | Fatal all-host admin/ACL barrier; standard Kafka Apply also has any_errors_fatal. One run_once loop delegates finalization to members in node order, one at a time. Each revocation waits for listeners, confirms that the process loaded admin-only superusers, then queries quorum using admin before the next member. Failure leaves later members untouched; successful prior revocations are not undone. |
+| M02 | Normalize the aggregate bootstrap decision with trim/bool; boolean conversion also applied to host observations and Verify predicate. |
+| M03 | Select CLUSTER resource blocks before rejecting non-admin administrative ALLOW operations; wildcard data-resource ALL cannot masquerade as cluster administration. |
+| M04 | Prior27a94a90 already corrected operation normalization by using the folded YAML predicate with properly escaped regex backreferences. Keep that implementation; add native integration coverage for exact CLUSTER IdempotentWrite/ClusterAction selection from mixed-resource inventory. |
+| M05 | Preserve dictionary listener key as name when passing listener settings into the PEM verifier; no embedded name field is required. |
+| M06 | SCRAM quorum diagnostics use admin with --bootstrap-server on the unambiguous SASL_SSL broker listener. Broker registration diagnostics use the same administrative identity and validate each broker's selected listener name/protocol/address. Without SCRAM the controller/client diagnostic paths remain. |
+| Admin inventory | authorization_setup reads fresh SCRAM metadata before application_account and provides the generic secret-file alias across initial and finalized admin templates. Existing admin credentials are authenticated, never reset. |
+
+Admin CLI configuration uses a private mode0600 temporary properties file from
+the existing runtime SecretRef, always removed; secret values are absent from
+argv. SASL_SSL uses the existing CA truststore and SCRAM admin, without client
+keystore/admin certificate privileges. Explicit PKCS12 truststore passwords
+remain runtime-only under the existing option; PEM requires none.
+
+Isolated QA PASS; independent FULL DIFF result recorded below.
+Final source/test identity is recorded in the dedicated review report. An
+unrelated concurrent inline-secret/UI workstream is excluded from this scope.
+
+Intermediate QA retained: first native8 sixPASS/two fixture failures (delegated
+hosts absent from synthetic inventory; dummy JAAS parser assumed unescaped '=');
+native9 repeat eightPASS/one negative fixture incorrectly expected the runner
+to fail rather than return rc to its caller. Initial Kafka35 regression34PASS/
+one stale PKCS12 fixture missing formats; fixture updated to current contract.
+Attempted M04 one-backslash rewrite failed CamelCase coverage and was reverted
+to the prior working spelling. No production retry/readiness timeout changed.
+
+Remaining acceptance: fresh published-runtime normal Kafka Apply/Verify/repeat,
+multi-node cold start and interrupted-bootstrap recovery through real execution.
+These are not authorized by this isolated repair task. Synthetic CLI/finalization
+substitutions prove task routing/barriers, not real Kafka quorum availability.
+The earlier alarm-view application run does not cover service installation.
+
+Final isolated RED OS node2 evidence (current qa-sync sources, no live Kafka/Registry calls):
+
+| Check | Result |
+| --- | --- |
+| New native service repair scenarios | 11 PASS /218.160s |
+| Exact ACL/operation native checks | 5 PASS /24.572s |
+| Kafka regression, including native CLI retry and exact PKI selection | 35 PASS /40.666s |
+| After final revocation-scope guard: affected transition cases | 5 PASS /36.068s, including new limited-play refusal |
+| Standard service Apply/Verify syntax | 2 PASS, no targets executed |
+| Final source verification and git diff --check | PASS |
+
+This is51 cases before the final guard, plus five affected-case executions
+(four repeats and one new case):52 distinct cases covered across the final
+combined evidence. The guard only constrains revocation; preexisting admin
+setup still delegates to the selected broker. A limited bootstrap play must
+include all deployment hosts before sequential revocation is allowed.
+
+Final source/test snapshot: base61c52f194d45c11d6ddd8991424026372f4190f3,
+15 sorted path/file-SHA256 pairs fingerprint
+sha256:c98af61a7cfe20553d3f18804d2d939aeb03c3350f9ecea2394000b4a689cb76.
+All15 bytes unchanged after QA. Detailed independent review: [FULL DIFF](../reviews/kafka-service-repairs-diff-review.md).
+QA copies a92f4b82/d6458474/32bb08d2/d12f8f27/1ccf0618 cleaned with standard
+qa-sync; local synthetic evidence retained. No new runtime bundle, real
+React/Wails execution, stand mutation or commit/push. Final real service
+Apply/Verify/repeat and failure-recovery acceptance remain open.
+
+Independent FULL DIFF final verdict APPROVE, open BLOCKING0, CURRENT for the
+final15-file snapshot above. KSR-D01 generic admin secret-file scope and KSR-D02
+selected-listener broker expectations corrected within the same review pass;
+no targeted recheck invoked. Review does not authorize installation.
+
+
+## Read-only stand Verify of existing qa-kafka-structure — 2026-10-21
+
+Owner superseded the intermediate Apply/Verify/repeat authorization with read-only
+Verify only. No Apply, restart, PKI issuance, cold start or bootstrap fault
+injection authorized in this run. This is standalone current-role Verify, not
+a real React/Wails installation run; no Installer plan/run ID. The earlier
+skipInfrastructureVerify request applies to plans; no infrastructure pre-Verify
+plan stage is invoked by this standalone role test.
+
+Execution Node node1 (.101), target nodes .101/.102/.103; original Kafka-only
+project context and exact runtime PKI requests/plans copied into a new protected
+execution workspace. Source copied through qa-sync; all15 reviewed source/test
+hashes match fingerprint c98af61a7cfe20553d3f18804d2d939aeb03c3350f9ecea2394000b4a689cb76.
+Fresh runtime-only admin/SSH inputs under the established protected secrets
+channel; no values in project or command arguments. Existing CA/certificates/
+keys/stores/markers/data identities remain the immutable baseline.
+
+The wrapper performs normal validation/discovery/derived identity projection
+and calls the unmodified current platform.kafka.kafka_kraft role with
+platform_kafka_verify_only=true and platform_kafka_phase=full. No prior manual
+normalization, injected listener names, resource-aware replacement checks or
+replacement quorum commands. A final read-only checksum comparison uses the
+retained original PKI/data-identity baseline. No pki-apply import.
+
+**PASS**. Command rc0, no failed/unreachable hosts. Observed local execution
+window2026-10-21T12:07:08Z–12:21:10Z (15:07:08–15:21:10MSK), approximately14m01s
+including SSH/process startup and output delivery; not an isolated CLI benchmark.
+
+| Host | ok | changed | failed | unreachable |
+| --- | --- | --- | --- | --- |
+| localhost | 28 | 0 | 0 | 0 |
+| node1 | 424 | 0 | 0 | 0 |
+| node2 | 291 | 0 | 0 | 0 |
+| node3 | 291 | 0 | 0 | 0 |
+
+Real admin SCRAM metadata/login, sole-admin security ACL guard and declared
+compatibility ACL verification PASS. Kafka member process/config/identity,
+PEM verification and9 real TLS handshakes PASS. Quorum via admin/SASL_SSL and
+exact registered/unfenced broker listener checks PASS. All three Registry
+units/configuration/PEM, SSL broker readiness and existing schema-topic policy
+PASS; HTTP/HTTPS readiness6 successful probes, no schema writes. Topic creation
+and all service mutation/revocation tasks SKIPPED. Original CA/leaf/private keys,
+PKCS12 stores, markers and meta.properties checksum assertions PASS on all3.
+
+Safe evidence under .runtime/qa/kafka-service-stand-*: verify-01.log,
+result.json, source-proof.json, task-summary.json and secret-scan.json.
+No admin value or private-key body detected in the execution log. Runtime-only
+admin/SSH inputs removed and absence checked. Standard source verification PASS.
+Initial qa-sync cleanup failed on root-owned Python bytecode/validation output;
+after verifying the exact owned workspace path, its ownership was restored and
+standard cleanup PASS. The protected public execution context/baseline remains;
+source workspace removed. Prior manual context and service files not rewritten.
+
+This closes live current-role read-only Verify coverage for the M02–M06/admin
+inventory paths. Bootstrap revocation/rolling Apply, repeat Apply, cold start,
+interruption recovery, stock full PKI playbook and real React/Wails installation
+acceptance remain open. Owner revoked Apply authorization for this run; no
+bundle publication, PKI reissue, service restart, Installer Start or commit/push.
+
+Commit preparation removed only a redundant blank line at EOF in verify_quorum.yml
+found by staged diff --check (previous untracked file). Task content/behavior
+unchanged; reviewed and stand-tested snapshot identities above remain exact
+historical evidence. No tests or stand run repeated for this whitespace-only edit.
