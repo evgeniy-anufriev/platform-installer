@@ -782,6 +782,7 @@ export const backend: ProjectBackend = {
     CreateInstallationPlanForMode({
       ...request,
       skipInfrastructureVerify: request.skipInfrastructureVerify ?? false,
+      applicationLibraryOrder: request.applicationLibraryOrder ?? [],
     }) as unknown as Promise<InstallationPlanOperation>,
   getInfrastructureVerification: () =>
     GetInfrastructureVerification() as unknown as Promise<InfrastructureVerificationView>,
