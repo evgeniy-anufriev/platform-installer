@@ -402,3 +402,44 @@ The temporary RED OS QA source workspace was removed using qa-sync cleanup
 (only its remaining root-owned diagnostic directory ownership was corrected).
 Owned Wails34117/Vite5174 QA processes were stopped; implementation worktree,
 QA project, verified bundle inputs and established runtime secret files retained.
+
+## Master integration, 2026-10-21
+
+Owner authorized committing stage1 and integrating it into master. Implementation
+commit3dda665 was merged with origin/master e2b965b4 in e4dbd1fe. The examples/szi
+README now describes the observed Keycloak-only installation and required ignored
+assets. The main checkout's unrelated generated-password changes were preserved
+in recoverable stash fe7c4bd6ec593b80f8f3f7500cf4b5ca9c173607 plus runtime patches,
+then restored with staged/unstaged distinctions. Its UI assets were rebuilt from
+combined sources; those unrelated changes are excluded from SZI commits.
+
+Post-integration checks on the clean implementation branch:
+
+- Full Go tests and go vet PASS; frontend295 tests, typecheck, lint and build PASS.
+- RED OS focused Core110:109 PASS/one existing skip. Registry preparation and
+  application-plan20 PASS. Offline unshare46 PASS. SZI native8 and generic
+  context-free script runner1 PASS. Catalog/configuration schemas reproducible.
+- Regression exposed a lost registry-secret scope argument in the stage1 helper.
+  Commit4dbab390 restores existing scoped identities while retaining script-secret
+  deduplication. The twenty related tests passed after the correction.
+- Full Core regression is not claimed PASS: initial runs failed with the scope
+  defect; a final-source fail-fast restart was interrupted before completion.
+- Broad PostgreSQL33 tests failed11/errors7. Their stale lifecycle assertions
+  target tasks formerly inline in postgresql/tasks/main.yml; both the test and
+  that role are unchanged from origin/master e2b965b4. Native provider fixtures
+  also failed13 (one assertion/eleven errors), chiefly missing serviceType in
+  split_provider_jobs; that dispatcher/fixture mismatch predates this stage.
+  These broader gates remain open; no unrelated infrastructure repair is included.
+
+No new installation, password reset, database restore or replacement runtime
+bundle was performed during this integration. Previous real Wails/Core install
+acceptance remains bound to the exact run and revision recorded above; visual
+inspection and final full regression remain unperformed. Clean no-admin dump,
+full themes archive and nine JARs were copied into the main examples/szi tree
+and remain gitignored as previously requested.
+- Native configuration directory/archive reconciliation PASS (six applies,
+  changed=0 on repeats, stale file removal and interrupted archive recovery).
+- Preservation check:29 otherwise unchanged staged files retain exact original
+  blobs; partially staged journal and untracked review retain original bytes.
+  All11 ignored binary inputs (nine JARs, themes archive, clean dump) match the
+  tested implementation checkout. Backup stash is retained for recovery.

@@ -794,7 +794,7 @@ Existing runtime identity verification and source policy remain. AIM-D02 and
 AIM-D04 are to be corrected; AIM-D05 real Wails/Core QA is authorized, including
 its isolated QA runtime publication/preparation, without application Approve/Start.
 
-## ADR-047: Ordered application libraries and package-owned scripts
+## ADR-048: Ordered application libraries and package-owned scripts
 
 Owner approved the SZI stage-1 design in 2026-10. The Installer supplies a
 library execution order from `config/application.yml` and binds it to the fresh
