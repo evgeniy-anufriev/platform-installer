@@ -42,7 +42,7 @@ def application_execution_model(snapshot, image_lock=None, library_order=None):
         findings.append(finding('APPLICATION_IMAGE_LOCK_INVALID', 'artifactLock.x-container-images'))
         images = {}
 
-    def secret(source, library_id, placements, field, purpose='APPLICATION_SECRET', provider=None, operations=None):
+    def secret(source, library_id, placements, field, purpose='APPLICATION_SECRET', provider=None, scope=None, operations=None):
         if source.get('kind') != 'runtime_secret_ref':
             return
         ref = source.get('ref')
@@ -51,16 +51,18 @@ def application_execution_model(snapshot, image_lock=None, library_order=None):
             return
         requested_operations = list(operations or OPERATIONS)
         # A runtime reference names one value across application and script consumers.
-        item = secrets.get(ref)
+        key = (ref, scope)
+        item = secrets.get(key)
         if item is None:
             item = dict(purpose=purpose, providerDeployment=provider,
                         runtimeReference=ref, applicationLibraries=[], hosts=[],
                         operations=requested_operations)
-            secrets[ref] = item
+            secrets[key] = item
         elif item['purpose'] != purpose or item['providerDeployment'] != provider or item['operations'] != requested_operations:
             findings.append(finding('APPLICATION_SECRET_REF_CONFLICT', field))
             return
-        item['requirementRef'] = 'application-secret-' + canonical_digest([item['purpose'], ref]).split(':')[1][:32]
+        identity = [item['purpose'], ref] if scope is None else [item['purpose'], ref, scope]
+        item['requirementRef'] = 'application-secret-' + canonical_digest(identity).split(':')[1][:32]
         item['applicationLibraries'] = sorted(set(item['applicationLibraries']) | {library_id})
         item['hosts'] = sorted(set(item['hosts']) | set(placements))
 
