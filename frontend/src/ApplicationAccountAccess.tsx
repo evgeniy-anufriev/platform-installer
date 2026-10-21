@@ -123,17 +123,6 @@ export function ApplicationAccountAccess({
           ＋ Добавить доступ
         </button>
       </header>
-      <p className="muted">
-        Все пользовательские схемы и объекты БД, существующие и будущие.
-        {pg &&
-          " CREATE разрешает создавать объекты внутри схем этой БД. Будущие объекты: владелец библиотеки и указанные роли миграций; членство не заменяет SET ROLE."}
-      </p>
-      {pg && (
-        <p className="muted">
-          Снятие прав не меняет владельца объектов. Если эта УЗ владеет
-          объектами, её полномочия владельца сохраняются.
-        </p>
-      )}
       <table>
         <thead>
           <tr>
@@ -327,30 +316,28 @@ export function ApplicationRedisAccess({
   return (
     <fieldset className="application-redis-access">
       <legend>ACL {sentinel ? "Sentinel" : "Redis"}</legend>
-      {["commands", "keys", "channels"].map(
-        (key) => (
-          <label key={key}>
+      {["commands", "keys", "channels"].map((key) => (
+        <label key={key}>
+          {
             {
-              {
-                commands: "Команды",
-                keys: "Шаблоны ключей",
-                channels: "Шаблоны каналов",
-              }[key]
-            }
-            <input
-              aria-label={`ACL ${key}`}
-              disabled={disabled}
-              value={fields[key]}
-              placeholder="Значения через запятую"
-              onChange={(event) => {
-                setFields({ ...fields, [key]: event.target.value });
-                setDirty(true);
-                onDirtyChange(true);
-              }}
-            />
-          </label>
-        ),
-      )}
+              commands: "Команды",
+              keys: "Шаблоны ключей",
+              channels: "Шаблоны каналов",
+            }[key]
+          }
+          <input
+            aria-label={`ACL ${key}`}
+            disabled={disabled}
+            value={fields[key]}
+            placeholder="Значения через запятую"
+            onChange={(event) => {
+              setFields({ ...fields, [key]: event.target.value });
+              setDirty(true);
+              onDirtyChange(true);
+            }}
+          />
+        </label>
+      ))}
       <p className="muted">
         Права задаются списком команд и шаблонов. Core проверит формат данных.
       </p>
@@ -358,15 +345,13 @@ export function ApplicationRedisAccess({
         disabled={disabled || !dirty || !fields.commands.trim()}
         onClick={() => {
           const next = Object.fromEntries(
-            ["commands", "keys", "channels"].map(
-              (key) => [
-                key,
-                fields[key]
-                  .split(",")
-                  .map((v) => v.trim())
-                  .filter(Boolean),
-              ],
-            ),
+            ["commands", "keys", "channels"].map((key) => [
+              key,
+              fields[key]
+                .split(",")
+                .map((v) => v.trim())
+                .filter(Boolean),
+            ]),
           );
           void onSave(next).then((ok) => {
             if (ok) {

@@ -171,23 +171,25 @@ type RuntimeSecretDescriptorView struct {
 }
 
 type RuntimeSecretDescriptorOperation struct {
-	SecretsInstalled         bool                                        `json:"secretsInstalled,omitempty"`
-	Status                   string                                      `json:"status"`
-	ProjectRevision          string                                      `json:"projectRevision,omitempty"`
-	DescriptorSetFingerprint string                                      `json:"descriptorSetFingerprint,omitempty"`
-	Descriptors              []RuntimeSecretDescriptorView               `json:"descriptors,omitempty"`
-	ApplicationInputs        []executionnode.ApplicationSecretDescriptor `json:"applicationInputs,omitempty"`
-	Error                    *ProjectOpenError                           `json:"error,omitempty"`
+	ApplicationSecretAvailability map[string]bool                             `json:"applicationSecretAvailability,omitempty"`
+	SecretsInstalled              bool                                        `json:"secretsInstalled,omitempty"`
+	Status                        string                                      `json:"status"`
+	ProjectRevision               string                                      `json:"projectRevision,omitempty"`
+	DescriptorSetFingerprint      string                                      `json:"descriptorSetFingerprint,omitempty"`
+	Descriptors                   []RuntimeSecretDescriptorView               `json:"descriptors,omitempty"`
+	ApplicationInputs             []executionnode.ApplicationSecretDescriptor `json:"applicationInputs,omitempty"`
+	Error                         *ProjectOpenError                           `json:"error,omitempty"`
 }
 
 // RuntimeSecretValuesInput is one non-persistent submission for a single
 // Core-derived service deployment or application library. Values are never returned.
 type RuntimeSecretValuesInput struct {
-	ProjectRevision          string            `json:"projectRevision"`
-	DescriptorSetFingerprint string            `json:"descriptorSetFingerprint"`
-	ServiceDeployment        string            `json:"serviceDeployment"`
-	ApplicationLibrary       string            `json:"applicationLibrary,omitempty"`
-	Values                   map[string]string `json:"values"`
+	ProjectRevision           string            `json:"projectRevision"`
+	DescriptorSetFingerprint  string            `json:"descriptorSetFingerprint"`
+	ServiceDeployment         string            `json:"serviceDeployment"`
+	ApplicationLibrary        string            `json:"applicationLibrary,omitempty"`
+	ApplicationRequirementRef string            `json:"applicationRequirementRef,omitempty"`
+	Values                    map[string]string `json:"values"`
 }
 
 // PendingRuntimeSecretValuesInput is a locally catalog-authorized, transient
@@ -770,6 +772,33 @@ func (a *App) SetPKIStorePassword(value string) (runtimesecret.Status, error) {
 	return a.secrets.SetPKIStorePassword(binding, value)
 }
 
+// GetApplicationRuntimeSecretAvailability reads only presence in the current
+// Broker binding. Unlike descriptor discovery it never clears or promotes values.
+func (a *App) GetApplicationRuntimeSecretAvailability() RuntimeSecretDescriptorOperation {
+	a.editMu.Lock()
+	defer a.editMu.Unlock()
+	unavailable := RuntimeSecretDescriptorOperation{Status: "UNAVAILABLE"}
+	binding, err := a.credentialBindingLocked()
+	evidence := a.runtimeSecretEvidence
+	if err != nil || evidence == nil || a.binding == nil || evidence.projectID != binding.ID || evidence.nodeID != a.execution.context.SelectedHostID || !runtimeEvidenceMatchesExpected(evidence.runtime, a.binding.reader.runtimeRelease) {
+		return unavailable
+	}
+	revision, err := a.projectRevision(a.current.Root)
+	if err != nil || revision != evidence.projectRevision {
+		return unavailable
+	}
+	references := make([]string, 0, len(evidence.applicationInputs))
+	for _, descriptor := range evidence.applicationInputs {
+		references = append(references, descriptor.RequirementRef)
+	}
+	missing := a.secrets.MissingRequiredSecrets(binding, references, false, true)
+	availability := make(map[string]bool, len(references))
+	for _, reference := range references {
+		availability[reference] = !slices.Contains(missing, reference)
+	}
+	return RuntimeSecretDescriptorOperation{Status: "READY", ProjectRevision: revision, DescriptorSetFingerprint: evidence.fingerprint, ApplicationSecretAvailability: availability}
+}
+
 // SetDeploymentRuntimeSecretValues accepts values only for the current,
 // Core-derived descriptor set. It never persists or returns secret values.
 func (a *App) SetDeploymentRuntimeSecretValues(input RuntimeSecretValuesInput) error {
@@ -786,6 +815,21 @@ func (a *App) SetDeploymentRuntimeSecretValues(input RuntimeSecretValuesInput) e
 	requirements := make([]string, 0)
 	if input.ApplicationLibrary != "" && input.ServiceDeployment != "" {
 		return errors.New("RUNTIME_SECRET_INPUT_INVALID")
+	}
+	if input.ApplicationRequirementRef != "" {
+		if input.ApplicationLibrary == "" || input.ServiceDeployment != "" || len(input.Values) != 1 || input.Values[input.ApplicationRequirementRef] == "" {
+			return errors.New("RUNTIME_SECRET_INPUT_INVALID")
+		}
+		revision, revisionErr := a.projectRevision(a.current.Root)
+		if revisionErr != nil || revision != evidence.projectRevision {
+			return errors.New("RUNTIME_SECRET_DESCRIPTORS_STALE")
+		}
+		for _, descriptor := range evidence.applicationInputs {
+			if descriptor.RequirementRef == input.ApplicationRequirementRef && descriptor.Purpose == "APPLICATION_SECRET" && slices.Contains(descriptor.ApplicationLibraries, input.ApplicationLibrary) {
+				return a.secrets.SetPendingRuntimeSecretValuesForRequirements(binding, []string{descriptor.RequirementRef}, input.Values)
+			}
+		}
+		return errors.New("RUNTIME_SECRET_DESCRIPTOR_NOT_FOUND")
 	}
 	for _, descriptor := range evidence.descriptors {
 		if descriptor.Purpose == "SERVICE_PASSWORD" && descriptor.ServiceDeployment == input.ServiceDeployment {

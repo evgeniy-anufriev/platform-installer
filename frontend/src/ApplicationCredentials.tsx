@@ -2,6 +2,11 @@ import { useRef, useState, type ReactNode } from "react";
 import { objectValue } from "./application-draft";
 import { ApplicationValueFields } from "./ApplicationValueFields";
 import {
+  ApplicationRuntimeSecretField,
+  ApplicationSecretAvailabilityBadge,
+  type ApplicationSecretSession,
+} from "./ApplicationRuntimeSecretField";
+import {
   ApplicationAccountAccess,
   ApplicationRedisAccess,
 } from "./ApplicationAccountAccess";
@@ -17,6 +22,7 @@ export function CredentialSourceEditor({
   onReset,
   onDirtyChange,
   compact = false,
+  runtimeInput,
 }: {
   label: string;
   source: Obj;
@@ -27,6 +33,7 @@ export function CredentialSourceEditor({
   onReset: () => Promise<boolean>;
   onDirtyChange: (dirty: boolean) => void;
   compact?: boolean;
+  runtimeInput?: ReactNode;
 }) {
   const initial = Object.keys(source).length ? source : packageSource;
   const [kind, setKind] = useState(
@@ -90,7 +97,17 @@ export function CredentialSourceEditor({
           value={kind}
           onChange={(e) => {
             setKind(e.target.value);
-            setValues({});
+            setValues(
+              e.target.value === "runtime_secret_ref" &&
+                runtimeInput !== undefined
+                ? {
+                    ref:
+                      initial.kind === "runtime_secret_ref" && initial.ref
+                        ? initial.ref
+                        : `application-${crypto.randomUUID()}`,
+                  }
+                : {},
+            );
             change();
           }}
         >
@@ -101,29 +118,39 @@ export function CredentialSourceEditor({
           {allowLiteral && <option value="literal">Имя пользователя</option>}
         </select>
       </label>
-      {keys.map((key) => (
-        <label key={key}>
-          <span
-            className={
-              compact && keys.length <= 1
-                ? "application-credential-label"
-                : undefined
-            }
-          >
-            {labels[key]}
-          </span>
-          <input
-            placeholder={compact ? labels[key] : undefined}
-            disabled={disabled}
-            value={String(values[key] ?? "")}
-            autoComplete="off"
-            onChange={(e) => {
-              setValues((v) => ({ ...v, [key]: e.target.value }));
-              change();
-            }}
-          />
-        </label>
-      ))}
+      {kind === "runtime_secret_ref" && runtimeInput !== undefined ? (
+        dirty ? (
+          <small>
+            Сохраните источник в черновик и проект перед вводом секрета.
+          </small>
+        ) : (
+          runtimeInput
+        )
+      ) : (
+        keys.map((key) => (
+          <label key={key}>
+            <span
+              className={
+                compact && keys.length <= 1
+                  ? "application-credential-label"
+                  : undefined
+              }
+            >
+              {labels[key]}
+            </span>
+            <input
+              placeholder={compact ? labels[key] : undefined}
+              disabled={disabled}
+              value={String(values[key] ?? "")}
+              autoComplete="off"
+              onChange={(e) => {
+                setValues((v) => ({ ...v, [key]: e.target.value }));
+                change();
+              }}
+            />
+          </label>
+        ))
+      )}
       <div
         className={
           compact
@@ -131,23 +158,27 @@ export function CredentialSourceEditor({
             : "application-credential-actions-default"
         }
       >
-        <button
-          aria-label="В черновик"
-          title="В черновик"
-          disabled={
-            disabled ||
-            !dirty ||
-            keys.some((k) => !String(values[k] ?? "").trim())
-          }
-          onClick={() =>
-            void onSave({
-              kind,
-              ...Object.fromEntries(keys.map((k) => [k, values[k]])),
-            }).then(finish)
-          }
-        >
-          {compact ? "✓" : "В черновик"}
-        </button>
+        {(kind !== "runtime_secret_ref" ||
+          runtimeInput === undefined ||
+          dirty) && (
+          <button
+            aria-label="В черновик"
+            title="В черновик"
+            disabled={
+              disabled ||
+              !dirty ||
+              keys.some((k) => !String(values[k] ?? "").trim())
+            }
+            onClick={() =>
+              void onSave({
+                kind,
+                ...Object.fromEntries(keys.map((k) => [k, values[k]])),
+              }).then(finish)
+            }
+          >
+            {compact ? "✓" : "В черновик"}
+          </button>
+        )}
         <button
           aria-label="Сбросить к default"
           title="Сбросить к default"
@@ -174,6 +205,9 @@ export function ApplicationCredentials({
   deploymentTypes = {},
   variableBindings = {},
   renderVariables,
+  secretSession,
+  resolvedAccounts = {},
+  sharedSecretRefs = [],
 }: {
   defaults: Obj;
   authored: Obj;
@@ -186,6 +220,9 @@ export function ApplicationCredentials({
   deploymentTypes?: Record<string, string>;
   variableBindings?: Obj;
   renderVariables?: (account: string, field: string) => ReactNode;
+  secretSession?: ApplicationSecretSession;
+  resolvedAccounts?: Obj;
+  sharedSecretRefs?: string[];
 }) {
   const dirtyFields = useRef(new Set<string>());
   const mark = (key: string, dirty: boolean) => {
@@ -240,6 +277,34 @@ export function ApplicationCredentials({
             <section className="application-account-card" key={name}>
               <h3 title={`Подключение: ${binding}`}>
                 {deployment || name} <small>{serviceType}</small>
+                {secretSession && (
+                  <ApplicationSecretAvailabilityBadge
+                    session={secretSession}
+                    resolved={
+                      Object.keys(objectValue(resolvedAccounts[name])).length >
+                      0
+                    }
+                    sourceRefs={Object.values(
+                      objectValue(
+                        objectValue(resolvedAccounts[name]).credentials,
+                      ),
+                    )
+                      .map((credential) =>
+                        objectValue(objectValue(credential).source),
+                      )
+                      .filter((source) => source.kind === "runtime_secret_ref")
+                      .map((source) => String(source.ref ?? ""))}
+                  />
+                )}
+                {secretSession &&
+                  (secretSession.disabled ||
+                    !Object.keys(objectValue(resolvedAccounts[name]))
+                      .length) && (
+                    <small className="application-secret-prerequisite">
+                      Сохраните проект и получите актуальную проверку Core перед
+                      вводом секрета.
+                    </small>
+                  )}
               </h3>
               <details className="application-account-settings">
                 <summary>Настройки</summary>
@@ -367,6 +432,38 @@ export function ApplicationCredentials({
                             </td>
                             <td>
                               <CredentialSourceEditor
+                                runtimeInput={
+                                  secretSession ? (
+                                    <ApplicationRuntimeSecretField
+                                      session={secretSession}
+                                      label={`${name}: ${field === "password" ? "Пароль" : "Секрет имени пользователя"}`}
+                                      sourceRef={String(
+                                        objectValue(
+                                          objectValue(
+                                            objectValue(
+                                              objectValue(
+                                                resolvedAccounts[name],
+                                              ).credentials,
+                                            )[field],
+                                          ).source,
+                                        ).ref ?? "",
+                                      )}
+                                      shared={sharedSecretRefs.includes(
+                                        String(
+                                          objectValue(
+                                            objectValue(
+                                              objectValue(
+                                                objectValue(
+                                                  resolvedAccounts[name],
+                                                ).credentials,
+                                              )[field],
+                                            ).source,
+                                          ).ref ?? "",
+                                        ),
+                                      )}
+                                    />
+                                  ) : undefined
+                                }
                                 compact
                                 label={
                                   field === "username"

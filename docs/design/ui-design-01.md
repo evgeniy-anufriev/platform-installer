@@ -251,11 +251,28 @@ account per database. Add/Edit/Delete stages ordinary account settings; PG offer
 SELECT/INSERT/UPDATE/DELETE/CREATE, CH SELECT/INSERT. CREATE creates objects inside user schemas of the selected library-managed database; it does not grant database CREATE, ownership or membership. PG rights apply to all user schemas
 and existing/future objects for the owner and explicit creator roles. An explicit
 legacy-policy switch requires confirmation and Review; opening never broadens
-grants. Ownership is permitted: the UI states that removing DML does not remove
-owner authority. Redis/Sentinel use the existing structured commands/keys/channels
+grants. Ownership is permitted; removing DML does not remove owner authority.
+Owner refinement (2026-10-21) removes the verbose schema/CREATE/ownership help
+from the access block without changing these semantics.
+Redis/Sentinel use the existing structured commands/keys/channels
 editor, preserving provider restrictions. Runtime input remains inline through
 the existing lease; no KV rename/new secret store is implied. Current evidence
 and outstanding gates are in the Secrets access journal, not this design section.
+
+### Inline resource secret entry (2026-10-21)
+
+On the application instance Secrets tab, runtime credential rows accept the
+secret value directly. Existing references stay authored as before; selecting
+a new runtime source stages an automatic opaque reference through the existing
+writer. Values go only to the session Broker after Save and a fresh Core snapshot.
+Core snapshot credentialRequirements and descriptors provide the exact mapping;
+React never resolves templates. The lower instance-wide secret form is removed.
+The resource header displays deployment, service type and one aggregate presence
+chip: all required runtime values present / at least one missing / unavailable.
+The Save/Core prerequisite hint also appears in this header, not per field.
+Presence is read from Broker without exposing values or renewing TTL. Shared
+references warn that replacement affects all consumers. Separate existing
+Installation and registry flows keep their full-set API.
 
 ## 1. Product principle
 

@@ -359,6 +359,8 @@
 .application-account-card > h3 {
   grid-column: 1;
   display: flex;
+  align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
   margin: 0;
 }
@@ -381,6 +383,10 @@
 .application-account-card > h3 small {
   font-weight: 400;
   color: #65758b;
+}
+.application-account-card > h3 .application-secret-prerequisite {
+  flex-basis: 100%;
+  font-size: 11px;
 }
 .application-credential-table {
   width: 100%;
@@ -466,6 +472,24 @@
   grid-column: 1 / -1;
   font-size: 10px;
   margin: 0;
+  color: #65758b;
+}
+.application-runtime-secret {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+.application-runtime-secret-entry {
+  display: grid;
+  grid-template-columns: minmax(80px, 1fr) auto auto;
+  gap: 4px;
+}
+.application-runtime-secret-entry button {
+  padding: 5px;
+  min-width: 28px;
+}
+.application-runtime-secret small {
+  font-size: 11px;
   color: #65758b;
 }
 .application-credential-table td:last-child {

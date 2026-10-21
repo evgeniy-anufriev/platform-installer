@@ -1,9 +1,8 @@
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ApplicationLibraryResources } from "./ApplicationLibraryResources";
 import { ApplicationTopicBindings } from "./ApplicationTopicBindings";
 import { ApplicationPorts, type PortSource } from "./ApplicationPorts";
 import { ApplicationReadiness } from "./ApplicationReadiness";
-import { ApplicationSecretInputs } from "./ApplicationSecretInputs";
 import { ApplicationRegistryCredentials } from "./ApplicationRegistryCredentials";
 import { ApplicationBindings } from "./ApplicationBindings";
 import { ApplicationSecretBindings } from "./ApplicationSecretBindings";
@@ -42,6 +41,8 @@ export function ApplicationsPage({
   onDirtyChange,
   loadSecrets,
   saveSecrets,
+  loadSecretAvailability,
+  executionContextKey = "",
   choosePackage,
   onImport,
   draftActive,
@@ -60,6 +61,8 @@ export function ApplicationsPage({
   onProviderSecrets?: (deploymentId: string) => void;
   loadSecrets?: () => Promise<RuntimeSecretDescriptorOperation>;
   saveSecrets?: (input: RuntimeSecretValuesInput) => Promise<void>;
+  loadSecretAvailability?: () => Promise<RuntimeSecretDescriptorOperation>;
+  executionContextKey?: string;
   managed: OpenResult["managed"];
   snapshot: OpenResult["snapshot"];
   intents: ApplicationIntent[];
@@ -94,26 +97,116 @@ export function ApplicationsPage({
   const [local, setLocal] = useState<Record<string, string>>({});
   const [editing, setEditing] = useState<Set<string>>(new Set());
   const [error, setError] = useState("");
-  // One public descriptor query per saved revision while this page is open.
+  // One public descriptor query per saved revision and execution context.
   // A fresh query intentionally invalidates attached service inputs on the backend.
   const secretDescriptors = useRef<
-    RuntimeSecretDescriptorOperation | undefined
+    { context: string; operation: RuntimeSecretDescriptorOperation } | undefined
   >(undefined);
-  const loadApplicationSecrets = async () => {
+  const descriptorContext = JSON.stringify([
+    managed?.projectRevision,
+    executionContextKey,
+  ]);
+  const secretScope = JSON.stringify([
+    selected,
+    slot,
+    managed?.projectRevision,
+    executionContextKey,
+  ]);
+  const [secretAvailability, setSecretAvailability] = useState<{
+    value: RuntimeSecretDescriptorOperation;
+    snapshot: OpenResult["snapshot"];
+    scope: string;
+  }>();
+  const availabilityGeneration = useRef(0);
+  const availabilityQueue = useRef<Promise<void>>(Promise.resolve());
+  const secretDescriptorLoad = useRef<
+    | {
+        context: string;
+        promise: Promise<RuntimeSecretDescriptorOperation>;
+      }
+    | undefined
+  >(undefined);
+  const loadApplicationSecrets = useCallback(async () => {
     if (
       secretDescriptors.current &&
-      secretDescriptors.current.projectRevision === managed?.projectRevision
+      secretDescriptors.current.context === descriptorContext
     )
-      return secretDescriptors.current;
-    const result = await loadSecrets!();
-    secretDescriptors.current = result.status === "READY" ? result : undefined;
-    return result;
-  };
+      return secretDescriptors.current.operation;
+    const revision = managed?.projectRevision ?? "";
+    if (secretDescriptorLoad.current?.context === descriptorContext)
+      return secretDescriptorLoad.current.promise;
+    const promise = loadSecrets!()
+      .then((result) => {
+        if (secretDescriptorLoad.current?.promise === promise) {
+          secretDescriptors.current =
+            result.status === "READY" && result.projectRevision === revision
+              ? { context: descriptorContext, operation: result }
+              : undefined;
+        }
+        return result;
+      })
+      .finally(() => {
+        if (secretDescriptorLoad.current?.promise === promise)
+          secretDescriptorLoad.current = undefined;
+      });
+    secretDescriptorLoad.current = { context: descriptorContext, promise };
+    return promise;
+  }, [loadSecrets, managed?.projectRevision, descriptorContext]);
+  const refreshSecretAvailability = useCallback(() => {
+    const generation = ++availabilityGeneration.current;
+    const request = availabilityQueue.current
+      .catch(() => {})
+      .then(async () => {
+        if (generation !== availabilityGeneration.current) return;
+        try {
+          const cached = secretDescriptors.current;
+          const descriptors =
+            cached?.context === descriptorContext
+              ? cached.operation
+              : undefined;
+          const result = await loadSecretAvailability!();
+          if (generation !== availabilityGeneration.current) return;
+          setSecretAvailability(
+            result.status === "READY" &&
+              result.projectRevision === managed?.projectRevision &&
+              descriptors?.status === "READY" &&
+              result.descriptorSetFingerprint ===
+                descriptors.descriptorSetFingerprint
+              ? {
+                  value: {
+                    ...descriptors,
+                    applicationSecretAvailability:
+                      result.applicationSecretAvailability,
+                  },
+                  snapshot,
+                  scope: secretScope,
+                }
+              : undefined,
+          );
+        } catch {
+          if (generation === availabilityGeneration.current)
+            setSecretAvailability(undefined);
+        }
+      });
+    availabilityQueue.current = request;
+    return request;
+  }, [
+    loadSecretAvailability,
+    managed?.projectRevision,
+    snapshot,
+    secretScope,
+    descriptorContext,
+  ]);
   const saveApplicationSecrets = async (input: RuntimeSecretValuesInput) => {
+    ++availabilityGeneration.current;
+    setSecretAvailability(undefined);
     try {
       await saveSecrets!(input);
+      if (loadSecretAvailability) await refreshSecretAvailability();
     } catch (error) {
       secretDescriptors.current = undefined;
+      ++availabilityGeneration.current;
+      setSecretAvailability(undefined);
       throw error;
     }
   };
@@ -378,6 +471,104 @@ export function ApplicationsPage({
     : ["Общее", "Общие параметры", "Подключения", "Ресурсы и секреты"];
   const selectedTab = tabs.includes(tab) ? tab : tabs[0];
   const resolved = snapshot?.applicationLibraries?.libraries?.[selected];
+  const freshSecrets =
+    !busy &&
+    !draftActive &&
+    !dirty &&
+    intents.length === 0 &&
+    snapshot?.projectRevision === managed?.projectRevision;
+  const secretContext = JSON.stringify([
+    selected,
+    slot,
+    managed?.projectRevision,
+    freshSecrets,
+  ]);
+  useEffect(() => {
+    ++availabilityGeneration.current;
+    if (
+      !slot ||
+      selectedTab !== "Секреты" ||
+      !freshSecrets ||
+      !loadSecrets ||
+      !loadSecretAvailability
+    )
+      return;
+    let active = true;
+    let pending = false;
+    const refresh = async () => {
+      if (!active || pending) return;
+      pending = true;
+      try {
+        await refreshSecretAvailability();
+      } finally {
+        pending = false;
+      }
+    };
+    // Descriptor discovery is an explicit context-entry operation, never a poll.
+    void loadApplicationSecrets()
+      .then(() => {
+        if (active) void refresh();
+      })
+      .catch(() => {
+        if (active) setSecretAvailability(undefined);
+      });
+    const interval = window.setInterval(() => void refresh(), 10000);
+    window.addEventListener("focus", refresh);
+    return () => {
+      active = false;
+      ++availabilityGeneration.current;
+      window.clearInterval(interval);
+      window.removeEventListener("focus", refresh);
+    };
+  }, [
+    secretContext,
+    slot,
+    selectedTab,
+    freshSecrets,
+    loadSecrets,
+    loadSecretAvailability,
+    loadApplicationSecrets,
+    refreshSecretAvailability,
+  ]);
+  const resolvedSecretAccounts = freshSecrets
+    ? objectValue(
+        Object.values(resolved?.instances ?? {}).find(
+          (instance) => instance.slotId === slot,
+        )?.credentialRequirements,
+      )
+    : {};
+  const secretRefCounts: Record<string, number> = {};
+  for (const resolvedLibrary of Object.values(
+    snapshot?.applicationLibraries?.libraries ?? {},
+  )) {
+    for (const secret of Object.values(
+      objectValue(resolvedLibrary.sharedSecretRequirements),
+    )) {
+      const source = objectValue(objectValue(secret).source);
+      if (
+        source.kind === "runtime_secret_ref" &&
+        typeof source.ref === "string"
+      )
+        secretRefCounts[source.ref] = (secretRefCounts[source.ref] ?? 0) + 1;
+    }
+    for (const instance of Object.values(resolvedLibrary.instances ?? {})) {
+      for (const account of Object.values(
+        objectValue(instance.credentialRequirements),
+      )) {
+        for (const credential of Object.values(
+          objectValue(objectValue(account).credentials),
+        )) {
+          const source = objectValue(objectValue(credential).source);
+          if (
+            source.kind === "runtime_secret_ref" &&
+            typeof source.ref === "string"
+          )
+            secretRefCounts[source.ref] =
+              (secretRefCounts[source.ref] ?? 0) + 1;
+        }
+      }
+    }
+  }
   const resolvedTopics =
     !draftActive && snapshot?.projectRevision === managed?.projectRevision
       ? objectValue(resolved?.topics)
@@ -1431,6 +1622,29 @@ export function ApplicationsPage({
                       сессии.
                     </p>
                     <ApplicationCredentials
+                      secretSession={
+                        loadSecrets && saveSecrets
+                          ? {
+                              projectRevision: managed?.projectRevision ?? "",
+                              contextKey: executionContextKey,
+                              libraryId: selected,
+                              disabled: busy || !freshSecrets,
+                              availability:
+                                freshSecrets &&
+                                secretAvailability &&
+                                secretAvailability?.snapshot === snapshot &&
+                                secretAvailability.scope === secretScope
+                                  ? secretAvailability.value
+                                  : undefined,
+                              load: loadApplicationSecrets,
+                              save: saveApplicationSecrets,
+                            }
+                          : undefined
+                      }
+                      resolvedAccounts={resolvedSecretAccounts}
+                      sharedSecretRefs={Object.keys(secretRefCounts).filter(
+                        (ref) => secretRefCounts[ref] > 1,
+                      )}
                       renderVariables={(account, field) => (
                         <ApplicationSecretBindings
                           credential={{ account, field }}
@@ -1482,17 +1696,6 @@ export function ApplicationsPage({
                         })
                       }
                     />
-                    {loadSecrets && saveSecrets && (
-                      <ApplicationSecretInputs
-                        inline
-                        disabled={busy || draftActive || dirty}
-                        key={selected + slot + managed?.projectRevision}
-                        title={"Секреты: " + selected + " / " + slot}
-                        load={loadApplicationSecrets}
-                        save={saveApplicationSecrets}
-                        libraryId={selected}
-                      />
-                    )}
                     {draftActive && (
                       <p>
                         Для сессионного ввода сначала сохраните проект и

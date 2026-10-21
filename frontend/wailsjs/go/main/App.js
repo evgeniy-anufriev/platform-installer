@@ -130,6 +130,10 @@ export function GetApplicationConfig() {
   return window['go']['main']['App']['GetApplicationConfig']();
 }
 
+export function GetApplicationRuntimeSecretAvailability() {
+  return window['go']['main']['App']['GetApplicationRuntimeSecretAvailability']();
+}
+
 export function GetEndpointPreview() {
   return window['go']['main']['App']['GetEndpointPreview']();
 }

@@ -2440,7 +2440,16 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
               draftActive={!!sessionId}
               backendError={editError?.message}
               loadSecrets={api.getRuntimeSecretDescriptors}
+              executionContextKey={JSON.stringify([
+                executionNode?.selectionKind,
+                executionNode?.selectedHostId,
+                executionNode?.runtimeDigest,
+                executionNode?.status,
+              ])}
               saveSecrets={api.setDeploymentRuntimeSecretValues}
+              loadSecretAvailability={
+                api.getApplicationRuntimeSecretAvailability
+              }
             />
           )}
           {!loading && !creating && projectOpen && page === "services" && (

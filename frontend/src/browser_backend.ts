@@ -308,6 +308,8 @@ export const browserBackend: ProjectBackend = {
   setSessionCredential: (input) => invoke("setSessionCredential", [input]),
   setPKIStorePassword: (value) => invoke("setPKIStorePassword", [value]),
   getRuntimeSecretDescriptors: () => invoke("getRuntimeSecretDescriptors"),
+  getApplicationRuntimeSecretAvailability: () =>
+    invoke("getApplicationRuntimeSecretAvailability"),
   setDeploymentRuntimeSecretValues: (input) =>
     invoke("setDeploymentRuntimeSecretValues", [input]),
   getPendingRuntimeSecretDescriptors: (serviceDeployment) =>

@@ -8,6 +8,33 @@ import {
 } from "./ApplicationCredentials";
 
 describe("application connection settings", () => {
+  it("creates a runtime reference automatically when switching the resource source", async () => {
+    const save = vi.fn().mockResolvedValue(true);
+    render(
+      <CredentialSourceEditor
+        label="Пароль"
+        source={{}}
+        packageSource={{ kind: "generated" }}
+        runtimeInput={<span>Ввод в строке ресурса</span>}
+        allowLiteral={false}
+        disabled={false}
+        onSave={save}
+        onReset={vi.fn()}
+        onDirtyChange={vi.fn()}
+      />,
+    );
+    await userEvent.selectOptions(
+      screen.getByLabelText("Источник"),
+      "runtime_secret_ref",
+    );
+    expect(screen.queryByLabelText(/имя ссылки/)).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "В черновик" }));
+    expect(save).toHaveBeenCalledWith({
+      kind: "runtime_secret_ref",
+      ref: expect.stringMatching(/^application-[a-f0-9-]{36}$/),
+    });
+    expect(Object.keys(save.mock.calls[0][0]).sort()).toEqual(["kind", "ref"]);
+  });
   it("resets only account management mode and preserves credentials and rights", async () => {
     const save = vi.fn().mockResolvedValue(true);
     const credentials = {

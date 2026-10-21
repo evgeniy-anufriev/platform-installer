@@ -70,6 +70,8 @@ export function DiscardEditSession(arg1:string):Promise<desktop.EditOperationRes
 
 export function GetApplicationConfig():Promise<desktop.ApplicationConfigResult>;
 
+export function GetApplicationRuntimeSecretAvailability():Promise<desktop.RuntimeSecretDescriptorOperation>;
+
 export function GetEndpointPreview():Promise<desktop.EndpointPreview>;
 
 export function GetExecutionNodeContext():Promise<desktop.ExecutionNodeContext>;

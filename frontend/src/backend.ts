@@ -20,6 +20,7 @@ import {
   GetEndpointPreview,
   GetVerifiedPKIView,
   GetRuntimeSecretDescriptors,
+  GetApplicationRuntimeSecretAvailability,
   GetPendingRuntimeSecretDescriptors,
   ListPendingSecretOutputs,
   SetSecretOutputEncryptionPassword,
@@ -429,6 +430,7 @@ export type RuntimeSecretDescriptor = {
   hosts: string[];
 };
 export type RuntimeSecretDescriptorOperation = {
+  applicationSecretAvailability?: Record<string, boolean>;
   secretsInstalled?: boolean;
   status: "READY" | "UNAVAILABLE";
   projectRevision?: string;
@@ -477,6 +479,7 @@ export type RuntimeSecretValuesInput = {
   descriptorSetFingerprint: string;
   serviceDeployment: string;
   applicationLibrary?: string;
+  applicationRequirementRef?: string;
   values: Record<string, string>;
 };
 export type PendingRuntimeSecretValuesInput = {
@@ -596,6 +599,7 @@ export interface ProjectBackend {
   ): Promise<SessionCredentialStatus>;
   setPKIStorePassword?(value: string): Promise<SessionCredentialStatus>;
   getRuntimeSecretDescriptors?(): Promise<RuntimeSecretDescriptorOperation>;
+  getApplicationRuntimeSecretAvailability?(): Promise<RuntimeSecretDescriptorOperation>;
   setDeploymentRuntimeSecretValues?(
     input: RuntimeSecretValuesInput,
   ): Promise<void>;
@@ -720,6 +724,8 @@ export const backend: ProjectBackend = {
   setPKIStorePassword: SetPKIStorePassword,
   getRuntimeSecretDescriptors: () =>
     GetRuntimeSecretDescriptors() as unknown as Promise<RuntimeSecretDescriptorOperation>,
+  getApplicationRuntimeSecretAvailability: () =>
+    GetApplicationRuntimeSecretAvailability() as unknown as Promise<RuntimeSecretDescriptorOperation>,
   setDeploymentRuntimeSecretValues: (input) =>
     SetDeploymentRuntimeSecretValues(input as never),
   getPendingRuntimeSecretDescriptors: (serviceDeployment) =>
