@@ -72,6 +72,7 @@ class ProjectSnapshotActionTests(unittest.TestCase):
         action._load = load
         documents = [
             {"logicalPath": "ansible.cfg", "revisionIncluded": True},
+            {"logicalPath": "application-packages/front/1.0.0/assets/config.json", "revisionIncluded": True},
             {"logicalPath": "inventory/group_vars/all/platform-installer.yml", "revisionIncluded": True},
         ]
         desired, placements = action._provenance_sources("/project", documents, ["node1"])

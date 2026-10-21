@@ -18,7 +18,7 @@
     application_name: "{{ application_job.application.name }}"
     application_instance_id: >-
       {{ application_job.application.name if
-         (_library_package.platform_library_definition.instance_id_strategy | default('qualified')) == 'application-name'
+         (application_job.library.definition.instance_id_strategy | default('qualified')) == 'application-name'
          else application_job.application.name ~ '-' ~ application_job.libraryId }}
     library_instance_id: "{{ application_job.libraryId }}"
   no_log: true
@@ -184,8 +184,9 @@
         'libraryId': application_job.libraryId,
         'libraryRef': application_job.deployment.libraryRef,
         'slotId': application_job.slotId,
+        'startupPriority': application_job.slot.start_priority | default(100),
         'instanceId': application_instance_id,
-        'instanceIdStrategy': _library_package.platform_library_definition.instance_id_strategy | default('qualified'),
+        'instanceIdStrategy': application_job.library.definition.instance_id_strategy | default('qualified'),
         'applicationName': application_name,
         'applicationVersion': application_job.application.version,
         'hostId': application_job.hostId,
@@ -204,6 +205,8 @@
         'connections': _application_connections,
         'identityNames': _application_package.platform_application_definition.identity_environment | default([]),
         'packageIdentity': {'application': application_job.application.digest, 'library': application_job.library.digest},
+        'libraryScripts': application_job.library.scripts | default([]),
+        'applicationScripts': application_job.application.scripts | default([]),
         'commonDefaults': _application_shared.defaults | combine(_application_shared.overrides, recursive=true, list_merge='replace'),
         'inherited': {'environment': application_inherited.environment | default({}), 'parameters': application_inherited.parameters | default({})},
         'settings': application_inherited |

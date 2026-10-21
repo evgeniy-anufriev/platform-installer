@@ -6,7 +6,7 @@ services:
     image: {{ application_runtime.image | to_json }}
     container_name: {{ application_runtime.container_name | to_json }}
     command: []
-    entrypoint: ["/usr/bin/vault", "agent", "--config", "/opt/vault/agent.hcl"]
+    entrypoint: ["/usr/bin/vault", "agent", "-config=/opt/vault/agent.hcl"]
     user: {{ application_effective.user | to_json }}
     restart: {{ application_effective.restart | to_json }}
     environment:
@@ -22,9 +22,7 @@ services:
       - "{{ port.published }}:{{ port.container }}"
 {% endfor %}
     volumes:
-      - {{ (application_runtime.pki_path ~ "/leaf.crt:/usr/lib/keycloak/ssl/host.pem:ro") | to_json }}
-      - {{ (application_runtime.pki_path ~ "/leaf.key:/usr/lib/keycloak/ssl/host.key:ro") | to_json }}
-      - {{ (application_runtime.pki_path ~ "/ca-chain.pem:/usr/lib/keycloak/ssl/ca.pem:ro") | to_json }}
+      - {{ (application_runtime.pki_path ~ ":/opt/application/pki:ro") | to_json }}
       - {{ (application_runtime.vault_path ~ ":/opt/vault:ro") | to_json }}
 {% for config in application_effective.config_files %}
       - {{ (application_runtime.config_path ~ "/" ~ config.destination ~ ":" ~ ("/etc/keycloak/cache-ispn.xml" if config.destination == "conf/cache-ispn.xml" else "/usr/lib/keycloak/" ~ config.destination) ~ ":ro") | to_json }}
@@ -42,4 +40,4 @@ services:
     deploy:
       resources:
         limits:
-          memory: 6G
+          memory: {{ application_parameters.KEYCLOAK_MEMORY_LIMIT | to_json }}

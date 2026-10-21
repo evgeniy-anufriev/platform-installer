@@ -101,6 +101,21 @@ native module checks metadata, creates missing tables and verifies all members.
 Database ownership is persisted before table writes so partial creation can retry.
 See [file-only table contract](project-contract.md#file-only-clickhouse-base-tables).
 
+The SZI stage introduces a generic package script runner. The package declares
+phase, placement, file, nonsecret argv and runtime secret references; Core
+resolves those references without product-specific branches. Ansible copies
+the allowlisted script to the target, stages mode-0600 secret files for the
+selected account, executes exact argv with a timeout, validates a small JSON
+result and removes transient secrets. Docker and Keycloak commands live in the
+Keycloak package scripts. Application Apply completes shared providers first,
+then runs materialization, image delivery, before-start scripts, activation,
+after-ready scripts and Verify for each library in its explicit plan order.
+Within a library, selected slots run by optional package `start_priority`
+(default 100), then instance ID; each instance finishes its after-ready phase
+before the next starts.
+Direct multi-library Apply also requires an explicit order. PostgreSQL's
+managed `restore_on_create` is part of the existing provider stage.
+
 Kafka library resources reuse these stages with capability `service.kafka.topic`.
 Core projects topic defaults from the selected deployment's mode and broker members;
 the Kafka role uses builtin command/template/assert tasks and its installed CLI.

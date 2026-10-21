@@ -78,6 +78,7 @@ class ApplicationImageProtocolTests(unittest.TestCase):
             prepared = call(dict(operation='PrepareApplicationImages', phase='PREPARE', inputsDigest=description['inputsDigest']))
             planned = call(dict(operation='BuildDeploymentPlan', project=str(project),
                                 executionMode='FULL_PROJECT', deploymentOrder=['docker'], skipInfrastructureVerify=False,
+                                applicationLibraryOrder=sorted(variables['platform_desired_state']['applicationLibraryDeployments']),
                                 applicationVaultSources={}, applicationImagePreparation=prepared['preparationDigest']))
             plan = planned['deploymentPlan']
             self.assertEqual(plan['apiVersion'], 'platform.installer/plan/v1alpha7')

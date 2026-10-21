@@ -82,6 +82,12 @@ container runtime and integration inputs, including collision rejection.
 Its Keycloak package uses the common Core directory/archive configuration
 contracts. End-to-end SZI acceptance still requires exercising the real
 Installer/target flow.
+The approved [SZI stage-1 plan](work/application-libraries/szi-stage1-technical-plan.md)
+adds a typed managed PostgreSQL `restore_on_create`, generic package scripts
+with private secret files, and explicit per-library Apply/Verify ordering.
+Implementation is in a separate worktree; current gates remain in
+`CURRENT_STATE.md`. SDKU group creation and per-application Keycloak clients
+remain later integration work.
 
 [A2](work/application-libraries/milestones/a2/a2-technical-plan.md) covers explicit standalone
 rendering, pinned image delivery and rootless Compose Apply/Verify. Its exit gates

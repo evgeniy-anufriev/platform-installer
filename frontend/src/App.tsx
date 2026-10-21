@@ -295,6 +295,9 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
   const [serviceExecutionPriorities, setServiceExecutionPriorities] = useState<
     Array<{ serviceType: string; priority: number | null }>
   >([]);
+  const [libraryExecutionPriorities, setLibraryExecutionPriorities] = useState<
+    Array<{ libraryName: string; priority: number | null }>
+  >([]);
   const [applicationConfigVersion, setApplicationConfigVersion] = useState<
     number | undefined
   >();
@@ -455,6 +458,12 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
           setServiceExecutionPriorities(
             (value.config.serviceExecutionPriorities || []).map((item) => ({
               serviceType: item.serviceType,
+              priority: item.priority ?? null,
+            })),
+          );
+          setLibraryExecutionPriorities(
+            (value.config.libraryExecutionPriorities || []).map((item) => ({
+              libraryName: item.libraryName,
               priority: item.priority ?? null,
             })),
           );
@@ -902,10 +911,12 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     }
   };
   const installationOrderRef = useRef<string[]>([]);
+  const installationLibraryOrderRef = useRef<string[]>([]);
   const createInstallationPlan = async (
     deploymentOrder: string[],
     executionMode: InstallationExecutionMode = "FULL_PROJECT",
     skipInfrastructureVerify = false,
+    applicationLibraryOrder: string[] = [],
   ) => {
     if (
       ["STARTING", "RUNNING", "CANCELLING"].includes(
@@ -917,12 +928,14 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
       return;
     setInstallationBusy(true);
     installationOrderRef.current = deploymentOrder;
+    installationLibraryOrderRef.current = applicationLibraryOrder;
     try {
       const operation: InstallationPlanOperation =
         api.createInstallationPlanForMode
           ? await api.createInstallationPlanForMode({
               executionMode,
               deploymentOrder,
+              ...(applicationLibraryOrder.length ? { applicationLibraryOrder } : {}),
               applicationVaultSources: {},
               skipInfrastructureVerify,
             })
@@ -964,6 +977,9 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
         const fresh = await api.createInstallationPlanForMode({
           executionMode: installationExecutionMode,
           deploymentOrder: installationOrderRef.current,
+          ...(installationLibraryOrderRef.current.length
+            ? { applicationLibraryOrder: installationLibraryOrderRef.current }
+            : {}),
           applicationVaultSources: {},
         });
         setInstallationPlan(fresh);
@@ -2594,6 +2610,13 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
                 serviceType: item.serviceType,
               }))}
               serviceExecutionPriorities={serviceExecutionPriorities}
+              libraryDeployments={Object.entries(
+                result.managed?.applicationLibraries || {},
+              ).map(([deploymentId, value]) => ({
+                deploymentId,
+                libraryRef: value.libraryRef,
+              }))}
+              libraryExecutionPriorities={libraryExecutionPriorities}
               onApprovePlan={approveInstallationPlan}
               approvalErrorAttempt={approvalErrorAttempt}
               run={installationRun}

@@ -17,7 +17,7 @@ BEGIN
 {% endfor %}
 END
 $platform_owners$;
-{% for db in platform_postgresql_application_job.databases if db.mode == 'managed' %}
+{% for db in platform_postgresql_application_job.databases if db.mode == 'managed' and db.restoreOnCreate is not defined %}
 SELECT format('CREATE DATABASE %I OWNER %I TEMPLATE template0 ENCODING %L ALLOW_CONNECTIONS false',
  {{ db.name | platform.postgresql.application_sql_literal }}, {{ db.owner | platform.postgresql.application_sql_literal }}, 'UTF8')
  WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = {{ db.name | platform.postgresql.application_sql_literal }})

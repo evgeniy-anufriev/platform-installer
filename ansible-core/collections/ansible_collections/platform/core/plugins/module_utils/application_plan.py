@@ -18,11 +18,21 @@ PLAN_VERSION = 'platform.installer/plan/v1alpha4'
 MANIFEST_VERSION = 'platform.installer/execution-manifest/v1alpha2'
 
 
-def application_execution_model(snapshot, image_lock=None):
+def application_execution_model(snapshot, image_lock=None, library_order=None):
     """Consume native resolved rows via the safe projection; never merge hostvars."""
     projection = snapshot.get('applicationLibraries', {})
     libraries = projection.get('libraries', {})
     requirements, secrets, findings = [], {}, []
+    selected = sorted(libraries)
+    if library_order is None:
+        if len(selected) > 1:
+            findings.append(finding('APPLICATION_LIBRARY_ORDER_REQUIRED', 'applicationLibraryOrder'))
+        library_order = selected
+    if (not isinstance(library_order, list) or len(library_order) != len(selected) or
+            any(not isinstance(item, str) for item in library_order) or
+            len(set(library_order)) != len(library_order) or set(library_order) != set(selected)):
+        findings.append(finding('APPLICATION_LIBRARY_ORDER_INVALID', 'applicationLibraryOrder'))
+        library_order = selected
     images = image_lock.get('images', {}) if isinstance(image_lock, dict) else {}
     contracts = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../../../../../contracts'))
     invalid_lock = bool(libraries) and bool(SchemaValidator(contracts).validate(
@@ -32,18 +42,25 @@ def application_execution_model(snapshot, image_lock=None):
         findings.append(finding('APPLICATION_IMAGE_LOCK_INVALID', 'artifactLock.x-container-images'))
         images = {}
 
-    def secret(source, library_id, placements, field, purpose='APPLICATION_SECRET', provider=None, scope=None):
+    def secret(source, library_id, placements, field, purpose='APPLICATION_SECRET', provider=None, operations=None):
         if source.get('kind') != 'runtime_secret_ref':
             return
         ref = source.get('ref')
         if not isinstance(ref, str) or not ID.fullmatch(ref):
             findings.append(finding('APPLICATION_SECRET_REF_INVALID', field))
             return
-        key = 'application-secret-' + canonical_digest([purpose, ref] if scope is None else [purpose, ref, scope]).split(':')[1][:32]
-        item = secrets.setdefault((purpose, ref, scope), dict(requirementRef=key, purpose=purpose,
-                                            providerDeployment=provider,
-                                            runtimeReference=ref, applicationLibraries=[], hosts=[],
-                                            operations=list(OPERATIONS)))
+        requested_operations = list(operations or OPERATIONS)
+        # A runtime reference names one value across application and script consumers.
+        item = secrets.get(ref)
+        if item is None:
+            item = dict(purpose=purpose, providerDeployment=provider,
+                        runtimeReference=ref, applicationLibraries=[], hosts=[],
+                        operations=requested_operations)
+            secrets[ref] = item
+        elif item['purpose'] != purpose or item['providerDeployment'] != provider or item['operations'] != requested_operations:
+            findings.append(finding('APPLICATION_SECRET_REF_CONFLICT', field))
+            return
+        item['requirementRef'] = 'application-secret-' + canonical_digest([item['purpose'], ref]).split(':')[1][:32]
         item['applicationLibraries'] = sorted(set(item['applicationLibraries']) | {library_id})
         item['hosts'] = sorted(set(item['hosts']) | set(placements))
 
@@ -62,6 +79,10 @@ def application_execution_model(snapshot, image_lock=None):
             placements = sorted(instance.get('placements', {}))
             library_hosts.update(placements)
             field = 'applicationLibraryDeployments.%s.applications.%s' % (library_id, instance.get('slotId', instance_id))
+            for script in instance.get('scripts', []):
+                for name, source in script.get('secretInputs', {}).items():
+                    secret(dict(kind='runtime_secret_ref', ref=source['ref']), library_id, placements,
+                           field + '.scripts.' + script['id'] + '.secretInputs.' + name)
             for host in placements:
                 image_name = instance['placements'][host].get('imageRequirement', instance.get('imageRequirement', {})).get('image')
                 try:
@@ -94,6 +115,10 @@ def application_execution_model(snapshot, image_lock=None):
         for name, value in sorted(library.get('sharedSecretRequirements', {}).items()):
             secret(value['source'], library_id, library_hosts,
                    'applicationLibraryDeployments.' + library_id + '.sharedSecrets.' + name)
+        for script in library.get('scripts', []):
+            for name, source in script.get('secretInputs', {}).items():
+                secret(dict(kind='runtime_secret_ref', ref=source['ref']), library_id, library_hosts,
+                       'applicationLibraryDeployments.' + library_id + '.scripts.' + script['id'] + '.secretInputs.' + name)
     actions = []
     targets = set()
     # Reuse resolved deployment hosts: provider hooks can discover any member.
@@ -115,8 +140,8 @@ def application_execution_model(snapshot, image_lock=None):
                                 summary=action.capitalize() + ' application libraries'))
     return dict(actions=actions, artifactRequirements=requirements,
                 runtimeSecretRequirements=sorted(secrets.values(), key=lambda item: item['requirementRef']),
-                libraryIds=sorted(libraries), findings=findings,
-                semanticFingerprint=canonical_digest(dict(projection=projection, imageLock={} if invalid_lock else image_lock or {})))
+                libraryIds=list(library_order), findings=findings,
+                semanticFingerprint=canonical_digest(dict(projection=projection, imageLock={} if invalid_lock else image_lock or {}, libraryOrder=library_order)))
 
 
 def application_operation(action, model):

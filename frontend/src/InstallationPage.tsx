@@ -64,6 +64,29 @@ export type ServiceDeploymentInput = {
   serviceType: string;
 };
 
+export type LibraryPriorityInput = { libraryName: string; priority: number | null };
+export type LibraryDeploymentInput = { deploymentId: string; libraryRef: string };
+
+export function libraryOrderFromPriorities(
+  deployments: LibraryDeploymentInput[],
+  priorities: LibraryPriorityInput[],
+): { order: string[]; missingNames: string[] } {
+  const byName = new Map(priorities.map((item, index) => [item.libraryName, { ...item, index }]));
+  const nameOf = (item: LibraryDeploymentInput) => item.libraryRef.split("@", 1)[0];
+  const missingNames = [...new Set(deployments.filter((item) =>
+    byName.get(nameOf(item))?.priority == null).map(nameOf))].sort();
+  if (missingNames.length) return { order: [], missingNames };
+  return {
+    order: [...deployments].sort((left, right) => {
+      const a = byName.get(nameOf(left))!;
+      const b = byName.get(nameOf(right))!;
+      return a.priority! - b.priority! || a.index - b.index ||
+        (left.deploymentId < right.deploymentId ? -1 : left.deploymentId > right.deploymentId ? 1 : 0);
+    }).map((item) => item.deploymentId),
+    missingNames: [],
+  };
+}
+
 export function deploymentOrderFromPriorities(
   deployments: ServiceDeploymentInput[],
   priorities: ServicePriorityInput[],
@@ -221,6 +244,8 @@ export function InstallationPage({
   onExecutionModeChange,
   serviceDeployments = [],
   serviceExecutionPriorities = [],
+  libraryDeployments = [],
+  libraryExecutionPriorities = [],
   onApprovePlan,
   approvalErrorAttempt = 0,
   run,
@@ -251,12 +276,15 @@ export function InstallationPage({
     deploymentOrder: string[],
     mode?: InstallationExecutionMode,
     skipInfrastructureVerify?: boolean,
+    applicationLibraryOrder?: string[],
   ) => void;
   infrastructureObservation?: InfrastructureVerificationView;
   selectedExecutionMode?: InstallationExecutionMode;
   onExecutionModeChange?: (mode: InstallationExecutionMode) => void;
   serviceDeployments?: ServiceDeploymentInput[];
   serviceExecutionPriorities?: ServicePriorityInput[];
+  libraryDeployments?: LibraryDeploymentInput[];
+  libraryExecutionPriorities?: LibraryPriorityInput[];
   onApprovePlan: (planId: string, acknowledgements: string[]) => void;
   approvalErrorAttempt?: number;
   run?: InstallationRunOperation;
@@ -312,6 +340,9 @@ export function InstallationPage({
       ),
     [serviceDeployments, serviceExecutionPriorities],
   );
+  const libraryOrder = useMemo(() => libraryOrderFromPriorities(
+    libraryDeployments, libraryExecutionPriorities,
+  ), [libraryDeployments, libraryExecutionPriorities]);
   const createPlan = () => {
     if (deploymentOrder.missingTypes.length) {
       setOrderError(
@@ -321,10 +352,16 @@ export function InstallationPage({
       );
       return;
     }
+    if (libraryOrder.missingNames.length) {
+      setOrderError("Для библиотек " + libraryOrder.missingNames.join(", ") +
+        " не задан приоритет в application.yml.");
+      return;
+    }
     setOrderError("");
-    if (executionMode === "FULL_PROJECT") onCreatePlan(deploymentOrder.order);
-    else if (skipInfrastructureVerify)
-      onCreatePlan(deploymentOrder.order, executionMode, true);
+    const skip = executionMode === "APPLICATION_LIBRARIES_ONLY" && skipInfrastructureVerify;
+    if (libraryOrder.order.length)
+      onCreatePlan(deploymentOrder.order, executionMode, skip, libraryOrder.order);
+    else if (skip) onCreatePlan(deploymentOrder.order, executionMode, true);
     else onCreatePlan(deploymentOrder.order, executionMode);
   };
   const node = state?.executionNode;

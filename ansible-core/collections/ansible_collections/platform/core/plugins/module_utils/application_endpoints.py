@@ -8,6 +8,31 @@ except ImportError:
     from haproxy_resolution import normalize_backend_settings
 
 
+def placement_target(settings, host, hosts):
+    """Use the endpoint placement's existing listener and target address."""
+    endpoint = settings.get('endpoint', {})
+    protocol = endpoint.get('protocol', 'http')
+    port = settings.get('ports', {}).get(endpoint.get('listener'), {}).get('published')
+    if protocol not in {'http', 'https'} or type(port) is not int or not 1 <= port <= 65535:
+        raise ValueError('APPLICATION_ENDPOINT_INVALID')
+    address = hosts.get(host, {}).get('ansible_host')
+    if not isinstance(address, str) or not address:
+        raise ValueError('APPLICATION_ENDPOINT_ADDRESS_INVALID')
+    return {'hostId': host, 'address': address, 'port': port, 'serverName': host}
+
+
+def _published_target(settings, host, hosts):
+    target = placement_target(settings, host, hosts)
+    try:
+        parsed = ipaddress.ip_address(target['address'])
+        if parsed.version != 4:
+            raise ValueError('IPv4 required by the DNS projection')
+        target['address'] = str(parsed)
+    except (ValueError, TypeError):
+        raise ValueError('APPLICATION_ENDPOINT_ADDRESS_INVALID')
+    return target
+
+
 def project_endpoint_sources(rows, desired, hosts):
     sources = {}
     for row in rows:
@@ -19,10 +44,9 @@ def project_endpoint_sources(rows, desired, hosts):
         group_id = endpoint.get('endpoint_group')
         domain = desired.get('endpointGroups', {}).get(group_id, {}).get('address', {}).get('domain')
         protocol = endpoint.get('protocol', 'http')
-        port = settings.get('ports', {}).get(endpoint.get('listener'), {}).get('published')
+        target = _published_target(settings, host, hosts)
         if (not re.fullmatch(r'[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?', source_id) or
-                not isinstance(domain, str) or protocol not in {'http', 'https'} or
-                type(port) is not int or not 1 <= port <= 65535):
+                not isinstance(domain, str)):
             raise ValueError('APPLICATION_ENDPOINT_INVALID')
         defaults = {'balance': 'roundrobin', 'check': True, 'fall': 3, 'rise': 2,
                     'ssl': protocol == 'https', 'sslVerify': 'required'}
@@ -43,15 +67,7 @@ def project_endpoint_sources(rows, desired, hosts):
         existing = sources.setdefault(source_id, record)
         if any(existing[key] != record[key] for key in ('endpoint', 'settings', 'probe')):
             raise ValueError('APPLICATION_HOST_ENDPOINT_CONFLICT')
-        address = hosts.get(host, {}).get('ansible_host')
-        try:
-            parsed = ipaddress.ip_address(address)
-            if parsed.version != 4:
-                raise ValueError('IPv4 required by the DNS projection')
-            address = str(parsed)
-        except (ValueError, TypeError):
-            raise ValueError('APPLICATION_ENDPOINT_ADDRESS_INVALID')
-        existing['targets'].append({'hostId': host, 'address': address, 'port': port, 'serverName': host})
+        existing['targets'].append(target)
     for source in sources.values():
         source['targets'].sort(key=lambda target: target['hostId'])
     return sources

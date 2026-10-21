@@ -18,7 +18,7 @@ SPEC.loader.exec_module(BUILDER)
 
 
 class ApplicationImagesTests(unittest.TestCase):
-    def archive(self, path, corrupt=False, duplicate=False):
+    def archive(self, path, corrupt=False, duplicate=False, compressed=False):
         layer = b'a layer of a synthetic image'
         config = json.dumps(dict(os='linux', architecture='amd64',
                                  rootfs=dict(type='layers', diff_ids=['sha256:' + hashlib.sha256(layer).hexdigest()]))).encode()
@@ -26,7 +26,7 @@ class ApplicationImagesTests(unittest.TestCase):
                  ('config.json', config), ('layer.tar', b'corrupt' if corrupt else layer)]
         if duplicate:
             files.append(files[0])
-        with tarfile.open(path, 'w') as stream:
+        with tarfile.open(path, 'w:gz' if compressed else 'w') as stream:
             for name, content in files:
                 member = tarfile.TarInfo(name)
                 member.size = len(content)
@@ -54,6 +54,16 @@ class ApplicationImagesTests(unittest.TestCase):
                                          platform=dict(os='linux', architecture='amd64'),
                                          archiveRef='runtime/artifacts/app.tar')])
             self.assertNotEqual(image_id, BUILDER.digest_file(path))
+
+    def test_bundle_index_accepts_compressed_docker_save(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / 'runtime/artifacts/app.tar.gz'
+            path.parent.mkdir(parents=True)
+            image_id = self.archive(path, compressed=True)
+            index = BUILDER.container_images(root, [('example.test/app:1', 'artifacts/app.tar.gz')])
+            self.assertEqual(index[0]['imageId'], image_id)
+            self.assertEqual(index[0]['archiveRef'], 'runtime/artifacts/app.tar.gz')
 
     def test_rejects_corrupt_layers_duplicate_members_and_unproven_digest_alias(self):
         with tempfile.TemporaryDirectory() as tmp:

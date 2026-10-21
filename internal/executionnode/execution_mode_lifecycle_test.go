@@ -16,6 +16,40 @@ type modeLifecycleBuilder struct {
 	wrongMode, blocked, missingEvidence bool
 }
 
+type orderedModeLifecycleBuilder struct {
+	modeLifecycleBuilder
+	libraryOrders [][]string
+}
+
+func (b *orderedModeLifecycleBuilder) BuildDeploymentPlanForModeWithLibraryOrder(ctx context.Context, n Node, root string, release map[string]any, order, libraryOrder []string, mode ExecutionMode, sources map[string]string, skipInfrastructureVerify ...bool) (DeploymentPlan, error) {
+	b.libraryOrders = append(b.libraryOrders, append([]string(nil), libraryOrder...))
+	return b.modeLifecycleBuilder.BuildDeploymentPlanForMode(ctx, n, root, release, order, mode, sources, skipInfrastructureVerify...)
+}
+
+func TestLibraryOrderSurvivesApprovalAndFreshStartBuild(t *testing.T) {
+	b := &orderedModeLifecycleBuilder{}
+	c := &lifecycleClient{}
+	s := NewExecutionService(b, c)
+	order := []string{"szi", "sdku"}
+	p, err := s.CreatePlanForModeWithLibraryOrder(context.Background(), Node{}, "project", map[string]any{"bundleDigest": "sha256:x"}, nil, order, ApplicationLibrariesOnly, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	order[0] = "sdku"
+	if p.ApplicationLibraryOrder[0] != "szi" {
+		t.Fatal("plan record shares caller order")
+	}
+	if err := s.ApprovePlan(p.ID, []string{"ACK_RISK"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Start(context.Background(), Node{}, p.ID); err != nil {
+		t.Fatal(err)
+	}
+	if len(b.libraryOrders) != 2 || b.libraryOrders[1][0] != "szi" || c.starts != 1 {
+		t.Fatal("library order was not bound to fresh Start build")
+	}
+}
+
 func (b *modeLifecycleBuilder) BuildDeploymentPlanForMode(ctx context.Context, n Node, root string, release map[string]any, order []string, mode ExecutionMode, sources map[string]string, skipInfrastructureVerify ...bool) (DeploymentPlan, error) {
 	b.modes = append(b.modes, mode)
 	b.sources = append(b.sources, cloneVaultSources(sources))

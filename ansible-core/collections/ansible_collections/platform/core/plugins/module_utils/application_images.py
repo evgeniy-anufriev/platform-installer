@@ -146,7 +146,7 @@ def docker_save_image(path, reference):
     # A Docker-save config digest does not prove a registry manifest digest.
     if '@' in reference:
         raise ValueError('APPLICATION_IMAGE_ARCHIVE_DIGEST_UNPROVEN')
-    with tarfile.open(path, 'r:') as archive:
+    with tarfile.open(path, 'r:*') as archive:
         members = {}
         for member in archive:
             name = member.name.rstrip('/')

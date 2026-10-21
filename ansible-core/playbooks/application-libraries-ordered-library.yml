@@ -1,0 +1,65 @@
+---
+- name: Bind all logical instances selected for this library
+  ansible.builtin.set_fact:
+    application_library_instance_ids: >-
+      {{ hostvars['localhost'].application_runtime_inputs.jobs | selectattr('libraryId', 'equalto', application_library_id) |
+         sort(attribute='instanceId') | sort(attribute='startupPriority') |
+         map(attribute='instanceId') | unique | list }}
+  no_log: true
+
+- name: Materialize all selected placements of this library without starting containers
+  ansible.builtin.include_role:
+    name: platform.core.application_runtime
+    tasks_from: apply_library
+  when: platform_application_preflight_jobs | selectattr('libraryId', 'equalto', application_library_id) | list | length > 0
+
+- name: Deliver all selected library images before any before-start script
+  ansible.builtin.include_role:
+    name: platform.core.application_runtime
+    tasks_from: image_delivery
+  loop: "{{ platform_application_preflight_jobs | selectattr('libraryId', 'equalto', application_library_id) | list }}"
+  loop_control:
+    loop_var: application_runtime_job
+
+- name: Run library before-start scripts after materialization
+  ansible.builtin.include_role:
+    name: platform.core.application_runtime
+    tasks_from: run_scripts
+  vars:
+    application_script_phase: before_start
+    application_script_scope: library
+  loop: "{{ platform_application_preflight_jobs | selectattr('libraryId', 'equalto', application_library_id) | list }}"
+  loop_control:
+    loop_var: application_runtime_job
+
+- name: Reconcile each logical instance with explicit phase barriers
+  ansible.builtin.include_tasks: application-libraries-ordered-instance.yml
+  loop: "{{ application_library_instance_ids }}"
+  loop_control:
+    loop_var: application_instance_id
+
+- name: Run library after-ready scripts before endpoint publication
+  ansible.builtin.include_role:
+    name: platform.core.application_runtime
+    tasks_from: run_scripts
+  vars:
+    application_script_phase: after_ready
+    application_script_scope: library
+  loop: "{{ platform_application_preflight_jobs | selectattr('libraryId', 'equalto', application_library_id) | list }}"
+  loop_control:
+    loop_var: application_runtime_job
+
+- name: Publish and check only this library's ready endpoints
+  ansible.builtin.include_tasks: ../../services/integrations/tasks/apply-source.yml
+  vars:
+    platform_endpoint_source_ids: >-
+      {{ application_library_instance_ids | intersect(hostvars['localhost'].platform_endpoint_sources | default({}) | list) | sort }}
+  when: application_library_instance_ids | intersect(hostvars['localhost'].platform_endpoint_sources | default({}) | list) | length > 0
+
+- name: Verify this library's exact placements before the next library
+  ansible.builtin.include_role:
+    name: platform.core.application_runtime
+    tasks_from: verify
+  loop: "{{ platform_application_preflight_jobs | selectattr('libraryId', 'equalto', application_library_id) | list }}"
+  loop_control:
+    loop_var: application_runtime_job

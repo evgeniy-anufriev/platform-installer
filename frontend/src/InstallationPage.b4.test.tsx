@@ -2,7 +2,7 @@ import { desktop } from "../wailsjs/go/models";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { it, expect, vi } from "vitest";
-import { InstallationPage } from "./InstallationPage";
+import { InstallationPage, libraryOrderFromPriorities } from "./InstallationPage";
 import type { InstallationPlanOperation } from "./backend";
 
 const defaults = {
@@ -67,6 +67,20 @@ const fullPlan: InstallationPlanOperation = {
     ],
   },
 };
+it("orders selected libraries from configured priorities and rejects an unknown name", () => {
+  const deployments = [
+    { deploymentId: "sdku-east", libraryRef: "sdku@1.0.0" },
+    { deploymentId: "szi", libraryRef: "szi@1.0.0" },
+    { deploymentId: "sdku-west", libraryRef: "sdku@1.0.0" },
+  ];
+  expect(libraryOrderFromPriorities(deployments, [
+    { libraryName: "sdku", priority: 1 },
+    { libraryName: "szi", priority: 0 },
+  ])).toEqual({ order: ["szi", "sdku-east", "sdku-west"], missingNames: [] });
+  expect(libraryOrderFromPriorities(deployments, [
+    { libraryName: "szi", priority: 0 },
+  ])).toEqual({ order: [], missingNames: ["sdku"] });
+});
 it("owner amendment offers execution controls before Build and on Summary", () => {
   const view = render(
     <InstallationPage {...defaults} onCreatePlan={vi.fn()} />,

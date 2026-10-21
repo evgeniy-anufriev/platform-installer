@@ -39,6 +39,20 @@ def image_lock():
 
 
 class ApplicationPlanTests(unittest.TestCase):
+    def test_multiple_libraries_require_explicit_order_bound_to_plan_fingerprint(self):
+        value = application_snapshot()
+        value['applicationLibraries']['libraries']['szi'] = copy.deepcopy(
+            value['applicationLibraries']['libraries']['sdku'])
+        self.assertIn('APPLICATION_LIBRARY_ORDER_REQUIRED',
+                      [item['code'] for item in application_execution_model(value, image_lock())['findings']])
+        first = application_execution_model(value, image_lock(), ['szi', 'sdku'])
+        reverse = application_execution_model(value, image_lock(), ['sdku', 'szi'])
+        self.assertEqual([], first['findings'])
+        self.assertEqual(['szi', 'sdku'], first['libraryIds'])
+        self.assertNotEqual(first['semanticFingerprint'], reverse['semanticFingerprint'])
+        self.assertIn('APPLICATION_LIBRARY_ORDER_INVALID', [item['code'] for item in
+                      application_execution_model(value, image_lock(), ['szi', 'szi'])['findings']])
+
     def build(self, value=None, lock=None):
         return _build_deployment_plan(value or application_snapshot(), catalog(), runtime(),
                                       application_image_lock=lock or image_lock(),
@@ -109,6 +123,36 @@ class ApplicationPlanTests(unittest.TestCase):
         self.assertNotIn('value', descriptors['applicationInputs'][0])
         validator = SchemaValidator(str(REPO / 'contracts'))
         self.assertEqual([], validator.validate(descriptors, str(REPO / 'contracts/runtime-secret-descriptors/v1alpha3/schema.json')))
+
+    def test_script_and_application_bindings_share_one_runtime_reference(self):
+        value = application_snapshot()
+        library = value['applicationLibraries']['libraries']['sdku']
+        instance = library['instances']['apigateway-sdku']
+        instance['scripts'] = [
+            {'id': 'before', 'secretInputs': {'shared': {'ref': 'shared-key'}, 'script': {'ref': 'script-key'}}},
+            {'id': 'after', 'secretInputs': {'script': {'ref': 'script-key'}}},
+        ]
+        library['sharedSecretRequirements']['shared'] = {
+            'source': {'kind': 'runtime_secret_ref', 'ref': 'shared-key'}}
+        requirements = application_execution_model(value, image_lock())['runtimeSecretRequirements']
+        self.assertEqual(2, len(requirements))
+        by_ref = {item['runtimeReference']: item for item in requirements}
+        self.assertEqual('APPLICATION_SECRET', by_ref['shared-key']['purpose'])
+        self.assertEqual(OPERATIONS, by_ref['shared-key']['operations'])
+        self.assertEqual('APPLICATION_SECRET', by_ref['script-key']['purpose'])
+        self.assertEqual(OPERATIONS, by_ref['script-key']['operations'])
+        with patch.object(LEASE, 'runtime_secret_values_for_run', return_value={
+                item['requirementRef']: 'synthetic-value' for item in requirements}):
+            self.assertEqual({'shared-key': 'synthetic-value', 'script-key': 'synthetic-value'},
+                LEASE.application_secret_values_for_operation('/unused', 'run-1', OPERATIONS[0], requirements))
+        descriptors = build_runtime_secret_descriptors(value, catalog())
+        self.assertEqual(2, len(descriptors['applicationInputs']))
+        validator = SchemaValidator(str(REPO / 'contracts'))
+        self.assertEqual([], validator.validate(descriptors, str(REPO / 'contracts/runtime-secret-descriptors/v1alpha3/schema.json')))
+        result = _build_deployment_plan(value, catalog(), runtime(), application_image_lock=image_lock(),
+            deployment_order=['provider', 'consumer'], bundle_artifact_sources=sources())
+        self.assertEqual('EXECUTABLE', result['deploymentPlan']['status'])
+        CONTROLLER.validate_application_manifest(result['executionManifest'])
 
     def test_no_accounts_or_agent_requires_no_application_secrets(self):
         self.assertEqual([], application_execution_model(application_snapshot(), image_lock())['runtimeSecretRequirements'])

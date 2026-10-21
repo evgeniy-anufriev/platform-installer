@@ -513,7 +513,8 @@ func (a *App) StartApprovedInstallation(planID string) InstallationRunOperation 
 		a.startInFlight = false
 		a.editMu.Unlock()
 	}()
-	ctx, cancel := a.operationContext(2 * time.Minute)
+	// Start rebuilds the authoritative plan, including offline image preparation.
+	ctx, cancel := a.operationContext(10 * time.Minute)
 	defer cancel()
 	if outputRequired {
 		client, ok := binding.reader.transport.(secretOutputDeliveryClient)

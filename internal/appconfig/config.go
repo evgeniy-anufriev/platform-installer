@@ -13,14 +13,16 @@ import (
 )
 
 const (
-	SchemaVersion        = 2
+	SchemaVersion        = 3
 	maxConfigBytes       = 64 * 1024
 	maxServerTypes       = 64
 	maxServicePriorities = 64
+	maxLibraryPriorities = 128
 	maxDisplayNameLength = 128
 )
 
 var ServerTypeIDPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,62}$`)
+var libraryNamePattern = regexp.MustCompile(`^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$`)
 
 type ServerType struct {
 	ID          string `json:"id" yaml:"id"`
@@ -32,10 +34,16 @@ type ServiceExecutionPriority struct {
 	Priority    *int   `json:"priority" yaml:"priority"`
 }
 
+type LibraryExecutionPriority struct {
+	LibraryName string `json:"libraryName" yaml:"libraryName"`
+	Priority    *int   `json:"priority" yaml:"priority"`
+}
+
 type Config struct {
 	SchemaVersion              int                        `json:"schemaVersion" yaml:"schemaVersion"`
 	ServerTypes                []ServerType               `json:"serverTypes" yaml:"serverTypes"`
 	ServiceExecutionPriorities []ServiceExecutionPriority `json:"serviceExecutionPriorities" yaml:"serviceExecutionPriorities"`
+	LibraryExecutionPriorities []LibraryExecutionPriority `json:"libraryExecutionPriorities" yaml:"libraryExecutionPriorities"`
 }
 
 type Error struct {
@@ -116,7 +124,7 @@ func openRegularFile(path string) (*os.File, error) {
 }
 
 func Validate(config Config) error {
-	if config.SchemaVersion == 1 {
+	if config.SchemaVersion == 1 || config.SchemaVersion == 2 {
 		return &Error{Code: "APPLICATION_CONFIG_UPGRADE_REQUIRED"}
 	}
 	if config.SchemaVersion != SchemaVersion {
@@ -137,6 +145,19 @@ func Validate(config Config) error {
 			return &Error{Code: "APPLICATION_CONFIG_SERVICE_PRIORITY_DUPLICATE"}
 		}
 		prioritySeen[entry.ServiceType] = true
+	}
+	if len(config.LibraryExecutionPriorities) > maxLibraryPriorities {
+		return &Error{Code: "APPLICATION_CONFIG_LIBRARY_PRIORITIES_INVALID"}
+	}
+	librarySeen := make(map[string]bool, len(config.LibraryExecutionPriorities))
+	for _, entry := range config.LibraryExecutionPriorities {
+		if !libraryNamePattern.MatchString(entry.LibraryName) || len(entry.LibraryName) > 128 || entry.Priority == nil || *entry.Priority < 0 {
+			return &Error{Code: "APPLICATION_CONFIG_LIBRARY_PRIORITY_INVALID"}
+		}
+		if librarySeen[entry.LibraryName] {
+			return &Error{Code: "APPLICATION_CONFIG_LIBRARY_PRIORITY_DUPLICATE"}
+		}
+		librarySeen[entry.LibraryName] = true
 	}
 	seen := make(map[string]bool, len(config.ServerTypes))
 	for _, serverType := range config.ServerTypes {

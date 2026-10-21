@@ -255,6 +255,19 @@ Archive reconciliation trusts a machine-owned digest marker for an unchanged
 archive; Verify checks that the mounted directory exists but does not hash every
 extracted file. External edits inside the extracted directory are outside this
 bounded repeat-Apply check.
+Package manifests may also declare allowlisted executable `scripts` with a
+`before_start` or `after_ready` phase and `each_target` or deterministic `once`
+placement. `argv` contains literals or resolved nonsecret references; runtime
+secrets are declared separately as `secretInputs`. The generic target runner
+receives only the script file, account, working directory, argv and private
+secret files. Package-specific behavior belongs inside the package script.
+Slots in every library package may specify `start_priority` (default 100); Apply orders selected
+logical instances by this value and then by instance ID, completing each
+instance's readiness and after-ready scripts before starting the next.
+Managed PostgreSQL database resources may declare `restore_on_create` with an
+allowlisted custom-format dump and exact digest. The provider restores it only
+when first creating that managed database; a partially restored, unmarked
+database blocks automatic retry rather than being silently overwritten.
 Host membership is `platform_application_libraries.<library-id>` in host_vars.
 Ansible resolves namespaces/defaults/overrides before Core validates the derived
 rows. No project.yml is required. Infrastructure-only projects retain v2alpha1

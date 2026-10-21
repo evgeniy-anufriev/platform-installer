@@ -1,7 +1,4 @@
 ---
-- name: Deliver the authorized image into the exact selected daemon
-  ansible.builtin.include_tasks: image_delivery.yml
-
 - name: Observe the previous exact container before reconciliation
   ansible.builtin.command:
     argv: [docker, container, inspect, "{{ application_runtime_job.placement.containerName }}"]

@@ -138,6 +138,21 @@ def load_package(root, reference, kind, loader, validator, inputs=None):
         digest.append([short, checksum.hexdigest()])
     if discovered != listed:
         raise ValueError("Package allowlist mismatch")
+    scripts = manifest.get("scripts", [])
+    if len({script["id"] for script in scripts}) != len(scripts):
+        raise ValueError("Duplicate package script identity")
+    for script in scripts:
+        if script["source"] not in discovered or script["source"].endswith("/"):
+            raise ValueError("Package script is not allowlisted")
+        checked_file(root, folder + "/" + script["source"])
+        for argument in script.get("argv", []):
+            if not isinstance(argument, dict):
+                continue
+            source = argument["valueFrom"]
+            expected = ({"valueFrom", "name"} if source in ("parameter", "endpoint", "connection") else
+                        {"valueFrom", "application"} if source == "placement_https" else {"valueFrom"})
+            if set(argument) != expected:
+                raise ValueError("Package script reference invalid")
     defaults = loader(checked_file(root, folder + "/" + defaults_path))
     key = "platform_%s_definition" % kind
     if set(defaults) != {key}:
@@ -160,7 +175,7 @@ def load_package(root, reference, kind, loader, validator, inputs=None):
                 env_keys.add(match_env[1])
     return {"name": name, "version": version, "defaultsPath": os.path.join(root, folder, defaults_path),
             "definition": definition, "digest": canonical_digest(sorted(digest)), "logicalPath": folder,
-            "render": manifest.get("render", {}), "files": sorted(listed - {kind + ".yml"}),
+            "render": manifest.get("render", {}), "scripts": scripts, "files": sorted(listed - {kind + ".yml"}),
             "directoryEntries": [entry for entry in manifest["files"] if entry.endswith("/")]}
 
 
@@ -200,6 +215,19 @@ def prepare(root, desired, memberships, contract, loader, contracts_root):
         field = "applicationLibraryDeployments." + library_id
         try:
             library = package(deployment["libraryRef"], "library")
+            for resource in deployment.get("resources", {}).values():
+                restore = resource.get("parameters", {}).get("restore_on_create")
+                if restore is None:
+                    continue
+                if (resource["kind"] != "postgresql.database" or resource.get("mode", "managed") != "managed"
+                        or restore["source"] not in library["files"]):
+                    raise ValueError("Package database restore invalid")
+                checksum = hashlib.sha256()
+                with open(checked_file(root, library["logicalPath"] + "/" + restore["source"]), "rb") as stream:
+                    for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                        checksum.update(chunk)
+                if checksum.hexdigest() != restore["sha256"]:
+                    raise ValueError("Package database restore digest mismatch")
             selected = deployment["applications"]
             slots = library["definition"]["slots"]
             if set(selected) - set(slots) or any(slot.get("required", False) and name not in selected for name, slot in slots.items()):
@@ -556,7 +584,7 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
         except (KeyError, TypeError, ValueError):
             topics, topic_bindings = {}, {}
             findings.append(finding('APPLICATION_TOPIC_BINDING_INVALID', field + '.topicBindings'))
-        library = libraries.setdefault(library_id, {"libraryRef": row["libraryRef"], "packages": {}, "instances": {}, "resources": row["resources"], 'topics': topics, "sharedSecretRequirements": row["sharedSecrets"], 'connections': shared_connections, 'runtimeDirectory': row.get('runtimeDirectory', '~/' + library_id)})
+        library = libraries.setdefault(library_id, {"libraryRef": row["libraryRef"], "packages": {}, "instances": {}, "resources": row["resources"], 'topics': topics, "sharedSecretRequirements": row["sharedSecrets"], 'connections': shared_connections, 'runtimeDirectory': row.get('runtimeDirectory', '~/' + library_id), 'scripts': row.get('libraryScripts', [])})
         if library.setdefault('registryCredentials', row.get('registryCredentials', {})) != row.get('registryCredentials', {}):
             findings.append(finding('APPLICATION_HOST_RESOURCE_CONFLICT', field))
         registries = library.setdefault('registries', [])
@@ -565,7 +593,8 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
             if registry not in registries:
                 registries.append(registry)
                 registries.sort()
-        if library['connections'] != shared_connections or library['runtimeDirectory'] != row.get('runtimeDirectory', '~/' + library_id):
+        if (library['connections'] != shared_connections or library['runtimeDirectory'] != row.get('runtimeDirectory', '~/' + library_id)
+                or library['scripts'] != row.get('libraryScripts', [])):
             findings.append(finding('APPLICATION_HOST_RESOURCE_CONFLICT', field))
         library["packages"][row["applicationName"]] = row["packageIdentity"]
         try:
@@ -576,7 +605,9 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
             findings.append(finding('APPLICATION_TABLE_RESOURCE_INVALID', field))
         if library.setdefault('resourceDefaults', row.get('resourceDefaults', {})) != row.get('resourceDefaults', {}):
             findings.append(finding('APPLICATION_HOST_RESOURCE_CONFLICT', field))
-        instance = library["instances"].setdefault(app_id, {"applicationName": row["applicationName"], "slotId": row["slotId"], "placements": {},
+        instance = library["instances"].setdefault(app_id, {"applicationName": row["applicationName"], "slotId": row["slotId"],
+                                                            "startupPriority": row.get("startupPriority", 100), "placements": {},
+                                                            "scripts": row.get('applicationScripts', []),
                                                            "connections": connections, 'topics': topic_bindings, "credentialRequirements": accounts,
                                                            "identityEnvironment": {name: app_id for name in row["identityNames"]},
                                                            "agentRequired": agent_required, "executionPrerequisites": ["A2_IMAGE_DELIVERY", "A4_PROVIDER_PROVISIONING"] if accounts or agent_required else ["A2_IMAGE_DELIVERY"]})
@@ -584,6 +615,10 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
             findings.append(finding('APPLICATION_HOST_RESOURCE_CONFLICT', field))
         if instance['connections'] != connections:
             findings.append(finding('APPLICATION_HOST_CONNECTION_CONFLICT', field))
+        if instance['scripts'] != row.get('applicationScripts', []):
+            findings.append(finding('APPLICATION_HOST_RESOURCE_CONFLICT', field))
+        if instance['startupPriority'] != row.get('startupPriority', 100):
+            findings.append(finding('APPLICATION_HOST_RESOURCE_CONFLICT', field))
         if instance['topics'] != topic_bindings:
             findings.append(finding('APPLICATION_HOST_RESOURCE_CONFLICT', field))
         if instance["credentialRequirements"] != accounts:
@@ -615,6 +650,36 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
         used = {binding["source"]["library_secret"] for instance in library["instances"].values()
                 for binding in instance.get("secretBindings", {}).values() if "library_secret" in binding["source"]}
         library["sharedSecretRequirements"] = {key: value for key, value in library["sharedSecretRequirements"].items() if key in used}
+    for library_id, library in libraries.items():
+        named = {instance['applicationName']: instance for instance in library['instances'].values()}
+        for instance_id, instance in library['instances'].items():
+            scripts = library.get('scripts', []) + instance.get('scripts', [])
+            if len({script['id'] for script in scripts}) != len(scripts):
+                findings.append(finding('APPLICATION_SCRIPT_ID_CONFLICT', 'applicationLibraryDeployments.' + library_id))
+            for script in scripts:
+                for argument in script.get('argv', []):
+                    if not isinstance(argument, dict):
+                        continue
+                    source = argument['valueFrom']
+                    name = argument.get('name')
+                    if source == 'parameter':
+                        valid = all(name in p.get('parameters', {}) and isinstance(p['parameters'][name], (str, int, float, bool))
+                                    for p in instance['placements'].values())
+                    elif source in ('placement_https', 'endpoint'):
+                        target = named.get(argument.get('application', name), {})
+                        valid = bool(target) and all(
+                            host in target.get('placements', {}) and
+                            (target['placements'][host].get('endpoint', {}).get('protocol') == 'https'
+                             if source == 'placement_https' else target['placements'][host].get('endpoint', {}).get('enabled')) and
+                            target['placements'][host].get('endpoint', {}).get('listener') in target['placements'][host].get('ports', {})
+                            for host in instance['placements'])
+                    elif source == 'connection':
+                        valid = name in instance.get('connections', {}) and bool(instance['connections'][name].get('targets'))
+                    else:
+                        valid = source in ('applicationId', 'projectId', 'libraryId', 'targetHostId')
+                    if not valid:
+                        findings.append(finding('APPLICATION_SCRIPT_REFERENCE_INVALID',
+                                                'applicationLibraryDeployments.' + library_id + '.scripts.' + script['id']))
     if findings:
         libraries = {}  # Never return potentially unsafe settings on invalid input.
     return {"apiVersion": "platform.installer/application-libraries/v1alpha1", "status": "BLOCKED" if findings else "PASS",

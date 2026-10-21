@@ -6,10 +6,12 @@ import re
 
 try:
     from .application_libraries import checked_file, invocation_package_loader, nonsecret_values
+    from .application_scripts import prepare_script_jobs
     from .artifact_authority import assemble_authority
     from .application_images import selected_image, registry_request
 except ImportError:
     from application_libraries import checked_file, invocation_package_loader, nonsecret_values
+    from application_scripts import prepare_script_jobs
     from artifact_authority import assemble_authority
     from application_images import selected_image, registry_request
 
@@ -251,6 +253,8 @@ def prepare_runtime(root, snapshot, rows, desired, lock, validator, loader):
         authority = assemble_authority(requirement, offline, dict(registry or {}, kind="REPOSITORY"), image=True)
         registry_credentials = row.get('registryCredentials', {}).get(registry_request(registry['reference'])['registry'], {}) if registry else {}
         jobs.append(dict(row, placement=placement, account=account, configs=configs,
+                         packageApplicationScripts=app['scripts'], packageLibraryScripts=lib['scripts'],
+                         applicationPackagePath=app['logicalPath'], libraryPackagePath=lib['logicalPath'],
                          directoryConfigs=directories, archiveConfigs=archives, registryCredentials=registry_credentials,
                          agentTemplate=checked_file(root, app['logicalPath']+'/'+agent_template) if agent_template else None,
                          appTemplate=checked_file(root, app["logicalPath"] + "/" + app_render["compose_template"]),
@@ -258,7 +262,7 @@ def prepare_runtime(root, snapshot, rows, desired, lock, validator, loader):
                          baseFilename=lib_render["base_compose_filename"], baseService=lib_render["base_service"],
                          envSource=checked_file(root, lib["logicalPath"] + "/files/.env") if "files/.env" in lib["files"] else None,
                          archivePath=archive_path, authority=authority))
-    return jobs
+    return prepare_script_jobs(root, snapshot, desired, rows, jobs)
 
 
 def validate_config_contents(configs):

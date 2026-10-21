@@ -319,7 +319,8 @@ func (a *App) PrepareExecutionNode(planID string) ExecutionNodePreparation {
 		}
 		return preparationFailure(err)
 	}
-	ctx, cancel := a.operationContext(5 * time.Minute)
+	// Bundle transfer and extraction can exceed five minutes for offline images.
+	ctx, cancel := a.operationContext(20 * time.Minute)
 	defer cancel()
 	result, err := binding.service.Prepare(ctx, binding.node, binding.bundleRoot, continuation.planID)
 	if err != nil {

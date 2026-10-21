@@ -14,6 +14,19 @@ from application_libraries import resolve_topics, resolve_tables, resolve_connec
 
 
 class ApplicationProvidersTest(unittest.TestCase):
+    def test_restore_descriptor_is_bound_to_only_the_managed_database(self):
+        restore = {'source': 'assets/keycloak-clean.dump', 'format': 'pg_custom', 'sha256': 'a' * 64}
+        self.resources['db']['parameters']['restore_on_create'] = restore
+        result = self.resolve()
+        self.assertEqual('PASS', result['status'], result['findings'])
+        self.assertTrue(result['libraryJobs'][0]['databases'])
+        for job in result['libraryJobs'] + result['instanceJobs']:
+            for database in job['databases']:
+                if database['name'] == 'app':
+                    self.assertEqual(restore, database['restoreOnCreate'])
+                else:
+                    self.assertNotIn('restoreOnCreate', database)
+
     def test_kafka_grants_resolve_only_same_provider_topics_and_explicit_groups(self):
         topics = {'events': {'deploymentRef': 'kafka', 'name': 'library-events'}}
         grants = normalize_kafka_grants([

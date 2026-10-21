@@ -793,3 +793,29 @@ No extra platform discovery or sourceRef uniqueness mechanism is introduced.
 Existing runtime identity verification and source policy remain. AIM-D02 and
 AIM-D04 are to be corrected; AIM-D05 real Wails/Core QA is authorized, including
 its isolated QA runtime publication/preparation, without application Approve/Start.
+
+## ADR-047: Ordered application libraries and package-owned scripts
+
+Owner approved the SZI stage-1 design in 2026-10. The Installer supplies a
+library execution order from `config/application.yml` and binds it to the fresh
+plan. Core performs shared provider work before ordered library runtime phases;
+each library must pass readiness and Verify before the next starts. Standalone
+multi-library Apply requires an explicit order. Within a library, versioned
+slot `start_priority` orders selected instances before the instance ID tie
+breaker. No SZI-specific branch controls this sequence.
+
+Versioned package manifests may declare allowlisted scripts with phase and
+placement. Core resolves declared nonsecret references; a generic Ansible role
+runs the script on its selected target with exact argv and protected secret
+files. It does not know Docker, Keycloak, container names or product state.
+The Keycloak package owns its bootstrap and admin provisioning commands.
+Managed PostgreSQL `restore_on_create` extends the existing provider resource
+contract and runs only when first creating the owned database. See the
+[stage-1 plan](work/application-libraries/szi-stage1-technical-plan.md).
+
+Owner decision 2026-10-21 on FULL DIFF finding SZI-D04: do not add a
+restore-specific detail to the public DeploymentPlan. Existing application
+actions and semantic fingerprint remain the plan contract for this stage.
+Detailed action presentation, if introduced, should be designed consistently
+for all task types in a separate stage. The independent review's historical
+`BLOCK` verdict is retained; this scope rejection is not reviewer approval.

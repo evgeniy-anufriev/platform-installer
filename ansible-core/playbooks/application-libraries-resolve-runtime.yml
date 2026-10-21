@@ -41,6 +41,7 @@
       platform.core.prepare_application_providers:
         snapshot_result: "{{ application_snapshot }}"
         service_catalog_path: "{{ platform_service_catalog_path }}"
+        project_root: "{{ platform_project_root | default(inventory_dir | dirname) }}"
       register: application_provider_inputs
       no_log: true
     - name: Bind the same snapshot for runtime provider preflight

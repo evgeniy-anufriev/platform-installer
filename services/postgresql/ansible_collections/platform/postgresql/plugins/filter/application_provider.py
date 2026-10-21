@@ -39,6 +39,11 @@ def validate_job(job):
                 raise ValueError()
         owners = {}
         for database in job['databases']:
+            restore = database.get('restoreOnCreate')
+            if restore is not None and (database['mode'] != 'managed' or restore.get('format') != 'pg_custom'
+                    or not re.fullmatch(r'[a-f0-9]{64}', restore.get('sha256', ''))
+                    or not isinstance(database.get('restorePath'), str) or not database['restorePath']):
+                raise ValueError()
             prefix = 'platform.application/v1:' + ':'.join((job['projectId'],job['providerId'],database['libraryId'])) + ':'
             owner = 'pla_' + hashlib.sha256(':'.join((job['projectId'],job['providerId'],database['libraryId'])).encode()).hexdigest()[:24]
             if database['owner'] != owner or database['ownerMarker'] != prefix+'owner:'+database['libraryId'] or database['marker'] != prefix+'postgresql.database:'+database['resourceId']:

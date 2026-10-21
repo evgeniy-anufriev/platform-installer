@@ -1,0 +1,18 @@
+---
+- name: Execute declared package scripts for this placement and phase
+  ansible.builtin.include_role:
+    name: platform.core.package_script
+  vars:
+    platform_script_job:
+      id: "{{ application_script.id }}"
+      path: "{{ application_script.path }}"
+      argv: "{{ application_script.argv }}"
+      secretInputs: "{{ application_script.secretInputs }}"
+      workingDirectory: "{{ application_runtime_job.instancePath }}"
+      account: "{{ application_runtime_job.account }}"
+    platform_script_secret_files: "{{ platform_application_secret_files }}"
+    platform_script_secret_root: "{{ platform_application_secret_root }}"
+  loop: "{{ application_runtime_job.scripts | default([]) | selectattr('phase', 'equalto', application_script_phase) | selectattr('scope', 'equalto', application_script_scope) | list }}"
+  loop_control:
+    loop_var: application_script
+    label: "{{ application_script.id }}"

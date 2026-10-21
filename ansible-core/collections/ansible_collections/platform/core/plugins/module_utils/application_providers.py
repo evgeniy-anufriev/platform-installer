@@ -227,7 +227,10 @@ def project_providers(rows, snapshot, configuration, desired, catalog):
                         raise ValueError('APPLICATION_PROVIDER_NAME_CONFLICT')
                     job['topics'].append(topic)
                     continue
-                if set(resource['parameters']) != {'name'}:
+                restore = resource['parameters'].get('restore_on_create')
+                expected_parameters = {'name', 'restore_on_create'} if restore is not None else {'name'}
+                if (set(resource['parameters']) != expected_parameters or
+                        (restore is not None and (resource['kind'] != 'postgresql.database' or resource.get('mode', 'managed') != 'managed'))):
                     raise ValueError('APPLICATION_PROVIDER_RESOURCE_INVALID')
                 name, mode = identifier(resource['parameters']['name'], database=resource['kind'] == 'postgresql.database'), resource.get('mode', 'managed')
                 value = dict(resourceId=resource_id, name=name, mode=mode,
@@ -236,6 +239,8 @@ def project_providers(rows, snapshot, configuration, desired, catalog):
                     owner = 'pla_' + hashlib.sha256((project_id + ':' + ref + ':' + library_id).encode()).hexdigest()[:24]
                     value.update(providerId=ref, libraryId=library_id, owner=owner, schemas=[], accounts=[],
                                  ownerMarker=marker(project_id, ref, library_id, 'owner', library_id))
+                    if restore is not None:
+                        value['restoreOnCreate'] = restore
                     claim((ref, 'database', name), (library_id, resource_id), mode)
                     databases[resource_id] = value
                     if job['serviceType'] == 'clickhouse':

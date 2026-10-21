@@ -1,12 +1,17 @@
+{% set szi_instances = hostvars['localhost'].application_snapshot.snapshot.applicationLibraries.libraries[application_runtime_job.libraryId].instances %}
+{% set nginx_id = (szi_instances | dict2items | selectattr('value.applicationName', 'equalto', 'nginx') | map(attribute='key') | first) %}
+{% set keycloak_id = (szi_instances | dict2items | selectattr('value.applicationName', 'equalto', 'keycloak') | map(attribute='key') | first) %}
+{% set audit_id = (szi_instances | dict2items | selectattr('value.applicationName', 'equalto', 'grant-access-audit') | map(attribute='key') | first) %}
+{% set grant_access_id = (szi_instances | dict2items | selectattr('value.applicationName', 'equalto', 'grant-access') | map(attribute='key') | first) %}
 {
         "production": true,
-        "apiHost": "https://nginx.tnsv.tn.tngrp.ru",
-        "keycloakHost": "https://sso.tnsv.tn.tngrp.ru",
-        "auditHost": "https://nginx.tnsv.tn.tngrp.ru/grant-access-audit",
-        "visibilityZone": "https://nginx.tnsv.tn.tngrp.ru/data-manager",
-        "nginxLogoutHost": "https://nginx.tnsv.tn.tngrp.ru/grant-access-front/logout",
+        "apiHost": "https://{{ nginx_id }}.{{ platform_desired_state.endpointGroups[platform_desired_state.applicationLibraryDeployments[application_runtime_job.libraryId].applications['nginx'].overrides.endpoint.endpoint_group].address.domain }}",
+        "keycloakHost": "https://{{ keycloak_id }}.{{ platform_desired_state.endpointGroups[platform_desired_state.applicationLibraryDeployments[application_runtime_job.libraryId].applications['keycloak'].overrides.endpoint.endpoint_group].address.domain }}",
+        "auditHost": "https://{{ nginx_id }}.{{ platform_desired_state.endpointGroups[platform_desired_state.applicationLibraryDeployments[application_runtime_job.libraryId].applications['nginx'].overrides.endpoint.endpoint_group].address.domain }}/{{ audit_id }}",
+        "visibilityZone": "",
+        "nginxLogoutHost": "https://{{ nginx_id }}.{{ platform_desired_state.endpointGroups[platform_desired_state.applicationLibraryDeployments[application_runtime_job.libraryId].applications['nginx'].overrides.endpoint.endpoint_group].address.domain }}/{{ application_instance_id }}/logout",
         "withoutPasswordEdition": false,
-        "grantAccessNginxPath": "/grant-access",
+        "grantAccessNginxPath": "/{{ grant_access_id }}",
         "canary": false,
         "enableUserMultiGroup": false,
         "filterGroups": true,

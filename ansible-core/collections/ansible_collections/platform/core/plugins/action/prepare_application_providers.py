@@ -1,6 +1,9 @@
 """Resolve provider-only hooks without image authority or target contacts."""
+import hashlib
+import os
 from ansible.plugins.action import ActionBase
 from ansible_collections.platform.core.plugins.module_utils.application_providers import project_providers
+from ansible_collections.platform.core.plugins.module_utils.application_libraries import checked_file
 
 
 
@@ -18,6 +21,22 @@ class ActionModule(ActionBase):
             result = project_providers(values['platform_application_rows'], snapshot, configuration,
                                        values['platform_desired_state'], catalog)
             if result['status'] == 'PASS':
+                root = os.path.realpath(args['project_root'])
+                for job in result['jobs'] + result['libraryJobs'] + result['instanceJobs']:
+                    for database in job['databases']:
+                        restore = database.get('restoreOnCreate')
+                        if not restore:
+                            continue
+                        library_ref = snapshot['applicationLibraries']['libraries'][database['libraryId']]['libraryRef']
+                        name, version = library_ref.split('@', 1)
+                        path = checked_file(root, 'library-packages/' + name + '/' + version + '/' + restore['source'])
+                        checksum = hashlib.sha256()
+                        with open(path, 'rb') as stream:
+                            for chunk in iter(lambda: stream.read(1024 * 1024), b''):
+                                checksum.update(chunk)
+                        if checksum.hexdigest() != restore['sha256']:
+                            raise ValueError('APPLICATION_RESTORE_DIGEST_INVALID')
+                        database['restorePath'] = path
                 for job in result['jobs'] + result['libraryJobs'] + result['instanceJobs']:
                     settings = configuration['services'][job['providerId']]['configuration']
                     if job['serviceType'] == 'clickhouse':

@@ -103,6 +103,7 @@ type applicationPackageManifest struct {
 	Version    string            `yaml:"version"`
 	Files      []string          `yaml:"files"`
 	Render     map[string]string `yaml:"render,omitempty"`
+	Scripts    []map[string]any  `yaml:"scripts,omitempty"`
 }
 
 func checkPackageManifest(records []exportRecord, kind, name, version string) (string, error) {

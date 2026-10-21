@@ -146,6 +146,13 @@ def request():
         if value.get("apiVersion") not in (DEPLOYMENT_PLAN_REQUEST_VERSION, APPLICATION_PLAN_REQUEST_VERSION, B0_PLAN_REQUEST_VERSION, SKIP_PLAN_REQUEST_VERSION, image_preparation.REQUEST_VERSION):
             raise LifecycleError("DEPLOYMENT_ORDER_REQUEST_VERSION_REQUIRED")
         expected = {"apiVersion", "operation", "runId", "project", "runtimeRelease", "deploymentOrder"}
+        if 'applicationLibraryOrder' in value:
+            expected.add('applicationLibraryOrder')
+            library_order = value['applicationLibraryOrder']
+            if (not isinstance(library_order, list) or len(library_order) > MAX_DEPLOYMENT_ORDER or
+                    any(not isinstance(item, str) or re.fullmatch(r'[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*', item) is None
+                        for item in library_order) or len(library_order) != len(set(library_order))):
+                raise LifecycleError('APPLICATION_LIBRARY_ORDER_INVALID')
         if value['apiVersion'] in (APPLICATION_PLAN_REQUEST_VERSION, B0_PLAN_REQUEST_VERSION, SKIP_PLAN_REQUEST_VERSION, image_preparation.REQUEST_VERSION):
             expected.add('applicationVaultSources')
             sources = value.get('applicationVaultSources')
@@ -800,6 +807,8 @@ def core_operation(value, state_root, runtime_release, operation, runtime_identi
                     raise LifecycleError('APPLICATION_IMAGE_PREPARATION_STALE')
                 extra.update(platform_prepared_application_images=prepared, platform_application_image_metadata=True)
             extra["platform_execution_deployment_order"] = value["deploymentOrder"]
+            if 'applicationLibraryOrder' in value:
+                extra['platform_execution_application_library_order'] = value['applicationLibraryOrder']
             extra['platform_execution_application_vault_sources'] = value.get('applicationVaultSources', {})
             if value.get('apiVersion') in (B0_PLAN_REQUEST_VERSION, SKIP_PLAN_REQUEST_VERSION, image_preparation.REQUEST_VERSION):
                 extra['platform_execution_mode'] = value['executionMode']

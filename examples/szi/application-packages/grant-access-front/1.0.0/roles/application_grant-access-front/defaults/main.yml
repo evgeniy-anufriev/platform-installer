@@ -10,7 +10,7 @@ platform_application_definition:
       - -g
       - daemon off;
     config_files:
-      - source: assets/config.json
+      - template: assets/config.json
         destination: config.json
         mode: "0644"
     environment: {}

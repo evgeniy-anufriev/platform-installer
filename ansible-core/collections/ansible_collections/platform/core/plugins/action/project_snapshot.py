@@ -391,6 +391,8 @@ class ActionModule(ActionBase):
             logical_path = document["logicalPath"]
             if not document["revisionIncluded"]:
                 continue
+            if logical_path != "project.yml" and not logical_path.startswith(("inventory/", "group_vars/", "host_vars/")):
+                continue
             if os.path.splitext(logical_path)[1].lower() not in (".yml", ".yaml", ".json"):
                 continue
             parsed = self._load(os.path.join(project_root, *logical_path.split("/")), required=False)
@@ -622,7 +624,8 @@ class ActionModule(ActionBase):
                                                         (manifest or {}).get('artifactLock'),
                                                         task_vars.get('platform_prepared_application_images'))
                 if task_vars.get('platform_application_expected_fingerprint'):
-                    model = application_execution_model(snapshot, private_image_lock)
+                    model = application_execution_model(snapshot, private_image_lock,
+                                                       task_vars.get('platform_application_expected_library_ids'))
                     if (model['semanticFingerprint'] != task_vars['platform_application_expected_fingerprint'] or
                             model['libraryIds'] != task_vars.get('platform_application_expected_library_ids')):
                         raise ValueError('APPLICATION_EXECUTION_MODEL_MISMATCH')

@@ -2065,7 +2065,7 @@ func projectErrorMessage(code string) string {
 	case "EXPORT_STAGING_RETAINED":
 		return "Экспорт не завершён. Временная папка сохранена, потому что безопасное автоматическое удаление не удалось доказать."
 	case "APPLICATION_CONFIG_UPGRADE_REQUIRED":
-		return "Обновите config/application.yml: добавьте приоритеты сервисов и установите schemaVersion: 2."
+		return "Обновите config/application.yml: сохраните приоритеты сервисов, добавьте libraryExecutionPriorities и установите schemaVersion: 3."
 	case "APPLICATION_CONFIG_SERVICE_PRIORITIES_INVALID", "APPLICATION_CONFIG_SERVICE_PRIORITY_INVALID", "APPLICATION_CONFIG_SERVICE_PRIORITY_DUPLICATE":
 		return "В config/application.yml проверьте список serviceExecutionPriorities: каждому типу сервиса нужен один уникальный неотрицательный приоритет."
 	case "DEPLOYMENT_ORDER_RUNTIME_UNSUPPORTED":

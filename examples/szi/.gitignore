@@ -2,3 +2,4 @@
 /application-packages/keycloak/*/assets/themes/
 /application-packages/keycloak/*/assets/themes.tar.gz
 /application-packages/keycloak/*/assets/providers/*.jar
+/library-packages/szi/*/assets/keycloak-clean.dump

@@ -2,7 +2,7 @@ platform_application_definition:
   name: nginx
   version: 1.0.0
   defaults:
-    image: evoscada-docker.artifacts.tn.tngrp.ru/nginx-docker-szi:794a4663
+    image: evoscada-docker.artifacts.tn.tngrp.ru/lawellet/nginx-lua-resty:1.0.3-redos3-certs
     user: "1000:1000"
     restart: always
     command:
@@ -13,10 +13,10 @@ platform_application_definition:
       - source: assets/script.lua
         destination: script.lua
         mode: "0644"
-      - source: assets/data.env
+      - template: assets/data.env
         destination: data.env
         mode: "0644"
-      - source: assets/scada-lawellet.conf
+      - template: assets/scada-lawellet.conf
         destination: scada-lawellet.conf
         mode: "0644"
     environment:

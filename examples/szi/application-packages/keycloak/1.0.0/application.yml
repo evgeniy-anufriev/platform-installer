@@ -5,12 +5,40 @@
   "version": "1.0.0",
   "files": [
     "assets/conf/cache-ispn.xml",
+    "assets/scripts/bootstrap-admin.sh",
+    "assets/scripts/create-admin.sh",
     "assets/providers/",
     "assets/themes.tar.gz",
     "roles/application_keycloak/defaults/main.yml",
+    "roles/application_keycloak/templates/agent.hcl.j2",
     "roles/application_keycloak/templates/compose.yml.j2"
   ],
   "render": {
-    "compose_template": "roles/application_keycloak/templates/compose.yml.j2"
-  }
+    "compose_template": "roles/application_keycloak/templates/compose.yml.j2",
+    "agent_template": "roles/application_keycloak/templates/agent.hcl.j2"
+  },
+  "scripts": [
+    {
+      "id": "bootstrap-admin",
+      "source": "assets/scripts/bootstrap-admin.sh",
+      "phase": "before_start",
+      "execution": "once",
+      "argv": ["--realm", "master", "--db-user", "szi_keycloak", "--project", {"valueFrom": "projectId"}, "--library", {"valueFrom": "libraryId"}, "--instance", {"valueFrom": "applicationId"}, "--host", {"valueFrom": "targetHostId"}],
+      "secretInputs": {
+        "bootstrap_client_secret": {"valueFrom": "runtime_secret", "ref": "szi-bootstrap-client-secret"},
+        "db_password": {"valueFrom": "runtime_secret", "ref": "keycloak-postgres-password"}
+      }
+    },
+    {
+      "id": "create-admin",
+      "source": "assets/scripts/create-admin.sh",
+      "phase": "after_ready",
+      "execution": "once",
+      "argv": ["--realm", "master", "--keycloak-url", {"valueFrom": "placement_https", "application": "keycloak"}, "--project", {"valueFrom": "projectId"}, "--library", {"valueFrom": "libraryId"}, "--instance", {"valueFrom": "applicationId"}, "--host", {"valueFrom": "targetHostId"}],
+      "secretInputs": {
+        "bootstrap_client_secret": {"valueFrom": "runtime_secret", "ref": "szi-bootstrap-client-secret"},
+        "admin_password": {"valueFrom": "runtime_secret", "ref": "szi-admin-password"}
+      }
+    }
+  ]
 }

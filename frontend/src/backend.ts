@@ -97,6 +97,7 @@ export type VerificationStatus = {
 };
 export type ManagedProjectView = {
   projectRevision: string;
+  applicationLibraries?: Record<string, { libraryRef: string }>;
   dataRootDirectory?: string;
   namePrefix?: string;
   servers: Record<
@@ -256,6 +257,7 @@ export type InstallationPlanRequest = {
   skipInfrastructureVerify?: boolean;
   executionMode: InstallationExecutionMode;
   deploymentOrder: string[];
+  applicationLibraryOrder?: string[];
   applicationVaultSources: Record<
     string,
     "RUNTIME_INPUT" | "CURRENT_RUN_BOOTSTRAP"

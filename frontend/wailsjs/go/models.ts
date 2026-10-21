@@ -1,4 +1,18 @@
 export namespace appconfig {
+  export class LibraryExecutionPriority {
+    libraryName: string;
+    priority?: number;
+
+    static createFrom(source: any = {}) {
+      return new LibraryExecutionPriority(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.libraryName = source["libraryName"];
+      this.priority = source["priority"];
+    }
+  }
   export class ServiceExecutionPriority {
     serviceType: string;
     priority?: number;
@@ -31,6 +45,7 @@ export namespace appconfig {
     schemaVersion: number;
     serverTypes: ServerType[];
     serviceExecutionPriorities: ServiceExecutionPriority[];
+    libraryExecutionPriorities: LibraryExecutionPriority[];
 
     static createFrom(source: any = {}) {
       return new Config(source);
@@ -43,6 +58,10 @@ export namespace appconfig {
       this.serviceExecutionPriorities = this.convertValues(
         source["serviceExecutionPriorities"],
         ServiceExecutionPriority,
+      );
+      this.libraryExecutionPriorities = this.convertValues(
+        source["libraryExecutionPriorities"],
+        LibraryExecutionPriority,
       );
     }
 
@@ -227,6 +246,8 @@ export namespace coreadapter {
 
     constructor(source: any = {}) {
       if ("string" === typeof source) source = JSON.parse(source);
+      this.registryCredentials = source["registryCredentials"];
+      this.registries = source["registries"];
       this.tables = source["tables"];
       this.resourceDefaults = source["resourceDefaults"];
       this.topics = source["topics"];
@@ -241,8 +262,6 @@ export namespace coreadapter {
       );
       this.resources = source["resources"];
       this.sharedSecretRequirements = source["sharedSecretRequirements"];
-      this.registryCredentials = source["registryCredentials"];
-      this.registries = source["registries"];
     }
 
     convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -1254,6 +1273,7 @@ export namespace desktop {
     skipInfrastructureVerify: boolean;
     executionMode: string;
     deploymentOrder: string[];
+    applicationLibraryOrder: string[];
     applicationVaultSources: Record<string, string>;
 
     static createFrom(source: any = {}) {
@@ -1265,6 +1285,7 @@ export namespace desktop {
       this.skipInfrastructureVerify = source["skipInfrastructureVerify"];
       this.executionMode = source["executionMode"];
       this.deploymentOrder = source["deploymentOrder"];
+      this.applicationLibraryOrder = source["applicationLibraryOrder"];
       this.applicationVaultSources = source["applicationVaultSources"];
     }
   }
@@ -1768,6 +1789,7 @@ export namespace desktop {
     }
   }
   export class RuntimeSecretDescriptorView {
+    deploymentBound?: boolean;
     requirementRef: string;
     purpose: string;
     serviceDeployment?: string;
@@ -1784,6 +1806,7 @@ export namespace desktop {
 
     constructor(source: any = {}) {
       if ("string" === typeof source) source = JSON.parse(source);
+      this.deploymentBound = source["deploymentBound"];
       this.requirementRef = source["requirementRef"];
       this.purpose = source["purpose"];
       this.serviceDeployment = source["serviceDeployment"];
@@ -3605,6 +3628,7 @@ export namespace projectlifecycle {
     referenceKind?: string;
     runtimeSecretRequirementRef?: string;
     runtimeSecretUsernameRequired?: boolean;
+    runtimeSecretDeploymentBound?: boolean;
     minimum?: number;
     maximum?: number;
     minLength?: number;
@@ -3631,6 +3655,8 @@ export namespace projectlifecycle {
       this.runtimeSecretRequirementRef = source["runtimeSecretRequirementRef"];
       this.runtimeSecretUsernameRequired =
         source["runtimeSecretUsernameRequired"];
+      this.runtimeSecretDeploymentBound =
+        source["runtimeSecretDeploymentBound"];
       this.minimum = source["minimum"];
       this.maximum = source["maximum"];
       this.minLength = source["minLength"];

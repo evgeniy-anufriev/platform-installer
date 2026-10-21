@@ -19,7 +19,11 @@ BEGIN
     OR NOT EXISTS(SELECT FROM pg_roles oo WHERE oo.oid=d.datdba AND shobj_description(oo.oid,'pg_authid')={{ db.ownerMarker | platform.postgresql.application_sql_literal }}
                   AND NOT oo.rolcanlogin AND NOT oo.rolsuper AND NOT oo.rolcreatedb AND NOT oo.rolcreaterole AND NOT oo.rolreplication AND NOT oo.rolbypassrls)
     OR d.datistemplate OR d.datconnlimit != -1 OR pg_encoding_to_char(d.encoding) != 'UTF8'
-    OR (shobj_description(d.oid, 'pg_database') IS NOT NULL AND shobj_description(d.oid, 'pg_database') != {{ db.marker | platform.postgresql.application_sql_literal }})) THEN
+    OR (shobj_description(d.oid, 'pg_database') IS NOT NULL AND shobj_description(d.oid, 'pg_database') != {{ db.marker | platform.postgresql.application_sql_literal }})
+{% if db.restoreOnCreate is defined %}
+    OR shobj_description(d.oid, 'pg_database') IS NULL
+{% endif %}
+    ) THEN
     RAISE EXCEPTION 'APPLICATION_PROVIDER_DATABASE_CONFLICT';
   END IF;
 {% endif %}

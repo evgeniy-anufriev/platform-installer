@@ -25,6 +25,7 @@ type InstallationPlanRequest struct {
 	SkipInfrastructureVerify bool                        `json:"skipInfrastructureVerify"`
 	ExecutionMode            executionnode.ExecutionMode `json:"executionMode"`
 	DeploymentOrder          []string                    `json:"deploymentOrder"`
+	ApplicationLibraryOrder  []string                    `json:"applicationLibraryOrder"`
 	ApplicationVaultSources  map[string]string           `json:"applicationVaultSources"`
 }
 
@@ -119,12 +120,16 @@ func (a *App) createInstallationPlan(request InstallationPlanRequest) Installati
 	if err != nil {
 		return installationPlanFailure(errors.New("PROJECT_REVISION_UNAVAILABLE"))
 	}
-	ctx, cancel := a.operationContext(2 * time.Minute)
+	// Offline image preparation and target-free Core planning can each take
+	// several minutes when a bundle carries large application images.
+	ctx, cancel := a.operationContext(10 * time.Minute)
 	defer cancel()
 	ctx = executionnode.WithImagePreparationCredentials(ctx, a.imagePreparationCredentialsLocked)
 	var record executionnode.PlanRecord
 	if request.ExecutionMode == "" {
 		record, err = binding.plans.CreatePlanWithOrder(ctx, binding.node, a.current.Root, binding.reader.runtimeRelease, request.DeploymentOrder)
+	} else if request.ApplicationLibraryOrder != nil {
+		record, err = binding.plans.CreatePlanForModeWithLibraryOrder(ctx, binding.node, a.current.Root, binding.reader.runtimeRelease, request.DeploymentOrder, request.ApplicationLibraryOrder, request.ExecutionMode, request.ApplicationVaultSources, request.SkipInfrastructureVerify)
 	} else {
 		record, err = binding.plans.CreatePlanForMode(ctx, binding.node, a.current.Root, binding.reader.runtimeRelease, request.DeploymentOrder, request.ExecutionMode, request.ApplicationVaultSources, request.SkipInfrastructureVerify)
 	}

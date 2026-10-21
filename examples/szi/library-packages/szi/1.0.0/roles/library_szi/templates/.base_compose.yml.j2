@@ -1,7 +1,13 @@
+{% set postgres_addresses = [] %}
+{% for target in library_runtime.connections.postgres.targets %}
+{% set address = '[' ~ target.address ~ ']' if ':' in target.address else target.address %}
+{% set _ = postgres_addresses.append(address ~ ':' ~ (target.port | string)) %}
+{% endfor %}
 services:
   base:
     init: true
     environment:
+      POSTGRES_ADDRESS: {{ (postgres_addresses | join(',')) | to_json }}
 {% for server in groups['all'] | reject('equalto', 'localhost') | sort %}
       "SERVER_{{ loop.index }}_IP": "${SERVER_{{ loop.index }}_IP}"
 {% endfor %}

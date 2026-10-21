@@ -1,4 +1,4 @@
-schemaVersion: 2
+schemaVersion: 3
 serverTypes:
   - id: infra
     displayName: Инфраструктура
@@ -17,3 +17,7 @@ serviceExecutionPriorities:
   - {serviceType: postgresql, priority: 7}
   - {serviceType: redis, priority: 4}
   - {serviceType: vault, priority: 5}
+libraryExecutionPriorities:
+  - {libraryName: szi, priority: 0}
+  - {libraryName: sdku, priority: 1}
+  - {libraryName: cspa, priority: 1}

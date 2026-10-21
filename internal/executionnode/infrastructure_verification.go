@@ -118,6 +118,17 @@ func (t OpenSSHTransport) ReadApplicationLibraries(ctx context.Context, node Nod
 // BuildDeploymentPlanForMode reuses ordinary staging and the fixed Core operation.
 // Unsupported runtimes fail before staging; there is no full-project fallback.
 func (t OpenSSHTransport) BuildDeploymentPlanForMode(ctx context.Context, node Node, projectRoot string, release map[string]any, order []string, mode ExecutionMode, vaultSources map[string]string, skipInfrastructureVerify ...bool) (DeploymentPlan, error) {
+	return t.buildDeploymentPlanForMode(ctx, node, projectRoot, release, order, nil, mode, vaultSources, skipInfrastructureVerify...)
+}
+
+func (t OpenSSHTransport) BuildDeploymentPlanForModeWithLibraryOrder(ctx context.Context, node Node, projectRoot string, release map[string]any, order, libraryOrder []string, mode ExecutionMode, vaultSources map[string]string, skipInfrastructureVerify ...bool) (DeploymentPlan, error) {
+	if libraryOrder == nil || len(libraryOrder) > 256 {
+		return DeploymentPlan{}, errors.New("APPLICATION_LIBRARY_ORDER_INVALID")
+	}
+	return t.buildDeploymentPlanForMode(ctx, node, projectRoot, release, order, libraryOrder, mode, vaultSources, skipInfrastructureVerify...)
+}
+
+func (t OpenSSHTransport) buildDeploymentPlanForMode(ctx context.Context, node Node, projectRoot string, release map[string]any, order, libraryOrder []string, mode ExecutionMode, vaultSources map[string]string, skipInfrastructureVerify ...bool) (DeploymentPlan, error) {
 	if projectRoot == "" || len(release) == 0 || !validModePlanInput(order, mode, vaultSources) {
 		return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_INPUT_INVALID")
 	}
@@ -137,6 +148,9 @@ func (t OpenSSHTransport) BuildDeploymentPlanForMode(ctx context.Context, node N
 		vaultSources = map[string]string{}
 	}
 	request := map[string]any{"apiVersion": version, "runtimeRelease": release, "deploymentOrder": order, "executionMode": string(mode), "applicationVaultSources": vaultSources}
+	if libraryOrder != nil {
+		request["applicationLibraryOrder"] = libraryOrder
+	}
 	if skip {
 		request["skipInfrastructureVerify"] = true
 	}

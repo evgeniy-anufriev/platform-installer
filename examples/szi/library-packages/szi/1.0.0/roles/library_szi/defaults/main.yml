@@ -7,6 +7,12 @@ platform_library_definition:
     parameters:
       SZI_REALM: master
       HZ_CLUSTERNAME: '{{ library_instance_id }}'
+  shared_secrets:
+    java_keystore_password:
+      source:
+        binding: application-pki
+        credential: java_keystore_password
+        kind: pki_credential
   connections:
     postgres:
       library_binding: database
@@ -28,15 +34,16 @@ platform_library_definition:
     keycloak:
       applicationRef: keycloak@1.0.0
       required: true
+      start_priority: 0
     grant-access:
       applicationRef: grant-access@1.0.0
-      required: true
+      required: false
     grant-access-front:
       applicationRef: grant-access-front@1.0.0
-      required: true
+      required: false
     grant-access-audit:
       applicationRef: grant-access-audit@1.0.0
-      required: true
+      required: false
     nginx:
       applicationRef: nginx@1.0.0
-      required: true
+      required: false

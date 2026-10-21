@@ -1,0 +1,30 @@
+---
+- name: Run instance before-start scripts after all image deliveries
+  ansible.builtin.include_role:
+    name: platform.core.application_runtime
+    tasks_from: run_scripts
+  vars:
+    application_script_phase: before_start
+    application_script_scope: instance
+  loop: "{{ platform_application_preflight_jobs | selectattr('libraryId', 'equalto', application_library_id) | selectattr('instanceId', 'equalto', application_instance_id) | list }}"
+  loop_control:
+    loop_var: application_runtime_job
+
+- name: Activate and check every placement of this logical instance
+  ansible.builtin.include_role:
+    name: platform.core.application_runtime
+    tasks_from: activate_instance
+  loop: "{{ platform_application_preflight_jobs | selectattr('libraryId', 'equalto', application_library_id) | selectattr('instanceId', 'equalto', application_instance_id) | list }}"
+  loop_control:
+    loop_var: application_runtime_job
+
+- name: Run after-ready scripts only after every placement is healthy
+  ansible.builtin.include_role:
+    name: platform.core.application_runtime
+    tasks_from: run_scripts
+  vars:
+    application_script_phase: after_ready
+    application_script_scope: instance
+  loop: "{{ platform_application_preflight_jobs | selectattr('libraryId', 'equalto', application_library_id) | selectattr('instanceId', 'equalto', application_instance_id) | list }}"
+  loop_control:
+    loop_var: application_runtime_job

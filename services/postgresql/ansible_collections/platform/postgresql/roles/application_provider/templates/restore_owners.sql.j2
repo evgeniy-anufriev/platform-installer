@@ -1,0 +1,12 @@
+{% include 'session.sql.j2' %}
+{% for owner in platform_postgresql_application_job.libraries %}
+DO $platform_restore_owner$
+BEGIN
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = {{ owner.name | platform.postgresql.application_sql_literal }}) THEN
+    CREATE ROLE {{ owner.name | platform.postgresql.application_sql_identifier }} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+    COMMENT ON ROLE {{ owner.name | platform.postgresql.application_sql_identifier }} IS {{ owner.marker | platform.postgresql.application_sql_literal }};
+    RAISE NOTICE 'APPLICATION_PROVIDER_CHANGED';
+  END IF;
+END
+$platform_restore_owner$;
+{% endfor %}

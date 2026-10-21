@@ -4,6 +4,7 @@
   "name": "szi",
   "version": "1.0.0",
   "files": [
+    "assets/keycloak-clean.dump",
     "roles/library_szi/defaults/main.yml",
     "roles/library_szi/templates/.base_compose.yml.j2"
   ],
