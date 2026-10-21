@@ -190,12 +190,20 @@ function RuntimeSecretField({
         </button>
       </div>
       {shared && (
-        <small>
-          Один секрет используется несколькими ресурсами; замена действует на
-          всех потребителей.
+        <small title="Один секрет используется несколькими ресурсами; замена действует на всех потребителей.">
+          <span className="application-credential-label">
+            Один секрет используется несколькими ресурсами; замена действует на
+            всех потребителей.
+          </span>
+          <span aria-hidden="true">ⓘ</span>
         </small>
       )}
-      {message && <small role="status">{message}</small>}
+      {message && (
+        <small role="status" title={message}>
+          <span className="application-credential-label">{message}</span>
+          <span aria-hidden="true">ⓘ</span>
+        </small>
+      )}
     </div>
   );
 }

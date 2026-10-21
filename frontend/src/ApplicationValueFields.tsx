@@ -13,6 +13,9 @@ export function ApplicationValueFields({
   onDirtyChange,
   excludeKeys = [],
   defaultLabel = "Из пакета · без вычисления Ansible",
+  compact = false,
+  addControl,
+  resolvedValues = {},
 }: {
   label: string;
   value: Obj;
@@ -22,6 +25,9 @@ export function ApplicationValueFields({
   onDirtyChange: (dirty: boolean) => void;
   excludeKeys?: string[];
   defaultLabel?: string;
+  compact?: boolean;
+  addControl?: { adding: boolean; setAdding: (adding: boolean) => void };
+  resolvedValues?: Obj;
 }) {
   const dirtyFields = useRef(new Set<string>());
   const mark = (key: string, dirty: boolean) => {
@@ -30,10 +36,12 @@ export function ApplicationValueFields({
     onDirtyChange(dirtyFields.current.size > 0);
   };
   const [name, setName] = useState("");
-  const [adding, setAdding] = useState(false);
-  const keys = Object.keys({ ...defaults, ...value });
+  const [localAdding, setLocalAdding] = useState(false);
+  const adding = addControl?.adding ?? localAdding;
+  const setAdding = addControl?.setAdding ?? setLocalAdding;
+  const keys = Object.keys({ ...defaults, ...value, ...resolvedValues });
   return (
-    <section>
+    <section className={compact ? "application-compact-values" : undefined}>
       <h3>{label}</h3>
       {keys.map((key) => {
         const inherited = defaults[key],
@@ -50,6 +58,7 @@ export function ApplicationValueFields({
               <legend>{key}</legend>
               <ApplicationValueFields
                 label={key}
+                compact={compact}
                 value={objectValue(authored)}
                 defaults={objectValue(inherited)}
                 defaultLabel={defaultLabel}
@@ -72,6 +81,7 @@ export function ApplicationValueFields({
               <strong>{key}</strong>
               <ApplicationArrayFields
                 label={key}
+                compact={compact}
                 value={current}
                 disabled={disabled}
                 onDirtyChange={(dirty) => mark(key, dirty)}
@@ -88,9 +98,12 @@ export function ApplicationValueFields({
           );
         return (
           <ScalarValue
+            compact={compact}
             key={key + JSON.stringify(current)}
             label={key}
             value={current}
+            resolvedValue={resolvedValues[key]}
+            defaultValue={inherited}
             inferType={inherited === undefined && current === ""}
             explicit={Object.hasOwn(value, key)}
             defaultLabel={defaultLabel}
@@ -102,13 +115,15 @@ export function ApplicationValueFields({
         );
       })}
       {!adding ? (
-        <button
-          className="outline"
-          disabled={disabled}
-          onClick={() => setAdding(true)}
-        >
-          Добавить параметр · {label}
-        </button>
+        !addControl && (
+          <button
+            className="outline"
+            disabled={disabled}
+            onClick={() => setAdding(true)}
+          >
+            Добавить параметр · {label}
+          </button>
+        )
       ) : (
         <form
           className="application-add-parameter"
@@ -172,12 +187,14 @@ export function ApplicationArrayFields({
   disabled,
   onSave,
   onDirtyChange,
+  compact = false,
 }: {
   label: string;
   value: unknown[];
   disabled: boolean;
   onSave: (value: unknown[]) => Promise<boolean>;
   onDirtyChange: (dirty: boolean) => void;
+  compact?: boolean;
 }) {
   const dirtyRows = useRef(new Set<number>());
   const mark = (index: number, dirty: boolean) => {
@@ -196,6 +213,7 @@ export function ApplicationArrayFields({
           {row && typeof row === "object" && !Array.isArray(row) ? (
             <ApplicationValueFields
               label={label}
+              compact={compact}
               value={objectValue(row)}
               defaults={{}}
               disabled={disabled}
@@ -207,6 +225,7 @@ export function ApplicationArrayFields({
           ) : Array.isArray(row) ? (
             <ApplicationArrayFields
               label={label}
+              compact={compact}
               value={row}
               disabled={disabled}
               onDirtyChange={(dirty) => mark(index, dirty)}
@@ -217,6 +236,7 @@ export function ApplicationArrayFields({
           ) : (
             <ScalarValue
               label={label}
+              compact={compact}
               value={row}
               explicit={true}
               disabled={disabled}
@@ -263,6 +283,9 @@ function ScalarValue({
   onDirtyChange,
   inferType = false,
   defaultLabel = "Из пакета · без вычисления Ansible",
+  compact = false,
+  resolvedValue,
+  defaultValue,
 }: {
   label: string;
   value: unknown;
@@ -273,14 +296,24 @@ function ScalarValue({
   onDirtyChange: (dirty: boolean) => void;
   inferType?: boolean;
   defaultLabel?: string;
+  compact?: boolean;
+  resolvedValue?: unknown;
+  defaultValue?: unknown;
 }) {
   const [text, setText] = useState(String(value ?? ""));
   const [dirty, setDirty] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const showResolved =
+    compact &&
+    !focused &&
+    !dirty &&
+    ["string", "number", "boolean"].includes(typeof resolvedValue);
   const [manualType, setManualType] = useState("auto");
   const inferred = inferParameterValue(text);
   const originalType = typeof value;
-  const type =
-    manualType !== "auto"
+  const type = compact
+    ? typeof inferred
+    : manualType !== "auto"
       ? manualType
       : inferType
         ? typeof inferred
@@ -299,6 +332,54 @@ function ScalarValue({
         : true;
   const typeLabel =
     type === "number" ? "Число" : type === "boolean" ? "Логическое" : "Строка";
+  const saveValue = () =>
+    void onSave(parsed).then((ok) => {
+      if (ok) {
+        setDirty(false);
+        onDirtyChange(false);
+      }
+    });
+  const resetValue = () =>
+    void onReset().then((ok) => {
+      if (ok) {
+        setDirty(false);
+        onDirtyChange(false);
+      }
+    });
+  if (compact)
+    return (
+      <div className="application-value-row">
+        <label
+          className="application-value-key"
+          title={`${label}${defaultValue === undefined ? "" : ` · Default: ${String(defaultValue)}`}`}
+        >
+          <span>{label}</span>
+          <input
+            aria-label={label}
+            value={showResolved ? String(resolvedValue) : text}
+            disabled={disabled}
+            title={`${showResolved ? "Текущий расчёт Core · " : ""}Тип ввода: ${typeLabel} · автоматически · ${explicit ? "Явное значение" : defaultLabel}${defaultValue === undefined ? "" : ` · Default: ${String(defaultValue)}`}`}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+            onChange={(event) => {
+              setText(event.target.value);
+              setDirty(true);
+              onDirtyChange(true);
+            }}
+          />
+        </label>
+        <button disabled={disabled || !dirty || !valid} onClick={saveValue}>
+          В черновик
+        </button>
+        <button
+          className="outline"
+          disabled={disabled || !explicit}
+          onClick={resetValue}
+        >
+          Сбросить к default
+        </button>
+      </div>
+    );
   return (
     <div className="application-field">
       <label>
@@ -366,27 +447,13 @@ function ScalarValue({
       )}
       <small>{explicit ? "Явное значение" : defaultLabel}</small>
       <div className="row">
-        <button
-          disabled={disabled || !dirty || !valid}
-          onClick={() =>
-            void onSave(parsed).then((ok) => {
-              if (ok) {
-                setDirty(false);
-                onDirtyChange(false);
-              }
-            })
-          }
-        >
+        <button disabled={disabled || !dirty || !valid} onClick={saveValue}>
           В черновик
         </button>
         <button
           className="outline"
           disabled={disabled || !explicit}
-          onClick={() =>
-            void onReset().then((ok) => {
-              if (ok) onDirtyChange(false);
-            })
-          }
+          onClick={resetValue}
         >
           Сбросить к default
         </button>

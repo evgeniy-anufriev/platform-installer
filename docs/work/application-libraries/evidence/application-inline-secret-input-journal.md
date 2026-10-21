@@ -168,3 +168,63 @@ QA source/project/cache и vendor junction оставлены: ранее отк
 удаление не повторялось и не обходилось. Секретные application values были
 только в памяти isolated процесса, затем сеанс очищен и процесс остановлен.
 Real2h TTL остаётся единственным отдельным owner-deferred QA-пунктом.
+
+## Однострочные username/password — owner layout refinement
+
+2026-10-21: переменные и кнопки больше не переносятся; имена сокращаются с
+полным tooltip, расширенные источники прокручиваются горизонтально. Inline
+сообщения сохранены как доступный information indicator с tooltip. Pure layout,
+handlers/transport/secret guards не менялись; новый FULL review не требуется.
+Focused18, typecheck/lint/build PASS. Actual React layout fixture (не Wails/Core
+acceptance) проверяет literal/runtime/Vault/PKI при1440/1024: высота каждой строки
+47px, включая runtime shared/status indicator. Снимки просмотрены, визуально
+однострочные поля без перекрытий. Evidence `.runtime/qa/credential-row-layout.json`
+и `credential-row-1440.png`, `credential-row-1024.png`; private values не использованы.
+
+## Username из актуального Core snapshot
+
+2026-10-21: literal username в неизменённом поле отображается из переданного
+Core credentialRequirements. Existing freshSecrets gate исключает busy/draft/
+dirty/stale revision; password и runtime/Vault/PKI values не подставляются.
+Focus показывает исходный authored/package текст; blur без редактирования
+возвращает Core projection. onSave использует только authored values, поэтому
+показанный derived username не записывается автоматически в проект. Без
+актуальной проекции остаётся исходный шаблон, Jinja в React не вычисляется.
+Focused30 PASS, финальный focused7 после type-only test correction PASS;
+lint и typecheck/Vite build PASS. Actual React browser fixture проверил
+Core display → focus raw → blur Core и строки47px при1440/1024; это не новый
+Wails/Core acceptance. Артефакты `.runtime/qa/username-core-layout.json` и
+`username-core-1440.png`, `username-core-1024.png`; снимок1024 просмотрен.
+
+Последующая проверка по просьбе владельца выполнена через отдельный actual
+Wails bridge34125 и реальный проект full-services (копия принятого SDKU/CSPA,
+project-current), без synthetic credential rows. Actual React Open → credential/
+trust → node1 READY → Verify VERIFIED, revision be3c233e… (полный выше).
+Core username clickhouse `alarm_view_service_cspa` совпал с фактическим input
+на вкладке cspa/alarm-view-service/Секреты. Получены real-project-username-1440.png
+и real-project-username-1024.png;1440 просмотрен. Evidence
+`.runtime/qa/inline-secret-input/real-project-username.json`: PASS/complete,
+Core runtime53, приложение не запускалось. Это реальная проверка отображения,
+редактирование/сохранение username повторно не выполнялось. Сеанс очищен через
+React, isolated child45264/Wails54168 остановлены по exact identity; оригинальное
+окно18372 сохранено. QA source/package credentials в снимках отсутствуют.
+
+## Имя БД вместо ключа ресурса
+
+2026-10-21: AccountAccess получает актуальные resolvedResources через existing
+snapshot revision/draft gate. Колонка «База данных» и options используют
+Core parameters.name, затем authored name/reference как fallback. Option value
+и saved databaseRef остаются ключом. Открытие редактора прав не убирает имя
+базовой БД. Frontend focused32, lint, typecheck/Vite build PASS; test подтверждает
+Core name в row/option и сохранение исходного ref.
+
+Actual React/Wails/Core на копии full-services: Verify VERIFIED (be3c233e…,
+runtime53); у clickhouse resource history в таблице фактически показано cspa,
+равное Core resources.history.parameters.name. Evidence
+`.runtime/qa/inline-secret-input/real-project-database.json`: PASS/complete;
+screenshots real-project-database-1440.png и -1024.png,1440 просмотрен.
+Первые попытки: trust/probe timeout; дополнительный параллельный диагностический
+probe инвалидировал snapshot после Verify. Финальный последовательный повтор
+без параллельного probe PASS. Реальные rights edit/Save/Apply не выполнялись.
+Сеанс очищен через React; exact isolated child31404/Wails1156 остановлены,
+пользовательское окно не останавливалось. Application passwords не вводились.

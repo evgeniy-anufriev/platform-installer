@@ -156,6 +156,145 @@ async function selectSlot() {
   await userEvent.click(screen.getByRole("button", { name: "↳ gateway" }));
 }
 describe("application editor", () => {
+  it("uses compact endpoint rows on the application General tab with the existing writer", async () => {
+    const view = structuredClone(managed);
+    objectValue(
+      objectValue(
+        view.applicationPackages["application:gateway@1.0.0"].definition,
+      ).defaults,
+    ).endpoint = { enabled: true, protocol: "http" };
+    const calls: ApplicationIntent[] = [];
+    render(<Harness calls={calls} view={view} />);
+    await selectSlot();
+    await userEvent.click(
+      screen.getByText("Endpoint · публикация HAProxy / DNS"),
+    );
+    const input = screen.getByLabelText("protocol");
+    expect(input.closest(".application-value-row")).toBeTruthy();
+    fireEvent.change(input, { target: { value: "https" } });
+    await userEvent.click(
+      within(input.closest(".application-value-row")!).getByRole("button", {
+        name: "В черновик",
+      }),
+    );
+    expect(calls.at(-1)).toMatchObject({
+      operation: "SetApplicationLibraryOverride",
+      entityId: "gateway",
+      setting: "endpoint",
+      value: { protocol: "https" },
+    });
+  });
+  it("uses compact ENV rows and header Add for library common parameters", async () => {
+    const view = structuredClone(managed);
+    objectValue(
+      view.applicationPackages["library:sdku@1.0.0"].definition,
+    ).defaults = { environment: { LIB_ENV: "default" } };
+    const calls: ApplicationIntent[] = [];
+    render(<Harness calls={calls} view={view} />);
+    await userEvent.click(screen.getByRole("button", { name: /^sdku/ }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Общие параметры" }),
+    );
+    const input = screen.getByLabelText("LIB_ENV") as HTMLInputElement;
+    expect(input.closest(".application-value-row")).toBeTruthy();
+    expect(input.value).toBe("default");
+    const add = screen.getByRole("button", { name: "Добавить параметр" });
+    expect(add.closest("header")).toBeTruthy();
+    expect(
+      screen.queryByRole("button", { name: "Добавить параметр · Общие ENV" }),
+    ).toBeNull();
+    fireEvent.change(input, { target: { value: "false" } });
+    await userEvent.click(
+      within(input.closest(".application-value-row")!).getByRole("button", {
+        name: "В черновик",
+      }),
+    );
+    expect(calls.at(-1)).toMatchObject({
+      operation: "SetApplicationLibraryOverride",
+      entityId: "",
+      setting: "environment",
+      value: { LIB_ENV: false },
+    });
+    expect((screen.getByLabelText("LIB_ENV") as HTMLInputElement).value).toBe(
+      "false",
+    );
+    await userEvent.click(
+      within(
+        screen.getByLabelText("LIB_ENV").closest(".application-value-row")!,
+      ).getByRole("button", { name: "Сбросить к default" }),
+    );
+    expect((screen.getByLabelText("LIB_ENV") as HTMLInputElement).value).toBe(
+      "default",
+    );
+  });
+  it("retains application package ENV declarations while common defaults await Core verification", async () => {
+    const view = structuredClone(managed);
+    objectValue(
+      view.applicationPackages["library:sdku@1.0.0"].definition,
+    ).defaults = { environment: { LIBRARY_ONLY: "common" } };
+    objectValue(
+      objectValue(
+        view.applicationPackages["application:gateway@1.0.0"].definition,
+      ).defaults,
+    ).environment = { PACKAGE_ENV: "{{ application_instance_id }}" };
+    const calls: ApplicationIntent[] = [];
+    render(<Harness calls={calls} view={view} />);
+    await selectSlot();
+    await userEvent.click(screen.getByRole("button", { name: "Запуск" }));
+    expect(
+      (screen.getByLabelText("PACKAGE_ENV") as HTMLInputElement).value,
+    ).toBe("{{ application_instance_id }}");
+    expect(
+      screen.getByText(/ENV показывают исходные defaults пакета/),
+    ).toBeTruthy();
+    expect(screen.queryByLabelText("LIBRARY_ONLY")).toBeNull();
+    expect(calls).toEqual([]);
+  });
+  it("adds Startup ENV from the instance header and stages automatically typed values", async () => {
+    const calls: ApplicationIntent[] = [];
+    render(<Harness calls={calls} />);
+    await selectSlot();
+    expect(
+      screen.queryByRole("button", { name: "Добавить параметр" }),
+    ).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Запуск" }));
+    const add = screen.getByRole("button", {
+      name: "Добавить параметр",
+    });
+    expect(
+      add.closest("header")?.contains(
+        screen.getByRole("button", {
+          name: "Сбросить настройки",
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      screen.queryByRole("button", {
+        name: "Добавить параметр · Переменные окружения (ENV)",
+      }),
+    ).toBeNull();
+    await userEvent.click(add);
+    await userEvent.type(screen.getByLabelText("Имя параметра"), "WORKERS");
+    await userEvent.click(screen.getByRole("button", { name: "Добавить" }));
+    const input = screen.getByLabelText("WORKERS", { exact: true });
+    await userEvent.type(input, "3");
+    const row = within(input.closest(".application-value-row")!);
+    expect(row.queryByText("Дополнительно")).toBeNull();
+    await userEvent.click(row.getByRole("button", { name: "В черновик" }));
+    expect(calls.at(-1)).toMatchObject({
+      operation: "SetApplicationLibraryOverride",
+      setting: "environment",
+      value: { WORKERS: 3 },
+    });
+    await userEvent.click(
+      within(
+        screen
+          .getByLabelText("WORKERS", { exact: true })
+          .closest(".application-value-row")!,
+      ).getByRole("button", { name: "Сбросить к default" }),
+    );
+    expect(screen.queryByLabelText("WORKERS", { exact: true })).toBeNull();
+  });
   it("edits the library runtime directory and resets it without an app override", async () => {
     const user = userEvent.setup();
     const calls: ApplicationIntent[] = [];
@@ -197,7 +336,7 @@ describe("application editor", () => {
       within(
         screen
           .getByLabelText("COMMON")
-          .closest(".application-field") as HTMLElement,
+          .closest(".application-field, .application-value-row") as HTMLElement,
       ).getByRole("button", { name: "Сбросить к default" }),
     );
     expect((screen.getByLabelText("COMMON") as HTMLInputElement).value).toBe(
@@ -232,6 +371,11 @@ describe("application editor", () => {
                 slotId: "gateway",
                 placements: {
                   node1: {
+                    environment: {
+                      COMMON: "core-instance",
+                      ONLY_INHERITED: "core-effective",
+                      CORE_ONLY: false,
+                    },
                     inherited: {
                       environment: {
                         COMMON: "site",
@@ -259,11 +403,23 @@ describe("application editor", () => {
     await selectSlot();
     await userEvent.click(screen.getByRole("button", { name: "Запуск" }));
     expect((screen.getByLabelText("COMMON") as HTMLInputElement).value).toBe(
-      "instance",
+      "core-instance",
     );
     expect(
       (screen.getByLabelText("ONLY_INHERITED") as HTMLInputElement).value,
-    ).toBe("from-core");
+    ).toBe("core-effective");
+    expect((screen.getByLabelText("CORE_ONLY") as HTMLInputElement).value).toBe(
+      "false",
+    );
+    await userEvent.click(screen.getByLabelText("COMMON"));
+    expect((screen.getByLabelText("COMMON") as HTMLInputElement).value).toBe(
+      "instance",
+    );
+    await userEvent.tab();
+    expect((screen.getByLabelText("COMMON") as HTMLInputElement).value).toBe(
+      "core-instance",
+    );
+    expect(calls).toEqual([]);
     await userEvent.selectOptions(
       screen.getByLabelText("Наследуемые значения для сервера"),
       "node2",
@@ -303,7 +459,7 @@ describe("application editor", () => {
       within(
         screen
           .getByLabelText("COMMON")
-          .closest(".application-field") as HTMLElement,
+          .closest(".application-value-row") as HTMLElement,
       ).getByRole("button", { name: "Сбросить к default" }),
     );
     expect(calls.at(-1)).toMatchObject({

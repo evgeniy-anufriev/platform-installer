@@ -10,6 +10,7 @@ export function ApplicationAccountAccess({
   serviceType,
   deployment,
   resources,
+  resolvedResources = {},
   bindings,
   account,
   inherited,
@@ -20,6 +21,7 @@ export function ApplicationAccountAccess({
   serviceType: string;
   deployment: string;
   resources: ObjectValue;
+  resolvedResources?: ObjectValue;
   bindings: ObjectValue;
   account: ObjectValue;
   inherited: ObjectValue;
@@ -34,6 +36,12 @@ export function ApplicationAccountAccess({
   const [error, setError] = useState("");
   const pg = serviceType === "postgresql",
     ch = serviceType === "clickhouse";
+  const databaseName = (ref: string) =>
+    String(
+      objectValue(objectValue(resolvedResources[ref]).parameters).name ??
+        objectValue(objectValue(resources[ref]).parameters).name ??
+        ref,
+    );
   const source = Object.hasOwn(account, pg ? "databaseAccess" : "grants")
     ? account
     : inherited;
@@ -134,13 +142,7 @@ export function ApplicationAccountAccess({
         <tbody>
           {rows.map((row, i) => (
             <tr key={row.databaseRef}>
-              <td>
-                {String(
-                  objectValue(
-                    objectValue(resources[row.databaseRef]).parameters,
-                  ).name ?? row.databaseRef,
-                )}
-              </td>
+              <td title={row.databaseRef}>{databaseName(row.databaseRef)}</td>
               <td>
                 {row.privileges.join(" · ")}
                 {row.additionalCreatorRoles?.length ? (
@@ -194,11 +196,9 @@ export function ApplicationAccountAccess({
                       (row, i) => row.databaseRef === id && i !== edit,
                     ),
                 )
-                .map(([id, resource]) => (
+                .map(([id]) => (
                   <option key={id} value={id}>
-                    {String(
-                      objectValue(objectValue(resource).parameters).name ?? id,
-                    )}
+                    {databaseName(id)}
                   </option>
                 ))}
             </select>

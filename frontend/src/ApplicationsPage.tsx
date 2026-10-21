@@ -85,6 +85,7 @@ export function ApplicationsPage({
   const [tab, setTab] = useState("Общее");
   const [search, setSearch] = useState("");
   const [formEpoch, setFormEpoch] = useState(0);
+  const [addingEnvironment, setAddingEnvironment] = useState(false);
   const [create, setCreate] = useState(false);
   const [id, setId] = useState("");
   const [ref, setRef] = useState("");
@@ -269,6 +270,7 @@ export function ApplicationsPage({
     onDirtyChange(true);
   };
   const clearLocal = () => {
+    setAddingEnvironment(false);
     setLocal({});
     setEditing(new Set());
     setChildDirty(false);
@@ -860,6 +862,16 @@ export function ApplicationsPage({
                     Сбросить настройки
                   </button>
                 )}
+                {((slot && selectedTab === "Запуск") ||
+                  (!slot && selectedTab === "Общие параметры")) && (
+                  <button
+                    className="outline"
+                    disabled={busy || addingEnvironment}
+                    onClick={() => setAddingEnvironment(true)}
+                  >
+                    Добавить параметр
+                  </button>
+                )}
                 <nav className="application-tabs">
                   {tabs.map((t) => (
                     <button
@@ -1147,6 +1159,15 @@ export function ApplicationsPage({
                     {["environment", "parameters"].map((section) => (
                       <ApplicationValueFields
                         key={selected + section + formEpoch}
+                        compact={section === "environment"}
+                        addControl={
+                          section === "environment"
+                            ? {
+                                adding: addingEnvironment,
+                                setAdding: setAddingEnvironment,
+                              }
+                            : undefined
+                        }
                         label={
                           section === "environment"
                             ? "Общие ENV"
@@ -1219,6 +1240,7 @@ export function ApplicationsPage({
                 {!slot && selectedTab === "Ресурсы и секреты" && (
                   <>
                     <ApplicationLibraryResources
+                      showAddActions={false}
                       deployments={managed?.deployments ?? {}}
                       key={selected + "resources"}
                       resources={objectValue(library.resources)}
@@ -1475,6 +1497,7 @@ export function ApplicationsPage({
                         <ApplicationValueFields
                           key={selected + slot + "endpoint"}
                           label="Endpoint"
+                          compact
                           value={objectValue(overrides.endpoint)}
                           defaults={objectValue(defaults.endpoint)}
                           disabled={busy}
@@ -1524,42 +1547,63 @@ export function ApplicationsPage({
                     {commonActive && !freshBaseline && (
                       <p className="muted">
                         Унаследованные значения требуют проверки сохранённого
-                        проекта в Core. Здесь показаны только явные
-                        переопределения.
+                        проекта в Core. ENV показывают исходные defaults пакета
+                        и явные переопределения без вычисления Ansible;
+                        настройки конфигурации — только явные переопределения.
                       </p>
                     )}
-                    <section className="application-section">
-                      <h3>Команда и политика запуска</h3>{" "}
-                      {scalar(
-                        "command",
-                        "Команда · каждый аргумент с новой строки",
-                        Array.isArray(defaults.command)
-                          ? defaults.command.join("\n")
-                          : undefined,
-                        Array.isArray(overrides.command)
-                          ? overrides.command.join("\n")
-                          : undefined,
-                        (v) => send(override("command", v.split("\n"))),
-                        () => send(remove("command")),
-                        "multiline",
-                      )}
-                      {(["user", "restart"] as const).map((field) =>
-                        scalar(
-                          field,
-                          field,
-                          defaults[field],
-                          overrides[field],
-                          (v) => send(override(field, v)),
-                          () => send(remove(field)),
-                        ),
-                      )}
+                    <section className="application-section application-startup-policy">
+                      <h3>Команда и политика запуска</h3>
+                      <div className="application-startup-policy-fields">
+                        {scalar(
+                          "command",
+                          "Команда · каждый аргумент с новой строки",
+                          Array.isArray(defaults.command)
+                            ? defaults.command.join("\n")
+                            : undefined,
+                          Array.isArray(overrides.command)
+                            ? overrides.command.join("\n")
+                            : undefined,
+                          (v) => send(override("command", v.split("\n"))),
+                          () => send(remove("command")),
+                          "multiline",
+                        )}
+                        {(["user", "restart"] as const).map((field) =>
+                          scalar(
+                            field,
+                            field,
+                            defaults[field],
+                            overrides[field],
+                            (v) => send(override(field, v)),
+                            () => send(remove(field)),
+                          ),
+                        )}
+                      </div>
                     </section>
                     <section className="application-section">
                       <ApplicationValueFields
                         key={selected + slot + "environment"}
                         label="Переменные окружения (ENV)"
+                        compact
+                        addControl={{
+                          adding: addingEnvironment,
+                          setAdding: setAddingEnvironment,
+                        }}
                         value={objectValue(overrides.environment)}
-                        defaults={objectValue(startupDefaults.environment)}
+                        defaults={objectValue(
+                          freshBaseline
+                            ? inherited.environment
+                            : defaults.environment,
+                        )}
+                        resolvedValues={
+                          freshBaseline && !dirty && !busy
+                            ? objectValue(
+                                objectValue(
+                                  instancePlacements[selectedBaselineHost],
+                                ).environment,
+                              )
+                            : {}
+                        }
                         defaultLabel={
                           freshBaseline
                             ? "Унаследовано · последний расчёт Core"
@@ -1676,6 +1720,7 @@ export function ApplicationsPage({
                         ),
                       }}
                       resources={objectValue(library.resources)}
+                      resolvedResources={resolvedResources}
                       deploymentTypes={Object.fromEntries(
                         Object.entries(managed?.deployments ?? {}).map(
                           ([id, row]) => [id, row.serviceType],

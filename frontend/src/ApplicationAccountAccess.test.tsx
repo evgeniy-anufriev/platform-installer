@@ -21,6 +21,37 @@ const bindings = {
   ch: { deploymentRef: "qa-ch" },
 };
 describe("account database access", () => {
+  it("shows the Core database name in rows and options while saving its reference", async () => {
+    const save = vi.fn().mockResolvedValue(true);
+    render(
+      <ApplicationAccountAccess
+        serviceType="postgresql"
+        deployment="qa-pg"
+        resources={resources}
+        resolvedResources={{
+          main: { parameters: { name: "actual_database" } },
+        }}
+        bindings={bindings}
+        account={{
+          databaseAccess: [{ databaseRef: "main", privileges: ["SELECT"] }],
+        }}
+        inherited={{}}
+        disabled={false}
+        onSave={save}
+        onDirtyChange={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole("cell", { name: "actual_database" })).toBeTruthy();
+    expect(screen.queryByRole("cell", { name: "main" })).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Изменить" }));
+    expect(
+      screen.getByRole("option", { name: "actual_database" }),
+    ).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "В черновик" }));
+    expect(save).toHaveBeenCalledWith({
+      databaseAccess: [{ databaseRef: "main", privileges: ["SELECT"] }],
+    });
+  });
   it("adds database-wide rights using same-provider resources and creator roles", async () => {
     const save = vi.fn().mockResolvedValue(true);
     render(
@@ -152,7 +183,10 @@ describe("account database access", () => {
       />,
     );
     await userEvent.clear(screen.getByLabelText("ACL commands"));
-    await userEvent.type(screen.getByLabelText("ACL commands"), "+@all, -@admin, +@all");
+    await userEvent.type(
+      screen.getByLabelText("ACL commands"),
+      "+@all, -@admin, +@all",
+    );
     await userEvent.type(screen.getByLabelText("ACL channels"), "events:*");
     await userEvent.click(screen.getByRole("button", { name: "В черновик" }));
     expect(save).toHaveBeenCalledWith({
@@ -172,8 +206,14 @@ describe("account database access", () => {
         onDirtyChange={vi.fn()}
       />,
     );
-    await userEvent.type(screen.getByLabelText("ACL commands"), ", sentinel|set");
-    await userEvent.type(screen.getByLabelText("ACL channels"), "+switch-master");
+    await userEvent.type(
+      screen.getByLabelText("ACL commands"),
+      ", sentinel|set",
+    );
+    await userEvent.type(
+      screen.getByLabelText("ACL channels"),
+      "+switch-master",
+    );
     await userEvent.click(screen.getByRole("button", { name: "В черновик" }));
     expect(save).toHaveBeenCalledWith({
       commands: ["sentinel|master", "sentinel|set"],
