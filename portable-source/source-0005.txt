@@ -1,3 +1,1377 @@
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/alecthomas/chroma/v2/lexers/embedded/python.xml","mode":420,"size":20390,"sha256":"841ab339116116e6f6ccec57ba0e5af95de23cf24fd5f53f3df9fb493a2482d6","index":0,"count":1,"encoding":"utf-8","payloadBytes":20390}
+<lexer>
+  <config>
+    <name>Python</name>
+    <alias>python</alias>
+    <alias>py</alias>
+    <alias>sage</alias>
+    <alias>python3</alias>
+    <alias>py3</alias>
+    <filename>*.py</filename>
+    <filename>*.pyi</filename>
+    <filename>*.pyw</filename>
+    <filename>*.jy</filename>
+    <filename>*.sage</filename>
+    <filename>*.sc</filename>
+    <filename>SConstruct</filename>
+    <filename>SConscript</filename>
+    <filename>*.bzl</filename>
+    <filename>BUCK</filename>
+    <filename>BUILD</filename>
+    <filename>BUILD.bazel</filename>
+    <filename>WORKSPACE</filename>
+    <filename>WORKSPACE.bzlmod</filename>
+    <filename>WORKSPACE.bazel</filename>
+    <filename>MODULE.bazel</filename>
+    <filename>REPO.bazel</filename>
+    <filename>*.tac</filename>
+    <mime_type>text/x-python</mime_type>
+    <mime_type>application/x-python</mime_type>
+    <mime_type>text/x-python3</mime_type>
+    <mime_type>application/x-python3</mime_type>
+  </config>
+  <rules>
+    <state name="numbers">
+      <rule pattern="(\d(?:_?\d)*\.(?:\d(?:_?\d)*)?|(?:\d(?:_?\d)*)?\.\d(?:_?\d)*)([eE][+-]?\d(?:_?\d)*)?">
+        <token type="LiteralNumberFloat"/>
+      </rule>
+      <rule pattern="\d(?:_?\d)*[eE][+-]?\d(?:_?\d)*j?">
+        <token type="LiteralNumberFloat"/>
+      </rule>
+      <rule pattern="0[oO](?:_?[0-7])+">
+        <token type="LiteralNumberOct"/>
+      </rule>
+      <rule pattern="0[bB](?:_?[01])+">
+        <token type="LiteralNumberBin"/>
+      </rule>
+      <rule pattern="0[xX](?:_?[a-fA-F0-9])+">
+        <token type="LiteralNumberHex"/>
+      </rule>
+      <rule pattern="\d(?:_?\d)*">
+        <token type="LiteralNumberInteger"/>
+      </rule>
+    </state>
+    <state name="expr">
+      <rule pattern="(?i)(rf|fr)(&#34;&#34;&#34;)">
+        <bygroups>
+          <token type="LiteralStringAffix"/>
+          <token type="LiteralStringDouble"/>
+        </bygroups>
+        <combined state="rfstringescape" state="tdqf"/>
+      </rule>
+      <rule pattern="(?i)(rf|fr)(&#39;&#39;&#39;)">
+        <bygroups>
+          <token type="LiteralStringAffix"/>
+          <token type="LiteralStringSingle"/>
+        </bygroups>
+        <combined state="rfstringescape" state="tsqf"/>
+      </rule>
+      <rule pattern="(?i)(rf|fr)(&#34;)">
+        <bygroups>
+          <token type="LiteralStringAffix"/>
+          <token type="LiteralStringDouble"/>
+        </bygroups>
+        <combined state="rfstringescape" state="dqf"/>
+      </rule>
+      <rule pattern="(?i)(rf|fr)(&#39;)">
+        <bygroups>
+          <token type="LiteralStringAffix"/>
+          <token type="LiteralStringSingle"/>
+        </bygroups>
+        <combined state="rfstringescape" state="sqf"/>
+      </rule>
+      <rule pattern="([fF])(&#34;&#34;&#34;)">
+        <bygroups>
+          <token type="LiteralStringAffix"/>
+          <token type="LiteralStringDouble"/>
+        </bygroups>
+        <combined state="fstringescape" state="tdqf"/>
+      </rule>
+      <rule pattern="([fF])(&#39;&#39;&#39;)">
+        <bygroups>
+          <token type="LiteralStringAffix"/>
+          <token type="LiteralStringSingle"/>
+        </bygroups>
+        <combined state="fstringescape" state="tsqf"/>
+      </rule>
+      <rule pattern="([fF])(&#34;)">
+        <bygroups>
+          <token type="LiteralStringAffix"/>
+          <token type="LiteralStringDouble"/>
+        </bygroups>
+        <combined state="fstringescape" state="dqf"/>
+      </rule>
+      <rule pattern="([fF])(&#39;)">
+        <bygroups>
+          <token type="LiteralStringAffix"/>
+          <token type="LiteralStringSingle"/>
+        </bygroups>
+        <combined state="fstringescape" state="sqf"/>
+      </rule>
+      <rule pattern="(?i)(rb|br|r)(&#34;&#34;&#34;)">
+        <bygroups>
+          <token type="LiteralStringAffix"/>
+          <token type="LiteralStringDouble"/>
+        </bygroups>
+        <push state="tdqs"/>
+      </rule>
+      <rule pattern="(?i)(rb|br|r)(&#39;&#39;&#39;)">
+        <bygroups>
+          <token type="LiteralStringAffix"/>
+          <token type="LiteralStringSingle"/>
+        </bygroups>
+        <push state="tsqs"/>
+      </rule>
+      <rule pattern="(?i)(rb|br|r)(&#34;)">
+        <bygroups>
+          <token type="LiteralStringAffix"/>
+          <token type="LiteralStringDouble"/>
+        </bygroups>
+        <push state="dqs"/>
+      </rule>
+      <rule pattern="(?i)(rb|br|r)(&#39;)">
+        <bygroups>
+          <token type="LiteralStringAffix"/>
+          <token type="LiteralStringSingle"/>
+        </bygroups>
+        <push state="sqs"/>
+      </rule>
+      <rule pattern="([uUbB]?)(&#34;&#34;&#34;)">
+        <bygroups>
+          <token type="LiteralStringAffix"/>
+          <token type="LiteralStringDouble"/>
+        </bygroups>
+        <combined state="stringescape" state="tdqs"/>
+      </rule>
+      <rule pattern="([uUbB]?)(&#39;&#39;&#39;)">
+        <bygroups>
+          <token type="LiteralStringAffix"/>
+          <token type="LiteralStringSingle"/>
+        </bygroups>
+        <combined state="stringescape" state="tsqs"/>
+      </rule>
+      <rule pattern="([uUbB]?)(&#34;)">
+        <bygroups>
+          <token type="LiteralStringAffix"/>
+          <token type="LiteralStringDouble"/>
+        </bygroups>
+        <combined state="stringescape" state="dqs"/>
+      </rule>
+      <rule pattern="([uUbB]?)(&#39;)">
+        <bygroups>
+          <token type="LiteralStringAffix"/>
+          <token type="LiteralStringSingle"/>
+        </bygroups>
+        <combined state="stringescape" state="sqs"/>
+      </rule>
+      <rule pattern="[^\S\n]+">
+        <token type="Text"/>
+      </rule>
+      <rule>
+        <include state="numbers"/>
+      </rule>
+      <rule pattern="!=|==|&lt;&lt;|&gt;&gt;|:=|[-~+/*%=&lt;&gt;&amp;^|.]">
+        <token type="Operator"/>
+      </rule>
+      <rule pattern="[]{}:(),;[]">
+        <token type="Punctuation"/>
+      </rule>
+      <rule pattern="(in|is|and|or|not)\b">
+        <token type="OperatorWord"/>
+      </rule>
+      <rule>
+        <include state="expr-keywords"/>
+      </rule>
+      <rule>
+        <include state="builtins"/>
+      </rule>
+      <rule>
+        <include state="magicfuncs"/>
+      </rule>
+      <rule>
+        <include state="magicvars"/>
+      </rule>
+      <rule>
+        <include state="name"/>
+      </rule>
+    </state>
+    <state name="fstrings-double">
+      <rule pattern="\}">
+        <token type="LiteralStringInterpol"/>
+      </rule>
+      <rule pattern="\{">
+        <token type="LiteralStringInterpol"/>
+        <push state="expr-inside-fstring"/>
+      </rule>
+      <rule pattern="[^\\\&#39;&#34;{}\n]+">
+        <token type="LiteralStringDouble"/>
+      </rule>
+      <rule pattern="[\&#39;&#34;\\]">
+        <token type="LiteralStringDouble"/>
+      </rule>
+    </state>
+    <state name="keywords">
+      <rule pattern="(yield from|nonlocal|continue|finally|except|lambda|assert|global|return|raise|yield|while|break|await|async|pass|else|elif|with|try|for|del|as|if|match|case)\b">
+        <token type="Keyword"/>
+      </rule>
+      <rule pattern="(False|True|None)\b">
+        <token type="KeywordConstant"/>
+      </rule>
+    </state>
+    <state name="dqs">
+      <rule pattern="&#34;">
+        <token type="LiteralStringDouble"/>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern="\\\\|\\&#34;|\\\n">
+        <token type="LiteralStringEscape"/>
+      </rule>
+      <rule>
+        <include state="strings-double"/>
+      </rule>
+    </state>
+    <state name="fromimport">
+      <rule pattern="(\s+)(import)\b">
+        <bygroups>
+          <token type="Text"/>
+          <token type="KeywordNamespace"/>
+        </bygroups>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern="\.">
+        <token type="NameNamespace"/>
+      </rule>
+      <rule pattern="None\b">
+        <token type="NameBuiltinPseudo"/>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern="[_\p{L}][_\p{L}\p{N}]*">
+        <token type="NameNamespace"/>
+      </rule>
+      <rule>
+        <pop depth="1"/>
+      </rule>
+    </state>
+    <state name="builtins">
+      <rule pattern="(?&lt;!\.)(staticmethod|classmethod|memoryview|__import__|issubclass|isinstance|frozenset|bytearray|enumerate|reversed|property|compile|complex|delattr|hasattr|setattr|globals|getattr|divmod|filter|locals|format|object|sorted|slice|print|bytes|range|input|tuple|round|super|float|eval|list|dict|repr|type|vars|hash|next|bool|open|iter|oct|pow|min|zip|max|map|bin|len|set|any|dir|all|abs|str|sum|chr|int|hex|ord|id)\b">
+        <token type="NameBuiltin"/>
+      </rule>
+      <rule pattern="(?&lt;!\.)(self|Ellipsis|NotImplemented|cls)\b">
+        <token type="NameBuiltinPseudo"/>
+      </rule>
+      <rule pattern="(?&lt;!\.)(PendingDeprecationWarning|ConnectionAbortedError|ConnectionRefusedError|UnicodeTranslateError|ConnectionResetError|ModuleNotFoundError|NotImplementedError|FloatingPointError|StopAsyncIteration|UnicodeDecodeError|DeprecationWarning|UnicodeEncodeError|NotADirectoryError|ProcessLookupError|ZeroDivisionError|IsADirectoryError|FileNotFoundError|UnboundLocalError|KeyboardInterrupt|ChildProcessError|EnvironmentError|IndentationError|InterruptedError|BlockingIOError|ArithmeticError|ConnectionError|BrokenPipeError|FileExistsError|ResourceWarning|PermissionError|RuntimeWarning|ReferenceError|AttributeError|AssertionError|UnicodeWarning|RecursionError|StopIteration|BaseException|OverflowError|SyntaxWarning|FutureWarning|GeneratorExit|ImportWarning|UnicodeError|TimeoutError|WindowsError|RuntimeError|BytesWarning|SystemError|UserWarning|MemoryError|ImportError|LookupError|BufferError|SyntaxError|SystemExit|ValueError|IndexError|NameError|Exception|TypeError|TabError|EOFError|KeyError|VMSError|Warning|OSError|IOError)\b">
+        <token type="NameException"/>
+      </rule>
+    </state>
+    <state name="classname">
+      <rule pattern="[_\p{L}][_\p{L}\p{N}]*">
+        <token type="NameClass"/>
+        <pop depth="1"/>
+      </rule>
+    </state>
+    <state name="import">
+      <rule pattern="(\s+)(as)(\s+)">
+        <bygroups>
+          <token type="Text"/>
+          <token type="Keyword"/>
+          <token type="Text"/>
+        </bygroups>
+      </rule>
+      <rule pattern="\.">
+        <token type="NameNamespace"/>
+      </rule>
+      <rule pattern="[_\p{L}][_\p{L}\p{N}]*">
+        <token type="NameNamespace"/>
+      </rule>
+      <rule pattern="(\s*)(,)(\s*)">
+        <bygroups>
+          <token type="Text"/>
+          <token type="Operator"/>
+          <token type="Text"/>
+        </bygroups>
+      </rule>
+      <rule>
+        <pop depth="1"/>
+      </rule>
+    </state>
+    <state name="tsqs">
+      <rule pattern="&#39;&#39;&#39;">
+        <token type="LiteralStringSingle"/>
+        <pop depth="1"/>
+      </rule>
+      <rule>
+        <include state="strings-single"/>
+      </rule>
+      <rule pattern="\n">
+        <token type="LiteralStringSingle"/>
+      </rule>
+    </state>
+    <state name="strings-double">
+      <rule pattern="%(\(\w+\))?[-#0 +]*([0-9]+|[*])?(\.([0-9]+|[*]))?[hlL]?[E-GXc-giorsaux%]">
+        <token type="LiteralStringInterpol"/>
+      </rule>
+      <rule pattern="\{((\w+)((\.\w+)|(\[[^\]]+\]))*)?(\![sra])?(\:(.?[&lt;&gt;=\^])?[-+ ]?#?0?(\d+)?,?(\.\d+)?[E-GXb-gnosx%]?)?\}">
+        <token type="LiteralStringInterpol"/>
+      </rule>
+      <rule pattern="[^\\\&#39;&#34;%{\n]+">
+        <token type="LiteralStringDouble"/>
+      </rule>
+      <rule pattern="[\&#39;&#34;\\]">
+        <token type="LiteralStringDouble"/>
+      </rule>
+      <rule pattern="%|(\{{1,2})">
+        <token type="LiteralStringDouble"/>
+      </rule>
+    </state>
+    <state name="tdqf">
+      <rule pattern="&#34;&#34;&#34;">
+        <token type="LiteralStringDouble"/>
+        <pop depth="1"/>
+      </rule>
+      <rule>
+        <include state="fstrings-double"/>
+      </rule>
+      <rule pattern="\n">
+        <token type="LiteralStringDouble"/>
+      </rule>
+    </state>
+    <state name="expr-inside-fstring-inner">
+      <rule pattern="[{([]">
+        <token type="Punctuation"/>
+        <push state="expr-inside-fstring-inner"/>
+      </rule>
+      <rule pattern="[])}]">
+        <token type="Punctuation"/>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern="\s+">
+        <token type="Text"/>
+      </rule>
+      <rule>
+        <include state="expr"/>
+      </rule>
+    </state>
+    <state name="sqs">
+      <rule pattern="&#39;">
+        <token type="LiteralStringSingle"/>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern="\\\\|\\&#39;|\\\n">
+        <token type="LiteralStringEscape"/>
+      </rule>
+      <rule>
+        <include state="strings-single"/>
+      </rule>
+    </state>
+    <state name="funcname">
+      <rule>
+        <include state="magicfuncs"/>
+      </rule>
+      <rule pattern="[_\p{L}][_\p{L}\p{N}]*">
+        <token type="NameFunction"/>
+        <pop depth="1"/>
+      </rule>
+      <rule>
+        <pop depth="1"/>
+      </rule>
+    </state>
+    <state name="expr-keywords">
+      <rule pattern="(yield from|async for|lambda|yield|await|else|for|if)\b">
+        <token type="Keyword"/>
+      </rule>
+      <rule pattern="(False|True|None)\b">
+        <token type="KeywordConstant"/>
+      </rule>
+    </state>
+    <state name="name">
+      <rule pattern="@[_\p{L}][_\p{L}\p{N}]*(\s*\.\s*[_\p{L}][_\p{L}\p{N}]*)*">
+        <token type="NameDecorator"/>
+      </rule>
+      <rule pattern="@">
+        <token type="Operator"/>
+      </rule>
+      <rule pattern="[_\p{L}][_\p{L}\p{N}]*">
+        <token type="Name"/>
+      </rule>
+    </state>
+    <state name="magicfuncs">
+      <rule pattern="(__instancecheck__|__subclasscheck__|__getattribute__|__length_hint__|__rfloordiv__|__ifloordiv__|__itruediv__|__contains__|__floordiv__|__rtruediv__|__reversed__|__setitem__|__complex__|__rdivmod__|__delattr__|__rmatmul__|__ilshift__|__prepare__|__delitem__|__rrshift__|__imatmul__|__rlshift__|__setattr__|__truediv__|__getitem__|__missing__|__getattr__|__irshift__|__rshift__|__format__|__invert__|__matmul__|__divmod__|__delete__|__aenter__|__lshift__|__await__|__bytes__|__anext__|__aiter__|__aexit__|__round__|__float__|__enter__|__index__|__iadd__|__ipow__|__rpow__|__iter__|__init__|__ixor__|__rmul__|__rmod__|__imul__|__imod__|__iand__|__hash__|__rsub__|__exit__|__rxor__|__bool__|__call__|__rand__|__next__|__radd__|__isub__|__repr__|__set__|__add__|__new__|__neg__|__xor__|__and__|__mul__|__mod__|__sub__|__len__|__str__|__ror__|__ior__|__pos__|__del__|__get__|__dir__|__abs__|__int__|__pow__|__eq__|__gt__|__le__|__lt__|__ne__|__or__|__ge__)\b">
+        <token type="NameFunctionMagic"/>
+      </rule>
+    </state>
+    <state name="root">
+      <rule pattern="\n">
+        <token type="Text"/>
+      </rule>
+      <rule pattern="^(\s*)([rRuUbB]{,2})(&#34;&#34;&#34;(?:.|\n)*?&#34;&#34;&#34;)">
+        <bygroups>
+          <token type="Text"/>
+          <token type="LiteralStringAffix"/>
+          <token type="LiteralStringDoc"/>
+        </bygroups>
+      </rule>
+      <rule pattern="^(\s*)([rRuUbB]{,2})(&#39;&#39;&#39;(?:.|\n)*?&#39;&#39;&#39;)">
+        <bygroups>
+          <token type="Text"/>
+          <token type="LiteralStringAffix"/>
+          <token type="LiteralStringDoc"/>
+        </bygroups>
+      </rule>
+      <rule pattern="\A#!.+$">
+        <token type="CommentHashbang"/>
+      </rule>
+      <rule pattern="#.*$">
+        <token type="CommentSingle"/>
+      </rule>
+      <rule pattern="\\\n">
+        <token type="Text"/>
+      </rule>
+      <rule pattern="\\">
+        <token type="Text"/>
+      </rule>
+      <rule>
+        <include state="keywords"/>
+      </rule>
+      <rule pattern="(def)((?:\s|\\\s)+)">
+        <bygroups>
+          <token type="Keyword"/>
+          <token type="Text"/>
+        </bygroups>
+        <push state="funcname"/>
+      </rule>
+      <rule pattern="(class)((?:\s|\\\s)+)">
+        <bygroups>
+          <token type="Keyword"/>
+          <token type="Text"/>
+        </bygroups>
+        <push state="classname"/>
+      </rule>
+      <rule pattern="(from)((?:\s|\\\s)+)">
+        <bygroups>
+          <token type="KeywordNamespace"/>
+          <token type="Text"/>
+        </bygroups>
+        <push state="fromimport"/>
+      </rule>
+      <rule pattern="(import)((?:\s|\\\s)+)">
+        <bygroups>
+          <token type="KeywordNamespace"/>
+          <token type="Text"/>
+        </bygroups>
+        <push state="import"/>
+      </rule>
+      <rule>
+        <include state="expr"/>
+      </rule>
+    </state>
+    <state name="fstrings-single">
+      <rule pattern="\}">
+        <token type="LiteralStringInterpol"/>
+      </rule>
+      <rule pattern="\{">
+        <token type="LiteralStringInterpol"/>
+        <push state="expr-inside-fstring"/>
+      </rule>
+      <rule pattern="[^\\\&#39;&#34;{}\n]+">
+        <token type="LiteralStringSingle"/>
+      </rule>
+      <rule pattern="[\&#39;&#34;\\]">
+        <token type="LiteralStringSingle"/>
+      </rule>
+    </state>
+    <state name="magicvars">
+      <rule pattern="(__annotations__|__kwdefaults__|__qualname__|__objclass__|__defaults__|__closure__|__globals__|__weakref__|__module__|__class__|__bases__|__slots__|__file__|__code__|__name__|__func__|__dict__|__self__|__mro__|__doc__)\b">
+        <token type="NameVariableMagic"/>
+      </rule>
+    </state>
+    <state name="tsqf">
+      <rule pattern="&#39;&#39;&#39;">
+        <token type="LiteralStringSingle"/>
+        <pop depth="1"/>
+      </rule>
+      <rule>
+        <include state="fstrings-single"/>
+      </rule>
+      <rule pattern="\n">
+        <token type="LiteralStringSingle"/>
+      </rule>
+    </state>
+    <state name="strings-single">
+      <rule pattern="%(\(\w+\))?[-#0 +]*([0-9]+|[*])?(\.([0-9]+|[*]))?[hlL]?[E-GXc-giorsaux%]">
+        <token type="LiteralStringInterpol"/>
+      </rule>
+      <rule pattern="\{((\w+)((\.\w+)|(\[[^\]]+\]))*)?(\![sra])?(\:(.?[&lt;&gt;=\^])?[-+ ]?#?0?(\d+)?,?(\.\d+)?[E-GXb-gnosx%]?)?\}">
+        <token type="LiteralStringInterpol"/>
+      </rule>
+      <rule pattern="[^\\\&#39;&#34;%{\n]+">
+        <token type="LiteralStringSingle"/>
+      </rule>
+      <rule pattern="[\&#39;&#34;\\]">
+        <token type="LiteralStringSingle"/>
+      </rule>
+      <rule pattern="%|(\{{1,2})">
+        <token type="LiteralStringSingle"/>
+      </rule>
+    </state>
+    <state name="rfstringescape">
+      <rule pattern="\{\{">
+        <token type="LiteralStringEscape"/>
+      </rule>
+      <rule pattern="\}\}">
+        <token type="LiteralStringEscape"/>
+      </rule>
+    </state>
+    <state name="sqf">
+      <rule pattern="&#39;">
+        <token type="LiteralStringSingle"/>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern="\\\\|\\&#39;|\\\n">
+        <token type="LiteralStringEscape"/>
+      </rule>
+      <rule>
+        <include state="fstrings-single"/>
+      </rule>
+    </state>
+    <state name="dqf">
+      <rule pattern="&#34;">
+        <token type="LiteralStringDouble"/>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern="\\\\|\\&#34;|\\\n">
+        <token type="LiteralStringEscape"/>
+      </rule>
+      <rule>
+        <include state="fstrings-double"/>
+      </rule>
+    </state>
+    <state name="expr-inside-fstring">
+      <rule pattern="[{([]">
+        <token type="Punctuation"/>
+        <push state="expr-inside-fstring-inner"/>
+      </rule>
+      <rule pattern="(=\s*)?(\![sraf])?\}">
+        <token type="LiteralStringInterpol"/>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern="(=\s*)?(\![sraf])?:">
+        <token type="LiteralStringInterpol"/>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern="\s+">
+        <token type="Text"/>
+      </rule>
+      <rule>
+        <include state="expr"/>
+      </rule>
+    </state>
+    <state name="tdqs">
+      <rule pattern="&#34;&#34;&#34;">
+        <token type="LiteralStringDouble"/>
+        <pop depth="1"/>
+      </rule>
+      <rule>
+        <include state="strings-double"/>
+      </rule>
+      <rule pattern="\n">
+        <token type="LiteralStringDouble"/>
+      </rule>
+    </state>
+    <state name="fstringescape">
+      <rule>
+        <include state="rfstringescape"/>
+      </rule>
+      <rule>
+        <include state="stringescape"/>
+      </rule>
+    </state>
+    <state name="stringescape">
+      <rule pattern="\\([\\abfnrtv&#34;\&#39;]|\n|N\{.*?\}|u[a-fA-F0-9]{4}|U[a-fA-F0-9]{8}|x[a-fA-F0-9]{2}|[0-7]{1,3})">
+        <token type="LiteralStringEscape"/>
+      </rule>
+    </state>
+  </rules>
+</lexer>
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/alecthomas/chroma/v2/lexers/embedded/python_2.xml","mode":420,"size":12671,"sha256":"6841d6f36b30f16aa83475820adb7157a61f2ab5a8649746b283477a7dc93b6b","index":0,"count":1,"encoding":"utf-8","payloadBytes":12671}
+<lexer>
+  <config>
+    <name>Python 2</name>
+    <alias>python2</alias>
+    <alias>py2</alias>
+    <mime_type>text/x-python2</mime_type>
+    <mime_type>application/x-python2</mime_type>
+  </config>
+  <rules>
+    <state name="tdqs">
+      <rule pattern="&#34;&#34;&#34;">
+        <token type="LiteralStringDouble"/>
+        <pop depth="1"/>
+      </rule>
+      <rule>
+        <include state="strings-double"/>
+      </rule>
+      <rule pattern="\n">
+        <token type="LiteralStringDouble"/>
+      </rule>
+    </state>
+    <state name="name">
+      <rule pattern="@[\w.]+">
+        <token type="NameDecorator"/>
+      </rule>
+      <rule pattern="[a-zA-Z_]\w*">
+        <token type="Name"/>
+      </rule>
+    </state>
+    <state name="magicfuncs">
+      <rule pattern="(__instancecheck__|__subclasscheck__|__getattribute__|__rfloordiv__|__ifloordiv__|__setslice__|__getslice__|__contains__|__reversed__|__floordiv__|__rtruediv__|__itruediv__|__delslice__|__rlshift__|__rrshift__|__delitem__|__rdivmod__|__nonzero__|__missing__|__delattr__|__setattr__|__irshift__|__complex__|__setitem__|__getitem__|__truediv__|__unicode__|__ilshift__|__getattr__|__delete__|__coerce__|__invert__|__lshift__|__divmod__|__rshift__|__enter__|__index__|__float__|__iadd__|__rsub__|__init__|__imul__|__rpow__|__repr__|__rmul__|__isub__|__iter__|__rmod__|__ixor__|__call__|__imod__|__long__|__hash__|__rxor__|__idiv__|__iand__|__rdiv__|__ipow__|__rcmp__|__rand__|__exit__|__radd__|__str__|__cmp__|__pos__|__pow__|__oct__|__new__|__neg__|__mul__|__mod__|__set__|__xor__|__sub__|__len__|__and__|__get__|__rop__|__add__|__ior__|__div__|__iop__|__int__|__abs__|__hex__|__ror__|__del__|__eq__|__or__|__ne__|__lt__|__le__|__ge__|__gt__|__op__)\b">
+        <token type="NameFunctionMagic"/>
+      </rule>
+    </state>
+    <state name="keywords">
+      <rule pattern="(yield from|continue|finally|lambda|assert|global|except|return|print|yield|while|break|raise|elif|pass|exec|else|with|try|for|del|as|if)\b">
+        <token type="Keyword"/>
+      </rule>
+    </state>
+    <state name="tsqs">
+      <rule pattern="&#39;&#39;&#39;">
+        <token type="LiteralStringSingle"/>
+        <pop depth="1"/>
+      </rule>
+      <rule>
+        <include state="strings-single"/>
+      </rule>
+      <rule pattern="\n">
+        <token type="LiteralStringSingle"/>
+      </rule>
+    </state>
+    <state name="stringescape">
+      <rule pattern="\\([\\abfnrtv&#34;\&#39;]|\n|N\{.*?\}|u[a-fA-F0-9]{4}|U[a-fA-F0-9]{8}|x[a-fA-F0-9]{2}|[0-7]{1,3})">
+        <token type="LiteralStringEscape"/>
+      </rule>
+    </state>
+    <state name="numbers">
+      <rule pattern="(\d+\.\d*|\d*\.\d+)([eE][+-]?[0-9]+)?j?">
+        <token type="LiteralNumberFloat"/>
+      </rule>
+      <rule pattern="\d+[eE][+-]?[0-9]+j?">
+        <token type="LiteralNumberFloat"/>
+      </rule>
+      <rule pattern="0[0-7]+j?">
+        <token type="LiteralNumberOct"/>
+      </rule>
+      <rule pattern="0[bB][01]+">
+        <token type="LiteralNumberBin"/>
+      </rule>
+      <rule pattern="0[xX][a-fA-F0-9]+">
+        <token type="LiteralNumberHex"/>
+      </rule>
+      <rule pattern="\d+L">
+        <token type="LiteralNumberIntegerLong"/>
+      </rule>
+      <rule pattern="\d+j?">
+        <token type="LiteralNumberInteger"/>
+      </rule>
+    </state>
+    <state name="import">
+      <rule pattern="(?:[ \t]|\\\n)+">
+        <token type="Text"/>
+      </rule>
+      <rule pattern="as\b">
+        <token type="KeywordNamespace"/>
+      </rule>
+      <rule pattern=",">
+        <token type="Operator"/>
+      </rule>
+      <rule pattern="[a-zA-Z_][\w.]*">
+        <token type="NameNamespace"/>
+      </rule>
+      <rule>
+        <pop depth="1"/>
+      </rule>
+    </state>
+    <state name="magicvars">
+      <rule pattern="(__metaclass__|__defaults__|__globals__|__closure__|__weakref__|__module__|__slots__|__class__|__bases__|__file__|__func__|__dict__|__name__|__self__|__code__|__mro__|__doc__)\b">
+        <token type="NameVariableMagic"/>
+      </rule>
+    </state>
+    <state name="fromimport">
+      <rule pattern="(?:[ \t]|\\\n)+">
+        <token type="Text"/>
+      </rule>
+      <rule pattern="import\b">
+        <token type="KeywordNamespace"/>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern="None\b">
+        <token type="NameBuiltinPseudo"/>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern="[a-zA-Z_.][\w.]*">
+        <token type="NameNamespace"/>
+      </rule>
+      <rule>
+        <pop depth="1"/>
+      </rule>
+    </state>
+    <state name="strings-single">
+      <rule pattern="%(\(\w+\))?[-#0 +]*([0-9]+|[*])?(\.([0-9]+|[*]))?[hlL]?[E-GXc-giorsux%]">
+        <token type="LiteralStringInterpol"/>
+      </rule>
+      <rule pattern="[^\\\&#39;&#34;%\n]+">
+        <token type="LiteralStringSingle"/>
+      </rule>
+      <rule pattern="[\&#39;&#34;\\]">
+        <token type="LiteralStringSingle"/>
+      </rule>
+      <rule pattern="%">
+        <token type="LiteralStringSingle"/>
+      </rule>
+    </state>
+    <state name="funcname">
+      <rule>
+        <include state="magicfuncs"/>
+      </rule>
+      <rule pattern="[a-zA-Z_]\w*">
+        <token type="NameFunction"/>
+        <pop depth="1"/>
+      </rule>
+      <rule>
+        <pop depth="1"/>
+      </rule>
+    </state>
+    <state name="classname">
+      <rule pattern="[a-zA-Z_]\w*">
+        <token type="NameClass"/>
+        <pop depth="1"/>
+      </rule>
+    </state>
+    <state name="backtick">
+      <rule pattern="`.*?`">
+        <token type="LiteralStringBacktick"/>
+      </rule>
+    </state>
+    <state name="strings-double">
+      <rule pattern="%(\(\w+\))?[-#0 +]*([0-9]+|[*])?(\.([0-9]+|[*]))?[hlL]?[E-GXc-giorsux%]">
+        <token type="LiteralStringInterpol"/>
+      </rule>
+      <rule pattern="[^\\\&#39;&#34;%\n]+">
+        <token type="LiteralStringDouble"/>
+      </rule>
+      <rule pattern="[\&#39;&#34;\\]">
+        <token type="LiteralStringDouble"/>
+      </rule>
+      <rule pattern="%">
+        <token type="LiteralStringDouble"/>
+      </rule>
+    </state>
+    <state name="dqs">
+      <rule pattern="&#34;">
+        <token type="LiteralStringDouble"/>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern="\\\\|\\&#34;|\\\n">
+        <token type="LiteralStringEscape"/>
+      </rule>
+      <rule>
+        <include state="strings-double"/>
+      </rule>
+    </state>
+    <state name="root">
+      <rule pattern="\n">
+        <token type="Text"/>
+      </rule>
+      <rule pattern="^(\s*)([rRuUbB]{,2})(&#34;&#34;&#34;(?:.|\n)*?&#34;&#34;&#34;)">
+        <bygroups>
+          <token type="Text"/>
+          <token type="LiteralStringAffix"/>
+          <token type="LiteralStringDoc"/>
+        </bygroups>
+      </rule>
+      <rule pattern="^(\s*)([rRuUbB]{,2})(&#39;&#39;&#39;(?:.|\n)*?&#39;&#39;&#39;)">
+        <bygroups>
+          <token type="Text"/>
+          <token type="LiteralStringAffix"/>
+          <token type="LiteralStringDoc"/>
+        </bygroups>
+      </rule>
+      <rule pattern="[^\S\n]+">
+        <token type="Text"/>
+      </rule>
+      <rule pattern="\A#!.+$">
+        <token type="CommentHashbang"/>
+      </rule>
+      <rule pattern="#.*$">
+        <token type="CommentSingle"/>
+      </rule>
+      <rule pattern="[]{}:(),;[]">
+        <token type="Punctuation"/>
+      </rule>
+      <rule pattern="\\\n">
+        <token type="Text"/>
+      </rule>
+      <rule pattern="\\">
+        <token type="Text"/>
+      </rule>
+      <rule pattern="(in|is|and|or|not)\b">
+        <token type="OperatorWord"/>
+      </rule>
+      <rule pattern="!=|==|&lt;&lt;|&gt;&gt;|[-~+/*%=&lt;&gt;&amp;^|.]">
+        <token type="Operator"/>
+      </rule>
+      <rule>
+        <include state="keywords"/>
+      </rule>
+      <rule pattern="(def)((?:\s|\\\s)+)">
+        <bygroups>
+          <token type="Keyword"/>
+          <token type="Text"/>
+        </bygroups>
+        <push state="funcname"/>
+      </rule>
+      <rule pattern="(class)((?:\s|\\\s)+)">
+        <bygroups>
+          <token type="Keyword"/>
+          <token type="Text"/>
+        </bygroups>
+        <push state="classname"/>
+      </rule>
+      <rule pattern="(from)((?:\s|\\\s)+)">
+        <bygroups>
+          <token type="KeywordNamespace"/>
+          <token type="Text"/>
+        </bygroups>
+        <push state="fromimport"/>
+      </rule>
+      <rule pattern="(import)((?:\s|\\\s)+)">
+        <bygroups>
+          <token type="KeywordNamespace"/>
+          <token type="Text"/>
+        </bygroups>
+        <push state="import"/>
+      </rule>
+      <rule>
+        <include state="builtins"/>
+      </rule>
+      <rule>
+        <include state="magicfuncs"/>
+      </rule>
+      <rule>
+        <include state="magicvars"/>
+      </rule>
+      <rule>
+        <include state="backtick"/>
+      </rule>
+      <rule pattern="([rR]|[uUbB][rR]|[rR][uUbB])(&#34;&#34;&#34;)">
+        <bygroups>
+          <token type="LiteralStringAffix"/>
+          <token type="LiteralStringDouble"/>
+        </bygroups>
+        <push state="tdqs"/>
+      </rule>
+      <rule pattern="([rR]|[uUbB][rR]|[rR][uUbB])(&#39;&#39;&#39;)">
+        <bygroups>
+          <token type="LiteralStringAffix"/>
+          <token type="LiteralStringSingle"/>
+        </bygroups>
+        <push state="tsqs"/>
+      </rule>
+      <rule pattern="([rR]|[uUbB][rR]|[rR][uUbB])(&#34;)">
+        <bygroups>
+          <token type="LiteralStringAffix"/>
+          <token type="LiteralStringDouble"/>
+        </bygroups>
+        <push state="dqs"/>
+      </rule>
+      <rule pattern="([rR]|[uUbB][rR]|[rR][uUbB])(&#39;)">
+        <bygroups>
+          <token type="LiteralStringAffix"/>
+          <token type="LiteralStringSingle"/>
+        </bygroups>
+        <push state="sqs"/>
+      </rule>
+      <rule pattern="([uUbB]?)(&#34;&#34;&#34;)">
+        <bygroups>
+          <token type="LiteralStringAffix"/>
+          <token type="LiteralStringDouble"/>
+        </bygroups>
+        <combined state="stringescape" state="tdqs"/>
+      </rule>
+      <rule pattern="([uUbB]?)(&#39;&#39;&#39;)">
+        <bygroups>
+          <token type="LiteralStringAffix"/>
+          <token type="LiteralStringSingle"/>
+        </bygroups>
+        <combined state="stringescape" state="tsqs"/>
+      </rule>
+      <rule pattern="([uUbB]?)(&#34;)">
+        <bygroups>
+          <token type="LiteralStringAffix"/>
+          <token type="LiteralStringDouble"/>
+        </bygroups>
+        <combined state="stringescape" state="dqs"/>
+      </rule>
+      <rule pattern="([uUbB]?)(&#39;)">
+        <bygroups>
+          <token type="LiteralStringAffix"/>
+          <token type="LiteralStringSingle"/>
+        </bygroups>
+        <combined state="stringescape" state="sqs"/>
+      </rule>
+      <rule>
+        <include state="name"/>
+      </rule>
+      <rule>
+        <include state="numbers"/>
+      </rule>
+    </state>
+    <state name="sqs">
+      <rule pattern="&#39;">
+        <token type="LiteralStringSingle"/>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern="\\\\|\\&#39;|\\\n">
+        <token type="LiteralStringEscape"/>
+      </rule>
+      <rule>
+        <include state="strings-single"/>
+      </rule>
+    </state>
+    <state name="builtins">
+      <rule pattern="(?&lt;!\.)(staticmethod|classmethod|__import__|isinstance|basestring|issubclass|frozenset|raw_input|bytearray|enumerate|property|callable|reversed|execfile|hasattr|setattr|compile|complex|delattr|unicode|globals|getattr|unichr|reduce|xrange|buffer|intern|filter|locals|divmod|coerce|sorted|reload|object|slice|round|float|super|input|bytes|apply|tuple|range|iter|dict|long|type|hash|vars|next|file|exit|open|repr|eval|bool|list|bin|pow|zip|ord|oct|min|set|any|max|map|all|len|sum|int|dir|hex|chr|abs|cmp|str|id)\b">
+        <token type="NameBuiltin"/>
+      </rule>
+      <rule pattern="(?&lt;!\.)(self|None|Ellipsis|NotImplemented|False|True|cls)\b">
+        <token type="NameBuiltinPseudo"/>
+      </rule>
+      <rule pattern="(?&lt;!\.)(PendingDeprecationWarning|UnicodeTranslateError|NotImplementedError|UnicodeDecodeError|DeprecationWarning|UnicodeEncodeError|FloatingPointError|ZeroDivisionError|UnboundLocalError|KeyboardInterrupt|EnvironmentError|IndentationError|OverflowWarning|ArithmeticError|ReferenceError|AttributeError|AssertionError|RuntimeWarning|UnicodeWarning|GeneratorExit|SyntaxWarning|StandardError|BaseException|OverflowError|FutureWarning|ImportWarning|StopIteration|UnicodeError|WindowsError|RuntimeError|ImportError|UserWarning|LookupError|SyntaxError|SystemError|MemoryError|SystemExit|ValueError|IndexError|NameError|Exception|TypeError|EOFError|KeyError|VMSError|TabError|IOError|Warning|OSError)\b">
+        <token type="NameException"/>
+      </rule>
+    </state>
+  </rules>
+</lexer>
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/alecthomas/chroma/v2/lexers/embedded/qbasic.xml","mode":420,"size":6617,"sha256":"e266b20404762afb3f55ecf1b9554797b317cdddf3666ab7ef0e88f3d3b7b04c","index":0,"count":1,"encoding":"utf-8","payloadBytes":6617}
+<lexer>
+  <config>
+    <name>QBasic</name>
+    <alias>qbasic</alias>
+    <alias>basic</alias>
+    <filename>*.BAS</filename>
+    <filename>*.bas</filename>
+    <mime_type>text/basic</mime_type>
+  </config>
+  <rules>
+    <state name="root">
+      <rule pattern="\n+">
+        <token type="Text"/>
+      </rule>
+      <rule pattern="\s+">
+        <token type="TextWhitespace"/>
+      </rule>
+      <rule pattern="^(\s*)(\d*)(\s*)(REM .*)$">
+        <bygroups>
+          <token type="TextWhitespace"/>
+          <token type="NameLabel"/>
+          <token type="TextWhitespace"/>
+          <token type="CommentSingle"/>
+        </bygroups>
+      </rule>
+      <rule pattern="^(\s*)(\d+)(\s*)">
+        <bygroups>
+          <token type="TextWhitespace"/>
+          <token type="NameLabel"/>
+          <token type="TextWhitespace"/>
+        </bygroups>
+      </rule>
+      <rule pattern="(?=[\s]*)(\w+)(?=[\s]*=)">
+        <token type="NameVariableGlobal"/>
+      </rule>
+      <rule pattern="(?=[^&#34;]*)\&#39;.*$">
+        <token type="CommentSingle"/>
+      </rule>
+      <rule pattern="&#34;[^\n&#34;]*&#34;">
+        <token type="LiteralStringDouble"/>
+      </rule>
+      <rule pattern="(END)(\s+)(FUNCTION|IF|SELECT|SUB)">
+        <bygroups>
+          <token type="KeywordReserved"/>
+          <token type="TextWhitespace"/>
+          <token type="KeywordReserved"/>
+        </bygroups>
+      </rule>
+      <rule pattern="(DECLARE)(\s+)([A-Z]+)(\s+)(\S+)">
+        <bygroups>
+          <token type="KeywordDeclaration"/>
+          <token type="TextWhitespace"/>
+          <token type="NameVariable"/>
+          <token type="TextWhitespace"/>
+          <token type="Name"/>
+        </bygroups>
+      </rule>
+      <rule pattern="(DIM)(\s+)(SHARED)(\s+)([^\s(]+)">
+        <bygroups>
+          <token type="KeywordDeclaration"/>
+          <token type="TextWhitespace"/>
+          <token type="NameVariable"/>
+          <token type="TextWhitespace"/>
+          <token type="NameVariableGlobal"/>
+        </bygroups>
+      </rule>
+      <rule pattern="(DIM)(\s+)([^\s(]+)">
+        <bygroups>
+          <token type="KeywordDeclaration"/>
+          <token type="TextWhitespace"/>
+          <token type="NameVariableGlobal"/>
+        </bygroups>
+      </rule>
+      <rule pattern="^(\s*)([a-zA-Z_]+)(\s*)(\=)">
+        <bygroups>
+          <token type="TextWhitespace"/>
+          <token type="NameVariableGlobal"/>
+          <token type="TextWhitespace"/>
+          <token type="Operator"/>
+        </bygroups>
+      </rule>
+      <rule pattern="(GOTO|GOSUB)(\s+)(\w+\:?)">
+        <bygroups>
+          <token type="KeywordReserved"/>
+          <token type="TextWhitespace"/>
+          <token type="NameLabel"/>
+        </bygroups>
+      </rule>
+      <rule pattern="(SUB)(\s+)(\w+\:?)">
+        <bygroups>
+          <token type="KeywordReserved"/>
+          <token type="TextWhitespace"/>
+          <token type="NameLabel"/>
+        </bygroups>
+      </rule>
+      <rule>
+        <include state="declarations"/>
+      </rule>
+      <rule>
+        <include state="functions"/>
+      </rule>
+      <rule>
+        <include state="metacommands"/>
+      </rule>
+      <rule>
+        <include state="operators"/>
+      </rule>
+      <rule>
+        <include state="statements"/>
+      </rule>
+      <rule>
+        <include state="keywords"/>
+      </rule>
+      <rule pattern="[a-zA-Z_]\w*[$@#&amp;!]">
+        <token type="NameVariableGlobal"/>
+      </rule>
+      <rule pattern="[a-zA-Z_]\w*\:">
+        <token type="NameLabel"/>
+      </rule>
+      <rule pattern="\-?\d*\.\d+[@|#]?">
+        <token type="LiteralNumberFloat"/>
+      </rule>
+      <rule pattern="\-?\d+[@|#]">
+        <token type="LiteralNumberFloat"/>
+      </rule>
+      <rule pattern="\-?\d+#?">
+        <token type="LiteralNumberIntegerLong"/>
+      </rule>
+      <rule pattern="\-?\d+#?">
+        <token type="LiteralNumberInteger"/>
+      </rule>
+      <rule pattern="!=|==|:=|\.=|&lt;&lt;|&gt;&gt;|[-~+/\\*%=&lt;&gt;&amp;^|?:!.]">
+        <token type="Operator"/>
+      </rule>
+      <rule pattern="[\[\]{}(),;]">
+        <token type="Punctuation"/>
+      </rule>
+      <rule pattern="[\w]+">
+        <token type="NameVariableGlobal"/>
+      </rule>
+    </state>
+    <state name="declarations">
+      <rule pattern="\b(DATA|LET)(?=\(|\b)">
+        <token type="KeywordDeclaration"/>
+      </rule>
+    </state>
+    <state name="functions">
+      <rule pattern="\b(ABS|ASC|ATN|CDBL|CHR\$|CINT|CLNG|COMMAND\$|COS|CSNG|CSRLIN|CVD|CVDMBF|CVI|CVL|CVS|CVSMBF|DATE\$|ENVIRON\$|EOF|ERDEV|ERDEV\$|ERL|ERR|EXP|FILEATTR|FIX|FRE|FREEFILE|HEX\$|INKEY\$|INP|INPUT\$|INSTR|INT|IOCTL\$|LBOUND|LCASE\$|LEFT\$|LEN|LOC|LOF|LOG|LPOS|LTRIM\$|MID\$|MKD\$|MKDMBF\$|MKI\$|MKL\$|MKS\$|MKSMBF\$|OCT\$|PEEK|PEN|PLAY|PMAP|POINT|POS|RIGHT\$|RND|RTRIM\$|SADD|SCREEN|SEEK|SETMEM|SGN|SIN|SPACE\$|SPC|SQR|STICK|STR\$|STRIG|STRING\$|TAB|TAN|TIME\$|TIMER|UBOUND|UCASE\$|VAL|VARPTR|VARPTR\$|VARSEG)(?=\(|\b)">
+        <token type="KeywordReserved"/>
+      </rule>
+    </state>
+    <state name="metacommands">
+      <rule pattern="\b(\$DYNAMIC|\$INCLUDE|\$STATIC)(?=\(|\b)">
+        <token type="KeywordConstant"/>
+      </rule>
+    </state>
+    <state name="operators">
+      <rule pattern="\b(AND|EQV|IMP|NOT|OR|XOR)(?=\(|\b)">
+        <token type="OperatorWord"/>
+      </rule>
+    </state>
+    <state name="statements">
+      <rule pattern="\b(BEEP|BLOAD|BSAVE|CALL|CALL\ ABSOLUTE|CALL\ INTERRUPT|CALLS|CHAIN|CHDIR|CIRCLE|CLEAR|CLOSE|CLS|COLOR|COM|COMMON|CONST|DATA|DATE\$|DECLARE|DEF\ FN|DEF\ SEG|DEFDBL|DEFINT|DEFLNG|DEFSNG|DEFSTR|DEF|DIM|DO|LOOP|DRAW|END|ENVIRON|ERASE|ERROR|EXIT|FIELD|FILES|FOR|NEXT|FUNCTION|GET|GOSUB|GOTO|IF|THEN|INPUT|INPUT\ \#|IOCTL|KEY|KEY|KILL|LET|LINE|LINE\ INPUT|LINE\ INPUT\ \#|LOCATE|LOCK|UNLOCK|LPRINT|LSET|MID\$|MKDIR|NAME|ON\ COM|ON\ ERROR|ON\ KEY|ON\ PEN|ON\ PLAY|ON\ STRIG|ON\ TIMER|ON\ UEVENT|ON|OPEN|OPEN\ COM|OPTION\ BASE|OUT|PAINT|PALETTE|PCOPY|PEN|PLAY|POKE|PRESET|PRINT|PRINT\ \#|PRINT\ USING|PSET|PUT|PUT|RANDOMIZE|READ|REDIM|REM|RESET|RESTORE|RESUME|RETURN|RMDIR|RSET|RUN|SCREEN|SEEK|SELECT\ CASE|SHARED|SHELL|SLEEP|SOUND|STATIC|STOP|STRIG|SUB|SWAP|SYSTEM|TIME\$|TIMER|TROFF|TRON|TYPE|UEVENT|UNLOCK|VIEW|WAIT|WHILE|WEND|WIDTH|WINDOW|WRITE)\b">
+        <token type="KeywordReserved"/>
+      </rule>
+    </state>
+    <state name="keywords">
+      <rule pattern="\b(ACCESS|ALIAS|ANY|APPEND|AS|BASE|BINARY|BYVAL|CASE|CDECL|DOUBLE|ELSE|ELSEIF|ENDIF|INTEGER|IS|LIST|LOCAL|LONG|LOOP|MOD|NEXT|OFF|ON|OUTPUT|RANDOM|SIGNAL|SINGLE|STEP|STRING|THEN|TO|UNTIL|USING|WEND)\b">
+        <token type="Keyword"/>
+      </rule>
+    </state>
+  </rules>
+</lexer>
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/alecthomas/chroma/v2/lexers/embedded/qml.xml","mode":420,"size":3928,"sha256":"484de217ed0ecefbc94a88a2d2c296dc443d2d9fc75f38b5bf65cfb21e02b8e6","index":0,"count":1,"encoding":"utf-8","payloadBytes":3928}
+<lexer>
+  <config>
+    <name>QML</name>
+    <alias>qml</alias>
+    <alias>qbs</alias>
+    <filename>*.qml</filename>
+    <filename>*.qbs</filename>
+    <mime_type>application/x-qml</mime_type>
+    <mime_type>application/x-qt.qbs+qml</mime_type>
+    <dot_all>true</dot_all>
+  </config>
+  <rules>
+    <state name="root">
+      <rule pattern="^(?=\s|/|&lt;!--)">
+        <token type="Text"/>
+        <push state="slashstartsregex"/>
+      </rule>
+      <rule>
+        <include state="commentsandwhitespace"/>
+      </rule>
+      <rule pattern="\+\+|--|~|&amp;&amp;|\?|:|\|\||\\(?=\n)|(&lt;&lt;|&gt;&gt;&gt;?|==?|!=?|[-&lt;&gt;+*%&amp;|^/])=?">
+        <token type="Operator"/>
+        <push state="slashstartsregex"/>
+      </rule>
+      <rule pattern="[{(\[;,]">
+        <token type="Punctuation"/>
+        <push state="slashstartsregex"/>
+      </rule>
+      <rule pattern="[})\].]">
+        <token type="Punctuation"/>
+      </rule>
+      <rule pattern="\bid\s*:\s*[A-Za-z][\w.]*">
+        <token type="KeywordDeclaration"/>
+        <push state="slashstartsregex"/>
+      </rule>
+      <rule pattern="\b[A-Za-z][\w.]*\s*:">
+        <token type="Keyword"/>
+        <push state="slashstartsregex"/>
+      </rule>
+      <rule pattern="(for|in|while|do|break|return|continue|switch|case|default|if|else|throw|try|catch|finally|new|delete|typeof|instanceof|void|this)\b">
+        <token type="Keyword"/>
+        <push state="slashstartsregex"/>
+      </rule>
+      <rule pattern="(var|let|with|function)\b">
+        <token type="KeywordDeclaration"/>
+        <push state="slashstartsregex"/>
+      </rule>
+      <rule pattern="(abstract|boolean|byte|char|class|const|debugger|double|enum|export|extends|final|float|goto|implements|import|int|interface|long|native|package|private|protected|public|short|static|super|synchronized|throws|transient|volatile)\b">
+        <token type="KeywordReserved"/>
+      </rule>
+      <rule pattern="(true|false|null|NaN|Infinity|undefined)\b">
+        <token type="KeywordConstant"/>
+      </rule>
+      <rule pattern="(Array|Boolean|Date|Error|Function|Math|netscape|Number|Object|Packages|RegExp|String|sun|decodeURI|decodeURIComponent|encodeURI|encodeURIComponent|Error|eval|isFinite|isNaN|parseFloat|parseInt|document|this|window)\b">
+        <token type="NameBuiltin"/>
+      </rule>
+      <rule pattern="[$a-zA-Z_]\w*">
+        <token type="NameOther"/>
+      </rule>
+      <rule pattern="[0-9][0-9]*\.[0-9]+([eE][0-9]+)?[fd]?">
+        <token type="LiteralNumberFloat"/>
+      </rule>
+      <rule pattern="0x[0-9a-fA-F]+">
+        <token type="LiteralNumberHex"/>
+      </rule>
+      <rule pattern="[0-9]+">
+        <token type="LiteralNumberInteger"/>
+      </rule>
+      <rule pattern="&#34;(\\\\|\\&#34;|[^&#34;])*&#34;">
+        <token type="LiteralStringDouble"/>
+      </rule>
+      <rule pattern="&#39;(\\\\|\\&#39;|[^&#39;])*&#39;">
+        <token type="LiteralStringSingle"/>
+      </rule>
+    </state>
+    <state name="commentsandwhitespace">
+      <rule pattern="\s+">
+        <token type="Text"/>
+      </rule>
+      <rule pattern="&lt;!--">
+        <token type="Comment"/>
+      </rule>
+      <rule pattern="//.*?\n">
+        <token type="CommentSingle"/>
+      </rule>
+      <rule pattern="/\*.*?\*/">
+        <token type="CommentMultiline"/>
+      </rule>
+    </state>
+    <state name="slashstartsregex">
+      <rule>
+        <include state="commentsandwhitespace"/>
+      </rule>
+      <rule pattern="/(\\.|[^[/\\\n]|\[(\\.|[^\]\\\n])*])+/([gim]+\b|\B)">
+        <token type="LiteralStringRegex"/>
+        <pop depth="1"/>
+      </rule>
+      <rule pattern="(?=/)">
+        <token type="Text"/>
+        <push state="#pop" state="badregex"/>
+      </rule>
+      <rule>
+        <pop depth="1"/>
+      </rule>
+    </state>
+    <state name="badregex">
+      <rule pattern="\n">
+        <token type="Text"/>
+        <pop depth="1"/>
+      </rule>
+    </state>
+  </rules>
+</lexer>
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/alecthomas/chroma/v2/lexers/embedded/r.xml","mode":420,"size":3754,"sha256":"45f91ffee93153798074a51c8d993ad1912ee03760af36800f85ce33d510ce00","index":0,"count":1,"encoding":"utf-8","payloadBytes":3754}
+<lexer>
+  <config>
+    <name>R</name>
+    <alias>splus</alias>
+    <alias>s</alias>
+    <alias>r</alias>
+    <filename>*.S</filename>
+    <filename>*.R</filename>
+    <filename>*.r</filename>
+    <filename>.Rhistory</filename>
+    <filename>.Rprofile</filename>
+    <filename>.Renviron</filename>
+    <mime_type>text/S-plus</mime_type>
+    <mime_type>text/S</mime_type>
+    <mime_type>text/x-r-source</mime_type>
+    <mime_type>text/x-r</mime_type>
+    <mime_type>text/x-R</mime_type>
+    <mime_type>text/x-r-history</mime_type>
+    <mime_type>text/x-r-profile</mime_type>
+    <priority>0.1</priority> <!-- higher priority than Rebol -->
+  </config>
+  <rules>
+    <state name="numbers">
+      <rule pattern="0[xX][a-fA-F0-9]+([pP][0-9]+)?[Li]?">
+        <token type="LiteralNumberHex"/>
+      </rule>
+      <rule pattern="[+-]?([0-9]+(\.[0-9]+)?|\.[0-9]+|\.)([eE][+-]?[0-9]+)?[Li]?">
+        <token type="LiteralNumber"/>
+      </rule>
+    </state>
+    <state name="operators">
+      <rule pattern="&lt;&lt;?-|-&gt;&gt;?|-|==|&lt;=|&gt;=|&lt;|&gt;|&amp;&amp;?|!=|\|\|?|\?">
+        <token type="Operator"/>
+      </rule>
+      <rule pattern="\*|\+|\^|/|!|%[^%]*%|=|~|\$|@|:{1,3}">
+        <token type="Operator"/>
+      </rule>
+    </state>
+    <state name="root">
+      <rule>
+        <include state="keywords"/>
+      </rule>
+      <rule pattern="((?:`[^`\\]*(?:\\.[^`\\]*)*`)|(?:(?:[a-zA-z]|[_.][^0-9])[\w_.]*))\s*(?=\()">
+        <token type="NameFunction"/>
+      </rule>
+      <rule>
+        <include state="statements"/>
+      </rule>
+      <rule pattern="\{|\}">
+        <token type="Punctuation"/>
+      </rule>
+      <rule pattern=".">
+        <token type="Text"/>
+      </rule>
+    </state>
+    <state name="valid_name">
+      <rule pattern="(?:`[^`\\]*(?:\\.[^`\\]*)*`)|(?:(?:[a-zA-z]|[_.][^0-9])[\w_.]*)">
+        <token type="Name"/>
+      </rule>
+    </state>
+    <state name="keywords">
+      <rule pattern="(if|else|for|while|repeat|in|next|break|return|switch|function)(?![\w.])">
+        <token type="KeywordReserved"/>
+      </rule>
+    </state>
+    <state name="builtin_symbols">
+      <rule pattern="(NULL|NA(_(integer|real|complex|character)_)?|letters|LETTERS|Inf|TRUE|FALSE|NaN|pi|\.\.(\.|[0-9]+))(?![\w.])">
+        <token type="KeywordConstant"/>
+      </rule>
+      <rule pattern="(T|F)\b">
+        <token type="NameBuiltinPseudo"/>
+      </rule>
+    </state>
+    <state name="string_squote">
+      <rule pattern="([^\&#39;\\]|\\.)*\&#39;">
+        <token type="LiteralString"/>
+        <pop depth="1"/>
+      </rule>
+    </state>
+    <state name="comments">
+      <rule pattern="#.*$">
+        <token type="CommentSingle"/>
+      </rule>
+    </state>
+    <state name="punctuation">
+      <rule pattern="\[{1,2}|\]{1,2}|\(|\)|;|,">
+        <token type="Punctuation"/>
+      </rule>
+    </state>
+    <state name="statements">
+      <rule>
+        <include state="comments"/>
+      </rule>
+      <rule pattern="\s+">
+        <token type="Text"/>
+      </rule>
+      <rule pattern="\&#39;">
+        <token type="LiteralString"/>
+        <push state="string_squote"/>
+      </rule>
+      <rule pattern="\&#34;">
+        <token type="LiteralString"/>
+        <push state="string_dquote"/>
+      </rule>
+      <rule>
+        <include state="builtin_symbols"/>
+      </rule>
+      <rule>
+        <include state="valid_name"/>
+      </rule>
+      <rule>
+        <include state="numbers"/>
+      </rule>
+      <rule>
+        <include state="punctuation"/>
+      </rule>
+      <rule>
+        <include state="operators"/>
+      </rule>
+    </state>
+    <state name="string_dquote">
+      <rule pattern="([^&#34;\\]|\\.)*&#34;">
+        <token type="LiteralString"/>
+        <pop depth="1"/>
+      </rule>
+    </state>
+  </rules>
+</lexer>
+@@END
 @@PORTABLE {"path":"third_party/wails/vendor/github.com/alecthomas/chroma/v2/lexers/embedded/racket.xml","mode":420,"size":49461,"sha256":"d4a8fe9e50119e74071a98ca0dcdec6a1928cefbb6f8818574453573a2da5f82","index":0,"count":2,"encoding":"utf-8","payloadBytes":48010}
 <lexer>
   <config>
@@ -155144,3056 +156518,6 @@ func (w *limitedWriter) WriteString(s string) (int, error) {
 
 func (w *limitedWriter) Bytes() []byte {
 	return w.buf[:w.off]
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/itchyny/gojq/query.go","mode":420,"size":19569,"sha256":"d170b4b859b563103f7c072de46027f9c73ea1016bea15dcc96b168d7b5f03ec","index":0,"count":1,"encoding":"utf-8","payloadBytes":19569}
-package gojq
-
-import (
-	"context"
-	"strings"
-)
-
-// Query represents the abstract syntax tree of a jq query.
-type Query struct {
-	Meta     *ConstObject
-	Imports  []*Import
-	FuncDefs []*FuncDef
-	Term     *Term
-	Left     *Query
-	Op       Operator
-	Right    *Query
-	Func     string
-}
-
-// Run the query.
-//
-// It is safe to call this method in goroutines, to reuse a parsed [*Query].
-// But for arguments, do not give values sharing same data between goroutines.
-func (e *Query) Run(v any) Iter {
-	return e.RunWithContext(context.Background(), v)
-}
-
-// RunWithContext runs the query with context.
-func (e *Query) RunWithContext(ctx context.Context, v any) Iter {
-	code, err := Compile(e)
-	if err != nil {
-		return NewIter(err)
-	}
-	return code.RunWithContext(ctx, v)
-}
-
-func (e *Query) String() string {
-	var s strings.Builder
-	e.writeTo(&s)
-	return s.String()
-}
-
-func (e *Query) writeTo(s *strings.Builder) {
-	if e.Meta != nil {
-		s.WriteString("module ")
-		e.Meta.writeTo(s)
-		s.WriteString(";\n")
-	}
-	for _, im := range e.Imports {
-		im.writeTo(s)
-	}
-	for i, fd := range e.FuncDefs {
-		if i > 0 {
-			s.WriteByte(' ')
-		}
-		fd.writeTo(s)
-	}
-	if len(e.FuncDefs) > 0 {
-		s.WriteByte(' ')
-	}
-	if e.Func != "" {
-		s.WriteString(e.Func)
-	} else if e.Term != nil {
-		e.Term.writeTo(s)
-	} else if e.Right != nil {
-		e.Left.writeTo(s)
-		if e.Op == OpComma {
-			s.WriteString(", ")
-		} else {
-			s.WriteByte(' ')
-			s.WriteString(e.Op.String())
-			s.WriteByte(' ')
-		}
-		e.Right.writeTo(s)
-	}
-}
-
-func (e *Query) minify() {
-	for _, e := range e.FuncDefs {
-		e.Minify()
-	}
-	if e.Term != nil {
-		if name := e.Term.toFunc(); name != "" {
-			e.Term = nil
-			e.Func = name
-		} else {
-			e.Term.minify()
-		}
-	} else if e.Right != nil {
-		e.Left.minify()
-		e.Right.minify()
-	}
-}
-
-func (e *Query) toIndexKey() any {
-	if e.Term == nil {
-		return nil
-	}
-	return e.Term.toIndexKey()
-}
-
-func (e *Query) toIndices(xs []any) []any {
-	if e.Term == nil {
-		return nil
-	}
-	return e.Term.toIndices(xs)
-}
-
-// Import ...
-type Import struct {
-	ImportPath  string
-	ImportAlias string
-	IncludePath string
-	Meta        *ConstObject
-}
-
-func (e *Import) String() string {
-	var s strings.Builder
-	e.writeTo(&s)
-	return s.String()
-}
-
-func (e *Import) writeTo(s *strings.Builder) {
-	if e.ImportPath != "" {
-		s.WriteString("import ")
-		jsonEncodeString(s, e.ImportPath)
-		s.WriteString(" as ")
-		s.WriteString(e.ImportAlias)
-	} else {
-		s.WriteString("include ")
-		jsonEncodeString(s, e.IncludePath)
-	}
-	if e.Meta != nil {
-		s.WriteByte(' ')
-		e.Meta.writeTo(s)
-	}
-	s.WriteString(";\n")
-}
-
-// FuncDef ...
-type FuncDef struct {
-	Name string
-	Args []string
-	Body *Query
-}
-
-func (e *FuncDef) String() string {
-	var s strings.Builder
-	e.writeTo(&s)
-	return s.String()
-}
-
-func (e *FuncDef) writeTo(s *strings.Builder) {
-	s.WriteString("def ")
-	s.WriteString(e.Name)
-	if len(e.Args) > 0 {
-		s.WriteByte('(')
-		for i, e := range e.Args {
-			if i > 0 {
-				s.WriteString("; ")
-			}
-			s.WriteString(e)
-		}
-		s.WriteByte(')')
-	}
-	s.WriteString(": ")
-	e.Body.writeTo(s)
-	s.WriteByte(';')
-}
-
-// Minify ...
-func (e *FuncDef) Minify() {
-	e.Body.minify()
-}
-
-// Term ...
-type Term struct {
-	Type       TermType
-	Index      *Index
-	Func       *Func
-	Object     *Object
-	Array      *Array
-	Number     string
-	Unary      *Unary
-	Format     string
-	Str        *String
-	If         *If
-	Try        *Try
-	Reduce     *Reduce
-	Foreach    *Foreach
-	Label      *Label
-	Break      string
-	Query      *Query
-	SuffixList []*Suffix
-}
-
-func (e *Term) String() string {
-	var s strings.Builder
-	e.writeTo(&s)
-	return s.String()
-}
-
-func (e *Term) writeTo(s *strings.Builder) {
-	switch e.Type {
-	case TermTypeIdentity:
-		s.WriteByte('.')
-	case TermTypeRecurse:
-		s.WriteString("..")
-	case TermTypeNull:
-		s.WriteString("null")
-	case TermTypeTrue:
-		s.WriteString("true")
-	case TermTypeFalse:
-		s.WriteString("false")
-	case TermTypeIndex:
-		e.Index.writeTo(s)
-	case TermTypeFunc:
-		e.Func.writeTo(s)
-	case TermTypeObject:
-		e.Object.writeTo(s)
-	case TermTypeArray:
-		e.Array.writeTo(s)
-	case TermTypeNumber:
-		s.WriteString(e.Number)
-	case TermTypeUnary:
-		e.Unary.writeTo(s)
-	case TermTypeFormat:
-		s.WriteString(e.Format)
-		if e.Str != nil {
-			s.WriteByte(' ')
-			e.Str.writeTo(s)
-		}
-	case TermTypeString:
-		e.Str.writeTo(s)
-	case TermTypeIf:
-		e.If.writeTo(s)
-	case TermTypeTry:
-		e.Try.writeTo(s)
-	case TermTypeReduce:
-		e.Reduce.writeTo(s)
-	case TermTypeForeach:
-		e.Foreach.writeTo(s)
-	case TermTypeLabel:
-		e.Label.writeTo(s)
-	case TermTypeBreak:
-		s.WriteString("break ")
-		s.WriteString(e.Break)
-	case TermTypeQuery:
-		s.WriteByte('(')
-		e.Query.writeTo(s)
-		s.WriteByte(')')
-	}
-	for _, e := range e.SuffixList {
-		e.writeTo(s)
-	}
-}
-
-func (e *Term) minify() {
-	switch e.Type {
-	case TermTypeIndex:
-		e.Index.minify()
-	case TermTypeFunc:
-		e.Func.minify()
-	case TermTypeObject:
-		e.Object.minify()
-	case TermTypeArray:
-		e.Array.minify()
-	case TermTypeUnary:
-		e.Unary.minify()
-	case TermTypeFormat:
-		if e.Str != nil {
-			e.Str.minify()
-		}
-	case TermTypeString:
-		e.Str.minify()
-	case TermTypeIf:
-		e.If.minify()
-	case TermTypeTry:
-		e.Try.minify()
-	case TermTypeReduce:
-		e.Reduce.minify()
-	case TermTypeForeach:
-		e.Foreach.minify()
-	case TermTypeLabel:
-		e.Label.minify()
-	case TermTypeQuery:
-		e.Query.minify()
-	}
-	for _, e := range e.SuffixList {
-		e.minify()
-	}
-}
-
-func (e *Term) toFunc() string {
-	if len(e.SuffixList) != 0 {
-		return ""
-	}
-	// ref: compiler#compileQuery
-	switch e.Type {
-	case TermTypeIdentity:
-		return "."
-	case TermTypeRecurse:
-		return ".."
-	case TermTypeNull:
-		return "null"
-	case TermTypeTrue:
-		return "true"
-	case TermTypeFalse:
-		return "false"
-	case TermTypeFunc:
-		return e.Func.toFunc()
-	default:
-		return ""
-	}
-}
-
-func (e *Term) toIndexKey() any {
-	switch e.Type {
-	case TermTypeNumber:
-		return toNumber(e.Number)
-	case TermTypeUnary:
-		return e.Unary.toNumber()
-	case TermTypeString:
-		if e.Str.Queries == nil {
-			return e.Str.Str
-		}
-		return nil
-	default:
-		return nil
-	}
-}
-
-func (e *Term) toIndices(xs []any) []any {
-	switch e.Type {
-	case TermTypeIndex:
-		if xs = e.Index.toIndices(xs); xs == nil {
-			return nil
-		}
-	case TermTypeQuery:
-		if xs = e.Query.toIndices(xs); xs == nil {
-			return nil
-		}
-	default:
-		return nil
-	}
-	for _, s := range e.SuffixList {
-		if xs = s.toIndices(xs); xs == nil {
-			return nil
-		}
-	}
-	return xs
-}
-
-func (e *Term) toNumber() any {
-	if e.Type == TermTypeNumber {
-		return toNumber(e.Number)
-	}
-	return nil
-}
-
-// Unary ...
-type Unary struct {
-	Op   Operator
-	Term *Term
-}
-
-func (e *Unary) String() string {
-	var s strings.Builder
-	e.writeTo(&s)
-	return s.String()
-}
-
-func (e *Unary) writeTo(s *strings.Builder) {
-	s.WriteString(e.Op.String())
-	e.Term.writeTo(s)
-}
-
-func (e *Unary) minify() {
-	e.Term.minify()
-}
-
-func (e *Unary) toNumber() any {
-	v := e.Term.toNumber()
-	if v != nil && e.Op == OpSub {
-		v = funcOpNegate(v)
-	}
-	return v
-}
-
-// Pattern ...
-type Pattern struct {
-	Name   string
-	Array  []*Pattern
-	Object []*PatternObject
-}
-
-func (e *Pattern) String() string {
-	var s strings.Builder
-	e.writeTo(&s)
-	return s.String()
-}
-
-func (e *Pattern) writeTo(s *strings.Builder) {
-	if e.Name != "" {
-		s.WriteString(e.Name)
-	} else if len(e.Array) > 0 {
-		s.WriteByte('[')
-		for i, e := range e.Array {
-			if i > 0 {
-				s.WriteString(", ")
-			}
-			e.writeTo(s)
-		}
-		s.WriteByte(']')
-	} else if len(e.Object) > 0 {
-		s.WriteByte('{')
-		for i, e := range e.Object {
-			if i > 0 {
-				s.WriteString(", ")
-			}
-			e.writeTo(s)
-		}
-		s.WriteByte('}')
-	}
-}
-
-// PatternObject ...
-type PatternObject struct {
-	Key       string
-	KeyString *String
-	KeyQuery  *Query
-	Val       *Pattern
-}
-
-func (e *PatternObject) String() string {
-	var s strings.Builder
-	e.writeTo(&s)
-	return s.String()
-}
-
-func (e *PatternObject) writeTo(s *strings.Builder) {
-	if e.Key != "" {
-		s.WriteString(e.Key)
-	} else if e.KeyString != nil {
-		e.KeyString.writeTo(s)
-	} else if e.KeyQuery != nil {
-		s.WriteByte('(')
-		e.KeyQuery.writeTo(s)
-		s.WriteByte(')')
-	}
-	if e.Val != nil {
-		s.WriteString(": ")
-		e.Val.writeTo(s)
-	}
-}
-
-// Index ...
-type Index struct {
-	Name    string
-	Str     *String
-	Start   *Query
-	End     *Query
-	IsSlice bool
-}
-
-func (e *Index) String() string {
-	var s strings.Builder
-	e.writeTo(&s)
-	return s.String()
-}
-
-func (e *Index) writeTo(s *strings.Builder) {
-	if l := s.Len(); l > 0 {
-		// ". .x" != "..x" and "0 .x" != "0.x"
-		if c := s.String()[l-1]; c == '.' || '0' <= c && c <= '9' {
-			s.WriteByte(' ')
-		}
-	}
-	s.WriteByte('.')
-	e.writeSuffixTo(s)
-}
-
-func (e *Index) writeSuffixTo(s *strings.Builder) {
-	if e.Name != "" {
-		s.WriteString(e.Name)
-	} else if e.Str != nil {
-		e.Str.writeTo(s)
-	} else {
-		s.WriteByte('[')
-		if e.IsSlice {
-			if e.Start != nil {
-				e.Start.writeTo(s)
-			}
-			s.WriteByte(':')
-			if e.End != nil {
-				e.End.writeTo(s)
-			}
-		} else {
-			e.Start.writeTo(s)
-		}
-		s.WriteByte(']')
-	}
-}
-
-func (e *Index) minify() {
-	if e.Str != nil {
-		e.Str.minify()
-	}
-	if e.Start != nil {
-		e.Start.minify()
-	}
-	if e.End != nil {
-		e.End.minify()
-	}
-}
-
-func (e *Index) toIndexKey() any {
-	if e.Name != "" {
-		return e.Name
-	} else if e.Str != nil {
-		if e.Str.Queries == nil {
-			return e.Str.Str
-		}
-	} else if !e.IsSlice {
-		return e.Start.toIndexKey()
-	} else {
-		var start, end any
-		ok := true
-		if e.Start != nil {
-			start = e.Start.toIndexKey()
-			ok = start != nil
-		}
-		if e.End != nil && ok {
-			end = e.End.toIndexKey()
-			ok = end != nil
-		}
-		if ok {
-			return map[string]any{"start": start, "end": end}
-		}
-	}
-	return nil
-}
-
-func (e *Index) toIndices(xs []any) []any {
-	if k := e.toIndexKey(); k != nil {
-		return append(xs, k)
-	}
-	return nil
-}
-
-// Func ...
-type Func struct {
-	Name string
-	Args []*Query
-}
-
-func (e *Func) String() string {
-	var s strings.Builder
-	e.writeTo(&s)
-	return s.String()
-}
-
-func (e *Func) writeTo(s *strings.Builder) {
-	s.WriteString(e.Name)
-	if len(e.Args) > 0 {
-		s.WriteByte('(')
-		for i, e := range e.Args {
-			if i > 0 {
-				s.WriteString("; ")
-			}
-			e.writeTo(s)
-		}
-		s.WriteByte(')')
-	}
-}
-
-func (e *Func) minify() {
-	for _, x := range e.Args {
-		x.minify()
-	}
-}
-
-func (e *Func) toFunc() string {
-	if len(e.Args) != 0 {
-		return ""
-	}
-	return e.Name
-}
-
-// String ...
-type String struct {
-	Str     string
-	Queries []*Query
-}
-
-func (e *String) String() string {
-	var s strings.Builder
-	e.writeTo(&s)
-	return s.String()
-}
-
-func (e *String) writeTo(s *strings.Builder) {
-	if e.Queries == nil {
-		jsonEncodeString(s, e.Str)
-		return
-	}
-	s.WriteByte('"')
-	for _, e := range e.Queries {
-		if e.Term.Str == nil {
-			s.WriteString(`\`)
-			e.writeTo(s)
-		} else {
-			es := e.String()
-			s.WriteString(es[1 : len(es)-1])
-		}
-	}
-	s.WriteByte('"')
-}
-
-func (e *String) minify() {
-	for _, e := range e.Queries {
-		e.minify()
-	}
-}
-
-// Object ...
-type Object struct {
-	KeyVals []*ObjectKeyVal
-}
-
-func (e *Object) String() string {
-	var s strings.Builder
-	e.writeTo(&s)
-	return s.String()
-}
-
-func (e *Object) writeTo(s *strings.Builder) {
-	if len(e.KeyVals) == 0 {
-		s.WriteString("{}")
-		return
-	}
-	s.WriteString("{ ")
-	for i, kv := range e.KeyVals {
-		if i > 0 {
-			s.WriteString(", ")
-		}
-		kv.writeTo(s)
-	}
-	s.WriteString(" }")
-}
-
-func (e *Object) minify() {
-	for _, e := range e.KeyVals {
-		e.minify()
-	}
-}
-
-// ObjectKeyVal ...
-type ObjectKeyVal struct {
-	Key       string
-	KeyString *String
-	KeyQuery  *Query
-	Val       *ObjectVal
-}
-
-func (e *ObjectKeyVal) String() string {
-	var s strings.Builder
-	e.writeTo(&s)
-	return s.String()
-}
-
-func (e *ObjectKeyVal) writeTo(s *strings.Builder) {
-	if e.Key != "" {
-		s.WriteString(e.Key)
-	} else if e.KeyString != nil {
-		e.KeyString.writeTo(s)
-	} else if e.KeyQuery != nil {
-		s.WriteByte('(')
-		e.KeyQuery.writeTo(s)
-		s.WriteByte(')')
-	}
-	if e.Val != nil {
-		s.WriteString(": ")
-		e.Val.writeTo(s)
-	}
-}
-
-func (e *ObjectKeyVal) minify() {
-	if e.KeyString != nil {
-		e.KeyString.minify()
-	} else if e.KeyQuery != nil {
-		e.KeyQuery.minify()
-	}
-	if e.Val != nil {
-		e.Val.minify()
-	}
-}
-
-// ObjectVal ...
-type ObjectVal struct {
-	Queries []*Query
-}
-
-func (e *ObjectVal) String() string {
-	var s strings.Builder
-	e.writeTo(&s)
-	return s.String()
-}
-
-func (e *ObjectVal) writeTo(s *strings.Builder) {
-	for i, e := range e.Queries {
-		if i > 0 {
-			s.WriteString(" | ")
-		}
-		e.writeTo(s)
-	}
-}
-
-func (e *ObjectVal) minify() {
-	for _, e := range e.Queries {
-		e.minify()
-	}
-}
-
-// Array ...
-type Array struct {
-	Query *Query
-}
-
-func (e *Array) String() string {
-	var s strings.Builder
-	e.writeTo(&s)
-	return s.String()
-}
-
-func (e *Array) writeTo(s *strings.Builder) {
-	s.WriteByte('[')
-	if e.Query != nil {
-		e.Query.writeTo(s)
-	}
-	s.WriteByte(']')
-}
-
-func (e *Array) minify() {
-	if e.Query != nil {
-		e.Query.minify()
-	}
-}
-
-// Suffix ...
-type Suffix struct {
-	Index    *Index
-	Iter     bool
-	Optional bool
-	Bind     *Bind
-}
-
-func (e *Suffix) String() string {
-	var s strings.Builder
-	e.writeTo(&s)
-	return s.String()
-}
-
-func (e *Suffix) writeTo(s *strings.Builder) {
-	if e.Index != nil {
-		if e.Index.Name != "" || e.Index.Str != nil {
-			e.Index.writeTo(s)
-		} else {
-			e.Index.writeSuffixTo(s)
-		}
-	} else if e.Iter {
-		s.WriteString("[]")
-	} else if e.Optional {
-		s.WriteByte('?')
-	} else if e.Bind != nil {
-		e.Bind.writeTo(s)
-	}
-}
-
-func (e *Suffix) minify() {
-	if e.Index != nil {
-		e.Index.minify()
-	} else if e.Bind != nil {
-		e.Bind.minify()
-	}
-}
-
-func (e *Suffix) toTerm() *Term {
-	if e.Index != nil {
-		return &Term{Type: TermTypeIndex, Index: e.Index}
-	} else if e.Iter {
-		return &Term{Type: TermTypeIdentity, SuffixList: []*Suffix{{Iter: true}}}
-	} else {
-		return nil
-	}
-}
-
-func (e *Suffix) toIndices(xs []any) []any {
-	if e.Index == nil {
-		return nil
-	}
-	return e.Index.toIndices(xs)
-}
-
-// Bind ...
-type Bind struct {
-	Patterns []*Pattern
-	Body     *Query
-}
-
-func (e *Bind) String() string {
-	var s strings.Builder
-	e.writeTo(&s)
-	return s.String()
-}
-
-func (e *Bind) writeTo(s *strings.Builder) {
-	for i, p := range e.Patterns {
-		if i == 0 {
-			s.WriteString(" as ")
-			p.writeTo(s)
-			s.WriteByte(' ')
-		} else {
-			s.WriteString("?// ")
-			p.writeTo(s)
-			s.WriteByte(' ')
-		}
-	}
-	s.WriteString("| ")
-	e.Body.writeTo(s)
-}
-
-func (e *Bind) minify() {
-	e.Body.minify()
-}
-
-// If ...
-type If struct {
-	Cond *Query
-	Then *Query
-	Elif []*IfElif
-	Else *Query
-}
-
-func (e *If) String() string {
-	var s strings.Builder
-	e.writeTo(&s)
-	return s.String()
-}
-
-func (e *If) writeTo(s *strings.Builder) {
-	s.WriteString("if ")
-	e.Cond.writeTo(s)
-	s.WriteString(" then ")
-	e.Then.writeTo(s)
-	for _, e := range e.Elif {
-		s.WriteByte(' ')
-		e.writeTo(s)
-	}
-	if e.Else != nil {
-		s.WriteString(" else ")
-		e.Else.writeTo(s)
-	}
-	s.WriteString(" end")
-}
-
-func (e *If) minify() {
-	e.Cond.minify()
-	e.Then.minify()
-	for _, x := range e.Elif {
-		x.minify()
-	}
-	if e.Else != nil {
-		e.Else.minify()
-	}
-}
-
-// IfElif ...
-type IfElif struct {
-	Cond *Query
-	Then *Query
-}
-
-func (e *IfElif) String() string {
-	var s strings.Builder
-	e.writeTo(&s)
-	return s.String()
-}
-
-func (e *IfElif) writeTo(s *strings.Builder) {
-	s.WriteString("elif ")
-	e.Cond.writeTo(s)
-	s.WriteString(" then ")
-	e.Then.writeTo(s)
-}
-
-func (e *IfElif) minify() {
-	e.Cond.minify()
-	e.Then.minify()
-}
-
-// Try ...
-type Try struct {
-	Body  *Query
-	Catch *Query
-}
-
-func (e *Try) String() string {
-	var s strings.Builder
-	e.writeTo(&s)
-	return s.String()
-}
-
-func (e *Try) writeTo(s *strings.Builder) {
-	s.WriteString("try ")
-	e.Body.writeTo(s)
-	if e.Catch != nil {
-		s.WriteString(" catch ")
-		e.Catch.writeTo(s)
-	}
-}
-
-func (e *Try) minify() {
-	e.Body.minify()
-	if e.Catch != nil {
-		e.Catch.minify()
-	}
-}
-
-// Reduce ...
-type Reduce struct {
-	Term    *Term
-	Pattern *Pattern
-	Start   *Query
-	Update  *Query
-}
-
-func (e *Reduce) String() string {
-	var s strings.Builder
-	e.writeTo(&s)
-	return s.String()
-}
-
-func (e *Reduce) writeTo(s *strings.Builder) {
-	s.WriteString("reduce ")
-	e.Term.writeTo(s)
-	s.WriteString(" as ")
-	e.Pattern.writeTo(s)
-	s.WriteString(" (")
-	e.Start.writeTo(s)
-	s.WriteString("; ")
-	e.Update.writeTo(s)
-	s.WriteByte(')')
-}
-
-func (e *Reduce) minify() {
-	e.Term.minify()
-	e.Start.minify()
-	e.Update.minify()
-}
-
-// Foreach ...
-type Foreach struct {
-	Term    *Term
-	Pattern *Pattern
-	Start   *Query
-	Update  *Query
-	Extract *Query
-}
-
-func (e *Foreach) String() string {
-	var s strings.Builder
-	e.writeTo(&s)
-	return s.String()
-}
-
-func (e *Foreach) writeTo(s *strings.Builder) {
-	s.WriteString("foreach ")
-	e.Term.writeTo(s)
-	s.WriteString(" as ")
-	e.Pattern.writeTo(s)
-	s.WriteString(" (")
-	e.Start.writeTo(s)
-	s.WriteString("; ")
-	e.Update.writeTo(s)
-	if e.Extract != nil {
-		s.WriteString("; ")
-		e.Extract.writeTo(s)
-	}
-	s.WriteByte(')')
-}
-
-func (e *Foreach) minify() {
-	e.Term.minify()
-	e.Start.minify()
-	e.Update.minify()
-	if e.Extract != nil {
-		e.Extract.minify()
-	}
-}
-
-// Label ...
-type Label struct {
-	Ident string
-	Body  *Query
-}
-
-func (e *Label) String() string {
-	var s strings.Builder
-	e.writeTo(&s)
-	return s.String()
-}
-
-func (e *Label) writeTo(s *strings.Builder) {
-	s.WriteString("label ")
-	s.WriteString(e.Ident)
-	s.WriteString(" | ")
-	e.Body.writeTo(s)
-}
-
-func (e *Label) minify() {
-	e.Body.minify()
-}
-
-// ConstTerm ...
-type ConstTerm struct {
-	Object *ConstObject
-	Array  *ConstArray
-	Number string
-	Str    string
-	Null   bool
-	True   bool
-	False  bool
-}
-
-func (e *ConstTerm) String() string {
-	var s strings.Builder
-	e.writeTo(&s)
-	return s.String()
-}
-
-func (e *ConstTerm) writeTo(s *strings.Builder) {
-	if e.Object != nil {
-		e.Object.writeTo(s)
-	} else if e.Array != nil {
-		e.Array.writeTo(s)
-	} else if e.Number != "" {
-		s.WriteString(e.Number)
-	} else if e.Null {
-		s.WriteString("null")
-	} else if e.True {
-		s.WriteString("true")
-	} else if e.False {
-		s.WriteString("false")
-	} else {
-		jsonEncodeString(s, e.Str)
-	}
-}
-
-func (e *ConstTerm) toValue() any {
-	if e.Object != nil {
-		return e.Object.ToValue()
-	} else if e.Array != nil {
-		return e.Array.toValue()
-	} else if e.Number != "" {
-		return toNumber(e.Number)
-	} else if e.Null {
-		return nil
-	} else if e.True {
-		return true
-	} else if e.False {
-		return false
-	} else {
-		return e.Str
-	}
-}
-
-// ConstObject ...
-type ConstObject struct {
-	KeyVals []*ConstObjectKeyVal
-}
-
-func (e *ConstObject) String() string {
-	var s strings.Builder
-	e.writeTo(&s)
-	return s.String()
-}
-
-func (e *ConstObject) writeTo(s *strings.Builder) {
-	if len(e.KeyVals) == 0 {
-		s.WriteString("{}")
-		return
-	}
-	s.WriteString("{ ")
-	for i, kv := range e.KeyVals {
-		if i > 0 {
-			s.WriteString(", ")
-		}
-		kv.writeTo(s)
-	}
-	s.WriteString(" }")
-}
-
-// ToValue converts the object to map[string]any.
-func (e *ConstObject) ToValue() map[string]any {
-	if e == nil {
-		return nil
-	}
-	v := make(map[string]any, len(e.KeyVals))
-	for _, e := range e.KeyVals {
-		key := e.Key
-		if key == "" {
-			key = e.KeyString
-		}
-		v[key] = e.Val.toValue()
-	}
-	return v
-}
-
-// ConstObjectKeyVal ...
-type ConstObjectKeyVal struct {
-	Key       string
-	KeyString string
-	Val       *ConstTerm
-}
-
-func (e *ConstObjectKeyVal) String() string {
-	var s strings.Builder
-	e.writeTo(&s)
-	return s.String()
-}
-
-func (e *ConstObjectKeyVal) writeTo(s *strings.Builder) {
-	if e.Key != "" {
-		s.WriteString(e.Key)
-	} else {
-		s.WriteString(e.KeyString)
-	}
-	s.WriteString(": ")
-	e.Val.writeTo(s)
-}
-
-// ConstArray ...
-type ConstArray struct {
-	Elems []*ConstTerm
-}
-
-func (e *ConstArray) String() string {
-	var s strings.Builder
-	e.writeTo(&s)
-	return s.String()
-}
-
-func (e *ConstArray) writeTo(s *strings.Builder) {
-	s.WriteByte('[')
-	for i, e := range e.Elems {
-		if i > 0 {
-			s.WriteString(", ")
-		}
-		e.writeTo(s)
-	}
-	s.WriteByte(']')
-}
-
-func (e *ConstArray) toValue() []any {
-	v := make([]any, len(e.Elems))
-	for i, e := range e.Elems {
-		v[i] = e.toValue()
-	}
-	return v
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/itchyny/gojq/release.go","mode":420,"size":291,"sha256":"c703cd41ee468c197f48871401557dbbd5d9caf60d966c92c040566108310c60","index":0,"count":1,"encoding":"utf-8","payloadBytes":291}
-//go:build !gojq_debug
-// +build !gojq_debug
-
-package gojq
-
-type codeinfo struct{}
-
-func (c *compiler) appendCodeInfo(any) {}
-
-func (c *compiler) deleteCodeInfo(string) {}
-
-func (env *env) debugCodes() {}
-
-func (env *env) debugState(int, bool) {}
-
-func (env *env) debugForks(int, string) {}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/itchyny/gojq/scope_stack.go","mode":420,"size":813,"sha256":"9e67bbdbd7744834f247b450de7bb8314e79b58faddf7a264ce2ee27d76db9a9","index":0,"count":1,"encoding":"utf-8","payloadBytes":813}
-package gojq
-
-type scopeStack struct {
-	data  []scopeBlock
-	index int
-	limit int
-}
-
-type scopeBlock struct {
-	value scope
-	next  int
-}
-
-func newScopeStack() *scopeStack {
-	return &scopeStack{index: -1, limit: -1}
-}
-
-func (s *scopeStack) push(v scope) {
-	b := scopeBlock{v, s.index}
-	i := s.index + 1
-	if i <= s.limit {
-		i = s.limit + 1
-	}
-	s.index = i
-	if i < len(s.data) {
-		s.data[i] = b
-	} else {
-		s.data = append(s.data, b)
-	}
-}
-
-func (s *scopeStack) pop() scope {
-	b := s.data[s.index]
-	s.index = b.next
-	return b.value
-}
-
-func (s *scopeStack) empty() bool {
-	return s.index < 0
-}
-
-func (s *scopeStack) save() (index, limit int) {
-	index, limit = s.index, s.limit
-	if s.index > s.limit {
-		s.limit = s.index
-	}
-	return
-}
-
-func (s *scopeStack) restore(index, limit int) {
-	s.index, s.limit = index, limit
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/itchyny/gojq/stack.go","mode":420,"size":808,"sha256":"0bf3b861624d18b438b9fc87a54a40cafa60ebd570957c4d5d265a46e3c726e6","index":0,"count":1,"encoding":"utf-8","payloadBytes":808}
-package gojq
-
-type stack struct {
-	data  []block
-	index int
-	limit int
-}
-
-type block struct {
-	value any
-	next  int
-}
-
-func newStack() *stack {
-	return &stack{index: -1, limit: -1}
-}
-
-func (s *stack) push(v any) {
-	b := block{v, s.index}
-	i := s.index + 1
-	if i <= s.limit {
-		i = s.limit + 1
-	}
-	s.index = i
-	if i < len(s.data) {
-		s.data[i] = b
-	} else {
-		s.data = append(s.data, b)
-	}
-}
-
-func (s *stack) pop() any {
-	b := s.data[s.index]
-	s.index = b.next
-	return b.value
-}
-
-func (s *stack) top() any {
-	return s.data[s.index].value
-}
-
-func (s *stack) empty() bool {
-	return s.index < 0
-}
-
-func (s *stack) save() (index, limit int) {
-	index, limit = s.index, s.limit
-	if s.index > s.limit {
-		s.limit = s.index
-	}
-	return
-}
-
-func (s *stack) restore(index, limit int) {
-	s.index, s.limit = index, limit
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/itchyny/gojq/term_type.go","mode":420,"size":1541,"sha256":"909eb916009b46c8b0d5cdff48d0b96517a79e23127ac65999482c8938640419","index":0,"count":1,"encoding":"utf-8","payloadBytes":1541}
-package gojq
-
-// TermType represents the type of [Term].
-type TermType int
-
-// TermType list.
-const (
-	TermTypeIdentity TermType = iota + 1
-	TermTypeRecurse
-	TermTypeNull
-	TermTypeTrue
-	TermTypeFalse
-	TermTypeIndex
-	TermTypeFunc
-	TermTypeObject
-	TermTypeArray
-	TermTypeNumber
-	TermTypeUnary
-	TermTypeFormat
-	TermTypeString
-	TermTypeIf
-	TermTypeTry
-	TermTypeReduce
-	TermTypeForeach
-	TermTypeLabel
-	TermTypeBreak
-	TermTypeQuery
-)
-
-// GoString implements [fmt.GoStringer].
-func (termType TermType) GoString() (str string) {
-	defer func() { str = "gojq." + str }()
-	switch termType {
-	case TermTypeIdentity:
-		return "TermTypeIdentity"
-	case TermTypeRecurse:
-		return "TermTypeRecurse"
-	case TermTypeNull:
-		return "TermTypeNull"
-	case TermTypeTrue:
-		return "TermTypeTrue"
-	case TermTypeFalse:
-		return "TermTypeFalse"
-	case TermTypeIndex:
-		return "TermTypeIndex"
-	case TermTypeFunc:
-		return "TermTypeFunc"
-	case TermTypeObject:
-		return "TermTypeObject"
-	case TermTypeArray:
-		return "TermTypeArray"
-	case TermTypeNumber:
-		return "TermTypeNumber"
-	case TermTypeUnary:
-		return "TermTypeUnary"
-	case TermTypeFormat:
-		return "TermTypeFormat"
-	case TermTypeString:
-		return "TermTypeString"
-	case TermTypeIf:
-		return "TermTypeIf"
-	case TermTypeTry:
-		return "TermTypeTry"
-	case TermTypeReduce:
-		return "TermTypeReduce"
-	case TermTypeForeach:
-		return "TermTypeForeach"
-	case TermTypeLabel:
-		return "TermTypeLabel"
-	case TermTypeBreak:
-		return "TermTypeBreak"
-	case TermTypeQuery:
-		return "TermTypeQuery"
-	default:
-		panic(termType)
-	}
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/itchyny/gojq/type.go","mode":420,"size":581,"sha256":"dfa021af296dc39972b14991beda8de49097ce3d805d9e37112059a27b1cad6a","index":0,"count":1,"encoding":"utf-8","payloadBytes":581}
-package gojq
-
-import (
-	"fmt"
-	"math/big"
-)
-
-// TypeOf returns the jq-flavored type name of v.
-//
-// This method is used by built-in type/0 function, and accepts only limited
-// types (nil, bool, int, float64, *big.Int, string, []any, and map[string]any).
-func TypeOf(v any) string {
-	switch v.(type) {
-	case nil:
-		return "null"
-	case bool:
-		return "boolean"
-	case int, float64, *big.Int:
-		return "number"
-	case string:
-		return "string"
-	case []any:
-		return "array"
-	case map[string]any:
-		return "object"
-	default:
-		panic(fmt.Sprintf("invalid type: %[1]T (%[1]v)", v))
-	}
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/itchyny/timefmt-go/CHANGELOG.md","mode":420,"size":988,"sha256":"339ebeb8df6beda8bbdf9595823af76414ba407bae9c02e5c87c191c7bc219a4","index":0,"count":1,"encoding":"utf-8","payloadBytes":988}
-# Changelog
-## [v0.1.5](https://github.com/itchyny/timefmt-go/compare/v0.1.4..v0.1.5) (2022-12-01)
-* support parsing time zone offset with name using both `%z` and `%Z`
-
-## [v0.1.4](https://github.com/itchyny/timefmt-go/compare/v0.1.3..v0.1.4) (2022-09-01)
-* improve documents
-* drop support for Go 1.16
-
-## [v0.1.3](https://github.com/itchyny/timefmt-go/compare/v0.1.2..v0.1.3) (2021-04-14)
-* implement `ParseInLocation` for configuring the default location
-
-## [v0.1.2](https://github.com/itchyny/timefmt-go/compare/v0.1.1..v0.1.2) (2021-02-22)
-* implement parsing/formatting time zone offset with colons (`%:z`, `%::z`, `%:::z`)
-* recognize `Z` as UTC on parsing time zone offset (`%z`)
-* fix padding on formatting time zone offset (`%z`)
-
-## [v0.1.1](https://github.com/itchyny/timefmt-go/compare/v0.1.0..v0.1.1) (2020-09-01)
-* fix overflow check in 32-bit architecture
-
-## [v0.1.0](https://github.com/itchyny/timefmt-go/compare/2c02364..v0.1.0) (2020-08-16)
-* initial implementation
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/itchyny/timefmt-go/LICENSE","mode":420,"size":1079,"sha256":"ed76be872cfa9127de7290be8aaf7d2400790e69d684bc655b020481eba0c95a","index":0,"count":1,"encoding":"utf-8","payloadBytes":1079}
-The MIT License (MIT)
-
-Copyright (c) 2020-2022 itchyny
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/itchyny/timefmt-go/Makefile","mode":420,"size":306,"sha256":"b798e13a01b7516b7119201cc710fd8be49bad1a0cd99a1a150f7f88080415c1","index":0,"count":1,"encoding":"utf-8","payloadBytes":306}
-GOBIN ?= $(shell go env GOPATH)/bin
-
-.PHONY: all
-all: test
-
-.PHONY: test
-test:
-	go test -v -race ./...
-
-.PHONY: lint
-lint: $(GOBIN)/staticcheck
-	go vet ./...
-	staticcheck -checks all,-ST1000 ./...
-
-$(GOBIN)/staticcheck:
-	go install honnef.co/go/tools/cmd/staticcheck@latest
-
-.PHONY: clean
-clean:
-	go clean
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/itchyny/timefmt-go/README.md","mode":420,"size":2793,"sha256":"1d900480397377855fd4f602c3dda46b719b722c115d674aaa15435fe93b7c64","index":0,"count":1,"encoding":"utf-8","payloadBytes":2793}
-# timefmt-go
-[![CI Status](https://github.com/itchyny/timefmt-go/workflows/CI/badge.svg)](https://github.com/itchyny/timefmt-go/actions)
-[![Go Report Card](https://goreportcard.com/badge/github.com/itchyny/timefmt-go)](https://goreportcard.com/report/github.com/itchyny/timefmt-go)
-[![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/itchyny/timefmt-go/blob/main/LICENSE)
-[![release](https://img.shields.io/github/release/itchyny/timefmt-go/all.svg)](https://github.com/itchyny/timefmt-go/releases)
-[![pkg.go.dev](https://pkg.go.dev/badge/github.com/itchyny/timefmt-go)](https://pkg.go.dev/github.com/itchyny/timefmt-go)
-
-### Efficient time formatting library (strftime, strptime) for Golang
-This is a Go language package for formatting and parsing date time strings.
-
-```go
-package main
-
-import (
-	"fmt"
-	"log"
-
-	"github.com/itchyny/timefmt-go"
-)
-
-func main() {
-	t, err := timefmt.Parse("2020/07/24 09:07:29", "%Y/%m/%d %H:%M:%S")
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Println(t) // 2020-07-24 09:07:29 +0000 UTC
-
-	str := timefmt.Format(t, "%Y/%m/%d %H:%M:%S")
-	fmt.Println(str) // 2020/07/24 09:07:29
-
-	str = timefmt.Format(t, "%a, %d %b %Y %T %z")
-	fmt.Println(str) // Fri, 24 Jul 2020 09:07:29 +0000
-}
-```
-
-Please refer to [`man 3 strftime`](https://linux.die.net/man/3/strftime) and
-[`man 3 strptime`](https://linux.die.net/man/3/strptime) for formatters.
-As an extension, `%f` directive is supported for zero-padded microseconds, which originates from Python.
-Note that `E` and `O` modifier characters are not supported.
-
-## Comparison to other libraries
-- This library
-  - provides both formatting and parsing functions in pure Go language,
-  - depends only on the Go standard libraries not to grow up dependency.
-- `Format` (`strftime`) implements glibc extensions including
-  - width specifier like `%6Y %10B %4Z` (limited to 1024 bytes),
-  - omitting padding modifier like `%-y-%-m-%-d`,
-  - space padding modifier like `%_y-%_m-%_d`,
-  - upper case modifier like `%^a %^b`,
-  - swapping case modifier like `%#Z`,
-  - time zone offset modifier like `%:z %::z %:::z`,
-  - and its performance is very good.
-- `AppendFormat` is provided for reducing allocations.
-- `Parse` (`strptime`) allows to parse
-  - composed directives like `%F %T`,
-  - century years like `%C %y`,
-  - week names like `%A` `%a` (parsed results are discarded).
-- `ParseInLocation` is provided for configuring the default location.
-
-![](https://user-images.githubusercontent.com/375258/88606920-de475c80-d0b8-11ea-8d40-cbfee9e35c2e.jpg)
-
-## Bug Tracker
-Report bug at [Issues・itchyny/timefmt-go - GitHub](https://github.com/itchyny/timefmt-go/issues).
-
-## Author
-itchyny (https://github.com/itchyny)
-
-## License
-This software is released under the MIT License, see LICENSE.
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/itchyny/timefmt-go/format.go","mode":420,"size":10634,"sha256":"bdace75442f6986734e87e4e0dfbdeb423cbe1be19c3bd8b255e43eb70b82c9a","index":0,"count":1,"encoding":"utf-8","payloadBytes":10634}
-package timefmt
-
-import (
-	"math"
-	"strconv"
-	"time"
-)
-
-// Format time to string using the format.
-func Format(t time.Time, format string) string {
-	return string(AppendFormat(make([]byte, 0, 64), t, format))
-}
-
-// AppendFormat appends formatted time string to the buffer.
-func AppendFormat(buf []byte, t time.Time, format string) []byte {
-	year, month, day := t.Date()
-	hour, min, sec := t.Clock()
-	var width, colons int
-	var padding byte
-	var pending string
-	var upper, swap bool
-	for i := 0; i < len(format); i++ {
-		if b := format[i]; b == '%' {
-			if i++; i == len(format) {
-				buf = append(buf, '%')
-				break
-			}
-			b, width, padding, upper, swap = format[i], 0, '0', false, false
-		L:
-			switch b {
-			case '-':
-				if pending != "" {
-					buf = append(buf, '-')
-					break
-				}
-				if i++; i == len(format) {
-					goto K
-				}
-				padding = ^paddingMask
-				b = format[i]
-				goto L
-			case '_':
-				if i++; i == len(format) {
-					goto K
-				}
-				padding = ' ' | ^paddingMask
-				b = format[i]
-				goto L
-			case '^':
-				if i++; i == len(format) {
-					goto K
-				}
-				upper = true
-				b = format[i]
-				goto L
-			case '#':
-				if i++; i == len(format) {
-					goto K
-				}
-				swap = true
-				b = format[i]
-				goto L
-			case '0':
-				if i++; i == len(format) {
-					goto K
-				}
-				padding = '0' | ^paddingMask
-				b = format[i]
-				goto L
-			case '1', '2', '3', '4', '5', '6', '7', '8', '9':
-				width = int(b & 0x0F)
-				const maxWidth = 1024
-				for i++; i < len(format); i++ {
-					b = format[i]
-					if b <= '9' && '0' <= b {
-						width = width*10 + int(b&0x0F)
-						if width >= math.MaxInt/10 {
-							width = maxWidth
-						}
-					} else {
-						break
-					}
-				}
-				if width > maxWidth {
-					width = maxWidth
-				}
-				if padding == ^paddingMask {
-					padding = ' ' | ^paddingMask
-				}
-				if i == len(format) {
-					goto K
-				}
-				goto L
-			case 'Y':
-				if width == 0 {
-					width = 4
-				}
-				buf = appendInt(buf, year, width, padding)
-			case 'y':
-				if width < 2 {
-					width = 2
-				}
-				buf = appendInt(buf, year%100, width, padding)
-			case 'C':
-				if width < 2 {
-					width = 2
-				}
-				buf = appendInt(buf, year/100, width, padding)
-			case 'g':
-				if width < 2 {
-					width = 2
-				}
-				year, _ := t.ISOWeek()
-				buf = appendInt(buf, year%100, width, padding)
-			case 'G':
-				if width == 0 {
-					width = 4
-				}
-				year, _ := t.ISOWeek()
-				buf = appendInt(buf, year, width, padding)
-			case 'm':
-				if width < 2 {
-					width = 2
-				}
-				buf = appendInt(buf, int(month), width, padding)
-			case 'B':
-				buf = appendString(buf, longMonthNames[month-1], width, padding, upper, swap)
-			case 'b', 'h':
-				buf = appendString(buf, shortMonthNames[month-1], width, padding, upper, swap)
-			case 'A':
-				buf = appendString(buf, longWeekNames[t.Weekday()], width, padding, upper, swap)
-			case 'a':
-				buf = appendString(buf, shortWeekNames[t.Weekday()], width, padding, upper, swap)
-			case 'w':
-				for ; width > 1; width-- {
-					buf = append(buf, padding&paddingMask)
-				}
-				buf = append(buf, '0'+byte(t.Weekday()))
-			case 'u':
-				w := int(t.Weekday())
-				if w == 0 {
-					w = 7
-				}
-				for ; width > 1; width-- {
-					buf = append(buf, padding&paddingMask)
-				}
-				buf = append(buf, '0'+byte(w))
-			case 'V':
-				if width < 2 {
-					width = 2
-				}
-				_, week := t.ISOWeek()
-				buf = appendInt(buf, week, width, padding)
-			case 'U':
-				if width < 2 {
-					width = 2
-				}
-				week := (t.YearDay() + 6 - int(t.Weekday())) / 7
-				buf = appendInt(buf, week, width, padding)
-			case 'W':
-				if width < 2 {
-					width = 2
-				}
-				week := t.YearDay()
-				if int(t.Weekday()) > 0 {
-					week -= int(t.Weekday()) - 7
-				}
-				week /= 7
-				buf = appendInt(buf, week, width, padding)
-			case 'e':
-				if padding < ^paddingMask {
-					padding = ' '
-				}
-				fallthrough
-			case 'd':
-				if width < 2 {
-					width = 2
-				}
-				buf = appendInt(buf, day, width, padding)
-			case 'j':
-				if width < 3 {
-					width = 3
-				}
-				buf = appendInt(buf, t.YearDay(), width, padding)
-			case 'k':
-				if padding < ^paddingMask {
-					padding = ' '
-				}
-				fallthrough
-			case 'H':
-				if width < 2 {
-					width = 2
-				}
-				buf = appendInt(buf, hour, width, padding)
-			case 'l':
-				if width < 2 {
-					width = 2
-				}
-				if padding < ^paddingMask {
-					padding = ' '
-				}
-				h := hour
-				if h > 12 {
-					h -= 12
-				}
-				buf = appendInt(buf, h, width, padding)
-			case 'I':
-				if width < 2 {
-					width = 2
-				}
-				h := hour
-				if h > 12 {
-					h -= 12
-				} else if h == 0 {
-					h = 12
-				}
-				buf = appendInt(buf, h, width, padding)
-			case 'p':
-				if hour < 12 {
-					buf = appendString(buf, "AM", width, padding, upper, swap)
-				} else {
-					buf = appendString(buf, "PM", width, padding, upper, swap)
-				}
-			case 'P':
-				if hour < 12 {
-					buf = appendString(buf, "am", width, padding, upper, swap)
-				} else {
-					buf = appendString(buf, "pm", width, padding, upper, swap)
-				}
-			case 'M':
-				if width < 2 {
-					width = 2
-				}
-				buf = appendInt(buf, min, width, padding)
-			case 'S':
-				if width < 2 {
-					width = 2
-				}
-				buf = appendInt(buf, sec, width, padding)
-			case 's':
-				if padding < ^paddingMask {
-					padding = ' '
-				}
-				buf = appendInt(buf, int(t.Unix()), width, padding)
-			case 'f':
-				if width == 0 {
-					width = 6
-				}
-				buf = appendInt(buf, t.Nanosecond()/1000, width, padding)
-			case 'Z', 'z':
-				name, offset := t.Zone()
-				if b == 'Z' && name != "" {
-					buf = appendString(buf, name, width, padding, upper, swap)
-					break
-				}
-				i := len(buf)
-				if padding != ^paddingMask {
-					for ; width > 1; width-- {
-						buf = append(buf, padding&paddingMask)
-					}
-				}
-				j := len(buf)
-				if offset < 0 {
-					buf = append(buf, '-')
-					offset = -offset
-				} else {
-					buf = append(buf, '+')
-				}
-				k := len(buf)
-				buf = appendInt(buf, offset/3600, 2, padding)
-				if buf[k] == ' ' {
-					buf[k-1], buf[k] = buf[k], buf[k-1]
-				}
-				if k = offset % 3600; colons <= 2 || k != 0 {
-					if colons != 0 {
-						buf = append(buf, ':')
-					}
-					buf = appendInt(buf, k/60, 2, '0')
-					if k %= 60; colons == 2 || colons == 3 && k != 0 {
-						buf = append(buf, ':')
-						buf = appendInt(buf, k, 2, '0')
-					}
-				}
-				colons = 0
-				if i != j {
-					l := len(buf)
-					k = j + 1 - (l - j)
-					if k < i {
-						l = j + 1 + i - k
-						k = i
-					} else {
-						l = j + 1
-					}
-					copy(buf[k:], buf[j:])
-					buf = buf[:l]
-					if padding&paddingMask == '0' {
-						for ; k > i; k-- {
-							buf[k-1], buf[k] = buf[k], buf[k-1]
-						}
-					}
-				}
-			case ':':
-				if pending != "" {
-					buf = append(buf, ':')
-				} else {
-					colons = 1
-				M:
-					for i++; i < len(format); i++ {
-						switch format[i] {
-						case ':':
-							colons++
-						case 'z':
-							if colons > 3 {
-								i++
-								break M
-							}
-							b = 'z'
-							goto L
-						default:
-							break M
-						}
-					}
-					buf = appendLast(buf, format[:i], width, padding)
-					i--
-					colons = 0
-				}
-			case 't':
-				buf = appendString(buf, "\t", width, padding, false, false)
-			case 'n':
-				buf = appendString(buf, "\n", width, padding, false, false)
-			case '%':
-				buf = appendString(buf, "%", width, padding, false, false)
-			default:
-				if pending == "" {
-					var ok bool
-					if pending, ok = compositions[b]; ok {
-						swap = false
-						break
-					}
-					buf = appendLast(buf, format[:i], width-1, padding)
-				}
-				buf = append(buf, b)
-			}
-			if pending != "" {
-				b, pending, width, padding = pending[0], pending[1:], 0, '0'
-				goto L
-			}
-		} else {
-			buf = append(buf, b)
-		}
-	}
-	return buf
-K:
-	return appendLast(buf, format, width, padding)
-}
-
-func appendInt(buf []byte, num, width int, padding byte) []byte {
-	if padding != ^paddingMask {
-		padding &= paddingMask
-		switch width {
-		case 2:
-			if num < 10 {
-				buf = append(buf, padding)
-				goto L1
-			} else if num < 100 {
-				goto L2
-			} else if num < 1000 {
-				goto L3
-			} else if num < 10000 {
-				goto L4
-			}
-		case 4:
-			if num < 1000 {
-				buf = append(buf, padding)
-				if num < 100 {
-					buf = append(buf, padding)
-					if num < 10 {
-						buf = append(buf, padding)
-						goto L1
-					}
-					goto L2
-				}
-				goto L3
-			} else if num < 10000 {
-				goto L4
-			}
-		default:
-			i := len(buf)
-			for ; width > 1; width-- {
-				buf = append(buf, padding)
-			}
-			j := len(buf)
-			buf = strconv.AppendInt(buf, int64(num), 10)
-			l := len(buf)
-			if j+1 == l || i == j {
-				return buf
-			}
-			k := j + 1 - (l - j)
-			if k < i {
-				l = j + 1 + i - k
-				k = i
-			} else {
-				l = j + 1
-			}
-			copy(buf[k:], buf[j:])
-			return buf[:l]
-		}
-	}
-	if num < 100 {
-		if num < 10 {
-			goto L1
-		}
-		goto L2
-	} else if num < 10000 {
-		if num < 1000 {
-			goto L3
-		}
-		goto L4
-	}
-	return strconv.AppendInt(buf, int64(num), 10)
-L4:
-	buf = append(buf, byte(num/1000)|'0')
-	num %= 1000
-L3:
-	buf = append(buf, byte(num/100)|'0')
-	num %= 100
-L2:
-	buf = append(buf, byte(num/10)|'0')
-	num %= 10
-L1:
-	return append(buf, byte(num)|'0')
-}
-
-func appendString(buf []byte, str string, width int, padding byte, upper, swap bool) []byte {
-	if width > len(str) && padding != ^paddingMask {
-		if padding < ^paddingMask {
-			padding = ' '
-		} else {
-			padding &= paddingMask
-		}
-		for width -= len(str); width > 0; width-- {
-			buf = append(buf, padding)
-		}
-	}
-	switch {
-	case swap:
-		if str[len(str)-1] < 'a' {
-			for _, b := range []byte(str) {
-				buf = append(buf, b|0x20)
-			}
-			break
-		}
-		fallthrough
-	case upper:
-		for _, b := range []byte(str) {
-			buf = append(buf, b&0x5F)
-		}
-	default:
-		buf = append(buf, str...)
-	}
-	return buf
-}
-
-func appendLast(buf []byte, format string, width int, padding byte) []byte {
-	for i := len(format) - 1; i >= 0; i-- {
-		if format[i] == '%' {
-			buf = appendString(buf, format[i:], width, padding, false, false)
-			break
-		}
-	}
-	return buf
-}
-
-const paddingMask byte = 0x7F
-
-var longMonthNames = []string{
-	"January",
-	"February",
-	"March",
-	"April",
-	"May",
-	"June",
-	"July",
-	"August",
-	"September",
-	"October",
-	"November",
-	"December",
-}
-
-var shortMonthNames = []string{
-	"Jan",
-	"Feb",
-	"Mar",
-	"Apr",
-	"May",
-	"Jun",
-	"Jul",
-	"Aug",
-	"Sep",
-	"Oct",
-	"Nov",
-	"Dec",
-}
-
-var longWeekNames = []string{
-	"Sunday",
-	"Monday",
-	"Tuesday",
-	"Wednesday",
-	"Thursday",
-	"Friday",
-	"Saturday",
-}
-
-var shortWeekNames = []string{
-	"Sun",
-	"Mon",
-	"Tue",
-	"Wed",
-	"Thu",
-	"Fri",
-	"Sat",
-}
-
-var compositions = map[byte]string{
-	'c': "a b e H:M:S Y",
-	'+': "a b e H:M:S Z Y",
-	'F': "Y-m-d",
-	'D': "m/d/y",
-	'x': "m/d/y",
-	'v': "e-b-Y",
-	'T': "H:M:S",
-	'X': "H:M:S",
-	'r': "I:M:S p",
-	'R': "H:M",
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/itchyny/timefmt-go/parse.go","mode":420,"size":9174,"sha256":"1a8512c0de843843007f7cd90a209b818fab9a0f29acbdd808aa89d58dd9408f","index":0,"count":1,"encoding":"utf-8","payloadBytes":9174}
-package timefmt
-
-import (
-	"errors"
-	"fmt"
-	"time"
-)
-
-// Parse time string using the format.
-func Parse(source, format string) (t time.Time, err error) {
-	return parse(source, format, time.UTC, time.Local)
-}
-
-// ParseInLocation parses time string with the default location.
-// The location is also used to parse the time zone name (%Z).
-func ParseInLocation(source, format string, loc *time.Location) (t time.Time, err error) {
-	return parse(source, format, loc, loc)
-}
-
-func parse(source, format string, loc, base *time.Location) (t time.Time, err error) {
-	year, month, day, hour, min, sec, nsec := 1900, 1, 1, 0, 0, 0, 0
-	defer func() {
-		if err != nil {
-			err = fmt.Errorf("failed to parse %q with %q: %w", source, format, err)
-		}
-	}()
-	var j, century, yday, colons int
-	var pm, hasZoneName, hasZoneOffset bool
-	var pending string
-	for i, l := 0, len(source); i < len(format); i++ {
-		if b := format[i]; b == '%' {
-			i++
-			if i == len(format) {
-				err = errors.New("stray %")
-				return
-			}
-			b = format[i]
-		L:
-			switch b {
-			case 'Y':
-				if year, j, err = parseNumber(source, j, 4, 'Y'); err != nil {
-					return
-				}
-			case 'y':
-				if year, j, err = parseNumber(source, j, 2, 'y'); err != nil {
-					return
-				}
-				if year < 69 {
-					year += 2000
-				} else {
-					year += 1900
-				}
-			case 'C':
-				if century, j, err = parseNumber(source, j, 2, 'C'); err != nil {
-					return
-				}
-			case 'g':
-				if year, j, err = parseNumber(source, j, 2, b); err != nil {
-					return
-				}
-				year += 2000
-			case 'G':
-				if year, j, err = parseNumber(source, j, 4, b); err != nil {
-					return
-				}
-			case 'm':
-				if month, j, err = parseNumber(source, j, 2, 'm'); err != nil {
-					return
-				}
-			case 'B':
-				if month, j, err = lookup(source, j, longMonthNames, 'B'); err != nil {
-					return
-				}
-			case 'b', 'h':
-				if month, j, err = lookup(source, j, shortMonthNames, b); err != nil {
-					return
-				}
-			case 'A':
-				if _, j, err = lookup(source, j, longWeekNames, 'A'); err != nil {
-					return
-				}
-			case 'a':
-				if _, j, err = lookup(source, j, shortWeekNames, 'a'); err != nil {
-					return
-				}
-			case 'w':
-				if j >= l || source[j] < '0' || '6' < source[j] {
-					err = parseFormatError(b)
-					return
-				}
-				j++
-			case 'u':
-				if j >= l || source[j] < '1' || '7' < source[j] {
-					err = parseFormatError(b)
-					return
-				}
-				j++
-			case 'V', 'U', 'W':
-				if _, j, err = parseNumber(source, j, 2, b); err != nil {
-					return
-				}
-			case 'e':
-				if j < l && source[j] == ' ' {
-					j++
-				}
-				fallthrough
-			case 'd':
-				if day, j, err = parseNumber(source, j, 2, b); err != nil {
-					return
-				}
-			case 'j':
-				if yday, j, err = parseNumber(source, j, 3, 'j'); err != nil {
-					return
-				}
-			case 'k':
-				if j < l && source[j] == ' ' {
-					j++
-				}
-				fallthrough
-			case 'H':
-				if hour, j, err = parseNumber(source, j, 2, b); err != nil {
-					return
-				}
-			case 'l':
-				if j < l && source[j] == ' ' {
-					j++
-				}
-				fallthrough
-			case 'I':
-				if hour, j, err = parseNumber(source, j, 2, b); err != nil {
-					return
-				}
-				if hour == 12 {
-					hour = 0
-				}
-			case 'p', 'P':
-				var ampm int
-				if ampm, j, err = lookup(source, j, []string{"AM", "PM"}, 'p'); err != nil {
-					return
-				}
-				pm = ampm == 2
-			case 'M':
-				if min, j, err = parseNumber(source, j, 2, 'M'); err != nil {
-					return
-				}
-			case 'S':
-				if sec, j, err = parseNumber(source, j, 2, 'S'); err != nil {
-					return
-				}
-			case 's':
-				var unix int
-				if unix, j, err = parseNumber(source, j, 10, 's'); err != nil {
-					return
-				}
-				t = time.Unix(int64(unix), 0).In(time.UTC)
-				var mon time.Month
-				year, mon, day = t.Date()
-				hour, min, sec = t.Clock()
-				month = int(mon)
-			case 'f':
-				var usec, k, d int
-				if usec, k, err = parseNumber(source, j, 6, 'f'); err != nil {
-					return
-				}
-				for j, d = k, k-j; d < 6; d++ {
-					usec *= 10
-				}
-				nsec = usec * 1000
-			case 'Z':
-				k := j
-				for ; k < l; k++ {
-					if c := source[k]; c < 'A' || 'Z' < c {
-						break
-					}
-				}
-				t, err = time.ParseInLocation("MST", source[j:k], base)
-				if err != nil {
-					err = fmt.Errorf(`cannot parse %q with "%%Z"`, source[j:k])
-					return
-				}
-				if hasZoneOffset {
-					name, _ := t.Zone()
-					_, offset := locationZone(loc)
-					loc = time.FixedZone(name, offset)
-				} else {
-					loc = t.Location()
-				}
-				hasZoneName = true
-				j = k
-			case 'z':
-				if j >= l {
-					err = parseZFormatError(colons)
-					return
-				}
-				sign := 1
-				switch source[j] {
-				case '-':
-					sign = -1
-					fallthrough
-				case '+':
-					var hour, min, sec, k int
-					if hour, k, _ = parseNumber(source, j+1, 2, 'z'); k != j+3 {
-						err = parseZFormatError(colons)
-						return
-					}
-					if j = k; j >= l || source[j] != ':' {
-						switch colons {
-						case 1:
-							err = errors.New("expected ':' for %:z")
-							return
-						case 2:
-							err = errors.New("expected ':' for %::z")
-							return
-						}
-					} else if j++; colons == 0 {
-						colons = 4
-					}
-					if min, k, _ = parseNumber(source, j, 2, 'z'); k != j+2 {
-						if colons == 0 {
-							k = j
-						} else {
-							err = parseZFormatError(colons & 3)
-							return
-						}
-					}
-					if j = k; colons > 1 {
-						if j >= l || source[j] != ':' {
-							if colons == 2 {
-								err = errors.New("expected ':' for %::z")
-								return
-							}
-						} else if sec, k, _ = parseNumber(source, j+1, 2, 'z'); k != j+3 {
-							if colons == 2 {
-								err = parseZFormatError(colons)
-								return
-							}
-						} else {
-							j = k
-						}
-					}
-					var name string
-					if hasZoneName {
-						name, _ = locationZone(loc)
-					}
-					loc, colons = time.FixedZone(name, sign*((hour*60+min)*60+sec)), 0
-					hasZoneOffset = true
-				case 'Z':
-					loc, colons, j = time.UTC, 0, j+1
-				default:
-					err = parseZFormatError(colons)
-					return
-				}
-			case ':':
-				if pending != "" {
-					if j >= l || source[j] != b {
-						err = expectedFormatError(b)
-						return
-					}
-					j++
-				} else {
-					if i++; i == len(format) {
-						err = errors.New(`expected 'z' after "%:"`)
-						return
-					} else if b = format[i]; b == 'z' {
-						colons = 1
-					} else if b != ':' {
-						err = errors.New(`expected 'z' after "%:"`)
-						return
-					} else if i++; i == len(format) {
-						err = errors.New(`expected 'z' after "%::"`)
-						return
-					} else if b = format[i]; b == 'z' {
-						colons = 2
-					} else {
-						err = errors.New(`expected 'z' after "%::"`)
-						return
-					}
-					goto L
-				}
-			case 't', 'n':
-				k := j
-			K:
-				for ; k < l; k++ {
-					switch source[k] {
-					case ' ', '\t', '\n', '\v', '\f', '\r':
-					default:
-						break K
-					}
-				}
-				if k == j {
-					err = fmt.Errorf("expected a space for %%%c", b)
-					return
-				}
-				j = k
-			case '%':
-				if j >= l || source[j] != b {
-					err = expectedFormatError(b)
-					return
-				}
-				j++
-			default:
-				if pending == "" {
-					var ok bool
-					if pending, ok = compositions[b]; ok {
-						break
-					}
-					err = fmt.Errorf(`unexpected format: "%%%c"`, b)
-					return
-				}
-				if j >= l || source[j] != b {
-					err = expectedFormatError(b)
-					return
-				}
-				j++
-			}
-			if pending != "" {
-				b, pending = pending[0], pending[1:]
-				goto L
-			}
-		} else if j >= len(source) || source[j] != b {
-			err = expectedFormatError(b)
-			return
-		} else {
-			j++
-		}
-	}
-	if j < len(source) {
-		err = fmt.Errorf("unconverted string: %q", source[j:])
-		return
-	}
-	if pm {
-		hour += 12
-	}
-	if century > 0 {
-		year = century*100 + year%100
-	}
-	if yday > 0 {
-		return time.Date(year, time.January, 1, hour, min, sec, nsec, loc).AddDate(0, 0, yday-1), nil
-	}
-	return time.Date(year, time.Month(month), day, hour, min, sec, nsec, loc), nil
-}
-
-func locationZone(loc *time.Location) (name string, offset int) {
-	return time.Date(2000, time.January, 1, 0, 0, 0, 0, loc).Zone()
-}
-
-type parseFormatError byte
-
-func (err parseFormatError) Error() string {
-	return fmt.Sprintf("cannot parse %%%c", byte(err))
-}
-
-type expectedFormatError byte
-
-func (err expectedFormatError) Error() string {
-	return fmt.Sprintf("expected %q", byte(err))
-}
-
-type parseZFormatError int
-
-func (err parseZFormatError) Error() string {
-	switch int(err) {
-	case 0:
-		return "cannot parse %z"
-	case 1:
-		return "cannot parse %:z"
-	default:
-		return "cannot parse %::z"
-	}
-}
-
-func parseNumber(source string, min, size int, format byte) (int, int, error) {
-	var val int
-	if l := len(source); min+size > l {
-		size = l
-	} else {
-		size += min
-	}
-	i := min
-	for ; i < size; i++ {
-		if b := source[i]; '0' <= b && b <= '9' {
-			val = val*10 + int(b&0x0F)
-		} else {
-			break
-		}
-	}
-	if i == min {
-		return 0, 0, parseFormatError(format)
-	}
-	return val, i, nil
-}
-
-func lookup(source string, min int, candidates []string, format byte) (int, int, error) {
-L:
-	for i, xs := range candidates {
-		j := min
-		for k := 0; k < len(xs); k, j = k+1, j+1 {
-			if j >= len(source) {
-				continue L
-			}
-			if x, y := xs[k], source[j]; x != y && x|('a'-'A') != y|('a'-'A') {
-				continue L
-			}
-		}
-		return i + 1, j, nil
-	}
-	return 0, 0, parseFormatError(format)
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/itchyny/timefmt-go/timefmt.go","mode":420,"size":100,"sha256":"98f01623f68be096565e07e20246cb64ce7ab5bba75a071e7f5def09e584f434","index":0,"count":1,"encoding":"utf-8","payloadBytes":100}
-// Package timefmt provides functions for formatting and parsing date time strings.
-package timefmt
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/jackmordaunt/icns/.gitignore","mode":420,"size":24,"sha256":"97bd34f523e94741a1f7123bed15f6b5fcf5ef5c3216534b493fc958fc899387","index":0,"count":1,"encoding":"utf-8","payloadBytes":24}
-*.DS_Store
-*vendor
-*dist
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/jackmordaunt/icns/.goreleaser.yml","mode":420,"size":1451,"sha256":"184f546a604341e77ad1536a6f8492b2c6f1ff86deac9315a49dd487a274615f","index":0,"count":1,"encoding":"utf-8","payloadBytes":1451}
-project_name: icnsify
-release:
-  github:
-    owner: jackmordaunt
-    name: icns
-  name_template: '{{.Tag}}'
-brew:
-  commit_author:
-    name: jackmordaunt
-    email: jackmordaunt@gmail.com
-  install: bin.install "icns"
-scoop:
-  commit_author:
-    name: jackmordaunt
-    email: jackmordaunt@gmail.com
-builds:
-- goos:
-  - linux
-  - darwin
-  goarch:
-  - amd64
-  - "386"
-  goarm:
-  - "6"
-  targets:
-  - linux_amd64
-  - linux_386
-  - darwin_amd64
-  - darwin_386
-  main: ./cmd/icnsify
-  ldflags: -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}}
-  binary: icnsify
-  lang: go
-archive:
-  name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ if .Arm
-    }}v{{ .Arm }}{{ end }}'
-  format: tar.gz
-  files:
-  - licence*
-  - LICENCE*
-  - license*
-  - LICENSE*
-  - readme*
-  - README*
-  - changelog*
-  - CHANGELOG*
-fpm:
-  name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ if .Arm
-    }}v{{ .Arm }}{{ end }}'
-  bindir: /usr/local/bin
-snapcraft:
-  name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ if .Arm
-    }}v{{ .Arm }}{{ end }}'
-snapshot:
-  name_template: SNAPSHOT-{{ .Commit }}
-checksum:
-  name_template: '{{ .ProjectName }}_{{ .Version }}_checksums.txt'
-dist: dist
-sign:
-  cmd: gpg
-  args:
-  - --output
-  - $signature
-  - --detach-sig
-  - $artifact
-  signature: ${artifact}.sig
-  artifacts: none
-env_files:
-  github_token: ~/.config/goreleaser/github_token
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/jackmordaunt/icns/Gopkg.lock","mode":420,"size":1137,"sha256":"4870009a0629eb0cbc65c4c8e350eee0538ed2b127ae0fd4eaece3028a97ef99","index":0,"count":1,"encoding":"utf-8","payloadBytes":1137}
-# This file is autogenerated, do not edit; changes may be undone by the next 'dep ensure'.
-
-
-[[projects]]
-  branch = "master"
-  name = "github.com/nfnt/resize"
-  packages = ["."]
-  revision = "891127d8d1b52734debe1b3c3d7e747502b6c366"
-
-[[projects]]
-  name = "github.com/pkg/errors"
-  packages = ["."]
-  revision = "645ef00459ed84a119197bfb8d8205042c6df63d"
-  version = "v0.8.0"
-
-[[projects]]
-  name = "github.com/spf13/afero"
-  packages = [
-    ".",
-    "mem"
-  ]
-  revision = "bb8f1927f2a9d3ab41c9340aa034f6b803f4359c"
-  version = "v1.0.2"
-
-[[projects]]
-  name = "github.com/spf13/pflag"
-  packages = ["."]
-  revision = "e57e3eeb33f795204c1ca35f56c44f83227c6e66"
-  version = "v1.0.0"
-
-[[projects]]
-  branch = "master"
-  name = "golang.org/x/text"
-  packages = [
-    "internal/gen",
-    "internal/triegen",
-    "internal/ucd",
-    "transform",
-    "unicode/cldr",
-    "unicode/norm"
-  ]
-  revision = "4e4a3210bb54bb31f6ab2cdca2edcc0b50c420c1"
-
-[solve-meta]
-  analyzer-name = "dep"
-  analyzer-version = 1
-  inputs-digest = "542c1997350fc6496202a525a2792f1820f9f9ee7c550410442fea03a48da8dc"
-  solver-name = "gps-cdcl"
-  solver-version = 1
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/jackmordaunt/icns/Gopkg.toml","mode":420,"size":945,"sha256":"f0bfca59ca4db1c49b25e25e3834c4f4c8b101f6dec1988b14b15320b0198f29","index":0,"count":1,"encoding":"utf-8","payloadBytes":945}
-# Gopkg.toml example
-#
-# Refer to https://github.com/golang/dep/blob/master/docs/Gopkg.toml.md
-# for detailed Gopkg.toml documentation.
-#
-# required = ["github.com/user/thing/cmd/thing"]
-# ignored = ["github.com/user/project/pkgX", "bitbucket.org/user/project/pkgA/pkgY"]
-#
-# [[constraint]]
-#   name = "github.com/user/project"
-#   version = "1.0.0"
-#
-# [[constraint]]
-#   name = "github.com/user/project2"
-#   branch = "dev"
-#   source = "github.com/myfork/project2"
-#
-# [[override]]
-#   name = "github.com/x/y"
-#   version = "2.4.0"
-#
-# [prune]
-#   non-go = false
-#   go-tests = true
-#   unused-packages = true
-
-
-[[constraint]]
-  branch = "master"
-  name = "github.com/nfnt/resize"
-
-[[constraint]]
-  name = "github.com/pkg/errors"
-  version = "0.8.0"
-
-[[constraint]]
-  name = "github.com/spf13/afero"
-  version = "1.0.2"
-
-[[constraint]]
-  name = "github.com/spf13/pflag"
-  version = "1.0.0"
-
-[prune]
-  go-tests = true
-  unused-packages = true
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/jackmordaunt/icns/LICENSE","mode":420,"size":1070,"sha256":"7e47a9fd2664f0ebd611d867cb42950d37099a9e6eece83379e5eb34ac4ddfe2","index":0,"count":1,"encoding":"utf-8","payloadBytes":1070}
-MIT License
-
-Copyright (c) 2018 Jack Mordaunt
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/jackmordaunt/icns/doc.go","mode":420,"size":1088,"sha256":"d6c4a664475d596fbbf5b40ecb4acfc0c26c183512793ea50d925f2a9a8269e7","index":0,"count":1,"encoding":"utf-8","payloadBytes":1088}
-// Package icns implements an encoder for Apple's `.icns` file format.
-// Reference: "https://en.wikipedia.org/wiki/Apple_Icon_Image_format".
-//
-// icns files allow for high resolution icons to make your apps look sexy.
-// The most common ways to generate icns files are 1. use `iconutil` which is
-// a Mac native cli utility, or 2. use tools that wrap `ImageMagick` which adds
-// a large dependency to your project for such a simple use case.
-//
-// With this library you can use pure Go to create icns files from any source
-// image, given that you can decode it into an `image.Image`, without any
-// heavyweight dependencies or subprocessing required. You can also use this
-// library to create icns files on windows and linux.
-//
-// A small CLI app `icnsify` is provided to allow you to create icns files
-// using this library from the command line. It supports piping, which is
-// something `iconutil` does not do, making it substantially easier to wrap.
-//
-// Note: All icons within the icns are sized for high dpi retina screens, using
-// the appropriate icns OSTypes.
-package icns
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/jackmordaunt/icns/error.go","mode":420,"size":466,"sha256":"77729f1b87651fca54c06ea128ad3ecac8b7aa6b573419bb1d7b26aac518944a","index":0,"count":1,"encoding":"utf-8","payloadBytes":466}
-package icns
-
-import (
-	"fmt"
-	"image"
-)
-
-// ErrImageTooSmall is returned when the image is too small to process.
-type ErrImageTooSmall struct {
-	need  int
-	image image.Image
-}
-
-func (err ErrImageTooSmall) Error() string {
-	b := err.image.Bounds().Max
-	format := "image is too small: %dx%d, need at least %dx%d"
-	return fmt.Sprintf(format, b.X, b.Y, err.need, err.need)
-}
-
-func panicf(format string, values ...interface{}) {
-	panic(fmt.Sprintf(format, values...))
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/jackmordaunt/icns/icns.go","mode":420,"size":3573,"sha256":"fa7397f2e4b4f87b78aaf28eadbd31873f36b85ff26a11ef4bf1ade9a28d131a","index":0,"count":1,"encoding":"utf-8","payloadBytes":3573}
-package icns
-
-import (
-	"errors"
-	"image"
-	"io"
-
-	"github.com/nfnt/resize"
-)
-
-// Encoder encodes ICNS files from a source image.
-type Encoder struct {
-	Wr        io.Writer
-	Algorithm InterpolationFunction
-}
-
-// NewEncoder initialises an encoder.
-func NewEncoder(wr io.Writer) *Encoder {
-	return &Encoder{
-		Wr: wr,
-	}
-}
-
-// WithAlgorithm applies the interpolation function used to resize the image.
-func (enc *Encoder) WithAlgorithm(a InterpolationFunction) *Encoder {
-	enc.Algorithm = a
-	return enc
-}
-
-// Encode icns with the given configuration.
-func (enc *Encoder) Encode(img image.Image) error {
-	if enc.Wr == nil {
-		return errors.New("cannot write to nil writer")
-	}
-	if img == nil {
-		return errors.New("cannot encode nil image")
-	}
-	iconset, err := NewIconSet(img, enc.Algorithm)
-	if err != nil {
-		return err
-	}
-	if _, err := iconset.WriteTo(enc.Wr); err != nil {
-		return err
-	}
-	return nil
-}
-
-// Encode writes img to wr in ICNS format.
-// img is assumed to be a rectangle; non-square dimensions will be squared
-// without preserving the aspect ratio.
-// Uses nearest neighbor as interpolation algorithm.
-func Encode(wr io.Writer, img image.Image) error {
-	return NewEncoder(wr).Encode(img)
-}
-
-// NewIconSet uses the source image to create an IconSet.
-// If width != height, the image will be resized using the largest side without
-// preserving the aspect ratio.
-func NewIconSet(img image.Image, interp InterpolationFunction) (*IconSet, error) {
-	biggest := findNearestSize(img)
-	if biggest == 0 {
-		return nil, ErrImageTooSmall{image: img, need: 16}
-	}
-	icons := []*Icon{}
-	for _, size := range sizesFrom(biggest) {
-		t, ok := getTypeFromSize(size)
-		if !ok {
-			continue
-		}
-		iconImg := resize.Resize(size, size, img, interp)
-		icon := &Icon{
-			Type:  t,
-			Image: iconImg,
-		}
-		icons = append(icons, icon)
-	}
-	iconset := &IconSet{
-		Icons: icons,
-	}
-	return iconset, nil
-}
-
-// Big-endian.
-// https://golang.org/src/image/png/writer.go
-func writeUint32(b []uint8, u uint32) {
-	b[0] = uint8(u >> 24)
-	b[1] = uint8(u >> 16)
-	b[2] = uint8(u >> 8)
-	b[3] = uint8(u >> 0)
-}
-
-var sizes = []uint{
-	1024,
-	512,
-	256,
-	64,
-	32,
-}
-
-// findNearestSize finds the biggest icon size we can use for this image.
-func findNearestSize(img image.Image) uint {
-	size := biggestSide(img)
-	for _, s := range sizes {
-		if size >= s {
-			return s
-		}
-	}
-	return 0
-}
-
-func biggestSide(img image.Image) uint {
-	var size uint
-	b := img.Bounds()
-	w, h := uint(b.Max.X), uint(b.Max.Y)
-	size = w
-	if h > size {
-		size = h
-	}
-	return size
-}
-
-// sizesFrom returns a slice containing the sizes less than and including max.
-func sizesFrom(max uint) []uint {
-	for ii, s := range sizes {
-		if s <= max {
-			return sizes[ii:len(sizes)]
-		}
-	}
-	return []uint{}
-}
-
-// OsType is a 4 character identifier used to differentiate icon types.
-type OsType struct {
-	ID   string
-	Size uint
-}
-
-var osTypes = []OsType{
-	{ID: "ic10", Size: uint(1024)},
-	{ID: "ic14", Size: uint(512)},
-	{ID: "ic13", Size: uint(256)},
-	{ID: "ic07", Size: uint(128)},
-	{ID: "ic12", Size: uint(64)},
-	{ID: "ic11", Size: uint(32)},
-}
-
-// getTypeFromSize returns the type for the given icon size (in px).
-// The boolean indicates whether the type exists.
-func getTypeFromSize(size uint) (OsType, bool) {
-	for _, t := range osTypes {
-		if t.Size == size {
-			return t, true
-		}
-	}
-	return OsType{}, false
-}
-
-func getTypeFromID(ID string) (OsType, bool) {
-	for _, t := range osTypes {
-		if t.ID == ID {
-			return t, true
-		}
-	}
-	return OsType{}, false
-}
-
-func osTypeFromID(ID string) OsType {
-	t, _ := getTypeFromID(ID)
-	return t
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/jackmordaunt/icns/interpolation.go","mode":420,"size":546,"sha256":"e555c99eae27a9a45ce2e58fa663234d82ca88e7e35082d5a568aa5afab66c8e","index":0,"count":1,"encoding":"utf-8","payloadBytes":546}
-package icns
-
-import (
-	"github.com/nfnt/resize"
-)
-
-// InterpolationFunction is the algorithm used to resize the image.
-type InterpolationFunction = resize.InterpolationFunction
-
-// InterpolationFunction constants.
-const (
-	// Nearest-neighbor interpolation
-	NearestNeighbor InterpolationFunction = iota
-	// Bilinear interpolation
-	Bilinear
-	// Bicubic interpolation (with cubic hermite spline)
-	Bicubic
-	// Mitchell-Netravali interpolation
-	MitchellNetravali
-	// Lanczos interpolation (a=2)
-	Lanczos2
-	// Lanczos interpolation (a=3)
-	Lanczos3
-)
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/jackmordaunt/icns/reader.go","mode":420,"size":1601,"sha256":"60ca156e1fc93ab385d95f547624569d794ab058bcee86ee3ad1d1e52021cab7","index":0,"count":1,"encoding":"utf-8","payloadBytes":1601}
-package icns
-
-import (
-	"bytes"
-	"encoding/binary"
-	"fmt"
-	"image"
-	"io"
-	"io/ioutil"
-
-	"github.com/pkg/errors"
-)
-
-// Decode finds the largest icon listed in the icns file and returns it,
-// ignoring all other sizes. The format returned will be whatever the icon data
-// is, typically jpeg or png.
-func Decode(r io.Reader) (image.Image, error) {
-	data, err := ioutil.ReadAll(r)
-	if err != nil {
-		return nil, err
-	}
-	icnsHeader := data[0:4]
-	if string(icnsHeader) != "icns" {
-		return nil, fmt.Errorf("invalid header for icns file")
-	}
-	fileSize := binary.BigEndian.Uint32(data[4:8])
-	icons := []iconReader{}
-	read := uint32(8)
-	for read < fileSize {
-		next := data[read : read+4]
-		read += 4
-		switch string(next) {
-		case "TOC ":
-			read += 4
-			continue
-		case "icnV":
-			read += 4
-			continue
-		}
-		if isOsType(string(next)) {
-			iconSize := binary.BigEndian.Uint32(data[read : read+4])
-			read += 4
-			iconData := data[read : read+iconSize]
-			read += iconSize
-			icons = append(icons, iconReader{
-				OsType: osTypeFromID(string(next)),
-				r:      bytes.NewBuffer(iconData),
-			})
-		}
-	}
-	if len(icons) == 0 {
-		return nil, fmt.Errorf("no icons found")
-	}
-	var biggest iconReader
-	for _, icon := range icons {
-		if icon.Size > biggest.Size {
-			biggest = icon
-		}
-	}
-	img, _, err := image.Decode(biggest.r)
-	if err != nil {
-		return nil, errors.Wrap(err, "decoding largest image")
-	}
-	return img, nil
-}
-
-type iconReader struct {
-	OsType
-	r io.Reader
-}
-
-func isOsType(ID string) bool {
-	_, ok := getTypeFromID(ID)
-	return ok
-}
-
-func init() {
-	image.RegisterFormat("icns", "icns", Decode, nil)
 }
 
 @@END

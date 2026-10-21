@@ -1,3 +1,1368 @@
+@@PORTABLE {"path":"third_party/wails/vendor/howett.net/plist/bplist_parser.go","mode":420,"size":10818,"sha256":"b92c157f40e91e0832108d6c1dedf922bf8bbf6cd86b9324dd8cbf1775d52b39","index":0,"count":1,"encoding":"utf-8","payloadBytes":10818}
+package plist
+
+import (
+	"bytes"
+	"encoding/binary"
+	"errors"
+	"fmt"
+	"io"
+	"io/ioutil"
+	"math"
+	"runtime"
+	"time"
+	"unicode/utf16"
+)
+
+const (
+	signedHighBits = 0xFFFFFFFFFFFFFFFF
+)
+
+type offset uint64
+
+type bplistParser struct {
+	buffer []byte
+
+	reader        io.ReadSeeker
+	version       int
+	objects       []cfValue // object ID to object
+	trailer       bplistTrailer
+	trailerOffset uint64
+
+	containerStack []offset // slice of object offsets; manipulated during container deserialization
+}
+
+func (p *bplistParser) validateDocumentTrailer() {
+	if p.trailer.OffsetTableOffset >= p.trailerOffset {
+		panic(fmt.Errorf("offset table beyond beginning of trailer (0x%x, trailer@0x%x)", p.trailer.OffsetTableOffset, p.trailerOffset))
+	}
+
+	if p.trailer.OffsetTableOffset < 9 {
+		panic(fmt.Errorf("offset table begins inside header (0x%x)", p.trailer.OffsetTableOffset))
+	}
+
+	if p.trailerOffset > (p.trailer.NumObjects*uint64(p.trailer.OffsetIntSize))+p.trailer.OffsetTableOffset {
+		panic(errors.New("garbage between offset table and trailer"))
+	}
+
+	if p.trailer.OffsetTableOffset+(uint64(p.trailer.OffsetIntSize)*p.trailer.NumObjects) > p.trailerOffset {
+		panic(errors.New("offset table isn't long enough to address every object"))
+	}
+
+	maxObjectRef := uint64(1) << (8 * p.trailer.ObjectRefSize)
+	if p.trailer.NumObjects > maxObjectRef {
+		panic(fmt.Errorf("more objects (%v) than object ref size (%v bytes) can support", p.trailer.NumObjects, p.trailer.ObjectRefSize))
+	}
+
+	if p.trailer.OffsetIntSize < uint8(8) && (uint64(1)<<(8*p.trailer.OffsetIntSize)) <= p.trailer.OffsetTableOffset {
+		panic(errors.New("offset size isn't big enough to address entire file"))
+	}
+
+	if p.trailer.TopObject >= p.trailer.NumObjects {
+		panic(fmt.Errorf("top object #%d is out of range (only %d exist)", p.trailer.TopObject, p.trailer.NumObjects))
+	}
+}
+
+func (p *bplistParser) parseDocument() (pval cfValue, parseError error) {
+	defer func() {
+		if r := recover(); r != nil {
+			if _, ok := r.(runtime.Error); ok {
+				panic(r)
+			}
+
+			parseError = plistParseError{"binary", r.(error)}
+		}
+	}()
+
+	p.buffer, _ = ioutil.ReadAll(p.reader)
+
+	l := len(p.buffer)
+	if l < 40 {
+		panic(errors.New("not enough data"))
+	}
+
+	if !bytes.Equal(p.buffer[0:6], []byte{'b', 'p', 'l', 'i', 's', 't'}) {
+		panic(errors.New("incomprehensible magic"))
+	}
+
+	p.version = int(((p.buffer[6] - '0') * 10) + (p.buffer[7] - '0'))
+
+	if p.version > 1 {
+		panic(fmt.Errorf("unexpected version %d", p.version))
+	}
+
+	p.trailerOffset = uint64(l - 32)
+	p.trailer = bplistTrailer{
+		SortVersion:       p.buffer[p.trailerOffset+5],
+		OffsetIntSize:     p.buffer[p.trailerOffset+6],
+		ObjectRefSize:     p.buffer[p.trailerOffset+7],
+		NumObjects:        binary.BigEndian.Uint64(p.buffer[p.trailerOffset+8:]),
+		TopObject:         binary.BigEndian.Uint64(p.buffer[p.trailerOffset+16:]),
+		OffsetTableOffset: binary.BigEndian.Uint64(p.buffer[p.trailerOffset+24:]),
+	}
+
+	p.validateDocumentTrailer()
+
+	// INVARIANTS:
+	// - Entire offset table is before trailer
+	// - Offset table begins after header
+	// - Offset table can address entire document
+	// - Object IDs are big enough to support the number of objects in this plist
+	// - Top object is in range
+
+	p.objects = make([]cfValue, p.trailer.NumObjects)
+
+	pval = p.objectAtIndex(p.trailer.TopObject)
+	return
+}
+
+// parseSizedInteger returns a 128-bit integer as low64, high64
+func (p *bplistParser) parseSizedInteger(off offset, nbytes int) (lo uint64, hi uint64, newOffset offset) {
+	// Per comments in CoreFoundation, format version 00 requires that all
+	// 1, 2 or 4-byte integers be interpreted as unsigned. 8-byte integers are
+	// signed (always?) and therefore must be sign extended here.
+	// negative 1, 2, or 4-byte integers are always emitted as 64-bit.
+	switch nbytes {
+	case 1:
+		lo, hi = uint64(p.buffer[off]), 0
+	case 2:
+		lo, hi = uint64(binary.BigEndian.Uint16(p.buffer[off:])), 0
+	case 4:
+		lo, hi = uint64(binary.BigEndian.Uint32(p.buffer[off:])), 0
+	case 8:
+		lo = binary.BigEndian.Uint64(p.buffer[off:])
+		if p.buffer[off]&0x80 != 0 {
+			// sign extend if lo is signed
+			hi = signedHighBits
+		}
+	case 16:
+		lo, hi = binary.BigEndian.Uint64(p.buffer[off+8:]), binary.BigEndian.Uint64(p.buffer[off:])
+	default:
+		if nbytes > 8 {
+			panic(errors.New("illegal integer size"))
+		}
+		lo, hi = binary.BigEndian.Uint64(p.buffer[off-(8-offset(nbytes)):]) & ((1<<offset(nbytes*8))-1), 0
+	}
+	newOffset = off + offset(nbytes)
+	return
+}
+
+func (p *bplistParser) parseObjectRefAtOffset(off offset) (uint64, offset) {
+	oid, _, next := p.parseSizedInteger(off, int(p.trailer.ObjectRefSize))
+	return oid, next
+}
+
+func (p *bplistParser) parseOffsetAtOffset(off offset) (offset, offset) {
+	parsedOffset, _, next := p.parseSizedInteger(off, int(p.trailer.OffsetIntSize))
+	return offset(parsedOffset), next
+}
+
+func (p *bplistParser) objectAtIndex(index uint64) cfValue {
+	if index >= p.trailer.NumObjects {
+		panic(fmt.Errorf("invalid object#%d (max %d)", index, p.trailer.NumObjects))
+	}
+
+	if pval := p.objects[index]; pval != nil {
+		return pval
+	}
+
+	off, _ := p.parseOffsetAtOffset(offset(p.trailer.OffsetTableOffset + (index * uint64(p.trailer.OffsetIntSize))))
+	if off > offset(p.trailer.OffsetTableOffset-1) {
+		panic(fmt.Errorf("object#%d starts beyond beginning of object table (0x%x, table@0x%x)", index, off, p.trailer.OffsetTableOffset))
+	}
+
+	pval := p.parseTagAtOffset(off)
+	p.objects[index] = pval
+	return pval
+
+}
+
+func (p *bplistParser) pushNestedObject(off offset) {
+	for _, v := range p.containerStack {
+		if v == off {
+			p.panicNestedObject(off)
+		}
+	}
+	p.containerStack = append(p.containerStack, off)
+}
+
+func (p *bplistParser) panicNestedObject(off offset) {
+	ids := ""
+	for _, v := range p.containerStack {
+		ids += fmt.Sprintf("0x%x > ", v)
+	}
+
+	// %s0x%d: ids above ends with " > "
+	panic(fmt.Errorf("self-referential collection@0x%x (%s0x%x) cannot be deserialized", off, ids, off))
+}
+
+func (p *bplistParser) popNestedObject() {
+	p.containerStack = p.containerStack[:len(p.containerStack)-1]
+}
+
+func (p *bplistParser) parseTagAtOffset(off offset) cfValue {
+	tag := p.buffer[off]
+
+	switch tag & 0xF0 {
+	case bpTagNull:
+		switch tag & 0x0F {
+		case bpTagBoolTrue, bpTagBoolFalse:
+			return cfBoolean(tag == bpTagBoolTrue)
+		}
+	case bpTagInteger:
+		lo, hi, _ := p.parseIntegerAtOffset(off)
+		return &cfNumber{
+			signed: hi == signedHighBits, // a signed integer is stored as a 128-bit integer with the top 64 bits set
+			value:  lo,
+		}
+	case bpTagReal:
+		nbytes := 1 << (tag & 0x0F)
+		switch nbytes {
+		case 4:
+			bits := binary.BigEndian.Uint32(p.buffer[off+1:])
+			return &cfReal{wide: false, value: float64(math.Float32frombits(bits))}
+		case 8:
+			bits := binary.BigEndian.Uint64(p.buffer[off+1:])
+			return &cfReal{wide: true, value: math.Float64frombits(bits)}
+		}
+		panic(errors.New("illegal float size"))
+	case bpTagDate:
+		bits := binary.BigEndian.Uint64(p.buffer[off+1:])
+		val := math.Float64frombits(bits)
+
+		// Apple Epoch is 20110101000000Z
+		// Adjust for UNIX Time
+		val += 978307200
+
+		sec, fsec := math.Modf(val)
+		time := time.Unix(int64(sec), int64(fsec*float64(time.Second))).In(time.UTC)
+		return cfDate(time)
+	case bpTagData:
+		data := p.parseDataAtOffset(off)
+		return cfData(data)
+	case bpTagASCIIString:
+		str := p.parseASCIIStringAtOffset(off)
+		return cfString(str)
+	case bpTagUTF16String:
+		str := p.parseUTF16StringAtOffset(off)
+		return cfString(str)
+	case bpTagUID: // Somehow different than int: low half is nbytes - 1 instead of log2(nbytes)
+		lo, _, _ := p.parseSizedInteger(off+1, int(tag&0xF)+1)
+		return cfUID(lo)
+	case bpTagDictionary:
+		return p.parseDictionaryAtOffset(off)
+	case bpTagArray:
+		return p.parseArrayAtOffset(off)
+	}
+	panic(fmt.Errorf("unexpected atom 0x%2.02x at offset 0x%x", tag, off))
+}
+
+func (p *bplistParser) parseIntegerAtOffset(off offset) (uint64, uint64, offset) {
+	tag := p.buffer[off]
+	return p.parseSizedInteger(off+1, 1<<(tag&0xF))
+}
+
+func (p *bplistParser) countForTagAtOffset(off offset) (uint64, offset) {
+	tag := p.buffer[off]
+	cnt := uint64(tag & 0x0F)
+	if cnt == 0xF {
+		cnt, _, off = p.parseIntegerAtOffset(off + 1)
+		return cnt, off
+	}
+	return cnt, off + 1
+}
+
+func (p *bplistParser) parseDataAtOffset(off offset) []byte {
+	len, start := p.countForTagAtOffset(off)
+	if start+offset(len) > offset(p.trailer.OffsetTableOffset) {
+		panic(fmt.Errorf("data@0x%x too long (%v bytes, max is %v)", off, len, p.trailer.OffsetTableOffset-uint64(start)))
+	}
+	return p.buffer[start : start+offset(len)]
+}
+
+func (p *bplistParser) parseASCIIStringAtOffset(off offset) string {
+	len, start := p.countForTagAtOffset(off)
+	if start+offset(len) > offset(p.trailer.OffsetTableOffset) {
+		panic(fmt.Errorf("ascii string@0x%x too long (%v bytes, max is %v)", off, len, p.trailer.OffsetTableOffset-uint64(start)))
+	}
+
+	return zeroCopy8BitString(p.buffer, int(start), int(len))
+}
+
+func (p *bplistParser) parseUTF16StringAtOffset(off offset) string {
+	len, start := p.countForTagAtOffset(off)
+	bytes := len * 2
+	if start+offset(bytes) > offset(p.trailer.OffsetTableOffset) {
+		panic(fmt.Errorf("utf16 string@0x%x too long (%v bytes, max is %v)", off, bytes, p.trailer.OffsetTableOffset-uint64(start)))
+	}
+
+	u16s := make([]uint16, len)
+	for i := offset(0); i < offset(len); i++ {
+		u16s[i] = binary.BigEndian.Uint16(p.buffer[start+(i*2):])
+	}
+	runes := utf16.Decode(u16s)
+	return string(runes)
+}
+
+func (p *bplistParser) parseObjectListAtOffset(off offset, count uint64) []cfValue {
+	if off+offset(count*uint64(p.trailer.ObjectRefSize)) > offset(p.trailer.OffsetTableOffset) {
+		panic(fmt.Errorf("list@0x%x length (%v) puts its end beyond the offset table at 0x%x", off, count, p.trailer.OffsetTableOffset))
+	}
+	objects := make([]cfValue, count)
+
+	next := off
+	var oid uint64
+	for i := uint64(0); i < count; i++ {
+		oid, next = p.parseObjectRefAtOffset(next)
+		objects[i] = p.objectAtIndex(oid)
+	}
+
+	return objects
+}
+
+func (p *bplistParser) parseDictionaryAtOffset(off offset) *cfDictionary {
+	p.pushNestedObject(off)
+	defer p.popNestedObject()
+
+	// a dictionary is an object list of [key key key val val val]
+	cnt, start := p.countForTagAtOffset(off)
+	objects := p.parseObjectListAtOffset(start, cnt*2)
+
+	keys := make([]string, cnt)
+	for i := uint64(0); i < cnt; i++ {
+		if str, ok := objects[i].(cfString); ok {
+			keys[i] = string(str)
+		} else {
+			panic(fmt.Errorf("dictionary@0x%x contains non-string key at index %d", off, i))
+		}
+	}
+
+	return &cfDictionary{
+		keys:   keys,
+		values: objects[cnt:],
+	}
+}
+
+func (p *bplistParser) parseArrayAtOffset(off offset) *cfArray {
+	p.pushNestedObject(off)
+	defer p.popNestedObject()
+
+	// an array is just an object list
+	cnt, start := p.countForTagAtOffset(off)
+	return &cfArray{p.parseObjectListAtOffset(start, cnt)}
+}
+
+func newBplistParser(r io.ReadSeeker) *bplistParser {
+	return &bplistParser{reader: r}
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/howett.net/plist/decode.go","mode":420,"size":4058,"sha256":"b1b12b28a5e21d3ae4823efd38e87e41a88751d1ba3f0fad5b191dfe1004d877","index":0,"count":1,"encoding":"utf-8","payloadBytes":4058}
+package plist
+
+import (
+	"bytes"
+	"io"
+	"reflect"
+	"runtime"
+)
+
+type parser interface {
+	parseDocument() (cfValue, error)
+}
+
+// A Decoder reads a property list from an input stream.
+type Decoder struct {
+	// the format of the most-recently-decoded property list
+	Format int
+
+	reader io.ReadSeeker
+	lax    bool
+}
+
+// Decode works like Unmarshal, except it reads the decoder stream to find property list elements.
+//
+// After Decoding, the Decoder's Format field will be set to one of the plist format constants.
+func (p *Decoder) Decode(v interface{}) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			if _, ok := r.(runtime.Error); ok {
+				panic(r)
+			}
+			err = r.(error)
+		}
+	}()
+
+	header := make([]byte, 6)
+	p.reader.Read(header)
+	p.reader.Seek(0, 0)
+
+	var parser parser
+	var pval cfValue
+	if bytes.Equal(header, []byte("bplist")) {
+		parser = newBplistParser(p.reader)
+		pval, err = parser.parseDocument()
+		if err != nil {
+			// Had a bplist header, but still got an error: we have to die here.
+			return err
+		}
+		p.Format = BinaryFormat
+	} else {
+		parser = newXMLPlistParser(p.reader)
+		pval, err = parser.parseDocument()
+		if _, ok := err.(invalidPlistError); ok {
+			// Rewind: the XML parser might have exhausted the file.
+			p.reader.Seek(0, 0)
+			// We don't use parser here because we want the textPlistParser type
+			tp := newTextPlistParser(p.reader)
+			pval, err = tp.parseDocument()
+			if err != nil {
+				return err
+			}
+			p.Format = tp.format
+			if p.Format == OpenStepFormat {
+				// OpenStep property lists can only store strings,
+				// so we have to turn on lax mode here for the unmarshal step later.
+				p.lax = true
+			}
+		} else {
+			if err != nil {
+				return err
+			}
+			p.Format = XMLFormat
+		}
+	}
+
+	p.unmarshal(pval, reflect.ValueOf(v))
+	return
+}
+
+// NewDecoder returns a Decoder that reads property list elements from a stream reader, r.
+// NewDecoder requires a Seekable stream for the purposes of file type detection.
+func NewDecoder(r io.ReadSeeker) *Decoder {
+	return &Decoder{Format: InvalidFormat, reader: r, lax: false}
+}
+
+// Unmarshal parses a property list document and stores the result in the value pointed to by v.
+//
+// Unmarshal uses the inverse of the type encodings that Marshal uses, allocating heap-borne types as necessary.
+//
+// When given a nil pointer, Unmarshal allocates a new value for it to point to.
+//
+// To decode property list values into an interface value, Unmarshal decodes the property list into the concrete value contained
+// in the interface value. If the interface value is nil, Unmarshal stores one of the following in the interface value:
+//
+//     string, bool, uint64, float64
+//     plist.UID for "CoreFoundation Keyed Archiver UIDs" (convertible to uint64)
+//     []byte, for plist data
+//     []interface{}, for plist arrays
+//     map[string]interface{}, for plist dictionaries
+//
+// If a property list value is not appropriate for a given value type, Unmarshal aborts immediately and returns an error.
+//
+// As Go does not support 128-bit types, and we don't want to pretend we're giving the user integer types (as opposed to
+// secretly passing them structs), Unmarshal will drop the high 64 bits of any 128-bit integers encoded in binary property lists.
+// (This is important because CoreFoundation serializes some large 64-bit values as 128-bit values with an empty high half.)
+//
+// When Unmarshal encounters an OpenStep property list, it will enter a relaxed parsing mode: OpenStep property lists can only store
+// plain old data as strings, so we will attempt to recover integer, floating-point, boolean and date values wherever they are necessary.
+// (for example, if Unmarshal attempts to unmarshal an OpenStep property list into a time.Time, it will try to parse the string it
+// receives as a time.)
+//
+// Unmarshal returns the detected property list format and an error, if any.
+func Unmarshal(data []byte, v interface{}) (format int, err error) {
+	r := bytes.NewReader(data)
+	dec := NewDecoder(r)
+	err = dec.Decode(v)
+	format = dec.Format
+	return
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/howett.net/plist/doc.go","mode":420,"size":347,"sha256":"6371663e6d6df9ebf1b3952a586f8a8208100a02dc2b6f3102e63b555c03799d","index":0,"count":1,"encoding":"utf-8","payloadBytes":347}
+// Package plist implements encoding and decoding of Apple's "property list" format.
+// Property lists come in three sorts: plain text (GNUStep and OpenStep), XML and binary.
+// plist supports all of them.
+// The mapping between property list and Go objects is described in the documentation for the Marshal and Unmarshal functions.
+package plist
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/howett.net/plist/encode.go","mode":420,"size":3948,"sha256":"d1a93cb630c7a12bd8f9d0da74dd94d799da8aa8c48c7e72c4632c32a01387a9","index":0,"count":1,"encoding":"utf-8","payloadBytes":3948}
+package plist
+
+import (
+	"bytes"
+	"errors"
+	"io"
+	"reflect"
+	"runtime"
+)
+
+type generator interface {
+	generateDocument(cfValue)
+	Indent(string)
+}
+
+// An Encoder writes a property list to an output stream.
+type Encoder struct {
+	writer io.Writer
+	format int
+
+	indent string
+}
+
+// Encode writes the property list encoding of v to the stream.
+func (p *Encoder) Encode(v interface{}) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			if _, ok := r.(runtime.Error); ok {
+				panic(r)
+			}
+			err = r.(error)
+		}
+	}()
+
+	pval := p.marshal(reflect.ValueOf(v))
+	if pval == nil {
+		panic(errors.New("plist: no root element to encode"))
+	}
+
+	var g generator
+	switch p.format {
+	case XMLFormat:
+		g = newXMLPlistGenerator(p.writer)
+	case BinaryFormat, AutomaticFormat:
+		g = newBplistGenerator(p.writer)
+	case OpenStepFormat, GNUStepFormat:
+		g = newTextPlistGenerator(p.writer, p.format)
+	}
+	g.Indent(p.indent)
+	g.generateDocument(pval)
+	return
+}
+
+// Indent turns on pretty-printing for the XML and Text property list formats.
+// Each element begins on a new line and is preceded by one or more copies of indent according to its nesting depth.
+func (p *Encoder) Indent(indent string) {
+	p.indent = indent
+}
+
+// NewEncoder returns an Encoder that writes an XML property list to w.
+func NewEncoder(w io.Writer) *Encoder {
+	return NewEncoderForFormat(w, XMLFormat)
+}
+
+// NewEncoderForFormat returns an Encoder that writes a property list to w in the specified format.
+// Pass AutomaticFormat to allow the library to choose the best encoding (currently BinaryFormat).
+func NewEncoderForFormat(w io.Writer, format int) *Encoder {
+	return &Encoder{
+		writer: w,
+		format: format,
+	}
+}
+
+// NewBinaryEncoder returns an Encoder that writes a binary property list to w.
+func NewBinaryEncoder(w io.Writer) *Encoder {
+	return NewEncoderForFormat(w, BinaryFormat)
+}
+
+// Marshal returns the property list encoding of v in the specified format.
+//
+// Pass AutomaticFormat to allow the library to choose the best encoding (currently BinaryFormat).
+//
+// Marshal traverses the value v recursively.
+// Any nil values encountered, other than the root, will be silently discarded as
+// the property list format bears no representation for nil values.
+//
+// Strings, integers of varying size, floats and booleans are encoded unchanged.
+// Strings bearing non-ASCII runes will be encoded differently depending upon the property list format:
+// UTF-8 for XML property lists and UTF-16 for binary property lists.
+//
+// Slice and Array values are encoded as property list arrays, except for
+// []byte values, which are encoded as data.
+//
+// Map values encode as dictionaries. The map's key type must be string; there is no provision for encoding non-string dictionary keys.
+//
+// Struct values are encoded as dictionaries, with only exported fields being serialized. Struct field encoding may be influenced with the use of tags.
+// The tag format is:
+//
+//     `plist:"<key>[,flags...]"`
+//
+// The following flags are supported:
+//
+//     omitempty    Only include the field if it is not set to the zero value for its type.
+//
+// If the key is "-", the field is ignored.
+//
+// Anonymous struct fields are encoded as if their exported fields were exposed via the outer struct.
+//
+// Pointer values encode as the value pointed to.
+//
+// Channel, complex and function values cannot be encoded. Any attempt to do so causes Marshal to return an error.
+func Marshal(v interface{}, format int) ([]byte, error) {
+	return MarshalIndent(v, format, "")
+}
+
+// MarshalIndent works like Marshal, but each property list element
+// begins on a new line and is preceded by one or more copies of indent according to its nesting depth.
+func MarshalIndent(v interface{}, format int, indent string) ([]byte, error) {
+	buf := &bytes.Buffer{}
+	enc := NewEncoderForFormat(buf, format)
+	enc.Indent(indent)
+	if err := enc.Encode(v); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/howett.net/plist/fuzz.go","mode":420,"size":215,"sha256":"50b6ffbb921ad3a08fa63c644bb0de2cb3f8436ffde23f617fde98beca163649","index":0,"count":1,"encoding":"utf-8","payloadBytes":215}
+// +build gofuzz
+
+package plist
+
+import (
+	"bytes"
+)
+
+func Fuzz(data []byte) int {
+	buf := bytes.NewReader(data)
+
+	var obj interface{}
+	if err := NewDecoder(buf).Decode(&obj); err != nil {
+		return 0
+	}
+	return 1
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/howett.net/plist/marshal.go","mode":420,"size":4791,"sha256":"89fd4226fa6ee6ed5d6b618088b42fbfc990234e2cdb3754569cd985faac6a97","index":0,"count":1,"encoding":"utf-8","payloadBytes":4791}
+package plist
+
+import (
+	"encoding"
+	"reflect"
+	"time"
+)
+
+var (
+	plistMarshalerType = reflect.TypeOf((*Marshaler)(nil)).Elem()
+	textMarshalerType  = reflect.TypeOf((*encoding.TextMarshaler)(nil)).Elem()
+	timeType           = reflect.TypeOf((*time.Time)(nil)).Elem()
+)
+
+func implementsInterface(val reflect.Value, interfaceType reflect.Type) (interface{}, bool) {
+	if val.CanInterface() {
+		itf := val.Interface()
+		if itf != nil && reflect.TypeOf(itf).Implements(interfaceType) {
+			return itf, true
+		}
+	}
+
+	if val.CanAddr() {
+		if pv := val.Addr(); pv.CanInterface() {
+			itf := pv.Interface()
+			if itf != nil && reflect.TypeOf(itf).Implements(interfaceType) {
+				return itf, true
+			}
+		}
+	}
+	return nil, false
+}
+
+func (p *Encoder) marshalPlistInterface(marshalable Marshaler) cfValue {
+	value, err := marshalable.MarshalPlist()
+	if err != nil {
+		panic(err)
+	}
+	return p.marshal(reflect.ValueOf(value))
+}
+
+// marshalTextInterface marshals a TextMarshaler to a plist string.
+func (p *Encoder) marshalTextInterface(marshalable encoding.TextMarshaler) cfValue {
+	s, err := marshalable.MarshalText()
+	if err != nil {
+		panic(err)
+	}
+	return cfString(s)
+}
+
+// marshalStruct marshals a reflected struct value to a plist dictionary
+func (p *Encoder) marshalStruct(typ reflect.Type, val reflect.Value) cfValue {
+	tinfo, _ := getTypeInfo(typ)
+
+	dict := &cfDictionary{
+		keys:   make([]string, 0, len(tinfo.fields)),
+		values: make([]cfValue, 0, len(tinfo.fields)),
+	}
+	for _, finfo := range tinfo.fields {
+		value := finfo.value(val)
+		if !value.IsValid() {
+			continue
+		}
+		dict.keys = append(dict.keys, finfo.name)
+		dict.values = append(dict.values, p.marshal(value))
+	}
+
+	return dict
+}
+
+func (p *Encoder) marshalTime(val reflect.Value) cfValue {
+	time := val.Interface().(time.Time)
+	return cfDate(time)
+}
+
+func innermostValue(val reflect.Value) reflect.Value {
+	for val.Kind() == reflect.Ptr || (val.Kind() == reflect.Interface && val.NumMethod() == 0) {
+		val = val.Elem()
+	}
+	return val
+}
+
+func (p *Encoder) marshal(val reflect.Value) cfValue {
+	if !val.IsValid() {
+		return nil
+	}
+
+	if receiver, can := implementsInterface(val, plistMarshalerType); can {
+		return p.marshalPlistInterface(receiver.(Marshaler))
+	}
+
+	// time.Time implements TextMarshaler, but we need to store it in RFC3339
+	if val.Type() == timeType {
+		return p.marshalTime(val)
+	}
+	if val.Kind() == reflect.Ptr || (val.Kind() == reflect.Interface && val.NumMethod() == 0) {
+		ival := innermostValue(val)
+		if ival.IsValid() && ival.Type() == timeType {
+			return p.marshalTime(ival)
+		}
+	}
+
+	// Check for text marshaler.
+	if receiver, can := implementsInterface(val, textMarshalerType); can {
+		return p.marshalTextInterface(receiver.(encoding.TextMarshaler))
+	}
+
+	// Descend into pointers or interfaces
+	val = innermostValue(val)
+
+	// We got this far and still may have an invalid anything or nil ptr/interface
+	if !val.IsValid() || ((val.Kind() == reflect.Ptr || val.Kind() == reflect.Interface) && val.IsNil()) {
+		return nil
+	}
+
+	typ := val.Type()
+
+	if typ == uidType {
+		return cfUID(val.Uint())
+	}
+
+	if val.Kind() == reflect.Struct {
+		return p.marshalStruct(typ, val)
+	}
+
+	switch val.Kind() {
+	case reflect.String:
+		return cfString(val.String())
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return &cfNumber{signed: true, value: uint64(val.Int())}
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		return &cfNumber{signed: false, value: val.Uint()}
+	case reflect.Float32:
+		return &cfReal{wide: false, value: val.Float()}
+	case reflect.Float64:
+		return &cfReal{wide: true, value: val.Float()}
+	case reflect.Bool:
+		return cfBoolean(val.Bool())
+	case reflect.Slice, reflect.Array:
+		if typ.Elem().Kind() == reflect.Uint8 {
+			bytes := []byte(nil)
+			if val.CanAddr() && val.Kind() == reflect.Slice {
+				// arrays are may be addressable but do not support .Bytes
+				bytes = val.Bytes()
+			} else {
+				bytes = make([]byte, val.Len())
+				reflect.Copy(reflect.ValueOf(bytes), val)
+			}
+			return cfData(bytes)
+		} else {
+			values := make([]cfValue, val.Len())
+			for i, length := 0, val.Len(); i < length; i++ {
+				if subpval := p.marshal(val.Index(i)); subpval != nil {
+					values[i] = subpval
+				}
+			}
+			return &cfArray{values}
+		}
+	case reflect.Map:
+		if typ.Key().Kind() != reflect.String {
+			panic(&unknownTypeError{typ})
+		}
+
+		l := val.Len()
+		dict := &cfDictionary{
+			keys:   make([]string, 0, l),
+			values: make([]cfValue, 0, l),
+		}
+		for _, keyv := range val.MapKeys() {
+			if subpval := p.marshal(val.MapIndex(keyv)); subpval != nil {
+				dict.keys = append(dict.keys, keyv.String())
+				dict.values = append(dict.values, subpval)
+			}
+		}
+		return dict
+	default:
+		panic(&unknownTypeError{typ})
+	}
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/howett.net/plist/must.go","mode":420,"size":763,"sha256":"505b4521de914fe560157a75f9d03f9f4facfd1928fc3cf545ab6dddc49f91c4","index":0,"count":1,"encoding":"utf-8","payloadBytes":763}
+package plist
+
+import (
+	"io"
+	"strconv"
+)
+
+type mustWriter struct {
+	io.Writer
+}
+
+func (w mustWriter) Write(p []byte) (int, error) {
+	n, err := w.Writer.Write(p)
+	if err != nil {
+		panic(err)
+	}
+	return n, nil
+}
+
+func mustParseInt(str string, base, bits int) int64 {
+	i, err := strconv.ParseInt(str, base, bits)
+	if err != nil {
+		panic(err)
+	}
+	return i
+}
+
+func mustParseUint(str string, base, bits int) uint64 {
+	i, err := strconv.ParseUint(str, base, bits)
+	if err != nil {
+		panic(err)
+	}
+	return i
+}
+
+func mustParseFloat(str string, bits int) float64 {
+	i, err := strconv.ParseFloat(str, bits)
+	if err != nil {
+		panic(err)
+	}
+	return i
+}
+
+func mustParseBool(str string) bool {
+	i, err := strconv.ParseBool(str)
+	if err != nil {
+		panic(err)
+	}
+	return i
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/howett.net/plist/plist.go","mode":420,"size":2040,"sha256":"1b38553db4a1f94152ac45077828a87c4a311de394c62f85947549686e9e996e","index":0,"count":1,"encoding":"utf-8","payloadBytes":2040}
+package plist
+
+import (
+	"reflect"
+)
+
+// Property list format constants
+const (
+	// Used by Decoder to represent an invalid property list.
+	InvalidFormat int = 0
+
+	// Used to indicate total abandon with regards to Encoder's output format.
+	AutomaticFormat = 0
+
+	XMLFormat      = 1
+	BinaryFormat   = 2
+	OpenStepFormat = 3
+	GNUStepFormat  = 4
+)
+
+var FormatNames = map[int]string{
+	InvalidFormat:  "unknown/invalid",
+	XMLFormat:      "XML",
+	BinaryFormat:   "Binary",
+	OpenStepFormat: "OpenStep",
+	GNUStepFormat:  "GNUStep",
+}
+
+type unknownTypeError struct {
+	typ reflect.Type
+}
+
+func (u *unknownTypeError) Error() string {
+	return "plist: can't marshal value of type " + u.typ.String()
+}
+
+type invalidPlistError struct {
+	format string
+	err    error
+}
+
+func (e invalidPlistError) Error() string {
+	s := "plist: invalid " + e.format + " property list"
+	if e.err != nil {
+		s += ": " + e.err.Error()
+	}
+	return s
+}
+
+type plistParseError struct {
+	format string
+	err    error
+}
+
+func (e plistParseError) Error() string {
+	s := "plist: error parsing " + e.format + " property list"
+	if e.err != nil {
+		s += ": " + e.err.Error()
+	}
+	return s
+}
+
+// A UID represents a unique object identifier. UIDs are serialized in a manner distinct from
+// that of integers.
+type UID uint64
+
+// Marshaler is the interface implemented by types that can marshal themselves into valid
+// property list objects. The returned value is marshaled in place of the original value
+// implementing Marshaler
+//
+// If an error is returned by MarshalPlist, marshaling stops and the error is returned.
+type Marshaler interface {
+	MarshalPlist() (interface{}, error)
+}
+
+// Unmarshaler is the interface implemented by types that can unmarshal themselves from
+// property list objects. The UnmarshalPlist method receives a function that may
+// be called to unmarshal the original property list value into a field or variable.
+//
+// It is safe to call the unmarshal function more than once.
+type Unmarshaler interface {
+	UnmarshalPlist(unmarshal func(interface{}) error) error
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/howett.net/plist/plist_types.go","mode":420,"size":2787,"sha256":"803ab672ad23f8f0ec0301efac27dbc5a18089d07b06693386d19368099b5d47","index":0,"count":1,"encoding":"utf-8","payloadBytes":2787}
+package plist
+
+import (
+	"hash/crc32"
+	"sort"
+	"time"
+	"strconv"
+)
+
+// magic value used in the non-binary encoding of UIDs
+// (stored as a dictionary mapping CF$UID->integer)
+const cfUIDMagic = "CF$UID"
+
+type cfValue interface {
+	typeName() string
+	hash() interface{}
+}
+
+type cfDictionary struct {
+	keys   sort.StringSlice
+	values []cfValue
+}
+
+func (*cfDictionary) typeName() string {
+	return "dictionary"
+}
+
+func (p *cfDictionary) hash() interface{} {
+	return p
+}
+
+func (p *cfDictionary) Len() int {
+	return len(p.keys)
+}
+
+func (p *cfDictionary) Less(i, j int) bool {
+	return p.keys.Less(i, j)
+}
+
+func (p *cfDictionary) Swap(i, j int) {
+	p.keys.Swap(i, j)
+	p.values[i], p.values[j] = p.values[j], p.values[i]
+}
+
+func (p *cfDictionary) sort() {
+	sort.Sort(p)
+}
+
+func (p *cfDictionary) maybeUID(lax bool) cfValue {
+	if len(p.keys) == 1 && p.keys[0] == "CF$UID" && len(p.values) == 1 {
+		pval := p.values[0]
+		if integer, ok := pval.(*cfNumber); ok {
+			return cfUID(integer.value)
+		}
+		// Openstep only has cfString. Act like the unmarshaller a bit.
+		if lax {
+			if str, ok := pval.(cfString); ok {
+				if i, err := strconv.ParseUint(string(str), 10, 64); err == nil {
+					return cfUID(i)
+				}
+			}
+		}
+	}
+	return p
+}
+
+type cfArray struct {
+	values []cfValue
+}
+
+func (*cfArray) typeName() string {
+	return "array"
+}
+
+func (p *cfArray) hash() interface{} {
+	return p
+}
+
+type cfString string
+
+func (cfString) typeName() string {
+	return "string"
+}
+
+func (p cfString) hash() interface{} {
+	return string(p)
+}
+
+type cfNumber struct {
+	signed bool
+	value  uint64
+}
+
+func (*cfNumber) typeName() string {
+	return "integer"
+}
+
+func (p *cfNumber) hash() interface{} {
+	if p.signed {
+		return int64(p.value)
+	}
+	return p.value
+}
+
+type cfReal struct {
+	wide  bool
+	value float64
+}
+
+func (cfReal) typeName() string {
+	return "real"
+}
+
+func (p *cfReal) hash() interface{} {
+	if p.wide {
+		return p.value
+	}
+	return float32(p.value)
+}
+
+type cfBoolean bool
+
+func (cfBoolean) typeName() string {
+	return "boolean"
+}
+
+func (p cfBoolean) hash() interface{} {
+	return bool(p)
+}
+
+type cfUID UID
+
+func (cfUID) typeName() string {
+	return "UID"
+}
+
+func (p cfUID) hash() interface{} {
+	return p
+}
+
+func (p cfUID) toDict() *cfDictionary {
+	return &cfDictionary{
+		keys: []string{cfUIDMagic},
+		values: []cfValue{&cfNumber{
+			signed: false,
+			value:  uint64(p),
+		}},
+	}
+}
+
+type cfData []byte
+
+func (cfData) typeName() string {
+	return "data"
+}
+
+func (p cfData) hash() interface{} {
+	// Data are uniqued by their checksums.
+	// Todo: Look at calculating this only once and storing it somewhere;
+	// crc32 is fairly quick, however.
+	return crc32.ChecksumIEEE([]byte(p))
+}
+
+type cfDate time.Time
+
+func (cfDate) typeName() string {
+	return "date"
+}
+
+func (p cfDate) hash() interface{} {
+	return time.Time(p)
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/howett.net/plist/text_generator.go","mode":420,"size":4872,"sha256":"70d27387ef665e9f94871a887f702e5608a39eeb5d97ac025511c4c9e839423c","index":0,"count":1,"encoding":"utf-8","payloadBytes":4872}
+package plist
+
+import (
+	"encoding/hex"
+	"io"
+	"strconv"
+	"time"
+)
+
+type textPlistGenerator struct {
+	writer io.Writer
+	format int
+
+	quotableTable *characterSet
+
+	indent string
+	depth  int
+
+	dictKvDelimiter, dictEntryDelimiter, arrayDelimiter []byte
+}
+
+var (
+	textPlistTimeLayout = "2006-01-02 15:04:05 -0700"
+	padding             = "0000"
+)
+
+func (p *textPlistGenerator) generateDocument(pval cfValue) {
+	p.writePlistValue(pval)
+}
+
+func (p *textPlistGenerator) plistQuotedString(str string) string {
+	if str == "" {
+		return `""`
+	}
+	s := ""
+	quot := false
+	for _, r := range str {
+		if r > 0xFF {
+			quot = true
+			s += `\U`
+			us := strconv.FormatInt(int64(r), 16)
+			s += padding[len(us):]
+			s += us
+		} else if r > 0x7F {
+			quot = true
+			s += `\`
+			us := strconv.FormatInt(int64(r), 8)
+			s += padding[1+len(us):]
+			s += us
+		} else {
+			c := uint8(r)
+			if p.quotableTable.ContainsByte(c) {
+				quot = true
+			}
+
+			switch c {
+			case '\a':
+				s += `\a`
+			case '\b':
+				s += `\b`
+			case '\v':
+				s += `\v`
+			case '\f':
+				s += `\f`
+			case '\\':
+				s += `\\`
+			case '"':
+				s += `\"`
+			case '\t', '\r', '\n':
+				fallthrough
+			default:
+				s += string(c)
+			}
+		}
+	}
+	if quot {
+		s = `"` + s + `"`
+	}
+	return s
+}
+
+func (p *textPlistGenerator) deltaIndent(depthDelta int) {
+	if depthDelta < 0 {
+		p.depth--
+	} else if depthDelta > 0 {
+		p.depth++
+	}
+}
+
+func (p *textPlistGenerator) writeIndent() {
+	if len(p.indent) == 0 {
+		return
+	}
+	if len(p.indent) > 0 {
+		p.writer.Write([]byte("\n"))
+		for i := 0; i < p.depth; i++ {
+			io.WriteString(p.writer, p.indent)
+		}
+	}
+}
+
+func (p *textPlistGenerator) writePlistValue(pval cfValue) {
+	if pval == nil {
+		return
+	}
+
+	switch pval := pval.(type) {
+	case *cfDictionary:
+		pval.sort()
+		p.writer.Write([]byte(`{`))
+		p.deltaIndent(1)
+		for i, k := range pval.keys {
+			p.writeIndent()
+			io.WriteString(p.writer, p.plistQuotedString(k))
+			p.writer.Write(p.dictKvDelimiter)
+			p.writePlistValue(pval.values[i])
+			p.writer.Write(p.dictEntryDelimiter)
+		}
+		p.deltaIndent(-1)
+		p.writeIndent()
+		p.writer.Write([]byte(`}`))
+	case *cfArray:
+		p.writer.Write([]byte(`(`))
+		p.deltaIndent(1)
+		for _, v := range pval.values {
+			p.writeIndent()
+			p.writePlistValue(v)
+			p.writer.Write(p.arrayDelimiter)
+		}
+		p.deltaIndent(-1)
+		p.writeIndent()
+		p.writer.Write([]byte(`)`))
+	case cfString:
+		io.WriteString(p.writer, p.plistQuotedString(string(pval)))
+	case *cfNumber:
+		if p.format == GNUStepFormat {
+			p.writer.Write([]byte(`<*I`))
+		}
+		if pval.signed {
+			io.WriteString(p.writer, strconv.FormatInt(int64(pval.value), 10))
+		} else {
+			io.WriteString(p.writer, strconv.FormatUint(pval.value, 10))
+		}
+		if p.format == GNUStepFormat {
+			p.writer.Write([]byte(`>`))
+		}
+	case *cfReal:
+		if p.format == GNUStepFormat {
+			p.writer.Write([]byte(`<*R`))
+		}
+		// GNUstep does not differentiate between 32/64-bit floats.
+		io.WriteString(p.writer, strconv.FormatFloat(pval.value, 'g', -1, 64))
+		if p.format == GNUStepFormat {
+			p.writer.Write([]byte(`>`))
+		}
+	case cfBoolean:
+		if p.format == GNUStepFormat {
+			if pval {
+				p.writer.Write([]byte(`<*BY>`))
+			} else {
+				p.writer.Write([]byte(`<*BN>`))
+			}
+		} else {
+			if pval {
+				p.writer.Write([]byte(`1`))
+			} else {
+				p.writer.Write([]byte(`0`))
+			}
+		}
+	case cfData:
+		var hexencoded [9]byte
+		var l int
+		var asc = 9
+		hexencoded[8] = ' '
+
+		p.writer.Write([]byte(`<`))
+		b := []byte(pval)
+		for i := 0; i < len(b); i += 4 {
+			l = i + 4
+			if l >= len(b) {
+				l = len(b)
+				// We no longer need the space - or the rest of the buffer.
+				// (we used >= above to get this part without another conditional :P)
+				asc = (l - i) * 2
+			}
+			// Fill the buffer (only up to 8 characters, to preserve the space we implicitly include
+			// at the end of every encode)
+			hex.Encode(hexencoded[:8], b[i:l])
+			io.WriteString(p.writer, string(hexencoded[:asc]))
+		}
+		p.writer.Write([]byte(`>`))
+	case cfDate:
+		if p.format == GNUStepFormat {
+			p.writer.Write([]byte(`<*D`))
+			io.WriteString(p.writer, time.Time(pval).In(time.UTC).Format(textPlistTimeLayout))
+			p.writer.Write([]byte(`>`))
+		} else {
+			io.WriteString(p.writer, p.plistQuotedString(time.Time(pval).In(time.UTC).Format(textPlistTimeLayout)))
+		}
+	case cfUID:
+		p.writePlistValue(pval.toDict())
+	}
+}
+
+func (p *textPlistGenerator) Indent(i string) {
+	p.indent = i
+	if i == "" {
+		p.dictKvDelimiter = []byte(`=`)
+	} else {
+		// For pretty-printing
+		p.dictKvDelimiter = []byte(` = `)
+	}
+}
+
+func newTextPlistGenerator(w io.Writer, format int) *textPlistGenerator {
+	table := &osQuotable
+	if format == GNUStepFormat {
+		table = &gsQuotable
+	}
+	return &textPlistGenerator{
+		writer:             mustWriter{w},
+		format:             format,
+		quotableTable:      table,
+		dictKvDelimiter:    []byte(`=`),
+		arrayDelimiter:     []byte(`,`),
+		dictEntryDelimiter: []byte(`;`),
+	}
+}
+
+@@END
 @@PORTABLE {"path":"third_party/wails/vendor/howett.net/plist/text_parser.go","mode":420,"size":12516,"sha256":"d175169082a4c3f5e333feb4937d9f3ec5161e2f30b77740bb89a485a7611d64","index":0,"count":1,"encoding":"utf-8","payloadBytes":12516}
 // Parser for text plist formats.
 // @see https://github.com/apple/swift-corelibs-foundation/blob/master/CoreFoundation/Parsing.subproj/CFOldStylePList.c
