@@ -1,5 +1,38 @@
 # Architecture decisions
 
+## ADR-047: Core reconciles application passwords through existing provider hooks
+
+Status: Accepted by owner, 2026-10-21.
+
+For declared managed application accounts, the selected password is desired
+state: Apply repairs an explicit credential mismatch, then confirms login before
+normal Vault publication. Existing accounts remain immutable. Infrastructure
+admin/default/superuser/Vault credentials are consumed, never changed by this
+feature. Transport, TLS, administrative access, ownership and privilege failures
+do not authorize password replacement. Kafka's exact managed declaration plus
+administrative access replaces its former password-possession adoption guard;
+reserved infrastructure principals and ACL scope remain protected.
+
+Core creates generated passwords only during Apply on the Execution Node, reuses
+an owned published value and uses the existing invocation-only secret files.
+Before successful publication a retry may regenerate and reconcile a confirmed
+managed account. A failure before initial ownership-witness persistence remains
+blocked. No extra persistent store, recovery subsystem, UI generator or API is
+introduced. Prefer ordinary Ansible tasks; Python retains only necessary existing
+provider primitives, cryptographic generation and validation. Verify is unchanged.
+
+Managed KV paths exclude project ID: library/shared and
+library/instance/accounts/account within the selected mount. Core supplies every
+read/write location, policy and Agent template. Project-bound ownership remains;
+foreign documents block. Explicit external vault_ref locations remain unchanged.
+Legacy project-prefixed documents are retained without fallback or automatic
+migration; a generated password at a new path may therefore be newly selected.
+
+The operator/caller runs one Apply per project at a time across UI, standalone
+and Execution Nodes, covering selection through provider and Vault publication.
+There is no new cross-node lock or concurrent-Apply guarantee. See the
+[owner-approved plan](work/application-libraries/generated-password-plan.md).
+
 ## ADR-001: V2 is a separate repository
 
 Status: Accepted.

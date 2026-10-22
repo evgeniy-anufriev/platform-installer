@@ -92,7 +92,7 @@ class ApplicationProviderQA(unittest.TestCase):
                     'schemas': [{'name': 'api', 'mode': 'managed', 'resourceId': 'api', 'marker': prefix+'postgresql.schema:api'}], 'accounts': accounts}
         target = {'hostId': 'node1', 'memberId': 'data1', 'address': '127.0.0.1', 'port': cls.port,
                   'pkiPlans': [{'targetDirectory': str(cls.data)}]}
-        return {'projectId': project, 'providerId': 'pg', 'mode': 'standalone', 'libraries': [{'name': owner, 'marker': database['ownerMarker']}],
+        return {'projectId': project, 'serviceType': 'postgresql', 'providerId': 'pg', 'mode': 'standalone', 'libraries': [{'name': owner, 'marker': database['ownerMarker']}],
                 'databases': [database], 'accounts': accounts, 'candidates': [target]}
 
     @classmethod
@@ -295,20 +295,69 @@ class ApplicationProviderQA(unittest.TestCase):
         self.assertEqual(before, self.sql("SELECT oid FROM pg_roles WHERE rolname LIKE 'a3qa_user_%' ORDER BY rolname"))
         self.assertEqual(hashes, self.sql("SELECT rolpassword FROM pg_authid WHERE rolname LIKE 'a3qa_user_%' ORDER BY rolname"))
 
-    def test_02_password_rotation_and_foreign_owner_fail_closed(self):
+    def test_02_application_password_reconciliation_and_foreign_owner_fail_closed(self):
         job = self.make_job('a3negative', 1)
         self.play(job)
         ref = job['accounts'][0]['passwordRef']
         path = Path(self.passwords[ref]); original = path.read_text()
-        path.write_text(secrets.token_hex(20))
         try:
-            self.play(job, success=False)
+            for locale in ('C', 'ru_RU.utf8'):
+                self.sql("ALTER SYSTEM SET lc_messages = '"+locale+"'")
+                self.sql('SELECT pg_reload_conf()')
+                path.write_text(secrets.token_hex(20))
+                self.play(job)
+                repeat, _ = self.play(job)
+                self.assertRegex(repeat, r'localhost\s+:\s+ok=\d+\s+changed=0')
         finally:
+            self.sql("ALTER SYSTEM SET lc_messages = 'C'")
+            self.sql('SELECT pg_reload_conf()')
             path.write_text(original)
+            self.play(job)
         other = self.make_job('a3foreign', 0)
         self.sql('CREATE DATABASE a3foreign_db')
         self.play(other, success=False)
         self.assertEqual('0', self.sql("SELECT count(*) FROM pg_roles WHERE rolname='"+other['libraries'][0]['name']+"'"))
+
+    def test_password_probe_sqlstate_and_non_auth_failures(self):
+        job = self.make_job('a3state', 1)
+        self.play(job)
+        wrong = self.secret_root/'probe-wrong'
+        wrong.write_text(secrets.token_urlsafe(32)); wrong.chmod(0o600)
+        correct = self.passwords[job['accounts'][0]['passwordRef']]
+        tasks = []
+        for name, password, ca, host, port, authenticated, state in [
+            ('correct', correct, self.data/'ca-chain.pem', '127.0.0.1', self.port, True, ''),
+            ('wrong', wrong, self.data/'ca-chain.pem', '127.0.0.1', self.port, False, '28P01'),
+            ('missing_ca', wrong, self.data/'absent.pem', '127.0.0.1', self.port, False, ''),
+            ('tls_identity', wrong, self.data/'ca-chain.pem', 'localhost', self.port, False, ''),
+            ('closed_port', wrong, self.data/'ca-chain.pem', '127.0.0.1', self.port+1, False, ''),
+        ]:
+            tasks += [dict(name='Probe '+name, **{'platform.postgresql.application_password_probe': dict(
+                host=host, port=port, username=job['accounts'][0]['name'],
+                password="{{ lookup('ansible.builtin.file', '"+str(password)+"', rstrip=False) }}",
+                ca_file=str(ca), timeout=2), 'register':'probe', 'no_log':True, 'become':True}),
+                {'name':'Safe probe status', 'ansible.builtin.debug':{'msg':
+                    "{{ {'authenticated':probe.authenticated,'sqlstate':probe.sqlstate,'changed':probe.changed} }}"}},
+                {'name':'Check '+name, 'ansible.builtin.assert':{'that':[
+                    'probe.authenticated == '+str(authenticated).lower(),
+                    "probe.sqlstate == '"+state+"'", 'not probe.changed']}}]
+        play = self.runtime/'probe.yml'
+        play.write_text(yaml.safe_dump([dict(hosts='localhost', gather_facts=False, tasks=tasks)]))
+        self.sql("ALTER SYSTEM SET lc_messages = 'ru_RU.utf8'")
+        self.sql('SELECT pg_reload_conf()')
+        try:
+            result = subprocess.run(['ansible-playbook','-i',str(self.inventory),str(play)],
+                                    env=self.env,capture_output=True,timeout=60)
+            if result.returncode:
+                import re
+                names = re.findall(r'TASK \[(.*?)\]', result.stdout.decode(errors='replace'))
+                safe = re.findall(r'"(?:authenticated|sqlstate|changed)":\s*(?:true|false|"[A-Z0-9]*")', result.stdout.decode(errors='replace'))
+                self.fail('A3_SQLSTATE_PROBE_FAILED tasks='+repr(names[-3:])+' statuses='+repr(safe))
+            self.assertNotIn(wrong.read_bytes(),result.stdout+result.stderr)
+            self.assertNotIn(Path(correct).read_bytes(),result.stdout+result.stderr)
+        finally:
+            self.sql("ALTER SYSTEM SET lc_messages = 'C'")
+            self.sql('SELECT pg_reload_conf()')
 
     def test_03_existing_readonly_and_required_grants(self):
         job = self.make_job('a3existing', 1)

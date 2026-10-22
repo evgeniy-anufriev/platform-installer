@@ -17,9 +17,40 @@ spec.loader.exec_module(provider)
 sys.path.insert(0,str(ROOT/'ansible-core/collections'))
 spec=importlib.util.spec_from_file_location('vault_application_credentials',PLUGIN.parent.parent/'action/application_credentials.py')
 credentials=importlib.util.module_from_spec(spec);spec.loader.exec_module(credentials)
+spec=importlib.util.spec_from_file_location('vault_application_document',PLUGIN.parent.parent/'action/application_document.py')
+document_action=importlib.util.module_from_spec(spec);spec.loader.exec_module(document_action)
 
 
 class ApplicationProviderTest(unittest.TestCase):
+    def test_generated_password_reuses_owned_document_and_rejects_unsafe_sources(self):
+        with tempfile.TemporaryDirectory() as root:
+            ref = 'pla-generated-' + 'a' * 40
+            document = dict(mount='secret', owner='owned', fields={
+                'password': dict(source={'kind': 'generated'}, passwordRef=ref)})
+            args = dict(document=document, current={'status':404}, secret_root=root,
+                        secret_files={}, provider={'mounts':{'secret/':{'type':'kv','options':{'version':'2'}}}})
+            action = object.__new__(document_action.ActionModule)
+            action._task = SimpleNamespace(args=args)
+            with patch.object(document_action.secrets, 'token_urlsafe', wraps=document_action.secrets.token_urlsafe) as generator:
+                first = action.run()
+                self.assertFalse(first.get('failed', False))
+                self.assertEqual(43, len(first['fields']['password']))
+                generator.assert_called_once_with(32)
+                args['current'] = self.response()
+                generator.reset_mock()
+                saved = action.run()
+                self.assertEqual('old', saved['fields']['password'])
+                generator.assert_not_called()
+                args['current']['json']['data']['data']['_platform_owner'] = 'foreign'
+                self.assertTrue(action.run()['failed'])
+                generator.assert_not_called()
+                args['current'] = self.response()
+                args['current']['json']['data']['metadata']['destroyed'] = True
+                self.assertTrue(action.run()['failed'])
+                generator.assert_not_called()
+            document['fields']['password']['passwordRef'] = '../outside'
+            self.assertTrue(action.run()['failed'])
+
     def response(self):
         return {'status':200,'json':{'data':{'data':{'_platform_owner':'owned','password':'old','neighbor':'keep'},
             'metadata':{'version':7,'deletion_time':'','destroyed':False}}}}

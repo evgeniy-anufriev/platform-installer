@@ -163,8 +163,12 @@ class ApplicationACLTests(unittest.TestCase):
                 self.assertEqual(['port', '0'], args[1].command('CONFIG', 'GET', 'port'))
                 with self.assertRaises(ACLFailure):
                     args[1].command('GET', 'foreign:probe')
-                with self.assertRaises(ACLFailure):
-                    ensure_account(admin, connection(), directory, 'api-sdku', 'wrong', 'scope-sdku', 'client', grants, 'managed')
+                replacement = secrets.token_urlsafe(24)
+                rotate_args = (admin, connection(), directory, 'api-sdku', replacement, 'scope-sdku', 'client', grants, 'managed')
+                self.assertFalse(ensure_account(*rotate_args, preflight=True))
+                self.assertTrue(ensure_account(*rotate_args))
+                self.assertFalse(ensure_account(*rotate_args))
+                self.assertTrue(ensure_account(*args))
                 self.assertEqual({'client/api-sdku': 'scope-sdku'}, read_witness(directory))
                 admin.command('ACL', 'SETUSER', 'foreign', 'on', '#' + hashlib.sha256(app_password.encode()).hexdigest(), '+ping')
                 with self.assertRaises(ACLFailure):

@@ -14,6 +14,7 @@
     PGSSLROOTCERT: "{{ application_provider_target.pkiPlans[0].targetDirectory }}/ca-chain.pem"
     PGCONNECT_TIMEOUT: '10'
     PGPASSFILE: /dev/null
+    LC_ALL: C
   delegate_to: "{{ application_provider_target.hostId }}"
   become: true
   become_user: "{{ platform_pki_owner | default(platform_execution_technical_user | default('root', true)) }}"
@@ -22,7 +23,8 @@
   failed_when: application_provider_login.rc != 0 or application_provider_login.stdout != '1'
   loop: "{{ platform_postgresql_application_job.loginAccounts | default(platform_postgresql_application_job.accounts) }}"
   when: >-
+    not (application_provider_skip_managed | default(false) and item.mode == 'managed') and (
     application_provider_probe_scope == 'all' or
     (application_provider_probe_scope == 'existing' and item.name in platform_application_provider_runtime[platform_postgresql_application_job.providerId].catalog.roles) or
-    (application_provider_probe_scope == 'new' and item.name not in platform_application_provider_runtime[platform_postgresql_application_job.providerId].catalog.roles)
+    (application_provider_probe_scope == 'new' and item.name not in platform_application_provider_runtime[platform_postgresql_application_job.providerId].catalog.roles))
   no_log: true

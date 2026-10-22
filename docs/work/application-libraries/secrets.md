@@ -44,7 +44,13 @@ platform_application_definitions:
 ```
 
 `account` связывает credential output provider с переменной. В namespaced Vault
-path учитываются project/library/instance/account. Никакого определения источника
+path учитываются library/instance/account; id проекта в KV-путь не входит.
+Shared document: `<libraryId>/shared`, account document:
+`<libraryId>/<instanceId>/accounts/<accountId>`. Например, KV v2 read-путь —
+`secret/data/sdku-dm/shared`. Запись, чтение, policy и Agent используют одну
+Core-проекцию. Id проекта остаётся в ownership marker, чужой документ блокирует
+операцию. Старые project-prefixed документы не удаляются и не используются как
+неявный fallback; явные внешние `vault_ref` не переписываются. Никакого определения источника
 по имени переменной или сканирования env. Обычный Compose environment и
 secret_bindings не могут управлять одной переменной одновременно.
 
@@ -94,9 +100,14 @@ applications:
 возможностью редкого явного `accounts` override. Пароль по `password_ref`
 поступает через защищённый runtime-ввод, не через project YAML или `.env`.
 
-`generated` создаёт пароль при первом provisioning; защищённый runtime-путь
-обеспечивает сохранение результата в Vault и повтор без смены пароля. Interrupted
-create/retry не должен генерировать другое значение после создания provider account.
+`generated` для managed application password создаёт криптографический пароль
+на Execution Node при Apply и передаёт его через существующий защищённый
+runtime-путь. Уже опубликованный пароль берётся из своего документа Vault.
+После успешного provider hook выбранное значение публикуется в Vault обычным
+порядком. До публикации retry может выбрать новый пароль и установить его у
+подтверждённого managed аккаунта. Сбой до сохранения первоначального ownership
+witness остаётся блокирующим; автоматического recovery нет. Обязательное условие:
+один Apply проекта за раз, включая standalone и разные Execution Nodes.
 `runtime_secret_ref` получает заданное оператором значение через существующий
 runtime credential input. В UI оператор вводит plaintext в отдельном поле секрета;
 portable project сохраняет только ref. Standalone передаёт ref через защищённый
@@ -153,8 +164,14 @@ write access или wildcard read всей библиотеки. По каждо
 
 Generated-static mode: provider hooks создают постоянные УЗ, Vault хранит credentials.
 Это не динамическое создание пользователей Vault database secrets engine.
-Повтор/частичный сбой не должен незаметно менять пароль. Protected staging/version
-и порядок ensure/verify нужно детализировать без обещания общей транзакции.
+Для managed аккаунтов приложений переданный пароль является целевым: при
+подтверждённом несовпадении Apply устанавливает его и проверяет вход перед
+публикацией. Пароли infrastructure/admin/default/superuser не меняются.
+Existing accounts и Verify остаются read-only. Ошибки сети/TLS/admin/ownership
+не являются разрешением менять пароль. У Kafka declared managed principal +
+административный доступ заменяют прежнее доказательство владения старым паролем;
+reserved admin names, точная identity и ACL scope сохраняются. Общей транзакции
+между provider и Vault нет; concurrent Apply одного проекта не поддерживается.
 
 Для managed документов используется KV v2: после проверки ownership хук читает
 текущие данные и версию. Если путь ещё не создан — выполняет `kv put` с CAS=0.
@@ -213,7 +230,7 @@ exec {
 Адрес Vault и CA-файл берутся из разрешённого library binding/PKI;
 auth mount — из конфигурации provider, RoleID file — из runtime identity layout.
 `env_templates` строится из `secret_bindings`: имя переменной и Vault template,
-например `{{ with secret "applications/data/project-01/sdku/shared/java-keystore" }}{{ .Data.data.password }}{{ end }}`.
+например `{{ with secret "secret/data/sdku-dm/shared" }}{{ .Data.data.java_keystore_password }}{{ end }}`.
 Строка `contents` содержит ссылки на секреты, не их значения; подставленную
 Vault template строку нельзя повторно рендерить как Jinja. `command` берётся
 из разрешённых defaults приложения: для `apigateway-sdku` это
@@ -273,7 +290,7 @@ auto_auth {
 }
 
 env_template "JAVA_KEYSTORE_PASSWORD" {
-  contents = "{{ with secret \"applications/data/project-01/sdku-main/shared/java-keystore\" }}{{ .Data.data.password }}{{ end }}"
+  contents = "{{ with secret \"secret/data/sdku-dm/shared\" }}{{ .Data.data.java_keystore_password }}{{ end }}"
   error_on_missing_key = true
 }
 

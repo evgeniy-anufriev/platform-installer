@@ -1,6 +1,29 @@
-# SDKU package validation — 2026-10-16
+# SDKU package validation
 
-## Current source revision — 2026-10-17
+## Current source revision — 2026-10-22
+
+SDKU/CSPA library defaults and the shared alarm-view-service defaults match the
+packages used by successful run installer-4a5d154de7944a7578261d0ce0c0b312.
+Kafka uses SASL_SSL/SCRAM-SHA-512 and account-bound JAAS for producer/consumer;
+the other25 application packages were not replaced. Three import-catalog digests
+were recalculated from canonical Git bytes. Generic PostgreSQL example resources
+now include their existing default names, as required by the current schema.
+
+The separate alarm-view-secrets example prepares SDKU5 generated/CSPA5 manual
+runtime-secret references, managed history databases, distinct PostgreSQL names,
+tested memory/pool/readiness overrides and CSPA port10022. It contains no runtime
+credentials, QA addresses or artifact/image locks.
+
+Current-tree RED OS validation PASS:28 package schemas/digests, generic preparation2,
+secret-example preparation2, synthetic Compose renders26, shared base variants1.
+The examples validator does not execute targets. The preceding actual React/Wails
+run performed Apply and existing library Verify with skipInfraVerify=true:
+all6 Java/Agent delivery comparisons100/100, direct manual-password hashes15/15,
+and all6 health endpoints200/UP PASS. Full review/published-value reuse/visual
+acceptance limits remain documented in the
+[generated-password journal](../../docs/work/application-libraries/evidence/generated-password-journal.md).
+
+## Historical library-defaults amendment — 2026-10-17
 
 Owner amendment: common values now live in library defaults; application defaults
 retain their own values; instance overrides live only in group_vars. Removed

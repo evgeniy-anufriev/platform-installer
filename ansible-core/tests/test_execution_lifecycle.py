@@ -911,6 +911,21 @@ class ExecutionLifecycleTests(unittest.TestCase):
                 execution_controller._acquire_project_pki_apply_lock(journal)
             self.assertEqual("", target.read_text(encoding="utf-8"))
 
+    def test_application_dispatch_preserves_core_library_order_and_rejects_invalid_selection(self):
+        with tempfile.TemporaryDirectory() as root:
+            journal = Journal(root, "run-1")
+            operation = dict(operationId="applications:apply", phaseId="applications",
+                             operation="APPLICATION_LIBRARIES_APPLY", targets=["node1"],
+                             applicationLibraries=["sdku-dm", "cspa"],
+                             applicationSemanticFingerprint="sha256:" + "a" * 64)
+            original = list(operation["applicationLibraries"])
+            command = execution_controller._command(root, journal, operation)
+            self.assertTrue(command[3].endswith("application-libraries-apply.yml"))
+            self.assertEqual(original, operation["applicationLibraries"])
+            for libraries in (["sdku-dm", "sdku-dm"], ["bad library"], [], [1]):
+                with self.subTest(libraries=libraries), self.assertRaisesRegex(LifecycleError, "EXECUTION_MANIFEST_INVALID"):
+                    execution_controller._command(root, journal, dict(operation, applicationLibraries=libraries))
+
     def test_service_dispatch_requires_existing_runtime_projection(self):
         with tempfile.TemporaryDirectory() as root:
             journal = Journal(root, "run-1"); journal.initialize(metadata())

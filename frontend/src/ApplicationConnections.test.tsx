@@ -8,6 +8,29 @@ import {
 } from "./ApplicationCredentials";
 
 describe("application connection settings", () => {
+  it("saves generated as a source without accepting a plaintext value", async () => {
+    const save = vi.fn().mockResolvedValue(true);
+    render(
+      <CredentialSourceEditor
+        label="Пароль"
+        source={{}}
+        packageSource={{ kind: "runtime_secret_ref", ref: "app-password" }}
+        allowLiteral={false}
+        disabled={false}
+        onSave={save}
+        onReset={vi.fn()}
+        onDirtyChange={vi.fn()}
+      />,
+    );
+    await userEvent.selectOptions(
+      screen.getByLabelText("Источник"),
+      "generated",
+    );
+    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(screen.getByText(/Создаётся при применении/)).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "В черновик" }));
+    expect(save).toHaveBeenCalledWith({ kind: "generated" });
+  });
   it("displays the Core username but edits and saves only the authored source", async () => {
     const save = vi.fn().mockResolvedValue(true);
     const template = "{{ application_instance_id | replace('-', '_') }}";
@@ -48,9 +71,7 @@ describe("application connection settings", () => {
     await userEvent.click(input);
     await userEvent.clear(input);
     await userEvent.type(input, "custom-user");
-    await userEvent.click(
-      screen.getByRole("button", { name: "В черновик" }),
-    );
+    await userEvent.click(screen.getByRole("button", { name: "В черновик" }));
     expect(save).toHaveBeenCalledWith({
       postgres: {
         mode: "existing",

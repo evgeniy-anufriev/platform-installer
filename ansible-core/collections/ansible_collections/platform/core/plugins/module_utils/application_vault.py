@@ -3,6 +3,11 @@ import hashlib
 import json
 import re
 
+try:
+    from .runtime_secret_identity import generated_password_ref
+except ImportError:
+    from runtime_secret_identity import generated_password_ref
+
 SEGMENT = re.compile(r'^[A-Za-z0-9_-][A-Za-z0-9_.-]{0,127}$')
 
 
@@ -45,6 +50,11 @@ def project_vault(rows, prepared):
         active = [i for i in library['instances'].values() if i['agentRequired']]
         sources = [c['source'] for i in library['instances'].values() for a in i['credentialRequirements'].values()
                    for c in a['credentials'].values() if c['source']['kind'] == 'vault_ref']
+        if any(c['source']['kind'] == 'generated' and
+               (field != 'password' or a.get('mode') != 'managed' or not i['agentRequired'])
+               for i in library['instances'].values() for a in i['credentialRequirements'].values()
+               for field, c in a['credentials'].items()):
+            raise ValueError('APPLICATION_VAULT_GENERATED_PASSWORD_SCOPE_INVALID')
         if not active and not sources:
             continue
         auth = row.get('vaultRef', {})
@@ -106,7 +116,7 @@ def project_vault(rows, prepared):
         if len(mounts) > 1:
             raise ValueError('APPLICATION_VAULT_SHARED_MOUNT_CONFLICT')
         mount = segment(next(iter(mounts), 'secret'))
-        shared_doc = '%s/%s/shared' % (project, segment(library_id))
+        shared_doc = '%s/shared' % segment(library_id)
         documents = []
         shared_locations = {}
         for name, value in shared.items():
@@ -128,17 +138,22 @@ def project_vault(rows, prepared):
             locations, account_docs = {}, []
             for account_id, account in sorted(instance['credentialRequirements'].items()):
                 fields = {}
-                document = '%s/%s/%s/accounts/%s' % (project, library_id, segment(instance_id), segment(account_id))
+                document = '%s/%s/accounts/%s' % (segment(library_id), segment(instance_id), segment(account_id))
                 for field, credential in account['credentials'].items():
                     source = credential['source']
                     location = kv_source(source, row)
                     if location and location['providerId'] != ref:
                         raise ValueError('APPLICATION_VAULT_SOURCE_PROVIDER_MISMATCH')
-                    if source['kind'] not in {'literal', 'runtime_secret_ref', 'vault_ref'}:
+                    if source['kind'] not in {'literal', 'runtime_secret_ref', 'vault_ref', 'generated'}:
                         raise ValueError('APPLICATION_VAULT_SOURCE_DEFERRED')
                     locations[(account_id, field)] = location or dict(mount=mount, document=document, field=segment(field))
                     if not location:
                         fields[field] = dict(source=source)
+                        if source['kind'] == 'generated':
+                            password_ref = generated_password_ref(project, library_id, instance_id, account_id)
+                            fields[field]['passwordRef'] = password_ref
+                            source_jobs.append(dict(providerId=ref, mount=mount, document=document,
+                                                    field=field, passwordRef=password_ref))
                 if fields:
                     account_docs.append(dict(mount=mount, document=document, fields=fields))
             envs, paths, read_fields = [], set(), {}

@@ -121,12 +121,17 @@ export function CredentialSourceEditor({
           }}
         >
           <option value="runtime_secret_ref">Сессионный секрет</option>
-          <option value="generated">Генерируемый</option>
+          {!allowLiteral && <option value="generated">Генерируемый</option>}
           <option value="vault_ref">Существующий Vault secret</option>
           <option value="pki_credential">PKI credential</option>
           {allowLiteral && <option value="literal">Имя пользователя</option>}
         </select>
       </label>
+      {kind === "generated" && (
+        <small>
+          Создаётся при применении; сохранённый пароль используется повторно.
+        </small>
+      )}
       {kind === "runtime_secret_ref" && runtimeInput !== undefined ? (
         dirty ? (
           <small>

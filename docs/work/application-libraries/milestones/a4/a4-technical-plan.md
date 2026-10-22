@@ -232,7 +232,7 @@ bba6aacb…; прежний review не является проверкой эт
 | runtime_secret_ref | Прочитать защищённый runtime input; тот же пароль используют A3 и Vault |
 | vault_ref | Читать указанные binding/mount/document/field через endpoint; исходный document не изменять |
 | pki_credential | Только exact selected runtime PKI credential, подтверждённый соответствующим PKCS12 |
-| generated | Явно deferred; не генерировать новое значение при повторе |
+| generated | Owner amendment 2026-10-21: managed application passwords генерируются при Apply; опубликованное значение переиспользуется, до публикации retry может выбрать новый пароль |
 
 Решение владельца по A4-P02: библиотека выбирает **Vault deployment** через
 существующий binding `secrets`. Это общий Vault reference для всех её экземпляров.
@@ -290,13 +290,19 @@ instance deployment ref. Другой account может ссылаться на
 используем действующие source и bindings, расширяется лишь runtime поддержка A3.
 
 Для vault_ref расширить существующую доставку credentials A3 приватным runtime
-file, не передавать plaintext в snapshot/job. Managed account допускается только
-с проверяемым фактическим паролем; existing account не изменяется. Не обходить
-нынешний A3 guard путём подмены desired source kind.
+file, не передавать plaintext в snapshot/job. По owner amendment 2026-10-21
+несовпадающий пароль подтверждённого managed application account заменяется
+переданным при Apply; existing account и infrastructure credentials не меняются.
+Для Kafka declared managed principal + admin access заменяют прежнее доказательство
+владения паролем. TLS/admin/ownership и reserved-name guards сохраняются.
 
-Bindings указывают account+field либо library_secret. Путь вычисляется из project,
-library ID, instance ID и account name в объявленном mount. Shared document —
-project/library/shared; account document — project/library/instance/accounts/name.
+Bindings указывают account+field либо library_secret. По owner amendment 2026-10-21
+путь вычисляется из library ID, instance ID и account name в объявленном mount,
+без id проекта. Shared document — library/shared; account document —
+library/instance/accounts/name. Например, KV v2 read: secret/data/sdku-dm/shared.
+Те же locations используют read/write/CAS, policy, sourceJobs и Agent templates.
+Project ID остаётся в ownership, чужой документ блокируется. Старые prefixed
+документы не удаляются и не используются как fallback. Явные vault_ref неизменны.
 Коллизии, path traversal, wildcard и конфликт env имён блокируются.
 Для vault_ref Agent читает оригинальный путь/field, без копирования документа.
 
@@ -363,7 +369,8 @@ LXC bridge подсетей и 127.0.0.1/32;
 4. Library stage: A3 resources batch, затем один Vault library hook для
    действительно используемых shared secrets. Невостребованный secret не писать.
 5. Для instance: один A3 accounts/grants hook; подтвердить supplied password
-   login в объявленной application database. A3 не ротирует существующий пароль.
+   login в объявленной application database. Owner amendment 2026-10-21:
+   Apply меняет только несовпадающий пароль managed application account.
 6. Один Vault instance hook: согласовать account documents, минимальную policy,
    AppRole и получить стабильный RoleID. Не создавать сущности на каждый host.
 7. Для каждого Docker placement: материализовать private RoleID, Agent config,
@@ -517,7 +524,11 @@ Compose entrypoint запускает разрешённый Agent binary с age
 
 ### A4.5 — recovery и содержательный Verify
 
-- Interrupted retries используют стабильные sources и RoleID, не генерируют пароли.
+- Owner amendment 2026-10-21: опубликованные generated passwords повторно читаются
+  из своего документа; до публикации retry может генерировать новый пароль и
+  установить его после подтверждения ownership. Сбой до первоначального witness
+  блокируется. Только один Apply проекта одновременно, включая standalone и
+  разные Execution Nodes; общей provider/Vault транзакции нет.
 - Failure после PostgreSQL create не требует rollback УЗ; retry продолжает reconcile.
 - При KV/policy failure контейнер не стартует с неполной проекцией.
 - Agent restart, renewal, re-auth, missing field и недоступный endpoint дают

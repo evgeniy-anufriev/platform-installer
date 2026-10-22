@@ -27,6 +27,12 @@ example = load(package_root/'configuration/group_vars.yml.example')
 membership = load(package_root/'configuration/host_vars.yml.example')['platform_application_libraries']
 prepared = prepare(str(package_root), example['platform_desired_state'], {'example-host': membership}, CONTRACT, load, str(root/'contracts'))
 assert not prepared['findings'], prepared['findings']
+secret_example = load(package_root/'configuration/alarm-view-secrets.yml.example')
+secret_membership = {name: {} for name in secret_example['platform_desired_state']['applicationLibraryDeployments']}
+secret_prepared = prepare(str(package_root), secret_example['platform_desired_state'],
+                          {'example-host': secret_membership}, CONTRACT, load, str(root/'contracts'))
+assert not secret_prepared['findings'], secret_prepared['findings']
+assert len(secret_prepared['jobs']) == 2
 library = packages[('library','sdku')]
 common = library['definition'].get('defaults', {})
 base = str(package_root/'library-packages/sdku/1.0.0'/library['render']['base_compose_template'])
@@ -85,4 +91,4 @@ for (kind,name), package in packages.items():
         print('RENDER_FAILED', name)
         raise
 assert len(base_contents) == 1, 'Library base depends on consumer'
-print(json.dumps({'packageSchemasAndDigests':len(packages),'prepareJobs':len(prepared['jobs']),'syntheticComposeRenders':len(rendered),'sharedBaseVariants':len(base_contents),'realTargetExecution':False}))
+print(json.dumps({'packageSchemasAndDigests':len(packages),'prepareJobs':len(prepared['jobs']),'secretExampleJobs':len(secret_prepared['jobs']),'syntheticComposeRenders':len(rendered),'sharedBaseVariants':len(base_contents),'realTargetExecution':False}))

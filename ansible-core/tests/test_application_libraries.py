@@ -157,6 +157,28 @@ class ApplicationLibrariesTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             APP.account_policies(merged,[{'accounts': {'pg': {'databaseAccess':[], 'grants':[]}}}])
 
+    def test_explicit_credential_source_replaces_inherited_variant(self):
+        username = {'source': {'kind': 'literal', 'value': 'application_user'}}
+        base = {'accounts': {'pg': {'credentials': {
+            'username': username,
+            'password': {'source': {'kind': 'runtime_secret_ref', 'ref': 'application-password'}},
+        }}}}
+        generated = {'accounts': {'pg': {'credentials': {'password': {'source': {'kind': 'generated'}}}}}}
+        merged = copy.deepcopy(base)
+        merged['accounts']['pg']['credentials']['password']['source']['kind'] = 'generated'
+        actual = APP.account_policies(merged, [base, generated])
+        self.assertEqual({'kind': 'generated'}, actual['accounts']['pg']['credentials']['password']['source'])
+        self.assertEqual(username, actual['accounts']['pg']['credentials']['username'])
+        self.assertIn('ref', merged['accounts']['pg']['credentials']['password']['source'])
+        vault = {'accounts': {'pg': {'credentials': {'password': {'source': {
+            'kind': 'vault_ref', 'mount': 'secret', 'path': 'application/account', 'field': 'password',
+        }}}}}}
+        replaced = APP.account_policies(merged, [base, generated, vault])
+        self.assertEqual(vault['accounts']['pg']['credentials']['password']['source'],
+                         replaced['accounts']['pg']['credentials']['password']['source'])
+        restored = APP.account_policies(merged, [generated, base])
+        self.assertEqual(base['accounts']['pg']['credentials'], restored['accounts']['pg']['credentials'])
+
     def setUp(self):
         self.desired = load(os.path.join(FIXTURE, "inventory/group_vars/all/platform-installer.yml"))["platform_desired_state"]
         self.memberships = {host: load(os.path.join(FIXTURE, "inventory/host_vars", host, "platform-installer.yml"))["platform_application_libraries"] for host in ("node1", "node2")}

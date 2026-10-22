@@ -370,16 +370,19 @@ def resolve_connection(deployment_id, declaration, selector, desired, configurat
 
 
 def account_policies(settings, layers):
-    """Keep policy alternatives atomic after ordinary Ansible combine.
+    """Keep typed source and policy alternatives atomic after Ansible combine.
 
     The resolving task supplies layers in its existing order. Credential
-    inheritance is unchanged; a deliberate policy switch clears its alternative.
+    inheritance remains field-level; an explicit source replaces its descriptor.
     """
     import copy
     result = copy.deepcopy(settings)
     policies = {}
     for layer in layers:
         for name, declaration in layer.get('accounts', {}).items():
+            for field, credential in declaration.get('credentials', {}).items():
+                if isinstance(credential, dict) and 'source' in credential:
+                    result['accounts'][name]['credentials'][field]['source'] = copy.deepcopy(credential['source'])
             if 'databaseAccess' in declaration:
                 if 'databaseRef' in declaration or 'grants' in declaration:
                     raise ValueError('APPLICATION_PROVIDER_GRANTS_INVALID')

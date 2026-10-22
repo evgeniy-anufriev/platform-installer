@@ -234,7 +234,12 @@ class ApplicationProvidersTest(unittest.TestCase):
 
     def test_password_sources_and_missing_database_ref_block(self):
         self.accounts['postgres']['credentials']['password']['source'] = {'kind': 'generated'}
-        self.assertEqual('APPLICATION_PROVIDER_CREDENTIAL_SOURCE_DEFERRED', self.resolve()['findings'][0]['code'])
+        self.assertEqual('APPLICATION_PROVIDER_GENERATED_PASSWORD_SCOPE_INVALID', self.resolve()['findings'][0]['code'])
+        instance = self.snapshot['applicationLibraries']['libraries']['lib']['instances']['gateway-lib']
+        instance['agentRequired'] = True
+        generated = self.resolve()
+        self.assertEqual('PASS', generated['status'], generated['findings'])
+        self.assertTrue(generated['jobs'][0]['accounts'][0]['passwordRef'].startswith('pla-generated-'))
         self.accounts['postgres']['credentials']['password']['source'] = {'kind': 'runtime_secret_ref', 'ref': 'app-password'}
         self.accounts['postgres']['databaseRef'] = 'missing'
         self.assertEqual('BLOCKED', self.resolve()['status'])

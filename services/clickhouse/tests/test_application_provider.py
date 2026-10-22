@@ -385,6 +385,19 @@ class ApplicationProviderTests(unittest.TestCase):
                 else:
                     role('accounts')
                 self.assertIn('changed=0', role('accounts'))
+                replacement = secrets.token_urlsafe(24)
+                (secret_root / 'app').write_text(replacement)
+                self.assertIn('changed=0', role('preflight'))
+                role('accounts')
+                self.assertIn('changed=0', role('accounts'))
+                for member in targets:
+                    rotated = NativeClient(member, str(directory), replacement, 'api-lib')
+                    try:
+                        self.assertTrue(rotated.query('SELECT 1;').strip() == '1')
+                    finally:
+                        rotated.close()
+                (secret_root / 'app').write_text(user_password)
+                role('accounts')
                 witness_before = (directory / 'application-objects.json').read_bytes()
                 self.assertIn('changed=0', role('verify'))
                 self.assertEqual(witness_before, (directory / 'application-objects.json').read_bytes())

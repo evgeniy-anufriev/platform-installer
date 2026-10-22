@@ -1,16 +1,4 @@
 ---
-- name: Preflight all document values before mutations
-  platform.vault.application_document:
-    document: "{{ item }}"
-    provider: "{{ platform_application_vault_runtime[platform_vault_application_job.providerId] }}"
-    secret_root: "{{ platform_application_secret_root }}"
-    secret_files: "{{ platform_application_secret_files }}"
-  loop: "{{ platform_vault_application_job.documents }}"
-  changed_when: false
-  when: not application_vault_identity_only | default(false)
-  register: application_vault_document_sources
-  no_log: true
-
 - name: Read document ownership and CAS versions before provider writes
   ansible.builtin.uri:
     url: "{{ application_vault_provider.url }}/v1/{{ item.mount }}/data/{{ item.document }}"
@@ -28,10 +16,34 @@
   register: application_vault_document_states
   no_log: true
 
+- name: Reject foreign or deleted documents before resolving generated passwords
+  ansible.builtin.assert:
+    that: item | platform.vault.application_kv_delta({}, item.item.owner) is mapping
+    fail_msg: APPLICATION_VAULT_DOCUMENT_OWNERSHIP_INVALID
+  loop: "{{ application_vault_document_states.results | default([]) }}"
+  when: not application_vault_identity_only | default(false)
+  no_log: true
+
+- name: Preflight document values and generate missing application passwords
+  platform.vault.application_document:
+    document: "{{ item }}"
+    current: "{{ application_vault_document_states.results[application_vault_document_index] }}"
+    provider: "{{ platform_application_vault_runtime[platform_vault_application_job.providerId] }}"
+    secret_root: "{{ platform_application_secret_root }}"
+    secret_files: "{{ platform_application_secret_files | combine(platform_application_credential_files | default({})) }}"
+  loop: "{{ platform_vault_application_job.documents }}"
+  loop_control:
+    index_var: application_vault_document_index
+  changed_when: false
+  when: not application_vault_identity_only | default(false)
+  register: application_vault_document_sources
+  no_log: true
+
 - name: Validate ownership and retain source bytes and CAS versions once
   ansible.builtin.set_fact:
     platform_application_vault_values: "{{ platform_application_vault_values | default({}) | combine(application_vault_document_sources.results | platform.vault.application_vault_source_cache(platform_vault_application_job.providerId)) }}"
     platform_application_vault_documents: "{{ platform_application_vault_documents | default({}) | combine(application_vault_document_states.results | platform.vault.application_vault_document_cache(application_vault_document_sources.results | platform.vault.application_vault_source_cache(platform_vault_application_job.providerId), platform_vault_application_job.providerId)) }}"
+    platform_application_generated_values: "{{ platform_application_generated_values | default({}) | combine(application_vault_document_sources.results | map(attribute='generated') | list | combine) }}"
   when: not application_vault_identity_only | default(false)
   no_log: true
 

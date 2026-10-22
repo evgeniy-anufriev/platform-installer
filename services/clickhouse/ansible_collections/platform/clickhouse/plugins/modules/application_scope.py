@@ -141,6 +141,7 @@ def main():
                     raise ProviderFailure('CLICKHOUSE_APPLICATION_PARTIAL_ACCOUNT')
                 expected = required_grants(account)
                 missing_union, removed_union = set(), set()
+                password_update = False
                 for target, client in zip(targets, clients):
                     rows = observed[target['memberId']]
                     grants = [row for row in rows if row['kind'] == 'grant' and row['name'] == account['name']]
@@ -164,10 +165,15 @@ def main():
                         try:
                             verify_login(user_client, account, account['mode'] == 'managed' and
                                          (phase == 'preflight' or (phase == 'accounts' and bool(missing))))
+                        except ProviderFailure as error:
+                            if (str(error) != 'CLICKHOUSE_APPLICATION_QUERY_FAILED_516' or
+                                    account['mode'] != 'managed' or phase not in {'preflight', 'resources', 'accounts'}):
+                                raise
+                            password_update = True
                         finally:
                             user_client.close()
                 if phase == 'accounts' and account['mode'] == 'managed':
-                    account_sql.append(user_batch(account, args['passwords'][account['passwordRef']], missing_union, not existing, job['mode'] == 'raft-ha', removed_union))
+                    account_sql.append(user_batch(account, args['passwords'][account['passwordRef']], missing_union, not existing, job['mode'] == 'raft-ha', removed_union, password_update))
             if any(account_sql):
                 clients[0].query('SET distributed_ddl_task_timeout = 30;\n' + '\n'.join(account_sql))
                 changed = True
