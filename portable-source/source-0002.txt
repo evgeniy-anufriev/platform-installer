@@ -1,3 +1,387 @@
+@@PORTABLE {"path":"internal/desktop/target_host_trust.go","mode":420,"size":6972,"sha256":"07463ceb38df711d5c114e68a97c10396b6b8e820490a470b3bf558457bc342a","index":0,"count":1,"encoding":"utf-8","payloadBytes":6972}
+package desktop
+
+import (
+	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"errors"
+	"fmt"
+	"sort"
+	"time"
+
+	"platform-installer/internal/executionnode"
+)
+
+// These approvals exist only in this application session. A saved project
+// revision, server endpoint, or project-open lifecycle change makes them stale.
+type pendingTargetHostKey struct {
+	id, root, projectID, revision, hostID, address string
+	port                                           uint16
+	keyType, publicKey, fingerprint                string
+	expires                                        time.Time
+}
+
+type approvedTargetHostKey struct {
+	root, projectID, revision, hostID, address string
+	port                                       uint16
+	keyType, publicKey, fingerprint            string
+}
+
+func (a *App) savedTargetServerLocked(hostID string) (string, uint16, string, error) {
+	if a.current.Status != "OPEN" || a.current.Project == nil || a.current.Managed == nil || a.activeSession != "" {
+		return "", 0, "", errors.New("TARGET_HOST_TRUST_PROJECT_UNAVAILABLE")
+	}
+	server, ok := a.current.Managed.Servers[hostID]
+	if !ok || server.HostID != hostID || !validExecutionAddress(server.Address) {
+		return "", 0, "", errors.New("TARGET_HOST_TRUST_SERVER_INVALID")
+	}
+	port := 22
+	if server.SSHPort != nil {
+		port = *server.SSHPort
+	}
+	if port < 1 || port > 65535 {
+		return "", 0, "", errors.New("TARGET_HOST_TRUST_SERVER_INVALID")
+	}
+	revision, err := a.projectRevision(a.current.Root)
+	if err != nil || revision == "" || revision != a.current.Managed.ProjectRevision {
+		return "", 0, "", errors.New("TARGET_HOST_TRUST_PROJECT_STALE")
+	}
+	return server.Address, uint16(port), revision, nil
+}
+
+func (a *App) ProbeTargetHostKey(hostID string) HostKeyProbeResult {
+	a.editMu.Lock()
+	defer a.editMu.Unlock()
+	a.pendingTargetHostKey = nil
+	delete(a.approvedTargetHostKeys, hostID)
+	address, port, revision, err := a.savedTargetServerLocked(hostID)
+	if err != nil {
+		return hostKeyProbeFailure(projectErrorCode(err))
+	}
+	binding, err := a.resolveSelectedExecutionNodeBindingLocked()
+	if err != nil || a.execution.context.Status != "READY" {
+		return hostKeyProbeFailure("EXECUTION_NODE_READY_REQUIRED")
+	}
+	prober, ok := binding.reader.transport.(interface {
+		ProbeTargetHostKey(context.Context, executionnode.Node, string, uint16) ([]byte, error)
+	})
+	if !ok {
+		return hostKeyProbeFailure("TARGET_HOST_KEY_PROBE_FAILED")
+	}
+	ctx, cancel := a.operationContext(9 * time.Second)
+	defer cancel()
+	output, err := prober.ProbeTargetHostKey(ctx, binding.node, address, port)
+	if err != nil {
+		return hostKeyProbeFailure("TARGET_HOST_KEY_PROBE_FAILED")
+	}
+	keyType, publicKey, fingerprint, err := parseScannedHostKey(output, address, port)
+	if err != nil {
+		return hostKeyProbeFailure("TARGET_HOST_KEY_PROBE_FAILED")
+	}
+	nonce := make([]byte, 16)
+	if _, err := rand.Read(nonce); err != nil {
+		return hostKeyProbeFailure("TARGET_HOST_KEY_PROBE_FAILED")
+	}
+	probeID := hex.EncodeToString(nonce)
+	a.pendingTargetHostKey = &pendingTargetHostKey{
+		id: probeID, root: a.current.Root, projectID: a.current.Project.ID,
+		revision: revision, hostID: hostID, address: address, port: port,
+		keyType: keyType, publicKey: publicKey, fingerprint: fingerprint,
+		expires: time.Now().Add(2 * time.Minute),
+	}
+	return HostKeyProbeResult{Status: "APPROVAL_REQUIRED", ProbeID: probeID,
+		SafeLabel: fmt.Sprintf("%s · %s:%d", hostID, address, port),
+		KeyType:   keyType, Fingerprint: fingerprint}
+}
+
+func (a *App) DeclineTargetHostKey() HostKeyProbeResult {
+	a.editMu.Lock()
+	defer a.editMu.Unlock()
+	a.pendingTargetHostKey = nil
+	return HostKeyProbeResult{Status: "DECLINED"}
+}
+
+func (a *App) ApproveTargetHostKey(probeID string) HostKeyProbeResult {
+	a.editMu.Lock()
+	defer a.editMu.Unlock()
+	pending := a.pendingTargetHostKey
+	a.pendingTargetHostKey = nil
+	if pending == nil || pending.id != probeID || !time.Now().Before(pending.expires) || a.current.Root != pending.root || a.current.Project == nil || a.current.Project.ID != pending.projectID {
+		return hostKeyProbeFailure("TARGET_HOST_KEY_APPROVAL_STALE")
+	}
+	address, port, revision, err := a.savedTargetServerLocked(pending.hostID)
+	if err != nil || address != pending.address || port != pending.port || revision != pending.revision {
+		return hostKeyProbeFailure("TARGET_HOST_KEY_APPROVAL_STALE")
+	}
+	a.approvedTargetHostKeys[pending.hostID] = approvedTargetHostKey{
+		root: pending.root, projectID: pending.projectID, revision: pending.revision,
+		hostID: pending.hostID, address: address, port: port,
+		keyType: pending.keyType, publicKey: pending.publicKey, fingerprint: pending.fingerprint,
+	}
+	return HostKeyProbeResult{Status: "APPROVED", SafeLabel: fmt.Sprintf("%s · %s:%d", pending.hostID, address, port),
+		KeyType: pending.keyType, Fingerprint: pending.fingerprint}
+}
+
+func (a *App) configureTargetHostTrust() {
+	if a.binding == nil || a.binding.plans == nil {
+		return
+	}
+	stager, ok := a.binding.reader.transport.(executionnode.TargetHostTrustStager)
+	if !ok {
+		return
+	}
+	a.binding.plans.ConfigureTargetHostTrust(a.approvedTargetKeysForPlan, stager)
+}
+
+func (a *App) approvedTargetKeysForPlan(plan executionnode.DeploymentPlan) ([]executionnode.TargetHostKeyApproval, error) {
+	a.editMu.Lock()
+	defer a.editMu.Unlock()
+	targets := map[string]bool{}
+	for _, phase := range plan.Phases {
+		for _, action := range phase.Actions {
+			for _, hostID := range action.Targets {
+				targets[hostID] = true
+			}
+		}
+	}
+	ids := make([]string, 0, len(targets))
+	for hostID := range targets {
+		ids = append(ids, hostID)
+	}
+	sort.Strings(ids)
+	return a.approvedTargetKeysForHostsLocked(plan.ProjectIdentity, plan.ProjectRevision, ids)
+}
+
+func (a *App) approvedTargetKeysForHostsLocked(projectID, revision string, ids []string) ([]executionnode.TargetHostKeyApproval, error) {
+	if a.current.Status != "OPEN" || a.current.Project == nil || a.current.Managed == nil || a.activeSession != "" || a.current.Project.ID != projectID {
+		return nil, errors.New("TARGET_HOST_TRUST_REQUIRED")
+	}
+	currentRevision, err := a.projectRevision(a.current.Root)
+	if err != nil || currentRevision != revision || a.current.Managed.ProjectRevision != revision {
+		return nil, errors.New("TARGET_HOST_TRUST_STALE")
+	}
+	if len(ids) == 0 || len(ids) > 256 {
+		return nil, errors.New("TARGET_HOST_TRUST_INVALID")
+	}
+	result := make([]executionnode.TargetHostKeyApproval, 0, len(ids))
+	for _, hostID := range ids {
+		pin, ok := a.approvedTargetHostKeys[hostID]
+		if !ok || pin.root != a.current.Root || pin.projectID != projectID || pin.revision != revision {
+			return nil, errors.New("TARGET_HOST_TRUST_REQUIRED")
+		}
+		address, port, _, err := a.savedTargetServerLocked(hostID)
+		if err != nil || address != pin.address || port != pin.port {
+			return nil, errors.New("TARGET_HOST_TRUST_STALE")
+		}
+		result = append(result, executionnode.TargetHostKeyApproval{HostID: hostID, Address: address, Port: int(port), KeyType: pin.keyType, PublicKey: pin.publicKey})
+	}
+	return result, nil
+}
+
+@@END
+@@PORTABLE {"path":"internal/desktop/verified_pki_view.go","mode":420,"size":8010,"sha256":"e4cbb5c240663d45681a1b1670ed7b70b8d11a091dea7455d19075d4e7b7cae7","index":0,"count":1,"encoding":"utf-8","payloadBytes":8010}
+package desktop
+
+import (
+	"errors"
+	"net"
+	"regexp"
+	"sort"
+	"strings"
+
+	"platform-installer/internal/coreadapter"
+)
+
+const (
+	maxVerifiedPKIIdentities = 64
+	maxVerifiedPKIConsumers  = 4096
+	maxVerifiedPKISANs       = 64
+	maxVerifiedPKIValue      = 253
+)
+
+var verifiedPKISafeName = regexp.MustCompile(`^[A-Za-z0-9*._-]+$`)
+var verifiedPKIIdentityID = regexp.MustCompile(`^[a-z][a-z0-9._-]*$`)
+
+// VerifiedPKIView is an in-memory, read-only presentation projection of
+// revision-bound Core PKI evidence. It is never desired state or Save input.
+type VerifiedPKIView struct {
+	Status            string                        `json:"status"`
+	Identities        []VerifiedCertificateIdentity `json:"identities,omitempty"`
+	Findings          []VerificationFinding         `json:"findings,omitempty"`
+	FindingsTruncated bool                          `json:"findingsTruncated,omitempty"`
+	Error             *ProjectOpenError             `json:"error,omitempty"`
+}
+
+type VerifiedCertificateIdentity struct {
+	ID           string                `json:"id"`
+	Scope        string                `json:"scope"`
+	TLSProfileID string                `json:"tlsProfileId"`
+	DNSNames     []string              `json:"dnsNames"`
+	IPAddresses  []string              `json:"ipAddresses"`
+	Consumers    []VerifiedPKIConsumer `json:"consumers"`
+}
+
+type VerifiedPKIConsumer struct {
+	DeploymentID string `json:"deploymentId"`
+	MemberID     string `json:"memberId"`
+	HostID       string `json:"hostId"`
+}
+
+// GetVerifiedPKIView exposes only current, attested Core PKI identity/SAN
+// evidence. It deliberately cannot initiate verification or contact a node.
+func (a *App) GetVerifiedPKIView() VerifiedPKIView {
+	a.editMu.Lock()
+	defer a.editMu.Unlock()
+	a.reconcileEditSessionLocked()
+	return a.verifiedPKIViewLocked()
+}
+
+func (a *App) verifiedPKIViewLocked() VerifiedPKIView {
+	verification := a.current.Verification
+	if a.current.Status != "OPEN" || a.current.Project == nil {
+		return verifiedPKIUnavailable("PROJECT_NOT_OPEN")
+	}
+	if a.activeSession != "" {
+		return VerifiedPKIView{Status: "STALE"}
+	}
+	if verification.Status == "INVALID" {
+		return VerifiedPKIView{Status: "INVALID", Findings: append([]VerificationFinding(nil), verification.Findings...), FindingsTruncated: verification.FindingsTruncated}
+	}
+	if verification.Status == "STALE" {
+		return VerifiedPKIView{Status: "STALE"}
+	}
+	if verification.Status != "VERIFIED" {
+		if verification.Status == "UNVERIFIED" || verification.Status == "" {
+			return VerifiedPKIView{Status: "NOT_VERIFIED"}
+		}
+		return VerifiedPKIView{Status: "UNAVAILABLE", Error: verification.Error}
+	}
+	if a.current.Managed == nil || a.current.Snapshot == nil ||
+		verification.ProjectIdentity != a.current.Project.ID ||
+		verification.ProjectRevision == "" ||
+		verification.ProjectRevision != a.current.Managed.ProjectRevision ||
+		verification.ProjectRevision != a.current.Snapshot.ProjectRevision ||
+		verification.ExecutionNodeID == "" || verification.Runtime == nil {
+		return VerifiedPKIView{Status: "STALE"}
+	}
+	if a.binding == nil || a.binding.node.ID == "" ||
+		a.execution.context.SelectionKind != "EXPLICIT_EXTERNAL" ||
+		a.execution.external == nil || a.execution.external.hostID != a.binding.node.ID ||
+		verification.ExecutionNodeID != a.binding.node.ID ||
+		!runtimeEvidenceMatchesExpected(*verification.Runtime, a.binding.reader.runtimeRelease) {
+		return VerifiedPKIView{Status: "STALE"}
+	}
+	if a.current.Snapshot.Status != "PASS" || a.current.Snapshot.Partial {
+		return verifiedPKIUnavailable("VERIFIED_PKI_SNAPSHOT_INVALID")
+	}
+	view, err := buildVerifiedPKIView(a.current.Snapshot)
+	if err != nil {
+		return verifiedPKIUnavailable("VERIFIED_PKI_VIEW_UNAVAILABLE")
+	}
+	return view
+}
+
+func verifiedPKIUnavailable(code string) VerifiedPKIView {
+	return VerifiedPKIView{Status: "UNAVAILABLE", Error: &ProjectOpenError{Code: code, Message: "Не удалось безопасно подготовить read-only представление PKI."}}
+}
+
+func buildVerifiedPKIView(snapshot *coreadapter.Snapshot) (VerifiedPKIView, error) {
+	if snapshot == nil || len(snapshot.PKI) == 0 {
+		return VerifiedPKIView{}, errVerifiedPKIView
+	}
+	status, ok := snapshot.PKI["status"].(string)
+	identities, okIdentities := snapshot.PKI["certificateIdentities"].([]any)
+	if !ok || status != "PASS" || !okIdentities || len(identities) > maxVerifiedPKIIdentities {
+		return VerifiedPKIView{}, errVerifiedPKIView
+	}
+	view := VerifiedPKIView{Status: "CURRENT", Identities: make([]VerifiedCertificateIdentity, 0, len(identities))}
+	for _, raw := range identities {
+		identity, err := verifiedPKIIdentity(raw)
+		if err != nil {
+			return VerifiedPKIView{}, errVerifiedPKIView
+		}
+		view.Identities = append(view.Identities, identity)
+	}
+	sort.Slice(view.Identities, func(i, j int) bool { return view.Identities[i].ID < view.Identities[j].ID })
+	return view, nil
+}
+
+func verifiedPKIIdentity(raw any) (VerifiedCertificateIdentity, error) {
+	value, ok := object(raw)
+	if !ok {
+		return VerifiedCertificateIdentity{}, errVerifiedPKIView
+	}
+	id, validID := requiredString(value, "id", maxEndpointPreviewIdentifierLength)
+	tlsProfileID, validProfile := requiredString(value, "tlsProfileId", maxEndpointPreviewIdentifierLength)
+	scope, validScope := value["scope"].(string)
+	dnsNames, dnsOK := verifiedPKIDNSNames(value["dnsNames"])
+	ipAddresses, ipOK := verifiedPKIIPAddresses(value["ipAddresses"])
+	consumers, consumersOK := verifiedPKIConsumers(value["consumers"])
+	if !validID || !verifiedPKIIdentityID.MatchString(id) || !validProfile || !validPreviewIdentifier(tlsProfileID) || !validScope ||
+		(scope != "HOST" && scope != "MEMBER" && scope != "DEPLOYMENT") || !dnsOK || !ipOK || !consumersOK {
+		return VerifiedCertificateIdentity{}, errVerifiedPKIView
+	}
+	return VerifiedCertificateIdentity{ID: id, Scope: scope, TLSProfileID: tlsProfileID, DNSNames: dnsNames, IPAddresses: ipAddresses, Consumers: consumers}, nil
+}
+
+func verifiedPKIDNSNames(raw any) ([]string, bool) {
+	values, ok := array(raw)
+	if !ok || len(values) > maxVerifiedPKISANs {
+		return nil, false
+	}
+	result := make([]string, 0, len(values))
+	for _, raw := range values {
+		value, ok := raw.(string)
+		if !ok || len(value) == 0 || len(value) > maxVerifiedPKIValue || !verifiedPKISafeName.MatchString(value) {
+			return nil, false
+		}
+		result = append(result, value)
+	}
+	return result, true
+}
+
+func verifiedPKIIPAddresses(raw any) ([]string, bool) {
+	values, ok := array(raw)
+	if !ok || len(values) > maxVerifiedPKISANs {
+		return nil, false
+	}
+	result := make([]string, 0, len(values))
+	for _, raw := range values {
+		value, ok := raw.(string)
+		if !ok || len(value) == 0 || len(value) > maxVerifiedPKIValue || net.ParseIP(value) == nil {
+			return nil, false
+		}
+		result = append(result, value)
+	}
+	return result, true
+}
+
+func verifiedPKIConsumers(raw any) ([]VerifiedPKIConsumer, bool) {
+	values, ok := array(raw)
+	if !ok || len(values) > maxVerifiedPKIConsumers {
+		return nil, false
+	}
+	result := make([]VerifiedPKIConsumer, 0, len(values))
+	for _, raw := range values {
+		value, ok := object(raw)
+		deploymentID, deploymentOK := requiredString(value, "deploymentId", maxEndpointPreviewIdentifierLength)
+		memberID, memberOK := requiredString(value, "memberId", maxEndpointPreviewIdentifierLength)
+		hostID, hostOK := requiredString(value, "hostId", maxEndpointPreviewIdentifierLength)
+		if !ok || !deploymentOK || !memberOK || !hostOK || !validPreviewIdentifier(deploymentID) || !validPreviewIdentifier(memberID) || !validPreviewIdentifier(hostID) {
+			return nil, false
+		}
+		result = append(result, VerifiedPKIConsumer{DeploymentID: deploymentID, MemberID: memberID, HostID: hostID})
+	}
+	sort.Slice(result, func(i, j int) bool {
+		return strings.Join([]string{result[i].DeploymentID, result[i].MemberID, result[i].HostID}, "\x00") < strings.Join([]string{result[j].DeploymentID, result[j].MemberID, result[j].HostID}, "\x00")
+	})
+	return result, true
+}
+
+var errVerifiedPKIView = errors.New("verified PKI view invalid")
+
+@@END
 @@PORTABLE {"path":"internal/executionbundle/cache.go","mode":420,"size":5458,"sha256":"508f3ed2ec55e70eb9f4b90ee6d3d3706dc3dfc273c8ae0c01af6ed58fc37bc0","index":0,"count":1,"encoding":"utf-8","payloadBytes":5458}
 package executionbundle
 
@@ -24682,7 +25066,7 @@ class FilterModule:
         return {'platform_clickhouse_members': project_members}
 
 @@END
-@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/plugins/module_utils/application_sql.py","mode":420,"size":13670,"sha256":"e3b1746a767e6fdedc51cf73f35f1bdb9b0ad874573f2db5f1ed3c88ff6d3608","index":0,"count":1,"encoding":"utf-8","payloadBytes":13670}
+@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/plugins/module_utils/application_sql.py","mode":420,"size":13894,"sha256":"b104081e26cf8f045be8a0915842a8f17bb673243bf455a3a5031bb1ea4ffcaf","index":0,"count":1,"encoding":"utf-8","payloadBytes":13894}
 """Private native-client execution for library and logical instance scopes."""
 import contextlib
 import fcntl
@@ -24894,13 +25278,16 @@ def managed_grant_delta(account, rows, databases):
     return expected - current, removed
 
 
-def user_batch(account, password, missing, create, clustered, revoked=()):
+def user_batch(account, password, missing, create, clustered, revoked=(), password_update=False):
     name = identifier(account['name'])
     cluster = ' ON CLUSTER default' if clustered else ''
     statements = []
     if create:
         verifier = hashlib.sha256(password.encode()).hexdigest()
         statements.append("CREATE USER %s%s IDENTIFIED WITH sha256_hash BY '%s' DEFAULT ROLE NONE;" % (name, cluster, verifier))
+    elif password_update:
+        verifier = hashlib.sha256(password.encode()).hexdigest()
+        statements.append("ALTER USER %s%s IDENTIFIED WITH sha256_hash BY '%s';" % (name, cluster, verifier))
     for database, table, privilege in sorted(revoked):
         if privilege not in {'SELECT', 'INSERT', 'CREATE TABLE'}:
             raise ProviderFailure('CLICKHOUSE_APPLICATION_GRANTS_INVALID')
@@ -24957,7 +25344,7 @@ def project_members(instances, deployment, settings):
     return result
 
 @@END
-@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/plugins/modules/application_scope.py","mode":420,"size":14082,"sha256":"22258a24aa39730001118e1721fee635254454b8ed3c996ded875aca1fe163d5","index":0,"count":1,"encoding":"utf-8","payloadBytes":14082}
+@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/plugins/modules/application_scope.py","mode":420,"size":14498,"sha256":"7529a6fbc0836bba33bd850c868abce1196b570d46b0f5f99930f681512d6aa2","index":0,"count":1,"encoding":"utf-8","payloadBytes":14498}
 #!/usr/bin/python
 """One library resource batch or logical instance account/grant batch."""
 import json
@@ -25101,6 +25488,7 @@ def main():
                     raise ProviderFailure('CLICKHOUSE_APPLICATION_PARTIAL_ACCOUNT')
                 expected = required_grants(account)
                 missing_union, removed_union = set(), set()
+                password_update = False
                 for target, client in zip(targets, clients):
                     rows = observed[target['memberId']]
                     grants = [row for row in rows if row['kind'] == 'grant' and row['name'] == account['name']]
@@ -25124,10 +25512,15 @@ def main():
                         try:
                             verify_login(user_client, account, account['mode'] == 'managed' and
                                          (phase == 'preflight' or (phase == 'accounts' and bool(missing))))
+                        except ProviderFailure as error:
+                            if (str(error) != 'CLICKHOUSE_APPLICATION_QUERY_FAILED_516' or
+                                    account['mode'] != 'managed' or phase not in {'preflight', 'resources', 'accounts'}):
+                                raise
+                            password_update = True
                         finally:
                             user_client.close()
                 if phase == 'accounts' and account['mode'] == 'managed':
-                    account_sql.append(user_batch(account, args['passwords'][account['passwordRef']], missing_union, not existing, job['mode'] == 'raft-ha', removed_union))
+                    account_sql.append(user_batch(account, args['passwords'][account['passwordRef']], missing_union, not existing, job['mode'] == 'raft-ha', removed_union, password_update))
             if any(account_sql):
                 clients[0].query('SET distributed_ddl_task_timeout = 30;\n' + '\n'.join(account_sql))
                 changed = True
@@ -30539,8 +30932,14 @@ galaxy_info:
 dependencies: []
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/application_account.yml","mode":420,"size":4715,"sha256":"1699a74d4bcc21b3e19aa75cee2884744b9af43f2fa41601b3f0c962c1694967","index":0,"count":1,"encoding":"utf-8","payloadBytes":4715}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/application_account.yml","mode":420,"size":6602,"sha256":"e4ecbc1a438eb273a5545f39efb7a1c70129886813feaba764273002dd5c9837","index":0,"count":1,"encoding":"utf-8","payloadBytes":6602}
 ---
+- name: Exclude infrastructure identities from application password reconciliation
+  ansible.builtin.assert:
+    that: application_kafka_account.name not in ['admin', 'default']
+    fail_msg: APPLICATION_PROVIDER_IDENTIFIER_INVALID
+  when: platform_kafka_application_phase == 'apply' and application_kafka_account.mode == 'managed'
+
 - name: Select only this exact principal from deployment SCRAM metadata
   ansible.builtin.set_fact:
     application_kafka_description:
@@ -30565,11 +30964,48 @@ dependencies: []
       - "platform_kafka_application_phase != 'verify' and application_kafka_account.mode == 'managed' or 'SCRAM-SHA-512' in application_kafka_description.stdout"
     fail_msg: APPLICATION_KAFKA_ACCOUNT_UNAVAILABLE_OR_CONFLICT
 
-- name: Create missing managed credentials only during Apply
+- name: Prepare the actual application SASL connection without logging secrets
+  ansible.builtin.template:
+    src: application-account-client.properties.j2
+    dest: "{{ application_kafka_private.path }}/account.properties"
+    mode: '0600'
+  no_log: true
+  changed_when: false
+
+- name: Probe an existing application's password without changing credentials
+  ansible.builtin.command:
+    argv:
+      - "{{ application_topic_cli_directory }}/bin/kafka-broker-api-versions.sh"
+      - --bootstrap-server
+      - "{{ application_kafka_account.candidates[0].address }}:{{ application_kafka_account.candidates[0].port }}"
+      - --command-config
+      - "{{ application_kafka_private.path }}/account.properties"
+  register: application_kafka_password_probe
+  when: "'SCRAM-SHA-512' in application_kafka_description.stdout"
+  changed_when: false
+  failed_when: false
+  no_log: true
+
+- name: Identify only explicit SASL credential mismatches for managed Apply
+  ansible.builtin.set_fact:
+    application_kafka_password_mismatch: >-
+      {{ platform_kafka_application_phase == 'apply' and application_kafka_account.mode == 'managed'
+         and application_kafka_password_probe.rc | default(0) != 0
+         and 'SaslAuthenticationException' in (application_kafka_password_probe.stderr | default(''))
+         and 'invalid credentials' in (application_kafka_password_probe.stderr | default('') | lower) }}
+  no_log: true
+
+- name: Reject non-credential errors and mismatching read-only application accounts
+  ansible.builtin.assert:
+    that: application_kafka_password_probe.rc | default(0) == 0 or application_kafka_password_mismatch
+    fail_msg: APPLICATION_KAFKA_ACCOUNT_AUTHENTICATION_FAILED
+  no_log: true
+
+- name: Reconcile missing or mismatching managed application credentials during Apply
   when:
     - platform_kafka_application_phase == 'apply'
     - application_kafka_account.mode == 'managed'
-    - "'SCRAM-SHA-512' not in application_kafka_description.stdout"
+    - "'SCRAM-SHA-512' not in application_kafka_description.stdout or application_kafka_password_mismatch"
   block:
     - name: Render SCRAM mutation input without placing credentials in argv
       ansible.builtin.copy:
@@ -30578,7 +31014,7 @@ dependencies: []
         mode: '0600'
       changed_when: false
       no_log: true
-    - name: Create the missing SCRAM credential using Kafka's file interface
+    - name: Set the selected application SCRAM password using Kafka's file interface
       ansible.builtin.command:
         argv:
           - "{{ application_topic_cli_directory }}/bin/kafka-configs.sh"
@@ -30602,16 +31038,9 @@ dependencies: []
         that: application_kafka_creation.rc == 0
         fail_msg: APPLICATION_KAFKA_ACCOUNT_CREATE_FAILED
 
-- name: Prove credential possession before adopting an existing principal or granting access
-  when: "'SCRAM-SHA-512' in application_kafka_description.stdout or platform_kafka_application_phase == 'apply'"
+- name: Confirm newly set application credentials before granting access
+  when: "platform_kafka_application_phase == 'apply' and application_kafka_account.mode == 'managed' and ('SCRAM-SHA-512' not in application_kafka_description.stdout or application_kafka_password_mismatch)"
   block:
-    - name: Render the actual application's SASL connection without logging secrets
-      ansible.builtin.template:
-        src: application-account-client.properties.j2
-        dest: "{{ application_kafka_private.path }}/account.properties"
-        mode: '0600'
-      no_log: true
-      changed_when: false
     - name: Authenticate using the application's SCRAM listener
       ansible.builtin.command:
         argv:
@@ -30624,7 +31053,7 @@ dependencies: []
       changed_when: false
       failed_when: false
       no_log: true
-    - name: Reject a principal with mismatching credentials instead of resetting it
+    - name: Require the selected application password to authenticate after reconciliation
       ansible.builtin.assert:
         that: application_kafka_login.rc == 0
         fail_msg: APPLICATION_KAFKA_ACCOUNT_AUTHENTICATION_FAILED
@@ -36009,6 +36438,88 @@ class FilterModule:
                 'application_validate_provider_job': validate_job}
 
 @@END
+@@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/plugins/modules/application_password_probe.py","mode":420,"size":3716,"sha256":"c354c42c4549de978471bda68b816be47059c40e14c5d322439a5b2f4d38c61f","index":0,"count":1,"encoding":"utf-8","payloadBytes":3716}
+#!/usr/bin/python
+"""Read-only application authentication using installed libpq SQLSTATE output."""
+import ctypes
+import ctypes.util
+import re
+import select
+import time
+
+from ansible.module_utils.basic import AnsibleModule
+
+
+def main():
+    module = AnsibleModule(argument_spec=dict(
+        host=dict(required=True), port=dict(type='int', required=True),
+        username=dict(required=True), password=dict(required=True, no_log=True),
+        ca_file=dict(type='path', required=True), timeout=dict(type='int', default=10),
+    ), supports_check_mode=True)
+    args = module.params
+    if not 1 <= args['timeout'] <= 60 or not 1 <= args['port'] <= 65535:
+        module.fail_json(msg='APPLICATION_POSTGRESQL_PROBE_INPUT_INVALID')
+    connection = None
+    result = dict(changed=False, authenticated=False, sqlstate='')
+    try:
+        pq = ctypes.CDLL(ctypes.util.find_library('pq') or 'libpq.so.5')
+        signatures = (
+            ('PQconnectStartParams', ctypes.c_void_p, [ctypes.POINTER(ctypes.c_char_p), ctypes.POINTER(ctypes.c_char_p), ctypes.c_int]),
+            ('PQsetErrorVerbosity', ctypes.c_int, [ctypes.c_void_p, ctypes.c_int]),
+            ('PQconnectPoll', ctypes.c_int, [ctypes.c_void_p]),
+            ('PQsocket', ctypes.c_int, [ctypes.c_void_p]),
+            ('PQerrorMessage', ctypes.c_char_p, [ctypes.c_void_p]),
+            ('PQfinish', None, [ctypes.c_void_p]),
+        )
+        for name, restype, argtypes in signatures:
+            function = getattr(pq, name)
+            function.restype, function.argtypes = restype, argtypes
+        parameters = dict(host=args['host'], port=str(args['port']), dbname='postgres',
+                          user=args['username'], password=args['password'], sslmode='verify-full',
+                          sslrootcert=args['ca_file'], passfile='/dev/null',
+                          connect_timeout=str(args['timeout']))
+        array = ctypes.c_char_p * (len(parameters) + 1)
+        keys = array(*(key.encode() for key in parameters), None)
+        values = array(*(value.encode() for value in parameters.values()), None)
+        deadline = time.monotonic() + args['timeout']
+        connection = pq.PQconnectStartParams(keys, values, 0)
+        if not connection:
+            raise ValueError()
+        # Set before authentication: psql applies verbosity after initial connect.
+        # SQLSTATE mode retains the server code without localized message text.
+        pq.PQsetErrorVerbosity(connection, 3)  # PQERRORS_SQLSTATE
+        while time.monotonic() < deadline:
+            state = pq.PQconnectPoll(connection)
+            if state == 3:  # PGRES_POLLING_OK
+                result['authenticated'] = True
+                break
+            if state == 0:  # PGRES_POLLING_FAILED
+                error = pq.PQerrorMessage(connection) or b''
+                code = re.search(rb':\s+([0-9A-Z]{5})\s*$', error)
+                if code:
+                    result['sqlstate'] = code.group(1).decode('ascii')
+                break
+            if state not in (1, 2, 4):
+                raise ValueError()
+            descriptor = pq.PQsocket(connection)
+            if descriptor < 0:
+                raise ValueError()
+            remaining = max(0, deadline - time.monotonic())
+            select.select([descriptor] if state == 1 else [],
+                          [descriptor] if state == 2 else [], [], min(remaining, 0.25))
+    except Exception:
+        # No connection strings, credentials, or libpq messages enter diagnostics.
+        result = dict(changed=False, authenticated=False, sqlstate='')
+    finally:
+        if connection:
+            pq.PQfinish(connection)
+    module.exit_json(**result)
+
+
+if __name__ == '__main__':
+    main()
+
+@@END
 @@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/roles/application_provider/defaults/main.yml","mode":420,"size":636,"sha256":"6a83cf0e567ac0e1e829cbb5c5ceeec28c77485df049d878edc5b40779ba7618","index":0,"count":1,"encoding":"utf-8","payloadBytes":636}
 ---
 platform_postgresql_application_job: {}
@@ -36023,9 +36534,9 @@ platform_postgresql_application_statement_timeout: 30000
 platform_postgresql_application_phase: preflight
 
 @@END
-@@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/roles/application_provider/tasks/accounts.yml","mode":420,"size":1261,"sha256":"09355754c6f5d77f6b3ea690218f7d3671c7c096146c085cb7fb9a0a3a4ff537","index":0,"count":1,"encoding":"utf-8","payloadBytes":1261}
+@@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/roles/application_provider/tasks/accounts.yml","mode":420,"size":1271,"sha256":"48a33db26b591fe618d849fd0286d80818e9ee10b4906ba7d42fab2af2033ce6","index":0,"count":1,"encoding":"utf-8","payloadBytes":1271}
 ---
-- name: Create missing logical accounts in one maintenance session
+- name: Reconcile managed application credentials in one maintenance session
   ansible.builtin.command:
     argv: [psql, -X, -h, "{{ platform_postgresql_application_socket }}", -p, "{{ application_provider_target.port }}", -U, "{{ application_provider_os_user }}", -d, postgres, -At, -v, ON_ERROR_STOP=1, -f, -]
     stdin: "{{ lookup('ansible.builtin.template', 'accounts.sql.j2') }}"
@@ -36072,7 +36583,7 @@ platform_postgresql_application_phase: preflight
   no_log: true
 
 @@END
-@@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/roles/application_provider/tasks/login.yml","mode":420,"size":1767,"sha256":"4db690c57add616791beecc429f0174816e1e1a03665976dee2163409a66fa73","index":0,"count":1,"encoding":"utf-8","payloadBytes":1767}
+@@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/roles/application_provider/tasks/login.yml","mode":420,"size":1876,"sha256":"c7f196ed70a55c43928353c31b30c79c08c24e942aa8c6d87f5c513a3c121c46","index":0,"count":1,"encoding":"utf-8","payloadBytes":1876}
 ---
 - name: Authenticate selected logical accounts over verified TLS
   ansible.builtin.command:
@@ -36089,6 +36600,7 @@ platform_postgresql_application_phase: preflight
     PGSSLROOTCERT: "{{ application_provider_target.pkiPlans[0].targetDirectory }}/ca-chain.pem"
     PGCONNECT_TIMEOUT: '10'
     PGPASSFILE: /dev/null
+    LC_ALL: C
   delegate_to: "{{ application_provider_target.hostId }}"
   become: true
   become_user: "{{ platform_pki_owner | default(platform_execution_technical_user | default('root', true)) }}"
@@ -36097,9 +36609,10 @@ platform_postgresql_application_phase: preflight
   failed_when: application_provider_login.rc != 0 or application_provider_login.stdout != '1'
   loop: "{{ platform_postgresql_application_job.loginAccounts | default(platform_postgresql_application_job.accounts) }}"
   when: >-
+    not (application_provider_skip_managed | default(false) and item.mode == 'managed') and (
     application_provider_probe_scope == 'all' or
     (application_provider_probe_scope == 'existing' and item.name in platform_application_provider_runtime[platform_postgresql_application_job.providerId].catalog.roles) or
-    (application_provider_probe_scope == 'new' and item.name not in platform_application_provider_runtime[platform_postgresql_application_job.providerId].catalog.roles)
+    (application_provider_probe_scope == 'new' and item.name not in platform_application_provider_runtime[platform_postgresql_application_job.providerId].catalog.roles))
   no_log: true
 
 @@END
@@ -36109,7 +36622,7 @@ platform_postgresql_application_phase: preflight
   when: platform_postgresql_application_phase in ['preflight', 'resources', 'accounts', 'verify']
 
 @@END
-@@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/roles/application_provider/tasks/preflight.yml","mode":420,"size":4789,"sha256":"fecb4dcb575bca8e060ca4b64ae0720bb83ca4e9b94ca1ea3d565c10a9c71810","index":0,"count":1,"encoding":"utf-8","payloadBytes":4789}
+@@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/roles/application_provider/tasks/preflight.yml","mode":420,"size":6650,"sha256":"8f45b09f0d349914ff7b9fbeead1d4b3be1aeb39115a3c6125f3b49d7c43ec1e","index":0,"count":1,"encoding":"utf-8","payloadBytes":6650}
 ---
 - name: Validate bounded resolved inputs including manual inventory
   ansible.builtin.assert:
@@ -36178,11 +36691,37 @@ platform_postgresql_application_phase: preflight
   when: application_provider_database.name not in platform_application_provider_runtime[platform_postgresql_application_job.providerId].catalog.databases
   no_log: true
 
-- name: Probe existing account credentials without resetting passwords
+- name: Probe existing managed application credentials using server SQLSTATE
+  platform.postgresql.application_password_probe:
+    host: "{{ application_provider_target.address }}"
+    port: "{{ application_provider_target.port }}"
+    username: "{{ item.name }}"
+    password: "{{ lookup('ansible.builtin.file', platform_postgresql_application_credential_files[item.passwordRef], rstrip=False) }}"
+    ca_file: "{{ application_provider_target.pkiPlans[0].targetDirectory }}/ca-chain.pem"
+  vars:
+    application_provider_target: "{{ platform_application_provider_runtime[platform_postgresql_application_job.providerId].candidate }}"
+  delegate_to: "{{ application_provider_target.hostId }}"
+  become: true
+  become_user: "{{ platform_pki_owner | default(platform_execution_technical_user | default('root', true)) }}"
+  register: application_provider_password_probe
+  failed_when: not application_provider_password_probe.authenticated and application_provider_password_probe.sqlstate != '28P01'
+  loop: "{{ platform_postgresql_application_job.accounts }}"
+  when: item.mode == 'managed' and item.name in platform_application_provider_runtime[platform_postgresql_application_job.providerId].catalog.roles
+  no_log: true
+
+- name: Probe existing unmanaged application credentials without reconciliation
   ansible.builtin.include_tasks: login.yml
   vars:
     application_provider_check_objects: true
     application_provider_probe_scope: existing
+    application_provider_skip_managed: true
+
+- name: Retain only confirmed managed password mismatches for the account stage
+  ansible.builtin.set_fact:
+    platform_application_password_updates: "{{ platform_application_password_updates | default({}) | combine({platform_postgresql_application_job.providerId: ((platform_application_password_updates | default({})).get(platform_postgresql_application_job.providerId, []) + [item.item.name]) | unique | list}) }}"
+  loop: "{{ application_provider_password_probe.results | default([]) }}"
+  when: item.sqlstate | default('') == '28P01' and item.item.mode == 'managed'
+  no_log: true
 
 @@END
 @@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/roles/application_provider/tasks/resources.yml","mode":420,"size":2301,"sha256":"3d05ec42fe39e9b2892ce37f15d19bde05afca9d9cefda20066cac9770192e5e","index":0,"count":1,"encoding":"utf-8","payloadBytes":2301}
@@ -36355,7 +36894,7 @@ platform_postgresql_application_phase: preflight
     application_provider_probe_scope: all
 
 @@END
-@@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/roles/application_provider/templates/accounts.sql.j2","mode":420,"size":1628,"sha256":"b9d44cdba381dbbe92d1e84bc6ee8f58323ad07faa25c4e076cf864a63b05a20","index":0,"count":1,"encoding":"utf-8","payloadBytes":1628}
+@@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/roles/application_provider/templates/accounts.sql.j2","mode":420,"size":2107,"sha256":"80de665ba732f24831be08b1bf003446a52f5e0f972dbb5f2240d205ce496d05","index":0,"count":1,"encoding":"utf-8","payloadBytes":2107}
 {% include 'session.sql.j2' %}
 {% for account in platform_postgresql_application_job.accounts | sort(attribute='name') %}
 SELECT pg_advisory_lock(hashtextextended({{ ('platform.application.role:' ~ account.name) | platform.postgresql.application_sql_literal }}, 0));
@@ -36378,6 +36917,14 @@ SELECT format('CREATE ROLE %I LOGIN INHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE 
 COMMENT ON ROLE {{ account.name | platform.postgresql.application_sql_identifier }} IS {{ account.marker | platform.postgresql.application_sql_literal }};
 COMMIT;
 SELECT 'APPLICATION_PROVIDER_CHANGED';
+\else
+{% if account.name in (platform_application_password_updates | default({})).get(platform_postgresql_application_job.providerId, []) %}
+SELECT format('ALTER ROLE %I PASSWORD %L',
+ {{ account.name | platform.postgresql.application_sql_literal }},
+ {{ lookup('ansible.builtin.file', platform_postgresql_application_credential_files[account.passwordRef], rstrip=False) | platform.postgresql.application_sql_literal }})
+\gexec
+SELECT 'APPLICATION_PROVIDER_CHANGED';
+{% endif %}
 \endif
 {% endfor %}
 
@@ -38692,7 +39239,7 @@ class FilterModule:
         return {'platform_redis_members': project_members}
 
 @@END
-@@PORTABLE {"path":"services/redis/ansible_collections/platform/redis/plugins/module_utils/application_acl.py","mode":420,"size":11606,"sha256":"a090d8cf65f5e9650aee79c8ab12185f87f34e148ee89a8e89c5b3830251602e","index":0,"count":1,"encoding":"utf-8","payloadBytes":11606}
+@@PORTABLE {"path":"services/redis/ansible_collections/platform/redis/plugins/module_utils/application_acl.py","mode":420,"size":11879,"sha256":"5e61c87cdc168011aa665c1aa4f22a4d5f2167db3d44615ec6c6075248d603da","index":0,"count":1,"encoding":"utf-8","payloadBytes":11879}
 """Bounded RESP commands and member ownership custody for application ACLs."""
 import contextlib
 import fcntl
@@ -38863,7 +39410,7 @@ def command_permissions(rules, commands, categories):
 
 
 def ensure_account(client, user_client, directory, username, password, marker, listener, grants, mode, verify=False, timeout=15, preflight=False):
-    """One locked check/mutation/save/witness; no password rotation or takeover."""
+    """One locked check/reconcile/save/witness for an owned application account."""
     changed = False
     with member_lock(directory, timeout):
         acl_path = os.path.join(directory, ('sentinel' if listener == 'sentinel' else 'redis') + '.users.acl')
@@ -38889,6 +39436,7 @@ def ensure_account(client, user_client, directory, username, password, marker, l
         if actual is None and witness_key in witness:
             raise ACLFailure('REDIS_APPLICATION_OWNERSHIP_DRIFT')
         expected_hash = hashlib.sha256(password.encode('utf-8')).hexdigest()
+        password_mismatch = actual is not None and actual.get('passwords') != [expected_hash]
         command_tokens = [item if item[0] in '+-' else '+' + item for item in grants['commands']]
         commands, pending = {}, list(client.command('COMMAND'))
         while pending:
@@ -38912,7 +39460,8 @@ def ensure_account(client, user_client, directory, username, password, marker, l
                 raise ACLFailure('REDIS_APPLICATION_COMMAND_FAILED')
             changed = True
         else:
-            if not {'on'} <= set(actual.get('flags', [])) or set(actual.get('flags', [])) - {'on', 'sanitize-payload'} or actual.get('passwords') != [expected_hash] or actual.get('selectors'):
+            if (not {'on'} <= set(actual.get('flags', [])) or set(actual.get('flags', [])) - {'on', 'sanitize-payload'}
+                    or actual.get('selectors') or (password_mismatch and (verify or mode == 'existing'))):
                 raise ACLFailure('REDIS_APPLICATION_ACCOUNT_DRIFT')
             actual_commands = actual.get('commands', '').split()
             observed_commands = command_permissions(actual_commands, commands, categories)
@@ -38922,6 +39471,8 @@ def ensure_account(client, user_client, directory, username, password, marker, l
                     raise ACLFailure('REDIS_APPLICATION_GRANTS_DRIFT' if observed_commands - expected_commands else
                                      'REDIS_APPLICATION_GRANTS_MISSING')
                 updates = ['nocommands', *command_tokens]
+            if password_mismatch:
+                updates.extend(['resetpass', '#' + expected_hash])
             for field, prefix, requested in [('keys', '~', grants.get('keys', [])),
                                               ('channels', '&', grants.get('channels', []))]:
                 observed = set(actual.get(field, '').split())
@@ -38937,7 +39488,7 @@ def ensure_account(client, user_client, directory, username, password, marker, l
                 if client.command('ACL', 'SETUSER', username, *updates) != 'OK':
                     raise ACLFailure('REDIS_APPLICATION_COMMAND_FAILED')
                 changed = True
-        if user_client.command('AUTH', username, password) != 'OK' or (not preflight and 'ping' in grants['commands'] and user_client.command('PING') != 'PONG'):
+        if not (preflight and password_mismatch) and (user_client.command('AUTH', username, password) != 'OK' or (not preflight and 'ping' in grants['commands'] and user_client.command('PING') != 'PONG')):
             raise ACLFailure('REDIS_APPLICATION_LOGIN_FAILED')
         if changed:
             if client.command('ACL', 'SAVE') != 'OK':
@@ -41023,8 +41574,10 @@ class ActionModule(ActionBase):
             return dict(failed=True, msg='APPLICATION_VAULT_ADMIN_CREDENTIAL_INVALID')
 
 @@END
-@@PORTABLE {"path":"services/vault/ansible_collections/platform/vault/plugins/action/application_document.py","mode":420,"size":1732,"sha256":"2183525388d9fe5a3aaa96a49742b0979eb90f1ad230227bfd452a2fb931d23c","index":0,"count":1,"encoding":"utf-8","payloadBytes":1732}
+@@PORTABLE {"path":"services/vault/ansible_collections/platform/vault/plugins/action/application_document.py","mode":420,"size":2931,"sha256":"31449f9f98c1610212e68e0d45fb2dd01edab5ad78e0c51f054477e5e5096a08","index":0,"count":1,"encoding":"utf-8","payloadBytes":2931}
 """Resolve one managed document through existing private inputs and builtin uri."""
+import re
+import secrets
 from ansible.plugins.action import ActionBase
 from ansible_collections.platform.core.plugins.module_utils.application_credentials import protected_secret_files
 
@@ -41040,7 +41593,7 @@ class ActionModule(ActionBase):
             mount = provider['mounts'].get(document['mount']+'/', {})
             if mount.get('type') != 'kv' or str(mount.get('options', {}).get('version')) != '2':
                 raise ValueError()
-            fields = {}
+            fields, generated = {}, {}
             for field, descriptor in document['fields'].items():
                 source = descriptor['source']
                 if field == '_platform_owner':
@@ -41051,12 +41604,31 @@ class ActionModule(ActionBase):
                     protected_secret_files(args['secret_files'], [source['ref']], args['secret_root'])
                     with open(args['secret_files'][source['ref']], encoding='utf-8') as stream:
                         value = stream.read(4097)
+                elif source['kind'] == 'generated':
+                    ref = descriptor['passwordRef']
+                    if field != 'password' or not re.fullmatch(r'pla-generated-[0-9a-f]{40}', ref):
+                        raise ValueError()
+                    protected_secret_files({}, [], args['secret_root'])
+                    current = args['current']
+                    if current['status'] == 200:
+                        data = current['json']['data']
+                        if (data['data'].get('_platform_owner') != document['owner'] or
+                                data['metadata'].get('deletion_time') or data['metadata'].get('destroyed')):
+                            raise ValueError()
+                        value = data['data'].get(field)
+                        if value is None:
+                            value = secrets.token_urlsafe(32)
+                    elif current['status'] == 404 and not current.get('json', {}).get('data'):
+                        value = secrets.token_urlsafe(32)
+                    else:
+                        raise ValueError()
+                    generated[ref] = value
                 else:
                     raise ValueError()
                 if not isinstance(value, str) or not 1 <= len(value.encode()) <= 4096 or '\x00' in value:
                     raise ValueError()
                 fields[field] = value
-            return dict(changed=False, fields=fields)
+            return dict(changed=False, fields=fields, generated=generated)
         except Exception:
             return dict(failed=True, msg='APPLICATION_VAULT_DOCUMENT_SOURCE_INVALID')
 
@@ -41726,20 +42298,8 @@ platform_vault_bootstrap_output_dir: ''
   no_log: true
 
 @@END
-@@PORTABLE {"path":"services/vault/ansible_collections/platform/vault/roles/application_provider/tasks/preflight.yml","mode":420,"size":3672,"sha256":"228b2863afa669f610bf40b0b730c16f2a2bc7b8e212785a43d5c5409d593ccd","index":0,"count":1,"encoding":"utf-8","payloadBytes":3672}
+@@PORTABLE {"path":"services/vault/ansible_collections/platform/vault/roles/application_provider/tasks/preflight.yml","mode":420,"size":4521,"sha256":"61aad28a92edd39e545bdf3249c052a3d7baa9268ae6a9486100c3684449d23a","index":0,"count":1,"encoding":"utf-8","payloadBytes":4521}
 ---
-- name: Preflight all document values before mutations
-  platform.vault.application_document:
-    document: "{{ item }}"
-    provider: "{{ platform_application_vault_runtime[platform_vault_application_job.providerId] }}"
-    secret_root: "{{ platform_application_secret_root }}"
-    secret_files: "{{ platform_application_secret_files }}"
-  loop: "{{ platform_vault_application_job.documents }}"
-  changed_when: false
-  when: not application_vault_identity_only | default(false)
-  register: application_vault_document_sources
-  no_log: true
-
 - name: Read document ownership and CAS versions before provider writes
   ansible.builtin.uri:
     url: "{{ application_vault_provider.url }}/v1/{{ item.mount }}/data/{{ item.document }}"
@@ -41757,10 +42317,34 @@ platform_vault_bootstrap_output_dir: ''
   register: application_vault_document_states
   no_log: true
 
+- name: Reject foreign or deleted documents before resolving generated passwords
+  ansible.builtin.assert:
+    that: item | platform.vault.application_kv_delta({}, item.item.owner) is mapping
+    fail_msg: APPLICATION_VAULT_DOCUMENT_OWNERSHIP_INVALID
+  loop: "{{ application_vault_document_states.results | default([]) }}"
+  when: not application_vault_identity_only | default(false)
+  no_log: true
+
+- name: Preflight document values and generate missing application passwords
+  platform.vault.application_document:
+    document: "{{ item }}"
+    current: "{{ application_vault_document_states.results[application_vault_document_index] }}"
+    provider: "{{ platform_application_vault_runtime[platform_vault_application_job.providerId] }}"
+    secret_root: "{{ platform_application_secret_root }}"
+    secret_files: "{{ platform_application_secret_files | combine(platform_application_credential_files | default({})) }}"
+  loop: "{{ platform_vault_application_job.documents }}"
+  loop_control:
+    index_var: application_vault_document_index
+  changed_when: false
+  when: not application_vault_identity_only | default(false)
+  register: application_vault_document_sources
+  no_log: true
+
 - name: Validate ownership and retain source bytes and CAS versions once
   ansible.builtin.set_fact:
     platform_application_vault_values: "{{ platform_application_vault_values | default({}) | combine(application_vault_document_sources.results | platform.vault.application_vault_source_cache(platform_vault_application_job.providerId)) }}"
     platform_application_vault_documents: "{{ platform_application_vault_documents | default({}) | combine(application_vault_document_states.results | platform.vault.application_vault_document_cache(application_vault_document_sources.results | platform.vault.application_vault_source_cache(platform_vault_application_job.providerId), platform_vault_application_job.providerId)) }}"
+    platform_application_generated_values: "{{ platform_application_generated_values | default({}) | combine(application_vault_document_sources.results | map(attribute='generated') | list | combine) }}"
   when: not application_vault_identity_only | default(false)
   no_log: true
 
