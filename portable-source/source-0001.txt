@@ -1,4 +1,4 @@
-@@PORTABLE {"path":".gitattributes","mode":420,"size":278,"sha256":"9446626a28580d3ab8a231d59a2aa21bfb6594484f3b7bf2068593cd6cd6b5b6","index":0,"count":1,"encoding":"utf-8","payloadBytes":278}
+@@PORTABLE {"path":".gitattributes","mode":420,"size":311,"sha256":"431ef3dbdb9317284d604121acec30cdd6ecab87abf94f38292d2a4addf2f176","index":0,"count":1,"encoding":"utf-8","payloadBytes":311}
 * text=auto
 *.md text eol=lf
 *.yml text eol=lf
@@ -7,6 +7,7 @@
 *.py text eol=lf
 *.sh text eol=lf
 examples/sdku/**/*.j2 text eol=lf
+examples/szi/**/*.j2 text eol=lf
 services/docker/** text eol=lf
 
 # Portable records preserve byte-counted source payloads.
