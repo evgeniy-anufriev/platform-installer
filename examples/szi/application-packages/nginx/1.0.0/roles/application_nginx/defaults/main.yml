@@ -6,10 +6,21 @@ platform_application_definition:
     user: "1000:1000"
     restart: always
     command:
-      - nginx
+      - /usr/local/openresty/nginx/sbin/nginx
+      - -c
+      - /etc/nginx/nginx.conf
       - -g
       - daemon off;
     config_files:
+      - template: assets/routes.requested.json.j2
+        destination: routes.requested.json
+        mode: "0644"
+      - source: assets/routes-upsert.lua
+        destination: routes-upsert.lua
+        mode: "0644"
+      - source: assets/routes-upsert.conf
+        destination: routes-upsert.conf
+        mode: "0644"
       - source: assets/script.lua
         destination: script.lua
         mode: "0644"
@@ -20,16 +31,21 @@ platform_application_definition:
         destination: scada-lawellet.conf
         mode: "0644"
     environment:
-      NGINX_HOST: '{{ application_parameters.NGINX_HOST | default(undef(hint=''Configure SZI nginx hostname''), true) }}'
+      NGINX_HOST: "nginx.{{ platform_desired_state.endpointGroups[platform_desired_state.applicationLibraryDeployments[library_instance_id].applications.nginx.overrides.endpoint.endpoint_group].address.domain }}"
       REALM: '{{ application_parameters.SZI_REALM }}'
-      GA_HOST: '{{ application_parameters.GRANT_ACCESS_HOST | default(undef(hint=''Configure SZI grant-access endpoint''), true) }}'
-    parameters:
-      NGINX_HOST: ""
-      GRANT_ACCESS_HOST: ""
+      GA_HOST: "https://grant-access.{{ platform_desired_state.endpointGroups[platform_desired_state.applicationLibraryDeployments[library_instance_id].applications['grant-access'].overrides.endpoint.endpoint_group].address.domain }}"
     ports:
       port-1:
         container: 18443
         published: 10543
+    endpoint:
+      enabled: false
+      listener: port-1
+      protocol: https
+      probe:
+        path: /server-status
+        expected_status: 200
+        timeout: 10
     readiness:
       mode: container
       delay: 2

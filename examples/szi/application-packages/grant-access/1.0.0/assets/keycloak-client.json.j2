@@ -1,0 +1,708 @@
+{
+  "clientId": "{{ application_instance_id }}",
+  "name": "{{ application_instance_id }}",
+  "rootUrl": "{{ application_connections.sso.parameters.proxy_url }}/{{ application_instance_id }}/",
+  "adminUrl": "{{ application_connections.sso.parameters.proxy_url }}/{{ application_instance_id }}/",
+  "baseUrl": "{{ application_connections.sso.parameters.proxy_url }}/{{ application_instance_id }}/",
+  "surrogateAuthRequired": false,
+  "enabled": true,
+  "alwaysDisplayInConsole": false,
+  "clientAuthenticatorType": "client-secret",
+  "redirectUris": [
+    "{{ application_connections.sso.parameters.proxy_url }}/{{ application_instance_id }}/*"
+  ],
+  "webOrigins": [
+    "{{ application_connections.sso.parameters.proxy_url }}/{{ application_instance_id }}/"
+  ],
+  "notBefore": 0,
+  "bearerOnly": false,
+  "consentRequired": false,
+  "standardFlowEnabled": true,
+  "implicitFlowEnabled": true,
+  "directAccessGrantsEnabled": true,
+  "serviceAccountsEnabled": true,
+  "authorizationServicesEnabled": true,
+  "publicClient": false,
+  "frontchannelLogout": true,
+  "protocol": "openid-connect",
+  "attributes": {
+    "realm_client": "false",
+    "oidc.ciba.grant.enabled": "true",
+    "backchannel.logout.session.required": "true",
+    "post.logout.redirect.uris": "{{ application_connections.sso.parameters.proxy_url }}/{{ application_instance_id }}/",
+    "oauth2.device.authorization.grant.enabled": "true",
+    "display.on.consent.screen": "false",
+    "backchannel.logout.revoke.offline.tokens": "false"
+  },
+  "authenticationFlowBindingOverrides": {},
+  "fullScopeAllowed": true,
+  "nodeReRegistrationTimeout": -1,
+  "protocolMappers": [
+    {
+      "name": "Client ID",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usersessionmodel-note-mapper",
+      "consentRequired": false,
+      "config": {
+        "user.session.note": "client_id",
+        "introspection.token.claim": "true",
+        "id.token.claim": "true",
+        "access.token.claim": "true",
+        "claim.name": "client_id",
+        "jsonType.label": "String"
+      }
+    },
+    {
+      "name": "Client IP Address",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usersessionmodel-note-mapper",
+      "consentRequired": false,
+      "config": {
+        "user.session.note": "clientAddress",
+        "introspection.token.claim": "true",
+        "id.token.claim": "true",
+        "access.token.claim": "true",
+        "claim.name": "clientAddress",
+        "jsonType.label": "String"
+      }
+    },
+    {
+      "name": "Client Host",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usersessionmodel-note-mapper",
+      "consentRequired": false,
+      "config": {
+        "user.session.note": "clientHost",
+        "introspection.token.claim": "true",
+        "id.token.claim": "true",
+        "access.token.claim": "true",
+        "claim.name": "clientHost",
+        "jsonType.label": "String"
+      }
+    }
+  ],
+  "defaultClientScopes": [
+    "web-origins",
+    "acr",
+    "roles",
+    "profile",
+    "basic",
+    "email"
+  ],
+  "optionalClientScopes": [
+    "address",
+    "phone",
+    "microprofile-jwt"
+  ],
+  "authorizationSettings": {
+    "allowRemoteResourceManagement": true,
+    "policyEnforcementMode": "ENFORCING",
+    "resources": [
+      {
+        "name": "Куратор ИБ",
+        "ownerManagedAccess": false,
+        "displayName": "",
+        "attributes": {},
+        "uris": [
+          "/v1/sessions",
+          "/v1/systems",
+          "/v1/systems/byName",
+          "/v1/groups/searchGroupByName",
+          "/v1/groups/members",
+          "/v1/information",
+          "/v1/systems/byId",
+          "/v1/accounts/byName",
+          "/v1/systems/policies",
+          "/logs",
+          "/v1/policy/sessionLimit",
+          "/v1/sessions/count",
+          "/v1/systems/users",
+          "/v1/groups/search",
+          "/v1/systems/permissions",
+          "/v1/systems/roles",
+          "/v1/accounts/delete",
+          "/v1/systems/jsonForClient",
+          "/v1/roles/all",
+          "/v1/accounts/report",
+          "/logout",
+          "/v1/groups/patterns",
+          "/v1/systems/resources",
+          "/v1/policy/password",
+          "/v1/policy/token",
+          "/",
+          "/v1/policy/otp/groups/find",
+          "/v1/policy/report_export",
+          "/v1/policy/session",
+          "/v1/groups/searchGroupById",
+          "/v1/policy/otp/groups",
+          "/v1/groups/roles",
+          "/v1/policy/realmAttribute"
+        ],
+        "icon_uri": ""
+      },
+      {
+        "name": "Ресурсы системы",
+        "ownerManagedAccess": false,
+        "displayName": "",
+        "attributes": {},
+        "uris": [
+          "/v1/accounts/update",
+          "/v1/groups/add/user",
+          "/v1/policy/sessionLimit/update",
+          "/v1/groups/members",
+          "/v1/groups/remove/user",
+          "/v1/information",
+          "/v1/sessions/heartbeat",
+          "/v1/systems/remove",
+          "/v1/accounts/configureOTP",
+          "/v1/roles/client/create",
+          "/v1/policy/token/update",
+          "/logs",
+          "/v1/policy/sessionLimit",
+          "/v1/sessions/count",
+          "/v1/accounts/delete",
+          "/v1/groups/remove/role",
+          "/logout",
+          "/v1/groups/patterns",
+          "/v1/systems/resources",
+          "/v1/systems/edit",
+          "/v1/accounts/status",
+          "/v1/policy/set/realmAttribute",
+          "/v1/accounts",
+          "/v1/policy/otp/groups/find",
+          "/v1/policy/password/update",
+          "/v1/roles/edit",
+          "/v1/policy/session",
+          "/v1/groups/searchGroupById",
+          "/v1/groups/roles",
+          "/v1/groups/create",
+          "/v1/sessions",
+          "/v1/systems",
+          "/v1/sessions/*/kill",
+          "/v1/accounts/changePassword",
+          "/v1/systems/byName",
+          "/v1/groups/searchGroupByName",
+          "/v1/systems/createclient",
+          "/v1/roles/allByName",
+          "/v1/systems/byId",
+          "/v1/accounts/byName",
+          "/v1/systems/policies",
+          "/v1/systems/users",
+          "/v1/groups/search",
+          "/v1/systems/permissions",
+          "/v1/systems/roles",
+          "/v1/systems/jsonForClient",
+          "/v1/groups/change/patterns",
+          "/v1/roles/all",
+          "/v1/policy/disableHistory",
+          "/v1/accounts/report",
+          "/v1/groups/remove",
+          "/v1/systems/changeStatus",
+          "/v1/policy/otp/groups/add",
+          "/v1",
+          "/v1/policy/password",
+          "/v1/policy/token",
+          "/v1/roles/create",
+          "/v1/accounts/changePasswordMandatory",
+          "/v1/groups/add/role",
+          "/v1/policy/session/update",
+          "/v1/accounts/create",
+          "/v1/policy/report_export",
+          "/v1/groups/edit",
+          "/v1/policy/realmAttribute",
+          "/v1/roles/remove"
+        ],
+        "icon_uri": ""
+      },
+      {
+        "name": "Диспетчер",
+        "ownerManagedAccess": false,
+        "displayName": "",
+        "attributes": {},
+        "uris": [
+          "/v1/groups/*",
+          "/v1/groups/search"
+        ],
+        "icon_uri": ""
+      },
+      {
+        "name": "КИС",
+        "ownerManagedAccess": false,
+        "displayName": "master",
+        "attributes": {},
+        "uris": [
+          "/v1/groups/add/user",
+          "/v1/sessions",
+          "/logout",
+          "/v1/sessions/*/kill",
+          "/v1/accounts/changePassword",
+          "/v1/accounts/status",
+          "/v1/groups/searchGroupByName",
+          "/v1/groups/members",
+          "/v1/groups/remove/user",
+          "/v1/information",
+          "/v1/accounts",
+          "/v1/accounts/changePasswordMandatory",
+          "/v1/accounts/byName",
+          "/v1/accounts/create",
+          "/v1/groups/search",
+          "/v1/groups/searchGroupById",
+          "/v1/groups/change/patterns",
+          "/v1/groups/roles",
+          "/v1/roles/all"
+        ],
+        "icon_uri": ""
+      },
+      {
+        "name": "Администрирование",
+        "ownerManagedAccess": false,
+        "displayName": "master",
+        "attributes": {},
+        "uris": [
+          "/v1/accounts/update",
+          "/v1/groups/add/user",
+          "/v1/policy/sessionLimit/update",
+          "/v1/groups/members",
+          "/v1/groups/remove/user",
+          "/v1/information",
+          "/v1/sessions/heartbeat",
+          "/v1/accounts/configureOTP",
+          "/v1/roles/client/create",
+          "/v1/policy/token/update",
+          "/logs",
+          "/v1/policy/sessionLimit",
+          "/v1/sessions/count",
+          "/v1/accounts/delete",
+          "/v1/groups/remove/role",
+          "/logout",
+          "/v1/groups/patterns",
+          "/v1/accounts/status",
+          "/v1/policy/set/realmAttribute",
+          "/",
+          "/v1/accounts",
+          "/v1/policy/otp/groups/find",
+          "/v1/policy/password/update",
+          "/v1/roles/edit",
+          "/v1/policy/session",
+          "/v1/groups/searchGroupById",
+          "/v1/groups/roles",
+          "/v1/groups/create",
+          "/v1/sessions",
+          "/v1/systems",
+          "/v1/sessions/*/kill",
+          "/v1/accounts/changePassword",
+          "/v1/systems/byName",
+          "/v1/groups/searchGroupByName",
+          "/v1/roles/allByName",
+          "/v1/accounts/byName",
+          "/v1/groups/search",
+          "/v1/systems/jsonForClient",
+          "/v1/groups/change/patterns",
+          "/v1/roles/all",
+          "/v1/groups/*",
+          "/v1/accounts/report",
+          "/v1/groups/remove",
+          "/v1/policy/otp/groups/add",
+          "/v1/policy/password",
+          "/v1/policy/token",
+          "/v1/roles/create",
+          "/v1/accounts/changePasswordMandatory",
+          "/v1/groups/add/role",
+          "/v1/policy/session/update",
+          "/v1/accounts/create",
+          "/v1/policy/report_export",
+          "/v1/groups/edit",
+          "/v1/policy/realmAttribute",
+          "/v1/roles/remove"
+        ],
+        "icon_uri": ""
+      },
+      {
+        "name": "resourceCSPAusers_edit",
+        "ownerManagedAccess": false,
+        "displayName": "",
+        "attributes": {},
+        "uris": [
+          "/user_action_list",
+          "/logout",
+          "/v1/groups/search",
+          "/v1/systems/byName",
+          "/v1/groups/searchGroupByName",
+          "/v1/sessions/heartbeat",
+          "/v1/systems/jsonForClient",
+          "/user_action",
+          "/v1/groups/change/patterns",
+          "/",
+          "/v1/accounts"
+        ],
+        "icon_uri": ""
+      },
+      {
+        "name": "resourceCSPAusers_view",
+        "ownerManagedAccess": false,
+        "displayName": "",
+        "attributes": {},
+        "uris": [
+          "/logout",
+          "/v1/users",
+          "/v1/systems/byName",
+          "/v1/groups/searchGroupByName",
+          "/v1/groups/members",
+          "/v1/sessions/heartbeat",
+          "/",
+          "/v1/accounts",
+          "/user_action_list",
+          "/v1/groups/search",
+          "/v1/groups",
+          "/v1/systems/jsonForClient",
+          "/user_action"
+        ],
+        "icon_uri": ""
+      },
+      {
+        "name": "Получение первичных административных данных СЗИ (Для всех)",
+        "ownerManagedAccess": false,
+        "displayName": "master",
+        "attributes": {},
+        "uris": [
+          "/v1/sessions",
+          "/v1/systems",
+          "/v1/groups/patterns",
+          "/v1/groups/search",
+          "/v1/groups/members",
+          "/v1/information",
+          "/v1/groups/roles",
+          "/",
+          "/v1/accounts"
+        ],
+        "icon_uri": ""
+      },
+      {
+        "name": "Получение данных настроек безопасности и полного списка ролей (Все кроме администратора уровня 2)",
+        "ownerManagedAccess": false,
+        "displayName": "master",
+        "attributes": {},
+        "uris": [
+          "/v1/policy/otp/groups/find",
+          "/v1/policy/sessionLimit",
+          "/v1/policy/report_export",
+          "/v1/policy/session",
+          "/v1/policy/password",
+          "/v1/policy/token",
+          "/v1/roles/all",
+          "/v1/policy/realmAttribute"
+        ],
+        "icon_uri": ""
+      },
+      {
+        "name": "Настройка политик, ролей и групп (Администраторы уровня 0 и 1)",
+        "ownerManagedAccess": false,
+        "displayName": "master",
+        "attributes": {},
+        "uris": [
+          "/v1/groups/remove/role",
+          "/v1/groups/add/role",
+          "/v1/policy/password/update",
+          "/v1/policy/session/update",
+          "/v1/roles/client/create",
+          "/v1/policy/token/update",
+          "/v1/policy/otp/groups/add",
+          "/v1/policy/sessionLimit/update",
+          "/v1/policy/set/realmAttribute",
+          "/v1/groups/edit"
+        ],
+        "icon_uri": ""
+      },
+      {
+        "name": "Управление пользователями (Все кроме куратора ИБ)",
+        "ownerManagedAccess": false,
+        "displayName": "master",
+        "attributes": {},
+        "uris": [
+          "/v1/accounts/update",
+          "/v1/groups/add/user",
+          "/v1/accounts/create",
+          "/v1/sessions/*/kill",
+          "/v1/accounts/changePassword",
+          "/v1/accounts/delete",
+          "/v1/accounts/status",
+          "/v1/groups/remove/user",
+          "/v1/groups/change/patterns",
+          "/v1/accounts/changePasswordMandatory",
+          "/v1/accounts/configureOTP"
+        ],
+        "icon_uri": ""
+      },
+      {
+        "name": "Получение данных по моделям доступов (Администратор уровня 1 и Куратор ИБ)",
+        "ownerManagedAccess": false,
+        "displayName": "master",
+        "attributes": {},
+        "uris": [
+          "/v1/accounts/report",
+          "/v1/systems/jsonForClient"
+        ],
+        "icon_uri": ""
+      },
+      {
+        "name": "Создание/удаление групп, работа с клиентами, изменение ролей (Администратор уровня 1)",
+        "ownerManagedAccess": false,
+        "displayName": "master",
+        "attributes": {},
+        "uris": [
+          "/v1/groups/create",
+          "/v1/groups/remove",
+          "/v1/roles/edit",
+          "/v1/systems/changeStatus",
+          "/v1/systems/edit",
+          "/v1/systems/createclient",
+          "/v1/systems/jsonForClient",
+          "/v1/systems/remove",
+          "/v1/roles/remove"
+        ],
+        "icon_uri": ""
+      },
+      {
+        "name": "Данные по клиентам",
+        "ownerManagedAccess": false,
+        "displayName": "master",
+        "attributes": {},
+        "uris": [
+          "/v1/systems/policies",
+          "/v1/systems/resources",
+          "/v1/systems/users",
+          "/v1/systems/permissions",
+          "/v1/systems/roles"
+        ],
+        "icon_uri": ""
+      }
+    ],
+    "policies": [
+      {
+        "name": "Доступы системы",
+        "description": "",
+        "type": "role",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "roles": "[{\"id\":\"{{ application_instance_id }}/Администратор системы\",\"required\":true}]"
+        }
+      },
+      {
+        "name": "Доступы администрирования ЭВО СЗИ",
+        "description": "",
+        "type": "role",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "roles": "[{\"id\":\"{{ application_instance_id }}/Администратор ЭВО СЗИ\",\"required\":true}]"
+        }
+      },
+      {
+        "name": "Доступы КИС",
+        "description": "",
+        "type": "role",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "roles": "[{\"id\":\"{{ application_instance_id }}/Администратор подключаемого сервиса\",\"required\":false}]"
+        }
+      },
+      {
+        "name": "Доступы куратора ИБ",
+        "description": "",
+        "type": "role",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "roles": "[{\"id\":\"{{ application_instance_id }}/Куратор ИБ\",\"required\":true}]"
+        }
+      },
+      {
+        "name": "Диспетчер",
+        "description": "",
+        "type": "role",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "roles": "[{\"id\":\"{{ application_instance_id }}/Диспетчер\",\"required\":true}]"
+        }
+      },
+      {
+        "name": "ЦСПА просмотр",
+        "description": "",
+        "type": "role",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "roles": "[{\"id\":\"{{ application_instance_id }}/ЦСПА просмотр\",\"required\":true}]"
+        }
+      },
+      {
+        "name": "ЦСПА редактирование",
+        "description": "",
+        "type": "role",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "roles": "[{\"id\":\"{{ application_instance_id }}/ЦСПА редактирование\",\"required\":true}]"
+        }
+      },
+      {
+        "name": "Разрешения для кураторов ИБ",
+        "description": "",
+        "type": "resource",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "resources": "[\"Куратор ИБ\"]",
+          "applyPolicies": "[\"Доступы куратора ИБ\"]"
+        }
+      },
+      {
+        "name": "Разрешение на администрирование ЭВО СЗИ",
+        "description": "",
+        "type": "resource",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "resources": "[\"Администрирование\"]",
+          "applyPolicies": "[\"Доступы администрирования ЭВО СЗИ\"]"
+        }
+      },
+      {
+        "name": "Разрешения КИС",
+        "description": "",
+        "type": "resource",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "resources": "[\"КИС\"]",
+          "applyPolicies": "[\"Доступы КИС\"]"
+        }
+      },
+      {
+        "name": "Разрешения на платформу",
+        "description": "",
+        "type": "resource",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "resources": "[\"Ресурсы системы\"]",
+          "applyPolicies": "[\"Доступы системы\"]"
+        }
+      },
+      {
+        "name": "Разрешение на управление диспетчером",
+        "description": "",
+        "type": "resource",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "resources": "[\"Диспетчер\"]",
+          "applyPolicies": "[\"Диспетчер\"]"
+        }
+      },
+      {
+        "name": "CSPA_edit_permission",
+        "description": "",
+        "type": "resource",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "resources": "[\"resourceCSPAusers_edit\"]",
+          "applyPolicies": "[\"ЦСПА редактирование\"]"
+        }
+      },
+      {
+        "name": "CSPA_view_permission",
+        "description": "",
+        "type": "resource",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "resources": "[\"resourceCSPAusers_view\"]",
+          "applyPolicies": "[\"ЦСПА просмотр\"]"
+        }
+      }
+    ],
+    "scopes": [
+      {
+        "name": "POST",
+        "iconUri": ""
+      },
+      {
+        "name": "GET",
+        "iconUri": ""
+      },
+      {
+        "name": "PUT",
+        "iconUri": ""
+      },
+      {
+        "name": "OPTIONS",
+        "iconUri": ""
+      },
+      {
+        "name": "DELETE",
+        "iconUri": ""
+      }
+    ],
+    "decisionStrategy": "UNANIMOUS"
+  },
+  "clientRoles": [
+    {
+      "name": "Куратор ИБ",
+      "description": "",
+      "composite": false,
+      "attributes": {}
+    },
+    {
+      "name": "Администратор системы",
+      "description": "",
+      "composite": false,
+      "attributes": {}
+    },
+    {
+      "name": "Диспетчер",
+      "description": "Роль диспетчера",
+      "composite": false,
+      "attributes": {}
+    },
+    {
+      "name": "Администратор ЭВО СЗИ",
+      "description": "",
+      "composite": false,
+      "attributes": {}
+    },
+    {
+      "name": "uma_protection",
+      "composite": false,
+      "attributes": {}
+    },
+    {
+      "name": "Администратор подключаемого сервиса",
+      "description": "",
+      "composite": false,
+      "attributes": {}
+    },
+    {
+      "name": "тестовая роль",
+      "description": "для тестов",
+      "composite": false,
+      "attributes": {}
+    },
+    {
+      "name": "ЦСПА редактирование",
+      "description": "",
+      "composite": false,
+      "attributes": {}
+    },
+    {
+      "name": "ЦСПА просмотр",
+      "description": "",
+      "composite": false,
+      "attributes": {}
+    }
+  ]
+}

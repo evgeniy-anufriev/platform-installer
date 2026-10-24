@@ -340,20 +340,6 @@ do
     -- Резервирование
     local ga_host_canary = env['GA_HOST_CANARY']
     local gaf_host_canary = env['GAF_HOST_CANARY']
-    --Безопасный режим
-    local alarm_service_host = env['ALARM_SERVICE']
-    local alarm_view_service_host = env['ALARM_VIEW_SERVICE']
-    local data_manager_host = env['DATA_MANAGER']
-    local cspa_impexp_host = env['CSPA_IMPEXP']
-    local cspa_hmi_backend_host = env['CSPA_HMI_BACKEND']
-    local hmi_backend_host = env['HMI_BACKEND']
-    local hmi_frontend_host = env["HMI_FRONTEND"]
-    local sdku_knp_backend_host = env['SDKU_KNP_BACKEND']
-    local sdku_vtor_host = env['SDKU_VTOR']
-    local sdku_mkr_backend_host = env['SDKU_MKR_BACKEND']
-    local sdku_mkr_view_service_host = env['SDKU_MKR_VIEW_SERVICE']
-    local evo_scheduler_host = env['EVO_SCHEDULER']
-    local hmi_frontend_hydrocyclone_host = env['HMI_FRONTEND_HYDROCYCLONE']
     -- Разграничение доступов по IP
     local client_limited_access = env['CLIENT_LIMITED_ACCESS']
     local ip_limited_access = env['IP_LIMITED_ACCESS']
@@ -378,7 +364,7 @@ do
     ngx.var.canary = ""
     local url_logout = ""
     local update_url = ""
-    local ssl_status = false
+    local ssl_status = true
     local headers = ngx.req.get_headers()
     local client_for_opts_information_json = ""
     local client_for_backend_information_json = ""
@@ -420,16 +406,6 @@ do
         keycloak_host = keycloak_host:sub(1, -2)
     end
 
-    if ngx.var.request_uri == "/hmi-frontend-cspa?_AUTH_TEST=1" then
-        local auth_status = {
-            auth = "OK"
-        }
-        ngx.header.content_type = "application/json"
-        ngx.say(cjson.encode(auth_status))
-        ngx.status = 200
-        return
-    end
-
     if (ngx.var.request_uri == "/health") then
         local health = {
             status_nginx = "UP",
@@ -451,70 +427,25 @@ do
     if network_availability_keycloak == "DOWN" then
         --Обозначаем статус аварийного режима
         ngx.var.system_is_recovery = true
-        --Указываем URL для wss
-        if (ngx.var.request_uri == "/alarm-view-service/alarm") then
-            ngx.var.new_url = alarm_view_service_host
-            ngx.var.new_request = "/alarm"
-        elseif (ngx.var.request_uri == "/alarm-view-service/gs-guide-websocket") then
-            ngx.var.new_url = alarm_service_host
-            ngx.var.new_request = "/gs-guide-websocket"
-        elseif (ngx.var.request_uri == "/cspa_hmi_backend/v2/hotlink") then
-            ngx.var.new_url = cspa_hmi_backend_host
-            ngx.var.new_request = "/v2/hotlink"
-        elseif (ngx.var.request_uri == "/cspa_hmi_backend/hotlink") then
-            ngx.var.new_url = cspa_hmi_backend_host
-            ngx.var.new_request = "/hotlink"
-        elseif (ngx.var.request_uri == "/hmi-backend/v2/hotlink") then
-            ngx.var.new_url = hmi_backend_host
-            ngx.var.new_request = "/v2/hotlink"
-        elseif (ngx.var.request_uri == "/hmi-backend/hotlink") then
-            ngx.var.new_url = hmi_backend_host
-            ngx.var.new_request = "/hotlink"
-        elseif (ngx.var.request_uri == "/sdku-vtor/ws") then
-            ngx.var.new_url = sdku_vtor_host
-            ngx.var.new_request = "/ws"
-        else
-            --Подставляем заголовки
-            ngx.var.user_groups = headers["x-user-groups"]
-            ngx.var.user_id = headers["x-user-id"]
-            ngx.var.user_login = headers["x-user-login"]
-            ngx.var.user_fullname = headers["x-user-fullname"]
-            --Парсим входящией запрос
-            local name_service = string.gsub(ngx.var.request_uri, "([^/+])/.*", "%1")
-            local uri_service = string.gsub(ngx.var.request_uri, "^/[^/]+", "")
-            --Указываем uri и параметры
-            ngx.var.new_request = uri_service
-            --Указываем URL
-            if name_service == "/alarm-service" then
-                ngx.var.new_url = alarm_service_host
-            elseif name_service == "/alarm-view-service" then
-                ngx.var.new_url = alarm_view_service_host
-            elseif name_service == "/cspa_hmi_backend" then
-                ngx.var.new_url = cspa_hmi_backend_host
-            elseif name_service == "/cspa-impexp" then
-                ngx.var.new_url = cspa_impexp_host
-            elseif name_service == "/data-manager" then
-                ngx.var.new_url = data_manager_host
-            elseif name_service == "/evo_scheduler" then
-                ngx.var.new_url = evo_scheduler_host
-            elseif name_service == "/grant-access" then
-                ngx.var.new_url = ga_host
-            elseif name_service == "/grant_access_audit" or name_service == "/grant-access-audit" then
-                ngx.var.new_url = gaa_host
-            elseif name_service == "/hmi-backend" then
-                ngx.var.new_url = hmi_backend_host
-            elseif name_service == "/hmi-frontend-cspa" then
-                ngx.var.new_url = hmi_frontend_host
-            elseif name_service == "/sdku-knp-backend" then
-                ngx.var.new_url = sdku_knp_backend_host
-            elseif name_service == "/sdku-vtor" then
-                ngx.var.new_url = sdku_vtor_host
-            elseif name_service == "/sdku-mkr-backend" then
-                ngx.var.new_url = sdku_mkr_backend_host
-            elseif name_service == "/sdku-mkr-view-service" then
-                ngx.var.new_url = sdku_mkr_view_service_host
-            end
+        local file = io.open('/var/lib/nginx/routes/routes.effective.json', 'rb')
+        if not file then return ngx.exit(ngx.HTTP_SERVICE_UNAVAILABLE) end
+        local ok, catalog = pcall(cjson.decode, file:read('*a'))
+        file:close()
+        if not ok or type(catalog) ~= 'table' or type(catalog.routes) ~= 'table' then
+            return ngx.exit(ngx.HTTP_SERVICE_UNAVAILABLE)
         end
+        local application_id = ngx.var.uri:match('^/([^/]+)')
+        local route = application_id and catalog.routes[application_id]
+        if not route then return ngx.exit(ngx.HTTP_NOT_FOUND) end
+        ngx.var.new_url = route.endpoint
+        local remainder = ngx.var.request_uri:sub(#application_id + 2)
+        if remainder == '' then remainder = '/' end
+        if remainder:sub(1, 1) == '?' then remainder = '/' .. remainder end
+        ngx.var.new_request = remainder
+        ngx.var.user_groups = headers['x-user-groups']
+        ngx.var.user_id = headers['x-user-id']
+        ngx.var.user_login = headers['x-user-login']
+        ngx.var.user_fullname = headers['x-user-fullname']
         ngx.log(ngx.WARN, "Аварийный режим: ", ngx.req.get_method() .. " запрос по адресу " .. ngx.var.new_url .. ngx.var.new_request)
     else
         local service = string.match(ngx.var.request_uri, "^/([^/?]+)")
@@ -836,7 +767,7 @@ do
                 local opts = {
                     redirect_uri = redirect_url_custom,
                     accept_none_alg = false,
-                    ssl_verify = "no",
+                    ssl_verify = "yes",
                     discovery = keycloak_host .. "/realms/" .. realm .. "/.well-known/openid-configuration",
                     client_id = client_for_opts_information_json.client_id,
                     client_secret = client_for_opts_information_json.client_secret,

@@ -8,9 +8,35 @@
     "assets/scada-lawellet.conf",
     "assets/script.lua",
     "roles/application_nginx/defaults/main.yml",
-    "roles/application_nginx/templates/compose.yml.j2"
+    "roles/application_nginx/templates/compose.yml.j2",
+    "assets/routes.requested.json.j2",
+    "assets/routes-upsert.lua",
+    "assets/routes-upsert.conf",
+    "assets/prepare-routes.sh"
   ],
   "render": {
     "compose_template": "roles/application_nginx/templates/compose.yml.j2"
-  }
+  },
+  "scripts": [
+    {
+      "id": "prepare-routes",
+      "source": "assets/prepare-routes.sh",
+      "phase": "before_start",
+      "execution": "each_target",
+      "argv": [
+        {
+          "valueFrom": "projectId"
+        },
+        {
+          "valueFrom": "libraryId"
+        },
+        {
+          "valueFrom": "applicationId"
+        },
+        {
+          "valueFrom": "targetHostId"
+        }
+      ]
+    }
+  ]
 }

@@ -1,0 +1,77 @@
+---
+- name: Reconcile only ready shared fields through existing owned CAS delivery
+  ansible.builtin.include_role:
+    name: platform.vault.application_provider
+    tasks_from: preflight
+    apply:
+      delegate_to: localhost
+      delegate_facts: true
+      become: false
+  loop: "{{ hostvars['localhost'].application_vault_inputs.libraryJobs | platform.core.application_ready_shared_jobs(hostvars['localhost'].application_runtime_inputs.integrations, hostvars['localhost'].platform_application_completed_batches) }}"
+  loop_control:
+    loop_var: platform_vault_application_job
+  vars: &vault_context
+    platform_application_vault_runtime: "{{ hostvars['localhost'].platform_application_vault_runtime }}"
+    platform_application_vault_values: "{{ hostvars['localhost'].platform_application_vault_values }}"
+    platform_application_vault_documents: "{{ hostvars['localhost'].platform_application_vault_documents }}"
+    platform_application_vault_identities: "{{ hostvars['localhost'].platform_application_vault_identities }}"
+    platform_application_secret_files: "{{ hostvars['localhost'].platform_application_secret_files }}"
+    platform_application_secret_root: "{{ hostvars['localhost'].platform_application_secret_root }}"
+
+- name: Write ready shared field deltas without overwriting earlier fields
+  ansible.builtin.include_role:
+    name: platform.vault.application_provider
+    tasks_from: library
+    apply:
+      delegate_to: localhost
+      delegate_facts: true
+      become: false
+  loop: "{{ hostvars['localhost'].application_vault_inputs.libraryJobs | platform.core.application_ready_shared_jobs(hostvars['localhost'].application_runtime_inputs.integrations, hostvars['localhost'].platform_application_completed_batches) }}"
+  loop_control:
+    loop_var: platform_vault_application_job
+  vars: *vault_context
+
+- name: Bind consumers whose complete credential preparation just finished
+  ansible.builtin.set_fact:
+    application_ready_instance_vault_jobs: >-
+      {{ hostvars['localhost'].application_vault_inputs.instanceJobs | platform.core.application_ready_vault_jobs(
+         hostvars['localhost'].application_runtime_inputs.integrations,
+         hostvars['localhost'].platform_application_completed_batches,
+         hostvars['localhost'].platform_application_delivered_instances) }}
+  no_log: true
+
+- name: Reread owned documents before late consumer delivery
+  ansible.builtin.include_role:
+    name: platform.vault.application_provider
+    tasks_from: preflight
+    apply:
+      delegate_to: localhost
+      delegate_facts: true
+      become: false
+  loop: "{{ application_ready_instance_vault_jobs }}"
+  loop_control:
+    loop_var: platform_vault_application_job
+  vars: *vault_context
+
+- name: Deliver complete credentials and AppRole before any dependent consumer starts
+  ansible.builtin.include_role:
+    name: platform.vault.application_provider
+    tasks_from: instance
+    apply:
+      delegate_to: localhost
+      delegate_facts: true
+      become: false
+  loop: "{{ application_ready_instance_vault_jobs }}"
+  loop_control:
+    loop_var: platform_vault_application_job
+  vars: *vault_context
+
+- name: Record completed delivery results without persisting another desired state
+  ansible.builtin.set_fact:
+    platform_application_delivered_instances: >-
+      {{ hostvars['localhost'].platform_application_delivered_instances +
+         (application_ready_instance_vault_jobs | map(attribute='libraryId') |
+          zip(application_ready_instance_vault_jobs | map(attribute='instanceId')) | map('join', '/') | list) }}
+  delegate_to: localhost
+  delegate_facts: true
+  no_log: true

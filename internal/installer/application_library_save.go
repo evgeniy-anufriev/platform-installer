@@ -9,7 +9,7 @@ import (
 var libraryInputID = regexp.MustCompile(`^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$`)
 var exactLibraryRef = regexp.MustCompile(`^[a-z][a-z0-9-]*@[0-9]+\.[0-9]+\.[0-9]+$`)
 var registryAuthority = regexp.MustCompile(`^[a-z0-9][a-z0-9.-]*(?::[0-9]+)?$`)
-var applicationSettingKeys = []string{"image", "command", "user", "restart", "parameters", "environment", "ports", "endpoint", "accounts", "provisioner", "readiness", "config_files", "config_directories", "config_archives", "topicBindings"}
+var applicationSettingKeys = []string{"image", "command", "user", "restart", "parameters", "environment", "ports", "endpoint", "accounts", "provisioner", "readiness", "config_files", "config_directories", "config_archives", "topicBindings", "connections"}
 
 func applicationEditOperation(op string) bool {
 	switch op {
@@ -30,7 +30,7 @@ func validateApplicationEdit(c EditCommand) error {
 	switch c.Operation {
 	case "CreateApplicationLibraryDeployment", "UpdateApplicationLibraryDeployment":
 		fields = append(fields, "entity")
-		if c.Entity == nil || !applicationKeys(c.Entity, "libraryRef", "runtimeRef", "runtime_directory", "bindings", "resources", "shared_secrets", "vault_ref", "applications", "overrides", "registry_credentials") {
+		if c.Entity == nil || !applicationKeys(c.Entity, "libraryRef", "runtimeRef", "runtime_directory", "bindings", "resources", "shared_secrets", "vault_ref", "applications", "overrides", "registry_credentials", "provided_connections") {
 			return invalid
 		}
 		if c.Operation == "CreateApplicationLibraryDeployment" {
@@ -62,6 +62,27 @@ func validateApplicationEdit(c EditCommand) error {
 				}
 			} else if asMap(value) == nil {
 				return invalid
+			}
+			if key == "provided_connections" {
+				if asMap(value) == nil {
+					return blocked("INVALID_VALUE", "Provided connection overrides must be a map", "command")
+				}
+				for name, raw := range asMap(value) {
+					entry := asMap(raw)
+					if !validLibraryInputID(name) || entry == nil || !applicationKeys(entry, "parameters", "credentials") {
+						return blocked("INVALID_VALUE", "Only parameters and credential sources can be overridden", "command")
+					}
+					for _, property := range []string{"parameters", "credentials"} {
+						if value, exists := entry[property]; exists && asMap(value) == nil {
+							return blocked("INVALID_VALUE", "Provided parameters and credentials must be maps", "command")
+						}
+					}
+					for field, credential := range asMap(entry["credentials"]) {
+						if !validLibraryInputID(field) || !validApplicationCredential(credential, true) {
+							return blocked("SECRET_REFERENCE_INVALID", "Provided credential source is invalid", "command")
+						}
+					}
+				}
 			}
 			if key == "applications" {
 				for _, slot := range asMap(value) {
@@ -105,7 +126,7 @@ func validateApplicationEdit(c EditCommand) error {
 		if c.HostID != "" && c.Property != "parameters" && c.Property != "ports" {
 			return invalid
 		}
-		if c.Property != "" && c.Property != "parameters" && c.Property != "environment" && c.Property != "ports" && c.Property != "endpoint" {
+		if c.Property != "" && c.Property != "parameters" && c.Property != "environment" && c.Property != "ports" && c.Property != "endpoint" && c.Property != "connections" {
 			return invalid
 		}
 		if !configurationSettingPattern.MatchString(c.Setting) {
@@ -135,9 +156,15 @@ func validateApplicationEdit(c EditCommand) error {
 	if err := boundedApplicationInput(c.Value, 0); err != nil {
 		return err
 	}
-	if c.Property == "" && c.Setting == "accounts" {
-		if err := safeApplicationInput(map[string]any{"accounts": c.Value}, 0); err != nil {
+	if c.Property == "" && (c.Setting == "accounts" || c.Setting == "connections") && c.Operation == "SetApplicationLibraryOverride" {
+		if err := safeApplicationInput(map[string]any{c.Setting: c.Value}, 0); err != nil {
 			return err
+		}
+	}
+	if c.Operation == "SetApplicationLibraryOverride" {
+		if (c.Property == "connections" && !validApplicationConnectionSettings(map[string]any{c.Setting: c.Value})) ||
+			(c.Property == "" && c.Setting == "connections" && !validApplicationConnectionSettings(c.Value)) {
+			return invalid
 		}
 	}
 	data, err := json.Marshal(c)
@@ -172,7 +199,7 @@ func validLibrarySlot(m map[string]any) bool {
 		if obj == nil {
 			return false
 		}
-		if key == "overrides" && !applicationKeys(obj, applicationSettingKeys...) {
+		if key == "overrides" && (!applicationKeys(obj, applicationSettingKeys...) || !validApplicationConnectionSettings(obj["connections"])) {
 			return false
 		}
 		if key == "credentials" {
@@ -498,11 +525,31 @@ func (c *structuralCandidate) validateApplicationReferences() error {
 	if len(libraries) > 128 {
 		return managedReadError("Too many library deployments", desiredDocument)
 	}
+	var packages map[string]ManagedApplicationPackage
 	for _, raw := range libraries {
 		library := asMap(raw)
 		ref, _ := library["runtimeRef"].(string)
 		if library == nil || deployments[ref] == nil {
 			return referenceNotFound("runtimeRef")
+		}
+		for name, rawExport := range asMap(library["provided_connections"]) {
+			for field, rawCredential := range asMap(asMap(rawExport)["credentials"]) {
+				if asMap(asMap(rawCredential)["source"])["kind"] != "literal" {
+					continue
+				}
+				if packages == nil {
+					packages, err = readManagedApplicationPackages(c.root)
+					if err != nil {
+						return err
+					}
+				}
+				packageRef, _ := library["libraryRef"].(string)
+				declaration := asMap(asMap(packages["library:"+packageRef].Definition["provided_connections"])[name])
+				credential := asMap(asMap(declaration["credentials"])[field])
+				if sensitive, declared := credential["sensitive"].(bool); !declared || sensitive {
+					return blocked("SECRET_REFERENCE_INVALID", "Literal credential requires an explicitly non-sensitive package declaration", "provided_connections")
+				}
+			}
 		}
 		for _, rawBinding := range asMap(library["bindings"]) {
 			ref, _ := asMap(rawBinding)["deploymentRef"].(string)
@@ -574,4 +621,25 @@ func applicationWritePaths(c EditCommand) []string {
 		}
 		return []string{root + "/" + c.Setting}
 	}
+}
+
+// Validate the authored settings surface, not package connection declarations or arbitrary parameters.
+func validApplicationConnectionSettings(v any) bool {
+	if v == nil {
+		return true
+	}
+	entries := asMap(v)
+	if entries == nil {
+		return false
+	}
+	for name, raw := range entries {
+		entry := asMap(raw)
+		if !validLibraryInputID(name) || entry == nil || !applicationKeys(entry, "enabled") {
+			return false
+		}
+		if _, ok := entry["enabled"].(bool); !ok {
+			return false
+		}
+	}
+	return true
 }

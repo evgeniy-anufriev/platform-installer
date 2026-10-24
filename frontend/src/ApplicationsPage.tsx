@@ -1,3 +1,8 @@
+import { ApplicationProvidedConnections } from "./ApplicationProvidedConnections";
+import {
+  ApplicationRuntimeSecretField,
+  type ApplicationSecretSession,
+} from "./ApplicationRuntimeSecretField";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApplicationLibraryResources } from "./ApplicationLibraryResources";
 import { ApplicationTopicBindings } from "./ApplicationTopicBindings";
@@ -488,8 +493,7 @@ export function ApplicationsPage({
   useEffect(() => {
     ++availabilityGeneration.current;
     if (
-      !slot ||
-      selectedTab !== "Секреты" ||
+      !["Секреты", "Подключения", "Ресурсы и секреты"].includes(selectedTab) ||
       !freshSecrets ||
       !loadSecrets ||
       !loadSecretAvailability
@@ -539,6 +543,17 @@ export function ApplicationsPage({
         )?.credentialRequirements,
       )
     : {};
+  const librarySecretSession: ApplicationSecretSession | undefined =
+    loadSecrets && saveSecrets
+      ? {
+          projectRevision: managed?.projectRevision ?? "",
+          contextKey: executionContextKey,
+          libraryId: selected,
+          disabled: busy || !freshSecrets,
+          load: loadApplicationSecrets,
+          save: saveApplicationSecrets,
+        }
+      : undefined;
   const secretRefCounts: Record<string, number> = {};
   for (const resolvedLibrary of Object.values(
     snapshot?.applicationLibraries?.libraries ?? {},
@@ -1159,7 +1174,10 @@ export function ApplicationsPage({
                     {["environment", "parameters"].map((section) => (
                       <ApplicationValueFields
                         key={selected + section + formEpoch}
-                        compact={section === "environment"}
+                        compact
+                        hiddenKeys={
+                          section === "parameters" ? ["IDENTITY_GROUPS"] : []
+                        }
                         addControl={
                           section === "environment"
                             ? {
@@ -1195,7 +1213,7 @@ export function ApplicationsPage({
                   </>
                 )}
                 {!slot && selectedTab === "Подключения" && (
-                  <>
+                  <div className="application-library-connections">
                     <ApplicationBindings
                       key={selected + "bindings"}
                       vaultBinding={
@@ -1225,6 +1243,17 @@ export function ApplicationsPage({
                       hints={bindingHints}
                       deployments={Object.keys(managed?.deployments ?? {})}
                       profiles={Object.keys(managed?.pki?.tlsProfiles ?? {})}
+                      providedConnections={
+                        freshSecrets
+                          ? Object.entries(
+                              snapshot?.applicationLibraries?.libraries ?? {},
+                            ).flatMap(([id, lib]) =>
+                              Object.keys(lib.providedConnections ?? {}).map(
+                                (name) => id + "/" + name,
+                              ),
+                            )
+                          : []
+                      }
                       disabled={busy}
                       onDirtyChange={(v) => markChildDirty(v, "bindings")}
                       onSave={(bindings) =>
@@ -1235,7 +1264,28 @@ export function ApplicationsPage({
                         })
                       }
                     />
-                  </>
+                    <ApplicationProvidedConnections
+                      secretSession={librarySecretSession}
+                      definitions={objectValue(definition.provided_connections)}
+                      value={objectValue(library.provided_connections)}
+                      resolved={
+                        freshSecrets
+                          ? objectValue(resolved?.providedConnections)
+                          : {}
+                      }
+                      disabled={busy}
+                      onDirtyChange={(v, k) =>
+                        markChildDirty(v, "provided:" + k)
+                      }
+                      onSave={(provided_connections) =>
+                        send({
+                          operation: "UpdateApplicationLibraryDeployment",
+                          deploymentId: selected,
+                          entity: { provided_connections },
+                        })
+                      }
+                    />
+                  </div>
                 )}
                 {!slot && selectedTab === "Ресурсы и секреты" && (
                   <>
@@ -1306,6 +1356,23 @@ export function ApplicationsPage({
                             )}
                           </summary>
                           <CredentialSourceEditor
+                            runtimeInput={
+                              librarySecretSession ? (
+                                <ApplicationRuntimeSecretField
+                                  session={librarySecretSession}
+                                  label={name}
+                                  sourceRef={String(
+                                    objectValue(
+                                      objectValue(
+                                        objectValue(
+                                          resolved?.sharedSecretRequirements,
+                                        )[name],
+                                      ).source,
+                                    ).ref ?? "",
+                                  )}
+                                />
+                              ) : undefined
+                            }
                             label={name}
                             source={source}
                             packageSource={objectValue(
@@ -1394,7 +1461,7 @@ export function ApplicationsPage({
                             return (
                               <span
                                 key={name}
-                                title={`${binding}: ${String(target.deploymentRef ?? target.profileRef ?? "Не задано")}`}
+                                title={`${binding}: ${String(target.deploymentRef ?? target.profileRef ?? (target.providedConnectionRef ? JSON.stringify(target.providedConnectionRef) : "Не задано"))}`}
                               >
                                 {name}
                               </span>

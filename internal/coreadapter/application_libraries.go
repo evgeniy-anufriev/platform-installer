@@ -15,6 +15,7 @@ type ApplicationLibraries struct {
 }
 
 type ApplicationLibrary struct {
+	ProvidedConnections      map[string]json.RawMessage     `json:"providedConnections,omitempty"`
 	RegistryCredentials      map[string]json.RawMessage     `json:"registryCredentials,omitempty"`
 	Registries               []string                       `json:"registries,omitempty"`
 	Tables                   map[string]json.RawMessage     `json:"tables,omitempty"`
@@ -46,23 +47,24 @@ type ApplicationInstance struct {
 }
 
 type ApplicationPlacement struct {
-	TopicBindings    map[string]any             `json:"topicBindings"`
-	RuntimeDirectory string                     `json:"runtimeDirectory"`
-	CommonDefaults   map[string]json.RawMessage `json:"commonDefaults,omitempty"`
-	Inherited        map[string]json.RawMessage `json:"inherited,omitempty"`
-	ServerID         string                     `json:"SERVER_ID"`
-	RuntimeRef       string                     `json:"runtimeRef"`
-	Command          []string                   `json:"command"`
-	ImageRequirement json.RawMessage            `json:"imageRequirement"`
-	Origin           ApplicationOrigin          `json:"origin"`
-	Parameters       map[string]json.RawMessage `json:"parameters"`
-	Environment      map[string]any             `json:"environment"`
-	Ports            map[string]json.RawMessage `json:"ports"`
-	Endpoint         json.RawMessage            `json:"endpoint"`
-	ContainerName    string                     `json:"containerName"`
-	ComposeProject   string                     `json:"composeProject"`
-	RuntimePath      string                     `json:"runtimePath"`
-	LibraryEnvPath   string                     `json:"libraryEnvPath"`
+	ConnectionSettings map[string]json.RawMessage `json:"connectionSettings,omitempty"`
+	TopicBindings      map[string]any             `json:"topicBindings"`
+	RuntimeDirectory   string                     `json:"runtimeDirectory"`
+	CommonDefaults     map[string]json.RawMessage `json:"commonDefaults,omitempty"`
+	Inherited          map[string]json.RawMessage `json:"inherited,omitempty"`
+	ServerID           string                     `json:"SERVER_ID"`
+	RuntimeRef         string                     `json:"runtimeRef"`
+	Command            []string                   `json:"command"`
+	ImageRequirement   json.RawMessage            `json:"imageRequirement"`
+	Origin             ApplicationOrigin          `json:"origin"`
+	Parameters         map[string]json.RawMessage `json:"parameters"`
+	Environment        map[string]any             `json:"environment"`
+	Ports              map[string]json.RawMessage `json:"ports"`
+	Endpoint           json.RawMessage            `json:"endpoint"`
+	ContainerName      string                     `json:"containerName"`
+	ComposeProject     string                     `json:"composeProject"`
+	RuntimePath        string                     `json:"runtimePath"`
+	LibraryEnvPath     string                     `json:"libraryEnvPath"`
 }
 
 type ApplicationOrigin struct {

@@ -1,30 +1,45 @@
 - name: Compute owned minimal document delta
   ansible.builtin.set_fact:
     application_vault_delta: "{{ platform_application_vault_documents[document_key] | platform.vault.application_kv_delta(platform_application_vault_values[document_key], application_vault_document.owner) }}"
+  delegate_facts: false
   vars:
     document_key: "{{ platform_vault_application_job.providerId ~ ':' ~ application_vault_document.mount ~ '/' ~ application_vault_document.document }}"
   no_log: true
 
-- name: Write only differing fields with CAS
-  ansible.builtin.uri:
-    url: "{{ application_vault_provider.url }}/v1/{{ application_vault_document.mount }}/data/{{ application_vault_document.document }}"
-    method: "{{ application_vault_delta.method }}"
-    headers:
-      X-Vault-Token: "{{ application_vault_provider.token }}"
-      Content-Type: "{{ 'application/merge-patch+json' if application_vault_delta.method == 'PATCH' else 'application/json' }}"
-    body_format: json
-    body: "{{ application_vault_delta.body }}"
-    ca_path: "{{ platform_application_secret_root }}/vault-{{ platform_vault_application_job.providerId }}-ca.pem"
-    validate_certs: true
-    follow_redirects: none
-    timeout: 10
-    status_code: [200, 400]
-  vars:
-    application_vault_provider: "{{ platform_application_vault_runtime[platform_vault_application_job.providerId] }}"
-  register: application_vault_document_write
-  when: application_vault_delta.changed
-  changed_when: application_vault_document_write.status == 200
-  no_log: true
+- name: Preserve safe Vault document write diagnostics
+  block:
+    - name: Write only differing fields with CAS
+      ansible.builtin.uri:
+        url: "{{ application_vault_provider.url }}/v1/{{ application_vault_document.mount }}/data/{{ application_vault_document.document }}"
+        method: "{{ application_vault_delta.method }}"
+        headers:
+          X-Vault-Token: "{{ application_vault_provider.token }}"
+          Content-Type: "{{ 'application/merge-patch+json' if application_vault_delta.method == 'PATCH' else 'application/json' }}"
+        body_format: json
+        body: "{{ application_vault_delta.body }}"
+        ca_path: "{{ platform_application_secret_root }}/vault-{{ platform_vault_application_job.providerId }}-ca.pem"
+        validate_certs: true
+        follow_redirects: none
+        timeout: 10
+        status_code: [200, 400]
+      vars:
+        application_vault_provider: "{{ platform_application_vault_runtime[platform_vault_application_job.providerId] }}"
+      register: application_vault_document_write
+      when: application_vault_delta.changed
+      changed_when: application_vault_document_write.status == 200
+      no_log: true
+  rescue:
+    - name: "Vault document write failed (HTTP {{ ansible_failed_result.status | default(-1) | int }}, {{ application_vault_write_category }})"
+      ansible.builtin.fail:
+        msg: APPLICATION_VAULT_DOCUMENT_WRITE_FAILED
+      vars:
+        application_vault_write_message: "{{ ansible_failed_result.msg | default('') | string }}"
+        application_vault_write_category: >-
+          {{ 'template' if ('undefined' in application_vault_write_message | lower or 'recursive' in application_vault_write_message | lower)
+             else 'tls' if ('certificate' in application_vault_write_message | lower or 'ssl' in application_vault_write_message | lower)
+             else 'timeout' if ('timed out' in application_vault_write_message | lower or 'timeout' in application_vault_write_message | lower)
+             else 'http' if (ansible_failed_result.status | default(-1) | int > 0)
+             else 'module' }}
 
 - name: Reread once on CAS conflict and preserve intervening fields
   ansible.builtin.include_tasks: document_retry.yml

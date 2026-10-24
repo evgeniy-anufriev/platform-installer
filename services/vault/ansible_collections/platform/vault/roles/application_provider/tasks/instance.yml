@@ -45,6 +45,18 @@
       token_type: service
       token_ttl: "{{ platform_vault_application_token_ttl }}"
       token_max_ttl: "{{ platform_vault_application_token_max_ttl }}"
+  delegate_facts: false
+  no_log: true
+
+- name: Retain previously managed instance read paths during additive updates
+  ansible.builtin.set_fact:
+    application_vault_retained_policy: >-
+      {{ application_vault_identity_before.results[0] |
+         platform.vault.application_vault_retained_policy(platform_vault_application_job.policy, platform_vault_application_job.owner)
+         if (platform_vault_application_job.retainPolicy | default(false) or
+             '# application.connection-retention/v1' in (application_vault_identity_before.results[0].json.data.policy | default('')))
+         else platform_vault_application_job.policy }}
+  delegate_facts: false
   no_log: true
 
 - name: Update only differing owned policy
@@ -53,7 +65,7 @@
     method: PUT
     headers: {X-Vault-Token: "{{ application_vault_provider.token }}"}
     body_format: json
-    body: {policy: "{{ platform_vault_application_job.policy }}"}
+    body: {policy: "{{ application_vault_retained_policy }}"}
     ca_path: "{{ platform_application_secret_root }}/vault-{{ platform_vault_application_job.providerId }}-ca.pem"
     validate_certs: true
     follow_redirects: none
@@ -61,7 +73,7 @@
     status_code: [200, 204]
   vars:
     application_vault_provider: "{{ platform_application_vault_runtime[platform_vault_application_job.providerId] }}"
-  when: application_vault_identity_before.results[0].status == 404 or application_vault_identity_before.results[0].json.data.policy != platform_vault_application_job.policy
+  when: application_vault_identity_before.results[0].status == 404 or application_vault_identity_before.results[0].json.data.policy != application_vault_retained_policy
   changed_when: true
   no_log: true
 

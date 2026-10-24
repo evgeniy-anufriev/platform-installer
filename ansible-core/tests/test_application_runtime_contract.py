@@ -28,6 +28,31 @@ DIGEST = "sha256:" + "a" * 64
 
 
 class ApplicationRuntimeTests(unittest.TestCase):
+    @unittest.skipUnless(shutil.which('ansible-playbook'), 'requires native Ansible')
+    def test_rendered_json_configuration_remains_file_text(self):
+        import yaml
+        core = ROOT / 'ansible-core'
+        tasks = yaml.safe_load((core / 'collections/ansible_collections/platform/core/roles/application_runtime/tasks/preflight.yml').read_text())
+        render = next(task for task in tasks if task.get('name') == 'Render declared configuration files into private memory')
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory, 'config.json.j2')
+            source.write_text('{"endpoint": "{{ example_endpoint }}"}\n', encoding='utf-8')
+            play = [{'hosts': 'localhost', 'connection': 'local', 'gather_facts': False,
+                     'vars': {'example_endpoint': 'https://example.internal', 'application_config_contents': [],
+                              'application_runtime_job': {'configs': [{'template': True, 'path': str(source),
+                                                                       'destination': 'config.json'}]}},
+                     'tasks': [render, {'ansible.builtin.assert': {'that': [
+                         'application_config_contents[0].content is string',
+                         '(application_config_contents[0].content | from_json).endpoint == example_endpoint',
+                         'application_config_contents | platform.core.application_validate_configs']}}]}]
+            filename = Path(directory, 'probe.yml')
+            filename.write_text(yaml.safe_dump(play), encoding='utf-8')
+            environment = dict(os.environ, ANSIBLE_CONFIG=str(core / 'ansible.cfg'),
+                               ANSIBLE_COLLECTIONS_PATH=str(core / 'collections'))
+            completed = subprocess.run(['ansible-playbook', '-i', 'localhost,', str(filename)],
+                                       env=environment, capture_output=True, text=True, timeout=60)
+            self.assertEqual(0, completed.returncode, completed.stdout + completed.stderr)
+
     def setUp(self):
         self.requirement = {"id": "api:image", "name": "probe:qa", "artifactType": "container-image",
                             "imageId": DIGEST, "platform": {"os": "linux", "architecture": "amd64"}, "localReference": "probe:locked"}
@@ -121,6 +146,16 @@ class ApplicationRuntimeTests(unittest.TestCase):
         jobs = prepare_runtime(*inputs)
         self.assertEqual(1, len(jobs))
         self.assertEqual(inputs[2][0]['instanceId'], jobs[0]['instanceId'])
+
+    def test_runtime_preparation_accepts_projected_application_account(self):
+        inputs = self.runtime_fixture()
+        instance = inputs[1]['applicationLibraries']['libraries']['sdku']['instances']['apigateway-sdku']
+        instance['credentialRequirements'] = {'identity': {}}
+        instance['connections']['identity'] = dict(serviceType='application', libraryId='provider',
+                                                    applicationId='identity-api', protocol='https')
+        jobs = prepare_runtime(*inputs)
+        self.assertEqual(1, len(jobs))
+        self.assertEqual('application', instance['connections']['identity']['serviceType'])
 
     def test_runtime_preparation_still_rejects_unsupported_account_provider(self):
         for service_type in ('vault', 'unsupported'):

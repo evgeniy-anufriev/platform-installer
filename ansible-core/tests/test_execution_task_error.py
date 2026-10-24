@@ -8,6 +8,35 @@ from execution_task_error import safe_task_error
 
 
 class TaskErrorTests(unittest.TestCase):
+    def test_vault_write_code_is_public_without_private_response(self):
+        value = safe_task_error({'msg': 'APPLICATION_VAULT_DOCUMENT_WRITE_FAILED',
+                                 'stdout': 'private-token', 'body': 'private-password'})
+        self.assertEqual('APPLICATION_VAULT_DOCUMENT_WRITE_FAILED', value['code'])
+        self.assertNotIn('private', json.dumps(value))
+
+    def test_known_core_code_without_payload_or_secrets(self):
+        code = 'APPLICATION_RUNTIME_DEFERRED_FEATURE'
+        for field in ('msg', 'code', 'error_code'):
+            result = {field: code, 'stdout': 'private-password', 'invocation': 'private-token'}
+            self.assertEqual(code, safe_task_error(result)['code'])
+            self.assertNotIn('private', json.dumps(safe_task_error(result)))
+            self.assertEqual('ANSIBLE_FAILURE_REDACTED', safe_task_error(result, True)['code'])
+
+    def test_core_code_must_be_exact_and_known(self):
+        for value in ('APPLICATION_PRIVATE_PASSWORD', 'APPLICATION_RUNTIME_DEFERRED_FEATURE private',
+                      'private APPLICATION_RUNTIME_DEFERRED_FEATURE'):
+            self.assertEqual('ANSIBLE_TASK_FAILED', safe_task_error({'msg': value})['code'])
+
+    def test_controller_promotes_only_known_code_from_failure_record(self):
+        from execution_controller import _operation_error_code
+        code = 'APPLICATION_RUNTIME_DEFERRED_FEATURE'
+        payload = {'msg': code, 'stdout': 'private-password'}
+        line = ('fatal: [localhost]: FAILED! => ' + json.dumps(payload)).encode()
+        self.assertEqual(code, _operation_error_code(line))
+        payload['_ansible_no_log'] = True
+        line = ('fatal: [localhost]: FAILED! => ' + json.dumps(payload)).encode()
+        self.assertEqual('ANSIBLE_FAILURE_REDACTED', _operation_error_code(line))
+
     def test_failure_reason_and_exit_code_without_secret_text(self):
         error = safe_task_error({'msg': 'No space left on device password=private', 'rc': 2, 'stdout': 'private'})
         self.assertEqual('ANSIBLE_FILESYSTEM_FULL', error['code'])

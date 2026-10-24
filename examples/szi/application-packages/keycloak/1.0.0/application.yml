@@ -5,13 +5,15 @@
   "version": "1.0.0",
   "files": [
     "assets/conf/cache-ispn.xml",
+    "assets/conf/keycloak.conf",
     "assets/scripts/bootstrap-admin.sh",
     "assets/scripts/create-admin.sh",
     "assets/providers/",
     "assets/themes.tar.gz",
     "roles/application_keycloak/defaults/main.yml",
     "roles/application_keycloak/templates/agent.hcl.j2",
-    "roles/application_keycloak/templates/compose.yml.j2"
+    "roles/application_keycloak/templates/compose.yml.j2",
+    "assets/scripts/integration.sh"
   ],
   "render": {
     "compose_template": "roles/application_keycloak/templates/compose.yml.j2",
@@ -23,10 +25,38 @@
       "source": "assets/scripts/bootstrap-admin.sh",
       "phase": "before_start",
       "execution": "once",
-      "argv": ["--realm", "master", "--db-user", "szi_keycloak", "--project", {"valueFrom": "projectId"}, "--library", {"valueFrom": "libraryId"}, "--instance", {"valueFrom": "applicationId"}, "--host", {"valueFrom": "targetHostId"}],
+      "argv": [
+        "--realm",
+        "master",
+        "--db-user",
+        "szi_keycloak",
+        "--project",
+        {
+          "valueFrom": "projectId"
+        },
+        "--library",
+        {
+          "valueFrom": "libraryId"
+        },
+        "--instance",
+        {
+          "valueFrom": "applicationId"
+        },
+        "--host",
+        {
+          "valueFrom": "targetHostId"
+        }
+      ],
       "secretInputs": {
-        "bootstrap_client_secret": {"valueFrom": "runtime_secret", "ref": "szi-bootstrap-client-secret"},
-        "db_password": {"valueFrom": "runtime_secret", "ref": "keycloak-postgres-password"}
+        "bootstrap_client_secret": {
+          "valueFrom": "provided_connection",
+          "name": "sso",
+          "credential": "password"
+        },
+        "db_password": {
+          "valueFrom": "runtime_secret",
+          "ref": "keycloak-postgres-password"
+        }
       }
     },
     {
@@ -34,11 +64,134 @@
       "source": "assets/scripts/create-admin.sh",
       "phase": "after_ready",
       "execution": "once",
-      "argv": ["--realm", "master", "--keycloak-url", {"valueFrom": "placement_https", "application": "keycloak"}, "--project", {"valueFrom": "projectId"}, "--library", {"valueFrom": "libraryId"}, "--instance", {"valueFrom": "applicationId"}, "--host", {"valueFrom": "targetHostId"}],
+      "argv": [
+        "--realm",
+        "master",
+        "--keycloak-url",
+        {
+          "valueFrom": "placement_https",
+          "application": "keycloak"
+        },
+        "--project",
+        {
+          "valueFrom": "projectId"
+        },
+        "--library",
+        {
+          "valueFrom": "libraryId"
+        },
+        "--instance",
+        {
+          "valueFrom": "applicationId"
+        },
+        "--host",
+        {
+          "valueFrom": "targetHostId"
+        }
+      ],
       "secretInputs": {
-        "bootstrap_client_secret": {"valueFrom": "runtime_secret", "ref": "szi-bootstrap-client-secret"},
-        "admin_password": {"valueFrom": "runtime_secret", "ref": "szi-admin-password"}
+        "bootstrap_client_secret": {
+          "valueFrom": "provided_connection",
+          "name": "sso",
+          "credential": "password"
+        },
+        "admin_password": {
+          "valueFrom": "provided_connection",
+          "name": "sso",
+          "credential": "password"
+        }
       }
+    },
+    {
+      "id": "ensure-user",
+      "source": "assets/scripts/integration.sh",
+      "phase": "account_apply",
+      "execution": "once",
+      "argv": [
+        "accounts",
+        {
+          "valueFrom": "provided_connection",
+          "name": "sso"
+        },
+        {
+          "valueFrom": "provided_connection",
+          "name": "sso",
+          "field": "parameters.realm"
+        },
+        {
+          "valueFrom": "provided_connection",
+          "name": "sso",
+          "field": "credentials.username.source.value"
+        },
+        {
+          "valueFrom": "applicationId"
+        },
+        "",
+        "",
+        "{}"
+      ],
+      "secretInputs": {
+        "admin_password": {
+          "valueFrom": "provided_connection",
+          "name": "sso",
+          "credential": "password"
+        },
+        "account_batch": {
+          "valueFrom": "account_batch"
+        }
+      },
+      "run_on": "execution_node"
+    },
+    {
+      "id": "integrate-consumer",
+      "source": "assets/scripts/integration.sh",
+      "phase": "connection_apply",
+      "execution": "once",
+      "argv": [
+        "client",
+        {
+          "valueFrom": "provided_connection",
+          "name": "sso"
+        },
+        {
+          "valueFrom": "provided_connection",
+          "name": "sso",
+          "field": "parameters.realm"
+        },
+        {
+          "valueFrom": "provided_connection",
+          "name": "sso",
+          "field": "credentials.username.source.value"
+        },
+        {
+          "valueFrom": "applicationId"
+        },
+        {
+          "valueFrom": "endpoint"
+        },
+        {
+          "valueFrom": "provided_connection",
+          "name": "sso",
+          "field": "parameters.proxy_url"
+        },
+        {
+          "valueFrom": "parameter",
+          "name": "IDENTITY_CLIENT"
+        }
+      ],
+      "secretInputs": {
+        "admin_password": {
+          "valueFrom": "provided_connection",
+          "name": "sso",
+          "credential": "password"
+        },
+        "client_secret": {
+          "valueFrom": "secret_binding",
+          "binding": "KEYCLOAK_CLIENT_SECRET",
+          "optional": true
+        }
+      },
+      "run_on": "execution_node"
     }
   ]
 }

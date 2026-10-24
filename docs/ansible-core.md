@@ -87,6 +87,11 @@ All selected placements pass preflight before materialization. Each library/host
 has a shared `.env` and base Compose; per-instance Compose/config files use
 validated package render descriptors. Apply uses native Compose and a generated
 config-digest ownership label to recover an interrupted configuration activation.
+If ordinary Compose startup fails, Ansible handles the failure with `rescue`
+and makes one `up --force-recreate` attempt for that exact instance. Both attempts
+disable pulls, builds and dependency startup. Failed recreation stops Apply;
+successful startup continues through the existing readiness check. Persistent
+volumes and bind-mounted data are not removed.
 Ordinary Verify uses one container inspect task per placement for locked image
 identity, project/library/instance/host ownership, Running and configured
 healthcheck. It does not inspect file/config digests or Compose hashes, and its
@@ -126,7 +131,10 @@ phase, placement, file, nonsecret argv and runtime secret references; Core
 resolves those references without product-specific branches. Ansible copies
 the allowlisted script to the target, stages mode-0600 secret files for the
 selected account, executes exact argv with a timeout, validates a small JSON
-result and removes transient secrets. Docker and Keycloak commands live in the
+result and removes transient secrets. Source inputs need only be readable,
+nonempty files; no size, runtime-root, symlink, ownership or mode guards apply
+to them. The target copies still use private permissions and no-log tasks.
+Docker and Keycloak commands live in the
 Keycloak package scripts. Application Apply completes shared providers first,
 then runs materialization, image delivery, before-start scripts, activation,
 after-ready scripts and Verify for each library in its explicit plan order.

@@ -9,13 +9,24 @@
   failed_when: false
   no_log: true
 
-- name: Reconcile exact instance with no pull build or dependency startup
-  ansible.builtin.command:
-    argv: "{{ application_runtime_job.composeArgv + ['up', '-d', '--no-build', '--pull', 'never', '--no-deps', application_runtime_job.instanceId] }}"
-  become_user: "{{ application_runtime_job.account }}"
-  environment: "{{ application_runtime_job.dockerEnvironment }}"
-  changed_when: false
-  no_log: true
+- name: Start the exact instance with one recreation attempt on failure
+  block:
+    - name: Reconcile exact instance with no pull build or dependency startup
+      any_errors_fatal: false
+      ansible.builtin.command:
+        argv: "{{ application_runtime_job.composeArgv + ['up', '-d', '--no-build', '--pull', 'never', '--no-deps', application_runtime_job.instanceId] }}"
+      become_user: "{{ application_runtime_job.account }}"
+      environment: "{{ application_runtime_job.dockerEnvironment }}"
+      changed_when: false
+      no_log: true
+  rescue:
+    - name: Recreate exact instance after ordinary Compose startup failed
+      ansible.builtin.command:
+        argv: "{{ application_runtime_job.composeArgv + ['up', '-d', '--no-build', '--pull', 'never', '--no-deps', '--force-recreate', application_runtime_job.instanceId] }}"
+      become_user: "{{ application_runtime_job.account }}"
+      environment: "{{ application_runtime_job.dockerEnvironment }}"
+      changed_when: false
+      no_log: true
 
 - name: Verify the observed instance after reconciliation
   ansible.builtin.include_tasks: verify.yml

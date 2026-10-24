@@ -480,7 +480,9 @@
   display: inline;
   white-space: nowrap;
 }
-.application-credential-table:has(.application-credential-source-expanded) {
+:is(.application-credential-table, .application-provided-credentials):has(
+  .application-credential-source-expanded
+) {
   min-width: 950px;
 }
 .application-credential-table code {
@@ -518,7 +520,8 @@
   width: 100%;
   min-width: 0;
 }
-.application-credential-table .application-credential-source {
+:is(.application-credential-table, .application-provided-credentials)
+  .application-credential-source {
   display: grid;
   grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.3fr) auto;
   align-items: center;
@@ -551,7 +554,8 @@
   min-width: 32px;
   padding: 5px;
 }
-.application-credential-table .application-credential-source-expanded {
+:is(.application-credential-table, .application-provided-credentials)
+  .application-credential-source-expanded {
   grid-template-columns: none;
   grid-auto-flow: column;
   grid-auto-columns: minmax(80px, 1fr);
@@ -1320,4 +1324,60 @@
 }
 .application-port-arrow {
   align-self: center;
+}
+
+.application-content:has(.application-library-connections) {
+  display: block;
+  overflow: auto;
+}
+.application-library-connections {
+  min-width: 0;
+}
+.application-provided-connection {
+  min-width: 0;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border, #cad5e3);
+}
+.application-provided-credentials {
+  width: 100%;
+  min-width: 530px;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.application-provided-credentials th,
+.application-provided-credentials td {
+  padding: 4px;
+  text-align: left;
+  border-bottom: 1px solid #e1e7ef;
+}
+.application-provided-credentials th:first-child {
+  width: 20%;
+}
+.application-provided-credentials .application-credential-source {
+  margin: 0;
+}
+
+.application-compact-values .application-value-row,
+.application-value-heading {
+  grid-template-columns: minmax(0, 1fr) 96px 152px;
+  gap: 8px;
+  min-width: 530px;
+  padding: 6px 0;
+  margin: 0;
+  border-bottom: 1px solid #e1e7ef;
+}
+.application-value-heading {
+  display: grid;
+  font-size: 11px;
+  font-weight: 600;
+  color: #52657d;
+}
+.application-value-heading > div {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.8fr) minmax(140px, 1.2fr);
+  gap: 12px;
+}
+.application-value-heading > span {
+  grid-column: 2 / 4;
 }

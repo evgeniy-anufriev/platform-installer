@@ -336,8 +336,7 @@ The resource header displays deployment, service type and one aggregate presence
 chip: all required runtime values present / at least one missing / unavailable.
 The Save/Core prerequisite hint also appears in this header, not per field.
 Presence is read from Broker without exposing values or renewing TTL. Shared
-references warn that replacement affects all consumers. Separate existing
-Installation and registry flows keep their full-set API.
+references warn that replacement affects all consumers. Registry retains its existing flow. Library provider credentials and shared secrets accept values inline in their settings. The Installation Plan has no secret-entry form (owner decision 2026-10-22).
 
 ## 1. Product principle
 
@@ -991,7 +990,7 @@ click is required for the scope change. Libraries remain Apply -> Verify; Start 
 unavailable while the displayed plan differs from the selected scope. This replaces
 the earlier B4 instruction requiring an explicit fresh Build after checkbox changes.
 
-B4 owner-authorized credential completion (2026-10-15): Plan adds a compact «Секреты библиотек» dialog, using the existing runtime-secret dialog styling and Core-derived applicationInputs. The selected service's Secrets dialog remains unchanged. Password values remain in the existing session Broker/lease, never desired state. This is a minimal integration addition to the Installation mockup, not a library editor.
+Historical B4 credential completion (2026-10-15; superseded by owner on 2026-10-22): Plan added a compact «Секреты библиотек» dialog, using the existing runtime-secret dialog styling and Core-derived applicationInputs. The selected service's Secrets dialog remains unchanged. Password values remain in the existing session Broker/lease, never desired state. This is a minimal integration addition to the Installation mockup, not a library editor.
 
 C owner refinement: the application slot Parameters tab edits image, host
 (published) and container ports, inherited from package defaults. Explicit overrides
@@ -1099,3 +1098,5 @@ Create Plan stays synchronous and uses the shared busy indication «Подгот
 образов и плана…». Registry discovery occurs during that operation, without
 network requests on image input or Save. Image digest/size are not form fields.
 Real React/Wails/Core acceptance and visual inspection are separate gates.
+
+SZI stage2 owner-approved refinement (2026-10-22): Applications / library Connections edits provided_connections parameters and credential references, and selects Core-derived providedConnectionRef candidates. Instance General edits connections.<alias>.enabled with reset; Secrets reuses existing accounts.<alias>, disabled usage blocks edits without removing data. This extends the deployment-only mockup; it adds no new navigation tab. Effective values and candidates come from current-revision Core only.

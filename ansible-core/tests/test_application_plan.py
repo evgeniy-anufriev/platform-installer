@@ -39,6 +39,32 @@ def image_lock():
 
 
 class ApplicationPlanTests(unittest.TestCase):
+    def test_shared_secret_accumulates_operations_across_provider_and_lifecycle(self):
+        value = application_snapshot()
+        library = value['applicationLibraries']['libraries']['sdku']
+        source = dict(kind='runtime_secret_ref', ref='provider-admin-password')
+        library['sharedSecretRequirements'] = {'admin': {'source': source}}
+        library['scripts'] = [dict(id='groups', phase='provider_prepare', scope='library',
+                                   secretInputs={'PASSWORD': source}, sharedInputs=[],
+                                   target={'connection': 'identity'})]
+        instance = library['instances']['apigateway-sdku']
+        instance['connections']['identity'] = dict(serviceType='application', libraryId='sdku',
+                                                   applicationId='provider', startupPriority=0)
+        instance['scripts'] = [dict(id='bootstrap', phase='before_start', scope='instance',
+                                    secretInputs={'PASSWORD': source}, sharedInputs=[])]
+        model = application_execution_model(value, image_lock())
+        self.assertEqual([], model['findings'])
+        self.assertEqual(1, len(model['runtimeSecretRequirements']))
+        requirement = model['runtimeSecretRequirements'][0]
+        self.assertEqual(OPERATIONS, requirement['operations'])
+        self.assertEqual(['node1'], requirement['hosts'])
+        library['sharedSecretRequirements'] = {}
+        instance['scripts'] = []
+        apply_only = application_execution_model(value, image_lock())
+        self.assertEqual([], apply_only['findings'])
+        self.assertEqual(['APPLICATION_LIBRARIES_APPLY'],
+                         apply_only['runtimeSecretRequirements'][0]['operations'])
+
     def test_multiple_libraries_require_explicit_order_bound_to_plan_fingerprint(self):
         value = application_snapshot()
         value['applicationLibraries']['libraries']['szi'] = copy.deepcopy(

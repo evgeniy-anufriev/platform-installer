@@ -7,6 +7,11 @@
   tasks:
     - name: Execute provider stages with bounded derived credential custody
       block:
+        - name: Initialize only invocation-scoped provider completion results
+          ansible.builtin.set_fact:
+            platform_application_completed_batches: []
+            platform_application_delivered_instances: []
+          no_log: true
         - name: Read existing credential sources within bounded runtime custody
           ansible.builtin.include_role:
             name: platform.vault.application_provider
@@ -76,7 +81,7 @@
           ansible.builtin.include_role:
             name: platform.vault.application_provider
             tasks_from: library
-          loop: "{{ application_vault_inputs.libraryJobs }}"
+          loop: "{{ application_vault_inputs.libraryJobs | platform.core.application_ready_shared_jobs(application_runtime_inputs.integrations, []) }}"
           loop_control:
             loop_var: platform_vault_application_job
         - name: Ensure and authenticate each PostgreSQL account instance
@@ -113,9 +118,22 @@
           ansible.builtin.include_role:
             name: platform.vault.application_provider
             tasks_from: instance
-          loop: "{{ application_vault_inputs.instanceJobs }}"
+          loop: "{{ application_vault_inputs.instanceJobs | platform.core.application_ready_vault_jobs(application_runtime_inputs.integrations, [], []) }}"
           loop_control:
             loop_var: platform_vault_application_job
+        - name: Retain completed ordinary instance deliveries for the runtime coordinator
+          ansible.builtin.set_fact:
+            platform_application_delivered_instances: >-
+              {{ (application_vault_inputs.instanceJobs | platform.core.application_ready_vault_jobs(
+                  application_runtime_inputs.integrations, [], [])) |
+                 map(attribute='libraryId') | zip((application_vault_inputs.instanceJobs |
+                   platform.core.application_ready_vault_jobs(application_runtime_inputs.integrations, [], [])) |
+                   map(attribute='instanceId')) | map('join', '/') | list }}
+          no_log: true
+        - name: Transfer derived credential custody to the runtime play
+          ansible.builtin.set_fact:
+            platform_application_runtime_credential_custody: true
+          no_log: true
       always:
         - name: Remove only invocation-derived Vault account credential files
           ansible.builtin.file:
@@ -124,3 +142,4 @@
           loop: "{{ application_vault_inputs.sourceJobs | default([]) | selectattr('passwordRef', 'defined') | list }}"
           changed_when: false
           no_log: true
+          when: not (platform_application_runtime_credential_custody | default(false)) or application_runtime_inputs.integrations.batches | length == 0

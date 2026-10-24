@@ -12,7 +12,7 @@ class ActionModule(ActionBase):
     def run(self, tmp=None, task_vars=None):
         task_vars = task_vars or {}
         args = self._task.args
-        if args.get('shared_defaults') or args.get('resource_defaults'):
+        if args.get('shared_defaults') or args.get('resource_defaults') or args.get('provided_connections'):
             try:
                 variables = dict(task_vars)
                 variables.update(task_vars['hostvars'].raw_get(args['host_id']))
@@ -23,10 +23,11 @@ class ActionModule(ActionBase):
                 if args.get('shared_defaults'):
                     variables['library_resources'] = task_vars['library_resources']
                 templar = self._templar.copy_with_new_env(available_variables=variables)
-                field = 'resource_defaults' if args.get('resource_defaults') else 'defaults'
+                field = ('provided_connections' if args.get('provided_connections') else
+                         'resource_defaults' if args.get('resource_defaults') else 'defaults')
                 defaults = self._loader.load_from_file(args['defaults_path'])['platform_library_definition'].get(field, {})
                 overrides = task_vars['platform_desired_state']['applicationLibraryDeployments'][args['library_id']].get(
-                    'resource_defaults' if args.get('resource_defaults') else 'overrides', {})
+                    field if field != 'defaults' else 'overrides', {})
                 return dict(defaults=templar.template(defaults), overrides=templar.template(overrides), changed=False)
             except (ValueError, OSError, KeyError, TypeError, AnsibleError):
                 return dict(defaults={}, overrides={}, findings=[finding('APPLICATION_INPUT_INVALID', 'applicationLibraryDeployments')], changed=False)

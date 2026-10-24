@@ -6,7 +6,7 @@ services:
     image: {{ application_runtime.image | to_json }}
     container_name: {{ application_runtime.container_name | to_json }}
     command: []
-    entrypoint: ["/usr/bin/vault", "agent", "--config", "/opt/vault/agent.hcl"]
+    entrypoint: ["/usr/bin/vault", "agent", "-config=/opt/vault/agent.hcl"]
     user: {{ application_effective.user | to_json }}
     restart: {{ application_effective.restart | to_json }}
     environment:
@@ -22,10 +22,11 @@ services:
       - "{{ port.published }}:{{ port.container }}"
 {% endfor %}
     volumes:
+      - {{ (application_runtime.pki_path ~ ":/opt/application/pki:ro") | to_json }}
       - {{ (application_runtime.vault_path ~ ":/opt/vault:ro") | to_json }}
       - {{ (application_runtime.pki_path ~ "/ca-chain.pem:/usr/local/app/ca.pem:ro") | to_json }}
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8031/"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:{{ application_effective.ports['port-1'].container }}/"]
       interval: 30s
       timeout: 15s
       retries: 10

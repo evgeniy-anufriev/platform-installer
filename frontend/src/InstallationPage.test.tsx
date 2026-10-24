@@ -70,6 +70,9 @@ describe("InstallationPage", () => {
     expect((flag as HTMLInputElement).checked).toBe(false);
     await user.click(flag);
     view.rerender(<InstallationPage {...props} tab="plan" />);
+    expect(
+      screen.queryByRole("button", { name: "Секреты библиотек" }),
+    ).toBeNull();
     await user.click(
       screen.getByRole("button", { name: "Сформировать свежий план" }),
     );
@@ -500,9 +503,12 @@ describe("InstallationPage", () => {
             runId: "run-safe",
             sequence: 3,
             eventType: "TASK_COMPLETED",
-            status: "SUCCESS",
+            status: "FAILED",
             timestamp: "2026-10-05T07:22:44Z",
             safeMessage: "Ansible task completed",
+            errorCode: "APPLICATION_RUNTIME_DEFERRED_FEATURE",
+            errorSummary:
+              "Core operation failed (APPLICATION_RUNTIME_DEFERRED_FEATURE)",
             host: "node1",
             serviceDeployment: "qa-bind",
             task: {
@@ -529,6 +535,9 @@ describe("InstallationPage", () => {
     ).toBeTruthy();
     expect(screen.queryByText("RUNNING")).toBeNull();
     expect(screen.getByText(/Запуск: run-safe/)).toBeTruthy();
+    expect(
+      screen.getAllByText("APPLICATION_RUNTIME_DEFERRED_FEATURE").length,
+    ).toBeGreaterThan(0);
     expect(screen.getByRole("status").textContent).toContain(
       "Идёт установка · 50%",
     );

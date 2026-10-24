@@ -2,6 +2,8 @@ platform_application_definition:
   name: grant-access-front
   version: 1.0.0
   defaults:
+    connections:
+      sso: {enabled: true}
     image: evoscada-docker.artifacts.tn.tngrp.ru/grant-access-front:1.0.0-73f96255
     user: "1000:1000"
     restart: always
@@ -14,6 +16,8 @@ platform_application_definition:
         destination: config.json
         mode: "0644"
     environment: {}
+    parameters:
+      IDENTITY_CLIENT: "{{ lookup('ansible.builtin.template', (application_job.application.defaultsPath | dirname) ~ '/../../../assets/keycloak-client.json.j2', convert_data=false) | from_json }}"
     ports:
       port-1:
         container: 8021
@@ -22,4 +26,4 @@ platform_application_definition:
       mode: container
       delay: 2
       retries: 30
-  connections: []
+  connections: [sso]

@@ -1,0 +1,14 @@
+{% set snapshot = hostvars['localhost'].application_snapshot.snapshot %}
+{% set ns = namespace(routes={}) %}
+{% for library in snapshot.applicationLibraries.libraries.values() %}
+{% for app_id, app in library.instances.items() %}
+{% set matching = app.connections.values() | selectattr('serviceType', 'equalto', 'application') | selectattr('libraryId', 'equalto', application_runtime_job.libraryId) | selectattr('applicationId', 'equalto', 'keycloak') | selectattr('connectionProvisioner.apply_script', 'defined') | list %}
+{% if matching | length > 0 %}
+{% set placement = app.placements.values() | first %}
+{% if placement.endpoint.enabled | default(false) %}
+{% set _ = ns.routes.update({app_id: {'endpoint': 'https://' ~ hostvars['localhost'].platform_endpoint_sources[app_id].endpoint.fqdn, 'subpath': '/' ~ app_id, 'parameters': placement.parameters.IDENTITY_ROUTE | default({})}}) %}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% endfor %}
+{{ {'owner': 'platform.application.routes/v1:' ~ application_runtime_job.projectId ~ ':' ~ application_runtime_job.libraryId ~ ':' ~ application_instance_id, 'routes': ns.routes} | to_json }}

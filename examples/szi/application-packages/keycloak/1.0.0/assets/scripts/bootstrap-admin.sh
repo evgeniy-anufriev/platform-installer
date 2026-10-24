@@ -54,7 +54,39 @@ if docker container inspect "$temporary_name" >/dev/null 2>&1; then
 fi
 
 wrapper="$instance_path/.scripts/keycloak-bootstrap-wrapper.sh"
-trap 'rm -f "$wrapper"' EXIT HUP INT TERM
+trace_wrapper="$instance_path/.scripts/keycloak-bootstrap-trace.sh"
+work="$instance_path/.scripts/.bootstrap-work"
+diagnostic_directory="$instance_path/.scripts/diagnostics"
+mkdir -p "$diagnostic_directory"
+diagnostic_log="$diagnostic_directory/bootstrap-admin-$(date -u +%Y%m%dT%H%M%SZ)-$.log"
+mkdir -p "$work"
+trap 'rm -f "$wrapper" "$trace_wrapper"; rm -rf "$work"' EXIT HUP INT TERM
+cat > "$trace_wrapper" <<'TRACE'
+#!/bin/sh
+set -eu
+umask 077
+fifo=/run/platform-admin-work/trace-pipe
+mkfifo "$fifo"
+# Raw xtrace exists only in this pipe. Never persist it before redaction.
+jq -Rrs --rawfile admin /run/platform-db-password \
+  --rawfile bootstrap /run/platform-bootstrap-secret '
+  def variants: ., @sh, (@json | .[1:-1]), @uri;
+  ([ $admin, $bootstrap ] | map(., split("\n")[]) | map(select(length > 0) | variants)
+    | unique | sort_by(length) | reverse) as $secrets
+  | reduce $secrets[] as $secret (. ; split($secret) | join("[REDACTED]"))
+  | gsub("eyJ[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+"; "[REDACTED_JWT]")
+' < "$fifo" >&2 &
+redactor=$!
+set +e
+PS4='+ keycloak-bootstrap trace: ' /bin/sh -x /run/platform-bootstrap-wrapper "$@" > "$fifo" 2>&1
+result=$?
+wait "$redactor"
+redaction_result=$?
+set -e
+rm -f "$fifo"
+[ "$redaction_result" -eq 0 ] || exit 1
+exit "$result"
+TRACE
 cat > "$wrapper" <<'WRAPPER'
 #!/bin/sh
 set -eu
@@ -72,11 +104,18 @@ exec /usr/lib/keycloak/bin/kc.sh bootstrap-admin service --client-id temp-admin 
 WRAPPER
 chmod 0600 "$wrapper"
 
+printf 'bootstrap-admin start=%s host=%s\n' "$(date -u +%FT%TZ)" "$host_id" > "$diagnostic_log"
+compose_result=0
 compose run --rm --no-deps --pull never -T --name "$temporary_name" \
   --user 0:0 --entrypoint /bin/sh \
   -v "$wrapper:/run/platform-bootstrap-wrapper:ro" \
+  -v "$trace_wrapper:/run/platform-trace-wrapper:ro" \
+  -v "$work:/run/platform-admin-work" \
   -v "$PLATFORM_SCRIPT_SECRET_BOOTSTRAP_CLIENT_SECRET_FILE:/run/platform-bootstrap-secret:ro" \
   -v "$PLATFORM_SCRIPT_SECRET_DB_PASSWORD_FILE:/run/platform-db-password:ro" \
-  "$instance_id" /run/platform-bootstrap-wrapper "$db_user" \
-  >/dev/null 2>&1 || fail APPLICATION_KEYCLOAK_BOOTSTRAP_FAILED
+  "$instance_id" /run/platform-trace-wrapper "$db_user" \
+  >> "$diagnostic_log" 2>&1 || compose_result=$?
+printf 'bootstrap-admin finish=%s compose_rc=%s\n' "$(date -u +%FT%TZ)" "$compose_result" >> "$diagnostic_log"
+cat "$diagnostic_log" >&2
+[ "$compose_result" -eq 0 ] || fail APPLICATION_KEYCLOAK_BOOTSTRAP_FAILED
 printf '{"status":"ok","changed":true}\n'

@@ -232,10 +232,15 @@ func TestBrokerBindsTypedServiceInputsToCoreDescriptors(t *testing.T) {
 		{RequirementRef: "si-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", Purpose: "SERVICE_ADMIN_TOKEN", ServiceDeployment: "vault-ha", Operations: []string{"SERVICE_APPLY", "SERVICE_VERIFY"}},
 		{RequirementRef: "si-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", Purpose: "SERVICE_UNSEAL_SHARES", ServiceDeployment: "vault-ha", Operations: []string{"SERVICE_APPLY"}},
 	}
-	if err := broker.BindPendingServiceSecretInputs(binding, descriptors); err != nil {
+	applicationToken := RuntimeSecretInput{RequirementRef: "application-token", Purpose: "APPLICATION_VAULT_ADMIN_TOKEN", ServiceDeployment: "vault-ha"}
+	foreignToken := RuntimeSecretInput{RequirementRef: "foreign-token", Purpose: "APPLICATION_VAULT_ADMIN_TOKEN", ServiceDeployment: "other-vault"}
+	if err := broker.BindPendingServiceSecretInputs(binding, descriptors, applicationToken, foreignToken); err != nil {
 		t.Fatal("Core descriptor binding failed")
 	}
 	if err := broker.WithTargetCredential(binding, func(value TargetCredential) error {
+		if string(value.RuntimeSecretValues[applicationToken.RequirementRef]) != "admin-token" || len(value.RuntimeSecretValues[foreignToken.RequirementRef]) != 0 {
+			t.Fatal("application token must reuse only the exact infrastructure deployment input")
+		}
 		if len(value.RuntimeSecretInputs) != 2 {
 			t.Fatal("typed inputs missing")
 		}

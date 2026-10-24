@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import type { EditResult, InstallationEventView, ManagedProjectView } from "./backend";
+import type {
+  EditResult,
+  InstallationEventView,
+  ManagedProjectView,
+} from "./backend";
 import { eventTimestampLabel, taskNameWithoutRole } from "./event-format";
 import "./utility-pages.css";
 
@@ -232,8 +236,7 @@ const helpArticles: (HelpArticle & {
     id: "certificate-store-password",
     category: "certificates",
     title: "Пароль Java-хранилищ PKCS#12",
-    summary:
-      "Как задаётся пароль keystore и truststore и где он хранится.",
+    summary: "Как задаётся пароль keystore и truststore и где он хранится.",
     intro:
       "Пароль защищает Java-хранилища PKCS#12 (keystore/truststore). Его можно задать или заменить в верхнем блоке страницы «Сертификаты».",
     sections: [
@@ -535,15 +538,15 @@ const helpArticles: (HelpArticle & {
         title: "Проверить прежний запуск",
         steps: [
           "После перезапуска приложения при необходимости заново задайте SSH-учётные данные и подтвердите доверие к отпечатку узла.",
-          "Откройте «Установка» и нажмите «Проверить прежний запуск», чтобы получить его фактический статус.",
-          "Если запуск ещё активен, дождитесь завершения или используйте штатную команду «Отменить выполнение».",
+          "Откройте «Серверы» и в блоке узла выполнения нажмите «Проверить прежний запуск», чтобы получить его фактический статус.",
+          "Если запуск ещё активен, сверьте его ID и нажмите «Подключиться», чтобы восстановить наблюдение. Дождитесь завершения; подключение не запускает установку повторно.",
           "Когда запуск подтверждён как завершённый, проверьте, что полный проверенный набор находится в папке bundle внутри проекта, и снова нажмите «Проверить новый набор» на странице «Проект».",
         ],
       },
     ],
     warning:
       "Не удаляйте записи или журналы запуска и не редактируйте блокировки проекта вручную.",
-    targetPage: "installation",
+    targetPage: "servers",
   },
   {
     id: "execution-not-updating",
@@ -557,15 +560,18 @@ const helpArticles: (HelpArticle & {
         title: "Проверить состояние",
         steps: [
           "Запишите ID выполнения со страницы установки или из журнала.",
-          "Проверьте фактический статус запуска на Execution Node.",
-          "Сверьте последние события и их время.",
-          "Вернитесь в приложение и сопоставьте состояние с терминальным результатом.",
+          "Откройте исходный проект. На странице «Серверы» выберите тот же узел выполнения, на котором запускалась установка.",
+          "Если SSH-сессия истекла или приложение перезапускалось, заново задайте учётные данные исходного технического пользователя. Проверьте сервер и подтвердите доверие после независимой сверки отпечатка SSH-ключа.",
+          "В блоке узла выполнения нажмите «Проверить прежний запуск». Сверьте показанные ID запуска, ревизию проекта и фактическое состояние.",
+          "Если запуск найден и доступна кнопка «Подключиться», нажмите её. Приложение откроет «Установка → Выполнение» и восстановит наблюдение за тем же запуском и его событиями. Новый план, утверждение и повторный Start не требуются.",
+          "Сверьте последние события и их время, затем дождитесь терминального результата. Если запуск уже завершён, используйте его фактический результат; повторно запускать установку для восстановления наблюдения не нужно.",
+          "Если запуск недоступен или его состояние не подтверждено, проверьте SSH-доступ и исходный узел выполнения, затем повторите проверку прежнего запуска.",
         ],
       },
     ],
     warning:
       "Не запускайте операцию повторно, не удаляйте данные запуска и не считайте результат успешным или ошибочным только по замершему экрану.",
-    targetPage: "installation",
+    targetPage: "servers",
   },
   {
     id: "blocked-plan",
@@ -962,8 +968,14 @@ function EventLog({
 type Props = {
   page: string;
   managed?: ManagedProjectView;
-  projectSettingDraftValues?: Partial<Record<"platform_data_root_directory" | "platform_name_prefix", string>>;
-  onAppendProjectSetting?: (intent: { operation: "SetProjectSetting"; setting: "platform_data_root_directory" | "platform_name_prefix"; value: string }) => Promise<boolean>;
+  projectSettingDraftValues?: Partial<
+    Record<"platform_data_root_directory" | "platform_name_prefix", string>
+  >;
+  onAppendProjectSetting?: (intent: {
+    operation: "SetProjectSetting";
+    setting: "platform_data_root_directory" | "platform_name_prefix";
+    value: string;
+  }) => Promise<boolean>;
   editError?: EditResult["error"] | null;
   events: InstallationEventView[];
   runId?: string;
@@ -1207,7 +1219,12 @@ function HelpPage({ onNavigate }: { onNavigate?: (page: HelpPageId) => void }) {
                   {category.description}
                 </span>
                 <small>
-                  Статей: {helpArticles.filter((article) => article.category === category.id).length}
+                  Статей:{" "}
+                  {
+                    helpArticles.filter(
+                      (article) => article.category === category.id,
+                    ).length
+                  }
                 </small>
               </button>
             ))}
@@ -1233,22 +1250,43 @@ export function UtilityPages({
 }: Props) {
   const savedDataRootDirectory = managed?.dataRootDirectory || "/var/lib";
   const savedNamePrefix = managed?.namePrefix || "";
-  const draftDataRootDirectory = projectSettingDraftValues?.platform_data_root_directory;
+  const draftDataRootDirectory =
+    projectSettingDraftValues?.platform_data_root_directory;
   const draftNamePrefix = projectSettingDraftValues?.platform_name_prefix;
-  const dataRootDirectoryChanged = draftDataRootDirectory !== undefined && draftDataRootDirectory !== savedDataRootDirectory;
-  const namePrefixChanged = draftNamePrefix !== undefined && draftNamePrefix !== savedNamePrefix;
-  const [dataRootDirectory, setDataRootDirectory] = useState(draftDataRootDirectory || savedDataRootDirectory);
-  const [namePrefix, setNamePrefix] = useState(draftNamePrefix ?? savedNamePrefix);
+  const dataRootDirectoryChanged =
+    draftDataRootDirectory !== undefined &&
+    draftDataRootDirectory !== savedDataRootDirectory;
+  const namePrefixChanged =
+    draftNamePrefix !== undefined && draftNamePrefix !== savedNamePrefix;
+  const [dataRootDirectory, setDataRootDirectory] = useState(
+    draftDataRootDirectory || savedDataRootDirectory,
+  );
+  const [namePrefix, setNamePrefix] = useState(
+    draftNamePrefix ?? savedNamePrefix,
+  );
   const [settingBusy, setSettingBusy] = useState(false);
   useEffect(() => {
     setDataRootDirectory(draftDataRootDirectory || savedDataRootDirectory);
     setNamePrefix(draftNamePrefix ?? savedNamePrefix);
-  }, [managed?.projectRevision, savedDataRootDirectory, savedNamePrefix, draftDataRootDirectory, draftNamePrefix]);
-  const stageSetting = async (setting: "platform_data_root_directory" | "platform_name_prefix", value: string) => {
+  }, [
+    managed?.projectRevision,
+    savedDataRootDirectory,
+    savedNamePrefix,
+    draftDataRootDirectory,
+    draftNamePrefix,
+  ]);
+  const stageSetting = async (
+    setting: "platform_data_root_directory" | "platform_name_prefix",
+    value: string,
+  ) => {
     if (!onAppendProjectSetting || !managed) return;
     setSettingBusy(true);
     try {
-      await onAppendProjectSetting({ operation: "SetProjectSetting", setting, value });
+      await onAppendProjectSetting({
+        operation: "SetProjectSetting",
+        setting,
+        value,
+      });
     } finally {
       setSettingBusy(false);
     }
@@ -1315,30 +1353,90 @@ export function UtilityPages({
         </header>
         <section className="utility-card">
           <h2>Параметры проекта</h2>
-          <p>Изменения добавляются в общий черновик проекта. Просмотрите их и нажмите «Сохранить» в шапке.</p>
-          {editError && <p className="field-error" role="alert"><code>{editError.code}</code> — {editError.message}</p>}
-          <div className={`project-setting-field${dataRootDirectoryChanged ? " project-setting-field--changed" : ""}`}>
+          <p>
+            Изменения добавляются в общий черновик проекта. Просмотрите их и
+            нажмите «Сохранить» в шапке.
+          </p>
+          {editError && (
+            <p className="field-error" role="alert">
+              <code>{editError.code}</code> — {editError.message}
+            </p>
+          )}
+          <div
+            className={`project-setting-field${dataRootDirectoryChanged ? " project-setting-field--changed" : ""}`}
+          >
             <label>
               Корневой каталог данных сервисов
-              <input value={dataRootDirectory} onChange={(event) => setDataRootDirectory(event.target.value)} disabled={!managed || settingBusy} />
+              <input
+                value={dataRootDirectory}
+                onChange={(event) => setDataRootDirectory(event.target.value)}
+                disabled={!managed || settingBusy}
+              />
             </label>
-            {dataRootDirectoryChanged && <small className="project-setting-draft-status" role="status">В черновике: <code>{draftDataRootDirectory}</code>. Сохраните проект в шапке, чтобы зафиксировать это значение.</small>}
-            <button type="button" disabled={!managed || settingBusy || dataRootDirectory === (draftDataRootDirectory ?? savedDataRootDirectory)} onClick={() => void stageSetting("platform_data_root_directory", dataRootDirectory)}>
+            {dataRootDirectoryChanged && (
+              <small className="project-setting-draft-status" role="status">
+                В черновике: <code>{draftDataRootDirectory}</code>. Сохраните
+                проект в шапке, чтобы зафиксировать это значение.
+              </small>
+            )}
+            <button
+              type="button"
+              disabled={
+                !managed ||
+                settingBusy ||
+                dataRootDirectory ===
+                  (draftDataRootDirectory ?? savedDataRootDirectory)
+              }
+              onClick={() =>
+                void stageSetting(
+                  "platform_data_root_directory",
+                  dataRootDirectory,
+                )
+              }
+            >
               Добавить каталог в черновик
             </button>
           </div>
-          <p>Путь применяется к каталогам данных сервисов по умолчанию. Данные при изменении пути автоматически не переносятся.</p>
-          <div className={`project-setting-field${namePrefixChanged ? " project-setting-field--changed" : ""}`}>
+          <p>
+            Путь применяется к каталогам данных сервисов по умолчанию. Данные
+            при изменении пути автоматически не переносятся.
+          </p>
+          <div
+            className={`project-setting-field${namePrefixChanged ? " project-setting-field--changed" : ""}`}
+          >
             <label>
               Префикс имён ресурсов
-              <input value={namePrefix} onChange={(event) => setNamePrefix(event.target.value)} disabled={!managed || settingBusy} />
+              <input
+                value={namePrefix}
+                onChange={(event) => setNamePrefix(event.target.value)}
+                disabled={!managed || settingBusy}
+              />
             </label>
-            {namePrefixChanged && <small className="project-setting-draft-status" role="status">В черновике задан префикс «{draftNamePrefix || "не задан"}». Сохраните проект в шапке, чтобы зафиксировать это значение.</small>}
-            <button type="button" disabled={!managed || settingBusy || namePrefix === (draftNamePrefix ?? savedNamePrefix)} onClick={() => void stageSetting("platform_name_prefix", namePrefix)}>
+            {namePrefixChanged && (
+              <small className="project-setting-draft-status" role="status">
+                В черновике задан префикс «{draftNamePrefix || "не задан"}».
+                Сохраните проект в шапке, чтобы зафиксировать это значение.
+              </small>
+            )}
+            <button
+              type="button"
+              disabled={
+                !managed ||
+                settingBusy ||
+                namePrefix === (draftNamePrefix ?? savedNamePrefix)
+              }
+              onClick={() =>
+                void stageSetting("platform_name_prefix", namePrefix)
+              }
+            >
               Добавить префикс в черновик
             </button>
           </div>
-          <p>Пустое значение создаёт имена ресурсов сервисов без префикса. Новый префикс создаёт новые имена ресурсов; прежние ресурсы автоматически не переименовываются.</p>
+          <p>
+            Пустое значение создаёт имена ресурсов сервисов без префикса. Новый
+            префикс создаёт новые имена ресурсов; прежние ресурсы автоматически
+            не переименовываются.
+          </p>
         </section>
         <section className="utility-card">
           <h2>Конфигурация приложения</h2>

@@ -25,6 +25,7 @@ export function CredentialSourceEditor({
   compact = false,
   runtimeInput,
   resolvedLiteralValue,
+  literalLabel = "Имя пользователя",
 }: {
   label: string;
   source: Obj;
@@ -37,6 +38,7 @@ export function CredentialSourceEditor({
   compact?: boolean;
   runtimeInput?: ReactNode;
   resolvedLiteralValue?: string;
+  literalLabel?: string;
 }) {
   const initial = Object.keys(source).length ? source : packageSource;
   const [kind, setKind] = useState(
@@ -64,7 +66,7 @@ export function CredentialSourceEditor({
     document: "Vault document",
     field: "Поле секрета",
     credential: "PKI credential",
-    value: "Имя пользователя",
+    value: literalLabel,
   };
   const keys = fields[kind] ?? [];
   const change = () => {
@@ -124,7 +126,7 @@ export function CredentialSourceEditor({
           <option value="generated">Генерируемый</option>
           <option value="vault_ref">Существующий Vault secret</option>
           <option value="pki_credential">PKI credential</option>
-          {allowLiteral && <option value="literal">Имя пользователя</option>}
+          {allowLiteral && <option value="literal">{literalLabel}</option>}
         </select>
       </label>
       {kind === "runtime_secret_ref" && runtimeInput !== undefined ? (
@@ -228,6 +230,7 @@ export function ApplicationCredentials({
   renderVariables,
   secretSession,
   resolvedAccounts = {},
+  connectionUsage = {},
   sharedSecretRefs = [],
 }: {
   defaults: Obj;
@@ -244,6 +247,7 @@ export function ApplicationCredentials({
   renderVariables?: (account: string, field: string) => ReactNode;
   secretSession?: ApplicationSecretSession;
   resolvedAccounts?: Obj;
+  connectionUsage?: Obj;
   sharedSecretRefs?: string[];
 }) {
   const dirtyFields = useRef(new Set<string>());
@@ -285,6 +289,12 @@ export function ApplicationCredentials({
           const binding = String(
             objectValue(connections[name]).library_binding ?? name,
           );
+          const integrationDisabled =
+            objectValue(connectionUsage[name]).enabled === false;
+          const provided = objectValue(
+            objectValue(bindings[binding]).providedConnectionRef,
+          );
+          const accountDisabled = disabled || integrationDisabled;
           const deployment = String(
             objectValue(bindings[binding]).deploymentRef ?? "",
           );
@@ -298,7 +308,14 @@ export function ApplicationCredentials({
           return (
             <section className="application-account-card" key={name}>
               <h3 title={`Подключение: ${binding}`}>
-                {deployment || name} <small>{serviceType}</small>
+                {deployment ||
+                  (provided.libraryId
+                    ? String(provided.libraryId) + "/" + String(provided.name)
+                    : name)}{" "}
+                <small>{serviceType}</small>
+                {integrationDisabled && (
+                  <small> · использование выключено</small>
+                )}
                 {secretSession && (
                   <ApplicationSecretAvailabilityBadge
                     session={secretSession}
@@ -336,7 +353,7 @@ export function ApplicationCredentials({
                       Управление учётной записью
                       <select
                         aria-label="Управление учётной записью"
-                        disabled={disabled}
+                        disabled={accountDisabled}
                         value={String(account.mode ?? "")}
                         onChange={(event) => {
                           const next = { ...account };
@@ -366,6 +383,7 @@ export function ApplicationCredentials({
                               "databaseRef",
                               "grants",
                               "databaseAccess",
+                              "parameters",
                             ].includes(key),
                           ),
                         )}
@@ -375,11 +393,12 @@ export function ApplicationCredentials({
                               "databaseRef",
                               "grants",
                               "databaseAccess",
+                              "parameters",
                             ].includes(key),
                           ),
                         )}
                         excludeKeys={["credentials"]}
-                        disabled={disabled || !account.mode}
+                        disabled={accountDisabled || !account.mode}
                         onDirtyChange={(dirty) => mark(name + "options", dirty)}
                         onSave={(metadata) =>
                           save({
@@ -390,6 +409,7 @@ export function ApplicationCredentials({
                                     "databaseRef",
                                     "grants",
                                     "databaseAccess",
+                                    "parameters",
                                   ].includes(key),
                               ),
                             ),
@@ -512,7 +532,7 @@ export function ApplicationCredentials({
                                     objectValue(base[field]).source,
                                   )}
                                   allowLiteral={field === "username"}
-                                  disabled={disabled || !account.mode}
+                                  disabled={accountDisabled || !account.mode}
                                   onDirtyChange={(dirty) =>
                                     mark(name + field, dirty)
                                   }
@@ -550,7 +570,7 @@ export function ApplicationCredentials({
                   inherited={packageAccount}
                   resolved={objectValue(resolvedAccounts[name])}
                   resolvedResources={resolvedResources}
-                  disabled={disabled || !account.mode}
+                  disabled={accountDisabled || !account.mode}
                   onDirtyChange={(dirty) => mark(name + "acl", dirty)}
                   onSave={(grants) => {
                     const next = { ...account };
@@ -572,7 +592,7 @@ export function ApplicationCredentials({
                 bindings={bindings}
                 account={account}
                 inherited={packageAccount}
-                disabled={disabled || !account.mode}
+                disabled={accountDisabled || !account.mode}
                 onDirtyChange={(dirty) => mark(name + "access", dirty)}
                 onSave={(metadata) => {
                   const next = { ...account };
@@ -588,7 +608,7 @@ export function ApplicationCredentials({
                   sentinel={
                     objectValue(bindings[binding]).connectionRef === "sentinel"
                   }
-                  disabled={disabled || !account.mode}
+                  disabled={accountDisabled || !account.mode}
                   onDirtyChange={(dirty) => mark(name + "acl", dirty)}
                   onSave={(grants) => save({ ...account, grants })}
                 />

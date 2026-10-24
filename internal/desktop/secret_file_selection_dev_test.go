@@ -7,8 +7,6 @@ import (
 	"encoding/json"
 	"path/filepath"
 	"testing"
-
-	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 func TestQASecretFileSelectionsFiniteOrderedAndCancellation(t *testing.T) {
@@ -21,16 +19,16 @@ func TestQASecretFileSelectionsFiniteOrderedAndCancellation(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, err := a.chooseSecretFile(ctx, runtime.OpenDialogOptions{}); err == nil {
+	if _, err := a.chooseSecretFile(ctx, DialogOptions{}); err == nil {
 		t.Fatal("cancelled selection accepted")
 	}
 	for _, expected := range paths {
-		got, err := a.chooseSecretFile(context.Background(), runtime.OpenDialogOptions{})
+		got, err := a.chooseSecretFile(context.Background(), DialogOptions{})
 		if err != nil || got != expected {
 			t.Fatal("selection order changed")
 		}
 	}
-	if _, err := a.chooseSecretFile(context.Background(), runtime.OpenDialogOptions{}); err == nil {
+	if _, err := a.chooseSecretFile(context.Background(), DialogOptions{}); err == nil {
 		t.Fatal("exhausted queue must not reopen native dialog")
 	}
 }

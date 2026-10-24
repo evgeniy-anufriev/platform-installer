@@ -152,7 +152,7 @@ def validate_compose(config, job, instance_path, digest):
     expected_mounts = {os.path.join(instance_path, "config", x["destination"]): None
                        for x in job["configs"] + job.get("directoryConfigs", []) + job.get("archiveConfigs", [])}
     core_mounts = {os.path.join(instance_path, 'vault'): '/opt/vault'} if job.get('agentTemplate') else {}
-    if job.get('vault', {}).get('pkiPlans'):
+    if job.get('agentTemplate') and job.get('pkiPlans'):
         core_mounts[os.path.join(instance_path, 'pki')] = '/opt/application/pki'
     expected_mounts.update(core_mounts)
     for source, target in expected_mounts.items():
@@ -182,7 +182,7 @@ def prepare_runtime(root, snapshot, rows, desired, lock, validator, loader):
         placement = instance["placements"][host]
         settings = row["settings"]
         if (any(r['kind'] not in {'postgresql.database', 'postgresql.schema', 'clickhouse.database', 'kafka.topic', 'redis.key'} for r in row['resources'].values()) or
-                any(instance['connections'].get(k, {}).get('serviceType') not in {'postgresql', 'redis', 'clickhouse', 'kafka'} for k in instance['credentialRequirements']) or
+                any(instance['connections'].get(k, {}).get('serviceType') not in {'postgresql', 'redis', 'clickhouse', 'kafka', 'application'} for k in instance['credentialRequirements']) or
                 any(x.get("tls") for x in instance["connections"].values())):
             raise ValueError("APPLICATION_RUNTIME_DEFERRED_FEATURE")
         # Recheck packages after native variable composition, before any rendering.

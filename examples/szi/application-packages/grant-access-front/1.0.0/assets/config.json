@@ -1,21 +1,20 @@
-{% set szi_instances = hostvars['localhost'].application_snapshot.snapshot.applicationLibraries.libraries[application_runtime_job.libraryId].instances %}
-{% set nginx_id = (szi_instances | dict2items | selectattr('value.applicationName', 'equalto', 'nginx') | map(attribute='key') | first) %}
-{% set keycloak_id = (szi_instances | dict2items | selectattr('value.applicationName', 'equalto', 'keycloak') | map(attribute='key') | first) %}
-{% set audit_id = (szi_instances | dict2items | selectattr('value.applicationName', 'equalto', 'grant-access-audit') | map(attribute='key') | first) %}
-{% set grant_access_id = (szi_instances | dict2items | selectattr('value.applicationName', 'equalto', 'grant-access') | map(attribute='key') | first) %}
+{% set szi = hostvars['localhost'].application_snapshot.snapshot.applicationLibraries.libraries[application_runtime_job.libraryId] %}
+{% set connection = szi.instances[application_instance_id].connections.sso %}
+{% set audit_id = szi.instances | dict2items | selectattr('value.applicationName', 'equalto', 'grant-access-audit') | map(attribute='key') | first %}
+{% set grant_id = szi.instances | dict2items | selectattr('value.applicationName', 'equalto', 'grant-access') | map(attribute='key') | first %}
 {
-        "production": true,
-        "apiHost": "https://{{ nginx_id }}.{{ platform_desired_state.endpointGroups[platform_desired_state.applicationLibraryDeployments[application_runtime_job.libraryId].applications['nginx'].overrides.endpoint.endpoint_group].address.domain }}",
-        "keycloakHost": "https://{{ keycloak_id }}.{{ platform_desired_state.endpointGroups[platform_desired_state.applicationLibraryDeployments[application_runtime_job.libraryId].applications['keycloak'].overrides.endpoint.endpoint_group].address.domain }}",
-        "auditHost": "https://{{ nginx_id }}.{{ platform_desired_state.endpointGroups[platform_desired_state.applicationLibraryDeployments[application_runtime_job.libraryId].applications['nginx'].overrides.endpoint.endpoint_group].address.domain }}/{{ audit_id }}",
-        "visibilityZone": "",
-        "nginxLogoutHost": "https://{{ nginx_id }}.{{ platform_desired_state.endpointGroups[platform_desired_state.applicationLibraryDeployments[application_runtime_job.libraryId].applications['nginx'].overrides.endpoint.endpoint_group].address.domain }}/{{ application_instance_id }}/logout",
-        "withoutPasswordEdition": false,
-        "grantAccessNginxPath": "/{{ grant_access_id }}",
-        "canary": false,
-        "enableUserMultiGroup": false,
-        "filterGroups": true,
-        "heartbeatEnabled": false,
-        "heartbeatIntervalSec": 60,
-        "showHeaderButtons": true
+  "production": true,
+  "apiHost": {{ connection.parameters.proxy_url | to_json }},
+  "keycloakHost": {{ connection.url | to_json }},
+  "auditHost": {{ (connection.parameters.proxy_url ~ '/' ~ audit_id) | to_json }},
+  "visibilityZone": "",
+  "nginxLogoutHost": {{ (connection.parameters.proxy_url ~ '/' ~ application_instance_id ~ '/logout') | to_json }},
+  "withoutPasswordEdition": false,
+  "grantAccessNginxPath": {{ ('/' ~ grant_id) | to_json }},
+  "canary": false,
+  "enableUserMultiGroup": false,
+  "filterGroups": true,
+  "heartbeatEnabled": false,
+  "heartbeatIntervalSec": 60,
+  "showHeaderButtons": true
 }

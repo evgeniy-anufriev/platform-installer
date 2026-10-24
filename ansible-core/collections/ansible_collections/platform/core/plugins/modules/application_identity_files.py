@@ -52,7 +52,8 @@ def write(path, content, uid, gid):
 def main():
     module = AnsibleModule(argument_spec=dict(account=dict(required=True), user=dict(default='0:0'),
         instance_path=dict(required=True), role_id=dict(default='', no_log=True), ca=dict(default=''),
-        agent=dict(default=''), pki_plans=dict(type='list', elements='dict', default=[]), preflight=dict(type='bool', default=False)), supports_check_mode=True)
+        agent=dict(default=''), agent_required=dict(type='bool', default=False),
+        pki_plans=dict(type='list', elements='dict', default=[]), preflight=dict(type='bool', default=False)), supports_check_mode=True)
     try:
         args = module.params
         account = pwd.getpwnam(args['account'])
@@ -73,7 +74,9 @@ def main():
             if os.path.lexists(current):
                 custody(current, {account.pw_uid}, directory=True)
             current = os.path.dirname(current)
-        payloads = {'vault': {'role-id': args['role_id'].encode(), 'agent.hcl': args['agent'].encode(), 'ca.pem': args['ca'].encode()}}
+        payloads = {}
+        if args['agent_required'] or args['agent'] or args['role_id'] or args['ca']:
+            payloads['vault'] = {'role-id': args['role_id'].encode(), 'agent.hcl': args['agent'].encode(), 'ca.pem': args['ca'].encode()}
         if args['pki_plans']:
             if len(args['pki_plans']) != 1:
                 raise ValueError()
@@ -82,7 +85,7 @@ def main():
             if not source.startswith('/etc/platform-installer/pki/') or os.path.realpath(source) != source:
                 raise ValueError()
             payloads['pki'] = {}
-            for name in ('keystore.p12', 'truststore.p12', 'ca-chain.pem'):
+            for name in ('keystore.p12', 'truststore.p12', 'ca-chain.pem', 'certificate.pem', 'private-key.pem'):
                 path = source+'/'+name
                 info = custody(path, {0})
                 if not stat.S_ISREG(info.st_mode) or info.st_size > 1048576:

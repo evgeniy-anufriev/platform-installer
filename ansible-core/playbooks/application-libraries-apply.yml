@@ -10,26 +10,39 @@
   become: true
   any_errors_fatal: true
   tasks:
-    - name: Bind the ordered library ids from the immutable plan or manual input
-      ansible.builtin.set_fact:
-        application_library_order: >-
-          {{ platform_application_expected_library_ids | default(platform_application_library_order |
-             default(hostvars['localhost'].application_runtime_inputs.jobs | map(attribute='libraryId') | unique | sort | list)) }}
-      no_log: true
-    - name: Require an explicit order for multiple libraries outside a planned execution
-      ansible.builtin.assert:
-        that:
-          - platform_application_expected_library_ids is defined or platform_application_library_order is defined or
-            (hostvars['localhost'].application_runtime_inputs.jobs | map(attribute='libraryId') | unique | list | length) <= 1
-        fail_msg: APPLICATION_LIBRARY_ORDER_REQUIRED
-    - name: Require the exact selected library set and no duplicate order entries
-      ansible.builtin.assert:
-        that:
-          - application_library_order | length == (application_library_order | unique | length)
-          - application_library_order | sort == (hostvars['localhost'].application_runtime_inputs.jobs | map(attribute='libraryId') | unique | sort | list)
-        fail_msg: APPLICATION_LIBRARY_ORDER_INVALID
-    - name: Complete one library before moving to the next
-      ansible.builtin.include_tasks: application-libraries-ordered-library.yml
-      loop: "{{ application_library_order }}"
-      loop_control:
-        loop_var: application_library_id
+    - name: Apply ordered libraries with bounded private source custody
+      block:
+        - name: Bind the ordered library ids from the immutable plan or manual input
+          ansible.builtin.set_fact:
+            application_library_order: >-
+              {{ platform_application_expected_library_ids | default(platform_application_library_order |
+                 default(hostvars['localhost'].application_runtime_inputs.jobs | map(attribute='libraryId') | unique | sort | list)) }}
+          no_log: true
+        - name: Require an explicit order for multiple libraries outside a planned execution
+          ansible.builtin.assert:
+            that:
+              - platform_application_expected_library_ids is defined or platform_application_library_order is defined or
+                (hostvars['localhost'].application_runtime_inputs.jobs | map(attribute='libraryId') | unique | list | length) <= 1
+            fail_msg: APPLICATION_LIBRARY_ORDER_REQUIRED
+        - name: Require the exact selected library set and no duplicate order entries
+          ansible.builtin.assert:
+            that:
+              - application_library_order | length == (application_library_order | unique | length)
+              - application_library_order | sort == (hostvars['localhost'].application_runtime_inputs.jobs | map(attribute='libraryId') | unique | sort | list)
+            fail_msg: APPLICATION_LIBRARY_ORDER_INVALID
+        - name: Complete one library before moving to the next
+          ansible.builtin.include_tasks: application-libraries-ordered-library.yml
+          loop: "{{ application_library_order }}"
+          loop_control:
+            loop_var: application_library_id
+      always:
+        - name: Remove only invocation-derived account source files after runtime coordination
+          ansible.builtin.file:
+            path: "{{ hostvars['localhost'].platform_application_secret_root }}/{{ item.passwordRef }}"
+            state: absent
+          loop: "{{ hostvars['localhost'].application_vault_inputs.sourceJobs | default([]) | selectattr('passwordRef', 'defined') | list }}"
+          delegate_to: localhost
+          become: false
+          run_once: true
+          changed_when: false
+          no_log: true

@@ -530,7 +530,8 @@ class PKISinglePassResolutionTests(unittest.TestCase):
                     "platform_redis_mode": "sentinel",
                     "redis_member": {"config_directory": str(target.parent), "roles": ["sentinel"]},
                     "_platform_kafka_tls_runtime": {"targetDirectory": str(source),
-                                                    "consumerDirectory": str(target)},
+                                                    "consumerDirectory": str(target),
+                                                    "storeType": "PKCS12"},
                     "_platform_postgresql_tls_directory": str(target),
                     "platform_haproxy_pki_directory": str(source),
                     "_platform_vault_local_instances": [

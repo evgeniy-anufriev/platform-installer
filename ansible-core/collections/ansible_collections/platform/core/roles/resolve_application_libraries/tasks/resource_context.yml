@@ -12,6 +12,6 @@
   when:
     - _application_resources[resource_id].kind in ['kafka.topic', 'postgresql.database', 'clickhouse.database']
     - _application_resources[resource_id].binding in application_job.deployment.bindings
-    - application_job.deployment.bindings[_application_resources[resource_id].binding].deploymentRef == application_job.deployment.bindings[resource_connection.value.library_binding].deploymentRef
+    - application_job.deployment.bindings[_application_resources[resource_id].binding].deploymentRef | default('') == application_job.deployment.bindings.get(resource_connection.value.library_binding, {}).deploymentRef | default('')
   no_log: true
   become: false

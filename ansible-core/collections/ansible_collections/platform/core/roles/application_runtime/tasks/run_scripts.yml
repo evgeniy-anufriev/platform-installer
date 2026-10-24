@@ -10,7 +10,9 @@
       secretInputs: "{{ application_script.secretInputs }}"
       workingDirectory: "{{ application_runtime_job.instancePath }}"
       account: "{{ application_runtime_job.account }}"
-    platform_script_secret_files: "{{ platform_application_secret_files }}"
+    platform_script_secret_files: >-
+      {{ platform_application_secret_files |
+         combine(hostvars['localhost'].platform_application_credential_files | default({})) }}
     platform_script_secret_root: "{{ platform_application_secret_root }}"
   loop: "{{ application_runtime_job.scripts | default([]) | selectattr('phase', 'equalto', application_script_phase) | selectattr('scope', 'equalto', application_script_scope) | list }}"
   loop_control:

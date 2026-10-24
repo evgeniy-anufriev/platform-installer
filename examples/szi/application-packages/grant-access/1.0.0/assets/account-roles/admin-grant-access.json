@@ -1,0 +1,47 @@
+{
+  "realm_roles": [
+    "admin",
+    "default-roles-master"
+  ],
+  "client_roles": {
+    "grant-access": [
+      "uma_protection"
+    ],
+    "master-realm": [
+      "view-events",
+      "manage-authorization",
+      "manage-events",
+      "manage-realm",
+      "manage-identity-providers",
+      "create-client",
+      "impersonation",
+      "view-users",
+      "view-identity-providers",
+      "view-realm",
+      "view-authorization",
+      "query-clients",
+      "view-clients",
+      "manage-clients",
+      "manage-users",
+      "query-realms",
+      "query-users",
+      "query-groups"
+    ],
+    "account": [
+      "view-groups",
+      "view-profile",
+      "view-consent",
+      "view-applications",
+      "manage-account-links",
+      "manage-account",
+      "manage-consent",
+      "delete-account"
+    ],
+    "grant-access-audit": [
+      "uma_protection"
+    ],
+    "broker": [
+      "read-token"
+    ]
+  }
+}

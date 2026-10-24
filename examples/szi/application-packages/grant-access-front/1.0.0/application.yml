@@ -6,7 +6,8 @@
   "files": [
     "assets/config.json",
     "roles/application_grant-access-front/defaults/main.yml",
-    "roles/application_grant-access-front/templates/compose.yml.j2"
+    "roles/application_grant-access-front/templates/compose.yml.j2",
+    "assets/keycloak-client.json.j2"
   ],
   "render": {
     "compose_template": "roles/application_grant-access-front/templates/compose.yml.j2"

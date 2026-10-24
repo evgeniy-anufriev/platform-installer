@@ -40,9 +40,10 @@
     account: "{{ application_runtime_job.account }}"
     user: "{{ application_runtime_job.settings.user | default('0:0') }}"
     instance_path: "{{ application_instance_path }}"
-    pki_plans: "{{ application_runtime_job.vault.pkiPlans | default([]) }}"
+    agent_required: "{{ true if application_runtime_job.agentTemplate else false }}"
+    pki_plans: "{{ application_runtime_job.pkiPlans | default([]) }}"
     preflight: true
-  when: application_runtime_job.agentTemplate
+  when: application_runtime_job.agentTemplate or (application_runtime_job.pkiPlans | default([]) | length > 0)
   no_log: true
 
 - name: Require rootless runtime and the locked target platform
@@ -140,7 +141,7 @@
   ansible.builtin.set_fact:
     application_config_contents: "{{ application_config_contents + [{'destination': application_config.destination, 'content': _application_config_content, 'sha256': (_application_config_content | hash('sha256')), 'mode': application_config.mode | default('0644')}] }}"
   vars:
-    _application_config_content: "{{ lookup('ansible.builtin.template', application_config.path) }}"
+    _application_config_content: "{{ lookup('ansible.builtin.template', application_config.path, convert_data=False) }}"
   loop: "{{ application_runtime_job.configs }}"
   loop_control:
     loop_var: application_config

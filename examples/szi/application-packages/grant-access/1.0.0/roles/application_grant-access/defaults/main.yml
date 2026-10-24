@@ -2,11 +2,25 @@ platform_application_definition:
   name: grant-access
   version: 1.0.0
   defaults:
+    connections:
+      sso: {enabled: true}
     image: evoscada-docker.artifacts.tn.tngrp.ru/grant-access:2.0.5-22-20261008-1710-3575288d-redos
     user: "1000:1000"
     restart: always
+    accounts:
+      sso:
+        mode: managed
+        parameters:
+          groups: [ТУЗ]
+          roles_file: "{{ lookup('ansible.builtin.file', (application_job.application.defaultsPath | dirname) ~ '/../../../assets/account-roles/admin-grant-access.json') | from_json }}"
+        credentials:
+          username:
+            source: {kind: literal, value: admin-grant-access}
+          password:
+            source: {kind: runtime_secret_ref, ref: grant-access-user-password}
     command:
-      - java
+      - /bin/sh
+      - /opt/application/config/start-java.sh
       - -XX:+ExitOnOutOfMemoryError
       - -Dhazelcast.rest.enabled=true
       - -Duser.timezone=Europe/Moscow
@@ -14,6 +28,9 @@ platform_application_definition:
       - -jar
       - grant-access.jar
     config_files:
+      - source: assets/start-java.sh
+        destination: start-java.sh
+        mode: "0644"
       - source: assets/roles-of-realm.json
         destination: roles-of-realm.json
         mode: "0644"
@@ -28,11 +45,9 @@ platform_application_definition:
             combine(application_job.hostOverride.ports | default({}), recursive=true))['port-1'].container }}
       USE_GROUP_PATTERS: "true"
       APIPROVIDER_CLIENT_ID: '{{ application_job.application.name }}'
-      KEYCLOAK_CLIENT_HOST: >-
-        https://keycloak.{{ platform_desired_state.endpointGroups[platform_desired_state.applicationLibraryDeployments[library_instance_id].applications['keycloak'].overrides.endpoint.endpoint_group].address.domain }}
-      KEYCLOAK_CLIENT_REALM: '{{ application_parameters.SZI_REALM }}'
-      NGINX_URL: >-
-        https://nginx.{{ platform_desired_state.endpointGroups[platform_desired_state.applicationLibraryDeployments[library_instance_id].applications['nginx'].overrides.endpoint.endpoint_group].address.domain }}
+      KEYCLOAK_CLIENT_HOST: '{{ application_connections.sso.url }}'
+      KEYCLOAK_CLIENT_REALM: '{{ application_connections.sso.parameters.realm }}'
+      NGINX_URL: '{{ application_connections.sso.parameters.proxy_url }}'
       CUSTOM_PASSWORD_POLICY_ENABLED: "true"
       PASSWORD_POLICY_ALLOWED: "true"
       CREATE_UPDATE_DELETE_ACCOUNT_ENABLED: "true"
@@ -52,17 +67,16 @@ platform_application_definition:
       ROOT_GROUP_LEVEL_1_ROLE: Администратор системы
       ROOT_GROUP_LEVEL_2: Администратор подключаемого сервиса
       ROOT_GROUP_LEVEL_2_ROLE: Администратор подключаемого сервиса
-      ACCESS_LIST_OF_USERS_BY_GROUP: Администратор СДКУ,Администратор ЭВО СЗИ,Администратор системы,Администратор_ЦСПА,Куратор ИБ,Администратор подключаемого сервиса
+      ACCESS_LIST_OF_USERS_BY_GROUP: Администратор ЭВО СЗИ,Администратор системы,Администратор подключаемого сервиса
       ACCOUNT_EXCLUDE_GROUP_LIST: ТУЗ
       ALLOW_CLIENT_CACHE_CLEARING: "false"
       HZ_CLUSTERNAME: '{{ application_parameters.HZ_CLUSTERNAME }}'
       HZ_NETWORK_PUBLICADDRESS: >-
-        {%- set server_ids = groups['all'] | reject('equalto', 'localhost') | sort | list -%}
         {%- set ports = (application_job.application.definition.defaults.ports | default({})) |
             combine(application_job.slot.overrides.ports | default({}), recursive=true) |
             combine(application_job.instance.overrides.ports | default({}), recursive=true) |
             combine(application_job.hostOverride.ports | default({}), recursive=true) -%}
-        $${SERVER_{{ server_ids.index(application_job.hostId) + 1 }}_IP}:{{ ports['port-2'].published }}
+        {{ hostvars[application_job.hostId].ansible_host | default(application_job.hostId) }}:{{ ports['port-2'].published }}
       HZ_NETWORK_PORT: >-
         {{ ((application_job.application.definition.defaults.ports | default({})) |
             combine(application_job.slot.overrides.ports | default({}), recursive=true) |
@@ -70,7 +84,6 @@ platform_application_definition:
             combine(application_job.hostOverride.ports | default({}), recursive=true))['port-2'].container }}
       HZ_NETWORK_JOIN_TCPIP_MEMBERS: >-
         {%- set members = [] -%}
-        {%- set server_ids = groups['all'] | reject('equalto', 'localhost') | sort | list -%}
         {%- for placement in _application_inputs.jobs |
             selectattr('libraryId', 'equalto', library_instance_id) |
             selectattr('slotId', 'equalto', application_job.slotId) | sort(attribute='hostId') -%}
@@ -78,12 +91,14 @@ platform_application_definition:
             combine(placement.slot.overrides.ports | default({}), recursive=true) |
             combine(placement.instance.overrides.ports | default({}), recursive=true) |
             combine(placement.hostOverride.ports | default({}), recursive=true) -%}
-        {%- set _ = members.append('$${SERVER_' ~ (server_ids.index(placement.hostId) + 1) ~ '_IP}:' ~ (ports['port-2'].published | string)) -%}
+        {%- set _ = members.append((hostvars[placement.hostId].ansible_host | default(placement.hostId)) ~ ':' ~ (ports['port-2'].published | string)) -%}
         {%- endfor -%}
         {{- members | join(',') -}}
       KILL_EXPIRED_USER_SESSIONS_JOB_RATE: "60000"
       KILL_EXPIRED_USER_SESSIONS_LIVE_TIME: "120000"
-      SPRING_PROFILES_ACTIVE: swagger,dev,redis-sentinel
+      SPRING_PROFILES_ACTIVE: swagger,dev
+    parameters:
+      IDENTITY_CLIENT: "{{ lookup('ansible.builtin.template', (application_job.application.defaultsPath | dirname) ~ '/../../../assets/keycloak-client.json.j2', convert_data=false) | from_json }}"
     ports:
       port-1:
         container: 8011
@@ -94,6 +109,14 @@ platform_application_definition:
       port-3:
         container: 5702
         published: 5702
+    endpoint:
+      enabled: false
+      listener: port-1
+      protocol: http
+      probe:
+        path: /actuator/health
+        expected_status: 200
+        timeout: 10
     readiness:
       mode: healthcheck
       delay: 2
@@ -105,4 +128,18 @@ platform_application_definition:
         method: approle
       approle:
         bind_secret_id: false
-  connections: [redis, sentinel, vault]
+      secrets: {mount: secret}
+      secret_bindings:
+        JAVA_KEYSTORE_PASSWORD:
+          source: {library_secret: java_keystore_password}
+        APIPROVIDER_CLIENT_SECRET:
+          requires_connections: [sso]
+          source: {library_secret: grant_access_client_secret}
+        KEYCLOAK_CLIENT_SECRET:
+          requires_connections: [sso]
+          source: {library_secret: grant_access_client_secret}
+        KEYCLOAK_CLIENT_USER_NAME:
+          source: {account: sso, field: username}
+        KEYCLOAK_CLIENT_USER_PASSWORD:
+          source: {account: sso, field: password}
+  connections: [vault, sso]

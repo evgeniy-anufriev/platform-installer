@@ -6,12 +6,14 @@ try:
     from .application_runtime import image_requirement
     from .application_images import selected_image, registry_request
     from .schema_validation import SchemaValidator
+    from .application_connections import active_script, script_secret_source, connection_order_findings, connection_callback
 except ImportError:
     from project_validation import canonical_digest
     from application_libraries import finding, ID
     from application_runtime import image_requirement
     from application_images import selected_image, registry_request
     from schema_validation import SchemaValidator
+    from application_connections import active_script, script_secret_source, connection_order_findings, connection_callback
 
 OPERATIONS = ['APPLICATION_LIBRARIES_APPLY', 'APPLICATION_LIBRARIES_VERIFY']
 PLAN_VERSION = 'platform.installer/plan/v1alpha4'
@@ -34,6 +36,10 @@ def application_execution_model(snapshot, image_lock=None, library_order=None):
         findings.append(finding('APPLICATION_LIBRARY_ORDER_INVALID', 'applicationLibraryOrder'))
         library_order = selected
     images = image_lock.get('images', {}) if isinstance(image_lock, dict) else {}
+    for field, provider in connection_order_findings(libraries, library_order):
+        item = finding('APPLICATION_PROVIDED_CONNECTION_ORDER_REQUIRED', field)
+        item['safeDetails'] = {'providerLibraryId': provider}
+        findings.append(item)
     contracts = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../../../../../contracts'))
     invalid_lock = bool(libraries) and bool(SchemaValidator(contracts).validate(
         image_lock or {}, os.path.join(contracts, 'artifact-source/v1alpha2/' +
@@ -58,9 +64,13 @@ def application_execution_model(snapshot, image_lock=None, library_order=None):
                         runtimeReference=ref, applicationLibraries=[], hosts=[],
                         operations=requested_operations)
             secrets[key] = item
-        elif item['purpose'] != purpose or item['providerDeployment'] != provider or item['operations'] != requested_operations:
+        elif item['purpose'] != purpose or item['providerDeployment'] != provider:
             findings.append(finding('APPLICATION_SECRET_REF_CONFLICT', field))
             return
+        # One value can be consumed by both lifecycle and Apply-only callbacks.
+        # Accumulate their declared uses, preserving the canonical operation order.
+        item['operations'] = [operation for operation in OPERATIONS
+                              if operation in item['operations'] or operation in requested_operations]
         identity = [item['purpose'], ref] if scope is None else [item['purpose'], ref, scope]
         item['requirementRef'] = 'application-secret-' + canonical_digest(identity).split(':')[1][:32]
         item['applicationLibraries'] = sorted(set(item['applicationLibraries']) | {library_id})
@@ -82,9 +92,26 @@ def application_execution_model(snapshot, image_lock=None, library_order=None):
             library_hosts.update(placements)
             field = 'applicationLibraryDeployments.%s.applications.%s' % (library_id, instance.get('slotId', instance_id))
             for script in instance.get('scripts', []):
+                if not active_script(script, instance):
+                    continue
                 for name, source in script.get('secretInputs', {}).items():
-                    secret(dict(kind='runtime_secret_ref', ref=source['ref']), library_id, placements,
-                           field + '.scripts.' + script['id'] + '.secretInputs.' + name)
+                    value = script_secret_source(source, library, instance)
+                    if value:
+                        secret(value, library_id, placements,
+                               field + '.scripts.' + script['id'] + '.secretInputs.' + name,
+                               operations=['APPLICATION_LIBRARIES_APPLY'] if script.get('phase') == 'provider_prepare' else OPERATIONS)
+            for alias, connection in instance.get('connections', {}).items():
+                if connection.get('serviceType') != 'application' or not connection.get('connectionProvisioner'):
+                    continue
+                owner, _, callback = connection_callback(libraries, connection)
+                for name, source in callback.get('secretInputs', {}).items():
+                    value = script_secret_source(source, library, instance, owner)
+                    if value:
+                        provider_source = source.get('valueFrom') == 'provided_connection'
+                        secret(value, connection['libraryId'] if provider_source else library_id,
+                               sorted(target['hostId'] for target in connection['targets']) if provider_source else placements,
+                               field + '.connections.' + alias + '.secretInputs.' + name,
+                               operations=['APPLICATION_LIBRARIES_APPLY'])
             for host in placements:
                 image_name = instance['placements'][host].get('imageRequirement', instance.get('imageRequirement', {})).get('image')
                 try:
@@ -105,6 +132,21 @@ def application_execution_model(snapshot, image_lock=None, library_order=None):
             for name, account in sorted(instance.get('credentialRequirements', {}).items()):
                 for credential, value in sorted(account.get('credentials', {}).items()):
                     secret(value['source'], library_id, placements, field + '.accounts.' + name + '.' + credential)
+                connection = instance.get('connections', {}).get(name, {})
+                if connection.get('serviceType') == 'application':
+                    owner_library = libraries[connection['libraryId']]
+                    owner_instance = owner_library['instances'][connection['applicationId']]
+                    callback_id = connection['accountProvisioner']['apply_script']
+                    callbacks = [item for item in owner_instance.get('scripts', [])
+                                 if item['id'] == callback_id and item['phase'] == 'account_apply']
+                    if len(callbacks) != 1:
+                        findings.append(finding('APPLICATION_ACCOUNT_CALLBACK_INVALID', field + '.accounts.' + name))
+                    else:
+                        for key, source in callbacks[0].get('secretInputs', {}).items():
+                            value = script_secret_source(source, owner_library, owner_instance)
+                            if value:
+                                secret(value, library_id, placements, field + '.accounts.' + name + '.' + key,
+                                       operations=['APPLICATION_LIBRARIES_APPLY'])
             if instance.get('agentRequired') or any(c.get('source', {}).get('kind') == 'vault_ref'
                                                    for a in instance.get('credentialRequirements', {}).values()
                                                    for c in a.get('credentials', {}).values()):
@@ -118,9 +160,15 @@ def application_execution_model(snapshot, image_lock=None, library_order=None):
             secret(value['source'], library_id, library_hosts,
                    'applicationLibraryDeployments.' + library_id + '.sharedSecrets.' + name)
         for script in library.get('scripts', []):
+            selected = [instance for instance in library.get('instances', {}).values() if active_script(script, instance)]
+            if not selected:
+                continue
             for name, source in script.get('secretInputs', {}).items():
-                secret(dict(kind='runtime_secret_ref', ref=source['ref']), library_id, library_hosts,
-                       'applicationLibraryDeployments.' + library_id + '.scripts.' + script['id'] + '.secretInputs.' + name)
+                value = script_secret_source(source, library, selected[0])
+                if value:
+                    secret(value, library_id, library_hosts,
+                           'applicationLibraryDeployments.' + library_id + '.scripts.' + script['id'] + '.secretInputs.' + name,
+                           operations=['APPLICATION_LIBRARIES_APPLY'] if script.get('phase') == 'provider_prepare' else OPERATIONS)
     actions = []
     targets = set()
     # Reuse resolved deployment hosts: provider hooks can discover any member.

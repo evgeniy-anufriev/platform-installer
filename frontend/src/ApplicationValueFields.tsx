@@ -12,6 +12,7 @@ export function ApplicationValueFields({
   onSave,
   onDirtyChange,
   excludeKeys = [],
+  hiddenKeys = [],
   defaultLabel = "Из пакета · без вычисления Ansible",
   compact = false,
   addControl,
@@ -24,6 +25,7 @@ export function ApplicationValueFields({
   onSave: (value: Obj) => Promise<boolean>;
   onDirtyChange: (dirty: boolean) => void;
   excludeKeys?: string[];
+  hiddenKeys?: string[];
   defaultLabel?: string;
   compact?: boolean;
   addControl?: { adding: boolean; setAdding: (adding: boolean) => void };
@@ -39,10 +41,21 @@ export function ApplicationValueFields({
   const [localAdding, setLocalAdding] = useState(false);
   const adding = addControl?.adding ?? localAdding;
   const setAdding = addControl?.setAdding ?? setLocalAdding;
-  const keys = Object.keys({ ...defaults, ...value, ...resolvedValues });
+  const keys = Object.keys({ ...defaults, ...value, ...resolvedValues }).filter(
+    (key) => !hiddenKeys.includes(key),
+  );
   return (
     <section className={compact ? "application-compact-values" : undefined}>
       <h3>{label}</h3>
+      {compact && keys.length > 0 && (
+        <div className="application-value-heading" aria-hidden="true">
+          <div>
+            <span>Имя</span>
+            <span>Значение</span>
+          </div>
+          <span>Действия</span>
+        </div>
+      )}
       {keys.map((key) => {
         const inherited = defaults[key],
           authored = value[key];
@@ -129,7 +142,12 @@ export function ApplicationValueFields({
           className="application-add-parameter"
           onSubmit={(e) => {
             e.preventDefault();
-            if (!name || keys.includes(name) || excludeKeys.includes(name))
+            if (
+              !name ||
+              keys.includes(name) ||
+              excludeKeys.includes(name) ||
+              hiddenKeys.includes(name)
+            )
               return;
             void onSave({ ...value, [name]: "" }).then((ok) => {
               if (ok) {
@@ -157,7 +175,8 @@ export function ApplicationValueFields({
               disabled ||
               !name ||
               keys.includes(name) ||
-              excludeKeys.includes(name)
+              excludeKeys.includes(name) ||
+              hiddenKeys.includes(name)
             }
           >
             Добавить

@@ -69,11 +69,12 @@
     account: "{{ application_runtime_job.account }}"
     user: "{{ application_runtime_job.settings.user | default('0:0') }}"
     instance_path: "{{ application_runtime_job.instancePath }}"
-    role_id: "{{ hostvars['localhost'].platform_application_vault_identities[application_runtime_job.libraryId ~ '/' ~ application_runtime_job.instanceId].roleId }}"
-    ca: "{{ hostvars['localhost'].platform_application_vault_runtime[application_runtime_job.vault.providerId].ca }}"
-    agent: "{{ application_runtime_job.agentContent }}"
-    pki_plans: "{{ application_runtime_job.vault.pkiPlans | default([]) }}"
-  when: application_runtime_job.agentTemplate
+    agent_required: "{{ true if application_runtime_job.agentTemplate else false }}"
+    role_id: "{{ hostvars['localhost'].platform_application_vault_identities[application_runtime_job.libraryId ~ '/' ~ application_runtime_job.instanceId].roleId if application_runtime_job.agentTemplate else omit }}"
+    ca: "{{ hostvars['localhost'].platform_application_vault_runtime[application_runtime_job.vault.providerId].ca if application_runtime_job.agentTemplate else omit }}"
+    agent: "{{ application_runtime_job.agentContent if application_runtime_job.agentTemplate else omit }}"
+    pki_plans: "{{ application_runtime_job.pkiPlans | default([]) }}"
+  when: application_runtime_job.agentTemplate or (application_runtime_job.pkiPlans | default([]) | length > 0)
   no_log: true
 
 - name: Parse effective Compose without startup or image mutation

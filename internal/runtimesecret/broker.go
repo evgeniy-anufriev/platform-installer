@@ -191,7 +191,7 @@ func (b *Broker) SetPendingServiceSecretInput(binding Binding, deployment, purpo
 
 // BindPendingServiceSecretInputs maps local deployment/purpose values onto
 // the exact current Core descriptors before target credential serialization.
-func (b *Broker) BindPendingServiceSecretInputs(binding Binding, descriptors []RuntimeSecretInput) error {
+func (b *Broker) BindPendingServiceSecretInputs(binding Binding, descriptors []RuntimeSecretInput, applicationTokens ...RuntimeSecretInput) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.pending == nil || b.pending.binding != binding || !b.now().Before(b.pending.expiresAt) || b.lease == nil || b.lease.binding != binding || !b.now().Before(b.lease.expiresAt) {
@@ -207,6 +207,13 @@ func (b *Broker) BindPendingServiceSecretInputs(binding Binding, descriptors []R
 			return errors.New("RUNTIME_SECRET_DESCRIPTORS_STALE")
 		}
 		allowed[key] = descriptor
+	}
+	seen := map[string]bool{}
+	for _, token := range applicationTokens {
+		if token.Purpose != "APPLICATION_VAULT_ADMIN_TOKEN" || !runtimeSecretID(token.RequirementRef) || token.ServiceDeployment == "" || len(token.ServiceDeployment) > 128 || seen[token.RequirementRef] {
+			return errors.New("RUNTIME_SECRET_DESCRIPTORS_STALE")
+		}
+		seen[token.RequirementRef] = true
 	}
 	attached := make([]RuntimeSecretInput, 0, len(b.pending.typed))
 	passwords := cloneSecretMap(b.lease.runtimeSecretValues)
@@ -224,6 +231,14 @@ func (b *Broker) BindPendingServiceSecretInputs(binding Binding, descriptors []R
 		descriptor.Value = append([]byte(nil), pending.Value...)
 		descriptor.Shares = cloneSecretSlices(pending.Shares)
 		attached = append(attached, descriptor)
+	}
+	// Core binds each application requirement to the infrastructure deployment.
+	// Reuse its existing typed admin input without returning a token to callers.
+	for _, token := range applicationTokens {
+		if pending, ok := b.pending.typed[typedSecretKey(token.ServiceDeployment, "SERVICE_ADMIN_TOKEN")]; ok {
+			zero(passwords[token.RequirementRef])
+			passwords[token.RequirementRef] = append([]byte(nil), pending.Value...)
+		}
 	}
 	sort.Slice(attached, func(i, j int) bool { return attached[i].RequirementRef < attached[j].RequirementRef })
 	for _, old := range b.lease.runtimeSecretInputs {

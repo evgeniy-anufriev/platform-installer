@@ -107,6 +107,7 @@ export namespace coreadapter {
     }
   }
   export class ApplicationPlacement {
+    connectionSettings?: Record<string, Array<number>>;
     topicBindings: Record<string, any>;
     runtimeDirectory: string;
     commonDefaults?: Record<string, Array<number>>;
@@ -131,6 +132,7 @@ export namespace coreadapter {
 
     constructor(source: any = {}) {
       if ("string" === typeof source) source = JSON.parse(source);
+      this.connectionSettings = source["connectionSettings"];
       this.topicBindings = source["topicBindings"];
       this.runtimeDirectory = source["runtimeDirectory"];
       this.commonDefaults = source["commonDefaults"];
@@ -227,6 +229,7 @@ export namespace coreadapter {
     }
   }
   export class ApplicationLibrary {
+    providedConnections?: Record<string, Array<number>>;
     registryCredentials?: Record<string, Array<number>>;
     registries?: string[];
     tables?: Record<string, Array<number>>;
@@ -246,6 +249,7 @@ export namespace coreadapter {
 
     constructor(source: any = {}) {
       if ("string" === typeof source) source = JSON.parse(source);
+      this.providedConnections = source["providedConnections"];
       this.registryCredentials = source["registryCredentials"];
       this.registries = source["registries"];
       this.tables = source["tables"];

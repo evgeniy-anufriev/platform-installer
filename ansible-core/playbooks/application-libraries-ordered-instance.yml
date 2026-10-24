@@ -1,4 +1,21 @@
 ---
+- name: Require complete provider batches before starting this consumer
+  ansible.builtin.assert:
+    that: >-
+      (application_library_id ~ '/' ~ application_instance_id) not in
+      (hostvars['localhost'].application_runtime_inputs.integrations |
+       platform.core.application_pending_instances(hostvars['localhost'].platform_application_completed_batches))
+    fail_msg: APPLICATION_PROVIDER_PREPARATION_INCOMPLETE
+
+- name: Materialize deferred consumer Agent inputs only after full Vault delivery
+  ansible.builtin.include_role:
+    name: platform.core.application_runtime
+    tasks_from: apply_instance
+  loop: "{{ platform_application_preflight_jobs | selectattr('libraryId', 'equalto', application_library_id) | selectattr('instanceId', 'equalto', application_instance_id) | list }}"
+  loop_control:
+    loop_var: application_runtime_job
+  when: (application_library_id ~ '/' ~ application_instance_id) in hostvars['localhost'].application_runtime_inputs.integrations.dependencies
+
 - name: Run instance before-start scripts after all image deliveries
   ansible.builtin.include_role:
     name: platform.core.application_runtime
@@ -28,3 +45,29 @@
   loop: "{{ platform_application_preflight_jobs | selectattr('libraryId', 'equalto', application_library_id) | selectattr('instanceId', 'equalto', application_instance_id) | list }}"
   loop_control:
     loop_var: application_runtime_job
+
+- name: Bind all selected consumer batches supplied by this ready instance
+  ansible.builtin.set_fact:
+    application_ready_provider_batches: >-
+      {{ hostvars['localhost'].application_runtime_inputs.integrations.batches |
+         selectattr('providerLibraryId', 'equalto', application_library_id) |
+         selectattr('providerInstanceId', 'equalto', application_instance_id) | list }}
+  no_log: true
+
+- name: Publish and check this used provider endpoint before its consumers
+  ansible.builtin.include_tasks: ../../services/integrations/tasks/apply-source.yml
+  vars:
+    platform_endpoint_source_ids: "{{ [application_instance_id] }}"
+  when: application_ready_provider_batches | length > 0
+
+- name: Prepare all selected consumers in batches of this ready provider
+  ansible.builtin.include_tasks: tasks/application-provider-batch.yml
+  loop: "{{ application_ready_provider_batches }}"
+  loop_control:
+    loop_var: application_provider_batch
+  run_once: true
+
+- name: Complete standard Vault delivery for all consumers whose providers are ready
+  ansible.builtin.include_tasks: tasks/application-deliver-ready.yml
+  when: application_ready_provider_batches | length > 0
+  run_once: true

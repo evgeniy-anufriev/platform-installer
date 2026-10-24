@@ -10,8 +10,6 @@ import type {
   SessionCredentialStatus,
   SecretOutputPackagesOperation,
   SecretOutputDeliveryOperation,
-  RuntimeSecretDescriptorOperation,
-  RuntimeSecretValuesInput,
 } from "./backend";
 import {
   actionResultLabel,
@@ -20,7 +18,6 @@ import {
 } from "./installationPresentation";
 import { executionNodeStatusLabel } from "./executionNodeLabels";
 import { eventTimestampLabel, taskNameWithoutRole } from "./event-format";
-import { ApplicationSecretInputs } from "./ApplicationSecretInputs";
 
 type InstallationTab = "summary" | "plan" | "execution" | "result";
 
@@ -64,25 +61,48 @@ export type ServiceDeploymentInput = {
   serviceType: string;
 };
 
-export type LibraryPriorityInput = { libraryName: string; priority: number | null };
-export type LibraryDeploymentInput = { deploymentId: string; libraryRef: string };
+export type LibraryPriorityInput = {
+  libraryName: string;
+  priority: number | null;
+};
+export type LibraryDeploymentInput = {
+  deploymentId: string;
+  libraryRef: string;
+};
 
 export function libraryOrderFromPriorities(
   deployments: LibraryDeploymentInput[],
   priorities: LibraryPriorityInput[],
 ): { order: string[]; missingNames: string[] } {
-  const byName = new Map(priorities.map((item, index) => [item.libraryName, { ...item, index }]));
-  const nameOf = (item: LibraryDeploymentInput) => item.libraryRef.split("@", 1)[0];
-  const missingNames = [...new Set(deployments.filter((item) =>
-    byName.get(nameOf(item))?.priority == null).map(nameOf))].sort();
+  const byName = new Map(
+    priorities.map((item, index) => [item.libraryName, { ...item, index }]),
+  );
+  const nameOf = (item: LibraryDeploymentInput) =>
+    item.libraryRef.split("@", 1)[0];
+  const missingNames = [
+    ...new Set(
+      deployments
+        .filter((item) => byName.get(nameOf(item))?.priority == null)
+        .map(nameOf),
+    ),
+  ].sort();
   if (missingNames.length) return { order: [], missingNames };
   return {
-    order: [...deployments].sort((left, right) => {
-      const a = byName.get(nameOf(left))!;
-      const b = byName.get(nameOf(right))!;
-      return a.priority! - b.priority! || a.index - b.index ||
-        (left.deploymentId < right.deploymentId ? -1 : left.deploymentId > right.deploymentId ? 1 : 0);
-    }).map((item) => item.deploymentId),
+    order: [...deployments]
+      .sort((left, right) => {
+        const a = byName.get(nameOf(left))!;
+        const b = byName.get(nameOf(right))!;
+        return (
+          a.priority! - b.priority! ||
+          a.index - b.index ||
+          (left.deploymentId < right.deploymentId
+            ? -1
+            : left.deploymentId > right.deploymentId
+              ? 1
+              : 0)
+        );
+      })
+      .map((item) => item.deploymentId),
     missingNames: [],
   };
 }
@@ -262,8 +282,6 @@ export function InstallationPage({
   outputDelivery,
   onRefreshSecretOutputs = () => {},
   onCollectSecretOutputs = async () => {},
-  onGetRuntimeSecretDescriptors,
-  onSetRuntimeSecretValues,
 }: {
   state?: InstallationState;
   draftActive?: boolean;
@@ -302,8 +320,6 @@ export function InstallationPage({
   outputDelivery?: SecretOutputDeliveryOperation;
   onRefreshSecretOutputs?: () => void;
   onCollectSecretOutputs?: () => Promise<void>;
-  onGetRuntimeSecretDescriptors?: () => Promise<RuntimeSecretDescriptorOperation>;
-  onSetRuntimeSecretValues?: (input: RuntimeSecretValuesInput) => Promise<void>;
 }) {
   const [orderError, setOrderError] = useState("");
   const [skipInfrastructureVerify, setSkipInfrastructureVerify] =
@@ -340,9 +356,14 @@ export function InstallationPage({
       ),
     [serviceDeployments, serviceExecutionPriorities],
   );
-  const libraryOrder = useMemo(() => libraryOrderFromPriorities(
-    libraryDeployments, libraryExecutionPriorities,
-  ), [libraryDeployments, libraryExecutionPriorities]);
+  const libraryOrder = useMemo(
+    () =>
+      libraryOrderFromPriorities(
+        libraryDeployments,
+        libraryExecutionPriorities,
+      ),
+    [libraryDeployments, libraryExecutionPriorities],
+  );
   const createPlan = () => {
     if (deploymentOrder.missingTypes.length) {
       setOrderError(
@@ -353,14 +374,24 @@ export function InstallationPage({
       return;
     }
     if (libraryOrder.missingNames.length) {
-      setOrderError("Для библиотек " + libraryOrder.missingNames.join(", ") +
-        " не задан приоритет в application.yml.");
+      setOrderError(
+        "Для библиотек " +
+          libraryOrder.missingNames.join(", ") +
+          " не задан приоритет в application.yml.",
+      );
       return;
     }
     setOrderError("");
-    const skip = executionMode === "APPLICATION_LIBRARIES_ONLY" && skipInfrastructureVerify;
+    const skip =
+      executionMode === "APPLICATION_LIBRARIES_ONLY" &&
+      skipInfrastructureVerify;
     if (libraryOrder.order.length)
-      onCreatePlan(deploymentOrder.order, executionMode, skip, libraryOrder.order);
+      onCreatePlan(
+        deploymentOrder.order,
+        executionMode,
+        skip,
+        libraryOrder.order,
+      );
     else if (skip) onCreatePlan(deploymentOrder.order, executionMode, true);
     else onCreatePlan(deploymentOrder.order, executionMode);
   };
@@ -652,14 +683,6 @@ export function InstallationPage({
         )}
         {tab === "plan" && (
           <>
-            {onGetRuntimeSecretDescriptors && onSetRuntimeSecretValues && (
-              <ApplicationSecretInputs
-                key={plan?.plan?.projectRevision || "no-revision"}
-                disabled={busy || runActive || !!draftActive}
-                load={onGetRuntimeSecretDescriptors}
-                save={onSetRuntimeSecretValues}
-              />
-            )}
             <PlanStage
               key={plan?.plan?.id || "no-plan"}
               servicesControl={servicesControl}
@@ -1538,6 +1561,12 @@ function ExecutionStage({
                               event.eventType}
                           </span>
                           <small>{eventMessageLabel(event.safeMessage)}</small>
+                          {event.errorCode && (
+                            <small className="field-error">
+                              <code>{event.errorCode}</code>{" "}
+                              {event.errorSummary}
+                            </small>
+                          )}
                         </td>
                         <td>{event.serviceDeployment || "—"}</td>
                         <td>{event.host || "—"}</td>
@@ -1945,6 +1974,11 @@ function EventList({ events }: { events: InstallationEventView[] }) {
                     eventTypeLabel(event.eventType)}
                 </b>
                 <small>{eventMessageLabel(event.safeMessage)}</small>
+                {event.errorCode && (
+                  <small className="field-error">
+                    <code>{event.errorCode}</code> {event.errorSummary}
+                  </small>
+                )}
                 <small>
                   <time
                     className="installation-event-time"

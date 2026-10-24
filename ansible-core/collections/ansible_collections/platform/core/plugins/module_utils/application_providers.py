@@ -262,6 +262,8 @@ def project_providers(rows, snapshot, configuration, desired, catalog):
                 for account_id, account in sorted(instance.get('credentialRequirements', {}).items()):
                     connection = instance['connections'].get(account_id, {})
                     service_type = connection.get('serviceType')
+                    if service_type == 'application':
+                        continue  # Prepared as a batch only after this application provider is ready.
                     if service_type not in {'postgresql', 'redis', 'clickhouse', 'kafka'}:
                         raise ValueError('APPLICATION_PROVIDER_CAPABILITY_UNSUPPORTED')
                     ref = connection['deploymentRef']

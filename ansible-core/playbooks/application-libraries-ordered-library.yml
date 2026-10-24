@@ -53,8 +53,15 @@
   ansible.builtin.include_tasks: ../../services/integrations/tasks/apply-source.yml
   vars:
     platform_endpoint_source_ids: >-
-      {{ application_library_instance_ids | intersect(hostvars['localhost'].platform_endpoint_sources | default({}) | list) | sort }}
-  when: application_library_instance_ids | intersect(hostvars['localhost'].platform_endpoint_sources | default({}) | list) | length > 0
+      {{ application_library_instance_ids |
+         difference(hostvars['localhost'].application_runtime_inputs.integrations.batches |
+           selectattr('providerLibraryId', 'equalto', application_library_id) | map(attribute='providerInstanceId') | list) |
+         intersect(hostvars['localhost'].platform_endpoint_sources | default({}) | list) | sort }}
+  when: >-
+    application_library_instance_ids |
+    difference(hostvars['localhost'].application_runtime_inputs.integrations.batches |
+      selectattr('providerLibraryId', 'equalto', application_library_id) | map(attribute='providerInstanceId') | list) |
+    intersect(hostvars['localhost'].platform_endpoint_sources | default({}) | list) | length > 0
 
 - name: Verify this library's exact placements before the next library
   ansible.builtin.include_role:

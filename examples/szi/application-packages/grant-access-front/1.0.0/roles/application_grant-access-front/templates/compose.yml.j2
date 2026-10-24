@@ -24,9 +24,10 @@ services:
       - "{{ port.published }}:{{ port.container }}"
 {% endfor %}
     volumes:
+      - {{ (application_runtime.pki_path ~ ":/opt/application/pki:ro") | to_json }}
       - {{ (application_runtime.config_path ~ "/config.json:/grant-access-front/config.json:ro") | to_json }}
-      - {{ (application_runtime.pki_path ~ "/leaf.crt:/etc/nginx/host.crt:ro") | to_json }}
-      - {{ (application_runtime.pki_path ~ "/leaf.key:/etc/nginx/host.key:ro") | to_json }}
+      - {{ (application_runtime.pki_path ~ "/certificate.pem:/etc/nginx/host.crt:ro") | to_json }}
+      - {{ (application_runtime.pki_path ~ "/private-key.pem:/etc/nginx/host.key:ro") | to_json }}
     deploy:
       resources:
         limits:

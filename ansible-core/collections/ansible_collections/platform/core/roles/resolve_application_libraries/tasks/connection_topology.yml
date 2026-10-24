@@ -1,0 +1,62 @@
+---
+- name: Bind the library template identity before resolving its exports
+  ansible.builtin.set_fact:
+    library_instance_id: "{{ application_job.libraryId }}"
+  no_log: true
+  become: false
+
+- name: Expand only declared exports in the isolated native library context
+  platform.core.prepare_application_libraries:
+    provided_connections: true
+    library_id: "{{ application_job.libraryId }}"
+    host_id: "{{ application_job.hostId }}"
+    defaults_path: "{{ application_job.library.defaultsPath }}"
+  register: _application_export_inputs
+  no_log: true
+  become: false
+
+- name: Require complete native export expansion before resolving topology
+  ansible.builtin.assert:
+    that: _application_export_inputs.findings | default([]) | length == 0
+    fail_msg: APPLICATION_INPUT_INVALID
+  no_log: true
+  become: false
+
+- name: Merge provided parameters with native precedence
+  ansible.builtin.set_fact:
+    application_provided_connection_definitions: >-
+      {{ _application_export_inputs.defaults |
+         combine(_application_export_inputs.overrides, recursive=true, list_merge='replace') }}
+  no_log: true
+  become: false
+
+- name: Replace credential source descriptors as complete typed values
+  ansible.builtin.include_tasks: provided_credential_sources.yml
+  loop: "{{ _application_export_inputs.overrides | dict2items }}"
+  loop_control:
+    loop_var: application_export_override
+  no_log: true
+
+- name: Resolve connection topology with native package and installation precedence
+  ansible.builtin.set_fact:
+    platform_application_connection_rows: >-
+      {{ platform_application_connection_rows + [{
+        'libraryId': application_job.libraryId, 'slotId': application_job.slotId,
+        'instanceId': (application_job.application.name if
+          application_job.library.definition.instance_id_strategy | default('qualified') == 'application-name'
+          else application_job.application.name ~ '-' ~ application_job.libraryId),
+        'hostId': application_job.hostId, 'startupPriority': application_job.slot.start_priority | default(100),
+        'providedConnections': application_provided_connection_definitions,
+        'settings': {
+          'endpoint': application_job.application.definition.defaults.endpoint | default({}) |
+            combine(application_job.slot.overrides.endpoint | default({}), recursive=true) |
+            combine(application_job.instance.overrides.endpoint | default({}), recursive=true) |
+            combine(application_job.hostOverride.endpoint | default({}), recursive=true),
+          'ports': application_job.application.definition.defaults.ports | default({}) |
+            combine(application_job.slot.overrides.ports | default({}), recursive=true) |
+            combine(application_job.instance.overrides.ports | default({}), recursive=true) |
+            combine(application_job.hostOverride.ports | default({}), recursive=true)
+        }
+      }] }}
+  no_log: true
+  become: false

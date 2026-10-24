@@ -1277,15 +1277,19 @@ func (a *App) getRuntimeSecretDescriptorsLocked(clearAttached bool) RuntimeSecre
 			typedRequirements = append(typedRequirements, runtimesecret.RuntimeSecretInput{RequirementRef: descriptor.RequirementRef, Purpose: descriptor.Purpose, ServiceDeployment: descriptor.ServiceDeployment, Operations: append([]string(nil), descriptor.Operations...)})
 		}
 	}
+	applicationTokens := []runtimesecret.RuntimeSecretInput{}
 	for _, item := range view.ApplicationInputs {
 		requirements = append(requirements, item.RequirementRef)
+		if item.Purpose == "APPLICATION_VAULT_ADMIN_TOKEN" && item.ProviderDeployment != nil {
+			applicationTokens = append(applicationTokens, runtimesecret.RuntimeSecretInput{RequirementRef: item.RequirementRef, Purpose: item.Purpose, ServiceDeployment: *item.ProviderDeployment})
+		}
 	}
 	if credentialBinding, bindingErr := a.credentialBindingLocked(); bindingErr == nil {
 		if err := a.secrets.PromotePendingRuntimeSecretValues(credentialBinding, requirements); err != nil {
 			a.runtimeSecretEvidence = nil
 			return RuntimeSecretDescriptorOperation{Status: "UNAVAILABLE", Error: &ProjectOpenError{Code: projectErrorCode(err), Message: projectErrorMessage(projectErrorCode(err))}}
 		}
-		if err := a.secrets.BindPendingServiceSecretInputs(credentialBinding, typedRequirements); err != nil {
+		if err := a.secrets.BindPendingServiceSecretInputs(credentialBinding, typedRequirements, applicationTokens...); err != nil {
 			a.runtimeSecretEvidence = nil
 			return RuntimeSecretDescriptorOperation{Status: "UNAVAILABLE", Error: &ProjectOpenError{Code: projectErrorCode(err), Message: projectErrorMessage(projectErrorCode(err))}}
 		}

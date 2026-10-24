@@ -21,6 +21,15 @@ def placement_target(settings, host, hosts):
     return {'hostId': host, 'address': address, 'port': port, 'serverName': host}
 
 
+def public_endpoint_url(instance_id, settings, desired):
+    """Shared endpoints publish HTTPS/443 independently of backend transport."""
+    endpoint = settings.get('endpoint', {})
+    domain = desired.get('endpointGroups', {}).get(endpoint.get('endpoint_group'), {}).get('address', {}).get('domain')
+    if not endpoint.get('enabled') or not domain:
+        raise ValueError('APPLICATION_ENDPOINT_INVALID')
+    return 'https://' + instance_id + '.' + domain
+
+
 def _published_target(settings, host, hosts):
     target = placement_target(settings, host, hosts)
     try:

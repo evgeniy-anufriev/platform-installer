@@ -10,7 +10,27 @@
 - name: Preserve safe preflight findings
   ansible.builtin.set_fact:
     platform_application_rows: []
+    platform_application_connection_rows: []
     platform_application_findings: "{{ _application_inputs.findings }}"
+  no_log: true
+  become: false
+
+- name: Resolve provided connection topology before consumer ENV expansion
+  ansible.builtin.include_tasks: connection_topology.yml
+  loop: "{{ _application_inputs.jobs }}"
+  loop_control:
+    loop_var: application_job
+  no_log: true
+
+- name: Bind application-provided connections from native topology
+  platform.core.prepare_application_connections:
+  register: _application_connection_inputs
+  no_log: true
+  become: false
+
+- name: Expose resolved provider parameters to package templates
+  ansible.builtin.set_fact:
+    platform_application_provided_connections: "{{ _application_connection_inputs.connections }}"
   no_log: true
   become: false
 

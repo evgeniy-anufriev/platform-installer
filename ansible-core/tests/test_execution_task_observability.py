@@ -79,6 +79,19 @@ class _Result(object):
 
 
 class ExecutionTaskObservabilityTests(unittest.TestCase):
+    def test_known_core_failure_survives_callback_and_journal_without_payload(self):
+        with tempfile.TemporaryDirectory() as root:
+            journal = _active_journal(root)
+            result = _Result(_Task(), {'msg': 'APPLICATION_RUNTIME_DEFERRED_FEATURE',
+                                      'stdout': 'SENSITIVE_PASSWORD', 'invocation': 'SENSITIVE_TOKEN'})
+            with mock.patch.object(execution_events_json, 'EXECUTION_STATE_ROOT', root), mock.patch.dict(
+                    os.environ, {'PLATFORM_EXECUTION_RUN_ID': 'run-1'}, clear=False):
+                execution_events_json.CallbackModule().v2_runner_on_failed(result)
+            events = journal.events()
+            self.assertEqual('APPLICATION_RUNTIME_DEFERRED_FEATURE', events[-1]['error']['code'])
+            self.assertNotIn('SENSITIVE_', json.dumps(events))
+            self.assert_events_match_contract(events)
+
     def test_http_diagnostic_only_promotes_tagged_closed_assertion_message(self):
         safe = 'HTTP backend 127.0.0.1:10041; expected=200; actual=503; timeout=10s; reason=HTTP_STATUS_MISMATCH'
         for action, tags, no_log, message, emitted in [
@@ -462,6 +475,31 @@ class ExecutionTaskObservabilityTests(unittest.TestCase):
 
 @unittest.skipUnless(os.environ.get("PLATFORM_TEST_CANONICAL_EXECUTION_ROOT") == "1", "requires isolated root-owned RED OS acceptance")
 class ControllerTaskStreamAcceptanceTests(unittest.TestCase):
+    def test_real_core_failure_retains_code_without_secret_output(self):
+        tasks = ("    - name: Core expected failure\n"
+                 "      ansible.builtin.assert:\n"
+                 "        that: false\n"
+                 "        fail_msg: APPLICATION_RUNTIME_DEFERRED_FEATURE\n")
+        with self.runtime(tasks) as (release, journal, manifest):
+            import subprocess
+            environment = dict(os.environ)
+            environment.update(PLATFORM_EXECUTION_RUN_ID=journal.run_id,
+                               ANSIBLE_CONFIG=str(Path(release, 'ansible-core', 'ansible.cfg')),
+                               ANSIBLE_COLLECTIONS_PATH=str(COLLECTIONS),
+                               ANSIBLE_CALLBACKS_ENABLED='platform.core.execution_events_json')
+            completed = subprocess.run(['ansible-playbook', '-i',
+                str(Path(journal.directory, 'project', 'inventory', 'hosts.yml')),
+                str(Path(release, 'services', 'kafka', 'playbooks', 'verify.yml'))],
+                env=environment, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=45)
+            self.assertNotEqual(0, completed.returncode)
+            events = journal.events()
+            results = [event for event in events if event['eventType'] == 'TASK_COMPLETED']
+            self.assertEqual(2, len(results))
+            for event in results:
+                self.assertEqual('APPLICATION_RUNTIME_DEFERRED_FEATURE', event['error']['code'])
+            journal.terminal('FAILED', 'EXECUTION_OPERATION_FAILED', 'QA expected failure')
+            self.assert_no_payload(journal)
+
     @contextmanager
     def runtime(self, tasks, callback_fault=None):
         self.assertEqual(0, os.geteuid(), "acceptance requires root-owned canonical journals")

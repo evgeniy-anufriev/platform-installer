@@ -1,5 +1,22 @@
 # Portable project contract
 
+### Package script execution location and failure diagnostics
+
+`scripts[].run_on` defaults to `target`. `execution_node` runs a
+`provider_prepare`, `connection_apply` or `account_apply` script with
+`execution: once` on the selected Core Execution Node. `target.connection`
+still identifies the provider dependency. The working directory is the
+invocation project root and the account is the Core process account.
+No container context is injected; existing target execution is unchanged.
+
+A failing script may return a JSON object (at most 2048 characters) with
+`status: error` and numeric `step` (0–65535), `http_status` (0–599),
+`curl_exit` (0–255). The runner captures stdout/stderr under `no_log`, then
+publishes only these numeric fields and the process exit code through
+`APPLICATION_SCRIPT_EXECUTION_FAILED` in the existing execution journal.
+Raw output, response bodies and arbitrary error text are withheld. Invalid
+output retains only the exit code. The journal/UI retain this safe diagnostic.
+
 ## Purpose
 
 The portable project directory contains the single canonical user-owned desired
@@ -260,7 +277,26 @@ Package manifests may also declare allowlisted executable `scripts` with a
 placement. `argv` contains literals or resolved nonsecret references; runtime
 secrets are declared separately as `secretInputs`. The generic target runner
 receives only the script file, account, working directory, argv and private
-secret files. Package-specific behavior belongs inside the package script.
+secret files. Source inputs are checked for readable nonempty file availability,
+without size, runtime-root, symlink, owner or mode restrictions. Runtime copies
+remain private, are never logged and are removed after invocation.
+Package-specific behavior belongs inside the package script.
+Provider integration hooks may declare integer `order` (default 0). They run in
+ascending order before the provider's account batch; equal values retain the
+library-before-instance, stable identity ordering. This allows one library hook
+to prepare objects before instance hooks and another to assign references after
+those instance hooks, without product-specific phases or runner behavior.
+A provided connection may declare `connection_provisioner: {apply_script: <id>}`.
+The referenced allowlisted script belongs to the provider application package,
+has `phase: connection_apply` and `execution: once`, and is a callback rather
+than a normal startup script. For every resolved enabled consumer connection,
+Apply resolves one invocation using the consumer's identity, settings parameters
+and current endpoint; `provided_connection` references use the provider library.
+The callback joins the same ordered provider batch before accounts. Its source
+and execution target come from the selected provider, without consumer wrapper
+scripts. `secretInputs` may reference a consumer `secret_binding` by `binding`;
+an explicitly optional absent binding supplies no input. Credential values are
+still delivered only through the existing protected files. Verify is unchanged.
 Slots in every library package may specify `start_priority` (default 100); Apply orders selected
 logical instances by this value and then by instance ID, completing each
 instance's readiness and after-ready scripts before starting the next.
@@ -495,6 +531,16 @@ package default. Files are <library-root>/.base_compose.yml and
 <library-root>/<app-instance>/{compose.yml,config,vault,pki}; Apply/Verify/Vault use
 one placement. Existing ownership/symlink checks remain; old paths are never
 automatically moved or deleted.
+
+Application PKI delivery uses the library's selected PKI profile and the existing
+host materialization plan, independently of Vault Agent or a keystore-password
+secret binding. The private instance `pki` directory receives `certificate.pem`,
+`private-key.pem`, `ca-chain.pem`, `keystore.p12` and `truststore.p12` for the actual
+rootless container UID/GID, with directory mode0700 and file mode0600. Existing
+byte-identical files are unchanged on repeat Apply. Vault identity files are
+delivered only for Agent applications. The existing required Agent PKI directory
+bind remains `/opt/application/pki:ro`; non-Agent package templates declare their
+own needed PKI mounts and do not acquire a new mandatory mount.
 
 Original-tag preservation applies to tagged references, including uppercase tags.
 Existing @sha256 inputs retain their immutable local startup alias: Docker cannot

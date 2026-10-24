@@ -5,15 +5,47 @@ platform_library_definition:
   defaults:
     environment: {}
     parameters:
+      IDENTITY_GROUPS:
+        - name: ТУЗ
+          roles_file: "{{ lookup('ansible.builtin.template', platform_project_root ~ '/library-packages/szi/1.0.0/assets/group-roles/service-accounts.json.j2', convert_data=false) | from_json }}"
       SZI_REALM: master
       HZ_CLUSTERNAME: '{{ library_instance_id }}'
+  provided_connections:
+    sso:
+      application: keycloak
+      protocol: https
+      parameters:
+        realm: master
+        proxy_url: "{{ ('https://nginx.' ~ platform_desired_state.endpointGroups[platform_desired_state.applicationLibraryDeployments[library_instance_id].applications.nginx.overrides.endpoint.endpoint_group].address.domain) if 'nginx' in platform_desired_state.applicationLibraryDeployments[library_instance_id].applications else '' }}"
+      credentials:
+        username:
+          sensitive: false
+          source: {kind: literal, value: admin}
+        password:
+          sensitive: true
+          source: {kind: runtime_secret_ref, ref: szi_admin_secret}
+      account_provisioner: {apply_script: ensure-user}
+      connection_provisioner: {apply_script: integrate-consumer}
+  resource_defaults:
+    postgresql:
+      databases:
+        keycloak-db:
+          name: keycloak
+        audit-db:
+          name: szi_audit
   shared_secrets:
+    grant_access_client_secret:
+      source: {kind: runtime_secret_ref, ref: grant-access-client-secret}
     java_keystore_password:
       source:
         binding: application-pki
         credential: java_keystore_password
         kind: pki_credential
   connections:
+    sso:
+      library_binding: sso
+      protocol: https
+      purpose: client
     postgres:
       library_binding: database
       protocol: tcp
@@ -36,14 +68,18 @@ platform_library_definition:
       required: true
       start_priority: 0
     grant-access:
+      start_priority: 20
       applicationRef: grant-access@1.0.0
       required: false
     grant-access-front:
+      start_priority: 30
       applicationRef: grant-access-front@1.0.0
       required: false
     grant-access-audit:
+      start_priority: 10
       applicationRef: grant-access-audit@1.0.0
       required: false
     nginx:
+      start_priority: 40
       applicationRef: nginx@1.0.0
       required: false

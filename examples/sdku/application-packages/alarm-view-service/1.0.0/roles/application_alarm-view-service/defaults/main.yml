@@ -2,6 +2,10 @@ platform_application_definition:
     name: alarm-view-service
     version: 1.0.0
     defaults:
+        parameters:
+            IDENTITY_CLIENT: {publicClient: true}
+        connections:
+            sso: {enabled: false}
         image: evoscada-docker.artifacts.tn.tngrp.ru/alarm-view-service:0.4.0-96e90ee0-redos
         user: 1000:1000
         restart: always
@@ -231,6 +235,7 @@ platform_application_definition:
             mode: healthcheck
             retries: 30
     connections:
+        - sso
         - clickhouse
         - kafka
         - postgres

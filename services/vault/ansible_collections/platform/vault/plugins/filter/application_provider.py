@@ -1,5 +1,7 @@
 """Bounded pure reconciliations consumed by builtin uri tasks."""
 import ipaddress
+import json
+import re
 from ansible.errors import AnsibleFilterError
 
 
@@ -13,6 +15,46 @@ def delta(response, fields, owner):
         raise AnsibleFilterError('APPLICATION_VAULT_DOCUMENT_OWNERSHIP_INVALID')
     changed = {k: v for k, v in fields.items() if data['data'].get(k) != v}
     return dict(method='PATCH', changed=bool(changed), body={'options': {'cas': data['metadata']['version']}, 'data': changed})
+
+
+def retained_policy(response, desired, owner):
+    """Retain only canonical instance KV reads, never arbitrary HCL/capabilities."""
+    if response.get('status') == 404:
+        return desired
+    previous = response['json']['data']['policy']
+    header = '# ' + owner + '\n'
+    if not previous.startswith(header) or not desired.startswith(header):
+        raise AnsibleFilterError('APPLICATION_VAULT_IDENTITY_OWNERSHIP_INVALID')
+    identity = owner.split(':')
+    if len(identity) != 4 or identity[0] != 'platform.application/v1':
+        raise AnsibleFilterError('APPLICATION_VAULT_IDENTITY_OWNERSHIP_INVALID')
+    project, library, instance = identity[1:]
+
+    def reads(policy):
+        result = set()
+        for line in policy[len(header):].splitlines():
+            if line == '# application.connection-retention/v1':
+                continue
+            match = re.fullmatch(r'path ("[^"\\]+") \{ capabilities = \["(read|update)"\] \}', line)
+            if not match:
+                raise AnsibleFilterError('APPLICATION_VAULT_POLICY_FORMAT_INVALID')
+            path, capability = json.loads(match[1]), match[2]
+            if path in ('auth/token/lookup-self', 'auth/token/renew-self', 'auth/token/revoke-self'):
+                expected = 'read' if path.endswith('lookup-self') else 'update'
+                if capability != expected:
+                    raise AnsibleFilterError('APPLICATION_VAULT_POLICY_FORMAT_INVALID')
+                continue
+            prefix = r'[a-z][a-z0-9_.-]*/data/' + re.escape(project + '/' + library + '/')
+            if (capability != 'read' or not re.fullmatch(prefix + r'(shared|' + re.escape(instance) + r'/accounts/[a-z][a-z0-9_.-]*)', path)):
+                raise AnsibleFilterError('APPLICATION_VAULT_POLICY_FORMAT_INVALID')
+            result.add(path)
+        return result
+
+    paths = reads(previous) | reads(desired)
+    tail = ('path "auth/token/lookup-self" { capabilities = ["read"] }\n'
+            'path "auth/token/renew-self" { capabilities = ["update"] }\n'
+            'path "auth/token/revoke-self" { capabilities = ["update"] }\n')
+    return header + '# application.connection-retention/v1\n' + ''.join('path %s { capabilities = ["read"] }\n' % json.dumps(path) for path in sorted(paths)) + tail
 
 
 def cidrs(routes, bridges=None):
@@ -80,4 +122,4 @@ def verify_fields(results, expected):
 
 class FilterModule:
     def filters(self):
-        return {'application_vault_document_cache': document_cache, 'application_vault_verify_fields': verify_fields, 'application_vault_role_changed': role_changed, 'application_vault_source_cache': source_cache, 'application_kv_delta': delta, 'application_vault_cidrs': cidrs}
+        return {'application_vault_retained_policy': retained_policy, 'application_vault_document_cache': document_cache, 'application_vault_verify_fields': verify_fields, 'application_vault_role_changed': role_changed, 'application_vault_source_cache': source_cache, 'application_kv_delta': delta, 'application_vault_cidrs': cidrs}

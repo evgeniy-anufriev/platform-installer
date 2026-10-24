@@ -80,6 +80,10 @@ def _operation_error_code(output):
         return "ANSIBLE_FAILURE_UNCLASSIFIED"
     if result.get("_ansible_no_log") or "censored" in result:
         return "ANSIBLE_FAILURE_REDACTED"
+    from execution_task_error import core_error_code
+    core_code = core_error_code(result)
+    if core_code:
+        return core_code
     message = result.get("msg")
     if not isinstance(message, str):
         return "ANSIBLE_FAILURE_UNCLASSIFIED"

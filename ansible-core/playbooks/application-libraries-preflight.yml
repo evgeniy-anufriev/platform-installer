@@ -1,6 +1,33 @@
 ---
 - import_playbook: application-libraries-resolve-runtime.yml
 
+- name: Check explicit library order and provider scope before any target contact
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Bind the declared Apply order without expanding its scope
+      ansible.builtin.set_fact:
+        application_preflight_library_ids: "{{ application_runtime_inputs.jobs | map(attribute='libraryId') | unique | sort | list }}"
+        application_preflight_library_order: >-
+          {{ platform_application_expected_library_ids | default(platform_application_library_order |
+             default(application_runtime_inputs.jobs | map(attribute='libraryId') | unique | sort | list)) }}
+    - name: Require an exact explicit order for multiple selected libraries
+      ansible.builtin.assert:
+        that:
+          - platform_application_expected_library_ids is defined or platform_application_library_order is defined or application_preflight_library_ids | length <= 1
+          - application_preflight_library_order | unique | length == application_preflight_library_order | length
+          - application_preflight_library_order | sort == application_preflight_library_ids
+        fail_msg: APPLICATION_LIBRARY_ORDER_INVALID
+    - name: Require every used application provider earlier in the same Apply scope
+      ansible.builtin.assert:
+        that: application_provider_order_findings | length == 0
+        fail_msg: "APPLICATION_PROVIDED_CONNECTION_ORDER_REQUIRED {{ application_provider_order_findings }}"
+      vars:
+        application_provider_order_findings: >-
+          {{ application_snapshot.snapshot.applicationLibraries.libraries |
+             platform.core.application_connection_order_findings(application_preflight_library_order) }}
+
 - name: Read-only preflight every selected target before application mutations
   hosts: platform_targets
   gather_facts: false

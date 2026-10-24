@@ -10,7 +10,7 @@
   ansible.builtin.assert:
     that: >-
       {{ platform_script_secret_files | platform.core.application_protected_secret_files(
-        platform_script_job.secretInputs.values() | list, platform_script_secret_root) }}
+        platform_script_job.secretInputs.values() | list) }}
     fail_msg: APPLICATION_SCRIPT_RUNTIME_SECRET_REQUIRED
   when: platform_script_job.secretInputs | length > 0
   no_log: true
@@ -72,8 +72,14 @@
       become_user: "{{ platform_script_job.account }}"
       environment: "{{ platform_script_environment }}"
       register: platform_script_result
+      failed_when: false
       changed_when: false
       no_log: true
+
+    - name: "Preserve safe failure diagnostics for package script {{ platform_script_job.id }}"
+      ansible.builtin.fail:
+        msg: "{{ platform_script_result | platform.core.application_script_failure }}"
+      when: platform_script_result.rc | default(-1) | int != 0
 
     - name: Require a bounded machine-readable nonsensitive result
       ansible.builtin.assert:

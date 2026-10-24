@@ -1,0 +1,78 @@
+---
+- name: Execute integration hooks in declared order before the account batch
+  ansible.builtin.include_tasks: application-provider-script.yml
+  vars:
+    application_provider_script: "{{ application_provider_hook }}"
+    application_provider_script_host: "{{ application_provider_hook.target.hostId }}"
+  loop: "{{ application_provider_batch.hooks }}"
+  loop_control:
+    loop_var: application_provider_hook
+
+- name: Reconcile this provider account batch through private files
+  when: application_provider_batch.accounts | length > 0
+  block:
+    - name: Resolve account callback from the exact provider package
+      platform.core.prepare_application_account_batch:
+        batch: "{{ application_provider_batch }}"
+        project_root: "{{ platform_project_root | default(hostvars['localhost'].inventory_dir | dirname) }}"
+      delegate_to: localhost
+      become: false
+      register: application_account_callback
+      no_log: true
+
+    - name: Require protected source files for all passwords in this batch
+      ansible.builtin.assert:
+        that: >-
+          {{ (hostvars['localhost'].platform_application_secret_files |
+               combine(hostvars['localhost'].platform_application_credential_files | default({}))) |
+             platform.core.application_protected_secret_files(
+               application_account_callback.requests | map(attribute='passwordRef') | list,
+               hostvars['localhost'].platform_application_secret_root) }}
+        fail_msg: APPLICATION_PROVIDER_SECRET_FILE_INVALID
+      delegate_to: localhost
+      become: false
+      no_log: true
+
+    - name: Bind invocation-private password values without public script outputs
+      ansible.builtin.set_fact:
+        application_batch_passwords: "{{ application_batch_passwords | default({}) | combine({item.id: lookup('ansible.builtin.file', application_batch_source_files[item.passwordRef], rstrip=false)}) }}"
+      vars:
+        application_batch_source_files: "{{ hostvars['localhost'].platform_application_secret_files | combine(hostvars['localhost'].platform_application_credential_files | default({})) }}"
+      loop: "{{ application_account_callback.requests }}"
+      no_log: true
+
+    - name: Stage this batch in the existing protected controller root
+      ansible.builtin.copy:
+        content: "{{ {'accounts': application_account_callback.accounts, 'passwords': application_batch_passwords} | to_json }}"
+        dest: "{{ hostvars['localhost'].platform_application_secret_root }}/{{ application_provider_batch.id }}"
+        mode: '0600'
+      delegate_to: localhost
+      become: false
+      no_log: true
+
+    - name: Execute one callback for all this provider accounts
+      ansible.builtin.include_tasks: application-provider-script.yml
+      vars:
+        application_provider_script: "{{ application_account_callback.script }}"
+        application_provider_script_host: "{{ application_account_callback.targetHostId }}"
+        application_provider_private_files: "{{ {application_provider_batch.id: hostvars['localhost'].platform_application_secret_root ~ '/' ~ application_provider_batch.id} }}"
+  always:
+    - name: Remove only this derived batch input
+      ansible.builtin.file:
+        path: "{{ hostvars['localhost'].platform_application_secret_root }}/{{ application_provider_batch.id }}"
+        state: absent
+      delegate_to: localhost
+      become: false
+      changed_when: false
+      no_log: true
+    - name: Discard batch password values before another provider
+      ansible.builtin.set_fact:
+        application_batch_passwords: {}
+      no_log: true
+
+- name: Record only successfully completed provider batches in current invocation
+  ansible.builtin.set_fact:
+    platform_application_completed_batches: "{{ hostvars['localhost'].platform_application_completed_batches + [application_provider_batch.id] }}"
+  delegate_to: localhost
+  delegate_facts: true
+  no_log: true

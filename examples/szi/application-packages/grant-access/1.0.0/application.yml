@@ -4,11 +4,16 @@
   "name": "grant-access",
   "version": "1.0.0",
   "files": [
+    "assets/start-java.sh",
     "assets/roles-of-realm.json",
     "roles/application_grant-access/defaults/main.yml",
-    "roles/application_grant-access/templates/compose.yml.j2"
+    "roles/application_grant-access/templates/compose.yml.j2",
+    "roles/application_grant-access/templates/agent.hcl.j2",
+    "assets/account-roles/admin-grant-access.json",
+    "assets/keycloak-client.json.j2"
   ],
   "render": {
-    "compose_template": "roles/application_grant-access/templates/compose.yml.j2"
+    "compose_template": "roles/application_grant-access/templates/compose.yml.j2",
+    "agent_template": "roles/application_grant-access/templates/agent.hcl.j2"
   }
 }

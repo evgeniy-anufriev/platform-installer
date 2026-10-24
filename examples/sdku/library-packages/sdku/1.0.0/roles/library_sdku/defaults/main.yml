@@ -5,6 +5,10 @@ platform_library_definition:
         kafka:
             connectionRef: SSL
     connections:
+        sso:
+            library_binding: sso
+            protocol: https
+            purpose: client
         clickhouse:
             library_binding: analytics
             protocol: https
@@ -110,7 +114,10 @@ platform_library_definition:
             kafka.producer.socket.connection.setup.timeout.max.ms: "5000"
             kafka.producer.socket.connection.setup.timeout.ms: "1500"
             tn-scada.kafka.listener.store-id: $${SERVER_ID}
-        parameters: {}
+        parameters:
+            IDENTITY_GROUPS:
+              - name: Администратор СДКУ
+                roles_file: "{{ lookup('ansible.builtin.template', platform_project_root ~ '/library-packages/sdku/1.0.0/assets/group-roles/sdku-admin.json.j2', convert_data=false) | from_json }}"
     resource_defaults:
         clickhouse:
             databases:

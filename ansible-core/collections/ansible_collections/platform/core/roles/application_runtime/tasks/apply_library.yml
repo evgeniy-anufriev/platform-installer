@@ -41,5 +41,9 @@
     - name: Materialize and validate each application in its own Compose project
       ansible.builtin.include_tasks: apply_instance.yml
       loop: "{{ application_library_jobs }}"
+      when: >-
+        (application_runtime_job.libraryId ~ '/' ~ application_runtime_job.instanceId) not in
+        (hostvars['localhost'].application_runtime_inputs.integrations |
+         platform.core.application_pending_instances(hostvars['localhost'].platform_application_completed_batches | default([])))
       loop_control:
         loop_var: application_runtime_job

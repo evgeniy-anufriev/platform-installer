@@ -1,34 +1,37 @@
-"""Shared private runtime credential path guard; no secret values returned."""
+"""Runtime credential input availability; no secret values returned."""
 import os
-import stat
+import json
 from ansible.errors import AnsibleFilterError
 
 
-def protected_secret_files(files, refs, runtime_root, maximum=4096):
-    """No values returned; paths must remain under caller's private runtime root."""
+def script_failure(result):
+    """Project only bounded numeric diagnostics, never arbitrary script output."""
+    safe = {'code': 'APPLICATION_SCRIPT_EXECUTION_FAILED'}
+    if type(result.get('rc')) is int and -255 <= result['rc'] <= 65535:
+        safe['rc'] = result['rc']
     try:
-        root = os.path.abspath(runtime_root)
-        if not runtime_root or root != os.path.realpath(root):
-            raise ValueError()
-        owner = os.getuid()
-        root_stat = os.lstat(root)
-        if not stat.S_ISDIR(root_stat.st_mode) or root_stat.st_uid != owner or root_stat.st_mode & 0o077:
-            raise ValueError()
+        raw = result.get('stdout', '')
+        value = json.loads(raw) if isinstance(raw, str) and len(raw) <= 2048 else {}
+        if isinstance(value, dict) and value.get('status') == 'error':
+            for key, maximum in (('step', 65535), ('http_status', 599), ('curl_exit', 255)):
+                item = value.get(key)
+                if type(item) is int and 0 <= item <= maximum:
+                    safe[key] = item
+    except (ValueError, TypeError):
+        pass
+    return safe
+
+
+def protected_secret_files(files, refs, runtime_root=None, maximum=None):
+    """Require readable, nonempty regular files for explicitly bound references."""
+    try:
         for ref in set(refs):
-            path = os.path.abspath(files[ref])
-            if path == root or os.path.commonpath([root, path]) != root or os.path.realpath(path) != path:
+            path = files[ref]
+            if not os.path.isfile(path):
                 raise ValueError()
-            current = path
-            while current != root:
-                info = os.lstat(current)
-                if info.st_uid != owner or info.st_mode & 0o077 or stat.S_ISLNK(info.st_mode):
+            with open(path, 'rb') as stream:
+                if not stream.read(1):
                     raise ValueError()
-                if current == path:
-                    if not stat.S_ISREG(info.st_mode) or info.st_size < 1 or info.st_size > maximum:
-                        raise ValueError()
-                elif not stat.S_ISDIR(info.st_mode):
-                    raise ValueError()
-                current = os.path.dirname(current)
         return True
     except (ValueError, OSError, KeyError, TypeError):
         raise AnsibleFilterError('APPLICATION_PROVIDER_SECRET_FILE_INVALID')

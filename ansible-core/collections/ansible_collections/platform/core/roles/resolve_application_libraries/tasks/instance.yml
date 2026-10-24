@@ -29,6 +29,7 @@
     application_topics: {}
     application_databases: {}
     _application_connections: {}
+    application_connections: {}
     _application_resources: {}
     library_resources: {}
     _application_resource_defaults: {}
@@ -51,6 +52,18 @@
          application_job.application.definition.connections[item] if application_job.application.definition.connections is mapping else
          application_job.library.definition.connections[item]}) }}
   loop: "{{ application_job.application.definition.connections | default({}) | list }}"
+  no_log: true
+  become: false
+
+- name: Expose provided connection values to application package templates
+  ansible.builtin.set_fact:
+    application_connections: >-
+      {{ application_connections | combine({item.key:
+        platform_application_provided_connections.get(
+          application_job.deployment.bindings[item.value.library_binding].providedConnectionRef.libraryId, {}).get(
+          application_job.deployment.bindings[item.value.library_binding].providedConnectionRef.name, {})}) }}
+  loop: "{{ _application_connections | dict2items }}"
+  when: application_job.deployment.bindings.get(item.value.library_binding, {}).providedConnectionRef is defined
   no_log: true
   become: false
 
@@ -193,6 +206,8 @@
         'runtimeRef': application_job.deployment.runtimeRef,
         'runtimeDirectory': application_job.deployment.runtime_directory | default(_library_package.platform_library_definition.runtime_directory | default('~/' ~ application_job.libraryId), true),
         'libraryConnections': _library_package.platform_library_definition.connections | default({}),
+        'providedConnections': (platform_application_connection_rows |
+          selectattr('libraryId', 'equalto', application_job.libraryId) | first).providedConnections,
         'bindings': application_job.deployment.bindings | default({}),
         'vaultRef': application_job.deployment.vault_ref | default({}),
         'registryCredentials': application_job.deployment.registry_credentials | default({}),

@@ -195,6 +195,7 @@ describe("UtilityPages help", () => {
       ),
     ).toBeTruthy();
     expect(screen.getByText(/Не запускайте операцию повторно/)).toBeTruthy();
+    expect(screen.getByText(/доступна кнопка «Подключиться»/)).toBeTruthy();
   });
 
   it("explains safe recovery when bundle detection is blocked by a prior run", () => {
@@ -222,7 +223,7 @@ describe("UtilityPages help", () => {
     expect(screen.getByText(/SSH-учётные данные/)).toBeTruthy();
     expect(
       screen.getByText(
-        "Откройте «Установка» и нажмите «Проверить прежний запуск», чтобы получить его фактический статус.",
+        "Откройте «Серверы» и в блоке узла выполнения нажмите «Проверить прежний запуск», чтобы получить его фактический статус.",
       ),
     ).toBeTruthy();
     expect(
@@ -233,8 +234,8 @@ describe("UtilityPages help", () => {
     ).toBeTruthy();
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Открыть страницу «Установка»" }),
+      screen.getByRole("button", { name: "Открыть страницу «Серверы»" }),
     );
-    expect(onNavigate).toHaveBeenCalledWith("installation");
+    expect(onNavigate).toHaveBeenCalledWith("servers");
   });
 });

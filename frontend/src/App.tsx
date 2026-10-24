@@ -935,7 +935,9 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
           ? await api.createInstallationPlanForMode({
               executionMode,
               deploymentOrder,
-              ...(applicationLibraryOrder.length ? { applicationLibraryOrder } : {}),
+              ...(applicationLibraryOrder.length
+                ? { applicationLibraryOrder }
+                : {}),
               applicationVaultSources: {},
               skipInfrastructureVerify,
             })
@@ -2599,8 +2601,6 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
           {!loading && !creating && projectOpen && page === "installation" && (
             <InstallationPage
               key={result.root}
-              onGetRuntimeSecretDescriptors={api.getRuntimeSecretDescriptors}
-              onSetRuntimeSecretValues={api.setDeploymentRuntimeSecretValues}
               state={installationState}
               draftActive={!!sessionId || refreshRequired}
               tab={installationTab}

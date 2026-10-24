@@ -24,6 +24,9 @@ platform_application_definition:
       - /usr/lib/keycloak/bin/kc.sh
       - start
     config_files:
+      - source: assets/conf/keycloak.conf
+        destination: conf/keycloak.conf
+        mode: "0644"
       - source: assets/conf/cache-ispn.xml
         destination: conf/cache-ispn.xml
         mode: "0644"
@@ -50,20 +53,23 @@ platform_application_definition:
       JGROUPS_DISCOVERY_EXTERNAL_IP: '{{ application_parameters.KEYCLOAK_DISCOVERY_IP | default(undef(hint=''Configure Keycloak discovery address''), true) }}'
       KC_HTTPS_KEY_STORE_FILE: /opt/application/pki/keystore.p12
       KC_HTTPS_KEY_STORE_TYPE: PKCS12
-      KC_HTTPS_PORT: "8051"
+      KC_HTTPS_PORT: >-
+        {{ ((application_job.application.definition.defaults.ports | default({})) |
+            combine(application_job.slot.overrides.ports | default({}), recursive=true) |
+            combine(application_job.instance.overrides.ports | default({}), recursive=true) |
+            combine(application_job.hostOverride.ports | default({}), recursive=true))['port-1'].container }}
+      KC_HTTP_PORT: >-
+        {{ ((application_job.application.definition.defaults.ports | default({})) |
+            combine(application_job.slot.overrides.ports | default({}), recursive=true) |
+            combine(application_job.instance.overrides.ports | default({}), recursive=true) |
+            combine(application_job.hostOverride.ports | default({}), recursive=true))['port-3'].container }}
+      KC_HTTP_MANAGEMENT_PORT: >-
+        {{ ((application_job.application.definition.defaults.ports | default({})) |
+            combine(application_job.slot.overrides.ports | default({}), recursive=true) |
+            combine(application_job.instance.overrides.ports | default({}), recursive=true) |
+            combine(application_job.hostOverride.ports | default({}), recursive=true))['port-5'].container }}
       KC_LOG_LEVEL: INFO
-      QUARKUS_DATASOURCE_JDBC_ACQUISITION_TIMEOUT: 1s
-      KC_SPI_EVENTS_LISTENER_DMZ_PROVISION_PROVISION_HOST: '{{ application_parameters.DMZ_PROVISION_URL | default(undef(hint=''Configure DMZ provisioning endpoint''), true) }}'
-      KC_SPI_EVENTS_LISTENER_DMZ_PROVISION_REALM_PARTIAL_IMPORT_RESOURCE: /realm-partial-import
-      KC_SPI_EVENTS_LISTENER_DMZ_PROVISION_REALM_RESOURCE: /realms
-      KC_SPI_EVENTS_LISTENER_DMZ_PROVISION_CLIENT_RESOURCE: /clients
-      KC_SPI_EVENTS_LISTENER_DMZ_PROVISION_CLIENT_SCOPE_RESOURCE: /scopes
-      KC_SPI_EVENTS_LISTENER_DMZ_PROVISION_GROUP_RESOURCE: /groups
-      KC_SPI_EVENTS_LISTENER_DMZ_PROVISION_ROLE_RESOURCE: /roles
-      KC_SPI_EVENTS_LISTENER_DMZ_PROVISION_USER_RESOURCE: /users
-      KC_SPI_EVENTS_LISTENER_DMZ_PROVISION_PROTECTED_USER_NAMES: '{{ application_parameters.PROTECTED_USER_NAMES | default(undef(hint=''Configure protected Keycloak users''), true) }}'
-      KC_SPI_EVENTS_LISTENER_DMZ_PROVISION_EXPORT_INTERVAL_MILLIS: "359900"
-      KC_SPI_EVENTS_LISTENER_DMZ_PROVISION_USERS_EXPORT_INTERVAL_MILLIS: "1500000"
+      QUARKUS_DATASOURCE_JDBC_ACQUISITION_TIMEOUT: 30s
       KC_SPI_EVENTS_LISTENER_JBOSS_LOGGING_SUCCESS_LEVEL: DEBUG
       KC_SPI_EVENTS_LISTENER_JBOSS_LOGGING_ERROR_LEVEL: DEBUG
       KC_PROXY_HEADERS: xforwarded
@@ -83,8 +89,6 @@ platform_application_definition:
       KEYCLOAK_BIND_IP: ""
       KEYCLOAK_INITIAL_HOSTS: ""
       KEYCLOAK_NODE_NAME: ""
-      DMZ_PROVISION_URL: ""
-      PROTECTED_USER_NAMES: ""
     ports:
       port-1:
         container: 8051

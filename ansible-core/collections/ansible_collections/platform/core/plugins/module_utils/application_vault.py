@@ -2,6 +2,10 @@
 import hashlib
 import json
 import re
+try:
+    from .application_connections import used_script_sources
+except ImportError:
+    from application_connections import used_script_sources
 
 SEGMENT = re.compile(r'^[A-Za-z0-9_-][A-Za-z0-9_.-]{0,127}$')
 
@@ -37,6 +41,7 @@ def project_vault(rows, prepared):
     plans = prepared['pki_materialization']['materializationPlans']
     project = segment(snapshot['project']['id'])
     providers, library_jobs, instance_jobs, source_jobs = {}, [], [], []
+    script_sources = used_script_sources(libraries)
     for library_id, library in sorted(libraries.items()):
         selected = [r for r in rows if r['libraryId'] == library_id]
         row = selected[0]
@@ -45,6 +50,7 @@ def project_vault(rows, prepared):
         active = [i for i in library['instances'].values() if i['agentRequired']]
         sources = [c['source'] for i in library['instances'].values() for a in i['credentialRequirements'].values()
                    for c in a['credentials'].values() if c['source']['kind'] == 'vault_ref']
+        sources += [source for source in script_sources.get(library_id, []) if source['kind'] == 'vault_ref']
         if not active and not sources:
             continue
         auth = row.get('vaultRef', {})
@@ -80,10 +86,16 @@ def project_vault(rows, prepared):
                 raise ValueError('APPLICATION_VAULT_SOURCE_PROVIDER_MISMATCH')
             password_ref = 'pla-vault-'+hashlib.sha256(repr(sorted(source.items())).encode()).hexdigest()[:32]
             entry = dict(location, passwordRef=password_ref)
+            if any(job['passwordRef'] == password_ref and job != entry for job in source_jobs):
+                raise ValueError('APPLICATION_VAULT_SOURCE_AMBIGUOUS')
             if entry not in source_jobs:
                 source_jobs.append(entry)
         shared = {}
+        used_shared = {binding['source']['library_secret'] for instance in library['instances'].values()
+                       for binding in instance.get('secretBindings', {}).values() if 'library_secret' in binding['source']}
         for name, value in sorted(library['sharedSecretRequirements'].items()):
+            if name not in used_shared:
+                continue
             source = value['source']
             if source['kind'] == 'pki_credential':
                 profile = row['bindings'].get(source['binding'], {}).get('profileRef')
@@ -171,11 +183,15 @@ def project_vault(rows, prepared):
             identity = 'pla-'+hashlib.sha256((':'.join((project, library_id, instance_id))).encode()).hexdigest()[:32]
             owner = 'platform.application/v1:'+':'.join((project, library_id, instance_id))
             policy = '# '+owner+'\n'+''.join('path %s { capabilities = ["read"] }\n' % json.dumps(p) for p in sorted(paths))
+            retain_policy = bool(library.get('providedConnections') or any(
+                binding.get('providedConnectionRef') for binding in instance_rows[0]['bindings'].values()))
+            if retain_policy:
+                policy = policy.replace('# '+owner+'\n', '# '+owner+'\n# application.connection-retention/v1\n', 1)
             policy += 'path "auth/token/lookup-self" { capabilities = ["read"] }\npath "auth/token/renew-self" { capabilities = ["update"] }\n'
             policy += 'path "auth/token/revoke-self" { capabilities = ["update"] }\n'
             instance_jobs.append(dict(providerId=ref, libraryId=library_id, instanceId=instance_id,
                                      hosts=sorted(instance['placements']), documents=account_docs, identity=identity,
-                                     owner=owner, policy=policy, envTemplates=envs, readFields=read_fields, mounts=sorted({p.split('/')[0] for p in paths})))
+                                     owner=owner, policy=policy, retainPolicy=retain_policy, envTemplates=envs, readFields=read_fields, mounts=sorted({p.split('/')[0] for p in paths})))
     for job in library_jobs+instance_jobs:
         for doc in job['documents']:
             doc['owner'] = 'platform.application/v1:'+':'.join((project, job['libraryId'], doc['document']))

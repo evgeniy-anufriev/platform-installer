@@ -34,7 +34,7 @@ services:
       - {{ (application_runtime.config_path ~ "/" ~ config.destination ~ ":/usr/lib/keycloak/" ~ config.destination ~ ":ro") | to_json }}
 {% endfor %}
     healthcheck:
-      test: ["CMD-SHELL", "curl -k https://localhost:9000/health/ready | grep -q UP"]
+      test: ["CMD-SHELL", "curl -k https://localhost:{{ application_effective.ports['port-5'].container }}/health/ready | grep -q UP"]
       interval: 30s
       timeout: 25s
     deploy:

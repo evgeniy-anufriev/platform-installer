@@ -24,11 +24,17 @@ services:
       - "{{ port.published }}:{{ port.container }}"
 {% endfor %}
     volumes:
+      - {{ (application_runtime.pki_path ~ ":/opt/application/pki:ro") | to_json }}
+      - {{ ((application_runtime.config_path | dirname) ~ "/routes:/var/lib/nginx/routes:ro") | to_json }}
+      - {{ (application_runtime.config_path ~ "/routes.requested.json:/etc/nginx/routes.requested.json:ro") | to_json }}
+      - {{ (application_runtime.config_path ~ "/routes-upsert.lua:/etc/nginx/routes-upsert.lua:ro") | to_json }}
+      - {{ (application_runtime.config_path ~ "/routes-upsert.conf:/etc/nginx/routes-upsert.conf:ro") | to_json }}
+      - {{ (application_runtime.pki_path ~ "/ca-chain.pem:/etc/nginx/ssl/ca-chain.pem:ro") | to_json }}
       - {{ (application_runtime.config_path ~ "/script.lua:/etc/nginx/conf.d/script.lua:ro") | to_json }}
       - {{ (application_runtime.config_path ~ "/data.env:/etc/nginx/data.env:ro") | to_json }}
       - {{ (application_runtime.config_path ~ "/scada-lawellet.conf:/etc/nginx/nginx.conf:ro") | to_json }}
-      - {{ (application_runtime.pki_path ~ "/leaf.crt:/etc/nginx/ssl/host.pem:ro") | to_json }}
-      - {{ (application_runtime.pki_path ~ "/leaf.key:/etc/nginx/ssl/host.key:ro") | to_json }}
+      - {{ (application_runtime.pki_path ~ "/certificate.pem:/etc/nginx/ssl/host.pem:ro") | to_json }}
+      - {{ (application_runtime.pki_path ~ "/private-key.pem:/etc/nginx/ssl/host.key:ro") | to_json }}
     deploy:
       resources:
         limits:

@@ -5,9 +5,13 @@
   "version": "1.0.0",
   "files": [
     "roles/application_grant-access-audit/defaults/main.yml",
-    "roles/application_grant-access-audit/templates/compose.yml.j2"
+    "roles/application_grant-access-audit/templates/compose.yml.j2",
+    "roles/application_grant-access-audit/templates/agent.hcl.j2",
+    "assets/account-roles/admin-grant-access-audit.json",
+    "assets/keycloak-client.json.j2"
   ],
   "render": {
-    "compose_template": "roles/application_grant-access-audit/templates/compose.yml.j2"
+    "compose_template": "roles/application_grant-access-audit/templates/compose.yml.j2",
+    "agent_template": "roles/application_grant-access-audit/templates/agent.hcl.j2"
   }
 }

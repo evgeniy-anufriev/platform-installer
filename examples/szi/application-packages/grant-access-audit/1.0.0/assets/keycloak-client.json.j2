@@ -1,0 +1,272 @@
+{
+  "clientId": "{{ application_instance_id }}",
+  "name": "{{ application_instance_id }}",
+  "rootUrl": "{{ application_connections.sso.parameters.proxy_url }}/{{ application_instance_id }}/",
+  "adminUrl": "{{ application_connections.sso.parameters.proxy_url }}/{{ application_instance_id }}/",
+  "baseUrl": "{{ application_connections.sso.parameters.proxy_url }}/{{ application_instance_id }}/",
+  "surrogateAuthRequired": false,
+  "enabled": true,
+  "alwaysDisplayInConsole": false,
+  "clientAuthenticatorType": "client-secret",
+  "redirectUris": [
+    "{{ application_connections.sso.parameters.proxy_url }}/{{ application_instance_id }}/*"
+  ],
+  "webOrigins": [
+    "{{ application_connections.sso.parameters.proxy_url }}/{{ application_instance_id }}/"
+  ],
+  "notBefore": 0,
+  "bearerOnly": false,
+  "consentRequired": false,
+  "standardFlowEnabled": true,
+  "implicitFlowEnabled": true,
+  "directAccessGrantsEnabled": true,
+  "serviceAccountsEnabled": true,
+  "authorizationServicesEnabled": true,
+  "publicClient": false,
+  "frontchannelLogout": false,
+  "protocol": "openid-connect",
+  "attributes": {
+    "realm_client": "false",
+    "oidc.ciba.grant.enabled": "true",
+    "backchannel.logout.session.required": "true",
+    "post.logout.redirect.uris": "{{ application_connections.sso.parameters.proxy_url }}/{{ application_instance_id }}/",
+    "display.on.consent.screen": "false",
+    "oauth2.device.authorization.grant.enabled": "true",
+    "backchannel.logout.revoke.offline.tokens": "false",
+    "ui_available": "false"
+  },
+  "authenticationFlowBindingOverrides": {},
+  "fullScopeAllowed": true,
+  "nodeReRegistrationTimeout": -1,
+  "protocolMappers": [
+    {
+      "name": "Client Host",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usersessionmodel-note-mapper",
+      "consentRequired": false,
+      "config": {
+        "user.session.note": "clientHost",
+        "introspection.token.claim": "true",
+        "userinfo.token.claim": "true",
+        "id.token.claim": "true",
+        "access.token.claim": "true",
+        "claim.name": "clientHost",
+        "jsonType.label": "String"
+      }
+    },
+    {
+      "name": "Client ID",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usersessionmodel-note-mapper",
+      "consentRequired": false,
+      "config": {
+        "user.session.note": "client_id",
+        "introspection.token.claim": "true",
+        "userinfo.token.claim": "true",
+        "id.token.claim": "true",
+        "access.token.claim": "true",
+        "claim.name": "client_id",
+        "jsonType.label": "String"
+      }
+    },
+    {
+      "name": "Client IP Address",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usersessionmodel-note-mapper",
+      "consentRequired": false,
+      "config": {
+        "user.session.note": "clientAddress",
+        "introspection.token.claim": "true",
+        "userinfo.token.claim": "true",
+        "id.token.claim": "true",
+        "access.token.claim": "true",
+        "claim.name": "clientAddress",
+        "jsonType.label": "String"
+      }
+    }
+  ],
+  "defaultClientScopes": [
+    "web-origins",
+    "acr",
+    "profile",
+    "roles",
+    "basic",
+    "email"
+  ],
+  "optionalClientScopes": [
+    "address",
+    "phone",
+    "microprofile-jwt"
+  ],
+  "authorizationSettings": {
+    "allowRemoteResourceManagement": true,
+    "policyEnforcementMode": "ENFORCING",
+    "resources": [
+      {
+        "name": "Получение данных для работы аудита (Для всех)",
+        "ownerManagedAccess": false,
+        "displayName": "master",
+        "attributes": {},
+        "uris": [
+          "/user_action_list",
+          "/user_action_types ",
+          "/events/types/groups",
+          "/"
+        ],
+        "icon_uri": ""
+      },
+      {
+        "name": "Создание новых групп действий и типов действий (Администратор уровня 1)",
+        "ownerManagedAccess": false,
+        "displayName": "master",
+        "attributes": {},
+        "uris": [
+          "/events/types",
+          "/user_action"
+        ],
+        "icon_uri": ""
+      },
+      {
+        "name": "Получение данных",
+        "ownerManagedAccess": false,
+        "displayName": "master",
+        "attributes": {},
+        "uris": [
+          "/user_action_list",
+          "/user_action_types",
+          "/events/types/groups",
+          "/"
+        ],
+        "scopes": [
+          {
+            "name": "GET"
+          },
+          {
+            "name": "POST"
+          }
+        ],
+        "icon_uri": ""
+      },
+      {
+        "name": "Расширение паттернов аудита",
+        "ownerManagedAccess": false,
+        "displayName": "master",
+        "attributes": {},
+        "uris": [
+          "/events/types",
+          "/user_action"
+        ],
+        "scopes": [
+          {
+            "name": "POST"
+          }
+        ],
+        "icon_uri": ""
+      }
+    ],
+    "policies": [
+      {
+        "name": "Политика по аудиту",
+        "description": "",
+        "type": "role",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "roles": "[]"
+        }
+      },
+      {
+        "name": "Политика доступа на получение данных",
+        "description": "",
+        "type": "role",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "fetchRoles": "false",
+          "roles": "[{\"id\":\"{{ application_instance_id }}/Получение данных для работы аудита\",\"required\":false}]"
+        }
+      },
+      {
+        "name": "Политика расширения модели аудита",
+        "description": "",
+        "type": "role",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "fetchRoles": "false",
+          "roles": "[{\"id\":\"{{ application_instance_id }}/Расширение модели аудита\",\"required\":false}]"
+        }
+      },
+      {
+        "name": "Разрешение_на_работу_с_аудитом",
+        "description": "",
+        "type": "resource",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "resources": "[\"Получение данных для работы аудита (Для всех)\"]",
+          "applyPolicies": "[\"Политика по аудиту\"]"
+        }
+      },
+      {
+        "name": "Разрешение на получение данных",
+        "description": "",
+        "type": "scope",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "resources": "[\"Получение данных\"]",
+          "scopes": "[\"GET\",\"POST\"]",
+          "applyPolicies": "[\"Политика доступа на получение данных\"]"
+        }
+      },
+      {
+        "name": "Разрешение на расширение модели аудита",
+        "description": "",
+        "type": "scope",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "resources": "[\"Расширение паттернов аудита\"]",
+          "scopes": "[\"POST\"]",
+          "applyPolicies": "[\"Политика расширения модели аудита\"]"
+        }
+      }
+    ],
+    "scopes": [
+      {
+        "name": "GET",
+        "iconUri": ""
+      },
+      {
+        "name": "POST",
+        "iconUri": ""
+      },
+      {
+        "name": "OPTIONS",
+        "iconUri": ""
+      }
+    ],
+    "decisionStrategy": "UNANIMOUS"
+  },
+  "clientRoles": [
+    {
+      "name": "Расширение модели аудита",
+      "description": "Создание новых групп действий и типов действий",
+      "composite": false,
+      "attributes": {}
+    },
+    {
+      "name": "uma_protection",
+      "description": "Техническая роль для проверки разрешений",
+      "composite": false,
+      "attributes": {}
+    },
+    {
+      "name": "Получение данных для работы аудита",
+      "description": "Права на чтение",
+      "composite": false,
+      "attributes": {}
+    }
+  ]
+}

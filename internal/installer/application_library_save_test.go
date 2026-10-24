@@ -8,6 +8,61 @@ import (
 	"testing"
 )
 
+func TestProvidedCredentialLiteralUsesPackageSensitivityNotItsName(t *testing.T) {
+	root, backend, _ := b2Project(t)
+	prefix := "library-packages/provider/1.0.0/"
+	writeExportFixture(t, root, prefix+"library.yml", "apiVersion: platform.installer/application-package/v1alpha1\nkind: LibraryPackage\nname: provider\nversion: 1.0.0\nfiles: [roles/library_provider/defaults/main.yml]\n")
+	writeExportFixture(t, root, prefix+"roles/library_provider/defaults/main.yml", "platform_library_definition:\n  name: provider\n  version: 1.0.0\n  provided_connections:\n    api:\n      credentials:\n        login:\n          sensitive: false\n        username:\n          sensitive: true\n")
+	revision, err := ProjectRevision(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	create := b2Command(revision, "CreateApplicationLibraryDeployment")
+	create.Entity = map[string]any{"libraryRef": "provider@1.0.0", "runtimeRef": "kafka-main", "provided_connections": map[string]any{
+		"api": map[string]any{"credentials": map[string]any{"login": map[string]any{"source": map[string]any{"kind": "literal", "value": "operator"}}}},
+	}}
+	result := commitStructuralForTest(t, backend, root, projectlifecycle.ClassificationManaged, revision, []EditCommand{create})
+	update := b2Command(result.NewProjectRevision, "UpdateApplicationLibraryDeployment")
+	update.Entity = map[string]any{"provided_connections": map[string]any{"api": map[string]any{"credentials": map[string]any{
+		"username": map[string]any{"source": map[string]any{"kind": "literal", "value": "fixture-forbidden"}},
+	}}}}
+	plan, _ := backend.PlanStructuralSave(context.Background(), root, projectlifecycle.ClassificationManaged, result.NewProjectRevision, []EditCommand{update})
+	if plan.Status != "BLOCKED" {
+		t.Fatal("Sensitive credential accepted solely because it was named username")
+	}
+}
+
+func TestProvidedConnectionsAndEnabledSaveStructurallyWithoutCore(t *testing.T) {
+	root, backend, revision := b2Project(t)
+	create := b2Command(revision, "CreateApplicationLibraryDeployment")
+	create.Entity = map[string]any{"libraryRef": "sdku@1.0.0", "runtimeRef": "kafka-main",
+		"bindings": map[string]any{"identity": map[string]any{"providedConnectionRef": map[string]any{"libraryId": "provider", "name": "api"}}},
+		"provided_connections": map[string]any{"api": map[string]any{"parameters": map[string]any{"tenant": "example", "options": []any{true, 42}},
+			"credentials": map[string]any{"token": map[string]any{"source": map[string]any{"kind": "runtime_secret_ref", "ref": "provider-token"}}}}}}
+	result := commitStructuralForTest(t, backend, root, projectlifecycle.ClassificationManaged, revision, []EditCommand{create})
+	set := b2Command(result.NewProjectRevision, "SetApplicationLibraryOverride")
+	set.EntityID, set.Property, set.Setting, set.Value = "gateway", "connections", "identity", map[string]any{"enabled": false}
+	result = commitStructuralForTest(t, backend, root, projectlifecycle.ClassificationManaged, result.NewProjectRevision, []EditCommand{set})
+	view, err := ReadManagedProjectView(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	overrides := asMap(asMap(asMap(view.ApplicationLibraries["sdku"]["applications"])["gateway"])["overrides"])
+	if asMap(asMap(overrides["connections"])["identity"])["enabled"] != false {
+		t.Fatal("false connection override lost")
+	}
+	reset := b2Command(result.NewProjectRevision, "RemoveApplicationLibraryOverride")
+	reset.EntityID, reset.Property, reset.Setting = "gateway", "connections", "identity"
+	result = commitStructuralForTest(t, backend, root, projectlifecycle.ClassificationManaged, result.NewProjectRevision, []EditCommand{reset})
+	bad := b2Command(result.NewProjectRevision, "UpdateApplicationLibraryDeployment")
+	bad.Entity = map[string]any{"provided_connections": map[string]any{"api": map[string]any{"credentials": map[string]any{
+		"token": map[string]any{"source": map[string]any{"kind": "literal", "value": "fixture-forbidden"}}}}}}
+	plan, _ := backend.PlanStructuralSave(context.Background(), root, projectlifecycle.ClassificationManaged, result.NewProjectRevision, []EditCommand{bad})
+	if plan.Status != "BLOCKED" {
+		t.Fatal("plaintext provided credential accepted")
+	}
+}
+
 func TestNamedTopicRolesSaveIncompleteAndResetWithoutCore(t *testing.T) {
 	root, b, revision := b2Project(t)
 	create := b2Command(revision, "CreateApplicationLibraryDeployment")

@@ -7,6 +7,7 @@ export function ApplicationBindings({
   hints,
   deployments,
   profiles,
+  providedConnections = [],
   disabled,
   onSave,
   onDirtyChange,
@@ -21,6 +22,7 @@ export function ApplicationBindings({
   hints: Record<string, string>;
   deployments: string[];
   profiles: string[];
+  providedConnections?: string[];
   disabled: boolean;
   onSave: (value: Obj) => Promise<boolean>;
   onDirtyChange: (dirty: boolean) => void;
@@ -40,7 +42,10 @@ export function ApplicationBindings({
   return (
     <section className="application-bindings-table">
       <h3>Подключения библиотеки</h3>
-      <p>Выберите сервис или TLS-профиль. Совместимость проверяет Core.</p>
+      <p>
+        Выберите сервис, предоставляемое подключение или TLS-профиль.
+        Совместимость проверяет Core.
+      </p>
       <div
         className="application-connections-scroll"
         role="region"
@@ -74,6 +79,7 @@ export function ApplicationBindings({
                 hint={hints[key]}
                 deployments={deployments}
                 profiles={profiles}
+                providedConnections={providedConnections}
                 disabled={disabled}
                 onDirtyChange={(dirty) => mark(key, dirty)}
                 onSave={(entry) => onSave({ ...value, [key]: entry })}
@@ -150,6 +156,7 @@ function BindingRow({
   hint,
   deployments,
   profiles,
+  providedConnections = [],
   disabled,
   onSave,
   onRemove,
@@ -163,21 +170,33 @@ function BindingRow({
   hint?: string;
   deployments: string[];
   profiles: string[];
+  providedConnections?: string[];
   disabled: boolean;
   onSave: (value: Obj) => Promise<boolean>;
   onRemove: () => Promise<boolean>;
   onDirtyChange: (dirty: boolean) => void;
 }) {
   const [kind, setKind] = useState(
-    Object.hasOwn(value, "profileRef") || hint === "pki"
-      ? "profileRef"
-      : "deploymentRef",
+    Object.hasOwn(value, "providedConnectionRef")
+      ? "providedConnectionRef"
+      : Object.hasOwn(value, "profileRef") || hint === "pki"
+        ? "profileRef"
+        : "deploymentRef",
   );
   const [ref, setRef] = useState(
-    String(value.profileRef ?? value.deploymentRef ?? ""),
+    value.providedConnectionRef
+      ? String(objectValue(value.providedConnectionRef).libraryId) +
+          "/" +
+          String(objectValue(value.providedConnectionRef).name)
+      : String(value.profileRef ?? value.deploymentRef ?? ""),
   );
   const [dirty, setDirty] = useState(false);
-  const candidates = kind === "profileRef" ? profiles : deployments;
+  const candidates =
+    kind === "providedConnectionRef"
+      ? providedConnections
+      : kind === "profileRef"
+        ? profiles
+        : deployments;
   return (
     <tr>
       <td>
@@ -200,6 +219,7 @@ function BindingRow({
         >
           <option value="deploymentRef">Сервис</option>
           <option value="profileRef">TLS-профиль</option>
+          <option value="providedConnectionRef">Подключение приложения</option>
         </select>
       </td>
       <td>
@@ -230,7 +250,14 @@ function BindingRow({
               const next = { ...value };
               delete next.deploymentRef;
               delete next.profileRef;
-              void onSave({ ...next, [kind]: ref }).then((ok) => {
+              delete next.providedConnectionRef;
+              void onSave({
+                ...next,
+                [kind]:
+                  kind === "providedConnectionRef"
+                    ? { libraryId: ref.split("/")[0], name: ref.split("/")[1] }
+                    : ref,
+              }).then((ok) => {
                 if (ok) {
                   setDirty(false);
                   onDirtyChange(false);

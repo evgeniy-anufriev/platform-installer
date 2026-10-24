@@ -10,12 +10,14 @@ try:
     from .kafka_listener_resolution import project_member_listeners
     from .kafka_schema_registry import registry_projection
     from .application_images import registry_request
+    from .application_connections import provided_connections, application_connection, enabled, active_script, script_secret_source, connection_callback
 except ImportError:
     from project_validation import canonical_digest
     from schema_validation import SchemaValidator
     from kafka_listener_resolution import project_member_listeners
     from kafka_schema_registry import registry_projection
     from application_images import registry_request
+    from application_connections import provided_connections, application_connection, enabled, active_script, script_secret_source, connection_callback
 
 CONTRACT = "platform.installer/project-desired-state/v3alpha1"
 ID = re.compile(r"^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$")
@@ -149,9 +151,11 @@ def load_package(root, reference, kind, loader, validator, inputs=None):
             if not isinstance(argument, dict):
                 continue
             source = argument["valueFrom"]
-            expected = ({"valueFrom", "name"} if source in ("parameter", "endpoint", "connection") else
+            expected = ({"valueFrom", "name"} if source in ("parameter", "endpoint", "connection", "library_secret", "provided_connection") else
                         {"valueFrom", "application"} if source == "placement_https" else {"valueFrom"})
-            if set(argument) != expected:
+            if source == 'endpoint' and script['phase'] == 'connection_apply' and set(argument) == {'valueFrom'}:
+                expected = {'valueFrom'}
+            if set(argument) - {'field'} != expected or ('field' in argument and source not in ('connection', 'provided_connection')):
                 raise ValueError("Package script reference invalid")
     defaults = loader(checked_file(root, folder + "/" + defaults_path))
     key = "platform_%s_definition" % kind
@@ -215,6 +219,8 @@ def prepare(root, desired, memberships, contract, loader, contracts_root):
         field = "applicationLibraryDeployments." + library_id
         try:
             library = package(deployment["libraryRef"], "library")
+            if set(deployment.get('provided_connections', {})) - set(library['definition'].get('provided_connections', {})):
+                raise ValueError('Unknown provided connection override')
             for resource in deployment.get("resources", {}).values():
                 restore = resource.get("parameters", {}).get("restore_on_create")
                 if restore is None:
@@ -243,6 +249,8 @@ def prepare(root, desired, memberships, contract, loader, contracts_root):
                     raise ValueError("Duplicate application definition")
                 app_names.add(application["name"])
                 for host in placements:
+                    if 'connections' in memberships[host][library_id].get('overrides', {}):
+                        raise ValueError('Host connection override is not supported')
                     jobs.append({"libraryId": library_id, "slotId": slot_id, "hostId": host,
                                  "library": library, "application": application,
                                  "deployment": deployment, "instance": selected[slot_id],
@@ -447,6 +455,11 @@ def resolve_tables(resources, bindings, desired, defaults, catalog, project_id):
 
 def project(rows, desired, configuration, catalog, hosts, project_id="ansible-project"):
     findings, libraries, ports = [], {}, set()
+    try:
+        exports = provided_connections(rows, desired, hosts)
+    except (ValueError, KeyError, TypeError):
+        exports = {}
+        findings.append(finding('APPLICATION_PROVIDED_CONNECTION_INVALID', 'applicationLibraryDeployments'))
     instance_owners = {}
     if not isinstance(project_id, str) or not ID.fullmatch(project_id):
         return {"apiVersion": "platform.installer/application-libraries/v1alpha1", "status": "BLOCKED", "libraries": {},
@@ -475,10 +488,14 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
         for resource_id, resource in row["resources"].items():
             nonsecret_values(resource.get("parameters", {}), field + ".resources." + resource_id + ".parameters", findings)
         declared_accounts = settings.get("accounts", {})
-        accounts = declared_accounts
+        accounts = {name: value for name, value in declared_accounts.items() if enabled(settings, name)}
         secret_bindings = settings.get("provisioner", {}).get("secret_bindings", {})
+        secret_bindings = {name: value for name, value in secret_bindings.items()
+                           if all(enabled(settings, alias) for alias in value.get('requires_connections', []))
+                           and enabled(settings, value['source'].get('account', ''))}
         skipped = {name for name, declaration in row['connections'].items()
-                   if not row['bindings'].get(declaration['library_binding'], {}).get('deploymentRef')}
+                   if not (row['bindings'].get(declaration['library_binding'], {}).get('deploymentRef')
+                           or row['bindings'].get(declaration['library_binding'], {}).get('providedConnectionRef'))}
         accounts = {name: account for name, account in accounts.items() if name not in skipped}
         secret_bindings = {name: binding for name, binding in secret_bindings.items()
                            if binding['source'].get('account') not in skipped}
@@ -506,7 +523,20 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
             findings.append(finding("APPLICATION_IDENTITY_OVERRIDE", field))
         connections = {}
         for name, declaration in row["connections"].items():
+            if not enabled(settings, name):
+                continue
             binding = row["bindings"].get(declaration["library_binding"], {})
+            if not binding and settings.get('connections', {}).get(name, {}).get('enabled') is True:
+                findings.append(finding('APPLICATION_BINDING_REQUIRED', field + '.bindings.' + declaration['library_binding']))
+                continue
+            if 'providedConnectionRef' in binding:
+                try:
+                    connections[name] = application_connection(binding, declaration, exports)
+                    if name in accounts and not connections[name].get('accountProvisioner'):
+                        raise ValueError('APPLICATION_ACCOUNT_CAPABILITY_UNSUPPORTED')
+                except (ValueError, KeyError, TypeError):
+                    findings.append(finding('APPLICATION_PROVIDED_CONNECTION_INVALID', field + '.connections.' + name))
+                continue
             reference = binding.get("deploymentRef")
             if not reference:
                 if name in accounts:
@@ -562,6 +592,12 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
             ports.add(key)
         shared_connections = {}
         for name, declaration in row.get('libraryConnections', {}).items():
+            if 'providedConnectionRef' in row['bindings'].get(declaration['library_binding'], {}):
+                try:
+                    shared_connections[name] = application_connection(row['bindings'][declaration['library_binding']], declaration, exports)
+                except (ValueError, KeyError, TypeError):
+                    pass  # A disabled optional consumer need not resolve this connection.
+                continue
             reference = row['bindings'].get(declaration['library_binding'], {}).get('deploymentRef')
             if not reference:
                 continue
@@ -585,6 +621,7 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
             topics, topic_bindings = {}, {}
             findings.append(finding('APPLICATION_TOPIC_BINDING_INVALID', field + '.topicBindings'))
         library = libraries.setdefault(library_id, {"libraryRef": row["libraryRef"], "packages": {}, "instances": {}, "resources": row["resources"], 'topics': topics, "sharedSecretRequirements": row["sharedSecrets"], 'connections': shared_connections, 'runtimeDirectory': row.get('runtimeDirectory', '~/' + library_id), 'scripts': row.get('libraryScripts', [])})
+        library['providedConnections'] = exports.get(library_id, {})
         if library.setdefault('registryCredentials', row.get('registryCredentials', {})) != row.get('registryCredentials', {}):
             findings.append(finding('APPLICATION_HOST_RESOURCE_CONFLICT', field))
         registries = library.setdefault('registries', [])
@@ -639,6 +676,7 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
                                           "origin": {"resolution": "ANSIBLE", "precision": "RESOLUTION_SCOPE",
                                                      "applicationPackage": row['applicationName'] + '@' + row['applicationVersion'],
                                                      "libraryPackage": row['libraryRef'], "host": host},
+                                          "connectionSettings": settings.get('connections', {}),
                                           "parameters": settings.get("parameters", {}), "environment": settings.get("environment", {}),
                                           "topicBindings": settings.get('topicBindings', {}),
                                           "ports": settings.get("ports", {}), "endpoint": settings.get("endpoint", {}),
@@ -649,21 +687,71 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
     for library in libraries.values():
         used = {binding["source"]["library_secret"] for instance in library["instances"].values()
                 for binding in instance.get("secretBindings", {}).values() if "library_secret" in binding["source"]}
+        used.update(source['name'] for instance in library['instances'].values()
+                    for script in library.get('scripts', []) + instance.get('scripts', []) if active_script(script, instance)
+                    for source in script.get('secretInputs', {}).values() if source.get('valueFrom') == 'library_secret')
         library["sharedSecretRequirements"] = {key: value for key, value in library["sharedSecretRequirements"].items() if key in used}
     for library_id, library in libraries.items():
+        for export_name, export in library.get('providedConnections', {}).items():
+            callback = export.get('accountProvisioner', {}).get('apply_script')
+            if callback and len([script for script in library['instances'][export['applicationId']].get('scripts', [])
+                                 if script['id'] == callback and script['phase'] == 'account_apply']) != 1:
+                findings.append(finding('APPLICATION_ACCOUNT_CALLBACK_INVALID',
+                                        'applicationLibraryDeployments.' + library_id + '.provided_connections.' + export_name))
+            if export.get('connectionProvisioner'):
+                try:
+                    connection_callback(libraries, export)
+                except (ValueError, KeyError, TypeError):
+                    findings.append(finding('APPLICATION_CONNECTION_CALLBACK_INVALID',
+                                            'applicationLibraryDeployments.' + library_id + '.provided_connections.' + export_name))
         named = {instance['applicationName']: instance for instance in library['instances'].values()}
+        for consumer in library['instances'].values():
+            for alias, connection in consumer.get('connections', {}).items():
+                if not connection.get('connectionProvisioner'):
+                    continue
+                try:
+                    provider, _, callback = connection_callback(libraries, connection)
+                    for source in callback.get('secretInputs', {}).values():
+                        value = script_secret_source(source, library, consumer, provider)
+                        if value is None and not source.get('optional', False):
+                            raise ValueError('APPLICATION_SCRIPT_REFERENCE_INVALID')
+                    for argument in callback.get('argv', []):
+                        if not isinstance(argument, dict):
+                            continue
+                        if argument['valueFrom'] == 'parameter' and any(
+                                argument['name'] not in placement.get('parameters', {}) for placement in consumer['placements'].values()):
+                            raise ValueError('APPLICATION_SCRIPT_REFERENCE_INVALID')
+                        if argument['valueFrom'] == 'endpoint' and 'name' not in argument and any(
+                                not placement.get('endpoint', {}).get('enabled') for placement in consumer['placements'].values()):
+                            raise ValueError('APPLICATION_SCRIPT_REFERENCE_INVALID')
+                except (ValueError, KeyError, TypeError):
+                    findings.append(finding('APPLICATION_CONNECTION_CALLBACK_INVALID',
+                                            'applicationLibraryDeployments.' + library_id + '.connections.' + alias))
+
         for instance_id, instance in library['instances'].items():
             scripts = library.get('scripts', []) + instance.get('scripts', [])
             if len({script['id'] for script in scripts}) != len(scripts):
                 findings.append(finding('APPLICATION_SCRIPT_ID_CONFLICT', 'applicationLibraryDeployments.' + library_id))
             for script in scripts:
+                if script['phase'] == 'connection_apply':
+                    continue
+                if script['phase'] != 'account_apply' and not active_script(script, instance):
+                    continue
+                for source in script.get('secretInputs', {}).values():
+                    try:
+                        value = script_secret_source(source, library, instance)
+                        if value is None and script['phase'] != 'account_apply' and not source.get('optional', False):
+                            raise ValueError('APPLICATION_SCRIPT_REFERENCE_INVALID')
+                    except (ValueError, KeyError, TypeError):
+                        findings.append(finding('APPLICATION_SCRIPT_REFERENCE_INVALID',
+                                                'applicationLibraryDeployments.' + library_id + '.scripts.' + script['id']))
                 for argument in script.get('argv', []):
                     if not isinstance(argument, dict):
                         continue
                     source = argument['valueFrom']
                     name = argument.get('name')
                     if source == 'parameter':
-                        valid = all(name in p.get('parameters', {}) and isinstance(p['parameters'][name], (str, int, float, bool))
+                        valid = all(name in p.get('parameters', {}) and isinstance(p['parameters'][name], (str, int, float, bool, dict, list))
                                     for p in instance['placements'].values())
                     elif source in ('placement_https', 'endpoint'):
                         target = named.get(argument.get('application', name), {})
@@ -675,6 +763,10 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
                             for host in instance['placements'])
                     elif source == 'connection':
                         valid = name in instance.get('connections', {}) and bool(instance['connections'][name].get('targets'))
+                    elif source == 'provided_connection':
+                        valid = name in library.get('providedConnections', {})
+                    elif source == 'account_batch':
+                        valid = script['phase'] == 'account_apply'
                     else:
                         valid = source in ('applicationId', 'projectId', 'libraryId', 'targetHostId')
                     if not valid:

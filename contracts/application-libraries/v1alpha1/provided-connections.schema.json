@@ -1,0 +1,172 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Application-provided connections",
+  "$defs": {
+    "exports": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$",
+        "maxLength": 128
+      },
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "application",
+          "protocol"
+        ],
+        "properties": {
+          "application": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$",
+            "maxLength": 128
+          },
+          "protocol": {
+            "enum": [
+              "https"
+            ]
+          },
+          "parameters": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          },
+          "credentials": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$",
+              "maxLength": 128
+            },
+            "additionalProperties": {
+              "type": "object",
+              "required": [
+                "source"
+              ],
+              "properties": {
+                "sensitive": {
+                  "type": "boolean"
+                },
+                "source": {
+                  "$ref": "settings.schema.json#/$defs/source"
+                }
+              },
+              "additionalProperties": false,
+              "allOf": [
+                {
+                  "if": {
+                    "not": {
+                      "properties": {
+                        "sensitive": {
+                          "const": false
+                        }
+                      },
+                      "required": [
+                        "sensitive"
+                      ]
+                    }
+                  },
+                  "then": {
+                    "properties": {
+                      "source": {
+                        "not": {
+                          "properties": {
+                            "kind": {
+                              "const": "literal"
+                            }
+                          },
+                          "required": [
+                            "kind"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            },
+            "maxProperties": 128
+          },
+          "account_provisioner": {
+            "type": "object",
+            "required": [
+              "apply_script"
+            ],
+            "properties": {
+              "apply_script": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$",
+                "maxLength": 128
+              }
+            },
+            "additionalProperties": false
+          },
+          "connection_provisioner": {
+            "type": "object",
+            "required": [
+              "apply_script"
+            ],
+            "properties": {
+              "apply_script": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$",
+                "maxLength": 128
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "maxProperties": 128
+    },
+    "overrides": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$",
+        "maxLength": 128
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "parameters": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          },
+          "credentials": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$",
+              "maxLength": 128
+            },
+            "additionalProperties": {
+              "type": "object",
+              "required": [
+                "source"
+              ],
+              "properties": {
+                "source": {
+                  "$ref": "settings.schema.json#/$defs/source"
+                }
+              },
+              "additionalProperties": false
+            },
+            "maxProperties": 128
+          }
+        },
+        "additionalProperties": false
+      },
+      "maxProperties": 128
+    }
+  },
+  "$id": "https://platform-installer.local/contracts/application-libraries/v1alpha1/provided-connections.schema.json"
+}
