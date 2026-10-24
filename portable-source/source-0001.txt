@@ -21500,7 +21500,7 @@ def docker_save_image(path, reference):
                     imageId='sha256:' + hashlib.sha256(raw).hexdigest())
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_libraries.py","mode":420,"size":47210,"sha256":"68e519c70cfcf095d49f3461358e7c6e218328c5547e7078bfcf95011674fdd0","index":0,"count":1,"encoding":"utf-8","payloadBytes":47210}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_libraries.py","mode":420,"size":47490,"sha256":"ca9a321ccf2da52f281c053be54571c5869454399587111f646af18711d53e3a","index":0,"count":1,"encoding":"utf-8","payloadBytes":47490}
 """Read-only application contract checks. Ansible owns composition and templating."""
 import hashlib
 import json
@@ -21873,16 +21873,19 @@ def resolve_connection(deployment_id, declaration, selector, desired, configurat
 
 
 def account_policies(settings, layers):
-    """Keep policy alternatives atomic after ordinary Ansible combine.
+    """Keep typed source and policy alternatives atomic after Ansible combine.
 
     The resolving task supplies layers in its existing order. Credential
-    inheritance is unchanged; a deliberate policy switch clears its alternative.
+    inheritance remains field-level; an explicit source replaces its descriptor.
     """
     import copy
     result = copy.deepcopy(settings)
     policies = {}
     for layer in layers:
         for name, declaration in layer.get('accounts', {}).items():
+            for field, credential in declaration.get('credentials', {}).items():
+                if isinstance(credential, dict) and 'source' in credential:
+                    result['accounts'][name]['credentials'][field]['source'] = copy.deepcopy(credential['source'])
             if 'databaseAccess' in declaration:
                 if 'databaseRef' in declaration or 'grants' in declaration:
                     raise ValueError('APPLICATION_PROVIDER_GRANTS_INVALID')
@@ -22363,16 +22366,16 @@ def application_operation(action, model):
                 applicationSemanticFingerprint=model['semanticFingerprint'])
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_providers.py","mode":420,"size":30369,"sha256":"9e749b038d126f4179052925bc3c55e2c66897105fd4e71fa1b8491012c8165d","index":0,"count":1,"encoding":"utf-8","payloadBytes":30369}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_providers.py","mode":420,"size":30956,"sha256":"707279720857f35a02fe29b8564e9338b198e058a7d0cb6ba2228a6b68cbd91f","index":0,"count":1,"encoding":"utf-8","payloadBytes":30956}
 """Target-free provider hook projection. Ansible remains the variable resolver."""
 import hashlib
 import re
 
 try:
-    from .runtime_secret_identity import secret_input_requirement_ref
+    from .runtime_secret_identity import secret_input_requirement_ref, generated_password_ref
     from .application_libraries import resolve_connection, finding, _value
 except ImportError:
-    from runtime_secret_identity import secret_input_requirement_ref
+    from runtime_secret_identity import secret_input_requirement_ref, generated_password_ref
     from application_libraries import resolve_connection, finding, _value
 
 NAME = re.compile(r'^[a-z_][a-z0-9_]{0,62}$')
@@ -22642,8 +22645,10 @@ def project_providers(rows, snapshot, configuration, desired, catalog):
                     credentials = account['credentials']
                     if set(credentials) != {'username', 'password'} or credentials['username']['source']['kind'] != 'literal':
                         raise ValueError('APPLICATION_PROVIDER_CREDENTIAL_INVALID')
-                    if credentials['password']['source']['kind'] not in {'runtime_secret_ref', 'vault_ref'}:
+                    if credentials['password']['source']['kind'] not in {'runtime_secret_ref', 'vault_ref', 'generated'}:
                         raise ValueError('APPLICATION_PROVIDER_CREDENTIAL_SOURCE_DEFERRED')
+                    if credentials['password']['source']['kind'] == 'generated' and (account['mode'] != 'managed' or not instance.get('agentRequired')):
+                        raise ValueError('APPLICATION_PROVIDER_GENERATED_PASSWORD_SCOPE_INVALID')
                     username = identifier(credentials['username']['source']['value'], True)
                     admin = configuration['services'][ref]['configuration'].get('adminSuperuser', {}).get('value', {}).get('username')
                     if username in {admin, 'default', 'autoctl_node', 'pgautofailover_replicator'} or (service_type == 'kafka' and username == 'admin'):
@@ -22682,7 +22687,10 @@ def project_providers(rows, snapshot, configuration, desired, catalog):
                     value = dict(name=username, mode=account['mode'], instanceId=instance_id, accountId=account_id,
                                  database=database['name'] if database else None, libraryId=library_id,
                                  listener=listener, candidates=connection.get('targets', job['candidates']),
-                                 passwordRef=(credentials['password']['source']['ref'] if credentials['password']['source']['kind'] == 'runtime_secret_ref' else 'pla-vault-'+hashlib.sha256(repr(sorted(credentials['password']['source'].items())).encode()).hexdigest()[:32]), grants=grants,
+                                 passwordRef=(generated_password_ref(project_id, library_id, instance_id, account_id)
+                                              if credentials['password']['source']['kind'] == 'generated' else
+                                              credentials['password']['source']['ref'] if credentials['password']['source']['kind'] == 'runtime_secret_ref' else
+                                              'pla-vault-'+hashlib.sha256(repr(sorted(credentials['password']['source'].items())).encode()).hexdigest()[:32]), grants=grants,
                                  marker=marker(project_id, ref, library_id, 'account', instance_id + '/' + account_id))
                     if bulk_access:
                         value['databaseAccess'] = access
@@ -23199,11 +23207,16 @@ def prepare_script_jobs(root, snapshot, desired, rows, jobs):
     return jobs
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_vault.py","mode":420,"size":11997,"sha256":"ae86dba02afad341b7077a08166f5daebb4d6e3f9c965b463634fd49a1743a63","index":0,"count":1,"encoding":"utf-8","payloadBytes":11997}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_vault.py","mode":420,"size":12968,"sha256":"1d28638cd04ccba6f418c8f7171d22d78ece560917d7d9a3bebe484a4495e555","index":0,"count":1,"encoding":"utf-8","payloadBytes":12968}
 """Target-free Vault jobs; no values, network access or Installer lifecycle."""
 import hashlib
 import json
 import re
+
+try:
+    from .runtime_secret_identity import generated_password_ref
+except ImportError:
+    from runtime_secret_identity import generated_password_ref
 
 SEGMENT = re.compile(r'^[A-Za-z0-9_-][A-Za-z0-9_.-]{0,127}$')
 
@@ -23247,6 +23260,11 @@ def project_vault(rows, prepared):
         active = [i for i in library['instances'].values() if i['agentRequired']]
         sources = [c['source'] for i in library['instances'].values() for a in i['credentialRequirements'].values()
                    for c in a['credentials'].values() if c['source']['kind'] == 'vault_ref']
+        if any(c['source']['kind'] == 'generated' and
+               (field != 'password' or a.get('mode') != 'managed' or not i['agentRequired'])
+               for i in library['instances'].values() for a in i['credentialRequirements'].values()
+               for field, c in a['credentials'].items()):
+            raise ValueError('APPLICATION_VAULT_GENERATED_PASSWORD_SCOPE_INVALID')
         if not active and not sources:
             continue
         auth = row.get('vaultRef', {})
@@ -23308,7 +23326,7 @@ def project_vault(rows, prepared):
         if len(mounts) > 1:
             raise ValueError('APPLICATION_VAULT_SHARED_MOUNT_CONFLICT')
         mount = segment(next(iter(mounts), 'secret'))
-        shared_doc = '%s/%s/shared' % (project, segment(library_id))
+        shared_doc = '%s/shared' % segment(library_id)
         documents = []
         shared_locations = {}
         for name, value in shared.items():
@@ -23330,17 +23348,22 @@ def project_vault(rows, prepared):
             locations, account_docs = {}, []
             for account_id, account in sorted(instance['credentialRequirements'].items()):
                 fields = {}
-                document = '%s/%s/%s/accounts/%s' % (project, library_id, segment(instance_id), segment(account_id))
+                document = '%s/%s/accounts/%s' % (segment(library_id), segment(instance_id), segment(account_id))
                 for field, credential in account['credentials'].items():
                     source = credential['source']
                     location = kv_source(source, row)
                     if location and location['providerId'] != ref:
                         raise ValueError('APPLICATION_VAULT_SOURCE_PROVIDER_MISMATCH')
-                    if source['kind'] not in {'literal', 'runtime_secret_ref', 'vault_ref'}:
+                    if source['kind'] not in {'literal', 'runtime_secret_ref', 'vault_ref', 'generated'}:
                         raise ValueError('APPLICATION_VAULT_SOURCE_DEFERRED')
                     locations[(account_id, field)] = location or dict(mount=mount, document=document, field=segment(field))
                     if not location:
                         fields[field] = dict(source=source)
+                        if source['kind'] == 'generated':
+                            password_ref = generated_password_ref(project, library_id, instance_id, account_id)
+                            fields[field]['passwordRef'] = password_ref
+                            source_jobs.append(dict(providerId=ref, mount=mount, document=document,
+                                                    field=field, passwordRef=password_ref))
                 if fields:
                     account_docs.append(dict(mount=mount, document=document, fields=fields))
             envs, paths, read_fields = [], set(), {}
@@ -27685,10 +27708,16 @@ def write_validation_artifact(path, result):
         raise
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/runtime_secret_identity.py","mode":420,"size":448,"sha256":"a9f0e4f8dc26381f6e27ee7ffa890757f90f0680fba39741ddef2a0c104565db","index":0,"count":1,"encoding":"utf-8","payloadBytes":448}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/runtime_secret_identity.py","mode":420,"size":734,"sha256":"cc218f22c3f5b9bb36d092f9682f8ab40d3e1f4dd78a827fde4c3623f2f741ff","index":0,"count":1,"encoding":"utf-8","payloadBytes":734}
 """Opaque deployment-bound identities shared by existing runtime-secret projections."""
 import hashlib
 import json
+
+
+def generated_password_ref(project, library, instance, account):
+    encoded = json.dumps([project, library, instance, account], ensure_ascii=False,
+                         separators=(",", ":")).encode("utf-8")
+    return "pla-generated-" + hashlib.sha256(encoded).hexdigest()[:40]
 
 
 def secret_input_requirement_ref(service_deployment, manifest_requirement_ref, purpose):
@@ -34872,7 +34901,7 @@ artifactLock:
     - ansible.builtin.import_tasks: tasks/application-libraries-offline-archives.yml
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-provider-stage.yml","mode":420,"size":6750,"sha256":"3c7b0b090f6ec06c9a08735ab22974cc221a254e54e2c9c67120d3ef9a4f4f44","index":0,"count":1,"encoding":"utf-8","payloadBytes":6750}
+@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-provider-stage.yml","mode":420,"size":8309,"sha256":"6cb156af7772886ee8993831e3cac429b19335392cc03d0d2fdd71170cf5e578","index":0,"count":1,"encoding":"utf-8","payloadBytes":8309}
 ---
 - name: Run preflighted library then instance provider hooks
   hosts: localhost
@@ -34882,6 +34911,26 @@ artifactLock:
   tasks:
     - name: Execute provider stages with bounded derived credential custody
       block:
+        - name: Require protected runtime root before generated credential delivery
+          ansible.builtin.assert:
+            that: "{} | platform.core.application_protected_secret_files([], platform_application_secret_root)"
+            fail_msg: APPLICATION_PROVIDER_SECRET_FILE_INVALID
+          when: platform_application_generated_values | default({}) | length > 0
+          no_log: true
+        - name: Deliver generated application passwords through existing runtime files
+          ansible.builtin.copy:
+            content: "{{ item.value }}"
+            dest: "{{ platform_application_secret_root }}/{{ item.key }}"
+            mode: '0600'
+            follow: false
+          loop: "{{ platform_application_generated_values | default({}) | dict2items }}"
+          changed_when: false
+          no_log: true
+        - name: Bind generated runtime files for the ordinary provider hooks
+          ansible.builtin.set_fact:
+            platform_application_credential_files: "{{ platform_application_credential_files | default({}) | combine({item.key: platform_application_secret_root ~ '/' ~ item.key}) }}"
+          loop: "{{ platform_application_generated_values | default({}) | dict2items }}"
+          no_log: true
         - name: Read existing credential sources within bounded runtime custody
           ansible.builtin.include_role:
             name: platform.vault.application_provider
@@ -34889,6 +34938,7 @@ artifactLock:
           loop: "{{ application_vault_inputs.sourceJobs | default([]) }}"
           loop_control:
             loop_var: application_vault_source
+          when: application_vault_source.passwordRef | default('') not in (platform_application_credential_files | default({}))
         - name: Require the same prepared PostgreSQL scope
           ansible.builtin.assert:
             that: application_provider_inputs.status == 'PASS'
@@ -34992,6 +35042,10 @@ artifactLock:
           loop_control:
             loop_var: platform_vault_application_job
       always:
+        - name: Discard generated password preparation values after provider delivery
+          ansible.builtin.set_fact:
+            platform_application_generated_values: {}
+          no_log: true
         - name: Remove only invocation-derived Vault account credential files
           ansible.builtin.file:
             path: "{{ platform_application_secret_root }}/{{ item.passwordRef }}"
@@ -35302,7 +35356,7 @@ artifactLock:
         fail_msg: "{{ application_runtime_inputs.code | default('APPLICATION_RUNTIME_INPUT_INVALID') }}"
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-vault-preflight.yml","mode":420,"size":1769,"sha256":"6c55e3cac6ec09b966904b491d1ade09081749a915d004d6e83b8da8b05e8b11","index":0,"count":1,"encoding":"utf-8","payloadBytes":1769}
+@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-vault-preflight.yml","mode":420,"size":1819,"sha256":"54a738f6973df9096f7f76eee474960df0a1c52f43aead234c47740a64611fd8","index":0,"count":1,"encoding":"utf-8","payloadBytes":1819}
 ---
 - name: Resolve and preflight application Vault providers without mutations
   hosts: localhost
@@ -35326,6 +35380,7 @@ artifactLock:
         platform_application_vault_values: {}
         platform_application_vault_documents: {}
         platform_application_credential_files: {}
+        platform_application_generated_values: {}
       no_log: true
     - name: Discover each Vault deployment once
       ansible.builtin.include_role:
@@ -36559,7 +36614,7 @@ if __name__ == "__main__":
     raise SystemExit(main())
 
 @@END
-@@PORTABLE {"path":"ansible-core/tools/execution_controller.py","mode":420,"size":67233,"sha256":"28c90e40a6153ffb88329a7acd4a44f2ce7703b437a21a90af28aa0a9ff49310","index":0,"count":2,"encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"ansible-core/tools/execution_controller.py","mode":420,"size":67235,"sha256":"0518eb172563f6659f7c1a5f10176bd7d2159e55c0ba9f473e491f67642d238c","index":0,"count":2,"encoding":"utf-8","payloadBytes":48000}
 #!/usr/bin/env python3
 """Fixed Execution Node controller.  It never accepts a command or playbook."""
 from __future__ import print_function
@@ -37015,7 +37070,7 @@ def _command(release, journal, operation):
                 operation.get('phaseId') != 'applications' or not isinstance(libraries, list) or
                 not 1 <= len(libraries) <= 256 or any(not isinstance(item, str) or
                     re.fullmatch(r'[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*', item) is None for item in libraries) or
-                libraries != sorted(set(libraries)) or not isinstance(operation.get('applicationSemanticFingerprint'), str) or
+                len(libraries) != len(set(libraries)) or not isinstance(operation.get('applicationSemanticFingerprint'), str) or
                 re.fullmatch(r'sha256:[a-f0-9]{64}', operation['applicationSemanticFingerprint']) is None):
             raise LifecycleError('EXECUTION_MANIFEST_INVALID')
         targets = _service_targets(operation)
@@ -37411,10 +37466,10 @@ def validate_application_manifest(manifest):
         raise LifecycleError('EXECUTION_MANIFEST_INVALID')
     declared = {item['serviceDeployment'] for item in _secret_output_declarations(manifest)}
     vaults = {item.get('serviceDeployment') for item in manifest['operations']
-              if item.get('operation')
+              if item.get('operation
 @@END
-@@PORTABLE {"path":"ansible-core/tools/execution_controller.py","mode":420,"size":67233,"sha256":"28c90e40a6153ffb88329a7acd4a44f2ce7703b437a21a90af28aa0a9ff49310","index":1,"count":2,"encoding":"utf-8","payloadBytes":19233}
- == 'SERVICE_APPLY' and item.get('serviceType') == 'vault'}
+@@PORTABLE {"path":"ansible-core/tools/execution_controller.py","mode":420,"size":67235,"sha256":"0518eb172563f6659f7c1a5f10176bd7d2159e55c0ba9f473e491f67642d238c","index":1,"count":2,"encoding":"utf-8","payloadBytes":19235}
+') == 'SERVICE_APPLY' and item.get('serviceType') == 'vault'}
     refs, names = set(), set()
     for item in manifest['applicationSecretRequirements']:
         if (item['requirementRef'] in refs or item['runtimeReference'] in names or
@@ -56017,7 +56072,7 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/application-packages/alarm-view-service/1.0.0/roles/application_alarm-view-service/defaults/main.yml","mode":420,"size":10827,"sha256":"4519f83ee0be7dfae48908e691d4919618161bd8447a6d43f5f7c021b2540a7a","index":0,"count":1,"encoding":"utf-8","payloadBytes":10827}
+@@PORTABLE {"path":"examples/sdku/application-packages/alarm-view-service/1.0.0/roles/application_alarm-view-service/defaults/main.yml","mode":420,"size":13424,"sha256":"3782c4e657f6f425680dc7f7ebbad5001fadd53ee015541696bc168c64153d2d","index":0,"count":1,"encoding":"utf-8","payloadBytes":13424}
 platform_application_definition:
     name: alarm-view-service
     version: 1.0.0
@@ -56026,6 +56081,23 @@ platform_application_definition:
         user: 1000:1000
         restart: always
         accounts:
+            kafka:
+                mode: managed
+                credentials:
+                    username:
+                        source: {kind: literal, value: '{{ application_instance_id | replace(''-'', ''_'') }}'}
+                    password:
+                        source: {kind: runtime_secret_ref, ref: '{{ application_instance_id }}-kafka-password'}
+                grants:
+                    - {resourceType: topic, name: ack-alarm-, patternType: prefixed, operations: [Describe]}
+                    - {topicRef: ack_alarm, operations: [Read, Write, Describe]}
+                    - {topicRef: alarms, operations: [Read, Write, Describe]}
+                    - {topicRef: alarms_compact, operations: [Read, Write, Describe]}
+                    - {topicRef: main, operations: [Read, Write, Describe]}
+                    - {resourceType: group, name: 'alarm-view-service-{{ application_instance_id }}', patternType: prefixed, operations: [Read, Describe]}
+                    - {resourceType: group, name: alarm-view-service-ack-alarm-listener, operations: [Read, Describe]}
+                    - {resourceType: group, name: '{{ application_instance_id }}', patternType: prefixed, operations: [Read, Describe]}
+                    - {resourceType: cluster, name: kafka-cluster, operations: [Describe, IdempotentWrite]}
             clickhouse:
                 credentials:
                     password:
@@ -56139,8 +56211,8 @@ platform_application_definition:
             KAFKA_LISTENER_CONCURRENCY: "1"
             KAFKA_LISTENER_ID_CONFIG: '{{ application_instance_id }}'
             KAFKA_MANAGER_LISTENER_ID: alarm-view-service-{{ application_instance_id }}
-            KAFKA_SASL_MECHANISM: PLAIN
-            KAFKA_SECURITY_PROTOCOL: SSL
+            KAFKA_SASL_MECHANISM: SCRAM-SHA-512
+            KAFKA_SECURITY_PROTOCOL: SASL_SSL
             KAFKA_SIGNAL_TOPIC: '{{ application_topics.kafka.main.name }}'
             LOGGER_LEVEL: DEBUG
             SERVER_ALLOWED_ORIGINS: '*'
@@ -56153,6 +56225,19 @@ platform_application_definition:
             TIME_STAMP_PATTERN: yyyy.MM.dd HH:mm:ss.SSS
             TNT_DEMO_CLIENT_PORT: '{{ ((application_job.application.definition.defaults.ports | default({})) | combine(application_job.slot.overrides.ports | default({}), recursive=true) | combine(application_job.instance.overrides.ports | default({}), recursive=true) | combine(application_job.hostOverride.ports | default({}), recursive=true))[''port-1''].container }}'
             WEB_SERVER_PORT: '{{ ((application_job.application.definition.defaults.ports | default({})) | combine(application_job.slot.overrides.ports | default({}), recursive=true) | combine(application_job.instance.overrides.ports | default({}), recursive=true) | combine(application_job.hostOverride.ports | default({}), recursive=true))[''port-1''].container }}'
+            kafka.consumer.security.protocol: SASL_SSL
+            kafka.producer.security.protocol: SASL_SSL
+            kafka.consumer.sasl.mechanism: SCRAM-SHA-512
+            kafka.producer.sasl.mechanism: SCRAM-SHA-512
+            kafka.consumer.sasl.jaas.config: '$${KAFKA_CONSUMER_SASL_JAAS_CONFIG}'
+            kafka.producer.sasl.jaas.config: '$${KAFKA_PRODUCER_SASL_JAAS_CONFIG}'
+            kafka.consumer.ssl.truststore.location: /opt/application/pki/truststore.p12
+            kafka.consumer.ssl.truststore.type: PKCS12
+            kafka.consumer.ssl.truststore.password: '$${KAFKA_TRUSTSTORE_PASSWORD}'
+            kafka.producer.ssl.truststore.location: /opt/application/pki/truststore.p12
+            kafka.producer.ssl.truststore.type: PKCS12
+            kafka.producer.ssl.truststore.password: '$${KAFKA_TRUSTSTORE_PASSWORD}'
+            logging.level.tnt.tnscada.core.kafkamanager.kafka.config.KafkaManagerConfig: INFO
             kafka.consumer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-consumer'
             kafka.producer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-producer'
             logging.level.ru.tnt.transneft.alarmservice.processor: WARN
@@ -56168,6 +56253,12 @@ platform_application_definition:
                 method: approle
             mode: process-supervisor
             secret_bindings:
+                KAFKA_PRODUCER_SASL_JAAS_CONFIG:
+                    source: {account: kafka, field: password}
+                    format: kafka_scram_jaas
+                KAFKA_CONSUMER_SASL_JAAS_CONFIG:
+                    source: {account: kafka, field: password}
+                    format: kafka_scram_jaas
                 DB_PASSWORD:
                     source:
                         account: postgres
@@ -60926,7 +61017,83 @@ services:
               memory: 2G
 
 @@END
-@@PORTABLE {"path":"examples/sdku/configuration/group_vars.yml.example","mode":420,"size":2605,"sha256":"b3c90d35905e9488f71009a4ef9f0d7d0e1db90a5fb02968d919acae735802fb","index":0,"count":1,"encoding":"utf-8","payloadBytes":2605}
+@@PORTABLE {"path":"examples/sdku/configuration/alarm-view-secrets.yml.example","mode":420,"size":3992,"sha256":"f29a0cfdc170ceb37cb6901f883792048501de3816bb81947834b3918f584c34","index":0,"count":1,"encoding":"utf-8","payloadBytes":3992}
+---
+# Merge into ordinary group_vars; replace deployment/profile references for your project.
+# Host membership: platform_application_libraries: {sdku-dm: {}, cspa: {}}
+# Runtime credentials are entered in the UI session or supplied to standalone Ansible.
+# No plaintext passwords belong in this fragment.
+platform_desired_state:
+  applicationLibraryDeployments:
+    sdku-dm:
+      libraryRef: sdku@1.0.0
+      runtimeRef: docker-apps
+      bindings:
+        database: {deploymentRef: postgres-apps}
+        analytics: {deploymentRef: clickhouse-apps}
+        cache: {deploymentRef: redis-apps}
+        messaging: {deploymentRef: kafka-apps}
+        secrets: {deploymentRef: vault-apps}
+        application-pki: {profileRef: application-pki}
+      connection_defaults:
+        kafka: {connectionRef: SASL_SSL}
+        redis: {connectionRef: sentinel}
+      resources:
+        history: {kind: clickhouse.database, binding: analytics, mode: managed, parameters: {name: sdku_dm}}
+        alarms_db: {kind: postgresql.database, binding: database, mode: managed, parameters: {name: sdku_alarm_view}}
+      applications:
+        alarm-view-service:
+          accounts:
+            postgres: {mode: managed, credentials: {password: {source: {kind: generated}}}}
+            clickhouse: {mode: managed, credentials: {password: {source: {kind: generated}}}}
+            kafka: {mode: managed, credentials: {password: {source: {kind: generated}}}}
+            redis: {mode: managed, credentials: {password: {source: {kind: generated}}}}
+            sentinel: {mode: managed, credentials: {password: {source: {kind: generated}}}}
+          overrides:
+            environment:
+              JAVA_OPTS: -Xmx768m
+              JAVA_TOOL_OPTIONS: -Xmx768m
+              SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "10"
+              SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
+              EVO_SERVICES_CONSENSUS_SERVICE_HEALTH_CHECK_TIMEOUT: "5000"
+            readiness: {mode: healthcheck, delay: 5, retries: 60}
+    cspa:
+      libraryRef: cspa@1.0.0
+      runtimeRef: docker-apps
+      bindings:
+        database: {deploymentRef: postgres-apps}
+        analytics: {deploymentRef: clickhouse-apps}
+        cache: {deploymentRef: redis-apps}
+        messaging: {deploymentRef: kafka-apps}
+        secrets: {deploymentRef: vault-apps}
+        application-pki: {profileRef: application-pki}
+      connection_defaults:
+        kafka: {connectionRef: SASL_SSL}
+        redis: {connectionRef: sentinel}
+      resources:
+        history: {kind: clickhouse.database, binding: analytics, mode: managed, parameters: {name: cspa}}
+        alarms_db: {kind: postgresql.database, binding: database, mode: managed, parameters: {name: cspa_alarm_view}}
+      applications:
+        alarm-view-service:
+          accounts:
+            postgres: {mode: managed, credentials: {password: {source: {kind: runtime_secret_ref, ref: alarm-view-service-cspa-postgres-password}}}}
+            clickhouse: {mode: managed, credentials: {password: {source: {kind: runtime_secret_ref, ref: alarm-view-service-cspa-clickhouse-password}}}}
+            kafka: {mode: managed, credentials: {password: {source: {kind: runtime_secret_ref, ref: alarm-view-service-cspa-kafka-password}}}}
+            redis: {mode: managed, credentials: {password: {source: {kind: runtime_secret_ref, ref: alarm-view-service-cspa-redis-password}}}}
+            sentinel: {mode: managed, credentials: {password: {source: {kind: runtime_secret_ref, ref: alarm-view-service-cspa-sentinel-password}}}}
+          overrides:
+            environment:
+              JAVA_OPTS: -Xmx768m
+              JAVA_TOOL_OPTIONS: -Xmx768m
+              SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "10"
+              SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
+              EVO_SERVICES_CONSENSUS_SERVICE_HEALTH_CHECK_TIMEOUT: "5000"
+            readiness: {mode: healthcheck, delay: 5, retries: 60}
+            ports:
+              port-1: {container: 10022, published: 10022}
+
+@@END
+@@PORTABLE {"path":"examples/sdku/configuration/group_vars.yml.example","mode":420,"size":2674,"sha256":"620bbc8a6345695fbd398e696418df65e90086edfbff8ea5111ff06f2100242e","index":0,"count":1,"encoding":"utf-8","payloadBytes":2674}
 ---
 # Merge this fragment into the project's ordinary inventory/group_vars.
 # References below must name existing deployments of THAT project.
@@ -60952,7 +61119,7 @@ platform_desired_state:
         secrets: {deploymentRef: vault-apps}
         application-pki: {profileRef: application-pki}
       connection_defaults:
-        kafka: {connectionRef: CLIENT_SSL}
+        kafka: {connectionRef: SASL_SSL}
         # Choose sentinel only for a Sentinel-backed Redis connection.
         redis: {connectionRef: client}
       resources:
@@ -60960,10 +61127,10 @@ platform_desired_state:
         alert-hdl: {kind: redis.key, binding: cache, parameters: {}}
         alert-class: {kind: redis.key, binding: cache, parameters: {}}
         history: {kind: clickhouse.database, binding: analytics, parameters: {}}
-        model: {kind: postgresql.database, binding: database, parameters: {}}
-        alarms_db: {kind: postgresql.database, binding: database, parameters: {}}
-        preferences: {kind: postgresql.database, binding: database, parameters: {}}
-        ef-store: {kind: postgresql.database, binding: database, parameters: {}}
+        model: {kind: postgresql.database, binding: database, parameters: {name: tn-scada}}
+        alarms_db: {kind: postgresql.database, binding: database, parameters: {name: sdku_alarm_view}}
+        preferences: {kind: postgresql.database, binding: database, parameters: {name: user-preferences}}
+        ef-store: {kind: postgresql.database, binding: database, parameters: {name: ef-store}}
         main: {kind: kafka.topic, binding: messaging, parameters: {}}
         main_compact: {kind: kafka.topic, binding: messaging, parameters: {}}
         alarms: {kind: kafka.topic, binding: messaging, parameters: {}}
@@ -60991,7 +61158,7 @@ platform_application_libraries:
   sdku-main: {}
 
 @@END
-@@PORTABLE {"path":"examples/sdku/import-catalog.json","mode":420,"size":5771,"sha256":"ca680c498ee69de602ec8bb86bd61f7d6d7eeac5edc0a5f4293a4032bc62405b","index":0,"count":1,"encoding":"utf-8","payloadBytes":5771}
+@@PORTABLE {"path":"examples/sdku/import-catalog.json","mode":420,"size":5771,"sha256":"164b542e840e000d2969df9d8a6a62a6b4be08adbb8b0cce1163ed3da394ed87","index":0,"count":1,"encoding":"utf-8","payloadBytes":5771}
 [
   {
     "digest": "sha256:51a85d8d0276e47498b98243d47d2a7e17d354d239f7467b4822ed4d64e9f021",
@@ -61001,7 +61168,7 @@ platform_application_libraries:
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:13b9109f7bbfadca8c847ac982ea4439c88e5b12746d4134b77a43db5da4a932",
+    "digest": "sha256:68a98b24855f07727c30ad4ebf881ea5d734b47289834b38cdc158d2783d0448",
     "kind": "application",
     "name": "alarm-view-service",
     "sourceDirectory": ".",
@@ -61180,10 +61347,10 @@ platform_application_libraries:
     "name": "cspa",
     "version": "1.0.0",
     "sourceDirectory": ".",
-    "digest": "sha256:0892188e6b0fe0d3d03f27277f6778ee33e46183e60146057faa806a80fbac27"
+    "digest": "sha256:0fbf87d2cbc34d92b2542dcdce4b096cccff7ff43003b1a75dfb91cbe9ac7730"
   },
   {
-    "digest": "sha256:5693d68cf1b4015748e7b1881d7e57ef127d0f38ca0ccda91490cfaacbaa156f",
+    "digest": "sha256:9f8954ce4d6bbfde23290d5d47438153d211a92f49bb40b59794c2c2e31d030b",
     "kind": "library",
     "name": "sdku",
     "sourceDirectory": ".",
@@ -61210,13 +61377,13 @@ platform_application_libraries:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/library-packages/cspa/1.0.0/roles/library_cspa/defaults/main.yml","mode":420,"size":17611,"sha256":"1b5778c362116aa6efc83406cf64f4864279ecdcfa34e18c960e264075195bf8","index":0,"count":1,"encoding":"utf-8","payloadBytes":17611}
+@@PORTABLE {"path":"examples/sdku/library-packages/cspa/1.0.0/roles/library_cspa/defaults/main.yml","mode":420,"size":17536,"sha256":"a663f2ee186edf41c796998c8d45230af78069677430692d8be90f1ced3a23d6","index":0,"count":1,"encoding":"utf-8","payloadBytes":17536}
 platform_library_definition:
     name: cspa
     version: 1.0.0
     connection_defaults:
         kafka:
-            connectionRef: SSL
+            connectionRef: SASL_SSL
     connections:
         clickhouse:
             library_binding: analytics
@@ -61260,7 +61427,6 @@ platform_library_definition:
             KAFKA_CONSUMER_SESSION_TIMEOUT_MS: "10000"
             KAFKA_CONSUMER_SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS: "5000"
             KAFKA_CONSUMER_SOCKET_CONNECTION_SETUP_TIMEOUT_MS: "1500"
-            KAFKA_ENABLE_SSL: "true"
             KAFKA_KEYSTORE_LOCATION: /opt/application/pki/keystore.p12
             KAFKA_PRODUCER_DELIVERY_TIMEOUT_MS: "20000"
             KAFKA_PRODUCER_HEARTBEAT_INTERVAL_MS: "500"
@@ -61280,8 +61446,7 @@ platform_library_definition:
             REDIS_METADATA_TOPIC: '{{ library_resources[''dm-meta''].parameters.name }}'
             REDIS_SENTINEL_MASTER: redis-1
             REDIS_TRUSTSTORE_LOCATION: /opt/application/pki/truststore.p12
-            SPRING_KAFKA_SECURITY_PROTOCOL: SSL
-            SPRING_KAFKA_SSL_ENABLE_SSL: "true"
+            SPRING_KAFKA_SECURITY_PROTOCOL: SASL_SSL
             SPRING_KAFKA_SSL_KEY_STORE_LOCATION: /opt/application/pki/keystore.p12
             SPRING_KAFKA_SSL_KEY_STORE_TYPE: PKCS12
             SPRING_KAFKA_SSL_TRUST_STORE_LOCATION: /opt/application/pki/truststore.p12
@@ -61685,13 +61850,13 @@ services:
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/library-packages/sdku/1.0.0/roles/library_sdku/defaults/main.yml","mode":420,"size":17588,"sha256":"fcbb4a9a539d0419c244acd5466d2858e461af27e8f819f18675bb6038034458","index":0,"count":1,"encoding":"utf-8","payloadBytes":17588}
+@@PORTABLE {"path":"examples/sdku/library-packages/sdku/1.0.0/roles/library_sdku/defaults/main.yml","mode":420,"size":17513,"sha256":"ada648aaec31dca84bf4a517cddff6248f07a5cce3db17b95816db461e3782e4","index":0,"count":1,"encoding":"utf-8","payloadBytes":17513}
 platform_library_definition:
     name: sdku
     version: 1.0.0
     connection_defaults:
         kafka:
-            connectionRef: SSL
+            connectionRef: SASL_SSL
     connections:
         clickhouse:
             library_binding: analytics
@@ -61735,7 +61900,6 @@ platform_library_definition:
             KAFKA_CONSUMER_SESSION_TIMEOUT_MS: "10000"
             KAFKA_CONSUMER_SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS: "5000"
             KAFKA_CONSUMER_SOCKET_CONNECTION_SETUP_TIMEOUT_MS: "1500"
-            KAFKA_ENABLE_SSL: "true"
             KAFKA_KEYSTORE_LOCATION: /opt/application/pki/keystore.p12
             KAFKA_PRODUCER_DELIVERY_TIMEOUT_MS: "20000"
             KAFKA_PRODUCER_HEARTBEAT_INTERVAL_MS: "500"
@@ -61755,8 +61919,7 @@ platform_library_definition:
             REDIS_METADATA_TOPIC: '{{ library_resources[''dm-meta''].parameters.name }}'
             REDIS_SENTINEL_MASTER: redis-1
             REDIS_TRUSTSTORE_LOCATION: /opt/application/pki/truststore.p12
-            SPRING_KAFKA_SECURITY_PROTOCOL: SSL
-            SPRING_KAFKA_SSL_ENABLE_SSL: "true"
+            SPRING_KAFKA_SECURITY_PROTOCOL: SASL_SSL
             SPRING_KAFKA_SSL_KEY_STORE_LOCATION: /opt/application/pki/keystore.p12
             SPRING_KAFKA_SSL_KEY_STORE_TYPE: PKCS12
             SPRING_KAFKA_SSL_TRUST_STORE_LOCATION: /opt/application/pki/truststore.p12
@@ -62432,7 +62595,7 @@ public final class StartupMock {
 }
 
 @@END
-@@PORTABLE {"path":"examples/sdku/validate_packages.py","mode":420,"size":6149,"sha256":"00e35fad6535a9bbd890bc129d5723cc3f8d175e27d5c4b3d0c2a450b2a80b13","index":0,"count":1,"encoding":"utf-8","payloadBytes":6149}
+@@PORTABLE {"path":"examples/sdku/validate_packages.py","mode":420,"size":6696,"sha256":"547624d3b1b881d6bd076655c3f0dedc16f0879200a6ef442847884718db0f55","index":0,"count":1,"encoding":"utf-8","payloadBytes":6696}
 import sys, json, pathlib, yaml
 from ansible.parsing.dataloader import DataLoader
 from ansible.template import Templar
@@ -62462,6 +62625,12 @@ example = load(package_root/'configuration/group_vars.yml.example')
 membership = load(package_root/'configuration/host_vars.yml.example')['platform_application_libraries']
 prepared = prepare(str(package_root), example['platform_desired_state'], {'example-host': membership}, CONTRACT, load, str(root/'contracts'))
 assert not prepared['findings'], prepared['findings']
+secret_example = load(package_root/'configuration/alarm-view-secrets.yml.example')
+secret_membership = {name: {} for name in secret_example['platform_desired_state']['applicationLibraryDeployments']}
+secret_prepared = prepare(str(package_root), secret_example['platform_desired_state'],
+                          {'example-host': secret_membership}, CONTRACT, load, str(root/'contracts'))
+assert not secret_prepared['findings'], secret_prepared['findings']
+assert len(secret_prepared['jobs']) == 2
 library = packages[('library','sdku')]
 common = library['definition'].get('defaults', {})
 base = str(package_root/'library-packages/sdku/1.0.0'/library['render']['base_compose_template'])
@@ -62520,7 +62689,7 @@ for (kind,name), package in packages.items():
         print('RENDER_FAILED', name)
         raise
 assert len(base_contents) == 1, 'Library base depends on consumer'
-print(json.dumps({'packageSchemasAndDigests':len(packages),'prepareJobs':len(prepared['jobs']),'syntheticComposeRenders':len(rendered),'sharedBaseVariants':len(base_contents),'realTargetExecution':False}))
+print(json.dumps({'packageSchemasAndDigests':len(packages),'prepareJobs':len(prepared['jobs']),'secretExampleJobs':len(secret_prepared['jobs']),'syntheticComposeRenders':len(rendered),'sharedBaseVariants':len(base_contents),'realTargetExecution':False}))
 
 @@END
 @@PORTABLE {"path":"examples/szi/.gitattributes","mode":420,"size":115,"sha256":"ce5d44572752416e6f9ce02c764964d5ea0c69a9b489ae490df9ecc41cda9a3b","index":0,"count":1,"encoding":"utf-8","payloadBytes":115}
@@ -75704,7 +75873,7 @@ function BindingRow({
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/ApplicationCredentials.tsx","mode":420,"size":24282,"sha256":"aafb0ba50363ed7fa5df46bba380e2f452d8a1e3af707e8340ab71677e080811","index":0,"count":1,"encoding":"utf-8","payloadBytes":24282}
+@@PORTABLE {"path":"frontend/src/ApplicationCredentials.tsx","mode":420,"size":24513,"sha256":"41c4e11f79aecc5fb2e32b810fd6793e5a44bd2ce9dce46fadd646242d41f0be","index":0,"count":1,"encoding":"utf-8","payloadBytes":24513}
 import { useRef, useState, type ReactNode } from "react";
 import { objectValue } from "./application-draft";
 import { ApplicationValueFields } from "./ApplicationValueFields";
@@ -75828,12 +75997,17 @@ export function CredentialSourceEditor({
           }}
         >
           <option value="runtime_secret_ref">Сессионный секрет</option>
-          <option value="generated">Генерируемый</option>
+          {!allowLiteral && <option value="generated">Генерируемый</option>}
           <option value="vault_ref">Существующий Vault secret</option>
           <option value="pki_credential">PKI credential</option>
           {allowLiteral && <option value="literal">Имя пользователя</option>}
         </select>
       </label>
+      {kind === "generated" && (
+        <small>
+          Создаётся при применении; сохранённый пароль используется повторно.
+        </small>
+      )}
       {kind === "runtime_secret_ref" && runtimeInput !== undefined ? (
         dirty ? (
           <small>
@@ -113050,389 +113224,5 @@ func (a *App) CheckServerInformation(probeID string) ServerInformationResult {
 	a.approvedTargetHostKeys[p.hostID] = approvedTargetHostKey{root: p.root, projectID: p.projectID, revision: p.revision, hostID: p.hostID, address: p.address, port: p.port, keyType: p.keyType, publicKey: p.publicKey, fingerprint: p.fingerprint}
 	return ServerInformationResult{Status: "CHECKED", HostID: p.hostID, Information: &info}
 }
-
-@@END
-@@PORTABLE {"path":"internal/desktop/target_host_trust.go","mode":420,"size":6972,"sha256":"07463ceb38df711d5c114e68a97c10396b6b8e820490a470b3bf558457bc342a","index":0,"count":1,"encoding":"utf-8","payloadBytes":6972}
-package desktop
-
-import (
-	"context"
-	"crypto/rand"
-	"encoding/hex"
-	"errors"
-	"fmt"
-	"sort"
-	"time"
-
-	"platform-installer/internal/executionnode"
-)
-
-// These approvals exist only in this application session. A saved project
-// revision, server endpoint, or project-open lifecycle change makes them stale.
-type pendingTargetHostKey struct {
-	id, root, projectID, revision, hostID, address string
-	port                                           uint16
-	keyType, publicKey, fingerprint                string
-	expires                                        time.Time
-}
-
-type approvedTargetHostKey struct {
-	root, projectID, revision, hostID, address string
-	port                                       uint16
-	keyType, publicKey, fingerprint            string
-}
-
-func (a *App) savedTargetServerLocked(hostID string) (string, uint16, string, error) {
-	if a.current.Status != "OPEN" || a.current.Project == nil || a.current.Managed == nil || a.activeSession != "" {
-		return "", 0, "", errors.New("TARGET_HOST_TRUST_PROJECT_UNAVAILABLE")
-	}
-	server, ok := a.current.Managed.Servers[hostID]
-	if !ok || server.HostID != hostID || !validExecutionAddress(server.Address) {
-		return "", 0, "", errors.New("TARGET_HOST_TRUST_SERVER_INVALID")
-	}
-	port := 22
-	if server.SSHPort != nil {
-		port = *server.SSHPort
-	}
-	if port < 1 || port > 65535 {
-		return "", 0, "", errors.New("TARGET_HOST_TRUST_SERVER_INVALID")
-	}
-	revision, err := a.projectRevision(a.current.Root)
-	if err != nil || revision == "" || revision != a.current.Managed.ProjectRevision {
-		return "", 0, "", errors.New("TARGET_HOST_TRUST_PROJECT_STALE")
-	}
-	return server.Address, uint16(port), revision, nil
-}
-
-func (a *App) ProbeTargetHostKey(hostID string) HostKeyProbeResult {
-	a.editMu.Lock()
-	defer a.editMu.Unlock()
-	a.pendingTargetHostKey = nil
-	delete(a.approvedTargetHostKeys, hostID)
-	address, port, revision, err := a.savedTargetServerLocked(hostID)
-	if err != nil {
-		return hostKeyProbeFailure(projectErrorCode(err))
-	}
-	binding, err := a.resolveSelectedExecutionNodeBindingLocked()
-	if err != nil || a.execution.context.Status != "READY" {
-		return hostKeyProbeFailure("EXECUTION_NODE_READY_REQUIRED")
-	}
-	prober, ok := binding.reader.transport.(interface {
-		ProbeTargetHostKey(context.Context, executionnode.Node, string, uint16) ([]byte, error)
-	})
-	if !ok {
-		return hostKeyProbeFailure("TARGET_HOST_KEY_PROBE_FAILED")
-	}
-	ctx, cancel := a.operationContext(9 * time.Second)
-	defer cancel()
-	output, err := prober.ProbeTargetHostKey(ctx, binding.node, address, port)
-	if err != nil {
-		return hostKeyProbeFailure("TARGET_HOST_KEY_PROBE_FAILED")
-	}
-	keyType, publicKey, fingerprint, err := parseScannedHostKey(output, address, port)
-	if err != nil {
-		return hostKeyProbeFailure("TARGET_HOST_KEY_PROBE_FAILED")
-	}
-	nonce := make([]byte, 16)
-	if _, err := rand.Read(nonce); err != nil {
-		return hostKeyProbeFailure("TARGET_HOST_KEY_PROBE_FAILED")
-	}
-	probeID := hex.EncodeToString(nonce)
-	a.pendingTargetHostKey = &pendingTargetHostKey{
-		id: probeID, root: a.current.Root, projectID: a.current.Project.ID,
-		revision: revision, hostID: hostID, address: address, port: port,
-		keyType: keyType, publicKey: publicKey, fingerprint: fingerprint,
-		expires: time.Now().Add(2 * time.Minute),
-	}
-	return HostKeyProbeResult{Status: "APPROVAL_REQUIRED", ProbeID: probeID,
-		SafeLabel: fmt.Sprintf("%s · %s:%d", hostID, address, port),
-		KeyType:   keyType, Fingerprint: fingerprint}
-}
-
-func (a *App) DeclineTargetHostKey() HostKeyProbeResult {
-	a.editMu.Lock()
-	defer a.editMu.Unlock()
-	a.pendingTargetHostKey = nil
-	return HostKeyProbeResult{Status: "DECLINED"}
-}
-
-func (a *App) ApproveTargetHostKey(probeID string) HostKeyProbeResult {
-	a.editMu.Lock()
-	defer a.editMu.Unlock()
-	pending := a.pendingTargetHostKey
-	a.pendingTargetHostKey = nil
-	if pending == nil || pending.id != probeID || !time.Now().Before(pending.expires) || a.current.Root != pending.root || a.current.Project == nil || a.current.Project.ID != pending.projectID {
-		return hostKeyProbeFailure("TARGET_HOST_KEY_APPROVAL_STALE")
-	}
-	address, port, revision, err := a.savedTargetServerLocked(pending.hostID)
-	if err != nil || address != pending.address || port != pending.port || revision != pending.revision {
-		return hostKeyProbeFailure("TARGET_HOST_KEY_APPROVAL_STALE")
-	}
-	a.approvedTargetHostKeys[pending.hostID] = approvedTargetHostKey{
-		root: pending.root, projectID: pending.projectID, revision: pending.revision,
-		hostID: pending.hostID, address: address, port: port,
-		keyType: pending.keyType, publicKey: pending.publicKey, fingerprint: pending.fingerprint,
-	}
-	return HostKeyProbeResult{Status: "APPROVED", SafeLabel: fmt.Sprintf("%s · %s:%d", pending.hostID, address, port),
-		KeyType: pending.keyType, Fingerprint: pending.fingerprint}
-}
-
-func (a *App) configureTargetHostTrust() {
-	if a.binding == nil || a.binding.plans == nil {
-		return
-	}
-	stager, ok := a.binding.reader.transport.(executionnode.TargetHostTrustStager)
-	if !ok {
-		return
-	}
-	a.binding.plans.ConfigureTargetHostTrust(a.approvedTargetKeysForPlan, stager)
-}
-
-func (a *App) approvedTargetKeysForPlan(plan executionnode.DeploymentPlan) ([]executionnode.TargetHostKeyApproval, error) {
-	a.editMu.Lock()
-	defer a.editMu.Unlock()
-	targets := map[string]bool{}
-	for _, phase := range plan.Phases {
-		for _, action := range phase.Actions {
-			for _, hostID := range action.Targets {
-				targets[hostID] = true
-			}
-		}
-	}
-	ids := make([]string, 0, len(targets))
-	for hostID := range targets {
-		ids = append(ids, hostID)
-	}
-	sort.Strings(ids)
-	return a.approvedTargetKeysForHostsLocked(plan.ProjectIdentity, plan.ProjectRevision, ids)
-}
-
-func (a *App) approvedTargetKeysForHostsLocked(projectID, revision string, ids []string) ([]executionnode.TargetHostKeyApproval, error) {
-	if a.current.Status != "OPEN" || a.current.Project == nil || a.current.Managed == nil || a.activeSession != "" || a.current.Project.ID != projectID {
-		return nil, errors.New("TARGET_HOST_TRUST_REQUIRED")
-	}
-	currentRevision, err := a.projectRevision(a.current.Root)
-	if err != nil || currentRevision != revision || a.current.Managed.ProjectRevision != revision {
-		return nil, errors.New("TARGET_HOST_TRUST_STALE")
-	}
-	if len(ids) == 0 || len(ids) > 256 {
-		return nil, errors.New("TARGET_HOST_TRUST_INVALID")
-	}
-	result := make([]executionnode.TargetHostKeyApproval, 0, len(ids))
-	for _, hostID := range ids {
-		pin, ok := a.approvedTargetHostKeys[hostID]
-		if !ok || pin.root != a.current.Root || pin.projectID != projectID || pin.revision != revision {
-			return nil, errors.New("TARGET_HOST_TRUST_REQUIRED")
-		}
-		address, port, _, err := a.savedTargetServerLocked(hostID)
-		if err != nil || address != pin.address || port != pin.port {
-			return nil, errors.New("TARGET_HOST_TRUST_STALE")
-		}
-		result = append(result, executionnode.TargetHostKeyApproval{HostID: hostID, Address: address, Port: int(port), KeyType: pin.keyType, PublicKey: pin.publicKey})
-	}
-	return result, nil
-}
-
-@@END
-@@PORTABLE {"path":"internal/desktop/verified_pki_view.go","mode":420,"size":8010,"sha256":"e4cbb5c240663d45681a1b1670ed7b70b8d11a091dea7455d19075d4e7b7cae7","index":0,"count":1,"encoding":"utf-8","payloadBytes":8010}
-package desktop
-
-import (
-	"errors"
-	"net"
-	"regexp"
-	"sort"
-	"strings"
-
-	"platform-installer/internal/coreadapter"
-)
-
-const (
-	maxVerifiedPKIIdentities = 64
-	maxVerifiedPKIConsumers  = 4096
-	maxVerifiedPKISANs       = 64
-	maxVerifiedPKIValue      = 253
-)
-
-var verifiedPKISafeName = regexp.MustCompile(`^[A-Za-z0-9*._-]+$`)
-var verifiedPKIIdentityID = regexp.MustCompile(`^[a-z][a-z0-9._-]*$`)
-
-// VerifiedPKIView is an in-memory, read-only presentation projection of
-// revision-bound Core PKI evidence. It is never desired state or Save input.
-type VerifiedPKIView struct {
-	Status            string                        `json:"status"`
-	Identities        []VerifiedCertificateIdentity `json:"identities,omitempty"`
-	Findings          []VerificationFinding         `json:"findings,omitempty"`
-	FindingsTruncated bool                          `json:"findingsTruncated,omitempty"`
-	Error             *ProjectOpenError             `json:"error,omitempty"`
-}
-
-type VerifiedCertificateIdentity struct {
-	ID           string                `json:"id"`
-	Scope        string                `json:"scope"`
-	TLSProfileID string                `json:"tlsProfileId"`
-	DNSNames     []string              `json:"dnsNames"`
-	IPAddresses  []string              `json:"ipAddresses"`
-	Consumers    []VerifiedPKIConsumer `json:"consumers"`
-}
-
-type VerifiedPKIConsumer struct {
-	DeploymentID string `json:"deploymentId"`
-	MemberID     string `json:"memberId"`
-	HostID       string `json:"hostId"`
-}
-
-// GetVerifiedPKIView exposes only current, attested Core PKI identity/SAN
-// evidence. It deliberately cannot initiate verification or contact a node.
-func (a *App) GetVerifiedPKIView() VerifiedPKIView {
-	a.editMu.Lock()
-	defer a.editMu.Unlock()
-	a.reconcileEditSessionLocked()
-	return a.verifiedPKIViewLocked()
-}
-
-func (a *App) verifiedPKIViewLocked() VerifiedPKIView {
-	verification := a.current.Verification
-	if a.current.Status != "OPEN" || a.current.Project == nil {
-		return verifiedPKIUnavailable("PROJECT_NOT_OPEN")
-	}
-	if a.activeSession != "" {
-		return VerifiedPKIView{Status: "STALE"}
-	}
-	if verification.Status == "INVALID" {
-		return VerifiedPKIView{Status: "INVALID", Findings: append([]VerificationFinding(nil), verification.Findings...), FindingsTruncated: verification.FindingsTruncated}
-	}
-	if verification.Status == "STALE" {
-		return VerifiedPKIView{Status: "STALE"}
-	}
-	if verification.Status != "VERIFIED" {
-		if verification.Status == "UNVERIFIED" || verification.Status == "" {
-			return VerifiedPKIView{Status: "NOT_VERIFIED"}
-		}
-		return VerifiedPKIView{Status: "UNAVAILABLE", Error: verification.Error}
-	}
-	if a.current.Managed == nil || a.current.Snapshot == nil ||
-		verification.ProjectIdentity != a.current.Project.ID ||
-		verification.ProjectRevision == "" ||
-		verification.ProjectRevision != a.current.Managed.ProjectRevision ||
-		verification.ProjectRevision != a.current.Snapshot.ProjectRevision ||
-		verification.ExecutionNodeID == "" || verification.Runtime == nil {
-		return VerifiedPKIView{Status: "STALE"}
-	}
-	if a.binding == nil || a.binding.node.ID == "" ||
-		a.execution.context.SelectionKind != "EXPLICIT_EXTERNAL" ||
-		a.execution.external == nil || a.execution.external.hostID != a.binding.node.ID ||
-		verification.ExecutionNodeID != a.binding.node.ID ||
-		!runtimeEvidenceMatchesExpected(*verification.Runtime, a.binding.reader.runtimeRelease) {
-		return VerifiedPKIView{Status: "STALE"}
-	}
-	if a.current.Snapshot.Status != "PASS" || a.current.Snapshot.Partial {
-		return verifiedPKIUnavailable("VERIFIED_PKI_SNAPSHOT_INVALID")
-	}
-	view, err := buildVerifiedPKIView(a.current.Snapshot)
-	if err != nil {
-		return verifiedPKIUnavailable("VERIFIED_PKI_VIEW_UNAVAILABLE")
-	}
-	return view
-}
-
-func verifiedPKIUnavailable(code string) VerifiedPKIView {
-	return VerifiedPKIView{Status: "UNAVAILABLE", Error: &ProjectOpenError{Code: code, Message: "Не удалось безопасно подготовить read-only представление PKI."}}
-}
-
-func buildVerifiedPKIView(snapshot *coreadapter.Snapshot) (VerifiedPKIView, error) {
-	if snapshot == nil || len(snapshot.PKI) == 0 {
-		return VerifiedPKIView{}, errVerifiedPKIView
-	}
-	status, ok := snapshot.PKI["status"].(string)
-	identities, okIdentities := snapshot.PKI["certificateIdentities"].([]any)
-	if !ok || status != "PASS" || !okIdentities || len(identities) > maxVerifiedPKIIdentities {
-		return VerifiedPKIView{}, errVerifiedPKIView
-	}
-	view := VerifiedPKIView{Status: "CURRENT", Identities: make([]VerifiedCertificateIdentity, 0, len(identities))}
-	for _, raw := range identities {
-		identity, err := verifiedPKIIdentity(raw)
-		if err != nil {
-			return VerifiedPKIView{}, errVerifiedPKIView
-		}
-		view.Identities = append(view.Identities, identity)
-	}
-	sort.Slice(view.Identities, func(i, j int) bool { return view.Identities[i].ID < view.Identities[j].ID })
-	return view, nil
-}
-
-func verifiedPKIIdentity(raw any) (VerifiedCertificateIdentity, error) {
-	value, ok := object(raw)
-	if !ok {
-		return VerifiedCertificateIdentity{}, errVerifiedPKIView
-	}
-	id, validID := requiredString(value, "id", maxEndpointPreviewIdentifierLength)
-	tlsProfileID, validProfile := requiredString(value, "tlsProfileId", maxEndpointPreviewIdentifierLength)
-	scope, validScope := value["scope"].(string)
-	dnsNames, dnsOK := verifiedPKIDNSNames(value["dnsNames"])
-	ipAddresses, ipOK := verifiedPKIIPAddresses(value["ipAddresses"])
-	consumers, consumersOK := verifiedPKIConsumers(value["consumers"])
-	if !validID || !verifiedPKIIdentityID.MatchString(id) || !validProfile || !validPreviewIdentifier(tlsProfileID) || !validScope ||
-		(scope != "HOST" && scope != "MEMBER" && scope != "DEPLOYMENT") || !dnsOK || !ipOK || !consumersOK {
-		return VerifiedCertificateIdentity{}, errVerifiedPKIView
-	}
-	return VerifiedCertificateIdentity{ID: id, Scope: scope, TLSProfileID: tlsProfileID, DNSNames: dnsNames, IPAddresses: ipAddresses, Consumers: consumers}, nil
-}
-
-func verifiedPKIDNSNames(raw any) ([]string, bool) {
-	values, ok := array(raw)
-	if !ok || len(values) > maxVerifiedPKISANs {
-		return nil, false
-	}
-	result := make([]string, 0, len(values))
-	for _, raw := range values {
-		value, ok := raw.(string)
-		if !ok || len(value) == 0 || len(value) > maxVerifiedPKIValue || !verifiedPKISafeName.MatchString(value) {
-			return nil, false
-		}
-		result = append(result, value)
-	}
-	return result, true
-}
-
-func verifiedPKIIPAddresses(raw any) ([]string, bool) {
-	values, ok := array(raw)
-	if !ok || len(values) > maxVerifiedPKISANs {
-		return nil, false
-	}
-	result := make([]string, 0, len(values))
-	for _, raw := range values {
-		value, ok := raw.(string)
-		if !ok || len(value) == 0 || len(value) > maxVerifiedPKIValue || net.ParseIP(value) == nil {
-			return nil, false
-		}
-		result = append(result, value)
-	}
-	return result, true
-}
-
-func verifiedPKIConsumers(raw any) ([]VerifiedPKIConsumer, bool) {
-	values, ok := array(raw)
-	if !ok || len(values) > maxVerifiedPKIConsumers {
-		return nil, false
-	}
-	result := make([]VerifiedPKIConsumer, 0, len(values))
-	for _, raw := range values {
-		value, ok := object(raw)
-		deploymentID, deploymentOK := requiredString(value, "deploymentId", maxEndpointPreviewIdentifierLength)
-		memberID, memberOK := requiredString(value, "memberId", maxEndpointPreviewIdentifierLength)
-		hostID, hostOK := requiredString(value, "hostId", maxEndpointPreviewIdentifierLength)
-		if !ok || !deploymentOK || !memberOK || !hostOK || !validPreviewIdentifier(deploymentID) || !validPreviewIdentifier(memberID) || !validPreviewIdentifier(hostID) {
-			return nil, false
-		}
-		result = append(result, VerifiedPKIConsumer{DeploymentID: deploymentID, MemberID: memberID, HostID: hostID})
-	}
-	sort.Slice(result, func(i, j int) bool {
-		return strings.Join([]string{result[i].DeploymentID, result[i].MemberID, result[i].HostID}, "\x00") < strings.Join([]string{result[j].DeploymentID, result[j].MemberID, result[j].HostID}, "\x00")
-	})
-	return result, true
-}
-
-var errVerifiedPKIView = errors.New("verified PKI view invalid")
 
 @@END

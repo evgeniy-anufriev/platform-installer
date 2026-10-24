@@ -183,8 +183,17 @@ class ApplicationVaultQA(a3.ApplicationProviderQA):
             try: cls.api(path,'DELETE')
             except urllib.error.HTTPError as error:
                 if error.code != 404: raise
-        prefix=cls.project.name+'/sdku'
+        prefix='sdku'
         for document in (prefix+'/shared',prefix+'/apigateway-sdku/accounts/postgres',cls.project.name+'/other'):
+            if document.startswith(prefix+'/'):
+                try:
+                    current=cls.api('secret/data/'+document)['data']['data']
+                except urllib.error.HTTPError as error:
+                    if error.code == 404: continue
+                    raise
+                expected='platform.application/v1:'+cls.project.name+':sdku:'+document
+                if current.get('_platform_owner') != expected:
+                    continue
             for path in ('secret/metadata/'+document,'secret/data/'+document):
                 try: cls.api(path,'DELETE')
                 except urllib.error.HTTPError as error:
@@ -371,11 +380,103 @@ class ApplicationVaultQA(a3.ApplicationProviderQA):
         if result.returncode:
             log=Path('/tmp/a4-core-last-protected.log');log.write_bytes(result.stdout+result.stderr);log.chmod(0o600)
             self.fail('A4_PKI_FIXTURE_FAILED protected log /tmp/a4-core-last-protected.log')
+    def test_generated_password_uses_normal_apply_and_reuses_published_value(self):
+        if self.external:
+            self.skipTest('Generated native provider test uses isolated Vault only')
+        from runtime_secret_identity import generated_password_ref
+        # Exercise the production Vault/provider stages without requiring a probe image.
+        subprocess.run(self.pgcmd+['openssl','req','-x509','-newkey','rsa:2048','-nodes',
+            '-keyout',str(self.data/'private-key.pem'),'-out',str(self.data/'ca-chain.pem'),
+            '-days','1','-subj','/CN=127.0.0.1','-addext','subjectAltName=IP:127.0.0.1'],
+            capture_output=True,check=True)
+        subprocess.run(self.pgcmd+[self.pgctl,'-D',str(self.data),'reload'],capture_output=True,check=True)
+        trust=self.secret_root/'vault-trust';trust.mkdir(mode=0o700)
+        (trust/'ca-chain.pem').write_bytes(Path(self.agent_ca_path).read_bytes())
+        job=self.make_job('a4gen',1)
+        account=job['accounts'][0]
+        account['passwordRef']=generated_password_ref('a4gen','lib','app-0','postgres')
+        bindings={'PGUSER':{'source':{'account':'postgres','field':'username'}},
+                  'PGPASSWORD':{'source':{'account':'postgres','field':'password'}},
+                  'SHARED':{'source':{'library_secret':'marker'}}}
+        instance=dict(agentRequired=True,placements={'node1':{}},
+            connections={'vault':dict(serviceType='vault',deploymentRef='vault-qa',targets=[
+                dict(hostId='node1',port=self.vport,address=ADDRESS,tlsProfileRef='v')])},
+            credentialRequirements={'postgres':dict(mode='managed',credentials={
+                'username':{'source':{'kind':'literal','value':account['name']}},
+                'password':{'source':{'kind':'generated'}}})},secretBindings=bindings)
+        row=dict(libraryId='lib',instanceId='app-0',hostId='node1',vaultRef={'binding':'secrets'},
+            bindings={'secrets':{'deploymentRef':'vault-qa'}},
+            settings={'provisioner':{'secrets':{'mount':'secret'},'secret_bindings':bindings}})
+        prepared=dict(snapshot={'project':{'id':'a4gen'},'applicationLibraries':{'libraries':{
+            'lib':{'instances':{'app-0':instance},'sharedSecretRequirements':{
+                'marker':{'source':{'kind':'runtime_secret_ref','ref':'gateway-password'}}}}}}},
+            pki_materialization={'materializationPlans':[dict(hostId='node1',tlsProfileId='v',targetDirectory=str(trust))]})
+        libraries,instances=a3.split_provider_jobs([job])
+        variables=dict(application_provider_snapshot=prepared,platform_application_rows=[row],
+            application_provider_inputs=dict(status='PASS',jobs=[job],libraryJobs=libraries,instanceJobs=instances),
+            platform_application_secret_root=str(self.secret_root),platform_application_secret_files=self.passwords,
+            platform_postgresql_application_secret_root=str(self.secret_root),platform_postgresql_secret_files=self.passwords,
+            platform_postgresql_application_socket=str(self.data),platform_runtime_secret_inputs=[
+                dict(purpose='SERVICE_ADMIN_TOKEN',requirementRef='si-'+'a'*40,value=self.token)])
+        extra=self.secret_root/'generated-vars.json';extra.write_text(json.dumps(variables));extra.chmod(0o600)
+        agent=self.secret_root/'generated-agent.hcl'
+        runtime=dict(vault=dict(endpoint_url=self.url,ca_container_path='/opt/vault/ca.pem',auth_mount='auth/approle',
+            role_id_container_path='/opt/vault/role-id',env_templates='{{ application_vault_inputs.instanceJobs[0].envTemplates }}'),
+            application_command=['/opt/application/run'])
+        wrapper=self.secret_root/'generated-apply.yml'
+        wrapper.write_text(yaml.safe_dump([
+            {'import_playbook':str(ROOT/'ansible-core/playbooks/application-libraries-vault-preflight.yml')},
+            {'import_playbook':str(ROOT/'ansible-core/playbooks/application-libraries-provider-stage.yml')},
+            dict(hosts='localhost',connection='local',gather_facts=False,vars={'application_runtime':runtime},tasks=[
+                {'ansible.builtin.copy':{'content':'{{ application_runtime | platform.core.application_agent_config }}',
+                                        'dest':str(agent),'mode':'0600'}}])],sort_keys=False))
+        env=dict(self.env,ANSIBLE_COLLECTIONS_PATH=':'.join([str(ROOT/'ansible-core/collections')]+
+            [str(ROOT/'services'/service) for service in ('vault','postgresql','redis','clickhouse','kafka')]))
+        def apply(success=True):
+            result=subprocess.run(['ansible-playbook','-i',str(self.inventory),str(wrapper),'-e','@'+str(extra)],
+                env=env,capture_output=True,timeout=300)
+            log=self.secret_root/'last-generated.log';log.write_bytes(result.stdout+result.stderr);log.chmod(0o600)
+            if (result.returncode == 0) != success:
+                preserved=Path(os.environ.get('A4_PROTECTED_LOG',log))
+                preserved.write_bytes(log.read_bytes());preserved.chmod(0o600)
+                self.fail('GENERATED_NATIVE_STAGE_RESULT protected log')
+            self.assertTrue(self.token.encode() not in result.stdout+result.stderr)
+            return result.stdout+result.stderr
+        document='secret/data/lib/app-0/accounts/postgres'
+        self.api(document,'POST',{'data':{'_platform_owner':'foreign-test-fixture','password':secrets.token_urlsafe(32)}})
+        apply(success=False)
+        self.assertEqual('0',self.sql("SELECT count(*) FROM pg_roles WHERE rolname='a4gen_user_0'"))
+        self.api(document.replace('/data/','/metadata/'),'DELETE')
+        legacy='secret/data/a4gen/lib/shared'
+        self.api(legacy,'POST',{'data':{'retained':'test-owned-legacy-document'}})
+        legacy_version=self.api(legacy)['data']['metadata']['version']
+        output=apply()
+        self.assertTrue('secret/data/lib/shared' in agent.read_text())
+        self.assertTrue('a4gen' not in agent.read_text())
+        self.assertEqual(legacy_version,self.api(legacy)['data']['metadata']['version'])
+        before=self.api(document)['data']
+        self.assertTrue(len(before['data']['password']) == 43)
+        self.assertTrue(before['data']['password'].encode() not in output)
+        output=apply()
+        after=self.api(document)['data']
+        self.assertTrue(before['data']['password'].encode() not in output)
+        self.assertTrue(before['data']['password'] == after['data']['password'])
+        self.assertEqual(before['metadata']['version'], after['metadata']['version'])
+        # Simulate completed provider ownership but missing password publication.
+        pending=dict(after['data']);del pending['password']
+        self.api(document,'POST',{'options':{'cas':after['metadata']['version']},'data':pending})
+        output=apply()
+        repaired=self.api(document)['data']['data']['password']
+        self.assertTrue(repaired != before['data']['password'])
+        self.assertTrue(repaired.encode() not in output)
+        self.assertFalse((self.secret_root/account['passwordRef']).exists())
+        print('GENERATED_NATIVE_PROVIDER_VAULT_AGENT_RENDER_REUSE_RETRY_PASS no_container_acceptance')
+
     def test_a4_full_apply_verify_repeat(self):
         self.prepare_application_fixture()
         self.play_core('application-libraries-apply.yml')
         self.play_core('application-libraries-verify.yml')
-        document='secret/data/'+self.project.name+'/sdku/apigateway-sdku/accounts/postgres'
+        document='secret/data/sdku/apigateway-sdku/accounts/postgres'
         before=self.api(document)['data']['metadata']['version']
         self.api(document,'PATCH',{'options':{'cas':before},'data':{'neighbor':'keep'}})
         before=self.api(document)['data']['metadata']['version']
@@ -503,7 +604,7 @@ class ApplicationVaultQA(a3.ApplicationProviderQA):
         finally:Path(self.passwords['gateway-password']).write_bytes(original)
         # Read the original field; do not duplicate or overwrite that KV source.
         base['accounts']['postgres']['credentials']['password']['source']={
-            'kind':'vault_ref','binding':'secrets','mount':'secret','document':self.project.name+'/sdku/apigateway-sdku/accounts/postgres','field':'password'}
+            'kind':'vault_ref','binding':'secrets','mount':'secret','document':'sdku/apigateway-sdku/accounts/postgres','field':'password'}
         defaults_path.write_text(json.dumps({'platform_application_definition':definition}))
         self.play_core('application-libraries-apply.yml')
         self.play_core('application-libraries-verify.yml')

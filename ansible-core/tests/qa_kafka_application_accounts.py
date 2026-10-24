@@ -29,12 +29,15 @@ if kind == 'kafka-configs.sh':
         if state.get('metadata_error'):
             print("Error retrieving SCRAM credential configs for user-principal 'other': ExecutionException")
 elif kind == 'kafka-broker-api-versions.sh':
+    if state.get('login_transport_fail'):
+        sys.exit(1)
     content = pathlib.Path(args[args.index('--command-config') + 1]).read_text()
     # Dummy identities/passwords contain no properties escapes. Avoid interpreting
     # escaped key separators or mistaking the administrative JAAS line for the
     # application's later SASL override.
     name = next((name for name in state['users'] if '"' + name + '"' in content), None)
     if name is None or '"' + state['users'][name][1] + '"' not in content:
+        print('SaslAuthenticationException: Authentication failed due to invalid credentials', file=sys.stderr)
         sys.exit(1)
 elif '--list' in args:
     if state.get('acl_fail'):
@@ -114,11 +117,24 @@ class KafkaApplicationAccountsTests(unittest.TestCase):
         self.assertEqual(1, sum('--alter' in args for _, args in calls))
         self.assertEqual(1, sum('--add' in args for _, args in calls))
 
-    def test_bad_password_stops_before_any_acl_mutation(self):
+    def test_managed_application_password_is_reconciled_before_grants(self):
         calls = self.probe({'qa.one': ['SCRAM-SHA-512', 'qa-wrong']}, ['qa.one'],
-                           mode='managed', acl_names=[], success=False)
+                           mode='managed', acl_names=[])
+        self.assertEqual(1, sum('--alter' in args for _, args in calls))
+        self.assertEqual(1, sum('--add' in args for _, args in calls))
+
+    def test_transport_error_stops_before_any_password_or_acl_mutation(self):
+        calls = self.probe({'qa.one': ['SCRAM-SHA-512', 'qa-wrong']}, ['qa.one'],
+                           mode='managed', acl_names=[], success=False, login_transport_fail=True)
         self.assertEqual(3, len(calls))
         self.assertFalse(any('--add' in args or '--alter' in args for _, args in calls))
+
+    def test_existing_application_password_and_infrastructure_admin_are_not_reset(self):
+        for name, mode in [('qa.one', 'existing'), ('admin', 'managed')]:
+            with self.subTest(name=name):
+                calls = self.probe({name: ['SCRAM-SHA-512', 'qa-wrong']}, [name],
+                                   mode=mode, acl_names=[], success=False)
+                self.assertFalse(any('--alter' in args or '--add' in args for _, args in calls))
 
     def test_partial_or_failed_metadata_batch_never_creates_credentials(self):
         for error in ['metadata_fail', 'metadata_error']:

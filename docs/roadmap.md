@@ -1,5 +1,14 @@
 # V2 roadmap and milestone gates
 
+The owner-approved [generated application passwords](work/application-libraries/generated-password-plan.md)
+extension adds Core generation and managed application-password reconciliation
+through existing Ansible provider hooks and the existing source editor. Managed
+Vault paths and Agent references omit project ID. Gates include standalone
+generation/reuse/retry, infrastructure-identity exclusion, explicit-auth-error
+handling, actual React/Wails/Core acceptance and FULL DIFF security review.
+Verify, external vault_ref paths and infrastructure credentials stay unchanged;
+concurrent Applies of the same project are outside supported execution scope.
+
 The owner-approved [ClickHouse library table extension](work/application-libraries/clickhouse-base-tables-plan.md)
 adds file-only resource defaults and base-table creation/Verify to existing provider
 stages. Gates cover default/override preservation, target-free projection, native

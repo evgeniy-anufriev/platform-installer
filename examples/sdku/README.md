@@ -27,20 +27,35 @@ hydro-calculation, hydro-history-and-model, hmi-frontend-hydrocyclone.
 
 ### Проверенные SDKU/CSPA и alarm-view-service
 
-Библиотеки SDKU/CSPA и общий `alarm-view-service` перенесены из тестового
-проекта 2026-10-20. Они проверены совместно на 101/102/103: отдельные PostgreSQL
+Библиотеки SDKU/CSPA и общий `alarm-view-service` актуализированы из проверенного
+проекта 2026-10-22. Они проверены совместно на 101/102/103: отдельные PostgreSQL
 и ClickHouse БД, Kafka topics и Redis names, собственные УЗ PostgreSQL,
-ClickHouse, Redis client и Sentinel. Рецепты библиотек различаются только
+ClickHouse, Kafka SCRAM, Redis client и Sentinel. Рецепты библиотек различаются только
 именем и `resource_defaults`; приложения остаются общими.
 
-Эта проверенная конфигурация использует Kafka listener `SSL`, Redis Sentinel
-с TLS и Vault KV mount `secret`. `alarm-view-service` также использует SSL для
-собственных ACK-клиентов Kafka. Значения секретов и настройки тестовых
-экземпляров из group_vars сюда не копируются. Endpoint group
+Эта проверенная конфигурация использует Kafka listener `SASL_SSL` с SCRAM-SHA-512,
+Redis Sentinel с TLS и Vault KV mount `secret`. Основные и ACK-клиенты Kafka
+получают JAAS через аккаунтные Vault bindings. Значения секретов из тестового
+проекта сюда не копируются. Endpoint group
 `qa-shared-endpoint` в defaults приложения следует заменить для другого
 проекта через group_vars. В тесте оба экземпляра имели `-Xmx768m`, Hikari
 `maximum-pool-size=10`/`minimum-idle=2`, health timeout 5000ms и readiness
 60×5s; CSPA использовал port-1=10022.
+
+[Пример двух экземпляров](configuration/alarm-view-secrets.yml.example) задаёт
+пять `generated`-паролей SDKU и пять ручных `runtime_secret_ref` CSPA. Ручные
+значения вводятся только в сессию; для standalone Ansible используются обычные
+защищённые runtime-входы. ClickHouse `history` объявлен managed, имена PostgreSQL
+БД заданы явно. Пример не переносит адреса, runtime/image locks или секреты QA.
+Перед использованием замените ссылки deployments/TLS profile и endpoint group
+на объекты своего проекта. Режим managed не присваивает существующие чужие БД:
+несовпадение ownership marker требует отдельного согласованного исправления.
+
+Реальный React/Wails Apply и существующий Verify библиотек завершились
+`SUCCEEDED` с `skipInfraVerify=true`; все шесть Java-процессов получили заданные
+значения, 100 проверок Vault/Agent/ENV и 15 прямых сверок ручных паролей прошли,
+все шесть health endpoints отвечали `200 / UP`. Подробности и границы приёмки —
+в [журнале generated secrets](../../docs/work/application-libraries/evidence/generated-password-journal.md).
 
 Остальные 25 application-пакетов не заменены QA-копиями. Их текущие настройки
 SASL/SCRAM сохранены; при их выборе требуется соответствующий Kafka listener

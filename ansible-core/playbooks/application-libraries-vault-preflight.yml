@@ -21,6 +21,7 @@
         platform_application_vault_values: {}
         platform_application_vault_documents: {}
         platform_application_credential_files: {}
+        platform_application_generated_values: {}
       no_log: true
     - name: Discover each Vault deployment once
       ansible.builtin.include_role:

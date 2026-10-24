@@ -71,6 +71,27 @@ class ApplicationVaultTest(unittest.TestCase):
         self.instance['secretBindings']={}
         self.assertEqual(project_vault(self.rows,self.prepared)['providers'],[])
 
+    def test_project_id_is_absent_from_all_managed_paths_and_materialized_agent(self):
+        project = 'project-b46aa3f5f57a495f'
+        self.prepared['snapshot']['project']['id'] = project
+        libraries = self.prepared['snapshot']['applicationLibraries']['libraries']
+        libraries['sdku-dm'] = libraries.pop('sdku')
+        for row in self.rows:
+            row['libraryId'] = 'sdku-dm'
+        libraries['sdku-dm']['sharedSecretRequirements'] = {
+            'shared': {'source': {'kind':'runtime_secret_ref', 'ref':'shared-password'}}}
+        self.instance['secretBindings']['SHARED'] = {'source': {'library_secret':'shared'}}
+        result = project_vault(self.rows, self.prepared)
+        self.assertEqual('sdku-dm/shared', result['libraryJobs'][0]['documents'][0]['document'])
+        job = result['instanceJobs'][0]
+        self.assertTrue(all(project not in doc['document'] for doc in job['documents']))
+        content = agent_config({'vault': {'endpoint_url':'https://v.example.test',
+            'ca_container_path':'/opt/vault/ca.pem', 'auth_mount':'auth/approle',
+            'role_id_container_path':'/opt/vault/role-id', 'env_templates':job['envTemplates']},
+            'application_command':['/opt/application/run']})
+        self.assertIn('secret/data/sdku-dm/shared', content)
+        self.assertNotIn(project, content)
+
     def test_missing_vault_binding_fails(self):
         self.rows[0]['vaultRef']={}
         self.rows[1]['vaultRef']={}
@@ -84,6 +105,28 @@ class ApplicationVaultTest(unittest.TestCase):
         self.assertEqual(len(result['sourceJobs']),1)
         self.assertEqual(set(result['instanceJobs'][0]['documents'][0]['fields']),{'username'})
         self.assertIn('secret/data/existing/account',result['instanceJobs'][0]['policy'])
+
+    def test_generated_password_has_one_source_per_account_and_ordinary_publication(self):
+        account = self.instance['credentialRequirements']['postgres']
+        account['mode'] = 'managed'
+        account['credentials']['password']['source'] = {'kind': 'generated'}
+        self.instance['credentialRequirements']['redis'] = copy.deepcopy(account)
+        result = project_vault(self.rows, self.prepared)
+        self.assertEqual(2, len(result['sourceJobs']))
+        self.assertEqual(2, len({job['passwordRef'] for job in result['sourceJobs']}))
+        for document in result['instanceJobs'][0]['documents']:
+            field = document['fields']['password']
+            self.assertEqual({'kind': 'generated'}, field['source'])
+            self.assertEqual(1, sum(source['passwordRef'] == field['passwordRef']
+                                    for source in result['sourceJobs']))
+        self.assertEqual(result, project_vault(self.rows, self.prepared))
+        self.assertTrue(all(not doc['document'].startswith('project/')
+                            for job in result['instanceJobs'] for doc in job['documents']))
+        self.assertTrue(all('secret/data/sdku/apigateway-sdku/accounts/' in item['contents']
+                            for item in result['instanceJobs'][0]['envTemplates']))
+        self.instance['agentRequired'] = False
+        with self.assertRaisesRegex(ValueError, 'GENERATED_PASSWORD_SCOPE_INVALID'):
+            project_vault(self.rows, self.prepared)
 
     def test_shared_vault_source_is_preflighted_without_password_file(self):
         self.instance['credentialRequirements']={}
@@ -112,6 +155,9 @@ class ApplicationVaultTest(unittest.TestCase):
         result=project_vault(self.rows,self.prepared)
         self.assertEqual(result['instanceJobs'][0]['documents'],[])
         self.assertEqual(len(result['libraryJobs'][0]['documents']),1)
+        self.assertEqual('sdku/shared', result['libraryJobs'][0]['documents'][0]['document'])
+        self.assertTrue(any('secret/data/sdku/shared' in item['contents']
+                            for item in result['instanceJobs'][0]['envTemplates']))
         self.prepared['pki_materialization']['materializationPlans'].append(copy.deepcopy(self.prepared['pki_materialization']['materializationPlans'][-1]))
         with self.assertRaisesRegex(ValueError,'PKI_CREDENTIAL_AMBIGUOUS'):
             project_vault(self.rows,self.prepared)

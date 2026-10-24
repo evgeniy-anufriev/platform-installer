@@ -7,7 +7,7 @@
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:1bc26df543a0a329fb7e9c98aa74fa0f0986aab500b8e1ac3a2cc6c4e7b7afef",
+    "digest": "sha256:26d9d8c21c8d497e4789f93a8c575b9fbd4325880fe76dbfcbdc1d5523248861",
     "kind": "application",
     "name": "alarm-view-service",
     "sourceDirectory": ".",
@@ -186,10 +186,10 @@
     "name": "cspa",
     "version": "1.0.0",
     "sourceDirectory": ".",
-    "digest": "sha256:0892188e6b0fe0d3d03f27277f6778ee33e46183e60146057faa806a80fbac27"
+    "digest": "sha256:0fbf87d2cbc34d92b2542dcdce4b096cccff7ff43003b1a75dfb91cbe9ac7730"
   },
   {
-    "digest": "sha256:22af43ddf3357467574dd0a9a52bad1296a9dc655ebe84ed2f30b645797a77be",
+    "digest": "sha256:ae1737ccad1100552f6795c76629c4de740d8bec688eb3f6adbefe91d7128da5",
     "kind": "library",
     "name": "sdku",
     "sourceDirectory": ".",

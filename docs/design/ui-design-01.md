@@ -196,6 +196,14 @@ acceptance. Production contracts are unchanged; no direct container controls are
 
 ### Existing-contract secret binding editor (2026-10-16)
 
+Owner extension 2026-10-21: generated application passwords use the existing
+source selector and draft/Review/Save. Generation happens in Execution Node Core
+during Apply; the editor accepts no generated plaintext value and explains saved
+value reuse. It is offered for password fields, not usernames. Managed KV paths
+and materialized Agent secret references omit project ID (for example
+`secret/data/sdku-dm/shared`); explicit external Vault references remain authored
+sources. No UI generator, Generate button or new Wails method is added.
+
 The production HTML mockup now includes the subsequent UX audit refinement:
 compact deployment cards with inline credential variable aliases/reset, session
 password entry next to its source, and database access tables (five PostgreSQL

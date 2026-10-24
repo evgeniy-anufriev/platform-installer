@@ -209,13 +209,16 @@ def managed_grant_delta(account, rows, databases):
     return expected - current, removed
 
 
-def user_batch(account, password, missing, create, clustered, revoked=()):
+def user_batch(account, password, missing, create, clustered, revoked=(), password_update=False):
     name = identifier(account['name'])
     cluster = ' ON CLUSTER default' if clustered else ''
     statements = []
     if create:
         verifier = hashlib.sha256(password.encode()).hexdigest()
         statements.append("CREATE USER %s%s IDENTIFIED WITH sha256_hash BY '%s' DEFAULT ROLE NONE;" % (name, cluster, verifier))
+    elif password_update:
+        verifier = hashlib.sha256(password.encode()).hexdigest()
+        statements.append("ALTER USER %s%s IDENTIFIED WITH sha256_hash BY '%s';" % (name, cluster, verifier))
     for database, table, privilege in sorted(revoked):
         if privilege not in {'SELECT', 'INSERT', 'CREATE TABLE'}:
             raise ProviderFailure('CLICKHOUSE_APPLICATION_GRANTS_INVALID')

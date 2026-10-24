@@ -23,7 +23,7 @@ platform_desired_state:
         secrets: {deploymentRef: vault-apps}
         application-pki: {profileRef: application-pki}
       connection_defaults:
-        kafka: {connectionRef: CLIENT_SSL}
+        kafka: {connectionRef: SASL_SSL}
         # Choose sentinel only for a Sentinel-backed Redis connection.
         redis: {connectionRef: client}
       resources:
@@ -31,10 +31,10 @@ platform_desired_state:
         alert-hdl: {kind: redis.key, binding: cache, parameters: {}}
         alert-class: {kind: redis.key, binding: cache, parameters: {}}
         history: {kind: clickhouse.database, binding: analytics, parameters: {}}
-        model: {kind: postgresql.database, binding: database, parameters: {}}
-        alarms_db: {kind: postgresql.database, binding: database, parameters: {}}
-        preferences: {kind: postgresql.database, binding: database, parameters: {}}
-        ef-store: {kind: postgresql.database, binding: database, parameters: {}}
+        model: {kind: postgresql.database, binding: database, parameters: {name: tn-scada}}
+        alarms_db: {kind: postgresql.database, binding: database, parameters: {name: sdku_alarm_view}}
+        preferences: {kind: postgresql.database, binding: database, parameters: {name: user-preferences}}
+        ef-store: {kind: postgresql.database, binding: database, parameters: {name: ef-store}}
         main: {kind: kafka.topic, binding: messaging, parameters: {}}
         main_compact: {kind: kafka.topic, binding: messaging, parameters: {}}
         alarms: {kind: kafka.topic, binding: messaging, parameters: {}}

@@ -457,7 +457,7 @@ def _command(release, journal, operation):
                 operation.get('phaseId') != 'applications' or not isinstance(libraries, list) or
                 not 1 <= len(libraries) <= 256 or any(not isinstance(item, str) or
                     re.fullmatch(r'[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*', item) is None for item in libraries) or
-                libraries != sorted(set(libraries)) or not isinstance(operation.get('applicationSemanticFingerprint'), str) or
+                len(libraries) != len(set(libraries)) or not isinstance(operation.get('applicationSemanticFingerprint'), str) or
                 re.fullmatch(r'sha256:[a-f0-9]{64}', operation['applicationSemanticFingerprint']) is None):
             raise LifecycleError('EXECUTION_MANIFEST_INVALID')
         targets = _service_targets(operation)

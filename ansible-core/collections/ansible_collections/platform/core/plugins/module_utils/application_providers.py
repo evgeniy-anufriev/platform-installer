@@ -3,10 +3,10 @@ import hashlib
 import re
 
 try:
-    from .runtime_secret_identity import secret_input_requirement_ref
+    from .runtime_secret_identity import secret_input_requirement_ref, generated_password_ref
     from .application_libraries import resolve_connection, finding, _value
 except ImportError:
-    from runtime_secret_identity import secret_input_requirement_ref
+    from runtime_secret_identity import secret_input_requirement_ref, generated_password_ref
     from application_libraries import resolve_connection, finding, _value
 
 NAME = re.compile(r'^[a-z_][a-z0-9_]{0,62}$')
@@ -278,8 +278,10 @@ def project_providers(rows, snapshot, configuration, desired, catalog):
                     credentials = account['credentials']
                     if set(credentials) != {'username', 'password'} or credentials['username']['source']['kind'] != 'literal':
                         raise ValueError('APPLICATION_PROVIDER_CREDENTIAL_INVALID')
-                    if credentials['password']['source']['kind'] not in {'runtime_secret_ref', 'vault_ref'}:
+                    if credentials['password']['source']['kind'] not in {'runtime_secret_ref', 'vault_ref', 'generated'}:
                         raise ValueError('APPLICATION_PROVIDER_CREDENTIAL_SOURCE_DEFERRED')
+                    if credentials['password']['source']['kind'] == 'generated' and (account['mode'] != 'managed' or not instance.get('agentRequired')):
+                        raise ValueError('APPLICATION_PROVIDER_GENERATED_PASSWORD_SCOPE_INVALID')
                     username = identifier(credentials['username']['source']['value'], True)
                     admin = configuration['services'][ref]['configuration'].get('adminSuperuser', {}).get('value', {}).get('username')
                     if username in {admin, 'default', 'autoctl_node', 'pgautofailover_replicator'} or (service_type == 'kafka' and username == 'admin'):
@@ -318,7 +320,10 @@ def project_providers(rows, snapshot, configuration, desired, catalog):
                     value = dict(name=username, mode=account['mode'], instanceId=instance_id, accountId=account_id,
                                  database=database['name'] if database else None, libraryId=library_id,
                                  listener=listener, candidates=connection.get('targets', job['candidates']),
-                                 passwordRef=(credentials['password']['source']['ref'] if credentials['password']['source']['kind'] == 'runtime_secret_ref' else 'pla-vault-'+hashlib.sha256(repr(sorted(credentials['password']['source'].items())).encode()).hexdigest()[:32]), grants=grants,
+                                 passwordRef=(generated_password_ref(project_id, library_id, instance_id, account_id)
+                                              if credentials['password']['source']['kind'] == 'generated' else
+                                              credentials['password']['source']['ref'] if credentials['password']['source']['kind'] == 'runtime_secret_ref' else
+                                              'pla-vault-'+hashlib.sha256(repr(sorted(credentials['password']['source'].items())).encode()).hexdigest()[:32]), grants=grants,
                                  marker=marker(project_id, ref, library_id, 'account', instance_id + '/' + account_id))
                     if bulk_access:
                         value['databaseAccess'] = access

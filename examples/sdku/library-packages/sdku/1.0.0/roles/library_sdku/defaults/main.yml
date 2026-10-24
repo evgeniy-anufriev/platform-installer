@@ -3,7 +3,7 @@ platform_library_definition:
     version: 1.0.0
     connection_defaults:
         kafka:
-            connectionRef: SSL
+            connectionRef: SASL_SSL
     connections:
         sso:
             library_binding: sso
@@ -51,7 +51,6 @@ platform_library_definition:
             KAFKA_CONSUMER_SESSION_TIMEOUT_MS: "10000"
             KAFKA_CONSUMER_SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS: "5000"
             KAFKA_CONSUMER_SOCKET_CONNECTION_SETUP_TIMEOUT_MS: "1500"
-            KAFKA_ENABLE_SSL: "true"
             KAFKA_KEYSTORE_LOCATION: /opt/application/pki/keystore.p12
             KAFKA_PRODUCER_DELIVERY_TIMEOUT_MS: "20000"
             KAFKA_PRODUCER_HEARTBEAT_INTERVAL_MS: "500"
@@ -71,8 +70,7 @@ platform_library_definition:
             REDIS_METADATA_TOPIC: '{{ library_resources[''dm-meta''].parameters.name }}'
             REDIS_SENTINEL_MASTER: redis-1
             REDIS_TRUSTSTORE_LOCATION: /opt/application/pki/truststore.p12
-            SPRING_KAFKA_SECURITY_PROTOCOL: SSL
-            SPRING_KAFKA_SSL_ENABLE_SSL: "true"
+            SPRING_KAFKA_SECURITY_PROTOCOL: SASL_SSL
             SPRING_KAFKA_SSL_KEY_STORE_LOCATION: /opt/application/pki/keystore.p12
             SPRING_KAFKA_SSL_KEY_STORE_TYPE: PKCS12
             SPRING_KAFKA_SSL_TRUST_STORE_LOCATION: /opt/application/pki/truststore.p12

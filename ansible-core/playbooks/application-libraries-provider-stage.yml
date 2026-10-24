@@ -12,6 +12,26 @@
             platform_application_completed_batches: []
             platform_application_delivered_instances: []
           no_log: true
+        - name: Require protected runtime root before generated credential delivery
+          ansible.builtin.assert:
+            that: "{} | platform.core.application_protected_secret_files([], platform_application_secret_root)"
+            fail_msg: APPLICATION_PROVIDER_SECRET_FILE_INVALID
+          when: platform_application_generated_values | default({}) | length > 0
+          no_log: true
+        - name: Deliver generated application passwords through existing runtime files
+          ansible.builtin.copy:
+            content: "{{ item.value }}"
+            dest: "{{ platform_application_secret_root }}/{{ item.key }}"
+            mode: '0600'
+            follow: false
+          loop: "{{ platform_application_generated_values | default({}) | dict2items }}"
+          changed_when: false
+          no_log: true
+        - name: Bind generated runtime files for the ordinary provider hooks
+          ansible.builtin.set_fact:
+            platform_application_credential_files: "{{ platform_application_credential_files | default({}) | combine({item.key: platform_application_secret_root ~ '/' ~ item.key}) }}"
+          loop: "{{ platform_application_generated_values | default({}) | dict2items }}"
+          no_log: true
         - name: Read existing credential sources within bounded runtime custody
           ansible.builtin.include_role:
             name: platform.vault.application_provider
@@ -19,6 +39,7 @@
           loop: "{{ application_vault_inputs.sourceJobs | default([]) }}"
           loop_control:
             loop_var: application_vault_source
+          when: application_vault_source.passwordRef | default('') not in (platform_application_credential_files | default({}))
         - name: Require the same prepared PostgreSQL scope
           ansible.builtin.assert:
             that: application_provider_inputs.status == 'PASS'
@@ -135,6 +156,10 @@
             platform_application_runtime_credential_custody: true
           no_log: true
       always:
+        - name: Discard generated password preparation values after provider delivery
+          ansible.builtin.set_fact:
+            platform_application_generated_values: {}
+          no_log: true
         - name: Remove only invocation-derived Vault account credential files
           ansible.builtin.file:
             path: "{{ platform_application_secret_root }}/{{ item.passwordRef }}"
