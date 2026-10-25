@@ -1,5 +1,5 @@
 ---
-- name: Validate resolved DNS A-record update input
+- name: Проверка разрешенных входных данных обновления A-записи DNS
   ansible.builtin.assert:
     that:
       - platform_bind_a_record is mapping
@@ -19,7 +19,7 @@
       - platform_bind_a_record.ttl | int <= 2147483647
     fail_msg: BIND_DNS_A_RECORD_UPDATE_INPUT_INVALID
 
-- name: Validate each resolved DNS A-record IPv4 address
+- name: Проверка каждого разрешенного адреса DNS A-записи IPv4
   ansible.builtin.assert:
     that:
       - platform_bind_a_record_address is string
@@ -30,7 +30,7 @@
     loop_var: platform_bind_a_record_address
     label: Validate DNS A-record IPv4 address
 
-- name: Read current authoritative A record from local primary
+- name: Прочитать текущую авторитетную запись A из локальной первичной записи
   ansible.builtin.command:
     argv:
       - dig
@@ -49,14 +49,14 @@
     not ('status: NOERROR' in _platform_bind_a_record_current.stdout or
          'status: NXDOMAIN' in _platform_bind_a_record_current.stdout)
 
-- name: Collect existing authoritative answer records for the exact owner
+- name: Собрать существующие авторитетные записи ответов для конкретного владельца
   ansible.builtin.set_fact:
     _platform_bind_a_record_current_answer_lines: >-
       {{ _platform_bind_a_record_current.stdout_lines |
          reject('match', '^\s*(;|$)') |
          select('search', 'IN') | list }}
 
-- name: Reject CNAME or foreign-owner answer before changing the A record
+- name: Отклонить ответ CNAME или неуправляемого владельца перед изменением записи A
   ansible.builtin.assert:
     that:
       - platform_bind_a_record_answer.split() | length == 5
@@ -69,12 +69,12 @@
     loop_var: platform_bind_a_record_answer
     label: Validate existing authoritative A-record answer
 
-- name: Normalize current and desired A record sets
+- name: Нормализовать текущие и желаемые наборы записей A
   ansible.builtin.set_fact:
     _platform_bind_a_record_current_addresses: []
     _platform_bind_a_record_desired_addresses: []
 
-- name: Add current DNS answer fields to the exact comparison set
+- name: Добавить текущие поля ответа DNS в точный набор сравнения
   ansible.builtin.set_fact:
     _platform_bind_a_record_current_addresses: >-
       {{ _platform_bind_a_record_current_addresses +
@@ -85,7 +85,7 @@
     loop_var: platform_bind_a_record_answer
     label: Normalize current DNS A-record answer
 
-- name: Build exact desired A record set including TTL
+- name: Построить точный желаемый набор записей, включая TTL
   ansible.builtin.set_fact:
     _platform_bind_a_record_desired_addresses: >-
       {{ _platform_bind_a_record_desired_addresses +
@@ -95,6 +95,6 @@
     loop_var: platform_bind_a_record_address
     label: Add desired A-record IPv4 to comparison set
 
-- name: Retain exact observed RRsets and desired update without mutations
+- name: Сохранить точные наблюдаемые наборы RRset и желаемое обновление без мутаций
   ansible.builtin.set_fact:
     _platform_bind_zone_observations: "{{ _platform_bind_zone_observations + [{'record': platform_bind_a_record, 'currentAddresses': _platform_bind_a_record_current_answer_lines | map('split') | map('last') | sort | list, 'absentOwner': 'status: NXDOMAIN' in _platform_bind_a_record_current.stdout, 'changed': (_platform_bind_a_record_current_addresses != _platform_bind_a_record_desired_addresses) or (platform_bind_force_dynamic_update_probe | default(false) | bool)}] }}"

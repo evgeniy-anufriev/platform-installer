@@ -1,17 +1,17 @@
 ---
-- name: Resolve the canonical standalone project root for read-only verify
+- name: Разрешить канонический корень автономного проекта для проверки только для чтения
   ansible.builtin.set_fact:
     _platform_vault_project_root: >-
       {{ platform_project_root if (platform_project_root is defined and platform_project_root | string | length > 0)
          else ((inventory_dir | dirname) if (inventory_dir is defined and inventory_dir | string | length > 0) else '') }}
 
-- name: Resolve the exact standalone output path for read-only verify
+- name: Определение точного пути автономного вывода для проверки только для чтения
   ansible.builtin.set_fact:
     _platform_vault_bootstrap_output_dir: >-
       {{ platform_vault_bootstrap_output_dir if (platform_vault_bootstrap_output_dir | string | length > 0)
          else (_platform_vault_project_root ~ '/secrets/' ~ platform_vault_deployment_id) }}
 
-- name: Require an explicit or project-root-derived standalone output path
+- name: Требовать явный или определяемый корнем проекта автономный путь вывода
   ansible.builtin.assert:
     that:
       - _platform_vault_bootstrap_output_dir.startswith('/')
@@ -20,24 +20,24 @@
       - "'\\\\' not in _platform_vault_bootstrap_output_dir"
     fail_msg: VAULT_BOOTSTRAP_OUTPUT_PATH_INVALID
 
-- name: Resolve the verify output path without following a substituted parent
+- name: Разрешить выходной путь проверки, не следуя за замененным родительским элементом
   ansible.builtin.command:
     argv: [realpath, -m, "{{ _platform_vault_bootstrap_output_dir }}"]
   register: _platform_vault_verify_output_realpath
   changed_when: false
 
-- name: Require the read-only verify output path to be canonical
+- name: Требовать, чтобы выходной путь проверки только для чтения был каноническим
   ansible.builtin.assert:
     that: _platform_vault_verify_output_realpath.stdout == _platform_vault_bootstrap_output_dir
     fail_msg: VAULT_BOOTSTRAP_OUTPUT_PATH_UNSAFE
 
-- name: Identify the local verify account
+- name: Определение локальной учетной записи проверки
   ansible.builtin.command:
     argv: [id, -u]
   register: _platform_vault_verify_uid
   changed_when: false
 
-- name: Inspect standalone output directory and token without following links
+- name: Проверка отдельного выходного каталога и токена без перехода по ссылкам
   ansible.builtin.stat:
     path: "{{ item }}"
     follow: false
@@ -49,7 +49,7 @@
     - "{{ _platform_vault_bootstrap_output_dir }}/admin-token"
   register: _platform_vault_verify_output_stats
 
-- name: Require private controller-owned token custody for standalone verify
+- name: Требовать хранения токенов, принадлежащих частному контроллеру, для автономной проверки
   ansible.builtin.assert:
     that:
       - _platform_vault_verify_output_stats.results[0].stat.isdir
@@ -63,7 +63,7 @@
     fail_msg: VAULT_BOOTSTRAP_OUTPUT_FILE_UNSAFE
   no_log: true
 
-- name: Read the standalone root token without exposing it
+- name: Прочитать автономный корневой токен, не раскрывая его
   ansible.builtin.set_fact:
     platform_vault_admin_token: "{{ lookup('ansible.builtin.file', _platform_vault_bootstrap_output_dir ~ '/admin-token') | trim }}"
   no_log: true

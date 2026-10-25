@@ -1,5 +1,5 @@
 ---
-- name: Resolve exact Keepalived deployment participants
+- name: Определение точных участников развертывания Keepalived
   hosts: localhost
   connection: local
   gather_facts: false
@@ -11,7 +11,7 @@
     _platform_keepalived_selected_deployment: "{{ platform_execution_service_deployment | default('', true) }}"
   tags: [keepalived-participant-scope]
   tasks:
-    - name: Collect hosts assigned to the current Keepalived deployment
+    - name: Собрать хосты, назначенные текущему развертыванию Keepalived
       ansible.builtin.set_fact:
         _platform_keepalived_participants: "{{ (_platform_keepalived_participants | default([])) + [item] }}"
       loop: "{{ groups['platform_targets'] | default([]) | sort }}"
@@ -28,12 +28,12 @@
             | length > 0)
         )
 
-    - name: Require at least one participant for the Keepalived action
+    - name: Для действия Keepalived требуется хотя бы один участник
       ansible.builtin.assert:
         that: _platform_keepalived_participants | default([]) | length > 0
         fail_msg: KEEPALIVED_DEPLOYMENT_PARTICIPANTS_EMPTY
 
-- name: Phase A - prepare and validate Keepalived candidates
+- name: Этап A — подготовить и проверить конфигурации Keepalived
   hosts: platform_targets
   become: true
   gather_facts: false
@@ -43,14 +43,14 @@
       platform_keepalived_lifecycle_phase: prepare
       when: inventory_hostname in (hostvars['localhost']._platform_keepalived_participants | default([]))
 
-- name: Barrier A - release activation only after every candidate passes
+- name: Барьер A — разрешить активацию только после проверки всех конфигураций
   hosts: localhost
   connection: local
   gather_facts: false
   vars:
     _platform_keepalived_participants: "{{ hostvars['localhost']._platform_keepalived_participants | default([]) }}"
   tasks:
-    - name: Assert every participant produced a passing candidate
+    - name: Убедиться, что каждый участник создал проходного кандидата
       ansible.builtin.assert:
         that:
           - hostvars[item].platform_keepalived_candidate_checksum | default('') | length > 0
@@ -60,7 +60,7 @@
       loop_control:
         label: "{{ item }}"
 
-- name: Phase B - install and validate exact Keepalived candidates
+- name: Этап B — установить и проверить подготовленные конфигурации Keepalived
   hosts: platform_targets
   become: true
   gather_facts: false
@@ -70,14 +70,14 @@
       platform_keepalived_lifecycle_phase: activate
       when: inventory_hostname in (hostvars['localhost']._platform_keepalived_participants | default([]))
 
-- name: Barrier B - release service reconcile only after active validation
+- name: Барьер B — разрешить изменение состояния службы после проверки активной конфигурации
   hosts: localhost
   connection: local
   gather_facts: false
   vars:
     _platform_keepalived_participants: "{{ hostvars['localhost']._platform_keepalived_participants | default([]) }}"
   tasks:
-    - name: Assert every active configuration matches and validates
+    - name: Подтвердить соответствие и проверку каждой активной конфигурации
       ansible.builtin.assert:
         that:
           - hostvars[item].platform_keepalived_active_checksum | default('') == hostvars[item].platform_keepalived_candidate_checksum | default('__missing__')
@@ -87,7 +87,7 @@
       loop_control:
         label: "{{ item }}"
 
-- name: Phase C - reconcile Keepalived after both cluster barriers
+- name: Этап C — привести Keepalived к заданному состоянию после обоих кластерных барьеров
   hosts: platform_targets
   become: true
   gather_facts: false

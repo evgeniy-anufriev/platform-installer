@@ -1,5 +1,5 @@
 ---
-- name: Bind this placement's platform and source inputs
+- name: Связать платформу этого места размещения и исходные входные данные
   ansible.builtin.set_fact:
     _image_platform:
       os: "{{ ansible_facts.system | lower }}"
@@ -11,12 +11,12 @@
     _image_request_key: "{{ [application_image_input.request, application_image_input.credentials, application_image_input.account, application_image_input.configDirectory] | to_json | hash('sha256') }}"
   no_log: true
 
-- name: Reuse identical registry observations only within this target preparation
+- name: Повторно использовать идентичные наблюдения реестра только в рамках этой целевой подготовки
   ansible.builtin.set_fact:
     _image_registry: "{{ (_image_registry_cache | default({})).get(_image_request_key, {}) }}"
   no_log: true
 
-- name: Require assigned runtime credentials before contacting a registry
+- name: Требовать присвоенные учетные данные среды выполнения перед обращением к реестру
   ansible.builtin.assert:
     that:
       - application_image_input.credentials.username.source.ref in platform_application_image_secret_values
@@ -25,38 +25,38 @@
   when: application_image_input.credentials | length > 0
   no_log: true
 
-- name: Bind explicitly assigned registry session inputs
+- name: Привязка явно назначенных входных данных сеанса реестра
   ansible.builtin.set_fact:
     _image_username: "{{ platform_application_image_secret_values[application_image_input.credentials.username.source.ref] }}"
     _image_password: "{{ platform_application_image_secret_values[application_image_input.credentials.password.source.ref] }}"
   when: application_image_input.credentials | length > 0
   no_log: true
 
-- name: Retain existing node Docker credentials when no library source was assigned
+- name: Сохранить учетные данные существующего узла Docker, если источник библиотеки не назначен
   ansible.builtin.include_tasks: node_credentials.yml
   when:
     - application_image_input.credentials | length == 0
     - application_image_input.request.registry in (platform_application_approved_registries | default([]))
     - _image_request_key not in (_image_registry_cache | default({}))
 
-- name: Read metadata from the approved registry in this node's network context
+- name: Прочитать метаданные из утвержденного реестра в сетевом контексте этого узла
   ansible.builtin.include_tasks: registry.yml
   when:
     - application_image_input.request.registry in (platform_application_approved_registries | default([]))
     - _image_request_key not in (_image_registry_cache | default({}))
 
-- name: Retain nonsecret registry metadata for repeated placements on this target
+- name: Сохранить несекретные метаданные реестра для повторного размещения на этом целевом объекте
   ansible.builtin.set_fact:
     _image_registry_cache: "{{ (_image_registry_cache | default({})) | combine({_image_request_key: _image_registry}) }}"
   when: application_image_input.request.registry in (platform_application_approved_registries | default([]))
   no_log: true
 
-- name: Match fallback metadata against the exact selected image
+- name: Сопоставить резервные метаданные с точным выбранным изображением
   ansible.builtin.set_fact:
     _image_offline: "{{ platform_application_image_bundle | platform.core.application_offline_image(application_image_input.reference, _image_platform, application_image_input.legacy) }}"
   no_log: true
 
-- name: Freeze the selected identity and only an equivalent fallback
+- name: Заморозить выбранное удостоверение и только эквивалентный запасной вариант
   ansible.builtin.set_fact:
     platform_application_image_preparations: >-
       {{ platform_application_image_preparations | combine({

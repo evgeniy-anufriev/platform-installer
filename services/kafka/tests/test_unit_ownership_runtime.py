@@ -16,10 +16,10 @@ class KafkaUnitOwnershipRuntimeTests(unittest.TestCase):
         if not executable:
             self.skipTest("Ansible runtime required")
         source = yaml.safe_load(TASKS.read_text(encoding="utf-8"))
-        names = ["Inspect exact Kafka member unit paths before rendering",
-                 "Reject unsafe existing Kafka member unit paths",
-                 "Read ownership headers from existing Kafka member units",
-                 "Refuse replacement of foreign Kafka member units"]
+        names = ["Проверка точных путей к службе systemd экземпляра службы Kafka перед рендерингом",
+                 "Отклонить небезопасные существующие пути службы systemd экземпляра службы Kafka",
+                 "Прочитать заголовки владения из существующих системных служб экземпляра службы Kafka",
+                 "Отказаться от замены неуправляемых сервисов экземпляра службы Kafka systemd"]
         checks = [next(task for task in source if task.get("name") == name) for name in names]
         with tempfile.TemporaryDirectory(prefix="platform-kafka-ownership-") as directory:
             root = Path(directory)

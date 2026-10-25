@@ -1,5 +1,5 @@
 ---
-- name: Validate named Kafka role resource and provider
+- name: Проверка ресурса и провайдера роли Kafka
   ansible.builtin.assert:
     that:
       - topic_role.value in _application_resources
@@ -17,7 +17,7 @@
     label: "{{ topic_role.key }}"
   become: false
 
-- name: Expose selected names to application templates
+- name: Предоставить выбранные имена шаблонам приложений
   ansible.builtin.set_fact:
     application_topics: >-
       {{ application_topics | combine({topic_connection.key:

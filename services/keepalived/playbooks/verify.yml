@@ -1,5 +1,5 @@
 ---
-- name: Verify Keepalived VRRP read-only
+- name: Проверить VRRP Keepalived без изменений
   hosts: platform_targets
   become: true
   gather_facts: false

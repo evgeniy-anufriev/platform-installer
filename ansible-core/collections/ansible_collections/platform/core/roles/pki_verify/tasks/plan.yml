@@ -1,5 +1,5 @@
 ---
-- name: Inspect deployed PKI files read-only
+- name: Проверка развернутых файлов PKI, доступных только для чтения
   ansible.builtin.find:
     paths: "{{ platform_pki_plan.targetDirectory }}"
     patterns: [ca-chain.pem, certificate.pem, private-key.pem, keystore.p12, truststore.p12, materialization-fingerprint]
@@ -9,23 +9,23 @@
     get_checksum: false
   register: platform_pki_deployed_files
 
-- name: Require complete deployed PKI material
+- name: Требовать полностью развернутый материал PKI
   ansible.builtin.assert:
     that: platform_pki_deployed_files.matched == 6
     fail_msg: PKI_TARGET_MATERIAL_INCOMPLETE
 
-- name: Verify deployed certificate chain read-only
+- name: Проверить развёрнутую цепочку сертификатов без изменений
   ansible.builtin.command:
     argv: [openssl, verify, -CAfile, "{{ platform_pki_plan.targetDirectory }}/ca-chain.pem", "{{ platform_pki_plan.targetDirectory }}/certificate.pem"]
   changed_when: false
 
-- name: Read deployed materialization fingerprint
+- name: Прочитать отпечаток развернутой материализации
   ansible.builtin.command:
     argv: [cat, "{{ platform_pki_plan.targetDirectory }}/materialization-fingerprint"]
   changed_when: false
   register: platform_pki_target_fingerprint
 
-- name: Require expected deployed materialization fingerprint
+- name: Требовать ожидаемый отпечаток развернутой материализации
   ansible.builtin.assert:
     that: "(platform_pki_target_fingerprint.stdout | trim) == platform_pki_plan.materializationFingerprint"
     fail_msg: PKI_TARGET_MATERIALIZATION_MISMATCH

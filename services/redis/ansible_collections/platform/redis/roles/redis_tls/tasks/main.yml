@@ -1,9 +1,9 @@
 ---
-- name: Validate portable service resource settings
+- name: Проверка настроек ресурсов переносимой службы
   ansible.builtin.include_role:
     name: platform.core.project_settings
 
-- name: Validate resolved Redis artifact source before mutation
+- name: Проверка разрешенного источника артефакта Redis перед изменением
   ansible.builtin.include_role:
     name: platform.core.artifact_source_gate
   vars:
@@ -13,25 +13,25 @@
     - platform_resolved_artifact_sources is defined or (platform_artifact_source_authority_active | default(false))
     - not (platform_redis_verify_only | bool)
 
-- name: Validate Redis inputs and instance topology
+- name: Проверка входных данных Redis и топологии экземпляра
   ansible.builtin.include_tasks: validate.yml
 
-- name: Normalize Redis members into stable deployment slots
+- name: Нормализовать экземпляры службы Redis в стабильные слоты развертывания
   ansible.builtin.include_tasks: normalize.yml
 
-- name: Check ownership of package-provided Redis system units
+- name: Проверка владения предоставляемыми пакетом системными службами systemd Redis
   ansible.builtin.include_tasks: package_preflight.yml
   when: not (platform_redis_verify_only | bool)
 
-- name: Project local Redis member list
+- name: Проект списка экземпляров локальной службы Redis
   ansible.builtin.set_fact:
     _platform_redis_local_instances: >-
       {{ _platform_redis_instances | selectattr('host', 'equalto', inventory_hostname) | list }}
 
-- name: Reject overlapping local Redis data paths
+- name: Отклонить перекрывающиеся локальные пути данных Redis
   ansible.builtin.include_tasks: validate_data_paths.yml
 
-- name: Guard local Redis data paths before mutation
+- name: Защита локальных путей к данным Redis перед изменением
   ansible.builtin.include_role:
     name: platform.core.managed_data_path_guard
   vars:
@@ -45,14 +45,14 @@
     loop_var: platform_managed_data_path_instance
     label: "{{ platform_managed_data_path_instance.id }}"
 
-- name: Prove local Redis listener ownership before mutation
+- name: Доказать право собственности на локальный прослушиватель Redis перед изменением
   ansible.builtin.include_tasks: preflight.yml
   when: not (platform_redis_verify_only | bool)
 
-- name: Resolve Redis TLS material
+- name: Разрешить материал Redis TLS
   ansible.builtin.include_tasks: resolve_tls.yml
 
-- name: Install approved Redis package from configured repository
+- name: Установить утвержденный пакет Redis из настроенного репозитория
   ansible.builtin.package:
     name: "redis-{{ platform_redis_version }}"
     state: present
@@ -60,13 +60,13 @@
     - not (platform_redis_verify_only | bool)
     - platform_resolved_artifact_sources is not defined or platform_resolved_artifact_sources['redis-runtime'].source == 'REPOSITORY'
 
-- name: Disable package-provided Redis units on first package installation
+- name: Отключить предоставляемые пакетом системные службы Redis при первой установке пакета
   ansible.builtin.include_tasks: package_units.yml
   when:
     - not (platform_redis_verify_only | bool)
     - _platform_redis_package_absent_before_apply
 
-- name: Configure local Redis members
+- name: Настройка локальных экземпляров службы Redis
   ansible.builtin.include_tasks: member.yml
   loop: "{{ _platform_redis_local_instances }}"
   loop_control:
@@ -74,13 +74,13 @@
     label: "{{ redis_member.id }}"
   when: not (platform_redis_verify_only | bool)
 
-- name: Initialize local Redis verification observations
+- name: Инициализация локальных проверочных наблюдений Redis
   ansible.builtin.set_fact:
     _platform_redis_observed_members: []
     _platform_redis_observed_sentinel_masters: []
   when: _platform_redis_local_instances | length > 0
 
-- name: Verify local Redis and Sentinel before committing bootstrap state
+- name: Проверка локальных Redis и Sentinel перед фиксацией состояния начальной загрузки
   ansible.builtin.include_tasks: verify.yml
   loop: "{{ _platform_redis_local_instances }}"
   loop_control:
@@ -88,19 +88,19 @@
     label: "{{ redis_member.id }}"
   when: not (platform_redis_verify_only | bool)
 
-- name: Verify deployment-wide Redis replication and Sentinel agreement
+- name: Проверка репликации Redis на уровне всего развертывания и соглашения Sentinel
   ansible.builtin.include_tasks: verify_deployment.yml
   when:
     - not (platform_redis_verify_only | bool)
     - _platform_redis_local_instances | length > 0
 
-- name: Finalize new Redis deployment bootstrap state
+- name: Завершение нового состояния начальной загрузки развертывания Redis
   ansible.builtin.include_tasks: finalize_bootstrap.yml
   when:
     - not (platform_redis_verify_only | bool)
     - not _platform_redis_has_persistent_state
 
-- name: Verify local Redis and Sentinel read-only
+- name: Проверить локальные Redis и Sentinel без изменений
   ansible.builtin.include_tasks: verify.yml
   loop: "{{ _platform_redis_local_instances }}"
   loop_control:
@@ -108,7 +108,7 @@
     label: "{{ redis_member.id }}"
   when: platform_redis_verify_only | bool
 
-- name: Verify deployment-wide Redis replication and Sentinel agreement read-only
+- name: Проверить репликацию Redis и согласованность Sentinel во всём развёртывании без изменений
   ansible.builtin.include_tasks: verify_deployment.yml
   when:
     - platform_redis_verify_only | bool

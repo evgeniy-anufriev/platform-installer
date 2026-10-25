@@ -1,5 +1,5 @@
 ---
-- name: Require Core-authorized artifact sources for this deployment
+- name: Для этого развертывания требуются авторизованные источники артефактов Core
   ansible.builtin.assert:
     that:
       - platform_execution_service_deployment is string
@@ -11,7 +11,7 @@
     label: "{{ item.id }}"
   no_log: true
 
-- name: Probe the existing target repository for Core-authorized requirements
+- name: Проверить существующий целевой репозиторий на наличие требований, авторизованных Core
   ansible.builtin.command:
     argv:
       - dnf
@@ -28,7 +28,7 @@
   failed_when: false
   no_log: true
 
-- name: Read the target operating-system ID for compatibility proof
+- name: Прочитать идентификатор целевой операционной системы для проверки совместимости
   ansible.builtin.command:
     argv:
       - awk
@@ -40,7 +40,7 @@
   failed_when: false
   no_log: true
 
-- name: Realize the closed Core-authorized repository then offline policy
+- name: Реализовать закрытый авторизованный репозиторий Core, а затем политику автономного режима
   ansible.builtin.set_fact:
     platform_resolved_artifact_sources: >-
       {{ platform_resolved_artifact_sources | default({}) | combine({

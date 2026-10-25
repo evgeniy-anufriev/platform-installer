@@ -1,5 +1,5 @@
 ---
-- name: Require private invocation credentials before any Redis account calls
+- name: Требовать учетные данные частного вызова перед любым вызовом учетной записи Redis
   ansible.builtin.assert:
     that:
       - platform_redis_application_job.serviceType == 'redis'
@@ -12,7 +12,7 @@
     fail_msg: APPLICATION_PROVIDER_SECRET_FILE_INVALID
   no_log: true
 
-- name: Check or ensure each Redis and Sentinel account member in one bounded call
+- name: Проверить или убедитесь, что каждый экземпляр службы учетных записей Redis и Sentinel за один ограниченный вызов
   platform.redis.application_account:
     address: "{{ item.1.address }}"
     port: "{{ item.1.port }}"

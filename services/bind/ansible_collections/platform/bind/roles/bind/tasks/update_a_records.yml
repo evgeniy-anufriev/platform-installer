@@ -1,5 +1,5 @@
 ---
-- name: Require one exact nonempty zone and unique owners for this update
+- name: Требовать одну непустую зону и уникальных владельцев для этого обновления
   ansible.builtin.assert:
     that:
       - platform_bind_a_records is sequence
@@ -9,11 +9,11 @@
       - platform_bind_a_records | map(attribute='owner') | unique | list | length == platform_bind_a_records | length
     fail_msg: BIND_DNS_A_RECORD_UPDATE_INPUT_INVALID
 
-- name: Initialize this zone's read-only observations
+- name: Инициализировать наблюдения этой зоны, доступные только для чтения
   ansible.builtin.set_fact:
     _platform_bind_zone_observations: []
 
-- name: Validate and read every selected owner before any DNS mutation
+- name: Проверить и прочитать каждого выбранного владельца перед любым изменением DNS
   ansible.builtin.include_tasks: prepare_a_record.yml
   vars:
     platform_bind_a_record: "{{ _platform_bind_record }}"
@@ -21,7 +21,7 @@
   loop_control:
     loop_var: _platform_bind_record
 
-- name: Build one zone update with observed existence and RDATA prerequisites
+- name: Создать одно обновление зоны с наблюдаемым существованием и предварительными условиями RDATA
   ansible.builtin.set_fact:
     _platform_bind_zone_update: |-
       zone {{ platform_bind_a_records[0].zone }}.
@@ -47,14 +47,14 @@
       {% endfor %}
       send
 
-- name: Bound the entire DNS request before its first mutation
+- name: Привязать весь запрос DNS перед его первой модификацией
   ansible.builtin.assert:
     # All input is validated ASCII; the presentation-size bound conservatively
     # covers uncompressed DNS names, headers and RR metadata on a TCP message.
     that: (_platform_bind_zone_update | length * 2 + 512) <= 60000
     fail_msg: BIND_DNS_ZONE_UPDATE_TOO_LARGE
 
-- name: Apply the exact selected zone changes through local authenticated DNS update
+- name: Применить точные изменения выбранной зоны с помощью локального аутентифицированного обновления DNS
   ansible.builtin.command:
     argv: [nsupdate, -l, -v]
     stdin: "{{ _platform_bind_zone_update }}"
@@ -62,7 +62,7 @@
   changed_when: true
   when: _platform_bind_zone_observations | selectattr('changed') | list | length > 0
 
-- name: Verify every changed authoritative RRset after the zone update
+- name: Проверка каждого измененного авторитетного набора RRset после обновления зоны
   ansible.builtin.include_tasks: verify_a_record.yml
   vars:
     platform_bind_a_record: "{{ _platform_bind_observation.record }}"

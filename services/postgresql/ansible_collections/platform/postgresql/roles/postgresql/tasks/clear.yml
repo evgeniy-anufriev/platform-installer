@@ -1,11 +1,11 @@
 ---
-- name: Require exact PostgreSQL clean-install acknowledgement
+- name: Требовать точное подтверждение чистой установки PostgreSQL
   ansible.builtin.assert:
     that:
       - platform_postgresql_confirm_destructive_reset == platform_postgresql_service_name
     fail_msg: 'BLOCKED: PostgreSQL clean_install requires exact service-name acknowledgement'
 
-- name: Derive PostgreSQL deployment-owned cleanup paths
+- name: Получение путей очистки PostgreSQL, принадлежащих развертыванию
   ansible.builtin.set_fact:
     _platform_postgresql_clear_paths:
       - "{{ platform_postgresql_data_directory }}"
@@ -16,7 +16,7 @@
       - /var/lib/pgsql/.pgpass
     _platform_postgresql_clear_unit: "/etc/systemd/system/{{ _platform_postgresql_unit_name }}"
 
-- name: Validate PostgreSQL clear paths before mutation
+- name: Проверка очистки путей PostgreSQL перед изменением
   ansible.builtin.assert:
     that:
       - item is string
@@ -29,14 +29,14 @@
     fail_msg: 'BLOCKED: PostgreSQL clean_install path is unsafe or ambiguous'
   loop: "{{ _platform_postgresql_clear_paths }}"
 
-- name: Stop and disable the selected PostgreSQL unit
+- name: Остановить и отключить выбранную службу systemd PostgreSQL
   ansible.builtin.systemd:
     name: "{{ _platform_postgresql_unit_name }}"
     state: stopped
     enabled: false
   failed_when: false
 
-- name: Wait bounded time for PostgreSQL processes using the selected data path
+- name: Ожидание ограниченного времени для процессов PostgreSQL, использующих выбранный путь к данным
   ansible.builtin.shell: |
     set -o pipefail
     found=0
@@ -61,7 +61,7 @@
   delay: "{{ platform_postgresql_clear_stop_delay }}"
   until: platform_postgresql_clear_processes.rc == 0
 
-- name: Terminate attributable PostgreSQL processes after bounded stop
+- name: Завершить процессы, связанные с PostgreSQL, после ограниченной остановки
   ansible.builtin.shell: |
     set -o pipefail
     for proc in /proc/[0-9]*; do
@@ -80,12 +80,12 @@
   when: platform_postgresql_clear_processes.rc != 0
   changed_when: true
 
-- name: Wait after PostgreSQL process termination
+- name: Дождаться завершения процесса PostgreSQL
   ansible.builtin.pause:
     seconds: 2
   when: platform_postgresql_clear_processes.rc != 0
 
-- name: Force-stop attributable PostgreSQL processes that ignored termination
+- name: Принудительно остановить процессы, связанные с PostgreSQL, которые игнорировали завершение
   ansible.builtin.shell: |
     set -o pipefail
     for proc in /proc/[0-9]*; do
@@ -104,7 +104,7 @@
   when: platform_postgresql_clear_processes.rc != 0
   changed_when: true
 
-- name: Verify PostgreSQL processes are absent before deleting runtime files
+- name: Убедиться, что процессы PostgreSQL отсутствуют, прежде чем удалять файлы среды выполнения
   ansible.builtin.shell: |
     set -o pipefail
     for proc in /proc/[0-9]*; do
@@ -124,12 +124,12 @@
   failed_when: false
   register: platform_postgresql_clear_final_processes
 
-- name: Reject PostgreSQL processes remaining before clear
+- name: Отклонить процессы PostgreSQL, оставшиеся до очистки
   ansible.builtin.assert:
     that: platform_postgresql_clear_final_processes.rc == 0
     fail_msg: 'BLOCKED: PostgreSQL process still references the selected data directory'
 
-- name: Inspect PostgreSQL deployment-owned paths before clear
+- name: Проверка путей PostgreSQL, принадлежащих развертыванию, перед очисткой
   ansible.builtin.stat:
     path: "{{ item }}"
     follow: false
@@ -139,7 +139,7 @@
   register: platform_postgresql_clear_path_state
   loop: "{{ _platform_postgresql_clear_paths }}"
 
-- name: Reject paths not owned by the PostgreSQL service account
+- name: Отклонить пути, не принадлежащие учетной записи службы PostgreSQL
   ansible.builtin.assert:
     that:
       - not item.stat.exists or item.stat.pw_name == platform_postgresql_user
@@ -149,28 +149,28 @@
   loop_control:
     label: "{{ item.item }}"
 
-- name: Remove only selected PostgreSQL deployment state
+- name: Удалить только выбранное состояние развертывания PostgreSQL
   ansible.builtin.file:
     path: "{{ item }}"
     state: absent
   loop: "{{ _platform_postgresql_clear_paths }}"
 
-- name: Remove selected PostgreSQL systemd unit
+- name: Удалить выбранную службу systemd PostgreSQL systemd
   ansible.builtin.file:
     path: "{{ _platform_postgresql_clear_unit }}"
     state: absent
 
-- name: Reload systemd after PostgreSQL deployment cleanup
+- name: Перезагрузка systemd после очистки развертывания PostgreSQL
   ansible.builtin.systemd:
     daemon_reload: true
 
-- name: Clear stale state for the selected PostgreSQL unit
+- name: Очистить устаревшее состояние выбранной службы systemd PostgreSQL
   ansible.builtin.command:
     argv: [systemctl, reset-failed, "{{ _platform_postgresql_unit_name }}"]
   changed_when: false
   failed_when: false
 
-- name: Verify PostgreSQL deployment-owned paths are absent
+- name: Убедиться, что пути PostgreSQL, принадлежащие развертыванию, отсутствуют
   ansible.builtin.stat:
     path: "{{ item }}"
     get_mime: false
@@ -179,7 +179,7 @@
   register: platform_postgresql_clear_final_state
   loop: "{{ _platform_postgresql_clear_paths }}"
 
-- name: Assert PostgreSQL clean_install removed selected runtime paths
+- name: Assert PostgreSQL clean_install удалил выбранные пути выполнения
   ansible.builtin.assert:
     that: not item.stat.exists
     fail_msg: "PostgreSQL clean_install did not remove {{ item.item }}"

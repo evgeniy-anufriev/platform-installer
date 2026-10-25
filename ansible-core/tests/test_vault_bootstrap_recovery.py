@@ -20,11 +20,11 @@ MATERIAL = {'root_token': TOKEN, 'keys': SHARES}
 class VaultBootstrapRecoveryTests(unittest.TestCase):
     def tasks(self):
         start = next(i for i, task in enumerate(BOOTSTRAP)
-                     if task['name'] == 'Refuse an init recovery response if the seed is still uninitialized')
+                     if task['name'] == 'Отклонить ответ на восстановление инициализации, если исходный узел все еще не инициализирован')
         end = next(i for i, task in enumerate(BOOTSTRAP)
-                   if task['name'] == 'Unseal the seed with the configured threshold')
+                   if task['name'] == 'Разблокировать начальный узел с настроенным порогом')
         tasks = copy.deepcopy(BOOTSTRAP[start:end])
-        init = next(task for task in tasks if task['name'] == 'Initialize a new seed exactly once')
+        init = next(task for task in tasks if task['name'] == 'Инициализировать новый начальный узел ровно один раз')
         # Replace only remote API boundary with a fixed synthetic response. All
         # production custody/validation/durability tasks execute unchanged.
         init.pop('ansible.builtin.uri')
@@ -104,8 +104,8 @@ class VaultBootstrapRecoveryTests(unittest.TestCase):
 
     def test_durable_recovery_and_partial_pair_reopen_in_both_native_modes(self):
         for native in (False, True):
-            for point in ('Synchronize recovery data and directory publication before validation',
-                          'Persist the standalone initial root token without overwriting an existing file'):
+            for point in ('Синхронизировать данные восстановления и публикацию каталога перед проверкой',
+                          'Сохранение автономного исходного корневого токена без перезаписи существующего файла'):
                 with self.subTest(native=native, point=point), tempfile.TemporaryDirectory() as directory:
                     root = Path(directory)
                     self.run_probe(root, native=native, fail_after=point, expected=2)
@@ -155,17 +155,17 @@ class VaultBootstrapRecoveryTests(unittest.TestCase):
                     self.assertFalse((root / 'admin-token').exists())
 
     def test_readback_sync_and_cleanup_failure_preserve_recoverability(self):
-        for point in ('Read back the minimal recovery record without exposing it',
-                      'Synchronize recovery data and directory publication before validation',
-                      'Synchronize both matching custody files before recovery cleanup',
-                      'Remove the protected recovery record only after both custody files exist',
-                      'Synchronize the custody directory after recovery record removal'):
+        for point in ('Прочитать минимальную запись восстановления, не раскрывая ее',
+                      'Синхронизировать данные восстановления и публикацию каталога перед проверкой',
+                      'Синхронизировать оба совпадающих файла хранения перед очисткой для восстановления',
+                      'Удалить защищенную запись восстановления только после существования обоих файлов хранения',
+                      'Синхронизировать каталог хранения после удаления записи восстановления'):
             with self.subTest(point=point), tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
                 self.run_probe(root, fail_task=point, expected=2)
-                if point.startswith('Synchronize both') or point.startswith('Remove') or point.startswith('Synchronize the custody'):
+                if point.startswith('Синхронизировать оба совпадающих файла хранения перед очисткой для восстановления') or point.startswith('Удал') or point.startswith('Синхронизировать каталог хранения после удаления записи восстановления'):
                     self.assert_pair(root)
-                if not point.startswith('Synchronize the custody directory after'):
+                if not point.startswith('Синхронизировать каталог хранения после удаления записи восстановления'):
                     self.assertTrue((root / 'init-response.json').exists())
                 else:
                     self.assertFalse((root / 'init-response.json').exists())
@@ -175,5 +175,5 @@ class VaultBootstrapRecoveryTests(unittest.TestCase):
     def test_pre_init_sync_failure_produces_no_material(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            self.run_probe(root, fail_task='Require controller filesystem synchronization before initialization', expected=2)
+            self.run_probe(root, fail_task='Требовать синхронизации файловой системы контроллера перед инициализацией', expected=2)
             self.assertEqual([], list(root.iterdir()))

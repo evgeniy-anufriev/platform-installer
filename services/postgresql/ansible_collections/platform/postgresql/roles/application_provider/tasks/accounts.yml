@@ -1,5 +1,5 @@
 ---
-- name: Reconcile managed application credentials in one maintenance session
+- name: Согласование учетных данных управляемого приложения за один сеанс обслуживания
   ansible.builtin.command:
     argv: [psql, -X, -h, "{{ platform_postgresql_application_socket }}", -p, "{{ application_provider_target.port }}", -U, "{{ application_provider_os_user }}", -d, postgres, -At, -v, ON_ERROR_STOP=1, -f, -]
     stdin: "{{ lookup('ansible.builtin.template', 'accounts.sql.j2') }}"
@@ -14,7 +14,7 @@
   when: platform_postgresql_application_job.accounts | length > 0
   no_log: true
 
-- name: Authenticate all accounts against their declared database
+- name: Аутентифицировать все учетные записи по их заявленной базе данных
   ansible.builtin.include_tasks: login.yml
   vars:
     application_provider_probe_scope: all

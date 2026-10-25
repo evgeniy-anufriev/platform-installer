@@ -1,5 +1,5 @@
 ---
-- name: Add Kafka member metadata paths
+- name: Добавление путей к метаданным экземпляра службы Kafka
   ansible.builtin.set_fact:
     _kafka_discovery_records: "{{ _kafka_discovery_records | default([]) + [ {
       'deploymentId': _kafka_discovery_deployment.key,

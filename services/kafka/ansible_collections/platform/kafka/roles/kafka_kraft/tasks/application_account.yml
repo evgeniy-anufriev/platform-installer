@@ -1,11 +1,11 @@
 ---
-- name: Exclude infrastructure identities from application password reconciliation
+- name: Исключение идентификаторов инфраструктуры из сверки паролей приложений
   ansible.builtin.assert:
     that: application_kafka_account.name not in ['admin', 'default']
     fail_msg: APPLICATION_PROVIDER_IDENTIFIER_INVALID
   when: platform_kafka_application_phase == 'apply' and application_kafka_account.mode == 'managed'
 
-- name: Select only this exact principal from deployment SCRAM metadata
+- name: Выбрать только этого конкретного субъекта из метаданных развертывания SCRAM
   ansible.builtin.set_fact:
     application_kafka_description:
       rc: "{{ application_kafka_user_inventory.rc }}"
@@ -17,7 +17,7 @@
   changed_when: false
   no_log: true
 
-- name: Reject unavailable metadata and existing accounts with an incompatible mechanism
+- name: Отклонить недоступные метаданные и существующие учетные записи с несовместимым механизмом
   ansible.builtin.assert:
     that:
       - application_kafka_description.rc | int == 0
@@ -29,7 +29,7 @@
       - "platform_kafka_application_phase != 'verify' and application_kafka_account.mode == 'managed' or 'SCRAM-SHA-512' in application_kafka_description.stdout"
     fail_msg: APPLICATION_KAFKA_ACCOUNT_UNAVAILABLE_OR_CONFLICT
 
-- name: Prepare the actual application SASL connection without logging secrets
+- name: Подготовка фактического SASL-соединения приложения без регистрации секретов
   ansible.builtin.template:
     src: application-account-client.properties.j2
     dest: "{{ application_kafka_private.path }}/account.properties"
@@ -37,7 +37,7 @@
   no_log: true
   changed_when: false
 
-- name: Probe an existing application's password without changing credentials
+- name: Проверка пароля существующего приложения без изменения учетных данных
   ansible.builtin.command:
     argv:
       - "{{ application_topic_cli_directory }}/bin/kafka-broker-api-versions.sh"
@@ -51,7 +51,7 @@
   failed_when: false
   no_log: true
 
-- name: Identify only explicit SASL credential mismatches for managed Apply
+- name: Выявление только явных несоответствий учетных данных SASL для управляемого приложения
   ansible.builtin.set_fact:
     application_kafka_password_mismatch: >-
       {{ platform_kafka_application_phase == 'apply' and application_kafka_account.mode == 'managed'
@@ -60,26 +60,26 @@
          and 'invalid credentials' in (application_kafka_password_probe.stderr | default('') | lower) }}
   no_log: true
 
-- name: Reject non-credential errors and mismatching read-only application accounts
+- name: Отклонить ошибки, не связанные с учетными данными, и несовпадающие учетные записи приложений, доступные только для чтения
   ansible.builtin.assert:
     that: application_kafka_password_probe.rc | default(0) == 0 or application_kafka_password_mismatch
     fail_msg: APPLICATION_KAFKA_ACCOUNT_AUTHENTICATION_FAILED
   no_log: true
 
-- name: Reconcile missing or mismatching managed application credentials during Apply
+- name: Согласовать отсутствующие или несовпадающие учетные данные управляемого приложения во время применения
   when:
     - platform_kafka_application_phase == 'apply'
     - application_kafka_account.mode == 'managed'
     - "'SCRAM-SHA-512' not in application_kafka_description.stdout or application_kafka_password_mismatch"
   block:
-    - name: Render SCRAM mutation input without placing credentials in argv
+    - name: Визуализировать входные данные модификации SCRAM без помещения учетных данных в argv
       ansible.builtin.copy:
         content: "SCRAM-SHA-512=iterations=8192,password={{ lookup('ansible.builtin.file', application_kafka_credentials[application_kafka_account.passwordRef], rstrip=false) | platform.core.platform_java_properties_value }}\n"
         dest: "{{ application_kafka_private.path }}/scram.properties"
         mode: '0600'
       changed_when: false
       no_log: true
-    - name: Set the selected application SCRAM password using Kafka's file interface
+    - name: Установить пароль выбранного приложения SCRAM с помощью файлового интерфейса Kafka
       ansible.builtin.command:
         argv:
           - "{{ application_topic_cli_directory }}/bin/kafka-configs.sh"
@@ -98,15 +98,15 @@
       failed_when: false
       changed_when: application_kafka_creation.rc == 0
       no_log: true
-    - name: Require successful credential creation
+    - name: Требовать успешного создания учетных данных
       ansible.builtin.assert:
         that: application_kafka_creation.rc == 0
         fail_msg: APPLICATION_KAFKA_ACCOUNT_CREATE_FAILED
 
-- name: Confirm newly set application credentials before granting access
+- name: Подтвердить вновь установленные учетные данные приложения перед предоставлением доступа
   when: "platform_kafka_application_phase == 'apply' and application_kafka_account.mode == 'managed' and ('SCRAM-SHA-512' not in application_kafka_description.stdout or application_kafka_password_mismatch)"
   block:
-    - name: Authenticate using the application's SCRAM listener
+    - name: Аутентификация с помощью прослушивателя SCRAM приложения
       ansible.builtin.command:
         argv:
           - "{{ application_topic_cli_directory }}/bin/kafka-broker-api-versions.sh"
@@ -118,12 +118,12 @@
       changed_when: false
       failed_when: false
       no_log: true
-    - name: Require the selected application password to authenticate after reconciliation
+    - name: Запросить выбранный пароль приложения для аутентификации после согласования
       ansible.builtin.assert:
         that: application_kafka_login.rc == 0
         fail_msg: APPLICATION_KAFKA_ACCOUNT_AUTHENTICATION_FAILED
 
-- name: Check or ensure declared ACL resources
+- name: Проверка или обеспечение заявленных ресурсов ACL
   ansible.builtin.include_tasks: application_acl.yml
   loop: "{{ application_kafka_account.grants }}"
   loop_control:

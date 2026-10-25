@@ -1,86 +1,86 @@
 ---
-- name: Check default and member-specific data paths without target changes
+- name: Проверка путей к данным по умолчанию и для конкретного экземпляра службы без целевых изменений
   hosts: localhost
   connection: local
   gather_facts: false
   vars:
     platform_execution_service_deployment: qa-stateful
   tasks:
-    - name: Load Redis role defaults
+    - name: Загрузить значения по умолчанию для роли Redis
       ansible.builtin.include_vars: ../../services/redis/ansible_collections/platform/redis/roles/redis_tls/defaults/main.yml
-    - name: Project Redis members on separate hosts
+    - name: Проектирование экземпляров службы Redis на отдельных хостах
       ansible.builtin.set_fact:
         platform_redis_instances:
           - {id: qa-stateful-1, host: localhost, roles: [redis]}
           - {id: qa-stateful-2, host: other-host, roles: [redis]}
     - ansible.builtin.include_tasks: ../../services/redis/ansible_collections/platform/redis/roles/redis_tls/tasks/normalize.yml
-    - name: Check Redis default on each host
+    - name: Проверка Redis по умолчанию на каждом хосте
       ansible.builtin.assert:
         that: _platform_redis_instances | map(attribute='data_directory') | unique | list == ['/var/lib/qa-stateful']
-    - name: Put Redis members on one host with one explicit path
+    - name: Разместить экземпляры службы Redis на одном хосте с одним явным путем
       ansible.builtin.set_fact:
         platform_redis_instances:
           - {id: qa-stateful-1, host: localhost, roles: [redis]}
           - {id: qa-stateful-2, host: localhost, roles: [redis], data_directory: /data/redis-two}
     - ansible.builtin.include_tasks: ../../services/redis/ansible_collections/platform/redis/roles/redis_tls/tasks/normalize.yml
-    - name: Check Redis co-location and explicit override
+    - name: Проверка совместного размещения Redis и явное переопределение
       ansible.builtin.assert:
         that:
           - _platform_redis_instances[0].data_directory == '/var/lib/qa-stateful/qa-stateful-1'
           - _platform_redis_instances[1].data_directory == '/data/redis-two'
-    - name: Accept disjoint Redis member paths
+    - name: Проверить непересекающиеся каталоги экземпляров Redis
       ansible.builtin.include_tasks: ../../services/redis/ansible_collections/platform/redis/roles/redis_tls/tasks/validate_data_paths.yml
       vars:
         _platform_redis_local_instances: "{{ _platform_redis_instances }}"
 
-    - name: Load ClickHouse role defaults
+    - name: Загрузить значения по умолчанию для роли ClickHouse
       ansible.builtin.include_vars: ../../services/clickhouse/ansible_collections/platform/clickhouse/roles/clickhouse_tls/defaults/main.yml
-    - name: Project ClickHouse members on separate hosts
+    - name: Проектирование экземпляров службы ClickHouse на отдельных хостах
       ansible.builtin.set_fact:
         platform_clickhouse_instances:
           - {id: qa-stateful-1, host: localhost, roles: [server]}
           - {id: qa-stateful-2, host: other-host, roles: [server]}
     - ansible.builtin.include_tasks: ../../services/clickhouse/ansible_collections/platform/clickhouse/roles/clickhouse_tls/tasks/normalize.yml
-    - name: Check ClickHouse default on each host
+    - name: Проверка ClickHouse по умолчанию на каждом хосте
       ansible.builtin.assert:
         that: _platform_clickhouse_instances | map(attribute='data_directory') | unique | list == ['/var/lib/qa-stateful']
-    - name: Put ClickHouse members on one host with one explicit path
+    - name: Разместить экземпляры службы ClickHouse на одном хосте с одним явным путем
       ansible.builtin.set_fact:
         platform_clickhouse_instances:
           - {id: qa-stateful-1, host: localhost, roles: [server]}
           - {id: qa-stateful-2, host: localhost, roles: [server], data_directory: /data/clickhouse-two}
     - ansible.builtin.include_tasks: ../../services/clickhouse/ansible_collections/platform/clickhouse/roles/clickhouse_tls/tasks/normalize.yml
-    - name: Check ClickHouse co-location and explicit override
+    - name: Проверка совместного размещения ClickHouse и явное переопределение
       ansible.builtin.assert:
         that:
           - _platform_clickhouse_instances[0].data_directory == '/var/lib/qa-stateful/qa-stateful-1'
           - _platform_clickhouse_instances[1].data_directory == '/data/clickhouse-two'
-    - name: Accept disjoint ClickHouse member paths
+    - name: Проверить непересекающиеся каталоги экземпляров ClickHouse
       ansible.builtin.include_tasks: ../../services/clickhouse/ansible_collections/platform/clickhouse/roles/clickhouse_tls/tasks/validate_data_paths.yml
       vars:
         _platform_clickhouse_local_instances: "{{ _platform_clickhouse_instances }}"
 
-    - name: Load Vault role defaults
+    - name: Загрузить значения по умолчанию для роли Vault
       ansible.builtin.include_vars: ../../services/vault/ansible_collections/platform/vault/roles/vault_tls/defaults/main.yml
-    - name: Project Vault members on separate hosts
+    - name: Проектирование экземпляров службы Vault на отдельных хостах
       ansible.builtin.set_fact:
         platform_vault_instances:
           - {id: qa-stateful-1, host: localhost, roles: [vault]}
           - {id: qa-stateful-2, host: other-host, roles: [vault]}
     - ansible.builtin.include_tasks: ../../services/vault/ansible_collections/platform/vault/roles/vault_tls/tasks/normalize.yml
-    - name: Check Vault default on each host
+    - name: Проверка Vault по умолчанию на каждом хосте
       ansible.builtin.assert:
         that: _platform_vault_instances | map(attribute='data_directory') | unique | list == ['/var/lib/qa-stateful']
-    - name: Put Vault members on one host with one explicit path
+    - name: Разместить экземпляры службы Vault на одном хосте с одним явным путем
       ansible.builtin.set_fact:
         platform_vault_instances:
           - {id: qa-stateful-1, host: localhost, roles: [vault]}
           - {id: qa-stateful-2, host: localhost, roles: [vault], data_directory: /data/vault-two}
     - ansible.builtin.include_tasks: ../../services/vault/ansible_collections/platform/vault/roles/vault_tls/tasks/normalize.yml
-    - name: Check Vault co-location and explicit override
+    - name: Проверка совместного размещения Vault и явное переопределение
       ansible.builtin.assert:
         that:
           - _platform_vault_instances[0].data_directory == '/var/lib/qa-stateful/qa-stateful-1'
           - _platform_vault_instances[1].data_directory == '/data/vault-two'
-    - name: Accept disjoint Vault member paths
+    - name: Проверить непересекающиеся каталоги экземпляров Vault
       ansible.builtin.include_tasks: ../../services/vault/ansible_collections/platform/vault/roles/vault_tls/tasks/validate_data_paths.yml

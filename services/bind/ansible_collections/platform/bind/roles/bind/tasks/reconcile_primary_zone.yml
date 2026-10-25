@@ -1,12 +1,12 @@
 ---
-- name: Resolve machine-runtime marker for the primary zone
+- name: Определение маркера времени выполнения машины для основной зоны
   ansible.builtin.set_fact:
     _platform_bind_zone_recovery_marker: >-
       {{ platform_bind_recovery_directory }}/{{ platform_bind_runtime_projection.generatedState.metadata.projectId | hash('sha256') }}/{{ platform_bind_resolved_zones[platform_bind_inspected_deployment.key].zone | hash('sha256') }}.yml
 
-- name: Freeze and replace one validated primary zone with recovery protection
+- name: Заморозить и заменить одну проверенную основную зону защитой от восстановления
   block:
-    - name: Create private machine-runtime recovery directory
+    - name: Создание частного каталога восстановления во время выполнения машины
       ansible.builtin.file:
         path: "{{ _platform_bind_zone_recovery_marker | dirname }}"
         state: directory
@@ -14,7 +14,7 @@
         group: root
         mode: '0700'
 
-    - name: Persist primary-zone recovery marker before freeze
+    - name: Сохранение маркера восстановления основной зоны перед фиксацией
       ansible.builtin.copy:
         content: >-
           {{ {'projectId': platform_bind_runtime_projection.generatedState.metadata.projectId,
@@ -26,18 +26,18 @@
         group: root
         mode: '0600'
 
-    - name: Freeze primary zone after candidate validation
+    - name: Заморозить основную зону после проверки кандидата
       ansible.builtin.command:
         argv: ["{{ platform_bind_rndc_binary }}", freeze, "{{ platform_bind_resolved_zones[platform_bind_inspected_deployment.key].zone }}"]
       changed_when: true
 
-    - name: Read primary SOA serial again after freeze closes the update race
+    - name: Снова прочитать основной серийный номер SOA после того, как зависание закрывает гонку обновлений
       ansible.builtin.command:
         argv: [dig, "@127.0.0.1", "{{ platform_bind_resolved_zones[platform_bind_inspected_deployment.key].zone }}", SOA, +short]
       changed_when: false
       register: _platform_bind_frozen_live_soa
 
-    - name: Require candidate serial to remain newer than the frozen live zone
+    - name: Требовать, чтобы серийный номер кандидата оставался новее, чем замороженная активная зона
       ansible.builtin.assert:
         that:
           - _platform_bind_frozen_live_soa.rc == 0
@@ -47,7 +47,7 @@
             (_platform_bind_frozen_live_soa.stdout.split()[2] | int)
         fail_msg: BIND_FULL_RECONCILE_SERIAL_RACE
 
-    - name: Install complete canonical full-reconcile zone candidate
+    - name: Установка полного канонического кандидата зоны полного согласования
       ansible.builtin.copy:
         src: "{{ platform_bind_primary_zone_directory }}/{{ platform_bind_resolved_zones[platform_bind_inspected_deployment.key].zone }}.zone.candidate"
         dest: "{{ platform_bind_primary_zone_directory }}/{{ platform_bind_resolved_zones[platform_bind_inspected_deployment.key].zone }}.zone"
@@ -57,7 +57,7 @@
         mode: '0640'
 
   always:
-    - name: Inspect whether primary-zone recovery marker remains
+    - name: Проверить, остался ли маркер восстановления основной зоны
       ansible.builtin.stat:
         path: "{{ _platform_bind_zone_recovery_marker }}"
         get_mime: false
@@ -65,7 +65,7 @@
         get_checksum: false
       register: _platform_bind_zone_recovery_after_attempt
 
-    - name: Always attempt to thaw a marked primary zone
+    - name: Всегда пытаться разморозить отмеченную основную зону
       ansible.builtin.command:
         argv: ["{{ platform_bind_rndc_binary }}", thaw, "{{ platform_bind_resolved_zones[platform_bind_inspected_deployment.key].zone }}"]
       changed_when: false
@@ -73,7 +73,7 @@
       register: _platform_bind_zone_always_thaw
       when: _platform_bind_zone_recovery_after_attempt.stat.exists
 
-- name: Verify primary zone authority after full-reconcile replacement
+- name: Проверка полномочий основной зоны после полной замены
   ansible.builtin.command:
     argv: [dig, "@127.0.0.1", "{{ platform_bind_resolved_zones[platform_bind_inspected_deployment.key].zone }}", SOA, +norecurse, +noall, +answer, +comments]
   changed_when: false
@@ -83,7 +83,7 @@
     'status: NOERROR' not in _platform_bind_zone_reconcile_authority.stdout or
     'flags: qr aa' not in _platform_bind_zone_reconcile_authority.stdout
 
-- name: Verify replaced primary zone accepts local dynamic updates
+- name: Убедиться, что замененная основная зона принимает локальные динамические обновления
   ansible.builtin.include_tasks: update_a_record.yml
   vars:
     platform_bind_force_dynamic_update_probe: true
@@ -93,7 +93,7 @@
       addresses: ["{{ platform_bind_resolved_zones[platform_bind_inspected_deployment.key].primary.address }}"]
       ttl: "{{ platform_bind_resolved_zones[platform_bind_inspected_deployment.key].defaultTtl | int }}"
 
-- name: Clear primary-zone marker after authority and update verification
+- name: Очистить маркер основной зоны после проверки полномочий и обновлений
   ansible.builtin.file:
     path: "{{ _platform_bind_zone_recovery_marker }}"
     state: absent

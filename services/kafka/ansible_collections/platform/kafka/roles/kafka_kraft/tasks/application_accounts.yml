@@ -1,5 +1,5 @@
 ---
-- name: Validate private Kafka account credential custody
+- name: Проверка хранения учетных данных частной учетной записи Kafka
   ansible.builtin.assert:
     that:
       - platform_kafka_application_phase in ['preflight', 'apply', 'verify']
@@ -14,7 +14,7 @@
     fail_msg: APPLICATION_PROVIDER_SECRET_FILE_INVALID
   no_log: true
 
-- name: Execute the instance account hook on its projected administrative broker
+- name: Выполнить перехватчик учетной записи экземпляра на предполагаемом административном брокере
   ansible.builtin.include_tasks:
     file: application_accounts_scope.yml
     apply:

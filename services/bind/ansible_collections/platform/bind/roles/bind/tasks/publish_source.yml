@@ -1,12 +1,12 @@
 ---
-- name: Validate resolved source DNS record list
+- name: Проверка разрешенного исходного списка записей DNS
   ansible.builtin.assert:
     that:
       - platform_bind_source_dns_records is sequence
       - platform_bind_source_dns_records is not string
     fail_msg: BIND_DNS_A_RECORD_UPDATE_INPUT_INVALID
 
-- name: Apply each exact primary and zone scope once
+- name: Применить каждую точную область первичной и зоны один раз
   ansible.builtin.include_tasks: update_a_records.yml
   vars:
     platform_bind_a_records: "{{ item.1 }}"

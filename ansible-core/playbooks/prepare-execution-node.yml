@@ -1,5 +1,5 @@
 ---
-- name: Prepare selected Execution Node environment
+- name: Подготовка выбранной среды узла выполнения
   hosts: execution_node
   connection: "{{ platform_execution_connection | default('ssh') }}"
   become: true

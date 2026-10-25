@@ -1,5 +1,5 @@
 ---
-- name: Install approved BIND packages from configured system repositories
+- name: Установить одобренные пакеты BIND из настроенных системных репозиториев
   ansible.builtin.package:
     name: "{{ _platform_bind_repository_packages }}"
     state: present
@@ -11,7 +11,7 @@
           or platform_resolved_artifact_sources['bind-utils'].source == 'REPOSITORY' else []) }}
   when: _platform_bind_repository_packages | length > 0
 
-- name: Create Platform BIND directories for candidate and runtime files
+- name: Создать каталоги платформы BIND для файлов-кандидатов и файлов среды выполнения
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
@@ -22,18 +22,18 @@
     - "{{ platform_bind_primary_zone_directory }}"
     - "{{ platform_bind_secondary_zone_directory }}"
 
-- name: Select local BIND deployment for options-scope rendering
+- name: Выбрать локальное развертывание BIND для рендеринга на уровне параметров
   ansible.builtin.set_fact:
     platform_bind_options_deployment: >-
       {{ platform_desired_state.serviceDeployments | dict2items |
          selectattr('value.serviceType', 'equalto', 'bind') |
          selectattr('key', 'in', platform_deployments) | first }}
 
-- name: Initialize existing primary zone ownership map
+- name: Инициализация существующей карты владения основной зоной
   ansible.builtin.set_fact:
     _platform_bind_existing_primary_zone_by_deployment: {}
 
-- name: Recover interrupted full zone replacement before any new BIND changes
+- name: Восстановить прерванную полную замену зоны перед любыми новыми изменениями BIND
   ansible.builtin.include_tasks: recover_primary_zone.yml
   loop: "{{ platform_desired_state.serviceDeployments | dict2items | selectattr('value.serviceType', 'equalto', 'bind') | selectattr('key', 'in', platform_deployments) | list }}"
   loop_control:
@@ -42,7 +42,7 @@
     platform_bind_inspected_deployment: "{{ item }}"
   when: platform_deployments[item.key].roles | first == 'primary'
 
-- name: Inspect existing primary zone state before candidate rendering
+- name: Проверка существующего состояния основной зоны перед рендерингом кандидата
   ansible.builtin.include_tasks: inspect_primary_zone.yml
   loop: "{{ platform_desired_state.serviceDeployments | dict2items | selectattr('value.serviceType', 'equalto', 'bind') | selectattr('key', 'in', platform_deployments) | list }}"
   loop_control:
@@ -51,7 +51,7 @@
     platform_bind_inspected_deployment: "{{ item }}"
   when: platform_deployments[item.key].roles | first == 'primary'
 
-- name: Render Platform BIND options candidate
+- name: Кандидат на опции Render Platform BIND
   ansible.builtin.template:
     src: platform-installer-options.conf.j2
     dest: "{{ platform_bind_options_include_file }}.candidate"
@@ -60,7 +60,7 @@
     mode: '0640'
   register: _platform_bind_options_candidate
 
-- name: Render BIND zones candidate for each local deployment
+- name: Отрисовка кандидатов зон BIND для каждого локального развертывания
   ansible.builtin.template:
     src: platform-installer.conf.j2
     dest: "{{ platform_bind_include_file }}.candidate"
@@ -77,7 +77,7 @@
   loop: "{{ platform_desired_state.serviceDeployments | dict2items | selectattr('value.serviceType', 'equalto', 'bind') | selectattr('key', 'in', platform_deployments) | list }}"
   register: _platform_bind_zones_candidate
 
-- name: Render BIND primary candidate zone
+- name: Рендеринг зоны основного кандидата BIND
   ansible.builtin.template:
     src: zone.j2
     dest: "{{ platform_bind_primary_zone_directory }}/{{ platform_bind_resolved_zones[item.key].zone }}.zone.candidate"
@@ -96,7 +96,7 @@
       (platform_bind_full_reconcile | default(false) | bool)
   register: _platform_bind_primary_zone_candidate
 
-- name: Inspect active and previous candidate BIND main configurations
+- name: Проверка основных конфигураций активного и предыдущего кандидата BIND
   ansible.builtin.stat:
     path: "{{ item }}"
     checksum_algorithm: sha256
@@ -107,7 +107,7 @@
     - "{{ platform_bind_candidate_main_config }}"
   register: _platform_bind_main_config_stats
 
-- name: Determine whether BIND candidate assembly is required
+- name: Определить, требуется ли сборка-кандидат BIND
   ansible.builtin.set_fact:
     platform_bind_candidate_rebuild_required: >-
       {{ _platform_bind_options_candidate.changed or
@@ -116,7 +116,7 @@
          not _platform_bind_main_config_stats.results[1].stat.exists or
          _platform_bind_main_config_stats.results[0].stat.checksum != _platform_bind_main_config_stats.results[1].stat.checksum }}
 
-- name: Copy distribution BIND configuration into a full candidate graph
+- name: Копирование конфигурации распределения BIND в полный граф-кандидат
   ansible.builtin.copy:
     src: "{{ platform_bind_distribution_config }}"
     dest: "{{ platform_bind_candidate_main_config }}"
@@ -126,60 +126,60 @@
     mode: '0640'
   when: platform_bind_candidate_rebuild_required
 
-- name: Remove legacy invalid Platform top-level options from candidate
+- name: Удалить устаревшие недопустимые параметры верхнего уровня платформы из кандидата
   ansible.builtin.replace:
     path: "{{ platform_bind_candidate_main_config }}"
     regexp: '(?ms)^// BEGIN Platform Installer NET-03 authoritative-only options.*?^// END Platform Installer NET-03 authoritative-only options\n?'
     replace: ''
   when: platform_bind_candidate_rebuild_required
 
-- name: Remove Platform and distribution candidate directives replaced by options fragment
+- name: Удалить директивы платформы и кандидата на распространение, замененные фрагментом параметров
   ansible.builtin.replace:
     path: "{{ platform_bind_candidate_main_config }}"
     regexp: '(?m)^[ \t]*(listen-on port 53|allow-query|recursion)[^\n]*\n'
     replace: ''
   when: platform_bind_candidate_rebuild_required
 
-- name: Remove prior Platform options include from candidate
+- name: Удалить предыдущие параметры платформы, включаемые из кандидата
   ansible.builtin.replace:
     path: "{{ platform_bind_candidate_main_config }}"
     regexp: '(?m)^[ \t]*include "{{ platform_bind_options_include_file | regex_escape }}(?:[.]candidate)?";[ \t]*\r?\n?'
     replace: ''
   when: platform_bind_candidate_rebuild_required
 
-- name: Remove prior Platform zones include from candidate
+- name: Удалить предыдущие зоны платформы из кандидата
   ansible.builtin.replace:
     path: "{{ platform_bind_candidate_main_config }}"
     regexp: '(?m)^[ \t]*include "{{ platform_bind_include_file | regex_escape }}(?:[.]candidate)?";[ \t]*\r?\n?'
     replace: ''
   when: platform_bind_candidate_rebuild_required
 
-- name: Inspect BIND options anchor in candidate configuration
+- name: Проверка привязки параметров BIND в конфигурации-кандидате
   ansible.builtin.slurp:
     src: "{{ platform_bind_candidate_main_config }}"
   register: _platform_bind_candidate_main
   when: platform_bind_candidate_rebuild_required
 
-- name: Require exactly one BIND options anchor before candidate insertion
+- name: Перед вставкой кандидата требуется ровно одна привязка параметров BIND
   ansible.builtin.assert:
     that:
       - (_platform_bind_candidate_main.content | b64decode | regex_findall('(?m)^\\s*options\\s*\\{\\s*$') | length) == 1
     fail_msg: BIND_OPTIONS_ANCHOR_INVALID
   when: platform_bind_candidate_rebuild_required
 
-- name: Deterministically inject candidate Platform options inside BIND options context
+- name: Детерминированное внедрение возможных вариантов платформы в контекст параметров BIND
   ansible.builtin.replace:
     path: "{{ platform_bind_candidate_main_config }}"
     regexp: '(?m)^([ \t]*options[ \t]*\{[ \t]*)$'
     replace: '\g<1>\n    include "{{ platform_bind_options_include_file }}.candidate";'
   when: platform_bind_candidate_rebuild_required
 
-- name: Inspect candidate configuration after options include insertion
+- name: Проверка конфигурации кандидата после включения опций
   ansible.builtin.slurp:
     src: "{{ platform_bind_candidate_main_config }}"
   register: _platform_bind_candidate_with_options
 
-- name: Assert candidate options include is directly inside options context
+- name: Утверждение вариантов-кандидатов включается непосредственно в контекст параметров
   ansible.builtin.assert:
     that:
       - (_platform_bind_candidate_with_options.content | b64decode | regex_findall('(?m)^[ \t]*include "' ~ (platform_bind_options_include_file | regex_escape) ~ '[.]candidate";[ \t]*$') | length) == 1
@@ -189,19 +189,19 @@
          (platform_bind_options_include_file | regex_escape) ~ '[.]candidate";')) | length == 1
     fail_msg: BIND_OPTIONS_INCLUDE_CONTEXT_INVALID
 
-- name: Deterministically append candidate Platform zones at top-level BIND context
+- name: Детерминированное добавление потенциальных зон платформы в контекст BIND верхнего уровня
   ansible.builtin.replace:
     path: "{{ platform_bind_candidate_main_config }}"
     regexp: '(?s)\Z'
     replace: '\ninclude "{{ platform_bind_include_file }}.candidate";\n'
   when: platform_bind_candidate_rebuild_required
 
-- name: Inspect complete candidate configuration structure
+- name: Проверка полной структуры конфигурации-кандидата
   ansible.builtin.slurp:
     src: "{{ platform_bind_candidate_main_config }}"
   register: _platform_bind_candidate_complete
 
-- name: Assert complete candidate include structure
+- name: Утвердить полную структуру включения кандидата
   ansible.builtin.assert:
     that:
       - (_platform_bind_candidate_complete.content | b64decode | regex_findall('(?m)^[ \t]*include "' ~ (platform_bind_include_file | regex_escape) ~ '[.]candidate";[ \t]*$') | length) == 1
@@ -209,12 +209,12 @@
       - _platform_bind_candidate_complete.content | b64decode is not regex('(?m)^[ \t]*include "' ~ (platform_bind_options_include_file | regex_escape) ~ '[.]candidate";[ \t]*$\\n?\\Z')
     fail_msg: BIND_CANDIDATE_INCLUDE_STRUCTURE_INVALID
 
-- name: Validate complete BIND candidate configuration graph
+- name: Проверка полного графа конфигурации-кандидата BIND
   ansible.builtin.command:
     argv: ["{{ platform_bind_checkconf_binary }}", "{{ platform_bind_candidate_main_config }}"]
   changed_when: false
 
-- name: Validate BIND primary candidate zone with native tooling
+- name: Проверка основной зоны-кандидата BIND с помощью встроенных инструментов
   ansible.builtin.command:
     argv: ["{{ platform_bind_checkzone_binary }}", "{{ platform_bind_resolved_zones[item.key].zone }}", "{{ platform_bind_primary_zone_directory }}/{{ platform_bind_resolved_zones[item.key].zone }}.zone.candidate"]
   changed_when: false

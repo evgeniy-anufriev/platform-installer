@@ -1,5 +1,5 @@
 ---
-- name: Resolve every source endpoint before probing the provider route
+- name: Разрешить каждую исходную конечную точку перед проверкой маршрута провайдера
   ansible.builtin.command:
     argv: [getent, ahostsv4, "{{ item }}"]
   loop: "{{ _platform_integration_source_fqdns }}"
@@ -9,7 +9,7 @@
   changed_when: false
   failed_when: false
   no_log: true
-- name: Require every source endpoint hostname to resolve
+- name: Потребовать разрешения каждого имени хоста исходной конечной точки
   ansible.builtin.assert:
     that:
       - item.rc == 0
@@ -24,7 +24,7 @@
     expected_addresses: "{{ platform_endpoint_probe_expected_addresses | default([]) | unique | sort }}"
     actual_addresses: "{{ item.stdout_lines | map('regex_replace', '^([^ ]+).*$', '\\1') | unique | sort }}"
 
-- name: Probe each source endpoint through the public HAProxy HTTPS listener
+- name: Проверить каждую конечную точку источника через общедоступный прослушиватель HAProxy HTTPS
   ansible.builtin.uri:
     url: >-
       https://{{ item }}{{ ':' ~ _platform_integration_probe_port_override
@@ -54,7 +54,7 @@
   # Preserve the final response for safe diagnostics and the assertion below.
   ignore_errors: true
 
-- name: Report safe public endpoint HTTP diagnostics
+- name: Сообщить о диагностике безопасной общедоступной конечной точки HTTP
   ansible.builtin.debug:
     msg:
       url: "{{ response.url | default('https://' ~ response.item) | regex_replace('[?#].*$', '') }}"
@@ -69,13 +69,13 @@
   vars:
     response: "{{ _platform_integration_endpoint_http.results[item] }}"
 
-- name: Publish safe endpoint results through the existing diagnostic event
+- name: Публикация результатов безопасной конечной точки с помощью существующего диагностического события
   ansible.builtin.include_tasks: report-endpoint-http.yml
   loop: "{{ range(0, _platform_integration_endpoint_http.results | default([]) | length) | list }}"
   loop_control:
     loop_var: _platform_probe_response_index
   when: (_platform_integration_probe | default({})).expected_status is defined
-- name: Require a routed HTTP response other than HAProxy unavailable statuses
+- name: Требовать перенаправленный ответ HTTP, отличный от статусов недоступности HAProxy
   ansible.builtin.assert:
     that:
       - statuses | length == _platform_integration_source_fqdns | length

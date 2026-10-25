@@ -1,5 +1,5 @@
 ---
-- name: Select Core PKI consumer plan when available
+- name: Выбрать потребительский план Core PKI, если он доступен
   ansible.builtin.include_role:
     name: platform.core.pki_materialize
     tasks_from: select_consumer_plan.yml
@@ -11,7 +11,7 @@
     | selectattr('tlsProfileId', 'equalto', platform_docker_tls_profile)
     | list | length > 0
 
-- name: Resolve approved Docker TLS directory
+- name: Разрешить утвержденный каталог Docker TLS
   ansible.builtin.set_fact:
     _platform_docker_tls_source: >-
       {{ platform_pki_selected_consumer_plan.targetDirectory
@@ -19,14 +19,14 @@
          else platform_docker_tls_directory }}
   changed_when: false
 
-- name: Reject missing or unsafe PKI directory
+- name: Отклонить отсутствующий или небезопасный каталог PKI
   ansible.builtin.assert:
     that:
       - _platform_docker_tls_source is match('^/[A-Za-z0-9_./-]{1,240}$')
       - "'..' not in _platform_docker_tls_source.split('/')"
     fail_msg: DOCKER_PKI_MATERIALIZATION_REQUIRED
 
-- name: Inspect exact Docker TLS files
+- name: Проверка точных файлов Docker TLS
   ansible.builtin.stat:
     path: "{{ _platform_docker_tls_source }}/{{ item }}"
     follow: false
@@ -37,7 +37,7 @@
   register: _platform_docker_tls_files
   no_log: true
 
-- name: Require regular, non-symlink TLS material
+- name: Требовать обычный материал TLS без символических ссылок
   ansible.builtin.assert:
     that:
       - _platform_docker_tls_files.results | rejectattr('stat.isreg', 'equalto', true) | list | length == 0
@@ -45,7 +45,7 @@
     fail_msg: DOCKER_PKI_MATERIALIZATION_REQUIRED
   no_log: true
 
-- name: Require the selected Core PKI request to declare both Docker usages
+- name: Потребовать от выбранного запроса Core PKI объявить оба варианта использования Docker
   ansible.builtin.assert:
     that:
       - _platform_docker_selected_requests | length == 1
@@ -59,7 +59,7 @@
          | list }}
   when: platform_pki_selected_consumer_plan is defined
 
-- name: Read explicit certificate extended key usage
+- name: Чтение явного использования расширенного ключа сертификата
   ansible.builtin.command:
     argv: [openssl, x509, -in, "{{ _platform_docker_tls_source }}/certificate.pem", -noout, -ext, extendedKeyUsage]
   register: _platform_docker_certificate_eku
@@ -67,7 +67,7 @@
   failed_when: false
   no_log: true
 
-- name: Reject absent or incomplete explicit Docker certificate EKU
+- name: Отклонить отсутствующий или неполный явный сертификат Docker EKU
   ansible.builtin.assert:
     that:
       - _platform_docker_certificate_eku.rc == 0
@@ -76,14 +76,14 @@
       - _platform_docker_certificate_eku.stdout is search('(?m)(?:^|[,\n])\s*TLS Web Client Authentication\s*(?:,|$)')
     fail_msg: DOCKER_PKI_USAGES_INVALID
 
-- name: Inspect Docker API certificate SAN
+- name: Проверка сертификата Docker API SAN
   ansible.builtin.command:
     argv: [openssl, x509, -in, "{{ _platform_docker_tls_source }}/certificate.pem", -noout, -ext, subjectAltName]
   register: _platform_docker_certificate_san
   changed_when: false
   no_log: true
 
-- name: Require certificate identity for the target API address
+- name: Запрос удостоверения сертификата для целевого адреса API
   ansible.builtin.assert:
     that:
       - >-

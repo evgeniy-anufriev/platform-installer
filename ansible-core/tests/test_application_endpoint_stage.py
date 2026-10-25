@@ -49,7 +49,7 @@ class EndpointTaskTest(unittest.TestCase):
 
     def test_external_dns_requires_expected_provider_address(self):
         task = yaml.safe_load((REPO / 'services/integrations/tasks/probe-endpoint.yml').read_text())
-        dns_assert = next(item for item in task if item.get('name') == 'Require every source endpoint hostname to resolve')
+        dns_assert = next(item for item in task if item.get('name') == 'Потребовать разрешения каждого имени хоста исходной конечной точки')
         conditions = dns_assert['ansible.builtin.assert']['that']
         self.assertIn('expected_addresses | length > 0', conditions)
         self.assertIn('actual_addresses == expected_addresses', conditions)
@@ -90,10 +90,10 @@ class EndpointTaskTest(unittest.TestCase):
         if not shutil.which('ansible-playbook'):
             self.skipTest('Ansible runtime required')
         tasks = yaml.safe_load((ROLE / 'tasks/prepare.yml').read_text())
-        names = {'Select exact filenames owned by the partial endpoint source',
-                 'Stage proven existing application backends for base provider update',
-                 'Retain exact proven backend inventory in base mode',
-                 'Select only this source deployment backend for partial integration'}
+        names = {'Выбрать точные имена файлов, принадлежащие частичному источнику конечной точки',
+                 'Проверка существующих серверных частей приложений для обновления базового провайдера',
+                 'Сохранение точных проверенных внутренних ресурсов в базовом режиме',
+                 'Выбрать только этот исходный сервер развертывания для частичной интеграции'}
         tasks = yaml.safe_load((ROLE / 'tasks/partial_scope.yml').read_text()) + [task for task in tasks if task.get('name') in names]
         for task in tasks:
             if 'ansible.builtin.copy' in task:

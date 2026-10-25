@@ -19,7 +19,7 @@ class BatchScopeRuntimeTests(unittest.TestCase):
         normalize = dict(main[0])
         normalize['ansible.builtin.include_tasks'] = str(HAP / 'partial_scope.yml')
         guard = next(task for task in main if task.get('name') ==
-                     'Require valid HAProxy phase and canonical desired state')
+                     'Требовать действительную фазу HAProxy и каноническое желаемое состояние')
         baseline = dict(platform_haproxy_phase='prepare', platform_desired_state={},
                         platform_deployments={}, platform_haproxy_full_reconcile=False)
         for scope in ({'platform_haproxy_partial_deployment_ids': ['app-one', 'app-two']},

@@ -1,5 +1,5 @@
 ---
-- name: Read current Vault audit mounts, secrets engines and auth methods
+- name: Прочитать текущие монтирования аудита Vault, секретные механизмы и методы аутентификации
   ansible.builtin.uri:
     url: "https://{{ (_platform_vault_instances | first).address }}:{{ (_platform_vault_instances | first).api_port }}/v1/{{ item }}"
     method: GET
@@ -14,7 +14,7 @@
   changed_when: false
   no_log: true
 
-- name: Refuse incompatible existing audit, KV or auth configuration before mutation
+- name: Отклонить несовместимую существующую конфигурацию аудита, KV или аутентификации перед изменением
   ansible.builtin.assert:
     that:
       # Vault stores audit options as strings; "0" is the legacy false form.
@@ -26,7 +26,7 @@
     fail_msg: VAULT_EXISTING_CONFIGURATION_INCOMPATIBLE
   no_log: true
 
-- name: Enable the cluster-wide file audit device only when absent
+- name: Включение устройства аудита файлов на уровне кластера только в случае его отсутствия
   ansible.builtin.uri:
     url: "https://{{ (_platform_vault_instances | first).address }}:{{ (_platform_vault_instances | first).api_port }}/v1/sys/audit/file"
     method: POST
@@ -45,7 +45,7 @@
   when: "'file/' not in _platform_vault_owned_configuration.results[0].json.data"
   no_log: true
 
-- name: Enable KV v2 at the fixed secret mount only when absent
+- name: Включить KV v2 при фиксированном секретном монтировании только в случае его отсутствия
   ansible.builtin.uri:
     url: "https://{{ (_platform_vault_instances | first).address }}:{{ (_platform_vault_instances | first).api_port }}/v1/sys/mounts/secret"
     method: POST
@@ -62,7 +62,7 @@
   when: "'secret/' not in _platform_vault_owned_configuration.results[1].json.data"
   no_log: true
 
-- name: Enable userpass auth only when absent
+- name: Включить аутентификацию userpass только при ее отсутствии
   ansible.builtin.uri:
     url: "https://{{ (_platform_vault_instances | first).address }}:{{ (_platform_vault_instances | first).api_port }}/v1/sys/auth/userpass"
     method: POST
@@ -77,7 +77,7 @@
   when: "'userpass/' not in _platform_vault_owned_configuration.results[2].json.data"
   no_log: true
 
-- name: Enable AppRole auth only when absent
+- name: Включить аутентификацию AppRole только при ее отсутствии
   ansible.builtin.uri:
     url: "https://{{ (_platform_vault_instances | first).address }}:{{ (_platform_vault_instances | first).api_port }}/v1/sys/auth/approle"
     method: POST

@@ -1,16 +1,16 @@
 ---
 - import_playbook: ../../../ansible-core/playbooks/validate.yml
 
-- name: Materialize BIND serial lifecycle state
+- name: Материализовать состояние последовательного жизненного цикла BIND
   hosts: localhost
   connection: local
   gather_facts: false
   tasks:
-    - name: Include normalized sources in explicit full DNS reconcile
+    - name: Включить нормализованные источники в явное полное согласование DNS
       ansible.builtin.include_role:
         name: platform.core.resolve_endpoint_sources
       when: platform_bind_full_reconcile | default(false) | bool
-    - name: Resolve controller-safe BIND generated-state path
+    - name: Определение безопасного для контроллера пути сгенерированного состояния BIND
       ansible.builtin.set_fact:
         _platform_bind_generated_state_path: >-
           {{ platform_generated_state_path |
@@ -18,7 +18,7 @@
                       default((inventory_dir | default('/project/inventory', true)) | dirname, true)) ~
                      '/inventory/group_vars/all/platform-state.yml', true) }}
 
-    - name: Resolve BIND generated-state project identity
+    - name: Разрешить идентификацию проекта сгенерированного состояния BIND
       ansible.builtin.set_fact:
         _platform_bind_project_id: >-
           {{ platform_project_id
@@ -28,27 +28,27 @@
                    else ((inventory_dir | dirname | basename)
                          if inventory_dir is defined else 'project')) }}
 
-    - name: Initialize absent BIND generated state safely
+    - name: Безопасная инициализация отсутствующего состояния, сгенерированного BIND
       ansible.builtin.set_fact:
         _platform_bind_persisted_state_file: {}
 
-    - name: Inspect persistent BIND generated state before reconciliation
+    - name: Проверка постоянного состояния, сгенерированного BIND, перед согласованием
       ansible.builtin.stat:
         path: "{{ _platform_bind_generated_state_path }}"
       register: _platform_bind_persisted_state_stat
 
-    - name: Load existing persistent BIND generated state for reconciliation
+    - name: Загрузить существующее постоянное сгенерированное состояние BIND для сверки
       ansible.builtin.include_vars:
         file: "{{ _platform_bind_generated_state_path }}"
         name: _platform_bind_persisted_state_file
       when: _platform_bind_persisted_state_stat.stat.exists | bool
 
-    - name: Select persistent generated state for BIND lifecycle reconciliation
+    - name: Выбрать постоянное сгенерированное состояние для сверки жизненного цикла BIND
       ansible.builtin.set_fact:
         _platform_bind_persisted_generated_state: >-
           {{ _platform_bind_persisted_state_file.platform_generated_state | default(platform_generated_state | default({}), true) }}
 
-    - name: Bind persistent BIND generated state to this project identity
+    - name: Привязать постоянное созданное состояние BIND к идентификатору этого проекта
       ansible.builtin.assert:
         that:
           - _platform_bind_persisted_generated_state.metadata | default({}) is mapping
@@ -56,7 +56,7 @@
         fail_msg: BIND_GENERATED_STATE_PROJECT_MISMATCH
       when: _platform_bind_persisted_generated_state | length > 0
 
-    - name: Validate loaded BIND generated state before reconciliation
+    - name: Проверка загруженного сгенерированного состояния BIND перед согласованием
       platform.core.validate_project:
         manifest: "{{ platform_project_manifest_document }}"
         topology: "{{ platform_project | default({}) }}"
@@ -82,12 +82,12 @@
       become: false
       when: _platform_bind_persisted_generated_state | length > 0
 
-    - name: Load published service catalog for BIND serial resolution
+    - name: Загрузить опубликованный каталог сервисов для последовательного разрешения BIND
       ansible.builtin.include_vars:
         file: "{{ platform_service_catalog_path }}"
         name: _platform_bind_catalog_file
 
-    - name: Collect safe project host and deployment projections
+    - name: Собрать безопасный хост проекта и прогнозы развертывания
       ansible.builtin.set_fact:
         _platform_bind_inventory_hosts: >-
           {{ _platform_bind_inventory_hosts | default({}) |
@@ -98,7 +98,7 @@
       loop: "{{ groups['platform_targets'] | default([]) | sort }}"
       no_log: true
 
-    - name: Resolve DNS logical content before serial materialization
+    - name: Разрешить логическое содержимое DNS перед последовательной материализацией
       platform.core.resolve_dns_zones:
         desired_state: "{{ platform_desired_state }}"
         service_catalog: "{{ _platform_bind_catalog_file.platform_service_catalog | default(_platform_bind_catalog_file, true) }}"
@@ -109,7 +109,7 @@
         endpoint_sources: "{{ hostvars['localhost'].platform_endpoint_sources | default({}) }}"
       register: platform_bind_resolution
 
-    - name: Resolve base-only DNS content for ordinary BIND Apply
+    - name: Разрешить только базовый контент DNS для обычного BIND. Применить
       platform.core.resolve_dns_zones:
         desired_state: "{{ platform_desired_state }}"
         service_catalog: "{{ _platform_bind_catalog_file.platform_service_catalog | default(_platform_bind_catalog_file, true) }}"
@@ -120,12 +120,12 @@
       register: _platform_bind_base_resolution
       when: not (platform_bind_full_reconcile | default(false) | bool)
 
-    - name: Initialize observed live DNS serial projection for explicit full reconcile
+    - name: Инициализировать наблюдаемую в реальном времени последовательную проекцию DNS для явного полного согласования
       ansible.builtin.set_fact:
         _platform_bind_observed_live_serials: {}
       when: platform_bind_full_reconcile | default(false) | bool
 
-    - name: Synchronize primary BIND journal before full-model replacement
+    - name: Синхронизировать основной журнал BIND перед полной заменой модели
       ansible.builtin.command:
         argv: [rndc, sync, "{{ item.value.zone }}"]
       delegate_to: "{{ item.value.primary.hostId }}"
@@ -137,7 +137,7 @@
       register: _platform_bind_sync_live_zone
       when: platform_bind_full_reconcile | default(false) | bool
 
-    - name: Read authoritative live primary SOA serial before full-model replacement
+    - name: Прочитать авторитетный основной серийный номер SOA перед полной заменой модели
       ansible.builtin.command:
         argv: [dig, "@127.0.0.1", "{{ item.value.zone }}", SOA, +short]
       delegate_to: "{{ item.value.primary.hostId }}"
@@ -149,7 +149,7 @@
       register: _platform_bind_live_zone_serial_query
       when: platform_bind_full_reconcile | default(false) | bool
 
-    - name: Require valid live SOA serials before replacing full zones
+    - name: Требовать действительные действующие серийные номера SOA перед заменой полных зон
       ansible.builtin.assert:
         that:
           - item.rc == 0
@@ -163,7 +163,7 @@
         label: "{{ item.item.key }}"
       when: platform_bind_full_reconcile | default(false) | bool
 
-    - name: Record observed live primary SOA serials
+    - name: Запись наблюдаемых в реальном времени первичных сериалов SOA
       ansible.builtin.set_fact:
         _platform_bind_observed_live_serials: >-
           {{ _platform_bind_observed_live_serials |
@@ -173,7 +173,7 @@
         label: "{{ item.item.key }}"
       when: platform_bind_full_reconcile | default(false) | bool
 
-    - name: Recover audited BIND DNS lifecycle metadata into the persistent project root
+    - name: Восстановить проверенные метаданные жизненного цикла BIND DNS в постоянный корень проекта
       platform.core.recover_dns_lifecycle:
         generated_state: "{{ _platform_bind_persisted_generated_state }}"
         zones: "{{ platform_bind_resolution.resolved_dns_zones.zones }}"
@@ -181,7 +181,7 @@
       register: _platform_bind_lifecycle_recovery
       when: platform_bind_lifecycle_recovery | default({}) | length > 0
 
-    - name: Initialize generated state envelope for BIND serial lifecycle
+    - name: Инициализировать созданный конверт состояния для последовательного жизненного цикла BIND
       ansible.builtin.set_fact:
         _platform_bind_next_state: >-
           {{ {
@@ -196,7 +196,7 @@
                    recursive=True) }}
       when: not (platform_bind_reuse_existing_generated_state | default(false) | bool)
 
-    - name: Require existing DNS lifecycle state for read-only retry projection
+    - name: Требовать существующее состояние жизненного цикла DNS для прогнозирования повторных попыток только для чтения
       ansible.builtin.assert:
         that:
           - platform_generated_state.serviceDeployments | default({}) is mapping
@@ -209,7 +209,7 @@
         label: "{{ item.key }}"
       when: platform_bind_reuse_existing_generated_state | default(false) | bool
 
-    - name: Materialize deterministic BIND serial entries
+    - name: Материализация детерминированных серийных записей BIND
       ansible.builtin.set_fact:
         _platform_bind_next_state: >-
           {{ _platform_bind_next_state |
@@ -232,7 +232,7 @@
         label: "{{ item.key }}"
       when: not (platform_bind_reuse_existing_generated_state | default(false) | bool)
 
-    - name: Validate BIND generated state against the published project contract
+    - name: Проверка сгенерированного состояния BIND на соответствие опубликованному контракту проекта
       platform.core.validate_project:
         manifest: "{{ platform_project_manifest_document }}"
         topology: "{{ platform_project | default({}) }}"
@@ -259,7 +259,7 @@
       changed_when: false
       become: false
 
-    - name: Publish BIND runtime projection for this apply
+    - name: Опубликовать проекцию времени выполнения BIND для этого приложения
       ansible.builtin.set_fact:
         platform_bind_runtime_projection:
           zones: >-
@@ -270,14 +270,14 @@
             {{ platform_generated_state if (platform_bind_reuse_existing_generated_state | default(false) | bool)
                else _platform_bind_next_state }}
 
-    - name: Create persistent generated-state directory for BIND serial lifecycle
+    - name: Создать постоянный каталог сгенерированного состояния для последовательного жизненного цикла BIND
       ansible.builtin.file:
         path: "{{ _platform_bind_generated_state_path | dirname }}"
         state: directory
         mode: '0700'
       when: not (platform_bind_reuse_existing_generated_state | default(false) | bool)
 
-    - name: Persist BIND generated serial state atomically
+    - name: Persist BIND атомарно генерирует последовательное состояние
       ansible.builtin.copy:
         content: "{{ {'platform_generated_state': _platform_bind_next_state} | to_nice_yaml(indent=2) }}"
         dest: "{{ _platform_bind_generated_state_path }}"
@@ -285,11 +285,11 @@
       register: platform_bind_generated_state_write
       when: not (platform_bind_reuse_existing_generated_state | default(false) | bool)
 
-    - name: Refresh inventory after BIND serial materialization
+    - name: Обновление запасов после серийной материализации BIND
       ansible.builtin.meta: refresh_inventory
       when: not (platform_bind_reuse_existing_generated_state | default(false) | bool)
 
-- name: Prepare and validate authoritative BIND DNS candidates on all participants
+- name: Подготовить и проверить авторитетных кандидатов BIND DNS для всех участников
   hosts: platform_targets
   become: true
   gather_facts: false
@@ -298,7 +298,7 @@
     - role: platform.bind.bind
       platform_bind_phase: prepare
 
-- name: Activate authoritative BIND DNS only after cluster-wide candidate validation
+- name: Активировать авторитетный DNS BIND после проверки подготовленных конфигураций на всём кластере
   hosts: platform_targets
   become: true
   gather_facts: false
@@ -307,7 +307,7 @@
     - role: platform.bind.bind
       platform_bind_phase: activate
 
-- name: Start authoritative BIND DNS only after cluster-wide active validation
+- name: Запуск авторитетного BIND DNS только после активной проверки на уровне всего кластера
   hosts: platform_targets
   become: true
   gather_facts: false

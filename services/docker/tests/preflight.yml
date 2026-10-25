@@ -1,10 +1,10 @@
 ---
-- name: Read-only Docker rootless RED OS preflight
+- name: Выполнить предварительную проверку Docker без прав root на RED OS без изменений
   hosts: platform_targets
   become: true
   gather_facts: false
   tasks:
-    - name: Validate Docker role inputs and target without mutation
+    - name: Проверка входных данных роли Docker и цели без изменений
       ansible.builtin.include_role:
         name: platform.docker.docker_rootless
         tasks_from: validate.yml

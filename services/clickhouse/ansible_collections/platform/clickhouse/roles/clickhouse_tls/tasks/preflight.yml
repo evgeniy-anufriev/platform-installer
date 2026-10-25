@@ -1,15 +1,15 @@
 ---
-- name: Prove managed ClickHouse path ancestry before privileged mutation
+- name: Доказать происхождение управляемого пути ClickHouse перед привилегированной модификацией
   ansible.builtin.include_tasks: path_safety.yml
 
-- name: Inspect existing ClickHouse package identities without mutation
+- name: Проверка существующих идентификаторов пакетов ClickHouse без изменений
   ansible.builtin.command:
     argv: [rpm, -q, --qf, '%{NAME}\t%{VERSION}-%{RELEASE}.%{ARCH}\n', clickhouse-common-static, clickhouse-server, clickhouse-client, clickhouse-keeper]
   register: _platform_clickhouse_installed_packages
   changed_when: false
   failed_when: false
 
-- name: Refuse an incompatible foreign ClickHouse package generation
+- name: Отказаться от создания несовместимого неуправляемого пакета ClickHouse
   ansible.builtin.assert:
     that:
       - _platform_clickhouse_package_lines | length <= 1
@@ -25,19 +25,19 @@
   loop_control:
     label: "{{ item }}"
 
-- name: Check stock ClickHouse server and Keeper unit activity without changing it
+- name: Проверить активность стандартного сервера ClickHouse и службы Keeper systemd, не меняя ее
   ansible.builtin.command:
     argv: [systemctl, is-active, clickhouse-server.service, clickhouse-keeper.service]
   register: _platform_clickhouse_stock_units
   changed_when: false
   failed_when: false
 
-- name: Refuse to change a host with active stock ClickHouse units
+- name: Отказаться от смены хоста с активными стандартными службами systemd ClickHouse
   ansible.builtin.assert:
     that: "'active' not in _platform_clickhouse_stock_units.stdout_lines"
     fail_msg: CLICKHOUSE_FOREIGN_UNIT_ACTIVE
 
-- name: Inspect exact instance-unit paths before rendering
+- name: Проверка точных путей к службам экземпляра systemd перед рендерингом
   ansible.builtin.stat:
     path: "/etc/systemd/system/{{ item.0.server_unit_name if item.1 == 'server' else item.0.keeper_unit_name }}"
     follow: false
@@ -50,7 +50,7 @@
   register: _platform_clickhouse_unit_path_stats
   no_log: true
 
-- name: Inspect legacy hash-named ClickHouse unit paths
+- name: Проверка устаревших путей к службам systemd с хеш-именами ClickHouse
   ansible.builtin.stat:
     path: "/etc/systemd/system/{{ item }}"
     follow: false
@@ -63,7 +63,7 @@
           if platform_clickhouse_mode == 'raft-ha' else []) }}
   register: _platform_clickhouse_legacy_unit_path_stats
 
-- name: Refuse automatic adoption of legacy ClickHouse unit names
+- name: Отказаться от автоматического принятия устаревших имен системных служб ClickHouse
   ansible.builtin.assert:
     that: not item.stat.exists
     fail_msg: CLICKHOUSE_LEGACY_UNIT_REQUIRES_S11_CLEANUP
@@ -71,7 +71,7 @@
   loop_control:
     label: "{{ item.item }}"
 
-- name: Refuse symlinked instance-unit paths
+- name: Отклонить пути к символическим ссылкам службы экземпляра systemd
   ansible.builtin.assert:
     that: >-
       _platform_clickhouse_unit_path_stats.results |
@@ -79,7 +79,7 @@
       selectattr('stat.islnk', 'equalto', true) | list | length == 0
     fail_msg: CLICKHOUSE_FOREIGN_UNIT_PATH
 
-- name: Read existing instance-unit ownership headers
+- name: Прочитать существующие заголовки владения службами экземпляра systemd
   ansible.builtin.slurp:
     path: "/etc/systemd/system/{{ item.item.0.server_unit_name if item.item.1 == 'server' else item.item.0.keeper_unit_name }}"
   loop: "{{ _platform_clickhouse_unit_path_stats.results }}"
@@ -87,7 +87,7 @@
   register: _platform_clickhouse_existing_unit_headers
   no_log: true
 
-- name: Refuse replacement of a foreign instance unit
+- name: Отказаться от замены неуправляемого экземпляра службы systemd
   ansible.builtin.assert:
     that: >-
       (item.content | b64decode).startswith('# ' ~ platform_clickhouse_name ~ '-managed: ' ~
@@ -97,7 +97,7 @@
   when: item.content is defined
   no_log: true
 
-- name: Inspect exact member-owned paths and identity markers
+- name: Проверка точных путей, принадлежащих экземпляру службы, и маркеров идентификации
   ansible.builtin.stat:
     path: "{{ item.0[item.1] }}"
     follow: false
@@ -107,7 +107,7 @@
   loop: "{{ _platform_clickhouse_local_instances | product(['config_directory', 'data_directory', 'log_directory']) | list }}"
   register: _platform_clickhouse_owned_path_stats
 
-- name: Inspect exact member identity markers
+- name: Проверка точных маркеров идентификации экземпляра службы
   ansible.builtin.stat:
     path: "{{ item.data_directory }}/.{{ platform_clickhouse_name }}-member.json"
     follow: false
@@ -117,7 +117,7 @@
   loop: "{{ _platform_clickhouse_local_instances }}"
   register: _platform_clickhouse_marker_stats
 
-- name: Refuse foreign paths or symlink substitution
+- name: Отказ от неуправляемых путей или замены символических ссылок
   ansible.builtin.assert:
     that:
       - >-
@@ -141,7 +141,7 @@
   loop_control:
     label: "{{ item.id }}"
 
-- name: Read existing ClickHouse member markers
+- name: Прочитать существующие маркеры экземпляра службы ClickHouse
   ansible.builtin.slurp:
     path: "{{ item.item.data_directory }}/.{{ platform_clickhouse_name }}-member.json"
   loop: "{{ _platform_clickhouse_marker_stats.results }}"
@@ -149,7 +149,7 @@
   register: _platform_clickhouse_existing_markers
   no_log: true
 
-- name: Prove existing member paths belong to the same identity
+- name: Доказать, что существующие пути к экземпляру службы принадлежат одному и тому же удостоверению
   ansible.builtin.assert:
     that:
       - (item.content | b64decode | from_json).apiVersion == 'platform.installer/clickhouse-member-marker/v1alpha1'
@@ -161,27 +161,27 @@
   when: item.content is defined
   no_log: true
 
-- name: Count members requiring first-time resource allocation
+- name: Подсчитать экземпляры службы, требующие первого выделения ресурсов
   ansible.builtin.set_fact:
     _platform_clickhouse_new_member_count: >-
       {{ _platform_clickhouse_marker_stats.results |
          rejectattr('stat.exists', 'equalto', true) | list | length }}
 
-- name: Inspect available target memory for new ClickHouse members
+- name: Проверка доступной целевой памяти на наличие новых экземпляров службы ClickHouse
   ansible.builtin.command:
     argv: [free, -b]
   register: _platform_clickhouse_memory
   changed_when: false
   when: _platform_clickhouse_new_member_count | int > 0
 
-- name: Inspect available target disk for new ClickHouse members
+- name: Проверка доступного целевого диска на наличие новых экземпляров службы ClickHouse
   ansible.builtin.command:
     argv: [df, -B1, --output=avail, /var/lib]
   register: _platform_clickhouse_disk
   changed_when: false
   when: _platform_clickhouse_new_member_count | int > 0
 
-- name: Require conservative headroom only for first-time members
+- name: Требовать консервативного запаса только для экземпляров службы, запускаемых впервые
   ansible.builtin.assert:
     that:
       - (_platform_clickhouse_memory.stdout_lines[1].split()[-1] | int) >= 1073741824 * (_platform_clickhouse_new_member_count | int)
@@ -189,11 +189,11 @@
     fail_msg: CLICKHOUSE_RESOURCE_PREFLIGHT_BLOCKED
   when: _platform_clickhouse_new_member_count | int > 0
 
-- name: Begin listener preflight for new ClickHouse members
+- name: Начать предварительную проверку прослушивателя для новых экземпляров службы ClickHouse
   ansible.builtin.set_fact:
     _platform_clickhouse_new_member_ports: []
 
-- name: Collect only ports belonging to members without an existing marker
+- name: Собрать только порты, принадлежащие экземплярам службы, без существующего маркера
   ansible.builtin.set_fact:
     _platform_clickhouse_new_member_ports: >-
       {{ _platform_clickhouse_new_member_ports +
@@ -206,14 +206,14 @@
     label: "{{ item.id }}"
   when: not _platform_clickhouse_marker_stats.results[clickhouse_member_index].stat.exists
 
-- name: Observe all TCP listeners before package or unit mutation
+- name: Наблюдать за всеми прослушивателями TCP перед изменением пакета или службы systemd
   ansible.builtin.command:
     argv: [ss, -H, -ltn]
   register: _platform_clickhouse_existing_listeners
   changed_when: false
   when: _platform_clickhouse_new_member_ports | length > 0
 
-- name: Refuse a new ClickHouse listener that belongs to another process
+- name: Отклонить новый прослушиватель ClickHouse, принадлежащий другому процессу
   ansible.builtin.assert:
     that: _platform_clickhouse_existing_listeners.stdout is not search(':' ~ (item | string) ~ '\\s')
     fail_msg: CLICKHOUSE_LISTENER_IN_USE

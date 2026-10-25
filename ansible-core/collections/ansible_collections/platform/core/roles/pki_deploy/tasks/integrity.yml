@@ -1,5 +1,5 @@
 ---
-- name: Validate the previously applied PKI target directory boundary
+- name: Проверка ранее примененной границы целевого каталога PKI
   ansible.builtin.assert:
     that:
       - "platform_pki_plan.targetDirectory is match('^/.+')"
@@ -8,7 +8,7 @@
       - "'/pki' in platform_pki_plan.targetDirectory"
     fail_msg: PKI_TARGET_DIRECTORY_UNSAFE
 
-- name: Inspect trusted source PKI files without exposing content
+- name: Проверка файлов PKI доверенного источника без раскрытия содержимого
   ansible.builtin.stat:
     path: "{{ platform_pki_state_root }}/{{ _platform_pki_effective_project_id }}/{{ item }}"
     follow: false
@@ -26,7 +26,7 @@
   register: _platform_pki_integrity_sources
   no_log: true
 
-- name: Require readable regular source PKI material
+- name: Требовать читаемый обычный исходный материал PKI
   ansible.builtin.assert:
     that:
       - item.stat.isreg | default(false)
@@ -36,7 +36,7 @@
   loop: "{{ _platform_pki_integrity_sources.results }}"
   no_log: true
 
-- name: Inspect target PKI directory without following links
+- name: Проверить целевой каталог PKI без перехода по ссылкам
   ansible.builtin.stat:
     path: "{{ platform_pki_plan.targetDirectory }}"
     follow: false
@@ -46,14 +46,14 @@
   register: _platform_pki_integrity_directory
   no_log: true
 
-- name: Reject substituted PKI target directory
+- name: Отклонить замененный целевой каталог PKI
   ansible.builtin.assert:
     that:
       - not (_platform_pki_integrity_directory.stat.exists | default(false)) or (_platform_pki_integrity_directory.stat.isdir | default(false) and not (_platform_pki_integrity_directory.stat.islnk | default(false)))
     fail_msg: PKI_TARGET_DIRECTORY_UNSAFE
   no_log: true
 
-- name: Inspect deployed PKI file metadata in one remote traversal
+- name: Проверка метаданных развернутого файла PKI за один удаленный обход
   ansible.builtin.find:
     paths: "{{ platform_pki_plan.targetDirectory }}"
     patterns: [ca-chain.pem, certificate.pem, private-key.pem, keystore.p12, truststore.p12, materialization-fingerprint]
@@ -64,7 +64,7 @@
   register: _platform_pki_integrity_scan
   no_log: true
 
-- name: Hash the exact regular PKI files without exposing content
+- name: Хешировать точные обычные файлы PKI, не раскрывая содержимое
   ansible.builtin.command:
     argv:
       - sha256sum
@@ -80,7 +80,7 @@
   changed_when: false
   no_log: true
 
-- name: Normalize inspected PKI metadata and SHA256 checksums
+- name: Нормализация проверенных метаданных PKI и контрольных сумм SHA256
   vars:
     _platform_pki_normalized_metadata: >-
       {% set result = [] %}
@@ -101,7 +101,7 @@
     _platform_pki_integrity_targets: '{{ _platform_pki_normalized_metadata | from_json }}'
   no_log: true
 
-- name: Initialize PKI target integrity result
+- name: Инициализация результата целевой целостности PKI
   ansible.builtin.set_fact:
     _platform_pki_integrity_valid: >-
       {{ (_platform_pki_integrity_directory.stat.isdir | default(false)) and
@@ -110,7 +110,7 @@
          (_platform_pki_integrity_directory.stat.gr_name | default('') == platform_pki_group) }}
   no_log: true
 
-- name: Compare exact PKI bytes and permissions with the trusted source
+- name: Сравнить точные байты и разрешения PKI с доверенным источником
   ansible.builtin.set_fact:
     _platform_pki_integrity_valid: >-
       {{ (_platform_pki_integrity_valid | bool) and
@@ -123,12 +123,12 @@
   loop: "{{ _platform_pki_integrity_targets.results[:5] }}"
   no_log: true
 
-- name: Compare the fingerprint bytes with the applied plan
+- name: Сравнить байты отпечатков пальцев с примененным планом
   ansible.builtin.set_fact:
     _platform_pki_integrity_fingerprint_matches: "{{ _platform_pki_integrity_targets.results[5].stat.checksum | default('') == ((platform_pki_plan.materializationFingerprint ~ '\n') | hash('sha256')) }}"
   no_log: true
 
-- name: Compare the exact materialization fingerprint file
+- name: Сравнить точный файл отпечатков пальцев материализации
   ansible.builtin.set_fact:
     _platform_pki_integrity_valid: >-
       {{ false not in [
@@ -142,6 +142,6 @@
          ] }}
   no_log: true
 
-- name: Repair PKI material that does not match the applied plan
+- name: Исправить материал PKI, не соответствующий прикладному плану
   ansible.builtin.include_tasks: plan.yml
   when: not (_platform_pki_integrity_valid | bool)

@@ -1,5 +1,5 @@
 ---
-- name: Publish the safe endpoint result through the existing diagnostic event
+- name: Опубликовать результат безопасной конечной точки через существующее диагностическое событие
   ansible.builtin.assert:
     that: true
     quiet: true

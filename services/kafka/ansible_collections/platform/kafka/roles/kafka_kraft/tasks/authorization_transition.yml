@@ -1,13 +1,13 @@
 ---
-- name: Reset this invocation's administrative readiness barrier
+- name: Сброс административного барьера готовности этого вызова
   ansible.builtin.set_fact:
     kafka_authorization_admin_ready: false
   changed_when: false
 
-- name: Stop every host if admin setup or member finalization fails
+- name: Остановить каждый хост, если настройка администратора или завершение экземпляра службы не удались
   any_errors_fatal: true
   block:
-    - name: Provision or verify admin and explicit compatibility rights once per deployment
+    - name: Предоставление или проверка прав администратора и явных прав совместимости один раз для каждого развертывания
       ansible.builtin.include_tasks:
         file: authorization_setup.yml
         apply:
@@ -15,12 +15,12 @@
           become: true
       run_once: true
 
-    - name: Release revocation only after successful admin login and ACL setup
+    - name: Отменить отзыв только после успешного входа в систему с правами администратора и установки ACL
       ansible.builtin.set_fact:
         kafka_authorization_admin_ready: true
       changed_when: false
 
-    - name: Require every deployment host in the play before delegated revocation
+    - name: Потребовать каждый хост развертывания в игре перед делегированным отзывом
       ansible.builtin.assert:
         that: >-
           (_platform_kafka_instances | map(attribute='host') | unique | list
@@ -30,7 +30,7 @@
         - not (platform_kafka_verify_only | bool)
         - _platform_kafka_authorization_bootstrap | bool
 
-    - name: Finalize members sequentially with quorum checks between revocations
+    - name: Последовательная финализация экземпляров службы с проверкой кворума между отзывами
       ansible.builtin.include_tasks:
         file: authorization_finalize_member.yml
         apply:

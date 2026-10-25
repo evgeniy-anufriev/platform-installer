@@ -19,7 +19,7 @@
         redis: {targets: "{{ targets }}"}
         schema-registry: {targets: "{{ targets }}"}
   tasks:
-    - name: Create only in-memory inventory in deliberately unsorted order
+    - name: Создавать только инвентарь в памяти в намеренно несортированном порядке
       ansible.builtin.add_host:
         name: "{{ item.id }}"
         ansible_host: "{{ item.ip }}"
@@ -29,12 +29,12 @@
         - {id: node1, ip: 192.0.2.11, hostname: node1.example.test}
         - {id: node2, ip: 192.0.2.12, hostname: node2.example.test}
 
-    - name: Render the production env and base templates without server writes
+    - name: Визуализация рабочей среды и базовых шаблонов без записи на сервер
       ansible.builtin.set_fact:
         rendered_env: "{{ lookup('ansible.builtin.template', application_runtime_role ~ '/templates/library.env.j2') }}"
         rendered_base: "{{ lookup('ansible.builtin.template', sdku_role ~ '/templates/.base_compose.yml.j2') | from_yaml }}"
 
-    - name: Check stable ordinals, full target lists, IPv6 and preserved defaults
+    - name: Проверка стабильных порядковых номеров, полных целевых списков, IPv6 и сохраненных значений по умолчанию
       ansible.builtin.assert:
         that:
           - "'SERVER_1_ID=node1' in rendered_env"
@@ -50,13 +50,13 @@
           - rendered_base.services.backend.environment.SCHEMA_REGISTRY_URL_CONFIG == 'https://${SERVER_1_IP}:8443,https://${SERVER_2_IP}:8444,https://[${SERVER_3_IP}]:8445'
           - rendered_base.services.backend.environment.OPERATOR_VALUE == 'preserved'
 
-    - name: Allocate isolated Compose configuration test directory
+    - name: Выделить изолированный тестовый каталог конфигурации Compose
       ansible.builtin.tempfile:
         state: directory
         prefix: library-server-env-
       register: compose_test
 
-    - name: Check native Compose interpolation without starting containers
+    - name: Проверка встроенной интерполяции Compose без запуска контейнеров
       block:
         - ansible.builtin.copy:
             dest: "{{ compose_test.path }}/{{ item.name }}"
@@ -84,7 +84,7 @@
             path: "{{ compose_test.path }}"
             state: absent
 
-    - name: Check standalone, Sentinel port, hostname and advertised alias
+    - name: Проверка автономного порта Sentinel, имени хоста и объявленного псевдонима
       ansible.builtin.assert:
         that:
           - value.services.backend.environment.CLICKHOUSE_ADDRESS == '${SERVER_2_IP}:8444'

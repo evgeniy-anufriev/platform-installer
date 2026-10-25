@@ -28,9 +28,9 @@ class PartialOptimizationTests(unittest.TestCase):
 
         source = yaml.safe_load((ROLE / 'tasks/prepare.yml').read_text())
         selected = [task for task in source if task.get('name') in {
-            'Check the projected targets before candidate publication',
-            'Reset only the temporary HAProxy candidate graph',
-            'Create temporary HAProxy candidate workspace'}]
+            'Проверка прогнозируемых целей перед публикацией кандидата',
+            'Сброс только временного графа-кандидата HAProxy',
+            'Создать временное рабочее пространство-кандидат HAProxy'}]
         for task in selected:
             if 'ansible.builtin.include_tasks' in task:
                 task['ansible.builtin.include_tasks'] = str(ROLE / 'tasks/check_targets.yml')
@@ -73,15 +73,15 @@ class PartialOptimizationTests(unittest.TestCase):
             source = yaml.safe_load((ROLE / "tasks" / file).read_text())
             return [task for task in source if task.get("name") in names]
         prepare = tasks("prepare.yml", {
-            "Require HAProxy PKI materialization", "Deploy HAProxy TLS PEM inputs",
-            "Build HAProxy PEM bundle atomically without logging key data",
-            "Record whether HAProxy TLS material changed", "Render full Platform HAProxy candidate",
-            "Stage unchanged provider configuration for partial backend validation"})
+            "Требовать материализацию HAProxy PKI", "Развертывание входов HAProxy TLS PEM",
+            "Атомарная сборка пакета HAProxy PEM без регистрации ключевых данных",
+            "Записать, изменился ли материал HAProxy TLS", "Отрисовка полного кандидата на платформу HAProxy",
+            "Подготовить неизмененную конфигурацию провайдера для частичной проверки серверной части"})
         publish = tasks("activate_publish.yml", {
-            "Install exact validated Platform main configuration atomically",
-            "Install exact validated Platform HAProxy fragments atomically",
-            "Install exact validated managed HAProxy application backend fragments",
-            "Record whether the active HAProxy graph changed"})
+            "Атомарно установить точную проверенную основную конфигурацию платформы",
+            "Атомарно установить точные проверенные фрагменты платформы HAProxy",
+            "Установка точных проверенных фрагментов серверной части управляемого приложения HAProxy",
+            "Записать, изменился ли активный график HAProxy"})
         start = yaml.safe_load((ROLE / "tasks/start.yml").read_text())
         with tempfile.TemporaryDirectory(prefix="platform-haproxy-partial-") as directory:
             root = Path(directory)

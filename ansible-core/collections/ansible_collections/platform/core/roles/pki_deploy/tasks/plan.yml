@@ -1,5 +1,5 @@
 ---
-- name: Reject unsafe PKI target directory
+- name: Отклонить небезопасный целевой каталог PKI
   ansible.builtin.assert:
     that:
       - "platform_pki_plan.targetDirectory is match('^/.+')"
@@ -8,7 +8,7 @@
       - "'/pki' in platform_pki_plan.targetDirectory"
     fail_msg: PKI_TARGET_DIRECTORY_UNSAFE
 
-- name: Prepare deployment-owned PKI target directory
+- name: Подготовка целевого каталога PKI, принадлежащего развертыванию
   ansible.builtin.file:
     path: "{{ platform_pki_plan.targetDirectory }}"
     state: directory
@@ -16,7 +16,7 @@
     group: "{{ platform_pki_group }}"
     mode: '0700'
 
-- name: Deploy immutable PEM and Java PKI material
+- name: Развертывание неизменяемого материала PEM и Java PKI
   ansible.builtin.copy:
     src: "{{ platform_pki_state_root }}/{{ _platform_pki_effective_project_id }}/{{ item.source }}"
     dest: "{{ platform_pki_plan.targetDirectory }}/{{ item.destination }}"
@@ -32,7 +32,7 @@
   register: _platform_pki_deployed_material
   no_log: true
 
-- name: Record non-secret target materialization fingerprint
+- name: Запись отпечатка несекретной целевой материализации
   ansible.builtin.copy:
     content: "{{ platform_pki_plan.materializationFingerprint }}\n"
     dest: "{{ platform_pki_plan.targetDirectory }}/materialization-fingerprint"
@@ -41,7 +41,7 @@
     mode: '0644'
   register: _platform_pki_deployed_fingerprint
 
-- name: Publish whether target PKI material changed for service activation
+- name: Опубликовать, изменился ли целевой материал PKI для активации службы
   ansible.builtin.set_fact:
     platform_pki_material_changed: >-
       {{ (platform_pki_material_changed | default(false) | bool) or

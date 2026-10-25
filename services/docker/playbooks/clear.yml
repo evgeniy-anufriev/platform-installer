@@ -1,10 +1,10 @@
 ---
-- name: Deactivate only the selected managed rootless Docker service
+- name: Остановить только выбранную управляемую службу Docker без прав root
   hosts: platform_targets
   become: true
   gather_facts: false
   tasks:
-    - name: Clear the selected managed Docker account without deleting its data
+    - name: Очистить выбранную управляемую учетную запись Docker, не удаляя ее данные
       ansible.builtin.include_role:
         name: platform.docker.docker_rootless
         tasks_from: clear_entry

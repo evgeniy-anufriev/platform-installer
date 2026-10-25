@@ -1,5 +1,5 @@
 ---
-- name: Inspect each bounded Vault path component without following symlinks
+- name: Проверить каждый ограниченный компонент пути Vault без перехода по символическим ссылкам
   ansible.builtin.stat:
     path: "{{ item.path }}"
     follow: false
@@ -11,7 +11,7 @@
   loop_control:
     label: "{{ item.path }}"
 
-- name: Reject substituted, non-directory or incorrectly owned Vault path components
+- name: Отклонить замененные, не относящиеся к каталогу или неправильно принадлежащие компонентам пути Vault
   ansible.builtin.assert:
     quiet: true
     that:

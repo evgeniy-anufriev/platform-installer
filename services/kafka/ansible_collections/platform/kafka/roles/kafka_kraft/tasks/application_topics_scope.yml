@@ -1,41 +1,41 @@
 ---
-- name: Create private temporary Kafka client configuration
+- name: Создание частной временной конфигурации клиента Kafka
   ansible.builtin.tempfile:
     state: directory
     prefix: platform-topics-
   register: application_kafka_private
   changed_when: false
 
-- name: Select this invocation's client configuration path
+- name: Выбрать путь конфигурации клиента для этого вызова
   ansible.builtin.set_fact:
     application_topic_client: "{{ {'path': application_kafka_private.path ~ '/client.properties'} }}"
   changed_when: false
 
-- name: Use existing Kafka security projection for this topic batch
+- name: Использовать существующую проекцию безопасности Kafka для этого пакета тем
   block:
-    - name: Prepare the invocation-private PEM client identity
+    - name: Подготовка частного удостоверения клиента PEM для вызова
       ansible.builtin.include_tasks: application_client_tls.yml
       when:
         - application_topic_candidate.tls
         - platform_kafka_store_type == 'PEM'
-    - name: Render the projected Kafka client configuration
+    - name: Визуализация прогнозируемой конфигурации клиента Kafka
       ansible.builtin.template:
         src: application-topics-client.properties.j2
         dest: "{{ application_topic_client.path }}"
         mode: '0600'
       changed_when: false
       no_log: true
-    - name: Read topic metadata and effective configurations once for the library batch
+    - name: Прочитать метаданные темы и эффективные конфигурации один раз для пакета библиотеки
       ansible.builtin.include_tasks: application_topics_read.yml
       when: platform_kafka_application_job.topics | length > 0
-    - name: Check or create each declared topic
+    - name: Проверить или создать каждую заявленную тему
       ansible.builtin.include_tasks: application_topic.yml
       loop: "{{ platform_kafka_application_job.topics }}"
       loop_control:
         loop_var: application_topic
         label: "{{ application_topic.name }}"
   always:
-    - name: Remove only this invocation's client configuration
+    - name: Удалить только конфигурацию клиента этого вызова
       ansible.builtin.file:
         path: "{{ application_kafka_private.path }}"
         state: absent

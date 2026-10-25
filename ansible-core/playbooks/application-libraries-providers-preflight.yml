@@ -1,43 +1,43 @@
 ---
 - import_playbook: application-libraries-providers-resolve.yml
-- name: Preflight all selected providers without mutations
+- name: Предварительная проверка всех выбранных провайдеров без мутаций
   hosts: localhost
   connection: local
   gather_facts: false
   any_errors_fatal: true
   tasks:
-    - name: Reset provider execution facts for this invocation
+    - name: Сброс фактов выполнения провайдера для этого вызова
       ansible.builtin.set_fact:
         platform_application_provider_runtime: {}
-    - name: Discover each unique PostgreSQL deployment once
+    - name: Один раз обнаружить каждое уникальное развертывание PostgreSQL
       ansible.builtin.include_role:
         name: platform.postgresql.application_provider
         tasks_from: discover
       loop: "{{ application_provider_inputs.jobs | selectattr('serviceType', 'equalto', 'postgresql') | list }}"
       loop_control:
         loop_var: platform_postgresql_application_job
-    - name: Preflight Redis and Sentinel logical instances
+    - name: Предварительная проверка логических экземпляров Redis и Sentinel
       ansible.builtin.include_role:
         name: platform.redis.application_provider
         tasks_from: preflight
       loop: "{{ application_provider_inputs.instanceJobs | selectattr('serviceType', 'equalto', 'redis') | list }}"
       loop_control:
         loop_var: platform_redis_application_job
-    - name: Preflight ClickHouse library and logical instance scopes
+    - name: Предварительная проверка библиотеки ClickHouse и областей логического экземпляра
       ansible.builtin.include_role:
         name: platform.clickhouse.application_provider
         tasks_from: preflight
       loop: "{{ (application_provider_inputs.libraryJobs + application_provider_inputs.instanceJobs) | selectattr('serviceType', 'equalto', 'clickhouse') | list }}"
       loop_control:
         loop_var: platform_clickhouse_application_job
-    - name: Preflight library resources separately
+    - name: Предварительная проверка ресурсов библиотеки отдельно
       ansible.builtin.include_role:
         name: platform.postgresql.application_provider
         tasks_from: preflight
       loop: "{{ application_provider_inputs.libraryJobs | selectattr('serviceType', 'equalto', 'postgresql') | list }}"
       loop_control:
         loop_var: platform_postgresql_application_job
-    - name: Preflight each logical application instance separately
+    - name: Предварительная проверка каждого экземпляра логического приложения отдельно
       ansible.builtin.include_role:
         name: platform.postgresql.application_provider
         tasks_from: preflight

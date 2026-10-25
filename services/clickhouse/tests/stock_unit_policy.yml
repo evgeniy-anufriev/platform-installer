@@ -1,12 +1,12 @@
 ---
-- name: Exercise the ClickHouse RPM stock-unit guard independently of a service plan
+- name: Применить стандартную системную защиту ClickHouse RPM независимо от плана обслуживания
   hosts: all
   gather_facts: false
   become: true
   vars:
     platform_clickhouse_package_version: '26.8.14.3'
   tasks:
-    - name: Apply the stock-unit policy from the standalone ClickHouse role
+    - name: Применить политику обслуживания Standard-Systemd из автономной роли ClickHouse
       ansible.builtin.include_role:
         name: platform.clickhouse.clickhouse_tls
         tasks_from: stock_unit.yml

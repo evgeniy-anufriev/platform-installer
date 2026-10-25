@@ -1,9 +1,9 @@
 ---
-- name: Bind this source's original sequential probe inputs
+- name: Привязать исходные последовательные входные данные зонда этого источника
   ansible.builtin.set_fact:
     _platform_integration_source_fqdns: "{{ _platform_selected_probe.fqdns }}"
     _platform_integration_probe: "{{ _platform_selected_probe.probe }}"
     platform_endpoint_probe_expected_addresses: "{{ _platform_selected_probe.expectedAddresses }}"
 
-- name: Check the source using the original observer and probe tasks
+- name: Проверить источник с помощью исходных задач наблюдателя и проверки
   ansible.builtin.include_tasks: probe-endpoint.yml

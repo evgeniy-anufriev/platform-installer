@@ -1,10 +1,10 @@
 ---
-- name: Read activated Execution runtime capabilities
+- name: Чтение активированных возможностей среды выполнения
   hosts: localhost
   connection: local
   gather_facts: false
   tasks:
-    - name: Return machine-readable runtime capabilities
+    - name: Возврат машиночитаемых возможностей среды выполнения
       platform.core.execution_capabilities:
         runtime_root: "{{ platform_execution_runtime_root }}"
         bundle_digest: "{{ platform_execution_bundle_digest }}"

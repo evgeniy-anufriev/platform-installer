@@ -1,27 +1,27 @@
 ---
-- name: Derive local configured virtual address ownership
+- name: Определение владения локальным настроенным виртуальным адресом
   ansible.builtin.set_fact:
     _platform_keepalived_expected_addresses: "{{ platform_keepalived_deployment.value.virtualAddresses | map(attribute='address') | list }}"
     _platform_keepalived_owned_addresses: "{{ platform_keepalived_deployment.value.virtualAddresses | map(attribute='address') | select('in', platform_keepalived_ipv4_addresses.stdout) | list }}"
 
-- name: Record local virtual address ownership
+- name: Запись владения локальным виртуальным адресом
   ansible.builtin.set_fact:
     platform_keepalived_local_ownership: "{{ platform_keepalived_local_ownership | combine({platform_keepalived_deployment.key: _platform_keepalived_owned_addresses}) }}"
 
-- name: Reject split or incomplete local virtual address ownership
+- name: Отклонить разделение или неполное владение локальным виртуальным адресом
   ansible.builtin.assert:
     that:
       - _platform_keepalived_owned_addresses | length == 0 or _platform_keepalived_owned_addresses | length == _platform_keepalived_expected_addresses | length
     fail_msg: KEEPALIVED_VIRTUAL_ADDRESS_SPLIT_OR_MISSING
 
-- name: Initialize deployment-wide VRRP ownership evidence
+- name: Инициализация свидетельства владения VRRP на уровне всего развертывания
   ansible.builtin.set_fact:
     _platform_keepalived_full_owners: []
     _platform_keepalived_empty_owners: []
     _platform_keepalived_participants: []
   run_once: true
 
-- name: Classify every VRRP participant by complete ownership
+- name: Классифицировать каждого участника VRRP по полному владению
   ansible.builtin.set_fact:
     _platform_keepalived_full_owners: >-
       {{ _platform_keepalived_full_owners +
@@ -39,7 +39,7 @@
   when: platform_keepalived_deployment.key in (hostvars[platform_keepalived_participant].platform_deployments | default({}))
   run_once: true
 
-- name: Assert one MASTER owner and BACKUP non-owners for the VRRP instance
+- name: Подтвердить одного владельца MASTER и не владельца BACKUP для экземпляра VRRP
   ansible.builtin.assert:
     that:
       - _platform_keepalived_participants | length >= 2
@@ -48,7 +48,7 @@
     fail_msg: KEEPALIVED_VRRP_OWNERSHIP_INVALID
   run_once: true
 
-- name: Report sanitized VRRP ownership evidence
+- name: Отчет об очищенных доказательствах владения VRRP
   ansible.builtin.debug:
     msg:
       deployment: "{{ platform_keepalived_deployment.key }}"

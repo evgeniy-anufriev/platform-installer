@@ -1,5 +1,5 @@
 ---
-- name: Resolve the current source endpoint and its providers without mutation
+- name: Разрешить текущую исходную конечную точку и ее провайдеров без изменений
   hosts: localhost
   connection: local
   gather_facts: false
@@ -11,7 +11,7 @@
     - hostvars['localhost'].platform_service_integration_projection.haproxyDeployments | length > 0
     - not (platform_endpoint_verify_only | default(false) | bool)
 
-- name: Verify the selected endpoint backend without provider mutation
+- name: Проверка выбранной серверной части конечной точки без изменения провайдера
   hosts: "{{ hostvars['localhost'].platform_service_integration_projection.haproxyHosts | default([]) }}"
   gather_facts: false
   become: true
@@ -29,18 +29,18 @@
   vars:
     platform_bind_source_dns_records: "{{ hostvars['localhost'].platform_bind_source_dns_records }}"
 
-- name: Verify the externally routed source endpoint after provider updates
+- name: Проверка конечной точки источника с внешней маршрутизацией после обновлений провайдера
   hosts: localhost
   connection: local
   gather_facts: false
   tasks:
-    - name: Require providers for a source with an explicit probe policy
+    - name: Требовать от провайдеров источника с явной политикой проверки
       ansible.builtin.assert:
         that:
           - platform_service_integration_projection.haproxyDeployments | length > 0
         fail_msg: APPLICATION_ENDPOINT_NOT_PUBLISHED
       when: _platform_integration_probe | default({}) | length > 0
-    - name: Probe source endpoint DNS and HTTP availability
+    - name: Проверка доступности конечной точки источника DNS и HTTP
       ansible.builtin.include_tasks: ../tasks/probe-endpoint.yml
       when:
         - platform_service_integration_projection.haproxyDeployments | length > 0

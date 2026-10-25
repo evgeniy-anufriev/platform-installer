@@ -1,29 +1,29 @@
 ---
-- name: Require a bounded selected Docker account for clear
+- name: Требовать ограниченную выбранную учетную запись Docker для очистки
   ansible.builtin.assert:
     that: platform_docker_account_name is match('^[a-z_][a-z0-9_-]{0,31}$')
     fail_msg: DOCKER_ACCOUNT_INVALID
 
-- name: Resolve selected Docker account for clear
+- name: Разрешить выбранную учетную запись Docker для очистки
   ansible.builtin.getent:
     database: passwd
     key: "{{ platform_docker_account_name }}"
     fail_key: true
 
-- name: Bind selected account identity for clear
+- name: Привязать выбранную учетную запись для очистки
   ansible.builtin.set_fact:
     _platform_docker_clear_uid: "{{ getent_passwd[platform_docker_account_name][1] | int }}"
     _platform_docker_clear_home: "{{ getent_passwd[platform_docker_account_name][4] }}"
   changed_when: false
 
-- name: Reject an ineligible account or unsafe home during clear
+- name: Отклонить неподходящую учетную запись или небезопасный дом во время очистки
   ansible.builtin.assert:
     that:
       - _platform_docker_clear_uid | int >= 1000
       - _platform_docker_clear_home is match('^/home/[a-z_][a-z0-9_-]{0,31}$')
     fail_msg: DOCKER_ACCOUNT_INELIGIBLE
 
-- name: Inspect exact managed Docker unit paths without following links
+- name: Проверить точные пути управляемых системных служб Docker без перехода по ссылкам
   ansible.builtin.stat:
     path: "{{ item }}"
     follow: false
@@ -35,7 +35,7 @@
     - "{{ _platform_docker_clear_home }}/.config/systemd/user/docker.service"
   register: _platform_docker_clear_units
 
-- name: Require regular unit files before reading them
+- name: Требовать обычные служебные файлы systemd перед их чтением
   ansible.builtin.assert:
     that:
       - item.stat.isreg | default(false)
@@ -46,7 +46,7 @@
   loop_control:
     label: "{{ item.item }}"
 
-- name: Read exact selected Docker units for ownership proof
+- name: Прочитать выбранные системные службы Docker для подтверждения права собственности
   ansible.builtin.slurp:
     src: "{{ item.item }}"
   loop: "{{ _platform_docker_clear_units.results }}"
@@ -54,7 +54,7 @@
     label: "{{ item.item }}"
   register: _platform_docker_clear_unit_contents
 
-- name: Refuse to stop foreign system or user services
+- name: Запретить остановку чужих системных и пользовательских служб
   ansible.builtin.assert:
     that:
       - _platform_docker_clear_units.results[0].stat.pw_name == 'root'
@@ -63,13 +63,13 @@
       - (_platform_docker_clear_unit_contents.results[1].content | b64decode).startswith('# Platform Installer V2 managed rootless Docker user unit')
     fail_msg: DOCKER_CLEAR_UNIT_NOT_OWNED
 
-- name: Stop and disable only the selected account's system bridge
+- name: Остановить и отключить только системный мост выбранной учетной записи
   ansible.builtin.systemd:
     name: "{{ platform_docker_name }}-rootless-{{ platform_docker_account_name }}.service"
     state: stopped
     enabled: false
 
-- name: Stop selected managed rootless Docker user unit if independently active
+- name: Остановить выбранную пользовательскую службу Docker без прав root, если она запущена отдельно
   ansible.builtin.command:
     argv: [systemctl, --user, stop, docker.service]
   become: true
@@ -79,7 +79,7 @@
     DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/{{ _platform_docker_clear_uid }}/bus"
   changed_when: false
 
-- name: Confirm selected rootless Docker is inactive
+- name: Подтвердить остановку выбранного Docker без прав root
   ansible.builtin.command:
     argv: [systemctl, --user, is-active, docker.service]
   become: true
@@ -91,7 +91,7 @@
   changed_when: false
   failed_when: false
 
-- name: Require cleared Docker user service to remain inactive
+- name: Требовать, чтобы очищенная пользовательская служба Docker оставалась неактивной
   ansible.builtin.assert:
     that: _platform_docker_clear_state.stdout != 'active'
     fail_msg: DOCKER_CLEAR_DAEMON_STILL_ACTIVE

@@ -1,5 +1,5 @@
 ---
-- name: Validate Redis mode and managed values
+- name: Проверка режима Redis и управляемых значений
   ansible.builtin.assert:
     that:
       - platform_redis_mode in ['standalone', 'sentinel-ha']
@@ -25,7 +25,7 @@
       - platform_redis_secret_files[platform_redis_credential.passwordSecretRef] | length > 0
     fail_msg: REDIS_CONFIGURATION_INVALID
 
-- name: Validate each Redis member
+- name: Проверка каждого экземпляра службы Redis
   ansible.builtin.assert:
     that:
       - item is mapping
@@ -50,7 +50,7 @@
   loop_control:
     label: "{{ item.id | default('unknown') }}"
 
-- name: Validate Redis standalone placement
+- name: Проверка автономного размещения Redis
   ansible.builtin.assert:
     that:
       - platform_redis_instances | length == 1
@@ -59,7 +59,7 @@
     fail_msg: REDIS_STANDALONE_REQUIRES_ONE_REDIS_MEMBER
   when: platform_redis_mode == 'standalone'
 
-- name: Validate paired Sentinel HA placement
+- name: Проверка парного размещения Sentinel HA
   ansible.builtin.assert:
     that:
       - platform_redis_instances | length == 3
@@ -69,13 +69,13 @@
     fail_msg: REDIS_SENTINEL_HA_REQUIRES_THREE_PAIRED_MEMBERS
   when: platform_redis_mode == 'sentinel-ha'
 
-- name: Reject unsafe Redis advanced settings
+- name: Отклонить небезопасные расширенные настройки Redis
   ansible.builtin.assert:
     that: item not in platform_redis_advanced_config
     fail_msg: "ADVANCED_SETTING_RESERVED: {{ item }}"
   loop: [port, tls-port, tls-cert-file, tls-key-file, tls-ca-cert-file, requirepass, masterauth, aclfile, user, sentinel, dir, pidfile, logfile]
 
-- name: Require the Sentinel credential for Sentinel HA
+- name: Требовать учетные данные Sentinel для Sentinel HA
   ansible.builtin.assert:
     that:
       - platform_redis_sentinel_credential is mapping

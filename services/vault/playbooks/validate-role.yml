@@ -1,22 +1,22 @@
 ---
-- name: Validate ordinary Vault role inputs without target contact
+- name: Проверка обычных входных данных роли Vault без целевого контакта
   hosts: localhost
   connection: local
   gather_facts: false
   tasks:
-    - name: Load Vault defaults
+    - name: Загрузить значения по умолчанию Vault
       ansible.builtin.include_vars: ../ansible_collections/platform/vault/roles/vault_tls/defaults/main.yml
-    - name: Load explicit standalone Vault fixture
+    - name: Загрузка явных автономных тестовых данных Vault
       ansible.builtin.include_vars: "{{ platform_vault_fixture }}"
-    - name: Validate Vault role inputs
+    - name: Проверка входных данных роли Vault
       ansible.builtin.include_role:
         name: platform.vault.vault_tls
         tasks_from: validate.yml
-    - name: Normalize Vault role inputs
+    - name: Нормализация входных данных роли Vault
       ansible.builtin.include_role:
         name: platform.vault.vault_tls
         tasks_from: normalize.yml
-    - name: Prove default noncolliding Vault pairs
+    - name: Доказать наличие неконфликтных пар Vault по умолчанию
       ansible.builtin.assert:
         that:
           - (_platform_vault_instances | map(attribute='api_port') | list) == ([8200] if platform_vault_mode == 'standalone' else [8200, 8202, 8204])

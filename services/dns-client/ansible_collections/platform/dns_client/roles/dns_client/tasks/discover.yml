@@ -1,39 +1,39 @@
 ---
-- name: Inspect systemd-resolved unit load state
+- name: Проверка состояния загрузки службы systemd systemd-resolved
   ansible.builtin.command:
     argv: [systemctl, show, systemd-resolved.service, --property=LoadState, --value]
   register: _platform_dns_client_resolved_unit
   changed_when: false
   failed_when: false
 
-- name: Inspect NetworkManager unit load state
+- name: Проверка состояния загрузки службы systemd NetworkManager
   ansible.builtin.command:
     argv: [systemctl, show, NetworkManager.service, --property=LoadState, --value]
   register: _platform_dns_client_nm_unit
   changed_when: false
   failed_when: false
 
-- name: Inspect whether systemd-resolved is running
+- name: Проверить, запущен ли systemd-resolved
   ansible.builtin.command:
     argv: [systemctl, is-active, systemd-resolved.service]
   register: _platform_dns_client_resolved_active
   changed_when: false
   failed_when: false
 
-- name: Inspect whether NetworkManager is running
+- name: Проверить, запущен ли NetworkManager
   ansible.builtin.command:
     argv: [systemctl, is-active, NetworkManager.service]
   register: _platform_dns_client_nm_active
   changed_when: false
   failed_when: false
 
-- name: Inspect resolver configuration ownership
+- name: Проверка владения конфигурацией преобразователя
   ansible.builtin.stat:
     path: /etc/resolv.conf
     follow: false
   register: _platform_dns_client_resolv_conf
 
-- name: Read resolver configuration link without mutation
+- name: Прочитать ссылку на конфигурацию преобразователя без изменений
   ansible.builtin.command:
     argv: [readlink, /etc/resolv.conf]
   register: _platform_dns_client_resolv_link
@@ -41,7 +41,7 @@
   failed_when: false
   when: _platform_dns_client_resolv_conf.stat.islnk | default(false)
 
-- name: Select deterministic DNS client backend
+- name: Выбор детерминированного клиентского сервера DNS
   ansible.builtin.set_fact:
     platform_dns_client_backend: >-
       {{ 'systemd-resolved'
@@ -52,12 +52,12 @@
                and _platform_dns_client_nm_active.stdout | trim == 'active'
                else '') }}
 
-- name: Require a supported DNS client backend
+- name: Требовать поддерживаемую серверную часть клиента DNS
   ansible.builtin.assert:
     that: platform_dns_client_backend | length > 0
     fail_msg: DNS_CLIENT_BACKEND_UNSUPPORTED
 
-- name: Require safe resolved ownership of resolv.conf
+- name: Требовать безопасного разрешения владения resolv.conf
   ansible.builtin.assert:
     that:
       - _platform_dns_client_resolv_conf.stat.islnk | default(false)
@@ -65,14 +65,14 @@
     fail_msg: DNS_CLIENT_RESOLV_CONF_CONFLICT
   when: platform_dns_client_backend == 'systemd-resolved'
 
-- name: Inspect NetworkManager split DNS configuration
+- name: Проверка разделенной конфигурации NetworkManager DNS
   ansible.builtin.slurp:
     src: /etc/NetworkManager/NetworkManager.conf
   register: _platform_dns_client_nm_config
   failed_when: false
   when: platform_dns_client_backend == 'NetworkManager'
 
-- name: Determine NetworkManager split DNS capability
+- name: Определить возможность разделения NetworkManager DNS
   ansible.builtin.set_fact:
     platform_dns_client_nm_split_supported: >-
       {{ _platform_dns_client_nm_config.content | default('') | b64decode is search('(?m)^\\s*dns\\s*=\\s*dnsmasq\\s*$') }}

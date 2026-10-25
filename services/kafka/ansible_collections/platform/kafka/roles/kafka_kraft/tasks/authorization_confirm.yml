@@ -1,8 +1,8 @@
 ---
-- name: Observe the exact running process after finalization
+- name: Наблюдать за точным выполнением процесса после завершения
   ansible.builtin.include_tasks: authorization_status.yml
 
-- name: Reject unconfirmed runtime superuser revocation
+- name: Отклонить неподтвержденный отзыв суперпользователя во время выполнения
   ansible.builtin.assert:
     that: kafka_authorization_running_final | bool
     fail_msg: KAFKA_AUTHORIZATION_RUNTIME_FINALIZATION_REQUIRED

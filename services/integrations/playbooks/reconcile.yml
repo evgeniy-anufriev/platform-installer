@@ -1,10 +1,10 @@
 ---
-- name: Resolve provider deployments implied by the completed source lifecycle
+- name: Разрешить развертывание провайдера, подразумеваемое завершенным жизненным циклом исходного кода
   hosts: localhost
   connection: local
   gather_facts: false
   tasks:
-    - name: Collect inventory placements for provider selection
+    - name: Сбор мест размещения инвентаря для выбора провайдера
       ansible.builtin.set_fact:
         _platform_integration_inventory_deployments: >-
           {{ _platform_integration_inventory_deployments | default({}) |
@@ -12,14 +12,14 @@
       loop: "{{ groups['platform_targets'] | default([]) | sort }}"
       no_log: true
 
-    - name: Resolve service-driven provider integrations read-only
+    - name: Разрешение интеграции провайдеров на основе сервисов (только для чтения)
       platform.core.resolve_service_integrations:
         desired_state: "{{ platform_desired_state }}"
         source_service_types: "{{ platform_integration_source_service_types | default([]) }}"
         inventory_deployments: "{{ _platform_integration_inventory_deployments | default({}) }}"
       register: _platform_service_integration_resolution
 
-    - name: Publish execution-local provider integration projection
+    - name: Публикация проекции интеграции локального провайдера выполнения
       ansible.builtin.set_fact:
         platform_service_integration_projection: "{{ _platform_service_integration_resolution.resolved_service_integrations.integrations }}"
 

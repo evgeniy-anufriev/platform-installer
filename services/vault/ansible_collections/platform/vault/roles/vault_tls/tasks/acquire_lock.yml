@@ -1,5 +1,5 @@
 ---
-- name: Validate the canonical Vault lock host
+- name: Проверка канонического хоста блокировки Vault
   ansible.builtin.assert:
     that:
       - platform_vault_bootstrap_lock_root == '/run/lock/' ~ platform_vault_name
@@ -7,7 +7,7 @@
       - platform_vault_lock_token is match('^[0-9a-f]{32}$')
     fail_msg: VAULT_LOCK_INPUT_INVALID
 
-- name: Inspect the fixed Vault lock directory without following symlinks
+- name: Проверить фиксированный каталог блокировки Vault без перехода по символическим ссылкам
   ansible.builtin.stat:
     path: "/run/lock/{{ platform_vault_name }}"
     follow: false
@@ -16,13 +16,13 @@
     get_checksum: false
   register: _platform_vault_lock_root_stat
 
-- name: Reject a substituted or incorrectly owned Vault lock directory
+- name: Отклонить замененный или неправильно принадлежащий каталог блокировки Vault
   ansible.builtin.assert:
     that:
       - not _platform_vault_lock_root_stat.stat.exists or (_platform_vault_lock_root_stat.stat.isdir and not _platform_vault_lock_root_stat.stat.islnk and _platform_vault_lock_root_stat.stat.uid == 0)
     fail_msg: VAULT_LOCK_DIRECTORY_UNSAFE
 
-- name: Create the root-owned Vault lock directory on the canonical first member
+- name: Создать каталог блокировки, принадлежащий пользователю root Vault, в каноническом первом экземпляре службы
   ansible.builtin.file:
     path: "/run/lock/{{ platform_vault_name }}"
     state: directory
@@ -30,12 +30,12 @@
     group: root
     mode: '0755'
 
-- name: Derive the shared deployment lock identity
+- name: Получение идентификатора блокировки общего развертывания
   ansible.builtin.set_fact:
     _platform_vault_lock_key: "{{ platform_vault_deployment_id | hash('sha256') }}"
     _platform_vault_lock_unit: "{{ platform_vault_name }}-lock-{{ platform_vault_lock_token }}"
 
-- name: Inspect the persistent shared lock object without following symlinks
+- name: Проверить объект постоянной общей блокировки, не переходя по символическим ссылкам
   ansible.builtin.stat:
     path: "{{ platform_vault_bootstrap_lock_root }}/{{ _platform_vault_lock_key }}.lock"
     follow: false
@@ -44,13 +44,13 @@
     get_checksum: false
   register: _platform_vault_lock_stat
 
-- name: Refuse an unsafe pre-existing Vault lock object
+- name: Отклонить небезопасный ранее существовавший объект блокировки Vault
   ansible.builtin.assert:
     that:
       - not _platform_vault_lock_stat.stat.exists or (_platform_vault_lock_stat.stat.isreg and not _platform_vault_lock_stat.stat.islnk and _platform_vault_lock_stat.stat.uid == 0 and (_platform_vault_lock_stat.stat.mode | int(base=8)) == 384)
     fail_msg: VAULT_LOCK_OBJECT_UNSAFE
 
-- name: Hold the shared Vault bootstrap lock for this Ansible invocation
+- name: Удержать общую блокировку начальной загрузки Vault для этого вызова Ansible
   ansible.builtin.command:
     argv:
       - systemd-run
@@ -74,7 +74,7 @@
   # Per-invocation coordination is not a desired-state service change.
   changed_when: false
 
-- name: Wait for the lock holder readiness signal or fail-closed startup
+- name: Дождаться сигнала готовности держателя замка или аварийно-закрытого запуска
   ansible.builtin.command:
     argv: [systemctl, show, --property=ActiveState, --value, "{{ _platform_vault_lock_unit }}.service"]
   register: _platform_vault_lock_state
@@ -83,12 +83,12 @@
   retries: 20
   delay: 1
 
-- name: Require successful ownership of the deployment lock
+- name: Требовать успешного владения блокировкой развертывания
   ansible.builtin.assert:
     that: _platform_vault_lock_state.stdout == 'active'
     fail_msg: VAULT_DEPLOYMENT_BUSY
 
-- name: Verify the opened Vault lock is a private regular root-owned file
+- name: Убедиться, что открытый замок Vault является частным обычным файлом, принадлежащим корневому пользователю
   ansible.builtin.stat:
     path: "{{ platform_vault_bootstrap_lock_root }}/{{ _platform_vault_lock_key }}.lock"
     follow: false
@@ -97,7 +97,7 @@
     get_checksum: false
   register: _platform_vault_lock_file_stat
 
-- name: Fail closed if the Vault lock file was substituted
+- name: Сбой закрытия, если был заменен файл блокировки Vault
   ansible.builtin.assert:
     that:
       - _platform_vault_lock_file_stat.stat.isreg

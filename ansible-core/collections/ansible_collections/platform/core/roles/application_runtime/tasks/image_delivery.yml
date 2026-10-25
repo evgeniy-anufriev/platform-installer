@@ -1,5 +1,5 @@
 ---
-- name: Inspect the locked local image before delivery
+- name: Проверка заблокированного локального образа перед доставкой
   ansible.builtin.command:
     argv: [docker, image, inspect, "{{ application_runtime_job.authority.requirement.localReference }}"]
   become_user: "{{ application_runtime_job.account }}"
@@ -9,72 +9,72 @@
   failed_when: false
   no_log: true
 
-- name: Deliver only when the locked local image is not already available
+- name: Доставка только в том случае, если заблокированный локальный образ еще не доступен
   when: application_local_image.rc != 0 or (application_local_image.stdout | from_json)[0].Id != application_runtime_job.authority.requirement.imageId
   block:
-    - name: Pull from the authorized registry with private override cleanup
+    - name: Извлечение из авторизованного реестра с очисткой частного переопределения
       ansible.builtin.include_tasks: pull_registry.yml
       when: application_runtime_job.source.source == 'REPOSITORY'
-    - name: Stage the verified archive privately for the Docker account
+    - name: Конфиденциально разместить проверенный архив для учетной записи Docker
       when: application_runtime_job.source.source == 'OFFLINE_BUNDLE'
       block:
-        - name: Allocate an account-readable private archive staging directory
+        - name: Выделить промежуточный каталог частного архива, доступный для чтения учетной записи
           ansible.builtin.tempfile:
             state: directory
             prefix: .application-image-
             path: "{{ application_runtime_job.libraryPath }}"
           register: application_image_stage
-        - name: Assign only the private stage to the selected account
+        - name: Назначить выбранной учетной записи только приватную стадию
           ansible.builtin.file:
             path: "{{ application_image_stage.path }}"
             owner: "{{ application_runtime_job.account }}"
             mode: '0700'
-        - name: Copy the exact locked archive from the verified Execution Node bundle
+        - name: Скопировать точный заблокированный архив из проверенного пакета узла выполнения
           ansible.builtin.copy:
             src: "{{ application_runtime_job.archivePath }}"
             dest: "{{ application_image_stage.path }}/image.tar"
             owner: "{{ application_runtime_job.account }}"
             mode: '0600'
-        - name: Check the target archive content and size
+        - name: Проверка содержимого и размера целевого архива
           ansible.builtin.stat:
             path: "{{ application_image_stage.path }}/image.tar"
             checksum_algorithm: sha256
             get_mime: false
             get_attributes: false
           register: application_target_archive
-        - name: Require exact locked archive bytes
+        - name: Требовать точные заблокированные байты архива
           ansible.builtin.assert:
             that:
               - "'sha256:' ~ application_target_archive.stat.checksum == application_runtime_job.authority.offlineBundle.sha256"
               - application_target_archive.stat.size == application_runtime_job.authority.offlineBundle.size
             fail_msg: APPLICATION_IMAGE_ARCHIVE_INVALID
-        - name: Load into the selected rootless daemon
+        - name: Загрузить образ в выбранный Docker без прав root
           ansible.builtin.command:
             argv: [docker, load, --input, "{{ application_image_stage.path }}/image.tar"]
           become_user: "{{ application_runtime_job.account }}"
           environment: "{{ application_runtime_job.dockerEnvironment }}"
           no_log: true
       always:
-        - name: Remove only the private stage allocated by this operation
+        - name: Удалить только частную стадию, выделенную этой операцией
           ansible.builtin.file:
             path: "{{ application_image_stage.path }}"
             state: absent
           when: application_image_stage.path is defined
-    - name: Require the exact loaded or pulled image ID to exist
+    - name: Требовать существования точного идентификатора загруженного или извлеченного изображения
       ansible.builtin.command:
         argv: [docker, image, inspect, "{{ application_runtime_job.authority.requirement.imageId }}"]
       become_user: "{{ application_runtime_job.account }}"
       environment: "{{ application_runtime_job.dockerEnvironment }}"
       changed_when: false
       no_log: true
-    - name: Assign the exact authorized local reference
+    - name: Назначить точную авторизованную локальную ссылку
       ansible.builtin.command:
         argv: [docker, tag, "{{ application_runtime_job.authority.requirement.imageId }}", "{{ application_runtime_job.authority.requirement.localReference }}"]
       become_user: "{{ application_runtime_job.account }}"
       environment: "{{ application_runtime_job.dockerEnvironment }}"
       no_log: true
 
-- name: Verify local image identity and platform before startup
+- name: Проверка подлинности локального образа и платформы перед запуском
   ansible.builtin.command:
     argv: [docker, image, inspect, "{{ application_runtime_job.authority.requirement.localReference }}"]
   become_user: "{{ application_runtime_job.account }}"
@@ -83,7 +83,7 @@
   changed_when: false
   no_log: true
 
-- name: Require exact image and platform
+- name: Требовать точное изображение и платформу
   ansible.builtin.assert:
     that:
       - (application_delivered_image.stdout | from_json)[0].Id == application_runtime_job.authority.requirement.imageId
@@ -92,7 +92,7 @@
     fail_msg: APPLICATION_IMAGE_IDENTITY_INVALID
   no_log: true
 
-- name: Preserve the original application image reference
+- name: Сохранить ссылку на исходный образ приложения
   ansible.builtin.command:
     argv: [docker, tag, "{{ application_runtime_job.authority.requirement.imageId }}", "{{ application_runtime_job.settings.image }}"]
   become_user: "{{ application_runtime_job.account }}"
@@ -101,7 +101,7 @@
   no_log: true
   when: "'@' not in application_runtime_job.settings.image"
 
-- name: Inspect the original reference before Compose startup
+- name: Проверка исходной ссылки перед запуском Compose
   ansible.builtin.command:
     argv: [docker, image, inspect, "{{ application_runtime_job.settings.image }}"]
   become_user: "{{ application_runtime_job.account }}"
@@ -111,7 +111,7 @@
   no_log: true
   when: "'@' not in application_runtime_job.settings.image"
 
-- name: Require the original reference to name the locked image
+- name: Потребовать, чтобы исходная ссылка давала имя заблокированному изображению
   ansible.builtin.assert:
     that: (application_original_image.stdout | from_json)[0].Id == application_runtime_job.authority.requirement.imageId
     fail_msg: APPLICATION_IMAGE_IDENTITY_INVALID

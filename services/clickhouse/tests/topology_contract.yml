@@ -1,5 +1,5 @@
 ---
-- name: Check ClickHouse topology and runtime password contract without target contact
+- name: Проверка топологии ClickHouse и контракта паролей среды выполнения без целевого контакта
   hosts: localhost
   connection: local
   gather_facts: false
@@ -9,23 +9,23 @@
       passwordSecretRef: runtime:clickhouse-default-password
     platform_clickhouse_tls_profile: infrastructure-tls
   tasks:
-    - name: Allocate an ephemeral runtime-secret input file
+    - name: Создать временный файл входных runtime-секретов
       ansible.builtin.tempfile:
         state: file
         prefix: platform-clickhouse-contract-
       register: clickhouse_password_file
       no_log: true
 
-    - name: Check both placement shapes with the same ephemeral credential
+    - name: Проверить обе формы размещения с одинаковыми временными учетными данными
       block:
-        - name: Write an ephemeral non-repository test password
+        - name: Написание эфемерного тестового пароля, не относящегося к репозиторию
           ansible.builtin.copy:
             dest: "{{ clickhouse_password_file.path }}"
             content: "{{ lookup('ansible.builtin.password', '/dev/null length=20 chars=ascii_letters,digits') }}"
             mode: '0600'
           no_log: true
 
-        - name: Validate standalone placement and password reference
+        - name: Проверка автономного размещения и ссылки на пароль
           ansible.builtin.include_role:
             name: platform.clickhouse.clickhouse_tls
             tasks_from: validate.yml
@@ -36,7 +36,7 @@
             platform_clickhouse_secret_files:
               runtime:clickhouse-default-password: "{{ clickhouse_password_file.path }}"
 
-        - name: Normalize standalone placement
+        - name: Нормализовать отдельное размещение
           ansible.builtin.include_role:
             name: platform.clickhouse.clickhouse_tls
             tasks_from: normalize.yml
@@ -45,7 +45,7 @@
             platform_clickhouse_instances:
               - {id: clickhouse-1, host: localhost, address: 127.0.0.1, roles: [server]}
 
-        - name: Prove standalone has one server and no Keeper allocation requirement
+        - name: Доказать, что у автономного сервера есть один сервер и нет требований к выделению Keeper
           ansible.builtin.assert:
             that:
               - _platform_clickhouse_local_instances | length == 1
@@ -53,7 +53,7 @@
               - _platform_clickhouse_local_ports | length == 3
               - _platform_clickhouse_local_instances[0].server_unit_name == 'platform-clickhouse-server@clickhouse-qa-1.service'
 
-        - name: Validate three paired members on one host
+        - name: Проверка трех парных экземпляров службы на одном хосте
           ansible.builtin.include_role:
             name: platform.clickhouse.clickhouse_tls
             tasks_from: validate.yml
@@ -66,7 +66,7 @@
             platform_clickhouse_secret_files:
               runtime:clickhouse-default-password: "{{ clickhouse_password_file.path }}"
 
-        - name: Normalize three paired members on one host
+        - name: Нормализовать три парных экземпляра службы на одном хосте
           ansible.builtin.include_role:
             name: platform.clickhouse.clickhouse_tls
             tasks_from: normalize.yml
@@ -77,7 +77,7 @@
               - {id: clickhouse-2, host: localhost, address: 127.0.0.1, roles: [server, keeper]}
               - {id: clickhouse-3, host: localhost, address: 127.0.0.1, roles: [server, keeper]}
 
-        - name: Prove unique Raft IDs and all five listener allocations per member
+        - name: Доказать уникальные идентификаторы Raft и все пять назначений прослушивателей для каждого экземпляра службы
           ansible.builtin.assert:
             that:
               - _platform_clickhouse_local_instances | length == 3
@@ -87,7 +87,7 @@
               - _platform_clickhouse_local_instances | map(attribute='server_unit_name') | list == ['platform-clickhouse-server@clickhouse-qa-1.service', 'platform-clickhouse-server@clickhouse-qa-2.service', 'platform-clickhouse-server@clickhouse-qa-3.service']
               - _platform_clickhouse_local_instances | map(attribute='keeper_unit_name') | list == ['platform-clickhouse-keeper@clickhouse-qa-1.service', 'platform-clickhouse-keeper@clickhouse-qa-2.service', 'platform-clickhouse-keeper@clickhouse-qa-3.service']
 
-        - name: Exercise read-only QA-host ownership preflight when explicitly requested
+        - name: Выполнить предварительную проверку владения хостом QA только для чтения по явному запросу
           ansible.builtin.include_role:
             name: platform.clickhouse.clickhouse_tls
             tasks_from: preflight.yml
@@ -97,7 +97,7 @@
             platform_clickhouse_mode: raft-ha
           when: platform_clickhouse_test_preflight | default(false) | bool
       always:
-        - name: Remove the ephemeral runtime-secret test file
+        - name: Удаление временного секретного тестового файла времени выполнения
           ansible.builtin.file:
             path: "{{ clickhouse_password_file.path }}"
             state: absent

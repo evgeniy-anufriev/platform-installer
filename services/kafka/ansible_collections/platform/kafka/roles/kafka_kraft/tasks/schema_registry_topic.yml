@@ -1,5 +1,5 @@
 ---
-- name: Describe the schema topic without modification
+- name: Описать тему схемы без изменений
   ansible.builtin.command:
     argv:
       - "{{ platform_kafka_install_directory }}/bin/kafka-topics.sh"
@@ -15,7 +15,7 @@
   register: _platform_kafka_registry_topic_before
   no_log: true
 
-- name: Refuse incompatible existing schema topic before Registry startup
+- name: Отклонить несовместимую существующую тему схемы перед запуском реестра
   ansible.builtin.assert:
     that:
       - "_platform_kafka_registry_topic_before.stdout | regex_search('PartitionCount: *1(?:\\s|$)') is not none"
@@ -26,7 +26,7 @@
   when: _platform_kafka_registry_topic_before.stdout | trim | length > 0
   no_log: true
 
-- name: Create the missing topic on one deterministic broker only
+- name: Создать недостающую тему только на одном детерминированном брокере
   ansible.builtin.command:
     argv:
       - "{{ platform_kafka_install_directory }}/bin/kafka-topics.sh"
@@ -52,7 +52,7 @@
     - registry_instance.id == (_platform_kafka_registry_projection.instances | selectattr('deployment_id', 'equalto', registry_instance.deployment_id) | first).id
   no_log: true
 
-- name: Wait for the exact schema topic policy without changing it
+- name: Дождаться точной политики темы схемы, не меняя ее
   ansible.builtin.command:
     argv:
       - "{{ platform_kafka_install_directory }}/bin/kafka-topics.sh"

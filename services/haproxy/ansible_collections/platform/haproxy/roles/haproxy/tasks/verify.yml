@@ -1,21 +1,21 @@
 ---
-- name: Check HAProxy package and active configuration read-only
+- name: Проверка пакета HAProxy и активной конфигурации, доступной только для чтения
   ansible.builtin.command:
     argv: ["{{ platform_haproxy_binary }}", '-c', '-f', "{{ platform_haproxy_main_config }}", '-f', "{{ platform_haproxy_conf_directory }}"]
   changed_when: false
 
-- name: Check HAProxy service is active read-only
+- name: Проверить, что служба HAProxy активна и доступна только для чтения
   ansible.builtin.command:
     argv: [systemctl, is-active, --quiet, "{{ platform_haproxy_service_name }}"]
   changed_when: false
 
-- name: Check HAProxy public and local stats listeners read-only
+- name: Проверка общедоступных и локальных прослушивателей статистики HAProxy, доступных только для чтения
   ansible.builtin.command:
     argv: [ss, -ltn]
   changed_when: false
   register: _platform_haproxy_listeners
 
-- name: Require HAProxy public and local stats listeners
+- name: Требовать прослушиватели общедоступной и локальной статистики HAProxy
   ansible.builtin.assert:
     that:
       - "':' ~ (platform_haproxy_public_port | string) in _platform_haproxy_listeners.stdout"

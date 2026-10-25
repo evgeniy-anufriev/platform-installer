@@ -1,21 +1,21 @@
 ---
-- name: Resolve the existing bootstrap TLS connection
+- name: Разрешить существующее загрузочное соединение TLS
   ansible.builtin.include_tasks: resolve_cli_connection.yml
   vars:
     kafka_cli_member: "{{ _platform_kafka_broker_instances | first }}"
     kafka_cli_purpose: interBroker
 
-- name: Select the service's explicit administrative SCRAM listener
+- name: Выбрать явный административный прослушиватель SCRAM службы
   ansible.builtin.set_fact:
     kafka_admin_listener_candidates: "{{ (_platform_kafka_broker_instances | first).listener_endpoints | selectattr('security_protocol', 'equalto', 'SASL_SSL') | list }}"
   changed_when: false
 
-- name: Require one unambiguous SCRAM listener for the admin account
+- name: Требовать один однозначный прослушиватель SCRAM для учетной записи администратора
   ansible.builtin.assert:
     that: kafka_admin_listener_candidates | length == 1
     fail_msg: KAFKA_ADMIN_SCRAM_LISTENER_AMBIGUOUS
 
-- name: Project the planned admin account and its existing runtime credential
+- name: Спроецировать запланированную учетную запись администратора и ее существующие учетные данные среды выполнения
   ansible.builtin.set_fact:
     application_topic_cli_directory: "{{ hostvars[(_platform_kafka_broker_instances | first).host].platform_kafka_install_directory | default(platform_kafka_install_directory) }}"
     application_kafka_credentials: "{{ platform_kafka_secret_files }}"
@@ -38,36 +38,36 @@
           port: "{{ kafka_admin_listener_candidates[0].bootstrap_port }}"
   changed_when: false
 
-- name: Create private bootstrap command custody
+- name: Создание частного хранилища команд начальной загрузки
   ansible.builtin.tempfile:
     state: directory
     prefix: platform-kafka-admin-
   register: application_kafka_private
   changed_when: false
 
-- name: Authenticate admin before changing compatibility or internal ACLs
+- name: Проверка подлинности администратора перед изменением совместимости или внутренних списков управления доступом
   vars:
     platform_application_secret_files: "{{ platform_kafka_secret_files }}"
   block:
-    - name: Prepare the invocation-private bootstrap PEM identity
+    - name: Подготовка индивидуального загрузочного идентификатора PEM для вызова
       ansible.builtin.include_tasks: application_client_tls.yml
       when: platform_kafka_store_type == 'PEM'
-    - name: Render either the temporary certificate bootstrap or final admin connection
+    - name: Визуализировать загрузку временного сертификата или окончательное подключение администратора
       ansible.builtin.template:
         src: application-topics-client.properties.j2
         dest: "{{ application_kafka_private.path }}/admin.properties"
         mode: '0600'
       no_log: true
       changed_when: false
-    - name: Read fresh SCRAM metadata for the bootstrap or finalized admin
+    - name: Прочитать свежие метаданные SCRAM для начальной загрузки или окончательного администратора
       ansible.builtin.include_tasks: application_accounts_read.yml
       vars:
         platform_kafka_application_job:
           accounts:
             - grants: []
-    - name: Check or create the exact plan-declared admin credential
+    - name: Проверка или создание точных учетных данных администратора, объявленных в плане
       ansible.builtin.include_tasks: application_account.yml
-    - name: Use the successfully authenticated admin for all security mutations
+    - name: Использовать успешно аутентифицированного администратора для всех изменений безопасности
       ansible.builtin.copy:
         src: "{{ application_kafka_private.path }}/account.properties"
         dest: "{{ application_kafka_private.path }}/admin.properties"
@@ -75,18 +75,18 @@
         mode: '0600'
       changed_when: false
       no_log: true
-    - name: Use admin's SASL endpoint with the authenticated configuration
+    - name: Использовать конечную точку SASL администратора с аутентифицированной конфигурацией
       ansible.builtin.set_fact:
         application_topic_candidate: "{{ application_topic_candidate | combine({'address': kafka_admin_listener_candidates[0].bootstrap_host, 'port': kafka_admin_listener_candidates[0].bootstrap_port, 'securityProtocol': 'SASL_SSL'}) }}"
       changed_when: false
-    - name: Configure only the owner-selected anonymous data access
+    - name: Настроить только анонимный доступ к данным, выбранный владельцем
       ansible.builtin.include_tasks: authorization_security_guard.yml
-    - name: Ensure the owner-selected anonymous data ACLs
+    - name: Обеспечить использование списков управления доступом к анонимным данным, выбранных владельцем
       ansible.builtin.include_tasks: authorization_principal.yml
       vars:
         kafka_authorization_principal: ANONYMOUS
         kafka_authorization_cluster_operations: [Describe, IdempotentWrite]
-    - name: Configure internal and certificate-present legacy clients without superuser status
+    - name: Настройка внутренних и устаревших клиентов с наличием сертификатов без статуса суперпользователя
       ansible.builtin.include_tasks: authorization_principal.yml
       loop: "{{ _platform_kafka_admin_principals }}"
       loop_control:
@@ -95,7 +95,7 @@
         kafka_authorization_principal: "{{ kafka_member_principal | regex_replace('^User:', '') }}"
         kafka_authorization_cluster_operations: [ClusterAction, Describe, IdempotentWrite]
   always:
-    - name: Remove only this invocation's temporary admin credentials
+    - name: Удалить только временные учетные данные администратора этого вызова
       ansible.builtin.file:
         path: "{{ application_kafka_private.path }}"
         state: absent

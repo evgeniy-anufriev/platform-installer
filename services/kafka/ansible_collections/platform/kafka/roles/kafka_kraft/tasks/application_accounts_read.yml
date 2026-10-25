@@ -1,5 +1,5 @@
 ---
-- name: Describe SCRAM metadata once for all deployment users
+- name: Описать метаданные SCRAM один раз для всех пользователей развертывания
   ansible.builtin.command:
     argv: ["{{ application_topic_cli_directory }}/bin/kafka-configs.sh", --bootstrap-server, "{{ application_topic_candidate.address }}:{{ application_topic_candidate.port }}", --command-config, "{{ application_kafka_private.path }}/admin.properties", --describe, --entity-type, users]
   register: application_kafka_user_inventory
@@ -7,7 +7,7 @@
   failed_when: false
   no_log: true
 
-- name: Require complete readable SCRAM metadata before account mutations
+- name: Требовать полные читаемые метаданные SCRAM перед изменением учетной записи
   ansible.builtin.assert:
     that:
       - application_kafka_user_inventory.rc == 0
@@ -15,22 +15,22 @@
     fail_msg: APPLICATION_KAFKA_ACCOUNT_UNAVAILABLE_OR_CONFLICT
   no_log: true
 
-- name: Reset deployment ACL inventory for this invocation
+- name: Сброс инвентаря развертывания ACL для этого вызова
   ansible.builtin.set_fact:
     application_kafka_acl_inventory: {rc: 0, stdout: ''}
   no_log: true
 
-- name: Read all deployment ACLs once before checking principals
+- name: Один раз прочитать все списки управления доступом развертывания перед проверкой участников
   when: platform_kafka_application_job.accounts | map(attribute='grants') | flatten | length > 0
   block:
-    - name: List the deployment ACL inventory without a principal filter
+    - name: Вывести список инвентаря развертывания ACL без основного фильтра
       ansible.builtin.command:
         argv: ["{{ application_topic_cli_directory }}/bin/kafka-acls.sh", --bootstrap-server, "{{ application_topic_candidate.address }}:{{ application_topic_candidate.port }}", --command-config, "{{ application_kafka_private.path }}/admin.properties", --list, --resource-pattern-type, any]
       register: application_kafka_acl_inventory
       changed_when: false
       failed_when: false
       no_log: true
-    - name: Require readable deployment ACL inventory
+    - name: Требовать читаемый инвентарь развертывания ACL
       ansible.builtin.assert:
         that: application_kafka_acl_inventory.rc == 0
         fail_msg: APPLICATION_KAFKA_ACL_READ_FAILED

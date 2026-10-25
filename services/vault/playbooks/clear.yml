@@ -1,12 +1,12 @@
 ---
-- name: Explicitly clear selected owned Vault Raft members
+- name: Явная очистка выбранных принадлежащих экземпляров службы Vault Raft
   hosts: platform_targets
   become: true
   gather_facts: false
   any_errors_fatal: true
   strategy: linear
   tasks:
-    - name: Run the standalone Vault clear entry
+    - name: Запуск автономной очистки записи Vault
       ansible.builtin.include_role:
         name: platform.vault.vault_tls
         tasks_from: clear_entry

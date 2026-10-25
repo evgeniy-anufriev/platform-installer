@@ -1,5 +1,5 @@
 ---
-- name: Validate bounded typed Vault inputs from the Execution Node lease
+- name: Проверка ограниченных типизированных входных данных Vault из аренды узла выполнения
   ansible.builtin.assert:
     that:
       - platform_runtime_secret_inputs is sequence
@@ -16,7 +16,7 @@
     label: "{{ item.purpose | default('unknown') }}"
   no_log: true
 
-- name: Reject duplicate typed Vault input purposes
+- name: Отклонить повторяющиеся цели ввода Vault
   ansible.builtin.assert:
     that:
       - >-
@@ -26,7 +26,7 @@
     fail_msg: VAULT_RUNTIME_SECRET_INPUT_DUPLICATE
   no_log: true
 
-- name: Use the typed administrative token when no standalone token was supplied
+- name: Использовать введенный административный токен, если автономный токен не был предоставлен
   ansible.builtin.set_fact:
     platform_vault_admin_token: "{{ (platform_runtime_secret_inputs | selectattr('purpose', 'equalto', 'SERVICE_ADMIN_TOKEN') | first).value }}"
   when:
@@ -34,7 +34,7 @@
     - platform_runtime_secret_inputs | default([]) | selectattr('purpose', 'equalto', 'SERVICE_ADMIN_TOKEN') | list | length == 1
   no_log: true
 
-- name: Use typed Shamir shares when no standalone shares were supplied
+- name: Использовать типизированные общие ресурсы Shamir, когда отдельные общие ресурсы не были предоставлены
   ansible.builtin.set_fact:
     platform_vault_unseal_keys: "{{ (platform_runtime_secret_inputs | selectattr('purpose', 'equalto', 'SERVICE_UNSEAL_SHARES') | first).value }}"
   when:

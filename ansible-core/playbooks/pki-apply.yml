@@ -1,12 +1,12 @@
 ---
-- name: Resolve managed PKI requests on the Execution Node
+- name: Разрешение управляемых запросов PKI на узле выполнения
   hosts: localhost
   connection: local
   gather_facts: false
   roles:
     - role: platform.core.pki_materialize
 
-- name: Deploy PKI material to selected targets
+- name: Развертывание материала PKI в выбранных целевых объектах
   hosts: platform_targets
   become: true
   gather_facts: false

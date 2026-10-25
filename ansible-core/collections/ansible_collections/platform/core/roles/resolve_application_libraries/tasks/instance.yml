@@ -1,19 +1,19 @@
 ---
-- name: Load validated library defaults in an isolated namespace
+- name: Загрузить проверенные параметры библиотеки по умолчанию в изолированное пространство имен
   ansible.builtin.include_vars:
     file: "{{ application_job.library.defaultsPath }}"
     name: "_library_package_{{ (application_job.libraryId ~ application_job.hostId) | hash('sha256') }}"
   no_log: true
   become: false
 
-- name: Load validated application defaults in an isolated namespace
+- name: Загрузить проверенные параметры приложения по умолчанию в изолированное пространство имен
   ansible.builtin.include_vars:
     file: "{{ application_job.application.defaultsPath }}"
     name: "_application_package_{{ (application_job.libraryId ~ application_job.slotId ~ application_job.hostId) | hash('sha256') }}"
   no_log: true
   become: false
 
-- name: Bind identities and parameter context independently for this placement
+- name: Независимо привязать идентификаторы и контекст параметра для этого размещения
   ansible.builtin.set_fact:
     application_name: "{{ application_job.application.name }}"
     application_instance_id: >-
@@ -24,7 +24,7 @@
   no_log: true
   become: false
 
-- name: Reset resources and topic context for this placement
+- name: Сбросить ресурсы и контекст темы для этого места размещения
   ansible.builtin.set_fact:
     application_topics: {}
     application_databases: {}
@@ -36,7 +36,7 @@
   no_log: true
   become: false
 
-- name: Require selected keys to exist in library connection declarations
+- name: Требовать, чтобы выбранные ключи существовали в объявлениях подключений библиотеки
   ansible.builtin.assert:
     that:
       - application_job.application.definition.connections | difference(application_job.library.definition.connections | default({}) | list) | length == 0
@@ -45,7 +45,7 @@
   when: application_job.application.definition.connections | default({}) is not mapping
   become: false
 
-- name: Resolve selected library connections or retain legacy declarations
+- name: Разрешить выбранные подключения к библиотекам или сохранить устаревшие объявления
   ansible.builtin.set_fact:
     _application_connections: >-
       {{ _application_connections | combine({item:
@@ -55,7 +55,7 @@
   no_log: true
   become: false
 
-- name: Expose provided connection values to application package templates
+- name: Предоставить предоставленные значения подключения шаблонам пакетов приложений
   ansible.builtin.set_fact:
     application_connections: >-
       {{ application_connections | combine({item.key:
@@ -67,7 +67,7 @@
   no_log: true
   become: false
 
-- name: Resolve upstream resource templates in the isolated library context
+- name: Разрешение шаблонов исходных ресурсов в контексте изолированной библиотеки
   platform.core.prepare_application_libraries:
     resource_defaults: true
     library_id: "{{ application_job.libraryId }}"
@@ -77,14 +77,14 @@
   no_log: true
   become: false
 
-- name: Require valid upstream library resource templates
+- name: Требовать действительные шаблоны ресурсов исходной библиотеки
   ansible.builtin.assert:
     that: _application_resource_inputs.findings | default([]) | length == 0
     fail_msg: "PROJECT_SNAPSHOT_INPUT_INVALID: Unable to resolve isolated library resource defaults"
     quiet: true
   become: false
 
-- name: Merge package and instance resource defaults with ordinary Ansible precedence
+- name: Объединить значения ресурсов по умолчанию для пакета и экземпляра с обычным приоритетом Ansible
   ansible.builtin.set_fact:
     _application_resource_defaults: >-
       {{ _application_resource_inputs.defaults |
@@ -92,7 +92,7 @@
   no_log: true
   become: false
 
-- name: Merge selected resource parameters with library defaults
+- name: Объединить выбранные параметры ресурса со значениями библиотеки по умолчанию
   ansible.builtin.set_fact:
     _application_resources: >-
       {{ _application_resources | combine({item.key: item.value | combine({'parameters':
@@ -105,13 +105,13 @@
   no_log: true
   become: false
 
-- name: Bind normalized resources for shared library templates
+- name: Привязка нормализованных ресурсов к шаблонам общих библиотек
   ansible.builtin.set_fact:
     library_resources: "{{ _application_resources }}"
   no_log: true
   become: false
 
-- name: Resolve isolated shared defaults after native resource normalization
+- name: Разрешение изолированных общих значений по умолчанию после нормализации собственных ресурсов
   platform.core.prepare_application_libraries:
     shared_defaults: true
     library_id: "{{ application_job.libraryId }}"
@@ -121,14 +121,14 @@
   no_log: true
   become: false
 
-- name: Require valid isolated shared library templates
+- name: Требовать допустимые шаблоны изолированных общих библиотек
   ansible.builtin.assert:
     that: _application_shared.findings | default([]) | length == 0
     fail_msg: "PROJECT_SNAPSHOT_INPUT_INVALID: Unable to resolve isolated shared library defaults"
     quiet: true
   become: false
 
-- name: Bind legacy topic selections after shared defaults
+- name: Привязка устаревших тем к общим настройкам по умолчанию
   ansible.builtin.set_fact:
     _application_topic_bindings: >-
       {{ (_application_shared.defaults.topicBindings | default({}) if application_job.slot.inherit_defaults | default(true) else {}) |
@@ -140,7 +140,7 @@
   no_log: true
   become: false
 
-- name: Expose selected resource keys before expanding parameters and environment
+- name: Предоставить выбранные ключи ресурсов перед расширением параметров и среды
   ansible.builtin.include_tasks: resource_context.yml
   loop: "{{ _application_connections | dict2items }}"
   loop_control:
@@ -148,7 +148,7 @@
     label: "{{ resource_connection.key }}"
   when: resource_connection.value.library_binding | default('') in application_job.deployment.bindings
 
-- name: Bind legacy topic roles after direct keys
+- name: Привязка ролей устаревших тем после прямых ключей
   ansible.builtin.include_tasks: topic_roles.yml
   loop: "{{ _application_topic_bindings | dict2items }}"
   loop_control:
@@ -156,7 +156,7 @@
     label: "{{ topic_connection.key }}"
   when: topic_connection.value is mapping
 
-- name: Seed parameter context before expanding dependent application settings
+- name: Начальный контекст параметра узла перед расширением зависимых параметров приложения
   ansible.builtin.set_fact:
     application_parameters: >-
       {{ (_application_shared.defaults.parameters | default({}) if application_job.slot.inherit_defaults | default(true) else {}) |
@@ -168,7 +168,7 @@
   no_log: true
   become: false
 
-- name: Resolve parameters after this placement identity is available
+- name: Разрешить параметры после того, как этот идентификатор места размещения станет доступен
   ansible.builtin.set_fact:
     application_parameters: >-
       {{ (_application_shared.defaults.parameters | default({}) if application_job.slot.inherit_defaults | default(true) else {}) |
@@ -180,7 +180,7 @@
   no_log: true
   become: false
 
-- name: Resolve inherited settings without this application's explicit overrides
+- name: Разрешить унаследованные настройки без явных переопределений этого приложения
   ansible.builtin.set_fact:
     application_inherited: >-
       {{ (_application_shared.defaults if application_job.slot.inherit_defaults | default(true) else {}) |
@@ -190,7 +190,7 @@
   no_log: true
   become: false
 
-- name: Collect machine-owned resolved row for existing structured actions
+- name: Собрать разрешенную строку, принадлежащую компьютеру, для существующих структурированных действий
   ansible.builtin.set_fact:
     platform_application_rows: >-
       {{ platform_application_rows + [{

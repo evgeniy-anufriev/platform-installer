@@ -1,5 +1,5 @@
 ---
-- name: Prove three same-host ClickHouse replicas share one TLS Keeper quorum
+- name: Доказать, что три реплики ClickHouse с одним и тем же хостом используют один кворум TLS Keeper
   hosts: localhost
   connection: local
   gather_facts: false
@@ -9,11 +9,11 @@
     clickhouse_qa_password: "{{ lookup('ansible.builtin.file', clickhouse_qa_root ~ '/default-password', lstrip=False, rstrip=False) }}"
     clickhouse_qa_ca: "{{ clickhouse_qa_root }}/pki/ca-chain.pem"
   tasks:
-    - name: Require the isolated QA input root
+    - name: Требовать изолированный корень ввода QA
       ansible.builtin.assert:
         that: clickhouse_qa_root is match('^/var/tmp/platform-clickhouse-qa-[A-Za-z0-9]+$')
 
-    - name: Create the same replicated table on all three members
+    - name: Создать одну и ту же реплицируемую таблицу во всех трех экземплярах службы
       ansible.builtin.uri:
         url: "https://192.168.56.103:{{ item }}/"
         method: POST
@@ -28,7 +28,7 @@
       register: clickhouse_qa_create
       no_log: true
 
-    - name: Insert one QA row through the first member
+    - name: Вставьте одну строку QA в первый экземпляр службы
       ansible.builtin.uri:
         url: https://192.168.56.103:8443/
         method: POST
@@ -41,7 +41,7 @@
         status_code: 200
       no_log: true
 
-    - name: Observe the committed row on every replica over authenticated HTTPS
+    - name: Наблюдать за зафиксированной строкой в каждой реплике, прошедшей проверку подлинности HTTPS
       ansible.builtin.uri:
         url: "https://192.168.56.103:{{ item }}/?query=SELECT%20count()%20FROM%20default.si09_ha3x1_v3"
         method: GET
@@ -59,7 +59,7 @@
       delay: 2
       no_log: true
 
-    - name: Confirm exactly one row reached each of three replicas
+    - name: Убедиться, что в каждой из трех реплик достигнута ровно одна строка
       ansible.builtin.assert:
         that:
           - clickhouse_qa_replica_read.results | length == 3

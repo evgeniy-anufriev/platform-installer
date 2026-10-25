@@ -60,13 +60,13 @@ class ClickHouseSQLUserManagementTests(unittest.TestCase):
 
         provision = yaml.safe_load((ROLE / "tasks/provision.yml").read_text(encoding="utf-8"))
         task = next(item for item in provision if item.get("name") ==
-                    "Create private persistent SQL access-control directories")
+                    "Создание частных постоянных каталогов управления доступом SQL")
         self.assertEqual("{{ item.data_directory }}/access", task["ansible.builtin.file"]["path"])
         self.assertEqual("0700", task["ansible.builtin.file"]["mode"])
 
         safety = yaml.safe_load((ROLE / "tasks/path_safety.yml").read_text(encoding="utf-8"))
         inspection = next(item for item in safety if item.get("name") ==
-                          "Inspect member, SQL access-control and private PKI paths without following links")
+                          "Проверка экземпляра службы, путей управления доступом SQL и частных путей PKI без следующих ссылок")
         self.assertIn("access_control_directory", inspection["loop"])
 
 

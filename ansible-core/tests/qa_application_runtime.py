@@ -187,10 +187,10 @@ class ApplicationRuntimeQA(unittest.TestCase):
         if not self.ssh:
             # Two libraries share an account; every invocation still rediscovers it.
             for observed in (initial, output):
-                self.assertEqual(1, observed.count("TASK [platform.core.application_runtime : Discover the selected Docker account]"))
-                self.assertEqual(1, observed.count("TASK [platform.core.application_runtime : Inspect rootless daemon and Compose plugin without mutation]"))
-            self.assertNotIn('Probe the exact platform manifest', verified)
-            self.assertNotIn('Inspect rootless daemon and Compose plugin', verified)
+                self.assertEqual(1, observed.count("TASK [platform.core.application_runtime : Обнаружение выбранной учетной записи Docker]"))
+                self.assertEqual(1, observed.count("TASK [platform.core.application_runtime : Проверить Docker без прав root и плагин Compose без изменений]"))
+            self.assertNotIn('Проверка точного манифеста платформы в утвержденном реестре', verified)
+            self.assertNotIn('Проверить Docker без прав root и плагин Compose без изменений', verified)
             self.assertNotIn('Inspect expected runtime file bytes', verified)
             self.assertRegex(verified, r"node1\s+:\s+ok=\d+\s+changed=0")
         self.assertRegex(output, r"node1\s+:\s+ok=\d+\s+changed=0")
@@ -247,7 +247,7 @@ class ApplicationRuntimeQA(unittest.TestCase):
         self.bundle.rename(hidden)
         try:
             output = self.play("apply")
-            self.assertIn("Pull the exact authorized platform manifest", output)
+            self.assertIn("Получить точный манифест авторизованной платформы", output)
         finally:
             hidden.rename(self.bundle)
         archive = self.bundle / "runtime/artifacts/applications/nginx.tar"

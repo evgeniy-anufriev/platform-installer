@@ -10,7 +10,7 @@ role = root / 'services/kafka/ansible_collections/platform/kafka/roles/kafka_kra
 sys.path.insert(0, str(root / 'ansible-core/collections/ansible_collections/platform/core/plugins/module_utils'))
 from kafka_schema_registry import registry_projection
 prepare = next(task for task in yaml.safe_load((role / 'tasks/schema_registry_member.yml').read_text())
-               if task.get('name') == 'Prepare Registry-owned member directories')
+               if task.get('name') == 'Подготовка каталогов экземпляров служб, принадлежащих реестру')
 plays = []
 for case in ('absent-config', 'owned-config'):
     base = root / ('sr-d01-' + case)

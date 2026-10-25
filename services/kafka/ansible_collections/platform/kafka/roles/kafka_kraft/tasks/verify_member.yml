@@ -1,23 +1,23 @@
 ---
-- name: Verify Kafka member systemd state and main process
+- name: Проверка состояния экземпляра службы Kafka systemd и основного процесса
   ansible.builtin.command:
     argv: [systemctl, show, --property=ActiveState, --property=MainPID, "{{ kafka_member.systemd_unit_name }}"]
   changed_when: false
   register: platform_kafka_member_service_state
 
-- name: Assert Kafka member service is active
+- name: Подтвердить, что служба экземпляра службы Kafka активна
   ansible.builtin.assert:
     that: "'ActiveState=active' in platform_kafka_member_service_state.stdout_lines"
     fail_msg: Kafka member systemd instance is not active
 
-- name: Verify Kafka member process
+- name: Проверка процесса экземпляра службы Kafka
   ansible.builtin.assert:
     that: >-
       (platform_kafka_member_service_state.stdout | regex_findall('(?m)^MainPID=([0-9]+)$')
        | first | default('0') | int) > 0
     fail_msg: Kafka member systemd instance has no running main process
 
-- name: Verify Kafka member configuration path
+- name: Проверка пути конфигурации экземпляра службы Kafka
   ansible.builtin.stat:
     path: "{{ kafka_member.config_directory }}/server.properties"
     get_mime: false
@@ -25,24 +25,24 @@
     get_checksum: false
   register: platform_kafka_verify_config
 
-- name: Assert Kafka member configuration exists
+- name: Подтвердить наличие конфигурации экземпляра службы Kafka
   ansible.builtin.assert:
     that: platform_kafka_verify_config.stat.exists
     fail_msg: Kafka member configuration is missing from its isolated directory
 
-- name: Read Kafka member metadata
+- name: Чтение метаданных экземпляра службы Kafka
   ansible.builtin.slurp:
     src: "{{ kafka_member.data_directory }}/meta.properties"
   register: platform_kafka_verify_member_metadata
 
-- name: Assert Kafka member identity
+- name: Подтвердить идентичность экземпляра службы Kafka
   ansible.builtin.assert:
     that:
       - (platform_kafka_verify_member_metadata.content | b64decode) is search('(?m)^cluster.id=' ~ platform_kafka_cluster_id ~ '$')
       - (platform_kafka_verify_member_metadata.content | b64decode) is search('(?m)^node.id=' ~ (kafka_member.node_id | string) ~ '$')
     fail_msg: Kafka member metadata does not match expected cluster/node identity
 
-- name: Verify Kafka member listeners
+- name: Проверка прослушивателей экземпляра службы Kafka
   ansible.builtin.wait_for:
     host: 127.0.0.1
     port: "{{ item }}"
@@ -50,7 +50,7 @@
     timeout: 5
   loop: "{{ kafka_member.listener_ports }}"
 
-- name: Verify SSL listeners with a real TLS handshake
+- name: Проверка прослушивателей SSL с помощью реального рукопожатия TLS
   ansible.builtin.include_tasks: verify_ssl_listener.yml
   vars:
     kafka_ssl_listener: "{{ kafka_ssl_listener_entry.value | combine({'name': kafka_ssl_listener_entry.key}) }}"

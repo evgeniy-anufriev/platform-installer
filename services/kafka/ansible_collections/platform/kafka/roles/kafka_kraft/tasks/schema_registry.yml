@@ -1,5 +1,5 @@
 ---
-- name: Resolve Registry source before installation
+- name: Определение источника реестра перед установкой
   ansible.builtin.include_role:
     name: platform.core.artifact_source_gate
   vars:
@@ -9,7 +9,7 @@
     - not platform_kafka_verify_only
     - platform_artifact_source_authority_active | default(false) or platform_resolved_artifact_sources is defined
 
-- name: Deliver Registry offline artifact using the existing source authority
+- name: Доставка автономного артефакта реестра с использованием существующего источника
   ansible.builtin.include_role:
     name: platform.core.artifact_delivery
   vars:
@@ -19,7 +19,7 @@
     - not platform_kafka_verify_only
     - platform_resolved_artifact_sources is defined
 
-- name: Install the approved Registry package when repository wins
+- name: Установить утвержденный пакет реестра после победы репозитория
   ansible.builtin.package:
     name: "confluent-schema-registry-{{ platform_kafka_schema_registry_version }}"
     state: present
@@ -28,7 +28,7 @@
     - platform_resolved_artifact_sources is defined
     - platform_resolved_artifact_sources['schema-registry-binary'].source == 'REPOSITORY'
 
-- name: Select Registry archive and source location
+- name: Выбрать архив реестра и исходное расположение
   ansible.builtin.set_fact:
     _platform_kafka_registry_archive: >-
       {{ platform_offline_artifact_paths['schema-registry-binary'][0]
@@ -39,7 +39,7 @@
     - not platform_kafka_verify_only
     - platform_resolved_artifact_sources is not defined or platform_resolved_artifact_sources['schema-registry-binary'].source == 'OFFLINE_BUNDLE'
 
-- name: Check Registry offline archive before extraction
+- name: Проверка автономного архива реестра перед извлечением
   ansible.builtin.stat:
     path: "{{ _platform_kafka_registry_archive }}"
     checksum_algorithm: sha256
@@ -50,7 +50,7 @@
     - not platform_kafka_verify_only
     - platform_resolved_artifact_sources is not defined or platform_resolved_artifact_sources['schema-registry-binary'].source == 'OFFLINE_BUNDLE'
 
-- name: Require the pinned Registry artifact bytes
+- name: Запросить закрепленные байты артефакта реестра
   ansible.builtin.assert:
     that:
       - _platform_kafka_registry_archive_stat.stat.isreg | default(false)
@@ -60,19 +60,19 @@
     - not platform_kafka_verify_only
     - platform_resolved_artifact_sources is not defined or platform_resolved_artifact_sources['schema-registry-binary'].source == 'OFFLINE_BUNDLE'
 
-- name: Inspect immutable Registry installation root
+- name: Проверка корня установки неизменяемого реестра
   ansible.builtin.stat:
     path: "{{ platform_kafka_schema_registry_install_directory }}"
     follow: false
     get_checksum: false
   register: _platform_kafka_registry_install_stat
 
-- name: Reject unsafe Registry installation root
+- name: Отклонить небезопасный корень установки реестра
   ansible.builtin.assert:
     that: not _platform_kafka_registry_install_stat.stat.exists or (_platform_kafka_registry_install_stat.stat.isdir | default(false) and not (_platform_kafka_registry_install_stat.stat.islnk | default(false)))
     fail_msg: SCHEMA_REGISTRY_INSTALL_PATH_UNSAFE
 
-- name: Extract verified Confluent distribution once
+- name: Один раз извлечь проверенный дистрибутив Confluent
   ansible.builtin.command:
     argv: [cat, "{{ platform_kafka_schema_registry_install_directory }}/.platform-approved-sha256"]
   changed_when: false
@@ -82,7 +82,7 @@
     - _platform_kafka_registry_install_stat.stat.exists
     - platform_resolved_artifact_sources is not defined or platform_resolved_artifact_sources['schema-registry-binary'].source == 'OFFLINE_BUNDLE'
 
-- name: Reject unowned or incompatible existing Confluent distribution
+- name: Отклонить не принадлежащий владельцу или несовместимый существующий дистрибутив Confluent
   ansible.builtin.assert:
     that:
       - _platform_kafka_registry_install_marker.rc == 0
@@ -92,7 +92,7 @@
     - _platform_kafka_registry_install_stat.stat.exists
     - platform_resolved_artifact_sources is not defined or platform_resolved_artifact_sources['schema-registry-binary'].source == 'OFFLINE_BUNDLE'
 
-- name: Extract the approved Confluent distribution once
+- name: Один раз извлечь утвержденный дистрибутив Confluent
   ansible.builtin.unarchive:
     src: "{{ _platform_kafka_registry_archive }}"
     dest: /opt
@@ -102,7 +102,7 @@
     - not platform_kafka_verify_only
     - platform_resolved_artifact_sources is not defined or platform_resolved_artifact_sources['schema-registry-binary'].source == 'OFFLINE_BUNDLE'
 
-- name: Record approved immutable distribution identity
+- name: Запись утвержденного неизменяемого идентификатора распространения
   ansible.builtin.copy:
     content: 'dc4d6234e0f7e1a91b369f9cf1d27d7c9885edb9f6440170c3a6f00ba68fcc81'
     dest: "{{ platform_kafka_schema_registry_install_directory }}/.platform-approved-sha256"
@@ -113,33 +113,33 @@
     - not platform_kafka_verify_only
     - platform_resolved_artifact_sources is not defined or platform_resolved_artifact_sources['schema-registry-binary'].source == 'OFFLINE_BUNDLE'
 
-- name: Check the pinned Registry JAR exists for offline installations
+- name: Проверить наличие закрепленного JAR-файла реестра для автономной установки
   ansible.builtin.stat:
     path: "{{ platform_kafka_schema_registry_install_directory }}/share/java/schema-registry/kafka-schema-registry-{{ platform_kafka_schema_registry_version }}.jar"
     follow: false
   register: _platform_kafka_registry_jar
   when: platform_resolved_artifact_sources is not defined or platform_resolved_artifact_sources['schema-registry-binary'].source == 'OFFLINE_BUNDLE'
 
-- name: Require the pinned Registry distribution
+- name: Запрос закрепленного дистрибутива реестра
   ansible.builtin.assert:
     that: _platform_kafka_registry_jar.stat.isreg | default(false) and not (_platform_kafka_registry_jar.stat.islnk | default(false))
     fail_msg: SCHEMA_REGISTRY_VERSION_UNAVAILABLE
   when: platform_resolved_artifact_sources is not defined or platform_resolved_artifact_sources['schema-registry-binary'].source == 'OFFLINE_BUNDLE'
 
-- name: Resolve the selected Registry launcher
+- name: Разрешить выбранную программу запуска реестра
   ansible.builtin.set_fact:
     _platform_kafka_registry_launcher: >-
       {{ '/usr/bin/schema-registry-start'
          if (platform_resolved_artifact_sources is defined and platform_resolved_artifact_sources['schema-registry-binary'].source == 'REPOSITORY')
          else platform_kafka_schema_registry_install_directory ~ '/bin/schema-registry-start' }}
 
-- name: Create Registry service group
+- name: Создание группы служб реестра
   ansible.builtin.group:
     name: "{{ platform_kafka_schema_registry_group }}"
     system: true
   when: not platform_kafka_verify_only
 
-- name: Create Registry service account
+- name: Создание учетной записи службы реестра
   ansible.builtin.user:
     name: "{{ platform_kafka_schema_registry_user }}"
     group: "{{ platform_kafka_schema_registry_group }}"
@@ -147,14 +147,14 @@
     create_home: false
   when: not platform_kafka_verify_only
 
-- name: Apply or verify each Registry alongside its broker
+- name: Применить или проверить каждый реестр вместе с его брокером
   ansible.builtin.include_tasks: schema_registry_member.yml
   loop: "{{ _platform_kafka_registry_local }}"
   loop_control:
     loop_var: registry_instance
     label: "{{ registry_instance.id }}"
 
-- name: Verify reachable trusted HTTPS peers
+- name: Проверка достижимых доверенных узлов HTTPS
   ansible.builtin.uri:
     url: "{{ item.https_url }}/subjects"
     method: GET

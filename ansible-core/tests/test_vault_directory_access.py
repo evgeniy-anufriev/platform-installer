@@ -16,7 +16,7 @@ class VaultDirectoryAccessTests(unittest.TestCase):
     def test_parent_traversal_does_not_grant_service_write_or_public_access(self):
         source = yaml.safe_load((ROLE / "tasks/provision.yml").read_text())
         task = next(task for task in source if task['name'] ==
-                    'Ensure the deployment-level Vault directories remain root-owned')
+                    'Убедиться, что каталоги Vault уровня развертывания остаются во владении пользователя root')
         self.assertEqual({'path': '{{ item }}', 'state': 'directory', 'owner': 'root',
                           'group': '{{ platform_vault_group }}', 'mode': '0750'},
                          task['ansible.builtin.file'])
@@ -32,12 +32,12 @@ class VaultDirectoryAccessTests(unittest.TestCase):
         account = pwd.getpwnam('nobody')
         group = grp.getgrgid(account.pw_gid).gr_name
         source = yaml.safe_load((ROLE / 'tasks/provision.yml').read_text())
-        names = ['Ensure fixed Vault config, data and log roots remain root-owned',
-                 'Ensure the deployment-level Vault directories remain root-owned',
-                 'Create isolated member config directories',
-                 'Create isolated member Raft data directories',
-                 'Create isolated member audit backing directories',
-                 'Create private per-member PKI directories']
+        names = ['Обеспечить фиксированную конфигурацию Vault, а корни данных и журналов остаются во владении пользователя root',
+                 'Убедиться, что каталоги Vault уровня развертывания остаются во владении пользователя root',
+                 'Создание каталогов конфигурации изолированного экземпляра службы',
+                 'Создание каталогов данных Raft изолированного экземпляра службы',
+                 'Создание резервных каталогов аудита изолированного экземпляра службы',
+                 'Создание частных каталогов PKI для каждого экземпляра службы']
         tasks = [copy.deepcopy(next(task for task in source if task['name'] == name))
                  for name in names]
         with tempfile.TemporaryDirectory(prefix='vault-directory-test-') as directory:

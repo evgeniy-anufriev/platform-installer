@@ -1,12 +1,12 @@
 ---
-- name: Validate portable service resource settings
+- name: Проверка настроек ресурсов переносимой службы
   ansible.builtin.include_role:
     name: platform.core.project_settings
 
-- name: Validate Docker rootless inputs and target compatibility
+- name: Проверить входные настройки Docker без прав root и совместимость целевого узла
   ansible.builtin.include_tasks: validate.yml
 
-- name: Validate approved Docker package sources
+- name: Проверка утвержденных источников пакета Docker
   ansible.builtin.include_role:
     name: platform.core.artifact_source_gate
   vars:
@@ -21,12 +21,12 @@
     - platform_resolved_artifact_sources is defined or (platform_artifact_source_authority_active | default(false))
     - not (platform_docker_verify_only | bool)
 
-- name: Select exact Docker PKI material
+- name: Выбрать точный материал Docker PKI
   ansible.builtin.include_tasks: resolve_tls.yml
 
-- name: Provision rootless Docker without changing other deployments
+- name: Подготовить Docker без прав root без изменения других развёртываний
   ansible.builtin.include_tasks: provision.yml
   when: not (platform_docker_verify_only | bool)
 
-- name: Verify Docker rootless and Compose runtime read-only
+- name: Проверить работу Docker без прав root и Compose без изменений
   ansible.builtin.include_tasks: verify.yml

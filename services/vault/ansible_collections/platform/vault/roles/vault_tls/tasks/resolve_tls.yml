@@ -1,12 +1,12 @@
 ---
-- name: Select the exact Core materialized Vault API TLS plan
+- name: Выбрать точный материализованный план Core Vault API TLS
   ansible.builtin.include_role:
     name: platform.core.pki_materialize
     tasks_from: select_consumer_plan.yml
   vars:
     platform_pki_consumer_tls_profile_id: "{{ platform_vault_tls_profile }}"
 
-- name: Require complete materialized Vault API TLS files on every member host
+- name: Требовать полные материализованные файлы Vault API TLS на каждом хосте экземпляра службы
   ansible.builtin.stat:
     path: "{{ platform_pki_selected_consumer_plan.targetDirectory }}/{{ item }}"
     get_mime: false
@@ -16,7 +16,7 @@
   register: _platform_vault_tls_files
   no_log: true
 
-- name: Refuse Vault API TLS materialization with missing files
+- name: Отказаться от материализации Vault API TLS с отсутствующими файлами
   ansible.builtin.assert:
     that: _platform_vault_tls_files.results | map(attribute='stat.exists') | list | min
     fail_msg: VAULT_PKI_MATERIALIZATION_REQUIRED

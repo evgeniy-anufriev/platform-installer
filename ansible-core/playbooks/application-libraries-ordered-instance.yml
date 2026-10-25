@@ -1,5 +1,5 @@
 ---
-- name: Require complete provider batches before starting this consumer
+- name: Требовать полные пакеты провайдера перед запуском этого потребителя
   ansible.builtin.assert:
     that: >-
       (application_library_id ~ '/' ~ application_instance_id) not in
@@ -7,7 +7,7 @@
        platform.core.application_pending_instances(hostvars['localhost'].platform_application_completed_batches))
     fail_msg: APPLICATION_PROVIDER_PREPARATION_INCOMPLETE
 
-- name: Materialize deferred consumer Agent inputs only after full Vault delivery
+- name: Материализовать отложенные входные данные потребительского агента только после полной доставки Vault
   ansible.builtin.include_role:
     name: platform.core.application_runtime
     tasks_from: apply_instance
@@ -16,7 +16,7 @@
     loop_var: application_runtime_job
   when: (application_library_id ~ '/' ~ application_instance_id) in hostvars['localhost'].application_runtime_inputs.integrations.dependencies
 
-- name: Run instance before-start scripts after all image deliveries
+- name: Запуск сценариев перед запуском экземпляра после доставки всех изображений
   ansible.builtin.include_role:
     name: platform.core.application_runtime
     tasks_from: run_scripts
@@ -27,7 +27,7 @@
   loop_control:
     loop_var: application_runtime_job
 
-- name: Activate and check every placement of this logical instance
+- name: Активировать и проверить каждое размещение этого логического экземпляра
   ansible.builtin.include_role:
     name: platform.core.application_runtime
     tasks_from: activate_instance
@@ -35,7 +35,7 @@
   loop_control:
     loop_var: application_runtime_job
 
-- name: Run after-ready scripts only after every placement is healthy
+- name: Запускать готовые сценарии только после того, как каждое размещение будет работоспособным
   ansible.builtin.include_role:
     name: platform.core.application_runtime
     tasks_from: run_scripts
@@ -46,7 +46,7 @@
   loop_control:
     loop_var: application_runtime_job
 
-- name: Bind all selected consumer batches supplied by this ready instance
+- name: Связать все выбранные потребительские пакеты, предоставленные этим готовым экземпляром
   ansible.builtin.set_fact:
     application_ready_provider_batches: >-
       {{ hostvars['localhost'].application_runtime_inputs.integrations.batches |
@@ -54,20 +54,20 @@
          selectattr('providerInstanceId', 'equalto', application_instance_id) | list }}
   no_log: true
 
-- name: Publish and check this used provider endpoint before its consumers
+- name: Опубликовать и проверить эту используемую конечную точку провайдера раньше, чем ее потребители
   ansible.builtin.include_tasks: ../../services/integrations/tasks/apply-source.yml
   vars:
     platform_endpoint_source_ids: "{{ [application_instance_id] }}"
   when: application_ready_provider_batches | length > 0
 
-- name: Prepare all selected consumers in batches of this ready provider
+- name: Подготовить всех выбранных потребителей в пакетах этого готового провайдера
   ansible.builtin.include_tasks: tasks/application-provider-batch.yml
   loop: "{{ application_ready_provider_batches }}"
   loop_control:
     loop_var: application_provider_batch
   run_once: true
 
-- name: Complete standard Vault delivery for all consumers whose providers are ready
+- name: Полная стандартная доставка Vault для всех потребителей, чьи провайдери готовы
   ansible.builtin.include_tasks: tasks/application-deliver-ready.yml
   when: application_ready_provider_batches | length > 0
   run_once: true

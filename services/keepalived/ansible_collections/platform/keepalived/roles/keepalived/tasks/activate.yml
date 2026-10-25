@@ -1,5 +1,5 @@
 ---
-- name: Recalculate prepared Keepalived candidate checksum
+- name: Пересчитать подготовленную контрольную сумму кандидата Keepalived
   ansible.builtin.stat:
     path: "{{ platform_keepalived_candidate_file }}"
     checksum_algorithm: sha256
@@ -7,14 +7,14 @@
     get_attributes: false
   register: platform_keepalived_activation_candidate_stat
 
-- name: Assert activation uses the candidate validated in Phase A
+- name: Активация Assert использует кандидата, проверенного на этапе A
   ansible.builtin.assert:
     that:
       - platform_keepalived_activation_candidate_stat.stat.exists
       - platform_keepalived_activation_candidate_stat.stat.checksum == platform_keepalived_candidate_checksum
     fail_msg: KEEPALIVED_CANDIDATE_CHANGED_AFTER_PHASE_A
 
-- name: Install exact validated Keepalived configuration atomically
+- name: Атомарно установить точную проверенную конфигурацию Keepalived
   ansible.builtin.copy:
     src: "{{ platform_keepalived_candidate_file }}"
     dest: "{{ platform_keepalived_config_file }}"
@@ -24,7 +24,7 @@
     mode: '0600'
   register: platform_keepalived_active_install
 
-- name: Calculate active Keepalived configuration checksum
+- name: Вычислить контрольную сумму активной конфигурации Keepalived
   ansible.builtin.stat:
     path: "{{ platform_keepalived_config_file }}"
     checksum_algorithm: sha256
@@ -32,19 +32,19 @@
     get_attributes: false
   register: platform_keepalived_active_stat
 
-- name: Assert active configuration exactly matches the validated candidate
+- name: Подтвердить активную конфигурацию, точно соответствующую проверенному кандидату
   ansible.builtin.assert:
     that: platform_keepalived_active_stat.stat.checksum == platform_keepalived_candidate_checksum
     fail_msg: KEEPALIVED_ACTIVE_CONFIG_CHECKSUM_MISMATCH
 
-- name: Validate active Keepalived configuration with native tooling
+- name: Проверка активной конфигурации Keepalived с помощью встроенных инструментов
   ansible.builtin.command:
     argv: ["{{ platform_keepalived_binary }}", --config-test, "--use-file={{ platform_keepalived_config_file }}"]
   register: platform_keepalived_active_validation
   changed_when: false
   failed_when: false
 
-- name: Record Keepalived active validation evidence
+- name: Запись активного доказательства проверки Keepalived
   ansible.builtin.set_fact:
     platform_keepalived_active_checksum: "{{ platform_keepalived_active_stat.stat.checksum }}"
     platform_keepalived_active_validation_rc: "{{ platform_keepalived_active_validation.rc }}"

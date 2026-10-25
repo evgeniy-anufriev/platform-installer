@@ -3,12 +3,12 @@
 
 - import_playbook: ../../../ansible-core/playbooks/pki-apply.yml
 
-- name: Apply rootless Docker and Compose
+- name: Настроить Docker без прав root и Compose
   hosts: platform_targets
   become: true
   gather_facts: false
   pre_tasks:
-    - name: Apply trusted runtime Docker settings
+    - name: Применить настройки доверенной среды выполнения Docker
       ansible.builtin.include_role:
         name: platform.core.runtime_role_variables
       when: platform_execution_role_variables_by_host is defined

@@ -1,19 +1,19 @@
 ---
-- name: Inspect the exact member configuration timestamp
+- name: Проверка точной отметки времени конфигурации экземпляра службы
   ansible.builtin.stat:
     path: "{{ kafka_authorization_member.config_directory }}/server.properties"
     follow: false
     get_checksum: false
   register: kafka_authorization_config_stat
 
-- name: Check the final superuser line
+- name: Проверка последней строки суперпользователя
   ansible.builtin.command:
     argv: [grep, -E, '^[[:space:]]*super[.]users([[:space:]:=]|$)', "{{ kafka_authorization_member.config_directory }}/server.properties"]
   register: kafka_authorization_config_line
   failed_when: false
   changed_when: false
 
-- name: Observe the current member process through systemd
+- name: Наблюдать за текущим процессом экземпляра службы через systemd
   ansible.builtin.command:
     argv: [systemctl, show, "{{ kafka_authorization_member.systemd_unit_name }}", --property=MainPID, --property=ExecMainStartTimestamp, --property=ActiveState]
   environment:
@@ -22,20 +22,20 @@
   failed_when: false
   changed_when: false
 
-- name: Extract bounded process identity
+- name: Извлечь идентификатор ограниченного процесса
   ansible.builtin.set_fact:
     kafka_authorization_pid: "{{ (kafka_authorization_process.stdout | regex_findall('(?m)^MainPID=([1-9][0-9]*)$') | first) | default('0') }}"
     kafka_authorization_started: "{{ (kafka_authorization_process.stdout | regex_findall('(?m)^ExecMainStartTimestamp=(.+)$') | first) | default('') }}"
   changed_when: false
 
-- name: Read the running process command line
+- name: Прочитать командную строку запущенного процесса
   ansible.builtin.slurp:
     src: "/proc/{{ kafka_authorization_pid }}/cmdline"
   register: kafka_authorization_command
   failed_when: false
   when: kafka_authorization_pid != '0'
 
-- name: Convert systemd's observed startup timestamp with the native date utility
+- name: Преобразовать наблюдаемую метку времени запуска systemd с помощью встроенной утилиты даты
   ansible.builtin.command:
     argv: [date, "--date={{ kafka_authorization_started }}", '+%s.%N']
   environment:
@@ -45,7 +45,7 @@
   changed_when: false
   when: kafka_authorization_started | length > 0
 
-- name: Recheck process identity after observing startup and command
+- name: Повторная проверка удостоверения процесса после наблюдения за запуском и командой
   ansible.builtin.command:
     argv: [systemctl, show, "{{ kafka_authorization_member.systemd_unit_name }}", --property=MainPID, --property=ExecMainStartTimestamp, --property=ActiveState]
   environment:
@@ -54,7 +54,7 @@
   failed_when: false
   changed_when: false
 
-- name: Record whether this running member demonstrably loaded the final file
+- name: Записать, загрузил ли этот запущенный экземпляр службы конечный файл
   ansible.builtin.set_fact:
     kafka_authorization_running_final: >-
       {{ kafka_authorization_config_line.rc == 0

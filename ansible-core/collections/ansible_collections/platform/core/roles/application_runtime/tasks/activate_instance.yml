@@ -1,5 +1,5 @@
 ---
-- name: Observe the previous exact container before reconciliation
+- name: Просмотреть предыдущий точный контейнер перед согласованием
   ansible.builtin.command:
     argv: [docker, container, inspect, "{{ application_runtime_job.placement.containerName }}"]
   become_user: "{{ application_runtime_job.account }}"
@@ -9,9 +9,9 @@
   failed_when: false
   no_log: true
 
-- name: Start the exact instance with one recreation attempt on failure
+- name: Запустить точный экземпляр с одной попыткой восстановления в случае неудачи
   block:
-    - name: Reconcile exact instance with no pull build or dependency startup
+    - name: Согласовать точный экземпляр без сборки по запросу или запуска зависимостей
       any_errors_fatal: false
       ansible.builtin.command:
         argv: "{{ application_runtime_job.composeArgv + ['up', '-d', '--no-build', '--pull', 'never', '--no-deps', application_runtime_job.instanceId] }}"
@@ -20,7 +20,7 @@
       changed_when: false
       no_log: true
   rescue:
-    - name: Recreate exact instance after ordinary Compose startup failed
+    - name: Воссоздать точный экземпляр после сбоя обычного запуска Compose
       ansible.builtin.command:
         argv: "{{ application_runtime_job.composeArgv + ['up', '-d', '--no-build', '--pull', 'never', '--no-deps', '--force-recreate', application_runtime_job.instanceId] }}"
       become_user: "{{ application_runtime_job.account }}"
@@ -28,12 +28,12 @@
       changed_when: false
       no_log: true
 
-- name: Verify the observed instance after reconciliation
+- name: Проверка наблюдаемого экземпляра после сверки
   ansible.builtin.include_tasks: verify.yml
   vars:
     application_runtime_verify_vault: false
 
-- name: Report actual creation replacement or start of the managed container
+- name: Сообщить о фактической замене создания или запуске управляемого контейнера
   ansible.builtin.debug:
     msg: APPLICATION_CONTAINER_RECONCILED
   changed_when: >-

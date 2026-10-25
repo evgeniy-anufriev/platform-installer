@@ -1,10 +1,10 @@
 ---
-- name: Ensure the private Vault service group and account exist
+- name: Убедиться, что частная группа служб и учетная запись Vault существуют
   ansible.builtin.group:
     name: "{{ platform_vault_group }}"
     system: true
 
-- name: Create the non-login Vault service account
+- name: Создание сервисной учетной записи Vault без входа в систему
   ansible.builtin.user:
     name: "{{ platform_vault_user }}"
     group: "{{ platform_vault_group }}"
@@ -12,7 +12,7 @@
     create_home: false
     shell: /sbin/nologin
 
-- name: Deliver the exact Vault artifact selected by source authority
+- name: Доставить точный артефакт Vault, выбранный источником
   ansible.builtin.include_role:
     name: platform.core.artifact_delivery
   vars:
@@ -20,24 +20,24 @@
       - {id: vault-runtime, name: vault}
   when: platform_resolved_artifact_sources is defined
 
-- name: Install Vault from the configured repository when selected
+- name: Установить Vault из настроенного репозитория, если он выбран
   ansible.builtin.package:
     name: vault
     state: present
   when: platform_resolved_artifact_sources is not defined or platform_resolved_artifact_sources['vault-runtime'].source == 'REPOSITORY'
 
-- name: Install the standard audit log rotation utility
+- name: Установка стандартной утилиты ротации журналов аудита
   ansible.builtin.package:
     name: logrotate
     state: present
 
-- name: Enable and start the standard logrotate timer
+- name: Включить и запустить стандартный таймер logrotate
   ansible.builtin.systemd:
     name: logrotate.timer
     state: started
     enabled: true
 
-- name: Ensure fixed Vault config, data and log roots remain root-owned
+- name: Обеспечить фиксированную конфигурацию Vault, а корни данных и журналов остаются во владении пользователя root
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
@@ -46,7 +46,7 @@
     mode: '0755'
   loop: ["{{ platform_vault_config_root }}", "{{ platform_vault_log_root }}"]
 
-- name: Ensure the deployment-level Vault directories remain root-owned
+- name: Убедиться, что каталоги Vault уровня развертывания остаются во владении пользователя root
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
@@ -57,7 +57,7 @@
     - "{{ platform_vault_config_root }}/{{ platform_vault_deployment_id }}"
     - "{{ platform_vault_log_root }}/{{ platform_vault_deployment_id }}"
 
-- name: Create shared Vault data parent for co-located members
+- name: Создать общий родительский элемент данных Vault для совместно расположенных экземпляров службы
   ansible.builtin.file:
     path: "{{ platform_vault_data_root }}"
     state: directory
@@ -66,11 +66,11 @@
     mode: '0755'
   when: _platform_vault_local_instances | length > 1
 
-- name: Initialize this host's exact changed-member restart set
+- name: Инициализировать точный набор перезапуска экземпляра измененной службы этого хоста
   ansible.builtin.set_fact:
     _platform_vault_restart_member_ids: []
 
-- name: Create the fixed audit mountpoint used inside each unit namespace
+- name: Создать фиксированную точку монтирования аудита, используемую внутри каждого пространства имен службы systemd
   ansible.builtin.file:
     path: "/var/log/{{ platform_vault_name }}-audit"
     state: directory
@@ -78,7 +78,7 @@
     group: root
     mode: '0755'
 
-- name: Create isolated member config directories
+- name: Создание каталогов конфигурации изолированного экземпляра службы
   ansible.builtin.file:
     path: "{{ item.config_directory }}"
     state: directory
@@ -87,7 +87,7 @@
     mode: '0700'
   loop: "{{ _platform_vault_local_instances }}"
 
-- name: Create isolated member Raft data directories
+- name: Создание каталогов данных Raft изолированного экземпляра службы
   ansible.builtin.file:
     path: "{{ item.data_directory }}"
     state: directory
@@ -96,7 +96,7 @@
     mode: '0700'
   loop: "{{ _platform_vault_local_instances }}"
 
-- name: Create isolated member audit backing directories
+- name: Создание резервных каталогов аудита изолированного экземпляра службы
   ansible.builtin.file:
     path: "{{ item.log_directory }}"
     state: directory
@@ -105,7 +105,7 @@
     mode: '0750'
   loop: "{{ _platform_vault_local_instances }}"
 
-- name: Create private per-member PKI directories
+- name: Создание частных каталогов PKI для каждого экземпляра службы
   ansible.builtin.file:
     path: "{{ item.config_directory }}/pki"
     state: directory
@@ -114,7 +114,7 @@
     mode: '0700'
   loop: "{{ _platform_vault_local_instances }}"
 
-- name: Materialize the API certificate, private key and CA for each Vault unit
+- name: Материализовать сертификат API, закрытый ключ и CA для каждой системной службы Vault
   ansible.builtin.copy:
     src: "{{ platform_pki_selected_consumer_plan.targetDirectory }}/{{ item.1 }}"
     dest: "{{ item.0.config_directory }}/pki/{{ item.1 }}"
@@ -126,14 +126,14 @@
   register: _platform_vault_pki_files_rendered
   no_log: true
 
-- name: Record members whose PKI files changed
+- name: Запись экземпляров службы, файлы PKI которых изменились
   ansible.builtin.set_fact:
     _platform_vault_restart_member_ids: "{{ _platform_vault_restart_member_ids + [item.item[0].id] }}"
   loop: "{{ _platform_vault_pki_files_rendered.results }}"
   when: item.changed and item.item[0].id not in _platform_vault_restart_member_ids
   no_log: true
 
-- name: Render isolated Vault configuration
+- name: Отрисовка изолированной конфигурации Vault
   ansible.builtin.template:
     src: vault.hcl.j2
     dest: "{{ vault_member.config_directory }}/vault.hcl"
@@ -148,13 +148,13 @@
   no_log: true
   register: _platform_vault_config_rendered
 
-- name: Record members whose Vault configuration changed
+- name: Запись экземпляров службы, конфигурация Vault которых изменилась
   ansible.builtin.set_fact:
     _platform_vault_restart_member_ids: "{{ _platform_vault_restart_member_ids + [item.item.id] }}"
   loop: "{{ _platform_vault_config_rendered.results }}"
   when: item.changed and item.item.id not in _platform_vault_restart_member_ids
 
-- name: Install isolated Vault systemd units
+- name: Установка изолированных системных служб Vault systemd
   ansible.builtin.template:
     src: vault.service.j2
     dest: "/etc/systemd/system/{{ vault_member.instance_name }}.service"
@@ -168,7 +168,7 @@
     vault_member: "{{ item }}"
   register: _platform_vault_units_rendered
 
-- name: Install bounded per-instance Vault audit log rotation policy
+- name: Установить ограниченную политику ротации журналов аудита Vault для каждого экземпляра
   ansible.builtin.template:
     src: vault-audit.logrotate.j2
     dest: "/etc/logrotate.d/{{ vault_member.instance_name }}"
@@ -181,13 +181,13 @@
   vars:
     vault_member: "{{ item }}"
 
-- name: Record members whose systemd unit changed
+- name: Запись экземпляров службы, чья системная служба systemd изменилась
   ansible.builtin.set_fact:
     _platform_vault_restart_member_ids: "{{ _platform_vault_restart_member_ids + [item.item.id] }}"
   loop: "{{ _platform_vault_units_rendered.results }}"
   when: item.changed and item.item.id not in _platform_vault_restart_member_ids
 
-- name: Ensure the immutable role-owned member identity marker exists
+- name: Убедиться, что существует неизменяемый маркер идентификации экземпляра службы, принадлежащей роли
   ansible.builtin.copy:
     content: "{{ {'apiVersion': 'platform.installer/vault-member-marker/v1alpha1', 'deploymentId': platform_vault_deployment_id, 'memberId': item.id, 'instanceName': item.instance_name} | to_nice_json }}\n"
     dest: "{{ item.data_directory }}/.{{ platform_vault_name }}-member.json"

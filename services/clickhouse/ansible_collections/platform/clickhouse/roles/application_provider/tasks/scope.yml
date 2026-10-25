@@ -1,5 +1,5 @@
 ---
-- name: Require protected credentials for the bounded ClickHouse scope
+- name: Требовать защищенные учетные данные для ограниченной области ClickHouse
   ansible.builtin.assert:
     that:
       - platform_clickhouse_application_phase in ['preflight', 'resources', 'accounts', 'verify']
@@ -10,11 +10,11 @@
     fail_msg: APPLICATION_PROVIDER_SECRET_FILE_INVALID
   no_log: true
 
-- name: Initialize rendered library table declarations
+- name: Инициализация отображаемых объявлений таблиц библиотеки
   ansible.builtin.set_fact:
     clickhouse_application_tables: []
 
-- name: Render declared tables with ordinary Ansible templates
+- name: Отобразить объявленные таблицы с помощью обычных шаблонов Ansible
   ansible.builtin.set_fact:
     clickhouse_application_tables: "{{ clickhouse_application_tables + [{'database': item.0.name, 'definition': item.1, 'sql': lookup('ansible.builtin.template', 'application-table.sql.j2')}] }}"
   loop: "{{ platform_clickhouse_application_job.databases | subelements('tables', skip_missing=true) }}"
@@ -22,7 +22,7 @@
     label: "{{ item.0.name }}.{{ item.1.name }}"
   no_log: true
 
-- name: Execute one ClickHouse library or instance scope with native TLS
+- name: Выполнить одну библиотеку ClickHouse или область экземпляра с помощью собственного TLS
   platform.clickhouse.application_scope:
     job: "{{ platform_clickhouse_application_job }}"
     tables: "{{ clickhouse_application_tables }}"
@@ -43,7 +43,7 @@
   register: clickhouse_application_result
   failed_when: false
 
-- name: Report safe ClickHouse resource or account failure
+- name: Сообщить о сбое безопасного ресурса ClickHouse или учетной записи
   ansible.builtin.assert:
     that: clickhouse_application_result.msg is not defined
     fail_msg: "{{ clickhouse_application_diagnostic | to_json }}"

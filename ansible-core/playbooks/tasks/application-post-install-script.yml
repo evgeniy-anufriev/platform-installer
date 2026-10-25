@@ -1,5 +1,5 @@
 ---
-- name: Invoke the existing context resolver and universal package runner
+- name: Вызов существующего преобразователя контекста и универсального средства запуска пакетов
   ansible.builtin.include_tasks: application-provider-script.yml
   vars:
     application_provider_batch:

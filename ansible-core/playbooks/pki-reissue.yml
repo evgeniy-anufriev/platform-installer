@@ -1,10 +1,10 @@
 ---
-- name: Explicitly reissue selected managed PKI requests on the Execution Node
+- name: Явный повторный выпуск выбранных управляемых запросов PKI на узле выполнения
   hosts: localhost
   connection: local
   gather_facts: false
   pre_tasks:
-    - name: Require an explicit non-empty PKI reissue request selection
+    - name: Требовать явный непустой выбор запроса на повторный выпуск PKI
       ansible.builtin.assert:
         that:
           - platform_pki_reissue_request_ids is defined
@@ -15,7 +15,7 @@
   roles:
     - role: platform.core.pki_materialize
 
-- name: Deploy explicitly reissued PKI material to selected targets
+- name: Развернуть явно перевыпущенный материал PKI на выбранных целевых объектах
   hosts: platform_targets
   become: true
   gather_facts: false

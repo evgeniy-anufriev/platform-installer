@@ -18,7 +18,7 @@ class RedisUnitOwnershipRuntimeTests(unittest.TestCase):
             self.skipTest("Ansible runtime required")
         source = yaml.safe_load(TASKS.read_text(encoding="utf-8"))
         authorize = next(task for task in source if task.get("name") ==
-                         "Authorize ACL overwrite only for a fully marked deployment with its exact owned units")
+                         "Разрешить перезапись ACL только для полностью помеченного развертывания с точно принадлежащими ему службами systemd")
         show = {"ansible.builtin.debug": {"var": "_platform_redis_acl_overwrite_allowed"}}
         owned_redis = {"content": "# platform-redis-managed: qa/member-1/redis"}
         owned_sentinel = {"content": "# platform-redis-managed: qa/member-1/sentinel"}
@@ -57,14 +57,14 @@ class RedisUnitOwnershipRuntimeTests(unittest.TestCase):
             self.skipTest("Ansible runtime required")
         source = yaml.safe_load(TASKS.read_text(encoding="utf-8"))
         names = {
-            "redis": ["Inspect exact Redis member unit paths before rendering",
-                      "Reject unsafe existing Redis member unit paths",
-                      "Read ownership headers from existing Redis member units",
-                      "Refuse replacement of foreign Redis member units"],
-            "sentinel": ["Inspect exact Sentinel unit paths before rendering",
-                         "Reject unsafe existing Sentinel unit paths",
-                         "Read ownership headers from existing Sentinel units",
-                         "Refuse replacement of foreign Sentinel units"],
+            "redis": ["Проверка точных путей к службе systemd экземпляра службы Redis перед рендерингом",
+                      "Отклонить небезопасные существующие пути службы systemd экземпляра службы Redis",
+                      "Прочитать заголовки владения из существующих системных служб экземпляра службы Redis",
+                      "Отказаться от замены неуправляемых сервисов экземпляра службы Redis systemd"],
+            "sentinel": ["Проверка точных путей к сервису systemd Sentinel перед рендерингом",
+                         "Отклонить небезопасные существующие пути службы systemd Sentinel",
+                         "Прочитать заголовки владения из существующих системных служб Sentinel",
+                         "Отказаться от замены неуправляемых системных служб Sentinel"],
         }
         with tempfile.TemporaryDirectory(prefix="platform-redis-ownership-") as directory:
             root = Path(directory)

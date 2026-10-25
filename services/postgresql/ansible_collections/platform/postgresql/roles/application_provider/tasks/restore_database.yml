@@ -1,11 +1,11 @@
 ---
-- name: Stage, restore and mark a newly created managed database
+- name: Подготовка, восстановление и пометка вновь созданной управляемой базы данных
   when: application_restore_database.name not in platform_application_provider_runtime[platform_postgresql_application_job.providerId].catalog.databases
   vars:
     application_provider_target: "{{ platform_application_provider_runtime[platform_postgresql_application_job.providerId].candidate }}"
     application_provider_os_user: "{{ hostvars[application_provider_target.hostId].platform_postgresql_user | default(platform_postgresql_user) }}"
   block:
-    - name: Allocate private restore staging on the selected PostgreSQL primary
+    - name: Выделить частный промежуточный этап восстановления на выбранном первичном сервере PostgreSQL
       ansible.builtin.tempfile:
         state: directory
         prefix: .application-restore-
@@ -15,7 +15,7 @@
       register: application_restore_stage
       no_log: true
 
-    - name: Permit only PostgreSQL runtime identity to traverse the restore stage
+    - name: Разрешить прохождение этапа восстановления только идентификатору среды выполнения PostgreSQL
       ansible.builtin.file:
         path: "{{ application_restore_stage.path }}"
         owner: "{{ application_provider_os_user }}"
@@ -24,7 +24,7 @@
       become: true
       no_log: true
 
-    - name: Deliver the verified package dump to the actual primary
+    - name: Доставить проверенный дамп пакета на реальный основной сервер
       ansible.builtin.copy:
         src: "{{ application_restore_database.restorePath }}"
         dest: "{{ application_restore_stage.path }}/database.dump"
@@ -34,7 +34,7 @@
       become: true
       no_log: true
 
-    - name: Check delivered dump bytes before creating the database
+    - name: Проверка доставленных байтов дампа перед созданием базы данных
       ansible.builtin.stat:
         path: "{{ application_restore_stage.path }}/database.dump"
         checksum_algorithm: sha256
@@ -45,13 +45,13 @@
       register: application_restore_bytes
       no_log: true
 
-    - name: Require the exact package dump digest
+    - name: Запросить точный дамп пакета
       ansible.builtin.assert:
         that: application_restore_bytes.stat.checksum == application_restore_database.restoreOnCreate.sha256
         fail_msg: APPLICATION_RESTORE_DIGEST_INVALID
       no_log: true
 
-    - name: Create only the absent database without an ownership marker
+    - name: Создать только отсутствующую базу данных без маркера владения
       ansible.builtin.command:
         argv: [psql, -X, -h, "{{ platform_postgresql_application_socket }}", -p, "{{ application_provider_target.port }}", -U, "{{ application_provider_os_user }}", -d, postgres, -At, -v, ON_ERROR_STOP=1, -f, -]
         stdin: |
@@ -66,7 +66,7 @@
       changed_when: true
       no_log: true
 
-    - name: Restore exact custom archive as the managed database owner
+    - name: Восстановление точного пользовательского архива в качестве владельца управляемой базы данных
       ansible.builtin.command:
         argv: [pg_restore, --exit-on-error, --no-owner, --no-acl, --role, "{{ application_restore_database.owner }}", -h, "{{ platform_postgresql_application_socket }}", -p, "{{ application_provider_target.port }}", -U, "{{ application_provider_os_user }}", -d, "{{ application_restore_database.name }}", "{{ application_restore_stage.path }}/database.dump"]
       delegate_to: "{{ application_provider_target.hostId }}"
@@ -75,7 +75,7 @@
       changed_when: true
       no_log: true
 
-    - name: Confirm the restored database has ordinary tables before marking ownership
+    - name: Убедиться, что восстановленная база данных содержит обычные таблицы, прежде чем отмечать право собственности
       ansible.builtin.command:
         argv: [psql, -X, -h, "{{ platform_postgresql_application_socket }}", -p, "{{ application_provider_target.port }}", -U, "{{ application_provider_os_user }}", -d, "{{ application_restore_database.name }}", -At, -v, ON_ERROR_STOP=1, -c, "SELECT EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE c.relkind='r' AND n.nspname NOT IN ('pg_catalog','information_schema'))"]
       delegate_to: "{{ application_provider_target.hostId }}"
@@ -86,7 +86,7 @@
       failed_when: application_restore_baseline.rc != 0 or application_restore_baseline.stdout | trim != 't'
       no_log: true
 
-    - name: Mark ownership only after successful restore and baseline check
+    - name: Пометить владельца только после успешного восстановления и проверки базовых показателей
       ansible.builtin.command:
         argv: [psql, -X, -h, "{{ platform_postgresql_application_socket }}", -p, "{{ application_provider_target.port }}", -U, "{{ application_provider_os_user }}", -d, postgres, -At, -v, ON_ERROR_STOP=1, -f, -]
         stdin: |
@@ -99,7 +99,7 @@
       changed_when: true
       no_log: true
   always:
-    - name: Remove only the private restore stage from this invocation
+    - name: Удалить из этого вызова только этап частного восстановления
       ansible.builtin.file:
         path: "{{ application_restore_stage.path }}"
         state: absent

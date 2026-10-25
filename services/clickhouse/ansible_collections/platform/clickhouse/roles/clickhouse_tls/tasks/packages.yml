@@ -1,5 +1,5 @@
 ---
-- name: Deliver exact Core-approved ClickHouse RPMs without implicit installation
+- name: Доставка точных пакетов RPM Core, одобренных ClickHouse, без неявной установки
   ansible.builtin.include_role:
     name: platform.core.artifact_delivery
   vars:
@@ -10,29 +10,29 @@
       - {id: clickhouse-client, name: clickhouse-client}
   when: platform_resolved_artifact_sources is defined
 
-- name: Install the pinned common binary before dependent RPMs
+- name: Установить закрепленный общий двоичный файл перед зависимыми пакетами RPM
   ansible.builtin.include_tasks: install_package.yml
   vars:
     clickhouse_package_id: clickhouse-common-static
 
-- name: Install exact server and client RPMs
+- name: Установка точных RPM сервера и клиента
   ansible.builtin.include_tasks: install_package.yml
   loop: [clickhouse-server, clickhouse-client]
   loop_control:
     loop_var: clickhouse_package_id
     label: "{{ clickhouse_package_id }}"
 
-- name: Prevent the pinned RPM stock unit from starting beside managed members
+- name: Запретить запуск закрепленной стандартной службы systemd RPM рядом с экземплярами управляемой службы
   ansible.builtin.include_tasks: stock_unit.yml
 
-- name: Prove HA Keeper executable is supplied by the pinned server RPM
+- name: Доказать, что исполняемый файл HA Keeper предоставляется закрепленным сервером RPM
   ansible.builtin.command:
     argv: [rpm, -qf, --qf, '%{NAME}-%{VERSION}-%{RELEASE}.%{ARCH}', /usr/bin/clickhouse-keeper]
   register: _platform_clickhouse_keeper_binary_owner
   changed_when: false
   when: platform_clickhouse_mode == 'raft-ha'
 
-- name: Reject a foreign or absent HA Keeper executable
+- name: Отклонить неуправляемый или отсутствующий исполняемый файл HA Keeper
   ansible.builtin.assert:
     that: _platform_clickhouse_keeper_binary_owner.stdout == 'clickhouse-server-' ~ platform_clickhouse_package_version ~ '-1.x86_64'
     fail_msg: CLICKHOUSE_KEEPER_BINARY_NOT_PINNED

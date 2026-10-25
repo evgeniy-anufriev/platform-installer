@@ -1,12 +1,12 @@
 ---
-- name: Test shared project data root ownership with the existing path guard
+- name: Проверка владения корнем данных общего проекта с помощью существующей защиты пути
   hosts: localhost
   connection: local
   gather_facts: false
   vars:
     ansible_user: platform-automation
   tasks:
-    - name: Create a private disposable QA parent under /var/lib
+    - name: Создать частный одноразовый родительский элемент QA под /var/lib
       ansible.builtin.tempfile:
         path: /var/lib
         state: directory
@@ -14,18 +14,18 @@
       become: true
       register: _platform_managed_data_root_qa_parent
 
-    - name: Exercise shared root repair and Verify policy
+    - name: Выполнить восстановление общего корня и проверить политику
       block:
-        - name: Set an isolated path owned by an unrelated built-in account
+        - name: Установить изолированный путь, принадлежащий несвязанной встроенной учетной записи
           ansible.builtin.set_fact:
             _platform_managed_data_root_qa_path: "{{ _platform_managed_data_root_qa_parent.path }}/data"
 
-        - name: Require the test account used for the foreign-owner case
+        - name: Требовать тестовую учетную запись, используемую для случая неуправляемого владельца
           ansible.builtin.command:
             argv: [getent, passwd, nobody]
           changed_when: false
 
-        - name: Create the root in the broken service-owned state
+        - name: Создать корень в сломанном состоянии, принадлежащем службе
           ansible.builtin.file:
             path: "{{ _platform_managed_data_root_qa_path }}"
             state: directory
@@ -33,7 +33,7 @@
             mode: '0700'
           become: true
 
-        - name: Require Verify to reject the wrong root owner
+        - name: Требовать проверки, чтобы отклонить неправильный корневой владелец
           block:
             - ansible.builtin.include_role:
                 name: platform.core.managed_data_path_guard
@@ -53,7 +53,7 @@
                   - "'PROJECT_DATA_ROOT_OWNERSHIP_INVALID' in (ansible_failed_result | to_json)"
                   - "'PROJECT_DATA_ROOT_INVALID_OWNER_ADMITTED' not in (ansible_failed_result | to_json)"
 
-        - name: Reconcile the shared root to the SSH technical user
+        - name: Согласование общего корня с техническим пользователем SSH
           ansible.builtin.include_role:
             name: platform.core.managed_data_path_guard
             apply:
@@ -64,20 +64,20 @@
             platform_managed_data_root_directory: "{{ _platform_managed_data_root_qa_path }}"
             platform_managed_data_root_owner: "{{ ansible_user }}"
 
-        - name: Inspect the reconciled shared root
+        - name: Проверка согласованного общего корня
           ansible.builtin.stat:
             path: "{{ _platform_managed_data_root_qa_path }}"
             follow: false
           become: true
           register: _platform_managed_data_root_qa_stat
 
-        - name: Require technical-user ownership and mode 0755
+        - name: Требовать владение техническим пользователем и режим 0755
           ansible.builtin.assert:
             that:
               - _platform_managed_data_root_qa_stat.stat.pw_name == ansible_user
               - _platform_managed_data_root_qa_stat.stat.mode == '0755'
 
-        - name: Confirm that the default /var/lib root is never chowned
+        - name: Убедиться, что корень /var/lib по умолчанию никогда не используется
           block:
             - ansible.builtin.stat:
                 path: /var/lib
@@ -109,7 +109,7 @@
                   - _platform_var_lib_after.stat.mode == _platform_var_lib_before.stat.mode
 
       always:
-        - name: Remove only the disposable QA parent
+        - name: Удалить только одноразовый родительский элемент QA
           ansible.builtin.file:
             path: "{{ _platform_managed_data_root_qa_parent.path }}"
             state: absent

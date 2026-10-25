@@ -14,8 +14,8 @@ class KafkaApplicationAclTests(unittest.TestCase):
     def test_batch_selection_never_borrows_acl_from_another_resource_or_pattern(self):
         path = ROOT / 'services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/application_acl.yml'
         tasks = yaml.safe_load(path.read_text())
-        select = next(t for t in tasks if t['name'] == 'Select only this exact resource from the principal ACL inventory')
-        predicate = next(t for t in tasks if t['name'] == 'Select missing exact ALLOW operations with wildcard host')
+        select = next(t for t in tasks if t['name'] == 'Выбрать только этот точный ресурс из основного инвентаря ACL')
+        predicate = next(t for t in tasks if t['name'] == 'Выбрать недостающие точные операции ALLOW с хостом с подстановочными знаками')
         actual = '\n'.join([
             'ACLs for principal `User:qa_probe`',
             'Current ACLs for resource `ResourcePattern(resourceType=TOPIC, name=qa.events, patternType=PREFIXED)`: ',
@@ -46,7 +46,7 @@ class KafkaApplicationAclTests(unittest.TestCase):
     def check_operations(self, actual, requested, missing):
         path = ROOT / 'services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/application_acl.yml'
         subject = next(task for task in yaml.safe_load(path.read_text())
-                       if task['name'] == 'Select missing exact ALLOW operations with wildcard host')
+                       if task['name'] == 'Выбрать недостающие точные операции ALLOW с хостом с подстановочными знаками')
         expected = [value for operation in missing for value in ('--operation', operation)]
         play = [dict(hosts='localhost', connection='local', gather_facts=False,
                      vars=dict(application_kafka_account=dict(name='qa_probe'),
@@ -73,8 +73,8 @@ class KafkaApplicationAclTests(unittest.TestCase):
 
     def test_cluster_idempotent_write_is_selected_from_full_inventory(self):
         tasks = yaml.safe_load((ROOT / 'services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/application_acl.yml').read_text())
-        select = next(t for t in tasks if t['name'] == 'Select only this exact resource from the principal ACL inventory')
-        predicate = next(t for t in tasks if t['name'] == 'Select missing exact ALLOW operations with wildcard host')
+        select = next(t for t in tasks if t['name'] == 'Выбрать только этот точный ресурс из основного инвентаря ACL')
+        predicate = next(t for t in tasks if t['name'] == 'Выбрать недостающие точные операции ALLOW с хостом с подстановочными знаками')
         actual = '\n'.join([
             'Current ACLs for resource `ResourcePattern(resourceType=TOPIC, name=*, patternType=LITERAL)`:',
             '  (principal=User:qa_probe, host=*, operation=ALL, permissionType=ALLOW)',

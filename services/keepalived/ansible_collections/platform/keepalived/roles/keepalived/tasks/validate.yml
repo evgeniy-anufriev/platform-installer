@@ -1,5 +1,5 @@
 ---
-- name: Require desired state and host-scoped deployment placement
+- name: Требовать желаемое состояние и размещение развертывания на уровне хоста
   ansible.builtin.assert:
     that:
       - platform_desired_state is mapping
@@ -8,7 +8,7 @@
       - platform_keepalived_verify_only | bool or platform_keepalived_lifecycle_phase in ['prepare', 'activate', 'reconcile']
     fail_msg: KEEPALIVED_DESIRED_STATE_INVALID
 
-- name: Validate local Keepalived deployment invariants
+- name: Проверка локальных инвариантов развертывания Keepalived
   ansible.builtin.assert:
     that:
       - item.key is string

@@ -21,7 +21,7 @@ class SourceDnsProjectionTests(unittest.TestCase):
         with open(APPLY_SOURCE, encoding="utf-8") as source:
             tasks = yaml.safe_load(source)
         publish = next(task for task in tasks if task.get("name") ==
-                       "Publish the resolved source projection once for every provider host")
+                       "Опубликовать решенную исходную проекцию один раз для каждого хоста провайдера")
         playbook = [{
             "name": "Exercise the production cross-host projection handoff",
             "hosts": "node1,node2",
@@ -83,7 +83,7 @@ class SourceDnsProjectionTests(unittest.TestCase):
         with open(PLAYBOOK, encoding="utf-8") as source:
             plays = yaml.safe_load(source)
         tasks = plays
-        build_task = next(task for task in tasks if task.get("name") == "Build exact source DNS updates for resolved BIND deployments")
+        build_task = next(task for task in tasks if task.get("name") == "Сборка точных исходных обновлений DNS для решенных развертываний BIND")
         playbook = [
             {
                 "name": "Exercise the production source DNS projection",
@@ -143,7 +143,7 @@ class SourceDnsProjectionTests(unittest.TestCase):
         with open(PLAYBOOK, encoding="utf-8") as source:
             tasks = yaml.safe_load(source)
         normalize = next(task for task in tasks if task.get("name") ==
-                         "Normalize expected DNS addresses for the selected endpoint source")
+                         "Нормализовать ожидаемые адреса DNS для выбранного источника конечной точки")
         playbook = [{
             "name": "Exercise common endpoint probe address projection",
             "hosts": "localhost",
@@ -180,7 +180,7 @@ class SourceDnsProjectionTests(unittest.TestCase):
         with open(PLAYBOOK, encoding="utf-8") as source:
             source_plays = yaml.safe_load(source)
         initialize = next(task for task in source_plays
-                          if task.get("name") == "Initialize an empty endpoint integration projection")
+                          if task.get("name") == "Инициализация пустой проекции интеграции конечной точки")
         with open(HAPROXY_PLAYBOOK, encoding="utf-8") as source:
             haproxy_plays = yaml.safe_load(source)
         source_ids = [play["roles"][0]["platform_haproxy_partial_deployment_id"]

@@ -19,7 +19,7 @@ def generate(workspace):
     defaults = yaml.safe_load((role / 'defaults/main.yml').read_text())
     member_tasks = yaml.safe_load((role / 'tasks/schema_registry_member.yml').read_text())
     preparation = []
-    for name in ('Recheck Registry root ownership before member preparation', 'Prepare Registry-owned member directories', 'Mark each new Registry member root independently'):
+    for name in ('Перепроверить владение корнем реестра перед подготовкой экземпляра службы', 'Подготовка каталогов экземпляров служб, принадлежащих реестру', 'Пометить каждый новый корень экземпляра службы реестра независимо'):
         item = copy.deepcopy(next(entry for entry in member_tasks if entry.get('name') == name))
         if 'ansible.builtin.include_tasks' in item:
             item['ansible.builtin.include_tasks'] = str(role / 'tasks' / item['ansible.builtin.include_tasks'])

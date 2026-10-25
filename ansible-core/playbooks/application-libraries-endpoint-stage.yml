@@ -1,11 +1,11 @@
 ---
-- name: Run common endpoint hooks in the original Ansible execution context
+- name: Запустить общие перехватчики конечных точек в исходном контексте выполнения Ansible
   hosts: platform_targets
   strategy: linear
   gather_facts: false
   any_errors_fatal: true
   tasks:
-    - name: Publish selected ready logical sources with existing provider tasks
+    - name: Опубликовать выбранные готовые логические источники с существующими задачами провайдера
       ansible.builtin.include_tasks: ../../services/integrations/tasks/apply-source.yml
       vars:
         platform_endpoint_source_ids: >-

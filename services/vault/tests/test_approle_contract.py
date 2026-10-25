@@ -13,7 +13,7 @@ ROLE = Path(__file__).resolve().parents[1] / "ansible_collections/platform/vault
 class AppRoleConfigurationTests(unittest.TestCase):
     def test_enable_preserves_existing_mount_and_uses_protected_api(self):
         tasks = yaml.safe_load((ROLE / "tasks/configure.yml").read_text(encoding="utf-8"))
-        enable = next(t for t in tasks if t["name"] == "Enable AppRole auth only when absent")
+        enable = next(t for t in tasks if t["name"] == "Включить аутентификацию AppRole только при ее отсутствии")
         api = enable["ansible.builtin.uri"]
         self.assertTrue(api["url"].endswith("/v1/sys/auth/approle"))
         self.assertEqual(api["method"], "POST")
@@ -30,7 +30,7 @@ class AppRoleConfigurationTests(unittest.TestCase):
 
     def test_conflicting_mount_rejected_before_any_write(self):
         tasks = yaml.safe_load((ROLE / "tasks/configure.yml").read_text(encoding="utf-8"))
-        guard = next(t for t in tasks if t["name"].startswith("Refuse incompatible existing"))
+        guard = next(t for t in tasks if t["name"].startswith("Отклонить несовместимую существующую конфигурацию аудита, KV или аутентификации перед изменением"))
         expression = next(x for x in guard["ansible.builtin.assert"]["that"] if "approle/" in x)
         self.assertLess(tasks.index(guard), next(i for i, t in enumerate(tasks) if t.get("ansible.builtin.uri", {}).get("method") == "POST"))
         loader = DataLoader()
@@ -44,7 +44,7 @@ class AppRoleConfigurationTests(unittest.TestCase):
 
     def test_verify_requires_approle_without_mutation(self):
         tasks = yaml.safe_load((ROLE / "tasks/verify.yml").read_text(encoding="utf-8"))
-        guard = next(t for t in tasks if t["name"].startswith("Require the approved audit"))
+        guard = next(t for t in tasks if t["name"].startswith("Требовать одобренное устройство аудита, KV v2 и монтирование аутентификации"))
         expressions = [x for x in guard["ansible.builtin.assert"]["that"] if "approle/" in x]
         self.assertEqual(len(expressions), 2)
         loader = DataLoader()

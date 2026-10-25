@@ -1,5 +1,5 @@
 ---
-- name: Execute the library topic batch on one projected broker
+- name: Выполнить пакет тем библиотеки на одном предполагаемом брокере
   ansible.builtin.include_tasks:
     file: application_topics_scope.yml
     apply:

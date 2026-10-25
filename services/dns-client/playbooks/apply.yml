@@ -1,7 +1,7 @@
 ---
 - import_playbook: projection.yml
 
-- name: Apply split DNS client adapters
+- name: Применение разделенных клиентских адаптеров DNS
   hosts: platform_targets
   become: true
   gather_facts: false

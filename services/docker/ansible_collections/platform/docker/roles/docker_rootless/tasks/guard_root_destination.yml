@@ -1,5 +1,5 @@
 ---
-- name: Inspect exact shared or system destination before write
+- name: Проверка точного общего или системного назначения перед записью
   ansible.builtin.stat:
     path: "{{ platform_docker_guard_path }}"
     follow: false
@@ -8,7 +8,7 @@
     get_checksum: false
   register: _platform_docker_guard_file
 
-- name: Refuse a symlink, non-file or foreign-owned destination
+- name: Отклонить путь назначения при символической ссылке, неправильном типе файла или другом владельце
   ansible.builtin.assert:
     that:
       - not (_platform_docker_guard_file.stat.islnk | default(false))
@@ -17,7 +17,7 @@
       - not (platform_docker_guard_required | default(false)) or _platform_docker_guard_file.stat.exists
     fail_msg: DOCKER_SHARED_DESTINATION_UNSAFE
 
-- name: Read existing managed destination marker
+- name: Прочитать существующий управляемый маркер назначения
   ansible.builtin.slurp:
     src: "{{ platform_docker_guard_path }}"
   register: _platform_docker_guard_content
@@ -25,7 +25,7 @@
     - _platform_docker_guard_file.stat.exists
     - platform_docker_guard_marker | default('') | length > 0
 
-- name: Refuse a foreign existing managed destination
+- name: Отклонить существующий неуправляемый управляемый пункт назначения
   ansible.builtin.assert:
     that:
       - >-

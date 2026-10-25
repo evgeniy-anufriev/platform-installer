@@ -1,10 +1,10 @@
 ---
-- name: Resolve managed PKI verification projection on the Execution Node
+- name: Разрешение управляемой проекции проверки PKI на узле выполнения
   hosts: localhost
   connection: local
   gather_facts: false
   tasks:
-    - name: Resolve managed PKI verification plan using role defaults
+    - name: Разрешение управляемого плана проверки PKI с использованием ролей по умолчанию
       ansible.builtin.include_role:
         name: platform.core.pki_materialize
         tasks_from: resolve.yml
@@ -13,7 +13,7 @@
         # them for every independent verify process; never persist or apply.
         platform_pki_resolve_managed: true
 
-- name: Verify managed PKI material on selected targets
+- name: Проверка управляемого материала PKI на выбранных объектах
   hosts: platform_targets
   become: true
   gather_facts: false

@@ -1,5 +1,5 @@
 ---
-- name: Read document and CAS version through resolved provider endpoint
+- name: Чтение документа и версии CAS через разрешенную конечную точку провайдера
   ansible.builtin.uri:
     url: "{{ application_vault_provider.url }}/v1/{{ application_vault_document.mount }}/data/{{ application_vault_document.document }}"
     headers: {X-Vault-Token: "{{ application_vault_provider.token }}"}
@@ -14,7 +14,7 @@
   register: application_vault_document_before
   no_log: true
 
-- name: Recompute owned minimal document delta after CAS conflict
+- name: Пересчитать минимальную разницу в принадлежащем документе после конфликта CAS
   ansible.builtin.set_fact:
     application_vault_delta: "{{ application_vault_document_before | platform.vault.application_kv_delta(platform_application_vault_values[document_key], application_vault_document.owner) }}"
   delegate_facts: false
@@ -22,9 +22,9 @@
     document_key: "{{ platform_vault_application_job.providerId ~ ':' ~ application_vault_document.mount ~ '/' ~ application_vault_document.document }}"
   no_log: true
 
-- name: Preserve safe Vault document write diagnostics
+- name: Сохранить безопасную диагностику записи документа Vault
   block:
-    - name: Retry only the differing fields with the latest CAS version
+    - name: Повторить только разные поля с последней версией CAS
       ansible.builtin.uri:
         url: "{{ application_vault_provider.url }}/v1/{{ application_vault_document.mount }}/data/{{ application_vault_document.document }}"
         method: "{{ application_vault_delta.method }}"
@@ -45,7 +45,7 @@
       changed_when: application_vault_document_write.status == 200
       no_log: true
   rescue:
-    - name: "Vault document write failed (HTTP {{ ansible_failed_result.status | default(-1) | int }}, {{ application_vault_write_category }})"
+    - name: "Ошибка записи документа Vault (HTTP {{ ansible_failed_result.status | default(-1) | int }}, {{ application_vault_write_category }})"
       ansible.builtin.fail:
         msg: APPLICATION_VAULT_DOCUMENT_WRITE_FAILED
       vars:

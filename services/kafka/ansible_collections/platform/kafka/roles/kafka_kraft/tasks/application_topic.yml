@@ -1,33 +1,33 @@
 ---
-- name: Inspect the topic before any mutation
+- name: Проверить тему перед любым изменением
   ansible.builtin.include_tasks: application_topic_describe.yml
   vars:
     application_topic_must_exist: "{{ platform_kafka_application_phase == 'verify' or application_topic.mode == 'existing' }}"
 
-- name: Bind the creation decision before read-back updates observed state
+- name: Привязать решение о создании перед обратным чтением обновлений наблюдаемого состояния
   ansible.builtin.set_fact:
     application_topic_creation_required: "{{ platform_kafka_application_phase == 'apply' and application_topic.mode == 'managed' and application_topic_description.stdout | trim | length == 0 }}"
   changed_when: false
 
-- name: Create the missing managed topic
+- name: Создать недостающую управляемую тему
   when: application_topic_creation_required | bool
   block:
-    - name: Initialize explicit topic property arguments
+    - name: Инициализация явных аргументов свойств темы
       ansible.builtin.set_fact:
         application_topic_config_args: []
-    - name: Append each property as a single CLI argument
+    - name: Добавить каждое свойство как один аргумент CLI
       ansible.builtin.set_fact:
         application_topic_config_args: "{{ application_topic_config_args + ['--config', item.key ~ '=' ~ item.value] }}"
       loop: "{{ application_topic.config | dict2items | sort(attribute='key') }}"
       no_log: true
-    - name: Create the declared topic without a shell
+    - name: Создать заявленную тему без оболочки
       ansible.builtin.command:
         argv: "{{ [application_topic_cli_directory ~ '/bin/kafka-topics.sh', '--bootstrap-server', application_topic_candidate.address ~ ':' ~ application_topic_candidate.port, '--command-config', application_topic_client.path, '--create', '--if-not-exists', '--topic', application_topic.name, '--partitions', application_topic.partitions | string, '--replication-factor', application_topic.replicationFactor | string] + application_topic_config_args }}"
       register: application_topic_creation
       failed_when: false
       changed_when: application_topic_creation.rc == 0
       no_log: true
-    - name: Require a successful Kafka topic creation response
+    - name: Требовать успешный ответ на создание темы Kafka
       ansible.builtin.assert:
         that: application_topic_creation.rc == 0
         fail_msg: "{{ application_topic_diagnostic | to_json }}"
@@ -38,7 +38,7 @@
           topic: "{{ application_topic.name }}"
           address: "{{ application_topic_candidate.address }}:{{ application_topic_candidate.port }}"
           reason: "{{ application_topic_creation.stderr | regex_search('(TopicAuthorizationException|TimeoutException|SSLHandshakeException|InvalidConfigurationException|InvalidReplicationFactorException)') | default('KAFKA_CLI_FAILED', true) }}"
-    - name: Read back the created topic rather than trusting create output
+    - name: Прочитать созданную тему, а не доверять выходным данным создания
       ansible.builtin.include_tasks: application_topic_describe.yml
       vars:
         application_topic_must_exist: true

@@ -1,24 +1,24 @@
 ---
-- name: Check managed data path safety without changing the target
+- name: Проверка безопасности пути управляемых данных без изменения цели
   hosts: localhost
   connection: local
   gather_facts: false
   tasks:
-    - name: Admit a prospective data directory under var lib
+    - name: Разрешить предполагаемый каталог данных в var lib
       ansible.builtin.include_role:
         name: platform.core.managed_data_path_guard
       vars:
         platform_managed_data_path: /var/lib/platform-installer-guard-qa-absent
         platform_managed_data_owner: platform-automation
 
-    - name: Admit a prospective data directory under a mount point
+    - name: Разрешить предполагаемый каталог данных в точке монтирования
       ansible.builtin.include_role:
         name: platform.core.managed_data_path_guard
       vars:
         platform_managed_data_path: /mnt/platform-installer-guard-qa-absent
         platform_managed_data_owner: platform-automation
 
-    - name: Reject a data directory under the system configuration tree
+    - name: Отклонить каталог данных в дереве конфигурации системы
       block:
         - ansible.builtin.include_role:
             name: platform.core.managed_data_path_guard

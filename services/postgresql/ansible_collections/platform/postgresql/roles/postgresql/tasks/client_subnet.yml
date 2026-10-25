@@ -1,17 +1,17 @@
 ---
-- name: Gather network facts for automatic PostgreSQL client access
+- name: Сбор сетевых фактов для автоматического доступа клиента PostgreSQL
   ansible.builtin.setup:
     gather_subset: ['!all', '!min', network]
   when: ansible_facts.interfaces is not defined
 
-- name: Select interface IPv4 facts for the configured PostgreSQL address
+- name: Выбрать факты интерфейса IPv4 для настроенного адреса PostgreSQL
   ansible.builtin.set_fact:
     _platform_postgresql_ipv4_interfaces: >-
       {{ ansible_facts | dict2items | selectattr('value.ipv4', 'defined')
          | selectattr('value.ipv4', 'mapping')
          | map(attribute='value') | list }}
 
-- name: Find the exact PostgreSQL interface address including secondary addresses
+- name: Найти точный адрес интерфейса PostgreSQL, включая вторичные адреса
   ansible.builtin.set_fact:
     _platform_postgresql_client_networks: >-
       {{ ((_platform_postgresql_ipv4_interfaces | map(attribute='ipv4') | list) +
@@ -21,7 +21,7 @@
              (_platform_postgresql_local_members | first).address | default(ansible_facts.default_ipv4.address | default('')))
          | list }}
 
-- name: Require an observed PostgreSQL client subnet without guessing a prefix
+- name: Запрос наблюдаемой клиентской подсети PostgreSQL без угадывания префикса
   ansible.builtin.assert:
     that:
       - _platform_postgresql_client_networks | length == 1
@@ -30,7 +30,7 @@
       - ((_platform_postgresql_client_networks | first).prefix | string) is match('^(?:[0-9]|[12][0-9]|3[0-2])$')
     fail_msg: POSTGRES_CLIENT_SUBNET_UNAVAILABLE
 
-- name: Derive TLS client access CIDR from the observed network
+- name: Получение CIDR клиентского доступа TLS из наблюдаемой сети
   ansible.builtin.set_fact:
     _platform_postgresql_client_subnet: >-
       {{ (_platform_postgresql_client_networks | first).network ~ '/' ~

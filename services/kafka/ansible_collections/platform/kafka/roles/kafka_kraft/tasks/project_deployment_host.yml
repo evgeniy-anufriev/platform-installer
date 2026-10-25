@@ -1,5 +1,5 @@
 ---
-- name: Project Kafka members from inventory-owned deployment members
+- name: Проектируйте экземпляры службы Kafka из экземпляров службы развертывания, принадлежащих инвентарю
   ansible.builtin.set_fact:
     platform_kafka_instances: "{{ platform_kafka_instances + [ {
       'id': item.key,

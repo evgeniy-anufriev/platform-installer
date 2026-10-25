@@ -1,10 +1,10 @@
 ---
-- name: Initialize offline artifact delivery state
+- name: Инициализация состояния доставки артефакта в автономном режиме
   ansible.builtin.set_fact:
     platform_offline_artifact_paths: "{{ platform_offline_artifact_paths | default({}) }}"
     platform_offline_package_paths: "{{ platform_offline_package_paths | default([]) }}"
 
-- name: Deliver selected artifact requirements from the execution bundle
+- name: Доставить выбранные требования к артефактам из пакета выполнения
   ansible.builtin.include_tasks: deliver_requirement.yml
   loop: "{{ platform_artifact_delivery_requirements }}"
   loop_control:
@@ -12,7 +12,7 @@
     label: "{{ artifact_requirement.id }}"
   when: platform_resolved_artifact_sources is defined
 
-- name: Install the selected local RPM closure without repositories
+- name: Установить выбранное локальное замыкание RPM без репозиториев
   ansible.builtin.dnf:
     name: "{{ platform_offline_package_paths }}"
     state: present

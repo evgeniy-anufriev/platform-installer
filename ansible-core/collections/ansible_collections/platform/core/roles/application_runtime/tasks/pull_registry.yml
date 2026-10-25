@@ -1,28 +1,28 @@
 ---
-- name: Pull one locked image without retaining a delivery override
+- name: Извлечь одно заблокированное изображение, не сохраняя переопределение доставки
   block:
-    - name: Scope session registry auth to this image pull
+    - name: Проверка подлинности реестра сеансов для этого извлечения образа
       ansible.builtin.include_tasks: registry_auth.yml
-    - name: Materialize the exact registry pull override
+    - name: Материализовать точное переопределение извлечения реестра
       ansible.builtin.copy:
         content: "{{ {'services': {application_runtime_job.instanceId: {'image': (application_runtime_job.authority.repository.reference | platform.core.application_pinned_registry_reference(application_runtime_job.authority.repository.manifestDigest))}}} | to_nice_yaml }}"
         dest: "{{ application_runtime_job.instancePath }}/.image-delivery.yml"
         owner: "{{ application_runtime_job.account }}"
         mode: '0600'
-    - name: Pull the exact authorized platform manifest
+    - name: Получить точный манифест авторизованной платформы
       ansible.builtin.command:
         argv: "{{ application_runtime_job.composeArgv + ['-f', application_runtime_job.instancePath ~ '/.image-delivery.yml', 'pull', application_runtime_job.instanceId] }}"
       become_user: "{{ application_runtime_job.account }}"
       environment: "{{ application_registry_environment }}"
       no_log: true
   always:
-    - name: Remove only this pull's transient registry authentication
+    - name: Удалить только временную аутентификацию реестра этого запроса
       ansible.builtin.file:
         path: "{{ application_registry_auth_stage.path }}"
         state: absent
       when: application_registry_auth_stage.path is defined
       changed_when: false
-    - name: Remove only the runtime-only registry override
+    - name: Удалить только переопределение реестра, предназначенное только для среды выполнения
       ansible.builtin.file:
         path: "{{ application_runtime_job.instancePath }}/.image-delivery.yml"
         state: absent

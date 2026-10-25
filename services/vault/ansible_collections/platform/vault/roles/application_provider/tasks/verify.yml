@@ -1,5 +1,5 @@
 ---
-- name: Validate private identity ownership and namespace without mutation
+- name: Проверка владения частным удостоверением и пространства имен без изменений
   platform.core.application_identity_files:
     account: "{{ application_runtime_job.account }}"
     user: "{{ application_runtime_job.settings.user | default('0:0') }}"
@@ -7,13 +7,13 @@
     preflight: true
   no_log: true
 
-- name: Read persistent RoleID only into runtime memory
+- name: Чтение постоянного RoleID только в память времени выполнения
   ansible.builtin.slurp:
     src: "{{ application_vault_instance_path }}/vault/role-id"
   register: application_vault_verify_identity
   no_log: true
 
-- name: Authenticate only with the instance RoleID through its resolved connection
+- name: Проверка подлинности только с помощью экземпляра RoleID через его разрешенное соединение
   ansible.builtin.uri:
     url: "{{ application_runtime_job.vault.endpoint_url }}/v1/auth/approle/login"
     method: POST
@@ -28,9 +28,9 @@
   register: application_vault_verify_login
   no_log: true
 
-- name: Verify declared read capabilities without keeping the probe token
+- name: Проверка заявленных возможностей чтения без сохранения пробного токена
   block:
-    - name: Read only the declared instance secret paths
+    - name: Чтение только объявленных секретных путей экземпляра
       ansible.builtin.uri:
         url: "{{ application_runtime_job.vault.endpoint_url }}/v1/{{ item }}"
         headers: {X-Vault-Token: "{{ application_vault_verify_login.json.auth.client_token }}"}
@@ -43,13 +43,13 @@
       loop: "{{ application_runtime_job.vault.readFields.keys() | list }}"
       register: application_vault_verify_reads
       no_log: true
-    - name: Require every declared field to exist and be nonempty
+    - name: Требовать, чтобы каждое объявленное поле существовало и было непустым
       ansible.builtin.assert:
         that: "{{ application_vault_verify_reads.results | platform.vault.application_vault_verify_fields(application_runtime_job.vault.readFields) }}"
         fail_msg: APPLICATION_VAULT_REQUIRED_FIELD_MISSING
       no_log: true
   always:
-    - name: Revoke only this verification token
+    - name: Отозвать только этот токен проверки
       ansible.builtin.uri:
         url: "{{ application_runtime_job.vault.endpoint_url }}/v1/auth/token/revoke-self"
         method: POST

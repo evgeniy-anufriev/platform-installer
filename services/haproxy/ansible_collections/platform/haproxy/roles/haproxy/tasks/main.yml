@@ -1,12 +1,12 @@
 ---
-- name: Normalize the exact partial source scope
+- name: Нормализовать точную частичную область источника
   ansible.builtin.include_tasks: partial_scope.yml
 
-- name: Validate portable service resource settings
+- name: Проверка настроек ресурсов переносимой службы
   ansible.builtin.include_role:
     name: platform.core.project_settings
 
-- name: Require valid HAProxy phase and canonical desired state
+- name: Требовать действительную фазу HAProxy и каноническое желаемое состояние
   ansible.builtin.assert:
     that:
       - platform_haproxy_phase in ['prepare', 'activate', 'start', 'verify']
@@ -14,6 +14,6 @@
       - platform_deployments | default({}) is mapping
     fail_msg: HAPROXY_DESIRED_STATE_INVALID
 
-- name: Run HAProxy lifecycle only on participating hosts
+- name: Запускать жизненный цикл HAProxy только на участвующих хостах
   ansible.builtin.include_tasks: lifecycle.yml
   when: (platform_desired_state.serviceDeployments | dict2items | selectattr('value.serviceType', 'equalto', 'haproxy') | selectattr('key', 'in', platform_deployments | default({})) | list | length) > 0

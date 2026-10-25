@@ -1,5 +1,5 @@
 ---
-- name: Validate portable project resource settings
+- name: Проверка настроек ресурсов переносимого проекта
   ansible.builtin.assert:
     that:
       - platform_data_root_directory is string

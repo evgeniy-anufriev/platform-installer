@@ -1,13 +1,13 @@
 ---
-- name: Recheck own policy and role immediately before reconciliation
+- name: Перепроверить собственную политику и роль непосредственно перед сверкой
   ansible.builtin.include_tasks: preflight.yml
   vars:
     application_vault_identity_only: true
 
-- name: Reconcile this instance account documents
+- name: Согласовать документы учетной записи этого экземпляра
   ansible.builtin.include_tasks: library.yml
 
-- name: Resolve IPv4 client destination on each Docker placement
+- name: Разрешить назначение клиента IPv4 для каждого размещения Docker
   ansible.builtin.command:
     argv: [getent, ahostsv4, "{{ application_vault_provider.routeAddress }}"]
   vars:
@@ -17,7 +17,7 @@
   register: application_vault_addresses
   changed_when: false
 
-- name: Resolve the source IPv4 route on each actual Docker placement
+- name: Разрешить исходный маршрут IPv4 для каждого фактического размещения Docker
   ansible.builtin.command:
     argv: [ip, -json, route, get, "{{ item.stdout.split()[0] }}"]
   vars:
@@ -27,7 +27,7 @@
   register: application_vault_routes
   changed_when: false
 
-- name: Read the LXC bridge IPv4 subnet on each Docker placement
+- name: Прочитать подсеть моста LXC IPv4 в каждом размещении Docker
   ansible.builtin.command:
     argv: [ip, -json, -4, address, show, dev, "{{ hostvars[item].platform_docker_lxc_bridge | default('lxcbr0') }}"]
   delegate_to: "{{ item }}"
@@ -35,7 +35,7 @@
   register: application_vault_lxc_addresses
   changed_when: false
 
-- name: Bind the accepted subnet policy and own AppRole settings
+- name: Привязать принятую политику подсети и собственные настройки AppRole
   ansible.builtin.set_fact:
     application_vault_role:
       bind_secret_id: false
@@ -48,7 +48,7 @@
   delegate_facts: false
   no_log: true
 
-- name: Retain previously managed instance read paths during additive updates
+- name: Сохранить ранее управляемые пути чтения экземпляра во время дополнительных обновлений
   ansible.builtin.set_fact:
     application_vault_retained_policy: >-
       {{ application_vault_identity_before.results[0] |
@@ -59,7 +59,7 @@
   delegate_facts: false
   no_log: true
 
-- name: Update only differing owned policy
+- name: Обновить только другую принадлежащую политику
   ansible.builtin.uri:
     url: "{{ application_vault_provider.url }}/v1/sys/policies/acl/{{ platform_vault_application_job.identity }}"
     method: PUT
@@ -77,7 +77,7 @@
   changed_when: true
   no_log: true
 
-- name: Reconcile this owned AppRole without creating SecretID
+- name: Согласовать принадлежащий AppRole без создания SecretID
   ansible.builtin.uri:
     url: "{{ application_vault_provider.url }}/v1/auth/approle/role/{{ platform_vault_application_job.identity }}"
     method: POST
@@ -95,7 +95,7 @@
   changed_when: true
   no_log: true
 
-- name: Read stable RoleID through the same resolved connection
+- name: Прочитать стабильный RoleID через то же разрешенное соединение
   ansible.builtin.uri:
     url: "{{ application_vault_provider.url }}/v1/auth/approle/role/{{ platform_vault_application_job.identity }}/role-id"
     headers: {X-Vault-Token: "{{ application_vault_provider.token }}"}
@@ -110,7 +110,7 @@
   register: application_vault_role_id
   no_log: true
 
-- name: Preserve private identity delivery only for this invocation
+- name: Сохранить доставку личных удостоверений только для этого вызова
   ansible.builtin.set_fact:
     platform_application_vault_identities: "{{ platform_application_vault_identities | combine({(platform_vault_application_job.libraryId ~ '/' ~ platform_vault_application_job.instanceId): {'roleId': application_vault_role_id.json.data.role_id, 'providerId': platform_vault_application_job.providerId}}) }}"
   no_log: true

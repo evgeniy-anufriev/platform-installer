@@ -1,7 +1,7 @@
 ---
 # One controller-side snapshot: never use a delegated localhost fact as a
 # mutable accumulator across target-host loop contexts.
-- name: Build complete normalized Kafka identity discovery snapshot
+- name: Создание полного нормализованного снимка обнаружения идентификации Kafka
   ansible.builtin.set_fact:
     platform_kafka_discovery_by_host: "{{ dict((groups['platform_targets'] | default([]) | sort) | zip((groups['platform_targets'] | default([]) | sort) | map('extract', hostvars, 'platform_kafka_identity_discovery'))) }}"
   delegate_to: localhost

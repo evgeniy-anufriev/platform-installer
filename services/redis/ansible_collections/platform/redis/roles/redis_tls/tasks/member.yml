@@ -1,5 +1,5 @@
 ---
-- name: Create Redis member paths
+- name: Создание путей к экземпляру службы Redis
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
@@ -12,7 +12,7 @@
     - "{{ redis_member.config_directory }}"
     - "{{ redis_member.log_directory }}"
 
-- name: Create Redis member TLS directory
+- name: Создать каталог экземпляра службы Redis TLS
   ansible.builtin.file:
     path: "{{ redis_member.config_directory }}/pki"
     state: directory
@@ -20,7 +20,7 @@
     group: "{{ platform_redis_group }}"
     mode: '0700'
 
-- name: Materialize Redis member TLS files
+- name: Материализация файлов экземпляра службы Redis TLS
   ansible.builtin.copy:
     src: "{{ platform_pki_selected_consumer_plan.targetDirectory }}/{{ item.name }}"
     dest: "{{ redis_member.config_directory }}/pki/{{ item.name }}"
@@ -35,7 +35,7 @@
   no_log: true
   register: _platform_redis_tls_copy
 
-- name: Render Redis TLS-only configuration
+- name: Рендеринг конфигурации только для Redis TLS
   ansible.builtin.template:
     src: redis.conf.j2
     dest: "{{ redis_member.config_directory }}/redis.conf"
@@ -46,10 +46,10 @@
   register: _platform_redis_config
   when: not _platform_redis_has_persistent_state
 
-- name: Prepare default-user ACL files without replacing existing users
+- name: Подготовка файлов ACL пользователя по умолчанию без замены существующих пользователей
   ansible.builtin.include_tasks: acl_files.yml
 
-- name: Attach the Redis ACL file without rewriting retained replication state
+- name: Прикрепить файл Redis ACL без перезаписи сохраненного состояния репликации
   ansible.builtin.lineinfile:
     path: "{{ redis_member.config_directory }}/redis.conf"
     regexp: '^\s*aclfile\s+'
@@ -57,7 +57,7 @@
   register: _platform_redis_acl_config
   no_log: true
 
-- name: Remove legacy Redis requirepass after attaching the hashed ACL
+- name: Удалить устаревший requirepass Redis после прикрепления хешированного ACL
   ansible.builtin.lineinfile:
     path: "{{ redis_member.config_directory }}/redis.conf"
     regexp: '^\s*requirepass\s+'
@@ -65,7 +65,7 @@
   register: _platform_redis_acl_legacy_password
   no_log: true
 
-- name: Render Redis systemd instance unit
+- name: Рендеринг службы экземпляра Redis systemd systemd
   ansible.builtin.template:
     src: redis.service.j2
     dest: "/etc/systemd/system/{{ platform_redis_name }}@{{ redis_member.instance_name }}.service"
@@ -74,7 +74,7 @@
     mode: '0644'
   register: _platform_redis_unit
 
-- name: Seed Sentinel TLS-only configuration for a new Sentinel
+- name: Начальный узел Sentinel Конфигурация только для TLS для нового Sentinel
   ansible.builtin.template:
     src: sentinel.conf.j2
     dest: "{{ redis_member.config_directory }}/sentinel.conf"
@@ -87,7 +87,7 @@
     - "'sentinel' in redis_member.roles"
     - not _platform_redis_has_persistent_state
 
-- name: Render Sentinel systemd instance unit
+- name: Отрисовка службы экземпляра Sentinel systemd systemd
   ansible.builtin.template:
     src: sentinel.service.j2
     dest: "/etc/systemd/system/{{ platform_redis_name }}-sentinel@{{ redis_member.instance_name }}.service"
@@ -97,7 +97,7 @@
   register: _platform_sentinel_unit
   when: "'sentinel' in redis_member.roles"
 
-- name: Attach the Sentinel ACL file without rewriting its elected master
+- name: Прикрепить файл Sentinel ACL, не переписывая его выбранный главный файл
   ansible.builtin.lineinfile:
     path: "{{ redis_member.config_directory }}/sentinel.conf"
     regexp: '^\s*aclfile\s+'
@@ -106,7 +106,7 @@
   when: "'sentinel' in redis_member.roles"
   no_log: true
 
-- name: Remove legacy Sentinel requirepass after attaching the hashed ACL
+- name: Удаление устаревшего требования Sentinel после присоединения хешированного ACL
   ansible.builtin.lineinfile:
     path: "{{ redis_member.config_directory }}/sentinel.conf"
     regexp: '^\s*requirepass\s+'
@@ -115,7 +115,7 @@
   when: "'sentinel' in redis_member.roles"
   no_log: true
 
-- name: Configure Sentinel peer authentication for the default ACL user
+- name: Настройка одноранговой аутентификации Sentinel для пользователя ACL по умолчанию
   ansible.builtin.lineinfile:
     path: "{{ redis_member.config_directory }}/sentinel.conf"
     regexp: '^sentinel sentinel-user\s+'
@@ -124,7 +124,7 @@
   when: "'sentinel' in redis_member.roles"
   no_log: true
 
-- name: Configure Sentinel peer password from the runtime secret
+- name: Настройка пароля узла Sentinel из секрета времени выполнения
   ansible.builtin.lineinfile:
     path: "{{ redis_member.config_directory }}/sentinel.conf"
     regexp: '^sentinel sentinel-pass\s+'
@@ -133,28 +133,28 @@
   when: "'sentinel' in redis_member.roles"
   no_log: true
 
-- name: Reload systemd for Redis member units
+- name: Перезагрузить systemd для экземпляра службы Redis systemd Services
   ansible.builtin.systemd:
     daemon_reload: true
   when: >-
     _platform_redis_unit.changed or
     (_platform_sentinel_unit.changed | default(false))
 
-- name: Enable and start Redis member
+- name: Включение и запуск экземпляра службы Redis
   ansible.builtin.systemd:
     name: "{{ platform_redis_name }}@{{ redis_member.instance_name }}.service"
     enabled: true
     state: restarted
   when: _platform_redis_config.changed or _platform_redis_acl_config.changed or _platform_redis_acl_file.changed or _platform_redis_acl_legacy_password.changed or _platform_redis_tls_copy.changed or _platform_redis_unit.changed
 
-- name: Start unchanged Redis member
+- name: Запустить неизмененный экземпляр службы Redis
   ansible.builtin.systemd:
     name: "{{ platform_redis_name }}@{{ redis_member.instance_name }}.service"
     enabled: true
     state: started
   when: not (_platform_redis_config.changed or _platform_redis_acl_config.changed or _platform_redis_acl_legacy_password.changed or _platform_redis_tls_copy.changed or _platform_redis_unit.changed)
 
-- name: Enable and start Sentinel member
+- name: Включение и запуск экземпляра службы Sentinel
   ansible.builtin.systemd:
     name: "{{ platform_redis_name }}-sentinel@{{ redis_member.instance_name }}.service"
     enabled: true
@@ -163,7 +163,7 @@
     - "'sentinel' in redis_member.roles"
     - _platform_sentinel_config.changed or _platform_sentinel_acl_config.changed or _platform_redis_acl_file.changed or _platform_sentinel_acl_legacy_password.changed or _platform_sentinel_peer_user.changed or _platform_sentinel_peer_password.changed or _platform_redis_tls_copy.changed or (_platform_sentinel_unit.changed | default(false))
 
-- name: Start unchanged Sentinel member
+- name: Запустить неизмененный экземпляр службы Sentinel
   ansible.builtin.systemd:
     name: "{{ platform_redis_name }}-sentinel@{{ redis_member.instance_name }}.service"
     enabled: true

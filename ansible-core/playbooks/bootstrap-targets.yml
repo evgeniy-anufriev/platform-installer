@@ -1,5 +1,5 @@
 ---
-- name: Bootstrap target hosts from the Execution Node
+- name: Загрузка целевых хостов с узла выполнения
   hosts: bootstrap_targets
   become: true
   gather_facts: false

@@ -1,12 +1,12 @@
 ---
-- name: Enable and start Keepalived
+- name: Включить и запустить Keepalived
   ansible.builtin.systemd:
     name: "{{ platform_keepalived_service_name }}"
     enabled: true
     state: started
   register: platform_keepalived_service
 
-- name: Reload Keepalived after cluster-validated configuration change
+- name: Перезагрузка Keepalived после изменения конфигурации, проверенного кластером
   ansible.builtin.systemd:
     name: "{{ platform_keepalived_service_name }}"
     state: reloaded

@@ -1,5 +1,5 @@
 ---
-- name: Create the exact instance configuration directories
+- name: Создать точные каталоги конфигурации экземпляра
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
@@ -7,7 +7,7 @@
     mode: '0700'
   loop: "{{ ([application_runtime_job.instancePath ~ '/config'] + (application_runtime_job.configs | map(attribute='destination') | map('dirname') | map('regex_replace', '^', application_runtime_job.instancePath ~ '/config/') | list) + (application_runtime_job.directoryConfigs | map(attribute='destination') | map('dirname') | map('regex_replace', '^', application_runtime_job.instancePath ~ '/config/') | list) + (application_runtime_job.archiveConfigs | map(attribute='destination') | map('dirname') | map('regex_replace', '^', application_runtime_job.instancePath ~ '/config/') | list)) | map('regex_replace', '/+$', '') | unique | list }}"
 
-- name: Apply declared directory modes to mounted configuration directories
+- name: Применить объявленные режимы каталогов к смонтированным каталогам конфигурации
   ansible.builtin.file:
     path: "{{ application_runtime_job.instancePath }}/config/{{ item.destination }}"
     state: directory
@@ -16,7 +16,7 @@
   loop: "{{ application_runtime_job.directoryConfigs }}"
   no_log: true
 
-- name: Apply declared directory modes to nested configuration directories
+- name: Применить объявленные режимы каталогов к вложенным каталогам конфигурации
   ansible.builtin.file:
     path: "{{ application_runtime_job.instancePath }}/config/{{ item.1 }}"
     state: directory
@@ -25,21 +25,21 @@
   loop: "{{ application_runtime_job.directoryConfigs | subelements('subdirectories') }}"
   no_log: true
 
-- name: Remove files no longer declared in configuration directories
+- name: Удалить файлы, которые больше не объявлены в каталогах конфигурации
   ansible.builtin.include_tasks: apply_directory.yml
   loop: "{{ application_runtime_job.directoryConfigs }}"
   loop_control:
     loop_var: application_directory
   no_log: true
 
-- name: Record instance ownership as derived runtime state
+- name: Запись владельца экземпляра как производного состояния среды выполнения
   ansible.builtin.copy:
     content: "{{ {'project': application_runtime_job.projectId, 'library': application_runtime_job.libraryId, 'instance': application_runtime_job.instanceId, 'host': inventory_hostname} | to_json(sort_keys=true) }}"
     dest: "{{ application_runtime_job.instancePath }}/.owner.json"
     owner: "{{ application_runtime_job.account }}"
     mode: '0600'
 
-- name: Materialize declared instance config bytes
+- name: Материализовать объявленные байты конфигурации экземпляра
   ansible.builtin.copy:
     src: "{{ item.path | default(omit) }}"
     content: "{{ item.content if item.path is not defined else omit }}"
@@ -49,14 +49,14 @@
   loop: "{{ application_runtime_job.configContents }}"
   no_log: true
 
-- name: Stage and replace declared configuration archives
+- name: Подготовка и замена объявленных архивов конфигурации
   ansible.builtin.include_tasks: apply_archive.yml
   loop: "{{ application_runtime_job.archiveConfigs }}"
   loop_control:
     loop_var: application_archive
   no_log: true
 
-- name: Materialize instance Compose including its automatic config-digest label
+- name: Материализовать экземпляр Compose, включая его метку автоматического дайджеста конфигурации
   ansible.builtin.copy:
     content: "{{ application_runtime_job.composeContent }}"
     dest: "{{ application_runtime_job.instancePath }}/compose.yml"
@@ -64,7 +64,7 @@
     mode: '0600'
   no_log: true
 
-- name: Deliver private RoleID and PKI files for the actual container UID
+- name: Доставка частных файлов RoleID и PKI для реального контейнера UID
   platform.core.application_identity_files:
     account: "{{ application_runtime_job.account }}"
     user: "{{ application_runtime_job.settings.user | default('0:0') }}"
@@ -77,7 +77,7 @@
   when: application_runtime_job.agentTemplate or (application_runtime_job.pkiPlans | default([]) | length > 0)
   no_log: true
 
-- name: Parse effective Compose without startup or image mutation
+- name: Анализ эффективного Compose без запуска или изменения образа
   ansible.builtin.command:
     argv: "{{ application_runtime_job.composeArgv + ['config', '--format', 'json'] }}"
   become_user: "{{ application_runtime_job.account }}"
@@ -86,7 +86,7 @@
   changed_when: false
   no_log: true
 
-- name: Check only Core-projected Compose values
+- name: Проверка только значений Core, прогнозируемых Compose
   ansible.builtin.assert:
     that: "{{ (application_compose_config.stdout | from_json) | platform.core.application_validate_compose(application_runtime_job, application_runtime_job.instancePath, application_runtime_job.configDigest) }}"
     fail_msg: APPLICATION_CORE_COMPOSE_PROJECTION_INVALID

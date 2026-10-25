@@ -46,7 +46,7 @@ class ServiceRuntimeOptimizationTests(unittest.TestCase):
                 "platform_resolved_artifact_sources": {}}
             with self.subTest(service=service, phase="verify"):
                 output = self.run_play(gates, variables)
-                self.assertNotIn("Require a resolved source for every service artifact requirement", output)
+                self.assertNotIn("Требовать разрешенный источник для каждого требования к артефакту службы", output)
             variables.update({f"platform_{service}_verify_only": False, "platform_bind_phase": "prepare"})
             with self.subTest(service=service, phase="apply"):
                 self.run_play(gates, variables, expected=2)
@@ -58,7 +58,7 @@ class ServiceRuntimeOptimizationTests(unittest.TestCase):
     def test_kafka_combined_state_keeps_active_and_pid_guards(self):
         source = self.source("kafka", "verify_member.yml")
         checks = [task for task in source if task.get("name") in
-                  ("Assert Kafka member service is active", "Verify Kafka member process")]
+                  ("Подтвердить, что служба экземпляра службы Kafka активна", "Проверка процесса экземпляра службы Kafka")]
         for state, pid, expected in [("active", 123, 0), ("inactive", 123, 2), ("active", 0, 2)]:
             with self.subTest(state=state, pid=pid):
                 lines = ["MainPID=" + str(pid), "ActiveState=" + state]
@@ -77,7 +77,7 @@ class ServiceRuntimeOptimizationTests(unittest.TestCase):
 
     def test_clickhouse_batched_rpm_keeps_each_package_and_keeper_guards(self):
         source = self.source("clickhouse", "preflight.yml")
-        guard = next(task for task in source if task.get("name") == "Refuse an incompatible foreign ClickHouse package generation")
+        guard = next(task for task in source if task.get("name") == "Отказаться от создания несовместимого неуправляемого пакета ClickHouse")
         version = "25.8.1"
         packages = ["clickhouse-common-static", "clickhouse-server", "clickhouse-client"]
         valid = [name + "\t" + version + "-1.x86_64" for name in packages]

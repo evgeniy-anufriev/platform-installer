@@ -1,12 +1,12 @@
 ---
-- name: Verify each Kafka member in deterministic order
+- name: Проверка каждого экземпляра службы Kafka в детерминированном порядке
   ansible.builtin.include_tasks: verify_member.yml
   loop: "{{ _platform_kafka_local_instances | sort(attribute='node_id') }}"
   loop_control:
     loop_var: kafka_member
     label: "{{ kafka_member.id }}"
 
-- name: Select Kafka member used for read-only quorum diagnostics
+- name: Выбрать экземпляр службы Kafka, используемый для диагностики кворума только для чтения
   ansible.builtin.set_fact:
     kafka_quorum_diagnostic_member: >-
       {{ (_platform_kafka_broker_instances | first)
@@ -16,23 +16,23 @@
           else (_platform_kafka_controller_instances | first)) }}
   changed_when: false
 
-- name: Verify quorum using admin with SCRAM or the existing controller connection
+- name: Проверка кворума с помощью администратора с SCRAM или существующего подключения контроллера
   ansible.builtin.include_tasks: verify_quorum.yml
   when: inventory_hostname == kafka_quorum_diagnostic_member.host
 
-- name: Select Kafka broker used for read-only registration diagnostics
+- name: Выбрать брокер Kafka, используемый для диагностики регистрации только для чтения
   ansible.builtin.set_fact:
     _platform_kafka_verify_broker: "{{ _platform_kafka_broker_instances | first }}"
   changed_when: false
 
-- name: Resolve broker registration Kafka CLI connection from runtime projection
+- name: Разрешение регистрации брокера соединения Kafka CLI из проекции времени выполнения
   ansible.builtin.include_tasks: resolve_cli_connection.yml
   vars:
     kafka_cli_member: "{{ _platform_kafka_verify_broker }}"
     kafka_cli_purpose: "{{ 'admin' if _platform_kafka_scram_enabled | default(false) | bool else 'client' }}"
   when: inventory_hostname == _platform_kafka_verify_broker.host
 
-- name: Query Kafka broker registrations through projected CLI connection
+- name: Запрос регистрации брокера Kafka через прогнозируемое соединение CLI
   ansible.builtin.include_tasks: run_cli_command.yml
   vars:
     kafka_cli_connection: "{{ _platform_kafka_cli_connection }}"
@@ -44,13 +44,13 @@
     kafka_cli_expected_unfenced_broker_count: "{{ _platform_kafka_broker_instances | length }}"
   when: inventory_hostname == _platform_kafka_verify_broker.host
 
-- name: Require projected broker registration diagnostic command to succeed
+- name: Для успешного завершения требуется прогнозируемая диагностическая команда регистрации брокера
   ansible.builtin.assert:
     that: platform_kafka_cli_command_result.rc == 0
     fail_msg: Kafka broker registration diagnostic command failed
   when: inventory_hostname == _platform_kafka_verify_broker.host
 
-- name: Select unfenced Kafka broker diagnostic headers read-only
+- name: Выбрать неизолированные диагностические заголовки брокера Kafka, доступные только для чтения
   ansible.builtin.set_fact:
     _platform_kafka_unfenced_broker_headers: >-
       {{ platform_kafka_cli_command_result.stdout_lines
@@ -59,7 +59,7 @@
   changed_when: false
   when: inventory_hostname == _platform_kafka_verify_broker.host
 
-- name: Assert Kafka brokers are registered and unfenced
+- name: Подтвердить, что брокеры Kafka зарегистрированы и не защищены
   ansible.builtin.assert:
     that:
       - _platform_kafka_unfenced_broker_headers | length == _platform_kafka_broker_instances | length

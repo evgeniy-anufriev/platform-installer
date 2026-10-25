@@ -1,5 +1,5 @@
 ---
-- name: Re-read A record after update
+- name: Перечитать запись после обновления
   ansible.builtin.command:
     argv:
       - dig
@@ -14,7 +14,7 @@
   changed_when: false
   when: _platform_bind_a_record_update is not skipped
 
-- name: Normalize A record set after dynamic update
+- name: Нормализация набора записей после динамического обновления
   ansible.builtin.set_fact:
     _platform_bind_a_record_after_answer_lines: >-
       {{ _platform_bind_a_record_after.stdout_lines |
@@ -23,7 +23,7 @@
     _platform_bind_a_record_after_addresses: []
   when: _platform_bind_a_record_update is not skipped
 
-- name: Normalize each DNS A-record answer after dynamic update
+- name: Нормализовать каждый ответ A-записи DNS после динамического обновления
   ansible.builtin.set_fact:
     _platform_bind_a_record_after_addresses: >-
       {{ _platform_bind_a_record_after_addresses +
@@ -35,7 +35,7 @@
     label: Normalize updated DNS A-record answer
   when: _platform_bind_a_record_update is not skipped
 
-- name: Verify exact authoritative A record set after update
+- name: Проверка достоверности набора записей A после обновления
   ansible.builtin.assert:
     that:
       - _platform_bind_a_record_after.rc == 0

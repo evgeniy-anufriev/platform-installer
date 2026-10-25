@@ -1,8 +1,8 @@
 ---
-- name: Resolve managed PKI inputs using normal role variable precedence
+- name: Разрешить управляемые входные данные PKI с использованием обычного приоритета ролевых переменных
   ansible.builtin.include_tasks: resolve.yml
 
-- name: Validate PKI materialization runtime contract
+- name: Проверка контракта времени выполнения материализации PKI
   ansible.builtin.assert:
     that:
       - platform_pki_project_id | length > 0
@@ -14,7 +14,7 @@
       - platform_pki_reissue_request_ids | difference(platform_pki_requests | map(attribute='id') | list) | length == 0
     fail_msg: PKI_MATERIALIZATION_RUNTIME_INVALID
 
-- name: Require fresh resolution to match the previously applied frozen PKI plans
+- name: Требовать новое разрешение, соответствующее ранее примененным замороженным планам PKI
   ansible.builtin.assert:
     that:
       - platform_pki_managed_resolution is defined
@@ -25,7 +25,7 @@
   when: "'platform_installer_pki_materialization' in ansible_skip_tags"
   no_log: true
 
-- name: Check for keytool before PKCS12 store materialization
+- name: Проверка наличия keytool перед материализацией хранилища PKCS12
   ansible.builtin.shell: command -v keytool
   args:
     executable: /bin/sh
@@ -36,7 +36,7 @@
     (platform_pki_materialization_plans | selectattr('formats', 'defined') |
      map(attribute='formats') | flatten | intersect(['PKCS12_KEYSTORE', 'PKCS12_TRUSTSTORE']) | length) > 0
 
-- name: Install Java runtime providing keytool when it is missing
+- name: Установить среду выполнения Java, предоставляя ключевой инструмент, когда он отсутствует
   ansible.builtin.package:
     name: "{{ platform_pki_keytool_package }}"
     state: present
@@ -46,7 +46,7 @@
     - _platform_pki_keytool_probe is not skipped
     - _platform_pki_keytool_probe.rc != 0
 
-- name: Recheck keytool after ensuring the Java runtime
+- name: Перепроверить keytool после проверки среды выполнения Java
   ansible.builtin.shell: command -v keytool
   args:
     executable: /bin/sh
@@ -57,7 +57,7 @@
     (platform_pki_materialization_plans | selectattr('formats', 'defined') |
      map(attribute='formats') | flatten | intersect(['PKCS12_KEYSTORE', 'PKCS12_TRUSTSTORE']) | length) > 0
 
-- name: Require keytool before PKCS12 store materialization
+- name: Требовать keytool перед материализацией хранилища PKCS12
   ansible.builtin.assert:
     that:
       - _platform_pki_keytool_ready.rc == 0
@@ -66,7 +66,7 @@
     (platform_pki_materialization_plans | selectattr('formats', 'defined') |
      map(attribute='formats') | flatten | intersect(['PKCS12_KEYSTORE', 'PKCS12_TRUSTSTORE']) | length) > 0
 
-- name: Prepare protected PKI execution roots
+- name: Подготовка защищенных корней выполнения PKI
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
@@ -80,7 +80,7 @@
   when: platform_pki_requests | length > 0
   tags: platform_installer_pki_materialization
 
-- name: Materialize resolved PKI certificate requests
+- name: Материализация разрешенных запросов сертификатов PKI
   ansible.builtin.include_tasks:
     file: request.yml
     apply:

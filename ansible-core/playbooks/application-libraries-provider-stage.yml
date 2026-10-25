@@ -1,24 +1,24 @@
 ---
-- name: Run preflighted library then instance provider hooks
+- name: Запустить предварительно проверенную библиотеку, а затем перехватить провайдера экземпляров
   hosts: localhost
   connection: local
   gather_facts: false
   any_errors_fatal: true
   tasks:
-    - name: Execute provider stages with bounded derived credential custody
+    - name: Выполнение этапов провайдера с ограниченным хранением производных учетных данных
       block:
-        - name: Initialize only invocation-scoped provider completion results
+        - name: Инициализировать только результаты завершения провайдера в области вызова
           ansible.builtin.set_fact:
             platform_application_completed_batches: []
             platform_application_delivered_instances: []
           no_log: true
-        - name: Require protected runtime root before generated credential delivery
+        - name: Требовать защищенный корень среды выполнения перед доставкой сгенерированных учетных данных
           ansible.builtin.assert:
             that: "{} | platform.core.application_protected_secret_files([], platform_application_secret_root)"
             fail_msg: APPLICATION_PROVIDER_SECRET_FILE_INVALID
           when: platform_application_generated_values | default({}) | length > 0
           no_log: true
-        - name: Deliver generated application passwords through existing runtime files
+        - name: Доставка сгенерированных паролей приложений через существующие файлы среды выполнения
           ansible.builtin.copy:
             content: "{{ item.value }}"
             dest: "{{ platform_application_secret_root }}/{{ item.key }}"
@@ -27,12 +27,12 @@
           loop: "{{ platform_application_generated_values | default({}) | dict2items }}"
           changed_when: false
           no_log: true
-        - name: Bind generated runtime files for the ordinary provider hooks
+        - name: Привязка сгенерированных файлов времени выполнения к обычным перехватчикам провайдера
           ansible.builtin.set_fact:
             platform_application_credential_files: "{{ platform_application_credential_files | default({}) | combine({item.key: platform_application_secret_root ~ '/' ~ item.key}) }}"
           loop: "{{ platform_application_generated_values | default({}) | dict2items }}"
           no_log: true
-        - name: Read existing credential sources within bounded runtime custody
+        - name: Чтение существующих источников учетных данных в рамках ограниченного хранения во время выполнения
           ansible.builtin.include_role:
             name: platform.vault.application_provider
             tasks_from: sources
@@ -40,42 +40,42 @@
           loop_control:
             loop_var: application_vault_source
           when: application_vault_source.passwordRef | default('') not in (platform_application_credential_files | default({}))
-        - name: Require the same prepared PostgreSQL scope
+        - name: Потребовать ту же подготовленную область PostgreSQL
           ansible.builtin.assert:
             that: application_provider_inputs.status == 'PASS'
             fail_msg: APPLICATION_PROVIDER_INPUT_INVALID
-        - name: Initialize provider discovery for this invocation
+        - name: Инициализировать обнаружение провайдера для этого вызова
           ansible.builtin.set_fact:
             platform_application_provider_runtime: {}
-        - name: Discover each PostgreSQL deployment once
+        - name: Один раз обнаружить каждое развертывание PostgreSQL
           ansible.builtin.include_role:
             name: platform.postgresql.application_provider
             tasks_from: discover
           loop: "{{ application_provider_inputs.jobs | selectattr('serviceType', 'equalto', 'postgresql') | list }}"
           loop_control:
             loop_var: platform_postgresql_application_job
-        - name: Preflight all PostgreSQL scopes before mutations
+        - name: Предварительная проверка всех областей PostgreSQL перед мутациями
           ansible.builtin.include_role:
             name: platform.postgresql.application_provider
             tasks_from: preflight
           loop: "{{ (application_provider_inputs.libraryJobs + application_provider_inputs.instanceJobs) | selectattr('serviceType', 'equalto', 'postgresql') | list }}"
           loop_control:
             loop_var: platform_postgresql_application_job
-        - name: Preflight Redis and Sentinel instance scopes before any provider mutations
+        - name: Предварительная проверка областей экземпляров Redis и Sentinel перед любыми мутациями провайдера
           ansible.builtin.include_role:
             name: platform.redis.application_provider
             tasks_from: preflight
           loop: "{{ application_provider_inputs.instanceJobs | selectattr('serviceType', 'equalto', 'redis') | list }}"
           loop_control:
             loop_var: platform_redis_application_job
-        - name: Preflight ClickHouse library and instance scopes before mutations
+        - name: Предварительная проверка библиотеки ClickHouse и областей экземпляра перед мутациями
           ansible.builtin.include_role:
             name: platform.clickhouse.application_provider
             tasks_from: preflight
           loop: "{{ (application_provider_inputs.libraryJobs + application_provider_inputs.instanceJobs) | selectattr('serviceType', 'equalto', 'clickhouse') | list }}"
           loop_control:
             loop_var: platform_clickhouse_application_job
-        - name: Create Kafka library topics before application instances
+        - name: Создать разделы библиотеки Kafka перед экземплярами приложения
           ansible.builtin.include_role:
             name: platform.kafka.kafka_kraft
             tasks_from: application_topics
@@ -84,49 +84,49 @@
           loop: "{{ application_provider_inputs.libraryJobs | selectattr('serviceType', 'equalto', 'kafka') | list }}"
           loop_control:
             loop_var: platform_kafka_application_job
-        - name: Create all library resources before instances
+        - name: Создать все ресурсы библиотеки перед экземплярами
           ansible.builtin.include_role:
             name: platform.postgresql.application_provider
             tasks_from: resources
           loop: "{{ application_provider_inputs.libraryJobs | selectattr('serviceType', 'equalto', 'postgresql') | list }}"
           loop_control:
             loop_var: platform_postgresql_application_job
-        - name: Create each ClickHouse library database batch before accounts
+        - name: Создать каждый пакет базы данных библиотеки ClickHouse перед учетными записями
           ansible.builtin.include_role:
             name: platform.clickhouse.application_provider
             tasks_from: resources
           loop: "{{ application_provider_inputs.libraryJobs | selectattr('serviceType', 'equalto', 'clickhouse') | list }}"
           loop_control:
             loop_var: platform_clickhouse_application_job
-        - name: Publish each library shared secrets once
+        - name: Опубликовать общие секреты каждой библиотеки один раз
           ansible.builtin.include_role:
             name: platform.vault.application_provider
             tasks_from: library
           loop: "{{ application_vault_inputs.libraryJobs | platform.core.application_ready_shared_jobs(application_runtime_inputs.integrations, []) }}"
           loop_control:
             loop_var: platform_vault_application_job
-        - name: Ensure and authenticate each PostgreSQL account instance
+        - name: Проверка и аутентификация каждого экземпляра учетной записи PostgreSQL
           ansible.builtin.include_role:
             name: platform.postgresql.application_provider
             tasks_from: accounts
           loop: "{{ application_provider_inputs.instanceJobs | selectattr('serviceType', 'equalto', 'postgresql') | list }}"
           loop_control:
             loop_var: platform_postgresql_application_job
-        - name: Ensure and authenticate each Redis and Sentinel logical instance
+        - name: Проверка и аутентификация каждого логического экземпляра Redis и Sentinel
           ansible.builtin.include_role:
             name: platform.redis.application_provider
             tasks_from: accounts
           loop: "{{ application_provider_inputs.instanceJobs | selectattr('serviceType', 'equalto', 'redis') | list }}"
           loop_control:
             loop_var: platform_redis_application_job
-        - name: Ensure each ClickHouse instance with one user and grant batch
+        - name: Убедиться, что каждый экземпляр ClickHouse имеет одного пользователя и предоставить пакет
           ansible.builtin.include_role:
             name: platform.clickhouse.application_provider
             tasks_from: accounts
           loop: "{{ application_provider_inputs.instanceJobs | selectattr('serviceType', 'equalto', 'clickhouse') | list }}"
           loop_control:
             loop_var: platform_clickhouse_application_job
-        - name: Ensure Kafka deployment accounts before Vault publication
+        - name: Проверка учетных записей развертывания Kafka перед публикацией Vault
           ansible.builtin.include_role:
             name: platform.kafka.kafka_kraft
             tasks_from: application_accounts
@@ -135,14 +135,14 @@
           loop: "{{ application_provider_inputs.jobs | selectattr('serviceType', 'equalto', 'kafka') | selectattr('accounts') | list }}"
           loop_control:
             loop_var: platform_kafka_application_job
-        - name: Publish each instance credentials and AppRole once
+        - name: Опубликовать учетные данные каждого экземпляра и AppRole один раз
           ansible.builtin.include_role:
             name: platform.vault.application_provider
             tasks_from: instance
           loop: "{{ application_vault_inputs.instanceJobs | platform.core.application_ready_vault_jobs(application_runtime_inputs.integrations, [], []) }}"
           loop_control:
             loop_var: platform_vault_application_job
-        - name: Retain completed ordinary instance deliveries for the runtime coordinator
+        - name: Сохранение завершенных обычных поставок экземпляров для координатора среды выполнения
           ansible.builtin.set_fact:
             platform_application_delivered_instances: >-
               {{ (application_vault_inputs.instanceJobs | platform.core.application_ready_vault_jobs(
@@ -151,16 +151,16 @@
                    platform.core.application_ready_vault_jobs(application_runtime_inputs.integrations, [], [])) |
                    map(attribute='instanceId')) | map('join', '/') | list }}
           no_log: true
-        - name: Transfer derived credential custody to the runtime play
+        - name: Передача производных учетных данных в среду выполнения
           ansible.builtin.set_fact:
             platform_application_runtime_credential_custody: true
           no_log: true
       always:
-        - name: Discard generated password preparation values after provider delivery
+        - name: Отменить сгенерированные значения подготовки пароля после доставки провайдера
           ansible.builtin.set_fact:
             platform_application_generated_values: {}
           no_log: true
-        - name: Remove only invocation-derived Vault account credential files
+        - name: Удалить только файлы учетных данных Vault, полученные из вызова
           ansible.builtin.file:
             path: "{{ platform_application_secret_root }}/{{ item.passwordRef }}"
             state: absent

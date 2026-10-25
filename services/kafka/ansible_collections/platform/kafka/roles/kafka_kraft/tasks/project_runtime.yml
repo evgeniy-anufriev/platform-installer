@@ -1,12 +1,12 @@
 ---
-- name: Initialize optional legacy project manifest
+- name: Инициализация дополнительного манифеста устаревшего проекта
   ansible.builtin.set_fact:
     _platform_kafka_project_manifest: {}
   delegate_to: localhost
   delegate_facts: true
   run_once: true
 
-- name: Load legacy project desired state when Ansible-native state is absent
+- name: Загрузить желаемое состояние устаревшего проекта, когда собственное состояние Ansible отсутствует
   ansible.builtin.include_vars:
     file: "{{ platform_project_manifest_path | default(inventory_dir ~ '/../project.yml', true) }}"
     name: _platform_kafka_project_manifest
@@ -16,7 +16,7 @@
   become: false
   when: platform_desired_state | default({}) | length == 0
 
-- name: Select Ansible-native desired state with legacy compatibility
+- name: Выбрать желаемое состояние Ansible с устаревшей совместимостью
   ansible.builtin.set_fact:
     _platform_kafka_project_state: >-
       {{ platform_desired_state
@@ -28,42 +28,42 @@
   delegate_facts: true
   run_once: true
 
-- name: Initialize projected Kafka member list
+- name: Инициализация прогнозируемого списка экземпляров службы Kafka
   ansible.builtin.set_fact:
     platform_kafka_instances: []
 
-- name: Select managed Kafka deployment
+- name: Выбор управляемого развертывания Kafka
   ansible.builtin.set_fact:
     _platform_kafka_managed_deployment: >-
       {{ (hostvars['localhost']._platform_kafka_project_state.serviceDeployments | dict2items
           | selectattr('value.serviceType', 'equalto', 'kafka') | list | first) }}
 
-- name: Select the exact approved Kafka deployment when executing a plan
+- name: Выбрать точное утвержденное развертывание Kafka при выполнении плана
   ansible.builtin.set_fact:
     _platform_kafka_managed_deployment:
       key: "{{ platform_execution_service_deployment }}"
       value: "{{ hostvars['localhost']._platform_kafka_project_state.serviceDeployments[platform_execution_service_deployment] }}"
   when: platform_execution_service_deployment is defined
 
-- name: Select machine-owned Kafka deployment state
+- name: Выбор состояния развертывания Kafka, принадлежащего компьютеру
   ansible.builtin.set_fact:
     _platform_kafka_generated_deployment_state: >-
       {{ (platform_generated_state | default({})).get('serviceDeployments', {}).get(
            _platform_kafka_managed_deployment.key, {}) }}
 
-- name: Project deployment-scoped Kafka identity
+- name: Идентификатор Kafka в области развертывания проекта
   ansible.builtin.set_fact:
     platform_kafka_cluster_id: >-
           {{ _platform_kafka_generated_deployment_state.get('identity', {}).get('clusterId', '')
           | default(_platform_kafka_managed_deployment.value.get('identity', {}).get('clusterId', ''), true)
           | default('', true) }}
 
-- name: Project explicit deployment-scoped Kafka settings
+- name: Явные параметры проекта Kafka в области развертывания
   ansible.builtin.set_fact:
     platform_kafka_quorum_mode: "{{ _platform_kafka_managed_deployment.value.configuration.quorumMode }}"
   when: "'quorumMode' in (_platform_kafka_managed_deployment.value.configuration | default({}))"
 
-- name: Project each Kafka deployment
+- name: Спроецировать каждое развертывание Kafka
   ansible.builtin.set_fact:
     platform_kafka_admin_credential: "{{ _platform_kafka_managed_deployment.value.configuration.adminCredential | default(platform_kafka_admin_credential) }}"
     platform_kafka_schema_registry_enabled: "{{ _platform_kafka_managed_deployment.value.configuration.schemaRegistryEnabled | default(platform_kafka_schema_registry_enabled) }}"
@@ -73,7 +73,7 @@
 # Do not copy integer defaults through scalar set_fact: classic Jinja turns them
 # into strings before the shared Registry projection validates their types.
 
-- name: Project each Kafka deployment with Registry settings
+- name: Проецировать каждое развертывание Kafka с настройками реестра
   ansible.builtin.include_tasks: project_deployment.yml
   loop: "{{ (hostvars['localhost']._platform_kafka_project_state.serviceDeployments | default({}) | dict2items) }}"
   loop_control:

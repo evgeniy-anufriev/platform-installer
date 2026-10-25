@@ -1,5 +1,5 @@
 ---
-- name: Hash the declared archive on the Execution Node
+- name: Хэширование объявленного архива на узле выполнения
   ansible.builtin.stat:
     path: "{{ application_archive.path }}"
     checksum_algorithm: sha256
@@ -8,7 +8,7 @@
   register: application_archive_stat
   no_log: true
 
-- name: Check archive readability before target writes
+- name: Проверка читаемости архива перед целевой записью
   ansible.builtin.command:
     argv: [tar, -tzf, "{{ application_archive.path }}"]
   delegate_to: localhost
@@ -16,7 +16,7 @@
   changed_when: false
   no_log: true
 
-- name: Bind archive bytes to the configuration fingerprint
+- name: Привязка байтов архива к отпечатку конфигурации
   ansible.builtin.set_fact:
     application_archive_pairs: "{{ application_archive_pairs + [[application_archive.destination, application_archive_stat.stat.checksum]] }}"
     application_archive_checksums: "{{ application_archive_checksums | combine({application_archive.destination: application_archive_stat.stat.checksum}) }}"

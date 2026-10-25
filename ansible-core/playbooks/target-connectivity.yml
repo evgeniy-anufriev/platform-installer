@@ -1,15 +1,15 @@
 ---
-- name: Verify centralized target connectivity and elevation
+- name: Проверка централизованного целевого подключения и повышения прав
   hosts: platform_targets
   become: true
   gather_facts: false
   tasks:
-    - name: Read effective elevated user
+    - name: Чтение эффективного пользователя с повышенными правами
       ansible.builtin.command: id -u
       register: platform_effective_uid
       changed_when: false
 
-    - name: Assert elevated execution is available
+    - name: Доступно подтверждение выполнения с повышенными правами
       ansible.builtin.assert:
         that:
           - platform_effective_uid.rc == 0

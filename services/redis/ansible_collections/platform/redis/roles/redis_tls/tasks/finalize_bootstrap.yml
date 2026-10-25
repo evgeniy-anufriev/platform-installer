@@ -1,5 +1,5 @@
 ---
-- name: Remove bootstrap replica target from Redis persistent configuration
+- name: Удаление целевой реплики начальной загрузки из постоянной конфигурации Redis
   ansible.builtin.lineinfile:
     path: "{{ item.config_directory }}/redis.conf"
     regexp: '^replicaof '
@@ -11,7 +11,7 @@
     - platform_redis_mode == 'sentinel-ha'
     - item.slot | int > 0
 
-- name: Write Redis persistent ownership marker after successful bootstrap
+- name: Запись постоянного маркера владения Redis после успешной начальной загрузки
   ansible.builtin.copy:
     content: "mode={{ platform_redis_mode }}\n"
     dest: "{{ item.data_directory }}/.{{ platform_redis_name }}-mode"

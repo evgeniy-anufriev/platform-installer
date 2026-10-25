@@ -1,5 +1,5 @@
 ---
-- name: Select the current pg_auto_failover member from explicit topology
+- name: Выбрать текущий экземпляр службы pg_auto_failover из явной топологии
   ansible.builtin.set_fact:
     _platform_postgresql_member: >-
       {{ platform_postgresql_instances
@@ -10,13 +10,13 @@
          | selectattr('roles', 'contains', 'monitor')
          | list | first }}
 
-- name: Resolve explicit pg_auto_failover member ports
+- name: Разрешение явных портов экземпляра службы pg_auto_failover
   ansible.builtin.set_fact:
     _platform_postgresql_member_port: "{{ _platform_postgresql_member.port | default(platform_postgresql_port) }}"
     _platform_postgresql_monitor_port: "{{ _platform_postgresql_monitor.port | default(platform_postgresql_port) }}"
     _platform_postgresql_monitor_uri: "postgres://{{ platform_postgresql_monitor_credential.username }}@{{ _platform_postgresql_monitor.address }}:{{ _platform_postgresql_monitor.port | default(platform_postgresql_port) }}/pg_auto_failover"
 
-- name: Require one current pg_auto_failover member
+- name: Требуется один текущий экземпляр службы pg_auto_failover
   ansible.builtin.assert:
     that:
       - _platform_postgresql_member is mapping
@@ -25,7 +25,7 @@
       - _platform_postgresql_monitor.address is defined
     fail_msg: POSTGRES_AUTO_FAILOVER_MEMBER_TOPOLOGY_REQUIRED
 
-- name: Install pg_auto_failover runtime password file
+- name: Установка файла пароля времени выполнения pg_auto_failover
   ansible.builtin.copy:
     content: |
       {{ _platform_postgresql_monitor.address }}:{{ _platform_postgresql_monitor_port }}:pg_auto_failover:{{ platform_postgresql_monitor_credential.username }}:{{ lookup('ansible.builtin.file', platform_postgresql_secret_files[platform_postgresql_monitor_credential.passwordSecretRef]) | trim }}
@@ -37,7 +37,7 @@
     mode: '0600'
   no_log: true
 
-- name: Persist pg_autoctl environment for the PostgreSQL login shell
+- name: Сохранение среды pg_autoctl для оболочки входа PostgreSQL
   ansible.builtin.blockinfile:
     path: "{{ platform_postgresql_user_home }}/.bash_profile"
     create: true
@@ -49,7 +49,7 @@
       export PGDATA="{{ platform_postgresql_data_directory }}"
       export PGPASSFILE="{{ platform_postgresql_pgpass_file }}"
 
-- name: Discover pg_auto_failover controller configuration
+- name: Обнаружение конфигурации контроллера pg_auto_failover
   ansible.builtin.stat:
     path: "/var/lib/pgsql/.config/pg_autoctl{{ platform_postgresql_data_directory }}/pg_autoctl.cfg"
     get_mime: false
@@ -57,7 +57,7 @@
     get_checksum: false
   register: platform_postgresql_pg_autoctl_config
 
-- name: Discover pg_auto_failover data initialization state
+- name: Обнаружение состояния инициализации данных pg_auto_failover
   ansible.builtin.stat:
     path: "{{ platform_postgresql_data_directory }}/PG_VERSION"
     get_mime: false
@@ -65,7 +65,7 @@
     get_checksum: false
   register: platform_postgresql_pg_autoctl_pg_version
 
-- name: Read existing pg_autoctl monitor URI
+- name: Прочитать существующий URI монитора pg_autoctl
   ansible.builtin.command:
     argv:
       - pg_autoctl
@@ -82,7 +82,7 @@
     - platform_postgresql_pg_autoctl_pg_version.stat.exists
     - "'database' in _platform_postgresql_member.roles"
 
-- name: Reconcile pg_autoctl monitor identity for existing data members
+- name: Согласование идентификаторов монитора pg_autoctl для существующих экземпляров службы данных
   ansible.builtin.command:
     argv:
       - pg_autoctl
@@ -101,7 +101,7 @@
     - "'database' in _platform_postgresql_member.roles"
     - platform_postgresql_pg_autoctl_monitor_uri.stdout | trim != _platform_postgresql_monitor_uri
 
-- name: Create pg_auto_failover monitor
+- name: Создание монитора pg_auto_failover
   ansible.builtin.command:
     argv:
       - pg_autoctl
@@ -133,7 +133,7 @@
   register: platform_postgresql_pg_autoctl_create_monitor
   changed_when: true
 
-- name: Create pg_auto_failover data member registration
+- name: Создание регистрации экземпляра службы данных pg_auto_failover
   ansible.builtin.command:
     argv:
       - pg_autoctl

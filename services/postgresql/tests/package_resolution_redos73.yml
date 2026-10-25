@@ -1,22 +1,22 @@
 ---
-- name: Resolve PostgreSQL packages from the RED OS 7.3 repository without installing them
+- name: Разрешить пакеты PostgreSQL из репозитория RED OS 7.3 без их установки
   hosts: all
   gather_facts: true
   vars:
     platform_postgresql_mode: pg_auto_failover
   tasks:
-    - name: Require the RED OS 7.3 target
+    - name: Требуется цель RED OS 7.3
       ansible.builtin.assert:
         that:
           - ansible_facts.distribution_version is version('7.3', '>=')
           - ansible_facts.distribution_version is version('8.0', '<')
 
-    - name: Resolve package masks through the PostgreSQL role
+    - name: Разрешение масок пакетов с помощью роли PostgreSQL
       ansible.builtin.include_role:
         name: platform.postgresql.postgresql
         tasks_from: resolve_packages
 
-    - name: Require the PostgreSQL 16 and pg_auto_failover 16 repository packages
+    - name: Требуются пакеты репозитория PostgreSQL 16 и pg_auto_failover 16
       ansible.builtin.assert:
         that:
           - _platform_postgresql_repository_packages | select('match', '^postgresql16-16[.]14-') | list | length == 1

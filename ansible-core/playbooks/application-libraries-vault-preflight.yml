@@ -1,20 +1,20 @@
 ---
-- name: Resolve and preflight application Vault providers without mutations
+- name: Разрешение и предварительная проверка провайдеров приложений Vault без мутаций
   hosts: localhost
   connection: local
   gather_facts: false
   any_errors_fatal: true
   tasks:
-    - name: Prepare target-free Vault projection from the exact provider snapshot
+    - name: Подготовить бесцелевую проекцию Vault на основе точного снимка провайдера
       platform.core.prepare_application_vault:
         snapshot_result: "{{ application_provider_snapshot }}"
       register: application_vault_inputs
       no_log: true
-    - name: Require supported Vault scope before writes
+    - name: Перед записью требовать поддерживаемую область Vault
       ansible.builtin.assert:
         that: application_vault_inputs.status == 'PASS'
         fail_msg: "{{ application_vault_inputs.code | default('APPLICATION_VAULT_INPUT_INVALID') }}"
-    - name: Initialize private provider facts
+    - name: Инициализация фактов частного провайдера
       ansible.builtin.set_fact:
         platform_application_vault_runtime: {}
         platform_application_vault_identities: {}
@@ -23,7 +23,7 @@
         platform_application_credential_files: {}
         platform_application_generated_values: {}
       no_log: true
-    - name: Discover each Vault deployment once
+    - name: Один раз обнаружить каждое развертывание Vault
       ansible.builtin.include_role:
         name: platform.vault.application_provider
         tasks_from: discover
@@ -32,7 +32,7 @@
       loop: "{{ application_vault_inputs.providers }}"
       loop_control:
         loop_var: platform_vault_application_provider
-    - name: Preflight library and logical instance secret scopes
+    - name: Библиотека предварительной проверки и секретные области логического экземпляра
       ansible.builtin.include_role:
         name: platform.vault.application_provider
         tasks_from: preflight

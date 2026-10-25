@@ -5,26 +5,26 @@
 
 - import_playbook: discover.yml
 
-- name: Kafka identity discovery aggregation
+- name: Kafka агрегирование обнаружения идентификационных данных
   hosts: platform_targets
   gather_facts: false
   tasks:
-    - name: Aggregate normalized read-only discovery
+    - name: Объединить нормализованные результаты обнаружения без изменений
       ansible.builtin.include_tasks: aggregate_discovery.yml
 
-- name: Kafka identity materialization
+- name: Материализация личности Kafka
   hosts: localhost
   connection: local
   gather_facts: false
   tasks:
-    - name: Select effective Kafka desired state for controller-side materialization
+    - name: Выбрать эффективное желаемое состояние Kafka для материализации на стороне контроллера
       ansible.builtin.set_fact:
         _platform_kafka_materialization_desired_state: >-
           {{ platform_desired_state |
              default(hostvars[(groups['platform_targets'] | default([]) | sort | first)].platform_desired_state |
                      default({}, true), true) }}
 
-    - name: Materialize managed Kafka identities before mutation
+    - name: Материализация управляемых удостоверений Kafka перед изменением
       platform.core.materialize_kafka_identities:
         project_path: "{{ platform_kafka_project_path | default(platform_project_manifest_path | default((inventory_dir | default('/project/inventory', true)) ~ '/../project.yml', true), true) if (_platform_kafka_materialization_desired_state | length == 0) else omit }}"
         inventory_path: "{{ platform_kafka_inventory_path | default((platform_project_root | default((inventory_dir | default('/project/inventory', true)) | dirname, true)) ~ '/inventory/hosts.yml', true) }}"
@@ -41,11 +41,11 @@
       # not make a repeat service apply appear changed.
       changed_when: false
 
-- name: Kafka generated identity projection
+- name: Kafka создал проекцию идентичности
   hosts: platform_targets
   gather_facts: false
   tasks:
-    - name: Project machine-owned Kafka identity state onto target hosts
+    - name: Проецировать принадлежащее компьютеру состояние удостоверения Kafka на целевые хосты
       ansible.builtin.set_fact:
         platform_generated_state: >-
           {{ hostvars['localhost'].platform_kafka_materialization.materialization.stateDocument.platform_generated_state |
@@ -53,13 +53,13 @@
 
 - import_playbook: ../../../ansible-core/playbooks/validate.yml
 
-- name: Apply Kafka KRaft members
+- name: Применить экземпляры службы Kafka KRaft
   hosts: platform_targets
   any_errors_fatal: true
   become: true
   gather_facts: true
   pre_tasks:
-    - name: Apply trusted runtime Kafka configuration
+    - name: Применить конфигурацию доверенной среды выполнения Kafka
       ansible.builtin.include_role:
         name: platform.core.runtime_role_variables
       when: platform_execution_role_variables_by_host is defined
@@ -68,7 +68,7 @@
       platform_kafka_verify_only: false
       platform_kafka_phase: kafka
 
-- name: Apply Schema Registry after all Kafka members have started
+- name: Применить Schema Registry после запуска всех экземпляров службы Kafka
   hosts: platform_targets
   become: true
   gather_facts: false

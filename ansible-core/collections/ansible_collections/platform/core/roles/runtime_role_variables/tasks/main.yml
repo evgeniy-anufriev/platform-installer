@@ -1,5 +1,5 @@
 ---
-- name: Require Core-derived role variables for the current target
+- name: Требовать ролевые переменные, производные от Core, для текущей цели
   ansible.builtin.assert:
     that:
       - platform_execution_role_variables_by_host is mapping
@@ -8,6 +8,6 @@
     fail_msg: EXECUTION_ROLE_VARIABLES_INVALID
   no_log: true
 
-- name: Apply Core-derived role variables for the current target
+- name: Применить ролевые переменные, производные от Core, для текущей цели
   platform.core.apply_runtime_role_variables:
   no_log: true

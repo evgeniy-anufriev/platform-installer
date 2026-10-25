@@ -1,16 +1,16 @@
 ---
-- name: Check Redis member systemd state
+- name: Проверка состояния экземпляра службы Redis systemd
   ansible.builtin.command:
     argv: [systemctl, is-active, "{{ platform_redis_name }}@{{ redis_member.instance_name }}.service"]
   changed_when: false
   register: _platform_redis_unit_state
 
-- name: Require active Redis member
+- name: Требовать активный экземпляр службы Redis
   ansible.builtin.assert:
     that: _platform_redis_unit_state.stdout | trim == 'active'
     fail_msg: REDIS_MEMBER_NOT_ACTIVE
 
-- name: Verify Redis TLS endpoint and credential
+- name: Проверка конечной точки Redis TLS и учетных данных
   ansible.builtin.command:
     argv:
       - redis-cli
@@ -38,7 +38,7 @@
   no_log: true
   ignore_errors: true
 
-- name: Require successful Redis TLS endpoint authentication
+- name: Требовать успешную аутентификацию конечной точки Redis TLS
   ansible.builtin.assert:
     that:
       - _platform_redis_ping.rc == 0
@@ -53,7 +53,7 @@
          else 'REDIS_TLS_PING_FAILED' }}
   when: _platform_redis_ping is failed
 
-- name: Read Redis replication role over the authenticated TLS endpoint
+- name: Чтение роли репликации Redis через аутентифицированную конечную точку TLS
   ansible.builtin.command:
     argv:
       - redis-cli
@@ -88,7 +88,7 @@
     )
   no_log: true
 
-- name: Record safe Redis role observation for deployment-wide verification
+- name: Запись безопасного наблюдения за ролью Redis для проверки в масштабе всего развертывания
   ansible.builtin.set_fact:
     _platform_redis_observed_members: >-
       {{ _platform_redis_observed_members + [{
@@ -108,20 +108,20 @@
       }] }}
   no_log: true
 
-- name: Check Sentinel member systemd state
+- name: Проверка состояния экземпляра службы Sentinel systemd
   ansible.builtin.command:
     argv: [systemctl, is-active, "{{ platform_redis_name }}-sentinel@{{ redis_member.instance_name }}.service"]
   changed_when: false
   register: _platform_sentinel_unit_state
   when: "'sentinel' in redis_member.roles"
 
-- name: Require active Sentinel member
+- name: Требовать активный экземпляр службы Sentinel
   ansible.builtin.assert:
     that: _platform_sentinel_unit_state.stdout | trim == 'active'
     fail_msg: REDIS_SENTINEL_MEMBER_NOT_ACTIVE
   when: "'sentinel' in redis_member.roles"
 
-- name: Verify Sentinel TLS quorum and discover its current master
+- name: Проверить кворум Sentinel TLS и обнаружить его текущий мастер
   ansible.builtin.command:
     argv:
       - redis-cli
@@ -152,7 +152,7 @@
   no_log: true
   when: "'sentinel' in redis_member.roles"
 
-- name: Read the current master address from Sentinel
+- name: Прочитать текущий главный адрес из Sentinel
   ansible.builtin.command:
     argv:
       - redis-cli
@@ -185,7 +185,7 @@
   no_log: true
   when: "'sentinel' in redis_member.roles"
 
-- name: Record safe Sentinel master observation for deployment-wide verification
+- name: Запись безопасного главного наблюдения Sentinel для проверки в масштабе всего развертывания
   ansible.builtin.set_fact:
     _platform_redis_observed_sentinel_masters: >-
       {{ _platform_redis_observed_sentinel_masters + [
@@ -194,5 +194,5 @@
   no_log: true
   when: "'sentinel' in redis_member.roles"
 
-- name: Verify and save the default-user ACL after member health checks
+- name: Проверка и сохранение пользователя по умолчанию ACL после проверки работоспособности экземпляра службы
   ansible.builtin.include_tasks: acl_runtime.yml

@@ -1,5 +1,5 @@
 ---
-- name: Direct autonomous Docker role acceptance on one RED OS target
+- name: Прямое принятие автономной роли Docker на одном целевом объекте RED OS
   hosts: platform_targets
   become: true
   gather_facts: false

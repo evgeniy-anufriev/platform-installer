@@ -1,5 +1,5 @@
 ---
-- name: Read retained member configurations before attaching ACL files
+- name: Прочитать сохраненные конфигурации экземпляра службы перед прикреплением файлов ACL
   ansible.builtin.slurp:
     src: "{{ redis_member.config_directory }}/{{ item }}.conf"
   loop: "{{ ['redis'] + (['sentinel'] if 'sentinel' in redis_member.roles else []) }}"
@@ -7,7 +7,7 @@
   register: _platform_redis_acl_configs
   no_log: true
 
-- name: Refuse foreign inline users or ACL paths in retained configurations
+- name: Отклонить неуправляемых встроенных пользователей или пути ACL в сохраненных конфигурациях
   ansible.builtin.assert:
     that:
       - >-
@@ -25,7 +25,7 @@
   when: not (item.skipped | default(false))
   no_log: true
 
-- name: Remove retained inline default-user definitions for this owned deployment
+- name: Удалить сохраненные встроенные определения пользователей по умолчанию для этого принадлежащего развертыванию
   ansible.builtin.replace:
     path: "{{ redis_member.config_directory }}/{{ item.item }}.conf"
     regexp: '(?m)^[ \t]*user[ \t]+default[ \t]+[^\r\n]*(?:\r?\n|$)'
@@ -39,7 +39,7 @@
     - item.content | b64decode is search('(?m)^[ \t]*user[ \t]+default[ \t]+')
   no_log: true
 
-- name: Preserve named users and prepare the default ACL under the member lock
+- name: Сохранить именованных пользователей и подготовить ACL по умолчанию для блокировки экземпляра службы
   platform.redis.acl_file:
     directory: "{{ redis_member.config_directory }}"
     listener: "{{ item }}"

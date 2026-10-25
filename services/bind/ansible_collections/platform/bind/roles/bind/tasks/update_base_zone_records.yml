@@ -1,5 +1,5 @@
 ---
-- name: Apply each desired base A record without deleting other owners
+- name: Применить каждую нужную базовую запись A, не удаляя других владельцев
   ansible.builtin.include_tasks: update_a_record.yml
   vars:
     platform_bind_a_record:

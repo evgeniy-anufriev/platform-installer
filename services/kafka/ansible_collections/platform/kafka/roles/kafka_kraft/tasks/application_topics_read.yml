@@ -1,11 +1,11 @@
 ---
-- name: Bind the exact declared topic selection for this invocation
+- name: Привязать точный объявленный выбор темы для этого вызова
   ansible.builtin.set_fact:
     application_topic_batch_pattern: "{{ '^(' ~ (platform_kafka_application_job.topics | map(attribute='name') | map('regex_escape') | join('|')) ~ ')$' }}"
     application_topic_required_names: "{{ (platform_kafka_application_job.topics if platform_kafka_application_phase == 'verify' else platform_kafka_application_job.topics | selectattr('mode', 'equalto', 'existing') | list) | map(attribute='name') | list }}"
   changed_when: false
 
-- name: Describe the declared topic batch once
+- name: Один раз описать заявленный пакет тем
   ansible.builtin.command:
     argv: ["{{ application_topic_cli_directory }}/bin/kafka-topics.sh", --bootstrap-server, "{{ application_topic_candidate.address }}:{{ application_topic_candidate.port }}", --command-config, "{{ application_topic_client.path }}", --describe, --if-exists, --topic, "{{ application_topic_batch_pattern }}"]
   register: application_topic_batch_description
@@ -19,12 +19,12 @@
   retries: "{{ platform_kafka_startup_readiness_retries }}"
   delay: "{{ platform_kafka_startup_readiness_delay }}"
 
-- name: Require readable topic batch metadata
+- name: Требовать читаемые метаданные тематического пакета
   ansible.builtin.assert:
     that: application_topic_batch_description.rc == 0
     fail_msg: APPLICATION_TOPIC_DESCRIBE_FAILED
 
-- name: Read effective topic configurations once for this invocation
+- name: Прочитать эффективные конфигурации темы один раз для этого вызова
   ansible.builtin.command:
     argv: ["{{ application_topic_cli_directory }}/bin/kafka-configs.sh", --bootstrap-server, "{{ application_topic_candidate.address }}:{{ application_topic_candidate.port }}", --command-config, "{{ application_topic_client.path }}", --describe, --all, --entity-type, topics]
   register: application_topic_batch_properties
@@ -32,7 +32,7 @@
   failed_when: false
   no_log: true
 
-- name: Require readable effective topic configurations
+- name: Требовать читаемые эффективные конфигурации тем
   ansible.builtin.assert:
     that: application_topic_batch_properties.rc == 0
     fail_msg: APPLICATION_TOPIC_CONFIG_READ_FAILED

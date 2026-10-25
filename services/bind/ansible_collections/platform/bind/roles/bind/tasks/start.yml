@@ -1,12 +1,12 @@
 ---
-- name: Determine whether BIND is already active
+- name: Определить, активен ли уже BIND
   ansible.builtin.command:
     argv: ["systemctl", "is-active", "--quiet", "{{ platform_bind_service_name }}"]
   changed_when: false
   failed_when: false
   register: _platform_bind_service_active
 
-- name: Reload active BIND after changed active artifacts
+- name: Перезагрузить активный BIND после изменения активных артефактов
   ansible.builtin.systemd:
     name: "{{ platform_bind_service_name }}"
     state: reloaded
@@ -14,14 +14,14 @@
     - _platform_bind_service_active.rc == 0
     - platform_bind_active_artifacts_changed | default(false) | bool
 
-- name: Enable and start inactive BIND after cluster-wide active validation
+- name: Включение и запуск неактивного BIND после активной проверки на уровне всего кластера
   ansible.builtin.systemd:
     name: "{{ platform_bind_service_name }}"
     enabled: true
     state: started
   when: _platform_bind_service_active.rc != 0
 
-- name: Add or update only the base-owned authoritative A records
+- name: Добавление или обновление только авторитетных записей A, принадлежащих базе
   ansible.builtin.include_tasks: update_base_zone_records.yml
   loop: "{{ platform_bind_resolved_zones | dict2items | selectattr('key', 'in', platform_deployments) | list }}"
   loop_control:

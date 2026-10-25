@@ -1,20 +1,20 @@
 ---
-- name: Build target-free machine-readable DeploymentPlan
+- name: Создание машиночитаемого плана развертывания без целевых объектов
   hosts: localhost
   connection: local
   gather_facts: false
   tasks:
-    - name: Validate portable service resource settings
+    - name: Проверка настроек ресурсов переносимой службы
       ansible.builtin.include_role:
         name: platform.core.project_settings
       run_once: true
 
-    - name: Resolve optional application libraries with ordinary Ansible
+    - name: Разрешить дополнительные библиотеки приложений с помощью обычного Ansible
       ansible.builtin.include_role:
         name: platform.core.resolve_application_libraries
       when: platform_desired_state.applicationLibraryDeployments is defined
 
-    - name: Build authoritative target-free project snapshot
+    - name: Создание авторитетного моментального снимка проекта без целевых объектов
       platform.core.project_snapshot:
         project_root: "{{ platform_project_root }}"
         service_catalog_path: "{{ platform_service_catalog_path }}"
@@ -23,13 +23,13 @@
       become: false
       register: platform_plan_snapshot
 
-    - name: Load authoritative service catalog
+    - name: Загрузка авторитетного каталога сервисов
       ansible.builtin.include_vars:
         file: "{{ platform_service_catalog_path }}"
         name: platform_plan_catalog_file
       changed_when: false
 
-    - name: Build authoritative public plan
+    - name: Разработать авторитетный общественный план
       platform.core.build_deployment_plan:
         snapshot: "{{ platform_plan_snapshot.snapshot }}"
         service_catalog: "{{ platform_plan_catalog_file.platform_service_catalog | default(platform_plan_catalog_file, true) }}"

@@ -1,5 +1,5 @@
 ---
-- name: Reconcile only ready shared fields through existing owned CAS delivery
+- name: Согласовать только готовые общие поля с помощью существующей собственной доставки CAS
   ansible.builtin.include_role:
     name: platform.vault.application_provider
     tasks_from: preflight
@@ -18,7 +18,7 @@
     platform_application_secret_files: "{{ hostvars['localhost'].platform_application_secret_files }}"
     platform_application_secret_root: "{{ hostvars['localhost'].platform_application_secret_root }}"
 
-- name: Write ready shared field deltas without overwriting earlier fields
+- name: Запись готовых дельт общих полей без перезаписи предыдущих полей
   ansible.builtin.include_role:
     name: platform.vault.application_provider
     tasks_from: library
@@ -31,7 +31,7 @@
     loop_var: platform_vault_application_job
   vars: *vault_context
 
-- name: Bind consumers whose complete credential preparation just finished
+- name: Привязать потребителей, полная подготовка учетных данных которых только что завершилась
   ansible.builtin.set_fact:
     application_ready_instance_vault_jobs: >-
       {{ hostvars['localhost'].application_vault_inputs.instanceJobs | platform.core.application_ready_vault_jobs(
@@ -40,7 +40,7 @@
          hostvars['localhost'].platform_application_delivered_instances) }}
   no_log: true
 
-- name: Reread owned documents before late consumer delivery
+- name: Перечитать принадлежащие документы до поздней доставки потребителю
   ansible.builtin.include_role:
     name: platform.vault.application_provider
     tasks_from: preflight
@@ -53,7 +53,7 @@
     loop_var: platform_vault_application_job
   vars: *vault_context
 
-- name: Deliver complete credentials and AppRole before any dependent consumer starts
+- name: Доставить полные учетные данные и AppRole до запуска любого зависимого потребителя
   ansible.builtin.include_role:
     name: platform.vault.application_provider
     tasks_from: instance
@@ -66,7 +66,7 @@
     loop_var: platform_vault_application_job
   vars: *vault_context
 
-- name: Record completed delivery results without persisting another desired state
+- name: Запись завершенных результатов доставки без сохранения другого желаемого состояния
   ansible.builtin.set_fact:
     platform_application_delivered_instances: >-
       {{ hostvars['localhost'].platform_application_delivered_instances +

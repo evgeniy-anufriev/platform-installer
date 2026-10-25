@@ -1,5 +1,5 @@
 ---
-- name: Validate every selected member before stopping any local Vault unit
+- name: Проверить каждый выбранный экземпляр службы перед остановкой любой локальной службы systemd Vault
   platform.vault.clear_member:
     name_prefix: "{{ platform_name_prefix | default('', true) }}"
     deployment_id: "{{ platform_vault_deployment_id }}"
@@ -13,7 +13,7 @@
   loop_control:
     label: "{{ item.id }}"
 
-- name: Stop and disable only selected owned Vault units
+- name: Остановить и отключить только выбранные службы systemd, принадлежащие Vault
   ansible.builtin.systemd:
     name: "{{ item.instance_name }}.service"
     state: stopped
@@ -22,7 +22,7 @@
   loop_control:
     label: "{{ item.id }}"
 
-- name: Clear Raft contents through freshly validated held member directories
+- name: Очистить содержимое Raft через недавно проверенные каталоги удерживаемых экземпляров службы
   platform.vault.clear_member:
     name_prefix: "{{ platform_name_prefix | default('', true) }}"
     deployment_id: "{{ platform_vault_deployment_id }}"

@@ -1,62 +1,62 @@
 ---
-- name: Require a proven NetworkManager split DNS backend
+- name: Требуется проверенный бэкэнд NetworkManager, разделенный DNS
   ansible.builtin.assert:
     that: platform_dns_client_nm_split_supported | default(false) | bool
     fail_msg: DNS_CLIENT_SPLIT_DNS_UNSUPPORTED
 
-- name: Validate explicit NetworkManager connection override
+- name: Проверка явного переопределения соединения NetworkManager
   ansible.builtin.assert:
     that: _platform_dns_client_local_placement.networkManagerConnection is match('^[A-Za-z0-9][A-Za-z0-9 _.-]{0,127}$')
     fail_msg: DNS_CLIENT_NM_CONNECTION_INVALID
   when: _platform_dns_client_local_placement.networkManagerConnection is defined
 
-- name: Inspect active IPv4 default route devices
+- name: Проверка активных устройств маршрута по умолчанию IPv4
   ansible.builtin.command:
     argv: [ip, -o, -4, route, show, default]
   register: _platform_dns_client_nm_default_routes
   changed_when: false
   when: _platform_dns_client_local_placement.networkManagerConnection is not defined
 
-- name: Derive unique active default route device
+- name: Получение уникального активного устройства маршрута по умолчанию
   ansible.builtin.set_fact:
     _platform_dns_client_nm_default_devices: >-
       {{ _platform_dns_client_nm_default_routes.stdout_lines | map('regex_replace', '^.*\\sdev\\s+([^\\s]+).*$','\\1') | unique | list }}
   when: _platform_dns_client_local_placement.networkManagerConnection is not defined
 
-- name: Require one unambiguous default route device
+- name: Требовать одно однозначное устройство маршрутизации по умолчанию
   ansible.builtin.assert:
     that: _platform_dns_client_nm_default_devices | length == 1
     fail_msg: DNS_CLIENT_NM_CONNECTION_AMBIGUOUS
   when: _platform_dns_client_local_placement.networkManagerConnection is not defined
 
-- name: Inspect connection associated with default route device
+- name: Проверка соединения, связанного с устройством маршрута по умолчанию
   ansible.builtin.command:
     argv: [nmcli, -g, GENERAL.CONNECTION, device, show, "{{ _platform_dns_client_nm_default_devices | first }}"]
   register: _platform_dns_client_nm_derived_connection
   changed_when: false
   when: _platform_dns_client_local_placement.networkManagerConnection is not defined
 
-- name: Publish selected NetworkManager connection
+- name: Опубликовать выбранное соединение NetworkManager
   ansible.builtin.set_fact:
     platform_dns_client_nm_connection: >-
       {{ _platform_dns_client_local_placement.networkManagerConnection
          if _platform_dns_client_local_placement.networkManagerConnection is defined
          else (_platform_dns_client_nm_derived_connection.stdout | trim) }}
 
-- name: Require an active NetworkManager connection
+- name: Требовать активное соединение NetworkManager
   ansible.builtin.assert:
     that:
       - platform_dns_client_nm_connection | length > 0
       - platform_dns_client_nm_connection != '--'
     fail_msg: DNS_CLIENT_NM_CONNECTION_AMBIGUOUS
 
-- name: Read NetworkManager profile DNS properties
+- name: Чтение свойств профиля NetworkManager DNS
   ansible.builtin.command:
     argv: [nmcli, -g, ipv4.dns,ipv4.dns-search,ipv4.ignore-auto-dns, connection, show, "{{ platform_dns_client_nm_connection }}"]
   register: _platform_dns_client_nm_profile
   changed_when: false
 
-- name: Apply deterministic NetworkManager split DNS profile
+- name: Применить детерминированный разделенный профиль NetworkManager DNS
   ansible.builtin.command:
     argv:
       - nmcli
@@ -75,7 +75,7 @@
     or 'no' not in _platform_dns_client_nm_profile.stdout
   register: _platform_dns_client_nm_profile_update
 
-- name: Reapply active NetworkManager device without reconnect
+- name: Повторное применение активного устройства NetworkManager без повторного подключения
   ansible.builtin.command:
     argv: [nmcli, device, reapply, "{{ _platform_dns_client_nm_default_devices | first }}"]
   when:

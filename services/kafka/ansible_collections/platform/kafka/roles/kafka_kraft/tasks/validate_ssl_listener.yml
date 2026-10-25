@@ -1,10 +1,10 @@
 ---
-- name: Resolve Kafka TLS runtime projection for SSL listener
+- name: Разрешение проекции времени выполнения Kafka TLS для прослушивателя SSL
   ansible.builtin.include_tasks: resolve_tls_runtime.yml
   vars:
     kafka_tls_member: "{{ kafka_member }}"
 
-- name: Check PKI-01 stores before Kafka mutation
+- name: Проверка хранилищ PKI-01 перед модификацией Kafka
   ansible.builtin.stat:
     path: "{{ _platform_kafka_tls_runtime.targetDirectory }}/{{ item }}"
     get_mime: false
@@ -13,12 +13,12 @@
   loop: "{{ ['private-key.pem', 'certificate.pem', 'ca-chain.pem', 'materialization-fingerprint'] + (['keystore.p12', 'truststore.p12'] if _platform_kafka_tls_runtime.storeType == 'PKCS12' else []) }}"
   register: platform_kafka_ssl_store_state
 
-- name: Require complete PKI-01 stores before Kafka mutation
+- name: Требовать полные хранилища PKI-01 перед модификацией Kafka
   ansible.builtin.assert:
     that: "platform_kafka_ssl_store_state.results | map(attribute='stat.exists') | list | min"
     fail_msg: 'BLOCKED: PKI-01 target stores are incomplete for SSL Kafka listener'
 
-- name: Create Kafka-owned PKI consumer directory
+- name: Создать потребительский каталог PKI, принадлежащий Kafka
   ansible.builtin.file:
     path: "{{ _platform_kafka_tls_runtime.consumerDirectory }}"
     state: directory
@@ -26,7 +26,7 @@
     group: "{{ platform_kafka_group }}"
     mode: '0700'
 
-- name: Resolve runtime-only PKI store password file
+- name: Разрешение файла паролей хранилища PKI только во время выполнения
   ansible.builtin.set_fact:
     _platform_kafka_ssl_password_file: >-
       {{ (platform_pki_secret_files
@@ -34,7 +34,7 @@
   no_log: true
   when: _platform_kafka_tls_runtime.storeType == 'PKCS12'
 
-- name: Copy PKI material into Kafka-owned consumer directory
+- name: Скопировать материал PKI в потребительский каталог, принадлежащий Kafka
   ansible.builtin.copy:
     src: "{{ _platform_kafka_tls_runtime.targetDirectory }}/{{ item.name }}"
     dest: "{{ _platform_kafka_tls_runtime.consumerDirectory }}/{{ item.name }}"
@@ -53,7 +53,7 @@
   no_log: true
   when: _platform_kafka_tls_runtime.storeType == 'PKCS12' or item.name not in ['keystore.p12', 'truststore.p12']
 
-- name: Materialize the Kafka-owned PEM identity from the exact PKI plan
+- name: Материализовать принадлежащий Kafka идентификатор PEM из точного плана PKI
   ansible.builtin.include_tasks: pem_identity.yml
   vars:
     kafka_pem_source_directory: "{{ _platform_kafka_tls_runtime.targetDirectory }}"
@@ -63,14 +63,14 @@
     kafka_pem_verify_only: false
   when: _platform_kafka_tls_runtime.storeType == 'PEM'
 
-- name: Aggregate Kafka member PKI change signal
+- name: Агрегировать сигнал изменения экземпляра службы Kafka PKI
   ansible.builtin.set_fact:
     platform_kafka_member_pki_changed: >-
       {{ (platform_kafka_member_pki_changed | default(false) | bool) or
          (_platform_kafka_copied_pki_material.changed | default(false) | bool) or
          (_platform_kafka_tls_runtime.storeType == 'PEM' and (_platform_kafka_pem_identity_write.changed | default(false) | bool)) }}
 
-- name: Add listener-scoped TLS paths and selected store type
+- name: Добавить пути TLS для listener и выбранный тип хранилища
   ansible.builtin.set_fact:
     kafka_effective_config: >-
       {{ kafka_effective_config | combine({
@@ -82,7 +82,7 @@
       }) }}
   no_log: true
 
-- name: Add passwords only for explicit PKCS12 compatibility
+- name: Добавлять пароли только для явной совместимости с PKCS12
   ansible.builtin.set_fact:
     kafka_effective_config: >-
       {{ kafka_effective_config | combine({

@@ -1,5 +1,5 @@
 ---
-- name: Project Kafka members owned by each target host
+- name: Экземпляры службы Project Kafka, принадлежащие каждому целевому узлу
   ansible.builtin.include_tasks: project_deployment_host.yml
   loop: "{{ groups['platform_targets'] | default([]) | sort }}"
   loop_control:

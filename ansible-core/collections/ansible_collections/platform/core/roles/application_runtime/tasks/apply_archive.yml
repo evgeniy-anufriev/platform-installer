@@ -1,5 +1,5 @@
 ---
-- name: Inspect any interrupted archive replacement
+- name: Проверка любой прерванной замены архива
   ansible.builtin.stat:
     path: "{{ item }}"
     follow: false
@@ -9,7 +9,7 @@
   register: application_archive_recovery
   no_log: true
 
-- name: Remove an incomplete new archive before restoring the previous one
+- name: Удалить неполный новый архив перед восстановлением предыдущего
   ansible.builtin.file:
     path: "{{ application_runtime_job.instancePath }}/config/{{ application_archive.destination }}"
     state: absent
@@ -18,7 +18,7 @@
     (application_archive_recovery.results[0].stat.exists | default(false))
   no_log: true
 
-- name: Restore the previous archive after an interrupted replacement
+- name: Восстановление предыдущего архива после прерванной замены
   ansible.builtin.command:
     argv:
       - mv
@@ -28,14 +28,14 @@
   when: application_archive_recovery.results[1].stat.isdir | default(false)
   no_log: true
 
-- name: Invalidate the digest marker after recovery
+- name: Сделать недействительным маркер дайджеста после восстановления
   ansible.builtin.file:
     path: "{{ application_runtime_job.instancePath }}/config/.archive-{{ application_archive.destination | hash('sha256') }}.sha256"
     state: absent
   when: application_archive_recovery.results[1].stat.isdir | default(false)
   no_log: true
 
-- name: Inspect installed archive directory and digest marker
+- name: Проверка установленного каталога архива и маркера дайджеста
   ansible.builtin.stat:
     path: "{{ item }}"
     follow: false
@@ -45,14 +45,14 @@
   register: application_archive_installed
   no_log: true
 
-- name: Read the installed archive digest marker
+- name: Прочитать установленный маркер дайджеста архива
   ansible.builtin.slurp:
     src: "{{ application_runtime_job.instancePath }}/config/.archive-{{ application_archive.destination | hash('sha256') }}.sha256"
   when: application_archive_installed.results[1].stat.isreg | default(false)
   register: application_archive_marker
   no_log: true
 
-- name: Replace archive content only when its digest or directory changed
+- name: Заменять содержимое архива только при изменении его дайджеста или каталога
   ansible.builtin.include_tasks: replace_archive.yml
   when: >-
     not (application_archive_installed.results[0].stat.isdir | default(false)) or

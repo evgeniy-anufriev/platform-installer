@@ -1,10 +1,10 @@
 ---
-- name: Validate bounded resolved inputs including manual inventory
+- name: Проверка ограниченных разрешенных входных данных, включая инвентаризацию вручную
   ansible.builtin.assert:
     that: platform_postgresql_application_job | platform.postgresql.application_validate_provider_job
     fail_msg: APPLICATION_PROVIDER_INPUT_INVALID
 
-- name: Validate protected controller credentials before provider calls
+- name: Проверка учетных данных защищенного контроллера перед вызовом провайдера
   ansible.builtin.assert:
     that:
       - platform_postgresql_application_job.mode in ['standalone', 'pg_auto_failover']
@@ -13,11 +13,11 @@
   when: platform_postgresql_application_job.accounts | length > 0
   no_log: true
 
-- name: Discover the provider once when called directly from manual inventory
+- name: Обнаружение провайдера один раз при вызове непосредственно из инвентаризации вручную
   ansible.builtin.include_tasks: discover.yml
   when: platform_postgresql_application_job.providerId not in platform_application_provider_runtime
 
-- name: Preflight resource and account ownership in one maintenance session
+- name: Предварительная проверка ресурса и владения учетной записью за один сеанс обслуживания
   ansible.builtin.command:
     argv: [psql, -X, -h, "{{ platform_postgresql_application_socket }}", -p, "{{ application_provider_target.port }}", -U, "{{ application_provider_os_user }}", -d, postgres, -Atq, -v, ON_ERROR_STOP=1, -f, -]
     stdin: "{{ lookup('ansible.builtin.template', 'preflight.sql.j2') }}"
@@ -32,7 +32,7 @@
   changed_when: false
   no_log: true
 
-- name: Retain safe existing database and account identities
+- name: Сохранить в безопасности существующую базу данных и идентификаторы учетных записей
   ansible.builtin.set_fact:
     platform_application_provider_runtime: >-
       {{ platform_application_provider_runtime | combine({platform_postgresql_application_job.providerId:
@@ -41,7 +41,7 @@
           'roles': ((platform_application_provider_runtime[platform_postgresql_application_job.providerId].get('catalog', {}).get('roles', []) + (application_provider_catalog.stdout | from_json).roles) | unique | list)}})}) }}
   no_log: true
 
-- name: Require existing TLS material and verified server identity before mutations
+- name: Потребовать существующий материал TLS и проверенную идентификацию сервера перед мутациями
   ansible.builtin.command:
     argv: "{{ ['timeout', '--kill-after=2s', '10s', 'openssl', 's_client', '-starttls', 'postgres', '-connect', application_provider_target.address ~ ':' ~ application_provider_target.port, '-CAfile', application_provider_target.pkiPlans[0].targetDirectory ~ '/ca-chain.pem', '-verify_return_error', ('-verify_ip' if application_provider_target.address is match('^[0-9.]+$') else '-verify_hostname'), application_provider_target.address] }}"
     # Quit s_client after the verified handshake instead of waiting for input.
@@ -56,7 +56,7 @@
   when: platform_postgresql_application_job.accounts | length > 0
   no_log: true
 
-- name: Require schema-only grants when a database is not yet created
+- name: Требовать предоставления только схемы, если база данных еще не создана
   ansible.builtin.assert:
     that: application_provider_database.accounts | map(attribute='grants') | flatten | rejectattr('kind', 'equalto', 'schema') | list | length == 0
     fail_msg: APPLICATION_PROVIDER_MIGRATION_REQUIRED
@@ -66,7 +66,7 @@
   when: application_provider_database.name not in platform_application_provider_runtime[platform_postgresql_application_job.providerId].catalog.databases
   no_log: true
 
-- name: Probe existing managed application credentials using server SQLSTATE
+- name: Проверка существующих учетных данных управляемого приложения с помощью сервера SQLSTATE
   platform.postgresql.application_password_probe:
     host: "{{ application_provider_target.address }}"
     port: "{{ application_provider_target.port }}"
@@ -84,14 +84,14 @@
   when: item.mode == 'managed' and item.name in platform_application_provider_runtime[platform_postgresql_application_job.providerId].catalog.roles
   no_log: true
 
-- name: Probe existing unmanaged application credentials without reconciliation
+- name: Проверка существующих учетных данных неуправляемого приложения без сверки
   ansible.builtin.include_tasks: login.yml
   vars:
     application_provider_check_objects: true
     application_provider_probe_scope: existing
     application_provider_skip_managed: true
 
-- name: Retain only confirmed managed password mismatches for the account stage
+- name: Сохранять только подтвержденные несоответствия управляемых паролей на этапе учетной записи
   ansible.builtin.set_fact:
     platform_application_password_updates: "{{ platform_application_password_updates | default({}) | combine({platform_postgresql_application_job.providerId: ((platform_application_password_updates | default({})).get(platform_postgresql_application_job.providerId, []) + [item.item.name]) | unique | list}) }}"
   loop: "{{ application_provider_password_probe.results | default([]) }}"

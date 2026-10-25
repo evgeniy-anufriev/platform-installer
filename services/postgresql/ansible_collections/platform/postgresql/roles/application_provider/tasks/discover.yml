@@ -1,5 +1,5 @@
 ---
-- name: Inspect all database members once without querying monitor
+- name: Однократная проверка всех экземпляров службы базы данных без запроса монитора
   ansible.builtin.command:
     argv: [psql, -X, -h, "{{ platform_postgresql_application_socket }}", -p, "{{ item.port }}", -U, "{{ hostvars[item.hostId].platform_postgresql_user | default(platform_postgresql_user) }}", -d, postgres, -Atqc, "SELECT CASE WHEN NOT pg_is_in_recovery() AND current_setting('transaction_read_only') = 'off' THEN 'writable' ELSE 'readonly' END"]
   delegate_to: "{{ item.hostId }}"
@@ -10,12 +10,12 @@
   changed_when: false
   no_log: true
 
-- name: Require exactly one writable data member
+- name: Требуется ровно один экземпляр службы данных с возможностью записи
   ansible.builtin.assert:
     that: application_provider_members.results | selectattr('stdout', 'equalto', 'writable') | list | length == 1
     fail_msg: APPLICATION_PROVIDER_WRITABLE_MEMBER_INVALID
 
-- name: Preserve selected member only within this invocation
+- name: Сохранить выбранный экземпляр службы только в рамках этого вызова
   ansible.builtin.set_fact:
     platform_application_provider_runtime: >-
       {{ platform_application_provider_runtime | combine({platform_postgresql_application_job.providerId:

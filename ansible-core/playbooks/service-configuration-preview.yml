@@ -1,10 +1,10 @@
 ---
-- name: Resolve saved service settings on the controller without target contact
+- name: Разрешить сохраненные настройки службы на контроллере без целевого контакта
   hosts: localhost
   connection: local
   gather_facts: false
   tasks:
-    - name: Build bounded service-setting preview
+    - name: Создание ограниченного предварительного просмотра настроек сервиса
       platform.core.project_snapshot:
         project_root: "{{ platform_project_root }}"
         service_catalog_path: "{{ platform_service_catalog_path }}"

@@ -1,10 +1,10 @@
 ---
-- name: Resolve Kafka TLS runtime projection for SSL verification
+- name: Разрешение проекции времени выполнения Kafka TLS для проверки SSL
   ansible.builtin.include_tasks: resolve_tls_runtime.yml
   vars:
     kafka_tls_member: "{{ kafka_member }}"
 
-- name: Verify existing Kafka PEM consumer without modifying it
+- name: Проверка существующего потребителя Kafka PEM без его изменения
   ansible.builtin.include_tasks: pem_identity.yml
   vars:
     kafka_pem_source_directory: "{{ _platform_kafka_tls_runtime.targetDirectory }}"
@@ -15,14 +15,14 @@
     kafka_pem_verify_only: true
   when: _platform_kafka_tls_runtime.storeType == 'PEM'
 
-- name: Read the installed member configuration without disclosing it
+- name: Прочитать конфигурацию установленного экземпляра службы, не раскрывая ее
   ansible.builtin.slurp:
     src: "{{ kafka_member.config_directory }}/server.properties"
   register: _platform_kafka_pem_member_config
   no_log: true
   when: _platform_kafka_tls_runtime.storeType == 'PEM'
 
-- name: Require installed listener configuration to use the selected PEM material
+- name: Требовать установленную конфигурацию прослушивателя для использования выбранного материала PEM
   ansible.builtin.assert:
     that:
       - "('listener.name.' ~ (kafka_ssl_listener.name | lower) ~ '.ssl.keystore.type=PEM') in (_platform_kafka_pem_member_config.content | b64decode).splitlines()"
@@ -36,7 +36,7 @@
   no_log: true
   when: _platform_kafka_tls_runtime.storeType == 'PEM'
 
-- name: Perform real TLS handshake for Kafka listener
+- name: Выполнить настоящее рукопожатие TLS для прослушивателя Kafka
   ansible.builtin.shell: |
     set -eu
     verification_host={{ kafka_ssl_listener.advertisedAddress | default(kafka_member.advertised_host) | quote }}
@@ -61,7 +61,7 @@
   delay: "{{ platform_kafka_startup_readiness_delay }}"
   until: platform_kafka_ssl_handshake.rc == 0
 
-- name: Assert Kafka SSL handshake succeeded
+- name: Подтвердить успешное рукопожатие Kafka SSL
   ansible.builtin.assert:
     that:
       - platform_kafka_ssl_handshake.rc == 0

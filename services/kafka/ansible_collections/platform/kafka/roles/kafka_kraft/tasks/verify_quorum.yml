@@ -1,11 +1,11 @@
 ---
-- name: Resolve controller quorum Kafka CLI connection from runtime projection
+- name: Разрешить соединение кворума контроллера Kafka CLI из проекции времени выполнения
   ansible.builtin.include_tasks: resolve_cli_connection.yml
   vars:
     kafka_cli_member: "{{ kafka_quorum_diagnostic_member }}"
     kafka_cli_purpose: "{{ 'admin' if _platform_kafka_scram_enabled | default(false) | bool else 'controller' }}"
 
-- name: Query Kafka controller quorum status through projected CLI connection
+- name: Запрос состояния кворума контроллера Kafka через проецируемое соединение CLI
   ansible.builtin.include_tasks: run_cli_command.yml
   vars:
     kafka_cli_connection: "{{ _platform_kafka_cli_connection }}"
@@ -17,12 +17,12 @@
     kafka_cli_expected_controller_ids: >-
       {{ _platform_kafka_controller_instances | map(attribute='node_id') | list }}
 
-- name: Require projected controller quorum diagnostic command to succeed
+- name: Для успешного завершения требуется команда диагностики кворума проецируемого контроллера
   ansible.builtin.assert:
     that: platform_kafka_cli_command_result.rc == 0
     fail_msg: Kafka controller quorum diagnostic command failed
 
-- name: Assert Kafka controller quorum leader and membership
+- name: Подтверждение лидера кворума и членства контроллера Kafka
   ansible.builtin.assert:
     that:
       - >-

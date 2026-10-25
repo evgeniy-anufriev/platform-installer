@@ -1,24 +1,24 @@
 ---
-- name: Verify systemd-resolved is active
+- name: Убедиться, что systemd-resolved активен
   ansible.builtin.command:
     argv: [systemctl, is-active, --quiet, systemd-resolved.service]
   changed_when: false
   when: platform_dns_client_backend == 'systemd-resolved'
 
-- name: Inspect effective systemd-resolved state read-only
+- name: Проверка эффективного состояния systemd-resolved, доступного только для чтения
   ansible.builtin.command:
     argv: [resolvectl, status]
   register: _platform_dns_client_resolvectl_status
   changed_when: false
   when: platform_dns_client_backend == 'systemd-resolved'
 
-- name: Read Platform systemd-resolved drop-in without mutation
+- name: Чтение модуля Platform systemd-resolved без изменений
   ansible.builtin.slurp:
     src: "/etc/systemd/resolved.conf.d/{{ (platform_name_prefix | default('') ~ '-') if (platform_name_prefix | default('')) else '' }}installer.conf"
   register: _platform_dns_client_resolved_dropin
   when: platform_dns_client_backend == 'systemd-resolved'
 
-- name: Verify Platform systemd-resolved drop-in matches derived projection
+- name: Проверить соответствие вставки «Платформа systemd-resolved» полученной проекции
   ansible.builtin.assert:
     that:
       - "('DNS=' ~ (platform_dns_client_local.servers | join(' '))) in (_platform_dns_client_resolved_dropin.content | b64decode)"
@@ -27,7 +27,7 @@
     fail_msg: DNS_CLIENT_RESOLVED_DROPIN_INVALID
   when: platform_dns_client_backend == 'systemd-resolved'
 
-- name: Verify effective split DNS servers and route domain
+- name: Проверка эффективного разделения серверов DNS и домена маршрутизации
   ansible.builtin.assert:
     that:
       - item in _platform_dns_client_resolvectl_status.stdout
@@ -36,14 +36,14 @@
   loop: "{{ platform_dns_client_local.servers }}"
   when: platform_dns_client_backend == 'systemd-resolved'
 
-- name: Inspect NetworkManager split DNS profile read-only
+- name: Проверка NetworkManager разделенного профиля DNS, доступного только для чтения
   ansible.builtin.command:
     argv: [nmcli, -g, ipv4.dns,ipv4.dns-search,ipv4.ignore-auto-dns, connection, show, "{{ platform_dns_client_nm_connection | default('') }}"]
   register: _platform_dns_client_nm_verify
   changed_when: false
   when: platform_dns_client_backend == 'NetworkManager'
 
-- name: Verify NetworkManager split DNS profile is effective
+- name: Проверить эффективность разделенного профиля NetworkManager DNS
   ansible.builtin.assert:
     that:
       - item in _platform_dns_client_nm_verify.stdout
@@ -53,7 +53,7 @@
   loop: "{{ platform_dns_client_local.servers }}"
   when: platform_dns_client_backend == 'NetworkManager'
 
-- name: Resolve managed project host through normal system resolver
+- name: Разрешить хост управляемого проекта с помощью обычного системного преобразователя
   ansible.builtin.command:
     argv: [getent, hosts, "{{ platform_dns_client_local.hostRecord }}"]
   changed_when: false

@@ -1,33 +1,33 @@
 ---
-- name: Create an invocation-private Kafka account directory
+- name: Создание закрытого для вызова каталога учетной записи Kafka
   ansible.builtin.tempfile:
     state: directory
     prefix: platform-kafka-accounts-
   register: application_kafka_private
   changed_when: false
 
-- name: Run bounded SCRAM and ACL operations
+- name: Выполнение ограниченных операций SCRAM и ACL
   block:
-    - name: Prepare the invocation-private PEM client identity
+    - name: Подготовка частного удостоверения клиента PEM для вызова
       ansible.builtin.include_tasks: application_client_tls.yml
       when: platform_kafka_store_type == 'PEM'
-    - name: Render the dedicated administrative SASL configuration
+    - name: Визуализация выделенной административной конфигурации SASL
       ansible.builtin.template:
         src: application-topics-client.properties.j2
         dest: "{{ application_kafka_private.path }}/admin.properties"
         mode: '0600'
       no_log: true
       changed_when: false
-    - name: Read deployment SCRAM metadata and ACL inventory once before accounts
+    - name: Прочитать метаданные развертывания SCRAM и инвентарь ACL один раз перед учетными записями
       ansible.builtin.include_tasks: application_accounts_read.yml
-    - name: Check or ensure each logical account
+    - name: Проверить или убедитесь, что каждая логическая учетная запись
       ansible.builtin.include_tasks: application_account.yml
       loop: "{{ platform_kafka_application_job.accounts }}"
       loop_control:
         loop_var: application_kafka_account
         label: "{{ application_kafka_account.accountId }}"
   always:
-    - name: Remove this invocation's credential files
+    - name: Удалить файлы учетных данных этого вызова
       ansible.builtin.file:
         path: "{{ application_kafka_private.path }}"
         state: absent

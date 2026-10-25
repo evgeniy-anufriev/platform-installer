@@ -1,9 +1,9 @@
 ---
-- name: Validate portable service resource settings
+- name: Проверка настроек ресурсов переносимой службы
   ansible.builtin.include_role:
     name: platform.core.project_settings
 
-- name: Include application sources before direct full DNS reconcile
+- name: Включить источники приложений перед прямым полным согласованием DNS
   ansible.builtin.include_role:
     name: platform.core.resolve_endpoint_sources
   when:
@@ -11,7 +11,7 @@
     - platform_desired_state.applicationLibraryDeployments | default({}) | length > 0
     - hostvars['localhost'].platform_endpoint_sources is not defined
 
-- name: Validate resolved BIND artifact sources before mutation
+- name: Проверка разрешенных источников артефактов BIND перед изменением
   ansible.builtin.include_role:
     name: platform.core.artifact_source_gate
   vars:
@@ -22,7 +22,7 @@
     - platform_resolved_artifact_sources is defined or (platform_artifact_source_authority_active | default(false))
     - platform_bind_phase == 'prepare'
 
-- name: Deliver selected BIND offline artifacts
+- name: Доставка выбранных автономных артефактов BIND
   ansible.builtin.include_role:
     name: platform.core.artifact_delivery
   vars:
@@ -33,7 +33,7 @@
     - platform_resolved_artifact_sources is defined
     - platform_bind_phase == 'prepare'
 
-- name: Require managed BIND desired state
+- name: Требовать желаемое управляемое состояние BIND
   ansible.builtin.assert:
     that:
       - platform_desired_state is mapping
@@ -42,24 +42,24 @@
       - platform_bind_phase in ['prepare', 'activate', 'start', 'verify']
     fail_msg: BIND_DESIRED_STATE_INVALID
 
-- name: Consume controller-projected BIND serial lifecycle state
+- name: Использование прогнозируемого контроллером состояния последовательного жизненного цикла BIND
   ansible.builtin.set_fact:
     platform_bind_runtime_projection: "{{ hostvars['localhost'].platform_bind_runtime_projection | default({}) }}"
 
-- name: Require BIND serial runtime projection
+- name: Требовать последовательную проекцию времени выполнения BIND
   ansible.builtin.assert:
     that:
       - platform_bind_runtime_projection.zones | default({}) is mapping
       - platform_bind_runtime_projection.generatedState.serviceDeployments | default({}) is mapping
     fail_msg: BIND_RUNTIME_PROJECTION_INVALID
 
-- name: Load published service catalog for BIND projection
+- name: Загрузить опубликованный каталог сервисов для проекции BIND
   ansible.builtin.include_vars:
     file: "{{ platform_service_catalog_path }}"
     name: _platform_bind_catalog_file
   run_once: true
 
-- name: Collect safe project host address projection for BIND
+- name: Собрать безопасную проекцию адреса хоста проекта для BIND
   ansible.builtin.set_fact:
     _platform_bind_inventory_hosts: >-
       {{ _platform_bind_inventory_hosts | default({}) |
@@ -71,7 +71,7 @@
   run_once: true
   no_log: true
 
-- name: Resolve authoritative DNS zones before target mutation
+- name: Разрешить авторитетные зоны DNS перед целевым изменением
   platform.core.resolve_dns_zones:
     desired_state: "{{ platform_desired_state }}"
     service_catalog: "{{ _platform_bind_catalog_file.platform_service_catalog | default(_platform_bind_catalog_file, true) }}"
@@ -83,11 +83,11 @@
   register: _platform_bind_resolution
   run_once: true
 
-- name: Publish resolved authoritative DNS zones
+- name: Публикация решенных авторитетных зон DNS
   ansible.builtin.set_fact:
     platform_bind_resolved_zones: "{{ hostvars[ansible_play_hosts_all | first]._platform_bind_resolution.resolved_dns_zones.zones }}"
 
-- name: Assert local BIND participant belongs to one resolved zone
+- name: Подтвердить, что локальный участник BIND принадлежит одной разрешенной зоне
   ansible.builtin.assert:
     that:
       - item.key in platform_bind_resolved_zones
@@ -98,6 +98,6 @@
   loop_control:
     label: "{{ item.key }}"
 
-- name: Run BIND lifecycle only on participating hosts
+- name: Запускать жизненный цикл BIND только на участвующих хостах
   ansible.builtin.include_tasks: lifecycle.yml
   when: (platform_desired_state.serviceDeployments | dict2items | selectattr('value.serviceType', 'equalto', 'bind') | selectattr('key', 'in', platform_deployments) | list | length) > 0

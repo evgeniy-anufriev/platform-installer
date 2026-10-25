@@ -1,9 +1,9 @@
 ---
-- name: Validate portable service resource settings
+- name: Проверка настроек ресурсов переносимой службы
   ansible.builtin.include_role:
     name: platform.core.project_settings
 
-- name: Require DNS client desired and runtime projections
+- name: Требовать желаемый клиент DNS и прогнозы времени выполнения
   ansible.builtin.assert:
     that:
       - platform_desired_state is mapping
@@ -12,51 +12,51 @@
       - hostvars['localhost'].platform_dns_client_runtime_projection.clients | default({}) is mapping
     fail_msg: DNS_CLIENT_RUNTIME_PROJECTION_INVALID
 
-- name: Consume controller-projected DNS client inputs
+- name: Использование входных данных клиента DNS, проецируемых контроллером
   ansible.builtin.set_fact:
     _platform_dns_client_clients: "{{ hostvars['localhost'].platform_dns_client_runtime_projection.clients | default({}) }}"
 
-- name: Select local DNS client deployment
+- name: Выбор локального развертывания клиента DNS
   ansible.builtin.set_fact:
     _platform_dns_client_local_items: >-
       {{ _platform_dns_client_clients | dict2items | selectattr('key', 'in', platform_deployments | default({})) | list }}
 
-- name: Reject ambiguous DNS client deployment ownership
+- name: Отклонить неоднозначное владение развертыванием клиента DNS
   ansible.builtin.assert:
     that: _platform_dns_client_local_items | length <= 1
     fail_msg: DNS_CLIENT_LOCAL_DEPLOYMENT_AMBIGUOUS
 
-- name: End DNS client role on non-participating host
+- name: Завершить роль клиента DNS на неучаствующем хосте
   ansible.builtin.meta: end_host
   when: _platform_dns_client_local_items | length == 0
 
-- name: Publish local DNS client projection
+- name: Публикация локальной проекции клиента DNS
   ansible.builtin.set_fact:
     platform_dns_client_local: "{{ _platform_dns_client_local_items | first | default({}) }}"
 
-- name: Publish local DNS client placement
+- name: Публикация локального размещения клиента DNS
   ansible.builtin.set_fact:
     _platform_dns_client_local_placement: "{{ platform_deployments[platform_dns_client_local.key] }}"
 
-- name: Replace local DNS client projection with derived values
+- name: Заменить локальную клиентскую проекцию DNS производными значениями
   ansible.builtin.set_fact:
     platform_dns_client_local: "{{ _platform_dns_client_clients[platform_dns_client_local.key] }}"
 
-- name: Discover DNS client runtime adapter safely
+- name: Безопасное обнаружение адаптера среды выполнения клиента DNS
   ansible.builtin.include_tasks: discover.yml
 
-- name: Apply systemd-resolved split DNS adapter
+- name: Применить разделенный адаптер systemd-resolved DNS
   ansible.builtin.include_tasks: resolved.yml
   when:
     - platform_dns_client_phase == 'apply'
     - platform_dns_client_backend == 'systemd-resolved'
 
-- name: Apply NetworkManager split DNS adapter
+- name: Применить разделенный адаптер NetworkManager DNS
   ansible.builtin.include_tasks: networkmanager.yml
   when:
     - platform_dns_client_phase == 'apply'
     - platform_dns_client_backend == 'NetworkManager'
 
-- name: Verify DNS client runtime read-only
+- name: Проверить работу DNS-клиента без изменений
   ansible.builtin.include_tasks: verify.yml
   when: platform_dns_client_phase == 'verify'

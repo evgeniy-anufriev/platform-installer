@@ -1,5 +1,5 @@
 ---
-- name: Reject unsafe managed data directory names
+- name: Отклонить небезопасные имена каталогов управляемых данных
   ansible.builtin.assert:
     that:
       - platform_managed_data_path is string
@@ -27,7 +27,7 @@
     fail_msg: MANAGED_DATA_PATH_UNSAFE
     quiet: true
 
-- name: Inspect each managed data directory ancestor without following links
+- name: Проверить все родительские каталоги управляемых данных без перехода по символическим ссылкам
   ansible.builtin.stat:
     path: "{{ '/' ~ (platform_managed_data_path.split('/')[1:item + 1] | join('/')) }}"
     follow: false
@@ -39,7 +39,7 @@
   # Let the assertion below classify the failure without exposing raw details.
   ignore_errors: true
 
-- name: Require successful managed data directory ancestor inspection
+- name: Подтвердить успешную проверку родительских каталогов управляемых данных
   ansible.builtin.assert:
     that:
       - not (item.failed | default(false))
@@ -62,7 +62,7 @@
   loop_control:
     label: "{{ item.item }}"
 
-- name: Reject linked, foreign or writable managed data directory ancestors
+- name: Отклонить символические ссылки, чужих владельцев и небезопасные права родительских каталогов данных
   ansible.builtin.assert:
     that:
       - not item.stat.exists or (item.stat.isdir | default(false))
@@ -85,7 +85,7 @@
   loop_control:
     label: "{{ item.item }}"
 
-- name: Inspect the custom project data root during Verify
+- name: Проверка корня данных пользовательского проекта во время проверки
   ansible.builtin.stat:
     path: "{{ platform_managed_data_root_directory }}"
     follow: false
@@ -99,7 +99,7 @@
     - platform_managed_data_path.startswith(platform_managed_data_root_directory ~ '/')
     - platform_managed_data_root_verify_only | default(false)
 
-- name: Require the custom project data root to belong to the SSH technical user during Verify
+- name: Потребовать, чтобы корень данных пользовательского проекта принадлежал техническому пользователю SSH во время проверки
   ansible.builtin.assert:
     that:
       - _platform_managed_data_root_stat.stat.exists
@@ -114,7 +114,7 @@
     - platform_managed_data_root_directory != '/var/lib'
     - platform_managed_data_root_verify_only | default(false)
 
-- name: Set the custom project data root to the SSH technical user with mode 0755
+- name: Установить корень данных пользовательского проекта для технического пользователя SSH с режимом 0755
   ansible.builtin.file:
     path: "{{ platform_managed_data_root_directory }}"
     state: directory

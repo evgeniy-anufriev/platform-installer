@@ -1,27 +1,27 @@
 ---
 - import_playbook: application-libraries-credential-root.yml
-- name: Resolve standalone application provider inputs without target calls
+- name: Обработка входных данных автономного провайдера приложений без целевых вызовов
   hosts: localhost
   connection: local
   gather_facts: false
   any_errors_fatal: true
   tasks:
-    - name: Resolve ordinary application defaults and placements
+    - name: Разрешить обычные настройки и размещения приложений по умолчанию
       ansible.builtin.include_role:
         name: platform.core.resolve_application_libraries
-    - name: Build existing read-only project snapshot
+    - name: Создание существующего моментального снимка проекта, доступного только для чтения
       platform.core.project_snapshot:
         project_root: "{{ platform_project_root | default(inventory_dir | dirname) }}"
         service_catalog_path: "{{ platform_service_catalog_path }}"
       register: application_provider_snapshot
       no_log: true
-    - name: Prepare unique PostgreSQL provider jobs
+    - name: Подготовка уникальных заданий провайдера PostgreSQL
       platform.core.prepare_application_providers:
         snapshot_result: "{{ application_provider_snapshot }}"
         service_catalog_path: "{{ platform_service_catalog_path }}"
       register: application_provider_inputs
       no_log: true
-    - name: Require valid provider scope before target calls
+    - name: Требовать действительную область провайдера перед целевыми вызовами
       ansible.builtin.assert:
         that: application_provider_inputs.status == 'PASS'
         fail_msg: APPLICATION_PROVIDER_INPUT_INVALID

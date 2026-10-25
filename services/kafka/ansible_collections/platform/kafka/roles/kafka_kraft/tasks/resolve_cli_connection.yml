@@ -1,5 +1,5 @@
 ---
-- name: Select Kafka CLI listener by semantic purpose
+- name: Выбрать прослушиватель Kafka CLI по семантическому назначению
   ansible.builtin.set_fact:
     _platform_kafka_cli_listener_matches: >-
       {{ (kafka_cli_member.listener_endpoints
@@ -10,7 +10,7 @@
           | rejectattr('security_protocol', 'equalto', 'SASL_SSL') | list) }}
   changed_when: false
 
-- name: Require one Kafka CLI listener for the requested purpose
+- name: Требуется один прослушиватель Kafka CLI для запрошенной цели
   ansible.builtin.assert:
     that:
       - _platform_kafka_cli_listener_matches | length == 1
@@ -18,7 +18,7 @@
       BLOCKED: Kafka member {{ kafka_cli_member.id }} has no unique CLI listener
       for purpose {{ kafka_cli_purpose }}
 
-- name: Build Kafka CLI connection projection without secret values
+- name: Построить проекцию соединения Kafka CLI без секретных значений
   ansible.builtin.set_fact:
     _platform_kafka_cli_connection: >-
       {{ {
@@ -32,13 +32,13 @@
          } }}
   changed_when: false
 
-- name: Resolve Kafka TLS runtime projection for SSL CLI connection
+- name: Разрешение проекции времени выполнения Kafka TLS для соединения SSL CLI
   ansible.builtin.include_tasks: resolve_tls_runtime.yml
   vars:
     kafka_tls_member: "{{ kafka_cli_member }}"
   when: _platform_kafka_cli_connection.securityProtocol in ['SSL', 'SASL_SSL']
 
-- name: Add TLS projection to Kafka CLI connection without secret values
+- name: Добавить проекцию TLS к соединению Kafka CLI без секретных значений
   ansible.builtin.set_fact:
     _platform_kafka_cli_connection: >-
       {{ _platform_kafka_cli_connection | combine({
@@ -52,7 +52,7 @@
   changed_when: false
   when: _platform_kafka_cli_connection.securityProtocol in ['SSL', 'SASL_SSL']
 
-- name: Bind the planned admin runtime SecretRef without copying its value
+- name: Привязать запланированную SecretRef среды выполнения администратора, не копируя ее значение
   ansible.builtin.set_fact:
     _platform_kafka_cli_connection: "{{ _platform_kafka_cli_connection | combine({'adminPasswordRef': platform_kafka_admin_credential.passwordSecretRef}) }}"
   changed_when: false

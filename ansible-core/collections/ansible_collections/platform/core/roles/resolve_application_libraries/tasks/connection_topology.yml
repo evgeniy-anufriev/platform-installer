@@ -1,11 +1,11 @@
 ---
-- name: Bind the library template identity before resolving its exports
+- name: Привязать идентификатор шаблона библиотеки перед разрешением его экспорта
   ansible.builtin.set_fact:
     library_instance_id: "{{ application_job.libraryId }}"
   no_log: true
   become: false
 
-- name: Expand only declared exports in the isolated native library context
+- name: Развернуть только объявленные экспорты в контексте изолированной собственной библиотеки
   platform.core.prepare_application_libraries:
     provided_connections: true
     library_id: "{{ application_job.libraryId }}"
@@ -15,14 +15,14 @@
   no_log: true
   become: false
 
-- name: Require complete native export expansion before resolving topology
+- name: Требовать полного расширения собственного экспорта перед разрешением топологии
   ansible.builtin.assert:
     that: _application_export_inputs.findings | default([]) | length == 0
     fail_msg: APPLICATION_INPUT_INVALID
   no_log: true
   become: false
 
-- name: Merge provided parameters with native precedence
+- name: Объединить предоставленные параметры с собственным приоритетом
   ansible.builtin.set_fact:
     application_provided_connection_definitions: >-
       {{ _application_export_inputs.defaults |
@@ -30,14 +30,14 @@
   no_log: true
   become: false
 
-- name: Replace credential source descriptors as complete typed values
+- name: Заменить дескрипторы источника учетных данных полными типизированными значениями
   ansible.builtin.include_tasks: provided_credential_sources.yml
   loop: "{{ _application_export_inputs.overrides | dict2items }}"
   loop_control:
     loop_var: application_export_override
   no_log: true
 
-- name: Resolve connection topology with native package and installation precedence
+- name: Определение топологии соединения с использованием собственного пакета и приоритета установки
   ansible.builtin.set_fact:
     platform_application_connection_rows: >-
       {{ platform_application_connection_rows + [{

@@ -1,5 +1,5 @@
 ---
-- name: Stop only this invocation's transient lock holder
+- name: Остановить только держатель временной блокировки этого вызова
   ansible.builtin.systemd:
     name: "{{ _platform_vault_lock_unit }}.service"
     state: stopped

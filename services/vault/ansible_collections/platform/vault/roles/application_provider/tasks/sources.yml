@@ -1,5 +1,5 @@
 ---
-- name: Require an existing KV v2 source mount
+- name: Требовать существующее монтирование исходного кода KV v2
   ansible.builtin.assert:
     that:
       - application_vault_provider.mounts[application_vault_source.mount ~ '/'].type == 'kv'
@@ -9,7 +9,7 @@
     application_vault_provider: "{{ platform_application_vault_runtime[application_vault_source.providerId] }}"
   no_log: true
 
-- name: Read existing account field through its library Vault connection
+- name: Прочитать существующее поле учетной записи через соединение с библиотекой Vault
   ansible.builtin.uri:
     url: "{{ application_vault_provider.url }}/v1/{{ application_vault_source.mount }}/data/{{ application_vault_source.document }}"
     headers: {X-Vault-Token: "{{ application_vault_provider.token }}"}
@@ -24,7 +24,7 @@
   register: application_vault_source_value
   no_log: true
 
-- name: Require the declared bounded credential field
+- name: Требовать объявленное ограниченное поле учетных данных
   ansible.builtin.assert:
     that:
       - application_vault_source_value.json.data.data[application_vault_source.field] is string
@@ -33,7 +33,7 @@
     fail_msg: APPLICATION_VAULT_SOURCE_FIELD_INVALID
   no_log: true
 
-- name: Materialize provider login input only in protected runtime custody
+- name: Материализовать входные данные провайдера только в защищенной среде выполнения
   ansible.builtin.copy:
     content: "{{ application_vault_source_value.json.data.data[application_vault_source.field] }}"
     dest: "{{ platform_application_secret_root }}/{{ application_vault_source.passwordRef }}"
@@ -42,7 +42,7 @@
   when: application_vault_source.passwordRef is defined
   no_log: true
 
-- name: Bind derived private input without replacing desired source
+- name: Привязка производного частного ввода без замены желаемого источника
   ansible.builtin.set_fact:
     platform_application_credential_files: "{{ platform_application_credential_files | default({}) | combine({application_vault_source.passwordRef: platform_application_secret_root ~ '/' ~ application_vault_source.passwordRef}) }}"
   when: application_vault_source.passwordRef is defined

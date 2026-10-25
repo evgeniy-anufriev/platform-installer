@@ -1,5 +1,5 @@
 ---
-- name: Select effective PKI-01 request and plan collections
+- name: Выбрать эффективный запрос PKI-01 и спланировать коллекции
   ansible.builtin.set_fact:
     _platform_kafka_tls_runtime_all_requests: >-
       {{ platform_pki_requests
@@ -19,7 +19,7 @@
                 | map(attribute='requestId') | unique | list)) }}
   changed_when: false
 
-- name: Bind managed Kafka TLS to its exact PKI consumer request
+- name: Привязать управляемый Kafka TLS к точному потребительскому запросу PKI
   ansible.builtin.set_fact:
     _platform_kafka_tls_runtime_request_ids: >-
       {{ _platform_kafka_tls_runtime_request_ids + [item.id] }}
@@ -37,7 +37,7 @@
       | list | length == 1
   changed_when: false
 
-- name: Resolve exact PKI-01 plan for Kafka TLS runtime projection
+- name: Точное решение плана PKI-01 для проекции времени выполнения Kafka TLS
   ansible.builtin.set_fact:
     _platform_kafka_tls_runtime_plans: >-
       {{ _platform_kafka_tls_runtime_candidate_plans
@@ -49,7 +49,7 @@
          | list }}
   changed_when: false
 
-- name: Require Kafka TLS runtime projection inputs
+- name: Требовать входные данные проекции времени выполнения Kafka TLS
   ansible.builtin.assert:
     that:
       - _platform_kafka_tls_runtime_plans | length == 1
@@ -60,7 +60,7 @@
       - "'PEM' in _platform_kafka_tls_runtime_plans[0].formats"
     fail_msg: 'BLOCKED: Kafka TLS requires exact PKI-01 serverAuth/clientAuth material and PEM or PKCS12 store type'
 
-- name: Require a runtime store SecretRef only for explicit PKCS12
+- name: Требовать хранилище SecretRef во время выполнения только для явного PKCS12
   ansible.builtin.assert:
     that:
       - "['PKCS12_KEYSTORE', 'PKCS12_TRUSTSTORE'] | difference(_platform_kafka_tls_runtime_plans[0].formats) | length == 0"
@@ -70,7 +70,7 @@
     fail_msg: 'BLOCKED: explicit PKCS12 requires PKI stores and a runtime store SecretRef'
   when: platform_kafka_store_type == 'PKCS12'
 
-- name: Build Kafka TLS runtime projection without secret values
+- name: Построение проекции времени выполнения Kafka TLS без секретных значений
   ansible.builtin.set_fact:
     _platform_kafka_tls_runtime: >-
       {{ {

@@ -1,5 +1,5 @@
 ---
-- name: Validate PostgreSQL mode
+- name: Проверка режима PostgreSQL
   ansible.builtin.assert:
     that:
       - platform_postgresql_mode in ['standalone', 'pg_auto_failover']
@@ -17,7 +17,7 @@
       - platform_postgresql_secret_files[platform_postgresql_admin_superuser.passwordSecretRef] | length > 0
     fail_msg: POSTGRES_CONFIGURATION_INVALID
 
-- name: Validate explicit PostgreSQL member list when supplied
+- name: Проверка явного списка экземпляров службы PostgreSQL при его предоставлении
   ansible.builtin.assert:
     that:
       - platform_postgresql_instances is iterable
@@ -43,7 +43,7 @@
     label: "{{ item.id | default('unknown') }}"
   when: platform_postgresql_instances | length > 0
 
-- name: Validate standalone member cardinality
+- name: Проверка количества экземпляров автономного экземпляра службы
   ansible.builtin.assert:
     that:
       - platform_postgresql_instances | length == 1
@@ -52,7 +52,7 @@
   when:
     - platform_postgresql_mode == 'standalone'
 
-- name: Validate pg_auto_failover member cardinality
+- name: Проверка количества экземпляров службы pg_auto_failover
   ansible.builtin.assert:
     that:
       - platform_postgresql_instances | length == 3
@@ -63,7 +63,7 @@
   when:
     - platform_postgresql_mode == 'pg_auto_failover'
 
-- name: Reject duplicate PostgreSQL ports on one host
+- name: Отклонить дубликаты портов PostgreSQL на одном хосте
   ansible.builtin.assert:
     that: >-
       (platform_postgresql_instances | selectattr('host', 'equalto', item.0.host)
@@ -76,7 +76,7 @@
     - platform_postgresql_instances | length > 1
     - item.0.host == item.1.host
 
-- name: Reject duplicate PostgreSQL unit names on one host
+- name: Отклонить повторяющиеся имена служб systemd PostgreSQL на одном хосте
   ansible.builtin.assert:
     that: >-
       (platform_postgresql_instances | selectattr('host', 'equalto', item)
@@ -85,7 +85,7 @@
     fail_msg: POSTGRES_UNIT_NAME_COLLISION
   loop: "{{ platform_postgresql_instances | map(attribute='host') | unique | list }}"
 
-- name: Reject duplicate PostgreSQL member paths
+- name: Отклонить повторяющиеся пути к экземпляру службы PostgreSQL
   ansible.builtin.assert:
     that: >-
       (platform_postgresql_instances | selectattr('host', 'equalto', item.0.host)
@@ -98,20 +98,20 @@
     - platform_postgresql_instances | length > 1
     - item.0.host == item.1.host
 
-- name: Reject Platform-owned PostgreSQL settings in advancedConfig
+- name: Отклонить настройки PostgreSQL, принадлежащие платформе, в AdvancedConfig
   ansible.builtin.assert:
     that:
       - item not in platform_postgresql_advanced_config
     fail_msg: "ADVANCED_SETTING_RESERVED: {{ item }}"
   loop: [data_directory, port, ssl, ssl_cert_file, ssl_key_file, ssl_ca_file, primary_conninfo, primary_slot_name, shared_preload_libraries, pg_hba_file]
 
-- name: Require TLS profile for pg_auto_failover
+- name: Требовать профиль TLS для pg_auto_failover
   ansible.builtin.assert:
     that: platform_postgresql_tls_profile | length > 0
     fail_msg: POSTGRES_TLS_PROFILE_REQUIRED
   when: platform_postgresql_mode == 'pg_auto_failover'
 
-- name: Validate pg_auto_failover authentication mode
+- name: Проверка режима аутентификации pg_auto_failover
   ansible.builtin.assert:
     that:
       - platform_postgresql_failover_auth in ['scram-sha-256', 'md5']

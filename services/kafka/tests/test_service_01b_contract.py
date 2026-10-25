@@ -32,10 +32,10 @@ class Service01BContractTests(unittest.TestCase):
 
     def test_role_has_one_generic_member_execution_path_and_legacy_adapter(self):
         source = (ROLE / "tasks" / "main.yml").read_text(encoding="utf-8")
-        self.assertIn("Adapt legacy single-member variables", source)
-        self.assertIn("Normalize Kafka members into the generic internal model", source)
+        self.assertIn("Преобразовать устаревшие переменные одного экземпляра сервиса", source)
+        self.assertIn("Нормализовать экземпляры службы Kafka в общую внутреннюю модель", source)
         self.assertIn("include_tasks: member.yml", source)
-        self.assertIn("Order normalized Kafka members deterministically", source)
+        self.assertIn("Детерминированный порядок нормализованных экземпляров службы Kafka", source)
         self.assertNotIn("SERVICE-01", source)
         self.assertNotIn("_platform_kafka_legacy_single", source)
         self.assertNotIn("exactly one local Kafka member", source)
@@ -43,9 +43,9 @@ class Service01BContractTests(unittest.TestCase):
     def test_manual_member_input_does_not_require_project_state(self):
         with (ROLE / "tasks" / "main.yml").open(encoding="utf-8") as stream:
             tasks = yaml.safe_load(stream)
-        projection = next(task for task in tasks if task["name"] == "Project managed Kafka members when the public list is absent")
+        projection = next(task for task in tasks if task["name"] == "Управляемые проектом экземпляры службы Kafka, когда общедоступный список отсутствует")
         self.assertIn("platform_kafka_instances | length == 0", projection["when"])
-        explicit = next(task for task in tasks if task["name"] == "Select explicit Kafka member input")
+        explicit = next(task for task in tasks if task["name"] == "Выбрать явный ввод экземпляра службы Kafka")
         self.assertEqual("platform_kafka_instances | length > 0", explicit["when"])
         self.assertNotIn("platform_project", explicit["when"])
 
@@ -53,14 +53,14 @@ class Service01BContractTests(unittest.TestCase):
         with (ROLE / "tasks" / "project_runtime.yml").open(encoding="utf-8") as stream:
             tasks = yaml.safe_load(stream)
         by_name = {task["name"]: task for task in tasks}
-        self.assertNotIn("platform_kafka_quorum_mode", by_name["Project deployment-scoped Kafka identity"]["ansible.builtin.set_fact"])
-        task = by_name["Project explicit deployment-scoped Kafka settings"]
+        self.assertNotIn("platform_kafka_quorum_mode", by_name["Идентификатор Kafka в области развертывания проекта"]["ansible.builtin.set_fact"])
+        task = by_name["Явные параметры проекта Kafka в области развертывания"]
         self.assertIn("'quorumMode' in", task["when"])
         self.assertIn("platform_kafka_quorum_mode", task["ansible.builtin.set_fact"])
 
     def test_role_blocks_identity_port_and_storage_collisions(self):
         source = (ROLE / "tasks" / "main.yml").read_text(encoding="utf-8")
-        self.assertIn("Reject duplicate Kafka node IDs", source)
+        self.assertIn("Отклонить повторяющиеся идентификаторы узла Kafka", source)
         self.assertIn("validate_host_resources.yml", source)
         resources = (ROLE / "tasks" / "validate_host_resources.yml").read_text(encoding="utf-8")
         self.assertIn("listener_ports", resources)
@@ -75,8 +75,8 @@ class Service01BContractTests(unittest.TestCase):
         self.assertIn("KAFKA_LEGACY_UNIT_REQUIRES_S11_CLEANUP", main)
         self.assertIn("KAFKA_UNIT_NAME_COLLISION", main)
         self.assertIn("KAFKA_UNIT_OWNERSHIP_UNKNOWN", main)
-        self.assertLess(main.index("Validate common Kafka member inputs"), main.index("Deliver selected Kafka offline artifacts"))
-        self.assertLess(main.index("Reject same-host Kafka unit-name collisions"), main.index("Deliver selected Kafka offline artifacts"))
+        self.assertLess(main.index("Проверка общих входных данных экземпляра службы Kafka"), main.index("Доставка выбранных автономных артефактов Kafka"))
+        self.assertLess(main.index("Отклонить конфликты имен служб systemd Kafka на одном и том же хосте"), main.index("Доставка выбранных автономных артефактов Kafka"))
         self.assertIn("# {{ platform_kafka_name }}-managed: {{ kafka_member.systemd_unit_name }}",
                       (ROLE / "templates/kafka.service.j2").read_text(encoding="utf-8"))
         self.assertIn("'systemd_unit_ownership_marker': '# ' ~ platform_kafka_name ~ '-managed: '", source)
@@ -84,8 +84,8 @@ class Service01BContractTests(unittest.TestCase):
     def test_member_role_uses_controller_count_and_member_role_for_format_strategy(self):
         source = (ROLE / "tasks" / "member.yml").read_text(encoding="utf-8")
         self.assertIn("controller.quorum.voters", source)
-        self.assertIn("Derive Kafka storage format strategy", source)
-        self.assertIn("Format uninitialized Kafka storage exactly once", source)
+        self.assertIn("Определение стратегии формата хранения Kafka", source)
+        self.assertIn("Отформатировать неинициализированное хранилище Kafka ровно один раз", source)
         self.assertIn("INITIAL_CONTROLLERS", source)
         self.assertIn("NO_INITIAL_CONTROLLERS", source)
         self.assertIn("STANDALONE_COMPATIBILITY", source)
@@ -106,8 +106,8 @@ class Service01BContractTests(unittest.TestCase):
         self.assertIn("for member in _platform_kafka_controller_instances", main)
         self.assertIn("'process.roles': kafka_member.roles | join(',')", member)
         self.assertNotIn("'process.roles': 'broker,controller'", member)
-        self.assertIn("Add dynamic quorum projection when explicitly selected", member)
-        self.assertIn("Add static quorum projection when explicitly selected", member)
+        self.assertIn("Добавление динамической проекции кворума при явном выборе", member)
+        self.assertIn("Добавление статической проекции кворума при явном выборе", member)
         self.assertIn("--bootstrap-controller", verify)
 
     def test_kafka_cli_diagnostics_consume_runtime_projection(self):
@@ -130,7 +130,7 @@ class Service01BContractTests(unittest.TestCase):
         self.assertIn("security.protocol={{ kafka_cli_connection.securityProtocol }}", runner)
         self.assertIn("truststorePath", runner)
         self.assertIn("truststoreType", runner)
-        self.assertIn("Remove ephemeral Kafka CLI command configuration", runner)
+        self.assertIn("Удаление эфемерной конфигурации команды Kafka CLI", runner)
 
     def test_listener_endpoint_projection_is_name_independent(self):
         normalize = (ROLE / "tasks" / "normalize_member.yml").read_text(encoding="utf-8")
@@ -143,7 +143,7 @@ class Service01BContractTests(unittest.TestCase):
     def test_schema_registry_findings_are_serialized_for_ansible_assert_message(self):
         with (ROLE / "tasks" / "schema_registry_validate.yml").open(encoding="utf-8") as stream:
             tasks = yaml.safe_load(stream)
-        validation = next(task for task in tasks if task["name"] == "Reject invalid Registry topology and ports before mutation")
+        validation = next(task for task in tasks if task["name"] == "Отклонить неверную топологию реестра и порты перед изменением")
         self.assertEqual(
             "{{ _platform_kafka_registry_projection.findings | to_nice_yaml }}",
             validation["ansible.builtin.assert"]["fail_msg"],
@@ -158,7 +158,7 @@ class Service01BContractTests(unittest.TestCase):
     def test_registry_source_preflight_is_apply_only(self):
         with (ROLE / "tasks" / "schema_registry_validate.yml").open(encoding="utf-8") as stream:
             tasks = yaml.safe_load(stream)
-        preflight = next(task for task in tasks if task["name"] == "Preflight the selected Registry source before Kafka mutation")
+        preflight = next(task for task in tasks if task["name"] == "Предварительная проверка выбранного источника реестра перед модификацией Kafka")
         self.assertIn("not (platform_kafka_verify_only | bool)", preflight["when"])
         self.assertIn("platform_kafka_schema_registry_enabled", preflight["when"])
         self.assertEqual("platform.core.artifact_source_gate", preflight["ansible.builtin.include_role"]["name"])
@@ -166,9 +166,9 @@ class Service01BContractTests(unittest.TestCase):
     def test_dynamic_and_static_config_projections_are_mutually_exclusive(self):
         with (ROLE / "tasks" / "member.yml").open(encoding="utf-8") as stream:
             tasks = {task["name"]: task for task in yaml.safe_load(stream)}
-        common = tasks["Build common member effective configuration"]["ansible.builtin.set_fact"]["kafka_effective_config"]
-        dynamic = tasks["Add the requested dynamic quorum projection"]["ansible.builtin.set_fact"]["kafka_effective_config"]
-        static = tasks["Add static quorum projection when explicitly selected"]["ansible.builtin.set_fact"]["kafka_effective_config"]
+        common = tasks["Создание эффективной конфигурации общего экземпляра службы"]["ansible.builtin.set_fact"]["kafka_effective_config"]
+        dynamic = tasks["Добавить запрошенную проекцию динамического кворума"]["ansible.builtin.set_fact"]["kafka_effective_config"]
+        static = tasks["Добавление статической проекции кворума при явном выборе"]["ansible.builtin.set_fact"]["kafka_effective_config"]
         self.assertNotIn("controller.quorum.bootstrap.servers", common)
         self.assertNotIn("controller.quorum.voters", common)
         self.assertIn("controller.quorum.bootstrap.servers", dynamic)
@@ -205,27 +205,27 @@ class Service01BContractTests(unittest.TestCase):
         self.assertIn("include_tasks: clear.yml", main)
         self.assertIn("platform_kafka_clean_install | bool", main)
         self.assertNotIn("platform_kafka_confirm_destructive_reset", main)
-        self.assertIn("Require exact Kafka clean-install acknowledgement", clear)
+        self.assertIn("Требовать точное подтверждение чистой установки Kafka", clear)
         self.assertIn("platform_kafka_confirm_destructive_reset", clear)
         self.assertLess(
-            main.index("Clear selected Kafka deployment explicitly when requested"),
-            main.index("Prepare Kafka host prerequisites once"),
+            main.index("Очистить выбранное развертывание Kafka явно по запросу"),
+            main.index("Один раз подготовить предварительные требования хоста Kafka"),
         )
-        self.assertIn("Remove only selected Kafka deployment member state", clear)
+        self.assertIn("Удалить только выбранное состояние экземпляра службы развертывания Kafka", clear)
         self.assertIn("systemctl, is-active", clear)
         self.assertIn("'/var/lib/kafka'", clear)
         self.assertIn("state: stopped", clear)
-        self.assertIn("Discover Kafka JVMs owning selected listener ports", clear)
-        self.assertIn("Stop attributable conflicting Kafka units before clear", clear)
-        self.assertIn("Terminate only attributable Kafka JVMs remaining after bounded stop", clear)
+        self.assertIn("Обнаружение JVM Kafka, владеющих выбранными портами прослушивателя", clear)
+        self.assertIn("Остановить конфликтующие службы systemd Kafka перед очисткой", clear)
+        self.assertIn("Завершить работу только JVM Kafka, оставшихся после ограниченной остановки", clear)
         self.assertEqual(clear.count("item.split('|')[2] in _platform_kafka_clear_owned_config_files"), 2)
-        self.assertIn("Reject occupied Kafka listener ports after bounded cleanup", clear)
-        self.assertIn("Remove only deployment-owned dedicated Kafka unit files", clear)
+        self.assertIn("Отклонить занятые порты прослушивателя Kafka после ограниченной очистки", clear)
+        self.assertIn("Удалить только выделенные служебные файлы systemd Kafka, принадлежащие развертыванию", clear)
         self.assertIn("daemon_reload: true", clear)
-        self.assertIn("Clear stale state for selected Kafka units", clear)
+        self.assertIn("Очистить устаревшее состояние для выбранных системных служб Kafka", clear)
         self.assertIn("reject('equalto', '/etc/systemd/system/kafka@.service')", clear)
         self.assertNotIn("state: absent\n  loop: \"{{ [platform_kafka_install_directory]", clear)
-        self.assertIn("Format uninitialized Kafka storage exactly once", member)
+        self.assertIn("Отформатировать неинициализированное хранилище Kafka ровно один раз", member)
         self.assertNotIn("platform_kafka_operation", main + defaults + clear)
 
     def test_member_tasks_avoid_path_and_handler_duplication(self):
@@ -243,19 +243,19 @@ class Service01BContractTests(unittest.TestCase):
     def test_host_reset_is_separate_guarded_qa_operation(self):
         reset = (SERVICE / "playbooks" / "reset_kafka_host.yml").read_text(encoding="utf-8")
         self.assertIn("RESET_ALL_KAFKA_RUNTIME_ON_TARGET_HOSTS", reset)
-        self.assertIn("Require exact destructive Kafka host-reset acknowledgement", reset)
-        self.assertIn("Discover all Kafka systemd service units", reset)
-        self.assertIn("Wait bounded time for Kafka JVM shutdown", reset)
-        self.assertIn("Verify Kafka JVMs are absent before deleting runtime files", reset)
+        self.assertIn("Требовать точное разрушительное подтверждение сброса хоста Kafka", reset)
+        self.assertIn("Обнаружить все сервисы Kafka systemd systemd", reset)
+        self.assertIn("Подождать определенное время для завершения работы JVM Kafka", reset)
+        self.assertIn("Убедиться, что JVM Kafka отсутствуют перед удалением файлов среды выполнения", reset)
         self.assertIn("/opt/kafka_2.13-4.3.1", reset)
         self.assertIn("patterns:\n          - 'kafka*.service'", reset)
         self.assertIn("daemon_reload: true", reset)
-        self.assertIn("Clear stale state for discovered Kafka units", reset)
+        self.assertIn("Очистить устаревшее состояние обнаруженных системных служб Kafka", reset)
         self.assertNotIn("platform_kafka_host_reset_confirmation", (ROLE / "defaults" / "main.yml").read_text(encoding="utf-8"))
 
     def test_fresh_distribution_has_writable_runtime_log_directory(self):
         prepare = (ROLE / "tasks" / "prepare_host.yml").read_text(encoding="utf-8")
-        self.assertIn("Prepare writable Kafka distribution log directory", prepare)
+        self.assertIn("Подготовка доступного для записи каталога журнала распространения Kafka", prepare)
         self.assertIn('path: "/opt/{{ platform_kafka_archive_directory }}/logs"', prepare)
         self.assertIn('owner: "{{ platform_kafka_user }}"', prepare)
         self.assertIn("mode: '0750'", prepare)
@@ -263,7 +263,7 @@ class Service01BContractTests(unittest.TestCase):
     def test_apply_waits_for_all_role_aware_member_listeners(self):
         main = (ROLE / "tasks" / "main.yml").read_text(encoding="utf-8")
         member = (ROLE / "tasks" / "member.yml").read_text(encoding="utf-8")
-        self.assertIn("Wait for all local Kafka member listeners after member startup", main)
+        self.assertIn("Дождаться всех локальных прослушивателей экземпляра службы Kafka после запуска экземпляра службы", main)
         self.assertIn("subelements('listener_ports'", main)
         self.assertIn("state: started", main)
         self.assertNotIn("listener startup readiness", member)

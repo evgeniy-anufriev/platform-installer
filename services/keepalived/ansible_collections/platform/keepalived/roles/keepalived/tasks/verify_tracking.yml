@@ -1,5 +1,5 @@
 ---
-- name: Inspect HAProxy readiness helper attributes read-only
+- name: Проверка вспомогательных атрибутов готовности HAProxy, доступных только для чтения
   ansible.builtin.stat:
     path: "{{ platform_keepalived_haproxy_check_path }}"
     get_mime: false
@@ -7,7 +7,7 @@
     get_checksum: false
   register: platform_keepalived_haproxy_helper_stat
 
-- name: Assert HAProxy readiness helper ownership and mode
+- name: Подтвердить владение и режим помощника готовности HAProxy
   ansible.builtin.assert:
     that:
       - platform_keepalived_haproxy_helper_stat.stat.exists
@@ -16,12 +16,12 @@
       - platform_keepalived_haproxy_helper_stat.stat.mode == '0750'
     fail_msg: KEEPALIVED_HAPROXY_HELPER_ATTRIBUTES_INVALID
 
-- name: Read HAProxy readiness helper content
+- name: Чтение вспомогательного содержимого готовности HAProxy
   ansible.builtin.slurp:
     src: "{{ platform_keepalived_haproxy_check_path }}"
   register: platform_keepalived_haproxy_helper_content
 
-- name: Assert HAProxy readiness helper is bounded and local
+- name: Помощник подтверждения готовности HAProxy ограничен и локальн
   ansible.builtin.assert:
     that:
       - platform_keepalived_haproxy_helper_content.content | b64decode is search('systemctl is-active --quiet haproxy')
@@ -30,28 +30,28 @@
       - platform_keepalived_haproxy_helper_content.content | b64decode is search('show info')
     fail_msg: KEEPALIVED_HAPROXY_HELPER_CONTENT_INVALID
 
-- name: Query HAProxy service state read-only
+- name: Запрос состояния службы HAProxy, доступный только для чтения
   ansible.builtin.command:
     argv: [systemctl, is-active, haproxy]
   register: platform_keepalived_haproxy_service_state
   changed_when: false
 
-- name: Assert HAProxy service is active for tracking
+- name: Подтвердить, что служба HAProxy активна для отслеживания
   ansible.builtin.assert:
     that: platform_keepalived_haproxy_service_state.stdout | trim == 'active'
     fail_msg: KEEPALIVED_HAPROXY_SERVICE_NOT_ACTIVE
 
-- name: Run HAProxy readiness helper read-only
+- name: Запуск помощника готовности HAProxy только для чтения
   ansible.builtin.command:
     argv: ["{{ platform_keepalived_haproxy_check_path }}"]
   changed_when: false
 
-- name: Read active Keepalived configuration
+- name: Чтение активной конфигурации Keepalived
   ansible.builtin.slurp:
     src: "{{ platform_keepalived_config_file }}"
   register: platform_keepalived_active_config_content
 
-- name: Assert active opt-in HAProxy tracking configuration
+- name: Подтвердить активную конфигурацию отслеживания HAProxy
   ansible.builtin.assert:
     that:
       - platform_keepalived_active_config_content.content | b64decode is search('vrrp_script platform_haproxy_ready_' ~ (platform_keepalived_tracking_deployment.key | replace('-', '_') | replace('.', '_')))

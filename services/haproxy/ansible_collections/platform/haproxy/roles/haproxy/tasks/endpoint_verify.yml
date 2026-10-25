@@ -1,8 +1,8 @@
 ---
-- name: Resolve the same backend model for read-only endpoint verification
+- name: Решить ту же серверную модель для проверки конечной точки только для чтения
   ansible.builtin.include_tasks: resolve.yml
 
-- name: Select this source's backends on this provider host
+- name: Выбрать серверные части этого источника на этом хосте провайдера
   ansible.builtin.set_fact:
     platform_haproxy_application_backends: >-
       {{ platform_haproxy_runtime_projection.backends.backends | dict2items |
@@ -10,8 +10,8 @@
          flatten | selectattr('targetDeploymentId', 'in', _platform_haproxy_partial_ids) |
          selectattr('providerHostIds', 'contains', inventory_hostname) | list }}
 
-- name: Check selected backend targets read-only
+- name: Проверить выбранные серверные цели только для чтения
   ansible.builtin.include_tasks: check_targets.yml
 
-- name: Verify the existing HAProxy service and configuration
+- name: Проверка существующей службы и конфигурации HAProxy
   ansible.builtin.include_tasks: verify.yml

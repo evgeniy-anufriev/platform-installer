@@ -1,5 +1,5 @@
 ---
-- name: Create HAProxy systemd drop-in directory
+- name: Создать каталог HAProxy systemd
   ansible.builtin.file:
     path: "{{ platform_haproxy_systemd_dropin_directory }}"
     state: directory
@@ -8,7 +8,7 @@
     mode: '0755'
   when: (platform_haproxy_partial_deployment_id is not defined and platform_haproxy_partial_deployment_ids is not defined)
 
-- name: Ensure systemd creates the HAProxy runtime socket directory
+- name: Убедиться, что systemd создает каталог сокетов времени выполнения HAProxy
   ansible.builtin.template:
     src: haproxy-runtime-directory.conf.j2
     dest: "{{ platform_haproxy_systemd_dropin_directory }}/{{ platform_haproxy_systemd_dropin_filename }}"
@@ -18,7 +18,7 @@
   register: _platform_haproxy_runtime_dropin
   when: (platform_haproxy_partial_deployment_id is not defined and platform_haproxy_partial_deployment_ids is not defined)
 
-- name: Start or reload validated HAProxy service
+- name: Запустить или перезагрузить проверенную службу HAProxy
   ansible.builtin.systemd:
     name: "{{ platform_haproxy_service_name }}"
     daemon_reload: true
@@ -29,7 +29,7 @@
     enabled: true
   when: (platform_haproxy_partial_deployment_id is not defined and platform_haproxy_partial_deployment_ids is not defined)
 
-- name: Reload existing HAProxy only after a changed partial backend graph
+- name: Перезагрузить существующий HAProxy только после изменения частичного внутреннего графа
   ansible.builtin.systemd:
     name: "{{ platform_haproxy_service_name }}"
     state: reloaded

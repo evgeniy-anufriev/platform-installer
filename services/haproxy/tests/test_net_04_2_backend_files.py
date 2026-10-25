@@ -33,7 +33,7 @@ class BackendFileContractTests(unittest.TestCase):
         self.assertIn("platform_haproxy_full_reconcile | bool or (platform_haproxy_partial_deployment_id is defined or platform_haproxy_partial_deployment_ids is defined)", resolve)
         self.assertIn("else {'endpoints': {}, 'hostEndpoints': {}, 'findings': [], 'status': 'PASS'}", resolve)
         self.assertIn("else {'backends': {}, 'findings': [], 'status': 'PASS'}", resolve)
-        self.assertNotIn("when: platform_haproxy_full_reconcile | bool or (platform_haproxy_partial_deployment_id is defined or platform_haproxy_partial_deployment_ids is defined)", resolve.split("- name: Publish HAProxy runtime projection", 1)[1])
+        self.assertNotIn("when: platform_haproxy_full_reconcile | bool or (platform_haproxy_partial_deployment_id is defined or platform_haproxy_partial_deployment_ids is defined)", resolve.split("- name: Публикация проекции времени выполнения HAProxy", 1)[1])
         self.assertIn("_platform_haproxy_prior_backend_capture.previousInventory", prepare)
         self.assertIn("when: not (platform_haproxy_full_reconcile | bool)", prepare)
         self.assertIn("platform_haproxy_full_reconcile: true", reconcile)
@@ -41,7 +41,7 @@ class BackendFileContractTests(unittest.TestCase):
     def test_source_integration_rebuilds_only_its_backend_and_preserves_others(self):
         prepare = (ROLE / "tasks" / "prepare.yml").read_text(encoding="utf-8")
         integrate = (ROLE.parents[4] / "playbooks" / "integrate.yml").read_text(encoding="utf-8")
-        self.assertIn("Select only this source deployment backend for partial integration", prepare)
+        self.assertIn("Выбрать только этот исходный сервер развертывания для частичной интеграции", prepare)
         self.assertIn("reject('in', _platform_haproxy_partial_source_files)", prepare)
         self.assertIn("platform_haproxy_partial_deployment_id", integrate)
         self.assertEqual(3, integrate.count("platform_haproxy_phase:"))

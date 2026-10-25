@@ -1,17 +1,17 @@
 ---
-- name: Remember whether PostgreSQL binary directory was explicitly configured
+- name: Запомнить, был ли явно настроен двоичный каталог PostgreSQL
   ansible.builtin.set_fact:
     _platform_postgresql_binary_directory_override: "{{ platform_postgresql_binary_directory | length > 0 }}"
   when: _platform_postgresql_binary_directory_override is not defined
 
-- name: Build PostgreSQL binary directory candidates
+- name: Сборка кандидатов двоичного каталога PostgreSQL
   ansible.builtin.set_fact:
     _platform_postgresql_binary_directory_candidates: >-
       {{ [platform_postgresql_binary_directory]
          if _platform_postgresql_binary_directory_override | bool
          else ['/usr/bin', '/usr/pgsql-' ~ platform_postgresql_version.split('.')[0] ~ '/bin'] }}
 
-- name: Inspect PostgreSQL control binary candidates
+- name: Проверка кандидатов на управляющие двоичные файлы PostgreSQL
   ansible.builtin.stat:
     path: "{{ item }}/pg_ctl"
     follow: true
@@ -21,7 +21,7 @@
   loop: "{{ _platform_postgresql_binary_directory_candidates }}"
   register: _platform_postgresql_binary_candidate_stats
 
-- name: Select the installed PostgreSQL binary directory
+- name: Выбрать установленный двоичный каталог PostgreSQL
   ansible.builtin.set_fact:
     platform_postgresql_binary_directory: >-
       {{ (_platform_postgresql_binary_candidate_stats.results
@@ -31,7 +31,7 @@
                    if ansible_distribution_major_version | default('8') | int < 8 else '/usr/bin') }}
   when: not (_platform_postgresql_binary_directory_override | bool)
 
-- name: Require PostgreSQL control binary in the selected directory
+- name: Запросить управляющий двоичный файл PostgreSQL в выбранном каталоге
   ansible.builtin.assert:
     that:
       - _platform_postgresql_binary_candidate_stats.results | selectattr('stat.exists', 'equalto', true) | list | length >= 1

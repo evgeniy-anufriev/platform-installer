@@ -1,5 +1,5 @@
 ---
-- name: Validate bounded Docker desired inputs
+- name: Проверка ограниченных желаемых входных данных Docker
   ansible.builtin.assert:
     that:
       - platform_docker_mode in ['create-user', 'existing-user']
@@ -27,37 +27,37 @@
       - platform_docker_lxc_veth_limit | int <= 64
     fail_msg: DOCKER_ROOTLESS_INPUT_INVALID
 
-- name: Inspect target RED OS identity
+- name: Проверка целевого идентификатора RED OS
   ansible.builtin.slurp:
     src: /etc/os-release
   register: _platform_docker_os_release
 
-- name: Inspect target machine architecture
+- name: Проверка архитектуры целевой машины
   ansible.builtin.command:
     argv: [uname, -m]
   register: _platform_docker_architecture
   changed_when: false
 
-- name: Require supported RED OS architecture
+- name: Требовать поддерживаемую архитектуру RED OS
   ansible.builtin.assert:
     that:
       - ( _platform_docker_os_release.content | b64decode ) is search('(?m)^ID=\"?redos\"?$')
       - _platform_docker_architecture.stdout == 'x86_64'
     fail_msg: DOCKER_ROOTLESS_UNSUPPORTED_TARGET
 
-- name: Inspect rootful Docker daemon and socket
+- name: Проверка корневого демона и сокета Docker
   ansible.builtin.command:
     argv: [systemctl, is-active, docker.service, docker.socket]
   register: _platform_docker_rootful_units
   changed_when: false
   failed_when: false
 
-- name: Refuse active rootful Docker ownership conflict
+- name: Отказ от активного корневого конфликта владения Docker
   ansible.builtin.assert:
     that: "'active' not in _platform_docker_rootful_units.stdout_lines"
     fail_msg: DOCKER_ROOTFUL_CONFLICT
 
-- name: Validate create-user runtime SecretRef
+- name: Проверка SecretRef среды выполнения создания пользователя
   ansible.builtin.assert:
     that:
       - platform_docker_account_credential is mapping
@@ -68,7 +68,7 @@
   when: platform_docker_mode == 'create-user'
   no_log: true
 
-- name: Inspect create-user runtime password file on the controller
+- name: Проверка файла паролей среды выполнения создания пользователя на контроллере
   ansible.builtin.stat:
     path: "{{ platform_docker_secret_files[platform_docker_account_credential.passwordSecretRef] }}"
     follow: false
@@ -81,7 +81,7 @@
   when: platform_docker_mode == 'create-user'
   no_log: true
 
-- name: Require bounded regular runtime password file
+- name: Требовать ограниченный файл паролей обычной среды выполнения
   ansible.builtin.assert:
     that:
       - _platform_docker_password_file.stat.isreg

@@ -1,9 +1,9 @@
 ---
-- name: Resolve Vault members local to this inventory host
+- name: Разрешить экземпляры службы Vault, локальные для этого хоста инвентаризации
   ansible.builtin.set_fact:
     _platform_vault_local_instances: "{{ _platform_vault_instances | selectattr('host', 'equalto', inventory_hostname) | list }}"
 
-- name: Query Vault health over validated API TLS
+- name: Запрос состояния Vault по проверенному API TLS
   ansible.builtin.uri:
     url: "https://{{ item.address }}:{{ item.api_port }}/v1/sys/health"
     method: GET
@@ -20,7 +20,7 @@
   changed_when: false
   no_log: true
 
-- name: Require every Vault API to be initialized and unsealed
+- name: Потребовать, чтобы каждый Vault API был инициализирован и разблокирован
   ansible.builtin.assert:
     that:
       - item.json.initialized | bool
@@ -31,13 +31,13 @@
     label: Vault API health
   no_log: true
 
-- name: Require an authorized token for Vault configuration verification
+- name: Запрос авторизованного токена для проверки конфигурации Vault
   ansible.builtin.assert:
     that: platform_vault_admin_token is string and platform_vault_admin_token | length > 0
     fail_msg: VAULT_ADMIN_TOKEN_REQUIRED
   no_log: true
 
-- name: Read audit, mounts and auth state using the selected administrative token
+- name: Чтение состояния аудита, монтирования и аутентификации с использованием выбранного административного токена
   ansible.builtin.uri:
     url: "https://{{ (_platform_vault_instances | first).address }}:{{ (_platform_vault_instances | first).api_port }}/v1/{{ item }}"
     method: GET
@@ -52,7 +52,7 @@
   changed_when: false
   no_log: true
 
-- name: Require the approved audit device, KV v2 and auth mounts
+- name: Требовать одобренное устройство аудита, KV v2 и монтирование аутентификации
   ansible.builtin.assert:
     that:
       - _platform_vault_configuration.results[0].json.data['file/'] is defined
@@ -68,7 +68,7 @@
     fail_msg: VAULT_CONFIGURATION_VERIFY_FAILED
   no_log: true
 
-- name: Read the authoritative Raft membership configuration
+- name: Прочитать авторитетную конфигурацию членства Raft
   ansible.builtin.uri:
     url: "https://{{ (_platform_vault_instances | first).address }}:{{ (_platform_vault_instances | first).api_port }}/v1/sys/storage/raft/configuration"
     method: GET
@@ -85,7 +85,7 @@
   when: platform_vault_mode == 'raft-ha'
   no_log: true
 
-- name: Require exactly the configured healthy voting members
+- name: Требовать именно настроенные работоспособные экземпляры службы голосования
   ansible.builtin.assert:
     that:
       - _platform_vault_raft_configuration.json.data.config.servers | length == _platform_vault_instances | length

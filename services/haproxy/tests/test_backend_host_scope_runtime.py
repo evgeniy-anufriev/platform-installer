@@ -17,9 +17,9 @@ class BackendHostScopeRuntimeTests(unittest.TestCase):
         if not shutil.which('ansible-playbook'):
             self.skipTest('Ansible runtime required')
         prepare = yaml.safe_load((ROLE / 'tasks/prepare.yml').read_text())
-        names = {'Select exact filenames owned by the partial endpoint source',
-                 'Retain exact proven backend inventory in base mode',
-                 'Select only this source deployment backend for partial integration'}
+        names = {'Выбрать точные имена файлов, принадлежащие частичному источнику конечной точки',
+                 'Сохранение точных проверенных внутренних ресурсов в базовом режиме',
+                 'Выбрать только этот исходный сервер развертывания для частичной интеграции'}
         tasks = yaml.safe_load((ROLE / 'tasks/partial_scope.yml').read_text())
         tasks += [task for task in prepare if task.get('name') in names]
         backends = [dict(targetDeploymentId='app-one', configFileName='30-backend-app-one.cfg', providerHostIds=['node1']),
@@ -51,10 +51,10 @@ class BackendHostScopeRuntimeTests(unittest.TestCase):
         main = yaml.safe_load((ROLE / "tasks/lifecycle.yml").read_text())
         prepare = yaml.safe_load((ROLE / "tasks/prepare.yml").read_text())
         selected = [task for task in main if task.get("name") in {
-            "Validate resolved HAProxy artifact sources before mutation",
-            "Deliver selected HAProxy offline artifacts"}]
+            "Проверка разрешенных источников артефактов HAProxy перед изменением",
+            "Доставка выбранных автономных артефактов HAProxy"}]
         selected += [task for task in prepare if task.get("name") ==
-                     "Install HAProxy from configured system repositories"]
+                     "Установить HAProxy из настроенных системных репозиториев"]
         repository = Path(__file__).resolve().parents[3]
         env = dict(os.environ)
         env["ANSIBLE_COLLECTIONS_PATH"] = str(repository / "ansible-core/collections")
@@ -81,17 +81,17 @@ class BackendHostScopeRuntimeTests(unittest.TestCase):
             result = subprocess.run([executable, "-i", "localhost,", str(path)],
                                     env=env, capture_output=True, text=True, timeout=30)
             self.assertNotEqual(0, result.returncode)
-            self.assertIn("Require Core-authorized artifact sources", result.stdout)
+            self.assertIn("Для этого развертывания требуются авторизованные источники артефактов Core", result.stdout)
 
     def test_full_and_partial_models_filter_hosts_and_preserve_other_sources(self):
         executable = shutil.which("ansible-playbook")
         if not executable:
             self.skipTest("ansible-playbook is required")
         tasks = yaml.safe_load((ROLE / "tasks/prepare.yml").read_text(encoding="utf-8"))
-        names = {"Select exact filenames owned by the partial endpoint source",
-                 "Select complete managed application backend file model",
-                 "Retain exact proven backend inventory in base mode",
-                 "Select only this source deployment backend for partial integration"}
+        names = {"Выбрать точные имена файлов, принадлежащие частичному источнику конечной точки",
+                 "Выбор полной модели файла серверной части управляемого приложения",
+                 "Сохранение точных проверенных внутренних ресурсов в базовом режиме",
+                 "Выбрать только этот исходный сервер развертывания для частичной интеграции"}
         selected = [task for task in tasks if task.get("name") in names]
         backend = {"targetDeploymentId": "app", "providerHostIds": ["node1", "node2"],
                    "configFileName": "30-backend-app-public.cfg"}

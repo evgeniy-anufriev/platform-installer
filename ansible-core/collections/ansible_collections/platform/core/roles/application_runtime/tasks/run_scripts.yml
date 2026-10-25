@@ -1,5 +1,5 @@
 ---
-- name: Execute declared package scripts for this placement and phase
+- name: Выполнить объявленные сценарии пакета для этого размещения и этапа
   ansible.builtin.include_role:
     name: platform.core.package_script
   vars:

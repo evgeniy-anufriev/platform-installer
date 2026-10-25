@@ -1,15 +1,15 @@
 ---
-- name: Collect the Vault members assigned to this inventory host
+- name: Собрать экземпляры службы Vault, назначенные этому узлу инвентаризации
   ansible.builtin.set_fact:
     _platform_vault_local_instances: "{{ _platform_vault_instances | selectattr('host', 'equalto', inventory_hostname) | list }}"
 
-- name: Check free space for bounded Vault audit retention
+- name: Проверка свободного места на наличие ограниченного хранения аудита Vault
   ansible.builtin.command:
     argv: [df, -PkP, --, /var/log]
   register: _platform_vault_audit_space
   changed_when: false
 
-- name: Require space for one current and fourteen rotated audit files
+- name: Требуется место для одного текущего и четырнадцати ротируемых файлов аудита
   ansible.builtin.assert:
     that:
       - _platform_vault_audit_space.stdout_lines | length >= 2
@@ -18,7 +18,7 @@
       - _platform_vault_audit_space.stdout_lines[-1].split()[3] | int >= 1600000
     fail_msg: VAULT_AUDIT_SPACE_INSUFFICIENT
 
-- name: Check the fixed Vault role roots before mutation
+- name: Проверка фиксированных корней роли Vault перед изменением
   ansible.builtin.stat:
     path: "{{ item }}"
     follow: false
@@ -28,7 +28,7 @@
   loop: ["{{ platform_vault_config_root }}", "{{ platform_vault_log_root }}"]
   register: _platform_vault_roots
 
-- name: Reject symlinked or non-directory Vault role roots
+- name: Отклонить корневые пути роли Vault при символических ссылках или неправильном типе каталога
   ansible.builtin.assert:
     that: not item.stat.exists or (item.stat.isdir and not item.stat.islnk and item.stat.uid == 0)
     fail_msg: VAULT_PATH_UNSAFE
@@ -36,7 +36,7 @@
   loop_control:
     label: "{{ item.item }}"
 
-- name: Inspect shared Vault data root before adding co-located members
+- name: Проверка общего корня данных Vault перед добавлением совместно расположенных экземпляров службы
   ansible.builtin.stat:
     path: "{{ platform_vault_data_root }}"
     follow: false
@@ -46,7 +46,7 @@
   register: _platform_vault_shared_data_root
   when: _platform_vault_local_instances | length > 1
 
-- name: Require a root-owned shared Vault data parent
+- name: Требовать общий родительский элемент данных Vault, принадлежащий пользователю root
   ansible.builtin.assert:
     that:
       - not _platform_vault_shared_data_root.stat.exists or _platform_vault_shared_data_root.stat.uid == 0
@@ -54,18 +54,18 @@
     fail_msg: VAULT_SHARED_DATA_ROOT_UNSAFE
   when: _platform_vault_local_instances | length > 1
 
-- name: Resolve the service account identity for owned Vault path validation
+- name: Разрешить идентификацию учетной записи службы для проверки принадлежащего ей пути Vault
   ansible.builtin.command:
     argv: [id, -u, "{{ platform_vault_user }}"]
   register: _platform_vault_service_uid
   changed_when: false
   failed_when: false
 
-- name: Build the bounded Vault path ancestry inspection set
+- name: Построение ограниченного набора проверки предков пути Vault
   ansible.builtin.set_fact:
     _platform_vault_path_checks: "{{ [{'path': platform_vault_config_root, 'owner': 'root'}, {'path': platform_vault_log_root, 'owner': 'root'}] }}"
 
-- name: Add each fixed deployment and member path component to preflight
+- name: Добавить каждый фиксированный компонент пути развертывания и экземпляра службы к предварительной проверке
   ansible.builtin.set_fact:
     _platform_vault_path_checks: "{{ _platform_vault_path_checks + [
       {'path': platform_vault_config_root ~ '/' ~ platform_vault_deployment_id, 'owner': 'root'},
@@ -79,10 +79,10 @@
   loop_control:
     label: "{{ item.id }}"
 
-- name: Inspect every fixed root/deployment/member/PKI component without following links
+- name: Проверить каждый фиксированный компонент root/deployment/member/PKI без перехода по ссылкам
   ansible.builtin.include_tasks: validate_owned_paths.yml
 
-- name: Inspect member Raft data directories before touching existing state
+- name: Проверка каталогов данных Raft экземпляра службы, прежде чем прикасаться к существующему состоянию
   ansible.builtin.stat:
     path: "{{ item.data_directory }}"
     follow: false
@@ -94,7 +94,7 @@
   loop_control:
     label: "{{ item.id }}"
 
-- name: Reject substituted member Raft data paths
+- name: Отклонить замененные пути к данным Raft экземпляра службы
   ansible.builtin.assert:
     that:
       - not item.stat.exists or (_platform_vault_service_uid.rc == 0 and item.stat.isdir and not item.stat.islnk and item.stat.uid | string == _platform_vault_service_uid.stdout | trim)
@@ -104,7 +104,7 @@
     label: "{{ item.item.id }}"
   when: item.stat.exists
 
-- name: Inspect only immediate existing member data entries
+- name: Проверка только непосредственно существующих записей данных экземпляра службы
   ansible.builtin.find:
     paths: "{{ item.item.data_directory }}"
     recurse: false
@@ -116,7 +116,7 @@
   loop_control:
     label: "{{ item.item.id }}"
 
-- name: Inspect the fixed role-owned member identity marker
+- name: Проверка маркера идентификации экземпляра службы, принадлежащей фиксированной роли
   ansible.builtin.stat:
     path: "{{ item.item.data_directory }}/.{{ platform_vault_name }}-member.json"
     follow: false
@@ -129,7 +129,7 @@
   loop_control:
     label: "{{ item.item.id }}"
 
-- name: Refuse nonempty member data without the role-owned identity marker
+- name: Отклонить непустые данные экземпляра службы без маркера идентификации, принадлежащего роли
   ansible.builtin.assert:
     that:
       - item.files | length == 0 or (_platform_vault_member_markers.results[vault_data_index].stat.exists | default(false))
@@ -141,14 +141,14 @@
     index_var: vault_data_index
   when: item.skipped is not defined
 
-- name: Read existing member identity markers without following links
+- name: Прочитать существующие маркеры идентификации экземпляра службы, не переходя по ссылкам
   ansible.builtin.slurp:
     src: "{{ item.item.item.data_directory }}/.{{ platform_vault_name }}-member.json"
   loop: "{{ _platform_vault_member_markers.results | selectattr('skipped', 'undefined') | selectattr('stat.exists') | list }}"
   register: _platform_vault_member_marker_content
   no_log: true
 
-- name: Verify existing data directories belong to this exact deployment member
+- name: Убедиться, что существующие каталоги данных принадлежат именно этому экземпляру службы развертывания
   ansible.builtin.assert:
     that:
       - (item.content | b64decode | from_json).apiVersion == 'platform.installer/vault-member-marker/v1alpha1'
@@ -164,7 +164,7 @@
     index_var: marker_index
   no_log: true
 
-- name: Inspect exact Vault unit files without following links
+- name: Проверить точные служебные файлы systemd Vault без следующих ссылок
   ansible.builtin.stat:
     path: "/etc/systemd/system/{{ item.instance_name }}.service"
     follow: false
@@ -176,7 +176,7 @@
   loop_control:
     label: "{{ item.id }}"
 
-- name: Inspect legacy hash-named Vault units without following links
+- name: Проверка устаревших системных служб с хэш-именами Vault без перехода по ссылкам
   ansible.builtin.stat:
     path: "/etc/systemd/system/{{ item.legacy_instance_name }}.service"
     follow: false
@@ -186,7 +186,7 @@
   loop: "{{ _platform_vault_local_instances }}"
   register: _platform_vault_legacy_unit_files
 
-- name: Refuse automatic adoption of legacy Vault unit names
+- name: Отказаться от автоматического принятия устаревших имен системных служб Vault
   ansible.builtin.assert:
     that: not item.stat.exists
     fail_msg: VAULT_LEGACY_UNIT_REQUIRES_S11_CLEANUP
@@ -194,7 +194,7 @@
   loop_control:
     label: "{{ item.item.id }}"
 
-- name: Inspect exact Vault audit rotation files without following links
+- name: Проверка точных файлов ротации аудита Vault без перехода по ссылкам
   ansible.builtin.stat:
     path: "/etc/logrotate.d/{{ item.instance_name }}"
     follow: false
@@ -206,7 +206,7 @@
   loop_control:
     label: "{{ item.id }}"
 
-- name: Refuse substituted or non-regular unit and rotation files
+- name: Отказаться от замененных или нестандартных файлов службы и ротации systemd
   ansible.builtin.assert:
     that:
       - not item.stat.exists or (item.stat.isreg and not item.stat.islnk and item.stat.uid == 0)
@@ -215,21 +215,21 @@
   loop_control:
     label: "{{ item.item.id }}"
 
-- name: Read existing unit files without following links
+- name: Прочитать существующие служебные файлы systemd без перехода по ссылкам
   ansible.builtin.slurp:
     src: "/etc/systemd/system/{{ item.item.instance_name }}.service"
   loop: "{{ _platform_vault_unit_files.results | selectattr('stat.exists') | list }}"
   register: _platform_vault_unit_file_contents
   when: item.stat.exists
 
-- name: Read existing rotation files without following links
+- name: Прочитать существующие файлы ротации без перехода по ссылкам
   ansible.builtin.slurp:
     src: "/etc/logrotate.d/{{ item.item.instance_name }}"
   loop: "{{ _platform_vault_rotation_files.results | selectattr('stat.exists') | list }}"
   register: _platform_vault_rotation_file_contents
   when: item.stat.exists
 
-- name: Require existing unit files to carry this deployment member identity
+- name: Потребовать, чтобы существующие служебные файлы systemd содержали идентификатор этого экземпляра службы развертывания
   ansible.builtin.assert:
     that:
       - >-
@@ -239,7 +239,7 @@
   loop: "{{ _platform_vault_unit_file_contents.results | default([]) }}"
   no_log: true
 
-- name: Require existing rotation files to carry this deployment member identity
+- name: Требовать, чтобы существующие файлы ротации содержали идентификатор этого экземпляра службы развертывания
   ansible.builtin.assert:
     that:
       - >-
@@ -249,7 +249,7 @@
   loop: "{{ _platform_vault_rotation_file_contents.results | default([]) }}"
   no_log: true
 
-- name: Query exact Vault units already managed by this deployment
+- name: Запросить точные системные службы Vault, уже управляемые этим развертыванием
   ansible.builtin.command:
     argv: [systemctl, is-active, "{{ item.instance_name }}.service"]
   loop: "{{ _platform_vault_local_instances }}"
@@ -257,16 +257,16 @@
   changed_when: false
   failed_when: false
 
-- name: Record active member units allowed to own their reserved ports
+- name: Запись активного экземпляра службы, которой разрешено владеть зарезервированными портами
   ansible.builtin.set_fact:
     _platform_vault_active_units: "{{ _platform_vault_unit_states.results | selectattr('stdout', 'equalto', 'active') | map(attribute='item.instance_name') | list }}"
 
-- name: Build exact per-member listener port expectations
+- name: Создание точных ожиданий порта прослушивателя для каждого экземпляра службы
   ansible.builtin.set_fact:
     _platform_vault_ports: "{{ (_platform_vault_ports | default([])) + [{'port': item.api_port, 'unit': item.instance_name}, {'port': item.cluster_port, 'unit': item.instance_name}] }}"
   loop: "{{ _platform_vault_local_instances }}"
 
-- name: Inspect local listener occupancy before provisioning
+- name: Проверка занятости локального прослушивателя перед подготовкой
   ansible.builtin.command:
     argv: [ss, -Hln, "sport = :{{ item.port }}"]
   register: _platform_vault_port_owner
@@ -276,7 +276,7 @@
   loop_control:
     label: "{{ item.port }}"
 
-- name: Require free ports or an already-active owned Vault unit
+- name: Требовать свободных портов или уже активной службы systemd Vault
   ansible.builtin.assert:
     that: item.rc == 0 and (item.stdout | trim == '' or item.item.unit in _platform_vault_active_units)
     fail_msg: VAULT_LISTENER_PORT_IN_USE

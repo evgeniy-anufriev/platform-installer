@@ -1,5 +1,5 @@
 ---
-- name: Exercise HAProxy role startup with an absent runtime socket directory
+- name: Выполнить запуск роли HAProxy с отсутствующим каталогом сокетов среды выполнения
   hosts: localhost
   connection: local
   become: true
@@ -8,47 +8,47 @@
     platform_haproxy_active_artifacts_changed: false
     platform_haproxy_tls_material_changed: false
   tasks:
-    - name: Stop HAProxy before simulating a fresh volatile runtime directory
+    - name: Остановить HAProxy перед симуляцией нового нестабильного каталога среды выполнения
       ansible.builtin.systemd:
         name: haproxy
         state: stopped
 
-    - name: Remove only HAProxy's volatile socket directory for the regression test
+    - name: Удалить только каталог нестабильных сокетов HAProxy для регрессионного теста
       ansible.builtin.file:
         path: /run/haproxy
         state: absent
 
-    - name: Run the production HAProxy startup tasks
+    - name: Запуск производственных задач запуска HAProxy
       ansible.builtin.include_role:
         name: platform.haproxy.haproxy
         tasks_from: start.yml
 
-    - name: Inspect the HAProxy runtime socket directory
+    - name: Проверка каталога сокетов времени выполнения HAProxy
       ansible.builtin.stat:
         path: /run/haproxy
       register: _haproxy_runtime_directory
 
-    - name: Require HAProxy runtime directory to be recreated on service start
+    - name: Требовать воссоздания каталога среды выполнения HAProxy при запуске службы
       ansible.builtin.assert:
         that:
           - _haproxy_runtime_directory.stat.isdir
           - _haproxy_runtime_directory.stat.mode == '0755'
 
-    - name: Require HAProxy to be active after the runtime-directory recovery
+    - name: Потребовать, чтобы HAProxy был активным после восстановления каталога времени выполнения
       ansible.builtin.command:
         argv: [systemctl, is-active, --quiet, haproxy]
       changed_when: false
 
-    - name: Inspect the configured HAProxy control socket
+    - name: Проверка настроенного управляющего сокета HAProxy
       ansible.builtin.stat:
         path: /run/haproxy/admin.sock
       register: _haproxy_runtime_socket
 
-    - name: Require the HAProxy control socket to exist
+    - name: Требовать существования управляющего сокета HAProxy
       ansible.builtin.assert:
         that: _haproxy_runtime_socket.stat.issock
 
-    - name: Run the production HAProxy read-only verification tasks
+    - name: Запуск производственных задач проверки HAProxy, доступных только для чтения
       ansible.builtin.include_role:
         name: platform.haproxy.haproxy
         tasks_from: verify.yml

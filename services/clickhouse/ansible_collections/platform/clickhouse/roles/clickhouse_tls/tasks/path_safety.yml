@@ -1,5 +1,5 @@
 ---
-- name: Restrict managed ClickHouse roots to one owned component under trusted system parents
+- name: Ограничить управляемые корни ClickHouse одним компонентом, принадлежащим доверенным родительским системам
   ansible.builtin.assert:
     that:
       - platform_clickhouse_config_root is match('^/etc/[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$')
@@ -7,7 +7,7 @@
       - platform_clickhouse_log_root is match('^/var/log/[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$')
     fail_msg: CLICKHOUSE_MANAGED_ROOT_UNSAFE
 
-- name: Guard ClickHouse data root ancestry before mutation
+- name: Защита корневого происхождения данных ClickHouse перед изменением
   ansible.builtin.include_role:
     name: platform.core.managed_data_path_guard
   vars:
@@ -17,7 +17,7 @@
     platform_managed_data_root_owner: "{{ ansible_user | default('') }}"
     platform_managed_data_root_verify_only: "{{ platform_clickhouse_verify_only | bool }}"
 
-- name: Guard effective ClickHouse member data paths
+- name: Защита эффективных путей к данным экземпляра службы ClickHouse
   ansible.builtin.include_role:
     name: platform.core.managed_data_path_guard
   vars:
@@ -31,7 +31,7 @@
     loop_var: platform_managed_data_path_instance
     label: "{{ platform_managed_data_path_instance.id }}"
 
-- name: Inspect shared ClickHouse data root before adding co-located members
+- name: Проверка общего корня данных ClickHouse перед добавлением совместно расположенных экземпляров службы
   ansible.builtin.stat:
     path: "{{ platform_clickhouse_data_root }}"
     follow: false
@@ -41,7 +41,7 @@
   register: _platform_clickhouse_shared_data_root
   when: _platform_clickhouse_local_instances | length > 1
 
-- name: Require a root-owned shared ClickHouse data parent
+- name: Требовать родительский элемент общих данных ClickHouse, принадлежащий пользователю root
   ansible.builtin.assert:
     that:
       - not _platform_clickhouse_shared_data_root.stat.exists or _platform_clickhouse_shared_data_root.stat.uid == 0
@@ -49,7 +49,7 @@
     fail_msg: CLICKHOUSE_SHARED_DATA_ROOT_UNSAFE
   when: _platform_clickhouse_local_instances | length > 1
 
-- name: Inspect managed ClickHouse root and deployment ancestors without following links
+- name: Проверить корневой и родительские каталоги ClickHouse без перехода по символическим ссылкам
   ansible.builtin.stat:
     path: "{{ item }}"
     follow: false
@@ -63,7 +63,7 @@
     - "{{ platform_clickhouse_log_root }}/{{ platform_clickhouse_deployment_id }}"
   register: _platform_clickhouse_ancestor_stats
 
-- name: Refuse substituted or foreign managed ClickHouse ancestors
+- name: Отклонить подменённые родительские каталоги ClickHouse и каталоги другого владельца
   ansible.builtin.assert:
     that:
       - not item.stat.exists or (item.stat.isdir | default(false))
@@ -76,7 +76,7 @@
   loop_control:
     label: "{{ item.item }}"
 
-- name: Inspect member, SQL access-control and private PKI paths without following links
+- name: Проверка экземпляра службы, путей управления доступом SQL и частных путей PKI без следующих ссылок
   ansible.builtin.stat:
     path: "{{ item.0.config_directory ~ '/pki' if item.1 == 'config_pki' else (item.0.data_directory ~ '/access' if item.1 == 'access_control_directory' else item.0[item.1]) }}"
     follow: false
@@ -86,7 +86,7 @@
   loop: "{{ _platform_clickhouse_local_instances | product(['config_directory', 'data_directory', 'log_directory', 'access_control_directory', 'config_pki']) | list }}"
   register: _platform_clickhouse_private_path_stats
 
-- name: Refuse substituted or foreign member and private PKI paths
+- name: Отказаться от замененного или неуправляемого экземпляра службы и частных путей PKI
   ansible.builtin.assert:
     that:
       - not item.stat.exists or (item.stat.isdir | default(false))

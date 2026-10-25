@@ -97,8 +97,8 @@ class VaultWriteDiagnosticsTests(unittest.TestCase):
                     'application_vault_lxc_addresses':{'results':[{'stdout':'[{"addr_info":[{"family":"inet","scope":"global","local":"10.0.3.1","prefixlen":24}]}]'}]}}
                 preflight=yaml.safe_load((TASKS.parent/'preflight.yml').read_text())
                 tasks=[t for t in preflight if t['name'] in (
-                    'Read current policy and role before any Vault mutation',
-                    'Reject foreign policy or unexpected role policies')]
+                    'Прочитать текущую политику и роль перед любым изменением Vault',
+                    'Отклонить неуправляемую политику или политику неожиданных ролей')]
                 tasks+=yaml.safe_load((TASKS.parent/'instance.yml').read_text())[5:]
                 task_path=Path(folder)/'tasks.yml';task_path.write_text(yaml.safe_dump(tasks))
                 play=[{'hosts':'consumer','gather_facts':False,'vars':variables,'tasks':[{

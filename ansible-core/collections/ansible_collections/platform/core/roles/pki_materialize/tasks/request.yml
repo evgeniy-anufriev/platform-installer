@@ -1,5 +1,5 @@
 ---
-- name: Derive request-owned PKI paths
+- name: Получение путей PKI, принадлежащих запросу
   ansible.builtin.set_fact:
     _platform_pki_authority_dir: "{{ platform_pki_state_root }}/{{ platform_pki_project_id }}/authorities/{{ platform_pki_request.authorityId }}"
     _platform_pki_request_dir: "{{ platform_pki_state_root }}/{{ platform_pki_project_id }}/requests/{{ platform_pki_request.id }}"
@@ -7,7 +7,7 @@
     _platform_pki_reissue_marker: "{{ platform_pki_state_root }}/{{ platform_pki_project_id }}/reissues/{{ platform_pki_request.id }}.fingerprint"
     _platform_pki_request_plans: "{{ platform_pki_materialization_plans | selectattr('requestId', 'equalto', platform_pki_request.id) | list }}"
 
-- name: Validate manual PKI request identity inputs
+- name: Проверка введенных вручную идентификационных данных запроса PKI
   ansible.builtin.assert:
     that:
       - platform_pki_request.keyAlgorithm in ['RSA', 'EC']
@@ -16,7 +16,7 @@
       - platform_pki_request.authorityCommonName is match('^[^\\r\\n]+$')
     fail_msg: PKI_REQUEST_RUNTIME_INVALID
 
-- name: Require runtime-only store password reference
+- name: Требовать ссылку на пароль хранилища только во время выполнения
   ansible.builtin.assert:
     that:
       - _platform_pki_request_plans | length > 0
@@ -25,19 +25,19 @@
     fail_msg: PKI_STORE_PASSWORD_RUNTIME_SECRET_REQUIRED
   no_log: true
 
-- name: Set selected PKI store password file
+- name: Установить выбранный файл пароля хранилища PKI
   ansible.builtin.set_fact:
     _platform_pki_password_file: "{{ platform_pki_secret_files[_platform_pki_request_plans[0].storePasswordSecretRef] }}"
   no_log: true
 
-- name: Inspect runtime-only PKI store password file
+- name: Проверка файла паролей хранилища PKI, доступного только во время выполнения
   ansible.builtin.stat:
     path: "{{ _platform_pki_password_file }}"
     follow: false
   register: platform_pki_password_file_stat
   no_log: true
 
-- name: Require protected runtime-only PKI store password file
+- name: Требовать защищенный файл паролей хранилища PKI, доступный только во время выполнения
   ansible.builtin.assert:
     that:
       - platform_pki_password_file_stat.stat.exists
@@ -48,26 +48,26 @@
     fail_msg: PKI_STORE_PASSWORD_RUNTIME_SECRET_REQUIRED
   no_log: true
 
-- name: Inspect existing PKI request fingerprint marker
+- name: Проверка существующего маркера отпечатка пальца запроса PKI
   ansible.builtin.stat:
     path: "{{ _platform_pki_request_dir }}/request-fingerprint"
     follow: false
   register: platform_pki_request_marker
 
-- name: Inspect persistent PKI request material consistency
+- name: Проверка согласованности материала постоянного запроса PKI
   ansible.builtin.stat:
     path: "{{ _platform_pki_request_dir }}/{{ item }}"
     follow: false
   loop: [leaf.key, leaf.crt, keystore.p12, truststore.p12]
   register: platform_pki_request_files
 
-- name: Inspect explicit PKI reissue recovery marker
+- name: Проверка явного маркера восстановления перевыпуска PKI
   ansible.builtin.stat:
     path: "{{ _platform_pki_reissue_marker }}"
     follow: false
   register: platform_pki_reissue_marker
 
-- name: Reject substituted PKI request and recovery state
+- name: Отклонить замененный запрос PKI и состояние восстановления
   ansible.builtin.assert:
     that:
       - not platform_pki_request_marker.stat.exists or (platform_pki_request_marker.stat.isreg | default(false))
@@ -76,14 +76,14 @@
     fail_msg: PKI_REQUEST_STATE_INCOMPLETE
   loop: "{{ platform_pki_request_files.results }}"
 
-- name: Read explicit PKI reissue recovery marker
+- name: Прочитать явный маркер восстановления перевыпуска PKI
   ansible.builtin.command:
     argv: [cat, "{{ _platform_pki_reissue_marker }}"]
   register: platform_pki_reissue_marker_value
   changed_when: false
   when: platform_pki_reissue_marker.stat.exists
 
-- name: Determine explicit PKI reissue authorization and recovery state
+- name: Определить явное состояние авторизации и восстановления повторного выпуска PKI
   ansible.builtin.set_fact:
     _platform_pki_reissue_requested: "{{ platform_pki_request.id in platform_pki_reissue_request_ids }}"
     _platform_pki_reissue_resumable: >-
@@ -91,7 +91,7 @@
          (platform_pki_reissue_marker_value.stdout | default('') | trim) == platform_pki_request.certificateRequestFingerprint and
          platform_pki_request.id in platform_pki_reissue_request_ids }}
 
-- name: Reject partial PKI request state
+- name: Отклонить частичное состояние запроса PKI
   ansible.builtin.assert:
     that:
       - >-
@@ -103,20 +103,20 @@
         _platform_pki_reissue_resumable
     fail_msg: PKI_REQUEST_STATE_INCOMPLETE
 
-- name: Require explicit authorization to resume a PKI reissue
+- name: Требовать явной авторизации для возобновления перевыпуска PKI
   ansible.builtin.assert:
     that:
       - not platform_pki_reissue_marker.stat.exists or _platform_pki_reissue_resumable
     fail_msg: PKI_REISSUE_RESUME_REQUIRED
 
-- name: Read existing PKI request fingerprint marker
+- name: Прочитать существующий маркер отпечатка пальца запроса PKI
   ansible.builtin.command:
     argv: [cat, "{{ _platform_pki_request_dir }}/request-fingerprint"]
   register: platform_pki_existing_request_fingerprint
   changed_when: false
   when: platform_pki_request_marker.stat.exists
 
-- name: Recognize an interrupted reissue whose leaf identity is already recorded
+- name: Распознать прерванную перевыпуск, идентичность листа которого уже записана
   ansible.builtin.set_fact:
     _platform_pki_reissue_materialized: >-
       {{ _platform_pki_reissue_resumable and platform_pki_request_marker.stat.exists and
@@ -124,7 +124,7 @@
          (platform_pki_request_files.results[0].stat.isreg | default(false)) and
          (platform_pki_request_files.results[1].stat.isreg | default(false)) }}
 
-- name: Determine whether certificate reissue is required
+- name: Определить, требуется ли повторный выпуск сертификата
   ansible.builtin.set_fact:
     _platform_pki_reissue_required: >-
       {{ not _platform_pki_reissue_resumable and platform_pki_request_marker.stat.exists and
@@ -132,13 +132,13 @@
           _platform_pki_reissue_requested) }}
     _platform_pki_reissue_active: "{{ _platform_pki_reissue_resumable and not _platform_pki_reissue_materialized }}"
 
-- name: Require explicit authorization for certificate reissue
+- name: Требовать явную авторизацию для повторного выпуска сертификата
   ansible.builtin.assert:
     that:
       - not _platform_pki_reissue_required or _platform_pki_reissue_requested
     fail_msg: CERTIFICATE_REISSUE_REQUIRED
 
-- name: Inspect authority material before any PKI reissue cleanup
+- name: Проверка авторитетных материалов перед любой очисткой перевыпуска PKI
   ansible.builtin.stat:
     path: "{{ item }}"
     follow: false
@@ -147,13 +147,13 @@
     - "{{ _platform_pki_authority_dir }}/ca.crt"
   register: platform_pki_authority_files
 
-- name: Inspect managed certificate authority fingerprint marker
+- name: Проверка маркера отпечатка пальца управляемого центра сертификации
   ansible.builtin.stat:
     path: "{{ _platform_pki_authority_dir }}/authority-fingerprint"
     follow: false
   register: platform_pki_authority_marker
 
-- name: Reject partial or substituted managed certificate authority state
+- name: Отклонить частичное или замененное состояние управляемого центра сертификации
   ansible.builtin.assert:
     that:
       - >-
@@ -164,14 +164,14 @@
          (platform_pki_authority_files.results[1].stat.isreg | default(false)))
     fail_msg: PKI_AUTHORITY_STATE_INCOMPLETE
 
-- name: Read managed certificate authority fingerprint marker
+- name: Чтение маркера отпечатка пальца управляемого центра сертификации
   ansible.builtin.command:
     argv: [cat, "{{ _platform_pki_authority_dir }}/authority-fingerprint"]
   register: platform_pki_existing_authority_fingerprint
   changed_when: false
   when: platform_pki_authority_marker.stat.exists
 
-- name: Reject managed certificate authority policy change before reissue cleanup
+- name: Отклонить изменение политики управляемого центра сертификации перед повторной очисткой
   ansible.builtin.assert:
     that:
       - >-
@@ -181,7 +181,7 @@
         not (platform_pki_request_marker.stat.exists or platform_pki_reissue_marker.stat.exists) or platform_pki_authority_marker.stat.exists
     fail_msg: CERTIFICATE_REISSUE_REQUIRED
 
-- name: Create protected PKI reissue transaction directory
+- name: Создать защищенный каталог транзакций перевыпуска PKI
   ansible.builtin.file:
     path: "{{ platform_pki_state_root }}/{{ platform_pki_project_id }}/reissues"
     state: directory
@@ -190,7 +190,7 @@
     mode: '0700'
   when: _platform_pki_reissue_required
 
-- name: Create protected PKI reissue backup directory
+- name: Создать защищенный каталог перевыпуска резервной копии PKI
   ansible.builtin.file:
     path: "{{ platform_pki_state_root }}/{{ platform_pki_project_id }}/reissue-backups/{{ platform_pki_request.id }}-{{ platform_pki_existing_request_fingerprint.stdout | trim | hash('sha256') }}"
     state: directory
@@ -199,7 +199,7 @@
     mode: '0700'
   when: _platform_pki_reissue_required
 
-- name: Preserve prior PKI request material before explicit reissue
+- name: Сохранить материал предыдущего запроса PKI перед явным повторным выпуском
   ansible.builtin.copy:
     src: "{{ _platform_pki_request_dir }}/{{ item }}"
     dest: "{{ platform_pki_state_root }}/{{ platform_pki_project_id }}/reissue-backups/{{ platform_pki_request.id }}-{{ platform_pki_existing_request_fingerprint.stdout | trim | hash('sha256') }}/{{ item }}"
@@ -211,7 +211,7 @@
   when: _platform_pki_reissue_required
   no_log: true
 
-- name: Preserve existing derived PKCS12 stores before explicit reissue
+- name: Сохранить существующие производные хранилища PKCS12 перед явным повторным выпуском
   ansible.builtin.copy:
     src: "{{ _platform_pki_request_dir }}/{{ item.name }}"
     dest: "{{ platform_pki_state_root }}/{{ platform_pki_project_id }}/reissue-backups/{{ platform_pki_request.id }}-{{ platform_pki_existing_request_fingerprint.stdout | trim | hash('sha256') }}/{{ item.name }}"
@@ -227,7 +227,7 @@
     - platform_pki_request_files.results[item.index].stat.isreg | default(false)
   no_log: true
 
-- name: Start an explicitly authorized PKI reissue after complete backup
+- name: Запустить явно авторизованный повторный выпуск PKI после полного резервного копирования
   ansible.builtin.copy:
     content: "{{ platform_pki_request.certificateRequestFingerprint }}\n"
     dest: "{{ _platform_pki_reissue_marker }}"
@@ -237,11 +237,11 @@
   when: _platform_pki_reissue_required
   register: _platform_pki_reissue_marker_created
 
-- name: Mark explicitly authorized PKI reissue as active
+- name: Пометить явно авторизованный перевыпуск PKI как активный
   ansible.builtin.set_fact:
     _platform_pki_reissue_active: "{{ _platform_pki_reissue_active or _platform_pki_reissue_required }}"
 
-- name: Remove superseded PKI request material during explicit reissue
+- name: Удалить замененный материал запроса PKI во время явного повторного выпуска
   ansible.builtin.file:
     path: "{{ item }}"
     state: absent
@@ -255,7 +255,7 @@
   when: _platform_pki_reissue_active
   no_log: true
 
-- name: Reject certificate request reissue during reconcile
+- name: Отклонить повторный выпуск сертификата во время согласования
   ansible.builtin.assert:
     that:
       - >-
@@ -264,7 +264,7 @@
         _platform_pki_reissue_active
     fail_msg: CERTIFICATE_REISSUE_REQUIRED
 
-- name: Prepare persistent managed authority and request directories
+- name: Подготовить постоянные управляемые полномочия и запросить каталоги
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
@@ -276,21 +276,21 @@
     - "{{ _platform_pki_request_dir }}"
     - "{{ _platform_pki_request_runtime_dir }}"
 
-- name: Create managed certificate authority key once
+- name: Один раз создать управляемый ключ центра сертификации
   ansible.builtin.command:
     argv: [openssl, genpkey, -algorithm, RSA, -pkeyopt, rsa_keygen_bits:3072, -out, "{{ _platform_pki_authority_dir }}/ca.key"]
   args:
     creates: "{{ _platform_pki_authority_dir }}/ca.key"
   no_log: true
 
-- name: Create managed certificate authority certificate once
+- name: Один раз создать сертификат управляемого центра сертификации
   ansible.builtin.command:
     argv: [openssl, req, -x509, -new, -key, "{{ _platform_pki_authority_dir }}/ca.key", -sha256, -days, "{{ platform_pki_request.authorityValidityDays }}", -subj, "/CN={{ platform_pki_request.authorityCommonName }}", -out, "{{ _platform_pki_authority_dir }}/ca.crt"]
   args:
     creates: "{{ _platform_pki_authority_dir }}/ca.crt"
   no_log: true
 
-- name: Record immutable managed certificate authority fingerprint
+- name: Запись неизменяемого отпечатка управляемого центра сертификации
   ansible.builtin.copy:
     content: "{{ platform_pki_request.authorityFingerprint }}\n"
     dest: "{{ _platform_pki_authority_dir }}/authority-fingerprint"
@@ -298,7 +298,7 @@
     group: "{{ platform_pki_group }}"
     mode: '0600'
 
-- name: Render deterministic request OpenSSL configuration
+- name: Отрисовка детерминированного запроса конфигурации OpenSSL
   ansible.builtin.template:
     src: openssl-request.cnf.j2
     dest: "{{ _platform_pki_request_runtime_dir }}/request.cnf"
@@ -306,7 +306,7 @@
     group: "{{ platform_pki_group }}"
     mode: '0600'
 
-- name: Create RSA request private key once
+- name: Один раз создать закрытый ключ запроса RSA
   ansible.builtin.command:
     argv: [openssl, genpkey, -algorithm, RSA, -pkeyopt, "rsa_keygen_bits:{{ platform_pki_request.keySize }}", -out, "{{ _platform_pki_request_dir }}/leaf.key"]
   args:
@@ -314,7 +314,7 @@
   no_log: true
   when: platform_pki_request.keyAlgorithm == 'RSA'
 
-- name: Create EC request private key once
+- name: Создать закрытый ключ запроса EC один раз
   ansible.builtin.command:
     argv: [openssl, genpkey, -algorithm, EC, -pkeyopt, ec_paramgen_curve:prime256v1, -out, "{{ _platform_pki_request_dir }}/leaf.key"]
   args:
@@ -322,7 +322,7 @@
   no_log: true
   when: platform_pki_request.keyAlgorithm == 'EC'
 
-- name: Enforce persistent private key permissions
+- name: Обеспечить постоянные разрешения закрытого ключа
   ansible.builtin.file:
     path: "{{ item }}"
     owner: "{{ platform_pki_owner }}"
@@ -333,21 +333,21 @@
     - "{{ _platform_pki_request_dir }}/leaf.key"
   no_log: true
 
-- name: Create request certificate signing request once
+- name: Создать запрос на подпись сертификата один раз
   ansible.builtin.command:
     argv: [openssl, req, -new, -key, "{{ _platform_pki_request_dir }}/leaf.key", -out, "{{ _platform_pki_request_runtime_dir }}/leaf.csr", -config, "{{ _platform_pki_request_runtime_dir }}/request.cnf"]
   args:
     creates: "{{ _platform_pki_request_runtime_dir }}/leaf.csr"
   no_log: true
 
-- name: Sign request certificate once
+- name: Один раз подписать сертификат запроса
   ansible.builtin.command:
     argv: [openssl, x509, -req, -in, "{{ _platform_pki_request_runtime_dir }}/leaf.csr", -CA, "{{ _platform_pki_authority_dir }}/ca.crt", -CAkey, "{{ _platform_pki_authority_dir }}/ca.key", -CAcreateserial, -days, "{{ platform_pki_request.validityDays }}", -extfile, "{{ _platform_pki_request_runtime_dir }}/request.cnf", -extensions, v3_req, -out, "{{ _platform_pki_request_dir }}/leaf.crt"]
   args:
     creates: "{{ _platform_pki_request_dir }}/leaf.crt"
   no_log: true
 
-- name: Record immutable request fingerprint after materialization
+- name: Записать неизменяемый отпечаток запроса после материализации
   ansible.builtin.copy:
     content: "{{ platform_pki_request.certificateRequestFingerprint }}\n"
     dest: "{{ _platform_pki_request_dir }}/request-fingerprint"
@@ -355,10 +355,10 @@
     group: "{{ platform_pki_group }}"
     mode: '0600'
 
-- name: Validate authoritative PEM and reconcile derived PKCS12 stores
+- name: Проверка достоверного PEM и согласование производных хранилищ PKCS12
   ansible.builtin.include_tasks: stores.yml
 
-- name: Complete explicit PKI reissue transaction after materialization
+- name: Завершить явную транзакцию повторного выпуска PKI после материализации
   ansible.builtin.file:
     path: "{{ _platform_pki_reissue_marker }}"
     state: absent

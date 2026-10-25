@@ -1,5 +1,5 @@
 ---
-- name: Validate Vault closed standalone input
+- name: Проверка закрытого автономного ввода Vault
   ansible.builtin.assert:
     that:
       - platform_vault_mode in ['standalone', 'raft-ha']
@@ -26,7 +26,7 @@
       - platform_vault_tls_profile is string and platform_vault_tls_profile | length > 0
     fail_msg: VAULT_CONFIGURATION_INVALID
 
-- name: Validate Vault member identity and reachable address
+- name: Проверка идентичности экземпляра службы Vault и доступного адреса
   ansible.builtin.assert:
     that:
       - item is mapping
@@ -45,13 +45,13 @@
   loop_control:
     label: "{{ item.id | default('unknown') }}"
 
-- name: Require unique canonical Vault member identities
+- name: Требовать уникальные канонические идентификаторы экземпляра службы Vault
   ansible.builtin.assert:
     that:
       - platform_vault_instances | map(attribute='id') | unique | length == platform_vault_instances | length
     fail_msg: VAULT_MEMBER_ID_DUPLICATE
 
-- name: Require unique Vault numeric member identities on each host
+- name: Требовать уникальные числовые идентификаторы экземпляра службы Vault на каждом хосте
   ansible.builtin.assert:
     that:
       - >-

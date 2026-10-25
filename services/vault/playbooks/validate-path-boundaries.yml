@@ -1,26 +1,26 @@
 ---
-- name: Prove Vault path preflight rejects descendant symlinks before mutation
+- name: Доказать, что предварительная проверка пути Vault отклоняет символические ссылки потомков перед модификацией
   hosts: localhost
   connection: local
   gather_facts: false
   become: true
   tasks:
-    - name: Create one bounded temporary root for path boundary cases
+    - name: Создать один ограниченный временный корень для случаев с границей пути
       ansible.builtin.tempfile:
         state: directory
         path: /var/tmp
         prefix: platform-vault-path-test-
       register: vault_path_test_dir
 
-    - name: Exercise every deployment/member/PKI descendant link case
+    - name: Проверка каждого случая развертывания /member/PKI с дочерней ссылкой
       block:
-        - name: Bind the synthetic service UID to root-owned test fixtures
+        - name: Привязать синтетический сервис UID к тестовым данным, принадлежащим пользователю root
           ansible.builtin.set_fact:
             _platform_vault_service_uid:
               rc: 0
               stdout: '0'
 
-        - name: Reject symlinks at every managed descendant boundary
+        - name: Отклонить символические ссылки на каждой границе управляемого потомка
           ansible.builtin.include_tasks: validate-path-scenario.yml
           loop:
             - {root: config, component: deployment}
@@ -35,7 +35,7 @@
             label: "{{ vault_path_scenario.root }}/{{ vault_path_scenario.component }}"
 
       always:
-        - name: Remove only the generated path-boundary fixture tree
+        - name: Удалить только сгенерированное дерево тестовых данных границы пути
           ansible.builtin.file:
             path: "{{ vault_path_test_dir.path }}"
             state: absent

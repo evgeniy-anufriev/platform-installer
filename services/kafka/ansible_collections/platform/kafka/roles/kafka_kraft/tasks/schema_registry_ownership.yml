@@ -1,5 +1,5 @@
 ---
-- name: Inspect Registry paths before mutation or removal
+- name: Проверка путей реестра перед изменением или удалением
   ansible.builtin.stat:
     path: "{{ item.1 }}"
     follow: false
@@ -9,7 +9,7 @@
     label: "{{ item.1 }}"
   register: _platform_kafka_registry_path_stats
 
-- name: Reject unsafe Registry paths
+- name: Отклонить небезопасные пути реестра
   ansible.builtin.assert:
     that: not item.stat.exists or (not (item.stat.islnk | default(false)) and (item.stat.isdir | default(false)))
     fail_msg: SCHEMA_REGISTRY_PATH_UNSAFE
@@ -17,7 +17,7 @@
   loop_control:
     label: "{{ item.item.1 }}"
 
-- name: Inspect independent ownership markers for existing Registry roots
+- name: Проверка независимых маркеров владения на наличие существующих корней реестра
   ansible.builtin.stat:
     path: "{{ item.1 }}/ownership-marker"
     follow: false
@@ -28,7 +28,7 @@
   register: _platform_kafka_registry_root_markers
   when: (_platform_kafka_registry_path_stats.results | selectattr('item.1', 'equalto', item.1) | first).stat.exists
 
-- name: Require ownership of each existing Registry root before mutation or removal
+- name: Требовать владения каждым существующим корнем реестра перед изменением или удалением
   ansible.builtin.assert:
     that:
       - item.stat.isreg | default(false)

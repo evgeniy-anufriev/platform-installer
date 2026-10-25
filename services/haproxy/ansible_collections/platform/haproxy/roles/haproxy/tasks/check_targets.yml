@@ -1,5 +1,5 @@
 ---
-- name: Probe actual backend TLS identities before HAProxy candidate activation
+- name: Проверка фактических идентификаторов серверной части TLS перед активацией кандидата HAProxy
   ansible.builtin.command:
     argv:
       - /usr/bin/timeout
@@ -27,13 +27,13 @@
   failed_when: false
   no_log: true
 
-- name: Require every actual backend TLS identity to match the Core projection
+- name: Потребовать, чтобы каждый фактический идентификатор серверной части TLS соответствовал проекции Core
   ansible.builtin.assert:
     that:
       - _platform_haproxy_backend_tls_probes.results | default([]) | selectattr('rc', 'ne', 0) | list | length == 0
     fail_msg: HAPROXY_BACKEND_TLS_IDENTITY_UNVERIFIED
 
-- name: Require verified HTTPS responses from each specific backend target
+- name: Требовать проверенные ответы HTTPS от каждой конкретной серверной цели
   ansible.builtin.command:
     argv:
       - /usr/bin/curl
@@ -58,7 +58,7 @@
   changed_when: false
   no_log: true
 
-- name: Require the expected status on the verified TLS connection
+- name: Запрос ожидаемого статуса проверенного соединения TLS
   ansible.builtin.assert:
     that:
       - item.rc == 0

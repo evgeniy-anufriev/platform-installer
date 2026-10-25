@@ -1,5 +1,5 @@
 ---
-- name: Bind all logical instances selected for this library
+- name: Привязать все логические экземпляры, выбранные для этой библиотеки
   ansible.builtin.set_fact:
     application_library_instance_ids: >-
       {{ hostvars['localhost'].application_runtime_inputs.jobs | selectattr('libraryId', 'equalto', application_library_id) |
@@ -7,13 +7,13 @@
          map(attribute='instanceId') | unique | list }}
   no_log: true
 
-- name: Materialize all selected placements of this library without starting containers
+- name: Материализовать все выбранные размещения этой библиотеки без запуска контейнеров
   ansible.builtin.include_role:
     name: platform.core.application_runtime
     tasks_from: apply_library
   when: platform_application_preflight_jobs | selectattr('libraryId', 'equalto', application_library_id) | list | length > 0
 
-- name: Deliver all selected library images before any before-start script
+- name: Доставить все выбранные изображения библиотеки перед любым сценарием перед запуском
   ansible.builtin.include_role:
     name: platform.core.application_runtime
     tasks_from: image_delivery
@@ -21,7 +21,7 @@
   loop_control:
     loop_var: application_runtime_job
 
-- name: Run library before-start scripts after materialization
+- name: Запуск сценариев перед запуском библиотеки после материализации
   ansible.builtin.include_role:
     name: platform.core.application_runtime
     tasks_from: run_scripts
@@ -32,13 +32,13 @@
   loop_control:
     loop_var: application_runtime_job
 
-- name: Reconcile each logical instance with explicit phase barriers
+- name: Согласовать каждый логический экземпляр с явными фазовыми барьерами
   ansible.builtin.include_tasks: application-libraries-ordered-instance.yml
   loop: "{{ application_library_instance_ids }}"
   loop_control:
     loop_var: application_instance_id
 
-- name: Run library after-ready scripts before endpoint publication
+- name: Запуск готовых сценариев библиотеки перед публикацией конечной точки
   ansible.builtin.include_role:
     name: platform.core.application_runtime
     tasks_from: run_scripts
@@ -49,7 +49,7 @@
   loop_control:
     loop_var: application_runtime_job
 
-- name: Publish and check only this library's ready endpoints
+- name: Публиковать и проверять только готовые конечные точки этой библиотеки
   ansible.builtin.include_tasks: ../../services/integrations/tasks/apply-source.yml
   vars:
     platform_endpoint_source_ids: >-
@@ -63,7 +63,7 @@
       selectattr('providerLibraryId', 'equalto', application_library_id) | map(attribute='providerInstanceId') | list) |
     intersect(hostvars['localhost'].platform_endpoint_sources | default({}) | list) | length > 0
 
-- name: Verify this library's exact placements before the next library
+- name: Проверить точное расположение этой библиотеки перед следующей библиотекой
   ansible.builtin.include_role:
     name: platform.core.application_runtime
     tasks_from: verify
@@ -71,7 +71,7 @@
   loop_control:
     loop_var: application_runtime_job
 
-- name: Prepare selected consumers of an explicitly skipped provider without its lifecycle
+- name: Подготовить выбранных потребителей явно пропущенного провайдера без его жизненного цикла
   ansible.builtin.include_tasks: tasks/application-provider-batch.yml
   loop: "{{ hostvars['localhost'].application_runtime_inputs.integrations.batches | selectattr('providerLibraryId', 'equalto', application_library_id) | list }}"
   loop_control:
@@ -79,12 +79,12 @@
   when: application_library_id in hostvars['localhost'].application_selection.scope.skippedLibraries
   run_once: true
 
-- name: Deliver ready consumer secrets after skipped-provider callbacks
+- name: Доставка готовых секретов потребителя после обратных вызовов пропущенного провайдера
   ansible.builtin.include_tasks: tasks/application-deliver-ready.yml
   when: application_library_id in hostvars['localhost'].application_selection.scope.providerLibraries and application_library_id in hostvars['localhost'].application_selection.scope.skippedLibraries
   run_once: true
 
-- name: Apply declared integration hooks on their own selected placements
+- name: Применить объявленные крючки интеграции к выбранным местам размещения
   ansible.builtin.include_tasks: tasks/application-provider-script.yml
   vars:
     application_provider_batch:

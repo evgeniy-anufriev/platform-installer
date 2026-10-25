@@ -17,11 +17,11 @@ ROLE = ROOT / "services/vault/ansible_collections/platform/vault/roles/vault_tls
 class VaultTemplateLoopTests(unittest.TestCase):
     def test_real_templates_track_changed_members_using_standard_item(self):
         source = yaml.safe_load((ROLE / "tasks/provision.yml").read_text())
-        names = ["Render isolated Vault configuration",
-                 "Record members whose Vault configuration changed",
-                 "Install isolated Vault systemd units",
-                 "Install bounded per-instance Vault audit log rotation policy",
-                 "Record members whose systemd unit changed"]
+        names = ["Отрисовка изолированной конфигурации Vault",
+                 "Запись экземпляров службы, конфигурация Vault которых изменилась",
+                 "Установка изолированных системных служб Vault systemd",
+                 "Установить ограниченную политику ротации журналов аудита Vault для каждого экземпляра",
+                 "Запись экземпляров службы, чья системная служба systemd изменилась"]
         selected = [copy.deepcopy(next(task for task in source if task["name"] == name))
                     for name in names]
         with tempfile.TemporaryDirectory(prefix="vault-loop-test-") as directory:

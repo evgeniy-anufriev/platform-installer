@@ -1,5 +1,5 @@
 ---
-- name: Require a nonempty unambiguous explicit partial source set
+- name: Требовать непустой однозначный явный частичный набор исходного кода
   ansible.builtin.assert:
     that:
       - platform_haproxy_partial_deployment_ids is sequence
@@ -10,11 +10,11 @@
     fail_msg: HAPROXY_PARTIAL_SCOPE_INVALID
   when: platform_haproxy_partial_deployment_ids is defined
 
-- name: Normalize singleton compatibility without interpreting empty scope as full
+- name: Нормализовать одноэлементную совместимость, не интерпретируя пустую область как полную
   ansible.builtin.set_fact:
     _platform_haproxy_partial_ids: "{{ platform_haproxy_partial_deployment_ids | default([platform_haproxy_partial_deployment_id] if platform_haproxy_partial_deployment_id is defined else []) | unique | sort }}"
 
-- name: Require exact safe partial source identities
+- name: Требовать точные безопасные частичные идентификаторы источника
   ansible.builtin.assert:
     that:
       - item is string

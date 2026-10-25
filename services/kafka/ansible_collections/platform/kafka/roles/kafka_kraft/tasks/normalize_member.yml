@@ -1,5 +1,5 @@
 ---
-- name: Derive normalized Kafka member primitives
+- name: Получение нормализованных примитивов экземпляра службы Kafka
   ansible.builtin.set_fact:
     _platform_kafka_normalized_roles: "{{ kafka_input_member.roles | unique | sort }}"
     _platform_kafka_normalized_config_directory: "{{ kafka_input_member.config_directory | default(platform_kafka_config_directory ~ '/' ~ platform_kafka_service_name ~ '/' ~ kafka_input_member.id) }}"
@@ -10,11 +10,11 @@
          else (platform_kafka_name ~ '-broker' if 'broker' in kafka_input_member.roles else platform_kafka_name ~ '-controller') }}
     _platform_kafka_normalized_member_number: "{{ kafka_input_member.id | regex_replace('^.*-', '') }}"
 
-- name: Derive normalized Kafka member runtime directory
+- name: Получение нормализованного каталога времени выполнения экземпляра службы Kafka
   ansible.builtin.set_fact:
     _platform_kafka_normalized_runtime_directory: "{{ _platform_kafka_normalized_compatibility_unit.runtime_directory | default(platform_kafka_config_directory ~ '/' ~ platform_kafka_service_name ~ '-' ~ kafka_input_member.id) }}"
 
-- name: Derive normalized Kafka member runtime resources
+- name: Получение нормализованных ресурсов времени выполнения экземпляра службы Kafka
   ansible.builtin.set_fact:
     _platform_kafka_normalized_legacy_unit_name: "{{ _platform_kafka_normalized_compatibility_unit.name | default(platform_kafka_service_name ~ '@' ~ platform_kafka_service_name ~ '-' ~ kafka_input_member.id) }}"
     _platform_kafka_normalized_unit_name: "{{ _platform_kafka_normalized_unit_service }}@{{ _platform_kafka_normalized_deployment_id }}-{{ _platform_kafka_normalized_member_number }}.service"
@@ -35,7 +35,7 @@
           if (kafka_input_member.listeners | default({}) | length > 0)
           else []) | unique | sort }}
 
-- name: Build normalized Kafka listener endpoint projection
+- name: Построение нормализованной проекции конечной точки прослушивателя Kafka
   ansible.builtin.set_fact:
     _platform_kafka_normalized_listener_endpoints: >-
       {% set endpoints = [] %}
@@ -53,11 +53,11 @@
       {% endfor %}
       {{ endpoints | to_json }}
 
-- name: Convert normalized Kafka listener endpoint projection to a native list
+- name: Преобразовать нормализованную проекцию конечной точки прослушивателя Kafka в собственный список
   ansible.builtin.set_fact:
     _platform_kafka_normalized_listener_endpoints: "{{ _platform_kafka_normalized_listener_endpoints | from_json }}"
 
-- name: Select normalized Kafka controller and client endpoints
+- name: Выбор нормализованного контроллера Kafka и конечных точек клиента
   ansible.builtin.set_fact:
     _platform_kafka_normalized_controller_endpoint: >-
       {{ _platform_kafka_normalized_listener_endpoints
@@ -66,7 +66,7 @@
       {{ _platform_kafka_normalized_listener_endpoints
          | selectattr('purpose', 'equalto', 'client') | list | first | default({}, true) }}
 
-- name: Assemble normalized Kafka member
+- name: Собрать нормализованный экземпляр службы Kafka
   ansible.builtin.set_fact:
     _platform_kafka_normalized_member: >-
       {{ (kafka_input_member | combine({
@@ -103,6 +103,6 @@
            ]
          })) | dict2items | rejectattr('key', 'equalto', '_compatibility_unit') | items2dict }}
 
-- name: Append normalized Kafka member
+- name: Добавление нормализованного экземпляра службы Kafka
   ansible.builtin.set_fact:
     _platform_kafka_instances: "{{ _platform_kafka_instances + [_platform_kafka_normalized_member] }}"

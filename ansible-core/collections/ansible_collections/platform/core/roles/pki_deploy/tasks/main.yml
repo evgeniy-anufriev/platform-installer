@@ -1,18 +1,18 @@
 ---
-- name: Derive effective PKI project identity from Execution Node projection
+- name: Получение эффективной идентичности проекта PKI на основе проекции узла выполнения
   ansible.builtin.set_fact:
     _platform_pki_effective_project_id: "{{ platform_pki_project_id if platform_pki_project_id | length > 0 else hostvars['localhost'].platform_pki_project_id | default('') }}"
 
-- name: Select PKI materialization plans for target host
+- name: Выбор планов материализации PKI для целевого хоста
   ansible.builtin.set_fact:
     _platform_pki_local_plans: "{{ (platform_pki_materialization_plans | default(hostvars['localhost'].platform_pki_materialization_plans | default([]), true)) | selectattr('hostId', 'equalto', inventory_hostname) | list }}"
 
-- name: Reconcile project CA certificates in system trust
+- name: Согласование сертификатов проекта CA в системном доверии
   ansible.builtin.include_tasks: trust_anchors.yml
   when: _platform_pki_local_plans | length > 0
   tags: platform_installer_pki_materialization
 
-- name: Deploy target-owned PKI material atomically
+- name: Атомарное развертывание принадлежащего цели материала PKI
   ansible.builtin.include_tasks: plan.yml
   loop: "{{ _platform_pki_local_plans | sort(attribute='id') | list }}"
   loop_control:
@@ -20,7 +20,7 @@
     label: "{{ platform_pki_plan.id }}"
   tags: platform_installer_pki_materialization
 
-- name: Verify previously deployed PKI material before service activation
+- name: Проверка ранее развернутого материала PKI перед активацией службы
   ansible.builtin.include_tasks: integrity.yml
   loop: "{{ _platform_pki_local_plans | sort(attribute='id') | list }}"
   loop_control:

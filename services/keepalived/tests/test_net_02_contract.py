@@ -29,7 +29,7 @@ class Net02KeepalivedContractTests(unittest.TestCase):
 
     def test_future_haproxy_helper_is_materialized_deterministically(self):
         tasks = (ROLE / "tasks" / "prepare.yml").read_text(encoding="utf-8")
-        self.assertIn("Install package-owned HAProxy readiness primitive", tasks)
+        self.assertIn("Установить примитив готовности HAProxy, принадлежащий пакету", tasks)
         self.assertIn("check-haproxy-ready.sh.j2", tasks)
         self.assertIn("platform_keepalived_haproxy_check_path", tasks)
         self.assertIn("mode: '0750'", tasks)
@@ -43,11 +43,11 @@ class Net02KeepalivedContractTests(unittest.TestCase):
 
     def test_cluster_barrier_orders_candidate_active_and_service_phases(self):
         playbook = (ROOT / "playbooks" / "apply.yml").read_text(encoding="utf-8")
-        phase_a = playbook.index("Phase A - prepare")
-        barrier_a = playbook.index("Barrier A")
-        phase_b = playbook.index("Phase B - install")
-        barrier_b = playbook.index("Barrier B")
-        phase_c = playbook.index("Phase C - reconcile")
+        phase_a = playbook.index("Этап A — подготовить")
+        barrier_a = playbook.index("Барьер A")
+        phase_b = playbook.index("Этап B — установить")
+        barrier_b = playbook.index("Барьер B")
+        phase_c = playbook.index("Этап C — привести")
         self.assertLess(phase_a, barrier_a)
         self.assertLess(barrier_a, phase_b)
         self.assertLess(phase_b, barrier_b)

@@ -1,10 +1,10 @@
 ---
-- name: Collect execution environment facts
+- name: Сбор фактов о среде выполнения
   ansible.builtin.setup:
     gather_subset:
       - min
 
-- name: Validate supported execution environment
+- name: Проверка поддерживаемой среды выполнения
   ansible.builtin.assert:
     that:
       - ansible_system == 'Linux'
@@ -12,20 +12,20 @@
       - ansible_python_version is version('3.8', '>=')
     fail_msg: Execution Node requires a supported Linux/Python environment
 
-- name: Check local Ansible executable
+- name: Проверка локального исполняемого файла Ansible
   ansible.builtin.command: ansible-playbook --version
   register: platform_execution_ansible_version
   changed_when: false
   when: platform_execution_require_ansible | bool
 
-- name: Require a technical user when execution identity is managed
+- name: Требуется технический пользователь при управлении удостоверением выполнения
   ansible.builtin.assert:
     that:
       - platform_execution_technical_user | length > 0
     fail_msg: Managed execution identity requires platform_execution_technical_user
   when: platform_execution_manage_technical_user | bool
 
-- name: Ensure managed execution technical user exists
+- name: Обеспечить существование технического пользователя управляемого выполнения
   ansible.builtin.user:
     name: "{{ platform_execution_technical_user }}"
     shell: /bin/bash
@@ -33,7 +33,7 @@
     state: present
   when: platform_execution_manage_technical_user | bool
 
-- name: Install explicitly supplied execution sudo policy
+- name: Установить явно предоставленную политику выполнения sudo
   ansible.builtin.copy:
     content: "{{ platform_execution_sudoers_content }}"
     dest: "/etc/sudoers.d/platform-execution"
@@ -43,7 +43,7 @@
     validate: /usr/sbin/visudo -cf %s
   when: platform_execution_sudoers_content | length > 0
 
-- name: Create shared execution workspace root
+- name: Создание корня общей рабочей области выполнения
   ansible.builtin.file:
     path: "{{ platform_execution_workspace }}"
     state: directory
@@ -51,7 +51,7 @@
     group: root
     mode: "0711"
 
-- name: Create private execution workspace directories
+- name: Создание частных каталогов рабочей области выполнения
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
@@ -60,7 +60,7 @@
     - "{{ platform_execution_private_workspace }}"
     - "{{ platform_execution_payload_root }}"
 
-- name: Create persistent execution identity state
+- name: Создание постоянного состояния идентификации выполнения
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
@@ -73,13 +73,13 @@
     - "{{ platform_execution_identity_root }}"
   when: platform_execution_technical_user | length > 0
 
-- name: Inspect persistent execution known-hosts file
+- name: Проверка файла известных хостов постоянного выполнения
   ansible.builtin.stat:
     path: "{{ platform_execution_known_hosts_path }}"
   register: platform_execution_known_hosts_stat
   when: platform_execution_technical_user | length > 0
 
-- name: Create persistent execution known-hosts file once
+- name: Один раз создать файл известных хостов с постоянным выполнением
   ansible.builtin.copy:
     content: ""
     dest: "{{ platform_execution_known_hosts_path }}"
@@ -90,7 +90,7 @@
     - platform_execution_technical_user | length > 0
     - not platform_execution_known_hosts_stat.stat.exists
 
-- name: Assign managed execution private workspace ownership
+- name: Назначить владение частной рабочей областью управляемого выполнения
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
@@ -101,7 +101,7 @@
     - "{{ platform_execution_private_workspace }}"
   when: platform_execution_technical_user | length > 0
 
-- name: Create managed execution SSH identity exactly once
+- name: Создать идентификатор SSH управляемого выполнения ровно один раз
   become_user: "{{ platform_execution_technical_user }}"
   ansible.builtin.command:
     argv:
@@ -117,7 +117,7 @@
     creates: "{{ platform_execution_ssh_key_path }}"
   when: platform_execution_technical_user | length > 0
 
-- name: Verify offline payload location when required
+- name: Проверка местоположения полезных данных в автономном режиме, когда это необходимо
   ansible.builtin.stat:
     path: "{{ platform_execution_offline_payload_root }}"
   register: platform_execution_payload_stat
@@ -125,7 +125,7 @@
     - platform_execution_require_offline_payload | bool
     - platform_execution_offline_payload_root | length > 0
 
-- name: Reject missing offline execution payload
+- name: Отклонить отсутствующую полезную нагрузку автономного выполнения
   ansible.builtin.assert:
     that:
       - platform_execution_payload_stat.stat.exists
@@ -135,7 +135,7 @@
     - platform_execution_require_offline_payload | bool
     - platform_execution_offline_payload_root | length > 0
 
-- name: Publish execution readiness marker
+- name: Публикация маркера готовности к выполнению
   ansible.builtin.copy:
     content: "execution-node-ready-v1\\n"
     dest: "{{ platform_execution_workspace }}/.execution-node-ready"

@@ -1,5 +1,5 @@
 ---
-- name: Keep the shared Redis data root separate from co-located members
+- name: Хранить общий корень данных Redis отдельно от совместно расположенных экземпляров службы
   ansible.builtin.assert:
     that: item.data_directory != platform_redis_data_root
     fail_msg: "REDIS_DATA_DIRECTORY_COLLISION: {{ item.id }}: {{ item.data_directory }} is the shared root"
@@ -8,7 +8,7 @@
     label: "{{ item.id }}"
   when: _platform_redis_local_instances | length > 1
 
-- name: Refuse overlapping Redis member directories on the same host
+- name: Отказаться от перекрытия каталогов экземпляров службы Redis на одном хосте
   ansible.builtin.assert:
     that:
       - not item.0.data_directory.startswith(item.1.data_directory ~ '/')

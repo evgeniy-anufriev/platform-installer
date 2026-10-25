@@ -1,5 +1,5 @@
 ---
-- name: Inspect active primary zone file
+- name: Проверка активного файла основной зоны
   ansible.builtin.stat:
     path: "{{ platform_bind_primary_zone_directory }}/{{ platform_bind_resolved_zones[platform_bind_inspected_deployment.key].zone }}.zone"
     get_mime: false
@@ -7,7 +7,7 @@
     get_checksum: false
   register: _platform_bind_existing_zone_file
 
-- name: Inspect primary dynamic-update journal
+- name: Проверка основного журнала динамических обновлений
   ansible.builtin.stat:
     path: "{{ platform_bind_primary_zone_directory }}/{{ platform_bind_resolved_zones[platform_bind_inspected_deployment.key].zone }}.zone.jnl"
     get_mime: false
@@ -15,13 +15,13 @@
     get_checksum: false
   register: _platform_bind_existing_zone_journal
 
-- name: Reject orphaned BIND dynamic-update journal
+- name: Отклонить потерянный журнал динамического обновления BIND
   ansible.builtin.assert:
     that:
       - _platform_bind_existing_zone_file.stat.exists or not _platform_bind_existing_zone_journal.stat.exists
     fail_msg: BIND_ZONE_JOURNAL_WITHOUT_MASTER_FILE
 
-- name: Record whether this primary zone already has persistent state
+- name: Записать, имеет ли эта основная зона постоянное состояние
   ansible.builtin.set_fact:
     _platform_bind_existing_primary_zone_by_deployment: >-
       {{ _platform_bind_existing_primary_zone_by_deployment |

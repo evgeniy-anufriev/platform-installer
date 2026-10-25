@@ -1,5 +1,5 @@
 ---
-- name: Resolve exact Kafka member PKI for Registry server and client
+- name: Разрешить точный экземпляр службы Kafka PKI для сервера и клиента реестра
   ansible.builtin.include_tasks: resolve_tls_runtime.yml
   vars:
     kafka_tls_member: >-
@@ -7,12 +7,12 @@
           | selectattr('deployment_id', 'equalto', registry_instance.deployment_id) | first)
          | combine({'config_directory': registry_instance.config_directory, 'tls_profile': registry_instance.tls_profile}) }}
 
-- name: Recheck Registry root ownership before member preparation
+- name: Перепроверить владение корнем реестра перед подготовкой экземпляра службы
   ansible.builtin.include_tasks: schema_registry_ownership.yml
   vars:
     _platform_kafka_registry_local: "{{ [registry_instance] }}"
 
-- name: Prepare Registry-owned member directories
+- name: Подготовка каталогов экземпляров служб, принадлежащих реестру
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
@@ -22,7 +22,7 @@
   loop: "{{ registry_instance.managed_paths }}"
   when: not platform_kafka_verify_only
 
-- name: Mark each new Registry member root independently
+- name: Пометить каждый новый корень экземпляра службы реестра независимо
   ansible.builtin.copy:
     content: "{{ registry_instance.ownership_marker }}\n"
     dest: "{{ item }}/ownership-marker"
@@ -32,7 +32,7 @@
   loop: "{{ registry_instance.ownership_paths }}"
   when: not platform_kafka_verify_only
 
-- name: Copy PKI stores into owned Registry runtime directories
+- name: Копирование хранилищ PKI в принадлежащие им каталоги времени выполнения реестра
   ansible.builtin.copy:
     src: "{{ _platform_kafka_tls_runtime.targetDirectory }}/{{ item }}"
     dest: "{{ registry_instance.config_directory }}/pki/{{ item }}"
@@ -45,7 +45,7 @@
   no_log: true
   when: not platform_kafka_verify_only
 
-- name: Materialize or verify the Registry-owned PEM identity
+- name: Материализовать или проверить принадлежащий реестру идентификатор PEM
   ansible.builtin.include_tasks: pem_identity.yml
   vars:
     kafka_pem_source_directory: "{{ _platform_kafka_tls_runtime.targetDirectory }}"
@@ -56,12 +56,12 @@
     kafka_pem_verify_only: "{{ platform_kafka_verify_only }}"
   when: _platform_kafka_tls_runtime.storeType == 'PEM'
 
-- name: Preserve the Registry PEM change signal
+- name: Сохранить сигнал изменения реестра PEM
   ansible.builtin.set_fact:
     _platform_kafka_registry_pem_changed: "{{ _platform_kafka_tls_runtime.storeType == 'PEM' and (_platform_kafka_pem_identity_write.changed | default(false) | bool) }}"
   changed_when: false
 
-- name: Load runtime-only store password without logging
+- name: Загрузка пароля хранилища только во время выполнения без регистрации
   ansible.builtin.set_fact:
     _platform_kafka_registry_password: >-
       {{ lookup('ansible.builtin.file',
@@ -69,7 +69,7 @@
   no_log: true
   when: _platform_kafka_tls_runtime.storeType == 'PKCS12'
 
-- name: Require a properties-safe store password
+- name: Запрос пароля хранилища, безопасного для свойств
   ansible.builtin.assert:
     that:
       - _platform_kafka_registry_password | length > 0
@@ -77,7 +77,7 @@
   no_log: true
   when: _platform_kafka_tls_runtime.storeType == 'PKCS12'
 
-- name: Render protected Registry and Kafka CLI properties
+- name: Отрисовка защищенного реестра и свойств Kafka CLI
   ansible.builtin.template:
     src: "{{ item.source }}"
     dest: "{{ registry_instance.config_directory }}/{{ item.destination }}"
@@ -92,7 +92,7 @@
   diff: false
   when: not platform_kafka_verify_only
 
-- name: Check protected Registry configuration digest without reading output
+- name: Проверка защищенного дайджеста конфигурации реестра без чтения выходных данных
   ansible.builtin.stat:
     path: "{{ registry_instance.config_directory }}/schema-registry.properties"
     checksum_algorithm: sha256
@@ -100,7 +100,7 @@
   register: _platform_kafka_registry_properties_state
   no_log: true
 
-- name: Require exact Registry configuration and restrictive ownership
+- name: Требовать точную конфигурацию реестра и ограниченное владение
   ansible.builtin.assert:
     that:
       - _platform_kafka_registry_properties_state.stat.isreg | default(false)
@@ -111,7 +111,7 @@
     fail_msg: SCHEMA_REGISTRY_CONFIG_DRIFT
   no_log: true
 
-- name: Verify broker protocol readiness for the selected connection
+- name: Проверка готовности протокола брокера для выбранного соединения
   ansible.builtin.command:
     argv:
       - "{{ platform_kafka_install_directory }}/bin/kafka-broker-api-versions.sh"
@@ -129,10 +129,10 @@
       _platform_kafka_registry_brokers_ready.stdout | regex_findall('\(id: ([0-9]+)') | map('int') | list) | length) == 0
   no_log: true
 
-- name: Inspect or reconcile the shared schema topic
+- name: Проверка или согласование раздела общей схемы
   ansible.builtin.include_tasks: schema_registry_topic.yml
 
-- name: Render the owned Registry unit
+- name: Отрисовка принадлежащей системной службы реестра
   ansible.builtin.template:
     src: schema-registry.service.j2
     dest: "{{ registry_instance.unit_path }}"
@@ -142,7 +142,7 @@
   register: _platform_kafka_registry_unit
   when: not platform_kafka_verify_only
 
-- name: Start Registry and restart only when its inputs changed
+- name: Запустить реестр и перезапустить его только при изменении входных данных
   ansible.builtin.systemd:
     name: "{{ registry_instance.unit_name }}"
     daemon_reload: "{{ _platform_kafka_registry_unit.changed }}"
@@ -150,14 +150,14 @@
     state: "{{ 'restarted' if (_platform_kafka_registry_unit.changed or _platform_kafka_registry_properties.changed or _platform_kafka_registry_pki_copy.changed or _platform_kafka_registry_pem_changed) else 'started' }}"
   when: not platform_kafka_verify_only
 
-- name: Verify Registry unit is active
+- name: Проверить, активна ли служба реестра systemd
   ansible.builtin.stat:
     path: "{{ registry_instance.unit_path }}"
     follow: false
     checksum_algorithm: sha256
   register: _platform_kafka_registry_unit_state
 
-- name: Require exact owned Registry unit configuration
+- name: Требовать точную конфигурацию службы реестра systemd
   ansible.builtin.assert:
     that:
       - _platform_kafka_registry_unit_state.stat.isreg | default(false)
@@ -165,7 +165,7 @@
       - _platform_kafka_registry_unit_state.stat.checksum == (lookup('ansible.builtin.template', 'schema-registry.service.j2') | hash('sha256'))
     fail_msg: SCHEMA_REGISTRY_UNIT_DRIFT
 
-- name: Verify Registry unit is running
+- name: Проверить, работает ли служба реестра systemd
   ansible.builtin.command:
     argv: [systemctl, is-active, "{{ registry_instance.unit_name }}"]
   changed_when: false
@@ -174,7 +174,7 @@
   delay: "{{ platform_kafka_schema_registry_readiness_delay }}"
   until: _platform_kafka_registry_active.rc == 0 and _platform_kafka_registry_active.stdout | trim == 'active'
 
-- name: Verify HTTP and HTTPS Registry readiness without schema writes
+- name: Проверка готовности реестра HTTP и HTTPS без записи схемы
   ansible.builtin.uri:
     url: "{{ item }}/subjects"
     method: GET
@@ -189,7 +189,7 @@
   delay: "{{ platform_kafka_schema_registry_readiness_delay }}"
   until: _platform_kafka_registry_http_ready.status | default(0) == 200
 
-- name: Discard the run-local password fact
+- name: Отбросить факт локального пароля
   ansible.builtin.set_fact:
     _platform_kafka_registry_password: ''
   no_log: true

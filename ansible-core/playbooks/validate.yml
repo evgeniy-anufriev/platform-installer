@@ -1,16 +1,16 @@
 ---
-- name: Validate Platform project contract
+- name: Проверка контракта проекта платформы
   hosts: localhost
   connection: local
   gather_facts: false
   any_errors_fatal: true
   pre_tasks:
-    - name: Validate portable service resource settings
+    - name: Проверка настроек ресурсов переносимой службы
       ansible.builtin.include_role:
         name: platform.core.project_settings
       run_once: true
 
-    - name: Inspect optional legacy portable project manifest
+    - name: Проверка дополнительного манифеста устаревшего портативного проекта
       ansible.builtin.stat:
         path: >-
           {{ platform_project_manifest_path |
@@ -18,12 +18,12 @@
       register: platform_project_manifest_stat
       run_once: true
 
-    - name: Initialize absent project manifest
+    - name: Инициализировать отсутствующий манифест проекта
       ansible.builtin.set_fact:
         platform_project_manifest_document: {}
       run_once: true
 
-    - name: Load optional legacy portable project manifest
+    - name: Загрузить дополнительный манифест устаревшего портативного проекта
       ansible.builtin.include_vars:
         file: >-
           {{ platform_project_manifest_path |
@@ -32,7 +32,7 @@
       when: platform_project_manifest_stat.stat.exists
       run_once: true
 
-    - name: Require a published service catalog artifact
+    - name: Запрос опубликованного артефакта каталога сервисов
       ansible.builtin.assert:
         that:
           - platform_service_catalog_path is defined
@@ -41,18 +41,18 @@
           platform_service_catalog_path must reference a published service catalog YAML artifact
       run_once: true
 
-    - name: Load the published service catalog artifact
+    - name: Загрузка опубликованного артефакта каталога сервисов
       ansible.builtin.include_vars:
         file: "{{ platform_service_catalog_path }}"
         name: platform_catalog_artifact
       run_once: true
 
-    - name: Initialize safe desired host projection
+    - name: Инициализировать безопасную проекцию желаемого хоста
       ansible.builtin.set_fact:
         platform_desired_hosts: {}
       run_once: true
 
-    - name: Collect only platform_host desired variables
+    - name: Собрать только нужные переменные platform_host
       ansible.builtin.set_fact:
         platform_desired_hosts: >-
           {{ platform_desired_hosts |
@@ -63,7 +63,7 @@
       no_log: true
       run_once: true
 
-    - name: Collect canonical inventory-owned service members
+    - name: Сбор экземпляров канонических служб, принадлежащих инвентарю
       ansible.builtin.set_fact:
         platform_inventory_deployments: >-
           {{ platform_inventory_deployments | default({}) |
@@ -74,7 +74,7 @@
       no_log: true
       run_once: true
 
-    - name: Collect safe canonical inventory host addresses
+    - name: Сбор безопасных адресов хостов канонической инвентаризации
       ansible.builtin.set_fact:
         platform_inventory_host_addresses: >-
           {{ platform_inventory_host_addresses | default({}) |
@@ -86,12 +86,12 @@
       run_once: true
 
   tasks:
-    - name: Resolve optional application libraries with ordinary Ansible
+    - name: Разрешить дополнительные библиотеки приложений с помощью обычного Ansible
       ansible.builtin.include_role:
         name: platform.core.resolve_application_libraries
       when: platform_desired_state.applicationLibraryDeployments is defined
 
-    - name: Validate application projection through the shared snapshot path
+    - name: Проверка проекции приложения через общий путь к снимку
       platform.core.project_snapshot:
         project_root: "{{ platform_project_root | default(inventory_dir | dirname) }}"
         service_catalog_path: "{{ platform_service_catalog_path }}"
@@ -100,7 +100,7 @@
       become: false
       no_log: true
 
-    - name: Validate desired project on the Ansible controller
+    - name: Проверка желаемого проекта на контроллере Ansible
       platform.core.validate_project:
         manifest: "{{ platform_project_manifest_document }}"
         topology: "{{ platform_project | default({}) }}"
@@ -129,7 +129,7 @@
       check_mode: false
       register: platform_validation
 
-    - name: Show validation summary
+    - name: Показать сводку проверки
       ansible.builtin.debug:
         msg:
           status: "{{ platform_validation.validation.status }}"

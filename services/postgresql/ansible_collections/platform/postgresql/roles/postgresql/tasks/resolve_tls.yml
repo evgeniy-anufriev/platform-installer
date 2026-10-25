@@ -1,16 +1,16 @@
 ---
-- name: Select the effective PKI-01 materialization plan for PostgreSQL
+- name: Выбрать эффективный план материализации PKI-01 для PostgreSQL
   ansible.builtin.include_role:
     name: platform.core.pki_materialize
     tasks_from: select_consumer_plan.yml
   vars:
     platform_pki_consumer_tls_profile_id: "{{ platform_postgresql_tls_profile }}"
 
-- name: Resolve PostgreSQL TLS material directory
+- name: Разрешить каталог материалов PostgreSQL TLS
   ansible.builtin.set_fact:
     _platform_postgresql_tls_directory: "{{ platform_postgresql_config_directory }}/pki"
 
-- name: Check PostgreSQL PEM materialization
+- name: Проверка материализации PostgreSQL PEM
   ansible.builtin.stat:
     path: "{{ platform_pki_selected_consumer_plan.targetDirectory }}/{{ item }}"
     get_mime: false
@@ -19,7 +19,7 @@
   loop: [ca-chain.pem, certificate.pem, private-key.pem]
   register: platform_postgresql_tls_files
 
-- name: Require complete source PostgreSQL PEM materialization
+- name: Требовать полную материализацию исходного кода PostgreSQL PEM
   ansible.builtin.assert:
     that: platform_postgresql_tls_files.results | map(attribute='stat.exists') | list | min
     fail_msg: POSTGRES_PKI_MATERIALIZATION_REQUIRED

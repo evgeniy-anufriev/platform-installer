@@ -1,5 +1,5 @@
 ---
-- name: Inspect Docker account Bash profiles
+- name: Проверка профилей Bash учетной записи Docker
   ansible.builtin.stat:
     path: "{{ _platform_docker_home }}/{{ item }}"
     follow: false
@@ -9,7 +9,7 @@
   loop: [.bashrc, .bash_profile]
   register: _platform_docker_shell_profiles
 
-- name: Reject unsafe Docker account profile paths
+- name: Отклонить небезопасные пути профиля учетной записи Docker
   ansible.builtin.assert:
     that: >-
       not item.stat.exists or
@@ -19,7 +19,7 @@
   loop_control:
     label: "{{ item.item }}"
 
-- name: Persist rootless Docker environment for Bash sessions
+- name: Сохранить окружение Docker без прав root для сеансов Bash
   ansible.builtin.blockinfile:
     path: "{{ _platform_docker_home }}/{{ item }}"
     create: true

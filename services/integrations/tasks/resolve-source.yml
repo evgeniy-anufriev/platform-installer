@@ -1,5 +1,5 @@
 ---
-- name: Initialize an empty endpoint integration projection
+- name: Инициализация пустой проекции интеграции конечной точки
   ansible.builtin.set_fact:
     _platform_integration_source_id: "{{ platform_endpoint_source_id | default(platform_execution_service_deployment | default(platform_integration_source_deployment_id | default(''))) }}"
     platform_service_integration_projection:
@@ -7,21 +7,21 @@
       haproxyDeployments: []
       haproxyHosts: []
     platform_bind_source_dns_records: []
-- name: Reuse normalized sources for the existing endpoint hook
+- name: Повторное использование нормализованных источников для существующего перехватчика конечной точки
   ansible.builtin.include_role:
     name: platform.core.resolve_endpoint_sources
-- name: Select the source probe policy without provider type branching
+- name: Выбор политики проверки источника без ветвления по типу провайдера
   ansible.builtin.set_fact:
     _platform_integration_probe: "{{ (hostvars['localhost'].platform_endpoint_sources | default({})).get(_platform_integration_source_id, {}).get('probe', {}) }}"
 
-- name: Require an explicit source identity when the project has endpoints
+- name: Требовать явного идентификатора источника, если в проекте есть конечные точки
   ansible.builtin.assert:
     that:
       - _platform_integration_source_id | length > 0
     fail_msg: SERVICE_INTEGRATION_SOURCE_ID_REQUIRED
   when: platform_desired_state.serviceDeployments | default({}) | dict2items | selectattr('value.endpointGroup', 'defined') | list | length > 0 and _platform_integration_source_id | length == 0
 
-- name: Collect project inventory projections for Core endpoint resolution
+- name: Собрать прогнозы инвентаризации проекта для разрешения конечной точки Core
   ansible.builtin.set_fact:
     _platform_integration_inventory_hosts: >-
       {{ _platform_integration_inventory_hosts | default({}) |
@@ -33,11 +33,11 @@
   no_log: true
   when: _platform_integration_source_id | length > 0 and not (_platform_integration_inventory_collected | default(false))
 
-- name: Reuse the safe inventory projection for subsequent source hooks
+- name: Повторное использование безопасной проекции запасов для последующих перехватчиков источников
   ansible.builtin.set_fact:
     _platform_integration_inventory_collected: true
 
-- name: Resolve providers for the selected source deployment
+- name: Определение провайдеров для выбранного исходного развертывания
   platform.core.resolve_service_integrations:
     endpoint_sources: "{{ hostvars['localhost'].platform_endpoint_sources | default({}) }}"
     desired_state: "{{ platform_desired_state }}"
@@ -47,12 +47,12 @@
   register: _platform_integration_resolution
   when: _platform_integration_source_id | length > 0
 
-- name: Publish selected source provider projection
+- name: Публикация выбранной проекции провайдера источника
   ansible.builtin.set_fact:
     platform_service_integration_projection: "{{ _platform_integration_resolution.resolved_service_integrations.integrations }}"
   when: _platform_integration_resolution is not skipped
 
-- name: Load service catalog for endpoint projection
+- name: Загрузка каталога сервисов для проекции конечной точки
   ansible.builtin.include_vars:
     file: "{{ platform_service_catalog_path }}"
     name: _platform_integration_catalog_file
@@ -60,7 +60,7 @@
     - _platform_integration_source_id | length > 0
     - platform_service_integration_projection.dnsDeployments | length > 0
 
-- name: Resolve only the selected source endpoint
+- name: Разрешить только выбранную исходную конечную точку
   platform.core.resolve_service_endpoints:
     endpoint_sources: "{{ hostvars['localhost'].platform_endpoint_sources | default({}) }}"
     desired_state: "{{ platform_desired_state }}"
@@ -72,7 +72,7 @@
     - _platform_integration_source_id | length > 0
     - platform_service_integration_projection.dnsDeployments | length > 0
 
-- name: Resolve source-only DNS records without group wildcard changes
+- name: Разрешить записи DNS только для источника без изменения подстановочных знаков группы
   platform.core.resolve_dns_zones:
     endpoint_sources: "{{ hostvars['localhost'].platform_endpoint_sources | default({}) }}"
     desired_state: "{{ platform_desired_state }}"
@@ -87,7 +87,7 @@
     - _platform_integration_source_id | length > 0
     - platform_service_integration_projection.dnsDeployments | length > 0
 
-- name: Collect only this source's deployment and opted-in host endpoint names
+- name: Собрать только имена развертывания этого источника и включенные имена конечных точек хоста
   ansible.builtin.set_fact:
     _platform_integration_source_fqdns: >-
       {{ ([ _platform_integration_endpoint_resolution.resolved_service_endpoints.endpoints[_platform_integration_source_id].fqdn ]
@@ -98,7 +98,7 @@
   when:
     - _platform_integration_dns_resolution is not skipped
 
-- name: Build exact source DNS updates for resolved BIND deployments
+- name: Сборка точных исходных обновлений DNS для решенных развертываний BIND
   ansible.builtin.set_fact:
     platform_bind_source_dns_records: >-
       {{ platform_bind_source_dns_records + [{
@@ -119,12 +119,12 @@
     - _platform_integration_dns_resolution is not skipped
     - record_matches | length == 1
 
-- name: Retain the exact normalized source hostname when DNS publication is skipped
+- name: Сохранить точное нормализованное имя хоста источника при пропуске публикации DNS
   ansible.builtin.set_fact:
     _platform_integration_source_fqdns: "{{ [hostvars['localhost'].platform_endpoint_sources[_platform_integration_source_id].endpoint.fqdn] }}"
   when: _platform_integration_source_id in (hostvars['localhost'].platform_endpoint_sources | default({}))
 
-- name: Normalize expected DNS addresses for the selected endpoint source
+- name: Нормализовать ожидаемые адреса DNS для выбранного источника конечной точки
   ansible.builtin.set_fact:
     platform_endpoint_probe_expected_addresses: "{{ source_expected_addresses if source_expected_addresses | length > 0 else source_dns_record_addresses }}"
   vars:

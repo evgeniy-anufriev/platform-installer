@@ -1,5 +1,5 @@
 ---
-- name: Authenticate selected logical accounts over verified TLS
+- name: Проверка подлинности выбранных логических учетных записей через проверенный TLS
   ansible.builtin.command:
     argv: [psql, -X, -Atqc, 'SELECT 1']
   vars:

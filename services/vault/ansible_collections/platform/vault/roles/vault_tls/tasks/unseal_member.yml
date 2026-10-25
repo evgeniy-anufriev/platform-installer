@@ -1,5 +1,5 @@
 ---
-- name: Read the current seal state for one exact Vault member
+- name: Прочитать текущее состояние печати для одного конкретного экземпляра службы Vault
   ansible.builtin.uri:
     url: "https://{{ vault_member.address }}:{{ vault_member.api_port }}/v1/sys/health"
     method: GET
@@ -15,7 +15,7 @@
   until: _platform_vault_member_health_before is succeeded
   no_log: true
 
-- name: Require recovery material only when this member is sealed
+- name: Требовать материалы для восстановления только в том случае, если этот экземпляр службы запечатан
   ansible.builtin.assert:
     that:
       - _platform_vault_effective_unseal_keys | length >= platform_vault_unseal_threshold
@@ -24,7 +24,7 @@
   when: _platform_vault_member_health_before.json.sealed | bool
   no_log: true
 
-- name: Submit only the configured number of required Shamir shares
+- name: Отправьте только настроенное количество необходимых общих ресурсов Shamir
   ansible.builtin.uri:
     url: "https://{{ vault_member.address }}:{{ vault_member.api_port }}/v1/sys/unseal"
     method: PUT
@@ -41,7 +41,7 @@
   register: _platform_vault_unseal_progress
   no_log: true
 
-- name: Confirm the exact member is now initialized and unsealed
+- name: Подтвердить инициализацию и разблокировку выбранного экземпляра Vault
   ansible.builtin.uri:
     url: "https://{{ vault_member.address }}:{{ vault_member.api_port }}/v1/sys/health"
     method: GET
@@ -57,7 +57,7 @@
   until: _platform_vault_member_health_after is succeeded and _platform_vault_member_health_after.json.initialized | bool and not (_platform_vault_member_health_after.json.sealed | bool)
   no_log: true
 
-- name: Require an initialized unsealed member to expose a cluster identity
+- name: Потребовать инициализированный разблокированный экземпляр службы для предоставления удостоверения кластера
   ansible.builtin.assert:
     that:
       - _platform_vault_member_health_after.json.cluster_id is defined
@@ -66,13 +66,13 @@
     fail_msg: VAULT_CLUSTER_IDENTITY_MISMATCH
   no_log: true
 
-- name: Capture the seed cluster identity after confirmed unseal
+- name: Захват исходной идентификации кластера узлов после подтверждения разблокировки
   ansible.builtin.set_fact:
     _platform_vault_seed_cluster_id: "{{ _platform_vault_member_health_after.json.cluster_id }}"
   when: vault_member.slot == 0
   no_log: true
 
-- name: Require the member to share the seed cluster identity
+- name: Потребовать от экземпляра службы совместного использования исходного идентификатора кластера узлов
   ansible.builtin.assert:
     that:
       - _platform_vault_member_health_after.json.cluster_id is string

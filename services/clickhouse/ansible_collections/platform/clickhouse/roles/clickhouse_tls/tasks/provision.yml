@@ -1,10 +1,10 @@
 ---
-- name: Create private ClickHouse service group
+- name: Создать частную сервисную группу ClickHouse
   ansible.builtin.group:
     name: "{{ platform_clickhouse_group }}"
     system: true
 
-- name: Create non-login ClickHouse service account
+- name: Создать учетную запись службы ClickHouse без входа в систему
   ansible.builtin.user:
     name: "{{ platform_clickhouse_user }}"
     group: "{{ platform_clickhouse_group }}"
@@ -12,7 +12,7 @@
     create_home: false
     shell: /sbin/nologin
 
-- name: Create root-owned ClickHouse root and deployment directories
+- name: Создать корневой каталог и каталог развертывания, принадлежащий пользователю root ClickHouse
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
@@ -25,7 +25,7 @@
     - "{{ platform_clickhouse_config_root }}/{{ platform_clickhouse_deployment_id }}"
     - "{{ platform_clickhouse_log_root }}/{{ platform_clickhouse_deployment_id }}"
 
-- name: Create shared ClickHouse data parent for co-located members
+- name: Создать общий родительский элемент данных ClickHouse для совместно расположенных экземпляров службы
   ansible.builtin.file:
     path: "{{ platform_clickhouse_data_root }}"
     state: directory
@@ -34,7 +34,7 @@
     mode: '0755'
   when: _platform_clickhouse_local_instances | length > 1
 
-- name: Create private ClickHouse member directories
+- name: Создание частных каталогов экземпляров службы ClickHouse
   ansible.builtin.file:
     path: "{{ item.0[item.1] }}"
     state: directory
@@ -44,7 +44,7 @@
   loop: "{{ _platform_clickhouse_local_instances | product(['config_directory', 'data_directory', 'log_directory']) | list }}"
   no_log: true
 
-- name: Create private persistent SQL access-control directories
+- name: Создание частных постоянных каталогов управления доступом SQL
   ansible.builtin.file:
     path: "{{ item.data_directory }}/access"
     state: directory
@@ -55,7 +55,7 @@
   loop_control:
     label: "{{ item.id }}"
 
-- name: Bind member data paths to one immutable managed identity
+- name: Привязать пути к данным экземпляра службы к одному неизменяемому управляемому удостоверению
   ansible.builtin.copy:
     content: "{{ {'apiVersion': 'platform.installer/clickhouse-member-marker/v1alpha1', 'deploymentId': platform_clickhouse_deployment_id, 'memberId': item.id, 'unitId': item.unit_id} | to_nice_json }}\n"
     dest: "{{ item.data_directory }}/.{{ platform_clickhouse_name }}-member.json"
@@ -67,7 +67,7 @@
   loop_control:
     label: "{{ item.id }}"
 
-- name: Create member-private TLS directories
+- name: Создание частных каталогов TLS для экземпляра службы
   ansible.builtin.file:
     path: "{{ item.config_directory }}/pki"
     state: directory
@@ -78,7 +78,7 @@
   loop_control:
     label: "{{ item.id }}"
 
-- name: Copy exact PKI material into member-private paths
+- name: Скопировать точный материал PKI в частные пути экземпляра службы
   ansible.builtin.copy:
     src: "{{ _platform_clickhouse_tls_directory }}/{{ item.1 }}"
     dest: "{{ item.0.config_directory }}/pki/{{ item.1 }}"
@@ -90,7 +90,7 @@
   register: _platform_clickhouse_tls_copies
   no_log: true
 
-- name: Render password verifier and default user policy without plaintext
+- name: Отобразить средство проверки пароля и политику пользователя по умолчанию без открытого текста
   ansible.builtin.template:
     src: users.xml.j2
     dest: "{{ item.config_directory }}/users.xml"
@@ -103,7 +103,7 @@
   register: _platform_clickhouse_users_configs
   no_log: true
 
-- name: Render private ClickHouse server configuration
+- name: Отрисовка конфигурации частного сервера ClickHouse
   ansible.builtin.template:
     src: server.xml.j2
     dest: "{{ clickhouse_member.config_directory }}/server.xml"
@@ -117,7 +117,7 @@
   register: _platform_clickhouse_server_configs
   no_log: true
 
-- name: Render private Keeper Raft configuration only for HA
+- name: Отрисовка частной конфигурации Keeper Raft только для высокой доступности
   ansible.builtin.template:
     src: keeper.xml.j2
     dest: "{{ clickhouse_member.config_directory }}/keeper.xml"
@@ -132,7 +132,7 @@
   when: platform_clickhouse_mode == 'raft-ha'
   no_log: true
 
-- name: Install exact member-owned ClickHouse server units
+- name: Установка точных системных служб сервера ClickHouse, принадлежащих экземпляру службы
   ansible.builtin.template:
     src: server.service.j2
     dest: "/etc/systemd/system/{{ clickhouse_member.server_unit_name }}"
@@ -145,7 +145,7 @@
     label: "{{ clickhouse_member.id }}"
   register: _platform_clickhouse_server_units
 
-- name: Install exact member-owned Keeper units only for HA
+- name: Установить точные системные службы Keeper, принадлежащие экземпляру службы, только для высокой доступности
   ansible.builtin.template:
     src: keeper.service.j2
     dest: "/etc/systemd/system/{{ clickhouse_member.keeper_unit_name }}"
@@ -159,7 +159,7 @@
   register: _platform_clickhouse_keeper_units
   when: platform_clickhouse_mode == 'raft-ha'
 
-- name: Reload systemd only after member-unit changes
+- name: Перезагрузить systemd только после изменения службы экземпляра службы systemd
   ansible.builtin.systemd:
     daemon_reload: true
   when: >-
@@ -167,13 +167,13 @@
     or
     (_platform_clickhouse_keeper_units.results | default([]) | selectattr('changed', 'equalto', true) | list | length > 0)
 
-- name: Determine members with changed TLS or user policy
+- name: Определить экземпляры службы с измененной политикой TLS или пользователя
   ansible.builtin.set_fact:
     _platform_clickhouse_restart_all: >-
       {{ (_platform_clickhouse_tls_copies.results | selectattr('changed', 'equalto', true) | list | length > 0)
          or (_platform_clickhouse_users_configs.results | selectattr('changed', 'equalto', true) | list | length > 0) }}
 
-- name: Start or restart isolated Keeper voters before ClickHouse servers
+- name: Запуск или перезапуск изолированных избирателей Keeper перед серверами ClickHouse
   ansible.builtin.systemd:
     name: "{{ clickhouse_member.keeper_unit_name }}"
     enabled: true
@@ -188,7 +188,7 @@
     label: "{{ clickhouse_member.id }}"
   when: platform_clickhouse_mode == 'raft-ha'
 
-- name: Start or restart isolated ClickHouse servers
+- name: Запуск или перезапуск изолированных серверов ClickHouse
   ansible.builtin.systemd:
     name: "{{ clickhouse_member.server_unit_name }}"
     enabled: true

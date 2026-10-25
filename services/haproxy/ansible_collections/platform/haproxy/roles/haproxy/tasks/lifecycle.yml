@@ -1,9 +1,9 @@
 ---
-- name: Resolve HAProxy runtime projection from canonical state
+- name: Разрешение проекции времени выполнения HAProxy из канонического состояния
   ansible.builtin.include_tasks: resolve.yml
   when: (platform_haproxy_partial_deployment_id is not defined and platform_haproxy_partial_deployment_ids is not defined) or platform_haproxy_phase == 'prepare'
 
-- name: Select the exact PKI consumer plan before HAProxy mutation
+- name: Выбрать точный потребительский план PKI перед изменением HAProxy
   ansible.builtin.include_role:
     name: platform.core.pki_materialize
     tasks_from: select_consumer_plan.yml
@@ -14,7 +14,7 @@
     - (platform_haproxy_partial_deployment_id is not defined and platform_haproxy_partial_deployment_ids is not defined)
     - platform_haproxy_phase == 'prepare'
 
-- name: Validate resolved HAProxy artifact sources before mutation
+- name: Проверка разрешенных источников артефактов HAProxy перед изменением
   ansible.builtin.include_role:
     name: platform.core.artifact_source_gate
   vars:
@@ -24,7 +24,7 @@
     - (platform_haproxy_partial_deployment_id is not defined and platform_haproxy_partial_deployment_ids is not defined)
     - platform_resolved_artifact_sources is defined or (platform_artifact_source_authority_active | default(false))
 
-- name: Deliver selected HAProxy offline artifacts
+- name: Доставка выбранных автономных артефактов HAProxy
   ansible.builtin.include_role:
     name: platform.core.artifact_delivery
   vars:
@@ -35,18 +35,18 @@
     - platform_resolved_artifact_sources is defined
     - platform_haproxy_phase == 'prepare'
 
-- name: Prepare and validate complete HAProxy candidate
+- name: Подготовка и проверка полного кандидата HAProxy
   ansible.builtin.include_tasks: prepare.yml
   when: platform_haproxy_phase == 'prepare'
 
-- name: Activate exact validated HAProxy candidate
+- name: Активировать проверенную конфигурацию HAProxy
   ansible.builtin.include_tasks: activate.yml
   when: platform_haproxy_phase == 'activate'
 
-- name: Start HAProxy after the active-validation barrier
+- name: Запустить HAProxy после барьера активной проверки
   ansible.builtin.include_tasks: start.yml
   when: platform_haproxy_phase == 'start'
 
-- name: Verify HAProxy read-only
+- name: Проверить HAProxy без изменений
   ansible.builtin.include_tasks: verify.yml
   when: platform_haproxy_phase == 'verify'

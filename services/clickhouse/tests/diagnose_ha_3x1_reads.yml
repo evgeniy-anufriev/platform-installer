@@ -1,5 +1,5 @@
 ---
-- name: Read bounded replica counts without exposing the runtime password
+- name: Чтение количества ограниченных реплик без раскрытия пароля среды выполнения
   hosts: localhost
   connection: local
   gather_facts: false
@@ -7,7 +7,7 @@
     clickhouse_qa_root: "{{ lookup('ansible.builtin.env', 'PLATFORM_CLICKHOUSE_QA_ROOT') }}"
     clickhouse_qa_password: "{{ lookup('ansible.builtin.file', clickhouse_qa_root ~ '/default-password', lstrip=False, rstrip=False) }}"
   tasks:
-    - name: Read replicated table count on each HTTPS port
+    - name: Чтение количества реплицируемых таблиц на каждом порту HTTPS
       ansible.builtin.uri:
         url: "https://192.168.56.103:{{ item }}/?query=SELECT%20count()%20FROM%20default.si09_ha3x1"
         method: GET
@@ -23,7 +23,7 @@
       failed_when: false
       no_log: true
 
-    - name: Show only status and numeric count, never error payload
+    - name: Показывать только статус и числовое значение, никогда не сообщать об ошибках
       ansible.builtin.debug:
         msg: >-
           port={{ item.item }} status={{ item.status | default(-1) }}

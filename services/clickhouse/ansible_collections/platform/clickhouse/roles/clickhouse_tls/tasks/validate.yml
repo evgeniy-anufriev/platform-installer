@@ -1,5 +1,5 @@
 ---
-- name: Validate closed ClickHouse deployment inputs
+- name: Проверка закрытых входных данных развертывания ClickHouse
   ansible.builtin.assert:
     that:
       - platform_clickhouse_mode in ['standalone', 'raft-ha']
@@ -17,7 +17,7 @@
     fail_msg: CLICKHOUSE_INPUT_INVALID
   no_log: true
 
-- name: Validate each ClickHouse placement before filesystem mutation
+- name: Проверка каждого размещения ClickHouse перед изменением файловой системы
   ansible.builtin.assert:
     that:
       - item is mapping
@@ -36,12 +36,12 @@
   loop_control:
     label: "{{ item.id | default('invalid') }}"
 
-- name: Reject duplicate ClickHouse member IDs
+- name: Отклонить повторяющиеся идентификаторы экземпляра службы ClickHouse
   ansible.builtin.assert:
     that: platform_clickhouse_instances | map(attribute='id') | unique | list | length == platform_clickhouse_instances | length
     fail_msg: CLICKHOUSE_MEMBER_ID_DUPLICATE
 
-- name: Require runtime-only default password file
+- name: Требовать файл паролей по умолчанию только во время выполнения
   ansible.builtin.stat:
     path: "{{ platform_clickhouse_secret_files[platform_clickhouse_default_credential.passwordSecretRef] }}"
     follow: false
@@ -53,7 +53,7 @@
   register: _platform_clickhouse_password_file
   no_log: true
 
-- name: Reject missing or substituted default password file
+- name: Отклонить отсутствующий или замененный файл паролей по умолчанию
   ansible.builtin.assert:
     that:
       - _platform_clickhouse_password_file.stat.exists
@@ -64,12 +64,12 @@
     fail_msg: CLICKHOUSE_PASSWORD_INPUT_INVALID
   no_log: true
 
-- name: Read the exact runtime password bytes without trimming
+- name: Прочитать точные байты пароля во время выполнения без обрезки
   ansible.builtin.set_fact:
     _platform_clickhouse_default_password: "{{ lookup('ansible.builtin.file', platform_clickhouse_secret_files[platform_clickhouse_default_credential.passwordSecretRef], lstrip=False, rstrip=False) }}"
   no_log: true
 
-- name: Require a nonempty UTF-8 password with the exact byte bound
+- name: Запрос непустого пароля UTF-8 с точной привязкой к байтам
   ansible.builtin.assert:
     that:
       - _platform_clickhouse_default_password | string | length > 0

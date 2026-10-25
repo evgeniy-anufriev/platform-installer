@@ -1,5 +1,5 @@
 ---
-- name: Prove two-voter continuity and restored third replica
+- name: Доказать непрерывность двух избирателей и восстановить третью реплику
   hosts: localhost
   connection: local
   gather_facts: false
@@ -12,13 +12,13 @@
          else ['192.168.56.101', '192.168.56.102', '192.168.56.103'] }}
     clickhouse_qa_password: "{{ lookup('ansible.builtin.file', clickhouse_qa_root ~ '/default-password', lstrip=False, rstrip=False) }}"
   tasks:
-    - name: Require closed recovery phase and isolated QA root
+    - name: Требуется закрытая фаза восстановления и изолированный корень QA
       ansible.builtin.assert:
         that:
           - clickhouse_qa_phase in ['degraded', 'restored']
           - clickhouse_qa_root is match('^/var/tmp/platform-clickhouse-qa-[A-Za-z0-9]+$')
 
-    - name: Commit another row while node3 server and Keeper are stopped
+    - name: Зафиксировать еще одну строку, пока сервер node3 и Keeper остановлены
       ansible.builtin.uri:
         url: https://192.168.56.101:8460/
         method: POST
@@ -32,7 +32,7 @@
       when: clickhouse_qa_phase == 'degraded'
       no_log: true
 
-    - name: Read both committed rows from every expected live host
+    - name: Прочитать обе зафиксированные строки с каждого ожидаемого активного хоста
       ansible.builtin.uri:
         url: "https://{{ item }}:8460/?query=SELECT%20count()%20FROM%20default.si09_ha3x3"
         method: GET
@@ -50,7 +50,7 @@
       delay: 2
       no_log: true
 
-    - name: Require all expected live hosts to expose the committed rows
+    - name: Потребовать от всех ожидаемых активных хостов предоставить зафиксированные строки
       ansible.builtin.assert:
         that:
           - clickhouse_qa_recovery_read.results | length == clickhouse_qa_hosts | length

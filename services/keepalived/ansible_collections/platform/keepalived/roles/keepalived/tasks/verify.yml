@@ -1,33 +1,33 @@
 ---
-- name: Verify Keepalived service state read-only
+- name: Проверить состояние службы Keepalived без изменений
   ansible.builtin.command:
     argv: [systemctl, is-active, "{{ platform_keepalived_service_name }}"]
   register: platform_keepalived_service_state
   changed_when: false
 
-- name: Assert Keepalived service is active
+- name: Подтвердить, что служба Keepalived активна
   ansible.builtin.assert:
     that: platform_keepalived_service_state.stdout | trim == 'active'
     fail_msg: KEEPALIVED_SERVICE_NOT_ACTIVE
 
-- name: Query local IPv4 ownership read-only
+- name: Запрос локального владения IPv4 только для чтения
   ansible.builtin.command:
     argv: [ip, -o, -4, addr, show]
   register: platform_keepalived_ipv4_addresses
   changed_when: false
 
-- name: Initialize local Keepalived ownership evidence
+- name: Инициализация локального свидетельства владения Keepalived
   ansible.builtin.set_fact:
     platform_keepalived_local_ownership: {}
 
-- name: Verify every local Keepalived deployment has all-or-none VIP ownership
+- name: Убедиться, что каждое локальное развертывание Keepalived имеет полное право собственности на VIP
   ansible.builtin.include_tasks: verify_deployment.yml
   loop: "{{ platform_desired_state.serviceDeployments | dict2items | selectattr('value.serviceType', 'equalto', 'keepalived') | selectattr('key', 'in', platform_deployments | default({})) | list }}"
   loop_control:
     loop_var: platform_keepalived_deployment
     label: "{{ platform_keepalived_deployment.key }}"
 
-- name: Verify opt-in HAProxy tracking primitives read-only
+- name: Проверить явно включённые механизмы отслеживания HAProxy без изменений
   ansible.builtin.include_tasks: verify_tracking.yml
   loop: "{{ platform_desired_state.serviceDeployments | dict2items | selectattr('value.serviceType', 'equalto', 'keepalived') | selectattr('key', 'in', platform_deployments | default({})) | selectattr('value.configuration.haproxyHealthTracking', 'defined') | list }}"
   loop_control:

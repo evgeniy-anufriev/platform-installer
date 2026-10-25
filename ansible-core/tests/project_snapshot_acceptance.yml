@@ -1,10 +1,10 @@
 ---
-- name: Verify read-only ProjectSnapshot acceptance
+- name: Проверить ProjectSnapshot без изменений
   hosts: localhost
   connection: local
   gather_facts: false
   tasks:
-    - name: Query the same project twice
+    - name: Дважды запросить один и тот же проект
       platform.core.project_snapshot:
         service_catalog_path: "{{ platform_service_catalog_path }}"
         installer_owned_paths:
@@ -14,7 +14,7 @@
           - inventory/host_vars/node3/platform-installer.yml
       register: first_snapshot
 
-    - name: Repeat the query
+    - name: Повторите запрос
       platform.core.project_snapshot:
         service_catalog_path: "{{ platform_service_catalog_path }}"
         installer_owned_paths:
@@ -24,7 +24,7 @@
           - inventory/host_vars/node3/platform-installer.yml
       register: second_snapshot
 
-    - name: Assert snapshot contract and safety
+    - name: Подтверждение контракта и безопасности моментального снимка
       ansible.builtin.assert:
         that:
           - first_snapshot is not changed
@@ -52,14 +52,14 @@
           - "'runtime:pki-store-password' not in (first_snapshot.snapshot | to_json)"
       run_once: true
 
-    - name: Prove missing project root is a structured fatal open error
+    - name: Доказать, что отсутствующий корень проекта является структурированной фатальной открытой ошибкой
       platform.core.project_snapshot:
         project_root: /path/that/does/not/exist
         service_catalog_path: "{{ platform_service_catalog_path }}"
       register: missing_project
       ignore_errors: true
 
-    - name: Assert structured project-open failure
+    - name: Подтверждение структурированного сбоя при открытии проекта
       ansible.builtin.assert:
         that:
           - missing_project is failed

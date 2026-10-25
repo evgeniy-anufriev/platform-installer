@@ -1,5 +1,5 @@
 ---
-- name: Start one Raft follower only after the seed is unsealed
+- name: Запустить один ведомый узел Raft после разблокировки начального узла
   ansible.builtin.systemd:
     name: "{{ vault_member.instance_name }}.service"
     state: "{{ 'restarted' if vault_member.instance_name in (hostvars[vault_member.host]._platform_vault_active_units | default([])) and vault_member.id in (hostvars[vault_member.host]._platform_vault_restart_member_ids | default([])) else 'started' }}"
@@ -8,10 +8,10 @@
   delegate_to: "{{ vault_member.host }}"
   become: true
 
-- name: Unseal the joining Raft follower with the seed shares
+- name: Разблокировать присоединяющегося последователя Raft с начальными общими ресурсами узла
   ansible.builtin.include_tasks: unseal_member.yml
 
-- name: Confirm the unsealed follower joined the initialized seed storage
+- name: Подтвердить, что разблокированный подписчик присоединился к инициализированному начальному хранилищу узла
   ansible.builtin.uri:
     url: "https://{{ vault_member.address }}:{{ vault_member.api_port }}/v1/sys/init"
     method: GET

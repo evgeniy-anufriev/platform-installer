@@ -2,7 +2,7 @@
 # A listener may be reused only by the exact already-active instance that this
 # role owns. This makes repeat apply idempotent while refusing an unrelated
 # daemon or stale former member before any config/unit is changed.
-- name: Inspect exact Redis member unit paths before rendering
+- name: Проверка точных путей к службе systemd экземпляра службы Redis перед рендерингом
   ansible.builtin.stat:
     path: "/etc/systemd/system/{{ platform_redis_name }}@{{ item.instance_name }}.service"
     follow: false
@@ -12,7 +12,7 @@
   register: _platform_redis_unit_path_stats
   loop: "{{ _platform_redis_local_instances }}"
 
-- name: Reject unsafe existing Redis member unit paths
+- name: Отклонить небезопасные существующие пути службы systemd экземпляра службы Redis
   ansible.builtin.assert:
     that: >-
       not item.stat.exists or
@@ -22,7 +22,7 @@
   loop_control:
     label: "{{ item.item.id }}"
 
-- name: Read ownership headers from existing Redis member units
+- name: Прочитать заголовки владения из существующих системных служб экземпляра службы Redis
   ansible.builtin.slurp:
     src: "/etc/systemd/system/{{ platform_redis_name }}@{{ item.item.instance_name }}.service"
   register: _platform_redis_existing_unit_headers
@@ -31,7 +31,7 @@
   loop_control:
     label: "{{ item.item.id }}"
 
-- name: Refuse replacement of foreign Redis member units
+- name: Отказаться от замены неуправляемых сервисов экземпляра службы Redis systemd
   ansible.builtin.assert:
     that: >-
       (item.content | b64decode | split('\n') | first)
@@ -42,7 +42,7 @@
   loop_control:
     label: "{{ item.item.item.id }}"
 
-- name: Inspect exact Sentinel unit paths before rendering
+- name: Проверка точных путей к сервису systemd Sentinel перед рендерингом
   ansible.builtin.stat:
     path: "/etc/systemd/system/{{ platform_redis_name }}-sentinel@{{ item.instance_name }}.service"
     follow: false
@@ -52,7 +52,7 @@
   register: _platform_sentinel_unit_path_stats
   loop: "{{ _platform_redis_local_instances | selectattr('roles', 'contains', 'sentinel') | list }}"
 
-- name: Reject unsafe existing Sentinel unit paths
+- name: Отклонить небезопасные существующие пути службы systemd Sentinel
   ansible.builtin.assert:
     that: >-
       not item.stat.exists or
@@ -62,7 +62,7 @@
   loop_control:
     label: "{{ item.item.id }}"
 
-- name: Read ownership headers from existing Sentinel units
+- name: Прочитать заголовки владения из существующих системных служб Sentinel
   ansible.builtin.slurp:
     src: "/etc/systemd/system/{{ platform_redis_name }}-sentinel@{{ item.item.instance_name }}.service"
   register: _platform_sentinel_existing_unit_headers
@@ -71,7 +71,7 @@
   loop_control:
     label: "{{ item.item.id }}"
 
-- name: Refuse replacement of foreign Sentinel units
+- name: Отказаться от замены неуправляемых системных служб Sentinel
   ansible.builtin.assert:
     that: >-
       (item.content | b64decode | split('\n') | first)
@@ -82,7 +82,7 @@
   loop_control:
     label: "{{ item.item.item.id }}"
 
-- name: Inspect prior member-scoped Redis and Sentinel unit files
+- name: Проверка служебных файлов systemd Redis и Sentinel на уровне экземпляра предыдущей службы
   ansible.builtin.stat:
     path: "/etc/systemd/system/{{ item }}"
     follow: false
@@ -100,7 +100,7 @@
           | map('regex_replace', '$', '.service') | list) }}
   register: _platform_redis_legacy_unit_files
 
-- name: Refuse automatic adoption of prior Redis unit names
+- name: Отказаться от автоматического принятия предыдущих имен системных служб Redis
   ansible.builtin.assert:
     that: not item.stat.exists
     fail_msg: REDIS_LEGACY_UNIT_REQUIRES_S11_CLEANUP
@@ -108,7 +108,7 @@
   loop_control:
     label: "{{ item.item }}"
 
-- name: Inspect existing Redis member state marker
+- name: Проверка существующего маркера состояния экземпляра службы Redis
   ansible.builtin.stat:
     path: "{{ item.data_directory }}/.{{ platform_redis_name }}-mode"
     get_mime: false
@@ -120,7 +120,7 @@
   loop_control:
     label: "redis:{{ item.instance_name }}"
 
-- name: Inspect existing Redis data directories
+- name: Проверка существующих каталогов данных Redis
   ansible.builtin.stat:
     path: "{{ item.data_directory }}"
     get_mime: false
@@ -132,7 +132,7 @@
   loop_control:
     label: "redis:{{ item.instance_name }}"
 
-- name: Detect nonempty Redis data directories without a state marker
+- name: Обнаружение непустых каталогов данных Redis без маркера состояния
   ansible.builtin.command:
     argv:
       - find
@@ -151,7 +151,7 @@
     label: "redis:{{ item.instance_name }}"
   when: _platform_redis_data_directory.results[redis_data_index].stat.exists
 
-- name: Reject unowned existing Redis persistent state
+- name: Отклонить бесхозное существующее постоянное состояние Redis
   ansible.builtin.assert:
     that: >-
       (not _platform_redis_data_directory.results[redis_data_index].stat.exists)
@@ -163,7 +163,7 @@
     index_var: redis_data_index
     label: "redis:{{ item.instance_name }}"
 
-- name: Inspect existing Redis configuration files
+- name: Проверка существующих файлов конфигурации Redis
   ansible.builtin.stat:
     path: "{{ item.config_directory }}/redis.conf"
     get_mime: false
@@ -175,7 +175,7 @@
   loop_control:
     label: "redis:{{ item.instance_name }}"
 
-- name: Reject partial Redis configuration without persistent ownership marker
+- name: Отклонить частичную конфигурацию Redis без постоянного маркера владения
   ansible.builtin.assert:
     that: >-
       _platform_redis_mode_marker.results[redis_config_index].stat.exists
@@ -186,7 +186,7 @@
     index_var: redis_config_index
     label: "redis:{{ item.instance_name }}"
 
-- name: Read existing Redis static configuration safely
+- name: Безопасное чтение существующей статической конфигурации Redis
   ansible.builtin.slurp:
     src: "{{ item.config_directory }}/redis.conf"
   changed_when: false
@@ -198,7 +198,7 @@
     label: "redis:{{ item.instance_name }}"
   when: _platform_redis_config_file.results[redis_config_index].stat.exists
 
-- name: Reject unsafe Redis static configuration drift
+- name: Отклонить небезопасное изменение статической конфигурации Redis
   ansible.builtin.assert:
     that:
       - >-
@@ -232,14 +232,14 @@
     index_var: redis_config_index
     label: "redis:{{ item.instance_name }}"
 
-- name: Read local Redis persistent ownership state
+- name: Прочитать локальное постоянное состояние владения Redis
   ansible.builtin.set_fact:
     _platform_redis_has_persistent_state: >-
       {{ _platform_redis_mode_marker.results | selectattr('stat.exists') | list | length > 0 }}
     _platform_redis_all_have_persistent_state: >-
       {{ _platform_redis_mode_marker.results | selectattr('stat.exists') | list | length == (_platform_redis_local_instances | length) }}
 
-- name: Authorize ACL overwrite only for a fully marked deployment with its exact owned units
+- name: Разрешить перезапись ACL только для полностью помеченного развертывания с точно принадлежащими ему службами systemd
   ansible.builtin.set_fact:
     _platform_redis_acl_overwrite_allowed: >-
       {{ _platform_redis_all_have_persistent_state | bool
@@ -251,7 +251,7 @@
               == (_platform_redis_local_instances
                   | selectattr('roles', 'contains', 'sentinel') | list | length)) }}
 
-- name: Reject partially initialized Redis deployment across target hosts
+- name: Отклонить частично инициализированное развертывание Redis на целевых хостах
   ansible.builtin.assert:
     that:
       - >-
@@ -269,7 +269,7 @@
     fail_msg: REDIS_DEPLOYMENT_PARTIAL_STATE_REQUIRES_OPERATOR_RECOVERY
   run_once: true
 
-- name: Read existing Redis member state marker
+- name: Прочитать существующий маркер состояния экземпляра службы Redis
   ansible.builtin.command:
     argv:
       - grep
@@ -285,7 +285,7 @@
     label: "redis:{{ item.instance_name }}"
   when: _platform_redis_mode_marker.results[redis_marker_index].stat.exists
 
-- name: Reject Redis data state with an absent or incompatible ownership marker
+- name: Отклонить состояние данных Redis с отсутствующим или несовместимым маркером владения
   ansible.builtin.assert:
     that: >-
       (not _platform_redis_mode_marker.results[redis_marker_index].stat.exists)
@@ -296,7 +296,7 @@
     index_var: redis_marker_index
     label: "redis:{{ item.instance_name }}"
 
-- name: Inspect existing Sentinel-owned configurations
+- name: Проверка существующих конфигураций, принадлежащих Sentinel
   ansible.builtin.stat:
     path: "{{ item.config_directory }}/sentinel.conf"
     get_mime: false
@@ -309,7 +309,7 @@
     index_var: sentinel_config_index
     label: "sentinel:{{ item.instance_name }}"
 
-- name: Reject partial Sentinel configuration without persistent ownership marker
+- name: Отклонить частичную конфигурацию Sentinel без постоянного маркера владения
   ansible.builtin.assert:
     that: >-
       _platform_redis_mode_marker.results[sentinel_marker_index].stat.exists
@@ -320,7 +320,7 @@
     index_var: sentinel_marker_index
     label: "sentinel:{{ item.instance_name }}"
 
-- name: Verify existing Sentinel static TLS and listener settings
+- name: Проверка существующего статического Sentinel TLS и настроек прослушивателя
   ansible.builtin.slurp:
     src: "{{ item.config_directory }}/sentinel.conf"
   changed_when: false
@@ -332,7 +332,7 @@
     label: "sentinel:{{ item.instance_name }}"
   when: _platform_sentinel_config_stat.results[sentinel_config_index].stat.exists
 
-- name: Reject unsafe Sentinel static configuration drift
+- name: Отклонить небезопасное изменение статической конфигурации Sentinel
   ansible.builtin.assert:
     that:
       - >-
@@ -365,7 +365,7 @@
     label: "sentinel:{{ item.instance_name }}"
   when: _platform_sentinel_config_stat.results[sentinel_config_index].stat.exists
 
-- name: Read local Redis listener occupancy
+- name: Чтение занятости локального прослушивателя Redis
   ansible.builtin.command:
     argv: [ss, -H, -ltn, "sport = :{{ item.redis_port }}"]
   changed_when: false
@@ -375,7 +375,7 @@
   loop_control:
     label: "redis:{{ item.instance_name }}"
 
-- name: Read local Redis owned unit state
+- name: Прочитать состояние локальной службы systemd, принадлежащей Redis
   ansible.builtin.command:
     argv: [systemctl, is-active, "{{ platform_redis_name }}@{{ item.instance_name }}.service"]
   changed_when: false
@@ -385,7 +385,7 @@
   loop_control:
     label: "redis:{{ item.instance_name }}"
 
-- name: Reject foreign Redis TLS listener before mutation
+- name: Отклонить неуправляемый прослушиватель Redis TLS перед изменением
   ansible.builtin.assert:
     that: >-
       (_platform_redis_port_probe.results[redis_index].stdout | trim | length == 0)
@@ -396,7 +396,7 @@
     index_var: redis_index
     label: "redis:{{ item.instance_name }}"
 
-- name: Read local Sentinel listener occupancy
+- name: Чтение занятости локального прослушивателя Sentinel
   ansible.builtin.command:
     argv: [ss, -H, -ltn, "sport = :{{ item.sentinel_port }}"]
   changed_when: false
@@ -406,7 +406,7 @@
   loop_control:
     label: "sentinel:{{ item.instance_name }}"
 
-- name: Read local Sentinel owned unit state
+- name: Прочитать состояние локальной службы systemd, принадлежащей Sentinel
   ansible.builtin.command:
     argv: [systemctl, is-active, "{{ platform_redis_name }}-sentinel@{{ item.instance_name }}.service"]
   changed_when: false
@@ -416,7 +416,7 @@
   loop_control:
     label: "sentinel:{{ item.instance_name }}"
 
-- name: Reject foreign Sentinel TLS listener before mutation
+- name: Отклонить неуправляемый прослушиватель Sentinel TLS перед изменением
   ansible.builtin.assert:
     that: >-
       (_platform_redis_sentinel_port_probe.results[sentinel_index].stdout | trim | length == 0)

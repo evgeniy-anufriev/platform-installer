@@ -1,11 +1,11 @@
 ---
-- name: Exercise the production Docker destination guard only
+- name: Использовать только производственную защиту назначения Docker
   hosts: localhost
   connection: local
   gather_facts: false
   become: true
   tasks:
-    - name: Guard the injected temporary QA destination
+    - name: Охрана введенного временного пункта назначения QA
       ansible.builtin.include_role:
         name: platform.docker.docker_rootless
         tasks_from: guard_root_destination.yml

@@ -1,24 +1,24 @@
 ---
-- name: Prove Vault deployment lock readiness and release semantics on the QA node
+- name: Доказать готовность блокировки развертывания Vault и семантику выпуска на узле QA
   hosts: localhost
   connection: local
   gather_facts: false
   become: true
   tasks:
-    - name: Create a private isolated lock test directory
+    - name: Создание частного изолированного тестового каталога блокировки
       ansible.builtin.tempfile:
         state: directory
         path: /var/tmp
         prefix: platform-vault-lock-test-
       register: vault_lock_test_dir
 
-    - name: Validate the generated test directory boundary
+    - name: Проверка созданной границы тестового каталога
       ansible.builtin.assert:
         that:
           - vault_lock_test_dir.path is match('^/var/tmp/platform-vault-lock-test-[A-Za-z0-9_]+$')
         fail_msg: VAULT_LOCK_TEST_PATH_INVALID
 
-    - name: Create the exact root-owned test lock file
+    - name: Создать файл тестовой блокировки, принадлежащий пользователю root
       ansible.builtin.file:
         path: "{{ vault_lock_test_dir.path }}/deployment.lock"
         state: touch
@@ -26,11 +26,11 @@
         group: root
         mode: '0600'
 
-    - name: Create invocation-specific transient unit names
+    - name: Создание имен временных служб systemd для конкретного вызова
       ansible.builtin.set_fact:
         vault_lock_test_suffix: "{{ lookup('ansible.builtin.password', '/dev/null', length=20, chars='hexdigits') | lower }}"
 
-    - name: Record exact transient units for bounded cleanup
+    - name: Запись точных временных системных служб для ограниченной очистки
       ansible.builtin.set_fact:
         vault_lock_test_units:
           - "platform-vault-lock-test-holder-{{ vault_lock_test_suffix }}"
@@ -39,9 +39,9 @@
           - "platform-vault-lock-test-failure-{{ vault_lock_test_suffix }}"
           - "platform-vault-lock-test-recovery-{{ vault_lock_test_suffix }}"
 
-    - name: Exercise contention, ordinary release and failed-holder release
+    - name: Конфликт при выполнении, обычное освобождение и неудачное освобождение держателя замка
       block:
-        - name: Start the first unit and wait for READY only after flock succeeds
+        - name: Запустить первую службу и дождаться READY после получения блокировки flock
           ansible.builtin.command:
             argv:
               - systemd-run
@@ -62,7 +62,7 @@
               - "set -eu; /usr/bin/systemd-notify --ready; /usr/bin/touch {{ vault_lock_test_dir.path }}/holder-reached-ready; exec /usr/bin/sleep infinity"
           changed_when: true
 
-        - name: Wait for the lock holder readiness handshake
+        - name: Дождаться подтверждения готовности держателя замка
           ansible.builtin.command:
             argv: [systemctl, show, --property=ActiveState, --value, "{{ vault_lock_test_units[0] }}.service"]
           register: vault_lock_holder_state
@@ -71,7 +71,7 @@
           retries: 10
           delay: 1
 
-        - name: Start a competing unit against the held lock
+        - name: Запуск конкурирующей службы systemd против удерживаемой блокировки
           ansible.builtin.command:
             argv:
               - systemd-run
@@ -92,7 +92,7 @@
               - "set -eu; /usr/bin/systemd-notify --ready; /usr/bin/touch {{ vault_lock_test_dir.path }}/contender-reached-ready; exec /usr/bin/sleep infinity"
           changed_when: true
 
-        - name: Wait until the contender fails before reaching its readiness command
+        - name: Дождаться, пока претендент выйдет из строя, прежде чем достичь команды готовности
           ansible.builtin.command:
             argv: [systemctl, show, --property=ActiveState, --value, "{{ vault_lock_test_units[1] }}.service"]
           register: vault_lock_contender_state
@@ -101,7 +101,7 @@
           retries: 10
           delay: 1
 
-        - name: Prove exactly the lock holder reached the protected phase
+        - name: Доказать, что именно держатель замка достиг защищенной фазы
           ansible.builtin.stat:
             path: "{{ vault_lock_test_dir.path }}/{{ item }}"
           loop:
@@ -109,7 +109,7 @@
             - contender-reached-ready
           register: vault_lock_markers
 
-        - name: Assert one winner and a blocked contender
+        - name: Определить одного победителя и заблокированного претендента
           ansible.builtin.assert:
             that:
               - vault_lock_holder_state.stdout == 'active'
@@ -118,12 +118,12 @@
               - not vault_lock_markers.results[1].stat.exists
             fail_msg: VAULT_LOCK_CONTENTION_TEST_FAILED
 
-        - name: Release the lock holder normally
+        - name: Нормально освободить держатель замка
           ansible.builtin.command:
             argv: [systemctl, stop, "{{ vault_lock_test_units[0] }}.service"]
           changed_when: true
 
-        - name: Start the contender after ordinary release
+        - name: Запустить претендент после обычного релиза
           ansible.builtin.command:
             argv:
               - systemd-run
@@ -144,7 +144,7 @@
               - "set -eu; /usr/bin/systemd-notify --ready; exec /usr/bin/sleep infinity"
           changed_when: true
 
-        - name: Wait for contender readiness after ordinary release
+        - name: Дождаться готовности претендента после обычного релиза
           ansible.builtin.command:
             argv: [systemctl, show, --property=ActiveState, --value, "{{ vault_lock_test_units[2] }}.service"]
           register: vault_lock_released_state
@@ -153,12 +153,12 @@
           retries: 10
           delay: 1
 
-        - name: Stop the ordinary-release contender
+        - name: Остановить претендента на обычный выпуск
           ansible.builtin.command:
             argv: [systemctl, stop, "{{ vault_lock_test_units[2] }}.service"]
           changed_when: true
 
-        - name: Start a holder that fails after successfully reporting READY
+        - name: Запуск держателя, который терпит неудачу после успешного сообщения о готовности
           ansible.builtin.command:
             argv:
               - systemd-run
@@ -179,7 +179,7 @@
               - "set -eu; /usr/bin/systemd-notify --ready; exit 42"
           changed_when: true
 
-        - name: Wait for the lock holder process failure
+        - name: Дождаться сбоя процесса держателя блокировки
           ansible.builtin.command:
             argv: [systemctl, show, --property=ActiveState, --value, "{{ vault_lock_test_units[3] }}.service"]
           register: vault_lock_failed_state
@@ -188,7 +188,7 @@
           retries: 10
           delay: 1
 
-        - name: Acquire the lock after failed-holder cleanup
+        - name: Получить блокировку после очистки состояния прежнего владельца
           ansible.builtin.command:
             argv:
               - systemd-run
@@ -209,7 +209,7 @@
               - "set -eu; /usr/bin/systemd-notify --ready; exec /usr/bin/sleep infinity"
           changed_when: true
 
-        - name: Wait for readiness after failed-holder release
+        - name: Дождаться готовности после неудачного освобождения держателя замка
           ansible.builtin.command:
             argv: [systemctl, show, --property=ActiveState, --value, "{{ vault_lock_test_units[4] }}.service"]
           register: vault_lock_recovery_state
@@ -219,21 +219,21 @@
           delay: 1
 
       always:
-        - name: Stop only this test's exact transient units
+        - name: Остановить только точные временные службы systemd этого теста
           ansible.builtin.command:
             argv: [systemctl, stop, "{{ item }}.service"]
           loop: "{{ vault_lock_test_units }}"
           changed_when: false
           failed_when: false
 
-        - name: Clear only this test's failed transient unit records
+        - name: Очистить только неудавшиеся временные записи службы systemd этого теста
           ansible.builtin.command:
             argv: [systemctl, reset-failed, "{{ item }}.service"]
           loop: "{{ vault_lock_test_units }}"
           changed_when: false
           failed_when: false
 
-        - name: Remove the exact generated lock test directory
+        - name: Удалить точный созданный каталог теста блокировки
           ansible.builtin.file:
             path: "{{ vault_lock_test_dir.path }}"
             state: absent

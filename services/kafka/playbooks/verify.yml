@@ -4,16 +4,16 @@
 
 - import_playbook: ../../../ansible-core/playbooks/pki-verify.yml
 
-- name: Verify Kafka KRaft members
+- name: Проверка экземпляров службы Kafka KRaft
   hosts: platform_targets
   become: true
   gather_facts: false
   pre_tasks:
-    - name: Apply the same trusted runtime Kafka configuration used by Apply
+    - name: Применить ту же доверенную конфигурацию среды выполнения Kafka, что и Apply
       ansible.builtin.include_role:
         name: platform.core.runtime_role_variables
       when: platform_execution_role_variables_by_host is defined
-    - name: Project controller-owned Kafka generated state onto verification hosts
+    - name: Проецировать созданное состояние Kafka, принадлежащее контроллеру, на узлы проверки
       ansible.builtin.set_fact:
         platform_generated_state: "{{ hostvars['localhost'].platform_generated_state }}"
       when: platform_generated_state_path is defined

@@ -1,4 +1,4 @@
-- name: Compute owned minimal document delta
+- name: Вычислить минимальную разницу в документах, принадлежащих компьютеру
   ansible.builtin.set_fact:
     application_vault_delta: "{{ platform_application_vault_documents[document_key] | platform.vault.application_kv_delta(platform_application_vault_values[document_key], application_vault_document.owner) }}"
   delegate_facts: false
@@ -6,9 +6,9 @@
     document_key: "{{ platform_vault_application_job.providerId ~ ':' ~ application_vault_document.mount ~ '/' ~ application_vault_document.document }}"
   no_log: true
 
-- name: Preserve safe Vault document write diagnostics
+- name: Сохранить безопасную диагностику записи документа Vault
   block:
-    - name: Write only differing fields with CAS
+    - name: Записывать только разные поля с помощью CAS
       ansible.builtin.uri:
         url: "{{ application_vault_provider.url }}/v1/{{ application_vault_document.mount }}/data/{{ application_vault_document.document }}"
         method: "{{ application_vault_delta.method }}"
@@ -29,7 +29,7 @@
       changed_when: application_vault_document_write.status == 200
       no_log: true
   rescue:
-    - name: "Vault document write failed (HTTP {{ ansible_failed_result.status | default(-1) | int }}, {{ application_vault_write_category }})"
+    - name: "Ошибка записи документа Vault (HTTP {{ ansible_failed_result.status | default(-1) | int }}, {{ application_vault_write_category }})"
       ansible.builtin.fail:
         msg: APPLICATION_VAULT_DOCUMENT_WRITE_FAILED
       vars:
@@ -41,7 +41,7 @@
              else 'http' if (ansible_failed_result.status | default(-1) | int > 0)
              else 'module' }}
 
-- name: Reread once on CAS conflict and preserve intervening fields
+- name: Перечитать один раз о конфликте CAS и сохранить промежуточные поля
   ansible.builtin.include_tasks: document_retry.yml
   when: >-
     application_vault_delta.changed and
@@ -49,7 +49,7 @@
     ('check-and-set' in (application_vault_document_write.json.errors | default([]) | join(' ') | lower))
   no_log: true
 
-- name: Fail closed on write or CAS conflict without blind overwrite
+- name: Сбой закрытия при записи или конфликте CAS без слепой перезаписи
   ansible.builtin.assert:
     that: not application_vault_delta.changed or application_vault_document_write.status | int == 200
     fail_msg: APPLICATION_VAULT_DOCUMENT_CAS_CONFLICT

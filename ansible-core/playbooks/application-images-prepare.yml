@@ -1,10 +1,10 @@
 ---
-- name: Bind the selected image targets without changing operator inventory
+- name: Привязать выбранные целевые изображения без изменения инвентаря оператора
   hosts: localhost
   connection: local
   gather_facts: false
   tasks:
-    - name: Add only the derived preparation group
+    - name: Добавить только вычисленную группу подготовки
       ansible.builtin.add_host:
         name: "{{ item }}"
         groups: platform_image_targets
@@ -12,38 +12,38 @@
         platform_application_image_bundle: "{{ hostvars['localhost'].platform_application_image_bundle }}"
       loop: "{{ platform_application_image_inputs.targetConnections | list }}"
 
-- name: Read image metadata from each selected target network context
+- name: Прочитать метаданные изображения из каждого выбранного контекста целевой сети
   hosts: platform_image_targets
   gather_facts: false
   any_errors_fatal: true
   tasks:
-    - name: Discover target OS and architecture without Docker
+    - name: Обнаружение целевой ОС и архитектуры без Docker
       ansible.builtin.setup:
         gather_subset: ['!all', 'min']
         filter: ['ansible_system', 'ansible_architecture']
-    - name: Initialize target preparation results
+    - name: Инициализация результатов подготовки цели
       ansible.builtin.set_fact:
         platform_application_image_preparations: {}
         _image_registry_cache: {}
-    - name: Prepare each selected image using ordinary Ansible tasks
+    - name: Подготовить каждое выбранное изображение с помощью обычных задач Ansible
       ansible.builtin.include_role:
         name: platform.core.prepare_application_images
       loop: "{{ platform_application_image_inputs.placements | selectattr('hostId', 'equalto', inventory_hostname) | list }}"
       loop_control:
         loop_var: application_image_input
 
-- name: Freeze the selected image metadata on the Execution Node
+- name: Заморозить выбранные метаданные изображения на узле выполнения
   hosts: localhost
   connection: local
   gather_facts: false
   tasks:
-    - name: Retain complete native preparation without secret values
+    - name: Сохранить полную нативную подготовку без секретных значений
       ansible.builtin.set_fact:
         platform_prepared_application_images: >-
           {{ {'apiVersion': 'platform.installer/container-images/v1alpha2',
               'placements': platform_application_image_inputs.ready |
                 combine((hostvars | platform.core.application_prepared_image_lock).placements)} }}
-    - name: Persist the complete preparation for the fixed machine protocol
+    - name: Продолжить полную подготовку протокола фиксированной машины
       ansible.builtin.copy:
         content: "{{ platform_prepared_application_images | to_json }}"
         dest: "{{ platform_application_image_result_path }}"

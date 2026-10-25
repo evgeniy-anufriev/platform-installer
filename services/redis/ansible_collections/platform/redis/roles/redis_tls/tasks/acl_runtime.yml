@@ -1,12 +1,12 @@
 ---
-- name: Read Sentinel ACL configuration without exposing replication credentials
+- name: Чтение конфигурации Sentinel ACL без раскрытия учетных данных репликации
   ansible.builtin.slurp:
     src: "{{ redis_member.config_directory }}/sentinel.conf"
   register: _platform_sentinel_acl_configuration
   when: "'sentinel' in redis_member.roles"
   no_log: true
 
-- name: Require the exact Sentinel ACL file configuration
+- name: Запросить точную конфигурацию файла Sentinel ACL
   ansible.builtin.assert:
     that:
       - (_platform_sentinel_acl_configuration.content | b64decode | regex_findall('(?m)^aclfile\s+(.+)$')) in [[redis_member.config_directory ~ '/sentinel.users.acl'], ['"' ~ redis_member.config_directory ~ '/sentinel.users.acl"']]
@@ -14,7 +14,7 @@
   when: "'sentinel' in redis_member.roles"
   no_log: true
 
-- name: Check and persist all ACL users under the shared member lock
+- name: Проверить и сохранить всех пользователей ACL под блокировкой экземпляра общей службы
   platform.redis.acl_file:
     directory: "{{ redis_member.config_directory }}"
     listener: "{{ item }}"

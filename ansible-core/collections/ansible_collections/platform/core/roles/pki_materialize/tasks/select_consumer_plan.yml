@@ -1,12 +1,12 @@
 ---
-- name: Validate PKI consumer plan selector inputs
+- name: Проверка входных данных селектора потребительского плана PKI
   ansible.builtin.assert:
     that:
       - platform_pki_consumer_tls_profile_id is string
       - platform_pki_consumer_tls_profile_id | length > 0
     fail_msg: PKI_CONSUMER_PLAN_INPUT_INVALID
 
-- name: Resolve authoritative PKI consumer collections
+- name: Разрешение авторитетных потребительских коллекций PKI
   ansible.builtin.set_fact:
     _platform_pki_consumer_requests: >-
       {{ platform_pki_requests
@@ -16,7 +16,7 @@
          | default(hostvars['localhost'].platform_pki_materialization_plans | default([]), true) }}
     _platform_pki_consumer_deployment_id: "{{ platform_execution_service_deployment | default('', true) }}"
 
-- name: Validate PKI consumer plan selector collections
+- name: Проверка коллекций селекторов потребительских планов PKI
   ansible.builtin.assert:
     that:
       - _platform_pki_consumer_requests is sequence
@@ -25,11 +25,11 @@
       - _platform_pki_consumer_available_plans is not string
     fail_msg: PKI_CONSUMER_PLAN_INPUT_INVALID
 
-- name: Initialize PKI consumer request candidates
+- name: Инициализация кандидатов потребительского запроса PKI
   ansible.builtin.set_fact:
     _platform_pki_consumer_request_ids: []
 
-- name: Collect PKI requests bound to this service consumer
+- name: Собрать запросы PKI, привязанные к этому потребителю службы
   ansible.builtin.set_fact:
     _platform_pki_consumer_request_ids: "{{ _platform_pki_consumer_request_ids + [item.id] }}"
   loop: "{{ _platform_pki_consumer_requests }}"
@@ -54,7 +54,7 @@
        | selectattr('deploymentId', 'equalto', _platform_pki_consumer_deployment_id)
        | list | length > 0)
 
-- name: Select the unique PKI plan for this service consumer
+- name: Выбрать уникальный план PKI для этого потребителя службы
   ansible.builtin.set_fact:
     _platform_pki_consumer_plans: >-
       {{ (_platform_pki_consumer_available_plans
@@ -63,7 +63,7 @@
           | selectattr('requestId', 'in', _platform_pki_consumer_request_ids)
           | list) }}
 
-- name: Require one exact PKI consumer plan
+- name: Требовать один точный потребительский план PKI
   ansible.builtin.assert:
     that:
       - _platform_pki_consumer_request_ids | length > 0
@@ -71,6 +71,6 @@
       - _platform_pki_consumer_plans[0].targetDirectory is defined
     fail_msg: PKI_CONSUMER_PLAN_REQUIRED
 
-- name: Publish selected PKI consumer plan
+- name: Опубликовать выбранный потребительский план PKI
   ansible.builtin.set_fact:
     platform_pki_selected_consumer_plan: "{{ _platform_pki_consumer_plans[0] }}"

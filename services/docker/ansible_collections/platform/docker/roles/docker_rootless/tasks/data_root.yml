@@ -1,5 +1,5 @@
 ---
-- name: Validate Docker data root path
+- name: Проверка корневого пути к данным Docker
   ansible.builtin.assert:
     that:
       - platform_docker_data_root is string
@@ -13,7 +13,7 @@
       - not platform_docker_data_root.startswith(_platform_docker_home ~ '/.config')
     fail_msg: DOCKER_DATA_ROOT_INVALID
 
-- name: Inspect Docker data root ancestors without following links
+- name: Проверить родительские каталоги данных Docker без перехода по символическим ссылкам
   ansible.builtin.stat:
     path: "{{ '/' ~ (platform_docker_data_root.split('/')[1:item + 1] | join('/')) }}"
     follow: false
@@ -23,7 +23,7 @@
   loop: "{{ range(1, platform_docker_data_root.split('/') | length) | list }}"
   register: _platform_docker_data_components
 
-- name: Refuse linked, foreign or writable Docker data root ancestors
+- name: Отклонить символические ссылки, чужих владельцев и небезопасные права родительских каталогов данных Docker
   ansible.builtin.assert:
     that:
       - not item.stat.exists or (item.stat.isdir | default(false))
@@ -37,14 +37,14 @@
   loop_control:
     label: "{{ item.item }}"
 
-- name: Require selected account ownership of existing Docker data root
+- name: Требовать, чтобы выбранная учетная запись владела существующим корнем данных Docker
   ansible.builtin.assert:
     that:
       - not _platform_docker_data_components.results[-1].stat.exists or _platform_docker_data_components.results[-1].stat.pw_name == platform_docker_account_name
       - not (platform_docker_verify_only | bool) or _platform_docker_data_components.results[-1].stat.exists
     fail_msg: DOCKER_DATA_ROOT_NOT_OWNED
 
-- name: Create private Docker data root without moving existing data
+- name: Создать частный корень данных Docker без перемещения существующих данных
   ansible.builtin.file:
     path: "{{ platform_docker_data_root }}"
     state: directory
@@ -53,7 +53,7 @@
     mode: '0700'
   when: not (platform_docker_verify_only | bool)
 
-- name: Inspect Docker configuration directory components
+- name: Проверка компонентов каталога конфигурации Docker
   ansible.builtin.stat:
     path: "{{ item }}"
     follow: false
@@ -66,7 +66,7 @@
     - "{{ _platform_docker_home }}/.config/docker"
   register: _platform_docker_config_components
 
-- name: Require private account-owned Docker configuration directories
+- name: Требовать каталоги конфигурации Docker, принадлежащие частной учетной записи
   ansible.builtin.assert:
     that:
       - item.stat.isdir | default(false)
@@ -80,7 +80,7 @@
   loop_control:
     label: "{{ item.item }}"
 
-- name: Inspect Docker daemon configuration before reading
+- name: Проверка конфигурации демона Docker перед чтением
   ansible.builtin.stat:
     path: "{{ _platform_docker_home }}/.config/docker/daemon.json"
     follow: false
@@ -89,7 +89,7 @@
     get_attributes: false
   register: _platform_docker_daemon_file
 
-- name: Require an account-owned regular Docker daemon configuration
+- name: Требовать обычную конфигурацию демона Docker, принадлежащую учетной записи
   ansible.builtin.assert:
     that:
       - not (_platform_docker_daemon_file.stat.islnk | default(false))
@@ -99,24 +99,24 @@
       - not (platform_docker_verify_only | bool) or _platform_docker_daemon_file.stat.exists
     fail_msg: DOCKER_DAEMON_CONFIG_NOT_OWNED
 
-- name: Read existing Docker daemon configuration privately
+- name: Конфиденциальное чтение существующей конфигурации демона Docker
   ansible.builtin.slurp:
     src: "{{ _platform_docker_home }}/.config/docker/daemon.json"
   register: _platform_docker_daemon_content
   when: _platform_docker_daemon_file.stat.exists
   no_log: true
 
-- name: Parse existing Docker daemon configuration privately
+- name: Частный анализ существующей конфигурации демона Docker
   ansible.builtin.set_fact:
     _platform_docker_daemon_config: "{{ (_platform_docker_daemon_content.content | b64decode | from_json) if _platform_docker_daemon_file.stat.exists else {} }}"
   no_log: true
 
-- name: Require a Docker daemon configuration object
+- name: Требовать объект конфигурации демона Docker
   ansible.builtin.assert:
     that: _platform_docker_daemon_config is mapping
     fail_msg: DOCKER_DAEMON_CONFIG_INVALID
 
-- name: Write Docker data-root while retaining other daemon settings
+- name: Запись корня данных Docker с сохранением других настроек демона
   ansible.builtin.copy:
     dest: "{{ _platform_docker_home }}/.config/docker/daemon.json"
     content: "{{ _platform_docker_daemon_config | combine({'data-root': platform_docker_data_root}) | to_nice_json }}\n"
@@ -125,9 +125,9 @@
     mode: '0600'
   when: not (platform_docker_verify_only | bool)
   no_log: true
-  notify: Restart rootless Docker bridge
+  notify: Перезапустить мост Docker без прав root
 
-- name: Verify configured Docker data root read-only
+- name: Проверить настроенный каталог данных Docker без изменений
   ansible.builtin.assert:
     that: _platform_docker_daemon_config.get('data-root') == platform_docker_data_root
     fail_msg: DOCKER_DATA_ROOT_CONFIG_MISMATCH

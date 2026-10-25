@@ -1,5 +1,5 @@
 ---
-- name: Bind the explicit non-administrative compatibility principal
+- name: Привязка явного неадминистративного принципа совместимости
   ansible.builtin.set_fact:
     application_kafka_account:
       name: "{{ kafka_authorization_principal }}"
@@ -14,10 +14,10 @@
         operations: "{{ kafka_authorization_cluster_operations }}"
   changed_when: false
 
-- name: Read this compatibility principal's ACLs once before checking resources
+- name: Прочитать списки ACL этого субъекта совместимости один раз перед проверкой ресурсов
   ansible.builtin.include_tasks: application_acls_read.yml
 
-- name: Check or ensure each explicitly scoped compatibility resource
+- name: Проверить или убедитесь, что каждый ресурс совместимости с явно заданной областью
   ansible.builtin.include_tasks: application_acl.yml
   loop: "{{ kafka_authorization_grants }}"
   loop_control:

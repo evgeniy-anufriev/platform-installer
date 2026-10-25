@@ -1,5 +1,5 @@
 ---
-- name: Execute integration hooks in declared order before the account batch
+- name: Выполнение перехватчиков интеграции в объявленном порядке перед пакетом учетных записей
   ansible.builtin.include_tasks: application-provider-script.yml
   vars:
     application_provider_script: "{{ application_provider_hook }}"
@@ -8,10 +8,10 @@
   loop_control:
     loop_var: application_provider_hook
 
-- name: Reconcile this provider account batch through private files
+- name: Согласовать этот пакет учетных записей провайдера через личные файлы
   when: application_provider_batch.accounts | length > 0
   block:
-    - name: Resolve account callback from the exact provider package
+    - name: Разрешить обратный вызов учетной записи из конкретного пакета провайдера
       platform.core.prepare_application_account_batch:
         batch: "{{ application_provider_batch }}"
         project_root: "{{ platform_project_root | default(hostvars['localhost'].inventory_dir | dirname) }}"
@@ -20,7 +20,7 @@
       register: application_account_callback
       no_log: true
 
-    - name: Require protected source files for all passwords in this batch
+    - name: Требовать защищенные исходные файлы для всех паролей в этом пакете
       ansible.builtin.assert:
         that: >-
           {{ (hostvars['localhost'].platform_application_secret_files |
@@ -33,7 +33,7 @@
       become: false
       no_log: true
 
-    - name: Bind invocation-private password values without public script outputs
+    - name: Привязка значений частного пароля вызова без выходных данных общедоступного сценария
       ansible.builtin.set_fact:
         application_batch_passwords: "{{ application_batch_passwords | default({}) | combine({item.id: lookup('ansible.builtin.file', application_batch_source_files[item.passwordRef], rstrip=false)}) }}"
       vars:
@@ -41,7 +41,7 @@
       loop: "{{ application_account_callback.requests }}"
       no_log: true
 
-    - name: Stage this batch in the existing protected controller root
+    - name: Разместить этот пакет в существующем корне защищенного контроллера
       ansible.builtin.copy:
         content: "{{ {'accounts': application_account_callback.accounts, 'passwords': application_batch_passwords} | to_json }}"
         dest: "{{ hostvars['localhost'].platform_application_secret_root }}/{{ application_provider_batch.id }}"
@@ -50,14 +50,14 @@
       become: false
       no_log: true
 
-    - name: Execute one callback for all this provider accounts
+    - name: Выполнить один обратный вызов для всех учетных записей этого провайдера
       ansible.builtin.include_tasks: application-provider-script.yml
       vars:
         application_provider_script: "{{ application_account_callback.script }}"
         application_provider_script_host: "{{ application_account_callback.targetHostId }}"
         application_provider_private_files: "{{ {application_provider_batch.id: hostvars['localhost'].platform_application_secret_root ~ '/' ~ application_provider_batch.id} }}"
   always:
-    - name: Remove only this derived batch input
+    - name: Удалить только этот производный пакетный ввод
       ansible.builtin.file:
         path: "{{ hostvars['localhost'].platform_application_secret_root }}/{{ application_provider_batch.id }}"
         state: absent
@@ -65,12 +65,12 @@
       become: false
       changed_when: false
       no_log: true
-    - name: Discard batch password values before another provider
+    - name: Отменить пакетные значения паролей перед другим провайдером
       ansible.builtin.set_fact:
         application_batch_passwords: {}
       no_log: true
 
-- name: Record only successfully completed provider batches in current invocation
+- name: Запись только успешно завершенных пакетов провайдера в текущем вызове
   ansible.builtin.set_fact:
     platform_application_completed_batches: "{{ hostvars['localhost'].platform_application_completed_batches + [application_provider_batch.id] }}"
   delegate_to: localhost

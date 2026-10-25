@@ -1,10 +1,10 @@
 ---
-- name: Verify active BIND configuration with native tooling
+- name: Проверка активной конфигурации BIND с помощью встроенных инструментов
   ansible.builtin.command:
     argv: ["{{ platform_bind_checkconf_binary }}", "{{ platform_bind_distribution_config }}"]
   changed_when: false
 
-- name: Verify BIND service is active
+- name: Убедиться, что служба BIND активна
   ansible.builtin.systemd:
     name: "{{ platform_bind_service_name }}"
     state: started
@@ -12,7 +12,7 @@
   register: _platform_bind_service_verify
   failed_when: _platform_bind_service_verify.status.ActiveState | default('') != 'active'
 
-- name: Query authoritative SOA from local BIND
+- name: Запрос авторитетного SOA из локального BIND
   ansible.builtin.command:
     argv: [dig, "@127.0.0.1", "{{ item.value.zone }}", SOA, +norecurse, +noall, +answer, +comments]
   changed_when: false
@@ -25,7 +25,7 @@
   loop_control:
     label: "{{ item.key }}"
 
-- name: Query expected project host record from local BIND
+- name: Запрос ожидаемой записи хоста проекта из локального BIND
   ansible.builtin.command:
     argv: [dig, "@127.0.0.1", "{{ item.value.primary.fqdn }}", A, +norecurse, +noall, +answer, +comments]
   changed_when: false

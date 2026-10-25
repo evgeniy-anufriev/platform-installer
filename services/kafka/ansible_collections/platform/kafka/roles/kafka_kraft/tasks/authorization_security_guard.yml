@@ -1,5 +1,5 @@
 ---
-- name: Observe cluster ACLs including wildcard and prefixed matches
+- name: Наблюдение за списками управления доступом кластера, включая совпадения с подстановочными знаками и префиксами
   ansible.builtin.command:
     argv: "{{ [application_topic_cli_directory ~ '/bin/kafka-acls.sh', '--bootstrap-server', application_topic_candidate.address ~ ':' ~ application_topic_candidate.port, '--command-config', application_kafka_private.path ~ '/admin.properties', '--list', '--cluster', '--resource-pattern-type', 'match'] }}"
   register: kafka_authorization_cluster_acls
@@ -7,7 +7,7 @@
   changed_when: false
   no_log: true
 
-- name: Select only cluster resource blocks before checking administrative rights
+- name: Выбрать только блоки ресурсов кластера перед проверкой административных прав
   ansible.builtin.set_fact:
     kafka_authorization_cluster_bindings: >-
       {{ kafka_authorization_cluster_acls.stdout
@@ -16,7 +16,7 @@
   changed_when: false
   no_log: true
 
-- name: Reject preexisting security administration rights outside the sole admin
+- name: Отклонить ранее существовавшие права администрирования безопасности за пределами единственного администратора
   ansible.builtin.assert:
     that:
       - kafka_authorization_cluster_acls.rc == 0

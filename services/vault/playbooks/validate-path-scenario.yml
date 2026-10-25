@@ -1,5 +1,5 @@
 ---
-- name: Select generated path-boundary case locations
+- name: Выбор сгенерированных местоположений границ пути
   ansible.builtin.set_fact:
     _vault_test_root: "{{ vault_path_test_dir.path }}/{{ vault_path_scenario.root }}"
     _vault_test_deployment: "{{ vault_path_test_dir.path }}/{{ vault_path_scenario.root }}/deployment"
@@ -7,7 +7,7 @@
     _vault_test_outside: "{{ vault_path_test_dir.path }}/outside-{{ vault_path_scenario.root }}-{{ vault_path_scenario.component }}"
     _vault_test_rejected: false
 
-- name: Create the safe ancestors and external sentinel
+- name: Создание безопасных предков и внешнего стража
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
@@ -19,7 +19,7 @@
     + ([_vault_test_deployment] if vault_path_scenario.component != 'deployment' else [])
     + ([_vault_test_member] if vault_path_scenario.component == 'pki' else []) }}
 
-- name: Create the outside sentinel that no rejected path may modify
+- name: Создать внешний контрольный индикатор, который не сможет изменить ни один отклоненный путь
   ansible.builtin.copy:
     content: unchanged
     dest: "{{ _vault_test_outside }}/sentinel"
@@ -27,14 +27,14 @@
     group: root
     mode: '0600'
 
-- name: Select exact descendant symlink location
+- name: Выбрать точное местоположение символической ссылки потомка
   ansible.builtin.set_fact:
     _vault_test_link: >-
       {{ _vault_test_deployment if vault_path_scenario.component == 'deployment'
       else (_vault_test_member if vault_path_scenario.component == 'member'
       else _vault_test_member ~ '/pki') }}
 
-- name: Build the bounded ancestor check list for this scenario
+- name: Создать ограниченный контрольный список предков для этого сценария
   ansible.builtin.set_fact:
     _vault_test_checks: >-
       {{ [{'path': _vault_test_root, 'owner': 'root'}]
@@ -42,29 +42,29 @@
       + ([{'path': _vault_test_member, 'owner': 'service'}] if vault_path_scenario.component == 'pki' else [])
       + [{'path': _vault_test_link, 'owner': 'service'}] }}
 
-- name: Substitute only the selected generated path component with a symlink
+- name: Заменить только выбранный сгенерированный компонент пути символической ссылкой
   ansible.builtin.file:
     src: "{{ _vault_test_outside }}"
     dest: "{{ _vault_test_link }}"
     state: link
 
-- name: Require the shared production validator to reject before subsequent writes
+- name: Потребовать, чтобы общий производственный валидатор отклонял перед последующими операциями записи
   block:
-    - name: Apply the exact Vault path component validator
+    - name: Применить точный валидатор компонента пути Vault
       ansible.builtin.include_tasks: ../ansible_collections/platform/vault/roles/vault_tls/tasks/validate_owned_paths.yml
       vars:
         _platform_vault_path_checks: "{{ _vault_test_checks }}"
 
-    - name: This mutation sentinel must remain unreachable after unsafe-path rejection
+    - name: Этот контрольный элемент модификации должен оставаться недоступным после отклонения небезопасного пути
       ansible.builtin.file:
         path: "{{ _vault_test_outside }}/must-not-exist"
         state: touch
   rescue:
-    - name: Record that the unsafe path was rejected
+    - name: Записать, что небезопасный путь отклонен
       ansible.builtin.set_fact:
         _vault_test_rejected: true
 
-- name: Verify rejection happened before any outside mutation
+- name: Убедиться, что отклонение произошло до внесения каких-либо внешних изменений
   ansible.builtin.stat:
     path: "{{ item }}"
   loop:
@@ -72,12 +72,12 @@
     - "{{ _vault_test_outside }}/must-not-exist"
   register: _vault_test_outside_stats
 
-- name: Read the bounded outside sentinel after rejection
+- name: Прочитать ограниченный внешний страж после отклонения
   ansible.builtin.slurp:
     src: "{{ _vault_test_outside }}/sentinel"
   register: _vault_test_sentinel_content
 
-- name: Assert unsafe path rejection and unchanged outside state
+- name: Подтверждение отклонения небезопасного пути и неизменности внешнего состояния
   ansible.builtin.assert:
     that:
       - _vault_test_rejected

@@ -1,18 +1,18 @@
 ---
-- name: Validate portable service resource settings
+- name: Проверка настроек ресурсов переносимой службы
   ansible.builtin.include_role:
     name: platform.core.project_settings
 
-- name: Validate ClickHouse desired inputs
+- name: Проверка желаемых входных данных ClickHouse
   ansible.builtin.include_tasks: validate.yml
 
-- name: Normalize ClickHouse member placement
+- name: Нормализация размещения экземпляра службы ClickHouse
   ansible.builtin.include_tasks: normalize.yml
 
-- name: Reject overlapping local ClickHouse data paths
+- name: Отклонить перекрывающиеся локальные пути данных ClickHouse
   ansible.builtin.include_tasks: validate_data_paths.yml
 
-- name: Validate approved ClickHouse artifact authority
+- name: Проверка утвержденных полномочий артефакта ClickHouse
   ansible.builtin.include_role:
     name: platform.core.artifact_source_gate
   vars:
@@ -24,28 +24,28 @@
     - platform_resolved_artifact_sources is defined or (platform_artifact_source_authority_active | default(false))
     - not (platform_clickhouse_verify_only | bool)
 
-- name: Resolve the exact ClickHouse TLS material
+- name: Решить точный материал ClickHouse TLS
   ansible.builtin.include_tasks: resolve_tls.yml
 
-- name: Check ClickHouse package and member ownership before apply
+- name: Проверка владения пакетом ClickHouse и экземпляром службы перед применением
   ansible.builtin.include_tasks: preflight.yml
   when:
     - not (platform_clickhouse_verify_only | bool)
     - _platform_clickhouse_local_instances | length > 0
 
-- name: Install approved ClickHouse packages
+- name: Установка утвержденных пакетов ClickHouse
   ansible.builtin.include_tasks: packages.yml
   when:
     - not (platform_clickhouse_verify_only | bool)
     - _platform_clickhouse_local_instances | length > 0
 
-- name: Configure isolated ClickHouse members
+- name: Настройка изолированных экземпляров службы ClickHouse
   ansible.builtin.include_tasks: provision.yml
   when:
     - not (platform_clickhouse_verify_only | bool)
     - _platform_clickhouse_local_instances | length > 0
 
-- name: Verify local ClickHouse members
+- name: Проверка локальных экземпляров службы ClickHouse
   ansible.builtin.include_tasks: verify.yml
   loop: "{{ _platform_clickhouse_local_instances }}"
   loop_control:

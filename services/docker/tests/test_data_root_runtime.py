@@ -34,7 +34,7 @@ class DockerDataRootTests(unittest.TestCase):
                           "platform_docker_data_root": str(self.data) if data is None else data,
                           "platform_docker_verify_only": verify},
                  "tasks": [{"ansible.builtin.include_tasks": str(ROLE / "tasks/data_root.yml")}],
-                 "handlers": [{"name": "Restart rootless Docker bridge",
+                 "handlers": [{"name": "Перезапустить мост Docker без прав root",
                                "ansible.builtin.debug": {"msg": "fixture restart notification"}}]}]
         playbook = self.home / "test.yml"
         playbook.write_text(yaml.safe_dump(play))

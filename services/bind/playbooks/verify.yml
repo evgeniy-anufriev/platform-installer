@@ -1,5 +1,5 @@
 ---
-- name: Verify authoritative BIND DNS
+- name: Проверка авторитетного BIND DNS
   hosts: platform_targets
   become: true
   gather_facts: false

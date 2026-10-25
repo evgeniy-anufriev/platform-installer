@@ -17,10 +17,10 @@ class PostgreSQLUnitOwnershipRuntimeTests(unittest.TestCase):
         if not executable:
             self.skipTest("Ansible runtime required")
         source = yaml.safe_load((ROLE / "tasks/main.yml").read_text(encoding="utf-8"))
-        names = ["Inspect the exact PostgreSQL unit path before mutation",
-                 "Refuse a substituted PostgreSQL unit path",
-                 "Read ownership header from an existing PostgreSQL unit",
-                 "Refuse replacement of a foreign PostgreSQL unit"]
+        names = ["Проверить точный путь к службе systemd PostgreSQL перед изменением",
+                 "Отклонить замененный путь к службе systemd PostgreSQL",
+                 "Прочитать заголовок владения из существующей службы systemd PostgreSQL",
+                 "Отказаться от замены неуправляемой службы systemd PostgreSQL"]
         checks = [next(task for task in source if task.get("name") == name) for name in names]
         template = (ROLE / "templates/postgresql.service.j2").read_text(encoding="utf-8")
         owned = template.replace("{{ platform_postgresql_deployment_id }}", "qa-postgresql").replace(

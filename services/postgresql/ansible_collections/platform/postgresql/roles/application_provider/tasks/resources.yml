@@ -1,5 +1,5 @@
 ---
-- name: Create managed owner roles needed for database restores
+- name: Создание управляемых ролей владельца, необходимых для восстановления базы данных
   ansible.builtin.command:
     argv: [psql, -X, -h, "{{ platform_postgresql_application_socket }}", -p, "{{ application_provider_target.port }}", -U, "{{ application_provider_os_user }}", -d, postgres, -At, -v, ON_ERROR_STOP=1, -f, -]
     stdin: "{{ lookup('ansible.builtin.template', 'restore_owners.sql.j2') }}"
@@ -13,13 +13,13 @@
   when: platform_postgresql_application_job.databases | selectattr('restoreOnCreate', 'defined') | list | length > 0
   no_log: true
 
-- name: Restore only newly created managed databases before other resources
+- name: Восстанавливать только вновь созданные управляемые базы данных перед другими ресурсами
   ansible.builtin.include_tasks: restore_database.yml
   loop: "{{ platform_postgresql_application_job.databases | selectattr('restoreOnCreate', 'defined') | list }}"
   loop_control:
     loop_var: application_restore_database
 
-- name: Ensure owned library roles and databases in one maintenance session
+- name: Проверка принадлежащих библиотек ролей и баз данных за один сеанс обслуживания
   ansible.builtin.command:
     argv: [psql, -X, -h, "{{ platform_postgresql_application_socket }}", -p, "{{ application_provider_target.port }}", -U, "{{ application_provider_os_user }}", -d, postgres, -At, -v, ON_ERROR_STOP=1, -f, -]
     stdin: "{{ lookup('ansible.builtin.template', 'resources.sql.j2') }}"

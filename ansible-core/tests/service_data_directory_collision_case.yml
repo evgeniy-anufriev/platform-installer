@@ -1,5 +1,5 @@
 ---
-- name: Project conflicting local member paths for each service
+- name: Проецировать конфликтующие пути к экземпляру локальной службы для каждой службы
   ansible.builtin.set_fact:
     _platform_redis_local_instances: "{{ collision_members }}"
     _platform_clickhouse_local_instances: "{{ collision_members }}"
@@ -10,15 +10,15 @@
       - {id: member-1, host: localhost, data_directory: "{{ collision_case.first }}"}
       - {id: member-2, host: localhost, data_directory: "{{ collision_case.second }}"}
 
-- name: Verify the role rejects the conflict before mutation
+- name: Убедиться, что роль отклоняет конфликт перед изменением
   block:
-    - name: Run the selected role's data path validation
+    - name: Запустить проверку пути к данным выбранной роли
       ansible.builtin.include_tasks: >-
         ../../services/{{ collision_case.service }}/ansible_collections/platform/{{ collision_case.service }}/roles/{{ collision_case.service }}_tls/tasks/validate_data_paths.yml
-    - name: Fail if conflicting paths were accepted
+    - name: Сбой, если были приняты конфликтующие пути
       ansible.builtin.fail:
         msg: EXPECTED_PATH_REJECTION_MISSING
   rescue:
-    - name: Require the expected collision result
+    - name: Запрос ожидаемого результата столкновения
       ansible.builtin.assert:
         that: (ansible_failed_result | to_json) is search('DATA_DIRECTORY_COLLISION')

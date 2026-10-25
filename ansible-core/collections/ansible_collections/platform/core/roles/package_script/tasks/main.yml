@@ -1,12 +1,12 @@
 ---
-- name: Bind only generic package script paths
+- name: Привязка только общих путей к сценариям пакетов
   ansible.builtin.set_fact:
     platform_script_directory: "{{ platform_script_job.workingDirectory }}/.scripts"
     platform_script_secret_directory: "{{ platform_script_job.workingDirectory }}/.scripts/.secrets/{{ platform_script_job.id }}"
     platform_script_environment: {}
   no_log: true
 
-- name: Require protected runtime script inputs
+- name: Требовать защищенные входные данные сценария среды выполнения
   ansible.builtin.assert:
     that: >-
       {{ platform_script_secret_files | platform.core.application_protected_secret_files(
@@ -15,7 +15,7 @@
   when: platform_script_job.secretInputs | length > 0
   no_log: true
 
-- name: Create a private package script directory
+- name: Создание каталога сценариев частного пакета
   ansible.builtin.file:
     path: "{{ platform_script_directory }}"
     state: directory
@@ -23,7 +23,7 @@
     mode: '0700'
   no_log: true
 
-- name: Deliver the exact allowlisted package script
+- name: Доставить точный сценарий пакета из разрешенного списка
   ansible.builtin.copy:
     src: "{{ platform_script_job.path }}"
     dest: "{{ platform_script_directory }}/{{ platform_script_job.id }}"
@@ -31,16 +31,16 @@
     mode: '0700'
   no_log: true
 
-- name: Remove this script's interrupted transient inputs before reuse
+- name: Удалить прерванные временные входные данные этого сценария перед повторным использованием
   ansible.builtin.file:
     path: "{{ platform_script_secret_directory }}"
     state: absent
   changed_when: false
   no_log: true
 
-- name: Run package script with bounded private inputs and cleanup
+- name: Запуск сценария пакета с ограниченными частными входными данными и очисткой
   block:
-    - name: Create only this script's transient secret directory
+    - name: Создать только временный секретный каталог этого сценария
       ansible.builtin.file:
         path: "{{ platform_script_secret_directory }}"
         state: directory
@@ -49,7 +49,7 @@
       when: platform_script_job.secretInputs | length > 0
       no_log: true
 
-    - name: Stage runtime input files for the selected target account
+    - name: Подготовка входных файлов среды выполнения для выбранной целевой учетной записи
       ansible.builtin.copy:
         src: "{{ platform_script_secret_files[item.value] }}"
         dest: "{{ platform_script_secret_directory }}/{{ item.key }}"
@@ -58,14 +58,14 @@
       loop: "{{ platform_script_job.secretInputs | dict2items }}"
       no_log: true
 
-    - name: Bind only private file paths to the script environment
+    - name: Привязать к среде скрипта только частные пути к файлам
       ansible.builtin.set_fact:
         platform_script_environment: >-
           {{ platform_script_environment | combine({'PLATFORM_SCRIPT_SECRET_' ~ (item.key | upper) ~ '_FILE': platform_script_secret_directory ~ '/' ~ item.key}) }}
       loop: "{{ platform_script_job.secretInputs | dict2items }}"
       no_log: true
 
-    - name: Execute exact package script without a shell or unbounded runtime
+    - name: Выполнить точный сценарий пакета без оболочки или неограниченной среды выполнения
       ansible.builtin.command:
         argv: "{{ ['timeout', '--kill-after=2s', '300s', platform_script_directory ~ '/' ~ platform_script_job.id] + platform_script_job.argv }}"
         chdir: "{{ platform_script_job.workingDirectory }}"
@@ -76,12 +76,12 @@
       changed_when: false
       no_log: true
 
-    - name: "Preserve safe failure diagnostics for package script {{ platform_script_job.id }}"
+    - name: "Сохранить безопасную диагностику сбоев для сценария пакета {{ platform_script_job.id }}"
       ansible.builtin.fail:
         msg: "{{ platform_script_result | platform.core.application_script_failure }}"
       when: platform_script_result.rc | default(-1) | int != 0
 
-    - name: Require a bounded machine-readable nonsensitive result
+    - name: Требовать ограниченный машиночитаемый нечувствительный результат
       ansible.builtin.assert:
         that:
           - platform_script_result.stdout | length <= 2048
@@ -90,12 +90,12 @@
         fail_msg: APPLICATION_SCRIPT_RESULT_INVALID
       no_log: true
 
-    - name: Report actual package script change
+    - name: Сообщить о фактическом изменении сценария пакета
       ansible.builtin.debug:
         msg: APPLICATION_SCRIPT_RECONCILED
       changed_when: (platform_script_result.stdout | from_json).changed | bool
   always:
-    - name: Remove only this script's transient secret inputs
+    - name: Удалить только временные секретные входные данные этого сценария
       ansible.builtin.file:
         path: "{{ platform_script_secret_directory }}"
         state: absent

@@ -1,10 +1,10 @@
 ---
-- name: Bind all placements consuming this one library-host projection
+- name: Связать все места размещения, использующие одну проекцию хоста библиотеки
   ansible.builtin.set_fact:
     application_library_jobs: "{{ platform_application_preflight_jobs | selectattr('libraryId', 'equalto', application_library_id) | list }}"
   no_log: true
 
-- name: Require identical shared library bytes across its consumers
+- name: Требовать от всех потребителей одинаковых байтов общей библиотеки
   ansible.builtin.assert:
     that:
       - application_library_jobs | map(attribute='libraryPath') | unique | length == 1
@@ -13,22 +13,22 @@
     fail_msg: APPLICATION_LIBRARY_HOST_PROJECTION_CONFLICT
   no_log: true
 
-- name: Create the library host directory in the validated private subtree
+- name: Создать каталог хоста библиотеки в проверенном частном поддереве
   ansible.builtin.file:
     path: "{{ application_library_jobs[0].libraryPath }}"
     state: directory
     owner: "{{ application_library_jobs[0].account }}"
     mode: '0700'
 
-- name: Materialize the library and its exact selected instances
+- name: Материализовать библиотеку и ее точные выбранные экземпляры
   block:
-    - name: Record library host ownership as derived runtime state
+    - name: Запись владения хостом библиотеки как производного состояния среды выполнения
       ansible.builtin.copy:
         content: "{{ {'project': application_library_jobs[0].projectId, 'library': application_library_id, 'host': inventory_hostname} | to_json(sort_keys=true) }}"
         dest: "{{ application_library_jobs[0].libraryPath }}/.owner.json"
         owner: "{{ application_library_jobs[0].account }}"
         mode: '0600'
-    - name: Materialize the common nonsecret env and base Compose exactly once
+    - name: Материализовать общую несекретную среду и базу Compose ровно один раз
       ansible.builtin.copy:
         content: "{{ item.content }}"
         dest: "{{ application_library_jobs[0].libraryPath }}/{{ item.name }}"
@@ -38,7 +38,7 @@
         - { name: .env, content: "{{ application_library_jobs[0].envContent }}" }
         - { name: "{{ application_library_jobs[0].baseFilename }}", content: "{{ application_library_jobs[0].baseContent }}" }
       no_log: true
-    - name: Materialize and validate each application in its own Compose project
+    - name: Материализовать и проверить каждое приложение в отдельном проекте Compose
       ansible.builtin.include_tasks: apply_instance.yml
       loop: "{{ application_library_jobs }}"
       when: >-

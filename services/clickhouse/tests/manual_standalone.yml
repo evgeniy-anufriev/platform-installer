@@ -1,5 +1,5 @@
 ---
-- name: Exercise the ordinary-variable ClickHouse role on the local RED OS QA node
+- name: Выполнить роль обычной переменной ClickHouse на локальном узле RED OS QA
   hosts: localhost
   connection: local
   become: true
@@ -23,7 +23,7 @@
       clickhouse-server: "{{ clickhouse_qa_root }}/rpm/clickhouse-server-26.8.14.3.x86_64.rpm"
       clickhouse-client: "{{ clickhouse_qa_root }}/rpm/clickhouse-client-26.8.14.3.x86_64.rpm"
   pre_tasks:
-    - name: Require an explicit bounded ephemeral QA root
+    - name: Требовать явный ограниченный эфемерный корень QA
       ansible.builtin.assert:
         that: clickhouse_qa_root is match('^/var/tmp/platform-clickhouse-qa-[A-Za-z0-9]+$')
         fail_msg: CLICKHOUSE_QA_ROOT_REQUIRED

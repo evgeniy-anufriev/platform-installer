@@ -15,10 +15,10 @@ TASKS = REPO / "ansible-core/collections/ansible_collections/platform/core/roles
 ACCOUNT = "platform-docker"
 HOSTS = ("discovery_target_a", "discovery_target_b")
 ROUTING_NAMES = (
-    "Bind this operation's account and Docker configuration discovery key",
-    "Discover each selected account and rootless runtime once per operation",
+    "Привязать учетную запись этой операции и ключ обнаружения конфигурации Docker",
+    "Однократно проверить выбранные учётные записи и Docker без прав root",
 )
-DISCOVERY_NAME = "Discover the selected Docker account"
+DISCOVERY_NAME = "Обнаружение выбранной учетной записи Docker"
 
 
 class ApplicationRuntimeDiscoveryQA(unittest.TestCase):

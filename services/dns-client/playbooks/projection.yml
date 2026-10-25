@@ -1,17 +1,17 @@
 ---
 - import_playbook: ../../../ansible-core/playbooks/validate.yml
 
-- name: Resolve DNS client runtime projection without generated state
+- name: Разрешение проекции времени выполнения клиента DNS без сгенерированного состояния
   hosts: localhost
   connection: local
   gather_facts: false
   tasks:
-    - name: Load published service catalog for DNS client projection
+    - name: Загрузить опубликованный каталог сервисов для проекции клиента DNS
       ansible.builtin.include_vars:
         file: "{{ platform_service_catalog_path }}"
         name: _platform_dns_client_catalog_file
 
-    - name: Collect canonical DNS client inventory projections
+    - name: Сбор канонических прогнозов запасов клиента DNS
       ansible.builtin.set_fact:
         _platform_dns_client_inventory_hosts: >-
           {{ _platform_dns_client_inventory_hosts | default({}) | combine({item: {'ansible_host': (hostvars[item].ansible_host | default(item))}}) }}
@@ -20,7 +20,7 @@
       loop: "{{ groups['platform_targets'] | default([]) | sort }}"
       no_log: true
 
-    - name: Resolve existing authoritative DNS projection
+    - name: Разрешить существующую авторитетную проекцию DNS
       platform.core.resolve_dns_zones:
         desired_state: "{{ platform_desired_state }}"
         service_catalog: "{{ _platform_dns_client_catalog_file.platform_service_catalog | default(_platform_dns_client_catalog_file, true) }}"
@@ -28,11 +28,11 @@
         inventory_deployments: "{{ _platform_dns_client_inventory_deployments }}"
       register: _platform_dns_client_dns
 
-    - name: Initialize DNS client runtime projection
+    - name: Инициализация проекции времени выполнения клиента DNS
       ansible.builtin.set_fact:
         platform_dns_client_runtime_projection: {clients: {}}
 
-    - name: Publish deterministic DNS client runtime projection
+    - name: Публикация детерминированной проекции времени выполнения клиента DNS
       ansible.builtin.set_fact:
         platform_dns_client_runtime_projection: >-
           {{ platform_dns_client_runtime_projection | combine({'clients': {

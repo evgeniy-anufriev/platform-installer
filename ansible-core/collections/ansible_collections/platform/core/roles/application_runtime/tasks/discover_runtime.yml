@@ -1,15 +1,15 @@
 ---
-- name: Discover the selected Docker account
+- name: Обнаружение выбранной учетной записи Docker
   ansible.builtin.getent:
     database: passwd
     key: "{{ application_runtime_job.account }}"
 
-- name: Require the discovered account HOME to be bounded before daemon probes
+- name: Потребовать, чтобы обнаруженная учетная запись HOME была ограничена перед зондированием демона
   ansible.builtin.assert:
     that: getent_passwd[application_runtime_job.account][4] is match('^/[a-zA-Z0-9_./-]+$')
     fail_msg: APPLICATION_RUNTIME_ROOT_INVALID
 
-- name: Inspect rootless daemon and Compose plugin without mutation
+- name: Проверить Docker без прав root и плагин Compose без изменений
   ansible.builtin.command:
     argv: "{{ item }}"
   loop:
@@ -25,7 +25,7 @@
   changed_when: false
   no_log: true
 
-- name: Retain successful discovery only within this operation and target
+- name: Сохранить успешное обнаружение только в рамках этой операции и целевого объекта
   ansible.builtin.set_fact:
     application_runtime_discoveries: >-
       {{ application_runtime_discoveries | combine({application_discovery_key: {

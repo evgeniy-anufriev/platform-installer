@@ -1,20 +1,20 @@
 ---
-- name: Build machine-readable Platform project snapshot
+- name: Создание машиночитаемого снимка проекта платформы
   hosts: localhost
   connection: local
   gather_facts: false
   tasks:
-    - name: Validate portable service resource settings
+    - name: Проверка настроек ресурсов переносимой службы
       ansible.builtin.include_role:
         name: platform.core.project_settings
       run_once: true
 
-    - name: Resolve optional application libraries with ordinary Ansible
+    - name: Разрешить дополнительные библиотеки приложений с помощью обычного Ansible
       ansible.builtin.include_role:
         name: platform.core.resolve_application_libraries
       when: platform_desired_state.applicationLibraryDeployments is defined
 
-    - name: Build deterministic read-only snapshot on the controller
+    - name: Создание детерминированного моментального снимка контроллера, доступного только для чтения
       platform.core.project_snapshot:
         project_root: "{{ platform_project_root }}"
         service_catalog_path: "{{ platform_service_catalog_path }}"

@@ -1,5 +1,5 @@
 ---
-- name: Validate resolved artifact metadata before target mutation
+- name: Проверка метаданных разрешенного артефакта перед целевым изменением
   ansible.builtin.assert:
     that:
       - platform_artifact_stage_root == '/var/tmp/platform-installer/artifacts'
@@ -21,7 +21,7 @@
     fail_msg: "ARTIFACT_SOURCE_METADATA_INVALID: {{ artifact_requirement.id }}"
   no_log: true
 
-- name: Create controlled target staging directory
+- name: Создание контролируемого целевого промежуточного каталога
   ansible.builtin.file:
     path: "{{ platform_artifact_stage_root }}/{{ artifact_requirement.id }}"
     state: directory
@@ -30,7 +30,7 @@
     mode: '0700'
   when: platform_resolved_artifact_sources[artifact_requirement.id].source == 'OFFLINE_BUNDLE'
 
-- name: Copy selected offline artifacts to the target
+- name: Копирование выбранных автономных артефактов в целевой объект
   ansible.builtin.copy:
     src: "{{ platform_execution_runtime_root }}/{{ artifact.ref }}"
     dest: "{{ platform_artifact_stage_root }}/{{ artifact_requirement.id }}/{{ artifact.sha256 | regex_replace('^sha256:', '') }}-{{ artifact.ref | basename }}"
@@ -43,7 +43,7 @@
     label: "{{ artifact.ref | basename }}"
   when: platform_resolved_artifact_sources[artifact_requirement.id].source == 'OFFLINE_BUNDLE'
 
-- name: Verify target artifact bytes before service installation
+- name: Проверка байтов целевого артефакта перед установкой службы
   ansible.builtin.stat:
     path: "{{ platform_artifact_stage_root }}/{{ artifact_requirement.id }}/{{ artifact.sha256 | regex_replace('^sha256:', '') }}-{{ artifact.ref | basename }}"
     checksum_algorithm: sha256
@@ -55,7 +55,7 @@
   when: platform_resolved_artifact_sources[artifact_requirement.id].source == 'OFFLINE_BUNDLE'
   no_log: true
 
-- name: Block before install when target artifact digest is wrong
+- name: Блокировка перед установкой, если целевой дайджест артефакта неверен
   ansible.builtin.assert:
     that:
       - artifact_stat.stat.exists
@@ -67,7 +67,7 @@
   when: platform_resolved_artifact_sources[artifact_requirement.id].source == 'OFFLINE_BUNDLE'
   no_log: true
 
-- name: Record staged artifact paths for service-specific installers
+- name: Запись поэтапных путей артефактов для установщиков конкретных служб
   ansible.builtin.set_fact:
     platform_offline_artifact_paths: >-
       {{ platform_offline_artifact_paths | combine({artifact_requirement.id:
@@ -79,7 +79,7 @@
     label: "{{ artifact.ref | basename }}"
   when: platform_resolved_artifact_sources[artifact_requirement.id].source == 'OFFLINE_BUNDLE'
 
-- name: Collect local RPM closure paths
+- name: Собрать локальные пути закрытия RPM
   ansible.builtin.set_fact:
     platform_offline_package_paths: >-
       {{ platform_offline_package_paths +

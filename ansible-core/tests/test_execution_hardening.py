@@ -15,9 +15,9 @@ class ExecutionHardeningTests(unittest.TestCase):
 
     def test_identity_generation_remains_idempotent(self):
         tasks = (ROLE / "tasks" / "main.yml").read_text(encoding="utf-8")
-        self.assertIn("Create managed execution SSH identity exactly once", tasks)
+        self.assertIn("Создать идентификатор SSH управляемого выполнения ровно один раз", tasks)
         self.assertIn("creates: \"{{ platform_execution_ssh_key_path }}\"", tasks)
-        self.assertIn("Create persistent execution known-hosts file", tasks)
+        self.assertIn("Один раз создать файл известных хостов с постоянным выполнением", tasks)
 
     def test_access_gate_reuses_existing_boundaries(self):
         playbook = (ROOT / "playbooks" / "ensure-execution-access.yml").read_text(encoding="utf-8")

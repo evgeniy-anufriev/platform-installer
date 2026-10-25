@@ -1,12 +1,12 @@
 ---
-- name: Capture exact prior Platform HAProxy backend inventory before candidate reset
+- name: Точно собрать предыдущую внутреннюю инвентаризацию платформы HAProxy перед сбросом кандидата
   platform.haproxy.archive_managed_backends:
     name_prefix: "{{ platform_name_prefix | default('', true) }}"
     operation: capture
     config_directory: "{{ platform_haproxy_config_directory }}"
   register: _platform_haproxy_prior_backend_capture
 
-- name: Install HAProxy from configured system repositories
+- name: Установить HAProxy из настроенных системных репозиториев
   ansible.builtin.package:
     name: "{{ platform_haproxy_package }}"
     state: present
@@ -16,7 +16,7 @@
       platform_resolved_artifact_sources is not defined or
       platform_resolved_artifact_sources.haproxy.source == 'REPOSITORY'
 
-- name: Create persistent Platform HAProxy directories
+- name: Создание постоянных каталогов платформы HAProxy
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
@@ -26,13 +26,13 @@
   loop: ["{{ platform_haproxy_conf_directory }}", "{{ platform_haproxy_pki_directory }}"]
   when: (platform_haproxy_partial_deployment_id is not defined and platform_haproxy_partial_deployment_ids is not defined)
 
-- name: Require HAProxy PKI materialization
+- name: Требовать материализацию HAProxy PKI
   ansible.builtin.assert:
     that: platform_pki_selected_consumer_plan.targetDirectory is defined
     fail_msg: HAPROXY_PKI_PLAN_REQUIRED
   when: (platform_haproxy_partial_deployment_id is not defined and platform_haproxy_partial_deployment_ids is not defined)
 
-- name: Deploy HAProxy TLS PEM inputs
+- name: Развертывание входов HAProxy TLS PEM
   ansible.builtin.copy:
     src: "{{ platform_pki_selected_consumer_plan.targetDirectory }}/{{ item.name }}"
     dest: "{{ platform_haproxy_pki_directory }}/{{ item.bundle }}"
@@ -47,7 +47,7 @@
   no_log: true
   when: (platform_haproxy_partial_deployment_id is not defined and platform_haproxy_partial_deployment_ids is not defined)
 
-- name: Discover unrelated HAProxy conf.d files for complete candidate validation
+- name: Обнаружение несвязанных файлов HAProxy conf.d для полной проверки кандидатов
   ansible.builtin.find:
     paths: "{{ platform_haproxy_conf_directory }}"
     file_type: file
@@ -55,7 +55,7 @@
     excludes: [10-public.cfg, 20-local-stats.cfg, 30-backend-*.cfg, 90-stats-backends.cfg]
   register: _platform_haproxy_third_party_fragments
 
-- name: Select exact filenames owned by the partial endpoint source
+- name: Выбрать точные имена файлов, принадлежащие частичному источнику конечной точки
   ansible.builtin.set_fact:
     _platform_haproxy_partial_source_files: >-
       {{ platform_haproxy_runtime_projection.backends.backends | dict2items |
@@ -63,7 +63,7 @@
          selectattr('targetDeploymentId', 'in', _platform_haproxy_partial_ids) |
          map(attribute='configFileName') | unique | list }}
 
-- name: Build HAProxy PEM bundle atomically without logging key data
+- name: Атомарная сборка пакета HAProxy PEM без регистрации ключевых данных
   ansible.builtin.assemble:
     src: "{{ platform_haproxy_pki_directory }}"
     dest: "{{ platform_haproxy_pki_directory }}/haproxy.pem"
@@ -75,16 +75,16 @@
   register: _platform_haproxy_pem_bundle
   when: (platform_haproxy_partial_deployment_id is not defined and platform_haproxy_partial_deployment_ids is not defined)
 
-- name: Record whether HAProxy TLS material changed
+- name: Записать, изменился ли материал HAProxy TLS
   ansible.builtin.set_fact:
     platform_haproxy_tls_material_changed: "{{ _platform_haproxy_pem_bundle.changed | default(false) }}"
 
-- name: Publish participating HAProxy addresses
+- name: Публикация участвующих адресов HAProxy
   ansible.builtin.set_fact:
     platform_haproxy_participant_addresses: >-
       {{ groups['platform_targets'] | default([]) | map('extract', hostvars, 'ansible_host') | list }}
 
-- name: Select complete managed application backend file model
+- name: Выбор полной модели файла серверной части управляемого приложения
   ansible.builtin.set_fact:
     platform_haproxy_application_backends: >-
       {{ platform_haproxy_runtime_projection.backends.backends | dict2items |
@@ -98,14 +98,14 @@
          map(attribute='configFileName') | sort | list }}
   when: platform_haproxy_full_reconcile | bool
 
-- name: Retain exact proven backend inventory in base mode
+- name: Сохранение точных проверенных внутренних ресурсов в базовом режиме
   ansible.builtin.set_fact:
     platform_haproxy_application_backends: []
     platform_haproxy_managed_application_backend_files: >-
       {{ _platform_haproxy_prior_backend_capture.previousInventory | map(attribute='name') | list }}
   when: not (platform_haproxy_full_reconcile | bool)
 
-- name: Select only this source deployment backend for partial integration
+- name: Выбрать только этот исходный сервер развертывания для частичной интеграции
   ansible.builtin.set_fact:
     platform_haproxy_application_backends: >-
       {{ platform_haproxy_runtime_projection.backends.backends | dict2items |
@@ -125,16 +125,16 @@
     - not (platform_haproxy_full_reconcile | bool)
     - (platform_haproxy_partial_deployment_id is defined or platform_haproxy_partial_deployment_ids is defined)
 
-- name: Check the projected targets before candidate publication
+- name: Проверка прогнозируемых целей перед публикацией кандидата
   ansible.builtin.include_tasks: check_targets.yml
 
-- name: Reset only the temporary HAProxy candidate graph
+- name: Сброс только временного графа-кандидата HAProxy
   ansible.builtin.file:
     path: "{{ platform_haproxy_candidate_directory }}"
     state: absent
   changed_when: false
 
-- name: Create temporary HAProxy candidate workspace
+- name: Создать временное рабочее пространство-кандидат HAProxy
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
@@ -144,7 +144,7 @@
   loop: ["{{ platform_haproxy_candidate_directory }}", "{{ platform_haproxy_candidate_directory }}/conf.d"]
   changed_when: false
 
-- name: Stage unrelated HAProxy conf.d files into the candidate graph unchanged
+- name: Добавить несвязанные файлы HAProxy conf.d в граф-кандидат без изменений
   ansible.builtin.copy:
     src: "{{ item.path }}"
     dest: "{{ platform_haproxy_candidate_directory }}/conf.d/{{ item.path | basename }}"
@@ -155,7 +155,7 @@
   loop: "{{ _platform_haproxy_third_party_fragments.files | sort(attribute='path') }}"
   changed_when: false
 
-- name: Stage proven existing application backends for base provider update
+- name: Проверка существующих серверных частей приложений для обновления базового провайдера
   ansible.builtin.copy:
     src: "{{ platform_haproxy_conf_directory }}/{{ item.name }}"
     dest: "{{ platform_haproxy_candidate_directory }}/conf.d/{{ item.name }}"
@@ -171,7 +171,7 @@
       item.name not in _platform_haproxy_partial_source_files
   changed_when: false
 
-- name: Render full Platform HAProxy candidate
+- name: Отрисовка полного кандидата на платформу HAProxy
   ansible.builtin.template:
     src: "{{ item.src }}"
     dest: "{{ platform_haproxy_candidate_directory }}/{{ item.dest }}"
@@ -186,7 +186,7 @@
   changed_when: false
   when: (platform_haproxy_partial_deployment_id is not defined and platform_haproxy_partial_deployment_ids is not defined)
 
-- name: Stage unchanged provider configuration for partial backend validation
+- name: Подготовить неизмененную конфигурацию провайдера для частичной проверки серверной части
   ansible.builtin.copy:
     src: "{{ item.src }}"
     dest: "{{ platform_haproxy_candidate_directory }}/{{ item.dest }}"
@@ -200,7 +200,7 @@
   changed_when: false
   when: (platform_haproxy_partial_deployment_id is defined or platform_haproxy_partial_deployment_ids is defined)
 
-- name: Update domain precedence in the existing public frontend candidate
+- name: Обновить приоритет домена в существующем кандидате общедоступного внешнего интерфейса
   ansible.builtin.template:
     src: 10-public.cfg.j2
     dest: "{{ platform_haproxy_candidate_directory }}/conf.d/10-public.cfg"
@@ -210,7 +210,7 @@
   changed_when: false
   when: (platform_haproxy_partial_deployment_id is defined or platform_haproxy_partial_deployment_ids is defined)
 
-- name: Render one managed HAProxy application backend candidate per resolved backend
+- name: Отрисовка одного управляемого кандидата на серверную часть приложения HAProxy для каждого разрешенного серверной части
   ansible.builtin.template:
     src: 30-application-backend.cfg.j2
     dest: "{{ platform_haproxy_candidate_directory }}/conf.d/{{ item.configFileName }}"
@@ -224,7 +224,7 @@
     platform_haproxy_application_backend: "{{ item }}"
   changed_when: false
 
-- name: Validate structured global HAProxy log settings
+- name: Проверка структурированных глобальных параметров журнала HAProxy
   ansible.builtin.assert:
     that:
       - platform_haproxy_global.log is sequence
@@ -235,7 +235,7 @@
     fail_msg: HAPROXY_GLOBAL_LOG_INVALID
   loop: "{{ platform_haproxy_global.log }}"
 
-- name: Calculate deterministic candidate graph digest
+- name: Вычислить детерминированный дайджест графа-кандидата
   ansible.builtin.shell: >-
     { sha256sum haproxy.cfg; cd conf.d; find . -type f -printf '%P\0' | sort -z | xargs -0 sha256sum; } |
     sed 's#  \./#  conf.d/#' | sort |
@@ -246,7 +246,7 @@
   changed_when: false
   register: _platform_haproxy_candidate_graph_digest
 
-- name: Validate complete HAProxy candidate graph before cluster activation
+- name: Проверка полного графа-кандидата HAProxy перед активацией кластера
   ansible.builtin.command:
     argv: ["{{ platform_haproxy_binary }}", '-c', '-f', "{{ platform_haproxy_candidate_directory }}/haproxy.cfg", '-f', "{{ platform_haproxy_candidate_directory }}/conf.d"]
   changed_when: false

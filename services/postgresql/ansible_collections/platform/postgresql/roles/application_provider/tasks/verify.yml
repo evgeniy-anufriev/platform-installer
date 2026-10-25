@@ -1,5 +1,5 @@
 ---
-- name: Verify this logical scope without repair in one native session
+- name: Проверить эту логическую область без восстановления в одном собственном сеансе
   ansible.builtin.command:
     argv: [psql, -X, -h, "{{ platform_postgresql_application_socket }}", -p, "{{ application_provider_target.port }}", -U, "{{ application_provider_os_user }}", -d, postgres, -Atq, -v, ON_ERROR_STOP=1, -f, -]
     stdin: "{{ lookup('ansible.builtin.template', 'verify.sql.j2') }}"
@@ -12,7 +12,7 @@
   changed_when: false
   no_log: true
 
-- name: Verify authenticated access to declared databases
+- name: Проверка аутентифицированного доступа к объявленным базам данных
   ansible.builtin.include_tasks: login.yml
   vars:
     application_provider_probe_scope: all

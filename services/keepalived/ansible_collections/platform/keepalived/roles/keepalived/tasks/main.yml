@@ -1,9 +1,9 @@
 ---
-- name: Validate portable service resource settings
+- name: Проверка настроек ресурсов переносимой службы
   ansible.builtin.include_role:
     name: platform.core.project_settings
 
-- name: Validate resolved Keepalived artifact sources before mutation
+- name: Проверка разрешенных источников артефактов Keepalived перед изменением
   ansible.builtin.include_role:
     name: platform.core.artifact_source_gate
   vars:
@@ -14,7 +14,7 @@
     - not (platform_keepalived_verify_only | bool)
     - platform_keepalived_lifecycle_phase == 'prepare'
 
-- name: Deliver selected Keepalived offline artifacts
+- name: Доставка выбранных автономных артефактов Keepalived
   ansible.builtin.include_role:
     name: platform.core.artifact_delivery
   vars:
@@ -26,27 +26,27 @@
     - not (platform_keepalived_verify_only | bool)
     - platform_keepalived_lifecycle_phase == 'prepare'
 
-- name: Validate Keepalived role inputs
+- name: Проверка входных данных роли Keepalived
   ansible.builtin.include_tasks: validate.yml
 
-- name: Prepare and validate a Keepalived candidate
+- name: Подготовка и проверка кандидата Keepalived
   ansible.builtin.include_tasks: prepare.yml
   when:
     - not (platform_keepalived_verify_only | bool)
     - platform_keepalived_lifecycle_phase == 'prepare'
 
-- name: Install and validate the prepared Keepalived candidate
+- name: Установка и проверка подготовленного кандидата Keepalived
   ansible.builtin.include_tasks: activate.yml
   when:
     - not (platform_keepalived_verify_only | bool)
     - platform_keepalived_lifecycle_phase == 'activate'
 
-- name: Reconcile Keepalived only after cluster activation validation
+- name: Согласовать Keepalived только после проверки активации кластера
   ansible.builtin.include_tasks: reconcile.yml
   when:
     - not (platform_keepalived_verify_only | bool)
     - platform_keepalived_lifecycle_phase == 'reconcile'
 
-- name: Verify Keepalived runtime ownership read-only
+- name: Проверить принадлежность runtime-объектов Keepalived без изменений
   ansible.builtin.include_tasks: verify.yml
   when: platform_keepalived_verify_only | bool
