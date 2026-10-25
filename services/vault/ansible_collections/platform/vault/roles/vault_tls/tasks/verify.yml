@@ -1,5 +1,5 @@
 ---
-- name: Разрешить экземпляры службы Vault, локальные для этого хоста инвентаризации
+- name: Определить экземпляры Vault на узле inventory
   ansible.builtin.set_fact:
     _platform_vault_local_instances: "{{ _platform_vault_instances | selectattr('host', 'equalto', inventory_hostname) | list }}"
 

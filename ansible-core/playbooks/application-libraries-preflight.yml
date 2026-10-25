@@ -34,7 +34,7 @@
   become: true
   any_errors_fatal: true
   tasks:
-    - name: Инициализировать частные строки предварительной проверки этой операции
+    - name: Инициализировать защищённые записи предварительной проверки приложений
       ansible.builtin.set_fact:
         platform_application_preflight_jobs: []
         application_runtime_discoveries: {}

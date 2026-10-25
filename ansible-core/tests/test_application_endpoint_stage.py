@@ -93,7 +93,7 @@ class EndpointTaskTest(unittest.TestCase):
         names = {'Выбрать точные имена файлов, принадлежащие частичному источнику конечной точки',
                  'Проверка существующих серверных частей приложений для обновления базового провайдера',
                  'Сохранение точных проверенных внутренних ресурсов в базовом режиме',
-                 'Выбрать только этот исходный сервер развертывания для частичной интеграции'}
+                 'Выбрать backend развёртывания источника для частичной интеграции HAProxy'}
         tasks = yaml.safe_load((ROLE / 'tasks/partial_scope.yml').read_text()) + [task for task in tasks if task.get('name') in names]
         for task in tasks:
             if 'ansible.builtin.copy' in task:

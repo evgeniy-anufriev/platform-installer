@@ -29,7 +29,7 @@
   ansible.builtin.set_fact:
     _platform_pki_consumer_request_ids: []
 
-- name: Собрать запросы PKI, привязанные к этому потребителю службы
+- name: Собрать запросы PKI выбранного потребителя сертификатов сервиса
   ansible.builtin.set_fact:
     _platform_pki_consumer_request_ids: "{{ _platform_pki_consumer_request_ids + [item.id] }}"
   loop: "{{ _platform_pki_consumer_requests }}"
@@ -54,7 +54,7 @@
        | selectattr('deploymentId', 'equalto', _platform_pki_consumer_deployment_id)
        | list | length > 0)
 
-- name: Выбрать уникальный план PKI для этого потребителя службы
+- name: Выбрать единственный план PKI потребителя сертификатов сервиса
   ansible.builtin.set_fact:
     _platform_pki_consumer_plans: >-
       {{ (_platform_pki_consumer_available_plans

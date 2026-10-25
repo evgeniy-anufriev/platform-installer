@@ -6,7 +6,7 @@
   gather_facts: false
   any_errors_fatal: true
   tasks:
-    - name: Сброс фактов выполнения провайдера для этого вызова
+    - name: Сбросить runtime-факты предварительной проверки провайдеров приложений
       ansible.builtin.set_fact:
         platform_application_provider_runtime: {}
     - name: Один раз обнаружить каждое уникальное развертывание PostgreSQL

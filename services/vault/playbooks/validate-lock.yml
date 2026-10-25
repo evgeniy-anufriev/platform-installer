@@ -219,14 +219,14 @@
           delay: 1
 
       always:
-        - name: Остановить только точные временные службы systemd этого теста
+        - name: Остановить временные службы systemd проверки блокировки Vault
           ansible.builtin.command:
             argv: [systemctl, stop, "{{ item }}.service"]
           loop: "{{ vault_lock_test_units }}"
           changed_when: false
           failed_when: false
 
-        - name: Очистить только неудавшиеся временные записи службы systemd этого теста
+        - name: Сбросить состояние failed временных служб systemd проверки блокировки Vault
           ansible.builtin.command:
             argv: [systemctl, reset-failed, "{{ item }}.service"]
           loop: "{{ vault_lock_test_units }}"

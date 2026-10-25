@@ -14,7 +14,7 @@
         prefix: platform-vault-output-test-
       register: _vault_output_test_root
 
-    - name: Выполнить предварительную проверку вывода и всегда удалять только этот тестовый корень
+    - name: Выполнить предварительную проверку вывода Vault с очисткой выделенного тестового каталога
       block:
         - name: Привязать тест к его точному временному корню проекта
           ansible.builtin.set_fact:
@@ -72,7 +72,7 @@
             that: not _vault_output_symlink_target.stat.exists
             fail_msg: VAULT_TEST_SYMLINK_BOUNDARY_FAILED
       always:
-        - name: Удалить только этот уникальный временный тестовый проект
+        - name: Удалить выделенный временный проект проверки вывода Vault
           ansible.builtin.file:
             path: "{{ _vault_output_test_root.path }}"
             state: absent

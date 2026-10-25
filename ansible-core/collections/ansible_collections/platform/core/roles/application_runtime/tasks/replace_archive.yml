@@ -1,5 +1,5 @@
 ---
-- name: Удалить только предыдущий промежуточный каталог этого архива
+- name: Удалить предыдущий временный каталог распаковки архива приложения
   ansible.builtin.file:
     path: "{{ application_runtime_job.instancePath }}/config/.archive-stage-{{ application_archive.destination | hash('sha256') }}"
     state: absent
@@ -96,7 +96,7 @@
       ansible.builtin.fail:
         msg: APPLICATION_CONFIG_ARCHIVE_REPLACE_FAILED
 
-- name: Удалить только промежуточный каталог этого архива
+- name: Удалить временный каталог распаковки архива приложения
   ansible.builtin.file:
     path: "{{ application_runtime_job.instancePath }}/config/.archive-stage-{{ application_archive.destination | hash('sha256') }}"
     state: absent

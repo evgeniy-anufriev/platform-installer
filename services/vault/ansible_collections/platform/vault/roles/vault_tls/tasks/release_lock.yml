@@ -1,5 +1,5 @@
 ---
-- name: Остановить только держатель временной блокировки этого вызова
+- name: Остановить процесс временной блокировки теста Vault
   ansible.builtin.systemd:
     name: "{{ _platform_vault_lock_unit }}.service"
     state: stopped

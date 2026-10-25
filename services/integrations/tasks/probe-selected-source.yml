@@ -1,5 +1,5 @@
 ---
-- name: Привязать исходные последовательные входные данные зонда этого источника
+- name: Привязать исходные параметры последовательной проверки источника интеграции
   ansible.builtin.set_fact:
     _platform_integration_source_fqdns: "{{ _platform_selected_probe.fqdns }}"
     _platform_integration_probe: "{{ _platform_selected_probe.probe }}"

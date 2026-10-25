@@ -1,5 +1,5 @@
 ---
-- name: Связать платформу этого места размещения и исходные входные данные
+- name: Привязать платформу и исходные параметры размещения образа
   ansible.builtin.set_fact:
     _image_platform:
       os: "{{ ansible_facts.system | lower }}"
@@ -11,7 +11,7 @@
     _image_request_key: "{{ [application_image_input.request, application_image_input.credentials, application_image_input.account, application_image_input.configDirectory] | to_json | hash('sha256') }}"
   no_log: true
 
-- name: Повторно использовать идентичные наблюдения реестра только в рамках этой целевой подготовки
+- name: Повторно использовать совпадающие метаданные реестра в рамках подготовки образов целевого узла
   ansible.builtin.set_fact:
     _image_registry: "{{ (_image_registry_cache | default({})).get(_image_request_key, {}) }}"
   no_log: true
@@ -39,13 +39,13 @@
     - application_image_input.request.registry in (platform_application_approved_registries | default([]))
     - _image_request_key not in (_image_registry_cache | default({}))
 
-- name: Прочитать метаданные из утвержденного реестра в сетевом контексте этого узла
+- name: Прочитать метаданные утверждённого реестра через сеть целевого узла подготовки образов
   ansible.builtin.include_tasks: registry.yml
   when:
     - application_image_input.request.registry in (platform_application_approved_registries | default([]))
     - _image_request_key not in (_image_registry_cache | default({}))
 
-- name: Сохранить несекретные метаданные реестра для повторного размещения на этом целевом объекте
+- name: Сохранить несекретные метаданные реестра для повторных размещений образа на целевом узле
   ansible.builtin.set_fact:
     _image_registry_cache: "{{ (_image_registry_cache | default({})) | combine({_image_request_key: _image_registry}) }}"
   when: application_image_input.request.registry in (platform_application_approved_registries | default([]))

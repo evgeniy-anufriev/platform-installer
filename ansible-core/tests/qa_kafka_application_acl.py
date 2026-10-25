@@ -14,7 +14,7 @@ class KafkaApplicationAclTests(unittest.TestCase):
     def test_batch_selection_never_borrows_acl_from_another_resource_or_pattern(self):
         path = ROOT / 'services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/application_acl.yml'
         tasks = yaml.safe_load(path.read_text())
-        select = next(t for t in tasks if t['name'] == 'Выбрать только этот точный ресурс из основного инвентаря ACL')
+        select = next(t for t in tasks if t['name'] == 'Выбрать заданный ресурс из полного списка Kafka ACL')
         predicate = next(t for t in tasks if t['name'] == 'Выбрать недостающие точные операции ALLOW с хостом с подстановочными знаками')
         actual = '\n'.join([
             'ACLs for principal `User:qa_probe`',
@@ -73,7 +73,7 @@ class KafkaApplicationAclTests(unittest.TestCase):
 
     def test_cluster_idempotent_write_is_selected_from_full_inventory(self):
         tasks = yaml.safe_load((ROOT / 'services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/application_acl.yml').read_text())
-        select = next(t for t in tasks if t['name'] == 'Выбрать только этот точный ресурс из основного инвентаря ACL')
+        select = next(t for t in tasks if t['name'] == 'Выбрать заданный ресурс из полного списка Kafka ACL')
         predicate = next(t for t in tasks if t['name'] == 'Выбрать недостающие точные операции ALLOW с хостом с подстановочными знаками')
         actual = '\n'.join([
             'Current ACLs for resource `ResourcePattern(resourceType=TOPIC, name=*, patternType=LITERAL)`:',

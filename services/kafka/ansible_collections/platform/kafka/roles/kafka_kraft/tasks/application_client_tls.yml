@@ -1,5 +1,5 @@
 ---
-- name: Для этого вызова требуются точные авторитетные входные данные PEM
+- name: Проверить авторитетные входные файлы PEM клиента Kafka
   ansible.builtin.assert:
     that:
       - application_topic_candidate.pkiPlans | length == 1

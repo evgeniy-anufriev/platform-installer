@@ -87,7 +87,7 @@
     - _platform_integration_source_id | length > 0
     - platform_service_integration_projection.dnsDeployments | length > 0
 
-- name: Собрать только имена развертывания этого источника и включенные имена конечных точек хоста
+- name: Собрать имена развёртываний и включённых конечных точек выбранного источника интеграции
   ansible.builtin.set_fact:
     _platform_integration_source_fqdns: >-
       {{ ([ _platform_integration_endpoint_resolution.resolved_service_endpoints.endpoints[_platform_integration_source_id].fqdn ]

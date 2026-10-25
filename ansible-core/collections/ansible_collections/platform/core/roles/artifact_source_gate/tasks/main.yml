@@ -1,5 +1,5 @@
 ---
-- name: Реализовать авторизованные источники Core на этой цели
+- name: Материализовать утверждённые источники артефактов Core на целевом узле
   ansible.builtin.include_role:
     name: platform.core.artifact_source_resolution
   when: platform_artifact_source_authorities_by_deployment is defined

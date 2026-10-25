@@ -55,7 +55,7 @@
           environment: "{{ application_runtime_job.dockerEnvironment }}"
           no_log: true
       always:
-        - name: Удалить только частную стадию, выделенную этой операцией
+        - name: Удалить выделенный временный каталог доставки образа приложения
           ansible.builtin.file:
             path: "{{ application_image_stage.path }}"
             state: absent

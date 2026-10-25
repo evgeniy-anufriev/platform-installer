@@ -23,7 +23,7 @@
             {{ application_registry_environment.XDG_RUNTIME_DIR ~ '/.platform-registry-' ~
               (([application_runtime_job.projectId, application_runtime_job.libraryId, application_runtime_job.account] | to_json) | hash('sha256')) }}
       no_log: true
-    - name: Восстановить только область временной проверки подлинности этого реестра библиотеки
+    - name: Восстановить временную область аутентификации реестра библиотеки приложений
       ansible.builtin.file:
         path: "{{ application_registry_auth_stage.path }}"
         state: absent
@@ -46,7 +46,7 @@
         mode: '0600'
       changed_when: false
       no_log: true
-    - name: Ограничить аутентификацию Docker этим зондом или запросом
+    - name: Ограничить аутентификацию Docker операцией проверки или загрузки образа
       ansible.builtin.set_fact:
         application_registry_environment: "{{ application_registry_environment | combine({'DOCKER_CONFIG': application_registry_auth_stage.path}) }}"
       no_log: true

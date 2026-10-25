@@ -41,7 +41,7 @@ class BackendFileContractTests(unittest.TestCase):
     def test_source_integration_rebuilds_only_its_backend_and_preserves_others(self):
         prepare = (ROLE / "tasks" / "prepare.yml").read_text(encoding="utf-8")
         integrate = (ROLE.parents[4] / "playbooks" / "integrate.yml").read_text(encoding="utf-8")
-        self.assertIn("Выбрать только этот исходный сервер развертывания для частичной интеграции", prepare)
+        self.assertIn("Выбрать backend развёртывания источника для частичной интеграции HAProxy", prepare)
         self.assertIn("reject('in', _platform_haproxy_partial_source_files)", prepare)
         self.assertIn("platform_haproxy_partial_deployment_id", integrate)
         self.assertEqual(3, integrate.count("platform_haproxy_phase:"))

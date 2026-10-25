@@ -5,7 +5,7 @@
     fail_msg: APPLICATION_PROVIDER_IDENTIFIER_INVALID
   when: platform_kafka_application_phase == 'apply' and application_kafka_account.mode == 'managed'
 
-- name: Выбрать только этого конкретного субъекта из метаданных развертывания SCRAM
+- name: Выбрать заданного Kafka principal из метаданных развёртывания SCRAM
   ansible.builtin.set_fact:
     application_kafka_description:
       rc: "{{ application_kafka_user_inventory.rc }}"

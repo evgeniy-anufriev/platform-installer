@@ -14,7 +14,7 @@
         operations: "{{ kafka_authorization_cluster_operations }}"
   changed_when: false
 
-- name: Прочитать списки ACL этого субъекта совместимости один раз перед проверкой ресурсов
+- name: Однократно прочитать Kafka ACL совместимого principal перед проверкой ресурсов
   ansible.builtin.include_tasks: application_acls_read.yml
 
 - name: Проверить или убедитесь, что каждый ресурс совместимости с явно заданной областью

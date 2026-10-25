@@ -42,7 +42,7 @@
     _platform_kafka_advanced_config_rf: "{{ platform_kafka_advanced_config.get('offsets.topic.replication.factor', ([3, _platform_kafka_broker_instances | length] | min)) }}"
   when: platform_kafka_schema_registry_enabled
 
-- name: Выбрать экземпляры реестра на этом хосте
+- name: Выбрать экземпляры Schema Registry на узле inventory
   ansible.builtin.set_fact:
     _platform_kafka_registry_local: >-
       {{ _platform_kafka_registry_projection.instances

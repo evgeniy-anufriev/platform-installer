@@ -45,7 +45,7 @@
             loop_var: application_post_install_script
             label: "{{ application_post_install_script.libraryId }}/{{ application_post_install_script.id }}"
       always:
-        - name: Удалить только производные исходные файлы, материализованные этим вызовом терминала
+        - name: Удалить временные исходные файлы завершающего этапа установки приложений
           ansible.builtin.file:
             path: "{{ platform_application_secret_root }}/{{ item.passwordRef }}"
             state: absent

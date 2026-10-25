@@ -56,11 +56,11 @@
 - name: Разрешить установленный двоичный каталог PostgreSQL
   ansible.builtin.include_tasks: resolve_binary_directory.yml
 
-- name: Разрешить один экземпляр службы PostgreSQL, размещенный на этом хосте
+- name: Определить экземпляр PostgreSQL на узле inventory
   ansible.builtin.set_fact:
     _platform_postgresql_local_members: "{{ platform_postgresql_instances | selectattr('host', 'equalto', inventory_hostname) | list }}"
 
-- name: Требуется ровно один экземпляр службы службы PostgreSQL на этом хосте
+- name: Проверить наличие ровно одного экземпляра PostgreSQL на узле inventory
   ansible.builtin.assert:
     that: _platform_postgresql_local_members | length == 1
     fail_msg: POSTGRES_LOCAL_MEMBER_REQUIRED
@@ -149,7 +149,7 @@
     - not (platform_postgresql_verify_only | bool)
     - platform_postgresql_clean_install | bool
 
-- name: Согласовать PostgreSQL, если только это не операция ясности
+- name: Согласовать PostgreSQL за исключением операции очистки
   ansible.builtin.include_tasks:
     file: reconcile.yml
     apply:

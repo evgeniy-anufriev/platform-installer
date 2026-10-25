@@ -50,7 +50,7 @@
       ansible.builtin.include_tasks: clear.yml
 
   always:
-    - name: Снять блокировку развертывания только этого ясного вызова
+    - name: Снять блокировку развёртывания после очистки Vault
       ansible.builtin.include_tasks:
         file: release_lock.yml
         apply:

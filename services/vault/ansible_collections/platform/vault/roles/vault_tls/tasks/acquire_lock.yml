@@ -50,7 +50,7 @@
       - not _platform_vault_lock_stat.stat.exists or (_platform_vault_lock_stat.stat.isreg and not _platform_vault_lock_stat.stat.islnk and _platform_vault_lock_stat.stat.uid == 0 and (_platform_vault_lock_stat.stat.mode | int(base=8)) == 384)
     fail_msg: VAULT_LOCK_OBJECT_UNSAFE
 
-- name: Удержать общую блокировку начальной загрузки Vault для этого вызова Ansible
+- name: Удерживать общую блокировку начальной загрузки Vault до завершения playbook
   ansible.builtin.command:
     argv:
       - systemd-run

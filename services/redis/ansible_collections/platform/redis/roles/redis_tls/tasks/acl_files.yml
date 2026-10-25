@@ -25,7 +25,7 @@
   when: not (item.skipped | default(false))
   no_log: true
 
-- name: Удалить сохраненные встроенные определения пользователей по умолчанию для этого принадлежащего развертыванию
+- name: Удалить сохранённые определения стандартных пользователей управляемого развёртывания Redis
   ansible.builtin.replace:
     path: "{{ redis_member.config_directory }}/{{ item.item }}.conf"
     regexp: '(?m)^[ \t]*user[ \t]+default[ \t]+[^\r\n]*(?:\r?\n|$)'

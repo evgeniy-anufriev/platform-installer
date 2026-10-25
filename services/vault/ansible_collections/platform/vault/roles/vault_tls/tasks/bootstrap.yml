@@ -270,7 +270,7 @@
   when: _platform_vault_bootstrap_material is defined
   no_log: true
 
-- name: Выбрать сгенерированный или восстановленный токен и общие ресурсы для этого вызова
+- name: Выбрать сгенерированный или восстановленный токен и общие ресурсы начальной загрузки Vault
   ansible.builtin.set_fact:
     _platform_vault_admin_token: "{{ _platform_vault_bootstrap_material.root_token }}"
     _platform_vault_effective_unseal_keys: "{{ _platform_vault_bootstrap_material['keys'] }}"

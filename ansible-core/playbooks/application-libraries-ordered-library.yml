@@ -8,7 +8,7 @@
   run_once: true
   when: application_library_id in hostvars['localhost'].application_selection.scope.installLibraries
 
-- name: Привязать все логические экземпляры, выбранные для этой библиотеки
+- name: Привязать выбранные логические экземпляры библиотеки приложений
   ansible.builtin.set_fact:
     application_library_instance_ids: >-
       {{ hostvars['localhost'].application_runtime_inputs.jobs | selectattr('libraryId', 'equalto', application_library_id) |
@@ -16,7 +16,7 @@
          map(attribute='instanceId') | unique | list }}
   no_log: true
 
-- name: Материализовать все выбранные размещения этой библиотеки без запуска контейнеров
+- name: Материализовать выбранные размещения библиотеки приложений без запуска контейнеров
   ansible.builtin.include_role:
     name: platform.core.application_runtime
     tasks_from: apply_library
@@ -58,7 +58,7 @@
   loop_control:
     loop_var: application_runtime_job
 
-- name: Публиковать и проверять только готовые конечные точки этой библиотеки
+- name: Опубликовать и проверить готовые конечные точки библиотеки приложений
   ansible.builtin.include_tasks: ../../services/integrations/tasks/apply-source.yml
   vars:
     platform_endpoint_source_ids: >-
@@ -72,7 +72,7 @@
       selectattr('providerLibraryId', 'equalto', application_library_id) | map(attribute='providerInstanceId') | list) |
     intersect(hostvars['localhost'].platform_endpoint_sources | default({}) | list) | length > 0
 
-- name: Проверить точное расположение этой библиотеки перед следующей библиотекой
+- name: Проверить размещения библиотеки приложений перед обработкой следующей библиотеки
   ansible.builtin.include_role:
     name: platform.core.application_runtime
     tasks_from: verify

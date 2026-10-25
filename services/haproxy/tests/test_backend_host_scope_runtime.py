@@ -19,7 +19,7 @@ class BackendHostScopeRuntimeTests(unittest.TestCase):
         prepare = yaml.safe_load((ROLE / 'tasks/prepare.yml').read_text())
         names = {'Выбрать точные имена файлов, принадлежащие частичному источнику конечной точки',
                  'Сохранение точных проверенных внутренних ресурсов в базовом режиме',
-                 'Выбрать только этот исходный сервер развертывания для частичной интеграции'}
+                 'Выбрать backend развёртывания источника для частичной интеграции HAProxy'}
         tasks = yaml.safe_load((ROLE / 'tasks/partial_scope.yml').read_text())
         tasks += [task for task in prepare if task.get('name') in names]
         backends = [dict(targetDeploymentId='app-one', configFileName='30-backend-app-one.cfg', providerHostIds=['node1']),
@@ -81,7 +81,7 @@ class BackendHostScopeRuntimeTests(unittest.TestCase):
             result = subprocess.run([executable, "-i", "localhost,", str(path)],
                                     env=env, capture_output=True, text=True, timeout=30)
             self.assertNotEqual(0, result.returncode)
-            self.assertIn("Для этого развертывания требуются авторизованные источники артефактов Core", result.stdout)
+            self.assertIn("Проверить наличие утверждённых источников артефактов Core для развёртывания сервиса", result.stdout)
 
     def test_full_and_partial_models_filter_hosts_and_preserve_other_sources(self):
         executable = shutil.which("ansible-playbook")
@@ -91,7 +91,7 @@ class BackendHostScopeRuntimeTests(unittest.TestCase):
         names = {"Выбрать точные имена файлов, принадлежащие частичному источнику конечной точки",
                  "Выбор полной модели файла серверной части управляемого приложения",
                  "Сохранение точных проверенных внутренних ресурсов в базовом режиме",
-                 "Выбрать только этот исходный сервер развертывания для частичной интеграции"}
+                 "Выбрать backend развёртывания источника для частичной интеграции HAProxy"}
         selected = [task for task in tasks if task.get("name") in names]
         backend = {"targetDeploymentId": "app", "providerHostIds": ["node1", "node2"],
                    "configFileName": "30-backend-app-public.cfg"}

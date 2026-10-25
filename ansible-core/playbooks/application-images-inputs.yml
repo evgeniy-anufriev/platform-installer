@@ -30,7 +30,7 @@
       ansible.builtin.include_vars:
         file: "{{ platform_execution_bundle_root }}/manifest.yaml"
         name: platform_application_image_bundle
-    - name: Сохранить частные входные данные подготовки для этого запроса
+    - name: Сохранить защищённые параметры запроса подготовки образов приложений
       ansible.builtin.copy:
         content: "{{ platform_image_inputs.inputs | to_json }}"
         dest: "{{ platform_application_image_inputs_path }}"

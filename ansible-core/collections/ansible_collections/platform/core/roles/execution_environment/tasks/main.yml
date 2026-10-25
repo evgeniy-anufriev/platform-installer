@@ -117,7 +117,7 @@
     creates: "{{ platform_execution_ssh_key_path }}"
   when: platform_execution_technical_user | length > 0
 
-- name: Проверка местоположения полезных данных в автономном режиме, когда это необходимо
+- name: Проверить каталог обязательного offline-пакета среды исполнения
   ansible.builtin.stat:
     path: "{{ platform_execution_offline_payload_root }}"
   register: platform_execution_payload_stat

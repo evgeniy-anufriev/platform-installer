@@ -2,7 +2,7 @@
 - name: Решить ту же серверную модель для проверки конечной точки только для чтения
   ansible.builtin.include_tasks: resolve.yml
 
-- name: Выбрать серверные части этого источника на этом хосте провайдера
+- name: Выбрать backend-сервисы источника интеграции на узле провайдера
   ansible.builtin.set_fact:
     platform_haproxy_application_backends: >-
       {{ platform_haproxy_runtime_projection.backends.backends | dict2items |

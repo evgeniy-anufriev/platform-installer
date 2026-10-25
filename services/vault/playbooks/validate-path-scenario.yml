@@ -34,7 +34,7 @@
       else (_vault_test_member if vault_path_scenario.component == 'member'
       else _vault_test_member ~ '/pki') }}
 
-- name: Создать ограниченный контрольный список предков для этого сценария
+- name: Создать контрольный список родительских каталогов тестового пути Vault
   ansible.builtin.set_fact:
     _vault_test_checks: >-
       {{ [{'path': _vault_test_root, 'owner': 'root'}]
@@ -55,7 +55,7 @@
       vars:
         _platform_vault_path_checks: "{{ _vault_test_checks }}"
 
-    - name: Этот контрольный элемент модификации должен оставаться недоступным после отклонения небезопасного пути
+    - name: Проверить недоступность контрольной задачи изменения после отклонения небезопасного пути Vault
       ansible.builtin.file:
         path: "{{ _vault_test_outside }}/must-not-exist"
         state: touch

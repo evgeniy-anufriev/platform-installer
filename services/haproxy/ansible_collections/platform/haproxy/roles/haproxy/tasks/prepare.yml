@@ -105,7 +105,7 @@
       {{ _platform_haproxy_prior_backend_capture.previousInventory | map(attribute='name') | list }}
   when: not (platform_haproxy_full_reconcile | bool)
 
-- name: Выбрать только этот исходный сервер развертывания для частичной интеграции
+- name: Выбрать backend развёртывания источника для частичной интеграции HAProxy
   ansible.builtin.set_fact:
     platform_haproxy_application_backends: >-
       {{ platform_haproxy_runtime_projection.backends.backends | dict2items |

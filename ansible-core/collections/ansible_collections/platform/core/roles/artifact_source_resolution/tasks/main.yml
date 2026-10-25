@@ -1,5 +1,5 @@
 ---
-- name: Для этого развертывания требуются авторизованные источники артефактов Core
+- name: Проверить наличие утверждённых источников артефактов Core для развёртывания сервиса
   ansible.builtin.assert:
     that:
       - platform_execution_service_deployment is string

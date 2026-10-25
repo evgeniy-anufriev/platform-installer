@@ -38,7 +38,7 @@
     - kafka_member.listeners | default({}) | length > 0
     - _platform_kafka_member_named_listeners is string
 
-- name: Выбрать прослушиватели, связанные с этим экземпляром службы Kafka
+- name: Выбрать listener-ы экземпляра Kafka
   ansible.builtin.set_fact:
     _platform_kafka_member_bound_listeners: >-
       {{ _platform_kafka_member_named_listeners

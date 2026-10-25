@@ -54,7 +54,7 @@
   failed_when: false
   changed_when: false
 
-- name: Записать, загрузил ли этот запущенный экземпляр службы конечный файл
+- name: Записать факт загрузки итоговой конфигурации запущенным экземпляром Kafka
   ansible.builtin.set_fact:
     kafka_authorization_running_final: >-
       {{ kafka_authorization_config_line.rc == 0

@@ -6,12 +6,12 @@
   register: application_kafka_private
   changed_when: false
 
-- name: Выбрать путь конфигурации клиента для этого вызова
+- name: Выбрать путь временной конфигурации клиента Kafka
   ansible.builtin.set_fact:
     application_topic_client: "{{ {'path': application_kafka_private.path ~ '/client.properties'} }}"
   changed_when: false
 
-- name: Использовать существующую проекцию безопасности Kafka для этого пакета тем
+- name: Применить проекцию безопасности Kafka к пакету запрошенных тем
   block:
     - name: Подготовка частного удостоверения клиента PEM для вызова
       ansible.builtin.include_tasks: application_client_tls.yml
@@ -35,7 +35,7 @@
         loop_var: application_topic
         label: "{{ application_topic.name }}"
   always:
-    - name: Удалить только конфигурацию клиента этого вызова
+    - name: Удалить временную конфигурацию клиента Kafka для пакета тем
       ansible.builtin.file:
         path: "{{ application_kafka_private.path }}"
         state: absent

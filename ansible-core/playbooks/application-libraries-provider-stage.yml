@@ -44,7 +44,7 @@
           ansible.builtin.assert:
             that: application_provider_inputs.status == 'PASS'
             fail_msg: APPLICATION_PROVIDER_INPUT_INVALID
-        - name: Инициализировать обнаружение провайдера для этого вызова
+        - name: Инициализировать обнаружение провайдера библиотеки приложений
           ansible.builtin.set_fact:
             platform_application_provider_runtime: {}
         - name: Один раз обнаружить каждое развертывание PostgreSQL

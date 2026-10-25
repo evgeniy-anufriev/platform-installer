@@ -16,10 +16,10 @@ class Net03BindContractTests(unittest.TestCase):
     def test_apply_projects_serial_state_once_from_controller_to_roles(self):
         apply = (ROOT / "playbooks" / "apply.yml").read_text(encoding="utf-8")
         role = (ROLE / "tasks" / "main.yml").read_text(encoding="utf-8")
-        self.assertIn("Опубликовать проекцию времени выполнения BIND для этого приложения", apply)
+        self.assertIn("Опубликовать runtime-проекцию BIND для операции применения конфигурации", apply)
         self.assertEqual(1, apply.count("Persist BIND атомарно генерирует последовательное состояние"))
         self.assertIn("platform_generated_state_path", apply)
-        self.assertIn("Привязать постоянное созданное состояние BIND к идентификатору этого проекта", apply)
+        self.assertIn("Привязать сохраняемое сгенерированное состояние BIND к идентификатору проекта", apply)
         self.assertIn("Проверка загруженного сгенерированного состояния BIND перед согласованием", apply)
         self.assertIn("Проверка сгенерированного состояния BIND на соответствие опубликованному контракту проекта", apply)
         self.assertIn("hostvars['localhost'].platform_bind_runtime_projection", role)

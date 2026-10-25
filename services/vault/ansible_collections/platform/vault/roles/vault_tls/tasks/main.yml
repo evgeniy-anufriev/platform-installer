@@ -104,7 +104,7 @@
       when: not (platform_vault_verify_only | bool)
 
   always:
-    - name: Снять блокировку развертывания этого вызова на его каноническом экземпляре службы
+    - name: Снять блокировку развёртывания Vault на каноническом экземпляре сервиса
       ansible.builtin.include_tasks:
         file: release_lock.yml
         apply:

@@ -99,7 +99,7 @@
       changed_when: true
       no_log: true
   always:
-    - name: Удалить из этого вызова только этап частного восстановления
+    - name: Удалить временный каталог восстановления базы PostgreSQL
       ansible.builtin.file:
         path: "{{ application_restore_stage.path }}"
         state: absent

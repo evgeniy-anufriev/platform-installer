@@ -48,7 +48,7 @@
         _platform_bind_persisted_generated_state: >-
           {{ _platform_bind_persisted_state_file.platform_generated_state | default(platform_generated_state | default({}), true) }}
 
-    - name: Привязать постоянное созданное состояние BIND к идентификатору этого проекта
+    - name: Привязать сохраняемое сгенерированное состояние BIND к идентификатору проекта
       ansible.builtin.assert:
         that:
           - _platform_bind_persisted_generated_state.metadata | default({}) is mapping
@@ -259,7 +259,7 @@
       changed_when: false
       become: false
 
-    - name: Опубликовать проекцию времени выполнения BIND для этого приложения
+    - name: Опубликовать runtime-проекцию BIND для операции применения конфигурации
       ansible.builtin.set_fact:
         platform_bind_runtime_projection:
           zones: >-

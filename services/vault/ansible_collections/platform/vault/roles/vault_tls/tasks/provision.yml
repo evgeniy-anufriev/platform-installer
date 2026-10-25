@@ -66,7 +66,7 @@
     mode: '0755'
   when: _platform_vault_local_instances | length > 1
 
-- name: Инициализировать точный набор перезапуска экземпляра измененной службы этого хоста
+- name: Инициализировать список изменённых экземпляров Vault для перезапуска на узле
   ansible.builtin.set_fact:
     _platform_vault_restart_member_ids: []
 

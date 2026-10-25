@@ -209,7 +209,7 @@ class VaultRoleContractTests(unittest.TestCase):
         acquire = yaml.safe_load((ROLE / "tasks/acquire_lock.yml").read_text(encoding="utf-8"))
         release = yaml.safe_load((ROLE / "tasks/release_lock.yml").read_text(encoding="utf-8"))
         lock_start = next(task["ansible.builtin.command"]["argv"] for task in acquire
-                          if task["name"].startswith("Удержать общую блокировку начальной загрузки Vault для этого вызова Ansible"))
+                          if task["name"].startswith("Удерживать общую блокировку начальной загрузки Vault до завершения playbook"))
         self.assertIn("--property=Type=notify", lock_start)
         self.assertIn("--property=NotifyAccess=all", lock_start)
         self.assertIn("--no-fork", lock_start)
@@ -225,7 +225,7 @@ class VaultRoleContractTests(unittest.TestCase):
     def test_only_transient_lock_coordination_is_excluded_from_change_recap(self):
         acquire = yaml.safe_load((ROLE / "tasks/acquire_lock.yml").read_text(encoding="utf-8"))
         release = yaml.safe_load((ROLE / "tasks/release_lock.yml").read_text(encoding="utf-8"))
-        hold = next(task for task in acquire if task["name"].startswith("Удержать общую блокировку начальной загрузки Vault для этого вызова Ansible"))
+        hold = next(task for task in acquire if task["name"].startswith("Удерживать общую блокировку начальной загрузки Vault до завершения playbook"))
         self.assertIs(hold["changed_when"], False)
         self.assertNotIn("failed_when", hold)
         self.assertIn("--nonblock", hold["ansible.builtin.command"]["argv"])
@@ -427,8 +427,8 @@ class VaultRoleContractTests(unittest.TestCase):
         names = [task["name"] for task in preflight]
         self.assertIn("Проверить точные служебные файлы systemd Vault без следующих ссылок", names)
         self.assertIn("Проверка точных файлов ротации аудита Vault без перехода по ссылкам", names)
-        self.assertIn("Потребовать, чтобы существующие служебные файлы systemd содержали идентификатор этого экземпляра службы развертывания", names)
-        self.assertIn("Требовать, чтобы существующие файлы ротации содержали идентификатор этого экземпляра службы развертывания", names)
+        self.assertIn("Проверить идентификатор экземпляра Vault в существующих файлах служб systemd", names)
+        self.assertIn("Проверить идентификатор экземпляра Vault в существующих файлах ротации журналов", names)
         for template in ("vault.service.j2", "vault-audit.logrotate.j2"):
             first = (ROLE / "templates" / template).read_text(encoding="utf-8").splitlines()[0]
             self.assertEqual(first, "# {{ platform_vault_name }}-managed: {{ platform_vault_deployment_id }}/{{ vault_member.id }}")

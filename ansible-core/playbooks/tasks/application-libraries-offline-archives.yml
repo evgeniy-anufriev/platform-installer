@@ -1,5 +1,5 @@
 ---
-- name: Инициализировать выбранные записи автономного архива для этого вызова
+- name: Инициализировать выбранные записи offline-архивов библиотек приложений
   ansible.builtin.set_fact:
     application_selected_offline_archives: []
 

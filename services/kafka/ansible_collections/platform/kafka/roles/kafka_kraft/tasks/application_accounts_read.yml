@@ -15,7 +15,7 @@
     fail_msg: APPLICATION_KAFKA_ACCOUNT_UNAVAILABLE_OR_CONFLICT
   no_log: true
 
-- name: Сброс инвентаря развертывания ACL для этого вызова
+- name: Сбросить результаты чтения Kafka ACL развёртывания
   ansible.builtin.set_fact:
     application_kafka_acl_inventory: {rc: 0, stdout: ''}
   no_log: true

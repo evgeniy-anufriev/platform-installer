@@ -31,7 +31,7 @@
     mode: '0700'
   no_log: true
 
-- name: Удалить прерванные временные входные данные этого сценария перед повторным использованием
+- name: Удалить временные входные файлы прерванного сценария пакета перед повторным запуском
   ansible.builtin.file:
     path: "{{ platform_script_secret_directory }}"
     state: absent
@@ -40,7 +40,7 @@
 
 - name: Запуск сценария пакета с ограниченными частными входными данными и очисткой
   block:
-    - name: Создать только временный секретный каталог этого сценария
+    - name: Создать временный каталог секретов сценария пакета
       ansible.builtin.file:
         path: "{{ platform_script_secret_directory }}"
         state: directory
@@ -95,7 +95,7 @@
         msg: APPLICATION_SCRIPT_RECONCILED
       changed_when: (platform_script_result.stdout | from_json).changed | bool
   always:
-    - name: Удалить только временные секретные входные данные этого сценария
+    - name: Удалить временные секретные входные файлы сценария пакета
       ansible.builtin.file:
         path: "{{ platform_script_secret_directory }}"
         state: absent

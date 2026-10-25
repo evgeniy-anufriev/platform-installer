@@ -1,5 +1,5 @@
 ---
-- name: Требовать одну непустую зону и уникальных владельцев для этого обновления
+- name: Проверить непустую зону и уникальность владельцев записей обновления BIND
   ansible.builtin.assert:
     that:
       - platform_bind_a_records is sequence
@@ -9,7 +9,7 @@
       - platform_bind_a_records | map(attribute='owner') | unique | list | length == platform_bind_a_records | length
     fail_msg: BIND_DNS_A_RECORD_UPDATE_INPUT_INVALID
 
-- name: Инициализировать наблюдения этой зоны, доступные только для чтения
+- name: Инициализировать результаты проверки зоны BIND без изменений
   ansible.builtin.set_fact:
     _platform_bind_zone_observations: []
 

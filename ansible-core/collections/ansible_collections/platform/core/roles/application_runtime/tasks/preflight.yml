@@ -1,5 +1,5 @@
 ---
-- name: Привязать учетную запись этой операции и ключ обнаружения конфигурации Docker
+- name: Привязать учётную запись операции приложения и ключ обнаружения конфигурации Docker
   ansible.builtin.set_fact:
     application_discovery_key: "{{ [application_runtime_job.account, platform_application_registry_config_directory] | to_json }}"
   no_log: true
@@ -62,7 +62,7 @@
       architecture: "{{ {'x86_64': 'amd64', 'aarch64': 'arm64'}.get(application_runtime_discoveries[application_discovery_key].info.Architecture, application_runtime_discoveries[application_discovery_key].info.Architecture) }}"
   no_log: true
 
-- name: Требовать явного одобрения реестра на этом узле
+- name: Проверить явное одобрение реестра на целевом узле приложения
   ansible.builtin.assert:
     that:
       - application_runtime_job.authority.repository.reference.split('/')[0] in platform_application_approved_registries
@@ -72,7 +72,7 @@
 - name: Проверка точного манифеста платформы в утвержденном реестре
   when: application_runtime_job.authority.repository.reference is defined
   block:
-    - name: Проверка подлинности реестра области для этого зонда, доступного только для чтения
+    - name: Подготовить аутентификацию реестра для проверки образа без изменений
       ansible.builtin.include_tasks: registry_auth.yml
     - name: Проверка только утвержденного неизменяемого манифеста платформы
       ansible.builtin.command:
@@ -84,7 +84,7 @@
       failed_when: false
       no_log: true
   always:
-    - name: Удалить только временную проверку подлинности реестра этого зонда
+    - name: Удалить временную аутентификацию реестра проверки образа
       ansible.builtin.file:
         path: "{{ application_registry_auth_stage.path }}"
         state: absent
@@ -380,7 +380,7 @@
     _application_owned_ports: "{{ (((application_existing_container.stdout | from_json)[0].HostConfig.PortBindings | default({}, true) | dict2items | map(attribute='value') | flatten | select('mapping') | map(attribute='HostPort') | list) if (application_existing_container.stdout | from_json)[0].State.Running else []) if application_existing_container.rc == 0 else [] }}"
   when: item.published | string not in _application_owned_ports
 
-- name: Записать полный неизменяемый контекст предварительной проверки для этого места размещения
+- name: Записать неизменяемый контекст предварительной проверки размещения приложения
   ansible.builtin.set_fact:
     platform_application_preflight_jobs: >-
       {{ platform_application_preflight_jobs + [application_runtime_job | combine({

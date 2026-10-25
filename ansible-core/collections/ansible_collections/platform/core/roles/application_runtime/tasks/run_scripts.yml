@@ -1,5 +1,5 @@
 ---
-- name: Выполнить объявленные сценарии пакета для этого размещения и этапа
+- name: Выполнить сценарии пакета для выбранного размещения и этапа приложения
   ansible.builtin.include_role:
     name: platform.core.package_script
   vars:

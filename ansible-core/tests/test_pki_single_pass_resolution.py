@@ -571,7 +571,7 @@ class PKISinglePassResolutionTests(unittest.TestCase):
                                      "when": task["when"]} for index, task in enumerate(restarts)]
                 elif service == "vault":
                     provision = tasks(service, "provision.yml")
-                    selected = [named(provision, "Инициализировать точный набор перезапуска экземпляра измененной службы этого хоста"),
+                    selected = [named(provision, "Инициализировать список изменённых экземпляров Vault для перезапуска на узле"),
                                 named(provision, "Материализовать сертификат API, закрытый ключ и CA для каждой системной службы Vault"),
                                 named(provision, "Запись экземпляров службы, файлы PKI которых изменились")]
                     state = tasks(service, "bootstrap_follower.yml")[0]["ansible.builtin.systemd"]["state"]

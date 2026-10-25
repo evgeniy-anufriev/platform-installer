@@ -21,7 +21,7 @@
       - _platform_bind_existing_zone_file.stat.exists or not _platform_bind_existing_zone_journal.stat.exists
     fail_msg: BIND_ZONE_JOURNAL_WITHOUT_MASTER_FILE
 
-- name: Записать, имеет ли эта основная зона постоянное состояние
+- name: Записать наличие сохранённого состояния основной зоны BIND
   ansible.builtin.set_fact:
     _platform_bind_existing_primary_zone_by_deployment: >-
       {{ _platform_bind_existing_primary_zone_by_deployment |

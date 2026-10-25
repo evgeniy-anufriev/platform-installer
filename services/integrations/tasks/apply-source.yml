@@ -3,7 +3,7 @@
   ansible.builtin.set_fact:
     _platform_integration_requested_sources: "{{ platform_endpoint_source_ids | default([platform_endpoint_source_id | default(platform_execution_service_deployment | default(platform_integration_source_deployment_id | default('')))]) }}"
 
-- name: Устранить этот источник с помощью задач общего контроллера
+- name: Согласовать выбранный источник интеграции задачами общего контроллера
   ansible.builtin.include_tasks:
     file: resolve-selected-sources.yml
     apply: {delegate_to: localhost, become: false}

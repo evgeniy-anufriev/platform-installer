@@ -5,7 +5,7 @@
       - _platform_pki_effective_project_id | length > 0
     fail_msg: PKI_PROJECT_ID_REQUIRED
 
-- name: Получить системное пространство имен привязки доверия CA этого проекта
+- name: Получить системное пространство имён доверенных CA проекта
   ansible.builtin.set_fact:
     _platform_pki_trust_project_token: "{{ _platform_pki_effective_project_id | hash('sha256') }}"
     _platform_pki_trust_authority_ids: "{{ _platform_pki_local_plans | map(attribute='authorityId') | unique | list }}"

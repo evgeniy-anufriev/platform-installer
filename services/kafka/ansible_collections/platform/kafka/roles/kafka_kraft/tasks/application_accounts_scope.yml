@@ -27,7 +27,7 @@
         loop_var: application_kafka_account
         label: "{{ application_kafka_account.accountId }}"
   always:
-    - name: Удалить файлы учетных данных этого вызова
+    - name: Удалить временные файлы проверки учётных данных Vault
       ansible.builtin.file:
         path: "{{ application_kafka_private.path }}"
         state: absent

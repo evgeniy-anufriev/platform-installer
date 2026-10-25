@@ -95,7 +95,7 @@
         kafka_authorization_principal: "{{ kafka_member_principal | regex_replace('^User:', '') }}"
         kafka_authorization_cluster_operations: [ClusterAction, Describe, IdempotentWrite]
   always:
-    - name: Удалить только временные учетные данные администратора этого вызова
+    - name: Удалить временные учётные данные администратора настройки Kafka
       ansible.builtin.file:
         path: "{{ application_kafka_private.path }}"
         state: absent

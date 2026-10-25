@@ -1,7 +1,7 @@
 ---
 - name: Извлечь одно заблокированное изображение, не сохраняя переопределение доставки
   block:
-    - name: Проверка подлинности реестра сеансов для этого извлечения образа
+    - name: Подготовить сеансовую аутентификацию реестра для загрузки образа приложения
       ansible.builtin.include_tasks: registry_auth.yml
     - name: Материализовать точное переопределение извлечения реестра
       ansible.builtin.copy:
@@ -16,7 +16,7 @@
       environment: "{{ application_registry_environment }}"
       no_log: true
   always:
-    - name: Удалить только временную аутентификацию реестра этого запроса
+    - name: Удалить временную аутентификацию реестра запроса загрузки образа
       ansible.builtin.file:
         path: "{{ application_registry_auth_stage.path }}"
         state: absent

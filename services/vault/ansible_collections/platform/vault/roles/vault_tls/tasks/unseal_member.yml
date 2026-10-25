@@ -15,7 +15,7 @@
   until: _platform_vault_member_health_before is succeeded
   no_log: true
 
-- name: Требовать материалы для восстановления только в том случае, если этот экземпляр службы запечатан
+- name: Проверить наличие материалов восстановления для запечатанного экземпляра Vault
   ansible.builtin.assert:
     that:
       - _platform_vault_effective_unseal_keys | length >= platform_vault_unseal_threshold

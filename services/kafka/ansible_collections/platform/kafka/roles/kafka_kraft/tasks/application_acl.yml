@@ -1,11 +1,11 @@
 ---
-- name: Спроецировать именно этот ресурс ACL, селектор CLI
+- name: Сформировать CLI-селектор выбранного ресурса Kafka ACL
   ansible.builtin.set_fact:
     application_kafka_acl_args: "{{ ['--' ~ application_kafka_grant.resourceType] + ([] if application_kafka_grant.resourceType == 'cluster' else [application_kafka_grant.name]) + ['--resource-pattern-type', application_kafka_grant.patternType] }}"
     application_kafka_acl_operations: []
   changed_when: false
 
-- name: Выбрать только этот точный ресурс из основного инвентаря ACL
+- name: Выбрать заданный ресурс из полного списка Kafka ACL
   ansible.builtin.set_fact:
     application_kafka_acl_actual:
       stdout: "{{ application_kafka_acl_inventory.stdout | regex_findall(application_kafka_acl_block_pattern) | join('\n') }}"

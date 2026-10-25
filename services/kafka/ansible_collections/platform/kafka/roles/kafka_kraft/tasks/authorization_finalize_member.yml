@@ -1,10 +1,10 @@
 ---
-- name: Потребовать административную готовность этого вызова перед отзывом
+- name: Проверить готовность администратора Kafka перед отзывом bootstrap-доступа
   ansible.builtin.assert:
     that: kafka_authorization_admin_ready | default(false) | bool
     fail_msg: KAFKA_ADMIN_NOT_READY_FOR_FINALIZATION
 
-- name: Завершить работу над этим экземпляром службы, используя администратора в качестве единственного суперпользователя
+- name: Завершить настройку экземпляра Kafka с администратором в роли единственного суперпользователя
   ansible.builtin.lineinfile:
     path: "{{ kafka_authorization_member.config_directory }}/server.properties"
     regexp: '^super\.users='
@@ -16,19 +16,19 @@
     timeout: 1
   changed_when: false
 
-- name: Перезапустить этот экземпляр службы начальной загрузки, включая прерванную финализацию
+- name: Перезапустить bootstrap-экземпляр Kafka с учётом прерванного завершения настройки
   ansible.builtin.systemd:
     name: "{{ kafka_authorization_member.systemd_unit_name }}"
     state: restarted
 
-- name: Дождаться прослушивателей этого завершенного экземпляра службы
+- name: Дождаться готовности listener-ов экземпляра Kafka после завершения настройки
   ansible.builtin.wait_for:
     host: 127.0.0.1
     port: "{{ item }}"
     timeout: 120
   loop: "{{ kafka_authorization_member.listener_ports }}"
 
-- name: Убедиться, что этот процесс загрузил суперпользователей только с правами администратора
+- name: Проверить загрузку экземпляром Kafka конфигурации с администратором в роли единственного суперпользователя
   ansible.builtin.include_tasks: authorization_confirm.yml
 
 - name: Аутентификация администратора и проверка кворума перед отзывом следующего экземпляра службы

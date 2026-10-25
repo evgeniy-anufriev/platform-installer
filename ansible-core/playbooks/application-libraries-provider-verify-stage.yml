@@ -53,7 +53,7 @@
           loop: "{{ application_provider_inputs.jobs | selectattr('serviceType', 'equalto', 'kafka') | selectattr('accounts') | list }}"
           loop_control:
             loop_var: platform_kafka_application_job
-        - name: Сброс обнаружения PostgreSQL только для чтения для этого вызова
+        - name: Сбросить результаты обнаружения PostgreSQL перед проверкой провайдера
           ansible.builtin.set_fact:
             platform_application_provider_runtime: {}
         - name: Один раз обнаружить каждое развертывание PostgreSQL для проверки

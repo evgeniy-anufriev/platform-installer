@@ -28,7 +28,7 @@
   no_log: true
   when: application_topic_readback | default(false)
 
-- name: Выбрать точные метаданные темы из пакета этого вызова
+- name: Выбрать метаданные Kafka topic из пакета запрошенных тем
   ansible.builtin.set_fact:
     application_topic_description:
       rc: "{{ application_topic_batch_description.rc }}"
@@ -95,7 +95,7 @@
       changed_when: false
       no_log: true
       when: application_topic_readback | default(false)
-    - name: Выбрать только эффективный блок конфигурации этой темы
+    - name: Выбрать действующий блок конфигурации Kafka topic
       ansible.builtin.set_fact:
         application_topic_properties:
           rc: "{{ application_topic_batch_properties.rc }}"

@@ -49,7 +49,7 @@
         fail_msg: APPLICATION_VAULT_REQUIRED_FIELD_MISSING
       no_log: true
   always:
-    - name: Отозвать только этот токен проверки
+    - name: Отозвать токен проверки учётных данных Vault
       ansible.builtin.uri:
         url: "{{ application_runtime_job.vault.endpoint_url }}/v1/auth/token/revoke-self"
         method: POST

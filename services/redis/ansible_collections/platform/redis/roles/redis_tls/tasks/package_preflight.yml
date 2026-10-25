@@ -32,6 +32,6 @@
       - _platform_redis_default_sentinel_state.results[1].stdout | trim not in ['enabled', 'enabled-runtime']
     fail_msg: REDIS_PACKAGE_DEFAULT_UNIT_CONFLICT
 
-- name: Записать, будут ли в этом приложении добавлены службы systemd пакета Redis
+- name: Записать отсутствие пакета Redis до установки
   ansible.builtin.set_fact:
     _platform_redis_package_absent_before_apply: "{{ _platform_redis_installed_package.rc != 0 }}"

@@ -26,7 +26,7 @@
     that: _platform_haproxy_local_deployments | length == 1
     fail_msg: HAPROXY_LOCAL_DEPLOYMENT_AMBIGUOUS
 
-- name: Спроецировать настроенный профиль HAProxy TLS для этого развертывания
+- name: Сформировать настроенный профиль TLS развёртывания HAProxy
   ansible.builtin.set_fact:
     platform_haproxy_tls_profile: >-
       {{ _platform_haproxy_local_deployments[0].value.configuration.tlsProfile |

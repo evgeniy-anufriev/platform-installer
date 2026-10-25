@@ -1,5 +1,5 @@
 ---
-- name: Собрать экземпляры службы Vault, назначенные этому узлу инвентаризации
+- name: Собрать экземпляры Vault, назначенные узлу inventory
   ansible.builtin.set_fact:
     _platform_vault_local_instances: "{{ _platform_vault_instances | selectattr('host', 'equalto', inventory_hostname) | list }}"
 
@@ -148,7 +148,7 @@
   register: _platform_vault_member_marker_content
   no_log: true
 
-- name: Убедиться, что существующие каталоги данных принадлежат именно этому экземпляру службы развертывания
+- name: Проверить принадлежность каталогов данных выбранному экземпляру Vault
   ansible.builtin.assert:
     that:
       - (item.content | b64decode | from_json).apiVersion == 'platform.installer/vault-member-marker/v1alpha1'
@@ -229,7 +229,7 @@
   register: _platform_vault_rotation_file_contents
   when: item.stat.exists
 
-- name: Потребовать, чтобы существующие служебные файлы systemd содержали идентификатор этого экземпляра службы развертывания
+- name: Проверить идентификатор экземпляра Vault в существующих файлах служб systemd
   ansible.builtin.assert:
     that:
       - >-
@@ -239,7 +239,7 @@
   loop: "{{ _platform_vault_unit_file_contents.results | default([]) }}"
   no_log: true
 
-- name: Требовать, чтобы существующие файлы ротации содержали идентификатор этого экземпляра службы развертывания
+- name: Проверить идентификатор экземпляра Vault в существующих файлах ротации журналов
   ansible.builtin.assert:
     that:
       - >-
@@ -249,7 +249,7 @@
   loop: "{{ _platform_vault_rotation_file_contents.results | default([]) }}"
   no_log: true
 
-- name: Запросить точные системные службы Vault, уже управляемые этим развертыванием
+- name: Запросить службы systemd, управляемые развёртыванием Vault
   ansible.builtin.command:
     argv: [systemctl, is-active, "{{ item.instance_name }}.service"]
   loop: "{{ _platform_vault_local_instances }}"

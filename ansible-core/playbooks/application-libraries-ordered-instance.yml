@@ -1,5 +1,5 @@
 ---
-- name: Требовать полные пакеты провайдера перед запуском этого потребителя
+- name: Проверить полноту пакетов провайдеров перед запуском потребителя приложения
   ansible.builtin.assert:
     that: >-
       (application_library_id ~ '/' ~ application_instance_id) not in
@@ -27,7 +27,7 @@
   loop_control:
     loop_var: application_runtime_job
 
-- name: Активировать и проверить каждое размещение этого логического экземпляра
+- name: Активировать и проверить размещения логического экземпляра приложения
   ansible.builtin.include_role:
     name: platform.core.application_runtime
     tasks_from: activate_instance
@@ -46,7 +46,7 @@
   loop_control:
     loop_var: application_runtime_job
 
-- name: Связать все выбранные потребительские пакеты, предоставленные этим готовым экземпляром
+- name: Привязать выбранные пакеты потребителей готового экземпляра приложения
   ansible.builtin.set_fact:
     application_ready_provider_batches: >-
       {{ hostvars['localhost'].application_runtime_inputs.integrations.batches |
@@ -54,13 +54,13 @@
          selectattr('providerInstanceId', 'equalto', application_instance_id) | list }}
   no_log: true
 
-- name: Опубликовать и проверить эту используемую конечную точку провайдера раньше, чем ее потребители
+- name: Опубликовать и проверить конечную точку готового провайдера до запуска потребителей
   ansible.builtin.include_tasks: ../../services/integrations/tasks/apply-source.yml
   vars:
     platform_endpoint_source_ids: "{{ [application_instance_id] }}"
   when: application_ready_provider_batches | length > 0
 
-- name: Подготовить всех выбранных потребителей в пакетах этого готового провайдера
+- name: Подготовить выбранных потребителей пакетов готового провайдера приложения
   ansible.builtin.include_tasks: tasks/application-provider-batch.yml
   loop: "{{ application_ready_provider_batches }}"
   loop_control:

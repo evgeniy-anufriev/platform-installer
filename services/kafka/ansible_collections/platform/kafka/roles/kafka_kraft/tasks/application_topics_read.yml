@@ -1,5 +1,5 @@
 ---
-- name: Привязать точный объявленный выбор темы для этого вызова
+- name: Привязать объявленный список запрошенных тем Kafka
   ansible.builtin.set_fact:
     application_topic_batch_pattern: "{{ '^(' ~ (platform_kafka_application_job.topics | map(attribute='name') | map('regex_escape') | join('|')) ~ ')$' }}"
     application_topic_required_names: "{{ (platform_kafka_application_job.topics if platform_kafka_application_phase == 'verify' else platform_kafka_application_job.topics | selectattr('mode', 'equalto', 'existing') | list) | map(attribute='name') | list }}"
@@ -24,7 +24,7 @@
     that: application_topic_batch_description.rc == 0
     fail_msg: APPLICATION_TOPIC_DESCRIBE_FAILED
 
-- name: Прочитать эффективные конфигурации темы один раз для этого вызова
+- name: Однократно прочитать действующие конфигурации запрошенных тем Kafka
   ansible.builtin.command:
     argv: ["{{ application_topic_cli_directory }}/bin/kafka-configs.sh", --bootstrap-server, "{{ application_topic_candidate.address }}:{{ application_topic_candidate.port }}", --command-config, "{{ application_topic_client.path }}", --describe, --all, --entity-type, topics]
   register: application_topic_batch_properties

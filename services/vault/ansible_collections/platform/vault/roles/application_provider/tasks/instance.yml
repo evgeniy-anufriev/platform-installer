@@ -4,7 +4,7 @@
   vars:
     application_vault_identity_only: true
 
-- name: Согласовать документы учетной записи этого экземпляра
+- name: Согласовать документы учётных записей экземпляра Vault
   ansible.builtin.include_tasks: library.yml
 
 - name: Разрешить назначение клиента IPv4 для каждого размещения Docker
@@ -110,7 +110,7 @@
   register: application_vault_role_id
   no_log: true
 
-- name: Сохранить доставку личных удостоверений только для этого вызова
+- name: Сохранить результаты доставки учётных данных провайдера Vault в контексте операции
   ansible.builtin.set_fact:
     platform_application_vault_identities: "{{ platform_application_vault_identities | combine({(platform_vault_application_job.libraryId ~ '/' ~ platform_vault_application_job.instanceId): {'roleId': application_vault_role_id.json.data.role_id, 'providerId': platform_vault_application_job.providerId}}) }}"
   no_log: true

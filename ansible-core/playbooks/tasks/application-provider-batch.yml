@@ -8,7 +8,7 @@
   loop_control:
     loop_var: application_provider_hook
 
-- name: Согласовать этот пакет учетных записей провайдера через личные файлы
+- name: Согласовать пакет учётных записей провайдера через защищённые файлы
   when: application_provider_batch.accounts | length > 0
   block:
     - name: Разрешить обратный вызов учетной записи из конкретного пакета провайдера
@@ -20,7 +20,7 @@
       register: application_account_callback
       no_log: true
 
-    - name: Требовать защищенные исходные файлы для всех паролей в этом пакете
+    - name: Проверить защищённые исходные файлы всех паролей пакета учётных записей провайдера
       ansible.builtin.assert:
         that: >-
           {{ (hostvars['localhost'].platform_application_secret_files |
@@ -41,7 +41,7 @@
       loop: "{{ application_account_callback.requests }}"
       no_log: true
 
-    - name: Разместить этот пакет в существующем корне защищенного контроллера
+    - name: Разместить пакет учётных записей провайдера в защищённом каталоге контроллера
       ansible.builtin.copy:
         content: "{{ {'accounts': application_account_callback.accounts, 'passwords': application_batch_passwords} | to_json }}"
         dest: "{{ hostvars['localhost'].platform_application_secret_root }}/{{ application_provider_batch.id }}"
@@ -50,14 +50,14 @@
       become: false
       no_log: true
 
-    - name: Выполнить один обратный вызов для всех учетных записей этого провайдера
+    - name: Выполнить общий обратный вызов для пакета учётных записей провайдера
       ansible.builtin.include_tasks: application-provider-script.yml
       vars:
         application_provider_script: "{{ application_account_callback.script }}"
         application_provider_script_host: "{{ application_account_callback.targetHostId }}"
         application_provider_private_files: "{{ {application_provider_batch.id: hostvars['localhost'].platform_application_secret_root ~ '/' ~ application_provider_batch.id} }}"
   always:
-    - name: Удалить только этот производный пакетный ввод
+    - name: Удалить временный файл пакета учётных записей провайдера
       ansible.builtin.file:
         path: "{{ hostvars['localhost'].platform_application_secret_root }}/{{ application_provider_batch.id }}"
         state: absent

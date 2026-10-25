@@ -1,5 +1,5 @@
 ---
-- name: Сброс административного барьера готовности этого вызова
+- name: Сбросить барьер готовности администратора Kafka перед переходом авторизации
   ansible.builtin.set_fact:
     kafka_authorization_admin_ready: false
   changed_when: false

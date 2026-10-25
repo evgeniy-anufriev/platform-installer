@@ -13,7 +13,7 @@
   no_log: true
   become: false
 
-- name: Независимо привязать идентификаторы и контекст параметра для этого размещения
+- name: Привязать идентификаторы и контекст параметров размещения приложения
   ansible.builtin.set_fact:
     application_name: "{{ application_job.application.name }}"
     application_instance_id: >-
@@ -24,7 +24,7 @@
   no_log: true
   become: false
 
-- name: Сбросить ресурсы и контекст темы для этого места размещения
+- name: Сбросить ресурсы и контекст тем размещения приложения
   ansible.builtin.set_fact:
     application_topics: {}
     application_databases: {}
@@ -168,7 +168,7 @@
   no_log: true
   become: false
 
-- name: Разрешить параметры после того, как этот идентификатор места размещения станет доступен
+- name: Разрешить параметры приложения после привязки идентификатора размещения
   ansible.builtin.set_fact:
     application_parameters: >-
       {{ (_application_shared.defaults.parameters | default({}) if application_job.slot.inherit_defaults | default(true) else {}) |
@@ -180,7 +180,7 @@
   no_log: true
   become: false
 
-- name: Разрешить унаследованные настройки без явных переопределений этого приложения
+- name: Разрешить наследуемые настройки приложения без явных переопределений
   ansible.builtin.set_fact:
     application_inherited: >-
       {{ (_application_shared.defaults if application_job.slot.inherit_defaults | default(true) else {}) |
