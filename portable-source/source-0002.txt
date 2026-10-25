@@ -35974,7 +35974,7 @@ platform_bind_lifecycle_recovery: {}
          combine({platform_bind_inspected_deployment.key: _platform_bind_existing_zone_file.stat.exists | bool}) }}
 
 @@END
-@@PORTABLE {"path":"services/bind/ansible_collections/platform/bind/roles/bind/tasks/lifecycle.yml","mode":420,"size":710,"sha256":"04fdbe6b615a526aef794b5b93e3a25ce640ef1c65770cdd92fb855ed4ecec7b","index":0,"count":1,"encoding":"utf-8","payloadBytes":710}
+@@PORTABLE {"path":"services/bind/ansible_collections/platform/bind/roles/bind/tasks/lifecycle.yml","mode":420,"size":720,"sha256":"3821701b116c999f294b4d5376b4a9d21e6b16ecc549b733f7d49a7ae659beed","index":0,"count":1,"encoding":"utf-8","payloadBytes":720}
 ---
 - name: Подготовка и проверка кандидатов BIND без активации
   ansible.builtin.include_tasks: prepare.yml
@@ -35988,12 +35988,12 @@ platform_bind_lifecycle_recovery: {}
   ansible.builtin.include_tasks: verify.yml
   when: platform_bind_phase == 'verify'
 
-- name: Запустить BIND после активного барьера проверки
+- name: "Запустить BIND после проверки активной конфигурации"
   ansible.builtin.include_tasks: start.yml
   when: platform_bind_phase == 'start'
 
 @@END
-@@PORTABLE {"path":"services/bind/ansible_collections/platform/bind/roles/bind/tasks/main.yml","mode":420,"size":5430,"sha256":"492941d2f12c0cf73cd63409c722070450d32654df3b041b0b3066c4081dfc99","index":0,"count":1,"encoding":"utf-8","payloadBytes":5430}
+@@PORTABLE {"path":"services/bind/ansible_collections/platform/bind/roles/bind/tasks/main.yml","mode":420,"size":5424,"sha256":"a50831e680cbe09a3d4989437ef68fda0e0106edf6cd8c648fc1696697cc02f4","index":0,"count":1,"encoding":"utf-8","payloadBytes":5424}
 ---
 - name: Проверка настроек ресурсов переносимой службы
   ansible.builtin.include_role:
@@ -36038,7 +36038,7 @@ platform_bind_lifecycle_recovery: {}
       - platform_bind_phase in ['prepare', 'activate', 'start', 'verify']
     fail_msg: BIND_DESIRED_STATE_INVALID
 
-- name: Использовать проекцию состояния жизненного цикла серийных номеров BIND с контроллера
+- name: "Использовать рассчитанное контроллером состояние серийных номеров зон BIND"
   ansible.builtin.set_fact:
     platform_bind_runtime_projection: "{{ hostvars['localhost'].platform_bind_runtime_projection | default({}) }}"
 
@@ -36079,7 +36079,7 @@ platform_bind_lifecycle_recovery: {}
   register: _platform_bind_resolution
   run_once: true
 
-- name: Публикация решенных авторитетных зон DNS
+- name: "Сохранить рассчитанные авторитетные DNS-зоны"
   ansible.builtin.set_fact:
     platform_bind_resolved_zones: "{{ hostvars[ansible_play_hosts_all | first]._platform_bind_resolution.resolved_dns_zones.zones }}"
 
@@ -36099,7 +36099,7 @@ platform_bind_lifecycle_recovery: {}
   when: (platform_desired_state.serviceDeployments | dict2items | selectattr('value.serviceType', 'equalto', 'bind') | selectattr('key', 'in', platform_deployments) | list | length) > 0
 
 @@END
-@@PORTABLE {"path":"services/bind/ansible_collections/platform/bind/roles/bind/tasks/prepare.yml","mode":420,"size":12646,"sha256":"4d858c7a195f590ec068d66330e45675e0326a30da771b83c2049869fa97a64b","index":0,"count":1,"encoding":"utf-8","payloadBytes":12646}
+@@PORTABLE {"path":"services/bind/ansible_collections/platform/bind/roles/bind/tasks/prepare.yml","mode":420,"size":12565,"sha256":"06651b486f56fa864c32c82545dd52b9b4b6bdbd40c3546503b14b549d855d16","index":0,"count":1,"encoding":"utf-8","payloadBytes":12565}
 ---
 - name: Установить одобренные пакеты BIND из настроенных системных репозиториев
   ansible.builtin.package:
@@ -36153,7 +36153,7 @@ platform_bind_lifecycle_recovery: {}
     platform_bind_inspected_deployment: "{{ item }}"
   when: platform_deployments[item.key].roles | first == 'primary'
 
-- name: Кандидат на опции Render Platform BIND
+- name: "Сформировать файл-кандидат параметров BIND"
   ansible.builtin.template:
     src: platform-installer-options.conf.j2
     dest: "{{ platform_bind_options_include_file }}.candidate"
@@ -36179,7 +36179,7 @@ platform_bind_lifecycle_recovery: {}
   loop: "{{ platform_desired_state.serviceDeployments | dict2items | selectattr('value.serviceType', 'equalto', 'bind') | selectattr('key', 'in', platform_deployments) | list }}"
   register: _platform_bind_zones_candidate
 
-- name: Рендеринг зоны основного кандидата BIND
+- name: "Сформировать файл-кандидат основной зоны BIND"
   ansible.builtin.template:
     src: zone.j2
     dest: "{{ platform_bind_primary_zone_directory }}/{{ platform_bind_resolved_zones[item.key].zone }}.zone.candidate"
@@ -36218,7 +36218,7 @@ platform_bind_lifecycle_recovery: {}
          not _platform_bind_main_config_stats.results[1].stat.exists or
          _platform_bind_main_config_stats.results[0].stat.checksum != _platform_bind_main_config_stats.results[1].stat.checksum }}
 
-- name: Копирование конфигурации распределения BIND в полный граф-кандидат
+- name: "Скопировать штатную конфигурацию BIND в проверяемый набор файлов"
   ansible.builtin.copy:
     src: "{{ platform_bind_distribution_config }}"
     dest: "{{ platform_bind_candidate_main_config }}"
@@ -36269,7 +36269,7 @@ platform_bind_lifecycle_recovery: {}
     fail_msg: BIND_OPTIONS_ANCHOR_INVALID
   when: platform_bind_candidate_rebuild_required
 
-- name: Детерминированное внедрение возможных вариантов платформы в контекст параметров BIND
+- name: "Подключить подготовленный файл параметров в блок options BIND"
   ansible.builtin.replace:
     path: "{{ platform_bind_candidate_main_config }}"
     regexp: '(?m)^([ \t]*options[ \t]*\{[ \t]*)$'
@@ -36281,7 +36281,7 @@ platform_bind_lifecycle_recovery: {}
     src: "{{ platform_bind_candidate_main_config }}"
   register: _platform_bind_candidate_with_options
 
-- name: Утверждение вариантов-кандидатов включается непосредственно в контекст параметров
+- name: "Проверить подключение файла параметров непосредственно в блоке options"
   ansible.builtin.assert:
     that:
       - (_platform_bind_candidate_with_options.content | b64decode | regex_findall('(?m)^[ \t]*include "' ~ (platform_bind_options_include_file | regex_escape) ~ '[.]candidate";[ \t]*$') | length) == 1
@@ -36291,7 +36291,7 @@ platform_bind_lifecycle_recovery: {}
          (platform_bind_options_include_file | regex_escape) ~ '[.]candidate";')) | length == 1
     fail_msg: BIND_OPTIONS_INCLUDE_CONTEXT_INVALID
 
-- name: Детерминированное добавление потенциальных зон платформы в контекст BIND верхнего уровня
+- name: "Подключить подготовленные зоны на верхнем уровне конфигурации BIND"
   ansible.builtin.replace:
     path: "{{ platform_bind_candidate_main_config }}"
     regexp: '(?s)\Z'
@@ -36328,7 +36328,7 @@ platform_bind_lifecycle_recovery: {}
       (platform_bind_full_reconcile | default(false) | bool)
 
 @@END
-@@PORTABLE {"path":"services/bind/ansible_collections/platform/bind/roles/bind/tasks/prepare_a_record.yml","mode":420,"size":5429,"sha256":"ba1649da0d7ac0ee810f421e399aa9360cd70ce88bcc9dbda01ab651b616770c","index":0,"count":1,"encoding":"utf-8","payloadBytes":5429}
+@@PORTABLE {"path":"services/bind/ansible_collections/platform/bind/roles/bind/tasks/prepare_a_record.yml","mode":420,"size":5414,"sha256":"74d0f05631611ee5134fdb96b18589e788def822dc4a52949895ee60858f487b","index":0,"count":1,"encoding":"utf-8","payloadBytes":5414}
 ---
 - name: Проверка разрешенных входных данных обновления A-записи DNS
   ansible.builtin.assert:
@@ -36361,7 +36361,7 @@ platform_bind_lifecycle_recovery: {}
     loop_var: platform_bind_a_record_address
     label: Validate DNS A-record IPv4 address
 
-- name: Прочитать текущую авторитетную запись A из локальной первичной записи
+- name: "Прочитать текущую A-запись с локального первичного DNS-сервера"
   ansible.builtin.command:
     argv:
       - dig
@@ -36450,16 +36450,16 @@ platform_bind_lifecycle_recovery: {}
     - platform_deployments[item.1[0].bindDeploymentId].roles | default([]) == ['primary']
 
 @@END
-@@PORTABLE {"path":"services/bind/ansible_collections/platform/bind/roles/bind/tasks/reconcile_primary_zone.yml","mode":420,"size":5771,"sha256":"3fe2d0640e4e46b990b129b755c62d663b85d8a21785787224956c37347defc3","index":0,"count":1,"encoding":"utf-8","payloadBytes":5771}
+@@PORTABLE {"path":"services/bind/ansible_collections/platform/bind/roles/bind/tasks/reconcile_primary_zone.yml","mode":420,"size":5725,"sha256":"b715452fc79b8eb956868d8a806b15cdc656cfa185a240199448392ff98023dc","index":0,"count":1,"encoding":"utf-8","payloadBytes":5725}
 ---
 - name: Определить служебный runtime-маркер основной зоны BIND
   ansible.builtin.set_fact:
     _platform_bind_zone_recovery_marker: >-
       {{ platform_bind_recovery_directory }}/{{ platform_bind_runtime_projection.generatedState.metadata.projectId | hash('sha256') }}/{{ platform_bind_resolved_zones[platform_bind_inspected_deployment.key].zone | hash('sha256') }}.yml
 
-- name: Заморозить и заменить одну проверенную основную зону защитой от восстановления
+- name: "Заморозить и заменить основную зону с возможностью восстановления после сбоя"
   block:
-    - name: Создать защищённый runtime-каталог восстановления PostgreSQL
+    - name: "Создать защищённый каталог восстановления зоны BIND"
       ansible.builtin.file:
         path: "{{ _platform_bind_zone_recovery_marker | dirname }}"
         state: directory
@@ -36484,7 +36484,7 @@ platform_bind_lifecycle_recovery: {}
         argv: ["{{ platform_bind_rndc_binary }}", freeze, "{{ platform_bind_resolved_zones[platform_bind_inspected_deployment.key].zone }}"]
       changed_when: true
 
-    - name: Снова прочитать основной серийный номер SOA после того, как зависание закрывает гонку обновлений
+    - name: "Повторно прочитать SOA serial после блокировки динамических обновлений зоны"
       ansible.builtin.command:
         argv: [dig, "@127.0.0.1", "{{ platform_bind_resolved_zones[platform_bind_inspected_deployment.key].zone }}", SOA, +short]
       changed_when: false
@@ -36652,9 +36652,9 @@ platform_bind_lifecycle_recovery: {}
   when: platform_deployments[platform_bind_base_zone.key].roles | first == 'primary'
 
 @@END
-@@PORTABLE {"path":"services/bind/ansible_collections/platform/bind/roles/bind/tasks/update_a_record.yml","mode":420,"size":256,"sha256":"d71434599086a75e72dc023111106f8e2a23dac932294cd31e985fe7ac036237","index":0,"count":1,"encoding":"utf-8","payloadBytes":256}
+@@PORTABLE {"path":"services/bind/ansible_collections/platform/bind/roles/bind/tasks/update_a_record.yml","mode":420,"size":269,"sha256":"f7f927fc340dd2be93e49ba7179959517d545c7372b33ce5b21fdb719cad3c74","index":0,"count":1,"encoding":"utf-8","payloadBytes":269}
 ---
-- name: Применить синглтон через одно и то же обновление защищенной зоны
+- name: "Обновить одну запись через общий механизм защищённого обновления зоны"
   ansible.builtin.include_tasks: update_a_records.yml
   vars:
     platform_bind_a_records: "{{ [platform_bind_a_record] }}"
@@ -36944,11 +36944,11 @@ platforms:
 }
 
 @@END
-@@PORTABLE {"path":"services/bind/playbooks/apply.yml","mode":420,"size":18373,"sha256":"2532a938ac0e5d29e285c3b997791677346bbd058bfb45a6448f7be6a46b84c5","index":0,"count":1,"encoding":"utf-8","payloadBytes":18373}
+@@PORTABLE {"path":"services/bind/playbooks/apply.yml","mode":420,"size":18183,"sha256":"169941b167fa1a731cf2bfde4fa92b62537edd017798f6d7bf5d2b344722ddf3","index":0,"count":1,"encoding":"utf-8","payloadBytes":18183}
 ---
 - import_playbook: ../../../ansible-core/playbooks/validate.yml
 
-- name: Материализовать состояние последовательного жизненного цикла BIND
+- name: "Подготовить состояние серийных номеров зон BIND"
   hosts: localhost
   connection: local
   gather_facts: false
@@ -37029,7 +37029,7 @@ platforms:
       become: false
       when: _platform_bind_persisted_generated_state | length > 0
 
-    - name: Загрузить опубликованный каталог сервисов для последовательного разрешения BIND
+    - name: "Загрузить каталог сервисов для расчёта серийных номеров зон BIND"
       ansible.builtin.include_vars:
         file: "{{ platform_service_catalog_path }}"
         name: _platform_bind_catalog_file
@@ -37056,7 +37056,7 @@ platforms:
         endpoint_sources: "{{ hostvars['localhost'].platform_endpoint_sources | default({}) }}"
       register: platform_bind_resolution
 
-    - name: Разрешить только базовый контент DNS для обычного BIND. Применить
+    - name: "Рассчитать базовые DNS-записи для обычного применения BIND"
       platform.core.resolve_dns_zones:
         desired_state: "{{ platform_desired_state }}"
         service_catalog: "{{ _platform_bind_catalog_file.platform_service_catalog | default(_platform_bind_catalog_file, true) }}"
@@ -37110,7 +37110,7 @@ platforms:
         label: "{{ item.item.key }}"
       when: platform_bind_full_reconcile | default(false) | bool
 
-    - name: Запись наблюдаемых в реальном времени первичных сериалов SOA
+    - name: "Сохранить текущие серийные номера SOA первичных зон"
       ansible.builtin.set_fact:
         _platform_bind_observed_live_serials: >-
           {{ _platform_bind_observed_live_serials |
@@ -37128,7 +37128,7 @@ platforms:
       register: _platform_bind_lifecycle_recovery
       when: platform_bind_lifecycle_recovery | default({}) | length > 0
 
-    - name: Инициализировать созданный конверт состояния для последовательного жизненного цикла BIND
+    - name: "Инициализировать структуру служебного состояния серийных номеров BIND"
       ansible.builtin.set_fact:
         _platform_bind_next_state: >-
           {{ {
@@ -37156,7 +37156,7 @@ platforms:
         label: "{{ item.key }}"
       when: platform_bind_reuse_existing_generated_state | default(false) | bool
 
-    - name: Материализация детерминированных серийных записей BIND
+    - name: "Рассчитать воспроизводимые серийные номера зон BIND"
       ansible.builtin.set_fact:
         _platform_bind_next_state: >-
           {{ _platform_bind_next_state |
@@ -37217,14 +37217,14 @@ platforms:
             {{ platform_generated_state if (platform_bind_reuse_existing_generated_state | default(false) | bool)
                else _platform_bind_next_state }}
 
-    - name: Создать постоянный каталог сгенерированного состояния для последовательного жизненного цикла BIND
+    - name: "Создать каталог служебного состояния серийных номеров BIND"
       ansible.builtin.file:
         path: "{{ _platform_bind_generated_state_path | dirname }}"
         state: directory
         mode: '0700'
       when: not (platform_bind_reuse_existing_generated_state | default(false) | bool)
 
-    - name: Persist BIND атомарно генерирует последовательное состояние
+    - name: "Атомарно сохранить служебное состояние серийных номеров BIND"
       ansible.builtin.copy:
         content: "{{ {'platform_generated_state': _platform_bind_next_state} | to_nice_yaml(indent=2) }}"
         dest: "{{ _platform_bind_generated_state_path }}"
@@ -37264,11 +37264,11 @@ platforms:
       platform_bind_phase: start
 
 @@END
-@@PORTABLE {"path":"services/bind/playbooks/integrate.yml","mode":420,"size":486,"sha256":"728acec4cc6436c025b6ed33594ec13bdeb7a9cb4a66455d5a398cd31e7ca9d1","index":0,"count":1,"encoding":"utf-8","payloadBytes":486}
+@@PORTABLE {"path":"services/bind/playbooks/integrate.yml","mode":420,"size":466,"sha256":"abf505be414766aada6eb1824aae6d21b56de35e3eb447303a6e4a685f91d98c","index":0,"count":1,"encoding":"utf-8","payloadBytes":466}
 ---
 # Exact source-owned DNS updates. The caller passes Core-resolved records;
 # this entrypoint never rebuilds or deletes the complete zone model.
-- name: Опубликовать выбранные исходные записи DNS на их основных элементах BIND
+- name: "Опубликовать выбранные DNS-записи на первичных серверах BIND"
   hosts: platform_targets
   become: true
   gather_facts: false
@@ -37904,7 +37904,7 @@ platform_clickhouse_application_credential_files: "{{ platform_clickhouse_secret
     platform_clickhouse_application_phase: resources
 
 @@END
-@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/roles/application_provider/tasks/scope.yml","mode":420,"size":3973,"sha256":"14dfcc95f726188811b19a20641ec2028053d0f192de6441cb2b9a46c3fc28cf","index":0,"count":1,"encoding":"utf-8","payloadBytes":3973}
+@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/roles/application_provider/tasks/scope.yml","mode":420,"size":3964,"sha256":"65e21295b817968cd022ab38eeae93b245ac21cd67d953581f68fbbe9c135749","index":0,"count":1,"encoding":"utf-8","payloadBytes":3964}
 ---
 - name: Требовать защищенные учетные данные для ограниченной области ClickHouse
   ansible.builtin.assert:
@@ -37917,11 +37917,11 @@ platform_clickhouse_application_credential_files: "{{ platform_clickhouse_secret
     fail_msg: APPLICATION_PROVIDER_SECRET_FILE_INVALID
   no_log: true
 
-- name: Инициализация отображаемых объявлений таблиц библиотеки
+- name: "Инициализировать список подготовленных описаний таблиц библиотеки"
   ansible.builtin.set_fact:
     clickhouse_application_tables: []
 
-- name: Отобразить объявленные таблицы с помощью обычных шаблонов Ansible
+- name: "Сформировать описания таблиц по шаблонам Ansible"
   ansible.builtin.set_fact:
     clickhouse_application_tables: "{{ clickhouse_application_tables + [{'database': item.0.name, 'definition': item.1, 'sql': lookup('ansible.builtin.template', 'application-table.sql.j2')}] }}"
   loop: "{{ platform_clickhouse_application_job.databases | subelements('tables', skip_missing=true) }}"
@@ -38027,9 +38027,9 @@ platform_clickhouse_expected_rpm_digests:
   clickhouse-client: 796874f358d73b96ff8bf04c5aabbf474ea020303eb7d113f1009961739e41c7
 
 @@END
-@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/roles/clickhouse_tls/tasks/install_package.yml","mode":420,"size":3901,"sha256":"0da2dbad8404519928fc7339e40dfb3574937d1d0bb05d9577891aa48c5ef7ab","index":0,"count":1,"encoding":"utf-8","payloadBytes":3901}
+@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/roles/clickhouse_tls/tasks/install_package.yml","mode":420,"size":3911,"sha256":"036b4a0b4add3b01cf77a30f4ca978a0d16ce43f766a1ec0195d1396fdcb69d7","index":0,"count":1,"encoding":"utf-8","payloadBytes":3911}
 ---
-- name: Доказать точный входной сигнал прямого Ansible RPM, когда авторитет источника Core не существует
+- name: "Проверить локальный RPM для прямого запуска Ansible без выбора источника через Core"
   ansible.builtin.stat:
     path: "{{ platform_clickhouse_rpm_paths[clickhouse_package_id] | default('') }}"
     checksum_algorithm: sha256
@@ -38052,7 +38052,7 @@ platform_clickhouse_expected_rpm_digests:
   when: platform_resolved_artifact_sources is not defined
   no_log: true
 
-- name: Создать узкую прямую сцену Ansible ClickHouse RPM
+- name: "Создать временный каталог RPM ClickHouse для прямого запуска Ansible"
   ansible.builtin.file:
     path: /var/tmp/platform-installer/artifacts/clickhouse-direct
     state: directory
@@ -38087,7 +38087,7 @@ platform_clickhouse_expected_rpm_digests:
   when: platform_resolved_artifact_sources is not defined
   no_log: true
 
-- name: Установить точный утвержденный локальный RPM без резервного хранилища
+- name: "Установить проверенный локальный RPM без обращения к репозиториям"
   ansible.builtin.dnf:
     name: >-
       {{ (platform_offline_artifact_paths[clickhouse_package_id] | first)
@@ -38112,7 +38112,7 @@ platform_clickhouse_expected_rpm_digests:
     - platform_resolved_artifact_sources[clickhouse_package_id].source == 'REPOSITORY'
 
 @@END
-@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/roles/clickhouse_tls/tasks/main.yml","mode":420,"size":2399,"sha256":"c6f632098c9d1c2c3c0adabd2598fb545fb7a79e119a7bffd44aef0e9e33d166","index":0,"count":1,"encoding":"utf-8","payloadBytes":2399}
+@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/roles/clickhouse_tls/tasks/main.yml","mode":420,"size":2404,"sha256":"bace33bdb958c163cb21c10e0858a82eabda72f89abf6ed563fbd700020c63d3","index":0,"count":1,"encoding":"utf-8","payloadBytes":2404}
 ---
 - name: Проверка настроек ресурсов переносимой службы
   ansible.builtin.include_role:
@@ -38139,7 +38139,7 @@ platform_clickhouse_expected_rpm_digests:
     - platform_resolved_artifact_sources is defined or (platform_artifact_source_authority_active | default(false))
     - not (platform_clickhouse_verify_only | bool)
 
-- name: Решить точный материал ClickHouse TLS
+- name: "Выбрать TLS-файлы ClickHouse по плану PKI"
   ansible.builtin.include_tasks: resolve_tls.yml
 
 - name: Проверка владения пакетом ClickHouse и экземпляром службы перед применением
@@ -38274,7 +38274,7 @@ platform_clickhouse_expected_rpm_digests:
   when: platform_clickhouse_mode == 'raft-ha'
 
 @@END
-@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/roles/clickhouse_tls/tasks/path_safety.yml","mode":420,"size":5618,"sha256":"1abbae0144fdc34b1b2316e9a806e1476dcfda48dcc4ccf0d16bdd01216e636b","index":0,"count":1,"encoding":"utf-8","payloadBytes":5618}
+@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/roles/clickhouse_tls/tasks/path_safety.yml","mode":420,"size":5613,"sha256":"378ae96352820d5a23a1b968b458af6436356197cf0324fe46215d103d9f83b3","index":0,"count":1,"encoding":"utf-8","payloadBytes":5613}
 ---
 - name: Ограничить управляемые корневые каталоги ClickHouse одним компонентом под доверенными родительскими каталогами
   ansible.builtin.assert:
@@ -38284,7 +38284,7 @@ platform_clickhouse_expected_rpm_digests:
       - platform_clickhouse_log_root is match('^/var/log/[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$')
     fail_msg: CLICKHOUSE_MANAGED_ROOT_UNSAFE
 
-- name: Защита корневого происхождения данных ClickHouse перед изменением
+- name: "Проверить безопасность родительских каталогов данных ClickHouse до изменений"
   ansible.builtin.include_role:
     name: platform.core.managed_data_path_guard
   vars:
@@ -38353,7 +38353,7 @@ platform_clickhouse_expected_rpm_digests:
   loop_control:
     label: "{{ item.item }}"
 
-- name: Проверка экземпляра службы, путей управления доступом SQL и частных путей PKI без следующих ссылок
+- name: "Проверить пути экземпляра, SQL-доступа и PKI без перехода по символическим ссылкам"
   ansible.builtin.stat:
     path: "{{ item.0.config_directory ~ '/pki' if item.1 == 'config_pki' else (item.0.data_directory ~ '/access' if item.1 == 'access_control_directory' else item.0[item.1]) }}"
     follow: false
@@ -38377,7 +38377,7 @@ platform_clickhouse_expected_rpm_digests:
     label: "{{ item.item.0.id }}/{{ item.item.1 }}"
 
 @@END
-@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/roles/clickhouse_tls/tasks/preflight.yml","mode":420,"size":11363,"sha256":"02aad6375fa8a99124abe49833506f4ffed4cfa7333d7fdaed2879bf2aca8014","index":0,"count":1,"encoding":"utf-8","payloadBytes":11363}
+@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/roles/clickhouse_tls/tasks/preflight.yml","mode":420,"size":11337,"sha256":"3686a36196aba56d1971b836301880dfbc2c9a5e39604544e318255c91cebb5a","index":0,"count":1,"encoding":"utf-8","payloadBytes":11337}
 ---
 - name: Доказать происхождение управляемого пути ClickHouse перед привилегированной модификацией
   ansible.builtin.include_tasks: path_safety.yml
@@ -38412,7 +38412,7 @@ platform_clickhouse_expected_rpm_digests:
   changed_when: false
   failed_when: false
 
-- name: Отказаться от смены хоста с активными стандартными службами systemd ClickHouse
+- name: "Отклонить установку при активных штатных службах ClickHouse"
   ansible.builtin.assert:
     that: "'active' not in _platform_clickhouse_stock_units.stdout_lines"
     fail_msg: CLICKHOUSE_FOREIGN_UNIT_ACTIVE
@@ -38601,7 +38601,7 @@ platform_clickhouse_expected_rpm_digests:
   when: _platform_clickhouse_new_member_ports | length > 0
 
 @@END
-@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/roles/clickhouse_tls/tasks/provision.yml","mode":420,"size":8954,"sha256":"2d688ebe636ced95cb3362185df72db56b674b5688f4187173d83e8e90255775","index":0,"count":1,"encoding":"utf-8","payloadBytes":8954}
+@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/roles/clickhouse_tls/tasks/provision.yml","mode":420,"size":8852,"sha256":"41abd90e1d0f9f8877d7a3f11475af255e6cc37cde19de2aec09391058cd2da4","index":0,"count":1,"encoding":"utf-8","payloadBytes":8852}
 ---
 - name: Создать частную сервисную группу ClickHouse
   ansible.builtin.group:
@@ -38694,7 +38694,7 @@ platform_clickhouse_expected_rpm_digests:
   register: _platform_clickhouse_tls_copies
   no_log: true
 
-- name: Отобразить средство проверки пароля и политику пользователя по умолчанию без открытого текста
+- name: "Сформировать настройки пользователя по умолчанию с хешем пароля"
   ansible.builtin.template:
     src: users.xml.j2
     dest: "{{ item.config_directory }}/users.xml"
@@ -38763,7 +38763,7 @@ platform_clickhouse_expected_rpm_digests:
   register: _platform_clickhouse_keeper_units
   when: platform_clickhouse_mode == 'raft-ha'
 
-- name: Перезагрузить systemd только после изменения службы экземпляра службы systemd
+- name: "Перечитать конфигурацию systemd после изменения файлов служб"
   ansible.builtin.systemd:
     daemon_reload: true
   when: >-
@@ -38777,7 +38777,7 @@ platform_clickhouse_expected_rpm_digests:
       {{ (_platform_clickhouse_tls_copies.results | selectattr('changed', 'equalto', true) | list | length > 0)
          or (_platform_clickhouse_users_configs.results | selectattr('changed', 'equalto', true) | list | length > 0) }}
 
-- name: Запуск или перезапуск изолированных избирателей Keeper перед серверами ClickHouse
+- name: "Запустить или перезапустить голосующие узлы Keeper перед ClickHouse"
   ansible.builtin.systemd:
     name: "{{ clickhouse_member.keeper_unit_name }}"
     enabled: true
@@ -38912,7 +38912,7 @@ platform_clickhouse_expected_rpm_digests:
     fail_msg: CLICKHOUSE_FOREIGN_UNIT_ACTIVE
 
 @@END
-@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/roles/clickhouse_tls/tasks/validate.yml","mode":420,"size":4360,"sha256":"f6bffcb53939e631e37fa6c2b1500bde6170c6d31056d1a9e70ed6c60c29cd7b","index":0,"count":1,"encoding":"utf-8","payloadBytes":4360}
+@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/roles/clickhouse_tls/tasks/validate.yml","mode":420,"size":4371,"sha256":"02a7b0ecd4b7ab7593d6c92b59be63dd175ea9855c722b50a5d6db1eacbe7a11","index":0,"count":1,"encoding":"utf-8","payloadBytes":4371}
 ---
 - name: Проверка закрытых входных данных развертывания ClickHouse
   ansible.builtin.assert:
@@ -38984,7 +38984,7 @@ platform_clickhouse_expected_rpm_digests:
     _platform_clickhouse_default_password: "{{ lookup('ansible.builtin.file', platform_clickhouse_secret_files[platform_clickhouse_default_credential.passwordSecretRef], lstrip=False, rstrip=False) }}"
   no_log: true
 
-- name: Запрос непустого пароля UTF-8 с точной привязкой к байтам
+- name: "Проверить непустой пароль UTF-8 без изменения его содержимого"
   ansible.builtin.assert:
     that:
       - _platform_clickhouse_default_password | string | length > 0
@@ -39020,7 +39020,7 @@ platform_clickhouse_expected_rpm_digests:
   when: item.0.id < item.1.id
 
 @@END
-@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/roles/clickhouse_tls/tasks/verify.yml","mode":420,"size":3272,"sha256":"7abe6a3b92ec621043ade707787da0a21fa967b8959751c420e0a64377ee10c8","index":0,"count":1,"encoding":"utf-8","payloadBytes":3272}
+@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/roles/clickhouse_tls/tasks/verify.yml","mode":420,"size":3256,"sha256":"5bcbf2fbefc1e9a1254b18ba3437eb1629fcef64398e93829d7f210c0dde19a7","index":0,"count":1,"encoding":"utf-8","payloadBytes":3256}
 ---
 - name: Наблюдать точную системную службу сервера ClickHouse
   ansible.builtin.command:
@@ -39043,7 +39043,7 @@ platform_clickhouse_expected_rpm_digests:
   changed_when: false
   failed_when: false
 
-- name: Запрос ожидаемого состояния процесса Keeper для конкретного режима
+- name: "Проверить состояние Keeper в соответствии с режимом ClickHouse"
   ansible.builtin.assert:
     that: >-
       (platform_clickhouse_mode == 'raft-ha' and _platform_clickhouse_keeper_status.stdout == 'active') or
@@ -39499,7 +39499,7 @@ tags: [dns, split-dns, systemd-resolved, networkmanager]
 platform_dns_client_phase: apply
 
 @@END
-@@PORTABLE {"path":"services/dns-client/ansible_collections/platform/dns_client/roles/dns_client/tasks/discover.yml","mode":420,"size":3579,"sha256":"0f6072505519c70f3ed4f2a221d7bf50e23989e905ce03214c2b7ceecda85685","index":0,"count":1,"encoding":"utf-8","payloadBytes":3579}
+@@PORTABLE {"path":"services/dns-client/ansible_collections/platform/dns_client/roles/dns_client/tasks/discover.yml","mode":420,"size":3618,"sha256":"c5f9a7f4cc941dddd8a44a8489a5e77bbc8c61e9d71b20726dade171b068f45a","index":0,"count":1,"encoding":"utf-8","payloadBytes":3618}
 ---
 - name: Проверка состояния загрузки службы systemd systemd-resolved
   ansible.builtin.command:
@@ -39529,13 +39529,13 @@ platform_dns_client_phase: apply
   changed_when: false
   failed_when: false
 
-- name: Проверка владения конфигурацией преобразователя
+- name: "Проверить, какой сервис управляет конфигурацией DNS-резолвера"
   ansible.builtin.stat:
     path: /etc/resolv.conf
     follow: false
   register: _platform_dns_client_resolv_conf
 
-- name: Прочитать ссылку на конфигурацию преобразователя без изменений
+- name: "Прочитать символическую ссылку конфигурации DNS-резолвера без изменений"
   ansible.builtin.command:
     argv: [readlink, /etc/resolv.conf]
   register: _platform_dns_client_resolv_link
@@ -39732,7 +39732,7 @@ platform_dns_client_phase: apply
     - _platform_dns_client_local_placement.networkManagerConnection is not defined
 
 @@END
-@@PORTABLE {"path":"services/dns-client/ansible_collections/platform/dns_client/roles/dns_client/tasks/resolved.yml","mode":420,"size":1559,"sha256":"0919d576f6b13a7a69c58fd19d67c3c3fa240776bc7f80787f890a22e039321a","index":0,"count":1,"encoding":"utf-8","payloadBytes":1559}
+@@PORTABLE {"path":"services/dns-client/ansible_collections/platform/dns_client/roles/dns_client/tasks/resolved.yml","mode":420,"size":1602,"sha256":"c40c9e11bc6a7281e522189db5e6313402f7111be19ea537f60b1b3c58ef81a5","index":0,"count":1,"encoding":"utf-8","payloadBytes":1602}
 ---
 - name: Проверка производных входных данных systemd-resolved, разделенных DNS
   ansible.builtin.assert:
@@ -39742,7 +39742,7 @@ platform_dns_client_phase: apply
       - platform_dns_client_local.managedZone is match('^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$')
     fail_msg: DNS_CLIENT_RESOLVED_INPUT_INVALID
 
-- name: Создать каталог вставки платформы systemd-resolved
+- name: "Создать каталог дополнительных настроек systemd-resolved"
   ansible.builtin.file:
     path: /etc/systemd/resolved.conf.d
     state: directory
@@ -39750,7 +39750,7 @@ platform_dns_client_phase: apply
     group: root
     mode: '0755'
 
-- name: Разделение платформы рендеринга DNS systemd-resolved
+- name: "Сформировать настройки раздельного DNS для systemd-resolved"
   ansible.builtin.template:
     src: platform-installer.conf.j2
     dest: "/etc/systemd/resolved.conf.d/{{ (platform_name_prefix | default('') ~ '-') if (platform_name_prefix | default('')) else '' }}installer.conf"
@@ -39765,14 +39765,14 @@ platform_dns_client_phase: apply
     enabled: true
     state: started
 
-- name: Перезапустить systemd-resolved после изменения вставки платформы
+- name: "Перезапустить systemd-resolved после изменения дополнительных настроек"
   ansible.builtin.systemd:
     name: systemd-resolved.service
     state: restarted
   when: _platform_dns_client_resolved_dropin.changed
 
 @@END
-@@PORTABLE {"path":"services/dns-client/ansible_collections/platform/dns_client/roles/dns_client/tasks/verify.yml","mode":420,"size":3321,"sha256":"62301972d278e00564f7b29d059297bd46740bb0c4b9f536f89f11cca6c1ffad","index":0,"count":1,"encoding":"utf-8","payloadBytes":3321}
+@@PORTABLE {"path":"services/dns-client/ansible_collections/platform/dns_client/roles/dns_client/tasks/verify.yml","mode":420,"size":3287,"sha256":"e6c85cf9e77b2b4d7ba59ec66356ad4255387c86e5d1c2accb51286c6d879461","index":0,"count":1,"encoding":"utf-8","payloadBytes":3287}
 ---
 - name: Убедиться, что systemd-resolved активен
   ansible.builtin.command:
@@ -39828,7 +39828,7 @@ platform_dns_client_phase: apply
   loop: "{{ platform_dns_client_local.servers }}"
   when: platform_dns_client_backend == 'NetworkManager'
 
-- name: Разрешить хост управляемого проекта с помощью обычного системного преобразователя
+- name: "Проверить разрешение имени узла проекта системным DNS-резолвером"
   ansible.builtin.command:
     argv: [getent, hosts, "{{ platform_dns_client_local.hostRecord }}"]
   changed_when: false
@@ -40025,7 +40025,7 @@ platform_docker_packages:
     daemon_reload: true
 
 @@END
-@@PORTABLE {"path":"services/docker/ansible_collections/platform/docker/roles/docker_rootless/tasks/clear_entry.yml","mode":420,"size":4715,"sha256":"8e8ffb9bdd46f43606171634b7558fcdb93448bac52c8fb1344696002355b961","index":0,"count":1,"encoding":"utf-8","payloadBytes":4715}
+@@PORTABLE {"path":"services/docker/ansible_collections/platform/docker/roles/docker_rootless/tasks/clear_entry.yml","mode":420,"size":4711,"sha256":"407f6a345bda08b46079ecf9ef77be7765d2337853b5d71ef321581e3216b61c","index":0,"count":1,"encoding":"utf-8","payloadBytes":4711}
 ---
 - name: Требовать ограниченную выбранную учетную запись Docker для очистки
   ansible.builtin.assert:
@@ -40044,7 +40044,7 @@ platform_docker_packages:
     _platform_docker_clear_home: "{{ getent_passwd[platform_docker_account_name][4] }}"
   changed_when: false
 
-- name: Отклонить неподходящую учетную запись или небезопасный дом во время очистки
+- name: "Отклонить неподходящую учётную запись или небезопасный домашний каталог"
   ansible.builtin.assert:
     that:
       - _platform_docker_clear_uid | int >= 1000
@@ -40125,7 +40125,7 @@ platform_docker_packages:
     fail_msg: DOCKER_CLEAR_DAEMON_STILL_ACTIVE
 
 @@END
-@@PORTABLE {"path":"services/docker/ansible_collections/platform/docker/roles/docker_rootless/tasks/data_root.yml","mode":420,"size":6830,"sha256":"93064e5c18425a3e8133f7273437ffd1bea8a24b89dac43449fc120da32ef76c","index":0,"count":1,"encoding":"utf-8","payloadBytes":6830}
+@@PORTABLE {"path":"services/docker/ansible_collections/platform/docker/roles/docker_rootless/tasks/data_root.yml","mode":420,"size":6834,"sha256":"e7de2230ccb79f21ccba6abf801cc9815ecd810ce9c291f5b625ad637c55c57f","index":0,"count":1,"encoding":"utf-8","payloadBytes":6834}
 ---
 - name: Проверка корневого пути к данным Docker
   ansible.builtin.assert:
@@ -40234,7 +40234,7 @@ platform_docker_packages:
   when: _platform_docker_daemon_file.stat.exists
   no_log: true
 
-- name: Частный анализ существующей конфигурации демона Docker
+- name: "Разобрать конфигурацию Docker без раскрытия содержимого"
   ansible.builtin.set_fact:
     _platform_docker_daemon_config: "{{ (_platform_docker_daemon_content.content | b64decode | from_json) if _platform_docker_daemon_file.stat.exists else {} }}"
   no_log: true
@@ -40262,7 +40262,7 @@ platform_docker_packages:
   when: platform_docker_verify_only | bool
 
 @@END
-@@PORTABLE {"path":"services/docker/ansible_collections/platform/docker/roles/docker_rootless/tasks/guard_root_destination.yml","mode":420,"size":1793,"sha256":"7ec381c82cedb5cec2180a56b6ef74d3b9df5b5429abb84a58670affd42f122b","index":0,"count":1,"encoding":"utf-8","payloadBytes":1793}
+@@PORTABLE {"path":"services/docker/ansible_collections/platform/docker/roles/docker_rootless/tasks/guard_root_destination.yml","mode":420,"size":1817,"sha256":"75345c890744843e66d97a44f4e5405438782e15ad9390e051ef121cf8fdad43","index":0,"count":1,"encoding":"utf-8","payloadBytes":1817}
 ---
 - name: Проверка точного общего или системного назначения перед записью
   ansible.builtin.stat:
@@ -40290,7 +40290,7 @@ platform_docker_packages:
     - _platform_docker_guard_file.stat.exists
     - platform_docker_guard_marker | default('') | length > 0
 
-- name: Отклонить существующий неуправляемый управляемый пункт назначения
+- name: "Отклонить существующий файл назначения без признаков управления инсталлятором"
   ansible.builtin.assert:
     that:
       - >-
@@ -40335,7 +40335,7 @@ platform_docker_packages:
   ansible.builtin.include_tasks: verify.yml
 
 @@END
-@@PORTABLE {"path":"services/docker/ansible_collections/platform/docker/roles/docker_rootless/tasks/provision.yml","mode":420,"size":24097,"sha256":"a99731eea215bfa683a6906ca8ce13081af81ad8a0a588f9f8104919b2cf31c6","index":0,"count":1,"encoding":"utf-8","payloadBytes":24097}
+@@PORTABLE {"path":"services/docker/ansible_collections/platform/docker/roles/docker_rootless/tasks/provision.yml","mode":420,"size":24055,"sha256":"f112c45bb4e93ac6d6a0f8df6fbd9ec8f715ba11f7a13ce149f43b90e3d6f97b","index":0,"count":1,"encoding":"utf-8","payloadBytes":24055}
 ---
 - name: Установить настроенные пакеты Docker без прав root для RED OS
   ansible.builtin.dnf:
@@ -40343,7 +40343,7 @@ platform_docker_packages:
     state: present
     update_cache: false
 
-- name: Еще раз проверьте, что установка пакета не активировала корневой Docker
+- name: "Проверить, что установка пакетов не запустила Docker с правами root"
   ansible.builtin.command:
     argv: [systemctl, is-active, docker.service, docker.socket]
   register: _platform_docker_rootful_postinstall
@@ -40438,7 +40438,7 @@ platform_docker_packages:
     - _platform_docker_password_state.stdout.split()[1] in ['LK', 'NP']
   no_log: true
 
-- name: Запросить полный результат шифрования SHA-512 перед активацией пароля
+- name: "Проверить полный формат хеша пароля SHA-512 crypt"
   ansible.builtin.assert:
     that:
       - _platform_docker_account_password_hash.stdout.startswith('$6$')
@@ -40465,14 +40465,14 @@ platform_docker_packages:
     key: "{{ platform_docker_account_name }}"
     fail_key: true
 
-- name: Привязать учетную запись UID и дом к точной записи NSS
+- name: "Сохранить UID и домашний каталог выбранной учётной записи из NSS"
   ansible.builtin.set_fact:
     _platform_docker_uid: "{{ getent_passwd[platform_docker_account_name][1] | int }}"
     _platform_docker_gid: "{{ getent_passwd[platform_docker_account_name][2] | int }}"
     _platform_docker_home: "{{ getent_passwd[platform_docker_account_name][4] }}"
   changed_when: false
 
-- name: Проверить, что выбранная учетная запись не является привилегированной или бездомной
+- name: "Проверить непривилегированную учётную запись Docker и допустимый домашний каталог"
   ansible.builtin.assert:
     that:
       - _platform_docker_uid | int >= 1000
@@ -40591,7 +40591,7 @@ platform_docker_packages:
         ['LXC_DHCP_CONFILE=/etc/lxc/' ~ platform_docker_name ~ '-dnsmasq.conf']
     fail_msg: DOCKER_LXC_DHCP_CONFIG_CONFLICT
 
-- name: Проверка незавершенного восходящего файла целевого преобразователя
+- name: "Проверить файл upstream DNS-серверов systemd-resolved"
   ansible.builtin.stat:
     path: /run/systemd/resolve/resolv.conf
     follow: true
@@ -40600,7 +40600,7 @@ platform_docker_packages:
     get_checksum: false
   register: _platform_docker_upstream_resolver_file
 
-- name: Чтение адресов целевого преобразователя для LXC DHCP
+- name: "Прочитать адреса DNS-серверов узла для DHCP сети LXC"
   ansible.builtin.slurp:
     src: "{{ '/run/systemd/resolve/resolv.conf' if _platform_docker_upstream_resolver_file.stat.isreg | default(false) else '/etc/resolv.conf' }}"
   register: _platform_docker_upstream_resolvers
@@ -40614,7 +40614,7 @@ platform_docker_packages:
            reject('match', '^(127[.]|0[.]0[.]0[.]0$)') | list | first) | default('')) }}
   changed_when: false
 
-- name: Требуется сервер IPv4 DNS без обратной связи для LXC DHCP
+- name: "Проверить IPv4-адрес DNS-сервера вне loopback-диапазона для DHCP сети LXC"
   ansible.builtin.assert:
     that:
       - _platform_docker_lxc_dns_server is match('^(?:(?:25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})[.]){3}(?:25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})$')
@@ -40791,7 +40791,7 @@ platform_docker_packages:
     mode: '0644'
   notify: Перезапустить мост Docker без прав root
 
-- name: Установка моста системы выбранной учетной записи /user
+- name: "Установить системную службу запуска пользовательского Docker"
   ansible.builtin.template:
     src: platform-docker-rootless-bridge.service.j2
     dest: "/etc/systemd/system/{{ platform_docker_name }}-rootless-{{ platform_docker_account_name }}.service"
@@ -40800,7 +40800,7 @@ platform_docker_packages:
     mode: '0644'
   notify: Перезапустить мост Docker без прав root
 
-- name: Перезагрузить граф службы systemd
+- name: "Перечитать конфигурацию служб systemd"
   ansible.builtin.systemd:
     daemon_reload: true
 
@@ -40846,7 +40846,7 @@ platform_docker_packages:
   ansible.builtin.meta: flush_handlers
 
 @@END
-@@PORTABLE {"path":"services/docker/ansible_collections/platform/docker/roles/docker_rootless/tasks/resolve_tls.yml","mode":420,"size":4521,"sha256":"9646a37d68e77eb1d6e98acb7e5e494ab6b2f441ea50535bfe2be82e7af63db6","index":0,"count":1,"encoding":"utf-8","payloadBytes":4521}
+@@PORTABLE {"path":"services/docker/ansible_collections/platform/docker/roles/docker_rootless/tasks/resolve_tls.yml","mode":420,"size":4509,"sha256":"91db48782cd41102f74f2323030d958b5148c365f61c263adea5967f8bdde660","index":0,"count":1,"encoding":"utf-8","payloadBytes":4509}
 ---
 - name: Выбрать потребительский план Core PKI, если он доступен
   ansible.builtin.include_role:
@@ -40908,7 +40908,7 @@ platform_docker_packages:
          | list }}
   when: platform_pki_selected_consumer_plan is defined
 
-- name: Чтение явного использования расширенного ключа сертификата
+- name: "Прочитать расширенные назначения ключа сертификата — EKU"
   ansible.builtin.command:
     argv: [openssl, x509, -in, "{{ _platform_docker_tls_source }}/certificate.pem", -noout, -ext, extendedKeyUsage]
   register: _platform_docker_certificate_eku
@@ -40932,7 +40932,7 @@ platform_docker_packages:
   changed_when: false
   no_log: true
 
-- name: Запрос удостоверения сертификата для целевого адреса API
+- name: "Проверить соответствие SAN сертификата адресу Docker API"
   ansible.builtin.assert:
     that:
       - >-
@@ -41076,7 +41076,7 @@ platform_docker_packages:
   no_log: true
 
 @@END
-@@PORTABLE {"path":"services/docker/ansible_collections/platform/docker/roles/docker_rootless/tasks/verify.yml","mode":420,"size":6358,"sha256":"7137de21ffa7f6d68b477008ea0f43fc420beafc3ab75d43f0bcc31f5c24b275","index":0,"count":1,"encoding":"utf-8","payloadBytes":6358}
+@@PORTABLE {"path":"services/docker/ansible_collections/platform/docker/roles/docker_rootless/tasks/verify.yml","mode":420,"size":6388,"sha256":"5c42886b4051edb890f90ca0e202e5cc62091a67eb47e5473fcf2054bd695da7","index":0,"count":1,"encoding":"utf-8","payloadBytes":6388}
 ---
 - name: Разрешить выбранную учетную запись Docker для проверки только для чтения
   ansible.builtin.getent:
@@ -41097,7 +41097,7 @@ platform_docker_packages:
   vars:
     platform_docker_verify_only: true
 
-- name: Проверка состояния задержки учетной записи Docker
+- name: "Проверить режим Linger учётной записи Docker"
   ansible.builtin.command:
     argv: [loginctl, show-user, "{{ platform_docker_account_name }}", --property=Linger]
   register: _platform_docker_linger
@@ -41108,7 +41108,7 @@ platform_docker_packages:
     that: _platform_docker_linger.stdout == 'Linger=yes'
     fail_msg: DOCKER_USER_LINGER_DISABLED
 
-- name: Проверить сеть LXC, целевой и пользовательский мосты активны
+- name: "Проверить активность сети LXC и служб запуска пользовательского Docker"
   ansible.builtin.command:
     argv: [systemctl, is-active, lxc-net.service, "{{ platform_docker_name }}-lxc-ready.target", "{{ platform_docker_name }}-rootless-{{ platform_docker_account_name }}.service"]
   register: _platform_docker_system_units
@@ -41213,7 +41213,7 @@ platform_docker_packages:
   changed_when: false
   failed_when: false
 
-- name: Запретить активный корневой путь Docker
+- name: "Убедиться, что Docker с правами root остаётся неактивным"
   ansible.builtin.assert:
     that: "'active' not in _platform_docker_rootful_verify.stdout_lines"
     fail_msg: DOCKER_ROOTFUL_CONFLICT
@@ -41844,7 +41844,7 @@ platform_haproxy_phase: prepare
 platform_haproxy_full_reconcile: false
 
 @@END
-@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/activate.yml","mode":420,"size":2298,"sha256":"b8424ad184378344cbbe3fe7d40192c2727fda55e1147c0995b1b4d4aac6edfc","index":0,"count":1,"encoding":"utf-8","payloadBytes":2298}
+@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/activate.yml","mode":420,"size":2287,"sha256":"a7d1b567f4fed694300d40a3cee15cd41d4ffbe10a4bbbd3799232a682f3cb0e","index":0,"count":1,"encoding":"utf-8","payloadBytes":2287}
 ---
 - name: Проверка активной основной конфигурации HAProxy перед публикацией
   ansible.builtin.stat:
@@ -41880,14 +41880,14 @@ platform_haproxy_full_reconcile: false
     - name: Установка и проверка графа-кандидата
       ansible.builtin.include_tasks: activate_publish.yml
   rescue:
-    - name: Остановка с помощью восстанавливаемого архивного свидетельства HAProxy
+    - name: "Остановить выполнение и указать архив для восстановления HAProxy"
       ansible.builtin.fail:
         msg: >-
           HAPROXY_ACTIVATION_RECOVERY_REQUIRED
           archive={{ _platform_haproxy_backend_archive.archivePath | default('none', true) }}
 
 @@END
-@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/activate_publish.yml","mode":420,"size":3644,"sha256":"093a7c82666f5a759738e389695fda960de7ad4184711aecc39d28d90bc9be77","index":0,"count":1,"encoding":"utf-8","payloadBytes":3644}
+@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/activate_publish.yml","mode":420,"size":3666,"sha256":"fea4032993afb5f7a2d9be85ae83a7a5fd63573ec8aa8e9b9a701bd0092321be","index":0,"count":1,"encoding":"utf-8","payloadBytes":3666}
 ---
 - name: Атомарно установить точную проверенную основную конфигурацию платформы
   ansible.builtin.copy:
@@ -41944,7 +41944,7 @@ platform_haproxy_full_reconcile: false
   changed_when: false
   register: _platform_haproxy_active_graph_digest
 
-- name: Требовать точного кандидата и эквивалентность активного графа HAProxy
+- name: "Проверить соответствие активной конфигурации HAProxy проверенному набору файлов"
   ansible.builtin.assert:
     that:
       - _platform_haproxy_candidate_graph_digest.stdout == _platform_haproxy_active_graph_digest.stdout
@@ -42029,9 +42029,9 @@ platform_haproxy_full_reconcile: false
   no_log: true
 
 @@END
-@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/endpoint_verify.yml","mode":420,"size":1028,"sha256":"7f10f802250e790b7314d27d226311172814dc2fb72da241c0002434fd9379b1","index":0,"count":1,"encoding":"utf-8","payloadBytes":1028}
+@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/endpoint_verify.yml","mode":420,"size":1037,"sha256":"6bf6664b6f55ed860bc8f82c22db5eac3b8ab6a2793d13e6cd4c5b35a0abbb29","index":0,"count":1,"encoding":"utf-8","payloadBytes":1037}
 ---
-- name: Решить ту же серверную модель для проверки конечной точки только для чтения
+- name: "Рассчитать ту же модель backend-сервисов для проверки конечной точки без изменений"
   ansible.builtin.include_tasks: resolve.yml
 
 - name: Выбрать backend-сервисы источника интеграции на узле провайдера
@@ -42049,7 +42049,7 @@ platform_haproxy_full_reconcile: false
   ansible.builtin.include_tasks: verify.yml
 
 @@END
-@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/lifecycle.yml","mode":420,"size":2646,"sha256":"ee8ed96a6344abb6da3c8efbf0a8e7ef6b198cb8f8bb4238b82722aca954cb28","index":0,"count":1,"encoding":"utf-8","payloadBytes":2646}
+@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/lifecycle.yml","mode":420,"size":2658,"sha256":"6045ae13861e050d25973dc89fb7ab21505bb62b74c68933cead162072b620e1","index":0,"count":1,"encoding":"utf-8","payloadBytes":2658}
 ---
 - name: Разрешение проекции времени выполнения HAProxy из канонического состояния
   ansible.builtin.include_tasks: resolve.yml
@@ -42095,7 +42095,7 @@ platform_haproxy_full_reconcile: false
   ansible.builtin.include_tasks: activate.yml
   when: platform_haproxy_phase == 'activate'
 
-- name: Запустить HAProxy после барьера активной проверки
+- name: "Запустить HAProxy после проверки активной конфигурации"
   ansible.builtin.include_tasks: start.yml
   when: platform_haproxy_phase == 'start'
 
@@ -42152,7 +42152,7 @@ platform_haproxy_full_reconcile: false
   loop: "{{ _platform_haproxy_partial_ids }}"
 
 @@END
-@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/prepare.yml","mode":420,"size":13225,"sha256":"6e3e1fa33ad9b1cb302ae337408195406f92ed1a46d7357f24516762ae32eca4","index":0,"count":1,"encoding":"utf-8","payloadBytes":13225}
+@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/prepare.yml","mode":420,"size":13157,"sha256":"241149daf664e65f164629e98ffcba9dfd711dab297539be5ce9bb8190fa8bf9","index":0,"count":1,"encoding":"utf-8","payloadBytes":13157}
 ---
 - name: Точно собрать предыдущую внутреннюю инвентаризацию платформы HAProxy перед сбросом кандидата
   platform.haproxy.archive_managed_backends:
@@ -42326,7 +42326,7 @@ platform_haproxy_full_reconcile: false
       item.name not in _platform_haproxy_partial_source_files
   changed_when: false
 
-- name: Отрисовка полного кандидата на платформу HAProxy
+- name: "Сформировать полный проверяемый набор конфигурации HAProxy"
   ansible.builtin.template:
     src: "{{ item.src }}"
     dest: "{{ platform_haproxy_candidate_directory }}/{{ item.dest }}"
@@ -42365,7 +42365,7 @@ platform_haproxy_full_reconcile: false
   changed_when: false
   when: (platform_haproxy_partial_deployment_id is defined or platform_haproxy_partial_deployment_ids is defined)
 
-- name: Отрисовка одного управляемого кандидата на серверную часть приложения HAProxy для каждого разрешенного серверной части
+- name: "Сформировать файл-кандидат HAProxy для каждого выбранного backend-сервиса"
   ansible.builtin.template:
     src: 30-application-backend.cfg.j2
     dest: "{{ platform_haproxy_candidate_directory }}/conf.d/{{ item.configFileName }}"
@@ -42530,14 +42530,14 @@ platform_haproxy_full_reconcile: false
     - platform_haproxy_active_artifacts_changed | default(false) | bool
 
 @@END
-@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/verify.yml","mode":420,"size":1251,"sha256":"e2dda6fe7bf506d8278943d7ac958e55fcef4d4258530c762c0ff68c97c7a262","index":0,"count":1,"encoding":"utf-8","payloadBytes":1251}
+@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/verify.yml","mode":420,"size":1241,"sha256":"a40d0c8d3bbd2854f1ac61d35de677d761e8b706108fe08428e5b3948be3f6c1","index":0,"count":1,"encoding":"utf-8","payloadBytes":1241}
 ---
 - name: Проверка пакета HAProxy и активной конфигурации, доступной только для чтения
   ansible.builtin.command:
     argv: ["{{ platform_haproxy_binary }}", '-c', '-f', "{{ platform_haproxy_main_config }}", '-f', "{{ platform_haproxy_conf_directory }}"]
   changed_when: false
 
-- name: Проверить, что служба HAProxy активна и доступна только для чтения
+- name: "Проверить активность службы HAProxy без внесения изменений"
   ansible.builtin.command:
     argv: [systemctl, is-active, --quiet, "{{ platform_haproxy_service_name }}"]
   changed_when: false
@@ -42809,7 +42809,7 @@ artifacts: []
 compatibilityRef: compatibility.yml
 
 @@END
-@@PORTABLE {"path":"services/integrations/playbooks/apply-endpoint.yml","mode":420,"size":2360,"sha256":"8b221f36fce0a3dd6ebe7be578b8bbb9649178e969b9a84f5a74b39b8d4dd570","index":0,"count":1,"encoding":"utf-8","payloadBytes":2360}
+@@PORTABLE {"path":"services/integrations/playbooks/apply-endpoint.yml","mode":420,"size":2370,"sha256":"45299e0a0a200684173fc19da7b38ced60a708b9b8f51efcaee586f74f788753","index":0,"count":1,"encoding":"utf-8","payloadBytes":2370}
 ---
 - name: Разрешить текущую исходную конечную точку и ее провайдеров без изменений
   hosts: localhost
@@ -42846,7 +42846,7 @@ compatibilityRef: compatibility.yml
   connection: local
   gather_facts: false
   tasks:
-    - name: Требовать от провайдеров источника с явной политикой проверки
+    - name: "Проверить наличие провайдеров и явной политики проверки источника"
       ansible.builtin.assert:
         that:
           - platform_service_integration_projection.haproxyDeployments | length > 0
@@ -43397,7 +43397,7 @@ galaxy_info:
 dependencies: []
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/application_account.yml","mode":420,"size":7752,"sha256":"3c00d7e2aceaaf6293063d9495f23ea3a0b65f36c6870e80d774db0cd5109505","index":0,"count":1,"encoding":"utf-8","payloadBytes":7752}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/application_account.yml","mode":420,"size":7751,"sha256":"bc29945f2f76eb296b6b57b8e609d62fce8b9c39b9e2bc084ab593d7a191cd28","index":0,"count":1,"encoding":"utf-8","payloadBytes":7751}
 ---
 - name: Исключение идентификаторов инфраструктуры из сверки паролей приложений
   ansible.builtin.assert:
@@ -43472,7 +43472,7 @@ dependencies: []
     - application_kafka_account.mode == 'managed'
     - "'SCRAM-SHA-512' not in application_kafka_description.stdout or application_kafka_password_mismatch"
   block:
-    - name: Визуализировать входные данные модификации SCRAM без помещения учетных данных в argv
+    - name: "Подготовить параметры изменения SCRAM без передачи паролей в аргументах команды"
       ansible.builtin.copy:
         content: "SCRAM-SHA-512=iterations=8192,password={{ lookup('ansible.builtin.file', application_kafka_credentials[application_kafka_account.passwordRef], rstrip=false) | platform.core.platform_java_properties_value }}\n"
         dest: "{{ application_kafka_private.path }}/scram.properties"
@@ -43518,7 +43518,7 @@ dependencies: []
       changed_when: false
       failed_when: false
       no_log: true
-    - name: Запросить выбранный пароль приложения для аутентификации после согласования
+    - name: "Проверить вход приложения с выбранным паролем после настройки учётной записи"
       ansible.builtin.assert:
         that: application_kafka_login.rc == 0
         fail_msg: APPLICATION_KAFKA_ACCOUNT_AUTHENTICATION_FAILED
@@ -43560,7 +43560,7 @@ dependencies: []
     application_kafka_credentials: "{{ platform_application_secret_files | default({}) | combine(platform_application_credential_files | default({})) }}"
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/application_accounts_read.yml","mode":420,"size":2312,"sha256":"8dd4136cf934eb133ee4e24ff61c0f7e4edf55ebba6f6b4f75de169db4343699","index":0,"count":1,"encoding":"utf-8","payloadBytes":2312}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/application_accounts_read.yml","mode":420,"size":2289,"sha256":"8cb8f38ec767b84be28b24cd1b13d21bd636b3250c2d3f889927e7ca9a7ece06","index":0,"count":1,"encoding":"utf-8","payloadBytes":2289}
 ---
 - name: Описать метаданные SCRAM один раз для всех пользователей развертывания
   ansible.builtin.command:
@@ -43586,7 +43586,7 @@ dependencies: []
 - name: Один раз прочитать все списки управления доступом развертывания перед проверкой участников
   when: platform_kafka_application_job.accounts | map(attribute='grants') | flatten | length > 0
   block:
-    - name: Вывести список инвентаря развертывания ACL без основного фильтра
+    - name: "Прочитать все ACL развёртывания без фильтра по principal"
       ansible.builtin.command:
         argv: ["{{ application_topic_cli_directory }}/bin/kafka-acls.sh", --bootstrap-server, "{{ application_topic_candidate.address }}:{{ application_topic_candidate.port }}", --command-config, "{{ application_kafka_private.path }}/admin.properties", --list, --resource-pattern-type, any]
       register: application_kafka_acl_inventory
@@ -43600,7 +43600,7 @@ dependencies: []
       no_log: true
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/application_accounts_scope.yml","mode":420,"size":1785,"sha256":"697b3512455f0bfff65f92a0d4630d0ab03740de627f055c2be84960c90f44f1","index":0,"count":1,"encoding":"utf-8","payloadBytes":1785}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/application_accounts_scope.yml","mode":420,"size":1755,"sha256":"6156abee8fb848f8508424cfe8dba3f4a035b1d43079507742871780b3d48d9e","index":0,"count":1,"encoding":"utf-8","payloadBytes":1755}
 ---
 - name: Создание закрытого для вызова каталога учетной записи Kafka
   ansible.builtin.tempfile:
@@ -43614,7 +43614,7 @@ dependencies: []
     - name: Подготовка частного удостоверения клиента PEM для вызова
       ansible.builtin.include_tasks: application_client_tls.yml
       when: platform_kafka_store_type == 'PEM'
-    - name: Визуализация выделенной административной конфигурации SASL
+    - name: "Сформировать административную конфигурацию SASL"
       ansible.builtin.template:
         src: application-topics-client.properties.j2
         dest: "{{ application_kafka_private.path }}/admin.properties"
@@ -43623,14 +43623,14 @@ dependencies: []
       changed_when: false
     - name: Прочитать метаданные развертывания SCRAM и инвентарь ACL один раз перед учетными записями
       ansible.builtin.include_tasks: application_accounts_read.yml
-    - name: Проверить или убедитесь, что каждая логическая учетная запись
+    - name: "Проверить или настроить каждую логическую учётную запись Kafka"
       ansible.builtin.include_tasks: application_account.yml
       loop: "{{ platform_kafka_application_job.accounts }}"
       loop_control:
         loop_var: application_kafka_account
         label: "{{ application_kafka_account.accountId }}"
   always:
-    - name: Удалить временные файлы проверки учётных данных Vault
+    - name: "Удалить временный каталог учётных данных Kafka"
       ansible.builtin.file:
         path: "{{ application_kafka_private.path }}"
         state: absent
@@ -43690,7 +43690,7 @@ dependencies: []
   when: application_kafka_acl_creation is not skipped
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/application_acls_read.yml","mode":420,"size":781,"sha256":"9400ba9d65bd59ecbb73aca3d52b9fddddb7eb9c17c9a50e3a9a45dbcefe9ac2","index":0,"count":1,"encoding":"utf-8","payloadBytes":781}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/application_acls_read.yml","mode":420,"size":795,"sha256":"a3a9d56b16cca6b6ac95fe80f21d76a5eea8fd7c1c34ef8f0927cc157de75cbc","index":0,"count":1,"encoding":"utf-8","payloadBytes":795}
 ---
 - name: Однократно прочитать Kafka ACL выбранного principal
   ansible.builtin.command:
@@ -43700,7 +43700,7 @@ dependencies: []
   failed_when: false
   no_log: true
 
-- name: Требовать читаемый основной инвентарь ACL
+- name: "Проверить успешность чтения ACL выбранного principal"
   ansible.builtin.assert:
     that: application_kafka_acl_inventory.rc == 0
     fail_msg: APPLICATION_KAFKA_ACL_READ_FAILED
@@ -43726,14 +43726,14 @@ dependencies: []
     kafka_pem_ephemeral: true
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/application_topic.yml","mode":420,"size":3166,"sha256":"b1702620b0add746b1631713278468b0a647c26a09a019b78a22a480a0dd4830","index":0,"count":1,"encoding":"utf-8","payloadBytes":3166}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/application_topic.yml","mode":420,"size":3144,"sha256":"a13915dcf7a52ebd39bb16b8768242df5045aced67260554bc9c1266d04ed608","index":0,"count":1,"encoding":"utf-8","payloadBytes":3144}
 ---
 - name: Проверить тему перед любым изменением
   ansible.builtin.include_tasks: application_topic_describe.yml
   vars:
     application_topic_must_exist: "{{ platform_kafka_application_phase == 'verify' or application_topic.mode == 'existing' }}"
 
-- name: Привязать решение о создании перед обратным чтением обновлений наблюдаемого состояния
+- name: "Сохранить решение о создании топика перед повторным чтением его состояния"
   ansible.builtin.set_fact:
     application_topic_creation_required: "{{ platform_kafka_application_phase == 'apply' and application_topic.mode == 'managed' and application_topic_description.stdout | trim | length == 0 }}"
   changed_when: false
@@ -43774,9 +43774,9 @@ dependencies: []
         application_topic_readback: true
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/application_topic_describe.yml","mode":420,"size":8631,"sha256":"643603db3bb515fbd3223648eb3f70c8bf05e444e9afe29e5e8e49bff7dab9e5","index":0,"count":1,"encoding":"utf-8","payloadBytes":8631}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/application_topic_describe.yml","mode":420,"size":8661,"sha256":"f6b89b8271e587024047e04d1cc5ddd4bbff9061b491a18308169de0812ef48c","index":0,"count":1,"encoding":"utf-8","payloadBytes":8661}
 ---
-- name: Описать только буквально заявленную тему
+- name: "Получить описание явно указанного топика Kafka"
   ansible.builtin.command:
     argv:
       - "{{ application_topic_cli_directory }}/bin/kafka-topics.sh"
@@ -43815,7 +43815,7 @@ dependencies: []
   no_log: true
   when: not application_topic_readback | default(false)
 
-- name: Отличить отсутствующие темы от неудачных подключений Kafka
+- name: "Отличить отсутствие топика от ошибки подключения к Kafka"
   ansible.builtin.assert:
     that:
       - application_topic_description.rc | int == 0
@@ -43887,7 +43887,7 @@ dependencies: []
       ansible.builtin.assert:
         that: application_topic_properties.stdout | trim | length > 0
         fail_msg: APPLICATION_TOPIC_CONFIG_READ_FAILED
-    - name: Отличить ошибки поиска свойств от смещения свойств
+    - name: "Отличить ошибку чтения настроек топика от расхождения значений"
       ansible.builtin.assert:
         that: application_topic_properties.rc | int == 0
         fail_msg: "{{ application_topic_diagnostic | to_json }}"
@@ -43928,7 +43928,7 @@ dependencies: []
     application_topic_cli_directory: "{{ hostvars[application_topic_candidate.hostId].platform_kafka_install_directory | default(platform_kafka_install_directory) }}"
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/application_topics_read.yml","mode":420,"size":2482,"sha256":"eadfa3f85493376a49072301b1a18704c2a90ab79f814ef49a9aab9cf6ddba1b","index":0,"count":1,"encoding":"utf-8","payloadBytes":2482}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/application_topics_read.yml","mode":420,"size":2495,"sha256":"9489142bb39e579df266b916925bb20ce4b05a1e304371a864998bd017a19df5","index":0,"count":1,"encoding":"utf-8","payloadBytes":2495}
 ---
 - name: Привязать объявленный список запрошенных тем Kafka
   ansible.builtin.set_fact:
@@ -43950,7 +43950,7 @@ dependencies: []
   retries: "{{ platform_kafka_startup_readiness_retries }}"
   delay: "{{ platform_kafka_startup_readiness_delay }}"
 
-- name: Требовать читаемые метаданные тематического пакета
+- name: "Проверить успешность чтения метаданных выбранных топиков"
   ansible.builtin.assert:
     that: application_topic_batch_description.rc == 0
     fail_msg: APPLICATION_TOPIC_DESCRIBE_FAILED
@@ -44025,7 +44025,7 @@ dependencies: []
     fail_msg: KAFKA_AUTHORIZATION_RUNTIME_FINALIZATION_REQUIRED
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/authorization_finalize_member.yml","mode":420,"size":2133,"sha256":"13517335735057387b419f63cd0f2054bd9eba68008564496fafdec391be9274","index":0,"count":1,"encoding":"utf-8","payloadBytes":2133}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/authorization_finalize_member.yml","mode":420,"size":2125,"sha256":"aab2f49ee2317eef0658d550e073b58b59ca67d94f9c821fb875822ff03d7394","index":0,"count":1,"encoding":"utf-8","payloadBytes":2125}
 ---
 - name: Проверить готовность администратора Kafka перед отзывом bootstrap-доступа
   ansible.builtin.assert:
@@ -44039,7 +44039,7 @@ dependencies: []
     line: super.users=User:admin
   no_log: true
 
-- name: Перекрестная запись окончательной конфигурации за секунду до перезапуска отзыва
+- name: "Выждать одну секунду после записи итоговой конфигурации перед перезапуском"
   ansible.builtin.wait_for:
     timeout: 1
   changed_when: false
@@ -44069,14 +44069,14 @@ dependencies: []
     kafka_quorum_diagnostic_member: "{{ _platform_kafka_broker_instances | first }}"
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/authorization_identity.yml","mode":420,"size":1519,"sha256":"fc355732fccbe5b3f70b14e5c73302ef6f8b4903df29646e0ea7a1da7b8a5a74","index":0,"count":1,"encoding":"utf-8","payloadBytes":1519}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/authorization_identity.yml","mode":420,"size":1504,"sha256":"e34437661c3ede8455412e07680212c7c5b38b69d059f060f5db1a36e0712afe","index":0,"count":1,"encoding":"utf-8","payloadBytes":1504}
 ---
 - name: Привязка точного материала запланированного экземпляра службы TLS
   ansible.builtin.include_tasks: resolve_tls_runtime.yml
   vars:
     kafka_tls_member: "{{ kafka_authorization_member }}"
 
-- name: Прочитать тему RFC2253 выбранного сертификата экземпляра службы
+- name: "Прочитать subject сертификата экземпляра в формате RFC2253"
   ansible.builtin.command:
     argv: [openssl, x509, -in, "{{ _platform_kafka_tls_runtime.targetDirectory }}/certificate.pem", -noout, -subject, -nameopt, RFC2253]
   delegate_to: "{{ kafka_authorization_member.host }}"
@@ -44182,9 +44182,9 @@ dependencies: []
   changed_when: false
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/authorization_principal.yml","mode":420,"size":1230,"sha256":"a3d1110724973e1eae2234c641661d318493e0a9cd2881bc75e39e2b5b873a91","index":0,"count":1,"encoding":"utf-8","payloadBytes":1230}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/authorization_principal.yml","mode":420,"size":1206,"sha256":"f302906518f31e93e9124080dd85a71bb2e5abbba86bc87393466b9b43722b73","index":0,"count":1,"encoding":"utf-8","payloadBytes":1206}
 ---
-- name: Привязка явного неадминистративного принципа совместимости
+- name: "Подготовить явно заданный principal совместимости без прав администратора"
   ansible.builtin.set_fact:
     application_kafka_account:
       name: "{{ kafka_authorization_principal }}"
@@ -44202,7 +44202,7 @@ dependencies: []
 - name: Однократно прочитать Kafka ACL совместимого principal перед проверкой ресурсов
   ansible.builtin.include_tasks: application_acls_read.yml
 
-- name: Проверить или убедитесь, что каждый ресурс совместимости с явно заданной областью
+- name: "Проверить или настроить ACL каждого ресурса совместимости"
   ansible.builtin.include_tasks: application_acl.yml
   loop: "{{ kafka_authorization_grants }}"
   loop_control:
@@ -44240,7 +44240,7 @@ dependencies: []
   no_log: true
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/authorization_setup.yml","mode":420,"size":6659,"sha256":"57f00a04688e32f7ecbb0d03d187ac67f0e2ad626430f43d6da5c63dd4cd9bdd","index":0,"count":1,"encoding":"utf-8","payloadBytes":6659}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/authorization_setup.yml","mode":420,"size":6652,"sha256":"262d6b96e949cbcd55d90c71037e605b5c9fd67b447b2ad6c7ff73f07dfe11a3","index":0,"count":1,"encoding":"utf-8","payloadBytes":6652}
 ---
 - name: Разрешить существующее загрузочное соединение TLS
   ansible.builtin.include_tasks: resolve_cli_connection.yml
@@ -44295,7 +44295,7 @@ dependencies: []
     - name: Подготовка индивидуального загрузочного идентификатора PEM для вызова
       ansible.builtin.include_tasks: application_client_tls.yml
       when: platform_kafka_store_type == 'PEM'
-    - name: Визуализировать загрузку временного сертификата или окончательное подключение администратора
+    - name: "Сформировать временное подключение по bootstrap-сертификату или учётной записи администратора"
       ansible.builtin.template:
         src: application-topics-client.properties.j2
         dest: "{{ application_kafka_private.path }}/admin.properties"
@@ -44422,14 +44422,14 @@ dependencies: []
   changed_when: false
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/authorization_transition.yml","mode":420,"size":2409,"sha256":"4f4f4de605e3349ba6eacda47d782834de497109b68d0f95c532b7bf9a6650d4","index":0,"count":1,"encoding":"utf-8","payloadBytes":2409}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/authorization_transition.yml","mode":420,"size":2388,"sha256":"34be5f1504bf72c2c903bf82c264a9dfbf12477b66a056aa421ddd683d807cac","index":0,"count":1,"encoding":"utf-8","payloadBytes":2388}
 ---
 - name: Сбросить барьер готовности администратора Kafka перед переходом авторизации
   ansible.builtin.set_fact:
     kafka_authorization_admin_ready: false
   changed_when: false
 
-- name: Остановить каждый хост, если настройка администратора или завершение экземпляра службы не удались
+- name: "Прервать выполнение на всех узлах при сбое настройки администратора или завершения настройки экземпляра"
   any_errors_fatal: true
   block:
     - name: Предоставление или проверка прав администратора и явных прав совместимости один раз для каждого развертывания
@@ -44440,7 +44440,7 @@ dependencies: []
           become: true
       run_once: true
 
-    - name: Отменить отзыв только после успешного входа в систему с правами администратора и установки ACL
+    - name: "Разрешить отзыв bootstrap-доступа после успешной проверки администратора и ACL"
       ansible.builtin.set_fact:
         kafka_authorization_admin_ready: true
       changed_when: false
@@ -44721,13 +44721,13 @@ dependencies: []
   failed_when: false
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/main.yml","mode":420,"size":24379,"sha256":"fddb814bde69bce9090d1ac55a69098568f0147edc77b6c7e672e075f379c301","index":0,"count":1,"encoding":"utf-8","payloadBytes":24379}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/main.yml","mode":420,"size":24295,"sha256":"672d20e90931323010cf989c5c88c73049ff354655fd4101c27038b23d4c0247","index":0,"count":1,"encoding":"utf-8","payloadBytes":24295}
 ---
 - name: Проверка настроек ресурсов переносимой службы
   ansible.builtin.include_role:
     name: platform.core.project_settings
 
-- name: Управляемые проектом экземпляры службы Kafka, когда общедоступный список отсутствует
+- name: "Получить экземпляры Kafka из проекта, если список не задан явно"
   ansible.builtin.include_tasks: project_runtime.yml
   when:
     - platform_kafka_instances | length == 0
@@ -45143,13 +45143,13 @@ dependencies: []
     label: "{{ item.0.id }}:{{ item.1 }}"
   when: not (platform_kafka_verify_only | bool) and platform_kafka_phase != 'schema_registry'
 
-- name: Установить администратора перед отзывом сериализованной начальной загрузки
+- name: "Настроить администратора перед последовательным отзывом bootstrap-доступа"
   ansible.builtin.include_tasks: authorization_transition.yml
   when:
     - _platform_kafka_scram_enabled
     - platform_kafka_phase != 'schema_registry'
 
-- name: Требовать продемонстрированной завершения среды выполнения перед любым следующим этапом
+- name: "Подтвердить загрузку итоговой конфигурации Kafka перед следующим этапом"
   ansible.builtin.include_tasks: authorization_confirm.yml
   loop: "{{ _platform_kafka_local_instances }}"
   loop_control:
@@ -45168,7 +45168,7 @@ dependencies: []
     - platform_kafka_phase in ['full', 'schema_registry'] or platform_kafka_verify_only
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/member.yml","mode":420,"size":17685,"sha256":"aeb27cecbafe41eaefa06f13d8b0652a55ed493494e16e2ebbe7b57321c537d6","index":0,"count":1,"encoding":"utf-8","payloadBytes":17685}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/member.yml","mode":420,"size":17660,"sha256":"a8af5dae2bd02fd40998b5ce511924ef34c7b1993107550a8b1d6c61a1bd222a","index":0,"count":1,"encoding":"utf-8","payloadBytes":17660}
 ---
 - name: Создание изолированных каталогов экземпляров службы
   ansible.builtin.file:
@@ -45428,7 +45428,7 @@ dependencies: []
   register: platform_kafka_member_environment
   when: not (platform_kafka_verify_only | bool)
 
-- name: Установка точного экземпляра службы Kafka службы systemd systemd
+- name: "Установить службу systemd для экземпляра Kafka"
   ansible.builtin.template:
     src: kafka.service.j2
     dest: "{{ kafka_member.systemd_unit_destination }}"
@@ -45703,7 +45703,7 @@ dependencies: []
   changed_when: false
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/prepare_host.yml","mode":420,"size":1931,"sha256":"28f27b4e9ca37e270866dff289eff206c8c76b9f72c4c6187f23d0792dd6451d","index":0,"count":1,"encoding":"utf-8","payloadBytes":1931}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/prepare_host.yml","mode":420,"size":1927,"sha256":"783bcedc57f97e96a3263a8544925d13b90531022a15b2de1630586f3221d134","index":0,"count":1,"encoding":"utf-8","payloadBytes":1927}
 ---
 - name: Установка необходимого компонента Java для всего хоста
   ansible.builtin.package:
@@ -45748,7 +45748,7 @@ dependencies: []
     system: true
     create_home: false
 
-- name: Подготовка доступного для записи каталога журнала распространения Kafka
+- name: "Подготовить доступный для записи каталог журналов дистрибутива Kafka"
   ansible.builtin.file:
     path: "/opt/{{ platform_kafka_archive_directory }}/logs"
     state: directory
@@ -45757,9 +45757,9 @@ dependencies: []
     mode: '0750'
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/project_deployment.yml","mode":420,"size":375,"sha256":"1e97bd875f5f8d95b496dc2bc3d2e4969eb6bc4035df13d2ee452f163e429bca","index":0,"count":1,"encoding":"utf-8","payloadBytes":375}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/project_deployment.yml","mode":420,"size":350,"sha256":"e23baa4e33b52152e1b651ca412ceae8fc695943fe00c2c5f026c19214f4e22a","index":0,"count":1,"encoding":"utf-8","payloadBytes":350}
 ---
-- name: Экземпляры службы Project Kafka, принадлежащие каждому целевому узлу
+- name: "Выбрать экземпляры Kafka для каждого целевого узла"
   ansible.builtin.include_tasks: project_deployment_host.yml
   loop: "{{ groups['platform_targets'] | default([]) | sort }}"
   loop_control:
@@ -45767,9 +45767,9 @@ dependencies: []
     label: "{{ _platform_kafka_project_member_host }}"
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/project_deployment_host.yml","mode":420,"size":3499,"sha256":"eac5544f6502ee20766eba9e3ec343f421c3d11e869b844727bdda5973df607e","index":0,"count":1,"encoding":"utf-8","payloadBytes":3499}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/project_deployment_host.yml","mode":420,"size":3422,"sha256":"0c26fe2ee7c0cffe341398dab0de62e0ac5a8c84bd7b2fb4318f6e421389ca84","index":0,"count":1,"encoding":"utf-8","payloadBytes":3422}
 ---
-- name: Проектируйте экземпляры службы Kafka из экземпляров службы развертывания, принадлежащих инвентарю
+- name: "Сформировать экземпляры Kafka по развёртываниям из inventory"
   ansible.builtin.set_fact:
     platform_kafka_instances: "{{ platform_kafka_instances + [ {
       'id': item.key,
@@ -45801,7 +45801,7 @@ dependencies: []
     label: "{{ _platform_kafka_project_member_host }}:{{ item.key }}"
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/project_runtime.yml","mode":420,"size":4875,"sha256":"32d22bdfe588f60118a3e02ffd36537a4bad6bb0bc8fcebf410d80cd16a6242f","index":0,"count":1,"encoding":"utf-8","payloadBytes":4875}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/project_runtime.yml","mode":420,"size":4911,"sha256":"15b884799fd0678310209506be597d55f00301dbfcf7b184fbebc10f6ae5dcbd","index":0,"count":1,"encoding":"utf-8","payloadBytes":4911}
 ---
 - name: Инициализация дополнительного манифеста устаревшего проекта
   ansible.builtin.set_fact:
@@ -45855,14 +45855,14 @@ dependencies: []
       {{ (platform_generated_state | default({})).get('serviceDeployments', {}).get(
            _platform_kafka_managed_deployment.key, {}) }}
 
-- name: Идентификатор Kafka в области развертывания проекта
+- name: "Определить идентификатор Kafka для выбранного развёртывания"
   ansible.builtin.set_fact:
     platform_kafka_cluster_id: >-
           {{ _platform_kafka_generated_deployment_state.get('identity', {}).get('clusterId', '')
           | default(_platform_kafka_managed_deployment.value.get('identity', {}).get('clusterId', ''), true)
           | default('', true) }}
 
-- name: Явные параметры проекта Kafka в области развертывания
+- name: "Определить явные параметры Kafka для выбранного развёртывания"
   ansible.builtin.set_fact:
     platform_kafka_quorum_mode: "{{ _platform_kafka_managed_deployment.value.configuration.quorumMode }}"
   when: "'quorumMode' in (_platform_kafka_managed_deployment.value.configuration | default({}))"
@@ -45950,9 +45950,9 @@ dependencies: []
   when: kafka_cli_purpose == 'admin'
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/resolve_tls_runtime.yml","mode":420,"size":5403,"sha256":"c69db67f65cf90810eb7296671a15cb7d77454befd117b6c55ce8fd15261b37a","index":0,"count":1,"encoding":"utf-8","payloadBytes":5403}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/resolve_tls_runtime.yml","mode":420,"size":5389,"sha256":"b7ecfda1bfe61e263e20861299690240cf0ea804aa37414c8986eabc19bdf3e0","index":0,"count":1,"encoding":"utf-8","payloadBytes":5389}
 ---
-- name: Выбрать эффективный запрос PKI-01 и спланировать коллекции
+- name: "Выбрать действующие запросы PKI-01 и наборы планов"
   ansible.builtin.set_fact:
     _platform_kafka_tls_runtime_all_requests: >-
       {{ platform_pki_requests
@@ -46136,7 +46136,7 @@ dependencies: []
       changed_when: false
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/schema_registry.yml","mode":420,"size":9223,"sha256":"3044fce10e42cde42b424a77d934157caa62100e7010cba2c51a51205a05d794","index":0,"count":1,"encoding":"utf-8","payloadBytes":9223}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/schema_registry.yml","mode":420,"size":9186,"sha256":"3f107e7be424b80fd1c38f707339022676ab5a0ecba3619af3d64d7a49113106","index":0,"count":1,"encoding":"utf-8","payloadBytes":9186}
 ---
 - name: Определение источника реестра перед установкой
   ansible.builtin.include_role:
@@ -46158,7 +46158,7 @@ dependencies: []
     - not platform_kafka_verify_only
     - platform_resolved_artifact_sources is defined
 
-- name: Установить утвержденный пакет реестра после победы репозитория
+- name: "Установить Schema Registry из выбранного разрешённого репозитория"
   ansible.builtin.package:
     name: "confluent-schema-registry-{{ platform_kafka_schema_registry_version }}"
     state: present
@@ -46241,7 +46241,7 @@ dependencies: []
     - not platform_kafka_verify_only
     - platform_resolved_artifact_sources is not defined or platform_resolved_artifact_sources['schema-registry-binary'].source == 'OFFLINE_BUNDLE'
 
-- name: Запись утвержденного неизменяемого идентификатора распространения
+- name: "Записать идентификатор проверенного дистрибутива"
   ansible.builtin.copy:
     content: 'dc4d6234e0f7e1a91b369f9cf1d27d7c9885edb9f6440170c3a6f00ba68fcc81'
     dest: "{{ platform_kafka_schema_registry_install_directory }}/.platform-approved-sha256"
@@ -46349,7 +46349,7 @@ dependencies: []
   when: _platform_kafka_registry_clear_units.changed
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/schema_registry_member.yml","mode":420,"size":9967,"sha256":"ab7afd7a355630b578a595336e8e369313540d92c09b0829f05fa4eec67c517d","index":0,"count":1,"encoding":"utf-8","payloadBytes":9967}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/schema_registry_member.yml","mode":420,"size":9984,"sha256":"65cda8b434e9144f85f786f93c50d96ac8d993c78a03d16a4a94b53be85b3c95","index":0,"count":1,"encoding":"utf-8","payloadBytes":9984}
 ---
 - name: Разрешить точный экземпляр службы Kafka PKI для сервера и клиента реестра
   ansible.builtin.include_tasks: resolve_tls_runtime.yml
@@ -46421,7 +46421,7 @@ dependencies: []
   no_log: true
   when: _platform_kafka_tls_runtime.storeType == 'PKCS12'
 
-- name: Запрос пароля хранилища, безопасного для свойств
+- name: "Проверить непустой пароль хранилища Schema Registry"
   ansible.builtin.assert:
     that:
       - _platform_kafka_registry_password | length > 0
@@ -46481,7 +46481,7 @@ dependencies: []
       _platform_kafka_registry_brokers_ready.stdout | regex_findall('\(id: ([0-9]+)') | map('int') | list) | length) == 0
   no_log: true
 
-- name: Проверка или согласование раздела общей схемы
+- name: "Проверить или создать служебный топик схем Schema Registry"
   ansible.builtin.include_tasks: schema_registry_topic.yml
 
 - name: Отрисовка принадлежащей системной службы реестра
@@ -46541,7 +46541,7 @@ dependencies: []
   delay: "{{ platform_kafka_schema_registry_readiness_delay }}"
   until: _platform_kafka_registry_http_ready.status | default(0) == 200
 
-- name: Отбросить факт локального пароля
+- name: "Сбросить временную переменную пароля"
   ansible.builtin.set_fact:
     _platform_kafka_registry_password: ''
   no_log: true
@@ -46673,7 +46673,7 @@ dependencies: []
   no_log: true
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/schema_registry_validate.yml","mode":420,"size":5560,"sha256":"8b14938340c7ee99c2babcab765c8290bead14cfe676e558dba767febc809b23","index":0,"count":1,"encoding":"utf-8","payloadBytes":5560}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/schema_registry_validate.yml","mode":420,"size":5533,"sha256":"bc89262575eddcbfb631058034f6a57bea529b35747e9fd456af57644dd05a30","index":0,"count":1,"encoding":"utf-8","payloadBytes":5533}
 ---
 - name: Проверка компонента реестра и фазы выполнения
   ansible.builtin.assert:
@@ -46689,7 +46689,7 @@ dependencies: []
       - platform_kafka_schema_registry_name is match('^[A-Za-z0-9_-]+$')
     fail_msg: SCHEMA_REGISTRY_INPUT_INVALID
 
-- name: Ресурсы реестра проекта через общий фильтр Core
+- name: "Рассчитать ресурсы Schema Registry общим фильтром Core"
   ansible.builtin.set_fact:
     _platform_kafka_registry_projection: >-
       {{ _platform_kafka_instances | platform.core.platform_kafka_schema_registry_projection(
@@ -46765,7 +46765,7 @@ dependencies: []
   when: item.stat.exists
   register: _platform_kafka_registry_unit_headers
 
-- name: Отказ от неуправляемых системных служб реестра и неявное удаление компонентов
+- name: "Отклонить чужие службы Schema Registry и неявное удаление компонента"
   ansible.builtin.assert:
     that:
       - item.stdout == item.item.registry_instance.ownership_marker
@@ -46893,7 +46893,7 @@ dependencies: []
   when: _platform_kafka_tls_runtime.storeType == 'PKCS12'
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/verify.yml","mode":420,"size":4712,"sha256":"cdd4f0f6064ca354b4bc2a60e150edc436adb04eed548bad7b895ae6d3ffe1ed","index":0,"count":1,"encoding":"utf-8","payloadBytes":4712}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/verify.yml","mode":420,"size":4704,"sha256":"c49e9e4778f62c41cfa44e39a8ce242dac26006b3b58e455f09ac38f025450c3","index":0,"count":1,"encoding":"utf-8","payloadBytes":4704}
 ---
 - name: Проверка каждого экземпляра службы Kafka в детерминированном порядке
   ansible.builtin.include_tasks: verify_member.yml
@@ -46955,7 +46955,7 @@ dependencies: []
   changed_when: false
   when: inventory_hostname == _platform_kafka_verify_broker.host
 
-- name: Подтвердить, что брокеры Kafka зарегистрированы и не защищены
+- name: "Подтвердить регистрацию брокеров Kafka и состояние unfenced"
   ansible.builtin.assert:
     that:
       - _platform_kafka_unfenced_broker_headers | length == _platform_kafka_broker_instances | length
@@ -47042,7 +47042,7 @@ dependencies: []
   when: kafka_member.listeners | default({}) | length > 0
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/verify_quorum.yml","mode":420,"size":2200,"sha256":"1e208ae9b88b2f1e7bf2555286738c079e9ed093c2b3ac2b1000f5e3361050fa","index":0,"count":1,"encoding":"utf-8","payloadBytes":2200}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/verify_quorum.yml","mode":420,"size":2132,"sha256":"5dcc49c5d7f34eb88f612817bfb601bd071762acd6d3211058bb0b460c532f4a","index":0,"count":1,"encoding":"utf-8","payloadBytes":2132}
 ---
 - name: Разрешить соединение кворума контроллера Kafka CLI из проекции времени выполнения
   ansible.builtin.include_tasks: resolve_cli_connection.yml
@@ -47062,7 +47062,7 @@ dependencies: []
     kafka_cli_expected_controller_ids: >-
       {{ _platform_kafka_controller_instances | map(attribute='node_id') | list }}
 
-- name: Для успешного завершения требуется команда диагностики кворума проецируемого контроллера
+- name: "Проверить успешность команды диагностики кворума Kafka"
   ansible.builtin.assert:
     that: platform_kafka_cli_command_result.rc == 0
     fail_msg: Kafka controller quorum diagnostic command failed
@@ -47472,7 +47472,7 @@ status: requires-integration-evidence
   run_once: true
 
 @@END
-@@PORTABLE {"path":"services/kafka/playbooks/apply.yml","mode":420,"size":4270,"sha256":"bb44a028ab679ab2414865e4f3f53d68b34c0209c55776a311604be449d1693b","index":0,"count":1,"encoding":"utf-8","payloadBytes":4270}
+@@PORTABLE {"path":"services/kafka/playbooks/apply.yml","mode":420,"size":4290,"sha256":"9b686447caf29c2599808e0b6bb8beaa7145327231020e4beb35287e2604f6e3","index":0,"count":1,"encoding":"utf-8","payloadBytes":4290}
 ---
 - import_playbook: ../../../ansible-core/playbooks/validate.yml
 
@@ -47480,7 +47480,7 @@ status: requires-integration-evidence
 
 - import_playbook: discover.yml
 
-- name: Kafka агрегирование обнаружения идентификационных данных
+- name: "Объединить результаты обнаружения идентификаторов Kafka"
   hosts: platform_targets
   gather_facts: false
   tasks:
@@ -47516,7 +47516,7 @@ status: requires-integration-evidence
       # not make a repeat service apply appear changed.
       changed_when: false
 
-- name: Kafka создал проекцию идентичности
+- name: "Сохранить рассчитанные идентификаторы Kafka"
   hosts: platform_targets
   gather_facts: false
   tasks:
@@ -47645,7 +47645,7 @@ status: requires-integration-evidence
       when: platform_generated_state_path is defined
 
 @@END
-@@PORTABLE {"path":"services/kafka/playbooks/reset_kafka_host.yml","mode":420,"size":5731,"sha256":"e751685c736a19376d47fc9f108f92e80424c5a9375d7a52f3b846f3b0465a11","index":0,"count":1,"encoding":"utf-8","payloadBytes":5731}
+@@PORTABLE {"path":"services/kafka/playbooks/reset_kafka_host.yml","mode":420,"size":5696,"sha256":"547c413e9bf6e69634d8c624c7755018b42556745d480c55a0e4a7e2a008fd76","index":0,"count":1,"encoding":"utf-8","payloadBytes":5696}
 ---
 - name: Деструктивный сброс среды выполнения Kafka с явно выбранных хостов QA
   hosts: platform_targets
@@ -47667,7 +47667,7 @@ status: requires-integration-evidence
           - platform_kafka_host_reset_confirmation == platform_kafka_host_reset_expected_confirmation
         fail_msg: 'BLOCKED: reset_kafka_host requires exact destructive acknowledgement'
 
-    - name: Обнаружить все сервисы Kafka systemd systemd
+    - name: "Найти все службы Kafka в systemd"
       ansible.builtin.shell: |
         set -o pipefail
         {
@@ -47743,7 +47743,7 @@ status: requires-integration-evidence
         state: absent
       loop: "{{ platform_kafka_host_reset_paths }}"
 
-    - name: Найти служебные файлы systemd Kafka systemd
+    - name: "Найти файлы служб Kafka в systemd"
       ansible.builtin.find:
         paths: /etc/systemd/system
         patterns:
@@ -47752,7 +47752,7 @@ status: requires-integration-evidence
         recurse: false
       register: platform_kafka_host_reset_unit_files
 
-    - name: Удалить служебные файлы systemd Kafka systemd
+    - name: "Удалить файлы служб Kafka из systemd"
       ansible.builtin.file:
         path: "{{ item.path }}"
         state: absent
@@ -48080,7 +48080,7 @@ platform_keepalived_haproxy_health_check:
   rise: 2
 
 @@END
-@@PORTABLE {"path":"services/keepalived/ansible_collections/platform/keepalived/roles/keepalived/tasks/activate.yml","mode":420,"size":2435,"sha256":"448470071a912424242b7b1c0bfa4247a63bf10c15c616b83c47ac6aa022de9d","index":0,"count":1,"encoding":"utf-8","payloadBytes":2435}
+@@PORTABLE {"path":"services/keepalived/ansible_collections/platform/keepalived/roles/keepalived/tasks/activate.yml","mode":420,"size":2457,"sha256":"e289455de354263aa2cffe6c37168dd9f12bba71a9cd4f2456e6ccb0d2f2310e","index":0,"count":1,"encoding":"utf-8","payloadBytes":2457}
 ---
 - name: Пересчитать подготовленную контрольную сумму кандидата Keepalived
   ansible.builtin.stat:
@@ -48090,7 +48090,7 @@ platform_keepalived_haproxy_health_check:
     get_attributes: false
   register: platform_keepalived_activation_candidate_stat
 
-- name: Активация Assert использует кандидата, проверенного на этапе A
+- name: "Проверить, что активируется конфигурация Keepalived, проверенная на этапе A"
   ansible.builtin.assert:
     that:
       - platform_keepalived_activation_candidate_stat.stat.exists
@@ -48188,7 +48188,7 @@ platform_keepalived_haproxy_health_check:
   when: platform_keepalived_verify_only | bool
 
 @@END
-@@PORTABLE {"path":"services/keepalived/ansible_collections/platform/keepalived/roles/keepalived/tasks/prepare.yml","mode":420,"size":2175,"sha256":"a2daf560a6d6cc9017b8e6ade410bb4e8d1679ad130f325c51380cee6ef995af","index":0,"count":1,"encoding":"utf-8","payloadBytes":2175}
+@@PORTABLE {"path":"services/keepalived/ansible_collections/platform/keepalived/roles/keepalived/tasks/prepare.yml","mode":420,"size":2187,"sha256":"f057deed21cf49dce37d74cdbaf60d54d11379c57e32c185571b2eea8dedb6c4","index":0,"count":1,"encoding":"utf-8","payloadBytes":2187}
 ---
 - name: Установить одобренный пакет Keepalived из настроенных системных репозиториев
   ansible.builtin.package:
@@ -48198,7 +48198,7 @@ platform_keepalived_haproxy_health_check:
     platform_resolved_artifact_sources is not defined or
     platform_resolved_artifact_sources.keepalived.source == 'REPOSITORY'
 
-- name: Создать каталог примитивов готовности Keepalived HAProxy
+- name: "Создать каталог скрипта проверки готовности HAProxy для Keepalived"
   ansible.builtin.file:
     path: "{{ platform_keepalived_haproxy_check_path | dirname }}"
     state: directory
@@ -48206,7 +48206,7 @@ platform_keepalived_haproxy_health_check:
     group: root
     mode: '0755'
 
-- name: Установить примитив готовности HAProxy, принадлежащий пакету
+- name: "Установить скрипт проверки готовности HAProxy из пакета"
   ansible.builtin.template:
     src: check-haproxy-ready.sh.j2
     dest: "{{ platform_keepalived_haproxy_check_path }}"
@@ -48296,7 +48296,7 @@ platform_keepalived_haproxy_health_check:
     label: "{{ item.key }}"
 
 @@END
-@@PORTABLE {"path":"services/keepalived/ansible_collections/platform/keepalived/roles/keepalived/tasks/verify.yml","mode":420,"size":2038,"sha256":"0c82ec9949d8f86a2be9477730e2efd5f27399fe7de4fd0a8a07d0c5469eb6e3","index":0,"count":1,"encoding":"utf-8","payloadBytes":2038}
+@@PORTABLE {"path":"services/keepalived/ansible_collections/platform/keepalived/roles/keepalived/tasks/verify.yml","mode":420,"size":2009,"sha256":"2ee936993e7eaa7e97833fd613f8e7d5009bb199d5f0fd1db5c0e0df9df4afb2","index":0,"count":1,"encoding":"utf-8","payloadBytes":2009}
 ---
 - name: Проверить состояние службы Keepalived без изменений
   ansible.builtin.command:
@@ -48319,7 +48319,7 @@ platform_keepalived_haproxy_health_check:
   ansible.builtin.set_fact:
     platform_keepalived_local_ownership: {}
 
-- name: Убедиться, что каждое локальное развертывание Keepalived имеет полное право собственности на VIP
+- name: "Проверить распределение VIP между участниками каждого развёртывания Keepalived"
   ansible.builtin.include_tasks: verify_deployment.yml
   loop: "{{ platform_desired_state.serviceDeployments | dict2items | selectattr('value.serviceType', 'equalto', 'keepalived') | selectattr('key', 'in', platform_deployments | default({})) | list }}"
   loop_control:
@@ -48334,7 +48334,7 @@ platform_keepalived_haproxy_health_check:
     label: "{{ platform_keepalived_tracking_deployment.key }}"
 
 @@END
-@@PORTABLE {"path":"services/keepalived/ansible_collections/platform/keepalived/roles/keepalived/tasks/verify_deployment.yml","mode":420,"size":3548,"sha256":"cd0bd2760842415f87bc15bacde20c8fbb5627173fb8949ace674dad596ad80b","index":0,"count":1,"encoding":"utf-8","payloadBytes":3548}
+@@PORTABLE {"path":"services/keepalived/ansible_collections/platform/keepalived/roles/keepalived/tasks/verify_deployment.yml","mode":420,"size":3589,"sha256":"8451b62a19a0a44471a4e19543df335d51e6f1cd812b6a637c60b2b95d9bb806","index":0,"count":1,"encoding":"utf-8","payloadBytes":3589}
 ---
 - name: Определение владения локальным настроенным виртуальным адресом
   ansible.builtin.set_fact:
@@ -48385,7 +48385,7 @@ platform_keepalived_haproxy_health_check:
     fail_msg: KEEPALIVED_VRRP_OWNERSHIP_INVALID
   run_once: true
 
-- name: Отчет об очищенных доказательствах владения VRRP
+- name: "Показать результаты проверки владельца VIP без чувствительных данных"
   ansible.builtin.debug:
     msg:
       deployment: "{{ platform_keepalived_deployment.key }}"
@@ -48395,7 +48395,7 @@ platform_keepalived_haproxy_health_check:
   run_once: true
 
 @@END
-@@PORTABLE {"path":"services/keepalived/ansible_collections/platform/keepalived/roles/keepalived/tasks/verify_tracking.yml","mode":420,"size":3442,"sha256":"6efc671e6e0f8c74aa70a1dbce2343da146fcd762dacfb0070cd992433189db9","index":0,"count":1,"encoding":"utf-8","payloadBytes":3442}
+@@PORTABLE {"path":"services/keepalived/ansible_collections/platform/keepalived/roles/keepalived/tasks/verify_tracking.yml","mode":420,"size":3457,"sha256":"6232b1ac25fb28b28f26bc3d9ce607be104dc23cad45b93e6424dc0bb7a7532f","index":0,"count":1,"encoding":"utf-8","payloadBytes":3457}
 ---
 - name: Проверка вспомогательных атрибутов готовности HAProxy, доступных только для чтения
   ansible.builtin.stat:
@@ -48419,7 +48419,7 @@ platform_keepalived_haproxy_health_check:
     src: "{{ platform_keepalived_haproxy_check_path }}"
   register: platform_keepalived_haproxy_helper_content
 
-- name: Помощник подтверждения готовности HAProxy ограничен и локальн
+- name: "Проверить локальность и таймауты скрипта проверки готовности HAProxy"
   ansible.builtin.assert:
     that:
       - platform_keepalived_haproxy_helper_content.content | b64decode is search('systemctl is-active --quiet haproxy')
@@ -48620,7 +48620,7 @@ status: accepted-net-02-runtime-evidence
 }
 
 @@END
-@@PORTABLE {"path":"services/keepalived/playbooks/apply.yml","mode":420,"size":4833,"sha256":"1b9587a80b90711bd0a928ca388b3cdf6d558cddebe0aa5f0810f2b0fcfdb10e","index":0,"count":1,"encoding":"utf-8","payloadBytes":4833}
+@@PORTABLE {"path":"services/keepalived/playbooks/apply.yml","mode":420,"size":4841,"sha256":"bd2a8054170c87346d603aafed9acf1d2de7be8d4bfd72839b29466c60d80644","index":0,"count":1,"encoding":"utf-8","payloadBytes":4841}
 ---
 - name: Определение точных участников развертывания Keepalived
   hosts: localhost
@@ -48673,7 +48673,7 @@ status: accepted-net-02-runtime-evidence
   vars:
     _platform_keepalived_participants: "{{ hostvars['localhost']._platform_keepalived_participants | default([]) }}"
   tasks:
-    - name: Убедиться, что каждый участник создал проходного кандидата
+    - name: "Проверить, что конфигурация каждого участника прошла проверку"
       ansible.builtin.assert:
         that:
           - hostvars[item].platform_keepalived_candidate_checksum | default('') | length > 0
@@ -49087,9 +49087,9 @@ platform_postgresql_application_phase: preflight
   when: platform_postgresql_application_phase in ['preflight', 'resources', 'accounts', 'verify']
 
 @@END
-@@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/roles/application_provider/tasks/preflight.yml","mode":420,"size":7522,"sha256":"65d55467a3e7be3545117688b6e8f8dddd2b96f70a2b044ac9da32b5c7893446","index":0,"count":1,"encoding":"utf-8","payloadBytes":7522}
+@@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/roles/application_provider/tasks/preflight.yml","mode":420,"size":7494,"sha256":"26168b59627f05488e8c2b1b86ce5b08cc29df06e7802b2bf0a78f119ff31816","index":0,"count":1,"encoding":"utf-8","payloadBytes":7494}
 ---
-- name: Проверка ограниченных разрешенных входных данных, включая инвентаризацию вручную
+- name: "Проверить входные параметры, в том числе при ручном запуске с inventory"
   ansible.builtin.assert:
     that: platform_postgresql_application_job | platform.postgresql.application_validate_provider_job
     fail_msg: APPLICATION_PROVIDER_INPUT_INVALID
@@ -49226,7 +49226,7 @@ platform_postgresql_application_phase: preflight
   no_log: true
 
 @@END
-@@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/roles/application_provider/tasks/restore_database.yml","mode":420,"size":6811,"sha256":"e938f238dce540f2f866d846eba4428633d46a1ebad659bade6848016dfdf6c8","index":0,"count":1,"encoding":"utf-8","payloadBytes":6811}
+@@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/roles/application_provider/tasks/restore_database.yml","mode":420,"size":6754,"sha256":"8770d7cfc33e41f0c14834ca466d5833bee858234fc1d368f9c9326116c71b42","index":0,"count":1,"encoding":"utf-8","payloadBytes":6754}
 ---
 - name: Подготовка, восстановление и пометка вновь созданной управляемой базы данных
   when: application_restore_database.name not in platform_application_provider_runtime[platform_postgresql_application_job.providerId].catalog.databases
@@ -49234,7 +49234,7 @@ platform_postgresql_application_phase: preflight
     application_provider_target: "{{ platform_application_provider_runtime[platform_postgresql_application_job.providerId].candidate }}"
     application_provider_os_user: "{{ hostvars[application_provider_target.hostId].platform_postgresql_user | default(platform_postgresql_user) }}"
   block:
-    - name: Выделить частный промежуточный этап восстановления на выбранном первичном сервере PostgreSQL
+    - name: "Создать защищённый временный каталог восстановления на основном сервере PostgreSQL"
       ansible.builtin.tempfile:
         state: directory
         prefix: .application-restore-
@@ -49244,7 +49244,7 @@ platform_postgresql_application_phase: preflight
       register: application_restore_stage
       no_log: true
 
-    - name: Разрешить прохождение этапа восстановления только идентификатору среды выполнения PostgreSQL
+    - name: "Ограничить доступ к каталогу восстановления учётной записью PostgreSQL"
       ansible.builtin.file:
         path: "{{ application_restore_stage.path }}"
         owner: "{{ application_provider_os_user }}"
@@ -49274,7 +49274,7 @@ platform_postgresql_application_phase: preflight
       register: application_restore_bytes
       no_log: true
 
-    - name: Запросить точный дамп пакета
+    - name: "Проверить соответствие доставленного дампа исходному пакету"
       ansible.builtin.assert:
         that: application_restore_bytes.stat.checksum == application_restore_database.restoreOnCreate.sha256
         fail_msg: APPLICATION_RESTORE_DIGEST_INVALID
@@ -49295,7 +49295,7 @@ platform_postgresql_application_phase: preflight
       changed_when: true
       no_log: true
 
-    - name: Восстановление точного пользовательского архива в качестве владельца управляемой базы данных
+    - name: "Восстановить дамп формата custom от имени владельца базы данных"
       ansible.builtin.command:
         argv: [pg_restore, --exit-on-error, --no-owner, --no-acl, --role, "{{ application_restore_database.owner }}", -h, "{{ platform_postgresql_application_socket }}", -p, "{{ application_provider_target.port }}", -U, "{{ application_provider_os_user }}", -d, "{{ application_restore_database.name }}", "{{ application_restore_stage.path }}/database.dump"]
       delegate_to: "{{ application_provider_target.hostId }}"
@@ -49882,7 +49882,7 @@ platform_postgresql_pgpass_file: "/var/lib/pgsql/.pgpass"
     state: restarted
 
 @@END
-@@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/roles/postgresql/tasks/clear.yml","mode":420,"size":7756,"sha256":"fff220b535822b50f9a958ba61c3236c1d7ed801b16bf19df3993248cdbe91c7","index":0,"count":1,"encoding":"utf-8","payloadBytes":7756}
+@@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/roles/postgresql/tasks/clear.yml","mode":420,"size":7773,"sha256":"a9f58770d841cb8482adac7a5d0afec7953e643786e7f2e3a82ae10c618c5669","index":0,"count":1,"encoding":"utf-8","payloadBytes":7773}
 ---
 - name: Требовать точное подтверждение чистой установки PostgreSQL
   ansible.builtin.assert:
@@ -50040,7 +50040,7 @@ platform_postgresql_pgpass_file: "/var/lib/pgsql/.pgpass"
     state: absent
   loop: "{{ _platform_postgresql_clear_paths }}"
 
-- name: Удалить выбранную службу systemd PostgreSQL systemd
+- name: "Удалить выбранную службу PostgreSQL из systemd"
   ansible.builtin.file:
     path: "{{ _platform_postgresql_clear_unit }}"
     state: absent
@@ -50064,7 +50064,7 @@ platform_postgresql_pgpass_file: "/var/lib/pgsql/.pgpass"
   register: platform_postgresql_clear_final_state
   loop: "{{ _platform_postgresql_clear_paths }}"
 
-- name: Assert PostgreSQL clean_install удалил выбранные пути выполнения
+- name: "Проверить удаление выбранных каталогов PostgreSQL после clean_install"
   ansible.builtin.assert:
     that: not item.stat.exists
     fail_msg: "PostgreSQL clean_install did not remove {{ item.item }}"
@@ -50073,7 +50073,7 @@ platform_postgresql_pgpass_file: "/var/lib/pgsql/.pgpass"
     label: "{{ item.item }}"
 
 @@END
-@@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/roles/postgresql/tasks/client_subnet.yml","mode":420,"size":2084,"sha256":"c43df4c702a288394dbd346ba9ae31b49af5b4fa7e843de051be4a59f505e61b","index":0,"count":1,"encoding":"utf-8","payloadBytes":2084}
+@@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/roles/postgresql/tasks/client_subnet.yml","mode":420,"size":2079,"sha256":"cf9f933778cda2b716a925619ac5df65653a7f5378de94cdb4d362d841a4cd60","index":0,"count":1,"encoding":"utf-8","payloadBytes":2079}
 ---
 - name: Сбор сетевых фактов для автоматического доступа клиента PostgreSQL
   ansible.builtin.setup:
@@ -50097,7 +50097,7 @@ platform_postgresql_pgpass_file: "/var/lib/pgsql/.pgpass"
              (_platform_postgresql_local_members | first).address | default(ansible_facts.default_ipv4.address | default('')))
          | list }}
 
-- name: Запрос наблюдаемой клиентской подсети PostgreSQL без угадывания префикса
+- name: "Проверить наличие клиентской подсети PostgreSQL в сетевых данных узла"
   ansible.builtin.assert:
     that:
       - _platform_postgresql_client_networks | length == 1
@@ -50113,13 +50113,13 @@ platform_postgresql_pgpass_file: "/var/lib/pgsql/.pgpass"
          (_platform_postgresql_client_networks | first).prefix }}
 
 @@END
-@@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/roles/postgresql/tasks/flush_handlers.yml","mode":420,"size":166,"sha256":"add0ba7eca718fce0ec42231ebd3386559e615026ae27d3d2bddba616204d491","index":0,"count":1,"encoding":"utf-8","payloadBytes":166}
+@@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/roles/postgresql/tasks/flush_handlers.yml","mode":420,"size":190,"sha256":"3b56adb7d8eed9dfc8f5e3e3220dac0a2d9840524f76148d37694028525a8cc8","index":0,"count":1,"encoding":"utf-8","payloadBytes":190}
 ---
-- name: Очистить обработчики PostgreSQL перед проверками учетных данных TLS
+- name: "Выполнить отложенные обработчики PostgreSQL перед проверкой TLS-аутентификации"
   ansible.builtin.meta: flush_handlers
 
 @@END
-@@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/roles/postgresql/tasks/install_tls.yml","mode":420,"size":1763,"sha256":"cfb759ec586166f9b2f6b0c15571d6d33a72e00a30f2a805351b1b172a6b1440","index":0,"count":1,"encoding":"utf-8","payloadBytes":1763}
+@@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/roles/postgresql/tasks/install_tls.yml","mode":420,"size":1727,"sha256":"772c2d554b5cc0394661fbca0a0ce9a02098b40985380799b0f357a2bb884149","index":0,"count":1,"encoding":"utf-8","payloadBytes":1727}
 ---
 - name: Создать каталог TLS, принадлежащий PostgreSQL, после настройки учетной записи
   ansible.builtin.file:
@@ -50146,7 +50146,7 @@ platform_postgresql_pgpass_file: "/var/lib/pgsql/.pgpass"
   notify: Перезагрузить материал PostgreSQL TLS
   when: not (platform_postgresql_verify_only | bool)
 
-- name: Проверить файлы TLS, принадлежащие PostgreSQL, доступные только для чтения
+- name: "Проверить TLS-файлы PostgreSQL без внесения изменений"
   ansible.builtin.stat:
     path: "{{ _platform_postgresql_tls_directory }}/{{ item }}"
     get_mime: false
@@ -50161,7 +50161,7 @@ platform_postgresql_pgpass_file: "/var/lib/pgsql/.pgpass"
     fail_msg: POSTGRES_TLS_FILES_NOT_DEPLOYED
 
 @@END
-@@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/roles/postgresql/tasks/main.yml","mode":420,"size":7755,"sha256":"3c35764ffa51dd8dce4f8d271c8374f1c13cda93f7c275a9d2c2c1ce23dc48a8","index":0,"count":1,"encoding":"utf-8","payloadBytes":7755}
+@@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/roles/postgresql/tasks/main.yml","mode":420,"size":7690,"sha256":"ef0eac4c1f27b7e21706a30b7d4d1f1dda4ddedf9403d49587dd63d4d2559802","index":0,"count":1,"encoding":"utf-8","payloadBytes":7690}
 ---
 - name: Проверка настроек ресурсов переносимой службы
   ansible.builtin.include_role:
@@ -50177,7 +50177,7 @@ platform_postgresql_pgpass_file: "/var/lib/pgsql/.pgpass"
     platform_managed_data_root_owner: "{{ ansible_user | default('') }}"
     platform_managed_data_root_verify_only: "{{ platform_postgresql_verify_only | bool }}"
 
-- name: Решить точный потребительский план PostgreSQL PKI перед внесением изменений
+- name: "Выбрать план PKI для PostgreSQL до внесения изменений"
   ansible.builtin.include_tasks: resolve_tls.yml
   when: platform_postgresql_tls_profile | length > 0
 
@@ -50217,7 +50217,7 @@ platform_postgresql_pgpass_file: "/var/lib/pgsql/.pgpass"
 - name: Проверка входных данных службы PostgreSQL
   ansible.builtin.include_tasks: validate.yml
 
-- name: Разрешить установленный двоичный каталог PostgreSQL
+- name: "Определить каталог исполняемых файлов PostgreSQL"
   ansible.builtin.include_tasks: resolve_binary_directory.yml
 
 - name: Определить экземпляр PostgreSQL на узле inventory
@@ -50233,7 +50233,7 @@ platform_postgresql_pgpass_file: "/var/lib/pgsql/.pgpass"
   ansible.builtin.include_tasks: client_subnet.yml
   when: not (platform_postgresql_verify_only | bool)
 
-- name: Получение точного имени службы systemd PostgreSQL systemd
+- name: "Определить имя службы PostgreSQL в systemd"
   ansible.builtin.set_fact:
     _platform_postgresql_unit_name: >-
       {{ platform_postgresql_name ~ '@' ~ platform_postgresql_deployment_id ~ '-'
@@ -50500,7 +50500,7 @@ platform_postgresql_pgpass_file: "/var/lib/pgsql/.pgpass"
   changed_when: true
 
 @@END
-@@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/roles/postgresql/tasks/reconcile.yml","mode":420,"size":24797,"sha256":"2c65ca46bdf4008c96909068121e3aa9a5cfee248ed8bb947cf982cdb414770c","index":0,"count":1,"encoding":"utf-8","payloadBytes":24797}
+@@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/roles/postgresql/tasks/reconcile.yml","mode":420,"size":24772,"sha256":"8fa63aa69e522ea0e91517e5c61d25596dd848641441bb789f5577fa1c8b584c","index":0,"count":1,"encoding":"utf-8","payloadBytes":24772}
 ---
 - name: Разрешить точные пакеты репозитория PostgreSQL перед установкой
   ansible.builtin.include_tasks: resolve_packages.yml
@@ -50535,7 +50535,7 @@ platform_postgresql_pgpass_file: "/var/lib/pgsql/.pgpass"
     - platform_postgresql_mode == 'pg_auto_failover'
     - platform_resolved_artifact_sources is not defined or platform_resolved_artifact_sources['pg-auto-failover'].source == 'REPOSITORY'
 
-- name: Разрешить двоичный каталог PostgreSQL после установки пакета
+- name: "Определить каталог исполняемых файлов PostgreSQL после установки пакета"
   ansible.builtin.include_tasks: resolve_binary_directory.yml
   vars:
     platform_postgresql_require_binary_directory: true
@@ -50561,7 +50561,7 @@ platform_postgresql_pgpass_file: "/var/lib/pgsql/.pgpass"
     - "{{ platform_postgresql_log_directory }}"
   when: not (platform_postgresql_verify_only | bool)
 
-- name: Установить принадлежащий PostgreSQL материал TLS после существования каталогов учетной записи и базы
+- name: "Установить TLS-файлы PostgreSQL после создания учётной записи и каталогов"
   ansible.builtin.include_tasks: install_tls.yml
   when: platform_postgresql_tls_profile | length > 0
 
@@ -50641,7 +50641,7 @@ platform_postgresql_pgpass_file: "/var/lib/pgsql/.pgpass"
   when: not (platform_postgresql_verify_only | bool)
   notify: Перезапустить PostgreSQL
 
-- name: Count Platform PostgreSQL включается в конфигурацию, принадлежащую initdb
+- name: "Подсчитать подключения postgresql-platform.conf в основной конфигурации PostgreSQL"
   ansible.builtin.command:
     argv:
       - grep
@@ -50659,7 +50659,7 @@ platform_postgresql_pgpass_file: "/var/lib/pgsql/.pgpass"
       - platform_postgresql_include_count.stdout | trim == '1'
     fail_msg: POSTGRES_PLATFORM_INCLUDE_INVALID
 
-- name: Установка службы systemd PostgreSQL systemd на уровне экземпляра
+- name: "Установить службу systemd для экземпляра PostgreSQL"
   ansible.builtin.template:
     src: postgresql.service.j2
     dest: "/etc/systemd/system/{{ _platform_postgresql_unit_name }}"
@@ -50984,14 +50984,14 @@ platform_postgresql_pgpass_file: "/var/lib/pgsql/.pgpass"
   when: platform_postgresql_verify_only | bool
 
 @@END
-@@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/roles/postgresql/tasks/resolve_binary_directory.yml","mode":420,"size":2090,"sha256":"0ee3a45be1088f8c600538cf06a7655b6f4d18a0d5878785e67f09e61fb3efe3","index":0,"count":1,"encoding":"utf-8","payloadBytes":2090}
+@@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/roles/postgresql/tasks/resolve_binary_directory.yml","mode":420,"size":2130,"sha256":"a0d108c9919680db607c2de21c1a54b0be5033fefabf99bc9c89e0346e41f5cb","index":0,"count":1,"encoding":"utf-8","payloadBytes":2130}
 ---
 - name: Запомнить, был ли явно настроен двоичный каталог PostgreSQL
   ansible.builtin.set_fact:
     _platform_postgresql_binary_directory_override: "{{ platform_postgresql_binary_directory | length > 0 }}"
   when: _platform_postgresql_binary_directory_override is not defined
 
-- name: Сборка кандидатов двоичного каталога PostgreSQL
+- name: "Собрать возможные каталоги исполняемых файлов PostgreSQL"
   ansible.builtin.set_fact:
     _platform_postgresql_binary_directory_candidates: >-
       {{ [platform_postgresql_binary_directory]
@@ -51008,7 +51008,7 @@ platform_postgresql_pgpass_file: "/var/lib/pgsql/.pgpass"
   loop: "{{ _platform_postgresql_binary_directory_candidates }}"
   register: _platform_postgresql_binary_candidate_stats
 
-- name: Выбрать установленный двоичный каталог PostgreSQL
+- name: "Выбрать каталог установленных исполняемых файлов PostgreSQL"
   ansible.builtin.set_fact:
     platform_postgresql_binary_directory: >-
       {{ (_platform_postgresql_binary_candidate_stats.results
@@ -51026,7 +51026,7 @@ platform_postgresql_pgpass_file: "/var/lib/pgsql/.pgpass"
   when: platform_postgresql_require_binary_directory | default(false) | bool
 
 @@END
-@@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/roles/postgresql/tasks/resolve_packages.yml","mode":420,"size":6305,"sha256":"3161f3ba5db94abed2ec556fb05f4ed8673908dcedf78e2c894c1bd3a2eefa88","index":0,"count":1,"encoding":"utf-8","payloadBytes":6305}
+@@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/roles/postgresql/tasks/resolve_packages.yml","mode":420,"size":6245,"sha256":"62007d0d2e1956f7bb8d2312bb7f10fb2968976b55d91943925de14846085723","index":0,"count":1,"encoding":"utf-8","payloadBytes":6245}
 - name: Проверка имен устаревших пакетов PostgreSQL по маскам точной версии
   ansible.builtin.command:
     argv:
@@ -51049,7 +51049,7 @@ platform_postgresql_pgpass_file: "/var/lib/pgsql/.pgpass"
     - platform_resolved_artifact_sources is not defined or
       platform_resolved_artifact_sources['postgresql-runtime'].source == 'REPOSITORY'
 
-- name: Проверка имен пакетов PostgreSQL с основной областью действия по маскам точной версии
+- name: "Проверить имена пакетов PostgreSQL с указанием основной версии"
   ansible.builtin.command:
     argv:
       - dnf
@@ -51093,7 +51093,7 @@ platform_postgresql_pgpass_file: "/var/lib/pgsql/.pgpass"
     - platform_resolved_artifact_sources is not defined or
       platform_resolved_artifact_sources['postgresql-runtime'].source == 'REPOSITORY'
 
-- name: Проверка имени пакета pg_auto_failover с основной областью действия по маске версии
+- name: "Проверить имя пакета pg_auto_failover с указанием основной версии PostgreSQL"
   ansible.builtin.command:
     argv:
       - dnf
@@ -51148,7 +51148,7 @@ platform_postgresql_pgpass_file: "/var/lib/pgsql/.pgpass"
     - platform_resolved_artifact_sources is not defined or
       platform_resolved_artifact_sources['pg-auto-failover'].source == 'REPOSITORY'
 
-- name: Запросить запрошенный пакет pg_auto_failover из настроенного репозитория
+- name: "Проверить наличие требуемого pg_auto_failover в настроенном репозитории"
   ansible.builtin.assert:
     that: _platform_postgresql_failover_repository_package | length == 1
     fail_msg: POSTGRES_FAILOVER_PACKAGE_UNAVAILABLE
@@ -51188,7 +51188,7 @@ platform_postgresql_pgpass_file: "/var/lib/pgsql/.pgpass"
     fail_msg: POSTGRES_PKI_MATERIALIZATION_REQUIRED
 
 @@END
-@@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/roles/postgresql/tasks/validate.yml","mode":420,"size":7318,"sha256":"2bca06cd13354b8f430f6dda746fe44c25a36194d9663a59687395da8b190971","index":0,"count":1,"encoding":"utf-8","payloadBytes":7318}
+@@PORTABLE {"path":"services/postgresql/ansible_collections/platform/postgresql/roles/postgresql/tasks/validate.yml","mode":420,"size":7293,"sha256":"ef2a82b08809dfa0dc5e3b54c641b9fdbb3488faee55b668e45b09cf335a77f6","index":0,"count":1,"encoding":"utf-8","payloadBytes":7293}
 ---
 - name: Проверка режима PostgreSQL
   ansible.builtin.assert:
@@ -51234,7 +51234,7 @@ platform_postgresql_pgpass_file: "/var/lib/pgsql/.pgpass"
     label: "{{ item.id | default('unknown') }}"
   when: platform_postgresql_instances | length > 0
 
-- name: Проверка количества экземпляров автономного экземпляра службы
+- name: "Проверить число экземпляров PostgreSQL в standalone-режиме"
   ansible.builtin.assert:
     that:
       - platform_postgresql_instances | length == 1
@@ -52230,7 +52230,7 @@ platform_application_secret_root: ''
 platform_redis_application_credential_files: "{{ platform_redis_secret_files | combine(platform_application_secret_files | default({})) | combine(platform_application_credential_files | default({})) }}"
 
 @@END
-@@PORTABLE {"path":"services/redis/ansible_collections/platform/redis/roles/application_provider/tasks/account_scope.yml","mode":420,"size":2364,"sha256":"731b47fd333b5788f887c63ab557f17661eba0776d3150f19f854ae40328f2b4","index":0,"count":1,"encoding":"utf-8","payloadBytes":2364}
+@@PORTABLE {"path":"services/redis/ansible_collections/platform/redis/roles/application_provider/tasks/account_scope.yml","mode":420,"size":2286,"sha256":"3d7b39755357a24b3ceee71579e923e50bc67c5c7bbc607a915c9779a59ef5e9","index":0,"count":1,"encoding":"utf-8","payloadBytes":2286}
 ---
 - name: Требовать учетные данные частного вызова перед любым вызовом учетной записи Redis
   ansible.builtin.assert:
@@ -52245,7 +52245,7 @@ platform_redis_application_credential_files: "{{ platform_redis_secret_files | c
     fail_msg: APPLICATION_PROVIDER_SECRET_FILE_INVALID
   no_log: true
 
-- name: Проверить или убедитесь, что каждый экземпляр службы учетных записей Redis и Sentinel за один ограниченный вызов
+- name: "Проверить или настроить учётные записи Redis и Sentinel за один вызов"
   platform.redis.application_account:
     address: "{{ item.1.address }}"
     port: "{{ item.1.port }}"
@@ -52438,7 +52438,7 @@ platform_redis_install_from_system_repo: true
     label: "redis:{{ item.instance_name }}"
 
 @@END
-@@PORTABLE {"path":"services/redis/ansible_collections/platform/redis/roles/redis_tls/tasks/main.yml","mode":420,"size":5626,"sha256":"8548861a9cdec8fe5b8d0413df3475523b7a86482cb73089c677c649c3a2a55a","index":0,"count":1,"encoding":"utf-8","payloadBytes":5626}
+@@PORTABLE {"path":"services/redis/ansible_collections/platform/redis/roles/redis_tls/tasks/main.yml","mode":420,"size":5639,"sha256":"95eaad7cd2bed8fa88bcea7ab68c4b79eadc59904097d5951219190b23afe3c2","index":0,"count":1,"encoding":"utf-8","payloadBytes":5639}
 ---
 - name: Проверка настроек ресурсов переносимой службы
   ansible.builtin.include_role:
@@ -52464,7 +52464,7 @@ platform_redis_install_from_system_repo: true
   ansible.builtin.include_tasks: package_preflight.yml
   when: not (platform_redis_verify_only | bool)
 
-- name: Проект списка экземпляров локальной службы Redis
+- name: "Сформировать список локальных экземпляров Redis"
   ansible.builtin.set_fact:
     _platform_redis_local_instances: >-
       {{ _platform_redis_instances | selectattr('host', 'equalto', inventory_hostname) | list }}
@@ -52529,7 +52529,7 @@ platform_redis_install_from_system_repo: true
     label: "{{ redis_member.id }}"
   when: not (platform_redis_verify_only | bool)
 
-- name: Проверка репликации Redis на уровне всего развертывания и соглашения Sentinel
+- name: "Проверить репликацию Redis и согласованность данных Sentinel во всём развёртывании"
   ansible.builtin.include_tasks: verify_deployment.yml
   when:
     - not (platform_redis_verify_only | bool)
@@ -52556,7 +52556,7 @@ platform_redis_install_from_system_repo: true
     - _platform_redis_local_instances | length > 0
 
 @@END
-@@PORTABLE {"path":"services/redis/ansible_collections/platform/redis/roles/redis_tls/tasks/member.yml","mode":420,"size":7996,"sha256":"a6cd340dc943f1233de6048fb645a1761fab396c582d45f85728e9da1520a3c2","index":0,"count":1,"encoding":"utf-8","payloadBytes":7996}
+@@PORTABLE {"path":"services/redis/ansible_collections/platform/redis/roles/redis_tls/tasks/member.yml","mode":420,"size":8028,"sha256":"ac599eb6bc5a00bd319c8507a5e94537cc8a328079880676655869b99b8e66a1","index":0,"count":1,"encoding":"utf-8","payloadBytes":8028}
 ---
 - name: Создание путей к экземпляру службы Redis
   ansible.builtin.file:
@@ -52624,7 +52624,7 @@ platform_redis_install_from_system_repo: true
   register: _platform_redis_acl_legacy_password
   no_log: true
 
-- name: Рендеринг службы экземпляра Redis systemd systemd
+- name: "Сформировать службу systemd для экземпляра Redis"
   ansible.builtin.template:
     src: redis.service.j2
     dest: "/etc/systemd/system/{{ platform_redis_name }}@{{ redis_member.instance_name }}.service"
@@ -52633,7 +52633,7 @@ platform_redis_install_from_system_repo: true
     mode: '0644'
   register: _platform_redis_unit
 
-- name: Начальный узел Sentinel Конфигурация только для TLS для нового Sentinel
+- name: "Создать начальную конфигурацию нового Sentinel с поддержкой только TLS"
   ansible.builtin.template:
     src: sentinel.conf.j2
     dest: "{{ redis_member.config_directory }}/sentinel.conf"
@@ -52646,7 +52646,7 @@ platform_redis_install_from_system_repo: true
     - "'sentinel' in redis_member.roles"
     - not _platform_redis_has_persistent_state
 
-- name: Отрисовка службы экземпляра Sentinel systemd systemd
+- name: "Сформировать службу systemd для экземпляра Sentinel"
   ansible.builtin.template:
     src: sentinel.service.j2
     dest: "/etc/systemd/system/{{ platform_redis_name }}-sentinel@{{ redis_member.instance_name }}.service"
@@ -52656,7 +52656,7 @@ platform_redis_install_from_system_repo: true
   register: _platform_sentinel_unit
   when: "'sentinel' in redis_member.roles"
 
-- name: Прикрепить файл Sentinel ACL, не переписывая его выбранный главный файл
+- name: "Подключить ACL-файл Sentinel, сохранив сведения о выбранном мастере"
   ansible.builtin.lineinfile:
     path: "{{ redis_member.config_directory }}/sentinel.conf"
     regexp: '^\s*aclfile\s+'
@@ -52665,7 +52665,7 @@ platform_redis_install_from_system_repo: true
   when: "'sentinel' in redis_member.roles"
   no_log: true
 
-- name: Удаление устаревшего требования Sentinel после присоединения хешированного ACL
+- name: "Удалить устаревшую директиву requirepass Sentinel после подключения ACL с хешами паролей"
   ansible.builtin.lineinfile:
     path: "{{ redis_member.config_directory }}/sentinel.conf"
     regexp: '^\s*requirepass\s+'
@@ -52692,7 +52692,7 @@ platform_redis_install_from_system_repo: true
   when: "'sentinel' in redis_member.roles"
   no_log: true
 
-- name: Перезагрузить systemd для экземпляра службы Redis systemd Services
+- name: "Перечитать конфигурацию systemd после обновления служб Redis"
   ansible.builtin.systemd:
     daemon_reload: true
   when: >-
@@ -53406,7 +53406,7 @@ platform_redis_install_from_system_repo: true
   when: item.0.id < item.1.id
 
 @@END
-@@PORTABLE {"path":"services/redis/ansible_collections/platform/redis/roles/redis_tls/tasks/verify.yml","mode":420,"size":7870,"sha256":"c0ff52d2b04faca25f7b58df8aa25d766b46cea8c26512377f2acf673a9ff171","index":0,"count":1,"encoding":"utf-8","payloadBytes":7870}
+@@PORTABLE {"path":"services/redis/ansible_collections/platform/redis/roles/redis_tls/tasks/verify.yml","mode":420,"size":7818,"sha256":"f8229f363a635c1fcd38f9f54d7bddeb9f5d0a5384ef4b3924501688ad7104b1","index":0,"count":1,"encoding":"utf-8","payloadBytes":7818}
 ---
 - name: Проверка состояния экземпляра службы Redis systemd
   ansible.builtin.command:
@@ -53594,7 +53594,7 @@ platform_redis_install_from_system_repo: true
   no_log: true
   when: "'sentinel' in redis_member.roles"
 
-- name: Запись безопасного главного наблюдения Sentinel для проверки в масштабе всего развертывания
+- name: "Сохранить обнаруженного Sentinel мастера Redis для общей проверки"
   ansible.builtin.set_fact:
     _platform_redis_observed_sentinel_masters: >-
       {{ _platform_redis_observed_sentinel_masters + [
@@ -53607,7 +53607,7 @@ platform_redis_install_from_system_repo: true
   ansible.builtin.include_tasks: acl_runtime.yml
 
 @@END
-@@PORTABLE {"path":"services/redis/ansible_collections/platform/redis/roles/redis_tls/tasks/verify_deployment.yml","mode":420,"size":2175,"sha256":"4e5e05762920ee737fa3eb2e4bc7332aad2a8db8d2cfe86a7179fe1bb20103bc","index":0,"count":1,"encoding":"utf-8","payloadBytes":2175}
+@@PORTABLE {"path":"services/redis/ansible_collections/platform/redis/roles/redis_tls/tasks/verify_deployment.yml","mode":420,"size":2186,"sha256":"92836e3ecbce806abf74de867d7782041069336e43c0aa5ff0166ab4ab43290f","index":0,"count":1,"encoding":"utf-8","payloadBytes":2186}
 ---
 - name: Проверка наблюдений Redis в масштабе всего развертывания
   vars:
@@ -53634,7 +53634,7 @@ platform_redis_install_from_system_repo: true
           or redis_members | selectattr('replicaReady', 'equalto', true) | list | length == 2
         fail_msg: REDIS_DEPLOYMENT_REPLICA_SET_INVALID
 
-    - name: Требовать один согласованный мастер Sentinel в Sentinel HA
+    - name: "Проверить, что все Sentinel указывают на одного мастера Redis"
       ansible.builtin.assert:
         that: >-
           platform_redis_mode == 'standalone'
@@ -54599,7 +54599,7 @@ platform_vault_bootstrap_output_dir: ''
   no_log: true
 
 @@END
-@@PORTABLE {"path":"services/vault/ansible_collections/platform/vault/roles/application_provider/tasks/document.yml","mode":420,"size":3504,"sha256":"6de6d06d65ab3302f4ea8d539894f3df9c31f6fe58a09abb65a861d002dabdc7","index":0,"count":1,"encoding":"utf-8","payloadBytes":3504}
+@@PORTABLE {"path":"services/vault/ansible_collections/platform/vault/roles/application_provider/tasks/document.yml","mode":420,"size":3571,"sha256":"f4ec5645d7cea8d8532ac125a40be77079e8c59ff9a7177494c60663a6a79507","index":0,"count":1,"encoding":"utf-8","payloadBytes":3571}
 - name: Вычислить минимальные изменения служебных документов
   ansible.builtin.set_fact:
     application_vault_delta: "{{ platform_application_vault_documents[document_key] | platform.vault.application_kv_delta(platform_application_vault_values[document_key], application_vault_document.owner) }}"
@@ -54610,7 +54610,7 @@ platform_vault_bootstrap_output_dir: ''
 
 - name: Сохранить безопасную диагностику записи документа Vault
   block:
-    - name: Записывать только разные поля с помощью CAS
+    - name: "Записать только изменённые поля с проверкой версии CAS"
       ansible.builtin.uri:
         url: "{{ application_vault_provider.url }}/v1/{{ application_vault_document.mount }}/data/{{ application_vault_document.document }}"
         method: "{{ application_vault_delta.method }}"
@@ -54643,7 +54643,7 @@ platform_vault_bootstrap_output_dir: ''
              else 'http' if (ansible_failed_result.status | default(-1) | int > 0)
              else 'module' }}
 
-- name: Перечитать один раз о конфликте CAS и сохранить промежуточные поля
+- name: "Один раз перечитать документ после конфликта CAS, сохранив чужие изменения"
   ansible.builtin.include_tasks: document_retry.yml
   when: >-
     application_vault_delta.changed and
@@ -54651,14 +54651,14 @@ platform_vault_bootstrap_output_dir: ''
     ('check-and-set' in (application_vault_document_write.json.errors | default([]) | join(' ') | lower))
   no_log: true
 
-- name: Сбой закрытия при записи или конфликте CAS без слепой перезаписи
+- name: "Прервать выполнение при ошибке записи или конфликте CAS без перезаписи данных"
   ansible.builtin.assert:
     that: not application_vault_delta.changed or application_vault_document_write.status | int == 200
     fail_msg: APPLICATION_VAULT_DOCUMENT_CAS_CONFLICT
   no_log: true
 
 @@END
-@@PORTABLE {"path":"services/vault/ansible_collections/platform/vault/roles/application_provider/tasks/document_retry.yml","mode":420,"size":3609,"sha256":"b76599b2aa55266b5066ecf0cbfeebfbeb6aaba44f59cc952567eff6f013dd9a","index":0,"count":1,"encoding":"utf-8","payloadBytes":3609}
+@@PORTABLE {"path":"services/vault/ansible_collections/platform/vault/roles/application_provider/tasks/document_retry.yml","mode":420,"size":3623,"sha256":"5cdc6256a0b843e66cdff7d2296fecab77e0c25d1c97d49e01729289255dba72","index":0,"count":1,"encoding":"utf-8","payloadBytes":3623}
 ---
 - name: Чтение документа и версии CAS через разрешенную конечную точку провайдера
   ansible.builtin.uri:
@@ -54685,7 +54685,7 @@ platform_vault_bootstrap_output_dir: ''
 
 - name: Сохранить безопасную диагностику записи документа Vault
   block:
-    - name: Повторить только разные поля с последней версией CAS
+    - name: "Повторить запись изменённых полей с актуальной версией CAS"
       ansible.builtin.uri:
         url: "{{ application_vault_provider.url }}/v1/{{ application_vault_document.mount }}/data/{{ application_vault_document.document }}"
         method: "{{ application_vault_delta.method }}"
@@ -54719,7 +54719,7 @@ platform_vault_bootstrap_output_dir: ''
              else 'module' }}
 
 @@END
-@@PORTABLE {"path":"services/vault/ansible_collections/platform/vault/roles/application_provider/tasks/instance.yml","mode":420,"size":6402,"sha256":"c40171002be2a1296ebc6aef6c9e006dc32048eb367b79f8ae975756ed13db87","index":0,"count":1,"encoding":"utf-8","payloadBytes":6402}
+@@PORTABLE {"path":"services/vault/ansible_collections/platform/vault/roles/application_provider/tasks/instance.yml","mode":420,"size":6442,"sha256":"46d63ab3384c40584390737e1da6703b60bb570cb3d5c38c600cb5fd22693101","index":0,"count":1,"encoding":"utf-8","payloadBytes":6442}
 ---
 - name: Перепроверить собственную политику и роль непосредственно перед сверкой
   ansible.builtin.include_tasks: preflight.yml
@@ -54781,7 +54781,7 @@ platform_vault_bootstrap_output_dir: ''
   delegate_facts: false
   no_log: true
 
-- name: Обновить только другую принадлежащую политику
+- name: "Обновить управляемую политику Vault только при изменении содержимого"
   ansible.builtin.uri:
     url: "{{ application_vault_provider.url }}/v1/sys/policies/acl/{{ platform_vault_application_job.identity }}"
     method: PUT
@@ -55070,7 +55070,7 @@ platform_vault_unseal_keys: []
 platform_vault_bootstrap_lock_root: "/run/lock/{{ platform_vault_name }}"
 
 @@END
-@@PORTABLE {"path":"services/vault/ansible_collections/platform/vault/roles/vault_tls/tasks/acquire_lock.yml","mode":420,"size":5062,"sha256":"f636a700f1c968915e22cdec909cbe4d8eeaa5e8c8a84a5c2cd1b2ac197a7544","index":0,"count":1,"encoding":"utf-8","payloadBytes":5062}
+@@PORTABLE {"path":"services/vault/ansible_collections/platform/vault/roles/vault_tls/tasks/acquire_lock.yml","mode":420,"size":4959,"sha256":"6441ee0cbc20536235e8e46b4f54027161334fd249369a72ca4419ed01d723ab","index":0,"count":1,"encoding":"utf-8","payloadBytes":4959}
 ---
 - name: Проверка канонического хоста блокировки Vault
   ansible.builtin.assert:
@@ -55147,7 +55147,7 @@ platform_vault_bootstrap_lock_root: "/run/lock/{{ platform_vault_name }}"
   # Per-invocation coordination is not a desired-state service change.
   changed_when: false
 
-- name: Дождаться сигнала готовности держателя замка или аварийно-закрытого запуска
+- name: "Дождаться подтверждения блокировки Vault или ошибки её захвата"
   ansible.builtin.command:
     argv: [systemctl, show, --property=ActiveState, --value, "{{ _platform_vault_lock_unit }}.service"]
   register: _platform_vault_lock_state
@@ -55161,7 +55161,7 @@ platform_vault_bootstrap_lock_root: "/run/lock/{{ platform_vault_name }}"
     that: _platform_vault_lock_state.stdout == 'active'
     fail_msg: VAULT_DEPLOYMENT_BUSY
 
-- name: Убедиться, что открытый замок Vault является частным обычным файлом, принадлежащим корневому пользователю
+- name: "Проверить тип, владельца и права файла блокировки Vault"
   ansible.builtin.stat:
     path: "{{ platform_vault_bootstrap_lock_root }}/{{ _platform_vault_lock_key }}.lock"
     follow: false
@@ -55170,7 +55170,7 @@ platform_vault_bootstrap_lock_root: "/run/lock/{{ platform_vault_name }}"
     get_checksum: false
   register: _platform_vault_lock_file_stat
 
-- name: Сбой закрытия, если был заменен файл блокировки Vault
+- name: "Отклонить подменённый или небезопасный файл блокировки Vault"
   ansible.builtin.assert:
     that:
       - _platform_vault_lock_file_stat.stat.isreg
@@ -55180,7 +55180,7 @@ platform_vault_bootstrap_lock_root: "/run/lock/{{ platform_vault_name }}"
     fail_msg: VAULT_LOCK_OBJECT_UNSAFE
 
 @@END
-@@PORTABLE {"path":"services/vault/ansible_collections/platform/vault/roles/vault_tls/tasks/bootstrap.yml","mode":420,"size":18936,"sha256":"1c8b9d584ce43f395ad2d4c6248544c55b93523fff7076d18d442c58eac0ca14","index":0,"count":1,"encoding":"utf-8","payloadBytes":18936}
+@@PORTABLE {"path":"services/vault/ansible_collections/platform/vault/roles/vault_tls/tasks/bootstrap.yml","mode":420,"size":18628,"sha256":"b046421e890275922860e04ba8fb92e6e45a9a0be2f95d175b7eb32341984b90","index":0,"count":1,"encoding":"utf-8","payloadBytes":18628}
 ---
 - name: Запустить канонический начальный узел Vault перед любым последователем Raft
   ansible.builtin.systemd:
@@ -55345,7 +55345,7 @@ platform_vault_bootstrap_lock_root: "/run/lock/{{ platform_vault_name }}"
   when: _platform_vault_bootstrap_material is defined and _platform_vault_output_files.results[0].stat.exists
   no_log: true
 
-- name: Отклонить конфликтующие существующие общие ресурсы перед завершением хранения пары
+- name: "Отклонить несовпадение сохранённых долей ключа перед завершением записи"
   ansible.builtin.assert:
     that:
       - _platform_vault_output_files.results[1].stat.size <= 32768
@@ -55367,7 +55367,7 @@ platform_vault_bootstrap_lock_root: "/run/lock/{{ platform_vault_name }}"
   when: _platform_vault_bootstrap_material is defined and not _platform_vault_output_files.results[0].stat.exists
   no_log: true
 
-- name: Сохранение отдельных общих ресурсов разблокировки без перезаписи существующего файла
+- name: "Сохранить доли ключа разблокировки без перезаписи существующего файла"
   ansible.builtin.copy:
     content: "{{ {'keys': _platform_vault_bootstrap_material['keys']} | to_nice_json }}\n"
     dest: "{{ _platform_vault_bootstrap_output_dir }}/unseal-shares"
@@ -55421,7 +55421,7 @@ platform_vault_bootstrap_lock_root: "/run/lock/{{ platform_vault_name }}"
   when: _platform_vault_existing_root_token is not skipped
   no_log: true
 
-- name: Прочитать существующие общие ресурсы разблокировки перед завершением прерванной публикации хранения
+- name: "Прочитать сохранённые доли ключа для завершения прерванной записи"
   ansible.builtin.slurp:
     src: "{{ _platform_vault_bootstrap_output_dir }}/unseal-shares"
   register: _platform_vault_existing_unseal_keys
@@ -55453,7 +55453,7 @@ platform_vault_bootstrap_lock_root: "/run/lock/{{ platform_vault_name }}"
   when: _platform_vault_bootstrap_material is defined
   no_log: true
 
-- name: Выбрать сгенерированный или восстановленный токен и общие ресурсы начальной загрузки Vault
+- name: "Выбрать созданный или восстановленный токен и доли ключа Vault"
   ansible.builtin.set_fact:
     _platform_vault_admin_token: "{{ _platform_vault_bootstrap_material.root_token }}"
     _platform_vault_effective_unseal_keys: "{{ _platform_vault_bootstrap_material['keys'] }}"
@@ -55490,25 +55490,25 @@ platform_vault_bootstrap_lock_root: "/run/lock/{{ platform_vault_name }}"
   when: _platform_vault_admin_token is not defined and _platform_vault_output_files.results[0].stat.exists
   no_log: true
 
-- name: Загрузка общих ресурсов разблокировки из защищенного автономного хранилища
+- name: "Загрузить доли ключа разблокировки из защищённого локального хранилища"
   ansible.builtin.set_fact:
     _platform_vault_effective_unseal_keys: "{{ (lookup('ansible.builtin.file', _platform_vault_bootstrap_output_dir ~ '/unseal-shares') | from_json)['keys'] }}"
   when: _platform_vault_effective_unseal_keys is not defined and (platform_vault_unseal_keys is not defined or platform_vault_unseal_keys | length == 0) and _platform_vault_output_files.results[1].stat.exists
   no_log: true
 
-- name: Выбрать явно предоставленные общие ресурсы для разблокировки, если они предусмотрены
+- name: "Использовать явно переданные доли ключа разблокировки, если они заданы"
   ansible.builtin.set_fact:
     _platform_vault_effective_unseal_keys: "{{ platform_vault_unseal_keys }}"
   when: _platform_vault_effective_unseal_keys is not defined and platform_vault_unseal_keys is sequence and platform_vault_unseal_keys is not string and platform_vault_unseal_keys | length > 0
   no_log: true
 
-- name: По умолчанию отсутствует необязательный ввод разблокировки в пустой список в памяти
+- name: "Использовать пустой список, если доли ключа разблокировки не переданы"
   ansible.builtin.set_fact:
     _platform_vault_effective_unseal_keys: []
   when: _platform_vault_effective_unseal_keys is not defined
   no_log: true
 
-- name: Требовать ограниченные полномочия начальной загрузки и разблокировать общие ресурсы
+- name: "Проверить административный токен и доли ключа разблокировки Vault"
   ansible.builtin.assert:
     that:
       - _platform_vault_admin_token is defined
@@ -55525,7 +55525,7 @@ platform_vault_bootstrap_lock_root: "/run/lock/{{ platform_vault_name }}"
   vars:
     vault_member: "{{ _platform_vault_instances | first }}"
 
-- name: Присоединитесь и разблокируйте каждого последователя Raft после того, как начальный узел станет работоспособным
+- name: "Присоединить и разблокировать остальные узлы Raft после готовности начального узла"
   ansible.builtin.include_tasks: bootstrap_follower.yml
   loop: "{{ _platform_vault_instances | sort(attribute='slot') }}"
   loop_control:
@@ -55540,7 +55540,7 @@ platform_vault_bootstrap_lock_root: "/run/lock/{{ platform_vault_name }}"
   no_log: true
 
 @@END
-@@PORTABLE {"path":"services/vault/ansible_collections/platform/vault/roles/vault_tls/tasks/bootstrap_follower.yml","mode":420,"size":1565,"sha256":"e8897309f6340b4a400f008254f3a6d901b628c86e7ecce6a812d097bb95cd84","index":0,"count":1,"encoding":"utf-8","payloadBytes":1565}
+@@PORTABLE {"path":"services/vault/ansible_collections/platform/vault/roles/vault_tls/tasks/bootstrap_follower.yml","mode":420,"size":1462,"sha256":"2fdc09c1fd8a2e992c494dc1be5e75f637c0e1089bdcb35a92a09af5a5b6d09e","index":0,"count":1,"encoding":"utf-8","payloadBytes":1462}
 ---
 - name: Запустить один ведомый узел Raft после разблокировки начального узла
   ansible.builtin.systemd:
@@ -55551,10 +55551,10 @@ platform_vault_bootstrap_lock_root: "/run/lock/{{ platform_vault_name }}"
   delegate_to: "{{ vault_member.host }}"
   become: true
 
-- name: Разблокировать присоединяющегося последователя Raft с начальными общими ресурсами узла
+- name: "Разблокировать присоединяемый узел Raft долями ключа начального узла"
   ansible.builtin.include_tasks: unseal_member.yml
 
-- name: Подтвердить, что разблокированный подписчик присоединился к инициализированному начальному хранилищу узла
+- name: "Проверить инициализацию присоединённого узла Raft после разблокировки"
   ansible.builtin.uri:
     url: "https://{{ vault_member.address }}:{{ vault_member.api_port }}/v1/sys/init"
     method: GET
@@ -55610,7 +55610,7 @@ platform_vault_bootstrap_lock_root: "/run/lock/{{ platform_vault_name }}"
     label: "{{ item.id }}"
 
 @@END
-@@PORTABLE {"path":"services/vault/ansible_collections/platform/vault/roles/vault_tls/tasks/clear_entry.yml","mode":420,"size":3430,"sha256":"44ac9790ff50eb8856d0d629576ca22fa97a44651c5e4680313431378c6904e7","index":0,"count":1,"encoding":"utf-8","payloadBytes":3430}
+@@PORTABLE {"path":"services/vault/ansible_collections/platform/vault/roles/vault_tls/tasks/clear_entry.yml","mode":420,"size":3403,"sha256":"49fa33ce4d901788d07d58443dc3dbfeaf2cf8491de37a9bb8abcaeaa3eeb21a","index":0,"count":1,"encoding":"utf-8","payloadBytes":3403}
 ---
 - name: Проверка автономных очищаемых входных данных Vault
   ansible.builtin.include_tasks: validate.yml
@@ -55644,7 +55644,7 @@ platform_vault_bootstrap_lock_root: "/run/lock/{{ platform_vault_name }}"
     label: "{{ item.id }}"
   when: ansible_check_mode
 
-- name: Сериализовать явную очистку Vault с существующей блокировкой развертывания
+- name: "Выполнять очистку Vault под общей блокировкой развёртывания"
   block:
     - name: Создать один идентификатор вызова для очистки блокировки Vault
       ansible.builtin.set_fact:
@@ -55770,7 +55770,7 @@ platform_vault_bootstrap_lock_root: "/run/lock/{{ platform_vault_name }}"
   no_log: true
 
 @@END
-@@PORTABLE {"path":"services/vault/ansible_collections/platform/vault/roles/vault_tls/tasks/main.yml","mode":420,"size":7487,"sha256":"d346404f78d00c4b0b2c13aadbec9cbaa6e3d1d01463fc0102a11c249d80fef9","index":0,"count":1,"encoding":"utf-8","payloadBytes":7487}
+@@PORTABLE {"path":"services/vault/ansible_collections/platform/vault/roles/vault_tls/tasks/main.yml","mode":420,"size":7423,"sha256":"4163e7fc8fd14b77b2352a59b784e3a324cf5f03f4c46b054cbcc5060bb8ecab","index":0,"count":1,"encoding":"utf-8","payloadBytes":7423}
 ---
 - name: Проверка настроек ресурсов переносимой службы
   ansible.builtin.include_role:
@@ -55866,7 +55866,7 @@ platform_vault_bootstrap_lock_root: "/run/lock/{{ platform_vault_name }}"
           run_once: true
       when: not (platform_vault_verify_only | bool)
 
-    - name: Настройка аудита, KV v2, пароля пользователя и AppRole без изменения существующих ресурсов
+    - name: "Настроить аудит, KV v2, userpass и AppRole, сохранив существующие ресурсы"
       ansible.builtin.include_tasks: configure.yml
       # These mounts are Raft cluster state, not per-host resources. Only the
       # canonical seed may reconcile them while the deployment lock is held.
@@ -55887,7 +55887,7 @@ platform_vault_bootstrap_lock_root: "/run/lock/{{ platform_vault_name }}"
       when: _platform_vault_lock_unit is defined and _platform_vault_lock_start is defined
   when: not (platform_vault_verify_only | bool)
 
-- name: Разрешить текущее свидетельство Vault TLS для проверки только для чтения
+- name: "Выбрать текущие TLS-файлы Vault для проверки без изменений"
   ansible.builtin.include_tasks: resolve_tls.yml
   when: platform_vault_verify_only | bool
 
@@ -55915,13 +55915,13 @@ platform_vault_bootstrap_lock_root: "/run/lock/{{ platform_vault_name }}"
   when: platform_vault_verify_only | bool
 
 @@END
-@@PORTABLE {"path":"services/vault/ansible_collections/platform/vault/roles/vault_tls/tasks/normalize.yml","mode":420,"size":2431,"sha256":"21f663888511becf3b516a0baafe46270f334b467d16abcb78458b450a5a2342","index":0,"count":1,"encoding":"utf-8","payloadBytes":2431}
+@@PORTABLE {"path":"services/vault/ansible_collections/platform/vault/roles/vault_tls/tasks/normalize.yml","mode":420,"size":2488,"sha256":"02c9a6b7737ec6e269096b7ce15471072cdac62fc07fea335b89f3f8fdf70bca","index":0,"count":1,"encoding":"utf-8","payloadBytes":2488}
 ---
 - name: Начать детерминированное проецирование экземпляра службы среды выполнения Vault
   ansible.builtin.set_fact:
     _platform_vault_instances: []
 
-- name: Проект стабильных слотов Vault и изолированных ресурсов
+- name: "Рассчитать стабильные номера и изолированные ресурсы экземпляров Vault"
   ansible.builtin.set_fact:
     _platform_vault_instances: "{{ _platform_vault_instances + [item | combine({'slot': vault_slot, 'api_port': (item.port if item.port is defined else platform_vault_api_port + 2 * (_platform_vault_instances | selectattr('host', 'equalto', item.host) | list | length)), 'cluster_port': platform_vault_cluster_port + 2 * vault_slot, 'instance_name': (platform_vault_name ~ '@') ~ platform_vault_deployment_id ~ '-' ~ (item.id | regex_replace('^.*-', '')), 'legacy_instance_name': (platform_vault_name ~ '-') ~ ((platform_vault_deployment_id ~ '\n' ~ item.id) | hash('sha256')), 'config_directory': platform_vault_config_root ~ '/' ~ platform_vault_deployment_id ~ '/' ~ item.id, 'data_directory': (item.data_directory | default(platform_vault_data_root ~ '/' ~ item.id if (platform_vault_instances | selectattr('host', 'equalto', item.host) | list | length > 1) else platform_vault_data_root)), 'log_directory': platform_vault_log_root ~ '/' ~ platform_vault_deployment_id ~ '/' ~ item.id})] }}"
   loop: "{{ platform_vault_instances | sort(attribute='id') }}"
@@ -55938,7 +55938,7 @@ platform_vault_bootstrap_lock_root: "/run/lock/{{ platform_vault_name }}"
   loop_control:
     label: "{{ item.id }}"
 
-- name: Отклонить API и конфликты кластеров на каждом хосте Vault
+- name: "Отклонить конфликты API-портов и кластерных портов Vault на одном узле"
   ansible.builtin.assert:
     that:
       - >-
@@ -55949,7 +55949,7 @@ platform_vault_bootstrap_lock_root: "/run/lock/{{ platform_vault_name }}"
   loop: "{{ _platform_vault_instances | map(attribute='host') | unique | list }}"
 
 @@END
-@@PORTABLE {"path":"services/vault/ansible_collections/platform/vault/roles/vault_tls/tasks/preflight.yml","mode":420,"size":14088,"sha256":"bd6327c5b99bff7cb93b168a9ad6de5f31e6cde3834cf6367c3a3a03a1a0d4d6","index":0,"count":1,"encoding":"utf-8","payloadBytes":14088}
+@@PORTABLE {"path":"services/vault/ansible_collections/platform/vault/roles/vault_tls/tasks/preflight.yml","mode":420,"size":14089,"sha256":"072c5a94a1787d87b3501acfeb8782f03bf00b5dcc6d71ee93368d6bee852b72","index":0,"count":1,"encoding":"utf-8","payloadBytes":14089}
 ---
 - name: Собрать экземпляры Vault, назначенные узлу inventory
   ansible.builtin.set_fact:
@@ -56013,7 +56013,7 @@ platform_vault_bootstrap_lock_root: "/run/lock/{{ platform_vault_name }}"
   changed_when: false
   failed_when: false
 
-- name: Построение ограниченного набора проверки предков пути Vault
+- name: "Собрать список родительских каталогов Vault для проверки"
   ansible.builtin.set_fact:
     _platform_vault_path_checks: "{{ [{'path': platform_vault_config_root, 'owner': 'root'}, {'path': platform_vault_log_root, 'owner': 'root'}] }}"
 
@@ -56116,7 +56116,7 @@ platform_vault_bootstrap_lock_root: "/run/lock/{{ platform_vault_name }}"
     index_var: marker_index
   no_log: true
 
-- name: Проверить точные служебные файлы systemd Vault без следующих ссылок
+- name: "Проверить файлы служб Vault без перехода по символическим ссылкам"
   ansible.builtin.stat:
     path: "/etc/systemd/system/{{ item.instance_name }}.service"
     follow: false
@@ -56237,7 +56237,7 @@ platform_vault_bootstrap_lock_root: "/run/lock/{{ platform_vault_name }}"
     label: "{{ item.item.port }}"
 
 @@END
-@@PORTABLE {"path":"services/vault/ansible_collections/platform/vault/roles/vault_tls/tasks/prepare_output.yml","mode":420,"size":7031,"sha256":"a68edd222f9845cdd4699fdf8d06c3cb6648b9c2a69bda826d27813c4e05b4f4","index":0,"count":1,"encoding":"utf-8","payloadBytes":7031}
+@@PORTABLE {"path":"services/vault/ansible_collections/platform/vault/roles/vault_tls/tasks/prepare_output.yml","mode":420,"size":6961,"sha256":"f88f19e9e8d15f9a13d21c0358d302003db73cb36f5ea02a2375643a17a67e01","index":0,"count":1,"encoding":"utf-8","payloadBytes":6961}
 ---
 - name: Разрешить канонический корень проекта для автономного хранения начальной загрузки
   ansible.builtin.set_fact:
@@ -56352,7 +56352,7 @@ platform_vault_bootstrap_lock_root: "/run/lock/{{ platform_vault_name }}"
   loop: [admin-token, unseal-shares, init-response.json]
   register: _platform_vault_output_files
 
-- name: Отказаться от замены файлов, принадлежащих другому пользователю или чрезмерно разрешительных файлов начальной загрузки
+- name: "Отклонить файлы инициализации с чужим владельцем или избыточными правами доступа"
   ansible.builtin.assert:
     that:
       - not item.stat.exists or (item.stat.isreg and not item.stat.islnk and item.stat.uid | string == _platform_vault_controller_uid.stdout | trim and item.stat.mode == '0600')
@@ -56362,7 +56362,7 @@ platform_vault_bootstrap_lock_root: "/run/lock/{{ platform_vault_name }}"
     label: "{{ item.item }}"
 
 @@END
-@@PORTABLE {"path":"services/vault/ansible_collections/platform/vault/roles/vault_tls/tasks/provision.yml","mode":420,"size":8666,"sha256":"01e28a793fdcfa0b29fc32523534f0ed593a459e6722f12df3bda1b8602d7db7","index":0,"count":1,"encoding":"utf-8","payloadBytes":8666}
+@@PORTABLE {"path":"services/vault/ansible_collections/platform/vault/roles/vault_tls/tasks/provision.yml","mode":420,"size":8599,"sha256":"eeec9ea8957d24ceb971023147a9603990fb4577f2756e371384f1eaafbda497","index":0,"count":1,"encoding":"utf-8","payloadBytes":8599}
 ---
 - name: Убедиться, что частная группа служб и учетная запись Vault существуют
   ansible.builtin.group:
@@ -56402,7 +56402,7 @@ platform_vault_bootstrap_lock_root: "/run/lock/{{ platform_vault_name }}"
     state: started
     enabled: true
 
-- name: Обеспечить фиксированную конфигурацию Vault, а корни данных и журналов остаются во владении пользователя root
+- name: "Сохранить владение root каталогами конфигурации, данных и журналов Vault"
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
@@ -56637,9 +56637,9 @@ platform_vault_bootstrap_lock_root: "/run/lock/{{ platform_vault_name }}"
   no_log: true
 
 @@END
-@@PORTABLE {"path":"services/vault/ansible_collections/platform/vault/roles/vault_tls/tasks/release_lock.yml","mode":420,"size":447,"sha256":"19f0df534b0fa4ccec75820c3d351f1f23dd4bc9314e604d41cb03e75837c20f","index":0,"count":1,"encoding":"utf-8","payloadBytes":447}
+@@PORTABLE {"path":"services/vault/ansible_collections/platform/vault/roles/vault_tls/tasks/release_lock.yml","mode":420,"size":477,"sha256":"7901c5d568b4737e7d11efd2e77c0fbe7fce11c227bf56979a6f637fc2daad09","index":0,"count":1,"encoding":"utf-8","payloadBytes":477}
 ---
-- name: Остановить процесс временной блокировки теста Vault
+- name: "Остановить процесс, удерживающий блокировку текущей операции Vault"
   ansible.builtin.systemd:
     name: "{{ _platform_vault_lock_unit }}.service"
     state: stopped
@@ -56650,7 +56650,7 @@ platform_vault_bootstrap_lock_root: "/run/lock/{{ platform_vault_name }}"
   when: _platform_vault_lock_unit is defined and _platform_vault_lock_start is defined
 
 @@END
-@@PORTABLE {"path":"services/vault/ansible_collections/platform/vault/roles/vault_tls/tasks/resolve_runtime_inputs.yml","mode":420,"size":2582,"sha256":"8362bcd2718a752aec98104b6cf1f8fec04d82514fbb1168326ad7dd1934d5f8","index":0,"count":1,"encoding":"utf-8","payloadBytes":2582}
+@@PORTABLE {"path":"services/vault/ansible_collections/platform/vault/roles/vault_tls/tasks/resolve_runtime_inputs.yml","mode":420,"size":2525,"sha256":"28811207a38c31184ae284a0ce12f76623eb49b7ac6da5f3bf76b2cb9ea9c4df","index":0,"count":1,"encoding":"utf-8","payloadBytes":2525}
 ---
 - name: Проверить типизированные входные данные Vault из runtime-сеанса секретов
   ansible.builtin.assert:
@@ -56687,7 +56687,7 @@ platform_vault_bootstrap_lock_root: "/run/lock/{{ platform_vault_name }}"
     - platform_runtime_secret_inputs | default([]) | selectattr('purpose', 'equalto', 'SERVICE_ADMIN_TOKEN') | list | length == 1
   no_log: true
 
-- name: Использовать типизированные общие ресурсы Shamir, когда отдельные общие ресурсы не были предоставлены
+- name: "Использовать доли ключа Shamir из runtime-сеанса, если они не переданы явно"
   ansible.builtin.set_fact:
     platform_vault_unseal_keys: "{{ (platform_runtime_secret_inputs | selectattr('purpose', 'equalto', 'SERVICE_UNSEAL_SHARES') | first).value }}"
   when:
@@ -56722,9 +56722,9 @@ platform_vault_bootstrap_lock_root: "/run/lock/{{ platform_vault_name }}"
   no_log: true
 
 @@END
-@@PORTABLE {"path":"services/vault/ansible_collections/platform/vault/roles/vault_tls/tasks/unseal_member.yml","mode":420,"size":4156,"sha256":"92850f05e42245c618cac7f9f390eaeeba72dc36c7a75f29003916eaec2d040c","index":0,"count":1,"encoding":"utf-8","payloadBytes":4156}
+@@PORTABLE {"path":"services/vault/ansible_collections/platform/vault/roles/vault_tls/tasks/unseal_member.yml","mode":420,"size":3997,"sha256":"a644982014b1e311a2ba11c8635853f4db864d219edc4757dc32af8afc38dc71","index":0,"count":1,"encoding":"utf-8","payloadBytes":3997}
 ---
-- name: Прочитать текущее состояние печати для одного конкретного экземпляра службы Vault
+- name: "Прочитать состояние блокировки экземпляра Vault — sealed/unsealed"
   ansible.builtin.uri:
     url: "https://{{ vault_member.address }}:{{ vault_member.api_port }}/v1/sys/health"
     method: GET
@@ -56749,7 +56749,7 @@ platform_vault_bootstrap_lock_root: "/run/lock/{{ platform_vault_name }}"
   when: _platform_vault_member_health_before.json.sealed | bool
   no_log: true
 
-- name: Отправьте только настроенное количество необходимых общих ресурсов Shamir
+- name: "Передать необходимое по порогу число долей ключа Shamir"
   ansible.builtin.uri:
     url: "https://{{ vault_member.address }}:{{ vault_member.api_port }}/v1/sys/unseal"
     method: PUT
@@ -56791,13 +56791,13 @@ platform_vault_bootstrap_lock_root: "/run/lock/{{ platform_vault_name }}"
     fail_msg: VAULT_CLUSTER_IDENTITY_MISMATCH
   no_log: true
 
-- name: Захват исходной идентификации кластера узлов после подтверждения разблокировки
+- name: "Сохранить идентификатор кластера начального узла после разблокировки"
   ansible.builtin.set_fact:
     _platform_vault_seed_cluster_id: "{{ _platform_vault_member_health_after.json.cluster_id }}"
   when: vault_member.slot == 0
   no_log: true
 
-- name: Потребовать от экземпляра службы совместного использования исходного идентификатора кластера узлов
+- name: "Проверить совпадение идентификатора кластера с начальным узлом"
   ansible.builtin.assert:
     that:
       - _platform_vault_member_health_after.json.cluster_id is string
@@ -56902,7 +56902,7 @@ platform_vault_bootstrap_lock_root: "/run/lock/{{ platform_vault_name }}"
   when: item.0.id < item.1.id
 
 @@END
-@@PORTABLE {"path":"services/vault/ansible_collections/platform/vault/roles/vault_tls/tasks/validate_owned_paths.yml","mode":420,"size":1152,"sha256":"1508ccbb3db125cb8e6c9293a124b9e96cdbc2e3dd16c9573a05f1e23630f57d","index":0,"count":1,"encoding":"utf-8","payloadBytes":1152}
+@@PORTABLE {"path":"services/vault/ansible_collections/platform/vault/roles/vault_tls/tasks/validate_owned_paths.yml","mode":420,"size":1102,"sha256":"b4a09efd324e0cec8071ed72009ac9586c9bf4be23c52a89fcb34a1f62e0136b","index":0,"count":1,"encoding":"utf-8","payloadBytes":1102}
 ---
 - name: Проверить каждый ограниченный компонент пути Vault без перехода по символическим ссылкам
   ansible.builtin.stat:
@@ -56916,7 +56916,7 @@ platform_vault_bootstrap_lock_root: "/run/lock/{{ platform_vault_name }}"
   loop_control:
     label: "{{ item.path }}"
 
-- name: Отклонить замененные, не относящиеся к каталогу или неправильно принадлежащие компонентам пути Vault
+- name: "Отклонить компоненты пути Vault с подменой, неверным типом или владельцем"
   ansible.builtin.assert:
     quiet: true
     that:
@@ -56932,7 +56932,7 @@ platform_vault_bootstrap_lock_root: "/run/lock/{{ platform_vault_name }}"
     label: "{{ item.item.path }}"
 
 @@END
-@@PORTABLE {"path":"services/vault/ansible_collections/platform/vault/roles/vault_tls/tasks/verify.yml","mode":420,"size":5161,"sha256":"3e8f99b79e35135442ec5a22064009630dadcd5b0d3e9b15de1e774dbb355cb3","index":0,"count":1,"encoding":"utf-8","payloadBytes":5161}
+@@PORTABLE {"path":"services/vault/ansible_collections/platform/vault/roles/vault_tls/tasks/verify.yml","mode":420,"size":5127,"sha256":"71b26bc4636afbb5e65c24ddb21bd27b9611d3ad34dbe41f2f8a38aa6634bb68","index":0,"count":1,"encoding":"utf-8","payloadBytes":5127}
 ---
 - name: Определить экземпляры Vault на узле inventory
   ansible.builtin.set_fact:
@@ -57020,7 +57020,7 @@ platform_vault_bootstrap_lock_root: "/run/lock/{{ platform_vault_name }}"
   when: platform_vault_mode == 'raft-ha'
   no_log: true
 
-- name: Требовать именно настроенные работоспособные экземпляры службы голосования
+- name: "Проверить состав и работоспособность голосующих узлов Raft"
   ansible.builtin.assert:
     that:
       - _platform_vault_raft_configuration.json.data.config.servers | length == _platform_vault_instances | length
@@ -57227,7 +57227,7 @@ platform_vault_instances:
 - import_playbook: ../../integrations/playbooks/apply-endpoint.yml
 
 @@END
-@@PORTABLE {"path":"services/vault/playbooks/clear.yml","mode":420,"size":434,"sha256":"bef0984e41ba753d45df2e43ba60af6baa75a4a90905164265323e4d741b6923","index":0,"count":1,"encoding":"utf-8","payloadBytes":434}
+@@PORTABLE {"path":"services/vault/playbooks/clear.yml","mode":420,"size":451,"sha256":"ac20d5bb243494640ba6af5662dda0ebcbbc239151c072dd0ead657f03e7857e","index":0,"count":1,"encoding":"utf-8","payloadBytes":451}
 ---
 - name: Явная очистка выбранных принадлежащих экземпляров службы Vault Raft
   hosts: platform_targets
@@ -57236,15 +57236,15 @@ platform_vault_instances:
   any_errors_fatal: true
   strategy: linear
   tasks:
-    - name: Запуск автономной очистки записи Vault
+    - name: "Выполнить очистку Vault при прямом запуске Ansible"
       ansible.builtin.include_role:
         name: platform.vault.vault_tls
         tasks_from: clear_entry
 
 @@END
-@@PORTABLE {"path":"services/vault/playbooks/validate-lock.yml","mode":420,"size":10961,"sha256":"4115ad817845456422c3da0acce2ecc9cc3060b4709e70b7f7c78a28e523611e","index":0,"count":1,"encoding":"utf-8","payloadBytes":10961}
+@@PORTABLE {"path":"services/vault/playbooks/validate-lock.yml","mode":420,"size":11107,"sha256":"08dcb92737a53b1bb2b389131ddcda79b5ec1b14ea19c7b43cdcc1f97032da64","index":0,"count":1,"encoding":"utf-8","payloadBytes":11107}
 ---
-- name: Доказать готовность блокировки развертывания Vault и семантику выпуска на узле QA
+- name: "Проверить захват и освобождение блокировки Vault на QA-узле"
   hosts: localhost
   connection: local
   gather_facts: false
@@ -57284,7 +57284,7 @@ platform_vault_instances:
           - "platform-vault-lock-test-failure-{{ vault_lock_test_suffix }}"
           - "platform-vault-lock-test-recovery-{{ vault_lock_test_suffix }}"
 
-    - name: Конфликт при выполнении, обычное освобождение и неудачное освобождение держателя замка
+    - name: "Проверить конкуренцию за блокировку, штатное освобождение и освобождение после сбоя"
       block:
         - name: Запустить первую службу и дождаться READY после получения блокировки flock
           ansible.builtin.command:
@@ -57307,7 +57307,7 @@ platform_vault_instances:
               - "set -eu; /usr/bin/systemd-notify --ready; /usr/bin/touch {{ vault_lock_test_dir.path }}/holder-reached-ready; exec /usr/bin/sleep infinity"
           changed_when: true
 
-        - name: Дождаться подтверждения готовности держателя замка
+        - name: "Дождаться готовности процесса, удерживающего блокировку"
           ansible.builtin.command:
             argv: [systemctl, show, --property=ActiveState, --value, "{{ vault_lock_test_units[0] }}.service"]
           register: vault_lock_holder_state
@@ -57337,7 +57337,7 @@ platform_vault_instances:
               - "set -eu; /usr/bin/systemd-notify --ready; /usr/bin/touch {{ vault_lock_test_dir.path }}/contender-reached-ready; exec /usr/bin/sleep infinity"
           changed_when: true
 
-        - name: Дождаться, пока претендент выйдет из строя, прежде чем достичь команды готовности
+        - name: "Проверить завершение конкурирующего процесса до сигнала готовности"
           ansible.builtin.command:
             argv: [systemctl, show, --property=ActiveState, --value, "{{ vault_lock_test_units[1] }}.service"]
           register: vault_lock_contender_state
@@ -57346,7 +57346,7 @@ platform_vault_instances:
           retries: 10
           delay: 1
 
-        - name: Доказать, что именно держатель замка достиг защищенной фазы
+        - name: "Проверить, что защищённый этап выполнил только владелец блокировки"
           ansible.builtin.stat:
             path: "{{ vault_lock_test_dir.path }}/{{ item }}"
           loop:
@@ -57363,12 +57363,12 @@ platform_vault_instances:
               - not vault_lock_markers.results[1].stat.exists
             fail_msg: VAULT_LOCK_CONTENTION_TEST_FAILED
 
-        - name: Нормально освободить держатель замка
+        - name: "Штатно остановить процесс, удерживающий блокировку"
           ansible.builtin.command:
             argv: [systemctl, stop, "{{ vault_lock_test_units[0] }}.service"]
           changed_when: true
 
-        - name: Запустить претендент после обычного релиза
+        - name: "Запустить конкурирующий процесс после штатного освобождения блокировки"
           ansible.builtin.command:
             argv:
               - systemd-run
@@ -57389,7 +57389,7 @@ platform_vault_instances:
               - "set -eu; /usr/bin/systemd-notify --ready; exec /usr/bin/sleep infinity"
           changed_when: true
 
-        - name: Дождаться готовности претендента после обычного релиза
+        - name: "Дождаться готовности конкурирующего процесса после освобождения блокировки"
           ansible.builtin.command:
             argv: [systemctl, show, --property=ActiveState, --value, "{{ vault_lock_test_units[2] }}.service"]
           register: vault_lock_released_state
@@ -57398,12 +57398,12 @@ platform_vault_instances:
           retries: 10
           delay: 1
 
-        - name: Остановить претендента на обычный выпуск
+        - name: "Штатно остановить конкурирующий процесс и освободить блокировку"
           ansible.builtin.command:
             argv: [systemctl, stop, "{{ vault_lock_test_units[2] }}.service"]
           changed_when: true
 
-        - name: Запуск держателя, который терпит неудачу после успешного сообщения о готовности
+        - name: "Запустить владельца блокировки с имитацией сбоя после сигнала готовности"
           ansible.builtin.command:
             argv:
               - systemd-run
@@ -57454,7 +57454,7 @@ platform_vault_instances:
               - "set -eu; /usr/bin/systemd-notify --ready; exec /usr/bin/sleep infinity"
           changed_when: true
 
-        - name: Дождаться готовности после неудачного освобождения держателя замка
+        - name: "Дождаться готовности нового владельца после сбоя прежнего владельца блокировки"
           ansible.builtin.command:
             argv: [systemctl, show, --property=ActiveState, --value, "{{ vault_lock_test_units[4] }}.service"]
           register: vault_lock_recovery_state
@@ -57565,7 +57565,7 @@ platform_vault_instances:
             state: absent
 
 @@END
-@@PORTABLE {"path":"services/vault/playbooks/validate-path-boundaries.yml","mode":420,"size":2025,"sha256":"2fec86da1dfbd7ba553156a81ef139b43a5aaa7481e61b150e280cbd93978ee0","index":0,"count":1,"encoding":"utf-8","payloadBytes":2025}
+@@PORTABLE {"path":"services/vault/playbooks/validate-path-boundaries.yml","mode":420,"size":2004,"sha256":"4c028d386b583e90db5f89c37b46cd9c0f1a6e92a59f381d8e4029bf45582698","index":0,"count":1,"encoding":"utf-8","payloadBytes":2004}
 ---
 - name: Доказать, что предварительная проверка пути Vault отклоняет символические ссылки потомков перед модификацией
   hosts: localhost
@@ -57573,7 +57573,7 @@ platform_vault_instances:
   gather_facts: false
   become: true
   tasks:
-    - name: Создать один ограниченный временный корень для случаев с границей пути
+    - name: "Создать временный каталог для проверок безопасности путей"
       ansible.builtin.tempfile:
         state: directory
         path: /var/tmp
@@ -57609,7 +57609,7 @@ platform_vault_instances:
             state: absent
 
 @@END
-@@PORTABLE {"path":"services/vault/playbooks/validate-path-scenario.yml","mode":420,"size":4516,"sha256":"8a93d09cfa1e9ccc14a2f99905893002b647f37c2f22c5ee608d1f0ba078e411","index":0,"count":1,"encoding":"utf-8","payloadBytes":4516}
+@@PORTABLE {"path":"services/vault/playbooks/validate-path-scenario.yml","mode":420,"size":4529,"sha256":"33f475d3921769f8ac8eea0594e6e8eaf07aa736b8847501d8b02b1cfdc55355","index":0,"count":1,"encoding":"utf-8","payloadBytes":4529}
 ---
 - name: Выбор сгенерированных местоположений границ пути
   ansible.builtin.set_fact:
@@ -57619,7 +57619,7 @@ platform_vault_instances:
     _vault_test_outside: "{{ vault_path_test_dir.path }}/outside-{{ vault_path_scenario.root }}-{{ vault_path_scenario.component }}"
     _vault_test_rejected: false
 
-- name: Создание безопасных предков и внешнего стража
+- name: "Создать безопасные родительские каталоги и внешний контрольный файл"
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
@@ -57660,7 +57660,7 @@ platform_vault_instances:
     dest: "{{ _vault_test_link }}"
     state: link
 
-- name: Потребовать, чтобы общий производственный валидатор отклонял перед последующими операциями записи
+- name: "Проверить отклонение небезопасного пути штатным валидатором до записи файлов"
   block:
     - name: Применить точный валидатор компонента пути Vault
       ansible.builtin.include_tasks: ../ansible_collections/platform/vault/roles/vault_tls/tasks/validate_owned_paths.yml
@@ -57684,7 +57684,7 @@ platform_vault_instances:
     - "{{ _vault_test_outside }}/must-not-exist"
   register: _vault_test_outside_stats
 
-- name: Прочитать ограниченный внешний страж после отклонения
+- name: "Прочитать внешний контрольный файл после отклонения пути"
   ansible.builtin.slurp:
     src: "{{ _vault_test_outside }}/sentinel"
   register: _vault_test_sentinel_content
@@ -57699,7 +57699,7 @@ platform_vault_instances:
     fail_msg: VAULT_PATH_BOUNDARY_TEST_FAILED
 
 @@END
-@@PORTABLE {"path":"services/vault/playbooks/validate-preflight.yml","mode":420,"size":1681,"sha256":"e71effb222d033fd9c9ffd71e1cf2845fd5495f939e2c406e6de12ddb2c29176","index":0,"count":1,"encoding":"utf-8","payloadBytes":1681}
+@@PORTABLE {"path":"services/vault/playbooks/validate-preflight.yml","mode":420,"size":1616,"sha256":"8db8cf60163e1f87e6f11df77dae3f499e349c0859c3eefd76ac696c9d7978fb","index":0,"count":1,"encoding":"utf-8","payloadBytes":1616}
 ---
 - name: Выполнить предварительную проверку Vault только для чтения в изолированном локальном пространстве имен
   hosts: localhost
@@ -57722,7 +57722,7 @@ platform_vault_instances:
         name: platform.vault.vault_tls
         tasks_from: normalize.yml
 
-    - name: Привязка экземпляра службы синтетических тестовых данных к локальному хосту для проверок только для чтения
+    - name: "Привязать тестовый экземпляр сервиса к localhost для проверок без изменений"
       ansible.builtin.set_fact:
         _platform_vault_instances: "{{ _platform_vault_instances | map('combine', {'host': inventory_hostname}) | list }}"
 
@@ -57759,11 +57759,11 @@ platform_vault_instances:
           - (_platform_vault_instances | map(attribute='instance_name') | list) == ['platform-vault@vault-standalone-1']
 
 @@END
-@@PORTABLE {"path":"services/vault/playbooks/validate-verify-syntax.yml","mode":420,"size":480,"sha256":"dd537b661c2971d3a44da4e1b59c32e5bd7f9532688a2f963acfff75b7a279ed","index":0,"count":1,"encoding":"utf-8","payloadBytes":480}
+@@PORTABLE {"path":"services/vault/playbooks/validate-verify-syntax.yml","mode":420,"size":518,"sha256":"8e3c867a7c1239c00251e0cc75d17cf0ac1c13b5d37ad330f3a2db077f2e24da","index":0,"count":1,"encoding":"utf-8","payloadBytes":518}
 ---
 # Static import lets --syntax-check parse the otherwise dynamically included
 # verifier without contacting targets or executing service tasks.
-- name: Анализ автономного верификатора Vault
+- name: "Проверить синтаксис самостоятельного playbook проверки Vault"
   hosts: localhost
   gather_facts: false
   tasks:
@@ -104707,5 +104707,161 @@ func NewSaveFileDialog(config DialogConfig) (SaveFileDialog, error) {
 	}
 	return saveDialog, nil
 }
+
+@@END
+@@PORTABLE {"path":"third_party/wails/internal/go-common-file-dialog/cfd/DialogConfig.go","mode":420,"size":4050,"sha256":"9cf7d818ab257568b8c7eb52ae86ffbe02ee713410b3e7cff44c69655023c7c8","index":0,"count":1,"encoding":"utf-8","payloadBytes":4050}
+// Cross-platform.
+
+package cfd
+
+import (
+	"fmt"
+	"os"
+	"reflect"
+)
+
+type FileFilter struct {
+	// The display name of the filter (That is shown to the user)
+	DisplayName string
+	// The filter pattern. Eg. "*.txt;*.png" to select all txt and png files, "*.*" to select any files, etc.
+	Pattern string
+}
+
+// Never obfuscate the FileFilter type.
+var _ = reflect.TypeOf(FileFilter{})
+
+type DialogConfig struct {
+	// The title of the dialog
+	Title string
+	// The role of the dialog. This is used to derive the dialog's GUID, which the
+	// OS will use to differentiate it from dialogs that are intended for other purposes.
+	// This means that, for example, a dialog with role "Import" will have a different
+	// previous location that it will open to than a dialog with role "Open". Can be any string.
+	Role string
+	// The default folder - the folder that is used the first time the user opens it
+	// (after the first time their last used location is used).
+	DefaultFolder string
+	// The initial folder - the folder that the dialog always opens to if not empty.
+	// If this is not empty, it will override the "default folder" behaviour and
+	// the dialog will always open to this folder.
+	Folder string
+	// The file filters that restrict which types of files the dialog is able to choose.
+	// Ignored by Select Folder Dialog.
+	FileFilters []FileFilter
+	// Sets the initially selected file filter. This is an index of FileFilters.
+	// Ignored by Select Folder Dialog.
+	SelectedFileFilterIndex uint
+	// The initial name of the file (I.E. the text in the file name text box) when the user opens the dialog.
+	// For the Select Folder Dialog, this sets the initial folder name.
+	FileName string
+	// The default extension applied when a user does not provide one as part of the file name.
+	// If the user selects a different file filter, the default extension will be automatically updated to match the new file filter.
+	// For Open / Open Multiple File Dialog, this only has an effect when the user specifies a file name with no extension and a file with the default extension exists.
+	// For Save File Dialog, this extension will be used whenever a user does not specify an extension.
+	// Ignored by Select Folder Dialog.
+	DefaultExtension string
+	// ParentWindowHandle is the handle (HWND) to the parent window of the dialog.
+	// If left as 0 / nil, the dialog will have no parent window.
+	ParentWindowHandle uintptr
+}
+
+var defaultFilters = []FileFilter{
+	{
+		DisplayName: "All Files (*.*)",
+		Pattern:     "*.*",
+	},
+}
+
+func (config *DialogConfig) apply(dialog Dialog) (err error) {
+	if config.Title != "" {
+		err = dialog.SetTitle(config.Title)
+		if err != nil {
+			return
+		}
+	}
+
+	if config.Role != "" {
+		err = dialog.SetRole(config.Role)
+		if err != nil {
+			return
+		}
+	}
+
+	if config.Folder != "" {
+		_, err = os.Stat(config.Folder)
+		if err != nil {
+			return
+		}
+		err = dialog.SetFolder(config.Folder)
+		if err != nil {
+			return
+		}
+	}
+
+	if config.DefaultFolder != "" {
+		_, err = os.Stat(config.DefaultFolder)
+		if err != nil {
+			return
+		}
+		err = dialog.SetDefaultFolder(config.DefaultFolder)
+		if err != nil {
+			return
+		}
+	}
+
+	if config.FileName != "" {
+		err = dialog.SetFileName(config.FileName)
+		if err != nil {
+			return
+		}
+	}
+
+	dialog.SetParentWindowHandle(config.ParentWindowHandle)
+
+	if dialog, ok := dialog.(FileDialog); ok {
+		var fileFilters []FileFilter
+		if config.FileFilters != nil && len(config.FileFilters) > 0 {
+			fileFilters = config.FileFilters
+		} else {
+			fileFilters = defaultFilters
+		}
+		err = dialog.SetFileFilters(fileFilters)
+		if err != nil {
+			return
+		}
+
+		if config.SelectedFileFilterIndex != 0 {
+			if config.SelectedFileFilterIndex > uint(len(fileFilters)) {
+				err = fmt.Errorf("selected file filter index out of range")
+				return
+			}
+			err = dialog.SetSelectedFileFilterIndex(config.SelectedFileFilterIndex)
+			if err != nil {
+				return
+			}
+		}
+
+		if config.DefaultExtension != "" {
+			err = dialog.SetDefaultExtension(config.DefaultExtension)
+			if err != nil {
+				return
+			}
+		}
+	}
+
+	return
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/internal/go-common-file-dialog/cfd/errors.go","mode":420,"size":203,"sha256":"da9965fcccb049e1ac66f8f38eaeab9cf6e8a6112e1066712ae1f6bebd563b9c","index":0,"count":1,"encoding":"utf-8","payloadBytes":203}
+package cfd
+
+import "errors"
+
+var (
+	ErrCancelled = errors.New("cancelled by user")
+	ErrInvalidGUID = errors.New("guid cannot be nil")
+	ErrEmptyFilters = errors.New("must specify at least one filter")
+)
 
 @@END
