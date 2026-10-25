@@ -57,7 +57,7 @@
     - "{{ platform_vault_config_root }}/{{ platform_vault_deployment_id }}"
     - "{{ platform_vault_log_root }}/{{ platform_vault_deployment_id }}"
 
-- name: Создать общий родительский элемент данных Vault для совместно расположенных экземпляров службы
+- name: Создать общий родительский каталог данных для совмещённых экземпляров Vault
   ansible.builtin.file:
     path: "{{ platform_vault_data_root }}"
     state: directory

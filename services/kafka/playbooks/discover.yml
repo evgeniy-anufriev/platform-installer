@@ -1,5 +1,5 @@
 ---
-- name: Обнаружение личности Kafka
+- name: Обнаружить идентификаторы кластера и узлов Kafka
   hosts: platform_targets
   become: true
   gather_facts: false
@@ -35,6 +35,6 @@
     - name: Публикация нормализованных записей обнаружения
       ansible.builtin.set_fact:
         platform_kafka_identity_discovery: "{{ _kafka_discovery_result.discovery }}"
-    - name: Показать очищенное обнаружение личности Kafka
+    - name: Показать безопасные результаты обнаружения идентификаторов Kafka
       ansible.builtin.debug:
         var: platform_kafka_identity_discovery

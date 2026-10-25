@@ -35,7 +35,7 @@
        else platform_haproxy_managed_application_backend_files | default([]) }}
   register: _platform_haproxy_application_backend_install
 
-- name: Записать, изменился ли активный график HAProxy
+- name: Записать изменение активного графа конфигурации HAProxy
   ansible.builtin.set_fact:
     platform_haproxy_active_artifacts_changed: >-
       {{ (_platform_haproxy_main_config_install.changed | default(false)) or

@@ -362,7 +362,7 @@
     fail_msg: Kafka artifact is missing or its SHA-256 does not match the approved offline contract
   when: not (platform_kafka_verify_only | bool) and platform_kafka_phase != 'schema_registry'
 
-- name: Построение детерминированных прогнозов кворума только для контроллеров
+- name: Построить детерминированные проекции кворума только для контроллеров Kafka
   ansible.builtin.set_fact:
     _platform_kafka_controller_bootstrap_servers: >-
       {% for member in _platform_kafka_controller_instances %}{{ member.controller_endpoint.bootstrap_host }}:{{ member.controller_endpoint.bootstrap_port }}{% if not loop.last %},{% endif %}{% endfor %}
@@ -408,7 +408,7 @@
     label: "{{ kafka_member.id }}"
   when: not (platform_kafka_verify_only | bool) and platform_kafka_phase != 'schema_registry'
 
-- name: Дождаться всех локальных прослушивателей экземпляра службы Kafka после запуска экземпляра службы
+- name: Дождаться всех локальных портов Kafka listeners после запуска экземпляра
   ansible.builtin.wait_for:
     host: 127.0.0.1
     port: "{{ item.1 }}"

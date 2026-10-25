@@ -37,7 +37,7 @@
     fail_msg: VAULT_ADMIN_TOKEN_REQUIRED
   no_log: true
 
-- name: Чтение состояния аудита, монтирования и аутентификации с использованием выбранного административного токена
+- name: Прочитать настройки аудита, хранилищ и методов аутентификации Vault с выбранным административным токеном
   ansible.builtin.uri:
     url: "https://{{ (_platform_vault_instances | first).address }}:{{ (_platform_vault_instances | first).api_port }}/v1/{{ item }}"
     method: GET
@@ -52,7 +52,7 @@
   changed_when: false
   no_log: true
 
-- name: Требовать одобренное устройство аудита, KV v2 и монтирование аутентификации
+- name: Проверить утверждённый аудит Vault, хранилище KV v2 и метод аутентификации
   ansible.builtin.assert:
     that:
       - _platform_vault_configuration.results[0].json.data['file/'] is defined

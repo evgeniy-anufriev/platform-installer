@@ -18,7 +18,7 @@
   changed_when: false
   failed_when: false
 
-- name: Отказаться от изменения стандартной службы systemd за пределами точно закрепленного сервера RPM
+- name: Отклонить изменение стандартной службы systemd вне зафиксированного RPM-пакета сервера ClickHouse
   ansible.builtin.assert:
     that:
       - _platform_clickhouse_stock_unit_owner.rc == 0

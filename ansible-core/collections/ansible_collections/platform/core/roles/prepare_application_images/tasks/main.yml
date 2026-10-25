@@ -51,12 +51,12 @@
   when: application_image_input.request.registry in (platform_application_approved_registries | default([]))
   no_log: true
 
-- name: Сопоставить резервные метаданные с точным выбранным изображением
+- name: Сопоставить метаданные offline-источника с выбранным образом
   ansible.builtin.set_fact:
     _image_offline: "{{ platform_application_image_bundle | platform.core.application_offline_image(application_image_input.reference, _image_platform, application_image_input.legacy) }}"
   no_log: true
 
-- name: Заморозить выбранное удостоверение и только эквивалентный запасной вариант
+- name: Зафиксировать идентификатор выбранного образа и эквивалентный offline-источник
   ansible.builtin.set_fact:
     platform_application_image_preparations: >-
       {{ platform_application_image_preparations | combine({

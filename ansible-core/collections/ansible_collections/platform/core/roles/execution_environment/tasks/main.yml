@@ -125,7 +125,7 @@
     - platform_execution_require_offline_payload | bool
     - platform_execution_offline_payload_root | length > 0
 
-- name: Отклонить отсутствующую полезную нагрузку автономного выполнения
+- name: Отклонить отсутствие обязательного offline-пакета среды исполнения
   ansible.builtin.assert:
     that:
       - platform_execution_payload_stat.stat.exists

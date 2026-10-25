@@ -190,7 +190,7 @@
   no_log: true
   become: false
 
-- name: Собрать разрешенную строку, принадлежащую компьютеру, для существующих структурированных действий
+- name: Собрать служебную запись разрешённых параметров для структурированных операций
   ansible.builtin.set_fact:
     platform_application_rows: >-
       {{ platform_application_rows + [{

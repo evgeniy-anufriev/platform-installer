@@ -28,7 +28,7 @@
       ansible.builtin.assert:
         that: application_selection.status == 'PASS'
         fail_msg: "{{ application_selection.code | default('APPLICATION_LIBRARY_SELECTION_INVALID') }}"
-    - name: Использовать выбранный снимок для всех прогнозов выполнения
+    - name: Использовать выбранный снимок для всех проекций исполнения
       ansible.builtin.set_fact:
         application_snapshot: "{{ application_selection.prepared }}"
       no_log: true

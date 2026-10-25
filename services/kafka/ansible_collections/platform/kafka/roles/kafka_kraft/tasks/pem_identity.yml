@@ -39,7 +39,7 @@
   register: _platform_kafka_pem_certificate_key
   changed_when: false
 
-- name: Прочитать публичный компонент закрытого ключа
+- name: Прочитать открытый ключ из файла закрытого ключа
   ansible.builtin.command:
     argv: [openssl, pkey, -in, "{{ kafka_pem_source_directory }}/private-key.pem", -pubout]
   register: _platform_kafka_pem_private_key
@@ -65,7 +65,7 @@
   diff: false
   when: not (kafka_pem_verify_only | default(false) | bool)
 
-- name: Проверка личности и доверия существующего потребителя PEM без восстановления
+- name: Проверить соответствие и доверие существующих PEM-файлов потребителя без восстановления
   ansible.builtin.stat:
     path: "{{ item }}"
     follow: false
@@ -75,7 +75,7 @@
   no_log: true
   when: kafka_pem_verify_only | default(false) | bool
 
-- name: Требовать точные потребительские файлы PEM и хранение личных данных
+- name: Проверить соответствие PEM-файлов потребителя и защищённость каталога хранилищ
   ansible.builtin.assert:
     that:
       - _platform_kafka_pem_consumer_stats.results[0].stat.isreg | default(false)

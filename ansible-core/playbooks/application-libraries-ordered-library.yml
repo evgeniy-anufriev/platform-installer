@@ -22,7 +22,7 @@
     tasks_from: apply_library
   when: platform_application_preflight_jobs | selectattr('libraryId', 'equalto', application_library_id) | list | length > 0
 
-- name: Доставить все выбранные изображения библиотеки перед любым сценарием перед запуском
+- name: Доставить выбранные образы библиотеки перед выполнением сценариев pre_start
   ansible.builtin.include_role:
     name: platform.core.application_runtime
     tasks_from: image_delivery

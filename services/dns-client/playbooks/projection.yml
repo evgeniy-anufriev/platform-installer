@@ -11,7 +11,7 @@
         file: "{{ platform_service_catalog_path }}"
         name: _platform_dns_client_catalog_file
 
-    - name: Сбор канонических прогнозов запасов клиента DNS
+    - name: Собрать канонические проекции inventory DNS-клиента
       ansible.builtin.set_fact:
         _platform_dns_client_inventory_hosts: >-
           {{ _platform_dns_client_inventory_hosts | default({}) | combine({item: {'ansible_host': (hostvars[item].ansible_host | default(item))}}) }}

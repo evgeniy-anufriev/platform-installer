@@ -28,7 +28,7 @@
          _platform_haproxy_previous_graph_digest.stdout != _platform_haproxy_candidate_graph_digest.stdout }}
   register: _platform_haproxy_backend_archive
 
-- name: Опубликовать и проверить точный проверенный график HAProxy
+- name: Опубликовать и проверить подготовленный граф конфигурации HAProxy
   block:
     - name: Установка и проверка графа-кандидата
       ansible.builtin.include_tasks: activate_publish.yml

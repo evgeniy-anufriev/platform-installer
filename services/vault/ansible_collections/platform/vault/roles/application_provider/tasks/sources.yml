@@ -1,5 +1,5 @@
 ---
-- name: Требовать существующее монтирование исходного кода KV v2
+- name: Проверить существующее хранилище KV v2 источника учётных данных Vault
   ansible.builtin.assert:
     that:
       - application_vault_provider.mounts[application_vault_source.mount ~ '/'].type == 'kv'

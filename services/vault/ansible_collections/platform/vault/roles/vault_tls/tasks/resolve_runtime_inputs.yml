@@ -1,5 +1,5 @@
 ---
-- name: Проверка ограниченных типизированных входных данных Vault из аренды узла выполнения
+- name: Проверить типизированные входные данные Vault из runtime-сеанса секретов
   ansible.builtin.assert:
     that:
       - platform_runtime_secret_inputs is sequence

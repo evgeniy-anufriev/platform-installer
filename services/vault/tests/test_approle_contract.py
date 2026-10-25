@@ -44,7 +44,7 @@ class AppRoleConfigurationTests(unittest.TestCase):
 
     def test_verify_requires_approle_without_mutation(self):
         tasks = yaml.safe_load((ROLE / "tasks/verify.yml").read_text(encoding="utf-8"))
-        guard = next(t for t in tasks if t["name"].startswith("Требовать одобренное устройство аудита, KV v2 и монтирование аутентификации"))
+        guard = next(t for t in tasks if t["name"].startswith("Проверить утверждённый аудит Vault, хранилище KV v2 и метод аутентификации"))
         expressions = [x for x in guard["ansible.builtin.assert"]["that"] if "approle/" in x]
         self.assertEqual(len(expressions), 2)
         loader = DataLoader()

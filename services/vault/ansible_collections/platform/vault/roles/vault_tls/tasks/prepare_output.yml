@@ -38,7 +38,7 @@
   register: _platform_vault_controller_uid
   changed_when: false
 
-- name: Проверить родительский элемент секретов по умолчанию, не переходя по символическим ссылкам
+- name: Проверить родительский каталог секретов по умолчанию без перехода по символическим ссылкам
   ansible.builtin.stat:
     path: "{{ _platform_vault_project_root }}/secrets"
     follow: false
@@ -62,7 +62,7 @@
     mode: '0700'
   when: _platform_vault_output_uses_project_secrets | bool
 
-- name: Проверить явный родительский элемент вывода без перехода по символическим ссылкам
+- name: Проверить заданный родительский каталог результатов без перехода по символическим ссылкам
   ansible.builtin.stat:
     path: "{{ _platform_vault_bootstrap_output_dir | dirname }}"
     follow: false
@@ -72,7 +72,7 @@
   register: _platform_vault_explicit_output_parent
   when: not (_platform_vault_output_uses_project_secrets | bool)
 
-- name: Потребовать, чтобы явный родительский элемент вывода был существующим каталогом, принадлежащим контроллеру
+- name: Проверить существование заданного родительского каталога результатов и владение контроллера
   ansible.builtin.assert:
     that:
       - _platform_vault_explicit_output_parent.stat.isdir

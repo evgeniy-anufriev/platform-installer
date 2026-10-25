@@ -189,7 +189,7 @@
     fail_msg: CLICKHOUSE_RESOURCE_PREFLIGHT_BLOCKED
   when: _platform_clickhouse_new_member_count | int > 0
 
-- name: Начать предварительную проверку прослушивателя для новых экземпляров службы ClickHouse
+- name: Начать предварительную проверку портов новых экземпляров ClickHouse
   ansible.builtin.set_fact:
     _platform_clickhouse_new_member_ports: []
 
@@ -206,14 +206,14 @@
     label: "{{ item.id }}"
   when: not _platform_clickhouse_marker_stats.results[clickhouse_member_index].stat.exists
 
-- name: Наблюдать за всеми прослушивателями TCP перед изменением пакета или службы systemd
+- name: Проверить слушающие TCP-порты перед изменением пакета или службы systemd
   ansible.builtin.command:
     argv: [ss, -H, -ltn]
   register: _platform_clickhouse_existing_listeners
   changed_when: false
   when: _platform_clickhouse_new_member_ports | length > 0
 
-- name: Отклонить новый прослушиватель ClickHouse, принадлежащий другому процессу
+- name: Отклонить порт нового экземпляра ClickHouse, занятый другим процессом
   ansible.builtin.assert:
     that: _platform_clickhouse_existing_listeners.stdout is not search(':' ~ (item | string) ~ '\\s')
     fail_msg: CLICKHOUSE_LISTENER_IN_USE

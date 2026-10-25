@@ -24,7 +24,7 @@
     expected_addresses: "{{ platform_endpoint_probe_expected_addresses | default([]) | unique | sort }}"
     actual_addresses: "{{ item.stdout_lines | map('regex_replace', '^([^ ]+).*$', '\\1') | unique | sort }}"
 
-- name: Проверить каждую конечную точку источника через общедоступный прослушиватель HAProxy HTTPS
+- name: Проверить конечные точки источника через публичный HTTPS-порт HAProxy
   ansible.builtin.uri:
     url: >-
       https://{{ item }}{{ ':' ~ _platform_integration_probe_port_override

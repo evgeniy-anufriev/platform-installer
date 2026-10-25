@@ -1,5 +1,5 @@
 ---
-- name: Прочитать запрошенный манифест без загрузки слоев изображения
+- name: Прочитать запрошенный манифест без загрузки слоёв образа
   ansible.builtin.uri:
     url: "https://{{ application_image_input.request.endpoint }}/v2/{{ application_image_input.request.repository }}/manifests/{{ application_image_input.request.version }}"
     method: GET
@@ -95,7 +95,7 @@
         _image_descriptor: "{{ _image_platform_response.content | platform.core.application_registry_manifest(_image_platform, _image_descriptor.manifestDigest) }}"
       when: _image_descriptor.index
       no_log: true
-    - name: Прочитать точную конфигурацию изображения без слоев
+    - name: Прочитать конфигурацию образа без загрузки слоёв
       ansible.builtin.uri:
         url: "https://{{ application_image_input.request.endpoint }}/v2/{{ application_image_input.request.repository }}/blobs/{{ _image_descriptor.configDigest }}"
         headers:

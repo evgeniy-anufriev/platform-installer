@@ -60,7 +60,7 @@
   loop_control:
     label: "{{ item.id }}"
 
-- name: Обнаружение JVM Kafka, владеющих выбранными портами прослушивателя
+- name: Обнаружить JVM Kafka, владеющие выбранными портами listeners
   ansible.builtin.shell: |
     set -o pipefail
     for port in {{ _platform_kafka_clear_listener_ports | join(' ') }}; do
@@ -159,7 +159,7 @@
     fail_msg: 'BLOCKED: Kafka member remained active before clean_install deletion'
   loop: "{{ platform_kafka_clear_unit_state.results }}"
 
-- name: Перед удалением убедитесь, что выбранные порты прослушивателя Kafka свободны
+- name: Проверить освобождение выбранных портов Kafka listeners перед удалением
   ansible.builtin.command:
     argv: [ss, -H, -ltn, "sport = :{{ item }}"]
   register: platform_kafka_clear_listener_state
@@ -169,7 +169,7 @@
   loop_control:
     label: "{{ item }}"
 
-- name: Отклонить занятые порты прослушивателя Kafka после ограниченной очистки
+- name: Отклонить занятые порты Kafka listeners после ограниченной очистки
   ansible.builtin.assert:
     that: item.stdout | trim | length == 0
     fail_msg: "BLOCKED: listener port {{ item.item }} remains occupied after attributable Kafka cleanup"

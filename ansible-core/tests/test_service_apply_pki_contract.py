@@ -122,7 +122,7 @@ class ServiceApplyPkiContractTests(unittest.TestCase):
         self.assertIn("platform_project_manifest_path", apply_tasks)
         self.assertIn("platform_project_root", apply_tasks)
         self.assertIn("Выбрать эффективное желаемое состояние Kafka для материализации на стороне контроллера", apply_tasks)
-        self.assertIn("Проецировать принадлежащее компьютеру состояние удостоверения Kafka на целевые хосты", apply_tasks)
+        self.assertIn("Передать служебное состояние идентификаторов Kafka на целевые узлы", apply_tasks)
         self.assertNotIn("Refresh inventory after canonical identity persistence", apply_tasks)
         aggregate = os.path.join(ROOT, "services/kafka/playbooks/aggregate_discovery.yml")
         with open(aggregate, encoding="utf-8") as handle:

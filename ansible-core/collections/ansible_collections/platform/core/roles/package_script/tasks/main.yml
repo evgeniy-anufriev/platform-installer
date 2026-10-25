@@ -81,7 +81,7 @@
         msg: "{{ platform_script_result | platform.core.application_script_failure }}"
       when: platform_script_result.rc | default(-1) | int != 0
 
-    - name: Требовать ограниченный машиночитаемый нечувствительный результат
+    - name: Проверить ограниченный машиночитаемый результат без секретов
       ansible.builtin.assert:
         that:
           - platform_script_result.stdout | length <= 2048

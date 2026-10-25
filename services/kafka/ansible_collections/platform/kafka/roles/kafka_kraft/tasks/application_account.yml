@@ -106,7 +106,7 @@
 - name: Подтвердить вновь установленные учетные данные приложения перед предоставлением доступа
   when: "platform_kafka_application_phase == 'apply' and application_kafka_account.mode == 'managed' and ('SCRAM-SHA-512' not in application_kafka_description.stdout or application_kafka_password_mismatch)"
   block:
-    - name: Аутентификация с помощью прослушивателя SCRAM приложения
+    - name: Выполнить аутентификацию приложения через SCRAM listener Kafka
       ansible.builtin.command:
         argv:
           - "{{ application_topic_cli_directory }}/bin/kafka-broker-api-versions.sh"

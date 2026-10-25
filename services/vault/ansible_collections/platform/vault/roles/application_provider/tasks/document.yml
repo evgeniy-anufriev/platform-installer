@@ -1,4 +1,4 @@
-- name: Вычислить минимальную разницу в документах, принадлежащих компьютеру
+- name: Вычислить минимальные изменения служебных документов
   ansible.builtin.set_fact:
     application_vault_delta: "{{ platform_application_vault_documents[document_key] | platform.vault.application_kv_delta(platform_application_vault_values[document_key], application_vault_document.owner) }}"
   delegate_facts: false

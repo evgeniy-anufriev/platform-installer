@@ -12,7 +12,7 @@
     - name: Объединить нормализованные результаты обнаружения без изменений
       ansible.builtin.include_tasks: aggregate_discovery.yml
 
-- name: Материализация личности Kafka
+- name: Материализовать идентификаторы кластера и узлов Kafka
   hosts: localhost
   connection: local
   gather_facts: false
@@ -45,7 +45,7 @@
   hosts: platform_targets
   gather_facts: false
   tasks:
-    - name: Проецировать принадлежащее компьютеру состояние удостоверения Kafka на целевые хосты
+    - name: Передать служебное состояние идентификаторов Kafka на целевые узлы
       ansible.builtin.set_fact:
         platform_generated_state: >-
           {{ hostvars['localhost'].platform_kafka_materialization.materialization.stateDocument.platform_generated_state |

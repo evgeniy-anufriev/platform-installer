@@ -21,7 +21,7 @@
     fail_msg: SERVICE_INTEGRATION_SOURCE_ID_REQUIRED
   when: platform_desired_state.serviceDeployments | default({}) | dict2items | selectattr('value.endpointGroup', 'defined') | list | length > 0 and _platform_integration_source_id | length == 0
 
-- name: Собрать прогнозы инвентаризации проекта для разрешения конечной точки Core
+- name: Собрать проекции inventory проекта для разрешения конечных точек Core
   ansible.builtin.set_fact:
     _platform_integration_inventory_hosts: >-
       {{ _platform_integration_inventory_hosts | default({}) |
@@ -33,7 +33,7 @@
   no_log: true
   when: _platform_integration_source_id | length > 0 and not (_platform_integration_inventory_collected | default(false))
 
-- name: Повторное использование безопасной проекции запасов для последующих перехватчиков источников
+- name: Повторно использовать безопасную проекцию inventory при обработке следующих источников интеграции
   ansible.builtin.set_fact:
     _platform_integration_inventory_collected: true
 

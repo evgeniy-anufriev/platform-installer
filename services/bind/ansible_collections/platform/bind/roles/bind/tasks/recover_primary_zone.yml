@@ -1,5 +1,5 @@
 ---
-- name: Определение маркера времени выполнения машины для основной зоны
+- name: Определить служебный runtime-маркер основной зоны BIND
   ansible.builtin.set_fact:
     _platform_bind_zone_recovery_marker: >-
       {{ platform_bind_recovery_directory }}/{{ platform_bind_runtime_projection.generatedState.metadata.projectId | hash('sha256') }}/{{ platform_bind_resolved_zones[platform_bind_inspected_deployment.key].zone | hash('sha256') }}.yml

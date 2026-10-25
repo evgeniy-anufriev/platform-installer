@@ -5,12 +5,12 @@
     kafka_cli_member: "{{ _platform_kafka_broker_instances | first }}"
     kafka_cli_purpose: interBroker
 
-- name: Выбрать явный административный прослушиватель SCRAM службы
+- name: Выбрать административный SCRAM listener Kafka
   ansible.builtin.set_fact:
     kafka_admin_listener_candidates: "{{ (_platform_kafka_broker_instances | first).listener_endpoints | selectattr('security_protocol', 'equalto', 'SASL_SSL') | list }}"
   changed_when: false
 
-- name: Требовать один однозначный прослушиватель SCRAM для учетной записи администратора
+- name: Проверить однозначность SCRAM listener для учётной записи администратора Kafka
   ansible.builtin.assert:
     that: kafka_admin_listener_candidates | length == 1
     fail_msg: KAFKA_ADMIN_SCRAM_LISTENER_AMBIGUOUS

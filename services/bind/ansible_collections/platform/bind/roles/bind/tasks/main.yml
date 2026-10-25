@@ -42,7 +42,7 @@
       - platform_bind_phase in ['prepare', 'activate', 'start', 'verify']
     fail_msg: BIND_DESIRED_STATE_INVALID
 
-- name: Использование прогнозируемого контроллером состояния последовательного жизненного цикла BIND
+- name: Использовать проекцию состояния жизненного цикла серийных номеров BIND с контроллера
   ansible.builtin.set_fact:
     platform_bind_runtime_projection: "{{ hostvars['localhost'].platform_bind_runtime_projection | default({}) }}"
 

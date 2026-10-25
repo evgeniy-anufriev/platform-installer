@@ -1,5 +1,5 @@
 ---
-- name: Обработка входных данных для подготовки изображения без контакта с целями
+- name: Обработать параметры подготовки образов без подключения к целевым узлам
   hosts: localhost
   connection: local
   gather_facts: false
@@ -16,17 +16,17 @@
         project_root: "{{ platform_project_root }}"
         service_catalog_path: "{{ platform_service_catalog_path }}"
       register: platform_image_snapshot
-    - name: Собрать входные данные для подготовки ограниченного изображения
+    - name: Собрать параметры выбранных образов для подготовки
       platform.core.prepare_application_images:
         project_root: "{{ platform_project_root }}"
         bundle_root: "{{ platform_execution_bundle_root }}"
         snapshot: "{{ platform_image_snapshot.snapshot }}"
         connections: "{{ platform_image_snapshot.execution_connections }}"
       register: platform_image_inputs
-    - name: Сохранить исходные данные подготовки для последующих автономных игр
+    - name: Сохранить параметры подготовки образов для последующих standalone-playbook
       ansible.builtin.set_fact:
         platform_application_image_inputs: "{{ platform_image_inputs.inputs }}"
-    - name: Загрузить индекс изображения выбранного неизменяемого пакета
+    - name: Загрузить манифест выбранного неизменяемого runtime bundle с индексом образов
       ansible.builtin.include_vars:
         file: "{{ platform_execution_bundle_root }}/manifest.yaml"
         name: platform_application_image_bundle

@@ -47,7 +47,7 @@ def build_play(folder):
             task['ansible.builtin.include_tasks'] = str(ROLE / 'tasks/source_config.yml')
     check = production_tasks(ROLE / 'tasks/apply_instance.yml', {
         'Анализ эффективного Compose без запуска или изменения образа',
-        'Проверка только значений Core, прогнозируемых Compose',
+        'Проверить только значения Compose, полученные из проекции Core',
     })
     initial = {'name': 'QA Bind isolated paths to the real runtime job', 'ansible.builtin.set_fact': {
         'application_project_id': '{{ application_runtime_job.projectId }}',
@@ -204,7 +204,7 @@ def main():
             rows, error = run(project, prepared, folder)
             if mode.startswith('legacy_'):
                 expected = ('QA Require concrete Hazelcast IP addresses before process startup'
-                            if mode == 'legacy_escaped' else 'Проверка только значений Core, прогнозируемых Compose')
+                            if mode == 'legacy_escaped' else 'Проверить только значения Compose, полученные из проекции Core')
                 if error and error['lastTask'] == expected:
                     evidence.append(dict(case=mode, status='PASS', rejectedBy=expected))
                     continue

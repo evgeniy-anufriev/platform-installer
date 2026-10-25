@@ -20,7 +20,7 @@
         kafka_authorization_admin_ready: true
       changed_when: false
 
-    - name: Потребовать каждый хост развертывания в игре перед делегированным отзывом
+    - name: Проверить участие всех узлов развёртывания в play перед делегированным отзывом
       ansible.builtin.assert:
         that: >-
           (_platform_kafka_instances | map(attribute='host') | unique | list

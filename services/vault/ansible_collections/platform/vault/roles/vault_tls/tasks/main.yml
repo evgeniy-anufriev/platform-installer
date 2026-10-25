@@ -3,10 +3,10 @@
   ansible.builtin.include_role:
     name: platform.core.project_settings
 
-- name: Разрешение необязательных типизированных входных данных аренды среды выполнения
+- name: Разрешить необязательные типизированные входные данные runtime-сеанса секретов
   ansible.builtin.include_tasks: resolve_runtime_inputs.yml
 
-- name: Проверка желаемого прогноза времени выполнения Vault
+- name: Проверить желаемую runtime-проекцию Vault
   ansible.builtin.include_tasks: validate.yml
 
 - name: Нормализация портов экземпляра Vault и идентификаторов частных ресурсов
@@ -29,7 +29,7 @@
     loop_var: platform_managed_data_path_instance
     label: "{{ platform_managed_data_path_instance.id }}"
 
-- name: Сериализация Vault применяется к установщику и автономным вызывающим программам Ansible
+- name: Обеспечить взаимное исключение операций Vault для Installer и standalone-Ansible
   block:
     - name: Создать один идентификатор вызова для блокировки развертывания
       ansible.builtin.set_fact:

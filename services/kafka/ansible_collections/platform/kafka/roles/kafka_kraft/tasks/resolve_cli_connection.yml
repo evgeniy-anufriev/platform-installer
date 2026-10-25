@@ -1,5 +1,5 @@
 ---
-- name: Выбрать прослушиватель Kafka CLI по семантическому назначению
+- name: Выбрать listener Kafka CLI по назначению
   ansible.builtin.set_fact:
     _platform_kafka_cli_listener_matches: >-
       {{ (kafka_cli_member.listener_endpoints
@@ -10,7 +10,7 @@
           | rejectattr('security_protocol', 'equalto', 'SASL_SSL') | list) }}
   changed_when: false
 
-- name: Требуется один прослушиватель Kafka CLI для запрошенной цели
+- name: Проверить наличие единственного listener Kafka CLI для запрошенной цели
   ansible.builtin.assert:
     that:
       - _platform_kafka_cli_listener_matches | length == 1

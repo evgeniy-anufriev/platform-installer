@@ -20,7 +20,7 @@
       - "'\\\\' not in _platform_vault_bootstrap_output_dir"
     fail_msg: VAULT_BOOTSTRAP_OUTPUT_PATH_INVALID
 
-- name: Разрешить выходной путь проверки, не следуя за замененным родительским элементом
+- name: Разрешить путь результатов проверки Vault без перехода через подменённый родительский каталог
   ansible.builtin.command:
     argv: [realpath, -m, "{{ _platform_vault_bootstrap_output_dir }}"]
   register: _platform_vault_verify_output_realpath

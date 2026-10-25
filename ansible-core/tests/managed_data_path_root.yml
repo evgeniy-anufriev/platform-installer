@@ -6,7 +6,7 @@
   vars:
     ansible_user: platform-automation
   tasks:
-    - name: Создать частный одноразовый родительский элемент QA под /var/lib
+    - name: Создать защищённый временный родительский каталог QA в /var/lib
       ansible.builtin.tempfile:
         path: /var/lib
         state: directory
@@ -109,7 +109,7 @@
                   - _platform_var_lib_after.stat.mode == _platform_var_lib_before.stat.mode
 
       always:
-        - name: Удалить только одноразовый родительский элемент QA
+        - name: Удалить временный родительский каталог QA
           ansible.builtin.file:
             path: "{{ _platform_managed_data_root_qa_parent.path }}"
             state: absent

@@ -388,7 +388,7 @@
 - name: Настроить постоянное окружение оболочки для Docker без прав root
   ansible.builtin.include_tasks: shell_environment.yml
 
-- name: Скопировать точный материал PKI в личный каталог времени выполнения учетной записи
+- name: Скопировать материал PKI в защищённый runtime-каталог учётной записи
   ansible.builtin.copy:
     src: "{{ _platform_docker_tls_source }}/{{ item }}"
     dest: "{{ _platform_docker_private_tls_dir }}/{{ item }}"
@@ -471,7 +471,7 @@
     name: "user@{{ _platform_docker_uid }}.service"
     state: started
 
-- name: Перезагрузить график службы systemd пользователя выбранной учетной записи
+- name: Перечитать определения пользовательских служб systemd выбранной учётной записи
   ansible.builtin.command:
     argv: [systemctl, --user, daemon-reload]
   become: true

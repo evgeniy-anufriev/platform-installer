@@ -111,7 +111,7 @@
         fail_msg: PKI_AUTHORITATIVE_PEM_CHAIN_INVALID
       no_log: true
 
-    - name: Получить открытый ключ из авторитетного листового закрытого ключа
+    - name: Получить открытый ключ из авторитетного закрытого ключа конечного сертификата
       ansible.builtin.command:
         argv:
           - openssl
@@ -124,7 +124,7 @@
       changed_when: false
       no_log: true
 
-    - name: Получение открытого ключа из авторитетного листового сертификата
+    - name: Получить открытый ключ из авторитетного конечного сертификата
       ansible.builtin.command:
         argv:
           - openssl
@@ -138,7 +138,7 @@
       changed_when: false
       no_log: true
 
-    - name: Запросить соответствие авторитетного листового ключа и сертификата
+    - name: Проверить соответствие авторитетного закрытого ключа конечному сертификату
       ansible.builtin.command:
         argv:
           - cmp
@@ -150,14 +150,14 @@
       failed_when: false
       no_log: true
 
-    - name: Отклонить несовпадающий авторитетный листовой ключ и сертификат
+    - name: Отклонить несовпадение авторитетного закрытого ключа и конечного сертификата
       ansible.builtin.assert:
         that:
           - _platform_pki_leaf_key_certificate_match.rc == 0
         fail_msg: PKI_AUTHORITATIVE_PEM_KEY_CERTIFICATE_MISMATCH
       no_log: true
 
-    - name: Экспорт авторитетного листового сертификата как DER для точного сравнения хранилищ
+    - name: Экспортировать авторитетный конечный сертификат в DER для сравнения хранилищ
       ansible.builtin.command:
         argv:
           - openssl
@@ -243,7 +243,7 @@
       when: _platform_pki_store_stats.results[1].stat.exists
       no_log: true
 
-    - name: Экспорт существующего сертификата хранилища ключей для проверки личности
+    - name: Экспортировать сертификат из хранилища ключей для проверки соответствия
       ansible.builtin.command:
         argv:
           - keytool
@@ -264,7 +264,7 @@
       when: (_platform_pki_existing_keystore_check.rc | default(1)) == 0
       no_log: true
 
-    - name: Экспорт существующего сертификата хранилища доверенных сертификатов для проверки личности
+    - name: Экспортировать сертификат из хранилища доверия для проверки соответствия
       ansible.builtin.command:
         argv:
           - keytool
@@ -285,7 +285,7 @@
       when: (_platform_pki_existing_truststore_check.rc | default(1)) == 0
       no_log: true
 
-    - name: Извлечение существующего закрытого ключа хранилища ключей для проверки личности
+    - name: Извлечь закрытый ключ из хранилища ключей для проверки соответствия
       ansible.builtin.command:
         argv:
           - openssl

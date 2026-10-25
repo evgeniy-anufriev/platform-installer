@@ -1,5 +1,5 @@
 ---
-- name: Прочитать текущие монтирования аудита Vault, секретные механизмы и методы аутентификации
+- name: Прочитать подключения аудита, secrets engines и методы аутентификации Vault
   ansible.builtin.uri:
     url: "https://{{ (_platform_vault_instances | first).address }}:{{ (_platform_vault_instances | first).api_port }}/v1/{{ item }}"
     method: GET
@@ -45,7 +45,7 @@
   when: "'file/' not in _platform_vault_owned_configuration.results[0].json.data"
   no_log: true
 
-- name: Включить KV v2 при фиксированном секретном монтировании только в случае его отсутствия
+- name: Включить отсутствующее хранилище KV v2 по заданному пути Vault
   ansible.builtin.uri:
     url: "https://{{ (_platform_vault_instances | first).address }}:{{ (_platform_vault_instances | first).api_port }}/v1/sys/mounts/secret"
     method: POST

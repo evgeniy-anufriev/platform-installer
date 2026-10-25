@@ -16,7 +16,7 @@
     loop_var: application_runtime_job
   when: (application_library_id ~ '/' ~ application_instance_id) in hostvars['localhost'].application_runtime_inputs.integrations.dependencies
 
-- name: Запуск сценариев перед запуском экземпляра после доставки всех изображений
+- name: Выполнить сценарии pre_start экземпляра после доставки всех образов
   ansible.builtin.include_role:
     name: platform.core.application_runtime
     tasks_from: run_scripts

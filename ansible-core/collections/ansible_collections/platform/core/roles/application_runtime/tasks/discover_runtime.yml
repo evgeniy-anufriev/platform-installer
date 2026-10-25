@@ -4,7 +4,7 @@
     database: passwd
     key: "{{ application_runtime_job.account }}"
 
-- name: Потребовать, чтобы обнаруженная учетная запись HOME была ограничена перед зондированием демона
+- name: Проверить границы домашнего каталога учётной записи перед обращением к Docker daemon
   ansible.builtin.assert:
     that: getent_passwd[application_runtime_job.account][4] is match('^/[a-zA-Z0-9_./-]+$')
     fail_msg: APPLICATION_RUNTIME_ROOT_INVALID

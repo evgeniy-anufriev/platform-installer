@@ -1,5 +1,5 @@
 ---
-- name: Привязать выбранные целевые изображения без изменения инвентаря оператора
+- name: Привязать выбранные образы к целевым узлам без изменения inventory оператора
   hosts: localhost
   connection: local
   gather_facts: false
@@ -12,7 +12,7 @@
         platform_application_image_bundle: "{{ hostvars['localhost'].platform_application_image_bundle }}"
       loop: "{{ platform_application_image_inputs.targetConnections | list }}"
 
-- name: Прочитать метаданные изображения из каждого выбранного контекста целевой сети
+- name: Прочитать метаданные образа через сеть каждого выбранного целевого узла
   hosts: platform_image_targets
   gather_facts: false
   any_errors_fatal: true
@@ -25,14 +25,14 @@
       ansible.builtin.set_fact:
         platform_application_image_preparations: {}
         _image_registry_cache: {}
-    - name: Подготовить каждое выбранное изображение с помощью обычных задач Ansible
+    - name: Подготовить каждый выбранный образ штатными задачами Ansible
       ansible.builtin.include_role:
         name: platform.core.prepare_application_images
       loop: "{{ platform_application_image_inputs.placements | selectattr('hostId', 'equalto', inventory_hostname) | list }}"
       loop_control:
         loop_var: application_image_input
 
-- name: Заморозить выбранные метаданные изображения на узле выполнения
+- name: Зафиксировать метаданные выбранного образа на узле выполнения
   hosts: localhost
   connection: local
   gather_facts: false
@@ -43,7 +43,7 @@
           {{ {'apiVersion': 'platform.installer/container-images/v1alpha2',
               'placements': platform_application_image_inputs.ready |
                 combine((hostvars | platform.core.application_prepared_image_lock).placements)} }}
-    - name: Продолжить полную подготовку протокола фиксированной машины
+    - name: Сохранить полный результат подготовки образов в формате машинного протокола
       ansible.builtin.copy:
         content: "{{ platform_prepared_application_images | to_json }}"
         dest: "{{ platform_application_image_result_path }}"

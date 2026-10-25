@@ -1,5 +1,5 @@
 ---
-- name: Проверка заблокированного локального образа перед доставкой
+- name: Проверить локальный образ с зафиксированным digest перед доставкой
   ansible.builtin.command:
     argv: [docker, image, inspect, "{{ application_runtime_job.authority.requirement.localReference }}"]
   become_user: "{{ application_runtime_job.account }}"
@@ -9,7 +9,7 @@
   failed_when: false
   no_log: true
 
-- name: Доставка только в том случае, если заблокированный локальный образ еще не доступен
+- name: Доставить образ с зафиксированным digest при отсутствии на целевом узле
   when: application_local_image.rc != 0 or (application_local_image.stdout | from_json)[0].Id != application_runtime_job.authority.requirement.imageId
   block:
     - name: Извлечение из авторизованного реестра с очисткой частного переопределения
@@ -60,7 +60,7 @@
             path: "{{ application_image_stage.path }}"
             state: absent
           when: application_image_stage.path is defined
-    - name: Требовать существования точного идентификатора загруженного или извлеченного изображения
+    - name: Проверить идентификатор образа после загрузки из архива или реестра
       ansible.builtin.command:
         argv: [docker, image, inspect, "{{ application_runtime_job.authority.requirement.imageId }}"]
       become_user: "{{ application_runtime_job.account }}"
@@ -83,7 +83,7 @@
   changed_when: false
   no_log: true
 
-- name: Требовать точное изображение и платформу
+- name: Проверить соответствие образа и целевой платформы
   ansible.builtin.assert:
     that:
       - (application_delivered_image.stdout | from_json)[0].Id == application_runtime_job.authority.requirement.imageId
@@ -111,7 +111,7 @@
   no_log: true
   when: "'@' not in application_runtime_job.settings.image"
 
-- name: Потребовать, чтобы исходная ссылка давала имя заблокированному изображению
+- name: Проверить соответствие исходной ссылки образу с зафиксированным digest
   ansible.builtin.assert:
     that: (application_original_image.stdout | from_json)[0].Id == application_runtime_job.authority.requirement.imageId
     fail_msg: APPLICATION_IMAGE_IDENTITY_INVALID

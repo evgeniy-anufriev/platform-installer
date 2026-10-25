@@ -1,5 +1,5 @@
 ---
-- name: Требовать непустой однозначный явный частичный набор исходного кода
+- name: Проверить непустой однозначный список развёртываний источников частичной интеграции HAProxy
   ansible.builtin.assert:
     that:
       - platform_haproxy_partial_deployment_ids is sequence

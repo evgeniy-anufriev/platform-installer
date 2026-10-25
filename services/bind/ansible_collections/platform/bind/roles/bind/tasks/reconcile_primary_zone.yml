@@ -1,12 +1,12 @@
 ---
-- name: Определение маркера времени выполнения машины для основной зоны
+- name: Определить служебный runtime-маркер основной зоны BIND
   ansible.builtin.set_fact:
     _platform_bind_zone_recovery_marker: >-
       {{ platform_bind_recovery_directory }}/{{ platform_bind_runtime_projection.generatedState.metadata.projectId | hash('sha256') }}/{{ platform_bind_resolved_zones[platform_bind_inspected_deployment.key].zone | hash('sha256') }}.yml
 
 - name: Заморозить и заменить одну проверенную основную зону защитой от восстановления
   block:
-    - name: Создание частного каталога восстановления во время выполнения машины
+    - name: Создать защищённый runtime-каталог восстановления PostgreSQL
       ansible.builtin.file:
         path: "{{ _platform_bind_zone_recovery_marker | dirname }}"
         state: directory

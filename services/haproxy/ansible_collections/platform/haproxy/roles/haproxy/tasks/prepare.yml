@@ -125,7 +125,7 @@
     - not (platform_haproxy_full_reconcile | bool)
     - (platform_haproxy_partial_deployment_id is defined or platform_haproxy_partial_deployment_ids is defined)
 
-- name: Проверка прогнозируемых целей перед публикацией кандидата
+- name: Проверить целевые узлы проекции перед публикацией конфигурации-кандидата
   ansible.builtin.include_tasks: check_targets.yml
 
 - name: Сброс только временного графа-кандидата HAProxy

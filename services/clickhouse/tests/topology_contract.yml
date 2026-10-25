@@ -77,7 +77,7 @@
               - {id: clickhouse-2, host: localhost, address: 127.0.0.1, roles: [server, keeper]}
               - {id: clickhouse-3, host: localhost, address: 127.0.0.1, roles: [server, keeper]}
 
-        - name: Доказать уникальные идентификаторы Raft и все пять назначений прослушивателей для каждого экземпляра службы
+        - name: Проверить уникальность Raft ID и пять назначений сетевых портов каждого экземпляра ClickHouse
           ansible.builtin.assert:
             that:
               - _platform_clickhouse_local_instances | length == 3

@@ -32,7 +32,7 @@
       {{ _platform_haproxy_local_deployments[0].value.configuration.tlsProfile |
          default(platform_haproxy_tls_profile, true) }}
 
-- name: Собрать безопасный прогноз запасов для HAProxy
+- name: Собрать безопасную проекцию inventory для HAProxy
   ansible.builtin.set_fact:
     _platform_haproxy_hosts: "{{ _platform_haproxy_hosts | default({}) | combine({item: {'ansible_host': (hostvars[item].ansible_host | default(item))}}) }}"
     _platform_haproxy_placements: "{{ _platform_haproxy_placements | default({}) | combine({item: (hostvars[item].platform_deployments | default({}))}) }}"

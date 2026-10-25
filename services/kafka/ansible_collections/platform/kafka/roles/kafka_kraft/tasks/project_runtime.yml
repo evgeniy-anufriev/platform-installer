@@ -28,7 +28,7 @@
   delegate_facts: true
   run_once: true
 
-- name: Инициализация прогнозируемого списка экземпляров службы Kafka
+- name: Инициализировать список экземпляров Kafka из runtime-проекции
   ansible.builtin.set_fact:
     platform_kafka_instances: []
 
@@ -45,7 +45,7 @@
       value: "{{ hostvars['localhost']._platform_kafka_project_state.serviceDeployments[platform_execution_service_deployment] }}"
   when: platform_execution_service_deployment is defined
 
-- name: Выбор состояния развертывания Kafka, принадлежащего компьютеру
+- name: Выбрать служебное состояние развёртывания Kafka
   ansible.builtin.set_fact:
     _platform_kafka_generated_deployment_state: >-
       {{ (platform_generated_state | default({})).get('serviceDeployments', {}).get(

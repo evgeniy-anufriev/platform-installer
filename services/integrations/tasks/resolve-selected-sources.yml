@@ -27,7 +27,7 @@
       dnsDeployments: "{{ _platform_integration_selected_sources | map(attribute='projection.dnsDeployments') | flatten | unique | sort }}"
     platform_bind_source_dns_records: "{{ _platform_integration_selected_sources | map(attribute='dnsRecords') | flatten | unique | list }}"
 
-- name: Отклонить конфликтующие выбранные прогнозы владельца DNS перед изменением провайдера
+- name: Отклонить конфликтующие проекции владельцев DNS перед изменением провайдера
   ansible.builtin.assert:
     that: item.1 | unique | list | length == 1
     fail_msg: APPLICATION_ENDPOINT_DNS_CONFLICT

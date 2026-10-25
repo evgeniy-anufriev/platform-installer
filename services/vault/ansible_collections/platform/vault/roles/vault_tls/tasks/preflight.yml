@@ -46,7 +46,7 @@
   register: _platform_vault_shared_data_root
   when: _platform_vault_local_instances | length > 1
 
-- name: Требовать общий родительский элемент данных Vault, принадлежащий пользователю root
+- name: Проверить владение root общим родительским каталогом данных Vault
   ansible.builtin.assert:
     that:
       - not _platform_vault_shared_data_root.stat.exists or _platform_vault_shared_data_root.stat.uid == 0
@@ -261,12 +261,12 @@
   ansible.builtin.set_fact:
     _platform_vault_active_units: "{{ _platform_vault_unit_states.results | selectattr('stdout', 'equalto', 'active') | map(attribute='item.instance_name') | list }}"
 
-- name: Создание точных ожиданий порта прослушивателя для каждого экземпляра службы
+- name: Сформировать ожидаемые сетевые порты каждого экземпляра Vault
   ansible.builtin.set_fact:
     _platform_vault_ports: "{{ (_platform_vault_ports | default([])) + [{'port': item.api_port, 'unit': item.instance_name}, {'port': item.cluster_port, 'unit': item.instance_name}] }}"
   loop: "{{ _platform_vault_local_instances }}"
 
-- name: Проверка занятости локального прослушивателя перед подготовкой
+- name: Проверить занятость локальных портов Vault перед установкой
   ansible.builtin.command:
     argv: [ss, -Hln, "sport = :{{ item.port }}"]
   register: _platform_vault_port_owner

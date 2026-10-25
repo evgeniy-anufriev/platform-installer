@@ -47,7 +47,7 @@
     platform_haproxy_partial_deployment_ids: "{{ hostvars['localhost']._platform_integration_selected_sources | map(attribute='sourceId') | list }}"
   when: inventory_hostname in hostvars['localhost'].platform_service_integration_projection.haproxyHosts and not (platform_endpoint_verify_only | default(false) | bool)
 
-- name: Перезагрузить исходный код после того, как все провайдери прошли активацию
+- name: Перезагрузить HAProxy источника интеграции после активации всех провайдеров
   ansible.builtin.include_role:
     name: platform.haproxy.haproxy
     apply: {become: true}

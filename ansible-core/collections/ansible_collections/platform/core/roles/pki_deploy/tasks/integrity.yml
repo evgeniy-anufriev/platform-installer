@@ -123,12 +123,12 @@
   loop: "{{ _platform_pki_integrity_targets.results[:5] }}"
   no_log: true
 
-- name: Сравнить байты отпечатков пальцев с примененным планом
+- name: Сравнить байты отпечатков с примененным планом
   ansible.builtin.set_fact:
     _platform_pki_integrity_fingerprint_matches: "{{ _platform_pki_integrity_targets.results[5].stat.checksum | default('') == ((platform_pki_plan.materializationFingerprint ~ '\n') | hash('sha256')) }}"
   no_log: true
 
-- name: Сравнить точный файл отпечатков пальцев материализации
+- name: Сравнить точный файл отпечатков материализации
   ansible.builtin.set_fact:
     _platform_pki_integrity_valid: >-
       {{ false not in [

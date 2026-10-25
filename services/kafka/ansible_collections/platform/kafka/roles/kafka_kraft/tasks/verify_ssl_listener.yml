@@ -22,7 +22,7 @@
   no_log: true
   when: _platform_kafka_tls_runtime.storeType == 'PEM'
 
-- name: Требовать установленную конфигурацию прослушивателя для использования выбранного материала PEM
+- name: Проверить использование выбранных PEM-файлов установленной конфигурацией Kafka listener
   ansible.builtin.assert:
     that:
       - "('listener.name.' ~ (kafka_ssl_listener.name | lower) ~ '.ssl.keystore.type=PEM') in (_platform_kafka_pem_member_config.content | b64decode).splitlines()"
@@ -36,7 +36,7 @@
   no_log: true
   when: _platform_kafka_tls_runtime.storeType == 'PEM'
 
-- name: Выполнить настоящее рукопожатие TLS для прослушивателя Kafka
+- name: Выполнить реальное TLS-соединение с listener Kafka
   ansible.builtin.shell: |
     set -eu
     verification_host={{ kafka_ssl_listener.advertisedAddress | default(kafka_member.advertised_host) | quote }}

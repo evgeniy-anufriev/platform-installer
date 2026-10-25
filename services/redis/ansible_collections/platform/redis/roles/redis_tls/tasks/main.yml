@@ -45,7 +45,7 @@
     loop_var: platform_managed_data_path_instance
     label: "{{ platform_managed_data_path_instance.id }}"
 
-- name: Доказать право собственности на локальный прослушиватель Redis перед изменением
+- name: Проверить принадлежность локального порта Redis перед изменением
   ansible.builtin.include_tasks: preflight.yml
   when: not (platform_redis_verify_only | bool)
 

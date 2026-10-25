@@ -27,7 +27,7 @@
   changed_when: false
   no_log: true
 
-- name: Проверить монтирование Vault через выбранную конечную точку без перенаправления
+- name: Проверить подключения хранилищ и методов аутентификации Vault без HTTP-перенаправлений
   ansible.builtin.uri:
     url: "{{ platform_vault_application_provider.url }}/v1/{{ item }}"
     headers: {X-Vault-Token: "{{ application_vault_admin.token }}"}
@@ -41,7 +41,7 @@
   register: application_vault_mounts
   no_log: true
 
-- name: Требовать существующее монтирование аутентификации AppRole
+- name: Проверить существующий метод аутентификации AppRole в Vault
   ansible.builtin.assert:
     that: application_vault_mounts.results[1].json.data['approle/'].type == 'approle'
     fail_msg: APPLICATION_VAULT_APPROLE_MOUNT_REQUIRED

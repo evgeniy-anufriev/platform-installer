@@ -25,7 +25,7 @@
     - "{{ platform_clickhouse_config_root }}/{{ platform_clickhouse_deployment_id }}"
     - "{{ platform_clickhouse_log_root }}/{{ platform_clickhouse_deployment_id }}"
 
-- name: Создать общий родительский элемент данных ClickHouse для совместно расположенных экземпляров службы
+- name: Создать общий родительский каталог данных для совмещённых экземпляров ClickHouse
   ansible.builtin.file:
     path: "{{ platform_clickhouse_data_root }}"
     state: directory

@@ -32,7 +32,7 @@ class PartialOptimizationTests(unittest.TestCase):
 
         source = yaml.safe_load((ROLE / 'tasks/prepare.yml').read_text())
         selected = [task for task in source if task.get('name') in {
-            'Проверка прогнозируемых целей перед публикацией кандидата',
+            'Проверить целевые узлы проекции перед публикацией конфигурации-кандидата',
             'Сброс только временного графа-кандидата HAProxy',
             'Создать временное рабочее пространство-кандидат HAProxy'}]
         for task in selected:
@@ -85,7 +85,7 @@ class PartialOptimizationTests(unittest.TestCase):
             "Атомарно установить точную проверенную основную конфигурацию платформы",
             "Атомарно установить точные проверенные фрагменты платформы HAProxy",
             "Установка точных проверенных фрагментов серверной части управляемого приложения HAProxy",
-            "Записать, изменился ли активный график HAProxy"})
+            "Записать изменение активного графа конфигурации HAProxy"})
         start = yaml.safe_load((ROLE / "tasks/start.yml").read_text())
         with tempfile.TemporaryDirectory(prefix="platform-haproxy-partial-") as directory:
             root = Path(directory)

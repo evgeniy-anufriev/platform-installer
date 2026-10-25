@@ -3,7 +3,7 @@
   ansible.builtin.include_role:
     name: platform.core.project_settings
 
-- name: Требовать желаемый клиент DNS и прогнозы времени выполнения
+- name: Проверить наличие желаемой конфигурации и runtime-проекций DNS-клиента
   ansible.builtin.assert:
     that:
       - platform_desired_state is mapping

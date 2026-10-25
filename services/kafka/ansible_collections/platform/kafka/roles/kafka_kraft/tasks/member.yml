@@ -18,7 +18,7 @@
     platform_kafka_member_pki_changed: false
   when: not (platform_kafka_verify_only | bool)
 
-- name: Создание проекции прослушивателя экземпляра службы с учетом ролей
+- name: Создать проекцию Kafka listeners экземпляра с учётом ролей
   ansible.builtin.set_fact:
     _platform_kafka_member_advanced_config: "{{ platform_kafka_advanced_config | combine(kafka_member.advanced_config | default({})) }}"
     _platform_kafka_member_named_listeners: >-
@@ -31,7 +31,7 @@
       {% endfor %}
       {{ selected | to_json }}
 
-- name: Преобразование именованной проекции прослушивателя в собственный список
+- name: Преобразовать проекцию именованных Kafka listeners в список Ansible
   ansible.builtin.set_fact:
     _platform_kafka_member_named_listeners: "{{ _platform_kafka_member_named_listeners | from_json }}"
   when:
@@ -46,7 +46,7 @@
          | list if 'controller' not in kafka_member.roles
          else _platform_kafka_member_named_listeners }}
 
-- name: Проверка требований к роли именованного прослушивателя и локальных портов экземпляра службы
+- name: Проверить назначение именованных Kafka listeners и локальные порты экземпляра
   ansible.builtin.assert:
     that:
       - "'controller' not in kafka_member.roles or (_platform_kafka_member_named_listeners | selectattr('purpose', 'equalto', 'controller') | list | length > 0)"
@@ -57,7 +57,7 @@
     fail_msg: 'BLOCKED: named Kafka listeners are invalid for this member role or collide on ports'
   when: kafka_member.listeners | default({}) | length > 0
 
-- name: Создание эффективных именованных строк прослушивателя
+- name: Сформировать строки действующих именованных Kafka listeners
   ansible.builtin.set_fact:
     _platform_kafka_member_listeners: >-
       {% for listener in _platform_kafka_member_bound_listeners %}{{ listener.name }}://{{ listener.bindAddress | default('0.0.0.0') }}:{{ listener.port }}{% if not loop.last %},{% endif %}{% endfor %}
@@ -81,7 +81,7 @@
            }) }}
   when: not (platform_kafka_verify_only | bool)
 
-- name: Проверка готовности PKI-01 для прослушивателей SSL
+- name: Проверить готовность PKI-01 для SSL listeners Kafka
   ansible.builtin.include_tasks: validate_ssl_listener.yml
   loop: "{{ _platform_kafka_member_named_listeners | selectattr('securityProtocol', 'in', ['SSL', 'SASL_SSL']) | list }}"
   loop_control:
@@ -91,7 +91,7 @@
     - not (platform_kafka_verify_only | bool)
     - kafka_member.listeners | default({}) | length > 0
 
-- name: Настройка SCRAM в области прослушивателя без паролей брокера
+- name: Настроить SCRAM listener Kafka без передачи паролей брокера
   ansible.builtin.set_fact:
     kafka_effective_config: "{{ kafka_effective_config | combine({('listener.name.' ~ (item.name | lower) ~ '.sasl.enabled.mechanisms'): 'SCRAM-SHA-512', ('listener.name.' ~ (item.name | lower) ~ '.scram-sha-512.sasl.jaas.config'): 'org.apache.kafka.common.security.scram.ScramLoginModule required;'}) }}"
   loop: "{{ _platform_kafka_member_named_listeners | selectattr('securityProtocol', 'equalto', 'SASL_SSL') | list }}"

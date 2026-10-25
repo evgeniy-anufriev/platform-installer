@@ -25,7 +25,7 @@
 - name: Запретить запуск закрепленной стандартной службы systemd RPM рядом с экземплярами управляемой службы
   ansible.builtin.include_tasks: stock_unit.yml
 
-- name: Доказать, что исполняемый файл HA Keeper предоставляется закрепленным сервером RPM
+- name: Проверить принадлежность исполняемого файла HA Keeper зафиксированному RPM-пакету сервера ClickHouse
   ansible.builtin.command:
     argv: [rpm, -qf, --qf, '%{NAME}-%{VERSION}-%{RELEASE}.%{ARCH}', /usr/bin/clickhouse-keeper]
   register: _platform_clickhouse_keeper_binary_owner

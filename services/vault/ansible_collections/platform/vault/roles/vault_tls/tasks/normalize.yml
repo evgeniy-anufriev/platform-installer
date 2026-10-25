@@ -10,7 +10,7 @@
   loop_control:
     index_var: vault_slot
 
-- name: Отклонить прогнозируемое переполнение порта Vault
+- name: Отклонить выход вычисленных портов Vault за допустимый диапазон
   ansible.builtin.assert:
     that:
       - item.api_port <= 65535

@@ -14,7 +14,7 @@
   changed_when: false
 
 - block:
-    - name: Визуализация прогнозируемой конфигурации команды PLAINTEXT Kafka CLI
+    - name: Сформировать конфигурацию команды PLAINTEXT Kafka CLI по runtime-проекции
       ansible.builtin.copy:
         content: "security.protocol={{ kafka_cli_connection.securityProtocol }}\n"
         dest: "{{ _platform_kafka_cli_command_config.path }}"
@@ -32,7 +32,7 @@
         - kafka_cli_connection.securityProtocol in ['SSL', 'SASL_SSL']
         - kafka_cli_connection.tls.truststoreType == 'PKCS12'
 
-    - name: Отрисовка прогнозируемой конфигурации команды SSL Kafka CLI
+    - name: Сформировать конфигурацию команды SSL Kafka CLI по runtime-проекции
       ansible.builtin.copy:
         content: |-
           security.protocol={{ kafka_cli_connection.securityProtocol }}
@@ -62,7 +62,7 @@
       no_log: true
       when: kafka_cli_connection.securityProtocol in ['SSL', 'SASL_SSL']
 
-    - name: Выполнить прогнозируемую команду Kafka CLI, доступную только для чтения
+    - name: Выполнить вычисленную команду Kafka CLI без изменений
       ansible.builtin.command:
         argv: "{{ kafka_cli_command_prefix + ['--command-config', _platform_kafka_cli_command_config.path] + kafka_cli_command_suffix }}"
       changed_when: false

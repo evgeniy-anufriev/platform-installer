@@ -59,7 +59,7 @@
     fail_msg: "CLICKHOUSE_AUTHENTICATED_HTTPS_VERIFY_FAILED status={{ _platform_clickhouse_https_query.status | default(-1) }}"
   no_log: true
 
-- name: Потребовать прослушиватель HA Keeper TLS или пропустить его для автономного режима
+- name: Проверить TLS-порт HA Keeper или пропустить проверку в standalone-режиме
   ansible.builtin.wait_for:
     host: "{{ clickhouse_member.address }}"
     port: "{{ clickhouse_member.keeper_client_port }}"

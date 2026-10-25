@@ -182,14 +182,14 @@
   ansible.builtin.include_tasks: flush_handlers.yml
   when: not (platform_postgresql_verify_only | bool)
 
-- name: Получение материализованного отпечатка листа PostgreSQL TLS
+- name: Получить отпечаток материализованного TLS-сертификата PostgreSQL
   ansible.builtin.command:
     argv: [openssl, x509, -in, "{{ _platform_postgresql_tls_directory }}/certificate.pem", -noout, -fingerprint, -sha256]
   register: _platform_postgresql_materialized_leaf
   changed_when: false
   when: not (platform_postgresql_verify_only | bool)
 
-- name: Получение отпечатка листа сетевого прослушивателя PostgreSQL
+- name: Получить отпечаток TLS-сертификата, предъявляемого PostgreSQL
   ansible.builtin.shell: >-
     set -o pipefail;
     timeout 15 openssl s_client -connect 127.0.0.1:{{ _platform_postgresql_effective_port }} -starttls postgres </dev/null 2>/dev/null |
@@ -200,7 +200,7 @@
   changed_when: false
   when: not (platform_postgresql_verify_only | bool)
 
-- name: Перезагрузить управляемый дочерний элемент PostgreSQL только в том случае, если обслуживающий лист TLS устарел
+- name: Перечитать TLS-конфигурацию управляемого PostgreSQL при несовпадении сертификата
   ansible.builtin.command:
     argv: [pg_ctl, reload, -D, "{{ platform_postgresql_data_directory }}"]
   become_user: "{{ platform_postgresql_user }}"
@@ -210,7 +210,7 @@
     - not (platform_postgresql_verify_only | bool)
     - _platform_postgresql_materialized_leaf.stdout | trim != _platform_postgresql_serving_leaf_before_reload.stdout | trim
 
-- name: Дождаться PostgreSQL после выполнения перезагрузки листа TLS
+- name: Дождаться готовности PostgreSQL после перечитывания TLS-сертификата
   ansible.builtin.command:
     argv: [pg_isready, -h, 127.0.0.1, -p, "{{ _platform_postgresql_effective_port }}"]
   register: _platform_postgresql_serving_leaf_ready
@@ -223,7 +223,7 @@
     - _platform_postgresql_serving_leaf_reload is defined
     - _platform_postgresql_serving_leaf_reload.changed | default(false)
 
-- name: Перепроверить лист сетевого прослушивателя PostgreSQL после корректирующей перезагрузки
+- name: Повторно проверить TLS-сертификат PostgreSQL после корректирующего перечитывания
   ansible.builtin.shell: >-
     set -o pipefail;
     timeout 15 openssl s_client -connect 127.0.0.1:{{ _platform_postgresql_effective_port }} -starttls postgres </dev/null 2>/dev/null |
@@ -234,7 +234,7 @@
   changed_when: false
   when: not (platform_postgresql_verify_only | bool)
 
-- name: Потребовать, чтобы сетевой прослушиватель PostgreSQL обслуживал материализованный лист TLS
+- name: Проверить использование материализованного TLS-сертификата сервером PostgreSQL
   ansible.builtin.assert:
     that: >-
       _platform_postgresql_materialized_leaf.stdout | trim ==
@@ -375,7 +375,7 @@
     - platform_postgresql_data_write_state.stdout | trim == 'primary'
     - platform_postgresql_replication_login.rc | default(1) != 0
 
-- name: Проверка роли зонда проверки работоспособности pg_auto_failover
+- name: Проверить роль контроля работоспособности pg_auto_failover
   ansible.builtin.command:
     argv:
       - psql
@@ -398,7 +398,7 @@
     - "'database' in _platform_postgresql_member.roles"
     - platform_postgresql_data_write_state.stdout | trim == 'primary'
 
-- name: Согласование роли зонда проверки работоспособности pg_auto_failover без пароля
+- name: Согласовать роль контроля работоспособности pg_auto_failover без пароля
   ansible.builtin.command:
     argv: [psql, -h, /var/run/postgresql, -p, "{{ _platform_postgresql_effective_port }}", -U, "{{ platform_postgresql_user }}", -d, postgres, -v, ON_ERROR_STOP=1, -f, -]
     stdin: |

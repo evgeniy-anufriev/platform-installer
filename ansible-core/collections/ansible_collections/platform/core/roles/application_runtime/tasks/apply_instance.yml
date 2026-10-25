@@ -86,7 +86,7 @@
   changed_when: false
   no_log: true
 
-- name: Проверка только значений Core, прогнозируемых Compose
+- name: Проверить только значения Compose, полученные из проекции Core
   ansible.builtin.assert:
     that: "{{ (application_compose_config.stdout | from_json) | platform.core.application_validate_compose(application_runtime_job, application_runtime_job.instancePath, application_runtime_job.configDigest) }}"
     fail_msg: APPLICATION_CORE_COMPOSE_PROJECTION_INVALID

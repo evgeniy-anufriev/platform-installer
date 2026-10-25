@@ -28,7 +28,7 @@
           loop: "{{ application_vault_inputs.providers | default([]) | selectattr('providerId', 'in', application_vault_inputs.sourceJobs | default([]) | map(attribute='providerId') | unique | list) | list }}"
           loop_control:
             loop_var: platform_vault_application_provider
-        - name: Чтение существующих источников учетных данных Vault для зондов провайдера
+        - name: Прочитать существующие источники учётных данных Vault для проверки провайдеров
           ansible.builtin.include_role:
             name: platform.vault.application_provider
             tasks_from: sources

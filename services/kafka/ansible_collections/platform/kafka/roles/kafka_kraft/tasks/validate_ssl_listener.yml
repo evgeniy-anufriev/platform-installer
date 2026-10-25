@@ -1,5 +1,5 @@
 ---
-- name: Разрешение проекции времени выполнения Kafka TLS для прослушивателя SSL
+- name: Разрешить runtime-проекцию Kafka TLS для SSL listener
   ansible.builtin.include_tasks: resolve_tls_runtime.yml
   vars:
     kafka_tls_member: "{{ kafka_member }}"

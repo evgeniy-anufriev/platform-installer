@@ -18,7 +18,7 @@
       when:
         - application_topic_candidate.tls
         - platform_kafka_store_type == 'PEM'
-    - name: Визуализация прогнозируемой конфигурации клиента Kafka
+    - name: Сформировать конфигурацию клиента Kafka по runtime-проекции
       ansible.builtin.template:
         src: application-topics-client.properties.j2
         dest: "{{ application_topic_client.path }}"

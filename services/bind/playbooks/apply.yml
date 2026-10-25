@@ -87,7 +87,7 @@
         file: "{{ platform_service_catalog_path }}"
         name: _platform_bind_catalog_file
 
-    - name: Собрать безопасный хост проекта и прогнозы развертывания
+    - name: Собрать безопасные проекции узлов и развёртываний проекта
       ansible.builtin.set_fact:
         _platform_bind_inventory_hosts: >-
           {{ _platform_bind_inventory_hosts | default({}) |
@@ -196,7 +196,7 @@
                    recursive=True) }}
       when: not (platform_bind_reuse_existing_generated_state | default(false) | bool)
 
-    - name: Требовать существующее состояние жизненного цикла DNS для прогнозирования повторных попыток только для чтения
+    - name: Проверить наличие состояния DNS для повторного построения проекции без изменений
       ansible.builtin.assert:
         that:
           - platform_generated_state.serviceDeployments | default({}) is mapping
@@ -285,7 +285,7 @@
       register: platform_bind_generated_state_write
       when: not (platform_bind_reuse_existing_generated_state | default(false) | bool)
 
-    - name: Обновление запасов после серийной материализации BIND
+    - name: Обновить inventory после материализации серийных номеров зон BIND
       ansible.builtin.meta: refresh_inventory
       when: not (platform_bind_reuse_existing_generated_state | default(false) | bool)
 

@@ -320,7 +320,7 @@
     index_var: sentinel_marker_index
     label: "sentinel:{{ item.instance_name }}"
 
-- name: Проверка существующего статического Sentinel TLS и настроек прослушивателя
+- name: Проверить существующие статические настройки TLS и сетевого порта Sentinel
   ansible.builtin.slurp:
     src: "{{ item.config_directory }}/sentinel.conf"
   changed_when: false
@@ -365,7 +365,7 @@
     label: "sentinel:{{ item.instance_name }}"
   when: _platform_sentinel_config_stat.results[sentinel_config_index].stat.exists
 
-- name: Чтение занятости локального прослушивателя Redis
+- name: Проверить занятость локального порта Redis
   ansible.builtin.command:
     argv: [ss, -H, -ltn, "sport = :{{ item.redis_port }}"]
   changed_when: false
@@ -385,7 +385,7 @@
   loop_control:
     label: "redis:{{ item.instance_name }}"
 
-- name: Отклонить неуправляемый прослушиватель Redis TLS перед изменением
+- name: Отклонить неуправляемый TLS-порт Redis перед изменением
   ansible.builtin.assert:
     that: >-
       (_platform_redis_port_probe.results[redis_index].stdout | trim | length == 0)
@@ -396,7 +396,7 @@
     index_var: redis_index
     label: "redis:{{ item.instance_name }}"
 
-- name: Чтение занятости локального прослушивателя Sentinel
+- name: Проверить занятость локального порта Sentinel
   ansible.builtin.command:
     argv: [ss, -H, -ltn, "sport = :{{ item.sentinel_port }}"]
   changed_when: false
@@ -416,7 +416,7 @@
   loop_control:
     label: "sentinel:{{ item.instance_name }}"
 
-- name: Отклонить неуправляемый прослушиватель Sentinel TLS перед изменением
+- name: Отклонить неуправляемый TLS-порт Sentinel перед изменением
   ansible.builtin.assert:
     that: >-
       (_platform_redis_sentinel_port_probe.results[sentinel_index].stdout | trim | length == 0)

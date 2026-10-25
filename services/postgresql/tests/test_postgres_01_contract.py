@@ -142,7 +142,7 @@ class PostgreSQLHaLifecycleContractTests(unittest.TestCase):
         self.assertNotIn("pgautofailover_monitor", self.failover)
 
     def test_monitor_healthcheck_role_is_least_privilege_and_has_no_password(self):
-        self.assertIn("Согласование роли зонда проверки работоспособности pg_auto_failover без пароля", self.main)
+        self.assertIn("Согласовать роль контроля работоспособности pg_auto_failover без пароля", self.main)
         self.assertIn("NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION", self.main)
         self.assertIn("SELECT FROM pg_authid WHERE rolname = 'pgautofailover_monitor'", self.main)
         self.assertNotIn("SELECT FROM pg_roles WHERE rolname = 'pgautofailover_monitor' AND rolcanlogin", self.main)
@@ -245,12 +245,12 @@ class PostgreSQLHaLifecycleContractTests(unittest.TestCase):
         self.assertNotIn("healthcheck-password", schema)
 
     def test_serving_certificate_guard_reloads_only_on_a_network_fingerprint_mismatch(self):
-        self.assertIn("Получение отпечатка листа сетевого прослушивателя PostgreSQL", self.main)
-        self.assertIn("Перезагрузить управляемый дочерний элемент PostgreSQL только в том случае, если обслуживающий лист TLS устарел", self.main)
+        self.assertIn("Получить отпечаток TLS-сертификата, предъявляемого PostgreSQL", self.main)
+        self.assertIn("Перечитать TLS-конфигурацию управляемого PostgreSQL при несовпадении сертификата", self.main)
         self.assertIn("pg_ctl, reload, -D", self.main)
         self.assertIn("POSTGRES_TLS_SERVING_CERTIFICATE_MISMATCH", self.main)
         self.assertLess(
-            self.main.index("Потребовать, чтобы сетевой прослушиватель PostgreSQL обслуживал материализованный лист TLS"),
+            self.main.index("Проверить использование материализованного TLS-сертификата сервером PostgreSQL"),
             self.main.index("Проверка учетных данных для мониторинга данных через TLS"),
         )
 

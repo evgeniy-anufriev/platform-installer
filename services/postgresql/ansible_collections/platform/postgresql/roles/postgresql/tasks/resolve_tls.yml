@@ -19,7 +19,7 @@
   loop: [ca-chain.pem, certificate.pem, private-key.pem]
   register: platform_postgresql_tls_files
 
-- name: Требовать полную материализацию исходного кода PostgreSQL PEM
+- name: Проверить наличие всех материализованных PEM-файлов PostgreSQL
   ansible.builtin.assert:
     that: platform_postgresql_tls_files.results | map(attribute='stat.exists') | list | min
     fail_msg: POSTGRES_PKI_MATERIALIZATION_REQUIRED

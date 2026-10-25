@@ -35,7 +35,7 @@
     application_archive_checksums: {}
   no_log: true
 
-- name: Доказать фактическое сопоставление пространства имен и пути к личным идентификаторам до того, как провайдер напишет
+- name: Проверить отображение user namespace и пути защищённых учётных данных до записи провайдером
   platform.core.application_identity_files:
     account: "{{ application_runtime_job.account }}"
     user: "{{ application_runtime_job.settings.user | default('0:0') }}"
@@ -55,7 +55,7 @@
       - application_runtime_discoveries[application_discovery_key].info.Architecture in ['x86_64', 'aarch64', 'amd64', 'arm64']
     fail_msg: APPLICATION_RUNTIME_DAEMON_INVALID
 
-- name: Определение целевой платформы изображений
+- name: Определить целевую платформу образов
   ansible.builtin.set_fact:
     application_image_platform:
       os: "{{ application_runtime_discoveries[application_discovery_key].info.OSType }}"
@@ -102,7 +102,7 @@
           (application_registry_probe.stderr | default('')) is search('manifest unknown|no such manifest') else 1))) }}
   no_log: true
 
-- name: Требовать авторизованный совместимый источник изображения
+- name: Проверить утверждённый совместимый источник образа
   ansible.builtin.assert:
     that: application_image_source.source != 'BLOCKED'
     fail_msg: "{{ application_image_source.reason }}"
@@ -131,7 +131,7 @@
   failed_when: false
   no_log: true
 
-- name: Отклонить неуправляемое изображение, используя зарезервированное имя, связанное с дайджестом
+- name: Отклонить неуправляемый образ с зарезервированным именем, привязанным к digest
   ansible.builtin.assert:
     that: application_bound_image.rc != 0 or (application_bound_image.stdout | from_json)[0].Id == application_runtime_job.authority.requirement.imageId
     fail_msg: APPLICATION_IMAGE_REFERENCE_OWNERSHIP_INVALID
@@ -176,7 +176,7 @@
     fail_msg: APPLICATION_CONFIG_CONTENT_INVALID
   no_log: true
 
-- name: Вычисление отпечатка конфигурации, принадлежащей компьютеру
+- name: Вычислить отпечаток служебной конфигурации приложения
   ansible.builtin.set_fact:
     application_config_pairs: []
   no_log: true

@@ -1,5 +1,5 @@
 ---
-- name: Ограничить управляемые корни ClickHouse одним компонентом, принадлежащим доверенным родительским системам
+- name: Ограничить управляемые корневые каталоги ClickHouse одним компонентом под доверенными родительскими каталогами
   ansible.builtin.assert:
     that:
       - platform_clickhouse_config_root is match('^/etc/[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$')
@@ -41,7 +41,7 @@
   register: _platform_clickhouse_shared_data_root
   when: _platform_clickhouse_local_instances | length > 1
 
-- name: Требовать родительский элемент общих данных ClickHouse, принадлежащий пользователю root
+- name: Проверить владение root общим родительским каталогом данных ClickHouse
   ansible.builtin.assert:
     that:
       - not _platform_clickhouse_shared_data_root.stat.exists or _platform_clickhouse_shared_data_root.stat.uid == 0

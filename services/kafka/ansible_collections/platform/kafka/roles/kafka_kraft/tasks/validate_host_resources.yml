@@ -1,5 +1,5 @@
 ---
-- name: Отклонить конфликты портов прослушивателя Kafka на одном физическом хосте
+- name: Отклонить конфликты портов Kafka listeners на одном физическом узле
   ansible.builtin.assert:
     that: >-
       (kafka_host_members.1 | map(attribute='listener_ports') | list | flatten | unique | length)

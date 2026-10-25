@@ -3,26 +3,26 @@
   vars:
     platform_application_post_install_only: true
 
-- name: Выполнение сценариев терминала после префикса успешной установки
+- name: Выполнить сценарии post_install для успешно установленной части библиотек
   hosts: localhost
   connection: local
   gather_facts: false
   any_errors_fatal: true
   tasks:
-    - name: Привязать разрешенную очередь терминалов и ее точные ссылки на учетные данные
+    - name: Привязать очередь сценариев post_install и ссылки на учётные данные
       ansible.builtin.set_fact:
         application_post_install_scripts: "{{ application_runtime_inputs.postInstallScripts }}"
         application_post_install_references: "{{ application_runtime_inputs.postInstallScripts | map(attribute='secretInputs') | map('dict2items') | flatten | map(attribute='value') | unique | list }}"
         platform_application_vault_runtime: {}
         platform_application_credential_files: {}
       no_log: true
-    - name: Привязать только существующие опубликованные поля, используемые скриптами терминала
+    - name: Привязать опубликованные поля, используемые сценариями post_install
       ansible.builtin.set_fact:
         application_post_install_sources: "{{ application_vault_inputs.sourceJobs | selectattr('passwordRef', 'in', application_post_install_references) | list }}"
       no_log: true
-    - name: Запуск сценариев терминала с хранением учетных данных, ограниченным вызовом
+    - name: Выполнить сценарии post_install с учётными данными в пределах операции
       block:
-        - name: Обнаружить только провайдеров Vault, необходимых для входных данных терминала
+        - name: Обнаружить провайдеров Vault, необходимых для входных данных post_install
           ansible.builtin.include_role:
             name: platform.vault.application_provider
             tasks_from: discover
@@ -38,7 +38,7 @@
           loop: "{{ application_post_install_sources }}"
           loop_control:
             loop_var: application_vault_source
-        - name: Последовательное выполнение детерминированной очереди терминала
+        - name: Последовательно выполнить детерминированную очередь сценариев post_install
           ansible.builtin.include_tasks: tasks/application-post-install-script.yml
           loop: "{{ application_post_install_scripts }}"
           loop_control:

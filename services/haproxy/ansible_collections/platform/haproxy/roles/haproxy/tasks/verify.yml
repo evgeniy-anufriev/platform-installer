@@ -9,13 +9,13 @@
     argv: [systemctl, is-active, --quiet, "{{ platform_haproxy_service_name }}"]
   changed_when: false
 
-- name: Проверка общедоступных и локальных прослушивателей статистики HAProxy, доступных только для чтения
+- name: Проверить публичный и локальный порты статистики HAProxy без изменений
   ansible.builtin.command:
     argv: [ss, -ltn]
   changed_when: false
   register: _platform_haproxy_listeners
 
-- name: Требовать прослушиватели общедоступной и локальной статистики HAProxy
+- name: Проверить наличие публичного и локального портов статистики HAProxy
   ansible.builtin.assert:
     that:
       - "':' ~ (platform_haproxy_public_port | string) in _platform_haproxy_listeners.stdout"

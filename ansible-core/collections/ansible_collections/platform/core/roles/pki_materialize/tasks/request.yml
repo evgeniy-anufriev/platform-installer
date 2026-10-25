@@ -48,7 +48,7 @@
     fail_msg: PKI_STORE_PASSWORD_RUNTIME_SECRET_REQUIRED
   no_log: true
 
-- name: Проверка существующего маркера отпечатка пальца запроса PKI
+- name: Проверка существующего маркера отпечатка запроса PKI
   ansible.builtin.stat:
     path: "{{ _platform_pki_request_dir }}/request-fingerprint"
     follow: false
@@ -109,14 +109,14 @@
       - not platform_pki_reissue_marker.stat.exists or _platform_pki_reissue_resumable
     fail_msg: PKI_REISSUE_RESUME_REQUIRED
 
-- name: Прочитать существующий маркер отпечатка пальца запроса PKI
+- name: Прочитать существующий маркер отпечатка запроса PKI
   ansible.builtin.command:
     argv: [cat, "{{ _platform_pki_request_dir }}/request-fingerprint"]
   register: platform_pki_existing_request_fingerprint
   changed_when: false
   when: platform_pki_request_marker.stat.exists
 
-- name: Распознать прерванную перевыпуск, идентичность листа которого уже записана
+- name: Распознать прерванный перевыпуск с уже записанным идентификатором конечного сертификата
   ansible.builtin.set_fact:
     _platform_pki_reissue_materialized: >-
       {{ _platform_pki_reissue_resumable and platform_pki_request_marker.stat.exists and
@@ -147,7 +147,7 @@
     - "{{ _platform_pki_authority_dir }}/ca.crt"
   register: platform_pki_authority_files
 
-- name: Проверка маркера отпечатка пальца управляемого центра сертификации
+- name: Проверка маркера отпечатка управляемого центра сертификации
   ansible.builtin.stat:
     path: "{{ _platform_pki_authority_dir }}/authority-fingerprint"
     follow: false
@@ -164,7 +164,7 @@
          (platform_pki_authority_files.results[1].stat.isreg | default(false)))
     fail_msg: PKI_AUTHORITY_STATE_INCOMPLETE
 
-- name: Чтение маркера отпечатка пальца управляемого центра сертификации
+- name: Чтение маркера отпечатка управляемого центра сертификации
   ansible.builtin.command:
     argv: [cat, "{{ _platform_pki_authority_dir }}/authority-fingerprint"]
   register: platform_pki_existing_authority_fingerprint
