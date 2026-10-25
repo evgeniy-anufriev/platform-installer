@@ -35398,12 +35398,12 @@ platform_name_prefix: ''
   become: false
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/resolve_application_libraries/tasks/main.yml","mode":420,"size":2349,"sha256":"3252391846b7ae76449630534339b0273ddd092b413c51cdae96924943bcf6b5","index":0,"count":1,"encoding":"utf-8","payloadBytes":2349}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/resolve_application_libraries/tasks/main.yml","mode":420,"size":2361,"sha256":"8987bdbfab2558265f8fab7cfae2ae397be490743ca7e12bf589c9df50721cc8","index":0,"count":1,"encoding":"utf-8","payloadBytes":2361}
 ---
 - name: Проверка закрытия пакета перед загрузкой значений по умолчанию
   platform.core.prepare_application_libraries:
     project_root: "{{ platform_project_root | default(inventory_dir | dirname) }}"
-    contracts_root: "{{ platform_contracts_root | default(playbook_dir ~ '/../../contracts') }}"
+    contracts_root: "{{ platform_contracts_root | default(role_path ~ '/../../../../../../../contracts') }}"
   register: _application_inputs
   no_log: true
   become: false
@@ -35785,7 +35785,72 @@ artifactLock:
   digest: sha256:2222222222222222222222222222222222222222222222222222222222222222
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/application-images-inputs.yml","mode":420,"size":2381,"sha256":"28e7445d1299b51a33ad6c241cb1c07ae498904b4ad992e4fa85ce84411d5b90","index":0,"count":1,"encoding":"utf-8","payloadBytes":2381}
+@@PORTABLE {"path":"ansible-core/playbooks/applications/apply.yml","mode":420,"size":3565,"sha256":"176d4f0eb6755ebc0653d9ff7a64811e4b2352d31e4703aaddafc93f9d7ceae4","index":0,"count":1,"encoding":"utf-8","payloadBytes":3565}
+---
+- name: Начать подготовку библиотек
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Отметить начало подготовки
+      ansible.builtin.debug:
+        msg: {id: 'applications:prepare', state: started}
+      tags: [platform_application_progress]
+
+- import_playbook: stages/preflight.yml
+- import_playbook: stages/vault-preflight.yml
+- import_playbook: stages/provider-stage.yml
+
+- name: Применить каждую предварительно проверенную библиотеку и проверить ее перед следующим запуском
+  hosts: platform_targets
+  strategy: linear
+  gather_facts: false
+  become: true
+  any_errors_fatal: true
+  tasks:
+    - name: Отметить завершение подготовки
+      ansible.builtin.debug:
+        msg: {id: 'applications:prepare', state: completed}
+      tags: [platform_application_progress]
+      run_once: true
+
+    - name: Применение упорядоченных библиотек с ограниченным хранением частных источников
+      block:
+        - name: Привязать упорядоченные идентификаторы библиотек из неизменяемого плана или ввода вручную
+          ansible.builtin.set_fact:
+            application_library_order: >-
+              {{ hostvars['localhost'].application_selection.scope.libraryOrder }}
+          no_log: true
+        - name: Требовать явного порядка для нескольких библиотек вне запланированного выполнения
+          ansible.builtin.assert:
+            that:
+              - platform_application_expected_library_ids is defined or platform_application_library_order is defined or
+                (hostvars['localhost'].application_runtime_inputs.jobs | map(attribute='libraryId') | unique | list | length) <= 1
+            fail_msg: APPLICATION_LIBRARY_ORDER_REQUIRED
+        - name: Требовать точно выбранный набор библиотек и отсутствие повторяющихся записей заказа
+          ansible.builtin.assert:
+            that:
+              - application_library_order | length == (application_library_order | unique | length)
+              - application_library_order | sort == (hostvars['localhost'].application_snapshot.snapshot.applicationLibraries.libraries | list | sort)
+            fail_msg: APPLICATION_LIBRARY_ORDER_INVALID
+        - name: Завершить одну библиотеку, прежде чем переходить к следующей
+          ansible.builtin.include_tasks: tasks/ordered-library.yml
+          loop: "{{ application_library_order }}"
+          loop_control:
+            loop_var: application_library_id
+      always:
+        - name: Удаление только исходных файлов учетной записи, полученной из вызова, после координации во время выполнения
+          ansible.builtin.file:
+            path: "{{ hostvars['localhost'].platform_application_secret_root }}/{{ item.passwordRef }}"
+            state: absent
+          loop: "{{ hostvars['localhost'].application_vault_inputs.sourceJobs | default([]) | selectattr('passwordRef', 'defined') | list }}"
+          delegate_to: localhost
+          become: false
+          run_once: true
+          changed_when: false
+          no_log: true
+
+@@END
+@@PORTABLE {"path":"ansible-core/playbooks/applications/images/inputs.yml","mode":420,"size":2381,"sha256":"28e7445d1299b51a33ad6c241cb1c07ae498904b4ad992e4fa85ce84411d5b90","index":0,"count":1,"encoding":"utf-8","payloadBytes":2381}
 ---
 - name: Обработать параметры подготовки образов без подключения к целевым узлам
   hosts: localhost
@@ -35826,16 +35891,16 @@ artifactLock:
       when: platform_application_image_inputs_path is defined
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/application-images-plan.yml","mode":420,"size":317,"sha256":"838fcc2d379910b270016c0b330b37630f096fe5904f31e11bbac4f509b2d52f","index":0,"count":1,"encoding":"utf-8","payloadBytes":317}
+@@PORTABLE {"path":"ansible-core/playbooks/applications/images/plan.yml","mode":420,"size":285,"sha256":"d9fb10e4e46b79f96093ef7c5d7836d61ba0d947a0efd1d803472d758aaa1671","index":0,"count":1,"encoding":"utf-8","payloadBytes":285}
 ---
 # Manual inventory uses the same native preparation and target-free planner.
 # Supply runtime-only registry values through a private extra-vars file, never inventory.
-- import_playbook: application-images-inputs.yml
-- import_playbook: application-images-prepare.yml
-- import_playbook: deployment-plan-machine.yml
+- import_playbook: inputs.yml
+- import_playbook: prepare.yml
+- import_playbook: ../../deployment-plan-machine.yml
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/application-images-prepare.yml","mode":420,"size":2816,"sha256":"f48f5d56db7b91dc29e1547554bf567d9dd066e6aadb0e394b55140bbccb158c","index":0,"count":1,"encoding":"utf-8","payloadBytes":2816}
+@@PORTABLE {"path":"ansible-core/playbooks/applications/images/prepare.yml","mode":420,"size":2816,"sha256":"f48f5d56db7b91dc29e1547554bf567d9dd066e6aadb0e394b55140bbccb158c","index":0,"count":1,"encoding":"utf-8","payloadBytes":2816}
 ---
 - name: Привязать выбранные образы к целевым узлам без изменения inventory оператора
   hosts: localhost
@@ -35889,310 +35954,9 @@ artifactLock:
       when: platform_application_image_result_path is defined
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-apply.yml","mode":420,"size":3626,"sha256":"7b40429e10b318e2c07b69a0393d65aa3a84d1c47d773d943c1d5cabf2ce959a","index":0,"count":1,"encoding":"utf-8","payloadBytes":3626}
+@@PORTABLE {"path":"ansible-core/playbooks/applications/post-install.yml","mode":420,"size":3333,"sha256":"beaefff70fab44fa64f0b0d22f508aa58bd472e87bf04cb7c80b9263701ce8b0","index":0,"count":1,"encoding":"utf-8","payloadBytes":3333}
 ---
-- name: Начать подготовку библиотек
-  hosts: localhost
-  gather_facts: false
-  tasks:
-    - name: Отметить начало подготовки
-      ansible.builtin.debug:
-        msg: {id: 'applications:prepare', state: started}
-      tags: [platform_application_progress]
-
-- import_playbook: application-libraries-preflight.yml
-- import_playbook: application-libraries-vault-preflight.yml
-- import_playbook: application-libraries-provider-stage.yml
-
-- name: Применить каждую предварительно проверенную библиотеку и проверить ее перед следующим запуском
-  hosts: platform_targets
-  strategy: linear
-  gather_facts: false
-  become: true
-  any_errors_fatal: true
-  tasks:
-    - name: Отметить завершение подготовки
-      ansible.builtin.debug:
-        msg: {id: 'applications:prepare', state: completed}
-      tags: [platform_application_progress]
-      run_once: true
-
-    - name: Применение упорядоченных библиотек с ограниченным хранением частных источников
-      block:
-        - name: Привязать упорядоченные идентификаторы библиотек из неизменяемого плана или ввода вручную
-          ansible.builtin.set_fact:
-            application_library_order: >-
-              {{ hostvars['localhost'].application_selection.scope.libraryOrder }}
-          no_log: true
-        - name: Требовать явного порядка для нескольких библиотек вне запланированного выполнения
-          ansible.builtin.assert:
-            that:
-              - platform_application_expected_library_ids is defined or platform_application_library_order is defined or
-                (hostvars['localhost'].application_runtime_inputs.jobs | map(attribute='libraryId') | unique | list | length) <= 1
-            fail_msg: APPLICATION_LIBRARY_ORDER_REQUIRED
-        - name: Требовать точно выбранный набор библиотек и отсутствие повторяющихся записей заказа
-          ansible.builtin.assert:
-            that:
-              - application_library_order | length == (application_library_order | unique | length)
-              - application_library_order | sort == (hostvars['localhost'].application_snapshot.snapshot.applicationLibraries.libraries | list | sort)
-            fail_msg: APPLICATION_LIBRARY_ORDER_INVALID
-        - name: Завершить одну библиотеку, прежде чем переходить к следующей
-          ansible.builtin.include_tasks: application-libraries-ordered-library.yml
-          loop: "{{ application_library_order }}"
-          loop_control:
-            loop_var: application_library_id
-      always:
-        - name: Удаление только исходных файлов учетной записи, полученной из вызова, после координации во время выполнения
-          ansible.builtin.file:
-            path: "{{ hostvars['localhost'].platform_application_secret_root }}/{{ item.passwordRef }}"
-            state: absent
-          loop: "{{ hostvars['localhost'].application_vault_inputs.sourceJobs | default([]) | selectattr('passwordRef', 'defined') | list }}"
-          delegate_to: localhost
-          become: false
-          run_once: true
-          changed_when: false
-          no_log: true
-
-@@END
-@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-credential-root.yml","mode":420,"size":1244,"sha256":"483726976ecd49d95b18a825b89818e6c793a4b83a0eb8f01636bc75523dcecf","index":0,"count":1,"encoding":"utf-8","payloadBytes":1244}
----
-- name: Нормализовать общий корень учетных данных приложения на границе совместимости
-  hosts: localhost
-  connection: local
-  gather_facts: false
-  tasks:
-    - name: Отклонить конфликтующие общие и устаревшие корни учетных данных
-      ansible.builtin.assert:
-        that: >-
-          not (platform_application_secret_root | default(''))
-          or not (platform_postgresql_application_secret_root | default(''))
-          or platform_application_secret_root == platform_postgresql_application_secret_root
-        fail_msg: APPLICATION_PROVIDER_SECRET_ROOT_CONFLICT
-      no_log: true
-    - name: Сохранить устаревшие входные данные PostgreSQL только в качестве псевдонима совместимости
-      ansible.builtin.set_fact:
-        platform_application_secret_root: "{{ platform_application_secret_root | default(platform_postgresql_application_secret_root | default(''), true) }}"
-        platform_application_secret_files: "{{ platform_application_secret_files | default(platform_postgresql_secret_files | default({})) }}"
-      no_log: true
-
-@@END
-@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-endpoint-stage.yml","mode":420,"size":1017,"sha256":"d50c5dec1bc4395c3fce29ae0c43f3c512b3726f1b656b767bec775566aa578e","index":0,"count":1,"encoding":"utf-8","payloadBytes":1017}
----
-- name: Запустить общие перехватчики конечных точек в исходном контексте выполнения Ansible
-  hosts: platform_targets
-  strategy: linear
-  gather_facts: false
-  any_errors_fatal: true
-  tasks:
-    - name: Опубликовать выбранные готовые логические источники с существующими задачами провайдера
-      ansible.builtin.include_tasks: ../../services/integrations/tasks/apply-source.yml
-      vars:
-        platform_endpoint_source_ids: >-
-          {{ (hostvars['localhost'].application_runtime_inputs.jobs | map(attribute='instanceId') | unique |
-              intersect(hostvars['localhost'].platform_endpoint_sources | default({}) | list) | sort)
-             if hostvars['localhost'].application_runtime_inputs is defined else
-             (hostvars['localhost'].platform_endpoint_sources | default({}) | sort) }}
-      when: platform_endpoint_source_ids | length > 0
-
-@@END
-@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-ordered-instance.yml","mode":420,"size":4343,"sha256":"c852eea02dc250ee2adeec7335a45e78ac001cfb09b27aad9b9db3ed30d895ab","index":0,"count":1,"encoding":"utf-8","payloadBytes":4343}
----
-- name: Проверить полноту пакетов провайдеров перед запуском потребителя приложения
-  ansible.builtin.assert:
-    that: >-
-      (application_library_id ~ '/' ~ application_instance_id) not in
-      (hostvars['localhost'].application_runtime_inputs.integrations |
-       platform.core.application_pending_instances(hostvars['localhost'].platform_application_completed_batches))
-    fail_msg: APPLICATION_PROVIDER_PREPARATION_INCOMPLETE
-
-- name: Материализовать отложенные входные данные потребительского агента только после полной доставки Vault
-  ansible.builtin.include_role:
-    name: platform.core.application_runtime
-    tasks_from: apply_instance
-  loop: "{{ platform_application_preflight_jobs | selectattr('libraryId', 'equalto', application_library_id) | selectattr('instanceId', 'equalto', application_instance_id) | list }}"
-  loop_control:
-    loop_var: application_runtime_job
-  when: (application_library_id ~ '/' ~ application_instance_id) in hostvars['localhost'].application_runtime_inputs.integrations.dependencies
-
-- name: Выполнить сценарии pre_start экземпляра после доставки всех образов
-  ansible.builtin.include_role:
-    name: platform.core.application_runtime
-    tasks_from: run_scripts
-  vars:
-    application_script_phase: before_start
-    application_script_scope: instance
-  loop: "{{ platform_application_preflight_jobs | selectattr('libraryId', 'equalto', application_library_id) | selectattr('instanceId', 'equalto', application_instance_id) | list }}"
-  loop_control:
-    loop_var: application_runtime_job
-
-- name: Активировать и проверить размещения логического экземпляра приложения
-  ansible.builtin.include_role:
-    name: platform.core.application_runtime
-    tasks_from: activate_instance
-  loop: "{{ platform_application_preflight_jobs | selectattr('libraryId', 'equalto', application_library_id) | selectattr('instanceId', 'equalto', application_instance_id) | list }}"
-  loop_control:
-    loop_var: application_runtime_job
-
-- name: Запускать готовые сценарии только после того, как каждое размещение будет работоспособным
-  ansible.builtin.include_role:
-    name: platform.core.application_runtime
-    tasks_from: run_scripts
-  vars:
-    application_script_phase: after_ready
-    application_script_scope: instance
-  loop: "{{ platform_application_preflight_jobs | selectattr('libraryId', 'equalto', application_library_id) | selectattr('instanceId', 'equalto', application_instance_id) | list }}"
-  loop_control:
-    loop_var: application_runtime_job
-
-- name: Привязать выбранные пакеты потребителей готового экземпляра приложения
-  ansible.builtin.set_fact:
-    application_ready_provider_batches: >-
-      {{ hostvars['localhost'].application_runtime_inputs.integrations.batches |
-         selectattr('providerLibraryId', 'equalto', application_library_id) |
-         selectattr('providerInstanceId', 'equalto', application_instance_id) | list }}
-  no_log: true
-
-- name: Опубликовать и проверить конечную точку готового провайдера до запуска потребителей
-  ansible.builtin.include_tasks: ../../services/integrations/tasks/apply-source.yml
-  vars:
-    platform_endpoint_source_ids: "{{ [application_instance_id] }}"
-  when: application_ready_provider_batches | length > 0
-
-- name: Подготовить выбранных потребителей пакетов готового провайдера приложения
-  ansible.builtin.include_tasks: tasks/application-provider-batch.yml
-  loop: "{{ application_ready_provider_batches }}"
-  loop_control:
-    loop_var: application_provider_batch
-  run_once: true
-
-- name: Полная стандартная доставка Vault для всех потребителей, чьи провайдери готовы
-  ansible.builtin.include_tasks: tasks/application-deliver-ready.yml
-  when: application_ready_provider_batches | length > 0
-  run_once: true
-
-@@END
-@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-ordered-library.yml","mode":420,"size":6604,"sha256":"dabc2ab627b3ec1c00592c1656e4f9d43b36371f46001bbabbe1888274d96a2e","index":0,"count":1,"encoding":"utf-8","payloadBytes":6604}
----
-- name: Отметить начало установки библиотеки
-  ansible.builtin.debug:
-    msg:
-      id: "applications:library:{{ application_library_id }}"
-      state: started
-  tags: [platform_application_progress]
-  run_once: true
-  when: application_library_id in hostvars['localhost'].application_selection.scope.installLibraries
-
-- name: Привязать выбранные логические экземпляры библиотеки приложений
-  ansible.builtin.set_fact:
-    application_library_instance_ids: >-
-      {{ hostvars['localhost'].application_runtime_inputs.jobs | selectattr('libraryId', 'equalto', application_library_id) |
-         sort(attribute='instanceId') | sort(attribute='startupPriority') |
-         map(attribute='instanceId') | unique | list }}
-  no_log: true
-
-- name: Материализовать выбранные размещения библиотеки приложений без запуска контейнеров
-  ansible.builtin.include_role:
-    name: platform.core.application_runtime
-    tasks_from: apply_library
-  when: platform_application_preflight_jobs | selectattr('libraryId', 'equalto', application_library_id) | list | length > 0
-
-- name: Доставить выбранные образы библиотеки перед выполнением сценариев pre_start
-  ansible.builtin.include_role:
-    name: platform.core.application_runtime
-    tasks_from: image_delivery
-  loop: "{{ platform_application_preflight_jobs | selectattr('libraryId', 'equalto', application_library_id) | list }}"
-  loop_control:
-    loop_var: application_runtime_job
-
-- name: Запуск сценариев перед запуском библиотеки после материализации
-  ansible.builtin.include_role:
-    name: platform.core.application_runtime
-    tasks_from: run_scripts
-  vars:
-    application_script_phase: before_start
-    application_script_scope: library
-  loop: "{{ platform_application_preflight_jobs | selectattr('libraryId', 'equalto', application_library_id) | list }}"
-  loop_control:
-    loop_var: application_runtime_job
-
-- name: Согласовать каждый логический экземпляр с явными фазовыми барьерами
-  ansible.builtin.include_tasks: application-libraries-ordered-instance.yml
-  loop: "{{ application_library_instance_ids }}"
-  loop_control:
-    loop_var: application_instance_id
-
-- name: Запуск готовых сценариев библиотеки перед публикацией конечной точки
-  ansible.builtin.include_role:
-    name: platform.core.application_runtime
-    tasks_from: run_scripts
-  vars:
-    application_script_phase: after_ready
-    application_script_scope: library
-  loop: "{{ platform_application_preflight_jobs | selectattr('libraryId', 'equalto', application_library_id) | list }}"
-  loop_control:
-    loop_var: application_runtime_job
-
-- name: Опубликовать и проверить готовые конечные точки библиотеки приложений
-  ansible.builtin.include_tasks: ../../services/integrations/tasks/apply-source.yml
-  vars:
-    platform_endpoint_source_ids: >-
-      {{ application_library_instance_ids |
-         difference(hostvars['localhost'].application_runtime_inputs.integrations.batches |
-           selectattr('providerLibraryId', 'equalto', application_library_id) | map(attribute='providerInstanceId') | list) |
-         intersect(hostvars['localhost'].platform_endpoint_sources | default({}) | list) | sort }}
-  when: >-
-    application_library_instance_ids |
-    difference(hostvars['localhost'].application_runtime_inputs.integrations.batches |
-      selectattr('providerLibraryId', 'equalto', application_library_id) | map(attribute='providerInstanceId') | list) |
-    intersect(hostvars['localhost'].platform_endpoint_sources | default({}) | list) | length > 0
-
-- name: Проверить размещения библиотеки приложений перед обработкой следующей библиотеки
-  ansible.builtin.include_role:
-    name: platform.core.application_runtime
-    tasks_from: verify
-  loop: "{{ platform_application_preflight_jobs | selectattr('libraryId', 'equalto', application_library_id) | list }}"
-  loop_control:
-    loop_var: application_runtime_job
-
-- name: Подготовить выбранных потребителей явно пропущенного провайдера без его жизненного цикла
-  ansible.builtin.include_tasks: tasks/application-provider-batch.yml
-  loop: "{{ hostvars['localhost'].application_runtime_inputs.integrations.batches | selectattr('providerLibraryId', 'equalto', application_library_id) | list }}"
-  loop_control:
-    loop_var: application_provider_batch
-  when: application_library_id in hostvars['localhost'].application_selection.scope.skippedLibraries
-  run_once: true
-
-- name: Доставка готовых секретов потребителя после обратных вызовов пропущенного провайдера
-  ansible.builtin.include_tasks: tasks/application-deliver-ready.yml
-  when: application_library_id in hostvars['localhost'].application_selection.scope.providerLibraries and application_library_id in hostvars['localhost'].application_selection.scope.skippedLibraries
-  run_once: true
-
-- name: Применить объявленные крючки интеграции к выбранным местам размещения
-  ansible.builtin.include_tasks: tasks/application-provider-script.yml
-  vars:
-    application_provider_batch:
-      providerLibraryId: "{{ application_integration_script.libraryId }}"
-      providerInstanceId: "{{ application_integration_script.instanceId }}"
-    application_provider_script: "{{ application_integration_script }}"
-    application_provider_script_host: "{{ application_integration_script.hostId }}"
-  loop: "{{ hostvars['localhost'].application_runtime_inputs.integrationScripts | selectattr('libraryId', 'equalto', application_library_id) | list }}"
-  loop_control:
-    loop_var: application_integration_script
-  run_once: true
-
-- name: Отметить завершение установки и проверки библиотеки
-  ansible.builtin.debug:
-    msg:
-      id: "applications:library:{{ application_library_id }}"
-      state: completed
-  tags: [platform_application_progress]
-  run_once: true
-  when: application_library_id in hostvars['localhost'].application_selection.scope.installLibraries
-
-@@END
-@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-post-install.yml","mode":420,"size":3360,"sha256":"10c34bcce56579f3f22e382b533b24da560c15eeea0a96474c8b7a1307b076ce","index":0,"count":1,"encoding":"utf-8","payloadBytes":3360}
----
-- import_playbook: application-libraries-resolve-runtime.yml
+- import_playbook: stages/resolve-runtime.yml
   vars:
     platform_application_post_install_only: true
 
@@ -36232,7 +35996,7 @@ artifactLock:
           loop_control:
             loop_var: application_vault_source
         - name: Последовательно выполнить детерминированную очередь сценариев post_install
-          ansible.builtin.include_tasks: tasks/application-post-install-script.yml
+          ansible.builtin.include_tasks: tasks/post-install-script.yml
           loop: "{{ application_post_install_scripts }}"
           loop_control:
             loop_var: application_post_install_script
@@ -36247,9 +36011,50 @@ artifactLock:
           no_log: true
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-preflight.yml","mode":420,"size":3478,"sha256":"cf89410461ad93cd62cfd4b69588fd08b697b049e163d6e1affd3e969b4ea41b","index":0,"count":1,"encoding":"utf-8","payloadBytes":3478}
+@@PORTABLE {"path":"ansible-core/playbooks/applications/stages/credential-root.yml","mode":420,"size":1244,"sha256":"483726976ecd49d95b18a825b89818e6c793a4b83a0eb8f01636bc75523dcecf","index":0,"count":1,"encoding":"utf-8","payloadBytes":1244}
 ---
-- import_playbook: application-libraries-resolve-runtime.yml
+- name: Нормализовать общий корень учетных данных приложения на границе совместимости
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Отклонить конфликтующие общие и устаревшие корни учетных данных
+      ansible.builtin.assert:
+        that: >-
+          not (platform_application_secret_root | default(''))
+          or not (platform_postgresql_application_secret_root | default(''))
+          or platform_application_secret_root == platform_postgresql_application_secret_root
+        fail_msg: APPLICATION_PROVIDER_SECRET_ROOT_CONFLICT
+      no_log: true
+    - name: Сохранить устаревшие входные данные PostgreSQL только в качестве псевдонима совместимости
+      ansible.builtin.set_fact:
+        platform_application_secret_root: "{{ platform_application_secret_root | default(platform_postgresql_application_secret_root | default(''), true) }}"
+        platform_application_secret_files: "{{ platform_application_secret_files | default(platform_postgresql_secret_files | default({})) }}"
+      no_log: true
+
+@@END
+@@PORTABLE {"path":"ansible-core/playbooks/applications/stages/endpoint.yml","mode":420,"size":1023,"sha256":"c844f96ba4c0a7ccd69c230ab95949aed6ea04da196d5260b43fc515e44553f8","index":0,"count":1,"encoding":"utf-8","payloadBytes":1023}
+---
+- name: Запустить общие перехватчики конечных точек в исходном контексте выполнения Ansible
+  hosts: platform_targets
+  strategy: linear
+  gather_facts: false
+  any_errors_fatal: true
+  tasks:
+    - name: Опубликовать выбранные готовые логические источники с существующими задачами провайдера
+      ansible.builtin.include_tasks: ../../../../services/integrations/tasks/apply-source.yml
+      vars:
+        platform_endpoint_source_ids: >-
+          {{ (hostvars['localhost'].application_runtime_inputs.jobs | map(attribute='instanceId') | unique |
+              intersect(hostvars['localhost'].platform_endpoint_sources | default({}) | list) | sort)
+             if hostvars['localhost'].application_runtime_inputs is defined else
+             (hostvars['localhost'].platform_endpoint_sources | default({}) | sort) }}
+      when: platform_endpoint_source_ids | length > 0
+
+@@END
+@@PORTABLE {"path":"ansible-core/playbooks/applications/stages/preflight.yml","mode":420,"size":3437,"sha256":"c40835902f57717c86ef6411b33ecdfc6b9edf29b4d7d7f346bf7cf30779bf19","index":0,"count":1,"encoding":"utf-8","payloadBytes":3437}
+---
+- import_playbook: resolve-runtime.yml
 
 - name: Проверка явного порядка библиотеки и области действия провайдера перед любым целевым контактом
   hosts: localhost
@@ -36305,10 +36110,10 @@ artifactLock:
   gather_facts: false
   any_errors_fatal: true
   tasks:
-    - ansible.builtin.import_tasks: tasks/application-libraries-offline-archives.yml
+    - ansible.builtin.import_tasks: ../tasks/offline-archives.yml
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-provider-stage.yml","mode":420,"size":11724,"sha256":"44739179fc3d29635733a1ffa4648920241de5d3727d25883a528d981628df72","index":0,"count":1,"encoding":"utf-8","payloadBytes":11724}
+@@PORTABLE {"path":"ansible-core/playbooks/applications/stages/provider-stage.yml","mode":420,"size":11724,"sha256":"44739179fc3d29635733a1ffa4648920241de5d3727d25883a528d981628df72","index":0,"count":1,"encoding":"utf-8","payloadBytes":11724}
 ---
 - name: Запустить предварительно проверенную библиотеку, а затем перехватить провайдера экземпляров
   hosts: localhost
@@ -36481,7 +36286,7 @@ artifactLock:
           when: not (platform_application_runtime_credential_custody | default(false)) or application_runtime_inputs.integrations.batches | length == 0
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-provider-verify-stage.yml","mode":420,"size":6508,"sha256":"f76430c6f9ba0137d986568fefae1a2a544bcc1271e5d1dafd81da8e947e5b3a","index":0,"count":1,"encoding":"utf-8","payloadBytes":6508}
+@@PORTABLE {"path":"ansible-core/playbooks/applications/stages/provider-verify-stage.yml","mode":420,"size":6508,"sha256":"f76430c6f9ba0137d986568fefae1a2a544bcc1271e5d1dafd81da8e947e5b3a","index":0,"count":1,"encoding":"utf-8","payloadBytes":6508}
 ---
 - name: Проверка провайдеров приложений без изменения сервиса
   hosts: localhost
@@ -36585,9 +36390,9 @@ artifactLock:
           no_log: true
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-providers-apply.yml","mode":420,"size":2664,"sha256":"a2881d27435d9de1cbc23186e71851fc13f234a523a688e0a7c37b165e17c80e","index":0,"count":1,"encoding":"utf-8","payloadBytes":2664}
+@@PORTABLE {"path":"ansible-core/playbooks/applications/stages/providers-apply.yml","mode":420,"size":2642,"sha256":"08467101ccb7444ede195fe3c823464b5936305486e851f29561fb2fa15c8ec9","index":0,"count":1,"encoding":"utf-8","payloadBytes":2642}
 ---
-- import_playbook: application-libraries-providers-preflight.yml
+- import_playbook: providers-preflight.yml
 - name: Подготовка всех ресурсов библиотеки перед учетной записью приложения
   hosts: localhost
   connection: local
@@ -36631,9 +36436,9 @@ artifactLock:
         loop_var: platform_clickhouse_application_job
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-providers-preflight.yml","mode":420,"size":2783,"sha256":"f593cb9f93bf6f6e3c4730598f49230ae0ed64471d5685d90cfa0a79e1b32e64","index":0,"count":1,"encoding":"utf-8","payloadBytes":2783}
+@@PORTABLE {"path":"ansible-core/playbooks/applications/stages/providers-preflight.yml","mode":420,"size":2761,"sha256":"dfc42912f2063828903b75bd964f8b3ebe92ce009478188f4a499f9a3c3acc45","index":0,"count":1,"encoding":"utf-8","payloadBytes":2761}
 ---
-- import_playbook: application-libraries-providers-resolve.yml
+- import_playbook: providers-resolve.yml
 - name: Предварительная проверка всех выбранных провайдеров без мутаций
   hosts: localhost
   connection: local
@@ -36680,9 +36485,9 @@ artifactLock:
         loop_var: platform_postgresql_application_job
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-providers-resolve.yml","mode":420,"size":1598,"sha256":"94c5704e98f41e7f371b681a73ada189e2e71a9d5699837432c1e5199ea4395b","index":0,"count":1,"encoding":"utf-8","payloadBytes":1598}
+@@PORTABLE {"path":"ansible-core/playbooks/applications/stages/providers-resolve.yml","mode":420,"size":1576,"sha256":"cad918fbb5a67684b7bf5c2af49a5fb0ece2cb5f1cbd9967c3baa6b1d03f42a1","index":0,"count":1,"encoding":"utf-8","payloadBytes":1576}
 ---
-- import_playbook: application-libraries-credential-root.yml
+- import_playbook: credential-root.yml
 - name: Обработка входных данных автономного провайдера приложений без целевых вызовов
   hosts: localhost
   connection: local
@@ -36710,15 +36515,15 @@ artifactLock:
         fail_msg: APPLICATION_PROVIDER_INPUT_INVALID
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-providers-verify.yml","mode":420,"size":134,"sha256":"3ea5d9a03de88c0dd5b04ef19894eb094cf9d7c30fcc12a5eed6b6d8c6961b86","index":0,"count":1,"encoding":"utf-8","payloadBytes":134}
+@@PORTABLE {"path":"ansible-core/playbooks/applications/stages/providers-verify.yml","mode":420,"size":90,"sha256":"886e6cb8ad36a11cd3e1e59f33f1e48d90ab0e6813e8713bd789b0297ed55dea","index":0,"count":1,"encoding":"utf-8","payloadBytes":90}
 ---
-- import_playbook: application-libraries-providers-resolve.yml
-- import_playbook: application-libraries-provider-verify-stage.yml
+- import_playbook: providers-resolve.yml
+- import_playbook: provider-verify-stage.yml
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-resolve-runtime.yml","mode":420,"size":5419,"sha256":"bbcaa621fe0b0bf0c4aef6c55410620b41ff3ced080552955a45635edf26b8fe","index":0,"count":1,"encoding":"utf-8","payloadBytes":5419}
+@@PORTABLE {"path":"ansible-core/playbooks/applications/stages/resolve-runtime.yml","mode":420,"size":5403,"sha256":"36c748c93a10773580379df016762a4e2d00407c04af18e4579397a985d23094","index":0,"count":1,"encoding":"utf-8","payloadBytes":5403}
 ---
-- import_playbook: application-libraries-credential-root.yml
+- import_playbook: credential-root.yml
 - name: Разрешить и проверить всю область автономного приложения
   hosts: localhost
   connection: local
@@ -36784,7 +36589,7 @@ artifactLock:
     - name: Собрать автономный центр управления образами без включения планировщика развертывания
       platform.core.prepare_application_runtime:
         project_root: "{{ platform_project_root | default(inventory_dir | dirname) }}"
-        contracts_root: "{{ platform_contracts_root | default(playbook_dir ~ '/../../contracts') }}"
+        contracts_root: "{{ platform_contracts_root | default(playbook_dir ~ '/../../../../contracts') }}"
         snapshot: "{{ application_snapshot.snapshot }}"
         scripts_only: "{{ platform_application_post_install_only | default(false) }}"
       register: application_runtime_inputs
@@ -36797,7 +36602,7 @@ artifactLock:
         fail_msg: "{{ application_runtime_inputs.code | default('APPLICATION_RUNTIME_INPUT_INVALID') }}"
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-vault-preflight.yml","mode":420,"size":2198,"sha256":"181db30ef4117ea90ebddc080466f750ea0fddfa78d50f38e79497d04254f49f","index":0,"count":1,"encoding":"utf-8","payloadBytes":2198}
+@@PORTABLE {"path":"ansible-core/playbooks/applications/stages/vault-preflight.yml","mode":420,"size":2198,"sha256":"181db30ef4117ea90ebddc080466f750ea0fddfa78d50f38e79497d04254f49f","index":0,"count":1,"encoding":"utf-8","payloadBytes":2198}
 ---
 - name: Разрешение и предварительная проверка провайдеров приложений Vault без мутаций
   hosts: localhost
@@ -36841,9 +36646,451 @@ artifactLock:
         loop_var: platform_vault_application_job
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-verify.yml","mode":420,"size":1772,"sha256":"4c054566b67342697cf1a85c61880b7935fe47608780f3790419013798bf4f8e","index":0,"count":1,"encoding":"utf-8","payloadBytes":1772}
+@@PORTABLE {"path":"ansible-core/playbooks/applications/tasks/deliver-ready.yml","mode":420,"size":4091,"sha256":"0cd00d41e7473d09ba38e45c9e50c590b428f98672a72549da1f6ed3fab50884","index":0,"count":1,"encoding":"utf-8","payloadBytes":4091}
 ---
-- import_playbook: application-libraries-resolve-runtime.yml
+- name: Согласовать только готовые общие поля с помощью существующей собственной доставки CAS
+  ansible.builtin.include_role:
+    name: platform.vault.application_provider
+    tasks_from: preflight
+    apply:
+      delegate_to: localhost
+      delegate_facts: true
+      become: false
+  loop: "{{ hostvars['localhost'].application_vault_inputs.libraryJobs | platform.core.application_ready_shared_jobs(hostvars['localhost'].application_runtime_inputs.integrations, hostvars['localhost'].platform_application_completed_batches) }}"
+  loop_control:
+    loop_var: platform_vault_application_job
+  vars: &vault_context
+    platform_application_vault_runtime: "{{ hostvars['localhost'].platform_application_vault_runtime }}"
+    platform_application_vault_values: "{{ hostvars['localhost'].platform_application_vault_values }}"
+    platform_application_vault_documents: "{{ hostvars['localhost'].platform_application_vault_documents }}"
+    platform_application_vault_identities: "{{ hostvars['localhost'].platform_application_vault_identities }}"
+    platform_application_secret_files: "{{ hostvars['localhost'].platform_application_secret_files }}"
+    platform_application_secret_root: "{{ hostvars['localhost'].platform_application_secret_root }}"
+
+- name: Запись готовых дельт общих полей без перезаписи предыдущих полей
+  ansible.builtin.include_role:
+    name: platform.vault.application_provider
+    tasks_from: library
+    apply:
+      delegate_to: localhost
+      delegate_facts: true
+      become: false
+  loop: "{{ hostvars['localhost'].application_vault_inputs.libraryJobs | platform.core.application_ready_shared_jobs(hostvars['localhost'].application_runtime_inputs.integrations, hostvars['localhost'].platform_application_completed_batches) }}"
+  loop_control:
+    loop_var: platform_vault_application_job
+  vars: *vault_context
+
+- name: Привязать потребителей, полная подготовка учетных данных которых только что завершилась
+  ansible.builtin.set_fact:
+    application_ready_instance_vault_jobs: >-
+      {{ hostvars['localhost'].application_vault_inputs.instanceJobs | platform.core.application_ready_vault_jobs(
+         hostvars['localhost'].application_runtime_inputs.integrations,
+         hostvars['localhost'].platform_application_completed_batches,
+         hostvars['localhost'].platform_application_delivered_instances) }}
+  no_log: true
+
+- name: Перечитать принадлежащие документы до поздней доставки потребителю
+  ansible.builtin.include_role:
+    name: platform.vault.application_provider
+    tasks_from: preflight
+    apply:
+      delegate_to: localhost
+      delegate_facts: true
+      become: false
+  loop: "{{ application_ready_instance_vault_jobs }}"
+  loop_control:
+    loop_var: platform_vault_application_job
+  vars: *vault_context
+
+- name: Доставить полные учетные данные и AppRole до запуска любого зависимого потребителя
+  ansible.builtin.include_role:
+    name: platform.vault.application_provider
+    tasks_from: instance
+    apply:
+      delegate_to: localhost
+      delegate_facts: true
+      become: false
+  loop: "{{ application_ready_instance_vault_jobs }}"
+  loop_control:
+    loop_var: platform_vault_application_job
+  vars: *vault_context
+
+- name: Запись завершенных результатов доставки без сохранения другого желаемого состояния
+  ansible.builtin.set_fact:
+    platform_application_delivered_instances: >-
+      {{ hostvars['localhost'].platform_application_delivered_instances +
+         (application_ready_instance_vault_jobs | map(attribute='libraryId') |
+          zip(application_ready_instance_vault_jobs | map(attribute='instanceId')) | map('join', '/') | list) }}
+  delegate_to: localhost
+  delegate_facts: true
+  no_log: true
+
+@@END
+@@PORTABLE {"path":"ansible-core/playbooks/applications/tasks/offline-archives.yml","mode":420,"size":1265,"sha256":"fc8045a4bd4689404c8ea07481c2e22395edc27b9e882898f16cc90e30e89264","index":0,"count":1,"encoding":"utf-8","payloadBytes":1265}
+---
+- name: Инициализировать выбранные записи offline-архивов библиотек приложений
+  ansible.builtin.set_fact:
+    application_selected_offline_archives: []
+
+- name: Собрать только архивы, выбранные в ходе целевой предварительной проверки
+  ansible.builtin.set_fact:
+    application_selected_offline_archives: >-
+      {{ (application_selected_offline_archives +
+          (hostvars[item].platform_application_preflight_jobs | default([])
+           | selectattr('source.source', 'equalto', 'OFFLINE_BUNDLE')
+           | map(attribute='authority.offlineBundle') | list)) | unique | list }}
+  loop: "{{ groups['platform_targets'] | default([]) }}"
+  no_log: true
+
+- name: Проверить каждый уникальный выбранный автономный архив перед мутациями
+  ansible.builtin.assert:
+    that: >-
+      (platform_execution_bundle_root | default('')
+       | platform.core.application_selected_archive('OFFLINE_BUNDLE', item)) is string
+    fail_msg: APPLICATION_IMAGE_ARCHIVE_INVALID
+  loop: "{{ application_selected_offline_archives }}"
+  loop_control:
+    label: "{{ item.ref }}"
+  no_log: true
+
+@@END
+@@PORTABLE {"path":"ansible-core/playbooks/applications/tasks/ordered-instance.yml","mode":420,"size":4313,"sha256":"0c55f124d4c0a9a05d32355f372732aed5c64287808aef6f8fe364e46dfe2170","index":0,"count":1,"encoding":"utf-8","payloadBytes":4313}
+---
+- name: Проверить полноту пакетов провайдеров перед запуском потребителя приложения
+  ansible.builtin.assert:
+    that: >-
+      (application_library_id ~ '/' ~ application_instance_id) not in
+      (hostvars['localhost'].application_runtime_inputs.integrations |
+       platform.core.application_pending_instances(hostvars['localhost'].platform_application_completed_batches))
+    fail_msg: APPLICATION_PROVIDER_PREPARATION_INCOMPLETE
+
+- name: Материализовать отложенные входные данные потребительского агента только после полной доставки Vault
+  ansible.builtin.include_role:
+    name: platform.core.application_runtime
+    tasks_from: apply_instance
+  loop: "{{ platform_application_preflight_jobs | selectattr('libraryId', 'equalto', application_library_id) | selectattr('instanceId', 'equalto', application_instance_id) | list }}"
+  loop_control:
+    loop_var: application_runtime_job
+  when: (application_library_id ~ '/' ~ application_instance_id) in hostvars['localhost'].application_runtime_inputs.integrations.dependencies
+
+- name: Выполнить сценарии pre_start экземпляра после доставки всех образов
+  ansible.builtin.include_role:
+    name: platform.core.application_runtime
+    tasks_from: run_scripts
+  vars:
+    application_script_phase: before_start
+    application_script_scope: instance
+  loop: "{{ platform_application_preflight_jobs | selectattr('libraryId', 'equalto', application_library_id) | selectattr('instanceId', 'equalto', application_instance_id) | list }}"
+  loop_control:
+    loop_var: application_runtime_job
+
+- name: Активировать и проверить размещения логического экземпляра приложения
+  ansible.builtin.include_role:
+    name: platform.core.application_runtime
+    tasks_from: activate_instance
+  loop: "{{ platform_application_preflight_jobs | selectattr('libraryId', 'equalto', application_library_id) | selectattr('instanceId', 'equalto', application_instance_id) | list }}"
+  loop_control:
+    loop_var: application_runtime_job
+
+- name: Запускать готовые сценарии только после того, как каждое размещение будет работоспособным
+  ansible.builtin.include_role:
+    name: platform.core.application_runtime
+    tasks_from: run_scripts
+  vars:
+    application_script_phase: after_ready
+    application_script_scope: instance
+  loop: "{{ platform_application_preflight_jobs | selectattr('libraryId', 'equalto', application_library_id) | selectattr('instanceId', 'equalto', application_instance_id) | list }}"
+  loop_control:
+    loop_var: application_runtime_job
+
+- name: Привязать выбранные пакеты потребителей готового экземпляра приложения
+  ansible.builtin.set_fact:
+    application_ready_provider_batches: >-
+      {{ hostvars['localhost'].application_runtime_inputs.integrations.batches |
+         selectattr('providerLibraryId', 'equalto', application_library_id) |
+         selectattr('providerInstanceId', 'equalto', application_instance_id) | list }}
+  no_log: true
+
+- name: Опубликовать и проверить конечную точку готового провайдера до запуска потребителей
+  ansible.builtin.include_tasks: ../../../../services/integrations/tasks/apply-source.yml
+  vars:
+    platform_endpoint_source_ids: "{{ [application_instance_id] }}"
+  when: application_ready_provider_batches | length > 0
+
+- name: Подготовить выбранных потребителей пакетов готового провайдера приложения
+  ansible.builtin.include_tasks: provider-batch.yml
+  loop: "{{ application_ready_provider_batches }}"
+  loop_control:
+    loop_var: application_provider_batch
+  run_once: true
+
+- name: Полная стандартная доставка Vault для всех потребителей, чьи провайдери готовы
+  ansible.builtin.include_tasks: deliver-ready.yml
+  when: application_ready_provider_batches | length > 0
+  run_once: true
+
+@@END
+@@PORTABLE {"path":"ansible-core/playbooks/applications/tasks/ordered-library.yml","mode":420,"size":6534,"sha256":"2fc414b4e6c31a5deca87f73fd425d3a66626e973e6ee0c9bbf03dd86834c629","index":0,"count":1,"encoding":"utf-8","payloadBytes":6534}
+---
+- name: Отметить начало установки библиотеки
+  ansible.builtin.debug:
+    msg:
+      id: "applications:library:{{ application_library_id }}"
+      state: started
+  tags: [platform_application_progress]
+  run_once: true
+  when: application_library_id in hostvars['localhost'].application_selection.scope.installLibraries
+
+- name: Привязать выбранные логические экземпляры библиотеки приложений
+  ansible.builtin.set_fact:
+    application_library_instance_ids: >-
+      {{ hostvars['localhost'].application_runtime_inputs.jobs | selectattr('libraryId', 'equalto', application_library_id) |
+         sort(attribute='instanceId') | sort(attribute='startupPriority') |
+         map(attribute='instanceId') | unique | list }}
+  no_log: true
+
+- name: Материализовать выбранные размещения библиотеки приложений без запуска контейнеров
+  ansible.builtin.include_role:
+    name: platform.core.application_runtime
+    tasks_from: apply_library
+  when: platform_application_preflight_jobs | selectattr('libraryId', 'equalto', application_library_id) | list | length > 0
+
+- name: Доставить выбранные образы библиотеки перед выполнением сценариев pre_start
+  ansible.builtin.include_role:
+    name: platform.core.application_runtime
+    tasks_from: image_delivery
+  loop: "{{ platform_application_preflight_jobs | selectattr('libraryId', 'equalto', application_library_id) | list }}"
+  loop_control:
+    loop_var: application_runtime_job
+
+- name: Запуск сценариев перед запуском библиотеки после материализации
+  ansible.builtin.include_role:
+    name: platform.core.application_runtime
+    tasks_from: run_scripts
+  vars:
+    application_script_phase: before_start
+    application_script_scope: library
+  loop: "{{ platform_application_preflight_jobs | selectattr('libraryId', 'equalto', application_library_id) | list }}"
+  loop_control:
+    loop_var: application_runtime_job
+
+- name: Согласовать каждый логический экземпляр с явными фазовыми барьерами
+  ansible.builtin.include_tasks: ordered-instance.yml
+  loop: "{{ application_library_instance_ids }}"
+  loop_control:
+    loop_var: application_instance_id
+
+- name: Запуск готовых сценариев библиотеки перед публикацией конечной точки
+  ansible.builtin.include_role:
+    name: platform.core.application_runtime
+    tasks_from: run_scripts
+  vars:
+    application_script_phase: after_ready
+    application_script_scope: library
+  loop: "{{ platform_application_preflight_jobs | selectattr('libraryId', 'equalto', application_library_id) | list }}"
+  loop_control:
+    loop_var: application_runtime_job
+
+- name: Опубликовать и проверить готовые конечные точки библиотеки приложений
+  ansible.builtin.include_tasks: ../../../../services/integrations/tasks/apply-source.yml
+  vars:
+    platform_endpoint_source_ids: >-
+      {{ application_library_instance_ids |
+         difference(hostvars['localhost'].application_runtime_inputs.integrations.batches |
+           selectattr('providerLibraryId', 'equalto', application_library_id) | map(attribute='providerInstanceId') | list) |
+         intersect(hostvars['localhost'].platform_endpoint_sources | default({}) | list) | sort }}
+  when: >-
+    application_library_instance_ids |
+    difference(hostvars['localhost'].application_runtime_inputs.integrations.batches |
+      selectattr('providerLibraryId', 'equalto', application_library_id) | map(attribute='providerInstanceId') | list) |
+    intersect(hostvars['localhost'].platform_endpoint_sources | default({}) | list) | length > 0
+
+- name: Проверить размещения библиотеки приложений перед обработкой следующей библиотеки
+  ansible.builtin.include_role:
+    name: platform.core.application_runtime
+    tasks_from: verify
+  loop: "{{ platform_application_preflight_jobs | selectattr('libraryId', 'equalto', application_library_id) | list }}"
+  loop_control:
+    loop_var: application_runtime_job
+
+- name: Подготовить выбранных потребителей явно пропущенного провайдера без его жизненного цикла
+  ansible.builtin.include_tasks: provider-batch.yml
+  loop: "{{ hostvars['localhost'].application_runtime_inputs.integrations.batches | selectattr('providerLibraryId', 'equalto', application_library_id) | list }}"
+  loop_control:
+    loop_var: application_provider_batch
+  when: application_library_id in hostvars['localhost'].application_selection.scope.skippedLibraries
+  run_once: true
+
+- name: Доставка готовых секретов потребителя после обратных вызовов пропущенного провайдера
+  ansible.builtin.include_tasks: deliver-ready.yml
+  when: application_library_id in hostvars['localhost'].application_selection.scope.providerLibraries and application_library_id in hostvars['localhost'].application_selection.scope.skippedLibraries
+  run_once: true
+
+- name: Применить объявленные крючки интеграции к выбранным местам размещения
+  ansible.builtin.include_tasks: provider-script.yml
+  vars:
+    application_provider_batch:
+      providerLibraryId: "{{ application_integration_script.libraryId }}"
+      providerInstanceId: "{{ application_integration_script.instanceId }}"
+    application_provider_script: "{{ application_integration_script }}"
+    application_provider_script_host: "{{ application_integration_script.hostId }}"
+  loop: "{{ hostvars['localhost'].application_runtime_inputs.integrationScripts | selectattr('libraryId', 'equalto', application_library_id) | list }}"
+  loop_control:
+    loop_var: application_integration_script
+  run_once: true
+
+- name: Отметить завершение установки и проверки библиотеки
+  ansible.builtin.debug:
+    msg:
+      id: "applications:library:{{ application_library_id }}"
+      state: completed
+  tags: [platform_application_progress]
+  run_once: true
+  when: application_library_id in hostvars['localhost'].application_selection.scope.installLibraries
+
+@@END
+@@PORTABLE {"path":"ansible-core/playbooks/applications/tasks/post-install-script.yml","mode":420,"size":760,"sha256":"f4bcb19b3ba7e0f71bfae2613dd2f5b79f64adc98f5409c193e18f05a8634b36","index":0,"count":1,"encoding":"utf-8","payloadBytes":760}
+---
+- name: Вызов существующего преобразователя контекста и универсального средства запуска пакетов
+  ansible.builtin.include_tasks: provider-script.yml
+  vars:
+    application_provider_batch:
+      providerLibraryId: "{{ application_post_install_script.target.libraryId | default(application_post_install_script.libraryId) }}"
+      providerInstanceId: "{{ application_post_install_script.target.instanceId | default(application_post_install_script.instanceId) }}"
+    application_provider_script: "{{ application_post_install_script }}"
+    application_provider_script_host: "{{ application_post_install_script.target.hostId | default(application_post_install_script.hostId) }}"
+
+@@END
+@@PORTABLE {"path":"ansible-core/playbooks/applications/tasks/provider-batch.yml","mode":420,"size":4669,"sha256":"9950dce6b39f6c651fac2d4d553d185cc82dc7f3e5a3013bdf1a99ea78531b9a","index":0,"count":1,"encoding":"utf-8","payloadBytes":4669}
+---
+- name: Выполнение перехватчиков интеграции в объявленном порядке перед пакетом учетных записей
+  ansible.builtin.include_tasks: provider-script.yml
+  vars:
+    application_provider_script: "{{ application_provider_hook }}"
+    application_provider_script_host: "{{ application_provider_hook.target.hostId }}"
+  loop: "{{ application_provider_batch.hooks }}"
+  loop_control:
+    loop_var: application_provider_hook
+
+- name: Согласовать пакет учётных записей провайдера через защищённые файлы
+  when: application_provider_batch.accounts | length > 0
+  block:
+    - name: Разрешить обратный вызов учетной записи из конкретного пакета провайдера
+      platform.core.prepare_application_account_batch:
+        batch: "{{ application_provider_batch }}"
+        project_root: "{{ platform_project_root | default(hostvars['localhost'].inventory_dir | dirname) }}"
+      delegate_to: localhost
+      become: false
+      register: application_account_callback
+      no_log: true
+
+    - name: Проверить защищённые исходные файлы всех паролей пакета учётных записей провайдера
+      ansible.builtin.assert:
+        that: >-
+          {{ (hostvars['localhost'].platform_application_secret_files |
+               combine(hostvars['localhost'].platform_application_credential_files | default({}))) |
+             platform.core.application_protected_secret_files(
+               application_account_callback.requests | map(attribute='passwordRef') | list,
+               hostvars['localhost'].platform_application_secret_root) }}
+        fail_msg: APPLICATION_PROVIDER_SECRET_FILE_INVALID
+      delegate_to: localhost
+      become: false
+      no_log: true
+
+    - name: Привязка значений частного пароля вызова без выходных данных общедоступного сценария
+      ansible.builtin.set_fact:
+        application_batch_passwords: "{{ application_batch_passwords | default({}) | combine({item.id: lookup('ansible.builtin.file', application_batch_source_files[item.passwordRef], rstrip=false)}) }}"
+      vars:
+        application_batch_source_files: "{{ hostvars['localhost'].platform_application_secret_files | combine(hostvars['localhost'].platform_application_credential_files | default({})) }}"
+      loop: "{{ application_account_callback.requests }}"
+      no_log: true
+
+    - name: Разместить пакет учётных записей провайдера в защищённом каталоге контроллера
+      ansible.builtin.copy:
+        content: "{{ {'accounts': application_account_callback.accounts, 'passwords': application_batch_passwords} | to_json }}"
+        dest: "{{ hostvars['localhost'].platform_application_secret_root }}/{{ application_provider_batch.id }}"
+        mode: '0600'
+      delegate_to: localhost
+      become: false
+      no_log: true
+
+    - name: Выполнить общий обратный вызов для пакета учётных записей провайдера
+      ansible.builtin.include_tasks: provider-script.yml
+      vars:
+        application_provider_script: "{{ application_account_callback.script }}"
+        application_provider_script_host: "{{ application_account_callback.targetHostId }}"
+        application_provider_private_files: "{{ {application_provider_batch.id: hostvars['localhost'].platform_application_secret_root ~ '/' ~ application_provider_batch.id} }}"
+  always:
+    - name: Удалить временный файл пакета учётных записей провайдера
+      ansible.builtin.file:
+        path: "{{ hostvars['localhost'].platform_application_secret_root }}/{{ application_provider_batch.id }}"
+        state: absent
+      delegate_to: localhost
+      become: false
+      changed_when: false
+      no_log: true
+    - name: Отменить пакетные значения паролей перед другим провайдером
+      ansible.builtin.set_fact:
+        application_batch_passwords: {}
+      no_log: true
+
+- name: Запись только успешно завершенных пакетов провайдера в текущем вызове
+  ansible.builtin.set_fact:
+    platform_application_completed_batches: "{{ hostvars['localhost'].platform_application_completed_batches + [application_provider_batch.id] }}"
+  delegate_to: localhost
+  delegate_facts: true
+  no_log: true
+
+@@END
+@@PORTABLE {"path":"ansible-core/playbooks/applications/tasks/provider-script.yml","mode":420,"size":2808,"sha256":"0ffcee40fb9372a07808a92d1db258f1e5f6a7b2e70445efaf090f2ffd9ac715","index":0,"count":1,"encoding":"utf-8","payloadBytes":2808}
+---
+- name: Разрешить только объявленный контекст сценария провайдера
+  ansible.builtin.set_fact:
+    application_script_target_job: >-
+      {{ hostvars['localhost'].application_runtime_inputs.scriptContexts |
+         selectattr('libraryId', 'equalto', application_provider_batch.providerLibraryId) |
+         selectattr('instanceId', 'equalto', application_provider_batch.providerInstanceId) |
+         selectattr('hostId', 'equalto', application_provider_script_host) | first }}
+  no_log: true
+
+- name: Разрешить домашнюю учетную запись сценария только для целевого выполнения
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ application_script_target_job.account }}"
+  delegate_to: "{{ application_provider_script_host }}"
+  register: application_script_identity
+  when: application_provider_script.runOn | default('target') != 'execution_node'
+  no_log: true
+
+- name: Вызов универсального средства запуска с явными входными данными сценария для выбранной цели
+  ansible.builtin.include_role:
+    name: platform.core.package_script
+    apply:
+      delegate_to: "{{ 'localhost' if application_provider_script.runOn | default('target') == 'execution_node' else application_provider_script_host }}"
+      become: "{{ application_provider_script.runOn | default('target') != 'execution_node' }}"
+  vars:
+    platform_script_job:
+      id: "{{ application_provider_script.id }}"
+      path: "{{ application_provider_script.path }}"
+      argv: "{{ application_provider_script.argv }}"
+      secretInputs: "{{ application_provider_script.secretInputs }}"
+      account: "{{ lookup('ansible.builtin.pipe', 'id -un') if application_provider_script.runOn | default('target') == 'execution_node' else application_script_target_job.account }}"
+      workingDirectory: >-
+        {{ (platform_project_root | default(hostvars['localhost'].inventory_dir | dirname))
+           if application_provider_script.runOn | default('target') == 'execution_node' else
+           (application_script_target_job.placement.runtimeDirectory | regex_replace('^~(?=/|$)',
+             application_script_identity.ansible_facts.getent_passwd[application_script_target_job.account][4])) ~
+           '/' ~ application_script_target_job.placement.runtimePath }}
+    platform_script_secret_files: >-
+      {{ hostvars['localhost'].platform_application_secret_files |
+         combine(hostvars['localhost'].platform_application_credential_files | default({})) |
+         combine(application_provider_private_files | default({})) }}
+    platform_script_secret_root: "{{ hostvars['localhost'].platform_application_secret_root }}"
+
+@@END
+@@PORTABLE {"path":"ansible-core/playbooks/applications/verify.yml","mode":420,"size":1736,"sha256":"54c55d3188f87e5c1b12db9ab5b47976cdf314b2c97500f15384ee4c4cffe688","index":0,"count":1,"encoding":"utf-8","payloadBytes":1736}
+---
+- import_playbook: stages/resolve-runtime.yml
 
 - name: Проверка приложений без мутаций
   hosts: platform_targets
@@ -36871,7 +37118,7 @@ artifactLock:
       loop_control:
         loop_var: application_verify_input
 
-- import_playbook: application-libraries-endpoint-stage.yml
+- import_playbook: stages/endpoint.yml
   vars:
     platform_endpoint_verify_only: true
 
@@ -37172,253 +37419,6 @@ artifactLock:
           - platform_effective_uid.rc == 0
           - platform_effective_uid.stdout | trim == '0'
         fail_msg: Centralized Ansible target execution lacks working elevation
-
-@@END
-@@PORTABLE {"path":"ansible-core/playbooks/tasks/application-deliver-ready.yml","mode":420,"size":4091,"sha256":"0cd00d41e7473d09ba38e45c9e50c590b428f98672a72549da1f6ed3fab50884","index":0,"count":1,"encoding":"utf-8","payloadBytes":4091}
----
-- name: Согласовать только готовые общие поля с помощью существующей собственной доставки CAS
-  ansible.builtin.include_role:
-    name: platform.vault.application_provider
-    tasks_from: preflight
-    apply:
-      delegate_to: localhost
-      delegate_facts: true
-      become: false
-  loop: "{{ hostvars['localhost'].application_vault_inputs.libraryJobs | platform.core.application_ready_shared_jobs(hostvars['localhost'].application_runtime_inputs.integrations, hostvars['localhost'].platform_application_completed_batches) }}"
-  loop_control:
-    loop_var: platform_vault_application_job
-  vars: &vault_context
-    platform_application_vault_runtime: "{{ hostvars['localhost'].platform_application_vault_runtime }}"
-    platform_application_vault_values: "{{ hostvars['localhost'].platform_application_vault_values }}"
-    platform_application_vault_documents: "{{ hostvars['localhost'].platform_application_vault_documents }}"
-    platform_application_vault_identities: "{{ hostvars['localhost'].platform_application_vault_identities }}"
-    platform_application_secret_files: "{{ hostvars['localhost'].platform_application_secret_files }}"
-    platform_application_secret_root: "{{ hostvars['localhost'].platform_application_secret_root }}"
-
-- name: Запись готовых дельт общих полей без перезаписи предыдущих полей
-  ansible.builtin.include_role:
-    name: platform.vault.application_provider
-    tasks_from: library
-    apply:
-      delegate_to: localhost
-      delegate_facts: true
-      become: false
-  loop: "{{ hostvars['localhost'].application_vault_inputs.libraryJobs | platform.core.application_ready_shared_jobs(hostvars['localhost'].application_runtime_inputs.integrations, hostvars['localhost'].platform_application_completed_batches) }}"
-  loop_control:
-    loop_var: platform_vault_application_job
-  vars: *vault_context
-
-- name: Привязать потребителей, полная подготовка учетных данных которых только что завершилась
-  ansible.builtin.set_fact:
-    application_ready_instance_vault_jobs: >-
-      {{ hostvars['localhost'].application_vault_inputs.instanceJobs | platform.core.application_ready_vault_jobs(
-         hostvars['localhost'].application_runtime_inputs.integrations,
-         hostvars['localhost'].platform_application_completed_batches,
-         hostvars['localhost'].platform_application_delivered_instances) }}
-  no_log: true
-
-- name: Перечитать принадлежащие документы до поздней доставки потребителю
-  ansible.builtin.include_role:
-    name: platform.vault.application_provider
-    tasks_from: preflight
-    apply:
-      delegate_to: localhost
-      delegate_facts: true
-      become: false
-  loop: "{{ application_ready_instance_vault_jobs }}"
-  loop_control:
-    loop_var: platform_vault_application_job
-  vars: *vault_context
-
-- name: Доставить полные учетные данные и AppRole до запуска любого зависимого потребителя
-  ansible.builtin.include_role:
-    name: platform.vault.application_provider
-    tasks_from: instance
-    apply:
-      delegate_to: localhost
-      delegate_facts: true
-      become: false
-  loop: "{{ application_ready_instance_vault_jobs }}"
-  loop_control:
-    loop_var: platform_vault_application_job
-  vars: *vault_context
-
-- name: Запись завершенных результатов доставки без сохранения другого желаемого состояния
-  ansible.builtin.set_fact:
-    platform_application_delivered_instances: >-
-      {{ hostvars['localhost'].platform_application_delivered_instances +
-         (application_ready_instance_vault_jobs | map(attribute='libraryId') |
-          zip(application_ready_instance_vault_jobs | map(attribute='instanceId')) | map('join', '/') | list) }}
-  delegate_to: localhost
-  delegate_facts: true
-  no_log: true
-
-@@END
-@@PORTABLE {"path":"ansible-core/playbooks/tasks/application-libraries-offline-archives.yml","mode":420,"size":1265,"sha256":"fc8045a4bd4689404c8ea07481c2e22395edc27b9e882898f16cc90e30e89264","index":0,"count":1,"encoding":"utf-8","payloadBytes":1265}
----
-- name: Инициализировать выбранные записи offline-архивов библиотек приложений
-  ansible.builtin.set_fact:
-    application_selected_offline_archives: []
-
-- name: Собрать только архивы, выбранные в ходе целевой предварительной проверки
-  ansible.builtin.set_fact:
-    application_selected_offline_archives: >-
-      {{ (application_selected_offline_archives +
-          (hostvars[item].platform_application_preflight_jobs | default([])
-           | selectattr('source.source', 'equalto', 'OFFLINE_BUNDLE')
-           | map(attribute='authority.offlineBundle') | list)) | unique | list }}
-  loop: "{{ groups['platform_targets'] | default([]) }}"
-  no_log: true
-
-- name: Проверить каждый уникальный выбранный автономный архив перед мутациями
-  ansible.builtin.assert:
-    that: >-
-      (platform_execution_bundle_root | default('')
-       | platform.core.application_selected_archive('OFFLINE_BUNDLE', item)) is string
-    fail_msg: APPLICATION_IMAGE_ARCHIVE_INVALID
-  loop: "{{ application_selected_offline_archives }}"
-  loop_control:
-    label: "{{ item.ref }}"
-  no_log: true
-
-@@END
-@@PORTABLE {"path":"ansible-core/playbooks/tasks/application-post-install-script.yml","mode":420,"size":772,"sha256":"6ec360772902353813e1b65062b0f850dbd77a81afed6744efa1ce90127caf1d","index":0,"count":1,"encoding":"utf-8","payloadBytes":772}
----
-- name: Вызов существующего преобразователя контекста и универсального средства запуска пакетов
-  ansible.builtin.include_tasks: application-provider-script.yml
-  vars:
-    application_provider_batch:
-      providerLibraryId: "{{ application_post_install_script.target.libraryId | default(application_post_install_script.libraryId) }}"
-      providerInstanceId: "{{ application_post_install_script.target.instanceId | default(application_post_install_script.instanceId) }}"
-    application_provider_script: "{{ application_post_install_script }}"
-    application_provider_script_host: "{{ application_post_install_script.target.hostId | default(application_post_install_script.hostId) }}"
-
-@@END
-@@PORTABLE {"path":"ansible-core/playbooks/tasks/application-provider-batch.yml","mode":420,"size":4693,"sha256":"62886377584dc9a36785951be8e1d3f642da42339e1bda6c87fc84e9d6d8f6fa","index":0,"count":1,"encoding":"utf-8","payloadBytes":4693}
----
-- name: Выполнение перехватчиков интеграции в объявленном порядке перед пакетом учетных записей
-  ansible.builtin.include_tasks: application-provider-script.yml
-  vars:
-    application_provider_script: "{{ application_provider_hook }}"
-    application_provider_script_host: "{{ application_provider_hook.target.hostId }}"
-  loop: "{{ application_provider_batch.hooks }}"
-  loop_control:
-    loop_var: application_provider_hook
-
-- name: Согласовать пакет учётных записей провайдера через защищённые файлы
-  when: application_provider_batch.accounts | length > 0
-  block:
-    - name: Разрешить обратный вызов учетной записи из конкретного пакета провайдера
-      platform.core.prepare_application_account_batch:
-        batch: "{{ application_provider_batch }}"
-        project_root: "{{ platform_project_root | default(hostvars['localhost'].inventory_dir | dirname) }}"
-      delegate_to: localhost
-      become: false
-      register: application_account_callback
-      no_log: true
-
-    - name: Проверить защищённые исходные файлы всех паролей пакета учётных записей провайдера
-      ansible.builtin.assert:
-        that: >-
-          {{ (hostvars['localhost'].platform_application_secret_files |
-               combine(hostvars['localhost'].platform_application_credential_files | default({}))) |
-             platform.core.application_protected_secret_files(
-               application_account_callback.requests | map(attribute='passwordRef') | list,
-               hostvars['localhost'].platform_application_secret_root) }}
-        fail_msg: APPLICATION_PROVIDER_SECRET_FILE_INVALID
-      delegate_to: localhost
-      become: false
-      no_log: true
-
-    - name: Привязка значений частного пароля вызова без выходных данных общедоступного сценария
-      ansible.builtin.set_fact:
-        application_batch_passwords: "{{ application_batch_passwords | default({}) | combine({item.id: lookup('ansible.builtin.file', application_batch_source_files[item.passwordRef], rstrip=false)}) }}"
-      vars:
-        application_batch_source_files: "{{ hostvars['localhost'].platform_application_secret_files | combine(hostvars['localhost'].platform_application_credential_files | default({})) }}"
-      loop: "{{ application_account_callback.requests }}"
-      no_log: true
-
-    - name: Разместить пакет учётных записей провайдера в защищённом каталоге контроллера
-      ansible.builtin.copy:
-        content: "{{ {'accounts': application_account_callback.accounts, 'passwords': application_batch_passwords} | to_json }}"
-        dest: "{{ hostvars['localhost'].platform_application_secret_root }}/{{ application_provider_batch.id }}"
-        mode: '0600'
-      delegate_to: localhost
-      become: false
-      no_log: true
-
-    - name: Выполнить общий обратный вызов для пакета учётных записей провайдера
-      ansible.builtin.include_tasks: application-provider-script.yml
-      vars:
-        application_provider_script: "{{ application_account_callback.script }}"
-        application_provider_script_host: "{{ application_account_callback.targetHostId }}"
-        application_provider_private_files: "{{ {application_provider_batch.id: hostvars['localhost'].platform_application_secret_root ~ '/' ~ application_provider_batch.id} }}"
-  always:
-    - name: Удалить временный файл пакета учётных записей провайдера
-      ansible.builtin.file:
-        path: "{{ hostvars['localhost'].platform_application_secret_root }}/{{ application_provider_batch.id }}"
-        state: absent
-      delegate_to: localhost
-      become: false
-      changed_when: false
-      no_log: true
-    - name: Отменить пакетные значения паролей перед другим провайдером
-      ansible.builtin.set_fact:
-        application_batch_passwords: {}
-      no_log: true
-
-- name: Запись только успешно завершенных пакетов провайдера в текущем вызове
-  ansible.builtin.set_fact:
-    platform_application_completed_batches: "{{ hostvars['localhost'].platform_application_completed_batches + [application_provider_batch.id] }}"
-  delegate_to: localhost
-  delegate_facts: true
-  no_log: true
-
-@@END
-@@PORTABLE {"path":"ansible-core/playbooks/tasks/application-provider-script.yml","mode":420,"size":2808,"sha256":"0ffcee40fb9372a07808a92d1db258f1e5f6a7b2e70445efaf090f2ffd9ac715","index":0,"count":1,"encoding":"utf-8","payloadBytes":2808}
----
-- name: Разрешить только объявленный контекст сценария провайдера
-  ansible.builtin.set_fact:
-    application_script_target_job: >-
-      {{ hostvars['localhost'].application_runtime_inputs.scriptContexts |
-         selectattr('libraryId', 'equalto', application_provider_batch.providerLibraryId) |
-         selectattr('instanceId', 'equalto', application_provider_batch.providerInstanceId) |
-         selectattr('hostId', 'equalto', application_provider_script_host) | first }}
-  no_log: true
-
-- name: Разрешить домашнюю учетную запись сценария только для целевого выполнения
-  ansible.builtin.getent:
-    database: passwd
-    key: "{{ application_script_target_job.account }}"
-  delegate_to: "{{ application_provider_script_host }}"
-  register: application_script_identity
-  when: application_provider_script.runOn | default('target') != 'execution_node'
-  no_log: true
-
-- name: Вызов универсального средства запуска с явными входными данными сценария для выбранной цели
-  ansible.builtin.include_role:
-    name: platform.core.package_script
-    apply:
-      delegate_to: "{{ 'localhost' if application_provider_script.runOn | default('target') == 'execution_node' else application_provider_script_host }}"
-      become: "{{ application_provider_script.runOn | default('target') != 'execution_node' }}"
-  vars:
-    platform_script_job:
-      id: "{{ application_provider_script.id }}"
-      path: "{{ application_provider_script.path }}"
-      argv: "{{ application_provider_script.argv }}"
-      secretInputs: "{{ application_provider_script.secretInputs }}"
-      account: "{{ lookup('ansible.builtin.pipe', 'id -un') if application_provider_script.runOn | default('target') == 'execution_node' else application_script_target_job.account }}"
-      workingDirectory: >-
-        {{ (platform_project_root | default(hostvars['localhost'].inventory_dir | dirname))
-           if application_provider_script.runOn | default('target') == 'execution_node' else
-           (application_script_target_job.placement.runtimeDirectory | regex_replace('^~(?=/|$)',
-             application_script_identity.ansible_facts.getent_passwd[application_script_target_job.account][4])) ~
-           '/' ~ application_script_target_job.placement.runtimePath }}
-    platform_script_secret_files: >-
-      {{ hostvars['localhost'].platform_application_secret_files |
-         combine(hostvars['localhost'].platform_application_credential_files | default({})) |
-         combine(application_provider_private_files | default({})) }}
-    platform_script_secret_root: "{{ hostvars['localhost'].platform_application_secret_root }}"
 
 @@END
 @@PORTABLE {"path":"ansible-core/playbooks/validate.yml","mode":420,"size":6585,"sha256":"97f6582449096a636a45d954fc58d7db6b05f9f6cc251bef360c97d1bbf39950","index":0,"count":1,"encoding":"utf-8","payloadBytes":6585}
@@ -38558,7 +38558,7 @@ if __name__ == "__main__":
     raise SystemExit(main())
 
 @@END
-@@PORTABLE {"path":"ansible-core/tools/execution_controller.py","mode":420,"size":71760,"sha256":"0c5c2eb9dc3b3901faead91028ac86ac658d6f6dd7396172648e906fbdcedf6f","index":0,"count":2,"encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"ansible-core/tools/execution_controller.py","mode":420,"size":71740,"sha256":"7436d7d9d14e867ab6444ff6c6341b1bce74090b84d38bd0ab1f7b51c12ca765","index":0,"count":2,"encoding":"utf-8","payloadBytes":48000}
 #!/usr/bin/env python3
 """Fixed Execution Node controller.  It never accepts a command or playbook."""
 from __future__ import print_function
@@ -39013,7 +39013,7 @@ def _command(release, journal, operation):
     if kind == 'APPLICATION_LIBRARIES_POST_INSTALL':
         prefix = dict(operation, operation='APPLICATION_LIBRARIES_VERIFY', operationId='applications:verify')
         command = _command(release, journal, prefix)
-        command[3] = os.path.join(release, 'ansible-core/playbooks/application-libraries-post-install.yml')
+        command[3] = os.path.join(release, 'ansible-core/playbooks/applications/post-install.yml')
         command[5] = '@' + os.path.join(journal.directory, '.runtime-projection-' + hashlib.sha256(operation['operationId'].encode()).hexdigest() + '.json')
         return command
     if kind in ('APPLICATION_LIBRARIES_APPLY', 'APPLICATION_LIBRARIES_VERIFY', 'APPLICATION_LIBRARIES_POST_INSTALL'):
@@ -39033,7 +39033,7 @@ def _command(release, journal, operation):
         projection = os.path.join(journal.directory, '.runtime-projection-' + hashlib.sha256(operation['operationId'].encode()).hexdigest() + '.json')
         # Application projection is materialized only after the infrastructure barrier.
         return ['ansible-playbook', '-i', os.path.join(journal.directory, 'project', 'inventory', 'hosts.yml'),
-                os.path.join(release, 'ansible-core', 'playbooks', 'application-libraries-' + action + '.yml'),
+                os.path.join(release, 'ansible-core', 'playbooks', 'applications', action + '.yml'),
                 '-e', '@' + projection, '--limit', 'localhost:' + ':'.join(targets)]
     if kind in ("PKI_APPLY", "PKI_REISSUE"):
         projection = os.path.join(journal.directory, "runtime-projection.json")
@@ -39411,10 +39411,10 @@ def validate_application_manifest(manifest):
             application_operations = operations[-2:]
             if (len(application_operations) != 2 or
                     application_operations[0]['targets'] != application_operations[1]['targets'] or
-                    application_operations[0]['applic
+                    application_operations[0]['applicationLibraries'] != 
 @@END
-@@PORTABLE {"path":"ansible-core/tools/execution_controller.py","mode":420,"size":71760,"sha256":"0c5c2eb9dc3b3901faead91028ac86ac658d6f6dd7396172648e906fbdcedf6f","index":1,"count":2,"encoding":"utf-8","payloadBytes":23760}
-ationLibraries'] != application_operations[1]['applicationLibraries'] or
+@@PORTABLE {"path":"ansible-core/tools/execution_controller.py","mode":420,"size":71740,"sha256":"7436d7d9d14e867ab6444ff6c6341b1bce74090b84d38bd0ab1f7b51c12ca765","index":1,"count":2,"encoding":"utf-8","payloadBytes":23740}
+application_operations[1]['applicationLibraries'] or
                     application_operations[0]['applicationSemanticFingerprint'] != application_operations[1]['applicationSemanticFingerprint']):
                 raise LifecycleError('EXECUTION_MANIFEST_INVALID')
             refs, names = set(), set()
@@ -39754,7 +39754,7 @@ if __name__ == "__main__":
         raise SystemExit(2)
 
 @@END
-@@PORTABLE {"path":"ansible-core/tools/execution_image_preparation.py","mode":420,"size":6400,"sha256":"319cff1050a132eb3ac5c333cefde1b8a066e6583ddfd64ec7eeb3ed58d18359","index":0,"count":1,"encoding":"utf-8","payloadBytes":6400}
+@@PORTABLE {"path":"ansible-core/tools/execution_image_preparation.py","mode":420,"size":6401,"sha256":"bc7d444430e6625f04b38968d84c6793695c7b9892f9ce6e6a3487adc6ac9748","index":0,"count":1,"encoding":"utf-8","payloadBytes":6401}
 """Fixed image preparation protocol; all registry requests are Ansible tasks."""
 import json
 import os
@@ -39837,7 +39837,7 @@ def prepare(journal, value, release, runtime_release):
         command = [sys.executable, os.path.join(release, 'ansible-core/tools/run_with_runtime_credentials.py'),
                    '--credentials-file', credentials_path, '--runtime-dir', os.path.join(temporary, 'identity'), '--',
                    'ansible-playbook', '-i', os.path.join(journal.directory, 'project/inventory/hosts.yml'),
-                   os.path.join(release, 'ansible-core/playbooks/application-images-prepare.yml'), '-e', '@' + variables_path]
+                   os.path.join(release, 'ansible-core/playbooks/applications/images/prepare.yml'), '-e', '@' + variables_path]
         environment = _environment(release, leased_private_key=bool(payload.get('privateKey')))
         environment['ANSIBLE_SSH_ARGS'] = environment['ANSIBLE_SSH_ARGS'].replace(
             '/var/lib/platform-installer/execution/known_hosts', trust_path)
@@ -40598,7 +40598,7 @@ def _secret_output_retention_pending(root, journal):
     return False
 
 @@END
-@@PORTABLE {"path":"ansible-core/tools/execution_protocol.py","mode":420,"size":76245,"sha256":"a8cbf21cb6f55eb1b421772c275cfc136bcf61eb29c43f157b7c3926ce4f7989","index":0,"count":2,"encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"ansible-core/tools/execution_protocol.py","mode":420,"size":76246,"sha256":"1301e98e2de2edd87aea141f85e5e52cbd48216a8c8b8775b57204c46fa4a43b","index":0,"count":2,"encoding":"utf-8","payloadBytes":48000}
 #!/usr/bin/env python3
 """Fixed JSON protocol for the activated Execution Node runtime.
 
@@ -41384,7 +41384,7 @@ def core_operation(value, state_root, runtime_release, operation, runtime_identi
     elif operation in ("BuildProjectSnapshot", "BuildServiceConfigurationPreview"):
         playbook, inventory = ("project-snapshot.yml" if operation == "BuildProjectSnapshot
 @@END
-@@PORTABLE {"path":"ansible-core/tools/execution_protocol.py","mode":420,"size":76245,"sha256":"a8cbf21cb6f55eb1b421772c275cfc136bcf61eb29c43f157b7c3926ce4f7989","index":1,"count":2,"encoding":"utf-8","payloadBytes":28245}
+@@PORTABLE {"path":"ansible-core/tools/execution_protocol.py","mode":420,"size":76246,"sha256":"1301e98e2de2edd87aea141f85e5e52cbd48216a8c8b8775b57204c46fa4a43b","index":1,"count":2,"encoding":"utf-8","payloadBytes":28246}
 " else "service-configuration-preview.yml"), os.path.join(project, "inventory", "hosts.yml")
         snapshot_request = _validated_snapshot_request(value)
         if snapshot_request is None:
@@ -41417,7 +41417,7 @@ def core_operation(value, state_root, runtime_release, operation, runtime_identi
                 raise LifecycleError("PROJECT_SNAPSHOT_RUNTIME_MISMATCH")
         extra = {"platform_project_root": project, "platform_project_manifest_path": os.path.join(project, "project.yml"), "platform_service_catalog_path": os.path.join(release, "catalog", "service-catalog.yml"), "platform_installer_owned_paths": owned_paths}
     elif operation == 'PrepareApplicationImages':
-        playbook, inventory = 'application-images-inputs.yml', os.path.join(project, 'inventory', 'hosts.yml')
+        playbook, inventory = 'applications/images/inputs.yml', os.path.join(project, 'inventory', 'hosts.yml')
         extra = dict(platform_project_root=project,
                      platform_service_catalog_path=os.path.join(release, 'catalog/service-catalog.yml'),
                      platform_execution_bundle_root=release,
