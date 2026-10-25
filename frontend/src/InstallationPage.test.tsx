@@ -48,6 +48,64 @@ const currentPlanState = (
 });
 
 describe("InstallationPage", () => {
+  it("localizes application Apply Verify and post-install action labels", () => {
+    const runPlan = {
+      id: "plan-labels",
+      status: "EXECUTABLE",
+      projectRevision: "revision",
+      planFingerprint: "sha256:plan",
+      executionNodeId: "node1",
+      runtime: {
+        bundleDigest: "sha256:bundle",
+        coreVersion: "core",
+        catalogDigest: "sha256:catalog",
+        protocol: "protocol",
+      },
+      expiresAt: "2026-10-25T23:59:59Z",
+      acknowledgements: [],
+      approved: true,
+      phases: [
+        {
+          id: "applications",
+          order: 0,
+          actions: ["APPLY", "VERIFY", "POST_INSTALL"].map((type) => ({
+            id: type,
+            type: "APPLICATION_LIBRARIES_" + type,
+            summary: "English summary " + type,
+            targets: ["node1"],
+            dependsOn: [],
+            mutating: type !== "VERIFY",
+            reboot: "NONE",
+          })),
+        },
+      ],
+    } as InstallationPlanView;
+    render(
+      <InstallationPage
+        state={currentPlanState("plan-labels", "revision", true)}
+        tab="execution"
+        onTabChange={vi.fn()}
+        onOpenServers={vi.fn()}
+        onCreatePlan={vi.fn()}
+        onApprovePlan={vi.fn()}
+        busy={false}
+        runPlan={runPlan}
+        run={
+          new desktop.InstallationRunOperation({
+            run: { runId: "run-labels", state: "RUNNING" },
+          })
+        }
+      />,
+    );
+    for (const label of [
+      "Установить библиотеки приложений",
+      "Проверить библиотеки приложений",
+      "Выполнить действия после установки",
+    ])
+      expect(screen.getByText(label)).toBeTruthy();
+    expect(screen.queryByText(/English summary/)).toBeNull();
+  });
+
   it("renders library child rows and retains their confirmed percentage on failure", () => {
     const plan = {
       id: "plan-progress",
@@ -136,6 +194,9 @@ describe("InstallationPage", () => {
     expect(
       document.querySelectorAll(".execution-plan-action.is-progress-step"),
     ).toHaveLength(2);
+    expect(document.querySelector(".is-progress-group .execution-plan-number")).toBeNull();
+    expect(document.querySelector(".is-progress-group .execution-plan-status")?.textContent).toBe("Выполняется");
+    expect([...document.querySelectorAll(".execution-plan-number")].map((row) => row.textContent)).toEqual(["1", "2"]);
     expect(screen.getByText(/Текущее действие/).textContent).toContain(
       "Библиотека СДКУ",
     );
@@ -600,6 +661,7 @@ describe("InstallationPage", () => {
         runProgress={{
           runId: "run-safe",
           lastSequence: 4,
+          lastActionSequence: 2,
           lastContiguousSequence: 4,
           pendingSequences: [],
           complete: true,

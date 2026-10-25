@@ -47,6 +47,12 @@ function planActionLabel(action: {
       return `Проверить сервис${deployment}`;
     case "SERVICE_CLEAR":
       return `Очистить установленный сервис${deployment}`;
+    case "APPLICATION_LIBRARIES_APPLY":
+      return "Установить библиотеки приложений";
+    case "APPLICATION_LIBRARIES_VERIFY":
+      return "Проверить библиотеки приложений";
+    case "APPLICATION_LIBRARIES_POST_INSTALL":
+      return "Выполнить действия после установки";
     default:
       return action.summary;
   }
@@ -515,11 +521,6 @@ export function InstallationPage({
           Установка библиотек пропущена:{" "}
           {displayedPlan.plan.skipApplicationLibraries.join(", ")}. Необходимые
           интеграции сохраняются.
-        </p>
-      )}
-      {displayedPlan?.plan?.skipInfrastructureVerify && tab !== "plan" && (
-        <p role="alert">
-          Infra Verify явно пропущен по принятому пользователем риску.
         </p>
       )}
       <div className="title">
@@ -1689,7 +1690,7 @@ function ExecutionStage({
               <p>Действия плана для этого запуска недоступны.</p>
             ) : (
               <ol className="execution-plan-actions">
-                {installationActionRows(plan).map((action, index) => {
+                {installationActionRows(plan).map((action) => {
                   const outcome = progress?.actionOutcomes[action.id];
                   const completion = events.find(
                     (event) =>
@@ -1709,7 +1710,10 @@ function ExecutionStage({
                       }).format(completedDate)
                     : "Время неизвестно";
                   const active =
-                    progress?.activeActionId === action.id &&
+                    (progress?.activeActionId === action.id ||
+                      (!!action.progressSteps?.length &&
+                        progress?.stepParents[progress.activeActionId || ""] ===
+                          action.id)) &&
                     ["STARTING", "RUNNING", "CANCELLING"].includes(
                       run.run!.state,
                     );
@@ -1744,15 +1748,14 @@ function ExecutionStage({
                   return (
                     <li
                       key={action.id}
-                      className={`execution-plan-action is-${tone}${action.parentId ? " is-progress-step" : ""}`}
-                      aria-current={active ? "step" : undefined}
+                      className={`execution-plan-action is-${tone}${action.parentId ? " is-progress-step" : ""}${action.progressSteps?.length ? " is-progress-group" : ""}`}
+                      aria-current={active && !action.progressSteps?.length ? "step" : undefined}
                     >
-                      <span
-                        className="execution-plan-number"
-                        aria-hidden="true"
-                      >
-                        {index + 1}
-                      </span>
+                      {action.number !== undefined && (
+                        <span className="execution-plan-number" aria-hidden="true">
+                          {action.number}
+                        </span>
+                      )}
                       <span
                         className="execution-plan-symbol"
                         aria-hidden="true"

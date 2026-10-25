@@ -507,7 +507,7 @@ it("attaches the previous run and reuses execution, events and cancellation with
     await screen.findByText(/Переподключено к прежнему запуску/),
   ).toBeTruthy();
   expect(
-    screen.getAllByText("Apply recovered libraries").length,
+    screen.getAllByText("Установить библиотеки приложений").length,
   ).toBeGreaterThan(0);
   expect(
     screen.queryByText("Действия плана для этого запуска недоступны."),

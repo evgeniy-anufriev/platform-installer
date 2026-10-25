@@ -994,6 +994,7 @@ def _materialize_application_projection(journal, manifest):
         scoped = dict(payload, platform_application_secret_root=journal.directory,
                       platform_application_secret_files=operation_files, platform_runtime_secret_inputs=operation_inputs,
                       platform_application_expected_fingerprint=operation['applicationSemanticFingerprint'],
+                      platform_application_library_order=operation['applicationLibraries'],
                       platform_application_expected_library_ids=operation['applicationLibraries'])
         if operation.get('applicationExecutionScope'):
             scoped['platform_application_execution_scope'] = operation['applicationExecutionScope']

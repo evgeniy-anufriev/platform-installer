@@ -9,6 +9,7 @@ export type RunProgress = {
   runId: string;
   // Highest sequence observed, which can advance ahead of delivery order.
   lastSequence: number;
+  lastActionSequence: number;
   // Highest sequence for which every preceding event has been observed.
   lastContiguousSequence: number;
   pendingSequences: number[];
@@ -28,6 +29,7 @@ export function beginRunProgress(
   return {
     runId,
     lastSequence: 0,
+    lastActionSequence: 0,
     lastContiguousSequence: 0,
     pendingSequences: [],
     complete: true,
@@ -66,7 +68,6 @@ export function observeRunEvent(
   if (event.sequence > contiguous) pending.add(event.sequence);
   while (pending.delete(contiguous + 1)) contiguous += 1;
   const complete = pending.size === 0;
-  const isNewest = event.sequence >= current.lastSequence;
   const knownAction =
     !!event.actionId &&
     (current.actionIds.includes(event.actionId) ||
@@ -82,6 +83,10 @@ export function observeRunEvent(
       "CANCELLED",
       "INTERRUPTED",
     ].includes(event.status);
+  const isNewestAction =
+    knownAction &&
+    ["ACTION_STARTED", "ACTION_COMPLETED"].includes(event.eventType) &&
+    event.sequence > (current.lastActionSequence || 0);
   const shouldRecordOutcome =
     outcomeRecorded &&
     event.sequence > (current.actionOutcomeSequences[event.actionId!] || 0);
@@ -97,13 +102,16 @@ export function observeRunEvent(
   return {
     ...current,
     lastSequence: Math.max(current.lastSequence, event.sequence),
+    lastActionSequence: isNewestAction
+      ? event.sequence
+      : current.lastActionSequence,
     lastContiguousSequence: contiguous,
     pendingSequences: [...pending],
     complete,
     completedActionIds,
     actionOutcomes,
     actionOutcomeSequences,
-    activeActionId: !isNewest
+    activeActionId: !isNewestAction
       ? current.activeActionId
       : knownAction && event.eventType === "ACTION_STARTED"
         ? event.actionId
@@ -134,10 +142,15 @@ export function actionResultLabel(
 
 // Keep the executable parent visible; child rows are display-only work units.
 export function installationActionRows(plan?: InstallationPlanView) {
+  let number = 0;
   return (
     plan?.phases.flatMap((phase) =>
       phase.actions.flatMap((action) => [
-        { ...action, parentId: undefined as string | undefined },
+        {
+          ...action,
+          number: action.progressSteps?.length ? undefined : ++number,
+          parentId: undefined as string | undefined,
+        },
         ...(action.progressSteps?.map((step) => ({
           ...action,
           id: step.id,
@@ -145,6 +158,7 @@ export function installationActionRows(plan?: InstallationPlanView) {
           type: "APPLICATION_PROGRESS",
           progressSteps: undefined,
           parentId: action.id,
+          number: ++number,
         })) || []),
       ]),
     ) || []

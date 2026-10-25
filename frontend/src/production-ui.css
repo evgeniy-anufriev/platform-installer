@@ -3231,6 +3231,15 @@ button:disabled {
   margin-left: 18px;
 }
 
+.execution-plan-action.is-progress-group {
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  background: #f5f8fc;
+}
+
+.execution-plan-action.is-progress-group strong {
+  font-weight: 600;
+}
+
 .plan-progress-steps {
   margin: 6px 0 0;
   padding-left: 18px;

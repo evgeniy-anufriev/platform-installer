@@ -9,10 +9,34 @@ The [technical plan](szi-stage3-technical-plan.md), SHA-256
 `4de51e6d62e5eb71fe62b57def88d8e703b4507dbd46d93ec237f16eaf87bbea`,
 and [FULL PLAN review](reviews/szi-stage3-plan-review.md) define the scope.
 
-Owner explicitly prohibits building a real-project deployment plan or starting
-installation until a further command. The owner will supply the stand acceptance
-plan after tests and implementation review. No Stage3 real-project plan or run
-has been started. No runtime bundle has been published or activated.
+At implementation start, the owner prohibited a real-project plan/run until a
+further command. That initial restriction was superseded by the subsequent
+explicit stand-installation requests recorded below.
+
+## Итоговая приёмка — PASS
+
+2026-10-25 владелец подтвердил **PASS всего этапа интеграций библиотек**.
+Этап Stage3 принят: пропуск установки библиотеки с сохранением интеграций,
+общие пакеты приложений СДКУ/ЦСПА, группы/клиенты/роли SSO, маршруты nginx,
+доставка секретов через Vault Agent и завершающие post_install действия.
+
+Проверены оба реальных React/Wails сценария:
+
+- СДКУ/ЦСПА с пропуском СЗИ:
+  `installer-82f291b9d43e51a137d8df0cb61ef770` — SUCCEEDED.
+- Все три библиотеки:
+  `installer-432346595068ea5f1067aeb5a60ebd9f` — SUCCEEDED, Apply/Verify/post_install
+  PASS, UI100%/6 из6. СЗИ5 контейнеров на103, СДКУ3 на101, ЦСПА3 на102;
+  девять функциональных блоков readback PASS, по одному demo/id1 на библиотеку.
+
+Подробности последнего сценария и неизменяемые идентификаторы:
+[журнал установки всех библиотек](szi-stage3-all-libraries-journal.md).
+Три исторических NoHttpResponseException при refreshToken grant-access сохранены
+в этом журнале как неблокирующее наблюдение; их причина не объявляется
+устранённой. Они не меняют подтверждённый владельцем итог PASS.
+Отдельный orphan reconnect после перезапуска Wails не выполнялся и не является
+открытым условием принятого этапа интеграций. Исторические результаты ревью
+и решения владельца ниже сохраняются без изменения.
 
 ## Implementation
 

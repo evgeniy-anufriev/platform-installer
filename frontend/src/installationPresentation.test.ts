@@ -73,6 +73,29 @@ const event = (
   }) as unknown as InstallationEventView;
 
 describe("installation status presentation", () => {
+  it("restores the active library step delivered after later task events", () => {
+    const nested = structuredClone(plan);
+    const apply = nested.phases[0].actions[0];
+    apply.id = "applications:apply";
+    apply.progressSteps = [
+      { id: "applications:prepare", summary: "Prepare" },
+      { id: "applications:library:sdku", summary: "SDKU" },
+    ];
+    const events = [
+      event(4, "ACTION_STARTED", apply.id),
+      event(8, "TASK_STARTED", apply.id),
+      event(7, "ACTION_STARTED", "applications:prepare"),
+    ];
+    let progress = events.reduce(observeRunEvent, beginRunProgress("run-1", nested));
+    expect(progress.activeActionId).toBe("applications:prepare");
+    progress = observeRunEvent(progress, event(10, "ACTION_STARTED", "applications:library:sdku"));
+    progress = observeRunEvent(progress, event(9, "ACTION_COMPLETED", "applications:prepare"));
+    expect(progress.activeActionId).toBe("applications:library:sdku");
+    expect(progress.completedActionIds).toEqual(["applications:prepare"]);
+    progress = observeRunEvent(progress, event(7, "ACTION_STARTED", "applications:prepare"));
+    expect(progress.activeActionId).toBe("applications:library:sdku");
+  });
+
   it("counts library leaves once and restores the same progress after replay", () => {
     const nested = structuredClone(plan);
     const apply = nested.phases[0].actions[0];
@@ -106,6 +129,9 @@ describe("installation status presentation", () => {
       ).percent,
     ).toBe(50);
     expect(installationActionRows(nested)).toHaveLength(5);
+    expect(installationActionRows(nested).map((row) => row.number)).toEqual([
+      undefined, 1, 2, 3, 4,
+    ]);
     const replay = [...events, events[5]].reduce(
       observeRunEvent,
       beginRunProgress("run-1", nested),

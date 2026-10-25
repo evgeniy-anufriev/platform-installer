@@ -54,8 +54,21 @@ Core subset was 77 tests / 5 skips; the 214-test run above supersedes it.
 
 ## Acceptance limits
 
-New runtime bundle publication/activation and actual React/Wails rendering of a
-new plan with child progress have not been performed. Existing runtime plans and
-saved records remain supported without children. A future owner-authorized run
-is needed for real multi-library installation/reconnect acceptance; no such run
-was started here. Visual acceptance is not claimed.
+The subsequent owner-authorized [all-libraries installation](szi-stage3-all-libraries-journal.md)
+published/activated runtime03 46e624e5 and completed actual React/Wails
+Plan/Approve/Start: installer-432346595068ea5f1067aeb5a60ebd9f SUCCEEDED.
+The UI confirmed preparation, szi, sdku, cspa, Verify and post_install,
+100%/6 of6. Its terminal1280px screenshot was visually inspected.
+
+Real delivery exposed a UI ordering defect: an ACTION_STARTED arriving after
+a newer TASK event did not activate its child. An independent action-boundary
+sequence now controls active status. The failing regression passed after the
+fix, and actual subscription replay restored preparation without restarting
+execution. Parent rows are unnumbered groups; leaf numbering matches the
+counter. Frontend307/focused33/lint/build PASS. Core's existing explicit library
+order also had to be forwarded for the full-selection path; real native
+controller-to-Ansible tests cover full order, skipped scope and the old failure.
+
+Existing runtime plans/records without children remain supported. Orphan
+reconnect after a Wails restart is still not tested; replay within the current
+Wails process is separate evidence.
