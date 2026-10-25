@@ -32,7 +32,8 @@ class ApplicationPkiProjectionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             action = module.ActionModule.__new__(module.ActionModule)
             action._task = SimpleNamespace(args=dict(project_root=folder, contracts_root=str(ROOT / 'contracts'),
-                                                    snapshot={'project': {'id': 'project'}}))
+                                                    snapshot={'project': {'id': 'project'},
+                                                              'applicationLibraries': {'libraries': {'library': {'instances': {}}}}}))
             action._loader = SimpleNamespace(load_from_file=lambda _: {})
             values = dict(platform_application_rows=[row], platform_desired_state={},
                           application_snapshot={'pki_materialization': {'materializationPlans': plans}})
