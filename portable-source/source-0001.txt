@@ -31562,7 +31562,7 @@ application_runtime_verify_vault: true
         loop_var: application_runtime_job
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/discover_runtime.yml","mode":420,"size":1907,"sha256":"3f58207440ae33be39865b94387dd99586033dba992aded1a085aecc91dfcb2b","index":0,"count":1,"encoding":"utf-8","payloadBytes":1907}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/discover_runtime.yml","mode":420,"size":1908,"sha256":"c0d9f20c68f2693d757ff3818b610a50d9098ea6402949d07fc56cbc785cceed","index":0,"count":1,"encoding":"utf-8","payloadBytes":1908}
 ---
 - name: Обнаружение выбранной учетной записи Docker
   ansible.builtin.getent:
@@ -31590,7 +31590,7 @@ application_runtime_verify_vault: true
   changed_when: false
   no_log: true
 
-- name: Сохранить успешное обнаружение только в рамках этой операции и целевого объекта
+- name: Сохранить результат обнаружения приложения в контексте операции и целевого узла
   ansible.builtin.set_fact:
     application_runtime_discoveries: >-
       {{ application_runtime_discoveries | combine({application_discovery_key: {
@@ -31600,7 +31600,7 @@ application_runtime_verify_vault: true
   no_log: true
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/image_delivery.yml","mode":420,"size":7185,"sha256":"e4c83bb9d4913b236b61591eacdeeff4e7dfd8249215979c69cd00c597945e4a","index":0,"count":1,"encoding":"utf-8","payloadBytes":7185}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/image_delivery.yml","mode":420,"size":7200,"sha256":"3c9496b54f5f9cbbc9e1c4f72e08994c43061381e30784f411a2c2536dd546ea","index":0,"count":1,"encoding":"utf-8","payloadBytes":7200}
 ---
 - name: Проверка заблокированного локального образа перед доставкой
   ansible.builtin.command:
@@ -31658,7 +31658,7 @@ application_runtime_verify_vault: true
           environment: "{{ application_runtime_job.dockerEnvironment }}"
           no_log: true
       always:
-        - name: Удалить только частную стадию, выделенную этой операцией
+        - name: Удалить выделенный временный каталог доставки образа приложения
           ansible.builtin.file:
             path: "{{ application_image_stage.path }}"
             state: absent
@@ -31722,9 +31722,9 @@ application_runtime_verify_vault: true
   when: "'@' not in application_runtime_job.settings.image"
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/preflight.yml","mode":420,"size":24828,"sha256":"a205d320fc1dceb5d5419e1d07bb7ba88a529ca186d2825bc6f855e8cb5d01b7","index":0,"count":1,"encoding":"utf-8","payloadBytes":24828}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/preflight.yml","mode":420,"size":24804,"sha256":"a2226c6ea32fd188e5ac8f317a40aa4873e5cc23a41f537540b764c25fcd4575","index":0,"count":1,"encoding":"utf-8","payloadBytes":24804}
 ---
-- name: Привязать учетную запись этой операции и ключ обнаружения конфигурации Docker
+- name: Привязать учётную запись операции приложения и ключ обнаружения конфигурации Docker
   ansible.builtin.set_fact:
     application_discovery_key: "{{ [application_runtime_job.account, platform_application_registry_config_directory] | to_json }}"
   no_log: true
@@ -31787,7 +31787,7 @@ application_runtime_verify_vault: true
       architecture: "{{ {'x86_64': 'amd64', 'aarch64': 'arm64'}.get(application_runtime_discoveries[application_discovery_key].info.Architecture, application_runtime_discoveries[application_discovery_key].info.Architecture) }}"
   no_log: true
 
-- name: Требовать явного одобрения реестра на этом узле
+- name: Проверить явное одобрение реестра на целевом узле приложения
   ansible.builtin.assert:
     that:
       - application_runtime_job.authority.repository.reference.split('/')[0] in platform_application_approved_registries
@@ -31797,7 +31797,7 @@ application_runtime_verify_vault: true
 - name: Проверка точного манифеста платформы в утвержденном реестре
   when: application_runtime_job.authority.repository.reference is defined
   block:
-    - name: Проверка подлинности реестра области для этого зонда, доступного только для чтения
+    - name: Подготовить аутентификацию реестра для проверки образа без изменений
       ansible.builtin.include_tasks: registry_auth.yml
     - name: Проверка только утвержденного неизменяемого манифеста платформы
       ansible.builtin.command:
@@ -31809,7 +31809,7 @@ application_runtime_verify_vault: true
       failed_when: false
       no_log: true
   always:
-    - name: Удалить только временную проверку подлинности реестра этого зонда
+    - name: Удалить временную аутентификацию реестра проверки образа
       ansible.builtin.file:
         path: "{{ application_registry_auth_stage.path }}"
         state: absent
@@ -32105,7 +32105,7 @@ application_runtime_verify_vault: true
     _application_owned_ports: "{{ (((application_existing_container.stdout | from_json)[0].HostConfig.PortBindings | default({}, true) | dict2items | map(attribute='value') | flatten | select('mapping') | map(attribute='HostPort') | list) if (application_existing_container.stdout | from_json)[0].State.Running else []) if application_existing_container.rc == 0 else [] }}"
   when: item.published | string not in _application_owned_ports
 
-- name: Записать полный неизменяемый контекст предварительной проверки для этого места размещения
+- name: Записать неизменяемый контекст предварительной проверки размещения приложения
   ansible.builtin.set_fact:
     platform_application_preflight_jobs: >-
       {{ platform_application_preflight_jobs + [application_runtime_job | combine({
@@ -32123,11 +32123,11 @@ application_runtime_verify_vault: true
   no_log: true
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/pull_registry.yml","mode":420,"size":2023,"sha256":"75d3c2d26023ffc5087f6ed2c3a270ead5dc1802bb457eb0584629d701a5d3f1","index":0,"count":1,"encoding":"utf-8","payloadBytes":2023}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/pull_registry.yml","mode":420,"size":2051,"sha256":"e1944594e33f157f4fa9776285e8bcfa0bee6c248c4f94b7303182c0f12745c1","index":0,"count":1,"encoding":"utf-8","payloadBytes":2051}
 ---
 - name: Извлечь одно заблокированное изображение, не сохраняя переопределение доставки
   block:
-    - name: Проверка подлинности реестра сеансов для этого извлечения образа
+    - name: Подготовить сеансовую аутентификацию реестра для загрузки образа приложения
       ansible.builtin.include_tasks: registry_auth.yml
     - name: Материализовать точное переопределение извлечения реестра
       ansible.builtin.copy:
@@ -32142,7 +32142,7 @@ application_runtime_verify_vault: true
       environment: "{{ application_registry_environment }}"
       no_log: true
   always:
-    - name: Удалить только временную аутентификацию реестра этого запроса
+    - name: Удалить временную аутентификацию реестра запроса загрузки образа
       ansible.builtin.file:
         path: "{{ application_registry_auth_stage.path }}"
         state: absent
@@ -32154,7 +32154,7 @@ application_runtime_verify_vault: true
         state: absent
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/registry_auth.yml","mode":420,"size":3562,"sha256":"fc124a6d6dd93f929b34597ad26f6fe920ae37b919de65e364d798f7d5ea6252","index":0,"count":1,"encoding":"utf-8","payloadBytes":3562}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/registry_auth.yml","mode":420,"size":3575,"sha256":"d82533868687583212e83621d6091ec9d59f0b912e4a257f7c1228297a9c9e08","index":0,"count":1,"encoding":"utf-8","payloadBytes":3575}
 ---
 - name: Начать с существующего контекста аутентификации узла Docker
   ansible.builtin.set_fact:
@@ -32180,7 +32180,7 @@ application_runtime_verify_vault: true
             {{ application_registry_environment.XDG_RUNTIME_DIR ~ '/.platform-registry-' ~
               (([application_runtime_job.projectId, application_runtime_job.libraryId, application_runtime_job.account] | to_json) | hash('sha256')) }}
       no_log: true
-    - name: Восстановить только область временной проверки подлинности этого реестра библиотеки
+    - name: Восстановить временную область аутентификации реестра библиотеки приложений
       ansible.builtin.file:
         path: "{{ application_registry_auth_stage.path }}"
         state: absent
@@ -32203,15 +32203,15 @@ application_runtime_verify_vault: true
         mode: '0600'
       changed_when: false
       no_log: true
-    - name: Ограничить аутентификацию Docker этим зондом или запросом
+    - name: Ограничить аутентификацию Docker операцией проверки или загрузки образа
       ansible.builtin.set_fact:
         application_registry_environment: "{{ application_registry_environment | combine({'DOCKER_CONFIG': application_registry_auth_stage.path}) }}"
       no_log: true
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/replace_archive.yml","mode":420,"size":5961,"sha256":"567d2a7207541c47098f380c8465ecde2255668b7fdcf1286d903938acca6765","index":0,"count":1,"encoding":"utf-8","payloadBytes":5961}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/replace_archive.yml","mode":420,"size":5981,"sha256":"7f8ec4da0f737f09abb7cf957562560da698370fb482b11c5c32d1f1740f2f1f","index":0,"count":1,"encoding":"utf-8","payloadBytes":5981}
 ---
-- name: Удалить только предыдущий промежуточный каталог этого архива
+- name: Удалить предыдущий временный каталог распаковки архива приложения
   ansible.builtin.file:
     path: "{{ application_runtime_job.instancePath }}/config/.archive-stage-{{ application_archive.destination | hash('sha256') }}"
     state: absent
@@ -32308,7 +32308,7 @@ application_runtime_verify_vault: true
       ansible.builtin.fail:
         msg: APPLICATION_CONFIG_ARCHIVE_REPLACE_FAILED
 
-- name: Удалить только промежуточный каталог этого архива
+- name: Удалить временный каталог распаковки архива приложения
   ansible.builtin.file:
     path: "{{ application_runtime_job.instancePath }}/config/.archive-stage-{{ application_archive.destination | hash('sha256') }}"
     state: absent
@@ -32354,9 +32354,9 @@ application_runtime_verify_vault: true
   no_log: true
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/run_scripts.yml","mode":420,"size":1081,"sha256":"f89a40aacda2f184b2e0bc2b554185ac1dc42df55f174e6ce99d0d466af1de7b","index":0,"count":1,"encoding":"utf-8","payloadBytes":1081}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/run_scripts.yml","mode":420,"size":1089,"sha256":"77be6227fd96cf4dbf08db53dbf1353bcbd50f0bbb60fcc7c5453fe11bc761e4","index":0,"count":1,"encoding":"utf-8","payloadBytes":1089}
 ---
-- name: Выполнить объявленные сценарии пакета для этого размещения и этапа
+- name: Выполнить сценарии пакета для выбранного размещения и этапа приложения
   ansible.builtin.include_role:
     name: platform.core.package_script
   vars:
@@ -32630,9 +32630,9 @@ platform_execution_runtime_root: "{{ platform_execution_bundle_root | default('/
     - platform_artifact_package_manager | default('dnf') == 'dnf'
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/artifact_source_gate/tasks/main.yml","mode":420,"size":1041,"sha256":"e8b07e8d802bd51ef23b29e108dd8dd6208716c7be0fae72288e6a7b869e84e5","index":0,"count":1,"encoding":"utf-8","payloadBytes":1041}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/artifact_source_gate/tasks/main.yml","mode":420,"size":1072,"sha256":"61890cd44a59cc183b9dc810f443eaf1c1a6e7bc8f66a13a857a8fb5caf65cf3","index":0,"count":1,"encoding":"utf-8","payloadBytes":1072}
 ---
-- name: Реализовать авторизованные источники Core на этой цели
+- name: Материализовать утверждённые источники артефактов Core на целевом узле
   ansible.builtin.include_role:
     name: platform.core.artifact_source_resolution
   when: platform_artifact_source_authorities_by_deployment is defined
@@ -32653,9 +32653,9 @@ platform_execution_runtime_root: "{{ platform_execution_bundle_root | default('/
   no_log: true
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/artifact_source_resolution/tasks/main.yml","mode":420,"size":2519,"sha256":"daac8bb317f14fa8044902cf85ec1f9a8d6b83ab538364bd784a75909905ff64","index":0,"count":1,"encoding":"utf-8","payloadBytes":2519}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/artifact_source_resolution/tasks/main.yml","mode":420,"size":2536,"sha256":"e92ebfb7c02b1a4082e490ed11eb45aade05078ecb6d1f85f76782091ed84a22","index":0,"count":1,"encoding":"utf-8","payloadBytes":2536}
 ---
-- name: Для этого развертывания требуются авторизованные источники артефактов Core
+- name: Проверить наличие утверждённых источников артефактов Core для развёртывания сервиса
   ansible.builtin.assert:
     that:
       - platform_execution_service_deployment is string
@@ -32729,7 +32729,7 @@ platform_execution_sudoers_content: ""
 platform_execution_ssh_key_path: "{{ platform_execution_identity_root }}/id_ed25519"
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/execution_environment/tasks/main.yml","mode":420,"size":5793,"sha256":"0400744b6bbf66af0ff53e54c8b25ae8dac541dbe4b646469319b09815c45376","index":0,"count":1,"encoding":"utf-8","payloadBytes":5793}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/execution_environment/tasks/main.yml","mode":420,"size":5754,"sha256":"ba08482beb87c9fe520de3673ed8cec9abab9552451f409f2699791ff644e649","index":0,"count":1,"encoding":"utf-8","payloadBytes":5754}
 ---
 - name: Сбор фактов о среде выполнения
   ansible.builtin.setup:
@@ -32849,7 +32849,7 @@ platform_execution_ssh_key_path: "{{ platform_execution_identity_root }}/id_ed25
     creates: "{{ platform_execution_ssh_key_path }}"
   when: platform_execution_technical_user | length > 0
 
-- name: Проверка местоположения полезных данных в автономном режиме, когда это необходимо
+- name: Проверить каталог обязательного offline-пакета среды исполнения
   ansible.builtin.stat:
     path: "{{ platform_execution_offline_payload_root }}"
   register: platform_execution_payload_stat
@@ -33004,7 +33004,7 @@ platform_execution_ssh_key_path: "{{ platform_execution_identity_root }}/id_ed25
     - not (platform_managed_data_root_verify_only | default(false))
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/package_script/tasks/main.yml","mode":420,"size":5162,"sha256":"e3b222e155e63219106a12f51245419eb6755c8f7ab064f85792ecfe074260ba","index":0,"count":1,"encoding":"utf-8","payloadBytes":5162}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/package_script/tasks/main.yml","mode":420,"size":5126,"sha256":"69fb8eb3b534a4d1f9963b7231564f64787912efaf3deb25d382210fd1c9b9cb","index":0,"count":1,"encoding":"utf-8","payloadBytes":5126}
 ---
 - name: Привязка только общих путей к сценариям пакетов
   ansible.builtin.set_fact:
@@ -33038,7 +33038,7 @@ platform_execution_ssh_key_path: "{{ platform_execution_identity_root }}/id_ed25
     mode: '0700'
   no_log: true
 
-- name: Удалить прерванные временные входные данные этого сценария перед повторным использованием
+- name: Удалить временные входные файлы прерванного сценария пакета перед повторным запуском
   ansible.builtin.file:
     path: "{{ platform_script_secret_directory }}"
     state: absent
@@ -33047,7 +33047,7 @@ platform_execution_ssh_key_path: "{{ platform_execution_identity_root }}/id_ed25
 
 - name: Запуск сценария пакета с ограниченными частными входными данными и очисткой
   block:
-    - name: Создать только временный секретный каталог этого сценария
+    - name: Создать временный каталог секретов сценария пакета
       ansible.builtin.file:
         path: "{{ platform_script_secret_directory }}"
         state: directory
@@ -33102,7 +33102,7 @@ platform_execution_ssh_key_path: "{{ platform_execution_identity_root }}/id_ed25
         msg: APPLICATION_SCRIPT_RECONCILED
       changed_when: (platform_script_result.stdout | from_json).changed | bool
   always:
-    - name: Удалить только временные секретные входные данные этого сценария
+    - name: Удалить временные секретные входные файлы сценария пакета
       ansible.builtin.file:
         path: "{{ platform_script_secret_directory }}"
         state: absent
@@ -33353,7 +33353,7 @@ platform_pki_group: root
          (_platform_pki_deployed_fingerprint.changed | default(false) | bool) }}
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/pki_deploy/tasks/trust_anchors.yml","mode":420,"size":1704,"sha256":"9190871ab63fa122503db7a1f33cb30c6ca2dc930643463bfd01caa1fc81cc86","index":0,"count":1,"encoding":"utf-8","payloadBytes":1704}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/pki_deploy/tasks/trust_anchors.yml","mode":420,"size":1682,"sha256":"ff19f596c67cce213dbb0f08414dbd4dfb7d2a281f2972645e973db5ada4ae85","index":0,"count":1,"encoding":"utf-8","payloadBytes":1682}
 ---
 - name: Требовать идентификатор проекта для сверки доверия системы CA
   ansible.builtin.assert:
@@ -33361,7 +33361,7 @@ platform_pki_group: root
       - _platform_pki_effective_project_id | length > 0
     fail_msg: PKI_PROJECT_ID_REQUIRED
 
-- name: Получить системное пространство имен привязки доверия CA этого проекта
+- name: Получить системное пространство имён доверенных CA проекта
   ansible.builtin.set_fact:
     _platform_pki_trust_project_token: "{{ _platform_pki_effective_project_id | hash('sha256') }}"
     _platform_pki_trust_authority_ids: "{{ _platform_pki_local_plans | map(attribute='authorityId') | unique | list }}"
@@ -34043,7 +34043,7 @@ platform_pki_keytool_package: java-21-openjdk-headless
   when: platform_pki_resolve_managed | bool
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/pki_materialize/tasks/select_consumer_plan.yml","mode":420,"size":3567,"sha256":"b455825f4f9eef94498ac07dd0fee4d7ca6f9637f9b3d773e99ee97139cd0dc2","index":0,"count":1,"encoding":"utf-8","payloadBytes":3567}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/pki_materialize/tasks/select_consumer_plan.yml","mode":420,"size":3590,"sha256":"13aa165fd0030d28f0a964fea601345f17dbfc3484096ffd771513473a66af1b","index":0,"count":1,"encoding":"utf-8","payloadBytes":3590}
 ---
 - name: Проверка входных данных селектора потребительского плана PKI
   ansible.builtin.assert:
@@ -34075,7 +34075,7 @@ platform_pki_keytool_package: java-21-openjdk-headless
   ansible.builtin.set_fact:
     _platform_pki_consumer_request_ids: []
 
-- name: Собрать запросы PKI, привязанные к этому потребителю службы
+- name: Собрать запросы PKI выбранного потребителя сертификатов сервиса
   ansible.builtin.set_fact:
     _platform_pki_consumer_request_ids: "{{ _platform_pki_consumer_request_ids + [item.id] }}"
   loop: "{{ _platform_pki_consumer_requests }}"
@@ -34100,7 +34100,7 @@ platform_pki_keytool_package: java-21-openjdk-headless
        | selectattr('deploymentId', 'equalto', _platform_pki_consumer_deployment_id)
        | list | length > 0)
 
-- name: Выбрать уникальный план PKI для этого потребителя службы
+- name: Выбрать единственный план PKI потребителя сертификатов сервиса
   ansible.builtin.set_fact:
     _platform_pki_consumer_plans: >-
       {{ (_platform_pki_consumer_available_plans
@@ -34797,9 +34797,9 @@ platform_pki_materialization_plans: []
     fail_msg: PKI_TARGET_MATERIALIZATION_MISMATCH
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/prepare_application_images/tasks/main.yml","mode":420,"size":4238,"sha256":"e1a316bcefde1a1a9226db495913ecd773f5b32f12f2c206dcaaeae4ebd7f7e4","index":0,"count":1,"encoding":"utf-8","payloadBytes":4238}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/prepare_application_images/tasks/main.yml","mode":420,"size":4246,"sha256":"898234c9bf1c2dad9639cfd9f96acf6f38e8fc46559db0e7d05599447eb5e832","index":0,"count":1,"encoding":"utf-8","payloadBytes":4246}
 ---
-- name: Связать платформу этого места размещения и исходные входные данные
+- name: Привязать платформу и исходные параметры размещения образа
   ansible.builtin.set_fact:
     _image_platform:
       os: "{{ ansible_facts.system | lower }}"
@@ -34811,7 +34811,7 @@ platform_pki_materialization_plans: []
     _image_request_key: "{{ [application_image_input.request, application_image_input.credentials, application_image_input.account, application_image_input.configDirectory] | to_json | hash('sha256') }}"
   no_log: true
 
-- name: Повторно использовать идентичные наблюдения реестра только в рамках этой целевой подготовки
+- name: Повторно использовать совпадающие метаданные реестра в рамках подготовки образов целевого узла
   ansible.builtin.set_fact:
     _image_registry: "{{ (_image_registry_cache | default({})).get(_image_request_key, {}) }}"
   no_log: true
@@ -34839,13 +34839,13 @@ platform_pki_materialization_plans: []
     - application_image_input.request.registry in (platform_application_approved_registries | default([]))
     - _image_request_key not in (_image_registry_cache | default({}))
 
-- name: Прочитать метаданные из утвержденного реестра в сетевом контексте этого узла
+- name: Прочитать метаданные утверждённого реестра через сеть целевого узла подготовки образов
   ansible.builtin.include_tasks: registry.yml
   when:
     - application_image_input.request.registry in (platform_application_approved_registries | default([]))
     - _image_request_key not in (_image_registry_cache | default({}))
 
-- name: Сохранить несекретные метаданные реестра для повторного размещения на этом целевом объекте
+- name: Сохранить несекретные метаданные реестра для повторных размещений образа на целевом узле
   ansible.builtin.set_fact:
     _image_registry_cache: "{{ (_image_registry_cache | default({})) | combine({_image_request_key: _image_registry}) }}"
   when: application_image_input.request.registry in (platform_application_approved_registries | default([]))
@@ -34866,7 +34866,7 @@ platform_pki_materialization_plans: []
   no_log: true
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/prepare_application_images/tasks/node_credentials.yml","mode":420,"size":3302,"sha256":"898e5a59eb6436c020ff2bed1ab8a2b907ca896da4c43c22eeecbd25eb71742e","index":0,"count":1,"encoding":"utf-8","payloadBytes":3302}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/prepare_application_images/tasks/node_credentials.yml","mode":420,"size":3337,"sha256":"81bab8729b1296f6772bb3776ba988f171c3c0c512284e37a2a46d9e6491720a","index":0,"count":1,"encoding":"utf-8","payloadBytes":3337}
 ---
 - name: Обнаружить существующую учетную запись Docker, не создавая ее
   ansible.builtin.getent:
@@ -34902,7 +34902,7 @@ platform_pki_materialization_plans: []
     _image_auth_helper: "{{ (_image_auth_config.credHelpers | default({})).get(application_image_input.request.registry, _image_auth_config.credsStore | default('')) }}"
   no_log: true
 
-- name: Декодировать существующую встроенную аутентификацию Docker для этого реестра
+- name: Декодировать сохранённые данные аутентификации Docker для выбранного реестра образов
   ansible.builtin.set_fact:
     _image_username: "{{ (_image_auth_entry.auth | b64decode).split(':', 1)[0] }}"
     _image_password: "{{ (_image_auth_entry.auth | b64decode).split(':', 1)[1] }}"
@@ -34920,7 +34920,7 @@ platform_pki_materialization_plans: []
   when: _image_auth_helper | length > 0
   no_log: true
 
-- name: Привязать вспомогательный результат только для этой операции
+- name: Привязать результат поиска учётных данных к операции подготовки образов
   ansible.builtin.set_fact:
     _image_username: "{{ (_image_helper_result.stdout | from_json).Username }}"
     _image_password: "{{ (_image_helper_result.stdout | from_json).Secret }}"
@@ -35156,7 +35156,7 @@ platform_name_prefix: ''
   become: false
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/resolve_application_libraries/tasks/instance.yml","mode":420,"size":15562,"sha256":"f5c2a1af6570851a44aa472b7a5411b8f68a29906c4f88eaf8d67741aac78698","index":0,"count":1,"encoding":"utf-8","payloadBytes":15562}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/resolve_application_libraries/tasks/instance.yml","mode":420,"size":15492,"sha256":"f4fa206835c729be48128591f5ed6c05b422d46827f7880bb42fb8eaef007b0e","index":0,"count":1,"encoding":"utf-8","payloadBytes":15492}
 ---
 - name: Загрузить проверенные параметры библиотеки по умолчанию в изолированное пространство имен
   ansible.builtin.include_vars:
@@ -35172,7 +35172,7 @@ platform_name_prefix: ''
   no_log: true
   become: false
 
-- name: Независимо привязать идентификаторы и контекст параметра для этого размещения
+- name: Привязать идентификаторы и контекст параметров размещения приложения
   ansible.builtin.set_fact:
     application_name: "{{ application_job.application.name }}"
     application_instance_id: >-
@@ -35183,7 +35183,7 @@ platform_name_prefix: ''
   no_log: true
   become: false
 
-- name: Сбросить ресурсы и контекст темы для этого места размещения
+- name: Сбросить ресурсы и контекст тем размещения приложения
   ansible.builtin.set_fact:
     application_topics: {}
     application_databases: {}
@@ -35327,7 +35327,7 @@ platform_name_prefix: ''
   no_log: true
   become: false
 
-- name: Разрешить параметры после того, как этот идентификатор места размещения станет доступен
+- name: Разрешить параметры приложения после привязки идентификатора размещения
   ansible.builtin.set_fact:
     application_parameters: >-
       {{ (_application_shared.defaults.parameters | default({}) if application_job.slot.inherit_defaults | default(true) else {}) |
@@ -35339,7 +35339,7 @@ platform_name_prefix: ''
   no_log: true
   become: false
 
-- name: Разрешить унаследованные настройки без явных переопределений этого приложения
+- name: Разрешить наследуемые настройки приложения без явных переопределений
   ansible.builtin.set_fact:
     application_inherited: >-
       {{ (_application_shared.defaults if application_job.slot.inherit_defaults | default(true) else {}) |
@@ -35463,9 +35463,9 @@ platform_name_prefix: ''
   become: false
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/resolve_application_libraries/tasks/resource_context.yml","mode":420,"size":1302,"sha256":"b6c00202b212cf4d92f3c4fac5f298e5a04a7afcea43bf3b05b88da5b2bf26c8","index":0,"count":1,"encoding":"utf-8","payloadBytes":1302}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/resolve_application_libraries/tasks/resource_context.yml","mode":420,"size":1304,"sha256":"717807bc66a7b52f333efd75839250b6b674cb3745683b553a323fa72ad58ba9","index":0,"count":1,"encoding":"utf-8","payloadBytes":1304}
 ---
-- name: Предоставить выбранные ресурсы этому провайдеру соединений
+- name: Передать выбранные ресурсы провайдеру соединений приложения
   ansible.builtin.set_fact:
     "{{ 'application_topics' if _application_resources[resource_id].kind == 'kafka.topic' else 'application_databases' }}": >-
       {{ (application_topics if _application_resources[resource_id].kind == 'kafka.topic' else application_databases) |
@@ -35785,7 +35785,7 @@ artifactLock:
   digest: sha256:2222222222222222222222222222222222222222222222222222222222222222
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/application-images-inputs.yml","mode":420,"size":2380,"sha256":"0a709b25d70307f95550cf1aaeb06bcbaadf537222041ead7a491ff61175d61c","index":0,"count":1,"encoding":"utf-8","payloadBytes":2380}
+@@PORTABLE {"path":"ansible-core/playbooks/application-images-inputs.yml","mode":420,"size":2395,"sha256":"0291e0e80ffe94f910e97d5f3dc7f8b22fb307bfab051227e591883fe401138b","index":0,"count":1,"encoding":"utf-8","payloadBytes":2395}
 ---
 - name: Обработка входных данных для подготовки изображения без контакта с целями
   hosts: localhost
@@ -35818,7 +35818,7 @@ artifactLock:
       ansible.builtin.include_vars:
         file: "{{ platform_execution_bundle_root }}/manifest.yaml"
         name: platform_application_image_bundle
-    - name: Сохранить частные входные данные подготовки для этого запроса
+    - name: Сохранить защищённые параметры запроса подготовки образов приложений
       ansible.builtin.copy:
         content: "{{ platform_image_inputs.inputs | to_json }}"
         dest: "{{ platform_application_image_inputs_path }}"
@@ -35995,9 +35995,9 @@ artifactLock:
       when: platform_endpoint_source_ids | length > 0
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-ordered-instance.yml","mode":420,"size":4402,"sha256":"a7869bb4a8dd60ad6862045d7361820c3dcfa6a70ba2176e855ddb078d327211","index":0,"count":1,"encoding":"utf-8","payloadBytes":4402}
+@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-ordered-instance.yml","mode":420,"size":4365,"sha256":"77da39e95a5f41c62911c102522030cbc377506afb32f62dcf3c1881ec5c4841","index":0,"count":1,"encoding":"utf-8","payloadBytes":4365}
 ---
-- name: Требовать полные пакеты провайдера перед запуском этого потребителя
+- name: Проверить полноту пакетов провайдеров перед запуском потребителя приложения
   ansible.builtin.assert:
     that: >-
       (application_library_id ~ '/' ~ application_instance_id) not in
@@ -36025,7 +36025,7 @@ artifactLock:
   loop_control:
     loop_var: application_runtime_job
 
-- name: Активировать и проверить каждое размещение этого логического экземпляра
+- name: Активировать и проверить размещения логического экземпляра приложения
   ansible.builtin.include_role:
     name: platform.core.application_runtime
     tasks_from: activate_instance
@@ -36044,7 +36044,7 @@ artifactLock:
   loop_control:
     loop_var: application_runtime_job
 
-- name: Связать все выбранные потребительские пакеты, предоставленные этим готовым экземпляром
+- name: Привязать выбранные пакеты потребителей готового экземпляра приложения
   ansible.builtin.set_fact:
     application_ready_provider_batches: >-
       {{ hostvars['localhost'].application_runtime_inputs.integrations.batches |
@@ -36052,13 +36052,13 @@ artifactLock:
          selectattr('providerInstanceId', 'equalto', application_instance_id) | list }}
   no_log: true
 
-- name: Опубликовать и проверить эту используемую конечную точку провайдера раньше, чем ее потребители
+- name: Опубликовать и проверить конечную точку готового провайдера до запуска потребителей
   ansible.builtin.include_tasks: ../../services/integrations/tasks/apply-source.yml
   vars:
     platform_endpoint_source_ids: "{{ [application_instance_id] }}"
   when: application_ready_provider_batches | length > 0
 
-- name: Подготовить всех выбранных потребителей в пакетах этого готового провайдера
+- name: Подготовить выбранных потребителей пакетов готового провайдера приложения
   ansible.builtin.include_tasks: tasks/application-provider-batch.yml
   loop: "{{ application_ready_provider_batches }}"
   loop_control:
@@ -36071,7 +36071,7 @@ artifactLock:
   run_once: true
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-ordered-library.yml","mode":420,"size":6610,"sha256":"6182f3d70bd8dace27bb1326624a9b609813abd4fc73dcf4f90973ab71e45e62","index":0,"count":1,"encoding":"utf-8","payloadBytes":6610}
+@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-ordered-library.yml","mode":420,"size":6627,"sha256":"d47a79e6f75e48c3fa3a384bc4f0af8da0131a629552e8c57e79b9edbbae7c27","index":0,"count":1,"encoding":"utf-8","payloadBytes":6627}
 ---
 - name: Отметить начало установки библиотеки
   ansible.builtin.debug:
@@ -36082,7 +36082,7 @@ artifactLock:
   run_once: true
   when: application_library_id in hostvars['localhost'].application_selection.scope.installLibraries
 
-- name: Привязать все логические экземпляры, выбранные для этой библиотеки
+- name: Привязать выбранные логические экземпляры библиотеки приложений
   ansible.builtin.set_fact:
     application_library_instance_ids: >-
       {{ hostvars['localhost'].application_runtime_inputs.jobs | selectattr('libraryId', 'equalto', application_library_id) |
@@ -36090,7 +36090,7 @@ artifactLock:
          map(attribute='instanceId') | unique | list }}
   no_log: true
 
-- name: Материализовать все выбранные размещения этой библиотеки без запуска контейнеров
+- name: Материализовать выбранные размещения библиотеки приложений без запуска контейнеров
   ansible.builtin.include_role:
     name: platform.core.application_runtime
     tasks_from: apply_library
@@ -36132,7 +36132,7 @@ artifactLock:
   loop_control:
     loop_var: application_runtime_job
 
-- name: Публиковать и проверять только готовые конечные точки этой библиотеки
+- name: Опубликовать и проверить готовые конечные точки библиотеки приложений
   ansible.builtin.include_tasks: ../../services/integrations/tasks/apply-source.yml
   vars:
     platform_endpoint_source_ids: >-
@@ -36146,7 +36146,7 @@ artifactLock:
       selectattr('providerLibraryId', 'equalto', application_library_id) | map(attribute='providerInstanceId') | list) |
     intersect(hostvars['localhost'].platform_endpoint_sources | default({}) | list) | length > 0
 
-- name: Проверить точное расположение этой библиотеки перед следующей библиотекой
+- name: Проверить размещения библиотеки приложений перед обработкой следующей библиотеки
   ansible.builtin.include_role:
     name: platform.core.application_runtime
     tasks_from: verify
@@ -36190,7 +36190,7 @@ artifactLock:
   when: application_library_id in hostvars['localhost'].application_selection.scope.installLibraries
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-post-install.yml","mode":420,"size":3478,"sha256":"a634d1f83e0d0bdc53e52a8264cc1ffeee9016343a86626f2fcb311b2e22c155","index":0,"count":1,"encoding":"utf-8","payloadBytes":3478}
+@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-post-install.yml","mode":420,"size":3458,"sha256":"b644ae0d9e9298e592a17f6626e6f148e09e6516630497278bb5b45520c2be51","index":0,"count":1,"encoding":"utf-8","payloadBytes":3458}
 ---
 - import_playbook: application-libraries-resolve-runtime.yml
   vars:
@@ -36238,7 +36238,7 @@ artifactLock:
             loop_var: application_post_install_script
             label: "{{ application_post_install_script.libraryId }}/{{ application_post_install_script.id }}"
       always:
-        - name: Удалить только производные исходные файлы, материализованные этим вызовом терминала
+        - name: Удалить временные исходные файлы завершающего этапа установки приложений
           ansible.builtin.file:
             path: "{{ platform_application_secret_root }}/{{ item.passwordRef }}"
             state: absent
@@ -36247,7 +36247,7 @@ artifactLock:
           no_log: true
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-preflight.yml","mode":420,"size":3477,"sha256":"26ab43803a5aab07969b2c125c3bf728916810dcdb39b3abba28b3d43e0b4061","index":0,"count":1,"encoding":"utf-8","payloadBytes":3477}
+@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-preflight.yml","mode":420,"size":3478,"sha256":"cf89410461ad93cd62cfd4b69588fd08b697b049e163d6e1affd3e969b4ea41b","index":0,"count":1,"encoding":"utf-8","payloadBytes":3478}
 ---
 - import_playbook: application-libraries-resolve-runtime.yml
 
@@ -36284,7 +36284,7 @@ artifactLock:
   become: true
   any_errors_fatal: true
   tasks:
-    - name: Инициализировать частные строки предварительной проверки этой операции
+    - name: Инициализировать защищённые записи предварительной проверки приложений
       ansible.builtin.set_fact:
         platform_application_preflight_jobs: []
         application_runtime_discoveries: {}
@@ -36308,7 +36308,7 @@ artifactLock:
     - ansible.builtin.import_tasks: tasks/application-libraries-offline-archives.yml
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-provider-stage.yml","mode":420,"size":11713,"sha256":"bd90eaccbfd33821b36c0456e7363c68b9fef895a09391e51b60a24d4b339f50","index":0,"count":1,"encoding":"utf-8","payloadBytes":11713}
+@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-provider-stage.yml","mode":420,"size":11724,"sha256":"44739179fc3d29635733a1ffa4648920241de5d3727d25883a528d981628df72","index":0,"count":1,"encoding":"utf-8","payloadBytes":11724}
 ---
 - name: Запустить предварительно проверенную библиотеку, а затем перехватить провайдера экземпляров
   hosts: localhost
@@ -36355,7 +36355,7 @@ artifactLock:
           ansible.builtin.assert:
             that: application_provider_inputs.status == 'PASS'
             fail_msg: APPLICATION_PROVIDER_INPUT_INVALID
-        - name: Инициализировать обнаружение провайдера для этого вызова
+        - name: Инициализировать обнаружение провайдера библиотеки приложений
           ansible.builtin.set_fact:
             platform_application_provider_runtime: {}
         - name: Один раз обнаружить каждое развертывание PostgreSQL
@@ -36481,7 +36481,7 @@ artifactLock:
           when: not (platform_application_runtime_credential_custody | default(false)) or application_runtime_inputs.integrations.batches | length == 0
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-provider-verify-stage.yml","mode":420,"size":6484,"sha256":"77ca1cf33d5b9b0f8238ca468c3390a5dd0502492b5ce7f539dccae6e91c3ed1","index":0,"count":1,"encoding":"utf-8","payloadBytes":6484}
+@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-provider-verify-stage.yml","mode":420,"size":6498,"sha256":"ae98bc7f2265fbdcf029a2fc6d791129a4d76ae6907c2bb6886d6f5fc6edf9e0","index":0,"count":1,"encoding":"utf-8","payloadBytes":6498}
 ---
 - name: Проверка провайдеров приложений без изменения сервиса
   hosts: localhost
@@ -36537,7 +36537,7 @@ artifactLock:
           loop: "{{ application_provider_inputs.jobs | selectattr('serviceType', 'equalto', 'kafka') | selectattr('accounts') | list }}"
           loop_control:
             loop_var: platform_kafka_application_job
-        - name: Сброс обнаружения PostgreSQL только для чтения для этого вызова
+        - name: Сбросить результаты обнаружения PostgreSQL перед проверкой провайдера
           ansible.builtin.set_fact:
             platform_application_provider_runtime: {}
         - name: Один раз обнаружить каждое развертывание PostgreSQL для проверки
@@ -36631,7 +36631,7 @@ artifactLock:
         loop_var: platform_clickhouse_application_job
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-providers-preflight.yml","mode":420,"size":2752,"sha256":"c764e0199d8d6acb4d304d3f10e148726a2826181249dbb615c077e9ab734e27","index":0,"count":1,"encoding":"utf-8","payloadBytes":2752}
+@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-providers-preflight.yml","mode":420,"size":2783,"sha256":"f593cb9f93bf6f6e3c4730598f49230ae0ed64471d5685d90cfa0a79e1b32e64","index":0,"count":1,"encoding":"utf-8","payloadBytes":2783}
 ---
 - import_playbook: application-libraries-providers-resolve.yml
 - name: Предварительная проверка всех выбранных провайдеров без мутаций
@@ -36640,7 +36640,7 @@ artifactLock:
   gather_facts: false
   any_errors_fatal: true
   tasks:
-    - name: Сброс фактов выполнения провайдера для этого вызова
+    - name: Сбросить runtime-факты предварительной проверки провайдеров приложений
       ansible.builtin.set_fact:
         platform_application_provider_runtime: {}
     - name: Один раз обнаружить каждое уникальное развертывание PostgreSQL
@@ -37254,9 +37254,9 @@ artifactLock:
   no_log: true
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/tasks/application-libraries-offline-archives.yml","mode":420,"size":1269,"sha256":"2a107b079819bb6e61ca763831fe7e42c24cb77851a16ba53ddfc2d6eb831f2d","index":0,"count":1,"encoding":"utf-8","payloadBytes":1269}
+@@PORTABLE {"path":"ansible-core/playbooks/tasks/application-libraries-offline-archives.yml","mode":420,"size":1265,"sha256":"fc8045a4bd4689404c8ea07481c2e22395edc27b9e882898f16cc90e30e89264","index":0,"count":1,"encoding":"utf-8","payloadBytes":1265}
 ---
-- name: Инициализировать выбранные записи автономного архива для этого вызова
+- name: Инициализировать выбранные записи offline-архивов библиотек приложений
   ansible.builtin.set_fact:
     application_selected_offline_archives: []
 
@@ -37294,7 +37294,7 @@ artifactLock:
     application_provider_script_host: "{{ application_post_install_script.target.hostId | default(application_post_install_script.hostId) }}"
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/tasks/application-provider-batch.yml","mode":420,"size":4625,"sha256":"c77dd9206001efb44830a84cbb2103fd0b2463b95326ed78bf8e574d1d2c7294","index":0,"count":1,"encoding":"utf-8","payloadBytes":4625}
+@@PORTABLE {"path":"ansible-core/playbooks/tasks/application-provider-batch.yml","mode":420,"size":4693,"sha256":"62886377584dc9a36785951be8e1d3f642da42339e1bda6c87fc84e9d6d8f6fa","index":0,"count":1,"encoding":"utf-8","payloadBytes":4693}
 ---
 - name: Выполнение перехватчиков интеграции в объявленном порядке перед пакетом учетных записей
   ansible.builtin.include_tasks: application-provider-script.yml
@@ -37305,7 +37305,7 @@ artifactLock:
   loop_control:
     loop_var: application_provider_hook
 
-- name: Согласовать этот пакет учетных записей провайдера через личные файлы
+- name: Согласовать пакет учётных записей провайдера через защищённые файлы
   when: application_provider_batch.accounts | length > 0
   block:
     - name: Разрешить обратный вызов учетной записи из конкретного пакета провайдера
@@ -37317,7 +37317,7 @@ artifactLock:
       register: application_account_callback
       no_log: true
 
-    - name: Требовать защищенные исходные файлы для всех паролей в этом пакете
+    - name: Проверить защищённые исходные файлы всех паролей пакета учётных записей провайдера
       ansible.builtin.assert:
         that: >-
           {{ (hostvars['localhost'].platform_application_secret_files |
@@ -37338,7 +37338,7 @@ artifactLock:
       loop: "{{ application_account_callback.requests }}"
       no_log: true
 
-    - name: Разместить этот пакет в существующем корне защищенного контроллера
+    - name: Разместить пакет учётных записей провайдера в защищённом каталоге контроллера
       ansible.builtin.copy:
         content: "{{ {'accounts': application_account_callback.accounts, 'passwords': application_batch_passwords} | to_json }}"
         dest: "{{ hostvars['localhost'].platform_application_secret_root }}/{{ application_provider_batch.id }}"
@@ -37347,14 +37347,14 @@ artifactLock:
       become: false
       no_log: true
 
-    - name: Выполнить один обратный вызов для всех учетных записей этого провайдера
+    - name: Выполнить общий обратный вызов для пакета учётных записей провайдера
       ansible.builtin.include_tasks: application-provider-script.yml
       vars:
         application_provider_script: "{{ application_account_callback.script }}"
         application_provider_script_host: "{{ application_account_callback.targetHostId }}"
         application_provider_private_files: "{{ {application_provider_batch.id: hostvars['localhost'].platform_application_secret_root ~ '/' ~ application_provider_batch.id} }}"
   always:
-    - name: Удалить только этот производный пакетный ввод
+    - name: Удалить временный файл пакета учётных записей провайдера
       ansible.builtin.file:
         path: "{{ hostvars['localhost'].platform_application_secret_root }}/{{ application_provider_batch.id }}"
         state: absent
@@ -37560,6 +37560,289 @@ artifactLock:
           artifact: "{{ platform_validation.artifact_path }}"
           findings: "{{ platform_validation.validation.summary }}"
       run_once: true
+
+@@END
+@@PORTABLE {"path":"ansible-core/tools/acquire_redos8_infrastructure.py","mode":420,"size":13960,"sha256":"85b528c5b2255b2fcf24545823163ded9567ccfff8e359d496528ea602fa39d3","index":0,"count":1,"encoding":"utf-8","payloadBytes":13960}
+#!/usr/bin/env python3
+"""DEV-only RED OS 8 RPM acquisition; never installs or publishes a bundle.
+
+Run on a trusted acquisition host with an existing Python/Core runtime.
+The embedded file repository must be configured separately on each target.
+"""
+
+import argparse
+import json
+import os
+from pathlib import Path
+import platform
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+
+import yaml
+
+import build_execution_runtime_bundle as builder
+
+
+def run(argv, phase):
+    # Repository diagnostics can contain credential-bearing URLs. Do not relay
+    # raw DNF output, environment, or command arguments to Installer logs.
+    result = subprocess.run([str(arg) for arg in argv], stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE, text=True)
+    if result.returncode:
+        raise ValueError("%s failed (exit %s)" % (phase, result.returncode))
+    return result.stdout
+
+
+def load(path):
+    with path.open(encoding="utf-8") as source:
+        return yaml.safe_load(source)
+
+
+def host_identity():
+    if platform.system() != "Linux" or platform.machine() != "x86_64":
+        raise ValueError("requires a trusted RED OS 8 x86_64 acquisition host")
+    values = {}
+    for line in Path("/etc/os-release").read_text().splitlines():
+        if "=" in line:
+            key, value = line.split("=", 1)
+            values[key] = value.strip('"\'')
+    if values.get("ID") != "redos" or values.get("VERSION_ID", "").split(".")[0] != "8":
+        raise ValueError("requires RED OS 8; cross-distribution acquisition is not supported")
+    return values
+
+
+def requirements(root):
+    """Read package names/versions from current service manifests and defaults.
+
+    This is an acquisition list, not an Ansible precedence/source resolver.
+    PostgreSQL uses the same two package-family alternatives as its role.
+    """
+    groups = []
+    bootstrap = (root / "ansible-core/tools/bootstrap_execution_runtime.sh").read_text()
+    names = re.search(r"for package in ([a-z0-9 -]+); do", bootstrap)
+    if not names:
+        raise ValueError("bootstrap prerequisite list could not be read")
+    groups.extend([[name]] for name in names.group(1).split())
+    for manifest_path in sorted((root / "services").glob("*/service.yml")):
+        service = load(manifest_path)
+        service_id = manifest_path.parent.name
+        fqcn = service["roleEntrypoints"]["apply"]["fqcn"].split(".")
+        defaults_path = (manifest_path.parent / "ansible_collections" / fqcn[0] /
+                         fqcn[1] / "roles" / fqcn[2] / "defaults/main.yml")
+        defaults = load(defaults_path)
+        versions = {item["name"]: str(item.get("version", ""))
+                    for item in service.get("runtimeRequirements", [])}
+        names = set(versions)
+        for key, value in defaults.items():
+            if key.endswith("_package") and isinstance(value, str):
+                names.add(value)
+            if key.endswith("_packages") and isinstance(value, list):
+                names.update(value)
+        if service_id == "redis":
+            versions["redis"] = str(defaults["platform_redis_version"])
+        if service_id == "vault":
+            # Literal ancillary package in vault_tls/tasks/provision.yml.
+            names.add("logrotate")
+        for name in sorted(names):
+            if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9+_.-]*", name):
+                raise ValueError("nonliteral package default: %s" % service_id)
+            version = versions.get(name, "")
+            if version and not re.fullmatch(r"[A-Za-z0-9+_.-]+", version):
+                raise ValueError("nonliteral package version: %s" % service_id)
+            suffix = ".*" if service_id == "redis" and version else "-*"
+            groups.append([name + "-" + version + suffix if version else name])
+        if service_id == "postgresql":
+            version = str(defaults["platform_postgresql_version"])
+            major = version.split(".")[0]
+            for legacy, scoped in (("postgresql", "postgresql" + major),
+                                   ("postgresql-server", "postgresql" + major + "-server"),
+                                   ("postgresql-contrib", "postgresql" + major + "-contrib")):
+                groups.append([legacy + "-" + version + "-*", scoped + "-" + version + "-*"])
+            failover = str(defaults["platform_postgresql_pg_auto_failover_version"])
+            groups.append(["pg_auto_failover-" + major + "-" + failover + "-*",
+                           "pg_auto_failover-" + failover + "-*"])
+    return sorted(set(tuple(group) for group in groups))
+
+
+def dnf_options(repos):
+    if not repos or any(not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]*", repo) for repo in repos):
+        raise ValueError("--repo requires explicit configured repository IDs, without globs")
+    return ["dnf", "-q", "--disablerepo=*"] + ["--enablerepo=" + repo for repo in repos] + [
+        "--setopt=install_weak_deps=False", "--setopt=skip_if_unavailable=False",
+        "--setopt=gpgcheck=True", "--setopt=sslverify=True"]
+
+
+def check_enabled_repositories(repos):
+    output = run(["dnf", "-q", "repolist", "--enabled"], "enabled repository inspection")
+    enabled = {line.split()[0] for line in output.splitlines() if line.split()}
+    if not set(repos).issubset(enabled):
+        raise ValueError("all --repo IDs must already be configured and enabled")
+
+
+def resolve_roots(groups, options):
+    roots = []
+    missing = []
+    def query(spec):
+        output = run(options + ["repoquery", "--available", "--latest-limit=1",
+                               "--archlist=x86_64,noarch", "--qf",
+                               "%{name}-%{epoch}:%{version}-%{release}.%{arch}", spec],
+                     "repository query")
+        return [line for line in output.splitlines()
+                if re.fullmatch(r"[A-Za-z0-9+_.:-]+\.(x86_64|noarch)", line)]
+
+    postgres = [group for group in groups if len(group) == 2 and group[0].startswith("postgresql")]
+    if postgres:
+        for family in (0, 1):
+            candidates = [query(group[family]) for group in postgres]
+            if all(candidates):
+                roots.extend(item for entries in candidates for item in entries)
+                break
+        else:
+            missing.append("complete PostgreSQL package family")
+    for alternatives in groups:
+        if alternatives in postgres:
+            continue
+        for spec in alternatives:
+            candidates = query(spec)
+            if candidates:
+                roots.extend(candidates)
+                break
+        else:
+            missing.append(" or ".join(alternatives))
+    if missing:
+        raise ValueError("required packages unavailable: " + ", ".join(missing))
+    return sorted(set(roots))
+
+
+def validate_bundle(cli, path):
+    return json.loads(run([cli, "-command", "validate-bundle", "-bundle", path],
+                          "standard bundle validation"))
+
+
+def offline_check(repository, roots, work, identity):
+    """Solve against an empty rpmdb and only the freshly collected file repo.
+
+    --downloadonly never executes an RPM transaction; unshare blocks external
+    networking even if a host plugin attempts an unexpected network request.
+    Every RPM was signature-checked against the acquisition host's trusted keys.
+    """
+    empty_repos = work / "empty-repos"
+    empty_repos.mkdir()
+    options = ["unshare", "--net", "dnf", "-q", "-y", "--noplugins",
+               "--installroot=" + str(work / "empty-root"),
+               "--releasever=" + identity["VERSION_ID"], "--disablerepo=*",
+               "--setopt=reposdir=" + str(empty_repos),
+               "--repofrompath=collected," + repository.as_uri(), "--enablerepo=collected",
+               "--setopt=collected.gpgcheck=False", "--setopt=install_weak_deps=False",
+               "--setopt=module_platform_id=" + identity.get("PLATFORM_ID", "platform:red80"),
+               "install", "--downloadonly", "--downloaddir=" + str(work / "solve-downloads")]
+    run(options + roots, "network-isolated empty-root dependency solve")
+
+
+def acquire(args):
+    identity = host_identity()
+    if os.geteuid() != 0:
+        raise ValueError("run with sudo -n: the isolated empty-root check requires root")
+    for tool in ("dnf", "rpmkeys", "createrepo_c", "unshare"):
+        if not shutil.which(tool):
+            raise ValueError("missing acquisition prerequisite: " + tool)
+    base = args.base_bundle.resolve()
+    output = args.output.absolute()
+    if output.exists() or output.is_symlink() or output.with_name(output.name + ".tmp").exists():
+        raise ValueError("output or its .tmp path already exists")
+    if base == output or base in output.parents or output in base.parents:
+        raise ValueError("output must be separate from the immutable base bundle")
+    for protected in (builder.REPOSITORY / "cache", builder.REPOSITORY / "bundle"):
+        if output.resolve() == protected.resolve() or protected.resolve() in output.resolve().parents:
+            raise ValueError("use a staging output; active cache requires the standard publisher")
+    verified = validate_bundle(args.installer_cli, base)
+    manifest = verified["Manifest"]
+    expected_platform = {"os": "redos", "version": identity["VERSION_ID"], "architecture": "x86_64"}
+    if manifest["platforms"] != [expected_platform]:
+        raise ValueError("base bundle must target only this exact RED OS 8 host platform")
+    options = dnf_options(args.repo)
+    check_enabled_repositories(args.repo)
+    groups = requirements(builder.REPOSITORY)
+    roots = resolve_roots(groups, options)
+    print("Resolved %d root packages; acquiring full dependency closure" % len(roots), flush=True)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="redos8-acquisition-", dir=output.parent) as temporary:
+        work = Path(temporary)
+        runtime = work / "runtime-input"
+        builder.copy_tree(base / "runtime", runtime)
+        repository = runtime / "artifacts/redos8-repository"
+        if repository.exists():
+            raise ValueError("base already contains redos8-repository; start from an unextended base")
+        repository.mkdir(parents=True)
+        run(options + ["download", "--resolve", "--alldeps", "--arch=x86_64,noarch",
+                       "--destdir=" + str(repository)] + roots, "RPM closure download")
+        rpms = sorted(repository.glob("*.rpm"))
+        if not rpms:
+            raise ValueError("RPM closure is empty")
+        records = []
+        package_names = set()
+        for rpm in rpms:
+            signature = run(["rpmkeys", "--checksig", rpm], "RPM signature validation")
+            if "signatures OK" not in signature:
+                raise ValueError("RPM must have a signature verified by an already trusted host key")
+            name = run(["rpm", "-qp", "--qf", "%{NAME}", rpm], "RPM name inspection").strip()
+            if name in package_names:
+                raise ValueError("duplicate RPM name in closure: " + name)
+            package_names.add(name)
+            records.append({"file": rpm.name, "sha256": builder.digest_file(rpm),
+                            "size": rpm.stat().st_size})
+        run(["createrepo_c", "--quiet", repository], "local repository metadata generation")
+        offline_check(repository, roots, work, identity)
+        # Bootstrap's fixed loader looks here, not under runtime/artifacts.
+        # Include the entire closure so its --disablerepo='*' install can solve.
+        packages = runtime / "packages/redos" / identity["VERSION_ID"] / "x86_64"
+        packages.mkdir(parents=True, exist_ok=True)
+        if any(packages.iterdir()):
+            raise ValueError("base bootstrap RPM directory must be empty (avoid mixed/ambiguous versions)")
+        for rpm in rpms:
+            shutil.copyfile(rpm, packages / rpm.name)
+        report = {"baseBundleDigest": verified["Digest"], "platform": expected_platform,
+                  "repositoryIds": args.repo, "requested": groups, "resolvedRoots": roots,
+                  "rpmCount": len(records), "packages": records,
+                  "signaturesVerified": True, "emptyRootOfflineSolve": True,
+                  "weakDependencies": False,
+                  "targetRepositoryConfigurationRequired": True}
+        (repository / "acquisition.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+        images = [(item["reference"], item["archiveRef"][len("runtime/"):])
+                  for item in manifest.get("containerImages", [])]
+        candidate = work / "bundle"
+        builder.build(candidate, runtime, args.bundle_version, manifest["coreVersion"],
+                      ["redos:" + identity["VERSION_ID"] + ":x86_64"], images)
+        result = validate_bundle(args.installer_cli, candidate)
+        # No incomplete/unchecked bundle is placed at the requested output.
+        candidate.rename(output)
+    print(json.dumps({"bundle": str(output), "digest": result["Digest"],
+                      "rpmCount": len(records), "published": False}, indent=2))
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--base-bundle", type=Path, required=True)
+    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--bundle-version", required=True)
+    parser.add_argument("--installer-cli", type=Path, required=True,
+                        help="absolute path to the native Linux platform-installer CLI")
+    parser.add_argument("--repo", action="append", required=True,
+                        help="approved, already configured RED OS 8 repository ID; repeat as needed")
+    args = parser.parse_args()
+    try:
+        acquire(args)
+    except (ValueError, OSError, KeyError) as error:
+        print("RED OS 8 acquisition blocked: %s" % error, file=sys.stderr)
+        return 2
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
 
 @@END
 @@PORTABLE {"path":"ansible-core/tools/bootstrap_execution_runtime.sh","mode":420,"size":2743,"sha256":"a56043237772dd3794eb46a471083e4838a2188bb1d8128c0120ed40a3ead79d","index":0,"count":1,"encoding":"utf-8","payloadBytes":2743}
