@@ -108,7 +108,9 @@ class Service01BContractTests(unittest.TestCase):
         self.assertNotIn("'process.roles': 'broker,controller'", member)
         self.assertIn("Добавление динамической проекции кворума при явном выборе", member)
         self.assertIn("Добавление статической проекции кворума при явном выборе", member)
-        self.assertIn("--bootstrap-controller", verify)
+        self.assertIn("verify_quorum.yml", verify)
+        quorum = (ROLE / "tasks" / "verify_quorum.yml").read_text(encoding="utf-8")
+        self.assertIn("--bootstrap-controller", quorum)
 
     def test_kafka_cli_diagnostics_consume_runtime_projection(self):
         verify = (ROLE / "tasks" / "verify.yml").read_text(encoding="utf-8")

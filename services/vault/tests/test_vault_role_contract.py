@@ -434,6 +434,10 @@ class VaultRoleContractTests(unittest.TestCase):
             self.assertEqual(first, "# {{ platform_vault_name }}-managed: {{ platform_vault_deployment_id }}/{{ vault_member.id }}")
 
     def test_artifact_source_gate_matches_existing_service_mode_policy(self):
+        from ansible.parsing.dataloader import DataLoader
+        from ansible.playbook.conditional import Conditional
+        from ansible.template import Templar
+
         vault = yaml.safe_load((ROLE / "tasks/main.yml").read_text(encoding="utf-8"))
         vault_gate = next(task for task in vault if task["name"].startswith("Сериализация Vault применяется к установщику и автономным вызывающим программам Ansible"))
         vault_gate = next(task for task in vault_gate["block"]
@@ -452,13 +456,38 @@ class VaultRoleContractTests(unittest.TestCase):
             peer_gate = next(task for task in tasks if task.get("ansible.builtin.include_role", {}).get("name") == "platform.core.artifact_source_gate")
             service = path.relative_to(ROOT).parts[1]
             self.assertIn(expected, peer_gate["when"], path.as_posix())
-            self.assertIn(f"not (platform_{service}_verify_only | bool)", peer_gate["when"], path.as_posix())
-            if service == "keepalived":
-                self.assertIn("platform_keepalived_lifecycle_phase == 'prepare'", peer_gate["when"])
+            loader = DataLoader()
+            phases = ("full", "schema_registry") if service == "kafka" else (
+                ("prepare", "activate") if service == "keepalived" else ("full",))
+            for source in ("absent", "resolved", "authority"):
+                for verify_only in (False, True):
+                    for phase in phases:
+                        variables = {f"platform_{service}_verify_only": verify_only,
+                                     "platform_kafka_phase": phase,
+                                     "platform_keepalived_lifecycle_phase": phase}
+                        if source == "resolved":
+                            variables["platform_resolved_artifact_sources"] = {}
+                        if source == "authority":
+                            variables["platform_artifact_source_authority_active"] = True
+                        check = Conditional(loader=loader)
+                        check.when = peer_gate["when"]
+                        allowed = source != "absent" and not verify_only and phase not in ("schema_registry", "activate")
+                        with self.subTest(service=service, source=source, verify_only=verify_only, phase=phase):
+                            self.assertEqual(allowed, check.evaluate_conditional(
+                                Templar(loader=loader, variables=variables), variables))
 
         provision = yaml.safe_load((ROLE / "tasks/provision.yml").read_text(encoding="utf-8"))
-        package = next(task for task in provision if task["name"].startswith("Install pinned Vault"))
+        package = next(task for task in provision
+                       if task.get("ansible.builtin.package", {}).get("name") == "vault")
         self.assertIn("platform_resolved_artifact_sources is not defined", package["when"])
+        for source, allowed in ((None, True), ("REPOSITORY", True), ("OFFLINE", False), ("BLOCKED", False)):
+            variables = {} if source is None else {
+                "platform_resolved_artifact_sources": {"vault-runtime": {"source": source}}}
+            check = Conditional(loader=loader)
+            check.when = [package["when"]]
+            with self.subTest(vault_package_source=source):
+                self.assertEqual(allowed, check.evaluate_conditional(
+                    Templar(loader=loader, variables=variables), variables))
 
     def test_preflight_checks_each_owned_path_component_before_data_reads(self):
         preflight = yaml.safe_load((ROLE / "tasks/preflight.yml").read_text(encoding="utf-8"))

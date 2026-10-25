@@ -32,6 +32,7 @@ class KafkaUnitOwnershipRuntimeTests(unittest.TestCase):
                         unit.write_text(header + "\n[Unit]\n", encoding="utf-8")
                     play = [{"hosts": "localhost", "connection": "local", "gather_facts": False,
                              "vars": {"platform_kafka_verify_only": False,
+                                      "platform_kafka_phase": "full",
                                       "_platform_kafka_local_instances": [{"id": scenario,
                                           "systemd_unit_destination": str(unit),
                                           "systemd_unit_ownership_marker": marker}]},

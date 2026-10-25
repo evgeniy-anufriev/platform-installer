@@ -1,4 +1,6 @@
 import json
+import base64
+import hashlib
 import multiprocessing
 import os
 import shutil
@@ -23,6 +25,7 @@ from execution_lifecycle import Journal, digest
 import execution_controller
 import execution_protocol
 import execution_secret_lease
+import execution_target_trust
 from ansible_collections.platform.core.plugins.callback import execution_events_json
 from ansible_collections.platform.core.plugins.module_utils.schema_validation import SchemaValidator
 
@@ -61,6 +64,10 @@ class _Task(object):
         self.no_log = no_log
         self._name = name
         self.name = name
+        self._ds = {"name": name}
+
+    def get_ds(self):
+        return self._ds
 
     def get_name(self):
         return self._name
@@ -514,13 +521,17 @@ class ControllerTaskStreamAcceptanceTests(unittest.TestCase):
     def runtime(self, tasks, callback_fault=None):
         self.assertEqual(0, os.geteuid(), "acceptance requires root-owned canonical journals")
         self.assertIsNotNone(shutil.which("ansible-playbook"), "ansible-playbook prerequisite missing")
-        run_id = "exec-obs-01d-%s" % uuid.uuid4().hex
+        run_id = "installer-%s" % uuid.uuid4().hex
         journal = Journal(execution_lifecycle.EXECUTION_STATE_ROOT, run_id)
         release = tempfile.mkdtemp(prefix="exec-obs-01d-release-", dir="/var/tmp")
         controller_lock = None
         try:
-            operation = {"operationId": "verify:qa", "phaseId": "verify", "operation": "SERVICE_VERIFY", "serviceType": "kafka", "serviceDeployment": "qa-only"}
-            manifest = {"projectIdentity": "exec-obs-01d-qa", "planFingerprint": "sha256:" + "a" * 64, "runtimeRelease": {"bundleDigest": "sha256:" + "c" * 64}, "operations": [operation]}
+            operation = {"operationId": "verify:qa", "phaseId": "verify", "operation": "SERVICE_VERIFY", "serviceType": "kafka", "serviceDeployment": "qa-only", "targets": ["node1", "node2"]}
+            connections = {host: {"address": address, "port": 22, "mode": "ssh", "unsupportedOptions": False}
+                           for host, address in (("node1", "192.0.2.1"), ("node2", "192.0.2.2"))}
+            manifest = {"projectIdentity": "exec-obs-01d-qa", "projectRevision": "sha256:" + "b" * 64,
+                        "planFingerprint": "sha256:" + "a" * 64, "runtimeRelease": {"bundleDigest": "sha256:" + "c" * 64},
+                        "targetConnections": connections, "operations": [operation]}
             metadata = {"runId": run_id, "projectIdentity": manifest["projectIdentity"], "planFingerprint": manifest["planFingerprint"], "manifestDigest": digest(manifest), "runtimeRelease": manifest["runtimeRelease"]["bundleDigest"], "unit": "platform-installer-run-%s.service" % run_id}
             journal.initialize(metadata)
             # Own the run exactly as the real controller does. Concurrent
@@ -530,10 +541,20 @@ class ControllerTaskStreamAcceptanceTests(unittest.TestCase):
             manifest_path = Path(journal.directory, "manifest.json")
             manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
             os.chmod(manifest_path, 0o600)
+            kind = 'ssh-ed25519'
+            public_key = base64.b64encode(len(kind).to_bytes(4, 'big') + kind.encode() + b'a' * 32).decode()
+            execution_target_trust.stage(journal.root, {
+                'stagingId': run_id, 'projectIdentity': manifest['projectIdentity'],
+                'projectRevision': manifest['projectRevision'], 'planFingerprint': manifest['planFingerprint'],
+                'runtimeRelease': manifest['runtimeRelease'], 'manifestDigest': digest(manifest),
+                'approvals': [dict(hostId=host, address=value['address'], port=value['port'],
+                                   keyType=kind, publicKey=public_key) for host, value in connections.items()],
+            })
             inventory = Path(journal.directory, "project", "inventory", "hosts.yml")
             inventory.parent.mkdir(parents=True)
-            inventory.write_text("all:\n  hosts:\n    node1: {ansible_connection: local}\n    node2: {ansible_connection: local}\n", encoding="utf-8")
-            projection = Path(journal.directory, "runtime-projection.json")
+            inventory.write_text("all:\n  hosts:\n    node1: {ansible_connection: local, ansible_host: 192.0.2.1}\n    node2: {ansible_connection: local, ansible_host: 192.0.2.2}\n", encoding="utf-8")
+            projection_id = hashlib.sha256(operation['operationId'].encode('utf-8')).hexdigest()
+            projection = Path(journal.directory, '.runtime-projection-' + projection_id + '.json')
             projection.write_text("{}", encoding="utf-8")
             os.chmod(projection, 0o600)
             core = Path(release, "ansible-core")
@@ -613,8 +634,12 @@ class ControllerTaskStreamAcceptanceTests(unittest.TestCase):
                 state, code = "FAILED", str(error)
             self.assertFalse(expired.is_set(), "real Ansible acceptance exceeded 45s")
             self.assertEqual(expected, state)
+            before_terminal = journal.events()
             result = journal.terminal(state, code, "QA trusted operation completed")
+            after_terminal = journal.events()
+            self.assertEqual(len(before_terminal) + 1, len(after_terminal))
             self.assertEqual(result, journal.terminal(state, code, "QA duplicate completion"))
+            self.assertEqual(after_terminal, journal.events())
         finally:
             timer.cancel()
             timer.join()
@@ -622,8 +647,12 @@ class ControllerTaskStreamAcceptanceTests(unittest.TestCase):
         self.assertEqual(list(range(1, len(events) + 1)), [event["sequence"] for event in events])
         # Existing lifecycle transitions use DIAGNOSTIC, including terminal
         # transitions; do not invent a RUN_COMPLETED production contract here.
-        terminals = [event for event in events if event["eventType"] == "DIAGNOSTIC" and event["status"] in ("SUCCESS", "FAILED", "CANCELLED", "INTERRUPTED")]
+        # An operation failure also publishes a FAILED diagnostic. Only the
+        # lifecycle completion appended above is the terminal transition.
+        terminals = events[len(before_terminal):]
         self.assertEqual(1, len(terminals))
+        self.assertEqual("DIAGNOSTIC", terminals[0]["eventType"])
+        self.assertEqual("QA trusted operation completed", terminals[0]["safeMessage"])
         self.assertEqual(events[-1], terminals[0])
         self.assertEqual("SUCCESS" if expected == "SUCCEEDED" else "FAILED", terminals[0]["status"])
         self.assertEqual(expected, journal.status()["state"])
@@ -636,8 +665,23 @@ class ControllerTaskStreamAcceptanceTests(unittest.TestCase):
     def assert_no_payload(self, journal, *sentinels):
         serialized = Path(journal.events_path).read_text(encoding="utf-8")
         serialized += Path(journal.result_path).read_text(encoding="utf-8")
-        for forbidden in sentinels + ('"_result"', '"args"', '"vars"', '"stdout"', '"stderr"', '"diff"', '"invocation"', '"cmd"'):
+        for forbidden in sentinels:
             self.assertNotIn(forbidden, serialized)
+        forbidden_keys = {'_result', 'args', 'vars', 'stdout', 'stderr', 'diff', 'invocation', 'cmd'}
+
+        def assert_safe_keys(value):
+            if isinstance(value, dict):
+                self.assertFalse(forbidden_keys.intersection(value))
+                for child in value.values():
+                    assert_safe_keys(child)
+            elif isinstance(value, list):
+                for child in value:
+                    assert_safe_keys(child)
+
+        # redaction.fields legitimately names removed fields; their payload
+        # keys and the synthetic secret sentinels must never be persisted.
+        assert_safe_keys(journal.events())
+        assert_safe_keys(json.loads(Path(journal.result_path).read_text(encoding='utf-8')))
 
     def test_real_ansible_callback_streams_multi_host_results_through_controller(self):
         tasks = "    - name: Safe multi-host task\n      ansible.builtin.debug:\n        msg: safe\n    - name: Safe skipped task\n      ansible.builtin.debug:\n        msg: skipped\n      when: false\n    - name: Safe changed result\n      ansible.builtin.debug:\n        msg: safe\n      changed_when: true\n"
@@ -679,14 +723,14 @@ class ControllerTaskStreamAcceptanceTests(unittest.TestCase):
                     self.assertEqual({task_status}, {event["status"] for event in results})
                     for event in details:
                         self.assertEqual(starts[0]["task"]["uuid"], event["task"]["uuid"])
-                        self.assertEqual("Скрытая задача", event["task"]["name"])
+                        self.assertEqual("{{ qa_private_name }}", event["task"]["name"])
                         self.assertEqual({"applied": True, "fields": []}, event["redaction"])
                         self.assertIn(event["safeMessage"], ("Ansible task started", "Ansible task completed"))
                     for event in results:
                         self.assertGreaterEqual(event["elapsedMilliseconds"], 0)
                         if expected == "FAILED":
-                            self.assertEqual({"code": "ANSIBLE_TASK_FAILED", "summary": "Ansible task failed"}, event["error"])
-                    self.assert_no_payload(journal, "qa-no-log-rendered-name", "qa_private_name", "qa-no-log-private-payload")
+                            self.assertEqual({"code": "ANSIBLE_FAILURE_REDACTED", "summary": "Ansible task failed; result hidden by no_log"}, event["error"])
+                    self.assert_no_payload(journal, "qa-no-log-rendered-name", "qa-no-log-private-payload")
 
     def test_real_task_failure_preserves_safe_failed_result_and_one_terminal(self):
         tasks = "    - name: Safe expected failure\n      ansible.builtin.fail:\n        msg: qa-private-failure-payload\n"
@@ -698,7 +742,7 @@ class ControllerTaskStreamAcceptanceTests(unittest.TestCase):
             for event in results:
                 self.assertEqual("FAILED", event["status"])
                 self.assertEqual("Safe expected failure", event["task"]["name"])
-                self.assertEqual({"code": "ANSIBLE_TASK_FAILED", "summary": "Ansible task failed"}, event["error"])
+                self.assertEqual({"code": "ANSIBLE_TASK_FAILED", "summary": "Ansible task failed; untrusted result text withheld"}, event["error"])
             self.assertFalse(any(event["eventType"] == "ACTION_COMPLETED" for event in events))
             self.assert_no_payload(journal, "qa-private-failure-payload")
 

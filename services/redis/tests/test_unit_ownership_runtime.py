@@ -83,6 +83,7 @@ class RedisUnitOwnershipRuntimeTests(unittest.TestCase):
                         tasks[2]["ansible.builtin.slurp"]["src"] = str(unit)
                         play = [{"hosts": "localhost", "connection": "local", "gather_facts": False,
                                  "vars": {"platform_redis_deployment_id": "qa",
+                                          "platform_redis_name": "platform-redis",
                                           "_platform_redis_local_instances": [{"id": "member-1",
                                               "instance_name": "qa-1", "roles": ["redis", "sentinel"]}]},
                                  "tasks": tasks}]

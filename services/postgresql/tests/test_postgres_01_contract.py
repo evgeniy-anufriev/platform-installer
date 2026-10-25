@@ -12,7 +12,10 @@ ROLE = (
 
 class PostgreSQLHaLifecycleContractTests(unittest.TestCase):
     def setUp(self):
-        self.main = (ROLE / "tasks/main.yml").read_text(encoding="utf-8")
+        self.entrypoint = (ROLE / "tasks/main.yml").read_text(encoding="utf-8")
+        reconcile = (ROLE / "tasks/reconcile.yml").read_text(encoding="utf-8")
+        # Reconciliation moved out of main; keep the contract's execution order.
+        self.main = self.entrypoint.rstrip() + "\n\n" + reconcile.split("---\n", 1)[-1]
         self.resolve_packages = (ROLE / "tasks/resolve_packages.yml").read_text(encoding="utf-8")
         self.failover = (ROLE / "tasks/pg_auto_failover.yml").read_text(
             encoding="utf-8"
@@ -20,6 +23,13 @@ class PostgreSQLHaLifecycleContractTests(unittest.TestCase):
         self.hba = (ROLE / "templates/pg_hba.conf.j2").read_text(encoding="utf-8")
         self.tls = (ROLE / "tasks/resolve_tls.yml").read_text(encoding="utf-8")
         self.handlers = (ROLE / "handlers/main.yml").read_text(encoding="utf-8")
+
+    def test_reconciliation_contract_is_reached_by_the_guarded_entrypoint(self):
+        dispatch = next(task for task in yaml.safe_load(self.entrypoint)
+                        if isinstance(task.get("ansible.builtin.include_tasks"), dict)
+                        if task["ansible.builtin.include_tasks"].get("file") == "reconcile.yml")
+        self.assertIn("platform_postgresql_verify_only | bool", dispatch["when"])
+        self.assertIn("platform_postgresql_clean_install | bool and platform_postgresql_clear_only | bool", dispatch["when"])
 
     def test_default_data_directory_is_nested_under_deployment_postgres(self):
         defaults = (ROLE / "defaults/main.yml").read_text(encoding="utf-8")
@@ -185,7 +195,11 @@ class PostgreSQLHaLifecycleContractTests(unittest.TestCase):
     def test_tls_material_is_reloaded_by_the_pg_autoctl_owned_postgres_process(self):
         install_tls = (ROLE / "tasks/install_tls.yml").read_text(encoding="utf-8")
         self.assertIn("notify: Перезагрузить материал PostgreSQL TLS", install_tls)
-        self.assertIn("pg_ctl, reload, -D", self.handlers)
+        reload_handler = next(task for task in yaml.safe_load(self.handlers)
+                              if task["name"] == "Перезагрузить материал PostgreSQL TLS")
+        arguments = reload_handler["ansible.builtin.command"]["argv"]
+        self.assertTrue(arguments[0].endswith("/pg_ctl"))
+        self.assertEqual(["reload", "-D", "{{ platform_postgresql_data_directory }}"], arguments[1:])
         self.assertLess(
             self.main.index("Применить измененный материал PostgreSQL TLS перед проверками учетных данных TLS"),
             self.main.index("Проверка учетных данных для мониторинга данных через TLS"),

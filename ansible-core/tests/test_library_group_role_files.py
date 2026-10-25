@@ -39,15 +39,24 @@ class LibraryGroupRoleFilesTests(unittest.TestCase):
             with self.subTest(library=library), tempfile.TemporaryDirectory() as directory:
                 defaults = ROOT / f'examples/{library}/library-packages/{library}/1.0.0/roles/library_{library}/defaults/main.yml'
                 play = Path(directory) / 'roles.yml'
+                applications = {name: {} for name in (
+                    'data-manager', 'hmi-backend', 'hmi-frontend-para', 'alarm-view-service')}
+                checks = [
+                    'parameters.IDENTITY_GROUPS[0].name == ' + json.dumps(group),
+                    'parameters.IDENTITY_GROUPS[0].roles_file.realm_roles is sequence',
+                    'parameters.IDENTITY_GROUPS[0].roles_file.client_roles is mapping']
+                if library == 'sdku':
+                    checks += [json.dumps(name + '-sample') +
+                               ' in parameters.IDENTITY_GROUPS[0].roles_file.client_roles'
+                               for name in applications]
                 play.write_text(json.dumps([dict(hosts='localhost', connection='local', gather_facts=False,
                     vars=dict(library_instance_id='sample', platform_project_root=str(ROOT / 'examples' / library),
+                              platform_desired_state={'applicationLibraryDeployments': {
+                                  'sample': {'applications': applications if library == 'sdku' else {}}}},
                               parameters_definition=yaml.safe_load(defaults.read_text())['platform_library_definition']['defaults']['parameters']),
                     tasks=[
                         {'ansible.builtin.set_fact': {'parameters': '{{ parameters_definition }}'}},
-                        {'ansible.builtin.assert': {'that': [
-                            'parameters.IDENTITY_GROUPS[0].name == ' + json.dumps(group),
-                            'parameters.IDENTITY_GROUPS[0].roles_file.realm_roles is sequence',
-                            'parameters.IDENTITY_GROUPS[0].roles_file.client_roles is mapping']}},
+                        {'ansible.builtin.assert': {'that': checks}},
                         {'ansible.builtin.set_fact': {'parameters': "{{ parameters | combine({'IDENTITY_GROUPS': []}, recursive=true, list_merge='replace') }}"}},
                         {'ansible.builtin.assert': {'that': ['parameters.IDENTITY_GROUPS == []']}}
                     ])]), encoding='utf-8')

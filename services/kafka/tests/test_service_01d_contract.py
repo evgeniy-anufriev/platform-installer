@@ -61,9 +61,11 @@ class Service01DContractTests(unittest.TestCase):
 
     def test_verify_requires_controller_membership_and_broker_registration(self):
         verify = (ROLE / "tasks" / "verify.yml").read_text(encoding="utf-8")
+        self.assertIn("verify_quorum.yml", verify)
+        quorum = (ROLE / "tasks" / "verify_quorum.yml").read_text(encoding="utf-8")
         ssl_verify = (ROLE / "tasks" / "verify_ssl_listener.yml").read_text(encoding="utf-8")
-        self.assertIn("Подтверждение лидера кворума и членства контроллера Kafka", verify)
-        self.assertIn("LeaderId", verify)
+        self.assertIn("Подтверждение лидера кворума и членства контроллера Kafka", quorum)
+        self.assertIn("LeaderId", quorum)
         self.assertIn("kafka-broker-api-versions.sh", verify)
         self.assertIn("Выбрать неизолированные диагностические заголовки брокера Kafka, доступные только для чтения", verify)
         self.assertIn("Подтвердить, что брокеры Kafka зарегистрированы и не защищены", verify)

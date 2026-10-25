@@ -1,4 +1,5 @@
 from pathlib import Path
+import os
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import shutil
 import subprocess
@@ -12,6 +13,9 @@ import yaml
 ROLE = Path(__file__).resolve().parents[1] / "ansible_collections/platform/haproxy/roles/haproxy"
 
 
+@unittest.skipUnless(getattr(os, 'geteuid', lambda: -1)() == 0,
+                     'Isolated root-owned HAProxy fixtures require root')
+@unittest.skipUnless(shutil.which('ansible-playbook'), 'Ansible runtime required')
 class PartialOptimizationTests(unittest.TestCase):
     def test_http_backend_is_not_probed_before_candidate_publication(self):
         class Handler(BaseHTTPRequestHandler):
@@ -106,9 +110,14 @@ class PartialOptimizationTests(unittest.TestCase):
                          "platform_haproxy_conf_directory": str(active / "conf.d"),
                          "platform_haproxy_application_backends": [{"configFileName": source}],
                          "platform_haproxy_managed_application_backend_files": [source, other],
-                         "platform_haproxy_service_name": "haproxy",
+                         "platform_haproxy_service_name": "qa-" + root.name,
                          "_platform_haproxy_backend_archive": {"changed": False}}
-            reload_check = dict(start[-1], check_mode=True, register="_qa_reload")
+            reload_task = start[-1]
+            self.assertEqual({"name": "{{ platform_haproxy_service_name }}", "state": "reloaded"},
+                             reload_task["ansible.builtin.systemd"])
+            # Evaluate the production conditions without depending on an installed service.
+            reload_check = {"ansible.builtin.assert": {"that": reload_task["when"]}}
+            start[-1] = dict(reload_task, register="_qa_reload")
             checks = [{"ansible.builtin.assert": {"that": [
                 "not platform_haproxy_tls_material_changed",
                 "not platform_haproxy_active_artifacts_changed"]}}]
@@ -116,9 +125,10 @@ class PartialOptimizationTests(unittest.TestCase):
                      "vars": variables, "tasks": prepare + publish},
                     {"hosts": "localhost", "connection": "local", "gather_facts": False,
                      "vars": variables, "tasks": [reload_check,
-                       {"ansible.builtin.assert": {"that": ["_qa_reload.changed"]}}]},
+                       {"ansible.builtin.assert": {"that": ["platform_haproxy_active_artifacts_changed"]}}]},
                     {"hosts": "localhost", "connection": "local", "gather_facts": False,
-                     "vars": variables, "tasks": publish + checks + start}]
+                     "vars": variables, "tasks": publish + checks + start + [
+                       {"ansible.builtin.assert": {"that": ["_qa_reload is skipped"]}}]}]
             path = root / "test.yml"
             path.write_text(yaml.safe_dump(play))
             # Fixtures use root-owned production copy tasks, in a disposable directory only.

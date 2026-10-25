@@ -71,11 +71,12 @@ class CallbackModule(CallbackBase):
         if no_log:
             # Task labels are useful progress metadata, but a templated label
             # could interpolate secret material. Use only a static source
-            # label for no_log tasks; never evaluate its template expression.
-            value = getattr(task, "name", None)
+            # label for no_log tasks; show template expressions literally.
+            # Result tasks may already have a rendered name. The original
+            # data source retains the expression without its substituted value.
+            source = task.get_ds()
+            value = source.get("name") if isinstance(source, dict) else None
             if not isinstance(value, str):
-                return "Скрытая задача"
-            if any(marker in value for marker in ("{{", "{%", "{#")):
                 return "Скрытая задача"
             return value
         try:

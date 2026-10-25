@@ -23,7 +23,7 @@ class PostgreSQLUnitOwnershipRuntimeTests(unittest.TestCase):
                  "Отказаться от замены неуправляемой службы systemd PostgreSQL"]
         checks = [next(task for task in source if task.get("name") == name) for name in names]
         template = (ROLE / "templates/postgresql.service.j2").read_text(encoding="utf-8")
-        owned = template.replace("{{ platform_postgresql_deployment_id }}", "qa-postgresql").replace(
+        owned = template.replace("{{ platform_postgresql_name }}", "platform-postgresql").replace("{{ platform_postgresql_deployment_id }}", "qa-postgresql").replace(
             "{{ (_platform_postgresql_local_members | first).id }}", "postgresql-1")
         marker = "# platform-postgresql-managed: qa-postgresql/postgresql-1"
         scenarios = [("missing", None, 0), ("current-template", owned, 0),
@@ -44,6 +44,7 @@ class PostgreSQLUnitOwnershipRuntimeTests(unittest.TestCase):
                     tasks[2]["ansible.builtin.slurp"]["src"] = str(unit)
                     play = [{"hosts": "localhost", "connection": "local", "gather_facts": False,
                              "vars": {"platform_postgresql_verify_only": False,
+                                      "platform_postgresql_name": "platform-postgresql",
                                       "platform_postgresql_deployment_id": "qa-postgresql",
                                       "_platform_postgresql_local_members": [{"id": "postgresql-1"}]},
                              "tasks": tasks}]
