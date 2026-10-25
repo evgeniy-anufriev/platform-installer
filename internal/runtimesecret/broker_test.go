@@ -331,9 +331,9 @@ func TestOutputEncryptionPasswordIsProjectBoundTransientAndClearedAfterUse(t *te
 	if err := broker.WithOutputEncryptionPassword(Binding{Root: binding.Root, ID: "other"}, func([]byte) error { t.Fatal("cross-project password access"); return nil }); err == nil {
 		t.Fatal("cross-project password access accepted")
 	}
-	now = now.Add(119 * time.Minute)
+	now = now.Add(239 * time.Minute)
 	if err := broker.WithOutputEncryptionPassword(binding, func([]byte) error { return nil }); err != nil {
-		t.Fatalf("output password expired before two-hour TTL: %v", err)
+		t.Fatalf("output password expired before four-hour TTL: %v", err)
 	}
 	now = now.Add(time.Minute)
 	if err := broker.WithOutputEncryptionPassword(binding, func([]byte) error { t.Fatal("expired password access"); return nil }); err == nil {
@@ -342,11 +342,11 @@ func TestOutputEncryptionPasswordIsProjectBoundTransientAndClearedAfterUse(t *te
 	broker.Clear()
 }
 
-func TestBrokerDefaultCredentialAndSecretTTLIsTwoHours(t *testing.T) {
+func TestBrokerDefaultCredentialAndSecretTTLIsFourHours(t *testing.T) {
 	now := time.Now()
 	broker := NewBroker(WithClock(func() time.Time { return now }))
-	if broker.ttl != 2*time.Hour {
-		t.Fatalf("broker TTL=%s, want 2h", broker.ttl)
+	if broker.ttl != 4*time.Hour {
+		t.Fatalf("broker TTL=%s, want 4h", broker.ttl)
 	}
 	binding := Binding{Root: t.TempDir(), ID: "project-ttl"}
 	if _, err := broker.Set(binding, Input{Username: "installer", SSHMode: SSHPassword, SSHPassword: "test-only", ElevationMode: ElevationNone}); err != nil {
@@ -358,10 +358,10 @@ func TestBrokerDefaultCredentialAndSecretTTLIsTwoHours(t *testing.T) {
 	if err := broker.SetRuntimeSecretValues(binding, map[string]string{"redis-password": "test-only"}); err != nil {
 		t.Fatal(err)
 	}
-	now = now.Add(119 * time.Minute)
+	now = now.Add(239 * time.Minute)
 	if err := broker.WithTargetCredential(binding, func(value TargetCredential) error {
 		if len(value.PKIStorePassword) == 0 || len(value.RuntimeSecretValues["redis-password"]) == 0 {
-			t.Fatal("session secrets expired before two hours")
+			t.Fatal("session secrets expired before four hours")
 		}
 		return nil
 	}); err != nil {
@@ -369,7 +369,7 @@ func TestBrokerDefaultCredentialAndSecretTTLIsTwoHours(t *testing.T) {
 	}
 	now = now.Add(time.Minute)
 	if err := broker.WithTargetCredential(binding, func(TargetCredential) error { t.Fatal("expired credential access"); return nil }); err == nil {
-		t.Fatal("credential remained accessible at two hours")
+		t.Fatal("credential remained accessible at four hours")
 	}
 }
 
@@ -413,7 +413,9 @@ func TestBrokerReadsRegularUnencryptedPEMKeyOnly(t *testing.T) {
 	if err := os.WriteFile(path, pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der}), 0600); err != nil {
 		t.Fatal(err)
 	}
-	broker := NewBroker()
+	now := time.Now()
+	broker := NewBroker(WithClock(func() time.Time { return now }))
+	defer broker.Clear()
 	binding := Binding{Root: `C:\projects\one`, ID: "project-one"}
 	if got, err := broker.Set(binding, Input{Username: "installer", SSHMode: SSHPrivateKey, PrivateKeyPath: path, ElevationMode: ElevationNone}); err != nil || got.SSHMode != SSHPrivateKey {
 		t.Fatalf("key status=%#v err=%v", got, err)
@@ -431,11 +433,42 @@ func TestBrokerReadsRegularUnencryptedPEMKeyOnly(t *testing.T) {
 	if _, err := broker.Set(binding, Input{Username: "installer", SSHMode: SSHPrivateKey, PrivateKeyPath: t.TempDir(), ElevationMode: ElevationNone}); err == nil || err.Error() != "SESSION_PRIVATE_KEY_NOT_REGULAR" {
 		t.Fatalf("directory error=%v", err)
 	}
+	now = now.Add(4*time.Hour - time.Second)
+	if _, err := broker.CurrentExecutionIdentity(binding); err != nil {
+		t.Fatalf("private key expired before four hours: %v", err)
+	}
+	now = now.Add(time.Second)
+	if _, err := broker.CurrentExecutionIdentity(binding); err == nil {
+		t.Fatal("private key remained accessible at four hours")
+	}
 	if _, err := broker.Set(binding, Input{Username: "installer", SSHMode: SSHPassword, SSHPassword: "runtime-only"}); err != nil {
 		t.Fatal(err)
 	}
 	if identity, err := broker.CurrentExecutionIdentity(binding); err != nil || identity.Mode != SSHPassword || identity.Path != "" || identity.FileInfo != nil {
 		t.Fatal("password identity unavailable or retained key metadata")
+	}
+}
+
+func TestPendingRuntimeSecretsDefaultExpiryIsFourHours(t *testing.T) {
+	now := time.Now()
+	broker := NewBroker(WithClock(func() time.Time { return now }))
+	defer broker.Clear()
+	binding := Binding{Root: t.TempDir(), ID: "pending-ttl"}
+	password := RuntimeSecretInput{RequirementRef: "service-password", Purpose: "SERVICE_PASSWORD", ServiceDeployment: "service-one"}
+	token := RuntimeSecretInput{RequirementRef: "service-token", Purpose: "SERVICE_ADMIN_TOKEN", ServiceDeployment: "service-one"}
+	if err := broker.SetPendingRuntimeSecretValuesForRequirements(binding, []string{password.RequirementRef}, map[string]string{password.RequirementRef: "synthetic-password"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := broker.SetPendingServiceSecretInput(binding, token.ServiceDeployment, token.Purpose, []byte("synthetic-token"), nil); err != nil {
+		t.Fatal(err)
+	}
+	now = now.Add(4*time.Hour - time.Second)
+	if !broker.ServiceSecretsPresent(binding, []RuntimeSecretInput{password, token}) {
+		t.Fatal("pending secrets expired before four hours")
+	}
+	now = now.Add(time.Second)
+	if broker.ServiceSecretsPresent(binding, []RuntimeSecretInput{password}) || broker.ServiceSecretsPresent(binding, []RuntimeSecretInput{token}) {
+		t.Fatal("pending secrets remained present at four hours")
 	}
 }
 

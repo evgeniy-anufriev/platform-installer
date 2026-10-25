@@ -31,6 +31,11 @@
       "minimum": 1,
       "type": "integer"
     },
+    "dataRoot": {
+      "maxLength": 255,
+      "minLength": 1,
+      "type": "string"
+    },
     "tlsProfile": {
       "minLength": 1,
       "type": "string"

@@ -2,6 +2,7 @@
 platform_docker_mode: create-user
 platform_docker_name: "{{ (platform_name_prefix | default('') ~ '-') if (platform_name_prefix | default('')) else '' }}docker"
 platform_docker_account_name: "{{ (platform_name_prefix | default('') ~ '-') if (platform_name_prefix | default('')) else '' }}docker"
+platform_docker_data_root: "/home/{{ platform_docker_account_name }}/.local/share/docker"
 platform_docker_account_credential:
   passwordSecretRef: ''
 platform_docker_secret_files: {}

@@ -10501,7 +10501,7 @@ fi
 `
 
 @@END
-@@PORTABLE {"path":"internal/executionnode/runtime_protocol.go","mode":420,"size":63464,"sha256":"275e4befc24f4d10a75dea9ac3f5e6ce1a11c0036579ac39f439f32ee098f8b5","index":0,"count":2,"encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"internal/executionnode/runtime_protocol.go","mode":420,"size":63464,"sha256":"560e6f8e0d0606d7f456bd9eae0fc163bd2ec1044c96a20860d44e623be7d6bd","index":0,"count":2,"encoding":"utf-8","payloadBytes":48000}
 package executionnode
 
 // Typed access to the fixed UI-BE-04C runtime protocol.  This is transport
@@ -10740,8 +10740,8 @@ func validSHA256(value string) bool {
 const ExecutionEventPageLimit = 256
 
 // Match the bounded Execution Node journal. The remote lifecycle reserves its
-// final 256 slots for critical events, but permits up to 16384 total records.
-const maxObservedExecutionEvents = 16384
+// final 256 slots for critical events, but permits up to 32768 total records.
+const maxObservedExecutionEvents = 32768
 
 const maxDecodedExecutionEventBytes = 64 * 1024
 const maxExecutionProtocolResponseBytes = 16 * 1024 * 1024
@@ -11499,7 +11499,7 @@ func validSHA256Fingerprint(value string) bool {
 	for _, character := range value[len("sha256:"):] {
 		
 @@END
-@@PORTABLE {"path":"internal/executionnode/runtime_protocol.go","mode":420,"size":63464,"sha256":"275e4befc24f4d10a75dea9ac3f5e6ce1a11c0036579ac39f439f32ee098f8b5","index":1,"count":2,"encoding":"utf-8","payloadBytes":15464}
+@@PORTABLE {"path":"internal/executionnode/runtime_protocol.go","mode":420,"size":63464,"sha256":"560e6f8e0d0606d7f456bd9eae0fc163bd2ec1044c96a20860d44e623be7d6bd","index":1,"count":2,"encoding":"utf-8","payloadBytes":15464}
 if (character < '0' || character > '9') && (character < 'a' || character > 'f') {
 			return false
 		}
@@ -25261,7 +25261,7 @@ func ReadLocks(ctx context.Context, projectRoot string, _ executionbundle.Verifi
 }
 
 @@END
-@@PORTABLE {"path":"internal/runtimesecret/broker.go","mode":420,"size":43420,"sha256":"556cad27ed58743f4e17ae193f7d3af550164f0ae26325f55b1e19571464d023","index":0,"count":1,"encoding":"utf-8","payloadBytes":43420}
+@@PORTABLE {"path":"internal/runtimesecret/broker.go","mode":420,"size":43420,"sha256":"29f399488de3f794b34701b3d70182fd220040cce71ce24da5f8826f9eb032ac","index":0,"count":1,"encoding":"utf-8","payloadBytes":43420}
 // Package runtimesecret holds short-lived, application-local target session
 // credentials. It deliberately has no persistence or transport capability.
 package runtimesecret
@@ -25851,7 +25851,7 @@ func WithTTL(ttl time.Duration) Option      { return func(b *Broker) { b.ttl = t
 func WithClock(now func() time.Time) Option { return func(b *Broker) { b.now = now } }
 
 func NewBroker(options ...Option) *Broker {
-	b := &Broker{ttl: 2 * time.Hour, now: time.Now}
+	b := &Broker{ttl: 4 * time.Hour, now: time.Now}
 	for _, option := range options {
 		option(b)
 	}
@@ -32239,11 +32239,12 @@ tags: [docker, rootless]
 dependencies: {}
 
 @@END
-@@PORTABLE {"path":"services/docker/ansible_collections/platform/docker/roles/docker_rootless/defaults/main.yml","mode":420,"size":875,"sha256":"a9c2ea722eb2389e0eea3b05f6605a4813dcce248426270071c6c19d5ed22493","index":0,"count":1,"encoding":"utf-8","payloadBytes":875}
+@@PORTABLE {"path":"services/docker/ansible_collections/platform/docker/roles/docker_rootless/defaults/main.yml","mode":420,"size":965,"sha256":"a5ee26e5d012ddfc062fac977378fa8956205ce42fa525a1420f3182835092e7","index":0,"count":1,"encoding":"utf-8","payloadBytes":965}
 ---
 platform_docker_mode: create-user
 platform_docker_name: "{{ (platform_name_prefix | default('') ~ '-') if (platform_name_prefix | default('')) else '' }}docker"
 platform_docker_account_name: "{{ (platform_name_prefix | default('') ~ '-') if (platform_name_prefix | default('')) else '' }}docker"
+platform_docker_data_root: "/home/{{ platform_docker_account_name }}/.local/share/docker"
 platform_docker_account_credential:
   passwordSecretRef: ''
 platform_docker_secret_files: {}
@@ -32375,6 +32376,143 @@ platform_docker_packages:
     fail_msg: DOCKER_CLEAR_DAEMON_STILL_ACTIVE
 
 @@END
+@@PORTABLE {"path":"services/docker/ansible_collections/platform/docker/roles/docker_rootless/tasks/data_root.yml","mode":420,"size":5900,"sha256":"fd18e01aa5bf41a785dc6971c5ac3d2fea9e4fe304ee35f601416471c004547a","index":0,"count":1,"encoding":"utf-8","payloadBytes":5900}
+---
+- name: Validate Docker data root path
+  ansible.builtin.assert:
+    that:
+      - platform_docker_data_root is string
+      - platform_docker_data_root | length <= 255
+      - platform_docker_data_root is match('^/(?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+$')
+      - "'.' not in platform_docker_data_root.split('/')"
+      - "'..' not in platform_docker_data_root.split('/')"
+      - platform_docker_data_root.split('/')[1] not in ['bin', 'boot', 'dev', 'etc', 'lib', 'lib64', 'proc', 'root', 'run', 'sbin', 'sys', 'tmp', 'usr']
+      - platform_docker_data_root.split('/') | length > 2
+      - platform_docker_data_root.split('/')[1] != 'home' or platform_docker_data_root.startswith(_platform_docker_home ~ '/')
+      - not platform_docker_data_root.startswith(_platform_docker_home ~ '/.config')
+    fail_msg: DOCKER_DATA_ROOT_INVALID
+
+- name: Inspect Docker data root ancestors without following links
+  ansible.builtin.stat:
+    path: "{{ '/' ~ (platform_docker_data_root.split('/')[1:item + 1] | join('/')) }}"
+    follow: false
+    get_checksum: false
+    get_mime: false
+    get_attributes: false
+  loop: "{{ range(1, platform_docker_data_root.split('/') | length) | list }}"
+  register: _platform_docker_data_components
+
+- name: Refuse linked, foreign or writable Docker data root ancestors
+  ansible.builtin.assert:
+    that:
+      - not item.stat.exists or (item.stat.isdir | default(false))
+      - not (item.stat.islnk | default(false))
+      - not item.stat.exists or item.stat.pw_name in ['root', platform_docker_account_name]
+      - not item.stat.exists or item.stat.mode[-1:] not in ['2', '3', '6', '7']
+      - not item.stat.exists or item.stat.mode[-2:-1] not in ['2', '3', '6', '7']
+    fail_msg: DOCKER_DATA_ROOT_UNSAFE
+    quiet: true
+  loop: "{{ _platform_docker_data_components.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+
+- name: Require selected account ownership of existing Docker data root
+  ansible.builtin.assert:
+    that:
+      - not _platform_docker_data_components.results[-1].stat.exists or _platform_docker_data_components.results[-1].stat.pw_name == platform_docker_account_name
+      - not (platform_docker_verify_only | bool) or _platform_docker_data_components.results[-1].stat.exists
+    fail_msg: DOCKER_DATA_ROOT_NOT_OWNED
+
+- name: Create private Docker data root without moving existing data
+  ansible.builtin.file:
+    path: "{{ platform_docker_data_root }}"
+    state: directory
+    owner: "{{ platform_docker_account_name }}"
+    group: "{{ _platform_docker_gid }}"
+    mode: '0700'
+  when: not (platform_docker_verify_only | bool)
+
+- name: Inspect Docker configuration directory components
+  ansible.builtin.stat:
+    path: "{{ item }}"
+    follow: false
+    get_checksum: false
+    get_mime: false
+    get_attributes: false
+  loop:
+    - "{{ _platform_docker_home }}"
+    - "{{ _platform_docker_home }}/.config"
+    - "{{ _platform_docker_home }}/.config/docker"
+  register: _platform_docker_config_components
+
+- name: Require private account-owned Docker configuration directories
+  ansible.builtin.assert:
+    that:
+      - item.stat.isdir | default(false)
+      - not (item.stat.islnk | default(false))
+      - item.stat.pw_name == platform_docker_account_name
+      - item.stat.mode[-1:] not in ['2', '3', '6', '7']
+      - item.stat.mode[-2:-1] not in ['2', '3', '6', '7']
+    fail_msg: DOCKER_ACCOUNT_PATH_UNSAFE
+    quiet: true
+  loop: "{{ _platform_docker_config_components.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+
+- name: Inspect Docker daemon configuration before reading
+  ansible.builtin.stat:
+    path: "{{ _platform_docker_home }}/.config/docker/daemon.json"
+    follow: false
+    get_checksum: false
+    get_mime: false
+    get_attributes: false
+  register: _platform_docker_daemon_file
+
+- name: Require an account-owned regular Docker daemon configuration
+  ansible.builtin.assert:
+    that:
+      - not (_platform_docker_daemon_file.stat.islnk | default(false))
+      - not _platform_docker_daemon_file.stat.exists or (_platform_docker_daemon_file.stat.isreg | default(false))
+      - not _platform_docker_daemon_file.stat.exists or _platform_docker_daemon_file.stat.pw_name == platform_docker_account_name
+      - not _platform_docker_daemon_file.stat.exists or _platform_docker_daemon_file.stat.size <= 1048576
+      - not (platform_docker_verify_only | bool) or _platform_docker_daemon_file.stat.exists
+    fail_msg: DOCKER_DAEMON_CONFIG_NOT_OWNED
+
+- name: Read existing Docker daemon configuration privately
+  ansible.builtin.slurp:
+    src: "{{ _platform_docker_home }}/.config/docker/daemon.json"
+  register: _platform_docker_daemon_content
+  when: _platform_docker_daemon_file.stat.exists
+  no_log: true
+
+- name: Parse existing Docker daemon configuration privately
+  ansible.builtin.set_fact:
+    _platform_docker_daemon_config: "{{ (_platform_docker_daemon_content.content | b64decode | from_json) if _platform_docker_daemon_file.stat.exists else {} }}"
+  no_log: true
+
+- name: Require a Docker daemon configuration object
+  ansible.builtin.assert:
+    that: _platform_docker_daemon_config is mapping
+    fail_msg: DOCKER_DAEMON_CONFIG_INVALID
+
+- name: Write Docker data-root while retaining other daemon settings
+  ansible.builtin.copy:
+    dest: "{{ _platform_docker_home }}/.config/docker/daemon.json"
+    content: "{{ _platform_docker_daemon_config | combine({'data-root': platform_docker_data_root}) | to_nice_json }}\n"
+    owner: "{{ platform_docker_account_name }}"
+    group: "{{ _platform_docker_gid }}"
+    mode: '0600'
+  when: not (platform_docker_verify_only | bool)
+  no_log: true
+  notify: Restart rootless Docker bridge
+
+- name: Verify configured Docker data root read-only
+  ansible.builtin.assert:
+    that: _platform_docker_daemon_config.get('data-root') == platform_docker_data_root
+    fail_msg: DOCKER_DATA_ROOT_CONFIG_MISMATCH
+  when: platform_docker_verify_only | bool
+
+@@END
 @@PORTABLE {"path":"services/docker/ansible_collections/platform/docker/roles/docker_rootless/tasks/guard_root_destination.yml","mode":420,"size":1464,"sha256":"f2e0bac2757e0c51350f5e8ff84c56998093d324fbf8aa1306df164e83bc1726","index":0,"count":1,"encoding":"utf-8","payloadBytes":1464}
 ---
 - name: Inspect exact shared or system destination before write
@@ -32448,7 +32586,7 @@ platform_docker_packages:
   ansible.builtin.include_tasks: verify.yml
 
 @@END
-@@PORTABLE {"path":"services/docker/ansible_collections/platform/docker/roles/docker_rootless/tasks/provision.yml","mode":420,"size":19893,"sha256":"910c731393cbd77671d1e9436c0d960098d0735ea813116275dcb70b062e8b10","index":0,"count":1,"encoding":"utf-8","payloadBytes":19893}
+@@PORTABLE {"path":"services/docker/ansible_collections/platform/docker/roles/docker_rootless/tasks/provision.yml","mode":420,"size":19976,"sha256":"5628d5519b61b175cbe946a12fa817616d8e400b0d71f37a10adfd392c0f8508","index":0,"count":1,"encoding":"utf-8","payloadBytes":19976}
 ---
 - name: Install configured RED OS Docker rootless packages
   ansible.builtin.dnf:
@@ -32833,6 +32971,9 @@ platform_docker_packages:
     _platform_docker_private_tls_dir: "{{ _platform_docker_home }}/.config/docker/pki"
   changed_when: false
 
+- name: Configure Docker data root
+  ansible.builtin.include_tasks: data_root.yml
+
 - name: Configure persistent rootless Docker shell environment
   ansible.builtin.include_tasks: shell_environment.yml
 
@@ -33090,7 +33231,7 @@ platform_docker_packages:
   loop: [.bashrc, .bash_profile]
 
 @@END
-@@PORTABLE {"path":"services/docker/ansible_collections/platform/docker/roles/docker_rootless/tasks/validate.yml","mode":420,"size":3354,"sha256":"152aff8c7f84439329566b588da28a9ff8a97123ea0aff90b65ce66caccc0585","index":0,"count":1,"encoding":"utf-8","payloadBytes":3354}
+@@PORTABLE {"path":"services/docker/ansible_collections/platform/docker/roles/docker_rootless/tasks/validate.yml","mode":420,"size":4157,"sha256":"3b47074629c0e8b5a8a37e15edc6b603e75e65a52ad55e67398304eef1767c81","index":0,"count":1,"encoding":"utf-8","payloadBytes":4157}
 ---
 - name: Validate bounded Docker desired inputs
   ansible.builtin.assert:
@@ -33098,6 +33239,16 @@ platform_docker_packages:
       - platform_docker_mode in ['create-user', 'existing-user']
       - platform_docker_account_name is match('^[a-z_][a-z0-9_-]{0,31}$')
       - platform_docker_account_name not in ['root', 'admin', 'platform-automation']
+      - platform_docker_data_root is string
+      - platform_docker_data_root | length > 1
+      - platform_docker_data_root | length <= 255
+      - platform_docker_data_root is match('^/(?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+$')
+      - "'.' not in platform_docker_data_root.split('/')"
+      - "'..' not in platform_docker_data_root.split('/')"
+      - platform_docker_data_root.split('/')[1] not in ['bin', 'boot', 'dev', 'etc', 'lib', 'lib64', 'proc', 'root', 'run', 'sbin', 'sys', 'tmp', 'usr']
+      - platform_docker_data_root.split('/') | length > 2
+      - platform_docker_data_root.split('/')[1] != 'home' or platform_docker_data_root.startswith('/home/' ~ platform_docker_account_name ~ '/')
+      - not platform_docker_data_root.startswith('/home/' ~ platform_docker_account_name ~ '/.config')
       - platform_docker_tls_profile is string
       - platform_docker_tls_profile | length > 0 or platform_docker_tls_directory | length > 0
       - platform_docker_api_port | int >= 1
@@ -33176,7 +33327,7 @@ platform_docker_packages:
   no_log: true
 
 @@END
-@@PORTABLE {"path":"services/docker/ansible_collections/platform/docker/roles/docker_rootless/tasks/verify.yml","mode":420,"size":4983,"sha256":"dd46b6229aa9bfb7031a429b4366062dbcb3bb432f2b1fc123c75c266d145caa","index":0,"count":1,"encoding":"utf-8","payloadBytes":4983}
+@@PORTABLE {"path":"services/docker/ansible_collections/platform/docker/roles/docker_rootless/tasks/verify.yml","mode":420,"size":5412,"sha256":"1223fe020b9160d12a0f24e496109f03b2352427bc78634eeffce477c0a1e0c3","index":0,"count":1,"encoding":"utf-8","payloadBytes":5412}
 ---
 - name: Resolve selected Docker account for read-only verification
   ansible.builtin.getent:
@@ -33187,8 +33338,15 @@ platform_docker_packages:
 - name: Bind verified UID and private TLS path
   ansible.builtin.set_fact:
     _platform_docker_uid: "{{ getent_passwd[platform_docker_account_name][1] | int }}"
+    _platform_docker_gid: "{{ getent_passwd[platform_docker_account_name][2] | int }}"
+    _platform_docker_home: "{{ getent_passwd[platform_docker_account_name][4] }}"
     _platform_docker_private_tls_dir: "{{ getent_passwd[platform_docker_account_name][4] }}/.config/docker/pki"
   changed_when: false
+
+- name: Verify Docker data directory and daemon configuration read-only
+  ansible.builtin.include_tasks: data_root.yml
+  vars:
+    platform_docker_verify_only: true
 
 - name: Check Docker account linger state
   ansible.builtin.command:
@@ -33253,6 +33411,7 @@ platform_docker_packages:
     that:
       - "'rootless' in ((_platform_docker_info.stdout | from_json).SecurityOptions | join(' '))"
       - (_platform_docker_info.stdout | from_json).Swarm.LocalNodeState == 'inactive'
+      - (_platform_docker_info.stdout | from_json).DockerRootDir == platform_docker_data_root
     fail_msg: DOCKER_ROOTLESS_RUNTIME_INVALID
 
 - name: Verify exact Docker Compose CLI plugin
@@ -33401,7 +33560,7 @@ combinations:
 status: requires-service-install-10-runtime-evidence
 
 @@END
-@@PORTABLE {"path":"services/docker/configuration.schema.json","mode":420,"size":924,"sha256":"011e56aed5a373dbff0684f391928ab9e73f4c7119f4f0c9f69f7c7e2d7e76d0","index":0,"count":1,"encoding":"utf-8","payloadBytes":924}
+@@PORTABLE {"path":"services/docker/configuration.schema.json","mode":420,"size":1018,"sha256":"534688670caf93cef3f715277cd709a57efeef8a03d440e37343b08afd7001ae","index":0,"count":1,"encoding":"utf-8","payloadBytes":1018}
 {
   "$id": "https://platform.installer/schemas/services/docker/configuration-v1alpha1.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -33434,6 +33593,11 @@ status: requires-service-install-10-runtime-evidence
       "maximum": 65535,
       "minimum": 1,
       "type": "integer"
+    },
+    "dataRoot": {
+      "maxLength": 255,
+      "minLength": 1,
+      "type": "string"
     },
     "tlsProfile": {
       "minLength": 1,
@@ -33496,7 +33660,7 @@ status: requires-service-install-10-runtime-evidence
       platform_docker_verify_only: true
 
 @@END
-@@PORTABLE {"path":"services/docker/service.yml","mode":420,"size":3499,"sha256":"e2cdd5dc4a30a44b81d448ed5172d3d5ff4b513dd2d22ef5ff2749eea4276292","index":0,"count":1,"encoding":"utf-8","payloadBytes":3499}
+@@PORTABLE {"path":"services/docker/service.yml","mode":420,"size":4031,"sha256":"b1d65f1187f5d318b63d1b12a66e8ffee57af185d1c84b76d417e62fb8a8becd","index":0,"count":1,"encoding":"utf-8","payloadBytes":4031}
 apiVersion: platform.installer/service-manifest/v1alpha1
 kind: ServiceManifest
 metadata:
@@ -33525,6 +33689,7 @@ configurationSchema: {$ref: configuration.schema.json}
 configuration:
   additionalProperties: false
   settings:
+    dataRoot: {kind: MANAGED, roleVariable: platform_docker_data_root, type: string, scopes: [deployment], validation: {minLength: 1, maxLength: 255}, ui: {label: Каталог данных Docker, section: Хранение, order: 0, description: 'По умолчанию /home/<Docker account>/.local/share/docker. Записывается в data-root пользовательского daemon.json. Изменение пути не переносит существующие образы, контейнеры и тома.'}}
     accountName: {kind: MANAGED, roleVariable: platform_docker_account_name, type: string, scopes: [deployment], validation: {minLength: 1, maxLength: 32}, ui: {label: Docker account, section: Account, order: 10}}
     tlsProfile: {kind: MANAGED, roleVariable: platform_docker_tls_profile, type: string, scopes: [deployment], validation: {minLength: 1}, ui: {label: TLS profile, section: TLS, order: 20, x-referenceKind: TLS_PROFILE}}
     apiPort: {kind: MANAGED, roleVariable: platform_docker_api_port, type: integer, scopes: [deployment], validation: {minimum: 1, maximum: 65535}, ui: {label: Docker TLS API port, section: Network, order: 30}}

@@ -5,6 +5,16 @@
       - platform_docker_mode in ['create-user', 'existing-user']
       - platform_docker_account_name is match('^[a-z_][a-z0-9_-]{0,31}$')
       - platform_docker_account_name not in ['root', 'admin', 'platform-automation']
+      - platform_docker_data_root is string
+      - platform_docker_data_root | length > 1
+      - platform_docker_data_root | length <= 255
+      - platform_docker_data_root is match('^/(?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+$')
+      - "'.' not in platform_docker_data_root.split('/')"
+      - "'..' not in platform_docker_data_root.split('/')"
+      - platform_docker_data_root.split('/')[1] not in ['bin', 'boot', 'dev', 'etc', 'lib', 'lib64', 'proc', 'root', 'run', 'sbin', 'sys', 'tmp', 'usr']
+      - platform_docker_data_root.split('/') | length > 2
+      - platform_docker_data_root.split('/')[1] != 'home' or platform_docker_data_root.startswith('/home/' ~ platform_docker_account_name ~ '/')
+      - not platform_docker_data_root.startswith('/home/' ~ platform_docker_account_name ~ '/.config')
       - platform_docker_tls_profile is string
       - platform_docker_tls_profile | length > 0 or platform_docker_tls_directory | length > 0
       - platform_docker_api_port | int >= 1

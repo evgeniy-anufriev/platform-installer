@@ -373,6 +373,9 @@ safe message and redaction metadata. An Ansible callback may normalize task
 events, but human recap text is never the API. Slow or disconnected Go/UI
 subscribers cannot block the controller because replay comes from the bounded
 Execution Node journal and each Installer subscriber has a bounded buffer.
+The journal and Go observer admit at most 32768 events per run, with the last
+256 journal slots reserved for critical events. Event page and byte limits
+remain independent of this record count.
 
 The controller passes the exact owned journal root to the task callback, including
 nondefault standalone state roots. Failed task events retain bounded static task

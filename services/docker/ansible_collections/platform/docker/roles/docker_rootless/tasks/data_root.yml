@@ -1,0 +1,134 @@
+---
+- name: Validate Docker data root path
+  ansible.builtin.assert:
+    that:
+      - platform_docker_data_root is string
+      - platform_docker_data_root | length <= 255
+      - platform_docker_data_root is match('^/(?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+$')
+      - "'.' not in platform_docker_data_root.split('/')"
+      - "'..' not in platform_docker_data_root.split('/')"
+      - platform_docker_data_root.split('/')[1] not in ['bin', 'boot', 'dev', 'etc', 'lib', 'lib64', 'proc', 'root', 'run', 'sbin', 'sys', 'tmp', 'usr']
+      - platform_docker_data_root.split('/') | length > 2
+      - platform_docker_data_root.split('/')[1] != 'home' or platform_docker_data_root.startswith(_platform_docker_home ~ '/')
+      - not platform_docker_data_root.startswith(_platform_docker_home ~ '/.config')
+    fail_msg: DOCKER_DATA_ROOT_INVALID
+
+- name: Inspect Docker data root ancestors without following links
+  ansible.builtin.stat:
+    path: "{{ '/' ~ (platform_docker_data_root.split('/')[1:item + 1] | join('/')) }}"
+    follow: false
+    get_checksum: false
+    get_mime: false
+    get_attributes: false
+  loop: "{{ range(1, platform_docker_data_root.split('/') | length) | list }}"
+  register: _platform_docker_data_components
+
+- name: Refuse linked, foreign or writable Docker data root ancestors
+  ansible.builtin.assert:
+    that:
+      - not item.stat.exists or (item.stat.isdir | default(false))
+      - not (item.stat.islnk | default(false))
+      - not item.stat.exists or item.stat.pw_name in ['root', platform_docker_account_name]
+      - not item.stat.exists or item.stat.mode[-1:] not in ['2', '3', '6', '7']
+      - not item.stat.exists or item.stat.mode[-2:-1] not in ['2', '3', '6', '7']
+    fail_msg: DOCKER_DATA_ROOT_UNSAFE
+    quiet: true
+  loop: "{{ _platform_docker_data_components.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+
+- name: Require selected account ownership of existing Docker data root
+  ansible.builtin.assert:
+    that:
+      - not _platform_docker_data_components.results[-1].stat.exists or _platform_docker_data_components.results[-1].stat.pw_name == platform_docker_account_name
+      - not (platform_docker_verify_only | bool) or _platform_docker_data_components.results[-1].stat.exists
+    fail_msg: DOCKER_DATA_ROOT_NOT_OWNED
+
+- name: Create private Docker data root without moving existing data
+  ansible.builtin.file:
+    path: "{{ platform_docker_data_root }}"
+    state: directory
+    owner: "{{ platform_docker_account_name }}"
+    group: "{{ _platform_docker_gid }}"
+    mode: '0700'
+  when: not (platform_docker_verify_only | bool)
+
+- name: Inspect Docker configuration directory components
+  ansible.builtin.stat:
+    path: "{{ item }}"
+    follow: false
+    get_checksum: false
+    get_mime: false
+    get_attributes: false
+  loop:
+    - "{{ _platform_docker_home }}"
+    - "{{ _platform_docker_home }}/.config"
+    - "{{ _platform_docker_home }}/.config/docker"
+  register: _platform_docker_config_components
+
+- name: Require private account-owned Docker configuration directories
+  ansible.builtin.assert:
+    that:
+      - item.stat.isdir | default(false)
+      - not (item.stat.islnk | default(false))
+      - item.stat.pw_name == platform_docker_account_name
+      - item.stat.mode[-1:] not in ['2', '3', '6', '7']
+      - item.stat.mode[-2:-1] not in ['2', '3', '6', '7']
+    fail_msg: DOCKER_ACCOUNT_PATH_UNSAFE
+    quiet: true
+  loop: "{{ _platform_docker_config_components.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+
+- name: Inspect Docker daemon configuration before reading
+  ansible.builtin.stat:
+    path: "{{ _platform_docker_home }}/.config/docker/daemon.json"
+    follow: false
+    get_checksum: false
+    get_mime: false
+    get_attributes: false
+  register: _platform_docker_daemon_file
+
+- name: Require an account-owned regular Docker daemon configuration
+  ansible.builtin.assert:
+    that:
+      - not (_platform_docker_daemon_file.stat.islnk | default(false))
+      - not _platform_docker_daemon_file.stat.exists or (_platform_docker_daemon_file.stat.isreg | default(false))
+      - not _platform_docker_daemon_file.stat.exists or _platform_docker_daemon_file.stat.pw_name == platform_docker_account_name
+      - not _platform_docker_daemon_file.stat.exists or _platform_docker_daemon_file.stat.size <= 1048576
+      - not (platform_docker_verify_only | bool) or _platform_docker_daemon_file.stat.exists
+    fail_msg: DOCKER_DAEMON_CONFIG_NOT_OWNED
+
+- name: Read existing Docker daemon configuration privately
+  ansible.builtin.slurp:
+    src: "{{ _platform_docker_home }}/.config/docker/daemon.json"
+  register: _platform_docker_daemon_content
+  when: _platform_docker_daemon_file.stat.exists
+  no_log: true
+
+- name: Parse existing Docker daemon configuration privately
+  ansible.builtin.set_fact:
+    _platform_docker_daemon_config: "{{ (_platform_docker_daemon_content.content | b64decode | from_json) if _platform_docker_daemon_file.stat.exists else {} }}"
+  no_log: true
+
+- name: Require a Docker daemon configuration object
+  ansible.builtin.assert:
+    that: _platform_docker_daemon_config is mapping
+    fail_msg: DOCKER_DAEMON_CONFIG_INVALID
+
+- name: Write Docker data-root while retaining other daemon settings
+  ansible.builtin.copy:
+    dest: "{{ _platform_docker_home }}/.config/docker/daemon.json"
+    content: "{{ _platform_docker_daemon_config | combine({'data-root': platform_docker_data_root}) | to_nice_json }}\n"
+    owner: "{{ platform_docker_account_name }}"
+    group: "{{ _platform_docker_gid }}"
+    mode: '0600'
+  when: not (platform_docker_verify_only | bool)
+  no_log: true
+  notify: Restart rootless Docker bridge
+
+- name: Verify configured Docker data root read-only
+  ansible.builtin.assert:
+    that: _platform_docker_daemon_config.get('data-root') == platform_docker_data_root
+    fail_msg: DOCKER_DATA_ROOT_CONFIG_MISMATCH
+  when: platform_docker_verify_only | bool

@@ -375,10 +375,15 @@ write-only Go `RuntimeSecretBroker`; the response contains only status metadata:
 mode, availability and expiry. Its internal
 `runtime:ssh-session-<32-hex>` reference is never exposed through Wails/React.
 Query, review, logs and events never return the value or internal reference.
-The lease expires two hours after it is set/replaced, on project
+The lease expires four hours after it is set/replaced, on project
 close/replacement or process exit, whichever comes first, and is applied to every target `Node` for that
 project only by a future trusted Go transport. Execution Node credentials
 remain a separate trusted binding.
+
+The same four-hour Broker default covers pending and attached service/application
+secrets, sudo and PKI passwords, private-key session access and the transient
+output-encryption password. Existing explicit clear, project binding, zeroization
+and active-run identity retention rules still apply.
 
 The Installer never opens a direct workstation-to-target SSH path and never
 materializes the target password or private key in a Windows file. Secret bytes
