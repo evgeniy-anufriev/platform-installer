@@ -31414,7 +31414,7 @@ application_runtime_verify_vault: true
   no_log: true
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/apply_instance.yml","mode":420,"size":5812,"sha256":"bfef51235b345183a0af71c02d6672f8e1a4216920b9b474b359d69b18678617","index":0,"count":1,"encoding":"utf-8","payloadBytes":5812}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/apply_instance.yml","mode":420,"size":5828,"sha256":"b736d8569edd5dcb122ac5e0a02098143ab45a3b4b9518140c7524a78deb3a9d","index":0,"count":1,"encoding":"utf-8","payloadBytes":5828}
 ---
 - name: Создать точные каталоги конфигурации экземпляра
   ansible.builtin.file:
@@ -31503,7 +31503,7 @@ application_runtime_verify_vault: true
   changed_when: false
   no_log: true
 
-- name: Проверка только значений Core, прогнозируемых Compose
+- name: Проверить только значения Compose, полученные из проекции Core
   ansible.builtin.assert:
     that: "{{ (application_compose_config.stdout | from_json) | platform.core.application_validate_compose(application_runtime_job, application_runtime_job.instancePath, application_runtime_job.configDigest) }}"
     fail_msg: APPLICATION_CORE_COMPOSE_PROJECTION_INVALID
@@ -31562,14 +31562,14 @@ application_runtime_verify_vault: true
         loop_var: application_runtime_job
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/discover_runtime.yml","mode":420,"size":1908,"sha256":"c0d9f20c68f2693d757ff3818b610a50d9098ea6402949d07fc56cbc785cceed","index":0,"count":1,"encoding":"utf-8","payloadBytes":1908}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/discover_runtime.yml","mode":420,"size":1881,"sha256":"f909daa67e4007f53bfd5ec51ea70c53ffbf4accfc084fe82dce06a69a5eff59","index":0,"count":1,"encoding":"utf-8","payloadBytes":1881}
 ---
 - name: Обнаружение выбранной учетной записи Docker
   ansible.builtin.getent:
     database: passwd
     key: "{{ application_runtime_job.account }}"
 
-- name: Потребовать, чтобы обнаруженная учетная запись HOME была ограничена перед зондированием демона
+- name: Проверить границы домашнего каталога учётной записи перед обращением к Docker daemon
   ansible.builtin.assert:
     that: getent_passwd[application_runtime_job.account][4] is match('^/[a-zA-Z0-9_./-]+$')
     fail_msg: APPLICATION_RUNTIME_ROOT_INVALID
@@ -31600,9 +31600,9 @@ application_runtime_verify_vault: true
   no_log: true
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/image_delivery.yml","mode":420,"size":7200,"sha256":"3c9496b54f5f9cbbc9e1c4f72e08994c43061381e30784f411a2c2536dd546ea","index":0,"count":1,"encoding":"utf-8","payloadBytes":7200}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/image_delivery.yml","mode":420,"size":7142,"sha256":"20898cf2420f53fbc4fbe12cdb1b1908ccbdd9bc1e2a170192f23bfd6e943ada","index":0,"count":1,"encoding":"utf-8","payloadBytes":7142}
 ---
-- name: Проверка заблокированного локального образа перед доставкой
+- name: Проверить локальный образ с зафиксированным digest перед доставкой
   ansible.builtin.command:
     argv: [docker, image, inspect, "{{ application_runtime_job.authority.requirement.localReference }}"]
   become_user: "{{ application_runtime_job.account }}"
@@ -31612,7 +31612,7 @@ application_runtime_verify_vault: true
   failed_when: false
   no_log: true
 
-- name: Доставка только в том случае, если заблокированный локальный образ еще не доступен
+- name: Доставить образ с зафиксированным digest при отсутствии на целевом узле
   when: application_local_image.rc != 0 or (application_local_image.stdout | from_json)[0].Id != application_runtime_job.authority.requirement.imageId
   block:
     - name: Извлечение из авторизованного реестра с очисткой частного переопределения
@@ -31663,7 +31663,7 @@ application_runtime_verify_vault: true
             path: "{{ application_image_stage.path }}"
             state: absent
           when: application_image_stage.path is defined
-    - name: Требовать существования точного идентификатора загруженного или извлеченного изображения
+    - name: Проверить идентификатор образа после загрузки из архива или реестра
       ansible.builtin.command:
         argv: [docker, image, inspect, "{{ application_runtime_job.authority.requirement.imageId }}"]
       become_user: "{{ application_runtime_job.account }}"
@@ -31686,7 +31686,7 @@ application_runtime_verify_vault: true
   changed_when: false
   no_log: true
 
-- name: Требовать точное изображение и платформу
+- name: Проверить соответствие образа и целевой платформы
   ansible.builtin.assert:
     that:
       - (application_delivered_image.stdout | from_json)[0].Id == application_runtime_job.authority.requirement.imageId
@@ -31714,7 +31714,7 @@ application_runtime_verify_vault: true
   no_log: true
   when: "'@' not in application_runtime_job.settings.image"
 
-- name: Потребовать, чтобы исходная ссылка давала имя заблокированному изображению
+- name: Проверить соответствие исходной ссылки образу с зафиксированным digest
   ansible.builtin.assert:
     that: (application_original_image.stdout | from_json)[0].Id == application_runtime_job.authority.requirement.imageId
     fail_msg: APPLICATION_IMAGE_IDENTITY_INVALID
@@ -31722,7 +31722,7 @@ application_runtime_verify_vault: true
   when: "'@' not in application_runtime_job.settings.image"
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/preflight.yml","mode":420,"size":24804,"sha256":"a2226c6ea32fd188e5ac8f317a40aa4873e5cc23a41f537540b764c25fcd4575","index":0,"count":1,"encoding":"utf-8","payloadBytes":24804}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/preflight.yml","mode":420,"size":24679,"sha256":"836b6b1fb231da66c297ff81d9b3e52d7e23cd5d9e7e5485b6293250004166dc","index":0,"count":1,"encoding":"utf-8","payloadBytes":24679}
 ---
 - name: Привязать учётную запись операции приложения и ключ обнаружения конфигурации Docker
   ansible.builtin.set_fact:
@@ -31760,7 +31760,7 @@ application_runtime_verify_vault: true
     application_archive_checksums: {}
   no_log: true
 
-- name: Доказать фактическое сопоставление пространства имен и пути к личным идентификаторам до того, как провайдер напишет
+- name: Проверить отображение user namespace и пути защищённых учётных данных до записи провайдером
   platform.core.application_identity_files:
     account: "{{ application_runtime_job.account }}"
     user: "{{ application_runtime_job.settings.user | default('0:0') }}"
@@ -31780,7 +31780,7 @@ application_runtime_verify_vault: true
       - application_runtime_discoveries[application_discovery_key].info.Architecture in ['x86_64', 'aarch64', 'amd64', 'arm64']
     fail_msg: APPLICATION_RUNTIME_DAEMON_INVALID
 
-- name: Определение целевой платформы изображений
+- name: Определить целевую платформу образов
   ansible.builtin.set_fact:
     application_image_platform:
       os: "{{ application_runtime_discoveries[application_discovery_key].info.OSType }}"
@@ -31827,7 +31827,7 @@ application_runtime_verify_vault: true
           (application_registry_probe.stderr | default('')) is search('manifest unknown|no such manifest') else 1))) }}
   no_log: true
 
-- name: Требовать авторизованный совместимый источник изображения
+- name: Проверить утверждённый совместимый источник образа
   ansible.builtin.assert:
     that: application_image_source.source != 'BLOCKED'
     fail_msg: "{{ application_image_source.reason }}"
@@ -31856,7 +31856,7 @@ application_runtime_verify_vault: true
   failed_when: false
   no_log: true
 
-- name: Отклонить неуправляемое изображение, используя зарезервированное имя, связанное с дайджестом
+- name: Отклонить неуправляемый образ с зарезервированным именем, привязанным к digest
   ansible.builtin.assert:
     that: application_bound_image.rc != 0 or (application_bound_image.stdout | from_json)[0].Id == application_runtime_job.authority.requirement.imageId
     fail_msg: APPLICATION_IMAGE_REFERENCE_OWNERSHIP_INVALID
@@ -31901,7 +31901,7 @@ application_runtime_verify_vault: true
     fail_msg: APPLICATION_CONFIG_CONTENT_INVALID
   no_log: true
 
-- name: Вычисление отпечатка конфигурации, принадлежащей компьютеру
+- name: Вычислить отпечаток служебной конфигурации приложения
   ansible.builtin.set_fact:
     application_config_pairs: []
   no_log: true
@@ -32123,9 +32123,9 @@ application_runtime_verify_vault: true
   no_log: true
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/pull_registry.yml","mode":420,"size":2051,"sha256":"e1944594e33f157f4fa9776285e8bcfa0bee6c248c4f94b7303182c0f12745c1","index":0,"count":1,"encoding":"utf-8","payloadBytes":2051}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/pull_registry.yml","mode":420,"size":2049,"sha256":"9070e7312ba24dc26dcb8c855fa0cacaa0290aef2d41392ebc25f78a108a0cf5","index":0,"count":1,"encoding":"utf-8","payloadBytes":2049}
 ---
-- name: Извлечь одно заблокированное изображение, не сохраняя переопределение доставки
+- name: Загрузить образ с зафиксированным digest без сохранения переопределения доставки
   block:
     - name: Подготовить сеансовую аутентификацию реестра для загрузки образа приложения
       ansible.builtin.include_tasks: registry_auth.yml
@@ -32630,9 +32630,9 @@ platform_execution_runtime_root: "{{ platform_execution_bundle_root | default('/
     - platform_artifact_package_manager | default('dnf') == 'dnf'
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/artifact_source_gate/tasks/main.yml","mode":420,"size":1072,"sha256":"61890cd44a59cc183b9dc810f443eaf1c1a6e7bc8f66a13a857a8fb5caf65cf3","index":0,"count":1,"encoding":"utf-8","payloadBytes":1072}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/artifact_source_gate/tasks/main.yml","mode":420,"size":1064,"sha256":"73dadfba4ecd18419c8dbd195daee42f042365213e558878ab6a135aa1b46d25","index":0,"count":1,"encoding":"utf-8","payloadBytes":1064}
 ---
-- name: Материализовать утверждённые источники артефактов Core на целевом узле
+- name: Разрешить утверждённые источники артефактов Core для целевого узла
   ansible.builtin.include_role:
     name: platform.core.artifact_source_resolution
   when: platform_artifact_source_authorities_by_deployment is defined
@@ -32729,7 +32729,7 @@ platform_execution_sudoers_content: ""
 platform_execution_ssh_key_path: "{{ platform_execution_identity_root }}/id_ed25519"
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/execution_environment/tasks/main.yml","mode":420,"size":5754,"sha256":"ba08482beb87c9fe520de3673ed8cec9abab9552451f409f2699791ff644e649","index":0,"count":1,"encoding":"utf-8","payloadBytes":5754}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/execution_environment/tasks/main.yml","mode":420,"size":5750,"sha256":"57e1ae4d91a71f9f56da6eef81bd1a78e1b287d1a0476d116f287208e1e37764","index":0,"count":1,"encoding":"utf-8","payloadBytes":5750}
 ---
 - name: Сбор фактов о среде выполнения
   ansible.builtin.setup:
@@ -32857,7 +32857,7 @@ platform_execution_ssh_key_path: "{{ platform_execution_identity_root }}/id_ed25
     - platform_execution_require_offline_payload | bool
     - platform_execution_offline_payload_root | length > 0
 
-- name: Отклонить отсутствующую полезную нагрузку автономного выполнения
+- name: Отклонить отсутствие обязательного offline-пакета среды исполнения
   ansible.builtin.assert:
     that:
       - platform_execution_payload_stat.stat.exists
@@ -33004,7 +33004,7 @@ platform_execution_ssh_key_path: "{{ platform_execution_identity_root }}/id_ed25
     - not (platform_managed_data_root_verify_only | default(false))
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/package_script/tasks/main.yml","mode":420,"size":5126,"sha256":"69fb8eb3b534a4d1f9963b7231564f64787912efaf3deb25d382210fd1c9b9cb","index":0,"count":1,"encoding":"utf-8","payloadBytes":5126}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/package_script/tasks/main.yml","mode":420,"size":5117,"sha256":"5ba90f4454066c2fe6ac31e696d232aedde4285d6c9eade9dea5181cd5772450","index":0,"count":1,"encoding":"utf-8","payloadBytes":5117}
 ---
 - name: Привязка только общих путей к сценариям пакетов
   ansible.builtin.set_fact:
@@ -33088,7 +33088,7 @@ platform_execution_ssh_key_path: "{{ platform_execution_identity_root }}/id_ed25
         msg: "{{ platform_script_result | platform.core.application_script_failure }}"
       when: platform_script_result.rc | default(-1) | int != 0
 
-    - name: Требовать ограниченный машиночитаемый нечувствительный результат
+    - name: Проверить ограниченный машиночитаемый результат без секретов
       ansible.builtin.assert:
         that:
           - platform_script_result.stdout | length <= 2048
@@ -33119,7 +33119,7 @@ platform_pki_owner: root
 platform_pki_group: root
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/pki_deploy/tasks/integrity.yml","mode":420,"size":7752,"sha256":"f99418a08894c7ebad6fe80e79b22ebe1d769277de39dcdb316cdbd93985ef41","index":0,"count":1,"encoding":"utf-8","payloadBytes":7752}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/pki_deploy/tasks/integrity.yml","mode":420,"size":7722,"sha256":"c27b5b4b79f901c8a8a192381fd4edba3bf5e12364068acc688c1bef3f4f1f32","index":0,"count":1,"encoding":"utf-8","payloadBytes":7722}
 ---
 - name: Проверка ранее примененной границы целевого каталога PKI
   ansible.builtin.assert:
@@ -33245,12 +33245,12 @@ platform_pki_group: root
   loop: "{{ _platform_pki_integrity_targets.results[:5] }}"
   no_log: true
 
-- name: Сравнить байты отпечатков пальцев с примененным планом
+- name: Сравнить байты отпечатков с примененным планом
   ansible.builtin.set_fact:
     _platform_pki_integrity_fingerprint_matches: "{{ _platform_pki_integrity_targets.results[5].stat.checksum | default('') == ((platform_pki_plan.materializationFingerprint ~ '\n') | hash('sha256')) }}"
   no_log: true
 
-- name: Сравнить точный файл отпечатков пальцев материализации
+- name: Сравнить точный файл отпечатков материализации
   ansible.builtin.set_fact:
     _platform_pki_integrity_valid: >-
       {{ false not in [
@@ -33535,7 +33535,7 @@ platform_pki_keytool_package: java-21-openjdk-headless
   tags: platform_installer_pki_materialization
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/pki_materialize/tasks/request.yml","mode":420,"size":19114,"sha256":"8f63e3b52a15db31cd34a6aa0a16c21c990ce0f6a4e0fd5e6ed6f292cc73052e","index":0,"count":1,"encoding":"utf-8","payloadBytes":19114}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/pki_materialize/tasks/request.yml","mode":420,"size":19088,"sha256":"1c1e61a1618f299c2866c00e74587185f388196ab1e27e3c0193bb03bf58d3d9","index":0,"count":1,"encoding":"utf-8","payloadBytes":19088}
 ---
 - name: Получение путей PKI, принадлежащих запросу
   ansible.builtin.set_fact:
@@ -33586,7 +33586,7 @@ platform_pki_keytool_package: java-21-openjdk-headless
     fail_msg: PKI_STORE_PASSWORD_RUNTIME_SECRET_REQUIRED
   no_log: true
 
-- name: Проверка существующего маркера отпечатка пальца запроса PKI
+- name: Проверка существующего маркера отпечатка запроса PKI
   ansible.builtin.stat:
     path: "{{ _platform_pki_request_dir }}/request-fingerprint"
     follow: false
@@ -33647,14 +33647,14 @@ platform_pki_keytool_package: java-21-openjdk-headless
       - not platform_pki_reissue_marker.stat.exists or _platform_pki_reissue_resumable
     fail_msg: PKI_REISSUE_RESUME_REQUIRED
 
-- name: Прочитать существующий маркер отпечатка пальца запроса PKI
+- name: Прочитать существующий маркер отпечатка запроса PKI
   ansible.builtin.command:
     argv: [cat, "{{ _platform_pki_request_dir }}/request-fingerprint"]
   register: platform_pki_existing_request_fingerprint
   changed_when: false
   when: platform_pki_request_marker.stat.exists
 
-- name: Распознать прерванную перевыпуск, идентичность листа которого уже записана
+- name: Распознать прерванный перевыпуск с уже записанным идентификатором конечного сертификата
   ansible.builtin.set_fact:
     _platform_pki_reissue_materialized: >-
       {{ _platform_pki_reissue_resumable and platform_pki_request_marker.stat.exists and
@@ -33685,7 +33685,7 @@ platform_pki_keytool_package: java-21-openjdk-headless
     - "{{ _platform_pki_authority_dir }}/ca.crt"
   register: platform_pki_authority_files
 
-- name: Проверка маркера отпечатка пальца управляемого центра сертификации
+- name: Проверка маркера отпечатка управляемого центра сертификации
   ansible.builtin.stat:
     path: "{{ _platform_pki_authority_dir }}/authority-fingerprint"
     follow: false
@@ -33702,7 +33702,7 @@ platform_pki_keytool_package: java-21-openjdk-headless
          (platform_pki_authority_files.results[1].stat.isreg | default(false)))
     fail_msg: PKI_AUTHORITY_STATE_INCOMPLETE
 
-- name: Чтение маркера отпечатка пальца управляемого центра сертификации
+- name: Чтение маркера отпечатка управляемого центра сертификации
   ansible.builtin.command:
     argv: [cat, "{{ _platform_pki_authority_dir }}/authority-fingerprint"]
   register: platform_pki_existing_authority_fingerprint
@@ -34122,7 +34122,7 @@ platform_pki_keytool_package: java-21-openjdk-headless
     platform_pki_selected_consumer_plan: "{{ _platform_pki_consumer_plans[0] }}"
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/pki_materialize/tasks/stores.yml","mode":420,"size":24615,"sha256":"9efc7d09a6be45689bec9589596d2d910a47d92a228480403628fd2fa0344c71","index":0,"count":1,"encoding":"utf-8","payloadBytes":24615}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/pki_materialize/tasks/stores.yml","mode":420,"size":24603,"sha256":"4608454c04b198560d831bef4eb91ae3728ca7666e898aedb028505a418cca5f","index":0,"count":1,"encoding":"utf-8","payloadBytes":24603}
 ---
 - name: Согласование хранилищ PKI с проверенным материалом PEM
   block:
@@ -34236,7 +34236,7 @@ platform_pki_keytool_package: java-21-openjdk-headless
         fail_msg: PKI_AUTHORITATIVE_PEM_CHAIN_INVALID
       no_log: true
 
-    - name: Получить открытый ключ из авторитетного листового закрытого ключа
+    - name: Получить открытый ключ из авторитетного закрытого ключа конечного сертификата
       ansible.builtin.command:
         argv:
           - openssl
@@ -34249,7 +34249,7 @@ platform_pki_keytool_package: java-21-openjdk-headless
       changed_when: false
       no_log: true
 
-    - name: Получение открытого ключа из авторитетного листового сертификата
+    - name: Получить открытый ключ из авторитетного конечного сертификата
       ansible.builtin.command:
         argv:
           - openssl
@@ -34263,7 +34263,7 @@ platform_pki_keytool_package: java-21-openjdk-headless
       changed_when: false
       no_log: true
 
-    - name: Запросить соответствие авторитетного листового ключа и сертификата
+    - name: Проверить соответствие авторитетного закрытого ключа конечному сертификату
       ansible.builtin.command:
         argv:
           - cmp
@@ -34275,14 +34275,14 @@ platform_pki_keytool_package: java-21-openjdk-headless
       failed_when: false
       no_log: true
 
-    - name: Отклонить несовпадающий авторитетный листовой ключ и сертификат
+    - name: Отклонить несовпадение авторитетного закрытого ключа и конечного сертификата
       ansible.builtin.assert:
         that:
           - _platform_pki_leaf_key_certificate_match.rc == 0
         fail_msg: PKI_AUTHORITATIVE_PEM_KEY_CERTIFICATE_MISMATCH
       no_log: true
 
-    - name: Экспорт авторитетного листового сертификата как DER для точного сравнения хранилищ
+    - name: Экспортировать авторитетный конечный сертификат в DER для сравнения хранилищ
       ansible.builtin.command:
         argv:
           - openssl
@@ -34368,7 +34368,7 @@ platform_pki_keytool_package: java-21-openjdk-headless
       when: _platform_pki_store_stats.results[1].stat.exists
       no_log: true
 
-    - name: Экспорт существующего сертификата хранилища ключей для проверки личности
+    - name: Экспортировать сертификат из хранилища ключей для проверки соответствия
       ansible.builtin.command:
         argv:
           - keytool
@@ -34389,7 +34389,7 @@ platform_pki_keytool_package: java-21-openjdk-headless
       when: (_platform_pki_existing_keystore_check.rc | default(1)) == 0
       no_log: true
 
-    - name: Экспорт существующего сертификата хранилища доверенных сертификатов для проверки личности
+    - name: Экспортировать сертификат из хранилища доверия для проверки соответствия
       ansible.builtin.command:
         argv:
           - keytool
@@ -34410,7 +34410,7 @@ platform_pki_keytool_package: java-21-openjdk-headless
       when: (_platform_pki_existing_truststore_check.rc | default(1)) == 0
       no_log: true
 
-    - name: Извлечение существующего закрытого ключа хранилища ключей для проверки личности
+    - name: Извлечь закрытый ключ из хранилища ключей для проверки соответствия
       ansible.builtin.command:
         argv:
           - openssl
@@ -34797,7 +34797,7 @@ platform_pki_materialization_plans: []
     fail_msg: PKI_TARGET_MATERIALIZATION_MISMATCH
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/prepare_application_images/tasks/main.yml","mode":420,"size":4246,"sha256":"898234c9bf1c2dad9639cfd9f96acf6f38e8fc46559db0e7d05599447eb5e832","index":0,"count":1,"encoding":"utf-8","payloadBytes":4246}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/prepare_application_images/tasks/main.yml","mode":420,"size":4232,"sha256":"a6a6994fb26608b27883cb1eba25d4aba6fdfccc8ba9866f0facd047ebcd615f","index":0,"count":1,"encoding":"utf-8","payloadBytes":4232}
 ---
 - name: Привязать платформу и исходные параметры размещения образа
   ansible.builtin.set_fact:
@@ -34851,12 +34851,12 @@ platform_pki_materialization_plans: []
   when: application_image_input.request.registry in (platform_application_approved_registries | default([]))
   no_log: true
 
-- name: Сопоставить резервные метаданные с точным выбранным изображением
+- name: Сопоставить метаданные offline-источника с выбранным образом
   ansible.builtin.set_fact:
     _image_offline: "{{ platform_application_image_bundle | platform.core.application_offline_image(application_image_input.reference, _image_platform, application_image_input.legacy) }}"
   no_log: true
 
-- name: Заморозить выбранное удостоверение и только эквивалентный запасной вариант
+- name: Зафиксировать идентификатор выбранного образа и эквивалентный offline-источник
   ansible.builtin.set_fact:
     platform_application_image_preparations: >-
       {{ platform_application_image_preparations | combine({
@@ -34928,9 +34928,9 @@ platform_pki_materialization_plans: []
   no_log: true
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/prepare_application_images/tasks/registry.yml","mode":420,"size":8636,"sha256":"ff38db8a52a8c1855ce8d450baaa8740864ba8d33f68532ac18496fac67e3f53","index":0,"count":1,"encoding":"utf-8","payloadBytes":8636}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/prepare_application_images/tasks/registry.yml","mode":420,"size":8620,"sha256":"4bba67b1c97cd3a54536bb24132805e9fd4b21459bce3a600a77a8293684f529","index":0,"count":1,"encoding":"utf-8","payloadBytes":8620}
 ---
-- name: Прочитать запрошенный манифест без загрузки слоев изображения
+- name: Прочитать запрошенный манифест без загрузки слоёв образа
   ansible.builtin.uri:
     url: "https://{{ application_image_input.request.endpoint }}/v2/{{ application_image_input.request.repository }}/manifests/{{ application_image_input.request.version }}"
     method: GET
@@ -35026,7 +35026,7 @@ platform_pki_materialization_plans: []
         _image_descriptor: "{{ _image_platform_response.content | platform.core.application_registry_manifest(_image_platform, _image_descriptor.manifestDigest) }}"
       when: _image_descriptor.index
       no_log: true
-    - name: Прочитать точную конфигурацию изображения без слоев
+    - name: Прочитать конфигурацию образа без загрузки слоёв
       ansible.builtin.uri:
         url: "https://{{ application_image_input.request.endpoint }}/v2/{{ application_image_input.request.repository }}/blobs/{{ _image_descriptor.configDigest }}"
         headers:
@@ -35156,7 +35156,7 @@ platform_name_prefix: ''
   become: false
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/resolve_application_libraries/tasks/instance.yml","mode":420,"size":15492,"sha256":"f4fa206835c729be48128591f5ed6c05b422d46827f7880bb42fb8eaef007b0e","index":0,"count":1,"encoding":"utf-8","payloadBytes":15492}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/resolve_application_libraries/tasks/instance.yml","mode":420,"size":15457,"sha256":"a69965a54f85b509b619f07e4a7925e1078607de0b54142eace38c4c7afb0180","index":0,"count":1,"encoding":"utf-8","payloadBytes":15457}
 ---
 - name: Загрузить проверенные параметры библиотеки по умолчанию в изолированное пространство имен
   ansible.builtin.include_vars:
@@ -35349,7 +35349,7 @@ platform_name_prefix: ''
   no_log: true
   become: false
 
-- name: Собрать разрешенную строку, принадлежащую компьютеру, для существующих структурированных действий
+- name: Собрать служебную запись разрешённых параметров для структурированных операций
   ansible.builtin.set_fact:
     platform_application_rows: >-
       {{ platform_application_rows + [{
@@ -35785,9 +35785,9 @@ artifactLock:
   digest: sha256:2222222222222222222222222222222222222222222222222222222222222222
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/application-images-inputs.yml","mode":420,"size":2395,"sha256":"0291e0e80ffe94f910e97d5f3dc7f8b22fb307bfab051227e591883fe401138b","index":0,"count":1,"encoding":"utf-8","payloadBytes":2395}
+@@PORTABLE {"path":"ansible-core/playbooks/application-images-inputs.yml","mode":420,"size":2381,"sha256":"28e7445d1299b51a33ad6c241cb1c07ae498904b4ad992e4fa85ce84411d5b90","index":0,"count":1,"encoding":"utf-8","payloadBytes":2381}
 ---
-- name: Обработка входных данных для подготовки изображения без контакта с целями
+- name: Обработать параметры подготовки образов без подключения к целевым узлам
   hosts: localhost
   connection: local
   gather_facts: false
@@ -35804,17 +35804,17 @@ artifactLock:
         project_root: "{{ platform_project_root }}"
         service_catalog_path: "{{ platform_service_catalog_path }}"
       register: platform_image_snapshot
-    - name: Собрать входные данные для подготовки ограниченного изображения
+    - name: Собрать параметры выбранных образов для подготовки
       platform.core.prepare_application_images:
         project_root: "{{ platform_project_root }}"
         bundle_root: "{{ platform_execution_bundle_root }}"
         snapshot: "{{ platform_image_snapshot.snapshot }}"
         connections: "{{ platform_image_snapshot.execution_connections }}"
       register: platform_image_inputs
-    - name: Сохранить исходные данные подготовки для последующих автономных игр
+    - name: Сохранить параметры подготовки образов для последующих standalone-playbook
       ansible.builtin.set_fact:
         platform_application_image_inputs: "{{ platform_image_inputs.inputs }}"
-    - name: Загрузить индекс изображения выбранного неизменяемого пакета
+    - name: Загрузить манифест выбранного неизменяемого runtime bundle с индексом образов
       ansible.builtin.include_vars:
         file: "{{ platform_execution_bundle_root }}/manifest.yaml"
         name: platform_application_image_bundle
@@ -35835,9 +35835,9 @@ artifactLock:
 - import_playbook: deployment-plan-machine.yml
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/application-images-prepare.yml","mode":420,"size":2828,"sha256":"7d4776b029b63b426a98d29233e6db0abe2c29b10b32a7abd528f2c6ddd2cd91","index":0,"count":1,"encoding":"utf-8","payloadBytes":2828}
+@@PORTABLE {"path":"ansible-core/playbooks/application-images-prepare.yml","mode":420,"size":2816,"sha256":"f48f5d56db7b91dc29e1547554bf567d9dd066e6aadb0e394b55140bbccb158c","index":0,"count":1,"encoding":"utf-8","payloadBytes":2816}
 ---
-- name: Привязать выбранные целевые изображения без изменения инвентаря оператора
+- name: Привязать выбранные образы к целевым узлам без изменения inventory оператора
   hosts: localhost
   connection: local
   gather_facts: false
@@ -35850,7 +35850,7 @@ artifactLock:
         platform_application_image_bundle: "{{ hostvars['localhost'].platform_application_image_bundle }}"
       loop: "{{ platform_application_image_inputs.targetConnections | list }}"
 
-- name: Прочитать метаданные изображения из каждого выбранного контекста целевой сети
+- name: Прочитать метаданные образа через сеть каждого выбранного целевого узла
   hosts: platform_image_targets
   gather_facts: false
   any_errors_fatal: true
@@ -35863,14 +35863,14 @@ artifactLock:
       ansible.builtin.set_fact:
         platform_application_image_preparations: {}
         _image_registry_cache: {}
-    - name: Подготовить каждое выбранное изображение с помощью обычных задач Ansible
+    - name: Подготовить каждый выбранный образ штатными задачами Ansible
       ansible.builtin.include_role:
         name: platform.core.prepare_application_images
       loop: "{{ platform_application_image_inputs.placements | selectattr('hostId', 'equalto', inventory_hostname) | list }}"
       loop_control:
         loop_var: application_image_input
 
-- name: Заморозить выбранные метаданные изображения на узле выполнения
+- name: Зафиксировать метаданные выбранного образа на узле выполнения
   hosts: localhost
   connection: local
   gather_facts: false
@@ -35881,7 +35881,7 @@ artifactLock:
           {{ {'apiVersion': 'platform.installer/container-images/v1alpha2',
               'placements': platform_application_image_inputs.ready |
                 combine((hostvars | platform.core.application_prepared_image_lock).placements)} }}
-    - name: Продолжить полную подготовку протокола фиксированной машины
+    - name: Сохранить полный результат подготовки образов в формате машинного протокола
       ansible.builtin.copy:
         content: "{{ platform_prepared_application_images | to_json }}"
         dest: "{{ platform_application_image_result_path }}"
@@ -35995,7 +35995,7 @@ artifactLock:
       when: platform_endpoint_source_ids | length > 0
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-ordered-instance.yml","mode":420,"size":4365,"sha256":"77da39e95a5f41c62911c102522030cbc377506afb32f62dcf3c1881ec5c4841","index":0,"count":1,"encoding":"utf-8","payloadBytes":4365}
+@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-ordered-instance.yml","mode":420,"size":4343,"sha256":"c852eea02dc250ee2adeec7335a45e78ac001cfb09b27aad9b9db3ed30d895ab","index":0,"count":1,"encoding":"utf-8","payloadBytes":4343}
 ---
 - name: Проверить полноту пакетов провайдеров перед запуском потребителя приложения
   ansible.builtin.assert:
@@ -36014,7 +36014,7 @@ artifactLock:
     loop_var: application_runtime_job
   when: (application_library_id ~ '/' ~ application_instance_id) in hostvars['localhost'].application_runtime_inputs.integrations.dependencies
 
-- name: Запуск сценариев перед запуском экземпляра после доставки всех изображений
+- name: Выполнить сценарии pre_start экземпляра после доставки всех образов
   ansible.builtin.include_role:
     name: platform.core.application_runtime
     tasks_from: run_scripts
@@ -36071,7 +36071,7 @@ artifactLock:
   run_once: true
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-ordered-library.yml","mode":420,"size":6627,"sha256":"d47a79e6f75e48c3fa3a384bc4f0af8da0131a629552e8c57e79b9edbbae7c27","index":0,"count":1,"encoding":"utf-8","payloadBytes":6627}
+@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-ordered-library.yml","mode":420,"size":6604,"sha256":"dabc2ab627b3ec1c00592c1656e4f9d43b36371f46001bbabbe1888274d96a2e","index":0,"count":1,"encoding":"utf-8","payloadBytes":6604}
 ---
 - name: Отметить начало установки библиотеки
   ansible.builtin.debug:
@@ -36096,7 +36096,7 @@ artifactLock:
     tasks_from: apply_library
   when: platform_application_preflight_jobs | selectattr('libraryId', 'equalto', application_library_id) | list | length > 0
 
-- name: Доставить все выбранные изображения библиотеки перед любым сценарием перед запуском
+- name: Доставить выбранные образы библиотеки перед выполнением сценариев pre_start
   ansible.builtin.include_role:
     name: platform.core.application_runtime
     tasks_from: image_delivery
@@ -36190,32 +36190,32 @@ artifactLock:
   when: application_library_id in hostvars['localhost'].application_selection.scope.installLibraries
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-post-install.yml","mode":420,"size":3458,"sha256":"b644ae0d9e9298e592a17f6626e6f148e09e6516630497278bb5b45520c2be51","index":0,"count":1,"encoding":"utf-8","payloadBytes":3458}
+@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-post-install.yml","mode":420,"size":3360,"sha256":"10c34bcce56579f3f22e382b533b24da560c15eeea0a96474c8b7a1307b076ce","index":0,"count":1,"encoding":"utf-8","payloadBytes":3360}
 ---
 - import_playbook: application-libraries-resolve-runtime.yml
   vars:
     platform_application_post_install_only: true
 
-- name: Выполнение сценариев терминала после префикса успешной установки
+- name: Выполнить сценарии post_install для успешно установленной части библиотек
   hosts: localhost
   connection: local
   gather_facts: false
   any_errors_fatal: true
   tasks:
-    - name: Привязать разрешенную очередь терминалов и ее точные ссылки на учетные данные
+    - name: Привязать очередь сценариев post_install и ссылки на учётные данные
       ansible.builtin.set_fact:
         application_post_install_scripts: "{{ application_runtime_inputs.postInstallScripts }}"
         application_post_install_references: "{{ application_runtime_inputs.postInstallScripts | map(attribute='secretInputs') | map('dict2items') | flatten | map(attribute='value') | unique | list }}"
         platform_application_vault_runtime: {}
         platform_application_credential_files: {}
       no_log: true
-    - name: Привязать только существующие опубликованные поля, используемые скриптами терминала
+    - name: Привязать опубликованные поля, используемые сценариями post_install
       ansible.builtin.set_fact:
         application_post_install_sources: "{{ application_vault_inputs.sourceJobs | selectattr('passwordRef', 'in', application_post_install_references) | list }}"
       no_log: true
-    - name: Запуск сценариев терминала с хранением учетных данных, ограниченным вызовом
+    - name: Выполнить сценарии post_install с учётными данными в пределах операции
       block:
-        - name: Обнаружить только провайдеров Vault, необходимых для входных данных терминала
+        - name: Обнаружить провайдеров Vault, необходимых для входных данных post_install
           ansible.builtin.include_role:
             name: platform.vault.application_provider
             tasks_from: discover
@@ -36231,7 +36231,7 @@ artifactLock:
           loop: "{{ application_post_install_sources }}"
           loop_control:
             loop_var: application_vault_source
-        - name: Последовательное выполнение детерминированной очереди терминала
+        - name: Последовательно выполнить детерминированную очередь сценариев post_install
           ansible.builtin.include_tasks: tasks/application-post-install-script.yml
           loop: "{{ application_post_install_scripts }}"
           loop_control:
@@ -36481,7 +36481,7 @@ artifactLock:
           when: not (platform_application_runtime_credential_custody | default(false)) or application_runtime_inputs.integrations.batches | length == 0
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-provider-verify-stage.yml","mode":420,"size":6498,"sha256":"ae98bc7f2265fbdcf029a2fc6d791129a4d76ae6907c2bb6886d6f5fc6edf9e0","index":0,"count":1,"encoding":"utf-8","payloadBytes":6498}
+@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-provider-verify-stage.yml","mode":420,"size":6508,"sha256":"f76430c6f9ba0137d986568fefae1a2a544bcc1271e5d1dafd81da8e947e5b3a","index":0,"count":1,"encoding":"utf-8","payloadBytes":6508}
 ---
 - name: Проверка провайдеров приложений без изменения сервиса
   hosts: localhost
@@ -36512,7 +36512,7 @@ artifactLock:
           loop: "{{ application_vault_inputs.providers | default([]) | selectattr('providerId', 'in', application_vault_inputs.sourceJobs | default([]) | map(attribute='providerId') | unique | list) | list }}"
           loop_control:
             loop_var: platform_vault_application_provider
-        - name: Чтение существующих источников учетных данных Vault для зондов провайдера
+        - name: Прочитать существующие источники учётных данных Vault для проверки провайдеров
           ansible.builtin.include_role:
             name: platform.vault.application_provider
             tasks_from: sources
@@ -36716,7 +36716,7 @@ artifactLock:
 - import_playbook: application-libraries-provider-verify-stage.yml
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-resolve-runtime.yml","mode":420,"size":5421,"sha256":"c298d6b00dbb72ca60111f0f5c10b75a1715c2ff9effc34dffe38844ecdb5d2d","index":0,"count":1,"encoding":"utf-8","payloadBytes":5421}
+@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-resolve-runtime.yml","mode":420,"size":5419,"sha256":"bbcaa621fe0b0bf0c4aef6c55410620b41ff3ced080552955a45635edf26b8fe","index":0,"count":1,"encoding":"utf-8","payloadBytes":5419}
 ---
 - import_playbook: application-libraries-credential-root.yml
 - name: Разрешить и проверить всю область автономного приложения
@@ -36747,7 +36747,7 @@ artifactLock:
       ansible.builtin.assert:
         that: application_selection.status == 'PASS'
         fail_msg: "{{ application_selection.code | default('APPLICATION_LIBRARY_SELECTION_INVALID') }}"
-    - name: Использовать выбранный снимок для всех прогнозов выполнения
+    - name: Использовать выбранный снимок для всех проекций исполнения
       ansible.builtin.set_fact:
         application_snapshot: "{{ application_selection.prepared }}"
       no_log: true
