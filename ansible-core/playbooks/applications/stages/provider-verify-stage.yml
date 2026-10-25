@@ -35,7 +35,7 @@
           loop: "{{ application_vault_inputs.sourceJobs | default([]) }}"
           loop_control:
             loop_var: application_vault_source
-        - name: Проверка разделов библиотеки Kafka без мутаций ресурсов
+        - name: "Проверить топики библиотеки Kafka без внесения изменений"
           ansible.builtin.include_role:
             name: platform.kafka.kafka_kraft
             tasks_from: application_topics

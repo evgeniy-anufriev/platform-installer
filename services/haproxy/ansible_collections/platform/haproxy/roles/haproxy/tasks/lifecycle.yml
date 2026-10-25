@@ -43,7 +43,7 @@
   ansible.builtin.include_tasks: activate.yml
   when: platform_haproxy_phase == 'activate'
 
-- name: Запустить HAProxy после барьера активной проверки
+- name: "Запустить HAProxy после проверки активной конфигурации"
   ansible.builtin.include_tasks: start.yml
   when: platform_haproxy_phase == 'start'
 

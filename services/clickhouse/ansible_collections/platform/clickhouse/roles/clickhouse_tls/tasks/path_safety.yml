@@ -7,7 +7,7 @@
       - platform_clickhouse_log_root is match('^/var/log/[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$')
     fail_msg: CLICKHOUSE_MANAGED_ROOT_UNSAFE
 
-- name: Защита корневого происхождения данных ClickHouse перед изменением
+- name: "Проверить безопасность родительских каталогов данных ClickHouse до изменений"
   ansible.builtin.include_role:
     name: platform.core.managed_data_path_guard
   vars:
@@ -76,7 +76,7 @@
   loop_control:
     label: "{{ item.item }}"
 
-- name: Проверка экземпляра службы, путей управления доступом SQL и частных путей PKI без следующих ссылок
+- name: "Проверить пути экземпляра, SQL-доступа и PKI без перехода по символическим ссылкам"
   ansible.builtin.stat:
     path: "{{ item.0.config_directory ~ '/pki' if item.1 == 'config_pki' else (item.0.data_directory ~ '/access' if item.1 == 'access_control_directory' else item.0[item.1]) }}"
     follow: false

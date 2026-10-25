@@ -13,7 +13,7 @@
       - platform_kafka_schema_registry_name is match('^[A-Za-z0-9_-]+$')
     fail_msg: SCHEMA_REGISTRY_INPUT_INVALID
 
-- name: Ресурсы реестра проекта через общий фильтр Core
+- name: "Рассчитать ресурсы Schema Registry общим фильтром Core"
   ansible.builtin.set_fact:
     _platform_kafka_registry_projection: >-
       {{ _platform_kafka_instances | platform.core.platform_kafka_schema_registry_projection(
@@ -89,7 +89,7 @@
   when: item.stat.exists
   register: _platform_kafka_registry_unit_headers
 
-- name: Отказ от неуправляемых системных служб реестра и неявное удаление компонентов
+- name: "Отклонить чужие службы Schema Registry и неявное удаление компонента"
   ansible.builtin.assert:
     that:
       - item.stdout == item.item.registry_instance.ownership_marker

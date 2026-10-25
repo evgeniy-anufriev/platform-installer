@@ -7,7 +7,7 @@
     platform_resolved_artifact_sources is not defined or
     platform_resolved_artifact_sources.keepalived.source == 'REPOSITORY'
 
-- name: Создать каталог примитивов готовности Keepalived HAProxy
+- name: "Создать каталог скрипта проверки готовности HAProxy для Keepalived"
   ansible.builtin.file:
     path: "{{ platform_keepalived_haproxy_check_path | dirname }}"
     state: directory
@@ -15,7 +15,7 @@
     group: root
     mode: '0755'
 
-- name: Установить примитив готовности HAProxy, принадлежащий пакету
+- name: "Установить скрипт проверки готовности HAProxy из пакета"
   ansible.builtin.template:
     src: check-haproxy-ready.sh.j2
     dest: "{{ platform_keepalived_haproxy_check_path }}"

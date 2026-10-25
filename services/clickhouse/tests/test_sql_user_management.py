@@ -66,7 +66,7 @@ class ClickHouseSQLUserManagementTests(unittest.TestCase):
 
         safety = yaml.safe_load((ROLE / "tasks/path_safety.yml").read_text(encoding="utf-8"))
         inspection = next(item for item in safety if item.get("name") ==
-                          "Проверка экземпляра службы, путей управления доступом SQL и частных путей PKI без следующих ссылок")
+                          "Проверить пути экземпляра, SQL-доступа и PKI без перехода по символическим ссылкам")
         self.assertIn("access_control_directory", inspection["loop"])
 
 

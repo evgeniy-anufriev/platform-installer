@@ -1,5 +1,5 @@
 ---
-- name: Запустить общие перехватчики конечных точек в исходном контексте выполнения Ansible
+- name: "Выполнить общие обработчики конечных точек в исходном контексте Ansible"
   hosts: platform_targets
   strategy: linear
   gather_facts: false

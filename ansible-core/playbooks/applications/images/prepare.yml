@@ -21,7 +21,7 @@
       ansible.builtin.setup:
         gather_subset: ['!all', 'min']
         filter: ['ansible_system', 'ansible_architecture']
-    - name: Инициализация результатов подготовки цели
+    - name: "Инициализировать результаты подготовки образов целевого узла"
       ansible.builtin.set_fact:
         platform_application_image_preparations: {}
         _image_registry_cache: {}
@@ -37,7 +37,7 @@
   connection: local
   gather_facts: false
   tasks:
-    - name: Сохранить полную нативную подготовку без секретных значений
+    - name: "Сохранить сводные результаты подготовки образов без секретов"
       ansible.builtin.set_fact:
         platform_prepared_application_images: >-
           {{ {'apiVersion': 'platform.installer/container-images/v1alpha2',

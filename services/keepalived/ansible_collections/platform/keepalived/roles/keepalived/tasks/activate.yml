@@ -7,7 +7,7 @@
     get_attributes: false
   register: platform_keepalived_activation_candidate_stat
 
-- name: Активация Assert использует кандидата, проверенного на этапе A
+- name: "Проверить, что активируется конфигурация Keepalived, проверенная на этапе A"
   ansible.builtin.assert:
     that:
       - platform_keepalived_activation_candidate_stat.stat.exists

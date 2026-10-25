@@ -43,7 +43,7 @@ class Service01BContractTests(unittest.TestCase):
     def test_manual_member_input_does_not_require_project_state(self):
         with (ROLE / "tasks" / "main.yml").open(encoding="utf-8") as stream:
             tasks = yaml.safe_load(stream)
-        projection = next(task for task in tasks if task["name"] == "Управляемые проектом экземпляры службы Kafka, когда общедоступный список отсутствует")
+        projection = next(task for task in tasks if task["name"] == "Получить экземпляры Kafka из проекта, если список не задан явно")
         self.assertIn("platform_kafka_instances | length == 0", projection["when"])
         explicit = next(task for task in tasks if task["name"] == "Выбрать явный ввод экземпляра службы Kafka")
         self.assertEqual("platform_kafka_instances | length > 0", explicit["when"])
@@ -53,8 +53,8 @@ class Service01BContractTests(unittest.TestCase):
         with (ROLE / "tasks" / "project_runtime.yml").open(encoding="utf-8") as stream:
             tasks = yaml.safe_load(stream)
         by_name = {task["name"]: task for task in tasks}
-        self.assertNotIn("platform_kafka_quorum_mode", by_name["Идентификатор Kafka в области развертывания проекта"]["ansible.builtin.set_fact"])
-        task = by_name["Явные параметры проекта Kafka в области развертывания"]
+        self.assertNotIn("platform_kafka_quorum_mode", by_name["Определить идентификатор Kafka для выбранного развёртывания"]["ansible.builtin.set_fact"])
+        task = by_name["Определить явные параметры Kafka для выбранного развёртывания"]
         self.assertIn("'quorumMode' in", task["when"])
         self.assertIn("platform_kafka_quorum_mode", task["ansible.builtin.set_fact"])
 
@@ -246,7 +246,7 @@ class Service01BContractTests(unittest.TestCase):
         reset = (SERVICE / "playbooks" / "reset_kafka_host.yml").read_text(encoding="utf-8")
         self.assertIn("RESET_ALL_KAFKA_RUNTIME_ON_TARGET_HOSTS", reset)
         self.assertIn("Требовать точное разрушительное подтверждение сброса хоста Kafka", reset)
-        self.assertIn("Обнаружить все сервисы Kafka systemd systemd", reset)
+        self.assertIn("Найти все службы Kafka в systemd", reset)
         self.assertIn("Подождать определенное время для завершения работы JVM Kafka", reset)
         self.assertIn("Убедиться, что JVM Kafka отсутствуют перед удалением файлов среды выполнения", reset)
         self.assertIn("/opt/kafka_2.13-4.3.1", reset)
@@ -257,7 +257,7 @@ class Service01BContractTests(unittest.TestCase):
 
     def test_fresh_distribution_has_writable_runtime_log_directory(self):
         prepare = (ROLE / "tasks" / "prepare_host.yml").read_text(encoding="utf-8")
-        self.assertIn("Подготовка доступного для записи каталога журнала распространения Kafka", prepare)
+        self.assertIn("Подготовить доступный для записи каталог журналов дистрибутива Kafka", prepare)
         self.assertIn('path: "/opt/{{ platform_kafka_archive_directory }}/logs"', prepare)
         self.assertIn('owner: "{{ platform_kafka_user }}"', prepare)
         self.assertIn("mode: '0750'", prepare)

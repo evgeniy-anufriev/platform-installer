@@ -40,7 +40,7 @@
          hostvars['localhost'].platform_application_delivered_instances) }}
   no_log: true
 
-- name: Перечитать принадлежащие документы до поздней доставки потребителю
+- name: "Повторно проверить управляемые документы перед доставкой учётных данных потребителю"
   ansible.builtin.include_role:
     name: platform.vault.application_provider
     tasks_from: preflight

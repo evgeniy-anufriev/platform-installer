@@ -1,5 +1,5 @@
 ---
-- name: Сопоставление каталога библиотеки с целевой учетной записью Docker HOME
+- name: "Определить каталог библиотеки относительно домашнего каталога пользователя Docker"
   ansible.builtin.set_fact:
     application_root: "{{ application_runtime_job.placement.runtimeDirectory | regex_replace('^~(?=/|$)', application_path_home) }}"
   no_log: true

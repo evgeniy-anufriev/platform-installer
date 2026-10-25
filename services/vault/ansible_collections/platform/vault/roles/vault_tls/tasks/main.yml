@@ -93,7 +93,7 @@
           run_once: true
       when: not (platform_vault_verify_only | bool)
 
-    - name: Настройка аудита, KV v2, пароля пользователя и AppRole без изменения существующих ресурсов
+    - name: "Настроить аудит, KV v2, userpass и AppRole, сохранив существующие ресурсы"
       ansible.builtin.include_tasks: configure.yml
       # These mounts are Raft cluster state, not per-host resources. Only the
       # canonical seed may reconcile them while the deployment lock is held.
@@ -114,7 +114,7 @@
       when: _platform_vault_lock_unit is defined and _platform_vault_lock_start is defined
   when: not (platform_vault_verify_only | bool)
 
-- name: Разрешить текущее свидетельство Vault TLS для проверки только для чтения
+- name: "Выбрать текущие TLS-файлы Vault для проверки без изменений"
   ansible.builtin.include_tasks: resolve_tls.yml
   when: platform_vault_verify_only | bool
 

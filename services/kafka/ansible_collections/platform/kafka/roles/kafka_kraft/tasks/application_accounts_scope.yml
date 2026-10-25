@@ -11,7 +11,7 @@
     - name: Подготовка частного удостоверения клиента PEM для вызова
       ansible.builtin.include_tasks: application_client_tls.yml
       when: platform_kafka_store_type == 'PEM'
-    - name: Визуализация выделенной административной конфигурации SASL
+    - name: "Сформировать административную конфигурацию SASL"
       ansible.builtin.template:
         src: application-topics-client.properties.j2
         dest: "{{ application_kafka_private.path }}/admin.properties"
@@ -20,14 +20,14 @@
       changed_when: false
     - name: Прочитать метаданные развертывания SCRAM и инвентарь ACL один раз перед учетными записями
       ansible.builtin.include_tasks: application_accounts_read.yml
-    - name: Проверить или убедитесь, что каждая логическая учетная запись
+    - name: "Проверить или настроить каждую логическую учётную запись Kafka"
       ansible.builtin.include_tasks: application_account.yml
       loop: "{{ platform_kafka_application_job.accounts }}"
       loop_control:
         loop_var: application_kafka_account
         label: "{{ application_kafka_account.accountId }}"
   always:
-    - name: Удалить временные файлы проверки учётных данных Vault
+    - name: "Удалить временный каталог учётных данных Kafka"
       ansible.builtin.file:
         path: "{{ application_kafka_private.path }}"
         state: absent

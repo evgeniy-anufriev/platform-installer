@@ -29,7 +29,7 @@ class Net02KeepalivedContractTests(unittest.TestCase):
 
     def test_future_haproxy_helper_is_materialized_deterministically(self):
         tasks = (ROLE / "tasks" / "prepare.yml").read_text(encoding="utf-8")
-        self.assertIn("Установить примитив готовности HAProxy, принадлежащий пакету", tasks)
+        self.assertIn("Установить скрипт проверки готовности HAProxy из пакета", tasks)
         self.assertIn("check-haproxy-ready.sh.j2", tasks)
         self.assertIn("platform_keepalived_haproxy_check_path", tasks)
         self.assertIn("mode: '0750'", tasks)

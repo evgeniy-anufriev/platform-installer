@@ -10,11 +10,11 @@
     fail_msg: APPLICATION_PROVIDER_SECRET_FILE_INVALID
   no_log: true
 
-- name: Инициализация отображаемых объявлений таблиц библиотеки
+- name: "Инициализировать список подготовленных описаний таблиц библиотеки"
   ansible.builtin.set_fact:
     clickhouse_application_tables: []
 
-- name: Отобразить объявленные таблицы с помощью обычных шаблонов Ansible
+- name: "Сформировать описания таблиц по шаблонам Ansible"
   ansible.builtin.set_fact:
     clickhouse_application_tables: "{{ clickhouse_application_tables + [{'database': item.0.name, 'definition': item.1, 'sql': lookup('ansible.builtin.template', 'application-table.sql.j2')}] }}"
   loop: "{{ platform_clickhouse_application_job.databases | subelements('tables', skip_missing=true) }}"

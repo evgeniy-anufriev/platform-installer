@@ -11,6 +11,6 @@
   ansible.builtin.include_tasks: verify.yml
   when: platform_bind_phase == 'verify'
 
-- name: Запустить BIND после активного барьера проверки
+- name: "Запустить BIND после проверки активной конфигурации"
   ansible.builtin.include_tasks: start.yml
   when: platform_bind_phase == 'start'

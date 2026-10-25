@@ -65,7 +65,7 @@
   register: _platform_redis_acl_legacy_password
   no_log: true
 
-- name: Рендеринг службы экземпляра Redis systemd systemd
+- name: "Сформировать службу systemd для экземпляра Redis"
   ansible.builtin.template:
     src: redis.service.j2
     dest: "/etc/systemd/system/{{ platform_redis_name }}@{{ redis_member.instance_name }}.service"
@@ -74,7 +74,7 @@
     mode: '0644'
   register: _platform_redis_unit
 
-- name: Начальный узел Sentinel Конфигурация только для TLS для нового Sentinel
+- name: "Создать начальную конфигурацию нового Sentinel с поддержкой только TLS"
   ansible.builtin.template:
     src: sentinel.conf.j2
     dest: "{{ redis_member.config_directory }}/sentinel.conf"
@@ -87,7 +87,7 @@
     - "'sentinel' in redis_member.roles"
     - not _platform_redis_has_persistent_state
 
-- name: Отрисовка службы экземпляра Sentinel systemd systemd
+- name: "Сформировать службу systemd для экземпляра Sentinel"
   ansible.builtin.template:
     src: sentinel.service.j2
     dest: "/etc/systemd/system/{{ platform_redis_name }}-sentinel@{{ redis_member.instance_name }}.service"
@@ -97,7 +97,7 @@
   register: _platform_sentinel_unit
   when: "'sentinel' in redis_member.roles"
 
-- name: Прикрепить файл Sentinel ACL, не переписывая его выбранный главный файл
+- name: "Подключить ACL-файл Sentinel, сохранив сведения о выбранном мастере"
   ansible.builtin.lineinfile:
     path: "{{ redis_member.config_directory }}/sentinel.conf"
     regexp: '^\s*aclfile\s+'
@@ -106,7 +106,7 @@
   when: "'sentinel' in redis_member.roles"
   no_log: true
 
-- name: Удаление устаревшего требования Sentinel после присоединения хешированного ACL
+- name: "Удалить устаревшую директиву requirepass Sentinel после подключения ACL с хешами паролей"
   ansible.builtin.lineinfile:
     path: "{{ redis_member.config_directory }}/sentinel.conf"
     regexp: '^\s*requirepass\s+'
@@ -133,7 +133,7 @@
   when: "'sentinel' in redis_member.roles"
   no_log: true
 
-- name: Перезагрузить systemd для экземпляра службы Redis systemd Services
+- name: "Перечитать конфигурацию systemd после обновления служб Redis"
   ansible.builtin.systemd:
     daemon_reload: true
   when: >-

@@ -1,5 +1,5 @@
 ---
-- name: Остановить процесс временной блокировки теста Vault
+- name: "Остановить процесс, удерживающий блокировку текущей операции Vault"
   ansible.builtin.systemd:
     name: "{{ _platform_vault_lock_unit }}.service"
     state: stopped

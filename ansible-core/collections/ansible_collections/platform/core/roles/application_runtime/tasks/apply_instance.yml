@@ -39,7 +39,7 @@
     owner: "{{ application_runtime_job.account }}"
     mode: '0600'
 
-- name: Материализовать объявленные байты конфигурации экземпляра
+- name: "Записать файлы конфигурации экземпляра"
   ansible.builtin.copy:
     src: "{{ item.path | default(omit) }}"
     content: "{{ item.content if item.path is not defined else omit }}"
@@ -56,7 +56,7 @@
     loop_var: application_archive
   no_log: true
 
-- name: Материализовать экземпляр Compose, включая его метку автоматического дайджеста конфигурации
+- name: "Создать Compose-файл экземпляра с меткой контрольной суммы конфигурации"
   ansible.builtin.copy:
     content: "{{ application_runtime_job.composeContent }}"
     dest: "{{ application_runtime_job.instancePath }}/compose.yml"
@@ -64,7 +64,7 @@
     mode: '0600'
   no_log: true
 
-- name: Доставка частных файлов RoleID и PKI для реального контейнера UID
+- name: "Передать защищённые файлы RoleID и PKI с правами для UID контейнера"
   platform.core.application_identity_files:
     account: "{{ application_runtime_job.account }}"
     user: "{{ application_runtime_job.settings.user | default('0:0') }}"

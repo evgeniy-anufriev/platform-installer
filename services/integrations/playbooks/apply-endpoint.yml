@@ -34,7 +34,7 @@
   connection: local
   gather_facts: false
   tasks:
-    - name: Требовать от провайдеров источника с явной политикой проверки
+    - name: "Проверить наличие провайдеров и явной политики проверки источника"
       ansible.builtin.assert:
         that:
           - platform_service_integration_projection.haproxyDeployments | length > 0

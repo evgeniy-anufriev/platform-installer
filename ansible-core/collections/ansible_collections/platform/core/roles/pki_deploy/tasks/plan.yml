@@ -32,7 +32,7 @@
   register: _platform_pki_deployed_material
   no_log: true
 
-- name: Запись отпечатка несекретной целевой материализации
+- name: "Записать контрольный отпечаток развёрнутых PKI-файлов без секретов"
   ansible.builtin.copy:
     content: "{{ platform_pki_plan.materializationFingerprint }}\n"
     dest: "{{ platform_pki_plan.targetDirectory }}/materialization-fingerprint"

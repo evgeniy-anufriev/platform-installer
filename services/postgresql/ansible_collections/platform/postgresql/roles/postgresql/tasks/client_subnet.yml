@@ -21,7 +21,7 @@
              (_platform_postgresql_local_members | first).address | default(ansible_facts.default_ipv4.address | default('')))
          | list }}
 
-- name: Запрос наблюдаемой клиентской подсети PostgreSQL без угадывания префикса
+- name: "Проверить наличие клиентской подсети PostgreSQL в сетевых данных узла"
   ansible.builtin.assert:
     that:
       - _platform_postgresql_client_networks | length == 1

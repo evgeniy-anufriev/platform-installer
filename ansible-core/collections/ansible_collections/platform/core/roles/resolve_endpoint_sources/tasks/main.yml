@@ -1,5 +1,5 @@
 ---
-- name: Разрешить входные данные собственного приложения один раз, когда источники конечных точек не подготовлены
+- name: "Вычислить параметры приложений, если источники конечных точек ещё не подготовлены"
   ansible.builtin.include_role:
     name: platform.core.resolve_application_libraries
     apply:
@@ -18,7 +18,7 @@
   delegate_to: localhost
   become: false
 
-- name: Совместное использование нормализованных источников конечных точек для частичного и полного согласования провайдеров
+- name: "Передать нормализованные источники конечных точек частичному и полному согласованию"
   ansible.builtin.set_fact:
     platform_endpoint_sources: "{{ _platform_endpoint_source_input.sources }}"
   failed_when: _platform_endpoint_source_input.status != 'PASS'

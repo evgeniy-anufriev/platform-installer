@@ -33,7 +33,7 @@
     - name: Установка и проверка графа-кандидата
       ansible.builtin.include_tasks: activate_publish.yml
   rescue:
-    - name: Остановка с помощью восстанавливаемого архивного свидетельства HAProxy
+    - name: "Остановить выполнение и указать архив для восстановления HAProxy"
       ansible.builtin.fail:
         msg: >-
           HAPROXY_ACTIVATION_RECOVERY_REQUIRED

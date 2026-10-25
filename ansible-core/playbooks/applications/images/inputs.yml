@@ -7,11 +7,11 @@
     - name: Загрузить обычные настройки проекта
       ansible.builtin.include_role:
         name: platform.core.project_settings
-    - name: Разрешение настроек приложения по умолчанию и переопределений
+    - name: "Вычислить настройки приложений с учётом значений по умолчанию и переопределений"
       ansible.builtin.include_role:
         name: platform.core.resolve_application_libraries
       when: platform_desired_state.applicationLibraryDeployments is defined
-    - name: Разрешить входные данные авторитетного проекта и целевого соединения
+    - name: "Определить исходные данные проекта и параметры подключения к целевым узлам"
       platform.core.project_snapshot:
         project_root: "{{ platform_project_root }}"
         service_catalog_path: "{{ platform_service_catalog_path }}"

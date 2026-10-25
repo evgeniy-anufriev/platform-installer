@@ -5,7 +5,7 @@
   gather_facts: false
   any_errors_fatal: true
   tasks:
-    - name: Подготовить бесцелевую проекцию Vault на основе точного снимка провайдера
+    - name: "Подготовить параметры Vault по снимку провайдера без обращения к целевым узлам"
       platform.core.prepare_application_vault:
         snapshot_result: "{{ application_provider_snapshot }}"
       register: application_vault_inputs
@@ -32,7 +32,7 @@
       loop: "{{ application_vault_inputs.providers }}"
       loop_control:
         loop_var: platform_vault_application_provider
-    - name: Библиотека предварительной проверки и секретные области логического экземпляра
+    - name: "Проверить секреты библиотеки и экземпляров приложения до внесения изменений"
       ansible.builtin.include_role:
         name: platform.vault.application_provider
         tasks_from: preflight

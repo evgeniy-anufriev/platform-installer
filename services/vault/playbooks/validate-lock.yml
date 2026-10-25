@@ -1,5 +1,5 @@
 ---
-- name: Доказать готовность блокировки развертывания Vault и семантику выпуска на узле QA
+- name: "Проверить захват и освобождение блокировки Vault на QA-узле"
   hosts: localhost
   connection: local
   gather_facts: false
@@ -39,7 +39,7 @@
           - "platform-vault-lock-test-failure-{{ vault_lock_test_suffix }}"
           - "platform-vault-lock-test-recovery-{{ vault_lock_test_suffix }}"
 
-    - name: Конфликт при выполнении, обычное освобождение и неудачное освобождение держателя замка
+    - name: "Проверить конкуренцию за блокировку, штатное освобождение и освобождение после сбоя"
       block:
         - name: Запустить первую службу и дождаться READY после получения блокировки flock
           ansible.builtin.command:
@@ -62,7 +62,7 @@
               - "set -eu; /usr/bin/systemd-notify --ready; /usr/bin/touch {{ vault_lock_test_dir.path }}/holder-reached-ready; exec /usr/bin/sleep infinity"
           changed_when: true
 
-        - name: Дождаться подтверждения готовности держателя замка
+        - name: "Дождаться готовности процесса, удерживающего блокировку"
           ansible.builtin.command:
             argv: [systemctl, show, --property=ActiveState, --value, "{{ vault_lock_test_units[0] }}.service"]
           register: vault_lock_holder_state
@@ -92,7 +92,7 @@
               - "set -eu; /usr/bin/systemd-notify --ready; /usr/bin/touch {{ vault_lock_test_dir.path }}/contender-reached-ready; exec /usr/bin/sleep infinity"
           changed_when: true
 
-        - name: Дождаться, пока претендент выйдет из строя, прежде чем достичь команды готовности
+        - name: "Проверить завершение конкурирующего процесса до сигнала готовности"
           ansible.builtin.command:
             argv: [systemctl, show, --property=ActiveState, --value, "{{ vault_lock_test_units[1] }}.service"]
           register: vault_lock_contender_state
@@ -101,7 +101,7 @@
           retries: 10
           delay: 1
 
-        - name: Доказать, что именно держатель замка достиг защищенной фазы
+        - name: "Проверить, что защищённый этап выполнил только владелец блокировки"
           ansible.builtin.stat:
             path: "{{ vault_lock_test_dir.path }}/{{ item }}"
           loop:
@@ -118,12 +118,12 @@
               - not vault_lock_markers.results[1].stat.exists
             fail_msg: VAULT_LOCK_CONTENTION_TEST_FAILED
 
-        - name: Нормально освободить держатель замка
+        - name: "Штатно остановить процесс, удерживающий блокировку"
           ansible.builtin.command:
             argv: [systemctl, stop, "{{ vault_lock_test_units[0] }}.service"]
           changed_when: true
 
-        - name: Запустить претендент после обычного релиза
+        - name: "Запустить конкурирующий процесс после штатного освобождения блокировки"
           ansible.builtin.command:
             argv:
               - systemd-run
@@ -144,7 +144,7 @@
               - "set -eu; /usr/bin/systemd-notify --ready; exec /usr/bin/sleep infinity"
           changed_when: true
 
-        - name: Дождаться готовности претендента после обычного релиза
+        - name: "Дождаться готовности конкурирующего процесса после освобождения блокировки"
           ansible.builtin.command:
             argv: [systemctl, show, --property=ActiveState, --value, "{{ vault_lock_test_units[2] }}.service"]
           register: vault_lock_released_state
@@ -153,12 +153,12 @@
           retries: 10
           delay: 1
 
-        - name: Остановить претендента на обычный выпуск
+        - name: "Штатно остановить конкурирующий процесс и освободить блокировку"
           ansible.builtin.command:
             argv: [systemctl, stop, "{{ vault_lock_test_units[2] }}.service"]
           changed_when: true
 
-        - name: Запуск держателя, который терпит неудачу после успешного сообщения о готовности
+        - name: "Запустить владельца блокировки с имитацией сбоя после сигнала готовности"
           ansible.builtin.command:
             argv:
               - systemd-run
@@ -209,7 +209,7 @@
               - "set -eu; /usr/bin/systemd-notify --ready; exec /usr/bin/sleep infinity"
           changed_when: true
 
-        - name: Дождаться готовности после неудачного освобождения держателя замка
+        - name: "Дождаться готовности нового владельца после сбоя прежнего владельца блокировки"
           ansible.builtin.command:
             argv: [systemctl, show, --property=ActiveState, --value, "{{ vault_lock_test_units[4] }}.service"]
           register: vault_lock_recovery_state

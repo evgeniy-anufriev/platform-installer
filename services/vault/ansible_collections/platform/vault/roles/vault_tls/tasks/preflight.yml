@@ -61,7 +61,7 @@
   changed_when: false
   failed_when: false
 
-- name: Построение ограниченного набора проверки предков пути Vault
+- name: "Собрать список родительских каталогов Vault для проверки"
   ansible.builtin.set_fact:
     _platform_vault_path_checks: "{{ [{'path': platform_vault_config_root, 'owner': 'root'}, {'path': platform_vault_log_root, 'owner': 'root'}] }}"
 
@@ -164,7 +164,7 @@
     index_var: marker_index
   no_log: true
 
-- name: Проверить точные служебные файлы systemd Vault без следующих ссылок
+- name: "Проверить файлы служб Vault без перехода по символическим ссылкам"
   ansible.builtin.stat:
     path: "/etc/systemd/system/{{ item.instance_name }}.service"
     follow: false

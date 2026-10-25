@@ -162,7 +162,7 @@
   when: _platform_vault_bootstrap_material is defined and _platform_vault_output_files.results[0].stat.exists
   no_log: true
 
-- name: Отклонить конфликтующие существующие общие ресурсы перед завершением хранения пары
+- name: "Отклонить несовпадение сохранённых долей ключа перед завершением записи"
   ansible.builtin.assert:
     that:
       - _platform_vault_output_files.results[1].stat.size <= 32768
@@ -184,7 +184,7 @@
   when: _platform_vault_bootstrap_material is defined and not _platform_vault_output_files.results[0].stat.exists
   no_log: true
 
-- name: Сохранение отдельных общих ресурсов разблокировки без перезаписи существующего файла
+- name: "Сохранить доли ключа разблокировки без перезаписи существующего файла"
   ansible.builtin.copy:
     content: "{{ {'keys': _platform_vault_bootstrap_material['keys']} | to_nice_json }}\n"
     dest: "{{ _platform_vault_bootstrap_output_dir }}/unseal-shares"
@@ -238,7 +238,7 @@
   when: _platform_vault_existing_root_token is not skipped
   no_log: true
 
-- name: Прочитать существующие общие ресурсы разблокировки перед завершением прерванной публикации хранения
+- name: "Прочитать сохранённые доли ключа для завершения прерванной записи"
   ansible.builtin.slurp:
     src: "{{ _platform_vault_bootstrap_output_dir }}/unseal-shares"
   register: _platform_vault_existing_unseal_keys
@@ -270,7 +270,7 @@
   when: _platform_vault_bootstrap_material is defined
   no_log: true
 
-- name: Выбрать сгенерированный или восстановленный токен и общие ресурсы начальной загрузки Vault
+- name: "Выбрать созданный или восстановленный токен и доли ключа Vault"
   ansible.builtin.set_fact:
     _platform_vault_admin_token: "{{ _platform_vault_bootstrap_material.root_token }}"
     _platform_vault_effective_unseal_keys: "{{ _platform_vault_bootstrap_material['keys'] }}"
@@ -307,25 +307,25 @@
   when: _platform_vault_admin_token is not defined and _platform_vault_output_files.results[0].stat.exists
   no_log: true
 
-- name: Загрузка общих ресурсов разблокировки из защищенного автономного хранилища
+- name: "Загрузить доли ключа разблокировки из защищённого локального хранилища"
   ansible.builtin.set_fact:
     _platform_vault_effective_unseal_keys: "{{ (lookup('ansible.builtin.file', _platform_vault_bootstrap_output_dir ~ '/unseal-shares') | from_json)['keys'] }}"
   when: _platform_vault_effective_unseal_keys is not defined and (platform_vault_unseal_keys is not defined or platform_vault_unseal_keys | length == 0) and _platform_vault_output_files.results[1].stat.exists
   no_log: true
 
-- name: Выбрать явно предоставленные общие ресурсы для разблокировки, если они предусмотрены
+- name: "Использовать явно переданные доли ключа разблокировки, если они заданы"
   ansible.builtin.set_fact:
     _platform_vault_effective_unseal_keys: "{{ platform_vault_unseal_keys }}"
   when: _platform_vault_effective_unseal_keys is not defined and platform_vault_unseal_keys is sequence and platform_vault_unseal_keys is not string and platform_vault_unseal_keys | length > 0
   no_log: true
 
-- name: По умолчанию отсутствует необязательный ввод разблокировки в пустой список в памяти
+- name: "Использовать пустой список, если доли ключа разблокировки не переданы"
   ansible.builtin.set_fact:
     _platform_vault_effective_unseal_keys: []
   when: _platform_vault_effective_unseal_keys is not defined
   no_log: true
 
-- name: Требовать ограниченные полномочия начальной загрузки и разблокировать общие ресурсы
+- name: "Проверить административный токен и доли ключа разблокировки Vault"
   ansible.builtin.assert:
     that:
       - _platform_vault_admin_token is defined
@@ -342,7 +342,7 @@
   vars:
     vault_member: "{{ _platform_vault_instances | first }}"
 
-- name: Присоединитесь и разблокируйте каждого последователя Raft после того, как начальный узел станет работоспособным
+- name: "Присоединить и разблокировать остальные узлы Raft после готовности начального узла"
   ansible.builtin.include_tasks: bootstrap_follower.yml
   loop: "{{ _platform_vault_instances | sort(attribute='slot') }}"
   loop_control:

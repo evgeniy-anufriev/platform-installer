@@ -42,7 +42,7 @@
     system: true
     create_home: false
 
-- name: Подготовка доступного для записи каталога журнала распространения Kafka
+- name: "Подготовить доступный для записи каталог журналов дистрибутива Kafka"
   ansible.builtin.file:
     path: "/opt/{{ platform_kafka_archive_directory }}/logs"
     state: directory

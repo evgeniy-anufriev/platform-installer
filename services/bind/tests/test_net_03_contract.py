@@ -17,7 +17,7 @@ class Net03BindContractTests(unittest.TestCase):
         apply = (ROOT / "playbooks" / "apply.yml").read_text(encoding="utf-8")
         role = (ROLE / "tasks" / "main.yml").read_text(encoding="utf-8")
         self.assertIn("Опубликовать runtime-проекцию BIND для операции применения конфигурации", apply)
-        self.assertEqual(1, apply.count("Persist BIND атомарно генерирует последовательное состояние"))
+        self.assertEqual(1, apply.count("Атомарно сохранить служебное состояние серийных номеров BIND"))
         self.assertIn("platform_generated_state_path", apply)
         self.assertIn("Привязать сохраняемое сгенерированное состояние BIND к идентификатору проекта", apply)
         self.assertIn("Проверка загруженного сгенерированного состояния BIND перед согласованием", apply)
@@ -25,7 +25,7 @@ class Net03BindContractTests(unittest.TestCase):
         self.assertIn("hostvars['localhost'].platform_bind_runtime_projection", role)
         self.assertNotIn("platform_generated_state.serviceDeployments[item.key].dns.currentSerial", role)
         self.assertIn("include_service_endpoints: true", apply)
-        self.assertIn("Разрешить только базовый контент DNS для обычного BIND. Применить", apply)
+        self.assertIn("Рассчитать базовые DNS-записи для обычного применения BIND", apply)
         self.assertIn("include_service_endpoints: false", apply)
         self.assertIn("include_group_wildcards: true", apply)
 
@@ -211,7 +211,7 @@ class Net03BindContractTests(unittest.TestCase):
         self.assertIn("BIND_OPTIONS_ANCHOR_INVALID", prepare)
         self.assertIn("BIND_OPTIONS_INCLUDE_CONTEXT_INVALID", prepare)
         self.assertNotIn("ansible.builtin.lineinfile", prepare)
-        self.assertIn("Детерминированное внедрение возможных вариантов платформы в контекст параметров BIND", prepare)
+        self.assertIn("Подключить подготовленный файл параметров в блок options BIND", prepare)
         self.assertIn("BIND_CANDIDATE_INCLUDE_STRUCTURE_INVALID", prepare)
 
     def test_activation_installs_the_validated_candidate_without_reassembly(self):

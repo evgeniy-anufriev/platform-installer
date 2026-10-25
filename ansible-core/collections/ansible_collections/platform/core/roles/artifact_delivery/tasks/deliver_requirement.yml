@@ -30,7 +30,7 @@
     mode: '0700'
   when: platform_resolved_artifact_sources[artifact_requirement.id].source == 'OFFLINE_BUNDLE'
 
-- name: Копирование выбранных автономных артефактов в целевой объект
+- name: "Скопировать выбранные offline-артефакты на целевой узел"
   ansible.builtin.copy:
     src: "{{ platform_execution_runtime_root }}/{{ artifact.ref }}"
     dest: "{{ platform_artifact_stage_root }}/{{ artifact_requirement.id }}/{{ artifact.sha256 | regex_replace('^sha256:', '') }}-{{ artifact.ref | basename }}"
@@ -67,7 +67,7 @@
   when: platform_resolved_artifact_sources[artifact_requirement.id].source == 'OFFLINE_BUNDLE'
   no_log: true
 
-- name: Запись поэтапных путей артефактов для установщиков конкретных служб
+- name: "Сохранить пути доставленных артефактов для установки сервисов"
   ansible.builtin.set_fact:
     platform_offline_artifact_paths: >-
       {{ platform_offline_artifact_paths | combine({artifact_requirement.id:
@@ -79,7 +79,7 @@
     label: "{{ artifact.ref | basename }}"
   when: platform_resolved_artifact_sources[artifact_requirement.id].source == 'OFFLINE_BUNDLE'
 
-- name: Собрать локальные пути закрытия RPM
+- name: "Собрать пути RPM-пакетов и их зависимостей"
   ansible.builtin.set_fact:
     platform_offline_package_paths: >-
       {{ platform_offline_package_paths +

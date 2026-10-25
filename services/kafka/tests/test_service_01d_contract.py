@@ -68,7 +68,7 @@ class Service01DContractTests(unittest.TestCase):
         self.assertIn("LeaderId", quorum)
         self.assertIn("kafka-broker-api-versions.sh", verify)
         self.assertIn("Выбрать неизолированные диагностические заголовки брокера Kafka, доступные только для чтения", verify)
-        self.assertIn("Подтвердить, что брокеры Kafka зарегистрированы и не защищены", verify)
+        self.assertIn("Подтвердить регистрацию брокеров Kafka и состояние unfenced", verify)
         self.assertIn("*[!0-9.]*)", ssl_verify)
         self.assertIn('"$verification_option" "$verification_host"', ssl_verify)
         self.assertIn("-cert {{ _platform_kafka_tls_runtime.targetDirectory }}/certificate.pem", ssl_verify)

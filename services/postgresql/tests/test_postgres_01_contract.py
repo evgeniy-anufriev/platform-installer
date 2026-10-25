@@ -70,7 +70,7 @@ class PostgreSQLHaLifecycleContractTests(unittest.TestCase):
         legacy_probe = next(task for task in tasks
                             if task.get("name") == "Проверка имен устаревших пакетов PostgreSQL по маскам точной версии")
         major_probe = next(task for task in tasks
-                           if task.get("name") == "Проверка имен пакетов PostgreSQL с основной областью действия по маскам точной версии")
+                           if task.get("name") == "Проверить имена пакетов PostgreSQL с указанием основной версии")
         legacy_argv = legacy_probe["ansible.builtin.command"]["argv"]
         major_argv = major_probe["ansible.builtin.command"]["argv"]
         self.assertIn("--latest-limit=1", legacy_argv)
@@ -87,7 +87,7 @@ class PostgreSQLHaLifecycleContractTests(unittest.TestCase):
     def test_pg_auto_failover_package_selection_supports_major_scoped_names(self):
         tasks = yaml.safe_load(self.resolve_packages)
         major_probe = next(task for task in tasks
-                           if task.get("name") == "Проверка имени пакета pg_auto_failover с основной областью действия по маске версии")
+                           if task.get("name") == "Проверить имя пакета pg_auto_failover с указанием основной версии PostgreSQL")
         legacy_probe = next(task for task in tasks
                             if task.get("name") == "Проверка имени устаревшего пакета pg_auto_failover по маске версии")
         self.assertIn("pg_auto_failover-{{ platform_postgresql_version.split('.')[0] }}-",
@@ -208,7 +208,7 @@ class PostgreSQLHaLifecycleContractTests(unittest.TestCase):
     def test_service_account_and_base_directories_precede_owned_tls_materialization(self):
         names = [task.get("name") for task in yaml.safe_load(self.main)]
         self.assertLess(
-            names.index("Решить точный потребительский план PostgreSQL PKI перед внесением изменений"),
+            names.index("Выбрать план PKI для PostgreSQL до внесения изменений"),
             names.index("Установить одобренные пакеты PostgreSQL из настроенного системного репозитория"),
         )
         self.assertLess(
@@ -221,7 +221,7 @@ class PostgreSQLHaLifecycleContractTests(unittest.TestCase):
         )
         self.assertLess(
             names.index("Создать каталоги развертывания и экземпляра службы PostgreSQL"),
-            names.index("Установить принадлежащий PostgreSQL материал TLS после существования каталогов учетной записи и базы"),
+            names.index("Установить TLS-файлы PostgreSQL после создания учётной записи и каталогов"),
         )
         install_tls = yaml.safe_load((ROLE / "tasks/install_tls.yml").read_text(encoding="utf-8"))
         tls_directory = next(task for task in install_tls

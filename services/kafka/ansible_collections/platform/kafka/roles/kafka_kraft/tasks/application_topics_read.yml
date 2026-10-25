@@ -19,7 +19,7 @@
   retries: "{{ platform_kafka_startup_readiness_retries }}"
   delay: "{{ platform_kafka_startup_readiness_delay }}"
 
-- name: Требовать читаемые метаданные тематического пакета
+- name: "Проверить успешность чтения метаданных выбранных топиков"
   ansible.builtin.assert:
     that: application_topic_batch_description.rc == 0
     fail_msg: APPLICATION_TOPIC_DESCRIBE_FAILED

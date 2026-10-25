@@ -14,7 +14,7 @@
       - platform_pki_reissue_request_ids | difference(platform_pki_requests | map(attribute='id') | list) | length == 0
     fail_msg: PKI_MATERIALIZATION_RUNTIME_INVALID
 
-- name: Требовать новое разрешение, соответствующее ранее примененным замороженным планам PKI
+- name: "Проверить соответствие заново рассчитанных планов PKI ранее применённым"
   ansible.builtin.assert:
     that:
       - platform_pki_managed_resolution is defined
@@ -36,7 +36,7 @@
     (platform_pki_materialization_plans | selectattr('formats', 'defined') |
      map(attribute='formats') | flatten | intersect(['PKCS12_KEYSTORE', 'PKCS12_TRUSTSTORE']) | length) > 0
 
-- name: Установить среду выполнения Java, предоставляя ключевой инструмент, когда он отсутствует
+- name: "Установить пакет Java с утилитой keytool, если она отсутствует"
   ansible.builtin.package:
     name: "{{ platform_pki_keytool_package }}"
     state: present

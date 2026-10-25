@@ -112,7 +112,7 @@
   loop: [admin-token, unseal-shares, init-response.json]
   register: _platform_vault_output_files
 
-- name: Отказаться от замены файлов, принадлежащих другому пользователю или чрезмерно разрешительных файлов начальной загрузки
+- name: "Отклонить файлы инициализации с чужим владельцем или избыточными правами доступа"
   ansible.builtin.assert:
     that:
       - not item.stat.exists or (item.stat.isreg and not item.stat.islnk and item.stat.uid | string == _platform_vault_controller_uid.stdout | trim and item.stat.mode == '0600')

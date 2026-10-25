@@ -19,7 +19,7 @@
           - platform_kafka_host_reset_confirmation == platform_kafka_host_reset_expected_confirmation
         fail_msg: 'BLOCKED: reset_kafka_host requires exact destructive acknowledgement'
 
-    - name: Обнаружить все сервисы Kafka systemd systemd
+    - name: "Найти все службы Kafka в systemd"
       ansible.builtin.shell: |
         set -o pipefail
         {
@@ -95,7 +95,7 @@
         state: absent
       loop: "{{ platform_kafka_host_reset_paths }}"
 
-    - name: Найти служебные файлы systemd Kafka systemd
+    - name: "Найти файлы служб Kafka в systemd"
       ansible.builtin.find:
         paths: /etc/systemd/system
         patterns:
@@ -104,7 +104,7 @@
         recurse: false
       register: platform_kafka_host_reset_unit_files
 
-    - name: Удалить служебные файлы systemd Kafka systemd
+    - name: "Удалить файлы служб Kafka из systemd"
       ansible.builtin.file:
         path: "{{ item.path }}"
         state: absent

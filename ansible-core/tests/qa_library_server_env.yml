@@ -29,7 +29,7 @@
         - {id: node1, ip: 192.0.2.11, hostname: node1.example.test}
         - {id: node2, ip: 192.0.2.12, hostname: node2.example.test}
 
-    - name: Визуализация рабочей среды и базовых шаблонов без записи на сервер
+    - name: "Сформировать окружение и базовые шаблоны без записи на сервер"
       ansible.builtin.set_fact:
         rendered_env: "{{ lookup('ansible.builtin.template', application_runtime_role ~ '/templates/library.env.j2') }}"
         rendered_base: "{{ lookup('ansible.builtin.template', sdku_role ~ '/templates/.base_compose.yml.j2') | from_yaml }}"

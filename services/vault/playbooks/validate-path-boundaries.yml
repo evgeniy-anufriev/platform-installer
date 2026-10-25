@@ -5,7 +5,7 @@
   gather_facts: false
   become: true
   tasks:
-    - name: Создать один ограниченный временный корень для случаев с границей пути
+    - name: "Создать временный каталог для проверок безопасности путей"
       ansible.builtin.tempfile:
         state: directory
         path: /var/tmp

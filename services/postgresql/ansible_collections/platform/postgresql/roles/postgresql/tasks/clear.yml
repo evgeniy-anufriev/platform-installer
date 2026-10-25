@@ -155,7 +155,7 @@
     state: absent
   loop: "{{ _platform_postgresql_clear_paths }}"
 
-- name: Удалить выбранную службу systemd PostgreSQL systemd
+- name: "Удалить выбранную службу PostgreSQL из systemd"
   ansible.builtin.file:
     path: "{{ _platform_postgresql_clear_unit }}"
     state: absent
@@ -179,7 +179,7 @@
   register: platform_postgresql_clear_final_state
   loop: "{{ _platform_postgresql_clear_paths }}"
 
-- name: Assert PostgreSQL clean_install удалил выбранные пути выполнения
+- name: "Проверить удаление выбранных каталогов PostgreSQL после clean_install"
   ansible.builtin.assert:
     that: not item.stat.exists
     fail_msg: "PostgreSQL clean_install did not remove {{ item.item }}"

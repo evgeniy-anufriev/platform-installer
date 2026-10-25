@@ -20,7 +20,7 @@
   ansible.builtin.set_fact:
     platform_keepalived_local_ownership: {}
 
-- name: Убедиться, что каждое локальное развертывание Keepalived имеет полное право собственности на VIP
+- name: "Проверить распределение VIP между участниками каждого развёртывания Keepalived"
   ansible.builtin.include_tasks: verify_deployment.yml
   loop: "{{ platform_desired_state.serviceDeployments | dict2items | selectattr('value.serviceType', 'equalto', 'keepalived') | selectattr('key', 'in', platform_deployments | default({})) | list }}"
   loop_control:

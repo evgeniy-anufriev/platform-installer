@@ -32,7 +32,7 @@
   changed_when: false
   failed_when: false
 
-- name: Отказаться от смены хоста с активными стандартными службами systemd ClickHouse
+- name: "Отклонить установку при активных штатных службах ClickHouse"
   ansible.builtin.assert:
     that: "'active' not in _platform_clickhouse_stock_units.stdout_lines"
     fail_msg: CLICKHOUSE_FOREIGN_UNIT_ACTIVE

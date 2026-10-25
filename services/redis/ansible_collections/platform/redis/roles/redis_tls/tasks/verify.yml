@@ -185,7 +185,7 @@
   no_log: true
   when: "'sentinel' in redis_member.roles"
 
-- name: Запись безопасного главного наблюдения Sentinel для проверки в масштабе всего развертывания
+- name: "Сохранить обнаруженного Sentinel мастера Redis для общей проверки"
   ansible.builtin.set_fact:
     _platform_redis_observed_sentinel_masters: >-
       {{ _platform_redis_observed_sentinel_masters + [

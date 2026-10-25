@@ -8,12 +8,12 @@
     platform_haproxy_active_artifacts_changed: false
     platform_haproxy_tls_material_changed: false
   tasks:
-    - name: Остановить HAProxy перед симуляцией нового нестабильного каталога среды выполнения
+    - name: "Остановить HAProxy перед проверкой восстановления временного runtime-каталога"
       ansible.builtin.systemd:
         name: haproxy
         state: stopped
 
-    - name: Удалить только каталог нестабильных сокетов HAProxy для регрессионного теста
+    - name: "Удалить временный каталог сокетов HAProxy для регрессионной проверки"
       ansible.builtin.file:
         path: /run/haproxy
         state: absent

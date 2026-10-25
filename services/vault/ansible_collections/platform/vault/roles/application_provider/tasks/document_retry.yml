@@ -24,7 +24,7 @@
 
 - name: Сохранить безопасную диагностику записи документа Vault
   block:
-    - name: Повторить только разные поля с последней версией CAS
+    - name: "Повторить запись изменённых полей с актуальной версией CAS"
       ansible.builtin.uri:
         url: "{{ application_vault_provider.url }}/v1/{{ application_vault_document.mount }}/data/{{ application_vault_document.document }}"
         method: "{{ application_vault_delta.method }}"

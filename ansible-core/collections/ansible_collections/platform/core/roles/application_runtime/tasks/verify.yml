@@ -1,5 +1,5 @@
 ---
-- name: Разрешить пути к библиотекам для автономной проверки без предварительной проверки
+- name: "Определить пути библиотеки для самостоятельного запуска Verify"
   ansible.builtin.include_tasks: resolve_paths.yml
   vars:
     application_path_home: "{{ getent_passwd[application_runtime_job.account][4] }}"

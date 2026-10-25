@@ -24,7 +24,7 @@
           or redis_members | selectattr('replicaReady', 'equalto', true) | list | length == 2
         fail_msg: REDIS_DEPLOYMENT_REPLICA_SET_INVALID
 
-    - name: Требовать один согласованный мастер Sentinel в Sentinel HA
+    - name: "Проверить, что все Sentinel указывают на одного мастера Redis"
       ansible.builtin.assert:
         that: >-
           platform_redis_mode == 'standalone'

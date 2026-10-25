@@ -53,7 +53,7 @@
   loop: "{{ platform_dns_client_local.servers }}"
   when: platform_dns_client_backend == 'NetworkManager'
 
-- name: Разрешить хост управляемого проекта с помощью обычного системного преобразователя
+- name: "Проверить разрешение имени узла проекта системным DNS-резолвером"
   ansible.builtin.command:
     argv: [getent, hosts, "{{ platform_dns_client_local.hostRecord }}"]
   changed_when: false

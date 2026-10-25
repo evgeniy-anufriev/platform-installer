@@ -51,7 +51,7 @@
     platform_bind_inspected_deployment: "{{ item }}"
   when: platform_deployments[item.key].roles | first == 'primary'
 
-- name: Кандидат на опции Render Platform BIND
+- name: "Сформировать файл-кандидат параметров BIND"
   ansible.builtin.template:
     src: platform-installer-options.conf.j2
     dest: "{{ platform_bind_options_include_file }}.candidate"
@@ -77,7 +77,7 @@
   loop: "{{ platform_desired_state.serviceDeployments | dict2items | selectattr('value.serviceType', 'equalto', 'bind') | selectattr('key', 'in', platform_deployments) | list }}"
   register: _platform_bind_zones_candidate
 
-- name: Рендеринг зоны основного кандидата BIND
+- name: "Сформировать файл-кандидат основной зоны BIND"
   ansible.builtin.template:
     src: zone.j2
     dest: "{{ platform_bind_primary_zone_directory }}/{{ platform_bind_resolved_zones[item.key].zone }}.zone.candidate"
@@ -116,7 +116,7 @@
          not _platform_bind_main_config_stats.results[1].stat.exists or
          _platform_bind_main_config_stats.results[0].stat.checksum != _platform_bind_main_config_stats.results[1].stat.checksum }}
 
-- name: Копирование конфигурации распределения BIND в полный граф-кандидат
+- name: "Скопировать штатную конфигурацию BIND в проверяемый набор файлов"
   ansible.builtin.copy:
     src: "{{ platform_bind_distribution_config }}"
     dest: "{{ platform_bind_candidate_main_config }}"
@@ -167,7 +167,7 @@
     fail_msg: BIND_OPTIONS_ANCHOR_INVALID
   when: platform_bind_candidate_rebuild_required
 
-- name: Детерминированное внедрение возможных вариантов платформы в контекст параметров BIND
+- name: "Подключить подготовленный файл параметров в блок options BIND"
   ansible.builtin.replace:
     path: "{{ platform_bind_candidate_main_config }}"
     regexp: '(?m)^([ \t]*options[ \t]*\{[ \t]*)$'
@@ -179,7 +179,7 @@
     src: "{{ platform_bind_candidate_main_config }}"
   register: _platform_bind_candidate_with_options
 
-- name: Утверждение вариантов-кандидатов включается непосредственно в контекст параметров
+- name: "Проверить подключение файла параметров непосредственно в блоке options"
   ansible.builtin.assert:
     that:
       - (_platform_bind_candidate_with_options.content | b64decode | regex_findall('(?m)^[ \t]*include "' ~ (platform_bind_options_include_file | regex_escape) ~ '[.]candidate";[ \t]*$') | length) == 1
@@ -189,7 +189,7 @@
          (platform_bind_options_include_file | regex_escape) ~ '[.]candidate";')) | length == 1
     fail_msg: BIND_OPTIONS_INCLUDE_CONTEXT_INVALID
 
-- name: Детерминированное добавление потенциальных зон платформы в контекст BIND верхнего уровня
+- name: "Подключить подготовленные зоны на верхнем уровне конфигурации BIND"
   ansible.builtin.replace:
     path: "{{ platform_bind_candidate_main_config }}"
     regexp: '(?s)\Z'

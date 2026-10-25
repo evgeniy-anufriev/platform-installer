@@ -11,7 +11,7 @@
 - name: Согласовать пакет учётных записей провайдера через защищённые файлы
   when: application_provider_batch.accounts | length > 0
   block:
-    - name: Разрешить обратный вызов учетной записи из конкретного пакета провайдера
+    - name: "Определить обработчик учётных записей из пакета провайдера"
       platform.core.prepare_application_account_batch:
         batch: "{{ application_provider_batch }}"
         project_root: "{{ platform_project_root | default(hostvars['localhost'].inventory_dir | dirname) }}"
@@ -33,7 +33,7 @@
       become: false
       no_log: true
 
-    - name: Привязка значений частного пароля вызова без выходных данных общедоступного сценария
+    - name: "Подготовить пароли текущей операции без включения их в вывод сценария"
       ansible.builtin.set_fact:
         application_batch_passwords: "{{ application_batch_passwords | default({}) | combine({item.id: lookup('ansible.builtin.file', application_batch_source_files[item.passwordRef], rstrip=false)}) }}"
       vars:
@@ -65,7 +65,7 @@
       become: false
       changed_when: false
       no_log: true
-    - name: Отменить пакетные значения паролей перед другим провайдером
+    - name: "Сбросить временные пароли пакета перед обработкой следующего провайдера"
       ansible.builtin.set_fact:
         application_batch_passwords: {}
       no_log: true

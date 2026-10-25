@@ -1,5 +1,5 @@
 ---
-- name: Прямое принятие автономной роли Docker на одном целевом объекте RED OS
+- name: "Проверить самостоятельный запуск роли Docker на одном узле RED OS"
   hosts: platform_targets
   become: true
   gather_facts: false

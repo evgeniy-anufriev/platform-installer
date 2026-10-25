@@ -30,7 +30,7 @@
     loop_var: platform_bind_a_record_address
     label: Validate DNS A-record IPv4 address
 
-- name: Прочитать текущую авторитетную запись A из локальной первичной записи
+- name: "Прочитать текущую A-запись с локального первичного DNS-сервера"
   ansible.builtin.command:
     argv:
       - dig

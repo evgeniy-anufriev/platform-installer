@@ -5,7 +5,7 @@
     state: present
     update_cache: false
 
-- name: Еще раз проверьте, что установка пакета не активировала корневой Docker
+- name: "Проверить, что установка пакетов не запустила Docker с правами root"
   ansible.builtin.command:
     argv: [systemctl, is-active, docker.service, docker.socket]
   register: _platform_docker_rootful_postinstall
@@ -100,7 +100,7 @@
     - _platform_docker_password_state.stdout.split()[1] in ['LK', 'NP']
   no_log: true
 
-- name: Запросить полный результат шифрования SHA-512 перед активацией пароля
+- name: "Проверить полный формат хеша пароля SHA-512 crypt"
   ansible.builtin.assert:
     that:
       - _platform_docker_account_password_hash.stdout.startswith('$6$')
@@ -127,14 +127,14 @@
     key: "{{ platform_docker_account_name }}"
     fail_key: true
 
-- name: Привязать учетную запись UID и дом к точной записи NSS
+- name: "Сохранить UID и домашний каталог выбранной учётной записи из NSS"
   ansible.builtin.set_fact:
     _platform_docker_uid: "{{ getent_passwd[platform_docker_account_name][1] | int }}"
     _platform_docker_gid: "{{ getent_passwd[platform_docker_account_name][2] | int }}"
     _platform_docker_home: "{{ getent_passwd[platform_docker_account_name][4] }}"
   changed_when: false
 
-- name: Проверить, что выбранная учетная запись не является привилегированной или бездомной
+- name: "Проверить непривилегированную учётную запись Docker и допустимый домашний каталог"
   ansible.builtin.assert:
     that:
       - _platform_docker_uid | int >= 1000
@@ -253,7 +253,7 @@
         ['LXC_DHCP_CONFILE=/etc/lxc/' ~ platform_docker_name ~ '-dnsmasq.conf']
     fail_msg: DOCKER_LXC_DHCP_CONFIG_CONFLICT
 
-- name: Проверка незавершенного восходящего файла целевого преобразователя
+- name: "Проверить файл upstream DNS-серверов systemd-resolved"
   ansible.builtin.stat:
     path: /run/systemd/resolve/resolv.conf
     follow: true
@@ -262,7 +262,7 @@
     get_checksum: false
   register: _platform_docker_upstream_resolver_file
 
-- name: Чтение адресов целевого преобразователя для LXC DHCP
+- name: "Прочитать адреса DNS-серверов узла для DHCP сети LXC"
   ansible.builtin.slurp:
     src: "{{ '/run/systemd/resolve/resolv.conf' if _platform_docker_upstream_resolver_file.stat.isreg | default(false) else '/etc/resolv.conf' }}"
   register: _platform_docker_upstream_resolvers
@@ -276,7 +276,7 @@
            reject('match', '^(127[.]|0[.]0[.]0[.]0$)') | list | first) | default('')) }}
   changed_when: false
 
-- name: Требуется сервер IPv4 DNS без обратной связи для LXC DHCP
+- name: "Проверить IPv4-адрес DNS-сервера вне loopback-диапазона для DHCP сети LXC"
   ansible.builtin.assert:
     that:
       - _platform_docker_lxc_dns_server is match('^(?:(?:25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})[.]){3}(?:25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})$')
@@ -453,7 +453,7 @@
     mode: '0644'
   notify: Перезапустить мост Docker без прав root
 
-- name: Установка моста системы выбранной учетной записи /user
+- name: "Установить системную службу запуска пользовательского Docker"
   ansible.builtin.template:
     src: platform-docker-rootless-bridge.service.j2
     dest: "/etc/systemd/system/{{ platform_docker_name }}-rootless-{{ platform_docker_account_name }}.service"
@@ -462,7 +462,7 @@
     mode: '0644'
   notify: Перезапустить мост Docker без прав root
 
-- name: Перезагрузить граф службы systemd
+- name: "Перечитать конфигурацию служб systemd"
   ansible.builtin.systemd:
     daemon_reload: true
 

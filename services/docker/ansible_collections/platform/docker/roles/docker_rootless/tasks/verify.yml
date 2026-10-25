@@ -18,7 +18,7 @@
   vars:
     platform_docker_verify_only: true
 
-- name: Проверка состояния задержки учетной записи Docker
+- name: "Проверить режим Linger учётной записи Docker"
   ansible.builtin.command:
     argv: [loginctl, show-user, "{{ platform_docker_account_name }}", --property=Linger]
   register: _platform_docker_linger
@@ -29,7 +29,7 @@
     that: _platform_docker_linger.stdout == 'Linger=yes'
     fail_msg: DOCKER_USER_LINGER_DISABLED
 
-- name: Проверить сеть LXC, целевой и пользовательский мосты активны
+- name: "Проверить активность сети LXC и служб запуска пользовательского Docker"
   ansible.builtin.command:
     argv: [systemctl, is-active, lxc-net.service, "{{ platform_docker_name }}-lxc-ready.target", "{{ platform_docker_name }}-rootless-{{ platform_docker_account_name }}.service"]
   register: _platform_docker_system_units
@@ -134,7 +134,7 @@
   changed_when: false
   failed_when: false
 
-- name: Запретить активный корневой путь Docker
+- name: "Убедиться, что Docker с правами root остаётся неактивным"
   ansible.builtin.assert:
     that: "'active' not in _platform_docker_rootful_verify.stdout_lines"
     fail_msg: DOCKER_ROOTFUL_CONFLICT

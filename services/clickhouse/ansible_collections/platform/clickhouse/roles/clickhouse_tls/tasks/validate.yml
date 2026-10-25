@@ -69,7 +69,7 @@
     _platform_clickhouse_default_password: "{{ lookup('ansible.builtin.file', platform_clickhouse_secret_files[platform_clickhouse_default_credential.passwordSecretRef], lstrip=False, rstrip=False) }}"
   no_log: true
 
-- name: Запрос непустого пароля UTF-8 с точной привязкой к байтам
+- name: "Проверить непустой пароль UTF-8 без изменения его содержимого"
   ansible.builtin.assert:
     that:
       - _platform_clickhouse_default_password | string | length > 0

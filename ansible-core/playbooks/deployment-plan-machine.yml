@@ -29,7 +29,7 @@
         name: platform_plan_catalog_file
       changed_when: false
 
-    - name: Разработать авторитетный общественный план
+    - name: "Сформировать авторитетный план развёртывания для внешнего интерфейса"
       platform.core.build_deployment_plan:
         snapshot: "{{ platform_plan_snapshot.snapshot }}"
         service_catalog: "{{ platform_plan_catalog_file.platform_service_catalog | default(platform_plan_catalog_file, true) }}"

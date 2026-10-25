@@ -3,7 +3,7 @@
   ansible.builtin.include_role:
     name: platform.core.project_settings
 
-- name: Управляемые проектом экземпляры службы Kafka, когда общедоступный список отсутствует
+- name: "Получить экземпляры Kafka из проекта, если список не задан явно"
   ansible.builtin.include_tasks: project_runtime.yml
   when:
     - platform_kafka_instances | length == 0
@@ -419,13 +419,13 @@
     label: "{{ item.0.id }}:{{ item.1 }}"
   when: not (platform_kafka_verify_only | bool) and platform_kafka_phase != 'schema_registry'
 
-- name: Установить администратора перед отзывом сериализованной начальной загрузки
+- name: "Настроить администратора перед последовательным отзывом bootstrap-доступа"
   ansible.builtin.include_tasks: authorization_transition.yml
   when:
     - _platform_kafka_scram_enabled
     - platform_kafka_phase != 'schema_registry'
 
-- name: Требовать продемонстрированной завершения среды выполнения перед любым следующим этапом
+- name: "Подтвердить загрузку итоговой конфигурации Kafka перед следующим этапом"
   ansible.builtin.include_tasks: authorization_confirm.yml
   loop: "{{ _platform_kafka_local_instances }}"
   loop_control:

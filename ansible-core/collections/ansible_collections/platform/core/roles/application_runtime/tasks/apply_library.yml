@@ -4,7 +4,7 @@
     application_library_jobs: "{{ platform_application_preflight_jobs | selectattr('libraryId', 'equalto', application_library_id) | list }}"
   no_log: true
 
-- name: Требовать от всех потребителей одинаковых байтов общей библиотеки
+- name: "Проверить одинаковое содержимое общей библиотеки у всех потребителей"
   ansible.builtin.assert:
     that:
       - application_library_jobs | map(attribute='libraryPath') | unique | length == 1
@@ -28,7 +28,7 @@
         dest: "{{ application_library_jobs[0].libraryPath }}/.owner.json"
         owner: "{{ application_library_jobs[0].account }}"
         mode: '0600'
-    - name: Материализовать общую несекретную среду и базу Compose ровно один раз
+    - name: "Создать общие несекретные переменные окружения и базовый Compose-файл один раз"
       ansible.builtin.copy:
         content: "{{ item.content }}"
         dest: "{{ application_library_jobs[0].libraryPath }}/{{ item.name }}"

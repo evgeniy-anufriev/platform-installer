@@ -8,7 +8,7 @@
 
 - name: Сохранить безопасную диагностику записи документа Vault
   block:
-    - name: Записывать только разные поля с помощью CAS
+    - name: "Записать только изменённые поля с проверкой версии CAS"
       ansible.builtin.uri:
         url: "{{ application_vault_provider.url }}/v1/{{ application_vault_document.mount }}/data/{{ application_vault_document.document }}"
         method: "{{ application_vault_delta.method }}"
@@ -41,7 +41,7 @@
              else 'http' if (ansible_failed_result.status | default(-1) | int > 0)
              else 'module' }}
 
-- name: Перечитать один раз о конфликте CAS и сохранить промежуточные поля
+- name: "Один раз перечитать документ после конфликта CAS, сохранив чужие изменения"
   ansible.builtin.include_tasks: document_retry.yml
   when: >-
     application_vault_delta.changed and
@@ -49,7 +49,7 @@
     ('check-and-set' in (application_vault_document_write.json.errors | default([]) | join(' ') | lower))
   no_log: true
 
-- name: Сбой закрытия при записи или конфликте CAS без слепой перезаписи
+- name: "Прервать выполнение при ошибке записи или конфликте CAS без перезаписи данных"
   ansible.builtin.assert:
     that: not application_vault_delta.changed or application_vault_document_write.status | int == 200
     fail_msg: APPLICATION_VAULT_DOCUMENT_CAS_CONFLICT

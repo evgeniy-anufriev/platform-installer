@@ -12,24 +12,24 @@
 - name: Доставить образ с зафиксированным digest при отсутствии на целевом узле
   when: application_local_image.rc != 0 or (application_local_image.stdout | from_json)[0].Id != application_runtime_job.authority.requirement.imageId
   block:
-    - name: Извлечение из авторизованного реестра с очисткой частного переопределения
+    - name: "Загрузить образ из разрешённого реестра и удалить временные настройки загрузки"
       ansible.builtin.include_tasks: pull_registry.yml
       when: application_runtime_job.source.source == 'REPOSITORY'
     - name: Конфиденциально разместить проверенный архив для учетной записи Docker
       when: application_runtime_job.source.source == 'OFFLINE_BUNDLE'
       block:
-        - name: Выделить промежуточный каталог частного архива, доступный для чтения учетной записи
+        - name: "Создать защищённый временный каталог архива для пользователя Docker"
           ansible.builtin.tempfile:
             state: directory
             prefix: .application-image-
             path: "{{ application_runtime_job.libraryPath }}"
           register: application_image_stage
-        - name: Назначить выбранной учетной записи только приватную стадию
+        - name: "Предоставить выбранной учётной записи доступ к временному каталогу"
           ansible.builtin.file:
             path: "{{ application_image_stage.path }}"
             owner: "{{ application_runtime_job.account }}"
             mode: '0700'
-        - name: Скопировать точный заблокированный архив из проверенного пакета узла выполнения
+        - name: "Скопировать архив с зафиксированной контрольной суммой из проверенного пакета узла выполнения"
           ansible.builtin.copy:
             src: "{{ application_runtime_job.archivePath }}"
             dest: "{{ application_image_stage.path }}/image.tar"
@@ -42,7 +42,7 @@
             get_mime: false
             get_attributes: false
           register: application_target_archive
-        - name: Требовать точные заблокированные байты архива
+        - name: "Проверить контрольную сумму и размер доставленного архива"
           ansible.builtin.assert:
             that:
               - "'sha256:' ~ application_target_archive.stat.checksum == application_runtime_job.authority.offlineBundle.sha256"
@@ -67,7 +67,7 @@
       environment: "{{ application_runtime_job.dockerEnvironment }}"
       changed_when: false
       no_log: true
-    - name: Назначить точную авторизованную локальную ссылку
+    - name: "Назначить образу разрешённый локальный тег"
       ansible.builtin.command:
         argv: [docker, tag, "{{ application_runtime_job.authority.requirement.imageId }}", "{{ application_runtime_job.authority.requirement.localReference }}"]
       become_user: "{{ application_runtime_job.account }}"

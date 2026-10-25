@@ -15,7 +15,7 @@
   register: _image_manifest_response
   no_log: true
 
-- name: Решение задачи Bearer с использованием ограниченной области репозитория, доступной только для чтения
+- name: "Пройти Bearer-аутентификацию с правом чтения выбранного репозитория"
   when: _image_manifest_response.status == 401
   block:
     - name: Требовать поддерживаемую проверку подлинности реестра
@@ -107,7 +107,7 @@
       register: _image_config_response
       when: _image_descriptor.configDigest | length > 0
       no_log: true
-    - name: Следовать по расположению большого двоичного объекта HTTPS, указанному в реестре, без пересылки аутентификации
+    - name: "Получить конфигурацию образа по HTTPS-перенаправлению без передачи учётных данных"
       when:
         - _image_descriptor.configDigest | length > 0
         - _image_config_response.status in [301, 302, 303, 307, 308]

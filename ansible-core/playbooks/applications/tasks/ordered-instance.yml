@@ -7,7 +7,7 @@
        platform.core.application_pending_instances(hostvars['localhost'].platform_application_completed_batches))
     fail_msg: APPLICATION_PROVIDER_PREPARATION_INCOMPLETE
 
-- name: Материализовать отложенные входные данные потребительского агента только после полной доставки Vault
+- name: "Подготовить отложенные файлы агента после полной доставки учётных данных из Vault"
   ansible.builtin.include_role:
     name: platform.core.application_runtime
     tasks_from: apply_instance
@@ -67,7 +67,7 @@
     loop_var: application_provider_batch
   run_once: true
 
-- name: Полная стандартная доставка Vault для всех потребителей, чьи провайдери готовы
+- name: "Завершить доставку учётных данных из Vault потребителям, чьи провайдеры готовы"
   ansible.builtin.include_tasks: deliver-ready.yml
   when: application_ready_provider_batches | length > 0
   run_once: true

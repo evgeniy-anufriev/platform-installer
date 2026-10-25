@@ -52,7 +52,7 @@
           - "'runtime:pki-store-password' not in (first_snapshot.snapshot | to_json)"
       run_once: true
 
-    - name: Доказать, что отсутствующий корень проекта является структурированной фатальной открытой ошибкой
+    - name: "Проверить структурированную ошибку открытия несуществующего проекта"
       platform.core.project_snapshot:
         project_root: /path/that/does/not/exist
         service_catalog_path: "{{ platform_service_catalog_path }}"

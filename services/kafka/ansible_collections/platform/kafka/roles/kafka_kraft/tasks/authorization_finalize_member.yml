@@ -11,7 +11,7 @@
     line: super.users=User:admin
   no_log: true
 
-- name: Перекрестная запись окончательной конфигурации за секунду до перезапуска отзыва
+- name: "Выждать одну секунду после записи итоговой конфигурации перед перезапуском"
   ansible.builtin.wait_for:
     timeout: 1
   changed_when: false

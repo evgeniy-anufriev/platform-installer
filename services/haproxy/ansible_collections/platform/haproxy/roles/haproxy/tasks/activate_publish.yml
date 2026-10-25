@@ -54,7 +54,7 @@
   changed_when: false
   register: _platform_haproxy_active_graph_digest
 
-- name: Требовать точного кандидата и эквивалентность активного графа HAProxy
+- name: "Проверить соответствие активной конфигурации HAProxy проверенному набору файлов"
   ansible.builtin.assert:
     that:
       - _platform_haproxy_candidate_graph_digest.stdout == _platform_haproxy_active_graph_digest.stdout

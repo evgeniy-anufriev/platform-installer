@@ -13,7 +13,7 @@
     platform_managed_data_root_owner: "{{ ansible_user | default('') }}"
     platform_managed_data_root_verify_only: "{{ platform_postgresql_verify_only | bool }}"
 
-- name: Решить точный потребительский план PostgreSQL PKI перед внесением изменений
+- name: "Выбрать план PKI для PostgreSQL до внесения изменений"
   ansible.builtin.include_tasks: resolve_tls.yml
   when: platform_postgresql_tls_profile | length > 0
 
@@ -53,7 +53,7 @@
 - name: Проверка входных данных службы PostgreSQL
   ansible.builtin.include_tasks: validate.yml
 
-- name: Разрешить установленный двоичный каталог PostgreSQL
+- name: "Определить каталог исполняемых файлов PostgreSQL"
   ansible.builtin.include_tasks: resolve_binary_directory.yml
 
 - name: Определить экземпляр PostgreSQL на узле inventory
@@ -69,7 +69,7 @@
   ansible.builtin.include_tasks: client_subnet.yml
   when: not (platform_postgresql_verify_only | bool)
 
-- name: Получение точного имени службы systemd PostgreSQL systemd
+- name: "Определить имя службы PostgreSQL в systemd"
   ansible.builtin.set_fact:
     _platform_postgresql_unit_name: >-
       {{ platform_postgresql_name ~ '@' ~ platform_postgresql_deployment_id ~ '-'

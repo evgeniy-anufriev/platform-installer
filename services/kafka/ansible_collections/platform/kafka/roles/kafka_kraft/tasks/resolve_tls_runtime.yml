@@ -1,5 +1,5 @@
 ---
-- name: Выбрать эффективный запрос PKI-01 и спланировать коллекции
+- name: "Выбрать действующие запросы PKI-01 и наборы планов"
   ansible.builtin.set_fact:
     _platform_kafka_tls_runtime_all_requests: >-
       {{ platform_pki_requests

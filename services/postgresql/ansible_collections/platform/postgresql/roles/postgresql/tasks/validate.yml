@@ -43,7 +43,7 @@
     label: "{{ item.id | default('unknown') }}"
   when: platform_postgresql_instances | length > 0
 
-- name: Проверка количества экземпляров автономного экземпляра службы
+- name: "Проверить число экземпляров PostgreSQL в standalone-режиме"
   ansible.builtin.assert:
     that:
       - platform_postgresql_instances | length == 1

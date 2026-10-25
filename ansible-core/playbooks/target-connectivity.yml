@@ -9,7 +9,7 @@
       register: platform_effective_uid
       changed_when: false
 
-    - name: Доступно подтверждение выполнения с повышенными правами
+    - name: "Проверить выполнение команд с правами root"
       ansible.builtin.assert:
         that:
           - platform_effective_uid.rc == 0

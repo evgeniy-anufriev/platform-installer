@@ -32,7 +32,7 @@ class VaultDirectoryAccessTests(unittest.TestCase):
         account = pwd.getpwnam('nobody')
         group = grp.getgrgid(account.pw_gid).gr_name
         source = yaml.safe_load((ROLE / 'tasks/provision.yml').read_text())
-        names = ['Обеспечить фиксированную конфигурацию Vault, а корни данных и журналов остаются во владении пользователя root',
+        names = ['Сохранить владение root каталогами конфигурации, данных и журналов Vault',
                  'Убедиться, что каталоги Vault уровня развертывания остаются во владении пользователя root',
                  'Создание каталогов конфигурации изолированного экземпляра службы',
                  'Создание каталогов данных Raft изолированного экземпляра службы',

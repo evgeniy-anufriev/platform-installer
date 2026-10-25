@@ -8,10 +8,10 @@
   delegate_to: "{{ vault_member.host }}"
   become: true
 
-- name: Разблокировать присоединяющегося последователя Raft с начальными общими ресурсами узла
+- name: "Разблокировать присоединяемый узел Raft долями ключа начального узла"
   ansible.builtin.include_tasks: unseal_member.yml
 
-- name: Подтвердить, что разблокированный подписчик присоединился к инициализированному начальному хранилищу узла
+- name: "Проверить инициализацию присоединённого узла Raft после разблокировки"
   ansible.builtin.uri:
     url: "https://{{ vault_member.address }}:{{ vault_member.api_port }}/v1/sys/init"
     method: GET

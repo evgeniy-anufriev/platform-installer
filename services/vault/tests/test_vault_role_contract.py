@@ -26,7 +26,7 @@ class VaultRoleContractTests(unittest.TestCase):
 
         main = yaml.safe_load((ROLE / "tasks/main.yml").read_text(encoding="utf-8"))
         block = next(task["block"] for task in main if task["name"].startswith("Обеспечить взаимное исключение операций Vault для Installer и standalone-Ansible"))
-        configure = next(task for task in block if task["name"].startswith("Настройка аудита, KV v2, пароля пользователя и AppRole без изменения существующих ресурсов"))
+        configure = next(task for task in block if task["name"].startswith("Настроить аудит, KV v2, userpass и AppRole, сохранив существующие ресурсы"))
         self.assertEqual(configure["ansible.builtin.include_tasks"], "configure.yml")
         self.assertIn("inventory_hostname == _platform_vault_instances[0].host", configure["when"])
         self.assertNotIn("delegate_to", configure)
@@ -52,10 +52,10 @@ class VaultRoleContractTests(unittest.TestCase):
         from ansible.template import Templar
 
         bootstrap = yaml.safe_load((ROLE / "tasks/bootstrap.yml").read_text(encoding="utf-8"))
-        followers = next(task for task in bootstrap if task["name"].startswith("Присоединитесь и разблокируйте каждого последователя Raft после того, как начальный узел станет работоспособным"))
+        followers = next(task for task in bootstrap if task["name"].startswith("Присоединить и разблокировать остальные узлы Raft после готовности начального узла"))
         self.assertEqual(followers["loop_control"]["loop_var"], "vault_member")
         tasks = yaml.safe_load((ROLE / "tasks/bootstrap_follower.yml").read_text(encoding="utf-8"))
-        unseal = next(task for task in tasks if task["name"] == "Разблокировать присоединяющегося последователя Raft с начальными общими ресурсами узла")
+        unseal = next(task for task in tasks if task["name"] == "Разблокировать присоединяемый узел Raft долями ключа начального узла")
         self.assertEqual(unseal["ansible.builtin.include_tasks"], "unseal_member.yml")
         self.assertNotIn("vault_member", unseal.get("vars", {}))
         loader = DataLoader()
@@ -266,7 +266,7 @@ class VaultRoleContractTests(unittest.TestCase):
         self.assertLess(names.index("Обеспечить надежную подготовку минимального ответа на инициализацию перед любой операцией разблокировки"),
                         names.index("Разблокировать начальный узел с настроенным порогом"))
         self.assertLess(names.index("Разблокировать начальный узел с настроенным порогом"),
-                        names.index("Присоединитесь и разблокируйте каждого последователя Raft после того, как начальный узел станет работоспособным"))
+                        names.index("Присоединить и разблокировать остальные узлы Raft после готовности начального узла"))
         init = tasks[names.index("Инициализировать новый начальный узел ровно один раз")]
         self.assertEqual(names[names.index("Инициализировать новый начальный узел ровно один раз") + 1],
                          "Обеспечить надежную подготовку минимального ответа на инициализацию перед любой операцией разблокировки")
@@ -288,8 +288,8 @@ class VaultRoleContractTests(unittest.TestCase):
         tasks = yaml.safe_load((ROLE / "tasks/bootstrap_follower.yml").read_text(encoding="utf-8"))
         names = [task["name"] for task in tasks]
         start = names.index("Запустить один ведомый узел Raft после разблокировки начального узла")
-        unseal = names.index("Разблокировать присоединяющегося последователя Raft с начальными общими ресурсами узла")
-        joined = names.index("Подтвердить, что разблокированный подписчик присоединился к инициализированному начальному хранилищу узла")
+        unseal = names.index("Разблокировать присоединяемый узел Raft долями ключа начального узла")
+        joined = names.index("Проверить инициализацию присоединённого узла Raft после разблокировки")
         self.assertLess(start, unseal)
         self.assertLess(unseal, joined)
         self.assertEqual(tasks[unseal]["ansible.builtin.include_tasks"], "unseal_member.yml")
@@ -425,7 +425,7 @@ class VaultRoleContractTests(unittest.TestCase):
     def test_existing_unit_and_rotation_files_require_exact_managed_identity(self):
         preflight = yaml.safe_load((ROLE / "tasks/preflight.yml").read_text(encoding="utf-8"))
         names = [task["name"] for task in preflight]
-        self.assertIn("Проверить точные служебные файлы systemd Vault без следующих ссылок", names)
+        self.assertIn("Проверить файлы служб Vault без перехода по символическим ссылкам", names)
         self.assertIn("Проверка точных файлов ротации аудита Vault без перехода по ссылкам", names)
         self.assertIn("Проверить идентификатор экземпляра Vault в существующих файлах служб systemd", names)
         self.assertIn("Проверить идентификатор экземпляра Vault в существующих файлах ротации журналов", names)
@@ -505,8 +505,8 @@ class VaultRoleContractTests(unittest.TestCase):
     def test_lock_contention_and_path_boundary_validation_playbooks_cover_required_cases(self):
         lock = yaml.safe_load((ROOT / "services/vault/playbooks/validate-lock.yml").read_text(encoding="utf-8"))
         lock_text = str(lock)
-        for phrase in ("Конфликт при выполнении", "Нормально освободить держатель замка",
-                       "Запуск держателя, который терпит неудачу", "Получить блокировку после очистки состояния прежнего владельца"):
+        for phrase in ("Проверить конкуренцию за блокировку", "Штатно остановить процесс, удерживающий блокировку",
+                       "Запустить владельца блокировки с имитацией сбоя", "Получить блокировку после очистки состояния прежнего владельца"):
             self.assertIn(phrase, lock_text)
 
         paths = yaml.safe_load((ROOT / "services/vault/playbooks/validate-path-boundaries.yml").read_text(encoding="utf-8"))

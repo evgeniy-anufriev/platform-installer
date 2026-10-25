@@ -48,7 +48,7 @@
     fail_msg: KEEPALIVED_VRRP_OWNERSHIP_INVALID
   run_once: true
 
-- name: Отчет об очищенных доказательствах владения VRRP
+- name: "Показать результаты проверки владельца VIP без чувствительных данных"
   ansible.builtin.debug:
     msg:
       deployment: "{{ platform_keepalived_deployment.key }}"

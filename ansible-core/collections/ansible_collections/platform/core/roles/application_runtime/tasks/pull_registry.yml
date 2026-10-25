@@ -3,7 +3,7 @@
   block:
     - name: Подготовить сеансовую аутентификацию реестра для загрузки образа приложения
       ansible.builtin.include_tasks: registry_auth.yml
-    - name: Материализовать точное переопределение извлечения реестра
+    - name: "Создать временный Compose-файл с настройками загрузки из реестра"
       ansible.builtin.copy:
         content: "{{ {'services': {application_runtime_job.instanceId: {'image': (application_runtime_job.authority.repository.reference | platform.core.application_pinned_registry_reference(application_runtime_job.authority.repository.manifestDigest))}}} | to_nice_yaml }}"
         dest: "{{ application_runtime_job.instancePath }}/.image-delivery.yml"
@@ -22,7 +22,7 @@
         state: absent
       when: application_registry_auth_stage.path is defined
       changed_when: false
-    - name: Удалить только переопределение реестра, предназначенное только для среды выполнения
+    - name: "Удалить временный файл настроек загрузки из реестра"
       ansible.builtin.file:
         path: "{{ application_runtime_job.instancePath }}/.image-delivery.yml"
         state: absent

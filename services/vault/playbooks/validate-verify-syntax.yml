@@ -1,7 +1,7 @@
 ---
 # Static import lets --syntax-check parse the otherwise dynamically included
 # verifier without contacting targets or executing service tasks.
-- name: Анализ автономного верификатора Vault
+- name: "Проверить синтаксис самостоятельного playbook проверки Vault"
   hosts: localhost
   gather_facts: false
   tasks:

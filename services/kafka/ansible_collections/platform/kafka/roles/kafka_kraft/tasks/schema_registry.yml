@@ -19,7 +19,7 @@
     - not platform_kafka_verify_only
     - platform_resolved_artifact_sources is defined
 
-- name: Установить утвержденный пакет реестра после победы репозитория
+- name: "Установить Schema Registry из выбранного разрешённого репозитория"
   ansible.builtin.package:
     name: "confluent-schema-registry-{{ platform_kafka_schema_registry_version }}"
     state: present
@@ -102,7 +102,7 @@
     - not platform_kafka_verify_only
     - platform_resolved_artifact_sources is not defined or platform_resolved_artifact_sources['schema-registry-binary'].source == 'OFFLINE_BUNDLE'
 
-- name: Запись утвержденного неизменяемого идентификатора распространения
+- name: "Записать идентификатор проверенного дистрибутива"
   ansible.builtin.copy:
     content: 'dc4d6234e0f7e1a91b369f9cf1d27d7c9885edb9f6440170c3a6f00ba68fcc81'
     dest: "{{ platform_kafka_schema_registry_install_directory }}/.platform-approved-sha256"

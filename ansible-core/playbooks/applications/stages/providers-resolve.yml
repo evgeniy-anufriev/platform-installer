@@ -9,7 +9,7 @@
     - name: Разрешить обычные настройки и размещения приложений по умолчанию
       ansible.builtin.include_role:
         name: platform.core.resolve_application_libraries
-    - name: Создание существующего моментального снимка проекта, доступного только для чтения
+    - name: "Сформировать снимок текущего проекта без внесения изменений"
       platform.core.project_snapshot:
         project_root: "{{ platform_project_root | default(inventory_dir | dirname) }}"
         service_catalog_path: "{{ platform_service_catalog_path }}"

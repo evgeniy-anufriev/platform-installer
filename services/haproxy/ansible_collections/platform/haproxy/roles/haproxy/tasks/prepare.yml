@@ -171,7 +171,7 @@
       item.name not in _platform_haproxy_partial_source_files
   changed_when: false
 
-- name: Отрисовка полного кандидата на платформу HAProxy
+- name: "Сформировать полный проверяемый набор конфигурации HAProxy"
   ansible.builtin.template:
     src: "{{ item.src }}"
     dest: "{{ platform_haproxy_candidate_directory }}/{{ item.dest }}"
@@ -210,7 +210,7 @@
   changed_when: false
   when: (platform_haproxy_partial_deployment_id is defined or platform_haproxy_partial_deployment_ids is defined)
 
-- name: Отрисовка одного управляемого кандидата на серверную часть приложения HAProxy для каждого разрешенного серверной части
+- name: "Сформировать файл-кандидат HAProxy для каждого выбранного backend-сервиса"
   ansible.builtin.template:
     src: 30-application-backend.cfg.j2
     dest: "{{ platform_haproxy_candidate_directory }}/conf.d/{{ item.configFileName }}"

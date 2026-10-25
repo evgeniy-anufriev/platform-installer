@@ -1,5 +1,5 @@
 ---
-- name: Применить синглтон через одно и то же обновление защищенной зоны
+- name: "Обновить одну запись через общий механизм защищённого обновления зоны"
   ansible.builtin.include_tasks: update_a_records.yml
   vars:
     platform_bind_a_records: "{{ [platform_bind_a_record] }}"

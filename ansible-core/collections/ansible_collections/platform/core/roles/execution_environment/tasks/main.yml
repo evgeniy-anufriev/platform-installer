@@ -51,7 +51,7 @@
     group: root
     mode: "0711"
 
-- name: Создание частных каталогов рабочей области выполнения
+- name: "Создать защищённые каталоги рабочей области выполнения"
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
@@ -73,13 +73,13 @@
     - "{{ platform_execution_identity_root }}"
   when: platform_execution_technical_user | length > 0
 
-- name: Проверка файла известных хостов постоянного выполнения
+- name: "Проверить постоянный файл known_hosts узла выполнения"
   ansible.builtin.stat:
     path: "{{ platform_execution_known_hosts_path }}"
   register: platform_execution_known_hosts_stat
   when: platform_execution_technical_user | length > 0
 
-- name: Один раз создать файл известных хостов с постоянным выполнением
+- name: "Создать постоянный файл known_hosts, если он отсутствует"
   ansible.builtin.copy:
     content: ""
     dest: "{{ platform_execution_known_hosts_path }}"
@@ -101,7 +101,7 @@
     - "{{ platform_execution_private_workspace }}"
   when: platform_execution_technical_user | length > 0
 
-- name: Создать идентификатор SSH управляемого выполнения ровно один раз
+- name: "Создать постоянную SSH-пару ключей технического пользователя, если она отсутствует"
   become_user: "{{ platform_execution_technical_user }}"
   ansible.builtin.command:
     argv:

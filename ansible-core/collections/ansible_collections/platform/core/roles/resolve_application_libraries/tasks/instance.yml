@@ -24,7 +24,7 @@
   no_log: true
   become: false
 
-- name: Сбросить ресурсы и контекст тем размещения приложения
+- name: "Сбросить контекст ресурсов, подключений и топиков экземпляра приложения"
   ansible.builtin.set_fact:
     application_topics: {}
     application_databases: {}
@@ -55,7 +55,7 @@
   no_log: true
   become: false
 
-- name: Предоставить предоставленные значения подключения шаблонам пакетов приложений
+- name: "Передать значения подключений в шаблоны приложений"
   ansible.builtin.set_fact:
     application_connections: >-
       {{ application_connections | combine({item.key:
@@ -67,7 +67,7 @@
   no_log: true
   become: false
 
-- name: Разрешение шаблонов исходных ресурсов в контексте изолированной библиотеки
+- name: "Вычислить шаблоны ресурсов в контексте библиотеки"
   platform.core.prepare_application_libraries:
     resource_defaults: true
     library_id: "{{ application_job.libraryId }}"
@@ -111,7 +111,7 @@
   no_log: true
   become: false
 
-- name: Разрешение изолированных общих значений по умолчанию после нормализации собственных ресурсов
+- name: "Вычислить общие значения библиотеки по умолчанию после обработки ресурсов"
   platform.core.prepare_application_libraries:
     shared_defaults: true
     library_id: "{{ application_job.libraryId }}"
@@ -128,7 +128,7 @@
     quiet: true
   become: false
 
-- name: Привязка устаревших тем к общим настройкам по умолчанию
+- name: "Собрать привязки топиков старого формата с учётом значений по умолчанию"
   ansible.builtin.set_fact:
     _application_topic_bindings: >-
       {{ (_application_shared.defaults.topicBindings | default({}) if application_job.slot.inherit_defaults | default(true) else {}) |
@@ -148,7 +148,7 @@
     label: "{{ resource_connection.key }}"
   when: resource_connection.value.library_binding | default('') in application_job.deployment.bindings
 
-- name: Привязка ролей устаревших тем после прямых ключей
+- name: "Обработать привязки ролей топиков старого формата после прямых ключей"
   ansible.builtin.include_tasks: topic_roles.yml
   loop: "{{ _application_topic_bindings | dict2items }}"
   loop_control:
@@ -156,7 +156,7 @@
     label: "{{ topic_connection.key }}"
   when: topic_connection.value is mapping
 
-- name: Начальный контекст параметра узла перед расширением зависимых параметров приложения
+- name: "Подготовить параметры узла перед вычислением зависимых параметров приложения"
   ansible.builtin.set_fact:
     application_parameters: >-
       {{ (_application_shared.defaults.parameters | default({}) if application_job.slot.inherit_defaults | default(true) else {}) |

@@ -1,5 +1,5 @@
 ---
-- name: Проверка закрытия пакета перед загрузкой значений по умолчанию
+- name: "Проверить комплектность пакетов библиотек перед загрузкой значений по умолчанию"
   platform.core.prepare_application_libraries:
     project_root: "{{ platform_project_root | default(inventory_dir | dirname) }}"
     contracts_root: "{{ platform_contracts_root | default(role_path ~ '/../../../../../../../contracts') }}"
@@ -15,7 +15,7 @@
   no_log: true
   become: false
 
-- name: Решить предоставленную топологию соединения перед расширением потребительского ENV
+- name: "Определить топологию подключений перед формированием окружения потребителя"
   ansible.builtin.include_tasks: connection_topology.yml
   loop: "{{ _application_inputs.jobs }}"
   loop_control:

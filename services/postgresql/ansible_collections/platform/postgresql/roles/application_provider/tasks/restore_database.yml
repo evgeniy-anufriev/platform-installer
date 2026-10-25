@@ -5,7 +5,7 @@
     application_provider_target: "{{ platform_application_provider_runtime[platform_postgresql_application_job.providerId].candidate }}"
     application_provider_os_user: "{{ hostvars[application_provider_target.hostId].platform_postgresql_user | default(platform_postgresql_user) }}"
   block:
-    - name: Выделить частный промежуточный этап восстановления на выбранном первичном сервере PostgreSQL
+    - name: "Создать защищённый временный каталог восстановления на основном сервере PostgreSQL"
       ansible.builtin.tempfile:
         state: directory
         prefix: .application-restore-
@@ -15,7 +15,7 @@
       register: application_restore_stage
       no_log: true
 
-    - name: Разрешить прохождение этапа восстановления только идентификатору среды выполнения PostgreSQL
+    - name: "Ограничить доступ к каталогу восстановления учётной записью PostgreSQL"
       ansible.builtin.file:
         path: "{{ application_restore_stage.path }}"
         owner: "{{ application_provider_os_user }}"
@@ -45,7 +45,7 @@
       register: application_restore_bytes
       no_log: true
 
-    - name: Запросить точный дамп пакета
+    - name: "Проверить соответствие доставленного дампа исходному пакету"
       ansible.builtin.assert:
         that: application_restore_bytes.stat.checksum == application_restore_database.restoreOnCreate.sha256
         fail_msg: APPLICATION_RESTORE_DIGEST_INVALID
@@ -66,7 +66,7 @@
       changed_when: true
       no_log: true
 
-    - name: Восстановление точного пользовательского архива в качестве владельца управляемой базы данных
+    - name: "Восстановить дамп формата custom от имени владельца базы данных"
       ansible.builtin.command:
         argv: [pg_restore, --exit-on-error, --no-owner, --no-acl, --role, "{{ application_restore_database.owner }}", -h, "{{ platform_postgresql_application_socket }}", -p, "{{ application_provider_target.port }}", -U, "{{ application_provider_os_user }}", -d, "{{ application_restore_database.name }}", "{{ application_restore_stage.path }}/database.dump"]
       delegate_to: "{{ application_provider_target.hostId }}"

@@ -69,7 +69,7 @@
   no_log: true
   when: _platform_kafka_tls_runtime.storeType == 'PKCS12'
 
-- name: Запрос пароля хранилища, безопасного для свойств
+- name: "Проверить непустой пароль хранилища Schema Registry"
   ansible.builtin.assert:
     that:
       - _platform_kafka_registry_password | length > 0
@@ -129,7 +129,7 @@
       _platform_kafka_registry_brokers_ready.stdout | regex_findall('\(id: ([0-9]+)') | map('int') | list) | length) == 0
   no_log: true
 
-- name: Проверка или согласование раздела общей схемы
+- name: "Проверить или создать служебный топик схем Schema Registry"
   ansible.builtin.include_tasks: schema_registry_topic.yml
 
 - name: Отрисовка принадлежащей системной службы реестра
@@ -189,7 +189,7 @@
   delay: "{{ platform_kafka_schema_registry_readiness_delay }}"
   until: _platform_kafka_registry_http_ready.status | default(0) == 200
 
-- name: Отбросить факт локального пароля
+- name: "Сбросить временную переменную пароля"
   ansible.builtin.set_fact:
     _platform_kafka_registry_password: ''
   no_log: true

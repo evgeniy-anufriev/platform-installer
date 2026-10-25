@@ -1,10 +1,10 @@
 ---
-- name: Пропустить целевую загрузку для самоцели узла выполнения
+- name: "Пропустить подготовку SSH-доступа, если целевой узел совпадает с узлом выполнения"
   ansible.builtin.debug:
     msg: Self-target bootstrap skipped; Execution Node local transport is used
   when: platform_bootstrap_skip_self | bool
 
-- name: Загрузка удаленного целевого пользователя и ключа
+- name: "Подготовить технического пользователя и SSH-ключ на целевом узле"
   when: not (platform_bootstrap_skip_self | bool)
   block:
     - name: Загрузить открытый ключ выполнения из рабочей области среды выполнения контроллера

@@ -50,7 +50,7 @@
             owner: platform-clickhouse
             group: platform-clickhouse
 
-        - name: Отклонить принадлежащий другому пользователю root
+        - name: "Проверить отклонение корневого каталога с чужим владельцем"
           block:
             - ansible.builtin.include_role:
                 name: platform.clickhouse.clickhouse_tls

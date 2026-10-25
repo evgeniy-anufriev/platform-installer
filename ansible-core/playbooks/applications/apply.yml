@@ -25,7 +25,7 @@
       tags: [platform_application_progress]
       run_once: true
 
-    - name: Применение упорядоченных библиотек с ограниченным хранением частных источников
+    - name: "Установить библиотеки в заданном порядке с временным хранением учётных данных"
       block:
         - name: Привязать упорядоченные идентификаторы библиотек из неизменяемого плана или ввода вручную
           ansible.builtin.set_fact:
@@ -38,7 +38,7 @@
               - platform_application_expected_library_ids is defined or platform_application_library_order is defined or
                 (hostvars['localhost'].application_runtime_inputs.jobs | map(attribute='libraryId') | unique | list | length) <= 1
             fail_msg: APPLICATION_LIBRARY_ORDER_REQUIRED
-        - name: Требовать точно выбранный набор библиотек и отсутствие повторяющихся записей заказа
+        - name: "Проверить состав выбранных библиотек и отсутствие повторов в порядке установки"
           ansible.builtin.assert:
             that:
               - application_library_order | length == (application_library_order | unique | length)
@@ -50,7 +50,7 @@
           loop_control:
             loop_var: application_library_id
       always:
-        - name: Удаление только исходных файлов учетной записи, полученной из вызова, после координации во время выполнения
+        - name: "Удалить временные файлы учётных данных после установки библиотек"
           ansible.builtin.file:
             path: "{{ hostvars['localhost'].platform_application_secret_root }}/{{ item.passwordRef }}"
             state: absent

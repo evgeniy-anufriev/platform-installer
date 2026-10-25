@@ -34,7 +34,7 @@
     - platform_runtime_secret_inputs | default([]) | selectattr('purpose', 'equalto', 'SERVICE_ADMIN_TOKEN') | list | length == 1
   no_log: true
 
-- name: Использовать типизированные общие ресурсы Shamir, когда отдельные общие ресурсы не были предоставлены
+- name: "Использовать доли ключа Shamir из runtime-сеанса, если они не переданы явно"
   ansible.builtin.set_fact:
     platform_vault_unseal_keys: "{{ (platform_runtime_secret_inputs | selectattr('purpose', 'equalto', 'SERVICE_UNSEAL_SHARES') | first).value }}"
   when:

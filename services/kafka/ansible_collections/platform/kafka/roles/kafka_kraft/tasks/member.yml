@@ -257,7 +257,7 @@
   register: platform_kafka_member_environment
   when: not (platform_kafka_verify_only | bool)
 
-- name: Установка точного экземпляра службы Kafka службы systemd systemd
+- name: "Установить службу systemd для экземпляра Kafka"
   ansible.builtin.template:
     src: kafka.service.j2
     dest: "{{ kafka_member.systemd_unit_destination }}"

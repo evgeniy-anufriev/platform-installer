@@ -35,7 +35,7 @@
         owner: "{{ application_runtime_job.account }}"
         mode: '0700'
       changed_when: false
-    - name: Реализовать аутентификацию реестра без постоянного входа в систему Docker
+    - name: "Подготовить временную аутентификацию в реестре без постоянного docker login"
       ansible.builtin.copy:
         content: >-
           {{ {'auths': {(application_runtime_job.authority.repository.reference | platform.core.application_registry_request).registry:

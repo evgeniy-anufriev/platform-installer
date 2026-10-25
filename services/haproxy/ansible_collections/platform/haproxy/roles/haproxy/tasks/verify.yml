@@ -4,7 +4,7 @@
     argv: ["{{ platform_haproxy_binary }}", '-c', '-f', "{{ platform_haproxy_main_config }}", '-f', "{{ platform_haproxy_conf_directory }}"]
   changed_when: false
 
-- name: Проверить, что служба HAProxy активна и доступна только для чтения
+- name: "Проверить активность службы HAProxy без внесения изменений"
   ansible.builtin.command:
     argv: [systemctl, is-active, --quiet, "{{ platform_haproxy_service_name }}"]
   changed_when: false

@@ -59,7 +59,7 @@
   changed_when: false
   when: inventory_hostname == _platform_kafka_verify_broker.host
 
-- name: Подтвердить, что брокеры Kafka зарегистрированы и не защищены
+- name: "Подтвердить регистрацию брокеров Kafka и состояние unfenced"
   ansible.builtin.assert:
     that:
       - _platform_kafka_unfenced_broker_headers | length == _platform_kafka_broker_instances | length

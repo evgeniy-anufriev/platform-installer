@@ -4,7 +4,7 @@
   vars:
     application_topic_must_exist: "{{ platform_kafka_application_phase == 'verify' or application_topic.mode == 'existing' }}"
 
-- name: Привязать решение о создании перед обратным чтением обновлений наблюдаемого состояния
+- name: "Сохранить решение о создании топика перед повторным чтением его состояния"
   ansible.builtin.set_fact:
     application_topic_creation_required: "{{ platform_kafka_application_phase == 'apply' and application_topic.mode == 'managed' and application_topic_description.stdout | trim | length == 0 }}"
   changed_when: false

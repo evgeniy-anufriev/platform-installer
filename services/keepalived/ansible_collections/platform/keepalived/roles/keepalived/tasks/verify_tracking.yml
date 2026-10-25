@@ -21,7 +21,7 @@
     src: "{{ platform_keepalived_haproxy_check_path }}"
   register: platform_keepalived_haproxy_helper_content
 
-- name: Помощник подтверждения готовности HAProxy ограничен и локальн
+- name: "Проверить локальность и таймауты скрипта проверки готовности HAProxy"
   ansible.builtin.assert:
     that:
       - platform_keepalived_haproxy_helper_content.content | b64decode is search('systemctl is-active --quiet haproxy')

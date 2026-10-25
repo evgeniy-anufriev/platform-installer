@@ -37,7 +37,7 @@
     state: started
     enabled: true
 
-- name: Обеспечить фиксированную конфигурацию Vault, а корни данных и журналов остаются во владении пользователя root
+- name: "Сохранить владение root каталогами конфигурации, данных и журналов Vault"
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory

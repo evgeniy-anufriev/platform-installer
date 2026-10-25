@@ -14,7 +14,7 @@
         name: platform.core.resolve_application_libraries
       when: platform_desired_state.applicationLibraryDeployments is defined
 
-    - name: Создание детерминированного моментального снимка контроллера, доступного только для чтения
+    - name: "Сформировать воспроизводимый снимок проекта на контроллере без изменений"
       platform.core.project_snapshot:
         project_root: "{{ platform_project_root }}"
         service_catalog_path: "{{ platform_service_catalog_path }}"

@@ -5,7 +5,7 @@
 
 - import_playbook: discover.yml
 
-- name: Kafka агрегирование обнаружения идентификационных данных
+- name: "Объединить результаты обнаружения идентификаторов Kafka"
   hosts: platform_targets
   gather_facts: false
   tasks:
@@ -41,7 +41,7 @@
       # not make a repeat service apply appear changed.
       changed_when: false
 
-- name: Kafka создал проекцию идентичности
+- name: "Сохранить рассчитанные идентификаторы Kafka"
   hosts: platform_targets
   gather_facts: false
   tasks:

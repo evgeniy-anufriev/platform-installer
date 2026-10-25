@@ -42,7 +42,7 @@
       - platform_bind_phase in ['prepare', 'activate', 'start', 'verify']
     fail_msg: BIND_DESIRED_STATE_INVALID
 
-- name: Использовать проекцию состояния жизненного цикла серийных номеров BIND с контроллера
+- name: "Использовать рассчитанное контроллером состояние серийных номеров зон BIND"
   ansible.builtin.set_fact:
     platform_bind_runtime_projection: "{{ hostvars['localhost'].platform_bind_runtime_projection | default({}) }}"
 
@@ -83,7 +83,7 @@
   register: _platform_bind_resolution
   run_once: true
 
-- name: Публикация решенных авторитетных зон DNS
+- name: "Сохранить рассчитанные авторитетные DNS-зоны"
   ansible.builtin.set_fact:
     platform_bind_resolved_zones: "{{ hostvars[ansible_play_hosts_all | first]._platform_bind_resolution.resolved_dns_zones.zones }}"
 

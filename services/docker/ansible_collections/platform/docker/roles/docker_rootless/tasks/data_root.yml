@@ -106,7 +106,7 @@
   when: _platform_docker_daemon_file.stat.exists
   no_log: true
 
-- name: Частный анализ существующей конфигурации демона Docker
+- name: "Разобрать конфигурацию Docker без раскрытия содержимого"
   ansible.builtin.set_fact:
     _platform_docker_daemon_config: "{{ (_platform_docker_daemon_content.content | b64decode | from_json) if _platform_docker_daemon_file.stat.exists else {} }}"
   no_log: true

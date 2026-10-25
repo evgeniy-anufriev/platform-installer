@@ -33,7 +33,7 @@
             mode: '0700'
           become: true
 
-        - name: Требовать проверки, чтобы отклонить неправильный корневой владелец
+        - name: "Проверить отклонение корневого каталога с неверным владельцем"
           block:
             - ansible.builtin.include_role:
                 name: platform.core.managed_data_path_guard

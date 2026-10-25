@@ -1,3 +1,3 @@
 ---
-- name: Очистить обработчики PostgreSQL перед проверками учетных данных TLS
+- name: "Выполнить отложенные обработчики PostgreSQL перед проверкой TLS-аутентификации"
   ansible.builtin.meta: flush_handlers

@@ -23,7 +23,7 @@
   ansible.builtin.include_tasks: package_preflight.yml
   when: not (platform_redis_verify_only | bool)
 
-- name: Проект списка экземпляров локальной службы Redis
+- name: "Сформировать список локальных экземпляров Redis"
   ansible.builtin.set_fact:
     _platform_redis_local_instances: >-
       {{ _platform_redis_instances | selectattr('host', 'equalto', inventory_hostname) | list }}
@@ -88,7 +88,7 @@
     label: "{{ redis_member.id }}"
   when: not (platform_redis_verify_only | bool)
 
-- name: Проверка репликации Redis на уровне всего развертывания и соглашения Sentinel
+- name: "Проверить репликацию Redis и согласованность данных Sentinel во всём развёртывании"
   ansible.builtin.include_tasks: verify_deployment.yml
   when:
     - not (platform_redis_verify_only | bool)

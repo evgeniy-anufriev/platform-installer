@@ -74,7 +74,7 @@
   # Per-invocation coordination is not a desired-state service change.
   changed_when: false
 
-- name: Дождаться сигнала готовности держателя замка или аварийно-закрытого запуска
+- name: "Дождаться подтверждения блокировки Vault или ошибки её захвата"
   ansible.builtin.command:
     argv: [systemctl, show, --property=ActiveState, --value, "{{ _platform_vault_lock_unit }}.service"]
   register: _platform_vault_lock_state
@@ -88,7 +88,7 @@
     that: _platform_vault_lock_state.stdout == 'active'
     fail_msg: VAULT_DEPLOYMENT_BUSY
 
-- name: Убедиться, что открытый замок Vault является частным обычным файлом, принадлежащим корневому пользователю
+- name: "Проверить тип, владельца и права файла блокировки Vault"
   ansible.builtin.stat:
     path: "{{ platform_vault_bootstrap_lock_root }}/{{ _platform_vault_lock_key }}.lock"
     follow: false
@@ -97,7 +97,7 @@
     get_checksum: false
   register: _platform_vault_lock_file_stat
 
-- name: Сбой закрытия, если был заменен файл блокировки Vault
+- name: "Отклонить подменённый или небезопасный файл блокировки Vault"
   ansible.builtin.assert:
     that:
       - _platform_vault_lock_file_stat.stat.isreg

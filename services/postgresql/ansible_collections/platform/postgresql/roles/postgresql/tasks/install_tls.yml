@@ -24,7 +24,7 @@
   notify: Перезагрузить материал PostgreSQL TLS
   when: not (platform_postgresql_verify_only | bool)
 
-- name: Проверить файлы TLS, принадлежащие PostgreSQL, доступные только для чтения
+- name: "Проверить TLS-файлы PostgreSQL без внесения изменений"
   ansible.builtin.stat:
     path: "{{ _platform_postgresql_tls_directory }}/{{ item }}"
     get_mime: false

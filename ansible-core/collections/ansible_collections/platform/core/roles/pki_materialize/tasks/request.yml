@@ -190,7 +190,7 @@
     mode: '0700'
   when: _platform_pki_reissue_required
 
-- name: Создать защищенный каталог перевыпуска резервной копии PKI
+- name: "Создать защищённый каталог резервной копии перед перевыпуском PKI"
   ansible.builtin.file:
     path: "{{ platform_pki_state_root }}/{{ platform_pki_project_id }}/reissue-backups/{{ platform_pki_request.id }}-{{ platform_pki_existing_request_fingerprint.stdout | trim | hash('sha256') }}"
     state: directory
@@ -264,7 +264,7 @@
         _platform_pki_reissue_active
     fail_msg: CERTIFICATE_REISSUE_REQUIRED
 
-- name: Подготовить постоянные управляемые полномочия и запросить каталоги
+- name: "Создать постоянные каталоги центра сертификации и запроса сертификата"
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
@@ -298,7 +298,7 @@
     group: "{{ platform_pki_group }}"
     mode: '0600'
 
-- name: Отрисовка детерминированного запроса конфигурации OpenSSL
+- name: "Сформировать конфигурацию OpenSSL для запроса сертификата"
   ansible.builtin.template:
     src: openssl-request.cnf.j2
     dest: "{{ _platform_pki_request_runtime_dir }}/request.cnf"

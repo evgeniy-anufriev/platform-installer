@@ -72,7 +72,7 @@
     - application_kafka_account.mode == 'managed'
     - "'SCRAM-SHA-512' not in application_kafka_description.stdout or application_kafka_password_mismatch"
   block:
-    - name: Визуализировать входные данные модификации SCRAM без помещения учетных данных в argv
+    - name: "Подготовить параметры изменения SCRAM без передачи паролей в аргументах команды"
       ansible.builtin.copy:
         content: "SCRAM-SHA-512=iterations=8192,password={{ lookup('ansible.builtin.file', application_kafka_credentials[application_kafka_account.passwordRef], rstrip=false) | platform.core.platform_java_properties_value }}\n"
         dest: "{{ application_kafka_private.path }}/scram.properties"
@@ -118,7 +118,7 @@
       changed_when: false
       failed_when: false
       no_log: true
-    - name: Запросить выбранный пароль приложения для аутентификации после согласования
+    - name: "Проверить вход приложения с выбранным паролем после настройки учётной записи"
       ansible.builtin.assert:
         that: application_kafka_login.rc == 0
         fail_msg: APPLICATION_KAFKA_ACCOUNT_AUTHENTICATION_FAILED

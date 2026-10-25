@@ -7,7 +7,7 @@
     _vault_test_outside: "{{ vault_path_test_dir.path }}/outside-{{ vault_path_scenario.root }}-{{ vault_path_scenario.component }}"
     _vault_test_rejected: false
 
-- name: Создание безопасных предков и внешнего стража
+- name: "Создать безопасные родительские каталоги и внешний контрольный файл"
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
@@ -48,7 +48,7 @@
     dest: "{{ _vault_test_link }}"
     state: link
 
-- name: Потребовать, чтобы общий производственный валидатор отклонял перед последующими операциями записи
+- name: "Проверить отклонение небезопасного пути штатным валидатором до записи файлов"
   block:
     - name: Применить точный валидатор компонента пути Vault
       ansible.builtin.include_tasks: ../ansible_collections/platform/vault/roles/vault_tls/tasks/validate_owned_paths.yml
@@ -72,7 +72,7 @@
     - "{{ _vault_test_outside }}/must-not-exist"
   register: _vault_test_outside_stats
 
-- name: Прочитать ограниченный внешний страж после отклонения
+- name: "Прочитать внешний контрольный файл после отклонения пути"
   ansible.builtin.slurp:
     src: "{{ _vault_test_outside }}/sentinel"
   register: _vault_test_sentinel_content

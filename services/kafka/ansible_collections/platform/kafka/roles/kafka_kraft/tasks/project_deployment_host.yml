@@ -1,5 +1,5 @@
 ---
-- name: Проектируйте экземпляры службы Kafka из экземпляров службы развертывания, принадлежащих инвентарю
+- name: "Сформировать экземпляры Kafka по развёртываниям из inventory"
   ansible.builtin.set_fact:
     platform_kafka_instances: "{{ platform_kafka_instances + [ {
       'id': item.key,

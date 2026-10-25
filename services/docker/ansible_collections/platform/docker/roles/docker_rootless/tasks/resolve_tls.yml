@@ -59,7 +59,7 @@
          | list }}
   when: platform_pki_selected_consumer_plan is defined
 
-- name: Чтение явного использования расширенного ключа сертификата
+- name: "Прочитать расширенные назначения ключа сертификата — EKU"
   ansible.builtin.command:
     argv: [openssl, x509, -in, "{{ _platform_docker_tls_source }}/certificate.pem", -noout, -ext, extendedKeyUsage]
   register: _platform_docker_certificate_eku
@@ -83,7 +83,7 @@
   changed_when: false
   no_log: true
 
-- name: Запрос удостоверения сертификата для целевого адреса API
+- name: "Проверить соответствие SAN сертификата адресу Docker API"
   ansible.builtin.assert:
     that:
       - >-

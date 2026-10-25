@@ -1,7 +1,7 @@
 ---
 - name: Согласование хранилищ PKI с проверенным материалом PEM
   block:
-    - name: Проверить каталог назначения запроса PKI без следующих ссылок
+    - name: "Проверить каталог запроса PKI без перехода по символическим ссылкам"
       ansible.builtin.stat:
         path: "{{ _platform_pki_request_dir }}"
         follow: false
@@ -48,7 +48,7 @@
       register: _platform_pki_authoritative_pem_stats
       no_log: true
 
-    - name: Требовать защищенные регулярные авторитетные файлы PKI PEM
+    - name: "Проверить, что исходные PEM-файлы являются обычными файлами с безопасными правами"
       ansible.builtin.assert:
         that:
           - item.stat.exists
@@ -304,7 +304,7 @@
       when: (_platform_pki_existing_keystore_check.rc | default(1)) == 0
       no_log: true
 
-    - name: Ограничить извлеченные существующие разрешения закрытого ключа
+    - name: "Ограничить права доступа к извлечённому закрытому ключу"
       ansible.builtin.file:
         path: "{{ _platform_pki_store_stage.path }}/existing-keystore.key"
         owner: "{{ platform_pki_owner }}"
@@ -403,7 +403,7 @@
           changed_when: false
           no_log: true
 
-        - name: Ограничить поэтапные разрешения кандидата PKCS12
+        - name: "Ограничить права доступа к подготовленным хранилищам PKCS12"
           ansible.builtin.file:
             path: "{{ _platform_pki_store_stage.path }}/{{ item }}"
             owner: "{{ platform_pki_owner }}"
@@ -483,7 +483,7 @@
           changed_when: false
           no_log: true
 
-        - name: Ограничить разрешения для поэтапно извлеченного закрытого ключа
+        - name: "Ограничить права доступа к ключу, извлечённому из нового хранилища"
           ansible.builtin.file:
             path: "{{ _platform_pki_store_stage.path }}/candidate-keystore.key"
             owner: "{{ platform_pki_owner }}"
@@ -523,7 +523,7 @@
           changed_when: false
           no_log: true
 
-        - name: Требовать замены хранилищ для соответствия авторитетному идентификатору PEM
+        - name: "Проверить соответствие новых хранилищ исходным PEM-файлам"
           ansible.builtin.command:
             argv: [cmp, -s, "{{ item.left }}", "{{ item.right }}"]
           loop:
@@ -536,7 +536,7 @@
           changed_when: false
           no_log: true
 
-        - name: Требовать замены типов записей PKCS12
+        - name: "Проверить типы записей в новых хранилищах PKCS12"
           ansible.builtin.assert:
             that:
               - "'PrivateKeyEntry' in _platform_pki_candidate_keystore_check.stdout"

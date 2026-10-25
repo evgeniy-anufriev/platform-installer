@@ -6,7 +6,7 @@
   connection: local
   gather_facts: false
   tasks:
-    - name: Привязать объявленный заказ Apply, не расширяя его область действия
+    - name: "Использовать заданный порядок установки, не расширяя список библиотек"
       ansible.builtin.set_fact:
         application_preflight_library_ids: "{{ application_snapshot.snapshot.applicationLibraries.libraries | list | sort }}"
         application_preflight_library_order: >-
@@ -18,7 +18,7 @@
           - application_preflight_library_order | unique | length == application_preflight_library_order | length
           - application_preflight_library_order | sort == application_preflight_library_ids
         fail_msg: APPLICATION_LIBRARY_ORDER_INVALID
-    - name: Требовать, чтобы каждый использованный провайдер приложений ранее был в той же области применения
+    - name: "Проверить, что необходимые провайдеры стоят раньше потребителей в порядке установки"
       ansible.builtin.assert:
         that: application_provider_order_findings | length == 0
         fail_msg: "APPLICATION_PROVIDED_CONNECTION_ORDER_REQUIRED {{ application_provider_order_findings }}"

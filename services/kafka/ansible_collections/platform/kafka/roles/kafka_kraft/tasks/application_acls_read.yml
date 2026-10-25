@@ -7,7 +7,7 @@
   failed_when: false
   no_log: true
 
-- name: Требовать читаемый основной инвентарь ACL
+- name: "Проверить успешность чтения ACL выбранного principal"
   ansible.builtin.assert:
     that: application_kafka_acl_inventory.rc == 0
     fail_msg: APPLICATION_KAFKA_ACL_READ_FAILED

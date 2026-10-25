@@ -59,7 +59,7 @@
   delegate_facts: false
   no_log: true
 
-- name: Обновить только другую принадлежащую политику
+- name: "Обновить управляемую политику Vault только при изменении содержимого"
   ansible.builtin.uri:
     url: "{{ application_vault_provider.url }}/v1/sys/policies/acl/{{ platform_vault_application_job.identity }}"
     method: PUT

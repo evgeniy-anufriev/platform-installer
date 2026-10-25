@@ -1,5 +1,5 @@
 ---
-- name: Доказать точный входной сигнал прямого Ansible RPM, когда авторитет источника Core не существует
+- name: "Проверить локальный RPM для прямого запуска Ansible без выбора источника через Core"
   ansible.builtin.stat:
     path: "{{ platform_clickhouse_rpm_paths[clickhouse_package_id] | default('') }}"
     checksum_algorithm: sha256
@@ -22,7 +22,7 @@
   when: platform_resolved_artifact_sources is not defined
   no_log: true
 
-- name: Создать узкую прямую сцену Ansible ClickHouse RPM
+- name: "Создать временный каталог RPM ClickHouse для прямого запуска Ansible"
   ansible.builtin.file:
     path: /var/tmp/platform-installer/artifacts/clickhouse-direct
     state: directory
@@ -57,7 +57,7 @@
   when: platform_resolved_artifact_sources is not defined
   no_log: true
 
-- name: Установить точный утвержденный локальный RPM без резервного хранилища
+- name: "Установить проверенный локальный RPM без обращения к репозиториям"
   ansible.builtin.dnf:
     name: >-
       {{ (platform_offline_artifact_paths[clickhouse_package_id] | first)

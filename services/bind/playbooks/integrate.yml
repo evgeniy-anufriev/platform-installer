@@ -1,7 +1,7 @@
 ---
 # Exact source-owned DNS updates. The caller passes Core-resolved records;
 # this entrypoint never rebuilds or deletes the complete zone model.
-- name: Опубликовать выбранные исходные записи DNS на их основных элементах BIND
+- name: "Опубликовать выбранные DNS-записи на первичных серверах BIND"
   hosts: platform_targets
   become: true
   gather_facts: false

@@ -90,7 +90,7 @@
   register: _platform_clickhouse_tls_copies
   no_log: true
 
-- name: Отобразить средство проверки пароля и политику пользователя по умолчанию без открытого текста
+- name: "Сформировать настройки пользователя по умолчанию с хешем пароля"
   ansible.builtin.template:
     src: users.xml.j2
     dest: "{{ item.config_directory }}/users.xml"
@@ -159,7 +159,7 @@
   register: _platform_clickhouse_keeper_units
   when: platform_clickhouse_mode == 'raft-ha'
 
-- name: Перезагрузить systemd только после изменения службы экземпляра службы systemd
+- name: "Перечитать конфигурацию systemd после изменения файлов служб"
   ansible.builtin.systemd:
     daemon_reload: true
   when: >-
@@ -173,7 +173,7 @@
       {{ (_platform_clickhouse_tls_copies.results | selectattr('changed', 'equalto', true) | list | length > 0)
          or (_platform_clickhouse_users_configs.results | selectattr('changed', 'equalto', true) | list | length > 0) }}
 
-- name: Запуск или перезапуск изолированных избирателей Keeper перед серверами ClickHouse
+- name: "Запустить или перезапустить голосующие узлы Keeper перед ClickHouse"
   ansible.builtin.systemd:
     name: "{{ clickhouse_member.keeper_unit_name }}"
     enabled: true

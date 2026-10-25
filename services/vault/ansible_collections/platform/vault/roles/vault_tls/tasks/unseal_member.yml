@@ -1,5 +1,5 @@
 ---
-- name: Прочитать текущее состояние печати для одного конкретного экземпляра службы Vault
+- name: "Прочитать состояние блокировки экземпляра Vault — sealed/unsealed"
   ansible.builtin.uri:
     url: "https://{{ vault_member.address }}:{{ vault_member.api_port }}/v1/sys/health"
     method: GET
@@ -24,7 +24,7 @@
   when: _platform_vault_member_health_before.json.sealed | bool
   no_log: true
 
-- name: Отправьте только настроенное количество необходимых общих ресурсов Shamir
+- name: "Передать необходимое по порогу число долей ключа Shamir"
   ansible.builtin.uri:
     url: "https://{{ vault_member.address }}:{{ vault_member.api_port }}/v1/sys/unseal"
     method: PUT
@@ -66,13 +66,13 @@
     fail_msg: VAULT_CLUSTER_IDENTITY_MISMATCH
   no_log: true
 
-- name: Захват исходной идентификации кластера узлов после подтверждения разблокировки
+- name: "Сохранить идентификатор кластера начального узла после разблокировки"
   ansible.builtin.set_fact:
     _platform_vault_seed_cluster_id: "{{ _platform_vault_member_health_after.json.cluster_id }}"
   when: vault_member.slot == 0
   no_log: true
 
-- name: Потребовать от экземпляра службы совместного использования исходного идентификатора кластера узлов
+- name: "Проверить совпадение идентификатора кластера с начальным узлом"
   ansible.builtin.assert:
     that:
       - _platform_vault_member_health_after.json.cluster_id is string

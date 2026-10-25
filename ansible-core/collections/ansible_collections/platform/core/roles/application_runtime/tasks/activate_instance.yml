@@ -33,7 +33,7 @@
   vars:
     application_runtime_verify_vault: false
 
-- name: Сообщить о фактической замене создания или запуске управляемого контейнера
+- name: "Сообщить о создании, замене или запуске контейнера"
   ansible.builtin.debug:
     msg: APPLICATION_CONTAINER_RECONCILED
   changed_when: >-

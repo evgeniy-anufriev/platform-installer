@@ -32,7 +32,7 @@
     - platform_postgresql_mode == 'pg_auto_failover'
     - platform_resolved_artifact_sources is not defined or platform_resolved_artifact_sources['pg-auto-failover'].source == 'REPOSITORY'
 
-- name: Разрешить двоичный каталог PostgreSQL после установки пакета
+- name: "Определить каталог исполняемых файлов PostgreSQL после установки пакета"
   ansible.builtin.include_tasks: resolve_binary_directory.yml
   vars:
     platform_postgresql_require_binary_directory: true
@@ -58,7 +58,7 @@
     - "{{ platform_postgresql_log_directory }}"
   when: not (platform_postgresql_verify_only | bool)
 
-- name: Установить принадлежащий PostgreSQL материал TLS после существования каталогов учетной записи и базы
+- name: "Установить TLS-файлы PostgreSQL после создания учётной записи и каталогов"
   ansible.builtin.include_tasks: install_tls.yml
   when: platform_postgresql_tls_profile | length > 0
 
@@ -138,7 +138,7 @@
   when: not (platform_postgresql_verify_only | bool)
   notify: Перезапустить PostgreSQL
 
-- name: Count Platform PostgreSQL включается в конфигурацию, принадлежащую initdb
+- name: "Подсчитать подключения postgresql-platform.conf в основной конфигурации PostgreSQL"
   ansible.builtin.command:
     argv:
       - grep
@@ -156,7 +156,7 @@
       - platform_postgresql_include_count.stdout | trim == '1'
     fail_msg: POSTGRES_PLATFORM_INCLUDE_INVALID
 
-- name: Установка службы systemd PostgreSQL systemd на уровне экземпляра
+- name: "Установить службу systemd для экземпляра PostgreSQL"
   ansible.builtin.template:
     src: postgresql.service.j2
     dest: "/etc/systemd/system/{{ _platform_postgresql_unit_name }}"

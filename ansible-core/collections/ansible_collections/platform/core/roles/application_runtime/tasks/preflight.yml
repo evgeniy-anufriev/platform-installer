@@ -91,7 +91,7 @@
       when: application_registry_auth_stage.path is defined
       changed_when: false
 
-- name: Реализовать общий репозиторий, а затем политику автономного режима
+- name: "Выбрать источник образа: разрешённый реестр, затем offline-пакет"
   ansible.builtin.set_fact:
     application_image_source: >-
       {{ application_runtime_job.authority | platform.core.platform_resolve_artifact_source(
@@ -107,13 +107,13 @@
     that: application_image_source.source != 'BLOCKED'
     fail_msg: "{{ application_image_source.reason }}"
 
-- name: Проверка резервных байтов только для выбранного автономного источника перед мутациями
+- name: "Проверить архив выбранного offline-образа до внесения изменений"
   ansible.builtin.set_fact:
     application_selected_archive_path: "{{ platform_execution_bundle_root | default('') | platform.core.application_selected_archive(application_image_source.source, application_runtime_job.authority.offlineBundle) }}"
   no_log: true
   when: not (application_runtime_defer_archive_verification | default(false) | bool)
 
-- name: Привязать выбранный путь к архиву в ожидании общего барьера целостности предварительной проверки
+- name: "Сохранить путь выбранного архива для общей проверки целостности"
   ansible.builtin.set_fact:
     application_selected_archive_path: >-
       {{ ((platform_execution_bundle_root | default('') | regex_replace('/+$', '')) ~ '/' ~ application_runtime_job.authority.offlineBundle.ref)
@@ -137,7 +137,7 @@
     fail_msg: APPLICATION_IMAGE_REFERENCE_OWNERSHIP_INVALID
   no_log: true
 
-- name: Рендеринг объявленных файлов конфигурации в частную память
+- name: "Сформировать конфигурационные файлы по шаблонам в защищённой памяти"
   ansible.builtin.set_fact:
     application_config_contents: "{{ application_config_contents + [{'destination': application_config.destination, 'content': _application_config_content, 'sha256': (_application_config_content | hash('sha256')), 'mode': application_config.mode | default('0644')}] }}"
   vars:
@@ -170,7 +170,7 @@
     loop_var: application_archive
   no_log: true
 
-- name: Требовать ограниченное несекретное отображаемое содержимое конфигурации перед записью любого файла
+- name: "Проверить допустимость конфигурации и отсутствие секретов перед записью файлов"
   ansible.builtin.assert:
     that: "{{ application_config_contents | platform.core.application_validate_configs }}"
     fail_msg: APPLICATION_CONFIG_CONTENT_INVALID
@@ -181,7 +181,7 @@
     application_config_pairs: []
   no_log: true
 
-- name: Собрать детерминированные пары адресата и дайджеста контента
+- name: "Собрать упорядоченные пары путей назначения и контрольных сумм содержимого"
   ansible.builtin.set_fact:
     application_config_pairs: "{{ application_config_pairs + [[item.destination, item.sha256]] }}"
   loop: "{{ application_config_contents | sort(attribute='destination') }}"
@@ -216,7 +216,7 @@
       connections: "{{ hostvars['localhost'].application_snapshot.snapshot.applicationLibraries.libraries[application_runtime_job.libraryId].connections | default(hostvars['localhost'].application_snapshot.snapshot.applicationLibraries.libraries[application_runtime_job.libraryId].instances[application_runtime_job.instanceId].connections, true) }}"
   no_log: true
 
-- name: Отобразить конфигурацию агента из разрешенного списка без секретных значений
+- name: "Сформировать разрешённую конфигурацию агента без секретных значений"
   ansible.builtin.set_fact:
     application_agent_content: "{{ lookup('ansible.builtin.template', application_runtime_job.agentTemplate) if application_runtime_job.agentTemplate else '' }}"
   no_log: true
@@ -234,7 +234,7 @@
   when: application_runtime_job.agentTemplate
   no_log: true
 
-- name: Рендеринг ожидаемого Compose и байтов библиотеки с использованием собственных шаблонов Ansible
+- name: "Сформировать ожидаемые Compose-файлы и файлы библиотеки по шаблонам Ansible"
   ansible.builtin.set_fact:
     application_compose_content: "{{ lookup('ansible.builtin.template', application_runtime_job.appTemplate) }}"
     application_base_content: "{{ lookup('ansible.builtin.template', application_runtime_job.baseTemplate) }}"

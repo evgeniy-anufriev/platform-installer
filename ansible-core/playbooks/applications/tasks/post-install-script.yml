@@ -1,5 +1,5 @@
 ---
-- name: Вызов существующего преобразователя контекста и универсального средства запуска пакетов
+- name: "Подготовить контекст и запустить сценарий post_install"
   ansible.builtin.include_tasks: provider-script.yml
   vars:
     application_provider_batch:

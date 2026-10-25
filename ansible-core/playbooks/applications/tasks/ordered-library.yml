@@ -30,7 +30,7 @@
   loop_control:
     loop_var: application_runtime_job
 
-- name: Запуск сценариев перед запуском библиотеки после материализации
+- name: "Выполнить сценарии pre_start после подготовки файлов библиотеки"
   ansible.builtin.include_role:
     name: platform.core.application_runtime
     tasks_from: run_scripts
@@ -41,13 +41,13 @@
   loop_control:
     loop_var: application_runtime_job
 
-- name: Согласовать каждый логический экземпляр с явными фазовыми барьерами
+- name: "Обработать экземпляры приложения с проверкой завершения каждого этапа"
   ansible.builtin.include_tasks: ordered-instance.yml
   loop: "{{ application_library_instance_ids }}"
   loop_control:
     loop_var: application_instance_id
 
-- name: Запуск готовых сценариев библиотеки перед публикацией конечной точки
+- name: "Выполнить сценарии готовности библиотеки перед публикацией конечной точки"
   ansible.builtin.include_role:
     name: platform.core.application_runtime
     tasks_from: run_scripts
@@ -80,7 +80,7 @@
   loop_control:
     loop_var: application_runtime_job
 
-- name: Подготовить выбранных потребителей явно пропущенного провайдера без его жизненного цикла
+- name: "Подготовить потребителей провайдера, установка которого явно пропущена"
   ansible.builtin.include_tasks: provider-batch.yml
   loop: "{{ hostvars['localhost'].application_runtime_inputs.integrations.batches | selectattr('providerLibraryId', 'equalto', application_library_id) | list }}"
   loop_control:
@@ -93,7 +93,7 @@
   when: application_library_id in hostvars['localhost'].application_selection.scope.providerLibraries and application_library_id in hostvars['localhost'].application_selection.scope.skippedLibraries
   run_once: true
 
-- name: Применить объявленные крючки интеграции к выбранным местам размещения
+- name: "Выполнить объявленные обработчики интеграции на выбранных узлах размещения"
   ansible.builtin.include_tasks: provider-script.yml
   vars:
     application_provider_batch:

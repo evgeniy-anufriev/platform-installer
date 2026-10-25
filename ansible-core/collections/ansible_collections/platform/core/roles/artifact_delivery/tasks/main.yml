@@ -4,7 +4,7 @@
     platform_offline_artifact_paths: "{{ platform_offline_artifact_paths | default({}) }}"
     platform_offline_package_paths: "{{ platform_offline_package_paths | default([]) }}"
 
-- name: Доставить выбранные требования к артефактам из пакета выполнения
+- name: "Доставить требуемые артефакты из пакета среды выполнения"
   ansible.builtin.include_tasks: deliver_requirement.yml
   loop: "{{ platform_artifact_delivery_requirements }}"
   loop_control:
@@ -12,7 +12,7 @@
     label: "{{ artifact_requirement.id }}"
   when: platform_resolved_artifact_sources is defined
 
-- name: Установить выбранное локальное замыкание RPM без репозиториев
+- name: "Установить локальные RPM-пакеты и зависимости без обращения к репозиториям"
   ansible.builtin.dnf:
     name: "{{ platform_offline_package_paths }}"
     state: present

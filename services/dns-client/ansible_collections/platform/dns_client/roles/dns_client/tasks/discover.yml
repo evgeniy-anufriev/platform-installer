@@ -27,13 +27,13 @@
   changed_when: false
   failed_when: false
 
-- name: Проверка владения конфигурацией преобразователя
+- name: "Проверить, какой сервис управляет конфигурацией DNS-резолвера"
   ansible.builtin.stat:
     path: /etc/resolv.conf
     follow: false
   register: _platform_dns_client_resolv_conf
 
-- name: Прочитать ссылку на конфигурацию преобразователя без изменений
+- name: "Прочитать символическую ссылку конфигурации DNS-резолвера без изменений"
   ansible.builtin.command:
     argv: [readlink, /etc/resolv.conf]
   register: _platform_dns_client_resolv_link

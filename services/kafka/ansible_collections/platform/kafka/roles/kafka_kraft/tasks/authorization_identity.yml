@@ -4,7 +4,7 @@
   vars:
     kafka_tls_member: "{{ kafka_authorization_member }}"
 
-- name: Прочитать тему RFC2253 выбранного сертификата экземпляра службы
+- name: "Прочитать subject сертификата экземпляра в формате RFC2253"
   ansible.builtin.command:
     argv: [openssl, x509, -in, "{{ _platform_kafka_tls_runtime.targetDirectory }}/certificate.pem", -noout, -subject, -nameopt, RFC2253]
   delegate_to: "{{ kafka_authorization_member.host }}"

@@ -1,5 +1,5 @@
 ---
-- name: Проверка ограниченных разрешенных входных данных, включая инвентаризацию вручную
+- name: "Проверить входные параметры, в том числе при ручном запуске с inventory"
   ansible.builtin.assert:
     that: platform_postgresql_application_job | platform.postgresql.application_validate_provider_job
     fail_msg: APPLICATION_PROVIDER_INPUT_INVALID

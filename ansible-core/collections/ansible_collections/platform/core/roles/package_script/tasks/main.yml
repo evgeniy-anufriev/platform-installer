@@ -15,7 +15,7 @@
   when: platform_script_job.secretInputs | length > 0
   no_log: true
 
-- name: Создание каталога сценариев частного пакета
+- name: "Создать защищённый каталог сценариев пакета"
   ansible.builtin.file:
     path: "{{ platform_script_directory }}"
     state: directory
@@ -58,7 +58,7 @@
       loop: "{{ platform_script_job.secretInputs | dict2items }}"
       no_log: true
 
-    - name: Привязать к среде скрипта только частные пути к файлам
+    - name: "Передать сценарию только пути защищённых входных файлов"
       ansible.builtin.set_fact:
         platform_script_environment: >-
           {{ platform_script_environment | combine({'PLATFORM_SCRIPT_SECRET_' ~ (item.key | upper) ~ '_FILE': platform_script_secret_directory ~ '/' ~ item.key}) }}
@@ -90,7 +90,7 @@
         fail_msg: APPLICATION_SCRIPT_RESULT_INVALID
       no_log: true
 
-    - name: Сообщить о фактическом изменении сценария пакета
+    - name: "Сообщить, внёс ли сценарий пакета изменения"
       ansible.builtin.debug:
         msg: APPLICATION_SCRIPT_RECONCILED
       changed_when: (platform_script_result.stdout | from_json).changed | bool

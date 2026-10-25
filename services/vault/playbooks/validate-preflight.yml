@@ -20,7 +20,7 @@
         name: platform.vault.vault_tls
         tasks_from: normalize.yml
 
-    - name: Привязка экземпляра службы синтетических тестовых данных к локальному хосту для проверок только для чтения
+    - name: "Привязать тестовый экземпляр сервиса к localhost для проверок без изменений"
       ansible.builtin.set_fact:
         _platform_vault_instances: "{{ _platform_vault_instances | map('combine', {'host': inventory_hostname}) | list }}"
 

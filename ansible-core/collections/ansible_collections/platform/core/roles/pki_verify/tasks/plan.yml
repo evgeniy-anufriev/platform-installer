@@ -19,13 +19,13 @@
     argv: [openssl, verify, -CAfile, "{{ platform_pki_plan.targetDirectory }}/ca-chain.pem", "{{ platform_pki_plan.targetDirectory }}/certificate.pem"]
   changed_when: false
 
-- name: Прочитать отпечаток развернутой материализации
+- name: "Прочитать отпечаток развёрнутых PKI-файлов"
   ansible.builtin.command:
     argv: [cat, "{{ platform_pki_plan.targetDirectory }}/materialization-fingerprint"]
   changed_when: false
   register: platform_pki_target_fingerprint
 
-- name: Требовать ожидаемый отпечаток развернутой материализации
+- name: "Проверить отпечаток развёрнутых PKI-файлов"
   ansible.builtin.assert:
     that: "(platform_pki_target_fingerprint.stdout | trim) == platform_pki_plan.materializationFingerprint"
     fail_msg: PKI_TARGET_MATERIALIZATION_MISMATCH

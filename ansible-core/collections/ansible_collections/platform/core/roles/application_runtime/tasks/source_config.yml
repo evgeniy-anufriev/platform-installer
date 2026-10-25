@@ -8,7 +8,7 @@
   register: application_source_stat
   no_log: true
 
-- name: Чтение исходных байтов для частной несекретной проверки
+- name: "Прочитать исходные файлы для защищённой проверки отсутствия секретов"
   ansible.builtin.slurp:
     src: "{{ application_config.path }}"
   delegate_to: localhost

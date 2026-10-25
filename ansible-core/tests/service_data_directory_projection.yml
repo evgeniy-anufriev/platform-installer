@@ -8,7 +8,7 @@
   tasks:
     - name: Загрузить значения по умолчанию для роли Redis
       ansible.builtin.include_vars: ../../services/redis/ansible_collections/platform/redis/roles/redis_tls/defaults/main.yml
-    - name: Проектирование экземпляров службы Redis на отдельных хостах
+    - name: "Рассчитать размещение экземпляров Redis на разных узлах"
       ansible.builtin.set_fact:
         platform_redis_instances:
           - {id: qa-stateful-1, host: localhost, roles: [redis]}
@@ -35,7 +35,7 @@
 
     - name: Загрузить значения по умолчанию для роли ClickHouse
       ansible.builtin.include_vars: ../../services/clickhouse/ansible_collections/platform/clickhouse/roles/clickhouse_tls/defaults/main.yml
-    - name: Проектирование экземпляров службы ClickHouse на отдельных хостах
+    - name: "Рассчитать размещение экземпляров ClickHouse на разных узлах"
       ansible.builtin.set_fact:
         platform_clickhouse_instances:
           - {id: qa-stateful-1, host: localhost, roles: [server]}
@@ -62,7 +62,7 @@
 
     - name: Загрузить значения по умолчанию для роли Vault
       ansible.builtin.include_vars: ../../services/vault/ansible_collections/platform/vault/roles/vault_tls/defaults/main.yml
-    - name: Проектирование экземпляров службы Vault на отдельных хостах
+    - name: "Рассчитать размещение экземпляров Vault на разных узлах"
       ansible.builtin.set_fact:
         platform_vault_instances:
           - {id: qa-stateful-1, host: localhost, roles: [vault]}

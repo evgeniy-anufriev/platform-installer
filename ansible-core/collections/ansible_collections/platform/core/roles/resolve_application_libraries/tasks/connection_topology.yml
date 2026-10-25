@@ -15,14 +15,14 @@
   no_log: true
   become: false
 
-- name: Требовать полного расширения собственного экспорта перед разрешением топологии
+- name: "Проверить вычисление всех экспортируемых значений библиотеки перед расчётом топологии"
   ansible.builtin.assert:
     that: _application_export_inputs.findings | default([]) | length == 0
     fail_msg: APPLICATION_INPUT_INVALID
   no_log: true
   become: false
 
-- name: Объединить предоставленные параметры с собственным приоритетом
+- name: "Объединить параметры с учётом приоритета значений Ansible"
   ansible.builtin.set_fact:
     application_provided_connection_definitions: >-
       {{ _application_export_inputs.defaults |
@@ -37,7 +37,7 @@
     loop_var: application_export_override
   no_log: true
 
-- name: Определение топологии соединения с использованием собственного пакета и приоритета установки
+- name: "Определить топологию подключений по параметрам пакета и установки"
   ansible.builtin.set_fact:
     platform_application_connection_rows: >-
       {{ platform_application_connection_rows + [{

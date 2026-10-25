@@ -50,7 +50,7 @@
   vars:
     _platform_keepalived_participants: "{{ hostvars['localhost']._platform_keepalived_participants | default([]) }}"
   tasks:
-    - name: Убедиться, что каждый участник создал проходного кандидата
+    - name: "Проверить, что конфигурация каждого участника прошла проверку"
       ansible.builtin.assert:
         that:
           - hostvars[item].platform_keepalived_candidate_checksum | default('') | length > 0

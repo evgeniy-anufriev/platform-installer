@@ -53,7 +53,7 @@
     fail_msg: PKI_TARGET_DIRECTORY_UNSAFE
   no_log: true
 
-- name: Проверка метаданных развернутого файла PKI за один удаленный обход
+- name: "Получить метаданные развёрнутых PKI-файлов одним удалённым вызовом"
   ansible.builtin.find:
     paths: "{{ platform_pki_plan.targetDirectory }}"
     patterns: [ca-chain.pem, certificate.pem, private-key.pem, keystore.p12, truststore.p12, materialization-fingerprint]
@@ -142,6 +142,6 @@
          ] }}
   no_log: true
 
-- name: Исправить материал PKI, не соответствующий прикладному плану
+- name: "Восстановить PKI-файлы в соответствии с применённым планом"
   ansible.builtin.include_tasks: plan.yml
   when: not (_platform_pki_integrity_valid | bool)

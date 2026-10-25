@@ -40,7 +40,7 @@
   failed_when: false
   no_log: true
 
-- name: Реализовать закрытый авторизованный репозиторий Core, а затем политику автономного режима
+- name: "Выбрать разрешённый Core источник: репозиторий, затем offline-пакет"
   ansible.builtin.set_fact:
     platform_resolved_artifact_sources: >-
       {{ platform_resolved_artifact_sources | default({}) | combine({

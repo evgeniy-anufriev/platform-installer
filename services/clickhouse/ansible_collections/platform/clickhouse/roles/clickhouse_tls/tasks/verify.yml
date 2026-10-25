@@ -20,7 +20,7 @@
   changed_when: false
   failed_when: false
 
-- name: Запрос ожидаемого состояния процесса Keeper для конкретного режима
+- name: "Проверить состояние Keeper в соответствии с режимом ClickHouse"
   ansible.builtin.assert:
     that: >-
       (platform_clickhouse_mode == 'raft-ha' and _platform_clickhouse_keeper_status.stdout == 'active') or

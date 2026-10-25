@@ -85,7 +85,7 @@
   when: platform_vault_mode == 'raft-ha'
   no_log: true
 
-- name: Требовать именно настроенные работоспособные экземпляры службы голосования
+- name: "Проверить состав и работоспособность голосующих узлов Raft"
   ansible.builtin.assert:
     that:
       - _platform_vault_raft_configuration.json.data.config.servers | length == _platform_vault_instances | length

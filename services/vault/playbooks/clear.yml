@@ -6,7 +6,7 @@
   any_errors_fatal: true
   strategy: linear
   tasks:
-    - name: Запуск автономной очистки записи Vault
+    - name: "Выполнить очистку Vault при прямом запуске Ansible"
       ansible.builtin.include_role:
         name: platform.vault.vault_tls
         tasks_from: clear_entry

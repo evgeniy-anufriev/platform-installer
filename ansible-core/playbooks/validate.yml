@@ -63,7 +63,7 @@
       no_log: true
       run_once: true
 
-    - name: Сбор экземпляров канонических служб, принадлежащих инвентарю
+    - name: "Собрать экземпляры сервисов из inventory проекта"
       ansible.builtin.set_fact:
         platform_inventory_deployments: >-
           {{ platform_inventory_deployments | default({}) |
@@ -74,7 +74,7 @@
       no_log: true
       run_once: true
 
-    - name: Сбор безопасных адресов хостов канонической инвентаризации
+    - name: "Собрать адреса узлов из inventory без секретных данных"
       ansible.builtin.set_fact:
         platform_inventory_host_addresses: >-
           {{ platform_inventory_host_addresses | default({}) |

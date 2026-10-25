@@ -19,7 +19,7 @@ class ServiceApplyPkiContractTests(unittest.TestCase):
             defaults = handle.read()
 
         self.assertIn("Проверка наличия keytool перед материализацией хранилища PKCS12", tasks)
-        self.assertIn("Установить среду выполнения Java, предоставляя ключевой инструмент, когда он отсутствует", tasks)
+        self.assertIn("Установить пакет Java с утилитой keytool, если она отсутствует", tasks)
         self.assertIn("Перепроверить keytool после проверки среды выполнения Java", tasks)
         self.assertIn("PKI_KEYTOOL_UNAVAILABLE", tasks)
         self.assertIn("platform_pki_keytool_package: java-21-openjdk-headless", defaults)
@@ -130,7 +130,7 @@ class ServiceApplyPkiContractTests(unittest.TestCase):
         self.assertIn("dict((groups['platform_targets'] | default([]) | sort) | zip", aggregate_tasks)
         self.assertIn("map('extract', hostvars, 'platform_kafka_identity_discovery')", aggregate_tasks)
         self.assertNotIn("platform_kafka_discovery_by_host | default({}) | combine", apply_tasks)
-        materializer = apply_tasks[apply_tasks.index("Материализация управляемых удостоверений Kafka перед изменением"):apply_tasks.index("Kafka создал проекцию идентичности")]
+        materializer = apply_tasks[apply_tasks.index("Материализация управляемых удостоверений Kafka перед изменением"):apply_tasks.index("Сохранить рассчитанные идентификаторы Kafka")]
         self.assertIn("changed_when: false", materializer)
 
     def test_tls_service_apply_playbooks_use_project_wide_pki_before_role_reconcile(self):
@@ -184,7 +184,7 @@ class ServiceApplyPkiContractTests(unittest.TestCase):
         with open(postgresql_main, encoding="utf-8") as handle:
             postgresql_tasks = handle.read()
         self.assertLess(
-            postgresql_tasks.index("Решить точный потребительский план PostgreSQL PKI перед внесением изменений"),
+            postgresql_tasks.index("Выбрать план PKI для PostgreSQL до внесения изменений"),
             postgresql_tasks.index("Доставка выбранных автономных артефактов PostgreSQL"),
         )
 

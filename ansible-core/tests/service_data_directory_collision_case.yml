@@ -19,6 +19,6 @@
       ansible.builtin.fail:
         msg: EXPECTED_PATH_REJECTION_MISSING
   rescue:
-    - name: Запрос ожидаемого результата столкновения
+    - name: "Проверить ожидаемую ошибку конфликта каталогов"
       ansible.builtin.assert:
         that: (ansible_failed_result | to_json) is search('DATA_DIRECTORY_COLLISION')

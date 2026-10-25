@@ -1,7 +1,7 @@
 ---
 - import_playbook: ../../../ansible-core/playbooks/validate.yml
 
-- name: Материализовать состояние последовательного жизненного цикла BIND
+- name: "Подготовить состояние серийных номеров зон BIND"
   hosts: localhost
   connection: local
   gather_facts: false
@@ -82,7 +82,7 @@
       become: false
       when: _platform_bind_persisted_generated_state | length > 0
 
-    - name: Загрузить опубликованный каталог сервисов для последовательного разрешения BIND
+    - name: "Загрузить каталог сервисов для расчёта серийных номеров зон BIND"
       ansible.builtin.include_vars:
         file: "{{ platform_service_catalog_path }}"
         name: _platform_bind_catalog_file
@@ -109,7 +109,7 @@
         endpoint_sources: "{{ hostvars['localhost'].platform_endpoint_sources | default({}) }}"
       register: platform_bind_resolution
 
-    - name: Разрешить только базовый контент DNS для обычного BIND. Применить
+    - name: "Рассчитать базовые DNS-записи для обычного применения BIND"
       platform.core.resolve_dns_zones:
         desired_state: "{{ platform_desired_state }}"
         service_catalog: "{{ _platform_bind_catalog_file.platform_service_catalog | default(_platform_bind_catalog_file, true) }}"
@@ -163,7 +163,7 @@
         label: "{{ item.item.key }}"
       when: platform_bind_full_reconcile | default(false) | bool
 
-    - name: Запись наблюдаемых в реальном времени первичных сериалов SOA
+    - name: "Сохранить текущие серийные номера SOA первичных зон"
       ansible.builtin.set_fact:
         _platform_bind_observed_live_serials: >-
           {{ _platform_bind_observed_live_serials |
@@ -181,7 +181,7 @@
       register: _platform_bind_lifecycle_recovery
       when: platform_bind_lifecycle_recovery | default({}) | length > 0
 
-    - name: Инициализировать созданный конверт состояния для последовательного жизненного цикла BIND
+    - name: "Инициализировать структуру служебного состояния серийных номеров BIND"
       ansible.builtin.set_fact:
         _platform_bind_next_state: >-
           {{ {
@@ -209,7 +209,7 @@
         label: "{{ item.key }}"
       when: platform_bind_reuse_existing_generated_state | default(false) | bool
 
-    - name: Материализация детерминированных серийных записей BIND
+    - name: "Рассчитать воспроизводимые серийные номера зон BIND"
       ansible.builtin.set_fact:
         _platform_bind_next_state: >-
           {{ _platform_bind_next_state |
@@ -270,14 +270,14 @@
             {{ platform_generated_state if (platform_bind_reuse_existing_generated_state | default(false) | bool)
                else _platform_bind_next_state }}
 
-    - name: Создать постоянный каталог сгенерированного состояния для последовательного жизненного цикла BIND
+    - name: "Создать каталог служебного состояния серийных номеров BIND"
       ansible.builtin.file:
         path: "{{ _platform_bind_generated_state_path | dirname }}"
         state: directory
         mode: '0700'
       when: not (platform_bind_reuse_existing_generated_state | default(false) | bool)
 
-    - name: Persist BIND атомарно генерирует последовательное состояние
+    - name: "Атомарно сохранить служебное состояние серийных номеров BIND"
       ansible.builtin.copy:
         content: "{{ {'platform_generated_state': _platform_bind_next_state} | to_nice_yaml(indent=2) }}"
         dest: "{{ _platform_bind_generated_state_path }}"

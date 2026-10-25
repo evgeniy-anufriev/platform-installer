@@ -16,7 +16,7 @@
     _platform_docker_clear_home: "{{ getent_passwd[platform_docker_account_name][4] }}"
   changed_when: false
 
-- name: Отклонить неподходящую учетную запись или небезопасный дом во время очистки
+- name: "Отклонить неподходящую учётную запись или небезопасный домашний каталог"
   ansible.builtin.assert:
     that:
       - _platform_docker_clear_uid | int >= 1000

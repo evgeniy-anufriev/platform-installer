@@ -1,5 +1,5 @@
 ---
-- name: Привязка явного неадминистративного принципа совместимости
+- name: "Подготовить явно заданный principal совместимости без прав администратора"
   ansible.builtin.set_fact:
     application_kafka_account:
       name: "{{ kafka_authorization_principal }}"
@@ -17,7 +17,7 @@
 - name: Однократно прочитать Kafka ACL совместимого principal перед проверкой ресурсов
   ansible.builtin.include_tasks: application_acls_read.yml
 
-- name: Проверить или убедитесь, что каждый ресурс совместимости с явно заданной областью
+- name: "Проверить или настроить ACL каждого ресурса совместимости"
   ansible.builtin.include_tasks: application_acl.yml
   loop: "{{ kafka_authorization_grants }}"
   loop_control:

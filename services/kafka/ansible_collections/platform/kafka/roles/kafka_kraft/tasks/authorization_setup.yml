@@ -52,7 +52,7 @@
     - name: Подготовка индивидуального загрузочного идентификатора PEM для вызова
       ansible.builtin.include_tasks: application_client_tls.yml
       when: platform_kafka_store_type == 'PEM'
-    - name: Визуализировать загрузку временного сертификата или окончательное подключение администратора
+    - name: "Сформировать временное подключение по bootstrap-сертификату или учётной записи администратора"
       ansible.builtin.template:
         src: application-topics-client.properties.j2
         dest: "{{ application_kafka_private.path }}/admin.properties"

@@ -26,7 +26,7 @@ if os.name == "posix":
 CORE = Path(__file__).resolve().parents[1]
 TAG = "platform_installer_pki_materialization"
 ROLE = "platform.core.pki_materialize"
-MATCH_TASK = "Требовать новое разрешение, соответствующее ранее примененным замороженным планам PKI"
+MATCH_TASK = "Проверить соответствие заново рассчитанных планов PKI ранее применённым"
 
 
 @unittest.skipUnless(shutil.which("ansible-playbook"), "ansible-playbook is required")
@@ -274,10 +274,10 @@ class PKISinglePassResolutionTests(unittest.TestCase):
         self.assertEqual([b"synthetic PKI material for integrity test"],
                          [p.read_bytes() for p in (self.root / 'trust-anchors').glob('*.crt')])
         refresh_mtime = (self.root / 'trust-refreshed').stat().st_mtime_ns
-        self.assertIn("Запись отпечатка несекретной целевой материализации", first)
+        self.assertIn("Записать контрольный отпечаток развёрнутых PKI-файлов без секретов", first)
         second = self.run_play([deploy], skip=True, extra=variables)
         self.assertRegex(second, r"qa-a\s+:.*changed=0.*failed=0")
-        self.assertRegex(second, r"Исправить материал PKI, не соответствующий прикладному плану[^\n]*\n[^\n]*skipping:")
+        self.assertRegex(second, r"Восстановить PKI-файлы в соответствии с применённым планом[^\n]*\n[^\n]*skipping:")
         target = Path(plan["targetDirectory"]) / "certificate.pem"
         target.write_bytes(b"tampered target")
         third = self.run_play([deploy], skip=True, extra=variables)
