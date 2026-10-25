@@ -1,3 +1,4031 @@
+@@PORTABLE {"path":"vendor/golang.org/x/sys/windows/security_windows.go","mode":420,"size":57283,"sha256":"a81ceadb4023d6712587d1d9d0b5a51948dfbfb8a5786811d3020fe55182b6c6","index":1,"count":2,"encoding":"utf-8","payloadBytes":9283}
+SECURITY_DESCRIPTOR) SetGroup(group *SID, defaulted bool) error {
+	return setSecurityDescriptorGroup(absoluteSD, group, defaulted)
+}
+
+// Length returns the length of the security descriptor.
+func (sd *SECURITY_DESCRIPTOR) Length() uint32 {
+	return getSecurityDescriptorLength(sd)
+}
+
+// IsValid returns whether the security descriptor is valid.
+func (sd *SECURITY_DESCRIPTOR) IsValid() bool {
+	return isValidSecurityDescriptor(sd)
+}
+
+// String returns the SDDL form of the security descriptor, with a function signature that can be
+// used with %v formatting directives.
+func (sd *SECURITY_DESCRIPTOR) String() string {
+	var sddl *uint16
+	err := convertSecurityDescriptorToStringSecurityDescriptor(sd, 1, 0xff, &sddl, nil)
+	if err != nil {
+		return ""
+	}
+	defer LocalFree(Handle(unsafe.Pointer(sddl)))
+	return UTF16PtrToString(sddl)
+}
+
+// ToAbsolute converts a self-relative security descriptor into an absolute one.
+func (selfRelativeSD *SECURITY_DESCRIPTOR) ToAbsolute() (absoluteSD *SECURITY_DESCRIPTOR, err error) {
+	control, _, err := selfRelativeSD.Control()
+	if err != nil {
+		return
+	}
+	if control&SE_SELF_RELATIVE == 0 {
+		err = ERROR_INVALID_PARAMETER
+		return
+	}
+	var absoluteSDSize, daclSize, saclSize, ownerSize, groupSize uint32
+	err = makeAbsoluteSD(selfRelativeSD, nil, &absoluteSDSize,
+		nil, &daclSize, nil, &saclSize, nil, &ownerSize, nil, &groupSize)
+	switch err {
+	case ERROR_INSUFFICIENT_BUFFER:
+	case nil:
+		// makeAbsoluteSD is expected to fail, but it succeeds.
+		return nil, ERROR_INTERNAL_ERROR
+	default:
+		return nil, err
+	}
+	if absoluteSDSize > 0 {
+		absoluteSD = new(SECURITY_DESCRIPTOR)
+		if unsafe.Sizeof(*absoluteSD) < uintptr(absoluteSDSize) {
+			panic("sizeof(SECURITY_DESCRIPTOR) too small")
+		}
+	}
+	var (
+		dacl  *ACL
+		sacl  *ACL
+		owner *SID
+		group *SID
+	)
+	if daclSize > 0 {
+		dacl = (*ACL)(unsafe.Pointer(unsafe.SliceData(make([]byte, daclSize))))
+	}
+	if saclSize > 0 {
+		sacl = (*ACL)(unsafe.Pointer(unsafe.SliceData(make([]byte, saclSize))))
+	}
+	if ownerSize > 0 {
+		owner = (*SID)(unsafe.Pointer(unsafe.SliceData(make([]byte, ownerSize))))
+	}
+	if groupSize > 0 {
+		group = (*SID)(unsafe.Pointer(unsafe.SliceData(make([]byte, groupSize))))
+	}
+	// We call into Windows via makeAbsoluteSD, which sets up
+	// pointers within absoluteSD that point to other chunks of memory
+	// we pass into makeAbsoluteSD, and that happens outside the view of the GC.
+	// We therefore take some care here to then verify the pointers are as we expect
+	// and set them explicitly in view of the GC. See https://go.dev/issue/73199.
+	// TODO: consider weak pointers once Go 1.24 is appropriate. See suggestion in https://go.dev/cl/663575.
+	err = makeAbsoluteSD(selfRelativeSD, absoluteSD, &absoluteSDSize,
+		dacl, &daclSize, sacl, &saclSize, owner, &ownerSize, group, &groupSize)
+	if err != nil {
+		// Don't return absoluteSD, which might be partially initialized.
+		return nil, err
+	}
+	// Before using any fields, verify absoluteSD is in the format we expect according to Windows.
+	// See https://learn.microsoft.com/en-us/windows/win32/secauthz/absolute-and-self-relative-security-descriptors
+	absControl, _, err := absoluteSD.Control()
+	if err != nil {
+		panic("absoluteSD: " + err.Error())
+	}
+	if absControl&SE_SELF_RELATIVE != 0 {
+		panic("absoluteSD not in absolute format")
+	}
+	if absoluteSD.dacl != dacl {
+		panic("dacl pointer mismatch")
+	}
+	if absoluteSD.sacl != sacl {
+		panic("sacl pointer mismatch")
+	}
+	if absoluteSD.owner != owner {
+		panic("owner pointer mismatch")
+	}
+	if absoluteSD.group != group {
+		panic("group pointer mismatch")
+	}
+	absoluteSD.dacl = dacl
+	absoluteSD.sacl = sacl
+	absoluteSD.owner = owner
+	absoluteSD.group = group
+
+	return
+}
+
+// ToSelfRelative converts an absolute security descriptor into a self-relative one.
+func (absoluteSD *SECURITY_DESCRIPTOR) ToSelfRelative() (selfRelativeSD *SECURITY_DESCRIPTOR, err error) {
+	control, _, err := absoluteSD.Control()
+	if err != nil {
+		return
+	}
+	if control&SE_SELF_RELATIVE != 0 {
+		err = ERROR_INVALID_PARAMETER
+		return
+	}
+	var selfRelativeSDSize uint32
+	err = makeSelfRelativeSD(absoluteSD, nil, &selfRelativeSDSize)
+	switch err {
+	case ERROR_INSUFFICIENT_BUFFER:
+	case nil:
+		// makeSelfRelativeSD is expected to fail, but it succeeds.
+		return nil, ERROR_INTERNAL_ERROR
+	default:
+		return nil, err
+	}
+	if selfRelativeSDSize > 0 {
+		selfRelativeSD = (*SECURITY_DESCRIPTOR)(unsafe.Pointer(&make([]byte, selfRelativeSDSize)[0]))
+	}
+	err = makeSelfRelativeSD(absoluteSD, selfRelativeSD, &selfRelativeSDSize)
+	return
+}
+
+func (selfRelativeSD *SECURITY_DESCRIPTOR) copySelfRelativeSecurityDescriptor() *SECURITY_DESCRIPTOR {
+	sdLen := int(selfRelativeSD.Length())
+	const min = int(unsafe.Sizeof(SECURITY_DESCRIPTOR{}))
+	if sdLen < min {
+		sdLen = min
+	}
+
+	src := unsafe.Slice((*byte)(unsafe.Pointer(selfRelativeSD)), sdLen)
+	// SECURITY_DESCRIPTOR has pointers in it, which means checkptr expects for it to
+	// be aligned properly. When we're copying a Windows-allocated struct to a
+	// Go-allocated one, make sure that the Go allocation is aligned to the
+	// pointer size.
+	const psize = int(unsafe.Sizeof(uintptr(0)))
+	alloc := make([]uintptr, (sdLen+psize-1)/psize)
+	dst := unsafe.Slice((*byte)(unsafe.Pointer(&alloc[0])), sdLen)
+	copy(dst, src)
+	return (*SECURITY_DESCRIPTOR)(unsafe.Pointer(&dst[0]))
+}
+
+// SecurityDescriptorFromString converts an SDDL string describing a security descriptor into a
+// self-relative security descriptor object allocated on the Go heap.
+func SecurityDescriptorFromString(sddl string) (sd *SECURITY_DESCRIPTOR, err error) {
+	var winHeapSD *SECURITY_DESCRIPTOR
+	err = convertStringSecurityDescriptorToSecurityDescriptor(sddl, 1, &winHeapSD, nil)
+	if err != nil {
+		return
+	}
+	defer LocalFree(Handle(unsafe.Pointer(winHeapSD)))
+	return winHeapSD.copySelfRelativeSecurityDescriptor(), nil
+}
+
+// GetSecurityInfo queries the security information for a given handle and returns the self-relative security
+// descriptor result on the Go heap.
+func GetSecurityInfo(handle Handle, objectType SE_OBJECT_TYPE, securityInformation SECURITY_INFORMATION) (sd *SECURITY_DESCRIPTOR, err error) {
+	var winHeapSD *SECURITY_DESCRIPTOR
+	err = getSecurityInfo(handle, objectType, securityInformation, nil, nil, nil, nil, &winHeapSD)
+	if err != nil {
+		return
+	}
+	defer LocalFree(Handle(unsafe.Pointer(winHeapSD)))
+	return winHeapSD.copySelfRelativeSecurityDescriptor(), nil
+}
+
+// GetNamedSecurityInfo queries the security information for a given named object and returns the self-relative security
+// descriptor result on the Go heap. The security descriptor might be nil, even when err is nil, if the object exists
+// but has no security descriptor.
+func GetNamedSecurityInfo(objectName string, objectType SE_OBJECT_TYPE, securityInformation SECURITY_INFORMATION) (sd *SECURITY_DESCRIPTOR, err error) {
+	var winHeapSD *SECURITY_DESCRIPTOR
+	err = getNamedSecurityInfo(objectName, objectType, securityInformation, nil, nil, nil, nil, &winHeapSD)
+	if err != nil {
+		return
+	}
+	if winHeapSD == nil {
+		return nil, nil
+	}
+	defer LocalFree(Handle(unsafe.Pointer(winHeapSD)))
+	return winHeapSD.copySelfRelativeSecurityDescriptor(), nil
+}
+
+// BuildSecurityDescriptor makes a new security descriptor using the input trustees, explicit access lists, and
+// prior security descriptor to be merged, any of which can be nil, returning the self-relative security descriptor
+// result on the Go heap.
+func BuildSecurityDescriptor(owner *TRUSTEE, group *TRUSTEE, accessEntries []EXPLICIT_ACCESS, auditEntries []EXPLICIT_ACCESS, mergedSecurityDescriptor *SECURITY_DESCRIPTOR) (sd *SECURITY_DESCRIPTOR, err error) {
+	var winHeapSD *SECURITY_DESCRIPTOR
+	var winHeapSDSize uint32
+	var firstAccessEntry *EXPLICIT_ACCESS
+	if len(accessEntries) > 0 {
+		firstAccessEntry = &accessEntries[0]
+	}
+	var firstAuditEntry *EXPLICIT_ACCESS
+	if len(auditEntries) > 0 {
+		firstAuditEntry = &auditEntries[0]
+	}
+	err = buildSecurityDescriptor(owner, group, uint32(len(accessEntries)), firstAccessEntry, uint32(len(auditEntries)), firstAuditEntry, mergedSecurityDescriptor, &winHeapSDSize, &winHeapSD)
+	if err != nil {
+		return
+	}
+	defer LocalFree(Handle(unsafe.Pointer(winHeapSD)))
+	return winHeapSD.copySelfRelativeSecurityDescriptor(), nil
+}
+
+// NewSecurityDescriptor creates and initializes a new absolute security descriptor.
+func NewSecurityDescriptor() (absoluteSD *SECURITY_DESCRIPTOR, err error) {
+	absoluteSD = &SECURITY_DESCRIPTOR{}
+	err = initializeSecurityDescriptor(absoluteSD, 1)
+	return
+}
+
+// ACLFromEntries returns a new ACL on the Go heap containing a list of explicit entries as well as those of another ACL.
+// Both explicitEntries and mergedACL are optional and can be nil.
+func ACLFromEntries(explicitEntries []EXPLICIT_ACCESS, mergedACL *ACL) (acl *ACL, err error) {
+	var firstExplicitEntry *EXPLICIT_ACCESS
+	if len(explicitEntries) > 0 {
+		firstExplicitEntry = &explicitEntries[0]
+	}
+	var winHeapACL *ACL
+	err = setEntriesInAcl(uint32(len(explicitEntries)), firstExplicitEntry, mergedACL, &winHeapACL)
+	if err != nil {
+		return
+	}
+	defer LocalFree(Handle(unsafe.Pointer(winHeapACL)))
+	aclBytes := make([]byte, winHeapACL.aclSize)
+	copy(aclBytes, (*[(1 << 31) - 1]byte)(unsafe.Pointer(winHeapACL))[:len(aclBytes):len(aclBytes)])
+	return (*ACL)(unsafe.Pointer(&aclBytes[0])), nil
+}
+
+@@END
+@@PORTABLE {"path":"vendor/golang.org/x/sys/windows/service.go","mode":420,"size":10503,"sha256":"88b18aaac8358e790f5f723acac90799e84b813bc02c9c7ddad2e0f15a0503d7","index":0,"count":1,"encoding":"utf-8","payloadBytes":10503}
+// Copyright 2012 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+//go:build windows
+
+package windows
+
+const (
+	SC_MANAGER_CONNECT            = 1
+	SC_MANAGER_CREATE_SERVICE     = 2
+	SC_MANAGER_ENUMERATE_SERVICE  = 4
+	SC_MANAGER_LOCK               = 8
+	SC_MANAGER_QUERY_LOCK_STATUS  = 16
+	SC_MANAGER_MODIFY_BOOT_CONFIG = 32
+	SC_MANAGER_ALL_ACCESS         = 0xf003f
+)
+
+const (
+	SERVICE_KERNEL_DRIVER       = 1
+	SERVICE_FILE_SYSTEM_DRIVER  = 2
+	SERVICE_ADAPTER             = 4
+	SERVICE_RECOGNIZER_DRIVER   = 8
+	SERVICE_WIN32_OWN_PROCESS   = 16
+	SERVICE_WIN32_SHARE_PROCESS = 32
+	SERVICE_WIN32               = SERVICE_WIN32_OWN_PROCESS | SERVICE_WIN32_SHARE_PROCESS
+	SERVICE_INTERACTIVE_PROCESS = 256
+	SERVICE_DRIVER              = SERVICE_KERNEL_DRIVER | SERVICE_FILE_SYSTEM_DRIVER | SERVICE_RECOGNIZER_DRIVER
+	SERVICE_TYPE_ALL            = SERVICE_WIN32 | SERVICE_ADAPTER | SERVICE_DRIVER | SERVICE_INTERACTIVE_PROCESS
+
+	SERVICE_BOOT_START   = 0
+	SERVICE_SYSTEM_START = 1
+	SERVICE_AUTO_START   = 2
+	SERVICE_DEMAND_START = 3
+	SERVICE_DISABLED     = 4
+
+	SERVICE_ERROR_IGNORE   = 0
+	SERVICE_ERROR_NORMAL   = 1
+	SERVICE_ERROR_SEVERE   = 2
+	SERVICE_ERROR_CRITICAL = 3
+
+	SC_STATUS_PROCESS_INFO = 0
+
+	SC_ACTION_NONE        = 0
+	SC_ACTION_RESTART     = 1
+	SC_ACTION_REBOOT      = 2
+	SC_ACTION_RUN_COMMAND = 3
+
+	SERVICE_STOPPED          = 1
+	SERVICE_START_PENDING    = 2
+	SERVICE_STOP_PENDING     = 3
+	SERVICE_RUNNING          = 4
+	SERVICE_CONTINUE_PENDING = 5
+	SERVICE_PAUSE_PENDING    = 6
+	SERVICE_PAUSED           = 7
+	SERVICE_NO_CHANGE        = 0xffffffff
+
+	SERVICE_ACCEPT_STOP                  = 1
+	SERVICE_ACCEPT_PAUSE_CONTINUE        = 2
+	SERVICE_ACCEPT_SHUTDOWN              = 4
+	SERVICE_ACCEPT_PARAMCHANGE           = 8
+	SERVICE_ACCEPT_NETBINDCHANGE         = 16
+	SERVICE_ACCEPT_HARDWAREPROFILECHANGE = 32
+	SERVICE_ACCEPT_POWEREVENT            = 64
+	SERVICE_ACCEPT_SESSIONCHANGE         = 128
+	SERVICE_ACCEPT_PRESHUTDOWN           = 256
+
+	SERVICE_CONTROL_STOP                  = 1
+	SERVICE_CONTROL_PAUSE                 = 2
+	SERVICE_CONTROL_CONTINUE              = 3
+	SERVICE_CONTROL_INTERROGATE           = 4
+	SERVICE_CONTROL_SHUTDOWN              = 5
+	SERVICE_CONTROL_PARAMCHANGE           = 6
+	SERVICE_CONTROL_NETBINDADD            = 7
+	SERVICE_CONTROL_NETBINDREMOVE         = 8
+	SERVICE_CONTROL_NETBINDENABLE         = 9
+	SERVICE_CONTROL_NETBINDDISABLE        = 10
+	SERVICE_CONTROL_DEVICEEVENT           = 11
+	SERVICE_CONTROL_HARDWAREPROFILECHANGE = 12
+	SERVICE_CONTROL_POWEREVENT            = 13
+	SERVICE_CONTROL_SESSIONCHANGE         = 14
+	SERVICE_CONTROL_PRESHUTDOWN           = 15
+
+	SERVICE_ACTIVE    = 1
+	SERVICE_INACTIVE  = 2
+	SERVICE_STATE_ALL = 3
+
+	SERVICE_QUERY_CONFIG         = 1
+	SERVICE_CHANGE_CONFIG        = 2
+	SERVICE_QUERY_STATUS         = 4
+	SERVICE_ENUMERATE_DEPENDENTS = 8
+	SERVICE_START                = 16
+	SERVICE_STOP                 = 32
+	SERVICE_PAUSE_CONTINUE       = 64
+	SERVICE_INTERROGATE          = 128
+	SERVICE_USER_DEFINED_CONTROL = 256
+	SERVICE_ALL_ACCESS           = STANDARD_RIGHTS_REQUIRED | SERVICE_QUERY_CONFIG | SERVICE_CHANGE_CONFIG | SERVICE_QUERY_STATUS | SERVICE_ENUMERATE_DEPENDENTS | SERVICE_START | SERVICE_STOP | SERVICE_PAUSE_CONTINUE | SERVICE_INTERROGATE | SERVICE_USER_DEFINED_CONTROL
+
+	SERVICE_RUNS_IN_SYSTEM_PROCESS = 1
+
+	SERVICE_CONFIG_DESCRIPTION              = 1
+	SERVICE_CONFIG_FAILURE_ACTIONS          = 2
+	SERVICE_CONFIG_DELAYED_AUTO_START_INFO  = 3
+	SERVICE_CONFIG_FAILURE_ACTIONS_FLAG     = 4
+	SERVICE_CONFIG_SERVICE_SID_INFO         = 5
+	SERVICE_CONFIG_REQUIRED_PRIVILEGES_INFO = 6
+	SERVICE_CONFIG_PRESHUTDOWN_INFO         = 7
+	SERVICE_CONFIG_TRIGGER_INFO             = 8
+	SERVICE_CONFIG_PREFERRED_NODE           = 9
+	SERVICE_CONFIG_LAUNCH_PROTECTED         = 12
+
+	SERVICE_SID_TYPE_NONE         = 0
+	SERVICE_SID_TYPE_UNRESTRICTED = 1
+	SERVICE_SID_TYPE_RESTRICTED   = 2 | SERVICE_SID_TYPE_UNRESTRICTED
+
+	SC_ENUM_PROCESS_INFO = 0
+
+	SERVICE_NOTIFY_STATUS_CHANGE    = 2
+	SERVICE_NOTIFY_STOPPED          = 0x00000001
+	SERVICE_NOTIFY_START_PENDING    = 0x00000002
+	SERVICE_NOTIFY_STOP_PENDING     = 0x00000004
+	SERVICE_NOTIFY_RUNNING          = 0x00000008
+	SERVICE_NOTIFY_CONTINUE_PENDING = 0x00000010
+	SERVICE_NOTIFY_PAUSE_PENDING    = 0x00000020
+	SERVICE_NOTIFY_PAUSED           = 0x00000040
+	SERVICE_NOTIFY_CREATED          = 0x00000080
+	SERVICE_NOTIFY_DELETED          = 0x00000100
+	SERVICE_NOTIFY_DELETE_PENDING   = 0x00000200
+
+	SC_EVENT_DATABASE_CHANGE = 0
+	SC_EVENT_PROPERTY_CHANGE = 1
+	SC_EVENT_STATUS_CHANGE   = 2
+
+	SERVICE_START_REASON_DEMAND             = 0x00000001
+	SERVICE_START_REASON_AUTO               = 0x00000002
+	SERVICE_START_REASON_TRIGGER            = 0x00000004
+	SERVICE_START_REASON_RESTART_ON_FAILURE = 0x00000008
+	SERVICE_START_REASON_DELAYEDAUTO        = 0x00000010
+
+	SERVICE_DYNAMIC_INFORMATION_LEVEL_START_REASON = 1
+)
+
+type ENUM_SERVICE_STATUS struct {
+	ServiceName   *uint16
+	DisplayName   *uint16
+	ServiceStatus SERVICE_STATUS
+}
+
+type SERVICE_STATUS struct {
+	ServiceType             uint32
+	CurrentState            uint32
+	ControlsAccepted        uint32
+	Win32ExitCode           uint32
+	ServiceSpecificExitCode uint32
+	CheckPoint              uint32
+	WaitHint                uint32
+}
+
+type SERVICE_TABLE_ENTRY struct {
+	ServiceName *uint16
+	ServiceProc uintptr
+}
+
+type QUERY_SERVICE_CONFIG struct {
+	ServiceType      uint32
+	StartType        uint32
+	ErrorControl     uint32
+	BinaryPathName   *uint16
+	LoadOrderGroup   *uint16
+	TagId            uint32
+	Dependencies     *uint16
+	ServiceStartName *uint16
+	DisplayName      *uint16
+}
+
+type SERVICE_DESCRIPTION struct {
+	Description *uint16
+}
+
+type SERVICE_DELAYED_AUTO_START_INFO struct {
+	IsDelayedAutoStartUp uint32
+}
+
+type SERVICE_STATUS_PROCESS struct {
+	ServiceType             uint32
+	CurrentState            uint32
+	ControlsAccepted        uint32
+	Win32ExitCode           uint32
+	ServiceSpecificExitCode uint32
+	CheckPoint              uint32
+	WaitHint                uint32
+	ProcessId               uint32
+	ServiceFlags            uint32
+}
+
+type ENUM_SERVICE_STATUS_PROCESS struct {
+	ServiceName          *uint16
+	DisplayName          *uint16
+	ServiceStatusProcess SERVICE_STATUS_PROCESS
+}
+
+type SERVICE_NOTIFY struct {
+	Version               uint32
+	NotifyCallback        uintptr
+	Context               uintptr
+	NotificationStatus    uint32
+	ServiceStatus         SERVICE_STATUS_PROCESS
+	NotificationTriggered uint32
+	ServiceNames          *uint16
+}
+
+type SERVICE_FAILURE_ACTIONS struct {
+	ResetPeriod  uint32
+	RebootMsg    *uint16
+	Command      *uint16
+	ActionsCount uint32
+	Actions      *SC_ACTION
+}
+
+type SERVICE_FAILURE_ACTIONS_FLAG struct {
+	FailureActionsOnNonCrashFailures int32
+}
+
+type SC_ACTION struct {
+	Type  uint32
+	Delay uint32
+}
+
+type QUERY_SERVICE_LOCK_STATUS struct {
+	IsLocked     uint32
+	LockOwner    *uint16
+	LockDuration uint32
+}
+
+//sys	OpenSCManager(machineName *uint16, databaseName *uint16, access uint32) (handle Handle, err error) [failretval==0] = advapi32.OpenSCManagerW
+//sys	CloseServiceHandle(handle Handle) (err error) = advapi32.CloseServiceHandle
+//sys	CreateService(mgr Handle, serviceName *uint16, displayName *uint16, access uint32, srvType uint32, startType uint32, errCtl uint32, pathName *uint16, loadOrderGroup *uint16, tagId *uint32, dependencies *uint16, serviceStartName *uint16, password *uint16) (handle Handle, err error) [failretval==0] = advapi32.CreateServiceW
+//sys	OpenService(mgr Handle, serviceName *uint16, access uint32) (handle Handle, err error) [failretval==0] = advapi32.OpenServiceW
+//sys	DeleteService(service Handle) (err error) = advapi32.DeleteService
+//sys	StartService(service Handle, numArgs uint32, argVectors **uint16) (err error) = advapi32.StartServiceW
+//sys	QueryServiceStatus(service Handle, status *SERVICE_STATUS) (err error) = advapi32.QueryServiceStatus
+//sys	QueryServiceLockStatus(mgr Handle, lockStatus *QUERY_SERVICE_LOCK_STATUS, bufSize uint32, bytesNeeded *uint32) (err error) = advapi32.QueryServiceLockStatusW
+//sys	ControlService(service Handle, control uint32, status *SERVICE_STATUS) (err error) = advapi32.ControlService
+//sys	StartServiceCtrlDispatcher(serviceTable *SERVICE_TABLE_ENTRY) (err error) = advapi32.StartServiceCtrlDispatcherW
+//sys	SetServiceStatus(service Handle, serviceStatus *SERVICE_STATUS) (err error) = advapi32.SetServiceStatus
+//sys	ChangeServiceConfig(service Handle, serviceType uint32, startType uint32, errorControl uint32, binaryPathName *uint16, loadOrderGroup *uint16, tagId *uint32, dependencies *uint16, serviceStartName *uint16, password *uint16, displayName *uint16) (err error) = advapi32.ChangeServiceConfigW
+//sys	QueryServiceConfig(service Handle, serviceConfig *QUERY_SERVICE_CONFIG, bufSize uint32, bytesNeeded *uint32) (err error) = advapi32.QueryServiceConfigW
+//sys	ChangeServiceConfig2(service Handle, infoLevel uint32, info *byte) (err error) = advapi32.ChangeServiceConfig2W
+//sys	QueryServiceConfig2(service Handle, infoLevel uint32, buff *byte, buffSize uint32, bytesNeeded *uint32) (err error) = advapi32.QueryServiceConfig2W
+//sys	EnumServicesStatusEx(mgr Handle, infoLevel uint32, serviceType uint32, serviceState uint32, services *byte, bufSize uint32, bytesNeeded *uint32, servicesReturned *uint32, resumeHandle *uint32, groupName *uint16) (err error) = advapi32.EnumServicesStatusExW
+//sys	QueryServiceStatusEx(service Handle, infoLevel uint32, buff *byte, buffSize uint32, bytesNeeded *uint32) (err error) = advapi32.QueryServiceStatusEx
+//sys	NotifyServiceStatusChange(service Handle, notifyMask uint32, notifier *SERVICE_NOTIFY) (ret error) = advapi32.NotifyServiceStatusChangeW
+//sys	SubscribeServiceChangeNotifications(service Handle, eventType uint32, callback uintptr, callbackCtx uintptr, subscription *uintptr) (ret error) = sechost.SubscribeServiceChangeNotifications?
+//sys	UnsubscribeServiceChangeNotifications(subscription uintptr) = sechost.UnsubscribeServiceChangeNotifications?
+//sys	RegisterServiceCtrlHandlerEx(serviceName *uint16, handlerProc uintptr, context uintptr) (handle Handle, err error) = advapi32.RegisterServiceCtrlHandlerExW
+//sys	QueryServiceDynamicInformation(service Handle, infoLevel uint32, dynamicInfo unsafe.Pointer) (err error) = advapi32.QueryServiceDynamicInformation?
+//sys	EnumDependentServices(service Handle, activityState uint32, services *ENUM_SERVICE_STATUS, buffSize uint32, bytesNeeded *uint32, servicesReturned *uint32) (err error) = advapi32.EnumDependentServicesW
+
+@@END
+@@PORTABLE {"path":"vendor/golang.org/x/sys/windows/setupapi_windows.go","mode":420,"size":68854,"sha256":"72097fc028210a5700ede92673d155af6de97210292770bfb31363691dad07c4","index":0,"count":2,"encoding":"utf-8","payloadBytes":48000}
+// Copyright 2021 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package windows
+
+import (
+	"encoding/binary"
+	"errors"
+	"fmt"
+	"runtime"
+	"strings"
+	"syscall"
+	"unsafe"
+)
+
+// This file contains functions that wrap SetupAPI.dll and CfgMgr32.dll,
+// core system functions for managing hardware devices, drivers, and the PnP tree.
+// Information about these APIs can be found at:
+//     https://docs.microsoft.com/en-us/windows-hardware/drivers/install/setupapi
+//     https://docs.microsoft.com/en-us/windows/win32/devinst/cfgmgr32-
+
+const (
+	ERROR_EXPECTED_SECTION_NAME                  Errno = 0x20000000 | 0xC0000000 | 0
+	ERROR_BAD_SECTION_NAME_LINE                  Errno = 0x20000000 | 0xC0000000 | 1
+	ERROR_SECTION_NAME_TOO_LONG                  Errno = 0x20000000 | 0xC0000000 | 2
+	ERROR_GENERAL_SYNTAX                         Errno = 0x20000000 | 0xC0000000 | 3
+	ERROR_WRONG_INF_STYLE                        Errno = 0x20000000 | 0xC0000000 | 0x100
+	ERROR_SECTION_NOT_FOUND                      Errno = 0x20000000 | 0xC0000000 | 0x101
+	ERROR_LINE_NOT_FOUND                         Errno = 0x20000000 | 0xC0000000 | 0x102
+	ERROR_NO_BACKUP                              Errno = 0x20000000 | 0xC0000000 | 0x103
+	ERROR_NO_ASSOCIATED_CLASS                    Errno = 0x20000000 | 0xC0000000 | 0x200
+	ERROR_CLASS_MISMATCH                         Errno = 0x20000000 | 0xC0000000 | 0x201
+	ERROR_DUPLICATE_FOUND                        Errno = 0x20000000 | 0xC0000000 | 0x202
+	ERROR_NO_DRIVER_SELECTED                     Errno = 0x20000000 | 0xC0000000 | 0x203
+	ERROR_KEY_DOES_NOT_EXIST                     Errno = 0x20000000 | 0xC0000000 | 0x204
+	ERROR_INVALID_DEVINST_NAME                   Errno = 0x20000000 | 0xC0000000 | 0x205
+	ERROR_INVALID_CLASS                          Errno = 0x20000000 | 0xC0000000 | 0x206
+	ERROR_DEVINST_ALREADY_EXISTS                 Errno = 0x20000000 | 0xC0000000 | 0x207
+	ERROR_DEVINFO_NOT_REGISTERED                 Errno = 0x20000000 | 0xC0000000 | 0x208
+	ERROR_INVALID_REG_PROPERTY                   Errno = 0x20000000 | 0xC0000000 | 0x209
+	ERROR_NO_INF                                 Errno = 0x20000000 | 0xC0000000 | 0x20A
+	ERROR_NO_SUCH_DEVINST                        Errno = 0x20000000 | 0xC0000000 | 0x20B
+	ERROR_CANT_LOAD_CLASS_ICON                   Errno = 0x20000000 | 0xC0000000 | 0x20C
+	ERROR_INVALID_CLASS_INSTALLER                Errno = 0x20000000 | 0xC0000000 | 0x20D
+	ERROR_DI_DO_DEFAULT                          Errno = 0x20000000 | 0xC0000000 | 0x20E
+	ERROR_DI_NOFILECOPY                          Errno = 0x20000000 | 0xC0000000 | 0x20F
+	ERROR_INVALID_HWPROFILE                      Errno = 0x20000000 | 0xC0000000 | 0x210
+	ERROR_NO_DEVICE_SELECTED                     Errno = 0x20000000 | 0xC0000000 | 0x211
+	ERROR_DEVINFO_LIST_LOCKED                    Errno = 0x20000000 | 0xC0000000 | 0x212
+	ERROR_DEVINFO_DATA_LOCKED                    Errno = 0x20000000 | 0xC0000000 | 0x213
+	ERROR_DI_BAD_PATH                            Errno = 0x20000000 | 0xC0000000 | 0x214
+	ERROR_NO_CLASSINSTALL_PARAMS                 Errno = 0x20000000 | 0xC0000000 | 0x215
+	ERROR_FILEQUEUE_LOCKED                       Errno = 0x20000000 | 0xC0000000 | 0x216
+	ERROR_BAD_SERVICE_INSTALLSECT                Errno = 0x20000000 | 0xC0000000 | 0x217
+	ERROR_NO_CLASS_DRIVER_LIST                   Errno = 0x20000000 | 0xC0000000 | 0x218
+	ERROR_NO_ASSOCIATED_SERVICE                  Errno = 0x20000000 | 0xC0000000 | 0x219
+	ERROR_NO_DEFAULT_DEVICE_INTERFACE            Errno = 0x20000000 | 0xC0000000 | 0x21A
+	ERROR_DEVICE_INTERFACE_ACTIVE                Errno = 0x20000000 | 0xC0000000 | 0x21B
+	ERROR_DEVICE_INTERFACE_REMOVED               Errno = 0x20000000 | 0xC0000000 | 0x21C
+	ERROR_BAD_INTERFACE_INSTALLSECT              Errno = 0x20000000 | 0xC0000000 | 0x21D
+	ERROR_NO_SUCH_INTERFACE_CLASS                Errno = 0x20000000 | 0xC0000000 | 0x21E
+	ERROR_INVALID_REFERENCE_STRING               Errno = 0x20000000 | 0xC0000000 | 0x21F
+	ERROR_INVALID_MACHINENAME                    Errno = 0x20000000 | 0xC0000000 | 0x220
+	ERROR_REMOTE_COMM_FAILURE                    Errno = 0x20000000 | 0xC0000000 | 0x221
+	ERROR_MACHINE_UNAVAILABLE                    Errno = 0x20000000 | 0xC0000000 | 0x222
+	ERROR_NO_CONFIGMGR_SERVICES                  Errno = 0x20000000 | 0xC0000000 | 0x223
+	ERROR_INVALID_PROPPAGE_PROVIDER              Errno = 0x20000000 | 0xC0000000 | 0x224
+	ERROR_NO_SUCH_DEVICE_INTERFACE               Errno = 0x20000000 | 0xC0000000 | 0x225
+	ERROR_DI_POSTPROCESSING_REQUIRED             Errno = 0x20000000 | 0xC0000000 | 0x226
+	ERROR_INVALID_COINSTALLER                    Errno = 0x20000000 | 0xC0000000 | 0x227
+	ERROR_NO_COMPAT_DRIVERS                      Errno = 0x20000000 | 0xC0000000 | 0x228
+	ERROR_NO_DEVICE_ICON                         Errno = 0x20000000 | 0xC0000000 | 0x229
+	ERROR_INVALID_INF_LOGCONFIG                  Errno = 0x20000000 | 0xC0000000 | 0x22A
+	ERROR_DI_DONT_INSTALL                        Errno = 0x20000000 | 0xC0000000 | 0x22B
+	ERROR_INVALID_FILTER_DRIVER                  Errno = 0x20000000 | 0xC0000000 | 0x22C
+	ERROR_NON_WINDOWS_NT_DRIVER                  Errno = 0x20000000 | 0xC0000000 | 0x22D
+	ERROR_NON_WINDOWS_DRIVER                     Errno = 0x20000000 | 0xC0000000 | 0x22E
+	ERROR_NO_CATALOG_FOR_OEM_INF                 Errno = 0x20000000 | 0xC0000000 | 0x22F
+	ERROR_DEVINSTALL_QUEUE_NONNATIVE             Errno = 0x20000000 | 0xC0000000 | 0x230
+	ERROR_NOT_DISABLEABLE                        Errno = 0x20000000 | 0xC0000000 | 0x231
+	ERROR_CANT_REMOVE_DEVINST                    Errno = 0x20000000 | 0xC0000000 | 0x232
+	ERROR_INVALID_TARGET                         Errno = 0x20000000 | 0xC0000000 | 0x233
+	ERROR_DRIVER_NONNATIVE                       Errno = 0x20000000 | 0xC0000000 | 0x234
+	ERROR_IN_WOW64                               Errno = 0x20000000 | 0xC0000000 | 0x235
+	ERROR_SET_SYSTEM_RESTORE_POINT               Errno = 0x20000000 | 0xC0000000 | 0x236
+	ERROR_SCE_DISABLED                           Errno = 0x20000000 | 0xC0000000 | 0x238
+	ERROR_UNKNOWN_EXCEPTION                      Errno = 0x20000000 | 0xC0000000 | 0x239
+	ERROR_PNP_REGISTRY_ERROR                     Errno = 0x20000000 | 0xC0000000 | 0x23A
+	ERROR_REMOTE_REQUEST_UNSUPPORTED             Errno = 0x20000000 | 0xC0000000 | 0x23B
+	ERROR_NOT_AN_INSTALLED_OEM_INF               Errno = 0x20000000 | 0xC0000000 | 0x23C
+	ERROR_INF_IN_USE_BY_DEVICES                  Errno = 0x20000000 | 0xC0000000 | 0x23D
+	ERROR_DI_FUNCTION_OBSOLETE                   Errno = 0x20000000 | 0xC0000000 | 0x23E
+	ERROR_NO_AUTHENTICODE_CATALOG                Errno = 0x20000000 | 0xC0000000 | 0x23F
+	ERROR_AUTHENTICODE_DISALLOWED                Errno = 0x20000000 | 0xC0000000 | 0x240
+	ERROR_AUTHENTICODE_TRUSTED_PUBLISHER         Errno = 0x20000000 | 0xC0000000 | 0x241
+	ERROR_AUTHENTICODE_TRUST_NOT_ESTABLISHED     Errno = 0x20000000 | 0xC0000000 | 0x242
+	ERROR_AUTHENTICODE_PUBLISHER_NOT_TRUSTED     Errno = 0x20000000 | 0xC0000000 | 0x243
+	ERROR_SIGNATURE_OSATTRIBUTE_MISMATCH         Errno = 0x20000000 | 0xC0000000 | 0x244
+	ERROR_ONLY_VALIDATE_VIA_AUTHENTICODE         Errno = 0x20000000 | 0xC0000000 | 0x245
+	ERROR_DEVICE_INSTALLER_NOT_READY             Errno = 0x20000000 | 0xC0000000 | 0x246
+	ERROR_DRIVER_STORE_ADD_FAILED                Errno = 0x20000000 | 0xC0000000 | 0x247
+	ERROR_DEVICE_INSTALL_BLOCKED                 Errno = 0x20000000 | 0xC0000000 | 0x248
+	ERROR_DRIVER_INSTALL_BLOCKED                 Errno = 0x20000000 | 0xC0000000 | 0x249
+	ERROR_WRONG_INF_TYPE                         Errno = 0x20000000 | 0xC0000000 | 0x24A
+	ERROR_FILE_HASH_NOT_IN_CATALOG               Errno = 0x20000000 | 0xC0000000 | 0x24B
+	ERROR_DRIVER_STORE_DELETE_FAILED             Errno = 0x20000000 | 0xC0000000 | 0x24C
+	ERROR_UNRECOVERABLE_STACK_OVERFLOW           Errno = 0x20000000 | 0xC0000000 | 0x300
+	EXCEPTION_SPAPI_UNRECOVERABLE_STACK_OVERFLOW Errno = ERROR_UNRECOVERABLE_STACK_OVERFLOW
+	ERROR_NO_DEFAULT_INTERFACE_DEVICE            Errno = ERROR_NO_DEFAULT_DEVICE_INTERFACE
+	ERROR_INTERFACE_DEVICE_ACTIVE                Errno = ERROR_DEVICE_INTERFACE_ACTIVE
+	ERROR_INTERFACE_DEVICE_REMOVED               Errno = ERROR_DEVICE_INTERFACE_REMOVED
+	ERROR_NO_SUCH_INTERFACE_DEVICE               Errno = ERROR_NO_SUCH_DEVICE_INTERFACE
+)
+
+const (
+	MAX_DEVICE_ID_LEN   = 200
+	MAX_DEVNODE_ID_LEN  = MAX_DEVICE_ID_LEN
+	MAX_GUID_STRING_LEN = 39 // 38 chars + terminator null
+	MAX_CLASS_NAME_LEN  = 32
+	MAX_PROFILE_LEN     = 80
+	MAX_CONFIG_VALUE    = 9999
+	MAX_INSTANCE_VALUE  = 9999
+	CONFIGMG_VERSION    = 0x0400
+)
+
+// Maximum string length constants
+const (
+	LINE_LEN                    = 256  // Windows 9x-compatible maximum for displayable strings coming from a device INF.
+	MAX_INF_STRING_LENGTH       = 4096 // Actual maximum size of an INF string (including string substitutions).
+	MAX_INF_SECTION_NAME_LENGTH = 255  // For Windows 9x compatibility, INF section names should be constrained to 32 characters.
+	MAX_TITLE_LEN               = 60
+	MAX_INSTRUCTION_LEN         = 256
+	MAX_LABEL_LEN               = 30
+	MAX_SERVICE_NAME_LEN        = 256
+	MAX_SUBTITLE_LEN            = 256
+)
+
+const (
+	// SP_MAX_MACHINENAME_LENGTH defines maximum length of a machine name in the format expected by ConfigMgr32 CM_Connect_Machine (i.e., "\\\\MachineName\0").
+	SP_MAX_MACHINENAME_LENGTH = MAX_PATH + 3
+)
+
+// HSPFILEQ is type for setup file queue
+type HSPFILEQ uintptr
+
+// DevInfo holds reference to device information set
+type DevInfo Handle
+
+// DEVINST is a handle usually recognized by cfgmgr32 APIs
+type DEVINST uint32
+
+// DevInfoData is a device information structure (references a device instance that is a member of a device information set)
+type DevInfoData struct {
+	size      uint32
+	ClassGUID GUID
+	DevInst   DEVINST
+	_         uintptr
+}
+
+// DevInfoListDetailData is a structure for detailed information on a device information set (used for SetupDiGetDeviceInfoListDetail which supersedes the functionality of SetupDiGetDeviceInfoListClass).
+type DevInfoListDetailData struct {
+	size                uint32 // Use unsafeSizeOf method
+	ClassGUID           GUID
+	RemoteMachineHandle Handle
+	remoteMachineName   [SP_MAX_MACHINENAME_LENGTH]uint16
+}
+
+func (*DevInfoListDetailData) unsafeSizeOf() uint32 {
+	if unsafe.Sizeof(uintptr(0)) == 4 {
+		// Windows declares this with pshpack1.h
+		return uint32(unsafe.Offsetof(DevInfoListDetailData{}.remoteMachineName) + unsafe.Sizeof(DevInfoListDetailData{}.remoteMachineName))
+	}
+	return uint32(unsafe.Sizeof(DevInfoListDetailData{}))
+}
+
+func (data *DevInfoListDetailData) RemoteMachineName() string {
+	return UTF16ToString(data.remoteMachineName[:])
+}
+
+func (data *DevInfoListDetailData) SetRemoteMachineName(remoteMachineName string) error {
+	str, err := UTF16FromString(remoteMachineName)
+	if err != nil {
+		return err
+	}
+	copy(data.remoteMachineName[:], str)
+	return nil
+}
+
+// DI_FUNCTION is function type for device installer
+type DI_FUNCTION uint32
+
+const (
+	DIF_SELECTDEVICE                   DI_FUNCTION = 0x00000001
+	DIF_INSTALLDEVICE                  DI_FUNCTION = 0x00000002
+	DIF_ASSIGNRESOURCES                DI_FUNCTION = 0x00000003
+	DIF_PROPERTIES                     DI_FUNCTION = 0x00000004
+	DIF_REMOVE                         DI_FUNCTION = 0x00000005
+	DIF_FIRSTTIMESETUP                 DI_FUNCTION = 0x00000006
+	DIF_FOUNDDEVICE                    DI_FUNCTION = 0x00000007
+	DIF_SELECTCLASSDRIVERS             DI_FUNCTION = 0x00000008
+	DIF_VALIDATECLASSDRIVERS           DI_FUNCTION = 0x00000009
+	DIF_INSTALLCLASSDRIVERS            DI_FUNCTION = 0x0000000A
+	DIF_CALCDISKSPACE                  DI_FUNCTION = 0x0000000B
+	DIF_DESTROYPRIVATEDATA             DI_FUNCTION = 0x0000000C
+	DIF_VALIDATEDRIVER                 DI_FUNCTION = 0x0000000D
+	DIF_DETECT                         DI_FUNCTION = 0x0000000F
+	DIF_INSTALLWIZARD                  DI_FUNCTION = 0x00000010
+	DIF_DESTROYWIZARDDATA              DI_FUNCTION = 0x00000011
+	DIF_PROPERTYCHANGE                 DI_FUNCTION = 0x00000012
+	DIF_ENABLECLASS                    DI_FUNCTION = 0x00000013
+	DIF_DETECTVERIFY                   DI_FUNCTION = 0x00000014
+	DIF_INSTALLDEVICEFILES             DI_FUNCTION = 0x00000015
+	DIF_UNREMOVE                       DI_FUNCTION = 0x00000016
+	DIF_SELECTBESTCOMPATDRV            DI_FUNCTION = 0x00000017
+	DIF_ALLOW_INSTALL                  DI_FUNCTION = 0x00000018
+	DIF_REGISTERDEVICE                 DI_FUNCTION = 0x00000019
+	DIF_NEWDEVICEWIZARD_PRESELECT      DI_FUNCTION = 0x0000001A
+	DIF_NEWDEVICEWIZARD_SELECT         DI_FUNCTION = 0x0000001B
+	DIF_NEWDEVICEWIZARD_PREANALYZE     DI_FUNCTION = 0x0000001C
+	DIF_NEWDEVICEWIZARD_POSTANALYZE    DI_FUNCTION = 0x0000001D
+	DIF_NEWDEVICEWIZARD_FINISHINSTALL  DI_FUNCTION = 0x0000001E
+	DIF_INSTALLINTERFACES              DI_FUNCTION = 0x00000020
+	DIF_DETECTCANCEL                   DI_FUNCTION = 0x00000021
+	DIF_REGISTER_COINSTALLERS          DI_FUNCTION = 0x00000022
+	DIF_ADDPROPERTYPAGE_ADVANCED       DI_FUNCTION = 0x00000023
+	DIF_ADDPROPERTYPAGE_BASIC          DI_FUNCTION = 0x00000024
+	DIF_TROUBLESHOOTER                 DI_FUNCTION = 0x00000026
+	DIF_POWERMESSAGEWAKE               DI_FUNCTION = 0x00000027
+	DIF_ADDREMOTEPROPERTYPAGE_ADVANCED DI_FUNCTION = 0x00000028
+	DIF_UPDATEDRIVER_UI                DI_FUNCTION = 0x00000029
+	DIF_FINISHINSTALL_ACTION           DI_FUNCTION = 0x0000002A
+)
+
+// DevInstallParams is device installation parameters structure (associated with a particular device information element, or globally with a device information set)
+type DevInstallParams struct {
+	size                     uint32
+	Flags                    DI_FLAGS
+	FlagsEx                  DI_FLAGSEX
+	hwndParent               uintptr
+	InstallMsgHandler        uintptr
+	InstallMsgHandlerContext uintptr
+	FileQueue                HSPFILEQ
+	_                        uintptr
+	_                        uint32
+	driverPath               [MAX_PATH]uint16
+}
+
+func (params *DevInstallParams) DriverPath() string {
+	return UTF16ToString(params.driverPath[:])
+}
+
+func (params *DevInstallParams) SetDriverPath(driverPath string) error {
+	str, err := UTF16FromString(driverPath)
+	if err != nil {
+		return err
+	}
+	copy(params.driverPath[:], str)
+	return nil
+}
+
+// DI_FLAGS is SP_DEVINSTALL_PARAMS.Flags values
+type DI_FLAGS uint32
+
+const (
+	// Flags for choosing a device
+	DI_SHOWOEM       DI_FLAGS = 0x00000001 // support Other... button
+	DI_SHOWCOMPAT    DI_FLAGS = 0x00000002 // show compatibility list
+	DI_SHOWCLASS     DI_FLAGS = 0x00000004 // show class list
+	DI_SHOWALL       DI_FLAGS = 0x00000007 // both class & compat list shown
+	DI_NOVCP         DI_FLAGS = 0x00000008 // don't create a new copy queue--use caller-supplied FileQueue
+	DI_DIDCOMPAT     DI_FLAGS = 0x00000010 // Searched for compatible devices
+	DI_DIDCLASS      DI_FLAGS = 0x00000020 // Searched for class devices
+	DI_AUTOASSIGNRES DI_FLAGS = 0x00000040 // No UI for resources if possible
+
+	// Flags returned by DiInstallDevice to indicate need to reboot/restart
+	DI_NEEDRESTART DI_FLAGS = 0x00000080 // Reboot required to take effect
+	DI_NEEDREBOOT  DI_FLAGS = 0x00000100 // ""
+
+	// Flags for device installation
+	DI_NOBROWSE DI_FLAGS = 0x00000200 // no Browse... in InsertDisk
+
+	// Flags set by DiBuildDriverInfoList
+	DI_MULTMFGS DI_FLAGS = 0x00000400 // Set if multiple manufacturers in class driver list
+
+	// Flag indicates that device is disabled
+	DI_DISABLED DI_FLAGS = 0x00000800 // Set if device disabled
+
+	// Flags for Device/Class Properties
+	DI_GENERALPAGE_ADDED  DI_FLAGS = 0x00001000
+	DI_RESOURCEPAGE_ADDED DI_FLAGS = 0x00002000
+
+	// Flag to indicate the setting properties for this Device (or class) caused a change so the Dev Mgr UI probably needs to be updated.
+	DI_PROPERTIES_CHANGE DI_FLAGS = 0x00004000
+
+	// Flag to indicate that the sorting from the INF file should be used.
+	DI_INF_IS_SORTED DI_FLAGS = 0x00008000
+
+	// Flag to indicate that only the INF specified by SP_DEVINSTALL_PARAMS.DriverPath should be searched.
+	DI_ENUMSINGLEINF DI_FLAGS = 0x00010000
+
+	// Flag that prevents ConfigMgr from removing/re-enumerating devices during device
+	// registration, installation, and deletion.
+	DI_DONOTCALLCONFIGMG DI_FLAGS = 0x00020000
+
+	// The following flag can be used to install a device disabled
+	DI_INSTALLDISABLED DI_FLAGS = 0x00040000
+
+	// Flag that causes SetupDiBuildDriverInfoList to build a device's compatible driver
+	// list from its existing class driver list, instead of the normal INF search.
+	DI_COMPAT_FROM_CLASS DI_FLAGS = 0x00080000
+
+	// This flag is set if the Class Install params should be used.
+	DI_CLASSINSTALLPARAMS DI_FLAGS = 0x00100000
+
+	// This flag is set if the caller of DiCallClassInstaller does NOT want the internal default action performed if the Class installer returns ERROR_DI_DO_DEFAULT.
+	DI_NODI_DEFAULTACTION DI_FLAGS = 0x00200000
+
+	// Flags for device installation
+	DI_QUIETINSTALL        DI_FLAGS = 0x00800000 // don't confuse the user with questions or excess info
+	DI_NOFILECOPY          DI_FLAGS = 0x01000000 // No file Copy necessary
+	DI_FORCECOPY           DI_FLAGS = 0x02000000 // Force files to be copied from install path
+	DI_DRIVERPAGE_ADDED    DI_FLAGS = 0x04000000 // Prop provider added Driver page.
+	DI_USECI_SELECTSTRINGS DI_FLAGS = 0x08000000 // Use Class Installer Provided strings in the Select Device Dlg
+	DI_OVERRIDE_INFFLAGS   DI_FLAGS = 0x10000000 // Override INF flags
+	DI_PROPS_NOCHANGEUSAGE DI_FLAGS = 0x20000000 // No Enable/Disable in General Props
+
+	DI_NOSELECTICONS DI_FLAGS = 0x40000000 // No small icons in select device dialogs
+
+	DI_NOWRITE_IDS DI_FLAGS = 0x80000000 // Don't write HW & Compat IDs on install
+)
+
+// DI_FLAGSEX is SP_DEVINSTALL_PARAMS.FlagsEx values
+type DI_FLAGSEX uint32
+
+const (
+	DI_FLAGSEX_CI_FAILED                DI_FLAGSEX = 0x00000004 // Failed to Load/Call class installer
+	DI_FLAGSEX_FINISHINSTALL_ACTION     DI_FLAGSEX = 0x00000008 // Class/co-installer wants to get a DIF_FINISH_INSTALL action in client context.
+	DI_FLAGSEX_DIDINFOLIST              DI_FLAGSEX = 0x00000010 // Did the Class Info List
+	DI_FLAGSEX_DIDCOMPATINFO            DI_FLAGSEX = 0x00000020 // Did the Compat Info List
+	DI_FLAGSEX_FILTERCLASSES            DI_FLAGSEX = 0x00000040
+	DI_FLAGSEX_SETFAILEDINSTALL         DI_FLAGSEX = 0x00000080
+	DI_FLAGSEX_DEVICECHANGE             DI_FLAGSEX = 0x00000100
+	DI_FLAGSEX_ALWAYSWRITEIDS           DI_FLAGSEX = 0x00000200
+	DI_FLAGSEX_PROPCHANGE_PENDING       DI_FLAGSEX = 0x00000400 // One or more device property sheets have had changes made to them, and need to have a DIF_PROPERTYCHANGE occur.
+	DI_FLAGSEX_ALLOWEXCLUDEDDRVS        DI_FLAGSEX = 0x00000800
+	DI_FLAGSEX_NOUIONQUERYREMOVE        DI_FLAGSEX = 0x00001000
+	DI_FLAGSEX_USECLASSFORCOMPAT        DI_FLAGSEX = 0x00002000 // Use the device's class when building compat drv list. (Ignored if DI_COMPAT_FROM_CLASS flag is specified.)
+	DI_FLAGSEX_NO_DRVREG_MODIFY         DI_FLAGSEX = 0x00008000 // Don't run AddReg and DelReg for device's software (driver) key.
+	DI_FLAGSEX_IN_SYSTEM_SETUP          DI_FLAGSEX = 0x00010000 // Installation is occurring during initial system setup.
+	DI_FLAGSEX_INET_DRIVER              DI_FLAGSEX = 0x00020000 // Driver came from Windows Update
+	DI_FLAGSEX_APPENDDRIVERLIST         DI_FLAGSEX = 0x00040000 // Cause SetupDiBuildDriverInfoList to append a new driver list to an existing list.
+	DI_FLAGSEX_PREINSTALLBACKUP         DI_FLAGSEX = 0x00080000 // not used
+	DI_FLAGSEX_BACKUPONREPLACE          DI_FLAGSEX = 0x00100000 // not used
+	DI_FLAGSEX_DRIVERLIST_FROM_URL      DI_FLAGSEX = 0x00200000 // build driver list from INF(s) retrieved from URL specified in SP_DEVINSTALL_PARAMS.DriverPath (empty string means Windows Update website)
+	DI_FLAGSEX_EXCLUDE_OLD_INET_DRIVERS DI_FLAGSEX = 0x00800000 // Don't include old Internet drivers when building a driver list. Ignored on Windows Vista and later.
+	DI_FLAGSEX_POWERPAGE_ADDED          DI_FLAGSEX = 0x01000000 // class installer added their own power page
+	DI_FLAGSEX_FILTERSIMILARDRIVERS     DI_FLAGSEX = 0x02000000 // only include similar drivers in class list
+	DI_FLAGSEX_INSTALLEDDRIVER          DI_FLAGSEX = 0x04000000 // only add the installed driver to the class or compat driver list.  Used in calls to SetupDiBuildDriverInfoList
+	DI_FLAGSEX_NO_CLASSLIST_NODE_MERGE  DI_FLAGSEX = 0x08000000 // Don't remove identical driver nodes from the class list
+	DI_FLAGSEX_ALTPLATFORM_DRVSEARCH    DI_FLAGSEX = 0x10000000 // Build driver list based on alternate platform information specified in associated file queue
+	DI_FLAGSEX_RESTART_DEVICE_ONLY      DI_FLAGSEX = 0x20000000 // only restart the device drivers are being installed on as opposed to restarting all devices using those drivers.
+	DI_FLAGSEX_RECURSIVESEARCH          DI_FLAGSEX = 0x40000000 // Tell SetupDiBuildDriverInfoList to do a recursive search
+	DI_FLAGSEX_SEARCH_PUBLISHED_INFS    DI_FLAGSEX = 0x80000000 // Tell SetupDiBuildDriverInfoList to do a "published INF" search
+)
+
+// ClassInstallHeader is the first member of any class install parameters structure. It contains the device installation request code that defines the format of the rest of the install parameters structure.
+type ClassInstallHeader struct {
+	size            uint32
+	InstallFunction DI_FUNCTION
+}
+
+func MakeClassInstallHeader(installFunction DI_FUNCTION) *ClassInstallHeader {
+	hdr := &ClassInstallHeader{InstallFunction: installFunction}
+	hdr.size = uint32(unsafe.Sizeof(*hdr))
+	return hdr
+}
+
+// DICS_STATE specifies values indicating a change in a device's state
+type DICS_STATE uint32
+
+const (
+	DICS_ENABLE     DICS_STATE = 0x00000001 // The device is being enabled.
+	DICS_DISABLE    DICS_STATE = 0x00000002 // The device is being disabled.
+	DICS_PROPCHANGE DICS_STATE = 0x00000003 // The properties of the device have changed.
+	DICS_START      DICS_STATE = 0x00000004 // The device is being started (if the request is for the currently active hardware profile).
+	DICS_STOP       DICS_STATE = 0x00000005 // The device is being stopped. The driver stack will be unloaded and the CSCONFIGFLAG_DO_NOT_START flag will be set for the device.
+)
+
+// DICS_FLAG specifies the scope of a device property change
+type DICS_FLAG uint32
+
+const (
+	DICS_FLAG_GLOBAL         DICS_FLAG = 0x00000001 // make change in all hardware profiles
+	DICS_FLAG_CONFIGSPECIFIC DICS_FLAG = 0x00000002 // make change in specified profile only
+	DICS_FLAG_CONFIGGENERAL  DICS_FLAG = 0x00000004 // 1 or more hardware profile-specific changes to follow (obsolete)
+)
+
+// PropChangeParams is a structure corresponding to a DIF_PROPERTYCHANGE install function.
+type PropChangeParams struct {
+	ClassInstallHeader ClassInstallHeader
+	StateChange        DICS_STATE
+	Scope              DICS_FLAG
+	HwProfile          uint32
+}
+
+// DI_REMOVEDEVICE specifies the scope of the device removal
+type DI_REMOVEDEVICE uint32
+
+const (
+	DI_REMOVEDEVICE_GLOBAL         DI_REMOVEDEVICE = 0x00000001 // Make this change in all hardware profiles. Remove information about the device from the registry.
+	DI_REMOVEDEVICE_CONFIGSPECIFIC DI_REMOVEDEVICE = 0x00000002 // Make this change to only the hardware profile specified by HwProfile. this flag only applies to root-enumerated devices. When Windows removes the device from the last hardware profile in which it was configured, Windows performs a global removal.
+)
+
+// RemoveDeviceParams is a structure corresponding to a DIF_REMOVE install function.
+type RemoveDeviceParams struct {
+	ClassInstallHeader ClassInstallHeader
+	Scope              DI_REMOVEDEVICE
+	HwProfile          uint32
+}
+
+// DrvInfoData is driver information structure (member of a driver info list that may be associated with a particular device instance, or (globally) with a device information set)
+type DrvInfoData struct {
+	size          uint32
+	DriverType    uint32
+	_             uintptr
+	description   [LINE_LEN]uint16
+	mfgName       [LINE_LEN]uint16
+	providerName  [LINE_LEN]uint16
+	DriverDate    Filetime
+	DriverVersion uint64
+}
+
+func (data *DrvInfoData) Description() string {
+	return UTF16ToString(data.description[:])
+}
+
+func (data *DrvInfoData) SetDescription(description string) error {
+	str, err := UTF16FromString(description)
+	if err != nil {
+		return err
+	}
+	copy(data.description[:], str)
+	return nil
+}
+
+func (data *DrvInfoData) MfgName() string {
+	return UTF16ToString(data.mfgName[:])
+}
+
+func (data *DrvInfoData) SetMfgName(mfgName string) error {
+	str, err := UTF16FromString(mfgName)
+	if err != nil {
+		return err
+	}
+	copy(data.mfgName[:], str)
+	return nil
+}
+
+func (data *DrvInfoData) ProviderName() string {
+	return UTF16ToString(data.providerName[:])
+}
+
+func (data *DrvInfoData) SetProviderName(providerName string) error {
+	str, err := UTF16FromString(providerName)
+	if err != nil {
+		return err
+	}
+	copy(data.providerName[:], str)
+	return nil
+}
+
+// IsNewer method returns true if DrvInfoData date and version is newer than supplied parameters.
+func (data *DrvInfoData) IsNewer(driverDate Filetime, driverVersion uint64) bool {
+	if data.DriverDate.HighDateTime > driverDate.HighDateTime {
+		return true
+	}
+	if data.DriverDate.HighDateTime < driverDate.HighDateTime {
+		return false
+	}
+
+	if data.DriverDate.LowDateTime > driverDate.LowDateTime {
+		return true
+	}
+	if data.DriverDate.LowDateTime < driverDate.LowDateTime {
+		return false
+	}
+
+	if data.DriverVersion > driverVersion {
+		return true
+	}
+	if data.DriverVersion < driverVersion {
+		return false
+	}
+
+	return false
+}
+
+// DrvInfoDetailData is driver information details structure (provides detailed information about a particular driver information structure)
+type DrvInfoDetailData struct {
+	size            uint32 // Use unsafeSizeOf method
+	InfDate         Filetime
+	compatIDsOffset uint32
+	compatIDsLength uint32
+	_               uintptr
+	sectionName     [LINE_LEN]uint16
+	infFileName     [MAX_PATH]uint16
+	drvDescription  [LINE_LEN]uint16
+	hardwareID      [1]uint16
+}
+
+func (*DrvInfoDetailData) unsafeSizeOf() uint32 {
+	if unsafe.Sizeof(uintptr(0)) == 4 {
+		// Windows declares this with pshpack1.h
+		return uint32(unsafe.Offsetof(DrvInfoDetailData{}.hardwareID) + unsafe.Sizeof(DrvInfoDetailData{}.hardwareID))
+	}
+	return uint32(unsafe.Sizeof(DrvInfoDetailData{}))
+}
+
+func (data *DrvInfoDetailData) SectionName() string {
+	return UTF16ToString(data.sectionName[:])
+}
+
+func (data *DrvInfoDetailData) InfFileName() string {
+	return UTF16ToString(data.infFileName[:])
+}
+
+func (data *DrvInfoDetailData) DrvDescription() string {
+	return UTF16ToString(data.drvDescription[:])
+}
+
+func (data *DrvInfoDetailData) HardwareID() string {
+	if data.compatIDsOffset > 1 {
+		bufW := data.getBuf()
+		return UTF16ToString(bufW[:wcslen(bufW)])
+	}
+
+	return ""
+}
+
+func (data *DrvInfoDetailData) CompatIDs() []string {
+	a := make([]string, 0)
+
+	if data.compatIDsLength > 0 {
+		bufW := data.getBuf()
+		bufW = bufW[data.compatIDsOffset : data.compatIDsOffset+data.compatIDsLength]
+		for i := 0; i < len(bufW); {
+			j := i + wcslen(bufW[i:])
+			if i < j {
+				a = append(a, UTF16ToString(bufW[i:j]))
+			}
+			i = j + 1
+		}
+	}
+
+	return a
+}
+
+func (data *DrvInfoDetailData) getBuf() []uint16 {
+	len := (data.size - uint32(unsafe.Offsetof(data.hardwareID))) / 2
+	sl := struct {
+		addr *uint16
+		len  int
+		cap  int
+	}{&data.hardwareID[0], int(len), int(len)}
+	return *(*[]uint16)(unsafe.Pointer(&sl))
+}
+
+// IsCompatible method tests if given hardware ID matches the driver or is listed on the compatible ID list.
+func (data *DrvInfoDetailData) IsCompatible(hwid string) bool {
+	hwidLC := strings.ToLower(hwid)
+	if strings.ToLower(data.HardwareID()) == hwidLC {
+		return true
+	}
+	a := data.CompatIDs()
+	for i := range a {
+		if strings.ToLower(a[i]) == hwidLC {
+			return true
+		}
+	}
+
+	return false
+}
+
+// DICD flags control SetupDiCreateDeviceInfo
+type DICD uint32
+
+const (
+	DICD_GENERATE_ID       DICD = 0x00000001
+	DICD_INHERIT_CLASSDRVS DICD = 0x00000002
+)
+
+// SUOI flags control SetupUninstallOEMInf
+type SUOI uint32
+
+const (
+	SUOI_FORCEDELETE SUOI = 0x0001
+)
+
+// SPDIT flags to distinguish between class drivers and
+// device drivers. (Passed in 'DriverType' parameter of
+// driver information list APIs)
+type SPDIT uint32
+
+const (
+	SPDIT_NODRIVER     SPDIT = 0x00000000
+	SPDIT_CLASSDRIVER  SPDIT = 0x00000001
+	SPDIT_COMPATDRIVER SPDIT = 0x00000002
+)
+
+// DIGCF flags control what is included in the device information set built by SetupDiGetClassDevs
+type DIGCF uint32
+
+const (
+	DIGCF_DEFAULT         DIGCF = 0x00000001 // only valid with DIGCF_DEVICEINTERFACE
+	DIGCF_PRESENT         DIGCF = 0x00000002
+	DIGCF_ALLCLASSES      DIGCF = 0x00000004
+	DIGCF_PROFILE         DIGCF = 0x00000008
+	DIGCF_DEVICEINTERFACE DIGCF = 0x00000010
+)
+
+// DIREG specifies values for SetupDiCreateDevRegKey, SetupDiOpenDevRegKey, and SetupDiDeleteDevRegKey.
+type DIREG uint32
+
+const (
+	DIREG_DEV  DIREG = 0x00000001 // Open/Create/Delete device key
+	DIREG_DRV  DIREG = 0x00000002 // Open/Create/Delete driver key
+	DIREG_BOTH DIREG = 0x00000004 // Delete both driver and Device key
+)
+
+// SPDRP specifies device registry property codes
+// (Codes marked as read-only (R) may only be used for
+// SetupDiGetDeviceRegistryProperty)
+//
+// These values should cover the same set of registry properties
+// as defined by the CM_DRP codes in cfgmgr32.h.
+//
+// Note that SPDRP codes are zero based while CM_DRP codes are one based!
+type SPDRP uint32
+
+const (
+	SPDRP_DEVICEDESC                  SPDRP = 0x00000000 // DeviceDesc (R/W)
+	SPDRP_HARDWAREID                  SPDRP = 0x00000001 // HardwareID (R/W)
+	SPDRP_COMPATIBLEIDS               SPDRP = 0x00000002 // CompatibleIDs (R/W)
+	SPDRP_SERVICE                     SPDRP = 0x00000004 // Service (R/W)
+	SPDRP_CLASS                       SPDRP = 0x00000007 // Class (R--tied to ClassGUID)
+	SPDRP_CLASSGUID                   SPDRP = 0x00000008 // ClassGUID (R/W)
+	SPDRP_DRIVER                      SPDRP = 0x00000009 // Driver (R/W)
+	SPDRP_CONFIGFLAGS                 SPDRP = 0x0000000A // ConfigFlags (R/W)
+	SPDRP_MFG                         SPDRP = 0x0000000B // Mfg (R/W)
+	SPDRP_FRIENDLYNAME                SPDRP = 0x0000000C // FriendlyName (R/W)
+	SPDRP_LOCATION_INFORMATION        SPDRP = 0x0000000D // LocationInformation (R/W)
+	SPDRP_PHYSICAL_DEVICE_OBJECT_NAME SPDRP = 0x0000000E // PhysicalDeviceObjectName (R)
+	SPDRP_CAPABILITIES                SPDRP = 0x0000000F // Capabilities (R)
+	SPDRP_UI_NUMBER                   SPDRP = 0x00000010 // UiNumber (R)
+	SPDRP_UPPERFILTERS                SPDRP = 0x00000011 // UpperFilters (R/W)
+	SPDRP_LOWERFILTERS                SPDRP = 0x00000012 // LowerFilters (R/W)
+	SPDRP_BUSTYPEGUID                 SPDRP = 0x00000013 // BusTypeGUID (R)
+	SPDRP_LEGACYBUSTYPE               SPDRP = 0x00000014 // LegacyBusType (R)
+	SPDRP_BUSNUMBER                   SPDRP = 0x00000015 // BusNumber (R)
+	SPDRP_ENUMERATOR_NAME             SPDRP = 0x00000016 // Enumerator Name (R)
+	SPDRP_SECURITY                    SPDRP = 0x00000017 // Security (R/W, binary form)
+	SPDRP_SECURITY_SDS                SPDRP = 0x00000018 // Security (W, SDS form)
+	SPDRP_DEVTYPE                     SPDRP = 0x00000019 // Device Type (R/W)
+	SPDRP_EXCLUSIVE                   SPDRP = 0x0000001A // Device is exclusive-access (R/W)
+	SPDRP_CHARACTERISTICS             SPDRP = 0x0000001B // Device Characteristics (R/W)
+	SPDRP_ADDRESS                     SPDRP = 0x0000001C // Device Address (R)
+	SPDRP_UI_NUMBER_DESC_FORMAT       SPDRP = 0x0000001D // UiNumberDescFormat (R/W)
+	SPDRP_DEVICE_POWER_DATA           SPDRP = 0x0000001E // Device Power Data (R)
+	SPDRP_REMOVAL_POLICY              SPDRP = 0x0000001F // Removal Policy (R)
+	SPDRP_REMOVAL_POLICY_HW_DEFAULT   SPDRP = 0x00000020 // Hardware Removal Policy (R)
+	SPDRP_REMOVAL_POLICY_OVERRIDE     SPDRP = 0x00000021 // Removal Policy Override (RW)
+	SPDRP_INSTALL_STATE               SPDRP = 0x00000022 // Device Install State (R)
+	SPDRP_LOCATION_PATHS              SPDRP = 0x00000023 // Device Location Paths (R)
+	SPDRP_BASE_CONTAINERID            SPDRP = 0x00000024 // Base ContainerID (R)
+
+	SPDRP_MAXIMUM_PROPERTY SPDRP = 0x00000025 // Upper bound on ordinals
+)
+
+// DEVPROPTYPE represents the property-data-type identifier that specifies the
+// data type of a device property value in the unified device property model.
+type DEVPROPTYPE uint32
+
+const (
+	DEVPROP_TYPEMOD_ARRAY DEVPROPTYPE = 0x00001000
+	DEVPROP_TYPEMOD_LIST  DEVPROPTYPE = 0x00002000
+
+	DEVPROP_TYPE_EMPTY                      DEVPROPTYPE = 0x00000000
+	DEVPROP_TYPE_NULL                       DEVPROPTYPE = 0x00000001
+	DEVPROP_TYPE_SBYTE                      DEVPROPTYPE = 0x00000002
+	DEVPROP_TYPE_BYTE                       DEVPROPTYPE = 0x00000003
+	DEVPROP_TYPE_INT16                      DEVPROPTYPE = 0x00000004
+	DEVPROP_TYPE_UINT16                     DEVPROPTYPE = 0x00000005
+	DEVPROP_TYPE_INT32                      DEVPROPTYPE = 0x00000006
+	DEVPROP_TYPE_UINT32                     DEVPROPTYPE = 0x00000007
+	DEVPROP_TYPE_INT64                      DEVPROPTYPE = 0x00000008
+	DEVPROP_TYPE_UINT64                     DEVPROPTYPE = 0x00000009
+	DEVPROP_TYPE_FLOAT                      DEVPROPTYPE = 0x0000000A
+	DEVPROP_TYPE_DOUBLE                     DEVPROPTYPE = 0x0000000B
+	DEVPROP_TYPE_DECIMAL                    DEVPROPTYPE = 0x0000000C
+	DEVPROP_TYPE_GUID                       DEVPROPTYPE = 0x0000000D
+	DEVPROP_TYPE_CURRENCY                   DEVPROPTYPE = 0x0000000E
+	DEVPROP_TYPE_DATE                       DEVPROPTYPE = 0x0000000F
+	DEVPROP_TYPE_FILETIME                   DEVPROPTYPE = 0x00000010
+	DEVPROP_TYPE_BOOLEAN                    DEVPROPTYPE = 0x00000011
+	DEVPROP_TYPE_STRING                     DEVPROPTYPE = 0x00000012
+	DEVPROP_TYPE_STRING_LIST                DEVPROPTYPE = DEVPROP_TYPE_STRING | DEVPROP_TYPEMOD_LIST
+	DEVPROP_TYPE_SECURITY_DESCRIPTOR        DEVPROPTYPE = 0x00000013
+	DEVPROP_TYPE_SECURITY_DESCRIPTOR_STRING DEVPROPTYPE = 0x00000014
+	DEVPROP_TYPE_DEVPROPKEY                 DEVPROPTYPE = 0x00000015
+	DEVPROP_TYPE_DEVPROPTYPE                DEVPROPTYPE = 0x00000016
+	DEVPROP_TYPE_BINARY                     DEVPROPTYPE = DEVPROP_TYPE_BYTE | DEVPROP_TYPEMOD_ARRAY
+	DEVPROP_TYPE_ERROR                      DEVPROPTYPE = 0x00000017
+	DEVPROP_TYPE_NTSTATUS                   DEVPROPTYPE = 0x00000018
+	DEVPROP_TYPE_STRING_INDIRECT            DEVPROPTYPE = 0x00000019
+
+	MAX_DEVPROP_TYPE    DEVPROPTYPE = 0x00000019
+	MAX_DEVPROP_TYPEMOD DEVPROPTYPE = 0x00002000
+
+	DEVPROP_MASK_TYPE    DEVPROPTYPE = 0x00000FFF
+	DEVPROP_MASK_TYPEMOD DEVPROPTYPE = 0x0000F000
+)
+
+// DEVPROPGUID specifies a property category.
+type DEVPROPGUID GUID
+
+// DEVPROPID uniquely identifies the property within the property category.
+type DEVPROPID uint32
+
+const DEVPROPID_FIRST_USABLE DEVPROPID = 2
+
+// DEVPROPKEY represents a device property key for a device property in the
+// unified device property model.
+type DEVPROPKEY struct {
+	FmtID DEVPROPGUID
+	PID   DEVPROPID
+}
+
+// CONFIGRET is a return value or error code from cfgmgr32 APIs
+type CONFIGRET uint32
+
+func (ret CONFIGRET) Error() string {
+	if win32Error, ok := ret.Unwrap().(Errno); ok {
+		return fmt.Sprintf("%s (CfgMgr error: 0x%08x)", win32Error.Error(), uint32(ret))
+	}
+	return fmt.Sprintf("CfgMgr error: 0x%08x", uint32(ret))
+}
+
+func (ret CONFIGRET) Win32Error(defaultError Errno) Errno {
+	return cm_MapCrToWin32Err(ret, defaultError)
+}
+
+func (ret CONFIGRET) Unwrap() error {
+	const noMatch = Errno(^uintptr(0))
+	win32Error := ret.Win32Error(noMatch)
+	if win32Error == noMatch {
+		return nil
+	}
+	return win32Error
+}
+
+const (
+	CR_SUCCESS                  CONFIGRET = 0x00000000
+	CR_DEFAULT                  CONFIGRET = 0x00000001
+	CR_OUT_OF_MEMORY            CONFIGRET = 0x00000002
+	CR_INVALID_POINTER          CONFIGRET = 0x00000003
+	CR_INVALID_FLAG             CONFIGRET = 0x00000004
+	CR_INVALID_DEVNODE          CONFIGRET = 0x00000005
+	CR_INVALID_DEVINST                    = CR_INVALID_DEVNODE
+	CR_INVALID_RES_DES          CONFIGRET = 0x00000006
+	CR_INVALID_LOG_CONF         CONFIGRET = 0x00000007
+	CR_INVALID_ARBITRATOR       CONFIGRET = 0x00000008
+	CR_INVALID_NODELIST         CONFIGRET = 0x00000009
+	CR_DEVNODE_HAS_REQS         CONFIGRET = 0x0000000A
+	CR_DEVINST_HAS_REQS                   = CR_DEVNODE_HAS_REQS
+	CR_INVALID_RESOURCEID       CONFIGRET = 0x0000000B
+	CR_DLVXD_NOT_FOUND          CONFIGRET = 0x0000000C
+	CR_NO_SUCH_DEVNODE          CONFIGRET = 0x0000000D
+	CR_NO_SUCH_DEVINST                    = CR_NO_SUCH_DEVNODE
+	CR_NO_MORE_LOG_CONF         CONFIGRET = 0x0000000E
+	CR_NO_MORE_RES_DES          CONFIGRET = 0x0000000F
+	CR_ALREADY_SUCH_DEVNODE     CONFIGRET = 0x00000010
+	CR_ALREADY_SUCH_DEVINST               = CR_ALREADY_SUCH_DEVNODE
+	CR_INVALID_RANGE_LIST       CONFIGRET = 0x00000011
+	CR_INVALID_RANGE            CONFIGRET = 0x00000012
+	CR_FAILURE                  CONFIGRET = 0x00000013
+	CR_NO_SUCH_LOGICAL_DEV      CONFIGRET = 0x00000014
+	CR_CREATE_BLOCKED           CONFIGRET = 0x00000015
+	CR_NOT_SYSTEM_VM            CONFIGRET = 0x00000016
+	CR_REMOVE_VETOED            CONFIGRET = 0x00000017
+	CR_APM_VETOED               CONFIGRET = 0x00000018
+	CR_INVALID_LOAD_TYPE        CONFIGRET = 0x00000019
+	CR_BUFFER_SMALL             CONFIGRET = 0x0000001A
+	CR_NO_ARBITRATOR            CONFIGRET = 0x0000001B
+	CR_NO_REGISTRY_HANDLE       CONFIGRET = 0x0000001C
+	CR_REGISTRY_ERROR           CONFIGRET = 0x0000001D
+	CR_INVALID_DEVICE_ID        CONFIGRET = 0x0000001E
+	CR_INVALID_DATA             CONFIGRET = 0x0000001F
+	CR_INVALID_API              CONFIGRET = 0x00000020
+	CR_DEVLOADER_NOT_READY      CONFIGRET = 0x00000021
+	CR_NEED_RESTART             CONFIGRET = 0x00000022
+	CR_NO_MORE_HW_PROFILES      CONFIGRET = 0x00000023
+	CR_DEVICE_NOT_THERE         CONFIGRET = 0x00000024
+	CR_NO_SUCH_VALUE            CONFIGRET = 0x00000025
+	CR_WRONG_TYPE               CONFIGRET = 0x00000026
+	CR_INVALID_PRIORITY         CONFIGRET = 0x00000027
+	CR_NOT_DISABLEABLE          CONFIGRET = 0x00000028
+	CR_FREE_RESOURCES           CONFIGRET = 0x00000029
+	CR_QUERY_VETOED             CONFIGRET = 0x0000002A
+	CR_CANT_SHARE_IRQ           CONFIGRET = 0x0000002B
+	CR_NO_DEPENDENT             CONFIGRET = 0x0000002C
+	CR_SAME_RESOURCES           CONFIGRET = 0x0000002D
+	CR_NO_SUCH_REGISTRY_KEY     CONFIGRET = 0x0000002E
+	CR_INVALID_MACHINENAME      CONFIGRET = 0x0000002F
+	CR_REMOTE_COMM_FAILURE      CONFIGRET = 0x00000030
+	CR_MACHINE_UNAVAILABLE      CONFIGRET = 0x00000031
+	CR_NO_CM_SERVICES           CONFIGRET = 0x00000032
+	CR_ACCESS_DENIED            CONFIGRET = 0x00000033
+	CR_CALL_NOT_IMPLEMENTED     CONFIGRET = 0x00000034
+	CR_INVALID_PROPERTY         CONFIGRET = 0x00000035
+	CR_DEVICE_INTERFACE_ACTIVE  CONFIGRET = 0x00000036
+	CR_NO_SUCH_DEVICE_INTERFACE CONFIGRET = 0x00000037
+	CR_INVALID_REFERENCE_STRING CONFIGRET = 0x00000038
+	CR_INVALID_CONFLICT_LIST    CONFIGRET = 0x00000039
+	CR_INVALID_INDEX            CONFIGRET = 0x0000003A
+	CR_INVALID_STRUCTURE_SIZE   CONFIGRET = 0x0000003B
+	NUM_CR_RESULTS              CONFIGRET = 0x0000003C
+)
+
+const (
+	CM_GET_DEVICE_INTERFACE_LIST_PRESENT     = 0 // only currently 'live' device interfaces
+	CM_GET_DEVICE_INTERFACE_LIST_ALL_DEVICES = 1 // all registered device interfaces, live or not
+)
+
+const (
+	DN_ROOT_ENUMERATED       = 0x00000001        // Was enumerated by ROOT
+	DN_DRIVER_LOADED         = 0x00000002        // Has Register_Device_Driver
+	DN_ENUM_LOADED           = 0x00000004        // Has Register_Enumerator
+	DN_STARTED               = 0x00000008        // Is currently configured
+	DN_MANUAL                = 0x00000010        // Manually installed
+	DN_NEED_TO_ENUM          = 0x00000020        // May need reenumeration
+	DN_NOT_FIRST_TIME        = 0x00000040        // Has received a config
+	DN_HARDWARE_ENUM         = 0x00000080        // Enum generates hardware ID
+	DN_LIAR                  = 0x00000100        // Lied about can reconfig once
+	DN_HAS_MARK              = 0x00000200        // Not CM_Create_DevInst lately
+	DN_HAS_PROBLEM           = 0x00000400        // Need device installer
+	DN_FILTERED              = 0x00000800        // Is filtered
+	DN_MOVED                 = 0x00001000        // Has been moved
+	DN_DISABLEABLE           = 0x00002000        // Can be disabled
+	DN_REMOVABLE             = 0x00004000        // Can be removed
+	DN_PRIVATE_PROBLEM       = 0x00008000        // Has a private problem
+	DN_MF_PARENT             = 0x00010000        // Multi function parent
+	DN_MF_CHILD              = 0x00020000        // Multi function child
+	DN_WILL_BE_REMOVED       = 0x00040000        // DevInst is being removed
+	DN_NOT_FIRST_TIMEE       = 0x00080000        // Has received a config enumerate
+	DN_STOP_FREE_RES         = 0x00100000        // When child is stopped, free resources
+	DN_REBAL_CANDIDATE       = 0x00200000        // Don't skip during rebalance
+	DN_BAD_PARTIAL           = 0x00400000        // This devnode's log_confs do not have same resources
+	DN_NT_ENUMERATOR         = 0x00800000        // This devnode's is an NT enumerator
+	DN_NT_DRIVER             = 0x01000000        // This devnode's is an NT driver
+	DN_NEEDS_LOCKING         = 0x02000000        // Devnode need lock resume processing
+	DN_ARM_WAKEUP            = 0x04000000        // Devnode can be the wakeup device
+	DN_APM_ENUMERATOR        = 0x08000000        // APM aware enumerator
+	DN_APM_DRIVER            = 0x10000000        // APM aware driver
+	DN_SILENT_INSTALL        = 0x20000000        // Silent install
+	DN_NO_SHOW_IN_DM         = 0x40000000        // No show in device manager
+	DN_BOOT_LOG_PROB         = 0x80000000        // Had a problem during preassignment of boot log conf
+	DN_NEED_RESTART          = DN_LIAR           // System needs to be restarted for this Devnode to work properly
+	DN_DRIVER_BLOCKED        = DN_NOT_FIRST_TIME // One or more drivers are blocked from loading for this Devnode
+	DN_LEGACY_DRIVER         = DN_MOVED          // This device is using a legacy driver
+	DN_CHILD_WITH_INVALID_ID = DN_HAS_MARK       // One or more children have invalid IDs
+	DN_DEVICE_DISCONNECTED   = DN_NEEDS_LOCKING  // The function driver for a device reported that the device is not connected.  Typically this means a wireless device is out of range.
+	DN_QUERY_REMOVE_PENDING  = DN_MF_PARENT      // Device is part of a set of related devices collectively pending query-removal
+	DN_QUERY_REMOVE_ACTIVE   = DN_MF_CHILD       // Device is actively engaged in a query-remove IRP
+	DN_CHANGEABLE_FLAGS      = DN_NOT_FIRST_TIME | DN_HARDWARE_ENUM | DN_HAS_MARK | DN_DISABLEABLE | DN_REMOVABLE | DN_MF_CHILD | DN_MF_PARENT | DN_NOT_FIRST_TIMEE | DN_STOP_FREE_RES | DN_REBAL_CANDIDATE | DN_NT_ENUMERATOR | DN_NT_DRIVER | DN_SILENT_INSTALL | DN_NO_SHOW_IN_DM
+)
+
+//sys	setupDiCreateDeviceInfoListEx(classGUID *GUID, hwndParent uintptr, machineName *uint16, reserved uintptr) (handle DevInfo, err error) [failretval==DevInfo(InvalidHandle)] = setupapi.SetupDiCreateDeviceInfoListExW
+
+// SetupDiCreateDeviceInfoListEx function creates an empty device information set on a remote or a local computer and optionally associates the set with a device setup class.
+func SetupDiCreateDeviceInfoListEx(classGUID *GUID, hwndParent uintptr, machineName string) (deviceInfoSet DevInfo, err error) {
+	var machineNameUTF16 *uint16
+	if machineName != "" {
+		machineNameUTF16, err = UTF16PtrFromString(machineName)
+		if err != nil {
+			return
+		}
+	}
+	return setupDiCreateDeviceInfoListEx(classGUID, hwndParent, machineNameUTF16, 0)
+}
+
+//sys	setupDiGetDeviceInfoListDetail(deviceInfoSet DevInfo, deviceInfoSetDetailData *DevInfoListDetailData) (err error) = setupapi.SetupDiGetDeviceInfoListDetailW
+
+// SetupDiGetDeviceInfoListDetail function retrieves information associated with a device information set including the class GUID, remote computer handle, and remote computer name.
+func SetupDiGetDeviceInfoListDetail(deviceInfoSet DevInfo) (deviceInfoSetDetailData *DevInfoListDetailData, err error) {
+	data := &DevInfoListDetailData{}
+	data.size = data.unsafeSizeOf()
+
+	return data, setupDiGetDeviceInfoListDetail(deviceInfoSet, data)
+}
+
+// DeviceInfoListDetail method retrieves information associated with a device information set including the class GUID, remote computer handle, and remote computer name.
+func (deviceInfoSet DevInfo) DeviceInfoListDetail() (*DevInfoListDetailData, error) {
+	return SetupDiGetDeviceInfoListDetail(deviceInfoSet)
+}
+
+//sys	setupDiCreateDeviceInfo(deviceInfoSet DevInfo, DeviceName *uint16, classGUID *GUID, DeviceDescription *uint16, hwndParent uintptr, CreationFlags DICD, deviceInfoData *DevInfoData) (err error) = setupapi.SetupDiCreateDeviceInfoW
+
+// SetupDiCreateDeviceInfo function creates a new device information element and adds it as a new member to the specified device information set.
+func SetupDiCreateDeviceInfo(deviceInfoSet DevInfo, deviceName string, classGUID *GUID, deviceDescription string, hwndParent uintptr, creationFlags DICD) (deviceInfoData *DevInfoData, err error) {
+	deviceNameUTF16, err := UTF16PtrFromString(deviceName)
+	if err != nil {
+		return
+	}
+
+	var deviceDescriptionUTF16 *uint16
+	if deviceDescription != "" {
+		deviceDescriptionUTF16, err = UTF16PtrFromString(deviceDescription)
+		if err != nil {
+			return
+		}
+	}
+
+	data := &DevInfoData{}
+	data.size = uint32(unsafe.Sizeof(*data))
+
+	return data, setupDiCreateDeviceInfo(deviceInfoSet, deviceNameUTF16, classGUID, deviceDescriptionUTF16, hwndParent, creationFlags, data)
+}
+
+// CreateDeviceInfo method creates a new device information element and adds it as a new member to the specified device information set.
+func (deviceInfoSet DevInfo) CreateDeviceInfo(deviceName string, classGUID *GUID, deviceDescription string, hwndParent uintptr, creationFlags DICD) (*DevInfoData, error) {
+	return SetupDiCreateDeviceInfo(deviceInfoSet, deviceName, classGUID, deviceDescription, hwndParent, creationFlags)
+}
+
+//sys	setupDiEnumDeviceInfo(deviceInfoSet DevInfo, memberIndex uint32, deviceInfoData *DevInfoData) (err error) = setupapi.SetupDiEnumDeviceInfo
+
+// SetupDiEnumDeviceInfo function returns a DevInfoData structure that specifies a device information element in a device information set.
+func SetupDiEnumDeviceInfo(deviceInfoSet DevInfo, memberIndex int) (*DevInfoData, error) {
+	data := &DevInfoData{}
+	data.size = uint32(unsafe.Sizeof(*data))
+
+	return data, setupDiEnumDeviceInfo(deviceInfoSet, uint32(memberIndex), data)
+}
+
+// EnumDeviceInfo method returns a DevInfoData structure that specifies a device information element in a device information set.
+func (deviceInfoSet DevInfo) EnumDeviceInfo(memberIndex int) (*DevInfoData, error) {
+	return SetupDiEnumDeviceInfo(deviceInfoSet, memberIndex)
+}
+
+// SetupDiDestroyDeviceInfoList function deletes a device information set and frees all associated memory.
+//sys	SetupDiDestroyDeviceInfoList(deviceInfoSet DevInfo) (err error) = setupapi.SetupDiDestroyDeviceInfoList
+
+// Close method deletes a device information set and frees all associated memory.
+func (deviceInfoSet DevInfo) Close() error {
+	return SetupDiDestroyDeviceInfoList(deviceInfoSet)
+}
+
+//sys	SetupDiBuildDriverInfoList(deviceInfoSet DevInfo, deviceInfoData *DevInfoData, driverType SPDIT) (err error) = setupapi.SetupDiBuildDriverInfoList
+
+// BuildDriverInfoList method builds a list of drivers that is associated with a specific device or with the global class driver list for a device information set.
+func (deviceInfoSet DevInfo) BuildDriverInfoList(deviceInfoData *DevInfoData, driverType SPDIT) error {
+	return SetupDiBuildDriverInfoList(deviceInfoSet, deviceInfoData, driverType)
+}
+
+//sys	SetupDiCancelDriverInfoSearch(deviceInfoSet DevInfo) (err error) = setupapi.SetupDiCancelDriverInfoSearch
+
+// CancelDriverInfoSearch method cancels a driver list search that is currently in progress in a different thread.
+func (deviceInfoSet DevInfo) CancelDriverInfoSearch() error {
+	return SetupDiCancelDriverInfoSearch(deviceInfoSet)
+}
+
+//sys	setupDiEnumDriverInfo(deviceInfoSet DevInfo, deviceInfoData *DevInfoData, driverType SPDIT, memberIndex uint32, driverInfoData *DrvInfoData) (err error) = setupapi.SetupDiEnumDriverInfoW
+
+// SetupDiEnumDriverInfo function enumerates the members o
+@@END
+@@PORTABLE {"path":"vendor/golang.org/x/sys/windows/setupapi_windows.go","mode":420,"size":68854,"sha256":"72097fc028210a5700ede92673d155af6de97210292770bfb31363691dad07c4","index":1,"count":2,"encoding":"utf-8","payloadBytes":20854}
+f a driver list.
+func SetupDiEnumDriverInfo(deviceInfoSet DevInfo, deviceInfoData *DevInfoData, driverType SPDIT, memberIndex int) (*DrvInfoData, error) {
+	data := &DrvInfoData{}
+	data.size = uint32(unsafe.Sizeof(*data))
+
+	return data, setupDiEnumDriverInfo(deviceInfoSet, deviceInfoData, driverType, uint32(memberIndex), data)
+}
+
+// EnumDriverInfo method enumerates the members of a driver list.
+func (deviceInfoSet DevInfo) EnumDriverInfo(deviceInfoData *DevInfoData, driverType SPDIT, memberIndex int) (*DrvInfoData, error) {
+	return SetupDiEnumDriverInfo(deviceInfoSet, deviceInfoData, driverType, memberIndex)
+}
+
+//sys	setupDiGetSelectedDriver(deviceInfoSet DevInfo, deviceInfoData *DevInfoData, driverInfoData *DrvInfoData) (err error) = setupapi.SetupDiGetSelectedDriverW
+
+// SetupDiGetSelectedDriver function retrieves the selected driver for a device information set or a particular device information element.
+func SetupDiGetSelectedDriver(deviceInfoSet DevInfo, deviceInfoData *DevInfoData) (*DrvInfoData, error) {
+	data := &DrvInfoData{}
+	data.size = uint32(unsafe.Sizeof(*data))
+
+	return data, setupDiGetSelectedDriver(deviceInfoSet, deviceInfoData, data)
+}
+
+// SelectedDriver method retrieves the selected driver for a device information set or a particular device information element.
+func (deviceInfoSet DevInfo) SelectedDriver(deviceInfoData *DevInfoData) (*DrvInfoData, error) {
+	return SetupDiGetSelectedDriver(deviceInfoSet, deviceInfoData)
+}
+
+//sys	SetupDiSetSelectedDriver(deviceInfoSet DevInfo, deviceInfoData *DevInfoData, driverInfoData *DrvInfoData) (err error) = setupapi.SetupDiSetSelectedDriverW
+
+// SetSelectedDriver method sets, or resets, the selected driver for a device information element or the selected class driver for a device information set.
+func (deviceInfoSet DevInfo) SetSelectedDriver(deviceInfoData *DevInfoData, driverInfoData *DrvInfoData) error {
+	return SetupDiSetSelectedDriver(deviceInfoSet, deviceInfoData, driverInfoData)
+}
+
+//sys	setupDiGetDriverInfoDetail(deviceInfoSet DevInfo, deviceInfoData *DevInfoData, driverInfoData *DrvInfoData, driverInfoDetailData *DrvInfoDetailData, driverInfoDetailDataSize uint32, requiredSize *uint32) (err error) = setupapi.SetupDiGetDriverInfoDetailW
+
+// SetupDiGetDriverInfoDetail function retrieves driver information detail for a device information set or a particular device information element in the device information set.
+func SetupDiGetDriverInfoDetail(deviceInfoSet DevInfo, deviceInfoData *DevInfoData, driverInfoData *DrvInfoData) (*DrvInfoDetailData, error) {
+	reqSize := uint32(2048)
+	for {
+		buf := make([]byte, reqSize)
+		data := (*DrvInfoDetailData)(unsafe.Pointer(&buf[0]))
+		data.size = data.unsafeSizeOf()
+		err := setupDiGetDriverInfoDetail(deviceInfoSet, deviceInfoData, driverInfoData, data, uint32(len(buf)), &reqSize)
+		if err == ERROR_INSUFFICIENT_BUFFER {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		data.size = reqSize
+		return data, nil
+	}
+}
+
+// DriverInfoDetail method retrieves driver information detail for a device information set or a particular device information element in the device information set.
+func (deviceInfoSet DevInfo) DriverInfoDetail(deviceInfoData *DevInfoData, driverInfoData *DrvInfoData) (*DrvInfoDetailData, error) {
+	return SetupDiGetDriverInfoDetail(deviceInfoSet, deviceInfoData, driverInfoData)
+}
+
+//sys	SetupDiDestroyDriverInfoList(deviceInfoSet DevInfo, deviceInfoData *DevInfoData, driverType SPDIT) (err error) = setupapi.SetupDiDestroyDriverInfoList
+
+// DestroyDriverInfoList method deletes a driver list.
+func (deviceInfoSet DevInfo) DestroyDriverInfoList(deviceInfoData *DevInfoData, driverType SPDIT) error {
+	return SetupDiDestroyDriverInfoList(deviceInfoSet, deviceInfoData, driverType)
+}
+
+//sys	setupDiGetClassDevsEx(classGUID *GUID, Enumerator *uint16, hwndParent uintptr, Flags DIGCF, deviceInfoSet DevInfo, machineName *uint16, reserved uintptr) (handle DevInfo, err error) [failretval==DevInfo(InvalidHandle)] = setupapi.SetupDiGetClassDevsExW
+
+// SetupDiGetClassDevsEx function returns a handle to a device information set that contains requested device information elements for a local or a remote computer.
+func SetupDiGetClassDevsEx(classGUID *GUID, enumerator string, hwndParent uintptr, flags DIGCF, deviceInfoSet DevInfo, machineName string) (handle DevInfo, err error) {
+	var enumeratorUTF16 *uint16
+	if enumerator != "" {
+		enumeratorUTF16, err = UTF16PtrFromString(enumerator)
+		if err != nil {
+			return
+		}
+	}
+	var machineNameUTF16 *uint16
+	if machineName != "" {
+		machineNameUTF16, err = UTF16PtrFromString(machineName)
+		if err != nil {
+			return
+		}
+	}
+	return setupDiGetClassDevsEx(classGUID, enumeratorUTF16, hwndParent, flags, deviceInfoSet, machineNameUTF16, 0)
+}
+
+// SetupDiCallClassInstaller function calls the appropriate class installer, and any registered co-installers, with the specified installation request (DIF code).
+//sys	SetupDiCallClassInstaller(installFunction DI_FUNCTION, deviceInfoSet DevInfo, deviceInfoData *DevInfoData) (err error) = setupapi.SetupDiCallClassInstaller
+
+// CallClassInstaller member calls the appropriate class installer, and any registered co-installers, with the specified installation request (DIF code).
+func (deviceInfoSet DevInfo) CallClassInstaller(installFunction DI_FUNCTION, deviceInfoData *DevInfoData) error {
+	return SetupDiCallClassInstaller(installFunction, deviceInfoSet, deviceInfoData)
+}
+
+// SetupDiOpenDevRegKey function opens a registry key for device-specific configuration information.
+//sys	SetupDiOpenDevRegKey(deviceInfoSet DevInfo, deviceInfoData *DevInfoData, Scope DICS_FLAG, HwProfile uint32, KeyType DIREG, samDesired uint32) (key Handle, err error) [failretval==InvalidHandle] = setupapi.SetupDiOpenDevRegKey
+
+// OpenDevRegKey method opens a registry key for device-specific configuration information.
+func (deviceInfoSet DevInfo) OpenDevRegKey(DeviceInfoData *DevInfoData, Scope DICS_FLAG, HwProfile uint32, KeyType DIREG, samDesired uint32) (Handle, error) {
+	return SetupDiOpenDevRegKey(deviceInfoSet, DeviceInfoData, Scope, HwProfile, KeyType, samDesired)
+}
+
+//sys	setupDiGetDeviceProperty(deviceInfoSet DevInfo, deviceInfoData *DevInfoData, propertyKey *DEVPROPKEY, propertyType *DEVPROPTYPE, propertyBuffer *byte, propertyBufferSize uint32, requiredSize *uint32, flags uint32) (err error) = setupapi.SetupDiGetDevicePropertyW
+
+// SetupDiGetDeviceProperty function retrieves a specified device instance property.
+func SetupDiGetDeviceProperty(deviceInfoSet DevInfo, deviceInfoData *DevInfoData, propertyKey *DEVPROPKEY) (value interface{}, err error) {
+	reqSize := uint32(256)
+	for {
+		var dataType DEVPROPTYPE
+		buf := make([]byte, reqSize)
+		err = setupDiGetDeviceProperty(deviceInfoSet, deviceInfoData, propertyKey, &dataType, &buf[0], uint32(len(buf)), &reqSize, 0)
+		if err == ERROR_INSUFFICIENT_BUFFER {
+			continue
+		}
+		if err != nil {
+			return
+		}
+		switch dataType {
+		case DEVPROP_TYPE_STRING:
+			ret := UTF16ToString(bufToUTF16(buf))
+			runtime.KeepAlive(buf)
+			return ret, nil
+		}
+		return nil, errors.New("unimplemented property type")
+	}
+}
+
+//sys	setupDiGetDeviceRegistryProperty(deviceInfoSet DevInfo, deviceInfoData *DevInfoData, property SPDRP, propertyRegDataType *uint32, propertyBuffer *byte, propertyBufferSize uint32, requiredSize *uint32) (err error) = setupapi.SetupDiGetDeviceRegistryPropertyW
+
+// SetupDiGetDeviceRegistryProperty function retrieves a specified Plug and Play device property.
+func SetupDiGetDeviceRegistryProperty(deviceInfoSet DevInfo, deviceInfoData *DevInfoData, property SPDRP) (value interface{}, err error) {
+	reqSize := uint32(256)
+	for {
+		var dataType uint32
+		buf := make([]byte, reqSize)
+		err = setupDiGetDeviceRegistryProperty(deviceInfoSet, deviceInfoData, property, &dataType, &buf[0], uint32(len(buf)), &reqSize)
+		if err == ERROR_INSUFFICIENT_BUFFER {
+			continue
+		}
+		if err != nil {
+			return
+		}
+		return getRegistryValue(buf[:reqSize], dataType)
+	}
+}
+
+func getRegistryValue(buf []byte, dataType uint32) (interface{}, error) {
+	switch dataType {
+	case REG_SZ:
+		ret := UTF16ToString(bufToUTF16(buf))
+		runtime.KeepAlive(buf)
+		return ret, nil
+	case REG_EXPAND_SZ:
+		value := UTF16ToString(bufToUTF16(buf))
+		if value == "" {
+			return "", nil
+		}
+		p, err := syscall.UTF16PtrFromString(value)
+		if err != nil {
+			return "", err
+		}
+		ret := make([]uint16, 100)
+		for {
+			n, err := ExpandEnvironmentStrings(p, &ret[0], uint32(len(ret)))
+			if err != nil {
+				return "", err
+			}
+			if n <= uint32(len(ret)) {
+				return UTF16ToString(ret[:n]), nil
+			}
+			ret = make([]uint16, n)
+		}
+	case REG_BINARY:
+		return buf, nil
+	case REG_DWORD_LITTLE_ENDIAN:
+		return binary.LittleEndian.Uint32(buf), nil
+	case REG_DWORD_BIG_ENDIAN:
+		return binary.BigEndian.Uint32(buf), nil
+	case REG_MULTI_SZ:
+		bufW := bufToUTF16(buf)
+		a := []string{}
+		for i := 0; i < len(bufW); {
+			j := i + wcslen(bufW[i:])
+			if i < j {
+				a = append(a, UTF16ToString(bufW[i:j]))
+			}
+			i = j + 1
+		}
+		runtime.KeepAlive(buf)
+		return a, nil
+	case REG_QWORD_LITTLE_ENDIAN:
+		return binary.LittleEndian.Uint64(buf), nil
+	default:
+		return nil, fmt.Errorf("Unsupported registry value type: %v", dataType)
+	}
+}
+
+// bufToUTF16 function reinterprets []byte buffer as []uint16
+func bufToUTF16(buf []byte) []uint16 {
+	sl := struct {
+		addr *uint16
+		len  int
+		cap  int
+	}{(*uint16)(unsafe.Pointer(&buf[0])), len(buf) / 2, cap(buf) / 2}
+	return *(*[]uint16)(unsafe.Pointer(&sl))
+}
+
+// utf16ToBuf function reinterprets []uint16 as []byte
+func utf16ToBuf(buf []uint16) []byte {
+	sl := struct {
+		addr *byte
+		len  int
+		cap  int
+	}{(*byte)(unsafe.Pointer(&buf[0])), len(buf) * 2, cap(buf) * 2}
+	return *(*[]byte)(unsafe.Pointer(&sl))
+}
+
+func wcslen(str []uint16) int {
+	for i := 0; i < len(str); i++ {
+		if str[i] == 0 {
+			return i
+		}
+	}
+	return len(str)
+}
+
+// DeviceRegistryProperty method retrieves a specified Plug and Play device property.
+func (deviceInfoSet DevInfo) DeviceRegistryProperty(deviceInfoData *DevInfoData, property SPDRP) (interface{}, error) {
+	return SetupDiGetDeviceRegistryProperty(deviceInfoSet, deviceInfoData, property)
+}
+
+//sys	setupDiSetDeviceRegistryProperty(deviceInfoSet DevInfo, deviceInfoData *DevInfoData, property SPDRP, propertyBuffer *byte, propertyBufferSize uint32) (err error) = setupapi.SetupDiSetDeviceRegistryPropertyW
+
+// SetupDiSetDeviceRegistryProperty function sets a Plug and Play device property for a device.
+func SetupDiSetDeviceRegistryProperty(deviceInfoSet DevInfo, deviceInfoData *DevInfoData, property SPDRP, propertyBuffers []byte) error {
+	return setupDiSetDeviceRegistryProperty(deviceInfoSet, deviceInfoData, property, &propertyBuffers[0], uint32(len(propertyBuffers)))
+}
+
+// SetDeviceRegistryProperty function sets a Plug and Play device property for a device.
+func (deviceInfoSet DevInfo) SetDeviceRegistryProperty(deviceInfoData *DevInfoData, property SPDRP, propertyBuffers []byte) error {
+	return SetupDiSetDeviceRegistryProperty(deviceInfoSet, deviceInfoData, property, propertyBuffers)
+}
+
+// SetDeviceRegistryPropertyString method sets a Plug and Play device property string for a device.
+func (deviceInfoSet DevInfo) SetDeviceRegistryPropertyString(deviceInfoData *DevInfoData, property SPDRP, str string) error {
+	str16, err := UTF16FromString(str)
+	if err != nil {
+		return err
+	}
+	err = SetupDiSetDeviceRegistryProperty(deviceInfoSet, deviceInfoData, property, utf16ToBuf(append(str16, 0)))
+	runtime.KeepAlive(str16)
+	return err
+}
+
+//sys	setupDiGetDeviceInstallParams(deviceInfoSet DevInfo, deviceInfoData *DevInfoData, deviceInstallParams *DevInstallParams) (err error) = setupapi.SetupDiGetDeviceInstallParamsW
+
+// SetupDiGetDeviceInstallParams function retrieves device installation parameters for a device information set or a particular device information element.
+func SetupDiGetDeviceInstallParams(deviceInfoSet DevInfo, deviceInfoData *DevInfoData) (*DevInstallParams, error) {
+	params := &DevInstallParams{}
+	params.size = uint32(unsafe.Sizeof(*params))
+
+	return params, setupDiGetDeviceInstallParams(deviceInfoSet, deviceInfoData, params)
+}
+
+// DeviceInstallParams method retrieves device installation parameters for a device information set or a particular device information element.
+func (deviceInfoSet DevInfo) DeviceInstallParams(deviceInfoData *DevInfoData) (*DevInstallParams, error) {
+	return SetupDiGetDeviceInstallParams(deviceInfoSet, deviceInfoData)
+}
+
+//sys	setupDiGetDeviceInstanceId(deviceInfoSet DevInfo, deviceInfoData *DevInfoData, instanceId *uint16, instanceIdSize uint32, instanceIdRequiredSize *uint32) (err error) = setupapi.SetupDiGetDeviceInstanceIdW
+
+// SetupDiGetDeviceInstanceId function retrieves the instance ID of the device.
+func SetupDiGetDeviceInstanceId(deviceInfoSet DevInfo, deviceInfoData *DevInfoData) (string, error) {
+	reqSize := uint32(1024)
+	for {
+		buf := make([]uint16, reqSize)
+		err := setupDiGetDeviceInstanceId(deviceInfoSet, deviceInfoData, &buf[0], uint32(len(buf)), &reqSize)
+		if err == ERROR_INSUFFICIENT_BUFFER {
+			continue
+		}
+		if err != nil {
+			return "", err
+		}
+		return UTF16ToString(buf), nil
+	}
+}
+
+// DeviceInstanceID method retrieves the instance ID of the device.
+func (deviceInfoSet DevInfo) DeviceInstanceID(deviceInfoData *DevInfoData) (string, error) {
+	return SetupDiGetDeviceInstanceId(deviceInfoSet, deviceInfoData)
+}
+
+// SetupDiGetClassInstallParams function retrieves class installation parameters for a device information set or a particular device information element.
+//sys	SetupDiGetClassInstallParams(deviceInfoSet DevInfo, deviceInfoData *DevInfoData, classInstallParams *ClassInstallHeader, classInstallParamsSize uint32, requiredSize *uint32) (err error) = setupapi.SetupDiGetClassInstallParamsW
+
+// ClassInstallParams method retrieves class installation parameters for a device information set or a particular device information element.
+func (deviceInfoSet DevInfo) ClassInstallParams(deviceInfoData *DevInfoData, classInstallParams *ClassInstallHeader, classInstallParamsSize uint32, requiredSize *uint32) error {
+	return SetupDiGetClassInstallParams(deviceInfoSet, deviceInfoData, classInstallParams, classInstallParamsSize, requiredSize)
+}
+
+//sys	SetupDiSetDeviceInstallParams(deviceInfoSet DevInfo, deviceInfoData *DevInfoData, deviceInstallParams *DevInstallParams) (err error) = setupapi.SetupDiSetDeviceInstallParamsW
+
+// SetDeviceInstallParams member sets device installation parameters for a device information set or a particular device information element.
+func (deviceInfoSet DevInfo) SetDeviceInstallParams(deviceInfoData *DevInfoData, deviceInstallParams *DevInstallParams) error {
+	return SetupDiSetDeviceInstallParams(deviceInfoSet, deviceInfoData, deviceInstallParams)
+}
+
+// SetupDiSetClassInstallParams function sets or clears class install parameters for a device information set or a particular device information element.
+//sys	SetupDiSetClassInstallParams(deviceInfoSet DevInfo, deviceInfoData *DevInfoData, classInstallParams *ClassInstallHeader, classInstallParamsSize uint32) (err error) = setupapi.SetupDiSetClassInstallParamsW
+
+// SetClassInstallParams method sets or clears class install parameters for a device information set or a particular device information element.
+func (deviceInfoSet DevInfo) SetClassInstallParams(deviceInfoData *DevInfoData, classInstallParams *ClassInstallHeader, classInstallParamsSize uint32) error {
+	return SetupDiSetClassInstallParams(deviceInfoSet, deviceInfoData, classInstallParams, classInstallParamsSize)
+}
+
+//sys	setupDiClassNameFromGuidEx(classGUID *GUID, className *uint16, classNameSize uint32, requiredSize *uint32, machineName *uint16, reserved uintptr) (err error) = setupapi.SetupDiClassNameFromGuidExW
+
+// SetupDiClassNameFromGuidEx function retrieves the class name associated with a class GUID. The class can be installed on a local or remote computer.
+func SetupDiClassNameFromGuidEx(classGUID *GUID, machineName string) (className string, err error) {
+	var classNameUTF16 [MAX_CLASS_NAME_LEN]uint16
+
+	var machineNameUTF16 *uint16
+	if machineName != "" {
+		machineNameUTF16, err = UTF16PtrFromString(machineName)
+		if err != nil {
+			return
+		}
+	}
+
+	err = setupDiClassNameFromGuidEx(classGUID, &classNameUTF16[0], MAX_CLASS_NAME_LEN, nil, machineNameUTF16, 0)
+	if err != nil {
+		return
+	}
+
+	className = UTF16ToString(classNameUTF16[:])
+	return
+}
+
+//sys	setupDiClassGuidsFromNameEx(className *uint16, classGuidList *GUID, classGuidListSize uint32, requiredSize *uint32, machineName *uint16, reserved uintptr) (err error) = setupapi.SetupDiClassGuidsFromNameExW
+
+// SetupDiClassGuidsFromNameEx function retrieves the GUIDs associated with the specified class name. This resulting list contains the classes currently installed on a local or remote computer.
+func SetupDiClassGuidsFromNameEx(className string, machineName string) ([]GUID, error) {
+	classNameUTF16, err := UTF16PtrFromString(className)
+	if err != nil {
+		return nil, err
+	}
+
+	var machineNameUTF16 *uint16
+	if machineName != "" {
+		machineNameUTF16, err = UTF16PtrFromString(machineName)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	reqSize := uint32(4)
+	for {
+		buf := make([]GUID, reqSize)
+		err = setupDiClassGuidsFromNameEx(classNameUTF16, &buf[0], uint32(len(buf)), &reqSize, machineNameUTF16, 0)
+		if err == ERROR_INSUFFICIENT_BUFFER {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		return buf[:reqSize], nil
+	}
+}
+
+//sys	setupDiGetSelectedDevice(deviceInfoSet DevInfo, deviceInfoData *DevInfoData) (err error) = setupapi.SetupDiGetSelectedDevice
+
+// SetupDiGetSelectedDevice function retrieves the selected device information element in a device information set.
+func SetupDiGetSelectedDevice(deviceInfoSet DevInfo) (*DevInfoData, error) {
+	data := &DevInfoData{}
+	data.size = uint32(unsafe.Sizeof(*data))
+
+	return data, setupDiGetSelectedDevice(deviceInfoSet, data)
+}
+
+// SelectedDevice method retrieves the selected device information element in a device information set.
+func (deviceInfoSet DevInfo) SelectedDevice() (*DevInfoData, error) {
+	return SetupDiGetSelectedDevice(deviceInfoSet)
+}
+
+// SetupDiSetSelectedDevice function sets a device information element as the selected member of a device information set. This function is typically used by an installation wizard.
+//sys	SetupDiSetSelectedDevice(deviceInfoSet DevInfo, deviceInfoData *DevInfoData) (err error) = setupapi.SetupDiSetSelectedDevice
+
+// SetSelectedDevice method sets a device information element as the selected member of a device information set. This function is typically used by an installation wizard.
+func (deviceInfoSet DevInfo) SetSelectedDevice(deviceInfoData *DevInfoData) error {
+	return SetupDiSetSelectedDevice(deviceInfoSet, deviceInfoData)
+}
+
+//sys	setupUninstallOEMInf(infFileName *uint16, flags SUOI, reserved uintptr) (err error) = setupapi.SetupUninstallOEMInfW
+
+// SetupUninstallOEMInf uninstalls the specified driver.
+func SetupUninstallOEMInf(infFileName string, flags SUOI) error {
+	infFileName16, err := UTF16PtrFromString(infFileName)
+	if err != nil {
+		return err
+	}
+	return setupUninstallOEMInf(infFileName16, flags, 0)
+}
+
+//sys cm_MapCrToWin32Err(configRet CONFIGRET, defaultWin32Error Errno) (ret Errno) = CfgMgr32.CM_MapCrToWin32Err
+
+//sys cm_Get_Device_Interface_List_Size(len *uint32, interfaceClass *GUID, deviceID *uint16, flags uint32) (ret CONFIGRET) = CfgMgr32.CM_Get_Device_Interface_List_SizeW
+//sys cm_Get_Device_Interface_List(interfaceClass *GUID, deviceID *uint16, buffer *uint16, bufferLen uint32, flags uint32) (ret CONFIGRET) = CfgMgr32.CM_Get_Device_Interface_ListW
+
+func CM_Get_Device_Interface_List(deviceID string, interfaceClass *GUID, flags uint32) ([]string, error) {
+	deviceID16, err := UTF16PtrFromString(deviceID)
+	if err != nil {
+		return nil, err
+	}
+	var buf []uint16
+	var buflen uint32
+	for {
+		if ret := cm_Get_Device_Interface_List_Size(&buflen, interfaceClass, deviceID16, flags); ret != CR_SUCCESS {
+			return nil, ret
+		}
+		buf = make([]uint16, buflen)
+		if ret := cm_Get_Device_Interface_List(interfaceClass, deviceID16, &buf[0], buflen, flags); ret == CR_SUCCESS {
+			break
+		} else if ret != CR_BUFFER_SMALL {
+			return nil, ret
+		}
+	}
+	var interfaces []string
+	for i := 0; i < len(buf); {
+		j := i + wcslen(buf[i:])
+		if i < j {
+			interfaces = append(interfaces, UTF16ToString(buf[i:j]))
+		}
+		i = j + 1
+	}
+	if interfaces == nil {
+		return nil, ERROR_NO_SUCH_DEVICE_INTERFACE
+	}
+	return interfaces, nil
+}
+
+//sys cm_Get_DevNode_Status(status *uint32, problemNumber *uint32, devInst DEVINST, flags uint32) (ret CONFIGRET) = CfgMgr32.CM_Get_DevNode_Status
+
+func CM_Get_DevNode_Status(status *uint32, problemNumber *uint32, devInst DEVINST, flags uint32) error {
+	ret := cm_Get_DevNode_Status(status, problemNumber, devInst, flags)
+	if ret == CR_SUCCESS {
+		return nil
+	}
+	return ret
+}
+
+@@END
+@@PORTABLE {"path":"vendor/golang.org/x/sys/windows/str.go","mode":420,"size":504,"sha256":"6c8cc24a3e0c11c6b4950dbb49a5f7eb72e65fcb861a8cd71cdad376125a43cb","index":0,"count":1,"encoding":"utf-8","payloadBytes":504}
+// Copyright 2009 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+//go:build windows
+
+package windows
+
+func itoa(val int) string { // do it here rather than with fmt to avoid dependency
+	if val < 0 {
+		return "-" + itoa(-val)
+	}
+	var buf [32]byte // big enough for int64
+	i := len(buf) - 1
+	for val >= 10 {
+		buf[i] = byte(val%10 + '0')
+		i--
+		val /= 10
+	}
+	buf[i] = byte(val + '0')
+	return string(buf[i:])
+}
+
+@@END
+@@PORTABLE {"path":"vendor/golang.org/x/sys/windows/syscall.go","mode":420,"size":3238,"sha256":"60b6c688bece9fb3550cb369311b55dc33d1e2350a93f9c8a5f8fa0cd8ddb2cc","index":0,"count":1,"encoding":"utf-8","payloadBytes":3238}
+// Copyright 2009 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+//go:build windows
+
+// Package windows contains an interface to the low-level operating system
+// primitives. OS details vary depending on the underlying system, and
+// by default, godoc will display the OS-specific documentation for the current
+// system. If you want godoc to display syscall documentation for another
+// system, set $GOOS and $GOARCH to the desired system. For example, if
+// you want to view documentation for freebsd/arm on linux/amd64, set $GOOS
+// to freebsd and $GOARCH to arm.
+//
+// The primary use of this package is inside other packages that provide a more
+// portable interface to the system, such as "os", "time" and "net".  Use
+// those packages rather than this one if you can.
+//
+// For details of the functions and data types in this package consult
+// the manuals for the appropriate operating system.
+//
+// These calls return err == nil to indicate success; otherwise
+// err represents an operating system error describing the failure and
+// holds a value of type syscall.Errno.
+package windows // import "golang.org/x/sys/windows"
+
+import (
+	"bytes"
+	"strings"
+	"syscall"
+	"unsafe"
+)
+
+// ByteSliceFromString returns a NUL-terminated slice of bytes
+// containing the text of s. If s contains a NUL byte at any
+// location, it returns (nil, syscall.EINVAL).
+func ByteSliceFromString(s string) ([]byte, error) {
+	if strings.IndexByte(s, 0) != -1 {
+		return nil, syscall.EINVAL
+	}
+	a := make([]byte, len(s)+1)
+	copy(a, s)
+	return a, nil
+}
+
+// BytePtrFromString returns a pointer to a NUL-terminated array of
+// bytes containing the text of s. If s contains a NUL byte at any
+// location, it returns (nil, syscall.EINVAL).
+func BytePtrFromString(s string) (*byte, error) {
+	a, err := ByteSliceFromString(s)
+	if err != nil {
+		return nil, err
+	}
+	return &a[0], nil
+}
+
+// ByteSliceToString returns a string form of the text represented by the slice s, with a terminating NUL and any
+// bytes after the NUL removed.
+func ByteSliceToString(s []byte) string {
+	if i := bytes.IndexByte(s, 0); i != -1 {
+		s = s[:i]
+	}
+	return string(s)
+}
+
+// BytePtrToString takes a pointer to a sequence of text and returns the corresponding string.
+// If the pointer is nil, it returns the empty string. It assumes that the text sequence is terminated
+// at a zero byte; if the zero byte is not present, the program may crash.
+func BytePtrToString(p *byte) string {
+	if p == nil {
+		return ""
+	}
+	if *p == 0 {
+		return ""
+	}
+
+	// Find NUL terminator.
+	n := 0
+	for ptr := unsafe.Pointer(p); *(*byte)(ptr) != 0; n++ {
+		ptr = unsafe.Pointer(uintptr(ptr) + 1)
+	}
+
+	return string(unsafe.Slice(p, n))
+}
+
+// Single-word zero for use when we need a valid pointer to 0 bytes.
+// See mksyscall.pl.
+var _zero uintptr
+
+func (ts *Timespec) Unix() (sec int64, nsec int64) {
+	return int64(ts.Sec), int64(ts.Nsec)
+}
+
+func (tv *Timeval) Unix() (sec int64, nsec int64) {
+	return int64(tv.Sec), int64(tv.Usec) * 1000
+}
+
+func (ts *Timespec) Nano() int64 {
+	return int64(ts.Sec)*1e9 + int64(ts.Nsec)
+}
+
+func (tv *Timeval) Nano() int64 {
+	return int64(tv.Sec)*1e9 + int64(tv.Usec)*1000
+}
+
+@@END
+@@PORTABLE {"path":"vendor/golang.org/x/sys/windows/syscall_windows.go","mode":420,"size":88929,"sha256":"589a6e28bca016f69eb25b75e82a808162d707de98d3d50367337303dcdd7018","index":0,"count":2,"encoding":"utf-8","payloadBytes":48000}
+// Copyright 2009 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+// Windows system calls.
+
+package windows
+
+import (
+	errorspkg "errors"
+	"fmt"
+	"runtime"
+	"sync"
+	"syscall"
+	"time"
+	"unicode/utf16"
+	"unsafe"
+)
+
+type (
+	Handle uintptr
+	HWND   uintptr
+)
+
+const (
+	InvalidHandle = ^Handle(0)
+	InvalidHWND   = ^HWND(0)
+
+	// Flags for DefineDosDevice.
+	DDD_EXACT_MATCH_ON_REMOVE = 0x00000004
+	DDD_NO_BROADCAST_SYSTEM   = 0x00000008
+	DDD_RAW_TARGET_PATH       = 0x00000001
+	DDD_REMOVE_DEFINITION     = 0x00000002
+
+	// Return values for GetDriveType.
+	DRIVE_UNKNOWN     = 0
+	DRIVE_NO_ROOT_DIR = 1
+	DRIVE_REMOVABLE   = 2
+	DRIVE_FIXED       = 3
+	DRIVE_REMOTE      = 4
+	DRIVE_CDROM       = 5
+	DRIVE_RAMDISK     = 6
+
+	// File system flags from GetVolumeInformation and GetVolumeInformationByHandle.
+	FILE_CASE_SENSITIVE_SEARCH        = 0x00000001
+	FILE_CASE_PRESERVED_NAMES         = 0x00000002
+	FILE_FILE_COMPRESSION             = 0x00000010
+	FILE_DAX_VOLUME                   = 0x20000000
+	FILE_NAMED_STREAMS                = 0x00040000
+	FILE_PERSISTENT_ACLS              = 0x00000008
+	FILE_READ_ONLY_VOLUME             = 0x00080000
+	FILE_SEQUENTIAL_WRITE_ONCE        = 0x00100000
+	FILE_SUPPORTS_ENCRYPTION          = 0x00020000
+	FILE_SUPPORTS_EXTENDED_ATTRIBUTES = 0x00800000
+	FILE_SUPPORTS_HARD_LINKS          = 0x00400000
+	FILE_SUPPORTS_OBJECT_IDS          = 0x00010000
+	FILE_SUPPORTS_OPEN_BY_FILE_ID     = 0x01000000
+	FILE_SUPPORTS_REPARSE_POINTS      = 0x00000080
+	FILE_SUPPORTS_SPARSE_FILES        = 0x00000040
+	FILE_SUPPORTS_TRANSACTIONS        = 0x00200000
+	FILE_SUPPORTS_USN_JOURNAL         = 0x02000000
+	FILE_UNICODE_ON_DISK              = 0x00000004
+	FILE_VOLUME_IS_COMPRESSED         = 0x00008000
+	FILE_VOLUME_QUOTAS                = 0x00000020
+
+	// Flags for LockFileEx.
+	LOCKFILE_FAIL_IMMEDIATELY = 0x00000001
+	LOCKFILE_EXCLUSIVE_LOCK   = 0x00000002
+
+	// Return value of SleepEx and other APC functions
+	WAIT_IO_COMPLETION = 0x000000C0
+)
+
+// StringToUTF16 is deprecated. Use UTF16FromString instead.
+// If s contains a NUL byte this function panics instead of
+// returning an error.
+func StringToUTF16(s string) []uint16 {
+	a, err := UTF16FromString(s)
+	if err != nil {
+		panic("windows: string with NUL passed to StringToUTF16")
+	}
+	return a
+}
+
+// UTF16FromString returns the UTF-16 encoding of the UTF-8 string
+// s, with a terminating NUL added. If s contains a NUL byte at any
+// location, it returns (nil, syscall.EINVAL).
+func UTF16FromString(s string) ([]uint16, error) {
+	return syscall.UTF16FromString(s)
+}
+
+// UTF16ToString returns the UTF-8 encoding of the UTF-16 sequence s,
+// with a terminating NUL and any bytes after the NUL removed.
+func UTF16ToString(s []uint16) string {
+	return syscall.UTF16ToString(s)
+}
+
+// StringToUTF16Ptr is deprecated. Use UTF16PtrFromString instead.
+// If s contains a NUL byte this function panics instead of
+// returning an error.
+func StringToUTF16Ptr(s string) *uint16 { return &StringToUTF16(s)[0] }
+
+// UTF16PtrFromString returns pointer to the UTF-16 encoding of
+// the UTF-8 string s, with a terminating NUL added. If s
+// contains a NUL byte at any location, it returns (nil, syscall.EINVAL).
+func UTF16PtrFromString(s string) (*uint16, error) {
+	a, err := UTF16FromString(s)
+	if err != nil {
+		return nil, err
+	}
+	return &a[0], nil
+}
+
+// UTF16PtrToString takes a pointer to a UTF-16 sequence and returns the corresponding UTF-8 encoded string.
+// If the pointer is nil, it returns the empty string. It assumes that the UTF-16 sequence is terminated
+// at a zero word; if the zero word is not present, the program may crash.
+func UTF16PtrToString(p *uint16) string {
+	if p == nil {
+		return ""
+	}
+	if *p == 0 {
+		return ""
+	}
+
+	// Find NUL terminator.
+	n := 0
+	for ptr := unsafe.Pointer(p); *(*uint16)(ptr) != 0; n++ {
+		ptr = unsafe.Pointer(uintptr(ptr) + unsafe.Sizeof(*p))
+	}
+	return UTF16ToString(unsafe.Slice(p, n))
+}
+
+func Getpagesize() int { return 4096 }
+
+// NewCallback converts a Go function to a function pointer conforming to the stdcall calling convention.
+// This is useful when interoperating with Windows code requiring callbacks.
+// The argument is expected to be a function with one uintptr-sized result. The function must not have arguments with size larger than the size of uintptr.
+func NewCallback(fn interface{}) uintptr {
+	return syscall.NewCallback(fn)
+}
+
+// NewCallbackCDecl converts a Go function to a function pointer conforming to the cdecl calling convention.
+// This is useful when interoperating with Windows code requiring callbacks.
+// The argument is expected to be a function with one uintptr-sized result. The function must not have arguments with size larger than the size of uintptr.
+func NewCallbackCDecl(fn interface{}) uintptr {
+	return syscall.NewCallbackCDecl(fn)
+}
+
+// windows api calls
+
+//sys	GetLastError() (lasterr error)
+//sys	LoadLibrary(libname string) (handle Handle, err error) = LoadLibraryW
+//sys	LoadLibraryEx(libname string, zero Handle, flags uintptr) (handle Handle, err error) = LoadLibraryExW
+//sys	FreeLibrary(handle Handle) (err error)
+//sys	GetProcAddress(module Handle, procname string) (proc uintptr, err error)
+//sys	GetModuleFileName(module Handle, filename *uint16, size uint32) (n uint32, err error) = kernel32.GetModuleFileNameW
+//sys	GetModuleHandleEx(flags uint32, moduleName *uint16, module *Handle) (err error) = kernel32.GetModuleHandleExW
+//sys	SetDefaultDllDirectories(directoryFlags uint32) (err error)
+//sys	AddDllDirectory(path *uint16) (cookie uintptr, err error) = kernel32.AddDllDirectory
+//sys	RemoveDllDirectory(cookie uintptr) (err error) = kernel32.RemoveDllDirectory
+//sys	SetDllDirectory(path string) (err error) = kernel32.SetDllDirectoryW
+//sys	GetVersion() (ver uint32, err error)
+//sys	FormatMessage(flags uint32, msgsrc uintptr, msgid uint32, langid uint32, buf []uint16, args *byte) (n uint32, err error) = FormatMessageW
+//sys	ExitProcess(exitcode uint32)
+//sys	IsWow64Process(handle Handle, isWow64 *bool) (err error) = IsWow64Process
+//sys	IsWow64Process2(handle Handle, processMachine *uint16, nativeMachine *uint16) (err error) = IsWow64Process2?
+//sys	CreateFile(name *uint16, access uint32, mode uint32, sa *SecurityAttributes, createmode uint32, attrs uint32, templatefile Handle) (handle Handle, err error) [failretval==InvalidHandle] = CreateFileW
+//sys	CreateNamedPipe(name *uint16, flags uint32, pipeMode uint32, maxInstances uint32, outSize uint32, inSize uint32, defaultTimeout uint32, sa *SecurityAttributes) (handle Handle, err error)  [failretval==InvalidHandle] = CreateNamedPipeW
+//sys	ConnectNamedPipe(pipe Handle, overlapped *Overlapped) (err error)
+//sys	DisconnectNamedPipe(pipe Handle) (err error)
+//sys   GetNamedPipeClientProcessId(pipe Handle, clientProcessID *uint32) (err error)
+//sys   GetNamedPipeServerProcessId(pipe Handle, serverProcessID *uint32) (err error)
+//sys	GetNamedPipeInfo(pipe Handle, flags *uint32, outSize *uint32, inSize *uint32, maxInstances *uint32) (err error)
+//sys	GetNamedPipeHandleState(pipe Handle, state *uint32, curInstances *uint32, maxCollectionCount *uint32, collectDataTimeout *uint32, userName *uint16, maxUserNameSize uint32) (err error) = GetNamedPipeHandleStateW
+//sys	SetNamedPipeHandleState(pipe Handle, state *uint32, maxCollectionCount *uint32, collectDataTimeout *uint32) (err error) = SetNamedPipeHandleState
+//sys	readFile(handle Handle, buf []byte, done *uint32, overlapped *Overlapped) (err error) = ReadFile
+//sys	writeFile(handle Handle, buf []byte, done *uint32, overlapped *Overlapped) (err error) = WriteFile
+//sys	GetOverlappedResult(handle Handle, overlapped *Overlapped, done *uint32, wait bool) (err error)
+//sys	SetFilePointer(handle Handle, lowoffset int32, highoffsetptr *int32, whence uint32) (newlowoffset uint32, err error) [failretval==0xffffffff]
+//sys	CloseHandle(handle Handle) (err error)
+//sys	GetStdHandle(stdhandle uint32) (handle Handle, err error) [failretval==InvalidHandle]
+//sys	SetStdHandle(stdhandle uint32, handle Handle) (err error)
+//sys	findFirstFile1(name *uint16, data *win32finddata1) (handle Handle, err error) [failretval==InvalidHandle] = FindFirstFileW
+//sys	findNextFile1(handle Handle, data *win32finddata1) (err error) = FindNextFileW
+//sys	FindClose(handle Handle) (err error)
+//sys	GetFileInformationByHandle(handle Handle, data *ByHandleFileInformation) (err error)
+//sys	GetFileInformationByHandleEx(handle Handle, class uint32, outBuffer *byte, outBufferLen uint32) (err error)
+//sys	SetFileInformationByHandle(handle Handle, class uint32, inBuffer *byte, inBufferLen uint32) (err error)
+//sys	GetCurrentDirectory(buflen uint32, buf *uint16) (n uint32, err error) = GetCurrentDirectoryW
+//sys	SetCurrentDirectory(path *uint16) (err error) = SetCurrentDirectoryW
+//sys	CreateDirectory(path *uint16, sa *SecurityAttributes) (err error) = CreateDirectoryW
+//sys	RemoveDirectory(path *uint16) (err error) = RemoveDirectoryW
+//sys	DeleteFile(path *uint16) (err error) = DeleteFileW
+//sys	MoveFile(from *uint16, to *uint16) (err error) = MoveFileW
+//sys	MoveFileEx(from *uint16, to *uint16, flags uint32) (err error) = MoveFileExW
+//sys	LockFileEx(file Handle, flags uint32, reserved uint32, bytesLow uint32, bytesHigh uint32, overlapped *Overlapped) (err error)
+//sys	UnlockFileEx(file Handle, reserved uint32, bytesLow uint32, bytesHigh uint32, overlapped *Overlapped) (err error)
+//sys	GetComputerName(buf *uint16, n *uint32) (err error) = GetComputerNameW
+//sys	GetComputerNameEx(nametype uint32, buf *uint16, n *uint32) (err error) = GetComputerNameExW
+//sys	SetEndOfFile(handle Handle) (err error)
+//sys	SetFileValidData(handle Handle, validDataLength int64) (err error)
+//sys	GetSystemTimeAsFileTime(time *Filetime)
+//sys	GetSystemTimePreciseAsFileTime(time *Filetime)
+//sys	GetTimeZoneInformation(tzi *Timezoneinformation) (rc uint32, err error) [failretval==0xffffffff]
+//sys	CreateIoCompletionPort(filehandle Handle, cphandle Handle, key uintptr, threadcnt uint32) (handle Handle, err error)
+//sys	GetQueuedCompletionStatus(cphandle Handle, qty *uint32, key *uintptr, overlapped **Overlapped, timeout uint32) (err error)
+//sys	PostQueuedCompletionStatus(cphandle Handle, qty uint32, key uintptr, overlapped *Overlapped) (err error)
+//sys	CancelIo(s Handle) (err error)
+//sys	CancelIoEx(s Handle, o *Overlapped) (err error)
+//sys	CreateProcess(appName *uint16, commandLine *uint16, procSecurity *SecurityAttributes, threadSecurity *SecurityAttributes, inheritHandles bool, creationFlags uint32, env *uint16, currentDir *uint16, startupInfo *StartupInfo, outProcInfo *ProcessInformation) (err error) = CreateProcessW
+//sys	CreateProcessAsUser(token Token, appName *uint16, commandLine *uint16, procSecurity *SecurityAttributes, threadSecurity *SecurityAttributes, inheritHandles bool, creationFlags uint32, env *uint16, currentDir *uint16, startupInfo *StartupInfo, outProcInfo *ProcessInformation) (err error) = advapi32.CreateProcessAsUserW
+//sys   initializeProcThreadAttributeList(attrlist *ProcThreadAttributeList, attrcount uint32, flags uint32, size *uintptr) (err error) = InitializeProcThreadAttributeList
+//sys   deleteProcThreadAttributeList(attrlist *ProcThreadAttributeList) = DeleteProcThreadAttributeList
+//sys   updateProcThreadAttribute(attrlist *ProcThreadAttributeList, flags uint32, attr uintptr, value unsafe.Pointer, size uintptr, prevvalue unsafe.Pointer, returnedsize *uintptr) (err error) = UpdateProcThreadAttribute
+//sys	OpenProcess(desiredAccess uint32, inheritHandle bool, processId uint32) (handle Handle, err error)
+//sys	ShellExecute(hwnd Handle, verb *uint16, file *uint16, args *uint16, cwd *uint16, showCmd int32) (err error) [failretval<=32] = shell32.ShellExecuteW
+//sys	GetWindowThreadProcessId(hwnd HWND, pid *uint32) (tid uint32, err error) = user32.GetWindowThreadProcessId
+//sys	LoadKeyboardLayout(name *uint16, flags uint32) (hkl Handle, err error) [failretval==0] = user32.LoadKeyboardLayoutW
+//sys	UnloadKeyboardLayout(hkl Handle) (err error) = user32.UnloadKeyboardLayout
+//sys	GetKeyboardLayout(tid uint32) (hkl Handle) = user32.GetKeyboardLayout
+//sys	ToUnicodeEx(vkey uint32, scancode uint32, keystate *byte, pwszBuff *uint16, cchBuff int32, flags uint32, hkl Handle) (ret int32) = user32.ToUnicodeEx
+//sys	GetShellWindow() (shellWindow HWND) = user32.GetShellWindow
+//sys	MessageBox(hwnd HWND, text *uint16, caption *uint16, boxtype uint32) (ret int32, err error) [failretval==0] = user32.MessageBoxW
+//sys	ExitWindowsEx(flags uint32, reason uint32) (err error) = user32.ExitWindowsEx
+//sys	shGetKnownFolderPath(id *KNOWNFOLDERID, flags uint32, token Token, path **uint16) (ret error) = shell32.SHGetKnownFolderPath
+//sys	TerminateProcess(handle Handle, exitcode uint32) (err error)
+//sys	GetExitCodeProcess(handle Handle, exitcode *uint32) (err error)
+//sys	getStartupInfo(startupInfo *StartupInfo) = GetStartupInfoW
+//sys	GetProcessTimes(handle Handle, creationTime *Filetime, exitTime *Filetime, kernelTime *Filetime, userTime *Filetime) (err error)
+//sys	DuplicateHandle(hSourceProcessHandle Handle, hSourceHandle Handle, hTargetProcessHandle Handle, lpTargetHandle *Handle, dwDesiredAccess uint32, bInheritHandle bool, dwOptions uint32) (err error)
+//sys	WaitForSingleObject(handle Handle, waitMilliseconds uint32) (event uint32, err error) [failretval==0xffffffff]
+//sys	waitForMultipleObjects(count uint32, handles uintptr, waitAll bool, waitMilliseconds uint32) (event uint32, err error) [failretval==0xffffffff] = WaitForMultipleObjects
+//sys	GetTempPath(buflen uint32, buf *uint16) (n uint32, err error) = GetTempPathW
+//sys	CreatePipe(readhandle *Handle, writehandle *Handle, sa *SecurityAttributes, size uint32) (err error)
+//sys	GetFileType(filehandle Handle) (n uint32, err error)
+//sys	CryptAcquireContext(provhandle *Handle, container *uint16, provider *uint16, provtype uint32, flags uint32) (err error) = advapi32.CryptAcquireContextW
+//sys	CryptReleaseContext(provhandle Handle, flags uint32) (err error) = advapi32.CryptReleaseContext
+//sys	CryptGenRandom(provhandle Handle, buflen uint32, buf *byte) (err error) = advapi32.CryptGenRandom
+//sys	GetEnvironmentStrings() (envs *uint16, err error) [failretval==nil] = kernel32.GetEnvironmentStringsW
+//sys	FreeEnvironmentStrings(envs *uint16) (err error) = kernel32.FreeEnvironmentStringsW
+//sys	GetEnvironmentVariable(name *uint16, buffer *uint16, size uint32) (n uint32, err error) = kernel32.GetEnvironmentVariableW
+//sys	SetEnvironmentVariable(name *uint16, value *uint16) (err error) = kernel32.SetEnvironmentVariableW
+//sys	ExpandEnvironmentStrings(src *uint16, dst *uint16, size uint32) (n uint32, err error) = kernel32.ExpandEnvironmentStringsW
+//sys	CreateEnvironmentBlock(block **uint16, token Token, inheritExisting bool) (err error) = userenv.CreateEnvironmentBlock
+//sys	DestroyEnvironmentBlock(block *uint16) (err error) = userenv.DestroyEnvironmentBlock
+//sys	getTickCount64() (ms uint64) = kernel32.GetTickCount64
+//sys   GetFileTime(handle Handle, ctime *Filetime, atime *Filetime, wtime *Filetime) (err error)
+//sys	SetFileTime(handle Handle, ctime *Filetime, atime *Filetime, wtime *Filetime) (err error)
+//sys	GetFileAttributes(name *uint16) (attrs uint32, err error) [failretval==INVALID_FILE_ATTRIBUTES] = kernel32.GetFileAttributesW
+//sys	SetFileAttributes(name *uint16, attrs uint32) (err error) = kernel32.SetFileAttributesW
+//sys	GetFileAttributesEx(name *uint16, level uint32, info *byte) (err error) = kernel32.GetFileAttributesExW
+//sys	GetCommandLine() (cmd *uint16) = kernel32.GetCommandLineW
+//sys	commandLineToArgv(cmd *uint16, argc *int32) (argv **uint16, err error) [failretval==nil] = shell32.CommandLineToArgvW
+//sys	LocalFree(hmem Handle) (handle Handle, err error) [failretval!=0]
+//sys	LocalAlloc(flags uint32, length uint32) (ptr uintptr, err error)
+//sys	SetHandleInformation(handle Handle, mask uint32, flags uint32) (err error)
+//sys	FlushFileBuffers(handle Handle) (err error)
+//sys	GetFullPathName(path *uint16, buflen uint32, buf *uint16, fname **uint16) (n uint32, err error) = kernel32.GetFullPathNameW
+//sys	GetLongPathName(path *uint16, buf *uint16, buflen uint32) (n uint32, err error) = kernel32.GetLongPathNameW
+//sys	GetShortPathName(longpath *uint16, shortpath *uint16, buflen uint32) (n uint32, err error) = kernel32.GetShortPathNameW
+//sys	GetFinalPathNameByHandle(file Handle, filePath *uint16, filePathSize uint32, flags uint32) (n uint32, err error) = kernel32.GetFinalPathNameByHandleW
+//sys	CreateFileMapping(fhandle Handle, sa *SecurityAttributes, prot uint32, maxSizeHigh uint32, maxSizeLow uint32, name *uint16) (handle Handle, err error) [failretval == 0 || e1 == ERROR_ALREADY_EXISTS] = kernel32.CreateFileMappingW
+//sys	MapViewOfFile(handle Handle, access uint32, offsetHigh uint32, offsetLow uint32, length uintptr) (addr uintptr, err error)
+//sys	UnmapViewOfFile(addr uintptr) (err error)
+//sys	FlushViewOfFile(addr uintptr, length uintptr) (err error)
+//sys	VirtualLock(addr uintptr, length uintptr) (err error)
+//sys	VirtualUnlock(addr uintptr, length uintptr) (err error)
+//sys	VirtualAlloc(address uintptr, size uintptr, alloctype uint32, protect uint32) (value uintptr, err error) = kernel32.VirtualAlloc
+//sys	VirtualFree(address uintptr, size uintptr, freetype uint32) (err error) = kernel32.VirtualFree
+//sys	VirtualProtect(address uintptr, size uintptr, newprotect uint32, oldprotect *uint32) (err error) = kernel32.VirtualProtect
+//sys	VirtualProtectEx(process Handle, address uintptr, size uintptr, newProtect uint32, oldProtect *uint32) (err error) = kernel32.VirtualProtectEx
+//sys	VirtualQuery(address uintptr, buffer *MemoryBasicInformation, length uintptr) (err error) = kernel32.VirtualQuery
+//sys	VirtualQueryEx(process Handle, address uintptr, buffer *MemoryBasicInformation, length uintptr) (err error) = kernel32.VirtualQueryEx
+//sys	ReadProcessMemory(process Handle, baseAddress uintptr, buffer *byte, size uintptr, numberOfBytesRead *uintptr) (err error) = kernel32.ReadProcessMemory
+//sys	WriteProcessMemory(process Handle, baseAddress uintptr, buffer *byte, size uintptr, numberOfBytesWritten *uintptr) (err error) = kernel32.WriteProcessMemory
+//sys	TransmitFile(s Handle, handle Handle, bytesToWrite uint32, bytsPerSend uint32, overlapped *Overlapped, transmitFileBuf *TransmitFileBuffers, flags uint32) (err error) = mswsock.TransmitFile
+//sys	ReadDirectoryChanges(handle Handle, buf *byte, buflen uint32, watchSubTree bool, mask uint32, retlen *uint32, overlapped *Overlapped, completionRoutine uintptr) (err error) = kernel32.ReadDirectoryChangesW
+//sys	FindFirstChangeNotification(path string, watchSubtree bool, notifyFilter uint32) (handle Handle, err error) [failretval==InvalidHandle] = kernel32.FindFirstChangeNotificationW
+//sys	FindNextChangeNotification(handle Handle) (err error)
+//sys	FindCloseChangeNotification(handle Handle) (err error)
+//sys	CertOpenSystemStore(hprov Handle, name *uint16) (store Handle, err error) = crypt32.CertOpenSystemStoreW
+//sys	CertOpenStore(storeProvider uintptr, msgAndCertEncodingType uint32, cryptProv uintptr, flags uint32, para uintptr) (handle Handle, err error) = crypt32.CertOpenStore
+//sys	CertEnumCertificatesInStore(store Handle, prevContext *CertContext) (context *CertContext, err error) [failretval==nil] = crypt32.CertEnumCertificatesInStore
+//sys	CertAddCertificateContextToStore(store Handle, certContext *CertContext, addDisposition uint32, storeContext **CertContext) (err error) = crypt32.CertAddCertificateContextToStore
+//sys	CertCloseStore(store Handle, flags uint32) (err error) = crypt32.CertCloseStore
+//sys	CertDeleteCertificateFromStore(certContext *CertContext) (err error) = crypt32.CertDeleteCertificateFromStore
+//sys	CertDuplicateCertificateContext(certContext *CertContext) (dupContext *CertContext) = crypt32.CertDuplicateCertificateContext
+//sys	PFXImportCertStore(pfx *CryptDataBlob, password *uint16, flags uint32) (store Handle, err error) = crypt32.PFXImportCertStore
+//sys	CertGetCertificateChain(engine Handle, leaf *CertContext, time *Filetime, additionalStore Handle, para *CertChainPara, flags uint32, reserved uintptr, chainCtx **CertChainContext) (err error) = crypt32.CertGetCertificateChain
+//sys	CertFreeCertificateChain(ctx *CertChainContext) = crypt32.CertFreeCertificateChain
+//sys	CertCreateCertificateContext(certEncodingType uint32, certEncoded *byte, encodedLen uint32) (context *CertContext, err error) [failretval==nil] = crypt32.CertCreateCertificateContext
+//sys	CertFreeCertificateContext(ctx *CertContext) (err error) = crypt32.CertFreeCertificateContext
+//sys	CertVerifyCertificateChainPolicy(policyOID uintptr, chain *CertChainContext, para *CertChainPolicyPara, status *CertChainPolicyStatus) (err error) = crypt32.CertVerifyCertificateChainPolicy
+//sys	CertGetNameString(certContext *CertContext, nameType uint32, flags uint32, typePara unsafe.Pointer, name *uint16, size uint32) (chars uint32) = crypt32.CertGetNameStringW
+//sys	CertFindExtension(objId *byte, countExtensions uint32, extensions *CertExtension) (ret *CertExtension) = crypt32.CertFindExtension
+//sys   CertFindCertificateInStore(store Handle, certEncodingType uint32, findFlags uint32, findType uint32, findPara unsafe.Pointer, prevCertContext *CertContext) (cert *CertContext, err error) [failretval==nil] = crypt32.CertFindCertificateInStore
+//sys   CertFindChainInStore(store Handle, certEncodingType uint32, findFlags uint32, findType uint32, findPara unsafe.Pointer, prevChainContext *CertChainContext) (certchain *CertChainContext, err error) [failretval==nil] = crypt32.CertFindChainInStore
+//sys   CryptAcquireCertificatePrivateKey(cert *CertContext, flags uint32, parameters unsafe.Pointer, cryptProvOrNCryptKey *Handle, keySpec *uint32, callerFreeProvOrNCryptKey *bool) (err error) = crypt32.CryptAcquireCertificatePrivateKey
+//sys	CryptQueryObject(objectType uint32, object unsafe.Pointer, expectedContentTypeFlags uint32, expectedFormatTypeFlags uint32, flags uint32, msgAndCertEncodingType *uint32, contentType *uint32, formatType *uint32, certStore *Handle, msg *Handle, context *unsafe.Pointer) (err error) = crypt32.CryptQueryObject
+//sys	CryptDecodeObject(encodingType uint32, structType *byte, encodedBytes *byte, lenEncodedBytes uint32, flags uint32, decoded unsafe.Pointer, decodedLen *uint32) (err error) = crypt32.CryptDecodeObject
+//sys	CryptProtectData(dataIn *DataBlob, name *uint16, optionalEntropy *DataBlob, reserved uintptr, promptStruct *CryptProtectPromptStruct, flags uint32, dataOut *DataBlob) (err error) = crypt32.CryptProtectData
+//sys	CryptUnprotectData(dataIn *DataBlob, name **uint16, optionalEntropy *DataBlob, reserved uintptr, promptStruct *CryptProtectPromptStruct, flags uint32, dataOut *DataBlob) (err error) = crypt32.CryptUnprotectData
+//sys	WinVerifyTrustEx(hwnd HWND, actionId *GUID, data *WinTrustData) (ret error) = wintrust.WinVerifyTrustEx
+//sys	RegOpenKeyEx(key Handle, subkey *uint16, options uint32, desiredAccess uint32, result *Handle) (regerrno error) = advapi32.RegOpenKeyExW
+//sys	RegCloseKey(key Handle) (regerrno error) = advapi32.RegCloseKey
+//sys	RegQueryInfoKey(key Handle, class *uint16, classLen *uint32, reserved *uint32, subkeysLen *uint32, maxSubkeyLen *uint32, maxClassLen *uint32, valuesLen *uint32, maxValueNameLen *uint32, maxValueLen *uint32, saLen *uint32, lastWriteTime *Filetime) (regerrno error) = advapi32.RegQueryInfoKeyW
+//sys	RegEnumKeyEx(key Handle, index uint32, name *uint16, nameLen *uint32, reserved *uint32, class *uint16, classLen *uint32, lastWriteTime *Filetime) (regerrno error) = advapi32.RegEnumKeyExW
+//sys	RegQueryValueEx(key Handle, name *uint16, reserved *uint32, valtype *uint32, buf *byte, buflen *uint32) (regerrno error) = advapi32.RegQueryValueExW
+//sys	RegNotifyChangeKeyValue(key Handle, watchSubtree bool, notifyFilter uint32, event Handle, asynchronous bool) (regerrno error) = advapi32.RegNotifyChangeKeyValue
+//sys	GetCurrentProcessId() (pid uint32) = kernel32.GetCurrentProcessId
+//sys	ProcessIdToSessionId(pid uint32, sessionid *uint32) (err error) = kernel32.ProcessIdToSessionId
+//sys	ClosePseudoConsole(console Handle) = kernel32.ClosePseudoConsole
+//sys	createPseudoConsole(size uint32, in Handle, out Handle, flags uint32, pconsole *Handle) (hr error) = kernel32.CreatePseudoConsole
+//sys	GetConsoleMode(console Handle, mode *uint32) (err error) = kernel32.GetConsoleMode
+//sys	SetConsoleMode(console Handle, mode uint32) (err error) = kernel32.SetConsoleMode
+//sys	GetConsoleScreenBufferInfo(console Handle, info *ConsoleScreenBufferInfo) (err error) = kernel32.GetConsoleScreenBufferInfo
+//sys	setConsoleCursorPosition(console Handle, position uint32) (err error) = kernel32.SetConsoleCursorPosition
+//sys	GetConsoleCP() (cp uint32, err error) = kernel32.GetConsoleCP
+//sys	GetConsoleOutputCP() (cp uint32, err error) = kernel32.GetConsoleOutputCP
+//sys	SetConsoleCP(cp uint32) (err error) = kernel32.SetConsoleCP
+//sys	SetConsoleOutputCP(cp uint32) (err error) = kernel32.SetConsoleOutputCP
+//sys	WriteConsole(console Handle, buf *uint16, towrite uint32, written *uint32, reserved *byte) (err error) = kernel32.WriteConsoleW
+//sys	ReadConsole(console Handle, buf *uint16, toread uint32, read *uint32, inputControl *byte) (err error) = kernel32.ReadConsoleW
+//sys	GetNumberOfConsoleInputEvents(console Handle, numevents *uint32) (err error) = kernel32.GetNumberOfConsoleInputEvents
+//sys	FlushConsoleInputBuffer(console Handle) (err error) = kernel32.FlushConsoleInputBuffer
+//sys	resizePseudoConsole(pconsole Handle, size uint32) (hr error) = kernel32.ResizePseudoConsole
+//sys	CreateToolhelp32Snapshot(flags uint32, processId uint32) (handle Handle, err error) [failretval==InvalidHandle] = kernel32.CreateToolhelp32Snapshot
+//sys	Module32First(snapshot Handle, moduleEntry *ModuleEntry32) (err error) = kernel32.Module32FirstW
+//sys	Module32Next(snapshot Handle, moduleEntry *ModuleEntry32) (err error) = kernel32.Module32NextW
+//sys	Process32First(snapshot Handle, procEntry *ProcessEntry32) (err error) = kernel32.Process32FirstW
+//sys	Process32Next(snapshot Handle, procEntry *ProcessEntry32) (err error) = kernel32.Process32NextW
+//sys	Thread32First(snapshot Handle, threadEntry *ThreadEntry32) (err error)
+//sys	Thread32Next(snapshot Handle, threadEntry *ThreadEntry32) (err error)
+//sys	DeviceIoControl(handle Handle, ioControlCode uint32, inBuffer *byte, inBufferSize uint32, outBuffer *byte, outBufferSize uint32, bytesReturned *uint32, overlapped *Overlapped) (err error)
+// This function returns 1 byte BOOLEAN rather than the 4 byte BOOL.
+//sys	CreateSymbolicLink(symlinkfilename *uint16, targetfilename *uint16, flags uint32) (err error) [failretval&0xff==0] = CreateSymbolicLinkW
+//sys	CreateHardLink(filename *uint16, existingfilename *uint16, reserved uintptr) (err error) [failretval&0xff==0] = CreateHardLinkW
+//sys	GetCurrentThreadId() (id uint32)
+//sys	CreateEvent(eventAttrs *SecurityAttributes, manualReset uint32, initialState uint32, name *uint16) (handle Handle, err error) [failretval == 0 || e1 == ERROR_ALREADY_EXISTS] = kernel32.CreateEventW
+//sys	CreateEventEx(eventAttrs *SecurityAttributes, name *uint16, flags uint32, desiredAccess uint32) (handle Handle, err error) [failretval == 0 || e1 == ERROR_ALREADY_EXISTS] = kernel32.CreateEventExW
+//sys	OpenEvent(desiredAccess uint32, inheritHandle bool, name *uint16) (handle Handle, err error) = kernel32.OpenEventW
+//sys	SetEvent(event Handle) (err error) = kernel32.SetEvent
+//sys	ResetEvent(event Handle) (err error) = kernel32.ResetEvent
+//sys	PulseEvent(event Handle) (err error) = kernel32.PulseEvent
+//sys	CreateMutex(mutexAttrs *SecurityAttributes, initialOwner bool, name *uint16) (handle Handle, err error) [failretval == 0 || e1 == ERROR_ALREADY_EXISTS] = kernel32.CreateMutexW
+//sys	CreateMutexEx(mutexAttrs *SecurityAttributes, name *uint16, flags uint32, desiredAccess uint32) (handle Handle, err error) [failretval == 0 || e1 == ERROR_ALREADY_EXISTS] = kernel32.CreateMutexExW
+//sys	OpenMutex(desiredAccess uint32, inheritHandle bool, name *uint16) (handle Handle, err error) = kernel32.OpenMutexW
+//sys	ReleaseMutex(mutex Handle) (err error) = kernel32.ReleaseMutex
+//sys	SleepEx(milliseconds uint32, alertable bool) (ret uint32) = kernel32.SleepEx
+//sys	CreateJobObject(jobAttr *SecurityAttributes, name *uint16) (handle Handle, err error) = kernel32.CreateJobObjectW
+//sys	AssignProcessToJobObject(job Handle, process Handle) (err error) = kernel32.AssignProcessToJobObject
+//sys	TerminateJobObject(job Handle, exitCode uint32) (err error) = kernel32.TerminateJobObject
+//sys	SetErrorMode(mode uint32) (ret uint32) = kernel32.SetErrorMode
+//sys	ResumeThread(thread Handle) (ret uint32, err error) [failretval==0xffffffff] = kernel32.ResumeThread
+//sys	SetPriorityClass(process Handle, priorityClass uint32) (err error) = kernel32.SetPriorityClass
+//sys	GetPriorityClass(process Handle) (ret uint32, err error) = kernel32.GetPriorityClass
+//sys	QueryInformationJobObject(job Handle, JobObjectInformationClass int32, JobObjectInformation uintptr, JobObjectInformationLength uint32, retlen *uint32) (err error) = kernel32.QueryInformationJobObject
+//sys	SetInformationJobObject(job Handle, JobObjectInformationClass uint32, JobObjectInformation uintptr, JobObjectInformationLength uint32) (ret int, err error)
+//sys	GenerateConsoleCtrlEvent(ctrlEvent uint32, processGroupID uint32) (err error)
+//sys	GetProcessId(process Handle) (id uint32, err error)
+//sys	QueryFullProcessImageName(proc Handle, flags uint32, exeName *uint16, size *uint32) (err error) = kernel32.QueryFullProcessImageNameW
+//sys	OpenThread(desiredAccess uint32, inheritHandle bool, threadId uint32) (handle Handle, err error)
+//sys	SetProcessPriorityBoost(process Handle, disable bool) (err error) = kernel32.SetProcessPriorityBoost
+//sys	GetProcessWorkingSetSizeEx(hProcess Handle, lpMinimumWorkingSetSize *uintptr, lpMaximumWorkingSetSize *uintptr, flags *uint32)
+//sys	SetProcessWorkingSetSizeEx(hProcess Handle, dwMinimumWorkingSetSize uintptr, dwMaximumWorkingSetSize uintptr, flags uint32) (err error)
+//sys	ClearCommBreak(handle Handle) (err error)
+//sys	ClearCommError(handle Handle, lpErrors *uint32, lpStat *ComStat) (err error)
+//sys	EscapeCommFunction(handle Handle, dwFunc uint32) (err error)
+//sys	GetCommState(handle Handle, lpDCB *DCB) (err error)
+//sys	GetCommModemStatus(handle Handle, lpModemStat *uint32) (err error)
+//sys	GetCommTimeouts(handle Handle, timeouts *CommTimeouts) (err error)
+//sys	PurgeComm(handle Handle, dwFlags uint32) (err error)
+//sys	SetCommBreak(handle Handle) (err error)
+//sys	SetCommMask(handle Handle, dwEvtMask uint32) (err error)
+//sys	SetCommState(handle Handle, lpDCB *DCB) (err error)
+//sys	SetCommTimeouts(handle Handle, timeouts *CommTimeouts) (err error)
+//sys	SetupComm(handle Handle, dwInQueue uint32, dwOutQueue uint32) (err error)
+//sys	WaitCommEvent(handle Handle, lpEvtMask *uint32, lpOverlapped *Overlapped) (err error)
+//sys	GetActiveProcessorCount(groupNumber uint16) (ret uint32)
+//sys	GetMaximumProcessorCount(groupNumber uint16) (ret uint32)
+//sys	EnumWindows(enumFunc uintptr, param unsafe.Pointer) (err error) = user32.EnumWindows
+//sys	EnumChildWindows(hwnd HWND, enumFunc uintptr, param unsafe.Pointer) = user32.EnumChildWindows
+//sys	GetClassName(hwnd HWND, className *uint16, maxCount int32) (copied int32, err error) = user32.GetClassNameW
+//sys	GetDesktopWindow() (hwnd HWND) = user32.GetDesktopWindow
+//sys	GetForegroundWindow() (hwnd HWND) = user32.GetForegroundWindow
+//sys	IsWindow(hwnd HWND) (isWindow bool) = user32.IsWindow
+//sys	IsWindowUnicode(hwnd HWND) (isUnicode bool) = user32.IsWindowUnicode
+//sys	IsWindowVisible(hwnd HWND) (isVisible bool) = user32.IsWindowVisible
+//sys	GetGUIThreadInfo(thread uint32, info *GUIThreadInfo) (err error) = user32.GetGUIThreadInfo
+//sys	GetLargePageMinimum() (size uintptr)
+
+// Volume Management Functions
+//sys	DefineDosDevice(flags uint32, deviceName *uint16, targetPath *uint16) (err error) = DefineDosDeviceW
+//sys	DeleteVolumeMountPoint(volumeMountPoint *uint16) (err error) = DeleteVolumeMountPointW
+//sys	FindFirstVolume(volumeName *uint16, bufferLength uint32) (handle Handle, err error) [failretval==InvalidHandle] = FindFirstVolumeW
+//sys	FindFirstVolumeMountPoint(rootPathName *uint16, volumeMountPoint *uint16, bufferLength uint32) (handle Handle, err error) [failretval==InvalidHandle] = FindFirstVolumeMountPointW
+//sys	FindNextVolume(findVolume Handle, volumeName *uint16, bufferLength uint32) (err error) = FindNextVolumeW
+//sys	FindNextVolumeMountPoint(findVolumeMountPoint Handle, volumeMountPoint *uint16, bufferLength uint32) (err error) = FindNextVolumeMountPointW
+//sys	FindVolumeClose(findVolume Handle) (err error)
+//sys	FindVolumeMountPointClose(findVolumeMountPoint Handle) (err error)
+//sys	GetDiskFreeSpaceEx(directoryName *uint16, freeBytesAvailableToCaller *uint64, totalNumberOfBytes *uint64, totalNumberOfFreeBytes *uint64) (err error) = GetDiskFreeSpaceExW
+//sys	GetDriveType(rootPathName *uint16) (driveType uint32) = GetDriveTypeW
+//sys	GetLogicalDrives() (drivesBitMask uint32, err error) [failretval==0]
+//sys	GetLogicalDriveStrings(bufferLength uint32, buffer *uint16) (n uint32, err error) [failretval==0] = GetLogicalDriveStringsW
+//sys	GetVolumeInformation(rootPathName *uint16, volumeNameBuffer *uint16, volumeNameSize uint32, volumeNameSerialNumber *uint32, maximumComponentLength *uint32, fileSystemFlags *uint32, fileSystemNameBuffer *uint16, fileSystemNameSize uint32) (err error) = GetVolumeInformationW
+//sys	GetVolumeInformationByHandle(file Handle, volumeNameBuffer *uint16, volumeNameSize uint32, volumeNameSerialNumber *uint32, maximumComponentLength *uint32, fileSystemFlags *uint32, fileSystemNameBuffer *uint16, fileSystemNameSize uint32) (err error) = GetVolumeInformationByHandleW
+//sys	GetVolumeNameForVolumeMountPoint(volumeMountPoint *uint16, volumeName *uint16, bufferlength uint32) (err error) = GetVolumeNameForVolumeMountPointW
+//sys	GetVolumePathName(fileName *uint16, volumePathName *uint16, bufferLength uint32) (err error) = GetVolumePathNameW
+//sys	GetVolumePathNamesForVolumeName(volumeName *uint16, volumePathNames *uint16, bufferLength uint32, returnLength *uint32) (err error) = GetVolumePathNamesForVolumeNameW
+//sys	QueryDosDevice(deviceName *uint16, targetPath *uint16, max uint32) (n uint32, err error) [failretval==0] = QueryDosDeviceW
+//sys	SetVolumeLabel(rootPathName *uint16, volumeName *uint16) (err error) = SetVolumeLabelW
+//sys	SetVolumeMountPoint(volumeMountPoint *uint16, volumeName *uint16) (err error) = SetVolumeMountPointW
+//sys	InitiateSystemShutdownEx(machineName *uint16, message *uint16, timeout uint32, forceAppsClosed bool, rebootAfterShutdown bool, reason uint32) (err error) = advapi32.InitiateSystemShutdownExW
+//sys	SetProcessShutdownParameters(level uint32, flags uint32) (err error) = kernel32.SetProcessShutdownParameters
+//sys	GetProcessShutdownParameters(level *uint32, flags *uint32) (err error) = kernel32.GetProcessShutdownParameters
+//sys	clsidFromString(lpsz *uint16, pclsid *GUID) (ret error) = ole32.CLSIDFromString
+//sys	stringFromGUID2(rguid *GUID, lpsz *uint16, cchMax int32) (chars int32) = ole32.StringFromGUID2
+//sys	coCreateGuid(pguid *GUID) (ret error) = ole32.CoCreateGuid
+//sys	CoTaskMemFree(address unsafe.Pointer) = ole32.CoTaskMemFree
+//sys	CoInitializeEx(reserved uintptr, coInit uint32) (ret error) = ole32.CoInitializeEx
+//sys	CoUninitialize() = ole32.CoUninitialize
+//sys	CoGetObject(name *uint16, bindOpts *BIND_OPTS3, guid *GUID, functionTable **uintptr) (ret error) = ole32.CoGetObject
+//sys	getProcessPreferredUILanguages(flags uint32, numLanguages *uint32, buf *uint16, bufSize *uint32) (err error) = kernel32.GetProcessPreferredUILanguages
+//sys	getThreadPreferredUILanguages(flags uint32, numLanguages *uint32, buf *uint16, bufSize *uint32) (err error) = kernel32.GetThreadPreferredUILanguages
+//sys	getUserPreferredUILanguages(flags uint32, numLanguages *uint32, buf *uint16, bufSize *uint32) (err error) = kernel32.GetUserPreferredUILanguages
+//sys	getSystemPreferredUILanguages(flags uint32, numLanguages *uint32, buf *uint16, bufSize *uint32) (err error) = kernel32.GetSystemPreferredUILanguages
+//sys	findResource(module Handle, name uintptr, resType uintptr) (resInfo Handle, err error) = kernel32.FindResourceW
+//sys	SizeofResource(module Handle, resInfo Handle) (size uint32, err error) = kernel32.SizeofResource
+//sys	LoadResource(module Handle, resInfo Handle) (resData Handle, err error) = kernel32.LoadResource
+//sys	LockResource(resData Handle) (addr uintptr, err error) = kernel32.LockResource
+
+// Version APIs
+//sys	GetFileVersionInfoSize(filename string, zeroHandle *Handle) (bufSize uint32, err error) = version.GetFileVersionInfoSizeW
+//sys	GetFileVersionInfo(filename string, handle uint32, bufSize uint32, buffer unsafe.Pointer) (err error) = version.GetFileVersionInfoW
+//sys	VerQueryValue(block unsafe.Pointer, subBlock string, pointerToBufferPointer unsafe.Pointer, bufSize *uint32) (err error) = version.VerQueryValueW
+
+// Process Status API (PSAPI)
+//sys	enumProcesses(processIds *uint32, nSize uint32, bytesReturned *uint32) (err error) = psapi.EnumProcesses
+//sys	EnumProcessModules(process Handle, module *Handle, cb uint32, cbNeeded *uint32) (err error) = psapi.EnumProcessModules
+//sys	EnumProcessModulesEx(process Handle, module *Handle, cb uint32, cbNeeded *uint32, filterFlag uint32) (err error) = psapi.EnumProcessModulesEx
+//sys	GetModuleInformation(process Handle, module Handle, modinfo *ModuleInfo, cb uint32) (err error) = psapi.GetModuleInformation
+//sys	GetModuleFileNameEx(process Handle, module Handle, filename *uint16, size uint32) (err error) = psapi.GetModuleFileNameExW
+//sys	GetModuleBaseName(process Handle, module Handle, baseName *uint16, size uint32) (err error) = psapi.GetModuleBaseNameW
+//sys   QueryWorkingSetEx(process Handle, pv uintptr, cb uint32) (err error) = psapi.QueryWorkingSetEx
+
+// NT Native APIs
+//sys	rtlNtStatusToDosErrorNoTeb(ntstatus NTStatus) (ret syscall.Errno) = ntdll.RtlNtStatusToDosErrorNoTeb
+//sys	rtlGetVersion(info *OsVersionInfoEx) (ntstatus error) = ntdll.RtlGetVersion
+//sys	rtlGetNtVersionNumbers(majorVersion *uint32, minorVersion *uint32, buildNumber *uint32) = ntdll.RtlGetNtVersionNumbers
+//sys	RtlGetCurrentPeb() (peb *PEB) = ntdll.RtlGetCurrentPeb
+//sys	RtlInitUnicodeString(destinationString *NTUnicodeString, sourceString *uint16) = ntdll.RtlInitUnicodeString
+//sys	RtlInitString(destinationString *NTString, sourceString *byte) = ntdll.RtlInitString
+//sys	NtCreateFile(handle *Handle, access uint32, oa *OBJECT_ATTRIBUTES, iosb *IO_STATUS_BLOCK, allocationSize *int64, attributes uint32, share uint32, disposition uint32, options uint32, eabuffer uintptr, ealength uint32) (ntstatus error) = ntdll.NtCreateFile
+//sys	NtCreateNamedPipeFile(pipe *Handle, access uint32, oa *OBJECT_ATTRIBUTES, iosb *IO_STATUS_BLOCK, share uint32, disposition uint32, options uint32, typ uint32, readMode uint32, completionMode uint32, maxInstances uint32, inboundQuota uint32, outputQuota uint32, timeout *int64) (ntstatus error) = ntdll.NtCreateNamedPipeFile
+//sys	NtQueryInformationFile(handle Handle, iosb *IO_STATUS_BLOCK, outBuffer *byte, outBufferLen uint32, class uint32) (ntstatus error) = ntdll.NtQueryInformationFile
+//sys	NtSetInformationFile(handle Handle, iosb *IO_STATUS_BLOCK, inBuffer *byte, inBufferLen uint32, class uint32) (ntstatus error) = ntdll.NtSetInformationFile
+//sys	RtlDosPathNameToNtPathName(dosName *uint16, ntName *NTUnicodeString, ntFileNamePart *uint16, relativeName *RTL_RELATIVE_NAME) (ntstatus error) = ntdll.RtlDosPathNameToNtPathName_U_WithStatus
+//sys	RtlDosPathNameToRelativeNtPathName(dosName *uint16, ntName *NTUnicodeString, ntFileNamePart *uint16, relativeName *RTL_RELATIVE_NAME) (ntstatus error) = ntdll.RtlDosPathNameToRelativeNtPathName_U_WithStatus
+//sys	RtlDefaultNpAcl(acl **ACL) (ntstatus error) = ntdll.RtlDefaultNpAcl
+//sys	NtQueryInformationProcess(proc Handle, procInfoClass int32, procInfo unsafe.Pointer, procInfoLen uint32, retLen *uint32) (ntstatus error) = ntdll.NtQueryInformationProcess
+//sys	NtSetInformationProcess(proc Handle, procInfoClass int32, procInfo unsafe.Pointer, procInfoLen uint32) (ntstatus error) = ntdll.NtSetInformationProcess
+//sys	NtQuerySystemInformation(sysInfoClass int32, sysInfo unsafe.Pointer, sysInfoLen uint32, retLen *uint32) (ntstatus error) = ntdll.NtQuerySystemInformation
+//sys	NtSetSystemInformation(sysInfoClass int32, sysInfo unsafe.Pointer, sysInfoLen uint32) (ntstatus error) = ntdll.NtSetSystemInformation
+//sys	NtQueryEaFile(handle Handle, iosb *IO_STATUS_BLOCK, outBuffer *byte, outBufferLen uint32, returnSingleEntry bool, eaList *byte, eaListLen uint32, eaIndex *uint32, restartScan bool) (ntstatus error) = ntdll.NtQueryEaFile
+//sys	NtSetEaFile(handle Handle, iosb *IO_STATUS_BLOCK, inBuffer *byte, inBufferLen uint32) (ntstatus error) = ntdll.NtSetEaFile
+//sys	RtlAddFunctionTable(functionTable *RUNTIME_FUNCTION, entryCount uint32, baseAddress uintptr) (ret bool) = ntdll.RtlAddFunctionTable
+//sys	RtlDeleteFunctionTable(functionTable *RUNTIME_FUNCTION) (ret bool) = ntdll.RtlDeleteFunctionTable
+
+// Desktop Window Manager API (Dwmapi)
+//sys	DwmGetWindowAttribute(hwnd HWND, attribute uint32, value unsafe.Pointer, size uint32) (ret error) = dwmapi.DwmGetWindowAttribute
+//sys	DwmSetWindowAttribute(hwnd HWND, attribute uint32, value unsafe.Pointer, size uint32) (ret error) = dwmapi.DwmSetWindowAttribute
+
+// Windows Multimedia API
+//sys TimeBeginPeriod (period uint32) (err error) [failretval != 0] = winmm.timeBeginPeriod
+//sys TimeEndPeriod (period uint32) (err error) [failretval != 0] = winmm.timeEndPeriod
+
+// syscall interface implementation for other packages
+
+// GetCurrentProcess returns the handle for the current process.
+// It is a pseudo handle that does not need to be closed.
+// The returned error is always nil.
+//
+// Deprecated: use CurrentProcess for the same Handle without the nil
+// error.
+func GetCurrentProcess() (Handle, error) {
+	return CurrentProcess(), nil
+}
+
+// CurrentProcess returns the handle for the current process.
+// It is a pseudo handle that does not need to be closed.
+func CurrentProcess() Handle { return Handle(^uintptr(1 - 1)) }
+
+// GetCurrentThread returns the handle for the current thread.
+// It is a pseudo handle that does not need to be closed.
+// The returned error is always nil.
+//
+// Deprecated: use CurrentThread for the same Handle without the nil
+// error.
+func GetCurrentThread() (Handle, error) {
+	return CurrentThread(), nil
+}
+
+// CurrentThread returns the handle for the current thread.
+// It is a pseudo handle that does not need to be closed.
+func CurrentThread() Handle { return Handle(^uintptr(2 - 1)) }
+
+// GetProcAddressByOrdinal retrieves the address of the exported
+// function from module by ordinal.
+func GetProcAddressByOrdinal(module Handle, ordinal uintptr) (proc uintptr, err error) {
+	r0, _, e1 := syscall.Syscall(procGetProcAddress.Addr(), 2, uintptr(module), ordinal, 0)
+	proc = uintptr(r0)
+	if proc == 0 {
+		err = errnoErr(e1)
+	}
+	return
+}
+
+func Exit(code int) { ExitProcess(uint32(code)) }
+
+func makeInheritSa() *SecurityAttributes {
+	var sa SecurityAttributes
+	sa.Length = uint32(unsafe.Sizeof(sa))
+	sa.InheritHandle = 1
+	return &sa
+}
+
+func Open(path string, mode int, perm uint32) (fd Handle, err error) {
+	if len(path) == 0 {
+		return InvalidHandle, ERROR_FILE_NOT_FOUND
+	}
+	pathp, err := UTF16PtrFromString(path)
+	if err != nil {
+		return InvalidHandle, err
+	}
+	var access uint32
+	switch mode & (O_RDONLY | O_WRONLY | O_RDWR) {
+	case O_RDONLY:
+		access = GENERIC_READ
+	case O_WRONLY:
+		access = GENERIC_WRITE
+	case O_RDWR:
+		access = GENERIC_READ | GENERIC_WRITE
+	}
+	if mode&O_CREAT != 0 {
+		access |= GENERIC_WRITE
+	}
+	if mode&O_APPEND != 0 {
+		access &^= GENERIC_WRITE
+		access |= FILE_APPEND_DATA
+	}
+	sharemode := uint32(FILE_SHARE_READ | FILE_SHARE_WRITE)
+	var sa *SecurityAttributes
+	if mode&O_CLOEXEC == 0 {
+		sa = makeInheritSa()
+	}
+	var createmode uint32
+	switch {
+	case mode&(O_CREAT|O_EXCL) == (O_CREAT | O_EXCL):
+		createmode = CREATE_NEW
+	case mode&(O_CREAT|O_TRUNC) == (O_CREAT | O_TRUNC):
+		createmode = CREATE_ALWAYS
+	case mode&O_CREAT == O_CREAT:
+		createmode = OPEN_ALWAYS
+	case mode&O_TRUNC == O_TRUNC:
+		createmode = TRUNCATE_EXISTING
+	default:
+		createmode = OPEN_EXISTING
+	}
+	var attrs uint32 = FILE_ATTRIBUTE_NORMAL
+	if perm&S_IWRITE == 0 {
+		attrs = FILE_ATTRIBUTE_READONLY
+	}
+	h, e := CreateFile(pathp, access, sharemode, sa, createmode, attrs, 0)
+	return h, e
+}
+
+func Read(fd Handle, p []byte) (n int, err error) {
+	var done uint32
+	e := ReadFile(fd, p, &done, nil)
+	if e != nil {
+		if e == ERROR_BROKEN_PIPE {
+			// NOTE(brainman): work around ERROR_BROKEN_PIPE is returned on reading EOF from stdin
+			return 0, nil
+		}
+		return 0, e
+	}
+	return int(done), nil
+}
+
+func Write(fd Handle, p []byte) (n int, err error) {
+	if raceenabled {
+		raceReleaseMerge(unsafe.Pointer(&ioSync))
+	}
+	var done uint32
+	e := WriteFile(fd, p, &done, nil)
+	if e != nil {
+		return 0, e
+	}
+	return int(done), nil
+}
+
+func ReadFile(fd Handle, p []byte, done *uint32, overlapped *Overlapped) error {
+	err := readFile(fd, p, done, overlapped)
+	if raceenabled {
+		if *done > 0 {
+			raceWriteRange(unsafe.Pointer(&p[0]), int(*done))
+		}
+		raceAcquire(unsafe.Pointer(&ioSync))
+	}
+	return err
+}
+
+func WriteFile(fd Handle, p []byte, done *uint32, overlapped *Overlapped) error {
+	if raceenabled {
+		raceReleaseMerge(unsafe.Pointer(&ioSync))
+	}
+	err := writeFile(fd, p, done, overlapped)
+	if raceenabled && *done > 0 {
+		raceReadRange(unsafe.Pointer(&p[0]), int(*done))
+	}
+	return err
+}
+
+var ioSync int64
+
+func Seek(fd Handle, offset int64, whence int) (newoffset int64, err error) {
+	var w uint32
+	switch whence {
+	case 0:
+		w = FILE_BEGIN
+	case 1:
+		w = FILE_CURRENT
+	case 2:
+		w = FILE_END
+	}
+	hi := int32(offset >> 32)
+	lo := int32(offset)
+	// use GetFileType to check pipe, pipe can't do seek
+	ft, _ := GetFileType(fd)
+	if ft == FILE_TYPE_PIPE {
+		return 0, syscall.EPIPE
+	}
+	rlo, e := SetFilePointer(fd, lo, &hi, w)
+	if e != nil {
+		return 0, e
+	}
+	return int64(hi)<<32 + int64(rlo), nil
+}
+
+func Close(fd Handle) (err error) {
+	return CloseHandle(fd)
+}
+
+var (
+	Stdin  = getStdHandle(STD_INPUT_HANDLE)
+	Stdout = getStdHandle(STD_OUTPUT_HANDLE)
+	Stderr = getStdHandle(STD_ERROR_HANDLE)
+)
+
+func getStdHandle(stdhandle uint32) (fd Handle) {
+	r, _ := GetStdHandle(stdhandle)
+	return r
+}
+
+const ImplementsGetwd = true
+
+func Getwd() (wd string, err error) {
+	b := make([]uint16, 300)
+	n, e := GetCurrentDirectory(uint32(len(b)), &b[0])
+	if e != nil {
+		return "", e
+	}
+	return string(utf16.Decode(b[0:n])), nil
+}
+
+func Chdir(path string) (err error) {
+	pathp, err := UTF16PtrFromString(path)
+	if err != nil {
+		return err
+	}
+	return SetCurrentDirectory(pathp)
+}
+
+func Mkdir(path string, mode uint32) (err error) {
+	pathp, err := UTF16PtrFromString(path)
+	if err != nil {
+		return err
+	}
+	return CreateDirectory(pathp, nil)
+}
+
+func Rmdir(path string) (err error) {
+	pathp, err := UTF16PtrFromString(path)
+	if err != nil {
+		return err
+	}
+	return RemoveDirectory(pathp)
+}
+
+func Unlink(path string) (err error) {
+	pathp, err := UTF16PtrFromString(path)
+	if err != nil {
+		return err
+	}
+	return DeleteFile(pathp)
+}
+
+func Rename(oldpath, newpath string) (err error) {
+	from, err := UTF16PtrFromString(oldpath)
+	if err != nil {
+		return err
+	}
+	to, err := UTF16PtrFromString(newpath)
+	if err != nil {
+		return err
+	}
+	return MoveFileEx(from, to, MOVEFILE_REPLACE_EXISTING)
+}
+
+func ComputerName() (name string, err error) {
+	var n uint32 = MAX_COMPUTERNAME_LENGTH + 1
+	b := make([]uint16, n)
+	e := GetComputerName(&b[0], &n)
+	if e != nil {
+		return "", e
+	}
+	return string(utf16.Decode(b[0:n])), nil
+}
+
+func DurationSinceBoot() time.Duration {
+	return time.Duration(getTickCount64()) * time.Millisecond
+}
+
+func Ftruncate(fd Handle, leng
+@@END
+@@PORTABLE {"path":"vendor/golang.org/x/sys/windows/syscall_windows.go","mode":420,"size":88929,"sha256":"589a6e28bca016f69eb25b75e82a808162d707de98d3d50367337303dcdd7018","index":1,"count":2,"encoding":"utf-8","payloadBytes":40929}
+th int64) (err error) {
+	type _FILE_END_OF_FILE_INFO struct {
+		EndOfFile int64
+	}
+	var info _FILE_END_OF_FILE_INFO
+	info.EndOfFile = length
+	return SetFileInformationByHandle(fd, FileEndOfFileInfo, (*byte)(unsafe.Pointer(&info)), uint32(unsafe.Sizeof(info)))
+}
+
+func Gettimeofday(tv *Timeval) (err error) {
+	var ft Filetime
+	GetSystemTimeAsFileTime(&ft)
+	*tv = NsecToTimeval(ft.Nanoseconds())
+	return nil
+}
+
+func Pipe(p []Handle) (err error) {
+	if len(p) != 2 {
+		return syscall.EINVAL
+	}
+	var r, w Handle
+	e := CreatePipe(&r, &w, makeInheritSa(), 0)
+	if e != nil {
+		return e
+	}
+	p[0] = r
+	p[1] = w
+	return nil
+}
+
+func Utimes(path string, tv []Timeval) (err error) {
+	if len(tv) != 2 {
+		return syscall.EINVAL
+	}
+	pathp, e := UTF16PtrFromString(path)
+	if e != nil {
+		return e
+	}
+	h, e := CreateFile(pathp,
+		FILE_WRITE_ATTRIBUTES, FILE_SHARE_WRITE, nil,
+		OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, 0)
+	if e != nil {
+		return e
+	}
+	defer CloseHandle(h)
+	a := NsecToFiletime(tv[0].Nanoseconds())
+	w := NsecToFiletime(tv[1].Nanoseconds())
+	return SetFileTime(h, nil, &a, &w)
+}
+
+func UtimesNano(path string, ts []Timespec) (err error) {
+	if len(ts) != 2 {
+		return syscall.EINVAL
+	}
+	pathp, e := UTF16PtrFromString(path)
+	if e != nil {
+		return e
+	}
+	h, e := CreateFile(pathp,
+		FILE_WRITE_ATTRIBUTES, FILE_SHARE_WRITE, nil,
+		OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, 0)
+	if e != nil {
+		return e
+	}
+	defer CloseHandle(h)
+	a := NsecToFiletime(TimespecToNsec(ts[0]))
+	w := NsecToFiletime(TimespecToNsec(ts[1]))
+	return SetFileTime(h, nil, &a, &w)
+}
+
+func Fsync(fd Handle) (err error) {
+	return FlushFileBuffers(fd)
+}
+
+func Chmod(path string, mode uint32) (err error) {
+	p, e := UTF16PtrFromString(path)
+	if e != nil {
+		return e
+	}
+	attrs, e := GetFileAttributes(p)
+	if e != nil {
+		return e
+	}
+	if mode&S_IWRITE != 0 {
+		attrs &^= FILE_ATTRIBUTE_READONLY
+	} else {
+		attrs |= FILE_ATTRIBUTE_READONLY
+	}
+	return SetFileAttributes(p, attrs)
+}
+
+func LoadGetSystemTimePreciseAsFileTime() error {
+	return procGetSystemTimePreciseAsFileTime.Find()
+}
+
+func LoadCancelIoEx() error {
+	return procCancelIoEx.Find()
+}
+
+func LoadSetFileCompletionNotificationModes() error {
+	return procSetFileCompletionNotificationModes.Find()
+}
+
+func WaitForMultipleObjects(handles []Handle, waitAll bool, waitMilliseconds uint32) (event uint32, err error) {
+	// Every other win32 array API takes arguments as "pointer, count", except for this function. So we
+	// can't declare it as a usual [] type, because mksyscall will use the opposite order. We therefore
+	// trivially stub this ourselves.
+
+	var handlePtr *Handle
+	if len(handles) > 0 {
+		handlePtr = &handles[0]
+	}
+	return waitForMultipleObjects(uint32(len(handles)), uintptr(unsafe.Pointer(handlePtr)), waitAll, waitMilliseconds)
+}
+
+// net api calls
+
+const socket_error = uintptr(^uint32(0))
+
+//sys	WSAStartup(verreq uint32, data *WSAData) (sockerr error) = ws2_32.WSAStartup
+//sys	WSACleanup() (err error) [failretval==socket_error] = ws2_32.WSACleanup
+//sys	WSAIoctl(s Handle, iocc uint32, inbuf *byte, cbif uint32, outbuf *byte, cbob uint32, cbbr *uint32, overlapped *Overlapped, completionRoutine uintptr) (err error) [failretval==socket_error] = ws2_32.WSAIoctl
+//sys	WSALookupServiceBegin(querySet *WSAQUERYSET, flags uint32, handle *Handle) (err error) [failretval==socket_error] = ws2_32.WSALookupServiceBeginW
+//sys	WSALookupServiceNext(handle Handle, flags uint32, size *int32, querySet *WSAQUERYSET) (err error) [failretval==socket_error] = ws2_32.WSALookupServiceNextW
+//sys	WSALookupServiceEnd(handle Handle) (err error) [failretval==socket_error] = ws2_32.WSALookupServiceEnd
+//sys	socket(af int32, typ int32, protocol int32) (handle Handle, err error) [failretval==InvalidHandle] = ws2_32.socket
+//sys	sendto(s Handle, buf []byte, flags int32, to unsafe.Pointer, tolen int32) (err error) [failretval==socket_error] = ws2_32.sendto
+//sys	recvfrom(s Handle, buf []byte, flags int32, from *RawSockaddrAny, fromlen *int32) (n int32, err error) [failretval==-1] = ws2_32.recvfrom
+//sys	Setsockopt(s Handle, level int32, optname int32, optval *byte, optlen int32) (err error) [failretval==socket_error] = ws2_32.setsockopt
+//sys	Getsockopt(s Handle, level int32, optname int32, optval *byte, optlen *int32) (err error) [failretval==socket_error] = ws2_32.getsockopt
+//sys	bind(s Handle, name unsafe.Pointer, namelen int32) (err error) [failretval==socket_error] = ws2_32.bind
+//sys	connect(s Handle, name unsafe.Pointer, namelen int32) (err error) [failretval==socket_error] = ws2_32.connect
+//sys	getsockname(s Handle, rsa *RawSockaddrAny, addrlen *int32) (err error) [failretval==socket_error] = ws2_32.getsockname
+//sys	getpeername(s Handle, rsa *RawSockaddrAny, addrlen *int32) (err error) [failretval==socket_error] = ws2_32.getpeername
+//sys	listen(s Handle, backlog int32) (err error) [failretval==socket_error] = ws2_32.listen
+//sys	shutdown(s Handle, how int32) (err error) [failretval==socket_error] = ws2_32.shutdown
+//sys	Closesocket(s Handle) (err error) [failretval==socket_error] = ws2_32.closesocket
+//sys	AcceptEx(ls Handle, as Handle, buf *byte, rxdatalen uint32, laddrlen uint32, raddrlen uint32, recvd *uint32, overlapped *Overlapped) (err error) = mswsock.AcceptEx
+//sys	GetAcceptExSockaddrs(buf *byte, rxdatalen uint32, laddrlen uint32, raddrlen uint32, lrsa **RawSockaddrAny, lrsalen *int32, rrsa **RawSockaddrAny, rrsalen *int32) = mswsock.GetAcceptExSockaddrs
+//sys	WSARecv(s Handle, bufs *WSABuf, bufcnt uint32, recvd *uint32, flags *uint32, overlapped *Overlapped, croutine *byte) (err error) [failretval==socket_error] = ws2_32.WSARecv
+//sys	WSASend(s Handle, bufs *WSABuf, bufcnt uint32, sent *uint32, flags uint32, overlapped *Overlapped, croutine *byte) (err error) [failretval==socket_error] = ws2_32.WSASend
+//sys	WSARecvFrom(s Handle, bufs *WSABuf, bufcnt uint32, recvd *uint32, flags *uint32,  from *RawSockaddrAny, fromlen *int32, overlapped *Overlapped, croutine *byte) (err error) [failretval==socket_error] = ws2_32.WSARecvFrom
+//sys	WSASendTo(s Handle, bufs *WSABuf, bufcnt uint32, sent *uint32, flags uint32, to *RawSockaddrAny, tolen int32,  overlapped *Overlapped, croutine *byte) (err error) [failretval==socket_error] = ws2_32.WSASendTo
+//sys	WSASocket(af int32, typ int32, protocol int32, protoInfo *WSAProtocolInfo, group uint32, flags uint32) (handle Handle, err error) [failretval==InvalidHandle] = ws2_32.WSASocketW
+//sys	WSADuplicateSocket(s Handle, processID uint32, info *WSAProtocolInfo) (err error) [failretval!=0] = ws2_32.WSADuplicateSocketW
+//sys	GetHostByName(name string) (h *Hostent, err error) [failretval==nil] = ws2_32.gethostbyname
+//sys	GetServByName(name string, proto string) (s *Servent, err error) [failretval==nil] = ws2_32.getservbyname
+//sys	Ntohs(netshort uint16) (u uint16) = ws2_32.ntohs
+//sys	GetProtoByName(name string) (p *Protoent, err error) [failretval==nil] = ws2_32.getprotobyname
+//sys	DnsQuery(name string, qtype uint16, options uint32, extra *byte, qrs **DNSRecord, pr *byte) (status error) = dnsapi.DnsQuery_W
+//sys	DnsRecordListFree(rl *DNSRecord, freetype uint32) = dnsapi.DnsRecordListFree
+//sys	DnsNameCompare(name1 *uint16, name2 *uint16) (same bool) = dnsapi.DnsNameCompare_W
+//sys	GetAddrInfoW(nodename *uint16, servicename *uint16, hints *AddrinfoW, result **AddrinfoW) (sockerr error) = ws2_32.GetAddrInfoW
+//sys	FreeAddrInfoW(addrinfo *AddrinfoW) = ws2_32.FreeAddrInfoW
+//sys	GetIfEntry(pIfRow *MibIfRow) (errcode error) = iphlpapi.GetIfEntry
+//sys	GetAdaptersInfo(ai *IpAdapterInfo, ol *uint32) (errcode error) = iphlpapi.GetAdaptersInfo
+//sys	SetFileCompletionNotificationModes(handle Handle, flags uint8) (err error) = kernel32.SetFileCompletionNotificationModes
+//sys	WSAEnumProtocols(protocols *int32, protocolBuffer *WSAProtocolInfo, bufferLength *uint32) (n int32, err error) [failretval==-1] = ws2_32.WSAEnumProtocolsW
+//sys	WSAGetOverlappedResult(h Handle, o *Overlapped, bytes *uint32, wait bool, flags *uint32) (err error) = ws2_32.WSAGetOverlappedResult
+//sys	GetAdaptersAddresses(family uint32, flags uint32, reserved uintptr, adapterAddresses *IpAdapterAddresses, sizePointer *uint32) (errcode error) = iphlpapi.GetAdaptersAddresses
+//sys	GetACP() (acp uint32) = kernel32.GetACP
+//sys	MultiByteToWideChar(codePage uint32, dwFlags uint32, str *byte, nstr int32, wchar *uint16, nwchar int32) (nwrite int32, err error) = kernel32.MultiByteToWideChar
+//sys	getBestInterfaceEx(sockaddr unsafe.Pointer, pdwBestIfIndex *uint32) (errcode error) = iphlpapi.GetBestInterfaceEx
+//sys   GetIfEntry2Ex(level uint32, row *MibIfRow2) (errcode error) = iphlpapi.GetIfEntry2Ex
+//sys   GetIfTable2Ex(level uint32, table **MibIfTable2) (errcode error) = iphlpapi.GetIfTable2Ex
+//sys   GetIpForwardEntry2(row *MibIpForwardRow2) (errcode error) = iphlpapi.GetIpForwardEntry2
+//sys   GetIpForwardTable2(family uint16, table **MibIpForwardTable2) (errcode error) = iphlpapi.GetIpForwardTable2
+//sys   GetIpInterfaceEntry(row *MibIpInterfaceRow) (errcode error) = iphlpapi.GetIpInterfaceEntry
+//sys   GetIpInterfaceTable(family uint16, table **MibIpInterfaceTable) (errcode error) = iphlpapi.GetIpInterfaceTable
+//sys   GetUnicastIpAddressEntry(row *MibUnicastIpAddressRow) (errcode error) = iphlpapi.GetUnicastIpAddressEntry
+//sys   GetUnicastIpAddressTable(family uint16, table **MibUnicastIpAddressTable) (errcode error) = iphlpapi.GetUnicastIpAddressTable
+//sys   FreeMibTable(memory unsafe.Pointer) = iphlpapi.FreeMibTable
+//sys   NotifyIpInterfaceChange(family uint16, callback uintptr, callerContext unsafe.Pointer, initialNotification bool, notificationHandle *Handle) (errcode error) = iphlpapi.NotifyIpInterfaceChange
+//sys   NotifyRouteChange2(family uint16, callback uintptr, callerContext unsafe.Pointer, initialNotification bool, notificationHandle *Handle) (errcode error) = iphlpapi.NotifyRouteChange2
+//sys   NotifyUnicastIpAddressChange(family uint16, callback uintptr, callerContext unsafe.Pointer, initialNotification bool, notificationHandle *Handle) (errcode error) = iphlpapi.NotifyUnicastIpAddressChange
+//sys   CancelMibChangeNotify2(notificationHandle Handle) (errcode error) = iphlpapi.CancelMibChangeNotify2
+//sys	IsProcessorFeaturePresent(ProcessorFeature uint32) (ret bool) = kernel32.IsProcessorFeaturePresent
+
+// For testing: clients can set this flag to force
+// creation of IPv6 sockets to return EAFNOSUPPORT.
+var SocketDisableIPv6 bool
+
+type RawSockaddrInet4 struct {
+	Family uint16
+	Port   uint16
+	Addr   [4]byte /* in_addr */
+	Zero   [8]uint8
+}
+
+type RawSockaddrInet6 struct {
+	Family   uint16
+	Port     uint16
+	Flowinfo uint32
+	Addr     [16]byte /* in6_addr */
+	Scope_id uint32
+}
+
+// RawSockaddrInet is a union that contains an IPv4, an IPv6 address, or an address family. See
+// https://learn.microsoft.com/en-us/windows/win32/api/ws2ipdef/ns-ws2ipdef-sockaddr_inet.
+//
+// A [*RawSockaddrInet] may be converted to a [*RawSockaddrInet4] or [*RawSockaddrInet6] using
+// unsafe, depending on the address family.
+type RawSockaddrInet struct {
+	Family uint16
+	Port   uint16
+	Data   [6]uint32
+}
+
+type RawSockaddr struct {
+	Family uint16
+	Data   [14]int8
+}
+
+type RawSockaddrAny struct {
+	Addr RawSockaddr
+	Pad  [100]int8
+}
+
+type Sockaddr interface {
+	sockaddr() (ptr unsafe.Pointer, len int32, err error) // lowercase; only we can define Sockaddrs
+}
+
+type SockaddrInet4 struct {
+	Port int
+	Addr [4]byte
+	raw  RawSockaddrInet4
+}
+
+func (sa *SockaddrInet4) sockaddr() (unsafe.Pointer, int32, error) {
+	if sa.Port < 0 || sa.Port > 0xFFFF {
+		return nil, 0, syscall.EINVAL
+	}
+	sa.raw.Family = AF_INET
+	p := (*[2]byte)(unsafe.Pointer(&sa.raw.Port))
+	p[0] = byte(sa.Port >> 8)
+	p[1] = byte(sa.Port)
+	sa.raw.Addr = sa.Addr
+	return unsafe.Pointer(&sa.raw), int32(unsafe.Sizeof(sa.raw)), nil
+}
+
+type SockaddrInet6 struct {
+	Port   int
+	ZoneId uint32
+	Addr   [16]byte
+	raw    RawSockaddrInet6
+}
+
+func (sa *SockaddrInet6) sockaddr() (unsafe.Pointer, int32, error) {
+	if sa.Port < 0 || sa.Port > 0xFFFF {
+		return nil, 0, syscall.EINVAL
+	}
+	sa.raw.Family = AF_INET6
+	p := (*[2]byte)(unsafe.Pointer(&sa.raw.Port))
+	p[0] = byte(sa.Port >> 8)
+	p[1] = byte(sa.Port)
+	sa.raw.Scope_id = sa.ZoneId
+	sa.raw.Addr = sa.Addr
+	return unsafe.Pointer(&sa.raw), int32(unsafe.Sizeof(sa.raw)), nil
+}
+
+type RawSockaddrUnix struct {
+	Family uint16
+	Path   [UNIX_PATH_MAX]int8
+}
+
+type SockaddrUnix struct {
+	Name string
+	raw  RawSockaddrUnix
+}
+
+func (sa *SockaddrUnix) sockaddr() (unsafe.Pointer, int32, error) {
+	name := sa.Name
+	n := len(name)
+	if n > len(sa.raw.Path) {
+		return nil, 0, syscall.EINVAL
+	}
+	if n == len(sa.raw.Path) && name[0] != '@' {
+		return nil, 0, syscall.EINVAL
+	}
+	sa.raw.Family = AF_UNIX
+	for i := 0; i < n; i++ {
+		sa.raw.Path[i] = int8(name[i])
+	}
+	// length is family (uint16), name, NUL.
+	sl := int32(2)
+	if n > 0 {
+		sl += int32(n) + 1
+	}
+	if sa.raw.Path[0] == '@' || (sa.raw.Path[0] == 0 && sl > 3) {
+		// Check sl > 3 so we don't change unnamed socket behavior.
+		sa.raw.Path[0] = 0
+		// Don't count trailing NUL for abstract address.
+		sl--
+	}
+
+	return unsafe.Pointer(&sa.raw), sl, nil
+}
+
+type RawSockaddrBth struct {
+	AddressFamily  [2]byte
+	BtAddr         [8]byte
+	ServiceClassId [16]byte
+	Port           [4]byte
+}
+
+type SockaddrBth struct {
+	BtAddr         uint64
+	ServiceClassId GUID
+	Port           uint32
+
+	raw RawSockaddrBth
+}
+
+func (sa *SockaddrBth) sockaddr() (unsafe.Pointer, int32, error) {
+	family := AF_BTH
+	sa.raw = RawSockaddrBth{
+		AddressFamily:  *(*[2]byte)(unsafe.Pointer(&family)),
+		BtAddr:         *(*[8]byte)(unsafe.Pointer(&sa.BtAddr)),
+		Port:           *(*[4]byte)(unsafe.Pointer(&sa.Port)),
+		ServiceClassId: *(*[16]byte)(unsafe.Pointer(&sa.ServiceClassId)),
+	}
+	return unsafe.Pointer(&sa.raw), int32(unsafe.Sizeof(sa.raw)), nil
+}
+
+func (rsa *RawSockaddrAny) Sockaddr() (Sockaddr, error) {
+	switch rsa.Addr.Family {
+	case AF_UNIX:
+		pp := (*RawSockaddrUnix)(unsafe.Pointer(rsa))
+		sa := new(SockaddrUnix)
+		if pp.Path[0] == 0 {
+			// "Abstract" Unix domain socket.
+			// Rewrite leading NUL as @ for textual display.
+			// (This is the standard convention.)
+			// Not friendly to overwrite in place,
+			// but the callers below don't care.
+			pp.Path[0] = '@'
+		}
+
+		// Assume path ends at NUL.
+		// This is not technically the Linux semantics for
+		// abstract Unix domain sockets--they are supposed
+		// to be uninterpreted fixed-size binary blobs--but
+		// everyone uses this convention.
+		n := 0
+		for n < len(pp.Path) && pp.Path[n] != 0 {
+			n++
+		}
+		sa.Name = string(unsafe.Slice((*byte)(unsafe.Pointer(&pp.Path[0])), n))
+		return sa, nil
+
+	case AF_INET:
+		pp := (*RawSockaddrInet4)(unsafe.Pointer(rsa))
+		sa := new(SockaddrInet4)
+		p := (*[2]byte)(unsafe.Pointer(&pp.Port))
+		sa.Port = int(p[0])<<8 + int(p[1])
+		sa.Addr = pp.Addr
+		return sa, nil
+
+	case AF_INET6:
+		pp := (*RawSockaddrInet6)(unsafe.Pointer(rsa))
+		sa := new(SockaddrInet6)
+		p := (*[2]byte)(unsafe.Pointer(&pp.Port))
+		sa.Port = int(p[0])<<8 + int(p[1])
+		sa.ZoneId = pp.Scope_id
+		sa.Addr = pp.Addr
+		return sa, nil
+	}
+	return nil, syscall.EAFNOSUPPORT
+}
+
+func Socket(domain, typ, proto int) (fd Handle, err error) {
+	if domain == AF_INET6 && SocketDisableIPv6 {
+		return InvalidHandle, syscall.EAFNOSUPPORT
+	}
+	return socket(int32(domain), int32(typ), int32(proto))
+}
+
+func SetsockoptInt(fd Handle, level, opt int, value int) (err error) {
+	v := int32(value)
+	return Setsockopt(fd, int32(level), int32(opt), (*byte)(unsafe.Pointer(&v)), int32(unsafe.Sizeof(v)))
+}
+
+func Bind(fd Handle, sa Sockaddr) (err error) {
+	ptr, n, err := sa.sockaddr()
+	if err != nil {
+		return err
+	}
+	return bind(fd, ptr, n)
+}
+
+func Connect(fd Handle, sa Sockaddr) (err error) {
+	ptr, n, err := sa.sockaddr()
+	if err != nil {
+		return err
+	}
+	return connect(fd, ptr, n)
+}
+
+func GetBestInterfaceEx(sa Sockaddr, pdwBestIfIndex *uint32) (err error) {
+	ptr, _, err := sa.sockaddr()
+	if err != nil {
+		return err
+	}
+	return getBestInterfaceEx(ptr, pdwBestIfIndex)
+}
+
+func Getsockname(fd Handle) (sa Sockaddr, err error) {
+	var rsa RawSockaddrAny
+	l := int32(unsafe.Sizeof(rsa))
+	if err = getsockname(fd, &rsa, &l); err != nil {
+		return
+	}
+	return rsa.Sockaddr()
+}
+
+func Getpeername(fd Handle) (sa Sockaddr, err error) {
+	var rsa RawSockaddrAny
+	l := int32(unsafe.Sizeof(rsa))
+	if err = getpeername(fd, &rsa, &l); err != nil {
+		return
+	}
+	return rsa.Sockaddr()
+}
+
+func Listen(s Handle, n int) (err error) {
+	return listen(s, int32(n))
+}
+
+func Shutdown(fd Handle, how int) (err error) {
+	return shutdown(fd, int32(how))
+}
+
+func WSASendto(s Handle, bufs *WSABuf, bufcnt uint32, sent *uint32, flags uint32, to Sockaddr, overlapped *Overlapped, croutine *byte) (err error) {
+	var rsa unsafe.Pointer
+	var l int32
+	if to != nil {
+		rsa, l, err = to.sockaddr()
+		if err != nil {
+			return err
+		}
+	}
+	return WSASendTo(s, bufs, bufcnt, sent, flags, (*RawSockaddrAny)(unsafe.Pointer(rsa)), l, overlapped, croutine)
+}
+
+func LoadGetAddrInfo() error {
+	return procGetAddrInfoW.Find()
+}
+
+var connectExFunc struct {
+	once sync.Once
+	addr uintptr
+	err  error
+}
+
+func LoadConnectEx() error {
+	connectExFunc.once.Do(func() {
+		var s Handle
+		s, connectExFunc.err = Socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)
+		if connectExFunc.err != nil {
+			return
+		}
+		defer CloseHandle(s)
+		var n uint32
+		connectExFunc.err = WSAIoctl(s,
+			SIO_GET_EXTENSION_FUNCTION_POINTER,
+			(*byte)(unsafe.Pointer(&WSAID_CONNECTEX)),
+			uint32(unsafe.Sizeof(WSAID_CONNECTEX)),
+			(*byte)(unsafe.Pointer(&connectExFunc.addr)),
+			uint32(unsafe.Sizeof(connectExFunc.addr)),
+			&n, nil, 0)
+	})
+	return connectExFunc.err
+}
+
+func connectEx(s Handle, name unsafe.Pointer, namelen int32, sendBuf *byte, sendDataLen uint32, bytesSent *uint32, overlapped *Overlapped) (err error) {
+	r1, _, e1 := syscall.Syscall9(connectExFunc.addr, 7, uintptr(s), uintptr(name), uintptr(namelen), uintptr(unsafe.Pointer(sendBuf)), uintptr(sendDataLen), uintptr(unsafe.Pointer(bytesSent)), uintptr(unsafe.Pointer(overlapped)), 0, 0)
+	if r1 == 0 {
+		if e1 != 0 {
+			err = error(e1)
+		} else {
+			err = syscall.EINVAL
+		}
+	}
+	return
+}
+
+func ConnectEx(fd Handle, sa Sockaddr, sendBuf *byte, sendDataLen uint32, bytesSent *uint32, overlapped *Overlapped) error {
+	err := LoadConnectEx()
+	if err != nil {
+		return errorspkg.New("failed to find ConnectEx: " + err.Error())
+	}
+	ptr, n, err := sa.sockaddr()
+	if err != nil {
+		return err
+	}
+	return connectEx(fd, ptr, n, sendBuf, sendDataLen, bytesSent, overlapped)
+}
+
+var sendRecvMsgFunc struct {
+	once     sync.Once
+	sendAddr uintptr
+	recvAddr uintptr
+	err      error
+}
+
+func loadWSASendRecvMsg() error {
+	sendRecvMsgFunc.once.Do(func() {
+		var s Handle
+		s, sendRecvMsgFunc.err = Socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
+		if sendRecvMsgFunc.err != nil {
+			return
+		}
+		defer CloseHandle(s)
+		var n uint32
+		sendRecvMsgFunc.err = WSAIoctl(s,
+			SIO_GET_EXTENSION_FUNCTION_POINTER,
+			(*byte)(unsafe.Pointer(&WSAID_WSARECVMSG)),
+			uint32(unsafe.Sizeof(WSAID_WSARECVMSG)),
+			(*byte)(unsafe.Pointer(&sendRecvMsgFunc.recvAddr)),
+			uint32(unsafe.Sizeof(sendRecvMsgFunc.recvAddr)),
+			&n, nil, 0)
+		if sendRecvMsgFunc.err != nil {
+			return
+		}
+		sendRecvMsgFunc.err = WSAIoctl(s,
+			SIO_GET_EXTENSION_FUNCTION_POINTER,
+			(*byte)(unsafe.Pointer(&WSAID_WSASENDMSG)),
+			uint32(unsafe.Sizeof(WSAID_WSASENDMSG)),
+			(*byte)(unsafe.Pointer(&sendRecvMsgFunc.sendAddr)),
+			uint32(unsafe.Sizeof(sendRecvMsgFunc.sendAddr)),
+			&n, nil, 0)
+	})
+	return sendRecvMsgFunc.err
+}
+
+func WSASendMsg(fd Handle, msg *WSAMsg, flags uint32, bytesSent *uint32, overlapped *Overlapped, croutine *byte) error {
+	err := loadWSASendRecvMsg()
+	if err != nil {
+		return err
+	}
+	r1, _, e1 := syscall.Syscall6(sendRecvMsgFunc.sendAddr, 6, uintptr(fd), uintptr(unsafe.Pointer(msg)), uintptr(flags), uintptr(unsafe.Pointer(bytesSent)), uintptr(unsafe.Pointer(overlapped)), uintptr(unsafe.Pointer(croutine)))
+	if r1 == socket_error {
+		err = errnoErr(e1)
+	}
+	return err
+}
+
+func WSARecvMsg(fd Handle, msg *WSAMsg, bytesReceived *uint32, overlapped *Overlapped, croutine *byte) error {
+	err := loadWSASendRecvMsg()
+	if err != nil {
+		return err
+	}
+	r1, _, e1 := syscall.Syscall6(sendRecvMsgFunc.recvAddr, 5, uintptr(fd), uintptr(unsafe.Pointer(msg)), uintptr(unsafe.Pointer(bytesReceived)), uintptr(unsafe.Pointer(overlapped)), uintptr(unsafe.Pointer(croutine)), 0)
+	if r1 == socket_error {
+		err = errnoErr(e1)
+	}
+	return err
+}
+
+// Invented structures to support what package os expects.
+type Rusage struct {
+	CreationTime Filetime
+	ExitTime     Filetime
+	KernelTime   Filetime
+	UserTime     Filetime
+}
+
+type WaitStatus struct {
+	ExitCode uint32
+}
+
+func (w WaitStatus) Exited() bool { return true }
+
+func (w WaitStatus) ExitStatus() int { return int(w.ExitCode) }
+
+func (w WaitStatus) Signal() Signal { return -1 }
+
+func (w WaitStatus) CoreDump() bool { return false }
+
+func (w WaitStatus) Stopped() bool { return false }
+
+func (w WaitStatus) Continued() bool { return false }
+
+func (w WaitStatus) StopSignal() Signal { return -1 }
+
+func (w WaitStatus) Signaled() bool { return false }
+
+func (w WaitStatus) TrapCause() int { return -1 }
+
+// Timespec is an invented structure on Windows, but here for
+// consistency with the corresponding package for other operating systems.
+type Timespec struct {
+	Sec  int64
+	Nsec int64
+}
+
+func TimespecToNsec(ts Timespec) int64 { return int64(ts.Sec)*1e9 + int64(ts.Nsec) }
+
+func NsecToTimespec(nsec int64) (ts Timespec) {
+	ts.Sec = nsec / 1e9
+	ts.Nsec = nsec % 1e9
+	return
+}
+
+// TODO(brainman): fix all needed for net
+
+func Accept(fd Handle) (nfd Handle, sa Sockaddr, err error) { return 0, nil, syscall.EWINDOWS }
+
+func Recvfrom(fd Handle, p []byte, flags int) (n int, from Sockaddr, err error) {
+	var rsa RawSockaddrAny
+	l := int32(unsafe.Sizeof(rsa))
+	n32, err := recvfrom(fd, p, int32(flags), &rsa, &l)
+	n = int(n32)
+	if err != nil {
+		return
+	}
+	from, err = rsa.Sockaddr()
+	return
+}
+
+func Sendto(fd Handle, p []byte, flags int, to Sockaddr) (err error) {
+	ptr, l, err := to.sockaddr()
+	if err != nil {
+		return err
+	}
+	return sendto(fd, p, int32(flags), ptr, l)
+}
+
+func SetsockoptTimeval(fd Handle, level, opt int, tv *Timeval) (err error) { return syscall.EWINDOWS }
+
+// The Linger struct is wrong but we only noticed after Go 1.
+// sysLinger is the real system call structure.
+
+// BUG(brainman): The definition of Linger is not appropriate for direct use
+// with Setsockopt and Getsockopt.
+// Use SetsockoptLinger instead.
+
+type Linger struct {
+	Onoff  int32
+	Linger int32
+}
+
+type sysLinger struct {
+	Onoff  uint16
+	Linger uint16
+}
+
+type IPMreq struct {
+	Multiaddr [4]byte /* in_addr */
+	Interface [4]byte /* in_addr */
+}
+
+type IPv6Mreq struct {
+	Multiaddr [16]byte /* in6_addr */
+	Interface uint32
+}
+
+func GetsockoptInt(fd Handle, level, opt int) (int, error) {
+	v := int32(0)
+	l := int32(unsafe.Sizeof(v))
+	err := Getsockopt(fd, int32(level), int32(opt), (*byte)(unsafe.Pointer(&v)), &l)
+	return int(v), err
+}
+
+func SetsockoptLinger(fd Handle, level, opt int, l *Linger) (err error) {
+	sys := sysLinger{Onoff: uint16(l.Onoff), Linger: uint16(l.Linger)}
+	return Setsockopt(fd, int32(level), int32(opt), (*byte)(unsafe.Pointer(&sys)), int32(unsafe.Sizeof(sys)))
+}
+
+func SetsockoptInet4Addr(fd Handle, level, opt int, value [4]byte) (err error) {
+	return Setsockopt(fd, int32(level), int32(opt), (*byte)(unsafe.Pointer(&value[0])), 4)
+}
+
+func SetsockoptIPMreq(fd Handle, level, opt int, mreq *IPMreq) (err error) {
+	return Setsockopt(fd, int32(level), int32(opt), (*byte)(unsafe.Pointer(mreq)), int32(unsafe.Sizeof(*mreq)))
+}
+
+func SetsockoptIPv6Mreq(fd Handle, level, opt int, mreq *IPv6Mreq) (err error) {
+	return syscall.EWINDOWS
+}
+
+func EnumProcesses(processIds []uint32, bytesReturned *uint32) error {
+	// EnumProcesses syscall expects the size parameter to be in bytes, but the code generated with mksyscall uses
+	// the length of the processIds slice instead. Hence, this wrapper function is added to fix the discrepancy.
+	var p *uint32
+	if len(processIds) > 0 {
+		p = &processIds[0]
+	}
+	size := uint32(len(processIds) * 4)
+	return enumProcesses(p, size, bytesReturned)
+}
+
+func Getpid() (pid int) { return int(GetCurrentProcessId()) }
+
+func FindFirstFile(name *uint16, data *Win32finddata) (handle Handle, err error) {
+	// NOTE(rsc): The Win32finddata struct is wrong for the system call:
+	// the two paths are each one uint16 short. Use the correct struct,
+	// a win32finddata1, and then copy the results out.
+	// There is no loss of expressivity here, because the final
+	// uint16, if it is used, is supposed to be a NUL, and Go doesn't need that.
+	// For Go 1.1, we might avoid the allocation of win32finddata1 here
+	// by adding a final Bug [2]uint16 field to the struct and then
+	// adjusting the fields in the result directly.
+	var data1 win32finddata1
+	handle, err = findFirstFile1(name, &data1)
+	if err == nil {
+		copyFindData(data, &data1)
+	}
+	return
+}
+
+func FindNextFile(handle Handle, data *Win32finddata) (err error) {
+	var data1 win32finddata1
+	err = findNextFile1(handle, &data1)
+	if err == nil {
+		copyFindData(data, &data1)
+	}
+	return
+}
+
+func getProcessEntry(pid int) (*ProcessEntry32, error) {
+	snapshot, err := CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
+	if err != nil {
+		return nil, err
+	}
+	defer CloseHandle(snapshot)
+	var procEntry ProcessEntry32
+	procEntry.Size = uint32(unsafe.Sizeof(procEntry))
+	if err = Process32First(snapshot, &procEntry); err != nil {
+		return nil, err
+	}
+	for {
+		if procEntry.ProcessID == uint32(pid) {
+			return &procEntry, nil
+		}
+		err = Process32Next(snapshot, &procEntry)
+		if err != nil {
+			return nil, err
+		}
+	}
+}
+
+func Getppid() (ppid int) {
+	pe, err := getProcessEntry(Getpid())
+	if err != nil {
+		return -1
+	}
+	return int(pe.ParentProcessID)
+}
+
+// TODO(brainman): fix all needed for os
+func Fchdir(fd Handle) (err error)             { return syscall.EWINDOWS }
+func Link(oldpath, newpath string) (err error) { return syscall.EWINDOWS }
+func Symlink(path, link string) (err error)    { return syscall.EWINDOWS }
+
+func Fchmod(fd Handle, mode uint32) (err error)        { return syscall.EWINDOWS }
+func Chown(path string, uid int, gid int) (err error)  { return syscall.EWINDOWS }
+func Lchown(path string, uid int, gid int) (err error) { return syscall.EWINDOWS }
+func Fchown(fd Handle, uid int, gid int) (err error)   { return syscall.EWINDOWS }
+
+func Getuid() (uid int)                  { return -1 }
+func Geteuid() (euid int)                { return -1 }
+func Getgid() (gid int)                  { return -1 }
+func Getegid() (egid int)                { return -1 }
+func Getgroups() (gids []int, err error) { return nil, syscall.EWINDOWS }
+
+func LoadCreateSymbolicLink() error {
+	return procCreateSymbolicLinkW.Find()
+}
+
+// Readlink returns the destination of the named symbolic link.
+func Readlink(path string, buf []byte) (n int, err error) {
+	fd, err := CreateFile(StringToUTF16Ptr(path), GENERIC_READ, 0, nil, OPEN_EXISTING,
+		FILE_FLAG_OPEN_REPARSE_POINT|FILE_FLAG_BACKUP_SEMANTICS, 0)
+	if err != nil {
+		return -1, err
+	}
+	defer CloseHandle(fd)
+
+	rdbbuf := make([]byte, MAXIMUM_REPARSE_DATA_BUFFER_SIZE)
+	var bytesReturned uint32
+	err = DeviceIoControl(fd, FSCTL_GET_REPARSE_POINT, nil, 0, &rdbbuf[0], uint32(len(rdbbuf)), &bytesReturned, nil)
+	if err != nil {
+		return -1, err
+	}
+
+	rdb := (*reparseDataBuffer)(unsafe.Pointer(&rdbbuf[0]))
+	var s string
+	switch rdb.ReparseTag {
+	case IO_REPARSE_TAG_SYMLINK:
+		data := (*symbolicLinkReparseBuffer)(unsafe.Pointer(&rdb.reparseBuffer))
+		p := (*[0xffff]uint16)(unsafe.Pointer(&data.PathBuffer[0]))
+		s = UTF16ToString(p[data.PrintNameOffset/2 : (data.PrintNameLength-data.PrintNameOffset)/2])
+	case IO_REPARSE_TAG_MOUNT_POINT:
+		data := (*mountPointReparseBuffer)(unsafe.Pointer(&rdb.reparseBuffer))
+		p := (*[0xffff]uint16)(unsafe.Pointer(&data.PathBuffer[0]))
+		s = UTF16ToString(p[data.PrintNameOffset/2 : (data.PrintNameLength-data.PrintNameOffset)/2])
+	default:
+		// the path is not a symlink or junction but another type of reparse
+		// point
+		return -1, syscall.ENOENT
+	}
+	n = copy(buf, []byte(s))
+
+	return n, nil
+}
+
+// GUIDFromString parses a string in the form of
+// "{XXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}" into a GUID.
+func GUIDFromString(str string) (GUID, error) {
+	guid := GUID{}
+	str16, err := syscall.UTF16PtrFromString(str)
+	if err != nil {
+		return guid, err
+	}
+	err = clsidFromString(str16, &guid)
+	if err != nil {
+		return guid, err
+	}
+	return guid, nil
+}
+
+// GenerateGUID creates a new random GUID.
+func GenerateGUID() (GUID, error) {
+	guid := GUID{}
+	err := coCreateGuid(&guid)
+	if err != nil {
+		return guid, err
+	}
+	return guid, nil
+}
+
+// String returns the canonical string form of the GUID,
+// in the form of "{XXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}".
+func (guid GUID) String() string {
+	var str [100]uint16
+	chars := stringFromGUID2(&guid, &str[0], int32(len(str)))
+	if chars <= 1 {
+		return ""
+	}
+	return string(utf16.Decode(str[:chars-1]))
+}
+
+// KnownFolderPath returns a well-known folder path for the current user, specified by one of
+// the FOLDERID_ constants, and chosen and optionally created based on a KF_ flag.
+func KnownFolderPath(folderID *KNOWNFOLDERID, flags uint32) (string, error) {
+	return Token(0).KnownFolderPath(folderID, flags)
+}
+
+// KnownFolderPath returns a well-known folder path for the user token, specified by one of
+// the FOLDERID_ constants, and chosen and optionally created based on a KF_ flag.
+func (t Token) KnownFolderPath(folderID *KNOWNFOLDERID, flags uint32) (string, error) {
+	var p *uint16
+	err := shGetKnownFolderPath(folderID, flags, t, &p)
+	if err != nil {
+		return "", err
+	}
+	defer CoTaskMemFree(unsafe.Pointer(p))
+	return UTF16PtrToString(p), nil
+}
+
+// RtlGetVersion returns the version of the underlying operating system, ignoring
+// manifest semantics but is affected by the application compatibility layer.
+func RtlGetVersion() *OsVersionInfoEx {
+	info := &OsVersionInfoEx{}
+	info.osVersionInfoSize = uint32(unsafe.Sizeof(*info))
+	// According to documentation, this function always succeeds.
+	// The function doesn't even check the validity of the
+	// osVersionInfoSize member. Disassembling ntdll.dll indicates
+	// that the documentation is indeed correct about that.
+	_ = rtlGetVersion(info)
+	return info
+}
+
+// RtlGetNtVersionNumbers returns the version of the underlying operating system,
+// ignoring manifest semantics and the application compatibility layer.
+func RtlGetNtVersionNumbers() (majorVersion, minorVersion, buildNumber uint32) {
+	rtlGetNtVersionNumbers(&majorVersion, &minorVersion, &buildNumber)
+	buildNumber &= 0xffff
+	return
+}
+
+// GetProcessPreferredUILanguages retrieves the process preferred UI languages.
+func GetProcessPreferredUILanguages(flags uint32) ([]string, error) {
+	return getUILanguages(flags, getProcessPreferredUILanguages)
+}
+
+// GetThreadPreferredUILanguages retrieves the thread preferred UI languages for the current thread.
+func GetThreadPreferredUILanguages(flags uint32) ([]string, error) {
+	return getUILanguages(flags, getThreadPreferredUILanguages)
+}
+
+// GetUserPreferredUILanguages retrieves information about the user preferred UI languages.
+func GetUserPreferredUILanguages(flags uint32) ([]string, error) {
+	return getUILanguages(flags, getUserPreferredUILanguages)
+}
+
+// GetSystemPreferredUILanguages retrieves the system preferred UI languages.
+func GetSystemPreferredUILanguages(flags uint32) ([]string, error) {
+	return getUILanguages(flags, getSystemPreferredUILanguages)
+}
+
+func getUILanguages(flags uint32, f func(flags uint32, numLanguages *uint32, buf *uint16, bufSize *uint32) error) ([]string, error) {
+	size := uint32(128)
+	for {
+		var numLanguages uint32
+		buf := make([]uint16, size)
+		err := f(flags, &numLanguages, &buf[0], &size)
+		if err == ERROR_INSUFFICIENT_BUFFER {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		buf = buf[:size]
+		if numLanguages == 0 || len(buf) == 0 { // GetProcessPreferredUILanguages may return numLanguages==0 with "\0\0"
+			return []string{}, nil
+		}
+		if buf[len(buf)-1] == 0 {
+			buf = buf[:len(buf)-1] // remove terminating null
+		}
+		languages := make([]string, 0, numLanguages)
+		from := 0
+		for i, c := range buf {
+			if c == 0 {
+				languages = append(languages, string(utf16.Decode(buf[from:i])))
+				from = i + 1
+			}
+		}
+		return languages, nil
+	}
+}
+
+func SetConsoleCursorPosition(console Handle, position Coord) error {
+	return setConsoleCursorPosition(console, *((*uint32)(unsafe.Pointer(&position))))
+}
+
+func GetStartupInfo(startupInfo *StartupInfo) error {
+	getStartupInfo(startupInfo)
+	return nil
+}
+
+func (s NTStatus) Errno() syscall.Errno {
+	return rtlNtStatusToDosErrorNoTeb(s)
+}
+
+func langID(pri, sub uint16) uint32 { return uint32(sub)<<10 | uint32(pri) }
+
+func (s NTStatus) Error() string {
+	b := make([]uint16, 300)
+	n, err := FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM|FORMAT_MESSAGE_FROM_HMODULE|FORMAT_MESSAGE_ARGUMENT_ARRAY, modntdll.Handle(), uint32(s), langID(LANG_ENGLISH, SUBLANG_ENGLISH_US), b, nil)
+	if err != nil {
+		return fmt.Sprintf("NTSTATUS 0x%08x", uint32(s))
+	}
+	// trim terminating \r and \n
+	for ; n > 0 && (b[n-1] == '\n' || b[n-1] == '\r'); n-- {
+	}
+	return string(utf16.Decode(b[:n]))
+}
+
+// NewNTUnicodeString returns a new NTUnicodeString structure for use with native
+// NT APIs that work over the NTUnicodeString type. Note that most Windows APIs
+// do not use NTUnicodeString, and instead UTF16PtrFromString should be used for
+// the more common *uint16 string type.
+func NewNTUnicodeString(s string) (*NTUnicodeString, error) {
+	s16, err := UTF16FromString(s)
+	if err != nil {
+		return nil, err
+	}
+	n := len(s16) * 2
+	if n > (1<<16)-1 {
+		return nil, syscall.EINVAL
+	}
+	return &NTUnicodeString{
+		Length:        uint16(n) - 2, // subtract 2 bytes for the NULL terminator
+		MaximumLength: uint16(n),
+		Buffer:        &s16[0],
+	}, nil
+}
+
+// Slice returns a uint16 slice that aliases the data in the NTUnicodeString.
+func (s *NTUnicodeString) Slice() []uint16 {
+	// Note: this rounds the length down, if it happens
+	// to (incorrectly) be odd. Probably safer than rounding up.
+	return unsafe.Slice(s.Buffer, s.MaximumLength/2)[:s.Length/2]
+}
+
+func (s *NTUnicodeString) String() string {
+	return UTF16ToString(s.Slice())
+}
+
+// NewNTString returns a new NTString structure for use with native
+// NT APIs that work over the NTString type. Note that most Windows APIs
+// do not use NTString, and instead UTF16PtrFromString should be used for
+// the more common *uint16 string type.
+func NewNTString(s string) (*NTString, error) {
+	var nts NTString
+	s8, err := ByteSliceFromString(s)
+	if err != nil {
+		return nil, err
+	}
+	// The source string plus its terminating NUL must fit within MAX_USHORT.
+	if len(s8) > MAX_USHORT {
+		return nil, syscall.EINVAL
+	}
+	RtlInitString(&nts, &s8[0])
+	return &nts, nil
+}
+
+// Slice returns a byte slice that aliases the data in the NTString.
+func (s *NTString) Slice() []byte {
+	slice := unsafe.Slice(s.Buffer, s.MaximumLength)
+	return slice[:s.Length]
+}
+
+func (s *NTString) String() string {
+	return ByteSliceToString(s.Slice())
+}
+
+// FindResource resolves a resource of the given name and resource type.
+func FindResource(module Handle, name, resType ResourceIDOrString) (Handle, error) {
+	var namePtr, resTypePtr uintptr
+	var name16, resType16 *uint16
+	var err error
+	resolvePtr := func(i interface{}, keep **uint16) (uintptr, error) {
+		switch v := i.(type) {
+		case string:
+			*keep, err = UTF16PtrFromString(v)
+			if err != nil {
+				return 0, err
+			}
+			return uintptr(unsafe.Pointer(*keep)), nil
+		case ResourceID:
+			return uintptr(v), nil
+		}
+		return 0, errorspkg.New("parameter must be a ResourceID or a string")
+	}
+	namePtr, err = resolvePtr(name, &name16)
+	if err != nil {
+		return 0, err
+	}
+	resTypePtr, err = resolvePtr(resType, &resType16)
+	if err != nil {
+		return 0, err
+	}
+	resInfo, err := findResource(module, namePtr, resTypePtr)
+	runtime.KeepAlive(name16)
+	runtime.KeepAlive(resType16)
+	return resInfo, err
+}
+
+func LoadResourceData(module, resInfo Handle) (data []byte, err error) {
+	size, err := SizeofResource(module, resInfo)
+	if err != nil {
+		return
+	}
+	resData, err := LoadResource(module, resInfo)
+	if err != nil {
+		return
+	}
+	ptr, err := LockResource(resData)
+	if err != nil {
+		return
+	}
+	data = unsafe.Slice((*byte)(unsafe.Pointer(ptr)), size)
+	return
+}
+
+// PSAPI_WORKING_SET_EX_BLOCK contains extended working set information for a page.
+type PSAPI_WORKING_SET_EX_BLOCK uint64
+
+// Valid returns the validity of this page.
+// If this bit is 1, the subsequent members are valid; otherwise they should be ignored.
+func (b PSAPI_WORKING_SET_EX_BLOCK) Valid() bool {
+	return (b & 1) == 1
+}
+
+// ShareCount is the number of processes that share this page. The maximum value of this member is 7.
+func (b PSAPI_WORKING_SET_EX_BLOCK) ShareCount() uint64 {
+	return b.intField(1, 3)
+}
+
+// Win32Protection is the memory protection attributes of the page. For a list of values, see
+// https://docs.microsoft.com/en-us/windows/win32/memory/memory-protection-constants
+func (b PSAPI_WORKING_SET_EX_BLOCK) Win32Protection() uint64 {
+	return b.intField(4, 11)
+}
+
+// Shared returns the shared status of this page.
+// If this bit is 1, the page can be shared.
+func (b PSAPI_WORKING_SET_EX_BLOCK) Shared() bool {
+	return (b & (1 << 15)) == 1
+}
+
+// Node is the NUMA node. The maximum value of this member is 63.
+func (b PSAPI_WORKING_SET_EX_BLOCK) Node() uint64 {
+	return b.intField(16, 6)
+}
+
+// Locked returns the locked status of this page.
+// If this bit is 1, the virtual page is locked in physical memory.
+func (b PSAPI_WORKING_SET_EX_BLOCK) Locked() bool {
+	return (b & (1 << 22)) == 1
+}
+
+// LargePage returns the large page status of this page.
+// If this bit is 1, the page is a large page.
+func (b PSAPI_WORKING_SET_EX_BLOCK) LargePage() bool {
+	return (b & (1 << 23)) == 1
+}
+
+// Bad returns the bad status of this page.
+// If this bit is 1, the page is has been reported as bad.
+func (b PSAPI_WORKING_SET_EX_BLOCK) Bad() bool {
+	return (b & (1 << 31)) == 1
+}
+
+// intField extracts an integer field in the PSAPI_WORKING_SET_EX_BLOCK union.
+func (b PSAPI_WORKING_SET_EX_BLOCK) intField(start, length int) uint64 {
+	var mask PSAPI_WORKING_SET_EX_BLOCK
+	for pos := start; pos < start+length; pos++ {
+		mask |= (1 << pos)
+	}
+
+	masked := b & mask
+	return uint64(masked >> start)
+}
+
+// PSAPI_WORKING_SET_EX_INFORMATION contains extended working set information for a process.
+type PSAPI_WORKING_SET_EX_INFORMATION struct {
+	// The virtual address.
+	VirtualAddress Pointer
+	// A PSAPI_WORKING_SET_EX_BLOCK union that indicates the attributes of the page at VirtualAddress.
+	VirtualAttributes PSAPI_WORKING_SET_EX_BLOCK
+}
+
+// CreatePseudoConsole creates a windows pseudo console.
+func CreatePseudoConsole(size Coord, in Handle, out Handle, flags uint32, pconsole *Handle) error {
+	// We need this wrapper to manually cast Coord to uint32. The autogenerated wrappers only
+	// accept arguments that can be casted to uintptr, and Coord can't.
+	return createPseudoConsole(*((*uint32)(unsafe.Pointer(&size))), in, out, flags, pconsole)
+}
+
+// ResizePseudoConsole resizes the internal buffers of the pseudo console to the width and height specified in `size`.
+func ResizePseudoConsole(pconsole Handle, size Coord) error {
+	// We need this wrapper to manually cast Coord to uint32. The autogenerated wrappers only
+	// accept arguments that can be casted to uintptr, and Coord can't.
+	return resizePseudoConsole(pconsole, *((*uint32)(unsafe.Pointer(&size))))
+}
+
+// DCB constants. See https://learn.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-dcb.
+const (
+	CBR_110    = 110
+	CBR_300    = 300
+	CBR_600    = 600
+	CBR_1200   = 1200
+	CBR_2400   = 2400
+	CBR_4800   = 4800
+	CBR_9600   = 9600
+	CBR_14400  = 14400
+	CBR_19200  = 19200
+	CBR_38400  = 38400
+	CBR_57600  = 57600
+	CBR_115200 = 115200
+	CBR_128000 = 128000
+	CBR_256000 = 256000
+
+	DTR_CONTROL_DISABLE   = 0x00000000
+	DTR_CONTROL_ENABLE    = 0x00000010
+	DTR_CONTROL_HANDSHAKE = 0x00000020
+
+	RTS_CONTROL_DISABLE   = 0x00000000
+	RTS_CONTROL_ENABLE    = 0x00001000
+	RTS_CONTROL_HANDSHAKE = 0x00002000
+	RTS_CONTROL_TOGGLE    = 0x00003000
+
+	NOPARITY    = 0
+	ODDPARITY   = 1
+	EVENPARITY  = 2
+	MARKPARITY  = 3
+	SPACEPARITY = 4
+
+	ONESTOPBIT   = 0
+	ONE5STOPBITS = 1
+	TWOSTOPBITS  = 2
+)
+
+// EscapeCommFunction constants. See https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-escapecommfunction.
+const (
+	SETXOFF  = 1
+	SETXON   = 2
+	SETRTS   = 3
+	CLRRTS   = 4
+	SETDTR   = 5
+	CLRDTR   = 6
+	SETBREAK = 8
+	CLRBREAK = 9
+)
+
+// PurgeComm constants. See https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-purgecomm.
+const (
+	PURGE_TXABORT = 0x0001
+	PURGE_RXABORT = 0x0002
+	PURGE_TXCLEAR = 0x0004
+	PURGE_RXCLEAR = 0x0008
+)
+
+// SetCommMask constants. See https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-setcommmask.
+const (
+	EV_RXCHAR  = 0x0001
+	EV_RXFLAG  = 0x0002
+	EV_TXEMPTY = 0x0004
+	EV_CTS     = 0x0008
+	EV_DSR     = 0x0010
+	EV_RLSD    = 0x0020
+	EV_BREAK   = 0x0040
+	EV_ERR     = 0x0080
+	EV_RING    = 0x0100
+)
+
+@@END
 @@PORTABLE {"path":"vendor/golang.org/x/sys/windows/types_windows.go","mode":420,"size":129524,"sha256":"afa1ce9faf38958759a3cabca512e105bf937970e8ed411e6d8a7a9fa9de4558","index":0,"count":3,"encoding":"utf-8","payloadBytes":48004}
 // Copyright 2011 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
