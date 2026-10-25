@@ -10501,7 +10501,7 @@ fi
 `
 
 @@END
-@@PORTABLE {"path":"internal/executionnode/runtime_protocol.go","mode":420,"size":63464,"sha256":"275e4befc24f4d10a75dea9ac3f5e6ce1a11c0036579ac39f439f32ee098f8b5","index":0,"count":2,"encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"internal/executionnode/runtime_protocol.go","mode":420,"size":63464,"sha256":"560e6f8e0d0606d7f456bd9eae0fc163bd2ec1044c96a20860d44e623be7d6bd","index":0,"count":2,"encoding":"utf-8","payloadBytes":48000}
 package executionnode
 
 // Typed access to the fixed UI-BE-04C runtime protocol.  This is transport
@@ -10740,8 +10740,8 @@ func validSHA256(value string) bool {
 const ExecutionEventPageLimit = 256
 
 // Match the bounded Execution Node journal. The remote lifecycle reserves its
-// final 256 slots for critical events, but permits up to 16384 total records.
-const maxObservedExecutionEvents = 16384
+// final 256 slots for critical events, but permits up to 32768 total records.
+const maxObservedExecutionEvents = 32768
 
 const maxDecodedExecutionEventBytes = 64 * 1024
 const maxExecutionProtocolResponseBytes = 16 * 1024 * 1024
@@ -11499,7 +11499,7 @@ func validSHA256Fingerprint(value string) bool {
 	for _, character := range value[len("sha256:"):] {
 		
 @@END
-@@PORTABLE {"path":"internal/executionnode/runtime_protocol.go","mode":420,"size":63464,"sha256":"275e4befc24f4d10a75dea9ac3f5e6ce1a11c0036579ac39f439f32ee098f8b5","index":1,"count":2,"encoding":"utf-8","payloadBytes":15464}
+@@PORTABLE {"path":"internal/executionnode/runtime_protocol.go","mode":420,"size":63464,"sha256":"560e6f8e0d0606d7f456bd9eae0fc163bd2ec1044c96a20860d44e623be7d6bd","index":1,"count":2,"encoding":"utf-8","payloadBytes":15464}
 if (character < '0' || character > '9') && (character < 'a' || character > 'f') {
 			return false
 		}
@@ -25261,7 +25261,7 @@ func ReadLocks(ctx context.Context, projectRoot string, _ executionbundle.Verifi
 }
 
 @@END
-@@PORTABLE {"path":"internal/runtimesecret/broker.go","mode":420,"size":43420,"sha256":"556cad27ed58743f4e17ae193f7d3af550164f0ae26325f55b1e19571464d023","index":0,"count":1,"encoding":"utf-8","payloadBytes":43420}
+@@PORTABLE {"path":"internal/runtimesecret/broker.go","mode":420,"size":43420,"sha256":"29f399488de3f794b34701b3d70182fd220040cce71ce24da5f8826f9eb032ac","index":0,"count":1,"encoding":"utf-8","payloadBytes":43420}
 // Package runtimesecret holds short-lived, application-local target session
 // credentials. It deliberately has no persistence or transport capability.
 package runtimesecret
@@ -25851,7 +25851,7 @@ func WithTTL(ttl time.Duration) Option      { return func(b *Broker) { b.ttl = t
 func WithClock(now func() time.Time) Option { return func(b *Broker) { b.now = now } }
 
 func NewBroker(options ...Option) *Broker {
-	b := &Broker{ttl: 2 * time.Hour, now: time.Now}
+	b := &Broker{ttl: 4 * time.Hour, now: time.Now}
 	for _, option := range options {
 		option(b)
 	}

@@ -38948,7 +38948,7 @@ def prepare(journal, value, release, runtime_release):
     return dict(status='READY', preparationDigest=digest(result))
 
 @@END
-@@PORTABLE {"path":"ansible-core/tools/execution_lifecycle.py","mode":420,"size":35455,"sha256":"196c9719217da15918b5c0688fcb703557f30bc17b74725bfde09cddf3bf3dcb","index":0,"count":1,"encoding":"utf-8","payloadBytes":35455}
+@@PORTABLE {"path":"ansible-core/tools/execution_lifecycle.py","mode":420,"size":35455,"sha256":"273bcfaa5dd24b19598d0155d4f7e32e482801f91dc48bb5ad14f6c9bdbdcce7","index":0,"count":1,"encoding":"utf-8","payloadBytes":35455}
 """Private, durable Execution Node lifecycle primitives for UI-BE-04C.
 
 This module deliberately has no Installer, SSH or arbitrary-command API.  The
@@ -38976,7 +38976,7 @@ ACTIVE = frozenset(("PENDING", "STARTING", "RUNNING"))
 # Detailed Ansible task events are intentionally bounded, but a complete
 # cumulative service plan legitimately produces several thousand events.
 # Keep the journal finite without truncating normal multi-service runs.
-MAX_EVENTS = 16384
+MAX_EVENTS = 32768
 MAX_EVENT_PAGE = 512
 MAX_EVENT_PAGE_BYTES = 1024 * 1024
 MAX_EVENT_BYTES = 64 * 1024
