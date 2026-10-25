@@ -8,8 +8,15 @@
 - name: Bind verified UID and private TLS path
   ansible.builtin.set_fact:
     _platform_docker_uid: "{{ getent_passwd[platform_docker_account_name][1] | int }}"
+    _platform_docker_gid: "{{ getent_passwd[platform_docker_account_name][2] | int }}"
+    _platform_docker_home: "{{ getent_passwd[platform_docker_account_name][4] }}"
     _platform_docker_private_tls_dir: "{{ getent_passwd[platform_docker_account_name][4] }}/.config/docker/pki"
   changed_when: false
+
+- name: Verify Docker data directory and daemon configuration read-only
+  ansible.builtin.include_tasks: data_root.yml
+  vars:
+    platform_docker_verify_only: true
 
 - name: Check Docker account linger state
   ansible.builtin.command:
@@ -74,6 +81,7 @@
     that:
       - "'rootless' in ((_platform_docker_info.stdout | from_json).SecurityOptions | join(' '))"
       - (_platform_docker_info.stdout | from_json).Swarm.LocalNodeState == 'inactive'
+      - (_platform_docker_info.stdout | from_json).DockerRootDir == platform_docker_data_root
     fail_msg: DOCKER_ROOTLESS_RUNTIME_INVALID
 
 - name: Verify exact Docker Compose CLI plugin

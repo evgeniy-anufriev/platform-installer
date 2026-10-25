@@ -34,10 +34,11 @@ when all declared inputs exist in the current session, amber «Не устано
 otherwise. Project references alone do not establish presence; this status
 does not authorize execution or replace Core checks.
 
-Data directory overrides for Kafka, Redis, ClickHouse and PostgreSQL use the
+Data directory overrides for Kafka, Redis, ClickHouse, PostgreSQL and Docker use the
 same catalog-driven parameter editor. The service package provides the field
 label and help text. Redis and ClickHouse configure a root with member
-subdirectories; Kafka and PostgreSQL configure the member directory. The UI
+subdirectories; Kafka and PostgreSQL configure the member directory. Docker's
+deployment-scoped `dataRoot` configures the rootless daemon directory. The UI
 shows that changing a path does not migrate existing data. Target path safety
 is checked by the service role before mutation.
 

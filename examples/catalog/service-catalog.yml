@@ -1,6 +1,6 @@
 apiVersion: platform.installer/catalog/v1alpha1
 kind: ServiceCatalog
-digest: sha256:0312ef6d691d72d2a9aca03b208632391045191dffaed8f83b76e0e6f95524ad
+digest: sha256:56ab7904b254dea873e29a243f6af6263e5b3f2a4639118f7b2fa2d12fae6e60
 definitions:
   clickhouse:
     apiVersion: platform.installer/service-manifest/v1alpha1
@@ -318,6 +318,22 @@ definitions:
     configuration:
       additionalProperties: false
       settings:
+        dataRoot:
+          kind: MANAGED
+          roleVariable: platform_docker_data_root
+          type: string
+          scopes:
+          - deployment
+          validation:
+            minLength: 1
+            maxLength: 255
+          ui:
+            label: Каталог данных Docker
+            section: Хранение
+            order: 0
+            description: По умолчанию /home/<Docker account>/.local/share/docker. Записывается в data-root
+              пользовательского daemon.json. Изменение пути не переносит существующие образы, контейнеры
+              и тома.
         accountName:
           kind: MANAGED
           roleVariable: platform_docker_account_name
@@ -441,7 +457,7 @@ definitions:
       architecture: x86_64
       requiredOffline: false
     compatibilityRef: ../../services/docker/compatibility.yml
-    x-definitionDigest: sha256:d24bf668ff656f2b8a9d9333f2ad8354b00b7664f862464e0b77b4caa48f5de5
+    x-definitionDigest: sha256:ea89641c872bd59b47c029c3c83231bf5cfcd5a07f0dfb0120a288370b233587
     x-sourceManifest: services/docker/service.yml
   kafka:
     apiVersion: platform.installer/service-manifest/v1alpha1

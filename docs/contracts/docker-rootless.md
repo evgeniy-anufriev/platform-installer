@@ -30,6 +30,26 @@ Apply/Verify do not.
 
 ## Runtime and network
 
+### Docker data directory
+
+`platform_docker_data_root` defaults to
+`/home/{{ platform_docker_account_name }}/.local/share/docker`. The catalog
+exposes it as deployment setting `dataRoot` («Каталог данных Docker»,
+«Хранение») through the ordinary override/reset and Review/Save flow.
+The role writes `data-root` in the selected account's
+`~/.config/docker/daemon.json`, preserving other JSON properties, and restarts
+the existing managed bridge when the configuration changes. This is the
+rootless daemon configuration, separate from the rootful `/etc/docker` path.
+
+The directory must be an absolute bounded path with no traversal, symlink,
+foreign-owned or group/world-writable ancestors. System directories and
+other users' homes are rejected. An existing leaf must belong to the Docker
+account; Apply creates a missing private directory. Changing the setting
+does not migrate or delete existing images, containers or volumes. The
+operator must plan any required data migration before Apply. Verify checks
+the directory, configured `data-root` and active daemon's `DockerRootDir`
+without changing files.
+
 RED OS repository packages provide Docker Engine/CLI/rootless extras,
 RootlessKit, LXC, fuse-overlayfs and the `docker-compose` package, which
 supplies the `docker compose` CLI plugin. Package acquisition follows the

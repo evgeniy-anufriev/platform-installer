@@ -382,6 +382,9 @@
     _platform_docker_private_tls_dir: "{{ _platform_docker_home }}/.config/docker/pki"
   changed_when: false
 
+- name: Configure Docker data root
+  ansible.builtin.include_tasks: data_root.yml
+
 - name: Configure persistent rootless Docker shell environment
   ansible.builtin.include_tasks: shell_environment.yml
 
