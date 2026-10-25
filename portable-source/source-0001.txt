@@ -142,7 +142,7 @@ class ActionModule(ActionBase):
                 "_ansible_facts_cacheable": False, "_ansible_no_log": True}
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/build_deployment_plan.py","mode":420,"size":6030,"sha256":"85d888306ca1b0f0aa39fdaf3d88be7084496851841ae508ddfe29f60308448f","index":0,"count":1,"encoding":"utf-8","payloadBytes":6030}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/build_deployment_plan.py","mode":420,"size":6559,"sha256":"3908ef97a9260d1a56492a58419d754a74ed0f36bc4f52eff96f03be0030e71e","index":0,"count":1,"encoding":"utf-8","payloadBytes":6559}
 import json
 import os
 import tempfile
@@ -199,6 +199,10 @@ class ActionModule(ActionBase):
             from ansible_collections.platform.core.plugins.module_utils.application_selection import execution_scope
             result = promote(result, execution_scope(snapshot, self._task.args.get('application_library_order'), self._task.args.get('skip_application_libraries')),
                              self._task.args.get('skip_infrastructure_verify', False))
+            from ansible_collections.platform.core.plugins.module_utils.application_progress import describe_progress
+            if self._task.args.get('application_image_metadata') or self._task.args.get('skip_application_libraries') is not None:
+                result = describe_progress(result, execution_scope(snapshot, self._task.args.get('application_library_order'), self._task.args.get('skip_application_libraries')),
+                                           self._task.args.get('skip_infrastructure_verify', False))
             result['executionManifestDigest'] = canonical_digest(result['executionManifest']) if result.get('executionManifest') else None
             destination = os.environ.get("PLATFORM_EXECUTION_MANIFEST_OUTPUT")
             manifest = result["executionManifest"]
@@ -1585,7 +1589,7 @@ class CallbackModule(CallbackBase):
         self._write(payload, "PLATFORM_CORE_DIAGNOSTIC_OUTPUT")
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/callback/execution_events_json.py","mode":420,"size":8650,"sha256":"a9d2e0881bcb3e45c3abc6cffcc47ef8da13b2f71dfdc54ca485ab7b5cdbf5be","index":0,"count":1,"encoding":"utf-8","payloadBytes":8650}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/callback/execution_events_json.py","mode":420,"size":10000,"sha256":"b973a4843bf468fe2b3e996b76d16ac0444a49cc735aa0cd1ba3edbdd2d11555","index":0,"count":1,"encoding":"utf-8","payloadBytes":10000}
 from __future__ import absolute_import, division, print_function
 
 import os
@@ -1736,6 +1740,7 @@ class CallbackModule(CallbackBase):
     def v2_runner_on_ok(self, result):
         payload = result._result if isinstance(result._result, dict) else {}
         self._emit("TASK_COMPLETED", "CHANGED" if payload.get("changed") else "SUCCESS", result._task, result)
+        self._application_progress(result, payload)
         # Only this Core module's bounded projection can report a nonfatal
         # integration error. Never journal arbitrary task payload/message text.
         if (self._no_log(result._task, result) or not self._run_id() or
@@ -1762,6 +1767,29 @@ class CallbackModule(CallbackBase):
 
     def v2_runner_on_skipped(self, result):
         self._emit("TASK_COMPLETED", "SKIPPED", result._task, result)
+
+    def _application_progress(self, result, payload):
+        task = result._task
+        if (not self._run_id() or self._no_log(task, result) or
+                self._context()['actionId'] != 'applications:apply' or
+                getattr(task, 'action', '') != 'ansible.builtin.debug' or
+                'platform_application_progress' not in getattr(task, 'tags', [])):
+            return
+        marker = payload.get('msg')
+        if not isinstance(marker, dict) or set(marker) != {'id', 'state'}:
+            return
+        identity, state = marker['id'], marker['state']
+        if (not isinstance(identity, str) or not re.fullmatch(
+                r'applications:(?:prepare|library:[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*)', identity) or len(identity) > 512 or
+                state not in ('started', 'completed')):
+            return
+        try:
+            self._journal().event('ACTION_STARTED' if state == 'started' else 'ACTION_COMPLETED',
+                                  'RUNNING' if state == 'started' else 'SUCCESS',
+                                  'Application progress step ' + state,
+                                  **dict(self._context(), actionId=identity))
+        except Exception:
+            self._journal().mark_task_observability_degraded('TASK_EVENT_WRITE_FAILED')
 
     def v2_runner_on_failed(self, result, ignore_errors=False):
         del ignore_errors
@@ -23124,6 +23152,34 @@ def script_queue(jobs, library_order):
                                           0 if item['scope'] == 'library' else 1, item['instanceId'], item['hostId']))
 
 @@END
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_progress.py","mode":420,"size":1446,"sha256":"792f309beddd5469d1e899802b948b837b1a07a6d7780c5ebd2f226330a93c47","index":0,"count":1,"encoding":"utf-8","payloadBytes":1446}
+"""Display-only steps for the existing application Apply operation."""
+try:
+    from .project_validation import canonical_digest
+except ImportError:
+    from project_validation import canonical_digest
+
+
+def describe_progress(result, scope, skip_infrastructure_verify=False):
+    plan = result['deploymentPlan']
+    applies = [action for phase in plan.get('phases', []) for action in phase['actions']
+               if action['type'] == 'APPLICATION_LIBRARIES_APPLY']
+    if not applies or 'executionMode' not in plan:
+        return result
+    applies[0]['progressSteps'] = [dict(id='applications:prepare', summary='Подготовить ресурсы и провайдеров')] + [
+        dict(id='applications:library:' + identity, summary='Установить и проверить библиотеку ' + identity)
+        for identity in scope['installLibraries']]
+    plan.update(apiVersion='platform.installer/plan/v1alpha10',
+                skipApplicationLibraries=scope['skippedLibraries'], applicationExecutionScope=scope,
+                skipInfrastructureVerify=skip_infrastructure_verify)
+    fingerprint = canonical_digest(dict(previous=plan['fingerprints']['plan'], phases=plan['phases']))
+    plan['fingerprints']['plan'] = fingerprint
+    plan['id'] = 'plan-' + fingerprint.split(':')[1][:24]
+    if result.get('executionManifest'):
+        result['executionManifest']['planFingerprint'] = fingerprint
+    return result
+
+@@END
 @@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_providers.py","mode":420,"size":31372,"sha256":"2a76e9418e49abf1528d972f3283cf2e04c566518674b3562e951bba8972d5eb","index":0,"count":1,"encoding":"utf-8","payloadBytes":31372}
 """Target-free provider hook projection. Ansible remains the variable resolver."""
 import hashlib
@@ -35833,8 +35889,17 @@ artifactLock:
       when: platform_application_image_result_path is defined
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-apply.yml","mode":420,"size":3094,"sha256":"6e9ae91cbd4deb969aeee82c09b6854b3149a6fc120ed60fa21d7526b67fb49a","index":0,"count":1,"encoding":"utf-8","payloadBytes":3094}
+@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-apply.yml","mode":420,"size":3626,"sha256":"7b40429e10b318e2c07b69a0393d65aa3a84d1c47d773d943c1d5cabf2ce959a","index":0,"count":1,"encoding":"utf-8","payloadBytes":3626}
 ---
+- name: Начать подготовку библиотек
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Отметить начало подготовки
+      ansible.builtin.debug:
+        msg: {id: 'applications:prepare', state: started}
+      tags: [platform_application_progress]
+
 - import_playbook: application-libraries-preflight.yml
 - import_playbook: application-libraries-vault-preflight.yml
 - import_playbook: application-libraries-provider-stage.yml
@@ -35846,6 +35911,12 @@ artifactLock:
   become: true
   any_errors_fatal: true
   tasks:
+    - name: Отметить завершение подготовки
+      ansible.builtin.debug:
+        msg: {id: 'applications:prepare', state: completed}
+      tags: [platform_application_progress]
+      run_once: true
+
     - name: Применение упорядоченных библиотек с ограниченным хранением частных источников
       block:
         - name: Привязать упорядоченные идентификаторы библиотек из неизменяемого плана или ввода вручную
@@ -36000,8 +36071,17 @@ artifactLock:
   run_once: true
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-ordered-library.yml","mode":420,"size":5872,"sha256":"a88ca3298a969f7ca3480fc5ad71cc0b0fc46e3ca10775eeebbf1477b831c6f8","index":0,"count":1,"encoding":"utf-8","payloadBytes":5872}
+@@PORTABLE {"path":"ansible-core/playbooks/application-libraries-ordered-library.yml","mode":420,"size":6610,"sha256":"6182f3d70bd8dace27bb1326624a9b609813abd4fc73dcf4f90973ab71e45e62","index":0,"count":1,"encoding":"utf-8","payloadBytes":6610}
 ---
+- name: Отметить начало установки библиотеки
+  ansible.builtin.debug:
+    msg:
+      id: "applications:library:{{ application_library_id }}"
+      state: started
+  tags: [platform_application_progress]
+  run_once: true
+  when: application_library_id in hostvars['localhost'].application_selection.scope.installLibraries
+
 - name: Привязать все логические экземпляры, выбранные для этой библиотеки
   ansible.builtin.set_fact:
     application_library_instance_ids: >-
@@ -36099,6 +36179,15 @@ artifactLock:
   loop_control:
     loop_var: application_integration_script
   run_once: true
+
+- name: Отметить завершение установки и проверки библиотеки
+  ansible.builtin.debug:
+    msg:
+      id: "applications:library:{{ application_library_id }}"
+      state: completed
+  tags: [platform_application_progress]
+  run_once: true
+  when: application_library_id in hostvars['localhost'].application_selection.scope.installLibraries
 
 @@END
 @@PORTABLE {"path":"ansible-core/playbooks/application-libraries-post-install.yml","mode":420,"size":3478,"sha256":"a634d1f83e0d0bdc53e52a8264cc1ffeee9016343a86626f2fcb311b2e22c155","index":0,"count":1,"encoding":"utf-8","payloadBytes":3478}
@@ -40226,7 +40315,7 @@ def _secret_output_retention_pending(root, journal):
     return False
 
 @@END
-@@PORTABLE {"path":"ansible-core/tools/execution_protocol.py","mode":420,"size":76012,"sha256":"b96f4565b052ce183b9e4101c94ef080aeeb0e53e2b90bf9d7f9028d00714f42","index":0,"count":2,"encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"ansible-core/tools/execution_protocol.py","mode":420,"size":76245,"sha256":"a8cbf21cb6f55eb1b421772c275cfc136bcf61eb29c43f157b7c3926ce4f7989","index":0,"count":2,"encoding":"utf-8","payloadBytes":48000}
 #!/usr/bin/env python3
 """Fixed JSON protocol for the activated Execution Node runtime.
 
@@ -40488,6 +40577,9 @@ def _image_capabilities(args, selection=False):
         result['applicationPostInstall'] = dict(protocol='ApplicationPostInstall/v1alpha1',
             packageManifestVersion='platform.installer/application-package/v1alpha3',
             planContract='platform.installer/plan/v1alpha9', manifestContract='platform.installer/execution-manifest/v1alpha7')
+        result['apiVersion'] = 'platform.installer/execution-capabilities/v1alpha13'
+        result['applicationProgress'] = dict(protocol='ApplicationProgress/v1alpha1',
+            planContract='platform.installer/plan/v1alpha10')
     result['runtimeSecretDescriptors']['protocol'] = 'BuildRuntimeSecretDescriptors/v1alpha4'
     return result
 
@@ -41007,14 +41099,14 @@ def core_operation(value, state_root, runtime_release, operation, runtime_identi
         playbook, inventory = "validate.yml", os.path.join(project, "inventory", "hosts.yml")
         extra = {"platform_project_manifest_path": os.path.join(project, "project.yml"), "platform_validation_artifact": os.path.join(journal.directory, "validation.json")}
     elif operation in ("BuildProjectSnapshot", "BuildServiceConfigurationPreview"):
-        playbook, inventory = ("project-snapshot.yml" if operation == "BuildProjectSnapshot" else "service-configuration-preview.yml"), os.path.join(project, "inventory", "hosts.yml")
+        playbook, inventory = ("project-snapshot.yml" if operation == "BuildProjectSnapshot
+@@END
+@@PORTABLE {"path":"ansible-core/tools/execution_protocol.py","mode":420,"size":76245,"sha256":"a8cbf21cb6f55eb1b421772c275cfc136bcf61eb29c43f157b7c3926ce4f7989","index":1,"count":2,"encoding":"utf-8","payloadBytes":28245}
+" else "service-configuration-preview.yml"), os.path.join(project, "inventory", "hosts.yml")
         snapshot_request = _validated_snapshot_request(value)
         if snapshot_request is None:
             owned_paths = []
-        else
-@@END
-@@PORTABLE {"path":"ansible-core/tools/execution_protocol.py","mode":420,"size":76012,"sha256":"b96f4565b052ce183b9e4101c94ef080aeeb0e53e2b90bf9d7f9028d00714f42","index":1,"count":2,"encoding":"utf-8","payloadBytes":28012}
-:
+        else:
             owned_paths = snapshot_request.get("installerOwnedLogicalPaths")
             archive_digest_path = os.path.join(journal.directory, "project-archive.digest")
             if not os.path.isfile(archive_digest_path) or os.path.islink(archive_digest_path):
@@ -48781,6 +48873,271 @@ libraryExecutionPriorities:
 }
 
 @@END
+@@PORTABLE {"path":"contracts/execution-capabilities/v1alpha13/schema.json","mode":420,"size":7136,"sha256":"86334a86c3348da825814eb60518b7b776763919d8ef47fed8927c60a90eac68","index":0,"count":1,"encoding":"utf-8","payloadBytes":7136}
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/execution-capabilities/v1alpha13/schema.json",
+  "title": "Execution capabilities with ordered deployment planning",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "apiVersion",
+    "kind",
+    "bootstrapProtocol",
+    "coreVersion",
+    "catalogDigest",
+    "schemaDigest",
+    "runtime",
+    "supportedOperations",
+    "executionStart",
+    "runtimeSecretDescriptors",
+    "targetCredentialLease",
+    "serviceConfigurationPreview",
+    "deploymentPlanRequestVersions",
+    "applicationExecution",
+    "infrastructureVerification",
+    "skipInfrastructureVerify",
+    "applicationImages",
+    "applicationLibrarySelection",
+    "applicationPostInstall",
+    "applicationProgress"
+  ],
+  "properties": {
+    "apiVersion": {
+      "const": "platform.installer/execution-capabilities/v1alpha13"
+    },
+    "kind": {
+      "const": "ExecutionCapabilities"
+    },
+    "bootstrapProtocol": {
+      "$ref": "../v1alpha5/schema.json#/properties/bootstrapProtocol"
+    },
+    "coreVersion": {
+      "$ref": "../v1alpha5/schema.json#/properties/coreVersion"
+    },
+    "catalogDigest": {
+      "$ref": "../v1alpha5/schema.json#/properties/catalogDigest"
+    },
+    "schemaDigest": {
+      "$ref": "../v1alpha5/schema.json#/properties/schemaDigest"
+    },
+    "runtime": {
+      "$ref": "../v1alpha5/schema.json#/properties/runtime"
+    },
+    "supportedOperations": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "GetCapabilities",
+          "ValidateProject",
+          "BuildProjectSnapshot",
+          "BuildServiceConfigurationPreview",
+          "BuildRuntimeSecretDescriptors",
+          "BuildDeploymentPlan",
+          "StartExecution",
+          "GetExecution",
+          "GetEvents",
+          "CancelExecution",
+          "PutRuntimeSecretLease",
+          "PrepareApplicationImages"
+        ]
+      },
+      "contains": {
+        "const": "BuildServiceConfigurationPreview"
+      }
+    },
+    "projectSnapshotRequestVersions": {
+      "$ref": "../v1alpha5/schema.json#/properties/projectSnapshotRequestVersions"
+    },
+    "executionStart": {
+      "$ref": "../v1alpha5/schema.json#/properties/executionStart"
+    },
+    "targetCredentialLease": {
+      "$ref": "../v1alpha5/schema.json#/properties/targetCredentialLease"
+    },
+    "runtimeSecretDescriptors": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol",
+        "maxHostsPerDescriptor",
+        "maxResponseBytes"
+      ],
+      "properties": {
+        "protocol": {
+          "const": "BuildRuntimeSecretDescriptors/v1alpha4"
+        },
+        "maxDescriptors": {
+          "const": 16
+        },
+        "maxHostsPerDescriptor": {
+          "const": 256
+        },
+        "maxResponseBytes": {
+          "const": 65536
+        }
+      }
+    },
+    "serviceConfigurationPreview": {
+      "$ref": "../v1alpha5/schema.json#/properties/serviceConfigurationPreview"
+    },
+    "deploymentPlanRequestVersions": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "applicationExecution": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "manifestContract",
+        "planContract",
+        "requiredPlanRequestVersion"
+      ],
+      "properties": {
+        "requiredPlanRequestVersion": {
+          "const": "platform.installer/execution-runtime/v1alpha3"
+        },
+        "manifestContract": {
+          "const": "platform.installer/execution-manifest/v1alpha2"
+        },
+        "planContract": {
+          "const": "platform.installer/plan/v1alpha4"
+        }
+      }
+    },
+    "infrastructureVerification": {
+      "required": [
+        "protocol",
+        "executionModes",
+        "requiredPlanRequestVersion",
+        "manifestContract",
+        "planContract"
+      ],
+      "properties": {
+        "executionModes": {
+          "const": [
+            "FULL_PROJECT",
+            "APPLICATION_LIBRARIES_ONLY",
+            "INFRASTRUCTURE_VERIFY_ONLY"
+          ]
+        },
+        "planContract": {
+          "const": "platform.installer/plan/v1alpha5"
+        },
+        "requiredPlanRequestVersion": {
+          "const": "platform.installer/execution-runtime/v1alpha4"
+        },
+        "protocol": {
+          "const": "InfrastructureVerification/v1alpha1"
+        },
+        "manifestContract": {
+          "const": "platform.installer/execution-manifest/v1alpha3"
+        }
+      },
+      "type": "object",
+      "additionalProperties": false
+    },
+    "skipInfrastructureVerify": {
+      "type": "boolean"
+    },
+    "applicationImages": {
+      "required": [
+        "protocol",
+        "leaseProtocol",
+        "planContract",
+        "manifestContract"
+      ],
+      "properties": {
+        "protocol": {
+          "const": "PrepareApplicationImages/v1alpha1"
+        },
+        "leaseProtocol": {
+          "const": "platform.installer/application-image-preparation-lease/v1alpha1"
+        },
+        "manifestContract": {
+          "const": "platform.installer/execution-manifest/v1alpha6"
+        },
+        "planContract": {
+          "const": "platform.installer/plan/v1alpha8"
+        }
+      },
+      "type": "object",
+      "additionalProperties": false
+    },
+    "applicationLibrarySelection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol",
+        "packageManifestVersions",
+        "scriptPhase",
+        "argumentSource"
+      ],
+      "properties": {
+        "protocol": {
+          "const": "ApplicationLibrarySelection/v1alpha1"
+        },
+        "packageManifestVersions": {
+          "const": [
+            "platform.installer/application-package/v1alpha1",
+            "platform.installer/application-package/v1alpha2"
+          ]
+        },
+        "scriptPhase": {
+          "const": "integration_apply"
+        },
+        "argumentSource": {
+          "const": "integration_consumers"
+        }
+      }
+    },
+    "applicationPostInstall": {
+      "required": [
+        "protocol",
+        "packageManifestVersion",
+        "planContract",
+        "manifestContract"
+      ],
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "packageManifestVersion": {
+          "const": "platform.installer/application-package/v1alpha3"
+        },
+        "manifestContract": {
+          "const": "platform.installer/execution-manifest/v1alpha7"
+        },
+        "protocol": {
+          "const": "ApplicationPostInstall/v1alpha1"
+        },
+        "planContract": {
+          "const": "platform.installer/plan/v1alpha9"
+        }
+      }
+    },
+    "applicationProgress": {
+      "required": [
+        "protocol",
+        "planContract"
+      ],
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "planContract": {
+          "const": "platform.installer/plan/v1alpha10"
+        },
+        "protocol": {
+          "const": "ApplicationProgress/v1alpha1"
+        }
+      }
+    }
+  }
+}
+
+@@END
 @@PORTABLE {"path":"contracts/execution-capabilities/v1alpha2/schema.json","mode":420,"size":2622,"sha256":"8261aad8c12912c3646b4f57db95989e70c3e702e3f4178bc136dda4ebffeddf","index":0,"count":1,"encoding":"utf-8","payloadBytes":2622}
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -52347,6 +52704,610 @@ libraryExecutionPriorities:
       },
       "patternProperties": { "^x-[A-Za-z0-9][A-Za-z0-9._-]*$": true },
       "additionalProperties": false
+    }
+  }
+}
+
+@@END
+@@PORTABLE {"path":"contracts/plan/v1alpha10/schema.json","mode":420,"size":13335,"sha256":"d109a2c47b606c73e6b9de7707dfe191f833dbe7e51ca58a752e41c229be1764","index":0,"count":1,"encoding":"utf-8","payloadBytes":13335}
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/plan/v1alpha10/schema.json",
+  "title": "Application-aware target-free deployment plan",
+  "type": "object",
+  "required": [
+    "apiVersion",
+    "kind",
+    "id",
+    "createdAt",
+    "projectIdentity",
+    "projectRevision",
+    "planner",
+    "runtimeRelease",
+    "fingerprints",
+    "status",
+    "readiness",
+    "artifactRequirements",
+    "phases",
+    "findings",
+    "executionMode",
+    "infrastructureVerification",
+    "skipInfrastructureVerify",
+    "skipApplicationLibraries",
+    "applicationExecutionScope"
+  ],
+  "properties": {
+    "apiVersion": {
+      "const": "platform.installer/plan/v1alpha10"
+    },
+    "kind": {
+      "const": "DeploymentPlan"
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "projectIdentity": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "projectRevision": {
+      "$ref": "#/$defs/digest"
+    },
+    "planner": {
+      "type": "object",
+      "required": [
+        "coreVersion",
+        "planningProtocol"
+      ],
+      "properties": {
+        "coreVersion": {
+          "type": "string",
+          "minLength": 1
+        },
+        "planningProtocol": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "runtimeRelease": {
+      "$ref": "#/$defs/runtimeRelease"
+    },
+    "fingerprints": {
+      "$ref": "#/$defs/fingerprints"
+    },
+    "status": {
+      "enum": [
+        "EXECUTABLE",
+        "BLOCKED"
+      ]
+    },
+    "readiness": {
+      "enum": [
+        "REQUIRES_PREPARATION",
+        "BLOCKED"
+      ]
+    },
+    "artifactRequirements": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/artifact"
+      }
+    },
+    "phases": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/phase"
+      }
+    },
+    "requiredCredentials": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "requirementRef",
+          "purpose",
+          "hosts"
+        ],
+        "properties": {
+          "requirementRef": {
+            "type": "string"
+          },
+          "purpose": {
+            "type": "string"
+          },
+          "hosts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "acknowledgements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "code",
+          "summary"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9_]*$"
+          },
+          "summary": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "$ref": "../../finding/v1alpha1/schema.json"
+      }
+    },
+    "executionMode": {
+      "enum": [
+        "FULL_PROJECT",
+        "APPLICATION_LIBRARIES_ONLY",
+        "INFRASTRUCTURE_VERIFY_ONLY"
+      ]
+    },
+    "infrastructureVerification": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "enum": [
+            null,
+            "INFRA_VERIFY_MISSING",
+            "INFRA_VERIFY_STALE",
+            "INFRA_EVIDENCE_UNAVAILABLE"
+          ]
+        },
+        "status": {
+          "enum": [
+            "PASS",
+            "BLOCKED",
+            "UNKNOWN"
+          ]
+        },
+        "evidenceRevision": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "deployments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "sourceRunId": {
+                "minLength": 1,
+                "type": "string",
+                "maxLength": 128
+              },
+              "deploymentId": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9-]{0,127}$"
+              },
+              "verifiedAt": {
+                "type": "string",
+                "maxLength": 40,
+                "format": "date-time"
+              },
+              "coverageDigest": {
+                "type": "string",
+                "pattern": "^sha256:[a-f0-9]{64}$"
+              }
+            },
+            "required": [
+              "deploymentId",
+              "sourceRunId",
+              "coverageDigest",
+              "verifiedAt"
+            ]
+          },
+          "maxItems": 256
+        },
+        "infrastructureFingerprint": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "status",
+        "infrastructureFingerprint",
+        "evidenceRevision",
+        "deployments",
+        "code"
+      ]
+    },
+    "skipInfrastructureVerify": {
+      "type": "boolean"
+    },
+    "skipApplicationLibraries": {
+      "$ref": "#/$defs/libraryIds"
+    },
+    "applicationExecutionScope": {
+      "$ref": "#/$defs/applicationExecutionScope"
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "runtimeRelease": {
+      "type": "object",
+      "required": [
+        "bundleDigest",
+        "coreVersion",
+        "catalogDigest",
+        "planningProtocol"
+      ],
+      "properties": {
+        "bundleDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "coreVersion": {
+          "type": "string"
+        },
+        "catalogDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "planningProtocol": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "fingerprints": {
+      "type": "object",
+      "required": [
+        "project",
+        "catalog",
+        "artifacts",
+        "core",
+        "plan"
+      ],
+      "properties": {
+        "project": {
+          "$ref": "#/$defs/digest"
+        },
+        "catalog": {
+          "$ref": "#/$defs/digest"
+        },
+        "artifacts": {
+          "$ref": "#/$defs/digest"
+        },
+        "core": {
+          "$ref": "#/$defs/digest"
+        },
+        "plan": {
+          "$ref": "#/$defs/digest"
+        }
+      },
+      "additionalProperties": false
+    },
+    "artifact": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/serviceArtifact"
+        },
+        {
+          "$ref": "#/$defs/imageArtifact"
+        }
+      ]
+    },
+    "phase": {
+      "type": "object",
+      "required": [
+        "id",
+        "order",
+        "actions"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "order": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "actions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/action"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "action": {
+      "type": "object",
+      "if": {"required": ["progressSteps"]},
+      "then": {
+        "properties": {
+          "id": {"const": "applications:apply"},
+          "type": {"const": "APPLICATION_LIBRARIES_APPLY"}
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "targets",
+        "dependsOn",
+        "mutating",
+        "reboot",
+        "summary"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]*$",
+          "enum": [
+            "PKI_APPLY",
+            "PKI_REISSUE",
+            "SERVICE_APPLY",
+            "SERVICE_VERIFY",
+            "APPLICATION_LIBRARIES_APPLY",
+            "APPLICATION_LIBRARIES_VERIFY",
+            "APPLICATION_LIBRARIES_POST_INSTALL"
+          ]
+        },
+        "serviceDeployment": {
+          "type": "string"
+        },
+        "targets": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        },
+        "dependsOn": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        },
+        "mutating": {
+          "type": "boolean"
+        },
+        "reboot": {
+          "enum": [
+            "NONE",
+            "RECOMMENDED",
+            "REQUIRED"
+          ]
+        },
+        "summary": {
+          "type": "string"
+        },
+        "progressSteps": {
+          "minItems": 1,
+          "maxItems": 257,
+          "type": "array",
+          "items": {
+            "properties": {
+              "id": {
+                "maxLength": 512,
+                "minLength": 1,
+                "type": "string"
+              },
+              "summary": {
+                "maxLength": 512,
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "summary"
+            ],
+            "additionalProperties": false,
+            "type": "object"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "serviceArtifact": {
+      "type": "object",
+      "required": [
+        "id",
+        "serviceDeployment",
+        "serviceType",
+        "requirementId",
+        "version",
+        "digest",
+        "requiredOffline"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "serviceDeployment": {
+          "type": "string"
+        },
+        "serviceType": {
+          "type": "string"
+        },
+        "requirementId": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "os": {
+          "type": "string"
+        },
+        "architecture": {
+          "type": "string"
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "requiredOffline": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "imageArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "applicationLibrary": {
+          "type": "string"
+        },
+        "platform": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "variant": {
+              "type": "string"
+            },
+            "architecture": {
+              "enum": [
+                "amd64",
+                "arm64"
+              ]
+            },
+            "os": {
+              "const": "linux"
+            }
+          },
+          "required": [
+            "os",
+            "architecture"
+          ]
+        },
+        "instanceId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "localReference": {
+          "type": "string",
+          "pattern": "^platform-application:sha256-[a-f0-9]{64}$"
+        },
+        "sourcePolicy": {
+          "const": "REPOSITORY_THEN_OFFLINE"
+        },
+        "hosts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        },
+        "name": {
+          "type": "string"
+        },
+        "imageId": {
+          "$ref": "#/$defs/digest"
+        },
+        "artifactType": {
+          "const": "container-image"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "artifactType",
+        "imageId",
+        "platform",
+        "localReference",
+        "applicationLibrary",
+        "instanceId",
+        "hosts",
+        "sourcePolicy"
+      ]
+    },
+    "libraryIds": {
+      "minItems": 0,
+      "uniqueItems": true,
+      "type": "array",
+      "items": {
+        "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$",
+        "type": "string"
+      },
+      "maxItems": 256,
+      "default": []
+    },
+    "applicationExecutionScope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "libraryOrder",
+        "skippedLibraries",
+        "installLibraries",
+        "consumerInstances",
+        "providerInstances",
+        "providerLibraries"
+      ],
+      "properties": {
+        "libraryOrder": {
+          "$ref": "#/$defs/libraryIds"
+        },
+        "skippedLibraries": {
+          "$ref": "#/$defs/libraryIds"
+        },
+        "installLibraries": {
+          "$ref": "#/$defs/libraryIds"
+        },
+        "providerLibraries": {
+          "$ref": "#/$defs/libraryIds"
+        },
+        "consumerInstances": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_.-]*/[a-z][a-z0-9_.-]*$"
+          }
+        },
+        "providerInstances": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_.-]*/[a-z][a-z0-9_.-]*$"
+          }
+        }
+      }
     }
   }
 }
@@ -93537,7 +94498,7 @@ function ProviderDialog({
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/InstallationPage.tsx","mode":420,"size":79662,"sha256":"cef1fd1ddbb4d7c0aedee2c803252838ddc1f006d372c935f3e967b085a761d9","index":0,"count":2,"encoding":"utf-8","payloadBytes":52524}
+@@PORTABLE {"path":"frontend/src/InstallationPage.tsx","mode":420,"size":79696,"sha256":"4b6970bd3255fc37bd519a9902104b6f9622b05c310320951526438e61c7f342","index":0,"count":2,"encoding":"utf-8","payloadBytes":52524}
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type {
   InstallationEventView,
@@ -93554,6 +94515,7 @@ import type {
 import {
   actionResultLabel,
   installationDisplay,
+  installationActionRows,
   type RunProgress,
 } from "./installationPresentation";
 import { executionNodeStatusLabel } from "./executionNodeLabels";
@@ -94855,6 +95817,13 @@ function PlanStage({
                       <span className="plan-action-number">{index + 1}</span>
                       <span className="plan-action-description">
                         <b>{planActionLabel(action)}</b>
+                        {!!action.progressSteps?.length && (
+                          <ul className="plan-progress-steps">
+                            {action.progressSteps.map((step) => (
+                              <li key={step.id}>{step.summary}</li>
+                            ))}
+                          </ul>
+                        )}
                         {action.serviceDeployment && (
                           <small>
                             Развёртывание: {action.serviceDeployment}
@@ -94898,7 +95867,10 @@ function PlanStage({
                 <input
                   type="checkbox"
                   checked={acknowledged.includes(item.code)}
-                  onChange={(event) =>
+                  onChan
+@@END
+@@PORTABLE {"path":"frontend/src/InstallationPage.tsx","mode":420,"size":79696,"sha256":"4b6970bd3255fc37bd519a9902104b6f9622b05c310320951526438e61c7f342","index":1,"count":2,"encoding":"utf-8","payloadBytes":27172}
+ge={(event) =>
                     setAcknowledged((current) =>
                       event.target.checked
                         ? [...current, item.code]
@@ -94908,10 +95880,7 @@ function PlanStage({
                 />{" "}
                 <span>
                   <b>{item.code}</b>
-                  <b
-@@END
-@@PORTABLE {"path":"frontend/src/InstallationPage.tsx","mode":420,"size":79662,"sha256":"cef1fd1ddbb4d7c0aedee2c803252838ddc1f006d372c935f3e967b085a761d9","index":1,"count":2,"encoding":"utf-8","payloadBytes":27138}
-r />
+                  <br />
                   {item.summary}
                 </span>
               </label>
@@ -95070,9 +96039,11 @@ function ExecutionStage({
       </article>
     );
   const display = installationDisplay(undefined, run, progress);
-  const currentAction = plan?.phases
-    .flatMap((phase) => phase.actions)
-    .find((action) => action.id === progress?.activeActionId);
+  const currentAction = installationActionRows(plan).find(
+    (action) =>
+      action.id === progress?.activeActionId &&
+      ["STARTING", "RUNNING", "CANCELLING"].includes(run.run!.state),
+  );
   const lastTask = [...events]
     .reverse()
     .find((event) => event.eventType === "TASK_COMPLETED" && event.task?.name);
@@ -95222,105 +96193,96 @@ function ExecutionStage({
               <p>Действия плана для этого запуска недоступны.</p>
             ) : (
               <ol className="execution-plan-actions">
-                {plan.phases
-                  .flatMap((phase) => phase.actions)
-                  .map((action, index) => {
-                    const outcome = progress?.actionOutcomes[action.id];
-                    const completion = events.find(
-                      (event) =>
-                        event.runId === run.run!.runId &&
-                        event.actionId === action.id &&
-                        event.eventType === "ACTION_COMPLETED" &&
-                        event.sequence ===
-                          progress?.actionOutcomeSequences[action.id],
+                {installationActionRows(plan).map((action, index) => {
+                  const outcome = progress?.actionOutcomes[action.id];
+                  const completion = events.find(
+                    (event) =>
+                      event.runId === run.run!.runId &&
+                      event.actionId === action.id &&
+                      event.eventType === "ACTION_COMPLETED" &&
+                      event.sequence ===
+                        progress?.actionOutcomeSequences[action.id],
+                  );
+                  const completedDate = new Date(completion?.timestamp || "");
+                  const completedTime = Number.isFinite(completedDate.getTime())
+                    ? new Intl.DateTimeFormat("ru-RU", {
+                        timeZone: "Europe/Moscow",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        second: "2-digit",
+                      }).format(completedDate)
+                    : "Время неизвестно";
+                  const active =
+                    progress?.activeActionId === action.id &&
+                    ["STARTING", "RUNNING", "CANCELLING"].includes(
+                      run.run!.state,
                     );
-                    const completedDate = new Date(completion?.timestamp || "");
-                    const completedTime = Number.isFinite(
-                      completedDate.getTime(),
-                    )
-                      ? new Intl.DateTimeFormat("ru-RU", {
-                          timeZone: "Europe/Moscow",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                          second: "2-digit",
-                        }).format(completedDate)
-                      : "Время неизвестно";
-                    const active =
-                      progress?.activeActionId === action.id &&
-                      ["STARTING", "RUNNING", "CANCELLING"].includes(
-                        run.run!.state,
-                      );
-                    const waiting =
-                      !outcome &&
-                      !active &&
-                      progress?.complete &&
-                      ["STARTING", "RUNNING", "CANCELLING"].includes(
-                        run.run!.state,
-                      );
-                    const label = active
-                      ? "Выполняется"
-                      : waiting
-                        ? "Ожидает"
-                        : actionResultLabel(
-                            action.id,
-                            run.run!.state,
-                            progress,
-                          );
-                    const tone = active
-                      ? "running"
-                      : ["SUCCESS", "CHANGED"].includes(outcome || "")
-                        ? "success"
-                        : outcome === "FAILED"
-                          ? "error"
-                          : "neutral";
-                    const symbol = active
-                      ? "◌"
-                      : tone === "success"
-                        ? "✓"
-                        : tone === "error"
-                          ? "!"
-                          : outcome === "SKIPPED"
-                            ? "↷"
-                            : "◷";
-                    return (
-                      <li
-                        key={action.id}
-                        className={`execution-plan-action is-${tone}`}
-                        aria-current={active ? "step" : undefined}
+                  const waiting =
+                    !outcome &&
+                    !active &&
+                    progress?.complete &&
+                    ["STARTING", "RUNNING", "CANCELLING"].includes(
+                      run.run!.state,
+                    );
+                  const label = active
+                    ? "Выполняется"
+                    : waiting
+                      ? "Ожидает"
+                      : actionResultLabel(action.id, run.run!.state, progress);
+                  const tone = active
+                    ? "running"
+                    : ["SUCCESS", "CHANGED"].includes(outcome || "")
+                      ? "success"
+                      : outcome === "FAILED"
+                        ? "error"
+                        : "neutral";
+                  const symbol = active
+                    ? "◌"
+                    : tone === "success"
+                      ? "✓"
+                      : tone === "error"
+                        ? "!"
+                        : outcome === "SKIPPED"
+                          ? "↷"
+                          : "◷";
+                  return (
+                    <li
+                      key={action.id}
+                      className={`execution-plan-action is-${tone}${action.parentId ? " is-progress-step" : ""}`}
+                      aria-current={active ? "step" : undefined}
+                    >
+                      <span
+                        className="execution-plan-number"
+                        aria-hidden="true"
                       >
-                        <span
-                          className="execution-plan-number"
-                          aria-hidden="true"
-                        >
-                          {index + 1}
-                        </span>
-                        <span
-                          className="execution-plan-symbol"
-                          aria-hidden="true"
-                        >
-                          {symbol}
-                        </span>
-                        <div className="execution-plan-description">
-                          <strong>{planActionLabel(action)}</strong>
-                          <small>
-                            {action.targets.join(", ") ||
-                              "Без целевых серверов"}
-                            {action.serviceDeployment
-                              ? ` · ${action.serviceDeployment}`
-                              : ""}
-                          </small>
-                        </div>
-                        <span
-                          className="execution-plan-status"
-                          title={
-                            tone === "success" ? `${label} · МСК` : undefined
-                          }
-                        >
-                          {tone === "success" ? completedTime : label}
-                        </span>
-                      </li>
-                    );
-                  })}
+                        {index + 1}
+                      </span>
+                      <span
+                        className="execution-plan-symbol"
+                        aria-hidden="true"
+                      >
+                        {symbol}
+                      </span>
+                      <div className="execution-plan-description">
+                        <strong>{planActionLabel(action)}</strong>
+                        <small>
+                          {action.targets.join(", ") || "Без целевых серверов"}
+                          {action.serviceDeployment
+                            ? ` · ${action.serviceDeployment}`
+                            : ""}
+                        </small>
+                      </div>
+                      <span
+                        className="execution-plan-status"
+                        title={
+                          tone === "success" ? `${label} · МСК` : undefined
+                        }
+                      >
+                        {tone === "success" ? completedTime : label}
+                      </span>
+                    </li>
+                  );
+                })}
               </ol>
             )}
           </div>
@@ -95358,7 +96320,7 @@ function ResultStage({
     events.some(
       (event) => executionDiagnosticCode(event.safeMessage) === "OUTPUT_BUSY",
     );
-  const actions = plan?.phases.flatMap((phase) => phase.actions) || [];
+  const actions = installationActionRows(plan);
   return (
     <section className="installation-stage-content">
       <article className="card">
@@ -103605,7 +104567,7 @@ export function applicationDraft(
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/backend.ts","mode":420,"size":28280,"sha256":"6e7eb3e0d7d9221d8fd8ab24140985576921f47a96d87434304398a36d49a9b4","index":0,"count":1,"encoding":"utf-8","payloadBytes":28280}
+@@PORTABLE {"path":"frontend/src/backend.ts","mode":420,"size":28342,"sha256":"40401016a618894c1ce42d2d8c9ea46ea10597204746bc694eb393fa3ccc7b91","index":0,"count":1,"encoding":"utf-8","payloadBytes":28342}
 import {
   ProbeServerInformation,
   CheckServerInformation,
@@ -103913,6 +104875,7 @@ export type InstallationPlanView = {
       mutating: boolean;
       reboot: string;
       summary: string;
+      progressSteps?: Array<{ id: string; summary: string }>;
     }>;
   }>;
   findings?: Array<{ code: string; safeMessage: string }>;
@@ -105629,7 +106592,7 @@ export function executionNodeCombinedStatus(
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/installationPresentation.ts","mode":420,"size":6225,"sha256":"655121561fe89d35c038775285573167a02bb3fb251fbf845d4be430061f1b2f","index":0,"count":1,"encoding":"utf-8","payloadBytes":6225}
+@@PORTABLE {"path":"frontend/src/installationPresentation.ts","mode":420,"size":7520,"sha256":"f8737f68cdfa94b1e6363afd5edb5d5525cfe2d278dc03c71c8ec7e2c90084b0","index":0,"count":1,"encoding":"utf-8","payloadBytes":7520}
 import type {
   InstallationEventView,
   InstallationPlanView,
@@ -105646,6 +106609,7 @@ export type RunProgress = {
   pendingSequences: number[];
   complete: boolean;
   actionIds: string[];
+  stepParents: Record<string, string>;
   completedActionIds: string[];
   actionOutcomes: Record<string, string>;
   actionOutcomeSequences: Record<string, number>;
@@ -105665,10 +106629,22 @@ export function beginRunProgress(
     actionIds: [
       ...new Set(
         plan?.phases.flatMap((phase) =>
-          phase.actions.map((action) => action.id),
+          phase.actions.flatMap((action) =>
+            action.progressSteps?.length
+              ? action.progressSteps.map((step) => step.id)
+              : [action.id],
+          ),
         ) || [],
       ),
     ],
+    stepParents: Object.fromEntries(
+      plan?.phases.flatMap((phase) =>
+        phase.actions.flatMap(
+          (action) =>
+            action.progressSteps?.map((step) => [step.id, action.id]) || [],
+        ),
+      ) || [],
+    ),
     completedActionIds: [],
     actionOutcomes: {},
     actionOutcomeSequences: {},
@@ -105687,7 +106663,9 @@ export function observeRunEvent(
   const complete = pending.size === 0;
   const isNewest = event.sequence >= current.lastSequence;
   const knownAction =
-    !!event.actionId && current.actionIds.includes(event.actionId);
+    !!event.actionId &&
+    (current.actionIds.includes(event.actionId) ||
+      Object.values(current.stepParents).includes(event.actionId));
   const outcomeRecorded =
     knownAction &&
     event.eventType === "ACTION_COMPLETED" &&
@@ -105725,7 +106703,9 @@ export function observeRunEvent(
       : knownAction && event.eventType === "ACTION_STARTED"
         ? event.actionId
         : event.eventType === "ACTION_COMPLETED" &&
-            event.actionId === current.activeActionId
+            (event.actionId === current.activeActionId ||
+              event.actionId ===
+                current.stepParents[current.activeActionId || ""])
           ? undefined
           : current.activeActionId,
   };
@@ -105741,8 +106721,29 @@ export function actionResultLabel(
   if (outcome === "SKIPPED") return "Пропущено";
   if (outcome === "FAILED") return "Ошибка";
   if (outcome === "CANCELLED" || outcome === "INTERRUPTED") return "Прервано";
+  if (terminalStates.has(runState) && progress?.activeActionId === actionId)
+    return "Не завершено";
   if (!progress?.complete) return "Сведения неполные";
   return runState === "SUCCEEDED" ? "Событие не получено" : "Не подтверждено";
+}
+
+// Keep the executable parent visible; child rows are display-only work units.
+export function installationActionRows(plan?: InstallationPlanView) {
+  return (
+    plan?.phases.flatMap((phase) =>
+      phase.actions.flatMap((action) => [
+        { ...action, parentId: undefined as string | undefined },
+        ...(action.progressSteps?.map((step) => ({
+          ...action,
+          id: step.id,
+          summary: step.summary,
+          type: "APPLICATION_PROGRESS",
+          progressSteps: undefined,
+          parentId: action.id,
+        })) || []),
+      ]),
+    ) || []
+  );
 }
 
 const terminalStates = new Set([
@@ -105847,7 +106848,7 @@ const qaE4 =
 renderApplication(qaE4 ? qaE4Backend : backend);
 
 @@END
-@@PORTABLE {"path":"frontend/src/production-ui.css","mode":420,"size":71966,"sha256":"8d49e3cca353252aabe5c919d95938a3a4edfb2db4ffbbc66128f799a8539dd8","index":0,"count":2,"encoding":"utf-8","payloadBytes":48107}
+@@PORTABLE {"path":"frontend/src/production-ui.css","mode":420,"size":72141,"sha256":"6ac0b60bd7e2897e6154ddbb0e0cba0399b17444d9bcdb9292c7a4ad6e102693","index":0,"count":2,"encoding":"utf-8","payloadBytes":48107}
 /* Desktop target from UI-DESIGN-01. Work regions, not the window, own overflow. */
 :root {
   --ui-font-page-title: 22px;
@@ -107984,7 +108985,7 @@ button:disabled {
 .services-detail-empty {
   display: flex;
 @@END
-@@PORTABLE {"path":"frontend/src/production-ui.css","mode":420,"size":71966,"sha256":"8d49e3cca353252aabe5c919d95938a3a4edfb2db4ffbbc66128f799a8539dd8","index":1,"count":2,"encoding":"utf-8","payloadBytes":23859}
+@@PORTABLE {"path":"frontend/src/production-ui.css","mode":420,"size":72141,"sha256":"6ac0b60bd7e2897e6154ddbb0e0cba0399b17444d9bcdb9292c7a4ad6e102693","index":1,"count":2,"encoding":"utf-8","payloadBytes":24034}
 
   flex-direction: column;
   justify-content: center;
@@ -109079,6 +110080,17 @@ button:disabled {
 .execution-plan-action.is-running {
   border-left: 3px solid #1672f3;
 }
+
+.execution-plan-action.is-progress-step {
+  margin-left: 18px;
+}
+
+.plan-progress-steps {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: 11px;
+  font-weight: normal;
+}
 .execution-plan-action.is-running .execution-plan-number {
   background: #1672f3;
   color: white;
@@ -110110,7 +111122,7 @@ export function VerifyProject() {
 }
 
 @@END
-@@PORTABLE {"path":"frontend/wailsjs/go/models.ts","mode":420,"size":116223,"sha256":"c3800d008745eb6e9dd91bf0bbba76c5f7938d2b794f40d0dfdf382dde568db2","index":0,"count":3,"encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"frontend/wailsjs/go/models.ts","mode":420,"size":117249,"sha256":"7d80dfa09a1a1238a0a372d5431ddba7fd4696e7019cf7bb12af59e9aa3ac3e9","index":0,"count":3,"encoding":"utf-8","payloadBytes":48000}
 export namespace appconfig {
   export class LibraryExecutionPriority {
     libraryName: string;
@@ -111185,6 +112197,7 @@ export namespace desktop {
     mutating: boolean;
     reboot: string;
     summary: string;
+    progressSteps?: executionnode.DeploymentProgressStep[];
 
     static createFrom(source: any = {}) {
       return new InstallationPlanAction(source);
@@ -111200,6 +112213,28 @@ export namespace desktop {
       this.mutating = source["mutating"];
       this.reboot = source["reboot"];
       this.summary = source["summary"];
+      this.progressSteps = this.convertValues(
+        source["progressSteps"],
+        executionnode.DeploymentProgressStep,
+      );
+    }
+
+    convertValues(a: any, classs: any, asMap: boolean = false): any {
+      if (!a) {
+        return a;
+      }
+      if (a.slice && a.map) {
+        return (a as any[]).map((elem) => this.convertValues(elem, classs));
+      } else if ("object" === typeof a) {
+        if (asMap) {
+          for (const key of Object.keys(a)) {
+            a[key] = new classs(a[key]);
+          }
+          return a;
+        }
+        return new classs(a);
+      }
+      return a;
     }
   }
   export class InstallationPlanFinding {
@@ -111507,8 +112542,8 @@ export namespace desktop {
 
     constructor(source: any = {}) {
       if ("string" === typeof source) source = JSON.parse(source);
-      this.reconnected = source["reconnected"];
       this.plan = this.convertValues(source["plan"], InstallationPlanView);
+      this.reconnected = source["reconnected"];
       this.cancelUnconfirmed = source["cancelUnconfirmed"];
       this.projectRevision = source["projectRevision"];
       this.status = source["status"];
@@ -111668,1626 +112703,5 @@ export namespace desktop {
     status: string;
     recoveryId?: string;
     runId?: string;
-    runState?: string;
-    projectRevision?: string;
-    error?: ProjectOpenError;
-
-    static createFrom(source: any = {}) {
-      return new OrphanRunRecoveryResult(source);
-    }
-
-    constructor(source: any = {}) {
-      if ("string" === typeof source) source = JSON.parse(source);
-      this.status = source["status"];
-      this.recoveryId = source["recoveryId"];
-      this.runId = source["runId"];
-      this.runState = source["runState"];
-      this.projectRevision = source["projectRevision"];
-      this.error = this.convertValues(source["error"], ProjectOpenError);
-    }
-
-    convertValues(a: any, classs: any, asMap: boolean = false): any {
-      if (!a) {
-  
-@@END
-@@PORTABLE {"path":"frontend/wailsjs/go/models.ts","mode":420,"size":116223,"sha256":"c3800d008745eb6e9dd91bf0bbba76c5f7938d2b794f40d0dfdf382dde568db2","index":1,"count":3,"encoding":"utf-8","payloadBytes":48000}
-      return a;
-      }
-      if (a.slice && a.map) {
-        return (a as any[]).map((elem) => this.convertValues(elem, classs));
-      } else if ("object" === typeof a) {
-        if (asMap) {
-          for (const key of Object.keys(a)) {
-            a[key] = new classs(a[key]);
-          }
-          return a;
-        }
-        return new classs(a);
-      }
-      return a;
-    }
-  }
-  export class OutputEncryptionPasswordInput {
-    password: string;
-    confirm: string;
-
-    static createFrom(source: any = {}) {
-      return new OutputEncryptionPasswordInput(source);
-    }
-
-    constructor(source: any = {}) {
-      if ("string" === typeof source) source = JSON.parse(source);
-      this.password = source["password"];
-      this.confirm = source["confirm"];
-    }
-  }
-  export class PendingRuntimeSecretFileInput {
-    serviceDeployment: string;
-    purpose: string;
-    encryptionPassword: string;
-
-    static createFrom(source: any = {}) {
-      return new PendingRuntimeSecretFileInput(source);
-    }
-
-    constructor(source: any = {}) {
-      if ("string" === typeof source) source = JSON.parse(source);
-      this.serviceDeployment = source["serviceDeployment"];
-      this.purpose = source["purpose"];
-      this.encryptionPassword = source["encryptionPassword"];
-    }
-  }
-  export class PendingRuntimeSecretValuesInput {
-    serviceDeployment: string;
-    values: Record<string, string>;
-
-    static createFrom(source: any = {}) {
-      return new PendingRuntimeSecretValuesInput(source);
-    }
-
-    constructor(source: any = {}) {
-      if ("string" === typeof source) source = JSON.parse(source);
-      this.serviceDeployment = source["serviceDeployment"];
-      this.values = source["values"];
-    }
-  }
-  export class ProjectExportOperationResult {
-    status: string;
-    plan?: installer.ProjectExportPlan;
-    result?: installer.ProjectExportResult;
-    error?: ProjectOpenError;
-
-    static createFrom(source: any = {}) {
-      return new ProjectExportOperationResult(source);
-    }
-
-    constructor(source: any = {}) {
-      if ("string" === typeof source) source = JSON.parse(source);
-      this.status = source["status"];
-      this.plan = this.convertValues(
-        source["plan"],
-        installer.ProjectExportPlan,
-      );
-      this.result = this.convertValues(
-        source["result"],
-        installer.ProjectExportResult,
-      );
-      this.error = this.convertValues(source["error"], ProjectOpenError);
-    }
-
-    convertValues(a: any, classs: any, asMap: boolean = false): any {
-      if (!a) {
-        return a;
-      }
-      if (a.slice && a.map) {
-        return (a as any[]).map((elem) => this.convertValues(elem, classs));
-      } else if ("object" === typeof a) {
-        if (asMap) {
-          for (const key of Object.keys(a)) {
-            a[key] = new classs(a[key]);
-          }
-          return a;
-        }
-        return new classs(a);
-      }
-      return a;
-    }
-  }
-
-  export class ProjectOpenResult {
-    status: string;
-    root?: string;
-    classification?: string;
-    project?: projectlifecycle.Project;
-    counts: projectlifecycle.Counts;
-    catalog?: projectlifecycle.ProjectCatalogView;
-    snapshot?: coreadapter.Snapshot;
-    managed?: installer.ManagedProjectView;
-    verification: ProjectVerification;
-    diagnostics?: ApplicationDiagnostic[];
-    error?: ProjectOpenError;
-
-    static createFrom(source: any = {}) {
-      return new ProjectOpenResult(source);
-    }
-
-    constructor(source: any = {}) {
-      if ("string" === typeof source) source = JSON.parse(source);
-      this.status = source["status"];
-      this.root = source["root"];
-      this.classification = source["classification"];
-      this.project = this.convertValues(
-        source["project"],
-        projectlifecycle.Project,
-      );
-      this.counts = this.convertValues(
-        source["counts"],
-        projectlifecycle.Counts,
-      );
-      this.catalog = this.convertValues(
-        source["catalog"],
-        projectlifecycle.ProjectCatalogView,
-      );
-      this.snapshot = this.convertValues(
-        source["snapshot"],
-        coreadapter.Snapshot,
-      );
-      this.managed = this.convertValues(
-        source["managed"],
-        installer.ManagedProjectView,
-      );
-      this.verification = this.convertValues(
-        source["verification"],
-        ProjectVerification,
-      );
-      this.diagnostics = this.convertValues(
-        source["diagnostics"],
-        ApplicationDiagnostic,
-      );
-      this.error = this.convertValues(source["error"], ProjectOpenError);
-    }
-
-    convertValues(a: any, classs: any, asMap: boolean = false): any {
-      if (!a) {
-        return a;
-      }
-      if (a.slice && a.map) {
-        return (a as any[]).map((elem) => this.convertValues(elem, classs));
-      } else if ("object" === typeof a) {
-        if (asMap) {
-          for (const key of Object.keys(a)) {
-            a[key] = new classs(a[key]);
-          }
-          return a;
-        }
-        return new classs(a);
-      }
-      return a;
-    }
-  }
-
-  export class RuntimeBundleUpdateResult {
-    status: string;
-    previewId?: string;
-    currentArtifactDigest?: string;
-    currentCatalogDigest?: string;
-    newArtifactDigest?: string;
-    newCatalogDigest?: string;
-    bundleVersion?: string;
-    coreVersion?: string;
-    projectRevision?: string;
-    error?: ProjectOpenError;
-
-    static createFrom(source: any = {}) {
-      return new RuntimeBundleUpdateResult(source);
-    }
-
-    constructor(source: any = {}) {
-      if ("string" === typeof source) source = JSON.parse(source);
-      this.status = source["status"];
-      this.previewId = source["previewId"];
-      this.currentArtifactDigest = source["currentArtifactDigest"];
-      this.currentCatalogDigest = source["currentCatalogDigest"];
-      this.newArtifactDigest = source["newArtifactDigest"];
-      this.newCatalogDigest = source["newCatalogDigest"];
-      this.bundleVersion = source["bundleVersion"];
-      this.coreVersion = source["coreVersion"];
-      this.projectRevision = source["projectRevision"];
-      this.error = this.convertValues(source["error"], ProjectOpenError);
-    }
-
-    convertValues(a: any, classs: any, asMap: boolean = false): any {
-      if (!a) {
-        return a;
-      }
-      if (a.slice && a.map) {
-        return (a as any[]).map((elem) => this.convertValues(elem, classs));
-      } else if ("object" === typeof a) {
-        if (asMap) {
-          for (const key of Object.keys(a)) {
-            a[key] = new classs(a[key]);
-          }
-          return a;
-        }
-        return new classs(a);
-      }
-      return a;
-    }
-  }
-  export class RuntimeSecretDescriptorView {
-    deploymentBound?: boolean;
-    requirementRef: string;
-    purpose: string;
-    serviceDeployment?: string;
-    setting?: string;
-    displayLabel: string;
-    requiredWhen?: string;
-    operations?: string[];
-    referenceConfigured: boolean;
-    hosts: string[];
-
-    static createFrom(source: any = {}) {
-      return new RuntimeSecretDescriptorView(source);
-    }
-
-    constructor(source: any = {}) {
-      if ("string" === typeof source) source = JSON.parse(source);
-      this.deploymentBound = source["deploymentBound"];
-      this.requirementRef = source["requirementRef"];
-      this.purpose = source["purpose"];
-      this.serviceDeployment = source["serviceDeployment"];
-      this.setting = source["setting"];
-      this.displayLabel = source["displayLabel"];
-      this.requiredWhen = source["requiredWhen"];
-      this.operations = source["operations"];
-      this.referenceConfigured = source["referenceConfigured"];
-      this.hosts = source["hosts"];
-    }
-  }
-  export class RuntimeSecretDescriptorOperation {
-    applicationSecretAvailability?: Record<string, boolean>;
-    secretsInstalled?: boolean;
-    status: string;
-    projectRevision?: string;
-    descriptorSetFingerprint?: string;
-    descriptors?: RuntimeSecretDescriptorView[];
-    applicationInputs?: executionnode.ApplicationSecretDescriptor[];
-    error?: ProjectOpenError;
-
-    static createFrom(source: any = {}) {
-      return new RuntimeSecretDescriptorOperation(source);
-    }
-
-    constructor(source: any = {}) {
-      if ("string" === typeof source) source = JSON.parse(source);
-      this.applicationSecretAvailability =
-        source["applicationSecretAvailability"];
-      this.secretsInstalled = source["secretsInstalled"];
-      this.status = source["status"];
-      this.projectRevision = source["projectRevision"];
-      this.descriptorSetFingerprint = source["descriptorSetFingerprint"];
-      this.descriptors = this.convertValues(
-        source["descriptors"],
-        RuntimeSecretDescriptorView,
-      );
-      this.applicationInputs = this.convertValues(
-        source["applicationInputs"],
-        executionnode.ApplicationSecretDescriptor,
-      );
-      this.error = this.convertValues(source["error"], ProjectOpenError);
-    }
-
-    convertValues(a: any, classs: any, asMap: boolean = false): any {
-      if (!a) {
-        return a;
-      }
-      if (a.slice && a.map) {
-        return (a as any[]).map((elem) => this.convertValues(elem, classs));
-      } else if ("object" === typeof a) {
-        if (asMap) {
-          for (const key of Object.keys(a)) {
-            a[key] = new classs(a[key]);
-          }
-          return a;
-        }
-        return new classs(a);
-      }
-      return a;
-    }
-  }
-
-  export class RuntimeSecretValuesInput {
-    projectRevision: string;
-    descriptorSetFingerprint: string;
-    serviceDeployment: string;
-    applicationLibrary?: string;
-    applicationRequirementRef?: string;
-    values: Record<string, string>;
-
-    static createFrom(source: any = {}) {
-      return new RuntimeSecretValuesInput(source);
-    }
-
-    constructor(source: any = {}) {
-      if ("string" === typeof source) source = JSON.parse(source);
-      this.projectRevision = source["projectRevision"];
-      this.descriptorSetFingerprint = source["descriptorSetFingerprint"];
-      this.serviceDeployment = source["serviceDeployment"];
-      this.applicationLibrary = source["applicationLibrary"];
-      this.applicationRequirementRef = source["applicationRequirementRef"];
-      this.values = source["values"];
-    }
-  }
-  export class SecretOutputDeliveryInput {
-    packageId: string;
-
-    static createFrom(source: any = {}) {
-      return new SecretOutputDeliveryInput(source);
-    }
-
-    constructor(source: any = {}) {
-      if ("string" === typeof source) source = JSON.parse(source);
-      this.packageId = source["packageId"];
-    }
-  }
-  export class SecretOutputDeliveryOperation {
-    status: string;
-    package?: executionnode.SecretOutputPackage;
-    directory?: string;
-    stagingPath?: string;
-    error?: ProjectOpenError;
-
-    static createFrom(source: any = {}) {
-      return new SecretOutputDeliveryOperation(source);
-    }
-
-    constructor(source: any = {}) {
-      if ("string" === typeof source) source = JSON.parse(source);
-      this.status = source["status"];
-      this.package = this.convertValues(
-        source["package"],
-        executionnode.SecretOutputPackage,
-      );
-      this.directory = source["directory"];
-      this.stagingPath = source["stagingPath"];
-      this.error = this.convertValues(source["error"], ProjectOpenError);
-    }
-
-    convertValues(a: any, classs: any, asMap: boolean = false): any {
-      if (!a) {
-        return a;
-      }
-      if (a.slice && a.map) {
-        return (a as any[]).map((elem) => this.convertValues(elem, classs));
-      } else if ("object" === typeof a) {
-        if (asMap) {
-          for (const key of Object.keys(a)) {
-            a[key] = new classs(a[key]);
-          }
-          return a;
-        }
-        return new classs(a);
-      }
-      return a;
-    }
-  }
-  export class SecretOutputPackagesOperation {
-    status: string;
-    packages?: executionnode.SecretOutputPackage[];
-    nextCursor?: string;
-    error?: ProjectOpenError;
-
-    static createFrom(source: any = {}) {
-      return new SecretOutputPackagesOperation(source);
-    }
-
-    constructor(source: any = {}) {
-      if ("string" === typeof source) source = JSON.parse(source);
-      this.status = source["status"];
-      this.packages = this.convertValues(
-        source["packages"],
-        executionnode.SecretOutputPackage,
-      );
-      this.nextCursor = source["nextCursor"];
-      this.error = this.convertValues(source["error"], ProjectOpenError);
-    }
-
-    convertValues(a: any, classs: any, asMap: boolean = false): any {
-      if (!a) {
-        return a;
-      }
-      if (a.slice && a.map) {
-        return (a as any[]).map((elem) => this.convertValues(elem, classs));
-      } else if ("object" === typeof a) {
-        if (asMap) {
-          for (const key of Object.keys(a)) {
-            a[key] = new classs(a[key]);
-          }
-          return a;
-        }
-        return new classs(a);
-      }
-      return a;
-    }
-  }
-  export class ServerInformationResult {
-    status: string;
-    hostId?: string;
-    information?: executionnode.ServerInformation;
-    error?: ProjectOpenError;
-
-    static createFrom(source: any = {}) {
-      return new ServerInformationResult(source);
-    }
-
-    constructor(source: any = {}) {
-      if ("string" === typeof source) source = JSON.parse(source);
-      this.status = source["status"];
-      this.hostId = source["hostId"];
-      this.information = this.convertValues(
-        source["information"],
-        executionnode.ServerInformation,
-      );
-      this.error = this.convertValues(source["error"], ProjectOpenError);
-    }
-
-    convertValues(a: any, classs: any, asMap: boolean = false): any {
-      if (!a) {
-        return a;
-      }
-      if (a.slice && a.map) {
-        return (a as any[]).map((elem) => this.convertValues(elem, classs));
-      } else if ("object" === typeof a) {
-        if (asMap) {
-          for (const key of Object.keys(a)) {
-            a[key] = new classs(a[key]);
-          }
-          return a;
-        }
-        return new classs(a);
-      }
-      return a;
-    }
-  }
-  export class StructuralEditOperationResult {
-    status: string;
-    session?: installer.EditSession;
-    plan?: installer.StructuralEditPlan;
-    commit?: installer.StructuralSaveResult;
-    current?: ProjectOpenResult;
-    diagnostics?: ApplicationDiagnostic[];
-    error?: ProjectOpenError;
-
-    static createFrom(source: any = {}) {
-      return new StructuralEditOperationResult(source);
-    }
-
-    constructor(source: any = {}) {
-      if ("string" === typeof source) source = JSON.parse(source);
-      this.status = source["status"];
-      this.session = this.convertValues(
-        source["session"],
-        installer.EditSession,
-      );
-      this.plan = this.convertValues(
-        source["plan"],
-        installer.StructuralEditPlan,
-      );
-      this.commit = this.convertValues(
-        source["commit"],
-        installer.StructuralSaveResult,
-      );
-      this.current = this.convertValues(source["current"], ProjectOpenResult);
-      this.diagnostics = this.convertValues(
-        source["diagnostics"],
-        ApplicationDiagnostic,
-      );
-      this.error = this.convertValues(source["error"], ProjectOpenError);
-    }
-
-    convertValues(a: any, classs: any, asMap: boolean = false): any {
-      if (!a) {
-        return a;
-      }
-      if (a.slice && a.map) {
-        return (a as any[]).map((elem) => this.convertValues(elem, classs));
-      } else if ("object" === typeof a) {
-        if (asMap) {
-          for (const key of Object.keys(a)) {
-            a[key] = new classs(a[key]);
-          }
-          return a;
-        }
-        return new classs(a);
-      }
-      return a;
-    }
-  }
-
-  export class VerifiedPKIConsumer {
-    deploymentId: string;
-    memberId: string;
-    hostId: string;
-
-    static createFrom(source: any = {}) {
-      return new VerifiedPKIConsumer(source);
-    }
-
-    constructor(source: any = {}) {
-      if ("string" === typeof source) source = JSON.parse(source);
-      this.deploymentId = source["deploymentId"];
-      this.memberId = source["memberId"];
-      this.hostId = source["hostId"];
-    }
-  }
-  export class VerifiedCertificateIdentity {
-    id: string;
-    scope: string;
-    tlsProfileId: string;
-    dnsNames: string[];
-    ipAddresses: string[];
-    consumers: VerifiedPKIConsumer[];
-
-    static createFrom(source: any = {}) {
-      return new VerifiedCertificateIdentity(source);
-    }
-
-    constructor(source: any = {}) {
-      if ("string" === typeof source) source = JSON.parse(source);
-      this.id = source["id"];
-      this.scope = source["scope"];
-      this.tlsProfileId = source["tlsProfileId"];
-      this.dnsNames = source["dnsNames"];
-      this.ipAddresses = source["ipAddresses"];
-      this.consumers = this.convertValues(
-        source["consumers"],
-        VerifiedPKIConsumer,
-      );
-    }
-
-    convertValues(a: any, classs: any, asMap: boolean = false): any {
-      if (!a) {
-        return a;
-      }
-      if (a.slice && a.map) {
-        return (a as any[]).map((elem) => this.convertValues(elem, classs));
-      } else if ("object" === typeof a) {
-        if (asMap) {
-          for (const key of Object.keys(a)) {
-            a[key] = new classs(a[key]);
-          }
-          return a;
-        }
-        return new classs(a);
-      }
-      return a;
-    }
-  }
-
-  export class VerifiedPKIView {
-    status: string;
-    identities?: VerifiedCertificateIdentity[];
-    findings?: VerificationFinding[];
-    findingsTruncated?: boolean;
-    error?: ProjectOpenError;
-
-    static createFrom(source: any = {}) {
-      return new VerifiedPKIView(source);
-    }
-
-    constructor(source: any = {}) {
-      if ("string" === typeof source) source = JSON.parse(source);
-      this.status = source["status"];
-      this.identities = this.convertValues(
-        source["identities"],
-        VerifiedCertificateIdentity,
-      );
-      this.findings = this.convertValues(
-        source["findings"],
-        VerificationFinding,
-      );
-      this.findingsTruncated = source["findingsTruncated"];
-      this.error = this.convertValues(source["error"], ProjectOpenError);
-    }
-
-    convertValues(a: any, classs: any, asMap: boolean = false): any {
-      if (!a) {
-        return a;
-      }
-      if (a.slice && a.map) {
-        return (a as any[]).map((elem) => this.convertValues(elem, classs));
-      } else if ("object" === typeof a) {
-        if (asMap) {
-          for (const key of Object.keys(a)) {
-            a[key] = new classs(a[key]);
-          }
-          return a;
-        }
-        return new classs(a);
-      }
-      return a;
-    }
-  }
-}
-
-export namespace executionnode {
-  export class ApplicationSecretDescriptor {
-    requirementRef: string;
-    purpose: string;
-    providerDeployment?: string;
-    applicationLibraries: string[];
-    hosts: string[];
-    operations: string[];
-    sourceRef: string;
-    displayLabel: string;
-
-    static createFrom(source: any = {}) {
-      return new ApplicationSecretDescriptor(source);
-    }
-
-    constructor(source: any = {}) {
-      if ("string" === typeof source) source = JSON.parse(source);
-      this.requirementRef = source["requirementRef"];
-      this.purpose = source["purpose"];
-      this.providerDeployment = source["providerDeployment"];
-      this.applicationLibraries = source["applicationLibraries"];
-      this.hosts = source["hosts"];
-      this.operations = source["operations"];
-      this.sourceRef = source["sourceRef"];
-      this.displayLabel = source["displayLabel"];
-    }
-  }
-  export class InfrastructureDeploymentVerification {
-    deploymentId: string;
-    sourceRunId: string;
-    coverageDigest: string;
-    verifiedAt: string;
-
-    static createFrom(source: any = {}) {
-      return new InfrastructureDeploymentVerification(source);
-    }
-
-    constructor(source: any = {}) {
-      if ("string" === typeof source) source = JSON.parse(source);
-      this.deploymentId = source["deploymentId"];
-      this.sourceRunId = source["sourceRunId"];
-      this.coverageDigest = source["coverageDigest"];
-      this.verifiedAt = source["verifiedAt"];
-    }
-  }
-  export class InfrastructureVerification {
-    status: string;
-    code?: string;
-    infrastructureFingerprint?: string;
-    evidenceRevision?: string;
-    deployments: InfrastructureDeploymentVerification[];
-
-    static createFrom(source: any = {}) {
-      return new InfrastructureVerification(source);
-    }
-
-    constructor(source: any = {}) {
-      if ("string" === typeof source) source = JSON.parse(source);
-      this.status = source["status"];
-      this.code = source["code"];
-      this.infrastructureFingerprint = source["infrastructureFingerprint"];
-      this.evidenceRevision = source["evidenceRevision"];
-      this.deployments = this.convertValues(
-        source["deployments"],
-        InfrastructureDeploymentVerification,
-      );
-    }
-
-    convertValues(a: any, classs: any, asMap: boolean = false): any {
-      if (!a) {
-        return a;
-      }
-      if (a.slice && a.map) {
-        return (a as any[]).map((elem) => this.convertValues(elem, classs));
-      } else if ("object" === typeof a) {
-        if (asMap) {
-          for (const key of Object.keys(a)) {
-            a[key] = new classs(a[key]);
-          }
-          return a;
-        }
-        return new classs(a);
-      }
-      return a;
-    }
-  }
-  export class RuntimeEvidence {
-    bundleDigest: string;
-    coreVersion: string;
-    catalogDigest: string;
-    protocol: string;
-
-    static createFrom(source: any = {}) {
-      return new RuntimeEvidence(source);
-    }
-
-    constructor(source: any = {}) {
-      if ("string" === typeof source) source = JSON.parse(source);
-      this.bundleDigest = source["bundleDigest"];
-      this.coreVersion = source["coreVersion"];
-      this.catalogDigest = source["catalogDigest"];
-      this.protocol = source["protocol"];
-    }
-  }
-  export class SecretOutputPackage {
-    protocol: string;
-    packageId: string;
-    projectId: string;
-    deploymentId: string;
-    sourceRunId: string;
-    runtimeDigest: string;
-    generation: number;
-    state: string;
-    entries: string[];
-
-    static createFrom(source: any = {}) {
-      return new SecretOutputPackage(source);
-    }
-
-    constructor(source: any = {}) {
-      if ("string" === typeof source) source = JSON.parse(source);
-      this.protocol = source["protocol"];
-      this.packageId = source["packageId"];
-      this.projectId = source["projectId"];
-      this.deploymentId = source["deploymentId"];
-      this.sourceRunId = source["sourceRunId"];
-      this.runtimeDigest = source["runtimeDigest"];
-      this.generation = source["generation"];
-      this.state = source["state"];
-      this.entries = source["entries"];
-    }
-  }
-  export class ServerInformation {
-    hostname: string;
-    os: string;
-    osVersion: string;
-    architecture: string;
-    cpuCount: number;
-    memoryBytes: number;
-    serverTime: string;
-    checkedAt: string;
-
-    static createFrom(source: any = {}) {
-      return new ServerInformation(source);
-    }
-
-    constructor(source: any = {}) {
-      if ("string" === typeof source) source = JSON.parse(source);
-      this.hostname = source["hostname"];
-      this.os = source["os"];
-      this.osVersion = source["osVersion"];
-      this.architecture = source["architecture"];
-      this.cpuCount = source["cpuCount"];
-      this.memoryBytes = source["memoryBytes"];
-      this.serverTime = source["serverTime"];
-      this.checkedAt = source["checkedAt"];
-    }
-  }
-  export class ServiceConfigurationValue {
-    state: string;
-    source: string;
-    value?: any;
-
-    static createFrom(source: any = {}) {
-      return new ServiceConfigurationValue(source);
-    }
-
-    constructor(source: any = {}) {
-      if ("string" === typeof source) source = JSON.parse(source);
-      this.state = source["state"];
-      this.source = source["source"];
-      this.value = source["value"];
-    }
-  }
-  export class ServiceConfigurationScope {
-    configuration: Record<string, ServiceConfigurationValue>;
-    members: Record<string, any>;
-
-    static createFrom(source: any = {}) {
-      return new ServiceConfigurationScope(source);
-    }
-
-    constructor(source: any = {}) {
-      if ("string" === typeof source) source = JSON.parse(source);
-      this.configuration = this.convertValues(
-        source["configuration"],
-        ServiceConfigurationValue,
-        true,
-      );
-      this.members = source["members"];
-    }
-
-    convertValues(a: any, classs: any, asMap: boolean = false): any {
-      if (!a) {
-        return a;
-      }
-      if (a.slice && a.map) {
-        return (a as any[]).map((elem) => this.convertValues(elem, classs));
-      } else if ("object" === typeof a) {
-        if (asMap) {
-          for (const key of Object.keys(a)) {
-            a[key] = new classs(a[key]);
-          }
-          return a;
-        }
-        return new classs(a);
-      }
-      return a;
-    }
-  }
-  export class ServiceConfigurationPreview {
-    apiVersion: string;
-    kind: string;
-    projectRevision: string;
-    services: Record<string, ServiceConfigurationScope>;
-    runtimeDigest?: string;
-
-    static createFrom(source: any = {}) {
-      return new ServiceConfigurationPreview(source);
-    }
-
-    constructor(source: any = {}) {
-      if ("string" === typeof source) source = JSON.parse(source);
-      this.apiVersion = source["apiVersion"];
-      this.kind = source["kind"];
-      this.projectRevision = source["projectRevision"];
-      this.services = this.convertValues(
-        source["services"],
-        ServiceConfigurationScope,
-        true,
-      );
-      this.runtimeDigest = source["runtimeDigest"];
-    }
-
-    convertValues(a: any, classs: any, asMap: boolean = false): any {
-      if (!a) {
-        return a;
-      }
-      if (a.slice && a.map) {
-        return (a as any[]).map((elem) => this.convertValues(elem, classs));
-      } else if ("object" === typeof a) {
-        if (asMap) {
-          for (const key of Object.keys(a)) {
-            a[key] = new classs(a[key]);
-          }
-          return a;
-        }
-        return new classs(a);
-      }
-      return a;
-    }
-  }
-}
-
-export namespace installer {
-  export class CommitTiming {
-    transaction: number;
-    snapshot: number;
-
-    static createFrom(source: any = {}) {
-      return new CommitTiming(source);
-    }
-
-    constructor(source: any = {}) {
-      if ("string" === typeof source) source = JSON.parse(source);
-      this.transaction = source["transaction"];
-      this.snapshot = source["snapshot"];
-    }
-  }
-  export class DocumentState {
-    state: string;
-    digest?: string;
-
-    static createFrom(source: any = {}) {
-      return new DocumentState(source);
-    }
-
-    constructor(source: any = {}) {
-      if ("string" === typeof source) source = JSON.parse(source);
-      this.state = source["state"];
-      this.digest = source["digest"];
-    }
-  }
-  export class DocumentChange {
-    logicalPath: string;
-    beforeDigest?: string;
-    afterDigest?: string;
-    before?: DocumentState;
-    after?: DocumentState;
-
-    static createFrom(source: any = {}) {
-      return new DocumentChange(source);
-    }
-
-    constructor(source: any = {}) {
-      if ("string" === typeof source) source = JSON.parse(source);
-      this.logicalPath = source["logicalPath"];
-      this.beforeDigest = source["beforeDigest"];
-      this.afterDigest = source["afterDigest"];
-      this.before = this.convertValues(source["before"], DocumentState);
-      this.after = this.convertValues(source["after"], DocumentState);
-    }
-
-    convertValues(a: any, classs: any, asMap: boolean = false): any {
-      if (!a) {
-        return a;
-      }
-      if (a.slice && a.map) {
-        return (a as any[]).map((elem) => this.convertValues(elem, classs));
-      } else if ("object" === typeof a) {
-        if (asMap) {
-          for (const key of Object.keys(a)) {
-            a[key] = new classs(a[key]);
-          }
-          return a;
-        }
-        return new classs(a);
-      }
-      return a;
-    }
-  }
-
-  export class VirtualAddress {
-    address: string;
-    interface: string;
-
-    static createFrom(source: any = {}) {
-      return new VirtualAddress(source);
-    }
-
-    constructor(source: any = {}) {
-      if ("string" === typeof source) source = JSON.parse(source);
-      this.address = source["address"];
-      this.interface = source["interface"];
-    }
-  }
-  export class PlacementHost {
-    hostId: string;
-    roles?: string[];
-    priority?: number;
-
-    static createFrom(source: any = {}) {
-      return new PlacementHost(source);
-    }
-
-    constructor(source: any = {}) {
-      if ("string" === typeof source) source = JSON.parse(source);
-      this.hostId = source["hostId"];
-      this.roles = source["roles"];
-      this.priority = source["priority"];
-    }
-  }
-  export class PlacementMember {
-    memberId: string;
-    hostId: string;
-    roles?: string[];
-    configuration?: Record<string, any>;
-
-    static createFrom(source: any = {}) {
-      return new PlacementMember(source);
-    }
-
-    constructor(source: any = {}) {
-      if ("string" === typeof source) source = JSON.parse(source);
-      this.memberId = source["memberId"];
-      this.hostId = source["hostId"];
-      this.roles = source["roles"];
-      this.configuration = source["configuration"];
-    }
-  }
-  export class EditCommand {
-    apiVersion?: string;
-    kind?: string;
-    baseProjectRevision?: string;
-    operation: string;
-    deploymentId?: string;
-    scope?: string;
-    memberId?: string;
-    setting?: string;
-    value?: any;
-    endpointGroupId?: string;
-    haproxyDeploymentId?: string;
-    hostId?: string;
-    type?: string;
-    desiredHostname?: string;
-    address?: string;
-    sshPort?: number;
-    clearSSHPort?: boolean;
-    serviceType?: string;
-    mode?: string;
-    entityId?: string;
-    entity?: Record<string, any>;
-    members?: PlacementMember[];
-    hosts?: PlacementHost[];
-    property?: string;
-    deployment?: Record<string, any>;
-    endpointGroup?: Record<string, any>;
-    virtualRouterId?: number;
-    virtualAddresses?: VirtualAddress[];
-    placement?: Record<string, any>;
-    backend?: Record<string, any>;
-    commands?: EditCommand[];
-
-    static createFrom(source: any = {}) {
-      return new EditCommand(source);
-    }
-
-    constructor(source: any = {}) {
-      if ("string" === typeof source) source = JSON.parse(source);
-      this.apiVersion = source["apiVersion"];
-      this.kind = source["kind"];
-      this.baseProjectRevision = source["baseProjectRevision"];
-      this.operation = source["operation"];
-      this.deploymentId = source["deploymentId"];
-      this.scope = source["scope"];
-      this.memberId = source["memberId"];
-      this.setting = source["setting"];
-      this.value = source["value"];
-      this.endpointGroupId = source["endpointGroupId"];
-      this.haproxyDeploymentId = source["haproxyDeploymentId"];
-      this.hostId = source["hostId"];
-      this.type = source["type"];
-      this.desiredHostname = source["desiredHostname"];
-      this.address = source["address"];
-      this.sshPort = source["sshPort"];
-      this.clearSSHPort = source["clearSSHPort"];
-      this.serviceType = source["serviceType"];
-      this.mode = source["mode"];
-      this.entityId = source["entityId"];
-      this.entity = source["entity"];
-      this.members = this.convertValues(source["members"], PlacementMember);
-      this.hosts = this.convertValues(source["hosts"], PlacementHost);
-      this.property = source["property"];
-      this.deployment = source["deployment"];
-      this.endpointGroup = source["endpointGroup"];
-      this.virtualRouterId = source["virtualRouterId"];
-      this.virtualAddresses = this.convertValues(
-        source["virtualAddresses"],
-        VirtualAddress,
-      );
-      this.placement = source["placement"];
-      this.backend = source["backend"];
-      this.commands = this.convertValues(source["commands"], EditCommand);
-    }
-
-    convertValues(a: any, classs: any, asMap: boolean = false): any {
-      if (!a) {
-        return a;
-      }
-      if (a.slice && a.map) {
-        return (a as any[]).map((elem) => this.convertValues(elem, classs));
-      } else if ("object" === typeof a) {
-        if (asMap) {
-          for (const key of Object.keys(a)) {
-            a[key] = new classs(a[key]);
-          }
-          return a;
-        }
-        return new classs(a);
-      }
-      return a;
-    }
-  }
-  export class ManagedPKI {
-    authorities: Record<string, any>;
-    profiles: Record<string, any>;
-    tlsProfiles: Record<string, any>;
-    scopes: Record<string, any>;
-
-    static createFrom(source: any = {}) {
-      return new ManagedPKI(source);
-    }
-
-    constructor(source: any = {}) {
-      if ("string" === typeof source) source = JSON.parse(source);
-      this.authorities = source["authorities"];
-      this.profiles = source["profiles"];
-      this.tlsProfiles = source["tlsProfiles"];
-      this.scopes = source["scopes"];
-    }
-  }
-  export class ManagedHostPlacement {
-    deploymentId: string;
-    hostId: string;
-    roles: string[];
-    priority?: number;
-
-    static createFrom(source: any = {}) {
-      return new ManagedHostPlacement(source);
-    }
-
-    constructor(source: any = {}) {
-      if ("string" === typeof source) source = JSON.parse(source);
-      this.deploymentId = source["deploymentId"];
-      this.hostId = source["hostId"];
-      this.roles = source["roles"];
-      this.priority = source["priority"];
-    }
-  }
-  export class ManagedMemberPlacement {
-    deploymentId: string;
-    memberId: string;
-    hostId: string;
-    roles: string[];
-    configuration: ManagedConfigurationOverride[];
-
-    static createFrom(source: any = {}) {
-      return new ManagedMemberPlacement(source);
-    }
-
-    constructor(source: any = {}) {
-      if ("string" === typeof source) source = JSON.parse(source);
-      this.deploymentId = source["deploymentId"];
-      this.memberId = source["memberId"];
-      this.hostId = source["hostId"];
-      this.roles = source["roles"];
-      this.configuration = this.convertValues(
-        source["configuration"],
-        ManagedConfigurationOverride,
-      );
-    }
-
-    convertValues(a: any, classs: any, asMap: boolean = false): any {
-      if (!a) {
-        return a;
-      }
-      if (a.slice && a.map) {
-        return (a as any[]).map((elem) => this.convertValues(elem, classs));
-      } else if ("object" === typeof a) {
-        if (asMap) {
-          for (const key of Object.keys(a)) {
-            a[key] = new classs(a[key]);
-          }
-          return a;
-        }
-        return new classs(a);
-      }
-      return a;
-    }
-  }
-  export class ManagedEndpointGroup {
-    endpointGroupId: string;
-    domain: string;
-    wildcard: boolean;
-
-    static createFrom(source: any = {}) {
-      return new ManagedEndpointGroup(source);
-    }
-
-    constructor(source: any = {}) {
-      if ("string" === typeof source) source = JSON.parse(source);
-      this.endpointGroupId = source["endpointGroupId"];
-      this.domain = source["domain"];
-      this.wildcard = source["wildcard"];
-    }
-  }
-  export class ManagedConfigurationOverride {
-    setting: string;
-    overridePresent: boolean;
-    state: string;
-    value?: any;
-
-    static createFrom(source: any = {}) {
-      return new ManagedConfigurationOverride(source);
-    }
-
-    constructor(source: any = {}) {
-      if ("string" === typeof source) source = JSON.parse(source);
-      this.setting = source["setting"];
-      this.overridePresent = source["overridePresent"];
-      this.state = source["state"];
-      this.value = source["value"];
-    }
-  }
-  export class ManagedDeployment {
-    deploymentId: string;
-    serviceType: string;
-    mode: string;
-    endpointGroup?: string;
-    endpointGroupRef?: string;
-    virtualRouterId?: number;
-    virtualAddresses?: VirtualAddress[];
-    providerEditState: string;
-    configuration: ManagedConfigurationOverride[];
-
-    static createFrom(source: any = {}) {
-      return new ManagedDeployment(source);
-    }
-
-    constructor(source: any = {}) {
-      if ("string" === typeof source) source = JSON.parse(source);
-      this.deploymentId = source["deploymentId"];
-      this.serviceType = source["serviceType"];
-      this.mode = source["mode"];
-      this.endpointGroup = source["endpointGroup"];
-      this.endpointGroupRef = source["endpointGroupRef"];
-      this.virtualRouterId = source["virtualRouterId"];
-      this.virtualAddresses = this.convertValues(
-        source["virtualAddresses"],
-        VirtualAddress,
-      );
-      this.providerEditState = source["providerEditState"];
-      this.configuration = this.convertValues(
-        source["configuration"],
-        ManagedConfigurationOverride,
-      );
-    }
-
-    convertValues(a: any, classs: any, asMap: boolean = false): any {
-      if (!a) {
-        return a;
-      }
-      if (a.slice && a.map) {
-        return (a as any[]).map((elem) => this.convertValues(elem, classs));
-      } else if ("object" === typeof a) {
-        if (asMap) {
-          for (const key of Object.keys(a)) {
-            a[key] = new classs(a[key]);
-          }
-          return a;
-        }
-        return new classs(a);
-      }
-      return a;
-    }
-  }
-  export class ManagedServer {
-    hostId: string;
-    type?: string;
-    desiredHostname?: string;
-    address?: string;
-    sshPort?: number;
-
-    static createFrom(source: any = {}) {
-      return new ManagedServer(source);
-    }
-
-    constructor(source: any = {}) {
-      if ("string" === typeof source) source = JSON.parse(source);
-      this.hostId = source["hostId"];
-      this.type = source["type"];
-      this.desiredHostname = source["desiredHostname"];
-      this.address = source["address"];
-      this.sshPort = source["sshPort"];
-    }
-  }
-  export class ManagedApplicationPackage {
-    kind: string;
-    ref: string;
-    digest: string;
-    definition: Record<string, any>;
-
-    static createFrom(source: any = {}) {
-      return new ManagedApplicationPackage(source);
-    }
-
-    constructor(source: any = {}) {
-      if ("string" === typeof source) source = JSON.parse(source);
-      this.kind = source["kind"];
-      this.ref = source["ref"];
-      this.digest = source["digest"];
-      this.definition = source["definition"];
-    }
-  }
-  export class ManagedProjectView {
-    applicationPackages: Record<string, ManagedApplicationPackage>;
-    applicationLibraries: Record<string, any>;
-    applicationPlacements: Record<string, any>;
-    projectRevision: string;
-    dataRootDirectory: string;
-    namePrefix: string;
-    servers: Record<string, ManagedServer>;
-    deployments: Record<string, ManagedDeployment>;
-    endpointGroups: Record<string, ManagedEndpointGroup>;
-    memberPlacements: ManagedMemberPlacement[];
-    hostPlacements: ManagedHostPlacement[];
-    pki: ManagedPKI;
-
-    static createFrom(source: any = {}) {
-      return new ManagedProjectView(source);
-    }
-
-    constructor(source: any = {}) {
-      if ("string" === typeof source) source = JSON.parse(source);
-      this.applicationPackages = this.convertValues(
-        source["applicationPackages"],
-        ManagedApplicationPackage,
-        true,
-      );
-      this.applicationLibraries = source["applicationLibraries"];
-      this.applicationPlacements = source["applicationPlacements"];
-      this.projectRevision = source["projectRevision"];
-      this.dataRootDirectory = source["dataRootDirectory"];
-      this.namePrefix = source["namePrefix"];
-      this.servers = this.convertValues(source["servers"], ManagedServer, true);
-      this.deployments = this.convertValues(
-        source["deployments"],
-        ManagedDeployment,
-        true,
-      );
-      this.endpointGroups = this.convertValues(
-        source["endpointGroups"],
-        ManagedEndpointGroup,
-        true,
-      );
-      this.memberPlacements = this.convertValues(
-        source["memberPlacements"],
-        ManagedMemberPlacement,
-      );
-      this.hostPlacements = this.convertValues(
-        source["hostPlacements"],
-        ManagedHostPlacement,
-      );
-      this.pki = this.convertValues(source["pki"], ManagedPKI);
-    }
-
-    convertValues(a: any, classs: any, asMap: boolean = false): any {
-      if (!a) {
-        return a;
-      }
-      if (a.slice && a.map) {
-        return (a as any[]).map((elem) => this.convertValues(elem, classs));
-      } else if ("object" === typeof a) {
-        if (asMap) {
-          for (const key of Object.keys(a)) {
-            a[key] = new classs(a[key]);
-          }
-          return a;
-        }
-        return new classs(a);
-      }
-      return a;
-    }
-  }
-  export class Finding {
-    apiVersion: string;
-    kind: string;
-    code: string;
-    status: string;
-    category: string;
-    field: string;
-    safeMessage: string;
-
-    static createFrom(source: any = {}) {
-      return new Finding(source);
-    }
-
-    constructor(source: any = {}) {
-      if ("string" === typeof source) source = JSON.parse(source);
-      this.apiVersion = source["apiVersion"];
-      this.kind = source["kind"];
-      this.code = source["code"];
-      this.status = source["status"];
-      this.category = source["category"];
-      this.field = source["field"];
-      this.safeMessage = source["safeMessage"];
-    }
-  }
-  export class EditCommitResult {
-    apiVersion: string;
-    kind: string;
-    status: string;
-    changed: boolean;
-    finding?: Finding;
-    oldProjectRevision?: string;
-    newProjectRevision?: string;
-    affectedDocuments?: DocumentChange[];
-    snapshot?: any;
-    managed?: ManagedProjectView;
-    applyRequired: boolean;
-    discarded?: boolean;
-    timing: CommitTiming;
-
-    static createFrom(source: any = {}) {
-      return new EditCommitResult(source);
-    }
-
-    constructor(source: any = {}) {
-      if ("string" === typeof source) source = JSON.parse(source);
-      this.apiVersion = source["apiVersion"];
-      this.kind = source["kind"];
-      this.status = source["status"];
-      this.changed = source["changed"];
-      this.finding = this.convertValues(source["finding"], Finding);
-      this.oldProjectRevision = source["oldProjectRevision"];
-      this.newProjectRevision = source["newProjectRevision"];
-      this.affectedDocuments = this.convertValues(
-        source["affectedDocuments"],
-        DocumentChange,
-      );
-      this.snapshot = source["snapshot"];
-      this.managed = this.convertValues(source["managed"], ManagedProjectView);
-      this.applyRequired = source["applyRequired"];
-      this.discarded = source["discarded"];
-      this.timing = this.convertValues(source["timing"], CommitTiming);
-    }
-
-    convertValues(a: any, classs: any, asMap: boolean = false): any {
-      if (!a) {
-        return a;
-      }
-      if (a.slice && a.map) {
-        return (a as any[]).map((elem) => this.convertValues(elem, classs));
-      } else if ("object" === typeof a) {
-        if (asMap) {
-          for (const key of Object.keys(a)) {
-            a[key] = new classs(a[key]);
-          }
-          return a;
-        }
-        return new classs(a);
-      }
-      return a;
-    }
-  }
-  export class PlanTiming {
-    application: number;
-    initialSnapshot: number;
-    stagedSnapshot: number;
-
-    static createFrom(source: any = {}) {
-      return new PlanTiming(source);
-    }
-
-    constructor(source: any = {}) {
-      if ("string" === typeof source) source = JSON.parse(source);
-      this.application = source["application"];
-      this.initialSnapshot = source["initialSnapshot"];
-      this.stagedSnapshot = source["stagedSnapshot"];
-    }
-  }
-  export class Validation {
-    status: string;
-    findings: Finding[];
-
-    static createFrom(source: any = {}) {
-      return new Validation(source);
-    }
-
-    constructor(source: any = {}) {
-      if ("string" === typeof source) source = JSON.parse(source);
-      this.status = source["status"];
-      this.findings = this.convertValues(source["findings"], Finding);
-    }
-
-    convertValues(a: any, classs: any, asMap: boolean = false): any {
-      if (!a) {
-        return a;
-      }
-      if (a.slice && a.map) {
-        return (a as any[]).map((elem) => this.convertValues(elem, classs));
-      } else if ("object" === typeof a) {
-        if (asMap) {
-          for (const key of Object.keys(a)) {
-            a[key] = new classs(a[key]);
-          }
-          return a;
-        }
-        return new classs(a);
-      }
-      return a;
-    }
-  }
-  export class SemanticChange {
-    operation: string;
-    entityId?: string;
-    property?: string;
-    safeSummary: string;
-
-    static createFrom(source: any = {}) {
-      return new SemanticChange(source);
-    }
-
-    constructor(source: any = {}) {
-      if ("string" === typeof source) source = JSON.parse(source);
-      this.operation = source["operation"];
-      this.entityId = source["entityId"];
-      this.property = source["property"];
-      this.safeSummary = source["safeSummary"];
-    }
-  }
-  export class EditPlan {
-    apiVersion: string;
-    kind: string;
-    status: string;
-    planId?: string;
-    baseProjectRevision: string;
-    commandSummary: SemanticChange;
-    semanticChanges: SemanticChange[];
-    affectedEntities: string[];
-    affectedDocuments: DocumentChange[];
-    impacts: string[];
-    validation: Validation;
-    expectedEffectiveState?: any[];
-    expectedSnapshotFingerprint?: string;
-    reviewDiff: string;
-    commitAllowed: boolean;
-    applyRequired: boolean;
-    // Go type: time
-    expiresAt?: any;
-    timing: PlanTiming;
-
-    static createFrom(source: any = {}) {
-      return new EditPlan(source);
-    }
-
-    constructor(source: any = {}) {
-      if ("string" === typeof source) source = JSON.parse(source);
-      this.apiVersion = source["apiVersion"];
-      this.kind = source["kind"];
-      this.status = source["status"];
-      this.planId = source["planId"];
-      this.baseProjectRevision = source["baseProjectRevision"];
-      this.commandSummary = this.convertValues(
-        source["commandSummary"],
-        SemanticChange,
-      );
-      this.semanticChanges = this.convertValues(
-        source["semanticChanges"],
-        SemanticChange,
-      );
-      this.affectedEntities = source["affectedEntities"];
-      this.affectedDocuments = this.convertValues(
-        source["affectedDocuments"],
-        DocumentChange,
-      );
-      this.impacts = source["impacts"];
-      this.validation = this.convertValues(source["validation"], Validation);
-      this.expectedEffectiveState = source["expectedEffectiveState"];
-      this.expectedSnapshotFingerprint = source["expectedSnapshotFingerprint"];
-      this.reviewDiff = source["reviewDiff"];
-      this.commitAllowed = source["commitAllowed"];
-      this.applyRequired = source["applyRequired"];
-      this.expiresAt = this.convertValues(source["expiresAt"], null);
-      this.timing = this.convertValues(source["timing"], PlanTiming);
-    }
-
-    convertValues(a: any, classs: any, asMap: boolean = false): any {
-      if (!a) {
-        return a;
-      }
-      if (a.slice && a.map) {
-        return (a as any[]).map((elem) => this.convertValues(elem, classs));
-      } else if ("object" === typeof a) {
-        if (asMap) {
-          for (const key of Object.keys(a)) {
-            a[key] = new classs(a[key]);
-          }
-          return a;
-        }
-        return new classs(a);
-      }
-      return a;
-    }
-  }
-  export class EditSession {
-    apiVersion: string;
-    kind: string;
-    sessionId: string;
-    projectContextId: string;
-    baseProjectRevision: string;
-    status: string;
-    commandCount: number;
-    encodedBytes: number;
-    // Go type: time
-    expiresAt: any;
-    reviewedPlanId?: string;
-
-    static createFrom(source: any = {}) {
-      return new EditSession(source);
-    }
-
-    constructor(source: any = {}) {
-      if ("string" === typeof source) source = JSON.parse(source);
-      this.apiVersion = source["apiVersion"];
-      this.kind = source["kind"];
-      this.sessionId = source["sessionId"];
-      this.projectContextId = source["projectContextId"];
-      this.baseProjectRevision = source["baseProjectRevision"];
-      th
+    ru
 @@END

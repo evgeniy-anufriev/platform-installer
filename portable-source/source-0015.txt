@@ -1,3 +1,3604 @@
+@@PORTABLE {"path":"vendor/golang.org/x/sys/unix/ztypes_zos_s390x.go","mode":420,"size":8918,"sha256":"0f12e659910139f6f617a42718292e585415eb118d2566cdb59f3ca7752d5413","index":0,"count":1,"encoding":"utf-8","payloadBytes":8918}
+// Copyright 2020 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+//go:build zos && s390x
+
+// Hand edited based on ztypes_linux_s390x.go
+// TODO: auto-generate.
+
+package unix
+
+const (
+	SizeofPtr      = 0x8
+	SizeofShort    = 0x2
+	SizeofInt      = 0x4
+	SizeofLong     = 0x8
+	SizeofLongLong = 0x8
+	PathMax        = 0x1000
+)
+
+const (
+	SizeofSockaddrAny   = 128
+	SizeofCmsghdr       = 12
+	SizeofIPMreq        = 8
+	SizeofIPv6Mreq      = 20
+	SizeofICMPv6Filter  = 32
+	SizeofIPv6MTUInfo   = 32
+	SizeofInet4Pktinfo  = 8
+	SizeofInet6Pktinfo  = 20
+	SizeofLinger        = 8
+	SizeofSockaddrInet4 = 16
+	SizeofSockaddrInet6 = 28
+	SizeofTCPInfo       = 0x68
+	SizeofUcred         = 12
+)
+
+type (
+	_C_short     int16
+	_C_int       int32
+	_C_long      int64
+	_C_long_long int64
+)
+
+type Timespec struct {
+	Sec  int64
+	Nsec int64
+}
+
+type Timeval struct {
+	Sec  int64
+	Usec int64
+}
+
+type timeval_zos struct { //correct (with padding and all)
+	Sec  int64
+	_    [4]byte // pad
+	Usec int32
+}
+
+type Tms struct { //clock_t is 4-byte unsigned int in zos
+	Utime  uint32
+	Stime  uint32
+	Cutime uint32
+	Cstime uint32
+}
+
+type Time_t int64
+
+type Utimbuf struct {
+	Actime  int64
+	Modtime int64
+}
+
+type Utsname struct {
+	Sysname  [16]byte
+	Nodename [32]byte
+	Release  [8]byte
+	Version  [8]byte
+	Machine  [16]byte
+}
+
+type Ucred struct {
+	Pid int32
+	Uid uint32
+	Gid uint32
+}
+
+type RawSockaddrInet4 struct {
+	Len    uint8
+	Family uint8
+	Port   uint16
+	Addr   [4]byte /* in_addr */
+	Zero   [8]uint8
+}
+
+type RawSockaddrInet6 struct {
+	Len      uint8
+	Family   uint8
+	Port     uint16
+	Flowinfo uint32
+	Addr     [16]byte /* in6_addr */
+	Scope_id uint32
+}
+
+type RawSockaddrUnix struct {
+	Len    uint8
+	Family uint8
+	Path   [108]int8
+}
+
+type RawSockaddr struct {
+	Len    uint8
+	Family uint8
+	Data   [14]uint8
+}
+
+type RawSockaddrAny struct {
+	Addr RawSockaddr
+	_    [112]uint8 // pad
+}
+
+type _Socklen uint32
+
+type Linger struct {
+	Onoff  int32
+	Linger int32
+}
+
+type Iovec struct {
+	Base *byte
+	Len  uint64
+}
+
+type IPMreq struct {
+	Multiaddr [4]byte /* in_addr */
+	Interface [4]byte /* in_addr */
+}
+
+type IPv6Mreq struct {
+	Multiaddr [16]byte /* in6_addr */
+	Interface uint32
+}
+
+type Msghdr struct {
+	Name       *byte
+	Iov        *Iovec
+	Control    *byte
+	Flags      int32
+	Namelen    int32
+	Iovlen     int32
+	Controllen int32
+}
+
+type Cmsghdr struct {
+	Len   int32
+	Level int32
+	Type  int32
+}
+
+type Inet4Pktinfo struct {
+	Addr    [4]byte /* in_addr */
+	Ifindex uint32
+}
+
+type Inet6Pktinfo struct {
+	Addr    [16]byte /* in6_addr */
+	Ifindex uint32
+}
+
+type IPv6MTUInfo struct {
+	Addr RawSockaddrInet6
+	Mtu  uint32
+}
+
+type ICMPv6Filter struct {
+	Data [8]uint32
+}
+
+type TCPInfo struct {
+	State          uint8
+	Ca_state       uint8
+	Retransmits    uint8
+	Probes         uint8
+	Backoff        uint8
+	Options        uint8
+	Rto            uint32
+	Ato            uint32
+	Snd_mss        uint32
+	Rcv_mss        uint32
+	Unacked        uint32
+	Sacked         uint32
+	Lost           uint32
+	Retrans        uint32
+	Fackets        uint32
+	Last_data_sent uint32
+	Last_ack_sent  uint32
+	Last_data_recv uint32
+	Last_ack_recv  uint32
+	Pmtu           uint32
+	Rcv_ssthresh   uint32
+	Rtt            uint32
+	Rttvar         uint32
+	Snd_ssthresh   uint32
+	Snd_cwnd       uint32
+	Advmss         uint32
+	Reordering     uint32
+	Rcv_rtt        uint32
+	Rcv_space      uint32
+	Total_retrans  uint32
+}
+
+type _Gid_t uint32
+
+type rusage_zos struct {
+	Utime timeval_zos
+	Stime timeval_zos
+}
+
+type Rusage struct {
+	Utime    Timeval
+	Stime    Timeval
+	Maxrss   int64
+	Ixrss    int64
+	Idrss    int64
+	Isrss    int64
+	Minflt   int64
+	Majflt   int64
+	Nswap    int64
+	Inblock  int64
+	Oublock  int64
+	Msgsnd   int64
+	Msgrcv   int64
+	Nsignals int64
+	Nvcsw    int64
+	Nivcsw   int64
+}
+
+type Rlimit struct {
+	Cur uint64
+	Max uint64
+}
+
+// { int, short, short } in poll.h
+type PollFd struct {
+	Fd      int32
+	Events  int16
+	Revents int16
+}
+
+type Stat_t struct { //Linux Definition
+	Dev     uint64
+	Ino     uint64
+	Nlink   uint64
+	Mode    uint32
+	Uid     uint32
+	Gid     uint32
+	_       int32
+	Rdev    uint64
+	Size    int64
+	Atim    Timespec
+	Mtim    Timespec
+	Ctim    Timespec
+	Blksize int64
+	Blocks  int64
+	_       [3]int64
+}
+
+type Stat_LE_t struct {
+	_            [4]byte // eye catcher
+	Length       uint16
+	Version      uint16
+	Mode         int32
+	Ino          uint32
+	Dev          uint32
+	Nlink        int32
+	Uid          int32
+	Gid          int32
+	Size         int64
+	Atim31       [4]byte
+	Mtim31       [4]byte
+	Ctim31       [4]byte
+	Rdev         uint32
+	Auditoraudit uint32
+	Useraudit    uint32
+	Blksize      int32
+	Creatim31    [4]byte
+	AuditID      [16]byte
+	_            [4]byte // rsrvd1
+	File_tag     struct {
+		Ccsid   uint16
+		Txtflag uint16 // aggregating Txflag:1 deferred:1 rsvflags:14
+	}
+	CharsetID [8]byte
+	Blocks    int64
+	Genvalue  uint32
+	Reftim31  [4]byte
+	Fid       [8]byte
+	Filefmt   byte
+	Fspflag2  byte
+	_         [2]byte // rsrvd2
+	Ctimemsec int32
+	Seclabel  [8]byte
+	_         [4]byte // rsrvd3
+	_         [4]byte // rsrvd4
+	Atim      Time_t
+	Mtim      Time_t
+	Ctim      Time_t
+	Creatim   Time_t
+	Reftim    Time_t
+	_         [24]byte // rsrvd5
+}
+
+type Statvfs_t struct {
+	ID          [4]byte
+	Len         int32
+	Bsize       uint64
+	Blocks      uint64
+	Usedspace   uint64
+	Bavail      uint64
+	Flag        uint64
+	Maxfilesize int64
+	_           [16]byte
+	Frsize      uint64
+	Bfree       uint64
+	Files       uint32
+	Ffree       uint32
+	Favail      uint32
+	Namemax31   uint32
+	Invarsec    uint32
+	_           [4]byte
+	Fsid        uint64
+	Namemax     uint64
+}
+
+type Statfs_t struct {
+	Type    uint64
+	Bsize   uint64
+	Blocks  uint64
+	Bfree   uint64
+	Bavail  uint64
+	Files   uint32
+	Ffree   uint32
+	Fsid    uint64
+	Namelen uint64
+	Frsize  uint64
+	Flags   uint64
+	_       [4]uint64
+}
+
+type direntLE struct {
+	Reclen uint16
+	Namlen uint16
+	Ino    uint32
+	Extra  uintptr
+	Name   [256]byte
+}
+
+type Dirent struct {
+	Ino    uint64
+	Off    int64
+	Reclen uint16
+	Type   uint8
+	Name   [256]uint8
+	_      [5]byte
+}
+
+type FdSet struct {
+	Bits [64]int32
+}
+
+// This struct is packed on z/OS so it can't be used directly.
+type Flock_t struct {
+	Type   int16
+	Whence int16
+	Start  int64
+	Len    int64
+	Pid    int32
+}
+
+type F_cnvrt struct {
+	Cvtcmd int32
+	Pccsid int16
+	Fccsid int16
+}
+
+type Termios struct {
+	Cflag uint32
+	Iflag uint32
+	Lflag uint32
+	Oflag uint32
+	Cc    [11]uint8
+}
+
+type Winsize struct {
+	Row    uint16
+	Col    uint16
+	Xpixel uint16
+	Ypixel uint16
+}
+
+type W_Mnth struct {
+	Hid   [4]byte
+	Size  int32
+	Cur1  int32 //32bit pointer
+	Cur2  int32 //^
+	Devno uint32
+	_     [4]byte
+}
+
+type W_Mntent struct {
+	Fstype       uint32
+	Mode         uint32
+	Dev          uint32
+	Parentdev    uint32
+	Rootino      uint32
+	Status       byte
+	Ddname       [9]byte
+	Fstname      [9]byte
+	Fsname       [45]byte
+	Pathlen      uint32
+	Mountpoint   [1024]byte
+	Jobname      [8]byte
+	PID          int32
+	Parmoffset   int32
+	Parmlen      int16
+	Owner        [8]byte
+	Quiesceowner [8]byte
+	_            [38]byte
+}
+
+type EpollEvent struct {
+	Events uint32
+	_      int32
+	Fd     int32
+	Pad    int32
+}
+
+type InotifyEvent struct {
+	Wd     int32
+	Mask   uint32
+	Cookie uint32
+	Len    uint32
+	Name   string
+}
+
+const (
+	SizeofInotifyEvent = 0x10
+)
+
+type ConsMsg2 struct {
+	Cm2Format       uint16
+	Cm2R1           uint16
+	Cm2Msglength    uint32
+	Cm2Msg          *byte
+	Cm2R2           [4]byte
+	Cm2R3           [4]byte
+	Cm2Routcde      *uint32
+	Cm2Descr        *uint32
+	Cm2Msgflag      uint32
+	Cm2Token        uint32
+	Cm2Msgid        *uint32
+	Cm2R4           [4]byte
+	Cm2DomToken     uint32
+	Cm2DomMsgid     *uint32
+	Cm2ModCartptr   *byte
+	Cm2ModConsidptr *byte
+	Cm2MsgCart      [8]byte
+	Cm2MsgConsid    [4]byte
+	Cm2R5           [12]byte
+}
+
+const (
+	CC_modify        = 1
+	CC_stop          = 2
+	CONSOLE_FORMAT_2 = 2
+	CONSOLE_FORMAT_3 = 3
+	CONSOLE_HRDCPY   = 0x80000000
+)
+
+type OpenHow struct {
+	Flags   uint64
+	Mode    uint64
+	Resolve uint64
+}
+
+const SizeofOpenHow = 0x18
+
+const (
+	RESOLVE_CACHED        = 0x20
+	RESOLVE_BENEATH       = 0x8
+	RESOLVE_IN_ROOT       = 0x10
+	RESOLVE_NO_MAGICLINKS = 0x2
+	RESOLVE_NO_SYMLINKS   = 0x4
+	RESOLVE_NO_XDEV       = 0x1
+)
+
+type Siginfo struct {
+	Signo int32
+	Errno int32
+	Code  int32
+	Pid   int32
+	Uid   uint32
+	_     [44]byte
+}
+
+type SysvIpcPerm struct {
+	Uid  uint32
+	Gid  uint32
+	Cuid uint32
+	Cgid uint32
+	Mode int32
+}
+
+type SysvShmDesc struct {
+	Perm   SysvIpcPerm
+	_      [4]byte
+	Lpid   int32
+	Cpid   int32
+	Nattch uint32
+	_      [4]byte
+	_      [4]byte
+	_      [4]byte
+	_      int32
+	_      uint8
+	_      uint8
+	_      uint16
+	_      *byte
+	Segsz  uint64
+	Atime  Time_t
+	Dtime  Time_t
+	Ctime  Time_t
+}
+
+type SysvShmDesc64 struct {
+	Perm   SysvIpcPerm
+	_      [4]byte
+	Lpid   int32
+	Cpid   int32
+	Nattch uint32
+	_      [4]byte
+	_      [4]byte
+	_      [4]byte
+	_      int32
+	_      byte
+	_      uint8
+	_      uint16
+	_      *byte
+	Segsz  uint64
+	Atime  int64
+	Dtime  int64
+	Ctime  int64
+}
+
+@@END
+@@PORTABLE {"path":"vendor/golang.org/x/sys/windows/aliases.go","mode":420,"size":310,"sha256":"8209f09b0195574766435d50f0b769dd76a460777ff194c53952db22c4d54d77","index":0,"count":1,"encoding":"utf-8","payloadBytes":310}
+// Copyright 2018 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+//go:build windows
+
+package windows
+
+import "syscall"
+
+type Signal = syscall.Signal
+type Errno = syscall.Errno
+type SysProcAttr = syscall.SysProcAttr
+
+@@END
+@@PORTABLE {"path":"vendor/golang.org/x/sys/windows/dll_windows.go","mode":420,"size":10522,"sha256":"1c62d9345dd0c1d8e660792c1955a407b2049210c3bd2d8000004375f07afed9","index":0,"count":1,"encoding":"utf-8","payloadBytes":10522}
+// Copyright 2011 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package windows
+
+import (
+	"sync"
+	"sync/atomic"
+	"syscall"
+	"unsafe"
+)
+
+// We need to use LoadLibrary and GetProcAddress from the Go runtime, because
+// the these symbols are loaded by the system linker and are required to
+// dynamically load additional symbols. Note that in the Go runtime, these
+// return syscall.Handle and syscall.Errno, but these are the same, in fact,
+// as windows.Handle and windows.Errno, and we intend to keep these the same.
+
+//go:linkname syscall_loadlibrary syscall.loadlibrary
+func syscall_loadlibrary(filename *uint16) (handle Handle, err Errno)
+
+//go:linkname syscall_getprocaddress syscall.getprocaddress
+func syscall_getprocaddress(handle Handle, procname *uint8) (proc uintptr, err Errno)
+
+// DLLError describes reasons for DLL load failures.
+type DLLError struct {
+	Err     error
+	ObjName string
+	Msg     string
+}
+
+func (e *DLLError) Error() string { return e.Msg }
+
+func (e *DLLError) Unwrap() error { return e.Err }
+
+// A DLL implements access to a single DLL.
+type DLL struct {
+	Name   string
+	Handle Handle
+}
+
+// LoadDLL loads DLL file into memory.
+//
+// Warning: using LoadDLL without an absolute path name is subject to
+// DLL preloading attacks. To safely load a system DLL, use [NewLazySystemDLL],
+// or use [LoadLibraryEx] directly.
+func LoadDLL(name string) (dll *DLL, err error) {
+	namep, err := UTF16PtrFromString(name)
+	if err != nil {
+		return nil, err
+	}
+	h, e := syscall_loadlibrary(namep)
+	if e != 0 {
+		return nil, &DLLError{
+			Err:     e,
+			ObjName: name,
+			Msg:     "Failed to load " + name + ": " + e.Error(),
+		}
+	}
+	d := &DLL{
+		Name:   name,
+		Handle: h,
+	}
+	return d, nil
+}
+
+// MustLoadDLL is like LoadDLL but panics if load operation fails.
+func MustLoadDLL(name string) *DLL {
+	d, e := LoadDLL(name)
+	if e != nil {
+		panic(e)
+	}
+	return d
+}
+
+// FindProc searches DLL d for procedure named name and returns *Proc
+// if found. It returns an error if search fails.
+func (d *DLL) FindProc(name string) (proc *Proc, err error) {
+	namep, err := BytePtrFromString(name)
+	if err != nil {
+		return nil, err
+	}
+	a, e := syscall_getprocaddress(d.Handle, namep)
+	if e != 0 {
+		return nil, &DLLError{
+			Err:     e,
+			ObjName: name,
+			Msg:     "Failed to find " + name + " procedure in " + d.Name + ": " + e.Error(),
+		}
+	}
+	p := &Proc{
+		Dll:  d,
+		Name: name,
+		addr: a,
+	}
+	return p, nil
+}
+
+// MustFindProc is like FindProc but panics if search fails.
+func (d *DLL) MustFindProc(name string) *Proc {
+	p, e := d.FindProc(name)
+	if e != nil {
+		panic(e)
+	}
+	return p
+}
+
+// FindProcByOrdinal searches DLL d for procedure by ordinal and returns *Proc
+// if found. It returns an error if search fails.
+func (d *DLL) FindProcByOrdinal(ordinal uintptr) (proc *Proc, err error) {
+	a, e := GetProcAddressByOrdinal(d.Handle, ordinal)
+	name := "#" + itoa(int(ordinal))
+	if e != nil {
+		return nil, &DLLError{
+			Err:     e,
+			ObjName: name,
+			Msg:     "Failed to find " + name + " procedure in " + d.Name + ": " + e.Error(),
+		}
+	}
+	p := &Proc{
+		Dll:  d,
+		Name: name,
+		addr: a,
+	}
+	return p, nil
+}
+
+// MustFindProcByOrdinal is like FindProcByOrdinal but panics if search fails.
+func (d *DLL) MustFindProcByOrdinal(ordinal uintptr) *Proc {
+	p, e := d.FindProcByOrdinal(ordinal)
+	if e != nil {
+		panic(e)
+	}
+	return p
+}
+
+// Release unloads DLL d from memory.
+func (d *DLL) Release() (err error) {
+	return FreeLibrary(d.Handle)
+}
+
+// A Proc implements access to a procedure inside a DLL.
+type Proc struct {
+	Dll  *DLL
+	Name string
+	addr uintptr
+}
+
+// Addr returns the address of the procedure represented by p.
+// The return value can be passed to Syscall to run the procedure.
+func (p *Proc) Addr() uintptr {
+	return p.addr
+}
+
+//go:uintptrescapes
+
+// Call executes procedure p with arguments a. It will panic, if more than 15 arguments
+// are supplied.
+//
+// The returned error is always non-nil, constructed from the result of GetLastError.
+// Callers must inspect the primary return value to decide whether an error occurred
+// (according to the semantics of the specific function being called) before consulting
+// the error. The error will be guaranteed to contain windows.Errno.
+func (p *Proc) Call(a ...uintptr) (r1, r2 uintptr, lastErr error) {
+	return syscall.SyscallN(p.Addr(), a...)
+}
+
+// A LazyDLL implements access to a single DLL.
+// It will delay the load of the DLL until the first
+// call to its Handle method or to one of its
+// LazyProc's Addr method.
+type LazyDLL struct {
+	Name string
+
+	// System determines whether the DLL must be loaded from the
+	// Windows System directory, bypassing the normal DLL search
+	// path.
+	System bool
+
+	mu  sync.Mutex
+	dll *DLL // non nil once DLL is loaded
+}
+
+// Load loads DLL file d.Name into memory. It returns an error if fails.
+// Load will not try to load DLL, if it is already loaded into memory.
+func (d *LazyDLL) Load() error {
+	// Non-racy version of:
+	// if d.dll != nil {
+	if atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&d.dll))) != nil {
+		return nil
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.dll != nil {
+		return nil
+	}
+
+	// kernel32.dll is special, since it's where LoadLibraryEx comes from.
+	// The kernel already special-cases its name, so it's always
+	// loaded from system32.
+	var dll *DLL
+	var err error
+	if d.Name == "kernel32.dll" {
+		dll, err = LoadDLL(d.Name)
+	} else {
+		dll, err = loadLibraryEx(d.Name, d.System)
+	}
+	if err != nil {
+		return err
+	}
+
+	// Non-racy version of:
+	// d.dll = dll
+	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&d.dll)), unsafe.Pointer(dll))
+	return nil
+}
+
+// mustLoad is like Load but panics if search fails.
+func (d *LazyDLL) mustLoad() {
+	e := d.Load()
+	if e != nil {
+		panic(e)
+	}
+}
+
+// Handle returns d's module handle.
+func (d *LazyDLL) Handle() uintptr {
+	d.mustLoad()
+	return uintptr(d.dll.Handle)
+}
+
+// NewProc returns a LazyProc for accessing the named procedure in the DLL d.
+func (d *LazyDLL) NewProc(name string) *LazyProc {
+	return &LazyProc{l: d, Name: name}
+}
+
+// NewLazyDLL creates new LazyDLL associated with DLL file.
+//
+// Warning: using NewLazyDLL without an absolute path name is subject to
+// DLL preloading attacks. To safely load a system DLL, use [NewLazySystemDLL].
+func NewLazyDLL(name string) *LazyDLL {
+	return &LazyDLL{Name: name}
+}
+
+// NewLazySystemDLL is like NewLazyDLL, but will only
+// search Windows System directory for the DLL if name is
+// a base name (like "advapi32.dll").
+func NewLazySystemDLL(name string) *LazyDLL {
+	return &LazyDLL{Name: name, System: true}
+}
+
+// A LazyProc implements access to a procedure inside a LazyDLL.
+// It delays the lookup until the Addr method is called.
+type LazyProc struct {
+	Name string
+
+	mu   sync.Mutex
+	l    *LazyDLL
+	proc *Proc
+}
+
+// Find searches DLL for procedure named p.Name. It returns
+// an error if search fails. Find will not search procedure,
+// if it is already found and loaded into memory.
+func (p *LazyProc) Find() error {
+	// Non-racy version of:
+	// if p.proc == nil {
+	if atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&p.proc))) == nil {
+		p.mu.Lock()
+		defer p.mu.Unlock()
+		if p.proc == nil {
+			e := p.l.Load()
+			if e != nil {
+				return e
+			}
+			proc, e := p.l.dll.FindProc(p.Name)
+			if e != nil {
+				return e
+			}
+			// Non-racy version of:
+			// p.proc = proc
+			atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&p.proc)), unsafe.Pointer(proc))
+		}
+	}
+	return nil
+}
+
+// mustFind is like Find but panics if search fails.
+func (p *LazyProc) mustFind() {
+	e := p.Find()
+	if e != nil {
+		panic(e)
+	}
+}
+
+// Addr returns the address of the procedure represented by p.
+// The return value can be passed to Syscall to run the procedure.
+// It will panic if the procedure cannot be found.
+func (p *LazyProc) Addr() uintptr {
+	p.mustFind()
+	return p.proc.Addr()
+}
+
+//go:uintptrescapes
+
+// Call executes procedure p with arguments a. It will panic, if more than 15 arguments
+// are supplied. It will also panic if the procedure cannot be found.
+//
+// The returned error is always non-nil, constructed from the result of GetLastError.
+// Callers must inspect the primary return value to decide whether an error occurred
+// (according to the semantics of the specific function being called) before consulting
+// the error. The error will be guaranteed to contain windows.Errno.
+func (p *LazyProc) Call(a ...uintptr) (r1, r2 uintptr, lastErr error) {
+	p.mustFind()
+	return p.proc.Call(a...)
+}
+
+var canDoSearchSystem32Once struct {
+	sync.Once
+	v bool
+}
+
+func initCanDoSearchSystem32() {
+	// https://msdn.microsoft.com/en-us/library/ms684179(v=vs.85).aspx says:
+	// "Windows 7, Windows Server 2008 R2, Windows Vista, and Windows
+	// Server 2008: The LOAD_LIBRARY_SEARCH_* flags are available on
+	// systems that have KB2533623 installed. To determine whether the
+	// flags are available, use GetProcAddress to get the address of the
+	// AddDllDirectory, RemoveDllDirectory, or SetDefaultDllDirectories
+	// function. If GetProcAddress succeeds, the LOAD_LIBRARY_SEARCH_*
+	// flags can be used with LoadLibraryEx."
+	canDoSearchSystem32Once.v = (modkernel32.NewProc("AddDllDirectory").Find() == nil)
+}
+
+func canDoSearchSystem32() bool {
+	canDoSearchSystem32Once.Do(initCanDoSearchSystem32)
+	return canDoSearchSystem32Once.v
+}
+
+func isBaseName(name string) bool {
+	for _, c := range name {
+		if c == ':' || c == '/' || c == '\\' {
+			return false
+		}
+	}
+	return true
+}
+
+// loadLibraryEx wraps the Windows LoadLibraryEx function.
+//
+// See https://msdn.microsoft.com/en-us/library/windows/desktop/ms684179(v=vs.85).aspx
+//
+// If name is not an absolute path, LoadLibraryEx searches for the DLL
+// in a variety of automatic locations unless constrained by flags.
+// See: https://msdn.microsoft.com/en-us/library/ff919712%28VS.85%29.aspx
+func loadLibraryEx(name string, system bool) (*DLL, error) {
+	loadDLL := name
+	var flags uintptr
+	if system {
+		if canDoSearchSystem32() {
+			flags = LOAD_LIBRARY_SEARCH_SYSTEM32
+		} else if isBaseName(name) {
+			// WindowsXP or unpatched Windows machine
+			// trying to load "foo.dll" out of the system
+			// folder, but LoadLibraryEx doesn't support
+			// that yet on their system, so emulate it.
+			systemdir, err := GetSystemDirectory()
+			if err != nil {
+				return nil, err
+			}
+			loadDLL = systemdir + "\\" + name
+		}
+	}
+	h, err := LoadLibraryEx(loadDLL, 0, flags)
+	if err != nil {
+		return nil, err
+	}
+	return &DLL{Name: name, Handle: h}, nil
+}
+
+@@END
+@@PORTABLE {"path":"vendor/golang.org/x/sys/windows/env_windows.go","mode":420,"size":1367,"sha256":"fcfa69bb220a15cc151240ecc57bb144cf25c6628e899bc72d8217171376ab5b","index":0,"count":1,"encoding":"utf-8","payloadBytes":1367}
+// Copyright 2010 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+// Windows environment variables.
+
+package windows
+
+import (
+	"syscall"
+	"unsafe"
+)
+
+func Getenv(key string) (value string, found bool) {
+	return syscall.Getenv(key)
+}
+
+func Setenv(key, value string) error {
+	return syscall.Setenv(key, value)
+}
+
+func Clearenv() {
+	syscall.Clearenv()
+}
+
+func Environ() []string {
+	return syscall.Environ()
+}
+
+// Returns a default environment associated with the token, rather than the current
+// process. If inheritExisting is true, then this environment also inherits the
+// environment of the current process.
+func (token Token) Environ(inheritExisting bool) (env []string, err error) {
+	var block *uint16
+	err = CreateEnvironmentBlock(&block, token, inheritExisting)
+	if err != nil {
+		return nil, err
+	}
+	defer DestroyEnvironmentBlock(block)
+	size := unsafe.Sizeof(*block)
+	for *block != 0 {
+		// find NUL terminator
+		end := unsafe.Pointer(block)
+		for *(*uint16)(end) != 0 {
+			end = unsafe.Add(end, size)
+		}
+
+		entry := unsafe.Slice(block, (uintptr(end)-uintptr(unsafe.Pointer(block)))/size)
+		env = append(env, UTF16ToString(entry))
+		block = (*uint16)(unsafe.Add(end, size))
+	}
+	return env, nil
+}
+
+func Unsetenv(key string) error {
+	return syscall.Unsetenv(key)
+}
+
+@@END
+@@PORTABLE {"path":"vendor/golang.org/x/sys/windows/eventlog.go","mode":420,"size":825,"sha256":"0162de9581d94b7f73c2125e310a8c08d1f5f6ec9d99d68b450ea330cdab33e0","index":0,"count":1,"encoding":"utf-8","payloadBytes":825}
+// Copyright 2012 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+//go:build windows
+
+package windows
+
+const (
+	EVENTLOG_SUCCESS          = 0
+	EVENTLOG_ERROR_TYPE       = 1
+	EVENTLOG_WARNING_TYPE     = 2
+	EVENTLOG_INFORMATION_TYPE = 4
+	EVENTLOG_AUDIT_SUCCESS    = 8
+	EVENTLOG_AUDIT_FAILURE    = 16
+)
+
+//sys	RegisterEventSource(uncServerName *uint16, sourceName *uint16) (handle Handle, err error) [failretval==0] = advapi32.RegisterEventSourceW
+//sys	DeregisterEventSource(handle Handle) (err error) = advapi32.DeregisterEventSource
+//sys	ReportEvent(log Handle, etype uint16, category uint16, eventId uint32, usrSId uintptr, numStrings uint16, dataSize uint32, strings **uint16, rawData *byte) (err error) = advapi32.ReportEventW
+
+@@END
+@@PORTABLE {"path":"vendor/golang.org/x/sys/windows/exec_windows.go","mode":420,"size":7513,"sha256":"9c4824d3c8a1d54189f9d81e54a5786971b338c6d8b116ad188c1746212534a8","index":0,"count":1,"encoding":"utf-8","payloadBytes":7513}
+// Copyright 2009 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+// Fork, exec, wait, etc.
+
+package windows
+
+import (
+	errorspkg "errors"
+	"unsafe"
+)
+
+// EscapeArg rewrites command line argument s as prescribed
+// in http://msdn.microsoft.com/en-us/library/ms880421.
+// This function returns "" (2 double quotes) if s is empty.
+// Alternatively, these transformations are done:
+//   - every back slash (\) is doubled, but only if immediately
+//     followed by double quote (");
+//   - every double quote (") is escaped by back slash (\);
+//   - finally, s is wrapped with double quotes (arg -> "arg"),
+//     but only if there is space or tab inside s.
+func EscapeArg(s string) string {
+	if len(s) == 0 {
+		return `""`
+	}
+	n := len(s)
+	hasSpace := false
+	for i := 0; i < len(s); i++ {
+		switch s[i] {
+		case '"', '\\':
+			n++
+		case ' ', '\t':
+			hasSpace = true
+		}
+	}
+	if hasSpace {
+		n += 2 // Reserve space for quotes.
+	}
+	if n == len(s) {
+		return s
+	}
+
+	qs := make([]byte, n)
+	j := 0
+	if hasSpace {
+		qs[j] = '"'
+		j++
+	}
+	slashes := 0
+	for i := 0; i < len(s); i++ {
+		switch s[i] {
+		default:
+			slashes = 0
+			qs[j] = s[i]
+		case '\\':
+			slashes++
+			qs[j] = s[i]
+		case '"':
+			for ; slashes > 0; slashes-- {
+				qs[j] = '\\'
+				j++
+			}
+			qs[j] = '\\'
+			j++
+			qs[j] = s[i]
+		}
+		j++
+	}
+	if hasSpace {
+		for ; slashes > 0; slashes-- {
+			qs[j] = '\\'
+			j++
+		}
+		qs[j] = '"'
+		j++
+	}
+	return string(qs[:j])
+}
+
+// ComposeCommandLine escapes and joins the given arguments suitable for use as a Windows command line,
+// in CreateProcess's CommandLine argument, CreateService/ChangeServiceConfig's BinaryPathName argument,
+// or any program that uses CommandLineToArgv.
+func ComposeCommandLine(args []string) string {
+	if len(args) == 0 {
+		return ""
+	}
+
+	// Per https://learn.microsoft.com/en-us/windows/win32/api/shellapi/nf-shellapi-commandlinetoargvw:
+	// “This function accepts command lines that contain a program name; the
+	// program name can be enclosed in quotation marks or not.”
+	//
+	// Unfortunately, it provides no means of escaping interior quotation marks
+	// within that program name, and we have no way to report them here.
+	prog := args[0]
+	mustQuote := len(prog) == 0
+	for i := 0; i < len(prog); i++ {
+		c := prog[i]
+		if c <= ' ' || (c == '"' && i == 0) {
+			// Force quotes for not only the ASCII space and tab as described in the
+			// MSDN article, but also ASCII control characters.
+			// The documentation for CommandLineToArgvW doesn't say what happens when
+			// the first argument is not a valid program name, but it empirically
+			// seems to drop unquoted control characters.
+			mustQuote = true
+			break
+		}
+	}
+	var commandLine []byte
+	if mustQuote {
+		commandLine = make([]byte, 0, len(prog)+2)
+		commandLine = append(commandLine, '"')
+		for i := 0; i < len(prog); i++ {
+			c := prog[i]
+			if c == '"' {
+				// This quote would interfere with our surrounding quotes.
+				// We have no way to report an error, so just strip out
+				// the offending character instead.
+				continue
+			}
+			commandLine = append(commandLine, c)
+		}
+		commandLine = append(commandLine, '"')
+	} else {
+		if len(args) == 1 {
+			// args[0] is a valid command line representing itself.
+			// No need to allocate a new slice or string for it.
+			return prog
+		}
+		commandLine = []byte(prog)
+	}
+
+	for _, arg := range args[1:] {
+		commandLine = append(commandLine, ' ')
+		// TODO(bcmills): since we're already appending to a slice, it would be nice
+		// to avoid the intermediate allocations of EscapeArg.
+		// Perhaps we can factor out an appendEscapedArg function.
+		commandLine = append(commandLine, EscapeArg(arg)...)
+	}
+	return string(commandLine)
+}
+
+// DecomposeCommandLine breaks apart its argument command line into unescaped parts using CommandLineToArgv,
+// as gathered from GetCommandLine, QUERY_SERVICE_CONFIG's BinaryPathName argument, or elsewhere that
+// command lines are passed around.
+// DecomposeCommandLine returns an error if commandLine contains NUL.
+func DecomposeCommandLine(commandLine string) ([]string, error) {
+	if len(commandLine) == 0 {
+		return []string{}, nil
+	}
+	utf16CommandLine, err := UTF16FromString(commandLine)
+	if err != nil {
+		return nil, errorspkg.New("string with NUL passed to DecomposeCommandLine")
+	}
+	var argc int32
+	argv, err := commandLineToArgv(&utf16CommandLine[0], &argc)
+	if err != nil {
+		return nil, err
+	}
+	defer LocalFree(Handle(unsafe.Pointer(argv)))
+
+	var args []string
+	for _, p := range unsafe.Slice(argv, argc) {
+		args = append(args, UTF16PtrToString(p))
+	}
+	return args, nil
+}
+
+// CommandLineToArgv parses a Unicode command line string and sets
+// argc to the number of parsed arguments.
+//
+// The returned memory should be freed using a single call to LocalFree.
+//
+// Note that although the return type of CommandLineToArgv indicates 8192
+// entries of up to 8192 characters each, the actual count of parsed arguments
+// may exceed 8192, and the documentation for CommandLineToArgvW does not mention
+// any bound on the lengths of the individual argument strings.
+// (See https://go.dev/issue/63236.)
+func CommandLineToArgv(cmd *uint16, argc *int32) (argv *[8192]*[8192]uint16, err error) {
+	argp, err := commandLineToArgv(cmd, argc)
+	argv = (*[8192]*[8192]uint16)(unsafe.Pointer(argp))
+	return argv, err
+}
+
+func CloseOnExec(fd Handle) {
+	SetHandleInformation(Handle(fd), HANDLE_FLAG_INHERIT, 0)
+}
+
+// FullPath retrieves the full path of the specified file.
+func FullPath(name string) (path string, err error) {
+	p, err := UTF16PtrFromString(name)
+	if err != nil {
+		return "", err
+	}
+	n := uint32(100)
+	for {
+		buf := make([]uint16, n)
+		n, err = GetFullPathName(p, uint32(len(buf)), &buf[0], nil)
+		if err != nil {
+			return "", err
+		}
+		if n <= uint32(len(buf)) {
+			return UTF16ToString(buf[:n]), nil
+		}
+	}
+}
+
+// NewProcThreadAttributeList allocates a new ProcThreadAttributeListContainer, with the requested maximum number of attributes.
+func NewProcThreadAttributeList(maxAttrCount uint32) (*ProcThreadAttributeListContainer, error) {
+	var size uintptr
+	err := initializeProcThreadAttributeList(nil, maxAttrCount, 0, &size)
+	if err != ERROR_INSUFFICIENT_BUFFER {
+		if err == nil {
+			return nil, errorspkg.New("unable to query buffer size from InitializeProcThreadAttributeList")
+		}
+		return nil, err
+	}
+	alloc, err := LocalAlloc(LMEM_FIXED, uint32(size))
+	if err != nil {
+		return nil, err
+	}
+	// size is guaranteed to be ≥1 by InitializeProcThreadAttributeList.
+	al := &ProcThreadAttributeListContainer{data: (*ProcThreadAttributeList)(unsafe.Pointer(alloc))}
+	err = initializeProcThreadAttributeList(al.data, maxAttrCount, 0, &size)
+	if err != nil {
+		return nil, err
+	}
+	return al, err
+}
+
+// Update modifies the ProcThreadAttributeList using UpdateProcThreadAttribute.
+func (al *ProcThreadAttributeListContainer) Update(attribute uintptr, value unsafe.Pointer, size uintptr) error {
+	al.pointers = append(al.pointers, value)
+	return updateProcThreadAttribute(al.data, 0, attribute, value, size, nil, nil)
+}
+
+// Delete frees ProcThreadAttributeList's resources.
+func (al *ProcThreadAttributeListContainer) Delete() {
+	deleteProcThreadAttributeList(al.data)
+	LocalFree(Handle(unsafe.Pointer(al.data)))
+	al.data = nil
+	al.pointers = nil
+}
+
+// List returns the actual ProcThreadAttributeList to be passed to StartupInfoEx.
+func (al *ProcThreadAttributeListContainer) List() *ProcThreadAttributeList {
+	return al.data
+}
+
+@@END
+@@PORTABLE {"path":"vendor/golang.org/x/sys/windows/memory_windows.go","mode":420,"size":1405,"sha256":"070342979027b739e224a8d35c5dabd9ac6ea662b9a58954446f27103c2443c4","index":0,"count":1,"encoding":"utf-8","payloadBytes":1405}
+// Copyright 2017 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package windows
+
+const (
+	MEM_COMMIT      = 0x00001000
+	MEM_RESERVE     = 0x00002000
+	MEM_DECOMMIT    = 0x00004000
+	MEM_RELEASE     = 0x00008000
+	MEM_RESET       = 0x00080000
+	MEM_TOP_DOWN    = 0x00100000
+	MEM_WRITE_WATCH = 0x00200000
+	MEM_PHYSICAL    = 0x00400000
+	MEM_RESET_UNDO  = 0x01000000
+	MEM_LARGE_PAGES = 0x20000000
+
+	PAGE_NOACCESS          = 0x00000001
+	PAGE_READONLY          = 0x00000002
+	PAGE_READWRITE         = 0x00000004
+	PAGE_WRITECOPY         = 0x00000008
+	PAGE_EXECUTE           = 0x00000010
+	PAGE_EXECUTE_READ      = 0x00000020
+	PAGE_EXECUTE_READWRITE = 0x00000040
+	PAGE_EXECUTE_WRITECOPY = 0x00000080
+	PAGE_GUARD             = 0x00000100
+	PAGE_NOCACHE           = 0x00000200
+	PAGE_WRITECOMBINE      = 0x00000400
+	PAGE_TARGETS_INVALID   = 0x40000000
+	PAGE_TARGETS_NO_UPDATE = 0x40000000
+
+	QUOTA_LIMITS_HARDWS_MIN_DISABLE = 0x00000002
+	QUOTA_LIMITS_HARDWS_MIN_ENABLE  = 0x00000001
+	QUOTA_LIMITS_HARDWS_MAX_DISABLE = 0x00000008
+	QUOTA_LIMITS_HARDWS_MAX_ENABLE  = 0x00000004
+)
+
+type MemoryBasicInformation struct {
+	BaseAddress       uintptr
+	AllocationBase    uintptr
+	AllocationProtect uint32
+	PartitionId       uint16
+	RegionSize        uintptr
+	State             uint32
+	Protect           uint32
+	Type              uint32
+}
+
+@@END
+@@PORTABLE {"path":"vendor/golang.org/x/sys/windows/mkerrors.bash","mode":420,"size":2168,"sha256":"1e8ad2fee707012f9df5b217fb17fc08bbe65677d249d167d065c7d83c215e43","index":0,"count":1,"encoding":"utf-8","payloadBytes":2168}
+#!/bin/bash
+
+# Copyright 2019 The Go Authors. All rights reserved.
+# Use of this source code is governed by a BSD-style
+# license that can be found in the LICENSE file.
+
+set -e
+shopt -s nullglob
+
+winerror="$(printf '%s\n' "/mnt/c/Program Files (x86)/Windows Kits/"/*/Include/*/shared/winerror.h | sort -Vr | head -n 1)"
+[[ -n $winerror ]] || { echo "Unable to find winerror.h" >&2; exit 1; }
+ntstatus="$(printf '%s\n' "/mnt/c/Program Files (x86)/Windows Kits/"/*/Include/*/shared/ntstatus.h | sort -Vr | head -n 1)"
+[[ -n $ntstatus ]] || { echo "Unable to find ntstatus.h" >&2; exit 1; }
+
+declare -A errors
+
+{
+	echo "// Code generated by 'mkerrors.bash'; DO NOT EDIT."
+	echo
+	echo "package windows"
+	echo "import \"syscall\""
+	echo "const ("
+
+	while read -r line; do
+		unset vtype
+		if [[ $line =~ ^#define\ +([A-Z0-9_]+k?)\ +([A-Z0-9_]+\()?([A-Z][A-Z0-9_]+k?)\)? ]]; then
+			key="${BASH_REMATCH[1]}"
+			value="${BASH_REMATCH[3]}"
+		elif [[ $line =~ ^#define\ +([A-Z0-9_]+k?)\ +([A-Z0-9_]+\()?((0x)?[0-9A-Fa-f]+)L?\)? ]]; then
+			key="${BASH_REMATCH[1]}"
+			value="${BASH_REMATCH[3]}"
+			vtype="${BASH_REMATCH[2]}"
+		elif [[ $line =~ ^#define\ +([A-Z0-9_]+k?)\ +\(\(([A-Z]+)\)((0x)?[0-9A-Fa-f]+)L?\) ]]; then
+			key="${BASH_REMATCH[1]}"
+			value="${BASH_REMATCH[3]}"
+			vtype="${BASH_REMATCH[2]}"
+		else
+			continue
+		fi
+		[[ -n $key && -n $value ]] || continue
+		[[ -z ${errors["$key"]} ]] || continue
+		errors["$key"]="$value"
+		if [[ -v vtype ]]; then
+			if [[ $key == FACILITY_* || $key == NO_ERROR ]]; then
+				vtype=""
+			elif [[ $vtype == *HANDLE* || $vtype == *HRESULT* ]]; then
+				vtype="Handle"
+			else
+				vtype="syscall.Errno"
+			fi
+			last_vtype="$vtype"
+		else
+			vtype=""
+			if [[ $last_vtype == Handle && $value == NO_ERROR ]]; then
+				value="S_OK"
+			elif [[ $last_vtype == syscall.Errno && $value == NO_ERROR ]]; then
+				value="ERROR_SUCCESS"
+			fi
+		fi
+
+		echo "$key $vtype = $value"
+	done < "$winerror"
+
+	while read -r line; do
+		[[ $line =~ ^#define\ (STATUS_[^\s]+)\ +\(\(NTSTATUS\)((0x)?[0-9a-fA-F]+)L?\) ]] || continue
+		echo "${BASH_REMATCH[1]} NTStatus = ${BASH_REMATCH[2]}"
+	done < "$ntstatus"
+
+	echo ")"
+} | gofmt > "zerrors_windows.go"
+
+@@END
+@@PORTABLE {"path":"vendor/golang.org/x/sys/windows/mkknownfolderids.bash","mode":420,"size":1382,"sha256":"3b7f6ac42ae1e73aa8d06d4f89f18b91916f153b030e9c01e15d41959b6b5fc6","index":0,"count":1,"encoding":"utf-8","payloadBytes":1382}
+#!/bin/bash
+
+# Copyright 2019 The Go Authors. All rights reserved.
+# Use of this source code is governed by a BSD-style
+# license that can be found in the LICENSE file.
+
+set -e
+shopt -s nullglob
+
+knownfolders="$(printf '%s\n' "/mnt/c/Program Files (x86)/Windows Kits/"/*/Include/*/um/KnownFolders.h | sort -Vr | head -n 1)"
+[[ -n $knownfolders ]] || { echo "Unable to find KnownFolders.h" >&2; exit 1; }
+
+{
+	echo "// Code generated by 'mkknownfolderids.bash'; DO NOT EDIT."
+	echo
+	echo "package windows"
+	echo "type KNOWNFOLDERID GUID"
+	echo "var ("
+	while read -r line; do
+		[[ $line =~ DEFINE_KNOWN_FOLDER\((FOLDERID_[^,]+),[\t\ ]*(0x[^,]+),[\t\ ]*(0x[^,]+),[\t\ ]*(0x[^,]+),[\t\ ]*(0x[^,]+),[\t\ ]*(0x[^,]+),[\t\ ]*(0x[^,]+),[\t\ ]*(0x[^,]+),[\t\ ]*(0x[^,]+),[\t\ ]*(0x[^,]+),[\t\ ]*(0x[^,]+),[\t\ ]*(0x[^,]+)\) ]] || continue
+		printf "%s = &KNOWNFOLDERID{0x%08x, 0x%04x, 0x%04x, [8]byte{0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x}}\n" \
+			"${BASH_REMATCH[1]}" $(( "${BASH_REMATCH[2]}" )) $(( "${BASH_REMATCH[3]}" )) $(( "${BASH_REMATCH[4]}" )) \
+			$(( "${BASH_REMATCH[5]}" )) $(( "${BASH_REMATCH[6]}" )) $(( "${BASH_REMATCH[7]}" )) $(( "${BASH_REMATCH[8]}" )) \
+			$(( "${BASH_REMATCH[9]}" )) $(( "${BASH_REMATCH[10]}" )) $(( "${BASH_REMATCH[11]}" )) $(( "${BASH_REMATCH[12]}" ))
+	done < "$knownfolders"
+	echo ")"
+} | gofmt > "zknownfolderids_windows.go"
+
+@@END
+@@PORTABLE {"path":"vendor/golang.org/x/sys/windows/mksyscall.go","mode":420,"size":367,"sha256":"ece9a0ac70f7ee5765046bed09762c27e22b7a3777ab82d65ba696806cdcd264","index":0,"count":1,"encoding":"utf-8","payloadBytes":367}
+// Copyright 2009 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+//go:build generate
+
+package windows
+
+//go:generate go run golang.org/x/sys/windows/mkwinsyscall -output zsyscall_windows.go eventlog.go service.go syscall_windows.go security_windows.go setupapi_windows.go
+
+@@END
+@@PORTABLE {"path":"vendor/golang.org/x/sys/windows/race.go","mode":420,"size":591,"sha256":"bda47d77e2bd07cbdb9471188672b735973fbf85e9f6494a0c7fb397d53f20fa","index":0,"count":1,"encoding":"utf-8","payloadBytes":591}
+// Copyright 2012 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+//go:build windows && race
+
+package windows
+
+import (
+	"runtime"
+	"unsafe"
+)
+
+const raceenabled = true
+
+func raceAcquire(addr unsafe.Pointer) {
+	runtime.RaceAcquire(addr)
+}
+
+func raceReleaseMerge(addr unsafe.Pointer) {
+	runtime.RaceReleaseMerge(addr)
+}
+
+func raceReadRange(addr unsafe.Pointer, len int) {
+	runtime.RaceReadRange(addr, len)
+}
+
+func raceWriteRange(addr unsafe.Pointer, len int) {
+	runtime.RaceWriteRange(addr, len)
+}
+
+@@END
+@@PORTABLE {"path":"vendor/golang.org/x/sys/windows/race0.go","mode":420,"size":454,"sha256":"fd656479b0761b07939c12b95733002fe0437f33e6a9b317cdaf8b3fe3e116e4","index":0,"count":1,"encoding":"utf-8","payloadBytes":454}
+// Copyright 2012 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+//go:build windows && !race
+
+package windows
+
+import (
+	"unsafe"
+)
+
+const raceenabled = false
+
+func raceAcquire(addr unsafe.Pointer) {
+}
+
+func raceReleaseMerge(addr unsafe.Pointer) {
+}
+
+func raceReadRange(addr unsafe.Pointer, len int) {
+}
+
+func raceWriteRange(addr unsafe.Pointer, len int) {
+}
+
+@@END
+@@PORTABLE {"path":"vendor/golang.org/x/sys/windows/registry/key.go","mode":420,"size":7289,"sha256":"59aab3af1dd13c55cb65c9189cc3da277fecfe82dc4c21baf557cb1c3d2c128d","index":0,"count":1,"encoding":"utf-8","payloadBytes":7289}
+// Copyright 2015 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+//go:build windows
+
+// Package registry provides access to the Windows registry.
+//
+// Here is a simple example, opening a registry key and reading a string value from it.
+//
+//	k, err := registry.OpenKey(registry.LOCAL_MACHINE, `SOFTWARE\Microsoft\Windows NT\CurrentVersion`, registry.QUERY_VALUE)
+//	if err != nil {
+//		log.Fatal(err)
+//	}
+//	defer k.Close()
+//
+//	s, _, err := k.GetStringValue("SystemRoot")
+//	if err != nil {
+//		log.Fatal(err)
+//	}
+//	fmt.Printf("Windows system root is %q\n", s)
+package registry
+
+import (
+	"io"
+	"runtime"
+	"syscall"
+	"time"
+)
+
+const (
+	// Registry key security and access rights.
+	// See https://msdn.microsoft.com/en-us/library/windows/desktop/ms724878.aspx
+	// for details.
+	ALL_ACCESS         = 0xf003f
+	CREATE_LINK        = 0x00020
+	CREATE_SUB_KEY     = 0x00004
+	ENUMERATE_SUB_KEYS = 0x00008
+	EXECUTE            = 0x20019
+	NOTIFY             = 0x00010
+	QUERY_VALUE        = 0x00001
+	READ               = 0x20019
+	SET_VALUE          = 0x00002
+	WOW64_32KEY        = 0x00200
+	WOW64_64KEY        = 0x00100
+	WRITE              = 0x20006
+)
+
+// Key is a handle to an open Windows registry key.
+// Keys can be obtained by calling OpenKey; there are
+// also some predefined root keys such as CURRENT_USER.
+// Keys can be used directly in the Windows API.
+type Key syscall.Handle
+
+const (
+	// Windows defines some predefined root keys that are always open.
+	// An application can use these keys as entry points to the registry.
+	// Normally these keys are used in OpenKey to open new keys,
+	// but they can also be used anywhere a Key is required.
+	CLASSES_ROOT     = Key(syscall.HKEY_CLASSES_ROOT)
+	CURRENT_USER     = Key(syscall.HKEY_CURRENT_USER)
+	LOCAL_MACHINE    = Key(syscall.HKEY_LOCAL_MACHINE)
+	USERS            = Key(syscall.HKEY_USERS)
+	CURRENT_CONFIG   = Key(syscall.HKEY_CURRENT_CONFIG)
+	PERFORMANCE_DATA = Key(syscall.HKEY_PERFORMANCE_DATA)
+)
+
+// Close closes open key k.
+func (k Key) Close() error {
+	return syscall.RegCloseKey(syscall.Handle(k))
+}
+
+// OpenKey opens a new key with path name relative to key k.
+// It accepts any open key, including CURRENT_USER and others,
+// and returns the new key and an error.
+// The access parameter specifies desired access rights to the
+// key to be opened.
+func OpenKey(k Key, path string, access uint32) (Key, error) {
+	p, err := syscall.UTF16PtrFromString(path)
+	if err != nil {
+		return 0, err
+	}
+	var subkey syscall.Handle
+	err = syscall.RegOpenKeyEx(syscall.Handle(k), p, 0, access, &subkey)
+	if err != nil {
+		return 0, err
+	}
+	return Key(subkey), nil
+}
+
+// OpenRemoteKey opens a predefined registry key on another
+// computer pcname. The key to be opened is specified by k, but
+// can only be one of LOCAL_MACHINE, PERFORMANCE_DATA or USERS.
+// If pcname is "", OpenRemoteKey returns local computer key.
+func OpenRemoteKey(pcname string, k Key) (Key, error) {
+	var err error
+	var p *uint16
+	if pcname != "" {
+		p, err = syscall.UTF16PtrFromString(`\\` + pcname)
+		if err != nil {
+			return 0, err
+		}
+	}
+	var remoteKey syscall.Handle
+	err = regConnectRegistry(p, syscall.Handle(k), &remoteKey)
+	if err != nil {
+		return 0, err
+	}
+	return Key(remoteKey), nil
+}
+
+// ReadSubKeyNames returns the names of subkeys of key k.
+// The parameter n controls the number of returned names,
+// analogous to the way os.File.Readdirnames works.
+func (k Key) ReadSubKeyNames(n int) ([]string, error) {
+	// RegEnumKeyEx must be called repeatedly and to completion.
+	// During this time, this goroutine cannot migrate away from
+	// its current thread. See https://golang.org/issue/49320 and
+	// https://golang.org/issue/49466.
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
+	names := make([]string, 0)
+	// Registry key size limit is 255 bytes and described there:
+	// https://msdn.microsoft.com/library/windows/desktop/ms724872.aspx
+	buf := make([]uint16, 256) //plus extra room for terminating zero byte
+loopItems:
+	for i := uint32(0); ; i++ {
+		if n > 0 {
+			if len(names) == n {
+				return names, nil
+			}
+		}
+		l := uint32(len(buf))
+		for {
+			err := syscall.RegEnumKeyEx(syscall.Handle(k), i, &buf[0], &l, nil, nil, nil, nil)
+			if err == nil {
+				break
+			}
+			if err == syscall.ERROR_MORE_DATA {
+				// Double buffer size and try again.
+				l = uint32(2 * len(buf))
+				buf = make([]uint16, l)
+				continue
+			}
+			if err == _ERROR_NO_MORE_ITEMS {
+				break loopItems
+			}
+			return names, err
+		}
+		names = append(names, syscall.UTF16ToString(buf[:l]))
+	}
+	if n > len(names) {
+		return names, io.EOF
+	}
+	return names, nil
+}
+
+// CreateKey creates a key named path under open key k.
+// CreateKey returns the new key and a boolean flag that reports
+// whether the key already existed.
+// The access parameter specifies the access rights for the key
+// to be created.
+func CreateKey(k Key, path string, access uint32) (newk Key, openedExisting bool, err error) {
+	var h syscall.Handle
+	var d uint32
+	var pathPointer *uint16
+	pathPointer, err = syscall.UTF16PtrFromString(path)
+	if err != nil {
+		return 0, false, err
+	}
+	err = regCreateKeyEx(syscall.Handle(k), pathPointer,
+		0, nil, _REG_OPTION_NON_VOLATILE, access, nil, &h, &d)
+	if err != nil {
+		return 0, false, err
+	}
+	return Key(h), d == _REG_OPENED_EXISTING_KEY, nil
+}
+
+// DeleteKey deletes the subkey path of key k and its values.
+func DeleteKey(k Key, path string) error {
+	pathPointer, err := syscall.UTF16PtrFromString(path)
+	if err != nil {
+		return err
+	}
+	return regDeleteKey(syscall.Handle(k), pathPointer)
+}
+
+// A KeyInfo describes the statistics of a key. It is returned by Stat.
+type KeyInfo struct {
+	SubKeyCount     uint32
+	MaxSubKeyLen    uint32 // size of the key's subkey with the longest name, in Unicode characters, not including the terminating zero byte
+	ValueCount      uint32
+	MaxValueNameLen uint32 // size of the key's longest value name, in Unicode characters, not including the terminating zero byte
+	MaxValueLen     uint32 // longest data component among the key's values, in bytes
+	lastWriteTime   syscall.Filetime
+}
+
+// ModTime returns the key's last write time.
+func (ki *KeyInfo) ModTime() time.Time {
+	lastHigh, lastLow := ki.lastWriteTime.HighDateTime, ki.lastWriteTime.LowDateTime
+	// 100-nanosecond intervals since January 1, 1601
+	hsec := uint64(lastHigh)<<32 + uint64(lastLow)
+	// Convert _before_ gauging; the nanosecond difference between Epoch (00:00:00
+	// UTC, January 1, 1970) and Filetime's zero offset (January 1, 1601) is out
+	// of bounds for int64: -11644473600*1e7*1e2 < math.MinInt64
+	sec := int64(hsec/1e7) - 11644473600
+	nsec := int64(hsec%1e7) * 100
+	return time.Unix(sec, nsec)
+}
+
+// modTimeZero reports whether the key's last write time is zero.
+func (ki *KeyInfo) modTimeZero() bool {
+	return ki.lastWriteTime.LowDateTime == 0 && ki.lastWriteTime.HighDateTime == 0
+}
+
+// Stat retrieves information about the open key k.
+func (k Key) Stat() (*KeyInfo, error) {
+	var ki KeyInfo
+	err := syscall.RegQueryInfoKey(syscall.Handle(k), nil, nil, nil,
+		&ki.SubKeyCount, &ki.MaxSubKeyLen, nil, &ki.ValueCount,
+		&ki.MaxValueNameLen, &ki.MaxValueLen, nil, &ki.lastWriteTime)
+	if err != nil {
+		return nil, err
+	}
+	return &ki, nil
+}
+
+@@END
+@@PORTABLE {"path":"vendor/golang.org/x/sys/windows/registry/mksyscall.go","mode":420,"size":297,"sha256":"1628ad29b024b82ef412ebff1f56033d330432372aa4ae6b4859de8f56071c3f","index":0,"count":1,"encoding":"utf-8","payloadBytes":297}
+// Copyright 2015 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+//go:build generate
+
+package registry
+
+//go:generate go run golang.org/x/sys/windows/mkwinsyscall -output zsyscall_windows.go syscall.go
+
+@@END
+@@PORTABLE {"path":"vendor/golang.org/x/sys/windows/registry/syscall.go","mode":420,"size":1673,"sha256":"c630e393502f67d3c8369774ba3b3a6b09df646e22b788e7298237d3b38c21ab","index":0,"count":1,"encoding":"utf-8","payloadBytes":1673}
+// Copyright 2015 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+//go:build windows
+
+package registry
+
+import "syscall"
+
+const (
+	_REG_OPTION_NON_VOLATILE = 0
+
+	_REG_CREATED_NEW_KEY     = 1
+	_REG_OPENED_EXISTING_KEY = 2
+
+	_ERROR_NO_MORE_ITEMS syscall.Errno = 259
+)
+
+func LoadRegLoadMUIString() error {
+	return procRegLoadMUIStringW.Find()
+}
+
+//sys	regCreateKeyEx(key syscall.Handle, subkey *uint16, reserved uint32, class *uint16, options uint32, desired uint32, sa *syscall.SecurityAttributes, result *syscall.Handle, disposition *uint32) (regerrno error) = advapi32.RegCreateKeyExW
+//sys	regDeleteKey(key syscall.Handle, subkey *uint16) (regerrno error) = advapi32.RegDeleteKeyW
+//sys	regSetValueEx(key syscall.Handle, valueName *uint16, reserved uint32, vtype uint32, buf *byte, bufsize uint32) (regerrno error) = advapi32.RegSetValueExW
+//sys	regEnumValue(key syscall.Handle, index uint32, name *uint16, nameLen *uint32, reserved *uint32, valtype *uint32, buf *byte, buflen *uint32) (regerrno error) = advapi32.RegEnumValueW
+//sys	regDeleteValue(key syscall.Handle, name *uint16) (regerrno error) = advapi32.RegDeleteValueW
+//sys   regLoadMUIString(key syscall.Handle, name *uint16, buf *uint16, buflen uint32, buflenCopied *uint32, flags uint32, dir *uint16) (regerrno error) = advapi32.RegLoadMUIStringW
+//sys	regConnectRegistry(machinename *uint16, key syscall.Handle, result *syscall.Handle) (regerrno error) = advapi32.RegConnectRegistryW
+
+//sys	expandEnvironmentStrings(src *uint16, dst *uint16, size uint32) (n uint32, err error) = kernel32.ExpandEnvironmentStringsW
+
+@@END
+@@PORTABLE {"path":"vendor/golang.org/x/sys/windows/registry/value.go","mode":420,"size":11793,"sha256":"abf23b1dc18dbb3d54ea1e113794cf6d564c2dd1f946e7159f9aadabb8a1a1a5","index":0,"count":1,"encoding":"utf-8","payloadBytes":11793}
+// Copyright 2015 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+//go:build windows
+
+package registry
+
+import (
+	"errors"
+	"io"
+	"syscall"
+	"unicode/utf16"
+	"unsafe"
+)
+
+const (
+	// Registry value types.
+	NONE                       = 0
+	SZ                         = 1
+	EXPAND_SZ                  = 2
+	BINARY                     = 3
+	DWORD                      = 4
+	DWORD_BIG_ENDIAN           = 5
+	LINK                       = 6
+	MULTI_SZ                   = 7
+	RESOURCE_LIST              = 8
+	FULL_RESOURCE_DESCRIPTOR   = 9
+	RESOURCE_REQUIREMENTS_LIST = 10
+	QWORD                      = 11
+)
+
+var (
+	// ErrShortBuffer is returned when the buffer was too short for the operation.
+	ErrShortBuffer = syscall.ERROR_MORE_DATA
+
+	// ErrNotExist is returned when a registry key or value does not exist.
+	ErrNotExist = syscall.ERROR_FILE_NOT_FOUND
+
+	// ErrUnexpectedType is returned by Get*Value when the value's type was unexpected.
+	ErrUnexpectedType = errors.New("unexpected key value type")
+)
+
+// GetValue retrieves the type and data for the specified value associated
+// with an open key k. It fills up buffer buf and returns the retrieved
+// byte count n. If buf is too small to fit the stored value it returns
+// ErrShortBuffer error along with the required buffer size n.
+// If no buffer is provided, it returns true and actual buffer size n.
+// If no buffer is provided, GetValue returns the value's type only.
+// If the value does not exist, the error returned is ErrNotExist.
+//
+// GetValue is a low level function. If value's type is known, use the appropriate
+// Get*Value function instead.
+func (k Key) GetValue(name string, buf []byte) (n int, valtype uint32, err error) {
+	pname, err := syscall.UTF16PtrFromString(name)
+	if err != nil {
+		return 0, 0, err
+	}
+	var pbuf *byte
+	if len(buf) > 0 {
+		pbuf = (*byte)(unsafe.Pointer(&buf[0]))
+	}
+	l := uint32(len(buf))
+	err = syscall.RegQueryValueEx(syscall.Handle(k), pname, nil, &valtype, pbuf, &l)
+	if err != nil {
+		return int(l), valtype, err
+	}
+	return int(l), valtype, nil
+}
+
+func (k Key) getValue(name string, buf []byte) (data []byte, valtype uint32, err error) {
+	p, err := syscall.UTF16PtrFromString(name)
+	if err != nil {
+		return nil, 0, err
+	}
+	var t uint32
+	n := uint32(len(buf))
+	for {
+		err = syscall.RegQueryValueEx(syscall.Handle(k), p, nil, &t, (*byte)(unsafe.Pointer(&buf[0])), &n)
+		if err == nil {
+			return buf[:n], t, nil
+		}
+		if err != syscall.ERROR_MORE_DATA {
+			return nil, 0, err
+		}
+		if n <= uint32(len(buf)) {
+			return nil, 0, err
+		}
+		buf = make([]byte, n)
+	}
+}
+
+// GetStringValue retrieves the string value for the specified
+// value name associated with an open key k. It also returns the value's type.
+// If value does not exist, GetStringValue returns ErrNotExist.
+// If value is not SZ or EXPAND_SZ, it will return the correct value
+// type and ErrUnexpectedType.
+func (k Key) GetStringValue(name string) (val string, valtype uint32, err error) {
+	data, typ, err2 := k.getValue(name, make([]byte, 64))
+	if err2 != nil {
+		return "", typ, err2
+	}
+	switch typ {
+	case SZ, EXPAND_SZ:
+	default:
+		return "", typ, ErrUnexpectedType
+	}
+	if len(data) == 0 {
+		return "", typ, nil
+	}
+	u := (*[1 << 29]uint16)(unsafe.Pointer(&data[0]))[: len(data)/2 : len(data)/2]
+	return syscall.UTF16ToString(u), typ, nil
+}
+
+// GetMUIStringValue retrieves the localized string value for
+// the specified value name associated with an open key k.
+// If the value name doesn't exist or the localized string value
+// can't be resolved, GetMUIStringValue returns ErrNotExist.
+// GetMUIStringValue panics if the system doesn't support
+// regLoadMUIString; use LoadRegLoadMUIString to check if
+// regLoadMUIString is supported before calling this function.
+func (k Key) GetMUIStringValue(name string) (string, error) {
+	pname, err := syscall.UTF16PtrFromString(name)
+	if err != nil {
+		return "", err
+	}
+
+	buf := make([]uint16, 1024)
+	var buflen uint32
+	var pdir *uint16
+
+	err = regLoadMUIString(syscall.Handle(k), pname, &buf[0], uint32(len(buf)), &buflen, 0, pdir)
+	if err == syscall.ERROR_FILE_NOT_FOUND { // Try fallback path
+
+		// Try to resolve the string value using the system directory as
+		// a DLL search path; this assumes the string value is of the form
+		// @[path]\dllname,-strID but with no path given, e.g. @tzres.dll,-320.
+
+		// This approach works with tzres.dll but may have to be revised
+		// in the future to allow callers to provide custom search paths.
+
+		var s string
+		s, err = ExpandString("%SystemRoot%\\system32\\")
+		if err != nil {
+			return "", err
+		}
+		pdir, err = syscall.UTF16PtrFromString(s)
+		if err != nil {
+			return "", err
+		}
+
+		err = regLoadMUIString(syscall.Handle(k), pname, &buf[0], uint32(len(buf)), &buflen, 0, pdir)
+	}
+
+	for err == syscall.ERROR_MORE_DATA { // Grow buffer if needed
+		if buflen <= uint32(len(buf)) {
+			break // Buffer not growing, assume race; break
+		}
+		buf = make([]uint16, buflen)
+		err = regLoadMUIString(syscall.Handle(k), pname, &buf[0], uint32(len(buf)), &buflen, 0, pdir)
+	}
+
+	if err != nil {
+		return "", err
+	}
+
+	return syscall.UTF16ToString(buf), nil
+}
+
+// ExpandString expands environment-variable strings and replaces
+// them with the values defined for the current user.
+// Use ExpandString to expand EXPAND_SZ strings.
+func ExpandString(value string) (string, error) {
+	if value == "" {
+		return "", nil
+	}
+	p, err := syscall.UTF16PtrFromString(value)
+	if err != nil {
+		return "", err
+	}
+	r := make([]uint16, 100)
+	for {
+		n, err := expandEnvironmentStrings(p, &r[0], uint32(len(r)))
+		if err != nil {
+			return "", err
+		}
+		if n <= uint32(len(r)) {
+			return syscall.UTF16ToString(r[:n]), nil
+		}
+		r = make([]uint16, n)
+	}
+}
+
+// GetStringsValue retrieves the []string value for the specified
+// value name associated with an open key k. It also returns the value's type.
+// If value does not exist, GetStringsValue returns ErrNotExist.
+// If value is not MULTI_SZ, it will return the correct value
+// type and ErrUnexpectedType.
+func (k Key) GetStringsValue(name string) (val []string, valtype uint32, err error) {
+	data, typ, err2 := k.getValue(name, make([]byte, 64))
+	if err2 != nil {
+		return nil, typ, err2
+	}
+	if typ != MULTI_SZ {
+		return nil, typ, ErrUnexpectedType
+	}
+	if len(data) == 0 {
+		return nil, typ, nil
+	}
+	p := (*[1 << 29]uint16)(unsafe.Pointer(&data[0]))[: len(data)/2 : len(data)/2]
+	if len(p) == 0 {
+		return nil, typ, nil
+	}
+	if p[len(p)-1] == 0 {
+		p = p[:len(p)-1] // remove terminating null
+	}
+	val = make([]string, 0, 5)
+	from := 0
+	for i, c := range p {
+		if c == 0 {
+			val = append(val, string(utf16.Decode(p[from:i])))
+			from = i + 1
+		}
+	}
+	return val, typ, nil
+}
+
+// GetIntegerValue retrieves the integer value for the specified
+// value name associated with an open key k. It also returns the value's type.
+// If value does not exist, GetIntegerValue returns ErrNotExist.
+// If value is not DWORD or QWORD, it will return the correct value
+// type and ErrUnexpectedType.
+func (k Key) GetIntegerValue(name string) (val uint64, valtype uint32, err error) {
+	data, typ, err2 := k.getValue(name, make([]byte, 8))
+	if err2 != nil {
+		return 0, typ, err2
+	}
+	switch typ {
+	case DWORD:
+		if len(data) != 4 {
+			return 0, typ, errors.New("DWORD value is not 4 bytes long")
+		}
+		var val32 uint32
+		copy((*[4]byte)(unsafe.Pointer(&val32))[:], data)
+		return uint64(val32), DWORD, nil
+	case QWORD:
+		if len(data) != 8 {
+			return 0, typ, errors.New("QWORD value is not 8 bytes long")
+		}
+		copy((*[8]byte)(unsafe.Pointer(&val))[:], data)
+		return val, QWORD, nil
+	default:
+		return 0, typ, ErrUnexpectedType
+	}
+}
+
+// GetBinaryValue retrieves the binary value for the specified
+// value name associated with an open key k. It also returns the value's type.
+// If value does not exist, GetBinaryValue returns ErrNotExist.
+// If value is not BINARY, it will return the correct value
+// type and ErrUnexpectedType.
+func (k Key) GetBinaryValue(name string) (val []byte, valtype uint32, err error) {
+	data, typ, err2 := k.getValue(name, make([]byte, 64))
+	if err2 != nil {
+		return nil, typ, err2
+	}
+	if typ != BINARY {
+		return nil, typ, ErrUnexpectedType
+	}
+	return data, typ, nil
+}
+
+func (k Key) setValue(name string, valtype uint32, data []byte) error {
+	p, err := syscall.UTF16PtrFromString(name)
+	if err != nil {
+		return err
+	}
+	if len(data) == 0 {
+		return regSetValueEx(syscall.Handle(k), p, 0, valtype, nil, 0)
+	}
+	return regSetValueEx(syscall.Handle(k), p, 0, valtype, &data[0], uint32(len(data)))
+}
+
+// SetDWordValue sets the data and type of a name value
+// under key k to value and DWORD.
+func (k Key) SetDWordValue(name string, value uint32) error {
+	return k.setValue(name, DWORD, (*[4]byte)(unsafe.Pointer(&value))[:])
+}
+
+// SetQWordValue sets the data and type of a name value
+// under key k to value and QWORD.
+func (k Key) SetQWordValue(name string, value uint64) error {
+	return k.setValue(name, QWORD, (*[8]byte)(unsafe.Pointer(&value))[:])
+}
+
+func (k Key) setStringValue(name string, valtype uint32, value string) error {
+	v, err := syscall.UTF16FromString(value)
+	if err != nil {
+		return err
+	}
+	buf := (*[1 << 29]byte)(unsafe.Pointer(&v[0]))[: len(v)*2 : len(v)*2]
+	return k.setValue(name, valtype, buf)
+}
+
+// SetStringValue sets the data and type of a name value
+// under key k to value and SZ. The value must not contain a zero byte.
+func (k Key) SetStringValue(name, value string) error {
+	return k.setStringValue(name, SZ, value)
+}
+
+// SetExpandStringValue sets the data and type of a name value
+// under key k to value and EXPAND_SZ. The value must not contain a zero byte.
+func (k Key) SetExpandStringValue(name, value string) error {
+	return k.setStringValue(name, EXPAND_SZ, value)
+}
+
+// SetStringsValue sets the data and type of a name value
+// under key k to value and MULTI_SZ. The value strings
+// must not contain a zero byte.
+func (k Key) SetStringsValue(name string, value []string) error {
+	ss := ""
+	for _, s := range value {
+		for i := 0; i < len(s); i++ {
+			if s[i] == 0 {
+				return errors.New("string cannot have 0 inside")
+			}
+		}
+		ss += s + "\x00"
+	}
+	v := utf16.Encode([]rune(ss + "\x00"))
+	buf := (*[1 << 29]byte)(unsafe.Pointer(&v[0]))[: len(v)*2 : len(v)*2]
+	return k.setValue(name, MULTI_SZ, buf)
+}
+
+// SetBinaryValue sets the data and type of a name value
+// under key k to value and BINARY.
+func (k Key) SetBinaryValue(name string, value []byte) error {
+	return k.setValue(name, BINARY, value)
+}
+
+// DeleteValue removes a named value from the key k.
+func (k Key) DeleteValue(name string) error {
+	namePointer, err := syscall.UTF16PtrFromString(name)
+	if err != nil {
+		return err
+	}
+	return regDeleteValue(syscall.Handle(k), namePointer)
+}
+
+// ReadValueNames returns the value names of key k.
+// The parameter n controls the number of returned names,
+// analogous to the way os.File.Readdirnames works.
+func (k Key) ReadValueNames(n int) ([]string, error) {
+	ki, err := k.Stat()
+	if err != nil {
+		return nil, err
+	}
+	names := make([]string, 0, ki.ValueCount)
+	buf := make([]uint16, ki.MaxValueNameLen+1) // extra room for terminating null character
+loopItems:
+	for i := uint32(0); ; i++ {
+		if n > 0 {
+			if len(names) == n {
+				return names, nil
+			}
+		}
+		l := uint32(len(buf))
+		for {
+			err := regEnumValue(syscall.Handle(k), i, &buf[0], &l, nil, nil, nil, nil)
+			if err == nil {
+				break
+			}
+			if err == syscall.ERROR_MORE_DATA {
+				// Double buffer size and try again.
+				l = uint32(2 * len(buf))
+				buf = make([]uint16, l)
+				continue
+			}
+			if err == _ERROR_NO_MORE_ITEMS {
+				break loopItems
+			}
+			return names, err
+		}
+		names = append(names, syscall.UTF16ToString(buf[:l]))
+	}
+	if n > len(names) {
+		return names, io.EOF
+	}
+	return names, nil
+}
+
+@@END
+@@PORTABLE {"path":"vendor/golang.org/x/sys/windows/registry/zsyscall_windows.go","mode":420,"size":4453,"sha256":"8206b74089e5ac1da35035ed5fda2f9ca32b763b1c9b23f9e40881ba0731b45a","index":0,"count":1,"encoding":"utf-8","payloadBytes":4453}
+// Code generated by 'go generate'; DO NOT EDIT.
+
+package registry
+
+import (
+	"syscall"
+	"unsafe"
+
+	"golang.org/x/sys/windows"
+)
+
+var _ unsafe.Pointer
+
+// Do the interface allocations only once for common
+// Errno values.
+const (
+	errnoERROR_IO_PENDING = 997
+)
+
+var (
+	errERROR_IO_PENDING error = syscall.Errno(errnoERROR_IO_PENDING)
+	errERROR_EINVAL     error = syscall.EINVAL
+)
+
+// errnoErr returns common boxed Errno values, to prevent
+// allocations at runtime.
+func errnoErr(e syscall.Errno) error {
+	switch e {
+	case 0:
+		return errERROR_EINVAL
+	case errnoERROR_IO_PENDING:
+		return errERROR_IO_PENDING
+	}
+	// TODO: add more here, after collecting data on the common
+	// error values see on Windows. (perhaps when running
+	// all.bat?)
+	return e
+}
+
+var (
+	modadvapi32 = windows.NewLazySystemDLL("advapi32.dll")
+	modkernel32 = windows.NewLazySystemDLL("kernel32.dll")
+
+	procRegConnectRegistryW       = modadvapi32.NewProc("RegConnectRegistryW")
+	procRegCreateKeyExW           = modadvapi32.NewProc("RegCreateKeyExW")
+	procRegDeleteKeyW             = modadvapi32.NewProc("RegDeleteKeyW")
+	procRegDeleteValueW           = modadvapi32.NewProc("RegDeleteValueW")
+	procRegEnumValueW             = modadvapi32.NewProc("RegEnumValueW")
+	procRegLoadMUIStringW         = modadvapi32.NewProc("RegLoadMUIStringW")
+	procRegSetValueExW            = modadvapi32.NewProc("RegSetValueExW")
+	procExpandEnvironmentStringsW = modkernel32.NewProc("ExpandEnvironmentStringsW")
+)
+
+func regConnectRegistry(machinename *uint16, key syscall.Handle, result *syscall.Handle) (regerrno error) {
+	r0, _, _ := syscall.SyscallN(procRegConnectRegistryW.Addr(), uintptr(unsafe.Pointer(machinename)), uintptr(key), uintptr(unsafe.Pointer(result)))
+	if r0 != 0 {
+		regerrno = syscall.Errno(r0)
+	}
+	return
+}
+
+func regCreateKeyEx(key syscall.Handle, subkey *uint16, reserved uint32, class *uint16, options uint32, desired uint32, sa *syscall.SecurityAttributes, result *syscall.Handle, disposition *uint32) (regerrno error) {
+	r0, _, _ := syscall.SyscallN(procRegCreateKeyExW.Addr(), uintptr(key), uintptr(unsafe.Pointer(subkey)), uintptr(reserved), uintptr(unsafe.Pointer(class)), uintptr(options), uintptr(desired), uintptr(unsafe.Pointer(sa)), uintptr(unsafe.Pointer(result)), uintptr(unsafe.Pointer(disposition)))
+	if r0 != 0 {
+		regerrno = syscall.Errno(r0)
+	}
+	return
+}
+
+func regDeleteKey(key syscall.Handle, subkey *uint16) (regerrno error) {
+	r0, _, _ := syscall.SyscallN(procRegDeleteKeyW.Addr(), uintptr(key), uintptr(unsafe.Pointer(subkey)))
+	if r0 != 0 {
+		regerrno = syscall.Errno(r0)
+	}
+	return
+}
+
+func regDeleteValue(key syscall.Handle, name *uint16) (regerrno error) {
+	r0, _, _ := syscall.SyscallN(procRegDeleteValueW.Addr(), uintptr(key), uintptr(unsafe.Pointer(name)))
+	if r0 != 0 {
+		regerrno = syscall.Errno(r0)
+	}
+	return
+}
+
+func regEnumValue(key syscall.Handle, index uint32, name *uint16, nameLen *uint32, reserved *uint32, valtype *uint32, buf *byte, buflen *uint32) (regerrno error) {
+	r0, _, _ := syscall.SyscallN(procRegEnumValueW.Addr(), uintptr(key), uintptr(index), uintptr(unsafe.Pointer(name)), uintptr(unsafe.Pointer(nameLen)), uintptr(unsafe.Pointer(reserved)), uintptr(unsafe.Pointer(valtype)), uintptr(unsafe.Pointer(buf)), uintptr(unsafe.Pointer(buflen)))
+	if r0 != 0 {
+		regerrno = syscall.Errno(r0)
+	}
+	return
+}
+
+func regLoadMUIString(key syscall.Handle, name *uint16, buf *uint16, buflen uint32, buflenCopied *uint32, flags uint32, dir *uint16) (regerrno error) {
+	r0, _, _ := syscall.SyscallN(procRegLoadMUIStringW.Addr(), uintptr(key), uintptr(unsafe.Pointer(name)), uintptr(unsafe.Pointer(buf)), uintptr(buflen), uintptr(unsafe.Pointer(buflenCopied)), uintptr(flags), uintptr(unsafe.Pointer(dir)))
+	if r0 != 0 {
+		regerrno = syscall.Errno(r0)
+	}
+	return
+}
+
+func regSetValueEx(key syscall.Handle, valueName *uint16, reserved uint32, vtype uint32, buf *byte, bufsize uint32) (regerrno error) {
+	r0, _, _ := syscall.SyscallN(procRegSetValueExW.Addr(), uintptr(key), uintptr(unsafe.Pointer(valueName)), uintptr(reserved), uintptr(vtype), uintptr(unsafe.Pointer(buf)), uintptr(bufsize))
+	if r0 != 0 {
+		regerrno = syscall.Errno(r0)
+	}
+	return
+}
+
+func expandEnvironmentStrings(src *uint16, dst *uint16, size uint32) (n uint32, err error) {
+	r0, _, e1 := syscall.SyscallN(procExpandEnvironmentStringsW.Addr(), uintptr(unsafe.Pointer(src)), uintptr(unsafe.Pointer(dst)), uintptr(size))
+	n = uint32(r0)
+	if n == 0 {
+		err = errnoErr(e1)
+	}
+	return
+}
+
+@@END
+@@PORTABLE {"path":"vendor/golang.org/x/sys/windows/security_windows.go","mode":420,"size":57283,"sha256":"a81ceadb4023d6712587d1d9d0b5a51948dfbfb8a5786811d3020fe55182b6c6","index":0,"count":2,"encoding":"utf-8","payloadBytes":48000}
+// Copyright 2012 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package windows
+
+import (
+	"syscall"
+	"unsafe"
+)
+
+const (
+	NameUnknown          = 0
+	NameFullyQualifiedDN = 1
+	NameSamCompatible    = 2
+	NameDisplay          = 3
+	NameUniqueId         = 6
+	NameCanonical        = 7
+	NameUserPrincipal    = 8
+	NameCanonicalEx      = 9
+	NameServicePrincipal = 10
+	NameDnsDomain        = 12
+)
+
+// This function returns 1 byte BOOLEAN rather than the 4 byte BOOL.
+// http://blogs.msdn.com/b/drnick/archive/2007/12/19/windows-and-upn-format-credentials.aspx
+//sys	TranslateName(accName *uint16, accNameFormat uint32, desiredNameFormat uint32, translatedName *uint16, nSize *uint32) (err error) [failretval&0xff==0] = secur32.TranslateNameW
+//sys	GetUserNameEx(nameFormat uint32, nameBuffre *uint16, nSize *uint32) (err error) [failretval&0xff==0] = secur32.GetUserNameExW
+
+// TranslateAccountName converts a directory service
+// object name from one format to another.
+func TranslateAccountName(username string, from, to uint32, initSize int) (string, error) {
+	u, e := UTF16PtrFromString(username)
+	if e != nil {
+		return "", e
+	}
+	n := uint32(50)
+	for {
+		b := make([]uint16, n)
+		e = TranslateName(u, from, to, &b[0], &n)
+		if e == nil {
+			return UTF16ToString(b[:n]), nil
+		}
+		if e != ERROR_INSUFFICIENT_BUFFER {
+			return "", e
+		}
+		if n <= uint32(len(b)) {
+			return "", e
+		}
+	}
+}
+
+const (
+	// do not reorder
+	NetSetupUnknownStatus = iota
+	NetSetupUnjoined
+	NetSetupWorkgroupName
+	NetSetupDomainName
+)
+
+type UserInfo10 struct {
+	Name       *uint16
+	Comment    *uint16
+	UsrComment *uint16
+	FullName   *uint16
+}
+
+//sys	NetUserGetInfo(serverName *uint16, userName *uint16, level uint32, buf **byte) (neterr error) = netapi32.NetUserGetInfo
+//sys	NetGetJoinInformation(server *uint16, name **uint16, bufType *uint32) (neterr error) = netapi32.NetGetJoinInformation
+//sys	NetApiBufferFree(buf *byte) (neterr error) = netapi32.NetApiBufferFree
+//sys   NetUserEnum(serverName *uint16, level uint32, filter uint32, buf **byte, prefMaxLen uint32, entriesRead *uint32, totalEntries *uint32, resumeHandle *uint32) (neterr error) = netapi32.NetUserEnum
+
+const (
+	// do not reorder
+	SidTypeUser = 1 + iota
+	SidTypeGroup
+	SidTypeDomain
+	SidTypeAlias
+	SidTypeWellKnownGroup
+	SidTypeDeletedAccount
+	SidTypeInvalid
+	SidTypeUnknown
+	SidTypeComputer
+	SidTypeLabel
+)
+
+type SidIdentifierAuthority struct {
+	Value [6]byte
+}
+
+var (
+	SECURITY_NULL_SID_AUTHORITY        = SidIdentifierAuthority{[6]byte{0, 0, 0, 0, 0, 0}}
+	SECURITY_WORLD_SID_AUTHORITY       = SidIdentifierAuthority{[6]byte{0, 0, 0, 0, 0, 1}}
+	SECURITY_LOCAL_SID_AUTHORITY       = SidIdentifierAuthority{[6]byte{0, 0, 0, 0, 0, 2}}
+	SECURITY_CREATOR_SID_AUTHORITY     = SidIdentifierAuthority{[6]byte{0, 0, 0, 0, 0, 3}}
+	SECURITY_NON_UNIQUE_AUTHORITY      = SidIdentifierAuthority{[6]byte{0, 0, 0, 0, 0, 4}}
+	SECURITY_NT_AUTHORITY              = SidIdentifierAuthority{[6]byte{0, 0, 0, 0, 0, 5}}
+	SECURITY_MANDATORY_LABEL_AUTHORITY = SidIdentifierAuthority{[6]byte{0, 0, 0, 0, 0, 16}}
+)
+
+const (
+	SECURITY_NULL_RID                   = 0
+	SECURITY_WORLD_RID                  = 0
+	SECURITY_LOCAL_RID                  = 0
+	SECURITY_CREATOR_OWNER_RID          = 0
+	SECURITY_CREATOR_GROUP_RID          = 1
+	SECURITY_DIALUP_RID                 = 1
+	SECURITY_NETWORK_RID                = 2
+	SECURITY_BATCH_RID                  = 3
+	SECURITY_INTERACTIVE_RID            = 4
+	SECURITY_LOGON_IDS_RID              = 5
+	SECURITY_SERVICE_RID                = 6
+	SECURITY_LOCAL_SYSTEM_RID           = 18
+	SECURITY_BUILTIN_DOMAIN_RID         = 32
+	SECURITY_PRINCIPAL_SELF_RID         = 10
+	SECURITY_CREATOR_OWNER_SERVER_RID   = 0x2
+	SECURITY_CREATOR_GROUP_SERVER_RID   = 0x3
+	SECURITY_LOGON_IDS_RID_COUNT        = 0x3
+	SECURITY_ANONYMOUS_LOGON_RID        = 0x7
+	SECURITY_PROXY_RID                  = 0x8
+	SECURITY_ENTERPRISE_CONTROLLERS_RID = 0x9
+	SECURITY_SERVER_LOGON_RID           = SECURITY_ENTERPRISE_CONTROLLERS_RID
+	SECURITY_AUTHENTICATED_USER_RID     = 0xb
+	SECURITY_RESTRICTED_CODE_RID        = 0xc
+	SECURITY_NT_NON_UNIQUE_RID          = 0x15
+)
+
+// Predefined domain-relative RIDs for local groups.
+// See https://msdn.microsoft.com/en-us/library/windows/desktop/aa379649(v=vs.85).aspx
+const (
+	DOMAIN_ALIAS_RID_ADMINS                         = 0x220
+	DOMAIN_ALIAS_RID_USERS                          = 0x221
+	DOMAIN_ALIAS_RID_GUESTS                         = 0x222
+	DOMAIN_ALIAS_RID_POWER_USERS                    = 0x223
+	DOMAIN_ALIAS_RID_ACCOUNT_OPS                    = 0x224
+	DOMAIN_ALIAS_RID_SYSTEM_OPS                     = 0x225
+	DOMAIN_ALIAS_RID_PRINT_OPS                      = 0x226
+	DOMAIN_ALIAS_RID_BACKUP_OPS                     = 0x227
+	DOMAIN_ALIAS_RID_REPLICATOR                     = 0x228
+	DOMAIN_ALIAS_RID_RAS_SERVERS                    = 0x229
+	DOMAIN_ALIAS_RID_PREW2KCOMPACCESS               = 0x22a
+	DOMAIN_ALIAS_RID_REMOTE_DESKTOP_USERS           = 0x22b
+	DOMAIN_ALIAS_RID_NETWORK_CONFIGURATION_OPS      = 0x22c
+	DOMAIN_ALIAS_RID_INCOMING_FOREST_TRUST_BUILDERS = 0x22d
+	DOMAIN_ALIAS_RID_MONITORING_USERS               = 0x22e
+	DOMAIN_ALIAS_RID_LOGGING_USERS                  = 0x22f
+	DOMAIN_ALIAS_RID_AUTHORIZATIONACCESS            = 0x230
+	DOMAIN_ALIAS_RID_TS_LICENSE_SERVERS             = 0x231
+	DOMAIN_ALIAS_RID_DCOM_USERS                     = 0x232
+	DOMAIN_ALIAS_RID_IUSERS                         = 0x238
+	DOMAIN_ALIAS_RID_CRYPTO_OPERATORS               = 0x239
+	DOMAIN_ALIAS_RID_CACHEABLE_PRINCIPALS_GROUP     = 0x23b
+	DOMAIN_ALIAS_RID_NON_CACHEABLE_PRINCIPALS_GROUP = 0x23c
+	DOMAIN_ALIAS_RID_EVENT_LOG_READERS_GROUP        = 0x23d
+	DOMAIN_ALIAS_RID_CERTSVC_DCOM_ACCESS_GROUP      = 0x23e
+)
+
+//sys	LookupAccountSid(systemName *uint16, sid *SID, name *uint16, nameLen *uint32, refdDomainName *uint16, refdDomainNameLen *uint32, use *uint32) (err error) = advapi32.LookupAccountSidW
+//sys	LookupAccountName(systemName *uint16, accountName *uint16, sid *SID, sidLen *uint32, refdDomainName *uint16, refdDomainNameLen *uint32, use *uint32) (err error) = advapi32.LookupAccountNameW
+//sys	ConvertSidToStringSid(sid *SID, stringSid **uint16) (err error) = advapi32.ConvertSidToStringSidW
+//sys	ConvertStringSidToSid(stringSid *uint16, sid **SID) (err error) = advapi32.ConvertStringSidToSidW
+//sys	GetLengthSid(sid *SID) (len uint32) = advapi32.GetLengthSid
+//sys	CopySid(destSidLen uint32, destSid *SID, srcSid *SID) (err error) = advapi32.CopySid
+//sys	AllocateAndInitializeSid(identAuth *SidIdentifierAuthority, subAuth byte, subAuth0 uint32, subAuth1 uint32, subAuth2 uint32, subAuth3 uint32, subAuth4 uint32, subAuth5 uint32, subAuth6 uint32, subAuth7 uint32, sid **SID) (err error) = advapi32.AllocateAndInitializeSid
+//sys	createWellKnownSid(sidType WELL_KNOWN_SID_TYPE, domainSid *SID, sid *SID, sizeSid *uint32) (err error) = advapi32.CreateWellKnownSid
+//sys	isWellKnownSid(sid *SID, sidType WELL_KNOWN_SID_TYPE) (isWellKnown bool) = advapi32.IsWellKnownSid
+//sys	FreeSid(sid *SID) (err error) [failretval!=0] = advapi32.FreeSid
+//sys	EqualSid(sid1 *SID, sid2 *SID) (isEqual bool) = advapi32.EqualSid
+//sys	getSidIdentifierAuthority(sid *SID) (authority *SidIdentifierAuthority) = advapi32.GetSidIdentifierAuthority
+//sys	getSidSubAuthorityCount(sid *SID) (count *uint8) = advapi32.GetSidSubAuthorityCount
+//sys	getSidSubAuthority(sid *SID, index uint32) (subAuthority *uint32) = advapi32.GetSidSubAuthority
+//sys	isValidSid(sid *SID) (isValid bool) = advapi32.IsValidSid
+
+// The security identifier (SID) structure is a variable-length
+// structure used to uniquely identify users or groups.
+type SID struct{}
+
+// StringToSid converts a string-format security identifier
+// SID into a valid, functional SID.
+func StringToSid(s string) (*SID, error) {
+	var sid *SID
+	p, e := UTF16PtrFromString(s)
+	if e != nil {
+		return nil, e
+	}
+	e = ConvertStringSidToSid(p, &sid)
+	if e != nil {
+		return nil, e
+	}
+	defer LocalFree((Handle)(unsafe.Pointer(sid)))
+	return sid.Copy()
+}
+
+// LookupSID retrieves a security identifier SID for the account
+// and the name of the domain on which the account was found.
+// System specify target computer to search.
+func LookupSID(system, account string) (sid *SID, domain string, accType uint32, err error) {
+	if len(account) == 0 {
+		return nil, "", 0, syscall.EINVAL
+	}
+	acc, e := UTF16PtrFromString(account)
+	if e != nil {
+		return nil, "", 0, e
+	}
+	var sys *uint16
+	if len(system) > 0 {
+		sys, e = UTF16PtrFromString(system)
+		if e != nil {
+			return nil, "", 0, e
+		}
+	}
+	n := uint32(50)
+	dn := uint32(50)
+	for {
+		b := make([]byte, n)
+		db := make([]uint16, dn)
+		sid = (*SID)(unsafe.Pointer(&b[0]))
+		e = LookupAccountName(sys, acc, sid, &n, &db[0], &dn, &accType)
+		if e == nil {
+			return sid, UTF16ToString(db), accType, nil
+		}
+		if e != ERROR_INSUFFICIENT_BUFFER {
+			return nil, "", 0, e
+		}
+		if n <= uint32(len(b)) {
+			return nil, "", 0, e
+		}
+	}
+}
+
+// String converts SID to a string format suitable for display, storage, or transmission.
+func (sid *SID) String() string {
+	var s *uint16
+	e := ConvertSidToStringSid(sid, &s)
+	if e != nil {
+		return ""
+	}
+	defer LocalFree((Handle)(unsafe.Pointer(s)))
+	return UTF16ToString((*[256]uint16)(unsafe.Pointer(s))[:])
+}
+
+// Len returns the length, in bytes, of a valid security identifier SID.
+func (sid *SID) Len() int {
+	return int(GetLengthSid(sid))
+}
+
+// Copy creates a duplicate of security identifier SID.
+func (sid *SID) Copy() (*SID, error) {
+	b := make([]byte, sid.Len())
+	sid2 := (*SID)(unsafe.Pointer(&b[0]))
+	e := CopySid(uint32(len(b)), sid2, sid)
+	if e != nil {
+		return nil, e
+	}
+	return sid2, nil
+}
+
+// IdentifierAuthority returns the identifier authority of the SID.
+func (sid *SID) IdentifierAuthority() SidIdentifierAuthority {
+	return *getSidIdentifierAuthority(sid)
+}
+
+// SubAuthorityCount returns the number of sub-authorities in the SID.
+func (sid *SID) SubAuthorityCount() uint8 {
+	return *getSidSubAuthorityCount(sid)
+}
+
+// SubAuthority returns the sub-authority of the SID as specified by
+// the index, which must be less than sid.SubAuthorityCount().
+func (sid *SID) SubAuthority(idx uint32) uint32 {
+	if idx >= uint32(sid.SubAuthorityCount()) {
+		panic("sub-authority index out of range")
+	}
+	return *getSidSubAuthority(sid, idx)
+}
+
+// IsValid returns whether the SID has a valid revision and length.
+func (sid *SID) IsValid() bool {
+	return isValidSid(sid)
+}
+
+// Equals compares two SIDs for equality.
+func (sid *SID) Equals(sid2 *SID) bool {
+	return EqualSid(sid, sid2)
+}
+
+// IsWellKnown determines whether the SID matches the well-known sidType.
+func (sid *SID) IsWellKnown(sidType WELL_KNOWN_SID_TYPE) bool {
+	return isWellKnownSid(sid, sidType)
+}
+
+// LookupAccount retrieves the name of the account for this SID
+// and the name of the first domain on which this SID is found.
+// System specify target computer to search for.
+func (sid *SID) LookupAccount(system string) (account, domain string, accType uint32, err error) {
+	var sys *uint16
+	if len(system) > 0 {
+		sys, err = UTF16PtrFromString(system)
+		if err != nil {
+			return "", "", 0, err
+		}
+	}
+	n := uint32(50)
+	dn := uint32(50)
+	for {
+		b := make([]uint16, n)
+		db := make([]uint16, dn)
+		e := LookupAccountSid(sys, sid, &b[0], &n, &db[0], &dn, &accType)
+		if e == nil {
+			return UTF16ToString(b), UTF16ToString(db), accType, nil
+		}
+		if e != ERROR_INSUFFICIENT_BUFFER {
+			return "", "", 0, e
+		}
+		if n <= uint32(len(b)) {
+			return "", "", 0, e
+		}
+	}
+}
+
+// Various types of pre-specified SIDs that can be synthesized and compared at runtime.
+type WELL_KNOWN_SID_TYPE uint32
+
+const (
+	WinNullSid                                    = 0
+	WinWorldSid                                   = 1
+	WinLocalSid                                   = 2
+	WinCreatorOwnerSid                            = 3
+	WinCreatorGroupSid                            = 4
+	WinCreatorOwnerServerSid                      = 5
+	WinCreatorGroupServerSid                      = 6
+	WinNtAuthoritySid                             = 7
+	WinDialupSid                                  = 8
+	WinNetworkSid                                 = 9
+	WinBatchSid                                   = 10
+	WinInteractiveSid                             = 11
+	WinServiceSid                                 = 12
+	WinAnonymousSid                               = 13
+	WinProxySid                                   = 14
+	WinEnterpriseControllersSid                   = 15
+	WinSelfSid                                    = 16
+	WinAuthenticatedUserSid                       = 17
+	WinRestrictedCodeSid                          = 18
+	WinTerminalServerSid                          = 19
+	WinRemoteLogonIdSid                           = 20
+	WinLogonIdsSid                                = 21
+	WinLocalSystemSid                             = 22
+	WinLocalServiceSid                            = 23
+	WinNetworkServiceSid                          = 24
+	WinBuiltinDomainSid                           = 25
+	WinBuiltinAdministratorsSid                   = 26
+	WinBuiltinUsersSid                            = 27
+	WinBuiltinGuestsSid                           = 28
+	WinBuiltinPowerUsersSid                       = 29
+	WinBuiltinAccountOperatorsSid                 = 30
+	WinBuiltinSystemOperatorsSid                  = 31
+	WinBuiltinPrintOperatorsSid                   = 32
+	WinBuiltinBackupOperatorsSid                  = 33
+	WinBuiltinReplicatorSid                       = 34
+	WinBuiltinPreWindows2000CompatibleAccessSid   = 35
+	WinBuiltinRemoteDesktopUsersSid               = 36
+	WinBuiltinNetworkConfigurationOperatorsSid    = 37
+	WinAccountAdministratorSid                    = 38
+	WinAccountGuestSid                            = 39
+	WinAccountKrbtgtSid                           = 40
+	WinAccountDomainAdminsSid                     = 41
+	WinAccountDomainUsersSid                      = 42
+	WinAccountDomainGuestsSid                     = 43
+	WinAccountComputersSid                        = 44
+	WinAccountControllersSid                      = 45
+	WinAccountCertAdminsSid                       = 46
+	WinAccountSchemaAdminsSid                     = 47
+	WinAccountEnterpriseAdminsSid                 = 48
+	WinAccountPolicyAdminsSid                     = 49
+	WinAccountRasAndIasServersSid                 = 50
+	WinNTLMAuthenticationSid                      = 51
+	WinDigestAuthenticationSid                    = 52
+	WinSChannelAuthenticationSid                  = 53
+	WinThisOrganizationSid                        = 54
+	WinOtherOrganizationSid                       = 55
+	WinBuiltinIncomingForestTrustBuildersSid      = 56
+	WinBuiltinPerfMonitoringUsersSid              = 57
+	WinBuiltinPerfLoggingUsersSid                 = 58
+	WinBuiltinAuthorizationAccessSid              = 59
+	WinBuiltinTerminalServerLicenseServersSid     = 60
+	WinBuiltinDCOMUsersSid                        = 61
+	WinBuiltinIUsersSid                           = 62
+	WinIUserSid                                   = 63
+	WinBuiltinCryptoOperatorsSid                  = 64
+	WinUntrustedLabelSid                          = 65
+	WinLowLabelSid                                = 66
+	WinMediumLabelSid                             = 67
+	WinHighLabelSid                               = 68
+	WinSystemLabelSid                             = 69
+	WinWriteRestrictedCodeSid                     = 70
+	WinCreatorOwnerRightsSid                      = 71
+	WinCacheablePrincipalsGroupSid                = 72
+	WinNonCacheablePrincipalsGroupSid             = 73
+	WinEnterpriseReadonlyControllersSid           = 74
+	WinAccountReadonlyControllersSid              = 75
+	WinBuiltinEventLogReadersGroup                = 76
+	WinNewEnterpriseReadonlyControllersSid        = 77
+	WinBuiltinCertSvcDComAccessGroup              = 78
+	WinMediumPlusLabelSid                         = 79
+	WinLocalLogonSid                              = 80
+	WinConsoleLogonSid                            = 81
+	WinThisOrganizationCertificateSid             = 82
+	WinApplicationPackageAuthoritySid             = 83
+	WinBuiltinAnyPackageSid                       = 84
+	WinCapabilityInternetClientSid                = 85
+	WinCapabilityInternetClientServerSid          = 86
+	WinCapabilityPrivateNetworkClientServerSid    = 87
+	WinCapabilityPicturesLibrarySid               = 88
+	WinCapabilityVideosLibrarySid                 = 89
+	WinCapabilityMusicLibrarySid                  = 90
+	WinCapabilityDocumentsLibrarySid              = 91
+	WinCapabilitySharedUserCertificatesSid        = 92
+	WinCapabilityEnterpriseAuthenticationSid      = 93
+	WinCapabilityRemovableStorageSid              = 94
+	WinBuiltinRDSRemoteAccessServersSid           = 95
+	WinBuiltinRDSEndpointServersSid               = 96
+	WinBuiltinRDSManagementServersSid             = 97
+	WinUserModeDriversSid                         = 98
+	WinBuiltinHyperVAdminsSid                     = 99
+	WinAccountCloneableControllersSid             = 100
+	WinBuiltinAccessControlAssistanceOperatorsSid = 101
+	WinBuiltinRemoteManagementUsersSid            = 102
+	WinAuthenticationAuthorityAssertedSid         = 103
+	WinAuthenticationServiceAssertedSid           = 104
+	WinLocalAccountSid                            = 105
+	WinLocalAccountAndAdministratorSid            = 106
+	WinAccountProtectedUsersSid                   = 107
+	WinCapabilityAppointmentsSid                  = 108
+	WinCapabilityContactsSid                      = 109
+	WinAccountDefaultSystemManagedSid             = 110
+	WinBuiltinDefaultSystemManagedGroupSid        = 111
+	WinBuiltinStorageReplicaAdminsSid             = 112
+	WinAccountKeyAdminsSid                        = 113
+	WinAccountEnterpriseKeyAdminsSid              = 114
+	WinAuthenticationKeyTrustSid                  = 115
+	WinAuthenticationKeyPropertyMFASid            = 116
+	WinAuthenticationKeyPropertyAttestationSid    = 117
+	WinAuthenticationFreshKeyAuthSid              = 118
+	WinBuiltinDeviceOwnersSid                     = 119
+)
+
+// Creates a SID for a well-known predefined alias, generally using the constants of the form
+// Win*Sid, for the local machine.
+func CreateWellKnownSid(sidType WELL_KNOWN_SID_TYPE) (*SID, error) {
+	return CreateWellKnownDomainSid(sidType, nil)
+}
+
+// Creates a SID for a well-known predefined alias, generally using the constants of the form
+// Win*Sid, for the domain specified by the domainSid parameter.
+func CreateWellKnownDomainSid(sidType WELL_KNOWN_SID_TYPE, domainSid *SID) (*SID, error) {
+	n := uint32(50)
+	for {
+		b := make([]byte, n)
+		sid := (*SID)(unsafe.Pointer(&b[0]))
+		err := createWellKnownSid(sidType, domainSid, sid, &n)
+		if err == nil {
+			return sid, nil
+		}
+		if err != ERROR_INSUFFICIENT_BUFFER {
+			return nil, err
+		}
+		if n <= uint32(len(b)) {
+			return nil, err
+		}
+	}
+}
+
+const (
+	// do not reorder
+	TOKEN_ASSIGN_PRIMARY = 1 << iota
+	TOKEN_DUPLICATE
+	TOKEN_IMPERSONATE
+	TOKEN_QUERY
+	TOKEN_QUERY_SOURCE
+	TOKEN_ADJUST_PRIVILEGES
+	TOKEN_ADJUST_GROUPS
+	TOKEN_ADJUST_DEFAULT
+	TOKEN_ADJUST_SESSIONID
+
+	TOKEN_ALL_ACCESS = STANDARD_RIGHTS_REQUIRED |
+		TOKEN_ASSIGN_PRIMARY |
+		TOKEN_DUPLICATE |
+		TOKEN_IMPERSONATE |
+		TOKEN_QUERY |
+		TOKEN_QUERY_SOURCE |
+		TOKEN_ADJUST_PRIVILEGES |
+		TOKEN_ADJUST_GROUPS |
+		TOKEN_ADJUST_DEFAULT |
+		TOKEN_ADJUST_SESSIONID
+	TOKEN_READ  = STANDARD_RIGHTS_READ | TOKEN_QUERY
+	TOKEN_WRITE = STANDARD_RIGHTS_WRITE |
+		TOKEN_ADJUST_PRIVILEGES |
+		TOKEN_ADJUST_GROUPS |
+		TOKEN_ADJUST_DEFAULT
+	TOKEN_EXECUTE = STANDARD_RIGHTS_EXECUTE
+)
+
+const (
+	// do not reorder
+	TokenUser = 1 + iota
+	TokenGroups
+	TokenPrivileges
+	TokenOwner
+	TokenPrimaryGroup
+	TokenDefaultDacl
+	TokenSource
+	TokenType
+	TokenImpersonationLevel
+	TokenStatistics
+	TokenRestrictedSids
+	TokenSessionId
+	TokenGroupsAndPrivileges
+	TokenSessionReference
+	TokenSandBoxInert
+	TokenAuditPolicy
+	TokenOrigin
+	TokenElevationType
+	TokenLinkedToken
+	TokenElevation
+	TokenHasRestrictions
+	TokenAccessInformation
+	TokenVirtualizationAllowed
+	TokenVirtualizationEnabled
+	TokenIntegrityLevel
+	TokenUIAccess
+	TokenMandatoryPolicy
+	TokenLogonSid
+	MaxTokenInfoClass
+)
+
+// Group attributes inside of Tokengroups.Groups[i].Attributes
+const (
+	SE_GROUP_MANDATORY          = 0x00000001
+	SE_GROUP_ENABLED_BY_DEFAULT = 0x00000002
+	SE_GROUP_ENABLED            = 0x00000004
+	SE_GROUP_OWNER              = 0x00000008
+	SE_GROUP_USE_FOR_DENY_ONLY  = 0x00000010
+	SE_GROUP_INTEGRITY          = 0x00000020
+	SE_GROUP_INTEGRITY_ENABLED  = 0x00000040
+	SE_GROUP_LOGON_ID           = 0xC0000000
+	SE_GROUP_RESOURCE           = 0x20000000
+	SE_GROUP_VALID_ATTRIBUTES   = SE_GROUP_MANDATORY | SE_GROUP_ENABLED_BY_DEFAULT | SE_GROUP_ENABLED | SE_GROUP_OWNER | SE_GROUP_USE_FOR_DENY_ONLY | SE_GROUP_LOGON_ID | SE_GROUP_RESOURCE | SE_GROUP_INTEGRITY | SE_GROUP_INTEGRITY_ENABLED
+)
+
+// Privilege attributes
+const (
+	SE_PRIVILEGE_ENABLED_BY_DEFAULT = 0x00000001
+	SE_PRIVILEGE_ENABLED            = 0x00000002
+	SE_PRIVILEGE_REMOVED            = 0x00000004
+	SE_PRIVILEGE_USED_FOR_ACCESS    = 0x80000000
+	SE_PRIVILEGE_VALID_ATTRIBUTES   = SE_PRIVILEGE_ENABLED_BY_DEFAULT | SE_PRIVILEGE_ENABLED | SE_PRIVILEGE_REMOVED | SE_PRIVILEGE_USED_FOR_ACCESS
+)
+
+// Token types
+const (
+	TokenPrimary       = 1
+	TokenImpersonation = 2
+)
+
+// Impersonation levels
+const (
+	SecurityAnonymous      = 0
+	SecurityIdentification = 1
+	SecurityImpersonation  = 2
+	SecurityDelegation     = 3
+)
+
+type LUID struct {
+	LowPart  uint32
+	HighPart int32
+}
+
+type LUIDAndAttributes struct {
+	Luid       LUID
+	Attributes uint32
+}
+
+type SIDAndAttributes struct {
+	Sid        *SID
+	Attributes uint32
+}
+
+type Tokenuser struct {
+	User SIDAndAttributes
+}
+
+type Tokenprimarygroup struct {
+	PrimaryGroup *SID
+}
+
+type Tokengroups struct {
+	GroupCount uint32
+	Groups     [1]SIDAndAttributes // Use AllGroups() for iterating.
+}
+
+// AllGroups returns a slice that can be used to iterate over the groups in g.
+func (g *Tokengroups) AllGroups() []SIDAndAttributes {
+	return (*[(1 << 28) - 1]SIDAndAttributes)(unsafe.Pointer(&g.Groups[0]))[:g.GroupCount:g.GroupCount]
+}
+
+type Tokenprivileges struct {
+	PrivilegeCount uint32
+	Privileges     [1]LUIDAndAttributes // Use AllPrivileges() for iterating.
+}
+
+// AllPrivileges returns a slice that can be used to iterate over the privileges in p.
+func (p *Tokenprivileges) AllPrivileges() []LUIDAndAttributes {
+	return (*[(1 << 27) - 1]LUIDAndAttributes)(unsafe.Pointer(&p.Privileges[0]))[:p.PrivilegeCount:p.PrivilegeCount]
+}
+
+type Tokenmandatorylabel struct {
+	Label SIDAndAttributes
+}
+
+func (tml *Tokenmandatorylabel) Size() uint32 {
+	return uint32(unsafe.Sizeof(Tokenmandatorylabel{})) + GetLengthSid(tml.Label.Sid)
+}
+
+// Authorization Functions
+//sys	checkTokenMembership(tokenHandle Token, sidToCheck *SID, isMember *int32) (err error) = advapi32.CheckTokenMembership
+//sys	isTokenRestricted(tokenHandle Token) (ret bool, err error) [!failretval] = advapi32.IsTokenRestricted
+//sys	OpenProcessToken(process Handle, access uint32, token *Token) (err error) = advapi32.OpenProcessToken
+//sys	OpenThreadToken(thread Handle, access uint32, openAsSelf bool, token *Token) (err error) = advapi32.OpenThreadToken
+//sys	ImpersonateSelf(impersonationlevel uint32) (err error) = advapi32.ImpersonateSelf
+//sys	RevertToSelf() (err error) = advapi32.RevertToSelf
+//sys	SetThreadToken(thread *Handle, token Token) (err error) = advapi32.SetThreadToken
+//sys	LookupPrivilegeValue(systemname *uint16, name *uint16, luid *LUID) (err error) = advapi32.LookupPrivilegeValueW
+//sys	AdjustTokenPrivileges(token Token, disableAllPrivileges bool, newstate *Tokenprivileges, buflen uint32, prevstate *Tokenprivileges, returnlen *uint32) (err error) = advapi32.AdjustTokenPrivileges
+//sys	AdjustTokenGroups(token Token, resetToDefault bool, newstate *Tokengroups, buflen uint32, prevstate *Tokengroups, returnlen *uint32) (err error) = advapi32.AdjustTokenGroups
+//sys	GetTokenInformation(token Token, infoClass uint32, info *byte, infoLen uint32, returnedLen *uint32) (err error) = advapi32.GetTokenInformation
+//sys	SetTokenInformation(token Token, infoClass uint32, info *byte, infoLen uint32) (err error) = advapi32.SetTokenInformation
+//sys	DuplicateTokenEx(existingToken Token, desiredAccess uint32, tokenAttributes *SecurityAttributes, impersonationLevel uint32, tokenType uint32, newToken *Token) (err error) = advapi32.DuplicateTokenEx
+//sys	GetUserProfileDirectory(t Token, dir *uint16, dirLen *uint32) (err error) = userenv.GetUserProfileDirectoryW
+//sys	getSystemDirectory(dir *uint16, dirLen uint32) (len uint32, err error) = kernel32.GetSystemDirectoryW
+//sys	getWindowsDirectory(dir *uint16, dirLen uint32) (len uint32, err error) = kernel32.GetWindowsDirectoryW
+//sys	getSystemWindowsDirectory(dir *uint16, dirLen uint32) (len uint32, err error) = kernel32.GetSystemWindowsDirectoryW
+
+// An access token contains the security information for a logon session.
+// The system creates an access token when a user logs on, and every
+// process executed on behalf of the user has a copy of the token.
+// The token identifies the user, the user's groups, and the user's
+// privileges. The system uses the token to control access to securable
+// objects and to control the ability of the user to perform various
+// system-related operations on the local computer.
+type Token Handle
+
+// OpenCurrentProcessToken opens an access token associated with current
+// process with TOKEN_QUERY access. It is a real token that needs to be closed.
+//
+// Deprecated: Explicitly call OpenProcessToken(CurrentProcess(), ...)
+// with the desired access instead, or use GetCurrentProcessToken for a
+// TOKEN_QUERY token.
+func OpenCurrentProcessToken() (Token, error) {
+	var token Token
+	err := OpenProcessToken(CurrentProcess(), TOKEN_QUERY, &token)
+	return token, err
+}
+
+// GetCurrentProcessToken returns the access token associated with
+// the current process. It is a pseudo token that does not need
+// to be closed.
+func GetCurrentProcessToken() Token {
+	return Token(^uintptr(4 - 1))
+}
+
+// GetCurrentThreadToken return the access token associated with
+// the current thread. It is a pseudo token that does not need
+// to be closed.
+func GetCurrentThreadToken() Token {
+	return Token(^uintptr(5 - 1))
+}
+
+// GetCurrentThreadEffectiveToken returns the effective access token
+// associated with the current thread. It is a pseudo token that does
+// not need to be closed.
+func GetCurrentThreadEffectiveToken() Token {
+	return Token(^uintptr(6 - 1))
+}
+
+// Close releases access to access token.
+func (t Token) Close() error {
+	return CloseHandle(Handle(t))
+}
+
+// getInfo retrieves a specified type of information about an access token.
+func (t Token) getInfo(class uint32, initSize int) (unsafe.Pointer, error) {
+	n := uint32(initSize)
+	for {
+		b := make([]byte, n)
+		e := GetTokenInformation(t, class, &b[0], uint32(len(b)), &n)
+		if e == nil {
+			return unsafe.Pointer(&b[0]), nil
+		}
+		if e != ERROR_INSUFFICIENT_BUFFER {
+			return nil, e
+		}
+		if n <= uint32(len(b)) {
+			return nil, e
+		}
+	}
+}
+
+// GetTokenUser retrieves access token t user account information.
+func (t Token) GetTokenUser() (*Tokenuser, error) {
+	i, e := t.getInfo(TokenUser, 50)
+	if e != nil {
+		return nil, e
+	}
+	return (*Tokenuser)(i), nil
+}
+
+// GetTokenGroups retrieves group accounts associated with access token t.
+func (t Token) GetTokenGroups() (*Tokengroups, error) {
+	i, e := t.getInfo(TokenGroups, 50)
+	if e != nil {
+		return nil, e
+	}
+	return (*Tokengroups)(i), nil
+}
+
+// GetTokenPrimaryGroup retrieves access token t primary group information.
+// A pointer to a SID structure representing a group that will become
+// the primary group of any objects created by a process using this access token.
+func (t Token) GetTokenPrimaryGroup() (*Tokenprimarygroup, error) {
+	i, e := t.getInfo(TokenPrimaryGroup, 50)
+	if e != nil {
+		return nil, e
+	}
+	return (*Tokenprimarygroup)(i), nil
+}
+
+// GetUserProfileDirectory retrieves path to the
+// root directory of the access token t user's profile.
+func (t Token) GetUserProfileDirectory() (string, error) {
+	n := uint32(100)
+	for {
+		b := make([]uint16, n)
+		e := GetUserProfileDirectory(t, &b[0], &n)
+		if e == nil {
+			return UTF16ToString(b), nil
+		}
+		if e != ERROR_INSUFFICIENT_BUFFER {
+			return "", e
+		}
+		if n <= uint32(len(b)) {
+			return "", e
+		}
+	}
+}
+
+// IsElevated returns whether the current token is elevated from a UAC perspective.
+func (token Token) IsElevated() bool {
+	var isElevated uint32
+	var outLen uint32
+	err := GetTokenInformation(token, TokenElevation, (*byte)(unsafe.Pointer(&isElevated)), uint32(unsafe.Sizeof(isElevated)), &outLen)
+	if err != nil {
+		return false
+	}
+	return outLen == uint32(unsafe.Sizeof(isElevated)) && isElevated != 0
+}
+
+// GetLinkedToken returns the linked token, which may be an elevated UAC token.
+func (token Token) GetLinkedToken() (Token, error) {
+	var linkedToken Token
+	var outLen uint32
+	err := GetTokenInformation(token, TokenLinkedToken, (*byte)(unsafe.Pointer(&linkedToken)), uint32(unsafe.Sizeof(linkedToken)), &outLen)
+	if err != nil {
+		return Token(0), err
+	}
+	return linkedToken, nil
+}
+
+// GetSystemDirectory retrieves the path to current location of the system
+// directory, which is typically, though not always, `C:\Windows\System32`.
+func GetSystemDirectory() (string, error) {
+	n := uint32(MAX_PATH)
+	for {
+		b := make([]uint16, n)
+		l, e := getSystemDirectory(&b[0], n)
+		if e != nil {
+			return "", e
+		}
+		if l <= n {
+			return UTF16ToString(b[:l]), nil
+		}
+		n = l
+	}
+}
+
+// GetWindowsDirectory retrieves the path to current location of the Windows
+// directory, which is typically, though not always, `C:\Windows`. This may
+// be a private user directory in the case that the application is running
+// under a terminal server.
+func GetWindowsDirectory() (string, error) {
+	n := uint32(MAX_PATH)
+	for {
+		b := make([]uint16, n)
+		l, e := getWindowsDirectory(&b[0], n)
+		if e != nil {
+			return "", e
+		}
+		if l <= n {
+			return UTF16ToString(b[:l]), nil
+		}
+		n = l
+	}
+}
+
+// GetSystemWindowsDirectory retrieves the path to current location of the
+// Windows directory, which is typically, though not always, `C:\Windows`.
+func GetSystemWindowsDirectory() (string, error) {
+	n := uint32(MAX_PATH)
+	for {
+		b := make([]uint16, n)
+		l, e := getSystemWindowsDirectory(&b[0], n)
+		if e != nil {
+			return "", e
+		}
+		if l <= n {
+			return UTF16ToString(b[:l]), nil
+		}
+		n = l
+	}
+}
+
+// IsMember reports whether the access token t is a member of the provided SID.
+func (t Token) IsMember(sid *SID) (bool, error) {
+	var b int32
+	if e := checkTokenMembership(t, sid, &b); e != nil {
+		return false, e
+	}
+	return b != 0, nil
+}
+
+// IsRestricted reports whether the access token t is a restricted token.
+func (t Token) IsRestricted() (isRestricted bool, err error) {
+	isRestricted, err = isTokenRestricted(t)
+	if !isRestricted && err == syscall.EINVAL {
+		// If err is EINVAL, this returned ERROR_SUCCESS indicating a non-restricted token.
+		err = nil
+	}
+	return
+}
+
+const (
+	WTS_CONSOLE_CONNECT        = 0x1
+	WTS_CONSOLE_DISCONNECT     = 0x2
+	WTS_REMOTE_CONNECT         = 0x3
+	WTS_REMOTE_DISCONNECT      = 0x4
+	WTS_SESSION_LOGON          = 0x5
+	WTS_SESSION_LOGOFF         = 0x6
+	WTS_SESSION_LOCK           = 0x7
+	WTS_SESSION_UNLOCK         = 0x8
+	WTS_SESSION_REMOTE_CONTROL = 0x9
+	WTS_SESSION_CREATE         = 0xa
+	WTS_SESSION_TERMINATE      = 0xb
+)
+
+const (
+	WTSActive       = 0
+	WTSConnected    = 1
+	WTSConnectQuery = 2
+	WTSShadow       = 3
+	WTSDisconnected = 4
+	WTSIdle         = 5
+	WTSListen       = 6
+	WTSReset        = 7
+	WTSDown         = 8
+	WTSInit         = 9
+)
+
+type WTSSESSION_NOTIFICATION struct {
+	Size      uint32
+	SessionID uint32
+}
+
+type WTS_SESSION_INFO struct {
+	SessionID         uint32
+	WindowStationName *uint16
+	State             uint32
+}
+
+//sys WTSQueryUserToken(session uint32, token *Token) (err error) = wtsapi32.WTSQueryUserToken
+//sys WTSEnumerateSessions(handle Handle, reserved uint32, version uint32, sessions **WTS_SESSION_INFO, count *uint32) (err error) = wtsapi32.WTSEnumerateSessionsW
+//sys WTSFreeMemory(ptr uintptr) = wtsapi32.WTSFreeMemory
+//sys WTSGetActiveConsoleSessionId() (sessionID uint32)
+
+type ACL struct {
+	aclRevision byte
+	sbz1        byte
+	aclSize     uint16
+	AceCount    uint16
+	sbz2        uint16
+}
+
+type SECURITY_DESCRIPTOR struct {
+	revision byte
+	sbz1     byte
+	control  SECURITY_DESCRIPTOR_CONTROL
+	owner    *SID
+	group    *SID
+	sacl     *ACL
+	dacl     *ACL
+}
+
+type SECURITY_QUALITY_OF_SERVICE struct {
+	Length              uint32
+	ImpersonationLevel  uint32
+	ContextTrackingMode byte
+	EffectiveOnly       byte
+}
+
+// Constants for the ContextTrackingMode field of SECURITY_QUALITY_OF_SERVICE.
+const (
+	SECURITY_STATIC_TRACKING  = 0
+	SECURITY_DYNAMIC_TRACKING = 1
+)
+
+type SecurityAttributes struct {
+	Length             uint32
+	SecurityDescriptor *SECURITY_DESCRIPTOR
+	InheritHandle      uint32
+}
+
+type SE_OBJECT_TYPE uint32
+
+// Constants for type SE_OBJECT_TYPE
+const (
+	SE_UNKNOWN_OBJECT_TYPE     = 0
+	SE_FILE_OBJECT             = 1
+	SE_SERVICE                 = 2
+	SE_PRINTER                 = 3
+	SE_REGISTRY_KEY            = 4
+	SE_LMSHARE                 = 5
+	SE_KERNEL_OBJECT           = 6
+	SE_WINDOW_OBJECT           = 7
+	SE_DS_OBJECT               = 8
+	SE_DS_OBJECT_ALL           = 9
+	SE_PROVIDER_DEFINED_OBJECT = 10
+	SE_WMIGUID_OBJECT          = 11
+	SE_REGISTRY_WOW64_32KEY    = 12
+	SE_REGISTRY_WOW64_64KEY    = 13
+)
+
+type SECURITY_INFORMATION uint32
+
+// Constants for type SECURITY_INFORMATION
+const (
+	OWNER_SECURITY_INFORMATION            = 0x00000001
+	GROUP_SECURITY_INFORMATION            = 0x00000002
+	DACL_SECURITY_INFORMATION             = 0x00000004
+	SACL_SECURITY_INFORMATION             = 0x00000008
+	LABEL_SECURITY_INFORMATION            = 0x00000010
+	ATTRIBUTE_SECURITY_INFORMATION        = 0x00000020
+	SCOPE_SECURITY_INFORMATION            = 0x00000040
+	BACKUP_SECURITY_INFORMATION           = 0x00010000
+	PROTECTED_DACL_SECURITY_INFORMATION   = 0x80000000
+	PROTECTED_SACL_SECURITY_INFORMATION   = 0x40000000
+	UNPROTECTED_DACL_SECURITY_INFORMATION = 0x20000000
+	UNPROTECTED_SACL_SECURITY_INFORMATION = 0x10000000
+)
+
+type SECURITY_DESCRIPTOR_CONTROL uint16
+
+// Constants for type SECURITY_DESCRIPTOR_CONTROL
+const (
+	SE_OWNER_DEFAULTED       = 0x0001
+	SE_GROUP_DEFAULTED       = 0x0002
+	SE_DACL_PRESENT          = 0x0004
+	SE_DACL_DEFAULTED        = 0x0008
+	SE_SACL_PRESENT          = 0x0010
+	SE_SACL_DEFAULTED        = 0x0020
+	SE_DACL_AUTO_INHERIT_REQ = 0x0100
+	SE_SACL_AUTO_INHERIT_REQ = 0x0200
+	SE_DACL_AUTO_INHERITED   = 0x0400
+	SE_SACL_AUTO_INHERITED   = 0x0800
+	SE_DACL_PROTECTED        = 0x1000
+	SE_SACL_PROTECTED        = 0x2000
+	SE_RM_CONTROL_VALID      = 0x4000
+	SE_SELF_RELATIVE         = 0x8000
+)
+
+type ACCESS_MASK uint32
+
+// Constants for type ACCESS_MASK
+const (
+	DELETE                   = 0x00010000
+	READ_CONTROL             = 0x00020000
+	WRITE_DAC                = 0x00040000
+	WRITE_OWNER              = 0x00080000
+	SYNCHRONIZE              = 0x00100000
+	STANDARD_RIGHTS_REQUIRED = 0x000F0000
+	STANDARD_RIGHTS_READ     = READ_CONTROL
+	STANDARD_RIGHTS_WRITE    = READ_CONTROL
+	STANDARD_RIGHTS_EXECUTE  = READ_CONTROL
+	STANDARD_RIGHTS_ALL      = 0x001F0000
+	SPECIFIC_RIGHTS_ALL      = 0x0000FFFF
+	ACCESS_SYSTEM_SECURITY   = 0x01000000
+	MAXIMUM_ALLOWED          = 0x02000000
+	GENERIC_READ             = 0x80000000
+	GENERIC_WRITE            = 0x40000000
+	GENERIC_EXECUTE          = 0x20000000
+	GENERIC_ALL              = 0x10000000
+)
+
+type ACCESS_MODE uint32
+
+// Constants for type ACCESS_MODE
+const (
+	NOT_USED_ACCESS   = 0
+	GRANT_ACCESS      = 1
+	SET_ACCESS        = 2
+	DENY_ACCESS       = 3
+	REVOKE_ACCESS     = 4
+	SET_AUDIT_SUCCESS = 5
+	SET_AUDIT_FAILURE = 6
+)
+
+// Constants for AceFlags and Inheritance fields
+const (
+	NO_INHERITANCE                     = 0x0
+	SUB_OBJECTS_ONLY_INHERIT           = 0x1
+	SUB_CONTAINERS_ONLY_INHERIT        = 0x2
+	SUB_CONTAINERS_AND_OBJECTS_INHERIT = 0x3
+	INHERIT_NO_PROPAGATE               = 0x4
+	INHERIT_ONLY                       = 0x8
+	INHERITED_ACCESS_ENTRY             = 0x10
+	INHERITED_PARENT                   = 0x10000000
+	INHERITED_GRANDPARENT              = 0x20000000
+	OBJECT_INHERIT_ACE                 = 0x1
+	CONTAINER_INHERIT_ACE              = 0x2
+	NO_PROPAGATE_INHERIT_ACE           = 0x4
+	INHERIT_ONLY_ACE                   = 0x8
+	INHERITED_ACE                      = 0x10
+	VALID_INHERIT_FLAGS                = 0x1F
+)
+
+type MULTIPLE_TRUSTEE_OPERATION uint32
+
+// Constants for MULTIPLE_TRUSTEE_OPERATION
+const (
+	NO_MULTIPLE_TRUSTEE    = 0
+	TRUSTEE_IS_IMPERSONATE = 1
+)
+
+type TRUSTEE_FORM uint32
+
+// Constants for TRUSTEE_FORM
+const (
+	TRUSTEE_IS_SID              = 0
+	TRUSTEE_IS_NAME             = 1
+	TRUSTEE_BAD_FORM            = 2
+	TRUSTEE_IS_OBJECTS_AND_SID  = 3
+	TRUSTEE_IS_OBJECTS_AND_NAME = 4
+)
+
+type TRUSTEE_TYPE uint32
+
+// Constants for TRUSTEE_TYPE
+const (
+	TRUSTEE_IS_UNKNOWN          = 0
+	TRUSTEE_IS_USER             = 1
+	TRUSTEE_IS_GROUP            = 2
+	TRUSTEE_IS_DOMAIN           = 3
+	TRUSTEE_IS_ALIAS            = 4
+	TRUSTEE_IS_WELL_KNOWN_GROUP = 5
+	TRUSTEE_IS_DELETED          = 6
+	TRUSTEE_IS_INVALID          = 7
+	TRUSTEE_IS_COMPUTER         = 8
+)
+
+// Constants for ObjectsPresent field
+const (
+	ACE_OBJECT_TYPE_PRESENT           = 0x1
+	ACE_INHERITED_OBJECT_TYPE_PRESENT = 0x2
+)
+
+type EXPLICIT_ACCESS struct {
+	AccessPermissions ACCESS_MASK
+	AccessMode        ACCESS_MODE
+	Inheritance       uint32
+	Trustee           TRUSTEE
+}
+
+// https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-ace_header
+type ACE_HEADER struct {
+	AceType  uint8
+	AceFlags uint8
+	AceSize  uint16
+}
+
+// https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-access_allowed_ace
+type ACCESS_ALLOWED_ACE struct {
+	Header   ACE_HEADER
+	Mask     ACCESS_MASK
+	SidStart uint32
+}
+
+const (
+	// Constants for AceType
+	// https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-ace_header
+	ACCESS_ALLOWED_ACE_TYPE = 0
+	ACCESS_DENIED_ACE_TYPE  = 1
+)
+
+// This type is the union inside of TRUSTEE and must be created using one of the TrusteeValueFrom* functions.
+//
+// Go pointers stored in a TrusteeValue must be pinned using [runtime.Pinner]
+// for the lifetime of the TrusteeValue.
+type TrusteeValue uintptr
+
+// TrusteeValueFromString is unsafe and should not be used.
+//
+// It returns a uintptr containing a reference to newly-allocated memory
+// which will be freed by the garbage collector.
+// There is no way for the caller to safely reference this memory.
+//
+// To create a [TrusteeValue] from a string, use:
+//
+//	p, err := windows.UTF16PtrFromString(s)
+//	if err != nil {
+//		// handle error
+//	}
+//
+//	// Pin the string for as long as it is used.
+//	var pinner runtime.Pinner
+//	pinner.Pin(p)
+//	defer pinner.Unpin()
+//
+//	tv := TrusteeValue(unsafe.Pointer(p))
+//
+// Deprecated: TrusteeValueFromString is unsafe and should not be used.
+func TrusteeValueFromString(str string) TrusteeValue {
+	return TrusteeValue(unsafe.Pointer(StringToUTF16Ptr(str)))
+}
+
+// TrusteeValueFromSID returns a [TrusteeValue] referencing sid.
+//
+// The caller must pin sid using a [runtime.Pinner] for the lifetime of the TrusteeValue.
+func TrusteeValueFromSID(sid *SID) TrusteeValue {
+	return TrusteeValue(unsafe.Pointer(sid))
+}
+
+// TrusteeValueFromObjectsAndSid returns a [TrusteeValue] referencing objectsAndSid.
+//
+// The caller must pin objectsAndSid using a [runtime.Pinner] for the lifetime of the TrusteeValue.
+func TrusteeValueFromObjectsAndSid(objectsAndSid *OBJECTS_AND_SID) TrusteeValue {
+	return TrusteeValue(unsafe.Pointer(objectsAndSid))
+}
+
+// TrusteeValueFromObjectsAndName returns a [TrusteeValue] referencing objectsAndName.
+//
+// The caller must pin objectsAndName using a [runtime.Pinner] for the lifetime of the TrusteeValue.
+func TrusteeValueFromObjectsAndName(objectsAndName *OBJECTS_AND_NAME) TrusteeValue {
+	return TrusteeValue(unsafe.Pointer(objectsAndName))
+}
+
+type TRUSTEE struct {
+	MultipleTrustee          *TRUSTEE
+	MultipleTrusteeOperation MULTIPLE_TRUSTEE_OPERATION
+	TrusteeForm              TRUSTEE_FORM
+	TrusteeType              TRUSTEE_TYPE
+	TrusteeValue             TrusteeValue
+}
+
+type OBJECTS_AND_SID struct {
+	ObjectsPresent          uint32
+	ObjectTypeGuid          GUID
+	InheritedObjectTypeGuid GUID
+	Sid                     *SID
+}
+
+type OBJECTS_AND_NAME struct {
+	ObjectsPresent          uint32
+	ObjectType              SE_OBJECT_TYPE
+	ObjectTypeName          *uint16
+	InheritedObjectTypeName *uint16
+	Name                    *uint16
+}
+
+//sys	getSecurityInfo(handle Handle, objectType SE_OBJECT_TYPE, securityInformation SECURITY_INFORMATION, owner **SID, group **SID, dacl **ACL, sacl **ACL, sd **SECURITY_DESCRIPTOR) (ret error) = advapi32.GetSecurityInfo
+//sys	SetSecurityInfo(handle Handle, objectType SE_OBJECT_TYPE, securityInformation SECURITY_INFORMATION, owner *SID, group *SID, dacl *ACL, sacl *ACL) (ret error) = advapi32.SetSecurityInfo
+//sys	getNamedSecurityInfo(objectName string, objectType SE_OBJECT_TYPE, securityInformation SECURITY_INFORMATION, owner **SID, group **SID, dacl **ACL, sacl **ACL, sd **SECURITY_DESCRIPTOR) (ret error) = advapi32.GetNamedSecurityInfoW
+//sys	SetNamedSecurityInfo(objectName string, objectType SE_OBJECT_TYPE, securityInformation SECURITY_INFORMATION, owner *SID, group *SID, dacl *ACL, sacl *ACL) (ret error) = advapi32.SetNamedSecurityInfoW
+//sys	SetKernelObjectSecurity(handle Handle, securityInformation SECURITY_INFORMATION, securityDescriptor *SECURITY_DESCRIPTOR) (err error) = advapi32.SetKernelObjectSecurity
+
+//sys	buildSecurityDescriptor(owner *TRUSTEE, group *TRUSTEE, countAccessEntries uint32, accessEntries *EXPLICIT_ACCESS, countAuditEntries uint32, auditEntries *EXPLICIT_ACCESS, oldSecurityDescriptor *SECURITY_DESCRIPTOR, sizeNewSecurityDescriptor *uint32, newSecurityDescriptor **SECURITY_DESCRIPTOR) (ret error) = advapi32.BuildSecurityDescriptorW
+//sys	initializeSecurityDescriptor(absoluteSD *SECURITY_DESCRIPTOR, revision uint32) (err error) = advapi32.InitializeSecurityDescriptor
+
+//sys	getSecurityDescriptorControl(sd *SECURITY_DESCRIPTOR, control *SECURITY_DESCRIPTOR_CONTROL, revision *uint32) (err error) = advapi32.GetSecurityDescriptorControl
+//sys	getSecurityDescriptorDacl(sd *SECURITY_DESCRIPTOR, daclPresent *bool, dacl **ACL, daclDefaulted *bool) (err error) = advapi32.GetSecurityDescriptorDacl
+//sys	getSecurityDescriptorSacl(sd *SECURITY_DESCRIPTOR, saclPresent *bool, sacl **ACL, saclDefaulted *bool) (err error) = advapi32.GetSecurityDescriptorSacl
+//sys	getSecurityDescriptorOwner(sd *SECURITY_DESCRIPTOR, owner **SID, ownerDefaulted *bool) (err error) = advapi32.GetSecurityDescriptorOwner
+//sys	getSecurityDescriptorGroup(sd *SECURITY_DESCRIPTOR, group **SID, groupDefaulted *bool) (err error) = advapi32.GetSecurityDescriptorGroup
+//sys	getSecurityDescriptorLength(sd *SECURITY_DESCRIPTOR) (len uint32) = advapi32.GetSecurityDescriptorLength
+//sys	getSecurityDescriptorRMControl(sd *SECURITY_DESCRIPTOR, rmControl *uint8) (ret error) [failretval!=0] = advapi32.GetSecurityDescriptorRMControl
+//sys	isValidSecurityDescriptor(sd *SECURITY_DESCRIPTOR) (isValid bool) = advapi32.IsValidSecurityDescriptor
+
+//sys	setSecurityDescriptorControl(sd *SECURITY_DESCRIPTOR, controlBitsOfInterest SECURITY_DESCRIPTOR_CONTROL, controlBitsToSet SECURITY_DESCRIPTOR_CONTROL) (err error) = advapi32.SetSecurityDescriptorControl
+//sys	setSecurityDescriptorDacl(sd *SECURITY_DESCRIPTOR, daclPresent bool, dacl *ACL, daclDefaulted bool) (err error) = advapi32.SetSecurityDescriptorDacl
+//sys	setSecurityDescriptorSacl(sd *SECURITY_DESCRIPTOR, saclPresent bool, sacl *ACL, saclDefaulted bool) (err error) = advapi32.SetSecurityDescriptorSacl
+//sys	setSecurityDescriptorOwner(sd *SECURITY_DESCRIPTOR, owner *SID, ownerDefaulted bool) (err error) = advapi32.SetSecurityDescriptorOwner
+//sys	setSecurityDescriptorGroup(sd *SECURITY_DESCRIPTOR, group *SID, groupDefaulted bool) (err error) = advapi32.SetSecurityDescriptorGroup
+//sys	setSecurityDescriptorRMControl(sd *SECURITY_DESCRIPTOR, rmControl *uint8) = advapi32.SetSecurityDescriptorRMControl
+
+//sys	convertStringSecurityDescriptorToSecurityDescriptor(str string, revision uint32, sd **SECURITY_DESCRIPTOR, size *uint32) (err error) = advapi32.ConvertStringSecurityDescriptorToSecurityDescriptorW
+//sys	convertSecurityDescriptorToStringSecurityDescriptor(sd *SECURITY_DESCRIPTOR, revision uint32, securityInformation SECURITY_INFORMATION, str **uint16, strLen *uint32) (err error) = advapi32.ConvertSecurityDescriptorToStringSecurityDescriptorW
+
+//sys	makeAbsoluteSD(selfRelativeSD *SECURITY_DESCRIPTOR, absoluteSD *SECURITY_DESCRIPTOR, absoluteSDSize *uint32, dacl *ACL, daclSize *uint32, sacl *ACL, saclSize *uint32, owner *SID, ownerSize *uint32, group *SID, groupSize *uint32) (err error) = advapi32.MakeAbsoluteSD
+//sys	makeSelfRelativeSD(absoluteSD *SECURITY_DESCRIPTOR, selfRelativeSD *SECURITY_DESCRIPTOR, selfRelativeSDSize *uint32) (err error) = advapi32.MakeSelfRelativeSD
+
+//sys	setEntriesInAcl(countExplicitEntries uint32, explicitEntries *EXPLICIT_ACCESS, oldACL *ACL, newACL **ACL) (ret error) = advapi32.SetEntriesInAclW
+//sys	GetAce(acl *ACL, aceIndex uint32, pAce **ACCESS_ALLOWED_ACE) (err error) = advapi32.GetAce
+
+// Control returns the security descriptor control bits.
+func (sd *SECURITY_DESCRIPTOR) Control() (control SECURITY_DESCRIPTOR_CONTROL, revision uint32, err error) {
+	err = getSecurityDescriptorControl(sd, &control, &revision)
+	return
+}
+
+// SetControl sets the security descriptor control bits.
+func (sd *SECURITY_DESCRIPTOR) SetControl(controlBitsOfInterest SECURITY_DESCRIPTOR_CONTROL, controlBitsToSet SECURITY_DESCRIPTOR_CONTROL) error {
+	return setSecurityDescriptorControl(sd, controlBitsOfInterest, controlBitsToSet)
+}
+
+// RMControl returns the security descriptor resource manager control bits.
+func (sd *SECURITY_DESCRIPTOR) RMControl() (control uint8, err error) {
+	err = getSecurityDescriptorRMControl(sd, &control)
+	return
+}
+
+// SetRMControl sets the security descriptor resource manager control bits.
+func (sd *SECURITY_DESCRIPTOR) SetRMControl(rmControl uint8) {
+	setSecurityDescriptorRMControl(sd, &rmControl)
+}
+
+// DACL returns the security descriptor DACL and whether it was defaulted. The dacl return value may be nil
+// if a DACL exists but is an "empty DACL", meaning fully permissive. If the DACL does not exist, err returns
+// ERROR_OBJECT_NOT_FOUND.
+func (sd *SECURITY_DESCRIPTOR) DACL() (dacl *ACL, defaulted bool, err error) {
+	var present bool
+	err = getSecurityDescriptorDacl(sd, &present, &dacl, &defaulted)
+	if !present {
+		err = ERROR_OBJECT_NOT_FOUND
+	}
+	return
+}
+
+// SetDACL sets the absolute security descriptor DACL.
+func (absoluteSD *SECURITY_DESCRIPTOR) SetDACL(dacl *ACL, present, defaulted bool) error {
+	return setSecurityDescriptorDacl(absoluteSD, present, dacl, defaulted)
+}
+
+// SACL returns the security descriptor SACL and whether it was defaulted. The sacl return value may be nil
+// if a SACL exists but is an "empty SACL", meaning fully permissive. If the SACL does not exist, err returns
+// ERROR_OBJECT_NOT_FOUND.
+func (sd *SECURITY_DESCRIPTOR) SACL() (sacl *ACL, defaulted bool, err error) {
+	var present bool
+	err = getSecurityDescriptorSacl(sd, &present, &sacl, &defaulted)
+	if !present {
+		err = ERROR_OBJECT_NOT_FOUND
+	}
+	return
+}
+
+// SetSACL sets the absolute security descriptor SACL.
+func (absoluteSD *SECURITY_DESCRIPTOR) SetSACL(sacl *ACL, present, defaulted bool) error {
+	return setSecurityDescriptorSacl(absoluteSD, present, sacl, defaulted)
+}
+
+// Owner returns the security descriptor owner and whether it was defaulted.
+func (sd *SECURITY_DESCRIPTOR) Owner() (owner *SID, defaulted bool, err error) {
+	err = getSecurityDescriptorOwner(sd, &owner, &defaulted)
+	return
+}
+
+// SetOwner sets the absolute security descriptor owner.
+func (absoluteSD *SECURITY_DESCRIPTOR) SetOwner(owner *SID, defaulted bool) error {
+	return setSecurityDescriptorOwner(absoluteSD, owner, defaulted)
+}
+
+// Group returns the security descriptor group and whether it was defaulted.
+func (sd *SECURITY_DESCRIPTOR) Group() (group *SID, defaulted bool, err error) {
+	err = getSecurityDescriptorGroup(sd, &group, &defaulted)
+	return
+}
+
+// SetGroup sets the absolute security descriptor owner.
+func (absoluteSD *
+@@END
 @@PORTABLE {"path":"vendor/golang.org/x/sys/windows/security_windows.go","mode":420,"size":57283,"sha256":"a81ceadb4023d6712587d1d9d0b5a51948dfbfb8a5786811d3020fe55182b6c6","index":1,"count":2,"encoding":"utf-8","payloadBytes":9283}
 SECURITY_DESCRIPTOR) SetGroup(group *SID, defaulted bool) error {
 	return setSecurityDescriptorGroup(absoluteSD, group, defaulted)

@@ -1,3 +1,1897 @@
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/google/uuid/uuid.go","mode":420,"size":9633,"sha256":"0edec8e34c6b6fe0db31b71a29069a09ed832e3fd04ee0175916b58f2b60e5c1","index":0,"count":1,"encoding":"utf-8","payloadBytes":9633}
+// Copyright 2018 Google Inc.  All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package uuid
+
+import (
+	"bytes"
+	"crypto/rand"
+	"encoding/hex"
+	"errors"
+	"fmt"
+	"io"
+	"strings"
+	"sync"
+)
+
+// A UUID is a 128 bit (16 byte) Universal Unique IDentifier as defined in RFC
+// 4122.
+type UUID [16]byte
+
+// A Version represents a UUID's version.
+type Version byte
+
+// A Variant represents a UUID's variant.
+type Variant byte
+
+// Constants returned by Variant.
+const (
+	Invalid   = Variant(iota) // Invalid UUID
+	RFC4122                   // The variant specified in RFC4122
+	Reserved                  // Reserved, NCS backward compatibility.
+	Microsoft                 // Reserved, Microsoft Corporation backward compatibility.
+	Future                    // Reserved for future definition.
+)
+
+const randPoolSize = 16 * 16
+
+var (
+	rander      = rand.Reader // random function
+	poolEnabled = false
+	poolMu      sync.Mutex
+	poolPos     = randPoolSize     // protected with poolMu
+	pool        [randPoolSize]byte // protected with poolMu
+)
+
+type invalidLengthError struct{ len int }
+
+func (err invalidLengthError) Error() string {
+	return fmt.Sprintf("invalid UUID length: %d", err.len)
+}
+
+// IsInvalidLengthError is matcher function for custom error invalidLengthError
+func IsInvalidLengthError(err error) bool {
+	_, ok := err.(invalidLengthError)
+	return ok
+}
+
+// Parse decodes s into a UUID or returns an error if it cannot be parsed.  Both
+// the standard UUID forms defined in RFC 4122
+// (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx and
+// urn:uuid:xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx) are decoded.  In addition,
+// Parse accepts non-standard strings such as the raw hex encoding
+// xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx and 38 byte "Microsoft style" encodings,
+// e.g.  {xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx}.  Only the middle 36 bytes are
+// examined in the latter case.  Parse should not be used to validate strings as
+// it parses non-standard encodings as indicated above.
+func Parse(s string) (UUID, error) {
+	var uuid UUID
+	switch len(s) {
+	// xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+	case 36:
+
+	// urn:uuid:xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+	case 36 + 9:
+		if !strings.EqualFold(s[:9], "urn:uuid:") {
+			return uuid, fmt.Errorf("invalid urn prefix: %q", s[:9])
+		}
+		s = s[9:]
+
+	// {xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx}
+	case 36 + 2:
+		s = s[1:]
+
+	// xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+	case 32:
+		var ok bool
+		for i := range uuid {
+			uuid[i], ok = xtob(s[i*2], s[i*2+1])
+			if !ok {
+				return uuid, errors.New("invalid UUID format")
+			}
+		}
+		return uuid, nil
+	default:
+		return uuid, invalidLengthError{len(s)}
+	}
+	// s is now at least 36 bytes long
+	// it must be of the form  xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+	if s[8] != '-' || s[13] != '-' || s[18] != '-' || s[23] != '-' {
+		return uuid, errors.New("invalid UUID format")
+	}
+	for i, x := range [16]int{
+		0, 2, 4, 6,
+		9, 11,
+		14, 16,
+		19, 21,
+		24, 26, 28, 30, 32, 34,
+	} {
+		v, ok := xtob(s[x], s[x+1])
+		if !ok {
+			return uuid, errors.New("invalid UUID format")
+		}
+		uuid[i] = v
+	}
+	return uuid, nil
+}
+
+// ParseBytes is like Parse, except it parses a byte slice instead of a string.
+func ParseBytes(b []byte) (UUID, error) {
+	var uuid UUID
+	switch len(b) {
+	case 36: // xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+	case 36 + 9: // urn:uuid:xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+		if !bytes.EqualFold(b[:9], []byte("urn:uuid:")) {
+			return uuid, fmt.Errorf("invalid urn prefix: %q", b[:9])
+		}
+		b = b[9:]
+	case 36 + 2: // {xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx}
+		b = b[1:]
+	case 32: // xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+		var ok bool
+		for i := 0; i < 32; i += 2 {
+			uuid[i/2], ok = xtob(b[i], b[i+1])
+			if !ok {
+				return uuid, errors.New("invalid UUID format")
+			}
+		}
+		return uuid, nil
+	default:
+		return uuid, invalidLengthError{len(b)}
+	}
+	// s is now at least 36 bytes long
+	// it must be of the form  xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+	if b[8] != '-' || b[13] != '-' || b[18] != '-' || b[23] != '-' {
+		return uuid, errors.New("invalid UUID format")
+	}
+	for i, x := range [16]int{
+		0, 2, 4, 6,
+		9, 11,
+		14, 16,
+		19, 21,
+		24, 26, 28, 30, 32, 34,
+	} {
+		v, ok := xtob(b[x], b[x+1])
+		if !ok {
+			return uuid, errors.New("invalid UUID format")
+		}
+		uuid[i] = v
+	}
+	return uuid, nil
+}
+
+// MustParse is like Parse but panics if the string cannot be parsed.
+// It simplifies safe initialization of global variables holding compiled UUIDs.
+func MustParse(s string) UUID {
+	uuid, err := Parse(s)
+	if err != nil {
+		panic(`uuid: Parse(` + s + `): ` + err.Error())
+	}
+	return uuid
+}
+
+// FromBytes creates a new UUID from a byte slice. Returns an error if the slice
+// does not have a length of 16. The bytes are copied from the slice.
+func FromBytes(b []byte) (uuid UUID, err error) {
+	err = uuid.UnmarshalBinary(b)
+	return uuid, err
+}
+
+// Must returns uuid if err is nil and panics otherwise.
+func Must(uuid UUID, err error) UUID {
+	if err != nil {
+		panic(err)
+	}
+	return uuid
+}
+
+// Validate returns an error if s is not a properly formatted UUID in one of the following formats:
+//   xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+//   urn:uuid:xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+//   xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+//   {xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx}
+// It returns an error if the format is invalid, otherwise nil.
+func Validate(s string) error {
+	switch len(s) {
+	// Standard UUID format
+	case 36:
+
+	// UUID with "urn:uuid:" prefix
+	case 36 + 9:
+		if !strings.EqualFold(s[:9], "urn:uuid:") {
+			return fmt.Errorf("invalid urn prefix: %q", s[:9])
+		}
+		s = s[9:]
+
+	// UUID enclosed in braces
+	case 36 + 2:
+		if s[0] != '{' || s[len(s)-1] != '}' {
+			return fmt.Errorf("invalid bracketed UUID format")
+		}
+		s = s[1 : len(s)-1]
+
+	// UUID without hyphens
+	case 32:
+		for i := 0; i < len(s); i += 2 {
+			_, ok := xtob(s[i], s[i+1])
+			if !ok {
+				return errors.New("invalid UUID format")
+			}
+		}
+
+	default:
+		return invalidLengthError{len(s)}
+	}
+
+	// Check for standard UUID format
+	if len(s) == 36 {
+		if s[8] != '-' || s[13] != '-' || s[18] != '-' || s[23] != '-' {
+			return errors.New("invalid UUID format")
+		}
+		for _, x := range []int{0, 2, 4, 6, 9, 11, 14, 16, 19, 21, 24, 26, 28, 30, 32, 34} {
+			if _, ok := xtob(s[x], s[x+1]); !ok {
+				return errors.New("invalid UUID format")
+			}
+		}
+	}
+
+	return nil
+}
+
+// String returns the string form of uuid, xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+// , or "" if uuid is invalid.
+func (uuid UUID) String() string {
+	var buf [36]byte
+	encodeHex(buf[:], uuid)
+	return string(buf[:])
+}
+
+// URN returns the RFC 2141 URN form of uuid,
+// urn:uuid:xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx,  or "" if uuid is invalid.
+func (uuid UUID) URN() string {
+	var buf [36 + 9]byte
+	copy(buf[:], "urn:uuid:")
+	encodeHex(buf[9:], uuid)
+	return string(buf[:])
+}
+
+func encodeHex(dst []byte, uuid UUID) {
+	hex.Encode(dst, uuid[:4])
+	dst[8] = '-'
+	hex.Encode(dst[9:13], uuid[4:6])
+	dst[13] = '-'
+	hex.Encode(dst[14:18], uuid[6:8])
+	dst[18] = '-'
+	hex.Encode(dst[19:23], uuid[8:10])
+	dst[23] = '-'
+	hex.Encode(dst[24:], uuid[10:])
+}
+
+// Variant returns the variant encoded in uuid.
+func (uuid UUID) Variant() Variant {
+	switch {
+	case (uuid[8] & 0xc0) == 0x80:
+		return RFC4122
+	case (uuid[8] & 0xe0) == 0xc0:
+		return Microsoft
+	case (uuid[8] & 0xe0) == 0xe0:
+		return Future
+	default:
+		return Reserved
+	}
+}
+
+// Version returns the version of uuid.
+func (uuid UUID) Version() Version {
+	return Version(uuid[6] >> 4)
+}
+
+func (v Version) String() string {
+	if v > 15 {
+		return fmt.Sprintf("BAD_VERSION_%d", v)
+	}
+	return fmt.Sprintf("VERSION_%d", v)
+}
+
+func (v Variant) String() string {
+	switch v {
+	case RFC4122:
+		return "RFC4122"
+	case Reserved:
+		return "Reserved"
+	case Microsoft:
+		return "Microsoft"
+	case Future:
+		return "Future"
+	case Invalid:
+		return "Invalid"
+	}
+	return fmt.Sprintf("BadVariant%d", int(v))
+}
+
+// SetRand sets the random number generator to r, which implements io.Reader.
+// If r.Read returns an error when the package requests random data then
+// a panic will be issued.
+//
+// Calling SetRand with nil sets the random number generator to the default
+// generator.
+func SetRand(r io.Reader) {
+	if r == nil {
+		rander = rand.Reader
+		return
+	}
+	rander = r
+}
+
+// EnableRandPool enables internal randomness pool used for Random
+// (Version 4) UUID generation. The pool contains random bytes read from
+// the random number generator on demand in batches. Enabling the pool
+// may improve the UUID generation throughput significantly.
+//
+// Since the pool is stored on the Go heap, this feature may be a bad fit
+// for security sensitive applications.
+//
+// Both EnableRandPool and DisableRandPool are not thread-safe and should
+// only be called when there is no possibility that New or any other
+// UUID Version 4 generation function will be called concurrently.
+func EnableRandPool() {
+	poolEnabled = true
+}
+
+// DisableRandPool disables the randomness pool if it was previously
+// enabled with EnableRandPool.
+//
+// Both EnableRandPool and DisableRandPool are not thread-safe and should
+// only be called when there is no possibility that New or any other
+// UUID Version 4 generation function will be called concurrently.
+func DisableRandPool() {
+	poolEnabled = false
+	defer poolMu.Unlock()
+	poolMu.Lock()
+	poolPos = randPoolSize
+}
+
+// UUIDs is a slice of UUID types.
+type UUIDs []UUID
+
+// Strings returns a string slice containing the string form of each UUID in uuids.
+func (uuids UUIDs) Strings() []string {
+	var uuidStrs = make([]string, len(uuids))
+	for i, uuid := range uuids {
+		uuidStrs[i] = uuid.String()
+	}
+	return uuidStrs
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/google/uuid/version1.go","mode":420,"size":1257,"sha256":"38a2c229a2aad4bb72d45529304f210b1f31e8ef60bbd2605690a10f0d8a8242","index":0,"count":1,"encoding":"utf-8","payloadBytes":1257}
+// Copyright 2016 Google Inc.  All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package uuid
+
+import (
+	"encoding/binary"
+)
+
+// NewUUID returns a Version 1 UUID based on the current NodeID and clock
+// sequence, and the current time.  If the NodeID has not been set by SetNodeID
+// or SetNodeInterface then it will be set automatically.  If the NodeID cannot
+// be set NewUUID returns nil.  If clock sequence has not been set by
+// SetClockSequence then it will be set automatically.  If GetTime fails to
+// return the current NewUUID returns nil and an error.
+//
+// In most cases, New should be used.
+func NewUUID() (UUID, error) {
+	var uuid UUID
+	now, seq, err := GetTime()
+	if err != nil {
+		return uuid, err
+	}
+
+	timeLow := uint32(now & 0xffffffff)
+	timeMid := uint16((now >> 32) & 0xffff)
+	timeHi := uint16((now >> 48) & 0x0fff)
+	timeHi |= 0x1000 // Version 1
+
+	binary.BigEndian.PutUint32(uuid[0:], timeLow)
+	binary.BigEndian.PutUint16(uuid[4:], timeMid)
+	binary.BigEndian.PutUint16(uuid[6:], timeHi)
+	binary.BigEndian.PutUint16(uuid[8:], seq)
+
+	nodeMu.Lock()
+	if nodeID == zeroID {
+		setNodeInterface("")
+	}
+	copy(uuid[10:], nodeID[:])
+	nodeMu.Unlock()
+
+	return uuid, nil
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/google/uuid/version4.go","mode":420,"size":2057,"sha256":"f252aeb4028659d83cbf7b037d4524f7c9b76cde1fdca1f6f7de310dab6f4dcd","index":0,"count":1,"encoding":"utf-8","payloadBytes":2057}
+// Copyright 2016 Google Inc.  All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package uuid
+
+import "io"
+
+// New creates a new random UUID or panics.  New is equivalent to
+// the expression
+//
+//    uuid.Must(uuid.NewRandom())
+func New() UUID {
+	return Must(NewRandom())
+}
+
+// NewString creates a new random UUID and returns it as a string or panics.
+// NewString is equivalent to the expression
+//
+//    uuid.New().String()
+func NewString() string {
+	return Must(NewRandom()).String()
+}
+
+// NewRandom returns a Random (Version 4) UUID.
+//
+// The strength of the UUIDs is based on the strength of the crypto/rand
+// package.
+//
+// Uses the randomness pool if it was enabled with EnableRandPool.
+//
+// A note about uniqueness derived from the UUID Wikipedia entry:
+//
+//  Randomly generated UUIDs have 122 random bits.  One's annual risk of being
+//  hit by a meteorite is estimated to be one chance in 17 billion, that
+//  means the probability is about 0.00000000006 (6 × 10−11),
+//  equivalent to the odds of creating a few tens of trillions of UUIDs in a
+//  year and having one duplicate.
+func NewRandom() (UUID, error) {
+	if !poolEnabled {
+		return NewRandomFromReader(rander)
+	}
+	return newRandomFromPool()
+}
+
+// NewRandomFromReader returns a UUID based on bytes read from a given io.Reader.
+func NewRandomFromReader(r io.Reader) (UUID, error) {
+	var uuid UUID
+	_, err := io.ReadFull(r, uuid[:])
+	if err != nil {
+		return Nil, err
+	}
+	uuid[6] = (uuid[6] & 0x0f) | 0x40 // Version 4
+	uuid[8] = (uuid[8] & 0x3f) | 0x80 // Variant is 10
+	return uuid, nil
+}
+
+func newRandomFromPool() (UUID, error) {
+	var uuid UUID
+	poolMu.Lock()
+	if poolPos == randPoolSize {
+		_, err := io.ReadFull(rander, pool[:])
+		if err != nil {
+			poolMu.Unlock()
+			return Nil, err
+		}
+		poolPos = 0
+	}
+	copy(uuid[:], pool[poolPos:(poolPos+16)])
+	poolPos += 16
+	poolMu.Unlock()
+
+	uuid[6] = (uuid[6] & 0x0f) | 0x40 // Version 4
+	uuid[8] = (uuid[8] & 0x3f) | 0x80 // Variant is 10
+	return uuid, nil
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/google/uuid/version6.go","mode":420,"size":2213,"sha256":"013cc9f4a9e606746d38d53f8e651b9222f5042fde567484588ec1d7a0c54905","index":0,"count":1,"encoding":"utf-8","payloadBytes":2213}
+// Copyright 2023 Google Inc.  All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package uuid
+
+import "encoding/binary"
+
+// UUID version 6 is a field-compatible version of UUIDv1, reordered for improved DB locality.
+// It is expected that UUIDv6 will primarily be used in contexts where there are existing v1 UUIDs.
+// Systems that do not involve legacy UUIDv1 SHOULD consider using UUIDv7 instead.
+//
+// see https://datatracker.ietf.org/doc/html/draft-peabody-dispatch-new-uuid-format-03#uuidv6
+//
+// NewV6 returns a Version 6 UUID based on the current NodeID and clock
+// sequence, and the current time. If the NodeID has not been set by SetNodeID
+// or SetNodeInterface then it will be set automatically. If the NodeID cannot
+// be set NewV6 set NodeID is random bits automatically . If clock sequence has not been set by
+// SetClockSequence then it will be set automatically. If GetTime fails to
+// return the current NewV6 returns Nil and an error.
+func NewV6() (UUID, error) {
+	var uuid UUID
+	now, seq, err := GetTime()
+	if err != nil {
+		return uuid, err
+	}
+
+	/*
+	    0                   1                   2                   3
+	    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+	   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+	   |                           time_high                           |
+	   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+	   |           time_mid            |      time_low_and_version     |
+	   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+	   |clk_seq_hi_res |  clk_seq_low  |         node (0-1)            |
+	   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+	   |                         node (2-5)                            |
+	   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+	*/
+
+	binary.BigEndian.PutUint64(uuid[0:], uint64(now))
+	binary.BigEndian.PutUint16(uuid[8:], seq)
+
+	uuid[6] = 0x60 | (uuid[6] & 0x0F)
+	uuid[8] = 0x80 | (uuid[8] & 0x3F)
+
+	nodeMu.Lock()
+	if nodeID == zeroID {
+		setNodeInterface("")
+	}
+	copy(uuid[10:], nodeID[:])
+	nodeMu.Unlock()
+
+	return uuid, nil
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/google/uuid/version7.go","mode":420,"size":3371,"sha256":"8002748cc22a032c3782b42f7653a947189b8566c50d246b4a3beb2e075f8d62","index":0,"count":1,"encoding":"utf-8","payloadBytes":3371}
+// Copyright 2023 Google Inc.  All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package uuid
+
+import (
+	"io"
+)
+
+// UUID version 7 features a time-ordered value field derived from the widely
+// implemented and well known Unix Epoch timestamp source,
+// the number of milliseconds seconds since midnight 1 Jan 1970 UTC, leap seconds excluded.
+// As well as improved entropy characteristics over versions 1 or 6.
+//
+// see https://datatracker.ietf.org/doc/html/draft-peabody-dispatch-new-uuid-format-03#name-uuid-version-7
+//
+// Implementations SHOULD utilize UUID version 7 over UUID version 1 and 6 if possible.
+//
+// NewV7 returns a Version 7 UUID based on the current time(Unix Epoch).
+// Uses the randomness pool if it was enabled with EnableRandPool.
+// On error, NewV7 returns Nil and an error
+func NewV7() (UUID, error) {
+	uuid, err := NewRandom()
+	if err != nil {
+		return uuid, err
+	}
+	makeV7(uuid[:])
+	return uuid, nil
+}
+
+// NewV7FromReader returns a Version 7 UUID based on the current time(Unix Epoch).
+// it use NewRandomFromReader fill random bits.
+// On error, NewV7FromReader returns Nil and an error.
+func NewV7FromReader(r io.Reader) (UUID, error) {
+	uuid, err := NewRandomFromReader(r)
+	if err != nil {
+		return uuid, err
+	}
+
+	makeV7(uuid[:])
+	return uuid, nil
+}
+
+// makeV7 fill 48 bits time (uuid[0] - uuid[5]), set version b0111 (uuid[6])
+// uuid[8] already has the right version number (Variant is 10)
+// see function NewV7 and NewV7FromReader
+func makeV7(uuid []byte) {
+	/*
+		 0                   1                   2                   3
+		 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+		+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+		|                           unix_ts_ms                          |
+		+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+		|          unix_ts_ms           |  ver  |  rand_a (12 bit seq)  |
+		+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+		|var|                        rand_b                             |
+		+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+		|                            rand_b                             |
+		+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+	*/
+	_ = uuid[15] // bounds check
+
+	t, s := getV7Time()
+
+	uuid[0] = byte(t >> 40)
+	uuid[1] = byte(t >> 32)
+	uuid[2] = byte(t >> 24)
+	uuid[3] = byte(t >> 16)
+	uuid[4] = byte(t >> 8)
+	uuid[5] = byte(t)
+
+	uuid[6] = 0x70 | (0x0F & byte(s>>8))
+	uuid[7] = byte(s)
+}
+
+// lastV7time is the last time we returned stored as:
+//
+//	52 bits of time in milliseconds since epoch
+//	12 bits of (fractional nanoseconds) >> 8
+var lastV7time int64
+
+const nanoPerMilli = 1000000
+
+// getV7Time returns the time in milliseconds and nanoseconds / 256.
+// The returned (milli << 12 + seq) is guarenteed to be greater than
+// (milli << 12 + seq) returned by any previous call to getV7Time.
+func getV7Time() (milli, seq int64) {
+	timeMu.Lock()
+	defer timeMu.Unlock()
+
+	nano := timeNow().UnixNano()
+	milli = nano / nanoPerMilli
+	// Sequence number is between 0 and 3906 (nanoPerMilli>>8)
+	seq = (nano - milli*nanoPerMilli) >> 8
+	now := milli<<12 + seq
+	if now <= lastV7time {
+		now = lastV7time + 1
+		milli = now >> 12
+		seq = now & 0xfff
+	}
+	lastV7time = now
+	return milli, seq
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/gookit/color/.gitignore","mode":420,"size":253,"sha256":"c78f32f6f6e365f8c5d7482386d4bb8238946eb9a8c3169e3363f2b8ffc61d9a","index":0,"count":1,"encoding":"utf-8","payloadBytes":253}
+*.log
+*.swp
+.idea
+*.patch
+### Go template
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, build with `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+.DS_Store
+app
+demo
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/gookit/color/.nojekyll","mode":420,"size":0,"sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855","index":0,"count":1,"encoding":"utf-8","payloadBytes":0}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/gookit/color/LICENSE","mode":420,"size":1072,"sha256":"42c8d055a76a6a91e8f7102a106cd5929592d193aab7d43cdd816a93b24fa218","index":0,"count":1,"encoding":"utf-8","payloadBytes":1072}
+The MIT License (MIT)
+
+Copyright (c) 2016 inhere
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/gookit/color/README.md","mode":420,"size":17718,"sha256":"2a503c5facdb9599e5c08bfcb3e16c69b05330cec8afd722231f0d23dcd1bf05","index":0,"count":1,"encoding":"utf-8","payloadBytes":17718}
+# CLI Color
+
+![GitHub go.mod Go version](https://img.shields.io/github/go-mod/go-version/gookit/color?style=flat-square)
+[![Actions Status](https://github.com/gookit/color/workflows/action-tests/badge.svg)](https://github.com/gookit/color/actions)
+[![Codacy Badge](https://app.codacy.com/project/badge/Grade/7fef8d74c1d64afc99ce0f2c6d3f8af1)](https://www.codacy.com/gh/gookit/color/dashboard?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=gookit/color&amp;utm_campaign=Badge_Grade)
+[![GoDoc](https://godoc.org/github.com/gookit/color?status.svg)](https://pkg.go.dev/github.com/gookit/color?tab=overview)
+[![GitHub tag (latest SemVer)](https://img.shields.io/github/tag/gookit/color)](https://github.com/gookit/color)
+[![Build Status](https://travis-ci.org/gookit/color.svg?branch=master)](https://travis-ci.org/gookit/color)
+[![Coverage Status](https://coveralls.io/repos/github/gookit/color/badge.svg?branch=master)](https://coveralls.io/github/gookit/color?branch=master)
+[![Go Report Card](https://goreportcard.com/badge/github.com/gookit/color)](https://goreportcard.com/report/github.com/gookit/color)
+
+A command-line color library with 16/256/True color support, universal API methods and Windows support.
+
+> **[中文说明](README.zh-CN.md)**
+
+Basic color preview:
+
+![basic-color](_examples/images/basic-color2.png)
+
+Now, 256 colors and RGB colors have also been supported to work in Windows CMD and PowerShell:
+
+![color-on-cmd-pwsh](_examples/images/color-on-cmd-pwsh.jpg)
+
+## Features
+
+  - Simple to use, zero dependencies
+  - Supports rich color output: 16-color (4-bit), 256-color (8-bit), true color (24-bit, RGB)
+    - 16-color output is the most commonly used and most widely supported, working on any Windows version
+    - Since `v1.2.4` **the 256-color (8-bit), true color (24-bit) support windows CMD and PowerShell**
+    - See [this gist](https://gist.github.com/XVilka/8346728) for information on true color support
+  - Support converts `HEX` `HSL` value to RGB color
+  - Generic API methods: `Print`, `Printf`, `Println`, `Sprint`, `Sprintf`
+  - Supports HTML tag-style color rendering, such as `<green>message</> <fg=red;bg=blue>text</>`.
+    - In addition to using built-in tags, it also supports custom color attributes
+    - Custom color attributes support the use of 16 color names, 256 color values, rgb color values and hex color values
+    - Support working on Windows `cmd` and `powerShell` terminal
+  - Basic colors: `Bold`, `Black`, `White`, `Gray`, `Red`, `Green`, `Yellow`, `Blue`, `Magenta`, `Cyan`
+  - Additional styles: `Info`, `Note`, `Light`, `Error`, `Danger`, `Notice`, `Success`, `Comment`, `Primary`, `Warning`, `Question`, `Secondary`
+  - Support by set `NO_COLOR` for disable color or use `FORCE_COLOR` for force open color render.
+  - Support Rgb, 256, 16 color conversion
+
+## GoDoc
+
+  - [godoc for gopkg](https://pkg.go.dev/gopkg.in/gookit/color.v1)
+  - [godoc for github](https://pkg.go.dev/github.com/gookit/color)
+
+## Install
+
+```bash
+go get github.com/gookit/color
+```
+
+## Quick start
+
+```go
+package main
+
+import (
+	"fmt"
+
+	"github.com/gookit/color"
+)
+
+func main() {
+	// quick use package func
+	color.Redp("Simple to use color")
+	color.Redln("Simple to use color")
+	color.Greenp("Simple to use color\n")
+	color.Cyanln("Simple to use color")
+	color.Yellowln("Simple to use color")
+
+	// quick use like fmt.Print*
+	color.Red.Println("Simple to use color")
+	color.Green.Print("Simple to use color\n")
+	color.Cyan.Printf("Simple to use %s\n", "color")
+	color.Yellow.Printf("Simple to use %s\n", "color")
+
+	// use like func
+	red := color.FgRed.Render
+	green := color.FgGreen.Render
+	fmt.Printf("%s line %s library\n", red("Command"), green("color"))
+
+	// custom color
+	color.New(color.FgWhite, color.BgBlack).Println("custom color style")
+
+	// can also:
+	color.Style{color.FgCyan, color.OpBold}.Println("custom color style")
+
+	// internal theme/style:
+	color.Info.Tips("message")
+	color.Info.Prompt("message")
+	color.Info.Println("message")
+	color.Warn.Println("message")
+	color.Error.Println("message")
+
+	// use style tag
+	color.Print("<suc>he</><comment>llo</>, <cyan>wel</><red>come</>\n")
+	// Custom label attr: Supports the use of 16 color names, 256 color values, rgb color values and hex color values
+	color.Println("<fg=11aa23>he</><bg=120,35,156>llo</>, <fg=167;bg=232>wel</><fg=red>come</>")
+
+	// apply a style tag
+	color.Tag("info").Println("info style text")
+
+	// prompt message
+	color.Info.Prompt("prompt style message")
+	color.Warn.Prompt("prompt style message")
+
+	// tips message
+	color.Info.Tips("tips style message")
+	color.Warn.Tips("tips style message")
+}
+```
+
+Run demo: `go run ./_examples/demo.go`
+
+![colored-out](_examples/images/color-demo.jpg)
+
+## Basic/16 color
+
+Supported on any Windows version. Provide generic API methods: `Print`, `Printf`, `Println`, `Sprint`, `Sprintf`
+
+```go
+color.Bold.Println("bold message")
+color.Cyan.Println("yellow message")
+color.Yellow.Println("yellow message")
+color.Magenta.Println("yellow message")
+
+// Only use foreground color
+color.FgCyan.Printf("Simple to use %s\n", "color")
+// Only use background color
+color.BgRed.Printf("Simple to use %s\n", "color")
+```
+
+Run demo: `go run ./_examples/color_16.go`
+
+![basic-color](_examples/images/basic-color.png)
+
+### Custom build color
+
+```go
+// Full custom: foreground, background, option
+myStyle := color.New(color.FgWhite, color.BgBlack, color.OpBold)
+myStyle.Println("custom color style")
+
+// can also:
+color.Style{color.FgCyan, color.OpBold}.Println("custom color style")
+```
+
+custom set console settings:
+
+```go
+// set console color
+color.Set(color.FgCyan)
+
+// print message
+fmt.Print("message")
+
+// reset console settings
+color.Reset()
+```
+
+### Additional styles
+
+provide generic API methods: `Print`, `Printf`, `Println`, `Sprint`, `Sprintf`
+
+print message use defined style:
+
+```go
+color.Info.Println("Info message")
+color.Notice.Println("Notice message")
+color.Error.Println("Error message")
+// ...
+```
+
+Run demo: `go run ./_examples/theme_basic.go`
+
+![theme-basic](_examples/images/theme-basic.png)
+
+**Tips style**
+
+```go
+color.Info.Tips("Info tips message")
+color.Notice.Tips("Notice tips message")
+color.Error.Tips("Error tips message")
+color.Secondary.Tips("Secondary tips message")
+```
+
+Run demo: `go run ./_examples/theme_tips.go`
+
+![theme-tips](_examples/images/theme-tips.png)
+
+**Prompt Style**
+
+```go
+color.Info.Prompt("Info prompt message")
+color.Notice.Prompt("Notice prompt message")
+color.Error.Prompt("Error prompt message")
+// ...
+```
+
+Run demo: `go run ./_examples/theme_prompt.go`
+
+![theme-prompt](_examples/images/theme-prompt.png)
+
+**Block Style**
+
+```go
+color.Danger.Block("Danger block message")
+color.Warn.Block("Warn block message")
+// ...
+```
+
+Run demo: `go run ./_examples/theme_block.go`
+
+![theme-block](_examples/images/theme-block.png)
+
+## 256-color usage
+
+> 256 colors support Windows CMD, PowerShell environment after `v1.2.4`
+
+### Set the foreground or background color
+
+- `color.C256(val uint8, isBg ...bool) Color256`
+
+```go
+c := color.C256(132) // fg color
+c.Println("message")
+c.Printf("format %s", "message")
+
+c := color.C256(132, true) // bg color
+c.Println("message")
+c.Printf("format %s", "message")
+```
+
+### 256-color style
+
+Can be used to set foreground and background colors at the same time.
+
+- `S256(fgAndBg ...uint8) *Style256`
+
+```go
+s := color.S256(32, 203)
+s.Println("message")
+s.Printf("format %s", "message")
+```
+
+with options:
+
+```go
+s := color.S256(32, 203)
+s.SetOpts(color.Opts{color.OpBold})
+
+s.Println("style with options")
+s.Printf("style with %s\n", "options")
+```
+
+Run demo: `go run ./_examples/color_256.go`
+
+![color-tags](_examples/images/color-256.png)
+
+## RGB/True color
+
+> RGB colors support Windows `CMD`, `PowerShell` environment after `v1.2.4`
+
+**Preview:**
+
+> Run demo: `Run demo: go run ./_examples/color_rgb.go`
+
+![color-rgb](_examples/images/color-rgb.png)
+
+example:
+
+```go
+color.RGB(30, 144, 255).Println("message. use RGB number")
+
+color.HEX("#1976D2").Println("blue-darken")
+color.HEX("#D50000", true).Println("red-accent. use HEX style")
+
+color.RGBStyleFromString("213,0,0").Println("red-accent. use RGB number")
+color.HEXStyle("eee", "D50000").Println("deep-purple color")
+```
+
+### Set the foreground or background color
+
+- `color.RGB(r, g, b uint8, isBg ...bool) RGBColor`
+
+```go
+c := color.RGB(30,144,255) // fg color
+c.Println("message")
+c.Printf("format %s", "message")
+
+c := color.RGB(30,144,255, true) // bg color
+c.Println("message")
+c.Printf("format %s", "message")
+```
+
+Create a style from an hexadecimal color string:
+
+- `color.HEX(hex string, isBg ...bool) RGBColor`
+
+```go
+c := color.HEX("ccc") // can also: "cccccc" "#cccccc"
+c.Println("message")
+c.Printf("format %s", "message")
+
+c = color.HEX("aabbcc", true) // as bg color
+c.Println("message")
+c.Printf("format %s", "message")
+```
+
+### RGB color style
+
+Can be used to set the foreground and background colors at the same time.
+
+- `color.NewRGBStyle(fg RGBColor, bg ...RGBColor) *RGBStyle`
+
+```go
+s := color.NewRGBStyle(RGB(20, 144, 234), RGB(234, 78, 23))
+s.Println("message")
+s.Printf("format %s", "message")
+```
+
+Create a style from an hexadecimal color string:
+
+- `color.HEXStyle(fg string, bg ...string) *RGBStyle`
+
+```go
+s := color.HEXStyle("11aa23", "eee")
+s.Println("message")
+s.Printf("format %s", "message")
+```
+
+with options:
+
+```go
+s := color.HEXStyle("11aa23", "eee")
+s.SetOpts(color.Opts{color.OpBold})
+
+s.Println("style with options")
+s.Printf("style with %s\n", "options")
+```
+
+## HTML-like tag usage
+
+`Print,Printf,Println` functions support auto parse and render color tags.
+
+```go
+	text := `
+  <mga1>gookit/color:</>
+     A <green>command-line</> 
+     <cyan>color library</> with <fg=167;bg=232>256-color</>
+     and <fg=11aa23;op=bold>True-color</> support,
+     <fg=mga;op=i>universal API</> methods
+     and <cyan>Windows</> support.
+`
+	color.Print(text)
+```
+
+Preview, code please see [_examples/demo_tag.go](_examples/demo_tag.go):
+
+![demo_tag](_examples/images/demo_tag.png)
+
+**Tag formats:**
+
+- Use built in tags: `<TAG_NAME>CONTENT</>` e.g: `<info>message</>`
+- Custom tag attributes: `<fg=VALUE;bg=VALUE;op=VALUES>CONTENT</>` e.g: `<fg=167;bg=232>wel</>`
+
+> **Supported** on Windows `cmd.exe` `PowerShell`.
+
+Examples:
+
+```go
+// use style tag
+color.Print("<suc>he</><comment>llo</>, <cyan>wel</><red>come</>")
+color.Println("<suc>hello</>")
+color.Println("<error>hello</>")
+color.Println("<warning>hello</>")
+
+// custom color attributes
+color.Print("<fg=yellow;bg=black;op=underscore;>hello, welcome</>\n")
+
+// Custom label attr: Supports the use of 16 color names, 256 color values, rgb color values and hex color values
+color.Println("<fg=11aa23>he</><bg=120,35,156>llo</>, <fg=167;bg=232>wel</><fg=red>come</>")
+```
+ 
+### Tag attributes
+
+tag attributes format:
+
+```text
+attr format:
+ // VALUE please see var: FgColors, BgColors, AllOptions
+ "fg=VALUE;bg=VALUE;op=VALUE"
+
+16 color:
+ "fg=yellow"
+ "bg=red"
+ "op=bold,underscore" // option is allow multi value
+ "fg=white;bg=blue;op=bold"
+ "fg=white;op=bold,underscore"
+
+256 color:
+ "fg=167"
+ "fg=167;bg=23"
+ "fg=167;bg=23;op=bold"
+ 
+True color:
+ // hex
+ "fg=fc1cac"
+ "fg=fc1cac;bg=c2c3c4"
+ // r,g,b
+ "fg=23,45,214"
+ "fg=23,45,214;bg=109,99,88"
+```
+
+> tag attributes parse please see `func ParseCodeFromAttr()`
+
+### Built-in tags
+
+Built-in tags please see var `colorTags` in [color_tag.go](color_tag.go)
+
+```go
+// use style tag
+color.Print("<suc>he</><comment>llo</>, <cyan>wel</><red>come</>")
+color.Println("<suc>hello</>")
+color.Println("<error>hello</>")
+```
+
+Run demo: `go run ./_examples/color_tag.go`
+
+![color-tags](_examples/images/color-tags.png)
+
+**Use `color.Tag` build message**:
+
+```go
+// set a style tag
+color.Tag("info").Print("info style text")
+color.Tag("info").Printf("%s style text", "info")
+color.Tag("info").Println("info style text")
+```
+
+## Color convert
+
+Supports conversion between Rgb, 256, 16 colors, `Rgb <=> 256 <=> 16`
+
+```go
+basic := color.Red
+basic.Println("basic color")
+
+c256 := color.Red.C256()
+c256.Println("256 color")
+c256.C16().Println("basic color")
+
+rgb := color.Red.RGB()
+rgb.Println("rgb color")
+rgb.C256().Println("256 color")
+```
+
+### Convert utils
+
+`color` has many built-in color conversion utility functions.
+
+```go
+func Basic2hex(val uint8) string
+
+func Bg2Fg(val uint8) uint8
+func Fg2Bg(val uint8) uint8
+
+func C256ToRgb(val uint8) (rgb []uint8)
+func C256ToRgbV1(val uint8) (rgb []uint8)
+
+func Hex2basic(hex string, asBg ...bool) uint8
+func Hex2rgb(hex string) []int
+func HexToRGB(hex string) []int
+func HexToRgb(hex string) (rgb []int)
+
+func HslIntToRgb(h, s, l int) (rgb []uint8)
+func HslToRgb(h, s, l float64) (rgb []uint8)
+func HsvToRgb(h, s, v int) (rgb []uint8)
+
+func Rgb2ansi(r, g, b uint8, isBg bool) uint8
+func Rgb2basic(r, g, b uint8, isBg bool) uint8
+func Rgb2hex(rgb []int) string
+func Rgb2short(r, g, b uint8) uint8
+func RgbTo256(r, g, b uint8) uint8
+func RgbTo256Table() map[string]uint8
+func RgbToAnsi(r, g, b uint8, isBg bool) uint8
+func RgbToHex(rgb []int) string
+func RgbToHsl(r, g, b uint8) []float64
+func RgbToHslInt(r, g, b uint8) []int
+```
+
+**Convert to `RGBColor`**:
+
+- `func RGBFromSlice(rgb []uint8, isBg ...bool) RGBColor`
+- `func RGBFromString(rgb string, isBg ...bool) RGBColor`
+- `func HEX(hex string, isBg ...bool) RGBColor`
+- `func HSL(h, s, l float64, isBg ...bool) RGBColor`
+- `func HSLInt(h, s, l int, isBg ...bool) RGBColor`
+
+## Util functions
+
+There are some useful functions reference
+
+- `Disable()` disable color render
+- `SetOutput(io.Writer)` custom set the colored text output writer
+- `ForceOpenColor()` force open color render
+- `Colors2code(colors ...Color) string` Convert colors to code. return like "32;45;3"
+- `ClearCode(str string) string` Use for clear color codes
+- `ClearTag(s string) string` clear all color html-tag for a string
+- `IsConsole(w io.Writer)` Determine whether w is one of stderr, stdout, stdin
+
+> More useful func please see https://pkg.go.dev/github.com/gookit/color
+
+### Detect color level
+
+`color` automatically checks the color levels supported by the current environment.
+
+```go
+// Level is the color level supported by a terminal.
+type Level = terminfo.ColorLevel
+
+// terminal color available level alias of the terminfo.ColorLevel*
+const (
+	LevelNo  = terminfo.ColorLevelNone     // not support color.
+	Level16  = terminfo.ColorLevelBasic    // basic - 3/4 bit color supported
+	Level256 = terminfo.ColorLevelHundreds // hundreds - 8-bit color supported
+	LevelRgb = terminfo.ColorLevelMillions // millions - (24 bit)true color supported
+)
+```
+
+- `func SupportColor() bool` Whether the current environment supports color output
+- `func Support256Color() bool` Whether the current environment supports 256-color output
+- `func SupportTrueColor() bool` Whether the current environment supports (RGB)True-color output
+- `func TermColorLevel() Level` Get the currently supported color level
+
+
+## Projects using color
+
+Check out these projects, which use https://github.com/gookit/color :
+
+- https://github.com/Delta456/box-cli-maker Make Highly Customized Boxes for your CLI
+- https://github.com/flipped-aurora/gin-vue-admin 基于gin+vue搭建的（中）后台系统框架
+- https://github.com/JanDeDobbeleer/oh-my-posh A prompt theme engine for any shell.
+- https://github.com/jesseduffield/lazygit Simple terminal UI for git commands
+- https://github.com/olivia-ai/olivia 💁‍♀️Your new best friend powered by an artificial neural network  
+- https://github.com/pterm/pterm PTerm is a modern Go module to beautify console output. Featuring charts, progressbars, tables, trees, etc.
+- https://github.com/securego/gosec Golang security checker
+- https://github.com/TNK-Studio/lazykube ⎈ The lazier way to manage kubernetes.
+- [+ See More](https://pkg.go.dev/github.com/gookit/color?tab=importedby)
+
+## Gookit packages
+
+  - [gookit/ini](https://github.com/gookit/ini) Go config management, use INI files
+  - [gookit/rux](https://github.com/gookit/rux) Simple and fast request router for golang HTTP 
+  - [gookit/gcli](https://github.com/gookit/gcli) build CLI application, tool library, running CLI commands
+  - [gookit/slog](https://github.com/gookit/slog) Concise and extensible go log library
+  - [gookit/event](https://github.com/gookit/event) Lightweight event manager and dispatcher implements by Go
+  - [gookit/cache](https://github.com/gookit/cache) Generic cache use and cache manager for golang. support File, Memory, Redis, Memcached.
+  - [gookit/config](https://github.com/gookit/config) Go config management. support JSON, YAML, TOML, INI, HCL, ENV and Flags
+  - [gookit/color](https://github.com/gookit/color) A command-line color library with true color support, universal API methods and Windows support
+  - [gookit/filter](https://github.com/gookit/filter) Provide filtering, sanitizing, and conversion of golang data
+  - [gookit/validate](https://github.com/gookit/validate) Use for data validation and filtering. support Map, Struct, Form data
+  - [gookit/goutil](https://github.com/gookit/goutil) Some utils for the Go: string, array/slice, map, format, cli, env, filesystem, test and more
+  - More, please see https://github.com/gookit
+
+## See also
+
+  - [inhere/console](https://github.com/inhere/php-console)
+  - [xo/terminfo](https://github.com/xo/terminfo)
+  - [beego/bee](https://github.com/beego/bee)
+  - [issue9/term](https://github.com/issue9/term)
+  - [muesli/termenv](https://github.com/muesli/termenv)
+  - [ANSI escape code](https://en.wikipedia.org/wiki/ANSI_escape_code)
+  - [Standard ANSI color map](https://conemu.github.io/en/AnsiEscapeCodes.html#Standard_ANSI_color_map)
+  - [Terminal Colors](https://gist.github.com/XVilka/8346728)
+
+## License
+
+[MIT](/LICENSE)
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/gookit/color/README.zh-CN.md","mode":420,"size":18437,"sha256":"ca52baafa75fabef09af7d1978cfba7373f8856c2d33a03a860889f7d4b4105c","index":0,"count":1,"encoding":"utf-8","payloadBytes":18437}
+# CLI Color
+
+![GitHub go.mod Go version](https://img.shields.io/github/go-mod/go-version/gookit/color?style=flat-square)
+[![Actions Status](https://github.com/gookit/color/workflows/action-tests/badge.svg)](https://github.com/gookit/color/actions)
+[![Codacy Badge](https://app.codacy.com/project/badge/Grade/7fef8d74c1d64afc99ce0f2c6d3f8af1)](https://www.codacy.com/gh/gookit/color/dashboard?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=gookit/color&amp;utm_campaign=Badge_Grade)
+[![GoDoc](https://godoc.org/github.com/gookit/color?status.svg)](https://pkg.go.dev/github.com/gookit/color?tab=overview)
+[![GitHub tag (latest SemVer)](https://img.shields.io/github/tag/gookit/color)](https://github.com/gookit/color)
+[![Build Status](https://travis-ci.org/gookit/color.svg?branch=master)](https://travis-ci.org/gookit/color)
+[![Coverage Status](https://coveralls.io/repos/github/gookit/color/badge.svg?branch=master)](https://coveralls.io/github/gookit/color?branch=master)
+[![Go Report Card](https://goreportcard.com/badge/github.com/gookit/color)](https://goreportcard.com/report/github.com/gookit/color)
+
+Golang下的命令行色彩使用库, 拥有丰富的色彩(16/256/True)渲染输出，通用的API方法，兼容Windows系统
+
+> **[EN README](README.md)**
+
+基本颜色预览：
+
+![basic-color](_examples/images/basic-color2.png)
+
+现在，256色和RGB色彩也已经支持windows CMD和PowerShell中工作：
+
+![color-on-cmd-pwsh](_examples/images/color-on-cmd-pwsh.jpg)
+
+## 功能特色
+
+  - 使用简单方便
+  - 支持丰富的颜色输出, 16色(4bit)，256色(8bit)，RGB色彩(24bit, RGB)
+    - 16色(4bit)是最常用和支持最广的，支持Windows `cmd.exe`
+    - 自 `v1.2.4` 起 **256色(8bit)，RGB色彩(24bit)均支持Windows CMD和PowerShell终端**
+    - 请查看 [this gist](https://gist.github.com/XVilka/8346728) 了解支持RGB色彩的终端
+  - 支持转换 `HEX` `HSL` 等为RGB色彩
+  - 提供通用的API方法：`Print` `Printf` `Println` `Sprint` `Sprintf`
+  - 同时支持html标签式的颜色渲染，除了使用内置标签，同时支持自定义颜色属性
+    - 例如: `this an <green>message</> <fg=red;bg=blue>text</>` 标签内部文本将会渲染对应色彩
+    - 自定义颜色属性: 支持使用16色彩名称，256色彩值，rgb色彩值以及hex色彩值
+  - 基础色彩: `Bold` `Black` `White` `Gray` `Red` `Green` `Yellow` `Blue` `Magenta` `Cyan`
+  - 扩展风格: `Info` `Note` `Light` `Error` `Danger` `Notice` `Success` `Comment` `Primary` `Warning` `Question` `Secondary`
+  - 支持通过设置环境变量 `NO_COLOR` 来禁用色彩，或者使用 `FORCE_COLOR` 来强制使用色彩渲染.
+  - 支持 Rgb, 256, 16 色彩之间的互相转换
+  - 支持Linux、Mac，同时兼容Windows系统环境
+
+## GoDoc
+
+  - [godoc for gopkg](https://pkg.go.dev/gopkg.in/gookit/color.v1)
+  - [godoc for github](https://pkg.go.dev/github.com/gookit/color)
+
+## 安装
+
+```bash
+go get github.com/gookit/color
+```
+
+## 快速开始
+
+如下，引入当前包就可以快速的使用
+
+```go
+package main
+
+import (
+	"fmt"
+	
+	"github.com/gookit/color"
+)
+
+func main() {
+	// 简单快速的使用，跟 fmt.Print* 类似
+	color.Redp("Simple to use color")
+	color.Redln("Simple to use color")
+	color.Greenp("Simple to use color\n")
+	color.Cyanln("Simple to use color")
+	color.Yellowln("Simple to use color")
+
+	// 简单快速的使用，跟 fmt.Print* 类似
+	color.Red.Println("Simple to use color")
+	color.Green.Print("Simple to use color\n")
+	color.Cyan.Printf("Simple to use %s\n", "color")
+	color.Yellow.Printf("Simple to use %s\n", "color")
+
+	// use like func
+	red := color.FgRed.Render
+	green := color.FgGreen.Render
+	fmt.Printf("%s line %s library\n", red("Command"), green("color"))
+
+	// 自定义颜色
+	color.New(color.FgWhite, color.BgBlack).Println("custom color style")
+
+	// 也可以:
+	color.Style{color.FgCyan, color.OpBold}.Println("custom color style")
+	
+	// internal style:
+	color.Info.Println("message")
+	color.Warn.Println("message")
+	color.Error.Println("message")
+	
+	// 使用内置颜色标签
+	color.Print("<suc>he</><comment>llo</>, <cyan>wel</><red>come</>\n")
+	// 自定义标签: 支持使用16色彩名称，256色彩值，rgb色彩值以及hex色彩值
+	color.Println("<fg=11aa23>he</><bg=120,35,156>llo</>, <fg=167;bg=232>wel</><fg=red>come</>")
+
+	// apply a style tag
+	color.Tag("info").Println("info style text")
+
+	// prompt message
+	color.Info.Prompt("prompt style message")
+	color.Warn.Prompt("prompt style message")
+
+	// tips message
+	color.Info.Tips("tips style message")
+	color.Warn.Tips("tips style message")
+}
+```
+
+> 运行 demo: `go run ./_examples/demo.go`
+
+![colored-out](_examples/images/color-demo.jpg)
+
+## 基础颜色(16-color)
+
+提供通用的API方法：`Print` `Printf` `Println` `Sprint` `Sprintf`
+
+> 支持在windows `cmd.exe`  `powerShell` 等终端使用
+
+```go
+color.Bold.Println("bold message")
+color.Black.Println("bold message")
+color.White.Println("bold message")
+// ...
+
+// Only use foreground color
+color.FgCyan.Printf("Simple to use %s\n", "color")
+// Only use background color
+color.BgRed.Printf("Simple to use %s\n", "color")
+```
+
+> 运行demo: `go run ./_examples/color_16.go`
+
+![basic-color](_examples/images/basic-color.png)
+
+### 构建风格
+
+```go
+// 仅设置前景色
+color.FgCyan.Printf("Simple to use %s\n", "color")
+// 仅设置背景色
+color.BgRed.Printf("Simple to use %s\n", "color")
+
+// 完全自定义: 前景色 背景色 选项
+style := color.New(color.FgWhite, color.BgBlack, color.OpBold)
+style.Println("custom color style")
+
+// 也可以:
+color.Style{color.FgCyan, color.OpBold}.Println("custom color style")
+```
+
+直接设置控制台属性：
+
+```go
+// 设置console颜色
+color.Set(color.FgCyan)
+
+// 输出信息
+fmt.Print("message")
+
+// 重置console颜色
+color.Reset()
+```
+
+> 当然，color已经内置丰富的色彩风格支持
+
+### 扩展风格方法 
+
+提供通用的API方法：`Print` `Printf` `Println` `Sprint` `Sprintf`
+
+> 支持在windows `cmd.exe`  `powerShell` 等终端使用
+
+基础使用：
+
+```go
+// print message
+color.Info.Println("Info message")
+color.Note.Println("Note message")
+color.Notice.Println("Notice message")
+// ...
+```
+
+Run demo: `go run ./_examples/theme_basic.go`
+
+![theme-basic](_examples/images/theme-basic.png)
+
+**简约提示风格**
+
+```go
+color.Info.Tips("Info tips message")
+color.Notice.Tips("Notice tips message")
+color.Error.Tips("Error tips message")
+// ...
+```
+
+Run demo: `go run ./_examples/theme_tips.go`
+
+![theme-tips](_examples/images/theme-tips.png)
+
+**着重提示风格**
+
+```go
+color.Info.Prompt("Info prompt message")
+color.Error.Prompt("Error prompt message")
+color.Danger.Prompt("Danger prompt message")
+```
+
+Run demo: `go run ./_examples/theme_prompt.go`
+
+![theme-prompt](_examples/images/theme-prompt.png)
+
+**强调提示风格**
+
+```go
+color.Warn.Block("Warn block message")
+color.Debug.Block("Debug block message")
+color.Question.Block("Question block message")
+```
+
+Run demo: `go run ./_examples/theme_block.go`
+
+![theme-block](_examples/images/theme-block.png)
+
+## 256 色彩使用
+
+> 256色彩在 `v1.2.4` 后支持Windows CMD,PowerShell 环境
+
+### 使用前景或后景色
+ 
+- `color.C256(val uint8, isBg ...bool) Color256`
+
+```go
+c := color.C256(132) // fg color
+c.Println("message")
+c.Printf("format %s", "message")
+
+c := color.C256(132, true) // bg color
+c.Println("message")
+c.Printf("format %s", "message")
+```
+
+### 使用256 色彩风格
+
+> 可同时设置前景和背景色
+ 
+- `color.S256(fgAndBg ...uint8) *Style256`
+
+```go
+s := color.S256(32, 203)
+s.Println("message")
+s.Printf("format %s", "message")
+```
+
+可以同时添加选项设置:
+
+```go
+s := color.S256(32, 203)
+s.SetOpts(color.Opts{color.OpBold})
+
+s.Println("style with options")
+s.Printf("style with %s\n", "options")
+```
+
+> 运行 demo: `go run ./_examples/color_256.go`
+
+![color-tags](_examples/images/color-256.png)
+
+## RGB/True色彩使用
+
+> RGB色彩在 `v1.2.4` 后支持 Windows `CMD`, `PowerShell` 环境
+
+**效果预览:**
+
+> 运行 demo: `Run demo: go run ./_examples/color_rgb.go`
+
+![color-rgb](_examples/images/color-rgb.png)
+
+代码示例：
+
+```go
+color.RGB(30, 144, 255).Println("message. use RGB number")
+
+color.HEX("#1976D2").Println("blue-darken")
+color.HEX("#D50000", true).Println("red-accent. use HEX style")
+
+color.RGBStyleFromString("213,0,0").Println("red-accent. use RGB number")
+color.HEXStyle("eee", "D50000").Println("deep-purple color")
+```
+
+### 使用前景或后景色 
+
+- `color.RGB(r, g, b uint8, isBg ...bool) RGBColor`
+
+```go
+c := color.RGB(30,144,255) // fg color
+c.Println("message")
+c.Printf("format %s", "message")
+
+c := color.RGB(30,144,255, true) // bg color
+c.Println("message")
+c.Printf("format %s", "message")
+```
+
+- `color.HEX(hex string, isBg ...bool) RGBColor` 从16进制颜色创建
+
+```go
+c := color.HEX("ccc") // 也可以写为: "cccccc" "#cccccc"
+c.Println("message")
+c.Printf("format %s", "message")
+
+c = color.HEX("aabbcc", true) // as bg color
+c.Println("message")
+c.Printf("format %s", "message")
+```
+
+### 使用RGB风格
+
+> TIP: 可同时设置前景和背景色
+
+- `color.NewRGBStyle(fg RGBColor, bg ...RGBColor) *RGBStyle`
+
+```go
+s := color.NewRGBStyle(RGB(20, 144, 234), RGB(234, 78, 23))
+s.Println("message")
+s.Printf("format %s", "message")
+```
+
+- `color.HEXStyle(fg string, bg ...string) *RGBStyle` 从16进制颜色创建
+
+```go
+s := color.HEXStyle("11aa23", "eee")
+s.Println("message")
+s.Printf("format %s", "message")
+```
+
+- 可以同时添加选项设置:
+
+```go
+s := color.HEXStyle("11aa23", "eee")
+s.SetOpts(color.Opts{color.OpBold})
+
+s.Println("style with options")
+s.Printf("style with %s\n", "options")
+```
+
+## 使用颜色标签
+
+`Print,Printf,Println` 等方法支持自动解析并渲染 HTML 风格的颜色标签
+
+> **支持** 在windows `cmd.exe` `PowerShell` 使用
+
+简单示例:
+
+```go
+	text := `
+  <mga1>gookit/color:</>
+     A <green>command-line</> 
+     <cyan>color library</> with <fg=167;bg=232>256-color</>
+     and <fg=11aa23;op=bold>True-color</> support,
+     <fg=mga;op=i>universal API</> methods
+     and <cyan>Windows</> support.
+`
+	color.Print(text)
+```
+
+输出效果, 示例代码请看 [_examples/demo_tag.go](_examples/demo_tag.go):
+
+![demo_tag](_examples/images/demo_tag.png)
+
+**颜色标签格式:**
+
+- 直接使用内置风格标签: `<TAG_NAME>CONTENT</>` e.g: `<info>message</>`
+- 自定义标签属性: `<fg=VALUE;bg=VALUE;op=VALUES>CONTENT</>` e.g: `<fg=167;bg=232>wel</>`
+
+使用内置的颜色标签，可以非常方便简单的构建自己需要的任何格式
+
+> 同时支持自定义颜色属性: 支持使用16色彩名称，256色彩值，rgb色彩值以及hex色彩值
+
+```go
+// 使用内置的 color tag
+color.Print("<suc>he</><comment>llo</>, <cyan>wel</><red>come</>")
+color.Println("<suc>hello</>")
+color.Println("<error>hello</>")
+color.Println("<warning>hello</>")
+
+// 自定义颜色属性
+color.Print("<fg=yellow;bg=black;op=underscore;>hello, welcome</>\n")
+
+// 自定义颜色属性: 支持使用16色彩名称，256色彩值，rgb色彩值以及hex色彩值
+color.Println("<fg=11aa23>he</><bg=120,35,156>llo</>, <fg=167;bg=232>wel</><fg=red>come</>")
+```
+
+### 自定义标签属性
+
+标签属性格式:
+
+```text
+attr format:
+ // VALUE please see var: FgColors, BgColors, AllOptions
+ "fg=VALUE;bg=VALUE;op=VALUE"
+
+16 color:
+ "fg=yellow"
+ "bg=red"
+ "op=bold,underscore" // option is allow multi value
+ "fg=white;bg=blue;op=bold"
+ "fg=white;op=bold,underscore"
+
+256 color:
+ "fg=167"
+ "fg=167;bg=23"
+ "fg=167;bg=23;op=bold"
+ 
+True color:
+ // hex
+ "fg=fc1cac"
+ "fg=fc1cac;bg=c2c3c4"
+ // r,g,b
+ "fg=23,45,214"
+ "fg=23,45,214;bg=109,99,88"
+```
+
+> tag attributes parse please see `func ParseCodeFromAttr()`
+
+### 内置标签
+
+内置标签请参见变量 `colorTags` 定义, 源文件 [color_tag.go](color_tag.go)
+
+```go
+// use style tag
+color.Print("<suc>he</><comment>llo</>, <cyan>wel</><red>come</>")
+color.Println("<suc>hello</>")
+color.Println("<error>hello</>")
+```
+
+> 运行 demo: `go run ./_examples/color_tag.go`
+
+![color-tags](_examples/images/color-tags.png)
+
+**使用 `color.Tag` 包装标签**:
+
+可以使用通用的输出API方法,给后面输出的文本信息加上给定的颜色风格标签
+
+```go
+// set a style tag
+color.Tag("info").Print("info style text")
+color.Tag("info").Printf("%s style text", "info")
+color.Tag("info").Println("info style text")
+```
+
+## 颜色转换
+
+支持 Rgb, 256, 16 色彩之间的互相转换 `Rgb <=> 256 <=> 16`
+
+```go
+basic := color.Red
+basic.Println("basic color")
+
+c256 := color.Red.C256()
+c256.Println("256 color")
+c256.C16().Println("basic color")
+
+rgb := color.Red.RGB()
+rgb.Println("rgb color")
+rgb.C256().Println("256 color")
+```
+
+### 颜色转换方法
+
+`color` 内置了许多颜色转换工具方法
+
+```go
+func Basic2hex(val uint8) string
+
+func Bg2Fg(val uint8) uint8
+func Fg2Bg(val uint8) uint8
+
+func C256ToRgb(val uint8) (rgb []uint8)
+func C256ToRgbV1(val uint8) (rgb []uint8)
+
+func Hex2basic(hex string, asBg ...bool) uint8
+func Hex2rgb(hex string) []int
+func HexToRGB(hex string) []int
+func HexToRgb(hex string) (rgb []int)
+
+func HslIntToRgb(h, s, l int) (rgb []uint8)
+func HslToRgb(h, s, l float64) (rgb []uint8)
+func HsvToRgb(h, s, v int) (rgb []uint8)
+
+func Rgb2ansi(r, g, b uint8, isBg bool) uint8
+func Rgb2basic(r, g, b uint8, isBg bool) uint8
+func Rgb2hex(rgb []int) string
+func Rgb2short(r, g, b uint8) uint8
+func RgbTo256(r, g, b uint8) uint8
+func RgbTo256Table() map[string]uint8
+func RgbToAnsi(r, g, b uint8, isBg bool) uint8
+func RgbToHex(rgb []int) string
+func RgbToHsl(r, g, b uint8) []float64
+func RgbToHslInt(r, g, b uint8) []int
+```
+
+**转换为 `RGBColor`**:
+
+- `func RGBFromSlice(rgb []uint8, isBg ...bool) RGBColor`
+- `func RGBFromString(rgb string, isBg ...bool) RGBColor`
+- `func HEX(hex string, isBg ...bool) RGBColor`
+- `func HSL(h, s, l float64, isBg ...bool) RGBColor`
+- `func HSLInt(h, s, l int, isBg ...bool) RGBColor`
+
+## 工具方法参考
+
+一些有用的工具方法参考
+
+- `Disable()` 禁用颜色渲染输出
+- `SetOutput(io.Writer)` 自定义设置渲染后的彩色文本输出位置
+- `ForceOpenColor()` 强制开启颜色渲染
+- `ClearCode(str string) string` Use for clear color codes
+- `Colors2code(colors ...Color) string` Convert colors to code. return like "32;45;3"
+- `ClearTag(s string) string` clear all color html-tag for a string
+- `IsConsole(w io.Writer)` Determine whether w is one of stderr, stdout, stdin
+- 更多请查看文档 https://pkg.go.dev/github.com/gookit/color
+
+### 检测支持的颜色级别
+
+`color` 会自动检查当前环境支持的颜色级别
+
+```go
+// Level is the color level supported by a terminal.
+type Level = terminfo.ColorLevel
+
+// terminal color available level alias of the terminfo.ColorLevel*
+const (
+	LevelNo  = terminfo.ColorLevelNone     // not support color.
+	Level16  = terminfo.ColorLevelBasic    // basic - 3/4 bit color supported
+	Level256 = terminfo.ColorLevelHundreds // hundreds - 8-bit color supported
+	LevelRgb = terminfo.ColorLevelMillions // millions - (24 bit)true color supported
+)
+```
+
+- `func SupportColor() bool` 当前环境是否支持色彩输出
+- `func Support256Color() bool` 当前环境是否支持256色彩输出
+- `func SupportTrueColor() bool` 当前环境是否支持(RGB)True色彩输出
+- `func TermColorLevel() Level` 获取当前支持的颜色级别
+
+## 使用Color的项目
+
+看看这些使用了 https://github.com/gookit/color 的项目:
+
+- https://github.com/Delta456/box-cli-maker Make Highly Customized Boxes for your CLI
+- https://github.com/flipped-aurora/gin-vue-admin 基于gin+vue搭建的（中）后台系统框架
+- https://github.com/JanDeDobbeleer/oh-my-posh A prompt theme engine for any shell.
+- https://github.com/jesseduffield/lazygit Simple terminal UI for git commands
+- https://github.com/olivia-ai/olivia 💁‍♀️Your new best friend powered by an artificial neural network
+- https://github.com/pterm/pterm PTerm is a modern Go module to beautify console output. Featuring charts, progressbars, tables, trees, etc.
+- https://github.com/securego/gosec Golang security checker
+- https://github.com/TNK-Studio/lazykube ⎈ The lazier way to manage kubernetes.
+- [+ See More](https://pkg.go.dev/github.com/gookit/color?tab=importedby)
+
+## Gookit 工具包
+
+  - [gookit/ini](https://github.com/gookit/ini) INI配置读取管理，支持多文件加载，数据覆盖合并, 解析ENV变量, 解析变量引用
+  - [gookit/rux](https://github.com/gookit/rux) Simple and fast request router for golang HTTP 
+  - [gookit/gcli](https://github.com/gookit/gcli) Go的命令行应用，工具库，运行CLI命令，支持命令行色彩，用户交互，进度显示，数据格式化显示
+  - [gookit/slog](https://github.com/gookit/slog) 简洁易扩展的go日志库
+  - [gookit/event](https://github.com/gookit/event) Go实现的轻量级的事件管理、调度程序库, 支持设置监听器的优先级, 支持对一组事件进行监听
+  - [gookit/cache](https://github.com/gookit/cache) 通用的缓存使用包装库，通过包装各种常用的驱动，来提供统一的使用API
+  - [gookit/config](https://github.com/gookit/config) Go应用配置管理，支持多种格式（JSON, YAML, TOML, INI, HCL, ENV, Flags），多文件加载，远程文件加载，数据合并
+  - [gookit/color](https://github.com/gookit/color) CLI 控制台颜色渲染工具库, 拥有简洁的使用API，支持16色，256色，RGB色彩渲染输出
+  - [gookit/filter](https://github.com/gookit/filter) 提供对Golang数据的过滤，净化，转换
+  - [gookit/validate](https://github.com/gookit/validate) Go通用的数据验证与过滤库，使用简单，内置大部分常用验证、过滤器
+  - [gookit/goutil](https://github.com/gookit/goutil) Go 的一些工具函数，格式化，特殊处理，常用信息获取等
+  - 更多请查看 https://github.com/gookit
+
+## 参考项目
+
+  - [inhere/console](https://github.com/inhere/php-console)
+  - [muesli/termenv](https://github.com/muesli/termenv)
+  - [xo/terminfo](https://github.com/xo/terminfo)
+  - [beego/bee](https://github.com/beego/bee)
+  - [issue9/term](https://github.com/issue9/term)
+  - [ANSI转义序列](https://zh.wikipedia.org/wiki/ANSI转义序列)
+  - [Standard ANSI color map](https://conemu.github.io/en/AnsiEscapeCodes.html#Standard_ANSI_color_map)
+  - [Terminal Colors](https://gist.github.com/XVilka/8346728)
+
+## License
+
+MIT
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/gookit/color/any.go","mode":420,"size":76,"sha256":"7174d16a3dce6918bbbd7b91566cbf1e0948b4f4c01d1f40195a96f6c47e8751","index":0,"count":1,"encoding":"utf-8","payloadBytes":76}
+//go:build !go1.18
+// +build !go1.18
+
+package color
+
+type any = interface{}
+
+@@END
 @@PORTABLE {"path":"third_party/wails/vendor/github.com/gookit/color/color.go","mode":420,"size":5833,"sha256":"a9b86bd0a1a2d056fe529a08f5094a4188ac3fe93640efc9c6f8a6ab6e7119e0","index":0,"count":1,"encoding":"utf-8","payloadBytes":5833}
 /*
 Package color is command line color library.
@@ -94942,680 +96836,4 @@ E JWAE
 	{0x1F12F, 0x1F12F, prExtendedPictographic}, // E0.0   [1] (🄯)       COPYLEFT SYMBOL
 	{0x1F16C, 0x1F16F, prExtendedPictographic}, // E0.0   [4] (🅬..🅯)    RAISED MR SIGN..CIRCLED HUMAN FIGURE
 	{0x1F170, 0x1F171, prExtendedPictographic}, // E0.6   [2] (🅰️..🅱️)    A bu
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/rivo/uniseg/graphemeproperties.go","mode":420,"size":179629,"sha256":"321483625d9a4aa92e4a5730df51c59d5b49725cd20e3879749488e5628b3da8","index":3,"count":4,"encoding":"utf-8","payloadBytes":34928}
-tton (blood type)..B button (blood type)
-	{0x1F17E, 0x1F17F, prExtendedPictographic}, // E0.6   [2] (🅾️..🅿️)    O button (blood type)..P button
-	{0x1F18E, 0x1F18E, prExtendedPictographic}, // E0.6   [1] (🆎)       AB button (blood type)
-	{0x1F191, 0x1F19A, prExtendedPictographic}, // E0.6  [10] (🆑..🆚)    CL button..VS button
-	{0x1F1AD, 0x1F1E5, prExtendedPictographic}, // E0.0  [57] (🆭..🇥)    MASK WORK SYMBOL..<reserved-1F1E5>
-	{0x1F1E6, 0x1F1FF, prRegionalIndicator},    // So  [26] REGIONAL INDICATOR SYMBOL LETTER A..REGIONAL INDICATOR SYMBOL LETTER Z
-	{0x1F201, 0x1F202, prExtendedPictographic}, // E0.6   [2] (🈁..🈂️)    Japanese “here” button..Japanese “service charge” button
-	{0x1F203, 0x1F20F, prExtendedPictographic}, // E0.0  [13] (🈃..🈏)    <reserved-1F203>..<reserved-1F20F>
-	{0x1F21A, 0x1F21A, prExtendedPictographic}, // E0.6   [1] (🈚)       Japanese “free of charge” button
-	{0x1F22F, 0x1F22F, prExtendedPictographic}, // E0.6   [1] (🈯)       Japanese “reserved” button
-	{0x1F232, 0x1F23A, prExtendedPictographic}, // E0.6   [9] (🈲..🈺)    Japanese “prohibited” button..Japanese “open for business” button
-	{0x1F23C, 0x1F23F, prExtendedPictographic}, // E0.0   [4] (🈼..🈿)    <reserved-1F23C>..<reserved-1F23F>
-	{0x1F249, 0x1F24F, prExtendedPictographic}, // E0.0   [7] (🉉..🉏)    <reserved-1F249>..<reserved-1F24F>
-	{0x1F250, 0x1F251, prExtendedPictographic}, // E0.6   [2] (🉐..🉑)    Japanese “bargain” button..Japanese “acceptable” button
-	{0x1F252, 0x1F2FF, prExtendedPictographic}, // E0.0 [174] (🉒..🋿)    <reserved-1F252>..<reserved-1F2FF>
-	{0x1F300, 0x1F30C, prExtendedPictographic}, // E0.6  [13] (🌀..🌌)    cyclone..milky way
-	{0x1F30D, 0x1F30E, prExtendedPictographic}, // E0.7   [2] (🌍..🌎)    globe showing Europe-Africa..globe showing Americas
-	{0x1F30F, 0x1F30F, prExtendedPictographic}, // E0.6   [1] (🌏)       globe showing Asia-Australia
-	{0x1F310, 0x1F310, prExtendedPictographic}, // E1.0   [1] (🌐)       globe with meridians
-	{0x1F311, 0x1F311, prExtendedPictographic}, // E0.6   [1] (🌑)       new moon
-	{0x1F312, 0x1F312, prExtendedPictographic}, // E1.0   [1] (🌒)       waxing crescent moon
-	{0x1F313, 0x1F315, prExtendedPictographic}, // E0.6   [3] (🌓..🌕)    first quarter moon..full moon
-	{0x1F316, 0x1F318, prExtendedPictographic}, // E1.0   [3] (🌖..🌘)    waning gibbous moon..waning crescent moon
-	{0x1F319, 0x1F319, prExtendedPictographic}, // E0.6   [1] (🌙)       crescent moon
-	{0x1F31A, 0x1F31A, prExtendedPictographic}, // E1.0   [1] (🌚)       new moon face
-	{0x1F31B, 0x1F31B, prExtendedPictographic}, // E0.6   [1] (🌛)       first quarter moon face
-	{0x1F31C, 0x1F31C, prExtendedPictographic}, // E0.7   [1] (🌜)       last quarter moon face
-	{0x1F31D, 0x1F31E, prExtendedPictographic}, // E1.0   [2] (🌝..🌞)    full moon face..sun with face
-	{0x1F31F, 0x1F320, prExtendedPictographic}, // E0.6   [2] (🌟..🌠)    glowing star..shooting star
-	{0x1F321, 0x1F321, prExtendedPictographic}, // E0.7   [1] (🌡️)       thermometer
-	{0x1F322, 0x1F323, prExtendedPictographic}, // E0.0   [2] (🌢..🌣)    BLACK DROPLET..WHITE SUN
-	{0x1F324, 0x1F32C, prExtendedPictographic}, // E0.7   [9] (🌤️..🌬️)    sun behind small cloud..wind face
-	{0x1F32D, 0x1F32F, prExtendedPictographic}, // E1.0   [3] (🌭..🌯)    hot dog..burrito
-	{0x1F330, 0x1F331, prExtendedPictographic}, // E0.6   [2] (🌰..🌱)    chestnut..seedling
-	{0x1F332, 0x1F333, prExtendedPictographic}, // E1.0   [2] (🌲..🌳)    evergreen tree..deciduous tree
-	{0x1F334, 0x1F335, prExtendedPictographic}, // E0.6   [2] (🌴..🌵)    palm tree..cactus
-	{0x1F336, 0x1F336, prExtendedPictographic}, // E0.7   [1] (🌶️)       hot pepper
-	{0x1F337, 0x1F34A, prExtendedPictographic}, // E0.6  [20] (🌷..🍊)    tulip..tangerine
-	{0x1F34B, 0x1F34B, prExtendedPictographic}, // E1.0   [1] (🍋)       lemon
-	{0x1F34C, 0x1F34F, prExtendedPictographic}, // E0.6   [4] (🍌..🍏)    banana..green apple
-	{0x1F350, 0x1F350, prExtendedPictographic}, // E1.0   [1] (🍐)       pear
-	{0x1F351, 0x1F37B, prExtendedPictographic}, // E0.6  [43] (🍑..🍻)    peach..clinking beer mugs
-	{0x1F37C, 0x1F37C, prExtendedPictographic}, // E1.0   [1] (🍼)       baby bottle
-	{0x1F37D, 0x1F37D, prExtendedPictographic}, // E0.7   [1] (🍽️)       fork and knife with plate
-	{0x1F37E, 0x1F37F, prExtendedPictographic}, // E1.0   [2] (🍾..🍿)    bottle with popping cork..popcorn
-	{0x1F380, 0x1F393, prExtendedPictographic}, // E0.6  [20] (🎀..🎓)    ribbon..graduation cap
-	{0x1F394, 0x1F395, prExtendedPictographic}, // E0.0   [2] (🎔..🎕)    HEART WITH TIP ON THE LEFT..BOUQUET OF FLOWERS
-	{0x1F396, 0x1F397, prExtendedPictographic}, // E0.7   [2] (🎖️..🎗️)    military medal..reminder ribbon
-	{0x1F398, 0x1F398, prExtendedPictographic}, // E0.0   [1] (🎘)       MUSICAL KEYBOARD WITH JACKS
-	{0x1F399, 0x1F39B, prExtendedPictographic}, // E0.7   [3] (🎙️..🎛️)    studio microphone..control knobs
-	{0x1F39C, 0x1F39D, prExtendedPictographic}, // E0.0   [2] (🎜..🎝)    BEAMED ASCENDING MUSICAL NOTES..BEAMED DESCENDING MUSICAL NOTES
-	{0x1F39E, 0x1F39F, prExtendedPictographic}, // E0.7   [2] (🎞️..🎟️)    film frames..admission tickets
-	{0x1F3A0, 0x1F3C4, prExtendedPictographic}, // E0.6  [37] (🎠..🏄)    carousel horse..person surfing
-	{0x1F3C5, 0x1F3C5, prExtendedPictographic}, // E1.0   [1] (🏅)       sports medal
-	{0x1F3C6, 0x1F3C6, prExtendedPictographic}, // E0.6   [1] (🏆)       trophy
-	{0x1F3C7, 0x1F3C7, prExtendedPictographic}, // E1.0   [1] (🏇)       horse racing
-	{0x1F3C8, 0x1F3C8, prExtendedPictographic}, // E0.6   [1] (🏈)       american football
-	{0x1F3C9, 0x1F3C9, prExtendedPictographic}, // E1.0   [1] (🏉)       rugby football
-	{0x1F3CA, 0x1F3CA, prExtendedPictographic}, // E0.6   [1] (🏊)       person swimming
-	{0x1F3CB, 0x1F3CE, prExtendedPictographic}, // E0.7   [4] (🏋️..🏎️)    person lifting weights..racing car
-	{0x1F3CF, 0x1F3D3, prExtendedPictographic}, // E1.0   [5] (🏏..🏓)    cricket game..ping pong
-	{0x1F3D4, 0x1F3DF, prExtendedPictographic}, // E0.7  [12] (🏔️..🏟️)    snow-capped mountain..stadium
-	{0x1F3E0, 0x1F3E3, prExtendedPictographic}, // E0.6   [4] (🏠..🏣)    house..Japanese post office
-	{0x1F3E4, 0x1F3E4, prExtendedPictographic}, // E1.0   [1] (🏤)       post office
-	{0x1F3E5, 0x1F3F0, prExtendedPictographic}, // E0.6  [12] (🏥..🏰)    hospital..castle
-	{0x1F3F1, 0x1F3F2, prExtendedPictographic}, // E0.0   [2] (🏱..🏲)    WHITE PENNANT..BLACK PENNANT
-	{0x1F3F3, 0x1F3F3, prExtendedPictographic}, // E0.7   [1] (🏳️)       white flag
-	{0x1F3F4, 0x1F3F4, prExtendedPictographic}, // E1.0   [1] (🏴)       black flag
-	{0x1F3F5, 0x1F3F5, prExtendedPictographic}, // E0.7   [1] (🏵️)       rosette
-	{0x1F3F6, 0x1F3F6, prExtendedPictographic}, // E0.0   [1] (🏶)       BLACK ROSETTE
-	{0x1F3F7, 0x1F3F7, prExtendedPictographic}, // E0.7   [1] (🏷️)       label
-	{0x1F3F8, 0x1F3FA, prExtendedPictographic}, // E1.0   [3] (🏸..🏺)    badminton..amphora
-	{0x1F3FB, 0x1F3FF, prExtend},               // Sk   [5] EMOJI MODIFIER FITZPATRICK TYPE-1-2..EMOJI MODIFIER FITZPATRICK TYPE-6
-	{0x1F400, 0x1F407, prExtendedPictographic}, // E1.0   [8] (🐀..🐇)    rat..rabbit
-	{0x1F408, 0x1F408, prExtendedPictographic}, // E0.7   [1] (🐈)       cat
-	{0x1F409, 0x1F40B, prExtendedPictographic}, // E1.0   [3] (🐉..🐋)    dragon..whale
-	{0x1F40C, 0x1F40E, prExtendedPictographic}, // E0.6   [3] (🐌..🐎)    snail..horse
-	{0x1F40F, 0x1F410, prExtendedPictographic}, // E1.0   [2] (🐏..🐐)    ram..goat
-	{0x1F411, 0x1F412, prExtendedPictographic}, // E0.6   [2] (🐑..🐒)    ewe..monkey
-	{0x1F413, 0x1F413, prExtendedPictographic}, // E1.0   [1] (🐓)       rooster
-	{0x1F414, 0x1F414, prExtendedPictographic}, // E0.6   [1] (🐔)       chicken
-	{0x1F415, 0x1F415, prExtendedPictographic}, // E0.7   [1] (🐕)       dog
-	{0x1F416, 0x1F416, prExtendedPictographic}, // E1.0   [1] (🐖)       pig
-	{0x1F417, 0x1F429, prExtendedPictographic}, // E0.6  [19] (🐗..🐩)    boar..poodle
-	{0x1F42A, 0x1F42A, prExtendedPictographic}, // E1.0   [1] (🐪)       camel
-	{0x1F42B, 0x1F43E, prExtendedPictographic}, // E0.6  [20] (🐫..🐾)    two-hump camel..paw prints
-	{0x1F43F, 0x1F43F, prExtendedPictographic}, // E0.7   [1] (🐿️)       chipmunk
-	{0x1F440, 0x1F440, prExtendedPictographic}, // E0.6   [1] (👀)       eyes
-	{0x1F441, 0x1F441, prExtendedPictographic}, // E0.7   [1] (👁️)       eye
-	{0x1F442, 0x1F464, prExtendedPictographic}, // E0.6  [35] (👂..👤)    ear..bust in silhouette
-	{0x1F465, 0x1F465, prExtendedPictographic}, // E1.0   [1] (👥)       busts in silhouette
-	{0x1F466, 0x1F46B, prExtendedPictographic}, // E0.6   [6] (👦..👫)    boy..woman and man holding hands
-	{0x1F46C, 0x1F46D, prExtendedPictographic}, // E1.0   [2] (👬..👭)    men holding hands..women holding hands
-	{0x1F46E, 0x1F4AC, prExtendedPictographic}, // E0.6  [63] (👮..💬)    police officer..speech balloon
-	{0x1F4AD, 0x1F4AD, prExtendedPictographic}, // E1.0   [1] (💭)       thought balloon
-	{0x1F4AE, 0x1F4B5, prExtendedPictographic}, // E0.6   [8] (💮..💵)    white flower..dollar banknote
-	{0x1F4B6, 0x1F4B7, prExtendedPictographic}, // E1.0   [2] (💶..💷)    euro banknote..pound banknote
-	{0x1F4B8, 0x1F4EB, prExtendedPictographic}, // E0.6  [52] (💸..📫)    money with wings..closed mailbox with raised flag
-	{0x1F4EC, 0x1F4ED, prExtendedPictographic}, // E0.7   [2] (📬..📭)    open mailbox with raised flag..open mailbox with lowered flag
-	{0x1F4EE, 0x1F4EE, prExtendedPictographic}, // E0.6   [1] (📮)       postbox
-	{0x1F4EF, 0x1F4EF, prExtendedPictographic}, // E1.0   [1] (📯)       postal horn
-	{0x1F4F0, 0x1F4F4, prExtendedPictographic}, // E0.6   [5] (📰..📴)    newspaper..mobile phone off
-	{0x1F4F5, 0x1F4F5, prExtendedPictographic}, // E1.0   [1] (📵)       no mobile phones
-	{0x1F4F6, 0x1F4F7, prExtendedPictographic}, // E0.6   [2] (📶..📷)    antenna bars..camera
-	{0x1F4F8, 0x1F4F8, prExtendedPictographic}, // E1.0   [1] (📸)       camera with flash
-	{0x1F4F9, 0x1F4FC, prExtendedPictographic}, // E0.6   [4] (📹..📼)    video camera..videocassette
-	{0x1F4FD, 0x1F4FD, prExtendedPictographic}, // E0.7   [1] (📽️)       film projector
-	{0x1F4FE, 0x1F4FE, prExtendedPictographic}, // E0.0   [1] (📾)       PORTABLE STEREO
-	{0x1F4FF, 0x1F502, prExtendedPictographic}, // E1.0   [4] (📿..🔂)    prayer beads..repeat single button
-	{0x1F503, 0x1F503, prExtendedPictographic}, // E0.6   [1] (🔃)       clockwise vertical arrows
-	{0x1F504, 0x1F507, prExtendedPictographic}, // E1.0   [4] (🔄..🔇)    counterclockwise arrows button..muted speaker
-	{0x1F508, 0x1F508, prExtendedPictographic}, // E0.7   [1] (🔈)       speaker low volume
-	{0x1F509, 0x1F509, prExtendedPictographic}, // E1.0   [1] (🔉)       speaker medium volume
-	{0x1F50A, 0x1F514, prExtendedPictographic}, // E0.6  [11] (🔊..🔔)    speaker high volume..bell
-	{0x1F515, 0x1F515, prExtendedPictographic}, // E1.0   [1] (🔕)       bell with slash
-	{0x1F516, 0x1F52B, prExtendedPictographic}, // E0.6  [22] (🔖..🔫)    bookmark..water pistol
-	{0x1F52C, 0x1F52D, prExtendedPictographic}, // E1.0   [2] (🔬..🔭)    microscope..telescope
-	{0x1F52E, 0x1F53D, prExtendedPictographic}, // E0.6  [16] (🔮..🔽)    crystal ball..downwards button
-	{0x1F546, 0x1F548, prExtendedPictographic}, // E0.0   [3] (🕆..🕈)    WHITE LATIN CROSS..CELTIC CROSS
-	{0x1F549, 0x1F54A, prExtendedPictographic}, // E0.7   [2] (🕉️..🕊️)    om..dove
-	{0x1F54B, 0x1F54E, prExtendedPictographic}, // E1.0   [4] (🕋..🕎)    kaaba..menorah
-	{0x1F54F, 0x1F54F, prExtendedPictographic}, // E0.0   [1] (🕏)       BOWL OF HYGIEIA
-	{0x1F550, 0x1F55B, prExtendedPictographic}, // E0.6  [12] (🕐..🕛)    one o’clock..twelve o’clock
-	{0x1F55C, 0x1F567, prExtendedPictographic}, // E0.7  [12] (🕜..🕧)    one-thirty..twelve-thirty
-	{0x1F568, 0x1F56E, prExtendedPictographic}, // E0.0   [7] (🕨..🕮)    RIGHT SPEAKER..BOOK
-	{0x1F56F, 0x1F570, prExtendedPictographic}, // E0.7   [2] (🕯️..🕰️)    candle..mantelpiece clock
-	{0x1F571, 0x1F572, prExtendedPictographic}, // E0.0   [2] (🕱..🕲)    BLACK SKULL AND CROSSBONES..NO PIRACY
-	{0x1F573, 0x1F579, prExtendedPictographic}, // E0.7   [7] (🕳️..🕹️)    hole..joystick
-	{0x1F57A, 0x1F57A, prExtendedPictographic}, // E3.0   [1] (🕺)       man dancing
-	{0x1F57B, 0x1F586, prExtendedPictographic}, // E0.0  [12] (🕻..🖆)    LEFT HAND TELEPHONE RECEIVER..PEN OVER STAMPED ENVELOPE
-	{0x1F587, 0x1F587, prExtendedPictographic}, // E0.7   [1] (🖇️)       linked paperclips
-	{0x1F588, 0x1F589, prExtendedPictographic}, // E0.0   [2] (🖈..🖉)    BLACK PUSHPIN..LOWER LEFT PENCIL
-	{0x1F58A, 0x1F58D, prExtendedPictographic}, // E0.7   [4] (🖊️..🖍️)    pen..crayon
-	{0x1F58E, 0x1F58F, prExtendedPictographic}, // E0.0   [2] (🖎..🖏)    LEFT WRITING HAND..TURNED OK HAND SIGN
-	{0x1F590, 0x1F590, prExtendedPictographic}, // E0.7   [1] (🖐️)       hand with fingers splayed
-	{0x1F591, 0x1F594, prExtendedPictographic}, // E0.0   [4] (🖑..🖔)    REVERSED RAISED HAND WITH FINGERS SPLAYED..REVERSED VICTORY HAND
-	{0x1F595, 0x1F596, prExtendedPictographic}, // E1.0   [2] (🖕..🖖)    middle finger..vulcan salute
-	{0x1F597, 0x1F5A3, prExtendedPictographic}, // E0.0  [13] (🖗..🖣)    WHITE DOWN POINTING LEFT HAND INDEX..BLACK DOWN POINTING BACKHAND INDEX
-	{0x1F5A4, 0x1F5A4, prExtendedPictographic}, // E3.0   [1] (🖤)       black heart
-	{0x1F5A5, 0x1F5A5, prExtendedPictographic}, // E0.7   [1] (🖥️)       desktop computer
-	{0x1F5A6, 0x1F5A7, prExtendedPictographic}, // E0.0   [2] (🖦..🖧)    KEYBOARD AND MOUSE..THREE NETWORKED COMPUTERS
-	{0x1F5A8, 0x1F5A8, prExtendedPictographic}, // E0.7   [1] (🖨️)       printer
-	{0x1F5A9, 0x1F5B0, prExtendedPictographic}, // E0.0   [8] (🖩..🖰)    POCKET CALCULATOR..TWO BUTTON MOUSE
-	{0x1F5B1, 0x1F5B2, prExtendedPictographic}, // E0.7   [2] (🖱️..🖲️)    computer mouse..trackball
-	{0x1F5B3, 0x1F5BB, prExtendedPictographic}, // E0.0   [9] (🖳..🖻)    OLD PERSONAL COMPUTER..DOCUMENT WITH PICTURE
-	{0x1F5BC, 0x1F5BC, prExtendedPictographic}, // E0.7   [1] (🖼️)       framed picture
-	{0x1F5BD, 0x1F5C1, prExtendedPictographic}, // E0.0   [5] (🖽..🗁)    FRAME WITH TILES..OPEN FOLDER
-	{0x1F5C2, 0x1F5C4, prExtendedPictographic}, // E0.7   [3] (🗂️..🗄️)    card index dividers..file cabinet
-	{0x1F5C5, 0x1F5D0, prExtendedPictographic}, // E0.0  [12] (🗅..🗐)    EMPTY NOTE..PAGES
-	{0x1F5D1, 0x1F5D3, prExtendedPictographic}, // E0.7   [3] (🗑️..🗓️)    wastebasket..spiral calendar
-	{0x1F5D4, 0x1F5DB, prExtendedPictographic}, // E0.0   [8] (🗔..🗛)    DESKTOP WINDOW..DECREASE FONT SIZE SYMBOL
-	{0x1F5DC, 0x1F5DE, prExtendedPictographic}, // E0.7   [3] (🗜️..🗞️)    clamp..rolled-up newspaper
-	{0x1F5DF, 0x1F5E0, prExtendedPictographic}, // E0.0   [2] (🗟..🗠)    PAGE WITH CIRCLED TEXT..STOCK CHART
-	{0x1F5E1, 0x1F5E1, prExtendedPictographic}, // E0.7   [1] (🗡️)       dagger
-	{0x1F5E2, 0x1F5E2, prExtendedPictographic}, // E0.0   [1] (🗢)       LIPS
-	{0x1F5E3, 0x1F5E3, prExtendedPictographic}, // E0.7   [1] (🗣️)       speaking head
-	{0x1F5E4, 0x1F5E7, prExtendedPictographic}, // E0.0   [4] (🗤..🗧)    THREE RAYS ABOVE..THREE RAYS RIGHT
-	{0x1F5E8, 0x1F5E8, prExtendedPictographic}, // E2.0   [1] (🗨️)       left speech bubble
-	{0x1F5E9, 0x1F5EE, prExtendedPictographic}, // E0.0   [6] (🗩..🗮)    RIGHT SPEECH BUBBLE..LEFT ANGER BUBBLE
-	{0x1F5EF, 0x1F5EF, prExtendedPictographic}, // E0.7   [1] (🗯️)       right anger bubble
-	{0x1F5F0, 0x1F5F2, prExtendedPictographic}, // E0.0   [3] (🗰..🗲)    MOOD BUBBLE..LIGHTNING MOOD
-	{0x1F5F3, 0x1F5F3, prExtendedPictographic}, // E0.7   [1] (🗳️)       ballot box with ballot
-	{0x1F5F4, 0x1F5F9, prExtendedPictographic}, // E0.0   [6] (🗴..🗹)    BALLOT SCRIPT X..BALLOT BOX WITH BOLD CHECK
-	{0x1F5FA, 0x1F5FA, prExtendedPictographic}, // E0.7   [1] (🗺️)       world map
-	{0x1F5FB, 0x1F5FF, prExtendedPictographic}, // E0.6   [5] (🗻..🗿)    mount fuji..moai
-	{0x1F600, 0x1F600, prExtendedPictographic}, // E1.0   [1] (😀)       grinning face
-	{0x1F601, 0x1F606, prExtendedPictographic}, // E0.6   [6] (😁..😆)    beaming face with smiling eyes..grinning squinting face
-	{0x1F607, 0x1F608, prExtendedPictographic}, // E1.0   [2] (😇..😈)    smiling face with halo..smiling face with horns
-	{0x1F609, 0x1F60D, prExtendedPictographic}, // E0.6   [5] (😉..😍)    winking face..smiling face with heart-eyes
-	{0x1F60E, 0x1F60E, prExtendedPictographic}, // E1.0   [1] (😎)       smiling face with sunglasses
-	{0x1F60F, 0x1F60F, prExtendedPictographic}, // E0.6   [1] (😏)       smirking face
-	{0x1F610, 0x1F610, prExtendedPictographic}, // E0.7   [1] (😐)       neutral face
-	{0x1F611, 0x1F611, prExtendedPictographic}, // E1.0   [1] (😑)       expressionless face
-	{0x1F612, 0x1F614, prExtendedPictographic}, // E0.6   [3] (😒..😔)    unamused face..pensive face
-	{0x1F615, 0x1F615, prExtendedPictographic}, // E1.0   [1] (😕)       confused face
-	{0x1F616, 0x1F616, prExtendedPictographic}, // E0.6   [1] (😖)       confounded face
-	{0x1F617, 0x1F617, prExtendedPictographic}, // E1.0   [1] (😗)       kissing face
-	{0x1F618, 0x1F618, prExtendedPictographic}, // E0.6   [1] (😘)       face blowing a kiss
-	{0x1F619, 0x1F619, prExtendedPictographic}, // E1.0   [1] (😙)       kissing face with smiling eyes
-	{0x1F61A, 0x1F61A, prExtendedPictographic}, // E0.6   [1] (😚)       kissing face with closed eyes
-	{0x1F61B, 0x1F61B, prExtendedPictographic}, // E1.0   [1] (😛)       face with tongue
-	{0x1F61C, 0x1F61E, prExtendedPictographic}, // E0.6   [3] (😜..😞)    winking face with tongue..disappointed face
-	{0x1F61F, 0x1F61F, prExtendedPictographic}, // E1.0   [1] (😟)       worried face
-	{0x1F620, 0x1F625, prExtendedPictographic}, // E0.6   [6] (😠..😥)    angry face..sad but relieved face
-	{0x1F626, 0x1F627, prExtendedPictographic}, // E1.0   [2] (😦..😧)    frowning face with open mouth..anguished face
-	{0x1F628, 0x1F62B, prExtendedPictographic}, // E0.6   [4] (😨..😫)    fearful face..tired face
-	{0x1F62C, 0x1F62C, prExtendedPictographic}, // E1.0   [1] (😬)       grimacing face
-	{0x1F62D, 0x1F62D, prExtendedPictographic}, // E0.6   [1] (😭)       loudly crying face
-	{0x1F62E, 0x1F62F, prExtendedPictographic}, // E1.0   [2] (😮..😯)    face with open mouth..hushed face
-	{0x1F630, 0x1F633, prExtendedPictographic}, // E0.6   [4] (😰..😳)    anxious face with sweat..flushed face
-	{0x1F634, 0x1F634, prExtendedPictographic}, // E1.0   [1] (😴)       sleeping face
-	{0x1F635, 0x1F635, prExtendedPictographic}, // E0.6   [1] (😵)       face with crossed-out eyes
-	{0x1F636, 0x1F636, prExtendedPictographic}, // E1.0   [1] (😶)       face without mouth
-	{0x1F637, 0x1F640, prExtendedPictographic}, // E0.6  [10] (😷..🙀)    face with medical mask..weary cat
-	{0x1F641, 0x1F644, prExtendedPictographic}, // E1.0   [4] (🙁..🙄)    slightly frowning face..face with rolling eyes
-	{0x1F645, 0x1F64F, prExtendedPictographic}, // E0.6  [11] (🙅..🙏)    person gesturing NO..folded hands
-	{0x1F680, 0x1F680, prExtendedPictographic}, // E0.6   [1] (🚀)       rocket
-	{0x1F681, 0x1F682, prExtendedPictographic}, // E1.0   [2] (🚁..🚂)    helicopter..locomotive
-	{0x1F683, 0x1F685, prExtendedPictographic}, // E0.6   [3] (🚃..🚅)    railway car..bullet train
-	{0x1F686, 0x1F686, prExtendedPictographic}, // E1.0   [1] (🚆)       train
-	{0x1F687, 0x1F687, prExtendedPictographic}, // E0.6   [1] (🚇)       metro
-	{0x1F688, 0x1F688, prExtendedPictographic}, // E1.0   [1] (🚈)       light rail
-	{0x1F689, 0x1F689, prExtendedPictographic}, // E0.6   [1] (🚉)       station
-	{0x1F68A, 0x1F68B, prExtendedPictographic}, // E1.0   [2] (🚊..🚋)    tram..tram car
-	{0x1F68C, 0x1F68C, prExtendedPictographic}, // E0.6   [1] (🚌)       bus
-	{0x1F68D, 0x1F68D, prExtendedPictographic}, // E0.7   [1] (🚍)       oncoming bus
-	{0x1F68E, 0x1F68E, prExtendedPictographic}, // E1.0   [1] (🚎)       trolleybus
-	{0x1F68F, 0x1F68F, prExtendedPictographic}, // E0.6   [1] (🚏)       bus stop
-	{0x1F690, 0x1F690, prExtendedPictographic}, // E1.0   [1] (🚐)       minibus
-	{0x1F691, 0x1F693, prExtendedPictographic}, // E0.6   [3] (🚑..🚓)    ambulance..police car
-	{0x1F694, 0x1F694, prExtendedPictographic}, // E0.7   [1] (🚔)       oncoming police car
-	{0x1F695, 0x1F695, prExtendedPictographic}, // E0.6   [1] (🚕)       taxi
-	{0x1F696, 0x1F696, prExtendedPictographic}, // E1.0   [1] (🚖)       oncoming taxi
-	{0x1F697, 0x1F697, prExtendedPictographic}, // E0.6   [1] (🚗)       automobile
-	{0x1F698, 0x1F698, prExtendedPictographic}, // E0.7   [1] (🚘)       oncoming automobile
-	{0x1F699, 0x1F69A, prExtendedPictographic}, // E0.6   [2] (🚙..🚚)    sport utility vehicle..delivery truck
-	{0x1F69B, 0x1F6A1, prExtendedPictographic}, // E1.0   [7] (🚛..🚡)    articulated lorry..aerial tramway
-	{0x1F6A2, 0x1F6A2, prExtendedPictographic}, // E0.6   [1] (🚢)       ship
-	{0x1F6A3, 0x1F6A3, prExtendedPictographic}, // E1.0   [1] (🚣)       person rowing boat
-	{0x1F6A4, 0x1F6A5, prExtendedPictographic}, // E0.6   [2] (🚤..🚥)    speedboat..horizontal traffic light
-	{0x1F6A6, 0x1F6A6, prExtendedPictographic}, // E1.0   [1] (🚦)       vertical traffic light
-	{0x1F6A7, 0x1F6AD, prExtendedPictographic}, // E0.6   [7] (🚧..🚭)    construction..no smoking
-	{0x1F6AE, 0x1F6B1, prExtendedPictographic}, // E1.0   [4] (🚮..🚱)    litter in bin sign..non-potable water
-	{0x1F6B2, 0x1F6B2, prExtendedPictographic}, // E0.6   [1] (🚲)       bicycle
-	{0x1F6B3, 0x1F6B5, prExtendedPictographic}, // E1.0   [3] (🚳..🚵)    no bicycles..person mountain biking
-	{0x1F6B6, 0x1F6B6, prExtendedPictographic}, // E0.6   [1] (🚶)       person walking
-	{0x1F6B7, 0x1F6B8, prExtendedPictographic}, // E1.0   [2] (🚷..🚸)    no pedestrians..children crossing
-	{0x1F6B9, 0x1F6BE, prExtendedPictographic}, // E0.6   [6] (🚹..🚾)    men’s room..water closet
-	{0x1F6BF, 0x1F6BF, prExtendedPictographic}, // E1.0   [1] (🚿)       shower
-	{0x1F6C0, 0x1F6C0, prExtendedPictographic}, // E0.6   [1] (🛀)       person taking bath
-	{0x1F6C1, 0x1F6C5, prExtendedPictographic}, // E1.0   [5] (🛁..🛅)    bathtub..left luggage
-	{0x1F6C6, 0x1F6CA, prExtendedPictographic}, // E0.0   [5] (🛆..🛊)    TRIANGLE WITH ROUNDED CORNERS..GIRLS SYMBOL
-	{0x1F6CB, 0x1F6CB, prExtendedPictographic}, // E0.7   [1] (🛋️)       couch and lamp
-	{0x1F6CC, 0x1F6CC, prExtendedPictographic}, // E1.0   [1] (🛌)       person in bed
-	{0x1F6CD, 0x1F6CF, prExtendedPictographic}, // E0.7   [3] (🛍️..🛏️)    shopping bags..bed
-	{0x1F6D0, 0x1F6D0, prExtendedPictographic}, // E1.0   [1] (🛐)       place of worship
-	{0x1F6D1, 0x1F6D2, prExtendedPictographic}, // E3.0   [2] (🛑..🛒)    stop sign..shopping cart
-	{0x1F6D3, 0x1F6D4, prExtendedPictographic}, // E0.0   [2] (🛓..🛔)    STUPA..PAGODA
-	{0x1F6D5, 0x1F6D5, prExtendedPictographic}, // E12.0  [1] (🛕)       hindu temple
-	{0x1F6D6, 0x1F6D7, prExtendedPictographic}, // E13.0  [2] (🛖..🛗)    hut..elevator
-	{0x1F6D8, 0x1F6DB, prExtendedPictographic}, // E0.0   [4] (🛘..🛛)    <reserved-1F6D8>..<reserved-1F6DB>
-	{0x1F6DC, 0x1F6DC, prExtendedPictographic}, // E15.0  [1] (🛜)       wireless
-	{0x1F6DD, 0x1F6DF, prExtendedPictographic}, // E14.0  [3] (🛝..🛟)    playground slide..ring buoy
-	{0x1F6E0, 0x1F6E5, prExtendedPictographic}, // E0.7   [6] (🛠️..🛥️)    hammer and wrench..motor boat
-	{0x1F6E6, 0x1F6E8, prExtendedPictographic}, // E0.0   [3] (🛦..🛨)    UP-POINTING MILITARY AIRPLANE..UP-POINTING SMALL AIRPLANE
-	{0x1F6E9, 0x1F6E9, prExtendedPictographic}, // E0.7   [1] (🛩️)       small airplane
-	{0x1F6EA, 0x1F6EA, prExtendedPictographic}, // E0.0   [1] (🛪)       NORTHEAST-POINTING AIRPLANE
-	{0x1F6EB, 0x1F6EC, prExtendedPictographic}, // E1.0   [2] (🛫..🛬)    airplane departure..airplane arrival
-	{0x1F6ED, 0x1F6EF, prExtendedPictographic}, // E0.0   [3] (🛭..🛯)    <reserved-1F6ED>..<reserved-1F6EF>
-	{0x1F6F0, 0x1F6F0, prExtendedPictographic}, // E0.7   [1] (🛰️)       satellite
-	{0x1F6F1, 0x1F6F2, prExtendedPictographic}, // E0.0   [2] (🛱..🛲)    ONCOMING FIRE ENGINE..DIESEL LOCOMOTIVE
-	{0x1F6F3, 0x1F6F3, prExtendedPictographic}, // E0.7   [1] (🛳️)       passenger ship
-	{0x1F6F4, 0x1F6F6, prExtendedPictographic}, // E3.0   [3] (🛴..🛶)    kick scooter..canoe
-	{0x1F6F7, 0x1F6F8, prExtendedPictographic}, // E5.0   [2] (🛷..🛸)    sled..flying saucer
-	{0x1F6F9, 0x1F6F9, prExtendedPictographic}, // E11.0  [1] (🛹)       skateboard
-	{0x1F6FA, 0x1F6FA, prExtendedPictographic}, // E12.0  [1] (🛺)       auto rickshaw
-	{0x1F6FB, 0x1F6FC, prExtendedPictographic}, // E13.0  [2] (🛻..🛼)    pickup truck..roller skate
-	{0x1F6FD, 0x1F6FF, prExtendedPictographic}, // E0.0   [3] (🛽..🛿)    <reserved-1F6FD>..<reserved-1F6FF>
-	{0x1F774, 0x1F77F, prExtendedPictographic}, // E0.0  [12] (🝴..🝿)    LOT OF FORTUNE..ORCUS
-	{0x1F7D5, 0x1F7DF, prExtendedPictographic}, // E0.0  [11] (🟕..🟟)    CIRCLED TRIANGLE..<reserved-1F7DF>
-	{0x1F7E0, 0x1F7EB, prExtendedPictographic}, // E12.0 [12] (🟠..🟫)    orange circle..brown square
-	{0x1F7EC, 0x1F7EF, prExtendedPictographic}, // E0.0   [4] (🟬..🟯)    <reserved-1F7EC>..<reserved-1F7EF>
-	{0x1F7F0, 0x1F7F0, prExtendedPictographic}, // E14.0  [1] (🟰)       heavy equals sign
-	{0x1F7F1, 0x1F7FF, prExtendedPictographic}, // E0.0  [15] (🟱..🟿)    <reserved-1F7F1>..<reserved-1F7FF>
-	{0x1F80C, 0x1F80F, prExtendedPictographic}, // E0.0   [4] (🠌..🠏)    <reserved-1F80C>..<reserved-1F80F>
-	{0x1F848, 0x1F84F, prExtendedPictographic}, // E0.0   [8] (🡈..🡏)    <reserved-1F848>..<reserved-1F84F>
-	{0x1F85A, 0x1F85F, prExtendedPictographic}, // E0.0   [6] (🡚..🡟)    <reserved-1F85A>..<reserved-1F85F>
-	{0x1F888, 0x1F88F, prExtendedPictographic}, // E0.0   [8] (🢈..🢏)    <reserved-1F888>..<reserved-1F88F>
-	{0x1F8AE, 0x1F8FF, prExtendedPictographic}, // E0.0  [82] (🢮..🣿)    <reserved-1F8AE>..<reserved-1F8FF>
-	{0x1F90C, 0x1F90C, prExtendedPictographic}, // E13.0  [1] (🤌)       pinched fingers
-	{0x1F90D, 0x1F90F, prExtendedPictographic}, // E12.0  [3] (🤍..🤏)    white heart..pinching hand
-	{0x1F910, 0x1F918, prExtendedPictographic}, // E1.0   [9] (🤐..🤘)    zipper-mouth face..sign of the horns
-	{0x1F919, 0x1F91E, prExtendedPictographic}, // E3.0   [6] (🤙..🤞)    call me hand..crossed fingers
-	{0x1F91F, 0x1F91F, prExtendedPictographic}, // E5.0   [1] (🤟)       love-you gesture
-	{0x1F920, 0x1F927, prExtendedPictographic}, // E3.0   [8] (🤠..🤧)    cowboy hat face..sneezing face
-	{0x1F928, 0x1F92F, prExtendedPictographic}, // E5.0   [8] (🤨..🤯)    face with raised eyebrow..exploding head
-	{0x1F930, 0x1F930, prExtendedPictographic}, // E3.0   [1] (🤰)       pregnant woman
-	{0x1F931, 0x1F932, prExtendedPictographic}, // E5.0   [2] (🤱..🤲)    breast-feeding..palms up together
-	{0x1F933, 0x1F93A, prExtendedPictographic}, // E3.0   [8] (🤳..🤺)    selfie..person fencing
-	{0x1F93C, 0x1F93E, prExtendedPictographic}, // E3.0   [3] (🤼..🤾)    people wrestling..person playing handball
-	{0x1F93F, 0x1F93F, prExtendedPictographic}, // E12.0  [1] (🤿)       diving mask
-	{0x1F940, 0x1F945, prExtendedPictographic}, // E3.0   [6] (🥀..🥅)    wilted flower..goal net
-	{0x1F947, 0x1F94B, prExtendedPictographic}, // E3.0   [5] (🥇..🥋)    1st place medal..martial arts uniform
-	{0x1F94C, 0x1F94C, prExtendedPictographic}, // E5.0   [1] (🥌)       curling stone
-	{0x1F94D, 0x1F94F, prExtendedPictographic}, // E11.0  [3] (🥍..🥏)    lacrosse..flying disc
-	{0x1F950, 0x1F95E, prExtendedPictographic}, // E3.0  [15] (🥐..🥞)    croissant..pancakes
-	{0x1F95F, 0x1F96B, prExtendedPictographic}, // E5.0  [13] (🥟..🥫)    dumpling..canned food
-	{0x1F96C, 0x1F970, prExtendedPictographic}, // E11.0  [5] (🥬..🥰)    leafy green..smiling face with hearts
-	{0x1F971, 0x1F971, prExtendedPictographic}, // E12.0  [1] (🥱)       yawning face
-	{0x1F972, 0x1F972, prExtendedPictographic}, // E13.0  [1] (🥲)       smiling face with tear
-	{0x1F973, 0x1F976, prExtendedPictographic}, // E11.0  [4] (🥳..🥶)    partying face..cold face
-	{0x1F977, 0x1F978, prExtendedPictographic}, // E13.0  [2] (🥷..🥸)    ninja..disguised face
-	{0x1F979, 0x1F979, prExtendedPictographic}, // E14.0  [1] (🥹)       face holding back tears
-	{0x1F97A, 0x1F97A, prExtendedPictographic}, // E11.0  [1] (🥺)       pleading face
-	{0x1F97B, 0x1F97B, prExtendedPictographic}, // E12.0  [1] (🥻)       sari
-	{0x1F97C, 0x1F97F, prExtendedPictographic}, // E11.0  [4] (🥼..🥿)    lab coat..flat shoe
-	{0x1F980, 0x1F984, prExtendedPictographic}, // E1.0   [5] (🦀..🦄)    crab..unicorn
-	{0x1F985, 0x1F991, prExtendedPictographic}, // E3.0  [13] (🦅..🦑)    eagle..squid
-	{0x1F992, 0x1F997, prExtendedPictographic}, // E5.0   [6] (🦒..🦗)    giraffe..cricket
-	{0x1F998, 0x1F9A2, prExtendedPictographic}, // E11.0 [11] (🦘..🦢)    kangaroo..swan
-	{0x1F9A3, 0x1F9A4, prExtendedPictographic}, // E13.0  [2] (🦣..🦤)    mammoth..dodo
-	{0x1F9A5, 0x1F9AA, prExtendedPictographic}, // E12.0  [6] (🦥..🦪)    sloth..oyster
-	{0x1F9AB, 0x1F9AD, prExtendedPictographic}, // E13.0  [3] (🦫..🦭)    beaver..seal
-	{0x1F9AE, 0x1F9AF, prExtendedPictographic}, // E12.0  [2] (🦮..🦯)    guide dog..white cane
-	{0x1F9B0, 0x1F9B9, prExtendedPictographic}, // E11.0 [10] (🦰..🦹)    red hair..supervillain
-	{0x1F9BA, 0x1F9BF, prExtendedPictographic}, // E12.0  [6] (🦺..🦿)    safety vest..mechanical leg
-	{0x1F9C0, 0x1F9C0, prExtendedPictographic}, // E1.0   [1] (🧀)       cheese wedge
-	{0x1F9C1, 0x1F9C2, prExtendedPictographic}, // E11.0  [2] (🧁..🧂)    cupcake..salt
-	{0x1F9C3, 0x1F9CA, prExtendedPictographic}, // E12.0  [8] (🧃..🧊)    beverage box..ice
-	{0x1F9CB, 0x1F9CB, prExtendedPictographic}, // E13.0  [1] (🧋)       bubble tea
-	{0x1F9CC, 0x1F9CC, prExtendedPictographic}, // E14.0  [1] (🧌)       troll
-	{0x1F9CD, 0x1F9CF, prExtendedPictographic}, // E12.0  [3] (🧍..🧏)    person standing..deaf person
-	{0x1F9D0, 0x1F9E6, prExtendedPictographic}, // E5.0  [23] (🧐..🧦)    face with monocle..socks
-	{0x1F9E7, 0x1F9FF, prExtendedPictographic}, // E11.0 [25] (🧧..🧿)    red envelope..nazar amulet
-	{0x1FA00, 0x1FA6F, prExtendedPictographic}, // E0.0 [112] (🨀..🩯)    NEUTRAL CHESS KING..<reserved-1FA6F>
-	{0x1FA70, 0x1FA73, prExtendedPictographic}, // E12.0  [4] (🩰..🩳)    ballet shoes..shorts
-	{0x1FA74, 0x1FA74, prExtendedPictographic}, // E13.0  [1] (🩴)       thong sandal
-	{0x1FA75, 0x1FA77, prExtendedPictographic}, // E15.0  [3] (🩵..🩷)    light blue heart..pink heart
-	{0x1FA78, 0x1FA7A, prExtendedPictographic}, // E12.0  [3] (🩸..🩺)    drop of blood..stethoscope
-	{0x1FA7B, 0x1FA7C, prExtendedPictographic}, // E14.0  [2] (🩻..🩼)    x-ray..crutch
-	{0x1FA7D, 0x1FA7F, prExtendedPictographic}, // E0.0   [3] (🩽..🩿)    <reserved-1FA7D>..<reserved-1FA7F>
-	{0x1FA80, 0x1FA82, prExtendedPictographic}, // E12.0  [3] (🪀..🪂)    yo-yo..parachute
-	{0x1FA83, 0x1FA86, prExtendedPictographic}, // E13.0  [4] (🪃..🪆)    boomerang..nesting dolls
-	{0x1FA87, 0x1FA88, prExtendedPictographic}, // E15.0  [2] (🪇..🪈)    maracas..flute
-	{0x1FA89, 0x1FA8F, prExtendedPictographic}, // E0.0   [7] (🪉..🪏)    <reserved-1FA89>..<reserved-1FA8F>
-	{0x1FA90, 0x1FA95, prExtendedPictographic}, // E12.0  [6] (🪐..🪕)    ringed planet..banjo
-	{0x1FA96, 0x1FAA8, prExtendedPictographic}, // E13.0 [19] (🪖..🪨)    military helmet..rock
-	{0x1FAA9, 0x1FAAC, prExtendedPictographic}, // E14.0  [4] (🪩..🪬)    mirror ball..hamsa
-	{0x1FAAD, 0x1FAAF, prExtendedPictographic}, // E15.0  [3] (🪭..🪯)    folding hand fan..khanda
-	{0x1FAB0, 0x1FAB6, prExtendedPictographic}, // E13.0  [7] (🪰..🪶)    fly..feather
-	{0x1FAB7, 0x1FABA, prExtendedPictographic}, // E14.0  [4] (🪷..🪺)    lotus..nest with eggs
-	{0x1FABB, 0x1FABD, prExtendedPictographic}, // E15.0  [3] (🪻..🪽)    hyacinth..wing
-	{0x1FABE, 0x1FABE, prExtendedPictographic}, // E0.0   [1] (🪾)       <reserved-1FABE>
-	{0x1FABF, 0x1FABF, prExtendedPictographic}, // E15.0  [1] (🪿)       goose
-	{0x1FAC0, 0x1FAC2, prExtendedPictographic}, // E13.0  [3] (🫀..🫂)    anatomical heart..people hugging
-	{0x1FAC3, 0x1FAC5, prExtendedPictographic}, // E14.0  [3] (🫃..🫅)    pregnant man..person with crown
-	{0x1FAC6, 0x1FACD, prExtendedPictographic}, // E0.0   [8] (🫆..🫍)    <reserved-1FAC6>..<reserved-1FACD>
-	{0x1FACE, 0x1FACF, prExtendedPictographic}, // E15.0  [2] (🫎..🫏)    moose..donkey
-	{0x1FAD0, 0x1FAD6, prExtendedPictographic}, // E13.0  [7] (🫐..🫖)    blueberries..teapot
-	{0x1FAD7, 0x1FAD9, prExtendedPictographic}, // E14.0  [3] (🫗..🫙)    pouring liquid..jar
-	{0x1FADA, 0x1FADB, prExtendedPictographic}, // E15.0  [2] (🫚..🫛)    ginger root..pea pod
-	{0x1FADC, 0x1FADF, prExtendedPictographic}, // E0.0   [4] (🫜..🫟)    <reserved-1FADC>..<reserved-1FADF>
-	{0x1FAE0, 0x1FAE7, prExtendedPictographic}, // E14.0  [8] (🫠..🫧)    melting face..bubbles
-	{0x1FAE8, 0x1FAE8, prExtendedPictographic}, // E15.0  [1] (🫨)       shaking face
-	{0x1FAE9, 0x1FAEF, prExtendedPictographic}, // E0.0   [7] (🫩..🫯)    <reserved-1FAE9>..<reserved-1FAEF>
-	{0x1FAF0, 0x1FAF6, prExtendedPictographic}, // E14.0  [7] (🫰..🫶)    hand with index finger and thumb crossed..heart hands
-	{0x1FAF7, 0x1FAF8, prExtendedPictographic}, // E15.0  [2] (🫷..🫸)    leftwards pushing hand..rightwards pushing hand
-	{0x1FAF9, 0x1FAFF, prExtendedPictographic}, // E0.0   [7] (🫹..🫿)    <reserved-1FAF9>..<reserved-1FAFF>
-	{0x1FC00, 0x1FFFD, prExtendedPictographic}, // E0.0[1022] (🰀..🿽)    <reserved-1FC00>..<reserved-1FFFD>
-	{0xE0000, 0xE0000, prControl},              // Cn       <reserved-E0000>
-	{0xE0001, 0xE0001, prControl},              // Cf       LANGUAGE TAG
-	{0xE0002, 0xE001F, prControl},              // Cn  [30] <reserved-E0002>..<reserved-E001F>
-	{0xE0020, 0xE007F, prExtend},               // Cf  [96] TAG SPACE..CANCEL TAG
-	{0xE0080, 0xE00FF, prControl},              // Cn [128] <reserved-E0080>..<reserved-E00FF>
-	{0xE0100, 0xE01EF, prExtend},               // Mn [240] VARIATION SELECTOR-17..VARIATION SELECTOR-256
-	{0xE01F0, 0xE0FFF, prControl},              // Cn [3600] <reserved-E01F0>..<reserved-E0FFF>
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/rivo/uniseg/graphemerules.go","mode":420,"size":5152,"sha256":"5a4414dfc0402ab1f2b415c0faf89166270f7201a584aee503da69ce6a65d738","index":0,"count":1,"encoding":"utf-8","payloadBytes":5152}
-package uniseg
-
-// The states of the grapheme cluster parser.
-const (
-	grAny = iota
-	grCR
-	grControlLF
-	grL
-	grLVV
-	grLVTT
-	grPrepend
-	grExtendedPictographic
-	grExtendedPictographicZWJ
-	grRIOdd
-	grRIEven
-)
-
-// The grapheme cluster parser's breaking instructions.
-const (
-	grNoBoundary = iota
-	grBoundary
-)
-
-// grTransitions implements the grapheme cluster parser's state transitions.
-// Maps state and property to a new state, a breaking instruction, and rule
-// number. The breaking instruction always refers to the boundary between the
-// last and next code point. Returns negative values if no transition is found.
-//
-// This function is used as follows:
-//
-//  1. Find specific state + specific property. Stop if found.
-//  2. Find specific state + any property.
-//  3. Find any state + specific property.
-//  4. If only (2) or (3) (but not both) was found, stop.
-//  5. If both (2) and (3) were found, use state from (3) and breaking instruction
-//     from the transition with the lower rule number, prefer (3) if rule numbers
-//     are equal. Stop.
-//  6. Assume grAny and grBoundary.
-//
-// Unicode version 15.0.0.
-func grTransitions(state, prop int) (newState int, newProp int, boundary int) {
-	// It turns out that using a big switch statement is much faster than using
-	// a map.
-
-	switch uint64(state) | uint64(prop)<<32 {
-	// GB5
-	case grAny | prCR<<32:
-		return grCR, grBoundary, 50
-	case grAny | prLF<<32:
-		return grControlLF, grBoundary, 50
-	case grAny | prControl<<32:
-		return grControlLF, grBoundary, 50
-
-	// GB4
-	case grCR | prAny<<32:
-		return grAny, grBoundary, 40
-	case grControlLF | prAny<<32:
-		return grAny, grBoundary, 40
-
-	// GB3
-	case grCR | prLF<<32:
-		return grControlLF, grNoBoundary, 30
-
-	// GB6
-	case grAny | prL<<32:
-		return grL, grBoundary, 9990
-	case grL | prL<<32:
-		return grL, grNoBoundary, 60
-	case grL | prV<<32:
-		return grLVV, grNoBoundary, 60
-	case grL | prLV<<32:
-		return grLVV, grNoBoundary, 60
-	case grL | prLVT<<32:
-		return grLVTT, grNoBoundary, 60
-
-	// GB7
-	case grAny | prLV<<32:
-		return grLVV, grBoundary, 9990
-	case grAny | prV<<32:
-		return grLVV, grBoundary, 9990
-	case grLVV | prV<<32:
-		return grLVV, grNoBoundary, 70
-	case grLVV | prT<<32:
-		return grLVTT, grNoBoundary, 70
-
-	// GB8
-	case grAny | prLVT<<32:
-		return grLVTT, grBoundary, 9990
-	case grAny | prT<<32:
-		return grLVTT, grBoundary, 9990
-	case grLVTT | prT<<32:
-		return grLVTT, grNoBoundary, 80
-
-	// GB9
-	case grAny | prExtend<<32:
-		return grAny, grNoBoundary, 90
-	case grAny | prZWJ<<32:
-		return grAny, grNoBoundary, 90
-
-	// GB9a
-	case grAny | prSpacingMark<<32:
-		return grAny, grNoBoundary, 91
-
-	// GB9b
-	case grAny | prPrepend<<32:
-		return grPrepend, grBoundary, 9990
-	case grPrepend | prAny<<32:
-		return grAny, grNoBoundary, 92
-
-	// GB11
-	case grAny | prExtendedPictographic<<32:
-		return grExtendedPictographic, grBoundary, 9990
-	case grExtendedPictographic | prExtend<<32:
-		return grExtendedPictographic, grNoBoundary, 110
-	case grExtendedPictographic | prZWJ<<32:
-		return grExtendedPictographicZWJ, grNoBoundary, 110
-	case grExtendedPictographicZWJ | prExtendedPictographic<<32:
-		return grExtendedPictographic, grNoBoundary, 110
-
-	// GB12 / GB13
-	case grAny | prRegionalIndicator<<32:
-		return grRIOdd, grBoundary, 9990
-	case grRIOdd | prRegionalIndicator<<32:
-		return grRIEven, grNoBoundary, 120
-	case grRIEven | prRegionalIndicator<<32:
-		return grRIOdd, grBoundary, 120
-	default:
-		return -1, -1, -1
-	}
-}
-
-// transitionGraphemeState determines the new state of the grapheme cluster
-// parser given the current state and the next code point. It also returns the
-// code point's grapheme property (the value mapped by the [graphemeCodePoints]
-// table) and whether a cluster boundary was detected.
-func transitionGraphemeState(state int, r rune) (newState, prop int, boundary bool) {
-	// Determine the property of the next character.
-	prop = propertyGraphemes(r)
-
-	// Find the applicable transition.
-	nextState, nextProp, _ := grTransitions(state, prop)
-	if nextState >= 0 {
-		// We have a specific transition. We'll use it.
-		return nextState, prop, nextProp == grBoundary
-	}
-
-	// No specific transition found. Try the less specific ones.
-	anyPropState, anyPropProp, anyPropRule := grTransitions(state, prAny)
-	anyStateState, anyStateProp, anyStateRule := grTransitions(grAny, prop)
-	if anyPropState >= 0 && anyStateState >= 0 {
-		// Both apply. We'll use a mix (see comments for grTransitions).
-		newState = anyStateState
-		boundary = anyStateProp == grBoundary
-		if anyPropRule < anyStateRule {
-			boundary = anyPropProp == grBoundary
-		}
-		return
-	}
-
-	if anyPropState >= 0 {
-		// We only have a specific state.
-		return anyPropState, prop, anyPropProp == grBoundary
-		// This branch will probably never be reached because okAnyState will
-		// always be true given the current transition map. But we keep it here
-		// for future modifications to the transition map where this may not be
-		// true anymore.
-	}
-
-	if anyStateState >= 0 {
-		// We only have a specific property.
-		return anyStateState, prop, anyStateProp == grBoundary
-	}
-
-	// No known transition. GB999: Any ÷ Any.
-	return grAny, prop, true
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/rivo/uniseg/line.go","mode":420,"size":4923,"sha256":"c71b13b940922b440da48b4f1f48c6df1446aabaa4b96003385983bdb8a2d528","index":0,"count":1,"encoding":"utf-8","payloadBytes":4923}
-package uniseg
-
-import "unicode/utf8"
-
-// FirstLineSegment returns the prefix of the given byte slice after which a
-// decision to break the string over to the next line can or must be made,
-// according to the rules of [Unicode Standard Annex #14]. This is used to
-// implement line breaking.
-//
-// Line breaking, also known as word wrapping, is the process of breaking a
-// section of text into lines such that it will fit in the available width of a
-// page, window or other display area.
-//
-// The returned "segment" may not be broken into smaller parts, unless no other
-// breaking opportunities present themselves, in which case you may break by
-// grapheme clusters (using the [FirstGraphemeCluster] function to determine the
-// grapheme clusters).
-//
-// The "mustBreak" flag indicates whether you MUST break the line after the
-// given segment (true), for example after newline characters, or you MAY break
-// the line after the given segment (false).
-//
-// This function can be called continuously to extract all non-breaking sub-sets
-// from a byte slice, as illustrated in the example below.
-//
-// If you don't know the current state, for example when calling the function
-// for the first time, you must pass -1. For consecutive calls, pass the state
-// and rest slice returned by the previous call.
-//
-// The "rest" slice is the sub-slice of the original byte slice "b" starting
-// after the last byte of the identified line segment. If the length of the
-// "rest" slice is 0, the entire byte slice "b" has been processed. The
-// "segment" byte slice is the sub-slice of the input slice containing the
-// identified line segment.
-//
-// Given an empty byte slice "b", the function returns nil values.
-//
-// Note that in accordance with [UAX #14 LB3], the final segment will end with
-// "mustBreak" set to true. You can choose to ignore this by checking if the
-// length of the "rest" slice is 0 and calling [HasTrailingLineBreak] or
-// [HasTrailingLineBreakInString] on the last rune.
-//
-// Note also that this algorithm may break within grapheme clusters. This is
-// addressed in Section 8.2 Example 6 of UAX #14. To avoid this, you can use
-// the [Step] function instead.
-//
-// [Unicode Standard Annex #14]: https://www.unicode.org/reports/tr14/
-// [UAX #14 LB3]: https://www.unicode.org/reports/tr14/#Algorithm
-func FirstLineSegment(b []byte, state int) (segment, rest []byte, mustBreak bool, newState int) {
-	// An empty byte slice returns nothing.
-	if len(b) == 0 {
-		return
-	}
-
-	// Extract the first rune.
-	r, length := utf8.DecodeRune(b)
-	if len(b) <= length { // If we're already past the end, there is nothing else to parse.
-		return b, nil, true, lbAny // LB3.
-	}
-
-	// If we don't know the state, determine it now.
-	if state < 0 {
-		state, _ = transitionLineBreakState(state, r, b[length:], "")
-	}
-
-	// Transition until we find a boundary.
-	var boundary int
-	for {
-		r, l := utf8.DecodeRune(b[length:])
-		state, boundary = transitionLineBreakState(state, r, b[length+l:], "")
-
-		if boundary != LineDontBreak {
-			return b[:length], b[length:], boundary == LineMustBreak, state
-		}
-
-		length += l
-		if len(b) <= length {
-			return b, nil, true, lbAny // LB3
-		}
-	}
-}
-
-// FirstLineSegmentInString is like [FirstLineSegment] but its input and outputs
-// are strings.
-func FirstLineSegmentInString(str string, state int) (segment, rest string, mustBreak bool, newState int) {
-	// An empty byte slice returns nothing.
-	if len(str) == 0 {
-		return
-	}
-
-	// Extract the first rune.
-	r, length := utf8.DecodeRuneInString(str)
-	if len(str) <= length { // If we're already past the end, there is nothing else to parse.
-		return str, "", true, lbAny // LB3.
-	}
-
-	// If we don't know the state, determine it now.
-	if state < 0 {
-		state, _ = transitionLineBreakState(state, r, nil, str[length:])
-	}
-
-	// Transition until we find a boundary.
-	var boundary int
-	for {
-		r, l := utf8.DecodeRuneInString(str[length:])
-		state, boundary = transitionLineBreakState(state, r, nil, str[length+l:])
-
-		if boundary != LineDontBreak {
-			return str[:length], str[length:], boundary == LineMustBreak, state
-		}
-
-		length += l
-		if len(str) <= length {
-			return str, "", true, lbAny // LB3.
-		}
-	}
-}
-
-// HasTrailingLineBreak returns true if the last rune in the given byte slice is
-// one of the hard line break code points defined in LB4 and LB5 of [UAX #14].
-//
-// [UAX #14]: https://www.unicode.org/reports/tr14/#Algorithm
-func HasTrailingLineBreak(b []byte) bool {
-	r, _ := utf8.DecodeLastRune(b)
-	property, _ := propertyLineBreak(r)
-	return property == prBK || property == prCR || property == prLF || property == prNL
-}
-
-// HasTrailingLineBreakInString is like [HasTrailingLineBreak] but for a string.
-func HasTrailingLineBreakInString(str string) bool {
-	r, _ := utf8.DecodeLastRuneInString(str)
-	property, _ := propertyLineBreak(r)
-	return property == prBK || property == prCR || property == prLF || property == prNL
-}
-
 @@END

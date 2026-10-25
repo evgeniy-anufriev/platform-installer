@@ -1,3 +1,421 @@
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/yuin/goldmark/util/html5entities.go","mode":420,"size":250122,"sha256":"4dee972d6cd584fd621b51779583d2da1bcd615d614b6d533e386cf0517859db","index":0,"count":6,"encoding":"utf-8","payloadBytes":48000}
+//nolint:golint,lll,misspell
+package util
+
+// An HTML5Entity struct represents HTML5 entitites.
+type HTML5Entity struct {
+	Name       string
+	CodePoints []int
+	Characters []byte
+}
+
+// LookUpHTML5EntityByName returns (an HTML5Entity, true) if an entity named
+// given name is found, otherwise (nil, false).
+func LookUpHTML5EntityByName(name string) (*HTML5Entity, bool) {
+	v, ok := html5entities[name]
+	return v, ok
+}
+
+var html5entities = map[string]*HTML5Entity{
+	"AElig":                           {Name: "AElig", CodePoints: []int{198}, Characters: []byte{0xc3, 0x86}},
+	"AMP":                             {Name: "AMP", CodePoints: []int{38}, Characters: []byte{0x26}},
+	"Aacute":                          {Name: "Aacute", CodePoints: []int{193}, Characters: []byte{0xc3, 0x81}},
+	"Acirc":                           {Name: "Acirc", CodePoints: []int{194}, Characters: []byte{0xc3, 0x82}},
+	"Acy":                             {Name: "Acy", CodePoints: []int{1040}, Characters: []byte{0xd0, 0x90}},
+	"Afr":                             {Name: "Afr", CodePoints: []int{120068}, Characters: []byte{0xf0, 0x9d, 0x94, 0x84}},
+	"Agrave":                          {Name: "Agrave", CodePoints: []int{192}, Characters: []byte{0xc3, 0x80}},
+	"Alpha":                           {Name: "Alpha", CodePoints: []int{913}, Characters: []byte{0xce, 0x91}},
+	"Amacr":                           {Name: "Amacr", CodePoints: []int{256}, Characters: []byte{0xc4, 0x80}},
+	"And":                             {Name: "And", CodePoints: []int{10835}, Characters: []byte{0xe2, 0xa9, 0x93}},
+	"Aogon":                           {Name: "Aogon", CodePoints: []int{260}, Characters: []byte{0xc4, 0x84}},
+	"Aopf":                            {Name: "Aopf", CodePoints: []int{120120}, Characters: []byte{0xf0, 0x9d, 0x94, 0xb8}},
+	"ApplyFunction":                   {Name: "ApplyFunction", CodePoints: []int{8289}, Characters: []byte{0xe2, 0x81, 0xa1}},
+	"Aring":                           {Name: "Aring", CodePoints: []int{197}, Characters: []byte{0xc3, 0x85}},
+	"Ascr":                            {Name: "Ascr", CodePoints: []int{119964}, Characters: []byte{0xf0, 0x9d, 0x92, 0x9c}},
+	"Assign":                          {Name: "Assign", CodePoints: []int{8788}, Characters: []byte{0xe2, 0x89, 0x94}},
+	"Atilde":                          {Name: "Atilde", CodePoints: []int{195}, Characters: []byte{0xc3, 0x83}},
+	"Auml":                            {Name: "Auml", CodePoints: []int{196}, Characters: []byte{0xc3, 0x84}},
+	"Backslash":                       {Name: "Backslash", CodePoints: []int{8726}, Characters: []byte{0xe2, 0x88, 0x96}},
+	"Barv":                            {Name: "Barv", CodePoints: []int{10983}, Characters: []byte{0xe2, 0xab, 0xa7}},
+	"Barwed":                          {Name: "Barwed", CodePoints: []int{8966}, Characters: []byte{0xe2, 0x8c, 0x86}},
+	"Bcy":                             {Name: "Bcy", CodePoints: []int{1041}, Characters: []byte{0xd0, 0x91}},
+	"Because":                         {Name: "Because", CodePoints: []int{8757}, Characters: []byte{0xe2, 0x88, 0xb5}},
+	"Bernoullis":                      {Name: "Bernoullis", CodePoints: []int{8492}, Characters: []byte{0xe2, 0x84, 0xac}},
+	"Beta":                            {Name: "Beta", CodePoints: []int{914}, Characters: []byte{0xce, 0x92}},
+	"Bfr":                             {Name: "Bfr", CodePoints: []int{120069}, Characters: []byte{0xf0, 0x9d, 0x94, 0x85}},
+	"Bopf":                            {Name: "Bopf", CodePoints: []int{120121}, Characters: []byte{0xf0, 0x9d, 0x94, 0xb9}},
+	"Breve":                           {Name: "Breve", CodePoints: []int{728}, Characters: []byte{0xcb, 0x98}},
+	"Bscr":                            {Name: "Bscr", CodePoints: []int{8492}, Characters: []byte{0xe2, 0x84, 0xac}},
+	"Bumpeq":                          {Name: "Bumpeq", CodePoints: []int{8782}, Characters: []byte{0xe2, 0x89, 0x8e}},
+	"CHcy":                            {Name: "CHcy", CodePoints: []int{1063}, Characters: []byte{0xd0, 0xa7}},
+	"COPY":                            {Name: "COPY", CodePoints: []int{169}, Characters: []byte{0xc2, 0xa9}},
+	"Cacute":                          {Name: "Cacute", CodePoints: []int{262}, Characters: []byte{0xc4, 0x86}},
+	"Cap":                             {Name: "Cap", CodePoints: []int{8914}, Characters: []byte{0xe2, 0x8b, 0x92}},
+	"CapitalDifferentialD":            {Name: "CapitalDifferentialD", CodePoints: []int{8517}, Characters: []byte{0xe2, 0x85, 0x85}},
+	"Cayleys":                         {Name: "Cayleys", CodePoints: []int{8493}, Characters: []byte{0xe2, 0x84, 0xad}},
+	"Ccaron":                          {Name: "Ccaron", CodePoints: []int{268}, Characters: []byte{0xc4, 0x8c}},
+	"Ccedil":                          {Name: "Ccedil", CodePoints: []int{199}, Characters: []byte{0xc3, 0x87}},
+	"Ccirc":                           {Name: "Ccirc", CodePoints: []int{264}, Characters: []byte{0xc4, 0x88}},
+	"Cconint":                         {Name: "Cconint", CodePoints: []int{8752}, Characters: []byte{0xe2, 0x88, 0xb0}},
+	"Cdot":                            {Name: "Cdot", CodePoints: []int{266}, Characters: []byte{0xc4, 0x8a}},
+	"Cedilla":                         {Name: "Cedilla", CodePoints: []int{184}, Characters: []byte{0xc2, 0xb8}},
+	"CenterDot":                       {Name: "CenterDot", CodePoints: []int{183}, Characters: []byte{0xc2, 0xb7}},
+	"Cfr":                             {Name: "Cfr", CodePoints: []int{8493}, Characters: []byte{0xe2, 0x84, 0xad}},
+	"Chi":                             {Name: "Chi", CodePoints: []int{935}, Characters: []byte{0xce, 0xa7}},
+	"CircleDot":                       {Name: "CircleDot", CodePoints: []int{8857}, Characters: []byte{0xe2, 0x8a, 0x99}},
+	"CircleMinus":                     {Name: "CircleMinus", CodePoints: []int{8854}, Characters: []byte{0xe2, 0x8a, 0x96}},
+	"CirclePlus":                      {Name: "CirclePlus", CodePoints: []int{8853}, Characters: []byte{0xe2, 0x8a, 0x95}},
+	"CircleTimes":                     {Name: "CircleTimes", CodePoints: []int{8855}, Characters: []byte{0xe2, 0x8a, 0x97}},
+	"ClockwiseContourIntegral":        {Name: "ClockwiseContourIntegral", CodePoints: []int{8754}, Characters: []byte{0xe2, 0x88, 0xb2}},
+	"CloseCurlyDoubleQuote":           {Name: "CloseCurlyDoubleQuote", CodePoints: []int{8221}, Characters: []byte{0xe2, 0x80, 0x9d}},
+	"CloseCurlyQuote":                 {Name: "CloseCurlyQuote", CodePoints: []int{8217}, Characters: []byte{0xe2, 0x80, 0x99}},
+	"Colon":                           {Name: "Colon", CodePoints: []int{8759}, Characters: []byte{0xe2, 0x88, 0xb7}},
+	"Colone":                          {Name: "Colone", CodePoints: []int{10868}, Characters: []byte{0xe2, 0xa9, 0xb4}},
+	"Congruent":                       {Name: "Congruent", CodePoints: []int{8801}, Characters: []byte{0xe2, 0x89, 0xa1}},
+	"Conint":                          {Name: "Conint", CodePoints: []int{8751}, Characters: []byte{0xe2, 0x88, 0xaf}},
+	"ContourIntegral":                 {Name: "ContourIntegral", CodePoints: []int{8750}, Characters: []byte{0xe2, 0x88, 0xae}},
+	"Copf":                            {Name: "Copf", CodePoints: []int{8450}, Characters: []byte{0xe2, 0x84, 0x82}},
+	"Coproduct":                       {Name: "Coproduct", CodePoints: []int{8720}, Characters: []byte{0xe2, 0x88, 0x90}},
+	"CounterClockwiseContourIntegral": {Name: "CounterClockwiseContourIntegral", CodePoints: []int{8755}, Characters: []byte{0xe2, 0x88, 0xb3}},
+	"Cross":                           {Name: "Cross", CodePoints: []int{10799}, Characters: []byte{0xe2, 0xa8, 0xaf}},
+	"Cscr":                            {Name: "Cscr", CodePoints: []int{119966}, Characters: []byte{0xf0, 0x9d, 0x92, 0x9e}},
+	"Cup":                             {Name: "Cup", CodePoints: []int{8915}, Characters: []byte{0xe2, 0x8b, 0x93}},
+	"CupCap":                          {Name: "CupCap", CodePoints: []int{8781}, Characters: []byte{0xe2, 0x89, 0x8d}},
+	"DD":                              {Name: "DD", CodePoints: []int{8517}, Characters: []byte{0xe2, 0x85, 0x85}},
+	"DDotrahd":                        {Name: "DDotrahd", CodePoints: []int{10513}, Characters: []byte{0xe2, 0xa4, 0x91}},
+	"DJcy":                            {Name: "DJcy", CodePoints: []int{1026}, Characters: []byte{0xd0, 0x82}},
+	"DScy":                            {Name: "DScy", CodePoints: []int{1029}, Characters: []byte{0xd0, 0x85}},
+	"DZcy":                            {Name: "DZcy", CodePoints: []int{1039}, Characters: []byte{0xd0, 0x8f}},
+	"Dagger":                          {Name: "Dagger", CodePoints: []int{8225}, Characters: []byte{0xe2, 0x80, 0xa1}},
+	"Darr":                            {Name: "Darr", CodePoints: []int{8609}, Characters: []byte{0xe2, 0x86, 0xa1}},
+	"Dashv":                           {Name: "Dashv", CodePoints: []int{10980}, Characters: []byte{0xe2, 0xab, 0xa4}},
+	"Dcaron":                          {Name: "Dcaron", CodePoints: []int{270}, Characters: []byte{0xc4, 0x8e}},
+	"Dcy":                             {Name: "Dcy", CodePoints: []int{1044}, Characters: []byte{0xd0, 0x94}},
+	"Del":                             {Name: "Del", CodePoints: []int{8711}, Characters: []byte{0xe2, 0x88, 0x87}},
+	"Delta":                           {Name: "Delta", CodePoints: []int{916}, Characters: []byte{0xce, 0x94}},
+	"Dfr":                             {Name: "Dfr", CodePoints: []int{120071}, Characters: []byte{0xf0, 0x9d, 0x94, 0x87}},
+	"DiacriticalAcute":                {Name: "DiacriticalAcute", CodePoints: []int{180}, Characters: []byte{0xc2, 0xb4}},
+	"DiacriticalDot":                  {Name: "DiacriticalDot", CodePoints: []int{729}, Characters: []byte{0xcb, 0x99}},
+	"DiacriticalDoubleAcute":          {Name: "DiacriticalDoubleAcute", CodePoints: []int{733}, Characters: []byte{0xcb, 0x9d}},
+	"DiacriticalGrave":                {Name: "DiacriticalGrave", CodePoints: []int{96}, Characters: []byte{0x60}},
+	"DiacriticalTilde":                {Name: "DiacriticalTilde", CodePoints: []int{732}, Characters: []byte{0xcb, 0x9c}},
+	"Diamond":                         {Name: "Diamond", CodePoints: []int{8900}, Characters: []byte{0xe2, 0x8b, 0x84}},
+	"DifferentialD":                   {Name: "DifferentialD", CodePoints: []int{8518}, Characters: []byte{0xe2, 0x85, 0x86}},
+	"Dopf":                            {Name: "Dopf", CodePoints: []int{120123}, Characters: []byte{0xf0, 0x9d, 0x94, 0xbb}},
+	"Dot":                             {Name: "Dot", CodePoints: []int{168}, Characters: []byte{0xc2, 0xa8}},
+	"DotDot":                          {Name: "DotDot", CodePoints: []int{8412}, Characters: []byte{0xe2, 0x83, 0x9c}},
+	"DotEqual":                        {Name: "DotEqual", CodePoints: []int{8784}, Characters: []byte{0xe2, 0x89, 0x90}},
+	"DoubleContourIntegral":           {Name: "DoubleContourIntegral", CodePoints: []int{8751}, Characters: []byte{0xe2, 0x88, 0xaf}},
+	"DoubleDot":                       {Name: "DoubleDot", CodePoints: []int{168}, Characters: []byte{0xc2, 0xa8}},
+	"DoubleDownArrow":                 {Name: "DoubleDownArrow", CodePoints: []int{8659}, Characters: []byte{0xe2, 0x87, 0x93}},
+	"DoubleLeftArrow":                 {Name: "DoubleLeftArrow", CodePoints: []int{8656}, Characters: []byte{0xe2, 0x87, 0x90}},
+	"DoubleLeftRightArrow":            {Name: "DoubleLeftRightArrow", CodePoints: []int{8660}, Characters: []byte{0xe2, 0x87, 0x94}},
+	"DoubleLeftTee":                   {Name: "DoubleLeftTee", CodePoints: []int{10980}, Characters: []byte{0xe2, 0xab, 0xa4}},
+	"DoubleLongLeftArrow":             {Name: "DoubleLongLeftArrow", CodePoints: []int{10232}, Characters: []byte{0xe2, 0x9f, 0xb8}},
+	"DoubleLongLeftRightArrow":        {Name: "DoubleLongLeftRightArrow", CodePoints: []int{10234}, Characters: []byte{0xe2, 0x9f, 0xba}},
+	"DoubleLongRightArrow":            {Name: "DoubleLongRightArrow", CodePoints: []int{10233}, Characters: []byte{0xe2, 0x9f, 0xb9}},
+	"DoubleRightArrow":                {Name: "DoubleRightArrow", CodePoints: []int{8658}, Characters: []byte{0xe2, 0x87, 0x92}},
+	"DoubleRightTee":                  {Name: "DoubleRightTee", CodePoints: []int{8872}, Characters: []byte{0xe2, 0x8a, 0xa8}},
+	"DoubleUpArrow":                   {Name: "DoubleUpArrow", CodePoints: []int{8657}, Characters: []byte{0xe2, 0x87, 0x91}},
+	"DoubleUpDownArrow":               {Name: "DoubleUpDownArrow", CodePoints: []int{8661}, Characters: []byte{0xe2, 0x87, 0x95}},
+	"DoubleVerticalBar":               {Name: "DoubleVerticalBar", CodePoints: []int{8741}, Characters: []byte{0xe2, 0x88, 0xa5}},
+	"DownArrow":                       {Name: "DownArrow", CodePoints: []int{8595}, Characters: []byte{0xe2, 0x86, 0x93}},
+	"DownArrowBar":                    {Name: "DownArrowBar", CodePoints: []int{10515}, Characters: []byte{0xe2, 0xa4, 0x93}},
+	"DownArrowUpArrow":                {Name: "DownArrowUpArrow", CodePoints: []int{8693}, Characters: []byte{0xe2, 0x87, 0xb5}},
+	"DownBreve":                       {Name: "DownBreve", CodePoints: []int{785}, Characters: []byte{0xcc, 0x91}},
+	"DownLeftRightVector":             {Name: "DownLeftRightVector", CodePoints: []int{10576}, Characters: []byte{0xe2, 0xa5, 0x90}},
+	"DownLeftTeeVector":               {Name: "DownLeftTeeVector", CodePoints: []int{10590}, Characters: []byte{0xe2, 0xa5, 0x9e}},
+	"DownLeftVector":                  {Name: "DownLeftVector", CodePoints: []int{8637}, Characters: []byte{0xe2, 0x86, 0xbd}},
+	"DownLeftVectorBar":               {Name: "DownLeftVectorBar", CodePoints: []int{10582}, Characters: []byte{0xe2, 0xa5, 0x96}},
+	"DownRightTeeVector":              {Name: "DownRightTeeVector", CodePoints: []int{10591}, Characters: []byte{0xe2, 0xa5, 0x9f}},
+	"DownRightVector":                 {Name: "DownRightVector", CodePoints: []int{8641}, Characters: []byte{0xe2, 0x87, 0x81}},
+	"DownRightVectorBar":              {Name: "DownRightVectorBar", CodePoints: []int{10583}, Characters: []byte{0xe2, 0xa5, 0x97}},
+	"DownTee":                         {Name: "DownTee", CodePoints: []int{8868}, Characters: []byte{0xe2, 0x8a, 0xa4}},
+	"DownTeeArrow":                    {Name: "DownTeeArrow", CodePoints: []int{8615}, Characters: []byte{0xe2, 0x86, 0xa7}},
+	"Downarrow":                       {Name: "Downarrow", CodePoints: []int{8659}, Characters: []byte{0xe2, 0x87, 0x93}},
+	"Dscr":                            {Name: "Dscr", CodePoints: []int{119967}, Characters: []byte{0xf0, 0x9d, 0x92, 0x9f}},
+	"Dstrok":                          {Name: "Dstrok", CodePoints: []int{272}, Characters: []byte{0xc4, 0x90}},
+	"ENG":                             {Name: "ENG", CodePoints: []int{330}, Characters: []byte{0xc5, 0x8a}},
+	"ETH":                             {Name: "ETH", CodePoints: []int{208}, Characters: []byte{0xc3, 0x90}},
+	"Eacute":                          {Name: "Eacute", CodePoints: []int{201}, Characters: []byte{0xc3, 0x89}},
+	"Ecaron":                          {Name: "Ecaron", CodePoints: []int{282}, Characters: []byte{0xc4, 0x9a}},
+	"Ecirc":                           {Name: "Ecirc", CodePoints: []int{202}, Characters: []byte{0xc3, 0x8a}},
+	"Ecy":                             {Name: "Ecy", CodePoints: []int{1069}, Characters: []byte{0xd0, 0xad}},
+	"Edot":                            {Name: "Edot", CodePoints: []int{278}, Characters: []byte{0xc4, 0x96}},
+	"Efr":                             {Name: "Efr", CodePoints: []int{120072}, Characters: []byte{0xf0, 0x9d, 0x94, 0x88}},
+	"Egrave":                          {Name: "Egrave", CodePoints: []int{200}, Characters: []byte{0xc3, 0x88}},
+	"Element":                         {Name: "Element", CodePoints: []int{8712}, Characters: []byte{0xe2, 0x88, 0x88}},
+	"Emacr":                           {Name: "Emacr", CodePoints: []int{274}, Characters: []byte{0xc4, 0x92}},
+	"EmptySmallSquare":                {Name: "EmptySmallSquare", CodePoints: []int{9723}, Characters: []byte{0xe2, 0x97, 0xbb}},
+	"EmptyVerySmallSquare":            {Name: "EmptyVerySmallSquare", CodePoints: []int{9643}, Characters: []byte{0xe2, 0x96, 0xab}},
+	"Eogon":                           {Name: "Eogon", CodePoints: []int{280}, Characters: []byte{0xc4, 0x98}},
+	"Eopf":                            {Name: "Eopf", CodePoints: []int{120124}, Characters: []byte{0xf0, 0x9d, 0x94, 0xbc}},
+	"Epsilon":                         {Name: "Epsilon", CodePoints: []int{917}, Characters: []byte{0xce, 0x95}},
+	"Equal":                           {Name: "Equal", CodePoints: []int{10869}, Characters: []byte{0xe2, 0xa9, 0xb5}},
+	"EqualTilde":                      {Name: "EqualTilde", CodePoints: []int{8770}, Characters: []byte{0xe2, 0x89, 0x82}},
+	"Equilibrium":                     {Name: "Equilibrium", CodePoints: []int{8652}, Characters: []byte{0xe2, 0x87, 0x8c}},
+	"Escr":                            {Name: "Escr", CodePoints: []int{8496}, Characters: []byte{0xe2, 0x84, 0xb0}},
+	"Esim":                            {Name: "Esim", CodePoints: []int{10867}, Characters: []byte{0xe2, 0xa9, 0xb3}},
+	"Eta":                             {Name: "Eta", CodePoints: []int{919}, Characters: []byte{0xce, 0x97}},
+	"Euml":                            {Name: "Euml", CodePoints: []int{203}, Characters: []byte{0xc3, 0x8b}},
+	"Exists":                          {Name: "Exists", CodePoints: []int{8707}, Characters: []byte{0xe2, 0x88, 0x83}},
+	"ExponentialE":                    {Name: "ExponentialE", CodePoints: []int{8519}, Characters: []byte{0xe2, 0x85, 0x87}},
+	"Fcy":                             {Name: "Fcy", CodePoints: []int{1060}, Characters: []byte{0xd0, 0xa4}},
+	"Ffr":                             {Name: "Ffr", CodePoints: []int{120073}, Characters: []byte{0xf0, 0x9d, 0x94, 0x89}},
+	"FilledSmallSquare":               {Name: "FilledSmallSquare", CodePoints: []int{9724}, Characters: []byte{0xe2, 0x97, 0xbc}},
+	"FilledVerySmallSquare":           {Name: "FilledVerySmallSquare", CodePoints: []int{9642}, Characters: []byte{0xe2, 0x96, 0xaa}},
+	"Fopf":                            {Name: "Fopf", CodePoints: []int{120125}, Characters: []byte{0xf0, 0x9d, 0x94, 0xbd}},
+	"ForAll":                          {Name: "ForAll", CodePoints: []int{8704}, Characters: []byte{0xe2, 0x88, 0x80}},
+	"Fouriertrf":                      {Name: "Fouriertrf", CodePoints: []int{8497}, Characters: []byte{0xe2, 0x84, 0xb1}},
+	"Fscr":                            {Name: "Fscr", CodePoints: []int{8497}, Characters: []byte{0xe2, 0x84, 0xb1}},
+	"GJcy":                            {Name: "GJcy", CodePoints: []int{1027}, Characters: []byte{0xd0, 0x83}},
+	"GT":                              {Name: "GT", CodePoints: []int{62}, Characters: []byte{0x3e}},
+	"Gamma":                           {Name: "Gamma", CodePoints: []int{915}, Characters: []byte{0xce, 0x93}},
+	"Gammad":                          {Name: "Gammad", CodePoints: []int{988}, Characters: []byte{0xcf, 0x9c}},
+	"Gbreve":                          {Name: "Gbreve", CodePoints: []int{286}, Characters: []byte{0xc4, 0x9e}},
+	"Gcedil":                          {Name: "Gcedil", CodePoints: []int{290}, Characters: []byte{0xc4, 0xa2}},
+	"Gcirc":                           {Name: "Gcirc", CodePoints: []int{284}, Characters: []byte{0xc4, 0x9c}},
+	"Gcy":                             {Name: "Gcy", CodePoints: []int{1043}, Characters: []byte{0xd0, 0x93}},
+	"Gdot":                            {Name: "Gdot", CodePoints: []int{288}, Characters: []byte{0xc4, 0xa0}},
+	"Gfr":                             {Name: "Gfr", CodePoints: []int{120074}, Characters: []byte{0xf0, 0x9d, 0x94, 0x8a}},
+	"Gg":                              {Name: "Gg", CodePoints: []int{8921}, Characters: []byte{0xe2, 0x8b, 0x99}},
+	"Gopf":                            {Name: "Gopf", CodePoints: []int{120126}, Characters: []byte{0xf0, 0x9d, 0x94, 0xbe}},
+	"GreaterEqual":                    {Name: "GreaterEqual", CodePoints: []int{8805}, Characters: []byte{0xe2, 0x89, 0xa5}},
+	"GreaterEqualLess":                {Name: "GreaterEqualLess", CodePoints: []int{8923}, Characters: []byte{0xe2, 0x8b, 0x9b}},
+	"GreaterFullEqual":                {Name: "GreaterFullEqual", CodePoints: []int{8807}, Characters: []byte{0xe2, 0x89, 0xa7}},
+	"GreaterGreater":                  {Name: "GreaterGreater", CodePoints: []int{10914}, Characters: []byte{0xe2, 0xaa, 0xa2}},
+	"GreaterLess":                     {Name: "GreaterLess", CodePoints: []int{8823}, Characters: []byte{0xe2, 0x89, 0xb7}},
+	"GreaterSlantEqual":               {Name: "GreaterSlantEqual", CodePoints: []int{10878}, Characters: []byte{0xe2, 0xa9, 0xbe}},
+	"GreaterTilde":                    {Name: "GreaterTilde", CodePoints: []int{8819}, Characters: []byte{0xe2, 0x89, 0xb3}},
+	"Gscr":                            {Name: "Gscr", CodePoints: []int{119970}, Characters: []byte{0xf0, 0x9d, 0x92, 0xa2}},
+	"Gt":                              {Name: "Gt", CodePoints: []int{8811}, Characters: []byte{0xe2, 0x89, 0xab}},
+	"HARDcy":                          {Name: "HARDcy", CodePoints: []int{1066}, Characters: []byte{0xd0, 0xaa}},
+	"Hacek":                           {Name: "Hacek", CodePoints: []int{711}, Characters: []byte{0xcb, 0x87}},
+	"Hat":                             {Name: "Hat", CodePoints: []int{94}, Characters: []byte{0x5e}},
+	"Hcirc":                           {Name: "Hcirc", CodePoints: []int{292}, Characters: []byte{0xc4, 0xa4}},
+	"Hfr":                             {Name: "Hfr", CodePoints: []int{8460}, Characters: []byte{0xe2, 0x84, 0x8c}},
+	"HilbertSpace":                    {Name: "HilbertSpace", CodePoints: []int{8459}, Characters: []byte{0xe2, 0x84, 0x8b}},
+	"Hopf":                            {Name: "Hopf", CodePoints: []int{8461}, Characters: []byte{0xe2, 0x84, 0x8d}},
+	"HorizontalLine":                  {Name: "HorizontalLine", CodePoints: []int{9472}, Characters: []byte{0xe2, 0x94, 0x80}},
+	"Hscr":                            {Name: "Hscr", CodePoints: []int{8459}, Characters: []byte{0xe2, 0x84, 0x8b}},
+	"Hstrok":                          {Name: "Hstrok", CodePoints: []int{294}, Characters: []byte{0xc4, 0xa6}},
+	"HumpDownHump":                    {Name: "HumpDownHump", CodePoints: []int{8782}, Characters: []byte{0xe2, 0x89, 0x8e}},
+	"HumpEqual":                       {Name: "HumpEqual", CodePoints: []int{8783}, Characters: []byte{0xe2, 0x89, 0x8f}},
+	"IEcy":                            {Name: "IEcy", CodePoints: []int{1045}, Characters: []byte{0xd0, 0x95}},
+	"IJlig":                           {Name: "IJlig", CodePoints: []int{306}, Characters: []byte{0xc4, 0xb2}},
+	"IOcy":                            {Name: "IOcy", CodePoints: []int{1025}, Characters: []byte{0xd0, 0x81}},
+	"Iacute":                          {Name: "Iacute", CodePoints: []int{205}, Characters: []byte{0xc3, 0x8d}},
+	"Icirc":                           {Name: "Icirc", CodePoints: []int{206}, Characters: []byte{0xc3, 0x8e}},
+	"Icy":                             {Name: "Icy", CodePoints: []int{1048}, Characters: []byte{0xd0, 0x98}},
+	"Idot":                            {Name: "Idot", CodePoints: []int{304}, Characters: []byte{0xc4, 0xb0}},
+	"Ifr":                             {Name: "Ifr", CodePoints: []int{8465}, Characters: []byte{0xe2, 0x84, 0x91}},
+	"Igrave":                          {Name: "Igrave", CodePoints: []int{204}, Characters: []byte{0xc3, 0x8c}},
+	"Im":                              {Name: "Im", CodePoints: []int{8465}, Characters: []byte{0xe2, 0x84, 0x91}},
+	"Imacr":                           {Name: "Imacr", CodePoints: []int{298}, Characters: []byte{0xc4, 0xaa}},
+	"ImaginaryI":                      {Name: "ImaginaryI", CodePoints: []int{8520}, Characters: []byte{0xe2, 0x85, 0x88}},
+	"Implies":                         {Name: "Implies", CodePoints: []int{8658}, Characters: []byte{0xe2, 0x87, 0x92}},
+	"Int":                             {Name: "Int", CodePoints: []int{8748}, Characters: []byte{0xe2, 0x88, 0xac}},
+	"Integral":                        {Name: "Integral", CodePoints: []int{8747}, Characters: []byte{0xe2, 0x88, 0xab}},
+	"Intersection":                    {Name: "Intersection", CodePoints: []int{8898}, Characters: []byte{0xe2, 0x8b, 0x82}},
+	"InvisibleComma":                  {Name: "InvisibleComma", CodePoints: []int{8291}, Characters: []byte{0xe2, 0x81, 0xa3}},
+	"InvisibleTimes":                  {Name: "InvisibleTimes", CodePoints: []int{8290}, Characters: []byte{0xe2, 0x81, 0xa2}},
+	"Iogon":                           {Name: "Iogon", CodePoints: []int{302}, Characters: []byte{0xc4, 0xae}},
+	"Iopf":                            {Name: "Iopf", CodePoints: []int{120128}, Characters: []byte{0xf0, 0x9d, 0x95, 0x80}},
+	"Iota":                            {Name: "Iota", CodePoints: []int{921}, Characters: []byte{0xce, 0x99}},
+	"Iscr":                            {Name: "Iscr", CodePoints: []int{8464}, Characters: []byte{0xe2, 0x84, 0x90}},
+	"Itilde":                          {Name: "Itilde", CodePoints: []int{296}, Characters: []byte{0xc4, 0xa8}},
+	"Iukcy":                           {Name: "Iukcy", CodePoints: []int{1030}, Characters: []byte{0xd0, 0x86}},
+	"Iuml":                            {Name: "Iuml", CodePoints: []int{207}, Characters: []byte{0xc3, 0x8f}},
+	"Jcirc":                           {Name: "Jcirc", CodePoints: []int{308}, Characters: []byte{0xc4, 0xb4}},
+	"Jcy":                             {Name: "Jcy", CodePoints: []int{1049}, Characters: []byte{0xd0, 0x99}},
+	"Jfr":                             {Name: "Jfr", CodePoints: []int{120077}, Characters: []byte{0xf0, 0x9d, 0x94, 0x8d}},
+	"Jopf":                            {Name: "Jopf", CodePoints: []int{120129}, Characters: []byte{0xf0, 0x9d, 0x95, 0x81}},
+	"Jscr":                            {Name: "Jscr", CodePoints: []int{119973}, Characters: []byte{0xf0, 0x9d, 0x92, 0xa5}},
+	"Jsercy":                          {Name: "Jsercy", CodePoints: []int{1032}, Characters: []byte{0xd0, 0x88}},
+	"Jukcy":                           {Name: "Jukcy", CodePoints: []int{1028}, Characters: []byte{0xd0, 0x84}},
+	"KHcy":                            {Name: "KHcy", CodePoints: []int{1061}, Characters: []byte{0xd0, 0xa5}},
+	"KJcy":                            {Name: "KJcy", CodePoints: []int{1036}, Characters: []byte{0xd0, 0x8c}},
+	"Kappa":                           {Name: "Kappa", CodePoints: []int{922}, Characters: []byte{0xce, 0x9a}},
+	"Kcedil":                          {Name: "Kcedil", CodePoints: []int{310}, Characters: []byte{0xc4, 0xb6}},
+	"Kcy":                             {Name: "Kcy", CodePoints: []int{1050}, Characters: []byte{0xd0, 0x9a}},
+	"Kfr":                             {Name: "Kfr", CodePoints: []int{120078}, Characters: []byte{0xf0, 0x9d, 0x94, 0x8e}},
+	"Kopf":                            {Name: "Kopf", CodePoints: []int{120130}, Characters: []byte{0xf0, 0x9d, 0x95, 0x82}},
+	"Kscr":                            {Name: "Kscr", CodePoints: []int{119974}, Characters: []byte{0xf0, 0x9d, 0x92, 0xa6}},
+	"LJcy":                            {Name: "LJcy", CodePoints: []int{1033}, Characters: []byte{0xd0, 0x89}},
+	"LT":                              {Name: "LT", CodePoints: []int{60}, Characters: []byte{0x3c}},
+	"Lacute":                          {Name: "Lacute", CodePoints: []int{313}, Characters: []byte{0xc4, 0xb9}},
+	"Lambda":                          {Name: "Lambda", CodePoints: []int{923}, Characters: []byte{0xce, 0x9b}},
+	"Lang":                            {Name: "Lang", CodePoints: []int{10218}, Characters: []byte{0xe2, 0x9f, 0xaa}},
+	"Laplacetrf":                      {Name: "Laplacetrf", CodePoints: []int{8466}, Characters: []byte{0xe2, 0x84, 0x92}},
+	"Larr":                            {Name: "Larr", CodePoints: []int{8606}, Characters: []byte{0xe2, 0x86, 0x9e}},
+	"Lcaron":                          {Name: "Lcaron", CodePoints: []int{317}, Characters: []byte{0xc4, 0xbd}},
+	"Lcedil":                          {Name: "Lcedil", CodePoints: []int{315}, Characters: []byte{0xc4, 0xbb}},
+	"Lcy":                             {Name: "Lcy", CodePoints: []int{1051}, Characters: []byte{0xd0, 0x9b}},
+	"LeftAngleBracket":                {Name: "LeftAngleBracket", CodePoints: []int{10216}, Characters: []byte{0xe2, 0x9f, 0xa8}},
+	"LeftArrow":                       {Name: "LeftArrow", CodePoints: []int{8592}, Characters: []byte{0xe2, 0x86, 0x90}},
+	"LeftArrowBar":                    {Name: "LeftArrowBar", CodePoints: []int{8676}, Characters: []byte{0xe2, 0x87, 0xa4}},
+	"LeftArrowRightArrow":             {Name: "LeftArrowRightArrow", CodePoints: []int{8646}, Characters: []byte{0xe2, 0x87, 0x86}},
+	"LeftCeiling":                     {Name: "LeftCeiling", CodePoints: []int{8968}, Characters: []byte{0xe2, 0x8c, 0x88}},
+	"LeftDoubleBracket":               {Name: "LeftDoubleBracket", CodePoints: []int{10214}, Characters: []byte{0xe2, 0x9f, 0xa6}},
+	"LeftDownTeeVector":               {Name: "LeftDownTeeVector", CodePoints: []int{10593}, Characters: []byte{0xe2, 0xa5, 0xa1}},
+	"LeftDownVector":                  {Name: "LeftDownVector", CodePoints: []int{8643}, Characters: []byte{0xe2, 0x87, 0x83}},
+	"LeftDownVectorBar":               {Name: "LeftDownVectorBar", CodePoints: []int{10585}, Characters: []byte{0xe2, 0xa5, 0x99}},
+	"LeftFloor":                       {Name: "LeftFloor", CodePoints: []int{8970}, Characters: []byte{0xe2, 0x8c, 0x8a}},
+	"LeftRightArrow":                  {Name: "LeftRightArrow", CodePoints: []int{8596}, Characters: []byte{0xe2, 0x86, 0x94}},
+	"LeftRightVector":                 {Name: "LeftRightVector", CodePoints: []int{10574}, Characters: []byte{0xe2, 0xa5, 0x8e}},
+	"LeftTee":                         {Name: "LeftTee", CodePoints: []int{8867}, Characters: []byte{0xe2, 0x8a, 0xa3}},
+	"LeftTeeArrow":                    {Name: "LeftTeeArrow", CodePoints: []int{8612}, Characters: []byte{0xe2, 0x86, 0xa4}},
+	"LeftTeeVector":                   {Name: "LeftTeeVector", CodePoints: []int{10586}, Characters: []byte{0xe2, 0xa5, 0x9a}},
+	"LeftTriangle":                    {Name: "LeftTriangle", CodePoints: []int{8882}, Characters: []byte{0xe2, 0x8a, 0xb2}},
+	"LeftTriangleBar":                 {Name: "LeftTriangleBar", CodePoints: []int{10703}, Characters: []byte{0xe2, 0xa7, 0x8f}},
+	"LeftTriangleEqual":               {Name: "LeftTriangleEqual", CodePoints: []int{8884}, Characters: []byte{0xe2, 0x8a, 0xb4}},
+	"LeftUpDownVector":                {Name: "LeftUpDownVector", CodePoints: []int{10577}, Characters: []byte{0xe2, 0xa5, 0x91}},
+	"LeftUpTeeVector":                 {Name: "LeftUpTeeVector", CodePoints: []int{10592}, Characters: []byte{0xe2, 0xa5, 0xa0}},
+	"LeftUpVector":                    {Name: "LeftUpVector", CodePoints: []int{8639}, Characters: []byte{0xe2, 0x86, 0xbf}},
+	"LeftUpVectorBar":                 {Name: "LeftUpVectorBar", CodePoints: []int{10584}, Characters: []byte{0xe2, 0xa5, 0x98}},
+	"LeftVector":                      {Name: "LeftVector", CodePoints: []int{8636}, Characters: []byte{0xe2, 0x86, 0xbc}},
+	"LeftVectorBar":                   {Name: "LeftVectorBar", CodePoints: []int{10578}, Characters: []byte{0xe2, 0xa5, 0x92}},
+	"Leftarrow":                       {Name: "Leftarrow", CodePoints: []int{8656}, Characters: []byte{0xe2, 0x87, 0x90}},
+	"Leftrightarrow":                  {Name: "Leftrightarrow", CodePoints: []int{8660}, Characters: []byte{0xe2, 0x87, 0x94}},
+	"LessEqualGreater":                {Name: "LessEqualGreater", CodePoints: []int{8922}, Characters: []byte{0xe2, 0x8b, 0x9a}},
+	"LessFullEqual":                   {Name: "LessFullEqual", CodePoints: []int{8806}, Characters: []byte{0xe2, 0x89, 0xa6}},
+	"LessGreater":                     {Name: "LessGreater", CodePoints: []int{8822}, Characters: []byte{0xe2, 0x89, 0xb6}},
+	"LessLess":                        {Name: "LessLess", CodePoints: []int{10913}, Characters: []byte{0xe2, 0xaa, 0xa1}},
+	"LessSlantEqual":                  {Name: "LessSlantEqual", CodePoints: []int{10877}, Characters: []byte{0xe2, 0xa9, 0xbd}},
+	"LessTilde":                       {Name: "LessTilde", CodePoints: []int{8818}, Characters: []byte{0xe2, 0x89, 0xb2}},
+	"Lfr":                             {Name: "Lfr", CodePoints: []int{120079}, Characters: []byte{0xf0, 0x9d, 0x94, 0x8f}},
+	"Ll":                              {Name: "Ll", CodePoints: []int{8920}, Characters: []byte{0xe2, 0x8b, 0x98}},
+	"Lleftarrow":                      {Name: "Lleftarrow", CodePoints: []int{8666}, Characters: []byte{0xe2, 0x87, 0x9a}},
+	"Lmidot":                          {Name: "Lmidot", CodePoints: []int{319}, Characters: []byte{0xc4, 0xbf}},
+	"LongLeftArrow":                   {Name: "LongLeftArrow", CodePoints: []int{10229}, Characters: []byte{0xe2, 0x9f, 0xb5}},
+	"LongLeftRightArrow":              {Name: "LongLeftRightArrow", CodePoints: []int{10231}, Characters: []byte{0xe2, 0x9f, 0xb7}},
+	"LongRightArrow":                  {Name: "LongRightArrow", CodePoints: []int{10230}, Characters: []byte{0xe2, 0x9f, 0xb6}},
+	"Longleftarrow":                   {Name: "Longleftarrow", CodePoints: []int{10232}, Characters: []byte{0xe2, 0x9f, 0xb8}},
+	"Longleftrightarrow":              {Name: "Longleftrightarrow", CodePoints: []int{10234}, Characters: []byte{0xe2, 0x9f, 0xba}},
+	"Longrightarrow":                  {Name: "Longrightarrow", CodePoints: []int{10233}, Characters: []byte{0xe2, 0x9f, 0xb9}},
+	"Lopf":                            {Name: "Lopf", CodePoints: []int{120131}, Characters: []byte{0xf0, 0x9d, 0x95, 0x83}},
+	"LowerLeftArrow":                  {Name: "LowerLeftArrow", CodePoints: []int{8601}, Characters: []byte{0xe2, 0x86, 0x99}},
+	"LowerRightArrow":                 {Name: "LowerRightArrow", CodePoints: []int{8600}, Characters: []byte{0xe2, 0x86, 0x98}},
+	"Lscr":                            {Name: "Lscr", CodePoints: []int{8466}, Characters: []byte{0xe2, 0x84, 0x92}},
+	"Lsh":                             {Name: "Lsh", CodePoints: []int{8624}, Characters: []byte{0xe2, 0x86, 0xb0}},
+	"Lstrok":                          {Name: "Lstrok", CodePoints: []int{321}, Characters: []byte{0xc5, 0x81}},
+	"Lt":                              {Name: "Lt", CodePoints: []int{8810}, Characters: []byte{0xe2, 0x89, 0xaa}},
+	"Map":                             {Name: "Map", CodePoints: []int{10501}, Characters: []byte{0xe2, 0xa4, 0x85}},
+	"Mcy":                             {Name: "Mcy", CodePoints: []int{1052}, Characters: []byte{0xd0, 0x9c}},
+	"MediumSpace":                     {Name: "MediumSpace", CodePoints: []int{8287}, Characters: []byte{0xe2, 0x81, 0x9f}},
+	"Mellintrf":                       {Name: "Mellintrf", CodePoints: []int{8499}, Characters: []byte{0xe2, 0x84, 0xb3}},
+	"Mfr":                             {Name: "Mfr", CodePoints: []int{120080}, Characters: []byte{0xf0, 0x9d, 0x94, 0x90}},
+	"MinusPlus":                       {Name: "MinusPlus", CodePoints: []int{8723}, Characters: []byte{0xe2, 0x88, 0x93}},
+	"Mopf":                            {Name: "Mopf", CodePoints: []int{120132}, Characters: []byte{0xf0, 0x9d, 0x95, 0x84}},
+	"Mscr":                            {Name: "Mscr", CodePoints: []int{8499}, Characters: []byte{0xe2, 0x84, 0xb3}},
+	"Mu":                              {Name: "Mu", CodePoints: []int{924}, Characters: []byte{0xce, 0x9c}},
+	"NJcy":                            {Name: "NJcy", CodePoints: []int{1034}, Characters: []byte{0xd0, 0x8a}},
+	"Nacute":                          {Name: "Nacute", CodePoints: []int{323}, Characters: []byte{0xc5, 0x83}},
+	"Ncaron":                          {Name: "Ncaron", CodePoints: []int{327}, Characters: []byte{0xc5, 0x87}},
+	"Ncedil":                          {Name: "Ncedil", CodePoints: []int{325}, Characters: []byte{0xc5, 0x85}},
+	"Ncy":                             {Name: "Ncy", CodePoints: []int{1053}, Characters: []byte{0xd0, 0x9d}},
+	"NegativeMediumSpace":             {Name: "NegativeMediumSpace", CodePoints: []int{8203}, Characters: []byte{0xe2, 0x80, 0x8b}},
+	"NegativeThickSpace":              {Name: "NegativeThickSpace", CodePoints: []int{8203}, Characters: []byte{0xe2, 0x80, 0x8b}},
+	"NegativeThinSpace":               {Name: "NegativeThinSpace", CodePoints: []int{8203}, Characters: []byte{0xe2, 0x80, 0x8b}},
+	"NegativeVeryThinSpace":           {Name: "NegativeVeryThinSpace", CodePoints: []int{8203}, Characters: []byte{0xe2, 0x80, 0x8b}},
+	"NestedGreaterGreater":            {Name: "NestedGreaterGreater", CodePoints: []int{8811}, Characters: []byte{0xe2, 0x89, 0xab}},
+	"NestedLessLess":                  {Name: "NestedLessLess", CodePoints: []int{8810}, Characters: []byte{0xe2, 0x89, 0xaa}},
+	"NewLine":                         {Name: "NewLine", CodePoints: []int{10}, Characters: []byte{0xa}},
+	"Nfr":                             {Name: "Nfr", CodePoints: []int{120081}, Characters: []byte{0xf0, 0x9d, 0x94, 0x91}},
+	"NoBreak":                         {Name: "NoBreak", CodePoints: []int{8288}, Characters: []byte{0xe2, 0x81, 0xa0}},
+	"NonBreakingSpace":                {Name: "NonBreakingSpace", CodePoints: []int{160}, Characters: []byte{0xc2, 0xa0}},
+	"Nopf":                            {Name: "Nopf", CodePoints: []int{8469}, Characters: []byte{0xe2, 0x84, 0x95}},
+	"Not":                             {Name: "Not", CodePoints: []int{10988}, Characters: []byte{0xe2, 0xab, 0xac}},
+	"NotCongruent":                    {Name: "NotCongruent", CodePoints: []int{8802}, Characters: []byte{0xe2, 0x89, 0xa2}},
+	"NotCupCap":                       {Name: "NotCupCap", CodePoints: []int{8813}, Characters: []byte{0xe2, 0x89, 0xad}},
+	"NotDoubleVerticalBar":            {Name: "NotDoubleVerticalBar", CodePoints: []int{8742}, Characters: []byte{0xe2, 0x88, 0xa6}},
+	"NotElement":                      {Name: "NotElement", CodePoints: []int{8713}, Characters: []byte{0xe2, 0x88, 0x89}},
+	"NotEqual":                        {Name: "NotEqual", CodePoints: []int{8800}, Characters: []byte{0xe2, 0x89, 0xa0}},
+	"NotEqualTilde":                   {Name: "NotEqualTilde", CodePoints: []int{8770, 824}, Characters: []byte{0xe2, 0x89, 0x82, 0xcc, 0xb8}},
+	"NotExists":                       {Name: "NotExists", CodePoints: []int{8708}, Characters: []byte{0xe2, 0x88, 0x84}},
+	"NotGreater":                      {Name: "NotGreater", CodePoints: []int{8815}, Characters: []byte{0xe2, 0x89, 0xaf}},
+	"NotGreaterEqual":                 {Name: "NotGreaterEqual", CodePoints: []int{8817}, Characters: []byte{0xe2, 0x89, 0xb1}},
+	"NotGreaterFullEqual":             {Name: "NotGreaterFullEqual", CodePoints: []int{8807, 824}, Characters: []byte{0xe2, 0x89, 0xa7, 0xcc, 0xb8}},
+	"NotGreaterGreater":               {Name: "NotGreaterGreater", CodePoints: []int{8811, 824}, Characters: []byte{0xe2, 0x89, 0xab, 0xcc, 0xb8}},
+	"NotGreaterLess":                  {Name: "NotGreaterLess", CodePoints: []int{8825}, Characters: []byte{0xe2, 0x89, 0xb9}},
+	"NotGreaterSlantEqual":            {Name: "NotGreaterSlantEqual", CodePoints: []int{10878, 824}, Characters: []byte{0xe2, 0xa9, 0xbe, 0xcc, 0xb8}},
+	"NotGreaterTilde":                 {Name: "NotGreaterTilde", CodePoints: []int{8821}, Characters: []byte{0xe2, 0x89, 0xb5}},
+	"NotHumpDownHump":                 {Name: "NotHumpDownHump", CodePoints: []int{8782, 824}, Characters: []byte{0xe2, 0x89, 0x8e, 0xcc, 0xb8}},
+	"NotHumpEqual":                    {Name: "NotHumpEqual", CodePoints: []int{8783, 824}, Characters: []byte{0xe2, 0x89, 0x8f, 0xcc, 0xb8}},
+	"NotLeftTriangle":                 {Name: "NotLeftTriangle", CodePoints: []int{8938}, Characters: []byte{0xe2, 0x8b, 0xaa}},
+	"NotLeftTriangleBar":              {Name: "NotLeftTriangleBar", CodePoints: []int{10703, 824}, Characters: []byte{0xe2, 0xa7, 0x8f, 0xcc, 0xb8}},
+	"NotLeftTriangleEqual":            {Name: "NotLeftTriangleEqual", CodePoints: []int{8940}, Characters: []byte{0xe2, 0x8b, 0xac}},
+	"NotLess":                         {Name: "NotLess", CodePoints: []int{8814}, Characters: []byte{0xe2, 0x89, 0xae}},
+	"NotLessEqual":                    {Name: "NotLessEqual", CodePoints: []int{8816}, Characters: []byte{0xe2, 0x89, 0xb0}},
+	"NotLessGreater":                  {Name: "NotLessGreater", CodePoints: []int{8824}, Characters: []byte{0xe2, 0x89, 0xb8}},
+	"NotLessLess":                     {Name: "NotLessLess", CodePoints: []int{8810, 824}, Characters: []byte{0xe2, 0x89, 0xaa, 0xcc, 0xb8}},
+	"NotLessSlantEqual":               {Name: "NotLessSlantEqual", CodePoints: []int{10877, 824}, Characters: []byte{0xe2, 0xa9, 0xbd, 0xcc, 0xb8}},
+	"NotLessTilde":                    {Name: "NotLessTilde", CodePoints: []int{8820}, Characters: []byte{0xe2, 0x89, 0xb4}},
+	"NotNestedGreaterGreater":         {Name: "NotNestedGreaterGreater", CodePoints: []int{10914, 824}, Characters: []byte{0xe2, 0xaa, 0xa2, 0xcc, 0xb8}},
+	"NotNestedLessLess":               {Name: "NotNestedLessLess", CodePoints: []int{10913, 824}, Characters: []byte{0xe2, 0xaa, 0xa1, 0xcc, 0xb8}},
+	"NotPrecedes":                     {Name: "NotPrecedes", CodePoints: []int{8832}, Characters: []byte{0xe2, 0x8a, 0x80}},
+	"NotPrecedesEqual":                {Name: "NotPrecedesEqual", CodePoints: []int{10927, 824}, Characters: []byte{0xe2, 0xaa, 0xaf, 0xcc, 0xb8}},
+	"NotPrecedesSlantEqual":           {Name: "NotPrecedesSlantEqual", CodePoints: []int{8928}, Characters: []byte{0xe2, 0x8b, 0xa0}},
+	"NotReverseElement":               {Name: "NotReverseElement", CodePoints: []int{8716}, Characters: []byte{0xe2, 0x88, 0x8c}},
+	"NotRightTriangle":                {Name: "NotRightTriangle", CodePoints: []int{8939}, Characters: []byte{0xe2, 0x8b, 0xab}},
+	"NotRightTriangleBar":             {Name: "NotRightTriangleBar", CodePoints: []int{10704, 824}, Characters: []byte{0xe2, 0xa7, 0x90, 0xcc, 0xb8}},
+	"NotRightTriangleEqual":           {Name: "NotRightTriangleEqual", CodePoints: []int{8941}, Characters: []byte{0xe2, 0x8b, 0xad}},
+	"NotSquareSubset":                 {Name: "NotSquareSubset", CodePoints: []int{8847, 824}, Characters: []byte{0xe2, 0x8a, 0x8f, 0xcc, 0xb8}},
+	"NotSquareSubsetEqual":            {Name: "NotSquareSubsetEqual", CodePoints: []int{8930}, Characters: []byte{0xe2, 0x8b, 0xa2}},
+	"NotSquareSuperset":               {Name: "NotSquareSuperset", CodePoints: []int{8848, 824}, Characters: []byte{0xe2, 0x8a, 0x90, 0xcc, 0xb8}},
+	"NotSquareSupersetEqual":          {Name: "NotSquareSupersetEqual", CodePoints: []int{8931}, Characters: []byte{0xe2, 0x8b, 0xa3}},
+	"NotSubset":                       {Name: "NotSubset", CodePoints: []int{8834, 8402}, Characters: []byte{0xe2, 0x8a, 0x82, 0xe2, 0x83, 0x92}},
+	"NotSubsetEqual":                  {Name: "NotSubsetEqual", CodePoints: []int{8840}, Characters: []byte{0xe2, 0x8a, 0x88}},
+	"NotSucceeds":                     {Name: "NotSucceeds", CodePoints: []int{8833}, Characters: []byte{0xe2, 0x8a, 0x81}},
+	"NotSucceedsEqual":                {Name: "NotSucceedsEqual", CodePoints: []int{10928, 824}, Characters: []byte{0xe2, 0xaa, 0xb0, 0xcc, 0xb8}},
+	"NotSucceedsSlantEqual":           {Name: "NotSucceedsSlantEqual", CodePoints: []int{8929}, Characters: []byte{0xe2, 0x8b, 0xa1}},
+	"NotSucceedsTilde":                {Name: "NotSucceedsTilde", CodePoints: []int{8831, 824}, Characters: []byte{0xe2, 0x89, 0xbf, 0xcc, 0xb8}},
+	"NotSuperset":                     {Name: "NotSuperset", CodePoints: []int{8835, 8402}, Characters: []byte{0xe2, 0x8a, 0x83, 0xe2, 0x83, 0x92}},
+	"NotSupersetEqual":                {Name: "NotSupersetEqual", CodePoints: []int{8841}, Characters: []byte{0xe2, 0x8a, 0x89}},
+	"NotTilde":                        {Name: "NotTilde", CodePoints: []int{8769}, Characters: []byte{0xe2, 0x89, 0x81}},
+	"NotTildeEqual":                   {Name: "NotTildeEqual", CodePoints: []int{8772}, Characters: []byte{0xe2, 0x89, 0x84}},
+	"NotTildeFullEqual":               {Name: "NotTildeFullEqual", CodePoints: []int{8775}, Characters: []byte{0xe2, 0x89, 0x87}},
+	"NotTildeTilde":                   {Name: "NotTildeTilde", CodePoints: []int{8777}, Characters: []byte{0xe2, 0x89, 0x89}},
+	"NotVerticalBar":                  {Name: "NotVerticalBar", CodePoints: []int{8740}, Characters: []byte{0xe2, 0x88, 0xa4}},
+	"Nscr":                            {Name: "Nscr", CodePoints: []int{119977}, Characters: []byte{0xf0, 0x9d, 0x92, 0xa9}},
+	"Ntilde":                          {Name: "Ntilde", CodePoints: []int{209}, Characters: []byte{0xc3, 0x91}},
+	"Nu":                              {Name: "Nu", CodePoints: []int{925}, Characters: []byte{0xce, 0x9d}},
+	"OElig":                           {Name: "OElig", CodePoints: []int{338}, Characters: []byte{0xc5, 0x92}},
+	"Oacute":                          {Name: "Oacute", CodePoints: []int{211}, Characters: []byte{0xc3, 0x93}},
+	"Ocirc":                           {Name: "Ocirc", CodePoints: []int{212}, Characters: []byte{0xc3, 0x94}},
+	"Ocy":                             {Name: "Ocy", CodePoints: []int{1054}, Characters: []byte{0xd0, 0x9e}},
+	"Odblac":                          {Name: "Odblac", CodePoints: []int{336}, Characters: []byte{0xc5, 0x90}},
+	"Ofr":                             {Name: "Ofr", CodePoints: []int{120082}, Characters: []byte{0xf0, 0x9d, 0x94, 0x92}},
+	"Ograve":                          {Name: "Ograve", CodePoints: []int{210}, Characters: []byte{0xc3, 0x92}},
+	"Omacr":                           {Name: "Omacr", CodePoints: []int{332}, Characters: []byte{0xc5, 0x8c}},
+	"Omega":                           {Name: "Omega", CodePoints: []int{937}, Characters: []byte{0xce, 0xa9}},
+	"Omicron":                         {Name: "Omicron", CodePoints: []int{927}, Characters: []byte{0xce, 0x9f}},
+	"Oopf":                            {Name: "Oopf", CodePoints: []int{120134}, Characters: []byte{0xf0, 0x9d, 0x95, 0x86}},
+	"OpenCurlyDoubleQuote":            {Name: "OpenCurlyDoubleQuote", CodePoints: []int{8220}, Characters: []byte{0xe2, 0x80, 0x9c}},
+	"OpenCurlyQuote":                  {Name: "OpenCurlyQuote", CodePoints: []int{8216}, Characters: []byte{0xe2, 0x80, 0x98}},
+	"Or":                              {Name: "Or", CodePoints: []int{10836}, Characters: []byte{0xe2, 0xa9, 0x94}},
+	"Oscr":                            {Name: "Oscr", CodePoints: []int{119978}, Characters: []byte{0xf0, 0x9d, 0x92, 0xaa}},
+	"Oslash":                          {Name: "Oslash", CodePoints: []int{216}, Characters: []byte{0xc3, 0x98}},
+	"Otilde":                          {Name: "Otilde", CodePoints: []int{213}, Characters: []byte{0xc3, 0x95}},
+	"Otimes":                          {Name: "Otimes", CodePoints: []int{10807}, Characters: []byte{0xe2, 0xa8, 0xb7}},
+	"Ouml":                            {Name: "Ouml", CodePoints: []int{214}, Characters: []byte{0xc3, 0x96}},
+	"OverBar":                         {Name: "OverBar", CodePoints: []int{8254}, Characters: []byte{0xe2, 0x80, 0xbe}},
+	"OverBrace":                       {Name: "OverBrace", CodePoints: []int{9182}, Characters: []byte{0xe2, 0x8f, 0x9e}},
+	"OverBracket":                     {Name: "OverBracket", CodePoints: []int{9140}, Characters: []byte{0xe2, 0x8e, 0xb4}},
+	"OverParenthesis":                 {Name: "OverParenthesis", CodePoints: []int{9180}, Characters: []byte{0xe2, 0x8f, 0x9c}},
+	"PartialD":                        {Name: "PartialD", CodePoints: []int{8706}, Characters: []byte{0xe2, 0x88, 0x82}},
+	"Pcy":                             {Name: "Pcy", CodePoints: []int{1055}, Characters: []byte{0xd0, 0x9f}},
+	"Pfr":                             {Name: "Pfr", CodePoints: []int{120083}, Characters: []byte{0xf0, 0x9d, 0x94, 0x93}},
+	"Phi":                             {Name: "Phi", CodePoints: []int{934}, Characters: []byte{0xce, 0xa6}},
+	"Pi":                              {Name: "Pi", CodePoints: []int{928}, Characters: []byte{0xce, 0xa0}},
+	"PlusMinus":                       {Name: "PlusMinus", CodePoints: []int{177}, Characters: []byte{0xc2, 0xb1}},
+	"Poincareplane":                   {Name: "Poincareplane", CodePoints: []int{8460}, Characters: []byte{0xe2, 0x84, 0x8c}},
+	"Popf":                            {Name: "Popf", CodePoints: []int{8473}, Characters: []byte{0xe2, 0x84, 0x99}},
+	"Pr":                              {Name: "Pr", CodePoints: []int{10939}, Characters: []byte{0xe2, 0xaa, 0xbb}},
+	"Precedes":                        {Name: "Precedes", CodePoints: []int{8826}, Characters: []byte{0xe2, 0x89, 0xba}},
+	"PrecedesEqual":                   {Name: "PrecedesEqual", CodePoints: []int{10927}, Characters: []byte{0xe2, 0xaa, 0xaf}},
+	"PrecedesSlantEqual":              {Name: "PrecedesSlantEqual", CodePoints: []int{8828}, Characters: []byte{0xe2, 0x89,
+@@END
 @@PORTABLE {"path":"third_party/wails/vendor/github.com/yuin/goldmark/util/html5entities.go","mode":420,"size":250122,"sha256":"4dee972d6cd584fd621b51779583d2da1bcd615d614b6d533e386cf0517859db","index":1,"count":6,"encoding":"utf-8","payloadBytes":48000}
  0xbc}},
 	"PrecedesTilde":                   {Name: "PrecedesTilde", CodePoints: []int{8830}, Characters: []byte{0xe2, 0x89, 0xbe}},
@@ -141896,923 +142314,4 @@ var signalList = [...]struct {
 	{33, "SIGLIBRT", "unknown signal"},
 }
 
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/sys/unix/zerrors_linux.go","mode":420,"size":218869,"sha256":"543cb3d5864d39685a876994164e77bd5614e112c9cbf60bbb4dd9dd2e143171","index":0,"count":5,"encoding":"utf-8","payloadBytes":48000}
-// Code generated by mkmerge; DO NOT EDIT.
-
-//go:build linux
-
-package unix
-
-import "syscall"
-
-const (
-	AAFS_MAGIC                                  = 0x5a3c69f0
-	ADFS_SUPER_MAGIC                            = 0xadf5
-	AFFS_SUPER_MAGIC                            = 0xadff
-	AFS_FS_MAGIC                                = 0x6b414653
-	AFS_SUPER_MAGIC                             = 0x5346414f
-	AF_ALG                                      = 0x26
-	AF_APPLETALK                                = 0x5
-	AF_ASH                                      = 0x12
-	AF_ATMPVC                                   = 0x8
-	AF_ATMSVC                                   = 0x14
-	AF_AX25                                     = 0x3
-	AF_BLUETOOTH                                = 0x1f
-	AF_BRIDGE                                   = 0x7
-	AF_CAIF                                     = 0x25
-	AF_CAN                                      = 0x1d
-	AF_DECnet                                   = 0xc
-	AF_ECONET                                   = 0x13
-	AF_FILE                                     = 0x1
-	AF_IB                                       = 0x1b
-	AF_IEEE802154                               = 0x24
-	AF_INET                                     = 0x2
-	AF_INET6                                    = 0xa
-	AF_IPX                                      = 0x4
-	AF_IRDA                                     = 0x17
-	AF_ISDN                                     = 0x22
-	AF_IUCV                                     = 0x20
-	AF_KCM                                      = 0x29
-	AF_KEY                                      = 0xf
-	AF_LLC                                      = 0x1a
-	AF_LOCAL                                    = 0x1
-	AF_MAX                                      = 0x2e
-	AF_MCTP                                     = 0x2d
-	AF_MPLS                                     = 0x1c
-	AF_NETBEUI                                  = 0xd
-	AF_NETLINK                                  = 0x10
-	AF_NETROM                                   = 0x6
-	AF_NFC                                      = 0x27
-	AF_PACKET                                   = 0x11
-	AF_PHONET                                   = 0x23
-	AF_PPPOX                                    = 0x18
-	AF_QIPCRTR                                  = 0x2a
-	AF_RDS                                      = 0x15
-	AF_ROSE                                     = 0xb
-	AF_ROUTE                                    = 0x10
-	AF_RXRPC                                    = 0x21
-	AF_SECURITY                                 = 0xe
-	AF_SMC                                      = 0x2b
-	AF_SNA                                      = 0x16
-	AF_TIPC                                     = 0x1e
-	AF_UNIX                                     = 0x1
-	AF_UNSPEC                                   = 0x0
-	AF_VSOCK                                    = 0x28
-	AF_WANPIPE                                  = 0x19
-	AF_X25                                      = 0x9
-	AF_XDP                                      = 0x2c
-	ALG_OP_DECRYPT                              = 0x0
-	ALG_OP_ENCRYPT                              = 0x1
-	ALG_SET_AEAD_ASSOCLEN                       = 0x4
-	ALG_SET_AEAD_AUTHSIZE                       = 0x5
-	ALG_SET_DRBG_ENTROPY                        = 0x6
-	ALG_SET_IV                                  = 0x2
-	ALG_SET_KEY                                 = 0x1
-	ALG_SET_KEY_BY_KEY_SERIAL                   = 0x7
-	ALG_SET_OP                                  = 0x3
-	ANON_INODE_FS_MAGIC                         = 0x9041934
-	ARPHRD_6LOWPAN                              = 0x339
-	ARPHRD_ADAPT                                = 0x108
-	ARPHRD_APPLETLK                             = 0x8
-	ARPHRD_ARCNET                               = 0x7
-	ARPHRD_ASH                                  = 0x30d
-	ARPHRD_ATM                                  = 0x13
-	ARPHRD_AX25                                 = 0x3
-	ARPHRD_BIF                                  = 0x307
-	ARPHRD_CAIF                                 = 0x336
-	ARPHRD_CAN                                  = 0x118
-	ARPHRD_CHAOS                                = 0x5
-	ARPHRD_CISCO                                = 0x201
-	ARPHRD_CSLIP                                = 0x101
-	ARPHRD_CSLIP6                               = 0x103
-	ARPHRD_DDCMP                                = 0x205
-	ARPHRD_DLCI                                 = 0xf
-	ARPHRD_ECONET                               = 0x30e
-	ARPHRD_EETHER                               = 0x2
-	ARPHRD_ETHER                                = 0x1
-	ARPHRD_EUI64                                = 0x1b
-	ARPHRD_FCAL                                 = 0x311
-	ARPHRD_FCFABRIC                             = 0x313
-	ARPHRD_FCPL                                 = 0x312
-	ARPHRD_FCPP                                 = 0x310
-	ARPHRD_FDDI                                 = 0x306
-	ARPHRD_FRAD                                 = 0x302
-	ARPHRD_HDLC                                 = 0x201
-	ARPHRD_HIPPI                                = 0x30c
-	ARPHRD_HWX25                                = 0x110
-	ARPHRD_IEEE1394                             = 0x18
-	ARPHRD_IEEE802                              = 0x6
-	ARPHRD_IEEE80211                            = 0x321
-	ARPHRD_IEEE80211_PRISM                      = 0x322
-	ARPHRD_IEEE80211_RADIOTAP                   = 0x323
-	ARPHRD_IEEE802154                           = 0x324
-	ARPHRD_IEEE802154_MONITOR                   = 0x325
-	ARPHRD_IEEE802_TR                           = 0x320
-	ARPHRD_INFINIBAND                           = 0x20
-	ARPHRD_IP6GRE                               = 0x337
-	ARPHRD_IPDDP                                = 0x309
-	ARPHRD_IPGRE                                = 0x30a
-	ARPHRD_IRDA                                 = 0x30f
-	ARPHRD_LAPB                                 = 0x204
-	ARPHRD_LOCALTLK                             = 0x305
-	ARPHRD_LOOPBACK                             = 0x304
-	ARPHRD_MCTP                                 = 0x122
-	ARPHRD_METRICOM                             = 0x17
-	ARPHRD_NETLINK                              = 0x338
-	ARPHRD_NETROM                               = 0x0
-	ARPHRD_NONE                                 = 0xfffe
-	ARPHRD_PHONET                               = 0x334
-	ARPHRD_PHONET_PIPE                          = 0x335
-	ARPHRD_PIMREG                               = 0x30b
-	ARPHRD_PPP                                  = 0x200
-	ARPHRD_PRONET                               = 0x4
-	ARPHRD_RAWHDLC                              = 0x206
-	ARPHRD_RAWIP                                = 0x207
-	ARPHRD_ROSE                                 = 0x10e
-	ARPHRD_RSRVD                                = 0x104
-	ARPHRD_SIT                                  = 0x308
-	ARPHRD_SKIP                                 = 0x303
-	ARPHRD_SLIP                                 = 0x100
-	ARPHRD_SLIP6                                = 0x102
-	ARPHRD_TUNNEL                               = 0x300
-	ARPHRD_TUNNEL6                              = 0x301
-	ARPHRD_VOID                                 = 0xffff
-	ARPHRD_VSOCKMON                             = 0x33a
-	ARPHRD_X25                                  = 0x10f
-	AUDIT_ADD                                   = 0x3eb
-	AUDIT_ADD_RULE                              = 0x3f3
-	AUDIT_ALWAYS                                = 0x2
-	AUDIT_ANOM_ABEND                            = 0x6a5
-	AUDIT_ANOM_CREAT                            = 0x6a7
-	AUDIT_ANOM_LINK                             = 0x6a6
-	AUDIT_ANOM_PROMISCUOUS                      = 0x6a4
-	AUDIT_ARCH                                  = 0xb
-	AUDIT_ARCH_AARCH64                          = 0xc00000b7
-	AUDIT_ARCH_ALPHA                            = 0xc0009026
-	AUDIT_ARCH_ARCOMPACT                        = 0x4000005d
-	AUDIT_ARCH_ARCOMPACTBE                      = 0x5d
-	AUDIT_ARCH_ARCV2                            = 0x400000c3
-	AUDIT_ARCH_ARCV2BE                          = 0xc3
-	AUDIT_ARCH_ARM                              = 0x40000028
-	AUDIT_ARCH_ARMEB                            = 0x28
-	AUDIT_ARCH_C6X                              = 0x4000008c
-	AUDIT_ARCH_C6XBE                            = 0x8c
-	AUDIT_ARCH_CRIS                             = 0x4000004c
-	AUDIT_ARCH_CSKY                             = 0x400000fc
-	AUDIT_ARCH_FRV                              = 0x5441
-	AUDIT_ARCH_H8300                            = 0x2e
-	AUDIT_ARCH_HEXAGON                          = 0xa4
-	AUDIT_ARCH_I386                             = 0x40000003
-	AUDIT_ARCH_IA64                             = 0xc0000032
-	AUDIT_ARCH_LOONGARCH32                      = 0x40000102
-	AUDIT_ARCH_LOONGARCH64                      = 0xc0000102
-	AUDIT_ARCH_M32R                             = 0x58
-	AUDIT_ARCH_M68K                             = 0x4
-	AUDIT_ARCH_MICROBLAZE                       = 0xbd
-	AUDIT_ARCH_MIPS                             = 0x8
-	AUDIT_ARCH_MIPS64                           = 0x80000008
-	AUDIT_ARCH_MIPS64N32                        = 0xa0000008
-	AUDIT_ARCH_MIPSEL                           = 0x40000008
-	AUDIT_ARCH_MIPSEL64                         = 0xc0000008
-	AUDIT_ARCH_MIPSEL64N32                      = 0xe0000008
-	AUDIT_ARCH_NDS32                            = 0x400000a7
-	AUDIT_ARCH_NDS32BE                          = 0xa7
-	AUDIT_ARCH_NIOS2                            = 0x40000071
-	AUDIT_ARCH_OPENRISC                         = 0x5c
-	AUDIT_ARCH_PARISC                           = 0xf
-	AUDIT_ARCH_PARISC64                         = 0x8000000f
-	AUDIT_ARCH_PPC                              = 0x14
-	AUDIT_ARCH_PPC64                            = 0x80000015
-	AUDIT_ARCH_PPC64LE                          = 0xc0000015
-	AUDIT_ARCH_RISCV32                          = 0x400000f3
-	AUDIT_ARCH_RISCV64                          = 0xc00000f3
-	AUDIT_ARCH_S390                             = 0x16
-	AUDIT_ARCH_S390X                            = 0x80000016
-	AUDIT_ARCH_SH                               = 0x2a
-	AUDIT_ARCH_SH64                             = 0x8000002a
-	AUDIT_ARCH_SHEL                             = 0x4000002a
-	AUDIT_ARCH_SHEL64                           = 0xc000002a
-	AUDIT_ARCH_SPARC                            = 0x2
-	AUDIT_ARCH_SPARC64                          = 0x8000002b
-	AUDIT_ARCH_TILEGX                           = 0xc00000bf
-	AUDIT_ARCH_TILEGX32                         = 0x400000bf
-	AUDIT_ARCH_TILEPRO                          = 0x400000bc
-	AUDIT_ARCH_UNICORE                          = 0x4000006e
-	AUDIT_ARCH_X86_64                           = 0xc000003e
-	AUDIT_ARCH_XTENSA                           = 0x5e
-	AUDIT_ARG0                                  = 0xc8
-	AUDIT_ARG1                                  = 0xc9
-	AUDIT_ARG2                                  = 0xca
-	AUDIT_ARG3                                  = 0xcb
-	AUDIT_AVC                                   = 0x578
-	AUDIT_AVC_PATH                              = 0x57a
-	AUDIT_BITMASK_SIZE                          = 0x40
-	AUDIT_BIT_MASK                              = 0x8000000
-	AUDIT_BIT_TEST                              = 0x48000000
-	AUDIT_BPF                                   = 0x536
-	AUDIT_BPRM_FCAPS                            = 0x529
-	AUDIT_CAPSET                                = 0x52a
-	AUDIT_CLASS_CHATTR                          = 0x2
-	AUDIT_CLASS_CHATTR_32                       = 0x3
-	AUDIT_CLASS_DIR_WRITE                       = 0x0
-	AUDIT_CLASS_DIR_WRITE_32                    = 0x1
-	AUDIT_CLASS_READ                            = 0x4
-	AUDIT_CLASS_READ_32                         = 0x5
-	AUDIT_CLASS_SIGNAL                          = 0x8
-	AUDIT_CLASS_SIGNAL_32                       = 0x9
-	AUDIT_CLASS_WRITE                           = 0x6
-	AUDIT_CLASS_WRITE_32                        = 0x7
-	AUDIT_COMPARE_AUID_TO_EUID                  = 0x10
-	AUDIT_COMPARE_AUID_TO_FSUID                 = 0xe
-	AUDIT_COMPARE_AUID_TO_OBJ_UID               = 0x5
-	AUDIT_COMPARE_AUID_TO_SUID                  = 0xf
-	AUDIT_COMPARE_EGID_TO_FSGID                 = 0x17
-	AUDIT_COMPARE_EGID_TO_OBJ_GID               = 0x4
-	AUDIT_COMPARE_EGID_TO_SGID                  = 0x18
-	AUDIT_COMPARE_EUID_TO_FSUID                 = 0x12
-	AUDIT_COMPARE_EUID_TO_OBJ_UID               = 0x3
-	AUDIT_COMPARE_EUID_TO_SUID                  = 0x11
-	AUDIT_COMPARE_FSGID_TO_OBJ_GID              = 0x9
-	AUDIT_COMPARE_FSUID_TO_OBJ_UID              = 0x8
-	AUDIT_COMPARE_GID_TO_EGID                   = 0x14
-	AUDIT_COMPARE_GID_TO_FSGID                  = 0x15
-	AUDIT_COMPARE_GID_TO_OBJ_GID                = 0x2
-	AUDIT_COMPARE_GID_TO_SGID                   = 0x16
-	AUDIT_COMPARE_SGID_TO_FSGID                 = 0x19
-	AUDIT_COMPARE_SGID_TO_OBJ_GID               = 0x7
-	AUDIT_COMPARE_SUID_TO_FSUID                 = 0x13
-	AUDIT_COMPARE_SUID_TO_OBJ_UID               = 0x6
-	AUDIT_COMPARE_UID_TO_AUID                   = 0xa
-	AUDIT_COMPARE_UID_TO_EUID                   = 0xb
-	AUDIT_COMPARE_UID_TO_FSUID                  = 0xc
-	AUDIT_COMPARE_UID_TO_OBJ_UID                = 0x1
-	AUDIT_COMPARE_UID_TO_SUID                   = 0xd
-	AUDIT_CONFIG_CHANGE                         = 0x519
-	AUDIT_CWD                                   = 0x51b
-	AUDIT_DAEMON_ABORT                          = 0x4b2
-	AUDIT_DAEMON_CONFIG                         = 0x4b3
-	AUDIT_DAEMON_END                            = 0x4b1
-	AUDIT_DAEMON_START                          = 0x4b0
-	AUDIT_DEL                                   = 0x3ec
-	AUDIT_DEL_RULE                              = 0x3f4
-	AUDIT_DEVMAJOR                              = 0x64
-	AUDIT_DEVMINOR                              = 0x65
-	AUDIT_DIR                                   = 0x6b
-	AUDIT_DM_CTRL                               = 0x53a
-	AUDIT_DM_EVENT                              = 0x53b
-	AUDIT_EGID                                  = 0x6
-	AUDIT_EOE                                   = 0x528
-	AUDIT_EQUAL                                 = 0x40000000
-	AUDIT_EUID                                  = 0x2
-	AUDIT_EVENT_LISTENER                        = 0x537
-	AUDIT_EXE                                   = 0x70
-	AUDIT_EXECVE                                = 0x51d
-	AUDIT_EXIT                                  = 0x67
-	AUDIT_FAIL_PANIC                            = 0x2
-	AUDIT_FAIL_PRINTK                           = 0x1
-	AUDIT_FAIL_SILENT                           = 0x0
-	AUDIT_FANOTIFY                              = 0x533
-	AUDIT_FD_PAIR                               = 0x525
-	AUDIT_FEATURE_BITMAP_ALL                    = 0x7f
-	AUDIT_FEATURE_BITMAP_BACKLOG_LIMIT          = 0x1
-	AUDIT_FEATURE_BITMAP_BACKLOG_WAIT_TIME      = 0x2
-	AUDIT_FEATURE_BITMAP_EXCLUDE_EXTEND         = 0x8
-	AUDIT_FEATURE_BITMAP_EXECUTABLE_PATH        = 0x4
-	AUDIT_FEATURE_BITMAP_FILTER_FS              = 0x40
-	AUDIT_FEATURE_BITMAP_LOST_RESET             = 0x20
-	AUDIT_FEATURE_BITMAP_SESSIONID_FILTER       = 0x10
-	AUDIT_FEATURE_CHANGE                        = 0x530
-	AUDIT_FEATURE_LOGINUID_IMMUTABLE            = 0x1
-	AUDIT_FEATURE_ONLY_UNSET_LOGINUID           = 0x0
-	AUDIT_FEATURE_VERSION                       = 0x1
-	AUDIT_FIELD_COMPARE                         = 0x6f
-	AUDIT_FILETYPE                              = 0x6c
-	AUDIT_FILTERKEY                             = 0xd2
-	AUDIT_FILTER_ENTRY                          = 0x2
-	AUDIT_FILTER_EXCLUDE                        = 0x5
-	AUDIT_FILTER_EXIT                           = 0x4
-	AUDIT_FILTER_FS                             = 0x6
-	AUDIT_FILTER_PREPEND                        = 0x10
-	AUDIT_FILTER_TASK                           = 0x1
-	AUDIT_FILTER_TYPE                           = 0x5
-	AUDIT_FILTER_URING_EXIT                     = 0x7
-	AUDIT_FILTER_USER                           = 0x0
-	AUDIT_FILTER_WATCH                          = 0x3
-	AUDIT_FIRST_KERN_ANOM_MSG                   = 0x6a4
-	AUDIT_FIRST_USER_MSG                        = 0x44c
-	AUDIT_FIRST_USER_MSG2                       = 0x834
-	AUDIT_FSGID                                 = 0x8
-	AUDIT_FSTYPE                                = 0x1a
-	AUDIT_FSUID                                 = 0x4
-	AUDIT_GET                                   = 0x3e8
-	AUDIT_GET_FEATURE                           = 0x3fb
-	AUDIT_GID                                   = 0x5
-	AUDIT_GREATER_THAN                          = 0x20000000
-	AUDIT_GREATER_THAN_OR_EQUAL                 = 0x60000000
-	AUDIT_INODE                                 = 0x66
-	AUDIT_INTEGRITY_DATA                        = 0x708
-	AUDIT_INTEGRITY_EVM_XATTR                   = 0x70e
-	AUDIT_INTEGRITY_HASH                        = 0x70b
-	AUDIT_INTEGRITY_METADATA                    = 0x709
-	AUDIT_INTEGRITY_PCR                         = 0x70c
-	AUDIT_INTEGRITY_POLICY_RULE                 = 0x70f
-	AUDIT_INTEGRITY_RULE                        = 0x70d
-	AUDIT_INTEGRITY_STATUS                      = 0x70a
-	AUDIT_INTEGRITY_USERSPACE                   = 0x710
-	AUDIT_IPC                                   = 0x517
-	AUDIT_IPC_SET_PERM                          = 0x51f
-	AUDIT_IPE_ACCESS                            = 0x58c
-	AUDIT_IPE_CONFIG_CHANGE                     = 0x58d
-	AUDIT_IPE_POLICY_LOAD                       = 0x58e
-	AUDIT_KERNEL                                = 0x7d0
-	AUDIT_KERNEL_OTHER                          = 0x524
-	AUDIT_KERN_MODULE                           = 0x532
-	AUDIT_LANDLOCK_ACCESS                       = 0x58f
-	AUDIT_LANDLOCK_DOMAIN                       = 0x590
-	AUDIT_LAST_FEATURE                          = 0x1
-	AUDIT_LAST_KERN_ANOM_MSG                    = 0x707
-	AUDIT_LAST_USER_MSG                         = 0x4af
-	AUDIT_LAST_USER_MSG2                        = 0xbb7
-	AUDIT_LESS_THAN                             = 0x10000000
-	AUDIT_LESS_THAN_OR_EQUAL                    = 0x50000000
-	AUDIT_LIST                                  = 0x3ea
-	AUDIT_LIST_RULES                            = 0x3f5
-	AUDIT_LOGIN                                 = 0x3ee
-	AUDIT_LOGINUID                              = 0x9
-	AUDIT_LOGINUID_SET                          = 0x18
-	AUDIT_MAC_CALIPSO_ADD                       = 0x58a
-	AUDIT_MAC_CALIPSO_DEL                       = 0x58b
-	AUDIT_MAC_CIPSOV4_ADD                       = 0x57f
-	AUDIT_MAC_CIPSOV4_DEL                       = 0x580
-	AUDIT_MAC_CONFIG_CHANGE                     = 0x57d
-	AUDIT_MAC_IPSEC_ADDSA                       = 0x583
-	AUDIT_MAC_IPSEC_ADDSPD                      = 0x585
-	AUDIT_MAC_IPSEC_DELSA                       = 0x584
-	AUDIT_MAC_IPSEC_DELSPD                      = 0x586
-	AUDIT_MAC_IPSEC_EVENT                       = 0x587
-	AUDIT_MAC_MAP_ADD                           = 0x581
-	AUDIT_MAC_MAP_DEL                           = 0x582
-	AUDIT_MAC_OBJ_CONTEXTS                      = 0x592
-	AUDIT_MAC_POLICY_LOAD                       = 0x57b
-	AUDIT_MAC_STATUS                            = 0x57c
-	AUDIT_MAC_TASK_CONTEXTS                     = 0x591
-	AUDIT_MAC_UNLBL_ALLOW                       = 0x57e
-	AUDIT_MAC_UNLBL_STCADD                      = 0x588
-	AUDIT_MAC_UNLBL_STCDEL                      = 0x589
-	AUDIT_MAKE_EQUIV                            = 0x3f7
-	AUDIT_MAX_FIELDS                            = 0x40
-	AUDIT_MAX_FIELD_COMPARE                     = 0x19
-	AUDIT_MAX_KEY_LEN                           = 0x100
-	AUDIT_MESSAGE_TEXT_MAX                      = 0x2170
-	AUDIT_MMAP                                  = 0x52b
-	AUDIT_MQ_GETSETATTR                         = 0x523
-	AUDIT_MQ_NOTIFY                             = 0x522
-	AUDIT_MQ_OPEN                               = 0x520
-	AUDIT_MQ_SENDRECV                           = 0x521
-	AUDIT_MSGTYPE                               = 0xc
-	AUDIT_NEGATE                                = 0x80000000
-	AUDIT_NETFILTER_CFG                         = 0x52d
-	AUDIT_NETFILTER_PKT                         = 0x52c
-	AUDIT_NEVER                                 = 0x0
-	AUDIT_NLGRP_MAX                             = 0x1
-	AUDIT_NOT_EQUAL                             = 0x30000000
-	AUDIT_NR_FILTERS                            = 0x8
-	AUDIT_OBJ_GID                               = 0x6e
-	AUDIT_OBJ_LEV_HIGH                          = 0x17
-	AUDIT_OBJ_LEV_LOW                           = 0x16
-	AUDIT_OBJ_PID                               = 0x526
-	AUDIT_OBJ_ROLE                              = 0x14
-	AUDIT_OBJ_TYPE                              = 0x15
-	AUDIT_OBJ_UID                               = 0x6d
-	AUDIT_OBJ_USER                              = 0x13
-	AUDIT_OPENAT2                               = 0x539
-	AUDIT_OPERATORS                             = 0x78000000
-	AUDIT_PATH                                  = 0x516
-	AUDIT_PERM                                  = 0x6a
-	AUDIT_PERM_ATTR                             = 0x8
-	AUDIT_PERM_EXEC                             = 0x1
-	AUDIT_PERM_READ                             = 0x4
-	AUDIT_PERM_WRITE                            = 0x2
-	AUDIT_PERS                                  = 0xa
-	AUDIT_PID                                   = 0x0
-	AUDIT_POSSIBLE                              = 0x1
-	AUDIT_PPID                                  = 0x12
-	AUDIT_PROCTITLE                             = 0x52f
-	AUDIT_REPLACE                               = 0x531
-	AUDIT_SADDR_FAM                             = 0x71
-	AUDIT_SECCOMP                               = 0x52e
-	AUDIT_SELINUX_ERR                           = 0x579
-	AUDIT_SESSIONID                             = 0x19
-	AUDIT_SET                                   = 0x3e9
-	AUDIT_SET_FEATURE                           = 0x3fa
-	AUDIT_SGID                                  = 0x7
-	AUDIT_SID_UNSET                             = 0xffffffff
-	AUDIT_SIGNAL_INFO                           = 0x3f2
-	AUDIT_SOCKADDR                              = 0x51a
-	AUDIT_SOCKETCALL                            = 0x518
-	AUDIT_STATUS_BACKLOG_LIMIT                  = 0x10
-	AUDIT_STATUS_BACKLOG_WAIT_TIME              = 0x20
-	AUDIT_STATUS_BACKLOG_WAIT_TIME_ACTUAL       = 0x80
-	AUDIT_STATUS_ENABLED                        = 0x1
-	AUDIT_STATUS_FAILURE                        = 0x2
-	AUDIT_STATUS_LOST                           = 0x40
-	AUDIT_STATUS_PID                            = 0x4
-	AUDIT_STATUS_RATE_LIMIT                     = 0x8
-	AUDIT_SUBJ_CLR                              = 0x11
-	AUDIT_SUBJ_ROLE                             = 0xe
-	AUDIT_SUBJ_SEN                              = 0x10
-	AUDIT_SUBJ_TYPE                             = 0xf
-	AUDIT_SUBJ_USER                             = 0xd
-	AUDIT_SUCCESS                               = 0x68
-	AUDIT_SUID                                  = 0x3
-	AUDIT_SYSCALL                               = 0x514
-	AUDIT_SYSCALL_CLASSES                       = 0x10
-	AUDIT_TIME_ADJNTPVAL                        = 0x535
-	AUDIT_TIME_INJOFFSET                        = 0x534
-	AUDIT_TRIM                                  = 0x3f6
-	AUDIT_TTY                                   = 0x527
-	AUDIT_TTY_GET                               = 0x3f8
-	AUDIT_TTY_SET                               = 0x3f9
-	AUDIT_UID                                   = 0x1
-	AUDIT_UID_UNSET                             = 0xffffffff
-	AUDIT_UNUSED_BITS                           = 0x7fffc00
-	AUDIT_URINGOP                               = 0x538
-	AUDIT_USER                                  = 0x3ed
-	AUDIT_USER_AVC                              = 0x453
-	AUDIT_USER_TTY                              = 0x464
-	AUDIT_VERSION_BACKLOG_LIMIT                 = 0x1
-	AUDIT_VERSION_BACKLOG_WAIT_TIME             = 0x2
-	AUDIT_VERSION_LATEST                        = 0x7f
-	AUDIT_WATCH                                 = 0x69
-	AUDIT_WATCH_INS                             = 0x3ef
-	AUDIT_WATCH_LIST                            = 0x3f1
-	AUDIT_WATCH_REM                             = 0x3f0
-	AUTOFS_SUPER_MAGIC                          = 0x187
-	B0                                          = 0x0
-	B110                                        = 0x3
-	B1200                                       = 0x9
-	B134                                        = 0x4
-	B150                                        = 0x5
-	B1800                                       = 0xa
-	B19200                                      = 0xe
-	B200                                        = 0x6
-	B2400                                       = 0xb
-	B300                                        = 0x7
-	B38400                                      = 0xf
-	B4800                                       = 0xc
-	B50                                         = 0x1
-	B600                                        = 0x8
-	B75                                         = 0x2
-	B9600                                       = 0xd
-	BCACHEFS_SUPER_MAGIC                        = 0xca451a4e
-	BDEVFS_MAGIC                                = 0x62646576
-	BINDERFS_SUPER_MAGIC                        = 0x6c6f6f70
-	BINFMTFS_MAGIC                              = 0x42494e4d
-	BPF_A                                       = 0x10
-	BPF_ABS                                     = 0x20
-	BPF_ADD                                     = 0x0
-	BPF_ALU                                     = 0x4
-	BPF_ALU64                                   = 0x7
-	BPF_AND                                     = 0x50
-	BPF_ARSH                                    = 0xc0
-	BPF_ATOMIC                                  = 0xc0
-	BPF_B                                       = 0x10
-	BPF_BUILD_ID_SIZE                           = 0x14
-	BPF_CALL                                    = 0x80
-	BPF_CMPXCHG                                 = 0xf1
-	BPF_DIV                                     = 0x30
-	BPF_DW                                      = 0x18
-	BPF_END                                     = 0xd0
-	BPF_EXIT                                    = 0x90
-	BPF_FETCH                                   = 0x1
-	BPF_FROM_BE                                 = 0x8
-	BPF_FROM_LE                                 = 0x0
-	BPF_FS_MAGIC                                = 0xcafe4a11
-	BPF_F_AFTER                                 = 0x10
-	BPF_F_ALLOW_MULTI                           = 0x2
-	BPF_F_ALLOW_OVERRIDE                        = 0x1
-	BPF_F_ANY_ALIGNMENT                         = 0x2
-	BPF_F_BEFORE                                = 0x8
-	BPF_F_ID                                    = 0x20
-	BPF_F_NETFILTER_IP_DEFRAG                   = 0x1
-	BPF_F_PREORDER                              = 0x40
-	BPF_F_QUERY_EFFECTIVE                       = 0x1
-	BPF_F_REDIRECT_FLAGS                        = 0x19
-	BPF_F_REPLACE                               = 0x4
-	BPF_F_SLEEPABLE                             = 0x10
-	BPF_F_STRICT_ALIGNMENT                      = 0x1
-	BPF_F_TEST_REG_INVARIANTS                   = 0x80
-	BPF_F_TEST_RND_HI32                         = 0x4
-	BPF_F_TEST_RUN_ON_CPU                       = 0x1
-	BPF_F_TEST_SKB_CHECKSUM_COMPLETE            = 0x4
-	BPF_F_TEST_STATE_FREQ                       = 0x8
-	BPF_F_TEST_XDP_LIVE_FRAMES                  = 0x2
-	BPF_F_XDP_DEV_BOUND_ONLY                    = 0x40
-	BPF_F_XDP_HAS_FRAGS                         = 0x20
-	BPF_H                                       = 0x8
-	BPF_IMM                                     = 0x0
-	BPF_IND                                     = 0x40
-	BPF_JA                                      = 0x0
-	BPF_JCOND                                   = 0xe0
-	BPF_JEQ                                     = 0x10
-	BPF_JGE                                     = 0x30
-	BPF_JGT                                     = 0x20
-	BPF_JLE                                     = 0xb0
-	BPF_JLT                                     = 0xa0
-	BPF_JMP                                     = 0x5
-	BPF_JMP32                                   = 0x6
-	BPF_JNE                                     = 0x50
-	BPF_JSET                                    = 0x40
-	BPF_JSGE                                    = 0x70
-	BPF_JSGT                                    = 0x60
-	BPF_JSLE                                    = 0xd0
-	BPF_JSLT                                    = 0xc0
-	BPF_K                                       = 0x0
-	BPF_LD                                      = 0x0
-	BPF_LDX                                     = 0x1
-	BPF_LEN                                     = 0x80
-	BPF_LL_OFF                                  = -0x200000
-	BPF_LOAD_ACQ                                = 0x100
-	BPF_LSH                                     = 0x60
-	BPF_MAJOR_VERSION                           = 0x1
-	BPF_MAXINSNS                                = 0x1000
-	BPF_MEM                                     = 0x60
-	BPF_MEMSX                                   = 0x80
-	BPF_MEMWORDS                                = 0x10
-	BPF_MINOR_VERSION                           = 0x1
-	BPF_MISC                                    = 0x7
-	BPF_MOD                                     = 0x90
-	BPF_MOV                                     = 0xb0
-	BPF_MSH                                     = 0xa0
-	BPF_MUL                                     = 0x20
-	BPF_NEG                                     = 0x80
-	BPF_NET_OFF                                 = -0x100000
-	BPF_OBJ_NAME_LEN                            = 0x10
-	BPF_OR                                      = 0x40
-	BPF_PSEUDO_BTF_ID                           = 0x3
-	BPF_PSEUDO_CALL                             = 0x1
-	BPF_PSEUDO_FUNC                             = 0x4
-	BPF_PSEUDO_KFUNC_CALL                       = 0x2
-	BPF_PSEUDO_MAP_FD                           = 0x1
-	BPF_PSEUDO_MAP_IDX                          = 0x5
-	BPF_PSEUDO_MAP_IDX_VALUE                    = 0x6
-	BPF_PSEUDO_MAP_VALUE                        = 0x2
-	BPF_RET                                     = 0x6
-	BPF_RSH                                     = 0x70
-	BPF_ST                                      = 0x2
-	BPF_STORE_REL                               = 0x110
-	BPF_STX                                     = 0x3
-	BPF_SUB                                     = 0x10
-	BPF_TAG_SIZE                                = 0x8
-	BPF_TAX                                     = 0x0
-	BPF_TO_BE                                   = 0x8
-	BPF_TO_LE                                   = 0x0
-	BPF_TXA                                     = 0x80
-	BPF_W                                       = 0x0
-	BPF_X                                       = 0x8
-	BPF_XADD                                    = 0xc0
-	BPF_XCHG                                    = 0xe1
-	BPF_XOR                                     = 0xa0
-	BRKINT                                      = 0x2
-	BS0                                         = 0x0
-	BTRFS_SUPER_MAGIC                           = 0x9123683e
-	BTRFS_TEST_MAGIC                            = 0x73727279
-	BUS_BLUETOOTH                               = 0x5
-	BUS_HIL                                     = 0x4
-	BUS_USB                                     = 0x3
-	BUS_VIRTUAL                                 = 0x6
-	CAN_BCM                                     = 0x2
-	CAN_BUS_OFF_THRESHOLD                       = 0x100
-	CAN_CTRLMODE_3_SAMPLES                      = 0x4
-	CAN_CTRLMODE_BERR_REPORTING                 = 0x10
-	CAN_CTRLMODE_CC_LEN8_DLC                    = 0x100
-	CAN_CTRLMODE_FD                             = 0x20
-	CAN_CTRLMODE_FD_NON_ISO                     = 0x80
-	CAN_CTRLMODE_LISTENONLY                     = 0x2
-	CAN_CTRLMODE_LOOPBACK                       = 0x1
-	CAN_CTRLMODE_ONE_SHOT                       = 0x8
-	CAN_CTRLMODE_PRESUME_ACK                    = 0x40
-	CAN_CTRLMODE_RESTRICTED                     = 0x800
-	CAN_CTRLMODE_TDC_AUTO                       = 0x200
-	CAN_CTRLMODE_TDC_MANUAL                     = 0x400
-	CAN_CTRLMODE_XL                             = 0x1000
-	CAN_CTRLMODE_XL_TDC_AUTO                    = 0x2000
-	CAN_CTRLMODE_XL_TDC_MANUAL                  = 0x4000
-	CAN_CTRLMODE_XL_TMS                         = 0x8000
-	CAN_EFF_FLAG                                = 0x80000000
-	CAN_EFF_ID_BITS                             = 0x1d
-	CAN_EFF_MASK                                = 0x1fffffff
-	CAN_ERROR_PASSIVE_THRESHOLD                 = 0x80
-	CAN_ERROR_WARNING_THRESHOLD                 = 0x60
-	CAN_ERR_ACK                                 = 0x20
-	CAN_ERR_BUSERROR                            = 0x80
-	CAN_ERR_BUSOFF                              = 0x40
-	CAN_ERR_CNT                                 = 0x200
-	CAN_ERR_CRTL                                = 0x4
-	CAN_ERR_CRTL_ACTIVE                         = 0x40
-	CAN_ERR_CRTL_RX_OVERFLOW                    = 0x1
-	CAN_ERR_CRTL_RX_PASSIVE                     = 0x10
-	CAN_ERR_CRTL_RX_WARNING                     = 0x4
-	CAN_ERR_CRTL_TX_OVERFLOW                    = 0x2
-	CAN_ERR_CRTL_TX_PASSIVE                     = 0x20
-	CAN_ERR_CRTL_TX_WARNING                     = 0x8
-	CAN_ERR_CRTL_UNSPEC                         = 0x0
-	CAN_ERR_DLC                                 = 0x8
-	CAN_ERR_FLAG                                = 0x20000000
-	CAN_ERR_LOSTARB                             = 0x2
-	CAN_ERR_LOSTARB_UNSPEC                      = 0x0
-	CAN_ERR_MASK                                = 0x1fffffff
-	CAN_ERR_PROT                                = 0x8
-	CAN_ERR_PROT_ACTIVE                         = 0x40
-	CAN_ERR_PROT_BIT                            = 0x1
-	CAN_ERR_PROT_BIT0                           = 0x8
-	CAN_ERR_PROT_BIT1                           = 0x10
-	CAN_ERR_PROT_FORM                           = 0x2
-	CAN_ERR_PROT_LOC_ACK                        = 0x19
-	CAN_ERR_PROT_LOC_ACK_DEL                    = 0x1b
-	CAN_ERR_PROT_LOC_CRC_DEL                    = 0x18
-	CAN_ERR_PROT_LOC_CRC_SEQ                    = 0x8
-	CAN_ERR_PROT_LOC_DATA                       = 0xa
-	CAN_ERR_PROT_LOC_DLC                        = 0xb
-	CAN_ERR_PROT_LOC_EOF                        = 0x1a
-	CAN_ERR_PROT_LOC_ID04_00                    = 0xe
-	CAN_ERR_PROT_LOC_ID12_05                    = 0xf
-	CAN_ERR_PROT_LOC_ID17_13                    = 0x7
-	CAN_ERR_PROT_LOC_ID20_18                    = 0x6
-	CAN_ERR_PROT_LOC_ID28_21                    = 0x2
-	CAN_ERR_PROT_LOC_IDE                        = 0x5
-	CAN_ERR_PROT_LOC_INTERM                     = 0x12
-	CAN_ERR_PROT_LOC_RES0                       = 0x9
-	CAN_ERR_PROT_LOC_RES1                       = 0xd
-	CAN_ERR_PROT_LOC_RTR                        = 0xc
-	CAN_ERR_PROT_LOC_SOF                        = 0x3
-	CAN_ERR_PROT_LOC_SRTR                       = 0x4
-	CAN_ERR_PROT_LOC_UNSPEC                     = 0x0
-	CAN_ERR_PROT_OVERLOAD                       = 0x20
-	CAN_ERR_PROT_STUFF                          = 0x4
-	CAN_ERR_PROT_TX                             = 0x80
-	CAN_ERR_PROT_UNSPEC                         = 0x0
-	CAN_ERR_RESTARTED                           = 0x100
-	CAN_ERR_TRX                                 = 0x10
-	CAN_ERR_TRX_CANH_NO_WIRE                    = 0x4
-	CAN_ERR_TRX_CANH_SHORT_TO_BAT               = 0x5
-	CAN_ERR_TRX_CANH_SHORT_TO_GND               = 0x7
-	CAN_ERR_TRX_CANH_SHORT_TO_VCC               = 0x6
-	CAN_ERR_TRX_CANL_NO_WIRE                    = 0x40
-	CAN_ERR_TRX_CANL_SHORT_TO_BAT               = 0x50
-	CAN_ERR_TRX_CANL_SHORT_TO_CANH              = 0x80
-	CAN_ERR_TRX_CANL_SHORT_TO_GND               = 0x70
-	CAN_ERR_TRX_CANL_SHORT_TO_VCC               = 0x60
-	CAN_ERR_TRX_UNSPEC                          = 0x0
-	CAN_ERR_TX_TIMEOUT                          = 0x1
-	CAN_INV_FILTER                              = 0x20000000
-	CAN_ISOTP                                   = 0x6
-	CAN_J1939                                   = 0x7
-	CAN_MAX_DLC                                 = 0x8
-	CAN_MAX_DLEN                                = 0x8
-	CAN_MAX_RAW_DLC                             = 0xf
-	CAN_MCNET                                   = 0x5
-	CAN_MTU                                     = 0x10
-	CAN_NPROTO                                  = 0x8
-	CAN_RAW                                     = 0x1
-	CAN_RAW_FILTER_MAX                          = 0x200
-	CAN_RAW_XL_VCID_RX_FILTER                   = 0x4
-	CAN_RAW_XL_VCID_TX_PASS                     = 0x2
-	CAN_RAW_XL_VCID_TX_SET                      = 0x1
-	CAN_RTR_FLAG                                = 0x40000000
-	CAN_SFF_ID_BITS                             = 0xb
-	CAN_SFF_MASK                                = 0x7ff
-	CAN_TERMINATION_DISABLED                    = 0x0
-	CAN_TP16                                    = 0x3
-	CAN_TP20                                    = 0x4
-	CAP_AUDIT_CONTROL                           = 0x1e
-	CAP_AUDIT_READ                              = 0x25
-	CAP_AUDIT_WRITE                             = 0x1d
-	CAP_BLOCK_SUSPEND                           = 0x24
-	CAP_BPF                                     = 0x27
-	CAP_CHECKPOINT_RESTORE                      = 0x28
-	CAP_CHOWN                                   = 0x0
-	CAP_DAC_OVERRIDE                            = 0x1
-	CAP_DAC_READ_SEARCH                         = 0x2
-	CAP_FOWNER                                  = 0x3
-	CAP_FSETID                                  = 0x4
-	CAP_IPC_LOCK                                = 0xe
-	CAP_IPC_OWNER                               = 0xf
-	CAP_KILL                                    = 0x5
-	CAP_LAST_CAP                                = 0x28
-	CAP_LEASE                                   = 0x1c
-	CAP_LINUX_IMMUTABLE                         = 0x9
-	CAP_MAC_ADMIN                               = 0x21
-	CAP_MAC_OVERRIDE                            = 0x20
-	CAP_MKNOD                                   = 0x1b
-	CAP_NET_ADMIN                               = 0xc
-	CAP_NET_BIND_SERVICE                        = 0xa
-	CAP_NET_BROADCAST                           = 0xb
-	CAP_NET_RAW                                 = 0xd
-	CAP_PERFMON                                 = 0x26
-	CAP_SETFCAP                                 = 0x1f
-	CAP_SETGID                                  = 0x6
-	CAP_SETPCAP                                 = 0x8
-	CAP_SETUID                                  = 0x7
-	CAP_SYSLOG                                  = 0x22
-	CAP_SYS_ADMIN                               = 0x15
-	CAP_SYS_BOOT                                = 0x16
-	CAP_SYS_CHROOT                              = 0x12
-	CAP_SYS_MODULE                              = 0x10
-	CAP_SYS_NICE                                = 0x17
-	CAP_SYS_PACCT                               = 0x14
-	CAP_SYS_PTRACE                              = 0x13
-	CAP_SYS_RAWIO                               = 0x11
-	CAP_SYS_RESOURCE                            = 0x18
-	CAP_SYS_TIME                                = 0x19
-	CAP_SYS_TTY_CONFIG                          = 0x1a
-	CAP_WAKE_ALARM                              = 0x23
-	CEPH_SUPER_MAGIC                            = 0xc36400
-	CFLUSH                                      = 0xf
-	CGROUP2_SUPER_MAGIC                         = 0x63677270
-	CGROUP_SUPER_MAGIC                          = 0x27e0eb
-	CIFS_SUPER_MAGIC                            = 0xff534d42
-	CLOCK_BOOTTIME                              = 0x7
-	CLOCK_BOOTTIME_ALARM                        = 0x9
-	CLOCK_DEFAULT                               = 0x0
-	CLOCK_EXT                                   = 0x1
-	CLOCK_INT                                   = 0x2
-	CLOCK_MONOTONIC                             = 0x1
-	CLOCK_MONOTONIC_COARSE                      = 0x6
-	CLOCK_MONOTONIC_RAW                         = 0x4
-	CLOCK_PROCESS_CPUTIME_ID                    = 0x2
-	CLOCK_REALTIME                              = 0x0
-	CLOCK_REALTIME_ALARM                        = 0x8
-	CLOCK_REALTIME_COARSE                       = 0x5
-	CLOCK_TAI                                   = 0xb
-	CLOCK_THREAD_CPUTIME_ID                     = 0x3
-	CLOCK_TXFROMRX                              = 0x4
-	CLOCK_TXINT                                 = 0x3
-	CLONE_ARGS_SIZE_VER0                        = 0x40
-	CLONE_ARGS_SIZE_VER1                        = 0x50
-	CLONE_ARGS_SIZE_VER2                        = 0x58
-	CLONE_CHILD_CLEARTID                        = 0x200000
-	CLONE_CHILD_SETTID                          = 0x1000000
-	CLONE_CLEAR_SIGHAND                         = 0x100000000
-	CLONE_DETACHED                              = 0x400000
-	CLONE_FILES                                 = 0x400
-	CLONE_FS                                    = 0x200
-	CLONE_INTO_CGROUP                           = 0x200000000
-	CLONE_IO                                    = 0x80000000
-	CLONE_NEWCGROUP                             = 0x2000000
-	CLONE_NEWIPC                                = 0x8000000
-	CLONE_NEWNET                                = 0x40000000
-	CLONE_NEWNS                                 = 0x20000
-	CLONE_NEWPID                                = 0x20000000
-	CLONE_NEWTIME                               = 0x80
-	CLONE_NEWUSER                               = 0x10000000
-	CLONE_NEWUTS                                = 0x4000000
-	CLONE_PARENT                                = 0x8000
-	CLONE_PARENT_SETTID                         = 0x100000
-	CLONE_PIDFD                                 = 0x1000
-	CLONE_PTRACE                                = 0x2000
-	CLONE_SETTLS                                = 0x80000
-	CLONE_SIGHAND                               = 0x800
-	CLONE_SYSVSEM                               = 0x40000
-	CLONE_THREAD                                = 0x10000
-	CLONE_UNTRACED                              = 0x800000
-	CLONE_VFORK                                 = 0x4000
-	CLONE_VM                                    = 0x100
-	CMSPAR                                      = 0x40000000
-	CODA_SUPER_MAGIC                            = 0x73757245
-	CR0                                         = 0x0
-	CRAMFS_MAGIC                                = 0x28cd3d45
-	CRTSCTS                                     = 0x80000000
-	CRYPTO_MAX_NAME                             = 0x40
-	CRYPTO_MSG_MAX                              = 0x15
-	CRYPTO_NR_MSGTYPES                          = 0x6
-	CRYPTO_REPORT_MAXSIZE                       = 0x160
-	CS5                                         = 0x0
-	CSIGNAL                                     = 0xff
-	CSTART                                      = 0x11
-	CSTATUS                                     = 0x0
-	CSTOP                                       = 0x13
-	CSUSP                                       = 0x1a
-	DAXFS_MAGIC                                 = 0x64646178
-	DEBUGFS_MAGIC                               = 0x64626720
-	DEVLINK_CMD_ESWITCH_MODE_GET                = 0x1d
-	DEVLINK_CMD_ESWITCH_MODE_SET                = 0x1e
-	DEVLINK_FLASH_OVERWRITE_IDENTIFIERS         = 0x2
-	DEVLINK_FLASH_OVERWRITE_SETTINGS            = 0x1
-	DEVLINK_GENL_MCGRP_CONFIG_NAME              = "config"
-	DEVLINK_GENL_NAME                           = "devlink"
-	DEVLINK_GENL_VERSION                        = 0x1
-	DEVLINK_PORT_FN_CAP_IPSEC_CRYPTO            = 0x4
-	DEVLINK_PORT_FN_CAP_IPSEC_PACKET            = 0x8
-	DEVLINK_PORT_FN_CAP_MIGRATABLE              = 0x2
-	DEVLINK_PORT_FN_CAP_ROCE                    = 0x1
-	DEVLINK_RATE_TCS_MAX                        = 0x8
-	DEVLINK_RATE_TC_INDEX_MAX                   = 0x7
-	DEVLINK_SB_THRESHOLD_TO_ALPHA_MAX           = 0x14
-	DEVLINK_SUPPORTED_FLASH_OVERWRITE_SECTIONS  = 0x3
-	DEVMEM_MAGIC                                = 0x454d444d
-	DEVPTS_SUPER_MAGIC                          = 0x1cd1
-	DMA_BUF_MAGIC                               = 0x444d4142
-	DM_ACTIVE_PRESENT_FLAG                      = 0x20
-	DM_BUFFER_FULL_FLAG                         = 0x100
-	DM_CONTROL_NODE                             = "control"
-	DM_DATA_OUT_FLAG                            = 0x10000
-	DM_DEFERRED_REMOVE                          = 0x20000
-	DM_DEV_ARM_POLL                             = 0xc138fd10
-	DM_DEV_CREATE                               = 0xc138fd03
-	DM_DEV_REMOVE                               = 0xc138fd04
-	DM_DEV_RENAME                               = 0xc138fd05
-	DM_DEV_SET_GEOMETRY                         = 0xc138fd0f
-	DM_DEV_STATUS                               = 0xc138fd07
-	DM_DEV_SUSPEND                              = 0xc138fd06
-	DM_DEV_WAIT                                 = 0xc138fd08
-	DM_DIR                                      = "mapper"
-	DM_GET_TARGET_VERSION                       = 0xc138fd11
-	DM_IMA_MEASUREMENT_FLAG                     = 0x80000
-	DM_INACTIVE_PRESENT_FLAG                    = 0x40
-	DM_INTERNAL_SUSPEND_FLAG                    = 0x40000
-	DM_IOCTL                                    = 0xfd
-	DM_LIST_DEVICES                             = 0xc138fd02
-	DM_LIST_VERSIONS                            = 0xc138fd0d
-	DM_MAX_TYPE_NAME                            = 0x10
-	DM_NAME_LEN                                 = 0x80
-	DM_NAME_LIST_FLAG_DOESNT_HAVE_UUID          = 0x2
-	DM_NAME_LIST_FLAG_HAS_UUID                  = 0x1
-	DM_NOFLUSH_FLAG                             = 0x800
-	DM_PERSISTENT_DEV_FLAG                      = 0x8
-	DM_QUERY_INACTIVE_TABLE_FLAG                = 0x1000
-	DM_READONLY_FLAG                            = 0x1
-	DM_REMOVE_ALL                               = 0xc138fd01
-	DM_SECURE_DATA_FLAG                         = 0x8000
-	DM_SKIP_BDGET_FLAG                          = 0x200
-	DM_SKIP_LOCKFS_FLAG                         = 0x400
-	DM_STATUS_TABLE_FLAG                        = 0x10
-	DM_SUSPEND_FLAG                             = 0x2
-	DM_TABLE_CLEAR                              = 0xc138fd0a
-	DM_TABLE_DEPS                               = 0xc138fd0b
-	DM_TABLE_LOAD                               = 0xc138fd09
-	DM_TABLE_STATUS                             = 0xc138fd0c
-	DM_TARGET_MSG                               = 0xc138fd0e
-	DM_UEVENT_GENERATED_FLAG                    = 0x2000
-	DM_UUID_FLAG                                = 0x4000
-	DM_UUID_LEN                                 = 0x81
-	DM_VERSION                                  = 0xc138fd00
-	DM_VERSION_EXTRA                            = "-ioctl (2025-04-28)"
-	DM_VERSION_MAJOR                            = 0x4
-	DM_VERSION_MINOR                            = 0x32
-	DM_VERSION_PATCHLEVEL                       = 0x0
-	DT_ADDRRNGHI                                = 0x6ffffeff
-	DT_ADDRRNGLO                                = 0x6ffffe00
-	DT_BLK                                      = 0x6
-	DT_CHR                                      = 0x2
-	DT_DEBUG                                    = 0x15
-	DT_DIR                                      = 0x4
-	DT_ENCODING                                 = 0x20
-	DT_FIFO                                     = 0x1
-	DT_FINI                                     = 0xd
-	DT_FLAGS_1                                  = 0x6ffffffb
-	DT_GNU_HASH                                 = 0x6ffffef5
-	DT_HASH                                     = 0x4
-	DT_HIOS                                     = 0x6ffff000
-	DT_HIPROC                                   = 0x7fffffff
-	DT_INIT                                     = 0xc
-	DT_JMPREL                                   = 0x17
-	DT_LNK                                      = 0xa
-	DT_LOOS                                     = 0x6000000d
-	DT_LOPROC                                   = 0x70000000
-	DT_NEEDED                                   = 0x1
-	DT_NULL                                     = 0x0
-	DT_PLTGOT                                   = 0x3
-	DT_PLTREL                                   = 0x14
-	DT_PLTRELSZ                                 = 0x2
-	DT_REG                                      = 0x8
-	DT_REL                                      = 0x11
-	DT_RELA                                     = 0x7
-	DT_RELACOUNT                                = 0x6ffffff9
-	DT_RELAENT                                  = 0x9
-	DT_RELASZ                                   = 0x8
-	DT_RELCOUNT                                 = 0x6ffffffa
-	DT_RELENT                                   = 0x13
-	DT_RELSZ                                    = 0x12
-	DT_RPATH                                    = 0xf
-	DT_SOCK                                     = 0xc
-	DT_SONAME                                   = 0xe
-	DT_STRSZ                                    = 0xa
-	DT_STRTAB                                   = 0x5
-	DT_SYMBOLIC                                 = 0x10
-	DT_SYMENT                                   = 0xb
-	DT_SYMTAB                                   = 0x6
-	DT_TEXTREL                                  = 0x16
-	DT_UNKNOWN                                  = 0x0
-	DT_VALRNGHI                                 = 0x6ffffdff
-	DT_VALRNGLO                                 = 0x6ffffd00
-	DT_VERDEF                                   = 0x6ffffffc
-	DT_VERDEFNUM                                = 0x6ffffffd
-	DT_VERNEED                                  = 0x6ffffffe
-	DT_VERNEEDNUM                               = 0x6fffffff
-	DT_VERSYM                                   = 0x6ffffff0
-	DT_WHT                                      = 0xe
-	ECHO                                        = 0x8
-	ECRYPTFS_SUPER_MAGIC          
 @@END

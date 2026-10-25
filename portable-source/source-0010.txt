@@ -1,3 +1,2089 @@
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/sys/unix/ztypes_linux.go","mode":420,"size":270748,"sha256":"a5eab77c5555033a363e4fa1dd5cb5d4a4f0bfaf6dedb77ccbcb32990e121790","index":5,"count":6,"encoding":"utf-8","payloadBytes":30748}
+ 0x6
+	NL80211_PMSR_RESP_ATTR_STATUS                           = 0x2
+	NL80211_PMSR_STATUS_FAILURE                             = 0x3
+	NL80211_PMSR_STATUS_REFUSED                             = 0x1
+	NL80211_PMSR_STATUS_SUCCESS                             = 0x0
+	NL80211_PMSR_STATUS_TIMEOUT                             = 0x2
+	NL80211_PMSR_TYPE_FTM                                   = 0x1
+	NL80211_PMSR_TYPE_INVALID                               = 0x0
+	NL80211_PMSR_TYPE_MAX                                   = 0x1
+	NL80211_PREAMBLE_DMG                                    = 0x3
+	NL80211_PREAMBLE_HE                                     = 0x4
+	NL80211_PREAMBLE_HT                                     = 0x1
+	NL80211_PREAMBLE_LEGACY                                 = 0x0
+	NL80211_PREAMBLE_VHT                                    = 0x2
+	NL80211_PROBE_RESP_OFFLOAD_SUPPORT_80211U               = 0x8
+	NL80211_PROBE_RESP_OFFLOAD_SUPPORT_P2P                  = 0x4
+	NL80211_PROBE_RESP_OFFLOAD_SUPPORT_WPS2                 = 0x2
+	NL80211_PROBE_RESP_OFFLOAD_SUPPORT_WPS                  = 0x1
+	NL80211_PROTOCOL_FEATURE_SPLIT_WIPHY_DUMP               = 0x1
+	NL80211_PS_DISABLED                                     = 0x0
+	NL80211_PS_ENABLED                                      = 0x1
+	NL80211_RADAR_CAC_ABORTED                               = 0x2
+	NL80211_RADAR_CAC_FINISHED                              = 0x1
+	NL80211_RADAR_CAC_STARTED                               = 0x5
+	NL80211_RADAR_DETECTED                                  = 0x0
+	NL80211_RADAR_NOP_FINISHED                              = 0x3
+	NL80211_RADAR_PRE_CAC_EXPIRED                           = 0x4
+	NL80211_RATE_INFO_10_MHZ_WIDTH                          = 0xb
+	NL80211_RATE_INFO_160_MHZ_WIDTH                         = 0xa
+	NL80211_RATE_INFO_16_MHZ_WIDTH                          = 0x1d
+	NL80211_RATE_INFO_1_MHZ_WIDTH                           = 0x19
+	NL80211_RATE_INFO_2_MHZ_WIDTH                           = 0x1a
+	NL80211_RATE_INFO_320_MHZ_WIDTH                         = 0x12
+	NL80211_RATE_INFO_40_MHZ_WIDTH                          = 0x3
+	NL80211_RATE_INFO_4_MHZ_WIDTH                           = 0x1b
+	NL80211_RATE_INFO_5_MHZ_WIDTH                           = 0xc
+	NL80211_RATE_INFO_80_MHZ_WIDTH                          = 0x8
+	NL80211_RATE_INFO_80P80_MHZ_WIDTH                       = 0x9
+	NL80211_RATE_INFO_8_MHZ_WIDTH                           = 0x1c
+	NL80211_RATE_INFO_BITRATE32                             = 0x5
+	NL80211_RATE_INFO_BITRATE                               = 0x1
+	NL80211_RATE_INFO_EHT_GI_0_8                            = 0x0
+	NL80211_RATE_INFO_EHT_GI_1_6                            = 0x1
+	NL80211_RATE_INFO_EHT_GI_3_2                            = 0x2
+	NL80211_RATE_INFO_EHT_GI                                = 0x15
+	NL80211_RATE_INFO_EHT_MCS                               = 0x13
+	NL80211_RATE_INFO_EHT_NSS                               = 0x14
+	NL80211_RATE_INFO_EHT_RU_ALLOC_106                      = 0x3
+	NL80211_RATE_INFO_EHT_RU_ALLOC_106P26                   = 0x4
+	NL80211_RATE_INFO_EHT_RU_ALLOC_242                      = 0x5
+	NL80211_RATE_INFO_EHT_RU_ALLOC_26                       = 0x0
+	NL80211_RATE_INFO_EHT_RU_ALLOC_2x996                    = 0xb
+	NL80211_RATE_INFO_EHT_RU_ALLOC_2x996P484                = 0xc
+	NL80211_RATE_INFO_EHT_RU_ALLOC_3x996                    = 0xd
+	NL80211_RATE_INFO_EHT_RU_ALLOC_3x996P484                = 0xe
+	NL80211_RATE_INFO_EHT_RU_ALLOC_484                      = 0x6
+	NL80211_RATE_INFO_EHT_RU_ALLOC_484P242                  = 0x7
+	NL80211_RATE_INFO_EHT_RU_ALLOC_4x996                    = 0xf
+	NL80211_RATE_INFO_EHT_RU_ALLOC_52                       = 0x1
+	NL80211_RATE_INFO_EHT_RU_ALLOC_52P26                    = 0x2
+	NL80211_RATE_INFO_EHT_RU_ALLOC_996                      = 0x8
+	NL80211_RATE_INFO_EHT_RU_ALLOC_996P484                  = 0x9
+	NL80211_RATE_INFO_EHT_RU_ALLOC_996P484P242              = 0xa
+	NL80211_RATE_INFO_EHT_RU_ALLOC                          = 0x16
+	NL80211_RATE_INFO_HE_1XLTF                              = 0x0
+	NL80211_RATE_INFO_HE_2XLTF                              = 0x1
+	NL80211_RATE_INFO_HE_4XLTF                              = 0x2
+	NL80211_RATE_INFO_HE_DCM                                = 0x10
+	NL80211_RATE_INFO_HE_GI_0_8                             = 0x0
+	NL80211_RATE_INFO_HE_GI_1_6                             = 0x1
+	NL80211_RATE_INFO_HE_GI_3_2                             = 0x2
+	NL80211_RATE_INFO_HE_GI                                 = 0xf
+	NL80211_RATE_INFO_HE_MCS                                = 0xd
+	NL80211_RATE_INFO_HE_NSS                                = 0xe
+	NL80211_RATE_INFO_HE_RU_ALLOC_106                       = 0x2
+	NL80211_RATE_INFO_HE_RU_ALLOC_242                       = 0x3
+	NL80211_RATE_INFO_HE_RU_ALLOC_26                        = 0x0
+	NL80211_RATE_INFO_HE_RU_ALLOC_2x996                     = 0x6
+	NL80211_RATE_INFO_HE_RU_ALLOC_484                       = 0x4
+	NL80211_RATE_INFO_HE_RU_ALLOC_52                        = 0x1
+	NL80211_RATE_INFO_HE_RU_ALLOC_996                       = 0x5
+	NL80211_RATE_INFO_HE_RU_ALLOC                           = 0x11
+	NL80211_RATE_INFO_MAX                                   = 0x20
+	NL80211_RATE_INFO_MCS                                   = 0x2
+	NL80211_RATE_INFO_S1G_MCS                               = 0x17
+	NL80211_RATE_INFO_S1G_NSS                               = 0x18
+	NL80211_RATE_INFO_SHORT_GI                              = 0x4
+	NL80211_RATE_INFO_VHT_MCS                               = 0x6
+	NL80211_RATE_INFO_VHT_NSS                               = 0x7
+	NL80211_REGDOM_SET_BY_CORE                              = 0x0
+	NL80211_REGDOM_SET_BY_COUNTRY_IE                        = 0x3
+	NL80211_REGDOM_SET_BY_DRIVER                            = 0x2
+	NL80211_REGDOM_SET_BY_USER                              = 0x1
+	NL80211_REGDOM_TYPE_COUNTRY                             = 0x0
+	NL80211_REGDOM_TYPE_CUSTOM_WORLD                        = 0x2
+	NL80211_REGDOM_TYPE_INTERSECTION                        = 0x3
+	NL80211_REGDOM_TYPE_WORLD                               = 0x1
+	NL80211_REG_RULE_ATTR_MAX                               = 0x8
+	NL80211_REKEY_DATA_AKM                                  = 0x4
+	NL80211_REKEY_DATA_KCK                                  = 0x2
+	NL80211_REKEY_DATA_KEK                                  = 0x1
+	NL80211_REKEY_DATA_REPLAY_CTR                           = 0x3
+	NL80211_REPLAY_CTR_LEN                                  = 0x8
+	NL80211_RRF_ALLOW_6GHZ_VLP_AP                           = 0x1000000
+	NL80211_RRF_AUTO_BW                                     = 0x800
+	NL80211_RRF_DFS                                         = 0x10
+	NL80211_RRF_DFS_CONCURRENT                              = 0x200000
+	NL80211_RRF_GO_CONCURRENT                               = 0x1000
+	NL80211_RRF_IR_CONCURRENT                               = 0x1000
+	NL80211_RRF_NO_160MHZ                                   = 0x10000
+	NL80211_RRF_NO_320MHZ                                   = 0x40000
+	NL80211_RRF_NO_6GHZ_AFC_CLIENT                          = 0x800000
+	NL80211_RRF_NO_6GHZ_VLP_CLIENT                          = 0x400000
+	NL80211_RRF_NO_80MHZ                                    = 0x8000
+	NL80211_RRF_NO_CCK                                      = 0x2
+	NL80211_RRF_NO_EHT                                      = 0x80000
+	NL80211_RRF_NO_HE                                       = 0x20000
+	NL80211_RRF_NO_HT40                                     = 0x6000
+	NL80211_RRF_NO_HT40MINUS                                = 0x2000
+	NL80211_RRF_NO_HT40PLUS                                 = 0x4000
+	NL80211_RRF_NO_IBSS                                     = 0x80
+	NL80211_RRF_NO_INDOOR                                   = 0x4
+	NL80211_RRF_NO_IR_ALL                                   = 0x180
+	NL80211_RRF_NO_IR                                       = 0x80
+	NL80211_RRF_NO_OFDM                                     = 0x1
+	NL80211_RRF_NO_OUTDOOR                                  = 0x8
+	NL80211_RRF_NO_UHB_AFC_CLIENT                           = 0x800000
+	NL80211_RRF_NO_UHB_VLP_CLIENT                           = 0x400000
+	NL80211_RRF_PASSIVE_SCAN                                = 0x80
+	NL80211_RRF_PSD                                         = 0x100000
+	NL80211_RRF_PTMP_ONLY                                   = 0x40
+	NL80211_RRF_PTP_ONLY                                    = 0x20
+	NL80211_RXMGMT_FLAG_ANSWERED                            = 0x1
+	NL80211_RXMGMT_FLAG_EXTERNAL_AUTH                       = 0x2
+	NL80211_SAE_PWE_BOTH                                    = 0x3
+	NL80211_SAE_PWE_HASH_TO_ELEMENT                         = 0x2
+	NL80211_SAE_PWE_HUNT_AND_PECK                           = 0x1
+	NL80211_SAE_PWE_UNSPECIFIED                             = 0x0
+	NL80211_SAR_ATTR_MAX                                    = 0x2
+	NL80211_SAR_ATTR_SPECS                                  = 0x2
+	NL80211_SAR_ATTR_SPECS_END_FREQ                         = 0x4
+	NL80211_SAR_ATTR_SPECS_MAX                              = 0x4
+	NL80211_SAR_ATTR_SPECS_POWER                            = 0x1
+	NL80211_SAR_ATTR_SPECS_RANGE_INDEX                      = 0x2
+	NL80211_SAR_ATTR_SPECS_START_FREQ                       = 0x3
+	NL80211_SAR_ATTR_TYPE                                   = 0x1
+	NL80211_SAR_TYPE_POWER                                  = 0x0
+	NL80211_SCAN_FLAG_ACCEPT_BCAST_PROBE_RESP               = 0x20
+	NL80211_SCAN_FLAG_AP                                    = 0x4
+	NL80211_SCAN_FLAG_COLOCATED_6GHZ                        = 0x4000
+	NL80211_SCAN_FLAG_FILS_MAX_CHANNEL_TIME                 = 0x10
+	NL80211_SCAN_FLAG_FLUSH                                 = 0x2
+	NL80211_SCAN_FLAG_FREQ_KHZ                              = 0x2000
+	NL80211_SCAN_FLAG_HIGH_ACCURACY                         = 0x400
+	NL80211_SCAN_FLAG_LOW_POWER                             = 0x200
+	NL80211_SCAN_FLAG_LOW_PRIORITY                          = 0x1
+	NL80211_SCAN_FLAG_LOW_SPAN                              = 0x100
+	NL80211_SCAN_FLAG_MIN_PREQ_CONTENT                      = 0x1000
+	NL80211_SCAN_FLAG_OCE_PROBE_REQ_DEFERRAL_SUPPRESSION    = 0x80
+	NL80211_SCAN_FLAG_OCE_PROBE_REQ_HIGH_TX_RATE            = 0x40
+	NL80211_SCAN_FLAG_RANDOM_ADDR                           = 0x8
+	NL80211_SCAN_FLAG_RANDOM_SN                             = 0x800
+	NL80211_SCAN_RSSI_THOLD_OFF                             = -0x12c
+	NL80211_SCHED_SCAN_MATCH_ATTR_BSSID                     = 0x5
+	NL80211_SCHED_SCAN_MATCH_ATTR_MAX                       = 0x6
+	NL80211_SCHED_SCAN_MATCH_ATTR_RELATIVE_RSSI             = 0x3
+	NL80211_SCHED_SCAN_MATCH_ATTR_RSSI_ADJUST               = 0x4
+	NL80211_SCHED_SCAN_MATCH_ATTR_RSSI                      = 0x2
+	NL80211_SCHED_SCAN_MATCH_ATTR_SSID                      = 0x1
+	NL80211_SCHED_SCAN_MATCH_PER_BAND_RSSI                  = 0x6
+	NL80211_SCHED_SCAN_PLAN_INTERVAL                        = 0x1
+	NL80211_SCHED_SCAN_PLAN_ITERATIONS                      = 0x2
+	NL80211_SCHED_SCAN_PLAN_MAX                             = 0x2
+	NL80211_SMPS_DYNAMIC                                    = 0x2
+	NL80211_SMPS_MAX                                        = 0x2
+	NL80211_SMPS_OFF                                        = 0x0
+	NL80211_SMPS_STATIC                                     = 0x1
+	NL80211_STA_BSS_PARAM_BEACON_INTERVAL                   = 0x5
+	NL80211_STA_BSS_PARAM_CTS_PROT                          = 0x1
+	NL80211_STA_BSS_PARAM_DTIM_PERIOD                       = 0x4
+	NL80211_STA_BSS_PARAM_MAX                               = 0x5
+	NL80211_STA_BSS_PARAM_SHORT_PREAMBLE                    = 0x2
+	NL80211_STA_BSS_PARAM_SHORT_SLOT_TIME                   = 0x3
+	NL80211_STA_FLAG_ASSOCIATED                             = 0x7
+	NL80211_STA_FLAG_AUTHENTICATED                          = 0x5
+	NL80211_STA_FLAG_AUTHORIZED                             = 0x1
+	NL80211_STA_FLAG_MAX                                    = 0x8
+	NL80211_STA_FLAG_MAX_OLD_API                            = 0x6
+	NL80211_STA_FLAG_MFP                                    = 0x4
+	NL80211_STA_FLAG_SHORT_PREAMBLE                         = 0x2
+	NL80211_STA_FLAG_SPP_AMSDU                              = 0x8
+	NL80211_STA_FLAG_TDLS_PEER                              = 0x6
+	NL80211_STA_FLAG_WME                                    = 0x3
+	NL80211_STA_INFO_ACK_SIGNAL_AVG                         = 0x23
+	NL80211_STA_INFO_ACK_SIGNAL                             = 0x22
+	NL80211_STA_INFO_AIRTIME_LINK_METRIC                    = 0x29
+	NL80211_STA_INFO_AIRTIME_WEIGHT                         = 0x28
+	NL80211_STA_INFO_ASSOC_AT_BOOTTIME                      = 0x2a
+	NL80211_STA_INFO_BEACON_LOSS                            = 0x12
+	NL80211_STA_INFO_BEACON_RX                              = 0x1d
+	NL80211_STA_INFO_BEACON_SIGNAL_AVG                      = 0x1e
+	NL80211_STA_INFO_BSS_PARAM                              = 0xf
+	NL80211_STA_INFO_CHAIN_SIGNAL_AVG                       = 0x1a
+	NL80211_STA_INFO_CHAIN_SIGNAL                           = 0x19
+	NL80211_STA_INFO_CONNECTED_TIME                         = 0x10
+	NL80211_STA_INFO_CONNECTED_TO_AS                        = 0x2b
+	NL80211_STA_INFO_CONNECTED_TO_GATE                      = 0x26
+	NL80211_STA_INFO_DATA_ACK_SIGNAL_AVG                    = 0x23
+	NL80211_STA_INFO_EXPECTED_THROUGHPUT                    = 0x1b
+	NL80211_STA_INFO_FCS_ERROR_COUNT                        = 0x25
+	NL80211_STA_INFO_INACTIVE_TIME                          = 0x1
+	NL80211_STA_INFO_LLID                                   = 0x4
+	NL80211_STA_INFO_LOCAL_PM                               = 0x14
+	NL80211_STA_INFO_MAX                                    = 0x2b
+	NL80211_STA_INFO_NONPEER_PM                             = 0x16
+	NL80211_STA_INFO_PAD                                    = 0x21
+	NL80211_STA_INFO_PEER_PM                                = 0x15
+	NL80211_STA_INFO_PLID                                   = 0x5
+	NL80211_STA_INFO_PLINK_STATE                            = 0x6
+	NL80211_STA_INFO_RX_BITRATE                             = 0xe
+	NL80211_STA_INFO_RX_BYTES64                             = 0x17
+	NL80211_STA_INFO_RX_BYTES                               = 0x2
+	NL80211_STA_INFO_RX_DROP_MISC                           = 0x1c
+	NL80211_STA_INFO_RX_DURATION                            = 0x20
+	NL80211_STA_INFO_RX_MPDUS                               = 0x24
+	NL80211_STA_INFO_RX_PACKETS                             = 0x9
+	NL80211_STA_INFO_SIGNAL_AVG                             = 0xd
+	NL80211_STA_INFO_SIGNAL                                 = 0x7
+	NL80211_STA_INFO_STA_FLAGS                              = 0x11
+	NL80211_STA_INFO_TID_STATS                              = 0x1f
+	NL80211_STA_INFO_T_OFFSET                               = 0x13
+	NL80211_STA_INFO_TX_BITRATE                             = 0x8
+	NL80211_STA_INFO_TX_BYTES64                             = 0x18
+	NL80211_STA_INFO_TX_BYTES                               = 0x3
+	NL80211_STA_INFO_TX_DURATION                            = 0x27
+	NL80211_STA_INFO_TX_FAILED                              = 0xc
+	NL80211_STA_INFO_TX_PACKETS                             = 0xa
+	NL80211_STA_INFO_TX_RETRIES                             = 0xb
+	NL80211_STA_WME_MAX                                     = 0x2
+	NL80211_STA_WME_MAX_SP                                  = 0x2
+	NL80211_STA_WME_UAPSD_QUEUES                            = 0x1
+	NL80211_SURVEY_INFO_CHANNEL_TIME_BUSY                   = 0x5
+	NL80211_SURVEY_INFO_CHANNEL_TIME                        = 0x4
+	NL80211_SURVEY_INFO_CHANNEL_TIME_EXT_BUSY               = 0x6
+	NL80211_SURVEY_INFO_CHANNEL_TIME_RX                     = 0x7
+	NL80211_SURVEY_INFO_CHANNEL_TIME_TX                     = 0x8
+	NL80211_SURVEY_INFO_FREQUENCY                           = 0x1
+	NL80211_SURVEY_INFO_FREQUENCY_OFFSET                    = 0xc
+	NL80211_SURVEY_INFO_IN_USE                              = 0x3
+	NL80211_SURVEY_INFO_MAX                                 = 0xc
+	NL80211_SURVEY_INFO_NOISE                               = 0x2
+	NL80211_SURVEY_INFO_PAD                                 = 0xa
+	NL80211_SURVEY_INFO_TIME_BSS_RX                         = 0xb
+	NL80211_SURVEY_INFO_TIME_BUSY                           = 0x5
+	NL80211_SURVEY_INFO_TIME                                = 0x4
+	NL80211_SURVEY_INFO_TIME_EXT_BUSY                       = 0x6
+	NL80211_SURVEY_INFO_TIME_RX                             = 0x7
+	NL80211_SURVEY_INFO_TIME_SCAN                           = 0x9
+	NL80211_SURVEY_INFO_TIME_TX                             = 0x8
+	NL80211_TDLS_DISABLE_LINK                               = 0x4
+	NL80211_TDLS_DISCOVERY_REQ                              = 0x0
+	NL80211_TDLS_ENABLE_LINK                                = 0x3
+	NL80211_TDLS_PEER_HE                                    = 0x8
+	NL80211_TDLS_PEER_HT                                    = 0x1
+	NL80211_TDLS_PEER_VHT                                   = 0x2
+	NL80211_TDLS_PEER_WMM                                   = 0x4
+	NL80211_TDLS_SETUP                                      = 0x1
+	NL80211_TDLS_TEARDOWN                                   = 0x2
+	NL80211_TID_CONFIG_ATTR_AMPDU_CTRL                      = 0x9
+	NL80211_TID_CONFIG_ATTR_AMSDU_CTRL                      = 0xb
+	NL80211_TID_CONFIG_ATTR_MAX                             = 0xd
+	NL80211_TID_CONFIG_ATTR_NOACK                           = 0x6
+	NL80211_TID_CONFIG_ATTR_OVERRIDE                        = 0x4
+	NL80211_TID_CONFIG_ATTR_PAD                             = 0x1
+	NL80211_TID_CONFIG_ATTR_PEER_SUPP                       = 0x3
+	NL80211_TID_CONFIG_ATTR_RETRY_LONG                      = 0x8
+	NL80211_TID_CONFIG_ATTR_RETRY_SHORT                     = 0x7
+	NL80211_TID_CONFIG_ATTR_RTSCTS_CTRL                     = 0xa
+	NL80211_TID_CONFIG_ATTR_TIDS                            = 0x5
+	NL80211_TID_CONFIG_ATTR_TX_RATE                         = 0xd
+	NL80211_TID_CONFIG_ATTR_TX_RATE_TYPE                    = 0xc
+	NL80211_TID_CONFIG_ATTR_VIF_SUPP                        = 0x2
+	NL80211_TID_CONFIG_DISABLE                              = 0x1
+	NL80211_TID_CONFIG_ENABLE                               = 0x0
+	NL80211_TID_STATS_MAX                                   = 0x6
+	NL80211_TID_STATS_PAD                                   = 0x5
+	NL80211_TID_STATS_RX_MSDU                               = 0x1
+	NL80211_TID_STATS_TX_MSDU                               = 0x2
+	NL80211_TID_STATS_TX_MSDU_FAILED                        = 0x4
+	NL80211_TID_STATS_TX_MSDU_RETRIES                       = 0x3
+	NL80211_TID_STATS_TXQ_STATS                             = 0x6
+	NL80211_TIMEOUT_ASSOC                                   = 0x3
+	NL80211_TIMEOUT_AUTH                                    = 0x2
+	NL80211_TIMEOUT_SCAN                                    = 0x1
+	NL80211_TIMEOUT_UNSPECIFIED                             = 0x0
+	NL80211_TKIP_DATA_OFFSET_ENCR_KEY                       = 0x0
+	NL80211_TKIP_DATA_OFFSET_RX_MIC_KEY                     = 0x18
+	NL80211_TKIP_DATA_OFFSET_TX_MIC_KEY                     = 0x10
+	NL80211_TX_POWER_AUTOMATIC                              = 0x0
+	NL80211_TX_POWER_FIXED                                  = 0x2
+	NL80211_TX_POWER_LIMITED                                = 0x1
+	NL80211_TXQ_ATTR_AC                                     = 0x1
+	NL80211_TXQ_ATTR_AIFS                                   = 0x5
+	NL80211_TXQ_ATTR_CWMAX                                  = 0x4
+	NL80211_TXQ_ATTR_CWMIN                                  = 0x3
+	NL80211_TXQ_ATTR_MAX                                    = 0x5
+	NL80211_TXQ_ATTR_QUEUE                                  = 0x1
+	NL80211_TXQ_ATTR_TXOP                                   = 0x2
+	NL80211_TXQ_Q_BE                                        = 0x2
+	NL80211_TXQ_Q_BK                                        = 0x3
+	NL80211_TXQ_Q_VI                                        = 0x1
+	NL80211_TXQ_Q_VO                                        = 0x0
+	NL80211_TXQ_STATS_BACKLOG_BYTES                         = 0x1
+	NL80211_TXQ_STATS_BACKLOG_PACKETS                       = 0x2
+	NL80211_TXQ_STATS_COLLISIONS                            = 0x8
+	NL80211_TXQ_STATS_DROPS                                 = 0x4
+	NL80211_TXQ_STATS_ECN_MARKS                             = 0x5
+	NL80211_TXQ_STATS_FLOWS                                 = 0x3
+	NL80211_TXQ_STATS_MAX                                   = 0xb
+	NL80211_TXQ_STATS_MAX_FLOWS                             = 0xb
+	NL80211_TXQ_STATS_OVERLIMIT                             = 0x6
+	NL80211_TXQ_STATS_OVERMEMORY                            = 0x7
+	NL80211_TXQ_STATS_TX_BYTES                              = 0x9
+	NL80211_TXQ_STATS_TX_PACKETS                            = 0xa
+	NL80211_TX_RATE_AUTOMATIC                               = 0x0
+	NL80211_TXRATE_DEFAULT_GI                               = 0x0
+	NL80211_TX_RATE_FIXED                                   = 0x2
+	NL80211_TXRATE_FORCE_LGI                                = 0x2
+	NL80211_TXRATE_FORCE_SGI                                = 0x1
+	NL80211_TXRATE_GI                                       = 0x4
+	NL80211_TXRATE_HE                                       = 0x5
+	NL80211_TXRATE_HE_GI                                    = 0x6
+	NL80211_TXRATE_HE_LTF                                   = 0x7
+	NL80211_TXRATE_HT                                       = 0x2
+	NL80211_TXRATE_LEGACY                                   = 0x1
+	NL80211_TX_RATE_LIMITED                                 = 0x1
+	NL80211_TXRATE_MAX                                      = 0xa
+	NL80211_TXRATE_MCS                                      = 0x2
+	NL80211_TXRATE_VHT                                      = 0x3
+	NL80211_UNSOL_BCAST_PROBE_RESP_ATTR_INT                 = 0x1
+	NL80211_UNSOL_BCAST_PROBE_RESP_ATTR_MAX                 = 0x2
+	NL80211_UNSOL_BCAST_PROBE_RESP_ATTR_TMPL                = 0x2
+	NL80211_USER_REG_HINT_CELL_BASE                         = 0x1
+	NL80211_USER_REG_HINT_INDOOR                            = 0x2
+	NL80211_USER_REG_HINT_USER                              = 0x0
+	NL80211_VENDOR_ID_IS_LINUX                              = 0x80000000
+	NL80211_VHT_CAPABILITY_LEN                              = 0xc
+	NL80211_VHT_NSS_MAX                                     = 0x8
+	NL80211_WIPHY_NAME_MAXLEN                               = 0x40
+	NL80211_WIPHY_RADIO_ATTR_FREQ_RANGE                     = 0x2
+	NL80211_WIPHY_RADIO_ATTR_INDEX                          = 0x1
+	NL80211_WIPHY_RADIO_ATTR_INTERFACE_COMBINATION          = 0x3
+	NL80211_WIPHY_RADIO_ATTR_MAX                            = 0x5
+	NL80211_WIPHY_RADIO_FREQ_ATTR_END                       = 0x2
+	NL80211_WIPHY_RADIO_FREQ_ATTR_MAX                       = 0x2
+	NL80211_WIPHY_RADIO_FREQ_ATTR_START                     = 0x1
+	NL80211_WMMR_AIFSN                                      = 0x3
+	NL80211_WMMR_CW_MAX                                     = 0x2
+	NL80211_WMMR_CW_MIN                                     = 0x1
+	NL80211_WMMR_MAX                                        = 0x4
+	NL80211_WMMR_TXOP                                       = 0x4
+	NL80211_WOWLAN_PKTPAT_MASK                              = 0x1
+	NL80211_WOWLAN_PKTPAT_OFFSET                            = 0x3
+	NL80211_WOWLAN_PKTPAT_PATTERN                           = 0x2
+	NL80211_WOWLAN_TCP_DATA_INTERVAL                        = 0x9
+	NL80211_WOWLAN_TCP_DATA_PAYLOAD                         = 0x6
+	NL80211_WOWLAN_TCP_DATA_PAYLOAD_SEQ                     = 0x7
+	NL80211_WOWLAN_TCP_DATA_PAYLOAD_TOKEN                   = 0x8
+	NL80211_WOWLAN_TCP_DST_IPV4                             = 0x2
+	NL80211_WOWLAN_TCP_DST_MAC                              = 0x3
+	NL80211_WOWLAN_TCP_DST_PORT                             = 0x5
+	NL80211_WOWLAN_TCP_SRC_IPV4                             = 0x1
+	NL80211_WOWLAN_TCP_SRC_PORT                             = 0x4
+	NL80211_WOWLAN_TCP_WAKE_MASK                            = 0xb
+	NL80211_WOWLAN_TCP_WAKE_PAYLOAD                         = 0xa
+	NL80211_WOWLAN_TRIG_4WAY_HANDSHAKE                      = 0x8
+	NL80211_WOWLAN_TRIG_ANY                                 = 0x1
+	NL80211_WOWLAN_TRIG_DISCONNECT                          = 0x2
+	NL80211_WOWLAN_TRIG_EAP_IDENT_REQUEST                   = 0x7
+	NL80211_WOWLAN_TRIG_GTK_REKEY_FAILURE                   = 0x6
+	NL80211_WOWLAN_TRIG_GTK_REKEY_SUPPORTED                 = 0x5
+	NL80211_WOWLAN_TRIG_MAGIC_PKT                           = 0x3
+	NL80211_WOWLAN_TRIG_NET_DETECT                          = 0x12
+	NL80211_WOWLAN_TRIG_NET_DETECT_RESULTS                  = 0x13
+	NL80211_WOWLAN_TRIG_PKT_PATTERN                         = 0x4
+	NL80211_WOWLAN_TRIG_RFKILL_RELEASE                      = 0x9
+	NL80211_WOWLAN_TRIG_TCP_CONNECTION                      = 0xe
+	NL80211_WOWLAN_TRIG_UNPROTECTED_DEAUTH_DISASSOC         = 0x14
+	NL80211_WOWLAN_TRIG_WAKEUP_PKT_80211                    = 0xa
+	NL80211_WOWLAN_TRIG_WAKEUP_PKT_80211_LEN                = 0xb
+	NL80211_WOWLAN_TRIG_WAKEUP_PKT_8023                     = 0xc
+	NL80211_WOWLAN_TRIG_WAKEUP_PKT_8023_LEN                 = 0xd
+	NL80211_WOWLAN_TRIG_WAKEUP_TCP_CONNLOST                 = 0x10
+	NL80211_WOWLAN_TRIG_WAKEUP_TCP_MATCH                    = 0xf
+	NL80211_WOWLAN_TRIG_WAKEUP_TCP_NOMORETOKENS             = 0x11
+	NL80211_WPA_VERSION_1                                   = 0x1
+	NL80211_WPA_VERSION_2                                   = 0x2
+	NL80211_WPA_VERSION_3                                   = 0x4
+)
+
+const (
+	FRA_UNSPEC             = 0x0
+	FRA_DST                = 0x1
+	FRA_SRC                = 0x2
+	FRA_IIFNAME            = 0x3
+	FRA_GOTO               = 0x4
+	FRA_UNUSED2            = 0x5
+	FRA_PRIORITY           = 0x6
+	FRA_UNUSED3            = 0x7
+	FRA_UNUSED4            = 0x8
+	FRA_UNUSED5            = 0x9
+	FRA_FWMARK             = 0xa
+	FRA_FLOW               = 0xb
+	FRA_TUN_ID             = 0xc
+	FRA_SUPPRESS_IFGROUP   = 0xd
+	FRA_SUPPRESS_PREFIXLEN = 0xe
+	FRA_TABLE              = 0xf
+	FRA_FWMASK             = 0x10
+	FRA_OIFNAME            = 0x11
+	FRA_PAD                = 0x12
+	FRA_L3MDEV             = 0x13
+	FRA_UID_RANGE          = 0x14
+	FRA_PROTOCOL           = 0x15
+	FRA_IP_PROTO           = 0x16
+	FRA_SPORT_RANGE        = 0x17
+	FRA_DPORT_RANGE        = 0x18
+	FR_ACT_UNSPEC          = 0x0
+	FR_ACT_TO_TBL          = 0x1
+	FR_ACT_GOTO            = 0x2
+	FR_ACT_NOP             = 0x3
+	FR_ACT_RES3            = 0x4
+	FR_ACT_RES4            = 0x5
+	FR_ACT_BLACKHOLE       = 0x6
+	FR_ACT_UNREACHABLE     = 0x7
+	FR_ACT_PROHIBIT        = 0x8
+)
+
+const (
+	AUDIT_NLGRP_NONE    = 0x0
+	AUDIT_NLGRP_READLOG = 0x1
+)
+
+const (
+	TUN_F_CSUM    = 0x1
+	TUN_F_TSO4    = 0x2
+	TUN_F_TSO6    = 0x4
+	TUN_F_TSO_ECN = 0x8
+	TUN_F_UFO     = 0x10
+	TUN_F_USO4    = 0x20
+	TUN_F_USO6    = 0x40
+)
+
+const (
+	VIRTIO_NET_HDR_F_NEEDS_CSUM = 0x1
+	VIRTIO_NET_HDR_F_DATA_VALID = 0x2
+	VIRTIO_NET_HDR_F_RSC_INFO   = 0x4
+)
+
+const (
+	VIRTIO_NET_HDR_GSO_NONE   = 0x0
+	VIRTIO_NET_HDR_GSO_TCPV4  = 0x1
+	VIRTIO_NET_HDR_GSO_UDP    = 0x3
+	VIRTIO_NET_HDR_GSO_TCPV6  = 0x4
+	VIRTIO_NET_HDR_GSO_UDP_L4 = 0x5
+	VIRTIO_NET_HDR_GSO_ECN    = 0x80
+)
+
+type SchedAttr struct {
+	Size     uint32
+	Policy   uint32
+	Flags    uint64
+	Nice     int32
+	Priority uint32
+	Runtime  uint64
+	Deadline uint64
+	Period   uint64
+	Util_min uint32
+	Util_max uint32
+}
+
+const SizeofSchedAttr = 0x38
+
+type Cachestat_t struct {
+	Cache            uint64
+	Dirty            uint64
+	Writeback        uint64
+	Evicted          uint64
+	Recently_evicted uint64
+}
+type CachestatRange struct {
+	Off uint64
+	Len uint64
+}
+
+const (
+	SK_MEMINFO_RMEM_ALLOC          = 0x0
+	SK_MEMINFO_RCVBUF              = 0x1
+	SK_MEMINFO_WMEM_ALLOC          = 0x2
+	SK_MEMINFO_SNDBUF              = 0x3
+	SK_MEMINFO_FWD_ALLOC           = 0x4
+	SK_MEMINFO_WMEM_QUEUED         = 0x5
+	SK_MEMINFO_OPTMEM              = 0x6
+	SK_MEMINFO_BACKLOG             = 0x7
+	SK_MEMINFO_DROPS               = 0x8
+	SK_MEMINFO_VARS                = 0x9
+	SKNLGRP_NONE                   = 0x0
+	SKNLGRP_INET_TCP_DESTROY       = 0x1
+	SKNLGRP_INET_UDP_DESTROY       = 0x2
+	SKNLGRP_INET6_TCP_DESTROY      = 0x3
+	SKNLGRP_INET6_UDP_DESTROY      = 0x4
+	SK_DIAG_BPF_STORAGE_REQ_NONE   = 0x0
+	SK_DIAG_BPF_STORAGE_REQ_MAP_FD = 0x1
+	SK_DIAG_BPF_STORAGE_REP_NONE   = 0x0
+	SK_DIAG_BPF_STORAGE            = 0x1
+	SK_DIAG_BPF_STORAGE_NONE       = 0x0
+	SK_DIAG_BPF_STORAGE_PAD        = 0x1
+	SK_DIAG_BPF_STORAGE_MAP_ID     = 0x2
+	SK_DIAG_BPF_STORAGE_MAP_VALUE  = 0x3
+)
+
+type SockDiagReq struct {
+	Family   uint8
+	Protocol uint8
+}
+
+const RTM_NEWNVLAN = 0x70
+
+const (
+	MPOL_BIND                = 0x2
+	MPOL_DEFAULT             = 0x0
+	MPOL_F_ADDR              = 0x2
+	MPOL_F_MEMS_ALLOWED      = 0x4
+	MPOL_F_MOF               = 0x8
+	MPOL_F_MORON             = 0x10
+	MPOL_F_NODE              = 0x1
+	MPOL_F_NUMA_BALANCING    = 0x2000
+	MPOL_F_RELATIVE_NODES    = 0x4000
+	MPOL_F_SHARED            = 0x1
+	MPOL_F_STATIC_NODES      = 0x8000
+	MPOL_INTERLEAVE          = 0x3
+	MPOL_LOCAL               = 0x4
+	MPOL_MAX                 = 0x7
+	MPOL_MF_INTERNAL         = 0x10
+	MPOL_MF_LAZY             = 0x8
+	MPOL_MF_MOVE_ALL         = 0x4
+	MPOL_MF_MOVE             = 0x2
+	MPOL_MF_STRICT           = 0x1
+	MPOL_MF_VALID            = 0x7
+	MPOL_MODE_FLAGS          = 0xe000
+	MPOL_PREFERRED           = 0x1
+	MPOL_PREFERRED_MANY      = 0x5
+	MPOL_WEIGHTED_INTERLEAVE = 0x6
+)
+
+const (
+	GPIO_V2_GET_LINEINFO_IOCTL       = 0xc100b405
+	GPIO_V2_GET_LINE_IOCTL           = 0xc250b407
+	GPIO_V2_LINE_GET_VALUES_IOCTL    = 0xc010b40e
+	GPIO_V2_LINE_SET_VALUES_IOCTL    = 0xc010b40f
+	GPIO_V2_GET_LINEINFO_WATCH_IOCTL = 0xc100b406
+	GPIO_GET_LINEINFO_UNWATCH_IOCTL  = 0xc004b40c
+)
+const (
+	GPIO_V2_LINE_ATTR_ID_FLAGS         = 0x1
+	GPIO_V2_LINE_ATTR_ID_OUTPUT_VALUES = 0x2
+	GPIO_V2_LINE_ATTR_ID_DEBOUNCE      = 0x3
+	GPIO_V2_LINE_CHANGED_REQUESTED     = 0x1
+	GPIO_V2_LINE_CHANGED_RELEASED      = 0x2
+	GPIO_V2_LINE_CHANGED_CONFIG        = 0x3
+	GPIO_V2_LINE_EVENT_RISING_EDGE     = 0x1
+	GPIO_V2_LINE_EVENT_FALLING_EDGE    = 0x2
+)
+
+type GPIOChipInfo struct {
+	Name  [32]byte
+	Label [32]byte
+	Lines uint32
+}
+type GPIOV2LineValues struct {
+	Bits uint64
+	Mask uint64
+}
+type GPIOV2LineAttribute struct {
+	Id    uint32
+	_     uint32
+	Flags uint64
+}
+type GPIOV2LineConfigAttribute struct {
+	Attr GPIOV2LineAttribute
+	Mask uint64
+}
+type GPIOV2LineConfig struct {
+	Flags     uint64
+	Num_attrs uint32
+	_         [5]uint32
+	Attrs     [10]GPIOV2LineConfigAttribute
+}
+type GPIOV2LineRequest struct {
+	Offsets           [64]uint32
+	Consumer          [32]byte
+	Config            GPIOV2LineConfig
+	Num_lines         uint32
+	Event_buffer_size uint32
+	_                 [5]uint32
+	Fd                int32
+}
+type GPIOV2LineInfo struct {
+	Name      [32]byte
+	Consumer  [32]byte
+	Offset    uint32
+	Num_attrs uint32
+	Flags     uint64
+	Attrs     [10]GPIOV2LineAttribute
+	_         [4]uint32
+}
+type GPIOV2LineInfoChanged struct {
+	Info         GPIOV2LineInfo
+	Timestamp_ns uint64
+	Event_type   uint32
+	_            [5]uint32
+}
+type GPIOV2LineEvent struct {
+	Timestamp_ns uint64
+	Id           uint32
+	Offset       uint32
+	Seqno        uint32
+	Line_seqno   uint32
+	_            [6]uint32
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/sys/unix/ztypes_linux_386.go","mode":420,"size":13482,"sha256":"835d85137e8d116c92f7d14d0e6ddc0c5d4306072333d0cd3caf95cf186f8831","index":0,"count":1,"encoding":"utf-8","payloadBytes":13482}
+// cgo -godefs -objdir=/tmp/386/cgo -- -Wall -Werror -static -I/tmp/386/include -m32 linux/types.go | go run mkpost.go
+// Code generated by the command above; see README.md. DO NOT EDIT.
+
+//go:build 386 && linux
+
+package unix
+
+const (
+	SizeofPtr  = 0x4
+	SizeofLong = 0x4
+)
+
+type (
+	_C_long int32
+)
+
+type Timespec struct {
+	Sec  int32
+	Nsec int32
+}
+
+type Timeval struct {
+	Sec  int32
+	Usec int32
+}
+
+type Timex struct {
+	Modes     uint32
+	Offset    int32
+	Freq      int32
+	Maxerror  int32
+	Esterror  int32
+	Status    int32
+	Constant  int32
+	Precision int32
+	Tolerance int32
+	Time      Timeval
+	Tick      int32
+	Ppsfreq   int32
+	Jitter    int32
+	Shift     int32
+	Stabil    int32
+	Jitcnt    int32
+	Calcnt    int32
+	Errcnt    int32
+	Stbcnt    int32
+	Tai       int32
+	_         [44]byte
+}
+
+type Time_t int32
+
+type Tms struct {
+	Utime  int32
+	Stime  int32
+	Cutime int32
+	Cstime int32
+}
+
+type Utimbuf struct {
+	Actime  int32
+	Modtime int32
+}
+
+type Rusage struct {
+	Utime    Timeval
+	Stime    Timeval
+	Maxrss   int32
+	Ixrss    int32
+	Idrss    int32
+	Isrss    int32
+	Minflt   int32
+	Majflt   int32
+	Nswap    int32
+	Inblock  int32
+	Oublock  int32
+	Msgsnd   int32
+	Msgrcv   int32
+	Nsignals int32
+	Nvcsw    int32
+	Nivcsw   int32
+}
+
+type Stat_t struct {
+	Dev     uint64
+	_       uint16
+	_       uint32
+	Mode    uint32
+	Nlink   uint32
+	Uid     uint32
+	Gid     uint32
+	Rdev    uint64
+	_       uint16
+	Size    int64
+	Blksize int32
+	Blocks  int64
+	Atim    Timespec
+	Mtim    Timespec
+	Ctim    Timespec
+	Ino     uint64
+}
+
+type Dirent struct {
+	Ino    uint64
+	Off    int64
+	Reclen uint16
+	Type   uint8
+	Name   [256]int8
+	_      [1]byte
+}
+
+type Flock_t struct {
+	Type   int16
+	Whence int16
+	Start  int64
+	Len    int64
+	Pid    int32
+}
+
+type DmNameList struct {
+	Dev  uint64
+	Next uint32
+}
+
+const (
+	FADV_DONTNEED = 0x4
+	FADV_NOREUSE  = 0x5
+)
+
+type RawSockaddrNFCLLCP struct {
+	Sa_family        uint16
+	Dev_idx          uint32
+	Target_idx       uint32
+	Nfc_protocol     uint32
+	Dsap             uint8
+	Ssap             uint8
+	Service_name     [63]uint8
+	Service_name_len uint32
+}
+
+type RawSockaddr struct {
+	Family uint16
+	Data   [14]int8
+}
+
+type RawSockaddrAny struct {
+	Addr RawSockaddr
+	Pad  [96]int8
+}
+
+type Iovec struct {
+	Base *byte
+	Len  uint32
+}
+
+type Msghdr struct {
+	Name       *byte
+	Namelen    uint32
+	Iov        *Iovec
+	Iovlen     uint32
+	Control    *byte
+	Controllen uint32
+	Flags      int32
+}
+
+type Cmsghdr struct {
+	Len   uint32
+	Level int32
+	Type  int32
+}
+
+type ifreq struct {
+	Ifrn [16]byte
+	Ifru [16]byte
+}
+
+const (
+	SizeofSockaddrNFCLLCP = 0x58
+	SizeofIovec           = 0x8
+	SizeofMsghdr          = 0x1c
+	SizeofCmsghdr         = 0xc
+)
+
+const (
+	SizeofSockFprog = 0x8
+)
+
+type PtraceRegs struct {
+	Ebx      int32
+	Ecx      int32
+	Edx      int32
+	Esi      int32
+	Edi      int32
+	Ebp      int32
+	Eax      int32
+	Xds      int32
+	Xes      int32
+	Xfs      int32
+	Xgs      int32
+	Orig_eax int32
+	Eip      int32
+	Xcs      int32
+	Eflags   int32
+	Esp      int32
+	Xss      int32
+}
+
+type FdSet struct {
+	Bits [32]int32
+}
+
+type Sysinfo_t struct {
+	Uptime    int32
+	Loads     [3]uint32
+	Totalram  uint32
+	Freeram   uint32
+	Sharedram uint32
+	Bufferram uint32
+	Totalswap uint32
+	Freeswap  uint32
+	Procs     uint16
+	Pad       uint16
+	Totalhigh uint32
+	Freehigh  uint32
+	Unit      uint32
+	_         [8]int8
+}
+
+type Ustat_t struct {
+	Tfree  int32
+	Tinode uint32
+	Fname  [6]int8
+	Fpack  [6]int8
+}
+
+type EpollEvent struct {
+	Events uint32
+	Fd     int32
+	Pad    int32
+}
+
+const (
+	OPEN_TREE_CLOEXEC = 0x80000
+)
+
+const (
+	POLLRDHUP = 0x2000
+)
+
+type Sigset_t struct {
+	Val [32]uint32
+}
+
+const _C__NSIG = 0x41
+
+const (
+	SIG_BLOCK   = 0x0
+	SIG_UNBLOCK = 0x1
+	SIG_SETMASK = 0x2
+)
+
+type Siginfo struct {
+	Signo int32
+	Errno int32
+	Code  int32
+	_     [116]byte
+}
+
+type Termios struct {
+	Iflag  uint32
+	Oflag  uint32
+	Cflag  uint32
+	Lflag  uint32
+	Line   uint8
+	Cc     [19]uint8
+	Ispeed uint32
+	Ospeed uint32
+}
+
+type Taskstats struct {
+	Version                   uint16
+	Ac_exitcode               uint32
+	Ac_flag                   uint8
+	Ac_nice                   uint8
+	_                         [6]byte
+	Cpu_count                 uint64
+	Cpu_delay_total           uint64
+	Blkio_count               uint64
+	Blkio_delay_total         uint64
+	Swapin_count              uint64
+	Swapin_delay_total        uint64
+	Cpu_run_real_total        uint64
+	Cpu_run_virtual_total     uint64
+	Ac_comm                   [32]int8
+	Ac_sched                  uint8
+	Ac_pad                    [3]uint8
+	_                         [4]byte
+	Ac_uid                    uint32
+	Ac_gid                    uint32
+	Ac_pid                    uint32
+	Ac_ppid                   uint32
+	Ac_btime                  uint32
+	_                         [4]byte
+	Ac_etime                  uint64
+	Ac_utime                  uint64
+	Ac_stime                  uint64
+	Ac_minflt                 uint64
+	Ac_majflt                 uint64
+	Coremem                   uint64
+	Virtmem                   uint64
+	Hiwater_rss               uint64
+	Hiwater_vm                uint64
+	Read_char                 uint64
+	Write_char                uint64
+	Read_syscalls             uint64
+	Write_syscalls            uint64
+	Read_bytes                uint64
+	Write_bytes               uint64
+	Cancelled_write_bytes     uint64
+	Nvcsw                     uint64
+	Nivcsw                    uint64
+	Ac_utimescaled            uint64
+	Ac_stimescaled            uint64
+	Cpu_scaled_run_real_total uint64
+	Freepages_count           uint64
+	Freepages_delay_total     uint64
+	Thrashing_count           uint64
+	Thrashing_delay_total     uint64
+	Ac_btime64                uint64
+	Compact_count             uint64
+	Compact_delay_total       uint64
+	Ac_tgid                   uint32
+	_                         [4]byte
+	Ac_tgetime                uint64
+	Ac_exe_dev                uint64
+	Ac_exe_inode              uint64
+	Wpcopy_count              uint64
+	Wpcopy_delay_total        uint64
+	Irq_count                 uint64
+	Irq_delay_total           uint64
+	Cpu_delay_max             uint64
+	Cpu_delay_min             uint64
+	Blkio_delay_max           uint64
+	Blkio_delay_min           uint64
+	Swapin_delay_max          uint64
+	Swapin_delay_min          uint64
+	Freepages_delay_max       uint64
+	Freepages_delay_min       uint64
+	Thrashing_delay_max       uint64
+	Thrashing_delay_min       uint64
+	Compact_delay_max         uint64
+	Compact_delay_min         uint64
+	Wpcopy_delay_max          uint64
+	Wpcopy_delay_min          uint64
+	Irq_delay_max             uint64
+	Irq_delay_min             uint64
+	Cpu_delay_max_ts          KernelTimespec
+	Blkio_delay_max_ts        KernelTimespec
+	Swapin_delay_max_ts       KernelTimespec
+	Freepages_delay_max_ts    KernelTimespec
+	Thrashing_delay_max_ts    KernelTimespec
+	Compact_delay_max_ts      KernelTimespec
+	Wpcopy_delay_max_ts       KernelTimespec
+	Irq_delay_max_ts          KernelTimespec
+}
+
+type cpuMask uint32
+
+const (
+	_NCPUBITS = 0x20
+)
+
+const (
+	CBitFieldMaskBit0  = 0x1
+	CBitFieldMaskBit1  = 0x2
+	CBitFieldMaskBit2  = 0x4
+	CBitFieldMaskBit3  = 0x8
+	CBitFieldMaskBit4  = 0x10
+	CBitFieldMaskBit5  = 0x20
+	CBitFieldMaskBit6  = 0x40
+	CBitFieldMaskBit7  = 0x80
+	CBitFieldMaskBit8  = 0x100
+	CBitFieldMaskBit9  = 0x200
+	CBitFieldMaskBit10 = 0x400
+	CBitFieldMaskBit11 = 0x800
+	CBitFieldMaskBit12 = 0x1000
+	CBitFieldMaskBit13 = 0x2000
+	CBitFieldMaskBit14 = 0x4000
+	CBitFieldMaskBit15 = 0x8000
+	CBitFieldMaskBit16 = 0x10000
+	CBitFieldMaskBit17 = 0x20000
+	CBitFieldMaskBit18 = 0x40000
+	CBitFieldMaskBit19 = 0x80000
+	CBitFieldMaskBit20 = 0x100000
+	CBitFieldMaskBit21 = 0x200000
+	CBitFieldMaskBit22 = 0x400000
+	CBitFieldMaskBit23 = 0x800000
+	CBitFieldMaskBit24 = 0x1000000
+	CBitFieldMaskBit25 = 0x2000000
+	CBitFieldMaskBit26 = 0x4000000
+	CBitFieldMaskBit27 = 0x8000000
+	CBitFieldMaskBit28 = 0x10000000
+	CBitFieldMaskBit29 = 0x20000000
+	CBitFieldMaskBit30 = 0x40000000
+	CBitFieldMaskBit31 = 0x80000000
+	CBitFieldMaskBit32 = 0x100000000
+	CBitFieldMaskBit33 = 0x200000000
+	CBitFieldMaskBit34 = 0x400000000
+	CBitFieldMaskBit35 = 0x800000000
+	CBitFieldMaskBit36 = 0x1000000000
+	CBitFieldMaskBit37 = 0x2000000000
+	CBitFieldMaskBit38 = 0x4000000000
+	CBitFieldMaskBit39 = 0x8000000000
+	CBitFieldMaskBit40 = 0x10000000000
+	CBitFieldMaskBit41 = 0x20000000000
+	CBitFieldMaskBit42 = 0x40000000000
+	CBitFieldMaskBit43 = 0x80000000000
+	CBitFieldMaskBit44 = 0x100000000000
+	CBitFieldMaskBit45 = 0x200000000000
+	CBitFieldMaskBit46 = 0x400000000000
+	CBitFieldMaskBit47 = 0x800000000000
+	CBitFieldMaskBit48 = 0x1000000000000
+	CBitFieldMaskBit49 = 0x2000000000000
+	CBitFieldMaskBit50 = 0x4000000000000
+	CBitFieldMaskBit51 = 0x8000000000000
+	CBitFieldMaskBit52 = 0x10000000000000
+	CBitFieldMaskBit53 = 0x20000000000000
+	CBitFieldMaskBit54 = 0x40000000000000
+	CBitFieldMaskBit55 = 0x80000000000000
+	CBitFieldMaskBit56 = 0x100000000000000
+	CBitFieldMaskBit57 = 0x200000000000000
+	CBitFieldMaskBit58 = 0x400000000000000
+	CBitFieldMaskBit59 = 0x800000000000000
+	CBitFieldMaskBit60 = 0x1000000000000000
+	CBitFieldMaskBit61 = 0x2000000000000000
+	CBitFieldMaskBit62 = 0x4000000000000000
+	CBitFieldMaskBit63 = 0x8000000000000000
+)
+
+type SockaddrStorage struct {
+	Family uint16
+	Data   [122]byte
+	_      uint32
+}
+
+type HDGeometry struct {
+	Heads     uint8
+	Sectors   uint8
+	Cylinders uint16
+	Start     uint32
+}
+
+type Statfs_t struct {
+	Type    int32
+	Bsize   int32
+	Blocks  uint64
+	Bfree   uint64
+	Bavail  uint64
+	Files   uint64
+	Ffree   uint64
+	Fsid    Fsid
+	Namelen int32
+	Frsize  int32
+	Flags   int32
+	Spare   [4]int32
+}
+
+type TpacketHdr struct {
+	Status  uint32
+	Len     uint32
+	Snaplen uint32
+	Mac     uint16
+	Net     uint16
+	Sec     uint32
+	Usec    uint32
+}
+
+const (
+	SizeofTpacketHdr = 0x18
+)
+
+type RTCPLLInfo struct {
+	Ctrl    int32
+	Value   int32
+	Max     int32
+	Min     int32
+	Posmult int32
+	Negmult int32
+	Clock   int32
+}
+
+type BlkpgPartition struct {
+	Start   int64
+	Length  int64
+	Pno     int32
+	Devname [64]uint8
+	Volname [64]uint8
+}
+
+const (
+	BLKPG = 0x1269
+)
+
+type CryptoUserAlg struct {
+	Name        [64]int8
+	Driver_name [64]int8
+	Module_name [64]int8
+	Type        uint32
+	Mask        uint32
+	Refcnt      uint32
+	Flags       uint32
+}
+
+type CryptoStatAEAD struct {
+	Type         [64]int8
+	Encrypt_cnt  uint64
+	Encrypt_tlen uint64
+	Decrypt_cnt  uint64
+	Decrypt_tlen uint64
+	Err_cnt      uint64
+}
+
+type CryptoStatAKCipher struct {
+	Type         [64]int8
+	Encrypt_cnt  uint64
+	Encrypt_tlen uint64
+	Decrypt_cnt  uint64
+	Decrypt_tlen uint64
+	Verify_cnt   uint64
+	Sign_cnt     uint64
+	Err_cnt      uint64
+}
+
+type CryptoStatCipher struct {
+	Type         [64]int8
+	Encrypt_cnt  uint64
+	Encrypt_tlen uint64
+	Decrypt_cnt  uint64
+	Decrypt_tlen uint64
+	Err_cnt      uint64
+}
+
+type CryptoStatCompress struct {
+	Type            [64]int8
+	Compress_cnt    uint64
+	Compress_tlen   uint64
+	Decompress_cnt  uint64
+	Decompress_tlen uint64
+	Err_cnt         uint64
+}
+
+type CryptoStatHash struct {
+	Type      [64]int8
+	Hash_cnt  uint64
+	Hash_tlen uint64
+	Err_cnt   uint64
+}
+
+type CryptoStatKPP struct {
+	Type                      [64]int8
+	Setsecret_cnt             uint64
+	Generate_public_key_cnt   uint64
+	Compute_shared_secret_cnt uint64
+	Err_cnt                   uint64
+}
+
+type CryptoStatRNG struct {
+	Type          [64]int8
+	Generate_cnt  uint64
+	Generate_tlen uint64
+	Seed_cnt      uint64
+	Err_cnt       uint64
+}
+
+type CryptoStatLarval struct {
+	Type [64]int8
+}
+
+type CryptoReportLarval struct {
+	Type [64]int8
+}
+
+type CryptoReportHash struct {
+	Type       [64]int8
+	Blocksize  uint32
+	Digestsize uint32
+}
+
+type CryptoReportCipher struct {
+	Type        [64]int8
+	Blocksize   uint32
+	Min_keysize uint32
+	Max_keysize uint32
+}
+
+type CryptoReportBlkCipher struct {
+	Type        [64]int8
+	Geniv       [64]int8
+	Blocksize   uint32
+	Min_keysize uint32
+	Max_keysize uint32
+	Ivsize      uint32
+}
+
+type CryptoReportAEAD struct {
+	Type        [64]int8
+	Geniv       [64]int8
+	Blocksize   uint32
+	Maxauthsize uint32
+	Ivsize      uint32
+}
+
+type CryptoReportComp struct {
+	Type [64]int8
+}
+
+type CryptoReportRNG struct {
+	Type     [64]int8
+	Seedsize uint32
+}
+
+type CryptoReportAKCipher struct {
+	Type [64]int8
+}
+
+type CryptoReportKPP struct {
+	Type [64]int8
+}
+
+type CryptoReportAcomp struct {
+	Type [64]int8
+}
+
+type LoopInfo struct {
+	Number           int32
+	Device           uint16
+	Inode            uint32
+	Rdevice          uint16
+	Offset           int32
+	Encrypt_type     int32
+	Encrypt_key_size int32
+	Flags            int32
+	Name             [64]int8
+	Encrypt_key      [32]uint8
+	Init             [2]uint32
+	Reserved         [4]int8
+}
+
+type TIPCSubscr struct {
+	Seq     TIPCServiceRange
+	Timeout uint32
+	Filter  uint32
+	Handle  [8]int8
+}
+
+type TIPCSIOCLNReq struct {
+	Peer     uint32
+	Id       uint32
+	Linkname [68]int8
+}
+
+type TIPCSIOCNodeIDReq struct {
+	Peer uint32
+	Id   [16]int8
+}
+
+type PPSKInfo struct {
+	Assert_sequence uint32
+	Clear_sequence  uint32
+	Assert_tu       PPSKTime
+	Clear_tu        PPSKTime
+	Current_mode    int32
+}
+
+const (
+	PPS_GETPARAMS = 0x800470a1
+	PPS_SETPARAMS = 0x400470a2
+	PPS_GETCAP    = 0x800470a3
+	PPS_FETCH     = 0xc00470a4
+)
+
+const (
+	PIDFD_NONBLOCK = 0x800
+)
+
+type SysvIpcPerm struct {
+	Key  int32
+	Uid  uint32
+	Gid  uint32
+	Cuid uint32
+	Cgid uint32
+	Mode uint16
+	_    [2]uint8
+	Seq  uint16
+	_    uint16
+	_    uint32
+	_    uint32
+}
+type SysvShmDesc struct {
+	Perm       SysvIpcPerm
+	Segsz      uint32
+	Atime      uint32
+	Atime_high uint32
+	Dtime      uint32
+	Dtime_high uint32
+	Ctime      uint32
+	Ctime_high uint32
+	Cpid       int32
+	Lpid       int32
+	Nattch     uint32
+	_          uint32
+	_          uint32
+}
+
+const (
+	GPIO_GET_CHIPINFO_IOCTL = 0x8044b401
+)
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/sys/unix/ztypes_linux_amd64.go","mode":420,"size":13655,"sha256":"f057c46400ef36587cd8516928f81e934f65d81dcfed58f5b8b2afe52a658664","index":0,"count":1,"encoding":"utf-8","payloadBytes":13655}
+// cgo -godefs -objdir=/tmp/amd64/cgo -- -Wall -Werror -static -I/tmp/amd64/include -m64 linux/types.go | go run mkpost.go
+// Code generated by the command above; see README.md. DO NOT EDIT.
+
+//go:build amd64 && linux
+
+package unix
+
+const (
+	SizeofPtr  = 0x8
+	SizeofLong = 0x8
+)
+
+type (
+	_C_long int64
+)
+
+type Timespec struct {
+	Sec  int64
+	Nsec int64
+}
+
+type Timeval struct {
+	Sec  int64
+	Usec int64
+}
+
+type Timex struct {
+	Modes     uint32
+	Offset    int64
+	Freq      int64
+	Maxerror  int64
+	Esterror  int64
+	Status    int32
+	Constant  int64
+	Precision int64
+	Tolerance int64
+	Time      Timeval
+	Tick      int64
+	Ppsfreq   int64
+	Jitter    int64
+	Shift     int32
+	Stabil    int64
+	Jitcnt    int64
+	Calcnt    int64
+	Errcnt    int64
+	Stbcnt    int64
+	Tai       int32
+	_         [44]byte
+}
+
+type Time_t int64
+
+type Tms struct {
+	Utime  int64
+	Stime  int64
+	Cutime int64
+	Cstime int64
+}
+
+type Utimbuf struct {
+	Actime  int64
+	Modtime int64
+}
+
+type Rusage struct {
+	Utime    Timeval
+	Stime    Timeval
+	Maxrss   int64
+	Ixrss    int64
+	Idrss    int64
+	Isrss    int64
+	Minflt   int64
+	Majflt   int64
+	Nswap    int64
+	Inblock  int64
+	Oublock  int64
+	Msgsnd   int64
+	Msgrcv   int64
+	Nsignals int64
+	Nvcsw    int64
+	Nivcsw   int64
+}
+
+type Stat_t struct {
+	Dev     uint64
+	Ino     uint64
+	Nlink   uint64
+	Mode    uint32
+	Uid     uint32
+	Gid     uint32
+	_       int32
+	Rdev    uint64
+	Size    int64
+	Blksize int64
+	Blocks  int64
+	Atim    Timespec
+	Mtim    Timespec
+	Ctim    Timespec
+	_       [3]int64
+}
+
+type Dirent struct {
+	Ino    uint64
+	Off    int64
+	Reclen uint16
+	Type   uint8
+	Name   [256]int8
+	_      [5]byte
+}
+
+type Flock_t struct {
+	Type   int16
+	Whence int16
+	Start  int64
+	Len    int64
+	Pid    int32
+	_      [4]byte
+}
+
+type DmNameList struct {
+	Dev  uint64
+	Next uint32
+	Name [0]byte
+	_    [4]byte
+}
+
+const (
+	FADV_DONTNEED = 0x4
+	FADV_NOREUSE  = 0x5
+)
+
+type RawSockaddrNFCLLCP struct {
+	Sa_family        uint16
+	Dev_idx          uint32
+	Target_idx       uint32
+	Nfc_protocol     uint32
+	Dsap             uint8
+	Ssap             uint8
+	Service_name     [63]uint8
+	Service_name_len uint64
+}
+
+type RawSockaddr struct {
+	Family uint16
+	Data   [14]int8
+}
+
+type RawSockaddrAny struct {
+	Addr RawSockaddr
+	Pad  [96]int8
+}
+
+type Iovec struct {
+	Base *byte
+	Len  uint64
+}
+
+type Msghdr struct {
+	Name       *byte
+	Namelen    uint32
+	Iov        *Iovec
+	Iovlen     uint64
+	Control    *byte
+	Controllen uint64
+	Flags      int32
+	_          [4]byte
+}
+
+type Cmsghdr struct {
+	Len   uint64
+	Level int32
+	Type  int32
+}
+
+type ifreq struct {
+	Ifrn [16]byte
+	Ifru [24]byte
+}
+
+const (
+	SizeofSockaddrNFCLLCP = 0x60
+	SizeofIovec           = 0x10
+	SizeofMsghdr          = 0x38
+	SizeofCmsghdr         = 0x10
+)
+
+const (
+	SizeofSockFprog = 0x10
+)
+
+type PtraceRegs struct {
+	R15      uint64
+	R14      uint64
+	R13      uint64
+	R12      uint64
+	Rbp      uint64
+	Rbx      uint64
+	R11      uint64
+	R10      uint64
+	R9       uint64
+	R8       uint64
+	Rax      uint64
+	Rcx      uint64
+	Rdx      uint64
+	Rsi      uint64
+	Rdi      uint64
+	Orig_rax uint64
+	Rip      uint64
+	Cs       uint64
+	Eflags   uint64
+	Rsp      uint64
+	Ss       uint64
+	Fs_base  uint64
+	Gs_base  uint64
+	Ds       uint64
+	Es       uint64
+	Fs       uint64
+	Gs       uint64
+}
+
+type FdSet struct {
+	Bits [16]int64
+}
+
+type Sysinfo_t struct {
+	Uptime    int64
+	Loads     [3]uint64
+	Totalram  uint64
+	Freeram   uint64
+	Sharedram uint64
+	Bufferram uint64
+	Totalswap uint64
+	Freeswap  uint64
+	Procs     uint16
+	Pad       uint16
+	Totalhigh uint64
+	Freehigh  uint64
+	Unit      uint32
+	_         [0]int8
+	_         [4]byte
+}
+
+type Ustat_t struct {
+	Tfree  int32
+	Tinode uint64
+	Fname  [6]int8
+	Fpack  [6]int8
+	_      [4]byte
+}
+
+type EpollEvent struct {
+	Events uint32
+	Fd     int32
+	Pad    int32
+}
+
+const (
+	OPEN_TREE_CLOEXEC = 0x80000
+)
+
+const (
+	POLLRDHUP = 0x2000
+)
+
+type Sigset_t struct {
+	Val [16]uint64
+}
+
+const _C__NSIG = 0x41
+
+const (
+	SIG_BLOCK   = 0x0
+	SIG_UNBLOCK = 0x1
+	SIG_SETMASK = 0x2
+)
+
+type Siginfo struct {
+	Signo int32
+	Errno int32
+	Code  int32
+	_     int32
+	_     [112]byte
+}
+
+type Termios struct {
+	Iflag  uint32
+	Oflag  uint32
+	Cflag  uint32
+	Lflag  uint32
+	Line   uint8
+	Cc     [19]uint8
+	Ispeed uint32
+	Ospeed uint32
+}
+
+type Taskstats struct {
+	Version                   uint16
+	Ac_exitcode               uint32
+	Ac_flag                   uint8
+	Ac_nice                   uint8
+	Cpu_count                 uint64
+	Cpu_delay_total           uint64
+	Blkio_count               uint64
+	Blkio_delay_total         uint64
+	Swapin_count              uint64
+	Swapin_delay_total        uint64
+	Cpu_run_real_total        uint64
+	Cpu_run_virtual_total     uint64
+	Ac_comm                   [32]int8
+	Ac_sched                  uint8
+	Ac_pad                    [3]uint8
+	_                         [4]byte
+	Ac_uid                    uint32
+	Ac_gid                    uint32
+	Ac_pid                    uint32
+	Ac_ppid                   uint32
+	Ac_btime                  uint32
+	Ac_etime                  uint64
+	Ac_utime                  uint64
+	Ac_stime                  uint64
+	Ac_minflt                 uint64
+	Ac_majflt                 uint64
+	Coremem                   uint64
+	Virtmem                   uint64
+	Hiwater_rss               uint64
+	Hiwater_vm                uint64
+	Read_char                 uint64
+	Write_char                uint64
+	Read_syscalls             uint64
+	Write_syscalls            uint64
+	Read_bytes                uint64
+	Write_bytes               uint64
+	Cancelled_write_bytes     uint64
+	Nvcsw                     uint64
+	Nivcsw                    uint64
+	Ac_utimescaled            uint64
+	Ac_stimescaled            uint64
+	Cpu_scaled_run_real_total uint64
+	Freepages_count           uint64
+	Freepages_delay_total     uint64
+	Thrashing_count           uint64
+	Thrashing_delay_total     uint64
+	Ac_btime64                uint64
+	Compact_count             uint64
+	Compact_delay_total       uint64
+	Ac_tgid                   uint32
+	Ac_tgetime                uint64
+	Ac_exe_dev                uint64
+	Ac_exe_inode              uint64
+	Wpcopy_count              uint64
+	Wpcopy_delay_total        uint64
+	Irq_count                 uint64
+	Irq_delay_total           uint64
+	Cpu_delay_max             uint64
+	Cpu_delay_min             uint64
+	Blkio_delay_max           uint64
+	Blkio_delay_min           uint64
+	Swapin_delay_max          uint64
+	Swapin_delay_min          uint64
+	Freepages_delay_max       uint64
+	Freepages_delay_min       uint64
+	Thrashing_delay_max       uint64
+	Thrashing_delay_min       uint64
+	Compact_delay_max         uint64
+	Compact_delay_min         uint64
+	Wpcopy_delay_max          uint64
+	Wpcopy_delay_min          uint64
+	Irq_delay_max             uint64
+	Irq_delay_min             uint64
+	Cpu_delay_max_ts          KernelTimespec
+	Blkio_delay_max_ts        KernelTimespec
+	Swapin_delay_max_ts       KernelTimespec
+	Freepages_delay_max_ts    KernelTimespec
+	Thrashing_delay_max_ts    KernelTimespec
+	Compact_delay_max_ts      KernelTimespec
+	Wpcopy_delay_max_ts       KernelTimespec
+	Irq_delay_max_ts          KernelTimespec
+}
+
+type cpuMask uint64
+
+const (
+	_NCPUBITS = 0x40
+)
+
+const (
+	CBitFieldMaskBit0  = 0x1
+	CBitFieldMaskBit1  = 0x2
+	CBitFieldMaskBit2  = 0x4
+	CBitFieldMaskBit3  = 0x8
+	CBitFieldMaskBit4  = 0x10
+	CBitFieldMaskBit5  = 0x20
+	CBitFieldMaskBit6  = 0x40
+	CBitFieldMaskBit7  = 0x80
+	CBitFieldMaskBit8  = 0x100
+	CBitFieldMaskBit9  = 0x200
+	CBitFieldMaskBit10 = 0x400
+	CBitFieldMaskBit11 = 0x800
+	CBitFieldMaskBit12 = 0x1000
+	CBitFieldMaskBit13 = 0x2000
+	CBitFieldMaskBit14 = 0x4000
+	CBitFieldMaskBit15 = 0x8000
+	CBitFieldMaskBit16 = 0x10000
+	CBitFieldMaskBit17 = 0x20000
+	CBitFieldMaskBit18 = 0x40000
+	CBitFieldMaskBit19 = 0x80000
+	CBitFieldMaskBit20 = 0x100000
+	CBitFieldMaskBit21 = 0x200000
+	CBitFieldMaskBit22 = 0x400000
+	CBitFieldMaskBit23 = 0x800000
+	CBitFieldMaskBit24 = 0x1000000
+	CBitFieldMaskBit25 = 0x2000000
+	CBitFieldMaskBit26 = 0x4000000
+	CBitFieldMaskBit27 = 0x8000000
+	CBitFieldMaskBit28 = 0x10000000
+	CBitFieldMaskBit29 = 0x20000000
+	CBitFieldMaskBit30 = 0x40000000
+	CBitFieldMaskBit31 = 0x80000000
+	CBitFieldMaskBit32 = 0x100000000
+	CBitFieldMaskBit33 = 0x200000000
+	CBitFieldMaskBit34 = 0x400000000
+	CBitFieldMaskBit35 = 0x800000000
+	CBitFieldMaskBit36 = 0x1000000000
+	CBitFieldMaskBit37 = 0x2000000000
+	CBitFieldMaskBit38 = 0x4000000000
+	CBitFieldMaskBit39 = 0x8000000000
+	CBitFieldMaskBit40 = 0x10000000000
+	CBitFieldMaskBit41 = 0x20000000000
+	CBitFieldMaskBit42 = 0x40000000000
+	CBitFieldMaskBit43 = 0x80000000000
+	CBitFieldMaskBit44 = 0x100000000000
+	CBitFieldMaskBit45 = 0x200000000000
+	CBitFieldMaskBit46 = 0x400000000000
+	CBitFieldMaskBit47 = 0x800000000000
+	CBitFieldMaskBit48 = 0x1000000000000
+	CBitFieldMaskBit49 = 0x2000000000000
+	CBitFieldMaskBit50 = 0x4000000000000
+	CBitFieldMaskBit51 = 0x8000000000000
+	CBitFieldMaskBit52 = 0x10000000000000
+	CBitFieldMaskBit53 = 0x20000000000000
+	CBitFieldMaskBit54 = 0x40000000000000
+	CBitFieldMaskBit55 = 0x80000000000000
+	CBitFieldMaskBit56 = 0x100000000000000
+	CBitFieldMaskBit57 = 0x200000000000000
+	CBitFieldMaskBit58 = 0x400000000000000
+	CBitFieldMaskBit59 = 0x800000000000000
+	CBitFieldMaskBit60 = 0x1000000000000000
+	CBitFieldMaskBit61 = 0x2000000000000000
+	CBitFieldMaskBit62 = 0x4000000000000000
+	CBitFieldMaskBit63 = 0x8000000000000000
+)
+
+type SockaddrStorage struct {
+	Family uint16
+	Data   [118]byte
+	_      uint64
+}
+
+type HDGeometry struct {
+	Heads     uint8
+	Sectors   uint8
+	Cylinders uint16
+	Start     uint64
+}
+
+type Statfs_t struct {
+	Type    int64
+	Bsize   int64
+	Blocks  uint64
+	Bfree   uint64
+	Bavail  uint64
+	Files   uint64
+	Ffree   uint64
+	Fsid    Fsid
+	Namelen int64
+	Frsize  int64
+	Flags   int64
+	Spare   [4]int64
+}
+
+type TpacketHdr struct {
+	Status  uint64
+	Len     uint32
+	Snaplen uint32
+	Mac     uint16
+	Net     uint16
+	Sec     uint32
+	Usec    uint32
+	_       [4]byte
+}
+
+const (
+	SizeofTpacketHdr = 0x20
+)
+
+type RTCPLLInfo struct {
+	Ctrl    int32
+	Value   int32
+	Max     int32
+	Min     int32
+	Posmult int32
+	Negmult int32
+	Clock   int64
+}
+
+type BlkpgPartition struct {
+	Start   int64
+	Length  int64
+	Pno     int32
+	Devname [64]uint8
+	Volname [64]uint8
+	_       [4]byte
+}
+
+const (
+	BLKPG = 0x1269
+)
+
+type CryptoUserAlg struct {
+	Name        [64]int8
+	Driver_name [64]int8
+	Module_name [64]int8
+	Type        uint32
+	Mask        uint32
+	Refcnt      uint32
+	Flags       uint32
+}
+
+type CryptoStatAEAD struct {
+	Type         [64]int8
+	Encrypt_cnt  uint64
+	Encrypt_tlen uint64
+	Decrypt_cnt  uint64
+	Decrypt_tlen uint64
+	Err_cnt      uint64
+}
+
+type CryptoStatAKCipher struct {
+	Type         [64]int8
+	Encrypt_cnt  uint64
+	Encrypt_tlen uint64
+	Decrypt_cnt  uint64
+	Decrypt_tlen uint64
+	Verify_cnt   uint64
+	Sign_cnt     uint64
+	Err_cnt      uint64
+}
+
+type CryptoStatCipher struct {
+	Type         [64]int8
+	Encrypt_cnt  uint64
+	Encrypt_tlen uint64
+	Decrypt_cnt  uint64
+	Decrypt_tlen uint64
+	Err_cnt      uint64
+}
+
+type CryptoStatCompress struct {
+	Type            [64]int8
+	Compress_cnt    uint64
+	Compress_tlen   uint64
+	Decompress_cnt  uint64
+	Decompress_tlen uint64
+	Err_cnt         uint64
+}
+
+type CryptoStatHash struct {
+	Type      [64]int8
+	Hash_cnt  uint64
+	Hash_tlen uint64
+	Err_cnt   uint64
+}
+
+type CryptoStatKPP struct {
+	Type                      [64]int8
+	Setsecret_cnt             uint64
+	Generate_public_key_cnt   uint64
+	Compute_shared_secret_cnt uint64
+	Err_cnt                   uint64
+}
+
+type CryptoStatRNG struct {
+	Type          [64]int8
+	Generate_cnt  uint64
+	Generate_tlen uint64
+	Seed_cnt      uint64
+	Err_cnt       uint64
+}
+
+type CryptoStatLarval struct {
+	Type [64]int8
+}
+
+type CryptoReportLarval struct {
+	Type [64]int8
+}
+
+type CryptoReportHash struct {
+	Type       [64]int8
+	Blocksize  uint32
+	Digestsize uint32
+}
+
+type CryptoReportCipher struct {
+	Type        [64]int8
+	Blocksize   uint32
+	Min_keysize uint32
+	Max_keysize uint32
+}
+
+type CryptoReportBlkCipher struct {
+	Type        [64]int8
+	Geniv       [64]int8
+	Blocksize   uint32
+	Min_keysize uint32
+	Max_keysize uint32
+	Ivsize      uint32
+}
+
+type CryptoReportAEAD struct {
+	Type        [64]int8
+	Geniv       [64]int8
+	Blocksize   uint32
+	Maxauthsize uint32
+	Ivsize      uint32
+}
+
+type CryptoReportComp struct {
+	Type [64]int8
+}
+
+type CryptoReportRNG struct {
+	Type     [64]int8
+	Seedsize uint32
+}
+
+type CryptoReportAKCipher struct {
+	Type [64]int8
+}
+
+type CryptoReportKPP struct {
+	Type [64]int8
+}
+
+type CryptoReportAcomp struct {
+	Type [64]int8
+}
+
+type LoopInfo struct {
+	Number           int32
+	Device           uint64
+	Inode            uint64
+	Rdevice          uint64
+	Offset           int32
+	Encrypt_type     int32
+	Encrypt_key_size int32
+	Flags            int32
+	Name             [64]int8
+	Encrypt_key      [32]uint8
+	Init             [2]uint64
+	Reserved         [4]int8
+	_                [4]byte
+}
+
+type TIPCSubscr struct {
+	Seq     TIPCServiceRange
+	Timeout uint32
+	Filter  uint32
+	Handle  [8]int8
+}
+
+type TIPCSIOCLNReq struct {
+	Peer     uint32
+	Id       uint32
+	Linkname [68]int8
+}
+
+type TIPCSIOCNodeIDReq struct {
+	Peer uint32
+	Id   [16]int8
+}
+
+type PPSKInfo struct {
+	Assert_sequence uint32
+	Clear_sequence  uint32
+	Assert_tu       PPSKTime
+	Clear_tu        PPSKTime
+	Current_mode    int32
+	_               [4]byte
+}
+
+const (
+	PPS_GETPARAMS = 0x800870a1
+	PPS_SETPARAMS = 0x400870a2
+	PPS_GETCAP    = 0x800870a3
+	PPS_FETCH     = 0xc00870a4
+)
+
+const (
+	PIDFD_NONBLOCK = 0x800
+)
+
+type SysvIpcPerm struct {
+	Key  int32
+	Uid  uint32
+	Gid  uint32
+	Cuid uint32
+	Cgid uint32
+	Mode uint32
+	_    [0]uint8
+	Seq  uint16
+	_    uint16
+	_    uint64
+	_    uint64
+}
+type SysvShmDesc struct {
+	Perm   SysvIpcPerm
+	Segsz  uint64
+	Atime  int64
+	Dtime  int64
+	Ctime  int64
+	Cpid   int32
+	Lpid   int32
+	Nattch uint64
+	_      uint64
+	_      uint64
+}
+
+const (
+	GPIO_GET_CHIPINFO_IOCTL = 0x8044b401
+)
+
+@@END
 @@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/sys/unix/ztypes_linux_arm.go","mode":420,"size":13425,"sha256":"e281b0186c091bc6412d4e79649e200b2e10bd40f9167b34c39f49f15edc7eba","index":0,"count":1,"encoding":"utf-8","payloadBytes":13425}
 // cgo -godefs -objdir=/tmp/arm/cgo -- -Wall -Werror -static -I/tmp/arm/include linux/types.go | go run mkpost.go
 // Code generated by the command above; see README.md. DO NOT EDIT.
@@ -116951,2574 +119037,4 @@ GT", Const, 0, ""},
 		{"MS_DEACTIVATE", Const, 0, ""},
 		{"MS_DIRSYNC", Const, 0, ""},
 		{"MS_INVALIDAT
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/stdlib/manifest.go","mode":420,"size":739828,"sha256":"6f507b11116812b1222b4bd972ddc16617f736785c8980ffeba8e11c479c03fe","index":12,"count":16,"encoding":"utf-8","payloadBytes":48000}
-E", Const, 0, ""},
-		{"MS_I_VERSION", Const, 0, ""},
-		{"MS_KERNMOUNT", Const, 0, ""},
-		{"MS_KILLPAGES", Const, 0, ""},
-		{"MS_MANDLOCK", Const, 0, ""},
-		{"MS_MGC_MSK", Const, 0, ""},
-		{"MS_MGC_VAL", Const, 0, ""},
-		{"MS_MOVE", Const, 0, ""},
-		{"MS_NOATIME", Const, 0, ""},
-		{"MS_NODEV", Const, 0, ""},
-		{"MS_NODIRATIME", Const, 0, ""},
-		{"MS_NOEXEC", Const, 0, ""},
-		{"MS_NOSUID", Const, 0, ""},
-		{"MS_NOUSER", Const, 0, ""},
-		{"MS_POSIXACL", Const, 0, ""},
-		{"MS_PRIVATE", Const, 0, ""},
-		{"MS_RDONLY", Const, 0, ""},
-		{"MS_REC", Const, 0, ""},
-		{"MS_RELATIME", Const, 0, ""},
-		{"MS_REMOUNT", Const, 0, ""},
-		{"MS_RMT_MASK", Const, 0, ""},
-		{"MS_SHARED", Const, 0, ""},
-		{"MS_SILENT", Const, 0, ""},
-		{"MS_SLAVE", Const, 0, ""},
-		{"MS_STRICTATIME", Const, 0, ""},
-		{"MS_SYNC", Const, 0, ""},
-		{"MS_SYNCHRONOUS", Const, 0, ""},
-		{"MS_UNBINDABLE", Const, 0, ""},
-		{"Madvise", Func, 0, "func(b []byte, advice int) (err error)"},
-		{"MapViewOfFile", Func, 0, ""},
-		{"MaxTokenInfoClass", Const, 0, ""},
-		{"Mclpool", Type, 2, ""},
-		{"Mclpool.Alive", Field, 2, ""},
-		{"Mclpool.Cwm", Field, 2, ""},
-		{"Mclpool.Grown", Field, 2, ""},
-		{"Mclpool.Hwm", Field, 2, ""},
-		{"Mclpool.Lwm", Field, 2, ""},
-		{"MibIfRow", Type, 0, ""},
-		{"MibIfRow.AdminStatus", Field, 0, ""},
-		{"MibIfRow.Descr", Field, 0, ""},
-		{"MibIfRow.DescrLen", Field, 0, ""},
-		{"MibIfRow.InDiscards", Field, 0, ""},
-		{"MibIfRow.InErrors", Field, 0, ""},
-		{"MibIfRow.InNUcastPkts", Field, 0, ""},
-		{"MibIfRow.InOctets", Field, 0, ""},
-		{"MibIfRow.InUcastPkts", Field, 0, ""},
-		{"MibIfRow.InUnknownProtos", Field, 0, ""},
-		{"MibIfRow.Index", Field, 0, ""},
-		{"MibIfRow.LastChange", Field, 0, ""},
-		{"MibIfRow.Mtu", Field, 0, ""},
-		{"MibIfRow.Name", Field, 0, ""},
-		{"MibIfRow.OperStatus", Field, 0, ""},
-		{"MibIfRow.OutDiscards", Field, 0, ""},
-		{"MibIfRow.OutErrors", Field, 0, ""},
-		{"MibIfRow.OutNUcastPkts", Field, 0, ""},
-		{"MibIfRow.OutOctets", Field, 0, ""},
-		{"MibIfRow.OutQLen", Field, 0, ""},
-		{"MibIfRow.OutUcastPkts", Field, 0, ""},
-		{"MibIfRow.PhysAddr", Field, 0, ""},
-		{"MibIfRow.PhysAddrLen", Field, 0, ""},
-		{"MibIfRow.Speed", Field, 0, ""},
-		{"MibIfRow.Type", Field, 0, ""},
-		{"Mkdir", Func, 0, "func(path string, mode uint32) (err error)"},
-		{"Mkdirat", Func, 0, "func(dirfd int, path string, mode uint32) (err error)"},
-		{"Mkfifo", Func, 0, "func(path string, mode uint32) (err error)"},
-		{"Mknod", Func, 0, "func(path string, mode uint32, dev int) (err error)"},
-		{"Mknodat", Func, 0, "func(dirfd int, path string, mode uint32, dev int) (err error)"},
-		{"Mlock", Func, 0, "func(b []byte) (err error)"},
-		{"Mlockall", Func, 0, "func(flags int) (err error)"},
-		{"Mmap", Func, 0, "func(fd int, offset int64, length int, prot int, flags int) (data []byte, err error)"},
-		{"Mount", Func, 0, "func(source string, target string, fstype string, flags uintptr, data string) (err error)"},
-		{"MoveFile", Func, 0, ""},
-		{"Mprotect", Func, 0, "func(b []byte, prot int) (err error)"},
-		{"Msghdr", Type, 0, ""},
-		{"Msghdr.Control", Field, 0, ""},
-		{"Msghdr.Controllen", Field, 0, ""},
-		{"Msghdr.Flags", Field, 0, ""},
-		{"Msghdr.Iov", Field, 0, ""},
-		{"Msghdr.Iovlen", Field, 0, ""},
-		{"Msghdr.Name", Field, 0, ""},
-		{"Msghdr.Namelen", Field, 0, ""},
-		{"Msghdr.Pad_cgo_0", Field, 0, ""},
-		{"Msghdr.Pad_cgo_1", Field, 0, ""},
-		{"Munlock", Func, 0, "func(b []byte) (err error)"},
-		{"Munlockall", Func, 0, "func() (err error)"},
-		{"Munmap", Func, 0, "func(b []byte) (err error)"},
-		{"MustLoadDLL", Func, 0, ""},
-		{"NAME_MAX", Const, 0, ""},
-		{"NETLINK_ADD_MEMBERSHIP", Const, 0, ""},
-		{"NETLINK_AUDIT", Const, 0, ""},
-		{"NETLINK_BROADCAST_ERROR", Const, 0, ""},
-		{"NETLINK_CONNECTOR", Const, 0, ""},
-		{"NETLINK_DNRTMSG", Const, 0, ""},
-		{"NETLINK_DROP_MEMBERSHIP", Const, 0, ""},
-		{"NETLINK_ECRYPTFS", Const, 0, ""},
-		{"NETLINK_FIB_LOOKUP", Const, 0, ""},
-		{"NETLINK_FIREWALL", Const, 0, ""},
-		{"NETLINK_GENERIC", Const, 0, ""},
-		{"NETLINK_INET_DIAG", Const, 0, ""},
-		{"NETLINK_IP6_FW", Const, 0, ""},
-		{"NETLINK_ISCSI", Const, 0, ""},
-		{"NETLINK_KOBJECT_UEVENT", Const, 0, ""},
-		{"NETLINK_NETFILTER", Const, 0, ""},
-		{"NETLINK_NFLOG", Const, 0, ""},
-		{"NETLINK_NO_ENOBUFS", Const, 0, ""},
-		{"NETLINK_PKTINFO", Const, 0, ""},
-		{"NETLINK_RDMA", Const, 0, ""},
-		{"NETLINK_ROUTE", Const, 0, ""},
-		{"NETLINK_SCSITRANSPORT", Const, 0, ""},
-		{"NETLINK_SELINUX", Const, 0, ""},
-		{"NETLINK_UNUSED", Const, 0, ""},
-		{"NETLINK_USERSOCK", Const, 0, ""},
-		{"NETLINK_XFRM", Const, 0, ""},
-		{"NET_RT_DUMP", Const, 0, ""},
-		{"NET_RT_DUMP2", Const, 0, ""},
-		{"NET_RT_FLAGS", Const, 0, ""},
-		{"NET_RT_IFLIST", Const, 0, ""},
-		{"NET_RT_IFLIST2", Const, 0, ""},
-		{"NET_RT_IFLISTL", Const, 1, ""},
-		{"NET_RT_IFMALIST", Const, 0, ""},
-		{"NET_RT_MAXID", Const, 0, ""},
-		{"NET_RT_OIFLIST", Const, 1, ""},
-		{"NET_RT_OOIFLIST", Const, 1, ""},
-		{"NET_RT_STAT", Const, 0, ""},
-		{"NET_RT_STATS", Const, 1, ""},
-		{"NET_RT_TABLE", Const, 1, ""},
-		{"NET_RT_TRASH", Const, 0, ""},
-		{"NLA_ALIGNTO", Const, 0, ""},
-		{"NLA_F_NESTED", Const, 0, ""},
-		{"NLA_F_NET_BYTEORDER", Const, 0, ""},
-		{"NLA_HDRLEN", Const, 0, ""},
-		{"NLMSG_ALIGNTO", Const, 0, ""},
-		{"NLMSG_DONE", Const, 0, ""},
-		{"NLMSG_ERROR", Const, 0, ""},
-		{"NLMSG_HDRLEN", Const, 0, ""},
-		{"NLMSG_MIN_TYPE", Const, 0, ""},
-		{"NLMSG_NOOP", Const, 0, ""},
-		{"NLMSG_OVERRUN", Const, 0, ""},
-		{"NLM_F_ACK", Const, 0, ""},
-		{"NLM_F_APPEND", Const, 0, ""},
-		{"NLM_F_ATOMIC", Const, 0, ""},
-		{"NLM_F_CREATE", Const, 0, ""},
-		{"NLM_F_DUMP", Const, 0, ""},
-		{"NLM_F_ECHO", Const, 0, ""},
-		{"NLM_F_EXCL", Const, 0, ""},
-		{"NLM_F_MATCH", Const, 0, ""},
-		{"NLM_F_MULTI", Const, 0, ""},
-		{"NLM_F_REPLACE", Const, 0, ""},
-		{"NLM_F_REQUEST", Const, 0, ""},
-		{"NLM_F_ROOT", Const, 0, ""},
-		{"NOFLSH", Const, 0, ""},
-		{"NOTE_ABSOLUTE", Const, 0, ""},
-		{"NOTE_ATTRIB", Const, 0, ""},
-		{"NOTE_BACKGROUND", Const, 16, ""},
-		{"NOTE_CHILD", Const, 0, ""},
-		{"NOTE_CRITICAL", Const, 16, ""},
-		{"NOTE_DELETE", Const, 0, ""},
-		{"NOTE_EOF", Const, 1, ""},
-		{"NOTE_EXEC", Const, 0, ""},
-		{"NOTE_EXIT", Const, 0, ""},
-		{"NOTE_EXITSTATUS", Const, 0, ""},
-		{"NOTE_EXIT_CSERROR", Const, 16, ""},
-		{"NOTE_EXIT_DECRYPTFAIL", Const, 16, ""},
-		{"NOTE_EXIT_DETAIL", Const, 16, ""},
-		{"NOTE_EXIT_DETAIL_MASK", Const, 16, ""},
-		{"NOTE_EXIT_MEMORY", Const, 16, ""},
-		{"NOTE_EXIT_REPARENTED", Const, 16, ""},
-		{"NOTE_EXTEND", Const, 0, ""},
-		{"NOTE_FFAND", Const, 0, ""},
-		{"NOTE_FFCOPY", Const, 0, ""},
-		{"NOTE_FFCTRLMASK", Const, 0, ""},
-		{"NOTE_FFLAGSMASK", Const, 0, ""},
-		{"NOTE_FFNOP", Const, 0, ""},
-		{"NOTE_FFOR", Const, 0, ""},
-		{"NOTE_FORK", Const, 0, ""},
-		{"NOTE_LEEWAY", Const, 16, ""},
-		{"NOTE_LINK", Const, 0, ""},
-		{"NOTE_LOWAT", Const, 0, ""},
-		{"NOTE_NONE", Const, 0, ""},
-		{"NOTE_NSECONDS", Const, 0, ""},
-		{"NOTE_PCTRLMASK", Const, 0, ""},
-		{"NOTE_PDATAMASK", Const, 0, ""},
-		{"NOTE_REAP", Const, 0, ""},
-		{"NOTE_RENAME", Const, 0, ""},
-		{"NOTE_RESOURCEEND", Const, 0, ""},
-		{"NOTE_REVOKE", Const, 0, ""},
-		{"NOTE_SECONDS", Const, 0, ""},
-		{"NOTE_SIGNAL", Const, 0, ""},
-		{"NOTE_TRACK", Const, 0, ""},
-		{"NOTE_TRACKERR", Const, 0, ""},
-		{"NOTE_TRIGGER", Const, 0, ""},
-		{"NOTE_TRUNCATE", Const, 1, ""},
-		{"NOTE_USECONDS", Const, 0, ""},
-		{"NOTE_VM_ERROR", Const, 0, ""},
-		{"NOTE_VM_PRESSURE", Const, 0, ""},
-		{"NOTE_VM_PRESSURE_SUDDEN_TERMINATE", Const, 0, ""},
-		{"NOTE_VM_PRESSURE_TERMINATE", Const, 0, ""},
-		{"NOTE_WRITE", Const, 0, ""},
-		{"NameCanonical", Const, 0, ""},
-		{"NameCanonicalEx", Const, 0, ""},
-		{"NameDisplay", Const, 0, ""},
-		{"NameDnsDomain", Const, 0, ""},
-		{"NameFullyQualifiedDN", Const, 0, ""},
-		{"NameSamCompatible", Const, 0, ""},
-		{"NameServicePrincipal", Const, 0, ""},
-		{"NameUniqueId", Const, 0, ""},
-		{"NameUnknown", Const, 0, ""},
-		{"NameUserPrincipal", Const, 0, ""},
-		{"Nanosleep", Func, 0, "func(time *Timespec, leftover *Timespec) (err error)"},
-		{"NetApiBufferFree", Func, 0, ""},
-		{"NetGetJoinInformation", Func, 2, ""},
-		{"NetSetupDomainName", Const, 2, ""},
-		{"NetSetupUnjoined", Const, 2, ""},
-		{"NetSetupUnknownStatus", Const, 2, ""},
-		{"NetSetupWorkgroupName", Const, 2, ""},
-		{"NetUserGetInfo", Func, 0, ""},
-		{"NetlinkMessage", Type, 0, ""},
-		{"NetlinkMessage.Data", Field, 0, ""},
-		{"NetlinkMessage.Header", Field, 0, ""},
-		{"NetlinkRIB", Func, 0, "func(proto int, family int) ([]byte, error)"},
-		{"NetlinkRouteAttr", Type, 0, ""},
-		{"NetlinkRouteAttr.Attr", Field, 0, ""},
-		{"NetlinkRouteAttr.Value", Field, 0, ""},
-		{"NetlinkRouteRequest", Type, 0, ""},
-		{"NetlinkRouteRequest.Data", Field, 0, ""},
-		{"NetlinkRouteRequest.Header", Field, 0, ""},
-		{"NewCallback", Func, 0, ""},
-		{"NewCallbackCDecl", Func, 3, ""},
-		{"NewLazyDLL", Func, 0, ""},
-		{"NlAttr", Type, 0, ""},
-		{"NlAttr.Len", Field, 0, ""},
-		{"NlAttr.Type", Field, 0, ""},
-		{"NlMsgerr", Type, 0, ""},
-		{"NlMsgerr.Error", Field, 0, ""},
-		{"NlMsgerr.Msg", Field, 0, ""},
-		{"NlMsghdr", Type, 0, ""},
-		{"NlMsghdr.Flags", Field, 0, ""},
-		{"NlMsghdr.Len", Field, 0, ""},
-		{"NlMsghdr.Pid", Field, 0, ""},
-		{"NlMsghdr.Seq", Field, 0, ""},
-		{"NlMsghdr.Type", Field, 0, ""},
-		{"NsecToFiletime", Func, 0, ""},
-		{"NsecToTimespec", Func, 0, "func(nsec int64) Timespec"},
-		{"NsecToTimeval", Func, 0, "func(nsec int64) Timeval"},
-		{"Ntohs", Func, 0, ""},
-		{"OCRNL", Const, 0, ""},
-		{"OFDEL", Const, 0, ""},
-		{"OFILL", Const, 0, ""},
-		{"OFIOGETBMAP", Const, 1, ""},
-		{"OID_PKIX_KP_SERVER_AUTH", Var, 0, ""},
-		{"OID_SERVER_GATED_CRYPTO", Var, 0, ""},
-		{"OID_SGC_NETSCAPE", Var, 0, ""},
-		{"OLCUC", Const, 0, ""},
-		{"ONLCR", Const, 0, ""},
-		{"ONLRET", Const, 0, ""},
-		{"ONOCR", Const, 0, ""},
-		{"ONOEOT", Const, 1, ""},
-		{"OPEN_ALWAYS", Const, 0, ""},
-		{"OPEN_EXISTING", Const, 0, ""},
-		{"OPOST", Const, 0, ""},
-		{"O_ACCMODE", Const, 0, ""},
-		{"O_ALERT", Const, 0, ""},
-		{"O_ALT_IO", Const, 1, ""},
-		{"O_APPEND", Const, 0, ""},
-		{"O_ASYNC", Const, 0, ""},
-		{"O_CLOEXEC", Const, 0, ""},
-		{"O_CREAT", Const, 0, ""},
-		{"O_DIRECT", Const, 0, ""},
-		{"O_DIRECTORY", Const, 0, ""},
-		{"O_DP_GETRAWENCRYPTED", Const, 16, ""},
-		{"O_DSYNC", Const, 0, ""},
-		{"O_EVTONLY", Const, 0, ""},
-		{"O_EXCL", Const, 0, ""},
-		{"O_EXEC", Const, 0, ""},
-		{"O_EXLOCK", Const, 0, ""},
-		{"O_FSYNC", Const, 0, ""},
-		{"O_LARGEFILE", Const, 0, ""},
-		{"O_NDELAY", Const, 0, ""},
-		{"O_NOATIME", Const, 0, ""},
-		{"O_NOCTTY", Const, 0, ""},
-		{"O_NOFOLLOW", Const, 0, ""},
-		{"O_NONBLOCK", Const, 0, ""},
-		{"O_NOSIGPIPE", Const, 1, ""},
-		{"O_POPUP", Const, 0, ""},
-		{"O_RDONLY", Const, 0, ""},
-		{"O_RDWR", Const, 0, ""},
-		{"O_RSYNC", Const, 0, ""},
-		{"O_SHLOCK", Const, 0, ""},
-		{"O_SYMLINK", Const, 0, ""},
-		{"O_SYNC", Const, 0, ""},
-		{"O_TRUNC", Const, 0, ""},
-		{"O_TTY_INIT", Const, 0, ""},
-		{"O_WRONLY", Const, 0, ""},
-		{"Open", Func, 0, "func(path string, mode int, perm uint32) (fd int, err error)"},
-		{"OpenCurrentProcessToken", Func, 0, ""},
-		{"OpenProcess", Func, 0, ""},
-		{"OpenProcessToken", Func, 0, ""},
-		{"Openat", Func, 0, "func(dirfd int, path string, flags int, mode uint32) (fd int, err error)"},
-		{"Overlapped", Type, 0, ""},
-		{"Overlapped.HEvent", Field, 0, ""},
-		{"Overlapped.Internal", Field, 0, ""},
-		{"Overlapped.InternalHigh", Field, 0, ""},
-		{"Overlapped.Offset", Field, 0, ""},
-		{"Overlapped.OffsetHigh", Field, 0, ""},
-		{"PACKET_ADD_MEMBERSHIP", Const, 0, ""},
-		{"PACKET_BROADCAST", Const, 0, ""},
-		{"PACKET_DROP_MEMBERSHIP", Const, 0, ""},
-		{"PACKET_FASTROUTE", Const, 0, ""},
-		{"PACKET_HOST", Const, 0, ""},
-		{"PACKET_LOOPBACK", Const, 0, ""},
-		{"PACKET_MR_ALLMULTI", Const, 0, ""},
-		{"PACKET_MR_MULTICAST", Const, 0, ""},
-		{"PACKET_MR_PROMISC", Const, 0, ""},
-		{"PACKET_MULTICAST", Const, 0, ""},
-		{"PACKET_OTHERHOST", Const, 0, ""},
-		{"PACKET_OUTGOING", Const, 0, ""},
-		{"PACKET_RECV_OUTPUT", Const, 0, ""},
-		{"PACKET_RX_RING", Const, 0, ""},
-		{"PACKET_STATISTICS", Const, 0, ""},
-		{"PAGE_EXECUTE_READ", Const, 0, ""},
-		{"PAGE_EXECUTE_READWRITE", Const, 0, ""},
-		{"PAGE_EXECUTE_WRITECOPY", Const, 0, ""},
-		{"PAGE_READONLY", Const, 0, ""},
-		{"PAGE_READWRITE", Const, 0, ""},
-		{"PAGE_WRITECOPY", Const, 0, ""},
-		{"PARENB", Const, 0, ""},
-		{"PARMRK", Const, 0, ""},
-		{"PARODD", Const, 0, ""},
-		{"PENDIN", Const, 0, ""},
-		{"PFL_HIDDEN", Const, 2, ""},
-		{"PFL_MATCHES_PROTOCOL_ZERO", Const, 2, ""},
-		{"PFL_MULTIPLE_PROTO_ENTRIES", Const, 2, ""},
-		{"PFL_NETWORKDIRECT_PROVIDER", Const, 2, ""},
-		{"PFL_RECOMMENDED_PROTO_ENTRY", Const, 2, ""},
-		{"PF_FLUSH", Const, 1, ""},
-		{"PKCS_7_ASN_ENCODING", Const, 0, ""},
-		{"PMC5_PIPELINE_FLUSH", Const, 1, ""},
-		{"PRIO_PGRP", Const, 2, ""},
-		{"PRIO_PROCESS", Const, 2, ""},
-		{"PRIO_USER", Const, 2, ""},
-		{"PRI_IOFLUSH", Const, 1, ""},
-		{"PROCESS_QUERY_INFORMATION", Const, 0, ""},
-		{"PROCESS_TERMINATE", Const, 2, ""},
-		{"PROT_EXEC", Const, 0, ""},
-		{"PROT_GROWSDOWN", Const, 0, ""},
-		{"PROT_GROWSUP", Const, 0, ""},
-		{"PROT_NONE", Const, 0, ""},
-		{"PROT_READ", Const, 0, ""},
-		{"PROT_WRITE", Const, 0, ""},
-		{"PROV_DH_SCHANNEL", Const, 0, ""},
-		{"PROV_DSS", Const, 0, ""},
-		{"PROV_DSS_DH", Const, 0, ""},
-		{"PROV_EC_ECDSA_FULL", Const, 0, ""},
-		{"PROV_EC_ECDSA_SIG", Const, 0, ""},
-		{"PROV_EC_ECNRA_FULL", Const, 0, ""},
-		{"PROV_EC_ECNRA_SIG", Const, 0, ""},
-		{"PROV_FORTEZZA", Const, 0, ""},
-		{"PROV_INTEL_SEC", Const, 0, ""},
-		{"PROV_MS_EXCHANGE", Const, 0, ""},
-		{"PROV_REPLACE_OWF", Const, 0, ""},
-		{"PROV_RNG", Const, 0, ""},
-		{"PROV_RSA_AES", Const, 0, ""},
-		{"PROV_RSA_FULL", Const, 0, ""},
-		{"PROV_RSA_SCHANNEL", Const, 0, ""},
-		{"PROV_RSA_SIG", Const, 0, ""},
-		{"PROV_SPYRUS_LYNKS", Const, 0, ""},
-		{"PROV_SSL", Const, 0, ""},
-		{"PR_CAPBSET_DROP", Const, 0, ""},
-		{"PR_CAPBSET_READ", Const, 0, ""},
-		{"PR_CLEAR_SECCOMP_FILTER", Const, 0, ""},
-		{"PR_ENDIAN_BIG", Const, 0, ""},
-		{"PR_ENDIAN_LITTLE", Const, 0, ""},
-		{"PR_ENDIAN_PPC_LITTLE", Const, 0, ""},
-		{"PR_FPEMU_NOPRINT", Const, 0, ""},
-		{"PR_FPEMU_SIGFPE", Const, 0, ""},
-		{"PR_FP_EXC_ASYNC", Const, 0, ""},
-		{"PR_FP_EXC_DISABLED", Const, 0, ""},
-		{"PR_FP_EXC_DIV", Const, 0, ""},
-		{"PR_FP_EXC_INV", Const, 0, ""},
-		{"PR_FP_EXC_NONRECOV", Const, 0, ""},
-		{"PR_FP_EXC_OVF", Const, 0, ""},
-		{"PR_FP_EXC_PRECISE", Const, 0, ""},
-		{"PR_FP_EXC_RES", Const, 0, ""},
-		{"PR_FP_EXC_SW_ENABLE", Const, 0, ""},
-		{"PR_FP_EXC_UND", Const, 0, ""},
-		{"PR_GET_DUMPABLE", Const, 0, ""},
-		{"PR_GET_ENDIAN", Const, 0, ""},
-		{"PR_GET_FPEMU", Const, 0, ""},
-		{"PR_GET_FPEXC", Const, 0, ""},
-		{"PR_GET_KEEPCAPS", Const, 0, ""},
-		{"PR_GET_NAME", Const, 0, ""},
-		{"PR_GET_PDEATHSIG", Const, 0, ""},
-		{"PR_GET_SECCOMP", Const, 0, ""},
-		{"PR_GET_SECCOMP_FILTER", Const, 0, ""},
-		{"PR_GET_SECUREBITS", Const, 0, ""},
-		{"PR_GET_TIMERSLACK", Const, 0, ""},
-		{"PR_GET_TIMING", Const, 0, ""},
-		{"PR_GET_TSC", Const, 0, ""},
-		{"PR_GET_UNALIGN", Const, 0, ""},
-		{"PR_MCE_KILL", Const, 0, ""},
-		{"PR_MCE_KILL_CLEAR", Const, 0, ""},
-		{"PR_MCE_KILL_DEFAULT", Const, 0, ""},
-		{"PR_MCE_KILL_EARLY", Const, 0, ""},
-		{"PR_MCE_KILL_GET", Const, 0, ""},
-		{"PR_MCE_KILL_LATE", Const, 0, ""},
-		{"PR_MCE_KILL_SET", Const, 0, ""},
-		{"PR_SECCOMP_FILTER_EVENT", Const, 0, ""},
-		{"PR_SECCOMP_FILTER_SYSCALL", Const, 0, ""},
-		{"PR_SET_DUMPABLE", Const, 0, ""},
-		{"PR_SET_ENDIAN", Const, 0, ""},
-		{"PR_SET_FPEMU", Const, 0, ""},
-		{"PR_SET_FPEXC", Const, 0, ""},
-		{"PR_SET_KEEPCAPS", Const, 0, ""},
-		{"PR_SET_NAME", Const, 0, ""},
-		{"PR_SET_PDEATHSIG", Const, 0, ""},
-		{"PR_SET_PTRACER", Const, 0, ""},
-		{"PR_SET_SECCOMP", Const, 0, ""},
-		{"PR_SET_SECCOMP_FILTER", Const, 0, ""},
-		{"PR_SET_SECUREBITS", Const, 0, ""},
-		{"PR_SET_TIMERSLACK", Const, 0, ""},
-		{"PR_SET_TIMING", Const, 0, ""},
-		{"PR_SET_TSC", Const, 0, ""},
-		{"PR_SET_UNALIGN", Const, 0, ""},
-		{"PR_TASK_PERF_EVENTS_DISABLE", Const, 0, ""},
-		{"PR_TASK_PERF_EVENTS_ENABLE", Const, 0, ""},
-		{"PR_TIMING_STATISTICAL", Const, 0, ""},
-		{"PR_TIMING_TIMESTAMP", Const, 0, ""},
-		{"PR_TSC_ENABLE", Const, 0, ""},
-		{"PR_TSC_SIGSEGV", Const, 0, ""},
-		{"PR_UNALIGN_NOPRINT", Const, 0, ""},
-		{"PR_UNALIGN_SIGBUS", Const, 0, ""},
-		{"PTRACE_ARCH_PRCTL", Const, 0, ""},
-		{"PTRACE_ATTACH", Const, 0, ""},
-		{"PTRACE_CONT", Const, 0, ""},
-		{"PTRACE_DETACH", Const, 0, ""},
-		{"PTRACE_EVENT_CLONE", Const, 0, ""},
-		{"PTRACE_EVENT_EXEC", Const, 0, ""},
-		{"PTRACE_EVENT_EXIT", Const, 0, ""},
-		{"PTRACE_EVENT_FORK", Const, 0, ""},
-		{"PTRACE_EVENT_VFORK", Const, 0, ""},
-		{"PTRACE_EVENT_VFORK_DONE", Const, 0, ""},
-		{"PTRACE_GETCRUNCHREGS", Const, 0, ""},
-		{"PTRACE_GETEVENTMSG", Const, 0, ""},
-		{"PTRACE_GETFPREGS", Const, 0, ""},
-		{"PTRACE_GETFPXREGS", Const, 0, ""},
-		{"PTRACE_GETHBPREGS", Const, 0, ""},
-		{"PTRACE_GETREGS", Const, 0, ""},
-		{"PTRACE_GETREGSET", Const, 0, ""},
-		{"PTRACE_GETSIGINFO", Const, 0, ""},
-		{"PTRACE_GETVFPREGS", Const, 0, ""},
-		{"PTRACE_GETWMMXREGS", Const, 0, ""},
-		{"PTRACE_GET_THREAD_AREA", Const, 0, ""},
-		{"PTRACE_KILL", Const, 0, ""},
-		{"PTRACE_OLDSETOPTIONS", Const, 0, ""},
-		{"PTRACE_O_MASK", Const, 0, ""},
-		{"PTRACE_O_TRACECLONE", Const, 0, ""},
-		{"PTRACE_O_TRACEEXEC", Const, 0, ""},
-		{"PTRACE_O_TRACEEXIT", Const, 0, ""},
-		{"PTRACE_O_TRACEFORK", Const, 0, ""},
-		{"PTRACE_O_TRACESYSGOOD", Const, 0, ""},
-		{"PTRACE_O_TRACEVFORK", Const, 0, ""},
-		{"PTRACE_O_TRACEVFORKDONE", Const, 0, ""},
-		{"PTRACE_PEEKDATA", Const, 0, ""},
-		{"PTRACE_PEEKTEXT", Const, 0, ""},
-		{"PTRACE_PEEKUSR", Const, 0, ""},
-		{"PTRACE_POKEDATA", Const, 0, ""},
-		{"PTRACE_POKETEXT", Const, 0, ""},
-		{"PTRACE_POKEUSR", Const, 0, ""},
-		{"PTRACE_SETCRUNCHREGS", Const, 0, ""},
-		{"PTRACE_SETFPREGS", Const, 0, ""},
-		{"PTRACE_SETFPXREGS", Const, 0, ""},
-		{"PTRACE_SETHBPREGS", Const, 0, ""},
-		{"PTRACE_SETOPTIONS", Const, 0, ""},
-		{"PTRACE_SETREGS", Const, 0, ""},
-		{"PTRACE_SETREGSET", Const, 0, ""},
-		{"PTRACE_SETSIGINFO", Const, 0, ""},
-		{"PTRACE_SETVFPREGS", Const, 0, ""},
-		{"PTRACE_SETWMMXREGS", Const, 0, ""},
-		{"PTRACE_SET_SYSCALL", Const, 0, ""},
-		{"PTRACE_SET_THREAD_AREA", Const, 0, ""},
-		{"PTRACE_SINGLEBLOCK", Const, 0, ""},
-		{"PTRACE_SINGLESTEP", Const, 0, ""},
-		{"PTRACE_SYSCALL", Const, 0, ""},
-		{"PTRACE_SYSEMU", Const, 0, ""},
-		{"PTRACE_SYSEMU_SINGLESTEP", Const, 0, ""},
-		{"PTRACE_TRACEME", Const, 0, ""},
-		{"PT_ATTACH", Const, 0, ""},
-		{"PT_ATTACHEXC", Const, 0, ""},
-		{"PT_CONTINUE", Const, 0, ""},
-		{"PT_DATA_ADDR", Const, 0, ""},
-		{"PT_DENY_ATTACH", Const, 0, ""},
-		{"PT_DETACH", Const, 0, ""},
-		{"PT_FIRSTMACH", Const, 0, ""},
-		{"PT_FORCEQUOTA", Const, 0, ""},
-		{"PT_KILL", Const, 0, ""},
-		{"PT_MASK", Const, 1, ""},
-		{"PT_READ_D", Const, 0, ""},
-		{"PT_READ_I", Const, 0, ""},
-		{"PT_READ_U", Const, 0, ""},
-		{"PT_SIGEXC", Const, 0, ""},
-		{"PT_STEP", Const, 0, ""},
-		{"PT_TEXT_ADDR", Const, 0, ""},
-		{"PT_TEXT_END_ADDR", Const, 0, ""},
-		{"PT_THUPDATE", Const, 0, ""},
-		{"PT_TRACE_ME", Const, 0, ""},
-		{"PT_WRITE_D", Const, 0, ""},
-		{"PT_WRITE_I", Const, 0, ""},
-		{"PT_WRITE_U", Const, 0, ""},
-		{"ParseDirent", Func, 0, "func(buf []byte, max int, names []string) (consumed int, count int, newnames []string)"},
-		{"ParseNetlinkMessage", Func, 0, "func(b []byte) ([]NetlinkMessage, error)"},
-		{"ParseNetlinkRouteAttr", Func, 0, "func(m *NetlinkMessage) ([]NetlinkRouteAttr, error)"},
-		{"ParseRoutingMessage", Func, 0, ""},
-		{"ParseRoutingSockaddr", Func, 0, ""},
-		{"ParseSocketControlMessage", Func, 0, "func(b []byte) ([]SocketControlMessage, error)"},
-		{"ParseUnixCredentials", Func, 0, "func(m *SocketControlMessage) (*Ucred, error)"},
-		{"ParseUnixRights", Func, 0, "func(m *SocketControlMessage) ([]int, error)"},
-		{"PathMax", Const, 0, ""},
-		{"Pathconf", Func, 0, ""},
-		{"Pause", Func, 0, "func() (err error)"},
-		{"Pipe", Func, 0, "func(p []int) error"},
-		{"Pipe2", Func, 1, "func(p []int, flags int) error"},
-		{"PivotRoot", Func, 0, "func(newroot string, putold string) (err error)"},
-		{"Pointer", Type, 11, ""},
-		{"PostQueuedCompletionStatus", Func, 0, ""},
-		{"Pread", Func, 0, "func(fd int, p []byte, offset int64) (n int, err error)"},
-		{"Proc", Type, 0, ""},
-		{"Proc.Dll", Field, 0, ""},
-		{"Proc.Name", Field, 0, ""},
-		{"ProcAttr", Type, 0, ""},
-		{"ProcAttr.Dir", Field, 0, ""},
-		{"ProcAttr.Env", Field, 0, ""},
-		{"ProcAttr.Files", Field, 0, ""},
-		{"ProcAttr.Sys", Field, 0, ""},
-		{"Process32First", Func, 4, ""},
-		{"Process32Next", Func, 4, ""},
-		{"ProcessEntry32", Type, 4, ""},
-		{"ProcessEntry32.DefaultHeapID", Field, 4, ""},
-		{"ProcessEntry32.ExeFile", Field, 4, ""},
-		{"ProcessEntry32.Flags", Field, 4, ""},
-		{"ProcessEntry32.ModuleID", Field, 4, ""},
-		{"ProcessEntry32.ParentProcessID", Field, 4, ""},
-		{"ProcessEntry32.PriClassBase", Field, 4, ""},
-		{"ProcessEntry32.ProcessID", Field, 4, ""},
-		{"ProcessEntry32.Size", Field, 4, ""},
-		{"ProcessEntry32.Threads", Field, 4, ""},
-		{"ProcessEntry32.Usage", Field, 4, ""},
-		{"ProcessInformation", Type, 0, ""},
-		{"ProcessInformation.Process", Field, 0, ""},
-		{"ProcessInformation.ProcessId", Field, 0, ""},
-		{"ProcessInformation.Thread", Field, 0, ""},
-		{"ProcessInformation.ThreadId", Field, 0, ""},
-		{"Protoent", Type, 0, ""},
-		{"Protoent.Aliases", Field, 0, ""},
-		{"Protoent.Name", Field, 0, ""},
-		{"Protoent.Proto", Field, 0, ""},
-		{"PtraceAttach", Func, 0, "func(pid int) (err error)"},
-		{"PtraceCont", Func, 0, "func(pid int, signal int) (err error)"},
-		{"PtraceDetach", Func, 0, "func(pid int) (err error)"},
-		{"PtraceGetEventMsg", Func, 0, "func(pid int) (msg uint, err error)"},
-		{"PtraceGetRegs", Func, 0, "func(pid int, regsout *PtraceRegs) (err error)"},
-		{"PtracePeekData", Func, 0, "func(pid int, addr uintptr, out []byte) (count int, err error)"},
-		{"PtracePeekText", Func, 0, "func(pid int, addr uintptr, out []byte) (count int, err error)"},
-		{"PtracePokeData", Func, 0, "func(pid int, addr uintptr, data []byte) (count int, err error)"},
-		{"PtracePokeText", Func, 0, "func(pid int, addr uintptr, data []byte) (count int, err error)"},
-		{"PtraceRegs", Type, 0, ""},
-		{"PtraceRegs.Cs", Field, 0, ""},
-		{"PtraceRegs.Ds", Field, 0, ""},
-		{"PtraceRegs.Eax", Field, 0, ""},
-		{"PtraceRegs.Ebp", Field, 0, ""},
-		{"PtraceRegs.Ebx", Field, 0, ""},
-		{"PtraceRegs.Ecx", Field, 0, ""},
-		{"PtraceRegs.Edi", Field, 0, ""},
-		{"PtraceRegs.Edx", Field, 0, ""},
-		{"PtraceRegs.Eflags", Field, 0, ""},
-		{"PtraceRegs.Eip", Field, 0, ""},
-		{"PtraceRegs.Es", Field, 0, ""},
-		{"PtraceRegs.Esi", Field, 0, ""},
-		{"PtraceRegs.Esp", Field, 0, ""},
-		{"PtraceRegs.Fs", Field, 0, ""},
-		{"PtraceRegs.Fs_base", Field, 0, ""},
-		{"PtraceRegs.Gs", Field, 0, ""},
-		{"PtraceRegs.Gs_base", Field, 0, ""},
-		{"PtraceRegs.Orig_eax", Field, 0, ""},
-		{"PtraceRegs.Orig_rax", Field, 0, ""},
-		{"PtraceRegs.R10", Field, 0, ""},
-		{"PtraceRegs.R11", Field, 0, ""},
-		{"PtraceRegs.R12", Field, 0, ""},
-		{"PtraceRegs.R13", Field, 0, ""},
-		{"PtraceRegs.R14", Field, 0, ""},
-		{"PtraceRegs.R15", Field, 0, ""},
-		{"PtraceRegs.R8", Field, 0, ""},
-		{"PtraceRegs.R9", Field, 0, ""},
-		{"PtraceRegs.Rax", Field, 0, ""},
-		{"PtraceRegs.Rbp", Field, 0, ""},
-		{"PtraceRegs.Rbx", Field, 0, ""},
-		{"PtraceRegs.Rcx", Field, 0, ""},
-		{"PtraceRegs.Rdi", Field, 0, ""},
-		{"PtraceRegs.Rdx", Field, 0, ""},
-		{"PtraceRegs.Rip", Field, 0, ""},
-		{"PtraceRegs.Rsi", Field, 0, ""},
-		{"PtraceRegs.Rsp", Field, 0, ""},
-		{"PtraceRegs.Ss", Field, 0, ""},
-		{"PtraceRegs.Uregs", Field, 0, ""},
-		{"PtraceRegs.Xcs", Field, 0, ""},
-		{"PtraceRegs.Xds", Field, 0, ""},
-		{"PtraceRegs.Xes", Field, 0, ""},
-		{"PtraceRegs.Xfs", Field, 0, ""},
-		{"PtraceRegs.Xgs", Field, 0, ""},
-		{"PtraceRegs.Xss", Field, 0, ""},
-		{"PtraceSetOptions", Func, 0, "func(pid int, options int) (err error)"},
-		{"PtraceSetRegs", Func, 0, "func(pid int, regs *PtraceRegs) (err error)"},
-		{"PtraceSingleStep", Func, 0, "func(pid int) (err error)"},
-		{"PtraceSyscall", Func, 1, "func(pid int, signal int) (err error)"},
-		{"Pwrite", Func, 0, "func(fd int, p []byte, offset int64) (n int, err error)"},
-		{"REG_BINARY", Const, 0, ""},
-		{"REG_DWORD", Const, 0, ""},
-		{"REG_DWORD_BIG_ENDIAN", Const, 0, ""},
-		{"REG_DWORD_LITTLE_ENDIAN", Const, 0, ""},
-		{"REG_EXPAND_SZ", Const, 0, ""},
-		{"REG_FULL_RESOURCE_DESCRIPTOR", Const, 0, ""},
-		{"REG_LINK", Const, 0, ""},
-		{"REG_MULTI_SZ", Const, 0, ""},
-		{"REG_NONE", Const, 0, ""},
-		{"REG_QWORD", Const, 0, ""},
-		{"REG_QWORD_LITTLE_ENDIAN", Const, 0, ""},
-		{"REG_RESOURCE_LIST", Const, 0, ""},
-		{"REG_RESOURCE_REQUIREMENTS_LIST", Const, 0, ""},
-		{"REG_SZ", Const, 0, ""},
-		{"RLIMIT_AS", Const, 0, ""},
-		{"RLIMIT_CORE", Const, 0, ""},
-		{"RLIMIT_CPU", Const, 0, ""},
-		{"RLIMIT_CPU_USAGE_MONITOR", Const, 16, ""},
-		{"RLIMIT_DATA", Const, 0, ""},
-		{"RLIMIT_FSIZE", Const, 0, ""},
-		{"RLIMIT_NOFILE", Const, 0, ""},
-		{"RLIMIT_STACK", Const, 0, ""},
-		{"RLIM_INFINITY", Const, 0, ""},
-		{"RTAX_ADVMSS", Const, 0, ""},
-		{"RTAX_AUTHOR", Const, 0, ""},
-		{"RTAX_BRD", Const, 0, ""},
-		{"RTAX_CWND", Const, 0, ""},
-		{"RTAX_DST", Const, 0, ""},
-		{"RTAX_FEATURES", Const, 0, ""},
-		{"RTAX_FEATURE_ALLFRAG", Const, 0, ""},
-		{"RTAX_FEATURE_ECN", Const, 0, ""},
-		{"RTAX_FEATURE_SACK", Const, 0, ""},
-		{"RTAX_FEATURE_TIMESTAMP", Const, 0, ""},
-		{"RTAX_GATEWAY", Const, 0, ""},
-		{"RTAX_GENMASK", Const, 0, ""},
-		{"RTAX_HOPLIMIT", Const, 0, ""},
-		{"RTAX_IFA", Const, 0, ""},
-		{"RTAX_IFP", Const, 0, ""},
-		{"RTAX_INITCWND", Const, 0, ""},
-		{"RTAX_INITRWND", Const, 0, ""},
-		{"RTAX_LABEL", Const, 1, ""},
-		{"RTAX_LOCK", Const, 0, ""},
-		{"RTAX_MAX", Const, 0, ""},
-		{"RTAX_MTU", Const, 0, ""},
-		{"RTAX_NETMASK", Const, 0, ""},
-		{"RTAX_REORDERING", Const, 0, ""},
-		{"RTAX_RTO_MIN", Const, 0, ""},
-		{"RTAX_RTT", Const, 0, ""},
-		{"RTAX_RTTVAR", Const, 0, ""},
-		{"RTAX_SRC", Const, 1, ""},
-		{"RTAX_SRCMASK", Const, 1, ""},
-		{"RTAX_SSTHRESH", Const, 0, ""},
-		{"RTAX_TAG", Const, 1, ""},
-		{"RTAX_UNSPEC", Const, 0, ""},
-		{"RTAX_WINDOW", Const, 0, ""},
-		{"RTA_ALIGNTO", Const, 0, ""},
-		{"RTA_AUTHOR", Const, 0, ""},
-		{"RTA_BRD", Const, 0, ""},
-		{"RTA_CACHEINFO", Const, 0, ""},
-		{"RTA_DST", Const, 0, ""},
-		{"RTA_FLOW", Const, 0, ""},
-		{"RTA_GATEWAY", Const, 0, ""},
-		{"RTA_GENMASK", Const, 0, ""},
-		{"RTA_IFA", Const, 0, ""},
-		{"RTA_IFP", Const, 0, ""},
-		{"RTA_IIF", Const, 0, ""},
-		{"RTA_LABEL", Const, 1, ""},
-		{"RTA_MAX", Const, 0, ""},
-		{"RTA_METRICS", Const, 0, ""},
-		{"RTA_MULTIPATH", Const, 0, ""},
-		{"RTA_NETMASK", Const, 0, ""},
-		{"RTA_OIF", Const, 0, ""},
-		{"RTA_PREFSRC", Const, 0, ""},
-		{"RTA_PRIORITY", Const, 0, ""},
-		{"RTA_SRC", Const, 0, ""},
-		{"RTA_SRCMASK", Const, 1, ""},
-		{"RTA_TABLE", Const, 0, ""},
-		{"RTA_TAG", Const, 1, ""},
-		{"RTA_UNSPEC", Const, 0, ""},
-		{"RTCF_DIRECTSRC", Const, 0, ""},
-		{"RTCF_DOREDIRECT", Const, 0, ""},
-		{"RTCF_LOG", Const, 0, ""},
-		{"RTCF_MASQ", Const, 0, ""},
-		{"RTCF_NAT", Const, 0, ""},
-		{"RTCF_VALVE", Const, 0, ""},
-		{"RTF_ADDRCLASSMASK", Const, 0, ""},
-		{"RTF_ADDRCONF", Const, 0, ""},
-		{"RTF_ALLONLINK", Const, 0, ""},
-		{"RTF_ANNOUNCE", Const, 1, ""},
-		{"RTF_BLACKHOLE", Const, 0, ""},
-		{"RTF_BROADCAST", Const, 0, ""},
-		{"RTF_CACHE", Const, 0, ""},
-		{"RTF_CLONED", Const, 1, ""},
-		{"RTF_CLONING", Const, 0, ""},
-		{"RTF_CONDEMNED", Const, 0, ""},
-		{"RTF_DEFAULT", Const, 0, ""},
-		{"RTF_DELCLONE", Const, 0, ""},
-		{"RTF_DONE", Const, 0, ""},
-		{"RTF_DYNAMIC", Const, 0, ""},
-		{"RTF_FLOW", Const, 0, ""},
-		{"RTF_FMASK", Const, 0, ""},
-		{"RTF_GATEWAY", Const, 0, ""},
-		{"RTF_GWFLAG_COMPAT", Const, 3, ""},
-		{"RTF_HOST", Const, 0, ""},
-		{"RTF_IFREF", Const, 0, ""},
-		{"RTF_IFSCOPE", Const, 0, ""},
-		{"RTF_INTERFACE", Const, 0, ""},
-		{"RTF_IRTT", Const, 0, ""},
-		{"RTF_LINKRT", Const, 0, ""},
-		{"RTF_LLDATA", Const, 0, ""},
-		{"RTF_LLINFO", Const, 0, ""},
-		{"RTF_LOCAL", Const, 0, ""},
-		{"RTF_MASK", Const, 1, ""},
-		{"RTF_MODIFIED", Const, 0, ""},
-		{"RTF_MPATH", Const, 1, ""},
-		{"RTF_MPLS", Const, 1, ""},
-		{"RTF_MSS", Const, 0, ""},
-		{"RTF_MTU", Const, 0, ""},
-		{"RTF_MULTICAST", Const, 0, ""},
-		{"RTF_NAT", Const, 0, ""},
-		{"RTF_NOFORWARD", Const, 0, ""},
-		{"RTF_NONEXTHOP", Const, 0, ""},
-		{"RTF_NOPMTUDISC", Const, 0, ""},
-		{"RTF_PERMANENT_ARP", Const, 1, ""},
-		{"RTF_PINNED", Const, 0, ""},
-		{"RTF_POLICY", Const, 0, ""},
-		{"RTF_PRCLONING", Const, 0, ""},
-		{"RTF_PROTO1", Const, 0, ""},
-		{"RTF_PROTO2", Const, 0, ""},
-		{"RTF_PROTO3", Const, 0, ""},
-		{"RTF_PROXY", Const, 16, ""},
-		{"RTF_REINSTATE", Const, 0, ""},
-		{"RTF_REJECT", Const, 0, ""},
-		{"RTF_RNH_LOCKED", Const, 0, ""},
-		{"RTF_ROUTER", Const, 16, ""},
-		{"RTF_SOURCE", Const, 1, ""},
-		{"RTF_SRC", Const, 1, ""},
-		{"RTF_STATIC", Const, 0, ""},
-		{"RTF_STICKY", Const, 0, ""},
-		{"RTF_THROW", Const, 0, ""},
-		{"RTF_TUNNEL", Const, 1, ""},
-		{"RTF_UP", Const, 0, ""},
-		{"RTF_USETRAILERS", Const, 1, ""},
-		{"RTF_WASCLONED", Const, 0, ""},
-		{"RTF_WINDOW", Const, 0, ""},
-		{"RTF_XRESOLVE", Const, 0, ""},
-		{"RTM_ADD", Const, 0, ""},
-		{"RTM_BASE", Const, 0, ""},
-		{"RTM_CHANGE", Const, 0, ""},
-		{"RTM_CHGADDR", Const, 1, ""},
-		{"RTM_DELACTION", Const, 0, ""},
-		{"RTM_DELADDR", Const, 0, ""},
-		{"RTM_DELADDRLABEL", Const, 0, ""},
-		{"RTM_DELETE", Const, 0, ""},
-		{"RTM_DELLINK", Const, 0, ""},
-		{"RTM_DELMADDR", Const, 0, ""},
-		{"RTM_DELNEIGH", Const, 0, ""},
-		{"RTM_DELQDISC", Const, 0, ""},
-		{"RTM_DELROUTE", Const, 0, ""},
-		{"RTM_DELRULE", Const, 0, ""},
-		{"RTM_DELTCLASS", Const, 0, ""},
-		{"RTM_DELTFILTER", Const, 0, ""},
-		{"RTM_DESYNC", Const, 1, ""},
-		{"RTM_F_CLONED", Const, 0, ""},
-		{"RTM_F_EQUALIZE", Const, 0, ""},
-		{"RTM_F_NOTIFY", Const, 0, ""},
-		{"RTM_F_PREFIX", Const, 0, ""},
-		{"RTM_GET", Const, 0, ""},
-		{"RTM_GET2", Const, 0, ""},
-		{"RTM_GETACTION", Const, 0, ""},
-		{"RTM_GETADDR", Const, 0, ""},
-		{"RTM_GETADDRLABEL", Const, 0, ""},
-		{"RTM_GETANYCAST", Const, 0, ""},
-		{"RTM_GETDCB", Const, 0, ""},
-		{"RTM_GETLINK", Const, 0, ""},
-		{"RTM_GETMULTICAST", Const, 0, ""},
-		{"RTM_GETNEIGH", Const, 0, ""},
-		{"RTM_GETNEIGHTBL", Const, 0, ""},
-		{"RTM_GETQDISC", Const, 0, ""},
-		{"RTM_GETROUTE", Const, 0, ""},
-		{"RTM_GETRULE", Const, 0, ""},
-		{"RTM_GETTCLASS", Const, 0, ""},
-		{"RTM_GETTFILTER", Const, 0, ""},
-		{"RTM_IEEE80211", Const, 0, ""},
-		{"RTM_IFANNOUNCE", Const, 0, ""},
-		{"RTM_IFINFO", Const, 0, ""},
-		{"RTM_IFINFO2", Const, 0, ""},
-		{"RTM_LLINFO_UPD", Const, 1, ""},
-		{"RTM_LOCK", Const, 0, ""},
-		{"RTM_LOSING", Const, 0, ""},
-		{"RTM_MAX", Const, 0, ""},
-		{"RTM_MAXSIZE", Const, 1, ""},
-		{"RTM_MISS", Const, 0, ""},
-		{"RTM_NEWACTION", Const, 0, ""},
-		{"RTM_NEWADDR", Const, 0, ""},
-		{"RTM_NEWADDRLABEL", Const, 0, ""},
-		{"RTM_NEWLINK", Const, 0, ""},
-		{"RTM_NEWMADDR", Const, 0, ""},
-		{"RTM_NEWMADDR2", Const, 0, ""},
-		{"RTM_NEWNDUSEROPT", Const, 0, ""},
-		{"RTM_NEWNEIGH", Const, 0, ""},
-		{"RTM_NEWNEIGHTBL", Const, 0, ""},
-		{"RTM_NEWPREFIX", Const, 0, ""},
-		{"RTM_NEWQDISC", Const, 0, ""},
-		{"RTM_NEWROUTE", Const, 0, ""},
-		{"RTM_NEWRULE", Const, 0, ""},
-		{"RTM_NEWTCLASS", Const, 0, ""},
-		{"RTM_NEWTFILTER", Const, 0, ""},
-		{"RTM_NR_FAMILIES", Const, 0, ""},
-		{"RTM_NR_MSGTYPES", Const, 0, ""},
-		{"RTM_OIFINFO", Const, 1, ""},
-		{"RTM_OLDADD", Const, 0, ""},
-		{"RTM_OLDDEL", Const, 0, ""},
-		{"RTM_OOIFINFO", Const, 1, ""},
-		{"RTM_REDIRECT", Const, 0, ""},
-		{"RTM_RESOLVE", Const, 0, ""},
-		{"RTM_RTTUNIT", Const, 0, ""},
-		{"RTM_SETDCB", Const, 0, ""},
-		{"RTM_SETGATE", Const, 1, ""},
-		{"RTM_SETLINK", Const, 0, ""},
-		{"RTM_SETNEIGHTBL", Const, 0, ""},
-		{"RTM_VERSION", Const, 0, ""},
-		{"RTNH_ALIGNTO", Const, 0, ""},
-		{"RTNH_F_DEAD", Const, 0, ""},
-		{"RTNH_F_ONLINK", Const, 0, ""},
-		{"RTNH_F_PERVASIVE", Const, 0, ""},
-		{"RTNLGRP_IPV4_IFADDR", Const, 1, ""},
-		{"RTNLGRP_IPV4_MROUTE", Const, 1, ""},
-		{"RTNLGRP_IPV4_ROUTE", Const, 1, ""},
-		{"RTNLGRP_IPV4_RULE", Const, 1, ""},
-		{"RTNLGRP_IPV6_IFADDR", Const, 1, ""},
-		{"RTNLGRP_IPV6_IFINFO", Const, 1, ""},
-		{"RTNLGRP_IPV6_MROUTE", Const, 1, ""},
-		{"RTNLGRP_IPV6_PREFIX", Const, 1, ""},
-		{"RTNLGRP_IPV6_ROUTE", Const, 1, ""},
-		{"RTNLGRP_IPV6_RULE", Const, 1, ""},
-		{"RTNLGRP_LINK", Const, 1, ""},
-		{"RTNLGRP_ND_USEROPT", Const, 1, ""},
-		{"RTNLGRP_NEIGH", Const, 1, ""},
-		{"RTNLGRP_NONE", Const, 1, ""},
-		{"RTNLGRP_NOTIFY", Const, 1, ""},
-		{"RTNLGRP_TC", Const, 1, ""},
-		{"RTN_ANYCAST", Const, 0, ""},
-		{"RTN_BLACKHOLE", Const, 0, ""},
-		{"RTN_BROADCAST", Const, 0, ""},
-		{"RTN_LOCAL", Const, 0, ""},
-		{"RTN_MAX", Const, 0, ""},
-		{"RTN_MULTICAST", Const, 0, ""},
-		{"RTN_NAT", Const, 0, ""},
-		{"RTN_PROHIBIT", Const, 0, ""},
-		{"RTN_THROW", Const, 0, ""},
-		{"RTN_UNICAST", Const, 0, ""},
-		{"RTN_UNREACHABLE", Const, 0, ""},
-		{"RTN_UNSPEC", Const, 0, ""},
-		{"RTN_XRESOLVE", Const, 0, ""},
-		{"RTPROT_BIRD", Const, 0, ""},
-		{"RTPROT_BOOT", Const, 0, ""},
-		{"RTPROT_DHCP", Const, 0, ""},
-		{"RTPROT_DNROUTED", Const, 0, ""},
-		{"RTPROT_GATED", Const, 0, ""},
-		{"RTPROT_KERNEL", Const, 0, ""},
-		{"RTPROT_MRT", Const, 0, ""},
-		{"RTPROT_NTK", Const, 0, ""},
-		{"RTPROT_RA", Const, 0, ""},
-		{"RTPROT_REDIRECT", Const, 0, ""},
-		{"RTPROT_STATIC", Const, 0, ""},
-		{"RTPROT_UNSPEC", Const, 0, ""},
-		{"RTPROT_XORP", Const, 0, ""},
-		{"RTPROT_ZEBRA", Const, 0, ""},
-		{"RTV_EXPIRE", Const, 0, ""},
-		{"RTV_HOPCOUNT", Const, 0, ""},
-		{"RTV_MTU", Const, 0, ""},
-		{"RTV_RPIPE", Const, 0, ""},
-		{"RTV_RTT", Const, 0, ""},
-		{"RTV_RTTVAR", Const, 0, ""},
-		{"RTV_SPIPE", Const, 0, ""},
-		{"RTV_SSTHRESH", Const, 0, ""},
-		{"RTV_WEIGHT", Const, 0, ""},
-		{"RT_CACHING_CONTEXT", Const, 1, ""},
-		{"RT_CLASS_DEFAULT", Const, 0, ""},
-		{"RT_CLASS_LOCAL", Const, 0, ""},
-		{"RT_CLASS_MAIN", Const, 0, ""},
-		{"RT_CLASS_MAX", Const, 0, ""},
-		{"RT_CLASS_UNSPEC", Const, 0, ""},
-		{"RT_DEFAULT_FIB", Const, 1, ""},
-		{"RT_NORTREF", Const, 1, ""},
-		{"RT_SCOPE_HOST", Const, 0, ""},
-		{"RT_SCOPE_LINK", Const, 0, ""},
-		{"RT_SCOPE_NOWHERE", Const, 0, ""},
-		{"RT_SCOPE_SITE", Const, 0, ""},
-		{"RT_SCOPE_UNIVERSE", Const, 0, ""},
-		{"RT_TABLEID_MAX", Const, 1, ""},
-		{"RT_TABLE_COMPAT", Const, 0, ""},
-		{"RT_TABLE_DEFAULT", Const, 0, ""},
-		{"RT_TABLE_LOCAL", Const, 0, ""},
-		{"RT_TABLE_MAIN", Const, 0, ""},
-		{"RT_TABLE_MAX", Const, 0, ""},
-		{"RT_TABLE_UNSPEC", Const, 0, ""},
-		{"RUSAGE_CHILDREN", Const, 0, ""},
-		{"RUSAGE_SELF", Const, 0, ""},
-		{"RUSAGE_THREAD", Const, 0, ""},
-		{"Radvisory_t", Type, 0, ""},
-		{"Radvisory_t.Count", Field, 0, ""},
-		{"Radvisory_t.Offset", Field, 0, ""},
-		{"Radvisory_t.Pad_cgo_0", Field, 0, ""},
-		{"RawConn", Type, 9, ""},
-		{"RawSockaddr", Type, 0, ""},
-		{"RawSockaddr.Data", Field, 0, ""},
-		{"RawSockaddr.Family", Field, 0, ""},
-		{"RawSockaddr.Len", Field, 0, ""},
-		{"RawSockaddrAny", Type, 0, ""},
-		{"RawSockaddrAny.Addr", Field, 0, ""},
-		{"RawSockaddrAny.Pad", Field, 0, ""},
-		{"RawSockaddrDatalink", Type, 0, ""},
-		{"RawSockaddrDatalink.Alen", Field, 0, ""},
-		{"RawSockaddrDatalink.Data", Field, 0, ""},
-		{"RawSockaddrDatalink.Family", Field, 0, ""},
-		{"RawSockaddrDatalink.Index", Field, 0, ""},
-		{"RawSockaddrDatalink.Len", Field, 0, ""},
-		{"RawSockaddrDatalink.Nlen", Field, 0, ""},
-		{"RawSockaddrDatalink.Pad_cgo_0", Field, 2, ""},
-		{"RawSockaddrDatalink.Slen", Field, 0, ""},
-		{"RawSockaddrDatalink.Type", Field, 0, ""},
-		{"RawSockaddrInet4", Type, 0, ""},
-		{"RawSockaddrInet4.Addr", Field, 0, ""},
-		{"RawSockaddrInet4.Family", Field, 0, ""},
-		{"RawSockaddrInet4.Len", Field, 0, ""},
-		{"RawSockaddrInet4.Port", Field, 0, ""},
-		{"RawSockaddrInet4.Zero", Field, 0, ""},
-		{"RawSockaddrInet6", Type, 0, ""},
-		{"RawSockaddrInet6.Addr", Field, 0, ""},
-		{"RawSockaddrInet6.Family", Field, 0, ""},
-		{"RawSockaddrInet6.Flowinfo", Field, 0, ""},
-		{"RawSockaddrInet6.Len", Field, 0, ""},
-		{"RawSockaddrInet6.Port", Field, 0, ""},
-		{"RawSockaddrInet6.Scope_id", Field, 0, ""},
-		{"RawSockaddrLinklayer", Type, 0, ""},
-		{"RawSockaddrLinklayer.Addr", Field, 0, ""},
-		{"RawSockaddrLinklayer.Family", Field, 0, ""},
-		{"RawSockaddrLinklayer.Halen", Field, 0, ""},
-		{"RawSockaddrLinklayer.Hatype", Field, 0, ""},
-		{"RawSockaddrLinklayer.Ifindex", Field, 0, ""},
-		{"RawSockaddrLinklayer.Pkttype", Field, 0, ""},
-		{"RawSockaddrLinklayer.Protocol", Field, 0, ""},
-		{"RawSockaddrNetlink", Type, 0, ""},
-		{"RawSockaddrNetlink.Family", Field, 0, ""},
-		{"RawSockaddrNetlink.Groups", Field, 0, ""},
-		{"RawSockaddrNetlink.Pad", Field, 0, ""},
-		{"RawSockaddrNetlink.Pid", Field, 0, ""},
-		{"RawSockaddrUnix", Type, 0, ""},
-		{"RawSockaddrUnix.Family", Field, 0, ""},
-		{"RawSockaddrUnix.Len", Field, 0, ""},
-		{"RawSockaddrUnix.Pad_cgo_0", Field, 2, ""},
-		{"RawSockaddrUnix.Path", Field, 0, ""},
-		{"RawSyscall", Func, 0, "func(trap uintptr, a1 uintptr, a2 uintptr, a3 uintptr) (r1 uintptr, r2 uintptr, err Errno)"},
-		{"RawSyscall6", Func, 0, "func(trap uintptr, a1 uintptr, a2 uintptr, a3 uintptr, a4 uintptr, a5 uintptr, a6 uintptr) (r1 uintptr, r2 uintptr, err Errno)"},
-		{"Read", Func, 0, "func(fd int, p []byte) (n int, err error)"},
-		{"ReadConsole", Func, 1, ""},
-		{"ReadDirectoryChanges", Func, 0, ""},
-		{"ReadDirent", Func, 0, "func(fd int, buf []byte) (n int, err error)"},
-		{"ReadFile", Func, 0, ""},
-		{"Readlink", Func, 0, "func(path string, buf []byte) (n int, err error)"},
-		{"Reboot", Func, 0, "func(cmd int) (err error)"},
-		{"Recvfrom", Func, 0, "func(fd int, p []byte, flags int) (n int, from Sockaddr, err error)"},
-		{"Recvmsg", Func, 0, "func(fd int, p []byte, oob []byte, flags int) (n int, oobn int, recvflags int, from Sockaddr, err error)"},
-		{"RegCloseKey", Func, 0, ""},
-		{"RegEnumKeyEx", Func, 0, ""},
-		{"RegOpenKeyEx", Func, 0, ""},
-		{"RegQueryInfoKey", Func, 0, ""},
-		{"RegQueryValueEx", Func, 0, ""},
-		{"RemoveDirectory", Func, 0, ""},
-		{"Removexattr", Func, 1, "func(path string, attr string) (err error)"},
-		{"Rename", Func, 0, "func(oldpath string, newpath string) (err error)"},
-		{"Renameat", Func, 0, "func(olddirfd int, oldpath string, newdirfd int, newpath string) (err error)"},
-		{"Revoke", Func, 0, ""},
-		{"Rlimit", Type, 0, ""},
-		{"Rlimit.Cur", Field, 0, ""},
-		{"Rlimit.Max", Field, 0, ""},
-		{"Rmdir", Func, 0, "func(path string) error"},
-		{"RouteMessage", Type, 0, ""},
-		{"RouteMessage.Data", Field, 0, ""},
-		{"RouteMessage.Header", Field, 0, ""},
-		{"RouteRIB", Func, 0, ""},
-		{"RoutingMessage", Type, 14, ""},
-		{"RtAttr", Type, 0, ""},
-		{"RtAttr.Len", Field, 0, ""},
-		{"RtAttr.Type", Field, 0, ""},
-		{"RtGenmsg", Type, 0, ""},
-		{"RtGenmsg.Family", Field, 0, ""},
-		{"RtMetrics", Type, 0, ""},
-		{"RtMetrics.Expire", Field, 0, ""},
-		{"RtMetrics.Filler", Field, 0, ""},
-		{"RtMetrics.Hopcount", Field, 0, ""},
-		{"RtMetrics.Locks", Field, 0, ""},
-		{"RtMetrics.Mtu", Field, 0, ""},
-		{"RtMetrics.Pad", Field, 3, ""},
-		{"RtMetrics.Pksent", Field, 0, ""},
-		{"RtMetrics.Recvpipe", Field, 0, ""},
-		{"RtMetrics.Refcnt", Field, 2, ""},
-		{"RtMetrics.Rtt", Field, 0, ""},
-		{"RtMetrics.Rttvar", Field, 0, ""},
-		{"RtMetrics.Sendpipe", Field, 0, ""},
-		{"RtMetrics.Ssthresh", Field, 0, ""},
-		{"RtMetrics.Weight", Field, 0, ""},
-		{"RtMsg", Type, 0, ""},
-		{"RtMsg.Dst_len", Field, 0, ""},
-		{"RtMsg.Family", Field, 0, ""},
-		{"RtMsg.Flags", Field, 0, ""},
-		{"RtMsg.Protocol", Field, 0, ""},
-		{"RtMsg.Scope", Field, 0, ""},
-		{"RtMsg.Src_len", Field, 0, ""},
-		{"RtMsg.Table", Field, 0, ""},
-		{"RtMsg.Tos", Field, 0, ""},
-		{"RtMsg.Type", Field, 0, ""},
-		{"RtMsghdr", Type, 0, ""},
-		{"RtMsghdr.Addrs", Field, 0, ""},
-		{"RtMsghdr.Errno", Field, 0, ""},
-		{"RtMsghdr.Flags", Field, 0, ""},
-		{"RtMsghdr.Fmask", Field, 0, ""},
-		{"RtMsghdr.Hdrlen", Field, 2, ""},
-		{"RtMsghdr.Index", Field, 0, ""},
-		{"RtMsghdr.Inits", Field, 0, ""},
-		{"RtMsghdr.Mpls", Field, 2, ""},
-		{"RtMsghdr.Msglen", Field, 0, ""},
-		{"RtMsghdr.Pad_cgo_0", Field, 0, ""},
-		{"RtMsghdr.Pad_cgo_1", Field, 2, ""},
-		{"RtMsghdr.Pid", Field, 0, ""},
-		{"RtMsghdr.Priority", Field, 2, ""},
-		{"RtMsghdr.Rmx", Field, 0, ""},
-		{"RtMsghdr.Seq", Field, 0, ""},
-		{"RtMsghdr.Tableid", Field, 2, ""},
-		{"RtMsghdr.Type", Field, 0, ""},
-		{"RtMsghdr.Use", Field, 0, ""},
-		{"RtMsghdr.Version", Field, 0, ""},
-		{"RtNexthop", Type, 0, ""},
-		{"RtNexthop.Flags", Field, 0, ""},
-		{"RtNexthop.Hops", Field, 0, ""},
-		{"RtNexthop.Ifindex", Field, 0, ""},
-		{"RtNexthop.Len", Field, 0, ""},
-		{"Rusage", Type, 0, ""},
-		{"Rusage.CreationTime", Field, 0, ""},
-		{"Rusage.ExitTime", Field, 0, ""},
-		{"Rusage.Idrss", Field, 0, ""},
-		{"Rusage.Inblock", Field, 0, ""},
-		{"Rusage.Isrss", Field, 0, ""},
-		{"Rusage.Ixrss", Field, 0, ""},
-		{"Rusage.KernelTime", Field, 0, ""},
-		{"Rusage.Majflt", Field, 0, ""},
-		{"Rusage.Maxrss", Field, 0, ""},
-		{"Rusage.Minflt", Field, 0, ""},
-		{"Rusage.Msgrcv", Field, 0, ""},
-		{"Rusage.Msgsnd", Field, 0, ""},
-		{"Rusage.Nivcsw", Field, 0, ""},
-		{"Rusage.Nsignals", Field, 0, ""},
-		{"Rusage.Nswap", Field, 0, ""},
-		{"Rusage.Nvcsw", Field, 0, ""},
-		{"Rusage.Oublock", Field, 0, ""},
-		{"Rusage.Stime", Field, 0, ""},
-		{"Rusage.UserTime", Field, 0, ""},
-		{"Rusage.Utime", Field, 0, ""},
-		{"SCM_BINTIME", Const, 0, ""},
-		{"SCM_CREDENTIALS", Const, 0, ""},
-		{"SCM_CREDS", Const, 0, ""},
-		{"SCM_RIGHTS", Const, 0, ""},
-		{"SCM_TIMESTAMP", Const, 0, ""},
-		{"SCM_TIMESTAMPING", Const, 0, ""},
-		{"SCM_TIMESTAMPNS", Const, 0, ""},
-		{"SCM_TIMESTAMP_MONOTONIC", Const, 0, ""},
-		{"SHUT_RD", Const, 0, ""},
-		{"SHUT_RDWR", Const, 0, ""},
-		{"SHUT_WR", Const, 0, ""},
-		{"SID", Type, 0, ""},
-		{"SIDAndAttributes", Type, 0, ""},
-		{"SIDAndAttributes.Attributes", Field, 0, ""},
-		{"SIDAndAttributes.Sid", Field, 0, ""},
-		{"SIGABRT", Const, 0, ""},
-		{"SIGALRM", Const, 0, ""},
-		{"SIGBUS", Const, 0, ""},
-		{"SIGCHLD", Const, 0, ""},
-		{"SIGCLD", Const, 0, ""},
-		{"SIGCONT", Const, 0, ""},
-		{"SIGEMT", Const, 0, ""},
-		{"SIGFPE", Const, 0, ""},
-		{"SIGHUP", Const, 0, ""},
-		{"SIGILL", Const, 0, ""},
-		{"SIGINFO", Const, 0, ""},
-		{"SIGINT", Const, 0, ""},
-		{"SIGIO", Const, 0, ""},
-		{"SIGIOT", Const, 0, ""},
-		{"SIGKILL", Const, 0, ""},
-		{"SIGLIBRT", Const, 1, ""},
-		{"SIGLWP", Const, 0, ""},
-		{"SIGPIPE", Const, 0, ""},
-		{"SIGPOLL", Const, 0, ""},
-		{"SIGPROF", Const, 0, ""},
-		{"SIGPWR", Const, 0, ""},
-		{"SIGQUIT", Const, 0, ""},
-		{"SIGSEGV", Const, 0, ""},
-		{"SIGSTKFLT", Const, 0, ""},
-		{"SIGSTOP", Const, 0, ""},
-		{"SIGSYS", Const, 0, ""},
-		{"SIGTERM", Const, 0, ""},
-		{"SIGTHR", Const, 0, ""},
-		{"SIGTRAP", Const, 0, ""},
-		{"SIGTSTP", Const, 0, ""},
-		{"SIGTTIN", Const, 0, ""},
-		{"SIGTTOU", Const, 0, ""},
-		{"SIGUNUSED", Const, 0, ""},
-		{"SIGURG", Const, 0, ""},
-		{"SIGUSR1", Const, 0, ""},
-		{"SIGUSR2", Const, 0, ""},
-		{"SIGVTALRM", Const, 0, ""},
-		{"SIGWINCH", Const, 0, ""},
-		{"SIGXCPU", Const, 0, ""},
-		{"SIGXFSZ", Const, 0, ""},
-		{"SIOCADDDLCI", Const, 0, ""},
-		{"SIOCADDMULTI", Const, 0, ""},
-		{"SIOCADDRT", Const, 0, ""},
-		{"SIOCAIFADDR", Const, 0, ""},
-		{"SIOCAIFGROUP", Const, 0, ""},
-		{"SIOCALIFADDR", Const, 0, ""},
-		{"SIOCARPIPLL", Const, 0, ""},
-		{"SIOCATMARK", Const, 0, ""},
-		{"SIOCAUTOADDR", Const, 0, ""},
-		{"SIOCAUTONETMASK", Const, 0, ""},
-		{"SIOCBRDGADD", Const, 1, ""},
-		{"SIOCBRDGADDS", Const, 1, ""},
-		{"SIOCBRDGARL", Const, 1, ""},
-		{"SIOCBRDGDADDR", Const, 1, ""},
-		{"SIOCBRDGDEL", Const, 1, ""},
-		{"SIOCBRDGDELS", Const, 1, ""},
-		{"SIOCBRDGFLUSH", Const, 1, ""},
-		{"SIOCBRDGFRL", Const, 1, ""},
-		{"SIOCBRDGGCACHE", Const, 1, ""},
-		{"SIOCBRDGGFD", Const, 1, ""},
-		{"SIOCBRDGGHT", Const, 1, ""},
-		{"SIOCBRDGGIFFLGS", Const, 1, ""},
-		{"SIOCBRDGGMA", Const, 1, ""},
-		{"SIOCBRDGGPARAM", Const, 1, ""},
-		{"SIOCBRDGGPRI", Const, 1, ""},
-		{"SIOCBRDGGRL", Const, 1, ""},
-		{"SIOCBRDGGSIFS", Const, 1, ""},
-		{"SIOCBRDGGTO", Const, 1, ""},
-		{"SIOCBRDGIFS", Const, 1, ""},
-		{"SIOCBRDGRTS", Const, 1, ""},
-		{"SIOCBRDGSADDR", Const, 1, ""},
-		{"SIOCBRDGSCACHE", Const, 1, ""},
-		{"SIOCBRDGSFD", Const, 1, ""},
-		{"SIOCBRDGSHT", Const, 1, ""},
-		{"SIOCBRDGSIFCOST", Const, 1, ""},
-		{"SIOCBRDGSIFFLGS", Const, 1, ""},
-		{"SIOCBRDGSIFPRIO", Const, 1, ""},
-		{"SIOCBRDGSMA", Const, 1, ""},
-		{"SIOCBRDGSPRI", Const, 1, ""},
-		{"SIOCBRDGSPROTO", Const, 1, ""},
-		{"SIOCBRDGSTO", Const, 1, ""},
-		{"SIOCBRDGSTXHC", Const, 1, ""},
-		{"SIOCDARP", Const, 0, ""},
-		{"SIOCDELDLCI", Const, 0, ""},
-		{"SIOCDELMULTI", Const, 0, ""},
-		{"SIOCDELRT", Const, 0, ""},
-		{"SIOCDEVPRIVATE", Const, 0, ""},
-		{"SIOCDIFADDR", Const, 0, ""},
-		{"SIOCDIFGROUP", Const, 0, ""},
-		{"SIOCDIFPHYADDR", Const, 0, ""},
-		{"SIOCDLIFADDR", Const, 0, ""},
-		{"SIOCDRARP", Const, 0, ""},
-		{"SIOCGARP", Const, 0, ""},
-		{"SIOCGDRVSPEC", Const, 0, ""},
-		{"SIOCGETKALIVE", Const, 1, ""},
-		{"SIOCGETLABEL", Const, 1, ""},
-		{"SIOCGETPFLOW", Const, 1, ""},
-		{"SIOCGETPFSYNC", Const, 1, ""},
-		{"SIOCGETSGCNT", Const, 0, ""},
-		{"SIOCGETVIFCNT", Const, 0, ""},
-		{"SIOCGETVLAN", Const, 0, ""},
-		{"SIOCGHIWAT", Const, 0, ""},
-		{"SIOCGIFADDR", Const, 0, ""},
-		{"SIOCGIFADDRPREF", Const, 1, ""},
-		{"SIOCGIFALIAS", Const, 1, ""},
-		{"SIOCGIFALTMTU", Const, 0, ""},
-		{"SIOCGIFASYNCMAP", Const, 0, ""},
-		{"SIOCGIFBOND", Const, 0, ""},
-		{"SIOCGIFBR", Const, 0, ""},
-		{"SIOCGIFBRDADDR", Const, 0, ""},
-		{"SIOCGIFCAP", Const, 0, ""},
-		{"SIOCGIFCONF", Const, 0, ""},
-		{"SIOCGIFCOUNT", Const, 0, ""},
-		{"SIOCGIFDATA", Const, 1, ""},
-		{"SIOCGIFDESCR", Const, 0, ""},
-		{"SIOCGIFDEVMTU", Const, 0, ""},
-		{"SIOCGIFDLT", Const, 1, ""},
-		{"SIOCGIFDSTADDR", Const, 0, ""},
-		{"SIOCGIFENCAP", Const, 0, ""},
-		{"SIOCGIFFIB", Const, 1, ""},
-		{"SIOCGIFFLAGS", Const, 0, ""},
-		{"SIOCGIFGATTR", Const, 1, ""},
-		{"SIOCGIFGENERIC", Const, 0, ""},
-		{"SIOCGIFGMEMB", Const, 0, ""},
-		{"SIOCGIFGROUP", Const, 0, ""},
-		{"SIOCGIFHARDMTU", Const, 3, ""},
-		{"SIOCGIFHWADDR", Const, 0, ""},
-		{"SIOCGIFINDEX", Const, 0, ""},
-		{"SIOCGIFKPI", Const, 0, ""},
-		{"SIOCGIFMAC", Const, 0, ""},
-		{"SIOCGIFMAP", Const, 0, ""},
-		{"SIOCGIFMEDIA", Const, 0, ""},
-		{"SIOCGIFMEM", Const, 0, ""},
-		{"SIOCGIFMETRIC", Const, 0, ""},
-		{"SIOCGIFMTU", Const, 0, ""},
-		{"SIOCGIFNAME", Const, 0, ""},
-		{"SIOCGIFNETMASK", Const, 0, ""},
-		{"SIOCGIFPDSTADDR", Const, 0, ""},
-		{"SIOCGIFPFLAGS", Const, 0, ""},
-		{"SIOCGIFPHYS", Const, 0, ""},
-		{"SIOCGIFPRIORITY", Const, 1, ""},
-		{"SIOCGIFPSRCADDR", Const, 0, ""},
-		{"SIOCGIFRDOMAIN", Const, 1, ""},
-		{"SIOCGIFRTLABEL", Const, 1, ""},
-		{"SIOCGIFSLAVE", Const, 0, ""},
-		{"SIOCGIFSTATUS", Const, 0, ""},
-		{"SIOCGIFTIMESLOT", Const, 1, ""},
-		{"SIOCGIFTXQLEN", Const, 0, ""},
-		{"SIOCGIFVLAN", Const, 0, ""},
-		{"SIOCGIFWAKEFLAGS", Const, 0, ""},
-		{"SIOCGIFXFLAGS", Const, 1, ""},
-		{"SIOCGLIFADDR", Const, 0, ""},
-		{"SIOCGLIFPHYADDR", Const, 0, ""},
-		{"SIOCGLIFPHYRTABLE", Const, 1, ""},
-		{"SIOCGLIFPHYTTL", Const, 3, ""},
-		{"SIOCGLINKSTR", Const, 1, ""},
-		{"SIOCGLOWAT", Const, 0, ""},
-		{"SIOCGPGRP", Const, 0, ""},
-		{"SIOCGPRIVATE_0", Const, 0, ""},
-		{"SIOCGPRIVATE_1", Const, 0, ""},
-		{"SIOCGRARP", Const, 0, ""},
-		{"SIOCGSPPPPARAMS", Const, 3, ""},
-		{"SIOCGSTAMP", Const, 0, ""},
-		{"SIOCGSTAMPNS", Const, 0, ""},
-		{"SIOCGVH", Const, 1, ""},
-		{"SIOCGVNETID", Const, 3, ""},
-		{"SIOCIFCREATE", Const, 0, ""},
-		{"SIOCIFCREATE2", Const, 0, ""},
-		{"SIOCIFDESTROY", Const, 0, ""},
-		{"SIOCIFGCLONERS", Const, 0, ""},
-		{"SIOCINITIFADDR", Const, 1, ""},
-		{"SIOCPROTOPRIVATE", Const, 0, ""},
-		{"SIOCRSLVMULTI", Const, 0, ""},
-		{"SIOCRTMSG", Const, 0, ""},
-		{"SIOCSARP", Const, 0, ""},
-		{"SIOCSDRVSPEC", Const, 0, ""},
-		{"SIOCSETKALIVE", Const, 1, ""},
-		{"SIOCSETLABEL", Const, 1, ""},
-		{"SIOCSETPFLOW", Const, 1, ""},
-		{"SIOCSETPFSYNC", Const, 1, ""},
-		{"SIOCSETVLAN", Const, 0, ""},
-		{"SIOCSHIWAT", Const, 0, ""},
-		{"SIOCSIFADDR", Const, 0, ""},
-		{"SIOCSIFADDRPREF", Const, 1, ""},
-		{"SIOCSIFALTMTU", Const, 0, ""},
-		{"SIOCSIFASYNCMAP", Const, 0, ""},
-		{"SIOCSIFBOND", Const, 0, ""},
-		{"SIOCSIFBR", Const, 0, ""},
-		{"SIOCSIFBRDADDR", Const, 0, ""},
-		{"SIOCSIFCAP", Const, 0, ""},
-		{"SIOCSIFDESCR", Const, 0, ""},
-		{"SIOCSIFDSTADDR", Const, 0, ""},
-		{"SIOCSIFENCAP", Const, 0, ""},
-		{"SIOCSIFFIB", Const, 1, ""},
-		{"SIOCSIFFLAGS", Const, 0, ""},
-		{"SIOCSIFGATTR", Const, 1, ""},
-		{"SIOCSIFGENERIC", Const, 0, ""},
-		{"SIOCSIFHWADDR", Const, 0, ""},
-		{"SIOCSIFHWBROADCAST", Const, 0, ""},
-		{"SIOCSIFKPI", Const, 0, ""},
-		{"SIOCSIFLINK", Const, 0, ""},
-		{"SIOCSIFLLADDR", Const, 0, ""},
-		{"SIOCS
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/golang.org/x/tools/internal/stdlib/manifest.go","mode":420,"size":739828,"sha256":"6f507b11116812b1222b4bd972ddc16617f736785c8980ffeba8e11c479c03fe","index":13,"count":16,"encoding":"utf-8","payloadBytes":48000}
-IFMAC", Const, 0, ""},
-		{"SIOCSIFMAP", Const, 0, ""},
-		{"SIOCSIFMEDIA", Const, 0, ""},
-		{"SIOCSIFMEM", Const, 0, ""},
-		{"SIOCSIFMETRIC", Const, 0, ""},
-		{"SIOCSIFMTU", Const, 0, ""},
-		{"SIOCSIFNAME", Const, 0, ""},
-		{"SIOCSIFNETMASK", Const, 0, ""},
-		{"SIOCSIFPFLAGS", Const, 0, ""},
-		{"SIOCSIFPHYADDR", Const, 0, ""},
-		{"SIOCSIFPHYS", Const, 0, ""},
-		{"SIOCSIFPRIORITY", Const, 1, ""},
-		{"SIOCSIFRDOMAIN", Const, 1, ""},
-		{"SIOCSIFRTLABEL", Const, 1, ""},
-		{"SIOCSIFRVNET", Const, 0, ""},
-		{"SIOCSIFSLAVE", Const, 0, ""},
-		{"SIOCSIFTIMESLOT", Const, 1, ""},
-		{"SIOCSIFTXQLEN", Const, 0, ""},
-		{"SIOCSIFVLAN", Const, 0, ""},
-		{"SIOCSIFVNET", Const, 0, ""},
-		{"SIOCSIFXFLAGS", Const, 1, ""},
-		{"SIOCSLIFPHYADDR", Const, 0, ""},
-		{"SIOCSLIFPHYRTABLE", Const, 1, ""},
-		{"SIOCSLIFPHYTTL", Const, 3, ""},
-		{"SIOCSLINKSTR", Const, 1, ""},
-		{"SIOCSLOWAT", Const, 0, ""},
-		{"SIOCSPGRP", Const, 0, ""},
-		{"SIOCSRARP", Const, 0, ""},
-		{"SIOCSSPPPPARAMS", Const, 3, ""},
-		{"SIOCSVH", Const, 1, ""},
-		{"SIOCSVNETID", Const, 3, ""},
-		{"SIOCZIFDATA", Const, 1, ""},
-		{"SIO_GET_EXTENSION_FUNCTION_POINTER", Const, 1, ""},
-		{"SIO_GET_INTERFACE_LIST", Const, 0, ""},
-		{"SIO_KEEPALIVE_VALS", Const, 3, ""},
-		{"SIO_UDP_CONNRESET", Const, 4, ""},
-		{"SOCK_CLOEXEC", Const, 0, ""},
-		{"SOCK_DCCP", Const, 0, ""},
-		{"SOCK_DGRAM", Const, 0, ""},
-		{"SOCK_FLAGS_MASK", Const, 1, ""},
-		{"SOCK_MAXADDRLEN", Const, 0, ""},
-		{"SOCK_NONBLOCK", Const, 0, ""},
-		{"SOCK_NOSIGPIPE", Const, 1, ""},
-		{"SOCK_PACKET", Const, 0, ""},
-		{"SOCK_RAW", Const, 0, ""},
-		{"SOCK_RDM", Const, 0, ""},
-		{"SOCK_SEQPACKET", Const, 0, ""},
-		{"SOCK_STREAM", Const, 0, ""},
-		{"SOL_AAL", Const, 0, ""},
-		{"SOL_ATM", Const, 0, ""},
-		{"SOL_DECNET", Const, 0, ""},
-		{"SOL_ICMPV6", Const, 0, ""},
-		{"SOL_IP", Const, 0, ""},
-		{"SOL_IPV6", Const, 0, ""},
-		{"SOL_IRDA", Const, 0, ""},
-		{"SOL_PACKET", Const, 0, ""},
-		{"SOL_RAW", Const, 0, ""},
-		{"SOL_SOCKET", Const, 0, ""},
-		{"SOL_TCP", Const, 0, ""},
-		{"SOL_X25", Const, 0, ""},
-		{"SOMAXCONN", Const, 0, ""},
-		{"SO_ACCEPTCONN", Const, 0, ""},
-		{"SO_ACCEPTFILTER", Const, 0, ""},
-		{"SO_ATTACH_FILTER", Const, 0, ""},
-		{"SO_BINDANY", Const, 1, ""},
-		{"SO_BINDTODEVICE", Const, 0, ""},
-		{"SO_BINTIME", Const, 0, ""},
-		{"SO_BROADCAST", Const, 0, ""},
-		{"SO_BSDCOMPAT", Const, 0, ""},
-		{"SO_DEBUG", Const, 0, ""},
-		{"SO_DETACH_FILTER", Const, 0, ""},
-		{"SO_DOMAIN", Const, 0, ""},
-		{"SO_DONTROUTE", Const, 0, ""},
-		{"SO_DONTTRUNC", Const, 0, ""},
-		{"SO_ERROR", Const, 0, ""},
-		{"SO_KEEPALIVE", Const, 0, ""},
-		{"SO_LABEL", Const, 0, ""},
-		{"SO_LINGER", Const, 0, ""},
-		{"SO_LINGER_SEC", Const, 0, ""},
-		{"SO_LISTENINCQLEN", Const, 0, ""},
-		{"SO_LISTENQLEN", Const, 0, ""},
-		{"SO_LISTENQLIMIT", Const, 0, ""},
-		{"SO_MARK", Const, 0, ""},
-		{"SO_NETPROC", Const, 1, ""},
-		{"SO_NKE", Const, 0, ""},
-		{"SO_NOADDRERR", Const, 0, ""},
-		{"SO_NOHEADER", Const, 1, ""},
-		{"SO_NOSIGPIPE", Const, 0, ""},
-		{"SO_NOTIFYCONFLICT", Const, 0, ""},
-		{"SO_NO_CHECK", Const, 0, ""},
-		{"SO_NO_DDP", Const, 0, ""},
-		{"SO_NO_OFFLOAD", Const, 0, ""},
-		{"SO_NP_EXTENSIONS", Const, 0, ""},
-		{"SO_NREAD", Const, 0, ""},
-		{"SO_NUMRCVPKT", Const, 16, ""},
-		{"SO_NWRITE", Const, 0, ""},
-		{"SO_OOBINLINE", Const, 0, ""},
-		{"SO_OVERFLOWED", Const, 1, ""},
-		{"SO_PASSCRED", Const, 0, ""},
-		{"SO_PASSSEC", Const, 0, ""},
-		{"SO_PEERCRED", Const, 0, ""},
-		{"SO_PEERLABEL", Const, 0, ""},
-		{"SO_PEERNAME", Const, 0, ""},
-		{"SO_PEERSEC", Const, 0, ""},
-		{"SO_PRIORITY", Const, 0, ""},
-		{"SO_PROTOCOL", Const, 0, ""},
-		{"SO_PROTOTYPE", Const, 1, ""},
-		{"SO_RANDOMPORT", Const, 0, ""},
-		{"SO_RCVBUF", Const, 0, ""},
-		{"SO_RCVBUFFORCE", Const, 0, ""},
-		{"SO_RCVLOWAT", Const, 0, ""},
-		{"SO_RCVTIMEO", Const, 0, ""},
-		{"SO_RESTRICTIONS", Const, 0, ""},
-		{"SO_RESTRICT_DENYIN", Const, 0, ""},
-		{"SO_RESTRICT_DENYOUT", Const, 0, ""},
-		{"SO_RESTRICT_DENYSET", Const, 0, ""},
-		{"SO_REUSEADDR", Const, 0, ""},
-		{"SO_REUSEPORT", Const, 0, ""},
-		{"SO_REUSESHAREUID", Const, 0, ""},
-		{"SO_RTABLE", Const, 1, ""},
-		{"SO_RXQ_OVFL", Const, 0, ""},
-		{"SO_SECURITY_AUTHENTICATION", Const, 0, ""},
-		{"SO_SECURITY_ENCRYPTION_NETWORK", Const, 0, ""},
-		{"SO_SECURITY_ENCRYPTION_TRANSPORT", Const, 0, ""},
-		{"SO_SETFIB", Const, 0, ""},
-		{"SO_SNDBUF", Const, 0, ""},
-		{"SO_SNDBUFFORCE", Const, 0, ""},
-		{"SO_SNDLOWAT", Const, 0, ""},
-		{"SO_SNDTIMEO", Const, 0, ""},
-		{"SO_SPLICE", Const, 1, ""},
-		{"SO_TIMESTAMP", Const, 0, ""},
-		{"SO_TIMESTAMPING", Const, 0, ""},
-		{"SO_TIMESTAMPNS", Const, 0, ""},
-		{"SO_TIMESTAMP_MONOTONIC", Const, 0, ""},
-		{"SO_TYPE", Const, 0, ""},
-		{"SO_UPCALLCLOSEWAIT", Const, 0, ""},
-		{"SO_UPDATE_ACCEPT_CONTEXT", Const, 0, ""},
-		{"SO_UPDATE_CONNECT_CONTEXT", Const, 1, ""},
-		{"SO_USELOOPBACK", Const, 0, ""},
-		{"SO_USER_COOKIE", Const, 1, ""},
-		{"SO_VENDOR", Const, 3, ""},
-		{"SO_WANTMORE", Const, 0, ""},
-		{"SO_WANTOOBFLAG", Const, 0, ""},
-		{"SSLExtraCertChainPolicyPara", Type, 0, ""},
-		{"SSLExtraCertChainPolicyPara.AuthType", Field, 0, ""},
-		{"SSLExtraCertChainPolicyPara.Checks", Field, 0, ""},
-		{"SSLExtraCertChainPolicyPara.ServerName", Field, 0, ""},
-		{"SSLExtraCertChainPolicyPara.Size", Field, 0, ""},
-		{"STANDARD_RIGHTS_ALL", Const, 0, ""},
-		{"STANDARD_RIGHTS_EXECUTE", Const, 0, ""},
-		{"STANDARD_RIGHTS_READ", Const, 0, ""},
-		{"STANDARD_RIGHTS_REQUIRED", Const, 0, ""},
-		{"STANDARD_RIGHTS_WRITE", Const, 0, ""},
-		{"STARTF_USESHOWWINDOW", Const, 0, ""},
-		{"STARTF_USESTDHANDLES", Const, 0, ""},
-		{"STD_ERROR_HANDLE", Const, 0, ""},
-		{"STD_INPUT_HANDLE", Const, 0, ""},
-		{"STD_OUTPUT_HANDLE", Const, 0, ""},
-		{"SUBLANG_ENGLISH_US", Const, 0, ""},
-		{"SW_FORCEMINIMIZE", Const, 0, ""},
-		{"SW_HIDE", Const, 0, ""},
-		{"SW_MAXIMIZE", Const, 0, ""},
-		{"SW_MINIMIZE", Const, 0, ""},
-		{"SW_NORMAL", Const, 0, ""},
-		{"SW_RESTORE", Const, 0, ""},
-		{"SW_SHOW", Const, 0, ""},
-		{"SW_SHOWDEFAULT", Const, 0, ""},
-		{"SW_SHOWMAXIMIZED", Const, 0, ""},
-		{"SW_SHOWMINIMIZED", Const, 0, ""},
-		{"SW_SHOWMINNOACTIVE", Const, 0, ""},
-		{"SW_SHOWNA", Const, 0, ""},
-		{"SW_SHOWNOACTIVATE", Const, 0, ""},
-		{"SW_SHOWNORMAL", Const, 0, ""},
-		{"SYMBOLIC_LINK_FLAG_DIRECTORY", Const, 4, ""},
-		{"SYNCHRONIZE", Const, 0, ""},
-		{"SYSCTL_VERSION", Const, 1, ""},
-		{"SYSCTL_VERS_0", Const, 1, ""},
-		{"SYSCTL_VERS_1", Const, 1, ""},
-		{"SYSCTL_VERS_MASK", Const, 1, ""},
-		{"SYS_ABORT2", Const, 0, ""},
-		{"SYS_ACCEPT", Const, 0, ""},
-		{"SYS_ACCEPT4", Const, 0, ""},
-		{"SYS_ACCEPT_NOCANCEL", Const, 0, ""},
-		{"SYS_ACCESS", Const, 0, ""},
-		{"SYS_ACCESS_EXTENDED", Const, 0, ""},
-		{"SYS_ACCT", Const, 0, ""},
-		{"SYS_ADD_KEY", Const, 0, ""},
-		{"SYS_ADD_PROFIL", Const, 0, ""},
-		{"SYS_ADJFREQ", Const, 1, ""},
-		{"SYS_ADJTIME", Const, 0, ""},
-		{"SYS_ADJTIMEX", Const, 0, ""},
-		{"SYS_AFS_SYSCALL", Const, 0, ""},
-		{"SYS_AIO_CANCEL", Const, 0, ""},
-		{"SYS_AIO_ERROR", Const, 0, ""},
-		{"SYS_AIO_FSYNC", Const, 0, ""},
-		{"SYS_AIO_MLOCK", Const, 14, ""},
-		{"SYS_AIO_READ", Const, 0, ""},
-		{"SYS_AIO_RETURN", Const, 0, ""},
-		{"SYS_AIO_SUSPEND", Const, 0, ""},
-		{"SYS_AIO_SUSPEND_NOCANCEL", Const, 0, ""},
-		{"SYS_AIO_WAITCOMPLETE", Const, 14, ""},
-		{"SYS_AIO_WRITE", Const, 0, ""},
-		{"SYS_ALARM", Const, 0, ""},
-		{"SYS_ARCH_PRCTL", Const, 0, ""},
-		{"SYS_ARM_FADVISE64_64", Const, 0, ""},
-		{"SYS_ARM_SYNC_FILE_RANGE", Const, 0, ""},
-		{"SYS_ATGETMSG", Const, 0, ""},
-		{"SYS_ATPGETREQ", Const, 0, ""},
-		{"SYS_ATPGETRSP", Const, 0, ""},
-		{"SYS_ATPSNDREQ", Const, 0, ""},
-		{"SYS_ATPSNDRSP", Const, 0, ""},
-		{"SYS_ATPUTMSG", Const, 0, ""},
-		{"SYS_ATSOCKET", Const, 0, ""},
-		{"SYS_AUDIT", Const, 0, ""},
-		{"SYS_AUDITCTL", Const, 0, ""},
-		{"SYS_AUDITON", Const, 0, ""},
-		{"SYS_AUDIT_SESSION_JOIN", Const, 0, ""},
-		{"SYS_AUDIT_SESSION_PORT", Const, 0, ""},
-		{"SYS_AUDIT_SESSION_SELF", Const, 0, ""},
-		{"SYS_BDFLUSH", Const, 0, ""},
-		{"SYS_BIND", Const, 0, ""},
-		{"SYS_BINDAT", Const, 3, ""},
-		{"SYS_BREAK", Const, 0, ""},
-		{"SYS_BRK", Const, 0, ""},
-		{"SYS_BSDTHREAD_CREATE", Const, 0, ""},
-		{"SYS_BSDTHREAD_REGISTER", Const, 0, ""},
-		{"SYS_BSDTHREAD_TERMINATE", Const, 0, ""},
-		{"SYS_CAPGET", Const, 0, ""},
-		{"SYS_CAPSET", Const, 0, ""},
-		{"SYS_CAP_ENTER", Const, 0, ""},
-		{"SYS_CAP_FCNTLS_GET", Const, 1, ""},
-		{"SYS_CAP_FCNTLS_LIMIT", Const, 1, ""},
-		{"SYS_CAP_GETMODE", Const, 0, ""},
-		{"SYS_CAP_GETRIGHTS", Const, 0, ""},
-		{"SYS_CAP_IOCTLS_GET", Const, 1, ""},
-		{"SYS_CAP_IOCTLS_LIMIT", Const, 1, ""},
-		{"SYS_CAP_NEW", Const, 0, ""},
-		{"SYS_CAP_RIGHTS_GET", Const, 1, ""},
-		{"SYS_CAP_RIGHTS_LIMIT", Const, 1, ""},
-		{"SYS_CHDIR", Const, 0, ""},
-		{"SYS_CHFLAGS", Const, 0, ""},
-		{"SYS_CHFLAGSAT", Const, 3, ""},
-		{"SYS_CHMOD", Const, 0, ""},
-		{"SYS_CHMOD_EXTENDED", Const, 0, ""},
-		{"SYS_CHOWN", Const, 0, ""},
-		{"SYS_CHOWN32", Const, 0, ""},
-		{"SYS_CHROOT", Const, 0, ""},
-		{"SYS_CHUD", Const, 0, ""},
-		{"SYS_CLOCK_ADJTIME", Const, 0, ""},
-		{"SYS_CLOCK_GETCPUCLOCKID2", Const, 1, ""},
-		{"SYS_CLOCK_GETRES", Const, 0, ""},
-		{"SYS_CLOCK_GETTIME", Const, 0, ""},
-		{"SYS_CLOCK_NANOSLEEP", Const, 0, ""},
-		{"SYS_CLOCK_SETTIME", Const, 0, ""},
-		{"SYS_CLONE", Const, 0, ""},
-		{"SYS_CLOSE", Const, 0, ""},
-		{"SYS_CLOSEFROM", Const, 0, ""},
-		{"SYS_CLOSE_NOCANCEL", Const, 0, ""},
-		{"SYS_CONNECT", Const, 0, ""},
-		{"SYS_CONNECTAT", Const, 3, ""},
-		{"SYS_CONNECT_NOCANCEL", Const, 0, ""},
-		{"SYS_COPYFILE", Const, 0, ""},
-		{"SYS_CPUSET", Const, 0, ""},
-		{"SYS_CPUSET_GETAFFINITY", Const, 0, ""},
-		{"SYS_CPUSET_GETID", Const, 0, ""},
-		{"SYS_CPUSET_SETAFFINITY", Const, 0, ""},
-		{"SYS_CPUSET_SETID", Const, 0, ""},
-		{"SYS_CREAT", Const, 0, ""},
-		{"SYS_CREATE_MODULE", Const, 0, ""},
-		{"SYS_CSOPS", Const, 0, ""},
-		{"SYS_CSOPS_AUDITTOKEN", Const, 16, ""},
-		{"SYS_DELETE", Const, 0, ""},
-		{"SYS_DELETE_MODULE", Const, 0, ""},
-		{"SYS_DUP", Const, 0, ""},
-		{"SYS_DUP2", Const, 0, ""},
-		{"SYS_DUP3", Const, 0, ""},
-		{"SYS_EACCESS", Const, 0, ""},
-		{"SYS_EPOLL_CREATE", Const, 0, ""},
-		{"SYS_EPOLL_CREATE1", Const, 0, ""},
-		{"SYS_EPOLL_CTL", Const, 0, ""},
-		{"SYS_EPOLL_CTL_OLD", Const, 0, ""},
-		{"SYS_EPOLL_PWAIT", Const, 0, ""},
-		{"SYS_EPOLL_WAIT", Const, 0, ""},
-		{"SYS_EPOLL_WAIT_OLD", Const, 0, ""},
-		{"SYS_EVENTFD", Const, 0, ""},
-		{"SYS_EVENTFD2", Const, 0, ""},
-		{"SYS_EXCHANGEDATA", Const, 0, ""},
-		{"SYS_EXECVE", Const, 0, ""},
-		{"SYS_EXIT", Const, 0, ""},
-		{"SYS_EXIT_GROUP", Const, 0, ""},
-		{"SYS_EXTATTRCTL", Const, 0, ""},
-		{"SYS_EXTATTR_DELETE_FD", Const, 0, ""},
-		{"SYS_EXTATTR_DELETE_FILE", Const, 0, ""},
-		{"SYS_EXTATTR_DELETE_LINK", Const, 0, ""},
-		{"SYS_EXTATTR_GET_FD", Const, 0, ""},
-		{"SYS_EXTATTR_GET_FILE", Const, 0, ""},
-		{"SYS_EXTATTR_GET_LINK", Const, 0, ""},
-		{"SYS_EXTATTR_LIST_FD", Const, 0, ""},
-		{"SYS_EXTATTR_LIST_FILE", Const, 0, ""},
-		{"SYS_EXTATTR_LIST_LINK", Const, 0, ""},
-		{"SYS_EXTATTR_SET_FD", Const, 0, ""},
-		{"SYS_EXTATTR_SET_FILE", Const, 0, ""},
-		{"SYS_EXTATTR_SET_LINK", Const, 0, ""},
-		{"SYS_FACCESSAT", Const, 0, ""},
-		{"SYS_FADVISE64", Const, 0, ""},
-		{"SYS_FADVISE64_64", Const, 0, ""},
-		{"SYS_FALLOCATE", Const, 0, ""},
-		{"SYS_FANOTIFY_INIT", Const, 0, ""},
-		{"SYS_FANOTIFY_MARK", Const, 0, ""},
-		{"SYS_FCHDIR", Const, 0, ""},
-		{"SYS_FCHFLAGS", Const, 0, ""},
-		{"SYS_FCHMOD", Const, 0, ""},
-		{"SYS_FCHMODAT", Const, 0, ""},
-		{"SYS_FCHMOD_EXTENDED", Const, 0, ""},
-		{"SYS_FCHOWN", Const, 0, ""},
-		{"SYS_FCHOWN32", Const, 0, ""},
-		{"SYS_FCHOWNAT", Const, 0, ""},
-		{"SYS_FCHROOT", Const, 1, ""},
-		{"SYS_FCNTL", Const, 0, ""},
-		{"SYS_FCNTL64", Const, 0, ""},
-		{"SYS_FCNTL_NOCANCEL", Const, 0, ""},
-		{"SYS_FDATASYNC", Const, 0, ""},
-		{"SYS_FEXECVE", Const, 0, ""},
-		{"SYS_FFCLOCK_GETCOUNTER", Const, 0, ""},
-		{"SYS_FFCLOCK_GETESTIMATE", Const, 0, ""},
-		{"SYS_FFCLOCK_SETESTIMATE", Const, 0, ""},
-		{"SYS_FFSCTL", Const, 0, ""},
-		{"SYS_FGETATTRLIST", Const, 0, ""},
-		{"SYS_FGETXATTR", Const, 0, ""},
-		{"SYS_FHOPEN", Const, 0, ""},
-		{"SYS_FHSTAT", Const, 0, ""},
-		{"SYS_FHSTATFS", Const, 0, ""},
-		{"SYS_FILEPORT_MAKEFD", Const, 0, ""},
-		{"SYS_FILEPORT_MAKEPORT", Const, 0, ""},
-		{"SYS_FKTRACE", Const, 1, ""},
-		{"SYS_FLISTXATTR", Const, 0, ""},
-		{"SYS_FLOCK", Const, 0, ""},
-		{"SYS_FORK", Const, 0, ""},
-		{"SYS_FPATHCONF", Const, 0, ""},
-		{"SYS_FREEBSD6_FTRUNCATE", Const, 0, ""},
-		{"SYS_FREEBSD6_LSEEK", Const, 0, ""},
-		{"SYS_FREEBSD6_MMAP", Const, 0, ""},
-		{"SYS_FREEBSD6_PREAD", Const, 0, ""},
-		{"SYS_FREEBSD6_PWRITE", Const, 0, ""},
-		{"SYS_FREEBSD6_TRUNCATE", Const, 0, ""},
-		{"SYS_FREMOVEXATTR", Const, 0, ""},
-		{"SYS_FSCTL", Const, 0, ""},
-		{"SYS_FSETATTRLIST", Const, 0, ""},
-		{"SYS_FSETXATTR", Const, 0, ""},
-		{"SYS_FSGETPATH", Const, 0, ""},
-		{"SYS_FSTAT", Const, 0, ""},
-		{"SYS_FSTAT64", Const, 0, ""},
-		{"SYS_FSTAT64_EXTENDED", Const, 0, ""},
-		{"SYS_FSTATAT", Const, 0, ""},
-		{"SYS_FSTATAT64", Const, 0, ""},
-		{"SYS_FSTATFS", Const, 0, ""},
-		{"SYS_FSTATFS64", Const, 0, ""},
-		{"SYS_FSTATV", Const, 0, ""},
-		{"SYS_FSTATVFS1", Const, 1, ""},
-		{"SYS_FSTAT_EXTENDED", Const, 0, ""},
-		{"SYS_FSYNC", Const, 0, ""},
-		{"SYS_FSYNC_NOCANCEL", Const, 0, ""},
-		{"SYS_FSYNC_RANGE", Const, 1, ""},
-		{"SYS_FTIME", Const, 0, ""},
-		{"SYS_FTRUNCATE", Const, 0, ""},
-		{"SYS_FTRUNCATE64", Const, 0, ""},
-		{"SYS_FUTEX", Const, 0, ""},
-		{"SYS_FUTIMENS", Const, 1, ""},
-		{"SYS_FUTIMES", Const, 0, ""},
-		{"SYS_FUTIMESAT", Const, 0, ""},
-		{"SYS_GETATTRLIST", Const, 0, ""},
-		{"SYS_GETAUDIT", Const, 0, ""},
-		{"SYS_GETAUDIT_ADDR", Const, 0, ""},
-		{"SYS_GETAUID", Const, 0, ""},
-		{"SYS_GETCONTEXT", Const, 0, ""},
-		{"SYS_GETCPU", Const, 0, ""},
-		{"SYS_GETCWD", Const, 0, ""},
-		{"SYS_GETDENTS", Const, 0, ""},
-		{"SYS_GETDENTS64", Const, 0, ""},
-		{"SYS_GETDIRENTRIES", Const, 0, ""},
-		{"SYS_GETDIRENTRIES64", Const, 0, ""},
-		{"SYS_GETDIRENTRIESATTR", Const, 0, ""},
-		{"SYS_GETDTABLECOUNT", Const, 1, ""},
-		{"SYS_GETDTABLESIZE", Const, 0, ""},
-		{"SYS_GETEGID", Const, 0, ""},
-		{"SYS_GETEGID32", Const, 0, ""},
-		{"SYS_GETEUID", Const, 0, ""},
-		{"SYS_GETEUID32", Const, 0, ""},
-		{"SYS_GETFH", Const, 0, ""},
-		{"SYS_GETFSSTAT", Const, 0, ""},
-		{"SYS_GETFSSTAT64", Const, 0, ""},
-		{"SYS_GETGID", Const, 0, ""},
-		{"SYS_GETGID32", Const, 0, ""},
-		{"SYS_GETGROUPS", Const, 0, ""},
-		{"SYS_GETGROUPS32", Const, 0, ""},
-		{"SYS_GETHOSTUUID", Const, 0, ""},
-		{"SYS_GETITIMER", Const, 0, ""},
-		{"SYS_GETLCID", Const, 0, ""},
-		{"SYS_GETLOGIN", Const, 0, ""},
-		{"SYS_GETLOGINCLASS", Const, 0, ""},
-		{"SYS_GETPEERNAME", Const, 0, ""},
-		{"SYS_GETPGID", Const, 0, ""},
-		{"SYS_GETPGRP", Const, 0, ""},
-		{"SYS_GETPID", Const, 0, ""},
-		{"SYS_GETPMSG", Const, 0, ""},
-		{"SYS_GETPPID", Const, 0, ""},
-		{"SYS_GETPRIORITY", Const, 0, ""},
-		{"SYS_GETRESGID", Const, 0, ""},
-		{"SYS_GETRESGID32", Const, 0, ""},
-		{"SYS_GETRESUID", Const, 0, ""},
-		{"SYS_GETRESUID32", Const, 0, ""},
-		{"SYS_GETRLIMIT", Const, 0, ""},
-		{"SYS_GETRTABLE", Const, 1, ""},
-		{"SYS_GETRUSAGE", Const, 0, ""},
-		{"SYS_GETSGROUPS", Const, 0, ""},
-		{"SYS_GETSID", Const, 0, ""},
-		{"SYS_GETSOCKNAME", Const, 0, ""},
-		{"SYS_GETSOCKOPT", Const, 0, ""},
-		{"SYS_GETTHRID", Const, 1, ""},
-		{"SYS_GETTID", Const, 0, ""},
-		{"SYS_GETTIMEOFDAY", Const, 0, ""},
-		{"SYS_GETUID", Const, 0, ""},
-		{"SYS_GETUID32", Const, 0, ""},
-		{"SYS_GETVFSSTAT", Const, 1, ""},
-		{"SYS_GETWGROUPS", Const, 0, ""},
-		{"SYS_GETXATTR", Const, 0, ""},
-		{"SYS_GET_KERNEL_SYMS", Const, 0, ""},
-		{"SYS_GET_MEMPOLICY", Const, 0, ""},
-		{"SYS_GET_ROBUST_LIST", Const, 0, ""},
-		{"SYS_GET_THREAD_AREA", Const, 0, ""},
-		{"SYS_GSSD_SYSCALL", Const, 14, ""},
-		{"SYS_GTTY", Const, 0, ""},
-		{"SYS_IDENTITYSVC", Const, 0, ""},
-		{"SYS_IDLE", Const, 0, ""},
-		{"SYS_INITGROUPS", Const, 0, ""},
-		{"SYS_INIT_MODULE", Const, 0, ""},
-		{"SYS_INOTIFY_ADD_WATCH", Const, 0, ""},
-		{"SYS_INOTIFY_INIT", Const, 0, ""},
-		{"SYS_INOTIFY_INIT1", Const, 0, ""},
-		{"SYS_INOTIFY_RM_WATCH", Const, 0, ""},
-		{"SYS_IOCTL", Const, 0, ""},
-		{"SYS_IOPERM", Const, 0, ""},
-		{"SYS_IOPL", Const, 0, ""},
-		{"SYS_IOPOLICYSYS", Const, 0, ""},
-		{"SYS_IOPRIO_GET", Const, 0, ""},
-		{"SYS_IOPRIO_SET", Const, 0, ""},
-		{"SYS_IO_CANCEL", Const, 0, ""},
-		{"SYS_IO_DESTROY", Const, 0, ""},
-		{"SYS_IO_GETEVENTS", Const, 0, ""},
-		{"SYS_IO_SETUP", Const, 0, ""},
-		{"SYS_IO_SUBMIT", Const, 0, ""},
-		{"SYS_IPC", Const, 0, ""},
-		{"SYS_ISSETUGID", Const, 0, ""},
-		{"SYS_JAIL", Const, 0, ""},
-		{"SYS_JAIL_ATTACH", Const, 0, ""},
-		{"SYS_JAIL_GET", Const, 0, ""},
-		{"SYS_JAIL_REMOVE", Const, 0, ""},
-		{"SYS_JAIL_SET", Const, 0, ""},
-		{"SYS_KAS_INFO", Const, 16, ""},
-		{"SYS_KDEBUG_TRACE", Const, 0, ""},
-		{"SYS_KENV", Const, 0, ""},
-		{"SYS_KEVENT", Const, 0, ""},
-		{"SYS_KEVENT64", Const, 0, ""},
-		{"SYS_KEXEC_LOAD", Const, 0, ""},
-		{"SYS_KEYCTL", Const, 0, ""},
-		{"SYS_KILL", Const, 0, ""},
-		{"SYS_KLDFIND", Const, 0, ""},
-		{"SYS_KLDFIRSTMOD", Const, 0, ""},
-		{"SYS_KLDLOAD", Const, 0, ""},
-		{"SYS_KLDNEXT", Const, 0, ""},
-		{"SYS_KLDSTAT", Const, 0, ""},
-		{"SYS_KLDSYM", Const, 0, ""},
-		{"SYS_KLDUNLOAD", Const, 0, ""},
-		{"SYS_KLDUNLOADF", Const, 0, ""},
-		{"SYS_KMQ_NOTIFY", Const, 14, ""},
-		{"SYS_KMQ_OPEN", Const, 14, ""},
-		{"SYS_KMQ_SETATTR", Const, 14, ""},
-		{"SYS_KMQ_TIMEDRECEIVE", Const, 14, ""},
-		{"SYS_KMQ_TIMEDSEND", Const, 14, ""},
-		{"SYS_KMQ_UNLINK", Const, 14, ""},
-		{"SYS_KQUEUE", Const, 0, ""},
-		{"SYS_KQUEUE1", Const, 1, ""},
-		{"SYS_KSEM_CLOSE", Const, 14, ""},
-		{"SYS_KSEM_DESTROY", Const, 14, ""},
-		{"SYS_KSEM_GETVALUE", Const, 14, ""},
-		{"SYS_KSEM_INIT", Const, 14, ""},
-		{"SYS_KSEM_OPEN", Const, 14, ""},
-		{"SYS_KSEM_POST", Const, 14, ""},
-		{"SYS_KSEM_TIMEDWAIT", Const, 14, ""},
-		{"SYS_KSEM_TRYWAIT", Const, 14, ""},
-		{"SYS_KSEM_UNLINK", Const, 14, ""},
-		{"SYS_KSEM_WAIT", Const, 14, ""},
-		{"SYS_KTIMER_CREATE", Const, 0, ""},
-		{"SYS_KTIMER_DELETE", Const, 0, ""},
-		{"SYS_KTIMER_GETOVERRUN", Const, 0, ""},
-		{"SYS_KTIMER_GETTIME", Const, 0, ""},
-		{"SYS_KTIMER_SETTIME", Const, 0, ""},
-		{"SYS_KTRACE", Const, 0, ""},
-		{"SYS_LCHFLAGS", Const, 0, ""},
-		{"SYS_LCHMOD", Const, 0, ""},
-		{"SYS_LCHOWN", Const, 0, ""},
-		{"SYS_LCHOWN32", Const, 0, ""},
-		{"SYS_LEDGER", Const, 16, ""},
-		{"SYS_LGETFH", Const, 0, ""},
-		{"SYS_LGETXATTR", Const, 0, ""},
-		{"SYS_LINK", Const, 0, ""},
-		{"SYS_LINKAT", Const, 0, ""},
-		{"SYS_LIO_LISTIO", Const, 0, ""},
-		{"SYS_LISTEN", Const, 0, ""},
-		{"SYS_LISTXATTR", Const, 0, ""},
-		{"SYS_LLISTXATTR", Const, 0, ""},
-		{"SYS_LOCK", Const, 0, ""},
-		{"SYS_LOOKUP_DCOOKIE", Const, 0, ""},
-		{"SYS_LPATHCONF", Const, 0, ""},
-		{"SYS_LREMOVEXATTR", Const, 0, ""},
-		{"SYS_LSEEK", Const, 0, ""},
-		{"SYS_LSETXATTR", Const, 0, ""},
-		{"SYS_LSTAT", Const, 0, ""},
-		{"SYS_LSTAT64", Const, 0, ""},
-		{"SYS_LSTAT64_EXTENDED", Const, 0, ""},
-		{"SYS_LSTATV", Const, 0, ""},
-		{"SYS_LSTAT_EXTENDED", Const, 0, ""},
-		{"SYS_LUTIMES", Const, 0, ""},
-		{"SYS_MAC_SYSCALL", Const, 0, ""},
-		{"SYS_MADVISE", Const, 0, ""},
-		{"SYS_MADVISE1", Const, 0, ""},
-		{"SYS_MAXSYSCALL", Const, 0, ""},
-		{"SYS_MBIND", Const, 0, ""},
-		{"SYS_MIGRATE_PAGES", Const, 0, ""},
-		{"SYS_MINCORE", Const, 0, ""},
-		{"SYS_MINHERIT", Const, 0, ""},
-		{"SYS_MKCOMPLEX", Const, 0, ""},
-		{"SYS_MKDIR", Const, 0, ""},
-		{"SYS_MKDIRAT", Const, 0, ""},
-		{"SYS_MKDIR_EXTENDED", Const, 0, ""},
-		{"SYS_MKFIFO", Const, 0, ""},
-		{"SYS_MKFIFOAT", Const, 0, ""},
-		{"SYS_MKFIFO_EXTENDED", Const, 0, ""},
-		{"SYS_MKNOD", Const, 0, ""},
-		{"SYS_MKNODAT", Const, 0, ""},
-		{"SYS_MLOCK", Const, 0, ""},
-		{"SYS_MLOCKALL", Const, 0, ""},
-		{"SYS_MMAP", Const, 0, ""},
-		{"SYS_MMAP2", Const, 0, ""},
-		{"SYS_MODCTL", Const, 1, ""},
-		{"SYS_MODFIND", Const, 0, ""},
-		{"SYS_MODFNEXT", Const, 0, ""},
-		{"SYS_MODIFY_LDT", Const, 0, ""},
-		{"SYS_MODNEXT", Const, 0, ""},
-		{"SYS_MODSTAT", Const, 0, ""},
-		{"SYS_MODWATCH", Const, 0, ""},
-		{"SYS_MOUNT", Const, 0, ""},
-		{"SYS_MOVE_PAGES", Const, 0, ""},
-		{"SYS_MPROTECT", Const, 0, ""},
-		{"SYS_MPX", Const, 0, ""},
-		{"SYS_MQUERY", Const, 1, ""},
-		{"SYS_MQ_GETSETATTR", Const, 0, ""},
-		{"SYS_MQ_NOTIFY", Const, 0, ""},
-		{"SYS_MQ_OPEN", Const, 0, ""},
-		{"SYS_MQ_TIMEDRECEIVE", Const, 0, ""},
-		{"SYS_MQ_TIMEDSEND", Const, 0, ""},
-		{"SYS_MQ_UNLINK", Const, 0, ""},
-		{"SYS_MREMAP", Const, 0, ""},
-		{"SYS_MSGCTL", Const, 0, ""},
-		{"SYS_MSGGET", Const, 0, ""},
-		{"SYS_MSGRCV", Const, 0, ""},
-		{"SYS_MSGRCV_NOCANCEL", Const, 0, ""},
-		{"SYS_MSGSND", Const, 0, ""},
-		{"SYS_MSGSND_NOCANCEL", Const, 0, ""},
-		{"SYS_MSGSYS", Const, 0, ""},
-		{"SYS_MSYNC", Const, 0, ""},
-		{"SYS_MSYNC_NOCANCEL", Const, 0, ""},
-		{"SYS_MUNLOCK", Const, 0, ""},
-		{"SYS_MUNLOCKALL", Const, 0, ""},
-		{"SYS_MUNMAP", Const, 0, ""},
-		{"SYS_NAME_TO_HANDLE_AT", Const, 0, ""},
-		{"SYS_NANOSLEEP", Const, 0, ""},
-		{"SYS_NEWFSTATAT", Const, 0, ""},
-		{"SYS_NFSCLNT", Const, 0, ""},
-		{"SYS_NFSSERVCTL", Const, 0, ""},
-		{"SYS_NFSSVC", Const, 0, ""},
-		{"SYS_NFSTAT", Const, 0, ""},
-		{"SYS_NICE", Const, 0, ""},
-		{"SYS_NLM_SYSCALL", Const, 14, ""},
-		{"SYS_NLSTAT", Const, 0, ""},
-		{"SYS_NMOUNT", Const, 0, ""},
-		{"SYS_NSTAT", Const, 0, ""},
-		{"SYS_NTP_ADJTIME", Const, 0, ""},
-		{"SYS_NTP_GETTIME", Const, 0, ""},
-		{"SYS_NUMA_GETAFFINITY", Const, 14, ""},
-		{"SYS_NUMA_SETAFFINITY", Const, 14, ""},
-		{"SYS_OABI_SYSCALL_BASE", Const, 0, ""},
-		{"SYS_OBREAK", Const, 0, ""},
-		{"SYS_OLDFSTAT", Const, 0, ""},
-		{"SYS_OLDLSTAT", Const, 0, ""},
-		{"SYS_OLDOLDUNAME", Const, 0, ""},
-		{"SYS_OLDSTAT", Const, 0, ""},
-		{"SYS_OLDUNAME", Const, 0, ""},
-		{"SYS_OPEN", Const, 0, ""},
-		{"SYS_OPENAT", Const, 0, ""},
-		{"SYS_OPENBSD_POLL", Const, 0, ""},
-		{"SYS_OPEN_BY_HANDLE_AT", Const, 0, ""},
-		{"SYS_OPEN_DPROTECTED_NP", Const, 16, ""},
-		{"SYS_OPEN_EXTENDED", Const, 0, ""},
-		{"SYS_OPEN_NOCANCEL", Const, 0, ""},
-		{"SYS_OVADVISE", Const, 0, ""},
-		{"SYS_PACCEPT", Const, 1, ""},
-		{"SYS_PATHCONF", Const, 0, ""},
-		{"SYS_PAUSE", Const, 0, ""},
-		{"SYS_PCICONFIG_IOBASE", Const, 0, ""},
-		{"SYS_PCICONFIG_READ", Const, 0, ""},
-		{"SYS_PCICONFIG_WRITE", Const, 0, ""},
-		{"SYS_PDFORK", Const, 0, ""},
-		{"SYS_PDGETPID", Const, 0, ""},
-		{"SYS_PDKILL", Const, 0, ""},
-		{"SYS_PERF_EVENT_OPEN", Const, 0, ""},
-		{"SYS_PERSONALITY", Const, 0, ""},
-		{"SYS_PID_HIBERNATE", Const, 0, ""},
-		{"SYS_PID_RESUME", Const, 0, ""},
-		{"SYS_PID_SHUTDOWN_SOCKETS", Const, 0, ""},
-		{"SYS_PID_SUSPEND", Const, 0, ""},
-		{"SYS_PIPE", Const, 0, ""},
-		{"SYS_PIPE2", Const, 0, ""},
-		{"SYS_PIVOT_ROOT", Const, 0, ""},
-		{"SYS_PMC_CONTROL", Const, 1, ""},
-		{"SYS_PMC_GET_INFO", Const, 1, ""},
-		{"SYS_POLL", Const, 0, ""},
-		{"SYS_POLLTS", Const, 1, ""},
-		{"SYS_POLL_NOCANCEL", Const, 0, ""},
-		{"SYS_POSIX_FADVISE", Const, 0, ""},
-		{"SYS_POSIX_FALLOCATE", Const, 0, ""},
-		{"SYS_POSIX_OPENPT", Const, 0, ""},
-		{"SYS_POSIX_SPAWN", Const, 0, ""},
-		{"SYS_PPOLL", Const, 0, ""},
-		{"SYS_PRCTL", Const, 0, ""},
-		{"SYS_PREAD", Const, 0, ""},
-		{"SYS_PREAD64", Const, 0, ""},
-		{"SYS_PREADV", Const, 0, ""},
-		{"SYS_PREAD_NOCANCEL", Const, 0, ""},
-		{"SYS_PRLIMIT64", Const, 0, ""},
-		{"SYS_PROCCTL", Const, 3, ""},
-		{"SYS_PROCESS_POLICY", Const, 0, ""},
-		{"SYS_PROCESS_VM_READV", Const, 0, ""},
-		{"SYS_PROCESS_VM_WRITEV", Const, 0, ""},
-		{"SYS_PROC_INFO", Const, 0, ""},
-		{"SYS_PROF", Const, 0, ""},
-		{"SYS_PROFIL", Const, 0, ""},
-		{"SYS_PSELECT", Const, 0, ""},
-		{"SYS_PSELECT6", Const, 0, ""},
-		{"SYS_PSET_ASSIGN", Const, 1, ""},
-		{"SYS_PSET_CREATE", Const, 1, ""},
-		{"SYS_PSET_DESTROY", Const, 1, ""},
-		{"SYS_PSYNCH_CVBROAD", Const, 0, ""},
-		{"SYS_PSYNCH_CVCLRPREPOST", Const, 0, ""},
-		{"SYS_PSYNCH_CVSIGNAL", Const, 0, ""},
-		{"SYS_PSYNCH_CVWAIT", Const, 0, ""},
-		{"SYS_PSYNCH_MUTEXDROP", Const, 0, ""},
-		{"SYS_PSYNCH_MUTEXWAIT", Const, 0, ""},
-		{"SYS_PSYNCH_RW_DOWNGRADE", Const, 0, ""},
-		{"SYS_PSYNCH_RW_LONGRDLOCK", Const, 0, ""},
-		{"SYS_PSYNCH_RW_RDLOCK", Const, 0, ""},
-		{"SYS_PSYNCH_RW_UNLOCK", Const, 0, ""},
-		{"SYS_PSYNCH_RW_UNLOCK2", Const, 0, ""},
-		{"SYS_PSYNCH_RW_UPGRADE", Const, 0, ""},
-		{"SYS_PSYNCH_RW_WRLOCK", Const, 0, ""},
-		{"SYS_PSYNCH_RW_YIELDWRLOCK", Const, 0, ""},
-		{"SYS_PTRACE", Const, 0, ""},
-		{"SYS_PUTPMSG", Const, 0, ""},
-		{"SYS_PWRITE", Const, 0, ""},
-		{"SYS_PWRITE64", Const, 0, ""},
-		{"SYS_PWRITEV", Const, 0, ""},
-		{"SYS_PWRITE_NOCANCEL", Const, 0, ""},
-		{"SYS_QUERY_MODULE", Const, 0, ""},
-		{"SYS_QUOTACTL", Const, 0, ""},
-		{"SYS_RASCTL", Const, 1, ""},
-		{"SYS_RCTL_ADD_RULE", Const, 0, ""},
-		{"SYS_RCTL_GET_LIMITS", Const, 0, ""},
-		{"SYS_RCTL_GET_RACCT", Const, 0, ""},
-		{"SYS_RCTL_GET_RULES", Const, 0, ""},
-		{"SYS_RCTL_REMOVE_RULE", Const, 0, ""},
-		{"SYS_READ", Const, 0, ""},
-		{"SYS_READAHEAD", Const, 0, ""},
-		{"SYS_READDIR", Const, 0, ""},
-		{"SYS_READLINK", Const, 0, ""},
-		{"SYS_READLINKAT", Const, 0, ""},
-		{"SYS_READV", Const, 0, ""},
-		{"SYS_READV_NOCANCEL", Const, 0, ""},
-		{"SYS_READ_NOCANCEL", Const, 0, ""},
-		{"SYS_REBOOT", Const, 0, ""},
-		{"SYS_RECV", Const, 0, ""},
-		{"SYS_RECVFROM", Const, 0, ""},
-		{"SYS_RECVFROM_NOCANCEL", Const, 0, ""},
-		{"SYS_RECVMMSG", Const, 0, ""},
-		{"SYS_RECVMSG", Const, 0, ""},
-		{"SYS_RECVMSG_NOCANCEL", Const, 0, ""},
-		{"SYS_REMAP_FILE_PAGES", Const, 0, ""},
-		{"SYS_REMOVEXATTR", Const, 0, ""},
-		{"SYS_RENAME", Const, 0, ""},
-		{"SYS_RENAMEAT", Const, 0, ""},
-		{"SYS_REQUEST_KEY", Const, 0, ""},
-		{"SYS_RESTART_SYSCALL", Const, 0, ""},
-		{"SYS_REVOKE", Const, 0, ""},
-		{"SYS_RFORK", Const, 0, ""},
-		{"SYS_RMDIR", Const, 0, ""},
-		{"SYS_RTPRIO", Const, 0, ""},
-		{"SYS_RTPRIO_THREAD", Const, 0, ""},
-		{"SYS_RT_SIGACTION", Const, 0, ""},
-		{"SYS_RT_SIGPENDING", Const, 0, ""},
-		{"SYS_RT_SIGPROCMASK", Const, 0, ""},
-		{"SYS_RT_SIGQUEUEINFO", Const, 0, ""},
-		{"SYS_RT_SIGRETURN", Const, 0, ""},
-		{"SYS_RT_SIGSUSPEND", Const, 0, ""},
-		{"SYS_RT_SIGTIMEDWAIT", Const, 0, ""},
-		{"SYS_RT_TGSIGQUEUEINFO", Const, 0, ""},
-		{"SYS_SBRK", Const, 0, ""},
-		{"SYS_SCHED_GETAFFINITY", Const, 0, ""},
-		{"SYS_SCHED_GETPARAM", Const, 0, ""},
-		{"SYS_SCHED_GETSCHEDULER", Const, 0, ""},
-		{"SYS_SCHED_GET_PRIORITY_MAX", Const, 0, ""},
-		{"SYS_SCHED_GET_PRIORITY_MIN", Const, 0, ""},
-		{"SYS_SCHED_RR_GET_INTERVAL", Const, 0, ""},
-		{"SYS_SCHED_SETAFFINITY", Const, 0, ""},
-		{"SYS_SCHED_SETPARAM", Const, 0, ""},
-		{"SYS_SCHED_SETSCHEDULER", Const, 0, ""},
-		{"SYS_SCHED_YIELD", Const, 0, ""},
-		{"SYS_SCTP_GENERIC_RECVMSG", Const, 0, ""},
-		{"SYS_SCTP_GENERIC_SENDMSG", Const, 0, ""},
-		{"SYS_SCTP_GENERIC_SENDMSG_IOV", Const, 0, ""},
-		{"SYS_SCTP_PEELOFF", Const, 0, ""},
-		{"SYS_SEARCHFS", Const, 0, ""},
-		{"SYS_SECURITY", Const, 0, ""},
-		{"SYS_SELECT", Const, 0, ""},
-		{"SYS_SELECT_NOCANCEL", Const, 0, ""},
-		{"SYS_SEMCONFIG", Const, 1, ""},
-		{"SYS_SEMCTL", Const, 0, ""},
-		{"SYS_SEMGET", Const, 0, ""},
-		{"SYS_SEMOP", Const, 0, ""},
-		{"SYS_SEMSYS", Const, 0, ""},
-		{"SYS_SEMTIMEDOP", Const, 0, ""},
-		{"SYS_SEM_CLOSE", Const, 0, ""},
-		{"SYS_SEM_DESTROY", Const, 0, ""},
-		{"SYS_SEM_GETVALUE", Const, 0, ""},
-		{"SYS_SEM_INIT", Const, 0, ""},
-		{"SYS_SEM_OPEN", Const, 0, ""},
-		{"SYS_SEM_POST", Const, 0, ""},
-		{"SYS_SEM_TRYWAIT", Const, 0, ""},
-		{"SYS_SEM_UNLINK", Const, 0, ""},
-		{"SYS_SEM_WAIT", Const, 0, ""},
-		{"SYS_SEM_WAIT_NOCANCEL", Const, 0, ""},
-		{"SYS_SEND", Const, 0, ""},
-		{"SYS_SENDFILE", Const, 0, ""},
-		{"SYS_SENDFILE64", Const, 0, ""},
-		{"SYS_SENDMMSG", Const, 0, ""},
-		{"SYS_SENDMSG", Const, 0, ""},
-		{"SYS_SENDMSG_NOCANCEL", Const, 0, ""},
-		{"SYS_SENDTO", Const, 0, ""},
-		{"SYS_SENDTO_NOCANCEL", Const, 0, ""},
-		{"SYS_SETATTRLIST", Const, 0, ""},
-		{"SYS_SETAUDIT", Const, 0, ""},
-		{"SYS_SETAUDIT_ADDR", Const, 0, ""},
-		{"SYS_SETAUID", Const, 0, ""},
-		{"SYS_SETCONTEXT", Const, 0, ""},
-		{"SYS_SETDOMAINNAME", Const, 0, ""},
-		{"SYS_SETEGID", Const, 0, ""},
-		{"SYS_SETEUID", Const, 0, ""},
-		{"SYS_SETFIB", Const, 0, ""},
-		{"SYS_SETFSGID", Const, 0, ""},
-		{"SYS_SETFSGID32", Const, 0, ""},
-		{"SYS_SETFSUID", Const, 0, ""},
-		{"SYS_SETFSUID32", Const, 0, ""},
-		{"SYS_SETGID", Const, 0, ""},
-		{"SYS_SETGID32", Const, 0, ""},
-		{"SYS_SETGROUPS", Const, 0, ""},
-		{"SYS_SETGROUPS32", Const, 0, ""},
-		{"SYS_SETHOSTNAME", Const, 0, ""},
-		{"SYS_SETITIMER", Const, 0, ""},
-		{"SYS_SETLCID", Const, 0, ""},
-		{"SYS_SETLOGIN", Const, 0, ""},
-		{"SYS_SETLOGINCLASS", Const, 0, ""},
-		{"SYS_SETNS", Const, 0, ""},
-		{"SYS_SETPGID", Const, 0, ""},
-		{"SYS_SETPRIORITY", Const, 0, ""},
-		{"SYS_SETPRIVEXEC", Const, 0, ""},
-		{"SYS_SETREGID", Const, 0, ""},
-		{"SYS_SETREGID32", Const, 0, ""},
-		{"SYS_SETRESGID", Const, 0, ""},
-		{"SYS_SETRESGID32", Const, 0, ""},
-		{"SYS_SETRESUID", Const, 0, ""},
-		{"SYS_SETRESUID32", Const, 0, ""},
-		{"SYS_SETREUID", Const, 0, ""},
-		{"SYS_SETREUID32", Const, 0, ""},
-		{"SYS_SETRLIMIT", Const, 0, ""},
-		{"SYS_SETRTABLE", Const, 1, ""},
-		{"SYS_SETSGROUPS", Const, 0, ""},
-		{"SYS_SETSID", Const, 0, ""},
-		{"SYS_SETSOCKOPT", Const, 0, ""},
-		{"SYS_SETTID", Const, 0, ""},
-		{"SYS_SETTID_WITH_PID", Const, 0, ""},
-		{"SYS_SETTIMEOFDAY", Const, 0, ""},
-		{"SYS_SETUID", Const, 0, ""},
-		{"SYS_SETUID32", Const, 0, ""},
-		{"SYS_SETWGROUPS", Const, 0, ""},
-		{"SYS_SETXATTR", Const, 0, ""},
-		{"SYS_SET_MEMPOLICY", Const, 0, ""},
-		{"SYS_SET_ROBUST_LIST", Const, 0, ""},
-		{"SYS_SET_THREAD_AREA", Const, 0, ""},
-		{"SYS_SET_TID_ADDRESS", Const, 0, ""},
-		{"SYS_SGETMASK", Const, 0, ""},
-		{"SYS_SHARED_REGION_CHECK_NP", Const, 0, ""},
-		{"SYS_SHARED_REGION_MAP_AND_SLIDE_NP", Const, 0, ""},
-		{"SYS_SHMAT", Const, 0, ""},
-		{"SYS_SHMCTL", Const, 0, ""},
-		{"SYS_SHMDT", Const, 0, ""},
-		{"SYS_SHMGET", Const, 0, ""},
-		{"SYS_SHMSYS", Const, 0, ""},
-		{"SYS_SHM_OPEN", Const, 0, ""},
-		{"SYS_SHM_UNLINK", Const, 0, ""},
-		{"SYS_SHUTDOWN", Const, 0, ""},
-		{"SYS_SIGACTION", Const, 0, ""},
-		{"SYS_SIGALTSTACK", Const, 0, ""},
-		{"SYS_SIGNAL", Const, 0, ""},
-		{"SYS_SIGNALFD", Const, 0, ""},
-		{"SYS_SIGNALFD4", Const, 0, ""},
-		{"SYS_SIGPENDING", Const, 0, ""},
-		{"SYS_SIGPROCMASK", Const, 0, ""},
-		{"SYS_SIGQUEUE", Const, 0, ""},
-		{"SYS_SIGQUEUEINFO", Const, 1, ""},
-		{"SYS_SIGRETURN", Const, 0, ""},
-		{"SYS_SIGSUSPEND", Const, 0, ""},
-		{"SYS_SIGSUSPEND_NOCANCEL", Const, 0, ""},
-		{"SYS_SIGTIMEDWAIT", Const, 0, ""},
-		{"SYS_SIGWAIT", Const, 0, ""},
-		{"SYS_SIGWAITINFO", Const, 0, ""},
-		{"SYS_SOCKET", Const, 0, ""},
-		{"SYS_SOCKETCALL", Const, 0, ""},
-		{"SYS_SOCKETPAIR", Const, 0, ""},
-		{"SYS_SPLICE", Const, 0, ""},
-		{"SYS_SSETMASK", Const, 0, ""},
-		{"SYS_SSTK", Const, 0, ""},
-		{"SYS_STACK_SNAPSHOT", Const, 0, ""},
-		{"SYS_STAT", Const, 0, ""},
-		{"SYS_STAT64", Const, 0, ""},
-		{"SYS_STAT64_EXTENDED", Const, 0, ""},
-		{"SYS_STATFS", Const, 0, ""},
-		{"SYS_STATFS64", Const, 0, ""},
-		{"SYS_STATV", Const, 0, ""},
-		{"SYS_STATVFS1", Const, 1, ""},
-		{"SYS_STAT_EXTENDED", Const, 0, ""},
-		{"SYS_STIME", Const, 0, ""},
-		{"SYS_STTY", Const, 0, ""},
-		{"SYS_SWAPCONTEXT", Const, 0, ""},
-		{"SYS_SWAPCTL", Const, 1, ""},
-		{"SYS_SWAPOFF", Const, 0, ""},
-		{"SYS_SWAPON", Const, 0, ""},
-		{"SYS_SYMLINK", Const, 0, ""},
-		{"SYS_SYMLINKAT", Const, 0, ""},
-		{"SYS_SYNC", Const, 0, ""},
-		{"SYS_SYNCFS", Const, 0, ""},
-		{"SYS_SYNC_FILE_RANGE", Const, 0, ""},
-		{"SYS_SYSARCH", Const, 0, ""},
-		{"SYS_SYSCALL", Const, 0, ""},
-		{"SYS_SYSCALL_BASE", Const, 0, ""},
-		{"SYS_SYSFS", Const, 0, ""},
-		{"SYS_SYSINFO", Const, 0, ""},
-		{"SYS_SYSLOG", Const, 0, ""},
-		{"SYS_TEE", Const, 0, ""},
-		{"SYS_TGKILL", Const, 0, ""},
-		{"SYS_THREAD_SELFID", Const, 0, ""},
-		{"SYS_THR_CREATE", Const, 0, ""},
-		{"SYS_THR_EXIT", Const, 0, ""},
-		{"SYS_THR_KILL", Const, 0, ""},
-		{"SYS_THR_KILL2", Const, 0, ""},
-		{"SYS_THR_NEW", Const, 0, ""},
-		{"SYS_THR_SELF", Const, 0, ""},
-		{"SYS_THR_SET_NAME", Const, 0, ""},
-		{"SYS_THR_SUSPEND", Const, 0, ""},
-		{"SYS_THR_WAKE", Const, 0, ""},
-		{"SYS_TIME", Const, 0, ""},
-		{"SYS_TIMERFD_CREATE", Const, 0, ""},
-		{"SYS_TIMERFD_GETTIME", Const, 0, ""},
-		{"SYS_TIMERFD_SETTIME", Const, 0, ""},
-		{"SYS_TIMER_CREATE", Const, 0, ""},
-		{"SYS_TIMER_DELETE", Const, 0, ""},
-		{"SYS_TIMER_GETOVERRUN", Const, 0, ""},
-		{"SYS_TIMER_GETTIME", Const, 0, ""},
-		{"SYS_TIMER_SETTIME", Const, 0, ""},
-		{"SYS_TIMES", Const, 0, ""},
-		{"SYS_TKILL", Const, 0, ""},
-		{"SYS_TRUNCATE", Const, 0, ""},
-		{"SYS_TRUNCATE64", Const, 0, ""},
-		{"SYS_TUXCALL", Const, 0, ""},
-		{"SYS_UGETRLIMIT", Const, 0, ""},
-		{"SYS_ULIMIT", Const, 0, ""},
-		{"SYS_UMASK", Const, 0, ""},
-		{"SYS_UMASK_EXTENDED", Const, 0, ""},
-		{"SYS_UMOUNT", Const, 0, ""},
-		{"SYS_UMOUNT2", Const, 0, ""},
-		{"SYS_UNAME", Const, 0, ""},
-		{"SYS_UNDELETE", Const, 0, ""},
-		{"SYS_UNLINK", Const, 0, ""},
-		{"SYS_UNLINKAT", Const, 0, ""},
-		{"SYS_UNMOUNT", Const, 0, ""},
-		{"SYS_UNSHARE", Const, 0, ""},
-		{"SYS_USELIB", Const, 0, ""},
-		{"SYS_USTAT", Const, 0, ""},
-		{"SYS_UTIME", Const, 0, ""},
-		{"SYS_UTIMENSAT", Const, 0, ""},
-		{"SYS_UTIMES", Const, 0, ""},
-		{"SYS_UTRACE", Const, 0, ""},
-		{"SYS_UUIDGEN", Const, 0, ""},
-		{"SYS_VADVISE", Const, 1, ""},
-		{"SYS_VFORK", Const, 0, ""},
-		{"SYS_VHANGUP", Const, 0, ""},
-		{"SYS_VM86", Const, 0, ""},
-		{"SYS_VM86OLD", Const, 0, ""},
-		{"SYS_VMSPLICE", Const, 0, ""},
-		{"SYS_VM_PRESSURE_MONITOR", Const, 0, ""},
-		{"SYS_VSERVER", Const, 0, ""},
-		{"SYS_WAIT4", Const, 0, ""},
-		{"SYS_WAIT4_NOCANCEL", Const, 0, ""},
-		{"SYS_WAIT6", Const, 1, ""},
-		{"SYS_WAITEVENT", Const, 0, ""},
-		{"SYS_WAITID", Const, 0, ""},
-		{"SYS_WAITID_NOCANCEL", Const, 0, ""},
-		{"SYS_WAITPID", Const, 0, ""},
-		{"SYS_WATCHEVENT", Const, 0, ""},
-		{"SYS_WORKQ_KERNRETURN", Const, 0, ""},
-		{"SYS_WORKQ_OPEN", Const, 0, ""},
-		{"SYS_WRITE", Const, 0, ""},
-		{"SYS_WRITEV", Const, 0, ""},
-		{"SYS_WRITEV_NOCANCEL", Const, 0, ""},
-		{"SYS_WRITE_NOCANCEL", Const, 0, ""},
-		{"SYS_YIELD", Const, 0, ""},
-		{"SYS__LLSEEK", Const, 0, ""},
-		{"SYS__LWP_CONTINUE", Const, 1, ""},
-		{"SYS__LWP_CREATE", Const, 1, ""},
-		{"SYS__LWP_CTL", Const, 1, ""},
-		{"SYS__LWP_DETACH", Const, 1, ""},
-		{"SYS__LWP_EXIT", Const, 1, ""},
-		{"SYS__LWP_GETNAME", Const, 1, ""},
-		{"SYS__LWP_GETPRIVATE", Const, 1, ""},
-		{"SYS__LWP_KILL", Const, 1, ""},
-		{"SYS__LWP_PARK", Const, 1, ""},
-		{"SYS__LWP_SELF", Const, 1, ""},
-		{"SYS__LWP_SETNAME", Const, 1, ""},
-		{"SYS__LWP_SETPRIVATE", Const, 1, ""},
-		{"SYS__LWP_SUSPEND", Const, 1, ""},
-		{"SYS__LWP_UNPARK", Const, 1, ""},
-		{"SYS__LWP_UNPARK_ALL", Const, 1, ""},
-		{"SYS__LWP_WAIT", Const, 1, ""},
-		{"SYS__LWP_WAKEUP", Const, 1, ""},
-		{"SYS__NEWSELECT", Const, 0, ""},
-		{"SYS__PSET_BIND", Const, 1, ""},
-		{"SYS__SCHED_GETAFFINITY", Const, 1, ""},
-		{"SYS__SCHED_GETPARAM", Const, 1, ""},
-		{"SYS__SCHED_SETAFFINITY", Const, 1, ""},
-		{"SYS__SCHED_SETPARAM", Const, 1, ""},
-		{"SYS__SYSCTL", Const, 0, ""},
-		{"SYS__UMTX_LOCK", Const, 0, ""},
-		{"SYS__UMTX_OP", Const, 0, ""},
-		{"SYS__UMTX_UNLOCK", Const, 0, ""},
-		{"SYS___ACL_ACLCHECK_FD", Const, 0, ""},
-		{"SYS___ACL_ACLCHECK_FILE", Const, 0, ""},
-		{"SYS___ACL_ACLCHECK_LINK", Const, 0, ""},
-		{"SYS___ACL_DELETE_FD", Const, 0, ""},
-		{"SYS___ACL_DELETE_FILE", Const, 0, ""},
-		{"SYS___ACL_DELETE_LINK", Const, 0, ""},
-		{"SYS___ACL_GET_FD", Const, 0, ""},
-		{"SYS___ACL_GET_FILE", Const, 0, ""},
-		{"SYS___ACL_GET_LINK", Const, 0, ""},
-		{"SYS___ACL_SET_FD", Const, 0, ""},
-		{"SYS___ACL_SET_FILE", Const, 0, ""},
-		{"SYS___ACL_SET_LINK", Const, 0, ""},
-		{"SYS___CAP_RIGHTS_GET", Const, 14, ""},
-		{"SYS___CLONE", Const, 1, ""},
-		{"SYS___DISABLE_THREADSIGNAL", Const, 0, ""},
-		{"SYS___GETCWD", Const, 0, ""},
-		{"SYS___GETLOGIN", Const, 1, ""},
-		{"SYS___GET_TCB", Const, 1, ""},
-		{"SYS___MAC_EXECVE", Const, 0, ""},
-		{"SYS___MAC_GETFSSTAT", Const, 0, ""},
-		{"SYS___MAC_GET_FD", Const, 0, ""},
-		{"SYS___MAC_GET_FILE", Const, 0, ""},
-		{"SYS___MAC_GET_LCID", Const, 0, ""},
-		{"SYS___MAC_GET_LCTX", Const, 0, ""},
-		{"SYS___MAC_GET_LINK", Const, 0, ""},
-		{"SYS___MAC_GET_MOUNT", Const, 0, ""},
-		{"SYS___MAC_GET_PID", Const, 0, ""},
-		{"SYS___MAC_GET_PROC", Const, 0, ""},
-		{"SYS___MAC_MOUNT", Const, 0, ""},
-		{"SYS___MAC_SET_FD", Const, 0, ""},
-		{"SYS___MAC_SET_FILE", Const, 0, ""},
-		{"SYS___MAC_SET_LCTX", Const, 0, ""},
-		{"SYS___MAC_SET_LINK", Const, 0, ""},
-		{"SYS___MAC_SET_PROC", Const, 0, ""},
-		{"SYS___MAC_SYSCALL", Const, 0, ""},
-		{"SYS___OLD_SEMWAIT_SIGNAL", Const, 0, ""},
-		{"SYS___OLD_SEMWAIT_SIGNAL_NOCANCEL", Const, 0, ""},
-		{"SYS___POSIX_CHOWN", Const, 1, ""},
-		{"SYS___POSIX_FCHOWN", Const, 1, ""},
-		{"SYS___POSIX_LCHOWN", Const, 1, ""},
-		{"SYS___POSIX_RENAME", Const, 1, ""},
-		{"SYS___PTHREAD_CANCELED", Const, 0, ""},
-		{"SYS___PTHREAD_CHDIR", Const, 0, ""},
-		{"SYS___PTHREAD_FCHDIR", Const, 0, ""},
-		{"SYS___PTHREAD_KILL", Const, 0, ""},
-		{"SYS___PTHREAD_MARKCANCEL", Const, 0, ""},
-		{"SYS___PTHREAD_SIGMASK", Const, 0, ""},
-		{"SYS___QUOTACTL", Const, 1, ""},
-		{"SYS___SEMCTL", Const, 1, ""},
-		{"SYS___SEMWAIT_SIGNAL", Const, 0, ""},
-		{"SYS___SEMWAIT_SIGNAL_NOCANCEL", Const, 0, ""},
-		{"SYS___SETLOGIN", Const, 1, ""},
-		{"SYS___SETUGID", Const, 0, ""},
-		{"SYS___SET_TCB", Const, 1, ""},
-		{"SYS___SIGACTION_SIGTRAMP", Const, 1, ""},
-		{"SYS___SIGTIMEDWAIT", Const, 1, ""},
-		{"SYS___SIGWAIT", Const, 0, ""},
-		{"SYS___SIGWAIT_NOCANCEL", Const, 0, ""},
-		{"SYS___SYSCTL", Const, 0, ""},
-		{"SYS___TFORK", Const, 1, ""},
-		{"SYS___THREXIT", Const, 1, ""},
-		{"SYS___THRSIGDIVERT", Const, 1, ""},
-		{"SYS___THRSLEEP", Const, 1, ""},
-		{"SYS___THRWAKEUP", Const, 1, ""},
-		{"S_ARCH1", Const, 1, ""},
-		{"S_ARCH2", Const, 1, ""},
-		{"S_BLKSIZE", Const, 0, ""},
-		{"S_IEXEC", Const, 0, ""},
-		{"S_IFBLK", Const, 0, ""},
-		{"S_IFCHR", Const, 0, ""},
-		{"S_IFDIR", Const, 0, ""},
-		{"S_IFIFO", Const, 0, ""},
-		{"S_IFLNK", Const, 0, ""},
-		{"S_IFMT", Const, 0, ""},
-		{"S_IFREG", Const, 0, ""},
-		{"S_IFSOCK", Const, 0, ""},
-		{"S_IFWHT", Const, 0, ""},
-		{"S_IREAD", Const, 0, ""},
-		{"S_IRGRP", Const, 0, ""},
-		{"S_IROTH", Const, 0, ""},
-		{"S_IRUSR", Const, 0, ""},
-		{"S_IRWXG", Const, 0, ""},
-		{"S_IRWXO", Const, 0, ""},
-		{"S_IRWXU", Const, 0, ""},
-		{"S_ISGID", Const, 0, ""},
-		{"S_ISTXT", Const, 0, ""},
-		{"S_ISUID", Const, 0, ""},
-		{"S_ISVTX", Const, 0, ""},
-		{"S_IWGRP", Const, 0, ""},
-		{"S_IWOTH", Const, 0, ""},
-		{"S_IWRITE", Const, 0, ""},
-		{"S_IWUSR", Const, 0, ""},
-		{"S_IXGRP", Const, 0, ""},
-		{"S_IXOTH", Const, 0, ""},
-		{"S_IXUSR", Const, 0, ""},
-		{"S_LOGIN_SET", Const, 1, ""},
-		{"SecurityAttributes", Type, 0, ""},
-		{"SecurityAttributes.InheritHandle", Field, 0, ""},
-		{"SecurityAttributes.Length", Field, 0, ""},
-		{"SecurityAttributes.SecurityDescriptor", Field, 0, ""},
-		{"Seek", Func, 0, "func(fd int, offset int64, whence int) (off int64, err error)"},
-		{"Select", Func, 0, "func(nfd int, r *FdSet, w *FdSet, e *FdSet, timeout *Timeval) (n int, err error)"},
-		{"Sendfile", Func, 0, "func(outfd int, infd int, offset *int64, count int) (written int, err error)"},
-		{"Sendmsg", Func, 0, "func(fd int, p []byte, oob []byte, to Sockaddr, flags int) (err error)"},
-		{"SendmsgN", Func, 3, "func(fd int, p []byte, oob []byte, to Sockaddr, flags int) (n int, err error)"},
-		{"Sendto", Func, 0, "func(fd int, p []byte, flags int, to Sockaddr) (err error)"},
-		{"Servent", Type, 0, ""},
-		{"Servent.Aliases", Field, 0, ""},
-		{"Servent.Name", Field, 0, ""},
-		{"Servent.Port", Field, 0, ""},
-		{"Servent.Proto", Field, 0, ""},
-		{"SetBpf", Func, 0, ""},
-		{"SetBpfBuflen", Func, 0, ""},
-		{"SetBpfDatalink", Func, 0, ""},
-		{"SetBpfHeadercmpl", Func, 0, ""},
-		{"SetBpfImmediate", Func, 0, ""},
-		{"SetBpfInterface", Func, 0, ""},
-		{"SetBpfPromisc", Func, 0, ""},
-		{"SetBpfTimeout", Func, 0, ""},
-		{"SetCurrentDirectory", Func, 0, ""},
-		{"SetEndOfFile", Func, 0, ""},
-		{"SetEnvironmentVariable", Func, 0, ""},
-		{"SetFileAttributes", Func, 0, ""},
-		{"SetFileCompletionNotificationModes", Func, 2, ""},
-		{"SetFilePointer", Func, 0, ""},
-		{"SetFileTime", Func, 0, ""},
-		{"SetHandleInformation", Func, 0, ""},
-		{"SetKevent", Func, 0, ""},
-		{"SetLsfPromisc", Func, 0, "func(name string, m bool) error"},
-		{"SetNonblock", Func, 0, "func(fd int, nonblocking bool) (err error)"},
-		{"Setdomainname", Func, 0, "func(p []byte) (err error)"},
-		{"Setegid", Func, 0, "func(egid int) (err error)"},
-		{"Setenv", Func, 0, "func(key string, value string) error"},
-		{"Seteuid", Func, 0, "func(euid int) (err error)"},
-		{"Setfsgid", Func, 0, "func(gid int) (err error)"},
-		{"Setfsuid", Func, 0, "func(uid int) (err error)"},
-		{"Setgid", Func, 0, "func(gid int) (err error)"},
-		{"Setgroups", Func, 0, "func(gids []int) (err error)"},
-		{"Sethostname", Func, 0, "func(p []byte) (err error)"},
-		{"Setlogin", Func, 0, ""},
-		{"Setpgid", Func, 0, "func(pid int, pgid int) (err error)"},
-		{"Setpriority", Func, 0, "func(which int, who int, prio int) (err error)"},
-		{"Setprivexec", Func, 0, ""},
-		{"Setregid", Func, 0, "func(rgid int, egid int) (err error)"},
-		{"Setresgid", Func, 0, "func(rgid int, egid int, sgid int) (err error)"},
-		{"Setresuid", Func, 0, "func(ruid int, euid int, suid int) (err error)"},
-		{"Setreuid", Func, 0, "func(ruid int, euid int) (err error)"},
-		{"Setrlimit", Func, 0, "func(resource int, rlim *Rlimit) error"},
-		{"Setsid", Func, 0, "func() (pid int, err error)"},
-		{"Setsockopt", Func, 0, ""},
-		{"SetsockoptByte", Func, 0, "func(fd int, level int, opt int, value byte) (err error)"},
-		{"SetsockoptICMPv6Filter", Func, 2, "func(fd int, level int, opt int, filter *ICMPv6Filter) error"},
-		{"SetsockoptIPMreq", Func, 0, "func(fd int, level int, opt int, mreq *IPMreq) (err error)"},
-		{"SetsockoptIPMreqn", Func, 0, "func(fd int, level int, opt int, mreq *IPMreqn) (err error)"},
-		{"SetsockoptIPv6Mreq", Func, 0, "func(fd int, level int, opt int, mreq *IPv6Mreq) (err error)"},
-		{"SetsockoptInet4Addr", Func, 0, "func(fd int, level int, opt int, value [4]byte) (err error)"},
-		{"SetsockoptInt", Func, 0, "func(fd int, level int, opt int, value int) (err error)"},
-		{"SetsockoptLinger", Func, 0, "func(fd int, level int, opt int, l *Linger) (err error)"},
-		{"SetsockoptString", Func, 0, "func(fd int, level int, opt int, s string) (err error)"},
-		{"SetsockoptTimeval", Func, 0, "func(fd int, level int, opt int, tv *Timeval) (err error)"},
-		{"Settimeofday", Func, 0, "func(tv *Timeval) (err error)"},
-		{"Setuid", Func, 0, "func(uid int) (err error)"},
-		{"Setxattr", Func, 1, "func(path string, attr string, data []byte, flags int) (err error)"},
-		{"Shutdown", Func, 0, "func(fd int, how int) (err error)"},
-		{"SidTypeAlias", Const, 0, ""},
-		{"SidTypeComputer", Const, 0, ""},
-		{"SidTypeDeletedAccount", Const, 0, ""},
-		{"SidTypeDomain", Const, 0, ""},
-		{"SidTypeGroup", Const, 0, ""},
-		{"SidTypeInvalid", Const, 0, ""},
-		{"SidTypeLabel", Const, 0, ""},
-		{"SidTypeUnknown", Const, 0, ""},
-		{"SidTypeUser", Const, 0, ""},
-		{"SidTypeWellKnownGroup", Const, 0, ""},
-		{"Signal", Type, 0, ""},
-		{"SizeofBpfHdr", Const, 0, ""},
-		{"SizeofBpfInsn", Const, 0, ""},
-		{"SizeofBpfProgram", Const, 0, ""},
-		{"SizeofBpfStat", Const, 0, ""},
-		{"SizeofBpfVersion", Const, 0, ""},
-		{"SizeofBpfZbuf", Const, 0, ""},
-		{"SizeofBpfZbufHeader", Const, 0, ""},
-		{"SizeofCmsghdr", Const, 0, ""},
-		{"SizeofICMPv6Filter", Const, 2, ""},
-		{"SizeofIPMreq", Const, 0, ""},
-		{"SizeofIPMreqn", Const, 0, ""},
-		{"SizeofIPv6MTUInfo", Const, 2, ""},
-		{"SizeofIPv6Mreq", Const, 0, ""},
-		{"SizeofIfAddrmsg", Const, 0, ""},
-		{"SizeofIfAnnounceMsghdr", Const, 1, ""},
-		{"SizeofIfData", Const, 0, ""},
-		{"SizeofIfInfomsg", Const, 0, ""},
-		{"SizeofIfMsghdr", Const, 0, ""},
-		{"SizeofIfaMsghdr", Const, 0, ""},
-		{"SizeofIfmaMsghdr", Const, 0, ""},
-		{"SizeofIfmaMsghdr2", Const, 0, ""},
-		{"SizeofInet4Pktinfo", Const, 0, ""},
-		{"SizeofInet6Pktinfo", Const, 0, ""},
-		{"SizeofInotifyEvent", Const, 0, ""},
-		{"SizeofLinger", Const, 0, ""},
-		{"SizeofMsghdr", Const, 0, ""},
-		{"SizeofNlAttr", Const, 0, ""},
-		{"SizeofNlMsgerr", Const, 0, ""},
-		{"SizeofNlMsghdr", Const, 0, ""},
-		{"SizeofRtAttr", Const, 0, ""},
-		{"SizeofRtGenmsg", Const, 0, ""},
-		{"SizeofRtMetrics", Const, 0, ""},
-		{"SizeofRtMsg", Const, 0, ""},
-		{"SizeofRtMsghdr", Const, 0, ""},
-		{"SizeofRtNexthop", Const, 0, ""},
-		{"SizeofSockFilter", Const, 0, ""},
-		{"SizeofSockFprog", Const, 0, ""},
-		{"SizeofSockaddrAny", Const, 0, ""},
-		{"SizeofSockaddrDatalink", Const, 0, ""},
-		{"SizeofSockaddrInet4", Const, 0, ""},
-		{"SizeofSockaddrInet6", Const, 0, ""},
-		{"SizeofSockaddrLinklayer", Const, 0, ""},
-		{"SizeofSockaddrNetlink", Const, 0, ""},
-		{"SizeofSockaddrUnix", Const, 0, ""},
-		{"SizeofTCPInfo", Const, 1, ""},
-		{"SizeofUcred", Const, 0, ""},
-		{"SlicePtrFromStrings", Func, 1, "func(ss []string) ([]*byte, error)"},
-		{"SockFilter", Type, 0, ""},
-		{"SockFilter.Code", Field, 0, ""},
-		{"SockFilter.Jf", Field, 0, ""},
-		{"SockFilter.Jt", Field, 0, ""},
-		{"SockFilter.K", Field, 0, ""},
-		{"SockFprog", Type, 0, ""},
-		{"SockFprog.Filter", Field, 0, ""},
-		{"SockFprog.Len", Field, 0, ""},
-		{"SockFprog.Pad_cgo_0", Field, 0, ""},
-		{"SockaddrDatalink", Type, 0, ""},
-		{"SockaddrDatalink.Alen", Field, 0, ""},
-		{"SockaddrDatalink.Data", Field, 0, ""},
-		{"SockaddrDatalink.Family", Field, 0, ""},
-		{"SockaddrDatalink.Index", Field, 0, ""},
-		{"SockaddrDatalink.Len", Field, 0, ""},
-		{"SockaddrDatalink.Nlen", Field, 0, ""},
-		{"SockaddrDatalink.Slen", Field, 0, ""},
-		{"SockaddrDatalink.Type", Field, 0, ""},
-		{"SockaddrGen", Type, 0, ""},
-		{"SockaddrInet4", Type, 0, ""},
-		{"SockaddrInet4.Addr", Field, 0, ""},
-		{"SockaddrInet4.Port", Field, 0, ""},
-		{"SockaddrInet6", Type, 0, ""},
-		{"SockaddrInet6.Addr", Field, 0, ""},
-		{"SockaddrInet6.Port", Field, 0, ""},
-		{"SockaddrInet6.ZoneId", Field, 0, ""},
-		{"SockaddrLinklayer", Type, 0, ""},
-		{"SockaddrLinklayer.Addr", Field, 0, ""},
-		{"SockaddrLinklayer.Halen", Field, 0, ""},
-		{"SockaddrLinklayer.Hatype", Field, 0, ""},
-		{"SockaddrLinklayer.Ifindex", Field, 0, ""},
-		{"SockaddrLinklayer.Pkttype", Field, 0, ""},
-		{"SockaddrLinklayer.Protocol", Field, 0, ""},
-		{"SockaddrNetlink", Type, 0, ""},
-		{"SockaddrNetlink.Family", Field, 0, ""},
-		{"SockaddrNetlink.Groups", Field, 0, ""},
-		{"SockaddrNetlink.Pad", Field, 0, ""},
-		{"SockaddrNetlink.Pid", Field, 0, ""},
-		{"SockaddrUnix", Type, 0, ""},
-		{"SockaddrUnix.Name", Field, 0, ""},
-		{"Socket", Func, 0, "func(domain int, typ int, proto int) (fd int, err error)"},
-		{"SocketControlMessage", Type, 0, ""},
-		{"SocketControlMessage.Data", Field, 0, ""},
-		{"SocketControlMessage.Header", Field, 0, ""},
-		{"SocketDisableIPv6", Var, 0, ""},
-		{"Socketpair", Func, 0, "func(domain int, typ int, proto int) (fd [2]int, err error)"},
-		{"Splice", Func, 0, "func(rfd int, roff *int64, wfd int, woff *int64, len int, flags int) (n int64, err error)"},
-		{"StartProcess", Func, 0, "func(argv0 string, argv []string, attr *ProcAttr) (pid int, handle uintptr, err error)"},
-		{"StartupInfo", Type, 0, ""},
-		{"StartupInfo.Cb", Field, 0, ""},
-		{"StartupInfo.Desktop", Field, 0, ""},
-		{"StartupInfo.FillAttribute", Field, 0, ""},
-		{"StartupInfo.Flags", Field, 0, ""},
-		{"StartupInfo.ShowWindow", Field, 0, ""},
-		{"StartupInfo.StdErr", Field, 0, ""},
-		{"StartupInfo.StdInput", Field, 0, ""},
-		{"StartupInfo.StdOutput", Field, 0, ""},
-		{"StartupInfo.Title", Field, 0, ""},
-		{"StartupInfo.X", Field, 0, ""},
-		{"StartupInfo.XCountChars", Field, 0, ""},
-		{"StartupInfo.XSize", Field, 0, ""},
-		{"StartupInfo.Y", Field, 0, ""},
-		{"StartupInfo.YCountChars", Field, 0, ""},
-		{"StartupInfo.YSize", Field, 0, ""},
-		{"Stat", Func, 0, "func(path string, stat *Stat_t) (err error)"},
-		{"Stat_t", Type, 0, ""},
-		{"Stat_t.Atim", Field, 0, ""},
-		{"Stat_t.Atim_ext", Field, 12, ""},
-		{"Stat_t.Atimespec", Field, 0, ""},
-		{"Stat_t.Birthtimespec", Field, 0, ""},
-		{"Stat_t.Blksize", Field, 0, ""},
-		{"Stat_t.Blocks", Field, 0, ""},
-		{"Stat_t.Btim_ext", Field, 12, ""},
-		{"Stat_t.Ctim", Field, 0, ""},
-		{"Stat_t.Ctim_ext", Field, 12, ""},
-		{"Stat_t.Ctimespec", Field, 0, ""},
-		{"Stat_t.Dev", Field, 0, ""},
-		{"Stat_t.Flags", Field, 0, ""},
-		{"Stat_t.Gen", Field, 0, ""},
-		{"Stat_t.Gid", Field, 0, ""},
-		{"Stat_t.Ino", Field, 0, ""},
-		{"Stat_t.Lspare", Field, 0, ""},
-		{"Stat_t.Lspare0", Field, 2, ""},
-		{"Stat_t.Lspare1", Field, 2, ""},
-		{"Stat_t.Mode", Field, 0, ""},
-		{"Stat_t.Mtim", Field, 0, ""},
-		{"Stat_t.Mtim_ext", Field, 12, ""},
-		{"Stat_t.Mtimespec", Field, 0, ""},
-		{"Stat_t.Nlink", Field, 0, ""},
-		{"Stat_t.Pad_cgo_0", Field, 0, ""},
-		{"Stat_
 @@END

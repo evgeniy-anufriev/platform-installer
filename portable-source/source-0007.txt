@@ -1,3 +1,679 @@
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/rivo/uniseg/graphemeproperties.go","mode":420,"size":179629,"sha256":"321483625d9a4aa92e4a5730df51c59d5b49725cd20e3879749488e5628b3da8","index":3,"count":4,"encoding":"utf-8","payloadBytes":34928}
+tton (blood type)..B button (blood type)
+	{0x1F17E, 0x1F17F, prExtendedPictographic}, // E0.6   [2] (🅾️..🅿️)    O button (blood type)..P button
+	{0x1F18E, 0x1F18E, prExtendedPictographic}, // E0.6   [1] (🆎)       AB button (blood type)
+	{0x1F191, 0x1F19A, prExtendedPictographic}, // E0.6  [10] (🆑..🆚)    CL button..VS button
+	{0x1F1AD, 0x1F1E5, prExtendedPictographic}, // E0.0  [57] (🆭..🇥)    MASK WORK SYMBOL..<reserved-1F1E5>
+	{0x1F1E6, 0x1F1FF, prRegionalIndicator},    // So  [26] REGIONAL INDICATOR SYMBOL LETTER A..REGIONAL INDICATOR SYMBOL LETTER Z
+	{0x1F201, 0x1F202, prExtendedPictographic}, // E0.6   [2] (🈁..🈂️)    Japanese “here” button..Japanese “service charge” button
+	{0x1F203, 0x1F20F, prExtendedPictographic}, // E0.0  [13] (🈃..🈏)    <reserved-1F203>..<reserved-1F20F>
+	{0x1F21A, 0x1F21A, prExtendedPictographic}, // E0.6   [1] (🈚)       Japanese “free of charge” button
+	{0x1F22F, 0x1F22F, prExtendedPictographic}, // E0.6   [1] (🈯)       Japanese “reserved” button
+	{0x1F232, 0x1F23A, prExtendedPictographic}, // E0.6   [9] (🈲..🈺)    Japanese “prohibited” button..Japanese “open for business” button
+	{0x1F23C, 0x1F23F, prExtendedPictographic}, // E0.0   [4] (🈼..🈿)    <reserved-1F23C>..<reserved-1F23F>
+	{0x1F249, 0x1F24F, prExtendedPictographic}, // E0.0   [7] (🉉..🉏)    <reserved-1F249>..<reserved-1F24F>
+	{0x1F250, 0x1F251, prExtendedPictographic}, // E0.6   [2] (🉐..🉑)    Japanese “bargain” button..Japanese “acceptable” button
+	{0x1F252, 0x1F2FF, prExtendedPictographic}, // E0.0 [174] (🉒..🋿)    <reserved-1F252>..<reserved-1F2FF>
+	{0x1F300, 0x1F30C, prExtendedPictographic}, // E0.6  [13] (🌀..🌌)    cyclone..milky way
+	{0x1F30D, 0x1F30E, prExtendedPictographic}, // E0.7   [2] (🌍..🌎)    globe showing Europe-Africa..globe showing Americas
+	{0x1F30F, 0x1F30F, prExtendedPictographic}, // E0.6   [1] (🌏)       globe showing Asia-Australia
+	{0x1F310, 0x1F310, prExtendedPictographic}, // E1.0   [1] (🌐)       globe with meridians
+	{0x1F311, 0x1F311, prExtendedPictographic}, // E0.6   [1] (🌑)       new moon
+	{0x1F312, 0x1F312, prExtendedPictographic}, // E1.0   [1] (🌒)       waxing crescent moon
+	{0x1F313, 0x1F315, prExtendedPictographic}, // E0.6   [3] (🌓..🌕)    first quarter moon..full moon
+	{0x1F316, 0x1F318, prExtendedPictographic}, // E1.0   [3] (🌖..🌘)    waning gibbous moon..waning crescent moon
+	{0x1F319, 0x1F319, prExtendedPictographic}, // E0.6   [1] (🌙)       crescent moon
+	{0x1F31A, 0x1F31A, prExtendedPictographic}, // E1.0   [1] (🌚)       new moon face
+	{0x1F31B, 0x1F31B, prExtendedPictographic}, // E0.6   [1] (🌛)       first quarter moon face
+	{0x1F31C, 0x1F31C, prExtendedPictographic}, // E0.7   [1] (🌜)       last quarter moon face
+	{0x1F31D, 0x1F31E, prExtendedPictographic}, // E1.0   [2] (🌝..🌞)    full moon face..sun with face
+	{0x1F31F, 0x1F320, prExtendedPictographic}, // E0.6   [2] (🌟..🌠)    glowing star..shooting star
+	{0x1F321, 0x1F321, prExtendedPictographic}, // E0.7   [1] (🌡️)       thermometer
+	{0x1F322, 0x1F323, prExtendedPictographic}, // E0.0   [2] (🌢..🌣)    BLACK DROPLET..WHITE SUN
+	{0x1F324, 0x1F32C, prExtendedPictographic}, // E0.7   [9] (🌤️..🌬️)    sun behind small cloud..wind face
+	{0x1F32D, 0x1F32F, prExtendedPictographic}, // E1.0   [3] (🌭..🌯)    hot dog..burrito
+	{0x1F330, 0x1F331, prExtendedPictographic}, // E0.6   [2] (🌰..🌱)    chestnut..seedling
+	{0x1F332, 0x1F333, prExtendedPictographic}, // E1.0   [2] (🌲..🌳)    evergreen tree..deciduous tree
+	{0x1F334, 0x1F335, prExtendedPictographic}, // E0.6   [2] (🌴..🌵)    palm tree..cactus
+	{0x1F336, 0x1F336, prExtendedPictographic}, // E0.7   [1] (🌶️)       hot pepper
+	{0x1F337, 0x1F34A, prExtendedPictographic}, // E0.6  [20] (🌷..🍊)    tulip..tangerine
+	{0x1F34B, 0x1F34B, prExtendedPictographic}, // E1.0   [1] (🍋)       lemon
+	{0x1F34C, 0x1F34F, prExtendedPictographic}, // E0.6   [4] (🍌..🍏)    banana..green apple
+	{0x1F350, 0x1F350, prExtendedPictographic}, // E1.0   [1] (🍐)       pear
+	{0x1F351, 0x1F37B, prExtendedPictographic}, // E0.6  [43] (🍑..🍻)    peach..clinking beer mugs
+	{0x1F37C, 0x1F37C, prExtendedPictographic}, // E1.0   [1] (🍼)       baby bottle
+	{0x1F37D, 0x1F37D, prExtendedPictographic}, // E0.7   [1] (🍽️)       fork and knife with plate
+	{0x1F37E, 0x1F37F, prExtendedPictographic}, // E1.0   [2] (🍾..🍿)    bottle with popping cork..popcorn
+	{0x1F380, 0x1F393, prExtendedPictographic}, // E0.6  [20] (🎀..🎓)    ribbon..graduation cap
+	{0x1F394, 0x1F395, prExtendedPictographic}, // E0.0   [2] (🎔..🎕)    HEART WITH TIP ON THE LEFT..BOUQUET OF FLOWERS
+	{0x1F396, 0x1F397, prExtendedPictographic}, // E0.7   [2] (🎖️..🎗️)    military medal..reminder ribbon
+	{0x1F398, 0x1F398, prExtendedPictographic}, // E0.0   [1] (🎘)       MUSICAL KEYBOARD WITH JACKS
+	{0x1F399, 0x1F39B, prExtendedPictographic}, // E0.7   [3] (🎙️..🎛️)    studio microphone..control knobs
+	{0x1F39C, 0x1F39D, prExtendedPictographic}, // E0.0   [2] (🎜..🎝)    BEAMED ASCENDING MUSICAL NOTES..BEAMED DESCENDING MUSICAL NOTES
+	{0x1F39E, 0x1F39F, prExtendedPictographic}, // E0.7   [2] (🎞️..🎟️)    film frames..admission tickets
+	{0x1F3A0, 0x1F3C4, prExtendedPictographic}, // E0.6  [37] (🎠..🏄)    carousel horse..person surfing
+	{0x1F3C5, 0x1F3C5, prExtendedPictographic}, // E1.0   [1] (🏅)       sports medal
+	{0x1F3C6, 0x1F3C6, prExtendedPictographic}, // E0.6   [1] (🏆)       trophy
+	{0x1F3C7, 0x1F3C7, prExtendedPictographic}, // E1.0   [1] (🏇)       horse racing
+	{0x1F3C8, 0x1F3C8, prExtendedPictographic}, // E0.6   [1] (🏈)       american football
+	{0x1F3C9, 0x1F3C9, prExtendedPictographic}, // E1.0   [1] (🏉)       rugby football
+	{0x1F3CA, 0x1F3CA, prExtendedPictographic}, // E0.6   [1] (🏊)       person swimming
+	{0x1F3CB, 0x1F3CE, prExtendedPictographic}, // E0.7   [4] (🏋️..🏎️)    person lifting weights..racing car
+	{0x1F3CF, 0x1F3D3, prExtendedPictographic}, // E1.0   [5] (🏏..🏓)    cricket game..ping pong
+	{0x1F3D4, 0x1F3DF, prExtendedPictographic}, // E0.7  [12] (🏔️..🏟️)    snow-capped mountain..stadium
+	{0x1F3E0, 0x1F3E3, prExtendedPictographic}, // E0.6   [4] (🏠..🏣)    house..Japanese post office
+	{0x1F3E4, 0x1F3E4, prExtendedPictographic}, // E1.0   [1] (🏤)       post office
+	{0x1F3E5, 0x1F3F0, prExtendedPictographic}, // E0.6  [12] (🏥..🏰)    hospital..castle
+	{0x1F3F1, 0x1F3F2, prExtendedPictographic}, // E0.0   [2] (🏱..🏲)    WHITE PENNANT..BLACK PENNANT
+	{0x1F3F3, 0x1F3F3, prExtendedPictographic}, // E0.7   [1] (🏳️)       white flag
+	{0x1F3F4, 0x1F3F4, prExtendedPictographic}, // E1.0   [1] (🏴)       black flag
+	{0x1F3F5, 0x1F3F5, prExtendedPictographic}, // E0.7   [1] (🏵️)       rosette
+	{0x1F3F6, 0x1F3F6, prExtendedPictographic}, // E0.0   [1] (🏶)       BLACK ROSETTE
+	{0x1F3F7, 0x1F3F7, prExtendedPictographic}, // E0.7   [1] (🏷️)       label
+	{0x1F3F8, 0x1F3FA, prExtendedPictographic}, // E1.0   [3] (🏸..🏺)    badminton..amphora
+	{0x1F3FB, 0x1F3FF, prExtend},               // Sk   [5] EMOJI MODIFIER FITZPATRICK TYPE-1-2..EMOJI MODIFIER FITZPATRICK TYPE-6
+	{0x1F400, 0x1F407, prExtendedPictographic}, // E1.0   [8] (🐀..🐇)    rat..rabbit
+	{0x1F408, 0x1F408, prExtendedPictographic}, // E0.7   [1] (🐈)       cat
+	{0x1F409, 0x1F40B, prExtendedPictographic}, // E1.0   [3] (🐉..🐋)    dragon..whale
+	{0x1F40C, 0x1F40E, prExtendedPictographic}, // E0.6   [3] (🐌..🐎)    snail..horse
+	{0x1F40F, 0x1F410, prExtendedPictographic}, // E1.0   [2] (🐏..🐐)    ram..goat
+	{0x1F411, 0x1F412, prExtendedPictographic}, // E0.6   [2] (🐑..🐒)    ewe..monkey
+	{0x1F413, 0x1F413, prExtendedPictographic}, // E1.0   [1] (🐓)       rooster
+	{0x1F414, 0x1F414, prExtendedPictographic}, // E0.6   [1] (🐔)       chicken
+	{0x1F415, 0x1F415, prExtendedPictographic}, // E0.7   [1] (🐕)       dog
+	{0x1F416, 0x1F416, prExtendedPictographic}, // E1.0   [1] (🐖)       pig
+	{0x1F417, 0x1F429, prExtendedPictographic}, // E0.6  [19] (🐗..🐩)    boar..poodle
+	{0x1F42A, 0x1F42A, prExtendedPictographic}, // E1.0   [1] (🐪)       camel
+	{0x1F42B, 0x1F43E, prExtendedPictographic}, // E0.6  [20] (🐫..🐾)    two-hump camel..paw prints
+	{0x1F43F, 0x1F43F, prExtendedPictographic}, // E0.7   [1] (🐿️)       chipmunk
+	{0x1F440, 0x1F440, prExtendedPictographic}, // E0.6   [1] (👀)       eyes
+	{0x1F441, 0x1F441, prExtendedPictographic}, // E0.7   [1] (👁️)       eye
+	{0x1F442, 0x1F464, prExtendedPictographic}, // E0.6  [35] (👂..👤)    ear..bust in silhouette
+	{0x1F465, 0x1F465, prExtendedPictographic}, // E1.0   [1] (👥)       busts in silhouette
+	{0x1F466, 0x1F46B, prExtendedPictographic}, // E0.6   [6] (👦..👫)    boy..woman and man holding hands
+	{0x1F46C, 0x1F46D, prExtendedPictographic}, // E1.0   [2] (👬..👭)    men holding hands..women holding hands
+	{0x1F46E, 0x1F4AC, prExtendedPictographic}, // E0.6  [63] (👮..💬)    police officer..speech balloon
+	{0x1F4AD, 0x1F4AD, prExtendedPictographic}, // E1.0   [1] (💭)       thought balloon
+	{0x1F4AE, 0x1F4B5, prExtendedPictographic}, // E0.6   [8] (💮..💵)    white flower..dollar banknote
+	{0x1F4B6, 0x1F4B7, prExtendedPictographic}, // E1.0   [2] (💶..💷)    euro banknote..pound banknote
+	{0x1F4B8, 0x1F4EB, prExtendedPictographic}, // E0.6  [52] (💸..📫)    money with wings..closed mailbox with raised flag
+	{0x1F4EC, 0x1F4ED, prExtendedPictographic}, // E0.7   [2] (📬..📭)    open mailbox with raised flag..open mailbox with lowered flag
+	{0x1F4EE, 0x1F4EE, prExtendedPictographic}, // E0.6   [1] (📮)       postbox
+	{0x1F4EF, 0x1F4EF, prExtendedPictographic}, // E1.0   [1] (📯)       postal horn
+	{0x1F4F0, 0x1F4F4, prExtendedPictographic}, // E0.6   [5] (📰..📴)    newspaper..mobile phone off
+	{0x1F4F5, 0x1F4F5, prExtendedPictographic}, // E1.0   [1] (📵)       no mobile phones
+	{0x1F4F6, 0x1F4F7, prExtendedPictographic}, // E0.6   [2] (📶..📷)    antenna bars..camera
+	{0x1F4F8, 0x1F4F8, prExtendedPictographic}, // E1.0   [1] (📸)       camera with flash
+	{0x1F4F9, 0x1F4FC, prExtendedPictographic}, // E0.6   [4] (📹..📼)    video camera..videocassette
+	{0x1F4FD, 0x1F4FD, prExtendedPictographic}, // E0.7   [1] (📽️)       film projector
+	{0x1F4FE, 0x1F4FE, prExtendedPictographic}, // E0.0   [1] (📾)       PORTABLE STEREO
+	{0x1F4FF, 0x1F502, prExtendedPictographic}, // E1.0   [4] (📿..🔂)    prayer beads..repeat single button
+	{0x1F503, 0x1F503, prExtendedPictographic}, // E0.6   [1] (🔃)       clockwise vertical arrows
+	{0x1F504, 0x1F507, prExtendedPictographic}, // E1.0   [4] (🔄..🔇)    counterclockwise arrows button..muted speaker
+	{0x1F508, 0x1F508, prExtendedPictographic}, // E0.7   [1] (🔈)       speaker low volume
+	{0x1F509, 0x1F509, prExtendedPictographic}, // E1.0   [1] (🔉)       speaker medium volume
+	{0x1F50A, 0x1F514, prExtendedPictographic}, // E0.6  [11] (🔊..🔔)    speaker high volume..bell
+	{0x1F515, 0x1F515, prExtendedPictographic}, // E1.0   [1] (🔕)       bell with slash
+	{0x1F516, 0x1F52B, prExtendedPictographic}, // E0.6  [22] (🔖..🔫)    bookmark..water pistol
+	{0x1F52C, 0x1F52D, prExtendedPictographic}, // E1.0   [2] (🔬..🔭)    microscope..telescope
+	{0x1F52E, 0x1F53D, prExtendedPictographic}, // E0.6  [16] (🔮..🔽)    crystal ball..downwards button
+	{0x1F546, 0x1F548, prExtendedPictographic}, // E0.0   [3] (🕆..🕈)    WHITE LATIN CROSS..CELTIC CROSS
+	{0x1F549, 0x1F54A, prExtendedPictographic}, // E0.7   [2] (🕉️..🕊️)    om..dove
+	{0x1F54B, 0x1F54E, prExtendedPictographic}, // E1.0   [4] (🕋..🕎)    kaaba..menorah
+	{0x1F54F, 0x1F54F, prExtendedPictographic}, // E0.0   [1] (🕏)       BOWL OF HYGIEIA
+	{0x1F550, 0x1F55B, prExtendedPictographic}, // E0.6  [12] (🕐..🕛)    one o’clock..twelve o’clock
+	{0x1F55C, 0x1F567, prExtendedPictographic}, // E0.7  [12] (🕜..🕧)    one-thirty..twelve-thirty
+	{0x1F568, 0x1F56E, prExtendedPictographic}, // E0.0   [7] (🕨..🕮)    RIGHT SPEAKER..BOOK
+	{0x1F56F, 0x1F570, prExtendedPictographic}, // E0.7   [2] (🕯️..🕰️)    candle..mantelpiece clock
+	{0x1F571, 0x1F572, prExtendedPictographic}, // E0.0   [2] (🕱..🕲)    BLACK SKULL AND CROSSBONES..NO PIRACY
+	{0x1F573, 0x1F579, prExtendedPictographic}, // E0.7   [7] (🕳️..🕹️)    hole..joystick
+	{0x1F57A, 0x1F57A, prExtendedPictographic}, // E3.0   [1] (🕺)       man dancing
+	{0x1F57B, 0x1F586, prExtendedPictographic}, // E0.0  [12] (🕻..🖆)    LEFT HAND TELEPHONE RECEIVER..PEN OVER STAMPED ENVELOPE
+	{0x1F587, 0x1F587, prExtendedPictographic}, // E0.7   [1] (🖇️)       linked paperclips
+	{0x1F588, 0x1F589, prExtendedPictographic}, // E0.0   [2] (🖈..🖉)    BLACK PUSHPIN..LOWER LEFT PENCIL
+	{0x1F58A, 0x1F58D, prExtendedPictographic}, // E0.7   [4] (🖊️..🖍️)    pen..crayon
+	{0x1F58E, 0x1F58F, prExtendedPictographic}, // E0.0   [2] (🖎..🖏)    LEFT WRITING HAND..TURNED OK HAND SIGN
+	{0x1F590, 0x1F590, prExtendedPictographic}, // E0.7   [1] (🖐️)       hand with fingers splayed
+	{0x1F591, 0x1F594, prExtendedPictographic}, // E0.0   [4] (🖑..🖔)    REVERSED RAISED HAND WITH FINGERS SPLAYED..REVERSED VICTORY HAND
+	{0x1F595, 0x1F596, prExtendedPictographic}, // E1.0   [2] (🖕..🖖)    middle finger..vulcan salute
+	{0x1F597, 0x1F5A3, prExtendedPictographic}, // E0.0  [13] (🖗..🖣)    WHITE DOWN POINTING LEFT HAND INDEX..BLACK DOWN POINTING BACKHAND INDEX
+	{0x1F5A4, 0x1F5A4, prExtendedPictographic}, // E3.0   [1] (🖤)       black heart
+	{0x1F5A5, 0x1F5A5, prExtendedPictographic}, // E0.7   [1] (🖥️)       desktop computer
+	{0x1F5A6, 0x1F5A7, prExtendedPictographic}, // E0.0   [2] (🖦..🖧)    KEYBOARD AND MOUSE..THREE NETWORKED COMPUTERS
+	{0x1F5A8, 0x1F5A8, prExtendedPictographic}, // E0.7   [1] (🖨️)       printer
+	{0x1F5A9, 0x1F5B0, prExtendedPictographic}, // E0.0   [8] (🖩..🖰)    POCKET CALCULATOR..TWO BUTTON MOUSE
+	{0x1F5B1, 0x1F5B2, prExtendedPictographic}, // E0.7   [2] (🖱️..🖲️)    computer mouse..trackball
+	{0x1F5B3, 0x1F5BB, prExtendedPictographic}, // E0.0   [9] (🖳..🖻)    OLD PERSONAL COMPUTER..DOCUMENT WITH PICTURE
+	{0x1F5BC, 0x1F5BC, prExtendedPictographic}, // E0.7   [1] (🖼️)       framed picture
+	{0x1F5BD, 0x1F5C1, prExtendedPictographic}, // E0.0   [5] (🖽..🗁)    FRAME WITH TILES..OPEN FOLDER
+	{0x1F5C2, 0x1F5C4, prExtendedPictographic}, // E0.7   [3] (🗂️..🗄️)    card index dividers..file cabinet
+	{0x1F5C5, 0x1F5D0, prExtendedPictographic}, // E0.0  [12] (🗅..🗐)    EMPTY NOTE..PAGES
+	{0x1F5D1, 0x1F5D3, prExtendedPictographic}, // E0.7   [3] (🗑️..🗓️)    wastebasket..spiral calendar
+	{0x1F5D4, 0x1F5DB, prExtendedPictographic}, // E0.0   [8] (🗔..🗛)    DESKTOP WINDOW..DECREASE FONT SIZE SYMBOL
+	{0x1F5DC, 0x1F5DE, prExtendedPictographic}, // E0.7   [3] (🗜️..🗞️)    clamp..rolled-up newspaper
+	{0x1F5DF, 0x1F5E0, prExtendedPictographic}, // E0.0   [2] (🗟..🗠)    PAGE WITH CIRCLED TEXT..STOCK CHART
+	{0x1F5E1, 0x1F5E1, prExtendedPictographic}, // E0.7   [1] (🗡️)       dagger
+	{0x1F5E2, 0x1F5E2, prExtendedPictographic}, // E0.0   [1] (🗢)       LIPS
+	{0x1F5E3, 0x1F5E3, prExtendedPictographic}, // E0.7   [1] (🗣️)       speaking head
+	{0x1F5E4, 0x1F5E7, prExtendedPictographic}, // E0.0   [4] (🗤..🗧)    THREE RAYS ABOVE..THREE RAYS RIGHT
+	{0x1F5E8, 0x1F5E8, prExtendedPictographic}, // E2.0   [1] (🗨️)       left speech bubble
+	{0x1F5E9, 0x1F5EE, prExtendedPictographic}, // E0.0   [6] (🗩..🗮)    RIGHT SPEECH BUBBLE..LEFT ANGER BUBBLE
+	{0x1F5EF, 0x1F5EF, prExtendedPictographic}, // E0.7   [1] (🗯️)       right anger bubble
+	{0x1F5F0, 0x1F5F2, prExtendedPictographic}, // E0.0   [3] (🗰..🗲)    MOOD BUBBLE..LIGHTNING MOOD
+	{0x1F5F3, 0x1F5F3, prExtendedPictographic}, // E0.7   [1] (🗳️)       ballot box with ballot
+	{0x1F5F4, 0x1F5F9, prExtendedPictographic}, // E0.0   [6] (🗴..🗹)    BALLOT SCRIPT X..BALLOT BOX WITH BOLD CHECK
+	{0x1F5FA, 0x1F5FA, prExtendedPictographic}, // E0.7   [1] (🗺️)       world map
+	{0x1F5FB, 0x1F5FF, prExtendedPictographic}, // E0.6   [5] (🗻..🗿)    mount fuji..moai
+	{0x1F600, 0x1F600, prExtendedPictographic}, // E1.0   [1] (😀)       grinning face
+	{0x1F601, 0x1F606, prExtendedPictographic}, // E0.6   [6] (😁..😆)    beaming face with smiling eyes..grinning squinting face
+	{0x1F607, 0x1F608, prExtendedPictographic}, // E1.0   [2] (😇..😈)    smiling face with halo..smiling face with horns
+	{0x1F609, 0x1F60D, prExtendedPictographic}, // E0.6   [5] (😉..😍)    winking face..smiling face with heart-eyes
+	{0x1F60E, 0x1F60E, prExtendedPictographic}, // E1.0   [1] (😎)       smiling face with sunglasses
+	{0x1F60F, 0x1F60F, prExtendedPictographic}, // E0.6   [1] (😏)       smirking face
+	{0x1F610, 0x1F610, prExtendedPictographic}, // E0.7   [1] (😐)       neutral face
+	{0x1F611, 0x1F611, prExtendedPictographic}, // E1.0   [1] (😑)       expressionless face
+	{0x1F612, 0x1F614, prExtendedPictographic}, // E0.6   [3] (😒..😔)    unamused face..pensive face
+	{0x1F615, 0x1F615, prExtendedPictographic}, // E1.0   [1] (😕)       confused face
+	{0x1F616, 0x1F616, prExtendedPictographic}, // E0.6   [1] (😖)       confounded face
+	{0x1F617, 0x1F617, prExtendedPictographic}, // E1.0   [1] (😗)       kissing face
+	{0x1F618, 0x1F618, prExtendedPictographic}, // E0.6   [1] (😘)       face blowing a kiss
+	{0x1F619, 0x1F619, prExtendedPictographic}, // E1.0   [1] (😙)       kissing face with smiling eyes
+	{0x1F61A, 0x1F61A, prExtendedPictographic}, // E0.6   [1] (😚)       kissing face with closed eyes
+	{0x1F61B, 0x1F61B, prExtendedPictographic}, // E1.0   [1] (😛)       face with tongue
+	{0x1F61C, 0x1F61E, prExtendedPictographic}, // E0.6   [3] (😜..😞)    winking face with tongue..disappointed face
+	{0x1F61F, 0x1F61F, prExtendedPictographic}, // E1.0   [1] (😟)       worried face
+	{0x1F620, 0x1F625, prExtendedPictographic}, // E0.6   [6] (😠..😥)    angry face..sad but relieved face
+	{0x1F626, 0x1F627, prExtendedPictographic}, // E1.0   [2] (😦..😧)    frowning face with open mouth..anguished face
+	{0x1F628, 0x1F62B, prExtendedPictographic}, // E0.6   [4] (😨..😫)    fearful face..tired face
+	{0x1F62C, 0x1F62C, prExtendedPictographic}, // E1.0   [1] (😬)       grimacing face
+	{0x1F62D, 0x1F62D, prExtendedPictographic}, // E0.6   [1] (😭)       loudly crying face
+	{0x1F62E, 0x1F62F, prExtendedPictographic}, // E1.0   [2] (😮..😯)    face with open mouth..hushed face
+	{0x1F630, 0x1F633, prExtendedPictographic}, // E0.6   [4] (😰..😳)    anxious face with sweat..flushed face
+	{0x1F634, 0x1F634, prExtendedPictographic}, // E1.0   [1] (😴)       sleeping face
+	{0x1F635, 0x1F635, prExtendedPictographic}, // E0.6   [1] (😵)       face with crossed-out eyes
+	{0x1F636, 0x1F636, prExtendedPictographic}, // E1.0   [1] (😶)       face without mouth
+	{0x1F637, 0x1F640, prExtendedPictographic}, // E0.6  [10] (😷..🙀)    face with medical mask..weary cat
+	{0x1F641, 0x1F644, prExtendedPictographic}, // E1.0   [4] (🙁..🙄)    slightly frowning face..face with rolling eyes
+	{0x1F645, 0x1F64F, prExtendedPictographic}, // E0.6  [11] (🙅..🙏)    person gesturing NO..folded hands
+	{0x1F680, 0x1F680, prExtendedPictographic}, // E0.6   [1] (🚀)       rocket
+	{0x1F681, 0x1F682, prExtendedPictographic}, // E1.0   [2] (🚁..🚂)    helicopter..locomotive
+	{0x1F683, 0x1F685, prExtendedPictographic}, // E0.6   [3] (🚃..🚅)    railway car..bullet train
+	{0x1F686, 0x1F686, prExtendedPictographic}, // E1.0   [1] (🚆)       train
+	{0x1F687, 0x1F687, prExtendedPictographic}, // E0.6   [1] (🚇)       metro
+	{0x1F688, 0x1F688, prExtendedPictographic}, // E1.0   [1] (🚈)       light rail
+	{0x1F689, 0x1F689, prExtendedPictographic}, // E0.6   [1] (🚉)       station
+	{0x1F68A, 0x1F68B, prExtendedPictographic}, // E1.0   [2] (🚊..🚋)    tram..tram car
+	{0x1F68C, 0x1F68C, prExtendedPictographic}, // E0.6   [1] (🚌)       bus
+	{0x1F68D, 0x1F68D, prExtendedPictographic}, // E0.7   [1] (🚍)       oncoming bus
+	{0x1F68E, 0x1F68E, prExtendedPictographic}, // E1.0   [1] (🚎)       trolleybus
+	{0x1F68F, 0x1F68F, prExtendedPictographic}, // E0.6   [1] (🚏)       bus stop
+	{0x1F690, 0x1F690, prExtendedPictographic}, // E1.0   [1] (🚐)       minibus
+	{0x1F691, 0x1F693, prExtendedPictographic}, // E0.6   [3] (🚑..🚓)    ambulance..police car
+	{0x1F694, 0x1F694, prExtendedPictographic}, // E0.7   [1] (🚔)       oncoming police car
+	{0x1F695, 0x1F695, prExtendedPictographic}, // E0.6   [1] (🚕)       taxi
+	{0x1F696, 0x1F696, prExtendedPictographic}, // E1.0   [1] (🚖)       oncoming taxi
+	{0x1F697, 0x1F697, prExtendedPictographic}, // E0.6   [1] (🚗)       automobile
+	{0x1F698, 0x1F698, prExtendedPictographic}, // E0.7   [1] (🚘)       oncoming automobile
+	{0x1F699, 0x1F69A, prExtendedPictographic}, // E0.6   [2] (🚙..🚚)    sport utility vehicle..delivery truck
+	{0x1F69B, 0x1F6A1, prExtendedPictographic}, // E1.0   [7] (🚛..🚡)    articulated lorry..aerial tramway
+	{0x1F6A2, 0x1F6A2, prExtendedPictographic}, // E0.6   [1] (🚢)       ship
+	{0x1F6A3, 0x1F6A3, prExtendedPictographic}, // E1.0   [1] (🚣)       person rowing boat
+	{0x1F6A4, 0x1F6A5, prExtendedPictographic}, // E0.6   [2] (🚤..🚥)    speedboat..horizontal traffic light
+	{0x1F6A6, 0x1F6A6, prExtendedPictographic}, // E1.0   [1] (🚦)       vertical traffic light
+	{0x1F6A7, 0x1F6AD, prExtendedPictographic}, // E0.6   [7] (🚧..🚭)    construction..no smoking
+	{0x1F6AE, 0x1F6B1, prExtendedPictographic}, // E1.0   [4] (🚮..🚱)    litter in bin sign..non-potable water
+	{0x1F6B2, 0x1F6B2, prExtendedPictographic}, // E0.6   [1] (🚲)       bicycle
+	{0x1F6B3, 0x1F6B5, prExtendedPictographic}, // E1.0   [3] (🚳..🚵)    no bicycles..person mountain biking
+	{0x1F6B6, 0x1F6B6, prExtendedPictographic}, // E0.6   [1] (🚶)       person walking
+	{0x1F6B7, 0x1F6B8, prExtendedPictographic}, // E1.0   [2] (🚷..🚸)    no pedestrians..children crossing
+	{0x1F6B9, 0x1F6BE, prExtendedPictographic}, // E0.6   [6] (🚹..🚾)    men’s room..water closet
+	{0x1F6BF, 0x1F6BF, prExtendedPictographic}, // E1.0   [1] (🚿)       shower
+	{0x1F6C0, 0x1F6C0, prExtendedPictographic}, // E0.6   [1] (🛀)       person taking bath
+	{0x1F6C1, 0x1F6C5, prExtendedPictographic}, // E1.0   [5] (🛁..🛅)    bathtub..left luggage
+	{0x1F6C6, 0x1F6CA, prExtendedPictographic}, // E0.0   [5] (🛆..🛊)    TRIANGLE WITH ROUNDED CORNERS..GIRLS SYMBOL
+	{0x1F6CB, 0x1F6CB, prExtendedPictographic}, // E0.7   [1] (🛋️)       couch and lamp
+	{0x1F6CC, 0x1F6CC, prExtendedPictographic}, // E1.0   [1] (🛌)       person in bed
+	{0x1F6CD, 0x1F6CF, prExtendedPictographic}, // E0.7   [3] (🛍️..🛏️)    shopping bags..bed
+	{0x1F6D0, 0x1F6D0, prExtendedPictographic}, // E1.0   [1] (🛐)       place of worship
+	{0x1F6D1, 0x1F6D2, prExtendedPictographic}, // E3.0   [2] (🛑..🛒)    stop sign..shopping cart
+	{0x1F6D3, 0x1F6D4, prExtendedPictographic}, // E0.0   [2] (🛓..🛔)    STUPA..PAGODA
+	{0x1F6D5, 0x1F6D5, prExtendedPictographic}, // E12.0  [1] (🛕)       hindu temple
+	{0x1F6D6, 0x1F6D7, prExtendedPictographic}, // E13.0  [2] (🛖..🛗)    hut..elevator
+	{0x1F6D8, 0x1F6DB, prExtendedPictographic}, // E0.0   [4] (🛘..🛛)    <reserved-1F6D8>..<reserved-1F6DB>
+	{0x1F6DC, 0x1F6DC, prExtendedPictographic}, // E15.0  [1] (🛜)       wireless
+	{0x1F6DD, 0x1F6DF, prExtendedPictographic}, // E14.0  [3] (🛝..🛟)    playground slide..ring buoy
+	{0x1F6E0, 0x1F6E5, prExtendedPictographic}, // E0.7   [6] (🛠️..🛥️)    hammer and wrench..motor boat
+	{0x1F6E6, 0x1F6E8, prExtendedPictographic}, // E0.0   [3] (🛦..🛨)    UP-POINTING MILITARY AIRPLANE..UP-POINTING SMALL AIRPLANE
+	{0x1F6E9, 0x1F6E9, prExtendedPictographic}, // E0.7   [1] (🛩️)       small airplane
+	{0x1F6EA, 0x1F6EA, prExtendedPictographic}, // E0.0   [1] (🛪)       NORTHEAST-POINTING AIRPLANE
+	{0x1F6EB, 0x1F6EC, prExtendedPictographic}, // E1.0   [2] (🛫..🛬)    airplane departure..airplane arrival
+	{0x1F6ED, 0x1F6EF, prExtendedPictographic}, // E0.0   [3] (🛭..🛯)    <reserved-1F6ED>..<reserved-1F6EF>
+	{0x1F6F0, 0x1F6F0, prExtendedPictographic}, // E0.7   [1] (🛰️)       satellite
+	{0x1F6F1, 0x1F6F2, prExtendedPictographic}, // E0.0   [2] (🛱..🛲)    ONCOMING FIRE ENGINE..DIESEL LOCOMOTIVE
+	{0x1F6F3, 0x1F6F3, prExtendedPictographic}, // E0.7   [1] (🛳️)       passenger ship
+	{0x1F6F4, 0x1F6F6, prExtendedPictographic}, // E3.0   [3] (🛴..🛶)    kick scooter..canoe
+	{0x1F6F7, 0x1F6F8, prExtendedPictographic}, // E5.0   [2] (🛷..🛸)    sled..flying saucer
+	{0x1F6F9, 0x1F6F9, prExtendedPictographic}, // E11.0  [1] (🛹)       skateboard
+	{0x1F6FA, 0x1F6FA, prExtendedPictographic}, // E12.0  [1] (🛺)       auto rickshaw
+	{0x1F6FB, 0x1F6FC, prExtendedPictographic}, // E13.0  [2] (🛻..🛼)    pickup truck..roller skate
+	{0x1F6FD, 0x1F6FF, prExtendedPictographic}, // E0.0   [3] (🛽..🛿)    <reserved-1F6FD>..<reserved-1F6FF>
+	{0x1F774, 0x1F77F, prExtendedPictographic}, // E0.0  [12] (🝴..🝿)    LOT OF FORTUNE..ORCUS
+	{0x1F7D5, 0x1F7DF, prExtendedPictographic}, // E0.0  [11] (🟕..🟟)    CIRCLED TRIANGLE..<reserved-1F7DF>
+	{0x1F7E0, 0x1F7EB, prExtendedPictographic}, // E12.0 [12] (🟠..🟫)    orange circle..brown square
+	{0x1F7EC, 0x1F7EF, prExtendedPictographic}, // E0.0   [4] (🟬..🟯)    <reserved-1F7EC>..<reserved-1F7EF>
+	{0x1F7F0, 0x1F7F0, prExtendedPictographic}, // E14.0  [1] (🟰)       heavy equals sign
+	{0x1F7F1, 0x1F7FF, prExtendedPictographic}, // E0.0  [15] (🟱..🟿)    <reserved-1F7F1>..<reserved-1F7FF>
+	{0x1F80C, 0x1F80F, prExtendedPictographic}, // E0.0   [4] (🠌..🠏)    <reserved-1F80C>..<reserved-1F80F>
+	{0x1F848, 0x1F84F, prExtendedPictographic}, // E0.0   [8] (🡈..🡏)    <reserved-1F848>..<reserved-1F84F>
+	{0x1F85A, 0x1F85F, prExtendedPictographic}, // E0.0   [6] (🡚..🡟)    <reserved-1F85A>..<reserved-1F85F>
+	{0x1F888, 0x1F88F, prExtendedPictographic}, // E0.0   [8] (🢈..🢏)    <reserved-1F888>..<reserved-1F88F>
+	{0x1F8AE, 0x1F8FF, prExtendedPictographic}, // E0.0  [82] (🢮..🣿)    <reserved-1F8AE>..<reserved-1F8FF>
+	{0x1F90C, 0x1F90C, prExtendedPictographic}, // E13.0  [1] (🤌)       pinched fingers
+	{0x1F90D, 0x1F90F, prExtendedPictographic}, // E12.0  [3] (🤍..🤏)    white heart..pinching hand
+	{0x1F910, 0x1F918, prExtendedPictographic}, // E1.0   [9] (🤐..🤘)    zipper-mouth face..sign of the horns
+	{0x1F919, 0x1F91E, prExtendedPictographic}, // E3.0   [6] (🤙..🤞)    call me hand..crossed fingers
+	{0x1F91F, 0x1F91F, prExtendedPictographic}, // E5.0   [1] (🤟)       love-you gesture
+	{0x1F920, 0x1F927, prExtendedPictographic}, // E3.0   [8] (🤠..🤧)    cowboy hat face..sneezing face
+	{0x1F928, 0x1F92F, prExtendedPictographic}, // E5.0   [8] (🤨..🤯)    face with raised eyebrow..exploding head
+	{0x1F930, 0x1F930, prExtendedPictographic}, // E3.0   [1] (🤰)       pregnant woman
+	{0x1F931, 0x1F932, prExtendedPictographic}, // E5.0   [2] (🤱..🤲)    breast-feeding..palms up together
+	{0x1F933, 0x1F93A, prExtendedPictographic}, // E3.0   [8] (🤳..🤺)    selfie..person fencing
+	{0x1F93C, 0x1F93E, prExtendedPictographic}, // E3.0   [3] (🤼..🤾)    people wrestling..person playing handball
+	{0x1F93F, 0x1F93F, prExtendedPictographic}, // E12.0  [1] (🤿)       diving mask
+	{0x1F940, 0x1F945, prExtendedPictographic}, // E3.0   [6] (🥀..🥅)    wilted flower..goal net
+	{0x1F947, 0x1F94B, prExtendedPictographic}, // E3.0   [5] (🥇..🥋)    1st place medal..martial arts uniform
+	{0x1F94C, 0x1F94C, prExtendedPictographic}, // E5.0   [1] (🥌)       curling stone
+	{0x1F94D, 0x1F94F, prExtendedPictographic}, // E11.0  [3] (🥍..🥏)    lacrosse..flying disc
+	{0x1F950, 0x1F95E, prExtendedPictographic}, // E3.0  [15] (🥐..🥞)    croissant..pancakes
+	{0x1F95F, 0x1F96B, prExtendedPictographic}, // E5.0  [13] (🥟..🥫)    dumpling..canned food
+	{0x1F96C, 0x1F970, prExtendedPictographic}, // E11.0  [5] (🥬..🥰)    leafy green..smiling face with hearts
+	{0x1F971, 0x1F971, prExtendedPictographic}, // E12.0  [1] (🥱)       yawning face
+	{0x1F972, 0x1F972, prExtendedPictographic}, // E13.0  [1] (🥲)       smiling face with tear
+	{0x1F973, 0x1F976, prExtendedPictographic}, // E11.0  [4] (🥳..🥶)    partying face..cold face
+	{0x1F977, 0x1F978, prExtendedPictographic}, // E13.0  [2] (🥷..🥸)    ninja..disguised face
+	{0x1F979, 0x1F979, prExtendedPictographic}, // E14.0  [1] (🥹)       face holding back tears
+	{0x1F97A, 0x1F97A, prExtendedPictographic}, // E11.0  [1] (🥺)       pleading face
+	{0x1F97B, 0x1F97B, prExtendedPictographic}, // E12.0  [1] (🥻)       sari
+	{0x1F97C, 0x1F97F, prExtendedPictographic}, // E11.0  [4] (🥼..🥿)    lab coat..flat shoe
+	{0x1F980, 0x1F984, prExtendedPictographic}, // E1.0   [5] (🦀..🦄)    crab..unicorn
+	{0x1F985, 0x1F991, prExtendedPictographic}, // E3.0  [13] (🦅..🦑)    eagle..squid
+	{0x1F992, 0x1F997, prExtendedPictographic}, // E5.0   [6] (🦒..🦗)    giraffe..cricket
+	{0x1F998, 0x1F9A2, prExtendedPictographic}, // E11.0 [11] (🦘..🦢)    kangaroo..swan
+	{0x1F9A3, 0x1F9A4, prExtendedPictographic}, // E13.0  [2] (🦣..🦤)    mammoth..dodo
+	{0x1F9A5, 0x1F9AA, prExtendedPictographic}, // E12.0  [6] (🦥..🦪)    sloth..oyster
+	{0x1F9AB, 0x1F9AD, prExtendedPictographic}, // E13.0  [3] (🦫..🦭)    beaver..seal
+	{0x1F9AE, 0x1F9AF, prExtendedPictographic}, // E12.0  [2] (🦮..🦯)    guide dog..white cane
+	{0x1F9B0, 0x1F9B9, prExtendedPictographic}, // E11.0 [10] (🦰..🦹)    red hair..supervillain
+	{0x1F9BA, 0x1F9BF, prExtendedPictographic}, // E12.0  [6] (🦺..🦿)    safety vest..mechanical leg
+	{0x1F9C0, 0x1F9C0, prExtendedPictographic}, // E1.0   [1] (🧀)       cheese wedge
+	{0x1F9C1, 0x1F9C2, prExtendedPictographic}, // E11.0  [2] (🧁..🧂)    cupcake..salt
+	{0x1F9C3, 0x1F9CA, prExtendedPictographic}, // E12.0  [8] (🧃..🧊)    beverage box..ice
+	{0x1F9CB, 0x1F9CB, prExtendedPictographic}, // E13.0  [1] (🧋)       bubble tea
+	{0x1F9CC, 0x1F9CC, prExtendedPictographic}, // E14.0  [1] (🧌)       troll
+	{0x1F9CD, 0x1F9CF, prExtendedPictographic}, // E12.0  [3] (🧍..🧏)    person standing..deaf person
+	{0x1F9D0, 0x1F9E6, prExtendedPictographic}, // E5.0  [23] (🧐..🧦)    face with monocle..socks
+	{0x1F9E7, 0x1F9FF, prExtendedPictographic}, // E11.0 [25] (🧧..🧿)    red envelope..nazar amulet
+	{0x1FA00, 0x1FA6F, prExtendedPictographic}, // E0.0 [112] (🨀..🩯)    NEUTRAL CHESS KING..<reserved-1FA6F>
+	{0x1FA70, 0x1FA73, prExtendedPictographic}, // E12.0  [4] (🩰..🩳)    ballet shoes..shorts
+	{0x1FA74, 0x1FA74, prExtendedPictographic}, // E13.0  [1] (🩴)       thong sandal
+	{0x1FA75, 0x1FA77, prExtendedPictographic}, // E15.0  [3] (🩵..🩷)    light blue heart..pink heart
+	{0x1FA78, 0x1FA7A, prExtendedPictographic}, // E12.0  [3] (🩸..🩺)    drop of blood..stethoscope
+	{0x1FA7B, 0x1FA7C, prExtendedPictographic}, // E14.0  [2] (🩻..🩼)    x-ray..crutch
+	{0x1FA7D, 0x1FA7F, prExtendedPictographic}, // E0.0   [3] (🩽..🩿)    <reserved-1FA7D>..<reserved-1FA7F>
+	{0x1FA80, 0x1FA82, prExtendedPictographic}, // E12.0  [3] (🪀..🪂)    yo-yo..parachute
+	{0x1FA83, 0x1FA86, prExtendedPictographic}, // E13.0  [4] (🪃..🪆)    boomerang..nesting dolls
+	{0x1FA87, 0x1FA88, prExtendedPictographic}, // E15.0  [2] (🪇..🪈)    maracas..flute
+	{0x1FA89, 0x1FA8F, prExtendedPictographic}, // E0.0   [7] (🪉..🪏)    <reserved-1FA89>..<reserved-1FA8F>
+	{0x1FA90, 0x1FA95, prExtendedPictographic}, // E12.0  [6] (🪐..🪕)    ringed planet..banjo
+	{0x1FA96, 0x1FAA8, prExtendedPictographic}, // E13.0 [19] (🪖..🪨)    military helmet..rock
+	{0x1FAA9, 0x1FAAC, prExtendedPictographic}, // E14.0  [4] (🪩..🪬)    mirror ball..hamsa
+	{0x1FAAD, 0x1FAAF, prExtendedPictographic}, // E15.0  [3] (🪭..🪯)    folding hand fan..khanda
+	{0x1FAB0, 0x1FAB6, prExtendedPictographic}, // E13.0  [7] (🪰..🪶)    fly..feather
+	{0x1FAB7, 0x1FABA, prExtendedPictographic}, // E14.0  [4] (🪷..🪺)    lotus..nest with eggs
+	{0x1FABB, 0x1FABD, prExtendedPictographic}, // E15.0  [3] (🪻..🪽)    hyacinth..wing
+	{0x1FABE, 0x1FABE, prExtendedPictographic}, // E0.0   [1] (🪾)       <reserved-1FABE>
+	{0x1FABF, 0x1FABF, prExtendedPictographic}, // E15.0  [1] (🪿)       goose
+	{0x1FAC0, 0x1FAC2, prExtendedPictographic}, // E13.0  [3] (🫀..🫂)    anatomical heart..people hugging
+	{0x1FAC3, 0x1FAC5, prExtendedPictographic}, // E14.0  [3] (🫃..🫅)    pregnant man..person with crown
+	{0x1FAC6, 0x1FACD, prExtendedPictographic}, // E0.0   [8] (🫆..🫍)    <reserved-1FAC6>..<reserved-1FACD>
+	{0x1FACE, 0x1FACF, prExtendedPictographic}, // E15.0  [2] (🫎..🫏)    moose..donkey
+	{0x1FAD0, 0x1FAD6, prExtendedPictographic}, // E13.0  [7] (🫐..🫖)    blueberries..teapot
+	{0x1FAD7, 0x1FAD9, prExtendedPictographic}, // E14.0  [3] (🫗..🫙)    pouring liquid..jar
+	{0x1FADA, 0x1FADB, prExtendedPictographic}, // E15.0  [2] (🫚..🫛)    ginger root..pea pod
+	{0x1FADC, 0x1FADF, prExtendedPictographic}, // E0.0   [4] (🫜..🫟)    <reserved-1FADC>..<reserved-1FADF>
+	{0x1FAE0, 0x1FAE7, prExtendedPictographic}, // E14.0  [8] (🫠..🫧)    melting face..bubbles
+	{0x1FAE8, 0x1FAE8, prExtendedPictographic}, // E15.0  [1] (🫨)       shaking face
+	{0x1FAE9, 0x1FAEF, prExtendedPictographic}, // E0.0   [7] (🫩..🫯)    <reserved-1FAE9>..<reserved-1FAEF>
+	{0x1FAF0, 0x1FAF6, prExtendedPictographic}, // E14.0  [7] (🫰..🫶)    hand with index finger and thumb crossed..heart hands
+	{0x1FAF7, 0x1FAF8, prExtendedPictographic}, // E15.0  [2] (🫷..🫸)    leftwards pushing hand..rightwards pushing hand
+	{0x1FAF9, 0x1FAFF, prExtendedPictographic}, // E0.0   [7] (🫹..🫿)    <reserved-1FAF9>..<reserved-1FAFF>
+	{0x1FC00, 0x1FFFD, prExtendedPictographic}, // E0.0[1022] (🰀..🿽)    <reserved-1FC00>..<reserved-1FFFD>
+	{0xE0000, 0xE0000, prControl},              // Cn       <reserved-E0000>
+	{0xE0001, 0xE0001, prControl},              // Cf       LANGUAGE TAG
+	{0xE0002, 0xE001F, prControl},              // Cn  [30] <reserved-E0002>..<reserved-E001F>
+	{0xE0020, 0xE007F, prExtend},               // Cf  [96] TAG SPACE..CANCEL TAG
+	{0xE0080, 0xE00FF, prControl},              // Cn [128] <reserved-E0080>..<reserved-E00FF>
+	{0xE0100, 0xE01EF, prExtend},               // Mn [240] VARIATION SELECTOR-17..VARIATION SELECTOR-256
+	{0xE01F0, 0xE0FFF, prControl},              // Cn [3600] <reserved-E01F0>..<reserved-E0FFF>
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/rivo/uniseg/graphemerules.go","mode":420,"size":5152,"sha256":"5a4414dfc0402ab1f2b415c0faf89166270f7201a584aee503da69ce6a65d738","index":0,"count":1,"encoding":"utf-8","payloadBytes":5152}
+package uniseg
+
+// The states of the grapheme cluster parser.
+const (
+	grAny = iota
+	grCR
+	grControlLF
+	grL
+	grLVV
+	grLVTT
+	grPrepend
+	grExtendedPictographic
+	grExtendedPictographicZWJ
+	grRIOdd
+	grRIEven
+)
+
+// The grapheme cluster parser's breaking instructions.
+const (
+	grNoBoundary = iota
+	grBoundary
+)
+
+// grTransitions implements the grapheme cluster parser's state transitions.
+// Maps state and property to a new state, a breaking instruction, and rule
+// number. The breaking instruction always refers to the boundary between the
+// last and next code point. Returns negative values if no transition is found.
+//
+// This function is used as follows:
+//
+//  1. Find specific state + specific property. Stop if found.
+//  2. Find specific state + any property.
+//  3. Find any state + specific property.
+//  4. If only (2) or (3) (but not both) was found, stop.
+//  5. If both (2) and (3) were found, use state from (3) and breaking instruction
+//     from the transition with the lower rule number, prefer (3) if rule numbers
+//     are equal. Stop.
+//  6. Assume grAny and grBoundary.
+//
+// Unicode version 15.0.0.
+func grTransitions(state, prop int) (newState int, newProp int, boundary int) {
+	// It turns out that using a big switch statement is much faster than using
+	// a map.
+
+	switch uint64(state) | uint64(prop)<<32 {
+	// GB5
+	case grAny | prCR<<32:
+		return grCR, grBoundary, 50
+	case grAny | prLF<<32:
+		return grControlLF, grBoundary, 50
+	case grAny | prControl<<32:
+		return grControlLF, grBoundary, 50
+
+	// GB4
+	case grCR | prAny<<32:
+		return grAny, grBoundary, 40
+	case grControlLF | prAny<<32:
+		return grAny, grBoundary, 40
+
+	// GB3
+	case grCR | prLF<<32:
+		return grControlLF, grNoBoundary, 30
+
+	// GB6
+	case grAny | prL<<32:
+		return grL, grBoundary, 9990
+	case grL | prL<<32:
+		return grL, grNoBoundary, 60
+	case grL | prV<<32:
+		return grLVV, grNoBoundary, 60
+	case grL | prLV<<32:
+		return grLVV, grNoBoundary, 60
+	case grL | prLVT<<32:
+		return grLVTT, grNoBoundary, 60
+
+	// GB7
+	case grAny | prLV<<32:
+		return grLVV, grBoundary, 9990
+	case grAny | prV<<32:
+		return grLVV, grBoundary, 9990
+	case grLVV | prV<<32:
+		return grLVV, grNoBoundary, 70
+	case grLVV | prT<<32:
+		return grLVTT, grNoBoundary, 70
+
+	// GB8
+	case grAny | prLVT<<32:
+		return grLVTT, grBoundary, 9990
+	case grAny | prT<<32:
+		return grLVTT, grBoundary, 9990
+	case grLVTT | prT<<32:
+		return grLVTT, grNoBoundary, 80
+
+	// GB9
+	case grAny | prExtend<<32:
+		return grAny, grNoBoundary, 90
+	case grAny | prZWJ<<32:
+		return grAny, grNoBoundary, 90
+
+	// GB9a
+	case grAny | prSpacingMark<<32:
+		return grAny, grNoBoundary, 91
+
+	// GB9b
+	case grAny | prPrepend<<32:
+		return grPrepend, grBoundary, 9990
+	case grPrepend | prAny<<32:
+		return grAny, grNoBoundary, 92
+
+	// GB11
+	case grAny | prExtendedPictographic<<32:
+		return grExtendedPictographic, grBoundary, 9990
+	case grExtendedPictographic | prExtend<<32:
+		return grExtendedPictographic, grNoBoundary, 110
+	case grExtendedPictographic | prZWJ<<32:
+		return grExtendedPictographicZWJ, grNoBoundary, 110
+	case grExtendedPictographicZWJ | prExtendedPictographic<<32:
+		return grExtendedPictographic, grNoBoundary, 110
+
+	// GB12 / GB13
+	case grAny | prRegionalIndicator<<32:
+		return grRIOdd, grBoundary, 9990
+	case grRIOdd | prRegionalIndicator<<32:
+		return grRIEven, grNoBoundary, 120
+	case grRIEven | prRegionalIndicator<<32:
+		return grRIOdd, grBoundary, 120
+	default:
+		return -1, -1, -1
+	}
+}
+
+// transitionGraphemeState determines the new state of the grapheme cluster
+// parser given the current state and the next code point. It also returns the
+// code point's grapheme property (the value mapped by the [graphemeCodePoints]
+// table) and whether a cluster boundary was detected.
+func transitionGraphemeState(state int, r rune) (newState, prop int, boundary bool) {
+	// Determine the property of the next character.
+	prop = propertyGraphemes(r)
+
+	// Find the applicable transition.
+	nextState, nextProp, _ := grTransitions(state, prop)
+	if nextState >= 0 {
+		// We have a specific transition. We'll use it.
+		return nextState, prop, nextProp == grBoundary
+	}
+
+	// No specific transition found. Try the less specific ones.
+	anyPropState, anyPropProp, anyPropRule := grTransitions(state, prAny)
+	anyStateState, anyStateProp, anyStateRule := grTransitions(grAny, prop)
+	if anyPropState >= 0 && anyStateState >= 0 {
+		// Both apply. We'll use a mix (see comments for grTransitions).
+		newState = anyStateState
+		boundary = anyStateProp == grBoundary
+		if anyPropRule < anyStateRule {
+			boundary = anyPropProp == grBoundary
+		}
+		return
+	}
+
+	if anyPropState >= 0 {
+		// We only have a specific state.
+		return anyPropState, prop, anyPropProp == grBoundary
+		// This branch will probably never be reached because okAnyState will
+		// always be true given the current transition map. But we keep it here
+		// for future modifications to the transition map where this may not be
+		// true anymore.
+	}
+
+	if anyStateState >= 0 {
+		// We only have a specific property.
+		return anyStateState, prop, anyStateProp == grBoundary
+	}
+
+	// No known transition. GB999: Any ÷ Any.
+	return grAny, prop, true
+}
+
+@@END
+@@PORTABLE {"path":"third_party/wails/vendor/github.com/rivo/uniseg/line.go","mode":420,"size":4923,"sha256":"c71b13b940922b440da48b4f1f48c6df1446aabaa4b96003385983bdb8a2d528","index":0,"count":1,"encoding":"utf-8","payloadBytes":4923}
+package uniseg
+
+import "unicode/utf8"
+
+// FirstLineSegment returns the prefix of the given byte slice after which a
+// decision to break the string over to the next line can or must be made,
+// according to the rules of [Unicode Standard Annex #14]. This is used to
+// implement line breaking.
+//
+// Line breaking, also known as word wrapping, is the process of breaking a
+// section of text into lines such that it will fit in the available width of a
+// page, window or other display area.
+//
+// The returned "segment" may not be broken into smaller parts, unless no other
+// breaking opportunities present themselves, in which case you may break by
+// grapheme clusters (using the [FirstGraphemeCluster] function to determine the
+// grapheme clusters).
+//
+// The "mustBreak" flag indicates whether you MUST break the line after the
+// given segment (true), for example after newline characters, or you MAY break
+// the line after the given segment (false).
+//
+// This function can be called continuously to extract all non-breaking sub-sets
+// from a byte slice, as illustrated in the example below.
+//
+// If you don't know the current state, for example when calling the function
+// for the first time, you must pass -1. For consecutive calls, pass the state
+// and rest slice returned by the previous call.
+//
+// The "rest" slice is the sub-slice of the original byte slice "b" starting
+// after the last byte of the identified line segment. If the length of the
+// "rest" slice is 0, the entire byte slice "b" has been processed. The
+// "segment" byte slice is the sub-slice of the input slice containing the
+// identified line segment.
+//
+// Given an empty byte slice "b", the function returns nil values.
+//
+// Note that in accordance with [UAX #14 LB3], the final segment will end with
+// "mustBreak" set to true. You can choose to ignore this by checking if the
+// length of the "rest" slice is 0 and calling [HasTrailingLineBreak] or
+// [HasTrailingLineBreakInString] on the last rune.
+//
+// Note also that this algorithm may break within grapheme clusters. This is
+// addressed in Section 8.2 Example 6 of UAX #14. To avoid this, you can use
+// the [Step] function instead.
+//
+// [Unicode Standard Annex #14]: https://www.unicode.org/reports/tr14/
+// [UAX #14 LB3]: https://www.unicode.org/reports/tr14/#Algorithm
+func FirstLineSegment(b []byte, state int) (segment, rest []byte, mustBreak bool, newState int) {
+	// An empty byte slice returns nothing.
+	if len(b) == 0 {
+		return
+	}
+
+	// Extract the first rune.
+	r, length := utf8.DecodeRune(b)
+	if len(b) <= length { // If we're already past the end, there is nothing else to parse.
+		return b, nil, true, lbAny // LB3.
+	}
+
+	// If we don't know the state, determine it now.
+	if state < 0 {
+		state, _ = transitionLineBreakState(state, r, b[length:], "")
+	}
+
+	// Transition until we find a boundary.
+	var boundary int
+	for {
+		r, l := utf8.DecodeRune(b[length:])
+		state, boundary = transitionLineBreakState(state, r, b[length+l:], "")
+
+		if boundary != LineDontBreak {
+			return b[:length], b[length:], boundary == LineMustBreak, state
+		}
+
+		length += l
+		if len(b) <= length {
+			return b, nil, true, lbAny // LB3
+		}
+	}
+}
+
+// FirstLineSegmentInString is like [FirstLineSegment] but its input and outputs
+// are strings.
+func FirstLineSegmentInString(str string, state int) (segment, rest string, mustBreak bool, newState int) {
+	// An empty byte slice returns nothing.
+	if len(str) == 0 {
+		return
+	}
+
+	// Extract the first rune.
+	r, length := utf8.DecodeRuneInString(str)
+	if len(str) <= length { // If we're already past the end, there is nothing else to parse.
+		return str, "", true, lbAny // LB3.
+	}
+
+	// If we don't know the state, determine it now.
+	if state < 0 {
+		state, _ = transitionLineBreakState(state, r, nil, str[length:])
+	}
+
+	// Transition until we find a boundary.
+	var boundary int
+	for {
+		r, l := utf8.DecodeRuneInString(str[length:])
+		state, boundary = transitionLineBreakState(state, r, nil, str[length+l:])
+
+		if boundary != LineDontBreak {
+			return str[:length], str[length:], boundary == LineMustBreak, state
+		}
+
+		length += l
+		if len(str) <= length {
+			return str, "", true, lbAny // LB3.
+		}
+	}
+}
+
+// HasTrailingLineBreak returns true if the last rune in the given byte slice is
+// one of the hard line break code points defined in LB4 and LB5 of [UAX #14].
+//
+// [UAX #14]: https://www.unicode.org/reports/tr14/#Algorithm
+func HasTrailingLineBreak(b []byte) bool {
+	r, _ := utf8.DecodeLastRune(b)
+	property, _ := propertyLineBreak(r)
+	return property == prBK || property == prCR || property == prLF || property == prNL
+}
+
+// HasTrailingLineBreakInString is like [HasTrailingLineBreak] but for a string.
+func HasTrailingLineBreakInString(str string) bool {
+	r, _ := utf8.DecodeLastRuneInString(str)
+	property, _ := propertyLineBreak(r)
+	return property == prBK || property == prCR || property == prLF || property == prNL
+}
+
+@@END
 @@PORTABLE {"path":"third_party/wails/vendor/github.com/rivo/uniseg/lineproperties.go","mode":420,"size":298992,"sha256":"d73432ab989195312fdaa4f4dcea34c7bfb478160b98ad26fbc31df94f898b45","index":0,"count":7,"encoding":"utf-8","payloadBytes":48000}
 // Code generated via go generate from gen_properties.go. DO NOT EDIT.
 
@@ -68471,422 +69147,4 @@ func (s *Segments) Unshift(v Segment) {
 	s.values[0] = v
 }
 
-@@END
-@@PORTABLE {"path":"third_party/wails/vendor/github.com/yuin/goldmark/util/html5entities.go","mode":420,"size":250122,"sha256":"4dee972d6cd584fd621b51779583d2da1bcd615d614b6d533e386cf0517859db","index":0,"count":6,"encoding":"utf-8","payloadBytes":48000}
-//nolint:golint,lll,misspell
-package util
-
-// An HTML5Entity struct represents HTML5 entitites.
-type HTML5Entity struct {
-	Name       string
-	CodePoints []int
-	Characters []byte
-}
-
-// LookUpHTML5EntityByName returns (an HTML5Entity, true) if an entity named
-// given name is found, otherwise (nil, false).
-func LookUpHTML5EntityByName(name string) (*HTML5Entity, bool) {
-	v, ok := html5entities[name]
-	return v, ok
-}
-
-var html5entities = map[string]*HTML5Entity{
-	"AElig":                           {Name: "AElig", CodePoints: []int{198}, Characters: []byte{0xc3, 0x86}},
-	"AMP":                             {Name: "AMP", CodePoints: []int{38}, Characters: []byte{0x26}},
-	"Aacute":                          {Name: "Aacute", CodePoints: []int{193}, Characters: []byte{0xc3, 0x81}},
-	"Acirc":                           {Name: "Acirc", CodePoints: []int{194}, Characters: []byte{0xc3, 0x82}},
-	"Acy":                             {Name: "Acy", CodePoints: []int{1040}, Characters: []byte{0xd0, 0x90}},
-	"Afr":                             {Name: "Afr", CodePoints: []int{120068}, Characters: []byte{0xf0, 0x9d, 0x94, 0x84}},
-	"Agrave":                          {Name: "Agrave", CodePoints: []int{192}, Characters: []byte{0xc3, 0x80}},
-	"Alpha":                           {Name: "Alpha", CodePoints: []int{913}, Characters: []byte{0xce, 0x91}},
-	"Amacr":                           {Name: "Amacr", CodePoints: []int{256}, Characters: []byte{0xc4, 0x80}},
-	"And":                             {Name: "And", CodePoints: []int{10835}, Characters: []byte{0xe2, 0xa9, 0x93}},
-	"Aogon":                           {Name: "Aogon", CodePoints: []int{260}, Characters: []byte{0xc4, 0x84}},
-	"Aopf":                            {Name: "Aopf", CodePoints: []int{120120}, Characters: []byte{0xf0, 0x9d, 0x94, 0xb8}},
-	"ApplyFunction":                   {Name: "ApplyFunction", CodePoints: []int{8289}, Characters: []byte{0xe2, 0x81, 0xa1}},
-	"Aring":                           {Name: "Aring", CodePoints: []int{197}, Characters: []byte{0xc3, 0x85}},
-	"Ascr":                            {Name: "Ascr", CodePoints: []int{119964}, Characters: []byte{0xf0, 0x9d, 0x92, 0x9c}},
-	"Assign":                          {Name: "Assign", CodePoints: []int{8788}, Characters: []byte{0xe2, 0x89, 0x94}},
-	"Atilde":                          {Name: "Atilde", CodePoints: []int{195}, Characters: []byte{0xc3, 0x83}},
-	"Auml":                            {Name: "Auml", CodePoints: []int{196}, Characters: []byte{0xc3, 0x84}},
-	"Backslash":                       {Name: "Backslash", CodePoints: []int{8726}, Characters: []byte{0xe2, 0x88, 0x96}},
-	"Barv":                            {Name: "Barv", CodePoints: []int{10983}, Characters: []byte{0xe2, 0xab, 0xa7}},
-	"Barwed":                          {Name: "Barwed", CodePoints: []int{8966}, Characters: []byte{0xe2, 0x8c, 0x86}},
-	"Bcy":                             {Name: "Bcy", CodePoints: []int{1041}, Characters: []byte{0xd0, 0x91}},
-	"Because":                         {Name: "Because", CodePoints: []int{8757}, Characters: []byte{0xe2, 0x88, 0xb5}},
-	"Bernoullis":                      {Name: "Bernoullis", CodePoints: []int{8492}, Characters: []byte{0xe2, 0x84, 0xac}},
-	"Beta":                            {Name: "Beta", CodePoints: []int{914}, Characters: []byte{0xce, 0x92}},
-	"Bfr":                             {Name: "Bfr", CodePoints: []int{120069}, Characters: []byte{0xf0, 0x9d, 0x94, 0x85}},
-	"Bopf":                            {Name: "Bopf", CodePoints: []int{120121}, Characters: []byte{0xf0, 0x9d, 0x94, 0xb9}},
-	"Breve":                           {Name: "Breve", CodePoints: []int{728}, Characters: []byte{0xcb, 0x98}},
-	"Bscr":                            {Name: "Bscr", CodePoints: []int{8492}, Characters: []byte{0xe2, 0x84, 0xac}},
-	"Bumpeq":                          {Name: "Bumpeq", CodePoints: []int{8782}, Characters: []byte{0xe2, 0x89, 0x8e}},
-	"CHcy":                            {Name: "CHcy", CodePoints: []int{1063}, Characters: []byte{0xd0, 0xa7}},
-	"COPY":                            {Name: "COPY", CodePoints: []int{169}, Characters: []byte{0xc2, 0xa9}},
-	"Cacute":                          {Name: "Cacute", CodePoints: []int{262}, Characters: []byte{0xc4, 0x86}},
-	"Cap":                             {Name: "Cap", CodePoints: []int{8914}, Characters: []byte{0xe2, 0x8b, 0x92}},
-	"CapitalDifferentialD":            {Name: "CapitalDifferentialD", CodePoints: []int{8517}, Characters: []byte{0xe2, 0x85, 0x85}},
-	"Cayleys":                         {Name: "Cayleys", CodePoints: []int{8493}, Characters: []byte{0xe2, 0x84, 0xad}},
-	"Ccaron":                          {Name: "Ccaron", CodePoints: []int{268}, Characters: []byte{0xc4, 0x8c}},
-	"Ccedil":                          {Name: "Ccedil", CodePoints: []int{199}, Characters: []byte{0xc3, 0x87}},
-	"Ccirc":                           {Name: "Ccirc", CodePoints: []int{264}, Characters: []byte{0xc4, 0x88}},
-	"Cconint":                         {Name: "Cconint", CodePoints: []int{8752}, Characters: []byte{0xe2, 0x88, 0xb0}},
-	"Cdot":                            {Name: "Cdot", CodePoints: []int{266}, Characters: []byte{0xc4, 0x8a}},
-	"Cedilla":                         {Name: "Cedilla", CodePoints: []int{184}, Characters: []byte{0xc2, 0xb8}},
-	"CenterDot":                       {Name: "CenterDot", CodePoints: []int{183}, Characters: []byte{0xc2, 0xb7}},
-	"Cfr":                             {Name: "Cfr", CodePoints: []int{8493}, Characters: []byte{0xe2, 0x84, 0xad}},
-	"Chi":                             {Name: "Chi", CodePoints: []int{935}, Characters: []byte{0xce, 0xa7}},
-	"CircleDot":                       {Name: "CircleDot", CodePoints: []int{8857}, Characters: []byte{0xe2, 0x8a, 0x99}},
-	"CircleMinus":                     {Name: "CircleMinus", CodePoints: []int{8854}, Characters: []byte{0xe2, 0x8a, 0x96}},
-	"CirclePlus":                      {Name: "CirclePlus", CodePoints: []int{8853}, Characters: []byte{0xe2, 0x8a, 0x95}},
-	"CircleTimes":                     {Name: "CircleTimes", CodePoints: []int{8855}, Characters: []byte{0xe2, 0x8a, 0x97}},
-	"ClockwiseContourIntegral":        {Name: "ClockwiseContourIntegral", CodePoints: []int{8754}, Characters: []byte{0xe2, 0x88, 0xb2}},
-	"CloseCurlyDoubleQuote":           {Name: "CloseCurlyDoubleQuote", CodePoints: []int{8221}, Characters: []byte{0xe2, 0x80, 0x9d}},
-	"CloseCurlyQuote":                 {Name: "CloseCurlyQuote", CodePoints: []int{8217}, Characters: []byte{0xe2, 0x80, 0x99}},
-	"Colon":                           {Name: "Colon", CodePoints: []int{8759}, Characters: []byte{0xe2, 0x88, 0xb7}},
-	"Colone":                          {Name: "Colone", CodePoints: []int{10868}, Characters: []byte{0xe2, 0xa9, 0xb4}},
-	"Congruent":                       {Name: "Congruent", CodePoints: []int{8801}, Characters: []byte{0xe2, 0x89, 0xa1}},
-	"Conint":                          {Name: "Conint", CodePoints: []int{8751}, Characters: []byte{0xe2, 0x88, 0xaf}},
-	"ContourIntegral":                 {Name: "ContourIntegral", CodePoints: []int{8750}, Characters: []byte{0xe2, 0x88, 0xae}},
-	"Copf":                            {Name: "Copf", CodePoints: []int{8450}, Characters: []byte{0xe2, 0x84, 0x82}},
-	"Coproduct":                       {Name: "Coproduct", CodePoints: []int{8720}, Characters: []byte{0xe2, 0x88, 0x90}},
-	"CounterClockwiseContourIntegral": {Name: "CounterClockwiseContourIntegral", CodePoints: []int{8755}, Characters: []byte{0xe2, 0x88, 0xb3}},
-	"Cross":                           {Name: "Cross", CodePoints: []int{10799}, Characters: []byte{0xe2, 0xa8, 0xaf}},
-	"Cscr":                            {Name: "Cscr", CodePoints: []int{119966}, Characters: []byte{0xf0, 0x9d, 0x92, 0x9e}},
-	"Cup":                             {Name: "Cup", CodePoints: []int{8915}, Characters: []byte{0xe2, 0x8b, 0x93}},
-	"CupCap":                          {Name: "CupCap", CodePoints: []int{8781}, Characters: []byte{0xe2, 0x89, 0x8d}},
-	"DD":                              {Name: "DD", CodePoints: []int{8517}, Characters: []byte{0xe2, 0x85, 0x85}},
-	"DDotrahd":                        {Name: "DDotrahd", CodePoints: []int{10513}, Characters: []byte{0xe2, 0xa4, 0x91}},
-	"DJcy":                            {Name: "DJcy", CodePoints: []int{1026}, Characters: []byte{0xd0, 0x82}},
-	"DScy":                            {Name: "DScy", CodePoints: []int{1029}, Characters: []byte{0xd0, 0x85}},
-	"DZcy":                            {Name: "DZcy", CodePoints: []int{1039}, Characters: []byte{0xd0, 0x8f}},
-	"Dagger":                          {Name: "Dagger", CodePoints: []int{8225}, Characters: []byte{0xe2, 0x80, 0xa1}},
-	"Darr":                            {Name: "Darr", CodePoints: []int{8609}, Characters: []byte{0xe2, 0x86, 0xa1}},
-	"Dashv":                           {Name: "Dashv", CodePoints: []int{10980}, Characters: []byte{0xe2, 0xab, 0xa4}},
-	"Dcaron":                          {Name: "Dcaron", CodePoints: []int{270}, Characters: []byte{0xc4, 0x8e}},
-	"Dcy":                             {Name: "Dcy", CodePoints: []int{1044}, Characters: []byte{0xd0, 0x94}},
-	"Del":                             {Name: "Del", CodePoints: []int{8711}, Characters: []byte{0xe2, 0x88, 0x87}},
-	"Delta":                           {Name: "Delta", CodePoints: []int{916}, Characters: []byte{0xce, 0x94}},
-	"Dfr":                             {Name: "Dfr", CodePoints: []int{120071}, Characters: []byte{0xf0, 0x9d, 0x94, 0x87}},
-	"DiacriticalAcute":                {Name: "DiacriticalAcute", CodePoints: []int{180}, Characters: []byte{0xc2, 0xb4}},
-	"DiacriticalDot":                  {Name: "DiacriticalDot", CodePoints: []int{729}, Characters: []byte{0xcb, 0x99}},
-	"DiacriticalDoubleAcute":          {Name: "DiacriticalDoubleAcute", CodePoints: []int{733}, Characters: []byte{0xcb, 0x9d}},
-	"DiacriticalGrave":                {Name: "DiacriticalGrave", CodePoints: []int{96}, Characters: []byte{0x60}},
-	"DiacriticalTilde":                {Name: "DiacriticalTilde", CodePoints: []int{732}, Characters: []byte{0xcb, 0x9c}},
-	"Diamond":                         {Name: "Diamond", CodePoints: []int{8900}, Characters: []byte{0xe2, 0x8b, 0x84}},
-	"DifferentialD":                   {Name: "DifferentialD", CodePoints: []int{8518}, Characters: []byte{0xe2, 0x85, 0x86}},
-	"Dopf":                            {Name: "Dopf", CodePoints: []int{120123}, Characters: []byte{0xf0, 0x9d, 0x94, 0xbb}},
-	"Dot":                             {Name: "Dot", CodePoints: []int{168}, Characters: []byte{0xc2, 0xa8}},
-	"DotDot":                          {Name: "DotDot", CodePoints: []int{8412}, Characters: []byte{0xe2, 0x83, 0x9c}},
-	"DotEqual":                        {Name: "DotEqual", CodePoints: []int{8784}, Characters: []byte{0xe2, 0x89, 0x90}},
-	"DoubleContourIntegral":           {Name: "DoubleContourIntegral", CodePoints: []int{8751}, Characters: []byte{0xe2, 0x88, 0xaf}},
-	"DoubleDot":                       {Name: "DoubleDot", CodePoints: []int{168}, Characters: []byte{0xc2, 0xa8}},
-	"DoubleDownArrow":                 {Name: "DoubleDownArrow", CodePoints: []int{8659}, Characters: []byte{0xe2, 0x87, 0x93}},
-	"DoubleLeftArrow":                 {Name: "DoubleLeftArrow", CodePoints: []int{8656}, Characters: []byte{0xe2, 0x87, 0x90}},
-	"DoubleLeftRightArrow":            {Name: "DoubleLeftRightArrow", CodePoints: []int{8660}, Characters: []byte{0xe2, 0x87, 0x94}},
-	"DoubleLeftTee":                   {Name: "DoubleLeftTee", CodePoints: []int{10980}, Characters: []byte{0xe2, 0xab, 0xa4}},
-	"DoubleLongLeftArrow":             {Name: "DoubleLongLeftArrow", CodePoints: []int{10232}, Characters: []byte{0xe2, 0x9f, 0xb8}},
-	"DoubleLongLeftRightArrow":        {Name: "DoubleLongLeftRightArrow", CodePoints: []int{10234}, Characters: []byte{0xe2, 0x9f, 0xba}},
-	"DoubleLongRightArrow":            {Name: "DoubleLongRightArrow", CodePoints: []int{10233}, Characters: []byte{0xe2, 0x9f, 0xb9}},
-	"DoubleRightArrow":                {Name: "DoubleRightArrow", CodePoints: []int{8658}, Characters: []byte{0xe2, 0x87, 0x92}},
-	"DoubleRightTee":                  {Name: "DoubleRightTee", CodePoints: []int{8872}, Characters: []byte{0xe2, 0x8a, 0xa8}},
-	"DoubleUpArrow":                   {Name: "DoubleUpArrow", CodePoints: []int{8657}, Characters: []byte{0xe2, 0x87, 0x91}},
-	"DoubleUpDownArrow":               {Name: "DoubleUpDownArrow", CodePoints: []int{8661}, Characters: []byte{0xe2, 0x87, 0x95}},
-	"DoubleVerticalBar":               {Name: "DoubleVerticalBar", CodePoints: []int{8741}, Characters: []byte{0xe2, 0x88, 0xa5}},
-	"DownArrow":                       {Name: "DownArrow", CodePoints: []int{8595}, Characters: []byte{0xe2, 0x86, 0x93}},
-	"DownArrowBar":                    {Name: "DownArrowBar", CodePoints: []int{10515}, Characters: []byte{0xe2, 0xa4, 0x93}},
-	"DownArrowUpArrow":                {Name: "DownArrowUpArrow", CodePoints: []int{8693}, Characters: []byte{0xe2, 0x87, 0xb5}},
-	"DownBreve":                       {Name: "DownBreve", CodePoints: []int{785}, Characters: []byte{0xcc, 0x91}},
-	"DownLeftRightVector":             {Name: "DownLeftRightVector", CodePoints: []int{10576}, Characters: []byte{0xe2, 0xa5, 0x90}},
-	"DownLeftTeeVector":               {Name: "DownLeftTeeVector", CodePoints: []int{10590}, Characters: []byte{0xe2, 0xa5, 0x9e}},
-	"DownLeftVector":                  {Name: "DownLeftVector", CodePoints: []int{8637}, Characters: []byte{0xe2, 0x86, 0xbd}},
-	"DownLeftVectorBar":               {Name: "DownLeftVectorBar", CodePoints: []int{10582}, Characters: []byte{0xe2, 0xa5, 0x96}},
-	"DownRightTeeVector":              {Name: "DownRightTeeVector", CodePoints: []int{10591}, Characters: []byte{0xe2, 0xa5, 0x9f}},
-	"DownRightVector":                 {Name: "DownRightVector", CodePoints: []int{8641}, Characters: []byte{0xe2, 0x87, 0x81}},
-	"DownRightVectorBar":              {Name: "DownRightVectorBar", CodePoints: []int{10583}, Characters: []byte{0xe2, 0xa5, 0x97}},
-	"DownTee":                         {Name: "DownTee", CodePoints: []int{8868}, Characters: []byte{0xe2, 0x8a, 0xa4}},
-	"DownTeeArrow":                    {Name: "DownTeeArrow", CodePoints: []int{8615}, Characters: []byte{0xe2, 0x86, 0xa7}},
-	"Downarrow":                       {Name: "Downarrow", CodePoints: []int{8659}, Characters: []byte{0xe2, 0x87, 0x93}},
-	"Dscr":                            {Name: "Dscr", CodePoints: []int{119967}, Characters: []byte{0xf0, 0x9d, 0x92, 0x9f}},
-	"Dstrok":                          {Name: "Dstrok", CodePoints: []int{272}, Characters: []byte{0xc4, 0x90}},
-	"ENG":                             {Name: "ENG", CodePoints: []int{330}, Characters: []byte{0xc5, 0x8a}},
-	"ETH":                             {Name: "ETH", CodePoints: []int{208}, Characters: []byte{0xc3, 0x90}},
-	"Eacute":                          {Name: "Eacute", CodePoints: []int{201}, Characters: []byte{0xc3, 0x89}},
-	"Ecaron":                          {Name: "Ecaron", CodePoints: []int{282}, Characters: []byte{0xc4, 0x9a}},
-	"Ecirc":                           {Name: "Ecirc", CodePoints: []int{202}, Characters: []byte{0xc3, 0x8a}},
-	"Ecy":                             {Name: "Ecy", CodePoints: []int{1069}, Characters: []byte{0xd0, 0xad}},
-	"Edot":                            {Name: "Edot", CodePoints: []int{278}, Characters: []byte{0xc4, 0x96}},
-	"Efr":                             {Name: "Efr", CodePoints: []int{120072}, Characters: []byte{0xf0, 0x9d, 0x94, 0x88}},
-	"Egrave":                          {Name: "Egrave", CodePoints: []int{200}, Characters: []byte{0xc3, 0x88}},
-	"Element":                         {Name: "Element", CodePoints: []int{8712}, Characters: []byte{0xe2, 0x88, 0x88}},
-	"Emacr":                           {Name: "Emacr", CodePoints: []int{274}, Characters: []byte{0xc4, 0x92}},
-	"EmptySmallSquare":                {Name: "EmptySmallSquare", CodePoints: []int{9723}, Characters: []byte{0xe2, 0x97, 0xbb}},
-	"EmptyVerySmallSquare":            {Name: "EmptyVerySmallSquare", CodePoints: []int{9643}, Characters: []byte{0xe2, 0x96, 0xab}},
-	"Eogon":                           {Name: "Eogon", CodePoints: []int{280}, Characters: []byte{0xc4, 0x98}},
-	"Eopf":                            {Name: "Eopf", CodePoints: []int{120124}, Characters: []byte{0xf0, 0x9d, 0x94, 0xbc}},
-	"Epsilon":                         {Name: "Epsilon", CodePoints: []int{917}, Characters: []byte{0xce, 0x95}},
-	"Equal":                           {Name: "Equal", CodePoints: []int{10869}, Characters: []byte{0xe2, 0xa9, 0xb5}},
-	"EqualTilde":                      {Name: "EqualTilde", CodePoints: []int{8770}, Characters: []byte{0xe2, 0x89, 0x82}},
-	"Equilibrium":                     {Name: "Equilibrium", CodePoints: []int{8652}, Characters: []byte{0xe2, 0x87, 0x8c}},
-	"Escr":                            {Name: "Escr", CodePoints: []int{8496}, Characters: []byte{0xe2, 0x84, 0xb0}},
-	"Esim":                            {Name: "Esim", CodePoints: []int{10867}, Characters: []byte{0xe2, 0xa9, 0xb3}},
-	"Eta":                             {Name: "Eta", CodePoints: []int{919}, Characters: []byte{0xce, 0x97}},
-	"Euml":                            {Name: "Euml", CodePoints: []int{203}, Characters: []byte{0xc3, 0x8b}},
-	"Exists":                          {Name: "Exists", CodePoints: []int{8707}, Characters: []byte{0xe2, 0x88, 0x83}},
-	"ExponentialE":                    {Name: "ExponentialE", CodePoints: []int{8519}, Characters: []byte{0xe2, 0x85, 0x87}},
-	"Fcy":                             {Name: "Fcy", CodePoints: []int{1060}, Characters: []byte{0xd0, 0xa4}},
-	"Ffr":                             {Name: "Ffr", CodePoints: []int{120073}, Characters: []byte{0xf0, 0x9d, 0x94, 0x89}},
-	"FilledSmallSquare":               {Name: "FilledSmallSquare", CodePoints: []int{9724}, Characters: []byte{0xe2, 0x97, 0xbc}},
-	"FilledVerySmallSquare":           {Name: "FilledVerySmallSquare", CodePoints: []int{9642}, Characters: []byte{0xe2, 0x96, 0xaa}},
-	"Fopf":                            {Name: "Fopf", CodePoints: []int{120125}, Characters: []byte{0xf0, 0x9d, 0x94, 0xbd}},
-	"ForAll":                          {Name: "ForAll", CodePoints: []int{8704}, Characters: []byte{0xe2, 0x88, 0x80}},
-	"Fouriertrf":                      {Name: "Fouriertrf", CodePoints: []int{8497}, Characters: []byte{0xe2, 0x84, 0xb1}},
-	"Fscr":                            {Name: "Fscr", CodePoints: []int{8497}, Characters: []byte{0xe2, 0x84, 0xb1}},
-	"GJcy":                            {Name: "GJcy", CodePoints: []int{1027}, Characters: []byte{0xd0, 0x83}},
-	"GT":                              {Name: "GT", CodePoints: []int{62}, Characters: []byte{0x3e}},
-	"Gamma":                           {Name: "Gamma", CodePoints: []int{915}, Characters: []byte{0xce, 0x93}},
-	"Gammad":                          {Name: "Gammad", CodePoints: []int{988}, Characters: []byte{0xcf, 0x9c}},
-	"Gbreve":                          {Name: "Gbreve", CodePoints: []int{286}, Characters: []byte{0xc4, 0x9e}},
-	"Gcedil":                          {Name: "Gcedil", CodePoints: []int{290}, Characters: []byte{0xc4, 0xa2}},
-	"Gcirc":                           {Name: "Gcirc", CodePoints: []int{284}, Characters: []byte{0xc4, 0x9c}},
-	"Gcy":                             {Name: "Gcy", CodePoints: []int{1043}, Characters: []byte{0xd0, 0x93}},
-	"Gdot":                            {Name: "Gdot", CodePoints: []int{288}, Characters: []byte{0xc4, 0xa0}},
-	"Gfr":                             {Name: "Gfr", CodePoints: []int{120074}, Characters: []byte{0xf0, 0x9d, 0x94, 0x8a}},
-	"Gg":                              {Name: "Gg", CodePoints: []int{8921}, Characters: []byte{0xe2, 0x8b, 0x99}},
-	"Gopf":                            {Name: "Gopf", CodePoints: []int{120126}, Characters: []byte{0xf0, 0x9d, 0x94, 0xbe}},
-	"GreaterEqual":                    {Name: "GreaterEqual", CodePoints: []int{8805}, Characters: []byte{0xe2, 0x89, 0xa5}},
-	"GreaterEqualLess":                {Name: "GreaterEqualLess", CodePoints: []int{8923}, Characters: []byte{0xe2, 0x8b, 0x9b}},
-	"GreaterFullEqual":                {Name: "GreaterFullEqual", CodePoints: []int{8807}, Characters: []byte{0xe2, 0x89, 0xa7}},
-	"GreaterGreater":                  {Name: "GreaterGreater", CodePoints: []int{10914}, Characters: []byte{0xe2, 0xaa, 0xa2}},
-	"GreaterLess":                     {Name: "GreaterLess", CodePoints: []int{8823}, Characters: []byte{0xe2, 0x89, 0xb7}},
-	"GreaterSlantEqual":               {Name: "GreaterSlantEqual", CodePoints: []int{10878}, Characters: []byte{0xe2, 0xa9, 0xbe}},
-	"GreaterTilde":                    {Name: "GreaterTilde", CodePoints: []int{8819}, Characters: []byte{0xe2, 0x89, 0xb3}},
-	"Gscr":                            {Name: "Gscr", CodePoints: []int{119970}, Characters: []byte{0xf0, 0x9d, 0x92, 0xa2}},
-	"Gt":                              {Name: "Gt", CodePoints: []int{8811}, Characters: []byte{0xe2, 0x89, 0xab}},
-	"HARDcy":                          {Name: "HARDcy", CodePoints: []int{1066}, Characters: []byte{0xd0, 0xaa}},
-	"Hacek":                           {Name: "Hacek", CodePoints: []int{711}, Characters: []byte{0xcb, 0x87}},
-	"Hat":                             {Name: "Hat", CodePoints: []int{94}, Characters: []byte{0x5e}},
-	"Hcirc":                           {Name: "Hcirc", CodePoints: []int{292}, Characters: []byte{0xc4, 0xa4}},
-	"Hfr":                             {Name: "Hfr", CodePoints: []int{8460}, Characters: []byte{0xe2, 0x84, 0x8c}},
-	"HilbertSpace":                    {Name: "HilbertSpace", CodePoints: []int{8459}, Characters: []byte{0xe2, 0x84, 0x8b}},
-	"Hopf":                            {Name: "Hopf", CodePoints: []int{8461}, Characters: []byte{0xe2, 0x84, 0x8d}},
-	"HorizontalLine":                  {Name: "HorizontalLine", CodePoints: []int{9472}, Characters: []byte{0xe2, 0x94, 0x80}},
-	"Hscr":                            {Name: "Hscr", CodePoints: []int{8459}, Characters: []byte{0xe2, 0x84, 0x8b}},
-	"Hstrok":                          {Name: "Hstrok", CodePoints: []int{294}, Characters: []byte{0xc4, 0xa6}},
-	"HumpDownHump":                    {Name: "HumpDownHump", CodePoints: []int{8782}, Characters: []byte{0xe2, 0x89, 0x8e}},
-	"HumpEqual":                       {Name: "HumpEqual", CodePoints: []int{8783}, Characters: []byte{0xe2, 0x89, 0x8f}},
-	"IEcy":                            {Name: "IEcy", CodePoints: []int{1045}, Characters: []byte{0xd0, 0x95}},
-	"IJlig":                           {Name: "IJlig", CodePoints: []int{306}, Characters: []byte{0xc4, 0xb2}},
-	"IOcy":                            {Name: "IOcy", CodePoints: []int{1025}, Characters: []byte{0xd0, 0x81}},
-	"Iacute":                          {Name: "Iacute", CodePoints: []int{205}, Characters: []byte{0xc3, 0x8d}},
-	"Icirc":                           {Name: "Icirc", CodePoints: []int{206}, Characters: []byte{0xc3, 0x8e}},
-	"Icy":                             {Name: "Icy", CodePoints: []int{1048}, Characters: []byte{0xd0, 0x98}},
-	"Idot":                            {Name: "Idot", CodePoints: []int{304}, Characters: []byte{0xc4, 0xb0}},
-	"Ifr":                             {Name: "Ifr", CodePoints: []int{8465}, Characters: []byte{0xe2, 0x84, 0x91}},
-	"Igrave":                          {Name: "Igrave", CodePoints: []int{204}, Characters: []byte{0xc3, 0x8c}},
-	"Im":                              {Name: "Im", CodePoints: []int{8465}, Characters: []byte{0xe2, 0x84, 0x91}},
-	"Imacr":                           {Name: "Imacr", CodePoints: []int{298}, Characters: []byte{0xc4, 0xaa}},
-	"ImaginaryI":                      {Name: "ImaginaryI", CodePoints: []int{8520}, Characters: []byte{0xe2, 0x85, 0x88}},
-	"Implies":                         {Name: "Implies", CodePoints: []int{8658}, Characters: []byte{0xe2, 0x87, 0x92}},
-	"Int":                             {Name: "Int", CodePoints: []int{8748}, Characters: []byte{0xe2, 0x88, 0xac}},
-	"Integral":                        {Name: "Integral", CodePoints: []int{8747}, Characters: []byte{0xe2, 0x88, 0xab}},
-	"Intersection":                    {Name: "Intersection", CodePoints: []int{8898}, Characters: []byte{0xe2, 0x8b, 0x82}},
-	"InvisibleComma":                  {Name: "InvisibleComma", CodePoints: []int{8291}, Characters: []byte{0xe2, 0x81, 0xa3}},
-	"InvisibleTimes":                  {Name: "InvisibleTimes", CodePoints: []int{8290}, Characters: []byte{0xe2, 0x81, 0xa2}},
-	"Iogon":                           {Name: "Iogon", CodePoints: []int{302}, Characters: []byte{0xc4, 0xae}},
-	"Iopf":                            {Name: "Iopf", CodePoints: []int{120128}, Characters: []byte{0xf0, 0x9d, 0x95, 0x80}},
-	"Iota":                            {Name: "Iota", CodePoints: []int{921}, Characters: []byte{0xce, 0x99}},
-	"Iscr":                            {Name: "Iscr", CodePoints: []int{8464}, Characters: []byte{0xe2, 0x84, 0x90}},
-	"Itilde":                          {Name: "Itilde", CodePoints: []int{296}, Characters: []byte{0xc4, 0xa8}},
-	"Iukcy":                           {Name: "Iukcy", CodePoints: []int{1030}, Characters: []byte{0xd0, 0x86}},
-	"Iuml":                            {Name: "Iuml", CodePoints: []int{207}, Characters: []byte{0xc3, 0x8f}},
-	"Jcirc":                           {Name: "Jcirc", CodePoints: []int{308}, Characters: []byte{0xc4, 0xb4}},
-	"Jcy":                             {Name: "Jcy", CodePoints: []int{1049}, Characters: []byte{0xd0, 0x99}},
-	"Jfr":                             {Name: "Jfr", CodePoints: []int{120077}, Characters: []byte{0xf0, 0x9d, 0x94, 0x8d}},
-	"Jopf":                            {Name: "Jopf", CodePoints: []int{120129}, Characters: []byte{0xf0, 0x9d, 0x95, 0x81}},
-	"Jscr":                            {Name: "Jscr", CodePoints: []int{119973}, Characters: []byte{0xf0, 0x9d, 0x92, 0xa5}},
-	"Jsercy":                          {Name: "Jsercy", CodePoints: []int{1032}, Characters: []byte{0xd0, 0x88}},
-	"Jukcy":                           {Name: "Jukcy", CodePoints: []int{1028}, Characters: []byte{0xd0, 0x84}},
-	"KHcy":                            {Name: "KHcy", CodePoints: []int{1061}, Characters: []byte{0xd0, 0xa5}},
-	"KJcy":                            {Name: "KJcy", CodePoints: []int{1036}, Characters: []byte{0xd0, 0x8c}},
-	"Kappa":                           {Name: "Kappa", CodePoints: []int{922}, Characters: []byte{0xce, 0x9a}},
-	"Kcedil":                          {Name: "Kcedil", CodePoints: []int{310}, Characters: []byte{0xc4, 0xb6}},
-	"Kcy":                             {Name: "Kcy", CodePoints: []int{1050}, Characters: []byte{0xd0, 0x9a}},
-	"Kfr":                             {Name: "Kfr", CodePoints: []int{120078}, Characters: []byte{0xf0, 0x9d, 0x94, 0x8e}},
-	"Kopf":                            {Name: "Kopf", CodePoints: []int{120130}, Characters: []byte{0xf0, 0x9d, 0x95, 0x82}},
-	"Kscr":                            {Name: "Kscr", CodePoints: []int{119974}, Characters: []byte{0xf0, 0x9d, 0x92, 0xa6}},
-	"LJcy":                            {Name: "LJcy", CodePoints: []int{1033}, Characters: []byte{0xd0, 0x89}},
-	"LT":                              {Name: "LT", CodePoints: []int{60}, Characters: []byte{0x3c}},
-	"Lacute":                          {Name: "Lacute", CodePoints: []int{313}, Characters: []byte{0xc4, 0xb9}},
-	"Lambda":                          {Name: "Lambda", CodePoints: []int{923}, Characters: []byte{0xce, 0x9b}},
-	"Lang":                            {Name: "Lang", CodePoints: []int{10218}, Characters: []byte{0xe2, 0x9f, 0xaa}},
-	"Laplacetrf":                      {Name: "Laplacetrf", CodePoints: []int{8466}, Characters: []byte{0xe2, 0x84, 0x92}},
-	"Larr":                            {Name: "Larr", CodePoints: []int{8606}, Characters: []byte{0xe2, 0x86, 0x9e}},
-	"Lcaron":                          {Name: "Lcaron", CodePoints: []int{317}, Characters: []byte{0xc4, 0xbd}},
-	"Lcedil":                          {Name: "Lcedil", CodePoints: []int{315}, Characters: []byte{0xc4, 0xbb}},
-	"Lcy":                             {Name: "Lcy", CodePoints: []int{1051}, Characters: []byte{0xd0, 0x9b}},
-	"LeftAngleBracket":                {Name: "LeftAngleBracket", CodePoints: []int{10216}, Characters: []byte{0xe2, 0x9f, 0xa8}},
-	"LeftArrow":                       {Name: "LeftArrow", CodePoints: []int{8592}, Characters: []byte{0xe2, 0x86, 0x90}},
-	"LeftArrowBar":                    {Name: "LeftArrowBar", CodePoints: []int{8676}, Characters: []byte{0xe2, 0x87, 0xa4}},
-	"LeftArrowRightArrow":             {Name: "LeftArrowRightArrow", CodePoints: []int{8646}, Characters: []byte{0xe2, 0x87, 0x86}},
-	"LeftCeiling":                     {Name: "LeftCeiling", CodePoints: []int{8968}, Characters: []byte{0xe2, 0x8c, 0x88}},
-	"LeftDoubleBracket":               {Name: "LeftDoubleBracket", CodePoints: []int{10214}, Characters: []byte{0xe2, 0x9f, 0xa6}},
-	"LeftDownTeeVector":               {Name: "LeftDownTeeVector", CodePoints: []int{10593}, Characters: []byte{0xe2, 0xa5, 0xa1}},
-	"LeftDownVector":                  {Name: "LeftDownVector", CodePoints: []int{8643}, Characters: []byte{0xe2, 0x87, 0x83}},
-	"LeftDownVectorBar":               {Name: "LeftDownVectorBar", CodePoints: []int{10585}, Characters: []byte{0xe2, 0xa5, 0x99}},
-	"LeftFloor":                       {Name: "LeftFloor", CodePoints: []int{8970}, Characters: []byte{0xe2, 0x8c, 0x8a}},
-	"LeftRightArrow":                  {Name: "LeftRightArrow", CodePoints: []int{8596}, Characters: []byte{0xe2, 0x86, 0x94}},
-	"LeftRightVector":                 {Name: "LeftRightVector", CodePoints: []int{10574}, Characters: []byte{0xe2, 0xa5, 0x8e}},
-	"LeftTee":                         {Name: "LeftTee", CodePoints: []int{8867}, Characters: []byte{0xe2, 0x8a, 0xa3}},
-	"LeftTeeArrow":                    {Name: "LeftTeeArrow", CodePoints: []int{8612}, Characters: []byte{0xe2, 0x86, 0xa4}},
-	"LeftTeeVector":                   {Name: "LeftTeeVector", CodePoints: []int{10586}, Characters: []byte{0xe2, 0xa5, 0x9a}},
-	"LeftTriangle":                    {Name: "LeftTriangle", CodePoints: []int{8882}, Characters: []byte{0xe2, 0x8a, 0xb2}},
-	"LeftTriangleBar":                 {Name: "LeftTriangleBar", CodePoints: []int{10703}, Characters: []byte{0xe2, 0xa7, 0x8f}},
-	"LeftTriangleEqual":               {Name: "LeftTriangleEqual", CodePoints: []int{8884}, Characters: []byte{0xe2, 0x8a, 0xb4}},
-	"LeftUpDownVector":                {Name: "LeftUpDownVector", CodePoints: []int{10577}, Characters: []byte{0xe2, 0xa5, 0x91}},
-	"LeftUpTeeVector":                 {Name: "LeftUpTeeVector", CodePoints: []int{10592}, Characters: []byte{0xe2, 0xa5, 0xa0}},
-	"LeftUpVector":                    {Name: "LeftUpVector", CodePoints: []int{8639}, Characters: []byte{0xe2, 0x86, 0xbf}},
-	"LeftUpVectorBar":                 {Name: "LeftUpVectorBar", CodePoints: []int{10584}, Characters: []byte{0xe2, 0xa5, 0x98}},
-	"LeftVector":                      {Name: "LeftVector", CodePoints: []int{8636}, Characters: []byte{0xe2, 0x86, 0xbc}},
-	"LeftVectorBar":                   {Name: "LeftVectorBar", CodePoints: []int{10578}, Characters: []byte{0xe2, 0xa5, 0x92}},
-	"Leftarrow":                       {Name: "Leftarrow", CodePoints: []int{8656}, Characters: []byte{0xe2, 0x87, 0x90}},
-	"Leftrightarrow":                  {Name: "Leftrightarrow", CodePoints: []int{8660}, Characters: []byte{0xe2, 0x87, 0x94}},
-	"LessEqualGreater":                {Name: "LessEqualGreater", CodePoints: []int{8922}, Characters: []byte{0xe2, 0x8b, 0x9a}},
-	"LessFullEqual":                   {Name: "LessFullEqual", CodePoints: []int{8806}, Characters: []byte{0xe2, 0x89, 0xa6}},
-	"LessGreater":                     {Name: "LessGreater", CodePoints: []int{8822}, Characters: []byte{0xe2, 0x89, 0xb6}},
-	"LessLess":                        {Name: "LessLess", CodePoints: []int{10913}, Characters: []byte{0xe2, 0xaa, 0xa1}},
-	"LessSlantEqual":                  {Name: "LessSlantEqual", CodePoints: []int{10877}, Characters: []byte{0xe2, 0xa9, 0xbd}},
-	"LessTilde":                       {Name: "LessTilde", CodePoints: []int{8818}, Characters: []byte{0xe2, 0x89, 0xb2}},
-	"Lfr":                             {Name: "Lfr", CodePoints: []int{120079}, Characters: []byte{0xf0, 0x9d, 0x94, 0x8f}},
-	"Ll":                              {Name: "Ll", CodePoints: []int{8920}, Characters: []byte{0xe2, 0x8b, 0x98}},
-	"Lleftarrow":                      {Name: "Lleftarrow", CodePoints: []int{8666}, Characters: []byte{0xe2, 0x87, 0x9a}},
-	"Lmidot":                          {Name: "Lmidot", CodePoints: []int{319}, Characters: []byte{0xc4, 0xbf}},
-	"LongLeftArrow":                   {Name: "LongLeftArrow", CodePoints: []int{10229}, Characters: []byte{0xe2, 0x9f, 0xb5}},
-	"LongLeftRightArrow":              {Name: "LongLeftRightArrow", CodePoints: []int{10231}, Characters: []byte{0xe2, 0x9f, 0xb7}},
-	"LongRightArrow":                  {Name: "LongRightArrow", CodePoints: []int{10230}, Characters: []byte{0xe2, 0x9f, 0xb6}},
-	"Longleftarrow":                   {Name: "Longleftarrow", CodePoints: []int{10232}, Characters: []byte{0xe2, 0x9f, 0xb8}},
-	"Longleftrightarrow":              {Name: "Longleftrightarrow", CodePoints: []int{10234}, Characters: []byte{0xe2, 0x9f, 0xba}},
-	"Longrightarrow":                  {Name: "Longrightarrow", CodePoints: []int{10233}, Characters: []byte{0xe2, 0x9f, 0xb9}},
-	"Lopf":                            {Name: "Lopf", CodePoints: []int{120131}, Characters: []byte{0xf0, 0x9d, 0x95, 0x83}},
-	"LowerLeftArrow":                  {Name: "LowerLeftArrow", CodePoints: []int{8601}, Characters: []byte{0xe2, 0x86, 0x99}},
-	"LowerRightArrow":                 {Name: "LowerRightArrow", CodePoints: []int{8600}, Characters: []byte{0xe2, 0x86, 0x98}},
-	"Lscr":                            {Name: "Lscr", CodePoints: []int{8466}, Characters: []byte{0xe2, 0x84, 0x92}},
-	"Lsh":                             {Name: "Lsh", CodePoints: []int{8624}, Characters: []byte{0xe2, 0x86, 0xb0}},
-	"Lstrok":                          {Name: "Lstrok", CodePoints: []int{321}, Characters: []byte{0xc5, 0x81}},
-	"Lt":                              {Name: "Lt", CodePoints: []int{8810}, Characters: []byte{0xe2, 0x89, 0xaa}},
-	"Map":                             {Name: "Map", CodePoints: []int{10501}, Characters: []byte{0xe2, 0xa4, 0x85}},
-	"Mcy":                             {Name: "Mcy", CodePoints: []int{1052}, Characters: []byte{0xd0, 0x9c}},
-	"MediumSpace":                     {Name: "MediumSpace", CodePoints: []int{8287}, Characters: []byte{0xe2, 0x81, 0x9f}},
-	"Mellintrf":                       {Name: "Mellintrf", CodePoints: []int{8499}, Characters: []byte{0xe2, 0x84, 0xb3}},
-	"Mfr":                             {Name: "Mfr", CodePoints: []int{120080}, Characters: []byte{0xf0, 0x9d, 0x94, 0x90}},
-	"MinusPlus":                       {Name: "MinusPlus", CodePoints: []int{8723}, Characters: []byte{0xe2, 0x88, 0x93}},
-	"Mopf":                            {Name: "Mopf", CodePoints: []int{120132}, Characters: []byte{0xf0, 0x9d, 0x95, 0x84}},
-	"Mscr":                            {Name: "Mscr", CodePoints: []int{8499}, Characters: []byte{0xe2, 0x84, 0xb3}},
-	"Mu":                              {Name: "Mu", CodePoints: []int{924}, Characters: []byte{0xce, 0x9c}},
-	"NJcy":                            {Name: "NJcy", CodePoints: []int{1034}, Characters: []byte{0xd0, 0x8a}},
-	"Nacute":                          {Name: "Nacute", CodePoints: []int{323}, Characters: []byte{0xc5, 0x83}},
-	"Ncaron":                          {Name: "Ncaron", CodePoints: []int{327}, Characters: []byte{0xc5, 0x87}},
-	"Ncedil":                          {Name: "Ncedil", CodePoints: []int{325}, Characters: []byte{0xc5, 0x85}},
-	"Ncy":                             {Name: "Ncy", CodePoints: []int{1053}, Characters: []byte{0xd0, 0x9d}},
-	"NegativeMediumSpace":             {Name: "NegativeMediumSpace", CodePoints: []int{8203}, Characters: []byte{0xe2, 0x80, 0x8b}},
-	"NegativeThickSpace":              {Name: "NegativeThickSpace", CodePoints: []int{8203}, Characters: []byte{0xe2, 0x80, 0x8b}},
-	"NegativeThinSpace":               {Name: "NegativeThinSpace", CodePoints: []int{8203}, Characters: []byte{0xe2, 0x80, 0x8b}},
-	"NegativeVeryThinSpace":           {Name: "NegativeVeryThinSpace", CodePoints: []int{8203}, Characters: []byte{0xe2, 0x80, 0x8b}},
-	"NestedGreaterGreater":            {Name: "NestedGreaterGreater", CodePoints: []int{8811}, Characters: []byte{0xe2, 0x89, 0xab}},
-	"NestedLessLess":                  {Name: "NestedLessLess", CodePoints: []int{8810}, Characters: []byte{0xe2, 0x89, 0xaa}},
-	"NewLine":                         {Name: "NewLine", CodePoints: []int{10}, Characters: []byte{0xa}},
-	"Nfr":                             {Name: "Nfr", CodePoints: []int{120081}, Characters: []byte{0xf0, 0x9d, 0x94, 0x91}},
-	"NoBreak":                         {Name: "NoBreak", CodePoints: []int{8288}, Characters: []byte{0xe2, 0x81, 0xa0}},
-	"NonBreakingSpace":                {Name: "NonBreakingSpace", CodePoints: []int{160}, Characters: []byte{0xc2, 0xa0}},
-	"Nopf":                            {Name: "Nopf", CodePoints: []int{8469}, Characters: []byte{0xe2, 0x84, 0x95}},
-	"Not":                             {Name: "Not", CodePoints: []int{10988}, Characters: []byte{0xe2, 0xab, 0xac}},
-	"NotCongruent":                    {Name: "NotCongruent", CodePoints: []int{8802}, Characters: []byte{0xe2, 0x89, 0xa2}},
-	"NotCupCap":                       {Name: "NotCupCap", CodePoints: []int{8813}, Characters: []byte{0xe2, 0x89, 0xad}},
-	"NotDoubleVerticalBar":            {Name: "NotDoubleVerticalBar", CodePoints: []int{8742}, Characters: []byte{0xe2, 0x88, 0xa6}},
-	"NotElement":                      {Name: "NotElement", CodePoints: []int{8713}, Characters: []byte{0xe2, 0x88, 0x89}},
-	"NotEqual":                        {Name: "NotEqual", CodePoints: []int{8800}, Characters: []byte{0xe2, 0x89, 0xa0}},
-	"NotEqualTilde":                   {Name: "NotEqualTilde", CodePoints: []int{8770, 824}, Characters: []byte{0xe2, 0x89, 0x82, 0xcc, 0xb8}},
-	"NotExists":                       {Name: "NotExists", CodePoints: []int{8708}, Characters: []byte{0xe2, 0x88, 0x84}},
-	"NotGreater":                      {Name: "NotGreater", CodePoints: []int{8815}, Characters: []byte{0xe2, 0x89, 0xaf}},
-	"NotGreaterEqual":                 {Name: "NotGreaterEqual", CodePoints: []int{8817}, Characters: []byte{0xe2, 0x89, 0xb1}},
-	"NotGreaterFullEqual":             {Name: "NotGreaterFullEqual", CodePoints: []int{8807, 824}, Characters: []byte{0xe2, 0x89, 0xa7, 0xcc, 0xb8}},
-	"NotGreaterGreater":               {Name: "NotGreaterGreater", CodePoints: []int{8811, 824}, Characters: []byte{0xe2, 0x89, 0xab, 0xcc, 0xb8}},
-	"NotGreaterLess":                  {Name: "NotGreaterLess", CodePoints: []int{8825}, Characters: []byte{0xe2, 0x89, 0xb9}},
-	"NotGreaterSlantEqual":            {Name: "NotGreaterSlantEqual", CodePoints: []int{10878, 824}, Characters: []byte{0xe2, 0xa9, 0xbe, 0xcc, 0xb8}},
-	"NotGreaterTilde":                 {Name: "NotGreaterTilde", CodePoints: []int{8821}, Characters: []byte{0xe2, 0x89, 0xb5}},
-	"NotHumpDownHump":                 {Name: "NotHumpDownHump", CodePoints: []int{8782, 824}, Characters: []byte{0xe2, 0x89, 0x8e, 0xcc, 0xb8}},
-	"NotHumpEqual":                    {Name: "NotHumpEqual", CodePoints: []int{8783, 824}, Characters: []byte{0xe2, 0x89, 0x8f, 0xcc, 0xb8}},
-	"NotLeftTriangle":                 {Name: "NotLeftTriangle", CodePoints: []int{8938}, Characters: []byte{0xe2, 0x8b, 0xaa}},
-	"NotLeftTriangleBar":              {Name: "NotLeftTriangleBar", CodePoints: []int{10703, 824}, Characters: []byte{0xe2, 0xa7, 0x8f, 0xcc, 0xb8}},
-	"NotLeftTriangleEqual":            {Name: "NotLeftTriangleEqual", CodePoints: []int{8940}, Characters: []byte{0xe2, 0x8b, 0xac}},
-	"NotLess":                         {Name: "NotLess", CodePoints: []int{8814}, Characters: []byte{0xe2, 0x89, 0xae}},
-	"NotLessEqual":                    {Name: "NotLessEqual", CodePoints: []int{8816}, Characters: []byte{0xe2, 0x89, 0xb0}},
-	"NotLessGreater":                  {Name: "NotLessGreater", CodePoints: []int{8824}, Characters: []byte{0xe2, 0x89, 0xb8}},
-	"NotLessLess":                     {Name: "NotLessLess", CodePoints: []int{8810, 824}, Characters: []byte{0xe2, 0x89, 0xaa, 0xcc, 0xb8}},
-	"NotLessSlantEqual":               {Name: "NotLessSlantEqual", CodePoints: []int{10877, 824}, Characters: []byte{0xe2, 0xa9, 0xbd, 0xcc, 0xb8}},
-	"NotLessTilde":                    {Name: "NotLessTilde", CodePoints: []int{8820}, Characters: []byte{0xe2, 0x89, 0xb4}},
-	"NotNestedGreaterGreater":         {Name: "NotNestedGreaterGreater", CodePoints: []int{10914, 824}, Characters: []byte{0xe2, 0xaa, 0xa2, 0xcc, 0xb8}},
-	"NotNestedLessLess":               {Name: "NotNestedLessLess", CodePoints: []int{10913, 824}, Characters: []byte{0xe2, 0xaa, 0xa1, 0xcc, 0xb8}},
-	"NotPrecedes":                     {Name: "NotPrecedes", CodePoints: []int{8832}, Characters: []byte{0xe2, 0x8a, 0x80}},
-	"NotPrecedesEqual":                {Name: "NotPrecedesEqual", CodePoints: []int{10927, 824}, Characters: []byte{0xe2, 0xaa, 0xaf, 0xcc, 0xb8}},
-	"NotPrecedesSlantEqual":           {Name: "NotPrecedesSlantEqual", CodePoints: []int{8928}, Characters: []byte{0xe2, 0x8b, 0xa0}},
-	"NotReverseElement":               {Name: "NotReverseElement", CodePoints: []int{8716}, Characters: []byte{0xe2, 0x88, 0x8c}},
-	"NotRightTriangle":                {Name: "NotRightTriangle", CodePoints: []int{8939}, Characters: []byte{0xe2, 0x8b, 0xab}},
-	"NotRightTriangleBar":             {Name: "NotRightTriangleBar", CodePoints: []int{10704, 824}, Characters: []byte{0xe2, 0xa7, 0x90, 0xcc, 0xb8}},
-	"NotRightTriangleEqual":           {Name: "NotRightTriangleEqual", CodePoints: []int{8941}, Characters: []byte{0xe2, 0x8b, 0xad}},
-	"NotSquareSubset":                 {Name: "NotSquareSubset", CodePoints: []int{8847, 824}, Characters: []byte{0xe2, 0x8a, 0x8f, 0xcc, 0xb8}},
-	"NotSquareSubsetEqual":            {Name: "NotSquareSubsetEqual", CodePoints: []int{8930}, Characters: []byte{0xe2, 0x8b, 0xa2}},
-	"NotSquareSuperset":               {Name: "NotSquareSuperset", CodePoints: []int{8848, 824}, Characters: []byte{0xe2, 0x8a, 0x90, 0xcc, 0xb8}},
-	"NotSquareSupersetEqual":          {Name: "NotSquareSupersetEqual", CodePoints: []int{8931}, Characters: []byte{0xe2, 0x8b, 0xa3}},
-	"NotSubset":                       {Name: "NotSubset", CodePoints: []int{8834, 8402}, Characters: []byte{0xe2, 0x8a, 0x82, 0xe2, 0x83, 0x92}},
-	"NotSubsetEqual":                  {Name: "NotSubsetEqual", CodePoints: []int{8840}, Characters: []byte{0xe2, 0x8a, 0x88}},
-	"NotSucceeds":                     {Name: "NotSucceeds", CodePoints: []int{8833}, Characters: []byte{0xe2, 0x8a, 0x81}},
-	"NotSucceedsEqual":                {Name: "NotSucceedsEqual", CodePoints: []int{10928, 824}, Characters: []byte{0xe2, 0xaa, 0xb0, 0xcc, 0xb8}},
-	"NotSucceedsSlantEqual":           {Name: "NotSucceedsSlantEqual", CodePoints: []int{8929}, Characters: []byte{0xe2, 0x8b, 0xa1}},
-	"NotSucceedsTilde":                {Name: "NotSucceedsTilde", CodePoints: []int{8831, 824}, Characters: []byte{0xe2, 0x89, 0xbf, 0xcc, 0xb8}},
-	"NotSuperset":                     {Name: "NotSuperset", CodePoints: []int{8835, 8402}, Characters: []byte{0xe2, 0x8a, 0x83, 0xe2, 0x83, 0x92}},
-	"NotSupersetEqual":                {Name: "NotSupersetEqual", CodePoints: []int{8841}, Characters: []byte{0xe2, 0x8a, 0x89}},
-	"NotTilde":                        {Name: "NotTilde", CodePoints: []int{8769}, Characters: []byte{0xe2, 0x89, 0x81}},
-	"NotTildeEqual":                   {Name: "NotTildeEqual", CodePoints: []int{8772}, Characters: []byte{0xe2, 0x89, 0x84}},
-	"NotTildeFullEqual":               {Name: "NotTildeFullEqual", CodePoints: []int{8775}, Characters: []byte{0xe2, 0x89, 0x87}},
-	"NotTildeTilde":                   {Name: "NotTildeTilde", CodePoints: []int{8777}, Characters: []byte{0xe2, 0x89, 0x89}},
-	"NotVerticalBar":                  {Name: "NotVerticalBar", CodePoints: []int{8740}, Characters: []byte{0xe2, 0x88, 0xa4}},
-	"Nscr":                            {Name: "Nscr", CodePoints: []int{119977}, Characters: []byte{0xf0, 0x9d, 0x92, 0xa9}},
-	"Ntilde":                          {Name: "Ntilde", CodePoints: []int{209}, Characters: []byte{0xc3, 0x91}},
-	"Nu":                              {Name: "Nu", CodePoints: []int{925}, Characters: []byte{0xce, 0x9d}},
-	"OElig":                           {Name: "OElig", CodePoints: []int{338}, Characters: []byte{0xc5, 0x92}},
-	"Oacute":                          {Name: "Oacute", CodePoints: []int{211}, Characters: []byte{0xc3, 0x93}},
-	"Ocirc":                           {Name: "Ocirc", CodePoints: []int{212}, Characters: []byte{0xc3, 0x94}},
-	"Ocy":                             {Name: "Ocy", CodePoints: []int{1054}, Characters: []byte{0xd0, 0x9e}},
-	"Odblac":                          {Name: "Odblac", CodePoints: []int{336}, Characters: []byte{0xc5, 0x90}},
-	"Ofr":                             {Name: "Ofr", CodePoints: []int{120082}, Characters: []byte{0xf0, 0x9d, 0x94, 0x92}},
-	"Ograve":                          {Name: "Ograve", CodePoints: []int{210}, Characters: []byte{0xc3, 0x92}},
-	"Omacr":                           {Name: "Omacr", CodePoints: []int{332}, Characters: []byte{0xc5, 0x8c}},
-	"Omega":                           {Name: "Omega", CodePoints: []int{937}, Characters: []byte{0xce, 0xa9}},
-	"Omicron":                         {Name: "Omicron", CodePoints: []int{927}, Characters: []byte{0xce, 0x9f}},
-	"Oopf":                            {Name: "Oopf", CodePoints: []int{120134}, Characters: []byte{0xf0, 0x9d, 0x95, 0x86}},
-	"OpenCurlyDoubleQuote":            {Name: "OpenCurlyDoubleQuote", CodePoints: []int{8220}, Characters: []byte{0xe2, 0x80, 0x9c}},
-	"OpenCurlyQuote":                  {Name: "OpenCurlyQuote", CodePoints: []int{8216}, Characters: []byte{0xe2, 0x80, 0x98}},
-	"Or":                              {Name: "Or", CodePoints: []int{10836}, Characters: []byte{0xe2, 0xa9, 0x94}},
-	"Oscr":                            {Name: "Oscr", CodePoints: []int{119978}, Characters: []byte{0xf0, 0x9d, 0x92, 0xaa}},
-	"Oslash":                          {Name: "Oslash", CodePoints: []int{216}, Characters: []byte{0xc3, 0x98}},
-	"Otilde":                          {Name: "Otilde", CodePoints: []int{213}, Characters: []byte{0xc3, 0x95}},
-	"Otimes":                          {Name: "Otimes", CodePoints: []int{10807}, Characters: []byte{0xe2, 0xa8, 0xb7}},
-	"Ouml":                            {Name: "Ouml", CodePoints: []int{214}, Characters: []byte{0xc3, 0x96}},
-	"OverBar":                         {Name: "OverBar", CodePoints: []int{8254}, Characters: []byte{0xe2, 0x80, 0xbe}},
-	"OverBrace":                       {Name: "OverBrace", CodePoints: []int{9182}, Characters: []byte{0xe2, 0x8f, 0x9e}},
-	"OverBracket":                     {Name: "OverBracket", CodePoints: []int{9140}, Characters: []byte{0xe2, 0x8e, 0xb4}},
-	"OverParenthesis":                 {Name: "OverParenthesis", CodePoints: []int{9180}, Characters: []byte{0xe2, 0x8f, 0x9c}},
-	"PartialD":                        {Name: "PartialD", CodePoints: []int{8706}, Characters: []byte{0xe2, 0x88, 0x82}},
-	"Pcy":                             {Name: "Pcy", CodePoints: []int{1055}, Characters: []byte{0xd0, 0x9f}},
-	"Pfr":                             {Name: "Pfr", CodePoints: []int{120083}, Characters: []byte{0xf0, 0x9d, 0x94, 0x93}},
-	"Phi":                             {Name: "Phi", CodePoints: []int{934}, Characters: []byte{0xce, 0xa6}},
-	"Pi":                              {Name: "Pi", CodePoints: []int{928}, Characters: []byte{0xce, 0xa0}},
-	"PlusMinus":                       {Name: "PlusMinus", CodePoints: []int{177}, Characters: []byte{0xc2, 0xb1}},
-	"Poincareplane":                   {Name: "Poincareplane", CodePoints: []int{8460}, Characters: []byte{0xe2, 0x84, 0x8c}},
-	"Popf":                            {Name: "Popf", CodePoints: []int{8473}, Characters: []byte{0xe2, 0x84, 0x99}},
-	"Pr":                              {Name: "Pr", CodePoints: []int{10939}, Characters: []byte{0xe2, 0xaa, 0xbb}},
-	"Precedes":                        {Name: "Precedes", CodePoints: []int{8826}, Characters: []byte{0xe2, 0x89, 0xba}},
-	"PrecedesEqual":                   {Name: "PrecedesEqual", CodePoints: []int{10927}, Characters: []byte{0xe2, 0xaa, 0xaf}},
-	"PrecedesSlantEqual":              {Name: "PrecedesSlantEqual", CodePoints: []int{8828}, Characters: []byte{0xe2, 0x89,
 @@END

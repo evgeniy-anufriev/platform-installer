@@ -1,5 +1,1640 @@
-@@PORTABLE {"path":"frontend/wailsjs/go/models.ts","mode":420,"size":116223,"sha256":"c3800d008745eb6e9dd91bf0bbba76c5f7938d2b794f40d0dfdf382dde568db2","index":2,"count":3,"encoding":"utf-8","payloadBytes":20223}
-is.status = source["status"];
+@@PORTABLE {"path":"frontend/wailsjs/go/models.ts","mode":420,"size":117249,"sha256":"7d80dfa09a1a1238a0a372d5431ddba7fd4696e7019cf7bb12af59e9aa3ac3e9","index":1,"count":3,"encoding":"utf-8","payloadBytes":48000}
+nState?: string;
+    projectRevision?: string;
+    error?: ProjectOpenError;
+
+    static createFrom(source: any = {}) {
+      return new OrphanRunRecoveryResult(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.status = source["status"];
+      this.recoveryId = source["recoveryId"];
+      this.runId = source["runId"];
+      this.runState = source["runState"];
+      this.projectRevision = source["projectRevision"];
+      this.error = this.convertValues(source["error"], ProjectOpenError);
+    }
+
+    convertValues(a: any, classs: any, asMap: boolean = false): any {
+      if (!a) {
+        return a;
+      }
+      if (a.slice && a.map) {
+        return (a as any[]).map((elem) => this.convertValues(elem, classs));
+      } else if ("object" === typeof a) {
+        if (asMap) {
+          for (const key of Object.keys(a)) {
+            a[key] = new classs(a[key]);
+          }
+          return a;
+        }
+        return new classs(a);
+      }
+      return a;
+    }
+  }
+  export class OutputEncryptionPasswordInput {
+    password: string;
+    confirm: string;
+
+    static createFrom(source: any = {}) {
+      return new OutputEncryptionPasswordInput(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.password = source["password"];
+      this.confirm = source["confirm"];
+    }
+  }
+  export class PendingRuntimeSecretFileInput {
+    serviceDeployment: string;
+    purpose: string;
+    encryptionPassword: string;
+
+    static createFrom(source: any = {}) {
+      return new PendingRuntimeSecretFileInput(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.serviceDeployment = source["serviceDeployment"];
+      this.purpose = source["purpose"];
+      this.encryptionPassword = source["encryptionPassword"];
+    }
+  }
+  export class PendingRuntimeSecretValuesInput {
+    serviceDeployment: string;
+    values: Record<string, string>;
+
+    static createFrom(source: any = {}) {
+      return new PendingRuntimeSecretValuesInput(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.serviceDeployment = source["serviceDeployment"];
+      this.values = source["values"];
+    }
+  }
+  export class ProjectExportOperationResult {
+    status: string;
+    plan?: installer.ProjectExportPlan;
+    result?: installer.ProjectExportResult;
+    error?: ProjectOpenError;
+
+    static createFrom(source: any = {}) {
+      return new ProjectExportOperationResult(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.status = source["status"];
+      this.plan = this.convertValues(
+        source["plan"],
+        installer.ProjectExportPlan,
+      );
+      this.result = this.convertValues(
+        source["result"],
+        installer.ProjectExportResult,
+      );
+      this.error = this.convertValues(source["error"], ProjectOpenError);
+    }
+
+    convertValues(a: any, classs: any, asMap: boolean = false): any {
+      if (!a) {
+        return a;
+      }
+      if (a.slice && a.map) {
+        return (a as any[]).map((elem) => this.convertValues(elem, classs));
+      } else if ("object" === typeof a) {
+        if (asMap) {
+          for (const key of Object.keys(a)) {
+            a[key] = new classs(a[key]);
+          }
+          return a;
+        }
+        return new classs(a);
+      }
+      return a;
+    }
+  }
+
+  export class ProjectOpenResult {
+    status: string;
+    root?: string;
+    classification?: string;
+    project?: projectlifecycle.Project;
+    counts: projectlifecycle.Counts;
+    catalog?: projectlifecycle.ProjectCatalogView;
+    snapshot?: coreadapter.Snapshot;
+    managed?: installer.ManagedProjectView;
+    verification: ProjectVerification;
+    diagnostics?: ApplicationDiagnostic[];
+    error?: ProjectOpenError;
+
+    static createFrom(source: any = {}) {
+      return new ProjectOpenResult(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.status = source["status"];
+      this.root = source["root"];
+      this.classification = source["classification"];
+      this.project = this.convertValues(
+        source["project"],
+        projectlifecycle.Project,
+      );
+      this.counts = this.convertValues(
+        source["counts"],
+        projectlifecycle.Counts,
+      );
+      this.catalog = this.convertValues(
+        source["catalog"],
+        projectlifecycle.ProjectCatalogView,
+      );
+      this.snapshot = this.convertValues(
+        source["snapshot"],
+        coreadapter.Snapshot,
+      );
+      this.managed = this.convertValues(
+        source["managed"],
+        installer.ManagedProjectView,
+      );
+      this.verification = this.convertValues(
+        source["verification"],
+        ProjectVerification,
+      );
+      this.diagnostics = this.convertValues(
+        source["diagnostics"],
+        ApplicationDiagnostic,
+      );
+      this.error = this.convertValues(source["error"], ProjectOpenError);
+    }
+
+    convertValues(a: any, classs: any, asMap: boolean = false): any {
+      if (!a) {
+        return a;
+      }
+      if (a.slice && a.map) {
+        return (a as any[]).map((elem) => this.convertValues(elem, classs));
+      } else if ("object" === typeof a) {
+        if (asMap) {
+          for (const key of Object.keys(a)) {
+            a[key] = new classs(a[key]);
+          }
+          return a;
+        }
+        return new classs(a);
+      }
+      return a;
+    }
+  }
+
+  export class RuntimeBundleUpdateResult {
+    status: string;
+    previewId?: string;
+    currentArtifactDigest?: string;
+    currentCatalogDigest?: string;
+    newArtifactDigest?: string;
+    newCatalogDigest?: string;
+    bundleVersion?: string;
+    coreVersion?: string;
+    projectRevision?: string;
+    error?: ProjectOpenError;
+
+    static createFrom(source: any = {}) {
+      return new RuntimeBundleUpdateResult(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.status = source["status"];
+      this.previewId = source["previewId"];
+      this.currentArtifactDigest = source["currentArtifactDigest"];
+      this.currentCatalogDigest = source["currentCatalogDigest"];
+      this.newArtifactDigest = source["newArtifactDigest"];
+      this.newCatalogDigest = source["newCatalogDigest"];
+      this.bundleVersion = source["bundleVersion"];
+      this.coreVersion = source["coreVersion"];
+      this.projectRevision = source["projectRevision"];
+      this.error = this.convertValues(source["error"], ProjectOpenError);
+    }
+
+    convertValues(a: any, classs: any, asMap: boolean = false): any {
+      if (!a) {
+        return a;
+      }
+      if (a.slice && a.map) {
+        return (a as any[]).map((elem) => this.convertValues(elem, classs));
+      } else if ("object" === typeof a) {
+        if (asMap) {
+          for (const key of Object.keys(a)) {
+            a[key] = new classs(a[key]);
+          }
+          return a;
+        }
+        return new classs(a);
+      }
+      return a;
+    }
+  }
+  export class RuntimeSecretDescriptorView {
+    deploymentBound?: boolean;
+    requirementRef: string;
+    purpose: string;
+    serviceDeployment?: string;
+    setting?: string;
+    displayLabel: string;
+    requiredWhen?: string;
+    operations?: string[];
+    referenceConfigured: boolean;
+    hosts: string[];
+
+    static createFrom(source: any = {}) {
+      return new RuntimeSecretDescriptorView(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.deploymentBound = source["deploymentBound"];
+      this.requirementRef = source["requirementRef"];
+      this.purpose = source["purpose"];
+      this.serviceDeployment = source["serviceDeployment"];
+      this.setting = source["setting"];
+      this.displayLabel = source["displayLabel"];
+      this.requiredWhen = source["requiredWhen"];
+      this.operations = source["operations"];
+      this.referenceConfigured = source["referenceConfigured"];
+      this.hosts = source["hosts"];
+    }
+  }
+  export class RuntimeSecretDescriptorOperation {
+    applicationSecretAvailability?: Record<string, boolean>;
+    secretsInstalled?: boolean;
+    status: string;
+    projectRevision?: string;
+    descriptorSetFingerprint?: string;
+    descriptors?: RuntimeSecretDescriptorView[];
+    applicationInputs?: executionnode.ApplicationSecretDescriptor[];
+    error?: ProjectOpenError;
+
+    static createFrom(source: any = {}) {
+      return new RuntimeSecretDescriptorOperation(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.applicationSecretAvailability =
+        source["applicationSecretAvailability"];
+      this.secretsInstalled = source["secretsInstalled"];
+      this.status = source["status"];
+      this.projectRevision = source["projectRevision"];
+      this.descriptorSetFingerprint = source["descriptorSetFingerprint"];
+      this.descriptors = this.convertValues(
+        source["descriptors"],
+        RuntimeSecretDescriptorView,
+      );
+      this.applicationInputs = this.convertValues(
+        source["applicationInputs"],
+        executionnode.ApplicationSecretDescriptor,
+      );
+      this.error = this.convertValues(source["error"], ProjectOpenError);
+    }
+
+    convertValues(a: any, classs: any, asMap: boolean = false): any {
+      if (!a) {
+        return a;
+      }
+      if (a.slice && a.map) {
+        return (a as any[]).map((elem) => this.convertValues(elem, classs));
+      } else if ("object" === typeof a) {
+        if (asMap) {
+          for (const key of Object.keys(a)) {
+            a[key] = new classs(a[key]);
+          }
+          return a;
+        }
+        return new classs(a);
+      }
+      return a;
+    }
+  }
+
+  export class RuntimeSecretValuesInput {
+    projectRevision: string;
+    descriptorSetFingerprint: string;
+    serviceDeployment: string;
+    applicationLibrary?: string;
+    applicationRequirementRef?: string;
+    values: Record<string, string>;
+
+    static createFrom(source: any = {}) {
+      return new RuntimeSecretValuesInput(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.projectRevision = source["projectRevision"];
+      this.descriptorSetFingerprint = source["descriptorSetFingerprint"];
+      this.serviceDeployment = source["serviceDeployment"];
+      this.applicationLibrary = source["applicationLibrary"];
+      this.applicationRequirementRef = source["applicationRequirementRef"];
+      this.values = source["values"];
+    }
+  }
+  export class SecretOutputDeliveryInput {
+    packageId: string;
+
+    static createFrom(source: any = {}) {
+      return new SecretOutputDeliveryInput(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.packageId = source["packageId"];
+    }
+  }
+  export class SecretOutputDeliveryOperation {
+    status: string;
+    package?: executionnode.SecretOutputPackage;
+    directory?: string;
+    stagingPath?: string;
+    error?: ProjectOpenError;
+
+    static createFrom(source: any = {}) {
+      return new SecretOutputDeliveryOperation(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.status = source["status"];
+      this.package = this.convertValues(
+        source["package"],
+        executionnode.SecretOutputPackage,
+      );
+      this.directory = source["directory"];
+      this.stagingPath = source["stagingPath"];
+      this.error = this.convertValues(source["error"], ProjectOpenError);
+    }
+
+    convertValues(a: any, classs: any, asMap: boolean = false): any {
+      if (!a) {
+        return a;
+      }
+      if (a.slice && a.map) {
+        return (a as any[]).map((elem) => this.convertValues(elem, classs));
+      } else if ("object" === typeof a) {
+        if (asMap) {
+          for (const key of Object.keys(a)) {
+            a[key] = new classs(a[key]);
+          }
+          return a;
+        }
+        return new classs(a);
+      }
+      return a;
+    }
+  }
+  export class SecretOutputPackagesOperation {
+    status: string;
+    packages?: executionnode.SecretOutputPackage[];
+    nextCursor?: string;
+    error?: ProjectOpenError;
+
+    static createFrom(source: any = {}) {
+      return new SecretOutputPackagesOperation(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.status = source["status"];
+      this.packages = this.convertValues(
+        source["packages"],
+        executionnode.SecretOutputPackage,
+      );
+      this.nextCursor = source["nextCursor"];
+      this.error = this.convertValues(source["error"], ProjectOpenError);
+    }
+
+    convertValues(a: any, classs: any, asMap: boolean = false): any {
+      if (!a) {
+        return a;
+      }
+      if (a.slice && a.map) {
+        return (a as any[]).map((elem) => this.convertValues(elem, classs));
+      } else if ("object" === typeof a) {
+        if (asMap) {
+          for (const key of Object.keys(a)) {
+            a[key] = new classs(a[key]);
+          }
+          return a;
+        }
+        return new classs(a);
+      }
+      return a;
+    }
+  }
+  export class ServerInformationResult {
+    status: string;
+    hostId?: string;
+    information?: executionnode.ServerInformation;
+    error?: ProjectOpenError;
+
+    static createFrom(source: any = {}) {
+      return new ServerInformationResult(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.status = source["status"];
+      this.hostId = source["hostId"];
+      this.information = this.convertValues(
+        source["information"],
+        executionnode.ServerInformation,
+      );
+      this.error = this.convertValues(source["error"], ProjectOpenError);
+    }
+
+    convertValues(a: any, classs: any, asMap: boolean = false): any {
+      if (!a) {
+        return a;
+      }
+      if (a.slice && a.map) {
+        return (a as any[]).map((elem) => this.convertValues(elem, classs));
+      } else if ("object" === typeof a) {
+        if (asMap) {
+          for (const key of Object.keys(a)) {
+            a[key] = new classs(a[key]);
+          }
+          return a;
+        }
+        return new classs(a);
+      }
+      return a;
+    }
+  }
+  export class StructuralEditOperationResult {
+    status: string;
+    session?: installer.EditSession;
+    plan?: installer.StructuralEditPlan;
+    commit?: installer.StructuralSaveResult;
+    current?: ProjectOpenResult;
+    diagnostics?: ApplicationDiagnostic[];
+    error?: ProjectOpenError;
+
+    static createFrom(source: any = {}) {
+      return new StructuralEditOperationResult(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.status = source["status"];
+      this.session = this.convertValues(
+        source["session"],
+        installer.EditSession,
+      );
+      this.plan = this.convertValues(
+        source["plan"],
+        installer.StructuralEditPlan,
+      );
+      this.commit = this.convertValues(
+        source["commit"],
+        installer.StructuralSaveResult,
+      );
+      this.current = this.convertValues(source["current"], ProjectOpenResult);
+      this.diagnostics = this.convertValues(
+        source["diagnostics"],
+        ApplicationDiagnostic,
+      );
+      this.error = this.convertValues(source["error"], ProjectOpenError);
+    }
+
+    convertValues(a: any, classs: any, asMap: boolean = false): any {
+      if (!a) {
+        return a;
+      }
+      if (a.slice && a.map) {
+        return (a as any[]).map((elem) => this.convertValues(elem, classs));
+      } else if ("object" === typeof a) {
+        if (asMap) {
+          for (const key of Object.keys(a)) {
+            a[key] = new classs(a[key]);
+          }
+          return a;
+        }
+        return new classs(a);
+      }
+      return a;
+    }
+  }
+
+  export class VerifiedPKIConsumer {
+    deploymentId: string;
+    memberId: string;
+    hostId: string;
+
+    static createFrom(source: any = {}) {
+      return new VerifiedPKIConsumer(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.deploymentId = source["deploymentId"];
+      this.memberId = source["memberId"];
+      this.hostId = source["hostId"];
+    }
+  }
+  export class VerifiedCertificateIdentity {
+    id: string;
+    scope: string;
+    tlsProfileId: string;
+    dnsNames: string[];
+    ipAddresses: string[];
+    consumers: VerifiedPKIConsumer[];
+
+    static createFrom(source: any = {}) {
+      return new VerifiedCertificateIdentity(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.id = source["id"];
+      this.scope = source["scope"];
+      this.tlsProfileId = source["tlsProfileId"];
+      this.dnsNames = source["dnsNames"];
+      this.ipAddresses = source["ipAddresses"];
+      this.consumers = this.convertValues(
+        source["consumers"],
+        VerifiedPKIConsumer,
+      );
+    }
+
+    convertValues(a: any, classs: any, asMap: boolean = false): any {
+      if (!a) {
+        return a;
+      }
+      if (a.slice && a.map) {
+        return (a as any[]).map((elem) => this.convertValues(elem, classs));
+      } else if ("object" === typeof a) {
+        if (asMap) {
+          for (const key of Object.keys(a)) {
+            a[key] = new classs(a[key]);
+          }
+          return a;
+        }
+        return new classs(a);
+      }
+      return a;
+    }
+  }
+
+  export class VerifiedPKIView {
+    status: string;
+    identities?: VerifiedCertificateIdentity[];
+    findings?: VerificationFinding[];
+    findingsTruncated?: boolean;
+    error?: ProjectOpenError;
+
+    static createFrom(source: any = {}) {
+      return new VerifiedPKIView(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.status = source["status"];
+      this.identities = this.convertValues(
+        source["identities"],
+        VerifiedCertificateIdentity,
+      );
+      this.findings = this.convertValues(
+        source["findings"],
+        VerificationFinding,
+      );
+      this.findingsTruncated = source["findingsTruncated"];
+      this.error = this.convertValues(source["error"], ProjectOpenError);
+    }
+
+    convertValues(a: any, classs: any, asMap: boolean = false): any {
+      if (!a) {
+        return a;
+      }
+      if (a.slice && a.map) {
+        return (a as any[]).map((elem) => this.convertValues(elem, classs));
+      } else if ("object" === typeof a) {
+        if (asMap) {
+          for (const key of Object.keys(a)) {
+            a[key] = new classs(a[key]);
+          }
+          return a;
+        }
+        return new classs(a);
+      }
+      return a;
+    }
+  }
+}
+
+export namespace executionnode {
+  export class ApplicationSecretDescriptor {
+    requirementRef: string;
+    purpose: string;
+    providerDeployment?: string;
+    applicationLibraries: string[];
+    hosts: string[];
+    operations: string[];
+    sourceRef: string;
+    displayLabel: string;
+
+    static createFrom(source: any = {}) {
+      return new ApplicationSecretDescriptor(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.requirementRef = source["requirementRef"];
+      this.purpose = source["purpose"];
+      this.providerDeployment = source["providerDeployment"];
+      this.applicationLibraries = source["applicationLibraries"];
+      this.hosts = source["hosts"];
+      this.operations = source["operations"];
+      this.sourceRef = source["sourceRef"];
+      this.displayLabel = source["displayLabel"];
+    }
+  }
+  export class DeploymentProgressStep {
+    id: string;
+    summary: string;
+
+    static createFrom(source: any = {}) {
+      return new DeploymentProgressStep(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.id = source["id"];
+      this.summary = source["summary"];
+    }
+  }
+  export class InfrastructureDeploymentVerification {
+    deploymentId: string;
+    sourceRunId: string;
+    coverageDigest: string;
+    verifiedAt: string;
+
+    static createFrom(source: any = {}) {
+      return new InfrastructureDeploymentVerification(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.deploymentId = source["deploymentId"];
+      this.sourceRunId = source["sourceRunId"];
+      this.coverageDigest = source["coverageDigest"];
+      this.verifiedAt = source["verifiedAt"];
+    }
+  }
+  export class InfrastructureVerification {
+    status: string;
+    code?: string;
+    infrastructureFingerprint?: string;
+    evidenceRevision?: string;
+    deployments: InfrastructureDeploymentVerification[];
+
+    static createFrom(source: any = {}) {
+      return new InfrastructureVerification(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.status = source["status"];
+      this.code = source["code"];
+      this.infrastructureFingerprint = source["infrastructureFingerprint"];
+      this.evidenceRevision = source["evidenceRevision"];
+      this.deployments = this.convertValues(
+        source["deployments"],
+        InfrastructureDeploymentVerification,
+      );
+    }
+
+    convertValues(a: any, classs: any, asMap: boolean = false): any {
+      if (!a) {
+        return a;
+      }
+      if (a.slice && a.map) {
+        return (a as any[]).map((elem) => this.convertValues(elem, classs));
+      } else if ("object" === typeof a) {
+        if (asMap) {
+          for (const key of Object.keys(a)) {
+            a[key] = new classs(a[key]);
+          }
+          return a;
+        }
+        return new classs(a);
+      }
+      return a;
+    }
+  }
+  export class RuntimeEvidence {
+    bundleDigest: string;
+    coreVersion: string;
+    catalogDigest: string;
+    protocol: string;
+
+    static createFrom(source: any = {}) {
+      return new RuntimeEvidence(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.bundleDigest = source["bundleDigest"];
+      this.coreVersion = source["coreVersion"];
+      this.catalogDigest = source["catalogDigest"];
+      this.protocol = source["protocol"];
+    }
+  }
+  export class SecretOutputPackage {
+    protocol: string;
+    packageId: string;
+    projectId: string;
+    deploymentId: string;
+    sourceRunId: string;
+    runtimeDigest: string;
+    generation: number;
+    state: string;
+    entries: string[];
+
+    static createFrom(source: any = {}) {
+      return new SecretOutputPackage(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.protocol = source["protocol"];
+      this.packageId = source["packageId"];
+      this.projectId = source["projectId"];
+      this.deploymentId = source["deploymentId"];
+      this.sourceRunId = source["sourceRunId"];
+      this.runtimeDigest = source["runtimeDigest"];
+      this.generation = source["generation"];
+      this.state = source["state"];
+      this.entries = source["entries"];
+    }
+  }
+  export class ServerInformation {
+    hostname: string;
+    os: string;
+    osVersion: string;
+    architecture: string;
+    cpuCount: number;
+    memoryBytes: number;
+    serverTime: string;
+    checkedAt: string;
+
+    static createFrom(source: any = {}) {
+      return new ServerInformation(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.hostname = source["hostname"];
+      this.os = source["os"];
+      this.osVersion = source["osVersion"];
+      this.architecture = source["architecture"];
+      this.cpuCount = source["cpuCount"];
+      this.memoryBytes = source["memoryBytes"];
+      this.serverTime = source["serverTime"];
+      this.checkedAt = source["checkedAt"];
+    }
+  }
+  export class ServiceConfigurationValue {
+    state: string;
+    source: string;
+    value?: any;
+
+    static createFrom(source: any = {}) {
+      return new ServiceConfigurationValue(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.state = source["state"];
+      this.source = source["source"];
+      this.value = source["value"];
+    }
+  }
+  export class ServiceConfigurationScope {
+    configuration: Record<string, ServiceConfigurationValue>;
+    members: Record<string, any>;
+
+    static createFrom(source: any = {}) {
+      return new ServiceConfigurationScope(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.configuration = this.convertValues(
+        source["configuration"],
+        ServiceConfigurationValue,
+        true,
+      );
+      this.members = source["members"];
+    }
+
+    convertValues(a: any, classs: any, asMap: boolean = false): any {
+      if (!a) {
+        return a;
+      }
+      if (a.slice && a.map) {
+        return (a as any[]).map((elem) => this.convertValues(elem, classs));
+      } else if ("object" === typeof a) {
+        if (asMap) {
+          for (const key of Object.keys(a)) {
+            a[key] = new classs(a[key]);
+          }
+          return a;
+        }
+        return new classs(a);
+      }
+      return a;
+    }
+  }
+  export class ServiceConfigurationPreview {
+    apiVersion: string;
+    kind: string;
+    projectRevision: string;
+    services: Record<string, ServiceConfigurationScope>;
+    runtimeDigest?: string;
+
+    static createFrom(source: any = {}) {
+      return new ServiceConfigurationPreview(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.apiVersion = source["apiVersion"];
+      this.kind = source["kind"];
+      this.projectRevision = source["projectRevision"];
+      this.services = this.convertValues(
+        source["services"],
+        ServiceConfigurationScope,
+        true,
+      );
+      this.runtimeDigest = source["runtimeDigest"];
+    }
+
+    convertValues(a: any, classs: any, asMap: boolean = false): any {
+      if (!a) {
+        return a;
+      }
+      if (a.slice && a.map) {
+        return (a as any[]).map((elem) => this.convertValues(elem, classs));
+      } else if ("object" === typeof a) {
+        if (asMap) {
+          for (const key of Object.keys(a)) {
+            a[key] = new classs(a[key]);
+          }
+          return a;
+        }
+        return new classs(a);
+      }
+      return a;
+    }
+  }
+}
+
+export namespace installer {
+  export class CommitTiming {
+    transaction: number;
+    snapshot: number;
+
+    static createFrom(source: any = {}) {
+      return new CommitTiming(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.transaction = source["transaction"];
+      this.snapshot = source["snapshot"];
+    }
+  }
+  export class DocumentState {
+    state: string;
+    digest?: string;
+
+    static createFrom(source: any = {}) {
+      return new DocumentState(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.state = source["state"];
+      this.digest = source["digest"];
+    }
+  }
+  export class DocumentChange {
+    logicalPath: string;
+    beforeDigest?: string;
+    afterDigest?: string;
+    before?: DocumentState;
+    after?: DocumentState;
+
+    static createFrom(source: any = {}) {
+      return new DocumentChange(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.logicalPath = source["logicalPath"];
+      this.beforeDigest = source["beforeDigest"];
+      this.afterDigest = source["afterDigest"];
+      this.before = this.convertValues(source["before"], DocumentState);
+      this.after = this.convertValues(source["after"], DocumentState);
+    }
+
+    convertValues(a: any, classs: any, asMap: boolean = false): any {
+      if (!a) {
+        return a;
+      }
+      if (a.slice && a.map) {
+        return (a as any[]).map((elem) => this.convertValues(elem, classs));
+      } else if ("object" === typeof a) {
+        if (asMap) {
+          for (const key of Object.keys(a)) {
+            a[key] = new classs(a[key]);
+          }
+          return a;
+        }
+        return new classs(a);
+      }
+      return a;
+    }
+  }
+
+  export class VirtualAddress {
+    address: string;
+    interface: string;
+
+    static createFrom(source: any = {}) {
+      return new VirtualAddress(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.address = source["address"];
+      this.interface = source["interface"];
+    }
+  }
+  export class PlacementHost {
+    hostId: string;
+    roles?: string[];
+    priority?: number;
+
+    static createFrom(source: any = {}) {
+      return new PlacementHost(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.hostId = source["hostId"];
+      this.roles = source["roles"];
+      this.priority = source["priority"];
+    }
+  }
+  export class PlacementMember {
+    memberId: string;
+    hostId: string;
+    roles?: string[];
+    configuration?: Record<string, any>;
+
+    static createFrom(source: any = {}) {
+      return new PlacementMember(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.memberId = source["memberId"];
+      this.hostId = source["hostId"];
+      this.roles = source["roles"];
+      this.configuration = source["configuration"];
+    }
+  }
+  export class EditCommand {
+    apiVersion?: string;
+    kind?: string;
+    baseProjectRevision?: string;
+    operation: string;
+    deploymentId?: string;
+    scope?: string;
+    memberId?: string;
+    setting?: string;
+    value?: any;
+    endpointGroupId?: string;
+    haproxyDeploymentId?: string;
+    hostId?: string;
+    type?: string;
+    desiredHostname?: string;
+    address?: string;
+    sshPort?: number;
+    clearSSHPort?: boolean;
+    serviceType?: string;
+    mode?: string;
+    entityId?: string;
+    entity?: Record<string, any>;
+    members?: PlacementMember[];
+    hosts?: PlacementHost[];
+    property?: string;
+    deployment?: Record<string, any>;
+    endpointGroup?: Record<string, any>;
+    virtualRouterId?: number;
+    virtualAddresses?: VirtualAddress[];
+    placement?: Record<string, any>;
+    backend?: Record<string, any>;
+    commands?: EditCommand[];
+
+    static createFrom(source: any = {}) {
+      return new EditCommand(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.apiVersion = source["apiVersion"];
+      this.kind = source["kind"];
+      this.baseProjectRevision = source["baseProjectRevision"];
+      this.operation = source["operation"];
+      this.deploymentId = source["deploymentId"];
+      this.scope = source["scope"];
+      this.memberId = source["memberId"];
+      this.setting = source["setting"];
+      this.value = source["value"];
+      this.endpointGroupId = source["endpointGroupId"];
+      this.haproxyDeploymentId = source["haproxyDeploymentId"];
+      this.hostId = source["hostId"];
+      this.type = source["type"];
+      this.desiredHostname = source["desiredHostname"];
+      this.address = source["address"];
+      this.sshPort = source["sshPort"];
+      this.clearSSHPort = source["clearSSHPort"];
+      this.serviceType = source["serviceType"];
+      this.mode = source["mode"];
+      this.entityId = source["entityId"];
+      this.entity = source["entity"];
+      this.members = this.convertValues(source["members"], PlacementMember);
+      this.hosts = this.convertValues(source["hosts"], PlacementHost);
+      this.property = source["property"];
+      this.deployment = source["deployment"];
+      this.endpointGroup = source["endpointGroup"];
+      this.virtualRouterId = source["virtualRouterId"];
+      this.virtualAddresses = this.convertValues(
+        source["virtualAddresses"],
+        VirtualAddress,
+      );
+      this.placement = source["placement"];
+      this.backend = source["backend"];
+      this.commands = this.convertValues(source["commands"], EditCommand);
+    }
+
+    convertValues(a: any, classs: any, asMap: boolean = false): any {
+      if (!a) {
+        return a;
+      }
+      if (a.slice && a.map) {
+        return (a as any[]).map((elem) => this.convertValues(elem, classs));
+      } else if ("object" === typeof a) {
+        if (asMap) {
+          for (const key of Object.keys(a)) {
+            a[key] = new classs(a[key]);
+          }
+          return a;
+        }
+        return new classs(a);
+      }
+      return a;
+    }
+  }
+  export class ManagedPKI {
+    authorities: Record<string, any>;
+    profiles: Record<string, any>;
+    tlsProfiles: Record<string, any>;
+    scopes: Record<string, any>;
+
+    static createFrom(source: any = {}) {
+      return new ManagedPKI(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.authorities = source["authorities"];
+      this.profiles = source["profiles"];
+      this.tlsProfiles = source["tlsProfiles"];
+      this.scopes = source["scopes"];
+    }
+  }
+  export class ManagedHostPlacement {
+    deploymentId: string;
+    hostId: string;
+    roles: string[];
+    priority?: number;
+
+    static createFrom(source: any = {}) {
+      return new ManagedHostPlacement(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.deploymentId = source["deploymentId"];
+      this.hostId = source["hostId"];
+      this.roles = source["roles"];
+      this.priority = source["priority"];
+    }
+  }
+  export class ManagedMemberPlacement {
+    deploymentId: string;
+    memberId: string;
+    hostId: string;
+    roles: string[];
+    configuration: ManagedConfigurationOverride[];
+
+    static createFrom(source: any = {}) {
+      return new ManagedMemberPlacement(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.deploymentId = source["deploymentId"];
+      this.memberId = source["memberId"];
+      this.hostId = source["hostId"];
+      this.roles = source["roles"];
+      this.configuration = this.convertValues(
+        source["configuration"],
+        ManagedConfigurationOverride,
+      );
+    }
+
+    convertValues(a: any, classs: any, asMap: boolean = false): any {
+      if (!a) {
+        return a;
+      }
+      if (a.slice && a.map) {
+        return (a as any[]).map((elem) => this.convertValues(elem, classs));
+      } else if ("object" === typeof a) {
+        if (asMap) {
+          for (const key of Object.keys(a)) {
+            a[key] = new classs(a[key]);
+          }
+          return a;
+        }
+        return new classs(a);
+      }
+      return a;
+    }
+  }
+  export class ManagedEndpointGroup {
+    endpointGroupId: string;
+    domain: string;
+    wildcard: boolean;
+
+    static createFrom(source: any = {}) {
+      return new ManagedEndpointGroup(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.endpointGroupId = source["endpointGroupId"];
+      this.domain = source["domain"];
+      this.wildcard = source["wildcard"];
+    }
+  }
+  export class ManagedConfigurationOverride {
+    setting: string;
+    overridePresent: boolean;
+    state: string;
+    value?: any;
+
+    static createFrom(source: any = {}) {
+      return new ManagedConfigurationOverride(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.setting = source["setting"];
+      this.overridePresent = source["overridePresent"];
+      this.state = source["state"];
+      this.value = source["value"];
+    }
+  }
+  export class ManagedDeployment {
+    deploymentId: string;
+    serviceType: string;
+    mode: string;
+    endpointGroup?: string;
+    endpointGroupRef?: string;
+    virtualRouterId?: number;
+    virtualAddresses?: VirtualAddress[];
+    providerEditState: string;
+    configuration: ManagedConfigurationOverride[];
+
+    static createFrom(source: any = {}) {
+      return new ManagedDeployment(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.deploymentId = source["deploymentId"];
+      this.serviceType = source["serviceType"];
+      this.mode = source["mode"];
+      this.endpointGroup = source["endpointGroup"];
+      this.endpointGroupRef = source["endpointGroupRef"];
+      this.virtualRouterId = source["virtualRouterId"];
+      this.virtualAddresses = this.convertValues(
+        source["virtualAddresses"],
+        VirtualAddress,
+      );
+      this.providerEditState = source["providerEditState"];
+      this.configuration = this.convertValues(
+        source["configuration"],
+        ManagedConfigurationOverride,
+      );
+    }
+
+    convertValues(a: any, classs: any, asMap: boolean = false): any {
+      if (!a) {
+        return a;
+      }
+      if (a.slice && a.map) {
+        return (a as any[]).map((elem) => this.convertValues(elem, classs));
+      } else if ("object" === typeof a) {
+        if (asMap) {
+          for (const key of Object.keys(a)) {
+            a[key] = new classs(a[key]);
+          }
+          return a;
+        }
+        return new classs(a);
+      }
+      return a;
+    }
+  }
+  export class ManagedServer {
+    hostId: string;
+    type?: string;
+    desiredHostname?: string;
+    address?: string;
+    sshPort?: number;
+
+    static createFrom(source: any = {}) {
+      return new ManagedServer(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.hostId = source["hostId"];
+      this.type = source["type"];
+      this.desiredHostname = source["desiredHostname"];
+      this.address = source["address"];
+      this.sshPort = source["sshPort"];
+    }
+  }
+  export class ManagedApplicationPackage {
+    kind: string;
+    ref: string;
+    digest: string;
+    definition: Record<string, any>;
+
+    static createFrom(source: any = {}) {
+      return new ManagedApplicationPackage(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.kind = source["kind"];
+      this.ref = source["ref"];
+      this.digest = source["digest"];
+      this.definition = source["definition"];
+    }
+  }
+  export class ManagedProjectView {
+    applicationPackages: Record<string, ManagedApplicationPackage>;
+    applicationLibraries: Record<string, any>;
+    applicationPlacements: Record<string, any>;
+    projectRevision: string;
+    dataRootDirectory: string;
+    namePrefix: string;
+    servers: Record<string, ManagedServer>;
+    deployments: Record<string, ManagedDeployment>;
+    endpointGroups: Record<string, ManagedEndpointGroup>;
+    memberPlacements: ManagedMemberPlacement[];
+    hostPlacements: ManagedHostPlacement[];
+    pki: ManagedPKI;
+
+    static createFrom(source: any = {}) {
+      return new ManagedProjectView(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.applicationPackages = this.convertValues(
+        source["applicationPackages"],
+        ManagedApplicationPackage,
+        true,
+      );
+      this.applicationLibraries = source["applicationLibraries"];
+      this.applicationPlacements = source["applicationPlacements"];
+      this.projectRevision = source["projectRevision"];
+      this.dataRootDirectory = source["dataRootDirectory"];
+      this.namePrefix = source["namePrefix"];
+      this.servers = this.convertValues(source["servers"], ManagedServer, true);
+      this.deployments = this.convertValues(
+        source["deployments"],
+        ManagedDeployment,
+        true,
+      );
+      this.endpointGroups = this.convertValues(
+        source["endpointGroups"],
+        ManagedEndpointGroup,
+        true,
+      );
+      this.memberPlacements = this.convertValues(
+        source["memberPlacements"],
+        ManagedMemberPlacement,
+      );
+      this.hostPlacements = this.convertValues(
+        source["hostPlacements"],
+        ManagedHostPlacement,
+      );
+      this.pki = this.convertValues(source["pki"], ManagedPKI);
+    }
+
+    convertValues(a: any, classs: any, asMap: boolean = false): any {
+      if (!a) {
+        return a;
+      }
+      if (a.slice && a.map) {
+        return (a as any[]).map((elem) => this.convertValues(elem, classs));
+      } else if ("object" === typeof a) {
+        if (asMap) {
+          for (const key of Object.keys(a)) {
+            a[key] = new classs(a[key]);
+          }
+          return a;
+        }
+        return new classs(a);
+      }
+      return a;
+    }
+  }
+  export class Finding {
+    apiVersion: string;
+    kind: string;
+    code: string;
+    status: string;
+    category: string;
+    field: string;
+    safeMessage: string;
+
+    static createFrom(source: any = {}) {
+      return new Finding(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.apiVersion = source["apiVersion"];
+      this.kind = source["kind"];
+      this.code = source["code"];
+      this.status = source["status"];
+      this.category = source["category"];
+      this.field = source["field"];
+      this.safeMessage = source["safeMessage"];
+    }
+  }
+  export class EditCommitResult {
+    apiVersion: string;
+    kind: string;
+    status: string;
+    changed: boolean;
+    finding?: Finding;
+    oldProjectRevision?: string;
+    newProjectRevision?: string;
+    affectedDocuments?: DocumentChange[];
+    snapshot?: any;
+    managed?: ManagedProjectView;
+    applyRequired: boolean;
+    discarded?: boolean;
+    timing: CommitTiming;
+
+    static createFrom(source: any = {}) {
+      return new EditCommitResult(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.apiVersion = source["apiVersion"];
+      this.kind = source["kind"];
+      this.status = source["status"];
+      this.changed = source["changed"];
+      this.finding = this.convertValues(source["finding"], Finding);
+      this.oldProjectRevision = source["oldProjectRevision"];
+      this.newProjectRevision = source["newProjectRevision"];
+      this.affectedDocuments = this.convertValues(
+        source["affectedDocuments"],
+        DocumentChange,
+      );
+      this.snapshot = source["snapshot"];
+      this.managed = this.convertValues(source["managed"], ManagedProjectView);
+      this.applyRequired = source["applyRequired"];
+      this.discarded = source["discarded"];
+      this.timing = this.convertValues(source["timing"], CommitTiming);
+    }
+
+    convertValues(a: any, classs: any, asMap: boolean = false): any {
+      if (!a) {
+        return a;
+      }
+      if (a.slice && a.map) {
+        return (a as any[]).map((elem) => this.convertValues(elem, classs));
+      } else if ("object" === typeof a) {
+        if (asMap) {
+          for (const key of Object.keys(a)) {
+            a[key] = new classs(a[key]);
+          }
+          return a;
+        }
+        return new classs(a);
+      }
+      return a;
+    }
+  }
+  export class PlanTiming {
+    application: number;
+    initialSnapshot: number;
+    stagedSnapshot: number;
+
+    static createFrom(source: any = {}) {
+      return new PlanTiming(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.application = source["application"];
+      this.initialSnapshot = source["initialSnapshot"];
+      this.stagedSnapshot = source["stagedSnapshot"];
+    }
+  }
+  export class Validation {
+    status: string;
+    findings: Finding[];
+
+    static createFrom(source: any = {}) {
+      return new Validation(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.status = source["status"];
+      this.findings = this.convertValues(source["findings"], Finding);
+    }
+
+    convertValues(a: any, classs: any, asMap: boolean = false): any {
+      if (!a) {
+        return a;
+      }
+      if (a.slice && a.map) {
+        return (a as any[]).map((elem) => this.convertValues(elem, classs));
+      } else if ("object" === typeof a) {
+        if (asMap) {
+          for (const key of Object.keys(a)) {
+            a[key] = new classs(a[key]);
+          }
+          return a;
+        }
+        return new classs(a);
+      }
+      return a;
+    }
+  }
+  export class SemanticChange {
+    operation: string;
+    entityId?: string;
+    property?: string;
+    safeSummary: string;
+
+    static createFrom(source: any = {}) {
+      return new SemanticChange(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.operation = source["operation"];
+      this.entityId = source["entityId"];
+      this.property = source["property"];
+      this.safeSummary = source["safeSummary"];
+    }
+  }
+  export class EditPlan {
+    apiVersion: string;
+    kind: string;
+    status: string;
+    planId?: string;
+    baseProjectRevision: string;
+    commandSummary: SemanticChange;
+    semanticChanges: SemanticChange[];
+    affectedEntities: string[];
+    affectedDocuments: DocumentChange[];
+    impacts: string[];
+    validation: Validation;
+    expectedEffectiveState?: any[];
+    expectedSnapshotFingerprint?: string;
+    reviewDiff: string;
+    commitAllowed: boolean;
+    applyRequired: boolean;
+    // Go type: time
+    expiresAt?: any;
+    timing: PlanTiming;
+
+    static createFrom(source: any = {}) {
+      return new EditPlan(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.apiVersion = source["apiVersion"];
+      this.kind = source["kind"];
+      this.status = source["status"];
+      this.planId = source["planId"];
+      this.baseProjectRevision = source["baseProjectRevision"];
+      this.commandSummary = this.convertValues(
+        source["commandSummary"],
+        SemanticChange,
+      );
+      this.semanticChanges = this.convertValues(
+        source["semanticChanges"],
+        SemanticChange,
+      );
+      this.affectedEntities = source["affectedEntities"];
+      this.affectedDocuments = this.convertValues(
+        source["affectedDocuments"],
+        DocumentChange,
+      );
+      this.impacts = source["impacts"];
+      this.validation = this.convertValues(source["validation"], Validation);
+      this.expectedEffectiveState = source["expectedEffectiveState"];
+      this.expectedSnapshotFingerprint = source["expectedSnapshotFingerprint"];
+      this.reviewDiff = source["reviewDiff"];
+      this.commitAllowed = source["commitAllowed"];
+      this.applyRequired = source["applyRequired"];
+      this.expiresAt = this.convertValues(source["expiresAt"], null);
+      this.timing = this.convertValues(source["timing"], PlanTiming);
+    }
+
+    convertValues(a: any, classs: any, asMap: boolean = false): any {
+      if (!a) {
+        return a;
+      }
+      if (a.slice && a.map) {
+        return (a as any[]).map((elem) => this.conv
+@@END
+@@PORTABLE {"path":"frontend/wailsjs/go/models.ts","mode":420,"size":117249,"sha256":"7d80dfa09a1a1238a0a372d5431ddba7fd4696e7019cf7bb12af59e9aa3ac3e9","index":2,"count":3,"encoding":"utf-8","payloadBytes":21249}
+ertValues(elem, classs));
+      } else if ("object" === typeof a) {
+        if (asMap) {
+          for (const key of Object.keys(a)) {
+            a[key] = new classs(a[key]);
+          }
+          return a;
+        }
+        return new classs(a);
+      }
+      return a;
+    }
+  }
+  export class EditSession {
+    apiVersion: string;
+    kind: string;
+    sessionId: string;
+    projectContextId: string;
+    baseProjectRevision: string;
+    status: string;
+    commandCount: number;
+    encodedBytes: number;
+    // Go type: time
+    expiresAt: any;
+    reviewedPlanId?: string;
+
+    static createFrom(source: any = {}) {
+      return new EditSession(source);
+    }
+
+    constructor(source: any = {}) {
+      if ("string" === typeof source) source = JSON.parse(source);
+      this.apiVersion = source["apiVersion"];
+      this.kind = source["kind"];
+      this.sessionId = source["sessionId"];
+      this.projectContextId = source["projectContextId"];
+      this.baseProjectRevision = source["baseProjectRevision"];
+      this.status = source["status"];
       this.commandCount = source["commandCount"];
       this.encodedBytes = source["encodedBytes"];
       this.expiresAt = this.convertValues(source["expiresAt"], null);
@@ -8330,7 +9965,7 @@ func (a *App) CancelInstallationRun(runID string) InstallationRunOperation {
 }
 
 @@END
-@@PORTABLE {"path":"internal/desktop/installation_plan.go","mode":420,"size":22250,"sha256":"6893b94b61bbe9df34a76f50e654b2992fdb66431fb237b42e45dcb6767eb6a4","index":0,"count":1,"encoding":"utf-8","payloadBytes":22250}
+@@PORTABLE {"path":"internal/desktop/installation_plan.go","mode":420,"size":22678,"sha256":"d8bde16a92a71a0cf9c19435de40b7dc6c9632c2345aa41393a3a7d1e88fe349","index":0,"count":1,"encoding":"utf-8","payloadBytes":22678}
 package desktop
 
 import (
@@ -8405,14 +10040,15 @@ type InstallationPlanPhase struct {
 }
 
 type InstallationPlanAction struct {
-	ID                string   `json:"id"`
-	Type              string   `json:"type"`
-	ServiceDeployment string   `json:"serviceDeployment,omitempty"`
-	Targets           []string `json:"targets"`
-	DependsOn         []string `json:"dependsOn"`
-	Mutating          bool     `json:"mutating"`
-	Reboot            string   `json:"reboot"`
-	Summary           string   `json:"summary"`
+	ID                string                                 `json:"id"`
+	Type              string                                 `json:"type"`
+	ServiceDeployment string                                 `json:"serviceDeployment,omitempty"`
+	Targets           []string                               `json:"targets"`
+	DependsOn         []string                               `json:"dependsOn"`
+	Mutating          bool                                   `json:"mutating"`
+	Reboot            string                                 `json:"reboot"`
+	Summary           string                                 `json:"summary"`
+	ProgressSteps     []executionnode.DeploymentProgressStep `json:"progressSteps,omitempty"`
 }
 
 type InstallationPlanFinding struct {
@@ -8711,7 +10347,8 @@ func installationPlanView(record executionnode.PlanRecord, binding *executionNod
 		projected := InstallationPlanPhase{ID: phase.ID, Order: phase.Order, Actions: make([]InstallationPlanAction, 0, len(phase.Actions))}
 		for _, action := range phase.Actions {
 			projected.Actions = append(projected.Actions, InstallationPlanAction{ID: action.ID, Type: action.Type, ServiceDeployment: action.ServiceDeployment,
-				Targets: append([]string{}, action.Targets...), DependsOn: append([]string{}, action.DependsOn...), Mutating: action.Mutating, Reboot: action.Reboot, Summary: action.Summary})
+				Targets: append([]string{}, action.Targets...), DependsOn: append([]string{}, action.DependsOn...), Mutating: action.Mutating, Reboot: action.Reboot, Summary: action.Summary,
+				ProgressSteps: append([]executionnode.DeploymentProgressStep(nil), action.ProgressSteps...)})
 		}
 		view.Phases = append(view.Phases, projected)
 	}
@@ -12021,7 +13658,7 @@ func (s ImagePreparationScope) TargetIDs() []string {
 }
 
 @@END
-@@PORTABLE {"path":"internal/executionnode/application_selection.go","mode":420,"size":1793,"sha256":"d66829be3feaea77cd66fbc16da86d25950cbc5d082a861635d67415e6c14c96","index":0,"count":1,"encoding":"utf-8","payloadBytes":1793}
+@@PORTABLE {"path":"internal/executionnode/application_selection.go","mode":420,"size":2266,"sha256":"97b5f98d2fa0740a686ef3164bfea717d30440bdbf3b27b792035cb3ae11cc3e","index":0,"count":1,"encoding":"utf-8","payloadBytes":2266}
 package executionnode
 
 import (
@@ -12060,12 +13697,19 @@ func selectionCapabilitySupported(c map[string]any) bool {
 
 func postInstallCapabilitySupported(c map[string]any) bool {
 	feature, ok := c["applicationPostInstall"].(map[string]any)
-	return ok && c["apiVersion"] == "platform.installer/execution-capabilities/v1alpha12" &&
+	return ok && (c["apiVersion"] == "platform.installer/execution-capabilities/v1alpha12" || c["apiVersion"] == "platform.installer/execution-capabilities/v1alpha13") &&
 		closedKeys(feature, "protocol", "packageManifestVersion", "planContract", "manifestContract") &&
 		feature["protocol"] == "ApplicationPostInstall/v1alpha1" &&
 		feature["packageManifestVersion"] == "platform.installer/application-package/v1alpha3" &&
 		feature["planContract"] == "platform.installer/plan/v1alpha9" &&
 		feature["manifestContract"] == "platform.installer/execution-manifest/v1alpha7"
+}
+
+func applicationProgressCapabilitySupported(c map[string]any) bool {
+	feature, ok := c["applicationProgress"].(map[string]any)
+	return ok && c["apiVersion"] == "platform.installer/execution-capabilities/v1alpha13" &&
+		closedKeys(feature, "protocol", "planContract") &&
+		feature["protocol"] == "ApplicationProgress/v1alpha1" && feature["planContract"] == "platform.installer/plan/v1alpha10"
 }
 
 @@END
@@ -13118,7 +14762,7 @@ func hardenMirrorHandle(file *os.File) error {
 }
 
 @@END
-@@PORTABLE {"path":"internal/executionnode/execution_service.go","mode":420,"size":36697,"sha256":"00ef9665a84a7401b0834aaa4c4b66066e959e31da8a71c45f12a75c3156f388","index":0,"count":1,"encoding":"utf-8","payloadBytes":36697}
+@@PORTABLE {"path":"internal/executionnode/execution_service.go","mode":420,"size":36959,"sha256":"f19f3e32adea8aa3b2570c6350c9d68868c479c60eb37a8ec1efd1fca57df66e","index":0,"count":1,"encoding":"utf-8","payloadBytes":36959}
 package executionnode
 
 import (
@@ -13234,6 +14878,12 @@ type DeploymentPlanAction struct {
 	Mutating          bool
 	Reboot            string
 	Summary           string
+	ProgressSteps     []DeploymentProgressStep
+}
+
+type DeploymentProgressStep struct {
+	ID      string `json:"id"`
+	Summary string `json:"summary"`
 }
 
 // TargetHostKeyApproval is runtime-only operator approval for one exact
@@ -14050,6 +15700,7 @@ func clonePlanPhases(phases []DeploymentPlanPhase) []DeploymentPlanPhase {
 			result[index].Actions[actionIndex] = action
 			result[index].Actions[actionIndex].Targets = append([]string(nil), action.Targets...)
 			result[index].Actions[actionIndex].DependsOn = append([]string(nil), action.DependsOn...)
+			result[index].Actions[actionIndex].ProgressSteps = append([]DeploymentProgressStep(nil), action.ProgressSteps...)
 		}
 	}
 	return result
@@ -14095,7 +15746,7 @@ func newStartAttemptID() (string, error) {
 func NewRequestID() (string, error) { return newStartAttemptID() }
 
 @@END
-@@PORTABLE {"path":"internal/executionnode/infrastructure_verification.go","mode":420,"size":10314,"sha256":"3c344976a2254ece31aaff022d9cf535f866aedbc483ba85deb3c584debba396","index":0,"count":1,"encoding":"utf-8","payloadBytes":10314}
+@@PORTABLE {"path":"internal/executionnode/infrastructure_verification.go","mode":420,"size":10729,"sha256":"7c38a45922ac24b6d99412197f6a55421cc858a82e53646faac60d63362e8bdd","index":0,"count":1,"encoding":"utf-8","payloadBytes":10729}
 package executionnode
 
 import (
@@ -14183,6 +15834,19 @@ func decodeInfrastructureVerification(raw any) (*InfrastructureVerification, err
 }
 
 func b0PlanCapabilitySupported(c map[string]any) bool {
+	if c["apiVersion"] == "platform.installer/execution-capabilities/v1alpha13" {
+		if !applicationProgressCapabilitySupported(c) {
+			return false
+		}
+		prefix := make(map[string]any, len(c))
+		for key, value := range c {
+			if key != "applicationProgress" {
+				prefix[key] = value
+			}
+		}
+		prefix["apiVersion"] = "platform.installer/execution-capabilities/v1alpha12"
+		return b0PlanCapabilitySupported(prefix)
+	}
 	if c["apiVersion"] == "platform.installer/execution-capabilities/v1alpha12" {
 		if !postInstallCapabilitySupported(c) {
 			return false
@@ -16528,7 +18192,7 @@ fi
 `
 
 @@END
-@@PORTABLE {"path":"internal/executionnode/runtime_protocol.go","mode":420,"size":65439,"sha256":"ce220912a236d13702f5698a348048e89dd9d65a14dcc0af69b551c957fc5dd2","index":0,"count":2,"encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"internal/executionnode/runtime_protocol.go","mode":420,"size":67247,"sha256":"889230e54a9c7ef558eac6c341de166279a0d4999316fe8ec616eb860ec12fed","index":0,"count":2,"encoding":"utf-8","payloadBytes":48000}
 package executionnode
 
 // Typed access to the fixed UI-BE-04C runtime protocol.  This is transport
@@ -16822,9 +18486,12 @@ func (t OpenSSHTransport) buildDeploymentPlanRequest(ctx context.Context, node N
 		return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
 	}
 	postInstallSupported := false
-	if value["apiVersion"] == "platform.installer/plan/v1alpha9" {
+	if value["apiVersion"] == "platform.installer/plan/v1alpha9" || value["apiVersion"] == "platform.installer/plan/v1alpha10" {
 		capability, probeErr := t.runtimeProtocol(ctx, node, map[string]any{"apiVersion": selectionPlanRequestVersion, "operation": "GetCapabilities"})
 		postInstallSupported = probeErr == nil && postInstallCapabilitySupported(capability)
+		if value["apiVersion"] == "platform.installer/plan/v1alpha10" && !applicationProgressCapabilitySupported(capability) {
+			return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
+		}
 		if !postInstallSupported {
 			return DeploymentPlan{}, errors.New("APPLICATION_POST_INSTALL_RUNTIME_UNSUPPORTED")
 		}
@@ -16835,7 +18502,7 @@ func (t OpenSSHTransport) buildDeploymentPlanRequest(ctx context.Context, node N
 	if request["apiVersion"] == "platform.installer/execution-runtime/v1alpha5" && (value["apiVersion"] != "platform.installer/plan/v1alpha6" || value["skipInfrastructureVerify"] != request["skipInfrastructureVerify"] || value["executionMode"] != request["executionMode"]) {
 		return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
 	}
-	if request["apiVersion"] == imagePlanRequestVersion && ((value["apiVersion"] != "platform.installer/plan/v1alpha7" && !(value["apiVersion"] == "platform.installer/plan/v1alpha9" && postInstallSupported)) || value["skipInfrastructureVerify"] != request["skipInfrastructureVerify"] || value["executionMode"] != request["executionMode"]) {
+	if request["apiVersion"] == imagePlanRequestVersion && ((value["apiVersion"] != "platform.installer/plan/v1alpha7" && !((value["apiVersion"] == "platform.installer/plan/v1alpha9" || value["apiVersion"] == "platform.installer/plan/v1alpha10") && postInstallSupported)) || value["skipInfrastructureVerify"] != request["skipInfrastructureVerify"] || value["executionMode"] != request["executionMode"]) {
 		return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
 	}
 	plan, err := decodeDeploymentPlan(value)
@@ -16846,7 +18513,7 @@ func (t OpenSSHTransport) buildDeploymentPlanRequest(ctx context.Context, node N
 		requested, _ := request["skipApplicationLibraries"].([]string)
 		requested = slices.Clone(requested)
 		slices.Sort(requested)
-		if (value["apiVersion"] != "platform.installer/plan/v1alpha8" && !(value["apiVersion"] == "platform.installer/plan/v1alpha9" && postInstallSupported)) || value["executionMode"] != request["executionMode"] || value["skipInfrastructureVerify"] != request["skipInfrastructureVerify"] || !slices.Equal(requested, plan.SkipApplicationLibraries) {
+		if (value["apiVersion"] != "platform.installer/plan/v1alpha8" && !((value["apiVersion"] == "platform.installer/plan/v1alpha9" || value["apiVersion"] == "platform.installer/plan/v1alpha10") && postInstallSupported)) || value["executionMode"] != request["executionMode"] || value["skipInfrastructureVerify"] != request["skipInfrastructureVerify"] || !slices.Equal(requested, plan.SkipApplicationLibraries) {
 			return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
 		}
 	}
@@ -17505,17 +19172,17 @@ func validateExecutionEvent(event ExecutionEvent, runID string) error {
 	}
 	for _, value := range []string{event.SafeMessage, event.PhaseID, event.ActionID, event.Host, event.ServiceDeployment} {
 		if len(value) > 8192 || strings.ContainsAny(value, "\x00\r\n\x1b") {
-			return errors.New("EXECUTION_EVENT_INVALID")
+			r
+@@END
+@@PORTABLE {"path":"internal/executionnode/runtime_protocol.go","mode":420,"size":67247,"sha256":"889230e54a9c7ef558eac6c341de166279a0d4999316fe8ec616eb860ec12fed","index":1,"count":2,"encoding":"utf-8","payloadBytes":19247}
+eturn errors.New("EXECUTION_EVENT_INVALID")
 		}
 	}
 	if event.ElapsedMillis != nil && *event.ElapsedMillis < 0 {
 		return errors.New("EXECUTION_EVENT_INVALID")
 	}
 	if event.Task != nil && (len(event.Task.UUID) > 128 || len(event.Task.Role) > 256 || len(event.Task.Name) > 512 || strings.ContainsAny(event.Task.UUID+event.Task.Role+event.Task.Name, "\x00\r\n\x1b")) {
-		return errors.New("EXE
-@@END
-@@PORTABLE {"path":"internal/executionnode/runtime_protocol.go","mode":420,"size":65439,"sha256":"ce220912a236d13702f5698a348048e89dd9d65a14dcc0af69b551c957fc5dd2","index":1,"count":2,"encoding":"utf-8","payloadBytes":17439}
-CUTION_EVENT_INVALID")
+		return errors.New("EXECUTION_EVENT_INVALID")
 	}
 	if (event.EventType == "TASK_STARTED" || event.EventType == "TASK_COMPLETED") && (event.Task == nil || event.Task.UUID == "") {
 		return errors.New("EXECUTION_EVENT_INVALID")
@@ -17564,7 +19231,7 @@ func validEventCode(value string) bool {
 }
 func decodeDeploymentPlan(value map[string]any) (DeploymentPlan, error) {
 	plan := DeploymentPlan{}
-	if value["apiVersion"] == "platform.installer/plan/v1alpha8" || value["apiVersion"] == "platform.installer/plan/v1alpha9" {
+	if value["apiVersion"] == "platform.installer/plan/v1alpha8" || (value["apiVersion"] == "platform.installer/plan/v1alpha9" || value["apiVersion"] == "platform.installer/plan/v1alpha10") {
 		values, ok := value["skipApplicationLibraries"].([]any)
 		if !ok {
 			return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
@@ -17577,7 +19244,7 @@ func decodeDeploymentPlan(value map[string]any) (DeploymentPlan, error) {
 			plan.SkipApplicationLibraries = append(plan.SkipApplicationLibraries, id)
 		}
 	}
-	if value["apiVersion"] == "platform.installer/plan/v1alpha7" || (value["apiVersion"] == "platform.installer/plan/v1alpha8" || value["apiVersion"] == "platform.installer/plan/v1alpha9") {
+	if value["apiVersion"] == "platform.installer/plan/v1alpha7" || (value["apiVersion"] == "platform.installer/plan/v1alpha8" || (value["apiVersion"] == "platform.installer/plan/v1alpha9" || value["apiVersion"] == "platform.installer/plan/v1alpha10")) {
 		skip, ok := value["skipInfrastructureVerify"].(bool)
 		if !ok || skip && value["executionMode"] != string(ApplicationLibrariesOnly) {
 			return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
@@ -17590,7 +19257,7 @@ func decodeDeploymentPlan(value map[string]any) (DeploymentPlan, error) {
 		}
 		plan.SkipInfrastructureVerify = true
 	}
-	if value["apiVersion"] == "platform.installer/plan/v1alpha5" || value["apiVersion"] == "platform.installer/plan/v1alpha6" || value["apiVersion"] == "platform.installer/plan/v1alpha7" || (value["apiVersion"] == "platform.installer/plan/v1alpha8" || value["apiVersion"] == "platform.installer/plan/v1alpha9") {
+	if value["apiVersion"] == "platform.installer/plan/v1alpha5" || value["apiVersion"] == "platform.installer/plan/v1alpha6" || value["apiVersion"] == "platform.installer/plan/v1alpha7" || (value["apiVersion"] == "platform.installer/plan/v1alpha8" || (value["apiVersion"] == "platform.installer/plan/v1alpha9" || value["apiVersion"] == "platform.installer/plan/v1alpha10")) {
 		mode, ok := value["executionMode"].(string)
 		plan.ExecutionMode = ExecutionMode(mode)
 		if !ok || !plan.ExecutionMode.valid() {
@@ -17791,8 +19458,14 @@ func decodeDeploymentPlanAction(raw any, seen map[string]bool) (DeploymentPlanAc
 	if !ok {
 		return DeploymentPlanAction{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
 	}
-	allowed := len(value) == 7 || len(value) == 8
-	if !allowed {
+	keys := []string{"id", "type", "targets", "dependsOn", "mutating", "reboot", "summary"}
+	if _, present := value["serviceDeployment"]; present {
+		keys = append(keys, "serviceDeployment")
+	}
+	if _, present := value["progressSteps"]; present {
+		keys = append(keys, "progressSteps")
+	}
+	if !closedKeys(value, keys...) {
 		return DeploymentPlanAction{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
 	}
 	action := DeploymentPlanAction{}
@@ -17820,6 +19493,25 @@ func decodeDeploymentPlanAction(raw any, seen map[string]bool) (DeploymentPlanAc
 	}
 	seen[action.ID] = true
 	action.Targets, action.DependsOn = targets, dependsOn
+	if rawSteps, present := value["progressSteps"]; present {
+		steps, ok := rawSteps.([]any)
+		if !ok || len(steps) == 0 || len(steps) > 257 || action.ID != "applications:apply" || action.Type != "APPLICATION_LIBRARIES_APPLY" {
+			return DeploymentPlanAction{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
+		}
+		for _, rawStep := range steps {
+			step, ok := rawStep.(map[string]any)
+			if !ok || !closedKeys(step, "id", "summary") {
+				return DeploymentPlanAction{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
+			}
+			id, idOK := step["id"].(string)
+			summary, summaryOK := step["summary"].(string)
+			if !idOK || !summaryOK || id == "" || len(id) > maxDeploymentPlanText || summary == "" || len(summary) > maxDeploymentPlanText || seen[id] {
+				return DeploymentPlanAction{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
+			}
+			seen[id] = true
+			action.ProgressSteps = append(action.ProgressSteps, DeploymentProgressStep{ID: id, Summary: summary})
+		}
+	}
 	return action, nil
 }
 
@@ -103014,1860 +104706,6 @@ func NewSaveFileDialog(config DialogConfig) (SaveFileDialog, error) {
 		return nil, err
 	}
 	return saveDialog, nil
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/internal/go-common-file-dialog/cfd/DialogConfig.go","mode":420,"size":4050,"sha256":"9cf7d818ab257568b8c7eb52ae86ffbe02ee713410b3e7cff44c69655023c7c8","index":0,"count":1,"encoding":"utf-8","payloadBytes":4050}
-// Cross-platform.
-
-package cfd
-
-import (
-	"fmt"
-	"os"
-	"reflect"
-)
-
-type FileFilter struct {
-	// The display name of the filter (That is shown to the user)
-	DisplayName string
-	// The filter pattern. Eg. "*.txt;*.png" to select all txt and png files, "*.*" to select any files, etc.
-	Pattern string
-}
-
-// Never obfuscate the FileFilter type.
-var _ = reflect.TypeOf(FileFilter{})
-
-type DialogConfig struct {
-	// The title of the dialog
-	Title string
-	// The role of the dialog. This is used to derive the dialog's GUID, which the
-	// OS will use to differentiate it from dialogs that are intended for other purposes.
-	// This means that, for example, a dialog with role "Import" will have a different
-	// previous location that it will open to than a dialog with role "Open". Can be any string.
-	Role string
-	// The default folder - the folder that is used the first time the user opens it
-	// (after the first time their last used location is used).
-	DefaultFolder string
-	// The initial folder - the folder that the dialog always opens to if not empty.
-	// If this is not empty, it will override the "default folder" behaviour and
-	// the dialog will always open to this folder.
-	Folder string
-	// The file filters that restrict which types of files the dialog is able to choose.
-	// Ignored by Select Folder Dialog.
-	FileFilters []FileFilter
-	// Sets the initially selected file filter. This is an index of FileFilters.
-	// Ignored by Select Folder Dialog.
-	SelectedFileFilterIndex uint
-	// The initial name of the file (I.E. the text in the file name text box) when the user opens the dialog.
-	// For the Select Folder Dialog, this sets the initial folder name.
-	FileName string
-	// The default extension applied when a user does not provide one as part of the file name.
-	// If the user selects a different file filter, the default extension will be automatically updated to match the new file filter.
-	// For Open / Open Multiple File Dialog, this only has an effect when the user specifies a file name with no extension and a file with the default extension exists.
-	// For Save File Dialog, this extension will be used whenever a user does not specify an extension.
-	// Ignored by Select Folder Dialog.
-	DefaultExtension string
-	// ParentWindowHandle is the handle (HWND) to the parent window of the dialog.
-	// If left as 0 / nil, the dialog will have no parent window.
-	ParentWindowHandle uintptr
-}
-
-var defaultFilters = []FileFilter{
-	{
-		DisplayName: "All Files (*.*)",
-		Pattern:     "*.*",
-	},
-}
-
-func (config *DialogConfig) apply(dialog Dialog) (err error) {
-	if config.Title != "" {
-		err = dialog.SetTitle(config.Title)
-		if err != nil {
-			return
-		}
-	}
-
-	if config.Role != "" {
-		err = dialog.SetRole(config.Role)
-		if err != nil {
-			return
-		}
-	}
-
-	if config.Folder != "" {
-		_, err = os.Stat(config.Folder)
-		if err != nil {
-			return
-		}
-		err = dialog.SetFolder(config.Folder)
-		if err != nil {
-			return
-		}
-	}
-
-	if config.DefaultFolder != "" {
-		_, err = os.Stat(config.DefaultFolder)
-		if err != nil {
-			return
-		}
-		err = dialog.SetDefaultFolder(config.DefaultFolder)
-		if err != nil {
-			return
-		}
-	}
-
-	if config.FileName != "" {
-		err = dialog.SetFileName(config.FileName)
-		if err != nil {
-			return
-		}
-	}
-
-	dialog.SetParentWindowHandle(config.ParentWindowHandle)
-
-	if dialog, ok := dialog.(FileDialog); ok {
-		var fileFilters []FileFilter
-		if config.FileFilters != nil && len(config.FileFilters) > 0 {
-			fileFilters = config.FileFilters
-		} else {
-			fileFilters = defaultFilters
-		}
-		err = dialog.SetFileFilters(fileFilters)
-		if err != nil {
-			return
-		}
-
-		if config.SelectedFileFilterIndex != 0 {
-			if config.SelectedFileFilterIndex > uint(len(fileFilters)) {
-				err = fmt.Errorf("selected file filter index out of range")
-				return
-			}
-			err = dialog.SetSelectedFileFilterIndex(config.SelectedFileFilterIndex)
-			if err != nil {
-				return
-			}
-		}
-
-		if config.DefaultExtension != "" {
-			err = dialog.SetDefaultExtension(config.DefaultExtension)
-			if err != nil {
-				return
-			}
-		}
-	}
-
-	return
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/internal/go-common-file-dialog/cfd/errors.go","mode":420,"size":203,"sha256":"da9965fcccb049e1ac66f8f38eaeab9cf6e8a6112e1066712ae1f6bebd563b9c","index":0,"count":1,"encoding":"utf-8","payloadBytes":203}
-package cfd
-
-import "errors"
-
-var (
-	ErrCancelled = errors.New("cancelled by user")
-	ErrInvalidGUID = errors.New("guid cannot be nil")
-	ErrEmptyFilters = errors.New("must specify at least one filter")
-)
-
-@@END
-@@PORTABLE {"path":"third_party/wails/internal/go-common-file-dialog/cfd/iFileOpenDialog.go","mode":420,"size":6420,"sha256":"08c8cef76a0988a7ff4209320c78a14460b059461be00d174d7a36f4b8f538fa","index":0,"count":1,"encoding":"utf-8","payloadBytes":6420}
-//go:build windows
-// +build windows
-
-package cfd
-
-import (
-	"github.com/go-ole/go-ole"
-	"github.com/google/uuid"
-	"syscall"
-	"unsafe"
-)
-
-var (
-	fileOpenDialogCLSID = ole.NewGUID("{DC1C5A9C-E88A-4dde-A5A1-60F82A20AEF7}")
-	fileOpenDialogIID   = ole.NewGUID("{d57c7288-d4ad-4768-be02-9d969532d960}")
-)
-
-type iFileOpenDialog struct {
-	vtbl               *iFileOpenDialogVtbl
-	parentWindowHandle uintptr
-}
-
-type iFileOpenDialogVtbl struct {
-	iFileDialogVtbl
-
-	GetResults       uintptr // func (ppenum **IShellItemArray) HRESULT
-	GetSelectedItems uintptr
-}
-
-func newIFileOpenDialog() (*iFileOpenDialog, error) {
-	if unknown, err := ole.CreateInstance(fileOpenDialogCLSID, fileOpenDialogIID); err == nil {
-		return (*iFileOpenDialog)(unsafe.Pointer(unknown)), nil
-	} else {
-		return nil, err
-	}
-}
-
-func (fileOpenDialog *iFileOpenDialog) Show() error {
-	return fileOpenDialog.vtbl.show(unsafe.Pointer(fileOpenDialog), fileOpenDialog.parentWindowHandle)
-}
-
-func (fileOpenDialog *iFileOpenDialog) SetParentWindowHandle(hwnd uintptr) {
-	fileOpenDialog.parentWindowHandle = hwnd
-}
-
-func (fileOpenDialog *iFileOpenDialog) ShowAndGetResult() (string, error) {
-	isMultiselect, err := fileOpenDialog.isMultiselect()
-	if err != nil {
-		return "", err
-	}
-	if isMultiselect {
-		// We should panic as this error is caused by the developer using the library
-		panic("use ShowAndGetResults for open multiple files dialog")
-	}
-	if err := fileOpenDialog.Show(); err != nil {
-		return "", err
-	}
-	return fileOpenDialog.GetResult()
-}
-
-func (fileOpenDialog *iFileOpenDialog) ShowAndGetResults() ([]string, error) {
-	isMultiselect, err := fileOpenDialog.isMultiselect()
-	if err != nil {
-		return nil, err
-	}
-	if !isMultiselect {
-		// We should panic as this error is caused by the developer using the library
-		panic("use ShowAndGetResult for open single file dialog")
-	}
-	if err := fileOpenDialog.Show(); err != nil {
-		return nil, err
-	}
-	return fileOpenDialog.GetResults()
-}
-
-func (fileOpenDialog *iFileOpenDialog) SetTitle(title string) error {
-	return fileOpenDialog.vtbl.setTitle(unsafe.Pointer(fileOpenDialog), title)
-}
-
-func (fileOpenDialog *iFileOpenDialog) GetResult() (string, error) {
-	isMultiselect, err := fileOpenDialog.isMultiselect()
-	if err != nil {
-		return "", err
-	}
-	if isMultiselect {
-		// We should panic as this error is caused by the developer using the library
-		panic("use GetResults for open multiple files dialog")
-	}
-	return fileOpenDialog.vtbl.getResultString(unsafe.Pointer(fileOpenDialog))
-}
-
-func (fileOpenDialog *iFileOpenDialog) Release() error {
-	return fileOpenDialog.vtbl.release(unsafe.Pointer(fileOpenDialog))
-}
-
-func (fileOpenDialog *iFileOpenDialog) SetDefaultFolder(defaultFolderPath string) error {
-	return fileOpenDialog.vtbl.setDefaultFolder(unsafe.Pointer(fileOpenDialog), defaultFolderPath)
-}
-
-func (fileOpenDialog *iFileOpenDialog) SetFolder(defaultFolderPath string) error {
-	return fileOpenDialog.vtbl.setFolder(unsafe.Pointer(fileOpenDialog), defaultFolderPath)
-}
-
-func (fileOpenDialog *iFileOpenDialog) SetFileFilters(filter []FileFilter) error {
-	return fileOpenDialog.vtbl.setFileTypes(unsafe.Pointer(fileOpenDialog), filter)
-}
-
-func (fileOpenDialog *iFileOpenDialog) SetRole(role string) error {
-	return fileOpenDialog.vtbl.setClientGuid(unsafe.Pointer(fileOpenDialog), StringToUUID(role))
-}
-
-// This should only be callable when the user asks for a multi select because
-// otherwise they will be given the Dialog interface which does not expose this function.
-func (fileOpenDialog *iFileOpenDialog) GetResults() ([]string, error) {
-	isMultiselect, err := fileOpenDialog.isMultiselect()
-	if err != nil {
-		return nil, err
-	}
-	if !isMultiselect {
-		// We should panic as this error is caused by the developer using the library
-		panic("use GetResult for open single file dialog")
-	}
-	return fileOpenDialog.vtbl.getResultsStrings(unsafe.Pointer(fileOpenDialog))
-}
-
-func (fileOpenDialog *iFileOpenDialog) SetDefaultExtension(defaultExtension string) error {
-	return fileOpenDialog.vtbl.setDefaultExtension(unsafe.Pointer(fileOpenDialog), defaultExtension)
-}
-
-func (fileOpenDialog *iFileOpenDialog) SetFileName(initialFileName string) error {
-	return fileOpenDialog.vtbl.setFileName(unsafe.Pointer(fileOpenDialog), initialFileName)
-}
-
-func (fileOpenDialog *iFileOpenDialog) SetSelectedFileFilterIndex(index uint) error {
-	return fileOpenDialog.vtbl.setSelectedFileFilterIndex(unsafe.Pointer(fileOpenDialog), index)
-}
-
-func (fileOpenDialog *iFileOpenDialog) setPickFolders(pickFolders bool) error {
-	const FosPickfolders = 0x20
-	if pickFolders {
-		return fileOpenDialog.vtbl.addOption(unsafe.Pointer(fileOpenDialog), FosPickfolders)
-	} else {
-		return fileOpenDialog.vtbl.removeOption(unsafe.Pointer(fileOpenDialog), FosPickfolders)
-	}
-}
-
-const FosAllowMultiselect = 0x200
-
-func (fileOpenDialog *iFileOpenDialog) isMultiselect() (bool, error) {
-	options, err := fileOpenDialog.vtbl.getOptions(unsafe.Pointer(fileOpenDialog))
-	if err != nil {
-		return false, err
-	}
-	return options&FosAllowMultiselect != 0, nil
-}
-
-func (fileOpenDialog *iFileOpenDialog) setIsMultiselect(isMultiselect bool) error {
-	if isMultiselect {
-		return fileOpenDialog.vtbl.addOption(unsafe.Pointer(fileOpenDialog), FosAllowMultiselect)
-	} else {
-		return fileOpenDialog.vtbl.removeOption(unsafe.Pointer(fileOpenDialog), FosAllowMultiselect)
-	}
-}
-
-func (vtbl *iFileOpenDialogVtbl) getResults(objPtr unsafe.Pointer) (*iShellItemArray, error) {
-	var shellItemArray *iShellItemArray
-	ret, _, _ := syscall.SyscallN(vtbl.GetResults,
-		uintptr(objPtr),
-		uintptr(unsafe.Pointer(&shellItemArray)),
-		0)
-	return shellItemArray, hresultToError(ret)
-}
-
-func (vtbl *iFileOpenDialogVtbl) getResultsStrings(objPtr unsafe.Pointer) ([]string, error) {
-	shellItemArray, err := vtbl.getResults(objPtr)
-	if err != nil {
-		return nil, err
-	}
-	if shellItemArray == nil {
-		return nil, ErrCancelled
-	}
-	defer shellItemArray.vtbl.release(unsafe.Pointer(shellItemArray))
-	count, err := shellItemArray.vtbl.getCount(unsafe.Pointer(shellItemArray))
-	if err != nil {
-		return nil, err
-	}
-	var results []string
-	for i := uintptr(0); i < count; i++ {
-		newItem, err := shellItemArray.vtbl.getItemAt(unsafe.Pointer(shellItemArray), i)
-		if err != nil {
-			return nil, err
-		}
-		results = append(results, newItem)
-	}
-	return results, nil
-}
-
-func StringToUUID(str string) *ole.GUID {
-	return ole.NewGUID(uuid.NewSHA1(uuid.Nil, []byte(str)).String())
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/internal/go-common-file-dialog/cfd/iFileSaveDialog.go","mode":420,"size":2951,"sha256":"54005c0036db81851524407f3a06a902f683a799cf0e2fcaa8f238a0d415f8f4","index":0,"count":1,"encoding":"utf-8","payloadBytes":2951}
-//go:build windows
-// +build windows
-
-package cfd
-
-import (
-	"github.com/go-ole/go-ole"
-	"unsafe"
-)
-
-var (
-	saveFileDialogCLSID = ole.NewGUID("{C0B4E2F3-BA21-4773-8DBA-335EC946EB8B}")
-	saveFileDialogIID   = ole.NewGUID("{84bccd23-5fde-4cdb-aea4-af64b83d78ab}")
-)
-
-type iFileSaveDialog struct {
-	vtbl               *iFileSaveDialogVtbl
-	parentWindowHandle uintptr
-}
-
-type iFileSaveDialogVtbl struct {
-	iFileDialogVtbl
-
-	SetSaveAsItem          uintptr
-	SetProperties          uintptr
-	SetCollectedProperties uintptr
-	GetProperties          uintptr
-	ApplyProperties        uintptr
-}
-
-func newIFileSaveDialog() (*iFileSaveDialog, error) {
-	if unknown, err := ole.CreateInstance(saveFileDialogCLSID, saveFileDialogIID); err == nil {
-		return (*iFileSaveDialog)(unsafe.Pointer(unknown)), nil
-	} else {
-		return nil, err
-	}
-}
-
-func (fileSaveDialog *iFileSaveDialog) Show() error {
-	return fileSaveDialog.vtbl.show(unsafe.Pointer(fileSaveDialog), fileSaveDialog.parentWindowHandle)
-}
-
-func (fileSaveDialog *iFileSaveDialog) SetParentWindowHandle(hwnd uintptr) {
-	fileSaveDialog.parentWindowHandle = hwnd
-}
-
-func (fileSaveDialog *iFileSaveDialog) ShowAndGetResult() (string, error) {
-	if err := fileSaveDialog.Show(); err != nil {
-		return "", err
-	}
-	return fileSaveDialog.GetResult()
-}
-
-func (fileSaveDialog *iFileSaveDialog) SetTitle(title string) error {
-	return fileSaveDialog.vtbl.setTitle(unsafe.Pointer(fileSaveDialog), title)
-}
-
-func (fileSaveDialog *iFileSaveDialog) GetResult() (string, error) {
-	return fileSaveDialog.vtbl.getResultString(unsafe.Pointer(fileSaveDialog))
-}
-
-func (fileSaveDialog *iFileSaveDialog) Release() error {
-	return fileSaveDialog.vtbl.release(unsafe.Pointer(fileSaveDialog))
-}
-
-func (fileSaveDialog *iFileSaveDialog) SetDefaultFolder(defaultFolderPath string) error {
-	return fileSaveDialog.vtbl.setDefaultFolder(unsafe.Pointer(fileSaveDialog), defaultFolderPath)
-}
-
-func (fileSaveDialog *iFileSaveDialog) SetFolder(defaultFolderPath string) error {
-	return fileSaveDialog.vtbl.setFolder(unsafe.Pointer(fileSaveDialog), defaultFolderPath)
-}
-
-func (fileSaveDialog *iFileSaveDialog) SetFileFilters(filter []FileFilter) error {
-	return fileSaveDialog.vtbl.setFileTypes(unsafe.Pointer(fileSaveDialog), filter)
-}
-
-func (fileSaveDialog *iFileSaveDialog) SetRole(role string) error {
-	return fileSaveDialog.vtbl.setClientGuid(unsafe.Pointer(fileSaveDialog), StringToUUID(role))
-}
-
-func (fileSaveDialog *iFileSaveDialog) SetDefaultExtension(defaultExtension string) error {
-	return fileSaveDialog.vtbl.setDefaultExtension(unsafe.Pointer(fileSaveDialog), defaultExtension)
-}
-
-func (fileSaveDialog *iFileSaveDialog) SetFileName(initialFileName string) error {
-	return fileSaveDialog.vtbl.setFileName(unsafe.Pointer(fileSaveDialog), initialFileName)
-}
-
-func (fileSaveDialog *iFileSaveDialog) SetSelectedFileFilterIndex(index uint) error {
-	return fileSaveDialog.vtbl.setSelectedFileFilterIndex(unsafe.Pointer(fileSaveDialog), index)
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/internal/go-common-file-dialog/cfd/iShellItem.go","mode":420,"size":1384,"sha256":"691f3c5f872361ed72e05de2c82e0ad79df5ac3c12ee06afee8424c53a374b3f","index":0,"count":1,"encoding":"utf-8","payloadBytes":1384}
-//go:build windows
-// +build windows
-
-package cfd
-
-import (
-	"github.com/go-ole/go-ole"
-	"syscall"
-	"unsafe"
-)
-
-var (
-	procSHCreateItemFromParsingName = syscall.NewLazyDLL("Shell32.dll").NewProc("SHCreateItemFromParsingName")
-	iidShellItem                    = ole.NewGUID("43826d1e-e718-42ee-bc55-a1e261c37bfe")
-)
-
-type iShellItem struct {
-	vtbl *iShellItemVtbl
-}
-
-type iShellItemVtbl struct {
-	iUnknownVtbl
-	BindToHandler  uintptr
-	GetParent      uintptr
-	GetDisplayName uintptr // func (sigdnName SIGDN, ppszName *LPWSTR) HRESULT
-	GetAttributes  uintptr
-	Compare        uintptr
-}
-
-func newIShellItem(path string) (*iShellItem, error) {
-	var shellItem *iShellItem
-	pathPtr := ole.SysAllocString(path)
-	defer func(v *int16) {
-		_ = ole.SysFreeString(v)
-	}(pathPtr)
-
-	ret, _, _ := procSHCreateItemFromParsingName.Call(
-		uintptr(unsafe.Pointer(pathPtr)),
-		0,
-		uintptr(unsafe.Pointer(iidShellItem)),
-		uintptr(unsafe.Pointer(&shellItem)))
-	return shellItem, hresultToError(ret)
-}
-
-func (vtbl *iShellItemVtbl) getDisplayName(objPtr unsafe.Pointer) (string, error) {
-	var ptr *uint16
-	ret, _, _ := syscall.SyscallN(vtbl.GetDisplayName,
-		uintptr(objPtr),
-		0x80058000, // SIGDN_FILESYSPATH,
-		uintptr(unsafe.Pointer(&ptr)))
-	if err := hresultToError(ret); err != nil {
-		return "", err
-	}
-	defer ole.CoTaskMemFree(uintptr(unsafe.Pointer(ptr)))
-	return ole.LpOleStrToString(ptr), nil
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/internal/go-common-file-dialog/cfd/iShellItemArray.go","mode":420,"size":1530,"sha256":"49d6c0f3735774a0d7d417a66e9bbce4179a7a76d4b39c693adf9ea579679bc1","index":0,"count":1,"encoding":"utf-8","payloadBytes":1530}
-//go:build windows
-// +build windows
-
-package cfd
-
-import (
-	"github.com/go-ole/go-ole"
-	"syscall"
-	"unsafe"
-)
-
-const (
-	iidShellItemArrayGUID = "{b63ea76d-1f85-456f-a19c-48159efa858b}"
-)
-
-var (
-	iidShellItemArray *ole.GUID
-)
-
-func init() {
-	iidShellItemArray, _ = ole.IIDFromString(iidShellItemArrayGUID)
-}
-
-type iShellItemArray struct {
-	vtbl *iShellItemArrayVtbl
-}
-
-type iShellItemArrayVtbl struct {
-	iUnknownVtbl
-	BindToHandler              uintptr
-	GetPropertyStore           uintptr
-	GetPropertyDescriptionList uintptr
-	GetAttributes              uintptr
-	GetCount                   uintptr // func (pdwNumItems *DWORD) HRESULT
-	GetItemAt                  uintptr // func (dwIndex DWORD, ppsi **IShellItem) HRESULT
-	EnumItems                  uintptr
-}
-
-func (vtbl *iShellItemArrayVtbl) getCount(objPtr unsafe.Pointer) (uintptr, error) {
-	var count uintptr
-	ret, _, _ := syscall.SyscallN(vtbl.GetCount,
-		uintptr(objPtr),
-		uintptr(unsafe.Pointer(&count)))
-	if err := hresultToError(ret); err != nil {
-		return 0, err
-	}
-	return count, nil
-}
-
-func (vtbl *iShellItemArrayVtbl) getItemAt(objPtr unsafe.Pointer, index uintptr) (string, error) {
-	var shellItem *iShellItem
-	ret, _, _ := syscall.SyscallN(vtbl.GetItemAt,
-		uintptr(objPtr),
-		index,
-		uintptr(unsafe.Pointer(&shellItem)))
-	if err := hresultToError(ret); err != nil {
-		return "", err
-	}
-	if shellItem == nil {
-		return "", ErrCancelled
-	}
-	defer shellItem.vtbl.release(unsafe.Pointer(shellItem))
-	return shellItem.vtbl.getDisplayName(unsafe.Pointer(shellItem))
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/internal/go-common-file-dialog/cfd/vtblCommon.go","mode":420,"size":1496,"sha256":"ad5cc8b321f1fa82a4b263c606558ce6e7ebb4ac6c8116602e1f96f32c927cd6","index":0,"count":1,"encoding":"utf-8","payloadBytes":1496}
-//go:build windows
-// +build windows
-
-package cfd
-
-type comDlgFilterSpec struct {
-	pszName *int16
-	pszSpec *int16
-}
-
-type iUnknownVtbl struct {
-	QueryInterface uintptr
-	AddRef         uintptr
-	Release        uintptr
-}
-
-type iModalWindowVtbl struct {
-	iUnknownVtbl
-	Show uintptr // func (hwndOwner HWND) HRESULT
-}
-
-type iFileDialogVtbl struct {
-	iModalWindowVtbl
-	SetFileTypes        uintptr // func (cFileTypes UINT, rgFilterSpec *COMDLG_FILTERSPEC) HRESULT
-	SetFileTypeIndex    uintptr // func(iFileType UINT) HRESULT
-	GetFileTypeIndex    uintptr
-	Advise              uintptr
-	Unadvise            uintptr
-	SetOptions          uintptr // func (fos FILEOPENDIALOGOPTIONS) HRESULT
-	GetOptions          uintptr // func (pfos *FILEOPENDIALOGOPTIONS) HRESULT
-	SetDefaultFolder    uintptr // func (psi *IShellItem) HRESULT
-	SetFolder           uintptr // func (psi *IShellItem) HRESULT
-	GetFolder           uintptr
-	GetCurrentSelection uintptr
-	SetFileName         uintptr // func (pszName LPCWSTR) HRESULT
-	GetFileName         uintptr
-	SetTitle            uintptr // func(pszTitle LPCWSTR) HRESULT
-	SetOkButtonLabel    uintptr
-	SetFileNameLabel    uintptr
-	GetResult           uintptr // func (ppsi **IShellItem) HRESULT
-	AddPlace            uintptr
-	SetDefaultExtension uintptr // func (pszDefaultExtension LPCWSTR) HRESULT
-	// This can only be used from a callback.
-	Close           uintptr
-	SetClientGuid   uintptr // func (guid REFGUID) HRESULT
-	ClearClientData uintptr
-	SetFilter       uintptr
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/internal/go-common-file-dialog/cfd/vtblCommonFunc.go","mode":420,"size":6509,"sha256":"2d6e6ba731fc5a8c4cb35e3ecdcc7712072e97254d19ad60cfff41b26d00f0a9","index":0,"count":1,"encoding":"utf-8","payloadBytes":6509}
-//go:build windows
-
-package cfd
-
-import (
-	"github.com/go-ole/go-ole"
-	"strings"
-	"syscall"
-	"unsafe"
-)
-
-func hresultToError(hr uintptr) error {
-	if hr < 0 {
-		return ole.NewError(hr)
-	}
-	return nil
-}
-
-func (vtbl *iUnknownVtbl) release(objPtr unsafe.Pointer) error {
-	ret, _, _ := syscall.SyscallN(vtbl.Release,
-		uintptr(objPtr),
-		0)
-	return hresultToError(ret)
-}
-
-func (vtbl *iModalWindowVtbl) show(objPtr unsafe.Pointer, hwnd uintptr) error {
-	ret, _, _ := syscall.SyscallN(vtbl.Show,
-		uintptr(objPtr),
-		hwnd)
-	return hresultToError(ret)
-}
-
-func (vtbl *iFileDialogVtbl) setFileTypes(objPtr unsafe.Pointer, filters []FileFilter) error {
-	cFileTypes := len(filters)
-	if cFileTypes < 0 {
-		return ErrEmptyFilters
-	}
-	comDlgFilterSpecs := make([]comDlgFilterSpec, cFileTypes)
-	for i := 0; i < cFileTypes; i++ {
-		filter := &filters[i]
-		comDlgFilterSpecs[i] = comDlgFilterSpec{
-			pszName: ole.SysAllocString(filter.DisplayName),
-			pszSpec: ole.SysAllocString(filter.Pattern),
-		}
-	}
-
-	// Ensure memory is freed after use
-	defer func() {
-		for _, spec := range comDlgFilterSpecs {
-			ole.SysFreeString(spec.pszName)
-			ole.SysFreeString(spec.pszSpec)
-		}
-	}()
-
-	ret, _, _ := syscall.SyscallN(vtbl.SetFileTypes,
-		uintptr(objPtr),
-		uintptr(cFileTypes),
-		uintptr(unsafe.Pointer(&comDlgFilterSpecs[0])))
-	return hresultToError(ret)
-}
-
-// Options are:
-// FOS_OVERWRITEPROMPT = 0x2,
-// FOS_STRICTFILETYPES = 0x4,
-// FOS_NOCHANGEDIR = 0x8,
-// FOS_PICKFOLDERS = 0x20,
-// FOS_FORCEFILESYSTEM = 0x40,
-// FOS_ALLNONSTORAGEITEMS = 0x80,
-// FOS_NOVALIDATE = 0x100,
-// FOS_ALLOWMULTISELECT = 0x200,
-// FOS_PATHMUSTEXIST = 0x800,
-// FOS_FILEMUSTEXIST = 0x1000,
-// FOS_CREATEPROMPT = 0x2000,
-// FOS_SHAREAWARE = 0x4000,
-// FOS_NOREADONLYRETURN = 0x8000,
-// FOS_NOTESTFILECREATE = 0x10000,
-// FOS_HIDEMRUPLACES = 0x20000,
-// FOS_HIDEPINNEDPLACES = 0x40000,
-// FOS_NODEREFERENCELINKS = 0x100000,
-// FOS_OKBUTTONNEEDSINTERACTION = 0x200000,
-// FOS_DONTADDTORECENT = 0x2000000,
-// FOS_FORCESHOWHIDDEN = 0x10000000,
-// FOS_DEFAULTNOMINIMODE = 0x20000000,
-// FOS_FORCEPREVIEWPANEON = 0x40000000,
-// FOS_SUPPORTSTREAMABLEITEMS = 0x80000000
-func (vtbl *iFileDialogVtbl) setOptions(objPtr unsafe.Pointer, options uint32) error {
-	ret, _, _ := syscall.SyscallN(vtbl.SetOptions,
-		uintptr(objPtr),
-		uintptr(options))
-	return hresultToError(ret)
-}
-
-func (vtbl *iFileDialogVtbl) getOptions(objPtr unsafe.Pointer) (uint32, error) {
-	var options uint32
-	ret, _, _ := syscall.SyscallN(vtbl.GetOptions,
-		uintptr(objPtr),
-		uintptr(unsafe.Pointer(&options)))
-	return options, hresultToError(ret)
-}
-
-func (vtbl *iFileDialogVtbl) addOption(objPtr unsafe.Pointer, option uint32) error {
-	if options, err := vtbl.getOptions(objPtr); err == nil {
-		return vtbl.setOptions(objPtr, options|option)
-	} else {
-		return err
-	}
-}
-
-func (vtbl *iFileDialogVtbl) removeOption(objPtr unsafe.Pointer, option uint32) error {
-	if options, err := vtbl.getOptions(objPtr); err == nil {
-		return vtbl.setOptions(objPtr, options&^option)
-	} else {
-		return err
-	}
-}
-
-func (vtbl *iFileDialogVtbl) setDefaultFolder(objPtr unsafe.Pointer, path string) error {
-	shellItem, err := newIShellItem(path)
-	if err != nil {
-		return err
-	}
-	defer shellItem.vtbl.release(unsafe.Pointer(shellItem))
-	ret, _, _ := syscall.SyscallN(vtbl.SetDefaultFolder,
-		uintptr(objPtr),
-		uintptr(unsafe.Pointer(shellItem)))
-	return hresultToError(ret)
-}
-
-func (vtbl *iFileDialogVtbl) setFolder(objPtr unsafe.Pointer, path string) error {
-	shellItem, err := newIShellItem(path)
-	if err != nil {
-		return err
-	}
-	defer shellItem.vtbl.release(unsafe.Pointer(shellItem))
-	ret, _, _ := syscall.SyscallN(vtbl.SetFolder,
-		uintptr(objPtr),
-		uintptr(unsafe.Pointer(shellItem)))
-	return hresultToError(ret)
-}
-
-func (vtbl *iFileDialogVtbl) setTitle(objPtr unsafe.Pointer, title string) error {
-	titlePtr := ole.SysAllocString(title)
-	defer ole.SysFreeString(titlePtr) // Ensure the string is freed
-	ret, _, _ := syscall.SyscallN(vtbl.SetTitle,
-		uintptr(objPtr),
-		uintptr(unsafe.Pointer(titlePtr)))
-	return hresultToError(ret)
-}
-
-func (vtbl *iFileDialogVtbl) close(objPtr unsafe.Pointer) error {
-	ret, _, _ := syscall.SyscallN(vtbl.Close,
-		uintptr(objPtr))
-	return hresultToError(ret)
-}
-
-func (vtbl *iFileDialogVtbl) getResult(objPtr unsafe.Pointer) (*iShellItem, error) {
-	var shellItem *iShellItem
-	ret, _, _ := syscall.SyscallN(vtbl.GetResult,
-		uintptr(objPtr),
-		uintptr(unsafe.Pointer(&shellItem)))
-	return shellItem, hresultToError(ret)
-}
-
-func (vtbl *iFileDialogVtbl) getResultString(objPtr unsafe.Pointer) (string, error) {
-	shellItem, err := vtbl.getResult(objPtr)
-	if err != nil {
-		return "", err
-	}
-	if shellItem == nil {
-		return "", ErrCancelled
-	}
-	defer shellItem.vtbl.release(unsafe.Pointer(shellItem))
-	return shellItem.vtbl.getDisplayName(unsafe.Pointer(shellItem))
-}
-
-func (vtbl *iFileDialogVtbl) setClientGuid(objPtr unsafe.Pointer, guid *ole.GUID) error {
-	// Ensure the GUID is not nil
-	if guid == nil {
-		return ErrInvalidGUID
-	}
-
-	// Call the SetClientGuid method
-	ret, _, _ := syscall.SyscallN(vtbl.SetClientGuid,
-		uintptr(objPtr),
-		uintptr(unsafe.Pointer(guid)))
-
-	// Convert the HRESULT to a Go error
-	return hresultToError(ret)
-}
-
-func (vtbl *iFileDialogVtbl) setDefaultExtension(objPtr unsafe.Pointer, defaultExtension string) error {
-	// Ensure the string is not empty before accessing the first character
-	if len(defaultExtension) > 0 && defaultExtension[0] == '.' {
-		defaultExtension = strings.TrimPrefix(defaultExtension, ".")
-	}
-
-	// Allocate memory for the default extension string
-	defaultExtensionPtr := ole.SysAllocString(defaultExtension)
-	defer ole.SysFreeString(defaultExtensionPtr) // Ensure the string is freed
-
-	// Call the SetDefaultExtension method
-	ret, _, _ := syscall.SyscallN(vtbl.SetDefaultExtension,
-		uintptr(objPtr),
-		uintptr(unsafe.Pointer(defaultExtensionPtr)))
-
-	// Convert the HRESULT to a Go error
-	return hresultToError(ret)
-}
-
-func (vtbl *iFileDialogVtbl) setFileName(objPtr unsafe.Pointer, fileName string) error {
-	fileNamePtr := ole.SysAllocString(fileName)
-	defer ole.SysFreeString(fileNamePtr) // Ensure the string is freed
-	ret, _, _ := syscall.SyscallN(vtbl.SetFileName,
-		uintptr(objPtr),
-		uintptr(unsafe.Pointer(fileNamePtr)))
-	return hresultToError(ret)
-}
-
-func (vtbl *iFileDialogVtbl) setSelectedFileFilterIndex(objPtr unsafe.Pointer, index uint) error {
-	ret, _, _ := syscall.SyscallN(vtbl.SetFileTypeIndex,
-		uintptr(objPtr),
-		uintptr(index+1)) // SetFileTypeIndex counts from 1
-	return hresultToError(ret)
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/internal/go-common-file-dialog/cfdutil/CFDUtil.go","mode":420,"size":1015,"sha256":"d1bf06aa9edc0e8641288c45054a4426d138130e4852245140c6b6eb388ee535","index":0,"count":1,"encoding":"utf-8","payloadBytes":1015}
-package cfdutil
-
-import (
-	"github.com/wailsapp/wails/v2/internal/go-common-file-dialog/cfd"
-)
-
-// TODO doc
-func ShowOpenFileDialog(config cfd.DialogConfig) (string, error) {
-	dialog, err := cfd.NewOpenFileDialog(config)
-	if err != nil {
-		return "", err
-	}
-	defer dialog.Release()
-	return dialog.ShowAndGetResult()
-}
-
-// TODO doc
-func ShowOpenMultipleFilesDialog(config cfd.DialogConfig) ([]string, error) {
-	dialog, err := cfd.NewOpenMultipleFilesDialog(config)
-	if err != nil {
-		return nil, err
-	}
-	defer dialog.Release()
-	return dialog.ShowAndGetResults()
-}
-
-// TODO doc
-func ShowPickFolderDialog(config cfd.DialogConfig) (string, error) {
-	dialog, err := cfd.NewSelectFolderDialog(config)
-	if err != nil {
-		return "", err
-	}
-	defer dialog.Release()
-	return dialog.ShowAndGetResult()
-}
-
-// TODO doc
-func ShowSaveFileDialog(config cfd.DialogConfig) (string, error) {
-	dialog, err := cfd.NewSaveFileDialog(config)
-	if err != nil {
-		return "", err
-	}
-	defer dialog.Release()
-	return dialog.ShowAndGetResult()
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/internal/go-common-file-dialog/util/util.go","mode":420,"size":190,"sha256":"dc555841d8c51dccfbdd6a534043f6913a8042580f7219e903e0a2c39601fa46","index":0,"count":1,"encoding":"utf-8","payloadBytes":190}
-package util
-
-import (
-	"github.com/go-ole/go-ole"
-	"github.com/google/uuid"
-)
-
-func StringToUUID(str string) *ole.GUID {
-	return ole.NewGUID(uuid.NewSHA1(uuid.Nil, []byte(str)).String())
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/internal/gomod/gomod.go","mode":420,"size":2593,"sha256":"ab788241c9a5c46eafd2aed21962f22fe2d44c6ce41993938f578a65a50d6d6c","index":0,"count":1,"encoding":"utf-8","payloadBytes":2593}
-package gomod
-
-import (
-	"fmt"
-
-	"github.com/Masterminds/semver"
-	"golang.org/x/mod/modfile"
-)
-
-func GetWailsVersionFromModFile(goModText []byte) (*semver.Version, error) {
-	file, err := modfile.Parse("", goModText, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, req := range file.Require {
-		if req.Syntax == nil {
-			continue
-		}
-		tokenPosition := 0
-		if !req.Syntax.InBlock {
-			tokenPosition = 1
-		}
-		if req.Syntax.Token[tokenPosition] == "github.com/wailsapp/wails/v2" {
-			version := req.Syntax.Token[tokenPosition+1]
-			return semver.NewVersion(version)
-		}
-	}
-
-	return nil, nil
-}
-
-func GoModOutOfSync(goModData []byte, currentVersion string) (bool, error) {
-	gomodversion, err := GetWailsVersionFromModFile(goModData)
-	if err != nil {
-		return false, err
-	}
-	if gomodversion == nil {
-		return false, fmt.Errorf("Unable to find Wails in go.mod")
-	}
-
-	result, err := semver.NewVersion(currentVersion)
-	if err != nil || result == nil {
-		return false, fmt.Errorf("Unable to parse Wails version: %s", currentVersion)
-	}
-
-	return !gomodversion.Equal(result), nil
-}
-
-func UpdateGoModVersion(goModText []byte, currentVersion string) ([]byte, error) {
-	file, err := modfile.Parse("", goModText, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	err = file.AddRequire("github.com/wailsapp/wails/v2", currentVersion)
-	if err != nil {
-		return nil, err
-	}
-
-	// Replace
-	if len(file.Replace) == 0 {
-		return file.Format()
-	}
-
-	for _, req := range file.Replace {
-		if req.Syntax == nil {
-			continue
-		}
-		tokenPosition := 0
-		if !req.Syntax.InBlock {
-			tokenPosition = 1
-		}
-		if req.Syntax.Token[tokenPosition] == "github.com/wailsapp/wails/v2" {
-			version := req.Syntax.Token[tokenPosition+1]
-			_, err := semver.NewVersion(version)
-			if err == nil {
-				req.Syntax.Token[tokenPosition+1] = currentVersion
-			}
-		}
-	}
-
-	return file.Format()
-}
-
-func SyncGoVersion(goModText []byte, goVersion string) ([]byte, bool, error) {
-	file, err := modfile.Parse("", goModText, nil)
-	if err != nil {
-		return nil, false, err
-	}
-
-	modVersion, err := semver.NewVersion(file.Go.Version)
-	if err != nil {
-		return nil, false, fmt.Errorf("Unable to parse Go version from go mod file: %s", err)
-	}
-
-	targetVersion, err := semver.NewVersion(goVersion)
-	if err != nil {
-		return nil, false, fmt.Errorf("Unable to parse Go version: %s", targetVersion)
-	}
-
-	if !targetVersion.GreaterThan(modVersion) {
-		return goModText, false, nil
-	}
-
-	file.Go.Version = goVersion
-	file.Go.Syntax.Token[1] = goVersion
-	goModText, err = file.Format()
-	if err != nil {
-		return nil, false, err
-	}
-
-	return goModText, true, nil
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/internal/gomod/gomod_data_unix.go","mode":420,"size":2322,"sha256":"f70e8c76f804148d51fd1d8e00c987fd40ab6f01bcc78ea132f257583607b31e","index":0,"count":1,"encoding":"utf-8","payloadBytes":2322}
-//go:build darwin || linux
-
-package gomod
-
-const basic string = `module changeme
-
-go 1.17
-
-require github.com/wailsapp/wails/v2 v2.0.0-beta.7
-
-//replace github.com/wailsapp/wails/v2 v2.0.0-beta.7 => /home/lea/wails/v2
-`
-
-const basicUpdated string = `module changeme
-
-go 1.17
-
-require github.com/wailsapp/wails/v2 v2.0.0-beta.20
-
-//replace github.com/wailsapp/wails/v2 v2.0.0-beta.7 => /home/lea/wails/v2
-`
-
-const multilineRequire = `module changeme
-
-go 1.17
-
-require (
-	github.com/wailsapp/wails/v2 v2.0.0-beta.7
-)
-
-//replace github.com/wailsapp/wails/v2 v2.0.0-beta.7 => /home/lea/wails/v2
-`
-
-const multilineReplace = `module changeme
-
-go 1.17
-
-require (
-	github.com/wailsapp/wails/v2 v2.0.0-beta.7
-)
-
-replace github.com/wailsapp/wails/v2 v2.0.0-beta.7 => /home/lea/wails/v2
-`
-
-const multilineReplaceNoVersion = `module changeme
-
-go 1.17
-
-require (
-	github.com/wailsapp/wails/v2 v2.0.0-beta.7
-)
-
-replace github.com/wailsapp/wails/v2 => /home/lea/wails/v2
-`
-
-const multilineReplaceNoVersionBlock = `module changeme
-
-go 1.17
-
-require (
-	github.com/wailsapp/wails/v2 v2.0.0-beta.7
-)
-
-replace (
-	github.com/wailsapp/wails/v2 => /home/lea/wails/v2
-)
-`
-
-const multilineReplaceBlock = `module changeme
-
-go 1.17
-
-require (
-	github.com/wailsapp/wails/v2 v2.0.0-beta.7
-)
-
-replace (
-	github.com/wailsapp/wails/v2 v2.0.0-beta.7 => /home/lea/wails/v2
-)
-`
-
-const multilineRequireUpdated = `module changeme
-
-go 1.17
-
-require (
-	github.com/wailsapp/wails/v2 v2.0.0-beta.20
-)
-
-//replace github.com/wailsapp/wails/v2 v2.0.0-beta.7 => /home/lea/wails/v2
-`
-
-const multilineReplaceUpdated = `module changeme
-
-go 1.17
-
-require (
-	github.com/wailsapp/wails/v2 v2.0.0-beta.20
-)
-
-replace github.com/wailsapp/wails/v2 v2.0.0-beta.20 => /home/lea/wails/v2
-`
-
-const multilineReplaceNoVersionUpdated = `module changeme
-
-go 1.17
-
-require (
-	github.com/wailsapp/wails/v2 v2.0.0-beta.20
-)
-
-replace github.com/wailsapp/wails/v2 => /home/lea/wails/v2
-`
-
-const multilineReplaceNoVersionBlockUpdated = `module changeme
-
-go 1.17
-
-require (
-	github.com/wailsapp/wails/v2 v2.0.0-beta.20
-)
-
-replace (
-	github.com/wailsapp/wails/v2 => /home/lea/wails/v2
-)
-`
-
-const multilineReplaceBlockUpdated = `module changeme
-
-go 1.17
-
-require (
-	github.com/wailsapp/wails/v2 v2.0.0-beta.20
-)
-
-replace (
-	github.com/wailsapp/wails/v2 v2.0.0-beta.20 => /home/lea/wails/v2
-)
-`
-
-@@END
-@@PORTABLE {"path":"third_party/wails/internal/gomod/gomod_data_windows.go","mode":420,"size":2658,"sha256":"c3d665430582f9074a8c962dc2578bde5e552eaedc4e7b127e317eb998dd9a07","index":0,"count":1,"encoding":"utf-8","payloadBytes":2658}
-//go:build windows
-
-package gomod
-
-const basic string = `module changeme
-
-go 1.17
-
-require github.com/wailsapp/wails/v2 v2.0.0-beta.7
-
-//replace github.com/wailsapp/wails/v2 v2.0.0-beta.7 => C:\Users\leaan\Documents\wails-v2-beta\wails\v2
-`
-const basicUpdated string = `module changeme
-
-go 1.17
-
-require github.com/wailsapp/wails/v2 v2.0.0-beta.20
-
-//replace github.com/wailsapp/wails/v2 v2.0.0-beta.7 => C:\Users\leaan\Documents\wails-v2-beta\wails\v2
-`
-
-const multilineRequire = `module changeme
-
-go 1.17
-
-require (
-	github.com/wailsapp/wails/v2 v2.0.0-beta.7
-)
-
-//replace github.com/wailsapp/wails/v2 v2.0.0-beta.7 => C:\Users\leaan\Documents\wails-v2-beta\wails\v2
-`
-const multilineReplace = `module changeme
-
-go 1.17
-
-require (
-	github.com/wailsapp/wails/v2 v2.0.0-beta.7
-)
-
-replace github.com/wailsapp/wails/v2 v2.0.0-beta.7 => C:\Users\leaan\Documents\wails-v2-beta\wails\v2
-`
-
-const multilineReplaceNoVersion = `module changeme
-
-go 1.17
-
-require (
-	github.com/wailsapp/wails/v2 v2.0.0-beta.7
-)
-
-replace github.com/wailsapp/wails/v2 => C:\Users\leaan\Documents\wails-v2-beta\wails\v2
-`
-
-const multilineReplaceNoVersionBlock = `module changeme
-
-go 1.17
-
-require (
-	github.com/wailsapp/wails/v2 v2.0.0-beta.7
-)
-
-replace (
-	github.com/wailsapp/wails/v2 => C:\Users\leaan\Documents\wails-v2-beta\wails\v2
-)
-`
-
-const multilineReplaceBlock = `module changeme
-
-go 1.17
-
-require (
-	github.com/wailsapp/wails/v2 v2.0.0-beta.7
-)
-
-replace (
-	github.com/wailsapp/wails/v2 v2.0.0-beta.7 => C:\Users\leaan\Documents\wails-v2-beta\wails\v2
-)
-`
-
-const multilineRequireUpdated = `module changeme
-
-go 1.17
-
-require (
-	github.com/wailsapp/wails/v2 v2.0.0-beta.20
-)
-
-//replace github.com/wailsapp/wails/v2 v2.0.0-beta.7 => C:\Users\leaan\Documents\wails-v2-beta\wails\v2
-`
-
-const multilineReplaceUpdated = `module changeme
-
-go 1.17
-
-require (
-	github.com/wailsapp/wails/v2 v2.0.0-beta.20
-)
-
-replace github.com/wailsapp/wails/v2 v2.0.0-beta.20 => C:\Users\leaan\Documents\wails-v2-beta\wails\v2
-`
-const multilineReplaceNoVersionUpdated = `module changeme
-
-go 1.17
-
-require (
-	github.com/wailsapp/wails/v2 v2.0.0-beta.20
-)
-
-replace github.com/wailsapp/wails/v2 => C:\Users\leaan\Documents\wails-v2-beta\wails\v2
-`
-const multilineReplaceNoVersionBlockUpdated = `module changeme
-
-go 1.17
-
-require (
-	github.com/wailsapp/wails/v2 v2.0.0-beta.20
-)
-
-replace (
-	github.com/wailsapp/wails/v2 => C:\Users\leaan\Documents\wails-v2-beta\wails\v2
-)
-`
-
-const multilineReplaceBlockUpdated = `module changeme
-
-go 1.17
-
-require (
-	github.com/wailsapp/wails/v2 v2.0.0-beta.20
-)
-
-replace (
-	github.com/wailsapp/wails/v2 v2.0.0-beta.20 => C:\Users\leaan\Documents\wails-v2-beta\wails\v2
-)
-`
-
-@@END
-@@PORTABLE {"path":"third_party/wails/internal/goversion/build_constraint.go","mode":420,"size":195,"sha256":"c80246e18fc7d60bb92a20fb50514c744736e1f082741f7d2dfdc63c44c07f95","index":0,"count":1,"encoding":"utf-8","payloadBytes":195}
-//go:build !go1.18
-// +build !go1.18
-
-package goversion
-
-const MinGoVersionRequired = "You need Go " + MinRequirement + " or newer to compile this program"
-
-func init() {
-	MinGoVersionRequired
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/internal/goversion/min.go","mode":420,"size":56,"sha256":"43d7c8e48c50966615d192efbf9f3cc926d7c095064f6ac20189f34164ab138e","index":0,"count":1,"encoding":"utf-8","payloadBytes":56}
-package goversion
-
-const MinRequirement string = "1.20"
-
-@@END
-@@PORTABLE {"path":"third_party/wails/internal/logger/custom_logger.go","mode":420,"size":2732,"sha256":"b7a32923a105e6a33f25bcbef80a4f91f3b9b871885ea55e75155cbc774b03c4","index":0,"count":1,"encoding":"utf-8","payloadBytes":2732}
-package logger
-
-import (
-	"fmt"
-)
-
-// CustomLogger defines what a user can do with a logger
-type CustomLogger interface {
-	// Writeln writes directly to the output with no log level plus line ending
-	Writeln(message string)
-
-	// Write writes directly to the output with no log level
-	Write(message string)
-
-	// Trace level logging. Works like Sprintf.
-	Trace(format string, args ...interface{})
-
-	// Debug level logging. Works like Sprintf.
-	Debug(format string, args ...interface{})
-
-	// Info level logging. Works like Sprintf.
-	Info(format string, args ...interface{})
-
-	// Warning level logging. Works like Sprintf.
-	Warning(format string, args ...interface{})
-
-	// Error level logging. Works like Sprintf.
-	Error(format string, args ...interface{})
-
-	// Fatal level logging. Works like Sprintf.
-	Fatal(format string, args ...interface{})
-}
-
-// customLogger is a utlility to log messages to a number of destinations
-type customLogger struct {
-	logger *Logger
-	name   string
-}
-
-// New creates a new customLogger. You may pass in a number of `io.Writer`s that
-// are the targets for the logs
-func newcustomLogger(logger *Logger, name string) *customLogger {
-	result := &customLogger{
-		name:   name,
-		logger: logger,
-	}
-	return result
-}
-
-// Writeln writes directly to the output with no log level
-// Appends a carriage return to the message
-func (l *customLogger) Writeln(message string) {
-	l.logger.Writeln(message)
-}
-
-// Write writes directly to the output with no log level
-func (l *customLogger) Write(message string) {
-	l.logger.Write(message)
-}
-
-// Trace level logging. Works like Sprintf.
-func (l *customLogger) Trace(format string, args ...interface{}) {
-	format = fmt.Sprintf("%s | %s", l.name, format)
-	l.logger.Trace(format, args...)
-}
-
-// Debug level logging. Works like Sprintf.
-func (l *customLogger) Debug(format string, args ...interface{}) {
-	format = fmt.Sprintf("%s | %s", l.name, format)
-	l.logger.Debug(format, args...)
-}
-
-// Info level logging. Works like Sprintf.
-func (l *customLogger) Info(format string, args ...interface{}) {
-	format = fmt.Sprintf("%s | %s", l.name, format)
-	l.logger.Info(format, args...)
-}
-
-// Warning level logging. Works like Sprintf.
-func (l *customLogger) Warning(format string, args ...interface{}) {
-	format = fmt.Sprintf("%s | %s", l.name, format)
-	l.logger.Warning(format, args...)
-}
-
-// Error level logging. Works like Sprintf.
-func (l *customLogger) Error(format string, args ...interface{}) {
-	format = fmt.Sprintf("%s | %s", l.name, format)
-	l.logger.Error(format, args...)
-}
-
-// Fatal level logging. Works like Sprintf.
-func (l *customLogger) Fatal(format string, args ...interface{}) {
-	format = fmt.Sprintf("%s | %s", l.name, format)
-	l.logger.Fatal(format, args...)
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/internal/logger/default_logger.go","mode":420,"size":2714,"sha256":"b907f7b885600ea8b8463d3d29cf324c90d527fcf5b8018ea019e13b1abb778a","index":0,"count":1,"encoding":"utf-8","payloadBytes":2714}
-package logger
-
-import (
-	"fmt"
-	"os"
-
-	"github.com/wailsapp/wails/v2/pkg/logger"
-)
-
-// LogLevel is an alias for the public LogLevel
-type LogLevel = logger.LogLevel
-
-// Logger is a utlility to log messages to a number of destinations
-type Logger struct {
-	output         logger.Logger
-	logLevel       LogLevel
-	showLevelInLog bool
-}
-
-// New creates a new Logger. You may pass in a number of `io.Writer`s that
-// are the targets for the logs
-func New(output logger.Logger) *Logger {
-	if output == nil {
-		output = logger.NewDefaultLogger()
-	}
-	result := &Logger{
-		logLevel:       logger.INFO,
-		showLevelInLog: true,
-		output:         output,
-	}
-
-	return result
-}
-
-// CustomLogger creates a new custom logger that prints out a name/id
-// before the messages
-func (l *Logger) CustomLogger(name string) CustomLogger {
-	return newcustomLogger(l, name)
-}
-
-// HideLogLevel removes the loglevel text from the start of each logged line
-func (l *Logger) HideLogLevel() {
-	l.showLevelInLog = true
-}
-
-// SetLogLevel sets the minimum level of logs that will be output
-func (l *Logger) SetLogLevel(level LogLevel) {
-	l.logLevel = level
-}
-
-// Writeln writes directly to the output with no log level
-// Appends a carriage return to the message
-func (l *Logger) Writeln(message string) {
-	l.output.Print(message)
-}
-
-// Write writes directly to the output with no log level
-func (l *Logger) Write(message string) {
-	l.output.Print(message)
-}
-
-// Print writes directly to the output with no log level
-// Appends a carriage return to the message
-func (l *Logger) Print(message string) {
-	l.Write(message)
-}
-
-// Trace level logging. Works like Sprintf.
-func (l *Logger) Trace(format string, args ...interface{}) {
-	if l.logLevel <= logger.TRACE {
-		l.output.Trace(fmt.Sprintf(format, args...))
-	}
-}
-
-// Debug level logging. Works like Sprintf.
-func (l *Logger) Debug(format string, args ...interface{}) {
-	if l.logLevel <= logger.DEBUG {
-		l.output.Debug(fmt.Sprintf(format, args...))
-	}
-}
-
-// Info level logging. Works like Sprintf.
-func (l *Logger) Info(format string, args ...interface{}) {
-	if l.logLevel <= logger.INFO {
-		l.output.Info(fmt.Sprintf(format, args...))
-	}
-}
-
-// Warning level logging. Works like Sprintf.
-func (l *Logger) Warning(format string, args ...interface{}) {
-	if l.logLevel <= logger.WARNING {
-		l.output.Warning(fmt.Sprintf(format, args...))
-	}
-}
-
-// Error level logging. Works like Sprintf.
-func (l *Logger) Error(format string, args ...interface{}) {
-	if l.logLevel <= logger.ERROR {
-		l.output.Error(fmt.Sprintf(format, args...))
-	}
-}
-
-// Fatal level logging. Works like Sprintf.
-func (l *Logger) Fatal(format string, args ...interface{}) {
-	l.output.Fatal(fmt.Sprintf(format, args...))
-	os.Exit(1)
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/internal/menumanager/applicationmenu.go","mode":420,"size":1375,"sha256":"84dafa5d7dbd9e2f606d9b9c4337d573a0e1992a465a557b2312acad4fc02875","index":0,"count":1,"encoding":"utf-8","payloadBytes":1375}
-package menumanager
-
-import "github.com/wailsapp/wails/v2/pkg/menu"
-
-func (m *Manager) SetApplicationMenu(applicationMenu *menu.Menu) error {
-	if applicationMenu == nil {
-		return nil
-	}
-
-	m.applicationMenu = applicationMenu
-
-	// Reset the menu map
-	m.applicationMenuItemMap = NewMenuItemMap()
-
-	// Add the menu to the menu map
-	m.applicationMenuItemMap.AddMenu(applicationMenu)
-
-	return m.processApplicationMenu()
-}
-
-func (m *Manager) GetApplicationMenuJSON() string {
-	return m.applicationMenuJSON
-}
-
-func (m *Manager) GetProcessedApplicationMenu() *WailsMenu {
-	return m.processedApplicationMenu
-}
-
-// UpdateApplicationMenu reprocesses the application menu to pick up structure
-// changes etc
-// Returns the JSON representation of the updated menu
-func (m *Manager) UpdateApplicationMenu() (string, error) {
-	m.applicationMenuItemMap = NewMenuItemMap()
-	m.applicationMenuItemMap.AddMenu(m.applicationMenu)
-	err := m.processApplicationMenu()
-	return m.applicationMenuJSON, err
-}
-
-func (m *Manager) processApplicationMenu() error {
-	// Process the menu
-	m.processedApplicationMenu = NewWailsMenu(m.applicationMenuItemMap, m.applicationMenu)
-	m.processRadioGroups(m.processedApplicationMenu, m.applicationMenuItemMap)
-	applicationMenuJSON, err := m.processedApplicationMenu.AsJSON()
-	if err != nil {
-		return err
-	}
-	m.applicationMenuJSON = applicationMenuJSON
-	return nil
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/internal/menumanager/contextmenu.go","mode":420,"size":1452,"sha256":"8c87c87b21190a420789322f776384675ceb19c30f4f679c112f23ad9c38ef69","index":0,"count":1,"encoding":"utf-8","payloadBytes":1452}
-package menumanager
-
-import (
-	"encoding/json"
-	"fmt"
-
-	"github.com/wailsapp/wails/v2/pkg/menu"
-)
-
-type ContextMenu struct {
-	ID            string
-	ProcessedMenu *WailsMenu
-	menuItemMap   *MenuItemMap
-	menu          *menu.Menu
-}
-
-func (t *ContextMenu) AsJSON() (string, error) {
-	data, err := json.Marshal(t)
-	if err != nil {
-		return "", err
-	}
-	return string(data), nil
-}
-
-func NewContextMenu(contextMenu *menu.ContextMenu) *ContextMenu {
-	result := &ContextMenu{
-		ID:          contextMenu.ID,
-		menu:        contextMenu.Menu,
-		menuItemMap: NewMenuItemMap(),
-	}
-
-	result.menuItemMap.AddMenu(contextMenu.Menu)
-	result.ProcessedMenu = NewWailsMenu(result.menuItemMap, result.menu)
-
-	return result
-}
-
-func (m *Manager) AddContextMenu(contextMenu *menu.ContextMenu) {
-	newContextMenu := NewContextMenu(contextMenu)
-
-	// Save the references
-	m.contextMenus[contextMenu.ID] = newContextMenu
-	m.contextMenuPointers[contextMenu] = contextMenu.ID
-}
-
-func (m *Manager) UpdateContextMenu(contextMenu *menu.ContextMenu) (string, error) {
-	contextMenuID, contextMenuKnown := m.contextMenuPointers[contextMenu]
-	if !contextMenuKnown {
-		return "", fmt.Errorf("unknown Context Menu '%s'. Please add the context menu using AddContextMenu()", contextMenu.ID)
-	}
-
-	// Create the updated context menu
-	updatedContextMenu := NewContextMenu(contextMenu)
-
-	// Save the reference
-	m.contextMenus[contextMenuID] = updatedContextMenu
-
-	return updatedContextMenu.AsJSON()
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/internal/menumanager/menuitemmap.go","mode":420,"size":1705,"sha256":"69a19623ca0b0c5d36ab7fd78284af65ece8dd488712f6025bc37797b9252c19","index":0,"count":1,"encoding":"utf-8","payloadBytes":1705}
-package menumanager
-
-import (
-	"fmt"
-	"strconv"
-	"sync"
-
-	"github.com/wailsapp/wails/v2/pkg/menu"
-)
-
-// MenuItemMap holds a mapping between menuIDs and menu items
-type MenuItemMap struct {
-	idToMenuItemMap map[string]*menu.MenuItem
-	menuItemToIDMap map[*menu.MenuItem]string
-
-	// We use a simple counter to keep track of unique menu IDs
-	menuIDCounter      int64
-	menuIDCounterMutex sync.Mutex
-}
-
-func NewMenuItemMap() *MenuItemMap {
-	result := &MenuItemMap{
-		idToMenuItemMap: make(map[string]*menu.MenuItem),
-		menuItemToIDMap: make(map[*menu.MenuItem]string),
-	}
-
-	return result
-}
-
-func (m *MenuItemMap) AddMenu(menu *menu.Menu) {
-	if menu == nil {
-		return
-	}
-	for _, item := range menu.Items {
-		m.processMenuItem(item)
-	}
-}
-
-func (m *MenuItemMap) Dump() {
-	println("idToMenuItemMap:")
-	for key, value := range m.idToMenuItemMap {
-		fmt.Printf("  %s\t%p\n", key, value)
-	}
-	println("\nmenuItemToIDMap")
-	for key, value := range m.menuItemToIDMap {
-		fmt.Printf("  %p\t%s\n", key, value)
-	}
-}
-
-// GenerateMenuID returns a unique string ID for a menu item
-func (m *MenuItemMap) generateMenuID() string {
-	m.menuIDCounterMutex.Lock()
-	result := strconv.FormatInt(m.menuIDCounter, 10)
-	m.menuIDCounter++
-	m.menuIDCounterMutex.Unlock()
-	return result
-}
-
-func (m *MenuItemMap) processMenuItem(item *menu.MenuItem) {
-	if item.SubMenu != nil {
-		for _, submenuitem := range item.SubMenu.Items {
-			m.processMenuItem(submenuitem)
-		}
-	}
-
-	// Create a unique ID for this menu item
-	menuID := m.generateMenuID()
-
-	// Store references
-	m.idToMenuItemMap[menuID] = item
-	m.menuItemToIDMap[item] = menuID
-}
-
-func (m *MenuItemMap) getMenuItemByID(menuId string) *menu.MenuItem {
-	return m.idToMenuItemMap[menuId]
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/internal/menumanager/menumanager.go","mode":420,"size":3040,"sha256":"727bffb4735703da8b57c70ce2b285a6beee3fcbeeca831fc2d3a49371b3a669","index":0,"count":1,"encoding":"utf-8","payloadBytes":3040}
-package menumanager
-
-import (
-	"fmt"
-
-	"github.com/wailsapp/wails/v2/pkg/menu"
-)
-
-type Manager struct {
-	// The application menu.
-	applicationMenu          *menu.Menu
-	applicationMenuJSON      string
-	processedApplicationMenu *WailsMenu
-
-	// Our application menu mappings
-	applicationMenuItemMap *MenuItemMap
-
-	// Context menus
-	contextMenus        map[string]*ContextMenu
-	contextMenuPointers map[*menu.ContextMenu]string
-
-	// Tray menu stores
-	trayMenus        map[string]*TrayMenu
-	trayMenuPointers map[*menu.TrayMenu]string
-
-	// Radio groups
-	radioGroups map[*menu.MenuItem][]*menu.MenuItem
-}
-
-func NewManager() *Manager {
-	return &Manager{
-		applicationMenuItemMap: NewMenuItemMap(),
-		contextMenus:           make(map[string]*ContextMenu),
-		contextMenuPointers:    make(map[*menu.ContextMenu]string),
-		trayMenus:              make(map[string]*TrayMenu),
-		trayMenuPointers:       make(map[*menu.TrayMenu]string),
-		radioGroups:            make(map[*menu.MenuItem][]*menu.MenuItem),
-	}
-}
-
-func (m *Manager) getMenuItemByID(menuMap *MenuItemMap, menuId string) *menu.MenuItem {
-	return menuMap.idToMenuItemMap[menuId]
-}
-
-func (m *Manager) ProcessClick(menuID string, data string, menuType string, parentID string) error {
-	var menuItemMap *MenuItemMap
-
-	switch menuType {
-	case "ApplicationMenu":
-		menuItemMap = m.applicationMenuItemMap
-	case "ContextMenu":
-		contextMenu := m.contextMenus[parentID]
-		if contextMenu == nil {
-			return fmt.Errorf("unknown context menu: %s", parentID)
-		}
-		menuItemMap = contextMenu.menuItemMap
-	case "TrayMenu":
-		trayMenu := m.trayMenus[parentID]
-		if trayMenu == nil {
-			return fmt.Errorf("unknown tray menu: %s", parentID)
-		}
-		menuItemMap = trayMenu.menuItemMap
-	default:
-		return fmt.Errorf("unknown menutype: %s", menuType)
-	}
-
-	// Get the menu item
-	menuItem := menuItemMap.getMenuItemByID(menuID)
-	if menuItem == nil {
-		return fmt.Errorf("Cannot process menuid %s - unknown", menuID)
-	}
-
-	// Is the menu item a checkbox?
-	if menuItem.Type == menu.CheckboxType {
-		// Toggle state
-		menuItem.Checked = !menuItem.Checked
-	}
-
-	if menuItem.Type == menu.RadioType {
-		println("Toggle radio")
-		// Get my radio group
-		for _, radioMenuItem := range m.radioGroups[menuItem] {
-			radioMenuItem.Checked = (radioMenuItem == menuItem)
-		}
-	}
-
-	if menuItem.Click == nil {
-		// No callback
-		return fmt.Errorf("No callback for menu '%s'", menuItem.Label)
-	}
-
-	// Create new Callback struct
-	callbackData := &menu.CallbackData{
-		MenuItem: menuItem,
-		// ContextData: data,
-	}
-
-	// Call back!
-	go menuItem.Click(callbackData)
-
-	return nil
-}
-
-func (m *Manager) processRadioGroups(processedMenu *WailsMenu, itemMap *MenuItemMap) {
-	for _, group := range processedMenu.RadioGroups {
-		radioGroupMenuItems := []*menu.MenuItem{}
-		for _, member := range group.Members {
-			item := m.getMenuItemByID(itemMap, member)
-			radioGroupMenuItems = append(radioGroupMenuItems, item)
-		}
-		for _, radioGroupMenuItem := range radioGroupMenuItems {
-			m.radioGroups[radioGroupMenuItem] = radioGroupMenuItems
-		}
-	}
 }
 
 @@END
