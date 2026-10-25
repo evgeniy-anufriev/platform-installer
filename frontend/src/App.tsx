@@ -890,10 +890,14 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
       setInstallationSubscription("");
       setInstallationRun(operation);
       setInstallationEvents([]);
-      setRunPlan(undefined);
+      const recoveredPlan = operation.plan as InstallationPlanOperation["plan"];
+      setRunPlan(recoveredPlan);
       activeRunIdRef.current = operation.run.runId;
       lastRecoveryCursorRef.current.delete(operation.run.runId);
-      runProgressRef.current = beginRunProgress(operation.run.runId);
+      runProgressRef.current = beginRunProgress(
+        operation.run.runId,
+        recoveredPlan,
+      );
       setRunProgress(runProgressRef.current);
       setPage("installation");
       setInstallationTab(operation.result ? "result" : "execution");
@@ -912,11 +916,13 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
   };
   const installationOrderRef = useRef<string[]>([]);
   const installationLibraryOrderRef = useRef<string[]>([]);
+  const installationSkippedLibrariesRef = useRef<string[]>([]);
   const createInstallationPlan = async (
     deploymentOrder: string[],
     executionMode: InstallationExecutionMode = "FULL_PROJECT",
     skipInfrastructureVerify = false,
     applicationLibraryOrder: string[] = [],
+    skipApplicationLibraries: string[] = [],
   ) => {
     if (
       ["STARTING", "RUNNING", "CANCELLING"].includes(
@@ -929,6 +935,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     setInstallationBusy(true);
     installationOrderRef.current = deploymentOrder;
     installationLibraryOrderRef.current = applicationLibraryOrder;
+    installationSkippedLibrariesRef.current = skipApplicationLibraries;
     try {
       const operation: InstallationPlanOperation =
         api.createInstallationPlanForMode
@@ -940,8 +947,13 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
                 : {}),
               applicationVaultSources: {},
               skipInfrastructureVerify,
+              ...(skipApplicationLibraries.length
+                ? { skipApplicationLibraries }
+                : {}),
             })
-          : executionMode === "FULL_PROJECT" && api.createInstallationPlan
+          : executionMode === "FULL_PROJECT" &&
+              !skipApplicationLibraries.length &&
+              api.createInstallationPlan
             ? await api.createInstallationPlan(deploymentOrder)
             : {
                 status: "BLOCKED",
@@ -976,6 +988,9 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
         installationExecutionMode
       ) {
         if (!api.createInstallationPlanForMode) return;
+        const skippedLibraries =
+          installationPlan?.plan?.skipApplicationLibraries ??
+          installationSkippedLibrariesRef.current;
         const fresh = await api.createInstallationPlanForMode({
           executionMode: installationExecutionMode,
           deploymentOrder: installationOrderRef.current,
@@ -983,6 +998,9 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
             ? { applicationLibraryOrder: installationLibraryOrderRef.current }
             : {}),
           applicationVaultSources: {},
+          ...(skippedLibraries.length
+            ? { skipApplicationLibraries: skippedLibraries }
+            : {}),
         });
         setInstallationPlan(fresh);
         const previous = installationPlan?.plan;

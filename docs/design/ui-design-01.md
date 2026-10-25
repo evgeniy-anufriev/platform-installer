@@ -616,7 +616,12 @@ Node panel on Servers. After inspection, show one previous run ID, its original
 revision and authoritative state, with **Подключиться** for an active run.
 Attach restores Installation / Execution through the existing reconnect,
 subscription and Cancel methods; it never repeats Start. No history/status list
-or separate recovery page is added. When bundle detection on Project is blocked by an
+or separate recovery page is added. New starts retain the safe display projection
+of the original plan in the existing local run record. Attach restores that
+projection and initializes action progress before replaying events. Legacy
+records without it keep the explicit unavailable-plan/percentage state; the
+display snapshot never authorizes Start or approval.
+When bundle detection on Project is blocked by an
 unconfirmed run, show a Russian explanation and a link to Servers: restore SSH
 credentials and host-key trust there, then choose **Проверить прежний запуск**.
 Do not show `INSTALLATION_RUN_ACTIVE` as the operator-facing explanation.
@@ -1073,6 +1078,19 @@ confirms the exact flagged plan. Changing the option invalidates the plan;
 changing project or execution mode clears the selection. Plan/Result retain the
 explicit skip and real verification observation, without a fabricated PASS.
 An older runtime rejects the negotiated feature, with no silent fallback.
+
+Stage3 owner-approved extension (2026-10-24): the Plan tab also has a library
+table keyed by instance ID, with an «Установить» checkbox per row, checked by
+default. Checked means install; unchecked means skip, matching infrastructure
+selection. The transport still carries only unchecked IDs as skipApplicationLibraries.
+This is local invocation state; it is never saved to defaults/group_vars.
+The UI forwards only selected IDs; Core derives provider and consumer scope.
+Changing it invalidates the displayed scope and disables approval/Start until
+a fresh authoritative plan is built and reviewed. A running execution locks
+the table. Project or execution-mode changes clear the selection. Skipped
+libraries remain available to selected consumers' integrations; the control
+does not disable connections or delete remote objects. The old static mockup
+does not show this new table; the approved Stage3 plan defines this extension.
 
 ### Direct resource keys (2026-10-19)
 

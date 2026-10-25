@@ -15,6 +15,7 @@ import (
 )
 
 const localRunRecordVersion = 1
+const maxLocalRunRecordBytes = 1 << 20
 
 // This is operational start evidence, never desired project state. The
 // initial PENDING record is durable before a remote Start can be sent.
@@ -32,6 +33,8 @@ type localRunRecord struct {
 	State              string `json:"state"` // PENDING, RUNNING, TERMINAL
 	RunID              string `json:"runId,omitempty"`
 	TerminalState      string `json:"terminalState,omitempty"`
+	// Display evidence only; never used to approve, rebuild or start a plan.
+	Plan *InstallationPlanView `json:"plan,omitempty"`
 }
 
 func defaultLocalRunRecordRoot() string {
@@ -82,6 +85,9 @@ func validLocalRunID(id string) bool {
 }
 
 func validLocalRunRecord(record localRunRecord) bool {
+	if record.Plan != nil && (record.Plan.ID != record.PlanID || record.Plan.ProjectRevision != record.ProjectRevision || record.Plan.ExecutionNodeID != record.NodeID) {
+		return false
+	}
 	if record.Version != localRunRecordVersion || record.ProjectRoot == "" || record.ProjectID == "" || record.ProjectRevision == "" || record.PlanID == "" || record.NodeID == "" || record.NodeAddress == "" || record.NodePort == 0 || record.NodeUser == "" || !strings.HasPrefix(record.HostKeyFingerprint, "SHA256:") {
 		return false
 	}
@@ -109,11 +115,11 @@ func readLocalRunRecord(storeRoot, projectRoot, projectID string) (*localRunReco
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	}
-	if err != nil || !info.Mode().IsRegular() || info.Size() < 2 || info.Size() > 8192 {
+	if err != nil || !info.Mode().IsRegular() || info.Size() < 2 || info.Size() > maxLocalRunRecordBytes {
 		return nil, errors.New("LOCAL_RUN_RECORD_INVALID")
 	}
 	content, err := os.ReadFile(path)
-	if err != nil || len(content) > 8192 {
+	if err != nil || len(content) > maxLocalRunRecordBytes {
 		return nil, errors.New("LOCAL_RUN_RECORD_INVALID")
 	}
 	decoder := json.NewDecoder(bytes.NewReader(content))
@@ -157,7 +163,7 @@ func writeLocalRunRecord(storeRoot string, record localRunRecord) error {
 		return errors.New("LOCAL_RUN_RECORD_INVALID")
 	}
 	data, err := json.Marshal(record)
-	if err != nil || len(data) > 8192 {
+	if err != nil || len(data) > maxLocalRunRecordBytes {
 		return errors.New("LOCAL_RUN_RECORD_INVALID")
 	}
 	return writeLocalOperationalRecord(storeRoot, path, data)
@@ -200,7 +206,9 @@ func restoreLocalRunRecordAfterUnsentStart(storeRoot string, pending localRunRec
 		return errors.New("LOCAL_RUN_RECORD_INVALID")
 	}
 	current, err := readLocalRunRecord(storeRoot, pending.ProjectRoot, pending.ProjectID)
-	if err != nil || current == nil || *current != pending {
+	currentJSON, currentErr := json.Marshal(current)
+	pendingJSON, pendingErr := json.Marshal(pending)
+	if err != nil || current == nil || currentErr != nil || pendingErr != nil || !bytes.Equal(currentJSON, pendingJSON) {
 		return errors.New("LOCAL_RUN_RECORD_CHANGED")
 	}
 	if previous != nil {

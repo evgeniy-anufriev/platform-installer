@@ -3,6 +3,8 @@ package desktop
 import (
 	"os"
 	"path/filepath"
+	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -36,6 +38,40 @@ func TestLocalRunRecordSurvivesReopenAndTransitions(t *testing.T) {
 		if err != nil || got == nil || *got != record {
 			t.Fatalf("state=%s got=%+v err=%v", state, got, err)
 		}
+	}
+}
+
+func TestLocalRunRecordRetainsDisplayPlanAcrossReopenAndUnsentStart(t *testing.T) {
+	root, record := testLocalRunRecord(t)
+	record.Plan = &InstallationPlanView{ID: record.PlanID, ProjectRevision: record.ProjectRevision, ExecutionNodeID: record.NodeID,
+		Phases: []InstallationPlanPhase{{ID: "applications", Actions: []InstallationPlanAction{{ID: "apply", Summary: strings.Repeat("safe display text", 600)}}}}}
+	if err := writeLocalRunRecord(root, record); err != nil {
+		t.Fatal(err)
+	}
+	got, err := readLocalRunRecord(root, record.ProjectRoot, record.ProjectID)
+	if err != nil || got == nil || !reflect.DeepEqual(*got, record) {
+		t.Fatalf("display plan lost: %v", err)
+	}
+	if err := restoreLocalRunRecordAfterUnsentStart(root, record, nil); err != nil {
+		t.Fatalf("snapshot changed reservation comparison: %v", err)
+	}
+	for _, field := range []string{"id", "revision", "node"} {
+		t.Run(field, func(t *testing.T) {
+			copy := *record.Plan
+			switch field {
+			case "id":
+				copy.ID = "other"
+			case "revision":
+				copy.ProjectRevision = "other"
+			case "node":
+				copy.ExecutionNodeID = "other"
+			}
+			invalid := record
+			invalid.Plan = &copy
+			if err := writeLocalRunRecord(root, invalid); err == nil {
+				t.Fatal("foreign display plan accepted")
+			}
+		})
 	}
 }
 

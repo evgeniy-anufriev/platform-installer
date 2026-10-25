@@ -3,11 +3,13 @@ import json
 try:
     from .application_endpoints import placement_target, public_endpoint_url
     from .application_libraries import checked_file
-    from .application_connections import active_script, script_secret_source, script_secret_reference, connection_callback
+    from .application_connections import active_script, library_script_hosts, script_secret_source, script_secret_reference, connection_callback
+    from .application_selection import integration_consumers
 except ImportError:
     from application_endpoints import placement_target, public_endpoint_url
     from application_libraries import checked_file
-    from application_connections import active_script, script_secret_source, script_secret_reference, connection_callback
+    from application_connections import active_script, library_script_hosts, script_secret_source, script_secret_reference, connection_callback
+    from application_selection import integration_consumers
 
 
 def _scalar(value):
@@ -28,10 +30,12 @@ def _instance(library, name):
     return matches[0]
 
 
-def _argument(argument, job, library, hosts, desired, provider_library=None):
+def _argument(argument, job, library, hosts, desired, provider_library=None, snapshot=None):
     if isinstance(argument, str):
         return argument
     source = argument['valueFrom']
+    if source == 'integration_consumers':
+        return _scalar(integration_consumers(snapshot, job['libraryId'], desired))
     if source == 'applicationId':
         return job['instanceId']
     if source == 'projectId':
@@ -89,7 +93,18 @@ def _argument(argument, job, library, hosts, desired, provider_library=None):
     raise ValueError('APPLICATION_SCRIPT_REFERENCE_INVALID')
 
 
-def prepare_script_jobs(root, snapshot, desired, rows, jobs):
+def _secret_reference(source, declaration, job):
+    if source and source.get('kind') == 'generated' and declaration.get('valueFrom') == 'secret_binding':
+        try:
+            from .runtime_secret_identity import generated_password_ref
+        except ImportError:
+            from runtime_secret_identity import generated_password_ref
+        binding = job['secretBindings'][declaration['binding']]['source']
+        return generated_password_ref(job['projectId'], job['libraryId'], job['instanceId'], binding['account'])
+    return script_secret_reference(source)
+
+
+def prepare_script_jobs(root, snapshot, desired, rows, jobs, phase=None):
     libraries = snapshot['applicationLibraries']['libraries']
     if (not any(job.get('packageApplicationScripts') or job.get('packageLibraryScripts') for job in jobs)
             and not any(connection.get('connectionProvisioner') for library in libraries.values()
@@ -112,12 +127,14 @@ def prepare_script_jobs(root, snapshot, desired, rows, jobs):
             raise ValueError('APPLICATION_SCRIPT_ID_CONFLICT')
         declarations = [(item, 'instance', job['applicationPackagePath']) for item in app_scripts]
         for item in lib_scripts:
-            eligible_instances = sorted(instance_id for instance_id, member in library['instances'].items()
-                                        if job['hostId'] in member['placements'] and active_script(item, member))
-            if eligible_instances and job['instanceId'] == eligible_instances[0]:
+            if job['hostId'] in library_script_hosts(library, job['instanceId'], item):
                 declarations.append((item, 'library', job['libraryPackagePath']))
         scripts = []
         for script, scope, package_path in declarations:
+            if phase is not None and script['phase'] != phase:
+                continue
+            if job.get('scriptContextOnly') and script['phase'] != 'integration_apply':
+                continue
             if not active_script(script, instance):
                 continue
             eligible = sorted(instance['placements'] if scope == 'instance' else {
@@ -133,7 +150,7 @@ def prepare_script_jobs(root, snapshot, desired, rows, jobs):
                 value = script_secret_source(source, library, instance)
                 if value is None and source.get('optional', False):
                     continue
-                secret_inputs[name] = script_secret_reference(value)
+                secret_inputs[name] = _secret_reference(value, source, dict(job, secretBindings=instance.get("secretBindings", {})))
             targets = [None]
             if script.get('target'):
                 connection = instance['connections'][script['target']['connection']]
@@ -152,13 +169,17 @@ def prepare_script_jobs(root, snapshot, desired, rows, jobs):
                 argument_job = dict(job, hostId=target['hostId']) if target else job
                 scripts.append(dict(id=script['id'], phase=script['phase'], order=script.get('order', 0), scope=scope,
                                 path=checked_file(root, package_path + '/' + script['source']),
-                                argv=[_argument(value, argument_job, library, hosts, desired) for value in script.get('argv', [])],
+                                argv=[_argument(value, argument_job, library, hosts, desired, snapshot=snapshot) for value in script.get('argv', [])],
                                 secretInputs=secret_inputs, target=target, runOn=script.get('run_on', 'target'),
                                 targetConnection=script.get('target', {}).get('connection'),
                                 sharedInputs=[value['name'] for value in script.get('secretInputs', {}).values()
                                               if value.get('valueFrom') == 'library_secret']))
         job['scripts'] = scripts
+    if phase == 'post_install':
+        return jobs
     for job in jobs:
+        if job.get('scriptContextOnly'):
+            continue
         library = libraries[job['libraryId']]
         instance = library['instances'][job['instanceId']]
         if job['hostId'] != min(instance['placements']):

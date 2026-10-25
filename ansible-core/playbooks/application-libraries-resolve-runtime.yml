@@ -19,6 +19,19 @@
       ansible.builtin.assert:
         that: application_snapshot.snapshot.validation.status == 'PASS'
         fail_msg: "{{ application_snapshot.snapshot.findings | map(attribute='code') | unique | list }}"
+    - name: Bind the invocation selection without removing provider definitions
+      platform.core.prepare_application_selection:
+        snapshot_result: "{{ application_snapshot }}"
+      register: application_selection
+      no_log: true
+    - name: Require valid invocation scope before any provider preparation
+      ansible.builtin.assert:
+        that: application_selection.status == 'PASS'
+        fail_msg: "{{ application_selection.code | default('APPLICATION_LIBRARY_SELECTION_INVALID') }}"
+    - name: Use the selected snapshot for all execution projections
+      ansible.builtin.set_fact:
+        application_snapshot: "{{ application_selection.prepared }}"
+      no_log: true
     - name: Resolve Vault hooks from the same snapshot
       platform.core.prepare_application_vault:
         snapshot_result: "{{ application_snapshot }}"
@@ -43,6 +56,7 @@
         service_catalog_path: "{{ platform_service_catalog_path }}"
         project_root: "{{ platform_project_root | default(inventory_dir | dirname) }}"
       register: application_provider_inputs
+      when: not platform_application_post_install_only | default(false)
       no_log: true
     - name: Bind the same snapshot for runtime provider preflight
       ansible.builtin.set_fact:
@@ -53,11 +67,12 @@
         project_root: "{{ platform_project_root | default(inventory_dir | dirname) }}"
         contracts_root: "{{ platform_contracts_root | default(playbook_dir ~ '/../../contracts') }}"
         snapshot: "{{ application_snapshot.snapshot }}"
+        scripts_only: "{{ platform_application_post_install_only | default(false) }}"
       register: application_runtime_inputs
       no_log: true
     - name: Require successful standalone authority preparation
       ansible.builtin.assert:
         that:
           - application_runtime_inputs.status == 'PASS'
-          - application_provider_inputs.status == 'PASS'
+          - platform_application_post_install_only | default(false) or application_provider_inputs.status == 'PASS'
         fail_msg: "{{ application_runtime_inputs.code | default('APPLICATION_RUNTIME_INPUT_INVALID') }}"

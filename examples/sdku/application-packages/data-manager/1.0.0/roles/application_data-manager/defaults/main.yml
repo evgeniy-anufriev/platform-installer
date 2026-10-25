@@ -2,10 +2,36 @@ platform_application_definition:
     name: data-manager
     version: 1.0.0
     defaults:
+        connections:
+            sso: {enabled: false}
         image: evoscada-docker.artifacts.tn.tngrp.ru/data-manager:1.5.0-SNAPSHOT-7a795dc1-redos
         user: 1000:1000
         restart: on-failure
         accounts:
+            sentinel:
+                credentials:
+                    password:
+                        source:
+                            kind: runtime_secret_ref
+                            ref: '{{ application_instance_id }}-sentinel-password'
+                    username:
+                        source:
+                            kind: literal
+                            value: '{{ application_instance_id | replace(''-'', ''_'') }}'
+                grants:
+                    channels:
+                        - '*'
+                    commands:
+                        - ping
+                        - auth
+                        - hello
+                        - sentinel|get-master-addr-by-name
+                        - sentinel|master
+                        - sentinel|replicas
+                        - sentinel|slaves
+                        - sentinel|sentinels
+                        - psubscribe
+                mode: managed
             postgres:
                 credentials:
                     password:
@@ -50,13 +76,19 @@ platform_application_definition:
             - -XX:HeapDumpPath=/tmp/dumps
             - -jar
             - data-manager.jar
+        endpoint:
+            enabled: false
+            listener: port-1
+            probe:
+                expected_status: 200
+                path: /actuator/health
+                timeout: 10
+            protocol: http
         environment:
             SERVER_PORT: &web_server_port >-
-                {{ ((application_job.application.definition.defaults.ports | default({})) |
-                combine(application_job.slot.overrides.ports | default({}), recursive=true) |
-                combine(application_job.instance.overrides.ports | default({}), recursive=true) |
-                combine(application_job.hostOverride.ports | default({}), recursive=true))['port-1'].container }}
+                {{ ((application_job.application.definition.defaults.ports | default({})) | combine(application_job.slot.overrides.ports | default({}), recursive=true) | combine(application_job.instance.overrides.ports | default({}), recursive=true) | combine(application_job.hostOverride.ports | default({}), recursive=true))['port-1'].container }}
             WEB_SERVER_PORT: *web_server_port
+            DB_ROOT_CERT: /opt/application/pki/ca-chain.pem
             DB_CONNECTION_STRING: $${POSTGRES_JDBC_ENDPOINT}/{{ application_databases.postgres.model.name }}?$${POSTGRES_SSL_OPTIONS}
             JAVA_OPTS: -Xmx8192m
             LOGGER_DATAMANAGER_LEVEL: INFO
@@ -65,24 +97,18 @@ platform_application_definition:
             LOGGER_TOTAL_SIZE_CAP: 200Mb
             LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_JDBC: DEBUG
             PROFILES_ACTIVE: specversion, development
-            REDIS_CONNECTION_TYPE: Standalone
-            REDIS_SENTINEL_MASTER: '{{ application_parameters.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
             SEARCH_ITEMS_LIMIT: "200"
             SERVER_ALLOWED_ORIGINS: '*'
             SPRING_APPLICATION_NAME: data-manager
             SPRING_JPA_PROPERTIES_JAKARTA_PERSISTENCE_QUERY_TIMEOUT: 2000
-            SPRING_KAFKA_CLIENT_ID: '{{ application_instance_id }}-$${SERVER_ID}'
             SQL_INIT_MODE: always
             STATIC_FILES_FOLDER: /usr/local/app/static/
             TN_SCADA_DATA_MANAGER_INITIALIZATION_BATCH_SIZE: 50000
-            TN_SCADA_REDIS_SENTINEL_MASTER: '{{ application_parameters.REDIS_SENTINEL_MASTER | default(undef(hint=''Configure SDKU REDIS_SENTINEL_MASTER''), true) }}'
-            kafka.consumer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-consumer'
-            kafka.producer.client.id: '{{ application_instance_id }}-$${SERVER_ID}-producer'
-            server.max-http-request-header-size: 100MB
+            server.max-http-request-header-size: 64KB
             spring.servlet.multipart.max-file-size: 50MB
             spring.servlet.multipart.max-request-size: 50MB
         parameters:
-            REDIS_SENTINEL_MASTER: ""
+            IDENTITY_CLIENT: "{{ (lookup('ansible.builtin.template', (application_job.application.defaultsPath | dirname) ~ '/../../../assets/keycloak-client.json.j2', convert_data=false) | from_json) if 'sso' in application_connections else {} }}"
         ports:
             port-1:
                 container: 10041
@@ -114,11 +140,11 @@ platform_application_definition:
                         field: password
                 REDIS_SENTINEL_PASSWORD:
                     source:
-                        account: redis
+                        account: sentinel
                         field: password
                 REDIS_SENTINEL_USERNAME:
                     source:
-                        account: redis
+                        account: sentinel
                         field: username
                 REDIS_TRUSTSTORE_PASSWORD:
                     source:
@@ -127,23 +153,17 @@ platform_application_definition:
                     source:
                         account: redis
                         field: username
-                SPRING_KAFKA_SSL_KEY_STORE_PASSWORD:
-                    source:
-                        library_secret: java_keystore_password
-                SPRING_KAFKA_SSL_TRUST_STORE_PASSWORD:
-                    source:
-                        library_secret: java_keystore_password
                 TN_SCADA_REDIS_ACL_PASSWORD:
                     source:
                         account: redis
                         field: password
                 TN_SCADA_REDIS_ACL_SENTINEL_PASSWORD:
                     source:
-                        account: redis
+                        account: sentinel
                         field: password
                 TN_SCADA_REDIS_ACL_SENTINEL_USERNAME:
                     source:
-                        account: redis
+                        account: sentinel
                         field: username
                 TN_SCADA_REDIS_ACL_USERNAME:
                     source:
@@ -156,10 +176,10 @@ platform_application_definition:
                     source:
                         library_secret: java_keystore_password
             secrets:
-                mount: applications
+                mount: secret
             type: vault-agent
         readiness:
             delay: 2
             mode: healthcheck
             retries: 30
-    connections: [kafka, postgres, redis, vault]
+    connections: [sso, postgres, redis, vault, sentinel]

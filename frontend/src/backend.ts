@@ -255,6 +255,7 @@ export type InstallationState = {
 export type InstallationExecutionMode =
   "FULL_PROJECT" | "APPLICATION_LIBRARIES_ONLY" | "INFRASTRUCTURE_VERIFY_ONLY";
 export type InstallationPlanRequest = {
+  skipApplicationLibraries?: string[];
   skipInfrastructureVerify?: boolean;
   executionMode: InstallationExecutionMode;
   deploymentOrder: string[];
@@ -269,6 +270,7 @@ export type InfrastructureVerificationView = Pick<
   "availability" | "observedAt" | "previous"
 >;
 export type InstallationPlanView = {
+  skipApplicationLibraries?: string[];
   skipInfrastructureVerify?: boolean;
   executionMode?: InstallationExecutionMode;
   infrastructureVerification?: executionnode.InfrastructureVerification;
@@ -782,6 +784,7 @@ export const backend: ProjectBackend = {
     CreateInstallationPlanForMode({
       ...request,
       skipInfrastructureVerify: request.skipInfrastructureVerify ?? false,
+      skipApplicationLibraries: request.skipApplicationLibraries ?? [],
       applicationLibraryOrder: request.applicationLibraryOrder ?? [],
     }) as unknown as Promise<InstallationPlanOperation>,
   getInfrastructureVerification: () =>

@@ -150,6 +150,31 @@ func TestApplicationPackageManifestAcceptsGenericScripts(t *testing.T) {
 	}
 }
 
+func TestApplicationPackageImportAcceptsManifestV2(t *testing.T) {
+	source, _ := b2Package(t)
+	manifest := filepath.Join(source, "application.yml")
+	data, err := os.ReadFile(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data = bytes.ReplaceAll(data, []byte("application-package/v1alpha1"), []byte("application-package/v1alpha2"))
+	if err := os.WriteFile(manifest, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	directory, err := openExportSourceDirectory(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer directory.close()
+	observation := exportObservation{}
+	if err := collectExportDirectory(directory, "application-packages/gateway/1.0.0", &observation, map[string]bool{}, map[string]bool{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := checkPackageManifest(observation.documents, "application", "gateway", "1.0.0"); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestB2PackageRollbackAndConcurrentRevisionGuard(t *testing.T) {
 	root, b, revision := b2Project(t)
 	source, digest := b2Package(t)

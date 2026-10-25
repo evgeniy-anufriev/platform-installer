@@ -289,7 +289,7 @@ def runtime_secret_values_for_run(state_root, run_id):
 
 def application_secret_values_for_operation(state_root, run_id, operation, requirements):
     """Bounded application scope over the existing v1alpha3/v1alpha4 secret lease."""
-    allowed = ['APPLICATION_LIBRARIES_APPLY', 'APPLICATION_LIBRARIES_VERIFY']
+    allowed = ['APPLICATION_LIBRARIES_APPLY', 'APPLICATION_LIBRARIES_VERIFY', 'APPLICATION_LIBRARIES_POST_INSTALL']
     if operation not in allowed or not isinstance(requirements, list):
         raise LifecycleError('EXECUTION_MANIFEST_INVALID')
     refs, names = set(), set()
@@ -303,7 +303,7 @@ def application_secret_values_for_operation(state_root, run_id, operation, requi
         if item.get('source') == 'CURRENT_RUN_BOOTSTRAP' and item.get('purpose') != 'APPLICATION_VAULT_ADMIN_TOKEN':
             raise LifecycleError('EXECUTION_MANIFEST_INVALID')
         if (item['purpose'] not in ('APPLICATION_SECRET', 'APPLICATION_VAULT_ADMIN_TOKEN', 'APPLICATION_REGISTRY_USERNAME', 'APPLICATION_REGISTRY_PASSWORD') or
-                item['operations'] != allowed or
+                (not item['operations'] or item['operations'] != [op for op in allowed if op in item['operations']]) or
                 not isinstance(item['requirementRef'], str) or
                 re.fullmatch(r'application-secret-[a-f0-9]{32}', item['requirementRef']) is None or
                 not isinstance(item['runtimeReference'], str) or
@@ -323,7 +323,7 @@ def application_secret_values_for_operation(state_root, run_id, operation, requi
                 item['requirementRef'] in refs or item['runtimeReference'] in names):
             raise LifecycleError('EXECUTION_MANIFEST_INVALID')
         refs.add(item['requirementRef']); names.add(item['runtimeReference'])
-    inputs = [item for item in requirements if item.get('source', 'RUNTIME_INPUT') == 'RUNTIME_INPUT']
+    inputs = [item for item in requirements if item.get('source', 'RUNTIME_INPUT') == 'RUNTIME_INPUT' and operation in item['operations']]
     refs = {item['requirementRef'] for item in inputs}
     values = runtime_secret_values_for_run(state_root, run_id) if inputs else {}
     if not refs.issubset(values):

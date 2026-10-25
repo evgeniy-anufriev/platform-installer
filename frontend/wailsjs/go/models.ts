@@ -1159,6 +1159,7 @@ export namespace desktop {
     }
   }
   export class InstallationPlanView {
+    skipApplicationLibraries: string[];
     skipInfrastructureVerify: boolean;
     executionMode: string;
     infrastructureVerification?: executionnode.InfrastructureVerification;
@@ -1185,6 +1186,7 @@ export namespace desktop {
 
     constructor(source: any = {}) {
       if ("string" === typeof source) source = JSON.parse(source);
+      this.skipApplicationLibraries = source["skipApplicationLibraries"];
       this.skipInfrastructureVerify = source["skipInfrastructureVerify"];
       this.executionMode = source["executionMode"];
       this.infrastructureVerification = this.convertValues(
@@ -1274,6 +1276,7 @@ export namespace desktop {
   }
 
   export class InstallationPlanRequest {
+    skipApplicationLibraries: string[];
     skipInfrastructureVerify: boolean;
     executionMode: string;
     deploymentOrder: string[];
@@ -1286,6 +1289,7 @@ export namespace desktop {
 
     constructor(source: any = {}) {
       if ("string" === typeof source) source = JSON.parse(source);
+      this.skipApplicationLibraries = source["skipApplicationLibraries"];
       this.skipInfrastructureVerify = source["skipInfrastructureVerify"];
       this.executionMode = source["executionMode"];
       this.deploymentOrder = source["deploymentOrder"];
@@ -1375,6 +1379,7 @@ export namespace desktop {
     }
   }
   export class InstallationRunOperation {
+    plan?: InstallationPlanView;
     reconnected?: boolean;
     cancelUnconfirmed?: boolean;
     projectRevision?: string;
@@ -1390,6 +1395,7 @@ export namespace desktop {
     constructor(source: any = {}) {
       if ("string" === typeof source) source = JSON.parse(source);
       this.reconnected = source["reconnected"];
+      this.plan = this.convertValues(source["plan"], InstallationPlanView);
       this.cancelUnconfirmed = source["cancelUnconfirmed"];
       this.projectRevision = source["projectRevision"];
       this.status = source["status"];

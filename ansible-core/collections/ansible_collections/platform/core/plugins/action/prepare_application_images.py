@@ -25,8 +25,12 @@ class ActionModule(ActionBase):
             if snapshot.get('validation', {}).get('status') != 'PASS':
                 raise ValueError('APPLICATION_IMAGE_PROJECT_INVALID')
             bundle = self._loader.load_from_file(os.path.join(args['bundle_root'], 'manifest.yaml'))
+            from ansible_collections.platform.core.plugins.module_utils.application_selection import execution_scope
+            scope = execution_scope(snapshot, values.get('platform_execution_application_library_order'), values.get('platform_execution_skip_application_libraries'))
             placements, ready, targets = [], {}, set()
             for row in ([] if values.get('platform_execution_mode') == 'INFRASTRUCTURE_VERIFY_ONLY' else values.get('platform_application_rows', [])):
+                if row['libraryId'] not in scope['installLibraries']:
+                    continue
                 reference = row['settings']['image']
                 legacy = selected_image(lock, reference, row['libraryId'], row['instanceId'], row['hostId'])
                 request = registry_request(reference, legacy)
@@ -48,7 +52,7 @@ class ActionModule(ActionBase):
                                        configDirectory=host.get('platform_application_registry_config_directory', ''),
                                        credentials=row.get('registryCredentials', {}).get(request['registry'], {})))
                 targets.add(row['hostId'])
-            model = application_execution_model(snapshot, lock)
+            model = application_execution_model(snapshot, lock, scope['libraryOrder'], scope['skippedLibraries'])
             needed_refs = {pair[name]['source']['ref'] for item in placements
                            for pair in [item['credentials']] if pair for name in ('username', 'password')}
             requirements = [item for item in model['runtimeSecretRequirements'] if item['purpose'].startswith('APPLICATION_REGISTRY_') and item['runtimeReference'] in needed_refs]

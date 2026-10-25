@@ -852,3 +852,14 @@ actions and semantic fingerprint remain the plan contract for this stage.
 Detailed action presentation, if introduced, should be designed consistently
 for all task types in a separate stage. The independent review's historical
 `BLOCK` verdict is retained; this scope rejection is not reviewer approval.
+
+Stage3 owner amendment (2026-10-24): installation selection is an invocation
+option, never another desired-state store. The full native project resolves
+connections; selected libraries supply installation jobs and consumers, while
+referenced skipped libraries supply only declared provider callbacks and
+integration hooks. A minimal script context replaces the former dependency
+on a provider's Docker preflight. The generic runner remains unaware of product
+or container behavior. New versioned request/plan/manifest/capability and
+package-script contracts make older runtimes reject unsupported selection.
+See the [Stage3 plan](work/application-libraries/szi-stage3-technical-plan.md)
+and its implementation journal; acceptance is recorded in CURRENT_STATE.md.

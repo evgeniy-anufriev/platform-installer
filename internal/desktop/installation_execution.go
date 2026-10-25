@@ -37,6 +37,7 @@ type InstallationRunView struct {
 }
 
 type InstallationRunOperation struct {
+	Plan              *InstallationPlanView   `json:"plan,omitempty"`
 	Reconnected       bool                    `json:"reconnected,omitempty"`
 	CancelUnconfirmed bool                    `json:"cancelUnconfirmed,omitempty"`
 	ProjectRevision   string                  `json:"projectRevision,omitempty"`
@@ -536,7 +537,12 @@ func (a *App) StartApprovedInstallation(planID string) InstallationRunOperation 
 		a.editMu.Unlock()
 		return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: "LOCAL_RUN_RECORD_UNAVAILABLE", Message: "Не удалось подготовить локальную запись запуска"}}
 	}
-	record := localRunRecord{Version: localRunRecordVersion, ProjectRoot: canonicalRoot, ProjectID: captured.projectID, ProjectRevision: captured.revision, PlanID: captured.planID, NodeID: binding.node.ID, NodeAddress: binding.node.Address, NodePort: binding.node.Port, NodeUser: binding.node.User, HostKeyFingerprint: binding.node.HostKey.Fingerprint, State: "PENDING"}
+	planView, viewErr := installationPlanView(planRecord, binding)
+	if viewErr != nil {
+		a.editMu.Unlock()
+		return InstallationRunOperation{Status: "BLOCKED", Error: &ProjectOpenError{Code: "DEPLOYMENT_PLAN_RESPONSE_INVALID", Message: projectErrorMessage("DEPLOYMENT_PLAN_RESPONSE_INVALID")}}
+	}
+	record := localRunRecord{Version: localRunRecordVersion, ProjectRoot: canonicalRoot, ProjectID: captured.projectID, ProjectRevision: captured.revision, PlanID: captured.planID, NodeID: binding.node.ID, NodeAddress: binding.node.Address, NodePort: binding.node.Port, NodeUser: binding.node.User, HostKeyFingerprint: binding.node.HostKey.Fingerprint, State: "PENDING", Plan: &planView}
 	if holdRunIdentity && !retryingUnknown {
 		if err := a.secrets.ReserveExecutionIdentityForStart(credentialBinding, planID, runIdentity); err != nil {
 			a.editMu.Unlock()

@@ -1,0 +1,394 @@
+{
+  "clientId": "{{ application_instance_id }}",
+  "name": "{{ application_instance_id }}",
+  "rootUrl": "{{ application_connections.sso.parameters.proxy_url }}/{{ application_instance_id }}/",
+  "adminUrl": "",
+  "baseUrl": "",
+  "surrogateAuthRequired": false,
+  "enabled": true,
+  "alwaysDisplayInConsole": false,
+  "clientAuthenticatorType": "client-secret",
+  "redirectUris": [
+    "{{ application_connections.sso.parameters.proxy_url }}/{{ application_instance_id }}/*"
+  ],
+  "webOrigins": [
+    "{{ application_connections.sso.parameters.proxy_url }}"
+  ],
+  "notBefore": 0,
+  "bearerOnly": false,
+  "consentRequired": false,
+  "standardFlowEnabled": true,
+  "implicitFlowEnabled": true,
+  "directAccessGrantsEnabled": true,
+  "serviceAccountsEnabled": true,
+  "authorizationServicesEnabled": true,
+  "publicClient": false,
+  "frontchannelLogout": true,
+  "protocol": "openid-connect",
+  "attributes": {
+    "realm_client": "false",
+    "oidc.ciba.grant.enabled": "true",
+    "backchannel.logout.session.required": "true",
+    "display.on.consent.screen": "false",
+    "oauth2.device.authorization.grant.enabled": "true",
+    "backchannel.logout.revoke.offline.tokens": "false"
+  },
+  "authenticationFlowBindingOverrides": {},
+  "fullScopeAllowed": true,
+  "nodeReRegistrationTimeout": -1,
+  "protocolMappers": [
+    {
+      "name": "Client ID",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usersessionmodel-note-mapper",
+      "consentRequired": false,
+      "config": {
+        "user.session.note": "client_id",
+        "introspection.token.claim": "true",
+        "id.token.claim": "true",
+        "access.token.claim": "true",
+        "claim.name": "client_id",
+        "jsonType.label": "String"
+      }
+    },
+    {
+      "name": "Client Host",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usersessionmodel-note-mapper",
+      "consentRequired": false,
+      "config": {
+        "user.session.note": "clientHost",
+        "introspection.token.claim": "true",
+        "id.token.claim": "true",
+        "access.token.claim": "true",
+        "claim.name": "clientHost",
+        "jsonType.label": "String"
+      }
+    },
+    {
+      "name": "Client IP Address",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usersessionmodel-note-mapper",
+      "consentRequired": false,
+      "config": {
+        "user.session.note": "clientAddress",
+        "introspection.token.claim": "true",
+        "id.token.claim": "true",
+        "access.token.claim": "true",
+        "claim.name": "clientAddress",
+        "jsonType.label": "String"
+      }
+    }
+  ],
+  "defaultClientScopes": [
+    "web-origins",
+    "acr",
+    "roles",
+    "profile",
+    "basic",
+    "email"
+  ],
+  "optionalClientScopes": [
+    "address",
+    "phone",
+    "microprofile-jwt"
+  ],
+  "authorizationSettings": {
+    "allowRemoteResourceManagement": true,
+    "policyEnforcementMode": "ENFORCING",
+    "resources": [
+      {
+        "name": "resourceAdministrator",
+        "ownerManagedAccess": false,
+        "displayName": "",
+        "attributes": {},
+        "uris": [
+          "/tags-get-history-flat",
+          "/object-labels",
+          "/v2/tag-names",
+          "/logout",
+          "/tag-get",
+          "/actuator/*",
+          "/hotlink",
+          "/tag-names-labels",
+          "/v1/configurator/project",
+          "/v2/tag-names*",
+          "/actuator/info",
+          "/tags-get-history",
+          "/v2/hotlink",
+          "/tag-names",
+          "/tag-set",
+          "/tag-labels",
+          "/tags-get",
+          "/v2/tag-labels",
+          "/v1/address_attr/*",
+          "/*",
+          "/tag-value-type",
+          "/object-names"
+        ],
+        "icon_uri": ""
+      },
+      {
+        "name": "resourceCuratorIB",
+        "ownerManagedAccess": false,
+        "displayName": "",
+        "attributes": {},
+        "uris": [
+          "/tags-get-history-flat",
+          "/object-labels",
+          "/v2/tag-names",
+          "/logout",
+          "/tag-get",
+          "/actuator/*",
+          "/hotlink",
+          "/tag-names-labels",
+          "/v2/tag-names*",
+          "/actuator/info",
+          "/tags-get-history",
+          "/",
+          "/v2/hotlink",
+          "/tag-names",
+          "/tag-labels",
+          "/tags-get",
+          "/v2/tag-labels",
+          "/v1/address_attr/*",
+          "/*",
+          "/tag-value-type",
+          "/object-names"
+        ],
+        "icon_uri": ""
+      },
+      {
+        "name": "resourceEngineer",
+        "ownerManagedAccess": false,
+        "displayName": "",
+        "attributes": {},
+        "uris": [
+          "/object-labels",
+          "/tag-names-labels",
+          "/v2/tag-names*",
+          "/tags-get-history",
+          "/tag-set",
+          "/tag-labels",
+          "/tags-get",
+          "/object-names",
+          "/tags-set",
+          "/v2/tag-names",
+          "/tag-set-and-wait",
+          "/v2/tags-get",
+          "/logout",
+          "/tag-get",
+          "/hotlink",
+          "/v1/configurator/project",
+          "/actuator/info",
+          "/object",
+          "/tag-value-types",
+          "/v1/address_attr/*/*",
+          "/",
+          "/v2/hotlink",
+          "/tag-names",
+          "/tag-set/*",
+          "/tag-value-type"
+        ],
+        "icon_uri": ""
+      },
+      {
+        "name": "resourceDispatcher",
+        "ownerManagedAccess": false,
+        "displayName": "",
+        "attributes": {},
+        "uris": [
+          "/tag-names",
+          "/object-labels",
+          "/tag-labels",
+          "/tags-get",
+          "/logout",
+          "/tag-get",
+          "/hotlink",
+          "/v1/address_attr/*",
+          "/tags-get-history",
+          "/object-names",
+          "/"
+        ]
+      },
+      {
+        "name": "resourceOthers",
+        "ownerManagedAccess": false,
+        "displayName": "",
+        "attributes": {},
+        "uris": [
+          "/tag-names",
+          "/object-labels",
+          "/tag-labels",
+          "/tags-get",
+          "/logout",
+          "/tag-get",
+          "/hotlink",
+          "/v1/address_attr/*",
+          "/tags-get-history",
+          "/object-names",
+          "/"
+        ]
+      }
+    ],
+    "policies": [
+      {
+        "name": "policyAdministrator",
+        "description": "",
+        "type": "role",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "fetchRoles": "false",
+          "roles": "[{\"id\":\"{{ application_instance_id }}/Администратор\",\"required\":false}]"
+        }
+      },
+      {
+        "name": "policyDispatcher",
+        "description": "",
+        "type": "role",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "roles": "[{\"id\":\"{{ application_instance_id }}/Диспетчер\",\"required\":false}]"
+        }
+      },
+      {
+        "name": "policyEngineer",
+        "description": "",
+        "type": "role",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "roles": "[{\"id\":\"{{ application_instance_id }}/Инженер\",\"required\":false}]"
+        }
+      },
+      {
+        "name": "policyOthers",
+        "description": "",
+        "type": "role",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "roles": "[{\"id\":\"{{ application_instance_id }}/Прочие\",\"required\":true}]"
+        }
+      },
+      {
+        "name": "policyCuratorIB",
+        "description": "",
+        "type": "role",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "roles": "[{\"id\":\"{{ application_instance_id }}/КураторИБ\",\"required\":false}]"
+        }
+      },
+      {
+        "name": "permissionsAdministrator",
+        "description": "",
+        "type": "resource",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "resources": "[\"resourceAdministrator\"]",
+          "applyPolicies": "[\"policyAdministrator\"]"
+        }
+      },
+      {
+        "name": "permissionsEngineer",
+        "description": "",
+        "type": "resource",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "resources": "[\"resourceEngineer\"]",
+          "applyPolicies": "[\"policyEngineer\"]"
+        }
+      },
+      {
+        "name": "permissionsDispatcher",
+        "description": "",
+        "type": "resource",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "resources": "[\"resourceDispatcher\"]",
+          "applyPolicies": "[\"policyDispatcher\"]"
+        }
+      },
+      {
+        "name": "permissionsOthers",
+        "description": "",
+        "type": "resource",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "resources": "[\"resourceOthers\"]",
+          "applyPolicies": "[\"policyOthers\"]"
+        }
+      },
+      {
+        "name": "permissionCuratorIB",
+        "description": "",
+        "type": "resource",
+        "logic": "POSITIVE",
+        "decisionStrategy": "UNANIMOUS",
+        "config": {
+          "resources": "[\"resourceCuratorIB\"]",
+          "applyPolicies": "[\"policyCuratorIB\"]"
+        }
+      }
+    ],
+    "scopes": [],
+    "decisionStrategy": "UNANIMOUS"
+  },
+  "clientRoles": [
+    {
+      "name": "Администратор",
+      "description": "Администратор",
+      "composite": false,
+      "attributes": {}
+    },
+    {
+      "name": "Диспетчер",
+      "description": "Диспетчер",
+      "composite": false,
+      "attributes": {}
+    },
+    {
+      "name": "Инженер",
+      "description": "Инженер",
+      "composite": false,
+      "attributes": {}
+    },
+    {
+      "name": "КураторИБ",
+      "description": "",
+      "composite": false,
+      "attributes": {}
+    },
+    {
+      "name": "Прочие",
+      "description": "",
+      "composite": false,
+      "attributes": {}
+    },
+    {
+      "name": "Common",
+      "description": "",
+      "composite": false,
+      "attributes": {}
+    },
+    {
+      "name": "uma_protection",
+      "composite": false,
+      "attributes": {}
+    },
+    {
+      "name": "viewCurrentDataMT",
+      "description": "",
+      "composite": false,
+      "attributes": {}
+    }
+  ]
+}

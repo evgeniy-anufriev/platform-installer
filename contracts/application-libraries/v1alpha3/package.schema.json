@@ -1,0 +1,380 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Package scripts with post-install phase v1alpha3",
+  "type": "object",
+  "properties": {
+    "apiVersion": {
+      "const": "platform.installer/application-package/v1alpha3"
+    },
+    "kind": {
+      "$ref": "../v1alpha1/package.schema.json#/properties/kind"
+    },
+    "name": {
+      "$ref": "../v1alpha1/package.schema.json#/properties/name"
+    },
+    "version": {
+      "$ref": "../v1alpha1/package.schema.json#/properties/version"
+    },
+    "files": {
+      "$ref": "../v1alpha1/package.schema.json#/properties/files"
+    },
+    "scripts": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "$ref": "#/$defs/script"
+      }
+    },
+    "render": {
+      "$ref": "../v1alpha1/package.schema.json#/properties/render"
+    }
+  },
+  "required": [
+    "apiVersion",
+    "kind",
+    "name",
+    "version",
+    "files"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "LibraryPackage"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "render": {
+            "not": {
+              "required": [
+                "agent_template"
+              ]
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "script": {
+      "type": "object",
+      "required": [
+        "id",
+        "source",
+        "phase"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$",
+          "maxLength": 128
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "phase": {
+          "enum": [
+            "before_start",
+            "after_ready",
+            "provider_prepare",
+            "account_apply",
+            "connection_apply",
+            "integration_apply",
+            "post_install"
+          ]
+        },
+        "execution": {
+          "enum": [
+            "once",
+            "each_target"
+          ]
+        },
+        "argv": {
+          "type": "array",
+          "maxItems": 128,
+          "items": {
+            "oneOf": [
+              {
+                "type": "string",
+                "maxLength": 4096
+              },
+              {
+                "type": "object",
+                "required": [
+                  "valueFrom"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "valueFrom": {
+                    "enum": [
+                      "applicationId",
+                      "projectId",
+                      "libraryId",
+                      "targetHostId",
+                      "parameter",
+                      "endpoint",
+                      "connection",
+                      "placement_https",
+                      "provided_connection",
+                      "account_batch",
+                      "integration_consumers"
+                    ]
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "application": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "field": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "secretInputs": {
+          "type": "object",
+          "maxProperties": 32,
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "maxLength": 128
+          },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "valueFrom": {
+                "enum": [
+                  "runtime_secret",
+                  "connection",
+                  "library_secret",
+                  "provided_connection",
+                  "account_batch",
+                  "secret_binding"
+                ]
+              },
+              "ref": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$",
+                "maxLength": 128
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$",
+                "maxLength": 128
+              },
+              "credential": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$",
+                "maxLength": 128
+              },
+              "binding": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "optional": {
+                "type": "boolean",
+                "default": false
+              }
+            },
+            "oneOf": [
+              {
+                "properties": {
+                  "valueFrom": {
+                    "const": "runtime_secret"
+                  }
+                },
+                "required": [
+                  "ref"
+                ]
+              },
+              {
+                "properties": {
+                  "valueFrom": {
+                    "enum": [
+                      "connection",
+                      "provided_connection"
+                    ]
+                  }
+                },
+                "required": [
+                  "valueFrom",
+                  "name",
+                  "credential"
+                ]
+              },
+              {
+                "properties": {
+                  "valueFrom": {
+                    "const": "library_secret"
+                  }
+                },
+                "required": [
+                  "valueFrom",
+                  "name"
+                ]
+              },
+              {
+                "properties": {
+                  "valueFrom": {
+                    "const": "account_batch"
+                  }
+                },
+                "required": [
+                  "valueFrom"
+                ]
+              },
+              {
+                "properties": {
+                  "valueFrom": {
+                    "const": "secret_binding"
+                  }
+                },
+                "required": [
+                  "valueFrom",
+                  "binding"
+                ]
+              }
+            ]
+          }
+        },
+        "requires_connections": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$",
+            "maxLength": 128
+          },
+          "uniqueItems": true,
+          "maxItems": 128
+        },
+        "target": {
+          "type": "object",
+          "required": [
+            "connection"
+          ],
+          "properties": {
+            "connection": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$",
+              "maxLength": 128
+            }
+          },
+          "additionalProperties": false
+        },
+        "order": {
+          "type": "integer",
+          "minimum": -10000,
+          "maximum": 10000,
+          "default": 0
+        },
+        "run_on": {
+          "enum": [
+            "target",
+            "execution_node"
+          ],
+          "default": "target"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "phase": {
+                "const": "provider_prepare"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "target"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "phase": {
+                "enum": [
+                  "account_apply",
+                  "connection_apply"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "execution": {
+                "const": "once"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "run_on"
+            ],
+            "properties": {
+              "run_on": {
+                "const": "execution_node"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "execution"
+            ],
+            "properties": {
+              "execution": {
+                "const": "once"
+              },
+              "phase": {
+                "enum": [
+                  "provider_prepare",
+                  "account_apply",
+                  "connection_apply",
+                  "integration_apply",
+                  "post_install"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "phase": {
+                "const": "integration_apply"
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "target"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  },
+  "additionalProperties": false,
+  "$id": "https://platform-installer.local/contracts/application-libraries/v1alpha3/package.schema.json"
+}

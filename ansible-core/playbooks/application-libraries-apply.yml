@@ -15,8 +15,7 @@
         - name: Bind the ordered library ids from the immutable plan or manual input
           ansible.builtin.set_fact:
             application_library_order: >-
-              {{ platform_application_expected_library_ids | default(platform_application_library_order |
-                 default(hostvars['localhost'].application_runtime_inputs.jobs | map(attribute='libraryId') | unique | sort | list)) }}
+              {{ hostvars['localhost'].application_selection.scope.libraryOrder }}
           no_log: true
         - name: Require an explicit order for multiple libraries outside a planned execution
           ansible.builtin.assert:
@@ -28,7 +27,7 @@
           ansible.builtin.assert:
             that:
               - application_library_order | length == (application_library_order | unique | length)
-              - application_library_order | sort == (hostvars['localhost'].application_runtime_inputs.jobs | map(attribute='libraryId') | unique | sort | list)
+              - application_library_order | sort == (hostvars['localhost'].application_snapshot.snapshot.applicationLibraries.libraries | list | sort)
             fail_msg: APPLICATION_LIBRARY_ORDER_INVALID
         - name: Complete one library before moving to the next
           ansible.builtin.include_tasks: application-libraries-ordered-library.yml

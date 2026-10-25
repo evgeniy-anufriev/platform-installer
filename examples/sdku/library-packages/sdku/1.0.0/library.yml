@@ -4,7 +4,10 @@
     "roles/library_sdku/defaults/main.yml",
     "roles/library_sdku/templates/.base_compose.yml.j2",
     "assets/scripts/prepare-groups.sh",
-    "assets/group-roles/sdku-admin.json.j2"
+    "assets/group-roles/sdku-admin.json.j2",
+    "assets/group-roles/sdku-dispatcher-control.json.j2",
+    "assets/group-roles/sdku-dispatcher-readonly.json.j2",
+    "assets/group-roles/sdku-engineer.json.j2"
   ],
   "kind": "LibraryPackage",
   "name": "sdku",

@@ -3,6 +3,7 @@ package desktop
 import (
 	"context"
 	"errors"
+	"reflect"
 	"sync"
 	"testing"
 	"time"
@@ -67,6 +68,26 @@ func TestAttachOrphanRestoresTrustedObservationWithoutPreparedBundle(t *testing.
 	}
 	if got := app.AttachOrphanRun(found.RecoveryID); got.Status != "BLOCKED" {
 		t.Fatalf("token reused: %+v", got)
+	}
+}
+
+func TestAttachOrphanRestoresSavedDisplayPlanWithoutNewApproval(t *testing.T) {
+	app, _, record := recoveredObservationFixture(t)
+	record.Plan = &InstallationPlanView{ID: record.PlanID, ProjectRevision: record.ProjectRevision, ExecutionNodeID: record.NodeID,
+		Phases: []InstallationPlanPhase{{ID: "applications", Actions: []InstallationPlanAction{{ID: "apply", Type: "APPLICATION_LIBRARIES_APPLY", Summary: "Apply libraries"}, {ID: "verify", Type: "APPLICATION_LIBRARIES_VERIFY"}}}}}
+	if err := writeLocalRunRecord(app.localRunRecordRoot, record); err != nil {
+		t.Fatal(err)
+	}
+	got := app.AttachOrphanRun(app.InspectOrphanRun().RecoveryID)
+	if got.Status != "READY" || !reflect.DeepEqual(got.Plan, record.Plan) {
+		t.Fatalf("attach lost saved plan: %+v", got)
+	}
+	if app.installationPlanID != "" {
+		t.Fatal("display evidence became a current approved plan")
+	}
+	observed := app.GetInstallationRun(record.RunID)
+	if !reflect.DeepEqual(observed.Plan, record.Plan) {
+		t.Fatal("subsequent observation lost display plan")
 	}
 }
 

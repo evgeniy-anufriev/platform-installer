@@ -7,14 +7,14 @@
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:26d9d8c21c8d497e4789f93a8c575b9fbd4325880fe76dbfcbdc1d5523248861",
+    "digest": "sha256:486e5230f95ed62c47f71e3dc9e44cac3c90b847e3146a7e59cba945999135ee",
     "kind": "application",
     "name": "alarm-view-service",
     "sourceDirectory": ".",
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:920c81e6529d4ee005c2bb6da3c7a8c7a9e673e15b0e22e4198edbade3b69378",
+    "digest": "sha256:ad92875161929e1fec4f762ad8f10eebf2f993b74c29644e95b69efd573aa40c",
     "kind": "application",
     "name": "data-manager",
     "sourceDirectory": ".",
@@ -49,7 +49,7 @@
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:3231e767ca2b87fb98b9021c1b77e170156541834e04d94742c370b8e98852a3",
+    "digest": "sha256:8713809ff6e3481d0a213fe2bdf8dc10bc14564687bb6898e2bb87eacadb904d",
     "kind": "application",
     "name": "hmi-backend",
     "sourceDirectory": ".",
@@ -63,7 +63,7 @@
     "version": "1.0.0"
   },
   {
-    "digest": "sha256:9509948e4f586866edc3d28a52c4385d9eaf4206e36459226ee973d921cb10b2",
+    "digest": "sha256:8ea1e2cc36ec65a742d8b8516ca55af2516660573626a0dbc186861125bbb02a",
     "kind": "application",
     "name": "hmi-frontend-para",
     "sourceDirectory": ".",
@@ -186,10 +186,10 @@
     "name": "cspa",
     "version": "1.0.0",
     "sourceDirectory": ".",
-    "digest": "sha256:0fbf87d2cbc34d92b2542dcdce4b096cccff7ff43003b1a75dfb91cbe9ac7730"
+    "digest": "sha256:1688beb7871cb5141a7c9c6ea7e7a22c7c4595e50769315c578a50c366d62123"
   },
   {
-    "digest": "sha256:ae1737ccad1100552f6795c76629c4de740d8bec688eb3f6adbefe91d7128da5",
+    "digest": "sha256:495c3d08efbe08cfe00266b0c599b18172a2cff7a02b1b76b9742fec5ee4d081",
     "kind": "library",
     "name": "sdku",
     "sourceDirectory": ".",

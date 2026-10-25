@@ -651,14 +651,14 @@ def _runtime_secret_outputs(manifest_operations, deployments, definitions):
     return result
 
 
-def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at="1970-01-01T00:00:00Z", bundle_artifact_sources=None, pki_materialization=None, execution_configuration=None, execution_connections=None, pki_reissue=None, deployment_order=None, application_image_lock=None, application_vault_sources=None, application_library_order=None):
+def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at="1970-01-01T00:00:00Z", bundle_artifact_sources=None, pki_materialization=None, execution_configuration=None, execution_connections=None, pki_reissue=None, deployment_order=None, application_image_lock=None, application_vault_sources=None, application_library_order=None, skip_application_libraries=None):
     """Return a public plan and private manifest from already resolved Core data."""
     snapshot = snapshot if isinstance(snapshot, dict) else {}
     if snapshot.get('apiVersion') not in (None, 'platform.installer/project-snapshot/v1alpha1',
                                          'platform.installer/project-snapshot/v2alpha1'):
         raise ValueError('PROJECT_SNAPSHOT_VERSION_UNSUPPORTED')
     application_aware = snapshot.get('apiVersion') == 'platform.installer/project-snapshot/v2alpha1'
-    application_model = application_execution_model(snapshot, application_image_lock, application_library_order) if application_aware else None
+    application_model = application_execution_model(snapshot, application_image_lock, application_library_order, skip_application_libraries) if application_aware else None
     plan_version = APPLICATION_PLAN_VERSION if application_aware else API_VERSION
     catalog = service_catalog.get("platform_service_catalog", service_catalog) if isinstance(service_catalog, dict) else {}
     definitions = catalog.get("definitions", {}) if isinstance(catalog, dict) else {}
@@ -859,7 +859,7 @@ def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at
         authority_deployments = set(item["requirement"]["serviceDeployment"] for item in source_authorities)
         for phase in phases:
             for action in phase["actions"]:
-                if action['type'] in ('APPLICATION_LIBRARIES_APPLY', 'APPLICATION_LIBRARIES_VERIFY'):
+                if action['type'] in ('APPLICATION_LIBRARIES_APPLY', 'APPLICATION_LIBRARIES_VERIFY', 'APPLICATION_LIBRARIES_POST_INSTALL'):
                     manifest_operations.append(application_operation(action, application_model))
                     continue
                 deployment = deployments.get(action.get("serviceDeployment"), {})

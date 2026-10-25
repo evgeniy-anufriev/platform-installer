@@ -38,6 +38,7 @@
     content: "{{ application_vault_source_value.json.data.data[application_vault_source.field] }}"
     dest: "{{ platform_application_secret_root }}/{{ application_vault_source.passwordRef }}"
     mode: '0600'
+  changed_when: false
   when: application_vault_source.passwordRef is defined
   no_log: true
 

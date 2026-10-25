@@ -625,8 +625,10 @@ class ActionModule(ActionBase):
                                                         (manifest or {}).get('artifactLock'),
                                                         task_vars.get('platform_prepared_application_images'))
                 if task_vars.get('platform_application_expected_fingerprint'):
+                    scope = task_vars.get('platform_application_execution_scope', {})
                     model = application_execution_model(snapshot, private_image_lock,
-                                                       task_vars.get('platform_application_expected_library_ids'))
+                                                       scope.get('libraryOrder', task_vars.get('platform_application_expected_library_ids')),
+                                                       scope.get('skippedLibraries'))
                     if (model['semanticFingerprint'] != task_vars['platform_application_expected_fingerprint'] or
                             model['libraryIds'] != task_vars.get('platform_application_expected_library_ids')):
                         raise ValueError('APPLICATION_EXECUTION_MODEL_MISMATCH')

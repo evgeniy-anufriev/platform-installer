@@ -5,6 +5,10 @@ platform_library_definition:
         kafka:
             connectionRef: SASL_SSL
     connections:
+        sso:
+            library_binding: sso
+            protocol: https
+            purpose: client
         clickhouse:
             library_binding: analytics
             protocol: https
@@ -88,8 +92,8 @@ platform_library_definition:
             VAULT_CACERT: /opt/application/pki/ca-chain.pem
             kafka.consumer.default.api.timeout.ms: "3500"
             kafka.consumer.heartbeat.interval.ms: "500"
-            kafka.consumer.http.connect.timeout.ms: "1000"
-            kafka.consumer.http.read.timeout.ms: "1000"
+            kafka.consumer.http.connect.timeout.ms: "10000"
+            kafka.consumer.http.read.timeout.ms: "30000"
             kafka.consumer.max.poll.interval.ms: "10000"
             kafka.consumer.request.timeout.ms: "3000"
             kafka.consumer.schema.registry.ssl.truststore.location: /opt/application/pki/ca-chain.pem
@@ -98,8 +102,8 @@ platform_library_definition:
             kafka.consumer.socket.connection.setup.timeout.max.ms: "5000"
             kafka.consumer.socket.connection.setup.timeout.ms: "1500"
             kafka.producer.heartbeat.interval.ms: "500"
-            kafka.producer.http.connect.timeout.ms: "1000"
-            kafka.producer.http.read.timeout.ms: "1000"
+            kafka.producer.http.connect.timeout.ms: "10000"
+            kafka.producer.http.read.timeout.ms: "30000"
             kafka.producer.max.block.ms: "2500"
             kafka.producer.request.timeout.ms: "3000"
             kafka.producer.schema.registry.ssl.truststore.location: /opt/application/pki/ca-chain.pem
@@ -108,7 +112,12 @@ platform_library_definition:
             kafka.producer.socket.connection.setup.timeout.max.ms: "5000"
             kafka.producer.socket.connection.setup.timeout.ms: "1500"
             tn-scada.kafka.listener.store-id: $${SERVER_ID}
-        parameters: {}
+        parameters:
+            IDENTITY_GROUPS:
+              - name: Администратор ЦСПА
+                roles_file: "{{ lookup('ansible.builtin.template', platform_project_root ~ '/library-packages/cspa/1.0.0/assets/group-roles/cspa-admin.json.j2', convert_data=false) | from_json }}"
+              - name: Инженер ЦСПА
+                roles_file: "{{ lookup('ansible.builtin.template', platform_project_root ~ '/library-packages/cspa/1.0.0/assets/group-roles/cspa-engineer.json.j2', convert_data=false) | from_json }}"
     resource_defaults:
         clickhouse:
             databases:

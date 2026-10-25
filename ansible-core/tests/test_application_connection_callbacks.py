@@ -46,6 +46,40 @@ def fixture(root):
 
 
 class ConnectionCallbackTests(unittest.TestCase):
+    def test_integration_hook_uses_declaring_placement_and_selected_consumers(self):
+        import json
+        from application_selection import execution_scope
+        with tempfile.TemporaryDirectory() as folder:
+            snapshot, jobs, desired = fixture(Path(folder))
+            library = snapshot['applicationLibraries']['libraries']['provider']
+            hook = dict(id='routes', source='integrate.sh', phase='integration_apply', execution='each_target',
+                        argv=[{'valueFrom': 'targetHostId'}, {'valueFrom': 'integration_consumers'}])
+            library['instances']['gateway'] = dict(placements={'node3': {}}, connections={}, scripts=[hook])
+            gateway = dict(jobs[0], instanceId='gateway', hostId='node3', packageApplicationScripts=[hook], scriptContextOnly=True)
+            jobs[0]['scriptContextOnly'] = True
+            jobs.append(gateway)
+            snapshot['hosts']['node3'] = {'ansibleHost': '192.0.2.3'}
+            snapshot['applicationExecutionScope'] = execution_scope(snapshot, ['provider', 'consumer'], ['provider'])
+            result = prepare_script_jobs(folder, snapshot, desired, [], jobs)
+            script = result[-1]['scripts'][0]
+            self.assertEqual('node3', script['argv'][0])
+            self.assertEqual(['frontend'], [item['applicationId'] for item in json.loads(script['argv'][1])])
+            self.assertEqual('node2', result[1]['scripts'][0]['target']['hostId'])
+
+    def test_skipped_provider_uses_minimal_context_and_has_no_own_callback(self):
+        from application_selection import execution_scope
+        with tempfile.TemporaryDirectory() as folder:
+            snapshot, jobs, desired = fixture(Path(folder))
+            snapshot['applicationExecutionScope'] = execution_scope(snapshot, ['provider', 'consumer'], ['provider'])
+            jobs[0]['scriptContextOnly'] = True
+            snapshot['applicationLibraries']['libraries']['provider']['instances']['server']['connections']['unused'] = dict(
+                serviceType='application', connectionProvisioner={'apply_script': 'must-not-run'})
+            result = prepare_script_jobs(folder, snapshot, desired, [], jobs)
+            self.assertEqual([], result[0]['scripts'])
+            self.assertEqual('node2', result[1]['scripts'][0]['target']['hostId'])
+            batches = prepare_integrations(snapshot, result[1:])
+            self.assertEqual(['frontend'], [hook['consumerInstanceId'] for hook in batches['batches'][0]['hooks']])
+
     def test_execution_node_location_keeps_provider_dependency_and_consumer_context(self):
         with tempfile.TemporaryDirectory() as folder:
             snapshot, jobs, desired = fixture(Path(folder))

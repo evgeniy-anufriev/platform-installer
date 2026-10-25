@@ -20,7 +20,8 @@ class ActionModule(ActionBase):
             instance = library['instances'][app_id]
             callback = next(item for item in instance['scripts'] if item['phase'] == 'account_apply'
                             and item['id'] == batch['connection']['accountProvisioner']['apply_script'])
-            jobs = values['hostvars']['localhost']['application_runtime_inputs']['jobs']
+            runtime = values['hostvars']['localhost']['application_runtime_inputs']
+            jobs = runtime.get('scriptContexts', runtime['jobs'])
             job = min((item for item in jobs if item['libraryId'] == owner and item['instanceId'] == app_id), key=lambda item: item['hostId'])
             requests = []
             for account in batch['accounts']:

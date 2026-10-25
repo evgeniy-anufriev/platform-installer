@@ -121,6 +121,8 @@ def project_providers(rows, snapshot, configuration, desired, catalog):
     """Discovery per provider; mutation batches per library and logical instance."""
     jobs, findings, names, logical = {}, [], {}, {}
     applications = snapshot.get('applicationLibraries', {})
+    selected = snapshot.get('applicationExecutionScope', {}).get('installLibraries', list(applications.get('libraries', {})))
+    rows = [row for row in rows if row['libraryId'] in selected]
     if applications.get('status') != 'PASS':
         return {'status': 'BLOCKED', 'jobs': [], 'findings': [finding('APPLICATION_PROVIDER_INPUT_INVALID', 'applicationLibraryDeployments')]}
     topology = snapshot.get('topology', {}).get('resolved', {}).get('serviceDeployments', {})
@@ -199,6 +201,8 @@ def project_providers(rows, snapshot, configuration, desired, catalog):
                 raise ValueError('APPLICATION_PROVIDER_HOST_CONFLICT')
             logical[key] = identity
         for library_id, library in sorted(applications['libraries'].items()):
+            if library_id not in selected:
+                continue
             library_rows = [row for row in rows if row['libraryId'] == library_id]
             row = library_rows[0]
             if any({k: other.get(k) for k in ('resources', 'bindings', 'connectionDefaults')} !=

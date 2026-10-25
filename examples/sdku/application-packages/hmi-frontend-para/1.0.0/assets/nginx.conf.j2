@@ -1,0 +1,24 @@
+server {
+  listen {{ application_runtime_job.settings.ports['port-1'].container }} ssl default_server;
+  ssl_certificate /etc/nginx/host.crt;
+  ssl_certificate_key /etc/nginx/host.key;
+  server_name {{ application_runtime_job.instanceId }};
+
+  error_log /dev/stdout info;
+  access_log /dev/stdout;
+  large_client_header_buffers 32 160k;
+
+  location / {
+    root /app/;
+    index  index.html;
+    try_files $uri $uri/ /index.html;
+    add_header 'Access-Control-Allow-Origin' '*' always;
+    add_header 'Access-Control-Allow-Methods' 'GET,PUT,POST,DELETE,PATCH,OPTIONS' always;
+    add_header 'Access-Control-Allow-Credentials' 'true' always;
+    add_header 'Access-Control-Allow-Headers' 'Origin,X-Requested-With,Content-Type,Accept,Authorization,JSNLog-RequestId,activityId,applicationId,applicationUserId,channelId,senderId,sessionId,x-user-fullname,x-user-groups,x-user-id,x-user-ip' always;
+  }
+
+  error_page 500 502 503 504  /50x.html;
+}
+
+

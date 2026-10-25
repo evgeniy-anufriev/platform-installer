@@ -46,17 +46,19 @@ def project_vault(rows, prepared):
     plans = prepared['pki_materialization']['materializationPlans']
     project = segment(snapshot['project']['id'])
     providers, library_jobs, instance_jobs, source_jobs = {}, [], [], []
-    script_sources = used_script_sources(libraries)
+    selected_libraries = snapshot.get('applicationExecutionScope', {}).get('installLibraries', list(libraries))
+    script_sources = used_script_sources(libraries, selected_libraries, snapshot.get('applicationExecutionScope', {}).get('providerLibraries', []))
     for library_id, library in sorted(libraries.items()):
         selected = [r for r in rows if r['libraryId'] == library_id]
         row = selected[0]
         if any(r.get('vaultRef', {}) != row.get('vaultRef', {}) for r in selected):
             raise ValueError('APPLICATION_VAULT_HOST_CONFLICT')
-        active = [i for i in library['instances'].values() if i['agentRequired']]
+        installing = library_id in selected_libraries
+        active = [i for i in library['instances'].values() if i['agentRequired']] if installing else []
         sources = [c['source'] for i in library['instances'].values() for a in i['credentialRequirements'].values()
-                   for c in a['credentials'].values() if c['source']['kind'] == 'vault_ref']
+                   for c in a['credentials'].values() if c['source']['kind'] == 'vault_ref'] if installing else []
         sources += [source for source in script_sources.get(library_id, []) if source['kind'] == 'vault_ref']
-        if any(c['source']['kind'] == 'generated' and
+        if installing and any(c['source']['kind'] == 'generated' and
                (field != 'password' or a.get('mode') != 'managed' or not i['agentRequired'])
                for i in library['instances'].values() for a in i['credentialRequirements'].values()
                for field, c in a['credentials'].items()):
@@ -100,6 +102,8 @@ def project_vault(rows, prepared):
                 raise ValueError('APPLICATION_VAULT_SOURCE_AMBIGUOUS')
             if entry not in source_jobs:
                 source_jobs.append(entry)
+        if not installing:
+            continue  # Credential reads for callbacks never imply provider-owned writes.
         shared = {}
         used_shared = {binding['source']['library_secret'] for instance in library['instances'].values()
                        for binding in instance.get('secretBindings', {}).values() if 'library_secret' in binding['source']}

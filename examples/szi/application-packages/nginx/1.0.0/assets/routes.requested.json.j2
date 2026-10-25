@@ -1,13 +1,8 @@
-{% set snapshot = hostvars['localhost'].application_snapshot.snapshot %}
 {% set ns = namespace(routes={}) %}
-{% for library in snapshot.applicationLibraries.libraries.values() %}
-{% for app_id, app in library.instances.items() %}
-{% set matching = app.connections.values() | selectattr('serviceType', 'equalto', 'application') | selectattr('libraryId', 'equalto', application_runtime_job.libraryId) | selectattr('applicationId', 'equalto', 'keycloak') | selectattr('connectionProvisioner.apply_script', 'defined') | list %}
-{% if matching | length > 0 %}
-{% set placement = app.placements.values() | first %}
-{% if placement.endpoint.enabled | default(false) %}
-{% set _ = ns.routes.update({app_id: {'endpoint': 'https://' ~ hostvars['localhost'].platform_endpoint_sources[app_id].endpoint.fqdn, 'subpath': '/' ~ app_id, 'parameters': placement.parameters.IDENTITY_ROUTE | default({})}}) %}
-{% endif %}
+{% for consumer in application_runtime_job.integrationConsumers %}
+{% for placement in consumer.placements.values() %}
+{% if placement.endpointUrl is defined and consumer.applicationId not in ns.routes %}
+{% set _ = ns.routes.update({consumer.applicationId: {'endpoint': placement.endpointUrl, 'subpath': '/' ~ consumer.applicationId, 'parameters': placement.parameters.IDENTITY_ROUTE | default({})}}) %}
 {% endif %}
 {% endfor %}
 {% endfor %}

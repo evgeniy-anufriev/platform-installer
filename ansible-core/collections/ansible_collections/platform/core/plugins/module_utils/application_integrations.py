@@ -1,5 +1,9 @@
 """Provider batch dependency projection. No product APIs, scheduling or secrets."""
 import hashlib
+try:
+    from .application_selection import scope_for
+except ImportError:
+    from application_selection import scope_for
 
 
 def instance_key(library_id, instance_id):
@@ -14,6 +18,8 @@ def prepare_integrations(snapshot, jobs):
     libraries = snapshot['applicationLibraries']['libraries']
     batches, dependencies, shared = {}, {}, {}
     for library_id, library in libraries.items():
+        if library_id not in scope_for(snapshot)['installLibraries']:
+            continue
         for app_id, instance in library['instances'].items():
             consumer = instance_key(library_id, app_id)
             for alias, connection in instance.get('connections', {}).items():

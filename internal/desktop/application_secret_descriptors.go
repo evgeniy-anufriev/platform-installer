@@ -12,7 +12,7 @@ var applicationSecretHost = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
 
 func validApplicationSecretDescriptor(item executionnode.ApplicationSecretDescriptor) bool {
 	if !applicationSecretRequirement.MatchString(item.RequirementRef) || !applicationSecretID.MatchString(item.SourceRef) || item.DisplayLabel == "" || len([]byte(item.DisplayLabel)) > 256 ||
-		!slices.Equal(item.Operations, []string{"APPLICATION_LIBRARIES_APPLY", "APPLICATION_LIBRARIES_VERIFY"}) {
+		!validApplicationSecretOperations(item.Operations) {
 		return false
 	}
 	if item.Purpose == "APPLICATION_SECRET" || item.Purpose == "APPLICATION_REGISTRY_USERNAME" || item.Purpose == "APPLICATION_REGISTRY_PASSWORD" {
@@ -42,4 +42,15 @@ func validApplicationSecretDescriptor(item executionnode.ApplicationSecretDescri
 		}
 	}
 	return true
+}
+
+func validApplicationSecretOperations(operations []string) bool {
+	allowed := []string{"APPLICATION_LIBRARIES_APPLY", "APPLICATION_LIBRARIES_VERIFY", "APPLICATION_LIBRARIES_POST_INSTALL"}
+	var ordered []string
+	for _, op := range allowed {
+		if slices.Contains(operations, op) {
+			ordered = append(ordered, op)
+		}
+	}
+	return len(operations) > 0 && slices.Equal(operations, ordered)
 }

@@ -36,6 +36,13 @@ assert len(secret_prepared['jobs']) == 2
 library = packages[('library','sdku')]
 common = library['definition'].get('defaults', {})
 base = str(package_root/'library-packages/sdku/1.0.0'/library['render']['base_compose_template'])
+# Compose-only fixture uses the resolved common ENV; provider group preparation
+# is exercised by standalone integration tests rather than recursive raw defaults.
+compose_common = dict(common, parameters={})
+fixture_applications = {name: {'overrides': {'endpoint': {'endpoint_group': 'apps'}}}
+                        for kind, name in packages if kind == 'application'}
+fixture_desired = {'applicationLibraryDeployments': {'sdku-main': {'applications': fixture_applications}},
+                   'endpointGroups': {'apps': {'address': {'domain': 'example.invalid'}}}}
 rendered = []
 base_contents = set()
 jobs = [dict(application={'definition': {'defaults': {'ports': p['definition']['defaults'].get('ports', {})}}},
@@ -44,7 +51,8 @@ jobs = [dict(application={'definition': {'defaults': {'ports': p['definition']['
         for (kind, n), p in packages.items() if kind == 'application']
 for (kind,name), package in packages.items():
     if kind != 'application': continue
-    settings = package['definition']['defaults']
+    settings = dict(package['definition']['defaults'])
+    settings['endpoint'] = dict(settings.get('endpoint', {}), endpoint_group='apps')
     params = settings.get('parameters', {})
     if not params.get('database_name'):
         params['database_name'] = 'fixture_database'
@@ -53,7 +61,8 @@ for (kind,name), package in packages.items():
             params[key] = 'example.invalid'
     for key,value in params.get('mount_sources', {}).items():
         if not value: params['mount_sources'][key] = '/tmp/sdku-fixture'
-    variables = dict(platform_project_root=str(package_root), application_name=name, application_instance_id=name+'-sdku-main', application_parameters=params,
+    variables = dict(platform_desired_state=fixture_desired, application_connections={},
+        platform_project_root=str(package_root), application_name=name, application_instance_id=name+'-sdku-main', application_parameters=params,
         application_topics={'kafka': {ref: dict(resourceId=ref, name=value['name'])
                             for ref, value in library['definition']['resource_defaults']['kafka']['topics'].items()}},
         application_databases={'postgres': {ref: dict(resourceId=ref, name=value['name'])
@@ -66,7 +75,7 @@ for (kind,name), package in packages.items():
         hostvars={'example-host': {'ansible_host': 'example.invalid'}},
         sdku_start_commands={name:'/fixture/unavailable-command'}, application_project_id='fixture', application_config_digest='0'*64,
         application_runtime_job={'baseTemplate':base},
-        library_runtime={'library_id':'sdku-main','host_id':'example-host','defaults':common,'connections':{key:{'targets':[{'hostId':'example-host','address':'example.invalid','port':12345}]} for key in library['definition'].get('connections',{})}},
+        library_runtime={'library_id':'sdku-main','host_id':'example-host','defaults':compose_common,'connections':{key:{'targets':[{'hostId':'example-host','address':'example.invalid','port':12345}]} for key in library['definition'].get('connections',{})}},
         application_runtime={'image':settings['image'],'container_name':name+'-sdku-main-example-host','base_compose_path':'/tmp/.base_compose.yml','base_service':'base','vault_path':'/tmp/vault','pki_path':'/tmp/pki', 'config_path':'/tmp/config', 'connections':{key:{'targets':[{'address':'example.invalid','port':12345}]} for key in package['definition'].get('connections',{})}})
     templar=Templar(loader=DataLoader(),variables=variables)
     settings=templar.template(settings)

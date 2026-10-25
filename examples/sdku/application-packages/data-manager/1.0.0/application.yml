@@ -1,9 +1,11 @@
 {
-  "apiVersion": "platform.installer/application-package/v1alpha1",
+  "apiVersion": "platform.installer/application-package/v1alpha3",
   "files": [
     "roles/application_data-manager/defaults/main.yml",
     "roles/application_data-manager/templates/compose.yml.j2",
-    "roles/application_data-manager/templates/agent.hcl.j2"
+    "roles/application_data-manager/templates/agent.hcl.j2",
+    "assets/keycloak-client.json.j2",
+    "assets/ensure-project.sh"
   ],
   "kind": "ApplicationPackage",
   "name": "data-manager",
@@ -11,5 +13,21 @@
     "agent_template": "roles/application_data-manager/templates/agent.hcl.j2",
     "compose_template": "roles/application_data-manager/templates/compose.yml.j2"
   },
-  "version": "1.0.0"
+  "version": "1.0.0",
+  "scripts": [
+    {
+      "id": "create-project",
+      "source": "assets/ensure-project.sh",
+      "phase": "post_install",
+      "execution": "once",
+      "run_on": "execution_node",
+      "argv": [
+        {
+          "valueFrom": "endpoint",
+          "name": "data-manager"
+        },
+        "demo"
+      ]
+    }
+  ]
 }

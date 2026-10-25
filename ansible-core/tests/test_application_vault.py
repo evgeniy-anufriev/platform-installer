@@ -13,6 +13,25 @@ from schema_validation import SchemaValidator
 
 
 class ApplicationVaultTest(unittest.TestCase):
+    def test_retained_policy_accepts_real_core_projected_paths(self):
+        self.rows[0]['bindings']['api'] = {'providedConnectionRef': {'libraryId': 'provider', 'name': 'api'}}
+        job = project_vault(self.rows, self.prepared)['instanceJobs'][0]
+        self.assertTrue(job['retainPolicy'])
+        path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../services/vault/ansible_collections/platform/vault/plugins/filter/application_provider.py'))
+        spec = importlib.util.spec_from_file_location('vault_retention_projection_test', path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        previous = {'status': 200, 'json': {'data': {'policy': job['policy']}}}
+        result = module.retained_policy(previous, job['policy'], job['owner'])
+        self.assertEqual(job['policy'], result)
+        self.assertEqual(result, module.retained_policy({'status': 200, 'json': {'data': {'policy': result}}}, job['policy'], job['owner']))
+
+    def test_skipped_library_has_no_own_vault_writes_or_agent_jobs(self):
+        self.prepared['snapshot']['applicationExecutionScope'] = dict(installLibraries=[], providerLibraries=[])
+        result = project_vault(self.rows, self.prepared)
+        for key in ('providers', 'libraryJobs', 'instanceJobs', 'sourceJobs'):
+            self.assertEqual([], result[key], key)
+
     def test_scram_jaas_uses_existing_agent_env_and_both_credential_locations(self):
         self.instance['connections']['postgres'] = {'serviceType': 'kafka'}
         self.instance['secretBindings'] = {

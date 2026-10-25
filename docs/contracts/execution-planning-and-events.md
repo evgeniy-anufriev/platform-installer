@@ -478,3 +478,25 @@ waives saved infra evidence, preserving its real observation, all other admissio
 checks and the full application Apply/Verify. The flag participates in fingerprint,
 stored request and fresh Start rebuild; a changed or unsupported flag is refused.
 Skipping never creates successful infra evidence. No new run lifecycle/store.
+
+## Terminal application scripts
+
+Package v1alpha3 may declare `post_install`. Core appends one mutating
+`applications:post-install` action (`APPLICATION_LIBRARIES_POST_INSTALL`) after
+all ordinary operations, including application Verify/endpoints. The operation
+is present only for active scripts of installed libraries. Verify-only and
+skipped-library lifecycle never invoke it. Failure or cancel in the prefix
+prevents invocation; terminal script failure fails the same run.
+
+The feature uses plan/v1alpha9, execution-manifest/v1alpha7 and the existing
+execution-runtime/v1alpha7 request. Capabilities/v1alpha12 adds the closed
+`applicationPostInstall` feature with protocol ApplicationPostInstall/v1alpha1,
+packageManifestVersion, planContract and manifestContract. Go requires that
+capability when receiving the new plan. The complete manifest is schema-checked;
+its terminal position/scope and ordered secret-operation permissions are checked
+before prior infrastructure-prefix admission. That admission-only compatibility
+copy is never dispatched or used for secret authorization. The controller
+executes the original approved manifest and reuses existing events/lease/trust
+and cancellation. Runtime inputs remain operation-scoped; exact existing Vault
+source fields, including generated account bindings, are rematerialized by the
+terminal Ansible process and removed by invocation and run cleanup.

@@ -1,10 +1,20 @@
 ---
-- name: Resolve the already preflighted provider placement
+- name: Resolve only the declared provider script context
   ansible.builtin.set_fact:
     application_script_target_job: >-
-      {{ hostvars[application_provider_script_host].platform_application_preflight_jobs |
+      {{ hostvars['localhost'].application_runtime_inputs.scriptContexts |
          selectattr('libraryId', 'equalto', application_provider_batch.providerLibraryId) |
-         selectattr('instanceId', 'equalto', application_provider_batch.providerInstanceId) | first }}
+         selectattr('instanceId', 'equalto', application_provider_batch.providerInstanceId) |
+         selectattr('hostId', 'equalto', application_provider_script_host) | first }}
+  no_log: true
+
+- name: Resolve the script account home only for target execution
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ application_script_target_job.account }}"
+  delegate_to: "{{ application_provider_script_host }}"
+  register: application_script_identity
+  when: application_provider_script.runOn | default('target') != 'execution_node'
   no_log: true
 
 - name: Invoke the generic runner with explicit script inputs on the selected target
@@ -20,7 +30,12 @@
       argv: "{{ application_provider_script.argv }}"
       secretInputs: "{{ application_provider_script.secretInputs }}"
       account: "{{ lookup('ansible.builtin.pipe', 'id -un') if application_provider_script.runOn | default('target') == 'execution_node' else application_script_target_job.account }}"
-      workingDirectory: "{{ (platform_project_root | default(hostvars['localhost'].inventory_dir | dirname)) if application_provider_script.runOn | default('target') == 'execution_node' else application_script_target_job.instancePath }}"
+      workingDirectory: >-
+        {{ (platform_project_root | default(hostvars['localhost'].inventory_dir | dirname))
+           if application_provider_script.runOn | default('target') == 'execution_node' else
+           (application_script_target_job.placement.runtimeDirectory | regex_replace('^~(?=/|$)',
+             application_script_identity.ansible_facts.getent_passwd[application_script_target_job.account][4])) ~
+           '/' ~ application_script_target_job.placement.runtimePath }}
     platform_script_secret_files: >-
       {{ hostvars['localhost'].platform_application_secret_files |
          combine(hostvars['localhost'].platform_application_credential_files | default({})) |

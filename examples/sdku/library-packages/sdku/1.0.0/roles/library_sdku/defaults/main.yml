@@ -92,8 +92,8 @@ platform_library_definition:
             VAULT_CACERT: /opt/application/pki/ca-chain.pem
             kafka.consumer.default.api.timeout.ms: "3500"
             kafka.consumer.heartbeat.interval.ms: "500"
-            kafka.consumer.http.connect.timeout.ms: "1000"
-            kafka.consumer.http.read.timeout.ms: "1000"
+            kafka.consumer.http.connect.timeout.ms: "10000"
+            kafka.consumer.http.read.timeout.ms: "30000"
             kafka.consumer.max.poll.interval.ms: "10000"
             kafka.consumer.request.timeout.ms: "3000"
             kafka.consumer.schema.registry.ssl.truststore.location: /opt/application/pki/ca-chain.pem
@@ -102,8 +102,8 @@ platform_library_definition:
             kafka.consumer.socket.connection.setup.timeout.max.ms: "5000"
             kafka.consumer.socket.connection.setup.timeout.ms: "1500"
             kafka.producer.heartbeat.interval.ms: "500"
-            kafka.producer.http.connect.timeout.ms: "1000"
-            kafka.producer.http.read.timeout.ms: "1000"
+            kafka.producer.http.connect.timeout.ms: "10000"
+            kafka.producer.http.read.timeout.ms: "30000"
             kafka.producer.max.block.ms: "2500"
             kafka.producer.request.timeout.ms: "3000"
             kafka.producer.schema.registry.ssl.truststore.location: /opt/application/pki/ca-chain.pem
@@ -116,6 +116,12 @@ platform_library_definition:
             IDENTITY_GROUPS:
               - name: Администратор СДКУ
                 roles_file: "{{ lookup('ansible.builtin.template', platform_project_root ~ '/library-packages/sdku/1.0.0/assets/group-roles/sdku-admin.json.j2', convert_data=false) | from_json }}"
+              - name: Инженер СДКУ
+                roles_file: "{{ lookup('ansible.builtin.template', platform_project_root ~ '/library-packages/sdku/1.0.0/assets/group-roles/sdku-engineer.json.j2', convert_data=false) | from_json }}"
+              - name: Диспетчер управляющий
+                roles_file: "{{ lookup('ansible.builtin.template', platform_project_root ~ '/library-packages/sdku/1.0.0/assets/group-roles/sdku-dispatcher-control.json.j2', convert_data=false) | from_json }}"
+              - name: Диспетчер неуправляющий
+                roles_file: "{{ lookup('ansible.builtin.template', platform_project_root ~ '/library-packages/sdku/1.0.0/assets/group-roles/sdku-dispatcher-readonly.json.j2', convert_data=false) | from_json }}"
     resource_defaults:
         clickhouse:
             databases:

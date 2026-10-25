@@ -116,7 +116,7 @@ func checkPackageManifest(records []exportRecord, kind, name, version string) (s
 	var m applicationPackageManifest
 	d := yaml.NewDecoder(strings.NewReader(string(byPath[kind+".yml"])))
 	d.KnownFields(true)
-	if d.Decode(&m) != nil || d.Decode(new(any)) != io.EOF || m.APIVersion != "platform.installer/application-package/v1alpha1" || m.Kind != strings.ToUpper(kind[:1])+kind[1:]+"Package" || m.Name != name || m.Version != version || len(m.Files) < 1 || len(m.Files) > maxApplicationPackageFiles-1 {
+	if d.Decode(&m) != nil || d.Decode(new(any)) != io.EOF || (m.APIVersion != "platform.installer/application-package/v1alpha1" && m.APIVersion != "platform.installer/application-package/v1alpha2" && m.APIVersion != "platform.installer/application-package/v1alpha3") || m.Kind != strings.ToUpper(kind[:1])+kind[1:]+"Package" || m.Name != name || m.Version != version || len(m.Files) < 1 || len(m.Files) > maxApplicationPackageFiles-1 {
 		return "", invalid
 	}
 	listed := map[string]bool{kind + ".yml": true}

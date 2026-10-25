@@ -1,0 +1,14 @@
+{% set client_roles = {"grant-access":["Диспетчер"],"master-realm":["SDKU_TRENDS_configuration","SDKU_KNP_enabling_control","GU_modeling_function","SDKU_EF_close_form_window","SDKU_ALARMS_configuration","VTOR_repair_management","SDKU_ALARMS_administration","SDKU_ALARMS_showing_control_buttons","GU_viewing_realtime_data","GU_setting_interval_playing_story","GU_acknowledging_alarms","SDKU_EF_dispatcher_control_commands","VTOR_viewing_reports","SDKU_TRENDS_administration","GU_viewing_history_data","SDKU_ALARMS_open_form_window","SDKU_EF_enabling_control","GU_configuring_display_alarms","GU_configuring_panels","SDKU_ALARMS_close_form_window","SDKU_KNP_open_form_window","SDKU_EF_open_form_window","SDKU_TRENDS_close_form_window","SDKU_KNP_configuration","GU_commenting_alarms","SDKU_WEB_REPORTS_open_form_window","NAVIGATOR_administration","NAVIGATOR_close_form_window","GU_disabling_sensor","VTOR_confirmation_repair_request","GU_change_maximum_pressures","VTOR_viewing_repairs","SDKU_KNP_administration","NAVIGATOR_configuration","VTOR_repair_request","SDKU_ALARMS_configuring_display_alarms","SDKU_KNP_close_form_window","SDKU_ALARMS_commenting_alarms","GU_setting_height_sensor","GU_enabling_control","SDKU_KNP_acknowledging_alarms","SDKU_WEB_REPORTS_input","SDKU_TRENDS_dispatcher_control_commands","GU_manual_density_expense_values","SDKU_TRENDS_showing_control_buttons","GU_exporting_alarms","NAVIGATOR_open_form_window","VTOR_canceling_request","SDKU_ALARMS_acknowledging_alarms","GU_configuring_frame_panel","SDKU_TRENDS_open_form_window","SDKU_ALARMS_exporting_alarms"],"grant-access-audit":["uma_protection"]} %}
+{% if 'data-manager' in platform_desired_state.applicationLibraryDeployments[library_instance_id].applications %}
+{% set _ = client_roles.update({('data-manager-' ~ library_instance_id): ["Диспетчер", "uma_protection", "viewCurrentDataMT", ('data-manager-' ~ library_instance_id)]}) %}
+{% endif %}
+{% if 'hmi-backend' in platform_desired_state.applicationLibraryDeployments[library_instance_id].applications %}
+{% set _ = client_roles.update({('hmi-backend-' ~ library_instance_id): ["uma_protection", "Common", "viewCurrentDataMT"]}) %}
+{% endif %}
+{% if 'hmi-frontend-para' in platform_desired_state.applicationLibraryDeployments[library_instance_id].applications %}
+{% set _ = client_roles.update({('hmi-frontend-para-' ~ library_instance_id): ["uma_protection", "para-access"]}) %}
+{% endif %}
+{% if 'alarm-view-service' in platform_desired_state.applicationLibraryDeployments[library_instance_id].applications %}
+{% set _ = client_roles.update({('alarm-view-service-' ~ library_instance_id): ["uma_protection", "viewCurrentDataMT", "Диспетчер_управляющий"]}) %}
+{% endif %}
+{{ {"realm_roles":[], "client_roles": client_roles} | to_json }}

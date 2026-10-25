@@ -3,7 +3,7 @@
 ### Package script execution location and failure diagnostics
 
 `scripts[].run_on` defaults to `target`. `execution_node` runs a
-`provider_prepare`, `connection_apply` or `account_apply` script with
+`provider_prepare`, `connection_apply`, `account_apply` or v1alpha2 `integration_apply` script with
 `execution: once` on the selected Core Execution Node. `target.connection`
 still identifies the provider dependency. The working directory is the
 invocation project root and the account is the Core process account.
@@ -281,6 +281,26 @@ secret files. Source inputs are checked for readable nonempty file availability,
 without size, runtime-root, symlink, owner or mode restrictions. Runtime copies
 remain private, are never logged and are removed after invocation.
 Package-specific behavior belongs inside the package script.
+
+Package manifest `platform.installer/application-package/v1alpha2` adds
+`integration_apply` and the nonsecret JSON argument source `integration_consumers`.
+The old v1alpha1 enums remain closed. The new phase runs at the declaring
+library's boundary, after its ordinary lifecycle when selected, and before
+the next library. Target scripts use the declaring application's placements;
+Execution Node scripts use `execution: once`. The argument contains selected
+consumer IDs, connection aliases, endpoint/parameter placements and public URLs;
+it contains no accounts, credentials or runtime environment.
+
+`skipApplicationLibraries` is an invocation-only list of library instance IDs,
+not a portable desired-state setting. Request v1alpha7, plan v1alpha8 and
+execution manifest v1alpha6 bind it and the Core-derived execution scope.
+The complete project and library order remain authoritative for validation and
+provider resolution. Skipped libraries have no installation images, own resource
+or account writes, own Vault/Agent/PKI delivery, lifecycle, endpoint publication
+or Verify. Declared callbacks for selected consumers and `integration_apply`
+hooks may still use their providers. Provider API failures stop consumers;
+skipping does not fabricate readiness or verification success. Existing objects
+and routes are retained when a consumer is no longer selected.
 Provider integration hooks may declare integer `order` (default 0). They run in
 ascending order before the provider's account batch; equal values retain the
 library-before-instance, stable identity ordering. This allows one library hook

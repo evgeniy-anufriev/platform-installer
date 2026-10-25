@@ -164,7 +164,7 @@ def validate_compose(config, job, instance_path, digest):
     return True
 
 
-def prepare_runtime(root, snapshot, rows, desired, lock, validator, loader):
+def prepare_runtime(root, snapshot, rows, desired, lock, validator, loader, script_contexts=None):
     libraries = snapshot.get("applicationLibraries", {})
     if snapshot.get("validation", {}).get("status") != "PASS" or libraries.get("status") != "PASS":
         raise ValueError("APPLICATION_RUNTIME_PROJECT_BLOCKED")
@@ -175,12 +175,16 @@ def prepare_runtime(root, snapshot, rows, desired, lock, validator, loader):
         raise ValueError("APPLICATION_IMAGE_LOCK_INVALID")
     jobs = []
     package_loader = invocation_package_loader(root, loader, validator)
+    scope = snapshot.get('applicationExecutionScope', {})
+    selected = scope.get('installLibraries', list(libraries['libraries']))
     for row in rows:
         lib_id, app_id, host = row["libraryId"], row["instanceId"], row["hostId"]
         library = libraries["libraries"][lib_id]
         instance = library["instances"][app_id]
         placement = instance["placements"][host]
         settings = row["settings"]
+        if lib_id not in selected:
+            continue
         if (any(r['kind'] not in {'postgresql.database', 'postgresql.schema', 'clickhouse.database', 'kafka.topic', 'redis.key'} for r in row['resources'].values()) or
                 any(instance['connections'].get(k, {}).get('serviceType') not in {'postgresql', 'redis', 'clickhouse', 'kafka', 'application'} for k in instance['credentialRequirements']) or
                 any(x.get("tls") for x in instance["connections"].values())):
@@ -262,7 +266,35 @@ def prepare_runtime(root, snapshot, rows, desired, lock, validator, loader):
                          baseFilename=lib_render["base_compose_filename"], baseService=lib_render["base_service"],
                          envSource=checked_file(root, lib["logicalPath"] + "/files/.env") if "files/.env" in lib["files"] else None,
                          archivePath=archive_path, authority=authority))
-    return prepare_script_jobs(root, snapshot, desired, rows, jobs)
+    contexts = provider_script_contexts(root, snapshot, rows, package_loader)
+    prepare_script_jobs(root, snapshot, desired, rows, jobs + contexts)
+    if script_contexts is not None:
+        script_contexts.extend(contexts)
+    return jobs
+
+
+def provider_script_contexts(root, snapshot, rows, package_loader, include_selected=False):
+    """Script metadata only: no image, materialization, Docker or PKI preflight."""
+    scope = snapshot.get('applicationExecutionScope', {})
+    selected = scope.get('installLibraries', list(snapshot['applicationLibraries']['libraries']))
+    result = []
+    for row in rows:
+        if (row['libraryId'] in selected and not include_selected or
+                row['libraryId'] not in selected and row['libraryId'] not in scope.get('providerLibraries', [])):
+            continue
+        library = snapshot['applicationLibraries']['libraries'][row['libraryId']]
+        instance = library['instances'][row['instanceId']]
+        app = package_loader(row['applicationName'] + '@' + row['applicationVersion'], 'application')
+        lib = package_loader(row['libraryRef'], 'library')
+        account = snapshot['effectiveConfiguration']['services'][row['runtimeRef']]['configuration']['accountName']['value']
+        placement = instance['placements'][row['hostId']]
+        result.append(dict(libraryId=row['libraryId'], instanceId=row['instanceId'], hostId=row['hostId'],
+                           placement={key: placement[key] for key in ('runtimeDirectory', 'runtimePath') if key in placement},
+                           account=account, settings={key: row['settings'].get(key, {}) for key in ('parameters', 'endpoint')},
+                           projectId=snapshot['project']['id'], scriptContextOnly=row['libraryId'] not in selected,
+                           applicationPackagePath=app['logicalPath'], libraryPackagePath=lib['logicalPath'],
+                           packageApplicationScripts=app['scripts'], packageLibraryScripts=lib['scripts']))
+    return result
 
 
 def validate_config_contents(configs):

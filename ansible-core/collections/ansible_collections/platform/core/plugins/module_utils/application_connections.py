@@ -17,6 +17,13 @@ def active_script(script, instance):
     return all(name in instance.get('connections', {}) for name in script.get('requires_connections', []))
 
 
+def library_script_hosts(library, instance_id, script):
+    """Placements where this instance represents the library script."""
+    return [host for host in sorted(library['instances'][instance_id]['placements'])
+            if instance_id == min((name for name, member in library['instances'].items()
+                                   if host in member['placements'] and active_script(script, member)), default=None)]
+
+
 def script_secret_source(source, library, instance, provider_library=None):
     kind = source.get('valueFrom', 'runtime_secret')
     if kind == 'runtime_secret':
@@ -59,11 +66,17 @@ def script_secret_reference(source):
     raise ValueError('APPLICATION_SCRIPT_CREDENTIAL_SOURCE_UNSUPPORTED')
 
 
-def used_script_sources(libraries):
+def used_script_sources(libraries, selected_libraries=None, provider_libraries=()):
     """Resolve credential custody in its declaring library, including exports."""
     result = {}
     declarations = []
     for library_id, library in libraries.items():
+        if selected_libraries is not None and library_id not in selected_libraries:
+            for instance in (library['instances'].values() if library_id in provider_libraries else []):
+                declarations.extend((library_id, library, instance, script, None)
+                                    for script in library.get('scripts', []) + instance.get('scripts', [])
+                                    if script['phase'] == 'integration_apply' and active_script(script, instance))
+            continue
         for instance in library['instances'].values():
             declarations.extend((library_id, library, instance, script, None)
                                 for script in library.get('scripts', []) + instance.get('scripts', [])

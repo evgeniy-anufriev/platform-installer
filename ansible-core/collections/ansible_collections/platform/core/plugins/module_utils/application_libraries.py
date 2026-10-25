@@ -10,14 +10,14 @@ try:
     from .kafka_listener_resolution import project_member_listeners
     from .kafka_schema_registry import registry_projection
     from .application_images import registry_request
-    from .application_connections import provided_connections, application_connection, enabled, active_script, script_secret_source, connection_callback
+    from .application_connections import provided_connections, application_connection, enabled, active_script, library_script_hosts, script_secret_source, connection_callback
 except ImportError:
     from project_validation import canonical_digest
     from schema_validation import SchemaValidator
     from kafka_listener_resolution import project_member_listeners
     from kafka_schema_registry import registry_projection
     from application_images import registry_request
-    from application_connections import provided_connections, application_connection, enabled, active_script, script_secret_source, connection_callback
+    from application_connections import provided_connections, application_connection, enabled, active_script, library_script_hosts, script_secret_source, connection_callback
 
 CONTRACT = "platform.installer/project-desired-state/v3alpha1"
 ID = re.compile(r"^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$")
@@ -106,7 +106,12 @@ def load_package(root, reference, kind, loader, validator, inputs=None):
     folder = "%s-packages/%s/%s" % (kind, name, version)
     manifest_path = folder + "/" + kind + ".yml"
     manifest = loader(checked_file(root, manifest_path))
-    schema = os.path.join(validator.schema_root, "application-libraries", "v1alpha1", "package.schema.json")
+    package_version = {'platform.installer/application-package/v1alpha1': 'v1alpha1',
+                       'platform.installer/application-package/v1alpha2': 'v1alpha2',
+                       'platform.installer/application-package/v1alpha3': 'v1alpha3'}.get(manifest.get('apiVersion'))
+    if package_version is None:
+        raise ValueError('APPLICATION_PACKAGE_VERSION_UNSUPPORTED')
+    schema = os.path.join(validator.schema_root, "application-libraries", package_version, "package.schema.json")
     if validator.validate(manifest, schema):
         raise ValueError("Package manifest shape invalid")
     if (manifest["name"], manifest["version"], manifest["kind"]) != (name, version, kind.title() + "Package"):
@@ -736,6 +741,8 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
             if len({script['id'] for script in scripts}) != len(scripts):
                 findings.append(finding('APPLICATION_SCRIPT_ID_CONFLICT', 'applicationLibraryDeployments.' + library_id))
             for script in scripts:
+                if script in library.get('scripts', []) and not library_script_hosts(library, instance_id, script):
+                    continue
                 if script['phase'] == 'connection_apply':
                     continue
                 if script['phase'] != 'account_apply' and not active_script(script, instance):
@@ -771,7 +778,7 @@ def project(rows, desired, configuration, catalog, hosts, project_id="ansible-pr
                     elif source == 'account_batch':
                         valid = script['phase'] == 'account_apply'
                     else:
-                        valid = source in ('applicationId', 'projectId', 'libraryId', 'targetHostId')
+                        valid = source in ('applicationId', 'projectId', 'libraryId', 'targetHostId', 'integration_consumers')
                     if not valid:
                         findings.append(finding('APPLICATION_SCRIPT_REFERENCE_INVALID',
                                                 'applicationLibraryDeployments.' + library_id + '.scripts.' + script['id']))

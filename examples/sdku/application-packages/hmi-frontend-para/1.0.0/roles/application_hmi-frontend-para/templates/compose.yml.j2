@@ -24,8 +24,11 @@ services:
       - "{{ port.published }}:{{ port.container }}"
 {% endfor %}
     volumes:
-      - {{ ((application_effective.parameters.mount_sources['mount-1'] | default(undef(hint='Configure SDKU mount /etc/nginx/host.crt'), true)) ~ ':/etc/nginx/host.crt:ro') | to_json }}
-      - {{ ((application_effective.parameters.mount_sources['mount-2'] | default(undef(hint='Configure SDKU mount /etc/nginx/host.key'), true)) ~ ':/etc/nginx/host.key:ro') | to_json }}
+      - {{ (application_runtime.pki_path ~ '/certificate.pem:/etc/nginx/host.crt:ro') | to_json }}
+      - {{ (application_runtime.pki_path ~ '/private-key.pem:/etc/nginx/host.key:ro') | to_json }}
+      - {{ (application_runtime.pki_path ~ '/ca-chain.pem:/etc/nginx/ca-chain.pem:ro') | to_json }}
+      - {{ (application_runtime.config_path ~ '/hmi-frontend-para.conf:/etc/nginx/conf.d/hmi-frontend-para.conf:ro') | to_json }}
+{% set public_host = application_instance_id ~ '.' ~ platform_desired_state.endpointGroups[application_effective.endpoint.endpoint_group].address.domain %}
     healthcheck:
       "interval": 30s
       "retries": 10
@@ -33,9 +36,9 @@ services:
           - CMD-SHELL
           - >-
             curl --fail --silent --show-error --output /dev/null
-            --cacert /etc/nginx/host.crt
-            --resolve {{ application_parameters.PUBLIC_HOST | default(undef(hint='Configure SDKU PUBLIC_HOST'), true) }}:{{ application_effective.ports['port-1'].container }}:127.0.0.1
-            https://{{ application_parameters.PUBLIC_HOST }}:{{ application_effective.ports['port-1'].container }}/
+            --cacert /etc/nginx/ca-chain.pem
+            --resolve {{ public_host }}:{{ application_effective.ports['port-1'].container }}:127.0.0.1
+            https://{{ public_host }}:{{ application_effective.ports['port-1'].container }}/
       "timeout": 15s
     deploy:
       "resources":

@@ -1992,6 +1992,10 @@ func projectErrorCode(err error) string {
 
 func projectErrorMessage(code string) string {
 	switch code {
+	case "APPLICATION_LIBRARY_SELECTION_RUNTIME_UNSUPPORTED":
+		return "Текущий runtime не поддерживает пропуск библиотек. Обновите runtime bundle; установка не запущена."
+	case "APPLICATION_LIBRARY_SELECTION_INVALID":
+		return "Выбор пропуска библиотек не соответствует сохранённому проекту. Обновите выбор библиотек."
 	case "SESSION_CREDENTIAL_UNAVAILABLE":
 		return "Учётные данные SSH-сеанса недоступны или срок их действия истёк. Укажите пароль или приватный ключ PEM на странице «Серверы»."
 	case "SESSION_CREDENTIAL_PASSWORD_FORMAT_UNSUPPORTED":

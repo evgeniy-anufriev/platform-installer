@@ -70,3 +70,29 @@
   loop: "{{ platform_application_preflight_jobs | selectattr('libraryId', 'equalto', application_library_id) | list }}"
   loop_control:
     loop_var: application_runtime_job
+
+- name: Prepare selected consumers of an explicitly skipped provider without its lifecycle
+  ansible.builtin.include_tasks: tasks/application-provider-batch.yml
+  loop: "{{ hostvars['localhost'].application_runtime_inputs.integrations.batches | selectattr('providerLibraryId', 'equalto', application_library_id) | list }}"
+  loop_control:
+    loop_var: application_provider_batch
+  when: application_library_id in hostvars['localhost'].application_selection.scope.skippedLibraries
+  run_once: true
+
+- name: Deliver ready consumer secrets after skipped-provider callbacks
+  ansible.builtin.include_tasks: tasks/application-deliver-ready.yml
+  when: application_library_id in hostvars['localhost'].application_selection.scope.providerLibraries and application_library_id in hostvars['localhost'].application_selection.scope.skippedLibraries
+  run_once: true
+
+- name: Apply declared integration hooks on their own selected placements
+  ansible.builtin.include_tasks: tasks/application-provider-script.yml
+  vars:
+    application_provider_batch:
+      providerLibraryId: "{{ application_integration_script.libraryId }}"
+      providerInstanceId: "{{ application_integration_script.instanceId }}"
+    application_provider_script: "{{ application_integration_script }}"
+    application_provider_script_host: "{{ application_integration_script.hostId }}"
+  loop: "{{ hostvars['localhost'].application_runtime_inputs.integrationScripts | selectattr('libraryId', 'equalto', application_library_id) | list }}"
+  loop_control:
+    loop_var: application_integration_script
+  run_once: true

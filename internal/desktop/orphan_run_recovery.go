@@ -195,6 +195,7 @@ func (a *App) observedInstallationRunLocked(run executionnode.ExecutionRun) Inst
 		result.Reconnected = true
 		result.CancelUnconfirmed = a.recoveredCancelUnconfirmed
 		result.ProjectRevision = a.recoveredRun.ProjectRevision
+		result.Plan = a.recoveredRun.Plan
 		if a.recoveredCancelUnconfirmed {
 			result.Result = nil
 		}

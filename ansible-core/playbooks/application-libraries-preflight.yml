@@ -8,10 +8,9 @@
   tasks:
     - name: Bind the declared Apply order without expanding its scope
       ansible.builtin.set_fact:
-        application_preflight_library_ids: "{{ application_runtime_inputs.jobs | map(attribute='libraryId') | unique | sort | list }}"
+        application_preflight_library_ids: "{{ application_snapshot.snapshot.applicationLibraries.libraries | list | sort }}"
         application_preflight_library_order: >-
-          {{ platform_application_expected_library_ids | default(platform_application_library_order |
-             default(application_runtime_inputs.jobs | map(attribute='libraryId') | unique | sort | list)) }}
+          {{ application_selection.scope.libraryOrder }}
     - name: Require an exact explicit order for multiple selected libraries
       ansible.builtin.assert:
         that:
@@ -25,7 +24,8 @@
         fail_msg: "APPLICATION_PROVIDED_CONNECTION_ORDER_REQUIRED {{ application_provider_order_findings }}"
       vars:
         application_provider_order_findings: >-
-          {{ application_snapshot.snapshot.applicationLibraries.libraries |
+          {{ application_snapshot.snapshot.applicationLibraries.libraries | dict2items |
+             selectattr('key', 'in', application_selection.scope.installLibraries) | items2dict |
              platform.core.application_connection_order_findings(application_preflight_library_order) }}
 
 - name: Read-only preflight every selected target before application mutations

@@ -8,5 +8,9 @@
     - name: Publish selected ready logical sources with existing provider tasks
       ansible.builtin.include_tasks: ../../services/integrations/tasks/apply-source.yml
       vars:
-        platform_endpoint_source_ids: "{{ hostvars['localhost'].platform_endpoint_sources | default({}) | sort }}"
-      when: hostvars['localhost'].platform_endpoint_sources | default({}) | length > 0
+        platform_endpoint_source_ids: >-
+          {{ (hostvars['localhost'].application_runtime_inputs.jobs | map(attribute='instanceId') | unique |
+              intersect(hostvars['localhost'].platform_endpoint_sources | default({}) | list) | sort)
+             if hostvars['localhost'].application_runtime_inputs is defined else
+             (hostvars['localhost'].platform_endpoint_sources | default({}) | sort) }}
+      when: platform_endpoint_source_ids | length > 0

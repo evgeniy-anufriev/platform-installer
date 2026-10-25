@@ -61,6 +61,7 @@ const (
 )
 
 type DeploymentPlan struct {
+	SkipApplicationLibraries   []string
 	SkipInfrastructureVerify   bool
 	ExecutionMode              ExecutionMode
 	InfrastructureVerification *InfrastructureVerification
@@ -131,6 +132,7 @@ type TargetHostTrustStager interface {
 type TargetHostTrustProvider func(DeploymentPlan) ([]TargetHostKeyApproval, error)
 
 type PlanRecord struct {
+	SkipApplicationLibraries []string
 	skipInfrastructureVerify bool
 	mode                     ExecutionMode
 	vaultSources             map[string]string
@@ -309,6 +311,9 @@ func (s *ExecutionService) CreatePlanForModeWithLibraryOrder(ctx context.Context
 
 func (s *ExecutionService) buildPlan(ctx context.Context, node Node, root string, release map[string]any, order, libraryOrder []string, mode ExecutionMode, sources map[string]string, skipInfrastructureVerify ...bool) (DeploymentPlan, error) {
 	if mode == "" {
+		if len(applicationLibrarySelection(ctx)) > 0 {
+			return DeploymentPlan{}, errors.New("APPLICATION_LIBRARY_SELECTION_RUNTIME_UNSUPPORTED")
+		}
 		return s.builder.BuildDeploymentPlan(ctx, node, root, release, slices.Clone(order))
 	}
 	builder, ok := s.builder.(ModePlanBuilder)
@@ -326,7 +331,7 @@ func (s *ExecutionService) buildPlan(ctx context.Context, node Node, root string
 	} else {
 		plan, err = builder.BuildDeploymentPlanForMode(ctx, node, root, release, append([]string{}, order...), mode, cloneVaultSources(sources), skipInfrastructureVerify...)
 	}
-	if err == nil && (plan.ExecutionMode != mode || plan.SkipInfrastructureVerify != (len(skipInfrastructureVerify) > 0 && skipInfrastructureVerify[0]) || plan.InfrastructureVerification == nil || !plan.InfrastructureVerification.Validate()) {
+	if err == nil && (plan.ExecutionMode != mode || !sameLibrarySelection(plan.SkipApplicationLibraries, applicationLibrarySelection(ctx)) || plan.SkipInfrastructureVerify != (len(skipInfrastructureVerify) > 0 && skipInfrastructureVerify[0]) || plan.InfrastructureVerification == nil || !plan.InfrastructureVerification.Validate()) {
 		return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
 	}
 	return plan, err
@@ -352,7 +357,7 @@ func (s *ExecutionService) createPlan(ctx context.Context, node Node, projectRoo
 		return PlanRecord{}, errors.New("DEPLOYMENT_PLAN_INVALID")
 	}
 	now := s.now().UTC()
-	record := PlanRecord{skipInfrastructureVerify: len(skipInfrastructureVerify) > 0 && skipInfrastructureVerify[0], mode: mode, vaultSources: cloneVaultSources(vaultSources), ID: plan.ID, Plan: cloneDeploymentPlan(plan), DeploymentOrder: slices.Clone(deploymentOrder), ApplicationLibraryOrder: slices.Clone(libraryOrder), CreatedAt: now, ExpiresAt: now.Add(s.ttl)}
+	record := PlanRecord{SkipApplicationLibraries: applicationLibrarySelection(ctx), skipInfrastructureVerify: len(skipInfrastructureVerify) > 0 && skipInfrastructureVerify[0], mode: mode, vaultSources: cloneVaultSources(vaultSources), ID: plan.ID, Plan: cloneDeploymentPlan(plan), DeploymentOrder: slices.Clone(deploymentOrder), ApplicationLibraryOrder: slices.Clone(libraryOrder), CreatedAt: now, ExpiresAt: now.Add(s.ttl)}
 	s.mu.Lock()
 	s.plans[record.ID] = record
 	s.projectRoots[record.ID] = projectRoot
@@ -497,7 +502,7 @@ func (s *ExecutionService) start(ctx context.Context, node Node, planID string, 
 	if len(record.Plan.RuntimeRelease) == 0 {
 		return ExecutionRun{}, errors.New("EXECUTION_PLAN_RUNTIME_RELEASE_MISSING")
 	}
-	fresh, err := s.buildPlan(ctx, node, projectRoot, record.Plan.RuntimeRelease, record.DeploymentOrder, record.ApplicationLibraryOrder, record.mode, record.vaultSources, record.skipInfrastructureVerify)
+	fresh, err := s.buildPlan(WithApplicationLibrarySelection(ctx, record.SkipApplicationLibraries), node, projectRoot, record.Plan.RuntimeRelease, record.DeploymentOrder, record.ApplicationLibraryOrder, record.mode, record.vaultSources, record.skipInfrastructureVerify)
 	if err != nil {
 		return ExecutionRun{}, err
 	}
@@ -872,6 +877,7 @@ func sameStrings(a, b []string) bool {
 	return true
 }
 func cloneDeploymentPlan(p DeploymentPlan) DeploymentPlan {
+	p.SkipApplicationLibraries = slices.Clone(p.SkipApplicationLibraries)
 	if p.InfrastructureVerification != nil {
 		value := *p.InfrastructureVerification
 		value.Deployments = append([]InfrastructureDeploymentVerification{}, value.Deployments...)
@@ -940,6 +946,7 @@ func cloneServicePlanRequest(r ServicePlanRequest) ServicePlanRequest {
 	return r
 }
 func clonePlanRecord(p PlanRecord) PlanRecord {
+	p.SkipApplicationLibraries = slices.Clone(p.SkipApplicationLibraries)
 	p.Plan = cloneDeploymentPlan(p.Plan)
 	p.vaultSources = cloneVaultSources(p.vaultSources)
 	p.DeploymentOrder = slices.Clone(p.DeploymentOrder)

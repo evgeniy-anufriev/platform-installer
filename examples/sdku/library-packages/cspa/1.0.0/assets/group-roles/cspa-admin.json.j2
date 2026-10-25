@@ -1,0 +1,14 @@
+{% set client_roles = {"grant-access":["ЦСПА редактирование","ЦСПА просмотр","Администратор системы","uma_protection"],"master-realm":["CSPA_export_project_configuration","CSPA_resetting_checksums","CSPA_defenses_correction","CSPA_viewing_message_journal","CSPA_viewing_history_data","CSPA_blocking_mask","CSPA_viewing_realtime_data","CSPA_report_user_actions","CSPA_edit_system_information_reports","CSPA_user_management"],"grant-access-front":["uma_protection","front-access"],"grant-access-audit":["Расширение модели аудита","uma_protection","Получение данных для работы аудита"]} %}
+{% if 'data-manager' in platform_desired_state.applicationLibraryDeployments[library_instance_id].applications %}
+{% set _ = client_roles.update({('data-manager-' ~ library_instance_id): ["uma_protection", ('data-manager-' ~ library_instance_id), "Зоны видимости", "Администратор"]}) %}
+{% endif %}
+{% if 'hmi-backend' in platform_desired_state.applicationLibraryDeployments[library_instance_id].applications %}
+{% set _ = client_roles.update({('hmi-backend-' ~ library_instance_id): ["uma_protection", "Администратор"]}) %}
+{% endif %}
+{% if 'hmi-frontend-para' in platform_desired_state.applicationLibraryDeployments[library_instance_id].applications %}
+{% set _ = client_roles.update({('hmi-frontend-para-' ~ library_instance_id): ["uma_protection", "para-access"]}) %}
+{% endif %}
+{% if 'alarm-view-service' in platform_desired_state.applicationLibraryDeployments[library_instance_id].applications %}
+{% set _ = client_roles.update({('alarm-view-service-' ~ library_instance_id): ["Администратор", "uma_protection"]}) %}
+{% endif %}
+{{ {"realm_roles":[], "client_roles": client_roles} | to_json }}

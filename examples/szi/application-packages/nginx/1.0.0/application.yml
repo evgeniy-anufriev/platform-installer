@@ -1,5 +1,5 @@
 {
-  "apiVersion": "platform.installer/application-package/v1alpha1",
+  "apiVersion": "platform.installer/application-package/v1alpha2",
   "kind": "ApplicationPackage",
   "name": "nginx",
   "version": "1.0.0",
@@ -10,8 +10,6 @@
     "roles/application_nginx/defaults/main.yml",
     "roles/application_nginx/templates/compose.yml.j2",
     "assets/routes.requested.json.j2",
-    "assets/routes-upsert.lua",
-    "assets/routes-upsert.conf",
     "assets/prepare-routes.sh"
   ],
   "render": {
@@ -35,6 +33,29 @@
         },
         {
           "valueFrom": "targetHostId"
+        }
+      ]
+    },
+    {
+      "id": "integrate-routes",
+      "source": "assets/prepare-routes.sh",
+      "phase": "integration_apply",
+      "execution": "each_target",
+      "argv": [
+        {
+          "valueFrom": "projectId"
+        },
+        {
+          "valueFrom": "libraryId"
+        },
+        {
+          "valueFrom": "applicationId"
+        },
+        {
+          "valueFrom": "targetHostId"
+        },
+        {
+          "valueFrom": "integration_consumers"
         }
       ]
     }

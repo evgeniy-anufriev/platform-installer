@@ -13,8 +13,8 @@ import (
 const maxInstallationPlanFindings = 64
 
 // InstallationPlanOperation is the only UI-02B mutation response. Its plan is
-// a bounded in-memory projection of a Core-owned PlanRecord, never a portable
-// project document or a Start authorization.
+// a bounded projection of a Core-owned PlanRecord, never a portable project
+// document or a Start authorization. A run may retain it as display evidence.
 type InstallationPlanOperation struct {
 	Status string                `json:"status"`
 	Plan   *InstallationPlanView `json:"plan,omitempty"`
@@ -22,6 +22,7 @@ type InstallationPlanOperation struct {
 }
 
 type InstallationPlanRequest struct {
+	SkipApplicationLibraries []string                    `json:"skipApplicationLibraries"`
 	SkipInfrastructureVerify bool                        `json:"skipInfrastructureVerify"`
 	ExecutionMode            executionnode.ExecutionMode `json:"executionMode"`
 	DeploymentOrder          []string                    `json:"deploymentOrder"`
@@ -30,6 +31,7 @@ type InstallationPlanRequest struct {
 }
 
 type InstallationPlanView struct {
+	SkipApplicationLibraries              []string                                  `json:"skipApplicationLibraries"`
 	SkipInfrastructureVerify              bool                                      `json:"skipInfrastructureVerify"`
 	ExecutionMode                         executionnode.ExecutionMode               `json:"executionMode"`
 	InfrastructureVerification            *executionnode.InfrastructureVerification `json:"infrastructureVerification,omitempty"`
@@ -125,6 +127,7 @@ func (a *App) createInstallationPlan(request InstallationPlanRequest) Installati
 	ctx, cancel := a.operationContext(10 * time.Minute)
 	defer cancel()
 	ctx = executionnode.WithImagePreparationCredentials(ctx, a.imagePreparationCredentialsLocked)
+	ctx = executionnode.WithApplicationLibrarySelection(ctx, request.SkipApplicationLibraries)
 	var record executionnode.PlanRecord
 	if request.ExecutionMode == "" {
 		record, err = binding.plans.CreatePlanWithOrder(ctx, binding.node, a.current.Root, binding.reader.runtimeRelease, request.DeploymentOrder)
@@ -359,7 +362,7 @@ func installationPlanView(record executionnode.PlanRecord, binding *executionNod
 	if mode == "" {
 		mode = executionnode.FullProject
 	}
-	view := InstallationPlanView{SkipInfrastructureVerify: record.Plan.SkipInfrastructureVerify, ExecutionMode: mode, InfrastructureVerification: record.Plan.InfrastructureVerification, ID: record.ID, Status: record.Plan.Status, ProjectRevision: record.Plan.ProjectRevision,
+	view := InstallationPlanView{SkipApplicationLibraries: append([]string{}, record.Plan.SkipApplicationLibraries...), SkipInfrastructureVerify: record.Plan.SkipInfrastructureVerify, ExecutionMode: mode, InfrastructureVerification: record.Plan.InfrastructureVerification, ID: record.ID, Status: record.Plan.Status, ProjectRevision: record.Plan.ProjectRevision,
 		PlanFingerprint: record.Plan.PlanFingerprint, ExecutionNodeID: binding.node.ID, Runtime: runtime,
 		ExpiresAt: record.ExpiresAt.UTC().Format(time.RFC3339), Approved: record.Approved,
 		Acknowledgements: make([]InstallationAcknowledgement, 0, len(record.Plan.AcknowledgementDetails)),

@@ -28,7 +28,11 @@ type ImageTargetConnection struct {
 }
 
 func (t OpenSSHTransport) imagePlanningCapabilities(ctx context.Context, node Node, fallback string) (map[string]any, error) {
-	capability, err := t.runtimeProtocol(ctx, node, map[string]any{"apiVersion": imagePlanRequestVersion, "operation": "GetCapabilities"})
+	capability, err := t.runtimeProtocol(ctx, node, map[string]any{"apiVersion": selectionPlanRequestVersion, "operation": "GetCapabilities"})
+	if err == nil && imagePlanCapabilitySupported(capability) {
+		return capability, nil
+	}
+	capability, err = t.runtimeProtocol(ctx, node, map[string]any{"apiVersion": imagePlanRequestVersion, "operation": "GetCapabilities"})
 	if err == nil && imagePlanCapabilitySupported(capability) {
 		return capability, nil
 	}
@@ -51,13 +55,13 @@ func WithImagePreparationCredentials(ctx context.Context, provider ImagePreparat
 
 func imagePlanCapabilitySupported(c map[string]any) bool {
 	images, ok := c["applicationImages"].(map[string]any)
-	return ok && c["apiVersion"] == "platform.installer/execution-capabilities/v1alpha10" &&
+	return ok && (c["apiVersion"] == "platform.installer/execution-capabilities/v1alpha10" || selectionCapabilitySupported(c)) &&
 		contains(c["supportedOperations"], "PrepareApplicationImages") && contains(c["deploymentPlanRequestVersions"], imagePlanRequestVersion) &&
 		images["protocol"] == "PrepareApplicationImages/v1alpha1" && images["leaseProtocol"] == "platform.installer/application-image-preparation-lease/v1alpha1"
 }
 
 func (t OpenSSHTransport) prepareApplicationImages(ctx context.Context, node Node, request map[string]any) error {
-	base := map[string]any{"apiVersion": imagePlanRequestVersion, "operation": "PrepareApplicationImages", "runId": request["runId"], "runtimeRelease": request["runtimeRelease"]}
+	base := map[string]any{"apiVersion": request["apiVersion"], "operation": "PrepareApplicationImages", "runId": request["runId"], "runtimeRelease": request["runtimeRelease"]}
 	describe := map[string]any{}
 	for key, value := range base {
 		describe[key] = value
@@ -65,6 +69,10 @@ func (t OpenSSHTransport) prepareApplicationImages(ctx context.Context, node Nod
 	describe["phase"] = "DESCRIBE"
 	for _, key := range []string{"executionMode", "deploymentOrder", "skipInfrastructureVerify"} {
 		describe[key] = request[key]
+	}
+	if request["apiVersion"] == selectionPlanRequestVersion {
+		describe["skipApplicationLibraries"] = request["skipApplicationLibraries"]
+		describe["applicationLibraryOrder"] = request["applicationLibraryOrder"]
 	}
 	response, err := t.runtimeProtocol(ctx, node, describe)
 	if err != nil {

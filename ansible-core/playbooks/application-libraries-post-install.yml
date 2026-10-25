@@ -1,0 +1,54 @@
+---
+- import_playbook: application-libraries-resolve-runtime.yml
+  vars:
+    platform_application_post_install_only: true
+
+- name: Execute terminal scripts after the successful installation prefix
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  any_errors_fatal: true
+  tasks:
+    - name: Bind the resolved terminal queue and its exact credential references
+      ansible.builtin.set_fact:
+        application_post_install_scripts: "{{ application_runtime_inputs.postInstallScripts }}"
+        application_post_install_references: "{{ application_runtime_inputs.postInstallScripts | map(attribute='secretInputs') | map('dict2items') | flatten | map(attribute='value') | unique | list }}"
+        platform_application_vault_runtime: {}
+        platform_application_credential_files: {}
+      no_log: true
+    - name: Bind only existing published fields consumed by terminal scripts
+      ansible.builtin.set_fact:
+        application_post_install_sources: "{{ application_vault_inputs.sourceJobs | selectattr('passwordRef', 'in', application_post_install_references) | list }}"
+      no_log: true
+    - name: Run terminal scripts with invocation-bounded credential custody
+      block:
+        - name: Discover only Vault providers needed for terminal inputs
+          ansible.builtin.include_role:
+            name: platform.vault.application_provider
+            tasks_from: discover
+          vars:
+            platform_vault_application_single_provider: "{{ application_vault_inputs.providers | length == 1 }}"
+          loop: "{{ application_vault_inputs.providers | selectattr('providerId', 'in', application_post_install_sources | map(attribute='providerId') | list) | list }}"
+          loop_control:
+            loop_var: platform_vault_application_provider
+        - name: Read published fields without generating or updating credentials
+          ansible.builtin.include_role:
+            name: platform.vault.application_provider
+            tasks_from: sources
+          loop: "{{ application_post_install_sources }}"
+          loop_control:
+            loop_var: application_vault_source
+        - name: Execute the deterministic terminal queue sequentially
+          ansible.builtin.include_tasks: tasks/application-post-install-script.yml
+          loop: "{{ application_post_install_scripts }}"
+          loop_control:
+            loop_var: application_post_install_script
+            label: "{{ application_post_install_script.libraryId }}/{{ application_post_install_script.id }}"
+      always:
+        - name: Remove only derived source files materialized by this terminal invocation
+          ansible.builtin.file:
+            path: "{{ platform_application_secret_root }}/{{ item.passwordRef }}"
+            state: absent
+          loop: "{{ application_post_install_sources }}"
+          changed_when: false
+          no_log: true

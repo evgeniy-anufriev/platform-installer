@@ -3,7 +3,8 @@
   "files": [
     "roles/application_hmi-backend/defaults/main.yml",
     "roles/application_hmi-backend/templates/compose.yml.j2",
-    "roles/application_hmi-backend/templates/agent.hcl.j2"
+    "roles/application_hmi-backend/templates/agent.hcl.j2",
+    "assets/keycloak-client.json.j2"
   ],
   "kind": "ApplicationPackage",
   "name": "hmi-backend",

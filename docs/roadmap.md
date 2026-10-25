@@ -98,6 +98,13 @@ Implementation is in a separate worktree; current gates remain in
 `CURRENT_STATE.md`. SDKU group creation and per-application Keycloak clients
 remain later integration work.
 
+The owner-authorized [Stage3 plan](work/application-libraries/szi-stage3-technical-plan.md)
+adds invocation-only skipped libraries while preserving selected consumers'
+provider integrations, and exercises SDKU/CSPA against existing SZI. This extends
+the ordered library flow and generic scripts; no SZI branch or new Verify
+responsibility is introduced. Implementation and acceptance evidence are tracked
+in CURRENT_STATE.md and the linked Stage3 journal.
+
 [A2](work/application-libraries/milestones/a2/a2-technical-plan.md) covers explicit standalone
 rendering, pinned image delivery and rootless Compose Apply/Verify. Its exit gates
 include multi-host registry/offline selection, clean repeat, interrupted activation,

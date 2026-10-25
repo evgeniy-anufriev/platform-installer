@@ -117,7 +117,10 @@ SHA-256 чистого дампа:
 `evoscada-docker.artifacts.tn.tngrp.ru/lawellet/nginx-lua-resty:1.0.3-redos3-certs`.
 Адреса в `scada-lawellet.conf` и конфиге grant-access-front выводятся из
 applicationId и endpoint-групп. Аварийные маршруты `script.lua`/`data.env`
-рассчитаны на динамическое заполнение интеграциями.
+рассчитаны на динамическое заполнение интеграциями. Хук `prepare-routes.sh`
+требует `jq` на целевых узлах, атомарно объединяет JSON без удаления прежних
+маршрутов и не вызывает Docker. Он работает и при остановленном nginx;
+повторный вызов без изменений возвращает `changed=false`.
 
 Полная библиотека установлена на двух узлах через реальный React/Wails/Core:
 по пять приложений, чистый импорт БД и bootstrap admin, затем успешный повторный

@@ -113,8 +113,7 @@ platform_application_definition:
             - -jar
             - alarm-view-service.jar
         endpoint:
-            enabled: true
-            endpoint_group: qa-shared-endpoint
+            enabled: false
             listener: port-1
             probe:
                 expected_status: 200

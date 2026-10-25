@@ -2,24 +2,35 @@ platform_application_definition:
     name: hmi-frontend-para
     version: 1.0.0
     defaults:
+        connections:
+            sso: {enabled: false}
         image: evoscada-docker.artifacts.tn.tngrp.ru/hmi-frontend-para:0.0.1-f878fe7c
         user: 1000:1000
         restart: on-failure
         command:
             - /app/docker-entrypoint.sh
+        endpoint:
+            enabled: false
+            listener: port-1
+            probe:
+                expected_status: 200
+                path: /
+                timeout: 10
+            protocol: https
         environment:
             GRANT_ACCESS: grant-access
             GRANT_ACCESS_AUDIT: grant-access-audit
-            NGINX_CSPA_BACK: hmi-backend
-            NGINX_DATA_MANAGER_BACK: data-manager
-            NGINX_PARA_FRONT: hmi-frontend-para
-            NGINX_URL: ""
+            NGINX_CSPA_BACK: 'hmi-backend-{{ library_instance_id }}'
+            NGINX_DATA_MANAGER_BACK: 'data-manager-{{ library_instance_id }}'
+            NGINX_PARA_FRONT: '{{ application_instance_id }}'
+            NGINX_URL: "{{ application_connections.sso.parameters.proxy_url if 'sso' in application_connections else '' }}"
             NGINX_URL_SCHEDULER: evo-scheduler
+        config_files:
+          - template: assets/nginx.conf.j2
+            destination: hmi-frontend-para.conf
+            mode: "0644"
         parameters:
-            mount_sources:
-                mount-1: ""
-                mount-2: ""
-            PUBLIC_HOST: ""
+            IDENTITY_CLIENT: "{{ (lookup('ansible.builtin.template', (application_job.application.defaultsPath | dirname) ~ '/../../../assets/keycloak-client.json.j2', convert_data=false) | from_json) if 'sso' in application_connections else {} }}"
         ports:
             port-1:
                 container: 10171
@@ -28,4 +39,4 @@ platform_application_definition:
             delay: 2
             mode: healthcheck
             retries: 30
-    connections: []
+    connections: [sso]

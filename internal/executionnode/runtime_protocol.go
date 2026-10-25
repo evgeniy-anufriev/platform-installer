@@ -16,6 +16,7 @@ import (
 	"os"
 	"path"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -276,7 +277,7 @@ func (t OpenSSHTransport) buildDeploymentPlanRequest(ctx context.Context, node N
 		return DeploymentPlan{}, err
 	}
 	request["operation"], request["runId"], request["project"] = "BuildDeploymentPlan", runID, "/var/lib/platform-installer/execution/runs/"+runID+"/project"
-	if request["apiVersion"] == imagePlanRequestVersion {
+	if request["apiVersion"] == imagePlanRequestVersion || request["apiVersion"] == selectionPlanRequestVersion {
 		if err := t.prepareApplicationImages(ctx, node, request); err != nil {
 			return DeploymentPlan{}, err
 		}
@@ -289,18 +290,34 @@ func (t OpenSSHTransport) buildDeploymentPlanRequest(ctx context.Context, node N
 	if !ok {
 		return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
 	}
+	postInstallSupported := false
+	if value["apiVersion"] == "platform.installer/plan/v1alpha9" {
+		capability, probeErr := t.runtimeProtocol(ctx, node, map[string]any{"apiVersion": selectionPlanRequestVersion, "operation": "GetCapabilities"})
+		postInstallSupported = probeErr == nil && postInstallCapabilitySupported(capability)
+		if !postInstallSupported {
+			return DeploymentPlan{}, errors.New("APPLICATION_POST_INSTALL_RUNTIME_UNSUPPORTED")
+		}
+	}
 	if request["apiVersion"] == "platform.installer/execution-runtime/v1alpha4" && (value["apiVersion"] != "platform.installer/plan/v1alpha5" || value["executionMode"] != request["executionMode"]) {
 		return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
 	}
 	if request["apiVersion"] == "platform.installer/execution-runtime/v1alpha5" && (value["apiVersion"] != "platform.installer/plan/v1alpha6" || value["skipInfrastructureVerify"] != request["skipInfrastructureVerify"] || value["executionMode"] != request["executionMode"]) {
 		return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
 	}
-	if request["apiVersion"] == imagePlanRequestVersion && (value["apiVersion"] != "platform.installer/plan/v1alpha7" || value["skipInfrastructureVerify"] != request["skipInfrastructureVerify"] || value["executionMode"] != request["executionMode"]) {
+	if request["apiVersion"] == imagePlanRequestVersion && ((value["apiVersion"] != "platform.installer/plan/v1alpha7" && !(value["apiVersion"] == "platform.installer/plan/v1alpha9" && postInstallSupported)) || value["skipInfrastructureVerify"] != request["skipInfrastructureVerify"] || value["executionMode"] != request["executionMode"]) {
 		return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
 	}
 	plan, err := decodeDeploymentPlan(value)
 	if err != nil {
 		return DeploymentPlan{}, err
+	}
+	if request["apiVersion"] == selectionPlanRequestVersion {
+		requested, _ := request["skipApplicationLibraries"].([]string)
+		requested = slices.Clone(requested)
+		slices.Sort(requested)
+		if (value["apiVersion"] != "platform.installer/plan/v1alpha8" && !(value["apiVersion"] == "platform.installer/plan/v1alpha9" && postInstallSupported)) || value["executionMode"] != request["executionMode"] || value["skipInfrastructureVerify"] != request["skipInfrastructureVerify"] || !slices.Equal(requested, plan.SkipApplicationLibraries) {
+			return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
+		}
 	}
 	if err := bindExecutionManifest(&plan, response, runID); err != nil {
 		return DeploymentPlan{}, err
@@ -1013,7 +1030,20 @@ func validEventCode(value string) bool {
 }
 func decodeDeploymentPlan(value map[string]any) (DeploymentPlan, error) {
 	plan := DeploymentPlan{}
-	if value["apiVersion"] == "platform.installer/plan/v1alpha7" {
+	if value["apiVersion"] == "platform.installer/plan/v1alpha8" || value["apiVersion"] == "platform.installer/plan/v1alpha9" {
+		values, ok := value["skipApplicationLibraries"].([]any)
+		if !ok {
+			return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
+		}
+		for _, raw := range values {
+			id, ok := raw.(string)
+			if !ok {
+				return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
+			}
+			plan.SkipApplicationLibraries = append(plan.SkipApplicationLibraries, id)
+		}
+	}
+	if value["apiVersion"] == "platform.installer/plan/v1alpha7" || (value["apiVersion"] == "platform.installer/plan/v1alpha8" || value["apiVersion"] == "platform.installer/plan/v1alpha9") {
 		skip, ok := value["skipInfrastructureVerify"].(bool)
 		if !ok || skip && value["executionMode"] != string(ApplicationLibrariesOnly) {
 			return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
@@ -1026,7 +1056,7 @@ func decodeDeploymentPlan(value map[string]any) (DeploymentPlan, error) {
 		}
 		plan.SkipInfrastructureVerify = true
 	}
-	if value["apiVersion"] == "platform.installer/plan/v1alpha5" || value["apiVersion"] == "platform.installer/plan/v1alpha6" || value["apiVersion"] == "platform.installer/plan/v1alpha7" {
+	if value["apiVersion"] == "platform.installer/plan/v1alpha5" || value["apiVersion"] == "platform.installer/plan/v1alpha6" || value["apiVersion"] == "platform.installer/plan/v1alpha7" || (value["apiVersion"] == "platform.installer/plan/v1alpha8" || value["apiVersion"] == "platform.installer/plan/v1alpha9") {
 		mode, ok := value["executionMode"].(string)
 		plan.ExecutionMode = ExecutionMode(mode)
 		if !ok || !plan.ExecutionMode.valid() {

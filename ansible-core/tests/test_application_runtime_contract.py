@@ -113,6 +113,27 @@ class ApplicationRuntimeTests(unittest.TestCase):
         inputs[4]["x-container-images"]["images"][inputs[2][0]["settings"]["image"]].update(image_patch or {})
         return prepare_runtime(*inputs)
 
+    def test_skipped_provider_context_does_not_resolve_an_image_or_runtime_payload(self):
+        import copy
+        inputs = self.runtime_fixture()
+        snapshot, rows = inputs[1], inputs[2]
+        snapshot['project'] = {'id': 'project'}
+        libraries = snapshot['applicationLibraries']['libraries']
+        libraries['provider'] = copy.deepcopy(libraries['sdku'])
+        provider_row = copy.deepcopy(rows[0])
+        provider_row['libraryId'] = 'provider'
+        provider_row['settings']['image'] = 'must-not-be-resolved:qa'
+        rows.append(provider_row)
+        snapshot['applicationExecutionScope'] = dict(installLibraries=['sdku'], providerLibraries=['provider'])
+        contexts = []
+        jobs = prepare_runtime(*inputs, script_contexts=contexts)
+        self.assertEqual(['sdku'], [job['libraryId'] for job in jobs])
+        self.assertEqual(['provider'], [job['libraryId'] for job in contexts])
+        for key in ('authority', 'configs', 'pkiPlans', 'vault', 'agentTemplate', 'composeArgv'):
+            self.assertNotIn(key, contexts[0])
+        self.assertEqual({'parameters', 'endpoint'}, set(contexts[0]['settings']))
+        self.assertNotIn('registryCredentials', contexts[0])
+
     def test_runtime_preparation_reads_shared_packages_once_for_many_placements(self):
         inputs = self.runtime_fixture()
         rows = inputs[2]

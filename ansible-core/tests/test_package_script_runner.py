@@ -28,6 +28,7 @@ class PackageScriptRunnerTests(unittest.TestCase):
             inventory = root / 'inventory.yml'
             inventory.write_text(yaml.safe_dump({'all': {'hosts': {
                 'localhost': {'ansible_connection': 'local',
+                              'application_runtime_inputs': {'scriptContexts': [{'libraryId': 'provider', 'instanceId': 'server', 'hostId': 'node2'}]},
                               'platform_application_secret_files': {'token': str(token)},
                               'platform_application_secret_root': str(root)},
                 'node2': {'ansible_host': 'unreachable.invalid', 'platform_application_preflight_jobs': [{

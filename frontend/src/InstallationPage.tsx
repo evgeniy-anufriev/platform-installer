@@ -295,6 +295,7 @@ export function InstallationPage({
     mode?: InstallationExecutionMode,
     skipInfrastructureVerify?: boolean,
     applicationLibraryOrder?: string[],
+    skipApplicationLibraries?: string[],
   ) => void;
   infrastructureObservation?: InfrastructureVerificationView;
   selectedExecutionMode?: InstallationExecutionMode;
@@ -322,6 +323,15 @@ export function InstallationPage({
   onCollectSecretOutputs?: () => Promise<void>;
 }) {
   const [orderError, setOrderError] = useState("");
+  const [skippedLibraries, setSkippedLibraries] = useState<string[]>([]);
+  const selectionPlanId = useRef<string | undefined>(undefined);
+  useEffect(() => setSkippedLibraries([]), [state?.project?.id]);
+  useEffect(() => {
+    if (selectionPlanId.current !== plan?.plan?.id) {
+      selectionPlanId.current = plan?.plan?.id;
+      setSkippedLibraries(plan?.plan?.skipApplicationLibraries || []);
+    }
+  }, [plan?.plan?.id, plan?.plan?.skipApplicationLibraries]);
   const [skipInfrastructureVerify, setSkipInfrastructureVerify] =
     useState(false);
   useEffect(() => setSkipInfrastructureVerify(false), [state?.project?.id]);
@@ -330,6 +340,7 @@ export function InstallationPage({
   const executionMode = selectedExecutionMode || localExecutionMode;
   const setExecutionMode = (mode: InstallationExecutionMode) => {
     setSkipInfrastructureVerify(false);
+    setSkippedLibraries([]);
     setLocalExecutionMode(mode);
     onExecutionModeChange?.(mode);
   };
@@ -343,7 +354,9 @@ export function InstallationPage({
   }, [plan?.plan?.id, plan?.plan?.executionMode, selectedExecutionMode]);
   const skipChanged =
     !!plan?.plan &&
-    !!plan.plan.skipInfrastructureVerify !== skipInfrastructureVerify;
+    (!!plan.plan.skipInfrastructureVerify !== skipInfrastructureVerify ||
+      JSON.stringify([...(plan.plan.skipApplicationLibraries || [])].sort()) !==
+        JSON.stringify([...skippedLibraries].sort()));
   const scopeChanged =
     !!plan?.plan &&
     ((plan.plan.executionMode || "FULL_PROJECT") !== executionMode ||
@@ -385,7 +398,15 @@ export function InstallationPage({
     const skip =
       executionMode === "APPLICATION_LIBRARIES_ONLY" &&
       skipInfrastructureVerify;
-    if (libraryOrder.order.length)
+    if (skippedLibraries.length)
+      onCreatePlan(
+        deploymentOrder.order,
+        executionMode,
+        skip,
+        libraryOrder.order,
+        skippedLibraries,
+      );
+    else if (libraryOrder.order.length)
       onCreatePlan(
         deploymentOrder.order,
         executionMode,
@@ -480,7 +501,7 @@ export function InstallationPage({
       {scopeChanged && (
         <p role="status">
           {skipChanged
-            ? "Параметр Infra Verify изменён. Сформируйте свежий план перед одобрением."
+            ? "Параметры пропуска изменены. Сформируйте свежий план перед одобрением."
             : "Состав запуска изменён. Актуальный план будет сформирован при одобрении перед запуском."}
         </p>
       )}
@@ -488,6 +509,13 @@ export function InstallationPage({
   );
   return (
     <section className="installation-page">
+      {!!displayedPlan?.plan?.skipApplicationLibraries?.length && (
+        <p role="status">
+          Установка библиотек пропущена:{" "}
+          {displayedPlan.plan.skipApplicationLibraries.join(", ")}. Необходимые
+          интеграции сохраняются.
+        </p>
+      )}
       {displayedPlan?.plan?.skipInfrastructureVerify && tab !== "plan" && (
         <p role="alert">
           Infra Verify явно пропущен по принятому пользователем риску.
@@ -685,7 +713,64 @@ export function InstallationPage({
           <>
             <PlanStage
               key={plan?.plan?.id || "no-plan"}
-              servicesControl={servicesControl}
+              servicesControl={
+                <>
+                  {servicesControl}
+                  {libraryDeployments.length > 0 && (
+                    <div aria-label="Выбор библиотек">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Библиотека</th>
+                            <th>Установить</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {libraryDeployments.map((library) => (
+                            <tr key={library.deploymentId}>
+                              <td>{library.deploymentId}</td>
+                              <td>
+                                <input
+                                  type="checkbox"
+                                  aria-label={
+                                    "Установить библиотеку " +
+                                    library.deploymentId
+                                  }
+                                  checked={
+                                    !skippedLibraries.includes(
+                                      library.deploymentId,
+                                    )
+                                  }
+                                  disabled={
+                                    busy ||
+                                    runActive ||
+                                    executionMode ===
+                                      "INFRASTRUCTURE_VERIFY_ONLY"
+                                  }
+                                  onChange={(event) =>
+                                    setSkippedLibraries((current) =>
+                                      !event.target.checked
+                                        ? [...current, library.deploymentId]
+                                        : current.filter(
+                                            (id) => id !== library.deploymentId,
+                                          ),
+                                    )
+                                  }
+                                />
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      <p className="muted">
+                        Apply и Verify выбранных библиотек пропускаются. Их
+                        подключения остаются доступны интеграциям
+                        устанавливаемых приложений.
+                      </p>
+                    </div>
+                  )}
+                </>
+              }
               scopeChanged={!runActive && scopeChanged}
               skipChanged={!runActive && skipChanged}
               infrastructureExcluded={

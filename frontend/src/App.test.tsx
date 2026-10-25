@@ -427,6 +427,37 @@ function api(overrides: Record<string, unknown> = {}): MockApi {
 
 it("attaches the previous run and reuses execution, events and cancellation without another Start", async () => {
   const runId = "installer-prior-run";
+  let onRunEvent:
+    | Parameters<
+        NonNullable<ProjectBackend["subscribeInstallationRunEvents"]>
+      >[0]
+    | undefined;
+  const recoveredPlan = {
+    id: "prior-plan",
+    projectRevision: "sha256:previous-revision",
+    phases: [
+      {
+        id: "applications",
+        order: 0,
+        actions: [
+          {
+            id: "apply",
+            type: "APPLICATION_LIBRARIES_APPLY",
+            targets: ["node1"],
+            dependsOn: [],
+            summary: "Apply recovered libraries",
+          },
+          {
+            id: "verify",
+            type: "APPLICATION_LIBRARIES_VERIFY",
+            targets: ["node1"],
+            dependsOn: ["apply"],
+            summary: "Verify recovered libraries",
+          },
+        ],
+      },
+    ],
+  };
   const inspectOrphanRun = vi.fn().mockResolvedValue({
     status: "FOUND",
     recoveryId: "recovery-token",
@@ -438,6 +469,7 @@ it("attaches the previous run and reuses execution, events and cancellation with
     status: "READY",
     reconnected: true,
     projectRevision: "sha256:previous-revision",
+    plan: recoveredPlan,
     run: { runId, state: "RUNNING", sequence: 0 },
   });
   const subscribeInstallationRun = vi.fn().mockResolvedValue({
@@ -456,6 +488,10 @@ it("attaches the previous run and reuses execution, events and cancellation with
     subscribeInstallationRun,
     cancelInstallationRun,
     startApprovedInstallation,
+    subscribeInstallationRunEvents: vi.fn((handler) => {
+      onRunEvent = handler;
+      return vi.fn();
+    }),
   });
   await openServers(value);
   await userEvent.click(
@@ -470,6 +506,34 @@ it("attaches the previous run and reuses execution, events and cancellation with
   expect(
     await screen.findByText(/Переподключено к прежнему запуску/),
   ).toBeTruthy();
+  expect(
+    screen.getAllByText("Apply recovered libraries").length,
+  ).toBeGreaterThan(0);
+  expect(
+    screen.queryByText("Действия плана для этого запуска недоступны."),
+  ).toBeNull();
+  await act(async () => {
+    for (const [sequence, actionId, eventType, status] of [
+      [1, "apply", "ACTION_STARTED", "RUNNING"],
+      [2, "apply", "ACTION_COMPLETED", "SUCCESS"],
+      [3, "verify", "ACTION_STARTED", "RUNNING"],
+    ] as const)
+      onRunEvent?.({
+        subscriptionId: "recovered-sub",
+        event: {
+          runId,
+          sequence,
+          actionId,
+          eventType,
+          status,
+          timestamp: "2026-10-25T12:00:00Z",
+          safeMessage: "safe",
+          redacted: true,
+        } as InstallationEventView,
+      });
+  });
+  expect(screen.getAllByText(/50%/).length).toBeGreaterThan(0);
+  expect(screen.getByText("1 из 2 завершено")).toBeTruthy();
   await userEvent.click(
     screen.getByRole("button", { name: "Отменить выполнение" }),
   );
@@ -3364,7 +3428,9 @@ it("refreshes the Core snapshot after successful Project Verify", async () => {
   );
   await userEvent.click(screen.getByRole("button", { name: "Проверить" }));
   await waitFor(() => expect(getCurrentProject).toHaveBeenCalledOnce());
-  expect(await screen.findByRole("heading", { name: "Verified Core" })).toBeTruthy();
+  expect(
+    await screen.findByRole("heading", { name: "Verified Core" }),
+  ).toBeTruthy();
 });
 
 it("explains the READY Execution Node prerequisite after Project Verify", async () => {

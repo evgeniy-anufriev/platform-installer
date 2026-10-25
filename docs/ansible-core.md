@@ -144,6 +144,17 @@ before the next starts.
 Direct multi-library Apply also requires an explicit order. PostgreSQL's
 managed `restore_on_create` is part of the existing provider stage.
 
+Invocation `platform_application_skip_libraries` selects library instance IDs
+to omit from installation while preserving their provider definitions. Planned
+execution supplies the same derived `platform_application_execution_scope` and
+checks it against fresh native resolution. Resource/account and Vault write jobs,
+runtime materialization, images and Verify contain only installed consumers.
+Provider callbacks use minimal script contexts without Docker preflight.
+At a skipped provider's library boundary the existing ordered integration and
+account batches execute, followed by ordinary dependent Vault/Agent delivery.
+Package v1alpha2 `integration_apply` hooks run on their declaring placements
+before the next library, through the unchanged generic script runner.
+
 Kafka library resources reuse these stages with capability `service.kafka.topic`.
 Core projects topic defaults from the selected deployment's mode and broker members;
 the Kafka role uses builtin command/template/assert tasks and its installed CLI.
@@ -490,3 +501,23 @@ to BuildDeploymentPlan and the existing execution path. No Go/UI registry resolv
 new planning worker or persistent secret store is introduced. An older runtime
 retains its explicit legacy-lock path. Source/identity policy and verification
 remain in Core. See [the plan](work/application-libraries/application-image-metadata-plan.md).
+
+### Terminal package scripts
+
+Application/LibraryPackage v1alpha3 adds `phase: post_install`. The resolved
+plan appends `APPLICATION_LIBRARIES_POST_INSTALL` only when selected packages
+declare active terminal scripts. It runs after the complete successful Apply/Verify
+prefix, never inside Verify, never after failure/cancel and never for skipped
+libraries. The standalone entrypoint is
+`ansible-core/playbooks/application-libraries-post-install.yml`. It resolves
+script contexts without image/container/provider preflight, reads only required
+existing Vault fields and calls the existing `package_script` role sequentially.
+Order: libraryOrder index, order, id, scope (library first), instanceId, hostId.
+`execution: once` is once per scope in this invocation. Every new Apply calls
+the script again; the script reports `status: ok` and actual `changed: false/true`.
+`argv`, `secretInputs`, `target` and `run_on` keep their existing meanings.
+
+New plans use plan/v1alpha9 and execution-manifest/v1alpha7; existing plans
+without terminal scripts retain their previous versions. Execution capabilities
+v1alpha12 advertise `applicationPostInstall: ApplicationPostInstall/v1alpha1`.
+No new script editor or product-specific runner environment is introduced.

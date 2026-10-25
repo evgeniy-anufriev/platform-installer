@@ -40,6 +40,7 @@
         execution_configuration: "{{ platform_plan_snapshot.execution_configuration | default({}) }}"
         execution_connections: "{{ platform_plan_snapshot.execution_connections | default({}) }}"
         deployment_order: "{{ platform_execution_deployment_order }}"
+        skip_application_libraries: "{{ platform_execution_skip_application_libraries | default(omit) }}"
         application_library_order: "{{ platform_execution_application_library_order | default(omit) }}"
         application_vault_sources: "{{ platform_execution_application_vault_sources | default({}) }}"
         execution_mode: "{{ platform_execution_mode | default(omit) }}"

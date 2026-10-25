@@ -1,0 +1,351 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "required": [
+    "apiVersion",
+    "applicationSecretRequirements",
+    "artifactRequirements",
+    "artifactSourceAuthorities",
+    "kind",
+    "operations",
+    "pkiMaterializationPlans",
+    "planFingerprint",
+    "projectIdentity",
+    "projectRevision",
+    "requiredCredentials",
+    "runtimeRelease",
+    "runtimeSecretDescriptorSetFingerprint",
+    "runtimeSecretInputs",
+    "runtimeSecretOutputs",
+    "runtimeSecretRequirements",
+    "executionMode",
+    "infrastructureVerification",
+    "skipInfrastructureVerify",
+    "skipApplicationLibraries",
+    "applicationExecutionScope"
+  ],
+  "type": "object",
+  "$id": "https://platform-installer.local/contracts/execution-manifest/v1alpha7/schema.json",
+  "additionalProperties": false,
+  "properties": {
+    "runtimeSecretDescriptorSetFingerprint": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "runtimeRelease": {
+      "$ref": "../../plan/v1alpha4/schema.json#/properties/runtimeRelease"
+    },
+    "apiVersion": {
+      "const": "platform.installer/execution-manifest/v1alpha7"
+    },
+    "artifactRequirements": {
+      "$ref": "../../plan/v1alpha4/schema.json#/properties/artifactRequirements"
+    },
+    "targetConnections": {
+      "type": "object"
+    },
+    "runtimeSecretRequirements": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "runtimeSecretOutputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "protocol",
+          "serviceDeployment",
+          "entries"
+        ],
+        "properties": {
+          "protocol": {
+            "const": "SecretOutputDelivery/v1alpha1"
+          },
+          "serviceDeployment": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 1
+          },
+          "entries": {
+            "const": [
+              "admin-token",
+              "unseal-shares"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "maxItems": 64
+    },
+    "applicationSecretRequirements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "requirementRef",
+          "purpose",
+          "runtimeReference",
+          "providerDeployment",
+          "applicationLibraries",
+          "hosts",
+          "operations",
+          "source"
+        ],
+        "properties": {
+          "purpose": {
+            "enum": [
+              "APPLICATION_SECRET",
+              "APPLICATION_VAULT_ADMIN_TOKEN",
+              "APPLICATION_REGISTRY_USERNAME",
+              "APPLICATION_REGISTRY_PASSWORD"
+            ]
+          },
+          "providerDeployment": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "applicationLibraries": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 256,
+              "minLength": 1
+            },
+            "maxItems": 256,
+            "uniqueItems": true,
+            "minItems": 1
+          },
+          "runtimeReference": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$"
+          },
+          "hosts": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9-]{0,62}$"
+            },
+            "maxItems": 256,
+            "uniqueItems": true
+          },
+          "operations": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 3,
+            "uniqueItems": true,
+            "items": {
+              "enum": [
+                "APPLICATION_LIBRARIES_APPLY",
+                "APPLICATION_LIBRARIES_VERIFY",
+                "APPLICATION_LIBRARIES_POST_INSTALL"
+              ]
+            }
+          },
+          "requirementRef": {
+            "type": "string",
+            "pattern": "^application-secret-[a-f0-9]{32}$"
+          },
+          "source": {
+            "enum": [
+              "RUNTIME_INPUT",
+              "CURRENT_RUN_BOOTSTRAP"
+            ]
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "operations": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          {
+            "$ref": "application-operation.schema.json"
+          },
+          {
+            "type": "object",
+            "required": [
+              "operationId",
+              "phaseId",
+              "operation",
+              "serviceDeployment",
+              "serviceType",
+              "requiresArtifactSources"
+            ],
+            "properties": {
+              "targets": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9][a-z0-9-]{0,62}$"
+                },
+                "maxItems": 256,
+                "uniqueItems": true
+              },
+              "reissueRequests": {
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "requiresArtifactSources": {
+                "type": "boolean"
+              },
+              "phaseId": {
+                "type": "string",
+                "maxLength": 256,
+                "minLength": 1
+              },
+              "serviceType": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "operation": {
+                "enum": [
+                  "SERVICE_APPLY",
+                  "SERVICE_VERIFY",
+                  "PKI_APPLY",
+                  "PKI_REISSUE"
+                ]
+              },
+              "operationId": {
+                "type": "string",
+                "maxLength": 256,
+                "minLength": 1
+              },
+              "roleVariablesByHost": {
+                "type": "object"
+              },
+              "serviceDeployment": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "roleVariablesPrefix": {
+                "type": "string",
+                "maxLength": 256,
+                "minLength": 1
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
+      "maxItems": 1024,
+      "minItems": 1
+    },
+    "projectRevision": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "runtimeSecretInputs": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "planFingerprint": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "requiredCredentials": {
+      "$ref": "../../plan/v1alpha4/schema.json#/properties/requiredCredentials"
+    },
+    "projectIdentity": {
+      "type": "string",
+      "maxLength": 256,
+      "minLength": 1
+    },
+    "kind": {
+      "const": "ExecutionManifest"
+    },
+    "artifactSourceAuthorities": {
+      "items": {
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "pkiMaterializationPlans": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "maxItems": 4096
+    },
+    "executionMode": {
+      "enum": [
+        "FULL_PROJECT",
+        "APPLICATION_LIBRARIES_ONLY",
+        "INFRASTRUCTURE_VERIFY_ONLY"
+      ]
+    },
+    "infrastructureVerification": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "evidenceRevision": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "model": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "hosts": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9-]{0,62}$"
+              },
+              "maxItems": 256,
+              "uniqueItems": true
+            },
+            "fingerprint": {
+              "type": "string",
+              "pattern": "^sha256:[a-f0-9]{64}$"
+            },
+            "coverage": {
+              "type": "object",
+              "maxProperties": 256,
+              "propertyNames": {
+                "pattern": "^[a-z0-9][a-z0-9-]{0,127}$"
+              },
+              "minProperties": 1,
+              "additionalProperties": {
+                "type": "string",
+                "pattern": "^sha256:[a-f0-9]{64}$"
+              }
+            }
+          },
+          "required": [
+            "fingerprint",
+            "coverage",
+            "hosts"
+          ]
+        }
+      },
+      "required": [
+        "model",
+        "evidenceRevision"
+      ]
+    },
+    "skipInfrastructureVerify": {
+      "type": "boolean"
+    },
+    "skipApplicationLibraries": {
+      "$ref": "../../plan/v1alpha8/schema.json#/$defs/libraryIds"
+    },
+    "applicationExecutionScope": {
+      "$ref": "../../plan/v1alpha8/schema.json#/$defs/applicationExecutionScope"
+    }
+  }
+}

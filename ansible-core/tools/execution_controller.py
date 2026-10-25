@@ -449,8 +449,16 @@ def _acquire_project_pki_apply_lock(journal):
 
 def _command(release, journal, operation):
     kind = operation.get("operation")
-    if kind in ('APPLICATION_LIBRARIES_APPLY', 'APPLICATION_LIBRARIES_VERIFY'):
+    if kind == 'APPLICATION_LIBRARIES_POST_INSTALL':
+        prefix = dict(operation, operation='APPLICATION_LIBRARIES_VERIFY', operationId='applications:verify')
+        command = _command(release, journal, prefix)
+        command[3] = os.path.join(release, 'ansible-core/playbooks/application-libraries-post-install.yml')
+        command[5] = '@' + os.path.join(journal.directory, '.runtime-projection-' + hashlib.sha256(operation['operationId'].encode()).hexdigest() + '.json')
+        return command
+    if kind in ('APPLICATION_LIBRARIES_APPLY', 'APPLICATION_LIBRARIES_VERIFY', 'APPLICATION_LIBRARIES_POST_INSTALL'):
         fields = {'operationId', 'phaseId', 'operation', 'targets', 'applicationLibraries', 'applicationSemanticFingerprint'}
+        if 'applicationExecutionScope' in operation:
+            fields.add('applicationExecutionScope')
         action = 'apply' if kind == 'APPLICATION_LIBRARIES_APPLY' else 'verify'
         libraries = operation.get('applicationLibraries')
         if (set(operation) != fields or operation.get('operationId') != 'applications:' + action or
@@ -796,8 +804,24 @@ def _materialize_runtime_projection(journal, metadata, manifest):
 
 def validate_application_manifest(manifest):
     """Closed mixed manifest admission, used by Build, Start and the controller."""
-    image_metadata = manifest.get('apiVersion') == 'platform.installer/execution-manifest/v1alpha5'
-    if manifest.get('apiVersion') in (infra.MANIFEST_VERSION, infra.SKIP_MANIFEST_VERSION, 'platform.installer/execution-manifest/v1alpha5'):
+    if manifest.get('apiVersion') == 'platform.installer/execution-manifest/v1alpha7':
+        module_utils = os.path.abspath(os.path.join(os.path.dirname(__file__), '../collections/ansible_collections/platform/core/plugins/module_utils'))
+        if module_utils not in sys.path:
+            sys.path.insert(0, module_utils)
+        from schema_validation import SchemaValidator
+        from application_post_install import validation_prefix
+        contracts = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../contracts'))
+        if SchemaValidator(contracts).validate(manifest, os.path.join(contracts, 'execution-manifest/v1alpha7/schema.json')):
+            raise LifecycleError('EXECUTION_MANIFEST_INVALID')
+        try:
+            prefix = validation_prefix(manifest)
+        except (ValueError, KeyError, TypeError) as error:
+            raise LifecycleError(str(error)) from None
+        validate_application_manifest(prefix)
+        return
+    selection_scope = manifest.get('applicationExecutionScope', {})
+    image_metadata = manifest.get('apiVersion') in ('platform.installer/execution-manifest/v1alpha5', 'platform.installer/execution-manifest/v1alpha6')
+    if manifest.get('apiVersion') in (infra.MANIFEST_VERSION, infra.SKIP_MANIFEST_VERSION, 'platform.installer/execution-manifest/v1alpha5', 'platform.installer/execution-manifest/v1alpha6'):
         module_utils = os.path.abspath(os.path.join(os.path.dirname(__file__),
             '../collections/ansible_collections/platform/core/plugins/module_utils'))
         if module_utils not in sys.path:
@@ -806,6 +830,18 @@ def validate_application_manifest(manifest):
         contracts = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../contracts'))
         if SchemaValidator(contracts).validate(manifest, os.path.join(contracts, 'execution-manifest', manifest['apiVersion'].rsplit('/', 1)[1], 'schema.json')):
             raise LifecycleError('EXECUTION_MANIFEST_INVALID')
+        if manifest['apiVersion'] == 'platform.installer/execution-manifest/v1alpha6':
+            order, skipped = selection_scope['libraryOrder'], selection_scope['skippedLibraries']
+            installed = selection_scope['installLibraries']
+            if (manifest['skipApplicationLibraries'] != skipped or skipped != sorted(set(skipped)) or
+                    set(skipped) - set(order) or installed != [key for key in order if key not in skipped] or
+                    set(selection_scope['providerLibraries']) - set(order)):
+                raise LifecycleError('EXECUTION_MANIFEST_INVALID')
+            for operation in manifest['operations']:
+                if operation['operation'] in ('APPLICATION_LIBRARIES_APPLY', 'APPLICATION_LIBRARIES_VERIFY'):
+                    if (operation['applicationLibraries'] != installed or
+                            (skipped and operation.get('applicationExecutionScope') != selection_scope)):
+                        raise LifecycleError('EXECUTION_MANIFEST_INVALID')
         infra.validate_manifest(manifest)
         if manifest['executionMode'] == 'INFRASTRUCTURE_VERIFY_ONLY':
             return
@@ -821,7 +857,7 @@ def validate_application_manifest(manifest):
             for item in manifest['applicationSecretRequirements']:
                 if (item['requirementRef'] in refs or item['runtimeReference'] in names or
                         not set(item['hosts']).issubset(application_operations[0]['targets']) or
-                        not set(item['applicationLibraries']).issubset(application_operations[0]['applicationLibraries']) or
+                        not set(item['applicationLibraries']).issubset(application_operations[0]['applicationLibraries'] + manifest.get('applicationExecutionScope', {}).get('providerLibraries', [])) or
                         (item['purpose'] == 'APPLICATION_VAULT_ADMIN_TOKEN' and
                          (item['providerDeployment'] not in manifest['infrastructureVerification']['model']['coverage'] or
                           item['runtimeReference'] != 'vault-admin-token-' + item['providerDeployment'])) or
@@ -835,6 +871,8 @@ def validate_application_manifest(manifest):
         del manifest['executionMode'], manifest['infrastructureVerification']
         if image_metadata:
             manifest.pop('skipInfrastructureVerify', None)
+            manifest.pop('skipApplicationLibraries', None)
+            manifest.pop('applicationExecutionScope', None)
     if manifest.get('apiVersion') != 'platform.installer/execution-manifest/v1alpha2':
         if any(item.get('operation') in ('APPLICATION_LIBRARIES_APPLY', 'APPLICATION_LIBRARIES_VERIFY')
                for item in manifest.get('operations', [])):
@@ -857,7 +895,7 @@ def validate_application_manifest(manifest):
     refs, names = set(), set()
     for item in manifest['applicationSecretRequirements']:
         if (item['requirementRef'] in refs or item['runtimeReference'] in names or
-                not set(item['applicationLibraries']).issubset(manifest['operations'][-1].get('applicationLibraries', [])) or
+                not set(item['applicationLibraries']).issubset(manifest['operations'][-1].get('applicationLibraries', []) + selection_scope.get('providerLibraries', [])) or
                 not set(item['hosts']).issubset(manifest['operations'][-1].get('targets', []))):
             raise LifecycleError('EXECUTION_MANIFEST_INVALID')
         refs.add(item['requirementRef']); names.add(item['runtimeReference'])
@@ -904,9 +942,11 @@ def _materialize_application_projection(journal, manifest):
     with open(os.path.join(journal.directory, 'runtime-projection.json'), encoding='utf-8') as stream:
         payload = json.load(stream)
     requirements = manifest.get('applicationSecretRequirements', [])
-    operations = manifest['operations'][-2:]
-    values = execution_secret_lease.application_secret_values_for_operation(
-        journal.root, journal.run_id, operations[0]['operation'], requirements)
+    operations = [item for item in manifest['operations'] if item['operation'].startswith('APPLICATION_LIBRARIES_')]
+    values = {}
+    for operation in operations:
+        values.update(execution_secret_lease.application_secret_values_for_operation(
+            journal.root, journal.run_id, operation['operation'], requirements))
     declared = {item['serviceDeployment'] for item in _secret_output_declarations(manifest)}
     for item in requirements:
         if item.get('source') == 'CURRENT_RUN_BOOTSTRAP':
@@ -930,7 +970,8 @@ def _materialize_application_projection(journal, manifest):
                 files[item['runtimeReference']] = path
     inputs = []
     for item in requirements:
-        if not set(item['applicationLibraries']).issubset(operations[0]['applicationLibraries']):
+        if not set(item['applicationLibraries']).issubset(operations[0]['applicationLibraries'] +
+                manifest.get('applicationExecutionScope', {}).get('providerLibraries', [])):
             raise LifecycleError('EXECUTION_MANIFEST_INVALID')
         reference = item['runtimeReference']
         path = os.path.join(journal.directory, '.runtime-application-secret-' + hashlib.sha256(reference.encode()).hexdigest())
@@ -943,10 +984,19 @@ def _materialize_application_projection(journal, manifest):
                                purpose='SERVICE_ADMIN_TOKEN', serviceDeployment=item['providerDeployment'],
                                value=values[reference]))
     for operation in operations:
+        operation_files = {ref: path for ref, path in files.items() if ref not in {item['runtimeReference'] for item in requirements}
+                           or any(item['runtimeReference'] == ref and operation['operation'] in item['operations'] for item in requirements)}
+        if operation['operation'] == 'APPLICATION_LIBRARIES_POST_INSTALL':
+            references = {item['runtimeReference'] for item in requirements if operation['operation'] in item['operations']}
+            operation_files = {ref: path for ref, path in operation_files.items() if ref in references}
+        operation_inputs = [item for item in inputs if any(req['providerDeployment'] == item['serviceDeployment']
+                            and operation['operation'] in req['operations'] for req in requirements)]
         scoped = dict(payload, platform_application_secret_root=journal.directory,
-                      platform_application_secret_files=files, platform_runtime_secret_inputs=inputs,
+                      platform_application_secret_files=operation_files, platform_runtime_secret_inputs=operation_inputs,
                       platform_application_expected_fingerprint=operation['applicationSemanticFingerprint'],
                       platform_application_expected_library_ids=operation['applicationLibraries'])
+        if operation.get('applicationExecutionScope'):
+            scoped['platform_application_execution_scope'] = operation['applicationExecutionScope']
         prepared_path = os.path.join(journal.directory, 'application-images.json')
         if os.path.isfile(prepared_path):
             scoped['platform_prepared_application_images'] = execution_secret_lease._read(prepared_path)
@@ -974,7 +1024,7 @@ def _dispatch(release, journal, manifest, stopped):
     for operation, command in commands:
         if stopped[0]:
             return "CANCELLED"
-        if not infrastructure_started and (manifest.get('apiVersion') in (infra.MANIFEST_VERSION, infra.SKIP_MANIFEST_VERSION) or
+        if not infrastructure_started and (manifest.get('apiVersion') in (infra.MANIFEST_VERSION, infra.SKIP_MANIFEST_VERSION, 'platform.installer/execution-manifest/v1alpha7') or
                 (operation['operation'] in ('SERVICE_APPLY', 'PKI_APPLY', 'PKI_REISSUE') and
                  infra.tracked(journal.root, manifest.get('projectIdentity')))):
             infra.begin(journal, manifest)
@@ -1043,7 +1093,7 @@ def _dispatch(release, journal, manifest, stopped):
                         raise
                     command.extend(["-e", "@" + secret_inputs_path])
             environment = _environment(release, journal, operation, leased_private_key=bool(credentials and "privateKey" in credentials))
-            if manifest.get('apiVersion') in (infra.MANIFEST_VERSION, infra.SKIP_MANIFEST_VERSION) and operation['operation'] == 'SERVICE_VERIFY':
+            if manifest.get('apiVersion') in (infra.MANIFEST_VERSION, infra.SKIP_MANIFEST_VERSION, 'platform.installer/execution-manifest/v1alpha7') and operation['operation'] == 'SERVICE_VERIFY':
                 infra.verify_pending(journal, operation)
                 environment['PLATFORM_EXECUTION_VERIFY_EVIDENCE'] = '1'
             process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=environment)
@@ -1067,7 +1117,7 @@ def _dispatch(release, journal, manifest, stopped):
             journal.emit_operation_failure_diagnostic(error_code, phaseId=operation.get("phaseId"), actionId=operation["operationId"], serviceDeployment=operation.get("serviceDeployment"))
             raise LifecycleError("EXECUTION_OPERATION_FAILED")
         journal.event("ACTION_COMPLETED", "SUCCESS", "Trusted operation completed", phaseId=operation.get("phaseId"), actionId=operation["operationId"], serviceDeployment=operation.get("serviceDeployment"))
-        if manifest.get('apiVersion') in (infra.MANIFEST_VERSION, infra.SKIP_MANIFEST_VERSION) and operation['operation'] == 'SERVICE_VERIFY':
+        if manifest.get('apiVersion') in (infra.MANIFEST_VERSION, infra.SKIP_MANIFEST_VERSION, 'platform.installer/execution-manifest/v1alpha7') and operation['operation'] == 'SERVICE_VERIFY':
             infra.verified(journal, operation)
         if operation.get("operation") == "PKI_APPLY":
             pki_applied_in_run = True

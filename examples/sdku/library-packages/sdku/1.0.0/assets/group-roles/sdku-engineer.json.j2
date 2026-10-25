@@ -1,0 +1,14 @@
+{% set client_roles = {"grant-access":["Диспетчер"],"master-realm":["NAVIGATOR_close_form_window","SDKU_EF_commenting_alarms","SDKU_EF_close_form_window","SDKU_ALARMS_configuration","SDKU_ALARMS_administration","NAVIGATOR_configuration","SDKU_ALARMS_showing_control_buttons","SDKU_ALARMS_configuring_display_alarms","SDKU_ALARMS_commenting_alarms","SDKU_WEB_REPORTS_configure","SDKU_WEB_REPORTS_input","SDKU_ALARMS_open_form_window","NAVIGATOR_open_form_window","SDKU_ALARMS_close_form_window","SDKU_ALARMS_acknowledging_alarms","SDKU_EF_open_form_window","SDKU_WEB_REPORTS_open_form_window","SDKU_ALARMS_exporting_alarms","NAVIGATOR_administration"],"grant-access-audit":["uma_protection"]} %}
+{% if 'data-manager' in platform_desired_state.applicationLibraryDeployments[library_instance_id].applications %}
+{% set _ = client_roles.update({('data-manager-' ~ library_instance_id): ["Инженер", "uma_protection"]}) %}
+{% endif %}
+{% if 'hmi-backend' in platform_desired_state.applicationLibraryDeployments[library_instance_id].applications %}
+{% set _ = client_roles.update({('hmi-backend-' ~ library_instance_id): ["uma_protection", "Common"]}) %}
+{% endif %}
+{% if 'hmi-frontend-para' in platform_desired_state.applicationLibraryDeployments[library_instance_id].applications %}
+{% set _ = client_roles.update({('hmi-frontend-para-' ~ library_instance_id): ["uma_protection", "para-access"]}) %}
+{% endif %}
+{% if 'alarm-view-service' in platform_desired_state.applicationLibraryDeployments[library_instance_id].applications %}
+{% set _ = client_roles.update({('alarm-view-service-' ~ library_instance_id): ["Инженер", "uma_protection"]}) %}
+{% endif %}
+{{ {"realm_roles":[], "client_roles": client_roles} | to_json }}

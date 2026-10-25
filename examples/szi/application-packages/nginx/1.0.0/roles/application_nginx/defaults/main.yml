@@ -15,12 +15,6 @@ platform_application_definition:
       - template: assets/routes.requested.json.j2
         destination: routes.requested.json
         mode: "0644"
-      - source: assets/routes-upsert.lua
-        destination: routes-upsert.lua
-        mode: "0644"
-      - source: assets/routes-upsert.conf
-        destination: routes-upsert.conf
-        mode: "0644"
       - source: assets/script.lua
         destination: script.lua
         mode: "0644"

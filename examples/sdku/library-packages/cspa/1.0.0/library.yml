@@ -2,7 +2,10 @@
   "apiVersion": "platform.installer/application-package/v1alpha1",
   "files": [
     "roles/library_cspa/defaults/main.yml",
-    "roles/library_cspa/templates/.base_compose.yml.j2"
+    "roles/library_cspa/templates/.base_compose.yml.j2",
+    "assets/scripts/prepare-groups.sh",
+    "assets/group-roles/cspa-admin.json.j2",
+    "assets/group-roles/cspa-engineer.json.j2"
   ],
   "kind": "LibraryPackage",
   "name": "cspa",
@@ -11,5 +14,101 @@
     "base_compose_template": "roles/library_cspa/templates/.base_compose.yml.j2",
     "base_service": "base"
   },
-  "version": "1.0.0"
+  "version": "1.0.0",
+  "scripts": [
+    {
+      "id": "prepare-identity-groups",
+      "source": "assets/scripts/prepare-groups.sh",
+      "phase": "provider_prepare",
+      "execution": "once",
+      "requires_connections": [
+        "sso"
+      ],
+      "target": {
+        "connection": "sso"
+      },
+      "argv": [
+        "groups",
+        {
+          "valueFrom": "connection",
+          "name": "sso"
+        },
+        {
+          "valueFrom": "connection",
+          "name": "sso",
+          "field": "parameters.realm"
+        },
+        {
+          "valueFrom": "connection",
+          "name": "sso",
+          "field": "credentials.username.source.value"
+        },
+        {
+          "valueFrom": "applicationId"
+        },
+        "",
+        "",
+        {
+          "valueFrom": "parameter",
+          "name": "IDENTITY_GROUPS"
+        }
+      ],
+      "secretInputs": {
+        "admin_password": {
+          "valueFrom": "connection",
+          "name": "sso",
+          "credential": "password"
+        }
+      },
+      "order": -100,
+      "run_on": "execution_node"
+    },
+    {
+      "id": "assign-identity-group-roles",
+      "source": "assets/scripts/prepare-groups.sh",
+      "phase": "provider_prepare",
+      "execution": "once",
+      "requires_connections": [
+        "sso"
+      ],
+      "target": {
+        "connection": "sso"
+      },
+      "argv": [
+        "group-roles",
+        {
+          "valueFrom": "connection",
+          "name": "sso"
+        },
+        {
+          "valueFrom": "connection",
+          "name": "sso",
+          "field": "parameters.realm"
+        },
+        {
+          "valueFrom": "connection",
+          "name": "sso",
+          "field": "credentials.username.source.value"
+        },
+        {
+          "valueFrom": "applicationId"
+        },
+        "",
+        "",
+        {
+          "valueFrom": "parameter",
+          "name": "IDENTITY_GROUPS"
+        }
+      ],
+      "secretInputs": {
+        "admin_password": {
+          "valueFrom": "connection",
+          "name": "sso",
+          "credential": "password"
+        }
+      },
+      "order": 100,
+      "run_on": "execution_node"
+    }
+  ]
 }

@@ -1,0 +1,9 @@
+---
+- name: Invoke the existing context resolver and universal package runner
+  ansible.builtin.include_tasks: application-provider-script.yml
+  vars:
+    application_provider_batch:
+      providerLibraryId: "{{ application_post_install_script.target.libraryId | default(application_post_install_script.libraryId) }}"
+      providerInstanceId: "{{ application_post_install_script.target.instanceId | default(application_post_install_script.instanceId) }}"
+    application_provider_script: "{{ application_post_install_script }}"
+    application_provider_script_host: "{{ application_post_install_script.target.hostId | default(application_post_install_script.hostId) }}"

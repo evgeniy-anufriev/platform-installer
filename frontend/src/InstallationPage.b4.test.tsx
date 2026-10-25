@@ -2,7 +2,10 @@ import { desktop } from "../wailsjs/go/models";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { it, expect, vi } from "vitest";
-import { InstallationPage, libraryOrderFromPriorities } from "./InstallationPage";
+import {
+  InstallationPage,
+  libraryOrderFromPriorities,
+} from "./InstallationPage";
 import type { InstallationPlanOperation } from "./backend";
 
 const defaults = {
@@ -73,13 +76,17 @@ it("orders selected libraries from configured priorities and rejects an unknown 
     { deploymentId: "szi", libraryRef: "szi@1.0.0" },
     { deploymentId: "sdku-west", libraryRef: "sdku@1.0.0" },
   ];
-  expect(libraryOrderFromPriorities(deployments, [
-    { libraryName: "sdku", priority: 1 },
-    { libraryName: "szi", priority: 0 },
-  ])).toEqual({ order: ["szi", "sdku-east", "sdku-west"], missingNames: [] });
-  expect(libraryOrderFromPriorities(deployments, [
-    { libraryName: "szi", priority: 0 },
-  ])).toEqual({ order: [], missingNames: ["sdku"] });
+  expect(
+    libraryOrderFromPriorities(deployments, [
+      { libraryName: "sdku", priority: 1 },
+      { libraryName: "szi", priority: 0 },
+    ]),
+  ).toEqual({ order: ["szi", "sdku-east", "sdku-west"], missingNames: [] });
+  expect(
+    libraryOrderFromPriorities(deployments, [
+      { libraryName: "szi", priority: 0 },
+    ]),
+  ).toEqual({ order: [], missingNames: ["sdku"] });
 });
 it("owner amendment offers execution controls before Build and on Summary", () => {
   const view = render(
@@ -330,4 +337,96 @@ it("B4 locks the services scope during an active run", () => {
   expect(
     screen.getByRole("checkbox", { name: "Устанавливать инфраструктуру" }),
   ).toHaveProperty("disabled", true);
+});
+
+it("Stage3 binds skipped library IDs to a fresh plan and blocks the old Start", async () => {
+  const create = vi.fn();
+  render(
+    <InstallationPage
+      {...defaults}
+      plan={fullPlan}
+      onCreatePlan={create}
+      libraryDeployments={[
+        { deploymentId: "identity-east", libraryRef: "szi@1.0.0" },
+        { deploymentId: "sdku-one", libraryRef: "sdku@1.0.0" },
+      ]}
+      libraryExecutionPriorities={[
+        { libraryName: "szi", priority: 0 },
+        { libraryName: "sdku", priority: 1 },
+      ]}
+    />,
+  );
+  expect(
+    screen.getByRole("checkbox", {
+      name: "Установить библиотеку identity-east",
+    }),
+  ).toHaveProperty("checked", true);
+  expect(
+    screen.getByRole("checkbox", { name: "Установить библиотеку sdku-one" }),
+  ).toHaveProperty("checked", true);
+  await userEvent.click(
+    screen.getByRole("checkbox", {
+      name: "Установить библиотеку identity-east",
+    }),
+  );
+  expect(screen.queryByRole("button", { name: "Начать установку" })).toBeNull();
+  expect(screen.getByRole("button", { name: "Одобрить план" })).toHaveProperty(
+    "disabled",
+    true,
+  );
+  await userEvent.click(
+    screen.getByRole("button", { name: "Сформировать свежий план" }),
+  );
+  expect(create).toHaveBeenCalledWith(
+    expect.any(Array),
+    "FULL_PROJECT",
+    false,
+    ["identity-east", "sdku-one"],
+    ["identity-east"],
+  );
+});
+
+it("Stage3 locks library selection during execution", () => {
+  render(
+    <InstallationPage
+      {...defaults}
+      plan={fullPlan}
+      runPlan={fullPlan.plan}
+      onCreatePlan={vi.fn()}
+      libraryDeployments={[
+        { deploymentId: "identity", libraryRef: "szi@1.0.0" },
+      ]}
+      run={
+        new desktop.InstallationRunOperation({
+          status: "READY",
+          run: { runId: "running", state: "RUNNING", sequence: 1 },
+        })
+      }
+    />,
+  );
+  expect(
+    screen.getByRole("checkbox", { name: "Установить библиотеку identity" }),
+  ).toHaveProperty("disabled", true);
+});
+
+it("Stage3 restores the Core plan selection when reopening the Plan tab", () => {
+  render(
+    <InstallationPage
+      {...defaults}
+      plan={{
+        ...fullPlan,
+        plan: { ...fullPlan.plan!, skipApplicationLibraries: ["identity"] },
+      }}
+      onCreatePlan={vi.fn()}
+      libraryDeployments={[
+        { deploymentId: "identity", libraryRef: "szi@1.0.0" },
+      ]}
+    />,
+  );
+  expect(
+    screen.getByRole("checkbox", { name: "Установить библиотеку identity" }),
+  ).toHaveProperty("checked", false);
+  expect(
+    screen.getByText(/Установка библиотек пропущена: identity/),
+  ).toBeTruthy();
 });

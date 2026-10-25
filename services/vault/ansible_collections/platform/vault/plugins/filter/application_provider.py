@@ -44,7 +44,8 @@ def retained_policy(response, desired, owner):
                 if capability != expected:
                     raise AnsibleFilterError('APPLICATION_VAULT_POLICY_FORMAT_INVALID')
                 continue
-            prefix = r'[a-z][a-z0-9_.-]*/data/' + re.escape(project + '/' + library + '/')
+            prefix = (r'[a-z][a-z0-9_.-]*/data/(?:' + re.escape(library + '/') +
+                      '|' + re.escape(project + '/' + library + '/') + ')')
             if (capability != 'read' or not re.fullmatch(prefix + r'(shared|' + re.escape(instance) + r'/accounts/[a-z][a-z0-9_.-]*)', path)):
                 raise AnsibleFilterError('APPLICATION_VAULT_POLICY_FORMAT_INVALID')
             result.add(path)

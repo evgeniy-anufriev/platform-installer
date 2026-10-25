@@ -85,21 +85,37 @@ func decodeInfrastructureVerification(raw any) (*InfrastructureVerification, err
 }
 
 func b0PlanCapabilitySupported(c map[string]any) bool {
+	if c["apiVersion"] == "platform.installer/execution-capabilities/v1alpha12" {
+		if !postInstallCapabilitySupported(c) {
+			return false
+		}
+		prefix := make(map[string]any, len(c))
+		for key, value := range c {
+			if key != "applicationPostInstall" {
+				prefix[key] = value
+			}
+		}
+		prefix["apiVersion"] = "platform.installer/execution-capabilities/v1alpha11"
+		return b0PlanCapabilitySupported(prefix)
+	}
 	keys := []string{"apiVersion", "kind", "bootstrapProtocol", "coreVersion", "catalogDigest", "schemaDigest", "runtime", "supportedOperations", "executionStart", "targetCredentialLease", "runtimeSecretDescriptors", "serviceConfigurationPreview", "deploymentPlanRequestVersions", "projectSnapshotRequestVersions", "applicationExecution", "infrastructureVerification"}
-	if c["apiVersion"] == "platform.installer/execution-capabilities/v1alpha9" || c["apiVersion"] == "platform.installer/execution-capabilities/v1alpha10" {
+	if c["apiVersion"] == "platform.installer/execution-capabilities/v1alpha9" || (c["apiVersion"] == "platform.installer/execution-capabilities/v1alpha10" || c["apiVersion"] == "platform.installer/execution-capabilities/v1alpha11") {
 		keys = append(keys, "skipInfrastructureVerify")
 		if c["skipInfrastructureVerify"] != true || !contains(c["deploymentPlanRequestVersions"], "platform.installer/execution-runtime/v1alpha5") {
 			return false
 		}
 	}
-	if c["apiVersion"] == "platform.installer/execution-capabilities/v1alpha10" {
+	if c["apiVersion"] == "platform.installer/execution-capabilities/v1alpha10" || c["apiVersion"] == "platform.installer/execution-capabilities/v1alpha11" {
 		keys = append(keys, "applicationImages")
+		if c["apiVersion"] == "platform.installer/execution-capabilities/v1alpha11" {
+			keys = append(keys, "applicationLibrarySelection")
+		}
 	}
 	if !closedKeys(c, keys...) {
 		return false
 	}
 	v, ok := c["infrastructureVerification"].(map[string]any)
-	return (c["apiVersion"] == "platform.installer/execution-capabilities/v1alpha8" || c["apiVersion"] == "platform.installer/execution-capabilities/v1alpha9" || c["apiVersion"] == "platform.installer/execution-capabilities/v1alpha10") && c["kind"] == "ExecutionCapabilities" && contains(c["supportedOperations"], "BuildDeploymentPlan") && contains(c["deploymentPlanRequestVersions"], "platform.installer/execution-runtime/v1alpha4") && ok && closedKeys(v, "protocol", "executionModes", "requiredPlanRequestVersion", "manifestContract", "planContract") && v["protocol"] == "InfrastructureVerification/v1alpha1" && v["requiredPlanRequestVersion"] == "platform.installer/execution-runtime/v1alpha4" && v["manifestContract"] == "platform.installer/execution-manifest/v1alpha3" && v["planContract"] == "platform.installer/plan/v1alpha5" && validExecutionModes(v["executionModes"])
+	return (c["apiVersion"] == "platform.installer/execution-capabilities/v1alpha8" || c["apiVersion"] == "platform.installer/execution-capabilities/v1alpha9" || (c["apiVersion"] == "platform.installer/execution-capabilities/v1alpha10" || c["apiVersion"] == "platform.installer/execution-capabilities/v1alpha11")) && c["kind"] == "ExecutionCapabilities" && contains(c["supportedOperations"], "BuildDeploymentPlan") && contains(c["deploymentPlanRequestVersions"], "platform.installer/execution-runtime/v1alpha4") && ok && closedKeys(v, "protocol", "executionModes", "requiredPlanRequestVersion", "manifestContract", "planContract") && v["protocol"] == "InfrastructureVerification/v1alpha1" && v["requiredPlanRequestVersion"] == "platform.installer/execution-runtime/v1alpha4" && v["manifestContract"] == "platform.installer/execution-manifest/v1alpha3" && v["planContract"] == "platform.installer/plan/v1alpha5" && validExecutionModes(v["executionModes"])
 }
 
 // ReadApplicationLibraries uses the existing target-free snapshot path. It
@@ -141,7 +157,7 @@ func (t OpenSSHTransport) buildDeploymentPlanForMode(ctx context.Context, node N
 	if err != nil {
 		return DeploymentPlan{}, err
 	}
-	if !b0PlanCapabilitySupported(c) || skip && ((c["apiVersion"] != "platform.installer/execution-capabilities/v1alpha9" && c["apiVersion"] != "platform.installer/execution-capabilities/v1alpha10") || c["skipInfrastructureVerify"] != true) {
+	if !b0PlanCapabilitySupported(c) || skip && ((c["apiVersion"] != "platform.installer/execution-capabilities/v1alpha9" && c["apiVersion"] != "platform.installer/execution-capabilities/v1alpha10" && c["apiVersion"] != "platform.installer/execution-capabilities/v1alpha11" && !postInstallCapabilitySupported(c)) || c["skipInfrastructureVerify"] != true) {
 		return DeploymentPlan{}, errors.New("EXECUTION_MODE_RUNTIME_UNSUPPORTED")
 	}
 	if vaultSources == nil {
@@ -157,6 +173,17 @@ func (t OpenSSHTransport) buildDeploymentPlanForMode(ctx context.Context, node N
 	if imagePlanCapabilitySupported(c) {
 		request["apiVersion"] = imagePlanRequestVersion
 		request["skipInfrastructureVerify"] = skip
+	}
+	skipped := applicationLibrarySelection(ctx)
+	if len(skipped) > 0 && (!selectionCapabilitySupported(c) || libraryOrder == nil) {
+		return DeploymentPlan{}, errors.New("APPLICATION_LIBRARY_SELECTION_RUNTIME_UNSUPPORTED")
+	}
+	if selectionCapabilitySupported(c) && libraryOrder != nil {
+		request["apiVersion"] = selectionPlanRequestVersion
+		if skipped == nil {
+			skipped = []string{}
+		}
+		request["skipApplicationLibraries"] = skipped
 	}
 	return t.buildDeploymentPlanRequest(ctx, node, projectRoot, request)
 }
