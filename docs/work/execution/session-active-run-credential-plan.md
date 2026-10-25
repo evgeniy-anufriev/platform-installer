@@ -4,7 +4,7 @@
 
 `SESSION-RUN-CREDENTIAL-01` — keep an already authorized Execution Node
 reachable for the lifetime of its active installation run, even after the
-ordinary two-hour UI credential lease would expire.
+ordinary four-hour UI credential lease would expire.
 
 ## Owner requirement and scope
 
@@ -20,7 +20,7 @@ Execution Node trust, or alter detached-run semantics.
 
 ## Evidence and current failure
 
-`docs/work/ui-01/ui-01a-contract-freeze.md` defines a two-hour `SessionCredential` lease.
+`docs/work/ui-01/ui-01a-contract-freeze.md` defines a four-hour `SessionCredential` lease.
 `internal/runtimesecret.Broker.expireLocked` clears all material in that lease.
 The dynamic Execution Node transport checks `CurrentExecutionIdentity` for
 each operation; after expiry, run polling and cancellation cannot authenticate.
@@ -119,7 +119,7 @@ unless the existing contracts cannot safely express this behavior.
   result releases the hold.
 - Nonvisual React/Wails acceptance through real bindings and the supported
   Execution Node path: start a run, cross the ordinary TTL boundary (using a
-  bounded test clock/seam, not a two-hour wait), prove the same run remains
+  bounded test clock/seam, not a four-hour wait), prove the same run remains
   observable and cancellable without restart/change, then prove credential
   release after terminal status. UI mocks or direct Go tests alone do not
   satisfy this acceptance gate.

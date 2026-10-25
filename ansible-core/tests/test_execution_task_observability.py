@@ -79,6 +79,16 @@ class _Result(object):
 
 
 class ExecutionTaskObservabilityTests(unittest.TestCase):
+    def test_default_event_limit_accepts_32768_and_rejects_next_event(self):
+        with tempfile.TemporaryDirectory() as root:
+            journal = _active_journal(root)
+            current = dict(journal.status(), sequence=32767)
+            with mock.patch.object(journal, "status", return_value=current):
+                event = journal.event("ACTION_COMPLETED", "SUCCESS", "last available event", actionId="apply:kafka")
+            self.assertEqual(32768, event["sequence"])
+            with self.assertRaisesRegex(execution_lifecycle.LifecycleError, "RUN_EVENT_LIMIT"):
+                journal.event("ACTION_COMPLETED", "SUCCESS", "over capacity", actionId="apply:kafka")
+
     def test_known_core_failure_survives_callback_and_journal_without_payload(self):
         with tempfile.TemporaryDirectory() as root:
             journal = _active_journal(root)

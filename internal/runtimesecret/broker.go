@@ -587,7 +587,7 @@ func WithTTL(ttl time.Duration) Option      { return func(b *Broker) { b.ttl = t
 func WithClock(now func() time.Time) Option { return func(b *Broker) { b.now = now } }
 
 func NewBroker(options ...Option) *Broker {
-	b := &Broker{ttl: 2 * time.Hour, now: time.Now}
+	b := &Broker{ttl: 4 * time.Hour, now: time.Now}
 	for _, option := range options {
 		option(b)
 	}
