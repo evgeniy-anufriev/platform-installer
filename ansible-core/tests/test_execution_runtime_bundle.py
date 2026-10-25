@@ -23,12 +23,15 @@ class ExecutionRuntimeBundleTests(unittest.TestCase):
             indexed = {item['path']: item for item in BUILDER.components(root)}
             required = [
                 'ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_plan.py',
-                'ansible-core/playbooks/application-libraries-apply.yml',
-                'ansible-core/playbooks/application-libraries-verify.yml',
+                'ansible-core/playbooks/applications/apply.yml',
+                'ansible-core/playbooks/applications/verify.yml',
                 'contracts/plan/v1alpha4/schema.json',
                 'contracts/runtime-secret-descriptors/v1alpha3/schema.json',
                 'contracts/execution-manifest/v1alpha2/application-operation.schema.json',
             ]
+            application_playbooks = sorted((BUILDER.REPOSITORY / 'ansible-core/playbooks/applications').rglob('*.yml'))
+            self.assertTrue(application_playbooks)
+            required.extend(path.relative_to(BUILDER.REPOSITORY).as_posix() for path in application_playbooks)
             for relative in required:
                 self.assertIn(relative, indexed)
                 self.assertEqual(BUILDER.digest_file(root / relative), BUILDER.digest_file(BUILDER.REPOSITORY / relative))

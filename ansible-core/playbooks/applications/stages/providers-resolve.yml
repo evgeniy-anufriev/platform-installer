@@ -1,5 +1,5 @@
 ---
-- import_playbook: application-libraries-credential-root.yml
+- import_playbook: credential-root.yml
 - name: Обработка входных данных автономного провайдера приложений без целевых вызовов
   hosts: localhost
   connection: local

@@ -2,7 +2,7 @@
 - name: Проверка закрытия пакета перед загрузкой значений по умолчанию
   platform.core.prepare_application_libraries:
     project_root: "{{ platform_project_root | default(inventory_dir | dirname) }}"
-    contracts_root: "{{ platform_contracts_root | default(playbook_dir ~ '/../../contracts') }}"
+    contracts_root: "{{ platform_contracts_root | default(role_path ~ '/../../../../../../../contracts') }}"
   register: _application_inputs
   no_log: true
   become: false

@@ -123,7 +123,7 @@ def build_play(folder):
     tasks_file.write_text(yaml.safe_dump([bind_job, initial] + configs + render + materialize + check + assertions))
     report = folder / 'render-results.json'
     play = [
-        {'import_playbook': str(ROOT / 'ansible-core/playbooks/application-libraries-resolve-runtime.yml')},
+        {'import_playbook': str(ROOT / 'ansible-core/playbooks/applications/stages/resolve-runtime.yml')},
         {'hosts': 'platform_targets', 'gather_facts': False, 'become': False,
          'vars': {'qa_root': str(folder / 'render'), 'role_path': str(ROLE)},
          'tasks': [

@@ -30,7 +30,7 @@ class EndpointTaskTest(unittest.TestCase):
                 'platform_service_catalog_path': str(REPO / 'examples/catalog/service-catalog.yml')}
             (root / 'extra.yml').write_text(yaml.safe_dump(extra))
             command = ['ansible-playbook', '-i', str(root / 'hosts.yml'),
-                       str(REPO / 'ansible-core/playbooks/application-libraries-endpoint-stage.yml'),
+                       str(REPO / 'ansible-core/playbooks/applications/stages/endpoint.yml'),
                        '-e', '@' + str(root / 'extra.yml'), '--limit', 'node1', '--user', 'cli-user',
                        '--private-key', str(root / 'unused-key')]
             env = dict(os.environ, ANSIBLE_CONFIG=str(REPO / 'ansible-core/ansible.cfg'),

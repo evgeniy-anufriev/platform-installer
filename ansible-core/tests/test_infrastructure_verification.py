@@ -661,17 +661,11 @@ class NativeInfrastructureScopeTests(unittest.TestCase):
         controller._materialize_runtime_projection(journal, journal.metadata(), manifest)
         self.assertEqual(['SERVICE_VERIFY', 'SERVICE_VERIFY', 'APPLICATION_LIBRARIES_APPLY', 'APPLICATION_LIBRARIES_VERIFY'],
                          [op['operation'] for op in manifest['operations']])
-        playbooks = core / 'playbooks'
-        playbooks.mkdir()
+        playbooks = core / 'playbooks' / 'applications'
+        playbooks.mkdir(parents=True)
         for action in ('apply', 'verify'):
-            (playbooks / ('application-libraries-' + action + '.yml')).write_text(
+            (playbooks / (action + '.yml')).write_text(
                 '- hosts: node1\n  gather_facts: false\n  tasks:\n    - ansible.builtin.assert:\n        that: platform_application_expected_library_ids == ["sdku"]\n')
-        execution_target_trust.stage(self.root, dict(stagingId=journal.run_id,
-            projectIdentity=manifest['projectIdentity'], projectRevision=manifest['projectRevision'],
-            planFingerprint=manifest['planFingerprint'], runtimeRelease=manifest['runtimeRelease'],
-            manifestDigest=digest(manifest), approvals=[dict(hostId='node1', address='192.0.2.1', port=22,
-                keyType=kind, publicKey=key)]))
-        controller._materialize_runtime_projection(journal, journal.metadata(), manifest)
         self.assertEqual('SUCCEEDED', controller._dispatch(str(release), journal, manifest, [False]))
         expected = manifest['infrastructureVerification']['model']
         self.assertEqual('BLOCKED', infra.summary(self.root, manifest['projectIdentity'], expected)['status'])

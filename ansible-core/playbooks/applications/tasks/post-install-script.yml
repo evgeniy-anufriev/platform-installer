@@ -1,6 +1,6 @@
 ---
 - name: Вызов существующего преобразователя контекста и универсального средства запуска пакетов
-  ansible.builtin.include_tasks: application-provider-script.yml
+  ansible.builtin.include_tasks: provider-script.yml
   vars:
     application_provider_batch:
       providerLibraryId: "{{ application_post_install_script.target.libraryId | default(application_post_install_script.libraryId) }}"

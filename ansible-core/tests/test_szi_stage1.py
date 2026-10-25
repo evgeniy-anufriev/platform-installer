@@ -261,8 +261,10 @@ esac
                     self.assertNotIn(value, result.stderr)
 
     def test_ordered_library_playbook_runs_keycloak_before_dependent_instances(self):
-        tasks = yaml.safe_load((ROOT / 'ansible-core/playbooks/application-libraries-ordered-library.yml').read_text())
-        expression = tasks[0]['ansible.builtin.set_fact']['application_library_instance_ids']
+        tasks = yaml.safe_load((ROOT / 'ansible-core/playbooks/applications/tasks/ordered-library.yml').read_text())
+        instance_order = next(task['ansible.builtin.set_fact'] for task in tasks
+                              if 'application_library_instance_ids' in task.get('ansible.builtin.set_fact', {}))
+        expression = instance_order['application_library_instance_ids']
         slots = yaml.safe_load((ROOT / 'examples/szi/library-packages/szi/1.0.0/roles/library_szi/defaults/main.yml').read_text())['platform_library_definition']['slots']
         jobs = [{'libraryId': 'szi', 'instanceId': name, 'startupPriority': value.get('start_priority', 100)}
                 for name, value in slots.items()]

@@ -6,7 +6,7 @@
   any_errors_fatal: true
   tasks:
     - name: Опубликовать выбранные готовые логические источники с существующими задачами провайдера
-      ansible.builtin.include_tasks: ../../services/integrations/tasks/apply-source.yml
+      ansible.builtin.include_tasks: ../../../../services/integrations/tasks/apply-source.yml
       vars:
         platform_endpoint_source_ids: >-
           {{ (hostvars['localhost'].application_runtime_inputs.jobs | map(attribute='instanceId') | unique |

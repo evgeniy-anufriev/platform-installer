@@ -80,9 +80,15 @@ inventory precedence. Package templates are trusted operator-authored executable
 inputs. A1 validates/fingerprints their closure but does not render them or execute
 application tasks. See [standalone fixture](../examples/valid/application-libraries/README.md).
 
-A2 adds explicit standalone `application-libraries-apply.yml` and
-`application-libraries-verify.yml` entrypoints. They reuse that resolver and the
+A2 adds explicit standalone `applications/apply.yml` and
+`applications/verify.yml` entrypoints. They reuse that resolver and the
 selected rootless Docker account; template rendering remains native Ansible.
+Application orchestration lives under `ansible-core/playbooks/applications/`:
+the top-level Apply/Verify/post-install entrypoints, `images/` for preparation,
+`stages/` for imported playbooks and `tasks/` for included task lists. See the
+[workflow layout and standalone invocation](../ansible-core/playbooks/applications/README.md).
+These paths replace the former root-level `application-*.yml` files; ordinary
+inventory and the Core/Go protocol are unchanged.
 All selected placements pass preflight before materialization. Each library/host
 has a shared `.env` and base Compose; per-instance Compose/config files use
 validated package render descriptors. Apply uses native Compose and a generated
@@ -484,11 +490,11 @@ indexes a Docker-save archive without loading it. Its image ID is the config
 digest; its archive digest and size belong to `components`, not the image entry.
 Docker-save archives do not prove a registry manifest digest for an @digest alias.
 
-The native `application-images-inputs.yml` and `application-images-prepare.yml`
+The native `applications/images/inputs.yml` and `applications/images/prepare.yml`
 playbooks resolve inputs locally, then use built-in setup/uri tasks on selected
 targets. They require no Docker daemon for metadata inspection. Config/manifest
 parsing and hashing use small filters; networking, node credentials and delivery
-remain ordinary Ansible tasks. `application-images-plan.yml` composes these steps
+remain ordinary Ansible tasks. `applications/images/plan.yml` composes these steps
 with the existing target-free machine planner. Supply the normal project/catalog,
 bundle, runtime-release and deployment-order variables. For a manual invocation,
 pass session-only registry values by runtime reference through a private extra-vars
@@ -509,7 +515,7 @@ plan appends `APPLICATION_LIBRARIES_POST_INSTALL` only when selected packages
 declare active terminal scripts. It runs after the complete successful Apply/Verify
 prefix, never inside Verify, never after failure/cancel and never for skipped
 libraries. The standalone entrypoint is
-`ansible-core/playbooks/application-libraries-post-install.yml`. It resolves
+`ansible-core/playbooks/applications/post-install.yml`. It resolves
 script contexts without image/container/provider preflight, reads only required
 existing Vault fields and calls the existing `package_script` role sequentially.
 Order: libraryOrder index, order, id, scope (library first), instanceId, hostId.

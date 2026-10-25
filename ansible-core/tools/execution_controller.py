@@ -452,7 +452,7 @@ def _command(release, journal, operation):
     if kind == 'APPLICATION_LIBRARIES_POST_INSTALL':
         prefix = dict(operation, operation='APPLICATION_LIBRARIES_VERIFY', operationId='applications:verify')
         command = _command(release, journal, prefix)
-        command[3] = os.path.join(release, 'ansible-core/playbooks/application-libraries-post-install.yml')
+        command[3] = os.path.join(release, 'ansible-core/playbooks/applications/post-install.yml')
         command[5] = '@' + os.path.join(journal.directory, '.runtime-projection-' + hashlib.sha256(operation['operationId'].encode()).hexdigest() + '.json')
         return command
     if kind in ('APPLICATION_LIBRARIES_APPLY', 'APPLICATION_LIBRARIES_VERIFY', 'APPLICATION_LIBRARIES_POST_INSTALL'):
@@ -472,7 +472,7 @@ def _command(release, journal, operation):
         projection = os.path.join(journal.directory, '.runtime-projection-' + hashlib.sha256(operation['operationId'].encode()).hexdigest() + '.json')
         # Application projection is materialized only after the infrastructure barrier.
         return ['ansible-playbook', '-i', os.path.join(journal.directory, 'project', 'inventory', 'hosts.yml'),
-                os.path.join(release, 'ansible-core', 'playbooks', 'application-libraries-' + action + '.yml'),
+                os.path.join(release, 'ansible-core', 'playbooks', 'applications', action + '.yml'),
                 '-e', '@' + projection, '--limit', 'localhost:' + ':'.join(targets)]
     if kind in ("PKI_APPLY", "PKI_REISSUE"):
         projection = os.path.join(journal.directory, "runtime-projection.json")

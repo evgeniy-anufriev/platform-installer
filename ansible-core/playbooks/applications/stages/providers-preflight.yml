@@ -1,5 +1,5 @@
 ---
-- import_playbook: application-libraries-providers-resolve.yml
+- import_playbook: providers-resolve.yml
 - name: Предварительная проверка всех выбранных провайдеров без мутаций
   hosts: localhost
   connection: local

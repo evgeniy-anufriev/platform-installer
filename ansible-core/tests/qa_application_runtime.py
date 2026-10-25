@@ -145,7 +145,7 @@ class ApplicationRuntimeQA(unittest.TestCase):
 
     def play(self, operation, success=True):
         command = ["ansible-playbook", "-i", str(self.root / "inventory/hosts.yml"),
-                   str(REPO / "ansible-core/playbooks" / ("application-libraries-" + operation + ".yml")),
+                   str(REPO / "ansible-core/playbooks/applications" / (operation + ".yml")),
                    "-e", "platform_project_root=" + str(self.root),
                    "-e", "platform_service_catalog_path=" + str(REPO / "examples/catalog/service-catalog.yml"),
                    "-e", "platform_execution_bundle_root=" + str(self.bundle)]
@@ -299,7 +299,7 @@ class ApplicationRuntimeQA(unittest.TestCase):
             stream = log.open("wb")
             log.chmod(0o600)
             command = ["ansible-playbook", "-i", str(view / "inventory/hosts.yml"),
-                       str(REPO / "ansible-core/playbooks/application-libraries-apply.yml"),
+                       str(REPO / "ansible-core/playbooks/applications/apply.yml"),
                        "-e", "platform_project_root=" + str(view),
                        "-e", "platform_service_catalog_path=" + str(REPO / "examples/catalog/service-catalog.yml"),
                        "-e", "platform_execution_bundle_root=" + str(self.bundle)]

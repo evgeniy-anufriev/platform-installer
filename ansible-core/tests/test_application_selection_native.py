@@ -31,7 +31,7 @@ class SelectedProviderNativeTests(unittest.TestCase):
                 platform_application_secret_files={}, platform_application_secret_root=str(root),
                 platform_application_completed_batches=[], platform_application_delivered_instances=[],
                 application_library_id='provider', platform_endpoint_sources={},
-                application_selection={'scope': {'skippedLibraries': ['provider'], 'providerLibraries': ['provider']}},
+                application_selection={'scope': {'installLibraries': [], 'skippedLibraries': ['provider'], 'providerLibraries': ['provider']}},
                 application_runtime_inputs=dict(jobs=[], integrationScripts=[],
                     scriptContexts=[dict(libraryId='provider', instanceId='api', hostId='unreachable')],
                     integrations=dict(batches=[batch], dependencies={}, sharedDependencies={})),
@@ -42,7 +42,7 @@ class SelectedProviderNativeTests(unittest.TestCase):
                 'unreachable': {'ansible_host': 'unreachable.invalid'}}}}))
             playbook = root / 'play.yml'
             playbook.write_text(yaml.safe_dump([dict(hosts='localhost', gather_facts=False,
-                tasks=[{'ansible.builtin.include_tasks': str(ROOT/'ansible-core/playbooks/application-libraries-ordered-library.yml')},
+                tasks=[{'ansible.builtin.include_tasks': str(ROOT/'ansible-core/playbooks/applications/tasks/ordered-library.yml')},
                        {'ansible.builtin.assert': {'that': ["platform_application_completed_batches == ['provider-batch']"]}}])], sort_keys=False))
             env = dict(os.environ, ANSIBLE_COLLECTIONS_PATH=str(ROOT/'ansible-core/collections') + os.pathsep + str(ROOT/'services/vault/ansible_collections'))
             for repeat in range(2):

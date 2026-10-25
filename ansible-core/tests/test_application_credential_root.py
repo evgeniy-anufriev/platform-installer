@@ -17,7 +17,7 @@ class ApplicationCredentialRootTests(unittest.TestCase):
             directory = Path(temporary)
             extra = directory / 'vars.yml'
             extra.write_text(yaml.safe_dump(variables))
-            play = [{'import_playbook': str(ROOT / 'ansible-core/playbooks/application-libraries-credential-root.yml')}]
+            play = [{'import_playbook': str(ROOT / 'ansible-core/playbooks/applications/stages/credential-root.yml')}]
             if expected_root is not None:
                 play.append({'hosts': 'localhost', 'gather_facts': False, 'tasks': [
                     {'ansible.builtin.assert': {'that': [

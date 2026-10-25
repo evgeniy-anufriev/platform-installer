@@ -44,7 +44,7 @@ class PackageScriptRunnerTests(unittest.TestCase):
                          'application_provider_script_host': 'node2',
                          'application_provider_script': {'id': 'controller-probe', 'path': str(script),
                              'runOn': 'execution_node', 'argv': [], 'secretInputs': {'token': 'token'}}},
-                'tasks': [{'ansible.builtin.include_tasks': str(ROOT / 'ansible-core/playbooks/tasks/application-provider-script.yml')}]}
+                'tasks': [{'ansible.builtin.include_tasks': str(ROOT / 'ansible-core/playbooks/applications/tasks/provider-script.yml')}]}
             ], sort_keys=False))
             env = dict(os.environ, ANSIBLE_COLLECTIONS_PATH=str(ROOT / 'ansible-core/collections'))
             result = subprocess.run(['ansible-playbook', '-i', str(inventory), str(playbook)],

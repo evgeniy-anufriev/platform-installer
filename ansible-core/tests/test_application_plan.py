@@ -218,7 +218,7 @@ class ApplicationPlanTests(unittest.TestCase):
                 path = Path(directory) / ('.runtime-projection-' + hashlib.sha256(operation['operationId'].encode()).hexdigest() + '.json')
                 path.write_text('{}')
                 command = CONTROLLER._command('/release', journal, operation)
-                self.assertIn('application-libraries-' + operation['operationId'].split(':')[1] + '.yml', command[3])
+                self.assertTrue(command[3].endswith('applications/' + operation['operationId'].split(':')[1] + '.yml'))
                 self.assertEqual('localhost:node1', command[-1])
                 with self.assertRaisesRegex(LifecycleError, 'EXECUTION_MANIFEST_INVALID'):
                     CONTROLLER._command('/release', journal, dict(operation, argv=['bad']))

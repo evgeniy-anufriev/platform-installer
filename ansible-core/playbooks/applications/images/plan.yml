@@ -1,6 +1,6 @@
 ---
 # Manual inventory uses the same native preparation and target-free planner.
 # Supply runtime-only registry values through a private extra-vars file, never inventory.
-- import_playbook: application-images-inputs.yml
-- import_playbook: application-images-prepare.yml
-- import_playbook: deployment-plan-machine.yml
+- import_playbook: inputs.yml
+- import_playbook: prepare.yml
+- import_playbook: ../../deployment-plan-machine.yml

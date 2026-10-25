@@ -22,8 +22,8 @@ The locked platform manifest/config identity is checked after acquisition.
 bundle for offline checks, then exercises approved public registry delivery.
 It does not publish an Installer bundle or exercise bootstrap acceptance.
 
-Apply/Verify entrypoints are `ansible-core/playbooks/application-libraries-apply.yml`
-and `application-libraries-verify.yml`. Set the project root and service catalog
+Apply/Verify entrypoints are `ansible-core/playbooks/applications/apply.yml`
+and `applications/verify.yml`. Set the project root and service catalog
 explicitly. Include `localhost` as a normal inventory host so controller tasks
 receive group_vars. With `--limit`, include `localhost` and the selected targets;
 excluded placements do not count as verified. Verify never loads or starts images.

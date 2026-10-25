@@ -80,7 +80,7 @@ def prepare(journal, value, release, runtime_release):
         command = [sys.executable, os.path.join(release, 'ansible-core/tools/run_with_runtime_credentials.py'),
                    '--credentials-file', credentials_path, '--runtime-dir', os.path.join(temporary, 'identity'), '--',
                    'ansible-playbook', '-i', os.path.join(journal.directory, 'project/inventory/hosts.yml'),
-                   os.path.join(release, 'ansible-core/playbooks/application-images-prepare.yml'), '-e', '@' + variables_path]
+                   os.path.join(release, 'ansible-core/playbooks/applications/images/prepare.yml'), '-e', '@' + variables_path]
         environment = _environment(release, leased_private_key=bool(payload.get('privateKey')))
         environment['ANSIBLE_SSH_ARGS'] = environment['ANSIBLE_SSH_ARGS'].replace(
             '/var/lib/platform-installer/execution/known_hosts', trust_path)

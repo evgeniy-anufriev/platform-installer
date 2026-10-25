@@ -55,19 +55,19 @@
   no_log: true
 
 - name: Опубликовать и проверить конечную точку готового провайдера до запуска потребителей
-  ansible.builtin.include_tasks: ../../services/integrations/tasks/apply-source.yml
+  ansible.builtin.include_tasks: ../../../../services/integrations/tasks/apply-source.yml
   vars:
     platform_endpoint_source_ids: "{{ [application_instance_id] }}"
   when: application_ready_provider_batches | length > 0
 
 - name: Подготовить выбранных потребителей пакетов готового провайдера приложения
-  ansible.builtin.include_tasks: tasks/application-provider-batch.yml
+  ansible.builtin.include_tasks: provider-batch.yml
   loop: "{{ application_ready_provider_batches }}"
   loop_control:
     loop_var: application_provider_batch
   run_once: true
 
 - name: Полная стандартная доставка Vault для всех потребителей, чьи провайдери готовы
-  ansible.builtin.include_tasks: tasks/application-deliver-ready.yml
+  ansible.builtin.include_tasks: deliver-ready.yml
   when: application_ready_provider_batches | length > 0
   run_once: true

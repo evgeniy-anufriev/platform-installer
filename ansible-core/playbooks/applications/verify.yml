@@ -1,5 +1,5 @@
 ---
-- import_playbook: application-libraries-resolve-runtime.yml
+- import_playbook: stages/resolve-runtime.yml
 
 - name: Проверка приложений без мутаций
   hosts: platform_targets
@@ -27,6 +27,6 @@
       loop_control:
         loop_var: application_verify_input
 
-- import_playbook: application-libraries-endpoint-stage.yml
+- import_playbook: stages/endpoint.yml
   vars:
     platform_endpoint_verify_only: true

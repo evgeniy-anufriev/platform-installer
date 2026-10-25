@@ -127,11 +127,11 @@ class KafkaApplicationBatchTests(unittest.TestCase):
         self.assertNotIn('--add', calls[0][1])
 
     def test_library_verify_has_only_container_and_endpoint_checks(self):
-        plays = yaml.safe_load((ROOT / 'ansible-core/playbooks/application-libraries-verify.yml').read_text())
-        self.assertFalse(any(p.get('import_playbook') == 'application-libraries-provider-verify-stage.yml' for p in plays))
+        plays = yaml.safe_load((ROOT / 'ansible-core/playbooks/applications/verify.yml').read_text())
+        self.assertFalse(any(p.get('import_playbook') == 'applications/stages/provider-verify-stage.yml' for p in plays))
         container = next(t for p in plays for t in p.get('tasks', []) if t['name'] == 'Проверка точного размещения каждого приложения')
         self.assertIs(False, container['vars']['application_runtime_verify_vault'])
-        self.assertTrue(any(p.get('import_playbook') == 'application-libraries-endpoint-stage.yml' for p in plays))
+        self.assertTrue(any(p.get('import_playbook') == 'applications/stages/endpoint.yml' for p in plays))
 
     def test_container_verify_with_agent_does_not_need_vault_or_provider_credentials(self):
         self.container_probe()

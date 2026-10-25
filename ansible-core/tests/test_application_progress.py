@@ -74,7 +74,7 @@ class ApplicationProgressTests(unittest.TestCase):
 
     @unittest.skipUnless(shutil.which('ansible-playbook'), 'native Ansible required')
     def test_real_two_host_callback_success_failure_and_skipped_markers(self):
-        production = yaml.safe_load((ROOT/'ansible-core/playbooks/application-libraries-ordered-library.yml').read_text())
+        production = yaml.safe_load((ROOT/'ansible-core/playbooks/applications/tasks/ordered-library.yml').read_text())
         begin, end = production[0], production[-1]
         for fail_second, selected in ((False, True), (True, True), (False, False)):
             with self.subTest(fail_second=fail_second, selected=selected), tempfile.TemporaryDirectory() as directory:

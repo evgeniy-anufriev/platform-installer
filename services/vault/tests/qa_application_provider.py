@@ -351,7 +351,7 @@ class ApplicationVaultQA(a3.ApplicationProviderQA):
             extra_values.update(platform_vault_application_token_ttl=15,platform_vault_application_token_max_ttl=60)
         self.extra.write_text(json.dumps(extra_values));self.extra.chmod(0o600)
         self.env=dict(self.env,ANSIBLE_COLLECTIONS_PATH=':'.join([str(ROOT/'ansible-core/collections'),str(ROOT/'services/postgresql'),str(ROOT/'services/vault')]))
-        self.play_core('application-libraries-resolve-runtime.yml')
+        self.play_core('applications/stages/resolve-runtime.yml')
         # Materialization uses only exact Core-selected plans, and is QA fixture setup.
         wrapper=self.secret_root/'materialize.yml'
         plans='{{ application_snapshot.pki_materialization.materializationPlans }}'
@@ -374,7 +374,7 @@ class ApplicationVaultQA(a3.ApplicationProviderQA):
             (self.tls/filename).chmod(0o600)
             tasks.append({'ansible.builtin.copy':{'src':str(self.tls/filename),'dest':'{{ item.targetDirectory }}/'+filename,'mode':'0600'},
                 'become':True,'loop':plans,'delegate_to':'{{ item.hostId }}'})
-        wrapper.write_text(yaml.safe_dump([{'import_playbook':str(ROOT/'ansible-core/playbooks/application-libraries-resolve-runtime.yml')},
+        wrapper.write_text(yaml.safe_dump([{'import_playbook':str(ROOT/'ansible-core/playbooks/applications/stages/resolve-runtime.yml')},
             {'hosts':'localhost','gather_facts':False,'tasks':tasks}]))
         result=subprocess.run(['ansible-playbook','-i',str(self.project/'inventory/hosts.yml'),str(wrapper),'-e','@'+str(self.extra)],env=self.env,capture_output=True,timeout=300)
         if result.returncode:
@@ -425,8 +425,8 @@ class ApplicationVaultQA(a3.ApplicationProviderQA):
             application_command=['/opt/application/run'])
         wrapper=self.secret_root/'generated-apply.yml'
         wrapper.write_text(yaml.safe_dump([
-            {'import_playbook':str(ROOT/'ansible-core/playbooks/application-libraries-vault-preflight.yml')},
-            {'import_playbook':str(ROOT/'ansible-core/playbooks/application-libraries-provider-stage.yml')},
+            {'import_playbook':str(ROOT/'ansible-core/playbooks/applications/stages/vault-preflight.yml')},
+            {'import_playbook':str(ROOT/'ansible-core/playbooks/applications/stages/provider-stage.yml')},
             dict(hosts='localhost',connection='local',gather_facts=False,vars={'application_runtime':runtime},tasks=[
                 {'ansible.builtin.copy':{'content':'{{ application_runtime | platform.core.application_agent_config }}',
                                         'dest':str(agent),'mode':'0600'}}])],sort_keys=False))
@@ -474,13 +474,13 @@ class ApplicationVaultQA(a3.ApplicationProviderQA):
 
     def test_a4_full_apply_verify_repeat(self):
         self.prepare_application_fixture()
-        self.play_core('application-libraries-apply.yml')
-        self.play_core('application-libraries-verify.yml')
+        self.play_core('applications/apply.yml')
+        self.play_core('applications/verify.yml')
         document='secret/data/sdku/apigateway-sdku/accounts/postgres'
         before=self.api(document)['data']['metadata']['version']
         self.api(document,'PATCH',{'options':{'cas':before},'data':{'neighbor':'keep'}})
         before=self.api(document)['data']['metadata']['version']
-        repeat=self.play_core('application-libraries-apply.yml')
+        repeat=self.play_core('applications/apply.yml')
         self.assertEqual(before,self.api(document)['data']['metadata']['version'])
         self.assertEqual(self.api(document)['data']['data']['neighbor'],'keep')
         self.assertFalse(re.search(rb'changed=[1-9]',repeat), 'A4_REPEAT_NOT_IDEMPOTENT')
@@ -564,7 +564,7 @@ class ApplicationVaultQA(a3.ApplicationProviderQA):
             self.api(document,'POST',{'options':{'cas':before_cas['metadata']['version']},'data':stale_data})
             self.cas_proxy.arm('/v1/'+document)
             try:
-                self.play_core('application-libraries-apply.yml')
+                self.play_core('applications/apply.yml')
             except AssertionError:
                 print('A4_CAS_PROXY_STATE injected='+str(self.cas_proxy.injected)+' conflict='+str(self.cas_proxy.conflict)+' race_status='+str(self.cas_proxy.race_status)+' writes='+str(self.cas_proxy.writes))
                 raise
@@ -579,7 +579,7 @@ class ApplicationVaultQA(a3.ApplicationProviderQA):
         reduced={key:value for key,value in original_data.items() if key!='password'}
         self.api(document,'POST',{'options':{'cas':current['data']['metadata']['version']},'data':reduced})
         try:
-            missing_output=self.play_core('application-libraries-verify.yml',success=False)
+            missing_output=self.play_core('applications/verify.yml',success=False)
             self.assertNotIn(Path(self.passwords['gateway-password']).read_bytes(),missing_output,'A4_SECRET_OUTPUT_FORBIDDEN')
         finally:
             latest=self.api(document)
@@ -589,7 +589,7 @@ class ApplicationVaultQA(a3.ApplicationProviderQA):
         subprocess.run(['sudo','-n','mv',str(vault_dir),str(vault_backup)],check=True)
         try:
             subprocess.run(['sudo','-n','ln','-s','/tmp/a4-unsafe-private-target',str(vault_dir)],check=True)
-            unsafe_output=self.play_core('application-libraries-verify.yml',success=False)
+            unsafe_output=self.play_core('applications/verify.yml',success=False)
             self.assertNotIn(Path(self.passwords['gateway-password']).read_bytes(),unsafe_output,'A4_SECRET_OUTPUT_FORBIDDEN')
         finally:
             subprocess.run(['sudo','-n','rm','-f','--',str(vault_dir)],check=True)
@@ -599,15 +599,15 @@ class ApplicationVaultQA(a3.ApplicationProviderQA):
         version=self.api(document)['data']['metadata']['version']
         try:
             Path(self.passwords['gateway-password']).write_text(secrets.token_hex(20))
-            self.play_core('application-libraries-apply.yml',success=False)
+            self.play_core('applications/apply.yml',success=False)
             self.assertEqual(self.api(document)['data']['metadata']['version'],version)
         finally:Path(self.passwords['gateway-password']).write_bytes(original)
         # Read the original field; do not duplicate or overwrite that KV source.
         base['accounts']['postgres']['credentials']['password']['source']={
             'kind':'vault_ref','binding':'secrets','mount':'secret','document':'sdku/apigateway-sdku/accounts/postgres','field':'password'}
         defaults_path.write_text(json.dumps({'platform_application_definition':definition}))
-        self.play_core('application-libraries-apply.yml')
-        self.play_core('application-libraries-verify.yml')
+        self.play_core('applications/apply.yml')
+        self.play_core('applications/verify.yml')
         self.assertEqual(self.api(document)['data']['metadata']['version'],version)
         self.assertEqual(list(self.secret_root.glob('pla-vault-*')),[])
         print('A4_WRONG_PASSWORD_AND_READONLY_SOURCE_PASS')
@@ -615,7 +615,7 @@ class ApplicationVaultQA(a3.ApplicationProviderQA):
         try:
             self.api(document,'PATCH',{'data':{'_platform_owner':'foreign'}})
             blocked_version=self.api(document)['data']['metadata']['version']
-            self.play_core('application-libraries-apply.yml',success=False)
+            self.play_core('applications/apply.yml',success=False)
             self.assertEqual(self.api(document)['data']['metadata']['version'],blocked_version)
         finally:self.api(document,'PATCH',{'data':{'_platform_owner':owner}})
         print('A4_FOREIGN_DOCUMENT_BLOCK_PASS')
@@ -626,14 +626,14 @@ class ApplicationVaultQA(a3.ApplicationProviderQA):
         try:
             standalone['platform_vault_admin_token']=self.token
             self.extra.write_text(json.dumps(standalone))
-            self.play_core('application-libraries-apply.yml')
+            self.play_core('applications/apply.yml')
             standalone.pop('platform_vault_admin_token')
             custody=self.secret_root/'bootstrap';custody.mkdir(mode=0o700)
             token_file=custody/'admin-token';token_file.write_text(self.token);token_file.chmod(0o600)
             standalone['platform_vault_bootstrap_output_dir']=str(custody)
             self.extra.write_text(json.dumps(standalone))
-            self.play_core('application-libraries-apply.yml')
-            self.play_core('application-libraries-verify.yml')
+            self.play_core('applications/apply.yml')
+            self.play_core('applications/verify.yml')
             token_file.unlink();custody.rmdir()
         finally:self.extra.write_text(original_extra)
         print('A4_STANDALONE_TOKEN_AND_BOOTSTRAP_PASS')

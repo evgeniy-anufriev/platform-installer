@@ -8,9 +8,9 @@
         msg: {id: 'applications:prepare', state: started}
       tags: [platform_application_progress]
 
-- import_playbook: application-libraries-preflight.yml
-- import_playbook: application-libraries-vault-preflight.yml
-- import_playbook: application-libraries-provider-stage.yml
+- import_playbook: stages/preflight.yml
+- import_playbook: stages/vault-preflight.yml
+- import_playbook: stages/provider-stage.yml
 
 - name: Применить каждую предварительно проверенную библиотеку и проверить ее перед следующим запуском
   hosts: platform_targets
@@ -45,7 +45,7 @@
               - application_library_order | sort == (hostvars['localhost'].application_snapshot.snapshot.applicationLibraries.libraries | list | sort)
             fail_msg: APPLICATION_LIBRARY_ORDER_INVALID
         - name: Завершить одну библиотеку, прежде чем переходить к следующей
-          ansible.builtin.include_tasks: application-libraries-ordered-library.yml
+          ansible.builtin.include_tasks: tasks/ordered-library.yml
           loop: "{{ application_library_order }}"
           loop_control:
             loop_var: application_library_id

@@ -1,3 +1,0 @@
----
-- import_playbook: application-libraries-providers-resolve.yml
-- import_playbook: application-libraries-provider-verify-stage.yml

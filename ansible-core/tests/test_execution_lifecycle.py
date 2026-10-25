@@ -920,7 +920,7 @@ class ExecutionLifecycleTests(unittest.TestCase):
                              applicationSemanticFingerprint="sha256:" + "a" * 64)
             original = list(operation["applicationLibraries"])
             command = execution_controller._command(root, journal, operation)
-            self.assertTrue(command[3].endswith("application-libraries-apply.yml"))
+            self.assertTrue(command[3].endswith("applications/apply.yml"))
             self.assertEqual(original, operation["applicationLibraries"])
             for libraries in (["sdku-dm", "sdku-dm"], ["bad library"], [], [1]):
                 with self.subTest(libraries=libraries), self.assertRaisesRegex(LifecycleError, "EXECUTION_MANIFEST_INVALID"):

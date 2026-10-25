@@ -1,5 +1,5 @@
 ---
-- import_playbook: application-libraries-providers-preflight.yml
+- import_playbook: providers-preflight.yml
 - name: Подготовка всех ресурсов библиотеки перед учетной записью приложения
   hosts: localhost
   connection: local

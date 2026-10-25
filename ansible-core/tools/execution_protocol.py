@@ -813,7 +813,7 @@ def core_operation(value, state_root, runtime_release, operation, runtime_identi
                 raise LifecycleError("PROJECT_SNAPSHOT_RUNTIME_MISMATCH")
         extra = {"platform_project_root": project, "platform_project_manifest_path": os.path.join(project, "project.yml"), "platform_service_catalog_path": os.path.join(release, "catalog", "service-catalog.yml"), "platform_installer_owned_paths": owned_paths}
     elif operation == 'PrepareApplicationImages':
-        playbook, inventory = 'application-images-inputs.yml', os.path.join(project, 'inventory', 'hosts.yml')
+        playbook, inventory = 'applications/images/inputs.yml', os.path.join(project, 'inventory', 'hosts.yml')
         extra = dict(platform_project_root=project,
                      platform_service_catalog_path=os.path.join(release, 'catalog/service-catalog.yml'),
                      platform_execution_bundle_root=release,

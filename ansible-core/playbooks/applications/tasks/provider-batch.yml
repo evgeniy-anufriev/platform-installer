@@ -1,6 +1,6 @@
 ---
 - name: Выполнение перехватчиков интеграции в объявленном порядке перед пакетом учетных записей
-  ansible.builtin.include_tasks: application-provider-script.yml
+  ansible.builtin.include_tasks: provider-script.yml
   vars:
     application_provider_script: "{{ application_provider_hook }}"
     application_provider_script_host: "{{ application_provider_hook.target.hostId }}"
@@ -51,7 +51,7 @@
       no_log: true
 
     - name: Выполнить общий обратный вызов для пакета учётных записей провайдера
-      ansible.builtin.include_tasks: application-provider-script.yml
+      ansible.builtin.include_tasks: provider-script.yml
       vars:
         application_provider_script: "{{ application_account_callback.script }}"
         application_provider_script_host: "{{ application_account_callback.targetHostId }}"

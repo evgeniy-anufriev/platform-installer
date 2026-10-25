@@ -5,7 +5,7 @@ Both logical instances belong to `sdku`; its membership includes node1/node2.
 One library database/schema and two login accounts are provisioned, regardless
 of Docker placement count. This fixture contains references only, no passwords.
 
-Use `ansible-core/playbooks/application-libraries-providers-{preflight,apply,verify}.yml`
+Use `ansible-core/playbooks/applications/stages/providers-{preflight,apply,verify}.yml`
 with this inventory, `platform_project_root` and `platform_service_catalog_path`.
 Collection paths include `ansible-core/collections` and `services/postgresql`.
 Supply `platform_postgresql_secret_files` and a private

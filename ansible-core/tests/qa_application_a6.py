@@ -60,7 +60,7 @@ class ApplicationA6QA(a5.ApplicationA5QA):
         node3_path.write_text(json.dumps(node3))
         # Core creates the managed database and ownership witness first; the
         # fixture migration adds tables before /status is used as readiness.
-        self.play_core('application-libraries-providers-apply.yml')
+        self.play_core('applications/stages/providers-apply.yml')
         sys.path.insert(0, str(ROOT / 'services/clickhouse'))
         from ansible_collections.platform.clickhouse.plugins.module_utils.application_sql import NativeClient
         client = NativeClient(self.ch_target, str(self.ch_directory), self.ch_admin)
@@ -96,23 +96,23 @@ class ApplicationA6QA(a5.ApplicationA5QA):
                                  'protocol': 'http', 'probe': {'path': '/status', 'expected_status': 200, 'timeout': 10}}
         path.write_text(json.dumps(group))
         self.env['ANSIBLE_COLLECTIONS_PATH'] += ':' + ':'.join(str(ROOT / 'services' / name) for name in ['haproxy', 'bind', 'keepalived'])
-        self.play_core('application-libraries-apply.yml')
+        self.play_core('applications/apply.yml')
         statuses = {host: self.probe_status(host) for host in ['node1', 'node2']}
         for host, report in statuses.items():
             for name in ['pkcs12', 'pkcs12Client', 'postgresql', 'redis', 'sentinel', 'clickhouse', 'kafka', 'vaultAgent']:
                 self.assertEqual('ok', report['checks'][name]['state'], 'A6_' + host.upper() + '_' + name.upper() + '_STATUS_FAILED')
             self.assertEqual('ok', report['overall'], 'A6_' + host.upper() + '_ALL_CONNECTIONS_REQUIRED')
-        self.play_core('application-libraries-verify.yml')
+        self.play_core('applications/verify.yml')
         extra = json.loads(self.extra.read_text())
         if full_haproxy:
-            repeated = self.play_core('application-libraries-apply.yml')
+            repeated = self.play_core('applications/apply.yml')
             self.assertFalse(re.search(rb'changed=[1-9]', repeated), 'A6_REPEAT_NOT_IDEMPOTENT')
             print('A6_TWO_HOST_ENDPOINT_APPLY_VERIFY_REPEAT_PASS status=node1,node2 all-services=ok')
             extra['platform_haproxy_full_reconcile'] = True
             self.extra.write_text(json.dumps(extra))
-            self.play_core('application-libraries-apply.yml')
-            self.play_core('application-libraries-verify.yml')
-            repeated = self.play_core('application-libraries-apply.yml')
+            self.play_core('applications/apply.yml')
+            self.play_core('applications/verify.yml')
+            repeated = self.play_core('applications/apply.yml')
             self.assertFalse(re.search(rb'changed=[1-9]', repeated), 'A6_FULL_RECONCILE_REPEAT_NOT_IDEMPOTENT')
             for host in ['node1', 'node2']:
                 self.assertEqual('ok', self.probe_status(host)['overall'])
@@ -123,7 +123,7 @@ class ApplicationA6QA(a5.ApplicationA5QA):
         extra['platform_bind_full_reconcile'] = True
         self.extra.write_text(json.dumps(extra))
         self.play_core('../../services/bind/playbooks/apply.yml')
-        self.play_core('application-libraries-verify.yml')
+        self.play_core('applications/verify.yml')
         print('A6_FULL_DNS_RECONCILE_APPLICATION_ENDPOINT_PRESERVED_PASS')
     def launch(self, binary, config):
         # Match the service's private-file umask when Sentinel rewrites its config.

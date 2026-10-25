@@ -1,5 +1,5 @@
 ---
-- import_playbook: application-libraries-credential-root.yml
+- import_playbook: credential-root.yml
 - name: Разрешить и проверить всю область автономного приложения
   hosts: localhost
   connection: local
@@ -65,7 +65,7 @@
     - name: Собрать автономный центр управления образами без включения планировщика развертывания
       platform.core.prepare_application_runtime:
         project_root: "{{ platform_project_root | default(inventory_dir | dirname) }}"
-        contracts_root: "{{ platform_contracts_root | default(playbook_dir ~ '/../../contracts') }}"
+        contracts_root: "{{ platform_contracts_root | default(playbook_dir ~ '/../../../../contracts') }}"
         snapshot: "{{ application_snapshot.snapshot }}"
         scripts_only: "{{ platform_application_post_install_only | default(false) }}"
       register: application_runtime_inputs

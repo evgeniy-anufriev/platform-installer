@@ -1,0 +1,3 @@
+---
+- import_playbook: providers-resolve.yml
+- import_playbook: provider-verify-stage.yml

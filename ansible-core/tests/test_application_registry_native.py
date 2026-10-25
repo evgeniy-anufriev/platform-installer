@@ -73,7 +73,7 @@ class ApplicationRegistryNativeTests(unittest.TestCase):
             if duplicate:
                 play[0]['tasks'].insert(1, {'ansible.builtin.include_role': dict(name='platform.core.prepare_application_images')})
             if standalone:
-                play = yaml.safe_load((ROOT / 'ansible-core/playbooks/application-images-prepare.yml').read_text())
+                play = yaml.safe_load((ROOT / 'ansible-core/playbooks/applications/images/prepare.yml').read_text())
                 for item in play:
                     item['module_defaults'] = {'ansible.builtin.uri': dict(ca_path=str(ca))}
                 variables['platform_application_image_inputs'] = dict(

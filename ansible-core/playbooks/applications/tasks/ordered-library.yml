@@ -42,7 +42,7 @@
     loop_var: application_runtime_job
 
 - name: Согласовать каждый логический экземпляр с явными фазовыми барьерами
-  ansible.builtin.include_tasks: application-libraries-ordered-instance.yml
+  ansible.builtin.include_tasks: ordered-instance.yml
   loop: "{{ application_library_instance_ids }}"
   loop_control:
     loop_var: application_instance_id
@@ -59,7 +59,7 @@
     loop_var: application_runtime_job
 
 - name: Опубликовать и проверить готовые конечные точки библиотеки приложений
-  ansible.builtin.include_tasks: ../../services/integrations/tasks/apply-source.yml
+  ansible.builtin.include_tasks: ../../../../services/integrations/tasks/apply-source.yml
   vars:
     platform_endpoint_source_ids: >-
       {{ application_library_instance_ids |
@@ -81,7 +81,7 @@
     loop_var: application_runtime_job
 
 - name: Подготовить выбранных потребителей явно пропущенного провайдера без его жизненного цикла
-  ansible.builtin.include_tasks: tasks/application-provider-batch.yml
+  ansible.builtin.include_tasks: provider-batch.yml
   loop: "{{ hostvars['localhost'].application_runtime_inputs.integrations.batches | selectattr('providerLibraryId', 'equalto', application_library_id) | list }}"
   loop_control:
     loop_var: application_provider_batch
@@ -89,12 +89,12 @@
   run_once: true
 
 - name: Доставка готовых секретов потребителя после обратных вызовов пропущенного провайдера
-  ansible.builtin.include_tasks: tasks/application-deliver-ready.yml
+  ansible.builtin.include_tasks: deliver-ready.yml
   when: application_library_id in hostvars['localhost'].application_selection.scope.providerLibraries and application_library_id in hostvars['localhost'].application_selection.scope.skippedLibraries
   run_once: true
 
 - name: Применить объявленные крючки интеграции к выбранным местам размещения
-  ansible.builtin.include_tasks: tasks/application-provider-script.yml
+  ansible.builtin.include_tasks: provider-script.yml
   vars:
     application_provider_batch:
       providerLibraryId: "{{ application_integration_script.libraryId }}"

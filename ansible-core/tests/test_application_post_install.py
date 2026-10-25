@@ -48,8 +48,8 @@ class PostInstallTests(unittest.TestCase):
             self.assertEqual([], validator.validate(manifest, ROOT/'contracts/execution-manifest/v1alpha7/schema.json'))
             validate_application_manifest(manifest)
             command = _command('/release', type('Journal', (), {'directory': '/run'})(), manifest['operations'][-1])
-            self.assertEqual('/release/ansible-core/playbooks/application-libraries-post-install.yml', command[3])
-            self.assertNotIn('application-libraries-verify.yml', command)
+            self.assertEqual('/release/ansible-core/playbooks/applications/post-install.yml', command[3])
+            self.assertNotIn('applications/verify.yml', command)
 
     def test_verify_only_has_no_terminal_operation(self):
         result = self.build('INFRASTRUCTURE_VERIFY_ONLY')

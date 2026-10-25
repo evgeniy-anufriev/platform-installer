@@ -508,9 +508,9 @@ class ApplicationProviderQA(unittest.TestCase):
              'become':True,'loop':'{{ application_provider_inputs.jobs | map(attribute="candidates") | flatten }}'}]}
         wrapper = self.runtime/'entry.yml'
         wrapper.write_text(yaml.safe_dump([
-            {'import_playbook':str(playbooks/'application-libraries-providers-resolve.yml')},prepare,
-            {'import_playbook':str(playbooks/'application-libraries-providers-apply.yml')},
-            {'import_playbook':str(playbooks/'application-libraries-providers-verify.yml')}]))
+            {'import_playbook':str(playbooks/'applications/stages/providers-resolve.yml')},prepare,
+            {'import_playbook':str(playbooks/'applications/stages/providers-apply.yml')},
+            {'import_playbook':str(playbooks/'applications/stages/providers-verify.yml')}]))
         pki_root = Path('/etc/platform-installer/pki')/project.name
         try:
             result = subprocess.run(['ansible-playbook','-i',str(project/'inventory/hosts.yml'),str(wrapper),'-e','@'+str(protected_vars)],

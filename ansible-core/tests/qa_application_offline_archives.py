@@ -10,7 +10,7 @@ import unittest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
-TASKS = ROOT / 'ansible-core/playbooks/tasks/application-libraries-offline-archives.yml'
+TASKS = ROOT / 'ansible-core/playbooks/applications/tasks/offline-archives.yml'
 
 
 class ApplicationOfflineArchivesTests(unittest.TestCase):

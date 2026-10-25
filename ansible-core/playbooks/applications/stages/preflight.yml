@@ -1,5 +1,5 @@
 ---
-- import_playbook: application-libraries-resolve-runtime.yml
+- import_playbook: resolve-runtime.yml
 
 - name: Проверка явного порядка библиотеки и области действия провайдера перед любым целевым контактом
   hosts: localhost
@@ -55,4 +55,4 @@
   gather_facts: false
   any_errors_fatal: true
   tasks:
-    - ansible.builtin.import_tasks: tasks/application-libraries-offline-archives.yml
+    - ansible.builtin.import_tasks: ../tasks/offline-archives.yml

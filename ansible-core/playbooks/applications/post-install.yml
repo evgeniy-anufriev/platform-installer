@@ -1,5 +1,5 @@
 ---
-- import_playbook: application-libraries-resolve-runtime.yml
+- import_playbook: stages/resolve-runtime.yml
   vars:
     platform_application_post_install_only: true
 
@@ -39,7 +39,7 @@
           loop_control:
             loop_var: application_vault_source
         - name: Последовательно выполнить детерминированную очередь сценариев post_install
-          ansible.builtin.include_tasks: tasks/application-post-install-script.yml
+          ansible.builtin.include_tasks: tasks/post-install-script.yml
           loop: "{{ application_post_install_scripts }}"
           loop_control:
             loop_var: application_post_install_script
