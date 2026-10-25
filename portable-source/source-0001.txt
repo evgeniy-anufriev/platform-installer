@@ -38558,7 +38558,7 @@ if __name__ == "__main__":
     raise SystemExit(main())
 
 @@END
-@@PORTABLE {"path":"ansible-core/tools/execution_controller.py","mode":420,"size":71740,"sha256":"7436d7d9d14e867ab6444ff6c6341b1bce74090b84d38bd0ab1f7b51c12ca765","index":0,"count":2,"encoding":"utf-8","payloadBytes":48000}
+@@PORTABLE {"path":"ansible-core/tools/execution_controller.py","mode":420,"size":71832,"sha256":"ceef4e8953258a300a3b5326d9d7e0a35bab10b7af893c38a191cc84db6782b3","index":0,"count":2,"encoding":"utf-8","payloadBytes":48000}
 #!/usr/bin/env python3
 """Fixed Execution Node controller.  It never accepts a command or playbook."""
 from __future__ import print_function
@@ -39413,7 +39413,7 @@ def validate_application_manifest(manifest):
                     application_operations[0]['targets'] != application_operations[1]['targets'] or
                     application_operations[0]['applicationLibraries'] != 
 @@END
-@@PORTABLE {"path":"ansible-core/tools/execution_controller.py","mode":420,"size":71740,"sha256":"7436d7d9d14e867ab6444ff6c6341b1bce74090b84d38bd0ab1f7b51c12ca765","index":1,"count":2,"encoding":"utf-8","payloadBytes":23740}
+@@PORTABLE {"path":"ansible-core/tools/execution_controller.py","mode":420,"size":71832,"sha256":"ceef4e8953258a300a3b5326d9d7e0a35bab10b7af893c38a191cc84db6782b3","index":1,"count":2,"encoding":"utf-8","payloadBytes":23832}
 application_operations[1]['applicationLibraries'] or
                     application_operations[0]['applicationSemanticFingerprint'] != application_operations[1]['applicationSemanticFingerprint']):
                 raise LifecycleError('EXECUTION_MANIFEST_INVALID')
@@ -39558,6 +39558,7 @@ def _materialize_application_projection(journal, manifest):
         scoped = dict(payload, platform_application_secret_root=journal.directory,
                       platform_application_secret_files=operation_files, platform_runtime_secret_inputs=operation_inputs,
                       platform_application_expected_fingerprint=operation['applicationSemanticFingerprint'],
+                      platform_application_library_order=operation['applicationLibraries'],
                       platform_application_expected_library_ids=operation['applicationLibraries'])
         if operation.get('applicationExecutionScope'):
             scoped['platform_application_execution_scope'] = operation['applicationExecutionScope']
@@ -94781,7 +94782,7 @@ function ProviderDialog({
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/InstallationPage.tsx","mode":420,"size":79696,"sha256":"4b6970bd3255fc37bd519a9902104b6f9622b05c310320951526438e61c7f342","index":0,"count":2,"encoding":"utf-8","payloadBytes":52524}
+@@PORTABLE {"path":"frontend/src/InstallationPage.tsx","mode":420,"size":80112,"sha256":"6109b94fb45d6b10cfe37f3d11f82f0f431d3a04c2ff48e94f1e7617e4905bcf","index":0,"count":2,"encoding":"utf-8","payloadBytes":52573}
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type {
   InstallationEventView,
@@ -94831,6 +94832,12 @@ function planActionLabel(action: {
       return `Проверить сервис${deployment}`;
     case "SERVICE_CLEAR":
       return `Очистить установленный сервис${deployment}`;
+    case "APPLICATION_LIBRARIES_APPLY":
+      return "Установить библиотеки приложений";
+    case "APPLICATION_LIBRARIES_VERIFY":
+      return "Проверить библиотеки приложений";
+    case "APPLICATION_LIBRARIES_POST_INSTALL":
+      return "Выполнить действия после установки";
     default:
       return action.summary;
   }
@@ -95299,11 +95306,6 @@ export function InstallationPage({
           Установка библиотек пропущена:{" "}
           {displayedPlan.plan.skipApplicationLibraries.join(", ")}. Необходимые
           интеграции сохраняются.
-        </p>
-      )}
-      {displayedPlan?.plan?.skipInfrastructureVerify && tab !== "plan" && (
-        <p role="alert">
-          Infra Verify явно пропущен по принятому пользователем риску.
         </p>
       )}
       <div className="title">
@@ -96149,11 +96151,11 @@ function PlanStage({
               <label className="acknowledgement" key={item.code}>
                 <input
                   type="checkbox"
-                  checked={acknowledged.includes(item.code)}
-                  onChan
+   
 @@END
-@@PORTABLE {"path":"frontend/src/InstallationPage.tsx","mode":420,"size":79696,"sha256":"4b6970bd3255fc37bd519a9902104b6f9622b05c310320951526438e61c7f342","index":1,"count":2,"encoding":"utf-8","payloadBytes":27172}
-ge={(event) =>
+@@PORTABLE {"path":"frontend/src/InstallationPage.tsx","mode":420,"size":80112,"sha256":"6109b94fb45d6b10cfe37f3d11f82f0f431d3a04c2ff48e94f1e7617e4905bcf","index":1,"count":2,"encoding":"utf-8","payloadBytes":27539}
+               checked={acknowledged.includes(item.code)}
+                  onChange={(event) =>
                     setAcknowledged((current) =>
                       event.target.checked
                         ? [...current, item.code]
@@ -96476,7 +96478,7 @@ function ExecutionStage({
               <p>Действия плана для этого запуска недоступны.</p>
             ) : (
               <ol className="execution-plan-actions">
-                {installationActionRows(plan).map((action, index) => {
+                {installationActionRows(plan).map((action) => {
                   const outcome = progress?.actionOutcomes[action.id];
                   const completion = events.find(
                     (event) =>
@@ -96496,7 +96498,10 @@ function ExecutionStage({
                       }).format(completedDate)
                     : "Время неизвестно";
                   const active =
-                    progress?.activeActionId === action.id &&
+                    (progress?.activeActionId === action.id ||
+                      (!!action.progressSteps?.length &&
+                        progress?.stepParents[progress.activeActionId || ""] ===
+                          action.id)) &&
                     ["STARTING", "RUNNING", "CANCELLING"].includes(
                       run.run!.state,
                     );
@@ -96531,15 +96536,14 @@ function ExecutionStage({
                   return (
                     <li
                       key={action.id}
-                      className={`execution-plan-action is-${tone}${action.parentId ? " is-progress-step" : ""}`}
-                      aria-current={active ? "step" : undefined}
+                      className={`execution-plan-action is-${tone}${action.parentId ? " is-progress-step" : ""}${action.progressSteps?.length ? " is-progress-group" : ""}`}
+                      aria-current={active && !action.progressSteps?.length ? "step" : undefined}
                     >
-                      <span
-                        className="execution-plan-number"
-                        aria-hidden="true"
-                      >
-                        {index + 1}
-                      </span>
+                      {action.number !== undefined && (
+                        <span className="execution-plan-number" aria-hidden="true">
+                          {action.number}
+                        </span>
+                      )}
                       <span
                         className="execution-plan-symbol"
                         aria-hidden="true"
@@ -106875,7 +106879,7 @@ export function executionNodeCombinedStatus(
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/installationPresentation.ts","mode":420,"size":7520,"sha256":"f8737f68cdfa94b1e6363afd5edb5d5525cfe2d278dc03c71c8ec7e2c90084b0","index":0,"count":1,"encoding":"utf-8","payloadBytes":7520}
+@@PORTABLE {"path":"frontend/src/installationPresentation.ts","mode":420,"size":7940,"sha256":"78ae55e5999f4c706ab663fc4d31a27213f417afb16d2e44611b96fb253cfd01","index":0,"count":1,"encoding":"utf-8","payloadBytes":7940}
 import type {
   InstallationEventView,
   InstallationPlanView,
@@ -106887,6 +106891,7 @@ export type RunProgress = {
   runId: string;
   // Highest sequence observed, which can advance ahead of delivery order.
   lastSequence: number;
+  lastActionSequence: number;
   // Highest sequence for which every preceding event has been observed.
   lastContiguousSequence: number;
   pendingSequences: number[];
@@ -106906,6 +106911,7 @@ export function beginRunProgress(
   return {
     runId,
     lastSequence: 0,
+    lastActionSequence: 0,
     lastContiguousSequence: 0,
     pendingSequences: [],
     complete: true,
@@ -106944,7 +106950,6 @@ export function observeRunEvent(
   if (event.sequence > contiguous) pending.add(event.sequence);
   while (pending.delete(contiguous + 1)) contiguous += 1;
   const complete = pending.size === 0;
-  const isNewest = event.sequence >= current.lastSequence;
   const knownAction =
     !!event.actionId &&
     (current.actionIds.includes(event.actionId) ||
@@ -106960,6 +106965,10 @@ export function observeRunEvent(
       "CANCELLED",
       "INTERRUPTED",
     ].includes(event.status);
+  const isNewestAction =
+    knownAction &&
+    ["ACTION_STARTED", "ACTION_COMPLETED"].includes(event.eventType) &&
+    event.sequence > (current.lastActionSequence || 0);
   const shouldRecordOutcome =
     outcomeRecorded &&
     event.sequence > (current.actionOutcomeSequences[event.actionId!] || 0);
@@ -106975,13 +106984,16 @@ export function observeRunEvent(
   return {
     ...current,
     lastSequence: Math.max(current.lastSequence, event.sequence),
+    lastActionSequence: isNewestAction
+      ? event.sequence
+      : current.lastActionSequence,
     lastContiguousSequence: contiguous,
     pendingSequences: [...pending],
     complete,
     completedActionIds,
     actionOutcomes,
     actionOutcomeSequences,
-    activeActionId: !isNewest
+    activeActionId: !isNewestAction
       ? current.activeActionId
       : knownAction && event.eventType === "ACTION_STARTED"
         ? event.actionId
@@ -107012,10 +107024,15 @@ export function actionResultLabel(
 
 // Keep the executable parent visible; child rows are display-only work units.
 export function installationActionRows(plan?: InstallationPlanView) {
+  let number = 0;
   return (
     plan?.phases.flatMap((phase) =>
       phase.actions.flatMap((action) => [
-        { ...action, parentId: undefined as string | undefined },
+        {
+          ...action,
+          number: action.progressSteps?.length ? undefined : ++number,
+          parentId: undefined as string | undefined,
+        },
         ...(action.progressSteps?.map((step) => ({
           ...action,
           id: step.id,
@@ -107023,6 +107040,7 @@ export function installationActionRows(plan?: InstallationPlanView) {
           type: "APPLICATION_PROGRESS",
           progressSteps: undefined,
           parentId: action.id,
+          number: ++number,
         })) || []),
       ]),
     ) || []
@@ -107131,7 +107149,7 @@ const qaE4 =
 renderApplication(qaE4 ? qaE4Backend : backend);
 
 @@END
-@@PORTABLE {"path":"frontend/src/production-ui.css","mode":420,"size":72141,"sha256":"6ac0b60bd7e2897e6154ddbb0e0cba0399b17444d9bcdb9292c7a4ad6e102693","index":0,"count":2,"encoding":"utf-8","payloadBytes":48107}
+@@PORTABLE {"path":"frontend/src/production-ui.css","mode":420,"size":72334,"sha256":"b1bac562bbc1c275b077c478ab772b20798ce0afc0d6f04bbc056d3a9950f7f7","index":0,"count":2,"encoding":"utf-8","payloadBytes":48107}
 /* Desktop target from UI-DESIGN-01. Work regions, not the window, own overflow. */
 :root {
   --ui-font-page-title: 22px;
@@ -109268,7 +109286,7 @@ button:disabled {
 .services-detail-empty {
   display: flex;
 @@END
-@@PORTABLE {"path":"frontend/src/production-ui.css","mode":420,"size":72141,"sha256":"6ac0b60bd7e2897e6154ddbb0e0cba0399b17444d9bcdb9292c7a4ad6e102693","index":1,"count":2,"encoding":"utf-8","payloadBytes":24034}
+@@PORTABLE {"path":"frontend/src/production-ui.css","mode":420,"size":72334,"sha256":"b1bac562bbc1c275b077c478ab772b20798ce0afc0d6f04bbc056d3a9950f7f7","index":1,"count":2,"encoding":"utf-8","payloadBytes":24227}
 
   flex-direction: column;
   justify-content: center;
@@ -110366,6 +110384,15 @@ button:disabled {
 
 .execution-plan-action.is-progress-step {
   margin-left: 18px;
+}
+
+.execution-plan-action.is-progress-group {
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  background: #f5f8fc;
+}
+
+.execution-plan-action.is-progress-group strong {
+  font-weight: 600;
 }
 
 .plan-progress-steps {
