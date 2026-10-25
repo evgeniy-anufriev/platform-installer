@@ -14,6 +14,7 @@ import type {
 import {
   actionResultLabel,
   installationDisplay,
+  installationActionRows,
   type RunProgress,
 } from "./installationPresentation";
 import { executionNodeStatusLabel } from "./executionNodeLabels";
@@ -1315,6 +1316,13 @@ function PlanStage({
                       <span className="plan-action-number">{index + 1}</span>
                       <span className="plan-action-description">
                         <b>{planActionLabel(action)}</b>
+                        {!!action.progressSteps?.length && (
+                          <ul className="plan-progress-steps">
+                            {action.progressSteps.map((step) => (
+                              <li key={step.id}>{step.summary}</li>
+                            ))}
+                          </ul>
+                        )}
                         {action.serviceDeployment && (
                           <small>
                             Развёртывание: {action.serviceDeployment}
@@ -1527,9 +1535,11 @@ function ExecutionStage({
       </article>
     );
   const display = installationDisplay(undefined, run, progress);
-  const currentAction = plan?.phases
-    .flatMap((phase) => phase.actions)
-    .find((action) => action.id === progress?.activeActionId);
+  const currentAction = installationActionRows(plan).find(
+    (action) =>
+      action.id === progress?.activeActionId &&
+      ["STARTING", "RUNNING", "CANCELLING"].includes(run.run!.state),
+  );
   const lastTask = [...events]
     .reverse()
     .find((event) => event.eventType === "TASK_COMPLETED" && event.task?.name);
@@ -1679,105 +1689,96 @@ function ExecutionStage({
               <p>Действия плана для этого запуска недоступны.</p>
             ) : (
               <ol className="execution-plan-actions">
-                {plan.phases
-                  .flatMap((phase) => phase.actions)
-                  .map((action, index) => {
-                    const outcome = progress?.actionOutcomes[action.id];
-                    const completion = events.find(
-                      (event) =>
-                        event.runId === run.run!.runId &&
-                        event.actionId === action.id &&
-                        event.eventType === "ACTION_COMPLETED" &&
-                        event.sequence ===
-                          progress?.actionOutcomeSequences[action.id],
+                {installationActionRows(plan).map((action, index) => {
+                  const outcome = progress?.actionOutcomes[action.id];
+                  const completion = events.find(
+                    (event) =>
+                      event.runId === run.run!.runId &&
+                      event.actionId === action.id &&
+                      event.eventType === "ACTION_COMPLETED" &&
+                      event.sequence ===
+                        progress?.actionOutcomeSequences[action.id],
+                  );
+                  const completedDate = new Date(completion?.timestamp || "");
+                  const completedTime = Number.isFinite(completedDate.getTime())
+                    ? new Intl.DateTimeFormat("ru-RU", {
+                        timeZone: "Europe/Moscow",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        second: "2-digit",
+                      }).format(completedDate)
+                    : "Время неизвестно";
+                  const active =
+                    progress?.activeActionId === action.id &&
+                    ["STARTING", "RUNNING", "CANCELLING"].includes(
+                      run.run!.state,
                     );
-                    const completedDate = new Date(completion?.timestamp || "");
-                    const completedTime = Number.isFinite(
-                      completedDate.getTime(),
-                    )
-                      ? new Intl.DateTimeFormat("ru-RU", {
-                          timeZone: "Europe/Moscow",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                          second: "2-digit",
-                        }).format(completedDate)
-                      : "Время неизвестно";
-                    const active =
-                      progress?.activeActionId === action.id &&
-                      ["STARTING", "RUNNING", "CANCELLING"].includes(
-                        run.run!.state,
-                      );
-                    const waiting =
-                      !outcome &&
-                      !active &&
-                      progress?.complete &&
-                      ["STARTING", "RUNNING", "CANCELLING"].includes(
-                        run.run!.state,
-                      );
-                    const label = active
-                      ? "Выполняется"
-                      : waiting
-                        ? "Ожидает"
-                        : actionResultLabel(
-                            action.id,
-                            run.run!.state,
-                            progress,
-                          );
-                    const tone = active
-                      ? "running"
-                      : ["SUCCESS", "CHANGED"].includes(outcome || "")
-                        ? "success"
-                        : outcome === "FAILED"
-                          ? "error"
-                          : "neutral";
-                    const symbol = active
-                      ? "◌"
-                      : tone === "success"
-                        ? "✓"
-                        : tone === "error"
-                          ? "!"
-                          : outcome === "SKIPPED"
-                            ? "↷"
-                            : "◷";
-                    return (
-                      <li
-                        key={action.id}
-                        className={`execution-plan-action is-${tone}`}
-                        aria-current={active ? "step" : undefined}
+                  const waiting =
+                    !outcome &&
+                    !active &&
+                    progress?.complete &&
+                    ["STARTING", "RUNNING", "CANCELLING"].includes(
+                      run.run!.state,
+                    );
+                  const label = active
+                    ? "Выполняется"
+                    : waiting
+                      ? "Ожидает"
+                      : actionResultLabel(action.id, run.run!.state, progress);
+                  const tone = active
+                    ? "running"
+                    : ["SUCCESS", "CHANGED"].includes(outcome || "")
+                      ? "success"
+                      : outcome === "FAILED"
+                        ? "error"
+                        : "neutral";
+                  const symbol = active
+                    ? "◌"
+                    : tone === "success"
+                      ? "✓"
+                      : tone === "error"
+                        ? "!"
+                        : outcome === "SKIPPED"
+                          ? "↷"
+                          : "◷";
+                  return (
+                    <li
+                      key={action.id}
+                      className={`execution-plan-action is-${tone}${action.parentId ? " is-progress-step" : ""}`}
+                      aria-current={active ? "step" : undefined}
+                    >
+                      <span
+                        className="execution-plan-number"
+                        aria-hidden="true"
                       >
-                        <span
-                          className="execution-plan-number"
-                          aria-hidden="true"
-                        >
-                          {index + 1}
-                        </span>
-                        <span
-                          className="execution-plan-symbol"
-                          aria-hidden="true"
-                        >
-                          {symbol}
-                        </span>
-                        <div className="execution-plan-description">
-                          <strong>{planActionLabel(action)}</strong>
-                          <small>
-                            {action.targets.join(", ") ||
-                              "Без целевых серверов"}
-                            {action.serviceDeployment
-                              ? ` · ${action.serviceDeployment}`
-                              : ""}
-                          </small>
-                        </div>
-                        <span
-                          className="execution-plan-status"
-                          title={
-                            tone === "success" ? `${label} · МСК` : undefined
-                          }
-                        >
-                          {tone === "success" ? completedTime : label}
-                        </span>
-                      </li>
-                    );
-                  })}
+                        {index + 1}
+                      </span>
+                      <span
+                        className="execution-plan-symbol"
+                        aria-hidden="true"
+                      >
+                        {symbol}
+                      </span>
+                      <div className="execution-plan-description">
+                        <strong>{planActionLabel(action)}</strong>
+                        <small>
+                          {action.targets.join(", ") || "Без целевых серверов"}
+                          {action.serviceDeployment
+                            ? ` · ${action.serviceDeployment}`
+                            : ""}
+                        </small>
+                      </div>
+                      <span
+                        className="execution-plan-status"
+                        title={
+                          tone === "success" ? `${label} · МСК` : undefined
+                        }
+                      >
+                        {tone === "success" ? completedTime : label}
+                      </span>
+                    </li>
+                  );
+                })}
               </ol>
             )}
           </div>
@@ -1815,7 +1816,7 @@ function ResultStage({
     events.some(
       (event) => executionDiagnosticCode(event.safeMessage) === "OUTPUT_BUSY",
     );
-  const actions = plan?.phases.flatMap((phase) => phase.actions) || [];
+  const actions = installationActionRows(plan);
   return (
     <section className="installation-stage-content">
       <article className="card">

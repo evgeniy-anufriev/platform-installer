@@ -113,6 +113,12 @@ type DeploymentPlanAction struct {
 	Mutating          bool
 	Reboot            string
 	Summary           string
+	ProgressSteps     []DeploymentProgressStep
+}
+
+type DeploymentProgressStep struct {
+	ID      string `json:"id"`
+	Summary string `json:"summary"`
 }
 
 // TargetHostKeyApproval is runtime-only operator approval for one exact
@@ -929,6 +935,7 @@ func clonePlanPhases(phases []DeploymentPlanPhase) []DeploymentPlanPhase {
 			result[index].Actions[actionIndex] = action
 			result[index].Actions[actionIndex].Targets = append([]string(nil), action.Targets...)
 			result[index].Actions[actionIndex].DependsOn = append([]string(nil), action.DependsOn...)
+			result[index].Actions[actionIndex].ProgressSteps = append([]DeploymentProgressStep(nil), action.ProgressSteps...)
 		}
 	}
 	return result

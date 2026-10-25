@@ -6,6 +6,8 @@ import {
   deploymentOrderFromPriorities,
 } from "./InstallationPage";
 import { desktop } from "../wailsjs/go/models";
+import { beginRunProgress, observeRunEvent } from "./installationPresentation";
+import type { InstallationPlanView } from "./backend";
 
 const state = {
   apiVersion: "platform.installer/installation-state/v1alpha1" as const,
@@ -46,6 +48,114 @@ const currentPlanState = (
 });
 
 describe("InstallationPage", () => {
+  it("renders library child rows and retains their confirmed percentage on failure", () => {
+    const plan = {
+      id: "plan-progress",
+      status: "EXECUTABLE",
+      projectRevision: "revision",
+      planFingerprint: "sha256:plan",
+      executionNodeId: "node1",
+      runtime: {
+        bundleDigest: "sha256:bundle",
+        coreVersion: "core",
+        catalogDigest: "sha256:catalog",
+        protocol: "protocol",
+      },
+      expiresAt: "2026-10-25T23:59:59Z",
+      acknowledgements: [],
+      approved: true,
+      phases: [
+        {
+          id: "applications",
+          order: 0,
+          actions: [
+            {
+              id: "applications:apply",
+              type: "APPLICATION_LIBRARIES_APPLY",
+              summary: "Установка библиотек",
+              targets: ["node1", "node2"],
+              dependsOn: [],
+              mutating: true,
+              reboot: "NONE",
+              progressSteps: [
+                { id: "applications:prepare", summary: "Подготовка ресурсов" },
+                { id: "applications:library:sdku", summary: "Библиотека СДКУ" },
+              ],
+            },
+          ],
+        },
+      ],
+    } as InstallationPlanView;
+    const events = [
+      new desktop.InstallationEventView({
+        runId: "run-progress",
+        sequence: 1,
+        safeMessage: "Application progress step completed",
+        timestamp: "2026-10-25T12:00:00Z",
+        eventType: "ACTION_COMPLETED",
+        actionId: "applications:prepare",
+        status: "SUCCESS",
+      }),
+      new desktop.InstallationEventView({
+        runId: "run-progress",
+        sequence: 2,
+        safeMessage: "Application progress step started",
+        timestamp: "2026-10-25T12:00:01Z",
+        eventType: "ACTION_STARTED",
+        actionId: "applications:library:sdku",
+        status: "RUNNING",
+      }),
+    ];
+    const progress = events.reduce(
+      observeRunEvent,
+      beginRunProgress("run-progress", plan),
+    );
+    const props = {
+      state: currentPlanState("plan-progress", "revision", true),
+      runPlan: plan,
+      tab: "execution" as const,
+      onTabChange: vi.fn(),
+      onOpenServers: vi.fn(),
+      onCreatePlan: vi.fn(),
+      onApprovePlan: vi.fn(),
+      busy: false,
+      runProgress: progress,
+      events,
+    };
+    const view = render(
+      <InstallationPage
+        {...props}
+        run={
+          new desktop.InstallationRunOperation({
+            run: { runId: "run-progress", state: "RUNNING" },
+          })
+        }
+      />,
+    );
+    expect(screen.getByRole("progressbar").getAttribute("value")).toBe("50");
+    expect(
+      document.querySelectorAll(".execution-plan-action.is-progress-step"),
+    ).toHaveLength(2);
+    expect(screen.getByText(/Текущее действие/).textContent).toContain(
+      "Библиотека СДКУ",
+    );
+    view.rerender(
+      <InstallationPage
+        {...props}
+        run={
+          new desktop.InstallationRunOperation({
+            run: { runId: "run-progress", state: "FAILED" },
+          })
+        }
+      />,
+    );
+    expect(screen.getByRole("progressbar").getAttribute("value")).toBe("50");
+    expect(screen.getByText("Не завершено")).toBeTruthy();
+    expect(
+      document.querySelector(".execution-plan-action.is-running"),
+    ).toBeNull();
+  });
+
   it("requires explicit risky Infra Verify skip and sends it only in a fresh library plan", async () => {
     const user = userEvent.setup();
     const create = vi.fn();
@@ -494,6 +604,7 @@ describe("InstallationPage", () => {
           pendingSequences: [],
           complete: true,
           actionIds: ["a", "b"],
+          stepParents: {},
           completedActionIds: ["a"],
           actionOutcomes: { a: "SUCCESS" },
           actionOutcomeSequences: { a: 2 },

@@ -54,6 +54,10 @@ class ActionModule(ActionBase):
             from ansible_collections.platform.core.plugins.module_utils.application_selection import execution_scope
             result = promote(result, execution_scope(snapshot, self._task.args.get('application_library_order'), self._task.args.get('skip_application_libraries')),
                              self._task.args.get('skip_infrastructure_verify', False))
+            from ansible_collections.platform.core.plugins.module_utils.application_progress import describe_progress
+            if self._task.args.get('application_image_metadata') or self._task.args.get('skip_application_libraries') is not None:
+                result = describe_progress(result, execution_scope(snapshot, self._task.args.get('application_library_order'), self._task.args.get('skip_application_libraries')),
+                                           self._task.args.get('skip_infrastructure_verify', False))
             result['executionManifestDigest'] = canonical_digest(result['executionManifest']) if result.get('executionManifest') else None
             destination = os.environ.get("PLATFORM_EXECUTION_MANIFEST_OUTPUT")
             manifest = result["executionManifest"]

@@ -122,7 +122,9 @@ class ApplicationImageProtocolTests(unittest.TestCase):
                                 applicationLibraryOrder=sorted(variables['platform_desired_state']['applicationLibraryDeployments']),
                                 applicationVaultSources={}, applicationImagePreparation=prepared['preparationDigest']))
             plan = planned['deploymentPlan']
-            self.assertEqual(plan['apiVersion'], 'platform.installer/plan/v1alpha7')
+            self.assertEqual(plan['apiVersion'], 'platform.installer/plan/v1alpha10')
+            validator = SchemaValidator(str(ROOT / 'contracts'))
+            self.assertEqual([], validator.validate(plan, ROOT / 'contracts/plan/v1alpha10/schema.json'))
             self.assertEqual(plan['status'], 'EXECUTABLE', str(plan.get('findings')))
             requirements = [item for item in plan['artifactRequirements'] if item.get('artifactType') == 'container-image']
             self.assertEqual(len(requirements), 3)
@@ -131,7 +133,8 @@ class ApplicationImageProtocolTests(unittest.TestCase):
             libraries = sorted(variables['platform_desired_state']['applicationLibraryDeployments'])
             base['apiVersion'] = 'platform.installer/execution-runtime/v1alpha7'
             capability = call(dict(operation='GetCapabilities'))
-            self.assertEqual('platform.installer/execution-capabilities/v1alpha12', capability['apiVersion'])
+            self.assertEqual('platform.installer/execution-capabilities/v1alpha13', capability['apiVersion'])
+            self.assertEqual([], validator.validate(capability, ROOT / 'contracts/execution-capabilities/v1alpha13/schema.json'))
             self.assertEqual('ApplicationPostInstall/v1alpha1', capability['applicationPostInstall']['protocol'])
             # Real resolver -> planner -> manifest admission with a skipped provider.
             # Provider package has its own connection callback and integration hook.
@@ -189,7 +192,11 @@ class ApplicationImageProtocolTests(unittest.TestCase):
             prepared = call(dict(operation='PrepareApplicationImages', phase='PREPARE', inputsDigest=description['inputsDigest']))
             selected = call(dict(selection, operation='BuildDeploymentPlan', project=str(project),
                                  applicationVaultSources={}, applicationImagePreparation=prepared['preparationDigest']))
-            self.assertEqual('platform.installer/plan/v1alpha8', selected['deploymentPlan']['apiVersion'])
+            self.assertEqual('platform.installer/plan/v1alpha10', selected['deploymentPlan']['apiVersion'])
+            self.assertEqual([], validator.validate(selected['deploymentPlan'], ROOT / 'contracts/plan/v1alpha10/schema.json'))
+            progress = next(a['progressSteps'] for p in selected['deploymentPlan']['phases'] for a in p['actions']
+                            if a['id'] == 'applications:apply')
+            self.assertEqual(['applications:prepare', 'applications:library:' + libraries[1]], [step['id'] for step in progress])
             self.assertEqual(libraries[:1], selected['deploymentPlan']['skipApplicationLibraries'])
             self.assertEqual(libraries[1:], selected['deploymentPlan']['applicationExecutionScope']['installLibraries'])
             manifest_path = Path(journal.directory) / 'manifest.json'

@@ -1,5 +1,29 @@
 # Execution planning, protocol and events
 
+## Application library progress
+
+`plan/v1alpha10` adds optional `progressSteps: [{id, summary}]` to
+`applications:apply`. `execution-capabilities/v1alpha13` advertises
+`applicationProgress` (`ApplicationProgress/v1alpha1`, planContract v1alpha10).
+The existing Build request and execution manifest versions are unchanged.
+Older plan versions remain readable. Steps are immutable display metadata bound
+to the plan fingerprint, not additional executable operations or dependencies.
+
+Steps are shared preparation (`applications:prepare`) followed by installed
+libraries in Core order (`applications:library:<libraryId>`). Referenced skipped
+providers retain their callbacks, without an installation progress step. Verify
+and post_install stay ordinary actions. Existing ACTION_STARTED/ACTION_COMPLETED
+events carry the step ID; ordinary TASK events retain the parent action ID.
+Core's callback accepts only tagged built-in markers with a closed nonsecret
+payload. Linear multi-host execution emits completion once after successful work
+on all hosts. A failed or skipped marker never confirms a successful step.
+
+UI counts leaf work units, never both parent and children. Parent operation
+outcomes remain visible, but cannot infer missing child completion. Failure may
+arrive as TASK failure, diagnostic and terminal run state without a failed parent
+ACTION_COMPLETED event. No new execution, retry, cancellation or persistence
+mechanism is introduced. See the [implementation plan](../work/application-libraries/library-progress-plan.md).
+
 Contract sections extracted verbatim from [UI-BE-04](../work/ui-backend/ui-be-04.md).
 
 ## A8 mixed Core execution extension

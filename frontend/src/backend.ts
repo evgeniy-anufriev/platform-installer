@@ -305,6 +305,7 @@ export type InstallationPlanView = {
       mutating: boolean;
       reboot: string;
       summary: string;
+      progressSteps?: Array<{ id: string; summary: string }>;
     }>;
   }>;
   findings?: Array<{ code: string; safeMessage: string }>;

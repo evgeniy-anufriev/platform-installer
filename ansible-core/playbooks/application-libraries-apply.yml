@@ -1,4 +1,13 @@
 ---
+- name: Начать подготовку библиотек
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Отметить начало подготовки
+      ansible.builtin.debug:
+        msg: {id: 'applications:prepare', state: started}
+      tags: [platform_application_progress]
+
 - import_playbook: application-libraries-preflight.yml
 - import_playbook: application-libraries-vault-preflight.yml
 - import_playbook: application-libraries-provider-stage.yml
@@ -10,6 +19,12 @@
   become: true
   any_errors_fatal: true
   tasks:
+    - name: Отметить завершение подготовки
+      ansible.builtin.debug:
+        msg: {id: 'applications:prepare', state: completed}
+      tags: [platform_application_progress]
+      run_once: true
+
     - name: Применение упорядоченных библиотек с ограниченным хранением частных источников
       block:
         - name: Привязать упорядоченные идентификаторы библиотек из неизменяемого плана или ввода вручную

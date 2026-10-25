@@ -1,5 +1,10 @@
 # V2 roadmap and milestone gates
 
+Owner-authorized per-library progress uses Core display steps inside the existing
+application Apply operation, existing ACTION events and leaf counting in UI.
+See the [plan](work/application-libraries/library-progress-plan.md) and ADR-048.
+Current validation and acceptance status belongs only to CURRENT_STATE.md.
+
 The owner-approved [generated application passwords](work/application-libraries/generated-password-plan.md)
 extension adds Core generation and managed application-password reconciliation
 through existing Ansible provider hooks and the existing source editor. Managed

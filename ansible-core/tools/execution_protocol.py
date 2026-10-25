@@ -259,6 +259,9 @@ def _image_capabilities(args, selection=False):
         result['applicationPostInstall'] = dict(protocol='ApplicationPostInstall/v1alpha1',
             packageManifestVersion='platform.installer/application-package/v1alpha3',
             planContract='platform.installer/plan/v1alpha9', manifestContract='platform.installer/execution-manifest/v1alpha7')
+        result['apiVersion'] = 'platform.installer/execution-capabilities/v1alpha13'
+        result['applicationProgress'] = dict(protocol='ApplicationProgress/v1alpha1',
+            planContract='platform.installer/plan/v1alpha10')
     result['runtimeSecretDescriptors']['protocol'] = 'BuildRuntimeSecretDescriptors/v1alpha4'
     return result
 

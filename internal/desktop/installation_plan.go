@@ -72,14 +72,15 @@ type InstallationPlanPhase struct {
 }
 
 type InstallationPlanAction struct {
-	ID                string   `json:"id"`
-	Type              string   `json:"type"`
-	ServiceDeployment string   `json:"serviceDeployment,omitempty"`
-	Targets           []string `json:"targets"`
-	DependsOn         []string `json:"dependsOn"`
-	Mutating          bool     `json:"mutating"`
-	Reboot            string   `json:"reboot"`
-	Summary           string   `json:"summary"`
+	ID                string                                 `json:"id"`
+	Type              string                                 `json:"type"`
+	ServiceDeployment string                                 `json:"serviceDeployment,omitempty"`
+	Targets           []string                               `json:"targets"`
+	DependsOn         []string                               `json:"dependsOn"`
+	Mutating          bool                                   `json:"mutating"`
+	Reboot            string                                 `json:"reboot"`
+	Summary           string                                 `json:"summary"`
+	ProgressSteps     []executionnode.DeploymentProgressStep `json:"progressSteps,omitempty"`
 }
 
 type InstallationPlanFinding struct {
@@ -378,7 +379,8 @@ func installationPlanView(record executionnode.PlanRecord, binding *executionNod
 		projected := InstallationPlanPhase{ID: phase.ID, Order: phase.Order, Actions: make([]InstallationPlanAction, 0, len(phase.Actions))}
 		for _, action := range phase.Actions {
 			projected.Actions = append(projected.Actions, InstallationPlanAction{ID: action.ID, Type: action.Type, ServiceDeployment: action.ServiceDeployment,
-				Targets: append([]string{}, action.Targets...), DependsOn: append([]string{}, action.DependsOn...), Mutating: action.Mutating, Reboot: action.Reboot, Summary: action.Summary})
+				Targets: append([]string{}, action.Targets...), DependsOn: append([]string{}, action.DependsOn...), Mutating: action.Mutating, Reboot: action.Reboot, Summary: action.Summary,
+				ProgressSteps: append([]executionnode.DeploymentProgressStep(nil), action.ProgressSteps...)})
 		}
 		view.Phases = append(view.Phases, projected)
 	}

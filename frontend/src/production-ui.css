@@ -3226,6 +3226,17 @@ button:disabled {
 .execution-plan-action.is-running {
   border-left: 3px solid #1672f3;
 }
+
+.execution-plan-action.is-progress-step {
+  margin-left: 18px;
+}
+
+.plan-progress-steps {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: 11px;
+  font-weight: normal;
+}
 .execution-plan-action.is-running .execution-plan-number {
   background: #1672f3;
   color: white;

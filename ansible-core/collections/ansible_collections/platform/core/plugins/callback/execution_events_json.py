@@ -148,6 +148,7 @@ class CallbackModule(CallbackBase):
     def v2_runner_on_ok(self, result):
         payload = result._result if isinstance(result._result, dict) else {}
         self._emit("TASK_COMPLETED", "CHANGED" if payload.get("changed") else "SUCCESS", result._task, result)
+        self._application_progress(result, payload)
         # Only this Core module's bounded projection can report a nonfatal
         # integration error. Never journal arbitrary task payload/message text.
         if (self._no_log(result._task, result) or not self._run_id() or
@@ -174,6 +175,29 @@ class CallbackModule(CallbackBase):
 
     def v2_runner_on_skipped(self, result):
         self._emit("TASK_COMPLETED", "SKIPPED", result._task, result)
+
+    def _application_progress(self, result, payload):
+        task = result._task
+        if (not self._run_id() or self._no_log(task, result) or
+                self._context()['actionId'] != 'applications:apply' or
+                getattr(task, 'action', '') != 'ansible.builtin.debug' or
+                'platform_application_progress' not in getattr(task, 'tags', [])):
+            return
+        marker = payload.get('msg')
+        if not isinstance(marker, dict) or set(marker) != {'id', 'state'}:
+            return
+        identity, state = marker['id'], marker['state']
+        if (not isinstance(identity, str) or not re.fullmatch(
+                r'applications:(?:prepare|library:[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*)', identity) or len(identity) > 512 or
+                state not in ('started', 'completed')):
+            return
+        try:
+            self._journal().event('ACTION_STARTED' if state == 'started' else 'ACTION_COMPLETED',
+                                  'RUNNING' if state == 'started' else 'SUCCESS',
+                                  'Application progress step ' + state,
+                                  **dict(self._context(), actionId=identity))
+        except Exception:
+            self._journal().mark_task_observability_degraded('TASK_EVENT_WRITE_FAILED')
 
     def v2_runner_on_failed(self, result, ignore_errors=False):
         del ignore_errors

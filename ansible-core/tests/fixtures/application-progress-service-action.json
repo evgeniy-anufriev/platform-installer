@@ -1,0 +1,10 @@
+{
+  "id": "applications:apply",
+  "type": "SERVICE_APPLY",
+  "summary": "Invalid service action with application progress",
+  "targets": ["node1"],
+  "dependsOn": [],
+  "mutating": true,
+  "reboot": "NONE",
+  "progressSteps": [{"id": "applications:prepare", "summary": "Prepare"}]
+}

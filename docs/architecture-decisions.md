@@ -1,5 +1,18 @@
 # Architecture decisions
 
+## ADR-048: Library progress reuses the application execution lifecycle
+
+Status: Owner authorized implementation, 2026-10-25.
+
+Core describes display-only library progress inside its existing application
+Apply action. The ordered Ansible loop, callback, journal and ACTION events
+confirm boundaries. Go transports this projection; UI counts its leaves and
+retains the executable parent outcome. No separate library controller operation,
+process, scheduler or progress store is introduced. New plan/v1alpha10 and
+capabilities/v1alpha13 declare the additive display contract; existing execution
+manifest/request contracts remain unchanged. See the
+[plan](work/application-libraries/library-progress-plan.md).
+
 ## ADR-047: Core reconciles application passwords through existing provider hooks
 
 Status: Accepted by owner, 2026-10-21.

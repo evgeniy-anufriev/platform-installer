@@ -1,4 +1,13 @@
 ---
+- name: Отметить начало установки библиотеки
+  ansible.builtin.debug:
+    msg:
+      id: "applications:library:{{ application_library_id }}"
+      state: started
+  tags: [platform_application_progress]
+  run_once: true
+  when: application_library_id in hostvars['localhost'].application_selection.scope.installLibraries
+
 - name: Привязать все логические экземпляры, выбранные для этой библиотеки
   ansible.builtin.set_fact:
     application_library_instance_ids: >-
@@ -96,3 +105,12 @@
   loop_control:
     loop_var: application_integration_script
   run_once: true
+
+- name: Отметить завершение установки и проверки библиотеки
+  ansible.builtin.debug:
+    msg:
+      id: "applications:library:{{ application_library_id }}"
+      state: completed
+  tags: [platform_application_progress]
+  run_once: true
+  when: application_library_id in hostvars['localhost'].application_selection.scope.installLibraries

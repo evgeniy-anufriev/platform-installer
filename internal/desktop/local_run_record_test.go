@@ -3,6 +3,7 @@ package desktop
 import (
 	"os"
 	"path/filepath"
+	"platform-installer/internal/executionnode"
 	"reflect"
 	"strings"
 	"testing"
@@ -44,7 +45,8 @@ func TestLocalRunRecordSurvivesReopenAndTransitions(t *testing.T) {
 func TestLocalRunRecordRetainsDisplayPlanAcrossReopenAndUnsentStart(t *testing.T) {
 	root, record := testLocalRunRecord(t)
 	record.Plan = &InstallationPlanView{ID: record.PlanID, ProjectRevision: record.ProjectRevision, ExecutionNodeID: record.NodeID,
-		Phases: []InstallationPlanPhase{{ID: "applications", Actions: []InstallationPlanAction{{ID: "apply", Summary: strings.Repeat("safe display text", 600)}}}}}
+		Phases: []InstallationPlanPhase{{ID: "applications", Actions: []InstallationPlanAction{{ID: "apply", Summary: strings.Repeat("safe display text", 600),
+			ProgressSteps: []executionnode.DeploymentProgressStep{{ID: "applications:library:sdku", Summary: "SDKU"}}}}}}}
 	if err := writeLocalRunRecord(root, record); err != nil {
 		t.Fatal(err)
 	}

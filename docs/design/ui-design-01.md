@@ -431,6 +431,15 @@ successful run reaches 100%. An observer disconnect is shown separately from
 execution failure. If the backend cannot provide a trustworthy action count,
 show the stage and current task without inventing a percentage. The mockup's
 state selector changes demonstration data only and never starts execution.
+Owner amendment 2026-10-25: Core may provide display-only `progressSteps` inside
+the application Apply action. Show shared preparation and each installed library
+as child rows. Count these leaves instead of the parent; ordinary infrastructure,
+Verify and post_install actions retain one unit each. Skipped library installations
+have no work unit. The percentage measures confirmed work units, not duration.
+Only explicit Core ACTION events confirm child completion. Terminal failure or
+cancel leaves an active child unfinished, without adding progress. The parent
+action and its failure remain visible. Original plan snapshots retain the child
+descriptions for reconnect; older plans remain supported without children.
 Protected service outputs have a separate delivery status. After a run ends,
 Installer attempts delivery only for packages produced by that run; a failed
 delivery does not change the run result or block another Start. Pending packages

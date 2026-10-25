@@ -14,6 +14,7 @@ export type RunProgress = {
   pendingSequences: number[];
   complete: boolean;
   actionIds: string[];
+  stepParents: Record<string, string>;
   completedActionIds: string[];
   actionOutcomes: Record<string, string>;
   actionOutcomeSequences: Record<string, number>;
@@ -33,10 +34,22 @@ export function beginRunProgress(
     actionIds: [
       ...new Set(
         plan?.phases.flatMap((phase) =>
-          phase.actions.map((action) => action.id),
+          phase.actions.flatMap((action) =>
+            action.progressSteps?.length
+              ? action.progressSteps.map((step) => step.id)
+              : [action.id],
+          ),
         ) || [],
       ),
     ],
+    stepParents: Object.fromEntries(
+      plan?.phases.flatMap((phase) =>
+        phase.actions.flatMap(
+          (action) =>
+            action.progressSteps?.map((step) => [step.id, action.id]) || [],
+        ),
+      ) || [],
+    ),
     completedActionIds: [],
     actionOutcomes: {},
     actionOutcomeSequences: {},
@@ -55,7 +68,9 @@ export function observeRunEvent(
   const complete = pending.size === 0;
   const isNewest = event.sequence >= current.lastSequence;
   const knownAction =
-    !!event.actionId && current.actionIds.includes(event.actionId);
+    !!event.actionId &&
+    (current.actionIds.includes(event.actionId) ||
+      Object.values(current.stepParents).includes(event.actionId));
   const outcomeRecorded =
     knownAction &&
     event.eventType === "ACTION_COMPLETED" &&
@@ -93,7 +108,9 @@ export function observeRunEvent(
       : knownAction && event.eventType === "ACTION_STARTED"
         ? event.actionId
         : event.eventType === "ACTION_COMPLETED" &&
-            event.actionId === current.activeActionId
+            (event.actionId === current.activeActionId ||
+              event.actionId ===
+                current.stepParents[current.activeActionId || ""])
           ? undefined
           : current.activeActionId,
   };
@@ -109,8 +126,29 @@ export function actionResultLabel(
   if (outcome === "SKIPPED") return "Пропущено";
   if (outcome === "FAILED") return "Ошибка";
   if (outcome === "CANCELLED" || outcome === "INTERRUPTED") return "Прервано";
+  if (terminalStates.has(runState) && progress?.activeActionId === actionId)
+    return "Не завершено";
   if (!progress?.complete) return "Сведения неполные";
   return runState === "SUCCEEDED" ? "Событие не получено" : "Не подтверждено";
+}
+
+// Keep the executable parent visible; child rows are display-only work units.
+export function installationActionRows(plan?: InstallationPlanView) {
+  return (
+    plan?.phases.flatMap((phase) =>
+      phase.actions.flatMap((action) => [
+        { ...action, parentId: undefined as string | undefined },
+        ...(action.progressSteps?.map((step) => ({
+          ...action,
+          id: step.id,
+          summary: step.summary,
+          type: "APPLICATION_PROGRESS",
+          progressSteps: undefined,
+          parentId: action.id,
+        })) || []),
+      ]),
+    ) || []
+  );
 }
 
 const terminalStates = new Set([
