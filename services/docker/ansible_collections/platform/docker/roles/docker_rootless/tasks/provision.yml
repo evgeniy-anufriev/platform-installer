@@ -1,4 +1,7 @@
 ---
+- name: Подготовка выбранной учётной записи Docker и проверка пароля
+  ansible.builtin.include_tasks: account.yml
+
 - name: Установка настроенных пакетов Docker без прав root для RED OS
   ansible.builtin.dnf:
     name: "{{ platform_docker_packages }}"
@@ -49,97 +52,6 @@
   ansible.builtin.assert:
     that: _platform_docker_binaries.results | rejectattr('stat.isreg', 'equalto', true) | list | length == 0
     fail_msg: DOCKER_RUNTIME_PACKAGE_INCOMPLETE
-
-- name: Проверить, существует ли уже выделенная учетная запись Docker
-  ansible.builtin.command:
-    argv: [getent, passwd, "{{ platform_docker_account_name }}"]
-  register: _platform_docker_existing_account
-  changed_when: false
-  failed_when: _platform_docker_existing_account.rc not in [0, 2]
-  when: platform_docker_mode == 'create-user'
-
-- name: Создать выделенную учетную запись Docker в заблокированном состоянии, только если она отсутствует
-  ansible.builtin.user:
-    name: "{{ platform_docker_account_name }}"
-    create_home: true
-    system: false
-    shell: /bin/bash
-    state: present
-  when:
-    - platform_docker_mode == 'create-user'
-    - _platform_docker_existing_account.rc == 2
-
-- name: Проверка состояния пароля при создании пользователя без чтения сохраненного хеша
-  ansible.builtin.command:
-    argv: [passwd, -S, "{{ platform_docker_account_name }}"]
-  register: _platform_docker_password_state
-  changed_when: false
-  when: platform_docker_mode == 'create-user'
-  no_log: true
-
-- name: Требовать состояние пароля поддерживаемой учетной записи
-  ansible.builtin.assert:
-    that: _platform_docker_password_state.stdout.split()[1] in ['LK', 'NP', 'PS']
-    fail_msg: DOCKER_ACCOUNT_PASSWORD_STATE_INVALID
-  when: platform_docker_mode == 'create-user'
-
-- name: Получение хэша пароля учетной записи без зависимости от библиотеки passlib Python
-  ansible.builtin.command:
-    argv: [openssl, passwd, -6, -stdin]
-    stdin: >-
-      {{ lookup('ansible.builtin.file',
-          platform_docker_secret_files[platform_docker_account_credential.passwordSecretRef],
-          lstrip=False, rstrip=False) }}
-    stdin_add_newline: false
-  delegate_to: localhost
-  become: false
-  register: _platform_docker_account_password_hash
-  changed_when: false
-  when:
-    - platform_docker_mode == 'create-user'
-    - _platform_docker_password_state.stdout.split()[1] in ['LK', 'NP']
-  no_log: true
-
-- name: "Проверить полный формат хеша пароля SHA-512 crypt"
-  ansible.builtin.assert:
-    that:
-      - _platform_docker_account_password_hash.stdout.startswith('$6$')
-      - _platform_docker_account_password_hash.stdout.split('$') | map('length') | list == [0, 1, 16, 86]
-      - _platform_docker_account_password_hash.stdout is match('^[./A-Za-z0-9$]+$')
-    fail_msg: DOCKER_ACCOUNT_HASH_INVALID
-  when:
-    - platform_docker_mode == 'create-user'
-    - _platform_docker_password_state.stdout.split()[1] in ['LK', 'NP']
-  no_log: true
-
-- name: Устанавливать пароль для создания пользователя только в том случае, если учетная запись заблокирована или отключена
-  ansible.builtin.command:
-    argv: [chpasswd, -e]
-    stdin: "{{ platform_docker_account_name }}:{{ _platform_docker_account_password_hash.stdout }}"
-  when:
-    - platform_docker_mode == 'create-user'
-    - _platform_docker_password_state.stdout.split()[1] in ['LK', 'NP']
-  no_log: true
-
-- name: Разрешить выбранную учетную запись через NSS
-  ansible.builtin.getent:
-    database: passwd
-    key: "{{ platform_docker_account_name }}"
-    fail_key: true
-
-- name: "Сохранить UID и домашний каталог выбранной учётной записи из NSS"
-  ansible.builtin.set_fact:
-    _platform_docker_uid: "{{ getent_passwd[platform_docker_account_name][1] | int }}"
-    _platform_docker_gid: "{{ getent_passwd[platform_docker_account_name][2] | int }}"
-    _platform_docker_home: "{{ getent_passwd[platform_docker_account_name][4] }}"
-  changed_when: false
-
-- name: "Проверить непривилегированную учётную запись Docker и допустимый домашний каталог"
-  ansible.builtin.assert:
-    that:
-      - _platform_docker_uid | int >= 1000
-      - _platform_docker_home is match('^/home/[a-z_][a-z0-9_-]{0,31}$')
-    fail_msg: DOCKER_ACCOUNT_INELIGIBLE
 
 - name: Чтение выделенных пользователю диапазонов subordinate UID и GID
   ansible.builtin.slurp:

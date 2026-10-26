@@ -1,0 +1,113 @@
+---
+- name: Проверка наличия выбранной учётной записи Docker
+  ansible.builtin.command:
+    argv: [getent, passwd, "{{ platform_docker_account_name }}"]
+  register: _platform_docker_existing_account
+  changed_when: false
+  failed_when: _platform_docker_existing_account.rc not in [0, 2]
+
+- name: Проверка наличия учётной записи в режиме existing-user
+  ansible.builtin.assert:
+    that: platform_docker_mode != 'existing-user' or _platform_docker_existing_account.rc == 0
+    fail_msg: DOCKER_ACCOUNT_REQUIRED
+
+- name: Создание отсутствующей учётной записи Docker
+  ansible.builtin.command:
+    argv: [useradd, --create-home, --user-group, --shell, /bin/bash, "{{ platform_docker_account_name }}"]
+  register: _platform_docker_created_account
+  when: _platform_docker_existing_account.rc == 2
+
+- name: Определение выбранной учётной записи через NSS
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ platform_docker_account_name }}"
+    fail_key: true
+
+- name: Сохранение UID и домашнего каталога выбранной учётной записи из NSS
+  ansible.builtin.set_fact:
+    _platform_docker_uid: "{{ getent_passwd[platform_docker_account_name][1] | int }}"
+    _platform_docker_gid: "{{ getent_passwd[platform_docker_account_name][2] | int }}"
+    _platform_docker_home: "{{ getent_passwd[platform_docker_account_name][4] }}"
+  changed_when: false
+
+- name: Проверка непривилегированной учётной записи Docker и допустимого домашнего каталога
+  ansible.builtin.assert:
+    that:
+      - _platform_docker_uid | int >= 1000
+      - _platform_docker_home is match('^/home/[a-z_][a-z0-9_-]{0,31}$')
+    fail_msg: DOCKER_ACCOUNT_INELIGIBLE
+
+- name: Проверка переданного пароля существующей учётной записи без его изменения
+  ansible.builtin.command:
+    argv:
+      - "{{ ansible_facts.discovered_interpreter_python | default(ansible_python_interpreter | default('/usr/bin/python3')) }}"
+      - -c
+      - |
+        import ctypes, ctypes.util, hmac, json, subprocess, sys
+        try:
+            entry = json.load(sys.stdin)
+            password = entry['password']
+            if not password or '\0' in password:
+                sys.exit(1)
+            record = subprocess.run(['getent', 'shadow', entry['username']], capture_output=True, text=True)
+            if record.returncode != 0:
+                sys.exit(1)
+            stored = record.stdout.split(':')[1]
+            if not stored or stored.startswith(('!', '*')):
+                sys.exit(1)
+            library = ctypes.CDLL(ctypes.util.find_library('crypt') or 'libcrypt.so.1')
+            library.crypt.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
+            library.crypt.restype = ctypes.c_char_p
+            actual = library.crypt(password.encode('utf-8'), stored.encode('ascii'))
+            sys.exit(0 if actual and hmac.compare_digest(actual, stored.encode('ascii')) else 1)
+        except Exception:
+            sys.exit(2)
+    stdin: >-
+      {{ {'username': platform_docker_account_name,
+          'password': lookup('ansible.builtin.file',
+              platform_docker_secret_files[platform_docker_account_credential.passwordSecretRef],
+              lstrip=False, rstrip=False)} | to_json }}
+    stdin_add_newline: false
+  register: _platform_docker_account_password_check
+  changed_when: false
+  failed_when: false
+  when: _platform_docker_existing_account.rc == 0
+  no_log: true
+
+- name: Отклонение несовпадающего пароля существующей учётной записи Docker
+  ansible.builtin.assert:
+    that: _platform_docker_account_password_check.rc == 0
+    fail_msg: DOCKER_ACCOUNT_PASSWORD_MISMATCH
+  when: _platform_docker_existing_account.rc == 0
+
+- name: Получение хеша пароля новой учётной записи без зависимости от passlib
+  ansible.builtin.command:
+    argv: [openssl, passwd, -6, -stdin]
+    stdin: >-
+      {{ lookup('ansible.builtin.file',
+          platform_docker_secret_files[platform_docker_account_credential.passwordSecretRef],
+          lstrip=False, rstrip=False) }}
+    stdin_add_newline: false
+  delegate_to: localhost
+  become: false
+  register: _platform_docker_account_password_hash
+  changed_when: false
+  when: _platform_docker_created_account.rc | default(1) == 0
+  no_log: true
+
+- name: Проверка формата хеша пароля новой учётной записи
+  ansible.builtin.assert:
+    that:
+      - _platform_docker_account_password_hash.stdout.startswith('$6$')
+      - _platform_docker_account_password_hash.stdout.split('$') | map('length') | list == [0, 1, 16, 86]
+      - _platform_docker_account_password_hash.stdout is match('^[./A-Za-z0-9$]+$')
+    fail_msg: DOCKER_ACCOUNT_HASH_INVALID
+  when: _platform_docker_created_account.rc | default(1) == 0
+  no_log: true
+
+- name: Установка пароля только для новой учётной записи Docker
+  ansible.builtin.command:
+    argv: [chpasswd, -e]
+    stdin: "{{ platform_docker_account_name }}:{{ _platform_docker_account_password_hash.stdout }}"
+  when: _platform_docker_created_account.rc | default(1) == 0
+  no_log: true

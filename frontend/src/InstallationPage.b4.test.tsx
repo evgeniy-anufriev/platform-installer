@@ -1,5 +1,5 @@
-import { desktop } from "../wailsjs/go/models";
-import { render, screen } from "@testing-library/react";
+import { desktop, executionnode } from "../wailsjs/go/models";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { it, expect, vi } from "vitest";
 import {
@@ -70,6 +70,113 @@ const fullPlan: InstallationPlanOperation = {
     ],
   },
 };
+
+it("keeps library selection and Vault source in the applications phase", () => {
+  const plan = {
+    ...fullPlan,
+    plan: {
+      ...fullPlan.plan!,
+      phases: [
+        ...fullPlan.plan!.phases,
+        {
+          id: "applications",
+          order: 2,
+          actions: [
+            {
+              id: "applications:apply",
+              type: "APPLICATION_LIBRARIES_APPLY",
+              targets: ["node"],
+              dependsOn: [],
+              mutating: true,
+              reboot: "NONE",
+              summary: "Libraries",
+            },
+          ],
+        },
+      ],
+    },
+  };
+  render(
+    <InstallationPage
+      {...defaults}
+      plan={plan}
+      onCreatePlan={vi.fn()}
+      serviceDeployments={[
+        { deploymentId: "vault-main", serviceType: "vault" },
+      ]}
+      libraryDeployments={[{ deploymentId: "szi", libraryRef: "szi@1.0.0" }]}
+      onApplicationVaultSourcesChange={vi.fn()}
+    />,
+  );
+  const services = screen
+    .getByText("services · Инфраструктура")
+    .closest("details")!;
+  const libraries = screen
+    .getAllByText("Библиотеки")
+    .map((element) => element.closest("details"))
+    .find(Boolean)!;
+  expect(
+    within(services).getByRole("checkbox", {
+      name: "Устанавливать инфраструктуру",
+    }),
+  ).toBeTruthy();
+  expect(
+    within(services).queryByRole("checkbox", {
+      name: "Установить библиотеку szi",
+    }),
+  ).toBeNull();
+  expect(
+    within(services).queryByRole("combobox", {
+      name: "Источник токена Vault · vault-main",
+    }),
+  ).toBeNull();
+  expect(
+    within(libraries).getByRole("checkbox", {
+      name: "Установить библиотеку szi",
+    }),
+  ).toBeTruthy();
+  expect(
+    within(libraries).getByRole("combobox", {
+      name: "Источник токена Vault · vault-main",
+    }),
+  ).toBeTruthy();
+});
+
+it.each([
+  ["FULL_PROJECT", false, false],
+  ["APPLICATION_LIBRARIES_ONLY", false, true],
+  ["APPLICATION_LIBRARIES_ONLY", true, false],
+] as const)(
+  "renders prior Infra Verify gate only when applicable: %s/%s",
+  (mode, skip, visible) => {
+    render(
+      <InstallationPage
+        {...defaults}
+        onCreatePlan={vi.fn()}
+        plan={{
+          ...fullPlan,
+          plan: {
+            ...fullPlan.plan!,
+            executionMode: mode,
+            skipInfrastructureVerify: skip,
+            infrastructureVerification:
+              new executionnode.InfrastructureVerification({
+                status: "BLOCKED",
+                code: "INFRA_VERIFY_MISSING",
+                deployments: [],
+              }),
+          },
+        }}
+      />,
+    );
+    expect(screen.queryByText(/BLOCKED.*INFRA_VERIFY_MISSING/) !== null).toBe(
+      visible,
+    );
+    expect(
+      screen.queryByText("Advanced: источники инфраструктурных Verify"),
+    ).toBeNull();
+  },
+);
 it("orders selected libraries from configured priorities and rejects an unknown name", () => {
   const deployments = [
     { deploymentId: "sdku-east", libraryRef: "sdku@1.0.0" },
@@ -88,6 +195,27 @@ it("orders selected libraries from configured priorities and rejects an unknown 
     ]),
   ).toEqual({ order: [], missingNames: ["sdku"] });
 });
+
+it.each(["STARTING", "RUNNING", "CANCELLING"])(
+  "does not call the active run plan stale: %s",
+  (state) => {
+    render(
+      <InstallationPage
+        {...defaults}
+        plan={fullPlan}
+        runPlan={fullPlan.plan}
+        onCreatePlan={vi.fn()}
+        run={
+          new desktop.InstallationRunOperation({
+            status: "READY",
+            run: { runId: "active", state, sequence: 1 },
+          })
+        }
+      />,
+    );
+    expect(screen.queryByText(/Этот план нельзя использовать/)).toBeNull();
+  },
+);
 it("owner amendment offers execution controls before Build and on Summary", () => {
   const view = render(
     <InstallationPage {...defaults} onCreatePlan={vi.fn()} />,

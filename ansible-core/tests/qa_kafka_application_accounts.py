@@ -129,12 +129,19 @@ class KafkaApplicationAccountsTests(unittest.TestCase):
         self.assertEqual(3, len(calls))
         self.assertFalse(any('--add' in args or '--alter' in args for _, args in calls))
 
-    def test_existing_application_password_and_infrastructure_admin_are_not_reset(self):
-        for name, mode in [('qa.one', 'existing'), ('admin', 'managed')]:
+    def test_existing_passwords_are_not_reset_regardless_of_name(self):
+        for name in ['qa.one', 'admin', 'default']:
             with self.subTest(name=name):
                 calls = self.probe({name: ['SCRAM-SHA-512', 'qa-wrong']}, [name],
-                                   mode=mode, acl_names=[], success=False)
+                                   mode='existing', acl_names=[], success=False)
                 self.assertFalse(any('--alter' in args or '--add' in args for _, args in calls))
+
+    def test_managed_accounts_have_no_special_name_restrictions(self):
+        for name in ['admin', 'default']:
+            with self.subTest(name=name):
+                calls = self.probe({}, [name], mode='managed', acl_names=[])
+                self.assertEqual(1, sum('--alter' in args for _, args in calls))
+                self.assertEqual(1, sum('--add' in args for _, args in calls))
 
     def test_partial_or_failed_metadata_batch_never_creates_credentials(self):
         for error in ['metadata_fail', 'metadata_error']:

@@ -48,6 +48,89 @@ const currentPlanState = (
 });
 
 describe("InstallationPage", () => {
+  it.each(["SUCCEEDED", "FAILED", "CANCELLED", "INTERRUPTED"])(
+    "shows confirmed run times above and below plan actions for %s",
+    (terminal) => {
+      const event = (
+        runId: string,
+        sequence: number,
+        eventType: string,
+        status: string,
+        timestamp: string,
+      ) =>
+        new desktop.InstallationEventView({
+          runId,
+          sequence,
+          eventType,
+          status,
+          timestamp,
+          safeMessage: "Execution event",
+        });
+      const events = [
+        event("previous", 1, "RUN_STARTED", "RUNNING", "2026-10-25T06:00:00Z"),
+        event("times", 2, "RUN_STARTED", "RUNNING", "2026-10-26T07:00:00Z"),
+        event(
+          "times",
+          4,
+          "DIAGNOSTIC",
+          terminal === "SUCCEEDED" ? "SUCCESS" : terminal,
+          "2026-10-26T08:00:00Z",
+        ),
+      ];
+      const props = {
+        state,
+        tab: "execution" as const,
+        onTabChange: vi.fn(),
+        onOpenServers: vi.fn(),
+        onCreatePlan: vi.fn(),
+        onApprovePlan: vi.fn(),
+        busy: false,
+        events,
+      };
+      const view = render(
+        <InstallationPage
+          {...props}
+          run={
+            new desktop.InstallationRunOperation({
+              run: { runId: "times", state: "RUNNING", sequence: 4 },
+            })
+          }
+        />,
+      );
+      const card = screen
+        .getByRole("heading", { name: "Действия плана" })
+        .closest("article")!;
+      expect(within(card).getByText(/Начало установки:/).textContent).toContain(
+        "10:00:00 МСК",
+      );
+      expect(within(card).queryByText(/Завершение установки:/)).toBeNull();
+      view.rerender(
+        <InstallationPage
+          {...props}
+          run={
+            new desktop.InstallationRunOperation({
+              run: { runId: "times", state: terminal, sequence: 5 },
+            })
+          }
+        />,
+      );
+      expect(within(card).queryByText(/Завершение установки:/)).toBeNull();
+      view.rerender(
+        <InstallationPage
+          {...props}
+          run={
+            new desktop.InstallationRunOperation({
+              run: { runId: "times", state: terminal, sequence: 4 },
+            })
+          }
+        />,
+      );
+      const end = within(card).getByText(/Завершение установки:/);
+      expect(end.textContent).toContain("11:00:00 МСК");
+      expect(card.lastElementChild).toBe(end);
+    },
+  );
+
   it("localizes application Apply Verify and post-install action labels", () => {
     const runPlan = {
       id: "plan-labels",
@@ -194,9 +277,18 @@ describe("InstallationPage", () => {
     expect(
       document.querySelectorAll(".execution-plan-action.is-progress-step"),
     ).toHaveLength(2);
-    expect(document.querySelector(".is-progress-group .execution-plan-number")).toBeNull();
-    expect(document.querySelector(".is-progress-group .execution-plan-status")?.textContent).toBe("Выполняется");
-    expect([...document.querySelectorAll(".execution-plan-number")].map((row) => row.textContent)).toEqual(["1", "2"]);
+    expect(
+      document.querySelector(".is-progress-group .execution-plan-number"),
+    ).toBeNull();
+    expect(
+      document.querySelector(".is-progress-group .execution-plan-status")
+        ?.textContent,
+    ).toBe("Выполняется");
+    expect(
+      [...document.querySelectorAll(".execution-plan-number")].map(
+        (row) => row.textContent,
+      ),
+    ).toEqual(["1", "2"]);
     expect(screen.getByText(/Текущее действие/).textContent).toContain(
       "Библиотека СДКУ",
     );

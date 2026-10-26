@@ -47,10 +47,10 @@ def _read_file(directory, name, limit=_FILE_LIMIT):
         details = os.fstat(descriptor)
         if (not stat.S_ISREG(details.st_mode) or details.st_uid != os.geteuid()
                 or stat.S_IMODE(details.st_mode) != 0o600 or details.st_nlink != 1
-                or details.st_size > limit):
+                or (limit is not None and details.st_size > limit)):
             _fail()
-        content = os.read(descriptor, limit + 1)
-        if len(content) > limit or len(content) != details.st_size:
+        content = os.read(descriptor, (details.st_size if limit is None else limit) + 1)
+        if (limit is not None and len(content) > limit) or len(content) != details.st_size:
             _fail()
         return content
     finally:
@@ -173,7 +173,8 @@ def stage(state_root, request):
     directory = _run_directory(state_root, request["stagingId"])
     try:
         fcntl.flock(directory, fcntl.LOCK_EX)
-        manifest = json.loads(_read_file(directory, "manifest.json"))
+        # This is the Core-validated private manifest, not the bounded trust file.
+        manifest = json.loads(_read_file(directory, "manifest.json", limit=None))
         manifest_digest = digest(manifest)
         if any(request[field] != manifest.get(field) for field in ("projectIdentity", "projectRevision", "planFingerprint", "runtimeRelease")) or request["manifestDigest"] != manifest_digest:
             _fail()

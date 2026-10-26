@@ -2,9 +2,9 @@
 - name: Проверка желаемых настроек Docker
   ansible.builtin.assert:
     that:
-      - platform_docker_mode in ['create-user', 'existing-user']
+      - platform_docker_mode in ['auto', 'create-user', 'existing-user']
       - platform_docker_account_name is match('^[a-z_][a-z0-9_-]{0,31}$')
-      - platform_docker_account_name not in ['root', 'admin', 'platform-automation']
+      - platform_docker_account_name != 'root'
       - platform_docker_data_root is string
       - platform_docker_data_root | length > 1
       - platform_docker_data_root | length <= 255
@@ -65,7 +65,6 @@
       - platform_docker_secret_files is mapping
       - platform_docker_account_credential.passwordSecretRef in platform_docker_secret_files
     fail_msg: DOCKER_ACCOUNT_PASSWORD_REQUIRED
-  when: platform_docker_mode == 'create-user'
   no_log: true
 
 - name: Проверка файла паролей среды выполнения создания пользователя на контроллере
@@ -78,7 +77,6 @@
   delegate_to: localhost
   become: false
   register: _platform_docker_password_file
-  when: platform_docker_mode == 'create-user'
   no_log: true
 
 - name: Проверка типа, размера и защиты runtime-файла пароля
@@ -89,5 +87,4 @@
       - _platform_docker_password_file.stat.size >= 1
       - _platform_docker_password_file.stat.size <= 4096
     fail_msg: DOCKER_ACCOUNT_PASSWORD_INVALID
-  when: platform_docker_mode == 'create-user'
   no_log: true

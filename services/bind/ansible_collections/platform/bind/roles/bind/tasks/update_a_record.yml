@@ -1,5 +1,9 @@
 ---
+- name: Сохранение одиночной записи до входа в пакетный цикл
+  ansible.builtin.set_fact:
+    _platform_bind_single_a_records: "{{ [platform_bind_a_record] }}"
+
 - name: "Обновление одной записи через общий механизм защищённого обновления зоны"
   ansible.builtin.include_tasks: update_a_records.yml
   vars:
-    platform_bind_a_records: "{{ [platform_bind_a_record] }}"
+    platform_bind_a_records: "{{ _platform_bind_single_a_records }}"

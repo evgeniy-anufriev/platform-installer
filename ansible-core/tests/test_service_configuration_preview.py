@@ -1,9 +1,13 @@
 import json
+import os
+import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
 from collections import UserDict
 from pathlib import Path
+import yaml
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -16,6 +20,38 @@ from build_execution_runtime_bundle import write_ui_static_defaults
 
 
 class ServiceConfigurationPreviewTests(unittest.TestCase):
+    def test_real_playbook_with_applications_resolves_default_data_directory(self):
+        executable = shutil.which('ansible-playbook')
+        if not executable:
+            self.skipTest('Ansible runtime required')
+        with tempfile.TemporaryDirectory() as temporary:
+            project = Path(temporary) / 'project'
+            shutil.copytree(ROOT / 'examples/valid/postgresql-standalone', project)
+            variables = project / 'inventory/group_vars/all/platform.yml'
+            values = yaml.safe_load(variables.read_text())
+            values['platform_data_root_directory'] = '/data'
+            values['platform_desired_state_contract'] = 'platform.installer/project-desired-state/v3alpha1'
+            values['platform_desired_state']['applicationLibraryDeployments'] = {
+                'consumer': {'libraryRef': 'example@1.0.0', 'runtimeRef': 'docker', 'bindings': {}}}
+            variables.write_text(yaml.safe_dump(values))
+            output = Path(temporary) / 'preview.json'
+            result = subprocess.run([
+                executable, '-i', str(project / 'inventory/hosts.yml'),
+                str(ROOT / 'ansible-core/playbooks/service-configuration-preview.yml'),
+                '-e', json.dumps({'platform_project_root': str(project),
+                                 'platform_service_catalog_path': str(ROOT / 'examples/catalog/service-catalog.yml')})],
+                env=dict(os.environ, ANSIBLE_CONFIG=str(ROOT / 'ansible-core/ansible.cfg'),
+                         ANSIBLE_COLLECTIONS_PATH=str(ROOT / 'ansible-core/collections'),
+                         ANSIBLE_CALLBACKS_ENABLED='platform.core.project_snapshot_json',
+                         PLATFORM_PROJECT_SNAPSHOT_OUTPUT=str(output)),
+                capture_output=True, text=True, timeout=90)
+            self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+            preview = json.loads(output.read_text())
+            setting = preview['services']['accounting-db']['configuration']['dataDirectory']
+            self.assertEqual('RESOLVED', setting['state'])
+            self.assertEqual('ROLE_DEFAULT', setting['source'])
+            self.assertEqual('/data/accounting-db/postgres', setting['value'])
+
     def test_postgresql_default_directory_includes_postgres_child_directory(self):
         catalog = {"definitions": {"postgresql": {
             "x-dataDirectoryProjection": {

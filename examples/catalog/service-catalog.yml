@@ -1,6 +1,6 @@
 apiVersion: platform.installer/catalog/v1alpha1
 kind: ServiceCatalog
-digest: sha256:56ab7904b254dea873e29a243f6af6263e5b3f2a4639118f7b2fa2d12fae6e60
+digest: sha256:245193464efbc37af1afb9484bc6ebbbe4943f1807e06c56573f5850752df9c2
 definitions:
   clickhouse:
     apiVersion: platform.installer/service-manifest/v1alpha1
@@ -283,6 +283,17 @@ definitions:
       description: Rootless Docker Engine and Compose with LXC networking and TLS TCP API
       category: runtime
     modes:
+      auto:
+        displayName: Автоматически
+        description: Use an existing account after password verification, or create it when absent
+        memberRoles: []
+        placement:
+          explicit: true
+          hostScoped: true
+          minMembers: 1
+          distinctHosts: true
+        x-requiredRuntimeSecretSettings:
+        - accountCredential
       create-user:
         displayName: Create Docker user
         description: Create a dedicated account using a runtime-only password
@@ -303,6 +314,8 @@ definitions:
           hostScoped: true
           minMembers: 1
           distinctHosts: true
+        x-requiredRuntimeSecretSettings:
+        - accountCredential
     listeners:
       api:
         protocol: tcp
@@ -457,7 +470,7 @@ definitions:
       architecture: x86_64
       requiredOffline: false
     compatibilityRef: ../../services/docker/compatibility.yml
-    x-definitionDigest: sha256:ea89641c872bd59b47c029c3c83231bf5cfcd5a07f0dfb0120a288370b233587
+    x-definitionDigest: sha256:41f9d9661c227c26efe5aa58f9c7ca8089c407b9713dc94335df5d2b9eb32205
     x-sourceManifest: services/docker/service.yml
   kafka:
     apiVersion: platform.installer/service-manifest/v1alpha1

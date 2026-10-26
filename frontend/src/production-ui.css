@@ -3169,6 +3169,13 @@ button:disabled {
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
 }
+.execution-plan-timestamp {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 5px 0;
+  color: var(--muted, #64748b);
+  font-size: 12px;
+}
 .execution-plan-actions {
   list-style: none;
   padding: 0;

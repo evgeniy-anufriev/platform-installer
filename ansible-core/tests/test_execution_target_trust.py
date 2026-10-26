@@ -1,6 +1,7 @@
 import base64
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -52,6 +53,26 @@ def fixture(tmp_path):
 
 
 class TargetHostTrustTests(unittest.TestCase):
+    def test_large_private_manifest_keeps_known_hosts_limit(self):
+        with tempfile.TemporaryDirectory() as root:
+            state, run, manifest, request = fixture(Path(root))
+            manifest['operations'][0]['roleVariables'] = {'configuration': 'x' * 70000}
+            (run / 'manifest.json').write_text(json.dumps(manifest), encoding='utf-8')
+            request['manifestDigest'] = digest(manifest)
+            self.assertGreater((run / 'manifest.json').stat().st_size, trust._FILE_LIMIT)
+            staged = subprocess.run([
+                sys.executable, str(TOOLS / 'execution_protocol.py'),
+                '--state-root', str(state), '--runtime-release', str(TOOLS.parent),
+                '--controller', str(TOOLS / 'execution_controller.py'),
+                '--stage-target-host-trust',
+            ], input=json.dumps(request), capture_output=True, text=True, timeout=30)
+            self.assertEqual(staged.returncode, 0, staged.stderr)
+            self.assertEqual(json.loads(staged.stdout), {'status': 'STAGED'})
+            self.assertEqual(str(run / 'known_hosts'), trust.verify(str(state), request['stagingId'], manifest))
+            (run / 'known_hosts').write_bytes(b'x' * (trust._FILE_LIMIT + 1))
+            with self.assertRaisesRegex(LifecycleError, 'TARGET_HOST_TRUST_INVALID'):
+                trust.verify(str(state), request['stagingId'], manifest)
+
     def test_stage_and_verify_exact_plan_trust(self):
         with tempfile.TemporaryDirectory() as root:
             state, run, manifest, request = fixture(Path(root))

@@ -9,6 +9,7 @@ import type {
   EndpointPreview,
   InstallationState,
   InstallationPlanOperation,
+  InstallationPlanRequest,
   InstallationExecutionMode,
   InfrastructureVerificationView,
   InstallationRunOperation,
@@ -324,6 +325,10 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
   const [installationExecutionMode, setInstallationExecutionMode] =
     useState<InstallationExecutionMode>("FULL_PROJECT");
   useEffect(() => setInstallationExecutionMode("FULL_PROJECT"), [result.root]);
+  const [installationVaultSources, setInstallationVaultSources] = useState<
+    InstallationPlanRequest["applicationVaultSources"]
+  >({});
+  useEffect(() => setInstallationVaultSources({}), [result.root]);
   const [infrastructureObservation, setInfrastructureObservation] =
     useState<InfrastructureVerificationView>();
   const [installationPlan, setInstallationPlan] = useState<
@@ -945,7 +950,10 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
               ...(applicationLibraryOrder.length
                 ? { applicationLibraryOrder }
                 : {}),
-              applicationVaultSources: {},
+              applicationVaultSources:
+                executionMode === "FULL_PROJECT"
+                  ? installationVaultSources
+                  : {},
               skipInfrastructureVerify,
               ...(skipApplicationLibraries.length
                 ? { skipApplicationLibraries }
@@ -953,6 +961,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
             })
           : executionMode === "FULL_PROJECT" &&
               !skipApplicationLibraries.length &&
+              !Object.keys(installationVaultSources).length &&
               api.createInstallationPlan
             ? await api.createInstallationPlan(deploymentOrder)
             : {
@@ -997,7 +1006,10 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
           ...(installationLibraryOrderRef.current.length
             ? { applicationLibraryOrder: installationLibraryOrderRef.current }
             : {}),
-          applicationVaultSources: {},
+          applicationVaultSources:
+            installationExecutionMode === "FULL_PROJECT"
+              ? installationVaultSources
+              : {},
           ...(skippedLibraries.length
             ? { skipApplicationLibraries: skippedLibraries }
             : {}),
@@ -2630,6 +2642,11 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
               onExecutionModeChange={setInstallationExecutionMode}
               busy={installationBusy}
               onCreatePlan={createInstallationPlan}
+              applicationVaultSources={installationVaultSources}
+              onApplicationVaultSourcesChange={(sources) => {
+                setInstallationVaultSources(sources);
+                setInstallationPlan(undefined);
+              }}
               serviceDeployments={Object.values(
                 result.managed?.deployments || {},
               ).map((item) => ({

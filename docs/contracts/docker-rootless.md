@@ -12,21 +12,31 @@ remains usable by autonomous Ansible with documented inventory variables;
 Installer/Core/Go/Wails use the existing service-manifest, PKI and runtime
 secret paths rather than a Docker-specific editor or transport.
 
-The operator selects either `create-user` or `existing-user` and supplies a
-bounded account name. In create-user mode, the password is supplied via the
-existing per-service Secrets dialog as a session-only `SERVICE_PASSWORD`
-requirement; the portable project stores only `passwordSecretRef`. The Ansible
-role accepts an equivalent runtime-only secret-file mapping for autonomous
-installation. In existing-user mode, the role must not set or change that
-account's password, UID, home or shell; it fails if the account is ineligible.
-The create-user password is applied without exposing plaintext in Ansible
-output, environment, command arguments, logs or project files. Reapply must
-not rotate or rewrite an unchanged password. The standard Ansible user module
-creates an initially locked account; a subsequent protected `chpasswd -e`
-task receives the runtime-derived hash through stdin only when the account
-is still locked/unset. A later Apply does not rotate the password. Under the existing `SERVICE_PASSWORD`
-contract, create-user Verify also requires that session secret; existing-user
-Apply/Verify do not.
+Account policy was updated by the owner on2026-10-26. The default mode is
+`auto`: an absent account is created; an existing account is reused after
+password verification. The saved `create-user` and `existing-user` modes remain
+supported. `existing-user` rejects an absent account. The only reserved account
+name is `root`; actual account eligibility still requires an unprivileged UID
+and a supported home directory.
+
+All modes require the existing session-only `SERVICE_PASSWORD` input through
+`accountCredential.passwordSecretRef`. The portable project contains only the
+reference; autonomous Ansible accepts the established runtime-only secret-file
+mapping. No alternative secret store or conditional password admission is added.
+
+An existing account's password must match the supplied runtime value. A mismatch,
+locked account or unavailable password verifier blocks Apply without changing
+the account's password, UID, home or shell. Authentication uses the system
+libcrypt against the NSS shadow record; the check is protected with `no_log` and
+passes the runtime value through stdin, never process arguments or environment.
+Existing password records are not returned or persisted by the role.
+
+Only an account created by this invocation receives a new password, using the
+existing protected OpenSSL SHA-512 hash and `chpasswd -e` stdin sequence. Reapply
+verifies the existing account and does not rotate or rewrite its password.
+Apply/Verify require the session password reference in all modes. An operator
+must separately authorize any password initialization/reset for an existing
+locked account; the role never unlocks or resets it implicitly.
 
 ## Runtime and network
 

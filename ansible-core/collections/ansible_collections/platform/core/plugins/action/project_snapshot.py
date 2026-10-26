@@ -459,7 +459,8 @@ class ActionModule(ActionBase):
             applications_enabled = bool(desired_state.get('applicationLibraryDeployments'))
             if task_vars.get('platform_application_expected_fingerprint') and not applications_enabled:
                 raise ValueError('APPLICATION_EXECUTION_MODEL_MISMATCH')
-            if applications_enabled and "platform_application_rows" not in task_vars:
+            if (applications_enabled and self._task.args.get("configuration_only") is not True
+                    and "platform_application_rows" not in task_vars):
                 raise ValueError("Application resolve role must run before snapshot")
             desired_state = infrastructure_state(desired_state)
             service_types = set(

@@ -37,7 +37,8 @@ class KafkaServiceRepairTests(unittest.TestCase):
                 {'ansible.builtin.set_fact': dict(_platform_kafka_cli_connection=dict(bootstrapHost='127.0.0.1', bootstrapPort=9094),
                     _platform_kafka_tls_runtime_plans=[dict(targetDirectory='/qa', storePasswordSecretRef='runtime:admin')])}]))
             (role / 'tasks/authorization_principal.yml').write_text(yaml.safe_dump([
-                {'ansible.builtin.assert': dict(that=['application_kafka_login.rc == 0'])}]))
+                {'ansible.builtin.assert': dict(that=[
+                    'application_kafka_login.rc | default(application_kafka_password_probe.rc | default(1)) == 0'])}]))
             (root / 'bin').mkdir()
             for name in ['kafka-configs.sh', 'kafka-acls.sh', 'kafka-broker-api-versions.sh']:
                 file = root / 'bin' / name

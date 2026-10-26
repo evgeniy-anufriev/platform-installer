@@ -1,5 +1,6 @@
 """Run production update rendering/guards with isolated observations; no target writes."""
 from pathlib import Path
+import os
 import shutil
 import subprocess
 import tempfile
@@ -10,6 +11,37 @@ ROLE = Path(__file__).resolve().parents[1] / 'ansible_collections/platform/bind/
 
 
 class ZoneBatchRuntimeTests(unittest.TestCase):
+    def test_base_records_nested_includes_and_repeat(self):
+        executable = shutil.which('ansible-playbook')
+        if not executable:
+            self.skipTest('Ansible runtime required')
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            dig = root / 'dig'
+            dig.write_text('#!/bin/sh\nprintf "REAL_DIG_STUB\\n" >> "$BIND_TEST_CALLS"\n'
+                           'printf ";; status: NOERROR\\n;; flags: qr aa;\\n%s 60 IN A 192.0.2.2\\n" "$2"\n')
+            dig.chmod(0o755)
+            records = [dict(type='A', owner=name + '.example.test.', values=['192.0.2.2'])
+                       for name in ('first', 'second')]
+            include = {'ansible.builtin.include_tasks': str(ROLE / 'tasks/update_base_zone_records.yml')}
+            tasks = [include, include, {'ansible.builtin.assert': {'that': [
+                '_platform_bind_zone_observations | length == 1',
+                '_platform_bind_zone_observations[0].record.owner == "second.example.test."',
+                'not _platform_bind_zone_observations[0].changed']}}]
+            play = [dict(hosts='localhost', connection='local', gather_facts=False,
+                         vars=dict(platform_bind_base_zone=dict(value=dict(
+                             zone='example.test', defaultTtl=60, records=records))), tasks=tasks)]
+            source = root / 'play.yml'
+            source.write_text(yaml.safe_dump(play))
+            calls = root / 'calls'
+            result = subprocess.run([executable, '-i', 'localhost,', str(source)],
+                                    env=dict(os.environ, PATH=str(root) + os.pathsep + os.environ['PATH'],
+                                             BIND_TEST_CALLS=str(calls)),
+                                    capture_output=True, text=True, timeout=90)
+            self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+            self.assertEqual(4, len(calls.read_text().splitlines()))
+            self.assertIn('changed=0', result.stdout)
+
     def run_tasks(self, observations, success=True):
         if not shutil.which('ansible-playbook'):
             self.skipTest('Ansible runtime required')

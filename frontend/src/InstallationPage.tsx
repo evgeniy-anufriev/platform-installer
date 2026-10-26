@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type {
   InstallationEventView,
   InstallationPlanOperation,
+  InstallationPlanRequest,
   InstallationPlanView,
   InstallationExecutionMode,
   InfrastructureVerificationView,
@@ -270,6 +271,8 @@ export function InstallationPage({
   selectedExecutionMode,
   onExecutionModeChange,
   serviceDeployments = [],
+  applicationVaultSources = {},
+  onApplicationVaultSourcesChange,
   serviceExecutionPriorities = [],
   libraryDeployments = [],
   libraryExecutionPriorities = [],
@@ -308,6 +311,10 @@ export function InstallationPage({
   selectedExecutionMode?: InstallationExecutionMode;
   onExecutionModeChange?: (mode: InstallationExecutionMode) => void;
   serviceDeployments?: ServiceDeploymentInput[];
+  applicationVaultSources?: InstallationPlanRequest["applicationVaultSources"];
+  onApplicationVaultSourcesChange?: (
+    sources: InstallationPlanRequest["applicationVaultSources"],
+  ) => void;
   serviceExecutionPriorities?: ServicePriorityInput[];
   libraryDeployments?: LibraryDeploymentInput[];
   libraryExecutionPriorities?: LibraryPriorityInput[];
@@ -479,10 +486,6 @@ export function InstallationPage({
               : "Установка инфраструктуры исключена. При отсутствии актуального Verify Core включит проверку инфраструктуры в этот план перед библиотеками."}
         </p>
       </div>
-      <div>
-        <strong>Библиотеки</strong>
-        <p>Полный цикл Apply → Verify.</p>
-      </div>
       {executionMode === "APPLICATION_LIBRARIES_ONLY" && (
         <label>
           <input
@@ -514,6 +517,96 @@ export function InstallationPage({
       )}
     </div>
   );
+  const librariesControl =
+    libraryDeployments.length > 0 ? (
+      <div aria-label="Настройки библиотек">
+        <div>
+          <strong>Библиотеки</strong>
+          <p>Полный цикл Apply → Verify.</p>
+        </div>
+        {executionMode === "FULL_PROJECT" &&
+          libraryDeployments.length > 0 &&
+          onApplicationVaultSourcesChange &&
+          serviceDeployments
+            .filter((service) => service.serviceType === "vault")
+            .map((service) => (
+              <label key={service.deploymentId}>
+                Источник токена Vault для приложений · {service.deploymentId}
+                <select
+                  aria-label={"Источник токена Vault · " + service.deploymentId}
+                  disabled={busy || runActive}
+                  value={
+                    applicationVaultSources[service.deploymentId] ||
+                    "RUNTIME_INPUT"
+                  }
+                  onChange={(event) => {
+                    const sources = { ...applicationVaultSources };
+                    if (event.target.value === "CURRENT_RUN_BOOTSTRAP")
+                      sources[service.deploymentId] = "CURRENT_RUN_BOOTSTRAP";
+                    else delete sources[service.deploymentId];
+                    onApplicationVaultSourcesChange(sources);
+                  }}
+                >
+                  <option value="RUNTIME_INPUT">
+                    Из секретов инфраструктурного Vault
+                  </option>
+                  <option value="CURRENT_RUN_BOOTSTRAP">
+                    Из текущей установки Vault
+                  </option>
+                </select>
+              </label>
+            ))}
+        {libraryDeployments.length > 0 && (
+          <div aria-label="Выбор библиотек">
+            <table>
+              <thead>
+                <tr>
+                  <th>Библиотека</th>
+                  <th>Установить</th>
+                </tr>
+              </thead>
+              <tbody>
+                {libraryDeployments.map((library) => (
+                  <tr key={library.deploymentId}>
+                    <td>{library.deploymentId}</td>
+                    <td>
+                      <input
+                        type="checkbox"
+                        aria-label={
+                          "Установить библиотеку " + library.deploymentId
+                        }
+                        checked={
+                          !skippedLibraries.includes(library.deploymentId)
+                        }
+                        disabled={
+                          busy ||
+                          runActive ||
+                          executionMode === "INFRASTRUCTURE_VERIFY_ONLY"
+                        }
+                        onChange={(event) =>
+                          setSkippedLibraries((current) =>
+                            !event.target.checked
+                              ? [...current, library.deploymentId]
+                              : current.filter(
+                                  (id) => id !== library.deploymentId,
+                                ),
+                          )
+                        }
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="muted">
+              Установка и проверка библиотек со снятым флажком пропускаются. Их
+              подключения остаются доступны интеграциям устанавливаемых
+              приложений.
+            </p>
+          </div>
+        )}
+      </div>
+    ) : null;
   return (
     <section className="installation-page">
       {!!displayedPlan?.plan?.skipApplicationLibraries?.length && (
@@ -638,6 +731,7 @@ export function InstallationPage({
             <article className="card installation-summary-plan">
               <h2>Состав запуска</h2>
               {servicesControl}
+              {librariesControl}
               <div className="installation-summary-plan-heading">
                 <div>
                   <h2>План установки</h2>
@@ -715,64 +809,8 @@ export function InstallationPage({
           <>
             <PlanStage
               key={plan?.plan?.id || "no-plan"}
-              servicesControl={
-                <>
-                  {servicesControl}
-                  {libraryDeployments.length > 0 && (
-                    <div aria-label="Выбор библиотек">
-                      <table>
-                        <thead>
-                          <tr>
-                            <th>Библиотека</th>
-                            <th>Установить</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {libraryDeployments.map((library) => (
-                            <tr key={library.deploymentId}>
-                              <td>{library.deploymentId}</td>
-                              <td>
-                                <input
-                                  type="checkbox"
-                                  aria-label={
-                                    "Установить библиотеку " +
-                                    library.deploymentId
-                                  }
-                                  checked={
-                                    !skippedLibraries.includes(
-                                      library.deploymentId,
-                                    )
-                                  }
-                                  disabled={
-                                    busy ||
-                                    runActive ||
-                                    executionMode ===
-                                      "INFRASTRUCTURE_VERIFY_ONLY"
-                                  }
-                                  onChange={(event) =>
-                                    setSkippedLibraries((current) =>
-                                      !event.target.checked
-                                        ? [...current, library.deploymentId]
-                                        : current.filter(
-                                            (id) => id !== library.deploymentId,
-                                          ),
-                                    )
-                                  }
-                                />
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                      <p className="muted">
-                        Apply и Verify выбранных библиотек пропускаются. Их
-                        подключения остаются доступны интеграциям
-                        устанавливаемых приложений.
-                      </p>
-                    </div>
-                  )}
-                </>
-              }
+              servicesControl={servicesControl}
+              librariesControl={librariesControl}
               scopeChanged={!runActive && scopeChanged}
               skipChanged={!runActive && skipChanged}
               infrastructureExcluded={
@@ -837,6 +875,7 @@ export function InstallationPage({
 
 function PlanStage({
   servicesControl,
+  librariesControl,
   scopeChanged,
   skipChanged,
   infrastructureExcluded,
@@ -854,6 +893,7 @@ function PlanStage({
   onSetOutputEncryptionPassword,
 }: {
   servicesControl: ReactNode;
+  librariesControl: ReactNode;
   scopeChanged: boolean;
   skipChanged: boolean;
   infrastructureExcluded: boolean;
@@ -902,6 +942,7 @@ function PlanStage({
       <article className="card installation-empty">
         <h2>План</h2>
         {servicesControl}
+        {librariesControl}
         <p>
           {operation?.error && (
             <>
@@ -942,9 +983,12 @@ function PlanStage({
             : phase,
         )
       : plan.phases;
+  const runActive = ["STARTING", "RUNNING", "CANCELLING"].includes(
+    run?.run?.state || "",
+  );
   const currentPlan =
     !skipChanged &&
-    !["STARTING", "RUNNING", "CANCELLING"].includes(run?.run?.state || "") &&
+    !runActive &&
     !draftActive &&
     !state?.project?.hasUnsavedChanges &&
     state?.executionNode.status === "READY" &&
@@ -1071,47 +1115,39 @@ function PlanStage({
               пользователем; успешный Verify не подтверждён этим запуском.
             </p>
           )}
-          {plan.infrastructureVerification && (
-            <section aria-label="Проверка инфраструктуры">
-              <h3>
-                {plan.infrastructureVerification.status === "PASS"
-                  ? "Инфраструктура проверена"
-                  : "Проверка инфраструктуры не подтверждена"}
-              </h3>
-              <p>
-                {plan.infrastructureVerification.status}
-                {plan.infrastructureVerification.code
-                  ? ` · ${plan.infrastructureVerification.code}`
-                  : ""}
-              </p>
-              {plan.infrastructureObservedAt && (
-                <p>Получено: {plan.infrastructureObservedAt}</p>
-              )}
-              <ul>
-                {plan.infrastructureVerification.deployments.map((item) => (
-                  <li key={item.deploymentId}>
-                    {item.deploymentId} · Verify {item.verifiedAt}
-                  </li>
-                ))}
-              </ul>
-              <details>
-                <summary>Advanced: источники инфраструктурных Verify</summary>
+          {plan.executionMode === "APPLICATION_LIBRARIES_ONLY" &&
+            !plan.skipInfrastructureVerify &&
+            plan.infrastructureVerification && (
+              <section aria-label="Проверка инфраструктуры">
+                <h3>
+                  {plan.infrastructureVerification.status === "PASS"
+                    ? "Инфраструктура проверена"
+                    : "Проверка инфраструктуры не подтверждена"}
+                </h3>
+                <p>
+                  {plan.infrastructureVerification.status}
+                  {plan.infrastructureVerification.code
+                    ? ` · ${plan.infrastructureVerification.code}`
+                    : ""}
+                </p>
+                {plan.infrastructureObservedAt && (
+                  <p>Получено: {plan.infrastructureObservedAt}</p>
+                )}
                 <ul>
                   {plan.infrastructureVerification.deployments.map((item) => (
                     <li key={item.deploymentId}>
-                      {item.deploymentId}: {item.sourceRunId}
+                      {item.deploymentId} · Verify {item.verifiedAt}
                     </li>
                   ))}
                 </ul>
-              </details>
-              {plan.infrastructureCacheWarning && (
-                <p role="status">
-                  Локальное наблюдение не сохранено. Решение текущего плана
-                  получено от Core.
-                </p>
-              )}
-            </section>
-          )}
+                {plan.infrastructureCacheWarning && (
+                  <p role="status">
+                    Локальное наблюдение не сохранено. Решение текущего плана
+                    получено от Core.
+                  </p>
+                )}
+              </section>
+            )}
 
           <dl>
             <dt>Статус</dt>
@@ -1153,7 +1189,7 @@ function PlanStage({
             </ul>
           </article>
         )}
-        {!currentPlan && (
+        {!currentPlan && !runActive && (
           <article className="card">
             <p role="status">
               Этот план нельзя использовать для текущего состояния проекта.
@@ -1256,6 +1292,13 @@ function PlanStage({
               {servicesControl}
             </section>
           )}
+          {librariesControl &&
+            !displayedPhases.some((phase) => phase.id === "applications") && (
+              <section className="plan-phase-card">
+                <h3>Библиотеки</h3>
+                {librariesControl}
+              </section>
+            )}
           {!hasActions && (
             <p role="status">
               В плане нет действий по развёртыванию сервисов. Проверьте состав и
@@ -1304,6 +1347,7 @@ function PlanStage({
                 </span>
               </summary>
               {phase.id === "services" && servicesControl}
+              {phase.id === "applications" && librariesControl}
               <div className="plan-phase-actions">
                 {phase.actions
                   .slice(
@@ -1544,6 +1588,42 @@ function ExecutionStage({
   const lastTask = [...events]
     .reverse()
     .find((event) => event.eventType === "TASK_COMPLETED" && event.task?.name);
+  const runEvents = events.filter((event) => event.runId === run.run!.runId);
+  const started = runEvents
+    .filter((event) => event.eventType === "RUN_STARTED")
+    .reduce<InstallationEventView | undefined>(
+      (first, event) =>
+        !first || event.sequence < first.sequence ? event : first,
+      undefined,
+    );
+  const terminalStatus: Record<string, string> = {
+    SUCCEEDED: "SUCCESS",
+    FAILED: "FAILED",
+    CANCELLED: "CANCELLED",
+    INTERRUPTED: "INTERRUPTED",
+  };
+  const completed = terminalStatus[run.run.state]
+    ? runEvents.find(
+        (event) =>
+          event.sequence === run.run!.sequence &&
+          event.eventType === "DIAGNOSTIC" &&
+          event.status === terminalStatus[run.run!.state] &&
+          !event.actionId &&
+          !event.task,
+      )
+    : undefined;
+  const runTime = (timestamp?: string) => {
+    const date = new Date(timestamp || "");
+    return Number.isFinite(date.getTime())
+      ? new Intl.DateTimeFormat("ru-RU", {
+          dateStyle: "short",
+          timeStyle: "medium",
+          timeZone: "Europe/Moscow",
+        }).format(date)
+      : undefined;
+  };
+  const startedTime = runTime(started?.timestamp);
+  const completedTime = runTime(completed?.timestamp);
   return (
     <section className="execution-stage-content">
       <article className="card execution-overview">
@@ -1685,6 +1765,14 @@ function ExecutionStage({
               </span>
             )}
           </div>
+          <p className="execution-plan-timestamp">
+            Начало установки:{" "}
+            {startedTime ? (
+              <time dateTime={started!.timestamp}>{startedTime} МСК</time>
+            ) : (
+              "время ещё не получено"
+            )}
+          </p>
           <div className="execution-plan-scroll">
             {!plan?.phases.some((phase) => phase.actions.length) ? (
               <p>Действия плана для этого запуска недоступны.</p>
@@ -1749,10 +1837,17 @@ function ExecutionStage({
                     <li
                       key={action.id}
                       className={`execution-plan-action is-${tone}${action.parentId ? " is-progress-step" : ""}${action.progressSteps?.length ? " is-progress-group" : ""}`}
-                      aria-current={active && !action.progressSteps?.length ? "step" : undefined}
+                      aria-current={
+                        active && !action.progressSteps?.length
+                          ? "step"
+                          : undefined
+                      }
                     >
                       {action.number !== undefined && (
-                        <span className="execution-plan-number" aria-hidden="true">
+                        <span
+                          className="execution-plan-number"
+                          aria-hidden="true"
+                        >
                           {action.number}
                         </span>
                       )}
@@ -1785,6 +1880,12 @@ function ExecutionStage({
               </ol>
             )}
           </div>
+          {completedTime && (
+            <p className="execution-plan-timestamp">
+              Завершение установки:{" "}
+              <time dateTime={completed!.timestamp}>{completedTime} МСК</time>
+            </p>
+          )}
         </article>
       </div>
     </section>

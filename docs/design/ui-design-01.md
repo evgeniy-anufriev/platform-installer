@@ -541,6 +541,15 @@ The UI distinguishes desired state, observed state, finding, proposed action
 and execution result. A green TCP check is not presented as Kafka health;
 Kafka status remains a result of the corresponding verification entrypoint.
 
+For a full installation with application libraries, Installation exposes the
+existing `applicationVaultSources` choice per Vault deployment: session inputs
+from infrastructure Secrets (`RUNTIME_INPUT`, default), or the protected output
+of Vault bootstrap in this run (`CURRENT_RUN_BOOTSTRAP`). This is an execution
+option, not portable desired state or a secret value. Changing it discards the
+displayed plan and requires a fresh plan and approval. Library-only execution
+always uses infrastructure session inputs. Core validates provider eligibility
+and owns delivery; the UI never obtains the plaintext bootstrap token.
+
 ## 4. Global pages
 
 ### Projects
@@ -723,7 +732,7 @@ Service credential inputs remain in the selected service's Secrets dialog.
 | --- | --- |
 | Summary | Execution Node strip, readiness, findings, plan preview and the only **Generate plan** action |
 | Plan | Core-owned action order, dependencies, deployments and exact target hosts, with Execution Node shown separately. Empty, stale and blocked plans are explicit; editing configuration invalidates approval. Generate remains on Summary; approval/start belongs to UI-02, not editor save. No per-task dry-run changes are invented before execution. |
-| Execution | active run progress, explicit confirmation state, safe task events and final PLAY RECAP; it is read-only for the active execution and does not parse/redact callback text in the frontend |
+| Execution | active run progress, explicit confirmation state, safe task events and final PLAY RECAP; it is read-only for the active execution and does not parse/redact callback text in the frontend. The plan-actions card shows the confirmed RUN_STARTED time above the list in Moscow time, and the matching terminal lifecycle event time below only after the authoritative run state is terminal. Missing or delayed evidence never becomes a workstation-generated timestamp. |
 | Result | Observed outcome for a specific runId/planId: successful, failed, skipped and unfinished actions, host-level results where reported, timings and verify outcome. Viewing does not rerun verify. Active runs have no final result; observer disconnect is not execution failure. |
 
 On Servers, Execution Node preparation may reveal advanced SSH/elevation,

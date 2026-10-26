@@ -1,10 +1,4 @@
 ---
-- name: Исключение идентификаторов инфраструктуры из сверки паролей приложений
-  ansible.builtin.assert:
-    that: application_kafka_account.name not in ['admin', 'default']
-    fail_msg: APPLICATION_PROVIDER_IDENTIFIER_INVALID
-  when: platform_kafka_application_phase == 'apply' and application_kafka_account.mode == 'managed'
-
 - name: Выбор заданного Kafka principal из метаданных развёртывания SCRAM
   ansible.builtin.set_fact:
     application_kafka_description:

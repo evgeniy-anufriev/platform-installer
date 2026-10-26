@@ -9,6 +9,92 @@ import type {
 } from "./backend";
 
 const sessionID = "0123456789abcdef0123456789abcdef";
+
+it("passes the selected current-run Vault source through the real plan handler and clears the old plan", async () => {
+  const create = vi.fn().mockResolvedValue({ status: "BLOCKED" });
+  const value = api({
+    createInstallationPlanForMode: create,
+    getApplicationConfig: vi.fn().mockResolvedValue({
+      status: "READY",
+      config: {
+        schemaVersion: 1,
+        serverTypes: [],
+        serviceExecutionPriorities: [{ serviceType: "vault", priority: 1 }],
+        libraryExecutionPriorities: [{ libraryName: "szi", priority: 1 }],
+      },
+    }),
+    getInstallationState: vi.fn().mockResolvedValue({
+      status: "READY_TO_PLAN",
+      project: { id: "p", hasUnsavedChanges: false },
+      executionNode: { status: "READY" },
+      plan: { status: "NONE" },
+      prerequisites: [],
+    }),
+  });
+  value.chooseProject.mockResolvedValue({
+    ...project,
+    managed: {
+      ...project.managed,
+      deployments: {
+        "vault-main": {
+          deploymentId: "vault-main",
+          serviceType: "vault",
+          mode: "raft-ha",
+        },
+      },
+      applicationLibraries: { szi: { libraryRef: "szi@1.0.0" } },
+    },
+  } as unknown as OpenResult);
+  render(<App api={value} />);
+  await userEvent.click(
+    screen.getByRole("button", { name: "Открыть папку проекта" }),
+  );
+  await userEvent.click(screen.getByRole("button", { name: "Установка" }));
+  await userEvent.click(screen.getByRole("tab", { name: "План" }));
+  const selector = await screen.findByRole("combobox", {
+    name: "Источник токена Vault · vault-main",
+  });
+  expect(selector).toHaveProperty("value", "RUNTIME_INPUT");
+  await userEvent.selectOptions(selector, "CURRENT_RUN_BOOTSTRAP");
+  await userEvent.click(
+    screen.getByRole("button", { name: "Сформировать свежий план" }),
+  );
+  await waitFor(() =>
+    expect(create).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        executionMode: "FULL_PROJECT",
+        applicationVaultSources: { "vault-main": "CURRENT_RUN_BOOTSTRAP" },
+      }),
+    ),
+  );
+  await userEvent.click(screen.getByRole("button", { name: "Серверы" }));
+  await userEvent.click(screen.getByRole("button", { name: "Установка" }));
+  await userEvent.click(screen.getByRole("tab", { name: "План" }));
+  expect(
+    screen.getByRole("combobox", {
+      name: "Источник токена Vault · vault-main",
+    }),
+  ).toHaveProperty("value", "CURRENT_RUN_BOOTSTRAP");
+  await userEvent.click(
+    screen.getByRole("checkbox", { name: "Устанавливать инфраструктуру" }),
+  );
+  expect(
+    screen.queryByRole("combobox", {
+      name: "Источник токена Vault · vault-main",
+    }),
+  ).toBeNull();
+  await userEvent.click(
+    screen.getByRole("button", { name: "Сформировать свежий план" }),
+  );
+  await waitFor(() =>
+    expect(create).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        executionMode: "APPLICATION_LIBRARIES_ONLY",
+        applicationVaultSources: {},
+      }),
+    ),
+  );
+});
 const project = {
   status: "OPEN",
   root: "C:/Projects/test",

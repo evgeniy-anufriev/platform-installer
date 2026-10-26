@@ -7,6 +7,12 @@ metadata:
   description: Rootless Docker Engine and Compose with LXC networking and TLS TCP API
   category: runtime
 modes:
+  auto:
+    displayName: Автоматически
+    description: Use an existing account after password verification, or create it when absent
+    memberRoles: []
+    placement: {explicit: true, hostScoped: true, minMembers: 1, distinctHosts: true}
+    x-requiredRuntimeSecretSettings: [accountCredential]
   create-user:
     displayName: Create Docker user
     description: Create a dedicated account using a runtime-only password
@@ -18,6 +24,7 @@ modes:
     description: Use an existing eligible account without changing its password
     memberRoles: []
     placement: {explicit: true, hostScoped: true, minMembers: 1, distinctHosts: true}
+    x-requiredRuntimeSecretSettings: [accountCredential]
 listeners:
   api: {protocol: tcp, defaultPort: 2376, tlsCapable: true, scope: deployment}
 capabilities: [service.docker.rootless, service.docker.compose]
