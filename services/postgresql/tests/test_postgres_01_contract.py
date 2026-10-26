@@ -27,7 +27,12 @@ class PostgreSQLHaLifecycleContractTests(unittest.TestCase):
     def test_reconciliation_contract_is_reached_by_the_guarded_entrypoint(self):
         dispatch = next(task for task in yaml.safe_load(self.entrypoint)
                         if isinstance(task.get("ansible.builtin.include_tasks"), dict)
-                        if task["ansible.builtin.include_tasks"].get("file") == "reconcile.yml")
+                        if "reconcile.yml" in task["ansible.builtin.include_tasks"].get("file", ""))
+        from ansible.parsing.dataloader import DataLoader
+        from ansible.template import Templar
+        for verify, expected in ((False, "reconcile.yml"), (True, "verify.yml")):
+            templar = Templar(loader=DataLoader(), variables={"platform_postgresql_verify_only": verify})
+            self.assertEqual(expected, templar.template(dispatch["ansible.builtin.include_tasks"]["file"]))
         self.assertIn("platform_postgresql_verify_only | bool", dispatch["when"])
         self.assertIn("platform_postgresql_clean_install | bool and platform_postgresql_clear_only | bool", dispatch["when"])
 
@@ -95,9 +100,9 @@ class PostgreSQLHaLifecycleContractTests(unittest.TestCase):
         self.assertIn("pg_auto_failover-{{ platform_postgresql_pg_auto_failover_version }}-*.x86_64",
                       legacy_probe["ansible.builtin.command"]["argv"])
         install = next(task for task in yaml.safe_load(self.main)
-                       if task.get("name") == "Установка одобренного пакета pg_auto_failover из настроенного системного репозитория")
+                       if task.get("name") == "Установка одобренных пакетов PostgreSQL из настроенного системного репозитория")
         self.assertIn("_platform_postgresql_failover_repository_package",
-                      str(install["ansible.builtin.package"]["name"]))
+                      str(install["vars"]["_platform_postgresql_failover_packages_to_install"]))
         self.assertIn("POSTGRES_FAILOVER_PACKAGE_UNAVAILABLE", str(tasks))
 
     def test_ha_data_members_do_not_run_platform_initdb(self):

@@ -153,19 +153,3 @@
   loop_control:
     loop_var: registry_instance
     label: "{{ registry_instance.id }}"
-
-- name: Проверка достижимых доверенных узлов HTTPS
-  ansible.builtin.uri:
-    url: "{{ item.https_url }}/subjects"
-    method: GET
-    status_code: 200
-    validate_certs: true
-    ca_path: "{{ (_platform_kafka_registry_local | first).config_directory }}/pki/ca-chain.pem"
-    use_proxy: false
-  loop: "{{ _platform_kafka_registry_projection.instances }}"
-  loop_control:
-    label: "{{ item.id }}"
-  register: _platform_kafka_registry_peer_ready
-  retries: "{{ platform_kafka_schema_registry_readiness_retries }}"
-  delay: "{{ platform_kafka_schema_registry_readiness_delay }}"
-  until: _platform_kafka_registry_peer_ready.status | default(0) == 200

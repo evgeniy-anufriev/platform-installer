@@ -1,0 +1,8 @@
+---
+# The Kafka play has already validated and normalized this operation's inputs.
+# Role defaults are loaded before evaluating the optional component switch.
+- name: Применение включённого Schema Registry с подготовленными данными Kafka
+  ansible.builtin.include_tasks: schema_registry.yml
+  when:
+    - platform_kafka_schema_registry_enabled
+    - _platform_kafka_registry_local | length > 0

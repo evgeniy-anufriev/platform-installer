@@ -1,5 +1,5 @@
 {
-  "apiVersion": "platform.installer/application-package/v1alpha1",
+  "apiVersion": "platform.installer/application-package/v1alpha4",
   "kind": "LibraryPackage",
   "name": "szi",
   "version": "1.0.0",
@@ -61,7 +61,8 @@
         }
       },
       "order": -100,
-      "run_on": "execution_node"
+      "run_on": "execution_node",
+      "batch": true
     },
     {
       "id": "assign-identity-group-roles",
@@ -108,7 +109,8 @@
         }
       },
       "order": 100,
-      "run_on": "execution_node"
+      "run_on": "execution_node",
+      "batch": true
     }
   ]
 }

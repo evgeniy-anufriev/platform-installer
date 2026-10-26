@@ -14,9 +14,6 @@
         operations: "{{ kafka_authorization_cluster_operations }}"
   changed_when: false
 
-- name: Однократное чтение ACL principal совместимости перед проверкой ресурсов
-  ansible.builtin.include_tasks: application_acls_read.yml
-
 - name: "Проверка или настройка ACL каждого ресурса совместимости"
   ansible.builtin.include_tasks: application_acl.yml
   loop: "{{ kafka_authorization_grants }}"

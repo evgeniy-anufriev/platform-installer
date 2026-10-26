@@ -13,33 +13,6 @@
     _platform_docker_private_tls_dir: "{{ getent_passwd[platform_docker_account_name][4] }}/.config/docker/pki"
   changed_when: false
 
-- name: Проверка каталога данных Docker и конфигурации демона без внесения изменений
-  ansible.builtin.include_tasks: data_root.yml
-  vars:
-    platform_docker_verify_only: true
-
-- name: "Проверка режима Linger учётной записи Docker"
-  ansible.builtin.command:
-    argv: [loginctl, show-user, "{{ platform_docker_account_name }}", --property=Linger]
-  register: _platform_docker_linger
-  changed_when: false
-
-- name: Проверка доступности пользовательского systemd без сеанса входа
-  ansible.builtin.assert:
-    that: _platform_docker_linger.stdout == 'Linger=yes'
-    fail_msg: DOCKER_USER_LINGER_DISABLED
-
-- name: "Проверка активности сети LXC и служб запуска пользовательского Docker"
-  ansible.builtin.command:
-    argv: [systemctl, is-active, lxc-net.service, "{{ platform_docker_name }}-lxc-ready.target", "{{ platform_docker_name }}-rootless-{{ platform_docker_account_name }}.service"]
-  register: _platform_docker_system_units
-  changed_when: false
-
-- name: Проверка активности системных зависимостей Docker
-  ansible.builtin.assert:
-    that: _platform_docker_system_units.stdout_lines == ['active', 'active', 'active']
-    fail_msg: DOCKER_LXC_TARGET_NOT_ACTIVE
-
 - name: Проверка того, активна ли служба Docker конкретного пользователя
   ansible.builtin.command:
     argv: [systemctl, --user, is-active, docker.service]
@@ -80,8 +53,6 @@
   ansible.builtin.assert:
     that:
       - "'rootless' in ((_platform_docker_info.stdout | from_json).SecurityOptions | join(' '))"
-      - (_platform_docker_info.stdout | from_json).Swarm.LocalNodeState == 'inactive'
-      - (_platform_docker_info.stdout | from_json).DockerRootDir == platform_docker_data_root
     fail_msg: DOCKER_ROOTLESS_RUNTIME_INVALID
 
 - name: Проверка плагина Docker Compose CLI
@@ -126,15 +97,3 @@
       - (_platform_docker_tls_api_version.stdout | from_json).Server.Version is string
       - (_platform_docker_tls_api_version.stdout | from_json).Server.Version | length > 0
     fail_msg: DOCKER_TLS_API_UNAVAILABLE
-
-- name: Проверка того, что системный демон /socket остается неактивным
-  ansible.builtin.command:
-    argv: [systemctl, is-active, docker.service, docker.socket]
-  register: _platform_docker_rootful_verify
-  changed_when: false
-  failed_when: false
-
-- name: "Проверка того, что Docker с правами root остаётся неактивным"
-  ansible.builtin.assert:
-    that: "'active' not in _platform_docker_rootful_verify.stdout_lines"
-    fail_msg: DOCKER_ROOTFUL_CONFLICT

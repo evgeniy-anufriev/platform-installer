@@ -1,5 +1,6 @@
 """Resolve versioned package scripts from the existing application projection."""
 import json
+import hashlib
 try:
     from .application_endpoints import placement_target, public_endpoint_url
     from .application_libraries import checked_file
@@ -20,6 +21,14 @@ def _scalar(value):
     if isinstance(value, (dict, list)):
         return json.dumps(value, sort_keys=True, separators=(',', ':'), ensure_ascii=False)
     raise ValueError('APPLICATION_SCRIPT_REFERENCE_INVALID')
+
+
+def _script_metadata(script, path):
+    if not script.get('batch', False):
+        return {}
+    with open(path, 'rb') as stream:
+        digest = hashlib.sha256(stream.read()).hexdigest()
+    return dict(sourceDigest=digest, **({'batch': True} if script.get('batch', False) else {}))
 
 
 def _instance(library, name):
@@ -173,7 +182,8 @@ def prepare_script_jobs(root, snapshot, desired, rows, jobs, phase=None):
                                 secretInputs=secret_inputs, target=target, runOn=script.get('run_on', 'target'),
                                 targetConnection=script.get('target', {}).get('connection'),
                                 sharedInputs=[value['name'] for value in script.get('secretInputs', {}).values()
-                                              if value.get('valueFrom') == 'library_secret']))
+                                              if value.get('valueFrom') == 'library_secret'],
+                                **_script_metadata(script, checked_file(root, package_path + '/' + script['source']))))
         job['scripts'] = scripts
     if phase == 'post_install':
         return jobs
@@ -210,5 +220,6 @@ def prepare_script_jobs(root, snapshot, desired, rows, jobs, phase=None):
                 argv=[_argument(value, dict(job, hostId=provider_job['hostId']), library, hosts, desired, provider)
                       for value in callback.get('argv', [])],
                 secretInputs=secret_inputs, sharedInputs=shared_inputs, targetConnection=alias, runOn=callback.get('run_on', 'target'),
-                target=dict(libraryId=connection['libraryId'], instanceId=connection['applicationId'], hostId=provider_job['hostId'])))
+                target=dict(libraryId=connection['libraryId'], instanceId=connection['applicationId'], hostId=provider_job['hostId']),
+                **_script_metadata(callback, checked_file(root, provider_job['applicationPackagePath'] + '/' + callback['source']))))
     return jobs

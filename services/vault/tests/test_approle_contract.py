@@ -42,8 +42,8 @@ class AppRoleConfigurationTests(unittest.TestCase):
             check.when = [expression]
             self.assertEqual(check.evaluate_conditional(Templar(loader=loader, variables=variables), variables), expected)
 
-    def test_verify_requires_approle_without_mutation(self):
-        tasks = yaml.safe_load((ROLE / "tasks/verify.yml").read_text(encoding="utf-8"))
+    def test_apply_readback_requires_approle_without_mutation(self):
+        tasks = yaml.safe_load((ROLE / "tasks/verify_configuration.yml").read_text(encoding="utf-8"))
         guard = next(t for t in tasks if t["name"].startswith("Проверка заданных настроек аудита Vault, хранилища KV v2 и метода аутентификации"))
         expressions = [x for x in guard["ansible.builtin.assert"]["that"] if "approle/" in x]
         self.assertEqual(len(expressions), 2)

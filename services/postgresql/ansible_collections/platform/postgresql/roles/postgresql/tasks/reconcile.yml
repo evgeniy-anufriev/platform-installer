@@ -5,37 +5,37 @@
     - not (platform_postgresql_verify_only | bool)
     - ansible_facts.pkg_mgr | default('') == 'dnf'
     - platform_resolved_artifact_sources is not defined or
-      platform_resolved_artifact_sources['postgresql-runtime'].source == 'REPOSITORY'
+      platform_resolved_artifact_sources['postgresql-runtime'].source == 'REPOSITORY' or
+      (platform_postgresql_mode == 'pg_auto_failover' and platform_resolved_artifact_sources['pg-auto-failover'].source == 'REPOSITORY')
 
 - name: Установка одобренных пакетов PostgreSQL из настроенного системного репозитория
   ansible.builtin.package:
     name: >-
-      {{ _platform_postgresql_repository_packages
-         if ansible_facts.pkg_mgr | default('') == 'dnf'
-         else ['postgresql-' ~ platform_postgresql_version,
-               'postgresql-server-' ~ platform_postgresql_version,
-               'postgresql-contrib-' ~ platform_postgresql_version] }}
+      {{ (_platform_postgresql_repository_packages_to_install if _platform_postgresql_repository_selected | bool else []) +
+         (_platform_postgresql_failover_packages_to_install if platform_postgresql_mode == 'pg_auto_failover' and _platform_postgresql_failover_repository_selected | bool else []) }}
     state: present
-  when: not (platform_postgresql_verify_only | bool)
-    and (platform_resolved_artifact_sources is not defined or
-         platform_resolved_artifact_sources['postgresql-runtime'].source == 'REPOSITORY')
-
-- name: Установка одобренного пакета pg_auto_failover из настроенного системного репозитория
-  ansible.builtin.package:
-    name: >-
-      {{ (_platform_postgresql_failover_repository_package
+  vars:
+    _platform_postgresql_repository_selected: "{{ platform_resolved_artifact_sources is not defined or platform_resolved_artifact_sources['postgresql-runtime'].source == 'REPOSITORY' }}"
+    _platform_postgresql_failover_repository_selected: "{{ platform_resolved_artifact_sources is not defined or (platform_postgresql_mode == 'pg_auto_failover' and platform_resolved_artifact_sources['pg-auto-failover'].source == 'REPOSITORY') }}"
+    _platform_postgresql_repository_packages_to_install: >-
+      {{ _platform_postgresql_repository_packages if ansible_facts.pkg_mgr | default('') == 'dnf'
+         else ['postgresql-' ~ platform_postgresql_version, 'postgresql-server-' ~ platform_postgresql_version, 'postgresql-contrib-' ~ platform_postgresql_version] }}
+    _platform_postgresql_failover_packages_to_install: >-
+      {{ _platform_postgresql_failover_repository_package
           if ansible_facts.pkg_mgr | default('') == 'dnf'
-          else ['pg_auto_failover-' ~ platform_postgresql_pg_auto_failover_version]) }}
-    state: present
+          else ['pg_auto_failover-' ~ platform_postgresql_pg_auto_failover_version] }}
+  register: _platform_postgresql_package_install
   when:
     - not (platform_postgresql_verify_only | bool)
-    - platform_postgresql_mode == 'pg_auto_failover'
-    - platform_resolved_artifact_sources is not defined or platform_resolved_artifact_sources['pg-auto-failover'].source == 'REPOSITORY'
+    - _platform_postgresql_repository_selected | bool or (platform_postgresql_mode == 'pg_auto_failover' and _platform_postgresql_failover_repository_selected | bool)
 
 - name: "Определение каталога исполняемых файлов PostgreSQL после установки пакета"
   ansible.builtin.include_tasks: resolve_binary_directory.yml
   vars:
     platform_postgresql_require_binary_directory: true
+  when: >-
+    _platform_postgresql_package_install is changed or
+    (_platform_postgresql_binary_candidate_stats.results | default([]) | selectattr('stat.exists', 'equalto', true) | list | length == 0)
 
 - name: Проверка того, что учетная запись службы PostgreSQL существует
   ansible.builtin.user:

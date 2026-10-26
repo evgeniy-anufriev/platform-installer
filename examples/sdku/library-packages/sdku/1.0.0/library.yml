@@ -1,5 +1,5 @@
 {
-  "apiVersion": "platform.installer/application-package/v1alpha1",
+  "apiVersion": "platform.installer/application-package/v1alpha4",
   "files": [
     "roles/library_sdku/defaults/main.yml",
     "roles/library_sdku/templates/.base_compose.yml.j2",
@@ -63,7 +63,8 @@
         }
       },
       "order": -100,
-      "run_on": "execution_node"
+      "run_on": "execution_node",
+      "batch": true
     },
     {
       "id": "assign-identity-group-roles",
@@ -110,7 +111,8 @@
         }
       },
       "order": 100,
-      "run_on": "execution_node"
+      "run_on": "execution_node",
+      "batch": true
     }
   ]
 }

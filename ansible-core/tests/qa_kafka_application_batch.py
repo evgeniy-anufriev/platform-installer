@@ -21,6 +21,8 @@ with (root / 'calls.jsonl').open('a') as stream:
     stream.write(json.dumps([kind, args]) + '\n')
 if state.get('fail'):
     sys.exit(1)
+if '--create' in args and state.get('fail_create'):
+    sys.exit(1)
 if '--create' in args:
     state['topics'][args[args.index('--topic')+1]] = 'delete'
     (root / 'state.json').write_text(json.dumps(state))
@@ -101,11 +103,17 @@ class KafkaApplicationBatchTests(unittest.TestCase):
                            [self.topic('qa.a')], expected_success=False)
         self.assertEqual(2, len(calls))
 
-    def test_missing_managed_topic_is_created_and_read_back_then_repeat_is_read_only(self):
+    def test_missing_managed_topic_is_created_without_readback_then_repeat_is_read_only(self):
         calls = self.probe({'topics': {}}, [self.topic('qa.a')], repeat=True)
-        self.assertEqual(7, len(calls), calls)
+        self.assertEqual(5, len(calls), calls)
         self.assertEqual(1, sum('--create' in args for _, args in calls))
-        self.assertEqual(1, sum('--entity-name' in args for _, args in calls))
+        self.assertEqual(0, sum('--entity-name' in args for _, args in calls))
+
+    def test_failed_creation_stops_without_post_creation_reads(self):
+        calls = self.probe({'topics': {}, 'fail_create': True},
+                           [self.topic('qa.a')], expected_success=False)
+        self.assertEqual(3, len(calls))
+        self.assertIn('--create', calls[-1][1])
 
     def test_missing_existing_topic_never_creates(self):
         calls = self.probe({'topics': {}}, [self.topic('qa.a', mode='existing')], expected_success=False)
@@ -128,10 +136,10 @@ class KafkaApplicationBatchTests(unittest.TestCase):
 
     def test_library_verify_has_only_container_and_endpoint_checks(self):
         plays = yaml.safe_load((ROOT / 'ansible-core/playbooks/applications/verify.yml').read_text())
-        self.assertFalse(any(p.get('import_playbook') == 'applications/stages/provider-verify-stage.yml' for p in plays))
+        self.assertFalse(any(p.get('import_playbook') == 'stages/provider-verify-stage.yml' for p in plays))
         container = next(t for p in plays for t in p.get('tasks', []) if t['name'] == 'Проверка выбранного размещения каждого приложения')
         self.assertIs(False, container['vars']['application_runtime_verify_vault'])
-        self.assertTrue(any(p.get('import_playbook') == 'applications/stages/endpoint.yml' for p in plays))
+        self.assertTrue(any(p.get('import_playbook') == 'stages/endpoint.yml' for p in plays))
 
     def test_container_verify_with_agent_does_not_need_vault_or_provider_credentials(self):
         self.container_probe()

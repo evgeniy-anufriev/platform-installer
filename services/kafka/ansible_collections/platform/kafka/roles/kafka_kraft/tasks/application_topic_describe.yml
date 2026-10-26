@@ -1,33 +1,4 @@
 ---
-- name: "Получение описания явно указанного топика Kafka"
-  ansible.builtin.command:
-    argv:
-      - "{{ application_topic_cli_directory }}/bin/kafka-topics.sh"
-      - --bootstrap-server
-      - "{{ application_topic_candidate.address }}:{{ application_topic_candidate.port }}"
-      - --command-config
-      - "{{ application_topic_client.path }}"
-      - --describe
-      - --if-exists
-      - --topic
-      - "{{ '^' ~ (application_topic.name | regex_escape) ~ '$' }}"
-  register: application_topic_single_description
-  changed_when: false
-  failed_when: false
-  ignore_errors: true
-  no_log: true
-  until: application_topic_single_description.rc != 0 or not application_topic_must_exist or application_topic_single_description.stdout | trim | length > 0
-  retries: "{{ platform_kafka_startup_readiness_retries }}"
-  delay: "{{ platform_kafka_startup_readiness_delay }}"
-  when: application_topic_readback | default(false)
-
-- name: Привязка метаданных топика после его создания и повторного чтения
-  ansible.builtin.set_fact:
-    application_topic_description: "{{ application_topic_single_description }}"
-  changed_when: false
-  no_log: true
-  when: application_topic_readback | default(false)
-
 - name: Выбор метаданных топика Kafka из запрошенного набора
   ansible.builtin.set_fact:
     application_topic_description:
@@ -36,7 +7,6 @@
       stderr: "{{ application_topic_batch_description.stderr | default('') }}"
   changed_when: false
   no_log: true
-  when: not application_topic_readback | default(false)
 
 - name: "Различение отсутствия топика и ошибки подключения к Kafka"
   ansible.builtin.assert:
@@ -81,20 +51,6 @@
           code: APPLICATION_TOPIC_REPLICAS_UNAVAILABLE
           provider: "{{ platform_kafka_application_job.providerId }}"
           topic: "{{ application_topic.name }}"
-    - name: Чтение действующих свойств топика с учётом настроек брокера по умолчанию
-      ansible.builtin.command:
-        argv: ["{{ application_topic_cli_directory }}/bin/kafka-configs.sh", --bootstrap-server, "{{ application_topic_candidate.address }}:{{ application_topic_candidate.port }}", --command-config, "{{ application_topic_client.path }}", --describe, --all, --entity-type, topics, --entity-name, "{{ application_topic.name }}"]
-      register: application_topic_single_properties
-      changed_when: false
-      failed_when: false
-      no_log: true
-      when: application_topic_readback | default(false)
-    - name: Привязка свойств топика, повторно прочитанных после создания
-      ansible.builtin.set_fact:
-        application_topic_properties: "{{ application_topic_single_properties }}"
-      changed_when: false
-      no_log: true
-      when: application_topic_readback | default(false)
     - name: Выбор действующего блока конфигурации топика Kafka
       ansible.builtin.set_fact:
         application_topic_properties:
@@ -105,7 +61,6 @@
         application_topic_properties_pattern: '(?ms)^All configs for topic {{ application_topic.name | regex_escape }} are:[ \t]*\r?\n(.*?)(?=^All configs for topic |\Z)'
       changed_when: false
       no_log: true
-      when: not application_topic_readback | default(false)
     - name: Проверка наличия ответа с конфигурацией выбранного топика
       ansible.builtin.assert:
         that: application_topic_properties.stdout | trim | length > 0

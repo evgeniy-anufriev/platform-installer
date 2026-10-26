@@ -17,31 +17,6 @@
        | first | default('0') | int) > 0
     fail_msg: Kafka member systemd instance has no running main process
 
-- name: Проверка пути конфигурации экземпляра службы Kafka
-  ansible.builtin.stat:
-    path: "{{ kafka_member.config_directory }}/server.properties"
-    get_mime: false
-    get_attributes: false
-    get_checksum: false
-  register: platform_kafka_verify_config
-
-- name: Подтверждение наличия конфигурации экземпляра службы Kafka
-  ansible.builtin.assert:
-    that: platform_kafka_verify_config.stat.exists
-    fail_msg: Kafka member configuration is missing from its isolated directory
-
-- name: Чтение метаданных экземпляра службы Kafka
-  ansible.builtin.slurp:
-    src: "{{ kafka_member.data_directory }}/meta.properties"
-  register: platform_kafka_verify_member_metadata
-
-- name: Подтверждение идентичности экземпляра службы Kafka
-  ansible.builtin.assert:
-    that:
-      - (platform_kafka_verify_member_metadata.content | b64decode) is search('(?m)^cluster.id=' ~ platform_kafka_cluster_id ~ '$')
-      - (platform_kafka_verify_member_metadata.content | b64decode) is search('(?m)^node.id=' ~ (kafka_member.node_id | string) ~ '$')
-    fail_msg: Kafka member metadata does not match expected cluster/node identity
-
 - name: Проверка listeners экземпляра Kafka
   ansible.builtin.wait_for:
     host: 127.0.0.1

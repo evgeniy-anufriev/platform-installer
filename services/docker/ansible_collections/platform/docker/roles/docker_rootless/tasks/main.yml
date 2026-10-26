@@ -23,6 +23,7 @@
 
 - name: Выбор PKI-файлов Docker
   ansible.builtin.include_tasks: resolve_tls.yml
+  when: not (platform_docker_verify_only | bool)
 
 - name: Подготовка Docker без прав root без изменения других развёртываний
   ansible.builtin.include_tasks: provision.yml

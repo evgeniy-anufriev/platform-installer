@@ -108,7 +108,8 @@ def load_package(root, reference, kind, loader, validator, inputs=None):
     manifest = loader(checked_file(root, manifest_path))
     package_version = {'platform.installer/application-package/v1alpha1': 'v1alpha1',
                        'platform.installer/application-package/v1alpha2': 'v1alpha2',
-                       'platform.installer/application-package/v1alpha3': 'v1alpha3'}.get(manifest.get('apiVersion'))
+                       'platform.installer/application-package/v1alpha3': 'v1alpha3',
+                       'platform.installer/application-package/v1alpha4': 'v1alpha4'}.get(manifest.get('apiVersion'))
     if package_version is None:
         raise ValueError('APPLICATION_PACKAGE_VERSION_UNSUPPORTED')
     schema = os.path.join(validator.schema_root, "application-libraries", package_version, "package.schema.json")

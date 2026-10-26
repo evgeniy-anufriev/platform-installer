@@ -183,25 +183,24 @@ class VaultRoleContractTests(unittest.TestCase):
                     self.assertIsNotNone(yaml.safe_load(path.read_text(encoding="utf-8")))
 
     def test_verify_failure_message_belongs_to_assert_module(self):
-        tasks = yaml.safe_load((ROLE / "tasks/verify.yml").read_text(encoding="utf-8"))
+        tasks = yaml.safe_load((ROLE / "tasks/verify_configuration.yml").read_text(encoding="utf-8"))
         task = next(task for task in tasks if task["name"] == "Проверка заданных настроек аудита Vault, хранилища KV v2 и метода аутентификации")
         self.assertNotIn("fail_msg", task)
         self.assertEqual(task["ansible.builtin.assert"]["fail_msg"], "VAULT_CONFIGURATION_VERIFY_FAILED")
 
     def test_independent_verify_reconstructs_pki_through_shared_read_only_playbook(self):
         playbook = yaml.safe_load((ROOT / "services/vault/playbooks/verify.yml").read_text(encoding="utf-8"))
-        self.assertEqual(playbook[0], {"import_playbook": "../../../ansible-core/playbooks/validate.yml"})
-        self.assertEqual(playbook[1], {"import_playbook": "../../../ansible-core/playbooks/pki-verify.yml"})
-        self.assertTrue(playbook[2]["roles"][0]["platform_vault_verify_only"])
+        self.assertEqual(playbook[0], {"import_playbook": "../../../ansible-core/playbooks/pki-resolve.yml"})
+        self.assertTrue(playbook[1]["roles"][0]["platform_vault_verify_only"])
         self.assertNotIn("pki-apply.yml", str(playbook))
         for service in ("kafka", "postgresql"):
             peer = yaml.safe_load((ROOT / "services" / service / "playbooks/verify.yml").read_text(encoding="utf-8"))
-            self.assertIn(playbook[1], peer)
-        shared = yaml.safe_load((ROOT / "ansible-core/playbooks/pki-verify.yml").read_text(encoding="utf-8"))
+            self.assertIn(playbook[0], peer)
+        shared = yaml.safe_load((ROOT / "ansible-core/playbooks/pki-resolve.yml").read_text(encoding="utf-8"))
         resolver = shared[0]["tasks"][0]
         self.assertEqual(resolver["ansible.builtin.include_role"]["tasks_from"], "resolve.yml")
         self.assertTrue(resolver["vars"]["platform_pki_resolve_managed"])
-        self.assertEqual(shared[1]["roles"], [{"role": "platform.core.pki_verify"}])
+        self.assertEqual(len(shared), 1)
 
     def test_role_serializes_apply_with_target_shared_flock_and_always_release(self):
         main = yaml.safe_load((ROLE / "tasks/main.yml").read_text(encoding="utf-8"))
@@ -312,7 +311,7 @@ class VaultRoleContractTests(unittest.TestCase):
         self.assertIn("/unseal-shares", bootstrap_text)
         self.assertNotIn("/root-token", bootstrap_text)
         self.assertNotIn("/unseal-keys.json", bootstrap_text)
-        verify = yaml.safe_load((ROLE / "tasks/verify.yml").read_text(encoding="utf-8"))
+        verify = yaml.safe_load((ROLE / "tasks/verify_configuration.yml").read_text(encoding="utf-8"))
         self.assertTrue(all("GET" == task.get("ansible.builtin.uri", {}).get("method", "GET") for task in verify
                             if "ansible.builtin.uri" in task))
 
@@ -350,7 +349,7 @@ class VaultRoleContractTests(unittest.TestCase):
         from ansible.template import Templar
 
         configure = yaml.safe_load((ROLE / "tasks/configure.yml").read_text(encoding="utf-8"))
-        verify = yaml.safe_load((ROLE / "tasks/verify.yml").read_text(encoding="utf-8"))
+        verify = yaml.safe_load((ROLE / "tasks/verify_configuration.yml").read_text(encoding="utf-8"))
         configure_guard = next(task for task in configure if task["name"].startswith("Отклонение несовместимой существующей конфигурации аудита, KV или аутентификации перед изменением"))["ansible.builtin.assert"]["that"][0]
         verify_guard = next(task for task in verify if task["name"].startswith("Проверка заданных настроек аудита Vault, хранилища KV v2 и метода аутентификации"))["ansible.builtin.assert"]["that"]
         verify_guard = next(condition for condition in verify_guard if "log_raw" in condition)

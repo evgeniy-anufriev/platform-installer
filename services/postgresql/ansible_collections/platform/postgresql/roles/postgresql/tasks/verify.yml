@@ -1,0 +1,26 @@
+---
+- name: Проверка PostgreSQL аутентифицированным SQL-запросом
+  ansible.builtin.command:
+    argv:
+      - psql
+      - -h
+      - "{{ (_platform_postgresql_local_members | first).address }}"
+      - -p
+      - "{{ _platform_postgresql_effective_port | string }}"
+      - -U
+      - "{{ platform_postgresql_admin_superuser.username }}"
+      - -d
+      - postgres
+      - -Atqc
+      - SELECT 1
+  environment:
+    PGPASSWORD: "{{ lookup('ansible.builtin.file', platform_postgresql_secret_files[platform_postgresql_admin_superuser.passwordSecretRef]) | trim }}"
+    PGSSLMODE: "{{ 'verify-full' if platform_postgresql_tls_profile | length > 0 else 'prefer' }}"
+    PGSSLROOTCERT: "{{ _platform_postgresql_tls_directory | default(platform_postgresql_config_directory ~ '/pki') }}/ca-chain.pem"
+    PGCONNECT_TIMEOUT: '5'
+  register: _platform_postgresql_health
+  changed_when: false
+  retries: 20
+  delay: 2
+  until: _platform_postgresql_health.rc == 0 and _platform_postgresql_health.stdout | trim == '1'
+  no_log: true

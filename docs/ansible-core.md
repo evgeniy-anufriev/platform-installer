@@ -37,6 +37,37 @@ inspect -> validate -> plan -> apply -> verify -> result
 
 `apply` requires an exact validated plan fingerprint or generates and confirms it within one controlled standalone session. It may not silently execute a different intent.
 
+Owner decision 2026-10-26: ordinary infrastructure service `verify` is a
+read-only health check, analogous to application readiness. It checks the
+configured protocol, TLS trust and authentication where enabled, and required
+cluster participants/quorum. File/configuration drift and resource/ACL audits
+belong to Apply reconciliation or explicit provider diagnostics, not ordinary
+service Verify. `pki-resolve.yml` reconstructs the runtime PKI projection without
+auditing target files; explicit `pki-verify.yml` remains available. This does not
+change target-free project validation or explicit application-provider Verify.
+BIND and HAProxy retain their existing configuration checks by owner decision.
+
+Service entrypoints use `playbooks/validate-infrastructure.yml` for their
+infrastructure prerequisites. It shares input preparation and the existing
+validator with full `validate.yml`, but does not resolve application packages
+or consume application findings. Its default artifact is
+`infrastructure-validation-result.json`. It is not full Project Verify and
+never authorizes a plan or Start; the full project Validate/Plan admission is
+unchanged. Both native inventory and compatibility metadata keep the same
+precedence/conflict checks. Full and infrastructure validation results remain
+separate even when invoked in one Ansible process.
+
+Infrastructure endpoint publication resolves the selected service directly;
+it does not pre-resolve all application packages. Full HAProxy reconciliation
+and mixed/application partial scopes still resolve application sources. No
+empty marker is published that could suppress a later application fallback.
+Endpoint publication remains after provider readiness and before consumers.
+
+Artifact source probing batches requirement names in one node-local DNF query;
+each requirement still passes the original exact name/version/architecture/OS
+filter and repository-then-offline policy. A failed batch retains per-name
+queries. It neither enables repositories nor caches source decisions across runs.
+
 ## Proposed distribution layout
 
 ```text
@@ -184,8 +215,7 @@ Core projects topic defaults from the selected deployment's mode and broker memb
 the Kafka role uses builtin command/template/assert tasks and its installed CLI.
 Kafka topic/account preflight is omitted from the standard library pipeline.
 Apply reads each declared topic batch once and its
-effective configs once, then creates only missing managed topics with a fresh
-read-back. ACL inventory is read once per deployment invocation. Existing
+effective configs once, then creates only missing managed topics. Successful creation does not trigger another describe/config read; CLI errors still fail Apply. ACL inventory is read once per deployment invocation. Missing ACL writes are grouped per account only for identical resource types, patterns and missing operations; resources are passed as repeated CLI selectors. A failed group stops Apply; a subsequent Apply reads fresh state and resumes the remaining delta. This batching is not atomic. Existing
 resources and explicit provider Verify are read-only. Mismatching counts or
 requested effective properties fail without altering topics. Temporary client
 properties use mode 0600 and always cleanup; raw CLI output is suppressed and
@@ -545,3 +575,12 @@ New plans use plan/v1alpha9 and execution-manifest/v1alpha7; existing plans
 without terminal scripts retain their previous versions. Execution capabilities
 v1alpha12 advertise `applicationPostInstall: ApplicationPostInstall/v1alpha1`.
 No new script editor or product-specific runner environment is introduced.
+
+Provider hooks may opt into package-v1alpha4 batching. Core preserves ordered
+provider boundaries and exact secret-reference isolation; the product script
+receives original argv arrays through PLATFORM_SCRIPT_BATCH_FILE and owns its
+single-session authentication. package_script remains context-free. Every invocation uses ordinary idempotent source copy. Only exact provider/
+route/host/bridge network discovery is reused within the Ansible process.
+Vault instance Apply performs one full fresh preflight before document writes;
+deferred delivery does not call that same preflight twice. Existing generated
+password runtime files retain the identity already provisioned before delivery.

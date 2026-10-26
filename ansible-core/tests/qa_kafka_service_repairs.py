@@ -68,6 +68,7 @@ class KafkaServiceRepairTests(unittest.TestCase):
                 self.assertEqual(1, sum('--describe' in args for _, args in calls))
                 self.assertEqual(1 if bootstrap and not metadata_fail else 0, sum('--alter' in args for _, args in calls))
                 self.assertEqual(0 if metadata_fail else 1, sum(name == 'kafka-broker-api-versions.sh' for name, _ in calls))
+                self.assertEqual(0 if metadata_fail else 1, sum(name == 'kafka-acls.sh' and '--list' in args for name, args in calls))
 
     def test_boolean_decision_uses_all_host_observations(self):
         subjects = yaml.safe_load((ROLE / 'tasks/authorization_inputs.yml').read_text())

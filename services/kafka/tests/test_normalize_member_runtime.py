@@ -42,7 +42,8 @@ class KafkaMemberNormalizationRuntimeTests(unittest.TestCase):
                     "expected_legacy": compatibility.get("name", "kafka@kafka-" + member_id) + ".service"}},
             ])
         play = [{"hosts": "localhost", "connection": "local", "gather_facts": False,
-                 "vars": {"platform_kafka_config_directory": "/tmp/config", "platform_kafka_service_name": "kafka",
+                 "vars": {"platform_kafka_config_directory": "/tmp/config", "platform_kafka_name": "platform-kafka", "platform_kafka_service_name": "kafka",
+                          "platform_kafka_version": yaml.safe_load((TASKS.parent.parent / "defaults/main.yml").read_text())["platform_kafka_version"],
                           "platform_kafka_deployment_id": "qa-kafka", "platform_kafka_tls_profile": "tls",
                           "_platform_kafka_instances": []}, "tasks": tasks}]
         with tempfile.TemporaryDirectory(prefix="platform-kafka-normalize-") as directory:

@@ -1,5 +1,5 @@
 {
-  "apiVersion": "platform.installer/application-package/v1alpha1",
+  "apiVersion": "platform.installer/application-package/v1alpha4",
   "kind": "ApplicationPackage",
   "name": "keycloak",
   "version": "1.0.0",
@@ -191,7 +191,8 @@
           "optional": true
         }
       },
-      "run_on": "execution_node"
+      "run_on": "execution_node",
+      "batch": true
     }
   ]
 }

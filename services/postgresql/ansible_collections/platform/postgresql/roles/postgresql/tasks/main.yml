@@ -12,6 +12,7 @@
     platform_managed_data_root_directory: "{{ platform_data_root_directory | default('/var/lib') }}"
     platform_managed_data_root_owner: "{{ ansible_user | default('') }}"
     platform_managed_data_root_verify_only: "{{ platform_postgresql_verify_only | bool }}"
+  when: not (platform_postgresql_verify_only | bool)
 
 - name: "Выбор плана PKI для PostgreSQL до внесения изменений"
   ansible.builtin.include_tasks: resolve_tls.yml
@@ -151,7 +152,7 @@
 
 - name: Согласование PostgreSQL за исключением операции очистки
   ansible.builtin.include_tasks:
-    file: reconcile.yml
+    file: "{{ 'verify.yml' if platform_postgresql_verify_only | bool else 'reconcile.yml' }}"
     apply:
       environment:
         PATH: "{{ platform_postgresql_binary_directory }}:{{ ansible_env.PATH | default('/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin') }}"

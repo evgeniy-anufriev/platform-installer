@@ -31,6 +31,21 @@ const tabLabels: Array<{ id: InstallationTab; label: string }> = [
 ];
 const executionEventWindowSize = 512;
 
+function planExpiryLabel(timestamp: string): string {
+  const date = new Date(timestamp);
+  if (!Number.isFinite(date.getTime())) return "Время неизвестно";
+  return `${new Intl.DateTimeFormat("ru-RU", {
+    timeZone: "Europe/Moscow",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).format(date)} МСК`;
+}
+
 function planActionLabel(action: {
   type: string;
   summary: string;
@@ -1157,7 +1172,11 @@ function PlanStage({
             <dt>Узел выполнения</dt>
             <dd>{plan.executionNodeId}</dd>
             <dt>Истекает</dt>
-            <dd>{plan.expiresAt}</dd>
+            <dd>
+              <time dateTime={plan.expiresAt}>
+                {planExpiryLabel(plan.expiresAt)}
+              </time>
+            </dd>
           </dl>
         </article>
         {(operation.error || run?.error) && (

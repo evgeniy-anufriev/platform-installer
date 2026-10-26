@@ -26,10 +26,3 @@
   loop_control:
     loop_var: platform_keepalived_deployment
     label: "{{ platform_keepalived_deployment.key }}"
-
-- name: Проверка явно включённых механизмов отслеживания HAProxy без изменений
-  ansible.builtin.include_tasks: verify_tracking.yml
-  loop: "{{ platform_desired_state.serviceDeployments | dict2items | selectattr('value.serviceType', 'equalto', 'keepalived') | selectattr('key', 'in', platform_deployments | default({})) | selectattr('value.configuration.haproxyHealthTracking', 'defined') | list }}"
-  loop_control:
-    loop_var: platform_keepalived_tracking_deployment
-    label: "{{ platform_keepalived_tracking_deployment.key }}"

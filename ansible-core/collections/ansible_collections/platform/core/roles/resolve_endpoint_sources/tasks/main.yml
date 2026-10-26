@@ -1,4 +1,12 @@
 ---
+- name: Использование ранее рассчитанных на контроллере параметров приложений
+  ansible.builtin.set_fact:
+    platform_application_rows: "{{ hostvars['localhost'].platform_application_rows }}"
+  when:
+    - hostvars['localhost'].platform_endpoint_sources is not defined
+    - hostvars['localhost'].platform_application_rows is defined
+  no_log: true
+
 - name: "Вычисление параметров приложений, если источники конечных точек ещё не подготовлены"
   ansible.builtin.include_role:
     name: platform.core.resolve_application_libraries
@@ -6,6 +14,7 @@
       delegate_to: localhost
   when:
     - hostvars['localhost'].platform_endpoint_sources is not defined
+    - platform_application_rows is not defined
     - platform_desired_state.applicationLibraryDeployments | default({}) | length > 0
   run_once: true
 

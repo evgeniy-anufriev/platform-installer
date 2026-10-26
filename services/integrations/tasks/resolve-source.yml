@@ -10,6 +10,7 @@
 - name: Повторное использование нормализованных источников для общего обработчика конечных точек
   ansible.builtin.include_role:
     name: platform.core.resolve_endpoint_sources
+  when: _platform_integration_source_id not in (platform_desired_state.serviceDeployments | default({}))
 - name: Выбор политики проверки источника без ветвления по типу провайдера
   ansible.builtin.set_fact:
     _platform_integration_probe: "{{ (hostvars['localhost'].platform_endpoint_sources | default({})).get(_platform_integration_source_id, {}).get('probe', {}) }}"

@@ -43,9 +43,9 @@ class Net02KeepalivedContractTests(unittest.TestCase):
 
     def test_cluster_barrier_orders_candidate_active_and_service_phases(self):
         playbook = (ROOT / "playbooks" / "apply.yml").read_text(encoding="utf-8")
-        phase_a = playbook.index("Этап A — подготовить")
+        phase_a = playbook.index("Этап A — подготовка")
         barrier_a = playbook.index("Барьер A")
-        phase_b = playbook.index("Этап B — установить")
+        phase_b = playbook.index("Этап B — установка")
         barrier_b = playbook.index("Барьер B")
         phase_c = playbook.index("Этап C — привести")
         self.assertLess(phase_a, barrier_a)

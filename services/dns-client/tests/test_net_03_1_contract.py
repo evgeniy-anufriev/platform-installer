@@ -73,7 +73,7 @@ class Net031DnsClientContractTests(unittest.TestCase):
         self.assertIn("nmcli, device, reapply", networkmanager)
         self.assertNotIn("connection, down", networkmanager)
         self.assertNotIn("connection, up", networkmanager)
-        self.assertIn("DNS_CLIENT_NM_EFFECTIVE_STATE_INVALID", verify)
+        self.assertIn("getent, hosts", verify)
 
     def test_runtime_role_uses_controller_projection_for_apply_and_verify(self):
         main = (ROLE / "tasks" / "main.yml").read_text(encoding="utf-8")

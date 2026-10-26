@@ -1,0 +1,18 @@
+---
+- name: Проверка готовности каждого локального Schema Registry через API
+  ansible.builtin.uri:
+    url: "{{ item.https_url }}/subjects"
+    method: GET
+    status_code: 200
+    validate_certs: true
+    ca_path: "{{ item.config_directory }}/pki/ca-chain.pem"
+    use_proxy: false
+    return_content: false
+  loop: "{{ _platform_kafka_registry_local }}"
+  loop_control:
+    label: "{{ item.id }}"
+  register: _platform_kafka_registry_health
+  retries: "{{ platform_kafka_schema_registry_readiness_retries }}"
+  delay: "{{ platform_kafka_schema_registry_readiness_delay }}"
+  until: _platform_kafka_registry_health.status | default(0) == 200
+  changed_when: false

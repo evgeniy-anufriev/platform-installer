@@ -28,9 +28,34 @@ finish() {
 }
 trap finish EXIT
 trap 'exit 1' HUP INT TERM
-[ "$#" -eq 8 ] || fail
-operation=$1; url=${2%/}; realm=$3; admin_user=$4
-instance=$5; endpoint=$6; proxy=$7; payload=$8
+bind_invocation() {
+  [ "$#" -eq 8 ] || fail
+  operation=$1; url=${2%/}; realm=$3; admin_user=$4
+  instance=$5; endpoint=$6; proxy=$7; payload=$8
+}
+batch_file=${PLATFORM_SCRIPT_BATCH_FILE:-}
+invocation_index=0
+load_batch_invocation() {
+  set -- "$(jq -er --argjson i "$invocation_index" '.[$i][0]' "$batch_file")" \
+    "$(jq -er --argjson i "$invocation_index" '.[$i][1]' "$batch_file")" \
+    "$(jq -er --argjson i "$invocation_index" '.[$i][2]' "$batch_file")" \
+    "$(jq -er --argjson i "$invocation_index" '.[$i][3]' "$batch_file")" \
+    "$(jq -er --argjson i "$invocation_index" '.[$i][4]' "$batch_file")" \
+    "$(jq -er --argjson i "$invocation_index" '.[$i][5]' "$batch_file")" \
+    "$(jq -er --argjson i "$invocation_index" '.[$i][6]' "$batch_file")" \
+    "$(jq -er --argjson i "$invocation_index" '.[$i][7]' "$batch_file")"
+  bind_invocation "$@"
+}
+if [ -n "$batch_file" ]; then
+  [ "$#" -eq 0 ] || fail
+  invocation_count=$(jq -er 'length | select(. > 0)' "$batch_file") || fail
+  jq -e 'all(.[]; length == 8) and (.[0][1:4] as $auth | all(.[]; .[1:4] == $auth))' "$batch_file" >/dev/null || fail
+  load_batch_invocation
+else
+  bind_invocation "$@"
+  invocation_count=1
+fi
+batch_url=$url; batch_realm=$realm; batch_admin=$admin_user
 command -v curl >/dev/null || fail
 command -v jq >/dev/null || fail
 case "$url" in https://*) ;; *) fail;; esac
@@ -111,7 +136,6 @@ kc() {
   case "$http_status" in 2??) ;; *) fail;; esac
   cat "$work/response"
 }
-printf '%s' "$payload" > "$work/payload.json"
 get_exact() {
   resource=$1; field=$2; name=$3
   if [ "$resource" = groups ]; then
@@ -196,6 +220,8 @@ reconcile_roles() {
     '([ $required[0][].id ] - [ .[].id ]) | length == 0' "$work/role-mappings.json" >/dev/null || fail
 }
 
+dispatch_invocation() {
+printf '%s' "$payload" > "$work/payload.json"
 case "$operation" in
   groups|group-roles)
     jq 'if type == "array" then {groups: .} else . end' "$work/payload.json" > "$work/groups-payload.json" || fail
@@ -395,4 +421,11 @@ case "$operation" in
     ;;
   *) fail;;
 esac
+}
+while [ "$invocation_index" -lt "$invocation_count" ]; do
+  if [ -n "$batch_file" ]; then load_batch_invocation; fi
+  [ "$url" = "$batch_url" ] && [ "$realm" = "$batch_realm" ] && [ "$admin_user" = "$batch_admin" ] || fail
+  dispatch_invocation
+  invocation_index=$((invocation_index+1))
+done
 printf '{"status":"ok","changed":%s}\n' "$changed"

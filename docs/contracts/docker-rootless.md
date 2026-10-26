@@ -56,9 +56,9 @@ foreign-owned or group/world-writable ancestors. System directories and
 other users' homes are rejected. An existing leaf must belong to the Docker
 account; Apply creates a missing private directory. Changing the setting
 does not migrate or delete existing images, containers or volumes. The
-operator must plan any required data migration before Apply. Verify checks
-the directory, configured `data-root` and active daemon's `DockerRootDir`
-without changing files.
+operator must plan any required data migration before Apply. Apply validates
+the directory and configures `data-root`. Ordinary Verify checks daemon/API
+availability, rootless operation and Compose; it does not audit data paths.
 
 RED OS repository packages provide Docker Engine/CLI/rootless extras,
 RootlessKit, LXC, fuse-overlayfs and the `docker-compose` package, which
@@ -106,8 +106,9 @@ to be active, so manual `systemctl --user start docker.service` cannot bypass
 the gate. There is no finite polling window: a late `lxc-net` start brings
 up the target and bridge, then starts Docker. When `lxc-net` stops, the
 target and bridge stop and Docker is stopped. Linger keeps the user manager
-alive without a login session. Apply/verify check both managers, target
-state and daemon state; no claim of a direct cross-manager `After=` edge.
+alive without a login session. Apply configures both managers and the target;
+Verify checks the resulting user daemon and API. There is no direct
+cross-manager `After=` edge.
 
 ## Docker TCP API and TLS
 

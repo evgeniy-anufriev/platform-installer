@@ -898,3 +898,9 @@ authority. Reuse synchronous Build/Approve/Start and session-secret transport.
 No operator-authored image SHA/size, new persistence or planning daemon. See the
 [implementation plan](work/application-libraries/application-image-metadata-plan.md)
 and ADR-046; current gates and blockers are recorded only in CURRENT_STATE.
+
+The owner-approved [runtime optimization](work/execution/service-runtime-optimization-phase4-plan.md)
+adds explicit compatible provider-script batching and removes repeated delivery
+preparation. Focused QA and independent review are separate from updated-bundle,
+React/Wails and cold-install timing acceptance; the active old-bundle run is not
+benchmark evidence for these changes.

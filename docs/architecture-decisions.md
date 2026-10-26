@@ -876,3 +876,15 @@ or container behavior. New versioned request/plan/manifest/capability and
 package-script contracts make older runtimes reject unsupported selection.
 See the [Stage3 plan](work/application-libraries/szi-stage3-technical-plan.md)
 and its implementation journal; acceptance is recorded in CURRENT_STATE.md.
+
+ADR-048 amendment, owner-approved runtime optimization (2026-10-26): package
+v1alpha4 explicitly opts compatible provider hooks into batched invocation.
+Core groups only adjacent invocations inside an already-ready provider batch;
+script ID/source digest/order/target/execution location/secret references must
+match. The generic runner passes a private argument-array file and fresh secret
+files, with bounded aggregate timeout and existing cleanup. It does not own
+product authentication or dispatch. No scheduler, persistent cache or second
+credential store is introduced. Existing schemas/legacy scripts remain unchanged.
+Vault delivery retains fresh ownership/CAS reads; only duplicate preflight and
+invocation-local network discovery are removed. See the
+[phase4 plan](work/execution/service-runtime-optimization-phase4-plan.md).

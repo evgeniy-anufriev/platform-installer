@@ -128,6 +128,7 @@
   loop_control:
     loop_var: platform_managed_data_path_instance
     label: "{{ platform_managed_data_path_instance.id }}"
+  when: not (platform_kafka_verify_only | bool)
 
 - name: Проверка устаревших шаблонов служб systemd Kafka перед изменением
   ansible.builtin.stat:
@@ -385,7 +386,7 @@
 
 - name: Проверка административного контроля и определение начальной загрузки перед мутациями хоста
   ansible.builtin.include_tasks: authorization_inputs.yml
-  when: _platform_kafka_scram_enabled
+  when: _platform_kafka_scram_enabled and not (platform_kafka_verify_only | bool)
 
 - name: Однократная подготовка узла Kafka
   ansible.builtin.include_tasks: prepare_host.yml
@@ -393,12 +394,24 @@
     - not (platform_kafka_verify_only | bool) and platform_kafka_phase != 'schema_registry'
     - _platform_kafka_local_instances | length > 0
 
+- name: Выбор узла расчёта principals для текущего запуска Kafka
+  ansible.builtin.set_fact:
+    _platform_kafka_principal_source_host: "{{ inventory_hostname }}"
+  run_once: true
+  when: _platform_kafka_scram_enabled and not (platform_kafka_verify_only | bool)
+
 - name: Определение удостоверений сертификата экземпляра доверенной службы перед активацией авторизатора
   ansible.builtin.include_tasks: authorization_identity.yml
   loop: "{{ _platform_kafka_instances }}"
   loop_control:
     loop_var: kafka_authorization_member
-  when: _platform_kafka_scram_enabled
+  when: _platform_kafka_scram_enabled and not (platform_kafka_verify_only | bool)
+  run_once: true
+
+- name: Передача рассчитанных principals всем участникам текущего запуска Kafka
+  ansible.builtin.set_fact:
+    _platform_kafka_admin_principals: "{{ hostvars[_platform_kafka_principal_source_host]._platform_kafka_admin_principals }}"
+  when: _platform_kafka_scram_enabled and not (platform_kafka_verify_only | bool)
 
 - name: Применение локальных экземпляров службы Kafka в детерминированном порядке узлов
   ansible.builtin.include_tasks: member.yml
@@ -424,20 +437,21 @@
   when:
     - _platform_kafka_scram_enabled
     - platform_kafka_phase != 'schema_registry'
+    - not (platform_kafka_verify_only | bool)
 
 - name: "Подтверждение загрузки итоговой конфигурации Kafka перед следующим этапом"
   ansible.builtin.include_tasks: authorization_confirm.yml
   loop: "{{ _platform_kafka_local_instances }}"
   loop_control:
     loop_var: kafka_authorization_member
-  when: _platform_kafka_scram_enabled
+  when: _platform_kafka_scram_enabled and not (platform_kafka_verify_only | bool)
 
 - name: Проверка локальных экземпляров службы Kafka и кластера
   ansible.builtin.include_tasks: verify.yml
   when: platform_kafka_verify_only | bool
 
 - name: Применение или проверка дополнительного компонента Schema Registry
-  ansible.builtin.include_tasks: schema_registry.yml
+  ansible.builtin.include_tasks: "{{ 'schema_registry_verify.yml' if platform_kafka_verify_only | bool else 'schema_registry.yml' }}"
   when:
     - platform_kafka_schema_registry_enabled
     - _platform_kafka_registry_local | length > 0

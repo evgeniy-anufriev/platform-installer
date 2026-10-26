@@ -29,6 +29,7 @@
       path: "{{ application_provider_script.path }}"
       argv: "{{ application_provider_script.argv }}"
       secretInputs: "{{ application_provider_script.secretInputs }}"
+      invocations: "{{ application_provider_script.invocations | default([]) }}"
       account: "{{ lookup('ansible.builtin.pipe', 'id -un') if application_provider_script.runOn | default('target') == 'execution_node' else application_script_target_job.account }}"
       workingDirectory: >-
         {{ (platform_project_root | default(hostvars['localhost'].inventory_dir | dirname))

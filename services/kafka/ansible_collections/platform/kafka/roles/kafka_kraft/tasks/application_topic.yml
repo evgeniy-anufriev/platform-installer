@@ -4,7 +4,7 @@
   vars:
     application_topic_must_exist: "{{ platform_kafka_application_phase == 'verify' or application_topic.mode == 'existing' }}"
 
-- name: "Сохранение решения о создании топика перед повторным чтением его состояния"
+- name: "Сохранение решения о создании отсутствующего топика"
   ansible.builtin.set_fact:
     application_topic_creation_required: "{{ platform_kafka_application_phase == 'apply' and application_topic.mode == 'managed' and application_topic_description.stdout | trim | length == 0 }}"
   changed_when: false
@@ -38,8 +38,3 @@
           topic: "{{ application_topic.name }}"
           address: "{{ application_topic_candidate.address }}:{{ application_topic_candidate.port }}"
           reason: "{{ application_topic_creation.stderr | regex_search('(TopicAuthorizationException|TimeoutException|SSLHandshakeException|InvalidConfigurationException|InvalidReplicationFactorException)') | default('KAFKA_CLI_FAILED', true) }}"
-    - name: Повторное чтение топика после создания
-      ansible.builtin.include_tasks: application_topic_describe.yml
-      vars:
-        application_topic_must_exist: true
-        application_topic_readback: true

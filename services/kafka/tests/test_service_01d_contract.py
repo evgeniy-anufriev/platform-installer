@@ -77,7 +77,7 @@ class Service01DContractTests(unittest.TestCase):
 
     def test_verify_reconstructs_the_derived_pki_plan(self):
         playbook = (SERVICE / "playbooks" / "verify.yml").read_text(encoding="utf-8")
-        self.assertIn("../../../ansible-core/playbooks/pki-verify.yml", playbook)
+        self.assertIn("../../../ansible-core/playbooks/pki-resolve.yml", playbook)
 
     def test_apply_restarts_members_when_target_pki_material_changes(self):
         member = (ROLE / "tasks" / "member.yml").read_text(encoding="utf-8")

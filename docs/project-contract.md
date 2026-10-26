@@ -317,6 +317,23 @@ and execution target come from the selected provider, without consumer wrapper
 scripts. `secretInputs` may reference a consumer `secret_binding` by `binding`;
 an explicitly optional absent binding supplies no input. Credential values are
 still delivered only through the existing protected files. Verify is unchanged.
+Package manifest v1alpha4 adds opt-in `batch: true` only for `provider_prepare`
+and `connection_apply`, with `execution: once`. Older schemas remain closed.
+Within one ready provider batch, only adjacent hooks with the same script ID,
+allowlisted source digest, order, target, execution location and exact secret
+references share an invocation. Original argument arrays retain their order in
+a private JSON input at `PLATFORM_SCRIPT_BATCH_FILE`; a batch script receives
+no command-line arguments. Singleton opt-ins receive a one-element array.
+The generic runner supplies only this file and the usual secret-file paths;
+product-specific authentication and operation dispatch remain inside the script.
+The timeout is 300 seconds times the original invocation count. Failure stops
+later operations; this is not an atomic transaction. Dependencies are derived
+before grouping, and accounts/Vault delivery wait for the complete batch.
+Each invocation restores directory ownership and uses the ordinary idempotent
+builtin copy for its allowlisted source; script source readiness is not cached.
+Secret inputs are freshly copied and cleaned
+for every invocation, including failure; batch input also uses this cleanup.
+
 Slots in every library package may specify `start_priority` (default 100); Apply orders selected
 logical instances by this value and then by instance ID, completing each
 instance's readiness and after-ready scripts before starting the next.

@@ -79,6 +79,8 @@
       ansible.builtin.set_fact:
         application_topic_candidate: "{{ application_topic_candidate | combine({'address': kafka_admin_listener_candidates[0].bootstrap_host, 'port': kafka_admin_listener_candidates[0].bootstrap_port, 'securityProtocol': 'SASL_SSL'}) }}"
       changed_when: false
+    - name: Чтение ACL всех principals перед пакетной настройкой совместимости
+      ansible.builtin.include_tasks: application_acls_read_all.yml
     - name: Настройка только выбранного владельцем анонимного доступа к данным
       ansible.builtin.include_tasks: authorization_security_guard.yml
     - name: Обеспечение использования списков управления доступом к анонимным данным, выбранных владельцем

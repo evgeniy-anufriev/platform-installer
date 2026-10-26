@@ -22,6 +22,27 @@ document_action=importlib.util.module_from_spec(spec);spec.loader.exec_module(do
 
 
 class ApplicationProviderTest(unittest.TestCase):
+    def test_deferred_delivery_keeps_already_provisioned_generated_password(self):
+        with tempfile.TemporaryDirectory() as root:
+            ref = 'pla-generated-' + 'a' * 40
+            password = Path(root) / ref
+            password.write_text('already-provisioned')
+            password.chmod(0o600)
+            args = dict(document=dict(mount='secret', owner='owned', fields={
+                'password': dict(source={'kind': 'generated'}, passwordRef=ref)}),
+                current={'status': 404}, secret_root=root, secret_files={ref: str(password)},
+                provider={'mounts': {'secret/': {'type': 'kv', 'options': {'version': '2'}}}})
+            action = object.__new__(document_action.ActionModule)
+            action._task = SimpleNamespace(args=args)
+            with patch.object(document_action.secrets, 'token_urlsafe') as generator:
+                result = action.run()
+                self.assertFalse(result.get('failed', False))
+                self.assertEqual('already-provisioned', result['fields']['password'])
+                generator.assert_not_called()
+                args['current'] = self.response()
+                args['current']['json']['data']['data']['_platform_owner'] = 'foreign'
+                self.assertTrue(action.run()['failed'])
+
     def test_generated_password_reuses_owned_document_and_rejects_unsafe_sources(self):
         with tempfile.TemporaryDirectory() as root:
             ref = 'pla-generated-' + 'a' * 40

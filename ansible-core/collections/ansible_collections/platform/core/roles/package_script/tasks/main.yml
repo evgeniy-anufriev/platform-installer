@@ -3,7 +3,7 @@
   ansible.builtin.set_fact:
     platform_script_directory: "{{ platform_script_job.workingDirectory }}/.scripts"
     platform_script_secret_directory: "{{ platform_script_job.workingDirectory }}/.scripts/.secrets/{{ platform_script_job.id }}"
-    platform_script_environment: {}
+    platform_script_environment: "{{ dict(platform_script_job.secretInputs.keys() | map('upper') | map('regex_replace', '^', 'PLATFORM_SCRIPT_SECRET_') | map('regex_replace', '$', '_FILE') | zip(platform_script_job.secretInputs.keys() | map('regex_replace', '^', platform_script_job.workingDirectory ~ '/.scripts/.secrets/' ~ platform_script_job.id ~ '/'))) | combine({'PLATFORM_SCRIPT_BATCH_FILE': platform_script_job.workingDirectory ~ '/.scripts/.secrets/' ~ platform_script_job.id ~ '/.batch.json'} if platform_script_job.invocations | default([]) | length > 0 else {}) }}"
   no_log: true
 
 - name: Проверка защиты входных данных сценария
@@ -46,7 +46,8 @@
         state: directory
         owner: "{{ platform_script_job.account }}"
         mode: '0700'
-      when: platform_script_job.secretInputs | length > 0
+      when: platform_script_job.secretInputs | length > 0 or platform_script_job.invocations | default([]) | length > 0
+      changed_when: false
       no_log: true
 
     - name: Подготовка входных файлов среды выполнения для выбранной целевой учетной записи
@@ -56,18 +57,22 @@
         owner: "{{ platform_script_job.account }}"
         mode: '0600'
       loop: "{{ platform_script_job.secretInputs | dict2items }}"
+      changed_when: false
       no_log: true
 
-    - name: "Передача сценарию только путей защищённых входных файлов"
-      ansible.builtin.set_fact:
-        platform_script_environment: >-
-          {{ platform_script_environment | combine({'PLATFORM_SCRIPT_SECRET_' ~ (item.key | upper) ~ '_FILE': platform_script_secret_directory ~ '/' ~ item.key}) }}
-      loop: "{{ platform_script_job.secretInputs | dict2items }}"
+    - name: Подготовка пакета несекретных аргументов для сценария
+      ansible.builtin.copy:
+        content: "{{ platform_script_job.invocations | to_json }}"
+        dest: "{{ platform_script_secret_directory }}/.batch.json"
+        owner: "{{ platform_script_job.account }}"
+        mode: '0600'
+      when: platform_script_job.invocations | default([]) | length > 0
+      changed_when: false
       no_log: true
 
     - name: Выполнение точного сценария пакета без оболочки или неограниченной среды выполнения
       ansible.builtin.command:
-        argv: "{{ ['timeout', '--kill-after=2s', '300s', platform_script_directory ~ '/' ~ platform_script_job.id] + platform_script_job.argv }}"
+        argv: "{{ ['timeout', '--kill-after=2s', ((300 * ([1, platform_script_job.invocations | default([]) | length] | max)) | string) ~ 's', platform_script_directory ~ '/' ~ platform_script_job.id] + platform_script_job.argv }}"
         chdir: "{{ platform_script_job.workingDirectory }}"
       become_user: "{{ platform_script_job.account }}"
       environment: "{{ platform_script_environment }}"

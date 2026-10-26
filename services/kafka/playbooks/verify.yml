@@ -1,8 +1,6 @@
-- import_playbook: discover.yml
-
 - import_playbook: load_generated_state.yml
 
-- import_playbook: ../../../ansible-core/playbooks/pki-verify.yml
+- import_playbook: ../../../ansible-core/playbooks/pki-resolve.yml
 
 - name: Проверка экземпляров службы Kafka KRaft
   hosts: platform_targets
