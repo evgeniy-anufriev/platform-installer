@@ -727,7 +727,7 @@ class ActionModule(ActionBase):
             return dict(status='BLOCKED', changed=False, code=code, providers=[], libraryJobs=[], instanceJobs=[])
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/project_snapshot.py","mode":420,"size":39190,"sha256":"8933cc8c295fb24550cb767b746f3e94994115684d94015c044a7ffb78d3120b","index":0,"count":1,"encoding":"utf-8","payloadBytes":39190}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/action/project_snapshot.py","mode":420,"size":39270,"sha256":"e85d83aff7041be6a084e49b78446a4b07e1a7c0e49b16a460113f186dcf4fc3","index":0,"count":1,"encoding":"utf-8","payloadBytes":39270}
 from __future__ import absolute_import, division, print_function
 
 __metaclass__ = type
@@ -1189,7 +1189,8 @@ class ActionModule(ActionBase):
             applications_enabled = bool(desired_state.get('applicationLibraryDeployments'))
             if task_vars.get('platform_application_expected_fingerprint') and not applications_enabled:
                 raise ValueError('APPLICATION_EXECUTION_MODEL_MISMATCH')
-            if applications_enabled and "platform_application_rows" not in task_vars:
+            if (applications_enabled and self._task.args.get("configuration_only") is not True
+                    and "platform_application_rows" not in task_vars):
                 raise ValueError("Application resolve role must run before snapshot")
             desired_state = infrastructure_state(desired_state)
             service_types = set(
@@ -35661,7 +35662,7 @@ all:
       hosts: {}
 
 @@END
-@@PORTABLE {"path":"ansible-core/examples/empty/project.yml","mode":420,"size":481,"sha256":"d60d5d04871cea5972df84d0061626fce18c21a658224528dce557a28e6af826","index":0,"count":1,"encoding":"utf-8","payloadBytes":481}
+@@PORTABLE {"path":"ansible-core/examples/empty/project.yml","mode":420,"size":481,"sha256":"4e3608c197ba6ab8c0cb58fed278f66d89ae08df6596197ec9c6473afce46c55","index":0,"count":1,"encoding":"utf-8","payloadBytes":481}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -35669,7 +35670,7 @@ metadata:
 desiredStateContract: platform.installer/project-desired-state/v2alpha1
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:56ab7904b254dea873e29a243f6af6263e5b3f2a4639118f7b2fa2d12fae6e60
+  digest: sha256:245193464efbc37af1afb9484bc6ebbbe4943f1807e06c56573f5850752df9c2
   services: {}
 artifactLock:
   apiVersion: platform.installer/artifacts/v1alpha1
@@ -35711,7 +35712,7 @@ all:
           ansible_host: 192.0.2.10
 
 @@END
-@@PORTABLE {"path":"ansible-core/examples/invalid-reference/project.yml","mode":420,"size":617,"sha256":"6f1b69def5d54398f6a2ba747e41fe611df9e51183625fcaeb7158336456c6a2","index":0,"count":1,"encoding":"utf-8","payloadBytes":617}
+@@PORTABLE {"path":"ansible-core/examples/invalid-reference/project.yml","mode":420,"size":617,"sha256":"0eef82d9d52d3eb4499e8f88c549ba1803e89676e3f2bfa788f28ff6148179a4","index":0,"count":1,"encoding":"utf-8","payloadBytes":617}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -35719,7 +35720,7 @@ metadata:
 desiredStateContract: platform.installer/project-desired-state/v2alpha1
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:56ab7904b254dea873e29a243f6af6263e5b3f2a4639118f7b2fa2d12fae6e60
+  digest: sha256:245193464efbc37af1afb9484bc6ebbbe4943f1807e06c56573f5850752df9c2
   services:
     kafka:
       definitionVersion: 1.0.0-alpha.3
@@ -35766,7 +35767,7 @@ all:
                   roles: [broker, controller]
 
 @@END
-@@PORTABLE {"path":"ansible-core/examples/valid/project.yml","mode":420,"size":662,"sha256":"9e5ebca0e62438fdbab771f0bf668a95461771066b87818420167783fa0dc132","index":0,"count":1,"encoding":"utf-8","payloadBytes":662}
+@@PORTABLE {"path":"ansible-core/examples/valid/project.yml","mode":420,"size":662,"sha256":"363cb90131c6f28d0f945c8381fa71ac09ede403bc65f14c75016ba1812823a5","index":0,"count":1,"encoding":"utf-8","payloadBytes":662}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -35775,7 +35776,7 @@ metadata:
 desiredStateContract: platform.installer/project-desired-state/v2alpha1
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:56ab7904b254dea873e29a243f6af6263e5b3f2a4639118f7b2fa2d12fae6e60
+  digest: sha256:245193464efbc37af1afb9484bc6ebbbe4943f1807e06c56573f5850752df9c2
   services:
     kafka:
       definitionVersion: 1.0.0-alpha.3
@@ -43471,7 +43472,7 @@ def cleanup(journal, operation=None):
         os.rmdir(directory)
 
 @@END
-@@PORTABLE {"path":"ansible-core/tools/execution_target_trust.py","mode":420,"size":8785,"sha256":"ace332efaed56feb45feefbececba6b977b4fb722ba3212fa19535d449e33576","index":0,"count":1,"encoding":"utf-8","payloadBytes":8785}
+@@PORTABLE {"path":"ansible-core/tools/execution_target_trust.py","mode":420,"size":8968,"sha256":"33cf00491c459f135e174fb162d4e7b1c403546ffd062c7d534b842a5a14f501","index":0,"count":1,"encoding":"utf-8","payloadBytes":8968}
 """Narrow per-run SSH host-key trust for Installer-owned execution.
 
 The private manifest supplies Core-resolved endpoints.  Operator-approved keys
@@ -43521,10 +43522,10 @@ def _read_file(directory, name, limit=_FILE_LIMIT):
         details = os.fstat(descriptor)
         if (not stat.S_ISREG(details.st_mode) or details.st_uid != os.geteuid()
                 or stat.S_IMODE(details.st_mode) != 0o600 or details.st_nlink != 1
-                or details.st_size > limit):
+                or (limit is not None and details.st_size > limit)):
             _fail()
-        content = os.read(descriptor, limit + 1)
-        if len(content) > limit or len(content) != details.st_size:
+        content = os.read(descriptor, (details.st_size if limit is None else limit) + 1)
+        if (limit is not None and len(content) > limit) or len(content) != details.st_size:
             _fail()
         return content
     finally:
@@ -43647,7 +43648,8 @@ def stage(state_root, request):
     directory = _run_directory(state_root, request["stagingId"])
     try:
         fcntl.flock(directory, fcntl.LOCK_EX)
-        manifest = json.loads(_read_file(directory, "manifest.json"))
+        # This is the Core-validated private manifest, not the bounded trust file.
+        manifest = json.loads(_read_file(directory, "manifest.json", limit=None))
         manifest_digest = digest(manifest)
         if any(request[field] != manifest.get(field) for field in ("projectIdentity", "projectRevision", "planFingerprint", "runtimeRelease")) or request["manifestDigest"] != manifest_digest:
             _fail()
@@ -60762,10 +60764,10 @@ artifacts: []
 x-conformanceOnly: true
 
 @@END
-@@PORTABLE {"path":"examples/catalog/service-catalog.yml","mode":420,"size":60069,"sha256":"506ef20174d955144da5d9527309ac8215b9be063957487b75977382662537f5","index":0,"count":2,"encoding":"utf-8","payloadBytes":49433}
+@@PORTABLE {"path":"examples/catalog/service-catalog.yml","mode":420,"size":60515,"sha256":"aa1478c60b66f15153249ced245c03b47dc37ae54dc3951349438cb0628719e9","index":0,"count":2,"encoding":"utf-8","payloadBytes":49446}
 apiVersion: platform.installer/catalog/v1alpha1
 kind: ServiceCatalog
-digest: sha256:56ab7904b254dea873e29a243f6af6263e5b3f2a4639118f7b2fa2d12fae6e60
+digest: sha256:245193464efbc37af1afb9484bc6ebbbe4943f1807e06c56573f5850752df9c2
 definitions:
   clickhouse:
     apiVersion: platform.installer/service-manifest/v1alpha1
@@ -61048,6 +61050,17 @@ definitions:
       description: Rootless Docker Engine and Compose with LXC networking and TLS TCP API
       category: runtime
     modes:
+      auto:
+        displayName: Автоматически
+        description: Use an existing account after password verification, or create it when absent
+        memberRoles: []
+        placement:
+          explicit: true
+          hostScoped: true
+          minMembers: 1
+          distinctHosts: true
+        x-requiredRuntimeSecretSettings:
+        - accountCredential
       create-user:
         displayName: Create Docker user
         description: Create a dedicated account using a runtime-only password
@@ -61068,6 +61081,8 @@ definitions:
           hostScoped: true
           minMembers: 1
           distinctHosts: true
+        x-requiredRuntimeSecretSettings:
+        - accountCredential
     listeners:
       api:
         protocol: tcp
@@ -61222,7 +61237,7 @@ definitions:
       architecture: x86_64
       requiredOffline: false
     compatibilityRef: ../../services/docker/compatibility.yml
-    x-definitionDigest: sha256:ea89641c872bd59b47c029c3c83231bf5cfcd5a07f0dfb0120a288370b233587
+    x-definitionDigest: sha256:41f9d9661c227c26efe5aa58f9c7ca8089c407b9713dc94335df5d2b9eb32205
     x-sourceManifest: services/docker/service.yml
   kafka:
     apiVersion: platform.installer/service-manifest/v1alpha1
@@ -62393,7 +62408,10 @@ definitions:
                 type: integer
                 minimum: 1
                 maximum: 60
-              fall:
+ 
+@@END
+@@PORTABLE {"path":"examples/catalog/service-catalog.yml","mode":420,"size":60515,"sha256":"aa1478c60b66f15153249ced245c03b47dc37ae54dc3951349438cb0628719e9","index":1,"count":2,"encoding":"utf-8","payloadBytes":11069}
+             fall:
                 type: integer
                 minimum: 1
                 maximum: 20
@@ -62407,10 +62425,7 @@ definitions:
             order: 40
         haproxyHealthTracking:
           kind: MANAGED
-          roleVariable: platform_keepalived_haproxy_h
-@@END
-@@PORTABLE {"path":"examples/catalog/service-catalog.yml","mode":420,"size":60069,"sha256":"506ef20174d955144da5d9527309ac8215b9be063957487b75977382662537f5","index":1,"count":2,"encoding":"utf-8","payloadBytes":10636}
-ealth_tracking
+          roleVariable: platform_keepalived_haproxy_health_tracking
           type: object
           scopes:
           - deployment
@@ -62810,7 +62825,7 @@ all:
         redos-node1: {}
 
 @@END
-@@PORTABLE {"path":"examples/invalid/invalid-placement/project.yml","mode":420,"size":645,"sha256":"b52e9278c2cb4ad2861af597f9fd5253fff4d257ab64751d6f56f95ae173fff5","index":0,"count":1,"encoding":"utf-8","payloadBytes":645}
+@@PORTABLE {"path":"examples/invalid/invalid-placement/project.yml","mode":420,"size":645,"sha256":"2453badc2e4655a2aaa3f90c3b5986a1a7bb1d5cccd838c659f34947e5a76a17","index":0,"count":1,"encoding":"utf-8","payloadBytes":645}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -62822,7 +62837,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:56ab7904b254dea873e29a243f6af6263e5b3f2a4639118f7b2fa2d12fae6e60
+  digest: sha256:245193464efbc37af1afb9484bc6ebbbe4943f1807e06c56573f5850752df9c2
   services:
     kafka:
       definitionVersion: 1.0.0-alpha.3
@@ -62865,7 +62880,7 @@ all:
         redos-node1: {}
 
 @@END
-@@PORTABLE {"path":"examples/invalid/missing-host-reference/project.yml","mode":420,"size":651,"sha256":"8cbc64a5e3ea81633bc253d79f17b7149c646490942a6dd1dca27c6611ab3a6c","index":0,"count":1,"encoding":"utf-8","payloadBytes":651}
+@@PORTABLE {"path":"examples/invalid/missing-host-reference/project.yml","mode":420,"size":651,"sha256":"3b7785afcbb95e6a6b73918d523818064c57f1aceb256f8cd1560ab63dd00ec4","index":0,"count":1,"encoding":"utf-8","payloadBytes":651}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -62877,7 +62892,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:56ab7904b254dea873e29a243f6af6263e5b3f2a4639118f7b2fa2d12fae6e60
+  digest: sha256:245193464efbc37af1afb9484bc6ebbbe4943f1807e06c56573f5850752df9c2
   services:
     kafka:
       definitionVersion: 1.0.0-alpha.3
@@ -62920,7 +62935,7 @@ all:
         redos-node1: {}
 
 @@END
-@@PORTABLE {"path":"examples/invalid/unknown-mode/project.yml","mode":420,"size":641,"sha256":"6239ee1c06a2a9e39411430fd1086a39c6bdbed6eb4aef8e64ff4ce3b6803365","index":0,"count":1,"encoding":"utf-8","payloadBytes":641}
+@@PORTABLE {"path":"examples/invalid/unknown-mode/project.yml","mode":420,"size":641,"sha256":"672d1b4992b3952b86d213e2e4965e82c71157f5575e5234abcddfaf0f33f631","index":0,"count":1,"encoding":"utf-8","payloadBytes":641}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -62932,7 +62947,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:56ab7904b254dea873e29a243f6af6263e5b3f2a4639118f7b2fa2d12fae6e60
+  digest: sha256:245193464efbc37af1afb9484bc6ebbbe4943f1807e06c56573f5850752df9c2
   services:
     kafka:
       definitionVersion: 1.0.0-alpha.3
@@ -78397,7 +78412,7 @@ all:
         node3: {}
 
 @@END
-@@PORTABLE {"path":"examples/valid/bind-authoritative/project.yml","mode":420,"size":937,"sha256":"c7115211d8c9a0eaa68d49666b2eb5f074e31e7da85cf6e3e602cf9185abf009","index":0,"count":1,"encoding":"utf-8","payloadBytes":937}
+@@PORTABLE {"path":"examples/valid/bind-authoritative/project.yml","mode":420,"size":937,"sha256":"710f0a3bd9100d5ac6d0986b30e4d989eaf04efe4318145572e9e2e6e0616ee0","index":0,"count":1,"encoding":"utf-8","payloadBytes":937}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -78409,7 +78424,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:56ab7904b254dea873e29a243f6af6263e5b3f2a4639118f7b2fa2d12fae6e60
+  digest: sha256:245193464efbc37af1afb9484bc6ebbbe4943f1807e06c56573f5850752df9c2
   services:
     bind:
       definitionVersion: 1.0.0-alpha.2
@@ -78446,7 +78461,7 @@ all:
         bind1: {}
 
 @@END
-@@PORTABLE {"path":"examples/valid/bind-standalone/project.yml","mode":420,"size":646,"sha256":"36b5022a9bc9d7d431e2236babceb6cbfed9bf99937c8b9c0ad93e60c5b1f619","index":0,"count":1,"encoding":"utf-8","payloadBytes":646}
+@@PORTABLE {"path":"examples/valid/bind-standalone/project.yml","mode":420,"size":646,"sha256":"034da367f0b6988f01d8a46b55af4fb10b65a1eb201e9a238eec96117fc581fe","index":0,"count":1,"encoding":"utf-8","payloadBytes":646}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -78458,7 +78473,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:56ab7904b254dea873e29a243f6af6263e5b3f2a4639118f7b2fa2d12fae6e60
+  digest: sha256:245193464efbc37af1afb9484bc6ebbbe4943f1807e06c56573f5850752df9c2
   services:
     bind:
       definitionVersion: 1.0.0-alpha.2
@@ -78485,7 +78500,7 @@ all:
       hosts: {}
 
 @@END
-@@PORTABLE {"path":"examples/valid/empty/project.yml","mode":420,"size":494,"sha256":"1866b848db3397c793d42e6a7efb44806c4bd8f39ae0f0813c2400803a0f9587","index":0,"count":1,"encoding":"utf-8","payloadBytes":494}
+@@PORTABLE {"path":"examples/valid/empty/project.yml","mode":420,"size":494,"sha256":"a27832114300dbab34209729dcf7ab1a023d4dc395b1f9ee7fcf9e17ccc5e83a","index":0,"count":1,"encoding":"utf-8","payloadBytes":494}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -78497,7 +78512,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:56ab7904b254dea873e29a243f6af6263e5b3f2a4639118f7b2fa2d12fae6e60
+  digest: sha256:245193464efbc37af1afb9484bc6ebbbe4943f1807e06c56573f5850752df9c2
   services: {}
 
 @@END
@@ -78591,7 +78606,7 @@ all:
       hosts: {node1: {}, node2: {}, node3: {}}
 
 @@END
-@@PORTABLE {"path":"examples/valid/haproxy-routing/project.yml","mode":420,"size":929,"sha256":"914ef5b88c7de5c5b4c2c9efe51387bff858e84deaf9e1a17e229656cdb9c250","index":0,"count":1,"encoding":"utf-8","payloadBytes":929}
+@@PORTABLE {"path":"examples/valid/haproxy-routing/project.yml","mode":420,"size":929,"sha256":"d143f448cb5cbb9710ed000cba9dbb25d8ff23d39b4655eddc97e15eab9450e5","index":0,"count":1,"encoding":"utf-8","payloadBytes":929}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -78603,7 +78618,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:56ab7904b254dea873e29a243f6af6263e5b3f2a4639118f7b2fa2d12fae6e60
+  digest: sha256:245193464efbc37af1afb9484bc6ebbbe4943f1807e06c56573f5850752df9c2
   services:
     haproxy:
       definitionVersion: 1.0.0-alpha.1
@@ -78679,7 +78694,7 @@ all:
         redos-node1: {}
 
 @@END
-@@PORTABLE {"path":"examples/valid/kafka-distributed/project.yml","mode":420,"size":641,"sha256":"cd0e9e0ba16398762f6c184885915ae54c18b054edc3e1e891b9cc6a054d3f08","index":0,"count":1,"encoding":"utf-8","payloadBytes":641}
+@@PORTABLE {"path":"examples/valid/kafka-distributed/project.yml","mode":420,"size":641,"sha256":"c8c02f73a188005664b127f1b3936378e9261e4396a7d6632e81e37eba92f471","index":0,"count":1,"encoding":"utf-8","payloadBytes":641}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -78691,7 +78706,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:56ab7904b254dea873e29a243f6af6263e5b3f2a4639118f7b2fa2d12fae6e60
+  digest: sha256:245193464efbc37af1afb9484bc6ebbbe4943f1807e06c56573f5850752df9c2
   services:
     kafka:
       definitionVersion: 1.0.0-alpha.3
@@ -78780,7 +78795,7 @@ all:
         node3: {}
 
 @@END
-@@PORTABLE {"path":"examples/valid/kafka-real-multihost/project.yml","mode":420,"size":648,"sha256":"d3176c473805944f1a9071c420ef82746a23da41414d1ce8700ca46e51f5693d","index":0,"count":1,"encoding":"utf-8","payloadBytes":648}
+@@PORTABLE {"path":"examples/valid/kafka-real-multihost/project.yml","mode":420,"size":648,"sha256":"96b084abd53e4713a2fb2bcbb594d7674dc1aa2b2e2fe154918876e8451fb283","index":0,"count":1,"encoding":"utf-8","payloadBytes":648}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -78792,7 +78807,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:56ab7904b254dea873e29a243f6af6263e5b3f2a4639118f7b2fa2d12fae6e60
+  digest: sha256:245193464efbc37af1afb9484bc6ebbbe4943f1807e06c56573f5850752df9c2
   services:
     kafka:
       definitionVersion: 1.0.0-alpha.3
@@ -78860,7 +78875,7 @@ all:
         redos-node1: {}
 
 @@END
-@@PORTABLE {"path":"examples/valid/kafka-single/project.yml","mode":420,"size":636,"sha256":"6ded0b683796f126f98c970578f222bad516a406da4a9551174acf203dd09683","index":0,"count":1,"encoding":"utf-8","payloadBytes":636}
+@@PORTABLE {"path":"examples/valid/kafka-single/project.yml","mode":420,"size":636,"sha256":"3d041c5e70ceed3965ccdb6b796ad8877c6834c440ff5a4b797a57c251be06aa","index":0,"count":1,"encoding":"utf-8","payloadBytes":636}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -78872,7 +78887,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:56ab7904b254dea873e29a243f6af6263e5b3f2a4639118f7b2fa2d12fae6e60
+  digest: sha256:245193464efbc37af1afb9484bc6ebbbe4943f1807e06c56573f5850752df9c2
   services:
     kafka:
       definitionVersion: 1.0.0-alpha.3
@@ -78944,7 +78959,7 @@ all:
         node3: {}
 
 @@END
-@@PORTABLE {"path":"examples/valid/kafka-split-multihost/project.yml","mode":420,"size":657,"sha256":"d39e08964ffe90ddd8f801eda4e7c26418d8bad17f17646f3db94ac6d8269a56","index":0,"count":1,"encoding":"utf-8","payloadBytes":657}
+@@PORTABLE {"path":"examples/valid/kafka-split-multihost/project.yml","mode":420,"size":657,"sha256":"7f4df50803d5204768cc6368cd482f309807d7a93dd069b5b853e4ce46971e13","index":0,"count":1,"encoding":"utf-8","payloadBytes":657}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -78956,7 +78971,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:56ab7904b254dea873e29a243f6af6263e5b3f2a4639118f7b2fa2d12fae6e60
+  digest: sha256:245193464efbc37af1afb9484bc6ebbbe4943f1807e06c56573f5850752df9c2
   services:
     kafka:
       definitionVersion: 1.0.0-alpha.3
@@ -79081,7 +79096,7 @@ all:
         node3: {}
 
 @@END
-@@PORTABLE {"path":"examples/valid/keepalived-vrrp/project.yml","mode":420,"size":656,"sha256":"277258d58583c4f396e923f3a7f80c1f2d542e51cc832f9b95e7ee00bf5cd85b","index":0,"count":1,"encoding":"utf-8","payloadBytes":656}
+@@PORTABLE {"path":"examples/valid/keepalived-vrrp/project.yml","mode":420,"size":656,"sha256":"81046558f5c35c177485c5f578e2d89f4c97c76dab91c96cb5b3c39886fc1875","index":0,"count":1,"encoding":"utf-8","payloadBytes":656}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -79093,7 +79108,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:56ab7904b254dea873e29a243f6af6263e5b3f2a4639118f7b2fa2d12fae6e60
+  digest: sha256:245193464efbc37af1afb9484bc6ebbbe4943f1807e06c56573f5850752df9c2
   services:
     keepalived:
       definitionVersion: 1.0.0-alpha.1
@@ -79174,7 +79189,7 @@ all:
       hosts: {node1: {}, node2: {}, node3: {}}
 
 @@END
-@@PORTABLE {"path":"examples/valid/net-04-2-integration/project.yml","mode":420,"size":1086,"sha256":"0898c225053ba9435fb14c47eb7ed6d865276840f4e1fe48cf1af3b58ed53d36","index":0,"count":1,"encoding":"utf-8","payloadBytes":1086}
+@@PORTABLE {"path":"examples/valid/net-04-2-integration/project.yml","mode":420,"size":1086,"sha256":"e3bebfd827814f02e0e659b6395bee26aed98df885e3577130df847797b19778","index":0,"count":1,"encoding":"utf-8","payloadBytes":1086}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -79186,7 +79201,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:56ab7904b254dea873e29a243f6af6263e5b3f2a4639118f7b2fa2d12fae6e60
+  digest: sha256:245193464efbc37af1afb9484bc6ebbbe4943f1807e06c56573f5850752df9c2
   services:
     bind:
       definitionVersion: 1.0.0-alpha.2
@@ -79246,7 +79261,7 @@ all:
         node1: {}
 
 @@END
-@@PORTABLE {"path":"examples/valid/pki-host-scope/project.yml","mode":420,"size":637,"sha256":"293a7032af506bb19a81584732b84afa4bc38db62713a5383603008628c460b0","index":0,"count":1,"encoding":"utf-8","payloadBytes":637}
+@@PORTABLE {"path":"examples/valid/pki-host-scope/project.yml","mode":420,"size":637,"sha256":"db4f4640a78866b1e1942f1f3ca29d99c8b8298719df5d36171df1ecf1b832c0","index":0,"count":1,"encoding":"utf-8","payloadBytes":637}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -79258,7 +79273,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:56ab7904b254dea873e29a243f6af6263e5b3f2a4639118f7b2fa2d12fae6e60
+  digest: sha256:245193464efbc37af1afb9484bc6ebbbe4943f1807e06c56573f5850752df9c2
   services:
     kafka:
       definitionVersion: 1.0.0-alpha.3
@@ -79323,7 +79338,7 @@ all:
         db-node3: {}
 
 @@END
-@@PORTABLE {"path":"examples/valid/postgresql-patroni/project.yml","mode":420,"size":782,"sha256":"e3bb5ca2b28fb17036775b62de9a0e77b13dab3502afed3897e197fc2c1ffa66","index":0,"count":1,"encoding":"utf-8","payloadBytes":782}
+@@PORTABLE {"path":"examples/valid/postgresql-patroni/project.yml","mode":420,"size":782,"sha256":"95e038bd336df991d094b82e02f48d48f3cceb5f45e7aa66d063f7c19efce792","index":0,"count":1,"encoding":"utf-8","payloadBytes":782}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -79335,7 +79350,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:56ab7904b254dea873e29a243f6af6263e5b3f2a4639118f7b2fa2d12fae6e60
+  digest: sha256:245193464efbc37af1afb9484bc6ebbbe4943f1807e06c56573f5850752df9c2
   services:
     postgresql:
       definitionVersion: 1.0.0-alpha.1
@@ -79380,7 +79395,7 @@ all:
       hosts: {db-node1: {}}
 
 @@END
-@@PORTABLE {"path":"examples/valid/postgresql-standalone/project.yml","mode":420,"size":656,"sha256":"deb8d9f39799bb1776daff0a94bb8ec940a4468078f24fead3a1aecd60d34807","index":0,"count":1,"encoding":"utf-8","payloadBytes":656}
+@@PORTABLE {"path":"examples/valid/postgresql-standalone/project.yml","mode":420,"size":656,"sha256":"7e997a8236fe139b6f4ac46a9c063ff34ffff28c42fee33c6dad6f621c94df7c","index":0,"count":1,"encoding":"utf-8","payloadBytes":656}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -79392,7 +79407,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:56ab7904b254dea873e29a243f6af6263e5b3f2a4639118f7b2fa2d12fae6e60
+  digest: sha256:245193464efbc37af1afb9484bc6ebbbe4943f1807e06c56573f5850752df9c2
   services:
     postgresql:
       definitionVersion: 1.0.0-alpha.1
@@ -79508,7 +79523,7 @@ all:
       hosts: {node1: {}, node2: {}, node3: {}}
 
 @@END
-@@PORTABLE {"path":"examples/valid/ui-project-snapshot/project.yml","mode":420,"size":1353,"sha256":"84be2a5a1db88a74dfa4ba74a479eec692f2a4a3bfbfa9e94c9ddec01f66fceb","index":0,"count":1,"encoding":"utf-8","payloadBytes":1353}
+@@PORTABLE {"path":"examples/valid/ui-project-snapshot/project.yml","mode":420,"size":1353,"sha256":"f9e73a9cfca5373d5d94d1a2b67e94f0dc8b6178070e57cce8be4c9b0eb9db4f","index":0,"count":1,"encoding":"utf-8","payloadBytes":1353}
 apiVersion: platform.installer/v2alpha1
 kind: PlatformProject
 metadata:
@@ -79520,7 +79535,7 @@ artifactLock:
   digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 catalogLock:
   apiVersion: platform.installer/catalog/v1alpha1
-  digest: sha256:56ab7904b254dea873e29a243f6af6263e5b3f2a4639118f7b2fa2d12fae6e60
+  digest: sha256:245193464efbc37af1afb9484bc6ebbbe4943f1807e06c56573f5850752df9c2
   services:
     bind:
       definitionVersion: 1.0.0-alpha.2
@@ -83021,7 +83036,7 @@ catalogLock:
 })();
 
 @@END
-@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":119820,"sha256":"c20be1d08905fb63d2be4009165bfb239119c0648c53467a36ec28470a8eae24","index":0,"count":3,"encoding":"utf-8","payloadBytes":49414}
+@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":120591,"sha256":"e693b4c513351ecbe4366580427f3e1a9424a0029b9f412d75dfa0a97c357490","index":0,"count":3,"encoding":"utf-8","payloadBytes":49414}
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   EditResult,
@@ -83033,6 +83048,7 @@ import type {
   EndpointPreview,
   InstallationState,
   InstallationPlanOperation,
+  InstallationPlanRequest,
   InstallationExecutionMode,
   InfrastructureVerificationView,
   InstallationRunOperation,
@@ -83348,6 +83364,10 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
   const [installationExecutionMode, setInstallationExecutionMode] =
     useState<InstallationExecutionMode>("FULL_PROJECT");
   useEffect(() => setInstallationExecutionMode("FULL_PROJECT"), [result.root]);
+  const [installationVaultSources, setInstallationVaultSources] = useState<
+    InstallationPlanRequest["applicationVaultSources"]
+  >({});
+  useEffect(() => setInstallationVaultSources({}), [result.root]);
   const [infrastructureObservation, setInfrastructureObservation] =
     useState<InfrastructureVerificationView>();
   const [installationPlan, setInstallationPlan] = useState<
@@ -83969,7 +83989,10 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
               ...(applicationLibraryOrder.length
                 ? { applicationLibraryOrder }
                 : {}),
-              applicationVaultSources: {},
+              applicationVaultSources:
+                executionMode === "FULL_PROJECT"
+                  ? installationVaultSources
+                  : {},
               skipInfrastructureVerify,
               ...(skipApplicationLibraries.length
                 ? { skipApplicationLibraries }
@@ -83977,6 +84000,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
             })
           : executionMode === "FULL_PROJECT" &&
               !skipApplicationLibraries.length &&
+              !Object.keys(installationVaultSources).length &&
               api.createInstallationPlan
             ? await api.createInstallationPlan(deploymentOrder)
             : {
@@ -84021,7 +84045,10 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
           ...(installationLibraryOrderRef.current.length
             ? { applicationLibraryOrder: installationLibraryOrderRef.current }
             : {}),
-          applicationVaultSources: {},
+          applicationVaultSources:
+            installationExecutionMode === "FULL_PROJECT"
+              ? installationVaultSources
+              : {},
           ...(skippedLibraries.length
             ? { skipApplicationLibraries: skippedLibraries }
             : {}),
@@ -84419,7 +84446,10 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
           ) {
             if (next.reconnected) setInstallationTab("result");
             if (!next.reconnected) {
-              void collectAndDeliverSecretOutputs(runId).catch(() =>
+              void collectAndD
+@@END
+@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":120591,"sha256":"e693b4c513351ecbe4366580427f3e1a9424a0029b9f412d75dfa0a97c357490","index":1,"count":3,"encoding":"utf-8","payloadBytes":49588}
+eliverSecretOutputs(runId).catch(() =>
                 setOutputDelivery(secretOutputDeliveryUnavailable()),
               );
             }
@@ -84438,10 +84468,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     };
   }, [
     api,
-    installationRun?.
-@@END
-@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":119820,"sha256":"c20be1d08905fb63d2be4009165bfb239119c0648c53467a36ec28470a8eae24","index":1,"count":3,"encoding":"utf-8","payloadBytes":49640}
-run?.runId,
+    installationRun?.run?.runId,
     installationRun?.run?.state,
     installationRun?.cancelUnconfirmed,
     collectAndDeliverSecretOutputs,
@@ -85657,6 +85684,11 @@ run?.runId,
               onExecutionModeChange={setInstallationExecutionMode}
               busy={installationBusy}
               onCreatePlan={createInstallationPlan}
+              applicationVaultSources={installationVaultSources}
+              onApplicationVaultSourcesChange={(sources) => {
+                setInstallationVaultSources(sources);
+                setInstallationPlan(undefined);
+              }}
               serviceDeployments={Object.values(
                 result.managed?.deployments || {},
               ).map((item) => ({
@@ -85715,7 +85747,10 @@ run?.runId,
                   Название проекта
                   <input
                     maxLength={256}
-                    value={name}
+   
+@@END
+@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":120591,"sha256":"e693b4c513351ecbe4366580427f3e1a9424a0029b9f412d75dfa0a97c357490","index":2,"count":3,"encoding":"utf-8","payloadBytes":21589}
+                 value={name}
                     onChange={(event) => {
                       setName(event.target.value);
                       setNameRequired(false);
@@ -85735,10 +85770,7 @@ run?.runId,
                   <p className="field-error" role="alert">
                     {nameError}
                   </p>
-           
-@@END
-@@PORTABLE {"path":"frontend/src/App.tsx","mode":420,"size":119820,"sha256":"c20be1d08905fb63d2be4009165bfb239119c0648c53467a36ec28470a8eae24","index":2,"count":3,"encoding":"utf-8","payloadBytes":20766}
-     )}
+                )}
                 <label>
                   Новая папка проекта
                   <input
@@ -94782,11 +94814,12 @@ function ProviderDialog({
 }
 
 @@END
-@@PORTABLE {"path":"frontend/src/InstallationPage.tsx","mode":420,"size":80112,"sha256":"6109b94fb45d6b10cfe37f3d11f82f0f431d3a04c2ff48e94f1e7617e4905bcf","index":0,"count":2,"encoding":"utf-8","payloadBytes":52573}
+@@PORTABLE {"path":"frontend/src/InstallationPage.tsx","mode":420,"size":83705,"sha256":"18b4f2897d462889de19ec6dafcff46f5a6e43e68a6bea1d025bdfdefa3a2f90","index":0,"count":2,"encoding":"utf-8","payloadBytes":52587}
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type {
   InstallationEventView,
   InstallationPlanOperation,
+  InstallationPlanRequest,
   InstallationPlanView,
   InstallationExecutionMode,
   InfrastructureVerificationView,
@@ -95055,6 +95088,8 @@ export function InstallationPage({
   selectedExecutionMode,
   onExecutionModeChange,
   serviceDeployments = [],
+  applicationVaultSources = {},
+  onApplicationVaultSourcesChange,
   serviceExecutionPriorities = [],
   libraryDeployments = [],
   libraryExecutionPriorities = [],
@@ -95093,6 +95128,10 @@ export function InstallationPage({
   selectedExecutionMode?: InstallationExecutionMode;
   onExecutionModeChange?: (mode: InstallationExecutionMode) => void;
   serviceDeployments?: ServiceDeploymentInput[];
+  applicationVaultSources?: InstallationPlanRequest["applicationVaultSources"];
+  onApplicationVaultSourcesChange?: (
+    sources: InstallationPlanRequest["applicationVaultSources"],
+  ) => void;
   serviceExecutionPriorities?: ServicePriorityInput[];
   libraryDeployments?: LibraryDeploymentInput[];
   libraryExecutionPriorities?: LibraryPriorityInput[];
@@ -95264,10 +95303,6 @@ export function InstallationPage({
               : "Установка инфраструктуры исключена. При отсутствии актуального Verify Core включит проверку инфраструктуры в этот план перед библиотеками."}
         </p>
       </div>
-      <div>
-        <strong>Библиотеки</strong>
-        <p>Полный цикл Apply → Verify.</p>
-      </div>
       {executionMode === "APPLICATION_LIBRARIES_ONLY" && (
         <label>
           <input
@@ -95299,6 +95334,96 @@ export function InstallationPage({
       )}
     </div>
   );
+  const librariesControl =
+    libraryDeployments.length > 0 ? (
+      <div aria-label="Настройки библиотек">
+        <div>
+          <strong>Библиотеки</strong>
+          <p>Полный цикл Apply → Verify.</p>
+        </div>
+        {executionMode === "FULL_PROJECT" &&
+          libraryDeployments.length > 0 &&
+          onApplicationVaultSourcesChange &&
+          serviceDeployments
+            .filter((service) => service.serviceType === "vault")
+            .map((service) => (
+              <label key={service.deploymentId}>
+                Источник токена Vault для приложений · {service.deploymentId}
+                <select
+                  aria-label={"Источник токена Vault · " + service.deploymentId}
+                  disabled={busy || runActive}
+                  value={
+                    applicationVaultSources[service.deploymentId] ||
+                    "RUNTIME_INPUT"
+                  }
+                  onChange={(event) => {
+                    const sources = { ...applicationVaultSources };
+                    if (event.target.value === "CURRENT_RUN_BOOTSTRAP")
+                      sources[service.deploymentId] = "CURRENT_RUN_BOOTSTRAP";
+                    else delete sources[service.deploymentId];
+                    onApplicationVaultSourcesChange(sources);
+                  }}
+                >
+                  <option value="RUNTIME_INPUT">
+                    Из секретов инфраструктурного Vault
+                  </option>
+                  <option value="CURRENT_RUN_BOOTSTRAP">
+                    Из текущей установки Vault
+                  </option>
+                </select>
+              </label>
+            ))}
+        {libraryDeployments.length > 0 && (
+          <div aria-label="Выбор библиотек">
+            <table>
+              <thead>
+                <tr>
+                  <th>Библиотека</th>
+                  <th>Установить</th>
+                </tr>
+              </thead>
+              <tbody>
+                {libraryDeployments.map((library) => (
+                  <tr key={library.deploymentId}>
+                    <td>{library.deploymentId}</td>
+                    <td>
+                      <input
+                        type="checkbox"
+                        aria-label={
+                          "Установить библиотеку " + library.deploymentId
+                        }
+                        checked={
+                          !skippedLibraries.includes(library.deploymentId)
+                        }
+                        disabled={
+                          busy ||
+                          runActive ||
+                          executionMode === "INFRASTRUCTURE_VERIFY_ONLY"
+                        }
+                        onChange={(event) =>
+                          setSkippedLibraries((current) =>
+                            !event.target.checked
+                              ? [...current, library.deploymentId]
+                              : current.filter(
+                                  (id) => id !== library.deploymentId,
+                                ),
+                          )
+                        }
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="muted">
+              Установка и проверка библиотек со снятым флажком пропускаются. Их
+              подключения остаются доступны интеграциям устанавливаемых
+              приложений.
+            </p>
+          </div>
+        )}
+      </div>
+    ) : null;
   return (
     <section className="installation-page">
       {!!displayedPlan?.plan?.skipApplicationLibraries?.length && (
@@ -95423,6 +95548,7 @@ export function InstallationPage({
             <article className="card installation-summary-plan">
               <h2>Состав запуска</h2>
               {servicesControl}
+              {librariesControl}
               <div className="installation-summary-plan-heading">
                 <div>
                   <h2>План установки</h2>
@@ -95500,64 +95626,8 @@ export function InstallationPage({
           <>
             <PlanStage
               key={plan?.plan?.id || "no-plan"}
-              servicesControl={
-                <>
-                  {servicesControl}
-                  {libraryDeployments.length > 0 && (
-                    <div aria-label="Выбор библиотек">
-                      <table>
-                        <thead>
-                          <tr>
-                            <th>Библиотека</th>
-                            <th>Установить</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {libraryDeployments.map((library) => (
-                            <tr key={library.deploymentId}>
-                              <td>{library.deploymentId}</td>
-                              <td>
-                                <input
-                                  type="checkbox"
-                                  aria-label={
-                                    "Установить библиотеку " +
-                                    library.deploymentId
-                                  }
-                                  checked={
-                                    !skippedLibraries.includes(
-                                      library.deploymentId,
-                                    )
-                                  }
-                                  disabled={
-                                    busy ||
-                                    runActive ||
-                                    executionMode ===
-                                      "INFRASTRUCTURE_VERIFY_ONLY"
-                                  }
-                                  onChange={(event) =>
-                                    setSkippedLibraries((current) =>
-                                      !event.target.checked
-                                        ? [...current, library.deploymentId]
-                                        : current.filter(
-                                            (id) => id !== library.deploymentId,
-                                          ),
-                                    )
-                                  }
-                                />
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                      <p className="muted">
-                        Apply и Verify выбранных библиотек пропускаются. Их
-                        подключения остаются доступны интеграциям
-                        устанавливаемых приложений.
-                      </p>
-                    </div>
-                  )}
-                </>
-              }
+              servicesControl={servicesControl}
+              librariesControl={librariesControl}
               scopeChanged={!runActive && scopeChanged}
               skipChanged={!runActive && skipChanged}
               infrastructureExcluded={
@@ -95622,6 +95692,7 @@ export function InstallationPage({
 
 function PlanStage({
   servicesControl,
+  librariesControl,
   scopeChanged,
   skipChanged,
   infrastructureExcluded,
@@ -95639,6 +95710,7 @@ function PlanStage({
   onSetOutputEncryptionPassword,
 }: {
   servicesControl: ReactNode;
+  librariesControl: ReactNode;
   scopeChanged: boolean;
   skipChanged: boolean;
   infrastructureExcluded: boolean;
@@ -95687,6 +95759,7 @@ function PlanStage({
       <article className="card installation-empty">
         <h2>План</h2>
         {servicesControl}
+        {librariesControl}
         <p>
           {operation?.error && (
             <>
@@ -95727,9 +95800,12 @@ function PlanStage({
             : phase,
         )
       : plan.phases;
+  const runActive = ["STARTING", "RUNNING", "CANCELLING"].includes(
+    run?.run?.state || "",
+  );
   const currentPlan =
     !skipChanged &&
-    !["STARTING", "RUNNING", "CANCELLING"].includes(run?.run?.state || "") &&
+    !runActive &&
     !draftActive &&
     !state?.project?.hasUnsavedChanges &&
     state?.executionNode.status === "READY" &&
@@ -95856,47 +95932,39 @@ function PlanStage({
               пользователем; успешный Verify не подтверждён этим запуском.
             </p>
           )}
-          {plan.infrastructureVerification && (
-            <section aria-label="Проверка инфраструктуры">
-              <h3>
-                {plan.infrastructureVerification.status === "PASS"
-                  ? "Инфраструктура проверена"
-                  : "Проверка инфраструктуры не подтверждена"}
-              </h3>
-              <p>
-                {plan.infrastructureVerification.status}
-                {plan.infrastructureVerification.code
-                  ? ` · ${plan.infrastructureVerification.code}`
-                  : ""}
-              </p>
-              {plan.infrastructureObservedAt && (
-                <p>Получено: {plan.infrastructureObservedAt}</p>
-              )}
-              <ul>
-                {plan.infrastructureVerification.deployments.map((item) => (
-                  <li key={item.deploymentId}>
-                    {item.deploymentId} · Verify {item.verifiedAt}
-                  </li>
-                ))}
-              </ul>
-              <details>
-                <summary>Advanced: источники инфраструктурных Verify</summary>
+          {plan.executionMode === "APPLICATION_LIBRARIES_ONLY" &&
+            !plan.skipInfrastructureVerify &&
+            plan.infrastructureVerification && (
+              <section aria-label="Проверка инфраструктуры">
+                <h3>
+                  {plan.infrastructureVerification.status === "PASS"
+                    ? "Инфраструктура проверена"
+                    : "Проверка инфраструктуры не подтверждена"}
+                </h3>
+                <p>
+                  {plan.infrastructureVerification.status}
+                  {plan.infrastructureVerification.code
+                    ? ` · ${plan.infrastructureVerification.code}`
+                    : ""}
+                </p>
+                {plan.infrastructureObservedAt && (
+                  <p>Получено: {plan.infrastructureObservedAt}</p>
+                )}
                 <ul>
                   {plan.infrastructureVerification.deployments.map((item) => (
                     <li key={item.deploymentId}>
-                      {item.deploymentId}: {item.sourceRunId}
+                      {item.deploymentId} · Verify {item.verifiedAt}
                     </li>
                   ))}
                 </ul>
-              </details>
-              {plan.infrastructureCacheWarning && (
-                <p role="status">
-                  Локальное наблюдение не сохранено. Решение текущего плана
-                  получено от Core.
-                </p>
-              )}
-            </section>
-          )}
+                {plan.infrastructureCacheWarning && (
+                  <p role="status">
+                    Локальное наблюдение не сохранено. Решение текущего плана
+                    получено от Core.
+                  </p>
+                )}
+              </section>
+            )}
 
           <dl>
             <dt>Статус</dt>
@@ -95938,7 +96006,7 @@ function PlanStage({
             </ul>
           </article>
         )}
-        {!currentPlan && (
+        {!currentPlan && !runActive && (
           <article className="card">
             <p role="status">
               Этот план нельзя использовать для текущего состояния проекта.
@@ -96041,6 +96109,13 @@ function PlanStage({
               {servicesControl}
             </section>
           )}
+          {librariesControl &&
+            !displayedPhases.some((phase) => phase.id === "applications") && (
+              <section className="plan-phase-card">
+                <h3>Библиотеки</h3>
+                {librariesControl}
+              </section>
+            )}
           {!hasActions && (
             <p role="status">
               В плане нет действий по развёртыванию сервисов. Проверьте состав и
@@ -96089,6 +96164,7 @@ function PlanStage({
                 </span>
               </summary>
               {phase.id === "services" && servicesControl}
+              {phase.id === "applications" && librariesControl}
               <div className="plan-phase-actions">
                 {phase.actions
                   .slice(
@@ -96114,7 +96190,10 @@ function PlanStage({
                             Развёртывание: {action.serviceDeployment}
                           </small>
                         )}
-                      </span>
+                      </spa
+@@END
+@@PORTABLE {"path":"frontend/src/InstallationPage.tsx","mode":420,"size":83705,"sha256":"18b4f2897d462889de19ec6dafcff46f5a6e43e68a6bea1d025bdfdefa3a2f90","index":1,"count":2,"encoding":"utf-8","payloadBytes":31118}
+n>
                       <span className="plan-action-targets">
                         {action.targets.join(", ") || "без целевых серверов"}
                       </span>
@@ -96151,10 +96230,7 @@ function PlanStage({
               <label className="acknowledgement" key={item.code}>
                 <input
                   type="checkbox"
-   
-@@END
-@@PORTABLE {"path":"frontend/src/InstallationPage.tsx","mode":420,"size":80112,"sha256":"6109b94fb45d6b10cfe37f3d11f82f0f431d3a04c2ff48e94f1e7617e4905bcf","index":1,"count":2,"encoding":"utf-8","payloadBytes":27539}
-               checked={acknowledged.includes(item.code)}
+                  checked={acknowledged.includes(item.code)}
                   onChange={(event) =>
                     setAcknowledged((current) =>
                       event.target.checked
@@ -96332,6 +96408,42 @@ function ExecutionStage({
   const lastTask = [...events]
     .reverse()
     .find((event) => event.eventType === "TASK_COMPLETED" && event.task?.name);
+  const runEvents = events.filter((event) => event.runId === run.run!.runId);
+  const started = runEvents
+    .filter((event) => event.eventType === "RUN_STARTED")
+    .reduce<InstallationEventView | undefined>(
+      (first, event) =>
+        !first || event.sequence < first.sequence ? event : first,
+      undefined,
+    );
+  const terminalStatus: Record<string, string> = {
+    SUCCEEDED: "SUCCESS",
+    FAILED: "FAILED",
+    CANCELLED: "CANCELLED",
+    INTERRUPTED: "INTERRUPTED",
+  };
+  const completed = terminalStatus[run.run.state]
+    ? runEvents.find(
+        (event) =>
+          event.sequence === run.run!.sequence &&
+          event.eventType === "DIAGNOSTIC" &&
+          event.status === terminalStatus[run.run!.state] &&
+          !event.actionId &&
+          !event.task,
+      )
+    : undefined;
+  const runTime = (timestamp?: string) => {
+    const date = new Date(timestamp || "");
+    return Number.isFinite(date.getTime())
+      ? new Intl.DateTimeFormat("ru-RU", {
+          dateStyle: "short",
+          timeStyle: "medium",
+          timeZone: "Europe/Moscow",
+        }).format(date)
+      : undefined;
+  };
+  const startedTime = runTime(started?.timestamp);
+  const completedTime = runTime(completed?.timestamp);
   return (
     <section className="execution-stage-content">
       <article className="card execution-overview">
@@ -96473,6 +96585,14 @@ function ExecutionStage({
               </span>
             )}
           </div>
+          <p className="execution-plan-timestamp">
+            Начало установки:{" "}
+            {startedTime ? (
+              <time dateTime={started!.timestamp}>{startedTime} МСК</time>
+            ) : (
+              "время ещё не получено"
+            )}
+          </p>
           <div className="execution-plan-scroll">
             {!plan?.phases.some((phase) => phase.actions.length) ? (
               <p>Действия плана для этого запуска недоступны.</p>
@@ -96537,10 +96657,17 @@ function ExecutionStage({
                     <li
                       key={action.id}
                       className={`execution-plan-action is-${tone}${action.parentId ? " is-progress-step" : ""}${action.progressSteps?.length ? " is-progress-group" : ""}`}
-                      aria-current={active && !action.progressSteps?.length ? "step" : undefined}
+                      aria-current={
+                        active && !action.progressSteps?.length
+                          ? "step"
+                          : undefined
+                      }
                     >
                       {action.number !== undefined && (
-                        <span className="execution-plan-number" aria-hidden="true">
+                        <span
+                          className="execution-plan-number"
+                          aria-hidden="true"
+                        >
                           {action.number}
                         </span>
                       )}
@@ -96573,6 +96700,12 @@ function ExecutionStage({
               </ol>
             )}
           </div>
+          {completedTime && (
+            <p className="execution-plan-timestamp">
+              Завершение установки:{" "}
+              <time dateTime={completed!.timestamp}>{completedTime} МСК</time>
+            </p>
+          )}
         </article>
       </div>
     </section>
@@ -107149,7 +107282,7 @@ const qaE4 =
 renderApplication(qaE4 ? qaE4Backend : backend);
 
 @@END
-@@PORTABLE {"path":"frontend/src/production-ui.css","mode":420,"size":72334,"sha256":"b1bac562bbc1c275b077c478ab772b20798ce0afc0d6f04bbc056d3a9950f7f7","index":0,"count":2,"encoding":"utf-8","payloadBytes":48107}
+@@PORTABLE {"path":"frontend/src/production-ui.css","mode":420,"size":72464,"sha256":"568a1c693572f827b44975cc52ca87c901aaad49cabdfe876aa774fe296ab421","index":0,"count":2,"encoding":"utf-8","payloadBytes":48107}
 /* Desktop target from UI-DESIGN-01. Work regions, not the window, own overflow. */
 :root {
   --ui-font-page-title: 22px;
@@ -109286,7 +109419,7 @@ button:disabled {
 .services-detail-empty {
   display: flex;
 @@END
-@@PORTABLE {"path":"frontend/src/production-ui.css","mode":420,"size":72334,"sha256":"b1bac562bbc1c275b077c478ab772b20798ce0afc0d6f04bbc056d3a9950f7f7","index":1,"count":2,"encoding":"utf-8","payloadBytes":24227}
+@@PORTABLE {"path":"frontend/src/production-ui.css","mode":420,"size":72464,"sha256":"568a1c693572f827b44975cc52ca87c901aaad49cabdfe876aa774fe296ab421","index":1,"count":2,"encoding":"utf-8","payloadBytes":24357}
 
   flex-direction: column;
   justify-content: center;
@@ -110323,6 +110456,13 @@ button:disabled {
   overflow: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
+}
+.execution-plan-timestamp {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 5px 0;
+  color: var(--muted, #64748b);
+  font-size: 12px;
 }
 .execution-plan-actions {
   list-style: none;
