@@ -5,7 +5,7 @@
   changed_when: false
   register: _platform_redis_unit_state
 
-- name: Требовать активный экземпляр службы Redis
+- name: Проверка активности экземпляра Redis
   ansible.builtin.assert:
     that: _platform_redis_unit_state.stdout | trim == 'active'
     fail_msg: REDIS_MEMBER_NOT_ACTIVE
@@ -38,7 +38,7 @@
   no_log: true
   ignore_errors: true
 
-- name: Требовать успешную аутентификацию конечной точки Redis TLS
+- name: Проверка успешности аутентификации Redis через TLS
   ansible.builtin.assert:
     that:
       - _platform_redis_ping.rc == 0
@@ -115,13 +115,13 @@
   register: _platform_sentinel_unit_state
   when: "'sentinel' in redis_member.roles"
 
-- name: Требовать активный экземпляр службы Sentinel
+- name: Проверка активности экземпляра Sentinel
   ansible.builtin.assert:
     that: _platform_sentinel_unit_state.stdout | trim == 'active'
     fail_msg: REDIS_SENTINEL_MEMBER_NOT_ACTIVE
   when: "'sentinel' in redis_member.roles"
 
-- name: Проверить кворум Sentinel TLS и обнаружить его текущий мастер
+- name: Проверка кворума Sentinel через TLS и определение текущего мастера
   ansible.builtin.command:
     argv:
       - redis-cli
@@ -152,7 +152,7 @@
   no_log: true
   when: "'sentinel' in redis_member.roles"
 
-- name: Прочитать текущий главный адрес из Sentinel
+- name: Чтение текущего главного адреса из Sentinel
   ansible.builtin.command:
     argv:
       - redis-cli
@@ -185,7 +185,7 @@
   no_log: true
   when: "'sentinel' in redis_member.roles"
 
-- name: "Сохранить обнаруженного Sentinel мастера Redis для общей проверки"
+- name: "Сохранение обнаруженного Sentinel мастера Redis для общей проверки"
   ansible.builtin.set_fact:
     _platform_redis_observed_sentinel_masters: >-
       {{ _platform_redis_observed_sentinel_masters + [

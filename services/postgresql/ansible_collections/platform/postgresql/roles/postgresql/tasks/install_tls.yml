@@ -1,5 +1,5 @@
 ---
-- name: Создать каталог TLS, принадлежащий PostgreSQL, после настройки учетной записи
+- name: Создание каталога TLS с владельцем PostgreSQL после настройки учётной записи
   ansible.builtin.file:
     path: "{{ _platform_postgresql_tls_directory }}"
     state: directory
@@ -8,7 +8,7 @@
     mode: '0700'
   when: not (platform_postgresql_verify_only | bool)
 
-- name: Материализовать принадлежащие PostgreSQL файлы PEM из проекции PKI-01
+- name: Подготовка PEM-файлов PostgreSQL по проекции PKI-01
   ansible.builtin.copy:
     src: "{{ platform_pki_selected_consumer_plan.targetDirectory }}/{{ item.name }}"
     dest: "{{ _platform_postgresql_tls_directory }}/{{ item.name }}"
@@ -21,10 +21,10 @@
     - {name: certificate.pem, mode: '0644'}
     - {name: private-key.pem, mode: '0600'}
   no_log: true
-  notify: Перезагрузить материал PostgreSQL TLS
+  notify: Перечитывание конфигурации PostgreSQL для применения TLS-файлов
   when: not (platform_postgresql_verify_only | bool)
 
-- name: "Проверить TLS-файлы PostgreSQL без внесения изменений"
+- name: "Проверка TLS-файлов PostgreSQL без внесения изменений"
   ansible.builtin.stat:
     path: "{{ _platform_postgresql_tls_directory }}/{{ item }}"
     get_mime: false
@@ -33,7 +33,7 @@
   loop: [ca-chain.pem, certificate.pem, private-key.pem]
   register: platform_postgresql_owned_tls_files
 
-- name: Требовать файлы TLS, принадлежащие PostgreSQL
+- name: Проверка наличия TLS-файлов и их принадлежности PostgreSQL
   ansible.builtin.assert:
     that: platform_postgresql_owned_tls_files.results | map(attribute='stat.exists') | list | min
     fail_msg: POSTGRES_TLS_FILES_NOT_DEPLOYED

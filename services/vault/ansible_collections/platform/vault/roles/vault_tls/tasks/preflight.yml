@@ -1,15 +1,15 @@
 ---
-- name: Собрать экземпляры Vault, назначенные узлу inventory
+- name: Сбор экземпляров Vault, назначенных узлу inventory
   ansible.builtin.set_fact:
     _platform_vault_local_instances: "{{ _platform_vault_instances | selectattr('host', 'equalto', inventory_hostname) | list }}"
 
-- name: Проверка свободного места на наличие ограниченного хранения аудита Vault
+- name: Проверка свободного места для хранения журналов аудита Vault
   ansible.builtin.command:
     argv: [df, -PkP, --, /var/log]
   register: _platform_vault_audit_space
   changed_when: false
 
-- name: Требуется место для одного текущего и четырнадцати ротируемых файлов аудита
+- name: Проверка места для текущего и четырнадцати архивных журналов аудита
   ansible.builtin.assert:
     that:
       - _platform_vault_audit_space.stdout_lines | length >= 2
@@ -28,7 +28,7 @@
   loop: ["{{ platform_vault_config_root }}", "{{ platform_vault_log_root }}"]
   register: _platform_vault_roots
 
-- name: Отклонить корневые пути роли Vault при символических ссылках или неправильном типе каталога
+- name: Отклонение корневых путей роли Vault при символических ссылках или неправильном типе каталога
   ansible.builtin.assert:
     that: not item.stat.exists or (item.stat.isdir and not item.stat.islnk and item.stat.uid == 0)
     fail_msg: VAULT_PATH_UNSAFE
@@ -46,7 +46,7 @@
   register: _platform_vault_shared_data_root
   when: _platform_vault_local_instances | length > 1
 
-- name: Проверить владение root общим родительским каталогом данных Vault
+- name: Проверка владения root общим родительским каталогом данных Vault
   ansible.builtin.assert:
     that:
       - not _platform_vault_shared_data_root.stat.exists or _platform_vault_shared_data_root.stat.uid == 0
@@ -54,18 +54,18 @@
     fail_msg: VAULT_SHARED_DATA_ROOT_UNSAFE
   when: _platform_vault_local_instances | length > 1
 
-- name: Разрешить идентификацию учетной записи службы для проверки принадлежащего ей пути Vault
+- name: Определение учётной записи службы для проверки владельца путей Vault
   ansible.builtin.command:
     argv: [id, -u, "{{ platform_vault_user }}"]
   register: _platform_vault_service_uid
   changed_when: false
   failed_when: false
 
-- name: "Собрать список родительских каталогов Vault для проверки"
+- name: "Сбор списка родительских каталогов Vault для проверки"
   ansible.builtin.set_fact:
     _platform_vault_path_checks: "{{ [{'path': platform_vault_config_root, 'owner': 'root'}, {'path': platform_vault_log_root, 'owner': 'root'}] }}"
 
-- name: Добавить каждый фиксированный компонент пути развертывания и экземпляра службы к предварительной проверке
+- name: Добавление каждого фиксированного компонента пути развертывания и экземпляра службы к предварительной проверке
   ansible.builtin.set_fact:
     _platform_vault_path_checks: "{{ _platform_vault_path_checks + [
       {'path': platform_vault_config_root ~ '/' ~ platform_vault_deployment_id, 'owner': 'root'},
@@ -79,10 +79,10 @@
   loop_control:
     label: "{{ item.id }}"
 
-- name: Проверить каждый фиксированный компонент root/deployment/member/PKI без перехода по ссылкам
+- name: Проверка каждого фиксированного компонента root/deployment/member/PKI без перехода по ссылкам
   ansible.builtin.include_tasks: validate_owned_paths.yml
 
-- name: Проверка каталогов данных Raft экземпляра службы, прежде чем прикасаться к существующему состоянию
+- name: Проверка каталогов данных Raft перед изменением существующего состояния
   ansible.builtin.stat:
     path: "{{ item.data_directory }}"
     follow: false
@@ -94,7 +94,7 @@
   loop_control:
     label: "{{ item.id }}"
 
-- name: Отклонить замененные пути к данным Raft экземпляра службы
+- name: Отклонение замененных путей к данным Raft экземпляра службы
   ansible.builtin.assert:
     that:
       - not item.stat.exists or (_platform_vault_service_uid.rc == 0 and item.stat.isdir and not item.stat.islnk and item.stat.uid | string == _platform_vault_service_uid.stdout | trim)
@@ -116,7 +116,7 @@
   loop_control:
     label: "{{ item.item.id }}"
 
-- name: Проверка маркера идентификации экземпляра службы, принадлежащей фиксированной роли
+- name: Проверка маркера принадлежности данных экземпляру Vault
   ansible.builtin.stat:
     path: "{{ item.item.data_directory }}/.{{ platform_vault_name }}-member.json"
     follow: false
@@ -129,7 +129,7 @@
   loop_control:
     label: "{{ item.item.id }}"
 
-- name: Отклонить непустые данные экземпляра службы без маркера идентификации, принадлежащего роли
+- name: Отклонение непустых данных экземпляра службы без маркера идентификации, принадлежащего роли
   ansible.builtin.assert:
     that:
       - item.files | length == 0 or (_platform_vault_member_markers.results[vault_data_index].stat.exists | default(false))
@@ -141,14 +141,14 @@
     index_var: vault_data_index
   when: item.skipped is not defined
 
-- name: Прочитать существующие маркеры идентификации экземпляра службы, не переходя по ссылкам
+- name: Чтение существующих маркеров идентификации экземпляра службы, не переходя по ссылкам
   ansible.builtin.slurp:
     src: "{{ item.item.item.data_directory }}/.{{ platform_vault_name }}-member.json"
   loop: "{{ _platform_vault_member_markers.results | selectattr('skipped', 'undefined') | selectattr('stat.exists') | list }}"
   register: _platform_vault_member_marker_content
   no_log: true
 
-- name: Проверить принадлежность каталогов данных выбранному экземпляру Vault
+- name: Проверка принадлежности каталогов данных выбранному экземпляру Vault
   ansible.builtin.assert:
     that:
       - (item.content | b64decode | from_json).apiVersion == 'platform.installer/vault-member-marker/v1alpha1'
@@ -164,7 +164,7 @@
     index_var: marker_index
   no_log: true
 
-- name: "Проверить файлы служб Vault без перехода по символическим ссылкам"
+- name: "Проверка файлов служб Vault без перехода по символическим ссылкам"
   ansible.builtin.stat:
     path: "/etc/systemd/system/{{ item.instance_name }}.service"
     follow: false
@@ -186,7 +186,7 @@
   loop: "{{ _platform_vault_local_instances }}"
   register: _platform_vault_legacy_unit_files
 
-- name: Отказаться от автоматического принятия устаревших имен системных служб Vault
+- name: Отклонение устаревших имён служб Vault без автоматического принятия
   ansible.builtin.assert:
     that: not item.stat.exists
     fail_msg: VAULT_LEGACY_UNIT_REQUIRES_S11_CLEANUP
@@ -194,7 +194,7 @@
   loop_control:
     label: "{{ item.item.id }}"
 
-- name: Проверка точных файлов ротации аудита Vault без перехода по ссылкам
+- name: Проверка файлов ротации аудита Vault без перехода по символическим ссылкам
   ansible.builtin.stat:
     path: "/etc/logrotate.d/{{ item.instance_name }}"
     follow: false
@@ -206,7 +206,7 @@
   loop_control:
     label: "{{ item.id }}"
 
-- name: Отказаться от замененных или нестандартных файлов службы и ротации systemd
+- name: Отклонение подменённых файлов служб и ротации журналов Vault или файлов неверного типа
   ansible.builtin.assert:
     that:
       - not item.stat.exists or (item.stat.isreg and not item.stat.islnk and item.stat.uid == 0)
@@ -215,21 +215,21 @@
   loop_control:
     label: "{{ item.item.id }}"
 
-- name: Прочитать существующие служебные файлы systemd без перехода по ссылкам
+- name: Чтение существующих служебных файлов systemd без перехода по ссылкам
   ansible.builtin.slurp:
     src: "/etc/systemd/system/{{ item.item.instance_name }}.service"
   loop: "{{ _platform_vault_unit_files.results | selectattr('stat.exists') | list }}"
   register: _platform_vault_unit_file_contents
   when: item.stat.exists
 
-- name: Прочитать существующие файлы ротации без перехода по ссылкам
+- name: Чтение существующих файлов ротации без перехода по ссылкам
   ansible.builtin.slurp:
     src: "/etc/logrotate.d/{{ item.item.instance_name }}"
   loop: "{{ _platform_vault_rotation_files.results | selectattr('stat.exists') | list }}"
   register: _platform_vault_rotation_file_contents
   when: item.stat.exists
 
-- name: Проверить идентификатор экземпляра Vault в существующих файлах служб systemd
+- name: Проверка идентификатора экземпляра Vault в существующих файлах служб systemd
   ansible.builtin.assert:
     that:
       - >-
@@ -239,7 +239,7 @@
   loop: "{{ _platform_vault_unit_file_contents.results | default([]) }}"
   no_log: true
 
-- name: Проверить идентификатор экземпляра Vault в существующих файлах ротации журналов
+- name: Проверка идентификатора экземпляра Vault в существующих файлах ротации журналов
   ansible.builtin.assert:
     that:
       - >-
@@ -249,7 +249,7 @@
   loop: "{{ _platform_vault_rotation_file_contents.results | default([]) }}"
   no_log: true
 
-- name: Запросить службы systemd, управляемые развёртыванием Vault
+- name: Получение состояния служб systemd развёртывания Vault
   ansible.builtin.command:
     argv: [systemctl, is-active, "{{ item.instance_name }}.service"]
   loop: "{{ _platform_vault_local_instances }}"
@@ -261,12 +261,12 @@
   ansible.builtin.set_fact:
     _platform_vault_active_units: "{{ _platform_vault_unit_states.results | selectattr('stdout', 'equalto', 'active') | map(attribute='item.instance_name') | list }}"
 
-- name: Сформировать ожидаемые сетевые порты каждого экземпляра Vault
+- name: Формирование ожидаемых сетевых портов каждого экземпляра Vault
   ansible.builtin.set_fact:
     _platform_vault_ports: "{{ (_platform_vault_ports | default([])) + [{'port': item.api_port, 'unit': item.instance_name}, {'port': item.cluster_port, 'unit': item.instance_name}] }}"
   loop: "{{ _platform_vault_local_instances }}"
 
-- name: Проверить занятость локальных портов Vault перед установкой
+- name: Проверка занятости локальных портов Vault перед установкой
   ansible.builtin.command:
     argv: [ss, -Hln, "sport = :{{ item.port }}"]
   register: _platform_vault_port_owner
@@ -276,7 +276,7 @@
   loop_control:
     label: "{{ item.port }}"
 
-- name: Требовать свободных портов или уже активной службы systemd Vault
+- name: Проверка доступности портов или их принадлежности управляемой службе Vault
   ansible.builtin.assert:
     that: item.rc == 0 and (item.stdout | trim == '' or item.item.unit in _platform_vault_active_units)
     fail_msg: VAULT_LISTENER_PORT_IN_USE

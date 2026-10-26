@@ -3,13 +3,13 @@
 
 - import_playbook: ../../../ansible-core/playbooks/pki-apply.yml
 
-- name: Применить PostgreSQL
+- name: Применение PostgreSQL
   hosts: platform_targets
   serial: 1
   become: true
   gather_facts: true
   pre_tasks:
-    - name: Применить конфигурацию доверенной среды выполнения PostgreSQL
+    - name: Применение конфигурации доверенной среды выполнения PostgreSQL
       ansible.builtin.include_role:
         name: platform.core.runtime_role_variables
       when: platform_execution_role_variables_by_host is defined

@@ -1,15 +1,15 @@
 ---
 - import_playbook: providers-resolve.yml
-- name: Предварительная проверка всех выбранных провайдеров без мутаций
+- name: Предварительная проверка всех выбранных провайдеров без внесения изменений
   hosts: localhost
   connection: local
   gather_facts: false
   any_errors_fatal: true
   tasks:
-    - name: Сбросить runtime-факты предварительной проверки провайдеров приложений
+    - name: Сброс runtime-фактов предварительной проверки провайдеров приложений
       ansible.builtin.set_fact:
         platform_application_provider_runtime: {}
-    - name: Один раз обнаружить каждое уникальное развертывание PostgreSQL
+    - name: Однократное обнаружение каждого уникального развёртывания PostgreSQL
       ansible.builtin.include_role:
         name: platform.postgresql.application_provider
         tasks_from: discover

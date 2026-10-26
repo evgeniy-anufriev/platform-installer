@@ -1,5 +1,5 @@
 ---
-- name: Загрузить сгенерированное состояние Kafka, принадлежащее контроллеру, для жизненного цикла, доступного только для чтения
+- name: Загрузка служебного состояния Kafka для проверки без внесения изменений
   hosts: localhost
   connection: local
   gather_facts: false
@@ -10,7 +10,7 @@
       register: _platform_kafka_generated_state_stat
       when: platform_generated_state_path is defined
 
-    - name: Требовать сохранение сгенерированного состояния Kafka для управляемой проверки
+    - name: Проверка наличия сохранённого служебного состояния Kafka для Verify
       ansible.builtin.assert:
         that:
           - _platform_kafka_generated_state_stat.stat.exists

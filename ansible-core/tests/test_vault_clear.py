@@ -80,8 +80,8 @@ class VaultClearContractTests(unittest.TestCase):
                          ANSIBLE_COLLECTIONS_PATHS=str(ROOT / 'services/vault')))
             self.assertNotEqual(0, result.returncode)
             self.assertIn(b'VAULT_CLEAR_CONFIRMATION_REQUIRED', result.stdout)
-            self.assertNotIn('Получить блокировку существующего развёртывания Vault перед очисткой'.encode('utf-8'), result.stdout)
-            self.assertNotIn('Остановить и отключить только выбранные службы systemd, принадлежащие Vault'.encode('utf-8'), result.stdout)
+            self.assertNotIn('Получение блокировки существующего развёртывания Vault перед очисткой'.encode('utf-8'), result.stdout)
+            self.assertNotIn('Остановка и отключение только выбранных служб Vault'.encode('utf-8'), result.stdout)
 
 
 

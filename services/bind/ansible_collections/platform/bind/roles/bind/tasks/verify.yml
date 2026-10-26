@@ -4,7 +4,7 @@
     argv: ["{{ platform_bind_checkconf_binary }}", "{{ platform_bind_distribution_config }}"]
   changed_when: false
 
-- name: Убедиться, что служба BIND активна
+- name: Проверка того, что служба BIND активна
   ansible.builtin.systemd:
     name: "{{ platform_bind_service_name }}"
     state: started

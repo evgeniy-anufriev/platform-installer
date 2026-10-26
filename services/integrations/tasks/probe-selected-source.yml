@@ -1,9 +1,9 @@
 ---
-- name: Привязать исходные параметры последовательной проверки источника интеграции
+- name: Привязка исходных параметров последовательной проверки источника интеграции
   ansible.builtin.set_fact:
     _platform_integration_source_fqdns: "{{ _platform_selected_probe.fqdns }}"
     _platform_integration_probe: "{{ _platform_selected_probe.probe }}"
     platform_endpoint_probe_expected_addresses: "{{ _platform_selected_probe.expectedAddresses }}"
 
-- name: Проверить источник с помощью исходных задач наблюдателя и проверки
+- name: Проверка источника с помощью исходных задач наблюдателя и проверки
   ansible.builtin.include_tasks: probe-endpoint.yml

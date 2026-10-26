@@ -1,5 +1,5 @@
 ---
-- name: Прочитать запрошенный манифест без загрузки слоёв образа
+- name: Чтение запрошенного манифеста без загрузки слоёв образа
   ansible.builtin.uri:
     url: "https://{{ application_image_input.request.endpoint }}/v2/{{ application_image_input.request.repository }}/manifests/{{ application_image_input.request.version }}"
     method: GET
@@ -15,10 +15,10 @@
   register: _image_manifest_response
   no_log: true
 
-- name: "Пройти Bearer-аутентификацию с правом чтения выбранного репозитория"
+- name: "Проверка Bearer-аутентификации с правом чтения выбранного репозитория"
   when: _image_manifest_response.status == 401
   block:
-    - name: Требовать поддерживаемую проверку подлинности реестра
+    - name: Проверка поддержки метода аутентификации реестра
       ansible.builtin.assert:
         that: _image_manifest_response.www_authenticate | default('') is match('Bearer ')
         fail_msg: APPLICATION_REGISTRY_AUTH_FAILED
@@ -30,14 +30,14 @@
         _image_auth_service: >-
           {{ ((_image_manifest_response.www_authenticate | regex_findall('service="([^"]+)"')) | first) | default('') }}
       no_log: true
-    - name: Хранить учетные данные аутентификации в утвержденном источнике реестра
+    - name: Хранение учетных данных аутентификации в утвержденном источнике реестра
       ansible.builtin.assert:
         that:
           - _image_auth_realm is match('https://')
           - _image_username == '' or (_image_auth_realm | urlsplit('netloc')) == application_image_input.request.endpoint or (application_image_input.request.registry == 'docker.io' and (_image_auth_realm | urlsplit('netloc')) == 'auth.docker.io')
         fail_msg: APPLICATION_REGISTRY_AUTH_ORIGIN_INVALID
       no_log: true
-    - name: Получить только токен с областью действия по запросу из доверенной области аутентификации
+    - name: Получение только токена с областью действия по запросу из доверенной области аутентификации
       ansible.builtin.uri:
         url: "{{ _image_auth_realm }}{{ '&' if '?' in _image_auth_realm else '?' }}service={{ _image_auth_service | urlencode }}&scope={{ ('repository:' ~ application_image_input.request.repository ~ ':pull') | urlencode }}"
         url_username: "{{ _image_username | default(omit, true) }}"
@@ -48,11 +48,11 @@
         timeout: 20
       register: _image_token_response
       no_log: true
-    - name: Привязать токен без публикации его ответа
+    - name: Привязка токена без публикации его ответа
       ansible.builtin.set_fact:
         _image_token: "{{ _image_token_response.json.token | default(_image_token_response.json.access_token) }}"
       no_log: true
-    - name: Прочитать запрошенный манифест с выданным токеном реестра
+    - name: Чтение запрошенного манифеста с выданным токеном реестра
       ansible.builtin.uri:
         url: "https://{{ application_image_input.request.endpoint }}/v2/{{ application_image_input.request.repository }}/manifests/{{ application_image_input.request.version }}"
         headers:
@@ -65,20 +65,20 @@
       register: _image_authenticated_manifest
       no_log: true
 
-- name: Выбрать целевую платформу из проверенных байтов манифеста
+- name: Выбор целевой платформы из проверенных байтов манифеста
   ansible.builtin.set_fact:
     _image_manifest: "{{ _image_authenticated_manifest if _image_manifest_response.status == 401 else _image_manifest_response }}"
     _image_authorization: "{{ ('Bearer ' ~ _image_token) if _image_token else ('Basic ' ~ ((_image_username ~ ':' ~ _image_password) | b64encode)) if _image_username else '' }}"
   no_log: true
 
-- name: Проверка и разрешение выбранного манифеста и конфигурации реестра
+- name: Проверка и обработка выбранных манифеста и конфигурации образа из реестра
   when: _image_manifest.status == 200
   block:
     - name: Проверка содержимого манифеста и выбор дескриптора платформы
       ansible.builtin.set_fact:
         _image_descriptor: "{{ _image_manifest.content | platform.core.application_registry_manifest(_image_platform, application_image_input.request.digest) }}"
       no_log: true
-    - name: Получить точный манифест платформы, выбранный из индекса
+    - name: Получение манифеста платформы, выбранного из индекса
       ansible.builtin.uri:
         url: "https://{{ application_image_input.request.endpoint }}/v2/{{ application_image_input.request.repository }}/manifests/{{ _image_descriptor.manifestDigest }}"
         headers:
@@ -90,12 +90,12 @@
       register: _image_platform_response
       when: _image_descriptor.index
       no_log: true
-    - name: Проверка точного содержимого манифеста платформы
+    - name: Проверка содержимого манифеста платформы
       ansible.builtin.set_fact:
         _image_descriptor: "{{ _image_platform_response.content | platform.core.application_registry_manifest(_image_platform, _image_descriptor.manifestDigest) }}"
       when: _image_descriptor.index
       no_log: true
-    - name: Прочитать конфигурацию образа без загрузки слоёв
+    - name: Чтение конфигурации образа без загрузки слоёв
       ansible.builtin.uri:
         url: "https://{{ application_image_input.request.endpoint }}/v2/{{ application_image_input.request.repository }}/blobs/{{ _image_descriptor.configDigest }}"
         headers:
@@ -107,17 +107,17 @@
       register: _image_config_response
       when: _image_descriptor.configDigest | length > 0
       no_log: true
-    - name: "Получить конфигурацию образа по HTTPS-перенаправлению без передачи учётных данных"
+    - name: "Получение конфигурации образа по HTTPS-перенаправлению без передачи учётных данных"
       when:
         - _image_descriptor.configDigest | length > 0
         - _image_config_response.status in [301, 302, 303, 307, 308]
       block:
-        - name: Требовать TLS на конечной точке хранилища
+        - name: Проверка HTTPS-адреса хранилища
           ansible.builtin.assert:
             that: _image_config_response.location is match('https://')
             fail_msg: APPLICATION_REGISTRY_BLOB_LOCATION_INVALID
           no_log: true
-        - name: Прочитать конфигурацию из URL-адреса хранилища, выданного реестром
+        - name: Чтение конфигурации из URL-адреса хранилища, выданного реестром
           ansible.builtin.uri:
             url: "{{ _image_config_response.location }}"
             return_content: true
@@ -125,7 +125,7 @@
             timeout: 20
           register: _image_redirected_config
           no_log: true
-        - name: Привязать перенаправленные байты конфигурации для одной и той же проверки дайджеста
+        - name: Привязка полученной по перенаправлению конфигурации для проверки контрольной суммы
           ansible.builtin.set_fact:
             _image_config_response: "{{ _image_redirected_config }}"
           no_log: true

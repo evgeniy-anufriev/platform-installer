@@ -1,5 +1,5 @@
 ---
-- name: "Подготовить контекст и запустить сценарий post_install"
+- name: "Подготовка контекста и запуск сценария post_install"
   ansible.builtin.include_tasks: provider-script.yml
   vars:
     application_provider_batch:

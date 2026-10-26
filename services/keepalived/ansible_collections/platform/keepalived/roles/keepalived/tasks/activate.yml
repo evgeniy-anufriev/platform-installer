@@ -1,5 +1,5 @@
 ---
-- name: Пересчитать подготовленную контрольную сумму кандидата Keepalived
+- name: Пересчёт подготовленной контрольной суммы кандидата Keepalived
   ansible.builtin.stat:
     path: "{{ platform_keepalived_candidate_file }}"
     checksum_algorithm: sha256
@@ -7,14 +7,14 @@
     get_attributes: false
   register: platform_keepalived_activation_candidate_stat
 
-- name: "Проверить, что активируется конфигурация Keepalived, проверенная на этапе A"
+- name: "Проверка того, что активируется конфигурация Keepalived, проверенная на этапе A"
   ansible.builtin.assert:
     that:
       - platform_keepalived_activation_candidate_stat.stat.exists
       - platform_keepalived_activation_candidate_stat.stat.checksum == platform_keepalived_candidate_checksum
     fail_msg: KEEPALIVED_CANDIDATE_CHANGED_AFTER_PHASE_A
 
-- name: Атомарно установить точную проверенную конфигурацию Keepalived
+- name: Атомарная установка проверенной конфигурации Keepalived
   ansible.builtin.copy:
     src: "{{ platform_keepalived_candidate_file }}"
     dest: "{{ platform_keepalived_config_file }}"
@@ -24,7 +24,7 @@
     mode: '0600'
   register: platform_keepalived_active_install
 
-- name: Вычислить контрольную сумму активной конфигурации Keepalived
+- name: Вычисление контрольной суммы активной конфигурации Keepalived
   ansible.builtin.stat:
     path: "{{ platform_keepalived_config_file }}"
     checksum_algorithm: sha256
@@ -32,7 +32,7 @@
     get_attributes: false
   register: platform_keepalived_active_stat
 
-- name: Подтвердить активную конфигурацию, точно соответствующую проверенному кандидату
+- name: Подтверждение соответствия активной конфигурации проверенному кандидату
   ansible.builtin.assert:
     that: platform_keepalived_active_stat.stat.checksum == platform_keepalived_candidate_checksum
     fail_msg: KEEPALIVED_ACTIVE_CONFIG_CHECKSUM_MISMATCH

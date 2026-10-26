@@ -1,5 +1,5 @@
 ---
-- name: Выбрать путь к манифесту переносимого проекта для идентификатора PKI
+- name: Выбор пути к манифесту переносимого проекта для идентификатора PKI
   ansible.builtin.set_fact:
     _platform_pki_project_manifest_path: >-
       {{ platform_project_manifest_path |
@@ -21,7 +21,7 @@
     - platform_pki_resolve_managed | bool
     - _platform_pki_project_manifest_stat.stat.exists
 
-- name: Выбрать стабильный идентификатор проекта PKI из проекции выполнения
+- name: Выбор стабильного идентификатора проекта PKI из проекции выполнения
   ansible.builtin.set_fact:
     _platform_pki_project_id: "{{ platform_project_id }}"
   when:
@@ -29,7 +29,7 @@
     - platform_project_id is defined
     - platform_project_id | length > 0
 
-- name: Выбрать стабильный идентификатор проекта PKI из переносимого манифеста
+- name: Выбор стабильного идентификатора проекта PKI из переносимого манифеста
   ansible.builtin.set_fact:
     _platform_pki_project_id: "{{ _platform_pki_project_manifest_document.metadata.id }}"
   when:
@@ -59,7 +59,7 @@
           | selectattr('value.endpointGroup', 'defined') | list) }}
   when: platform_pki_resolve_managed | bool
 
-- name: Требовать опубликованный каталог служб для разрешения PKI с учетом конечных точек
+- name: Проверка наличия каталога сервисов для расчёта PKI с учётом конечных точек
   ansible.builtin.assert:
     that:
       - platform_service_catalog_path is defined
@@ -70,7 +70,7 @@
     - platform_pki_resolve_managed | bool
     - _platform_pki_endpoint_deployments | default([]) | length > 0
 
-- name: Загрузить опубликованный каталог для разрешения PKI с учетом конечных точек
+- name: Загрузка опубликованного каталога для расчёта PKI с учётом конечных точек
   ansible.builtin.include_vars:
     file: "{{ platform_service_catalog_path }}"
     name: _platform_pki_endpoint_catalog_file
@@ -78,7 +78,7 @@
     - platform_pki_resolve_managed | bool
     - _platform_pki_endpoint_deployments | default([]) | length > 0
 
-- name: Сбор входных данных о размещении конечной точки перед разрешением конечной точки
+- name: Сбор данных размещения перед расчётом конечных точек
   ansible.builtin.set_fact:
     _platform_pki_inventory_deployments: >-
       {{ _platform_pki_inventory_deployments | default({}) |
@@ -106,7 +106,7 @@
     - _platform_pki_endpoint_resolution is defined
     - not (_platform_pki_endpoint_resolution.skipped | default(false))
 
-- name: Собрать входные данные о размещении PKI и адресе службы
+- name: Сбор входных данных о размещении PKI и адресе службы
   ansible.builtin.set_fact:
     _platform_pki_inventory_hosts: >-
       {{ _platform_pki_inventory_hosts | combine({item: {
@@ -117,7 +117,7 @@
   when: platform_pki_resolve_managed | bool
   no_log: true
 
-- name: Разрешение управляемых запросов PKI на основе топологии
+- name: Расчёт управляемых запросов PKI по топологии
   platform.core.resolve_pki_requests:
     project_path: "{{ platform_pki_project_path if (platform_desired_state | default({}) | length == 0) else omit }}"
     inventory_path: "{{ platform_pki_inventory_path if (platform_desired_state | default({}) | length == 0) else omit }}"

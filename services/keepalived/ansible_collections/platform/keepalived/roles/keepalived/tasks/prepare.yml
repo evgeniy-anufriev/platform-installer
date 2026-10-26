@@ -1,5 +1,5 @@
 ---
-- name: Установить одобренный пакет Keepalived из настроенных системных репозиториев
+- name: Установка одобренного пакета Keepalived из настроенных системных репозиториев
   ansible.builtin.package:
     name: "{{ platform_keepalived_package }}"
     state: present
@@ -7,7 +7,7 @@
     platform_resolved_artifact_sources is not defined or
     platform_resolved_artifact_sources.keepalived.source == 'REPOSITORY'
 
-- name: "Создать каталог скрипта проверки готовности HAProxy для Keepalived"
+- name: "Создание каталога скрипта проверки готовности HAProxy для Keepalived"
   ansible.builtin.file:
     path: "{{ platform_keepalived_haproxy_check_path | dirname }}"
     state: directory
@@ -15,7 +15,7 @@
     group: root
     mode: '0755'
 
-- name: "Установить скрипт проверки готовности HAProxy из пакета"
+- name: "Установка скрипта проверки готовности HAProxy из пакета"
   ansible.builtin.template:
     src: check-haproxy-ready.sh.j2
     dest: "{{ platform_keepalived_haproxy_check_path }}"
@@ -23,7 +23,7 @@
     group: root
     mode: '0750'
 
-- name: Отрисовка конфигурации-кандидата Keepalived
+- name: Формирование файла-кандидата конфигурации Keepalived
   ansible.builtin.template:
     src: keepalived.conf.j2
     dest: "{{ platform_keepalived_candidate_file }}"
@@ -38,7 +38,7 @@
   changed_when: false
   failed_when: false
 
-- name: Вычислить проверенную контрольную сумму кандидата Keepalived
+- name: Вычисление проверенной контрольной суммы кандидата Keepalived
   ansible.builtin.stat:
     path: "{{ platform_keepalived_candidate_file }}"
     checksum_algorithm: sha256
@@ -46,7 +46,7 @@
     get_attributes: false
   register: platform_keepalived_candidate_stat
 
-- name: Записать свидетельство проверки кандидата Keepalived
+- name: Запись свидетельства проверки кандидата Keepalived
   ansible.builtin.set_fact:
     platform_keepalived_candidate_checksum: "{{ platform_keepalived_candidate_stat.stat.checksum }}"
     platform_keepalived_candidate_validation_rc: "{{ platform_keepalived_candidate_validation.rc }}"

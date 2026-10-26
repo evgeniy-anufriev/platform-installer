@@ -1,10 +1,10 @@
 ---
-- name: Разрешить сохраненные настройки службы на контроллере без целевого контакта
+- name: Определение сохранённых настроек службы на контроллере без обращения к целевым узлам
   hosts: localhost
   connection: local
   gather_facts: false
   tasks:
-    - name: Создание ограниченного предварительного просмотра настроек сервиса
+    - name: Создание предварительного просмотра настроек сервиса
       platform.core.project_snapshot:
         project_root: "{{ platform_project_root }}"
         service_catalog_path: "{{ platform_service_catalog_path }}"

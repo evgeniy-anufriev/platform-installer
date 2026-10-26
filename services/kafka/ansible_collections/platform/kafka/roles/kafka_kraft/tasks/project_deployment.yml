@@ -1,5 +1,5 @@
 ---
-- name: "Выбрать экземпляры Kafka для каждого целевого узла"
+- name: "Выбор экземпляров Kafka для каждого целевого узла"
   ansible.builtin.include_tasks: project_deployment_host.yml
   loop: "{{ groups['platform_targets'] | default([]) | sort }}"
   loop_control:

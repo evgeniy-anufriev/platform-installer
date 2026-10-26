@@ -1,5 +1,5 @@
 ---
-- name: Применить каждую нужную базовую запись A, не удаляя других владельцев
+- name: Применение каждой нужной базовой записи A, не удаляя других владельцев
   ansible.builtin.include_tasks: update_a_record.yml
   vars:
     platform_bind_a_record:

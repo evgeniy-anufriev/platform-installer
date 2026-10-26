@@ -1,5 +1,5 @@
 ---
-- name: Требуется проверенный бэкэнд NetworkManager, разделенный DNS
+- name: Проверка поддержки раздельного DNS в NetworkManager
   ansible.builtin.assert:
     that: platform_dns_client_nm_split_supported | default(false) | bool
     fail_msg: DNS_CLIENT_SPLIT_DNS_UNSUPPORTED
@@ -23,7 +23,7 @@
       {{ _platform_dns_client_nm_default_routes.stdout_lines | map('regex_replace', '^.*\\sdev\\s+([^\\s]+).*$','\\1') | unique | list }}
   when: _platform_dns_client_local_placement.networkManagerConnection is not defined
 
-- name: Требовать одно однозначное устройство маршрутизации по умолчанию
+- name: Проверка единственности сетевого интерфейса маршрута по умолчанию
   ansible.builtin.assert:
     that: _platform_dns_client_nm_default_devices | length == 1
     fail_msg: DNS_CLIENT_NM_CONNECTION_AMBIGUOUS
@@ -36,14 +36,14 @@
   changed_when: false
   when: _platform_dns_client_local_placement.networkManagerConnection is not defined
 
-- name: Опубликовать выбранное соединение NetworkManager
+- name: Публикация выбранного соединения NetworkManager
   ansible.builtin.set_fact:
     platform_dns_client_nm_connection: >-
       {{ _platform_dns_client_local_placement.networkManagerConnection
          if _platform_dns_client_local_placement.networkManagerConnection is defined
          else (_platform_dns_client_nm_derived_connection.stdout | trim) }}
 
-- name: Требовать активное соединение NetworkManager
+- name: Проверка активности выбранного подключения NetworkManager
   ansible.builtin.assert:
     that:
       - platform_dns_client_nm_connection | length > 0
@@ -56,7 +56,7 @@
   register: _platform_dns_client_nm_profile
   changed_when: false
 
-- name: Применить детерминированный разделенный профиль NetworkManager DNS
+- name: Применение рассчитанного профиля раздельного DNS в NetworkManager
   ansible.builtin.command:
     argv:
       - nmcli

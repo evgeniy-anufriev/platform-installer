@@ -1,5 +1,5 @@
 ---
-- name: Проверить наличие утверждённых источников артефактов Core для развёртывания сервиса
+- name: Проверка наличия утверждённых источников артефактов Core для развёртывания сервиса
   ansible.builtin.assert:
     that:
       - platform_execution_service_deployment is string
@@ -11,7 +11,7 @@
     label: "{{ item.id }}"
   no_log: true
 
-- name: Проверить существующий целевой репозиторий на наличие требований, авторизованных Core
+- name: Проверка настроенного репозитория целевого узла на соответствие требованиям Core
   ansible.builtin.command:
     argv:
       - dnf
@@ -28,7 +28,7 @@
   failed_when: false
   no_log: true
 
-- name: Прочитать идентификатор целевой операционной системы для проверки совместимости
+- name: Чтение идентификатора целевой операционной системы для проверки совместимости
   ansible.builtin.command:
     argv:
       - awk
@@ -40,7 +40,7 @@
   failed_when: false
   no_log: true
 
-- name: "Выбрать разрешённый Core источник: репозиторий, затем offline-пакет"
+- name: "Выбор разрешённого Core источника: репозиторий, затем offline-пакет"
   ansible.builtin.set_fact:
     platform_resolved_artifact_sources: >-
       {{ platform_resolved_artifact_sources | default({}) | combine({

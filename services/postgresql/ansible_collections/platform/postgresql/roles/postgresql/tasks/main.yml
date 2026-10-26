@@ -13,7 +13,7 @@
     platform_managed_data_root_owner: "{{ ansible_user | default('') }}"
     platform_managed_data_root_verify_only: "{{ platform_postgresql_verify_only | bool }}"
 
-- name: "Выбрать план PKI для PostgreSQL до внесения изменений"
+- name: "Выбор плана PKI для PostgreSQL до внесения изменений"
   ansible.builtin.include_tasks: resolve_tls.yml
   when: platform_postgresql_tls_profile | length > 0
 
@@ -53,23 +53,23 @@
 - name: Проверка входных данных службы PostgreSQL
   ansible.builtin.include_tasks: validate.yml
 
-- name: "Определить каталог исполняемых файлов PostgreSQL"
+- name: "Определение каталога исполняемых файлов PostgreSQL"
   ansible.builtin.include_tasks: resolve_binary_directory.yml
 
-- name: Определить экземпляр PostgreSQL на узле inventory
+- name: Определение экземпляра PostgreSQL на узле inventory
   ansible.builtin.set_fact:
     _platform_postgresql_local_members: "{{ platform_postgresql_instances | selectattr('host', 'equalto', inventory_hostname) | list }}"
 
-- name: Проверить наличие ровно одного экземпляра PostgreSQL на узле inventory
+- name: Проверка наличия ровно одного экземпляра PostgreSQL на узле inventory
   ansible.builtin.assert:
     that: _platform_postgresql_local_members | length == 1
     fail_msg: POSTGRES_LOCAL_MEMBER_REQUIRED
 
-- name: Разрешить клиентскую подсеть из интерфейса экземпляра службы PostgreSQL
+- name: Определение клиентской подсети из интерфейса экземпляра службы PostgreSQL
   ansible.builtin.include_tasks: client_subnet.yml
   when: not (platform_postgresql_verify_only | bool)
 
-- name: "Определить имя службы PostgreSQL в systemd"
+- name: "Определение имени службы PostgreSQL в systemd"
   ansible.builtin.set_fact:
     _platform_postgresql_unit_name: >-
       {{ platform_postgresql_name ~ '@' ~ platform_postgresql_deployment_id ~ '-'
@@ -85,13 +85,13 @@
   register: _platform_postgresql_legacy_unit
   when: not (platform_postgresql_verify_only | bool)
 
-- name: Отказаться от автоматического принятия устаревшей службы systemd PostgreSQL
+- name: Отклонение устаревшей службы PostgreSQL без автоматического принятия
   ansible.builtin.assert:
     that: not _platform_postgresql_legacy_unit.stat.exists
     fail_msg: POSTGRES_LEGACY_UNIT_REQUIRES_S11_CLEANUP
   when: not (platform_postgresql_verify_only | bool)
 
-- name: Проверить точный путь к службе systemd PostgreSQL перед изменением
+- name: Проверка точного пути к службе systemd PostgreSQL перед изменением
   ansible.builtin.stat:
     path: "/etc/systemd/system/{{ _platform_postgresql_unit_name }}"
     follow: false
@@ -101,7 +101,7 @@
   register: _platform_postgresql_unit_path
   when: not (platform_postgresql_verify_only | bool)
 
-- name: Отклонить замененный путь к службе systemd PostgreSQL
+- name: Отклонение замененного пути к службе systemd PostgreSQL
   ansible.builtin.assert:
     that: >-
       not _platform_postgresql_unit_path.stat.exists or
@@ -109,7 +109,7 @@
     fail_msg: POSTGRES_UNIT_PATH_UNSAFE
   when: not (platform_postgresql_verify_only | bool)
 
-- name: Прочитать заголовок владения из существующей службы systemd PostgreSQL
+- name: Чтение заголовка владения из существующей службы systemd PostgreSQL
   ansible.builtin.slurp:
     src: "/etc/systemd/system/{{ _platform_postgresql_unit_name }}"
   register: _platform_postgresql_existing_unit
@@ -117,7 +117,7 @@
     - not (platform_postgresql_verify_only | bool)
     - _platform_postgresql_unit_path.stat.exists
 
-- name: Отказаться от замены неуправляемой службы systemd PostgreSQL
+- name: Запрет замены неуправляемой службы PostgreSQL
   ansible.builtin.assert:
     that: >-
       ('# ' ~ platform_postgresql_name ~ '-managed: ' ~ platform_postgresql_deployment_id ~ '/'
@@ -128,7 +128,7 @@
     - not (platform_postgresql_verify_only | bool)
     - _platform_postgresql_unit_path.stat.exists
 
-- name: Разрешение эффективного порта экземпляра службы PostgreSQL
+- name: Определение действующего порта экземпляра PostgreSQL
   ansible.builtin.set_fact:
     _platform_postgresql_effective_port: >-
       {{ (platform_postgresql_instances
@@ -138,18 +138,18 @@
           | default(platform_postgresql_port, true)) | int }}
   when: platform_postgresql_mode == 'pg_auto_failover'
 
-- name: Сохранить автономный порт PostgreSQL в качестве эффективного порта
+- name: Использование standalone-порта как действующего порта PostgreSQL
   ansible.builtin.set_fact:
     _platform_postgresql_effective_port: "{{ platform_postgresql_port | int }}"
   when: platform_postgresql_mode != 'pg_auto_failover'
 
-- name: Очистить выбранное развертывание PostgreSQL явно по запросу
+- name: Очистка выбранного развёртывания PostgreSQL явно по запросу
   ansible.builtin.include_tasks: clear.yml
   when:
     - not (platform_postgresql_verify_only | bool)
     - platform_postgresql_clean_install | bool
 
-- name: Согласовать PostgreSQL за исключением операции очистки
+- name: Согласование PostgreSQL за исключением операции очистки
   ansible.builtin.include_tasks:
     file: reconcile.yml
     apply:

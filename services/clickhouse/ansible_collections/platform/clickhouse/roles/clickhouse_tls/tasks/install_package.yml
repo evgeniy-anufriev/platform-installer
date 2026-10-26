@@ -1,5 +1,5 @@
 ---
-- name: "Проверить локальный RPM для прямого запуска Ansible без выбора источника через Core"
+- name: "Проверка локального RPM для прямого запуска Ansible без выбора источника через Core"
   ansible.builtin.stat:
     path: "{{ platform_clickhouse_rpm_paths[clickhouse_package_id] | default('') }}"
     checksum_algorithm: sha256
@@ -12,7 +12,7 @@
   when: platform_resolved_artifact_sources is not defined
   no_log: true
 
-- name: Отклонить отсутствующий, символический или несоответствующий дайджест прямой RPM
+- name: Отклонение отсутствующего RPM, символической ссылки или несовпадения контрольной суммы
   ansible.builtin.assert:
     that:
       - _platform_clickhouse_direct_rpm.stat.isreg
@@ -22,7 +22,7 @@
   when: platform_resolved_artifact_sources is not defined
   no_log: true
 
-- name: "Создать временный каталог RPM ClickHouse для прямого запуска Ansible"
+- name: "Создание временного каталога RPM ClickHouse для прямого запуска Ansible"
   ansible.builtin.file:
     path: /var/tmp/platform-installer/artifacts/clickhouse-direct
     state: directory
@@ -31,7 +31,7 @@
     mode: '0700'
   when: platform_resolved_artifact_sources is not defined
 
-- name: Разместить проверенный прямой Ansible RPM на целевом объекте
+- name: Копирование проверенного локального RPM на целевой узел при прямом запуске Ansible
   ansible.builtin.copy:
     src: "{{ platform_clickhouse_rpm_paths[clickhouse_package_id] }}"
     dest: "/var/tmp/platform-installer/artifacts/clickhouse-direct/{{ clickhouse_package_id }}-{{ platform_clickhouse_package_version }}-1.x86_64.rpm"
@@ -40,7 +40,7 @@
     mode: '0600'
   when: platform_resolved_artifact_sources is not defined
 
-- name: Повторная проверка промежуточных байтов прямого Ansible RPM
+- name: Повторная проверка локального RPM после передачи для прямого запуска Ansible
   ansible.builtin.stat:
     path: "/var/tmp/platform-installer/artifacts/clickhouse-direct/{{ clickhouse_package_id }}-{{ platform_clickhouse_package_version }}-1.x86_64.rpm"
     checksum_algorithm: sha256
@@ -50,14 +50,14 @@
   when: platform_resolved_artifact_sources is not defined
   no_log: true
 
-- name: Отклонить прямой Ansible RPM, который изменился во время транспортировки
+- name: Отклонение RPM, изменившегося при передаче на целевой узел
   ansible.builtin.assert:
     that: _platform_clickhouse_target_rpm.stat.checksum == platform_clickhouse_expected_rpm_digests[clickhouse_package_id]
     fail_msg: CLICKHOUSE_DIRECT_RPM_INVALID
   when: platform_resolved_artifact_sources is not defined
   no_log: true
 
-- name: "Установить проверенный локальный RPM без обращения к репозиториям"
+- name: "Установка проверенного локального RPM без обращения к репозиториям"
   ansible.builtin.dnf:
     name: >-
       {{ (platform_offline_artifact_paths[clickhouse_package_id] | first)
@@ -71,7 +71,7 @@
     platform_resolved_artifact_sources is not defined or
     platform_resolved_artifact_sources[clickhouse_package_id].source == 'OFFLINE_BUNDLE'
 
-- name: Установить точно закрепленный RPM из утвержденного настроенного репозитория
+- name: Установка точно закрепленного RPM из утвержденного настроенного репозитория
   ansible.builtin.dnf:
     name: "{{ clickhouse_package_id }}-{{ platform_clickhouse_package_version }}-1"
     state: present

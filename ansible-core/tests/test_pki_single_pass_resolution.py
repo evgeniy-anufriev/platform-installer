@@ -26,7 +26,7 @@ if os.name == "posix":
 CORE = Path(__file__).resolve().parents[1]
 TAG = "platform_installer_pki_materialization"
 ROLE = "platform.core.pki_materialize"
-MATCH_TASK = "Проверить соответствие заново рассчитанных планов PKI ранее применённым"
+MATCH_TASK = "Проверка соответствия заново рассчитанных планов PKI ранее применённым"
 
 
 @unittest.skipUnless(shutil.which("ansible-playbook"), "ansible-playbook is required")
@@ -181,7 +181,7 @@ class PKISinglePassResolutionTests(unittest.TestCase):
                              "platform_execution_service_deployment": "bravo",
                              "expected_ids": ids, "expected_plan": expected})
         self.assertIn(MATCH_TASK, output)
-        self.assertNotIn("Получение путей PKI, принадлежащих запросу", output)
+        self.assertNotIn("Определение путей файлов запроса PKI", output)
         self.assertRegex(output, r"localhost\s+:.*changed=0.*failed=0")
         self.assertRegex(output, r"qa-a\s+:.*changed=0.*failed=0")
         self.assert_no_pki_mutation()
@@ -246,9 +246,9 @@ class PKISinglePassResolutionTests(unittest.TestCase):
                        self.mutation_marker()], hosts="qa-a"),
         ], skip=True, success=False,
             extra={"platform_pki_materialization_plans": resolved["materializationPlans"]})
-        self.assertIn("Требовать читаемый обычный исходный материал PKI", output)
+        self.assertIn("Проверка доступности исходных PKI-файлов для чтения и отсутствия символических ссылок", output)
         self.assertIn("fatal:", output)
-        self.assertNotIn("Атомарное развертывание принадлежащего цели материала PKI", output)
+        self.assertNotIn("Атомарное развёртывание PKI-файлов целевого узла", output)
         self.assert_no_pki_mutation()
 
     def test_skip_reuses_matching_target_and_repairs_corrupt_target(self):
@@ -274,10 +274,10 @@ class PKISinglePassResolutionTests(unittest.TestCase):
         self.assertEqual([b"synthetic PKI material for integrity test"],
                          [p.read_bytes() for p in (self.root / 'trust-anchors').glob('*.crt')])
         refresh_mtime = (self.root / 'trust-refreshed').stat().st_mtime_ns
-        self.assertIn("Записать контрольный отпечаток развёрнутых PKI-файлов без секретов", first)
+        self.assertIn("Запись контрольного отпечатка развёрнутых PKI-файлов без секретов", first)
         second = self.run_play([deploy], skip=True, extra=variables)
         self.assertRegex(second, r"qa-a\s+:.*changed=0.*failed=0")
-        self.assertRegex(second, r"Восстановить PKI-файлы в соответствии с применённым планом[^\n]*\n[^\n]*skipping:")
+        self.assertRegex(second, r"Восстановление PKI-файлов в соответствии с применённым планом[^\n]*\n[^\n]*skipping:")
         target = Path(plan["targetDirectory"]) / "certificate.pem"
         target.write_bytes(b"tampered target")
         third = self.run_play([deploy], skip=True, extra=variables)
@@ -302,8 +302,8 @@ class PKISinglePassResolutionTests(unittest.TestCase):
 
     def test_standalone_without_skip_enters_real_mutation_and_request_include(self):
         output = self.run_play([self.play([self.role(), self.mutation_marker()])], success=False)
-        self.assertIn("Получение путей PKI, принадлежащих запросу", output)
-        self.assertRegex(output, r"Требовать ссылку на пароль хранилища только во время выполнения[^\n]*\n[^\n]*fatal:")
+        self.assertIn("Определение путей файлов запроса PKI", output)
+        self.assertRegex(output, r"Проверка наличия runtime-файла пароля по ссылке SecretRef[^\n]*\n[^\n]*fatal:")
         state = self.root / "pki-state" / "single-pass-qa"
         self.assertTrue((state / "authorities").is_dir())
         self.assertTrue((state / "requests").is_dir())
@@ -555,15 +555,15 @@ class PKISinglePassResolutionTests(unittest.TestCase):
                 if service == "kafka":
                     member = tasks(service, "member.yml")
                     listener = tasks(service, "validate_ssl_listener.yml")
-                    selected = [named(member, "Инициализировать сигнал изменения экземпляра службы Kafka PKI"),
-                                named(listener, "Скопировать материал PKI в потребительский каталог, принадлежащий Kafka"),
-                                named(listener, "Агрегировать сигнал изменения экземпляра службы Kafka PKI")]
+                    selected = [named(member, "Инициализация сигнала изменения экземпляра службы Kafka PKI"),
+                                named(listener, "Копирование PKI-файлов в каталог потребителя с владельцем Kafka"),
+                                named(listener, "Объединение сигнала изменения экземпляра службы Kafka PKI")]
                     restart = next(task for task in member
                                    if task.get("ansible.builtin.systemd", {}).get("state") == "restarted")
                     observations = [{"ansible.builtin.set_fact": {"activation": True}, "when": restart["when"]}]
                 elif service == "redis":
                     member = tasks(service, "member.yml")
-                    selected = [named(member, "Материализация файлов экземпляра службы Redis TLS")]
+                    selected = [named(member, "Подготовка файлов экземпляра Redis TLS")]
                     restarts = [task for task in member
                                 if task.get("ansible.builtin.systemd", {}).get("state") == "restarted"]
                     self.assertEqual(2, len(restarts))
@@ -571,15 +571,15 @@ class PKISinglePassResolutionTests(unittest.TestCase):
                                      "when": task["when"]} for index, task in enumerate(restarts)]
                 elif service == "vault":
                     provision = tasks(service, "provision.yml")
-                    selected = [named(provision, "Инициализировать список изменённых экземпляров Vault для перезапуска на узле"),
-                                named(provision, "Материализовать сертификат API, закрытый ключ и CA для каждой системной службы Vault"),
+                    selected = [named(provision, "Инициализация списка изменённых экземпляров Vault для перезапуска на узле"),
+                                named(provision, "Подготовка сертификата API, закрытого ключа и CA для каждой службы Vault"),
                                 named(provision, "Запись экземпляров службы, файлы PKI которых изменились")]
                     state = tasks(service, "bootstrap_follower.yml")[0]["ansible.builtin.systemd"]["state"]
                     observations = [{"ansible.builtin.set_fact": {"activation_state": state},
                                      "vars": {"vault_member": variables["_platform_vault_local_instances"][0]}}]
                 elif service == "postgresql":
                     selected = [named(tasks(service, "install_tls.yml"),
-                                      "Материализовать принадлежащие PostgreSQL файлы PEM из проекции PKI-01")]
+                                      "Подготовка PEM-файлов PostgreSQL по проекции PKI-01")]
                     handlers = [{"name": selected[0]["notify"],
                                  "ansible.builtin.set_fact": {"activation": True}}]
                     observations = [{"ansible.builtin.meta": "flush_handlers"}]
@@ -589,11 +589,11 @@ class PKISinglePassResolutionTests(unittest.TestCase):
                         (source / name).write_text("synthetic " + filename, encoding="utf-8")
                     prepare = tasks(service, "prepare.yml")
                     selected = [named(prepare, "Атомарная сборка пакета HAProxy PEM без регистрации ключевых данных"),
-                                named(prepare, "Записать, изменился ли материал HAProxy TLS")]
+                                named(prepare, "Фиксация изменения TLS-файлов HAProxy")]
                     # Only test ownership differs from the production assemble task.
                     selected[0]["ansible.builtin.assemble"].update(
                         owner=self.variables["platform_pki_owner"], group=self.variables["platform_pki_group"])
-                    state = named(tasks(service, "start.yml"), "Запустить или перезагрузить проверенную службу HAProxy")["ansible.builtin.systemd"]["state"]
+                    state = named(tasks(service, "start.yml"), "Запуск HAProxy или перезапуск при изменении конфигурации, TLS или настроек systemd")["ansible.builtin.systemd"]["state"]
                     observations = [{"ansible.builtin.set_fact": {"activation_state": state}}]
 
                 # Fresh processes exclude stale aggregate facts. Corrupt one

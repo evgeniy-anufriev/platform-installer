@@ -4,12 +4,12 @@
     database: passwd
     key: "{{ application_runtime_job.account }}"
 
-- name: Проверить границы домашнего каталога учётной записи перед обращением к Docker daemon
+- name: Проверка границ домашнего каталога учётной записи перед обращением к Docker daemon
   ansible.builtin.assert:
     that: getent_passwd[application_runtime_job.account][4] is match('^/[a-zA-Z0-9_./-]+$')
     fail_msg: APPLICATION_RUNTIME_ROOT_INVALID
 
-- name: Проверить Docker без прав root и плагин Compose без изменений
+- name: Проверка Docker без прав root и плагина Compose без внесения изменений
   ansible.builtin.command:
     argv: "{{ item }}"
   loop:
@@ -25,7 +25,7 @@
   changed_when: false
   no_log: true
 
-- name: Сохранить результат обнаружения приложения в контексте операции и целевого узла
+- name: Сохранение результата обнаружения приложения в контексте операции и целевого узла
   ansible.builtin.set_fact:
     application_runtime_discoveries: >-
       {{ application_runtime_discoveries | combine({application_discovery_key: {

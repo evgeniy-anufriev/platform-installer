@@ -1,18 +1,18 @@
 ---
-- name: Доказать доступ к управляемому пути ClickHouse без модификации пакета или службы
+- name: Проверка доступа к управляемому пути ClickHouse без изменения пакета или службы
   hosts: localhost
   connection: local
   become: true
   gather_facts: false
   tasks:
-    - name: Выделить точный корень конфигурации ClickHouse, принадлежащий QA
+    - name: Выделение каталога конфигурации ClickHouse для QA
       ansible.builtin.tempfile:
         state: directory
         path: /etc
         prefix: platform-clickhouse-qa-
       register: clickhouse_path_qa_root
 
-    - name: Привязать безопасные одноразовые корни и один экземпляр службы для тестов пути
+    - name: Привязка временных каталогов и экземпляра к тестам путей ClickHouse
       ansible.builtin.set_fact:
         platform_clickhouse_config_root: "{{ clickhouse_path_qa_root.path }}"
         platform_clickhouse_data_root: "/var/lib/{{ clickhouse_path_qa_root.path | basename }}"
@@ -24,14 +24,14 @@
             data_directory: "/var/lib/{{ clickhouse_path_qa_root.path | basename }}/clickhouse-qa-path/qa-member"
             log_directory: "/var/log/{{ clickhouse_path_qa_root.path | basename }}/clickhouse-qa-path/qa-member"
 
-    - name: Потребовать, чтобы одноразовый корень оставался в точном пространстве имен QA
+    - name: Проверка размещения временного каталога только внутри разрешённой области QA
       ansible.builtin.assert:
         that: clickhouse_path_qa_root.path is match('^/etc/platform-clickhouse-qa-[A-Za-z0-9_-]+$')
         fail_msg: CLICKHOUSE_QA_PATH_UNSAFE
 
-    - name: Проверка безопасных и враждебных путей ClickHouse
+    - name: Проверка безопасных путей ClickHouse и отклонения подменённых путей
       block:
-        - name: Подготовить правильно принадлежащий одноразовый корень
+        - name: Создание временного тестового каталога с ожидаемым владельцем
           ansible.builtin.file:
             path: "{{ platform_clickhouse_config_root }}"
             state: directory
@@ -39,7 +39,7 @@
             group: root
             mode: '0755'
 
-        - name: Проверить пустой корневой каталог и его владельца без изменений
+        - name: Проверка пустого корневого каталога и его владельца без изменений
           ansible.builtin.include_role:
             name: platform.clickhouse.clickhouse_tls
             tasks_from: path_safety.yml
@@ -50,7 +50,7 @@
             owner: platform-clickhouse
             group: platform-clickhouse
 
-        - name: "Проверить отклонение корневого каталога с чужим владельцем"
+        - name: "Проверка отклонения корневого каталога с чужим владельцем"
           block:
             - ansible.builtin.include_role:
                 name: platform.clickhouse.clickhouse_tls
@@ -63,24 +63,24 @@
                   - "'CLICKHOUSE_FOREIGN_ANCESTOR_PATH' in (ansible_failed_result | to_json)"
                   - "'FOREIGN_ROOT_ADMITTED' not in (ansible_failed_result | to_json)"
 
-        - name: Восстановить право собственности root до следующего изолированного случая
+        - name: Восстановление владельца root перед следующим изолированным тестом
           ansible.builtin.file:
             path: "{{ platform_clickhouse_config_root }}"
             owner: root
             group: root
 
-        - name: Удалить одноразовый корень перед заменой ссылки
+        - name: Удаление одноразового корня перед заменой ссылки
           ansible.builtin.file:
             path: "{{ platform_clickhouse_config_root }}"
             state: absent
 
-        - name: Заменить точную корневую символическую ссылку на несвязанный каталог
+        - name: Замена точной корневой символической ссылки на несвязанный каталог
           ansible.builtin.file:
             path: "{{ platform_clickhouse_config_root }}"
             src: /var/tmp
             state: link
 
-        - name: Отклонить замененный управляемый корень
+        - name: Отклонение замененного управляемого корня
           block:
             - ansible.builtin.include_role:
                 name: platform.clickhouse.clickhouse_tls
@@ -93,12 +93,12 @@
                   - "'CLICKHOUSE_FOREIGN_ANCESTOR_PATH' in (ansible_failed_result | to_json)"
                   - "'ROOT_SYMLINK_ADMITTED' not in (ansible_failed_result | to_json)"
 
-        - name: Удалить символическую ссылку, принадлежащую QA, не переходя по ней
+        - name: Удаление тестовой символической ссылки без перехода по ней
           ansible.builtin.file:
             path: "{{ platform_clickhouse_config_root }}"
             state: absent
 
-        - name: Воссоздать безопасный корневой каталог и каталог развертывания
+        - name: Повторное создание защищённых корневого каталога и каталога развёртывания
           ansible.builtin.file:
             path: "{{ item }}"
             state: directory
@@ -109,7 +109,7 @@
             - "{{ platform_clickhouse_config_root }}"
             - "{{ platform_clickhouse_config_root }}/clickhouse-qa-path"
 
-        - name: Создать точный каталог экземпляра частной службы
+        - name: Создание защищённого каталога экземпляра службы
           ansible.builtin.file:
             path: "{{ platform_clickhouse_config_root }}/clickhouse-qa-path/qa-member"
             state: directory
@@ -117,13 +117,13 @@
             group: platform-clickhouse
             mode: '0700'
 
-        - name: Заменить частный путь PKI символической ссылкой
+        - name: Замена защищённого пути PKI символической ссылкой
           ansible.builtin.file:
             path: "{{ platform_clickhouse_config_root }}/clickhouse-qa-path/qa-member/pki"
             src: /var/tmp
             state: link
 
-        - name: Отклонить замененный частный путь PKI
+        - name: Отклонение подменённого защищённого пути PKI
           block:
             - ansible.builtin.include_role:
                 name: platform.clickhouse.clickhouse_tls
@@ -137,7 +137,7 @@
                   - "'PRIVATE_PKI_SYMLINK_ADMITTED' not in (ansible_failed_result | to_json)"
 
       always:
-        - name: Удалить только точный эфемерный корень или ссылку QA
+        - name: Удаление только временного тестового каталога или символической ссылки
           ansible.builtin.file:
             path: "{{ clickhouse_path_qa_root.path }}"
             state: absent

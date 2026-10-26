@@ -1,10 +1,10 @@
 ---
-- name: Привязать выбранные образы к целевым узлам без изменения inventory оператора
+- name: Привязка выбранных образов к целевым узлам без изменения inventory оператора
   hosts: localhost
   connection: local
   gather_facts: false
   tasks:
-    - name: Добавить только вычисленную группу подготовки
+    - name: Добавление только вычисленной группы подготовки
       ansible.builtin.add_host:
         name: "{{ item }}"
         groups: platform_image_targets
@@ -12,7 +12,7 @@
         platform_application_image_bundle: "{{ hostvars['localhost'].platform_application_image_bundle }}"
       loop: "{{ platform_application_image_inputs.targetConnections | list }}"
 
-- name: Прочитать метаданные образа через сеть каждого выбранного целевого узла
+- name: Чтение метаданных образа через сеть каждого выбранного целевого узла
   hosts: platform_image_targets
   gather_facts: false
   any_errors_fatal: true
@@ -21,29 +21,29 @@
       ansible.builtin.setup:
         gather_subset: ['!all', 'min']
         filter: ['ansible_system', 'ansible_architecture']
-    - name: "Инициализировать результаты подготовки образов целевого узла"
+    - name: "Инициализация результатов подготовки образов целевого узла"
       ansible.builtin.set_fact:
         platform_application_image_preparations: {}
         _image_registry_cache: {}
-    - name: Подготовить каждый выбранный образ штатными задачами Ansible
+    - name: Подготовка каждого выбранного образа штатными задачами Ansible
       ansible.builtin.include_role:
         name: platform.core.prepare_application_images
       loop: "{{ platform_application_image_inputs.placements | selectattr('hostId', 'equalto', inventory_hostname) | list }}"
       loop_control:
         loop_var: application_image_input
 
-- name: Зафиксировать метаданные выбранного образа на узле выполнения
+- name: Фиксация метаданных выбранного образа на узле выполнения
   hosts: localhost
   connection: local
   gather_facts: false
   tasks:
-    - name: "Сохранить сводные результаты подготовки образов без секретов"
+    - name: "Сохранение сводных результатов подготовки образов без секретов"
       ansible.builtin.set_fact:
         platform_prepared_application_images: >-
           {{ {'apiVersion': 'platform.installer/container-images/v1alpha2',
               'placements': platform_application_image_inputs.ready |
                 combine((hostvars | platform.core.application_prepared_image_lock).placements)} }}
-    - name: Сохранить полный результат подготовки образов в формате машинного протокола
+    - name: Сохранение полного результата подготовки образов в формате машинного протокола
       ansible.builtin.copy:
         content: "{{ platform_prepared_application_images | to_json }}"
         dest: "{{ platform_application_image_result_path }}"

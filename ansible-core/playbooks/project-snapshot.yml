@@ -1,5 +1,5 @@
 ---
-- name: "Получить снимок проекта платформы"
+- name: "Получение снимка проекта платформы"
   hosts: localhost
   connection: local
   gather_facts: false
@@ -9,12 +9,12 @@
         name: platform.core.project_settings
       run_once: true
 
-    - name: Разрешить дополнительные библиотеки приложений с помощью обычного Ansible
+    - name: Вычисление параметров дополнительных библиотек приложений средствами Ansible
       ansible.builtin.include_role:
         name: platform.core.resolve_application_libraries
       when: platform_desired_state.applicationLibraryDeployments is defined
 
-    - name: Создание детерминированного моментального снимка контроллера, доступного только для чтения
+    - name: Формирование воспроизводимого снимка проекта без внесения изменений
       platform.core.project_snapshot:
         project_root: "{{ platform_project_root | default(omit) }}"
         service_catalog_path: "{{ platform_service_catalog_path }}"
@@ -24,7 +24,7 @@
       become: false
       check_mode: false
 
-    - name: "Показать идентификатор снимка без секретных данных"
+    - name: "Вывод идентификатора снимка без секретных данных"
       ansible.builtin.debug:
         msg:
           status: "{{ platform_project_snapshot.snapshot.status }}"

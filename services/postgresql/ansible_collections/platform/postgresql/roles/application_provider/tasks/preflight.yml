@@ -1,5 +1,5 @@
 ---
-- name: "Проверить входные параметры, в том числе при ручном запуске с inventory"
+- name: "Проверка входных параметров, в том числе при ручном запуске с inventory"
   ansible.builtin.assert:
     that: platform_postgresql_application_job | platform.postgresql.application_validate_provider_job
     fail_msg: APPLICATION_PROVIDER_INPUT_INVALID
@@ -32,7 +32,7 @@
   changed_when: false
   no_log: true
 
-- name: Сохранить в безопасности существующую базу данных и идентификаторы учетных записей
+- name: Сохранение существующей базы данных и идентификаторов учётных записей без изменений
   ansible.builtin.set_fact:
     platform_application_provider_runtime: >-
       {{ platform_application_provider_runtime | combine({platform_postgresql_application_job.providerId:
@@ -41,7 +41,7 @@
           'roles': ((platform_application_provider_runtime[platform_postgresql_application_job.providerId].get('catalog', {}).get('roles', []) + (application_provider_catalog.stdout | from_json).roles) | unique | list)}})}) }}
   no_log: true
 
-- name: Потребовать существующий материал TLS и проверенную идентификацию сервера перед мутациями
+- name: Проверка наличия TLS-файлов и идентичности сервера перед изменениями
   ansible.builtin.command:
     argv: "{{ ['timeout', '--kill-after=2s', '10s', 'openssl', 's_client', '-starttls', 'postgres', '-connect', application_provider_target.address ~ ':' ~ application_provider_target.port, '-CAfile', application_provider_target.pkiPlans[0].targetDirectory ~ '/ca-chain.pem', '-verify_return_error', ('-verify_ip' if application_provider_target.address is match('^[0-9.]+$') else '-verify_hostname'), application_provider_target.address] }}"
     # Quit s_client after the verified handshake instead of waiting for input.
@@ -56,7 +56,7 @@
   when: platform_postgresql_application_job.accounts | length > 0
   no_log: true
 
-- name: Требовать предоставления только схемы, если база данных еще не создана
+- name: Проверка ограничения прав ещё не созданной базы правами на схему
   ansible.builtin.assert:
     that: application_provider_database.accounts | map(attribute='grants') | flatten | rejectattr('kind', 'equalto', 'schema') | list | length == 0
     fail_msg: APPLICATION_PROVIDER_MIGRATION_REQUIRED
@@ -91,7 +91,7 @@
     application_provider_probe_scope: existing
     application_provider_skip_managed: true
 
-- name: Сохранять только подтвержденные несоответствия управляемых паролей на этапе учетной записи
+- name: Сохранение только подтвержденных несоответствий управляемых паролей на этапе учетной записи
   ansible.builtin.set_fact:
     platform_application_password_updates: "{{ platform_application_password_updates | default({}) | combine({platform_postgresql_application_job.providerId: ((platform_application_password_updates | default({})).get(platform_postgresql_application_job.providerId, []) + [item.item.name]) | unique | list}) }}"
   loop: "{{ application_provider_password_probe.results | default([]) }}"

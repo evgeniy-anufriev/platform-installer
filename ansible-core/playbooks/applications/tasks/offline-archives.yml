@@ -1,9 +1,9 @@
 ---
-- name: Инициализировать выбранные записи offline-архивов библиотек приложений
+- name: Инициализация выбранных записей offline-архивов библиотек приложений
   ansible.builtin.set_fact:
     application_selected_offline_archives: []
 
-- name: Собрать только архивы, выбранные в ходе целевой предварительной проверки
+- name: Сбор только архивов, выбранных при предварительной проверке целевых узлов
   ansible.builtin.set_fact:
     application_selected_offline_archives: >-
       {{ (application_selected_offline_archives +
@@ -13,7 +13,7 @@
   loop: "{{ groups['platform_targets'] | default([]) }}"
   no_log: true
 
-- name: Проверить каждый уникальный выбранный автономный архив перед мутациями
+- name: Проверка каждого выбранного offline-архива перед внесением изменений
   ansible.builtin.assert:
     that: >-
       (platform_execution_bundle_root | default('')

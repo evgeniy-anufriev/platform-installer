@@ -1,11 +1,11 @@
 ---
-- name: Разрешить выбранную учетную запись Docker для проверки только для чтения
+- name: Определение выбранной учетной записи Docker для проверки только для чтения
   ansible.builtin.getent:
     database: passwd
     key: "{{ platform_docker_account_name }}"
     fail_key: true
 
-- name: Привязать проверенный путь UID и частный путь TLS
+- name: Сохранение UID пользователя и пути защищённого TLS-каталога
   ansible.builtin.set_fact:
     _platform_docker_uid: "{{ getent_passwd[platform_docker_account_name][1] | int }}"
     _platform_docker_gid: "{{ getent_passwd[platform_docker_account_name][2] | int }}"
@@ -13,34 +13,34 @@
     _platform_docker_private_tls_dir: "{{ getent_passwd[platform_docker_account_name][4] }}/.config/docker/pki"
   changed_when: false
 
-- name: Проверить каталог данных Docker и конфигурацию демона без изменений
+- name: Проверка каталога данных Docker и конфигурации демона без внесения изменений
   ansible.builtin.include_tasks: data_root.yml
   vars:
     platform_docker_verify_only: true
 
-- name: "Проверить режим Linger учётной записи Docker"
+- name: "Проверка режима Linger учётной записи Docker"
   ansible.builtin.command:
     argv: [loginctl, show-user, "{{ platform_docker_account_name }}", --property=Linger]
   register: _platform_docker_linger
   changed_when: false
 
-- name: Требовать доступности менеджера пользователей без сеанса входа в систему
+- name: Проверка доступности пользовательского systemd без сеанса входа
   ansible.builtin.assert:
     that: _platform_docker_linger.stdout == 'Linger=yes'
     fail_msg: DOCKER_USER_LINGER_DISABLED
 
-- name: "Проверить активность сети LXC и служб запуска пользовательского Docker"
+- name: "Проверка активности сети LXC и служб запуска пользовательского Docker"
   ansible.builtin.command:
     argv: [systemctl, is-active, lxc-net.service, "{{ platform_docker_name }}-lxc-ready.target", "{{ platform_docker_name }}-rootless-{{ platform_docker_account_name }}.service"]
   register: _platform_docker_system_units
   changed_when: false
 
-- name: Требовать активную цепочку зависимостей на стороне системы
+- name: Проверка активности системных зависимостей Docker
   ansible.builtin.assert:
     that: _platform_docker_system_units.stdout_lines == ['active', 'active', 'active']
     fail_msg: DOCKER_LXC_TARGET_NOT_ACTIVE
 
-- name: Проверить, активна ли служба Docker конкретного пользователя
+- name: Проверка того, активна ли служба Docker конкретного пользователя
   ansible.builtin.command:
     argv: [systemctl, --user, is-active, docker.service]
   become: true
@@ -51,7 +51,7 @@
   register: _platform_docker_user_unit
   changed_when: false
 
-- name: Проверить работу пользовательской службы Docker без прав root
+- name: Проверка работы пользовательской службы Docker без прав root
   ansible.builtin.assert:
     that: _platform_docker_user_unit.stdout == 'active'
     fail_msg: DOCKER_USER_SERVICE_NOT_ACTIVE
@@ -71,12 +71,12 @@
   delay: 2
   no_log: true
 
-- name: Требовать доступного локального демона Docker
+- name: Проверка доступности локального Docker daemon
   ansible.builtin.assert:
     that: _platform_docker_info.rc == 0
     fail_msg: DOCKER_ROOTLESS_DAEMON_UNAVAILABLE
 
-- name: Проверить работу Docker без прав root и без Swarm
+- name: Проверка работы Docker без прав root и без Swarm
   ansible.builtin.assert:
     that:
       - "'rootless' in ((_platform_docker_info.stdout | from_json).SecurityOptions | join(' '))"
@@ -84,7 +84,7 @@
       - (_platform_docker_info.stdout | from_json).DockerRootDir == platform_docker_data_root
     fail_msg: DOCKER_ROOTLESS_RUNTIME_INVALID
 
-- name: Проверка точного плагина Docker Compose CLI
+- name: Проверка плагина Docker Compose CLI
   ansible.builtin.command:
     argv: [docker, compose, version, --short]
   become: true
@@ -94,7 +94,7 @@
   register: _platform_docker_compose_version
   changed_when: false
 
-- name: Требовать установленный плагин Compose
+- name: Проверка наличия плагина Docker Compose
   ansible.builtin.assert:
     that: _platform_docker_compose_version.stdout is match('^v?[0-9]+\.[0-9]+\.[0-9]+')
     fail_msg: DOCKER_COMPOSE_NOT_AVAILABLE
@@ -120,21 +120,21 @@
   changed_when: false
   no_log: true
 
-- name: Требовать действительный удаленный ответ Docker API
+- name: Проверка корректности ответа удалённого Docker API
   ansible.builtin.assert:
     that:
       - (_platform_docker_tls_api_version.stdout | from_json).Server.Version is string
       - (_platform_docker_tls_api_version.stdout | from_json).Server.Version | length > 0
     fail_msg: DOCKER_TLS_API_UNAVAILABLE
 
-- name: Проверить, что системный демон /socket остается неактивным
+- name: Проверка того, что системный демон /socket остается неактивным
   ansible.builtin.command:
     argv: [systemctl, is-active, docker.service, docker.socket]
   register: _platform_docker_rootful_verify
   changed_when: false
   failed_when: false
 
-- name: "Убедиться, что Docker с правами root остаётся неактивным"
+- name: "Проверка того, что Docker с правами root остаётся неактивным"
   ansible.builtin.assert:
     that: "'active' not in _platform_docker_rootful_verify.stdout_lines"
     fail_msg: DOCKER_ROOTFUL_CONFLICT

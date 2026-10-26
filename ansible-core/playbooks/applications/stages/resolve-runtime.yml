@@ -1,21 +1,21 @@
 ---
 - import_playbook: credential-root.yml
-- name: Разрешить и проверить всю область автономного приложения
+- name: Определение и проверка полного состава автономной операции приложения
   hosts: localhost
   connection: local
   gather_facts: false
   any_errors_fatal: true
   tasks:
-    - name: Определение настроек и мест размещения собственных приложений по умолчанию
+    - name: Определение настроек и размещений приложений по умолчанию
       ansible.builtin.include_role:
         name: platform.core.resolve_application_libraries
-    - name: Создание существующего моментального снимка проекта, доступного только для чтения
+    - name: Формирование снимка текущего проекта без внесения изменений
       platform.core.project_snapshot:
         project_root: "{{ platform_project_root | default(inventory_dir | dirname) }}"
         service_catalog_path: "{{ platform_service_catalog_path }}"
       register: application_snapshot
       no_log: true
-    - name: Запросить действительный снимок перед подготовкой перехватчиков времени выполнения
+    - name: Проверка корректности снимка перед подготовкой обработчиков выполнения
       ansible.builtin.assert:
         that: application_snapshot.snapshot.validation.status == 'PASS'
         fail_msg: "{{ application_snapshot.snapshot.findings | map(attribute='code') | unique | list }}"
@@ -24,33 +24,33 @@
         snapshot_result: "{{ application_snapshot }}"
       register: application_selection
       no_log: true
-    - name: Требовать действительную область вызова перед подготовкой провайдера
+    - name: Проверка выбранного состава операции до подготовки провайдера
       ansible.builtin.assert:
         that: application_selection.status == 'PASS'
         fail_msg: "{{ application_selection.code | default('APPLICATION_LIBRARY_SELECTION_INVALID') }}"
-    - name: Использовать выбранный снимок для всех проекций исполнения
+    - name: Использование выбранного снимка для всех проекций исполнения
       ansible.builtin.set_fact:
         application_snapshot: "{{ application_selection.prepared }}"
       no_log: true
-    - name: "Подготовить обработчики Vault по общему снимку проекта"
+    - name: "Подготовка обработчиков Vault по общему снимку проекта"
       platform.core.prepare_application_vault:
         snapshot_result: "{{ application_snapshot }}"
       register: application_vault_inputs
       no_log: true
-    - name: Разрешить общие источники конечных точек перед любым изменением цели
+    - name: Определение общих источников конечных точек перед изменением целевых узлов
       platform.core.prepare_application_endpoints:
         snapshot: "{{ application_snapshot.snapshot }}"
         service_catalog_path: "{{ platform_service_catalog_path }}"
       register: application_endpoint_inputs
-    - name: Требовать действительные источники конечных точек и публиковать входные данные общего перехватчика
+    - name: Сохранение проверенных источников конечных точек для общего обработчика
       ansible.builtin.set_fact:
         platform_endpoint_sources: "{{ application_endpoint_inputs.sources }}"
       failed_when: application_endpoint_inputs.status != 'PASS'
-    - name: Требовать действительную проекцию Vault перед целевыми контактами
+    - name: Проверка параметров Vault до обращения к целевым узлам
       ansible.builtin.assert:
         that: application_vault_inputs.status == 'PASS'
         fail_msg: "{{ application_vault_inputs.code | default('APPLICATION_VAULT_INPUT_INVALID') }}"
-    - name: Разрешить перехваты учетной записи инфраструктуры и ресурсов из одного снимка
+    - name: Подготовка обработчиков инфраструктурных учётных записей и ресурсов по общему снимку
       platform.core.prepare_application_providers:
         snapshot_result: "{{ application_snapshot }}"
         service_catalog_path: "{{ platform_service_catalog_path }}"
@@ -58,11 +58,11 @@
       register: application_provider_inputs
       when: not platform_application_post_install_only | default(false)
       no_log: true
-    - name: Привязка одного и того же моментального снимка для предварительной проверки провайдера среды выполнения
+    - name: Использование того же снимка для предварительной проверки провайдера
       ansible.builtin.set_fact:
         application_provider_snapshot: "{{ application_snapshot }}"
       no_log: true
-    - name: "Подготовить параметры выполнения приложений без планировщика развёртывания"
+    - name: "Подготовка параметров выполнения приложений без планировщика развёртывания"
       platform.core.prepare_application_runtime:
         project_root: "{{ platform_project_root | default(inventory_dir | dirname) }}"
         contracts_root: "{{ platform_contracts_root | default(playbook_dir ~ '/../../../../contracts') }}"
@@ -70,7 +70,7 @@
         scripts_only: "{{ platform_application_post_install_only | default(false) }}"
       register: application_runtime_inputs
       no_log: true
-    - name: "Проверить успешность подготовки параметров приложений и провайдеров"
+    - name: "Проверка успешности подготовки параметров приложений и провайдеров"
       ansible.builtin.assert:
         that:
           - application_runtime_inputs.status == 'PASS'

@@ -17,9 +17,9 @@ class BackendHostScopeRuntimeTests(unittest.TestCase):
         if not shutil.which('ansible-playbook'):
             self.skipTest('Ansible runtime required')
         prepare = yaml.safe_load((ROLE / 'tasks/prepare.yml').read_text())
-        names = {'Выбрать точные имена файлов, принадлежащие частичному источнику конечной точки',
+        names = {'Выбор имён файлов выбранного источника конечной точки',
                  'Сохранение точных проверенных внутренних ресурсов в базовом режиме',
-                 'Выбрать backend развёртывания источника для частичной интеграции HAProxy'}
+                 'Выбор backend развёртывания источника для частичной интеграции HAProxy'}
         tasks = yaml.safe_load((ROLE / 'tasks/partial_scope.yml').read_text())
         tasks += [task for task in prepare if task.get('name') in names]
         backends = [dict(targetDeploymentId='app-one', configFileName='30-backend-app-one.cfg', providerHostIds=['node1']),
@@ -54,7 +54,7 @@ class BackendHostScopeRuntimeTests(unittest.TestCase):
             "Проверка разрешенных источников артефактов HAProxy перед изменением",
             "Доставка выбранных автономных артефактов HAProxy"}]
         selected += [task for task in prepare if task.get("name") ==
-                     "Установить HAProxy из настроенных системных репозиториев"]
+                     "Установка HAProxy из настроенных системных репозиториев"]
         repository = Path(__file__).resolve().parents[3]
         env = dict(os.environ)
         env["ANSIBLE_COLLECTIONS_PATH"] = str(repository / "ansible-core/collections")
@@ -81,17 +81,17 @@ class BackendHostScopeRuntimeTests(unittest.TestCase):
             result = subprocess.run([executable, "-i", "localhost,", str(path)],
                                     env=env, capture_output=True, text=True, timeout=30)
             self.assertNotEqual(0, result.returncode)
-            self.assertIn("Проверить наличие утверждённых источников артефактов Core для развёртывания сервиса", result.stdout)
+            self.assertIn("Проверка наличия утверждённых источников артефактов Core для развёртывания сервиса", result.stdout)
 
     def test_full_and_partial_models_filter_hosts_and_preserve_other_sources(self):
         executable = shutil.which("ansible-playbook")
         if not executable:
             self.skipTest("ansible-playbook is required")
         tasks = yaml.safe_load((ROLE / "tasks/prepare.yml").read_text(encoding="utf-8"))
-        names = {"Выбрать точные имена файлов, принадлежащие частичному источнику конечной точки",
+        names = {"Выбор имён файлов выбранного источника конечной точки",
                  "Выбор полной модели файла серверной части управляемого приложения",
                  "Сохранение точных проверенных внутренних ресурсов в базовом режиме",
-                 "Выбрать backend развёртывания источника для частичной интеграции HAProxy"}
+                 "Выбор backend развёртывания источника для частичной интеграции HAProxy"}
         selected = [task for task in tasks if task.get("name") in names]
         backend = {"targetDeploymentId": "app", "providerHostIds": ["node1", "node2"],
                    "configFileName": "30-backend-app-public.cfg"}

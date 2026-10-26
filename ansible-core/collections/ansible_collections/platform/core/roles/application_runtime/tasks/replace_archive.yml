@@ -1,55 +1,55 @@
 ---
-- name: Удалить предыдущий временный каталог распаковки архива приложения
+- name: Удаление предыдущего временного каталога распаковки архива приложения
   ansible.builtin.file:
     path: "{{ application_runtime_job.instancePath }}/config/.archive-stage-{{ application_archive.destination | hash('sha256') }}"
     state: absent
 
-- name: Создание промежуточного каталога частного архива
+- name: Создание защищённого временного каталога архива
   ansible.builtin.file:
     path: "{{ application_runtime_job.instancePath }}/config/.archive-stage-{{ application_archive.destination | hash('sha256') }}"
     state: directory
     owner: "{{ application_runtime_job.account }}"
     mode: '0700'
 
-- name: "Скопировать архив в защищённый временный каталог"
+- name: "Копирование архива в защищённый временный каталог"
   ansible.builtin.copy:
     src: "{{ application_archive.path }}"
     dest: "{{ application_runtime_job.instancePath }}/config/.archive-stage-{{ application_archive.destination | hash('sha256') }}/archive.tar.gz"
     owner: "{{ application_runtime_job.account }}"
     mode: '0600'
 
-- name: "Вычислить контрольную сумму доставленного архива на целевом узле"
+- name: "Вычисление контрольной суммы доставленного архива на целевом узле"
   ansible.builtin.stat:
     path: "{{ application_runtime_job.instancePath }}/config/.archive-stage-{{ application_archive.destination | hash('sha256') }}/archive.tar.gz"
     checksum_algorithm: sha256
   register: application_target_archive
 
-- name: "Проверить контрольную сумму доставленного архива"
+- name: "Проверка контрольной суммы доставленного архива"
   ansible.builtin.assert:
     that: application_target_archive.stat.checksum == application_runtime_job.archiveChecksums[application_archive.destination]
     fail_msg: APPLICATION_CONFIG_ARCHIVE_CHANGED
 
-- name: "Распаковать проверенный архив во временный каталог"
+- name: "Распаковка проверенного архива во временный каталог"
   ansible.builtin.unarchive:
     src: "{{ application_runtime_job.instancePath }}/config/.archive-stage-{{ application_archive.destination | hash('sha256') }}/archive.tar.gz"
     dest: "{{ application_runtime_job.instancePath }}/config/.archive-stage-{{ application_archive.destination | hash('sha256') }}"
     owner: "{{ application_runtime_job.account }}"
     remote_src: true
 
-- name: Запросить объявленный корневой каталог архива
+- name: Проверка объявленного корневого каталога архива
   ansible.builtin.stat:
     path: "{{ application_runtime_job.instancePath }}/config/.archive-stage-{{ application_archive.destination | hash('sha256') }}/{{ application_archive.destination | basename }}"
     follow: false
   register: application_archive_root
 
-- name: Отклонить архивы без объявленного корневого каталога
+- name: Отклонение архивов без объявленного корневого каталога
   ansible.builtin.assert:
     that: application_archive_root.stat.isdir | default(false)
     fail_msg: APPLICATION_CONFIG_ARCHIVE_ROOT_INVALID
 
 - name: Замена каталога архива с откатом в случае сбоя
   block:
-    - name: Сохранить предыдущий каталог архива
+    - name: Сохранение предыдущего каталога архива
       ansible.builtin.command:
         argv:
           - mv
@@ -58,7 +58,7 @@
           - "{{ application_runtime_job.instancePath }}/config/.archive-previous-{{ application_archive.destination | hash('sha256') }}"
       when: application_archive_installed.results[0].stat.isdir | default(false)
 
-    - name: Установить извлеченный каталог архива
+    - name: Установка извлеченного каталога архива
       ansible.builtin.command:
         argv:
           - mv
@@ -66,19 +66,19 @@
           - "{{ application_runtime_job.instancePath }}/config/.archive-stage-{{ application_archive.destination | hash('sha256') }}/{{ application_archive.destination | basename }}"
           - "{{ application_runtime_job.instancePath }}/config/{{ application_archive.destination }}"
 
-    - name: Записать дайджест установленного архива
+    - name: Запись дайджеста установленного архива
       ansible.builtin.copy:
         content: "{{ application_runtime_job.archiveChecksums[application_archive.destination] }}\n"
         dest: "{{ application_runtime_job.instancePath }}/config/.archive-{{ application_archive.destination | hash('sha256') }}.sha256"
         owner: "{{ application_runtime_job.account }}"
         mode: '0600'
   rescue:
-    - name: Удалить каталог неудачной замены
+    - name: Удаление каталога неудачной замены
       ansible.builtin.file:
         path: "{{ application_runtime_job.instancePath }}/config/{{ application_archive.destination }}"
         state: absent
 
-    - name: Восстановить предыдущий каталог архива
+    - name: Восстановление предыдущего каталога архива
       ansible.builtin.command:
         argv:
           - mv
@@ -87,21 +87,21 @@
           - "{{ application_runtime_job.instancePath }}/config/{{ application_archive.destination }}"
       when: application_archive_installed.results[0].stat.isdir | default(false)
 
-    - name: "Удалить маркер контрольной суммы после отката"
+    - name: "Удаление маркера контрольной суммы после отката"
       ansible.builtin.file:
         path: "{{ application_runtime_job.instancePath }}/config/.archive-{{ application_archive.destination | hash('sha256') }}.sha256"
         state: absent
 
-    - name: Сообщить о неудачной замене архива
+    - name: Вывод сообщения о неудачной замене архива
       ansible.builtin.fail:
         msg: APPLICATION_CONFIG_ARCHIVE_REPLACE_FAILED
 
-- name: Удалить временный каталог распаковки архива приложения
+- name: Удаление временного каталога распаковки архива приложения
   ansible.builtin.file:
     path: "{{ application_runtime_job.instancePath }}/config/.archive-stage-{{ application_archive.destination | hash('sha256') }}"
     state: absent
 
-- name: Удалить предыдущий архив после успешной замены
+- name: Удаление предыдущего архива после успешной замены
   ansible.builtin.file:
     path: "{{ application_runtime_job.instancePath }}/config/.archive-previous-{{ application_archive.destination | hash('sha256') }}"
     state: absent

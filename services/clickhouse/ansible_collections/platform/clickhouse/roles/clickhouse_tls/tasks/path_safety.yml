@@ -1,5 +1,5 @@
 ---
-- name: Ограничить управляемые корневые каталоги ClickHouse одним компонентом под доверенными родительскими каталогами
+- name: Ограничение управляемых корневых каталогов ClickHouse одним компонентом под доверенными родительскими каталогами
   ansible.builtin.assert:
     that:
       - platform_clickhouse_config_root is match('^/etc/[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$')
@@ -7,7 +7,7 @@
       - platform_clickhouse_log_root is match('^/var/log/[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$')
     fail_msg: CLICKHOUSE_MANAGED_ROOT_UNSAFE
 
-- name: "Проверить безопасность родительских каталогов данных ClickHouse до изменений"
+- name: "Проверка безопасности родительских каталогов данных ClickHouse до изменений"
   ansible.builtin.include_role:
     name: platform.core.managed_data_path_guard
   vars:
@@ -17,7 +17,7 @@
     platform_managed_data_root_owner: "{{ ansible_user | default('') }}"
     platform_managed_data_root_verify_only: "{{ platform_clickhouse_verify_only | bool }}"
 
-- name: Защита эффективных путей к данным экземпляра службы ClickHouse
+- name: Защита действующих путей данных экземпляра ClickHouse
   ansible.builtin.include_role:
     name: platform.core.managed_data_path_guard
   vars:
@@ -41,7 +41,7 @@
   register: _platform_clickhouse_shared_data_root
   when: _platform_clickhouse_local_instances | length > 1
 
-- name: Проверить владение root общим родительским каталогом данных ClickHouse
+- name: Проверка владения root общим родительским каталогом данных ClickHouse
   ansible.builtin.assert:
     that:
       - not _platform_clickhouse_shared_data_root.stat.exists or _platform_clickhouse_shared_data_root.stat.uid == 0
@@ -49,7 +49,7 @@
     fail_msg: CLICKHOUSE_SHARED_DATA_ROOT_UNSAFE
   when: _platform_clickhouse_local_instances | length > 1
 
-- name: Проверить корневой и родительские каталоги ClickHouse без перехода по символическим ссылкам
+- name: Проверка корневого и родительских каталогов ClickHouse без перехода по символическим ссылкам
   ansible.builtin.stat:
     path: "{{ item }}"
     follow: false
@@ -63,7 +63,7 @@
     - "{{ platform_clickhouse_log_root }}/{{ platform_clickhouse_deployment_id }}"
   register: _platform_clickhouse_ancestor_stats
 
-- name: Отклонить подменённые родительские каталоги ClickHouse и каталоги другого владельца
+- name: Отклонение подменённых каталогов ClickHouse и каталогов другого владельца
   ansible.builtin.assert:
     that:
       - not item.stat.exists or (item.stat.isdir | default(false))
@@ -76,7 +76,7 @@
   loop_control:
     label: "{{ item.item }}"
 
-- name: "Проверить пути экземпляра, SQL-доступа и PKI без перехода по символическим ссылкам"
+- name: "Проверка путей экземпляра, SQL-доступа и PKI без перехода по символическим ссылкам"
   ansible.builtin.stat:
     path: "{{ item.0.config_directory ~ '/pki' if item.1 == 'config_pki' else (item.0.data_directory ~ '/access' if item.1 == 'access_control_directory' else item.0[item.1]) }}"
     follow: false
@@ -86,7 +86,7 @@
   loop: "{{ _platform_clickhouse_local_instances | product(['config_directory', 'data_directory', 'log_directory', 'access_control_directory', 'config_pki']) | list }}"
   register: _platform_clickhouse_private_path_stats
 
-- name: Отказаться от замененного или неуправляемого экземпляра службы и частных путей PKI
+- name: Отклонение подменённых или неуправляемых путей экземпляра ClickHouse и PKI
   ansible.builtin.assert:
     that:
       - not item.stat.exists or (item.stat.isdir | default(false))

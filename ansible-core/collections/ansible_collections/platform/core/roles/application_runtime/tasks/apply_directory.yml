@@ -1,5 +1,5 @@
 ---
-- name: Вывести список существующего объявленного каталога конфигурации
+- name: Получение списка содержимого объявленного каталога конфигурации
   ansible.builtin.find:
     paths: "{{ application_runtime_job.instancePath }}/config/{{ application_directory.destination }}"
     recurse: true
@@ -9,7 +9,7 @@
   register: application_directory_existing
   no_log: true
 
-- name: Удалить только файлы и каталоги, отсутствующие в объявленном пакете
+- name: Удаление только файлов и каталогов, отсутствующих в объявленном пакете
   ansible.builtin.file:
     path: "{{ item.path }}"
     state: absent

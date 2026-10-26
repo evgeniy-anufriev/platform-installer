@@ -69,13 +69,13 @@
     fail_msg: REDIS_SENTINEL_HA_REQUIRES_THREE_PAIRED_MEMBERS
   when: platform_redis_mode == 'sentinel-ha'
 
-- name: Отклонить небезопасные расширенные настройки Redis
+- name: Отклонение небезопасных расширенных настроек Redis
   ansible.builtin.assert:
     that: item not in platform_redis_advanced_config
     fail_msg: "ADVANCED_SETTING_RESERVED: {{ item }}"
   loop: [port, tls-port, tls-cert-file, tls-key-file, tls-ca-cert-file, requirepass, masterauth, aclfile, user, sentinel, dir, pidfile, logfile]
 
-- name: Требовать учетные данные Sentinel для Sentinel HA
+- name: Проверка учётных данных Sentinel для режима HA
   ansible.builtin.assert:
     that:
       - platform_redis_sentinel_credential is mapping

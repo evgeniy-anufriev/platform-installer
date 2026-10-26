@@ -1,10 +1,10 @@
 ---
-- name: "Определить каталог библиотеки относительно домашнего каталога пользователя Docker"
+- name: "Определение каталога библиотеки относительно домашнего каталога пользователя Docker"
   ansible.builtin.set_fact:
     application_root: "{{ application_runtime_job.placement.runtimeDirectory | regex_replace('^~(?=/|$)', application_path_home) }}"
   no_log: true
 
-- name: Требовать ограниченный каталог библиотеки
+- name: Проверка допустимости пути каталога библиотеки
   ansible.builtin.assert:
     that:
       - application_path_home is match('^/[a-zA-Z0-9_./-]+$')
@@ -14,7 +14,7 @@
       - application_root != application_path_home
     fail_msg: APPLICATION_RUNTIME_ROOT_INVALID
 
-- name: Требовать непересекающихся каталогов для разных библиотек перед материализацией
+- name: Проверка отсутствия пересечений каталогов библиотек перед записью файлов
   ansible.builtin.assert:
     that:
       - application_root != item.libraryPath

@@ -39,7 +39,7 @@ class PostgreSQLHaLifecycleContractTests(unittest.TestCase):
         )
 
     def test_standalone_retains_platform_initdb(self):
-        self.assertIn("Инициализировать PostgreSQL ровно один раз", self.main)
+        self.assertIn("Инициализация PostgreSQL ровно один раз", self.main)
         self.assertIn("platform_postgresql_mode == 'standalone'", self.main)
 
     def test_postgresql_unit_is_member_scoped_and_legacy_unit_is_not_adopted(self):
@@ -54,8 +54,8 @@ class PostgreSQLHaLifecycleContractTests(unittest.TestCase):
         gate = self.main[: self.main.index("Проверка входных данных службы PostgreSQL")]
         self.assertIn("platform_postgresql_mode == 'pg_auto_failover'", gate)
         package = self.main[
-            self.main.index("Установить одобренные пакеты PostgreSQL из настроенного системного репозитория") :
-            self.main.index("Убедиться, что учетная запись службы PostgreSQL существует")
+            self.main.index("Установка одобренных пакетов PostgreSQL из настроенного системного репозитория") :
+            self.main.index("Проверка того, что учетная запись службы PostgreSQL существует")
         ]
         self.assertIn("platform_postgresql_mode == 'pg_auto_failover'", package)
         tasks = yaml.safe_load(self.main)
@@ -68,9 +68,9 @@ class PostgreSQLHaLifecycleContractTests(unittest.TestCase):
     def test_repository_package_selection_probes_exact_version_masks(self):
         tasks = yaml.safe_load(self.resolve_packages)
         legacy_probe = next(task for task in tasks
-                            if task.get("name") == "Проверка имен устаревших пакетов PostgreSQL по маскам точной версии")
+                            if task.get("name") == "Проверка имён пакетов PostgreSQL старого формата по маскам версии")
         major_probe = next(task for task in tasks
-                           if task.get("name") == "Проверить имена пакетов PostgreSQL с указанием основной версии")
+                           if task.get("name") == "Проверка имён пакетов PostgreSQL с указанием основной версии")
         legacy_argv = legacy_probe["ansible.builtin.command"]["argv"]
         major_argv = major_probe["ansible.builtin.command"]["argv"]
         self.assertIn("--latest-limit=1", legacy_argv)
@@ -80,14 +80,14 @@ class PostgreSQLHaLifecycleContractTests(unittest.TestCase):
         self.assertTrue(any("postgresql{{ platform_postgresql_version.split('.')[0] }}-" in item
                             for item in major_argv))
         install = next(task for task in yaml.safe_load(self.main)
-                       if task.get("name") == "Установить одобренные пакеты PostgreSQL из настроенного системного репозитория")
+                       if task.get("name") == "Установка одобренных пакетов PostgreSQL из настроенного системного репозитория")
         self.assertIn("_platform_postgresql_repository_packages", str(install["ansible.builtin.package"]["name"]))
         self.assertIn("POSTGRES_PACKAGE_FAMILY_UNAVAILABLE", str(tasks))
 
     def test_pg_auto_failover_package_selection_supports_major_scoped_names(self):
         tasks = yaml.safe_load(self.resolve_packages)
         major_probe = next(task for task in tasks
-                           if task.get("name") == "Проверить имя пакета pg_auto_failover с указанием основной версии PostgreSQL")
+                           if task.get("name") == "Проверка имени пакета pg_auto_failover с указанием основной версии PostgreSQL")
         legacy_probe = next(task for task in tasks
                             if task.get("name") == "Проверка имени устаревшего пакета pg_auto_failover по маске версии")
         self.assertIn("pg_auto_failover-{{ platform_postgresql_version.split('.')[0] }}-",
@@ -95,14 +95,14 @@ class PostgreSQLHaLifecycleContractTests(unittest.TestCase):
         self.assertIn("pg_auto_failover-{{ platform_postgresql_pg_auto_failover_version }}-*.x86_64",
                       legacy_probe["ansible.builtin.command"]["argv"])
         install = next(task for task in yaml.safe_load(self.main)
-                       if task.get("name") == "Установить одобренный пакет pg_auto_failover из настроенного системного репозитория")
+                       if task.get("name") == "Установка одобренного пакета pg_auto_failover из настроенного системного репозитория")
         self.assertIn("_platform_postgresql_failover_repository_package",
                       str(install["ansible.builtin.package"]["name"]))
         self.assertIn("POSTGRES_FAILOVER_PACKAGE_UNAVAILABLE", str(tasks))
 
     def test_ha_data_members_do_not_run_platform_initdb(self):
         initdb = next(task for task in yaml.safe_load(self.main)
-                      if task.get("name") == "Инициализировать PostgreSQL ровно один раз")
+                      if task.get("name") == "Инициализация PostgreSQL ровно один раз")
         self.assertIn("platform_postgresql_mode == 'standalone'", initdb["when"])
 
     def test_pg_autoctl_owns_empty_data_member_bootstrap(self):
@@ -112,7 +112,7 @@ class PostgreSQLHaLifecycleContractTests(unittest.TestCase):
         self.assertNotIn("pg_basebackup", self.failover)
 
     def test_existing_monitor_uri_is_reconciled_only_for_initialized_data(self):
-        self.assertIn("Прочитать существующий URI монитора pg_autoctl", self.failover)
+        self.assertIn("Чтение существующего URI монитора pg_autoctl", self.failover)
         self.assertIn("platform_postgresql_pg_autoctl_pg_version.stat.exists", self.failover)
         self.assertIn(
             "platform_postgresql_pg_autoctl_monitor_uri.stdout | trim != _platform_postgresql_monitor_uri",
@@ -142,7 +142,7 @@ class PostgreSQLHaLifecycleContractTests(unittest.TestCase):
         self.assertNotIn("pgautofailover_monitor", self.failover)
 
     def test_monitor_healthcheck_role_is_least_privilege_and_has_no_password(self):
-        self.assertIn("Согласовать роль контроля работоспособности pg_auto_failover без пароля", self.main)
+        self.assertIn("Согласование роли контроля работоспособности pg_auto_failover без пароля", self.main)
         self.assertIn("NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION", self.main)
         self.assertIn("SELECT FROM pg_authid WHERE rolname = 'pgautofailover_monitor'", self.main)
         self.assertNotIn("SELECT FROM pg_roles WHERE rolname = 'pgautofailover_monitor' AND rolcanlogin", self.main)
@@ -167,7 +167,7 @@ class PostgreSQLHaLifecycleContractTests(unittest.TestCase):
         self.assertNotIn("secondary", self.failover.lower())
 
     def test_credential_reconciliation_targets_only_the_runtime_writable_member(self):
-        self.assertIn("Определить, доступен ли для записи экземпляр службы данных pg_auto_failover", self.main)
+        self.assertIn("Определение доступности экземпляра pg_auto_failover для записи", self.main)
         self.assertIn("platform_postgresql_data_write_state.stdout | trim == 'primary'", self.main)
 
     def test_replication_credential_reconcile_is_gated_by_a_read_only_probe(self):
@@ -194,44 +194,44 @@ class PostgreSQLHaLifecycleContractTests(unittest.TestCase):
 
     def test_tls_material_is_reloaded_by_the_pg_autoctl_owned_postgres_process(self):
         install_tls = (ROLE / "tasks/install_tls.yml").read_text(encoding="utf-8")
-        self.assertIn("notify: Перезагрузить материал PostgreSQL TLS", install_tls)
+        self.assertIn("notify: Перечитывание конфигурации PostgreSQL для применения TLS-файлов", install_tls)
         reload_handler = next(task for task in yaml.safe_load(self.handlers)
-                              if task["name"] == "Перезагрузить материал PostgreSQL TLS")
+                              if task["name"] == "Перечитывание конфигурации PostgreSQL для применения TLS-файлов")
         arguments = reload_handler["ansible.builtin.command"]["argv"]
         self.assertTrue(arguments[0].endswith("/pg_ctl"))
         self.assertEqual(["reload", "-D", "{{ platform_postgresql_data_directory }}"], arguments[1:])
         self.assertLess(
-            self.main.index("Применить измененный материал PostgreSQL TLS перед проверками учетных данных TLS"),
+            self.main.index("Применение изменённых TLS-файлов PostgreSQL перед проверкой учётных данных"),
             self.main.index("Проверка учетных данных для мониторинга данных через TLS"),
         )
 
     def test_service_account_and_base_directories_precede_owned_tls_materialization(self):
         names = [task.get("name") for task in yaml.safe_load(self.main)]
         self.assertLess(
-            names.index("Выбрать план PKI для PostgreSQL до внесения изменений"),
-            names.index("Установить одобренные пакеты PostgreSQL из настроенного системного репозитория"),
+            names.index("Выбор плана PKI для PostgreSQL до внесения изменений"),
+            names.index("Установка одобренных пакетов PostgreSQL из настроенного системного репозитория"),
         )
         self.assertLess(
-            names.index("Установить одобренные пакеты PostgreSQL из настроенного системного репозитория"),
-            names.index("Убедиться, что учетная запись службы PostgreSQL существует"),
+            names.index("Установка одобренных пакетов PostgreSQL из настроенного системного репозитория"),
+            names.index("Проверка того, что учетная запись службы PostgreSQL существует"),
         )
         self.assertLess(
-            names.index("Убедиться, что учетная запись службы PostgreSQL существует"),
-            names.index("Создать каталоги развертывания и экземпляра службы PostgreSQL"),
+            names.index("Проверка того, что учетная запись службы PostgreSQL существует"),
+            names.index("Создание каталогов развертывания и экземпляра службы PostgreSQL"),
         )
         self.assertLess(
-            names.index("Создать каталоги развертывания и экземпляра службы PostgreSQL"),
-            names.index("Установить TLS-файлы PostgreSQL после создания учётной записи и каталогов"),
+            names.index("Создание каталогов развертывания и экземпляра службы PostgreSQL"),
+            names.index("Установка TLS-файлов PostgreSQL после создания учётной записи и каталогов"),
         )
         install_tls = yaml.safe_load((ROLE / "tasks/install_tls.yml").read_text(encoding="utf-8"))
         tls_directory = next(task for task in install_tls
-                             if task.get("name") == "Создать каталог TLS, принадлежащий PostgreSQL, после настройки учетной записи")
+                             if task.get("name") == "Создание каталога TLS с владельцем PostgreSQL после настройки учётной записи")
         self.assertEqual("{{ platform_postgresql_user }}", tls_directory["ansible.builtin.file"]["owner"])
         self.assertEqual("{{ platform_postgresql_group }}", tls_directory["ansible.builtin.file"]["group"])
 
     def test_tls_verification_failure_blocks_credential_ddl(self):
-        self.assertIn("Блокировать сверку учетных данных монитора при сбое проверки TLS", self.main)
-        self.assertIn("Блокировать согласование учетных данных репликации при сбое проверки TLS", self.main)
+        self.assertIn("Блокировка сверки учетных данных монитора при сбое проверки TLS", self.main)
+        self.assertIn("Блокировка согласования учетных данных репликации при сбое проверки TLS", self.main)
         self.assertNotIn("healthcheck_login", self.main)
         self.assertIn("certificate verify failed", self.main)
 
@@ -245,12 +245,12 @@ class PostgreSQLHaLifecycleContractTests(unittest.TestCase):
         self.assertNotIn("healthcheck-password", schema)
 
     def test_serving_certificate_guard_reloads_only_on_a_network_fingerprint_mismatch(self):
-        self.assertIn("Получить отпечаток TLS-сертификата, предъявляемого PostgreSQL", self.main)
-        self.assertIn("Перечитать TLS-конфигурацию управляемого PostgreSQL при несовпадении сертификата", self.main)
+        self.assertIn("Получение отпечатка TLS-сертификата, предъявляемого PostgreSQL", self.main)
+        self.assertIn("Перечитывание TLS-конфигурации PostgreSQL при несовпадении сертификата", self.main)
         self.assertIn("pg_ctl, reload, -D", self.main)
         self.assertIn("POSTGRES_TLS_SERVING_CERTIFICATE_MISMATCH", self.main)
         self.assertLess(
-            self.main.index("Проверить использование материализованного TLS-сертификата сервером PostgreSQL"),
+            self.main.index("Проверка использования подготовленного TLS-сертификата сервером PostgreSQL"),
             self.main.index("Проверка учетных данных для мониторинга данных через TLS"),
         )
 

@@ -13,12 +13,12 @@
     - "{{ kafka_member.log_directory }}"
   when: not (platform_kafka_verify_only | bool)
 
-- name: Инициализировать сигнал изменения экземпляра службы Kafka PKI
+- name: Инициализация сигнала изменения экземпляра службы Kafka PKI
   ansible.builtin.set_fact:
     platform_kafka_member_pki_changed: false
   when: not (platform_kafka_verify_only | bool)
 
-- name: Создать проекцию Kafka listeners экземпляра с учётом ролей
+- name: Создание проекции Kafka listeners экземпляра с учётом ролей
   ansible.builtin.set_fact:
     _platform_kafka_member_advanced_config: "{{ platform_kafka_advanced_config | combine(kafka_member.advanced_config | default({})) }}"
     _platform_kafka_member_named_listeners: >-
@@ -31,14 +31,14 @@
       {% endfor %}
       {{ selected | to_json }}
 
-- name: Преобразовать проекцию именованных Kafka listeners в список Ansible
+- name: Преобразование проекции именованных Kafka listeners в список Ansible
   ansible.builtin.set_fact:
     _platform_kafka_member_named_listeners: "{{ _platform_kafka_member_named_listeners | from_json }}"
   when:
     - kafka_member.listeners | default({}) | length > 0
     - _platform_kafka_member_named_listeners is string
 
-- name: Выбрать listener-ы экземпляра Kafka
+- name: Выбор listeners экземпляра Kafka
   ansible.builtin.set_fact:
     _platform_kafka_member_bound_listeners: >-
       {{ _platform_kafka_member_named_listeners
@@ -46,7 +46,7 @@
          | list if 'controller' not in kafka_member.roles
          else _platform_kafka_member_named_listeners }}
 
-- name: Проверить назначение именованных Kafka listeners и локальные порты экземпляра
+- name: Проверка назначения именованных listeners Kafka и локальных портов экземпляра
   ansible.builtin.assert:
     that:
       - "'controller' not in kafka_member.roles or (_platform_kafka_member_named_listeners | selectattr('purpose', 'equalto', 'controller') | list | length > 0)"
@@ -57,7 +57,7 @@
     fail_msg: 'BLOCKED: named Kafka listeners are invalid for this member role or collide on ports'
   when: kafka_member.listeners | default({}) | length > 0
 
-- name: Сформировать строки действующих именованных Kafka listeners
+- name: Формирование строк действующих именованных Kafka listeners
   ansible.builtin.set_fact:
     _platform_kafka_member_listeners: >-
       {% for listener in _platform_kafka_member_bound_listeners %}{{ listener.name }}://{{ listener.bindAddress | default('0.0.0.0') }}:{{ listener.port }}{% if not loop.last %},{% endif %}{% endfor %}
@@ -66,7 +66,7 @@
     _platform_kafka_member_advertised_listeners: >-
       {% for listener in _platform_kafka_member_bound_listeners %}{{ listener.name }}://{{ listener.advertisedAddress | default(kafka_member.advertised_host) }}:{{ listener.port }}{% if not loop.last %},{% endif %}{% endfor %}
 
-- name: Создание эффективной конфигурации общего экземпляра службы
+- name: Создание действующей конфигурации экземпляра службы
   ansible.builtin.set_fact:
     kafka_effective_config: >-
       {{ (platform_kafka_advanced_config | combine(kafka_member.advanced_config | default({})))
@@ -81,7 +81,7 @@
            }) }}
   when: not (platform_kafka_verify_only | bool)
 
-- name: Проверить готовность PKI-01 для SSL listeners Kafka
+- name: Проверка готовности PKI-01 для SSL listeners Kafka
   ansible.builtin.include_tasks: validate_ssl_listener.yml
   loop: "{{ _platform_kafka_member_named_listeners | selectattr('securityProtocol', 'in', ['SSL', 'SASL_SSL']) | list }}"
   loop_control:
@@ -91,20 +91,20 @@
     - not (platform_kafka_verify_only | bool)
     - kafka_member.listeners | default({}) | length > 0
 
-- name: Настроить SCRAM listener Kafka без передачи паролей брокера
+- name: Настройка SCRAM listener Kafka без передачи паролей брокера
   ansible.builtin.set_fact:
     kafka_effective_config: "{{ kafka_effective_config | combine({('listener.name.' ~ (item.name | lower) ~ '.sasl.enabled.mechanisms'): 'SCRAM-SHA-512', ('listener.name.' ~ (item.name | lower) ~ '.scram-sha-512.sasl.jaas.config'): 'org.apache.kafka.common.security.scram.ScramLoginModule required;'}) }}"
   loop: "{{ _platform_kafka_member_named_listeners | selectattr('securityProtocol', 'equalto', 'SASL_SSL') | list }}"
   when: not (platform_kafka_verify_only | bool)
 
-- name: Включить авторизацию KRaft с точными идентификаторами экземпляра доверенной службы
+- name: Включение авторизации KRaft с точными идентификаторами экземпляра доверенной службы
   ansible.builtin.set_fact:
     kafka_effective_config: "{{ kafka_effective_config | combine({'authorizer.class.name': 'org.apache.kafka.metadata.authorizer.StandardAuthorizer', 'super.users': (['User:admin'] + (_platform_kafka_admin_principals if _platform_kafka_authorization_bootstrap else [])) | join(';'), 'allow.everyone.if.no.acl.found': false}) }}"
   when:
     - not (platform_kafka_verify_only | bool)
     - _platform_kafka_scram_enabled
 
-- name: Добавление эффективной конфигурации брокера
+- name: Добавление действующей конфигурации брокера
   ansible.builtin.set_fact:
     kafka_effective_config: >-
       {{ kafka_effective_config | combine({
@@ -127,7 +127,7 @@
     - platform_kafka_schema_registry_enabled
     - "'broker' in kafka_member.roles"
 
-- name: Добавить запрошенную проекцию динамического кворума
+- name: Добавление запрошенной проекции динамического кворума
   ansible.builtin.set_fact:
     kafka_effective_config: >-
       {{ kafka_effective_config | combine({
@@ -149,7 +149,7 @@
     - not (platform_kafka_verify_only | bool)
     - platform_kafka_quorum_mode == 'static'
 
-- name: Отклонить расширенные настройки зарезервированного экземпляра службы Kafka
+- name: Отклонение расширенных настроек зарезервированного экземпляра службы Kafka
   ansible.builtin.assert:
     that: >-
       ((_platform_kafka_member_advanced_config.keys() | list |
@@ -158,7 +158,7 @@
     fail_msg: 'ADVANCED_SETTING_RESERVED: BLOCKED; member advanced configuration contains reserved Kafka keys'
   when: not (platform_kafka_verify_only | bool)
 
-- name: Проверка эффективной конфигурации Kafka для конкретной роли
+- name: Проверка действующей конфигурации Kafka для выбранной роли
   ansible.builtin.assert:
     that:
       - "'broker' in kafka_member.roles or 'inter.broker.listener.name' not in kafka_effective_config"
@@ -169,7 +169,7 @@
     fail_msg: Kafka effective configuration contains behavior from an unassigned member role
   when: not (platform_kafka_verify_only | bool)
 
-- name: Проверка эффективных значений конфигурации экземпляра службы
+- name: Проверка итоговых значений конфигурации экземпляра службы
   ansible.builtin.assert:
     that: item.value is boolean or item.value is number or item.value is string
     fail_msg: Kafka effective configuration contains an unsupported value type
@@ -177,7 +177,7 @@
   when: not (platform_kafka_verify_only | bool)
   no_log: true
 
-- name: Отрисовка детерминированного экземпляра службы server.properties
+- name: Формирование server.properties для экземпляра Kafka
   ansible.builtin.template:
     src: server.properties.j2
     dest: "{{ kafka_member.config_directory }}/server.properties"
@@ -197,13 +197,13 @@
     get_checksum: false
   register: platform_kafka_member_metadata
 
-- name: Прочитать метаданные существующего экземпляра службы KRaft
+- name: Чтение метаданных существующего экземпляра службы KRaft
   ansible.builtin.slurp:
     src: "{{ kafka_member.data_directory }}/meta.properties"
   register: platform_kafka_member_metadata_content
   when: platform_kafka_member_metadata.stat.exists
 
-- name: Отклонить несоответствие идентификатора экземпляра службы
+- name: Отклонение несоответствия идентификатора экземпляра службы
   ansible.builtin.assert:
     that:
       - (platform_kafka_member_metadata_content.content | b64decode) is search('(?m)^cluster.id=' ~ platform_kafka_cluster_id ~ '$')
@@ -229,7 +229,7 @@
     - not (platform_kafka_verify_only | bool)
     - not platform_kafka_member_metadata.stat.exists
 
-- name: Отформатировать неинициализированное хранилище Kafka ровно один раз
+- name: Форматирование неинициализированного хранилища Kafka ровно один раз
   become_user: "{{ platform_kafka_user }}"
   ansible.builtin.command:
     argv: >-
@@ -257,7 +257,7 @@
   register: platform_kafka_member_environment
   when: not (platform_kafka_verify_only | bool)
 
-- name: "Установить службу systemd для экземпляра Kafka"
+- name: "Установка службы systemd для экземпляра Kafka"
   ansible.builtin.template:
     src: kafka.service.j2
     dest: "{{ kafka_member.systemd_unit_destination }}"
@@ -267,12 +267,12 @@
   register: platform_kafka_systemd_template
   when: not (platform_kafka_verify_only | bool)
 
-- name: Перезагрузить systemd перед запуском экземпляров службы
+- name: Перечитывание unit-файлов systemd перед запуском экземпляров Kafka
   ansible.builtin.systemd:
     daemon_reload: true
   when: not (platform_kafka_verify_only | bool)
 
-- name: Дождаться следующей секунды после записи конфигурации перед перезапуском SCRAM
+- name: Ожидание следующей секунды после записи конфигурации перед перезапуском SCRAM
   ansible.builtin.wait_for:
     timeout: 1
   changed_when: false
@@ -285,7 +285,7 @@
       (platform_kafka_member_pki_changed | default(false) | bool) or
       (platform_pki_material_changed | default(false) | bool)
 
-- name: Перезапустить только измененный экземпляр службы Kafka
+- name: Перезапуск экземпляра Kafka при изменении конфигурации, окружения или PKI
   ansible.builtin.systemd:
     name: "{{ kafka_member.systemd_unit_name }}"
     state: restarted
@@ -304,7 +304,7 @@
     state: started
   when: not (platform_kafka_verify_only | bool)
 
-- name: Дождаться готовности к запуску экземпляра службы Kafka systemd
+- name: Ожидание готовности к запуску экземпляра службы Kafka systemd
   ansible.builtin.command:
     argv:
       - systemctl

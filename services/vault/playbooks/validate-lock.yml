@@ -1,11 +1,11 @@
 ---
-- name: "Проверить захват и освобождение блокировки Vault на QA-узле"
+- name: "Проверка захвата и освобождения блокировки Vault на QA-узле"
   hosts: localhost
   connection: local
   gather_facts: false
   become: true
   tasks:
-    - name: Создание частного изолированного тестового каталога блокировки
+    - name: Создание защищённого временного каталога для теста блокировки
       ansible.builtin.tempfile:
         state: directory
         path: /var/tmp
@@ -18,7 +18,7 @@
           - vault_lock_test_dir.path is match('^/var/tmp/platform-vault-lock-test-[A-Za-z0-9_]+$')
         fail_msg: VAULT_LOCK_TEST_PATH_INVALID
 
-    - name: Создать файл тестовой блокировки, принадлежащий пользователю root
+    - name: Создание файла тестовой блокировки с владельцем root
       ansible.builtin.file:
         path: "{{ vault_lock_test_dir.path }}/deployment.lock"
         state: touch
@@ -30,7 +30,7 @@
       ansible.builtin.set_fact:
         vault_lock_test_suffix: "{{ lookup('ansible.builtin.password', '/dev/null', length=20, chars='hexdigits') | lower }}"
 
-    - name: Запись точных временных системных служб для ограниченной очистки
+    - name: Запись временных служб systemd для изолированной проверки очистки
       ansible.builtin.set_fact:
         vault_lock_test_units:
           - "platform-vault-lock-test-holder-{{ vault_lock_test_suffix }}"
@@ -39,9 +39,9 @@
           - "platform-vault-lock-test-failure-{{ vault_lock_test_suffix }}"
           - "platform-vault-lock-test-recovery-{{ vault_lock_test_suffix }}"
 
-    - name: "Проверить конкуренцию за блокировку, штатное освобождение и освобождение после сбоя"
+    - name: "Проверка конкуренции за блокировку, штатного освобождения и освобождения после сбоя"
       block:
-        - name: Запустить первую службу и дождаться READY после получения блокировки flock
+        - name: Запуск первой службы и ожидание READY после захвата блокировки flock
           ansible.builtin.command:
             argv:
               - systemd-run
@@ -62,7 +62,7 @@
               - "set -eu; /usr/bin/systemd-notify --ready; /usr/bin/touch {{ vault_lock_test_dir.path }}/holder-reached-ready; exec /usr/bin/sleep infinity"
           changed_when: true
 
-        - name: "Дождаться готовности процесса, удерживающего блокировку"
+        - name: "Ожидание готовности процесса, удерживающего блокировку"
           ansible.builtin.command:
             argv: [systemctl, show, --property=ActiveState, --value, "{{ vault_lock_test_units[0] }}.service"]
           register: vault_lock_holder_state
@@ -92,7 +92,7 @@
               - "set -eu; /usr/bin/systemd-notify --ready; /usr/bin/touch {{ vault_lock_test_dir.path }}/contender-reached-ready; exec /usr/bin/sleep infinity"
           changed_when: true
 
-        - name: "Проверить завершение конкурирующего процесса до сигнала готовности"
+        - name: "Проверка завершения конкурирующего процесса до сигнала готовности"
           ansible.builtin.command:
             argv: [systemctl, show, --property=ActiveState, --value, "{{ vault_lock_test_units[1] }}.service"]
           register: vault_lock_contender_state
@@ -101,7 +101,7 @@
           retries: 10
           delay: 1
 
-        - name: "Проверить, что защищённый этап выполнил только владелец блокировки"
+        - name: "Проверка того, что защищённый этап выполнил только владелец блокировки"
           ansible.builtin.stat:
             path: "{{ vault_lock_test_dir.path }}/{{ item }}"
           loop:
@@ -109,7 +109,7 @@
             - contender-reached-ready
           register: vault_lock_markers
 
-        - name: Определить одного победителя и заблокированного претендента
+        - name: Определение одного победителя и заблокированного претендента
           ansible.builtin.assert:
             that:
               - vault_lock_holder_state.stdout == 'active'
@@ -118,12 +118,12 @@
               - not vault_lock_markers.results[1].stat.exists
             fail_msg: VAULT_LOCK_CONTENTION_TEST_FAILED
 
-        - name: "Штатно остановить процесс, удерживающий блокировку"
+        - name: "Штатная остановка процесса, удерживающего блокировку"
           ansible.builtin.command:
             argv: [systemctl, stop, "{{ vault_lock_test_units[0] }}.service"]
           changed_when: true
 
-        - name: "Запустить конкурирующий процесс после штатного освобождения блокировки"
+        - name: "Запуск конкурирующего процесса после штатного освобождения блокировки"
           ansible.builtin.command:
             argv:
               - systemd-run
@@ -144,7 +144,7 @@
               - "set -eu; /usr/bin/systemd-notify --ready; exec /usr/bin/sleep infinity"
           changed_when: true
 
-        - name: "Дождаться готовности конкурирующего процесса после освобождения блокировки"
+        - name: "Ожидание готовности конкурирующего процесса после освобождения блокировки"
           ansible.builtin.command:
             argv: [systemctl, show, --property=ActiveState, --value, "{{ vault_lock_test_units[2] }}.service"]
           register: vault_lock_released_state
@@ -153,12 +153,12 @@
           retries: 10
           delay: 1
 
-        - name: "Штатно остановить конкурирующий процесс и освободить блокировку"
+        - name: "Штатная остановка конкурирующего процесса и освобождение блокировки"
           ansible.builtin.command:
             argv: [systemctl, stop, "{{ vault_lock_test_units[2] }}.service"]
           changed_when: true
 
-        - name: "Запустить владельца блокировки с имитацией сбоя после сигнала готовности"
+        - name: "Запуск владельца блокировки с имитацией сбоя после сигнала готовности"
           ansible.builtin.command:
             argv:
               - systemd-run
@@ -179,7 +179,7 @@
               - "set -eu; /usr/bin/systemd-notify --ready; exit 42"
           changed_when: true
 
-        - name: Дождаться сбоя процесса держателя блокировки
+        - name: Ожидание сбоя процесса держателя блокировки
           ansible.builtin.command:
             argv: [systemctl, show, --property=ActiveState, --value, "{{ vault_lock_test_units[3] }}.service"]
           register: vault_lock_failed_state
@@ -188,7 +188,7 @@
           retries: 10
           delay: 1
 
-        - name: Получить блокировку после очистки состояния прежнего владельца
+        - name: Получение блокировки после очистки состояния прежнего владельца
           ansible.builtin.command:
             argv:
               - systemd-run
@@ -209,7 +209,7 @@
               - "set -eu; /usr/bin/systemd-notify --ready; exec /usr/bin/sleep infinity"
           changed_when: true
 
-        - name: "Дождаться готовности нового владельца после сбоя прежнего владельца блокировки"
+        - name: "Ожидание готовности нового владельца после сбоя прежнего владельца блокировки"
           ansible.builtin.command:
             argv: [systemctl, show, --property=ActiveState, --value, "{{ vault_lock_test_units[4] }}.service"]
           register: vault_lock_recovery_state
@@ -219,21 +219,21 @@
           delay: 1
 
       always:
-        - name: Остановить временные службы systemd проверки блокировки Vault
+        - name: Остановка временных служб systemd проверки блокировки Vault
           ansible.builtin.command:
             argv: [systemctl, stop, "{{ item }}.service"]
           loop: "{{ vault_lock_test_units }}"
           changed_when: false
           failed_when: false
 
-        - name: Сбросить состояние failed временных служб systemd проверки блокировки Vault
+        - name: Сброс состояния failed временных служб systemd проверки блокировки Vault
           ansible.builtin.command:
             argv: [systemctl, reset-failed, "{{ item }}.service"]
           loop: "{{ vault_lock_test_units }}"
           changed_when: false
           failed_when: false
 
-        - name: Удалить точный созданный каталог теста блокировки
+        - name: Удаление точного созданного каталога теста блокировки
           ansible.builtin.file:
             path: "{{ vault_lock_test_dir.path }}"
             state: absent

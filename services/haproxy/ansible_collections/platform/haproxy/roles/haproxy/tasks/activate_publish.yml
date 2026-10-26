@@ -1,5 +1,5 @@
 ---
-- name: Атомарно установить точную проверенную основную конфигурацию платформы
+- name: Атомарная установка проверенной основной конфигурации HAProxy
   ansible.builtin.copy:
     src: "{{ platform_haproxy_candidate_directory }}/haproxy.cfg"
     dest: "{{ platform_haproxy_main_config }}"
@@ -10,7 +10,7 @@
   register: _platform_haproxy_main_config_install
   when: (platform_haproxy_partial_deployment_id is not defined and platform_haproxy_partial_deployment_ids is not defined)
 
-- name: Атомарно установить точные проверенные фрагменты платформы HAProxy
+- name: Атомарная установка проверенных файлов конфигурации HAProxy
   ansible.builtin.copy:
     src: "{{ platform_haproxy_candidate_directory }}/conf.d/{{ item }}"
     dest: "{{ platform_haproxy_conf_directory }}/{{ item }}"
@@ -21,7 +21,7 @@
   loop: "{{ ['10-public.cfg'] if (platform_haproxy_partial_deployment_id is defined or platform_haproxy_partial_deployment_ids is defined) else ['10-public.cfg', '20-local-stats.cfg', '90-stats-backends.cfg'] }}"
   register: _platform_haproxy_fragment_install
 
-- name: Установка точных проверенных фрагментов серверной части управляемого приложения HAProxy
+- name: Установка проверенных файлов backend управляемого приложения HAProxy
   ansible.builtin.copy:
     src: "{{ platform_haproxy_candidate_directory }}/conf.d/{{ item }}"
     dest: "{{ platform_haproxy_conf_directory }}/{{ item }}"
@@ -35,7 +35,7 @@
        else platform_haproxy_managed_application_backend_files | default([]) }}
   register: _platform_haproxy_application_backend_install
 
-- name: Записать изменение активного графа конфигурации HAProxy
+- name: Запись изменения активного графа конфигурации HAProxy
   ansible.builtin.set_fact:
     platform_haproxy_active_artifacts_changed: >-
       {{ (_platform_haproxy_main_config_install.changed | default(false)) or
@@ -43,7 +43,7 @@
          (_platform_haproxy_application_backend_install.results | default([]) | selectattr('changed') | list | length > 0) or
          _platform_haproxy_backend_archive.changed }}
 
-- name: Вычислить детерминированный дайджест активного графа HAProxy
+- name: Вычисление детерминированного дайджеста активного графа HAProxy
   ansible.builtin.shell: >-
     { sha256sum "{{ platform_haproxy_main_config }}"; cd "{{ platform_haproxy_conf_directory }}";
       find . -type f -printf '%P\0' | sort -z | xargs -0 sha256sum; } |
@@ -54,7 +54,7 @@
   changed_when: false
   register: _platform_haproxy_active_graph_digest
 
-- name: "Проверить соответствие активной конфигурации HAProxy проверенному набору файлов"
+- name: "Проверка соответствия активной конфигурации HAProxy проверенному набору файлов"
   ansible.builtin.assert:
     that:
       - _platform_haproxy_candidate_graph_digest.stdout == _platform_haproxy_active_graph_digest.stdout

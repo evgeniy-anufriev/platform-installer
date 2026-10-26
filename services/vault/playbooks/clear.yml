@@ -1,12 +1,12 @@
 ---
-- name: Явная очистка выбранных принадлежащих экземпляров службы Vault Raft
+- name: Очистка данных только выбранных управляемых экземпляров Vault Raft
   hosts: platform_targets
   become: true
   gather_facts: false
   any_errors_fatal: true
   strategy: linear
   tasks:
-    - name: "Выполнить очистку Vault при прямом запуске Ansible"
+    - name: "Выполнение очистки Vault при прямом запуске Ansible"
       ansible.builtin.include_role:
         name: platform.vault.vault_tls
         tasks_from: clear_entry

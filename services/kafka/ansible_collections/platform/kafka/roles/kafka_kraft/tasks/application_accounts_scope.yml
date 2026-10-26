@@ -8,26 +8,26 @@
 
 - name: Выполнение ограниченных операций SCRAM и ACL
   block:
-    - name: Подготовка частного удостоверения клиента PEM для вызова
+    - name: Подготовка защищённых PEM-файлов клиента для текущей операции
       ansible.builtin.include_tasks: application_client_tls.yml
       when: platform_kafka_store_type == 'PEM'
-    - name: "Сформировать административную конфигурацию SASL"
+    - name: "Формирование административной конфигурации SASL"
       ansible.builtin.template:
         src: application-topics-client.properties.j2
         dest: "{{ application_kafka_private.path }}/admin.properties"
         mode: '0600'
       no_log: true
       changed_when: false
-    - name: Прочитать метаданные развертывания SCRAM и инвентарь ACL один раз перед учетными записями
+    - name: Однократное чтение метаданных SCRAM и списка ACL перед обработкой учётных записей
       ansible.builtin.include_tasks: application_accounts_read.yml
-    - name: "Проверить или настроить каждую логическую учётную запись Kafka"
+    - name: "Проверка или настройка каждой логической учётной записи Kafka"
       ansible.builtin.include_tasks: application_account.yml
       loop: "{{ platform_kafka_application_job.accounts }}"
       loop_control:
         loop_var: application_kafka_account
         label: "{{ application_kafka_account.accountId }}"
   always:
-    - name: "Удалить временный каталог учётных данных Kafka"
+    - name: "Удаление временного каталога учётных данных Kafka"
       ansible.builtin.file:
         path: "{{ application_kafka_private.path }}"
         state: absent

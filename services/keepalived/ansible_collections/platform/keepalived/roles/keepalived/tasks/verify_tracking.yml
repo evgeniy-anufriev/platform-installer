@@ -7,7 +7,7 @@
     get_checksum: false
   register: platform_keepalived_haproxy_helper_stat
 
-- name: Подтвердить владение и режим помощника готовности HAProxy
+- name: Подтверждение владельца и прав скрипта проверки готовности HAProxy
   ansible.builtin.assert:
     that:
       - platform_keepalived_haproxy_helper_stat.stat.exists
@@ -21,7 +21,7 @@
     src: "{{ platform_keepalived_haproxy_check_path }}"
   register: platform_keepalived_haproxy_helper_content
 
-- name: "Проверить локальность и таймауты скрипта проверки готовности HAProxy"
+- name: "Проверка локальности и таймаутов скрипта проверки готовности HAProxy"
   ansible.builtin.assert:
     that:
       - platform_keepalived_haproxy_helper_content.content | b64decode is search('systemctl is-active --quiet haproxy')
@@ -30,13 +30,13 @@
       - platform_keepalived_haproxy_helper_content.content | b64decode is search('show info')
     fail_msg: KEEPALIVED_HAPROXY_HELPER_CONTENT_INVALID
 
-- name: Запрос состояния службы HAProxy, доступный только для чтения
+- name: Получение состояния службы HAProxy без внесения изменений
   ansible.builtin.command:
     argv: [systemctl, is-active, haproxy]
   register: platform_keepalived_haproxy_service_state
   changed_when: false
 
-- name: Подтвердить, что служба HAProxy активна для отслеживания
+- name: Проверка того, что служба HAProxy активна для отслеживания
   ansible.builtin.assert:
     that: platform_keepalived_haproxy_service_state.stdout | trim == 'active'
     fail_msg: KEEPALIVED_HAPROXY_SERVICE_NOT_ACTIVE
@@ -51,7 +51,7 @@
     src: "{{ platform_keepalived_config_file }}"
   register: platform_keepalived_active_config_content
 
-- name: Подтвердить активную конфигурацию отслеживания HAProxy
+- name: Подтверждение активной конфигурации отслеживания HAProxy
   ansible.builtin.assert:
     that:
       - platform_keepalived_active_config_content.content | b64decode is search('vrrp_script platform_haproxy_ready_' ~ (platform_keepalived_tracking_deployment.key | replace('-', '_') | replace('.', '_')))

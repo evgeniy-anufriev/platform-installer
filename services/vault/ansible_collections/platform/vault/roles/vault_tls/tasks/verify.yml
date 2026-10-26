@@ -1,5 +1,5 @@
 ---
-- name: Определить экземпляры Vault на узле inventory
+- name: Определение экземпляров Vault на узле inventory
   ansible.builtin.set_fact:
     _platform_vault_local_instances: "{{ _platform_vault_instances | selectattr('host', 'equalto', inventory_hostname) | list }}"
 
@@ -20,7 +20,7 @@
   changed_when: false
   no_log: true
 
-- name: Потребовать, чтобы каждый Vault API был инициализирован и разблокирован
+- name: Проверка инициализации и разблокировки всех экземпляров Vault
   ansible.builtin.assert:
     that:
       - item.json.initialized | bool
@@ -31,13 +31,13 @@
     label: Vault API health
   no_log: true
 
-- name: Запрос авторизованного токена для проверки конфигурации Vault
+- name: Проверка авторизованного токена для проверки конфигурации Vault
   ansible.builtin.assert:
     that: platform_vault_admin_token is string and platform_vault_admin_token | length > 0
     fail_msg: VAULT_ADMIN_TOKEN_REQUIRED
   no_log: true
 
-- name: Прочитать настройки аудита, хранилищ и методов аутентификации Vault с выбранным административным токеном
+- name: Чтение настроек аудита, хранилищ и методов аутентификации Vault с выбранным административным токеном
   ansible.builtin.uri:
     url: "https://{{ (_platform_vault_instances | first).address }}:{{ (_platform_vault_instances | first).api_port }}/v1/{{ item }}"
     method: GET
@@ -52,7 +52,7 @@
   changed_when: false
   no_log: true
 
-- name: Проверить утверждённый аудит Vault, хранилище KV v2 и метод аутентификации
+- name: Проверка заданных настроек аудита Vault, хранилища KV v2 и метода аутентификации
   ansible.builtin.assert:
     that:
       - _platform_vault_configuration.results[0].json.data['file/'] is defined
@@ -68,7 +68,7 @@
     fail_msg: VAULT_CONFIGURATION_VERIFY_FAILED
   no_log: true
 
-- name: Прочитать авторитетную конфигурацию членства Raft
+- name: Чтение текущей конфигурации участников Raft
   ansible.builtin.uri:
     url: "https://{{ (_platform_vault_instances | first).address }}:{{ (_platform_vault_instances | first).api_port }}/v1/sys/storage/raft/configuration"
     method: GET
@@ -85,7 +85,7 @@
   when: platform_vault_mode == 'raft-ha'
   no_log: true
 
-- name: "Проверить состав и работоспособность голосующих узлов Raft"
+- name: "Проверка состава и работоспособности голосующих узлов Raft"
   ansible.builtin.assert:
     that:
       - _platform_vault_raft_configuration.json.data.config.servers | length == _platform_vault_instances | length

@@ -21,7 +21,7 @@
     fail_msg: "ARTIFACT_SOURCE_METADATA_INVALID: {{ artifact_requirement.id }}"
   no_log: true
 
-- name: Создание контролируемого целевого промежуточного каталога
+- name: Создание управляемого временного каталога на целевом узле
   ansible.builtin.file:
     path: "{{ platform_artifact_stage_root }}/{{ artifact_requirement.id }}"
     state: directory
@@ -30,7 +30,7 @@
     mode: '0700'
   when: platform_resolved_artifact_sources[artifact_requirement.id].source == 'OFFLINE_BUNDLE'
 
-- name: "Скопировать выбранные offline-артефакты на целевой узел"
+- name: "Копирование выбранных offline-артефактов на целевой узел"
   ansible.builtin.copy:
     src: "{{ platform_execution_runtime_root }}/{{ artifact.ref }}"
     dest: "{{ platform_artifact_stage_root }}/{{ artifact_requirement.id }}/{{ artifact.sha256 | regex_replace('^sha256:', '') }}-{{ artifact.ref | basename }}"
@@ -43,7 +43,7 @@
     label: "{{ artifact.ref | basename }}"
   when: platform_resolved_artifact_sources[artifact_requirement.id].source == 'OFFLINE_BUNDLE'
 
-- name: Проверка байтов целевого артефакта перед установкой службы
+- name: Проверка содержимого артефакта на целевом узле перед установкой службы
   ansible.builtin.stat:
     path: "{{ platform_artifact_stage_root }}/{{ artifact_requirement.id }}/{{ artifact.sha256 | regex_replace('^sha256:', '') }}-{{ artifact.ref | basename }}"
     checksum_algorithm: sha256
@@ -67,7 +67,7 @@
   when: platform_resolved_artifact_sources[artifact_requirement.id].source == 'OFFLINE_BUNDLE'
   no_log: true
 
-- name: "Сохранить пути доставленных артефактов для установки сервисов"
+- name: "Сохранение путей доставленных артефактов для установки сервисов"
   ansible.builtin.set_fact:
     platform_offline_artifact_paths: >-
       {{ platform_offline_artifact_paths | combine({artifact_requirement.id:
@@ -79,7 +79,7 @@
     label: "{{ artifact.ref | basename }}"
   when: platform_resolved_artifact_sources[artifact_requirement.id].source == 'OFFLINE_BUNDLE'
 
-- name: "Собрать пути RPM-пакетов и их зависимостей"
+- name: "Сбор путей RPM-пакетов и их зависимостей"
   ansible.builtin.set_fact:
     platform_offline_package_paths: >-
       {{ platform_offline_package_paths +

@@ -1,8 +1,8 @@
 ---
-- name: "Рассчитать ту же модель backend-сервисов для проверки конечной точки без изменений"
+- name: "Расчёт той же модели backend-сервисов для проверки конечной точки без изменений"
   ansible.builtin.include_tasks: resolve.yml
 
-- name: Выбрать backend-сервисы источника интеграции на узле провайдера
+- name: Выбор backend-сервисов источника интеграции на узле провайдера
   ansible.builtin.set_fact:
     platform_haproxy_application_backends: >-
       {{ platform_haproxy_runtime_projection.backends.backends | dict2items |
@@ -10,7 +10,7 @@
          flatten | selectattr('targetDeploymentId', 'in', _platform_haproxy_partial_ids) |
          selectattr('providerHostIds', 'contains', inventory_hostname) | list }}
 
-- name: Проверить выбранные серверные цели только для чтения
+- name: Проверка выбранных серверных целей только для чтения
   ansible.builtin.include_tasks: check_targets.yml
 
 - name: Проверка существующей службы и конфигурации HAProxy

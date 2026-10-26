@@ -1,5 +1,5 @@
 ---
-- name: Деструктивный сброс среды выполнения Kafka с явно выбранных хостов QA
+- name: Удаление данных и служб Kafka на явно выбранных QA-узлах
   hosts: platform_targets
   become: true
   gather_facts: false
@@ -13,13 +13,13 @@
       - /opt/kafka
       - /opt/kafka_2.13-4.3.1
   tasks:
-    - name: Требовать точное разрушительное подтверждение сброса хоста Kafka
+    - name: Проверка точного подтверждения удаления данных Kafka на узле
       ansible.builtin.assert:
         that:
           - platform_kafka_host_reset_confirmation == platform_kafka_host_reset_expected_confirmation
         fail_msg: 'BLOCKED: reset_kafka_host requires exact destructive acknowledgement'
 
-    - name: "Найти все службы Kafka в systemd"
+    - name: "Поиск всех служб Kafka в systemd"
       ansible.builtin.shell: |
         set -o pipefail
         {
@@ -31,7 +31,7 @@
       register: platform_kafka_host_reset_units
       changed_when: false
 
-    - name: Остановить и отключить обнаруженные службы systemd Kafka
+    - name: Остановка и отключение обнаруженных служб systemd Kafka
       ansible.builtin.systemd:
         name: "{{ item }}"
         state: stopped
@@ -39,7 +39,7 @@
       loop: "{{ platform_kafka_host_reset_units.stdout_lines }}"
       failed_when: false
 
-    - name: Подождать определенное время для завершения работы JVM Kafka
+    - name: Ожидание завершения JVM Kafka в пределах таймаута
       ansible.builtin.command:
         argv: [pgrep, -f, kafka.Kafka]
       register: platform_kafka_host_reset_processes
@@ -49,7 +49,7 @@
       delay: 2
       until: platform_kafka_host_reset_processes.rc != 0
 
-    - name: Завершить работу оставшихся JVM Kafka после ограниченного завершения работы
+    - name: Принудительное завершение оставшихся JVM Kafka после таймаута остановки
       ansible.builtin.shell: |
         set -o pipefail
         for pid in $(pgrep -f 'kafka.Kafka .*server\.properties' || true); do
@@ -63,12 +63,12 @@
       when: platform_kafka_host_reset_processes.rc == 0
       changed_when: true
 
-    - name: Дождаться завершения Kafka JVM
+    - name: Ожидание завершения Kafka JVM
       ansible.builtin.pause:
         seconds: 2
       when: platform_kafka_host_reset_processes.rc == 0
 
-    - name: Принудительно остановить оставшиеся JVM Kafka
+    - name: Принудительная остановка оставшихся JVM Kafka
       ansible.builtin.shell: |
         set -o pipefail
         for pid in $(pgrep -f 'kafka.Kafka .*server\.properties' || true); do
@@ -82,7 +82,7 @@
       when: platform_kafka_host_reset_processes.rc == 0
       changed_when: true
 
-    - name: Убедиться, что JVM Kafka отсутствуют перед удалением файлов среды выполнения
+    - name: Проверка того, что JVM Kafka отсутствуют перед удалением файлов среды выполнения
       ansible.builtin.command:
         argv: [pgrep, -f, kafka.Kafka]
       register: platform_kafka_host_reset_final_processes
@@ -95,7 +95,7 @@
         state: absent
       loop: "{{ platform_kafka_host_reset_paths }}"
 
-    - name: "Найти файлы служб Kafka в systemd"
+    - name: "Поиск файлов служб Kafka в systemd"
       ansible.builtin.find:
         paths: /etc/systemd/system
         patterns:
@@ -104,7 +104,7 @@
         recurse: false
       register: platform_kafka_host_reset_unit_files
 
-    - name: "Удалить файлы служб Kafka из systemd"
+    - name: "Удаление файлов служб Kafka из systemd"
       ansible.builtin.file:
         path: "{{ item.path }}"
         state: absent
@@ -112,24 +112,24 @@
       loop_control:
         label: "{{ item.path }}"
 
-    - name: Перезагрузить systemd после сброса хоста Kafka
+    - name: Перечитывание unit-файлов systemd после сброса Kafka на узле
       ansible.builtin.systemd:
         daemon_reload: true
 
-    - name: Очистить устаревшее состояние обнаруженных системных служб Kafka
+    - name: Очистка устаревшего состояния обнаруженных системных служб Kafka
       ansible.builtin.command:
         argv: [systemctl, reset-failed, "{{ item }}"]
       loop: "{{ platform_kafka_host_reset_units.stdout_lines }}"
       changed_when: false
       failed_when: false
 
-    - name: Убедиться, что пути выполнения Kafka отсутствуют
+    - name: Проверка того, что пути выполнения Kafka отсутствуют
       ansible.builtin.stat:
         path: "{{ item }}"
       register: platform_kafka_host_reset_path_state
       loop: "{{ platform_kafka_host_reset_paths }}"
 
-    - name: При подтверждении сброса хоста Kafka удалены все выбранные пути выполнения
+    - name: Проверка удаления выбранных путей выполнения после подтверждённого сброса узла Kafka
       ansible.builtin.assert:
         that: not item.stat.exists
         fail_msg: "Kafka host reset did not remove {{ item.item }}"

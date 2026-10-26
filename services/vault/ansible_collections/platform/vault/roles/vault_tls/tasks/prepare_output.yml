@@ -1,18 +1,18 @@
 ---
-- name: Разрешить канонический корень проекта для автономного хранения начальной загрузки
+- name: Определение канонического корня проекта для автономного хранения начальной загрузки
   ansible.builtin.set_fact:
     _platform_vault_project_root: >-
       {{ platform_project_root if (platform_project_root is defined and platform_project_root | string | length > 0)
          else ((inventory_dir | dirname) if (inventory_dir is defined and inventory_dir | string | length > 0) else '') }}
 
-- name: Определить точный путь вывода начальной загрузки
+- name: Определение точного пути вывода начальной загрузки
   ansible.builtin.set_fact:
     _platform_vault_bootstrap_output_dir: >-
       {{ platform_vault_bootstrap_output_dir if (platform_vault_bootstrap_output_dir | string | length > 0)
          else (_platform_vault_project_root ~ '/secrets/' ~ platform_vault_deployment_id) }}
     _platform_vault_output_uses_project_secrets: "{{ platform_vault_bootstrap_output_dir | string | length == 0 }}"
 
-- name: Требовать однозначный абсолютный выходной путь начальной загрузки
+- name: Проверка однозначного абсолютного пути результатов инициализации
   ansible.builtin.assert:
     that:
       - _platform_vault_bootstrap_output_dir is string
@@ -21,24 +21,24 @@
       - not (_platform_vault_output_uses_project_secrets | bool) or (_platform_vault_project_root | string | length > 0)
     fail_msg: VAULT_BOOTSTRAP_OUTPUT_PATH_INVALID
 
-- name: Разрешить выходной путь, не следуя за замененным родителем
+- name: Определение пути результатов без перехода через подменённый родительский каталог
   ansible.builtin.command:
     argv: [realpath, -m, "{{ _platform_vault_bootstrap_output_dir }}"]
   register: _platform_vault_output_realpath
   changed_when: false
 
-- name: Проверить канонический путь результатов и отсутствие символических ссылок в родительских каталогах
+- name: Проверка канонического пути результатов и отсутствия символических ссылок в родительских каталогах
   ansible.builtin.assert:
     that: _platform_vault_output_realpath.stdout == _platform_vault_bootstrap_output_dir
     fail_msg: VAULT_BOOTSTRAP_OUTPUT_PATH_UNSAFE
 
-- name: Определить учетную запись контроллера Ansible, которой принадлежат автономные выходные данные
+- name: Определение учетной записи контроллера Ansible, которой принадлежат автономные выходные данные
   ansible.builtin.command:
     argv: [id, -u]
   register: _platform_vault_controller_uid
   changed_when: false
 
-- name: Проверить родительский каталог секретов по умолчанию без перехода по символическим ссылкам
+- name: Проверка родительского каталога секретов по умолчанию без перехода по символическим ссылкам
   ansible.builtin.stat:
     path: "{{ _platform_vault_project_root }}/secrets"
     follow: false
@@ -48,21 +48,21 @@
   register: _platform_vault_secrets_parent
   when: _platform_vault_output_uses_project_secrets | bool
 
-- name: Отказаться от использования существующего небезопасного секретного каталога проекта
+- name: Запрет использования небезопасного существующего каталога секретов проекта
   ansible.builtin.assert:
     that:
       - not _platform_vault_secrets_parent.stat.exists or (_platform_vault_secrets_parent.stat.isdir and not _platform_vault_secrets_parent.stat.islnk and _platform_vault_secrets_parent.stat.uid | string == _platform_vault_controller_uid.stdout | trim and _platform_vault_secrets_parent.stat.mode == '0700')
     fail_msg: VAULT_BOOTSTRAP_OUTPUT_PATH_UNSAFE
   when: _platform_vault_output_uses_project_secrets | bool
 
-- name: Создать каталог секретов проекта с частными разрешениями
+- name: Создание каталога секретов проекта с доступом только для владельца
   ansible.builtin.file:
     path: "{{ _platform_vault_project_root }}/secrets"
     state: directory
     mode: '0700'
   when: _platform_vault_output_uses_project_secrets | bool
 
-- name: Проверить заданный родительский каталог результатов без перехода по символическим ссылкам
+- name: Проверка заданного родительского каталога результатов без перехода по символическим ссылкам
   ansible.builtin.stat:
     path: "{{ _platform_vault_bootstrap_output_dir | dirname }}"
     follow: false
@@ -72,7 +72,7 @@
   register: _platform_vault_explicit_output_parent
   when: not (_platform_vault_output_uses_project_secrets | bool)
 
-- name: Проверить существование заданного родительского каталога результатов и владение контроллера
+- name: Проверка существования родительского каталога результатов и его принадлежности контроллеру
   ansible.builtin.assert:
     that:
       - _platform_vault_explicit_output_parent.stat.isdir
@@ -81,7 +81,7 @@
     fail_msg: VAULT_BOOTSTRAP_OUTPUT_PATH_UNSAFE
   when: not (_platform_vault_output_uses_project_secrets | bool)
 
-- name: Проверить выходной каталог развертывания, не переходя по символическим ссылкам
+- name: Проверка выходного каталога развертывания, не переходя по символическим ссылкам
   ansible.builtin.stat:
     path: "{{ _platform_vault_bootstrap_output_dir }}"
     follow: false
@@ -90,19 +90,19 @@
     get_checksum: false
   register: _platform_vault_output_directory
 
-- name: Отклонить существующий небезопасный выходной каталог развертывания
+- name: Отклонение существующего небезопасного выходного каталога развертывания
   ansible.builtin.assert:
     that:
       - not _platform_vault_output_directory.stat.exists or (_platform_vault_output_directory.stat.isdir and not _platform_vault_output_directory.stat.islnk and _platform_vault_output_directory.stat.uid | string == _platform_vault_controller_uid.stdout | trim and _platform_vault_output_directory.stat.mode == '0700')
     fail_msg: VAULT_BOOTSTRAP_OUTPUT_PATH_UNSAFE
 
-- name: Создание выходного каталога развертывания с частными разрешениями
+- name: Создание каталога результатов развёртывания с доступом только для владельца
   ansible.builtin.file:
     path: "{{ _platform_vault_bootstrap_output_dir }}"
     state: directory
     mode: '0700'
 
-- name: Проверить три фиксированных файла начальной загрузки, не переходя по символическим ссылкам
+- name: Проверка трёх файлов инициализации без перехода по символическим ссылкам
   ansible.builtin.stat:
     path: "{{ _platform_vault_bootstrap_output_dir }}/{{ item }}"
     follow: false
@@ -112,7 +112,7 @@
   loop: [admin-token, unseal-shares, init-response.json]
   register: _platform_vault_output_files
 
-- name: "Отклонить файлы инициализации с чужим владельцем или избыточными правами доступа"
+- name: "Отклонение файлов инициализации с чужим владельцем или избыточными правами доступа"
   ansible.builtin.assert:
     that:
       - not item.stat.exists or (item.stat.isreg and not item.stat.islnk and item.stat.uid | string == _platform_vault_controller_uid.stdout | trim and item.stat.mode == '0600')

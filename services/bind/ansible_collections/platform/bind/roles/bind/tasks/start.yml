@@ -1,12 +1,12 @@
 ---
-- name: Определить, активен ли уже BIND
+- name: Определение текущего состояния службы BIND
   ansible.builtin.command:
     argv: ["systemctl", "is-active", "--quiet", "{{ platform_bind_service_name }}"]
   changed_when: false
   failed_when: false
   register: _platform_bind_service_active
 
-- name: Перезагрузить активный BIND после изменения активных артефактов
+- name: Перечитывание конфигурации BIND после изменения активных файлов
   ansible.builtin.systemd:
     name: "{{ platform_bind_service_name }}"
     state: reloaded

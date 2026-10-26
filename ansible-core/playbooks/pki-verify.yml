@@ -1,10 +1,10 @@
 ---
-- name: Разрешение управляемой проекции проверки PKI на узле выполнения
+- name: Расчёт проекции проверки PKI на узле выполнения
   hosts: localhost
   connection: local
   gather_facts: false
   tasks:
-    - name: Разрешение управляемого плана проверки PKI с использованием ролей по умолчанию
+    - name: Расчёт плана проверки PKI со значениями роли по умолчанию
       ansible.builtin.include_role:
         name: platform.core.pki_materialize
         tasks_from: resolve.yml

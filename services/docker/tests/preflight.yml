@@ -1,5 +1,5 @@
 ---
-- name: Выполнить предварительную проверку Docker без прав root на RED OS без изменений
+- name: Выполнение предварительной проверки Docker без прав root на RED OS без изменений
   hosts: platform_targets
   become: true
   gather_facts: false

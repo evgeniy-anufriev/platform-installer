@@ -7,6 +7,24 @@ when `endpointGroups.<id>.address.wildcard` is `false`. A certificate profile
 may explicitly set `sanPolicy.includeEndpointWildcard: false` to disable these
 SANs. The endpoint flag controls DNS wildcard publication only.
 
+## Ansible task names
+
+Operator-visible play, task, block and handler names use Russian action nouns:
+«Проверка наличия каталога», «Создание учётной записи», «Перезапуск PostgreSQL».
+Use the concrete object and only conditions that distinguish the action or a
+required safety check. The same rule applies to compound stage titles:
+«Этап A — подготовка и проверка конфигураций».
+
+Describe the actual operation: assertions are «Проверка», service restarts are
+«Перезапуск», service configuration reloads are «Перечитывание конфигурации»,
+and systemd `daemon_reload` is «Перечитывание unit-файлов systemd». Prefer
+«Подготовка файлов», «Формирование конфигурации», «Расчёт параметров» and
+«Защищённый каталог» over literal translations such as «материализация байтов»,
+«отрисовка», «разрешение параметров» and «частный каталог». Retain precise
+technical terms, including Kafka topics/partitions, TLS, PKI, ACL and principal.
+Keep `notify`, `listen`, failed-task comparisons and test selectors synchronized
+when renaming a task or handler; resource names and execution logic are unchanged.
+
 ## Product contract
 
 Ansible Core must be installable and usable without Platform Installer. A Linux operator must be able to take a portable Ansible project and offline bundle and run the complete lifecycle with standard `ansible-playbook` commands.

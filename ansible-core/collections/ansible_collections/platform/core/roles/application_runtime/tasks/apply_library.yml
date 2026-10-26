@@ -1,10 +1,10 @@
 ---
-- name: Связать все места размещения, использующие одну проекцию хоста библиотеки
+- name: Привязка всех размещений с общей проекцией узла библиотеки
   ansible.builtin.set_fact:
     application_library_jobs: "{{ platform_application_preflight_jobs | selectattr('libraryId', 'equalto', application_library_id) | list }}"
   no_log: true
 
-- name: "Проверить одинаковое содержимое общей библиотеки у всех потребителей"
+- name: "Проверка одинакового содержимого общей библиотеки у всех потребителей"
   ansible.builtin.assert:
     that:
       - application_library_jobs | map(attribute='libraryPath') | unique | length == 1
@@ -13,14 +13,14 @@
     fail_msg: APPLICATION_LIBRARY_HOST_PROJECTION_CONFLICT
   no_log: true
 
-- name: Создать каталог хоста библиотеки в проверенном частном поддереве
+- name: Создание каталога библиотеки в проверенном защищённом подкаталоге
   ansible.builtin.file:
     path: "{{ application_library_jobs[0].libraryPath }}"
     state: directory
     owner: "{{ application_library_jobs[0].account }}"
     mode: '0700'
 
-- name: Материализовать библиотеку и ее точные выбранные экземпляры
+- name: Подготовка библиотеки и выбранных экземпляров
   block:
     - name: Запись владения хостом библиотеки как производного состояния среды выполнения
       ansible.builtin.copy:
@@ -28,7 +28,7 @@
         dest: "{{ application_library_jobs[0].libraryPath }}/.owner.json"
         owner: "{{ application_library_jobs[0].account }}"
         mode: '0600'
-    - name: "Создать общие несекретные переменные окружения и базовый Compose-файл один раз"
+    - name: "Однократное создание общих несекретных переменных окружения и базового Compose-файла"
       ansible.builtin.copy:
         content: "{{ item.content }}"
         dest: "{{ application_library_jobs[0].libraryPath }}/{{ item.name }}"
@@ -38,7 +38,7 @@
         - { name: .env, content: "{{ application_library_jobs[0].envContent }}" }
         - { name: "{{ application_library_jobs[0].baseFilename }}", content: "{{ application_library_jobs[0].baseContent }}" }
       no_log: true
-    - name: Материализовать и проверить каждое приложение в отдельном проекте Compose
+    - name: Подготовка и проверка каждого приложения в отдельном проекте Compose
       ansible.builtin.include_tasks: apply_instance.yml
       loop: "{{ application_library_jobs }}"
       when: >-

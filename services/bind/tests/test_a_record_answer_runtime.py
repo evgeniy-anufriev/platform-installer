@@ -19,8 +19,8 @@ class ARecordAnswerRuntimeTests(unittest.TestCase):
         source = (yaml.safe_load((ROLE / "tasks/prepare_a_record.yml").read_text()) +
                   yaml.safe_load((ROLE / "tasks/verify_a_record.yml").read_text()))
         names = {
-            "Собрать существующие авторитетные записи ответов для конкретного владельца",
-            "Отклонить ответ CNAME или неуправляемого владельца перед изменением записи A",
+            "Сбор существующих авторитетных записей ответов для конкретного владельца",
+            "Отклонение ответа CNAME или неуправляемого владельца перед изменением записи A",
             "Нормализация набора записей после динамического обновления",
         }
         tasks = [task for task in source if task["name"] in names]

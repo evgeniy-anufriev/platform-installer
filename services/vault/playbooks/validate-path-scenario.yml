@@ -7,7 +7,7 @@
     _vault_test_outside: "{{ vault_path_test_dir.path }}/outside-{{ vault_path_scenario.root }}-{{ vault_path_scenario.component }}"
     _vault_test_rejected: false
 
-- name: "Создать безопасные родительские каталоги и внешний контрольный файл"
+- name: "Создание защищённых родительских каталогов и внешнего контрольного файла"
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
@@ -19,7 +19,7 @@
     + ([_vault_test_deployment] if vault_path_scenario.component != 'deployment' else [])
     + ([_vault_test_member] if vault_path_scenario.component == 'pki' else []) }}
 
-- name: Создать внешний контрольный индикатор, который не сможет изменить ни один отклоненный путь
+- name: Создание внешнего контрольного файла для проверки отсутствия изменений при отклонении пути
   ansible.builtin.copy:
     content: unchanged
     dest: "{{ _vault_test_outside }}/sentinel"
@@ -27,14 +27,14 @@
     group: root
     mode: '0600'
 
-- name: Выбрать точное местоположение символической ссылки потомка
+- name: Выбор расположения тестовой символической ссылки во вложенном каталоге
   ansible.builtin.set_fact:
     _vault_test_link: >-
       {{ _vault_test_deployment if vault_path_scenario.component == 'deployment'
       else (_vault_test_member if vault_path_scenario.component == 'member'
       else _vault_test_member ~ '/pki') }}
 
-- name: Создать контрольный список родительских каталогов тестового пути Vault
+- name: Создание контрольного списка родительских каталогов тестового пути Vault
   ansible.builtin.set_fact:
     _vault_test_checks: >-
       {{ [{'path': _vault_test_root, 'owner': 'root'}]
@@ -42,29 +42,29 @@
       + ([{'path': _vault_test_member, 'owner': 'service'}] if vault_path_scenario.component == 'pki' else [])
       + [{'path': _vault_test_link, 'owner': 'service'}] }}
 
-- name: Заменить только выбранный сгенерированный компонент пути символической ссылкой
+- name: Замена только выбранного сгенерированного компонента пути символической ссылкой
   ansible.builtin.file:
     src: "{{ _vault_test_outside }}"
     dest: "{{ _vault_test_link }}"
     state: link
 
-- name: "Проверить отклонение небезопасного пути штатным валидатором до записи файлов"
+- name: "Проверка отклонения небезопасных путей штатным валидатором до записи файлов"
   block:
-    - name: Применить точный валидатор компонента пути Vault
+    - name: Применение точного валидатора компонента пути Vault
       ansible.builtin.include_tasks: ../ansible_collections/platform/vault/roles/vault_tls/tasks/validate_owned_paths.yml
       vars:
         _platform_vault_path_checks: "{{ _vault_test_checks }}"
 
-    - name: Проверить недоступность контрольной задачи изменения после отклонения небезопасного пути Vault
+    - name: Проверка недоступности контрольной задачи изменения после отклонения небезопасного пути Vault
       ansible.builtin.file:
         path: "{{ _vault_test_outside }}/must-not-exist"
         state: touch
   rescue:
-    - name: Записать, что небезопасный путь отклонен
+    - name: Фиксация отклонения небезопасного пути
       ansible.builtin.set_fact:
         _vault_test_rejected: true
 
-- name: Убедиться, что отклонение произошло до внесения каких-либо внешних изменений
+- name: Проверка того, что отклонение произошло до внесения каких-либо внешних изменений
   ansible.builtin.stat:
     path: "{{ item }}"
   loop:
@@ -72,7 +72,7 @@
     - "{{ _vault_test_outside }}/must-not-exist"
   register: _vault_test_outside_stats
 
-- name: "Прочитать внешний контрольный файл после отклонения пути"
+- name: "Чтение внешнего контрольного файла после отклонения пути"
   ansible.builtin.slurp:
     src: "{{ _vault_test_outside }}/sentinel"
   register: _vault_test_sentinel_content

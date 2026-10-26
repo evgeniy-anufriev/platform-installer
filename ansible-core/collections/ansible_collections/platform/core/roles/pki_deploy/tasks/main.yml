@@ -1,9 +1,9 @@
 ---
-- name: Получение эффективной идентичности проекта PKI на основе проекции узла выполнения
+- name: Определение идентификатора проекта PKI по проекции узла выполнения
   ansible.builtin.set_fact:
     _platform_pki_effective_project_id: "{{ platform_pki_project_id if platform_pki_project_id | length > 0 else hostvars['localhost'].platform_pki_project_id | default('') }}"
 
-- name: Выбор планов материализации PKI для целевого хоста
+- name: Выбор планов подготовки PKI для целевого узла
   ansible.builtin.set_fact:
     _platform_pki_local_plans: "{{ (platform_pki_materialization_plans | default(hostvars['localhost'].platform_pki_materialization_plans | default([]), true)) | selectattr('hostId', 'equalto', inventory_hostname) | list }}"
 
@@ -12,7 +12,7 @@
   when: _platform_pki_local_plans | length > 0
   tags: platform_installer_pki_materialization
 
-- name: Атомарное развертывание принадлежащего цели материала PKI
+- name: Атомарное развёртывание PKI-файлов целевого узла
   ansible.builtin.include_tasks: plan.yml
   loop: "{{ _platform_pki_local_plans | sort(attribute='id') | list }}"
   loop_control:

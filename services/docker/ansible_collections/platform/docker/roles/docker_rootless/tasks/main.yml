@@ -3,7 +3,7 @@
   ansible.builtin.include_role:
     name: platform.core.project_settings
 
-- name: Проверить входные настройки Docker без прав root и совместимость целевого узла
+- name: Проверка настроек Docker без прав root и совместимости целевого узла
   ansible.builtin.include_tasks: validate.yml
 
 - name: Проверка утвержденных источников пакета Docker
@@ -21,12 +21,12 @@
     - platform_resolved_artifact_sources is defined or (platform_artifact_source_authority_active | default(false))
     - not (platform_docker_verify_only | bool)
 
-- name: Выбрать точный материал Docker PKI
+- name: Выбор PKI-файлов Docker
   ansible.builtin.include_tasks: resolve_tls.yml
 
-- name: Подготовить Docker без прав root без изменения других развёртываний
+- name: Подготовка Docker без прав root без изменения других развёртываний
   ansible.builtin.include_tasks: provision.yml
   when: not (platform_docker_verify_only | bool)
 
-- name: Проверить работу Docker без прав root и Compose без изменений
+- name: Проверка работы Docker без прав root и Compose без изменений
   ansible.builtin.include_tasks: verify.yml

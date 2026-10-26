@@ -1,8 +1,8 @@
 ---
-- name: Разрешить управляемые входные данные PKI с использованием обычного приоритета ролевых переменных
+- name: Вычисление параметров PKI с учётом приоритета переменных Ansible
   ansible.builtin.include_tasks: resolve.yml
 
-- name: Проверка контракта времени выполнения материализации PKI
+- name: Проверка runtime-контракта подготовки PKI
   ansible.builtin.assert:
     that:
       - platform_pki_project_id | length > 0
@@ -14,7 +14,7 @@
       - platform_pki_reissue_request_ids | difference(platform_pki_requests | map(attribute='id') | list) | length == 0
     fail_msg: PKI_MATERIALIZATION_RUNTIME_INVALID
 
-- name: "Проверить соответствие заново рассчитанных планов PKI ранее применённым"
+- name: "Проверка соответствия заново рассчитанных планов PKI ранее применённым"
   ansible.builtin.assert:
     that:
       - platform_pki_managed_resolution is defined
@@ -25,7 +25,7 @@
   when: "'platform_installer_pki_materialization' in ansible_skip_tags"
   no_log: true
 
-- name: Проверка наличия keytool перед материализацией хранилища PKCS12
+- name: Проверка доступности keytool перед установкой Java
   ansible.builtin.shell: command -v keytool
   args:
     executable: /bin/sh
@@ -36,7 +36,7 @@
     (platform_pki_materialization_plans | selectattr('formats', 'defined') |
      map(attribute='formats') | flatten | intersect(['PKCS12_KEYSTORE', 'PKCS12_TRUSTSTORE']) | length) > 0
 
-- name: "Установить пакет Java с утилитой keytool, если она отсутствует"
+- name: "Установка пакета Java с утилитой keytool, если она отсутствует"
   ansible.builtin.package:
     name: "{{ platform_pki_keytool_package }}"
     state: present
@@ -46,7 +46,7 @@
     - _platform_pki_keytool_probe is not skipped
     - _platform_pki_keytool_probe.rc != 0
 
-- name: Перепроверить keytool после проверки среды выполнения Java
+- name: Повторная проверка keytool после проверки среды выполнения Java
   ansible.builtin.shell: command -v keytool
   args:
     executable: /bin/sh
@@ -57,7 +57,7 @@
     (platform_pki_materialization_plans | selectattr('formats', 'defined') |
      map(attribute='formats') | flatten | intersect(['PKCS12_KEYSTORE', 'PKCS12_TRUSTSTORE']) | length) > 0
 
-- name: Требовать keytool перед материализацией хранилища PKCS12
+- name: Проверка наличия keytool перед созданием хранилищ PKCS12
   ansible.builtin.assert:
     that:
       - _platform_pki_keytool_ready.rc == 0
@@ -80,7 +80,7 @@
   when: platform_pki_requests | length > 0
   tags: platform_installer_pki_materialization
 
-- name: Материализация разрешенных запросов сертификатов PKI
+- name: Подготовка сертификатов по рассчитанным запросам PKI
   ansible.builtin.include_tasks:
     file: request.yml
     apply:

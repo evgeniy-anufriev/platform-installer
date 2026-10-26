@@ -8,7 +8,7 @@
   ansible.builtin.set_fact:
     platform_keepalived_local_ownership: "{{ platform_keepalived_local_ownership | combine({platform_keepalived_deployment.key: _platform_keepalived_owned_addresses}) }}"
 
-- name: Отклонить разделение или неполное владение локальным виртуальным адресом
+- name: Отклонение разделённого или неполного владения локальным VIP
   ansible.builtin.assert:
     that:
       - _platform_keepalived_owned_addresses | length == 0 or _platform_keepalived_owned_addresses | length == _platform_keepalived_expected_addresses | length
@@ -21,7 +21,7 @@
     _platform_keepalived_participants: []
   run_once: true
 
-- name: Классифицировать каждого участника VRRP по полному владению
+- name: Определение участников VRRP, владеющих всеми ожидаемыми VIP
   ansible.builtin.set_fact:
     _platform_keepalived_full_owners: >-
       {{ _platform_keepalived_full_owners +
@@ -39,7 +39,7 @@
   when: platform_keepalived_deployment.key in (hostvars[platform_keepalived_participant].platform_deployments | default({}))
   run_once: true
 
-- name: Подтвердить одного владельца MASTER и не владельца BACKUP для экземпляра VRRP
+- name: Подтверждение одного владельца MASTER и отсутствия VIP у BACKUP для экземпляра VRRP
   ansible.builtin.assert:
     that:
       - _platform_keepalived_participants | length >= 2
@@ -48,7 +48,7 @@
     fail_msg: KEEPALIVED_VRRP_OWNERSHIP_INVALID
   run_once: true
 
-- name: "Показать результаты проверки владельца VIP без чувствительных данных"
+- name: "Вывод результатов проверки владельца VIP без чувствительных данных"
   ansible.builtin.debug:
     msg:
       deployment: "{{ platform_keepalived_deployment.key }}"

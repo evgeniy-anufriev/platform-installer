@@ -1,5 +1,5 @@
 ---
-- name: Однократно прочитать Kafka ACL выбранного principal
+- name: Однократное чтение ACL выбранного principal Kafka
   ansible.builtin.command:
     argv: "{{ [application_topic_cli_directory ~ '/bin/kafka-acls.sh', '--bootstrap-server', application_topic_candidate.address ~ ':' ~ application_topic_candidate.port, '--command-config', application_kafka_private.path ~ '/admin.properties', '--list', '--principal', 'User:' ~ application_kafka_account.name, '--resource-pattern-type', 'any'] }}"
   register: application_kafka_acl_inventory
@@ -7,7 +7,7 @@
   failed_when: false
   no_log: true
 
-- name: "Проверить успешность чтения ACL выбранного principal"
+- name: "Проверка успешности чтения ACL выбранного principal"
   ansible.builtin.assert:
     that: application_kafka_acl_inventory.rc == 0
     fail_msg: APPLICATION_KAFKA_ACL_READ_FAILED

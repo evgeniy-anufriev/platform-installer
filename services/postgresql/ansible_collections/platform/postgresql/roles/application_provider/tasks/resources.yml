@@ -13,13 +13,13 @@
   when: platform_postgresql_application_job.databases | selectattr('restoreOnCreate', 'defined') | list | length > 0
   no_log: true
 
-- name: Восстанавливать только вновь созданные управляемые базы данных перед другими ресурсами
+- name: Восстановление только вновь созданных управляемых баз данных перед другими ресурсами
   ansible.builtin.include_tasks: restore_database.yml
   loop: "{{ platform_postgresql_application_job.databases | selectattr('restoreOnCreate', 'defined') | list }}"
   loop_control:
     loop_var: application_restore_database
 
-- name: Проверка принадлежащих библиотек ролей и баз данных за один сеанс обслуживания
+- name: Проверка или создание ролей и баз данных библиотеки за один сеанс
   ansible.builtin.command:
     argv: [psql, -X, -h, "{{ platform_postgresql_application_socket }}", -p, "{{ application_provider_target.port }}", -U, "{{ application_provider_os_user }}", -d, postgres, -At, -v, ON_ERROR_STOP=1, -f, -]
     stdin: "{{ lookup('ansible.builtin.template', 'resources.sql.j2') }}"

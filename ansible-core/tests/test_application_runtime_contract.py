@@ -33,7 +33,7 @@ class ApplicationRuntimeTests(unittest.TestCase):
         import yaml
         core = ROOT / 'ansible-core'
         tasks = yaml.safe_load((core / 'collections/ansible_collections/platform/core/roles/application_runtime/tasks/preflight.yml').read_text())
-        render = next(task for task in tasks if task.get('name') == 'Сформировать конфигурационные файлы по шаблонам в защищённой памяти')
+        render = next(task for task in tasks if task.get('name') == 'Формирование конфигурационных файлов по шаблонам в защищённой памяти')
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory, 'config.json.j2')
             source.write_text('{"endpoint": "{{ example_endpoint }}"}\n', encoding='utf-8')

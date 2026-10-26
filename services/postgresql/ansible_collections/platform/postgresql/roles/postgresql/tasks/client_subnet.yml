@@ -4,14 +4,14 @@
     gather_subset: ['!all', '!min', network]
   when: ansible_facts.interfaces is not defined
 
-- name: Выбрать факты интерфейса IPv4 для настроенного адреса PostgreSQL
+- name: Выбор фактов интерфейса IPv4 для настроенного адреса PostgreSQL
   ansible.builtin.set_fact:
     _platform_postgresql_ipv4_interfaces: >-
       {{ ansible_facts | dict2items | selectattr('value.ipv4', 'defined')
          | selectattr('value.ipv4', 'mapping')
          | map(attribute='value') | list }}
 
-- name: Найти точный адрес интерфейса PostgreSQL, включая вторичные адреса
+- name: Поиск точного адреса интерфейса PostgreSQL, включая вторичные адреса
   ansible.builtin.set_fact:
     _platform_postgresql_client_networks: >-
       {{ ((_platform_postgresql_ipv4_interfaces | map(attribute='ipv4') | list) +
@@ -21,7 +21,7 @@
              (_platform_postgresql_local_members | first).address | default(ansible_facts.default_ipv4.address | default('')))
          | list }}
 
-- name: "Проверить наличие клиентской подсети PostgreSQL в сетевых данных узла"
+- name: "Проверка наличия клиентской подсети PostgreSQL в сетевых данных узла"
   ansible.builtin.assert:
     that:
       - _platform_postgresql_client_networks | length == 1

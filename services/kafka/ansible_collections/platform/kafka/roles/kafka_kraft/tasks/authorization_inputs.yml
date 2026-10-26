@@ -1,12 +1,12 @@
 ---
-- name: Требовать объявленные в плане учетные данные администратора во время выполнения
+- name: Проверка runtime-учётных данных администратора, заданного планом
   ansible.builtin.assert:
     that:
       - platform_kafka_admin_credential.passwordSecretRef | default('') is match('^runtime:[a-z][a-z0-9-]{0,127}$')
       - platform_kafka_admin_credential.passwordSecretRef in platform_kafka_secret_files
     fail_msg: KAFKA_ADMIN_RUNTIME_SECRET_REQUIRED
 
-- name: Проверить существующий защищенный секретный файл администратора, не переходя по символическим ссылкам
+- name: Проверка существующего защищенного секретного файла администратора, не переходя по символическим ссылкам
   ansible.builtin.stat:
     path: "{{ platform_kafka_secret_files[platform_kafka_admin_credential.passwordSecretRef] }}"
     follow: false
@@ -18,7 +18,7 @@
   register: kafka_admin_secret_stat
   no_log: true
 
-- name: Отклонить отсутствующие, небезопасные или слишком большие секретные данные администратора
+- name: Отклонение отсутствующих, небезопасных или слишком больших файлов секретов администратора
   ansible.builtin.assert:
     that:
       - kafka_admin_secret_stat.stat.exists
@@ -30,23 +30,23 @@
     fail_msg: KAFKA_ADMIN_RUNTIME_SECRET_INVALID
   no_log: true
 
-- name: Начать наблюдение за завершением локальной среды выполнения
+- name: Начало наблюдения за завершением локальной среды выполнения
   ansible.builtin.set_fact:
     kafka_authorization_local_final: true
   changed_when: false
 
-- name: Проверить, действительно ли каждый экземпляр локальной службы загрузил окончательную конфигурацию
+- name: Проверка того, действительно ли каждый экземпляр локальной службы загрузил окончательную конфигурацию
   ansible.builtin.include_tasks: authorization_observe.yml
   loop: "{{ _platform_kafka_local_instances }}"
   loop_control:
     loop_var: kafka_authorization_member
 
-- name: Пометить локальное свидетельство завершения без сохранения другого файла состояния
+- name: Маркировка локального свидетельства завершения без сохранения другого файла состояния
   ansible.builtin.set_fact:
     kafka_authorization_local_final: "{{ kafka_authorization_local_final | bool }}"
   changed_when: false
 
-- name: Определить этап начальной загрузки в масштабе всего развертывания перед изменением конфигурации
+- name: Определение этапа начальной загрузки в масштабе всего развертывания перед изменением конфигурации
   ansible.builtin.set_fact:
     _platform_kafka_authorization_bootstrap: >-
       {% set state = namespace(bootstrap=false) %}
@@ -58,12 +58,12 @@
       {{ state.bootstrap }}
   changed_when: false
 
-- name: Нормализовать наблюдаемое решение начальной загрузки до логического значения
+- name: Нормализация наблюдаемого решения начальной загрузки до логического значения
   ansible.builtin.set_fact:
     _platform_kafka_authorization_bootstrap: "{{ _platform_kafka_authorization_bootstrap | trim | bool }}"
   changed_when: false
 
-- name: Verify требует окончательной конфигурации суперпользователя только для администратора
+- name: Проверка завершения bootstrap и единственности администратора-суперпользователя в режиме Verify
   ansible.builtin.assert:
     that: not (_platform_kafka_authorization_bootstrap | bool)
     fail_msg: KAFKA_AUTHORIZATION_FINALIZATION_REQUIRED

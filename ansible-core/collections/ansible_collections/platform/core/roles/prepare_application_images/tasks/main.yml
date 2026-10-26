@@ -1,5 +1,5 @@
 ---
-- name: Привязать платформу и исходные параметры размещения образа
+- name: Привязка платформы и исходных параметров размещения образа
   ansible.builtin.set_fact:
     _image_platform:
       os: "{{ ansible_facts.system | lower }}"
@@ -11,12 +11,12 @@
     _image_request_key: "{{ [application_image_input.request, application_image_input.credentials, application_image_input.account, application_image_input.configDirectory] | to_json | hash('sha256') }}"
   no_log: true
 
-- name: Повторно использовать совпадающие метаданные реестра в рамках подготовки образов целевого узла
+- name: Повторное использование совпадающих метаданных реестра при подготовке образов целевого узла
   ansible.builtin.set_fact:
     _image_registry: "{{ (_image_registry_cache | default({})).get(_image_request_key, {}) }}"
   no_log: true
 
-- name: Требовать присвоенные учетные данные среды выполнения перед обращением к реестру
+- name: Проверка назначенных runtime-учётных данных перед обращением к реестру
   ansible.builtin.assert:
     that:
       - application_image_input.credentials.username.source.ref in platform_application_image_secret_values
@@ -32,31 +32,31 @@
   when: application_image_input.credentials | length > 0
   no_log: true
 
-- name: Сохранить учетные данные существующего узла Docker, если источник библиотеки не назначен
+- name: Сохранение учетных данных существующего узла Docker, если источник библиотеки не назначен
   ansible.builtin.include_tasks: node_credentials.yml
   when:
     - application_image_input.credentials | length == 0
     - application_image_input.request.registry in (platform_application_approved_registries | default([]))
     - _image_request_key not in (_image_registry_cache | default({}))
 
-- name: Прочитать метаданные утверждённого реестра через сеть целевого узла подготовки образов
+- name: Чтение метаданных утверждённого реестра через сеть целевого узла подготовки образов
   ansible.builtin.include_tasks: registry.yml
   when:
     - application_image_input.request.registry in (platform_application_approved_registries | default([]))
     - _image_request_key not in (_image_registry_cache | default({}))
 
-- name: Сохранить несекретные метаданные реестра для повторных размещений образа на целевом узле
+- name: Сохранение несекретных метаданных реестра для повторных размещений образа на целевом узле
   ansible.builtin.set_fact:
     _image_registry_cache: "{{ (_image_registry_cache | default({})) | combine({_image_request_key: _image_registry}) }}"
   when: application_image_input.request.registry in (platform_application_approved_registries | default([]))
   no_log: true
 
-- name: Сопоставить метаданные offline-источника с выбранным образом
+- name: Сопоставление метаданных offline-источника с выбранным образом
   ansible.builtin.set_fact:
     _image_offline: "{{ platform_application_image_bundle | platform.core.application_offline_image(application_image_input.reference, _image_platform, application_image_input.legacy) }}"
   no_log: true
 
-- name: Зафиксировать идентификатор выбранного образа и эквивалентный offline-источник
+- name: Фиксация идентификатора выбранного образа и эквивалентного offline-источника
   ansible.builtin.set_fact:
     platform_application_image_preparations: >-
       {{ platform_application_image_preparations | combine({

@@ -1,5 +1,5 @@
 ---
-- name: Доставка точных пакетов RPM Core, одобренных ClickHouse, без неявной установки
+- name: Доставка разрешённых Core RPM-пакетов ClickHouse без неявной установки
   ansible.builtin.include_role:
     name: platform.core.artifact_delivery
   vars:
@@ -10,29 +10,29 @@
       - {id: clickhouse-client, name: clickhouse-client}
   when: platform_resolved_artifact_sources is defined
 
-- name: Установить закрепленный общий двоичный файл перед зависимыми пакетами RPM
+- name: Установка закрепленного общего двоичного файла перед зависимыми пакетами RPM
   ansible.builtin.include_tasks: install_package.yml
   vars:
     clickhouse_package_id: clickhouse-common-static
 
-- name: Установка точных RPM сервера и клиента
+- name: Установка выбранных RPM-пакетов сервера и клиента
   ansible.builtin.include_tasks: install_package.yml
   loop: [clickhouse-server, clickhouse-client]
   loop_control:
     loop_var: clickhouse_package_id
     label: "{{ clickhouse_package_id }}"
 
-- name: Запретить запуск закрепленной стандартной службы systemd RPM рядом с экземплярами управляемой службы
+- name: Запрет запуска закрепленной стандартной службы systemd RPM рядом с экземплярами управляемой службы
   ansible.builtin.include_tasks: stock_unit.yml
 
-- name: Проверить принадлежность исполняемого файла HA Keeper зафиксированному RPM-пакету сервера ClickHouse
+- name: Проверка принадлежности исполняемого файла HA Keeper зафиксированному RPM-пакету сервера ClickHouse
   ansible.builtin.command:
     argv: [rpm, -qf, --qf, '%{NAME}-%{VERSION}-%{RELEASE}.%{ARCH}', /usr/bin/clickhouse-keeper]
   register: _platform_clickhouse_keeper_binary_owner
   changed_when: false
   when: platform_clickhouse_mode == 'raft-ha'
 
-- name: Отклонить неуправляемый или отсутствующий исполняемый файл HA Keeper
+- name: Отклонение неуправляемого или отсутствующего исполняемого файла Keeper в режиме HA
   ansible.builtin.assert:
     that: _platform_clickhouse_keeper_binary_owner.stdout == 'clickhouse-server-' ~ platform_clickhouse_package_version ~ '-1.x86_64'
     fail_msg: CLICKHOUSE_KEEPER_BINARY_NOT_PINNED

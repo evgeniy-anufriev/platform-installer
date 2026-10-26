@@ -9,7 +9,7 @@
   roles:
     - role: platform.haproxy.haproxy
       platform_haproxy_phase: prepare
-- name: Активировать HAProxy после проверки подготовленных конфигураций на всём кластере
+- name: Активация HAProxy после проверки подготовленных конфигураций на всём кластере
   hosts: platform_targets
   become: true
   gather_facts: false
@@ -17,7 +17,7 @@
   roles:
     - role: platform.haproxy.haproxy
       platform_haproxy_phase: activate
-- name: Запустить HAProxy только после активной проверки конфигурации
+- name: Запуск HAProxy только после активной проверки конфигурации
   hosts: platform_targets
   become: true
   gather_facts: false

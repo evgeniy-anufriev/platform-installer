@@ -1,5 +1,5 @@
 ---
-- name: Чтение количества ограниченных реплик без раскрытия пароля среды выполнения
+- name: Чтение числа реплик без раскрытия runtime-пароля
   hosts: localhost
   connection: local
   gather_facts: false
@@ -23,7 +23,7 @@
       failed_when: false
       no_log: true
 
-    - name: Показывать только статус и числовое значение, никогда не сообщать об ошибках
+    - name: Вывод только статуса и числового значения без текста ошибок
       ansible.builtin.debug:
         msg: >-
           port={{ item.item }} status={{ item.status | default(-1) }}

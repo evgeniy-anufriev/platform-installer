@@ -1,5 +1,5 @@
 ---
-- name: Разрешить точные пакеты репозитория PostgreSQL перед установкой
+- name: Определение точных пакетов репозитория PostgreSQL перед установкой
   ansible.builtin.include_tasks: resolve_packages.yml
   when:
     - not (platform_postgresql_verify_only | bool)
@@ -7,7 +7,7 @@
     - platform_resolved_artifact_sources is not defined or
       platform_resolved_artifact_sources['postgresql-runtime'].source == 'REPOSITORY'
 
-- name: Установить одобренные пакеты PostgreSQL из настроенного системного репозитория
+- name: Установка одобренных пакетов PostgreSQL из настроенного системного репозитория
   ansible.builtin.package:
     name: >-
       {{ _platform_postgresql_repository_packages
@@ -20,7 +20,7 @@
     and (platform_resolved_artifact_sources is not defined or
          platform_resolved_artifact_sources['postgresql-runtime'].source == 'REPOSITORY')
 
-- name: Установить одобренный пакет pg_auto_failover из настроенного системного репозитория
+- name: Установка одобренного пакета pg_auto_failover из настроенного системного репозитория
   ansible.builtin.package:
     name: >-
       {{ (_platform_postgresql_failover_repository_package
@@ -32,12 +32,12 @@
     - platform_postgresql_mode == 'pg_auto_failover'
     - platform_resolved_artifact_sources is not defined or platform_resolved_artifact_sources['pg-auto-failover'].source == 'REPOSITORY'
 
-- name: "Определить каталог исполняемых файлов PostgreSQL после установки пакета"
+- name: "Определение каталога исполняемых файлов PostgreSQL после установки пакета"
   ansible.builtin.include_tasks: resolve_binary_directory.yml
   vars:
     platform_postgresql_require_binary_directory: true
 
-- name: Убедиться, что учетная запись службы PostgreSQL существует
+- name: Проверка того, что учетная запись службы PostgreSQL существует
   ansible.builtin.user:
     name: "{{ platform_postgresql_user }}"
     group: "{{ platform_postgresql_group }}"
@@ -45,7 +45,7 @@
     create_home: false
   when: not (platform_postgresql_verify_only | bool)
 
-- name: Создать каталоги развертывания и экземпляра службы PostgreSQL
+- name: Создание каталогов развертывания и экземпляра службы PostgreSQL
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
@@ -58,7 +58,7 @@
     - "{{ platform_postgresql_log_directory }}"
   when: not (platform_postgresql_verify_only | bool)
 
-- name: "Установить TLS-файлы PostgreSQL после создания учётной записи и каталогов"
+- name: "Установка TLS-файлов PostgreSQL после создания учётной записи и каталогов"
   ansible.builtin.include_tasks: install_tls.yml
   when: platform_postgresql_tls_profile | length > 0
 
@@ -78,13 +78,13 @@
     get_checksum: false
   register: platform_postgresql_data_path
 
-- name: Заблокировать частичный каталог данных PostgreSQL
+- name: Блокировка частичного каталога данных PostgreSQL
   ansible.builtin.assert:
     that:
       - not platform_postgresql_data_path.stat.exists or platform_postgresql_data_path.stat.isdir
     fail_msg: 'POSTGRES_DATA_STATE_UNKNOWN: data directory is partial or cannot be safely classified'
 
-- name: Инициализировать PostgreSQL ровно один раз
+- name: Инициализация PostgreSQL ровно один раз
   ansible.builtin.command:
     argv:
       - initdb
@@ -99,7 +99,7 @@
   register: platform_postgresql_initdb
   changed_when: true
 
-- name: Отрисовка конфигурации PostgreSQL
+- name: Формирование конфигурации PostgreSQL
   ansible.builtin.template:
     src: postgresql-platform.conf.j2
     dest: "{{ platform_postgresql_config_directory }}/postgresql-platform.conf"
@@ -107,9 +107,9 @@
     group: "{{ platform_postgresql_group }}"
     mode: '0600'
   when: not (platform_postgresql_verify_only | bool)
-  notify: Перезагрузить материал PostgreSQL TLS
+  notify: Перечитывание конфигурации PostgreSQL для применения TLS-файлов
 
-- name: Отрисовка конфигурации аутентификации хоста PostgreSQL
+- name: Формирование правил аутентификации клиентов PostgreSQL
   ansible.builtin.template:
     src: pg_hba.conf.j2
     dest: "{{ platform_postgresql_config_directory }}/pg_hba.conf"
@@ -117,7 +117,7 @@
     group: "{{ platform_postgresql_group }}"
     mode: '0600'
   when: not (platform_postgresql_verify_only | bool)
-  notify: Перезагрузить материал PostgreSQL TLS
+  notify: Перечитывание конфигурации PostgreSQL для применения TLS-файлов
 
 - name: Настройка жизненного цикла pg_auto_failover
   ansible.builtin.include_tasks: pg_auto_failover.yml
@@ -125,7 +125,7 @@
     - platform_postgresql_mode == 'pg_auto_failover'
     - not (platform_postgresql_verify_only | bool)
 
-- name: Включить фрагмент платформы PostgreSQL из конфигурации, принадлежащей initdb
+- name: Включение фрагмента платформы PostgreSQL из конфигурации, принадлежащей initdb
   ansible.builtin.lineinfile:
     path: "{{ platform_postgresql_data_directory }}/postgresql.conf"
     line: "include = '{{ platform_postgresql_config_directory }}/postgresql-platform.conf'"
@@ -136,9 +136,9 @@
     mode: '0600'
     state: present
   when: not (platform_postgresql_verify_only | bool)
-  notify: Перезапустить PostgreSQL
+  notify: Перезапуск PostgreSQL
 
-- name: "Подсчитать подключения postgresql-platform.conf в основной конфигурации PostgreSQL"
+- name: "Подсчёт подключений postgresql-platform.conf в основной конфигурации PostgreSQL"
   ansible.builtin.command:
     argv:
       - grep
@@ -149,14 +149,14 @@
   changed_when: false
   failed_when: false
 
-- name: Убедиться, что присутствует ровно одно включение платформы PostgreSQL
+- name: Проверка того, что присутствует ровно одно включение платформы PostgreSQL
   ansible.builtin.assert:
     that:
       - platform_postgresql_include_count.rc == 0
       - platform_postgresql_include_count.stdout | trim == '1'
     fail_msg: POSTGRES_PLATFORM_INCLUDE_INVALID
 
-- name: "Установить службу systemd для экземпляра PostgreSQL"
+- name: "Установка службы systemd для экземпляра PostgreSQL"
   ansible.builtin.template:
     src: postgresql.service.j2
     dest: "/etc/systemd/system/{{ _platform_postgresql_unit_name }}"
@@ -164,9 +164,9 @@
     group: root
     mode: '0644'
   when: not (platform_postgresql_verify_only | bool)
-  notify: Перезапустить PostgreSQL
+  notify: Перезапуск PostgreSQL
 
-- name: Перезагрузить systemd после проекции системного сервиса PostgreSQL
+- name: Перечитывание unit-файлов systemd после настройки службы PostgreSQL
   ansible.builtin.systemd:
     daemon_reload: true
   when: not (platform_postgresql_verify_only | bool)
@@ -178,18 +178,18 @@
     state: started
   when: not (platform_postgresql_verify_only | bool)
 
-- name: Применить измененный материал PostgreSQL TLS перед проверками учетных данных TLS
+- name: Применение изменённых TLS-файлов PostgreSQL перед проверкой учётных данных
   ansible.builtin.include_tasks: flush_handlers.yml
   when: not (platform_postgresql_verify_only | bool)
 
-- name: Получить отпечаток материализованного TLS-сертификата PostgreSQL
+- name: Получение отпечатка подготовленного TLS-сертификата PostgreSQL
   ansible.builtin.command:
     argv: [openssl, x509, -in, "{{ _platform_postgresql_tls_directory }}/certificate.pem", -noout, -fingerprint, -sha256]
   register: _platform_postgresql_materialized_leaf
   changed_when: false
   when: not (platform_postgresql_verify_only | bool)
 
-- name: Получить отпечаток TLS-сертификата, предъявляемого PostgreSQL
+- name: Получение отпечатка TLS-сертификата, предъявляемого PostgreSQL
   ansible.builtin.shell: >-
     set -o pipefail;
     timeout 15 openssl s_client -connect 127.0.0.1:{{ _platform_postgresql_effective_port }} -starttls postgres </dev/null 2>/dev/null |
@@ -200,7 +200,7 @@
   changed_when: false
   when: not (platform_postgresql_verify_only | bool)
 
-- name: Перечитать TLS-конфигурацию управляемого PostgreSQL при несовпадении сертификата
+- name: Перечитывание TLS-конфигурации PostgreSQL при несовпадении сертификата
   ansible.builtin.command:
     argv: [pg_ctl, reload, -D, "{{ platform_postgresql_data_directory }}"]
   become_user: "{{ platform_postgresql_user }}"
@@ -210,7 +210,7 @@
     - not (platform_postgresql_verify_only | bool)
     - _platform_postgresql_materialized_leaf.stdout | trim != _platform_postgresql_serving_leaf_before_reload.stdout | trim
 
-- name: Дождаться готовности PostgreSQL после перечитывания TLS-сертификата
+- name: Ожидание готовности PostgreSQL после перечитывания TLS-сертификата
   ansible.builtin.command:
     argv: [pg_isready, -h, 127.0.0.1, -p, "{{ _platform_postgresql_effective_port }}"]
   register: _platform_postgresql_serving_leaf_ready
@@ -223,7 +223,7 @@
     - _platform_postgresql_serving_leaf_reload is defined
     - _platform_postgresql_serving_leaf_reload.changed | default(false)
 
-- name: Повторно проверить TLS-сертификат PostgreSQL после корректирующего перечитывания
+- name: Повторная проверка TLS-сертификата PostgreSQL после перечитывания конфигурации
   ansible.builtin.shell: >-
     set -o pipefail;
     timeout 15 openssl s_client -connect 127.0.0.1:{{ _platform_postgresql_effective_port }} -starttls postgres </dev/null 2>/dev/null |
@@ -234,7 +234,7 @@
   changed_when: false
   when: not (platform_postgresql_verify_only | bool)
 
-- name: Проверить использование материализованного TLS-сертификата сервером PostgreSQL
+- name: Проверка использования подготовленного TLS-сертификата сервером PostgreSQL
   ansible.builtin.assert:
     that: >-
       _platform_postgresql_materialized_leaf.stdout | trim ==
@@ -242,7 +242,7 @@
     fail_msg: POSTGRES_TLS_SERVING_CERTIFICATE_MISMATCH
   when: not (platform_postgresql_verify_only | bool)
 
-- name: Определить, доступен ли для записи экземпляр службы данных pg_auto_failover перед согласованием учетных данных
+- name: Определение доступности экземпляра pg_auto_failover для записи перед настройкой учётных данных
   ansible.builtin.command:
     argv: [psql, -h, /var/run/postgresql, -p, "{{ _platform_postgresql_effective_port }}", -U, "{{ platform_postgresql_user }}", -d, postgres, -Atqc, 'SELECT CASE WHEN pg_is_in_recovery() THEN ''standby'' ELSE ''primary'' END']
   become_user: "{{ platform_postgresql_user }}"
@@ -272,7 +272,7 @@
     - platform_postgresql_mode == 'pg_auto_failover'
     - "'monitor' in _platform_postgresql_member.roles"
 
-- name: Блокировать сверку учетных данных монитора при сбое проверки TLS
+- name: Блокировка сверки учетных данных монитора при сбое проверки TLS
   ansible.builtin.assert:
     that: "'certificate verify failed' not in (platform_postgresql_monitor_credential_login.stderr | default('') | lower)"
     fail_msg: POSTGRES_MONITOR_CREDENTIAL_TLS_PREREQUISITE_FAILED
@@ -310,7 +310,7 @@
       platform_postgresql_monitor_credential_login.rc | default(1) != 0
       or platform_postgresql_monitor_credential_role.stdout | trim != 'safe'
 
-- name: Определить, доступен ли для записи экземпляр службы данных pg_auto_failover
+- name: Определение доступности экземпляра pg_auto_failover для записи
   ansible.builtin.command:
     argv: [psql, -h, /var/run/postgresql, -p, "{{ _platform_postgresql_effective_port }}", -U, "{{ platform_postgresql_user }}", -d, postgres, -Atqc, 'SELECT CASE WHEN pg_is_in_recovery() THEN ''standby'' ELSE ''primary'' END']
   become_user: "{{ platform_postgresql_user }}"
@@ -341,7 +341,7 @@
     - "'database' in _platform_postgresql_member.roles"
     - platform_postgresql_data_write_state.stdout | trim == 'primary'
 
-- name: Блокировать согласование учетных данных репликации при сбое проверки TLS
+- name: Блокировка согласования учетных данных репликации при сбое проверки TLS
   ansible.builtin.assert:
     that: "'certificate verify failed' not in (platform_postgresql_replication_login.stderr | default('') | lower)"
     fail_msg: POSTGRES_REPLICATION_CREDENTIAL_TLS_PREREQUISITE_FAILED
@@ -375,7 +375,7 @@
     - platform_postgresql_data_write_state.stdout | trim == 'primary'
     - platform_postgresql_replication_login.rc | default(1) != 0
 
-- name: Проверить роль контроля работоспособности pg_auto_failover
+- name: Проверка роли контроля работоспособности pg_auto_failover
   ansible.builtin.command:
     argv:
       - psql
@@ -398,7 +398,7 @@
     - "'database' in _platform_postgresql_member.roles"
     - platform_postgresql_data_write_state.stdout | trim == 'primary'
 
-- name: Согласовать роль контроля работоспособности pg_auto_failover без пароля
+- name: Согласование роли контроля работоспособности pg_auto_failover без пароля
   ansible.builtin.command:
     argv: [psql, -h, /var/run/postgresql, -p, "{{ _platform_postgresql_effective_port }}", -U, "{{ platform_postgresql_user }}", -d, postgres, -v, ON_ERROR_STOP=1, -f, -]
     stdin: |
@@ -417,7 +417,7 @@
     - >-
       platform_postgresql_healthcheck_role.stdout | trim != 'safe'
 
-- name: Дождаться конечной точки клиента PostgreSQL
+- name: Ожидание конечной точки клиента PostgreSQL
   ansible.builtin.command:
     argv: [pg_isready, -h, 127.0.0.1, -p, "{{ _platform_postgresql_effective_port }}"]
   register: platform_postgresql_ready
@@ -426,14 +426,14 @@
   delay: 2
   until: platform_postgresql_ready.rc == 0
 
-- name: Проверить состояние службы PostgreSQL в systemd без изменений
+- name: Проверка состояния службы PostgreSQL в systemd без изменений
   ansible.builtin.command:
     argv: [systemctl, is-active, "{{ _platform_postgresql_unit_name }}"]
   register: platform_postgresql_service_state
   changed_when: false
   when: platform_postgresql_verify_only | bool
 
-- name: Подтвердить, что служба PostgreSQL активна
+- name: Проверка того, что служба PostgreSQL активна
   ansible.builtin.assert:
     that: platform_postgresql_service_state.stdout == 'active'
     fail_msg: POSTGRES_SERVICE_NOT_ACTIVE
@@ -450,7 +450,7 @@
   no_log: true
   when: platform_postgresql_admin_superuser.passwordSecretRef | length > 0
 
-- name: Убедиться, что настроенный администратор существует с паролем времени выполнения
+- name: Проверка того, что настроенный администратор существует с паролем времени выполнения
   ansible.builtin.command:
     argv: [psql, -h, /var/run/postgresql, -p, "{{ _platform_postgresql_effective_port }}", -U, "{{ platform_postgresql_user }}", -d, postgres, -v, ON_ERROR_STOP=1, -c, "DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '{{ platform_postgresql_admin_superuser.username }}') THEN CREATE ROLE {{ platform_postgresql_admin_superuser.username }} LOGIN SUPERUSER; ELSE ALTER ROLE {{ platform_postgresql_admin_superuser.username }} WITH LOGIN SUPERUSER; END IF; END $$;"]
   become_user: "{{ platform_postgresql_user }}"
@@ -459,7 +459,7 @@
     - platform_postgresql_admin_login.rc | default(1) != 0
   no_log: true
 
-- name: Устанавливать пароль администратора только в том случае, если вход в систему еще не работает
+- name: Установка пароля администратора только в том случае, если вход в систему еще не работает
   ansible.builtin.command:
     argv: [psql, -h, /var/run/postgresql, -p, "{{ _platform_postgresql_effective_port }}", -U, "{{ platform_postgresql_user }}", -d, postgres, -v, ON_ERROR_STOP=1, -f, -]
     stdin: |
@@ -471,7 +471,7 @@
     - platform_postgresql_admin_login.rc | default(1) != 0
   no_log: true
 
-- name: Проверить службу PostgreSQL без изменений
+- name: Проверка службы PostgreSQL без изменений
   ansible.builtin.command:
     argv: [psql, -h, 127.0.0.1, -p, "{{ _platform_postgresql_effective_port }}", -U, "{{ platform_postgresql_admin_superuser.username }}", -d, postgres, -Atqc, 'SELECT version()']
   environment:

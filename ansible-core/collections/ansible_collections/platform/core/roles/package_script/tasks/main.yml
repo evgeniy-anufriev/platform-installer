@@ -6,7 +6,7 @@
     platform_script_environment: {}
   no_log: true
 
-- name: Требовать защищенные входные данные сценария среды выполнения
+- name: Проверка защиты входных данных сценария
   ansible.builtin.assert:
     that: >-
       {{ platform_script_secret_files | platform.core.application_protected_secret_files(
@@ -15,7 +15,7 @@
   when: platform_script_job.secretInputs | length > 0
   no_log: true
 
-- name: "Создать защищённый каталог сценариев пакета"
+- name: "Создание защищённого каталога сценариев пакета"
   ansible.builtin.file:
     path: "{{ platform_script_directory }}"
     state: directory
@@ -23,7 +23,7 @@
     mode: '0700'
   no_log: true
 
-- name: Доставить точный сценарий пакета из разрешенного списка
+- name: Доставка точного сценария пакета из разрешенного списка
   ansible.builtin.copy:
     src: "{{ platform_script_job.path }}"
     dest: "{{ platform_script_directory }}/{{ platform_script_job.id }}"
@@ -31,16 +31,16 @@
     mode: '0700'
   no_log: true
 
-- name: Удалить временные входные файлы прерванного сценария пакета перед повторным запуском
+- name: Удаление временных входных файлов прерванного сценария пакета перед повторным запуском
   ansible.builtin.file:
     path: "{{ platform_script_secret_directory }}"
     state: absent
   changed_when: false
   no_log: true
 
-- name: Запуск сценария пакета с ограниченными частными входными данными и очисткой
+- name: Запуск сценария пакета с защищёнными входными файлами и последующей очисткой
   block:
-    - name: Создать временный каталог секретов сценария пакета
+    - name: Создание временного каталога секретов сценария пакета
       ansible.builtin.file:
         path: "{{ platform_script_secret_directory }}"
         state: directory
@@ -58,14 +58,14 @@
       loop: "{{ platform_script_job.secretInputs | dict2items }}"
       no_log: true
 
-    - name: "Передать сценарию только пути защищённых входных файлов"
+    - name: "Передача сценарию только путей защищённых входных файлов"
       ansible.builtin.set_fact:
         platform_script_environment: >-
           {{ platform_script_environment | combine({'PLATFORM_SCRIPT_SECRET_' ~ (item.key | upper) ~ '_FILE': platform_script_secret_directory ~ '/' ~ item.key}) }}
       loop: "{{ platform_script_job.secretInputs | dict2items }}"
       no_log: true
 
-    - name: Выполнить точный сценарий пакета без оболочки или неограниченной среды выполнения
+    - name: Выполнение точного сценария пакета без оболочки или неограниченной среды выполнения
       ansible.builtin.command:
         argv: "{{ ['timeout', '--kill-after=2s', '300s', platform_script_directory ~ '/' ~ platform_script_job.id] + platform_script_job.argv }}"
         chdir: "{{ platform_script_job.workingDirectory }}"
@@ -76,12 +76,12 @@
       changed_when: false
       no_log: true
 
-    - name: "Сохранить безопасную диагностику сбоев для сценария пакета {{ platform_script_job.id }}"
+    - name: "Сохранение безопасной диагностики сбоев для сценария пакета {{ platform_script_job.id }}"
       ansible.builtin.fail:
         msg: "{{ platform_script_result | platform.core.application_script_failure }}"
       when: platform_script_result.rc | default(-1) | int != 0
 
-    - name: Проверить ограниченный машиночитаемый результат без секретов
+    - name: Проверка ограниченного машиночитаемого результата без секретов
       ansible.builtin.assert:
         that:
           - platform_script_result.stdout | length <= 2048
@@ -90,12 +90,12 @@
         fail_msg: APPLICATION_SCRIPT_RESULT_INVALID
       no_log: true
 
-    - name: "Сообщить, внёс ли сценарий пакета изменения"
+    - name: "Вывод признака изменения состояния сценарием пакета"
       ansible.builtin.debug:
         msg: APPLICATION_SCRIPT_RECONCILED
       changed_when: (platform_script_result.stdout | from_json).changed | bool
   always:
-    - name: Удалить временные секретные входные файлы сценария пакета
+    - name: Удаление временных секретных входных файлов сценария пакета
       ansible.builtin.file:
         path: "{{ platform_script_secret_directory }}"
         state: absent

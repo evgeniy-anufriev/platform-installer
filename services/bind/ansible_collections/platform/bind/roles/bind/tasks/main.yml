@@ -3,7 +3,7 @@
   ansible.builtin.include_role:
     name: platform.core.project_settings
 
-- name: Включить источники приложений перед прямым полным согласованием DNS
+- name: Включение источников приложений перед прямым полным согласованием DNS
   ansible.builtin.include_role:
     name: platform.core.resolve_endpoint_sources
   when:
@@ -33,7 +33,7 @@
     - platform_resolved_artifact_sources is defined
     - platform_bind_phase == 'prepare'
 
-- name: Требовать желаемое управляемое состояние BIND
+- name: Проверка наличия заданной конфигурации управляемого BIND
   ansible.builtin.assert:
     that:
       - platform_desired_state is mapping
@@ -42,24 +42,24 @@
       - platform_bind_phase in ['prepare', 'activate', 'start', 'verify']
     fail_msg: BIND_DESIRED_STATE_INVALID
 
-- name: "Использовать рассчитанное контроллером состояние серийных номеров зон BIND"
+- name: "Использование рассчитанного контроллером состояния серийных номеров зон BIND"
   ansible.builtin.set_fact:
     platform_bind_runtime_projection: "{{ hostvars['localhost'].platform_bind_runtime_projection | default({}) }}"
 
-- name: Требовать последовательную проекцию времени выполнения BIND
+- name: Проверка служебного состояния серийных номеров зон BIND
   ansible.builtin.assert:
     that:
       - platform_bind_runtime_projection.zones | default({}) is mapping
       - platform_bind_runtime_projection.generatedState.serviceDeployments | default({}) is mapping
     fail_msg: BIND_RUNTIME_PROJECTION_INVALID
 
-- name: Загрузить опубликованный каталог сервисов для проекции BIND
+- name: Загрузка опубликованного каталога сервисов для проекции BIND
   ansible.builtin.include_vars:
     file: "{{ platform_service_catalog_path }}"
     name: _platform_bind_catalog_file
   run_once: true
 
-- name: Собрать безопасную проекцию адреса хоста проекта для BIND
+- name: Сбор безопасной проекции адреса хоста проекта для BIND
   ansible.builtin.set_fact:
     _platform_bind_inventory_hosts: >-
       {{ _platform_bind_inventory_hosts | default({}) |
@@ -71,7 +71,7 @@
   run_once: true
   no_log: true
 
-- name: Разрешить авторитетные зоны DNS перед целевым изменением
+- name: Определение авторитетных DNS-зон перед изменением целевых узлов
   platform.core.resolve_dns_zones:
     desired_state: "{{ platform_desired_state }}"
     service_catalog: "{{ _platform_bind_catalog_file.platform_service_catalog | default(_platform_bind_catalog_file, true) }}"
@@ -83,11 +83,11 @@
   register: _platform_bind_resolution
   run_once: true
 
-- name: "Сохранить рассчитанные авторитетные DNS-зоны"
+- name: "Сохранение рассчитанных авторитетных DNS-зон"
   ansible.builtin.set_fact:
     platform_bind_resolved_zones: "{{ hostvars[ansible_play_hosts_all | first]._platform_bind_resolution.resolved_dns_zones.zones }}"
 
-- name: Подтвердить, что локальный участник BIND принадлежит одной разрешенной зоне
+- name: Проверка того, что локальный участник BIND принадлежит одной разрешенной зоне
   ansible.builtin.assert:
     that:
       - item.key in platform_bind_resolved_zones
@@ -98,6 +98,6 @@
   loop_control:
     label: "{{ item.key }}"
 
-- name: Запускать жизненный цикл BIND только на участвующих хостах
+- name: Запуск жизненного цикла BIND только на участвующих хостах
   ansible.builtin.include_tasks: lifecycle.yml
   when: (platform_desired_state.serviceDeployments | dict2items | selectattr('value.serviceType', 'equalto', 'bind') | selectattr('key', 'in', platform_deployments) | list | length) > 0

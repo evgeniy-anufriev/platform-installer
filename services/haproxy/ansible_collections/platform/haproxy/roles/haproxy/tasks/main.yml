@@ -1,12 +1,12 @@
 ---
-- name: Нормализовать точную частичную область источника
+- name: Нормализация точной частичной области источника
   ansible.builtin.include_tasks: partial_scope.yml
 
 - name: Проверка настроек ресурсов переносимой службы
   ansible.builtin.include_role:
     name: platform.core.project_settings
 
-- name: Требовать действительную фазу HAProxy и каноническое желаемое состояние
+- name: Проверка этапа HAProxy и исходной конфигурации развёртывания
   ansible.builtin.assert:
     that:
       - platform_haproxy_phase in ['prepare', 'activate', 'start', 'verify']
@@ -14,6 +14,6 @@
       - platform_deployments | default({}) is mapping
     fail_msg: HAPROXY_DESIRED_STATE_INVALID
 
-- name: Запускать жизненный цикл HAProxy только на участвующих хостах
+- name: Запуск жизненного цикла HAProxy только на участвующих хостах
   ansible.builtin.include_tasks: lifecycle.yml
   when: (platform_desired_state.serviceDeployments | dict2items | selectattr('value.serviceType', 'equalto', 'haproxy') | selectattr('key', 'in', platform_deployments | default({})) | list | length) > 0

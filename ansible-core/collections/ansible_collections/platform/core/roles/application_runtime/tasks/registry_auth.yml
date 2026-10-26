@@ -1,14 +1,14 @@
 ---
-- name: Начать с существующего контекста аутентификации узла Docker
+- name: Использование существующего контекста аутентификации узла Docker
   ansible.builtin.set_fact:
     application_registry_environment: "{{ application_runtime_job.dockerEnvironment | default(application_docker_environment) }}"
     application_registry_auth_stage: {}
   no_log: true
 
-- name: Материализовать только явно назначенные входные данные реестра среды выполнения
+- name: Подготовка только явно назначенных входных данных реестра среды выполнения
   when: application_runtime_job.registryCredentials | default({}) | length > 0
   block:
-    - name: Требовать защищенные входные файлы среды выполнения для проверки подлинности реестра
+    - name: Проверка защиты входных файлов аутентификации реестра
       ansible.builtin.assert:
         that: >-
           {{ platform_application_secret_files | platform.core.application_protected_secret_files(
@@ -16,26 +16,26 @@
              application_runtime_job.registryCredentials.password.source.ref], platform_application_secret_root) }}
         fail_msg: APPLICATION_REGISTRY_RUNTIME_SECRET_REQUIRED
       no_log: true
-    - name: Привязка области частного реестра для нормальной и прерванной очистки
+    - name: Сохранение пути временных настроек реестра для штатной очистки и восстановления после сбоя
       ansible.builtin.set_fact:
         application_registry_auth_stage:
           path: >-
             {{ application_registry_environment.XDG_RUNTIME_DIR ~ '/.platform-registry-' ~
               (([application_runtime_job.projectId, application_runtime_job.libraryId, application_runtime_job.account] | to_json) | hash('sha256')) }}
       no_log: true
-    - name: Восстановить временную область аутентификации реестра библиотеки приложений
+    - name: Восстановление временной области аутентификации реестра библиотеки приложений
       ansible.builtin.file:
         path: "{{ application_registry_auth_stage.path }}"
         state: absent
       changed_when: false
-    - name: Предоставить только выбранной учетной записи Docker доступ к ее временной конфигурации
+    - name: Предоставление выбранной учётной записи Docker доступа к её временной конфигурации
       ansible.builtin.file:
         path: "{{ application_registry_auth_stage.path }}"
         state: directory
         owner: "{{ application_runtime_job.account }}"
         mode: '0700'
       changed_when: false
-    - name: "Подготовить временную аутентификацию в реестре без постоянного docker login"
+    - name: "Подготовка временной аутентификации в реестре без постоянного docker login"
       ansible.builtin.copy:
         content: >-
           {{ {'auths': {(application_runtime_job.authority.repository.reference | platform.core.application_registry_request).registry:
@@ -46,7 +46,7 @@
         mode: '0600'
       changed_when: false
       no_log: true
-    - name: Ограничить аутентификацию Docker операцией проверки или загрузки образа
+    - name: Ограничение аутентификации Docker операцией проверки или загрузки образа
       ansible.builtin.set_fact:
         application_registry_environment: "{{ application_registry_environment | combine({'DOCKER_CONFIG': application_registry_auth_stage.path}) }}"
       no_log: true

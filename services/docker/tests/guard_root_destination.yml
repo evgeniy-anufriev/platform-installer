@@ -1,11 +1,11 @@
 ---
-- name: Использовать только производственную защиту назначения Docker
+- name: Использование только производственной защиты назначения Docker
   hosts: localhost
   connection: local
   gather_facts: false
   become: true
   tasks:
-    - name: "Проверить безопасность временного пути назначения QA"
+    - name: "Проверка безопасности временного пути назначения QA"
       ansible.builtin.include_role:
         name: platform.docker.docker_rootless
         tasks_from: guard_root_destination.yml

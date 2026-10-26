@@ -26,7 +26,7 @@
   register: _platform_pki_integrity_sources
   no_log: true
 
-- name: Требовать читаемый обычный исходный материал PKI
+- name: Проверка доступности исходных PKI-файлов для чтения и отсутствия символических ссылок
   ansible.builtin.assert:
     that:
       - item.stat.isreg | default(false)
@@ -36,7 +36,7 @@
   loop: "{{ _platform_pki_integrity_sources.results }}"
   no_log: true
 
-- name: Проверить целевой каталог PKI без перехода по ссылкам
+- name: Проверка целевого каталога PKI без перехода по ссылкам
   ansible.builtin.stat:
     path: "{{ platform_pki_plan.targetDirectory }}"
     follow: false
@@ -46,14 +46,14 @@
   register: _platform_pki_integrity_directory
   no_log: true
 
-- name: Отклонить замененный целевой каталог PKI
+- name: Отклонение замененного целевого каталога PKI
   ansible.builtin.assert:
     that:
       - not (_platform_pki_integrity_directory.stat.exists | default(false)) or (_platform_pki_integrity_directory.stat.isdir | default(false) and not (_platform_pki_integrity_directory.stat.islnk | default(false)))
     fail_msg: PKI_TARGET_DIRECTORY_UNSAFE
   no_log: true
 
-- name: "Получить метаданные развёрнутых PKI-файлов одним удалённым вызовом"
+- name: "Получение метаданных развёрнутых PKI-файлов одним удалённым вызовом"
   ansible.builtin.find:
     paths: "{{ platform_pki_plan.targetDirectory }}"
     patterns: [ca-chain.pem, certificate.pem, private-key.pem, keystore.p12, truststore.p12, materialization-fingerprint]
@@ -64,7 +64,7 @@
   register: _platform_pki_integrity_scan
   no_log: true
 
-- name: Хешировать точные обычные файлы PKI, не раскрывая содержимое
+- name: Хеширование точных обычных файлов PKI, не раскрывая содержимое
   ansible.builtin.command:
     argv:
       - sha256sum
@@ -110,7 +110,7 @@
          (_platform_pki_integrity_directory.stat.gr_name | default('') == platform_pki_group) }}
   no_log: true
 
-- name: Сравнить точные байты и разрешения PKI с доверенным источником
+- name: Сравнение содержимого и прав доступа PKI-файлов с доверенным источником
   ansible.builtin.set_fact:
     _platform_pki_integrity_valid: >-
       {{ (_platform_pki_integrity_valid | bool) and
@@ -123,12 +123,12 @@
   loop: "{{ _platform_pki_integrity_targets.results[:5] }}"
   no_log: true
 
-- name: Сравнить байты отпечатков с примененным планом
+- name: Сравнение отпечатков с применённым планом
   ansible.builtin.set_fact:
     _platform_pki_integrity_fingerprint_matches: "{{ _platform_pki_integrity_targets.results[5].stat.checksum | default('') == ((platform_pki_plan.materializationFingerprint ~ '\n') | hash('sha256')) }}"
   no_log: true
 
-- name: Сравнить точный файл отпечатков материализации
+- name: Сравнение файла отпечатков подготовленных PKI-файлов
   ansible.builtin.set_fact:
     _platform_pki_integrity_valid: >-
       {{ false not in [
@@ -142,6 +142,6 @@
          ] }}
   no_log: true
 
-- name: "Восстановить PKI-файлы в соответствии с применённым планом"
+- name: "Восстановление PKI-файлов в соответствии с применённым планом"
   ansible.builtin.include_tasks: plan.yml
   when: not (_platform_pki_integrity_valid | bool)

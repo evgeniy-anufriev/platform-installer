@@ -1,12 +1,12 @@
 ---
-- name: Отклонить конфликты портов Kafka listeners на одном физическом узле
+- name: Отклонение конфликтов портов Kafka listeners на одном физическом узле
   ansible.builtin.assert:
     that: >-
       (kafka_host_members.1 | map(attribute='listener_ports') | list | flatten | unique | length)
       == (kafka_host_members.1 | map(attribute='listener_ports') | list | flatten | length)
     fail_msg: Kafka listener ports must be unique per physical host
 
-- name: Отклонить конфликты управляемых путей Kafka на одном физическом хосте
+- name: Отклонение конфликтов управляемых путей Kafka на одном физическом хосте
   ansible.builtin.assert:
     that: >-
       (kafka_host_members.1 | map(attribute='managed_paths') | list | flatten | unique | length)

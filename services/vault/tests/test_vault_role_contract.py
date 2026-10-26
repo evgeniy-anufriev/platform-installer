@@ -25,8 +25,8 @@ class VaultRoleContractTests(unittest.TestCase):
         from ansible.template import Templar
 
         main = yaml.safe_load((ROLE / "tasks/main.yml").read_text(encoding="utf-8"))
-        block = next(task["block"] for task in main if task["name"].startswith("Обеспечить взаимное исключение операций Vault для Installer и standalone-Ansible"))
-        configure = next(task for task in block if task["name"].startswith("Настроить аудит, KV v2, userpass и AppRole, сохранив существующие ресурсы"))
+        block = next(task["block"] for task in main if task["name"].startswith("Обеспечение взаимного исключения операций Vault для Installer и standalone-Ansible"))
+        configure = next(task for task in block if task["name"].startswith("Настройка аудита, KV v2, userpass и AppRole, сохранив существующие ресурсы"))
         self.assertEqual(configure["ansible.builtin.include_tasks"], "configure.yml")
         self.assertIn("inventory_hostname == _platform_vault_instances[0].host", configure["when"])
         self.assertNotIn("delegate_to", configure)
@@ -52,10 +52,10 @@ class VaultRoleContractTests(unittest.TestCase):
         from ansible.template import Templar
 
         bootstrap = yaml.safe_load((ROLE / "tasks/bootstrap.yml").read_text(encoding="utf-8"))
-        followers = next(task for task in bootstrap if task["name"].startswith("Присоединить и разблокировать остальные узлы Raft после готовности начального узла"))
+        followers = next(task for task in bootstrap if task["name"].startswith("Присоединение и разблокировка остальных узлов Raft после готовности начального узла"))
         self.assertEqual(followers["loop_control"]["loop_var"], "vault_member")
         tasks = yaml.safe_load((ROLE / "tasks/bootstrap_follower.yml").read_text(encoding="utf-8"))
-        unseal = next(task for task in tasks if task["name"] == "Разблокировать присоединяемый узел Raft долями ключа начального узла")
+        unseal = next(task for task in tasks if task["name"] == "Разблокировка присоединяемого узла Raft долями ключа начального узла")
         self.assertEqual(unseal["ansible.builtin.include_tasks"], "unseal_member.yml")
         self.assertNotIn("vault_member", unseal.get("vars", {}))
         loader = DataLoader()
@@ -134,7 +134,7 @@ class VaultRoleContractTests(unittest.TestCase):
         from ansible.template import Templar
 
         tasks = yaml.safe_load((ROLE / "tasks/verify.yml").read_text(encoding="utf-8"))
-        membership = next(task for task in tasks if task["name"] == "Прочитать авторитетную конфигурацию членства Raft")
+        membership = next(task for task in tasks if task["name"] == "Чтение текущей конфигурации участников Raft")
         self.assertTrue(membership["run_once"])
         self.assertEqual(membership["delegate_to"], "{{ (_platform_vault_instances | first).host }}")
         hostvars = {
@@ -165,8 +165,8 @@ class VaultRoleContractTests(unittest.TestCase):
 
     def test_typed_runtime_inputs_are_closed_and_never_logged(self):
         main = yaml.safe_load((ROLE / "tasks/main.yml").read_text(encoding="utf-8"))
-        include = next(task for task in main if task["name"] == "Разрешить необязательные типизированные входные данные runtime-сеанса секретов")
-        self.assertEqual("Разрешить необязательные типизированные входные данные runtime-сеанса секретов", include["name"])
+        include = next(task for task in main if task["name"] == "Определение необязательных типизированных входных данных runtime-сеанса секретов")
+        self.assertEqual("Определение необязательных типизированных входных данных runtime-сеанса секретов", include["name"])
         tasks = yaml.safe_load((ROLE / "tasks/resolve_runtime_inputs.yml").read_text(encoding="utf-8"))
         self.assertTrue(all(task.get("no_log") for task in tasks))
         source = (ROLE / "tasks/resolve_runtime_inputs.yml").read_text(encoding="utf-8")
@@ -184,7 +184,7 @@ class VaultRoleContractTests(unittest.TestCase):
 
     def test_verify_failure_message_belongs_to_assert_module(self):
         tasks = yaml.safe_load((ROLE / "tasks/verify.yml").read_text(encoding="utf-8"))
-        task = next(task for task in tasks if task["name"] == "Проверить утверждённый аудит Vault, хранилище KV v2 и метод аутентификации")
+        task = next(task for task in tasks if task["name"] == "Проверка заданных настроек аудита Vault, хранилища KV v2 и метода аутентификации")
         self.assertNotIn("fail_msg", task)
         self.assertEqual(task["ansible.builtin.assert"]["fail_msg"], "VAULT_CONFIGURATION_VERIFY_FAILED")
 
@@ -205,19 +205,19 @@ class VaultRoleContractTests(unittest.TestCase):
 
     def test_role_serializes_apply_with_target_shared_flock_and_always_release(self):
         main = yaml.safe_load((ROLE / "tasks/main.yml").read_text(encoding="utf-8"))
-        block = next(task["block"] for task in main if task["name"].startswith("Обеспечить взаимное исключение операций Vault для Installer и standalone-Ansible"))
+        block = next(task["block"] for task in main if task["name"].startswith("Обеспечение взаимного исключения операций Vault для Installer и standalone-Ansible"))
         acquire = yaml.safe_load((ROLE / "tasks/acquire_lock.yml").read_text(encoding="utf-8"))
         release = yaml.safe_load((ROLE / "tasks/release_lock.yml").read_text(encoding="utf-8"))
         lock_start = next(task["ansible.builtin.command"]["argv"] for task in acquire
-                          if task["name"].startswith("Удерживать общую блокировку начальной загрузки Vault до завершения playbook"))
+                          if task["name"].startswith("Удержание общей блокировки начальной загрузки Vault до завершения playbook"))
         self.assertIn("--property=Type=notify", lock_start)
         self.assertIn("--property=NotifyAccess=all", lock_start)
         self.assertIn("--no-fork", lock_start)
         self.assertIn("/usr/bin/systemd-notify --ready", lock_start[-1])
         self.assertFalse(any("Type=simple" in str(task) for task in acquire))
         self.assertTrue(any("systemd" in str(task) for task in release))
-        self.assertIn("always", next(task for task in main if task["name"].startswith("Обеспечить взаимное исключение операций Vault для Installer и standalone-Ansible")))
-        lock = next(task["ansible.builtin.include_tasks"] for task in block if task["name"].startswith("Получить блокировку flock проекта и развёртывания на целевом узле"))
+        self.assertIn("always", next(task for task in main if task["name"].startswith("Обеспечение взаимного исключения операций Vault для Installer и standalone-Ansible")))
+        lock = next(task["ansible.builtin.include_tasks"] for task in block if task["name"].startswith("Получение блокировки flock проекта и развёртывания на целевом узле"))
         self.assertTrue(lock["apply"]["run_once"])
         self.assertIn("_platform_vault_instances[0].host", lock["apply"]["delegate_to"])
         self.assertNotIn("rm -rf", str(acquire + release))
@@ -225,13 +225,13 @@ class VaultRoleContractTests(unittest.TestCase):
     def test_only_transient_lock_coordination_is_excluded_from_change_recap(self):
         acquire = yaml.safe_load((ROLE / "tasks/acquire_lock.yml").read_text(encoding="utf-8"))
         release = yaml.safe_load((ROLE / "tasks/release_lock.yml").read_text(encoding="utf-8"))
-        hold = next(task for task in acquire if task["name"].startswith("Удерживать общую блокировку начальной загрузки Vault до завершения playbook"))
+        hold = next(task for task in acquire if task["name"].startswith("Удержание общей блокировки начальной загрузки Vault до завершения playbook"))
         self.assertIs(hold["changed_when"], False)
         self.assertNotIn("failed_when", hold)
         self.assertIn("--nonblock", hold["ansible.builtin.command"]["argv"])
         self.assertIs(release[0]["changed_when"], False)
         self.assertEqual(release[0]["ansible.builtin.systemd"]["state"], "stopped")
-        lock_gate = next(task for task in acquire if task["name"].startswith("Требовать успешного владения блокировкой развертывания"))
+        lock_gate = next(task for task in acquire if task["name"].startswith("Проверка успешного захвата блокировки развёртывания"))
         self.assertEqual(lock_gate["ansible.builtin.assert"]["fail_msg"], "VAULT_DEPLOYMENT_BUSY")
         root = next(task for task in acquire if "ansible.builtin.file" in task)
         self.assertNotIn("changed_when", root)
@@ -259,23 +259,23 @@ class VaultRoleContractTests(unittest.TestCase):
     def test_seed_bootstrap_is_ordered_and_never_reinitializes_initialized_vault(self):
         tasks = yaml.safe_load((ROLE / "tasks/bootstrap.yml").read_text(encoding="utf-8"))
         names = [task["name"] for task in tasks]
-        self.assertLess(names.index("Запустить канонический начальный узел Vault перед любым последователем Raft"),
-                        names.index("Инициализировать новый начальный узел ровно один раз"))
-        self.assertLess(names.index("Инициализировать новый начальный узел ровно один раз"),
-                        names.index("Обеспечить надежную подготовку минимального ответа на инициализацию перед любой операцией разблокировки"))
-        self.assertLess(names.index("Обеспечить надежную подготовку минимального ответа на инициализацию перед любой операцией разблокировки"),
-                        names.index("Разблокировать начальный узел с настроенным порогом"))
-        self.assertLess(names.index("Разблокировать начальный узел с настроенным порогом"),
-                        names.index("Присоединить и разблокировать остальные узлы Raft после готовности начального узла"))
-        init = tasks[names.index("Инициализировать новый начальный узел ровно один раз")]
-        self.assertEqual(names[names.index("Инициализировать новый начальный узел ровно один раз") + 1],
-                         "Обеспечить надежную подготовку минимального ответа на инициализацию перед любой операцией разблокировки")
-        self.assertLess(names.index("Синхронизировать данные восстановления и публикацию каталога перед проверкой"),
+        self.assertLess(names.index("Запуск начального узла Vault перед остальными узлами Raft"),
+                        names.index("Инициализация нового начального узла ровно один раз"))
+        self.assertLess(names.index("Инициализация нового начального узла ровно один раз"),
+                        names.index("Надёжное сохранение минимального ответа инициализации перед разблокировкой"))
+        self.assertLess(names.index("Надёжное сохранение минимального ответа инициализации перед разблокировкой"),
+                        names.index("Разблокировка начального узла с настроенным порогом"))
+        self.assertLess(names.index("Разблокировка начального узла с настроенным порогом"),
+                        names.index("Присоединение и разблокировка остальных узлов Raft после готовности начального узла"))
+        init = tasks[names.index("Инициализация нового начального узла ровно один раз")]
+        self.assertEqual(names[names.index("Инициализация нового начального узла ровно один раз") + 1],
+                         "Надёжное сохранение минимального ответа инициализации перед разблокировкой")
+        self.assertLess(names.index("Синхронизация данных восстановления и каталога результатов перед проверкой"),
                         names.index("Проверка сохраненного секретного ответа перед его публикацией или использованием"))
-        self.assertLess(names.index("Синхронизировать оба совпадающих файла хранения перед очисткой для восстановления"),
-                        names.index("Удалить защищенную запись восстановления только после существования обоих файлов хранения"))
-        self.assertLess(names.index("Удалить защищенную запись восстановления только после существования обоих файлов хранения"),
-                        names.index("Синхронизировать каталог хранения после удаления записи восстановления"))
+        self.assertLess(names.index("Синхронизация обоих проверенных файлов перед удалением записи восстановления"),
+                        names.index("Удаление защищённой записи восстановления только после сохранения обоих файлов"))
+        self.assertLess(names.index("Удаление защищённой записи восстановления только после сохранения обоих файлов"),
+                        names.index("Синхронизация каталога хранения после удаления записи восстановления"))
         self.assertIn("not (_platform_vault_seed_init.json.initialized | bool)", init["when"])
         self.assertTrue(init["no_log"])
         material_tasks = [task for task in tasks if "_platform_vault_bootstrap_material" in str(task)
@@ -287,9 +287,9 @@ class VaultRoleContractTests(unittest.TestCase):
     def test_shamir_follower_is_unsealed_before_waiting_for_join_completion(self):
         tasks = yaml.safe_load((ROLE / "tasks/bootstrap_follower.yml").read_text(encoding="utf-8"))
         names = [task["name"] for task in tasks]
-        start = names.index("Запустить один ведомый узел Raft после разблокировки начального узла")
-        unseal = names.index("Разблокировать присоединяемый узел Raft долями ключа начального узла")
-        joined = names.index("Проверить инициализацию присоединённого узла Raft после разблокировки")
+        start = names.index("Запуск одного ведомого узла Raft после разблокировки начального узла")
+        unseal = names.index("Разблокировка присоединяемого узла Raft долями ключа начального узла")
+        joined = names.index("Проверка инициализации присоединённого узла Raft после разблокировки")
         self.assertLess(start, unseal)
         self.assertLess(unseal, joined)
         self.assertEqual(tasks[unseal]["ansible.builtin.include_tasks"], "unseal_member.yml")
@@ -321,7 +321,7 @@ class VaultRoleContractTests(unittest.TestCase):
 
         tasks = yaml.safe_load((ROLE / "tasks/read_output.yml").read_text(encoding="utf-8"))
         guard = next(task for task in tasks if task["name"] ==
-                     "Требовать явный или определяемый корнем проекта автономный путь вывода")
+                     "Проверка явного пути результатов или пути, полученного из корня проекта")
         expression = guard["ansible.builtin.assert"]["that"][-1]
         evaluate = Environment().compile_expression(expression)
         self.assertTrue(evaluate(_platform_vault_bootstrap_output_dir=
@@ -331,7 +331,7 @@ class VaultRoleContractTests(unittest.TestCase):
     def test_audit_configuration_blocks_incompatible_owned_paths_before_writes(self):
         tasks = yaml.safe_load((ROLE / "tasks/configure.yml").read_text(encoding="utf-8"))
         names = [task["name"] for task in tasks]
-        self.assertLess(names.index("Отклонить несовместимую существующую конфигурацию аудита, KV или аутентификации перед изменением"),
+        self.assertLess(names.index("Отклонение несовместимой существующей конфигурации аудита, KV или аутентификации перед изменением"),
                         names.index("Включение устройства аудита файлов на уровне кластера только в случае его отсутствия"))
         for task in tasks:
             if "ansible.builtin.uri" in task and task["ansible.builtin.uri"].get("method") != "GET":
@@ -351,8 +351,8 @@ class VaultRoleContractTests(unittest.TestCase):
 
         configure = yaml.safe_load((ROLE / "tasks/configure.yml").read_text(encoding="utf-8"))
         verify = yaml.safe_load((ROLE / "tasks/verify.yml").read_text(encoding="utf-8"))
-        configure_guard = next(task for task in configure if task["name"].startswith("Отклонить несовместимую существующую конфигурацию аудита, KV или аутентификации перед изменением"))["ansible.builtin.assert"]["that"][0]
-        verify_guard = next(task for task in verify if task["name"].startswith("Проверить утверждённый аудит Vault, хранилище KV v2 и метод аутентификации"))["ansible.builtin.assert"]["that"]
+        configure_guard = next(task for task in configure if task["name"].startswith("Отклонение несовместимой существующей конфигурации аудита, KV или аутентификации перед изменением"))["ansible.builtin.assert"]["that"][0]
+        verify_guard = next(task for task in verify if task["name"].startswith("Проверка заданных настроек аудита Vault, хранилища KV v2 и метода аутентификации"))["ansible.builtin.assert"]["that"]
         verify_guard = next(condition for condition in verify_guard if "log_raw" in condition)
         absent = object()
         cases = [(absent, True), (False, True), ("false", True), ("False", True),
@@ -406,29 +406,29 @@ class VaultRoleContractTests(unittest.TestCase):
 
         provision = yaml.safe_load((ROLE / "tasks/provision.yml").read_text(encoding="utf-8"))
         package = next(task for task in provision if task["name"] == "Установка стандартной утилиты ротации журналов аудита")
-        timer = next(task for task in provision if task["name"] == "Включить и запустить стандартный таймер logrotate")
+        timer = next(task for task in provision if task["name"] == "Включение автозапуска и запуск штатного таймера logrotate")
         self.assertEqual(package["ansible.builtin.package"], {"name": "logrotate", "state": "present"})
         self.assertTrue(timer["ansible.builtin.systemd"]["enabled"])
 
     def test_audit_free_space_gate_runs_during_preflight_before_provision(self):
         preflight = yaml.safe_load((ROLE / "tasks/preflight.yml").read_text(encoding="utf-8"))
-        df_task = next(task for task in preflight if task["name"] == "Проверка свободного места на наличие ограниченного хранения аудита Vault")
+        df_task = next(task for task in preflight if task["name"] == "Проверка свободного места для хранения журналов аудита Vault")
         self.assertEqual(df_task["ansible.builtin.command"]["argv"], ["df", "-PkP", "--", "/var/log"])
-        gate = next(task for task in preflight if task["name"] == "Требуется место для одного текущего и четырнадцати ротируемых файлов аудита")
+        gate = next(task for task in preflight if task["name"] == "Проверка места для текущего и четырнадцати архивных журналов аудита")
         self.assertIn("1600000", str(gate["ansible.builtin.assert"]))
         main = yaml.safe_load((ROLE / "tasks/main.yml").read_text(encoding="utf-8"))
-        block = next(task["block"] for task in main if task["name"].startswith("Обеспечить взаимное исключение операций Vault для Installer и standalone-Ansible"))
+        block = next(task["block"] for task in main if task["name"].startswith("Обеспечение взаимного исключения операций Vault для Installer и standalone-Ansible"))
         names = [task["name"] for task in block]
-        self.assertLess(names.index("Запустить предварительную проверку Vault перед изменением пакета или службы"),
+        self.assertLess(names.index("Запуск предварительной проверки Vault перед изменением пакета или службы"),
                         names.index("Запуск подготовки и настройки Vault"))
 
     def test_existing_unit_and_rotation_files_require_exact_managed_identity(self):
         preflight = yaml.safe_load((ROLE / "tasks/preflight.yml").read_text(encoding="utf-8"))
         names = [task["name"] for task in preflight]
-        self.assertIn("Проверить файлы служб Vault без перехода по символическим ссылкам", names)
-        self.assertIn("Проверка точных файлов ротации аудита Vault без перехода по ссылкам", names)
-        self.assertIn("Проверить идентификатор экземпляра Vault в существующих файлах служб systemd", names)
-        self.assertIn("Проверить идентификатор экземпляра Vault в существующих файлах ротации журналов", names)
+        self.assertIn("Проверка файлов служб Vault без перехода по символическим ссылкам", names)
+        self.assertIn("Проверка файлов ротации аудита Vault без перехода по символическим ссылкам", names)
+        self.assertIn("Проверка идентификатора экземпляра Vault в существующих файлах служб systemd", names)
+        self.assertIn("Проверка идентификатора экземпляра Vault в существующих файлах ротации журналов", names)
         for template in ("vault.service.j2", "vault-audit.logrotate.j2"):
             first = (ROLE / "templates" / template).read_text(encoding="utf-8").splitlines()[0]
             self.assertEqual(first, "# {{ platform_vault_name }}-managed: {{ platform_vault_deployment_id }}/{{ vault_member.id }}")
@@ -439,9 +439,9 @@ class VaultRoleContractTests(unittest.TestCase):
         from ansible.template import Templar
 
         vault = yaml.safe_load((ROLE / "tasks/main.yml").read_text(encoding="utf-8"))
-        vault_gate = next(task for task in vault if task["name"].startswith("Обеспечить взаимное исключение операций Vault для Installer и standalone-Ansible"))
+        vault_gate = next(task for task in vault if task["name"].startswith("Обеспечение взаимного исключения операций Vault для Installer и standalone-Ansible"))
         vault_gate = next(task for task in vault_gate["block"]
-                          if task["name"].startswith("Перед изменением запросить утвержденный источник артефакта Vault"))
+                          if task["name"].startswith("Проверка разрешённого источника артефакта Vault перед изменениями"))
         expected = "platform_resolved_artifact_sources is defined or (platform_artifact_source_authority_active | default(false))"
         self.assertEqual(vault_gate["when"], [expected, "not (platform_vault_verify_only | bool)"])
 
@@ -492,27 +492,27 @@ class VaultRoleContractTests(unittest.TestCase):
     def test_preflight_checks_each_owned_path_component_before_data_reads(self):
         preflight = yaml.safe_load((ROLE / "tasks/preflight.yml").read_text(encoding="utf-8"))
         names = [task["name"] for task in preflight]
-        inspect = names.index("Проверить каждый фиксированный компонент root/deployment/member/PKI без перехода по ссылкам")
+        inspect = names.index("Проверка каждого фиксированного компонента root/deployment/member/PKI без перехода по ссылкам")
         data_find = names.index("Проверка только непосредственно существующих записей данных экземпляра службы")
         self.assertLess(inspect, data_find)
         helper = yaml.safe_load((ROLE / "tasks/validate_owned_paths.yml").read_text(encoding="utf-8"))
         self.assertTrue(any(task.get("ansible.builtin.stat", {}).get("follow") is False for task in helper))
         checks = str(next(task["ansible.builtin.set_fact"] for task in preflight
-                          if task["name"].startswith("Добавить каждый фиксированный компонент пути развертывания и экземпляра службы к предварительной проверке")))
+                          if task["name"].startswith("Добавление каждого фиксированного компонента пути развертывания и экземпляра службы к предварительной проверке")))
         for suffix in ("config_directory", "config_directory ~ '/pki'", "data_directory", "log_directory"):
             self.assertIn(suffix, checks)
 
     def test_lock_contention_and_path_boundary_validation_playbooks_cover_required_cases(self):
         lock = yaml.safe_load((ROOT / "services/vault/playbooks/validate-lock.yml").read_text(encoding="utf-8"))
         lock_text = str(lock)
-        for phrase in ("Проверить конкуренцию за блокировку", "Штатно остановить процесс, удерживающий блокировку",
-                       "Запустить владельца блокировки с имитацией сбоя", "Получить блокировку после очистки состояния прежнего владельца"):
+        for phrase in ("Проверка конкуренции за блокировку", "Штатная остановка процесса, удерживающего блокировку",
+                       "Запуск владельца блокировки с имитацией сбоя", "Получение блокировки после очистки состояния прежнего владельца"):
             self.assertIn(phrase, lock_text)
 
         paths = yaml.safe_load((ROOT / "services/vault/playbooks/validate-path-boundaries.yml").read_text(encoding="utf-8"))
         block = next(task["block"] for task in paths[0]["tasks"] if "block" in task)
         cases = next(task["loop"] for task in block
-                     if task["name"].startswith("Отклонить символические ссылки на каждой границе управляемого потомка"))
+                     if task["name"].startswith("Отклонение символических ссылок на каждой границе управляемого потомка"))
         self.assertEqual({(case["root"], case["component"]) for case in cases}, {
             ("config", "deployment"), ("config", "member"), ("config", "pki"),
             ("data", "deployment"), ("data", "member"),

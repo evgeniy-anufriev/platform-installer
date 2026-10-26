@@ -6,7 +6,7 @@
   vars:
     ansible_user: platform-automation
   tasks:
-    - name: Создать защищённый временный родительский каталог QA в /var/lib
+    - name: Создание защищённого временного родительского каталога QA в /var/lib
       ansible.builtin.tempfile:
         path: /var/lib
         state: directory
@@ -14,18 +14,18 @@
       become: true
       register: _platform_managed_data_root_qa_parent
 
-    - name: Выполнить восстановление общего корня и проверить политику
+    - name: Восстановление общего каталога и проверка политики доступа
       block:
-        - name: Установить изолированный путь, принадлежащий несвязанной встроенной учетной записи
+        - name: Выбор изолированного тестового пути с посторонним владельцем
           ansible.builtin.set_fact:
             _platform_managed_data_root_qa_path: "{{ _platform_managed_data_root_qa_parent.path }}/data"
 
-        - name: Требовать тестовую учетную запись, используемую для случая неуправляемого владельца
+        - name: Проверка наличия тестовой учётной записи для случая с чужим владельцем
           ansible.builtin.command:
             argv: [getent, passwd, nobody]
           changed_when: false
 
-        - name: Создать корень в сломанном состоянии, принадлежащем службе
+        - name: Создание тестового каталога данных с неверным владельцем
           ansible.builtin.file:
             path: "{{ _platform_managed_data_root_qa_path }}"
             state: directory
@@ -33,7 +33,7 @@
             mode: '0700'
           become: true
 
-        - name: "Проверить отклонение корневого каталога с неверным владельцем"
+        - name: "Проверка отклонения корневого каталога с неверным владельцем"
           block:
             - ansible.builtin.include_role:
                 name: platform.core.managed_data_path_guard
@@ -71,13 +71,13 @@
           become: true
           register: _platform_managed_data_root_qa_stat
 
-        - name: Требовать владение техническим пользователем и режим 0755
+        - name: Проверка принадлежности каталога техническому пользователю и прав 0755
           ansible.builtin.assert:
             that:
               - _platform_managed_data_root_qa_stat.stat.pw_name == ansible_user
               - _platform_managed_data_root_qa_stat.stat.mode == '0755'
 
-        - name: Убедиться, что корень /var/lib по умолчанию никогда не используется
+        - name: Проверка того, что корень /var/lib по умолчанию никогда не используется
           block:
             - ansible.builtin.stat:
                 path: /var/lib
@@ -109,7 +109,7 @@
                   - _platform_var_lib_after.stat.mode == _platform_var_lib_before.stat.mode
 
       always:
-        - name: Удалить временный родительский каталог QA
+        - name: Удаление временного родительского каталога QA
           ansible.builtin.file:
             path: "{{ _platform_managed_data_root_qa_parent.path }}"
             state: absent

@@ -1,12 +1,12 @@
 ---
 - import_playbook: ../../../ansible-core/playbooks/validate.yml
 
-- name: "Подготовить состояние серийных номеров зон BIND"
+- name: "Подготовка состояния серийных номеров зон BIND"
   hosts: localhost
   connection: local
   gather_facts: false
   tasks:
-    - name: Включить нормализованные источники в явное полное согласование DNS
+    - name: Включение нормализованных источников в явное полное согласование DNS
       ansible.builtin.include_role:
         name: platform.core.resolve_endpoint_sources
       when: platform_bind_full_reconcile | default(false) | bool
@@ -18,7 +18,7 @@
                       default((inventory_dir | default('/project/inventory', true)) | dirname, true)) ~
                      '/inventory/group_vars/all/platform-state.yml', true) }}
 
-    - name: Разрешить идентификацию проекта сгенерированного состояния BIND
+    - name: Определение идентификатора проекта для служебного состояния BIND
       ansible.builtin.set_fact:
         _platform_bind_project_id: >-
           {{ platform_project_id
@@ -37,18 +37,18 @@
         path: "{{ _platform_bind_generated_state_path }}"
       register: _platform_bind_persisted_state_stat
 
-    - name: Загрузить существующее постоянное сгенерированное состояние BIND для сверки
+    - name: Загрузка сохранённого служебного состояния BIND для сверки
       ansible.builtin.include_vars:
         file: "{{ _platform_bind_generated_state_path }}"
         name: _platform_bind_persisted_state_file
       when: _platform_bind_persisted_state_stat.stat.exists | bool
 
-    - name: Выбрать постоянное сгенерированное состояние для сверки жизненного цикла BIND
+    - name: Выбор сохранённого служебного состояния для сверки BIND
       ansible.builtin.set_fact:
         _platform_bind_persisted_generated_state: >-
           {{ _platform_bind_persisted_state_file.platform_generated_state | default(platform_generated_state | default({}), true) }}
 
-    - name: Привязать сохраняемое сгенерированное состояние BIND к идентификатору проекта
+    - name: Привязка сохраняемого сгенерированного состояния BIND к идентификатору проекта
       ansible.builtin.assert:
         that:
           - _platform_bind_persisted_generated_state.metadata | default({}) is mapping
@@ -82,12 +82,12 @@
       become: false
       when: _platform_bind_persisted_generated_state | length > 0
 
-    - name: "Загрузить каталог сервисов для расчёта серийных номеров зон BIND"
+    - name: "Загрузка каталога сервисов для расчёта серийных номеров зон BIND"
       ansible.builtin.include_vars:
         file: "{{ platform_service_catalog_path }}"
         name: _platform_bind_catalog_file
 
-    - name: Собрать безопасные проекции узлов и развёртываний проекта
+    - name: Сбор безопасных проекций узлов и развёртываний проекта
       ansible.builtin.set_fact:
         _platform_bind_inventory_hosts: >-
           {{ _platform_bind_inventory_hosts | default({}) |
@@ -98,7 +98,7 @@
       loop: "{{ groups['platform_targets'] | default([]) | sort }}"
       no_log: true
 
-    - name: Разрешить логическое содержимое DNS перед последовательной материализацией
+    - name: Определение содержимого DNS перед расчётом серийных номеров
       platform.core.resolve_dns_zones:
         desired_state: "{{ platform_desired_state }}"
         service_catalog: "{{ _platform_bind_catalog_file.platform_service_catalog | default(_platform_bind_catalog_file, true) }}"
@@ -109,7 +109,7 @@
         endpoint_sources: "{{ hostvars['localhost'].platform_endpoint_sources | default({}) }}"
       register: platform_bind_resolution
 
-    - name: "Рассчитать базовые DNS-записи для обычного применения BIND"
+    - name: "Расчёт базовых DNS-записей для обычного применения BIND"
       platform.core.resolve_dns_zones:
         desired_state: "{{ platform_desired_state }}"
         service_catalog: "{{ _platform_bind_catalog_file.platform_service_catalog | default(_platform_bind_catalog_file, true) }}"
@@ -120,12 +120,12 @@
       register: _platform_bind_base_resolution
       when: not (platform_bind_full_reconcile | default(false) | bool)
 
-    - name: Инициализировать наблюдаемую в реальном времени последовательную проекцию DNS для явного полного согласования
+    - name: Инициализация наблюдаемого состояния серийных номеров DNS для полного согласования
       ansible.builtin.set_fact:
         _platform_bind_observed_live_serials: {}
       when: platform_bind_full_reconcile | default(false) | bool
 
-    - name: Синхронизировать основной журнал BIND перед полной заменой модели
+    - name: Синхронизация основного журнала BIND перед полной заменой модели
       ansible.builtin.command:
         argv: [rndc, sync, "{{ item.value.zone }}"]
       delegate_to: "{{ item.value.primary.hostId }}"
@@ -137,7 +137,7 @@
       register: _platform_bind_sync_live_zone
       when: platform_bind_full_reconcile | default(false) | bool
 
-    - name: Прочитать авторитетный основной серийный номер SOA перед полной заменой модели
+    - name: Чтение текущего серийного номера SOA основной зоны перед полной заменой
       ansible.builtin.command:
         argv: [dig, "@127.0.0.1", "{{ item.value.zone }}", SOA, +short]
       delegate_to: "{{ item.value.primary.hostId }}"
@@ -149,7 +149,7 @@
       register: _platform_bind_live_zone_serial_query
       when: platform_bind_full_reconcile | default(false) | bool
 
-    - name: Требовать действительные действующие серийные номера SOA перед заменой полных зон
+    - name: Проверка корректности текущих SOA serial перед заменой зон
       ansible.builtin.assert:
         that:
           - item.rc == 0
@@ -163,7 +163,7 @@
         label: "{{ item.item.key }}"
       when: platform_bind_full_reconcile | default(false) | bool
 
-    - name: "Сохранить текущие серийные номера SOA первичных зон"
+    - name: "Сохранение текущих серийных номеров SOA первичных зон"
       ansible.builtin.set_fact:
         _platform_bind_observed_live_serials: >-
           {{ _platform_bind_observed_live_serials |
@@ -173,7 +173,7 @@
         label: "{{ item.item.key }}"
       when: platform_bind_full_reconcile | default(false) | bool
 
-    - name: Восстановить проверенные метаданные жизненного цикла BIND DNS в постоянный корень проекта
+    - name: Восстановление проверенных метаданных жизненного цикла BIND DNS в постоянный корень проекта
       platform.core.recover_dns_lifecycle:
         generated_state: "{{ _platform_bind_persisted_generated_state }}"
         zones: "{{ platform_bind_resolution.resolved_dns_zones.zones }}"
@@ -181,7 +181,7 @@
       register: _platform_bind_lifecycle_recovery
       when: platform_bind_lifecycle_recovery | default({}) | length > 0
 
-    - name: "Инициализировать структуру служебного состояния серийных номеров BIND"
+    - name: "Инициализация структуры служебного состояния серийных номеров BIND"
       ansible.builtin.set_fact:
         _platform_bind_next_state: >-
           {{ {
@@ -196,7 +196,7 @@
                    recursive=True) }}
       when: not (platform_bind_reuse_existing_generated_state | default(false) | bool)
 
-    - name: Проверить наличие состояния DNS для повторного построения проекции без изменений
+    - name: Проверка наличия состояния DNS для повторного построения проекции без изменений
       ansible.builtin.assert:
         that:
           - platform_generated_state.serviceDeployments | default({}) is mapping
@@ -209,7 +209,7 @@
         label: "{{ item.key }}"
       when: platform_bind_reuse_existing_generated_state | default(false) | bool
 
-    - name: "Рассчитать воспроизводимые серийные номера зон BIND"
+    - name: "Расчёт воспроизводимых серийных номеров зон BIND"
       ansible.builtin.set_fact:
         _platform_bind_next_state: >-
           {{ _platform_bind_next_state |
@@ -259,7 +259,7 @@
       changed_when: false
       become: false
 
-    - name: Опубликовать runtime-проекцию BIND для операции применения конфигурации
+    - name: Публикация runtime-проекции BIND для операции применения конфигурации
       ansible.builtin.set_fact:
         platform_bind_runtime_projection:
           zones: >-
@@ -270,14 +270,14 @@
             {{ platform_generated_state if (platform_bind_reuse_existing_generated_state | default(false) | bool)
                else _platform_bind_next_state }}
 
-    - name: "Создать каталог служебного состояния серийных номеров BIND"
+    - name: "Создание каталога служебного состояния серийных номеров BIND"
       ansible.builtin.file:
         path: "{{ _platform_bind_generated_state_path | dirname }}"
         state: directory
         mode: '0700'
       when: not (platform_bind_reuse_existing_generated_state | default(false) | bool)
 
-    - name: "Атомарно сохранить служебное состояние серийных номеров BIND"
+    - name: "Атомарное сохранение служебного состояния серийных номеров BIND"
       ansible.builtin.copy:
         content: "{{ {'platform_generated_state': _platform_bind_next_state} | to_nice_yaml(indent=2) }}"
         dest: "{{ _platform_bind_generated_state_path }}"
@@ -285,11 +285,11 @@
       register: platform_bind_generated_state_write
       when: not (platform_bind_reuse_existing_generated_state | default(false) | bool)
 
-    - name: Обновить inventory после материализации серийных номеров зон BIND
+    - name: Обновление inventory после расчёта серийных номеров зон BIND
       ansible.builtin.meta: refresh_inventory
       when: not (platform_bind_reuse_existing_generated_state | default(false) | bool)
 
-- name: Подготовить и проверить авторитетных кандидатов BIND DNS для всех участников
+- name: Подготовка и проверка файлов-кандидатов BIND DNS для всех участников
   hosts: platform_targets
   become: true
   gather_facts: false
@@ -298,7 +298,7 @@
     - role: platform.bind.bind
       platform_bind_phase: prepare
 
-- name: Активировать авторитетный DNS BIND после проверки подготовленных конфигураций на всём кластере
+- name: Активация авторитетного DNS BIND после проверки подготовленных конфигураций на всём кластере
   hosts: platform_targets
   become: true
   gather_facts: false

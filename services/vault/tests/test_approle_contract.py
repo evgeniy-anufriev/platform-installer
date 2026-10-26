@@ -13,7 +13,7 @@ ROLE = Path(__file__).resolve().parents[1] / "ansible_collections/platform/vault
 class AppRoleConfigurationTests(unittest.TestCase):
     def test_enable_preserves_existing_mount_and_uses_protected_api(self):
         tasks = yaml.safe_load((ROLE / "tasks/configure.yml").read_text(encoding="utf-8"))
-        enable = next(t for t in tasks if t["name"] == "Включить аутентификацию AppRole только при ее отсутствии")
+        enable = next(t for t in tasks if t["name"] == "Включение аутентификации AppRole только при ее отсутствии")
         api = enable["ansible.builtin.uri"]
         self.assertTrue(api["url"].endswith("/v1/sys/auth/approle"))
         self.assertEqual(api["method"], "POST")
@@ -30,7 +30,7 @@ class AppRoleConfigurationTests(unittest.TestCase):
 
     def test_conflicting_mount_rejected_before_any_write(self):
         tasks = yaml.safe_load((ROLE / "tasks/configure.yml").read_text(encoding="utf-8"))
-        guard = next(t for t in tasks if t["name"].startswith("Отклонить несовместимую существующую конфигурацию аудита, KV или аутентификации перед изменением"))
+        guard = next(t for t in tasks if t["name"].startswith("Отклонение несовместимой существующей конфигурации аудита, KV или аутентификации перед изменением"))
         expression = next(x for x in guard["ansible.builtin.assert"]["that"] if "approle/" in x)
         self.assertLess(tasks.index(guard), next(i for i, t in enumerate(tasks) if t.get("ansible.builtin.uri", {}).get("method") == "POST"))
         loader = DataLoader()
@@ -44,7 +44,7 @@ class AppRoleConfigurationTests(unittest.TestCase):
 
     def test_verify_requires_approle_without_mutation(self):
         tasks = yaml.safe_load((ROLE / "tasks/verify.yml").read_text(encoding="utf-8"))
-        guard = next(t for t in tasks if t["name"].startswith("Проверить утверждённый аудит Vault, хранилище KV v2 и метод аутентификации"))
+        guard = next(t for t in tasks if t["name"].startswith("Проверка заданных настроек аудита Vault, хранилища KV v2 и метода аутентификации"))
         expressions = [x for x in guard["ansible.builtin.assert"]["that"] if "approle/" in x]
         self.assertEqual(len(expressions), 2)
         loader = DataLoader()

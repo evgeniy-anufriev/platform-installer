@@ -1,5 +1,5 @@
 ---
-- name: Проверить локальный образ с зафиксированным digest перед доставкой
+- name: Проверка локального образа с зафиксированным digest перед доставкой
   ansible.builtin.command:
     argv: [docker, image, inspect, "{{ application_runtime_job.authority.requirement.localReference }}"]
   become_user: "{{ application_runtime_job.account }}"
@@ -9,27 +9,27 @@
   failed_when: false
   no_log: true
 
-- name: Доставить образ с зафиксированным digest при отсутствии на целевом узле
+- name: Доставка образа с зафиксированным digest при отсутствии на целевом узле
   when: application_local_image.rc != 0 or (application_local_image.stdout | from_json)[0].Id != application_runtime_job.authority.requirement.imageId
   block:
-    - name: "Загрузить образ из разрешённого реестра и удалить временные настройки загрузки"
+    - name: "Загрузка образа из разрешённого реестра и удаление временных настроек загрузки"
       ansible.builtin.include_tasks: pull_registry.yml
       when: application_runtime_job.source.source == 'REPOSITORY'
-    - name: Конфиденциально разместить проверенный архив для учетной записи Docker
+    - name: Защищённое размещение проверенного архива для учётной записи Docker
       when: application_runtime_job.source.source == 'OFFLINE_BUNDLE'
       block:
-        - name: "Создать защищённый временный каталог архива для пользователя Docker"
+        - name: "Создание защищённого временного каталога архива для пользователя Docker"
           ansible.builtin.tempfile:
             state: directory
             prefix: .application-image-
             path: "{{ application_runtime_job.libraryPath }}"
           register: application_image_stage
-        - name: "Предоставить выбранной учётной записи доступ к временному каталогу"
+        - name: "Предоставление выбранной учётной записи доступа к временному каталогу"
           ansible.builtin.file:
             path: "{{ application_image_stage.path }}"
             owner: "{{ application_runtime_job.account }}"
             mode: '0700'
-        - name: "Скопировать архив с зафиксированной контрольной суммой из проверенного пакета узла выполнения"
+        - name: "Копирование архива с зафиксированной контрольной суммой из проверенного пакета узла выполнения"
           ansible.builtin.copy:
             src: "{{ application_runtime_job.archivePath }}"
             dest: "{{ application_image_stage.path }}/image.tar"
@@ -42,32 +42,32 @@
             get_mime: false
             get_attributes: false
           register: application_target_archive
-        - name: "Проверить контрольную сумму и размер доставленного архива"
+        - name: "Проверка контрольной суммы и размера доставленного архива"
           ansible.builtin.assert:
             that:
               - "'sha256:' ~ application_target_archive.stat.checksum == application_runtime_job.authority.offlineBundle.sha256"
               - application_target_archive.stat.size == application_runtime_job.authority.offlineBundle.size
             fail_msg: APPLICATION_IMAGE_ARCHIVE_INVALID
-        - name: Загрузить образ в выбранный Docker без прав root
+        - name: Загрузка образа в выбранный Docker без прав root
           ansible.builtin.command:
             argv: [docker, load, --input, "{{ application_image_stage.path }}/image.tar"]
           become_user: "{{ application_runtime_job.account }}"
           environment: "{{ application_runtime_job.dockerEnvironment }}"
           no_log: true
       always:
-        - name: Удалить выделенный временный каталог доставки образа приложения
+        - name: Удаление выделенного временного каталога доставки образа приложения
           ansible.builtin.file:
             path: "{{ application_image_stage.path }}"
             state: absent
           when: application_image_stage.path is defined
-    - name: Проверить идентификатор образа после загрузки из архива или реестра
+    - name: Проверка идентификатора образа после загрузки из архива или реестра
       ansible.builtin.command:
         argv: [docker, image, inspect, "{{ application_runtime_job.authority.requirement.imageId }}"]
       become_user: "{{ application_runtime_job.account }}"
       environment: "{{ application_runtime_job.dockerEnvironment }}"
       changed_when: false
       no_log: true
-    - name: "Назначить образу разрешённый локальный тег"
+    - name: "Назначение разрешённого локального тега образу"
       ansible.builtin.command:
         argv: [docker, tag, "{{ application_runtime_job.authority.requirement.imageId }}", "{{ application_runtime_job.authority.requirement.localReference }}"]
       become_user: "{{ application_runtime_job.account }}"
@@ -83,7 +83,7 @@
   changed_when: false
   no_log: true
 
-- name: Проверить соответствие образа и целевой платформы
+- name: Проверка соответствия образа и целевой платформы
   ansible.builtin.assert:
     that:
       - (application_delivered_image.stdout | from_json)[0].Id == application_runtime_job.authority.requirement.imageId
@@ -92,7 +92,7 @@
     fail_msg: APPLICATION_IMAGE_IDENTITY_INVALID
   no_log: true
 
-- name: Сохранить ссылку на исходный образ приложения
+- name: Сохранение ссылки на исходный образ приложения
   ansible.builtin.command:
     argv: [docker, tag, "{{ application_runtime_job.authority.requirement.imageId }}", "{{ application_runtime_job.settings.image }}"]
   become_user: "{{ application_runtime_job.account }}"
@@ -111,7 +111,7 @@
   no_log: true
   when: "'@' not in application_runtime_job.settings.image"
 
-- name: Проверить соответствие исходной ссылки образу с зафиксированным digest
+- name: Проверка соответствия исходной ссылки образу с зафиксированным digest
   ansible.builtin.assert:
     that: (application_original_image.stdout | from_json)[0].Id == application_runtime_job.authority.requirement.imageId
     fail_msg: APPLICATION_IMAGE_IDENTITY_INVALID

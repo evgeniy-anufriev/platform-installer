@@ -1,5 +1,5 @@
 ---
-- name: Выполнить пакет тем библиотеки на одном предполагаемом брокере
+- name: Обработка топиков библиотеки на одном выбранном брокере
   ansible.builtin.include_tasks:
     file: application_topics_scope.yml
     apply:

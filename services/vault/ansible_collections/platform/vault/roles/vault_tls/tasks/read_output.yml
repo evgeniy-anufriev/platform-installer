@@ -1,17 +1,17 @@
 ---
-- name: Разрешить канонический корень автономного проекта для проверки только для чтения
+- name: Определение канонического корня автономного проекта для проверки только для чтения
   ansible.builtin.set_fact:
     _platform_vault_project_root: >-
       {{ platform_project_root if (platform_project_root is defined and platform_project_root | string | length > 0)
          else ((inventory_dir | dirname) if (inventory_dir is defined and inventory_dir | string | length > 0) else '') }}
 
-- name: Определение точного пути автономного вывода для проверки только для чтения
+- name: Определение пути автономных результатов для проверки без внесения изменений
   ansible.builtin.set_fact:
     _platform_vault_bootstrap_output_dir: >-
       {{ platform_vault_bootstrap_output_dir if (platform_vault_bootstrap_output_dir | string | length > 0)
          else (_platform_vault_project_root ~ '/secrets/' ~ platform_vault_deployment_id) }}
 
-- name: Требовать явный или определяемый корнем проекта автономный путь вывода
+- name: Проверка явного пути результатов или пути, полученного из корня проекта
   ansible.builtin.assert:
     that:
       - _platform_vault_bootstrap_output_dir.startswith('/')
@@ -20,13 +20,13 @@
       - "'\\\\' not in _platform_vault_bootstrap_output_dir"
     fail_msg: VAULT_BOOTSTRAP_OUTPUT_PATH_INVALID
 
-- name: Разрешить путь результатов проверки Vault без перехода через подменённый родительский каталог
+- name: Определение пути результатов проверки Vault без перехода через подменённый родительский каталог
   ansible.builtin.command:
     argv: [realpath, -m, "{{ _platform_vault_bootstrap_output_dir }}"]
   register: _platform_vault_verify_output_realpath
   changed_when: false
 
-- name: Требовать, чтобы выходной путь проверки только для чтения был каноническим
+- name: Проверка канонического пути результатов Vault для Verify
   ansible.builtin.assert:
     that: _platform_vault_verify_output_realpath.stdout == _platform_vault_bootstrap_output_dir
     fail_msg: VAULT_BOOTSTRAP_OUTPUT_PATH_UNSAFE
@@ -49,7 +49,7 @@
     - "{{ _platform_vault_bootstrap_output_dir }}/admin-token"
   register: _platform_vault_verify_output_stats
 
-- name: Требовать хранения токенов, принадлежащих частному контроллеру, для автономной проверки
+- name: Проверка владельца и прав каталога результатов и файла токена Vault
   ansible.builtin.assert:
     that:
       - _platform_vault_verify_output_stats.results[0].stat.isdir
@@ -63,7 +63,7 @@
     fail_msg: VAULT_BOOTSTRAP_OUTPUT_FILE_UNSAFE
   no_log: true
 
-- name: Прочитать автономный корневой токен, не раскрывая его
+- name: Чтение автономного корневого токена, не раскрывая его
   ansible.builtin.set_fact:
     platform_vault_admin_token: "{{ lookup('ansible.builtin.file', _platform_vault_bootstrap_output_dir ~ '/admin-token') | trim }}"
   no_log: true

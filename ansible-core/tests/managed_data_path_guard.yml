@@ -4,21 +4,21 @@
   connection: local
   gather_facts: false
   tasks:
-    - name: Разрешить предполагаемый каталог данных в var lib
+    - name: Определение предполагаемого каталога данных в var lib
       ansible.builtin.include_role:
         name: platform.core.managed_data_path_guard
       vars:
         platform_managed_data_path: /var/lib/platform-installer-guard-qa-absent
         platform_managed_data_owner: platform-automation
 
-    - name: Разрешить предполагаемый каталог данных в точке монтирования
+    - name: Определение предполагаемого каталога данных в точке монтирования
       ansible.builtin.include_role:
         name: platform.core.managed_data_path_guard
       vars:
         platform_managed_data_path: /mnt/platform-installer-guard-qa-absent
         platform_managed_data_owner: platform-automation
 
-    - name: Отклонить каталог данных в дереве конфигурации системы
+    - name: Отклонение каталога данных в дереве конфигурации системы
       block:
         - ansible.builtin.include_role:
             name: platform.core.managed_data_path_guard

@@ -1,14 +1,14 @@
 ---
 - name: Согласование хранилищ PKI с проверенным материалом PEM
   block:
-    - name: "Проверить каталог запроса PKI без перехода по символическим ссылкам"
+    - name: "Проверка каталога запроса PKI без перехода по символическим ссылкам"
       ansible.builtin.stat:
         path: "{{ _platform_pki_request_dir }}"
         follow: false
       register: _platform_pki_request_directory_stat
       no_log: true
 
-    - name: Требовать защищенный каталог назначения обычного запроса PKI
+    - name: Проверка типа, владельца и прав каталога запроса PKI
       ansible.builtin.assert:
         that:
           - _platform_pki_request_directory_stat.stat.isdir | default(false)
@@ -18,7 +18,7 @@
         fail_msg: PKI_STORE_PATH_UNSAFE
       no_log: true
 
-    - name: Создать частный промежуточный каталог хранилища PKI с той же файловой системой
+    - name: Создание защищённого временного каталога хранилищ PKI на той же файловой системе
       ansible.builtin.tempfile:
         state: directory
         path: "{{ _platform_pki_request_dir }}"
@@ -27,7 +27,7 @@
       changed_when: false
       no_log: true
 
-    - name: Обеспечить принудительное использование частного промежуточного каталога хранилища PKI
+    - name: Установка владельца и прав 0700 для временного каталога хранилищ PKI
       ansible.builtin.file:
         path: "{{ _platform_pki_store_stage.path }}"
         state: directory
@@ -37,7 +37,7 @@
       changed_when: false
       no_log: true
 
-    - name: Проверка авторитетных файлов PKI PEM без перехода по ссылкам
+    - name: Проверка исходных PEM-файлов PKI без перехода по символическим ссылкам
       ansible.builtin.stat:
         path: "{{ item }}"
         follow: false
@@ -48,7 +48,7 @@
       register: _platform_pki_authoritative_pem_stats
       no_log: true
 
-    - name: "Проверить, что исходные PEM-файлы являются обычными файлами с безопасными правами"
+    - name: "Проверка того, что исходные PEM-файлы являются обычными файлами с безопасными правами"
       ansible.builtin.assert:
         that:
           - item.stat.exists
@@ -58,7 +58,7 @@
       loop: "{{ _platform_pki_authoritative_pem_stats.results }}"
       no_log: true
 
-    - name: Принудительное применение защищенных разрешений PEM перед проверкой и созданием хранилища
+    - name: Установка защищённых прав доступа к PEM-файлам перед проверкой и созданием хранилищ
       ansible.builtin.file:
         path: "{{ item }}"
         owner: "{{ platform_pki_owner }}"
@@ -70,7 +70,7 @@
         - "{{ _platform_pki_request_dir }}/leaf.crt"
       no_log: true
 
-    - name: Перепроверить защищенные разрешения PEM
+    - name: Повторная проверка прав доступа к PEM-файлам
       ansible.builtin.stat:
         path: "{{ item }}"
         follow: false
@@ -81,7 +81,7 @@
       register: _platform_pki_protected_pem_stats
       no_log: true
 
-    - name: Требовать разрешения PEM только для владельца
+    - name: Проверка доступа к PEM-файлам только для владельца
       ansible.builtin.assert:
         that:
           - item.stat.isreg | default(false)
@@ -104,14 +104,14 @@
       failed_when: false
       no_log: true
 
-    - name: Потребовать, чтобы существующий конечный сертификат был связан с управляемым CA
+    - name: Проверка подписи конечного сертификата управляемым центром сертификации
       ansible.builtin.assert:
         that:
           - _platform_pki_existing_leaf_chain.rc == 0
         fail_msg: PKI_AUTHORITATIVE_PEM_CHAIN_INVALID
       no_log: true
 
-    - name: Получить открытый ключ из авторитетного закрытого ключа конечного сертификата
+    - name: Получение открытого ключа из исходного закрытого ключа конечного сертификата
       ansible.builtin.command:
         argv:
           - openssl
@@ -124,7 +124,7 @@
       changed_when: false
       no_log: true
 
-    - name: Получить открытый ключ из авторитетного конечного сертификата
+    - name: Получение открытого ключа из исходного конечного сертификата
       ansible.builtin.command:
         argv:
           - openssl
@@ -138,7 +138,7 @@
       changed_when: false
       no_log: true
 
-    - name: Проверить соответствие авторитетного закрытого ключа конечному сертификату
+    - name: Проверка соответствия исходного закрытого ключа конечному сертификату
       ansible.builtin.command:
         argv:
           - cmp
@@ -150,14 +150,14 @@
       failed_when: false
       no_log: true
 
-    - name: Отклонить несовпадение авторитетного закрытого ключа и конечного сертификата
+    - name: Отклонение несовпадения исходного закрытого ключа и конечного сертификата
       ansible.builtin.assert:
         that:
           - _platform_pki_leaf_key_certificate_match.rc == 0
         fail_msg: PKI_AUTHORITATIVE_PEM_KEY_CERTIFICATE_MISMATCH
       no_log: true
 
-    - name: Экспортировать авторитетный конечный сертификат в DER для сравнения хранилищ
+    - name: Экспорт исходного конечного сертификата в DER для сравнения хранилищ
       ansible.builtin.command:
         argv:
           - openssl
@@ -171,7 +171,7 @@
       changed_when: false
       no_log: true
 
-    - name: Экспорт авторитетного сертификата CA как DER для точного сравнения хранилищ
+    - name: Экспорт исходного сертификата CA в DER для сравнения хранилищ
       ansible.builtin.command:
         argv:
           - openssl
@@ -185,7 +185,7 @@
       changed_when: false
       no_log: true
 
-    - name: Проверить существующие производные хранилища PKI без перехода по ссылкам
+    - name: Проверка существующих производных хранилищ PKI без перехода по ссылкам
       ansible.builtin.stat:
         path: "{{ _platform_pki_request_dir }}/{{ item }}"
         follow: false
@@ -193,7 +193,7 @@
       register: _platform_pki_store_stats
       no_log: true
 
-    - name: Отклонить замененные или незащищенные существующие пути хранения PKI
+    - name: Отклонение замененных или незащищенных существующих путей хранения PKI
       ansible.builtin.assert:
         that:
           - not item.stat.exists or (item.stat.isreg | default(false))
@@ -243,7 +243,7 @@
       when: _platform_pki_store_stats.results[1].stat.exists
       no_log: true
 
-    - name: Экспортировать сертификат из хранилища ключей для проверки соответствия
+    - name: Экспорт сертификата из хранилища ключей для проверки соответствия
       ansible.builtin.command:
         argv:
           - keytool
@@ -264,7 +264,7 @@
       when: (_platform_pki_existing_keystore_check.rc | default(1)) == 0
       no_log: true
 
-    - name: Экспортировать сертификат из хранилища доверия для проверки соответствия
+    - name: Экспорт сертификата из хранилища доверия для проверки соответствия
       ansible.builtin.command:
         argv:
           - keytool
@@ -285,7 +285,7 @@
       when: (_platform_pki_existing_truststore_check.rc | default(1)) == 0
       no_log: true
 
-    - name: Извлечь закрытый ключ из хранилища ключей для проверки соответствия
+    - name: Извлечение закрытого ключа из хранилища ключей для проверки соответствия
       ansible.builtin.command:
         argv:
           - openssl
@@ -304,7 +304,7 @@
       when: (_platform_pki_existing_keystore_check.rc | default(1)) == 0
       no_log: true
 
-    - name: "Ограничить права доступа к извлечённому закрытому ключу"
+    - name: "Ограничение прав доступа к извлечённому закрытому ключу"
       ansible.builtin.file:
         path: "{{ _platform_pki_store_stage.path }}/existing-keystore.key"
         owner: "{{ platform_pki_owner }}"
@@ -314,7 +314,7 @@
       changed_when: false
       no_log: true
 
-    - name: Получить открытый ключ из существующего хранилища ключей PKCS12
+    - name: Получение открытого ключа из существующего хранилища ключей PKCS12
       ansible.builtin.command:
         argv:
           - openssl
@@ -330,7 +330,7 @@
       when: (_platform_pki_existing_keystore_key.rc | default(1)) == 0
       no_log: true
 
-    - name: Сравнить текущее содержимое хранилища PKCS12 с авторитетным PEM
+    - name: Сравнение текущего содержимого хранилища PKCS12 с исходными PEM-файлами
       ansible.builtin.command:
         argv: [cmp, -s, "{{ item.left }}", "{{ item.right }}"]
       loop:
@@ -352,7 +352,7 @@
         - (_platform_pki_existing_keystore_public.rc | default(1)) == 0
       no_log: true
 
-    - name: Определить, можно ли повторно использовать оба существующих хранилища PKCS12
+    - name: Определение возможности повторного использования обоих хранилищ PKCS12
       ansible.builtin.set_fact:
         _platform_pki_existing_stores_match: >-
           {{ (_platform_pki_existing_keystore_check.rc | default(1)) == 0 and
@@ -360,10 +360,10 @@
              (_platform_pki_existing_store_comparisons.results | default([]) | length) == 3 and
              (_platform_pki_existing_store_comparisons.results | default([]) | map(attribute='rc') | select('equalto', 0) | list | length) == 3 }}
 
-    - name: Восстановить и опубликовать полную пару PKCS12, если пароль или содержимое отличаются
+    - name: Восстановление и публикация пары хранилищ PKCS12 при изменении пароля или содержимого
       when: not (_platform_pki_existing_stores_match | bool)
       block:
-        - name: Создать замену хранилища ключей PKCS12 на основе проверенного PEM
+        - name: Создание замены хранилища ключей PKCS12 на основе проверенного PEM
           ansible.builtin.command:
             argv:
               - openssl
@@ -384,7 +384,7 @@
           changed_when: false
           no_log: true
 
-        - name: Создать замену хранилища доверенных сертификатов PKCS12 на основе проверенного CA PEM
+        - name: Создание замены хранилища доверенных сертификатов PKCS12 на основе проверенного CA PEM
           ansible.builtin.command:
             argv:
               - keytool
@@ -403,7 +403,7 @@
           changed_when: false
           no_log: true
 
-        - name: "Ограничить права доступа к подготовленным хранилищам PKCS12"
+        - name: "Ограничение прав доступа к подготовленным хранилищам PKCS12"
           ansible.builtin.file:
             path: "{{ _platform_pki_store_stage.path }}/{{ item }}"
             owner: "{{ platform_pki_owner }}"
@@ -483,7 +483,7 @@
           changed_when: false
           no_log: true
 
-        - name: "Ограничить права доступа к ключу, извлечённому из нового хранилища"
+        - name: "Ограничение прав доступа к ключу, извлечённому из нового хранилища"
           ansible.builtin.file:
             path: "{{ _platform_pki_store_stage.path }}/candidate-keystore.key"
             owner: "{{ platform_pki_owner }}"
@@ -523,7 +523,7 @@
           changed_when: false
           no_log: true
 
-        - name: "Проверить соответствие новых хранилищ исходным PEM-файлам"
+        - name: "Проверка соответствия новых хранилищ исходным PEM-файлам"
           ansible.builtin.command:
             argv: [cmp, -s, "{{ item.left }}", "{{ item.right }}"]
           loop:
@@ -536,7 +536,7 @@
           changed_when: false
           no_log: true
 
-        - name: "Проверить типы записей в новых хранилищах PKCS12"
+        - name: "Проверка типов записей в новых хранилищах PKCS12"
           ansible.builtin.assert:
             that:
               - "'PrivateKeyEntry' in _platform_pki_candidate_keystore_check.stdout"
@@ -568,7 +568,7 @@
           register: _platform_pki_truststore_publish
           no_log: true
 
-    - name: Перепроверить опубликованные хранилища PKCS12
+    - name: Повторная проверка опубликованных хранилищ PKCS12
       ansible.builtin.command:
         argv:
           - keytool
@@ -583,7 +583,7 @@
       changed_when: false
       no_log: true
   always:
-    - name: Удалить частный промежуточный каталог хранилища PKI
+    - name: Удаление защищённого временного каталога хранилищ PKI
       ansible.builtin.file:
         path: "{{ _platform_pki_store_stage.path }}"
         state: absent

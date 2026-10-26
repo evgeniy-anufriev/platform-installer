@@ -1,10 +1,10 @@
 ---
-- name: Остановить только выбранную управляемую службу Docker без прав root
+- name: Остановка только выбранной управляемой службы Docker без прав root
   hosts: platform_targets
   become: true
   gather_facts: false
   tasks:
-    - name: Очистить выбранную управляемую учетную запись Docker, не удаляя ее данные
+    - name: Очистка выбранной управляемой учетной записи Docker, не удаляя ее данные
       ansible.builtin.include_role:
         name: platform.docker.docker_rootless
         tasks_from: clear_entry

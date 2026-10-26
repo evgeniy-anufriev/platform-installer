@@ -1,11 +1,11 @@
 ---
-- name: Доказать, что предварительная проверка пути Vault отклоняет символические ссылки потомков перед модификацией
+- name: Проверка отклонения вложенных символических ссылок до изменения путей Vault
   hosts: localhost
   connection: local
   gather_facts: false
   become: true
   tasks:
-    - name: "Создать временный каталог для проверок безопасности путей"
+    - name: "Создание временного каталога для проверок безопасности путей"
       ansible.builtin.tempfile:
         state: directory
         path: /var/tmp
@@ -14,13 +14,13 @@
 
     - name: Проверка каждого случая развертывания /member/PKI с дочерней ссылкой
       block:
-        - name: Привязать синтетический сервис UID к тестовым данным, принадлежащим пользователю root
+        - name: Задание тестового UID сервиса для проверки каталогов с владельцем root
           ansible.builtin.set_fact:
             _platform_vault_service_uid:
               rc: 0
               stdout: '0'
 
-        - name: Отклонить символические ссылки на каждой границе управляемого потомка
+        - name: Отклонение символических ссылок на каждой границе управляемого потомка
           ansible.builtin.include_tasks: validate-path-scenario.yml
           loop:
             - {root: config, component: deployment}
@@ -35,7 +35,7 @@
             label: "{{ vault_path_scenario.root }}/{{ vault_path_scenario.component }}"
 
       always:
-        - name: Удалить только сгенерированное дерево тестовых данных границы пути
+        - name: Удаление только сгенерированного дерева тестовых данных проверки путей
           ansible.builtin.file:
             path: "{{ vault_path_test_dir.path }}"
             state: absent

@@ -18,13 +18,13 @@ class ServiceApplyPkiContractTests(unittest.TestCase):
         with open(os.path.join(role_root, "defaults/main.yml"), encoding="utf-8") as handle:
             defaults = handle.read()
 
-        self.assertIn("Проверка наличия keytool перед материализацией хранилища PKCS12", tasks)
-        self.assertIn("Установить пакет Java с утилитой keytool, если она отсутствует", tasks)
-        self.assertIn("Перепроверить keytool после проверки среды выполнения Java", tasks)
+        self.assertIn("Проверка доступности keytool перед установкой Java", tasks)
+        self.assertIn("Установка пакета Java с утилитой keytool, если она отсутствует", tasks)
+        self.assertIn("Повторная проверка keytool после проверки среды выполнения Java", tasks)
         self.assertIn("PKI_KEYTOOL_UNAVAILABLE", tasks)
         self.assertIn("platform_pki_keytool_package: java-21-openjdk-headless", defaults)
-        self.assertLess(tasks.index("Требовать keytool перед материализацией хранилища PKCS12"),
-                        tasks.index("Материализация разрешенных запросов сертификатов PKI"))
+        self.assertLess(tasks.index("Проверка наличия keytool перед созданием хранилищ PKCS12"),
+                        tasks.index("Подготовка сертификатов по рассчитанным запросам PKI"))
         self.assertIn("keytool", stores)
 
     def test_pki_resolution_reloads_portable_manifest_for_stable_project_identity(self):
@@ -62,18 +62,18 @@ class ServiceApplyPkiContractTests(unittest.TestCase):
         self.assertIn("or\n          _platform_pki_reissue_requested", tasks)
         self.assertIn("not _platform_pki_reissue_required or _platform_pki_reissue_requested", tasks)
         self.assertIn("_platform_pki_reissue_active", tasks)
-        self.assertIn("Сохранить материал предыдущего запроса PKI перед явным повторным выпуском", tasks)
-        self.assertIn("Удалить замененный материал запроса PKI во время явного повторного выпуска", tasks)
+        self.assertIn("Сохранение файлов предыдущего запроса PKI перед перевыпуском", tasks)
+        self.assertIn("Удаление заменяемых файлов запроса PKI при разрешённом перевыпуске", tasks)
         self.assertIn("not _platform_pki_reissue_resumable and platform_pki_request_marker.stat.exists", tasks)
-        self.assertLess(tasks.index("Сохранить материал предыдущего запроса PKI перед явным повторным выпуском"),
-                        tasks.index("Запустить явно авторизованный повторный выпуск PKI после полного резервного копирования"))
-        self.assertLess(tasks.index("Запустить явно авторизованный повторный выпуск PKI после полного резервного копирования"),
-                        tasks.index("Удалить замененный материал запроса PKI во время явного повторного выпуска"))
-        self.assertLess(tasks.index("Отклонить изменение политики управляемого центра сертификации перед повторной очисткой"),
-                        tasks.index("Сохранить материал предыдущего запроса PKI перед явным повторным выпуском"))
-        self.assertLess(tasks.index("Отклонить изменение политики управляемого центра сертификации перед повторной очисткой"),
-                        tasks.index("Удалить замененный материал запроса PKI во время явного повторного выпуска"))
-        self.assertIn("Сохранить существующие производные хранилища PKCS12 перед явным повторным выпуском", tasks)
+        self.assertLess(tasks.index("Сохранение файлов предыдущего запроса PKI перед перевыпуском"),
+                        tasks.index("Запуск явно авторизованного повторного выпуска PKI после полного резервного копирования"))
+        self.assertLess(tasks.index("Запуск явно авторизованного повторного выпуска PKI после полного резервного копирования"),
+                        tasks.index("Удаление заменяемых файлов запроса PKI при разрешённом перевыпуске"))
+        self.assertLess(tasks.index("Отклонение изменения политики управляемого центра сертификации перед повторной очисткой"),
+                        tasks.index("Сохранение файлов предыдущего запроса PKI перед перевыпуском"))
+        self.assertLess(tasks.index("Отклонение изменения политики управляемого центра сертификации перед повторной очисткой"),
+                        tasks.index("Удаление заменяемых файлов запроса PKI при разрешённом перевыпуске"))
+        self.assertIn("Сохранение существующих производных хранилищ PKCS12 перед явным повторным выпуском", tasks)
         self.assertIn("platform_pki_request_files.results[item.index].stat.isreg | default(false)", tasks)
         self.assertIn("CERTIFICATE_REISSUE_REQUIRED", tasks)
 
@@ -93,7 +93,7 @@ class ServiceApplyPkiContractTests(unittest.TestCase):
         )
         with open(path, encoding="utf-8") as handle:
             tasks = handle.read()
-        render = tasks[tasks.index("- name: Отрисовка детерминированного экземпляра службы server.properties"):]
+        render = tasks[tasks.index("- name: Формирование server.properties для экземпляра Kafka"):]
         render = render[:render.index("\n- name:")]
         self.assertIn("diff: false", render)
         self.assertIn("no_log: true", render)
@@ -121,8 +121,8 @@ class ServiceApplyPkiContractTests(unittest.TestCase):
         self.assertNotIn("default((inventory_dir | dirname | basename), true)", apply_tasks)
         self.assertIn("platform_project_manifest_path", apply_tasks)
         self.assertIn("platform_project_root", apply_tasks)
-        self.assertIn("Выбрать эффективное желаемое состояние Kafka для материализации на стороне контроллера", apply_tasks)
-        self.assertIn("Передать служебное состояние идентификаторов Kafka на целевые узлы", apply_tasks)
+        self.assertIn("Выбор действующих параметров подготовки Kafka на контроллере", apply_tasks)
+        self.assertIn("Передача служебного состояния идентификаторов Kafka на целевые узлы", apply_tasks)
         self.assertNotIn("Refresh inventory after canonical identity persistence", apply_tasks)
         aggregate = os.path.join(ROOT, "services/kafka/playbooks/aggregate_discovery.yml")
         with open(aggregate, encoding="utf-8") as handle:
@@ -130,7 +130,7 @@ class ServiceApplyPkiContractTests(unittest.TestCase):
         self.assertIn("dict((groups['platform_targets'] | default([]) | sort) | zip", aggregate_tasks)
         self.assertIn("map('extract', hostvars, 'platform_kafka_identity_discovery')", aggregate_tasks)
         self.assertNotIn("platform_kafka_discovery_by_host | default({}) | combine", apply_tasks)
-        materializer = apply_tasks[apply_tasks.index("Материализация управляемых удостоверений Kafka перед изменением"):apply_tasks.index("Сохранить рассчитанные идентификаторы Kafka")]
+        materializer = apply_tasks[apply_tasks.index("Подготовка идентификаторов Kafka перед внесением изменений"):apply_tasks.index("Сохранение рассчитанных идентификаторов Kafka")]
         self.assertIn("changed_when: false", materializer)
 
     def test_tls_service_apply_playbooks_use_project_wide_pki_before_role_reconcile(self):
@@ -184,7 +184,7 @@ class ServiceApplyPkiContractTests(unittest.TestCase):
         with open(postgresql_main, encoding="utf-8") as handle:
             postgresql_tasks = handle.read()
         self.assertLess(
-            postgresql_tasks.index("Выбрать план PKI для PostgreSQL до внесения изменений"),
+            postgresql_tasks.index("Выбор плана PKI для PostgreSQL до внесения изменений"),
             postgresql_tasks.index("Доставка выбранных автономных артефактов PostgreSQL"),
         )
 
@@ -198,7 +198,7 @@ class ServiceApplyPkiContractTests(unittest.TestCase):
         self.assertIn('platform_execution_service_deployment: "{{ _platform_haproxy_local_deployments[0].key }}"', haproxy_tasks)
         self.assertIn("platform_haproxy_phase == 'prepare'", haproxy_tasks)
         self.assertLess(
-            haproxy_tasks.index("Выбрать точный потребительский план PKI перед изменением HAProxy"),
+            haproxy_tasks.index("Выбор точного потребительского плана PKI перед изменением HAProxy"),
             haproxy_tasks.index("Доставка выбранных автономных артефактов HAProxy"),
         )
 
@@ -209,8 +209,8 @@ class ServiceApplyPkiContractTests(unittest.TestCase):
         with open(redis_main, encoding="utf-8") as handle:
             redis_tasks = handle.read()
         self.assertLess(
-            redis_tasks.index("Разрешить материал Redis TLS"),
-            redis_tasks.index("Установить утвержденный пакет Redis из настроенного репозитория"),
+            redis_tasks.index("Выбор TLS-файлов Redis"),
+            redis_tasks.index("Установка утвержденного пакета Redis из настроенного репозитория"),
         )
 
     def test_runtime_role_variable_guard_projects_only_the_private_host_map(self):
@@ -232,7 +232,7 @@ class ServiceApplyPkiContractTests(unittest.TestCase):
         with open(loader, encoding="utf-8") as handle:
             loader_tasks = handle.read()
         self.assertIn("import_playbook: load_generated_state.yml", verify_tasks)
-        self.assertIn("Проецировать созданное состояние Kafka, принадлежащее контроллеру, на узлы проверки", verify_tasks)
+        self.assertIn("Передача подготовленного контроллером состояния Kafka на узлы проверки", verify_tasks)
         self.assertIn("platform_generated_state_path", loader_tasks)
         self.assertIn("KAFKA_GENERATED_STATE_REQUIRED", loader_tasks)
         self.assertIn("_platform_kafka_generated_state_document.platform_generated_state", loader_tasks)

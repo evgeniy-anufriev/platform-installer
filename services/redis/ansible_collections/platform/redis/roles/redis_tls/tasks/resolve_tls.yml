@@ -1,12 +1,12 @@
 ---
-- name: Выбрать эффективный план материализации PKI для Redis TLS
+- name: Выбор действующего плана PKI для Redis TLS
   ansible.builtin.include_role:
     name: platform.core.pki_materialize
     tasks_from: select_consumer_plan.yml
   vars:
     platform_pki_consumer_tls_profile_id: "{{ platform_redis_tls_profile }}"
 
-- name: Проверка материализованных входов Redis TLS
+- name: Проверка подготовленных TLS-файлов Redis
   ansible.builtin.stat:
     path: "{{ platform_pki_selected_consumer_plan.targetDirectory }}/{{ item }}"
     get_mime: false
@@ -15,7 +15,7 @@
   loop: [ca-chain.pem, certificate.pem, private-key.pem]
   register: _platform_redis_tls_inputs
 
-- name: Требовать полные материализованные входные данные Redis TLS
+- name: Проверка наличия всех подготовленных TLS-файлов Redis
   ansible.builtin.assert:
     that: _platform_redis_tls_inputs.results | map(attribute='stat.exists') | list | min
     fail_msg: REDIS_PKI_MATERIALIZATION_REQUIRED

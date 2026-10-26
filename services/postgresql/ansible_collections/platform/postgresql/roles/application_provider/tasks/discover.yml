@@ -10,12 +10,12 @@
   changed_when: false
   no_log: true
 
-- name: Требуется ровно один экземпляр службы данных с возможностью записи
+- name: Проверка наличия ровно одного экземпляра PostgreSQL, доступного для записи
   ansible.builtin.assert:
     that: application_provider_members.results | selectattr('stdout', 'equalto', 'writable') | list | length == 1
     fail_msg: APPLICATION_PROVIDER_WRITABLE_MEMBER_INVALID
 
-- name: Сохранить выбранный экземпляр провайдера PostgreSQL в контексте операции
+- name: Сохранение выбранного экземпляра провайдера PostgreSQL в контексте операции
   ansible.builtin.set_fact:
     platform_application_provider_runtime: >-
       {{ platform_application_provider_runtime | combine({platform_postgresql_application_job.providerId:

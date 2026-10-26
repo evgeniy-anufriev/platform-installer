@@ -1,5 +1,5 @@
 ---
-- name: "Определить пути библиотеки для самостоятельного запуска Verify"
+- name: "Определение путей библиотеки для самостоятельного запуска Verify"
   ansible.builtin.include_tasks: resolve_paths.yml
   vars:
     application_path_home: "{{ getent_passwd[application_runtime_job.account][4] }}"
@@ -14,7 +14,7 @@
   register: application_verified_config_trees
   no_log: true
 
-- name: Потребовать, чтобы объявленные деревья конфигурации существовали в виде каталогов
+- name: Проверка наличия объявленных каталогов конфигурации
   ansible.builtin.assert:
     that:
       - item.stat.isdir | default(false)
@@ -23,7 +23,7 @@
   loop: "{{ application_verified_config_trees.results }}"
   no_log: true
 
-- name: Проверка точного владения и готовности образа приложения
+- name: Проверка владельца и готовности образа приложения
   tags: [platform_application_instance_state]
   ansible.builtin.command:
     argv: [docker, container, inspect, "{{ application_runtime_job.placement.containerName }}"]
@@ -49,7 +49,7 @@
   delay: "{{ application_runtime_job.settings.readiness.delay | default(2) }}"
   no_log: true
 
-- name: Проверка входа в систему AppRole и точное чтение секрета после готовности контейнера
+- name: Проверка входа через AppRole и чтения выбранного секрета после готовности контейнера
   ansible.builtin.include_role:
     name: platform.vault.application_provider
     tasks_from: verify

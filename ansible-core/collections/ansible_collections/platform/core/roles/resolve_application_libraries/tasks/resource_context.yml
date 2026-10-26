@@ -1,5 +1,5 @@
 ---
-- name: Передать выбранные ресурсы провайдеру соединений приложения
+- name: Передача выбранных ресурсов провайдеру соединений приложения
   ansible.builtin.set_fact:
     "{{ 'application_topics' if _application_resources[resource_id].kind == 'kafka.topic' else 'application_databases' }}": >-
       {{ (application_topics if _application_resources[resource_id].kind == 'kafka.topic' else application_databases) |

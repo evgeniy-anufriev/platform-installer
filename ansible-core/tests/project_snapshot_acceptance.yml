@@ -1,10 +1,10 @@
 ---
-- name: Проверить ProjectSnapshot без изменений
+- name: Проверка ProjectSnapshot без изменений
   hosts: localhost
   connection: local
   gather_facts: false
   tasks:
-    - name: Дважды запросить один и тот же проект
+    - name: Двукратный запрос одного и того же проекта
       platform.core.project_snapshot:
         service_catalog_path: "{{ platform_service_catalog_path }}"
         installer_owned_paths:
@@ -14,7 +14,7 @@
           - inventory/host_vars/node3/platform-installer.yml
       register: first_snapshot
 
-    - name: Повторите запрос
+    - name: Повторение запроса
       platform.core.project_snapshot:
         service_catalog_path: "{{ platform_service_catalog_path }}"
         installer_owned_paths:
@@ -52,7 +52,7 @@
           - "'runtime:pki-store-password' not in (first_snapshot.snapshot | to_json)"
       run_once: true
 
-    - name: "Проверить структурированную ошибку открытия несуществующего проекта"
+    - name: "Проверка структурированной ошибки открытия несуществующего проекта"
       platform.core.project_snapshot:
         project_root: /path/that/does/not/exist
         service_catalog_path: "{{ platform_service_catalog_path }}"

@@ -9,7 +9,7 @@
   register: application_archive_recovery
   no_log: true
 
-- name: Удалить неполный новый архив перед восстановлением предыдущего
+- name: Удаление неполного нового архива перед восстановлением предыдущего
   ansible.builtin.file:
     path: "{{ application_runtime_job.instancePath }}/config/{{ application_archive.destination }}"
     state: absent
@@ -28,7 +28,7 @@
   when: application_archive_recovery.results[1].stat.isdir | default(false)
   no_log: true
 
-- name: Сделать недействительным маркер дайджеста после восстановления
+- name: Сброс маркера контрольной суммы после восстановления
   ansible.builtin.file:
     path: "{{ application_runtime_job.instancePath }}/config/.archive-{{ application_archive.destination | hash('sha256') }}.sha256"
     state: absent
@@ -45,14 +45,14 @@
   register: application_archive_installed
   no_log: true
 
-- name: Прочитать установленный маркер дайджеста архива
+- name: Чтение установленного маркера дайджеста архива
   ansible.builtin.slurp:
     src: "{{ application_runtime_job.instancePath }}/config/.archive-{{ application_archive.destination | hash('sha256') }}.sha256"
   when: application_archive_installed.results[1].stat.isreg | default(false)
   register: application_archive_marker
   no_log: true
 
-- name: Заменять содержимое архива только при изменении его дайджеста или каталога
+- name: Замена содержимого архива только при изменении его дайджеста или каталога
   ansible.builtin.include_tasks: replace_archive.yml
   when: >-
     not (application_archive_installed.results[0].stat.isdir | default(false)) or

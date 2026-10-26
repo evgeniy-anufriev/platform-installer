@@ -1,24 +1,24 @@
 ---
-- name: Найти установленную стандартную системную службу сервера ClickHouse
+- name: Поиск установленной стандартной системной службы сервера ClickHouse
   ansible.builtin.command:
     argv: [systemctl, show, clickhouse-server.service, --property=FragmentPath, --value]
   register: _platform_clickhouse_stock_fragment
   changed_when: false
 
-- name: Потребовать реальный стандартный фрагмент службы systemd перед изменением его включения
+- name: Проверка штатного unit-файла перед изменением автозапуска ClickHouse
   ansible.builtin.assert:
     that:
       - _platform_clickhouse_stock_fragment.stdout is match('^/.+/clickhouse-server[.]service$')
     fail_msg: CLICKHOUSE_STOCK_UNIT_OWNERSHIP_UNCONFIRMED
 
-- name: Определить RPM, владеющий стандартной системной службой сервера ClickHouse
+- name: Определение RPM-пакета штатной службы сервера ClickHouse
   ansible.builtin.command:
     argv: [rpm, -qf, --qf, '%{NAME}-%{VERSION}-%{RELEASE}.%{ARCH}', "{{ _platform_clickhouse_stock_fragment.stdout }}"]
   register: _platform_clickhouse_stock_unit_owner
   changed_when: false
   failed_when: false
 
-- name: Отклонить изменение стандартной службы systemd вне зафиксированного RPM-пакета сервера ClickHouse
+- name: Отклонение изменения стандартной службы systemd вне зафиксированного RPM-пакета сервера ClickHouse
   ansible.builtin.assert:
     that:
       - _platform_clickhouse_stock_unit_owner.rc == 0
@@ -32,24 +32,24 @@
   changed_when: false
   failed_when: false
 
-- name: Сохранить активный стандартный сервер ClickHouse для явного разрешения конфликтов
+- name: Сохранение активного стандартного сервера ClickHouse для явного разрешения конфликтов
   ansible.builtin.assert:
     that: _platform_clickhouse_stock_after_install.stdout != 'active'
     fail_msg: CLICKHOUSE_FOREIGN_UNIT_ACTIVE
 
-- name: Отключить неактивную стандартную системную службу сервера ClickHouse, предоставляемую RPM
+- name: Отключение неактивной штатной службы сервера ClickHouse из RPM-пакета
   ansible.builtin.systemd:
     name: clickhouse-server.service
     enabled: false
 
-- name: Убедиться, что стандартная системная служба RPM осталась неактивной
+- name: Проверка того, что стандартная системная служба RPM осталась неактивной
   ansible.builtin.command:
     argv: [systemctl, is-active, clickhouse-server.service]
   register: _platform_clickhouse_stock_after_disable
   changed_when: false
   failed_when: false
 
-- name: Отказаться от одновременной активации стандартной службы systemd RPM
+- name: Запрет одновременного запуска штатной службы ClickHouse из RPM-пакета
   ansible.builtin.assert:
     that: _platform_clickhouse_stock_after_disable.stdout != 'active'
     fail_msg: CLICKHOUSE_FOREIGN_UNIT_ACTIVE

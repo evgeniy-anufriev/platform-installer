@@ -1,18 +1,18 @@
 ---
-- name: Установить настроенные пакеты Docker без прав root для RED OS
+- name: Установка настроенных пакетов Docker без прав root для RED OS
   ansible.builtin.dnf:
     name: "{{ platform_docker_packages }}"
     state: present
     update_cache: false
 
-- name: "Проверить, что установка пакетов не запустила Docker с правами root"
+- name: "Проверка того, что установка пакетов не запустила Docker с правами root"
   ansible.builtin.command:
     argv: [systemctl, is-active, docker.service, docker.socket]
   register: _platform_docker_rootful_postinstall
   changed_when: false
   failed_when: false
 
-- name: Отказ от конфликта корневого демона /socket после установки
+- name: Отклонение конфликта с демоном или сокетом Docker с правами root после установки
   ansible.builtin.assert:
     that: "'active' not in _platform_docker_rootful_postinstall.stdout_lines"
     fail_msg: DOCKER_ROOTFUL_CONFLICT
@@ -26,7 +26,7 @@
     get_checksum: false
   register: _platform_docker_lxc_helper
 
-- name: Требовать доверенный исполняемый файл-помощник LXC
+- name: Проверка доверенного исполняемого файла помощника LXC
   ansible.builtin.assert:
     that:
       - _platform_docker_lxc_helper.stat.isreg
@@ -35,7 +35,7 @@
       - _platform_docker_lxc_helper.stat.mode in ['4755', '4750']
     fail_msg: DOCKER_LXC_HELPER_UNSAFE
 
-- name: Проверить необходимые исполняемые файлы Docker без прав root
+- name: Проверка необходимых исполняемых файлов Docker без прав root
   ansible.builtin.stat:
     path: "{{ item }}"
     follow: false
@@ -45,7 +45,7 @@
   loop: [/usr/bin/dockerd-rootless.sh, /usr/bin/rootlesskit, /usr/bin/newuidmap, /usr/bin/newgidmap, /usr/libexec/docker/cli-plugins/docker-compose]
   register: _platform_docker_binaries
 
-- name: Проверить наличие всех исполняемых файлов Docker без прав root и Compose
+- name: Проверка наличия всех исполняемых файлов Docker без прав root и Compose
   ansible.builtin.assert:
     that: _platform_docker_binaries.results | rejectattr('stat.isreg', 'equalto', true) | list | length == 0
     fail_msg: DOCKER_RUNTIME_PACKAGE_INCOMPLETE
@@ -141,13 +141,13 @@
       - _platform_docker_home is match('^/home/[a-z_][a-z0-9_-]{0,31}$')
     fail_msg: DOCKER_ACCOUNT_INELIGIBLE
 
-- name: Чтение собственного подчиненного распределения UID и GID
+- name: Чтение выделенных пользователю диапазонов subordinate UID и GID
   ansible.builtin.slurp:
     src: "{{ item }}"
   loop: [/etc/subuid, /etc/subgid]
   register: _platform_docker_subid_files
 
-- name: Требовать подчиненные диапазоны, выделенные ОС для выбранной учетной записи
+- name: Проверка диапазонов subordinate UID и GID, выделенных пользователю
   ansible.builtin.assert:
     that:
       - >-
@@ -178,7 +178,7 @@
   failed_when: _platform_docker_existing_usernet.rc not in [0, 1, 2]
   when: _platform_docker_guard_file.stat.exists
 
-- name: Отклонить конфликтующую запись сети пользователя LXC
+- name: Отклонение конфликтующей записи сети пользователя LXC
   ansible.builtin.assert:
     that:
       - >-
@@ -188,7 +188,7 @@
         [platform_docker_account_name ~ ' veth ' ~ platform_docker_lxc_bridge ~ ' ' ~ (platform_docker_lxc_veth_limit | string)]
     fail_msg: DOCKER_LXC_USERNET_CONFLICT
 
-- name: Добавить распределение пользовательской сети LXC только для выбранной учетной записи
+- name: Добавление распределения пользовательской сети LXC только для выбранной учетной записи
   ansible.builtin.lineinfile:
     path: /etc/lxc/lxc-usernet
     create: true
@@ -207,7 +207,7 @@
     get_checksum: false
   register: _platform_docker_lxc_dnsmasq_file
 
-- name: Отклонить существующее небезопасное переопределение LXC dnsmasq перед его чтением
+- name: Отклонение существующего небезопасного переопределения LXC dnsmasq перед его чтением
   ansible.builtin.assert:
     that:
       - not (_platform_docker_lxc_dnsmasq_file.stat.islnk | default(false))
@@ -215,13 +215,13 @@
       - not _platform_docker_lxc_dnsmasq_file.stat.exists or _platform_docker_lxc_dnsmasq_file.stat.pw_name == 'root'
     fail_msg: DOCKER_LXC_DNSMASQ_CONFIG_NOT_OWNED
 
-- name: Прочитать существующее переопределение LXC Docker, принадлежащее Docker
+- name: Чтение управляемых настроек LXC для Docker
   ansible.builtin.slurp:
     src: "/etc/lxc/{{ platform_docker_name }}-dnsmasq.conf"
   register: _platform_docker_lxc_dnsmasq_content
   when: _platform_docker_lxc_dnsmasq_file.stat.exists
 
-- name: Отказаться от замены неуправляемого переопределения LXC dnsmasq
+- name: Запрет замены неуправляемых дополнительных настроек LXC dnsmasq
   ansible.builtin.assert:
     that:
       - not (_platform_docker_lxc_dnsmasq_file.stat.islnk | default(false))
@@ -244,7 +244,7 @@
   changed_when: false
   failed_when: _platform_docker_lxc_dhcp_config.rc not in [0, 1]
 
-- name: Отказаться от замены неуправляемой конфигурации LXC dnsmasq
+- name: Запрет замены неуправляемой конфигурации LXC dnsmasq
   ansible.builtin.assert:
     that:
       - >-
@@ -253,7 +253,7 @@
         ['LXC_DHCP_CONFILE=/etc/lxc/' ~ platform_docker_name ~ '-dnsmasq.conf']
     fail_msg: DOCKER_LXC_DHCP_CONFIG_CONFLICT
 
-- name: "Проверить файл upstream DNS-серверов systemd-resolved"
+- name: "Проверка файла upstream DNS-серверов systemd-resolved"
   ansible.builtin.stat:
     path: /run/systemd/resolve/resolv.conf
     follow: true
@@ -262,12 +262,12 @@
     get_checksum: false
   register: _platform_docker_upstream_resolver_file
 
-- name: "Прочитать адреса DNS-серверов узла для DHCP сети LXC"
+- name: "Чтение адресов DNS-серверов узла для DHCP сети LXC"
   ansible.builtin.slurp:
     src: "{{ '/run/systemd/resolve/resolv.conf' if _platform_docker_upstream_resolver_file.stat.isreg | default(false) else '/etc/resolv.conf' }}"
   register: _platform_docker_upstream_resolvers
 
-- name: Выбрать явный или целевой адрес Docker LXC DNS
+- name: Выбор явного или целевого адреса Docker LXC DNS
   ansible.builtin.set_fact:
     _platform_docker_lxc_dns_server: >-
       {{ platform_docker_lxc_dns_server if platform_docker_lxc_dns_server | length > 0 else
@@ -276,7 +276,7 @@
            reject('match', '^(127[.]|0[.]0[.]0[.]0$)') | list | first) | default('')) }}
   changed_when: false
 
-- name: "Проверить IPv4-адрес DNS-сервера вне loopback-диапазона для DHCP сети LXC"
+- name: "Проверка IPv4-адреса DNS-сервера вне loopback-диапазона для DHCP сети LXC"
   ansible.builtin.assert:
     that:
       - _platform_docker_lxc_dns_server is match('^(?:(?:25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})[.]){3}(?:25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})$')
@@ -284,7 +284,7 @@
       - _platform_docker_lxc_dns_server != '0.0.0.0'
     fail_msg: DOCKER_LXC_DNS_SERVER_UNAVAILABLE
 
-- name: Сохранить LXC DHCP, разрешив существующему хосту DNS владеть портом 53
+- name: Сохранение LXC DHCP, разрешив существующему хосту DNS владеть портом 53
   ansible.builtin.copy:
     dest: "/etc/lxc/{{ platform_docker_name }}-dnsmasq.conf"
     owner: root
@@ -296,14 +296,14 @@
       dhcp-option=option:dns-server,{{ _platform_docker_lxc_dns_server }}
   register: _platform_docker_lxc_dnsmasq_config_change
 
-- name: Выбрать конфигурацию LXC dnsmasq только для DHCP без замены других настроек
+- name: Выбор конфигурации LXC dnsmasq только для DHCP без замены других настроек
   ansible.builtin.lineinfile:
     path: /etc/sysconfig/lxc-net
     regexp: '^LXC_DHCP_CONFILE='
     line: "LXC_DHCP_CONFILE=/etc/lxc/{{ platform_docker_name }}-dnsmasq.conf"
   register: _platform_docker_lxc_dnsmasq_reference_change
 
-- name: Перезапустить сеть LXC только при изменении ее управляемой конфигурации DHCP
+- name: Перезапуск сети LXC только при изменении её конфигурации DHCP
   ansible.builtin.systemd:
     name: lxc-net.service
     state: restarted
@@ -311,18 +311,18 @@
     _platform_docker_lxc_dnsmasq_config_change is changed or
     _platform_docker_lxc_dnsmasq_reference_change is changed
 
-- name: Убедиться, что сеть LXC включена и активна до Docker
+- name: Проверка того, что сеть LXC включена и активна до Docker
   ansible.builtin.systemd:
     name: lxc-net.service
     enabled: true
     state: started
 
-- name: Доказать, что настроенный мост LXC активен
+- name: Проверка того, что настроенный мост LXC активен
   ansible.builtin.command:
     argv: [ip, link, show, "{{ platform_docker_lxc_bridge }}"]
   changed_when: false
 
-- name: Включить диспетчер пользователей учетной записи без сеанса входа в систему
+- name: Включение диспетчера пользователей учетной записи без сеанса входа в систему
   ansible.builtin.command:
     argv: [loginctl, enable-linger, "{{ platform_docker_account_name }}"]
     creates: "/var/lib/systemd/linger/{{ platform_docker_account_name }}"
@@ -343,7 +343,7 @@
     - "{{ _platform_docker_home }}/.config/docker/pki"
   register: _platform_docker_home_components
 
-- name: Отклонить пути учётной записи Docker при символических ссылках или другом владельце
+- name: Отклонение путей учётной записи Docker при символических ссылках или другом владельце
   ansible.builtin.assert:
     that:
       - not (item.stat.islnk | default(false))
@@ -366,7 +366,7 @@
     - "{{ _platform_docker_home }}/.config/systemd"
     - "{{ _platform_docker_home }}/.config/systemd/user"
 
-- name: Создание частной конфигурации Docker и каталогов PKI
+- name: Создание защищённых каталогов конфигурации Docker и PKI
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
@@ -377,7 +377,7 @@
     - "{{ _platform_docker_home }}/.config/docker"
     - "{{ _platform_docker_home }}/.config/docker/pki"
 
-- name: Привязать частный каталог Docker TLS
+- name: Привязка защищённого каталога Docker TLS
   ansible.builtin.set_fact:
     _platform_docker_private_tls_dir: "{{ _platform_docker_home }}/.config/docker/pki"
   changed_when: false
@@ -385,10 +385,10 @@
 - name: Настройка корня данных Docker
   ansible.builtin.include_tasks: data_root.yml
 
-- name: Настроить постоянное окружение оболочки для Docker без прав root
+- name: Настройка постоянного окружения оболочки для Docker без прав root
   ansible.builtin.include_tasks: shell_environment.yml
 
-- name: Скопировать материал PKI в защищённый runtime-каталог учётной записи
+- name: Копирование PKI-файлов в защищённый runtime-каталог учётной записи
   ansible.builtin.copy:
     src: "{{ _platform_docker_tls_source }}/{{ item }}"
     dest: "{{ _platform_docker_private_tls_dir }}/{{ item }}"
@@ -398,7 +398,7 @@
     mode: '0600'
   loop: [ca-chain.pem, certificate.pem, private-key.pem]
   no_log: true
-  notify: Перезапустить мост Docker без прав root
+  notify: Перезапуск системной службы пользовательского Docker
 
 - name: Проверка существующей пользовательской службы systemd Docker на наличие неуправляемого владения
   ansible.builtin.stat:
@@ -409,13 +409,13 @@
     get_checksum: false
   register: _platform_docker_existing_user_unit
 
-- name: Прочитать существующую пользовательскую службу systemd Docker перед заменой
+- name: Чтение существующей пользовательской службы systemd Docker перед заменой
   ansible.builtin.slurp:
     src: "{{ _platform_docker_home }}/.config/systemd/user/docker.service"
   register: _platform_docker_existing_user_unit_content
   when: _platform_docker_existing_user_unit.stat.exists
 
-- name: Отклонить службу systemd существующего пользователя Docker, не являющегося владельцем
+- name: Отклонение чужой пользовательской службы systemd Docker
   ansible.builtin.assert:
     that:
       - not (_platform_docker_existing_user_unit.stat.islnk | default(false))
@@ -424,14 +424,14 @@
         (_platform_docker_existing_user_unit_content.content | b64decode).startswith('# Platform Installer V2 managed rootless Docker user unit')
     fail_msg: DOCKER_USER_UNIT_NOT_OWNED
 
-- name: Установить управляемую пользовательскую службу Docker без прав root
+- name: Установка управляемой пользовательской службы Docker без прав root
   ansible.builtin.template:
     src: docker.service.j2
     dest: "{{ _platform_docker_home }}/.config/systemd/user/docker.service"
     owner: "{{ platform_docker_account_name }}"
     group: "{{ _platform_docker_gid }}"
     mode: '0644'
-  notify: Перезапустить мост Docker без прав root
+  notify: Перезапуск системной службы пользовательского Docker
 
 - name: Проверка существующих системных назначений службы systemd Docker
   ansible.builtin.include_tasks: guard_root_destination.yml
@@ -444,34 +444,34 @@
   loop_control:
     label: "{{ item.path }}"
 
-- name: Установить цель готовности системы LXC
+- name: Установка цели systemd для готовности LXC
   ansible.builtin.template:
     src: platform-docker-lxc-ready.target.j2
     dest: "/etc/systemd/system/{{ platform_docker_name }}-lxc-ready.target"
     owner: root
     group: root
     mode: '0644'
-  notify: Перезапустить мост Docker без прав root
+  notify: Перезапуск системной службы пользовательского Docker
 
-- name: "Установить системную службу запуска пользовательского Docker"
+- name: "Установка системной службы запуска пользовательского Docker"
   ansible.builtin.template:
     src: platform-docker-rootless-bridge.service.j2
     dest: "/etc/systemd/system/{{ platform_docker_name }}-rootless-{{ platform_docker_account_name }}.service"
     owner: root
     group: root
     mode: '0644'
-  notify: Перезапустить мост Docker без прав root
+  notify: Перезапуск системной службы пользовательского Docker
 
-- name: "Перечитать конфигурацию служб systemd"
+- name: "Перечитывание unit-файлов systemd"
   ansible.builtin.systemd:
     daemon_reload: true
 
-- name: Убедиться, что менеджер пользователей выбранной учетной записи активен
+- name: Проверка того, что менеджер пользователей выбранной учетной записи активен
   ansible.builtin.systemd:
     name: "user@{{ _platform_docker_uid }}.service"
     state: started
 
-- name: Перечитать определения пользовательских служб systemd выбранной учётной записи
+- name: Перечитывание пользовательских unit-файлов systemd выбранной учётной записи
   ansible.builtin.command:
     argv: [systemctl, --user, daemon-reload]
   become: true
@@ -481,7 +481,7 @@
     DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/{{ _platform_docker_uid }}/bus"
   changed_when: false
 
-- name: Отключить прямой автозапуск Docker в диспетчере пользователей
+- name: Отключение прямого автозапуска Docker в диспетчере пользователей
   ansible.builtin.command:
     argv: [systemctl, --user, disable, docker.service]
   become: true
@@ -498,11 +498,11 @@
     enabled: true
     state: started
 
-- name: Включить и активировать мост выбранной учетной записи после цели
+- name: Включение автозапуска и запуск системной службы пользовательского Docker после готовности LXC
   ansible.builtin.systemd:
     name: "{{ platform_docker_name }}-rootless-{{ platform_docker_account_name }}.service"
     enabled: true
     state: started
 
-- name: Применить ожидающий перезапуск Docker только после существования цели и моста
+- name: Выполнение отложенного перезапуска Docker после подготовки зависимых служб
   ansible.builtin.meta: flush_handlers

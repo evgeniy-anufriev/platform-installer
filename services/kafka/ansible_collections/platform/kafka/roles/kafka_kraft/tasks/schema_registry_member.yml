@@ -1,5 +1,5 @@
 ---
-- name: Разрешить точный экземпляр службы Kafka PKI для сервера и клиента реестра
+- name: Определение точного экземпляра службы Kafka PKI для сервера и клиента реестра
   ansible.builtin.include_tasks: resolve_tls_runtime.yml
   vars:
     kafka_tls_member: >-
@@ -7,7 +7,7 @@
           | selectattr('deployment_id', 'equalto', registry_instance.deployment_id) | first)
          | combine({'config_directory': registry_instance.config_directory, 'tls_profile': registry_instance.tls_profile}) }}
 
-- name: Перепроверить владение корнем реестра перед подготовкой экземпляра службы
+- name: Повторная проверка владения корнем реестра перед подготовкой экземпляра службы
   ansible.builtin.include_tasks: schema_registry_ownership.yml
   vars:
     _platform_kafka_registry_local: "{{ [registry_instance] }}"
@@ -22,7 +22,7 @@
   loop: "{{ registry_instance.managed_paths }}"
   when: not platform_kafka_verify_only
 
-- name: Пометить каждый новый корень экземпляра службы реестра независимо
+- name: Маркировка каждого нового корня экземпляра службы реестра независимо
   ansible.builtin.copy:
     content: "{{ registry_instance.ownership_marker }}\n"
     dest: "{{ item }}/ownership-marker"
@@ -45,7 +45,7 @@
   no_log: true
   when: not platform_kafka_verify_only
 
-- name: Материализовать или проверить принадлежащий реестру идентификатор PEM
+- name: Подготовка или проверка PEM-файлов Schema Registry
   ansible.builtin.include_tasks: pem_identity.yml
   vars:
     kafka_pem_source_directory: "{{ _platform_kafka_tls_runtime.targetDirectory }}"
@@ -56,7 +56,7 @@
     kafka_pem_verify_only: "{{ platform_kafka_verify_only }}"
   when: _platform_kafka_tls_runtime.storeType == 'PEM'
 
-- name: Сохранить сигнал изменения реестра PEM
+- name: Сохранение сигнала изменения реестра PEM
   ansible.builtin.set_fact:
     _platform_kafka_registry_pem_changed: "{{ _platform_kafka_tls_runtime.storeType == 'PEM' and (_platform_kafka_pem_identity_write.changed | default(false) | bool) }}"
   changed_when: false
@@ -69,7 +69,7 @@
   no_log: true
   when: _platform_kafka_tls_runtime.storeType == 'PKCS12'
 
-- name: "Проверить непустой пароль хранилища Schema Registry"
+- name: "Проверка непустого пароля хранилища Schema Registry"
   ansible.builtin.assert:
     that:
       - _platform_kafka_registry_password | length > 0
@@ -77,7 +77,7 @@
   no_log: true
   when: _platform_kafka_tls_runtime.storeType == 'PKCS12'
 
-- name: Отрисовка защищенного реестра и свойств Kafka CLI
+- name: Формирование защищённых файлов настроек Schema Registry и Kafka CLI
   ansible.builtin.template:
     src: "{{ item.source }}"
     dest: "{{ registry_instance.config_directory }}/{{ item.destination }}"
@@ -100,7 +100,7 @@
   register: _platform_kafka_registry_properties_state
   no_log: true
 
-- name: Требовать точную конфигурацию реестра и ограниченное владение
+- name: Проверка контрольной суммы, владельца и прав конфигурации Schema Registry
   ansible.builtin.assert:
     that:
       - _platform_kafka_registry_properties_state.stat.isreg | default(false)
@@ -129,10 +129,10 @@
       _platform_kafka_registry_brokers_ready.stdout | regex_findall('\(id: ([0-9]+)') | map('int') | list) | length) == 0
   no_log: true
 
-- name: "Проверить или создать служебный топик схем Schema Registry"
+- name: "Проверка или создание служебного топика схем Schema Registry"
   ansible.builtin.include_tasks: schema_registry_topic.yml
 
-- name: Отрисовка принадлежащей системной службы реестра
+- name: Формирование файла службы systemd для Schema Registry
   ansible.builtin.template:
     src: schema-registry.service.j2
     dest: "{{ registry_instance.unit_path }}"
@@ -142,7 +142,7 @@
   register: _platform_kafka_registry_unit
   when: not platform_kafka_verify_only
 
-- name: Запустить реестр и перезапустить его только при изменении входных данных
+- name: Запуск Schema Registry или перезапуск при изменении конфигурации или PKI
   ansible.builtin.systemd:
     name: "{{ registry_instance.unit_name }}"
     daemon_reload: "{{ _platform_kafka_registry_unit.changed }}"
@@ -150,14 +150,14 @@
     state: "{{ 'restarted' if (_platform_kafka_registry_unit.changed or _platform_kafka_registry_properties.changed or _platform_kafka_registry_pki_copy.changed or _platform_kafka_registry_pem_changed) else 'started' }}"
   when: not platform_kafka_verify_only
 
-- name: Проверить, активна ли служба реестра systemd
+- name: Проверка файла службы Schema Registry без перехода по символическим ссылкам
   ansible.builtin.stat:
     path: "{{ registry_instance.unit_path }}"
     follow: false
     checksum_algorithm: sha256
   register: _platform_kafka_registry_unit_state
 
-- name: Требовать точную конфигурацию службы реестра systemd
+- name: Проверка соответствия unit-файла заданной конфигурации Schema Registry
   ansible.builtin.assert:
     that:
       - _platform_kafka_registry_unit_state.stat.isreg | default(false)
@@ -165,7 +165,7 @@
       - _platform_kafka_registry_unit_state.stat.checksum == (lookup('ansible.builtin.template', 'schema-registry.service.j2') | hash('sha256'))
     fail_msg: SCHEMA_REGISTRY_UNIT_DRIFT
 
-- name: Проверить, работает ли служба реестра systemd
+- name: Проверка того, работает ли служба реестра systemd
   ansible.builtin.command:
     argv: [systemctl, is-active, "{{ registry_instance.unit_name }}"]
   changed_when: false
@@ -189,7 +189,7 @@
   delay: "{{ platform_kafka_schema_registry_readiness_delay }}"
   until: _platform_kafka_registry_http_ready.status | default(0) == 200
 
-- name: "Сбросить временную переменную пароля"
+- name: "Сброс временной переменной пароля"
   ansible.builtin.set_fact:
     _platform_kafka_registry_password: ''
   no_log: true

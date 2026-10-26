@@ -15,8 +15,8 @@ TASKS = REPO / "ansible-core/collections/ansible_collections/platform/core/roles
 ACCOUNT = "platform-docker"
 HOSTS = ("discovery_target_a", "discovery_target_b")
 ROUTING_NAMES = (
-    "Привязать учётную запись операции приложения и ключ обнаружения конфигурации Docker",
-    "Однократно проверить выбранные учётные записи и Docker без прав root",
+    "Привязка учётной записи операции приложения и ключа обнаружения конфигурации Docker",
+    "Однократная проверка выбранных учётных записей и Docker без прав root",
 )
 DISCOVERY_NAME = "Обнаружение выбранной учетной записи Docker"
 

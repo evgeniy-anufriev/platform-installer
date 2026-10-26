@@ -19,7 +19,7 @@ class RedisContractTests(unittest.TestCase):
     def test_redis_quoted_paths_preserve_exact_static_guard(self):
         role = ROOT / "services" / "redis" / "ansible_collections" / "platform" / "redis" / "roles" / "redis_tls"
         tasks = yaml.safe_load((role / "tasks" / "preflight.yml").read_text(encoding="utf-8"))
-        guard = next(task for task in tasks if task["name"] == "Отклонить небезопасное изменение статической конфигурации Redis")
+        guard = next(task for task in tasks if task["name"] == "Отклонение небезопасного изменения статической конфигурации Redis")
         self.assertTrue(guard["no_log"])
         env = Environment()
         env.filters.update(b64decode=b64decode, regex_escape=regex_escape)
@@ -54,7 +54,7 @@ class RedisContractTests(unittest.TestCase):
     def test_sentinel_rewritten_tls_paths_preserve_exact_static_guard(self):
         role = ROOT / "services" / "redis" / "ansible_collections" / "platform" / "redis" / "roles" / "redis_tls"
         tasks = yaml.safe_load((role / "tasks" / "preflight.yml").read_text(encoding="utf-8"))
-        guard = next(task for task in tasks if task["name"] == "Отклонить небезопасное изменение статической конфигурации Sentinel")
+        guard = next(task for task in tasks if task["name"] == "Отклонение небезопасного изменения статической конфигурации Sentinel")
         self.assertTrue(guard["no_log"])
         env = Environment()
         env.filters.update(b64decode=b64decode, regex_escape=regex_escape)
@@ -153,7 +153,7 @@ class RedisContractTests(unittest.TestCase):
         self.assertIn("platform_redis_sentinel_credential.passwordSecretRef", peer_password["ansible.builtin.lineinfile"]["line"])
         self.assertIn("_platform_sentinel_peer_user.changed or _platform_sentinel_peer_password.changed", member)
         self.assertIn("- not _platform_redis_has_persistent_state", member)
-        self.assertIn("Создать начальную конфигурацию нового Sentinel с поддержкой только TLS", member)
+        self.assertIn("Создание начальной конфигурации нового Sentinel с поддержкой только TLS", member)
         self.assertIn("regexp: '^replicaof '\n    state: absent", finalize)
         self.assertLess(finalize.index("Удаление целевой реплики начальной загрузки из постоянной конфигурации Redis"), finalize.index("Запись постоянного маркера владения Redis после успешной начальной загрузки"))
         self.assertLess(main.index("include_tasks: member.yml"), main.index("include_tasks: finalize_bootstrap.yml"))
@@ -196,9 +196,9 @@ class RedisContractTests(unittest.TestCase):
 
     def test_deployment_verify_assertions_are_bounded_and_separately_identifiable(self):
         verify = (ROOT / "services" / "redis" / "ansible_collections" / "platform" / "redis" / "roles" / "redis_tls" / "tasks" / "verify_deployment.yml").read_text(encoding="utf-8")
-        self.assertIn("Требовать ожидаемое количество наблюдений экземпляра службы Redis", verify)
-        self.assertIn("Требуется ровно один наблюдаемый мастер Redis", verify)
-        self.assertIn("Требовать две готовые реплики Redis в Sentinel HA", verify)
-        self.assertIn("Проверить, что все Sentinel указывают на одного мастера Redis", verify)
-        self.assertIn("Потребовать, чтобы мастер Sentinel соответствовал наблюдению Redis", verify)
+        self.assertIn("Проверка получения результатов от всех ожидаемых экземпляров Redis", verify)
+        self.assertIn("Проверка наличия ровно одного мастера Redis", verify)
+        self.assertIn("Проверка готовности двух реплик Redis в режиме Sentinel HA", verify)
+        self.assertIn("Проверка того, что все Sentinel указывают на одного мастера Redis", verify)
+        self.assertIn("Проверка совпадения мастера по данным Sentinel и Redis", verify)
         self.assertIn("run_once: true", verify)

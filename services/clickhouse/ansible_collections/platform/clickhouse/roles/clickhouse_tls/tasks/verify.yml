@@ -1,33 +1,33 @@
 ---
-- name: Наблюдать точную системную службу сервера ClickHouse
+- name: Проверка состояния службы сервера ClickHouse
   ansible.builtin.command:
     argv: [systemctl, is-active, "{{ clickhouse_member.server_unit_name }}"]
   register: _platform_clickhouse_server_status
   changed_when: false
   failed_when: false
 
-- name: Требовать активный сервер ClickHouse, принадлежащий экземпляру службы
+- name: Проверка активности управляемого экземпляра ClickHouse
   ansible.builtin.assert:
     that:
       - _platform_clickhouse_server_status.rc == 0
       - _platform_clickhouse_server_status.stdout == 'active'
     fail_msg: CLICKHOUSE_SERVER_NOT_ACTIVE
 
-- name: Наблюдать за точной службой Keeper systemd только для HA
+- name: Наблюдение за точной службой Keeper systemd только для HA
   ansible.builtin.command:
     argv: [systemctl, is-active, "{{ clickhouse_member.keeper_unit_name }}"]
   register: _platform_clickhouse_keeper_status
   changed_when: false
   failed_when: false
 
-- name: "Проверить состояние Keeper в соответствии с режимом ClickHouse"
+- name: "Проверка состояния Keeper в соответствии с режимом ClickHouse"
   ansible.builtin.assert:
     that: >-
       (platform_clickhouse_mode == 'raft-ha' and _platform_clickhouse_keeper_status.stdout == 'active') or
       (platform_clickhouse_mode == 'standalone' and _platform_clickhouse_keeper_status.stdout != 'active')
     fail_msg: CLICKHOUSE_KEEPER_MODE_MISMATCH
 
-- name: Запрос ClickHouse HTTPS по умолчанию с точным паролем только во время выполнения и доверенным CA
+- name: HTTPS-запрос ClickHouse с runtime-паролем пользователя по умолчанию и доверенным CA
   ansible.builtin.uri:
     url: "https://{{ clickhouse_member.address }}:{{ clickhouse_member.https_port }}/?query=SELECT%201"
     method: GET
@@ -46,12 +46,12 @@
   delay: 2
   no_log: true
 
-- name: Сообщать только об ограниченном статусе HTTPS при неудачной аутентификации или TLS
+- name: Вывод только статуса HTTPS при ошибке аутентификации или TLS
   ansible.builtin.debug:
     msg: "CLICKHOUSE_HTTPS_STATUS={{ _platform_clickhouse_https_query.status | default(-1) }}"
   when: _platform_clickhouse_https_query.status | default(-1) | int != 200
 
-- name: Требовать аутентифицированный результат запроса ClickHouse HTTPS
+- name: Проверка успешности HTTPS-запроса ClickHouse с аутентификацией
   ansible.builtin.assert:
     that:
       - _platform_clickhouse_https_query.status | default(-1) | int == 200
@@ -59,7 +59,7 @@
     fail_msg: "CLICKHOUSE_AUTHENTICATED_HTTPS_VERIFY_FAILED status={{ _platform_clickhouse_https_query.status | default(-1) }}"
   no_log: true
 
-- name: Проверить TLS-порт HA Keeper или пропустить проверку в standalone-режиме
+- name: Проверка TLS-порта Keeper в режиме HA
   ansible.builtin.wait_for:
     host: "{{ clickhouse_member.address }}"
     port: "{{ clickhouse_member.keeper_client_port }}"

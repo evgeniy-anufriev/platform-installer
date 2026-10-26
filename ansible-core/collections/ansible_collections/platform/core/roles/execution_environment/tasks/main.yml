@@ -18,14 +18,14 @@
   changed_when: false
   when: platform_execution_require_ansible | bool
 
-- name: Требуется технический пользователь при управлении удостоверением выполнения
+- name: Проверка наличия технического пользователя для управляемого SSH-доступа
   ansible.builtin.assert:
     that:
       - platform_execution_technical_user | length > 0
     fail_msg: Managed execution identity requires platform_execution_technical_user
   when: platform_execution_manage_technical_user | bool
 
-- name: Обеспечить существование технического пользователя управляемого выполнения
+- name: Обеспечение существования технического пользователя управляемого выполнения
   ansible.builtin.user:
     name: "{{ platform_execution_technical_user }}"
     shell: /bin/bash
@@ -33,7 +33,7 @@
     state: present
   when: platform_execution_manage_technical_user | bool
 
-- name: Установить явно предоставленную политику выполнения sudo
+- name: Установка явно предоставленной политики выполнения sudo
   ansible.builtin.copy:
     content: "{{ platform_execution_sudoers_content }}"
     dest: "/etc/sudoers.d/platform-execution"
@@ -51,7 +51,7 @@
     group: root
     mode: "0711"
 
-- name: "Создать защищённые каталоги рабочей области выполнения"
+- name: "Создание защищённых каталогов рабочей области выполнения"
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
@@ -73,13 +73,13 @@
     - "{{ platform_execution_identity_root }}"
   when: platform_execution_technical_user | length > 0
 
-- name: "Проверить постоянный файл known_hosts узла выполнения"
+- name: "Проверка постоянного файла known_hosts узла выполнения"
   ansible.builtin.stat:
     path: "{{ platform_execution_known_hosts_path }}"
   register: platform_execution_known_hosts_stat
   when: platform_execution_technical_user | length > 0
 
-- name: "Создать постоянный файл known_hosts, если он отсутствует"
+- name: "Создание постоянного файла known_hosts, если он отсутствует"
   ansible.builtin.copy:
     content: ""
     dest: "{{ platform_execution_known_hosts_path }}"
@@ -90,7 +90,7 @@
     - platform_execution_technical_user | length > 0
     - not platform_execution_known_hosts_stat.stat.exists
 
-- name: Назначить владение частной рабочей областью управляемого выполнения
+- name: Назначение владельца защищённой рабочей области выполнения
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
@@ -101,7 +101,7 @@
     - "{{ platform_execution_private_workspace }}"
   when: platform_execution_technical_user | length > 0
 
-- name: "Создать постоянную SSH-пару ключей технического пользователя, если она отсутствует"
+- name: "Создание постоянной SSH-пары ключей технического пользователя, если она отсутствует"
   become_user: "{{ platform_execution_technical_user }}"
   ansible.builtin.command:
     argv:
@@ -117,7 +117,7 @@
     creates: "{{ platform_execution_ssh_key_path }}"
   when: platform_execution_technical_user | length > 0
 
-- name: Проверить каталог обязательного offline-пакета среды исполнения
+- name: Проверка каталога обязательного offline-пакета среды исполнения
   ansible.builtin.stat:
     path: "{{ platform_execution_offline_payload_root }}"
   register: platform_execution_payload_stat
@@ -125,7 +125,7 @@
     - platform_execution_require_offline_payload | bool
     - platform_execution_offline_payload_root | length > 0
 
-- name: Отклонить отсутствие обязательного offline-пакета среды исполнения
+- name: Отклонение отсутствия обязательного offline-пакета среды исполнения
   ansible.builtin.assert:
     that:
       - platform_execution_payload_stat.stat.exists

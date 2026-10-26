@@ -1,18 +1,18 @@
 ---
-- name: "Выполнить обработчики провайдеров библиотеки, затем экземпляров приложений"
+- name: "Выполнение обработчиков провайдеров библиотеки, затем экземпляров приложений"
   hosts: localhost
   connection: local
   gather_facts: false
   any_errors_fatal: true
   tasks:
-    - name: Выполнение этапов провайдера с ограниченным хранением производных учетных данных
+    - name: Выполнение этапов провайдера с временным хранением производных учётных данных
       block:
-        - name: Инициализировать только результаты завершения провайдера в области вызова
+        - name: Инициализация только результатов завершения провайдера в области вызова
           ansible.builtin.set_fact:
             platform_application_completed_batches: []
             platform_application_delivered_instances: []
           no_log: true
-        - name: Требовать защищенный корень среды выполнения перед доставкой сгенерированных учетных данных
+        - name: Проверка защищённого runtime-каталога перед передачей сгенерированных учётных данных
           ansible.builtin.assert:
             that: "{} | platform.core.application_protected_secret_files([], platform_application_secret_root)"
             fail_msg: APPLICATION_PROVIDER_SECRET_FILE_INVALID
@@ -27,12 +27,12 @@
           loop: "{{ platform_application_generated_values | default({}) | dict2items }}"
           changed_when: false
           no_log: true
-        - name: "Передать файлы сгенерированных учётных данных обработчикам провайдера"
+        - name: "Передача файлов сгенерированных учётных данных обработчикам провайдера"
           ansible.builtin.set_fact:
             platform_application_credential_files: "{{ platform_application_credential_files | default({}) | combine({item.key: platform_application_secret_root ~ '/' ~ item.key}) }}"
           loop: "{{ platform_application_generated_values | default({}) | dict2items }}"
           no_log: true
-        - name: Чтение существующих источников учетных данных в рамках ограниченного хранения во время выполнения
+        - name: Чтение существующих источников учётных данных в пределах текущей операции
           ansible.builtin.include_role:
             name: platform.vault.application_provider
             tasks_from: sources
@@ -40,21 +40,21 @@
           loop_control:
             loop_var: application_vault_source
           when: application_vault_source.passwordRef | default('') not in (platform_application_credential_files | default({}))
-        - name: "Проверить соответствие ранее подготовленному набору ресурсов PostgreSQL"
+        - name: "Проверка соответствия ранее подготовленному набору ресурсов PostgreSQL"
           ansible.builtin.assert:
             that: application_provider_inputs.status == 'PASS'
             fail_msg: APPLICATION_PROVIDER_INPUT_INVALID
-        - name: Инициализировать обнаружение провайдера библиотеки приложений
+        - name: Инициализация обнаружения провайдера библиотеки приложений
           ansible.builtin.set_fact:
             platform_application_provider_runtime: {}
-        - name: Один раз обнаружить каждое развертывание PostgreSQL
+        - name: Однократное обнаружение каждого развёртывания PostgreSQL
           ansible.builtin.include_role:
             name: platform.postgresql.application_provider
             tasks_from: discover
           loop: "{{ application_provider_inputs.jobs | selectattr('serviceType', 'equalto', 'postgresql') | list }}"
           loop_control:
             loop_var: platform_postgresql_application_job
-        - name: "Проверить все выбранные ресурсы PostgreSQL до внесения изменений"
+        - name: "Проверка всех выбранных ресурсов PostgreSQL до внесения изменений"
           ansible.builtin.include_role:
             name: platform.postgresql.application_provider
             tasks_from: preflight
@@ -75,7 +75,7 @@
           loop: "{{ (application_provider_inputs.libraryJobs + application_provider_inputs.instanceJobs) | selectattr('serviceType', 'equalto', 'clickhouse') | list }}"
           loop_control:
             loop_var: platform_clickhouse_application_job
-        - name: "Создать топики библиотеки Kafka перед настройкой экземпляров приложения"
+        - name: "Создание топиков библиотеки Kafka перед настройкой экземпляров приложения"
           ansible.builtin.include_role:
             name: platform.kafka.kafka_kraft
             tasks_from: application_topics
@@ -84,21 +84,21 @@
           loop: "{{ application_provider_inputs.libraryJobs | selectattr('serviceType', 'equalto', 'kafka') | list }}"
           loop_control:
             loop_var: platform_kafka_application_job
-        - name: Создать все ресурсы библиотеки перед экземплярами
+        - name: Создание всех ресурсов библиотеки перед экземплярами
           ansible.builtin.include_role:
             name: platform.postgresql.application_provider
             tasks_from: resources
           loop: "{{ application_provider_inputs.libraryJobs | selectattr('serviceType', 'equalto', 'postgresql') | list }}"
           loop_control:
             loop_var: platform_postgresql_application_job
-        - name: "Создать базы данных и таблицы библиотеки ClickHouse перед учётными записями"
+        - name: "Создание баз данных и таблиц библиотеки ClickHouse перед учётными записями"
           ansible.builtin.include_role:
             name: platform.clickhouse.application_provider
             tasks_from: resources
           loop: "{{ application_provider_inputs.libraryJobs | selectattr('serviceType', 'equalto', 'clickhouse') | list }}"
           loop_control:
             loop_var: platform_clickhouse_application_job
-        - name: Опубликовать общие секреты каждой библиотеки один раз
+        - name: Публикация общих секретов каждой библиотеки один раз
           ansible.builtin.include_role:
             name: platform.vault.application_provider
             tasks_from: library
@@ -119,7 +119,7 @@
           loop: "{{ application_provider_inputs.instanceJobs | selectattr('serviceType', 'equalto', 'redis') | list }}"
           loop_control:
             loop_var: platform_redis_application_job
-        - name: "Настроить пользователя и права доступа каждого экземпляра ClickHouse"
+        - name: "Настройка пользователя и прав доступа каждого экземпляра ClickHouse"
           ansible.builtin.include_role:
             name: platform.clickhouse.application_provider
             tasks_from: accounts
@@ -135,14 +135,14 @@
           loop: "{{ application_provider_inputs.jobs | selectattr('serviceType', 'equalto', 'kafka') | selectattr('accounts') | list }}"
           loop_control:
             loop_var: platform_kafka_application_job
-        - name: Опубликовать учетные данные каждого экземпляра и AppRole один раз
+        - name: Публикация учетных данных каждого экземпляра и AppRole один раз
           ansible.builtin.include_role:
             name: platform.vault.application_provider
             tasks_from: instance
           loop: "{{ application_vault_inputs.instanceJobs | platform.core.application_ready_vault_jobs(application_runtime_inputs.integrations, [], []) }}"
           loop_control:
             loop_var: platform_vault_application_job
-        - name: "Сохранить результаты доставки учётных данных экземпляров для координатора выполнения"
+        - name: "Сохранение результатов доставки учётных данных экземпляров для координатора выполнения"
           ansible.builtin.set_fact:
             platform_application_delivered_instances: >-
               {{ (application_vault_inputs.instanceJobs | platform.core.application_ready_vault_jobs(
@@ -156,11 +156,11 @@
             platform_application_runtime_credential_custody: true
           no_log: true
       always:
-        - name: "Сбросить временные значения сгенерированных паролей после передачи провайдеру"
+        - name: "Сброс временных значений сгенерированных паролей после передачи провайдеру"
           ansible.builtin.set_fact:
             platform_application_generated_values: {}
           no_log: true
-        - name: Удалить только файлы учетных данных Vault, полученные из вызова
+        - name: Удаление только файлов учётных данных Vault текущей операции
           ansible.builtin.file:
             path: "{{ platform_application_secret_root }}/{{ item.passwordRef }}"
             state: absent

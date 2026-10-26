@@ -1,12 +1,12 @@
 ---
-- name: Отключить службу по умолчанию Redis, предоставляемую пакетом
+- name: Отключение штатной службы Redis из пакета
   ansible.builtin.systemd:
     name: redis.service
     enabled: false
     state: stopped
     daemon_reload: true
 
-- name: Отключить службу по умолчанию Sentinel, предоставляемую пакетом
+- name: Отключение штатной службы Sentinel из пакета
   ansible.builtin.systemd:
     name: redis-sentinel.service
     enabled: false

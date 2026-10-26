@@ -9,23 +9,23 @@
     get_checksum: false
   register: platform_pki_deployed_files
 
-- name: Требовать полностью развернутый материал PKI
+- name: Проверка наличия всех развёрнутых PKI-файлов
   ansible.builtin.assert:
     that: platform_pki_deployed_files.matched == 6
     fail_msg: PKI_TARGET_MATERIAL_INCOMPLETE
 
-- name: Проверить развёрнутую цепочку сертификатов без изменений
+- name: Проверка развёрнутой цепочки сертификатов без изменений
   ansible.builtin.command:
     argv: [openssl, verify, -CAfile, "{{ platform_pki_plan.targetDirectory }}/ca-chain.pem", "{{ platform_pki_plan.targetDirectory }}/certificate.pem"]
   changed_when: false
 
-- name: "Прочитать отпечаток развёрнутых PKI-файлов"
+- name: "Чтение отпечатка развёрнутых PKI-файлов"
   ansible.builtin.command:
     argv: [cat, "{{ platform_pki_plan.targetDirectory }}/materialization-fingerprint"]
   changed_when: false
   register: platform_pki_target_fingerprint
 
-- name: "Проверить отпечаток развёрнутых PKI-файлов"
+- name: "Проверка отпечатка развёрнутых PKI-файлов"
   ansible.builtin.assert:
     that: "(platform_pki_target_fingerprint.stdout | trim) == platform_pki_plan.materializationFingerprint"
     fail_msg: PKI_TARGET_MATERIALIZATION_MISMATCH

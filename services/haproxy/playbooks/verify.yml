@@ -1,6 +1,6 @@
 ---
 - import_playbook: ../../../ansible-core/playbooks/pki-verify.yml
-- name: Проверить HAProxy без изменений
+- name: Проверка HAProxy без изменений
   hosts: platform_targets
   become: true
   gather_facts: false

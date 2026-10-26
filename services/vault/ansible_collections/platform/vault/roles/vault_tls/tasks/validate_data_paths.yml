@@ -3,7 +3,7 @@
   ansible.builtin.set_fact:
     _platform_vault_local_data_instances: "{{ _platform_vault_instances | selectattr('host', 'equalto', inventory_hostname) | list }}"
 
-- name: Хранить общий корень данных Vault отдельно от совместно расположенных экземпляров службы
+- name: Хранение общего корня данных Vault отдельно от совместно расположенных экземпляров службы
   ansible.builtin.assert:
     that: item.data_directory != platform_vault_data_root
     fail_msg: "VAULT_DATA_DIRECTORY_COLLISION: {{ item.id }}: {{ item.data_directory }} is the shared root"
@@ -12,7 +12,7 @@
     label: "{{ item.id }}"
   when: _platform_vault_local_data_instances | length > 1
 
-- name: Отказаться от перекрытия каталогов экземпляров службы Vault на одном хосте
+- name: Отклонение пересекающихся каталогов экземпляров Vault на одном узле
   ansible.builtin.assert:
     that:
       - not item.0.data_directory.startswith(item.1.data_directory ~ '/')

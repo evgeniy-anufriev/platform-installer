@@ -1,29 +1,29 @@
 ---
-- name: Требовать ограниченную выбранную учетную запись Docker для очистки
+- name: Проверка допустимости выбранной учётной записи Docker для очистки
   ansible.builtin.assert:
     that: platform_docker_account_name is match('^[a-z_][a-z0-9_-]{0,31}$')
     fail_msg: DOCKER_ACCOUNT_INVALID
 
-- name: Разрешить выбранную учетную запись Docker для очистки
+- name: Определение выбранной учетной записи Docker для очистки
   ansible.builtin.getent:
     database: passwd
     key: "{{ platform_docker_account_name }}"
     fail_key: true
 
-- name: Привязать выбранную учетную запись для очистки
+- name: Привязка выбранной учетной записи для очистки
   ansible.builtin.set_fact:
     _platform_docker_clear_uid: "{{ getent_passwd[platform_docker_account_name][1] | int }}"
     _platform_docker_clear_home: "{{ getent_passwd[platform_docker_account_name][4] }}"
   changed_when: false
 
-- name: "Отклонить неподходящую учётную запись или небезопасный домашний каталог"
+- name: "Отклонение неподходящей учётной записи или небезопасного домашнего каталога"
   ansible.builtin.assert:
     that:
       - _platform_docker_clear_uid | int >= 1000
       - _platform_docker_clear_home is match('^/home/[a-z_][a-z0-9_-]{0,31}$')
     fail_msg: DOCKER_ACCOUNT_INELIGIBLE
 
-- name: Проверить точные пути управляемых системных служб Docker без перехода по ссылкам
+- name: Проверка точных путей управляемых системных служб Docker без перехода по ссылкам
   ansible.builtin.stat:
     path: "{{ item }}"
     follow: false
@@ -35,7 +35,7 @@
     - "{{ _platform_docker_clear_home }}/.config/systemd/user/docker.service"
   register: _platform_docker_clear_units
 
-- name: Требовать обычные служебные файлы systemd перед их чтением
+- name: Проверка обычного типа unit-файлов systemd перед чтением
   ansible.builtin.assert:
     that:
       - item.stat.isreg | default(false)
@@ -46,7 +46,7 @@
   loop_control:
     label: "{{ item.item }}"
 
-- name: Прочитать выбранные системные службы Docker для подтверждения права собственности
+- name: Чтение выбранных системных служб Docker для подтверждения права собственности
   ansible.builtin.slurp:
     src: "{{ item.item }}"
   loop: "{{ _platform_docker_clear_units.results }}"
@@ -54,7 +54,7 @@
     label: "{{ item.item }}"
   register: _platform_docker_clear_unit_contents
 
-- name: Запретить остановку чужих системных и пользовательских служб
+- name: Запрет остановки чужих системных и пользовательских служб
   ansible.builtin.assert:
     that:
       - _platform_docker_clear_units.results[0].stat.pw_name == 'root'
@@ -63,13 +63,13 @@
       - (_platform_docker_clear_unit_contents.results[1].content | b64decode).startswith('# Platform Installer V2 managed rootless Docker user unit')
     fail_msg: DOCKER_CLEAR_UNIT_NOT_OWNED
 
-- name: Остановить и отключить только системный мост выбранной учетной записи
+- name: Остановка и отключение только системной службы Docker выбранной учётной записи
   ansible.builtin.systemd:
     name: "{{ platform_docker_name }}-rootless-{{ platform_docker_account_name }}.service"
     state: stopped
     enabled: false
 
-- name: Остановить выбранную пользовательскую службу Docker без прав root, если она запущена отдельно
+- name: Остановка выбранной пользовательской службы Docker без прав root, если она запущена отдельно
   ansible.builtin.command:
     argv: [systemctl, --user, stop, docker.service]
   become: true
@@ -79,7 +79,7 @@
     DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/{{ _platform_docker_clear_uid }}/bus"
   changed_when: false
 
-- name: Подтвердить остановку выбранного Docker без прав root
+- name: Подтверждение остановки выбранного Docker без прав root
   ansible.builtin.command:
     argv: [systemctl, --user, is-active, docker.service]
   become: true
@@ -91,7 +91,7 @@
   changed_when: false
   failed_when: false
 
-- name: Требовать, чтобы очищенная пользовательская служба Docker оставалась неактивной
+- name: Проверка остановки пользовательской службы Docker после очистки
   ansible.builtin.assert:
     that: _platform_docker_clear_state.stdout != 'active'
     fail_msg: DOCKER_CLEAR_DAEMON_STILL_ACTIVE

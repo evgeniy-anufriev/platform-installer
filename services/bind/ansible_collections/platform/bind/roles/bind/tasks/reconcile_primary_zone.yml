@@ -1,12 +1,12 @@
 ---
-- name: Определить служебный runtime-маркер основной зоны BIND
+- name: Определение служебного runtime-маркера основной зоны BIND
   ansible.builtin.set_fact:
     _platform_bind_zone_recovery_marker: >-
       {{ platform_bind_recovery_directory }}/{{ platform_bind_runtime_projection.generatedState.metadata.projectId | hash('sha256') }}/{{ platform_bind_resolved_zones[platform_bind_inspected_deployment.key].zone | hash('sha256') }}.yml
 
-- name: "Заморозить и заменить основную зону с возможностью восстановления после сбоя"
+- name: "Заморозка и замена основной зоны с возможностью восстановления после сбоя"
   block:
-    - name: "Создать защищённый каталог восстановления зоны BIND"
+    - name: "Создание защищённого каталога восстановления зоны BIND"
       ansible.builtin.file:
         path: "{{ _platform_bind_zone_recovery_marker | dirname }}"
         state: directory
@@ -26,18 +26,18 @@
         group: root
         mode: '0600'
 
-    - name: Заморозить основную зону после проверки кандидата
+    - name: Заморозка основной зоны после проверки кандидата
       ansible.builtin.command:
         argv: ["{{ platform_bind_rndc_binary }}", freeze, "{{ platform_bind_resolved_zones[platform_bind_inspected_deployment.key].zone }}"]
       changed_when: true
 
-    - name: "Повторно прочитать SOA serial после блокировки динамических обновлений зоны"
+    - name: "Повторное чтение серийного номера SOA после блокировки динамических обновлений зоны"
       ansible.builtin.command:
         argv: [dig, "@127.0.0.1", "{{ platform_bind_resolved_zones[platform_bind_inspected_deployment.key].zone }}", SOA, +short]
       changed_when: false
       register: _platform_bind_frozen_live_soa
 
-    - name: Требовать, чтобы серийный номер кандидата оставался новее, чем замороженная активная зона
+    - name: Проверка увеличения серийного номера новой зоны относительно замороженной активной зоны
       ansible.builtin.assert:
         that:
           - _platform_bind_frozen_live_soa.rc == 0
@@ -57,7 +57,7 @@
         mode: '0640'
 
   always:
-    - name: Проверить, остался ли маркер восстановления основной зоны
+    - name: Проверка того, остался ли маркер восстановления основной зоны
       ansible.builtin.stat:
         path: "{{ _platform_bind_zone_recovery_marker }}"
         get_mime: false
@@ -65,7 +65,7 @@
         get_checksum: false
       register: _platform_bind_zone_recovery_after_attempt
 
-    - name: Всегда пытаться разморозить отмеченную основную зону
+    - name: Попытка разморозки отмеченной основной зоны при любом исходе
       ansible.builtin.command:
         argv: ["{{ platform_bind_rndc_binary }}", thaw, "{{ platform_bind_resolved_zones[platform_bind_inspected_deployment.key].zone }}"]
       changed_when: false
@@ -73,7 +73,7 @@
       register: _platform_bind_zone_always_thaw
       when: _platform_bind_zone_recovery_after_attempt.stat.exists
 
-- name: Проверка полномочий основной зоны после полной замены
+- name: Проверка авторитетного SOA-ответа основной зоны после замены
   ansible.builtin.command:
     argv: [dig, "@127.0.0.1", "{{ platform_bind_resolved_zones[platform_bind_inspected_deployment.key].zone }}", SOA, +norecurse, +noall, +answer, +comments]
   changed_when: false
@@ -83,7 +83,7 @@
     'status: NOERROR' not in _platform_bind_zone_reconcile_authority.stdout or
     'flags: qr aa' not in _platform_bind_zone_reconcile_authority.stdout
 
-- name: Убедиться, что замененная основная зона принимает локальные динамические обновления
+- name: Проверка того, что замененная основная зона принимает локальные динамические обновления
   ansible.builtin.include_tasks: update_a_record.yml
   vars:
     platform_bind_force_dynamic_update_probe: true
@@ -93,7 +93,7 @@
       addresses: ["{{ platform_bind_resolved_zones[platform_bind_inspected_deployment.key].primary.address }}"]
       ttl: "{{ platform_bind_resolved_zones[platform_bind_inspected_deployment.key].defaultTtl | int }}"
 
-- name: Очистить маркер основной зоны после проверки полномочий и обновлений
+- name: Удаление маркера восстановления после проверки зоны и динамических обновлений
   ansible.builtin.file:
     path: "{{ _platform_bind_zone_recovery_marker }}"
     state: absent

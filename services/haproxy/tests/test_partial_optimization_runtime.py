@@ -32,9 +32,9 @@ class PartialOptimizationTests(unittest.TestCase):
 
         source = yaml.safe_load((ROLE / 'tasks/prepare.yml').read_text())
         selected = [task for task in source if task.get('name') in {
-            'Проверить целевые узлы проекции перед публикацией конфигурации-кандидата',
+            'Проверка целевых узлов проекции перед публикацией конфигурации-кандидата',
             'Сброс только временного графа-кандидата HAProxy',
-            'Создать временное рабочее пространство-кандидат HAProxy'}]
+            'Создание временного рабочего каталога конфигурации-кандидата HAProxy'}]
         for task in selected:
             if 'ansible.builtin.include_tasks' in task:
                 task['ansible.builtin.include_tasks'] = str(ROLE / 'tasks/check_targets.yml')
@@ -77,15 +77,15 @@ class PartialOptimizationTests(unittest.TestCase):
             source = yaml.safe_load((ROLE / "tasks" / file).read_text())
             return [task for task in source if task.get("name") in names]
         prepare = tasks("prepare.yml", {
-            "Требовать материализацию HAProxy PKI", "Развертывание входов HAProxy TLS PEM",
+            "Проверка наличия целевого каталога в выбранном плане PKI для HAProxy", "Развертывание входов HAProxy TLS PEM",
             "Атомарная сборка пакета HAProxy PEM без регистрации ключевых данных",
-            "Записать, изменился ли материал HAProxy TLS", "Сформировать полный проверяемый набор конфигурации HAProxy",
-            "Подготовить неизмененную конфигурацию провайдера для частичной проверки серверной части"})
+            "Фиксация изменения TLS-файлов HAProxy", "Формирование полного проверяемого набора конфигурации HAProxy",
+            "Подготовка неизменённой конфигурации провайдера для проверки выбранных backend"})
         publish = tasks("activate_publish.yml", {
-            "Атомарно установить точную проверенную основную конфигурацию платформы",
-            "Атомарно установить точные проверенные фрагменты платформы HAProxy",
-            "Установка точных проверенных фрагментов серверной части управляемого приложения HAProxy",
-            "Записать изменение активного графа конфигурации HAProxy"})
+            "Атомарная установка проверенной основной конфигурации HAProxy",
+            "Атомарная установка проверенных файлов конфигурации HAProxy",
+            "Установка проверенных файлов backend управляемого приложения HAProxy",
+            "Запись изменения активного графа конфигурации HAProxy"})
         start = yaml.safe_load((ROLE / "tasks/start.yml").read_text())
         with tempfile.TemporaryDirectory(prefix="platform-haproxy-partial-") as directory:
             root = Path(directory)

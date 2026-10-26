@@ -1,11 +1,11 @@
 ---
-- name: Убедиться, что systemd-resolved активен
+- name: Проверка того, что systemd-resolved активен
   ansible.builtin.command:
     argv: [systemctl, is-active, --quiet, systemd-resolved.service]
   changed_when: false
   when: platform_dns_client_backend == 'systemd-resolved'
 
-- name: Проверка эффективного состояния systemd-resolved, доступного только для чтения
+- name: Проверка действующих настроек systemd-resolved без внесения изменений
   ansible.builtin.command:
     argv: [resolvectl, status]
   register: _platform_dns_client_resolvectl_status
@@ -18,7 +18,7 @@
   register: _platform_dns_client_resolved_dropin
   when: platform_dns_client_backend == 'systemd-resolved'
 
-- name: Проверить соответствие вставки «Платформа systemd-resolved» полученной проекции
+- name: Проверка соответствия дополнительных настроек systemd-resolved рассчитанной проекции
   ansible.builtin.assert:
     that:
       - "('DNS=' ~ (platform_dns_client_local.servers | join(' '))) in (_platform_dns_client_resolved_dropin.content | b64decode)"
@@ -27,7 +27,7 @@
     fail_msg: DNS_CLIENT_RESOLVED_DROPIN_INVALID
   when: platform_dns_client_backend == 'systemd-resolved'
 
-- name: Проверка эффективного разделения серверов DNS и домена маршрутизации
+- name: Проверка действующих DNS-серверов и доменов маршрутизации раздельного DNS
   ansible.builtin.assert:
     that:
       - item in _platform_dns_client_resolvectl_status.stdout
@@ -43,7 +43,7 @@
   changed_when: false
   when: platform_dns_client_backend == 'NetworkManager'
 
-- name: Проверить эффективность разделенного профиля NetworkManager DNS
+- name: Проверка действия профиля раздельного DNS в NetworkManager
   ansible.builtin.assert:
     that:
       - item in _platform_dns_client_nm_verify.stdout
@@ -53,7 +53,7 @@
   loop: "{{ platform_dns_client_local.servers }}"
   when: platform_dns_client_backend == 'NetworkManager'
 
-- name: "Проверить разрешение имени узла проекта системным DNS-резолвером"
+- name: "Проверка разрешения имени узла проекта системным DNS-резолвером"
   ansible.builtin.command:
     argv: [getent, hosts, "{{ platform_dns_client_local.hostRecord }}"]
   changed_when: false

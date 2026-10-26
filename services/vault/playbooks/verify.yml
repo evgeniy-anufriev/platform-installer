@@ -8,7 +8,7 @@
   become: true
   gather_facts: false
   pre_tasks:
-    - name: Применить настройки доверенной среды выполнения Vault
+    - name: Применение настроек доверенной среды выполнения Vault
       ansible.builtin.include_role:
         name: platform.core.runtime_role_variables
       when: platform_execution_role_variables_by_host is defined

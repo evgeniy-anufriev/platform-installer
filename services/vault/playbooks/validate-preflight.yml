@@ -1,10 +1,10 @@
 ---
-- name: Выполнить предварительную проверку Vault только для чтения в изолированном локальном пространстве имен
+- name: Выполнение предварительной проверки Vault только для чтения в изолированном локальном пространстве имен
   hosts: localhost
   connection: local
   gather_facts: false
   tasks:
-    - name: Загрузить значения по умолчанию Vault
+    - name: Загрузка значений по умолчанию Vault
       ansible.builtin.include_vars: ../ansible_collections/platform/vault/roles/vault_tls/defaults/main.yml
 
     - name: Загрузка данных автономного предварительного проверочного теста
@@ -20,11 +20,11 @@
         name: platform.vault.vault_tls
         tasks_from: normalize.yml
 
-    - name: "Привязать тестовый экземпляр сервиса к localhost для проверок без изменений"
+    - name: "Привязка тестового экземпляра сервиса к localhost для проверок без изменений"
       ansible.builtin.set_fact:
         _platform_vault_instances: "{{ _platform_vault_instances | map('combine', {'host': inventory_hostname}) | list }}"
 
-    - name: Запустить предварительную проверку хоста Vault без внесения изменений и обращения к цели
+    - name: Предварительная проверка узла Vault без внесения изменений
       ansible.builtin.include_role:
         name: platform.vault.vault_tls
         tasks_from: preflight.yml

@@ -1,5 +1,5 @@
 ---
-- name: Выбрать потребительский план Core PKI, если он доступен
+- name: Выбор плана Core PKI для потребителя при его наличии
   ansible.builtin.include_role:
     name: platform.core.pki_materialize
     tasks_from: select_consumer_plan.yml
@@ -8,21 +8,21 @@
   when: >-
     platform_pki_materialization_plans | default(hostvars['localhost'].platform_pki_materialization_plans | default([]), true) | length > 0
 
-- name: Разрешить один утвержденный каталог TLS
+- name: Определение одного утвержденного каталога TLS
   ansible.builtin.set_fact:
     _platform_clickhouse_tls_directory: >-
       {{ platform_pki_selected_consumer_plan.targetDirectory
          if platform_pki_selected_consumer_plan is defined
          else platform_clickhouse_tls_directory }}
 
-- name: Отклонить отсутствующий или небезопасный каталог TLS
+- name: Отклонение отсутствующего или небезопасного каталога TLS
   ansible.builtin.assert:
     that:
       - _platform_clickhouse_tls_directory is match('^/[A-Za-z0-9_./-]{1,240}$')
       - "'..' not in _platform_clickhouse_tls_directory.split('/')"
     fail_msg: CLICKHOUSE_PKI_MATERIALIZATION_REQUIRED
 
-- name: Проверка точных файлов ClickHouse TLS
+- name: Проверка TLS-файлов ClickHouse
   ansible.builtin.stat:
     path: "{{ _platform_clickhouse_tls_directory }}/{{ item }}"
     follow: false
@@ -33,7 +33,7 @@
   register: _platform_clickhouse_tls_files
   no_log: true
 
-- name: Требовать обычные файлы ClickHouse TLS без символических ссылок
+- name: Проверка обычного типа TLS-файлов ClickHouse и отсутствия символических ссылок
   ansible.builtin.assert:
     that: >-
       _platform_clickhouse_tls_files.results |

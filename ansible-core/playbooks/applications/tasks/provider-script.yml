@@ -1,5 +1,5 @@
 ---
-- name: Разрешить только объявленный контекст сценария провайдера
+- name: Определение только объявленного контекста сценария провайдера
   ansible.builtin.set_fact:
     application_script_target_job: >-
       {{ hostvars['localhost'].application_runtime_inputs.scriptContexts |
@@ -8,7 +8,7 @@
          selectattr('hostId', 'equalto', application_provider_script_host) | first }}
   no_log: true
 
-- name: "Определить учётную запись и домашний каталог для запуска сценария на целевом узле"
+- name: "Определение учётной записи и домашнего каталога для запуска сценария на целевом узле"
   ansible.builtin.getent:
     database: passwd
     key: "{{ application_script_target_job.account }}"

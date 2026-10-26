@@ -1,5 +1,5 @@
 ---
-- name: Проверить VRRP Keepalived без изменений
+- name: Проверка VRRP Keepalived без изменений
   hosts: platform_targets
   become: true
   gather_facts: false

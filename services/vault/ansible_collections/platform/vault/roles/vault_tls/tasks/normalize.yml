@@ -1,16 +1,16 @@
 ---
-- name: Начать детерминированное проецирование экземпляра службы среды выполнения Vault
+- name: Начало расчёта экземпляров Vault
   ansible.builtin.set_fact:
     _platform_vault_instances: []
 
-- name: "Рассчитать стабильные номера и изолированные ресурсы экземпляров Vault"
+- name: "Расчёт стабильных номеров и изолированных ресурсов экземпляров Vault"
   ansible.builtin.set_fact:
     _platform_vault_instances: "{{ _platform_vault_instances + [item | combine({'slot': vault_slot, 'api_port': (item.port if item.port is defined else platform_vault_api_port + 2 * (_platform_vault_instances | selectattr('host', 'equalto', item.host) | list | length)), 'cluster_port': platform_vault_cluster_port + 2 * vault_slot, 'instance_name': (platform_vault_name ~ '@') ~ platform_vault_deployment_id ~ '-' ~ (item.id | regex_replace('^.*-', '')), 'legacy_instance_name': (platform_vault_name ~ '-') ~ ((platform_vault_deployment_id ~ '\n' ~ item.id) | hash('sha256')), 'config_directory': platform_vault_config_root ~ '/' ~ platform_vault_deployment_id ~ '/' ~ item.id, 'data_directory': (item.data_directory | default(platform_vault_data_root ~ '/' ~ item.id if (platform_vault_instances | selectattr('host', 'equalto', item.host) | list | length > 1) else platform_vault_data_root)), 'log_directory': platform_vault_log_root ~ '/' ~ platform_vault_deployment_id ~ '/' ~ item.id})] }}"
   loop: "{{ platform_vault_instances | sort(attribute='id') }}"
   loop_control:
     index_var: vault_slot
 
-- name: Отклонить выход вычисленных портов Vault за допустимый диапазон
+- name: Отклонение выхода вычисленных портов Vault за допустимый диапазон
   ansible.builtin.assert:
     that:
       - item.api_port <= 65535
@@ -20,7 +20,7 @@
   loop_control:
     label: "{{ item.id }}"
 
-- name: "Отклонить конфликты API-портов и кластерных портов Vault на одном узле"
+- name: "Отклонение конфликтов API-портов и кластерных портов Vault на одном узле"
   ansible.builtin.assert:
     that:
       - >-

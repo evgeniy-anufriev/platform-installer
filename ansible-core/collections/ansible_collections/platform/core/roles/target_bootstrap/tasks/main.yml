@@ -1,26 +1,26 @@
 ---
-- name: "Пропустить подготовку SSH-доступа, если целевой узел совпадает с узлом выполнения"
+- name: "Пропуск подготовки SSH-доступа, если целевой узел совпадает с узлом выполнения"
   ansible.builtin.debug:
     msg: Self-target bootstrap skipped; Execution Node local transport is used
   when: platform_bootstrap_skip_self | bool
 
-- name: "Подготовить технического пользователя и SSH-ключ на целевом узле"
+- name: "Подготовка технического пользователя и SSH-ключа на целевом узле"
   when: not (platform_bootstrap_skip_self | bool)
   block:
-    - name: Загрузить открытый ключ выполнения из рабочей области среды выполнения контроллера
+    - name: Загрузка открытого ключа выполнения из рабочей области среды выполнения контроллера
       ansible.builtin.set_fact:
         platform_bootstrap_public_key: "{{ lookup('ansible.builtin.file', platform_bootstrap_public_key_file) | trim }}"
       when:
         - platform_bootstrap_public_key | length == 0
         - platform_bootstrap_public_key_file | length > 0
 
-    - name: Требовать открытый ключ, предоставленный во время выполнения
+    - name: Проверка наличия открытого SSH-ключа для текущей операции
       ansible.builtin.assert:
         that:
           - platform_bootstrap_public_key | length > 0
         fail_msg: Target bootstrap requires a public SSH key from the runtime credential boundary
 
-    - name: Обеспечить существование пользователя технической автоматизации
+    - name: Обеспечение существования пользователя технической автоматизации
       ansible.builtin.user:
         name: "{{ platform_bootstrap_user }}"
         shell: /bin/bash
@@ -35,7 +35,7 @@
         group: "{{ platform_bootstrap_user }}"
         mode: "0700"
 
-    - name: Установить открытый ключ управляемого технического пользователя без удаления существующих ключей
+    - name: Установка открытого ключа управляемого технического пользователя без удаления существующих ключей
       ansible.builtin.lineinfile:
         line: "{{ platform_bootstrap_public_key | trim }}"
         dest: "/home/{{ platform_bootstrap_user }}/.ssh/authorized_keys"
@@ -45,7 +45,7 @@
         group: "{{ platform_bootstrap_user }}"
         mode: "0600"
 
-    - name: Установить явно предоставленную политику sudo
+    - name: Установка явно предоставленной политики sudo
       ansible.builtin.copy:
         content: "{{ platform_bootstrap_sudoers_content }}"
         dest: "/etc/sudoers.d/platform-automation"

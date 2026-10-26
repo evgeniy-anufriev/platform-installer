@@ -1,5 +1,5 @@
 ---
-- name: Отклонить небезопасные имена каталогов управляемых данных
+- name: Отклонение небезопасных имён каталогов управляемых данных
   ansible.builtin.assert:
     that:
       - platform_managed_data_path is string
@@ -27,7 +27,7 @@
     fail_msg: MANAGED_DATA_PATH_UNSAFE
     quiet: true
 
-- name: Проверить все родительские каталоги управляемых данных без перехода по символическим ссылкам
+- name: Проверка всех родительских каталогов управляемых данных без перехода по символическим ссылкам
   ansible.builtin.stat:
     path: "{{ '/' ~ (platform_managed_data_path.split('/')[1:item + 1] | join('/')) }}"
     follow: false
@@ -39,7 +39,7 @@
   # Let the assertion below classify the failure without exposing raw details.
   ignore_errors: true
 
-- name: Подтвердить успешную проверку родительских каталогов управляемых данных
+- name: Подтверждение успешной проверки родительских каталогов управляемых данных
   ansible.builtin.assert:
     that:
       - not (item.failed | default(false))
@@ -62,7 +62,7 @@
   loop_control:
     label: "{{ item.item }}"
 
-- name: Отклонить символические ссылки, чужих владельцев и небезопасные права родительских каталогов данных
+- name: Отклонение символических ссылок, чужих владельцев и небезопасных прав родительских каталогов данных
   ansible.builtin.assert:
     that:
       - not item.stat.exists or (item.stat.isdir | default(false))
@@ -99,7 +99,7 @@
     - platform_managed_data_path.startswith(platform_managed_data_root_directory ~ '/')
     - platform_managed_data_root_verify_only | default(false)
 
-- name: Потребовать, чтобы корень данных пользовательского проекта принадлежал техническому пользователю SSH во время проверки
+- name: Проверка существования, типа и владельца общего каталога данных проекта
   ansible.builtin.assert:
     that:
       - _platform_managed_data_root_stat.stat.exists
@@ -114,7 +114,7 @@
     - platform_managed_data_root_directory != '/var/lib'
     - platform_managed_data_root_verify_only | default(false)
 
-- name: Установить корень данных пользовательского проекта для технического пользователя SSH с режимом 0755
+- name: Установка корня данных пользовательского проекта для технического пользователя SSH с режимом 0755
   ansible.builtin.file:
     path: "{{ platform_managed_data_root_directory }}"
     state: directory

@@ -9,11 +9,11 @@
   become: true
   gather_facts: false
   pre_tasks:
-    - name: Применить ту же доверенную конфигурацию среды выполнения Kafka, что и Apply
+    - name: Применение той же доверенной конфигурации среды выполнения Kafka, что и Apply
       ansible.builtin.include_role:
         name: platform.core.runtime_role_variables
       when: platform_execution_role_variables_by_host is defined
-    - name: Проецировать созданное состояние Kafka, принадлежащее контроллеру, на узлы проверки
+    - name: Передача подготовленного контроллером состояния Kafka на узлы проверки
       ansible.builtin.set_fact:
         platform_generated_state: "{{ hostvars['localhost'].platform_generated_state }}"
       when: platform_generated_state_path is defined

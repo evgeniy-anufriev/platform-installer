@@ -1,5 +1,5 @@
 ---
-- name: Проверить типизированные входные данные Vault из runtime-сеанса секретов
+- name: Проверка типизированных входных данных Vault из runtime-сеанса секретов
   ansible.builtin.assert:
     that:
       - platform_runtime_secret_inputs is sequence
@@ -16,7 +16,7 @@
     label: "{{ item.purpose | default('unknown') }}"
   no_log: true
 
-- name: Отклонить повторяющиеся цели ввода Vault
+- name: Отклонение повторяющихся целей ввода Vault
   ansible.builtin.assert:
     that:
       - >-
@@ -26,7 +26,7 @@
     fail_msg: VAULT_RUNTIME_SECRET_INPUT_DUPLICATE
   no_log: true
 
-- name: Использовать введенный административный токен, если автономный токен не был предоставлен
+- name: Использование введенного административного токена, если автономный токен не был предоставлен
   ansible.builtin.set_fact:
     platform_vault_admin_token: "{{ (platform_runtime_secret_inputs | selectattr('purpose', 'equalto', 'SERVICE_ADMIN_TOKEN') | first).value }}"
   when:
@@ -34,7 +34,7 @@
     - platform_runtime_secret_inputs | default([]) | selectattr('purpose', 'equalto', 'SERVICE_ADMIN_TOKEN') | list | length == 1
   no_log: true
 
-- name: "Использовать доли ключа Shamir из runtime-сеанса, если они не переданы явно"
+- name: "Использование долей ключа Shamir из runtime-сеанса, если они не переданы явно"
   ansible.builtin.set_fact:
     platform_vault_unseal_keys: "{{ (platform_runtime_secret_inputs | selectattr('purpose', 'equalto', 'SERVICE_UNSEAL_SHARES') | first).value }}"
   when:

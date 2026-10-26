@@ -1,8 +1,8 @@
 ---
-- name: Перепроверить владение каталогом реестра непосредственно перед очисткой
+- name: Повторная проверка владения каталогом реестра непосредственно перед очисткой
   ansible.builtin.include_tasks: schema_registry_ownership.yml
 
-- name: Остановить только службы реестра systemd, принадлежащие развертыванию, перед очисткой Kafka
+- name: Остановка служб Schema Registry выбранного развёртывания перед очисткой Kafka
   ansible.builtin.systemd:
     name: "{{ item.registry_instance.unit_name }}"
     state: stopped
@@ -30,7 +30,7 @@
   loop_control:
     label: "{{ item.1 }}"
 
-- name: Перезагрузить systemd после очистки службы реестра systemd
+- name: Перечитывание unit-файлов systemd после удаления служб Schema Registry
   ansible.builtin.systemd:
     daemon_reload: true
   when: _platform_kafka_registry_clear_units.changed

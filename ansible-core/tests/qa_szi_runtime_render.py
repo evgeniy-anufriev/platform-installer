@@ -30,24 +30,24 @@ def production_tasks(path, names):
 def build_play(folder):
     names = {
         'Привязка зарезервированного дайджеста и контекста шаблона',
-        'Сформировать разрешённую конфигурацию агента без секретных значений',
+        'Формирование разрешённой конфигурации агента без секретных значений',
         'Привязка несекретной конфигурации агента к дайджесту согласования контейнера',
-        'Требовать закрытый профиль супервизора агента и точную дочернюю команду',
-        'Сформировать ожидаемые Compose-файлы и файлы библиотеки по шаблонам Ansible',
-        'Потребовать, чтобы общая среда оставалась ограниченной и несекретной',
+        'Проверка профиля супервизора агента и разрешённой команды дочернего процесса',
+        'Формирование Compose-файлов и файлов библиотеки по шаблонам Ansible',
+        'Проверка допустимого состава общего окружения и отсутствия секретов',
     }
     render = production_tasks(ROLE / 'tasks/preflight.yml', names)
     configs = production_tasks(ROLE / 'tasks/preflight.yml', {
-        'Сформировать конфигурационные файлы по шаблонам в защищённой памяти',
-        'Прочитать объявленные исходные файлы без преобразования текста',
-        'Проверить допустимость конфигурации и отсутствие секретов перед записью файлов',
+        'Формирование конфигурационных файлов по шаблонам в защищённой памяти',
+        'Чтение объявленных исходных файлов без преобразования текста',
+        'Проверка допустимости конфигурации и отсутствия секретов перед записью файлов',
     })
     for task in configs:
         if task.get('ansible.builtin.include_tasks') == 'source_config.yml':
             task['ansible.builtin.include_tasks'] = str(ROLE / 'tasks/source_config.yml')
     check = production_tasks(ROLE / 'tasks/apply_instance.yml', {
-        'Анализ эффективного Compose без запуска или изменения образа',
-        'Проверить только значения Compose, полученные из проекции Core',
+        'Анализ действующей конфигурации Compose без запуска или изменения образа',
+        'Проверка только значений Compose из проекции Core',
     })
     initial = {'name': 'QA Bind isolated paths to the real runtime job', 'ansible.builtin.set_fact': {
         'application_project_id': '{{ application_runtime_job.projectId }}',
@@ -204,7 +204,7 @@ def main():
             rows, error = run(project, prepared, folder)
             if mode.startswith('legacy_'):
                 expected = ('QA Require concrete Hazelcast IP addresses before process startup'
-                            if mode == 'legacy_escaped' else 'Проверить только значения Compose, полученные из проекции Core')
+                            if mode == 'legacy_escaped' else 'Проверка только значений Compose из проекции Core')
                 if error and error['lastTask'] == expected:
                     evidence.append(dict(case=mode, status='PASS', rejectedBy=expected))
                     continue

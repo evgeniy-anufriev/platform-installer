@@ -7,7 +7,7 @@
   changed_when: false
   no_log: true
 
-- name: Выбрать только блоки ресурсов кластера перед проверкой административных прав
+- name: Выбор только блоков ресурсов кластера перед проверкой административных прав
   ansible.builtin.set_fact:
     kafka_authorization_cluster_bindings: >-
       {{ kafka_authorization_cluster_acls.stdout
@@ -16,7 +16,7 @@
   changed_when: false
   no_log: true
 
-- name: Отклонить ранее существовавшие права администрирования безопасности за пределами единственного администратора
+- name: Отклонение ранее существовавших прав администрирования безопасности за пределами единственного администратора
   ansible.builtin.assert:
     that:
       - kafka_authorization_cluster_acls.rc == 0

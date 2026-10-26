@@ -1,5 +1,5 @@
 ---
-- name: Выполнить запуск роли HAProxy с отсутствующим каталогом сокетов среды выполнения
+- name: Выполнение запуска роли HAProxy с отсутствующим каталогом сокетов среды выполнения
   hosts: localhost
   connection: local
   become: true
@@ -8,12 +8,12 @@
     platform_haproxy_active_artifacts_changed: false
     platform_haproxy_tls_material_changed: false
   tasks:
-    - name: "Остановить HAProxy перед проверкой восстановления временного runtime-каталога"
+    - name: "Остановка HAProxy перед проверкой восстановления временного runtime-каталога"
       ansible.builtin.systemd:
         name: haproxy
         state: stopped
 
-    - name: "Удалить временный каталог сокетов HAProxy для регрессионной проверки"
+    - name: "Удаление временного каталога сокетов HAProxy для регрессионной проверки"
       ansible.builtin.file:
         path: /run/haproxy
         state: absent
@@ -28,13 +28,13 @@
         path: /run/haproxy
       register: _haproxy_runtime_directory
 
-    - name: Требовать воссоздания каталога среды выполнения HAProxy при запуске службы
+    - name: Проверка восстановления runtime-каталога HAProxy при запуске
       ansible.builtin.assert:
         that:
           - _haproxy_runtime_directory.stat.isdir
           - _haproxy_runtime_directory.stat.mode == '0755'
 
-    - name: Потребовать, чтобы HAProxy был активным после восстановления каталога времени выполнения
+    - name: Проверка активности HAProxy после восстановления runtime-каталога
       ansible.builtin.command:
         argv: [systemctl, is-active, --quiet, haproxy]
       changed_when: false
@@ -44,7 +44,7 @@
         path: /run/haproxy/admin.sock
       register: _haproxy_runtime_socket
 
-    - name: Требовать существования управляющего сокета HAProxy
+    - name: Проверка наличия управляющего сокета HAProxy
       ansible.builtin.assert:
         that: _haproxy_runtime_socket.stat.issock
 

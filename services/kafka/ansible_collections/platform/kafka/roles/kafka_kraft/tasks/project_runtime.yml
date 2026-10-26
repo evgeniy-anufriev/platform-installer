@@ -6,7 +6,7 @@
   delegate_facts: true
   run_once: true
 
-- name: Загрузить желаемое состояние устаревшего проекта, когда собственное состояние Ansible отсутствует
+- name: Загрузка совместимого желаемого состояния проекта при отсутствии настроек Ansible
   ansible.builtin.include_vars:
     file: "{{ platform_project_manifest_path | default(inventory_dir ~ '/../project.yml', true) }}"
     name: _platform_kafka_project_manifest
@@ -16,7 +16,7 @@
   become: false
   when: platform_desired_state | default({}) | length == 0
 
-- name: Выбрать желаемое состояние Ansible с устаревшей совместимостью
+- name: Выбор желаемого состояния Ansible с поддержкой старого формата
   ansible.builtin.set_fact:
     _platform_kafka_project_state: >-
       {{ platform_desired_state
@@ -28,7 +28,7 @@
   delegate_facts: true
   run_once: true
 
-- name: Инициализировать список экземпляров Kafka из runtime-проекции
+- name: Инициализация списка экземпляров Kafka из runtime-проекции
   ansible.builtin.set_fact:
     platform_kafka_instances: []
 
@@ -38,32 +38,32 @@
       {{ (hostvars['localhost']._platform_kafka_project_state.serviceDeployments | dict2items
           | selectattr('value.serviceType', 'equalto', 'kafka') | list | first) }}
 
-- name: Выбрать точное утвержденное развертывание Kafka при выполнении плана
+- name: Выбор точного утвержденного развёртывания Kafka при выполнении плана
   ansible.builtin.set_fact:
     _platform_kafka_managed_deployment:
       key: "{{ platform_execution_service_deployment }}"
       value: "{{ hostvars['localhost']._platform_kafka_project_state.serviceDeployments[platform_execution_service_deployment] }}"
   when: platform_execution_service_deployment is defined
 
-- name: Выбрать служебное состояние развёртывания Kafka
+- name: Выбор служебного состояния развёртывания Kafka
   ansible.builtin.set_fact:
     _platform_kafka_generated_deployment_state: >-
       {{ (platform_generated_state | default({})).get('serviceDeployments', {}).get(
            _platform_kafka_managed_deployment.key, {}) }}
 
-- name: "Определить идентификатор Kafka для выбранного развёртывания"
+- name: "Определение идентификатора Kafka для выбранного развёртывания"
   ansible.builtin.set_fact:
     platform_kafka_cluster_id: >-
           {{ _platform_kafka_generated_deployment_state.get('identity', {}).get('clusterId', '')
           | default(_platform_kafka_managed_deployment.value.get('identity', {}).get('clusterId', ''), true)
           | default('', true) }}
 
-- name: "Определить явные параметры Kafka для выбранного развёртывания"
+- name: "Определение явных параметров Kafka для выбранного развёртывания"
   ansible.builtin.set_fact:
     platform_kafka_quorum_mode: "{{ _platform_kafka_managed_deployment.value.configuration.quorumMode }}"
   when: "'quorumMode' in (_platform_kafka_managed_deployment.value.configuration | default({}))"
 
-- name: Спроецировать каждое развертывание Kafka
+- name: Формирование проекции каждого развёртывания Kafka
   ansible.builtin.set_fact:
     platform_kafka_admin_credential: "{{ _platform_kafka_managed_deployment.value.configuration.adminCredential | default(platform_kafka_admin_credential) }}"
     platform_kafka_schema_registry_enabled: "{{ _platform_kafka_managed_deployment.value.configuration.schemaRegistryEnabled | default(platform_kafka_schema_registry_enabled) }}"
@@ -73,7 +73,7 @@
 # Do not copy integer defaults through scalar set_fact: classic Jinja turns them
 # into strings before the shared Registry projection validates their types.
 
-- name: Проецировать каждое развертывание Kafka с настройками реестра
+- name: Формирование проекции каждого развёртывания Kafka с настройками реестра
   ansible.builtin.include_tasks: project_deployment.yml
   loop: "{{ (hostvars['localhost']._platform_kafka_project_state.serviceDeployments | default({}) | dict2items) }}"
   loop_control:

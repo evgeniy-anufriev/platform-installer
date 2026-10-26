@@ -13,7 +13,7 @@
   failed_when: false
   changed_when: false
 
-- name: Наблюдать за текущим процессом экземпляра службы через systemd
+- name: Наблюдение за текущим процессом экземпляра службы через systemd
   ansible.builtin.command:
     argv: [systemctl, show, "{{ kafka_authorization_member.systemd_unit_name }}", --property=MainPID, --property=ExecMainStartTimestamp, --property=ActiveState]
   environment:
@@ -22,20 +22,20 @@
   failed_when: false
   changed_when: false
 
-- name: Извлечь идентификатор ограниченного процесса
+- name: Извлечение идентификатора наблюдаемого процесса
   ansible.builtin.set_fact:
     kafka_authorization_pid: "{{ (kafka_authorization_process.stdout | regex_findall('(?m)^MainPID=([1-9][0-9]*)$') | first) | default('0') }}"
     kafka_authorization_started: "{{ (kafka_authorization_process.stdout | regex_findall('(?m)^ExecMainStartTimestamp=(.+)$') | first) | default('') }}"
   changed_when: false
 
-- name: Прочитать командную строку запущенного процесса
+- name: Чтение командной строки запущенного процесса
   ansible.builtin.slurp:
     src: "/proc/{{ kafka_authorization_pid }}/cmdline"
   register: kafka_authorization_command
   failed_when: false
   when: kafka_authorization_pid != '0'
 
-- name: Преобразовать наблюдаемую метку времени запуска systemd с помощью встроенной утилиты даты
+- name: Преобразование наблюдаемой метки времени запуска systemd с помощью встроенной утилиты даты
   ansible.builtin.command:
     argv: [date, "--date={{ kafka_authorization_started }}", '+%s.%N']
   environment:
@@ -45,7 +45,7 @@
   changed_when: false
   when: kafka_authorization_started | length > 0
 
-- name: Повторная проверка удостоверения процесса после наблюдения за запуском и командой
+- name: Повторная проверка PID процесса после чтения команды и времени запуска
   ansible.builtin.command:
     argv: [systemctl, show, "{{ kafka_authorization_member.systemd_unit_name }}", --property=MainPID, --property=ExecMainStartTimestamp, --property=ActiveState]
   environment:
@@ -54,7 +54,7 @@
   failed_when: false
   changed_when: false
 
-- name: Записать факт загрузки итоговой конфигурации запущенным экземпляром Kafka
+- name: Запись факта загрузки итоговой конфигурации запущенным экземпляром Kafka
   ansible.builtin.set_fact:
     kafka_authorization_running_final: >-
       {{ kafka_authorization_config_line.rc == 0

@@ -6,7 +6,7 @@
   when: "'sentinel' in redis_member.roles"
   no_log: true
 
-- name: Запросить точную конфигурацию файла Sentinel ACL
+- name: Проверка конфигурации файла ACL Sentinel
   ansible.builtin.assert:
     that:
       - (_platform_sentinel_acl_configuration.content | b64decode | regex_findall('(?m)^aclfile\s+(.+)$')) in [[redis_member.config_directory ~ '/sentinel.users.acl'], ['"' ~ redis_member.config_directory ~ '/sentinel.users.acl"']]
@@ -14,7 +14,7 @@
   when: "'sentinel' in redis_member.roles"
   no_log: true
 
-- name: Проверить и сохранить всех пользователей ACL под блокировкой экземпляра общей службы
+- name: Проверка и сохранение всех пользователей ACL под общей блокировкой экземпляра
   platform.redis.acl_file:
     directory: "{{ redis_member.config_directory }}"
     listener: "{{ item }}"

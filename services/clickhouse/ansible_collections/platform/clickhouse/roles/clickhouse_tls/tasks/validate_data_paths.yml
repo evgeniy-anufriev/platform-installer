@@ -1,5 +1,5 @@
 ---
-- name: Хранить общий корень данных ClickHouse отдельно от совместно расположенных экземпляров службы
+- name: Хранение общего корня данных ClickHouse отдельно от совместно расположенных экземпляров службы
   ansible.builtin.assert:
     that: item.data_directory != platform_clickhouse_data_root
     fail_msg: "CLICKHOUSE_DATA_DIRECTORY_COLLISION: {{ item.id }}: {{ item.data_directory }} is the shared root"
@@ -8,7 +8,7 @@
     label: "{{ item.id }}"
   when: _platform_clickhouse_local_instances | length > 1
 
-- name: Отказаться от перекрытия каталогов экземпляров службы ClickHouse на одном хосте
+- name: Отклонение пересекающихся каталогов экземпляров ClickHouse на одном узле
   ansible.builtin.assert:
     that:
       - not item.0.data_directory.startswith(item.1.data_directory ~ '/')

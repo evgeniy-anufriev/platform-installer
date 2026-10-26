@@ -1,5 +1,5 @@
 ---
-- name: "Проверить самостоятельный запуск роли Docker на одном узле RED OS"
+- name: "Проверка самостоятельного запуска роли Docker на одном узле RED OS"
   hosts: platform_targets
   become: true
   gather_facts: false

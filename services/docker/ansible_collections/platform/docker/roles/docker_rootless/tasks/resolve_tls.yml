@@ -1,5 +1,5 @@
 ---
-- name: Выбрать потребительский план Core PKI, если он доступен
+- name: Выбор плана Core PKI для потребителя при его наличии
   ansible.builtin.include_role:
     name: platform.core.pki_materialize
     tasks_from: select_consumer_plan.yml
@@ -11,7 +11,7 @@
     | selectattr('tlsProfileId', 'equalto', platform_docker_tls_profile)
     | list | length > 0
 
-- name: Разрешить утвержденный каталог Docker TLS
+- name: Определение утвержденного каталога Docker TLS
   ansible.builtin.set_fact:
     _platform_docker_tls_source: >-
       {{ platform_pki_selected_consumer_plan.targetDirectory
@@ -19,14 +19,14 @@
          else platform_docker_tls_directory }}
   changed_when: false
 
-- name: Отклонить отсутствующий или небезопасный каталог PKI
+- name: Отклонение отсутствующего или небезопасного каталога PKI
   ansible.builtin.assert:
     that:
       - _platform_docker_tls_source is match('^/[A-Za-z0-9_./-]{1,240}$')
       - "'..' not in _platform_docker_tls_source.split('/')"
     fail_msg: DOCKER_PKI_MATERIALIZATION_REQUIRED
 
-- name: Проверка точных файлов Docker TLS
+- name: Проверка TLS-файлов Docker
   ansible.builtin.stat:
     path: "{{ _platform_docker_tls_source }}/{{ item }}"
     follow: false
@@ -37,7 +37,7 @@
   register: _platform_docker_tls_files
   no_log: true
 
-- name: Требовать обычный материал TLS без символических ссылок
+- name: Проверка обычного типа TLS-файлов и отсутствия символических ссылок
   ansible.builtin.assert:
     that:
       - _platform_docker_tls_files.results | rejectattr('stat.isreg', 'equalto', true) | list | length == 0
@@ -45,7 +45,7 @@
     fail_msg: DOCKER_PKI_MATERIALIZATION_REQUIRED
   no_log: true
 
-- name: Потребовать от выбранного запроса Core PKI объявить оба варианта использования Docker
+- name: Проверка назначений serverAuth и clientAuth в выбранном запросе PKI для Docker
   ansible.builtin.assert:
     that:
       - _platform_docker_selected_requests | length == 1
@@ -59,7 +59,7 @@
          | list }}
   when: platform_pki_selected_consumer_plan is defined
 
-- name: "Прочитать расширенные назначения ключа сертификата — EKU"
+- name: "Чтение расширенных назначений ключа сертификата — EKU"
   ansible.builtin.command:
     argv: [openssl, x509, -in, "{{ _platform_docker_tls_source }}/certificate.pem", -noout, -ext, extendedKeyUsage]
   register: _platform_docker_certificate_eku
@@ -67,7 +67,7 @@
   failed_when: false
   no_log: true
 
-- name: Отклонить отсутствующий или неполный явный сертификат Docker EKU
+- name: Отклонение отсутствующего или неполного явного сертификата Docker EKU
   ansible.builtin.assert:
     that:
       - _platform_docker_certificate_eku.rc == 0
@@ -83,7 +83,7 @@
   changed_when: false
   no_log: true
 
-- name: "Проверить соответствие SAN сертификата адресу Docker API"
+- name: "Проверка соответствия SAN сертификата адресу Docker API"
   ansible.builtin.assert:
     that:
       - >-

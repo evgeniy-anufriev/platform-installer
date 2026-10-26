@@ -15,9 +15,9 @@ class ZoneBatchRuntimeTests(unittest.TestCase):
             self.skipTest('Ansible runtime required')
         tasks = yaml.safe_load((ROLE / 'tasks/update_a_records.yml').read_text())
         selected = [task for task in tasks if task['name'] in (
-            'Проверить непустую зону и уникальность владельцев записей обновления BIND',
-            'Создать одно обновление зоны с наблюдаемым существованием и предварительными условиями RDATA',
-            'Привязать весь запрос DNS перед его первой модификацией')]
+            'Проверка непустой зоны и уникальности владельцев обновляемых записей BIND',
+            'Создание одного обновления зоны с проверками наличия записей и исходных RDATA',
+            'Привязка всего запроса DNS перед его первой модификацией')]
         selected.append({'ansible.builtin.copy': {'content': '{{ _platform_bind_zone_update }}', 'dest': '{{ result_path }}'}})
         with tempfile.TemporaryDirectory() as directory:
             result_path = Path(directory) / 'update.txt'

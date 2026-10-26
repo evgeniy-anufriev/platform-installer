@@ -1,5 +1,5 @@
 ---
-- name: Разрешение проекции времени выполнения Kafka TLS для проверки SSL
+- name: Расчёт runtime-проекции Kafka TLS для проверки SSL
   ansible.builtin.include_tasks: resolve_tls_runtime.yml
   vars:
     kafka_tls_member: "{{ kafka_member }}"
@@ -15,14 +15,14 @@
     kafka_pem_verify_only: true
   when: _platform_kafka_tls_runtime.storeType == 'PEM'
 
-- name: Прочитать конфигурацию установленного экземпляра службы, не раскрывая ее
+- name: Чтение конфигурации установленного экземпляра службы, не раскрывая ее
   ansible.builtin.slurp:
     src: "{{ kafka_member.config_directory }}/server.properties"
   register: _platform_kafka_pem_member_config
   no_log: true
   when: _platform_kafka_tls_runtime.storeType == 'PEM'
 
-- name: Проверить использование выбранных PEM-файлов установленной конфигурацией Kafka listener
+- name: Проверка использования выбранных PEM-файлов установленной конфигурацией Kafka listener
   ansible.builtin.assert:
     that:
       - "('listener.name.' ~ (kafka_ssl_listener.name | lower) ~ '.ssl.keystore.type=PEM') in (_platform_kafka_pem_member_config.content | b64decode).splitlines()"
@@ -36,7 +36,7 @@
   no_log: true
   when: _platform_kafka_tls_runtime.storeType == 'PEM'
 
-- name: Выполнить реальное TLS-соединение с listener Kafka
+- name: Выполнение реального TLS-соединения с listener Kafka
   ansible.builtin.shell: |
     set -eu
     verification_host={{ kafka_ssl_listener.advertisedAddress | default(kafka_member.advertised_host) | quote }}
@@ -61,7 +61,7 @@
   delay: "{{ platform_kafka_startup_readiness_delay }}"
   until: platform_kafka_ssl_handshake.rc == 0
 
-- name: Подтвердить успешное рукопожатие Kafka SSL
+- name: Подтверждение успешного рукопожатия Kafka SSL
   ansible.builtin.assert:
     that:
       - platform_kafka_ssl_handshake.rc == 0

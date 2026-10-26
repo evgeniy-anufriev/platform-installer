@@ -1,10 +1,10 @@
 ---
-- name: Сбросить барьер готовности администратора Kafka перед переходом авторизации
+- name: Сброс барьера готовности администратора Kafka перед переходом авторизации
   ansible.builtin.set_fact:
     kafka_authorization_admin_ready: false
   changed_when: false
 
-- name: "Прервать выполнение на всех узлах при сбое настройки администратора или завершения настройки экземпляра"
+- name: "Прерывание выполнения на всех узлах при сбое настройки администратора или завершения настройки экземпляра"
   any_errors_fatal: true
   block:
     - name: Предоставление или проверка прав администратора и явных прав совместимости один раз для каждого развертывания
@@ -15,12 +15,12 @@
           become: true
       run_once: true
 
-    - name: "Разрешить отзыв bootstrap-доступа после успешной проверки администратора и ACL"
+    - name: "Разрешение отзыва bootstrap-доступа после успешной проверки администратора и ACL"
       ansible.builtin.set_fact:
         kafka_authorization_admin_ready: true
       changed_when: false
 
-    - name: Проверить участие всех узлов развёртывания в play перед делегированным отзывом
+    - name: Проверка участия всех узлов развёртывания в play перед делегированным отзывом
       ansible.builtin.assert:
         that: >-
           (_platform_kafka_instances | map(attribute='host') | unique | list

@@ -7,7 +7,7 @@
       - platform_dns_client_local.managedZone is match('^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$')
     fail_msg: DNS_CLIENT_RESOLVED_INPUT_INVALID
 
-- name: "Создать каталог дополнительных настроек systemd-resolved"
+- name: "Создание каталога дополнительных настроек systemd-resolved"
   ansible.builtin.file:
     path: /etc/systemd/resolved.conf.d
     state: directory
@@ -15,7 +15,7 @@
     group: root
     mode: '0755'
 
-- name: "Сформировать настройки раздельного DNS для systemd-resolved"
+- name: "Формирование настроек раздельного DNS для systemd-resolved"
   ansible.builtin.template:
     src: platform-installer.conf.j2
     dest: "/etc/systemd/resolved.conf.d/{{ (platform_name_prefix | default('') ~ '-') if (platform_name_prefix | default('')) else '' }}installer.conf"
@@ -24,13 +24,13 @@
     mode: '0644'
   register: _platform_dns_client_resolved_dropin
 
-- name: Убедиться, что systemd-resolved включен и активен
+- name: Проверка того, что systemd-resolved включен и активен
   ansible.builtin.systemd:
     name: systemd-resolved.service
     enabled: true
     state: started
 
-- name: "Перезапустить systemd-resolved после изменения дополнительных настроек"
+- name: "Перезапуск systemd-resolved после изменения дополнительных настроек"
   ansible.builtin.systemd:
     name: systemd-resolved.service
     state: restarted

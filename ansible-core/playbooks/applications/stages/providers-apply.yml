@@ -13,14 +13,14 @@
       loop: "{{ application_provider_inputs.libraryJobs | selectattr('serviceType', 'equalto', 'postgresql') | list }}"
       loop_control:
         loop_var: platform_postgresql_application_job
-    - name: Проверить каждую область базы данных библиотеки ClickHouse перед учетными записями приложений
+    - name: Проверка каждой области базы данных библиотеки ClickHouse перед учетными записями приложений
       ansible.builtin.include_role:
         name: platform.clickhouse.application_provider
         tasks_from: resources
       loop: "{{ application_provider_inputs.libraryJobs | selectattr('serviceType', 'equalto', 'clickhouse') | list }}"
       loop_control:
         loop_var: platform_clickhouse_application_job
-    - name: Убедиться, что каждая учетная запись экземпляра приложения предоставляет права и доступ с проверкой подлинности
+    - name: Проверка того, что каждая учетная запись экземпляра приложения предоставляет права и доступ с проверкой подлинности
       ansible.builtin.include_role:
         name: platform.postgresql.application_provider
         tasks_from: accounts
@@ -34,7 +34,7 @@
       loop: "{{ application_provider_inputs.instanceJobs | selectattr('serviceType', 'equalto', 'redis') | list }}"
       loop_control:
         loop_var: platform_redis_application_job
-    - name: "Проверить и настроить учётные записи и права доступа экземпляров ClickHouse"
+    - name: "Проверка и настройка учётных записей и прав доступа экземпляров ClickHouse"
       ansible.builtin.include_role:
         name: platform.clickhouse.application_provider
         tasks_from: accounts

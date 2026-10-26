@@ -13,27 +13,27 @@
   changed_when: false
   failed_when: false
 
-- name: Проверить, запущен ли systemd-resolved
+- name: Проверка того, запущен ли systemd-resolved
   ansible.builtin.command:
     argv: [systemctl, is-active, systemd-resolved.service]
   register: _platform_dns_client_resolved_active
   changed_when: false
   failed_when: false
 
-- name: Проверить, запущен ли NetworkManager
+- name: Проверка того, запущен ли NetworkManager
   ansible.builtin.command:
     argv: [systemctl, is-active, NetworkManager.service]
   register: _platform_dns_client_nm_active
   changed_when: false
   failed_when: false
 
-- name: "Проверить, какой сервис управляет конфигурацией DNS-резолвера"
+- name: "Проверка того, какой сервис управляет конфигурацией DNS-резолвера"
   ansible.builtin.stat:
     path: /etc/resolv.conf
     follow: false
   register: _platform_dns_client_resolv_conf
 
-- name: "Прочитать символическую ссылку конфигурации DNS-резолвера без изменений"
+- name: "Чтение символической ссылки конфигурации DNS-резолвера без изменений"
   ansible.builtin.command:
     argv: [readlink, /etc/resolv.conf]
   register: _platform_dns_client_resolv_link
@@ -52,12 +52,12 @@
                and _platform_dns_client_nm_active.stdout | trim == 'active'
                else '') }}
 
-- name: Требовать поддерживаемую серверную часть клиента DNS
+- name: Проверка поддержки выбранного механизма настройки DNS-клиента
   ansible.builtin.assert:
     that: platform_dns_client_backend | length > 0
     fail_msg: DNS_CLIENT_BACKEND_UNSUPPORTED
 
-- name: Требовать безопасного разрешения владения resolv.conf
+- name: Проверка сервиса, управляющего resolv.conf, и допустимости изменения файла
   ansible.builtin.assert:
     that:
       - _platform_dns_client_resolv_conf.stat.islnk | default(false)
@@ -72,7 +72,7 @@
   failed_when: false
   when: platform_dns_client_backend == 'NetworkManager'
 
-- name: Определить возможность разделения NetworkManager DNS
+- name: Определение поддержки раздельного DNS в NetworkManager
   ansible.builtin.set_fact:
     platform_dns_client_nm_split_supported: >-
       {{ _platform_dns_client_nm_config.content | default('') | b64decode is search('(?m)^\\s*dns\\s*=\\s*dnsmasq\\s*$') }}

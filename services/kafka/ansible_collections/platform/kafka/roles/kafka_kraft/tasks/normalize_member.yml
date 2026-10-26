@@ -35,7 +35,7 @@
           if (kafka_input_member.listeners | default({}) | length > 0)
           else []) | unique | sort }}
 
-- name: Построить нормализованную проекцию конечных точек Kafka listeners
+- name: Построение нормализованной проекции конечных точек Kafka listeners
   ansible.builtin.set_fact:
     _platform_kafka_normalized_listener_endpoints: >-
       {% set endpoints = [] %}
@@ -53,7 +53,7 @@
       {% endfor %}
       {{ endpoints | to_json }}
 
-- name: Преобразовать нормализованную проекцию Kafka listeners в список Ansible
+- name: Преобразование нормализованной проекции Kafka listeners в список Ansible
   ansible.builtin.set_fact:
     _platform_kafka_normalized_listener_endpoints: "{{ _platform_kafka_normalized_listener_endpoints | from_json }}"
 
@@ -66,7 +66,7 @@
       {{ _platform_kafka_normalized_listener_endpoints
          | selectattr('purpose', 'equalto', 'client') | list | first | default({}, true) }}
 
-- name: Собрать нормализованный экземпляр службы Kafka
+- name: Сбор нормализованного экземпляра службы Kafka
   ansible.builtin.set_fact:
     _platform_kafka_normalized_member: >-
       {{ (kafka_input_member | combine({

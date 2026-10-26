@@ -9,7 +9,7 @@
     label: "{{ item.1 }}"
   register: _platform_kafka_registry_path_stats
 
-- name: Отклонить небезопасные пути реестра
+- name: Отклонение небезопасных путей реестра
   ansible.builtin.assert:
     that: not item.stat.exists or (not (item.stat.islnk | default(false)) and (item.stat.isdir | default(false)))
     fail_msg: SCHEMA_REGISTRY_PATH_UNSAFE
@@ -28,7 +28,7 @@
   register: _platform_kafka_registry_root_markers
   when: (_platform_kafka_registry_path_stats.results | selectattr('item.1', 'equalto', item.1) | first).stat.exists
 
-- name: Требовать владения каждым существующим корнем реестра перед изменением или удалением
+- name: Проверка принадлежности каталогов Schema Registry перед изменением или удалением
   ansible.builtin.assert:
     that:
       - item.stat.isreg | default(false)

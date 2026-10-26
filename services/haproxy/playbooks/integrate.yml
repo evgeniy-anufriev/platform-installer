@@ -9,7 +9,7 @@
       platform_haproxy_phase: prepare
       platform_haproxy_partial_deployment_id: "{{ hostvars['localhost']._platform_integration_source_id }}"
 
-- name: Активировать backend источника после проверки конфигураций на всём кластере
+- name: Активация backend источника после проверки конфигураций на всём кластере
   hosts: "{{ hostvars['localhost'].platform_service_integration_projection.haproxyHosts | default([]) if hostvars is defined else [] }}"
   become: true
   gather_facts: false
@@ -19,7 +19,7 @@
       platform_haproxy_phase: activate
       platform_haproxy_partial_deployment_id: "{{ hostvars['localhost']._platform_integration_source_id }}"
 
-- name: Перезагрузить HAProxy после активации исходного сервера
+- name: Перечитывание конфигурации HAProxy после активации backend-сервиса источника
   hosts: "{{ hostvars['localhost'].platform_service_integration_projection.haproxyHosts | default([]) if hostvars is defined else [] }}"
   become: true
   gather_facts: false

@@ -1,12 +1,12 @@
 ---
-- name: Проверить авторитетные входные файлы PEM клиента Kafka
+- name: Проверка исходных PEM-файлов клиента Kafka
   ansible.builtin.assert:
     that:
       - application_topic_candidate.pkiPlans | length == 1
       - "'PEM' in application_topic_candidate.pkiPlans[0].formats"
     fail_msg: APPLICATION_PROVIDER_PKI_PLAN_REQUIRED
 
-- name: Подготовить только частный пакет PEM для Kafka CLI
+- name: Подготовка защищённого набора PEM-файлов для Kafka CLI
   ansible.builtin.include_tasks: pem_identity.yml
   vars:
     kafka_pem_source_directory: "{{ application_topic_candidate.pkiPlans[0].targetDirectory }}"

@@ -1,5 +1,5 @@
 ---
-- name: Запустить один ведомый узел Raft после разблокировки начального узла
+- name: Запуск одного ведомого узла Raft после разблокировки начального узла
   ansible.builtin.systemd:
     name: "{{ vault_member.instance_name }}.service"
     state: "{{ 'restarted' if vault_member.instance_name in (hostvars[vault_member.host]._platform_vault_active_units | default([])) and vault_member.id in (hostvars[vault_member.host]._platform_vault_restart_member_ids | default([])) else 'started' }}"
@@ -8,10 +8,10 @@
   delegate_to: "{{ vault_member.host }}"
   become: true
 
-- name: "Разблокировать присоединяемый узел Raft долями ключа начального узла"
+- name: "Разблокировка присоединяемого узла Raft долями ключа начального узла"
   ansible.builtin.include_tasks: unseal_member.yml
 
-- name: "Проверить инициализацию присоединённого узла Raft после разблокировки"
+- name: "Проверка инициализации присоединённого узла Raft после разблокировки"
   ansible.builtin.uri:
     url: "https://{{ vault_member.address }}:{{ vault_member.api_port }}/v1/sys/init"
     method: GET

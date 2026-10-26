@@ -1,5 +1,5 @@
 ---
-- name: Просмотреть предыдущий точный контейнер перед согласованием
+- name: Просмотр предыдущего точного контейнера перед согласованием
   ansible.builtin.command:
     argv: [docker, container, inspect, "{{ application_runtime_job.placement.containerName }}"]
   become_user: "{{ application_runtime_job.account }}"
@@ -9,9 +9,9 @@
   failed_when: false
   no_log: true
 
-- name: Запустить точный экземпляр с одной попыткой восстановления в случае неудачи
+- name: Запуск точного экземпляра с одной попыткой восстановления в случае неудачи
   block:
-    - name: Согласовать точный экземпляр без сборки по запросу или запуска зависимостей
+    - name: Согласование точного экземпляра без сборки по запросу или запуска зависимостей
       any_errors_fatal: false
       ansible.builtin.command:
         argv: "{{ application_runtime_job.composeArgv + ['up', '-d', '--no-build', '--pull', 'never', '--no-deps', application_runtime_job.instanceId] }}"
@@ -20,7 +20,7 @@
       changed_when: false
       no_log: true
   rescue:
-    - name: Воссоздать точный экземпляр после сбоя обычного запуска Compose
+    - name: Повторное создание точного экземпляра после сбоя обычного запуска Compose
       ansible.builtin.command:
         argv: "{{ application_runtime_job.composeArgv + ['up', '-d', '--no-build', '--pull', 'never', '--no-deps', '--force-recreate', application_runtime_job.instanceId] }}"
       become_user: "{{ application_runtime_job.account }}"
@@ -33,7 +33,7 @@
   vars:
     application_runtime_verify_vault: false
 
-- name: "Сообщить о создании, замене или запуске контейнера"
+- name: "Вывод сообщения о создании, замене или запуске контейнера"
   ansible.builtin.debug:
     msg: APPLICATION_CONTAINER_RECONCILED
   changed_when: >-

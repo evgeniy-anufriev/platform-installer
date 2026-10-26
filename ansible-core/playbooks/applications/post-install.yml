@@ -3,26 +3,26 @@
   vars:
     platform_application_post_install_only: true
 
-- name: Выполнить сценарии post_install для успешно установленной части библиотек
+- name: Выполнение сценариев post_install для успешно установленной части библиотек
   hosts: localhost
   connection: local
   gather_facts: false
   any_errors_fatal: true
   tasks:
-    - name: Привязать очередь сценариев post_install и ссылки на учётные данные
+    - name: Привязка очереди сценариев post_install и ссылок на учётные данные
       ansible.builtin.set_fact:
         application_post_install_scripts: "{{ application_runtime_inputs.postInstallScripts }}"
         application_post_install_references: "{{ application_runtime_inputs.postInstallScripts | map(attribute='secretInputs') | map('dict2items') | flatten | map(attribute='value') | unique | list }}"
         platform_application_vault_runtime: {}
         platform_application_credential_files: {}
       no_log: true
-    - name: Привязать опубликованные поля, используемые сценариями post_install
+    - name: Привязка опубликованных полей для сценариев post_install
       ansible.builtin.set_fact:
         application_post_install_sources: "{{ application_vault_inputs.sourceJobs | selectattr('passwordRef', 'in', application_post_install_references) | list }}"
       no_log: true
-    - name: Выполнить сценарии post_install с учётными данными в пределах операции
+    - name: Выполнение сценариев post_install с учётными данными в пределах операции
       block:
-        - name: Обнаружить провайдеров Vault, необходимых для входных данных post_install
+        - name: Обнаружение провайдеров Vault, необходимых для входных данных post_install
           ansible.builtin.include_role:
             name: platform.vault.application_provider
             tasks_from: discover
@@ -38,14 +38,14 @@
           loop: "{{ application_post_install_sources }}"
           loop_control:
             loop_var: application_vault_source
-        - name: Последовательно выполнить детерминированную очередь сценариев post_install
+        - name: Последовательное выполнение заданной очереди сценариев post_install
           ansible.builtin.include_tasks: tasks/post-install-script.yml
           loop: "{{ application_post_install_scripts }}"
           loop_control:
             loop_var: application_post_install_script
             label: "{{ application_post_install_script.libraryId }}/{{ application_post_install_script.id }}"
       always:
-        - name: Удалить временные исходные файлы завершающего этапа установки приложений
+        - name: Удаление временных исходных файлов завершающего этапа установки приложений
           ansible.builtin.file:
             path: "{{ platform_application_secret_root }}/{{ item.passwordRef }}"
             state: absent

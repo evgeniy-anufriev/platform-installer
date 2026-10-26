@@ -1,5 +1,5 @@
 ---
-- name: Отклонить небезопасный целевой каталог PKI
+- name: Отклонение небезопасного целевого каталога PKI
   ansible.builtin.assert:
     that:
       - "platform_pki_plan.targetDirectory is match('^/.+')"
@@ -32,7 +32,7 @@
   register: _platform_pki_deployed_material
   no_log: true
 
-- name: "Записать контрольный отпечаток развёрнутых PKI-файлов без секретов"
+- name: "Запись контрольного отпечатка развёрнутых PKI-файлов без секретов"
   ansible.builtin.copy:
     content: "{{ platform_pki_plan.materializationFingerprint }}\n"
     dest: "{{ platform_pki_plan.targetDirectory }}/materialization-fingerprint"
@@ -41,7 +41,7 @@
     mode: '0644'
   register: _platform_pki_deployed_fingerprint
 
-- name: Опубликовать, изменился ли целевой материал PKI для активации службы
+- name: Публикация признака изменения PKI-файлов для активации службы
   ansible.builtin.set_fact:
     platform_pki_material_changed: >-
       {{ (platform_pki_material_changed | default(false) | bool) or

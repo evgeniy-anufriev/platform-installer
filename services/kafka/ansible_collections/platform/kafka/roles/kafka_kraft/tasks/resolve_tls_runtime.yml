@@ -1,5 +1,5 @@
 ---
-- name: "Выбрать действующие запросы PKI-01 и наборы планов"
+- name: "Выбор действующих запросов и наборов планов PKI-01"
   ansible.builtin.set_fact:
     _platform_kafka_tls_runtime_all_requests: >-
       {{ platform_pki_requests
@@ -19,7 +19,7 @@
                 | map(attribute='requestId') | unique | list)) }}
   changed_when: false
 
-- name: Привязать управляемый Kafka TLS к точному потребительскому запросу PKI
+- name: Привязка управляемого Kafka TLS к точному потребительскому запросу PKI
   ansible.builtin.set_fact:
     _platform_kafka_tls_runtime_request_ids: >-
       {{ _platform_kafka_tls_runtime_request_ids + [item.id] }}
@@ -37,7 +37,7 @@
       | list | length == 1
   changed_when: false
 
-- name: Точное решение плана PKI-01 для проекции времени выполнения Kafka TLS
+- name: Выбор плана PKI-01 для runtime-проекции Kafka TLS
   ansible.builtin.set_fact:
     _platform_kafka_tls_runtime_plans: >-
       {{ _platform_kafka_tls_runtime_candidate_plans
@@ -49,7 +49,7 @@
          | list }}
   changed_when: false
 
-- name: Требовать входные данные проекции времени выполнения Kafka TLS
+- name: Проверка рассчитанных параметров TLS-подключения Kafka
   ansible.builtin.assert:
     that:
       - _platform_kafka_tls_runtime_plans | length == 1
@@ -60,7 +60,7 @@
       - "'PEM' in _platform_kafka_tls_runtime_plans[0].formats"
     fail_msg: 'BLOCKED: Kafka TLS requires exact PKI-01 serverAuth/clientAuth material and PEM or PKCS12 store type'
 
-- name: Требовать хранилище SecretRef во время выполнения только для явного PKCS12
+- name: Проверка наличия PKCS12-хранилищ в плане и runtime-пароля по SecretRef
   ansible.builtin.assert:
     that:
       - "['PKCS12_KEYSTORE', 'PKCS12_TRUSTSTORE'] | difference(_platform_kafka_tls_runtime_plans[0].formats) | length == 0"

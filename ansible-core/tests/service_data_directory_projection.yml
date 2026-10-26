@@ -1,14 +1,14 @@
 ---
-- name: Проверка путей к данным по умолчанию и для конкретного экземпляра службы без целевых изменений
+- name: Проверка общих и индивидуальных путей данных экземпляров без внесения изменений
   hosts: localhost
   connection: local
   gather_facts: false
   vars:
     platform_execution_service_deployment: qa-stateful
   tasks:
-    - name: Загрузить значения по умолчанию для роли Redis
+    - name: Загрузка значений по умолчанию для роли Redis
       ansible.builtin.include_vars: ../../services/redis/ansible_collections/platform/redis/roles/redis_tls/defaults/main.yml
-    - name: "Рассчитать размещение экземпляров Redis на разных узлах"
+    - name: "Расчёт размещения экземпляров Redis на разных узлах"
       ansible.builtin.set_fact:
         platform_redis_instances:
           - {id: qa-stateful-1, host: localhost, roles: [redis]}
@@ -17,7 +17,7 @@
     - name: Проверка Redis по умолчанию на каждом хосте
       ansible.builtin.assert:
         that: _platform_redis_instances | map(attribute='data_directory') | unique | list == ['/var/lib/qa-stateful']
-    - name: Разместить экземпляры службы Redis на одном хосте с одним явным путем
+    - name: Размещение экземпляров службы Redis на одном хосте с одним явным путем
       ansible.builtin.set_fact:
         platform_redis_instances:
           - {id: qa-stateful-1, host: localhost, roles: [redis]}
@@ -28,14 +28,14 @@
         that:
           - _platform_redis_instances[0].data_directory == '/var/lib/qa-stateful/qa-stateful-1'
           - _platform_redis_instances[1].data_directory == '/data/redis-two'
-    - name: Проверить непересекающиеся каталоги экземпляров Redis
+    - name: Проверка непересекающихся каталогов экземпляров Redis
       ansible.builtin.include_tasks: ../../services/redis/ansible_collections/platform/redis/roles/redis_tls/tasks/validate_data_paths.yml
       vars:
         _platform_redis_local_instances: "{{ _platform_redis_instances }}"
 
-    - name: Загрузить значения по умолчанию для роли ClickHouse
+    - name: Загрузка значений по умолчанию для роли ClickHouse
       ansible.builtin.include_vars: ../../services/clickhouse/ansible_collections/platform/clickhouse/roles/clickhouse_tls/defaults/main.yml
-    - name: "Рассчитать размещение экземпляров ClickHouse на разных узлах"
+    - name: "Расчёт размещения экземпляров ClickHouse на разных узлах"
       ansible.builtin.set_fact:
         platform_clickhouse_instances:
           - {id: qa-stateful-1, host: localhost, roles: [server]}
@@ -44,7 +44,7 @@
     - name: Проверка ClickHouse по умолчанию на каждом хосте
       ansible.builtin.assert:
         that: _platform_clickhouse_instances | map(attribute='data_directory') | unique | list == ['/var/lib/qa-stateful']
-    - name: Разместить экземпляры службы ClickHouse на одном хосте с одним явным путем
+    - name: Размещение экземпляров службы ClickHouse на одном хосте с одним явным путем
       ansible.builtin.set_fact:
         platform_clickhouse_instances:
           - {id: qa-stateful-1, host: localhost, roles: [server]}
@@ -55,14 +55,14 @@
         that:
           - _platform_clickhouse_instances[0].data_directory == '/var/lib/qa-stateful/qa-stateful-1'
           - _platform_clickhouse_instances[1].data_directory == '/data/clickhouse-two'
-    - name: Проверить непересекающиеся каталоги экземпляров ClickHouse
+    - name: Проверка непересекающихся каталогов экземпляров ClickHouse
       ansible.builtin.include_tasks: ../../services/clickhouse/ansible_collections/platform/clickhouse/roles/clickhouse_tls/tasks/validate_data_paths.yml
       vars:
         _platform_clickhouse_local_instances: "{{ _platform_clickhouse_instances }}"
 
-    - name: Загрузить значения по умолчанию для роли Vault
+    - name: Загрузка значений по умолчанию для роли Vault
       ansible.builtin.include_vars: ../../services/vault/ansible_collections/platform/vault/roles/vault_tls/defaults/main.yml
-    - name: "Рассчитать размещение экземпляров Vault на разных узлах"
+    - name: "Расчёт размещения экземпляров Vault на разных узлах"
       ansible.builtin.set_fact:
         platform_vault_instances:
           - {id: qa-stateful-1, host: localhost, roles: [vault]}
@@ -71,7 +71,7 @@
     - name: Проверка Vault по умолчанию на каждом хосте
       ansible.builtin.assert:
         that: _platform_vault_instances | map(attribute='data_directory') | unique | list == ['/var/lib/qa-stateful']
-    - name: Разместить экземпляры службы Vault на одном хосте с одним явным путем
+    - name: Размещение экземпляров службы Vault на одном хосте с одним явным путем
       ansible.builtin.set_fact:
         platform_vault_instances:
           - {id: qa-stateful-1, host: localhost, roles: [vault]}
@@ -82,5 +82,5 @@
         that:
           - _platform_vault_instances[0].data_directory == '/var/lib/qa-stateful/qa-stateful-1'
           - _platform_vault_instances[1].data_directory == '/data/vault-two'
-    - name: Проверить непересекающиеся каталоги экземпляров Vault
+    - name: Проверка непересекающихся каталогов экземпляров Vault
       ansible.builtin.include_tasks: ../../services/vault/ansible_collections/platform/vault/roles/vault_tls/tasks/validate_data_paths.yml

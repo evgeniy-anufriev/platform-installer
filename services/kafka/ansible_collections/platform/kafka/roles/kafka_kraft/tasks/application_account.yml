@@ -5,7 +5,7 @@
     fail_msg: APPLICATION_PROVIDER_IDENTIFIER_INVALID
   when: platform_kafka_application_phase == 'apply' and application_kafka_account.mode == 'managed'
 
-- name: Выбрать заданного Kafka principal из метаданных развёртывания SCRAM
+- name: Выбор заданного Kafka principal из метаданных развёртывания SCRAM
   ansible.builtin.set_fact:
     application_kafka_description:
       rc: "{{ application_kafka_user_inventory.rc }}"
@@ -17,7 +17,7 @@
   changed_when: false
   no_log: true
 
-- name: Отклонить недоступные метаданные и существующие учетные записи с несовместимым механизмом
+- name: Отклонение недоступных метаданных и существующих учётных записей с несовместимым механизмом
   ansible.builtin.assert:
     that:
       - application_kafka_description.rc | int == 0
@@ -60,26 +60,26 @@
          and 'invalid credentials' in (application_kafka_password_probe.stderr | default('') | lower) }}
   no_log: true
 
-- name: Отклонить ошибки, не связанные с учетными данными, и несовпадающие учетные записи приложений, доступные только для чтения
+- name: Отклонение ошибок подключения и несовпадения учётных данных существующих приложений
   ansible.builtin.assert:
     that: application_kafka_password_probe.rc | default(0) == 0 or application_kafka_password_mismatch
     fail_msg: APPLICATION_KAFKA_ACCOUNT_AUTHENTICATION_FAILED
   no_log: true
 
-- name: Согласовать отсутствующие или несовпадающие учетные данные управляемого приложения во время применения
+- name: Согласование отсутствующих или несовпадающих учетных данных управляемого приложения во время применения
   when:
     - platform_kafka_application_phase == 'apply'
     - application_kafka_account.mode == 'managed'
     - "'SCRAM-SHA-512' not in application_kafka_description.stdout or application_kafka_password_mismatch"
   block:
-    - name: "Подготовить параметры изменения SCRAM без передачи паролей в аргументах команды"
+    - name: "Подготовка параметров изменения SCRAM без передачи паролей в аргументах команды"
       ansible.builtin.copy:
         content: "SCRAM-SHA-512=iterations=8192,password={{ lookup('ansible.builtin.file', application_kafka_credentials[application_kafka_account.passwordRef], rstrip=false) | platform.core.platform_java_properties_value }}\n"
         dest: "{{ application_kafka_private.path }}/scram.properties"
         mode: '0600'
       changed_when: false
       no_log: true
-    - name: Установить пароль выбранного приложения SCRAM с помощью файлового интерфейса Kafka
+    - name: Установка пароля выбранного приложения SCRAM с помощью файлового интерфейса Kafka
       ansible.builtin.command:
         argv:
           - "{{ application_topic_cli_directory }}/bin/kafka-configs.sh"
@@ -98,15 +98,15 @@
       failed_when: false
       changed_when: application_kafka_creation.rc == 0
       no_log: true
-    - name: Требовать успешного создания учетных данных
+    - name: Проверка успешности создания учётных данных
       ansible.builtin.assert:
         that: application_kafka_creation.rc == 0
         fail_msg: APPLICATION_KAFKA_ACCOUNT_CREATE_FAILED
 
-- name: Подтвердить вновь установленные учетные данные приложения перед предоставлением доступа
+- name: Подтверждение вновь установленных учетных данных приложения перед предоставлением доступа
   when: "platform_kafka_application_phase == 'apply' and application_kafka_account.mode == 'managed' and ('SCRAM-SHA-512' not in application_kafka_description.stdout or application_kafka_password_mismatch)"
   block:
-    - name: Выполнить аутентификацию приложения через SCRAM listener Kafka
+    - name: Выполнение аутентификации приложения через SCRAM listener Kafka
       ansible.builtin.command:
         argv:
           - "{{ application_topic_cli_directory }}/bin/kafka-broker-api-versions.sh"
@@ -118,7 +118,7 @@
       changed_when: false
       failed_when: false
       no_log: true
-    - name: "Проверить вход приложения с выбранным паролем после настройки учётной записи"
+    - name: "Проверка входа приложения с выбранным паролем после настройки учётной записи"
       ansible.builtin.assert:
         that: application_kafka_login.rc == 0
         fail_msg: APPLICATION_KAFKA_ACCOUNT_AUTHENTICATION_FAILED

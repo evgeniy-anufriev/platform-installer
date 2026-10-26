@@ -6,19 +6,19 @@
   connection: local
   gather_facts: false
   tasks:
-    - name: "Использовать заданный порядок установки, не расширяя список библиотек"
+    - name: "Использование заданного порядка установки, не расширяя список библиотек"
       ansible.builtin.set_fact:
         application_preflight_library_ids: "{{ application_snapshot.snapshot.applicationLibraries.libraries | list | sort }}"
         application_preflight_library_order: >-
           {{ application_selection.scope.libraryOrder }}
-    - name: Требовать точный явный порядок для нескольких выбранных библиотек
+    - name: Проверка явно заданного порядка выбранных библиотек
       ansible.builtin.assert:
         that:
           - platform_application_expected_library_ids is defined or platform_application_library_order is defined or application_preflight_library_ids | length <= 1
           - application_preflight_library_order | unique | length == application_preflight_library_order | length
           - application_preflight_library_order | sort == application_preflight_library_ids
         fail_msg: APPLICATION_LIBRARY_ORDER_INVALID
-    - name: "Проверить, что необходимые провайдеры стоят раньше потребителей в порядке установки"
+    - name: "Проверка того, что необходимые провайдеры стоят раньше потребителей в порядке установки"
       ansible.builtin.assert:
         that: application_provider_order_findings | length == 0
         fail_msg: "APPLICATION_PROVIDED_CONNECTION_ORDER_REQUIRED {{ application_provider_order_findings }}"
@@ -34,12 +34,12 @@
   become: true
   any_errors_fatal: true
   tasks:
-    - name: Инициализировать защищённые записи предварительной проверки приложений
+    - name: Инициализация защищённых записей предварительной проверки приложений
       ansible.builtin.set_fact:
         platform_application_preflight_jobs: []
         application_runtime_discoveries: {}
       no_log: true
-    - name: Проверить и отобразить каждое выбранное размещение в памяти
+    - name: Проверка и формирование проекции каждого выбранного размещения в памяти
       ansible.builtin.include_role:
         name: platform.core.application_runtime
         tasks_from: preflight

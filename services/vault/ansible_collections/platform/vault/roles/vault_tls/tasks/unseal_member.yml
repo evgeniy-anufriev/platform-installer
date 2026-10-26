@@ -1,5 +1,5 @@
 ---
-- name: "Прочитать состояние блокировки экземпляра Vault — sealed/unsealed"
+- name: "Чтение состояния блокировки экземпляра Vault — sealed/unsealed"
   ansible.builtin.uri:
     url: "https://{{ vault_member.address }}:{{ vault_member.api_port }}/v1/sys/health"
     method: GET
@@ -15,7 +15,7 @@
   until: _platform_vault_member_health_before is succeeded
   no_log: true
 
-- name: Проверить наличие материалов восстановления для запечатанного экземпляра Vault
+- name: Проверка наличия данных восстановления для заблокированного экземпляра Vault
   ansible.builtin.assert:
     that:
       - _platform_vault_effective_unseal_keys | length >= platform_vault_unseal_threshold
@@ -24,7 +24,7 @@
   when: _platform_vault_member_health_before.json.sealed | bool
   no_log: true
 
-- name: "Передать необходимое по порогу число долей ключа Shamir"
+- name: "Передача порогового числа долей ключа Shamir"
   ansible.builtin.uri:
     url: "https://{{ vault_member.address }}:{{ vault_member.api_port }}/v1/sys/unseal"
     method: PUT
@@ -41,7 +41,7 @@
   register: _platform_vault_unseal_progress
   no_log: true
 
-- name: Подтвердить инициализацию и разблокировку выбранного экземпляра Vault
+- name: Подтверждение инициализации и разблокировки выбранного экземпляра Vault
   ansible.builtin.uri:
     url: "https://{{ vault_member.address }}:{{ vault_member.api_port }}/v1/sys/health"
     method: GET
@@ -57,7 +57,7 @@
   until: _platform_vault_member_health_after is succeeded and _platform_vault_member_health_after.json.initialized | bool and not (_platform_vault_member_health_after.json.sealed | bool)
   no_log: true
 
-- name: Потребовать инициализированный разблокированный экземпляр службы для предоставления удостоверения кластера
+- name: Проверка наличия идентификатора кластера у разблокированного экземпляра Vault
   ansible.builtin.assert:
     that:
       - _platform_vault_member_health_after.json.cluster_id is defined
@@ -66,13 +66,13 @@
     fail_msg: VAULT_CLUSTER_IDENTITY_MISMATCH
   no_log: true
 
-- name: "Сохранить идентификатор кластера начального узла после разблокировки"
+- name: "Сохранение идентификатора кластера начального узла после разблокировки"
   ansible.builtin.set_fact:
     _platform_vault_seed_cluster_id: "{{ _platform_vault_member_health_after.json.cluster_id }}"
   when: vault_member.slot == 0
   no_log: true
 
-- name: "Проверить совпадение идентификатора кластера с начальным узлом"
+- name: "Проверка совпадения идентификатора кластера с начальным узлом"
   ansible.builtin.assert:
     that:
       - _platform_vault_member_health_after.json.cluster_id is string

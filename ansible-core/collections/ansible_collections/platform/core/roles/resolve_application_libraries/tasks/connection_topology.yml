@@ -1,11 +1,11 @@
 ---
-- name: Привязать идентификатор шаблона библиотеки перед разрешением его экспорта
+- name: Привязка идентификатора шаблона библиотеки перед вычислением экспортируемых значений
   ansible.builtin.set_fact:
     library_instance_id: "{{ application_job.libraryId }}"
   no_log: true
   become: false
 
-- name: Развернуть только объявленные экспорты в контексте изолированной собственной библиотеки
+- name: Вычисление только объявленных экспортируемых значений в контексте библиотеки
   platform.core.prepare_application_libraries:
     provided_connections: true
     library_id: "{{ application_job.libraryId }}"
@@ -15,14 +15,14 @@
   no_log: true
   become: false
 
-- name: "Проверить вычисление всех экспортируемых значений библиотеки перед расчётом топологии"
+- name: "Проверка вычисления всех экспортируемых значений библиотеки перед расчётом топологии"
   ansible.builtin.assert:
     that: _application_export_inputs.findings | default([]) | length == 0
     fail_msg: APPLICATION_INPUT_INVALID
   no_log: true
   become: false
 
-- name: "Объединить параметры с учётом приоритета значений Ansible"
+- name: "Объединение параметров с учётом приоритета значений Ansible"
   ansible.builtin.set_fact:
     application_provided_connection_definitions: >-
       {{ _application_export_inputs.defaults |
@@ -30,14 +30,14 @@
   no_log: true
   become: false
 
-- name: Заменить дескрипторы источника учетных данных полными типизированными значениями
+- name: Замена дескрипторов источника учетных данных полными типизированными значениями
   ansible.builtin.include_tasks: provided_credential_sources.yml
   loop: "{{ _application_export_inputs.overrides | dict2items }}"
   loop_control:
     loop_var: application_export_override
   no_log: true
 
-- name: "Определить топологию подключений по параметрам пакета и установки"
+- name: "Определение топологии подключений по параметрам пакета и установки"
   ansible.builtin.set_fact:
     platform_application_connection_rows: >-
       {{ platform_application_connection_rows + [{

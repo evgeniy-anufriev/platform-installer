@@ -1,11 +1,11 @@
 ---
-- name: Сформировать CLI-селектор выбранного ресурса Kafka ACL
+- name: Формирование CLI-селектора выбранного ресурса Kafka ACL
   ansible.builtin.set_fact:
     application_kafka_acl_args: "{{ ['--' ~ application_kafka_grant.resourceType] + ([] if application_kafka_grant.resourceType == 'cluster' else [application_kafka_grant.name]) + ['--resource-pattern-type', application_kafka_grant.patternType] }}"
     application_kafka_acl_operations: []
   changed_when: false
 
-- name: Выбрать заданный ресурс из полного списка Kafka ACL
+- name: Выбор заданного ресурса из полного списка Kafka ACL
   ansible.builtin.set_fact:
     application_kafka_acl_actual:
       stdout: "{{ application_kafka_acl_inventory.stdout | regex_findall(application_kafka_acl_block_pattern) | join('\n') }}"
@@ -15,7 +15,7 @@
   changed_when: false
   no_log: true
 
-- name: Выбрать недостающие точные операции ALLOW с хостом с подстановочными знаками
+- name: Выбор недостающих точных операций ALLOW с хостом с подстановочными знаками
   ansible.builtin.set_fact:
     application_kafka_acl_operations: "{{ application_kafka_acl_operations + ['--operation', item] }}"
   loop: "{{ application_kafka_grant.operations }}"
@@ -25,13 +25,13 @@
     ', permissionType=ALLOW') not in application_kafka_acl_actual.stdout
   changed_when: false
 
-- name: Требовать, чтобы существующие учетные записи и учетные записи Verify уже имели запрошенные списки ACL
+- name: Проверка наличия требуемых ACL у существующих учётных записей и в режиме Verify
   ansible.builtin.assert:
     that: application_kafka_acl_operations | length == 0
     fail_msg: APPLICATION_KAFKA_ACL_MISSING
   when: platform_kafka_application_phase == 'verify' or application_kafka_account.mode == 'existing'
 
-- name: Добавить отсутствующие управляемые списки управления доступом без удаления других разрешений
+- name: Добавление отсутствующих управляемых списков управления доступом без удаления других разрешений
   ansible.builtin.command:
     argv: "{{ [application_topic_cli_directory ~ '/bin/kafka-acls.sh', '--bootstrap-server', application_topic_candidate.address ~ ':' ~ application_topic_candidate.port, '--command-config', application_kafka_private.path ~ '/admin.properties', '--add', '--allow-principal', 'User:' ~ application_kafka_account.name, '--allow-host', '*'] + application_kafka_acl_args + application_kafka_acl_operations }}"
   register: application_kafka_acl_creation
@@ -43,7 +43,7 @@
     - application_kafka_account.mode == 'managed'
     - application_kafka_acl_operations | length > 0
 
-- name: Требовать успешного добавления ACL
+- name: Проверка успешности добавления ACL
   ansible.builtin.assert:
     that: application_kafka_acl_creation.rc == 0
     fail_msg: APPLICATION_KAFKA_ACL_CREATE_FAILED

@@ -1,5 +1,5 @@
 ---
-- name: Определить служебный runtime-маркер основной зоны BIND
+- name: Определение служебного runtime-маркера основной зоны BIND
   ansible.builtin.set_fact:
     _platform_bind_zone_recovery_marker: >-
       {{ platform_bind_recovery_directory }}/{{ platform_bind_runtime_projection.generatedState.metadata.projectId | hash('sha256') }}/{{ platform_bind_resolved_zones[platform_bind_inspected_deployment.key].zone | hash('sha256') }}.yml
@@ -46,7 +46,7 @@
     'flags: qr aa' not in _platform_bind_zone_recovery_authority.stdout
   when: _platform_bind_zone_recovery_stat.stat.exists
 
-- name: Убедиться, что восстановленная основная зона принимает локальное динамическое обновление
+- name: Проверка того, что восстановленная основная зона принимает локальное динамическое обновление
   ansible.builtin.include_tasks: update_a_record.yml
   vars:
     platform_bind_force_dynamic_update_probe: true
@@ -57,7 +57,7 @@
       ttl: "{{ platform_bind_resolved_zones[platform_bind_inspected_deployment.key].defaultTtl | int }}"
   when: _platform_bind_zone_recovery_stat.stat.exists
 
-- name: Очистить прерванный маркер полной сверки только после подтвержденного восстановления
+- name: Очистка прерванного маркера полной сверки только после подтвержденного восстановления
   ansible.builtin.file:
     path: "{{ _platform_bind_zone_recovery_marker }}"
     state: absent

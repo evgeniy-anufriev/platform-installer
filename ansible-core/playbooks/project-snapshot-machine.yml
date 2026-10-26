@@ -9,12 +9,12 @@
         name: platform.core.project_settings
       run_once: true
 
-    - name: Разрешить дополнительные библиотеки приложений с помощью обычного Ansible
+    - name: Вычисление параметров дополнительных библиотек приложений средствами Ansible
       ansible.builtin.include_role:
         name: platform.core.resolve_application_libraries
       when: platform_desired_state.applicationLibraryDeployments is defined
 
-    - name: "Сформировать воспроизводимый снимок проекта на контроллере без изменений"
+    - name: "Формирование воспроизводимого снимка проекта на контроллере без изменений"
       platform.core.project_snapshot:
         project_root: "{{ platform_project_root }}"
         service_catalog_path: "{{ platform_service_catalog_path }}"

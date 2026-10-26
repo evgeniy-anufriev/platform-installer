@@ -1,5 +1,5 @@
 ---
-- name: Разрешить текущую исходную конечную точку и ее провайдеров без изменений
+- name: Определение конечной точки источника и её провайдеров без внесения изменений
   hosts: localhost
   connection: local
   gather_facts: false
@@ -34,7 +34,7 @@
   connection: local
   gather_facts: false
   tasks:
-    - name: "Проверить наличие провайдеров и явной политики проверки источника"
+    - name: "Проверка наличия провайдеров и явной политики проверки источника"
       ansible.builtin.assert:
         that:
           - platform_service_integration_projection.haproxyDeployments | length > 0

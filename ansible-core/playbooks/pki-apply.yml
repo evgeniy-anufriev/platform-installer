@@ -1,5 +1,5 @@
 ---
-- name: Разрешение управляемых запросов PKI на узле выполнения
+- name: Расчёт управляемых запросов PKI на узле выполнения
   hosts: localhost
   connection: local
   gather_facts: false

@@ -1,5 +1,5 @@
 ---
-- name: Прочитать подключения аудита, secrets engines и методы аутентификации Vault
+- name: Чтение настроек аудита, хранилищ и методов аутентификации Vault
   ansible.builtin.uri:
     url: "https://{{ (_platform_vault_instances | first).address }}:{{ (_platform_vault_instances | first).api_port }}/v1/{{ item }}"
     method: GET
@@ -14,7 +14,7 @@
   changed_when: false
   no_log: true
 
-- name: Отклонить несовместимую существующую конфигурацию аудита, KV или аутентификации перед изменением
+- name: Отклонение несовместимой существующей конфигурации аудита, KV или аутентификации перед изменением
   ansible.builtin.assert:
     that:
       # Vault stores audit options as strings; "0" is the legacy false form.
@@ -45,7 +45,7 @@
   when: "'file/' not in _platform_vault_owned_configuration.results[0].json.data"
   no_log: true
 
-- name: Включить отсутствующее хранилище KV v2 по заданному пути Vault
+- name: Включение отсутствующего хранилища KV v2 по заданному пути Vault
   ansible.builtin.uri:
     url: "https://{{ (_platform_vault_instances | first).address }}:{{ (_platform_vault_instances | first).api_port }}/v1/sys/mounts/secret"
     method: POST
@@ -62,7 +62,7 @@
   when: "'secret/' not in _platform_vault_owned_configuration.results[1].json.data"
   no_log: true
 
-- name: Включить аутентификацию userpass только при ее отсутствии
+- name: Включение аутентификации userpass только при ее отсутствии
   ansible.builtin.uri:
     url: "https://{{ (_platform_vault_instances | first).address }}:{{ (_platform_vault_instances | first).api_port }}/v1/sys/auth/userpass"
     method: POST
@@ -77,7 +77,7 @@
   when: "'userpass/' not in _platform_vault_owned_configuration.results[2].json.data"
   no_log: true
 
-- name: Включить аутентификацию AppRole только при ее отсутствии
+- name: Включение аутентификации AppRole только при ее отсутствии
   ansible.builtin.uri:
     url: "https://{{ (_platform_vault_instances | first).address }}:{{ (_platform_vault_instances | first).api_port }}/v1/sys/auth/approle"
     method: POST

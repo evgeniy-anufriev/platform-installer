@@ -1,5 +1,5 @@
 ---
-- name: Выбрать текущий экземпляр службы pg_auto_failover из явной топологии
+- name: Выбор текущего экземпляра службы pg_auto_failover из явной топологии
   ansible.builtin.set_fact:
     _platform_postgresql_member: >-
       {{ platform_postgresql_instances
@@ -10,13 +10,13 @@
          | selectattr('roles', 'contains', 'monitor')
          | list | first }}
 
-- name: Разрешение явных портов экземпляра службы pg_auto_failover
+- name: Определение явно заданных портов экземпляра pg_auto_failover
   ansible.builtin.set_fact:
     _platform_postgresql_member_port: "{{ _platform_postgresql_member.port | default(platform_postgresql_port) }}"
     _platform_postgresql_monitor_port: "{{ _platform_postgresql_monitor.port | default(platform_postgresql_port) }}"
     _platform_postgresql_monitor_uri: "postgres://{{ platform_postgresql_monitor_credential.username }}@{{ _platform_postgresql_monitor.address }}:{{ _platform_postgresql_monitor.port | default(platform_postgresql_port) }}/pg_auto_failover"
 
-- name: Требуется один текущий экземпляр службы pg_auto_failover
+- name: Проверка единственности экземпляра pg_auto_failover для текущего узла
   ansible.builtin.assert:
     that:
       - _platform_postgresql_member is mapping
@@ -65,7 +65,7 @@
     get_checksum: false
   register: platform_postgresql_pg_autoctl_pg_version
 
-- name: Прочитать существующий URI монитора pg_autoctl
+- name: Чтение существующего URI монитора pg_autoctl
   ansible.builtin.command:
     argv:
       - pg_autoctl

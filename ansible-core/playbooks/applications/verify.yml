@@ -1,17 +1,17 @@
 ---
 - import_playbook: stages/resolve-runtime.yml
 
-- name: Проверка приложений без мутаций
+- name: Проверка приложений без внесения изменений
   hosts: platform_targets
   gather_facts: false
   become: true
   any_errors_fatal: true
   tasks:
-    - name: Один раз обнаружить идентификаторы учетной записи Docker для проверки только для чтения
+    - name: Однократное определение идентификаторов учётной записи Docker без внесения изменений
       ansible.builtin.getent:
         database: passwd
       when: hostvars['localhost'].application_runtime_inputs.jobs | selectattr('hostId', 'equalto', inventory_hostname) | list | length > 0
-    - name: Проверка точного размещения каждого приложения
+    - name: Проверка выбранного размещения каждого приложения
       ansible.builtin.include_role:
         name: platform.core.application_runtime
         tasks_from: verify

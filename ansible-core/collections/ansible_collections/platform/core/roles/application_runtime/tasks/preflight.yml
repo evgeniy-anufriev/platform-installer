@@ -1,14 +1,14 @@
 ---
-- name: Привязать учётную запись операции приложения и ключ обнаружения конфигурации Docker
+- name: Привязка учётной записи операции приложения и ключа обнаружения конфигурации Docker
   ansible.builtin.set_fact:
     application_discovery_key: "{{ [application_runtime_job.account, platform_application_registry_config_directory] | to_json }}"
   no_log: true
 
-- name: Однократно проверить выбранные учётные записи и Docker без прав root
+- name: Однократная проверка выбранных учётных записей и Docker без прав root
   ansible.builtin.include_tasks: discover_runtime.yml
   when: application_discovery_key not in application_runtime_discoveries
 
-- name: Привязать точные пути к учетной записи и среде выполнения
+- name: Привязка точных путей к учетной записи и среде выполнения
   ansible.builtin.set_fact:
     application_uid: "{{ application_runtime_discoveries[application_discovery_key].uid }}"
     application_home: "{{ application_runtime_discoveries[application_discovery_key].home }}"
@@ -23,7 +23,7 @@
   vars:
     application_path_home: "{{ application_home }}"
 
-- name: Привязка путей размещения и частной среды Docker
+- name: Сохранение путей размещения и защищённого окружения Docker
   ansible.builtin.set_fact:
     application_docker_environment:
       HOME: "{{ application_home }}"
@@ -35,7 +35,7 @@
     application_archive_checksums: {}
   no_log: true
 
-- name: Проверить отображение user namespace и пути защищённых учётных данных до записи провайдером
+- name: Проверка отображения user namespace и путей защищённых учётных данных до записи провайдером
   platform.core.application_identity_files:
     account: "{{ application_runtime_job.account }}"
     user: "{{ application_runtime_job.settings.user | default('0:0') }}"
@@ -46,7 +46,7 @@
   when: application_runtime_job.agentTemplate or (application_runtime_job.pkiPlans | default([]) | length > 0)
   no_log: true
 
-- name: Проверить Docker без прав root и соответствие закреплённой целевой платформе
+- name: Проверка Docker без прав root и соответствия зафиксированной целевой платформе
   ansible.builtin.assert:
     that:
       - "'rootless' in (application_runtime_discoveries[application_discovery_key].info.SecurityOptions | join(' '))"
@@ -55,24 +55,24 @@
       - application_runtime_discoveries[application_discovery_key].info.Architecture in ['x86_64', 'aarch64', 'amd64', 'arm64']
     fail_msg: APPLICATION_RUNTIME_DAEMON_INVALID
 
-- name: Определить целевую платформу образов
+- name: Определение целевой платформы образов
   ansible.builtin.set_fact:
     application_image_platform:
       os: "{{ application_runtime_discoveries[application_discovery_key].info.OSType }}"
       architecture: "{{ {'x86_64': 'amd64', 'aarch64': 'arm64'}.get(application_runtime_discoveries[application_discovery_key].info.Architecture, application_runtime_discoveries[application_discovery_key].info.Architecture) }}"
   no_log: true
 
-- name: Проверить явное одобрение реестра на целевом узле приложения
+- name: Проверка явного одобрения реестра на целевом узле приложения
   ansible.builtin.assert:
     that:
       - application_runtime_job.authority.repository.reference.split('/')[0] in platform_application_approved_registries
     fail_msg: APPLICATION_REGISTRY_NOT_APPROVED
   when: application_runtime_job.authority.repository.reference is defined
 
-- name: Проверка точного манифеста платформы в утвержденном реестре
+- name: Проверка манифеста выбранной платформы в разрешённом реестре
   when: application_runtime_job.authority.repository.reference is defined
   block:
-    - name: Подготовить аутентификацию реестра для проверки образа без изменений
+    - name: Подготовка аутентификации реестра для проверки образа без изменений
       ansible.builtin.include_tasks: registry_auth.yml
     - name: Проверка только утвержденного неизменяемого манифеста платформы
       ansible.builtin.command:
@@ -84,14 +84,14 @@
       failed_when: false
       no_log: true
   always:
-    - name: Удалить временную аутентификацию реестра проверки образа
+    - name: Удаление временной аутентификации реестра проверки образа
       ansible.builtin.file:
         path: "{{ application_registry_auth_stage.path }}"
         state: absent
       when: application_registry_auth_stage.path is defined
       changed_when: false
 
-- name: "Выбрать источник образа: разрешённый реестр, затем offline-пакет"
+- name: "Выбор источника образа: разрешённый реестр, затем offline-пакет"
   ansible.builtin.set_fact:
     application_image_source: >-
       {{ application_runtime_job.authority | platform.core.platform_resolve_artifact_source(
@@ -102,18 +102,18 @@
           (application_registry_probe.stderr | default('')) is search('manifest unknown|no such manifest') else 1))) }}
   no_log: true
 
-- name: Проверить утверждённый совместимый источник образа
+- name: Проверка утверждённого совместимого источника образа
   ansible.builtin.assert:
     that: application_image_source.source != 'BLOCKED'
     fail_msg: "{{ application_image_source.reason }}"
 
-- name: "Проверить архив выбранного offline-образа до внесения изменений"
+- name: "Проверка архива выбранного offline-образа до внесения изменений"
   ansible.builtin.set_fact:
     application_selected_archive_path: "{{ platform_execution_bundle_root | default('') | platform.core.application_selected_archive(application_image_source.source, application_runtime_job.authority.offlineBundle) }}"
   no_log: true
   when: not (application_runtime_defer_archive_verification | default(false) | bool)
 
-- name: "Сохранить путь выбранного архива для общей проверки целостности"
+- name: "Сохранение пути выбранного архива для общей проверки целостности"
   ansible.builtin.set_fact:
     application_selected_archive_path: >-
       {{ ((platform_execution_bundle_root | default('') | regex_replace('/+$', '')) ~ '/' ~ application_runtime_job.authority.offlineBundle.ref)
@@ -131,13 +131,13 @@
   failed_when: false
   no_log: true
 
-- name: Отклонить неуправляемый образ с зарезервированным именем, привязанным к digest
+- name: Отклонение неуправляемого образа с зарезервированным именем, привязанным к digest
   ansible.builtin.assert:
     that: application_bound_image.rc != 0 or (application_bound_image.stdout | from_json)[0].Id == application_runtime_job.authority.requirement.imageId
     fail_msg: APPLICATION_IMAGE_REFERENCE_OWNERSHIP_INVALID
   no_log: true
 
-- name: "Сформировать конфигурационные файлы по шаблонам в защищённой памяти"
+- name: "Формирование конфигурационных файлов по шаблонам в защищённой памяти"
   ansible.builtin.set_fact:
     application_config_contents: "{{ application_config_contents + [{'destination': application_config.destination, 'content': _application_config_content, 'sha256': (_application_config_content | hash('sha256')), 'mode': application_config.mode | default('0644')}] }}"
   vars:
@@ -148,7 +148,7 @@
   when: application_config.template is defined
   no_log: true
 
-- name: Прочитать объявленные исходные файлы без преобразования текста
+- name: Чтение объявленных исходных файлов без преобразования текста
   ansible.builtin.include_tasks: source_config.yml
   loop: "{{ application_runtime_job.configs }}"
   loop_control:
@@ -170,24 +170,24 @@
     loop_var: application_archive
   no_log: true
 
-- name: "Проверить допустимость конфигурации и отсутствие секретов перед записью файлов"
+- name: "Проверка допустимости конфигурации и отсутствия секретов перед записью файлов"
   ansible.builtin.assert:
     that: "{{ application_config_contents | platform.core.application_validate_configs }}"
     fail_msg: APPLICATION_CONFIG_CONTENT_INVALID
   no_log: true
 
-- name: Вычислить отпечаток служебной конфигурации приложения
+- name: Вычисление отпечатка служебной конфигурации приложения
   ansible.builtin.set_fact:
     application_config_pairs: []
   no_log: true
 
-- name: "Собрать упорядоченные пары путей назначения и контрольных сумм содержимого"
+- name: "Сбор упорядоченных пар путей назначения и контрольных сумм содержимого"
   ansible.builtin.set_fact:
     application_config_pairs: "{{ application_config_pairs + [[item.destination, item.sha256]] }}"
   loop: "{{ application_config_contents | sort(attribute='destination') }}"
   no_log: true
 
-- name: Включить архивные байты в отпечаток конфигурации
+- name: Включение содержимого архивов в отпечаток конфигурации
   ansible.builtin.set_fact:
     application_config_pairs: "{{ (application_config_pairs + application_archive_pairs) | sort(attribute=0) }}"
   no_log: true
@@ -216,7 +216,7 @@
       connections: "{{ hostvars['localhost'].application_snapshot.snapshot.applicationLibraries.libraries[application_runtime_job.libraryId].connections | default(hostvars['localhost'].application_snapshot.snapshot.applicationLibraries.libraries[application_runtime_job.libraryId].instances[application_runtime_job.instanceId].connections, true) }}"
   no_log: true
 
-- name: "Сформировать разрешённую конфигурацию агента без секретных значений"
+- name: "Формирование разрешённой конфигурации агента без секретных значений"
   ansible.builtin.set_fact:
     application_agent_content: "{{ lookup('ansible.builtin.template', application_runtime_job.agentTemplate) if application_runtime_job.agentTemplate else '' }}"
   no_log: true
@@ -227,27 +227,27 @@
   when: application_runtime_job.agentTemplate
   no_log: true
 
-- name: Требовать закрытый профиль супервизора агента и точную дочернюю команду
+- name: Проверка профиля супервизора агента и разрешённой команды дочернего процесса
   ansible.builtin.assert:
     that: "{{ application_agent_content | platform.core.application_validate_agent(application_runtime) }}"
     fail_msg: APPLICATION_AGENT_PROFILE_INVALID
   when: application_runtime_job.agentTemplate
   no_log: true
 
-- name: "Сформировать ожидаемые Compose-файлы и файлы библиотеки по шаблонам Ansible"
+- name: "Формирование Compose-файлов и файлов библиотеки по шаблонам Ansible"
   ansible.builtin.set_fact:
     application_compose_content: "{{ lookup('ansible.builtin.template', application_runtime_job.appTemplate) }}"
     application_base_content: "{{ lookup('ansible.builtin.template', application_runtime_job.baseTemplate) }}"
     application_env_content: "{{ lookup('ansible.builtin.template', role_path ~ '/templates/library.env.j2') }}"
   no_log: true
 
-- name: Потребовать, чтобы общая среда оставалась ограниченной и несекретной
+- name: Проверка допустимого состава общего окружения и отсутствия секретов
   ansible.builtin.assert:
     that: "{{ [{'content': application_env_content}] | platform.core.application_validate_configs }}"
     fail_msg: APPLICATION_ENV_CONTENT_INVALID
   no_log: true
 
-- name: Проверить все родительские каталоги без перехода по символическим ссылкам
+- name: Проверка всех родительских каталогов без перехода по символическим ссылкам
   ansible.builtin.stat:
     path: "{{ item }}"
     follow: false
@@ -258,7 +258,7 @@
   register: application_ancestors
   no_log: true
 
-- name: Отклонить небезопасные пути и неуправляемые каталоги приложений
+- name: Отклонение небезопасных путей и неуправляемых каталогов приложений
   ansible.builtin.assert:
     that:
       - not (item.stat.islnk | default(false))
@@ -279,7 +279,7 @@
   register: application_owner_markers
   no_log: true
 
-- name: Требовать маркеры для любой существующей библиотеки или каталога экземпляра
+- name: Проверка маркеров владения существующими каталогами библиотеки и экземпляра
   ansible.builtin.assert:
     that:
       - not ((application_ancestors.results | selectattr('item', 'equalto', item.item) | first).stat.exists) or item.stat.isreg | default(false)
@@ -288,14 +288,14 @@
   loop: "{{ application_owner_markers.results }}"
   no_log: true
 
-- name: Конфиденциальное чтение существующих точных маркеров владельца каталога
+- name: Защищённое чтение маркеров владельца каталога
   ansible.builtin.slurp:
     src: "{{ item.item }}/.owner.json"
   loop: "{{ application_owner_markers.results | selectattr('stat.exists') | list }}"
   register: application_owner_contents
   no_log: true
 
-- name: Требовать точные идентификаторы библиотеки проекта и каталога хоста
+- name: Проверка идентификаторов проекта, библиотеки и каталога узла
   ansible.builtin.assert:
     that:
       - (item.content | b64decode | from_json).project == application_runtime_job.projectId
@@ -306,7 +306,7 @@
   loop: "{{ application_owner_contents.results }}"
   no_log: true
 
-- name: Проверить каждый существующий выходной файл, не переходя по символическим ссылкам
+- name: Проверка каждого существующего выходного файла, не переходя по символическим ссылкам
   ansible.builtin.stat:
     path: "{{ item }}"
     follow: false
@@ -317,7 +317,7 @@
   register: application_output_files
   no_log: true
 
-- name: Отклонить небезопасные или неуправляемые выходные файлы перед материализацией
+- name: Отклонение небезопасных или неуправляемых выходных файлов перед записью
   ansible.builtin.assert:
     that:
       - not item.stat.exists or item.stat.isreg
@@ -338,7 +338,7 @@
   register: application_output_directories
   no_log: true
 
-- name: Отклонить неуправляемые каталоги конфигурации перед заменой
+- name: Отклонение неуправляемых каталогов конфигурации перед заменой
   ansible.builtin.assert:
     that:
       - not item.stat.exists or item.stat.isdir
@@ -348,7 +348,7 @@
   loop: "{{ application_output_directories.results }}"
   no_log: true
 
-- name: Проверить точный контейнер, не раскрывая среду
+- name: Проверка точного контейнера, не раскрывая среду
   ansible.builtin.command:
     argv: [docker, container, inspect, "{{ application_runtime_job.placement.containerName }}"]
   become_user: "{{ application_runtime_job.account }}"
@@ -358,7 +358,7 @@
   failed_when: false
   no_log: true
 
-- name: Требовать ожидаемые метки владения для существующего контейнера
+- name: Проверка меток владения существующим контейнером
   ansible.builtin.assert:
     that:
       - (application_existing_container.stdout | from_json)[0].Config.Labels['platform.installer.project'] == application_runtime_job.projectId
@@ -369,7 +369,7 @@
   when: application_existing_container.rc == 0
   no_log: true
 
-- name: Требовать, чтобы новые опубликованные порты были свободны перед записью файла
+- name: Проверка доступности публикуемых портов до записи файлов
   ansible.builtin.wait_for:
     host: 127.0.0.1
     port: "{{ item.published }}"
@@ -380,7 +380,7 @@
     _application_owned_ports: "{{ (((application_existing_container.stdout | from_json)[0].HostConfig.PortBindings | default({}, true) | dict2items | map(attribute='value') | flatten | select('mapping') | map(attribute='HostPort') | list) if (application_existing_container.stdout | from_json)[0].State.Running else []) if application_existing_container.rc == 0 else [] }}"
   when: item.published | string not in _application_owned_ports
 
-- name: Записать неизменяемый контекст предварительной проверки размещения приложения
+- name: Запись неизменяемого контекста предварительной проверки размещения приложения
   ansible.builtin.set_fact:
     platform_application_preflight_jobs: >-
       {{ platform_application_preflight_jobs + [application_runtime_job | combine({

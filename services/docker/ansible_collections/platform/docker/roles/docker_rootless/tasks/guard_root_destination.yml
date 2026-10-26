@@ -1,5 +1,5 @@
 ---
-- name: Проверка точного общего или системного назначения перед записью
+- name: Проверка общего или системного пути назначения перед записью
   ansible.builtin.stat:
     path: "{{ platform_docker_guard_path }}"
     follow: false
@@ -8,7 +8,7 @@
     get_checksum: false
   register: _platform_docker_guard_file
 
-- name: Отклонить путь назначения при символической ссылке, неправильном типе файла или другом владельце
+- name: Отклонение пути назначения при символической ссылке, неправильном типе файла или другом владельце
   ansible.builtin.assert:
     that:
       - not (_platform_docker_guard_file.stat.islnk | default(false))
@@ -17,7 +17,7 @@
       - not (platform_docker_guard_required | default(false)) or _platform_docker_guard_file.stat.exists
     fail_msg: DOCKER_SHARED_DESTINATION_UNSAFE
 
-- name: Прочитать существующий управляемый маркер назначения
+- name: Чтение существующего управляемого маркера назначения
   ansible.builtin.slurp:
     src: "{{ platform_docker_guard_path }}"
   register: _platform_docker_guard_content
@@ -25,7 +25,7 @@
     - _platform_docker_guard_file.stat.exists
     - platform_docker_guard_marker | default('') | length > 0
 
-- name: "Отклонить существующий файл назначения без признаков управления инсталлятором"
+- name: "Отклонение существующего файла назначения без признаков управления инсталлятором"
   ansible.builtin.assert:
     that:
       - >-

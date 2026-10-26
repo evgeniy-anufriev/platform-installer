@@ -21,7 +21,7 @@ class SourceDnsProjectionTests(unittest.TestCase):
         with open(APPLY_SOURCE, encoding="utf-8") as source:
             tasks = yaml.safe_load(source)
         publish = next(task for task in tasks if task.get("name") ==
-                       "Опубликовать решенную исходную проекцию один раз для каждого хоста провайдера")
+                       "Публикация рассчитанной проекции источника один раз на каждом узле провайдера")
         playbook = [{
             "name": "Exercise the production cross-host projection handoff",
             "hosts": "node1,node2",
@@ -83,7 +83,7 @@ class SourceDnsProjectionTests(unittest.TestCase):
         with open(PLAYBOOK, encoding="utf-8") as source:
             plays = yaml.safe_load(source)
         tasks = plays
-        build_task = next(task for task in tasks if task.get("name") == "Сборка точных исходных обновлений DNS для решенных развертываний BIND")
+        build_task = next(task for task in tasks if task.get("name") == "Формирование обновлений DNS для выбранных развёртываний BIND")
         playbook = [
             {
                 "name": "Exercise the production source DNS projection",
@@ -143,7 +143,7 @@ class SourceDnsProjectionTests(unittest.TestCase):
         with open(PLAYBOOK, encoding="utf-8") as source:
             tasks = yaml.safe_load(source)
         normalize = next(task for task in tasks if task.get("name") ==
-                         "Нормализовать ожидаемые адреса DNS для выбранного источника конечной точки")
+                         "Нормализация ожидаемых адресов DNS для выбранного источника конечной точки")
         playbook = [{
             "name": "Exercise common endpoint probe address projection",
             "hosts": "localhost",

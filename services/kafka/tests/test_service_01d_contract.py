@@ -54,10 +54,10 @@ class Service01DContractTests(unittest.TestCase):
         self.assertIn("for member in _platform_kafka_controller_instances", main)
         self.assertIn("controller_endpoint.bootstrap_host", main)
         self.assertIn("controller_endpoint.bootstrap_port", main)
-        self.assertIn("Отформатировать неинициализированное хранилище Kafka ровно один раз", member)
+        self.assertIn("Форматирование неинициализированного хранилища Kafka ровно один раз", member)
         self.assertIn("NO_INITIAL_CONTROLLERS", member)
         self.assertIn("--no-initial-controllers", member)
-        self.assertIn("Проверка эффективной конфигурации Kafka для конкретной роли", member)
+        self.assertIn("Проверка действующей конфигурации Kafka для выбранной роли", member)
 
     def test_verify_requires_controller_membership_and_broker_registration(self):
         verify = (ROLE / "tasks" / "verify.yml").read_text(encoding="utf-8")
@@ -67,8 +67,8 @@ class Service01DContractTests(unittest.TestCase):
         self.assertIn("Подтверждение лидера кворума и членства контроллера Kafka", quorum)
         self.assertIn("LeaderId", quorum)
         self.assertIn("kafka-broker-api-versions.sh", verify)
-        self.assertIn("Выбрать неизолированные диагностические заголовки брокера Kafka, доступные только для чтения", verify)
-        self.assertIn("Подтвердить регистрацию брокеров Kafka и состояние unfenced", verify)
+        self.assertIn("Выбор диагностических заголовков брокера без внесения изменений", verify)
+        self.assertIn("Подтверждение регистрации брокеров Kafka и состояния unfenced", verify)
         self.assertIn("*[!0-9.]*)", ssl_verify)
         self.assertIn('"$verification_option" "$verification_host"', ssl_verify)
         self.assertIn("-cert {{ _platform_kafka_tls_runtime.targetDirectory }}/certificate.pem", ssl_verify)

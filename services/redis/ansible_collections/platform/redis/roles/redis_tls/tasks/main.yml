@@ -16,19 +16,19 @@
 - name: Проверка входных данных Redis и топологии экземпляра
   ansible.builtin.include_tasks: validate.yml
 
-- name: Нормализовать экземпляры службы Redis в стабильные слоты развертывания
+- name: Нормализация экземпляров службы Redis в стабильные слоты развертывания
   ansible.builtin.include_tasks: normalize.yml
 
 - name: Проверка владения предоставляемыми пакетом системными службами systemd Redis
   ansible.builtin.include_tasks: package_preflight.yml
   when: not (platform_redis_verify_only | bool)
 
-- name: "Сформировать список локальных экземпляров Redis"
+- name: "Формирование списка локальных экземпляров Redis"
   ansible.builtin.set_fact:
     _platform_redis_local_instances: >-
       {{ _platform_redis_instances | selectattr('host', 'equalto', inventory_hostname) | list }}
 
-- name: Отклонить перекрывающиеся локальные пути данных Redis
+- name: Отклонение перекрывающихся локальных путей данных Redis
   ansible.builtin.include_tasks: validate_data_paths.yml
 
 - name: Защита локальных путей к данным Redis перед изменением
@@ -45,14 +45,14 @@
     loop_var: platform_managed_data_path_instance
     label: "{{ platform_managed_data_path_instance.id }}"
 
-- name: Проверить принадлежность локального порта Redis перед изменением
+- name: Проверка принадлежности локального порта Redis перед изменением
   ansible.builtin.include_tasks: preflight.yml
   when: not (platform_redis_verify_only | bool)
 
-- name: Разрешить материал Redis TLS
+- name: Выбор TLS-файлов Redis
   ansible.builtin.include_tasks: resolve_tls.yml
 
-- name: Установить утвержденный пакет Redis из настроенного репозитория
+- name: Установка утвержденного пакета Redis из настроенного репозитория
   ansible.builtin.package:
     name: "redis-{{ platform_redis_version }}"
     state: present
@@ -60,7 +60,7 @@
     - not (platform_redis_verify_only | bool)
     - platform_resolved_artifact_sources is not defined or platform_resolved_artifact_sources['redis-runtime'].source == 'REPOSITORY'
 
-- name: Отключить предоставляемые пакетом системные службы Redis при первой установке пакета
+- name: Отключение штатных служб Redis при первой установке пакета
   ansible.builtin.include_tasks: package_units.yml
   when:
     - not (platform_redis_verify_only | bool)
@@ -88,7 +88,7 @@
     label: "{{ redis_member.id }}"
   when: not (platform_redis_verify_only | bool)
 
-- name: "Проверить репликацию Redis и согласованность данных Sentinel во всём развёртывании"
+- name: "Проверка репликации Redis и согласованности данных Sentinel во всём развёртывании"
   ansible.builtin.include_tasks: verify_deployment.yml
   when:
     - not (platform_redis_verify_only | bool)
@@ -100,7 +100,7 @@
     - not (platform_redis_verify_only | bool)
     - not _platform_redis_has_persistent_state
 
-- name: Проверить локальные Redis и Sentinel без изменений
+- name: Проверка локальных Redis и Sentinel без изменений
   ansible.builtin.include_tasks: verify.yml
   loop: "{{ _platform_redis_local_instances }}"
   loop_control:
@@ -108,7 +108,7 @@
     label: "{{ redis_member.id }}"
   when: platform_redis_verify_only | bool
 
-- name: Проверить репликацию Redis и согласованность Sentinel во всём развёртывании без изменений
+- name: Проверка репликации Redis и согласованности Sentinel без внесения изменений
   ansible.builtin.include_tasks: verify_deployment.yml
   when:
     - platform_redis_verify_only | bool

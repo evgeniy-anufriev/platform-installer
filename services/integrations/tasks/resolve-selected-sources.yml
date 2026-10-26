@@ -1,5 +1,5 @@
 ---
-- name: Требовать непустой явный выбор источника конечной точки
+- name: Проверка непустого списка выбранных источников конечных точек
   ansible.builtin.assert:
     that:
       - platform_endpoint_source_ids is sequence
@@ -13,13 +13,13 @@
   ansible.builtin.set_fact:
     _platform_integration_selected_sources: []
 
-- name: Разрешить каждый выбранный источник с помощью существующего преобразователя
+- name: Определение каждого выбранного источника с помощью существующего преобразователя
   ansible.builtin.include_tasks: resolve-selected-source.yml
   loop: "{{ platform_endpoint_source_ids | unique | sort }}"
   loop_control:
     loop_var: _platform_selected_source_id
 
-- name: Публикация объединения точно выбранных участников провайдера и записей DNS
+- name: Публикация выбранных участников провайдера и записей DNS
   ansible.builtin.set_fact:
     platform_service_integration_projection:
       haproxyHosts: "{{ _platform_integration_selected_sources | map(attribute='projection.haproxyHosts') | flatten | unique | sort }}"
@@ -27,7 +27,7 @@
       dnsDeployments: "{{ _platform_integration_selected_sources | map(attribute='projection.dnsDeployments') | flatten | unique | sort }}"
     platform_bind_source_dns_records: "{{ _platform_integration_selected_sources | map(attribute='dnsRecords') | flatten | unique | list }}"
 
-- name: Отклонить конфликтующие проекции владельцев DNS перед изменением провайдера
+- name: Отклонение конфликтующих проекций владельцев DNS перед изменением провайдера
   ansible.builtin.assert:
     that: item.1 | unique | list | length == 1
     fail_msg: APPLICATION_ENDPOINT_DNS_CONFLICT

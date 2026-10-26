@@ -15,9 +15,9 @@ class ExecutionHardeningTests(unittest.TestCase):
 
     def test_identity_generation_remains_idempotent(self):
         tasks = (ROLE / "tasks" / "main.yml").read_text(encoding="utf-8")
-        self.assertIn("Создать постоянную SSH-пару ключей технического пользователя, если она отсутствует", tasks)
+        self.assertIn("Создание постоянной SSH-пары ключей технического пользователя, если она отсутствует", tasks)
         self.assertIn("creates: \"{{ platform_execution_ssh_key_path }}\"", tasks)
-        self.assertIn("Создать постоянный файл known_hosts, если он отсутствует", tasks)
+        self.assertIn("Создание постоянного файла known_hosts, если он отсутствует", tasks)
 
     def test_access_gate_reuses_existing_boundaries(self):
         playbook = (ROOT / "playbooks" / "ensure-execution-access.yml").read_text(encoding="utf-8")

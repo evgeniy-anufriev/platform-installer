@@ -45,7 +45,7 @@
     - platform_deployments[item.key].roles | first == 'primary'
     - not (_platform_bind_existing_primary_zone_by_deployment[item.key] | default(false) | bool)
 
-- name: Установить точного проверенного кандидата в качестве активной основной конфигурации BIND
+- name: Установка точного проверенного кандидата в качестве активной основной конфигурации BIND
   ansible.builtin.copy:
     src: "{{ platform_bind_candidate_main_config }}"
     dest: "{{ platform_bind_distribution_config }}"
@@ -55,12 +55,12 @@
     mode: '0640'
   register: _platform_bind_main_config_install
 
-- name: Проверка активной конфигурации BIND перед жизненным циклом службы
+- name: Проверка активной конфигурации BIND перед запуском или перечитыванием
   ansible.builtin.command:
     argv: ["{{ platform_bind_checkconf_binary }}", "{{ platform_bind_distribution_config }}"]
   changed_when: false
 
-- name: Сравнить активную основную конфигурацию BIND с проверенным кандидатом
+- name: Сравнение активной основной конфигурации BIND с проверенным кандидатом
   ansible.builtin.shell: >-
     sha256sum "{{ platform_bind_candidate_main_config }}" "{{ platform_bind_distribution_config }}" |
     awk '{print $1}' | uniq | wc -l | grep -qx 1
@@ -70,14 +70,14 @@
   register: _platform_bind_active_checksum
   failed_when: _platform_bind_active_checksum.rc != 0
 
-- name: Проверка активной основной зоны BIND перед жизненным циклом службы
+- name: Проверка активной основной зоны BIND перед запуском или перечитыванием
   ansible.builtin.command:
     argv: ["{{ platform_bind_checkzone_binary }}", "{{ platform_bind_resolved_zones[item.key].zone }}", "{{ platform_bind_primary_zone_directory }}/{{ platform_bind_resolved_zones[item.key].zone }}.zone"]
   changed_when: false
   loop: "{{ platform_desired_state.serviceDeployments | dict2items | selectattr('value.serviceType', 'equalto', 'bind') | selectattr('key', 'in', platform_deployments) | list }}"
   when: platform_deployments[item.key].roles | first == 'primary'
 
-- name: Записать, изменились ли активные артефакты BIND
+- name: Фиксация изменения активных файлов BIND
   ansible.builtin.set_fact:
     platform_bind_active_artifacts_changed: >-
       {{ _platform_bind_options_install.changed or

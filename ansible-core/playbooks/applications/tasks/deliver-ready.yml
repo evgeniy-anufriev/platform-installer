@@ -1,5 +1,5 @@
 ---
-- name: Согласовать только готовые общие поля с помощью существующей собственной доставки CAS
+- name: Проверка готовых общих полей Vault перед доставкой с контролем версии CAS
   ansible.builtin.include_role:
     name: platform.vault.application_provider
     tasks_from: preflight
@@ -31,7 +31,7 @@
     loop_var: platform_vault_application_job
   vars: *vault_context
 
-- name: Привязать потребителей, полная подготовка учетных данных которых только что завершилась
+- name: Привязка потребителей, полная подготовка учетных данных которых только что завершилась
   ansible.builtin.set_fact:
     application_ready_instance_vault_jobs: >-
       {{ hostvars['localhost'].application_vault_inputs.instanceJobs | platform.core.application_ready_vault_jobs(
@@ -40,7 +40,7 @@
          hostvars['localhost'].platform_application_delivered_instances) }}
   no_log: true
 
-- name: "Повторно проверить управляемые документы перед доставкой учётных данных потребителю"
+- name: "Повторная проверка управляемых документов перед доставкой учётных данных потребителю"
   ansible.builtin.include_role:
     name: platform.vault.application_provider
     tasks_from: preflight
@@ -53,7 +53,7 @@
     loop_var: platform_vault_application_job
   vars: *vault_context
 
-- name: Доставить полные учетные данные и AppRole до запуска любого зависимого потребителя
+- name: Доставка полных учетных данных и AppRole до запуска любого зависимого потребителя
   ansible.builtin.include_role:
     name: platform.vault.application_provider
     tasks_from: instance

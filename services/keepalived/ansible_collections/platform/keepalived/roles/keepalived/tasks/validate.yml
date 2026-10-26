@@ -1,5 +1,5 @@
 ---
-- name: Требовать желаемое состояние и размещение развертывания на уровне хоста
+- name: Проверка заданной конфигурации и размещения Keepalived на узле
   ansible.builtin.assert:
     that:
       - platform_desired_state is mapping

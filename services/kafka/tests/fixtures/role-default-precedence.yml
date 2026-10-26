@@ -1,20 +1,20 @@
 ---
-- name: Убедиться, что проекция проекта Kafka сохраняет приоритет Ansible
+- name: Проверка того, что проекция проекта Kafka сохраняет приоритет Ansible
   hosts: localhost
   connection: local
   gather_facts: false
   pre_tasks:
-    - name: Загрузить желаемое состояние с типом QA
+    - name: Загрузка желаемого состояния с типом QA
       ansible.builtin.include_vars:
         file: "{{ qa_project_file }}"
   tasks:
-    - name: Входные данные среды выполнения Kafka, управляемые проектом
+    - name: Подготовка входных данных Kafka из проекта
       ansible.builtin.include_role:
         name: platform.kafka.kafka_kraft
         tasks_from: project_runtime.yml
         public: true
 
-    - name: Утверждение эффективных значений роли Kafka
+    - name: Проверка итоговых значений переменных роли Kafka
       ansible.builtin.assert:
         fail_msg: "retention={{ platform_kafka_log_retention_hours }} type={{ platform_kafka_log_retention_hours | type_debug }}"
         that:

@@ -1,5 +1,5 @@
 ---
-- name: Проверка авторитетных входных данных PEM без перехода по ссылкам
+- name: Проверка исходных PEM-файлов без перехода по символическим ссылкам
   ansible.builtin.stat:
     path: "{{ kafka_pem_source_directory }}/{{ item }}"
     follow: false
@@ -7,7 +7,7 @@
   loop: [private-key.pem, certificate.pem, ca-chain.pem]
   register: _platform_kafka_pem_input_stats
 
-- name: Требовать полные обычные исходные файлы PEM
+- name: Проверка полного комплекта исходных PEM-файлов без символических ссылок
   ansible.builtin.assert:
     that:
       - item.stat.isreg | default(false)
@@ -24,7 +24,7 @@
   register: _platform_kafka_pem_inputs
   no_log: true
 
-- name: Требовать незашифрованный материал PKCS8
+- name: Проверка незашифрованного закрытого ключа в формате PKCS8
   ansible.builtin.assert:
     that:
       - "(_platform_kafka_pem_inputs.results[0].content | b64decode) is search('-----BEGIN PRIVATE KEY-----')"
@@ -39,20 +39,20 @@
   register: _platform_kafka_pem_certificate_key
   changed_when: false
 
-- name: Прочитать открытый ключ из файла закрытого ключа
+- name: Чтение открытого ключа из файла закрытого ключа
   ansible.builtin.command:
     argv: [openssl, pkey, -in, "{{ kafka_pem_source_directory }}/private-key.pem", -pubout]
   register: _platform_kafka_pem_private_key
   changed_when: false
   no_log: true
 
-- name: Запрос соответствующего сертификата и закрытого ключа
+- name: Проверка соответствия сертификата и закрытого ключа
   ansible.builtin.assert:
     that: _platform_kafka_pem_certificate_key.stdout == _platform_kafka_pem_private_key.stdout
     fail_msg: KAFKA_PEM_KEY_CERT_MISMATCH
   no_log: true
 
-- name: Материализовать защищенный идентификатор PEM только во время применения или временного использования CLI
+- name: Подготовка защищённых PEM-файлов только для Apply или временного вызова CLI
   ansible.builtin.copy:
     content: "{{ (_platform_kafka_pem_inputs.results | map(attribute='content') | map('b64decode') | map('trim') | join('\n')) ~ '\n' }}"
     dest: "{{ kafka_pem_identity_path }}"
@@ -65,7 +65,7 @@
   diff: false
   when: not (kafka_pem_verify_only | default(false) | bool)
 
-- name: Проверить соответствие и доверие существующих PEM-файлов потребителя без восстановления
+- name: Проверка соответствия и доверия существующих PEM-файлов без восстановления
   ansible.builtin.stat:
     path: "{{ item }}"
     follow: false
@@ -75,7 +75,7 @@
   no_log: true
   when: kafka_pem_verify_only | default(false) | bool
 
-- name: Проверить соответствие PEM-файлов потребителя и защищённость каталога хранилищ
+- name: Проверка соответствия PEM-файлов потребителя и защиты каталога хранилищ
   ansible.builtin.assert:
     that:
       - _platform_kafka_pem_consumer_stats.results[0].stat.isreg | default(false)

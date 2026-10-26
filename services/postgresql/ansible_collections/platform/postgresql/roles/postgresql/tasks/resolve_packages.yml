@@ -1,4 +1,4 @@
-- name: Проверка имен устаревших пакетов PostgreSQL по маскам точной версии
+- name: Проверка имён пакетов PostgreSQL старого формата по маскам версии
   ansible.builtin.command:
     argv:
       - dnf
@@ -20,7 +20,7 @@
     - platform_resolved_artifact_sources is not defined or
       platform_resolved_artifact_sources['postgresql-runtime'].source == 'REPOSITORY'
 
-- name: "Проверить имена пакетов PostgreSQL с указанием основной версии"
+- name: "Проверка имён пакетов PostgreSQL с указанием основной версии"
   ansible.builtin.command:
     argv:
       - dnf
@@ -42,7 +42,7 @@
     - platform_resolved_artifact_sources is not defined or
       platform_resolved_artifact_sources['postgresql-runtime'].source == 'REPOSITORY'
 
-- name: Выбрать доступное семейство пакетов PostgreSQL, не меняя запрошенную версию
+- name: Выбор доступного семейства пакетов PostgreSQL, не меняя запрошенную версию
   ansible.builtin.set_fact:
     _platform_postgresql_repository_packages: >-
       {{ (_platform_postgresql_legacy_package_probe.stdout_lines | default([])
@@ -54,7 +54,7 @@
     - platform_resolved_artifact_sources is not defined or
       platform_resolved_artifact_sources['postgresql-runtime'].source == 'REPOSITORY'
 
-- name: Потребовать все запрошенные пакеты PostgreSQL из одного семейства имен репозиториев
+- name: Проверка наличия всех пакетов PostgreSQL из одного семейства имён
   ansible.builtin.assert:
     that: _platform_postgresql_repository_packages | length == 3
     fail_msg: POSTGRES_PACKAGE_FAMILY_UNAVAILABLE
@@ -64,7 +64,7 @@
     - platform_resolved_artifact_sources is not defined or
       platform_resolved_artifact_sources['postgresql-runtime'].source == 'REPOSITORY'
 
-- name: "Проверить имя пакета pg_auto_failover с указанием основной версии PostgreSQL"
+- name: "Проверка имени пакета pg_auto_failover с указанием основной версии PostgreSQL"
   ansible.builtin.command:
     argv:
       - dnf
@@ -106,7 +106,7 @@
     - platform_resolved_artifact_sources is not defined or
       platform_resolved_artifact_sources['pg-auto-failover'].source == 'REPOSITORY'
 
-- name: Выбрать доступный пакет pg_auto_failover по основной версии PostgreSQL
+- name: Выбор доступного пакета pg_auto_failover по основной версии PostgreSQL
   ansible.builtin.set_fact:
     _platform_postgresql_failover_repository_package: >-
       {{ (_platform_postgresql_major_failover_package_probe.stdout_lines | default([])
@@ -119,7 +119,7 @@
     - platform_resolved_artifact_sources is not defined or
       platform_resolved_artifact_sources['pg-auto-failover'].source == 'REPOSITORY'
 
-- name: "Проверить наличие требуемого pg_auto_failover в настроенном репозитории"
+- name: "Проверка наличия требуемого pg_auto_failover в настроенном репозитории"
   ansible.builtin.assert:
     that: _platform_postgresql_failover_repository_package | length == 1
     fail_msg: POSTGRES_FAILOVER_PACKAGE_UNAVAILABLE

@@ -1,5 +1,5 @@
 ---
-- name: Прочитать информацию о владельце документа и версии CAS до того, как провайдер запишет его
+- name: Чтение информации о владельце документа и версии CAS до того, как провайдер запишет его
   ansible.builtin.uri:
     url: "{{ application_vault_provider.url }}/v1/{{ item.mount }}/data/{{ item.document }}"
     headers: {X-Vault-Token: "{{ application_vault_provider.token }}"}
@@ -16,7 +16,7 @@
   register: application_vault_document_states
   no_log: true
 
-- name: Отклонить неуправляемые или удаленные документы перед разрешением сгенерированных паролей
+- name: Отклонение неуправляемых или удалённых документов перед получением сгенерированных паролей
   ansible.builtin.assert:
     that: item | platform.vault.application_kv_delta({}, item.item.owner) is mapping
     fail_msg: APPLICATION_VAULT_DOCUMENT_OWNERSHIP_INVALID
@@ -39,7 +39,7 @@
   register: application_vault_document_sources
   no_log: true
 
-- name: Подтвердить право собственности и единожды сохранить исходные байты и версии CAS
+- name: Подтверждение владельца и однократное сохранение исходного содержимого и версий CAS
   ansible.builtin.set_fact:
     platform_application_vault_values: "{{ platform_application_vault_values | default({}) | combine(application_vault_document_sources.results | platform.vault.application_vault_source_cache(platform_vault_application_job.providerId)) }}"
     platform_application_vault_documents: "{{ platform_application_vault_documents | default({}) | combine(application_vault_document_states.results | platform.vault.application_vault_document_cache(application_vault_document_sources.results | platform.vault.application_vault_source_cache(platform_vault_application_job.providerId), platform_vault_application_job.providerId)) }}"
@@ -47,7 +47,7 @@
   when: not application_vault_identity_only | default(false)
   no_log: true
 
-- name: Прочитать текущую политику и роль перед любым изменением Vault
+- name: Чтение текущих политики и роли перед изменением Vault
   ansible.builtin.uri:
     url: "{{ application_vault_provider.url }}/v1/{{ item }}"
     headers: {X-Vault-Token: "{{ application_vault_provider.token }}"}
@@ -66,7 +66,7 @@
   when: platform_vault_application_job.identity is defined
   no_log: true
 
-- name: Отклонить неуправляемую политику или политику неожиданных ролей
+- name: Отклонение неуправляемой политики или неожиданных политик роли
   ansible.builtin.assert:
     that:
       - application_vault_identity_before.results[0].status == 404 or application_vault_identity_before.results[0].json.data.policy.startswith('# ' ~ platform_vault_application_job.owner ~ '\n')

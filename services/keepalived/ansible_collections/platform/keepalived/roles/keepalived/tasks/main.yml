@@ -41,12 +41,12 @@
     - not (platform_keepalived_verify_only | bool)
     - platform_keepalived_lifecycle_phase == 'activate'
 
-- name: Согласовать Keepalived только после проверки активации кластера
+- name: Согласование Keepalived только после проверки активации кластера
   ansible.builtin.include_tasks: reconcile.yml
   when:
     - not (platform_keepalived_verify_only | bool)
     - platform_keepalived_lifecycle_phase == 'reconcile'
 
-- name: Проверить принадлежность runtime-объектов Keepalived без изменений
+- name: Проверка принадлежности runtime-объектов Keepalived без изменений
   ansible.builtin.include_tasks: verify.yml
   when: platform_keepalived_verify_only | bool

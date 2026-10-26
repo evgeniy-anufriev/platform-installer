@@ -1,41 +1,41 @@
 ---
-- name: Создание частной временной конфигурации клиента Kafka
+- name: Создание защищённой временной конфигурации клиента Kafka
   ansible.builtin.tempfile:
     state: directory
     prefix: platform-topics-
   register: application_kafka_private
   changed_when: false
 
-- name: Выбрать путь временной конфигурации клиента Kafka
+- name: Выбор пути временной конфигурации клиента Kafka
   ansible.builtin.set_fact:
     application_topic_client: "{{ {'path': application_kafka_private.path ~ '/client.properties'} }}"
   changed_when: false
 
-- name: Применить проекцию безопасности Kafka к пакету запрошенных тем
+- name: Применение проекции безопасности Kafka к запрошенным топикам
   block:
-    - name: Подготовка частного удостоверения клиента PEM для вызова
+    - name: Подготовка защищённых PEM-файлов клиента для текущей операции
       ansible.builtin.include_tasks: application_client_tls.yml
       when:
         - application_topic_candidate.tls
         - platform_kafka_store_type == 'PEM'
-    - name: Сформировать конфигурацию клиента Kafka по runtime-проекции
+    - name: Формирование конфигурации клиента Kafka по runtime-проекции
       ansible.builtin.template:
         src: application-topics-client.properties.j2
         dest: "{{ application_topic_client.path }}"
         mode: '0600'
       changed_when: false
       no_log: true
-    - name: Прочитать метаданные темы и эффективные конфигурации один раз для пакета библиотеки
+    - name: Однократное чтение метаданных и действующих конфигураций топиков библиотеки
       ansible.builtin.include_tasks: application_topics_read.yml
       when: platform_kafka_application_job.topics | length > 0
-    - name: Проверить или создать каждую заявленную тему
+    - name: Проверка или создание каждого объявленного топика
       ansible.builtin.include_tasks: application_topic.yml
       loop: "{{ platform_kafka_application_job.topics }}"
       loop_control:
         loop_var: application_topic
         label: "{{ application_topic.name }}"
   always:
-    - name: Удалить временную конфигурацию клиента Kafka для пакета тем
+    - name: Удаление временной конфигурации клиента Kafka для набора топиков
       ansible.builtin.file:
         path: "{{ application_kafka_private.path }}"
         state: absent

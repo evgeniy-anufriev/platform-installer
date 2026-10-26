@@ -8,18 +8,18 @@
     - name: Проверка логических областей с хранением учетных данных только для вызова
       when: application_provider_inputs.jobs | length > 0
       block:
-        - name: Требовать защищенного хранения во время выполнения перед чтением учетных данных, поддерживаемых Vault
+        - name: Проверка защищённого runtime-каталога перед чтением учётных данных Vault
           ansible.builtin.assert:
             that: "{} | platform.core.application_protected_secret_files([], platform_application_secret_root)"
             fail_msg: APPLICATION_PROVIDER_SECRET_FILE_INVALID
           when: application_vault_inputs.sourceJobs | default([]) | length > 0
           no_log: true
-        - name: Инициализировать обнаружение Vault только тогда, когда учетная запись считывает существующий секрет
+        - name: Инициализация обнаружения Vault только тогда, когда учетная запись считывает существующий секрет
           ansible.builtin.set_fact:
             platform_application_vault_runtime: {}
           when: application_vault_inputs.sourceJobs | default([]) | length > 0
           no_log: true
-        - name: Один раз обнаружить каждого провайдера источника учетных данных Vault
+        - name: Однократное обнаружение каждого провайдера источника учётных данных Vault
           ansible.builtin.include_role:
             name: platform.vault.application_provider
             tasks_from: discover
@@ -28,14 +28,14 @@
           loop: "{{ application_vault_inputs.providers | default([]) | selectattr('providerId', 'in', application_vault_inputs.sourceJobs | default([]) | map(attribute='providerId') | unique | list) | list }}"
           loop_control:
             loop_var: platform_vault_application_provider
-        - name: Прочитать существующие источники учётных данных Vault для проверки провайдеров
+        - name: Чтение существующих источников учётных данных Vault для проверки провайдеров
           ansible.builtin.include_role:
             name: platform.vault.application_provider
             tasks_from: sources
           loop: "{{ application_vault_inputs.sourceJobs | default([]) }}"
           loop_control:
             loop_var: application_vault_source
-        - name: "Проверить топики библиотеки Kafka без внесения изменений"
+        - name: "Проверка топиков библиотеки Kafka без внесения изменений"
           ansible.builtin.include_role:
             name: platform.kafka.kafka_kraft
             tasks_from: application_topics
@@ -44,7 +44,7 @@
           loop: "{{ application_provider_inputs.libraryJobs | selectattr('serviceType', 'equalto', 'kafka') | list }}"
           loop_control:
             loop_var: platform_kafka_application_job
-        - name: Проверить аутентификацию экземпляра Kafka и заданные ACL без изменений
+        - name: Проверка аутентификации экземпляра Kafka и заданных ACL без внесения изменений
           ansible.builtin.include_role:
             name: platform.kafka.kafka_kraft
             tasks_from: application_accounts
@@ -53,10 +53,10 @@
           loop: "{{ application_provider_inputs.jobs | selectattr('serviceType', 'equalto', 'kafka') | selectattr('accounts') | list }}"
           loop_control:
             loop_var: platform_kafka_application_job
-        - name: Сбросить результаты обнаружения PostgreSQL перед проверкой провайдера
+        - name: Сброс результатов обнаружения PostgreSQL перед проверкой провайдера
           ansible.builtin.set_fact:
             platform_application_provider_runtime: {}
-        - name: Один раз обнаружить каждое развертывание PostgreSQL для проверки
+        - name: Однократное обнаружение каждого развёртывания PostgreSQL для проверки
           ansible.builtin.include_role:
             name: platform.postgresql.application_provider
             tasks_from: discover
@@ -70,7 +70,7 @@
           loop: "{{ application_provider_inputs.libraryJobs | selectattr('serviceType', 'equalto', 'postgresql') | list }}"
           loop_control:
             loop_var: platform_postgresql_application_job
-        - name: Проверка учетных записей Redis и Sentinel без модификации ACL
+        - name: Проверка учётных записей Redis и Sentinel без изменения ACL
           ansible.builtin.include_role:
             name: platform.redis.application_provider
             tasks_from: verify
@@ -92,7 +92,7 @@
           loop_control:
             loop_var: platform_postgresql_application_job
       always:
-        - name: Удалить только файлы учетных данных, полученные из вызова
+        - name: Удаление только файлов учётных данных текущей операции
           ansible.builtin.file:
             path: "{{ platform_application_secret_root }}/{{ item.passwordRef }}"
             state: absent

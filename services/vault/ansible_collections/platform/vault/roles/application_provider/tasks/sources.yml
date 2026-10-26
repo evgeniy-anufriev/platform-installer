@@ -1,5 +1,5 @@
 ---
-- name: Проверить существующее хранилище KV v2 источника учётных данных Vault
+- name: Проверка существующего хранилища KV v2 источника учётных данных Vault
   ansible.builtin.assert:
     that:
       - application_vault_provider.mounts[application_vault_source.mount ~ '/'].type == 'kv'
@@ -9,7 +9,7 @@
     application_vault_provider: "{{ platform_application_vault_runtime[application_vault_source.providerId] }}"
   no_log: true
 
-- name: Прочитать существующее поле учетной записи через соединение с библиотекой Vault
+- name: Чтение существующего поля учетной записи через соединение с библиотекой Vault
   ansible.builtin.uri:
     url: "{{ application_vault_provider.url }}/v1/{{ application_vault_source.mount }}/data/{{ application_vault_source.document }}"
     headers: {X-Vault-Token: "{{ application_vault_provider.token }}"}
@@ -24,7 +24,7 @@
   register: application_vault_source_value
   no_log: true
 
-- name: Требовать объявленное ограниченное поле учетных данных
+- name: Проверка наличия и допустимости объявленного поля учётных данных
   ansible.builtin.assert:
     that:
       - application_vault_source_value.json.data.data[application_vault_source.field] is string
@@ -33,7 +33,7 @@
     fail_msg: APPLICATION_VAULT_SOURCE_FIELD_INVALID
   no_log: true
 
-- name: Материализовать входные данные провайдера только в защищенной среде выполнения
+- name: Подготовка входных данных провайдера только в защищенной среде выполнения
   ansible.builtin.copy:
     content: "{{ application_vault_source_value.json.data.data[application_vault_source.field] }}"
     dest: "{{ platform_application_secret_root }}/{{ application_vault_source.passwordRef }}"
@@ -42,7 +42,7 @@
   when: application_vault_source.passwordRef is defined
   no_log: true
 
-- name: Привязка производного частного ввода без замены желаемого источника
+- name: Привязка защищённых производных входных данных без замены желаемого источника
   ansible.builtin.set_fact:
     platform_application_credential_files: "{{ platform_application_credential_files | default({}) | combine({application_vault_source.passwordRef: platform_application_secret_root ~ '/' ~ application_vault_source.passwordRef}) }}"
   when: application_vault_source.passwordRef is defined

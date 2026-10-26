@@ -5,7 +5,7 @@
     follow: false
   register: _platform_haproxy_previous_main
 
-- name: Вычислить предыдущий активный дайджест графа HAProxy при установке
+- name: Вычисление предыдущего активного дайджеста графа HAProxy при установке
   ansible.builtin.shell: >-
     { sha256sum "{{ platform_haproxy_main_config }}"; cd "{{ platform_haproxy_conf_directory }}";
       find . -type f -printf '%P\0' | sort -z | xargs -0 sha256sum; } |
@@ -17,7 +17,7 @@
   register: _platform_haproxy_previous_graph_digest
   when: _platform_haproxy_previous_main.stat.isreg | default(false)
 
-- name: Доказать право собственности на серверную часть и архивировать только устаревшие фрагменты
+- name: Проверка владельца backend и архивация только устаревших файлов конфигурации
   platform.haproxy.archive_managed_backends:
     name_prefix: "{{ platform_name_prefix | default('', true) }}"
     config_directory: "{{ platform_haproxy_config_directory }}"
@@ -28,12 +28,12 @@
          _platform_haproxy_previous_graph_digest.stdout != _platform_haproxy_candidate_graph_digest.stdout }}
   register: _platform_haproxy_backend_archive
 
-- name: Опубликовать и проверить подготовленный граф конфигурации HAProxy
+- name: Публикация и проверка подготовленного набора конфигурации HAProxy
   block:
     - name: Установка и проверка графа-кандидата
       ansible.builtin.include_tasks: activate_publish.yml
   rescue:
-    - name: "Остановить выполнение и указать архив для восстановления HAProxy"
+    - name: "Остановка выполнения с указанием архива восстановления HAProxy"
       ansible.builtin.fail:
         msg: >-
           HAPROXY_ACTIVATION_RECOVERY_REQUIRED

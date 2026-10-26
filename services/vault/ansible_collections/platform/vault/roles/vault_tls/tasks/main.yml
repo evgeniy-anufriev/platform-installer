@@ -3,16 +3,16 @@
   ansible.builtin.include_role:
     name: platform.core.project_settings
 
-- name: Разрешить необязательные типизированные входные данные runtime-сеанса секретов
+- name: Определение необязательных типизированных входных данных runtime-сеанса секретов
   ansible.builtin.include_tasks: resolve_runtime_inputs.yml
 
-- name: Проверить желаемую runtime-проекцию Vault
+- name: Проверка желаемой runtime-проекции Vault
   ansible.builtin.include_tasks: validate.yml
 
-- name: Нормализация портов экземпляра Vault и идентификаторов частных ресурсов
+- name: Нормализация портов Vault и идентификаторов ресурсов экземпляров
   ansible.builtin.include_tasks: normalize.yml
 
-- name: Отклонить перекрывающиеся локальные пути данных Vault
+- name: Отклонение перекрывающихся локальных путей данных Vault
   ansible.builtin.include_tasks: validate_data_paths.yml
 
 - name: Защита локальных путей данных Vault перед изменением
@@ -29,14 +29,14 @@
     loop_var: platform_managed_data_path_instance
     label: "{{ platform_managed_data_path_instance.id }}"
 
-- name: Обеспечить взаимное исключение операций Vault для Installer и standalone-Ansible
+- name: Обеспечение взаимного исключения операций Vault для Installer и standalone-Ansible
   block:
-    - name: Создать один идентификатор вызова для блокировки развертывания
+    - name: Создание одного идентификатора вызова для блокировки развертывания
       ansible.builtin.set_fact:
         platform_vault_lock_token: "{{ lookup('ansible.builtin.password', '/dev/null', length=32, chars='hexdigits') | lower }}"
       run_once: true
 
-    - name: Получить блокировку flock проекта и развёртывания на целевом узле
+    - name: Получение блокировки flock проекта и развёртывания на целевом узле
       ansible.builtin.include_tasks:
         file: acquire_lock.yml
         apply:
@@ -44,19 +44,19 @@
           delegate_to: "{{ _platform_vault_instances[0].host }}"
           become: true
 
-    - name: Отклонить предоставляемые пакетом службы systemd по умолчанию Vault перед изменением
+    - name: Отклонение штатной службы Vault из пакета перед внесением изменений
       ansible.builtin.command:
         argv: [systemctl, is-active, vault.service]
       register: _platform_vault_default_unit
       changed_when: false
       failed_when: false
 
-    - name: Сбой, если служба systemd пакета по умолчанию владеет несвязанным экземпляром Vault
+    - name: Остановка при обнаружении постороннего экземпляра Vault под штатной службой из пакета
       ansible.builtin.assert:
         that: _platform_vault_default_unit.stdout | trim != 'active'
         fail_msg: VAULT_DEFAULT_UNIT_CONFLICT
 
-    - name: Разрешить и защитить выходной каталог автономной начальной загрузки
+    - name: Определение и защита каталога результатов автономной инициализации
       ansible.builtin.include_tasks:
         file: prepare_output.yml
         apply:
@@ -65,7 +65,7 @@
           become: false
       when: not (platform_vault_verify_only | bool)
 
-    - name: Перед изменением запросить утвержденный источник артефакта Vault
+    - name: Проверка разрешённого источника артефакта Vault перед изменениями
       ansible.builtin.include_role:
         name: platform.core.artifact_source_gate
       vars:
@@ -75,10 +75,10 @@
         - platform_resolved_artifact_sources is defined or (platform_artifact_source_authority_active | default(false))
         - not (platform_vault_verify_only | bool)
 
-    - name: Разрешить выбранный план материализации сертификата Vault API
+    - name: Определение выбранного плана подготовки сертификата Vault API
       ansible.builtin.include_tasks: resolve_tls.yml
 
-    - name: Запустить предварительную проверку Vault перед изменением пакета или службы
+    - name: Запуск предварительной проверки Vault перед изменением пакета или службы
       ansible.builtin.include_tasks: preflight.yml
       when: not (platform_vault_verify_only | bool)
 
@@ -86,25 +86,25 @@
       ansible.builtin.include_tasks: provision.yml
       when: not (platform_vault_verify_only | bool)
 
-    - name: Запустить начальный узел, однократно инициализировать и последовательно присоединить и разблокировать остальные экземпляры
+    - name: Запуск начального узла, однократная инициализация и последовательное присоединение остальных экземпляров
       ansible.builtin.include_tasks:
         file: bootstrap.yml
         apply:
           run_once: true
       when: not (platform_vault_verify_only | bool)
 
-    - name: "Настроить аудит, KV v2, userpass и AppRole, сохранив существующие ресурсы"
+    - name: "Настройка аудита, KV v2, userpass и AppRole, сохранив существующие ресурсы"
       ansible.builtin.include_tasks: configure.yml
       # These mounts are Raft cluster state, not per-host resources. Only the
       # canonical seed may reconcile them while the deployment lock is held.
       when: not (platform_vault_verify_only | bool) and inventory_hostname == _platform_vault_instances[0].host
 
-    - name: Проверить подготовленный Vault, пока удерживается блокировка развертывания
+    - name: Проверка подготовленного Vault, пока удерживается блокировка развертывания
       ansible.builtin.include_tasks: verify.yml
       when: not (platform_vault_verify_only | bool)
 
   always:
-    - name: Снять блокировку развёртывания Vault на каноническом экземпляре сервиса
+    - name: Снятие блокировки развёртывания Vault на каноническом экземпляре сервиса
       ansible.builtin.include_tasks:
         file: release_lock.yml
         apply:
@@ -114,11 +114,11 @@
       when: _platform_vault_lock_unit is defined and _platform_vault_lock_start is defined
   when: not (platform_vault_verify_only | bool)
 
-- name: "Выбрать текущие TLS-файлы Vault для проверки без изменений"
+- name: "Выбор текущих TLS-файлов Vault для проверки без изменений"
   ansible.builtin.include_tasks: resolve_tls.yml
   when: platform_vault_verify_only | bool
 
-- name: Разрешить автономный защищенный ввод начальной загрузки для запусков только для проверки
+- name: Определение защищённых данных автономной инициализации для режима Verify
   ansible.builtin.include_tasks:
     file: read_output.yml
     apply:
@@ -127,7 +127,7 @@
       become: false
   when: platform_vault_verify_only | bool and (platform_vault_admin_token is not defined or platform_vault_admin_token | string | length == 0)
 
-- name: Требовать полномочия проверки Vault без открытия или изменения выходных файлов
+- name: Проверка учётных данных для Verify без чтения или изменения файлов результатов
   ansible.builtin.assert:
     that:
       - platform_vault_admin_token is defined
@@ -137,6 +137,6 @@
   when: platform_vault_verify_only | bool
   no_log: true
 
-- name: Проверить Vault без изменения состояния службы
+- name: Проверка Vault без изменения состояния службы
   ansible.builtin.include_tasks: verify.yml
   when: platform_vault_verify_only | bool

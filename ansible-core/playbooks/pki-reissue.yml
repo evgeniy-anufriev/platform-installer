@@ -4,7 +4,7 @@
   connection: local
   gather_facts: false
   pre_tasks:
-    - name: Требовать явный непустой выбор запроса на повторный выпуск PKI
+    - name: Проверка непустого списка запросов на перевыпуск PKI
       ansible.builtin.assert:
         that:
           - platform_pki_reissue_request_ids is defined
@@ -15,7 +15,7 @@
   roles:
     - role: platform.core.pki_materialize
 
-- name: Развернуть явно перевыпущенный материал PKI на выбранных целевых объектах
+- name: Развёртывание перевыпущенных PKI-файлов на выбранных целевых узлах
   hosts: platform_targets
   become: true
   gather_facts: false

@@ -1,10 +1,10 @@
 ---
-- name: Разрешить утверждённые источники артефактов Core для целевого узла
+- name: Определение утверждённых источников артефактов Core для целевого узла
   ansible.builtin.include_role:
     name: platform.core.artifact_source_resolution
   when: platform_artifact_source_authorities_by_deployment is defined
 
-- name: Требовать разрешенный источник для каждого требования к артефакту службы
+- name: Проверка разрешённого источника каждого требуемого артефакта сервиса
   ansible.builtin.assert:
     that:
       - platform_resolved_artifact_sources[item.id] is defined

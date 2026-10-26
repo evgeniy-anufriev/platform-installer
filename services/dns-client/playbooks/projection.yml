@@ -1,17 +1,17 @@
 ---
 - import_playbook: ../../../ansible-core/playbooks/validate.yml
 
-- name: Разрешение проекции времени выполнения клиента DNS без сгенерированного состояния
+- name: Расчёт runtime-проекции DNS-клиента без сохранённого служебного состояния
   hosts: localhost
   connection: local
   gather_facts: false
   tasks:
-    - name: Загрузить опубликованный каталог сервисов для проекции клиента DNS
+    - name: Загрузка опубликованного каталога сервисов для проекции клиента DNS
       ansible.builtin.include_vars:
         file: "{{ platform_service_catalog_path }}"
         name: _platform_dns_client_catalog_file
 
-    - name: Собрать канонические проекции inventory DNS-клиента
+    - name: Сбор канонических проекций inventory DNS-клиента
       ansible.builtin.set_fact:
         _platform_dns_client_inventory_hosts: >-
           {{ _platform_dns_client_inventory_hosts | default({}) | combine({item: {'ansible_host': (hostvars[item].ansible_host | default(item))}}) }}
@@ -20,7 +20,7 @@
       loop: "{{ groups['platform_targets'] | default([]) | sort }}"
       no_log: true
 
-    - name: Разрешить существующую авторитетную проекцию DNS
+    - name: Расчёт общей проекции DNS
       platform.core.resolve_dns_zones:
         desired_state: "{{ platform_desired_state }}"
         service_catalog: "{{ _platform_dns_client_catalog_file.platform_service_catalog | default(_platform_dns_client_catalog_file, true) }}"

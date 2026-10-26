@@ -45,13 +45,13 @@
   loop_control:
     label: "{{ item.id | default('unknown') }}"
 
-- name: Требовать уникальные канонические идентификаторы экземпляра службы Vault
+- name: Проверка уникальности идентификаторов экземпляров Vault
   ansible.builtin.assert:
     that:
       - platform_vault_instances | map(attribute='id') | unique | length == platform_vault_instances | length
     fail_msg: VAULT_MEMBER_ID_DUPLICATE
 
-- name: Требовать уникальные числовые идентификаторы экземпляра службы Vault на каждом хосте
+- name: Проверка уникальности числовых идентификаторов Vault на каждом узле
   ansible.builtin.assert:
     that:
       - >-

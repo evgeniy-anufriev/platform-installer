@@ -14,7 +14,7 @@
   register: application_vault_document_before
   no_log: true
 
-- name: Пересчитать минимальную разницу в принадлежащем документе после конфликта CAS
+- name: Пересчёт изменений управляемого документа после конфликта CAS
   ansible.builtin.set_fact:
     application_vault_delta: "{{ application_vault_document_before | platform.vault.application_kv_delta(platform_application_vault_values[document_key], application_vault_document.owner) }}"
   delegate_facts: false
@@ -22,9 +22,9 @@
     document_key: "{{ platform_vault_application_job.providerId ~ ':' ~ application_vault_document.mount ~ '/' ~ application_vault_document.document }}"
   no_log: true
 
-- name: Сохранить безопасную диагностику записи документа Vault
+- name: Сохранение безопасной диагностики записи документа Vault
   block:
-    - name: "Повторить запись изменённых полей с актуальной версией CAS"
+    - name: "Повторение записи изменённых полей с актуальной версией CAS"
       ansible.builtin.uri:
         url: "{{ application_vault_provider.url }}/v1/{{ application_vault_document.mount }}/data/{{ application_vault_document.document }}"
         method: "{{ application_vault_delta.method }}"

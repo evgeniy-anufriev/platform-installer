@@ -2,7 +2,7 @@
 - name: Проверка автономных очищаемых входных данных Vault
   ansible.builtin.include_tasks: validate.yml
 
-- name: Требовать точное подтверждение деструктивного сброса Vault
+- name: Проверка точного подтверждения удаления данных Vault
   ansible.builtin.assert:
     that:
       - platform_vault_confirm_destructive_reset == platform_vault_deployment_id
@@ -10,14 +10,14 @@
       - platform_vault_group == platform_vault_name
     fail_msg: VAULT_CLEAR_CONFIRMATION_REQUIRED
 
-- name: Нормализовать выбранные идентификаторы экземпляра службы Vault для очистки
+- name: Нормализация выбранных идентификаторов экземпляра службы Vault для очистки
   ansible.builtin.include_tasks: normalize.yml
 
-- name: Собрать только выбранные локальные экземпляры службы Vault
+- name: Сбор только выбранных локальных экземпляров службы Vault
   ansible.builtin.set_fact:
     _platform_vault_local_instances: "{{ _platform_vault_instances | selectattr('host', 'equalto', inventory_hostname) | list }}"
 
-- name: Проверить очистку Vault без изменений в режиме проверки
+- name: Проверка очистки Vault без изменений в режиме проверки
   platform.vault.clear_member:
     name_prefix: "{{ platform_name_prefix | default('', true) }}"
     deployment_id: "{{ platform_vault_deployment_id }}"
@@ -31,14 +31,14 @@
     label: "{{ item.id }}"
   when: ansible_check_mode
 
-- name: "Выполнять очистку Vault под общей блокировкой развёртывания"
+- name: "Выполнение очистки Vault под общей блокировкой развёртывания"
   block:
-    - name: Создать один идентификатор вызова для очистки блокировки Vault
+    - name: Создание одного идентификатора вызова для очистки блокировки Vault
       ansible.builtin.set_fact:
         platform_vault_lock_token: "{{ lookup('ansible.builtin.password', '/dev/null', length=32, chars='hexdigits') | lower }}"
       run_once: true
 
-    - name: Получить блокировку существующего развёртывания Vault перед очисткой
+    - name: Получение блокировки существующего развёртывания Vault перед очисткой
       ansible.builtin.include_tasks:
         file: acquire_lock.yml
         apply:
@@ -46,11 +46,11 @@
           delegate_to: "{{ _platform_vault_instances[0].host }}"
           become: true
 
-    - name: Очистить только явно выбранные экземпляры службы Vault, принадлежащие владельцу
+    - name: Очистка только явно выбранных управляемых экземпляров Vault
       ansible.builtin.include_tasks: clear.yml
 
   always:
-    - name: Снять блокировку развёртывания после очистки Vault
+    - name: Снятие блокировки развёртывания после очистки Vault
       ansible.builtin.include_tasks:
         file: release_lock.yml
         apply:

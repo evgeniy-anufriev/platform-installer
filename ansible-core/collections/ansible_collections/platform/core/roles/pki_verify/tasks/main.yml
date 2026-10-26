@@ -1,9 +1,9 @@
 ---
-- name: Выбрать планы проверки PKI для целевого хоста
+- name: Выбор планов проверки PKI для целевого хоста
   ansible.builtin.set_fact:
     _platform_pki_verify_plans: "{{ (platform_pki_materialization_plans | default(hostvars['localhost'].platform_pki_materialization_plans | default([]), true)) | selectattr('hostId', 'equalto', inventory_hostname) | list }}"
 
-- name: Проверить PKI-материалы целевого узла без изменений
+- name: Проверка PKI-файлов целевого узла без внесения изменений
   ansible.builtin.include_tasks: plan.yml
   loop: "{{ _platform_pki_verify_plans | sort(attribute='id') | list }}"
   loop_control:

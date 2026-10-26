@@ -43,7 +43,7 @@
     label: "{{ item.id | default('unknown') }}"
   when: platform_postgresql_instances | length > 0
 
-- name: "Проверить число экземпляров PostgreSQL в standalone-режиме"
+- name: "Проверка числа экземпляров PostgreSQL в standalone-режиме"
   ansible.builtin.assert:
     that:
       - platform_postgresql_instances | length == 1
@@ -63,7 +63,7 @@
   when:
     - platform_postgresql_mode == 'pg_auto_failover'
 
-- name: Отклонить дубликаты портов PostgreSQL на одном хосте
+- name: Отклонение дубликатов портов PostgreSQL на одном хосте
   ansible.builtin.assert:
     that: >-
       (platform_postgresql_instances | selectattr('host', 'equalto', item.0.host)
@@ -76,7 +76,7 @@
     - platform_postgresql_instances | length > 1
     - item.0.host == item.1.host
 
-- name: Отклонить повторяющиеся имена служб systemd PostgreSQL на одном хосте
+- name: Отклонение повторяющихся имён служб systemd PostgreSQL на одном хосте
   ansible.builtin.assert:
     that: >-
       (platform_postgresql_instances | selectattr('host', 'equalto', item)
@@ -85,7 +85,7 @@
     fail_msg: POSTGRES_UNIT_NAME_COLLISION
   loop: "{{ platform_postgresql_instances | map(attribute='host') | unique | list }}"
 
-- name: Отклонить повторяющиеся пути к экземпляру службы PostgreSQL
+- name: Отклонение повторяющихся путей к экземпляру службы PostgreSQL
   ansible.builtin.assert:
     that: >-
       (platform_postgresql_instances | selectattr('host', 'equalto', item.0.host)
@@ -98,14 +98,14 @@
     - platform_postgresql_instances | length > 1
     - item.0.host == item.1.host
 
-- name: Отклонить настройки PostgreSQL, принадлежащие платформе, в AdvancedConfig
+- name: Отклонение управляемых платформой настроек PostgreSQL в AdvancedConfig
   ansible.builtin.assert:
     that:
       - item not in platform_postgresql_advanced_config
     fail_msg: "ADVANCED_SETTING_RESERVED: {{ item }}"
   loop: [data_directory, port, ssl, ssl_cert_file, ssl_key_file, ssl_ca_file, primary_conninfo, primary_slot_name, shared_preload_libraries, pg_hba_file]
 
-- name: Требовать профиль TLS для pg_auto_failover
+- name: Проверка наличия TLS-профиля для pg_auto_failover
   ansible.builtin.assert:
     that: platform_postgresql_tls_profile | length > 0
     fail_msg: POSTGRES_TLS_PROFILE_REQUIRED

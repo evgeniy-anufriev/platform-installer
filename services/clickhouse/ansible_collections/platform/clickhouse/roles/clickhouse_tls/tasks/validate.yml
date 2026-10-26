@@ -36,12 +36,12 @@
   loop_control:
     label: "{{ item.id | default('invalid') }}"
 
-- name: Отклонить повторяющиеся идентификаторы экземпляра службы ClickHouse
+- name: Отклонение повторяющихся идентификаторов экземпляра службы ClickHouse
   ansible.builtin.assert:
     that: platform_clickhouse_instances | map(attribute='id') | unique | list | length == platform_clickhouse_instances | length
     fail_msg: CLICKHOUSE_MEMBER_ID_DUPLICATE
 
-- name: Требовать файл паролей по умолчанию только во время выполнения
+- name: Проверка runtime-файла пароля пользователя ClickHouse по умолчанию
   ansible.builtin.stat:
     path: "{{ platform_clickhouse_secret_files[platform_clickhouse_default_credential.passwordSecretRef] }}"
     follow: false
@@ -53,7 +53,7 @@
   register: _platform_clickhouse_password_file
   no_log: true
 
-- name: Отклонить отсутствующий или замененный файл паролей по умолчанию
+- name: Отклонение отсутствующего или подменённого файла пароля по умолчанию
   ansible.builtin.assert:
     that:
       - _platform_clickhouse_password_file.stat.exists
@@ -64,12 +64,12 @@
     fail_msg: CLICKHOUSE_PASSWORD_INPUT_INVALID
   no_log: true
 
-- name: Прочитать точные байты пароля во время выполнения без обрезки
+- name: Чтение точных байтов пароля во время выполнения без обрезки
   ansible.builtin.set_fact:
     _platform_clickhouse_default_password: "{{ lookup('ansible.builtin.file', platform_clickhouse_secret_files[platform_clickhouse_default_credential.passwordSecretRef], lstrip=False, rstrip=False) }}"
   no_log: true
 
-- name: "Проверить непустой пароль UTF-8 без изменения его содержимого"
+- name: "Проверка непустого пароля UTF-8 без изменения его содержимого"
   ansible.builtin.assert:
     that:
       - _platform_clickhouse_default_password | string | length > 0

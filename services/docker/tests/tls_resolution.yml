@@ -1,9 +1,9 @@
 ---
-- name: Проверка точного материала Docker TLS без подготовки
+- name: Проверка TLS-файлов Docker без их подготовки
   hosts: platform_targets
   gather_facts: false
   tasks:
-    - name: Разрешить материал Docker TLS с помощью задачи производственной роли
+    - name: Выбор TLS-файлов Docker штатной задачей роли
       ansible.builtin.include_role:
         name: platform.docker.docker_rootless
         tasks_from: resolve_tls.yml

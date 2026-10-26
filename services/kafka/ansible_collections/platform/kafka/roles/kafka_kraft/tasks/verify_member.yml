@@ -5,7 +5,7 @@
   changed_when: false
   register: platform_kafka_member_service_state
 
-- name: Подтвердить, что служба экземпляра службы Kafka активна
+- name: Проверка активности службы экземпляра Kafka
   ansible.builtin.assert:
     that: "'ActiveState=active' in platform_kafka_member_service_state.stdout_lines"
     fail_msg: Kafka member systemd instance is not active
@@ -25,7 +25,7 @@
     get_checksum: false
   register: platform_kafka_verify_config
 
-- name: Подтвердить наличие конфигурации экземпляра службы Kafka
+- name: Подтверждение наличия конфигурации экземпляра службы Kafka
   ansible.builtin.assert:
     that: platform_kafka_verify_config.stat.exists
     fail_msg: Kafka member configuration is missing from its isolated directory
@@ -35,14 +35,14 @@
     src: "{{ kafka_member.data_directory }}/meta.properties"
   register: platform_kafka_verify_member_metadata
 
-- name: Подтвердить идентичность экземпляра службы Kafka
+- name: Подтверждение идентичности экземпляра службы Kafka
   ansible.builtin.assert:
     that:
       - (platform_kafka_verify_member_metadata.content | b64decode) is search('(?m)^cluster.id=' ~ platform_kafka_cluster_id ~ '$')
       - (platform_kafka_verify_member_metadata.content | b64decode) is search('(?m)^node.id=' ~ (kafka_member.node_id | string) ~ '$')
     fail_msg: Kafka member metadata does not match expected cluster/node identity
 
-- name: Проверить listeners экземпляра Kafka
+- name: Проверка listeners экземпляра Kafka
   ansible.builtin.wait_for:
     host: 127.0.0.1
     port: "{{ item }}"
@@ -50,7 +50,7 @@
     timeout: 5
   loop: "{{ kafka_member.listener_ports }}"
 
-- name: Проверить SSL listeners Kafka через реальное TLS-соединение
+- name: Проверка SSL listeners Kafka через реальное TLS-соединение
   ansible.builtin.include_tasks: verify_ssl_listener.yml
   vars:
     kafka_ssl_listener: "{{ kafka_ssl_listener_entry.value | combine({'name': kafka_ssl_listener_entry.key}) }}"

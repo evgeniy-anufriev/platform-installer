@@ -18,12 +18,12 @@
       register: platform_project_manifest_stat
       run_once: true
 
-    - name: Инициализировать отсутствующий манифест проекта
+    - name: Инициализация отсутствующего манифеста проекта
       ansible.builtin.set_fact:
         platform_project_manifest_document: {}
       run_once: true
 
-    - name: Загрузить дополнительный манифест устаревшего портативного проекта
+    - name: Загрузка дополнительного манифеста устаревшего портативного проекта
       ansible.builtin.include_vars:
         file: >-
           {{ platform_project_manifest_path |
@@ -32,7 +32,7 @@
       when: platform_project_manifest_stat.stat.exists
       run_once: true
 
-    - name: Запрос опубликованного артефакта каталога сервисов
+    - name: Проверка опубликованного артефакта каталога сервисов
       ansible.builtin.assert:
         that:
           - platform_service_catalog_path is defined
@@ -47,12 +47,12 @@
         name: platform_catalog_artifact
       run_once: true
 
-    - name: Инициализировать безопасную проекцию желаемого хоста
+    - name: Инициализация безопасной проекции желаемого хоста
       ansible.builtin.set_fact:
         platform_desired_hosts: {}
       run_once: true
 
-    - name: Собрать только нужные переменные platform_host
+    - name: Сбор только нужных переменных platform_host
       ansible.builtin.set_fact:
         platform_desired_hosts: >-
           {{ platform_desired_hosts |
@@ -63,7 +63,7 @@
       no_log: true
       run_once: true
 
-    - name: "Собрать экземпляры сервисов из inventory проекта"
+    - name: "Сбор экземпляров сервисов из inventory проекта"
       ansible.builtin.set_fact:
         platform_inventory_deployments: >-
           {{ platform_inventory_deployments | default({}) |
@@ -74,7 +74,7 @@
       no_log: true
       run_once: true
 
-    - name: "Собрать адреса узлов из inventory без секретных данных"
+    - name: "Сбор адресов узлов из inventory без секретных данных"
       ansible.builtin.set_fact:
         platform_inventory_host_addresses: >-
           {{ platform_inventory_host_addresses | default({}) |
@@ -86,7 +86,7 @@
       run_once: true
 
   tasks:
-    - name: Разрешить дополнительные библиотеки приложений с помощью обычного Ansible
+    - name: Вычисление параметров дополнительных библиотек приложений средствами Ansible
       ansible.builtin.include_role:
         name: platform.core.resolve_application_libraries
       when: platform_desired_state.applicationLibraryDeployments is defined
@@ -129,7 +129,7 @@
       check_mode: false
       register: platform_validation
 
-    - name: Показать сводку проверки
+    - name: Вывод сводки проверки
       ansible.builtin.debug:
         msg:
           status: "{{ platform_validation.validation.status }}"

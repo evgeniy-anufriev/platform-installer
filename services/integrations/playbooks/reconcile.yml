@@ -1,5 +1,5 @@
 ---
-- name: Разрешить развёртывание провайдера после завершения жизненного цикла источника интеграции
+- name: Определение развёртывания провайдера после завершения жизненного цикла источника интеграции
   hosts: localhost
   connection: local
   gather_facts: false
@@ -12,7 +12,7 @@
       loop: "{{ groups['platform_targets'] | default([]) | sort }}"
       no_log: true
 
-    - name: Разрешение интеграции провайдеров на основе сервисов (только для чтения)
+    - name: Определение интеграций сервисных провайдеров без внесения изменений
       platform.core.resolve_service_integrations:
         desired_state: "{{ platform_desired_state }}"
         source_service_types: "{{ platform_integration_source_service_types | default([]) }}"

@@ -19,7 +19,7 @@
         redis: {targets: "{{ targets }}"}
         schema-registry: {targets: "{{ targets }}"}
   tasks:
-    - name: Создавать только инвентарь в памяти в намеренно несортированном порядке
+    - name: Создание только инвентаря в памяти в намеренно несортированном порядке
       ansible.builtin.add_host:
         name: "{{ item.id }}"
         ansible_host: "{{ item.ip }}"
@@ -29,7 +29,7 @@
         - {id: node1, ip: 192.0.2.11, hostname: node1.example.test}
         - {id: node2, ip: 192.0.2.12, hostname: node2.example.test}
 
-    - name: "Сформировать окружение и базовые шаблоны без записи на сервер"
+    - name: "Формирование окружения и базовых шаблонов без записи на сервер"
       ansible.builtin.set_fact:
         rendered_env: "{{ lookup('ansible.builtin.template', application_runtime_role ~ '/templates/library.env.j2') }}"
         rendered_base: "{{ lookup('ansible.builtin.template', sdku_role ~ '/templates/.base_compose.yml.j2') | from_yaml }}"
@@ -50,7 +50,7 @@
           - rendered_base.services.backend.environment.SCHEMA_REGISTRY_URL_CONFIG == 'https://${SERVER_1_IP}:8443,https://${SERVER_2_IP}:8444,https://[${SERVER_3_IP}]:8445'
           - rendered_base.services.backend.environment.OPERATOR_VALUE == 'preserved'
 
-    - name: Выделить изолированный тестовый каталог конфигурации Compose
+    - name: Выделение изолированного тестового каталога конфигурации Compose
       ansible.builtin.tempfile:
         state: directory
         prefix: library-server-env-

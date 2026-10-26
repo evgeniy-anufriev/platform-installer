@@ -15,7 +15,7 @@
     platform_kafka_java_version.rc != 0 or
     ('version "21.' not in (platform_kafka_java_version.stderr ~ platform_kafka_java_version.stdout))
 
-- name: Один раз извлечь одобренный двоичный файл Kafka
+- name: Однократная распаковка разрешённого дистрибутива Kafka
   ansible.builtin.unarchive:
     src: "{{ platform_kafka_artifact_path }}"
     dest: /opt
@@ -23,14 +23,14 @@
     creates: "/opt/{{ platform_kafka_archive_directory }}/bin/kafka-storage.sh"
 
 
-- name: Указать стабильный путь установки Kafka в утвержденной версии
+- name: Указание стабильного пути установки Kafka в утвержденной версии
   ansible.builtin.file:
     src: "/opt/{{ platform_kafka_archive_directory }}"
     dest: "{{ platform_kafka_install_directory }}"
     state: link
     force: true
 
-- name: Создать общую группу Kafka
+- name: Создание общей группы Kafka
   ansible.builtin.group:
     name: "{{ platform_kafka_group }}"
     system: true
@@ -42,7 +42,7 @@
     system: true
     create_home: false
 
-- name: "Подготовить доступный для записи каталог журналов дистрибутива Kafka"
+- name: "Подготовка каталога журналов дистрибутива Kafka с доступом для записи"
   ansible.builtin.file:
     path: "/opt/{{ platform_kafka_archive_directory }}/logs"
     state: directory

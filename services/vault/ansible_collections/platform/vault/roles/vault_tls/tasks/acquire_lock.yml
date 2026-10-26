@@ -7,7 +7,7 @@
       - platform_vault_lock_token is match('^[0-9a-f]{32}$')
     fail_msg: VAULT_LOCK_INPUT_INVALID
 
-- name: Проверить фиксированный каталог блокировки Vault без перехода по символическим ссылкам
+- name: Проверка фиксированного каталога блокировки Vault без перехода по символическим ссылкам
   ansible.builtin.stat:
     path: "/run/lock/{{ platform_vault_name }}"
     follow: false
@@ -16,13 +16,13 @@
     get_checksum: false
   register: _platform_vault_lock_root_stat
 
-- name: Отклонить замененный или неправильно принадлежащий каталог блокировки Vault
+- name: Отклонение подменённого каталога блокировки Vault или каталога с неверным владельцем
   ansible.builtin.assert:
     that:
       - not _platform_vault_lock_root_stat.stat.exists or (_platform_vault_lock_root_stat.stat.isdir and not _platform_vault_lock_root_stat.stat.islnk and _platform_vault_lock_root_stat.stat.uid == 0)
     fail_msg: VAULT_LOCK_DIRECTORY_UNSAFE
 
-- name: Создать каталог блокировки, принадлежащий пользователю root Vault, в каноническом первом экземпляре службы
+- name: Создание каталога блокировки Vault с владельцем root на первом узле развёртывания
   ansible.builtin.file:
     path: "/run/lock/{{ platform_vault_name }}"
     state: directory
@@ -35,7 +35,7 @@
     _platform_vault_lock_key: "{{ platform_vault_deployment_id | hash('sha256') }}"
     _platform_vault_lock_unit: "{{ platform_vault_name }}-lock-{{ platform_vault_lock_token }}"
 
-- name: Проверить объект постоянной общей блокировки, не переходя по символическим ссылкам
+- name: Проверка объекта постоянной общей блокировки, не переходя по символическим ссылкам
   ansible.builtin.stat:
     path: "{{ platform_vault_bootstrap_lock_root }}/{{ _platform_vault_lock_key }}.lock"
     follow: false
@@ -44,13 +44,13 @@
     get_checksum: false
   register: _platform_vault_lock_stat
 
-- name: Отклонить небезопасный ранее существовавший объект блокировки Vault
+- name: Отклонение небезопасного ранее существовавшего объекта блокировки Vault
   ansible.builtin.assert:
     that:
       - not _platform_vault_lock_stat.stat.exists or (_platform_vault_lock_stat.stat.isreg and not _platform_vault_lock_stat.stat.islnk and _platform_vault_lock_stat.stat.uid == 0 and (_platform_vault_lock_stat.stat.mode | int(base=8)) == 384)
     fail_msg: VAULT_LOCK_OBJECT_UNSAFE
 
-- name: Удерживать общую блокировку начальной загрузки Vault до завершения playbook
+- name: Удержание общей блокировки начальной загрузки Vault до завершения playbook
   ansible.builtin.command:
     argv:
       - systemd-run
@@ -74,7 +74,7 @@
   # Per-invocation coordination is not a desired-state service change.
   changed_when: false
 
-- name: "Дождаться подтверждения блокировки Vault или ошибки её захвата"
+- name: "Ожидание подтверждения блокировки Vault или ошибки её захвата"
   ansible.builtin.command:
     argv: [systemctl, show, --property=ActiveState, --value, "{{ _platform_vault_lock_unit }}.service"]
   register: _platform_vault_lock_state
@@ -83,12 +83,12 @@
   retries: 20
   delay: 1
 
-- name: Требовать успешного владения блокировкой развертывания
+- name: Проверка успешного захвата блокировки развёртывания
   ansible.builtin.assert:
     that: _platform_vault_lock_state.stdout == 'active'
     fail_msg: VAULT_DEPLOYMENT_BUSY
 
-- name: "Проверить тип, владельца и права файла блокировки Vault"
+- name: "Проверка типа, владельца и прав файла блокировки Vault"
   ansible.builtin.stat:
     path: "{{ platform_vault_bootstrap_lock_root }}/{{ _platform_vault_lock_key }}.lock"
     follow: false
@@ -97,7 +97,7 @@
     get_checksum: false
   register: _platform_vault_lock_file_stat
 
-- name: "Отклонить подменённый или небезопасный файл блокировки Vault"
+- name: "Отклонение подменённого или небезопасного файла блокировки Vault"
   ansible.builtin.assert:
     that:
       - _platform_vault_lock_file_stat.stat.isreg

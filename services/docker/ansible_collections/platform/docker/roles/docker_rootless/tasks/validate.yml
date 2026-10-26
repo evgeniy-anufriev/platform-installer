@@ -1,5 +1,5 @@
 ---
-- name: Проверка ограниченных желаемых входных данных Docker
+- name: Проверка желаемых настроек Docker
   ansible.builtin.assert:
     that:
       - platform_docker_mode in ['create-user', 'existing-user']
@@ -38,7 +38,7 @@
   register: _platform_docker_architecture
   changed_when: false
 
-- name: Требовать поддерживаемую архитектуру RED OS
+- name: Проверка поддерживаемой архитектуры RED OS
   ansible.builtin.assert:
     that:
       - ( _platform_docker_os_release.content | b64decode ) is search('(?m)^ID=\"?redos\"?$')
@@ -52,7 +52,7 @@
   changed_when: false
   failed_when: false
 
-- name: Отказ от активного корневого конфликта владения Docker
+- name: Отклонение конфликта с активным Docker с правами root
   ansible.builtin.assert:
     that: "'active' not in _platform_docker_rootful_units.stdout_lines"
     fail_msg: DOCKER_ROOTFUL_CONFLICT
@@ -81,7 +81,7 @@
   when: platform_docker_mode == 'create-user'
   no_log: true
 
-- name: Требовать ограниченный файл паролей обычной среды выполнения
+- name: Проверка типа, размера и защиты runtime-файла пароля
   ansible.builtin.assert:
     that:
       - _platform_docker_password_file.stat.isreg

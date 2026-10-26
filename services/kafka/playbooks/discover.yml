@@ -1,5 +1,5 @@
 ---
-- name: Обнаружить идентификаторы кластера и узлов Kafka
+- name: Обнаружение идентификаторов кластера и узлов Kafka
   hosts: platform_targets
   become: true
   gather_facts: false
@@ -15,7 +15,7 @@
         name: _kafka_discovery_project
       when: platform_desired_state | default({}) | length == 0
 
-    - name: Выбрать эффективное желаемое состояние обнаружения Kafka
+    - name: Выбор действующих параметров обнаружения Kafka
       ansible.builtin.set_fact:
         _kafka_discovery_desired_state: >-
           {{ platform_desired_state
@@ -35,6 +35,6 @@
     - name: Публикация нормализованных записей обнаружения
       ansible.builtin.set_fact:
         platform_kafka_identity_discovery: "{{ _kafka_discovery_result.discovery }}"
-    - name: Показать безопасные результаты обнаружения идентификаторов Kafka
+    - name: Вывод безопасных результатов обнаружения идентификаторов Kafka
       ansible.builtin.debug:
         var: platform_kafka_identity_discovery

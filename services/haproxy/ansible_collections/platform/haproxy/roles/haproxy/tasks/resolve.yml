@@ -1,5 +1,5 @@
 ---
-- name: Нормализовать точную частичную область источника
+- name: Нормализация точной частичной области источника
   ansible.builtin.include_tasks: partial_scope.yml
 
 - name: Повторное использование общих нормализованных источников конечных точек
@@ -7,32 +7,32 @@
     name: platform.core.resolve_endpoint_sources
   when: platform_haproxy_full_reconcile | bool or (platform_haproxy_partial_deployment_id is defined or platform_haproxy_partial_deployment_ids is defined)
 
-- name: Загрузить опубликованный каталог сервисов для проекции HAProxy
+- name: Загрузка опубликованного каталога сервисов для проекции HAProxy
   ansible.builtin.include_vars:
     file: "{{ platform_service_catalog_path }}"
     name: _platform_haproxy_catalog_file
   run_once: true
   when: platform_haproxy_full_reconcile | bool or (platform_haproxy_partial_deployment_id is defined or platform_haproxy_partial_deployment_ids is defined)
 
-- name: Выбрать одно локальное развертывание HAProxy из канонического желаемого состояния
+- name: Выбор одного локального развёртывания HAProxy из канонического желаемого состояния
   ansible.builtin.set_fact:
     _platform_haproxy_local_deployments: >-
       {{ platform_desired_state.serviceDeployments | dict2items |
          selectattr('value.serviceType', 'equalto', 'haproxy') |
          selectattr('key', 'in', platform_deployments | default({})) | list }}
 
-- name: Требуется одно локальное развертывание HAProxy для проецирования ролевых переменных
+- name: Проверка наличия одного локального развёртывания HAProxy
   ansible.builtin.assert:
     that: _platform_haproxy_local_deployments | length == 1
     fail_msg: HAPROXY_LOCAL_DEPLOYMENT_AMBIGUOUS
 
-- name: Сформировать настроенный профиль TLS развёртывания HAProxy
+- name: Формирование настроенного профиля TLS развёртывания HAProxy
   ansible.builtin.set_fact:
     platform_haproxy_tls_profile: >-
       {{ _platform_haproxy_local_deployments[0].value.configuration.tlsProfile |
          default(platform_haproxy_tls_profile, true) }}
 
-- name: Собрать безопасную проекцию inventory для HAProxy
+- name: Сбор безопасной проекции inventory для HAProxy
   ansible.builtin.set_fact:
     _platform_haproxy_hosts: "{{ _platform_haproxy_hosts | default({}) | combine({item: {'ansible_host': (hostvars[item].ansible_host | default(item))}}) }}"
     _platform_haproxy_placements: "{{ _platform_haproxy_placements | default({}) | combine({item: (hostvars[item].platform_deployments | default({}))}) }}"
@@ -41,7 +41,7 @@
   no_log: true
   when: platform_haproxy_full_reconcile | bool or (platform_haproxy_partial_deployment_id is defined or platform_haproxy_partial_deployment_ids is defined)
 
-- name: Разрешение общей проекции конечной точки для HAProxy
+- name: Расчёт общей проекции конечных точек для HAProxy
   platform.core.resolve_service_endpoints:
     endpoint_sources: "{{ hostvars['localhost'].platform_endpoint_sources | default({}) }}"
     desired_state: "{{ platform_desired_state }}"
@@ -52,7 +52,7 @@
   run_once: true
   when: platform_haproxy_full_reconcile | bool or (platform_haproxy_partial_deployment_id is defined or platform_haproxy_partial_deployment_ids is defined)
 
-- name: Разрешить детерминированные внешние серверные части HAProxy
+- name: Расчёт frontend и backend HAProxy
   platform.core.resolve_haproxy_backends:
     endpoint_sources: "{{ hostvars['localhost'].platform_endpoint_sources | default({}) }}"
     desired_state: "{{ platform_desired_state }}"

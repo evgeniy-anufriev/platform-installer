@@ -1,9 +1,9 @@
 ---
-- name: Разрешение проекции времени выполнения HAProxy из канонического состояния
+- name: Расчёт runtime-проекции HAProxy из желаемого состояния
   ansible.builtin.include_tasks: resolve.yml
   when: (platform_haproxy_partial_deployment_id is not defined and platform_haproxy_partial_deployment_ids is not defined) or platform_haproxy_phase == 'prepare'
 
-- name: Выбрать точный потребительский план PKI перед изменением HAProxy
+- name: Выбор точного потребительского плана PKI перед изменением HAProxy
   ansible.builtin.include_role:
     name: platform.core.pki_materialize
     tasks_from: select_consumer_plan.yml
@@ -39,14 +39,14 @@
   ansible.builtin.include_tasks: prepare.yml
   when: platform_haproxy_phase == 'prepare'
 
-- name: Активировать проверенную конфигурацию HAProxy
+- name: Активация проверенной конфигурации HAProxy
   ansible.builtin.include_tasks: activate.yml
   when: platform_haproxy_phase == 'activate'
 
-- name: "Запустить HAProxy после проверки активной конфигурации"
+- name: "Запуск HAProxy после проверки активной конфигурации"
   ansible.builtin.include_tasks: start.yml
   when: platform_haproxy_phase == 'start'
 
-- name: Проверить HAProxy без изменений
+- name: Проверка HAProxy без изменений
   ansible.builtin.include_tasks: verify.yml
   when: platform_haproxy_phase == 'verify'

@@ -3,7 +3,7 @@
   ansible.builtin.include_role:
     name: platform.core.project_settings
 
-- name: Проверить наличие желаемой конфигурации и runtime-проекций DNS-клиента
+- name: Проверка наличия желаемой конфигурации и runtime-проекций DNS-клиента
   ansible.builtin.assert:
     that:
       - platform_desired_state is mapping
@@ -21,12 +21,12 @@
     _platform_dns_client_local_items: >-
       {{ _platform_dns_client_clients | dict2items | selectattr('key', 'in', platform_deployments | default({})) | list }}
 
-- name: Отклонить неоднозначное владение развертыванием клиента DNS
+- name: Отклонение неоднозначного владения развертыванием клиента DNS
   ansible.builtin.assert:
     that: _platform_dns_client_local_items | length <= 1
     fail_msg: DNS_CLIENT_LOCAL_DEPLOYMENT_AMBIGUOUS
 
-- name: Завершить роль клиента DNS на неучаствующем хосте
+- name: Завершение роли клиента DNS на неучаствующем хосте
   ansible.builtin.meta: end_host
   when: _platform_dns_client_local_items | length == 0
 
@@ -38,25 +38,25 @@
   ansible.builtin.set_fact:
     _platform_dns_client_local_placement: "{{ platform_deployments[platform_dns_client_local.key] }}"
 
-- name: Заменить локальную клиентскую проекцию DNS производными значениями
+- name: Замена локальной клиентской проекции DNS производными значениями
   ansible.builtin.set_fact:
     platform_dns_client_local: "{{ _platform_dns_client_clients[platform_dns_client_local.key] }}"
 
 - name: Безопасное обнаружение адаптера среды выполнения клиента DNS
   ansible.builtin.include_tasks: discover.yml
 
-- name: Применить разделенный адаптер systemd-resolved DNS
+- name: Применение настроек раздельного DNS через systemd-resolved
   ansible.builtin.include_tasks: resolved.yml
   when:
     - platform_dns_client_phase == 'apply'
     - platform_dns_client_backend == 'systemd-resolved'
 
-- name: Применить разделенный адаптер NetworkManager DNS
+- name: Применение настроек раздельного DNS через NetworkManager
   ansible.builtin.include_tasks: networkmanager.yml
   when:
     - platform_dns_client_phase == 'apply'
     - platform_dns_client_backend == 'NetworkManager'
 
-- name: Проверить работу DNS-клиента без изменений
+- name: Проверка работы DNS-клиента без изменений
   ansible.builtin.include_tasks: verify.yml
   when: platform_dns_client_phase == 'verify'

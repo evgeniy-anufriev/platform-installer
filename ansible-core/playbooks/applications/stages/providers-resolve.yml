@@ -1,15 +1,15 @@
 ---
 - import_playbook: credential-root.yml
-- name: Обработка входных данных автономного провайдера приложений без целевых вызовов
+- name: Обработка входных данных автономного провайдера приложений без обращения к целевым узлам
   hosts: localhost
   connection: local
   gather_facts: false
   any_errors_fatal: true
   tasks:
-    - name: Разрешить обычные настройки и размещения приложений по умолчанию
+    - name: Вычисление настроек и размещений приложений с учётом значений по умолчанию
       ansible.builtin.include_role:
         name: platform.core.resolve_application_libraries
-    - name: "Сформировать снимок текущего проекта без внесения изменений"
+    - name: "Формирование снимка текущего проекта без внесения изменений"
       platform.core.project_snapshot:
         project_root: "{{ platform_project_root | default(inventory_dir | dirname) }}"
         service_catalog_path: "{{ platform_service_catalog_path }}"
@@ -21,7 +21,7 @@
         service_catalog_path: "{{ platform_service_catalog_path }}"
       register: application_provider_inputs
       no_log: true
-    - name: Требовать действительную область провайдера перед целевыми вызовами
+    - name: Проверка выбранного набора ресурсов провайдера до обращения к узлам
       ansible.builtin.assert:
         that: application_provider_inputs.status == 'PASS'
         fail_msg: APPLICATION_PROVIDER_INPUT_INVALID

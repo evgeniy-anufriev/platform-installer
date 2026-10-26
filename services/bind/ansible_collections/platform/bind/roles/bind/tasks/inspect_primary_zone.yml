@@ -15,13 +15,13 @@
     get_checksum: false
   register: _platform_bind_existing_zone_journal
 
-- name: Отклонить потерянный журнал динамического обновления BIND
+- name: Отклонение потерянного журнала динамического обновления BIND
   ansible.builtin.assert:
     that:
       - _platform_bind_existing_zone_file.stat.exists or not _platform_bind_existing_zone_journal.stat.exists
     fail_msg: BIND_ZONE_JOURNAL_WITHOUT_MASTER_FILE
 
-- name: Записать наличие сохранённого состояния основной зоны BIND
+- name: Запись наличия сохранённого состояния основной зоны BIND
   ansible.builtin.set_fact:
     _platform_bind_existing_primary_zone_by_deployment: >-
       {{ _platform_bind_existing_primary_zone_by_deployment |

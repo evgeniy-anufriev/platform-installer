@@ -1,5 +1,5 @@
 ---
-- name: Требовать точное подтверждение чистой установки PostgreSQL
+- name: Проверка точного подтверждения очистки PostgreSQL перед новой установкой
   ansible.builtin.assert:
     that:
       - platform_postgresql_confirm_destructive_reset == platform_postgresql_service_name
@@ -29,14 +29,14 @@
     fail_msg: 'BLOCKED: PostgreSQL clean_install path is unsafe or ambiguous'
   loop: "{{ _platform_postgresql_clear_paths }}"
 
-- name: Остановить и отключить выбранную службу systemd PostgreSQL
+- name: Остановка и отключение выбранной службы PostgreSQL
   ansible.builtin.systemd:
     name: "{{ _platform_postgresql_unit_name }}"
     state: stopped
     enabled: false
   failed_when: false
 
-- name: Ожидание ограниченного времени для процессов PostgreSQL, использующих выбранный путь к данным
+- name: Ожидание завершения процессов PostgreSQL, использующих выбранный каталог данных, в пределах таймаута
   ansible.builtin.shell: |
     set -o pipefail
     found=0
@@ -61,7 +61,7 @@
   delay: "{{ platform_postgresql_clear_stop_delay }}"
   until: platform_postgresql_clear_processes.rc == 0
 
-- name: Завершить процессы, связанные с PostgreSQL, после ограниченной остановки
+- name: Завершение процессов PostgreSQL после таймаута остановки
   ansible.builtin.shell: |
     set -o pipefail
     for proc in /proc/[0-9]*; do
@@ -80,12 +80,12 @@
   when: platform_postgresql_clear_processes.rc != 0
   changed_when: true
 
-- name: Дождаться завершения процесса PostgreSQL
+- name: Ожидание завершения процесса PostgreSQL
   ansible.builtin.pause:
     seconds: 2
   when: platform_postgresql_clear_processes.rc != 0
 
-- name: Принудительно остановить процессы, связанные с PostgreSQL, которые игнорировали завершение
+- name: Принудительная остановка процессов PostgreSQL, не завершившихся штатно
   ansible.builtin.shell: |
     set -o pipefail
     for proc in /proc/[0-9]*; do
@@ -104,7 +104,7 @@
   when: platform_postgresql_clear_processes.rc != 0
   changed_when: true
 
-- name: Убедиться, что процессы PostgreSQL отсутствуют, прежде чем удалять файлы среды выполнения
+- name: Проверка отсутствия процессов PostgreSQL перед удалением runtime-файлов
   ansible.builtin.shell: |
     set -o pipefail
     for proc in /proc/[0-9]*; do
@@ -124,7 +124,7 @@
   failed_when: false
   register: platform_postgresql_clear_final_processes
 
-- name: Отклонить процессы PostgreSQL, оставшиеся до очистки
+- name: Отклонение процессов PostgreSQL, оставшихся перед очисткой
   ansible.builtin.assert:
     that: platform_postgresql_clear_final_processes.rc == 0
     fail_msg: 'BLOCKED: PostgreSQL process still references the selected data directory'
@@ -139,7 +139,7 @@
   register: platform_postgresql_clear_path_state
   loop: "{{ _platform_postgresql_clear_paths }}"
 
-- name: Отклонить пути, не принадлежащие учетной записи службы PostgreSQL
+- name: Отклонение путей, не принадлежащих учётной записи PostgreSQL
   ansible.builtin.assert:
     that:
       - not item.stat.exists or item.stat.pw_name == platform_postgresql_user
@@ -149,28 +149,28 @@
   loop_control:
     label: "{{ item.item }}"
 
-- name: Удалить только выбранное состояние развертывания PostgreSQL
+- name: Удаление только выбранного состояния развертывания PostgreSQL
   ansible.builtin.file:
     path: "{{ item }}"
     state: absent
   loop: "{{ _platform_postgresql_clear_paths }}"
 
-- name: "Удалить выбранную службу PostgreSQL из systemd"
+- name: "Удаление выбранной службы PostgreSQL из systemd"
   ansible.builtin.file:
     path: "{{ _platform_postgresql_clear_unit }}"
     state: absent
 
-- name: Перезагрузка systemd после очистки развертывания PostgreSQL
+- name: Перечитывание unit-файлов systemd после удаления служб PostgreSQL
   ansible.builtin.systemd:
     daemon_reload: true
 
-- name: Очистить устаревшее состояние выбранной службы systemd PostgreSQL
+- name: Очистка устаревшего состояния выбранной службы systemd PostgreSQL
   ansible.builtin.command:
     argv: [systemctl, reset-failed, "{{ _platform_postgresql_unit_name }}"]
   changed_when: false
   failed_when: false
 
-- name: Убедиться, что пути PostgreSQL, принадлежащие развертыванию, отсутствуют
+- name: Проверка того, что пути PostgreSQL, принадлежащие развертыванию, отсутствуют
   ansible.builtin.stat:
     path: "{{ item }}"
     get_mime: false
@@ -179,7 +179,7 @@
   register: platform_postgresql_clear_final_state
   loop: "{{ _platform_postgresql_clear_paths }}"
 
-- name: "Проверить удаление выбранных каталогов PostgreSQL после clean_install"
+- name: "Проверка удаления выбранных каталогов PostgreSQL после clean_install"
   ansible.builtin.assert:
     that: not item.stat.exists
     fail_msg: "PostgreSQL clean_install did not remove {{ item.item }}"

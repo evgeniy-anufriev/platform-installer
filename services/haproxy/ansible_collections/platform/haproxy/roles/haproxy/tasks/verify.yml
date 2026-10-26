@@ -4,18 +4,18 @@
     argv: ["{{ platform_haproxy_binary }}", '-c', '-f', "{{ platform_haproxy_main_config }}", '-f', "{{ platform_haproxy_conf_directory }}"]
   changed_when: false
 
-- name: "Проверить активность службы HAProxy без внесения изменений"
+- name: "Проверка активности службы HAProxy без внесения изменений"
   ansible.builtin.command:
     argv: [systemctl, is-active, --quiet, "{{ platform_haproxy_service_name }}"]
   changed_when: false
 
-- name: Проверить публичный и локальный порты статистики HAProxy без изменений
+- name: Проверка публичного и локального портов статистики HAProxy без изменений
   ansible.builtin.command:
     argv: [ss, -ltn]
   changed_when: false
   register: _platform_haproxy_listeners
 
-- name: Проверить наличие публичного и локального портов статистики HAProxy
+- name: Проверка наличия публичного и локального портов статистики HAProxy
   ansible.builtin.assert:
     that:
       - "':' ~ (platform_haproxy_public_port | string) in _platform_haproxy_listeners.stdout"

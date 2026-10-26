@@ -1,5 +1,5 @@
 ---
-- name: "Вычислить параметры приложений, если источники конечных точек ещё не подготовлены"
+- name: "Вычисление параметров приложений, если источники конечных точек ещё не подготовлены"
   ansible.builtin.include_role:
     name: platform.core.resolve_application_libraries
     apply:
@@ -9,7 +9,7 @@
     - platform_desired_state.applicationLibraryDeployments | default({}) | length > 0
   run_once: true
 
-- name: Нормализовать дополнительные источники через существующую границу конечной точки Core
+- name: Нормализация дополнительных источников через существующую границу конечной точки Core
   platform.core.prepare_application_endpoints:
     service_catalog_path: "{{ platform_service_catalog_path }}"
   register: _platform_endpoint_source_input
@@ -18,7 +18,7 @@
   delegate_to: localhost
   become: false
 
-- name: "Передать нормализованные источники конечных точек частичному и полному согласованию"
+- name: "Передача нормализованных источников конечных точек частичному и полному согласованию"
   ansible.builtin.set_fact:
     platform_endpoint_sources: "{{ _platform_endpoint_source_input.sources }}"
   failed_when: _platform_endpoint_source_input.status != 'PASS'

@@ -1,9 +1,9 @@
 ---
-- name: Нормализовать явный выбор конечной точки без расширения его области действия
+- name: Нормализация явного выбора конечной точки без расширения его области действия
   ansible.builtin.set_fact:
     _platform_integration_requested_sources: "{{ platform_endpoint_source_ids | default([platform_endpoint_source_id | default(platform_execution_service_deployment | default(platform_integration_source_deployment_id | default('')))]) }}"
 
-- name: Согласовать выбранный источник интеграции задачами общего контроллера
+- name: Согласование выбранного источника интеграции задачами общего контроллера
   ansible.builtin.include_tasks:
     file: resolve-selected-sources.yml
     apply: {delegate_to: localhost, become: false}
@@ -11,7 +11,7 @@
     platform_endpoint_source_ids: "{{ _platform_integration_requested_sources }}"
   run_once: true
 
-- name: Опубликовать решенную исходную проекцию один раз для каждого хоста провайдера
+- name: Публикация рассчитанной проекции источника один раз на каждом узле провайдера
   ansible.builtin.set_fact:
     platform_service_integration_projection: "{{ platform_service_integration_projection }}"
     platform_bind_source_dns_records: "{{ platform_bind_source_dns_records }}"
@@ -20,7 +20,7 @@
   delegate_facts: true
   run_once: true
 
-- name: Перед публикацией запросить полную информацию о провайдере и области размещения
+- name: Проверка полноты информации о провайдере и размещении перед публикацией
   ansible.builtin.assert:
     that:
       - hostvars['localhost'].platform_service_integration_projection.haproxyHosts | difference(ansible_play_hosts_all) | length == 0
@@ -38,7 +38,7 @@
     platform_haproxy_partial_deployment_ids: "{{ hostvars['localhost']._platform_integration_selected_sources | map(attribute='sourceId') | list }}"
   when: inventory_hostname in hostvars['localhost'].platform_service_integration_projection.haproxyHosts and not (platform_endpoint_verify_only | default(false) | bool)
 
-- name: Активировать источник после проверки всех подготовленных конфигураций провайдера
+- name: Активация источника после проверки всех подготовленных конфигураций провайдера
   ansible.builtin.include_role:
     name: platform.haproxy.haproxy
     apply: {become: true}
@@ -47,7 +47,7 @@
     platform_haproxy_partial_deployment_ids: "{{ hostvars['localhost']._platform_integration_selected_sources | map(attribute='sourceId') | list }}"
   when: inventory_hostname in hostvars['localhost'].platform_service_integration_projection.haproxyHosts and not (platform_endpoint_verify_only | default(false) | bool)
 
-- name: Перезагрузить HAProxy источника интеграции после активации всех провайдеров
+- name: Перечитывание конфигурации HAProxy после активации всех провайдеров интеграции
   ansible.builtin.include_role:
     name: platform.haproxy.haproxy
     apply: {become: true}
@@ -65,7 +65,7 @@
     platform_haproxy_partial_deployment_ids: "{{ hostvars['localhost']._platform_integration_selected_sources | map(attribute='sourceId') | list }}"
   when: inventory_hostname in hostvars['localhost'].platform_service_integration_projection.haproxyHosts and (platform_endpoint_verify_only | default(false) | bool)
 
-- name: Публикация исходных записей с использованием существующего перехватчика BIND
+- name: Публикация записей источника общим обработчиком BIND
   ansible.builtin.include_role:
     name: platform.bind.bind
     tasks_from: publish_source
@@ -74,13 +74,13 @@
     platform_bind_source_dns_records: "{{ hostvars['localhost'].platform_bind_source_dns_records }}"
   when: hostvars['localhost'].platform_bind_source_dns_records | length > 0 and not (platform_endpoint_verify_only | default(false) | bool)
 
-- name: Требовать разрешенного провайдера HAProxy перед внешней проверкой
+- name: Проверка выбранного провайдера HAProxy перед внешней проверкой
   ansible.builtin.assert:
     that: hostvars['localhost'].platform_service_integration_projection.haproxyDeployments | length > 0
     fail_msg: APPLICATION_ENDPOINT_NOT_PUBLISHED
   run_once: true
 
-- name: Последовательно проверить каждый источник, используя исходную политику DNS и HTTPS
+- name: Последовательная проверка источников по заданной политике DNS и HTTPS
   ansible.builtin.include_tasks:
     file: probe-selected-source.yml
     apply: {delegate_to: localhost, become: false}

@@ -1,12 +1,12 @@
 ---
-- name: Прочитать установленную версию пакета Redis
+- name: Чтение установленной версии пакета Redis
   ansible.builtin.command:
     argv: [rpm, -q, --qf, "%{VERSION}-%{RELEASE}", redis]
   changed_when: false
   failed_when: false
   register: _platform_redis_installed_package
 
-- name: Прочитать состояние службы Redis, предоставленное пакетом
+- name: Чтение состояния штатной службы Redis из пакета
   ansible.builtin.command:
     argv: [systemctl, "{{ item }}", redis.service]
   changed_when: false
@@ -14,7 +14,7 @@
   register: _platform_redis_default_service_state
   loop: [is-active, is-enabled]
 
-- name: Прочитать состояние службы Sentinel, предоставленное пакетом
+- name: Чтение состояния штатной службы Sentinel из пакета
   ansible.builtin.command:
     argv: [systemctl, "{{ item }}", redis-sentinel.service]
   changed_when: false
@@ -22,7 +22,7 @@
   register: _platform_redis_default_sentinel_state
   loop: [is-active, is-enabled]
 
-- name: Отклонить активные или включенные службы systemd, предоставляемые пакетом Redis
+- name: Отклонение активных служб или автозапуска штатных служб из пакета Redis
   ansible.builtin.assert:
     that:
       - _platform_redis_installed_package.rc != 0 or _platform_redis_installed_package.stdout == platform_redis_version
@@ -32,6 +32,6 @@
       - _platform_redis_default_sentinel_state.results[1].stdout | trim not in ['enabled', 'enabled-runtime']
     fail_msg: REDIS_PACKAGE_DEFAULT_UNIT_CONFLICT
 
-- name: Записать отсутствие пакета Redis до установки
+- name: Запись отсутствия пакета Redis до установки
   ansible.builtin.set_fact:
     _platform_redis_package_absent_before_apply: "{{ _platform_redis_installed_package.rc != 0 }}"

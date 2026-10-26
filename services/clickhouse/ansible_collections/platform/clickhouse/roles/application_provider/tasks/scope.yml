@@ -1,5 +1,5 @@
 ---
-- name: Требовать защищенные учетные данные для ограниченной области ClickHouse
+- name: Проверка защиты учётных данных выбранных ресурсов ClickHouse
   ansible.builtin.assert:
     that:
       - platform_clickhouse_application_phase in ['preflight', 'resources', 'accounts', 'verify']
@@ -10,11 +10,11 @@
     fail_msg: APPLICATION_PROVIDER_SECRET_FILE_INVALID
   no_log: true
 
-- name: "Инициализировать список подготовленных описаний таблиц библиотеки"
+- name: "Инициализация списка подготовленных описаний таблиц библиотеки"
   ansible.builtin.set_fact:
     clickhouse_application_tables: []
 
-- name: "Сформировать описания таблиц по шаблонам Ansible"
+- name: "Формирование описаний таблиц по шаблонам Ansible"
   ansible.builtin.set_fact:
     clickhouse_application_tables: "{{ clickhouse_application_tables + [{'database': item.0.name, 'definition': item.1, 'sql': lookup('ansible.builtin.template', 'application-table.sql.j2')}] }}"
   loop: "{{ platform_clickhouse_application_job.databases | subelements('tables', skip_missing=true) }}"
@@ -22,7 +22,7 @@
     label: "{{ item.0.name }}.{{ item.1.name }}"
   no_log: true
 
-- name: Выполнить одну библиотеку ClickHouse или область экземпляра с помощью собственного TLS
+- name: Обработка ресурсов библиотеки или экземпляра ClickHouse через TLS
   platform.clickhouse.application_scope:
     job: "{{ platform_clickhouse_application_job }}"
     tables: "{{ clickhouse_application_tables }}"
@@ -43,7 +43,7 @@
   register: clickhouse_application_result
   failed_when: false
 
-- name: Сообщить о сбое безопасного ресурса ClickHouse или учетной записи
+- name: Вывод безопасного сообщения об ошибке ресурса или учётной записи ClickHouse
   ansible.builtin.assert:
     that: clickhouse_application_result.msg is not defined
     fail_msg: "{{ clickhouse_application_diagnostic | to_json }}"

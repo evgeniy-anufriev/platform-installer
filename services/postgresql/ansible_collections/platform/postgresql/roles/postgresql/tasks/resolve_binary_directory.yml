@@ -1,10 +1,10 @@
 ---
-- name: Запомнить, был ли явно настроен двоичный каталог PostgreSQL
+- name: Сохранение признака явного задания каталога исполняемых файлов PostgreSQL
   ansible.builtin.set_fact:
     _platform_postgresql_binary_directory_override: "{{ platform_postgresql_binary_directory | length > 0 }}"
   when: _platform_postgresql_binary_directory_override is not defined
 
-- name: "Собрать возможные каталоги исполняемых файлов PostgreSQL"
+- name: "Сбор возможных каталогов исполняемых файлов PostgreSQL"
   ansible.builtin.set_fact:
     _platform_postgresql_binary_directory_candidates: >-
       {{ [platform_postgresql_binary_directory]
@@ -21,7 +21,7 @@
   loop: "{{ _platform_postgresql_binary_directory_candidates }}"
   register: _platform_postgresql_binary_candidate_stats
 
-- name: "Выбрать каталог установленных исполняемых файлов PostgreSQL"
+- name: "Выбор каталога установленных исполняемых файлов PostgreSQL"
   ansible.builtin.set_fact:
     platform_postgresql_binary_directory: >-
       {{ (_platform_postgresql_binary_candidate_stats.results
@@ -31,7 +31,7 @@
                    if ansible_distribution_major_version | default('8') | int < 8 else '/usr/bin') }}
   when: not (_platform_postgresql_binary_directory_override | bool)
 
-- name: Запросить управляющий двоичный файл PostgreSQL в выбранном каталоге
+- name: Проверка управляющего исполняемого файла PostgreSQL в выбранном каталоге
   ansible.builtin.assert:
     that:
       - _platform_postgresql_binary_candidate_stats.results | selectattr('stat.exists', 'equalto', true) | list | length >= 1

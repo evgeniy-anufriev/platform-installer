@@ -4,7 +4,7 @@
   vars:
     kafka_tls_member: "{{ kafka_authorization_member }}"
 
-- name: "Прочитать subject сертификата экземпляра в формате RFC2253"
+- name: "Чтение subject сертификата экземпляра в формате RFC2253"
   ansible.builtin.command:
     argv: [openssl, x509, -in, "{{ _platform_kafka_tls_runtime.targetDirectory }}/certificate.pem", -noout, -subject, -nameopt, RFC2253]
   delegate_to: "{{ kafka_authorization_member.host }}"
@@ -12,7 +12,7 @@
   register: kafka_authorization_subject
   changed_when: false
 
-- name: Требовать однозначный неанонимный субъект сертификата
+- name: Проверка однозначного неанонимного subject сертификата
   ansible.builtin.assert:
     that:
       - kafka_authorization_subject.stdout is match('^subject=')
@@ -20,7 +20,7 @@
       - "'\n' not in kafka_authorization_subject.stdout"
     fail_msg: KAFKA_ADMIN_CERTIFICATE_PRINCIPAL_INVALID
 
-- name: Собрать выбранные идентификаторы экземпляров службы для привилегированной начальной загрузки и внутреннего трафика
+- name: Сбор выбранных идентификаторов экземпляров службы для привилегированной начальной загрузки и внутреннего трафика
   ansible.builtin.set_fact:
     _platform_kafka_admin_principals: "{{ (_platform_kafka_admin_principals + ['User:' ~ (kafka_authorization_subject.stdout | regex_replace('^subject=\\s*', ''))]) | unique | sort }}"
   changed_when: false

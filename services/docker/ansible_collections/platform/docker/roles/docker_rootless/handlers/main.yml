@@ -1,5 +1,5 @@
 ---
-- name: Перезапустить мост Docker без прав root
+- name: Перезапуск системной службы пользовательского Docker
   ansible.builtin.systemd:
     name: "{{ platform_docker_name }}-rootless-{{ platform_docker_account_name }}.service"
     state: restarted

@@ -1,5 +1,5 @@
 ---
-- name: Требовать учетные данные частного вызова перед любым вызовом учетной записи Redis
+- name: Проверка параметров операции Redis и защищённых файлов учётных данных
   ansible.builtin.assert:
     that:
       - platform_redis_application_job.serviceType == 'redis'
@@ -12,7 +12,7 @@
     fail_msg: APPLICATION_PROVIDER_SECRET_FILE_INVALID
   no_log: true
 
-- name: "Проверить или настроить учётные записи Redis и Sentinel за один вызов"
+- name: "Проверка или настройка учётных записей Redis и Sentinel за один вызов"
   platform.redis.application_account:
     address: "{{ item.1.address }}"
     port: "{{ item.1.port }}"

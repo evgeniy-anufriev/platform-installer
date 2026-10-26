@@ -13,7 +13,7 @@
       - not platform_docker_data_root.startswith(_platform_docker_home ~ '/.config')
     fail_msg: DOCKER_DATA_ROOT_INVALID
 
-- name: Проверить родительские каталоги данных Docker без перехода по символическим ссылкам
+- name: Проверка родительских каталогов данных Docker без перехода по символическим ссылкам
   ansible.builtin.stat:
     path: "{{ '/' ~ (platform_docker_data_root.split('/')[1:item + 1] | join('/')) }}"
     follow: false
@@ -23,7 +23,7 @@
   loop: "{{ range(1, platform_docker_data_root.split('/') | length) | list }}"
   register: _platform_docker_data_components
 
-- name: Отклонить символические ссылки, чужих владельцев и небезопасные права родительских каталогов данных Docker
+- name: Отклонение символических ссылок, чужих владельцев и небезопасных прав каталогов данных Docker
   ansible.builtin.assert:
     that:
       - not item.stat.exists or (item.stat.isdir | default(false))
@@ -37,14 +37,14 @@
   loop_control:
     label: "{{ item.item }}"
 
-- name: Требовать, чтобы выбранная учетная запись владела существующим корнем данных Docker
+- name: Проверка владельца существующего каталога данных Docker
   ansible.builtin.assert:
     that:
       - not _platform_docker_data_components.results[-1].stat.exists or _platform_docker_data_components.results[-1].stat.pw_name == platform_docker_account_name
       - not (platform_docker_verify_only | bool) or _platform_docker_data_components.results[-1].stat.exists
     fail_msg: DOCKER_DATA_ROOT_NOT_OWNED
 
-- name: Создать частный корень данных Docker без перемещения существующих данных
+- name: Создание защищённого каталога данных Docker без перемещения существующих данных
   ansible.builtin.file:
     path: "{{ platform_docker_data_root }}"
     state: directory
@@ -66,7 +66,7 @@
     - "{{ _platform_docker_home }}/.config/docker"
   register: _platform_docker_config_components
 
-- name: Требовать каталоги конфигурации Docker, принадлежащие частной учетной записи
+- name: Проверка владельца и прав каталогов конфигурации Docker
   ansible.builtin.assert:
     that:
       - item.stat.isdir | default(false)
@@ -89,7 +89,7 @@
     get_attributes: false
   register: _platform_docker_daemon_file
 
-- name: Требовать обычную конфигурацию демона Docker, принадлежащую учетной записи
+- name: Проверка типа и владельца файла конфигурации Docker
   ansible.builtin.assert:
     that:
       - not (_platform_docker_daemon_file.stat.islnk | default(false))
@@ -106,12 +106,12 @@
   when: _platform_docker_daemon_file.stat.exists
   no_log: true
 
-- name: "Разобрать конфигурацию Docker без раскрытия содержимого"
+- name: "Разбор конфигурации Docker без раскрытия содержимого"
   ansible.builtin.set_fact:
     _platform_docker_daemon_config: "{{ (_platform_docker_daemon_content.content | b64decode | from_json) if _platform_docker_daemon_file.stat.exists else {} }}"
   no_log: true
 
-- name: Требовать объект конфигурации демона Docker
+- name: Проверка формата JSON-объекта в конфигурации Docker
   ansible.builtin.assert:
     that: _platform_docker_daemon_config is mapping
     fail_msg: DOCKER_DAEMON_CONFIG_INVALID
@@ -125,9 +125,9 @@
     mode: '0600'
   when: not (platform_docker_verify_only | bool)
   no_log: true
-  notify: Перезапустить мост Docker без прав root
+  notify: Перезапуск системной службы пользовательского Docker
 
-- name: Проверить настроенный каталог данных Docker без изменений
+- name: Проверка настроенного каталога данных Docker без изменений
   ansible.builtin.assert:
     that: _platform_docker_daemon_config.get('data-root') == platform_docker_data_root
     fail_msg: DOCKER_DATA_ROOT_CONFIG_MISMATCH

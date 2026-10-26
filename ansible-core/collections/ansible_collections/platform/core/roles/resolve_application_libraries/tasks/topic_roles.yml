@@ -17,7 +17,7 @@
     label: "{{ topic_role.key }}"
   become: false
 
-- name: Предоставить выбранные имена шаблонам приложений
+- name: Предоставление выбранных имён шаблонам приложений
   ansible.builtin.set_fact:
     application_topics: >-
       {{ application_topics | combine({topic_connection.key:

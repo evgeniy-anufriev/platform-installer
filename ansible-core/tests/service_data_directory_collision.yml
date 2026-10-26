@@ -1,5 +1,5 @@
 ---
-- name: Отклонить перекрывающиеся пути данных совмещенного экземпляра службы без целевых изменений
+- name: Отклонение пересекающихся путей данных совмещённых экземпляров без изменения узлов
   hosts: localhost
   connection: local
   gather_facts: false
@@ -8,7 +8,7 @@
     platform_clickhouse_data_root: /var/lib/qa-stateful
     platform_vault_data_root: /var/lib/qa-stateful
   tasks:
-    - name: Проверить каждую службу на наличие конфликтов корневых и вложенных экземпляров службы
+    - name: Проверка каждой службы на наличие конфликтов корневых и вложенных экземпляров службы
       ansible.builtin.include_tasks: service_data_directory_collision_case.yml
       loop:
         - {service: redis, first: /var/lib/qa-stateful, second: /var/lib/qa-stateful/member-2}

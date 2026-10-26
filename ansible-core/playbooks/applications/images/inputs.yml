@@ -1,36 +1,36 @@
 ---
-- name: Обработать параметры подготовки образов без подключения к целевым узлам
+- name: Обработка параметров подготовки образов без подключения к целевым узлам
   hosts: localhost
   connection: local
   gather_facts: false
   tasks:
-    - name: Загрузить обычные настройки проекта
+    - name: Загрузка обычных настроек проекта
       ansible.builtin.include_role:
         name: platform.core.project_settings
-    - name: "Вычислить настройки приложений с учётом значений по умолчанию и переопределений"
+    - name: "Вычисление настроек приложений с учётом значений по умолчанию и переопределений"
       ansible.builtin.include_role:
         name: platform.core.resolve_application_libraries
       when: platform_desired_state.applicationLibraryDeployments is defined
-    - name: "Определить исходные данные проекта и параметры подключения к целевым узлам"
+    - name: "Определение исходных данных проекта и параметров подключения к целевым узлам"
       platform.core.project_snapshot:
         project_root: "{{ platform_project_root }}"
         service_catalog_path: "{{ platform_service_catalog_path }}"
       register: platform_image_snapshot
-    - name: Собрать параметры выбранных образов для подготовки
+    - name: Сбор параметров выбранных образов для подготовки
       platform.core.prepare_application_images:
         project_root: "{{ platform_project_root }}"
         bundle_root: "{{ platform_execution_bundle_root }}"
         snapshot: "{{ platform_image_snapshot.snapshot }}"
         connections: "{{ platform_image_snapshot.execution_connections }}"
       register: platform_image_inputs
-    - name: Сохранить параметры подготовки образов для последующих standalone-playbook
+    - name: Сохранение параметров подготовки образов для последующих standalone-playbook
       ansible.builtin.set_fact:
         platform_application_image_inputs: "{{ platform_image_inputs.inputs }}"
-    - name: Загрузить манифест выбранного неизменяемого runtime bundle с индексом образов
+    - name: Загрузка манифеста выбранного неизменяемого runtime bundle с индексом образов
       ansible.builtin.include_vars:
         file: "{{ platform_execution_bundle_root }}/manifest.yaml"
         name: platform_application_image_bundle
-    - name: Сохранить защищённые параметры запроса подготовки образов приложений
+    - name: Сохранение защищённых параметров запроса подготовки образов приложений
       ansible.builtin.copy:
         content: "{{ platform_image_inputs.inputs | to_json }}"
         dest: "{{ platform_application_image_inputs_path }}"

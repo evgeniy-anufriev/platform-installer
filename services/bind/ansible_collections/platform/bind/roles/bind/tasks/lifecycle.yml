@@ -3,14 +3,14 @@
   ansible.builtin.include_tasks: prepare.yml
   when: platform_bind_phase == 'prepare'
 
-- name: Активировать ранее проверенные конфигурации BIND
+- name: Активация ранее проверенных конфигураций BIND
   ansible.builtin.include_tasks: activate.yml
   when: platform_bind_phase == 'activate'
 
-- name: Проверить работу BIND без изменений
+- name: Проверка работы BIND без изменений
   ansible.builtin.include_tasks: verify.yml
   when: platform_bind_phase == 'verify'
 
-- name: "Запустить BIND после проверки активной конфигурации"
+- name: "Запуск BIND после проверки активной конфигурации"
   ansible.builtin.include_tasks: start.yml
   when: platform_bind_phase == 'start'

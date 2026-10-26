@@ -1,5 +1,5 @@
 ---
-- name: "Проверить комплектность пакетов библиотек перед загрузкой значений по умолчанию"
+- name: "Проверка комплектности пакетов библиотек перед загрузкой значений по умолчанию"
   platform.core.prepare_application_libraries:
     project_root: "{{ platform_project_root | default(inventory_dir | dirname) }}"
     contracts_root: "{{ platform_contracts_root | default(role_path ~ '/../../../../../../../contracts') }}"
@@ -7,7 +7,7 @@
   no_log: true
   become: false
 
-- name: Сохранить в безопасности результаты предварительной проверки
+- name: Сохранение безопасных результатов предварительной проверки
   ansible.builtin.set_fact:
     platform_application_rows: []
     platform_application_connection_rows: []
@@ -15,26 +15,26 @@
   no_log: true
   become: false
 
-- name: "Определить топологию подключений перед формированием окружения потребителя"
+- name: "Определение топологии подключений перед формированием окружения потребителя"
   ansible.builtin.include_tasks: connection_topology.yml
   loop: "{{ _application_inputs.jobs }}"
   loop_control:
     loop_var: application_job
   no_log: true
 
-- name: Привязка подключений, предоставляемых приложением, к собственной топологии
+- name: Добавление подключений приложений в рассчитанную топологию
   platform.core.prepare_application_connections:
   register: _application_connection_inputs
   no_log: true
   become: false
 
-- name: Предоставить разрешенные параметры провайдера шаблонам пакетов
+- name: Предоставление рассчитанных параметров провайдера шаблонам пакетов
   ansible.builtin.set_fact:
     platform_application_provided_connections: "{{ _application_connection_inputs.connections }}"
   no_log: true
   become: false
 
-- name: Разрешить каждое приложение и хост с помощью обычных переменных Ansible
+- name: Вычисление параметров каждого приложения и узла по переменным Ansible
   ansible.builtin.include_tasks: instance.yml
   vars:
     _library_package: "{{ lookup('vars', '_library_package_' ~ ((application_job.libraryId ~ application_job.hostId) | hash('sha256'))) }}"

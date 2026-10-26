@@ -27,13 +27,13 @@
   failed_when: false
   no_log: true
 
-- name: Потребовать, чтобы каждый фактический идентификатор серверной части TLS соответствовал проекции Core
+- name: Проверка соответствия TLS-идентификаторов backend-сервисов параметрам Core
   ansible.builtin.assert:
     that:
       - _platform_haproxy_backend_tls_probes.results | default([]) | selectattr('rc', 'ne', 0) | list | length == 0
     fail_msg: HAPROXY_BACKEND_TLS_IDENTITY_UNVERIFIED
 
-- name: Требовать проверенные ответы HTTPS от каждой конкретной серверной цели
+- name: Проверка HTTPS-ответов всех выбранных backend-сервисов
   ansible.builtin.command:
     argv:
       - /usr/bin/curl
@@ -58,7 +58,7 @@
   changed_when: false
   no_log: true
 
-- name: Запрос ожидаемого статуса проверенного соединения TLS
+- name: Проверка ожидаемого статуса TLS-подключения
   ansible.builtin.assert:
     that:
       - item.rc == 0
