@@ -13,6 +13,8 @@ platform_bind_secondary_zone_directory: "/var/named/slaves/{{ (platform_name_pre
 platform_bind_recovery_directory: "{{ platform_data_root_directory | default('/var/lib') }}/{{ (platform_name_prefix | default('') ~ '-') if (platform_name_prefix | default('')) else '' }}installer/bind-recovery"
 platform_bind_rndc_binary: /usr/sbin/rndc
 platform_bind_phase: prepare
+platform_bind_readiness_retries: 60
+platform_bind_readiness_delay: 2
 # Empty by default. A recovery must be explicitly audited and supplied for one
 # controlled lifecycle migration; ordinary reconciliation never inspects it.
 platform_bind_lifecycle_recovery: {}

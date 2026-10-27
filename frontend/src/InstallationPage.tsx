@@ -281,6 +281,7 @@ export function InstallationPage({
   onOpenServers,
   plan,
   busy,
+  starting = false,
   onCreatePlan,
   infrastructureObservation,
   selectedExecutionMode,
@@ -315,6 +316,7 @@ export function InstallationPage({
   onOpenServers: () => void;
   plan?: InstallationPlanOperation;
   busy: boolean;
+  starting?: boolean;
   onCreatePlan: (
     deploymentOrder: string[],
     mode?: InstallationExecutionMode,
@@ -823,6 +825,7 @@ export function InstallationPage({
         {tab === "plan" && (
           <>
             <PlanStage
+              starting={starting}
               key={plan?.plan?.id || "no-plan"}
               servicesControl={servicesControl}
               librariesControl={librariesControl}
@@ -898,6 +901,7 @@ function PlanStage({
   draftActive,
   operation,
   busy,
+  starting = false,
   onCreatePlan,
   orderError,
   onApprovePlan,
@@ -916,6 +920,7 @@ function PlanStage({
   draftActive: boolean;
   operation?: InstallationPlanOperation;
   busy: boolean;
+  starting?: boolean;
   onCreatePlan: () => void;
   orderError: string;
   onApprovePlan: (planId: string, acknowledgements: string[]) => void;
@@ -1469,6 +1474,7 @@ function PlanStage({
       )}
       {plan.approved && !scopeChanged && (
         <StartApproval
+          starting={starting}
           plan={plan}
           busy={busy}
           canStart={canStart}
@@ -1488,6 +1494,7 @@ function PlanStage({
 function StartApproval({
   plan,
   busy,
+  starting = false,
   canStart,
   onStart,
   credentialStatus,
@@ -1497,6 +1504,7 @@ function StartApproval({
 }: {
   plan: NonNullable<InstallationPlanOperation["plan"]>;
   busy: boolean;
+  starting?: boolean;
   canStart: boolean;
   onStart: (planId: string) => void;
   credentialStatus: SessionCredentialStatus | null;
@@ -1513,7 +1521,9 @@ function StartApproval({
     >
       <div className="installation-start-gate">
         <span className="muted" role="status">
-          {runActive
+          {starting
+            ? "Запускается выполнение…"
+            : runActive
             ? "Выполнение этого плана уже запущено."
             : canStart && (!required || present) && outputReady
               ? "Одобренный план готов к запуску."
@@ -1544,7 +1554,7 @@ function StartApproval({
           runActive
         }
       >
-        Начать выполнение
+        {starting ? "Запускается выполнение…" : "Начать выполнение"}
       </button>
     </footer>
   );

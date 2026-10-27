@@ -309,6 +309,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     useState<ExecutionNodeContext | null>(null);
   const [serviceConfigurationPreview, setServiceConfigurationPreview] =
     useState<ServicePreviewObservation | undefined>(undefined);
+  const [servicePreviewAttempt, setServicePreviewAttempt] = useState(0);
   const [
     serviceConfigurationPreviewError,
     setServiceConfigurationPreviewError,
@@ -336,6 +337,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
   >(undefined);
   const [approvalErrorAttempt, setApprovalErrorAttempt] = useState(0);
   const [installationBusy, setInstallationBusy] = useState(false);
+  const [installationStarting, setInstallationStarting] = useState(false);
   const [installationRun, setInstallationRun] = useState<
     InstallationRunOperation | undefined
   >(undefined);
@@ -377,6 +379,10 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
   };
   const requestPage = (next: Page) => {
     if (page === next) return;
+    if (
+      ["services", "applications", "installation"].includes(next) &&
+      !coreProjectionReady
+    ) return;
     if (page === "applications" && !confirmApplicationExit()) return;
     setPage(next);
   };
@@ -419,6 +425,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     installationState,
     installationRun,
     runProgress,
+    installationStarting,
   );
   const title = empty
     ? local.name
@@ -426,8 +433,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
       ? String(project.name)
       : local?.name || "Проект не открыт";
   const certificateSources = certificateSourceOptions(managed, intents);
-  const visibleServiceConfigurationPreview =
-    commandCount === 0 &&
+  const savedServiceConfigurationPreview =
     executionNode?.status === "READY" &&
     !!executionNode.runtimeDigest &&
     !!serviceConfigurationPreview &&
@@ -442,15 +448,22 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     serviceConfigurationPreview.safeLabel === executionNode.safeLabel
       ? serviceConfigurationPreview.value
       : undefined;
+  const coreProjectionReady = !!savedServiceConfigurationPreview;
+  const visibleServiceConfigurationPreview =
+    commandCount === 0 ? savedServiceConfigurationPreview : undefined;
   const serviceConfigurationPreviewNotice =
-    !executionReady || commandCount !== 0 || visibleServiceConfigurationPreview
+    coreProjectionReady
       ? ""
-      : !executionNode?.runtimeDigest
-        ? "Core-проекция недоступна: runtime узла выполнения не подтверждён. Показаны безопасные локальные значения."
-        : !managed?.projectRevision
-          ? "Core-проекция недоступна: ревизия проекта не определена. Показаны безопасные локальные значения."
-          : serviceConfigurationPreviewError ||
-            "Вычисляются значения Core для текущей сохранённой ревизии…";
+      : commandCount !== 0
+        ? "Сохраните или отмените изменения проекта, чтобы получить Core-проекцию."
+        : !executionReady
+          ? "Для получения Core-проекции выберите и подготовьте узел выполнения на странице «Серверы»."
+          : !executionNode?.runtimeDigest
+            ? "Core-проекция недоступна: runtime узла выполнения не подтверждён. Проверьте или подготовьте узел."
+            : !managed?.projectRevision
+              ? "Core-проекция недоступна: ревизия проекта не определена. Сохраните проект."
+              : serviceConfigurationPreviewError ||
+                "Получение Core-проекции для сохранённой ревизии. Тайм-аут запроса — 90 секунд. Сервисы, приложения и установка станут доступны после получения значений.";
 
   useEffect(() => {
     let live = true;
@@ -530,13 +543,14 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
 
   useEffect(() => {
     let live = true;
+    if (commandCount !== 0) return () => { live = false; };
     setServiceConfigurationPreview(undefined);
     setServiceConfigurationPreviewError("");
     const revision = result.managed?.projectRevision;
     const runtimeDigest = executionNode?.runtimeDigest;
     if (
       !projectOpen ||
-      page !== "services" ||
+      commandCount !== 0 ||
       !revision ||
       !result.root ||
       executionNode?.status !== "READY" ||
@@ -578,6 +592,10 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     }
     request
       .then((value) => {
+        if (live && (value.projectRevision !== revision || value.runtimeDigest !== runtimeDigest)) {
+          setServiceConfigurationPreviewError("Core вернул проекцию другой ревизии или runtime. Проверьте сервер, чтобы повторить получение.");
+          return;
+        }
         if (
           live &&
           value.projectRevision === revision &&
@@ -598,7 +616,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
             /\b(SERVICE_CONFIGURATION_PREVIEW_(?:UNAVAILABLE|UNSUPPORTED|STALE|RESPONSE_INVALID|INPUT_INVALID)|PROJECT_REVISION_CHANGED|EXECUTION_RUNTIME_IDENTITY_UNCONFIRMED)\b/,
           )?.[1];
           setServiceConfigurationPreviewError(
-            `Core-проекция недоступна для текущей сохранённой ревизии.${safeCode ? ` Код: ${safeCode}.` : ""} Показаны безопасные локальные значения.`,
+            `Core-проекция недоступна для текущей сохранённой ревизии.${safeCode ? ` Код: ${safeCode}.` : ""} Проверьте сервер, чтобы повторить получение.`,
           );
         }
       });
@@ -607,10 +625,11 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     };
   }, [
     api,
-    page,
+    servicePreviewAttempt,
     projectOpen,
     result.root,
     result.managed?.projectRevision,
+    commandCount,
     executionNode?.status,
     executionNode?.runtimeDigest,
     executionNode?.selectionKind,
@@ -1078,6 +1097,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
       return;
     if (!api.startApprovedInstallation) return;
     setInstallationBusy(true);
+    setInstallationStarting(true);
     try {
       const operation = await api.startApprovedInstallation(planId);
       if (operation.status === "BLOCKED" && api.getInstallationPlan) {
@@ -1111,6 +1131,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
       }
       await refreshInstallationState();
     } finally {
+      setInstallationStarting(false);
       setInstallationBusy(false);
     }
   };
@@ -1934,6 +1955,10 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
           }
         : current,
     );
+    if (readiness.status === "READY" && !coreProjectionReady) {
+      if (serviceConfigurationPreviewError) servicePreviewRequests.current.clear();
+      setServicePreviewAttempt(value => value + 1);
+    }
     setLastNodeCheck({
       binding: nodeCheckBinding(refreshed || executionNode),
       readiness,
@@ -2053,6 +2078,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
             )
             .map((item) => {
               const enabled =
+                (!["services", "applications", "installation"].includes(item.id) || coreProjectionReady) && (
                 item.id === "project" ||
                 (item.id === "servers" && projectOpen) ||
                 (item.id === "topology" && topologyAvailable) ||
@@ -2063,7 +2089,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
                 item.id === "logs" ||
                 item.id === "help" ||
                 item.id === "about" ||
-                item.id === "settings";
+                item.id === "settings");
               return (
                 <button
                   key={item.id}
@@ -2071,6 +2097,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
                     item.id === page ? "active" : enabled ? undefined : "future"
                   }
                   disabled={!enabled}
+                  title={!enabled && ["services", "applications", "installation"].includes(item.id) ? serviceConfigurationPreviewNotice : undefined}
                   aria-current={item.id === page ? "page" : undefined}
                   onClick={() => {
                     if (
@@ -2144,7 +2171,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
               title="Открыть узел выполнения на странице «Серверы»"
             >
               Узел выполнения:{" "}
-              {executionNodeStatusLabel(
+              {executionReady && !coreProjectionReady ? (serviceConfigurationPreviewError ? "Ошибка получения данных Core" : "Получение данных Core…") : executionNodeStatusLabel(
                 executionNode?.status || "NOT_CONFIGURED",
               )}
               {executionNode?.safeLabel
@@ -2156,6 +2183,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
             <button
               type="button"
               className={`installation-global-status ${installationView.tone}`}
+              disabled={!coreProjectionReady}
               onClick={() => {
                 if (page === "applications" && !confirmApplicationExit())
                   return;
@@ -2356,6 +2384,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
                   : null
               }
               executionNode={executionNode}
+              coreProjectionNotice={!coreProjectionReady ? serviceConfigurationPreviewNotice : undefined}
               onSelectExecutionNode={selectExecutionNode}
               onCheckExecutionNode={checkExecutionNode}
               onProbeExecutionNodeHostKey={probeExecutionNodeHostKey}
@@ -2485,7 +2514,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
               verificationStatus={verification.status}
             />
           )}
-          {!loading && !creating && projectOpen && page === "applications" && (
+          {!loading && !creating && projectOpen && coreProjectionReady && page === "applications" && (
             <ApplicationsPage
               managed={managed}
               snapshot={snapshot}
@@ -2525,7 +2554,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
               }
             />
           )}
-          {!loading && !creating && projectOpen && page === "services" && (
+          {!loading && !creating && projectOpen && coreProjectionReady && page === "services" && (
             <ServicesPage
               key={serviceFormEpoch}
               managed={managed}
@@ -2653,7 +2682,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
               }
             />
           )}
-          {!loading && !creating && projectOpen && page === "installation" && (
+          {!loading && !creating && projectOpen && coreProjectionReady && page === "installation" && (
             <InstallationPage
               key={result.root}
               state={installationState}
@@ -2666,6 +2695,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
               selectedExecutionMode={installationExecutionMode}
               onExecutionModeChange={setInstallationExecutionMode}
               busy={installationBusy}
+              starting={installationStarting}
               onCreatePlan={createInstallationPlan}
               applicationVaultSources={installationVaultSources}
               onApplicationVaultSourcesChange={(sources) => {

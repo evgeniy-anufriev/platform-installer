@@ -249,6 +249,7 @@ export function ServersPage({
   onSetCredential,
   onClearCredential,
   executionNode,
+  coreProjectionNotice,
   onSelectExecutionNode,
   onCheckExecutionNode,
   onProbeExecutionNodeHostKey,
@@ -283,6 +284,7 @@ export function ServersPage({
   ) => Promise<SessionCredentialStatus>;
   onClearCredential: () => Promise<SessionCredentialStatus>;
   executionNode: ExecutionNodeContext | null;
+  coreProjectionNotice?: string;
   onSelectExecutionNode: (hostId: string) => Promise<ExecutionNodeContext>;
   onCheckExecutionNode: () => Promise<ExecutionNodeReadiness>;
   onProbeExecutionNodeHostKey?: () => Promise<HostKeyProbeResult>;
@@ -445,6 +447,7 @@ export function ServersPage({
         )}
         <ExecutionNodePanel
           context={executionNode}
+          coreProjectionNotice={coreProjectionNotice}
           rows={visible.filter((row) => row.state !== "deleting")}
           disabled={busy}
           onSelect={onSelectExecutionNode}
@@ -648,6 +651,7 @@ function TargetHostKeyDialog({
 
 function ExecutionNodePanel({
   context,
+  coreProjectionNotice,
   rows,
   disabled,
   onSelect,
@@ -664,6 +668,7 @@ function ExecutionNodePanel({
   information,
 }: {
   context: ExecutionNodeContext | null;
+  coreProjectionNotice?: string;
   rows: Row[];
   disabled: boolean;
   onSelect: (hostId: string) => Promise<ExecutionNodeContext>;
@@ -741,7 +746,7 @@ function ExecutionNodePanel({
           Узел выполнения
         </h2>
         <StatusChip tone={executionNodeTone(effective.status)}>
-          {executionNodeStatusLabel(effective.status)}
+          {effective.status === "READY" && coreProjectionNotice ? "Ожидание данных Core" : executionNodeStatusLabel(effective.status)}
         </StatusChip>
       </div>
       <div className="execution-node-detail">
@@ -849,7 +854,7 @@ function ExecutionNodePanel({
       >
         Статус:{" "}
         <StatusChip tone={combinedStatus.tone}>{combinedStatus.label}</StatusChip>
-        {combinedStatus.detail ? ` · ${combinedStatus.detail}` : ""}
+        {coreProjectionNotice ? ` · ${coreProjectionNotice}` : combinedStatus.detail ? ` · ${combinedStatus.detail}` : ""}
         {preparation?.verification
           ? ` · Проверка проекта: ${verificationLabel(preparation.verification.status)}`
           : ""}

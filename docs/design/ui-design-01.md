@@ -25,6 +25,16 @@ deployment editor remains on the right. Topology links select the exact
 deployment/member in that editor. Long parameter lists scroll inside the
 right-hand parameter column rather than moving the service list.
 
+Owner refinement (2026-10-27): Services, Applications and Installation remain
+unavailable until Core has returned the service configuration projection for the
+current saved revision and selected runtime. Fetch it automatically after
+Execution Node readiness and after a saved revision changes. Show waiting/errors
+within the existing Execution Node status; retry through its existing check
+action, without a separate projection panel or button. Preserve one successful
+revision/runtime observation across page navigation. This supersedes the static
+mockups' ungated links, adds no desired-state store, and does not replace a fresh
+authoritative deployment plan or execution approval.
+
 Owner refinement (2026-10-09): runtime-secret reference fields are omitted
 from the service and member parameter lists; they are configured through
 the existing Secrets dialog. Show its action card only when the service

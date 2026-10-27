@@ -462,6 +462,13 @@ it("explains when the previous run cannot be checked and keeps the safety block 
 
 function api(overrides: Record<string, unknown> = {}): MockApi {
   return {
+    getExecutionNodeContext: vi.fn().mockResolvedValue({
+      status: "READY", selectionKind: "PROJECT_SERVER", selectedHostId: "node1",
+      runtimeDigest: "sha256:runtime-a",
+    }),
+    getServiceConfigurationPreview: vi.fn().mockResolvedValue({
+      projectRevision: "sha256:old", runtimeDigest: "sha256:runtime-a", services: {},
+    }),
     getApplicationConfig: vi.fn().mockResolvedValue({
       status: "READY",
       config: {
@@ -854,7 +861,7 @@ it("shows the read-only Installation state without requesting a deployment plan"
     ],
   });
   const value = api({
-    getExecutionNodeContext: vi.fn().mockResolvedValue({ status: "READY" }),
+    getExecutionNodeContext: vi.fn().mockResolvedValue({ status: "READY", runtimeDigest: "sha256:runtime-a", selectionKind: "PROJECT_SERVER", selectedHostId: "node1" }),
     getInstallationState,
   });
   value.chooseProject.mockResolvedValue(project);
@@ -1395,7 +1402,7 @@ describe("UI-01E2 server editor", () => {
     expect(screen.queryByText("Есть несохранённые изменения")).toBeNull();
   });
 
-  it("keeps Installation visible before readiness while preparation stays on Servers", async () => {
+  it("blocks Installation before readiness while preparation stays on Servers", async () => {
     const value = api({
       getExecutionNodeContext: vi.fn().mockResolvedValue({
         status: "UPDATE_REQUIRED",
@@ -1420,7 +1427,7 @@ describe("UI-01E2 server editor", () => {
       (await screen.findByRole("button", {
         name: "Установка",
       })) as HTMLButtonElement,
-    ).toHaveProperty("disabled", false);
+    ).toHaveProperty("disabled", true);
     await userEvent.click(
       screen.getByRole("button", { name: "Проверить узел" }),
     );
@@ -1428,12 +1435,12 @@ describe("UI-01E2 server editor", () => {
     expect(
       (screen.getByRole("button", { name: "Установка" }) as HTMLButtonElement)
         .disabled,
-    ).toBe(false);
+    ).toBe(true);
     expect(
       screen
         .getByRole("button", { name: "Установка" })
         .classList.contains("future"),
-    ).toBe(false);
+    ).toBe(true);
     await userEvent.click(
       screen.getByRole("button", { name: "Спланировать подготовку" }),
     );
@@ -1877,7 +1884,7 @@ describe("UI-01F3 deployment editor", () => {
     expect(value.startEditSession).not.toHaveBeenCalled();
   });
 
-  it("opens Topology without an Execution Node and renders saved deployments", async () => {
+  it("opens Topology and renders saved deployments with a ready Core projection", async () => {
     const value = api();
     await openTopology(value);
     expect(
@@ -1910,7 +1917,7 @@ describe("UI-01F3 deployment editor", () => {
       name: "Сервисы",
     });
     expect(document.activeElement).toBe(listHeading);
-    expect(value.getExecutionNodeContext).toBeUndefined();
+    expect(value.getExecutionNodeContext).toHaveBeenCalled();
     await userEvent.click(screen.getByRole("button", { name: "Проект" }));
     expect(
       screen.getByText("Развёртывания").parentElement?.querySelector("strong")
@@ -2255,9 +2262,10 @@ describe("UI-01H2 services navigation and safe settings", () => {
     expect(value.appendEditCommand).not.toHaveBeenCalled();
   });
 
-  it("retries failed preview on return to Services and reuses a successful revision", async () => {
+  it("retries failed projection explicitly and reuses a successful revision", async () => {
     const value = api({
       createInstallationPlan: vi.fn(),
+      checkExecutionNode: vi.fn().mockResolvedValue({status:"READY"}),
       getExecutionNodeContext: vi.fn().mockResolvedValue({
         status: "READY",
         selectionKind: "PROJECT_SERVER",
@@ -2291,11 +2299,13 @@ describe("UI-01H2 services navigation and safe settings", () => {
     await userEvent.click(
       screen.getByRole("button", { name: "Открыть папку проекта" }),
     );
-    await userEvent.click(screen.getByRole("button", { name: "Сервисы" }));
-    await userEvent.click(screen.getByRole("button", { name: /^kafka-main/ }));
+    await userEvent.click(screen.getByRole("button",{name:"Серверы"}));
     await screen.findByText(/Код: SERVICE_CONFIGURATION_PREVIEW_UNSUPPORTED/);
-    await userEvent.click(screen.getByRole("button", { name: /^Серверы$/ }));
-    await userEvent.click(screen.getByRole("button", { name: /^Сервисы$/ }));
+    for (const name of ['Сервисы', 'Приложения', 'Установка']) expect(screen.getByRole('button',{name})).toHaveProperty('disabled',true);
+    await userEvent.click(screen.getByRole('button',{name:'Проверить узел'}));
+    await waitFor(()=>expect(screen.getByRole('button',{name:'Сервисы'})).toHaveProperty('disabled',false));
+    await userEvent.click(screen.getByRole('button',{name:'Сервисы'}));
+    await userEvent.click(screen.getByRole('button',{name:/^kafka-main/}));
     expect(await screen.findByText("По умолчанию: 5")).toBeTruthy();
     await userEvent.click(screen.getByRole("button", { name: /^Серверы$/ }));
     await userEvent.click(screen.getByRole("button", { name: /^Сервисы$/ }));
@@ -2305,7 +2315,45 @@ describe("UI-01H2 services navigation and safe settings", () => {
     expect(value.createInstallationPlan).not.toHaveBeenCalled();
   });
 
-  it("keeps local values visible when the READY Core projection is unavailable", async () => {
+  it("blocks dependent sections until the automatic saved Core projection arrives", async () => {
+    let complete!: (value: unknown) => void;
+    const value = api({
+      getServiceConfigurationPreview: vi.fn().mockImplementation(() => new Promise(resolve => { complete = resolve; })),
+      createInstallationPlan: vi.fn(),
+    });
+    value.chooseProject.mockResolvedValue(project);
+    render(<App api={value} />);
+    await userEvent.click(screen.getByRole("button", { name: "Открыть папку проекта" }));
+    await userEvent.click(screen.getByRole("button",{name:"Серверы"}));
+    await waitFor(() => expect(value.getServiceConfigurationPreview).toHaveBeenCalledOnce());
+    for (const name of ["Сервисы", "Приложения", "Установка"]) {
+      expect(screen.getByRole("button", { name })).toHaveProperty("disabled", true);
+    }
+    expect(screen.getByText(/Тайм-аут запроса — 90 секунд/)).toBeTruthy();
+    await act(async () => complete({ projectRevision: "sha256:old", runtimeDigest: "sha256:runtime-a", services: {} }));
+    for (const name of ["Сервисы", "Приложения", "Установка"]) {
+      expect(screen.getByRole("button", { name })).toHaveProperty("disabled", false);
+    }
+    expect(value.verifyProject).not.toHaveBeenCalled();
+    expect(value.createInstallationPlan).not.toHaveBeenCalled();
+  });
+
+  it("keeps sections blocked on a stale Core projection and offers a retry", async () => {
+    const value = api({ getServiceConfigurationPreview: vi.fn().mockResolvedValue({
+      projectRevision: "sha256:another", runtimeDigest: "sha256:runtime-a", services: {},
+    }) });
+    value.chooseProject.mockResolvedValue(project);
+    render(<App api={value} />);
+    await userEvent.click(screen.getByRole("button", { name: "Открыть папку проекта" }));
+    await userEvent.click(screen.getByRole("button",{name:"Серверы"}));
+    await screen.findByText(/Core вернул проекцию другой ревизии/);
+    for (const name of ["Сервисы", "Приложения", "Установка"]) {
+      expect(screen.getByRole("button", { name })).toHaveProperty("disabled", true);
+    }
+    expect(screen.getByRole("button", { name: "Проверить узел" })).toBeTruthy();
+  });
+
+  it("keeps gated pages blocked when the READY Core projection is unavailable", async () => {
     const value = api({
       getExecutionNodeContext: vi.fn().mockResolvedValue({
         status: "READY",
@@ -2324,11 +2372,11 @@ describe("UI-01H2 services navigation and safe settings", () => {
     await userEvent.click(
       screen.getByRole("button", { name: "Открыть папку проекта" }),
     );
-    await userEvent.click(screen.getByRole("button", { name: "Сервисы" }));
-    await userEvent.click(screen.getByRole("button", { name: /^kafka-main/ }));
+    await userEvent.click(screen.getByRole("button",{name:"Серверы"}));
+    expect(screen.getByRole("button", { name: "Сервисы" })).toHaveProperty("disabled",true);
     expect(
       await screen.findByText(
-        "Core-проекция недоступна для текущей сохранённой ревизии. Код: SERVICE_CONFIGURATION_PREVIEW_UNSUPPORTED. Показаны безопасные локальные значения.",
+        /Core-проекция недоступна для текущей сохранённой ревизии.*SERVICE_CONFIGURATION_PREVIEW_UNSUPPORTED/,
       ),
     ).toBeTruthy();
     expect(value.verifyProject).not.toHaveBeenCalled();
@@ -2378,11 +2426,11 @@ describe("UI-01H2 services navigation and safe settings", () => {
     await userEvent.click(
       screen.getByRole("button", { name: "Открыть папку проекта" }),
     );
-    await userEvent.click(screen.getByRole("button", { name: "Сервисы" }));
-    await userEvent.click(screen.getByRole("button", { name: /^kafka-main/ }));
+    await userEvent.click(screen.getByRole("button",{name:"Серверы"}));
+    expect(screen.getByRole("button", { name: "Сервисы" })).toHaveProperty("disabled",true);
     expect(
-      screen.getByText(
-        "Core-проекция недоступна: runtime узла выполнения не подтверждён. Показаны безопасные локальные значения.",
+      await screen.findByText(
+        /Core-проекция недоступна: runtime узла выполнения не подтверждён/,
       ),
     ).toBeTruthy();
     expect(value.getServiceConfigurationPreview).not.toHaveBeenCalled();
@@ -2655,7 +2703,7 @@ describe("UI-01H2 services navigation and safe settings", () => {
     });
   });
 
-  it("opens one Services list/detail view without an Execution Node and returns to the list", async () => {
+  it("opens one Services list/detail view after Core projection and returns to the list", async () => {
     const value = api();
     value.chooseProject.mockResolvedValue(project);
     render(<App api={value} />);
@@ -2677,7 +2725,7 @@ describe("UI-01H2 services navigation and safe settings", () => {
       await screen.findByRole("heading", { name: "Выберите сервис" }),
     ).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Сервисы" })).toBeTruthy();
-    expect(value.getExecutionNodeContext).toBeUndefined();
+    expect(value.getExecutionNodeContext).toHaveBeenCalled();
   });
 
   it("imports typed service secret files through Go without exposing paths or values", async () => {
@@ -2740,7 +2788,7 @@ describe("UI-01H2 services navigation and safe settings", () => {
     expect(
       screen.getByText("Файл принят и сохранён только в сессии."),
     ).toBeTruthy();
-    expect(value.getExecutionNodeContext).toBeUndefined();
+    expect(value.getExecutionNodeContext).toHaveBeenCalled();
     expect(value.appendEditCommand).not.toHaveBeenCalled();
   });
 

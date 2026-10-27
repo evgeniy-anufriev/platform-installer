@@ -755,3 +755,205 @@ acceptance/benchmark pending. Independent FULL DIFF APPROVE/blocking0, no findin
 9file source manifest c673a9d7497d298fd1dc2ca4e2c1bca507c762b61b22c7b9ac55556b41cb5984.
 
 Final9file identity confirmed; native source QA and UI fixture checks above completed. Current installer-c14d36d0 observed88%/CSPA, old immutable plan retained. Temporary f43070fb QA workspace cleaned with qa-sync; bundle/runtime acceptance pending.
+
+## Clean optimized restart and pre-plan service directories — 2026-10-27
+
+Owner-authorized restart: cancelled installer-c14d36d0500efb8a3f5a3ac61bb0040c
+at13:46:38MSK. Its execution unit was inactive before cleanup. Reused the prior
+full-stack cleanup scripts, adapted to platform-automation and /data/docker.
+Removed project containers/images, service packages/accounts/configuration/data,
+application directories, PKI and Installer runtime workspaces on101/102/103;
+retained OS prerequisites and the established automation identity. Final proof
+reported empty=true, remaining=[], processes=[] on all three nodes. Subsequent
+Execution Node preparation intentionally recreated the runtime on101.
+
+Bundle service-runtime-optimization-20261027-02, digest
+sha256:80e67f1c1375cec5c7b810e912d6194898b16c73e5cc839f13bc719e9e143bb6,
+built from07391701, validated and published through the standard publisher.
+Fresh QA project project-runtime02 retains project-b46aa3f5f57a495f and packages1.0.1;
+placements remain szi103, sdku101, cspa102. No library/infrastructure skips.
+
+Fixed a presentation request invalidating the trusted SSH binding when an edit
+session was active: reject that request before transport revalidation. React
+does not fetch a saved projection while commands are pending and retries after
+save/discard. No path calculation was added to Go/React. Desktop/executionnode
+Go tests and frontend App80 tests, lint/typecheck PASS; the new regression proves
+that a draft preview leaves the binding and READY context intact.
+
+Real React/Wails34126 with Execution Node101: saved revision
+sha256:909643ebfd4a8c447350529f900fcefb9a60be06f67bbcdfbb80eb5314aea25e.
+Before any plan (plan count0), all five textboxes displayed the Core values:
+ClickHouse /data/qa-clickhouse; Kafka /data/qa-kafka-structure;
+PostgreSQL /data/qa-postgresql/postgres; Redis /data/qa-redis;
+Vault /data/qa-vault-consumer. Screenshots and exact textbox assertions captured.
+All18 active application account password sources were saved and verified as
+managed/generated; no manual application account password input is permitted by
+the automation. Library provider/shared runtime credentials keep their existing
+contract. Full run preparation continues through the real React/Wails handlers;
+Start/terminal acceptance is not implied by these checks.
+
+Local evidence under .runtime/qa/service-runtime-optimization/results/:
+runtime02-empty-proof.json, runtime-binding.json, runtime03-data-root-preview.json,
+runtime03-data-root-ui.json and runtime03-install-ui-evidence.json. Browser remains
+open; runtime preparation and UI use the fresh bundle.
+
+Owner amendment: Keycloak PostgreSQL password must remain a runtime input.
+The first executable plan plan-6e31e9af1007f6042d2ba78b was not approved or started:
+bootstrap still requires keycloak-postgres-password. The UI reset removed the
+credential override and exposed an inherited templated reference rejected by
+schema validation; an explicit runtime_secret_ref was therefore authored in the
+ordinary QA project group_vars and reread through React/Wails. No schema rule was
+weakened. Fresh Project Verify PASS and projection assertions confirm17 generated
+passwords plus exactly one Keycloak runtime password. The latter uses the same
+keycloak-postgres-password reference as bootstrap. A fresh plan is required;
+the rejected plan is not reused. Evidence: runtime03-keycloak-refresh.log.
+
+Owner-approved navigation gate: fetch the existing Core service projection as
+soon as the selected Execution Node is ready, independently of the Services
+page. Services, Applications and Installation links and their content stay
+blocked until the observation matches the saved revision, root, runtime and node.
+Save invalidates it; successful observations are reused across page navigation.
+Stale/error responses do not unlock navigation. Retry uses the existing node
+check; waiting/errors appear within the existing node status and header badge.
+The intermediate separate projection panel/button was removed per owner request.
+No new Core operation, contract, desired-state store or bundle change was needed.
+
+Final App suite82 PASS, lint/typecheck PASS; existing desktop/executionnode Go
+tests/vet PASS. Tests cover pending/failed/stale responses, explicit retry through
+node check, valid release, reuse, node/runtime changes and no implicit Plan.
+Real React/Wails34126, project-runtime02, confirms disabled=true for all three
+links before Core, disabled=false after Core, all five data paths rendered before
+Project Verify or any plan (plansBeforeCoreCheck0). Password policy17 generated
+plus Keycloak runtime source confirmed; all runtime inputs set through real UI
+before fresh full plan. Full-project plan preparation continues without skips.
+Evidence: runtime04-install-ui-evidence.json, runtime04-full-run.log,
+core-gate-final-tests.log, core-gate-final-ready.png under the same local QA root.
+
+Full run started through actual React Plan/Approve/Start: plan-89ad688c2a57a43c77d3bdc1,
+revision sha256:65d6eb13ef0520f9c71418e14f27f773116db36554d805e6e71e4c665297e2e5,
+run installer-aa746f3e5b21e169cdc2665485a07078, confirmed STARTED15:32:16MSK.
+Runtime80e67f1c, FULL_PROJECT,23 actions, no skips; szi103/sdku101/cspa102;
+CURRENT_RUN_BOOTSTRAP for application Vault access. Keycloak runtime password
+was entered through its actual inline application secret field;17 other account
+passwords remain generated. Plan approval reported no missing inputs.
+
+Owner follow-up: show pending Start as "Запускается выполнение…" until Core
+returns. Implemented a client-only pending flag for header/plan status/button;
+typecheck/lint PASS, affected App/InstallationPage/presentation120 tests PASS and
+the pending display function directly asserted. This edit triggered React HMR
+after Start and reset local UI observation. The Wails process stayed43388 and
+the remote systemd execution unit remained active; no run restart/cancel occurred.
+Recovered via real Servers SSH confirmation -> Inspect previous run (FOUND,
+same run/revision) -> Attach. Reconnected UI and original observer show RUNNING;
+verify:qa-dns-client SUCCESS observed15:37:29MSK. Screenshot runtime04-reconnected.png.
+Owner instruction: no more UI edits/reloads until terminal. Terminal acceptance
+and benchmark remain pending; the browser stays open.
+
+Terminal observation: FAILED16:31:49MSK,65%, same installer-aa746f3e5b21e169cdc2665485a07078.
+Docker Apply failed on101/102/103 at the subordinate UID/GID allocation assertion
+(DOCKER_SUBID_ALLOCATION_REQUIRED). The current /etc/subuid and /etc/subgid had
+only the admin entry. Root cause is the adapted QA cleanup, not the password
+check: it retained platform-automation but removed its subordinate ID entries.
+The existing-account Docker role correctly refused to proceed without them.
+
+Original entries survived in /etc/subuid- and /etc/subgid- on all three nodes:
+platform-automation:589824:65536. Restored those exact non-overlapping allocations
+using usermod and verified both files on every node. Corrected the adapted QA
+cleanup to preserve subordinate IDs of the retained automation account while
+still removing its Docker-specific LXC network configuration. Account passwords,
+UID/GID and SSH authorization were not changed. No new run or Docker Apply was
+started. Evidence: runtime04-terminal-diagnosis.json and terminal observer log;
+the failed run/window remain available. Full installation acceptance is FAILED,
+not PASS; PostgreSQL and application-library installation were not reached.
+
+Owner authorized another complete cleanup/repeat. Fresh runtime05 inventory and
+manifests used; old cleanup receipts were not reused. Removed20 service RPMs per
+node and all inventoried service accounts/configuration/data. Fresh proof on
+101/102/103: empty=true, remaining/processes/serviceAccounts=[], exact automation
+subuid/subgid589824:65536 preserved on every host. Removed an empty recreated
+Ansible tmp directory on101 and repeated proof successfully. Corrected both the
+cleanup and its generator to retain subordinate IDs of the retained identity.
+Prior terminal reference resolved through actual UI before removing remote state.
+
+New full React/Wails preparation uses the same immutable80e67f1c bundle,
+project-runtime02/packages1.0.1, szi103/sdku101/cspa102,17 generated application
+passwords and Keycloak runtime input. Execution Node101 is being prepared again
+after removal of its runtime. Prior screenshots copied to runtime04-specific
+names before reuse of the original generic screenshot destinations. New evidence:
+runtime05-inventory.json, runtime05-cleanup-all.log, runtime05-empty-proof.json,
+runtime05-install-ui-evidence.json and runtime05-full-run.log. No new UI source
+changes or runtime bundle rebuild in this repeat.
+
+Owner follow-up accepted in sequence only: service installation checkboxes,
+analogous to library skips, are to be implemented after this repeat run. All
+services remain selected now. Existing deploymentOrder is full-set ordering,
+not a subset selector; a service skip must preserve provider connections and
+consumer resource/account provisioning. Implementation has not begun.
+
+Repeat launched through actual React/Wails34126: installer-c16023470ddfd063c5cba83edda390aa,
+STARTED17:02:56MSK, RUNNING. Fresh authoritative plan-89ad688c2a57a43c77d3bdc1
+(same deterministic plan identity for unchanged desired inputs), revision65d6eb13,
+runtime80e67f1c. Full infrastructure and all three libraries selected, no skips;
+17 generated account passwords and Keycloak runtime input confirmed. Actual
+pending Start UI assertion PASS: pending text present, old approved-ready text
+absent, repeated Start disabled. This run has had no UI source changes/reloads
+since Start. Standalone observer continues recording events and terminal result;
+full-install acceptance remains pending.
+
+Repeat terminal: installer-c16023470ddfd063c5cba83edda390aa FAILED17:07:27MSK.
+PKI and BIND Apply completed; BIND Verify failed on node2 at the authoritative
+SOA query for evoscada.internal (17:07:26). Read-only journal evidence: secondary
+started17:07:10, initial primary192.168.56.101:53 connection was refused; first
+successful transfer occurred17:08:03, serial1, after Verify/run failure. Current
+exact SOA queries on all three nodes return NOERROR/qr aa/serial1. This proves a
+cold-start readiness race, not an invalid zone configuration or missing subids.
+Verify has no wait/retry on that query; Apply must not finish before secondary
+zone readiness. No source correction, service restart, UI change or new run was
+performed for this diagnosis. Evidence: runtime05-terminal-diagnosis.json and
+canonical remote events.jsonl/result.json. Full installation remains FAILED.
+
+Owner said stop and redirected work to the installation error: service-skip
+planning stopped. Follow-up automation is PAUSED (confirmed from its configuration).
+
+Owner authorized the BIND readiness correction, new bundle and full repeat.
+Added one standard included command/until loop at the end of BIND start, after
+service start/reload and base record reconciliation, for every local resolved
+zone/participant. Require dig rc0, NOERROR and authoritative qr aa. Defaults:
+platform_bind_readiness_retries60, delay2s; query time2s/tries1. Ready zones finish
+on the first attempt with changed=false. Verify is byte-for-byte unchanged.
+
+Final RED OS102 QA from fresh source0f0ee0b4d6e745f3975d8be7711ca71e:
+three tests PASS, including two native cases with real BIND primary/secondary in
+a private network namespace. Delayed primary forces retries before successful
+zone transfer; immediate repeat has attempts1/changed0; an active secondary with
+an unavailable primary fails after a bounded wait. Live stand DNS was untouched.
+Fixture initially lacked an explicit second loopback address/source binding;
+corrected the isolated fixture and reran successfully (31.801s). DNS regressions20
+PASS, Apply/Verify syntax2 PASS. Production change is confined to the BIND role;
+no Core protocol, plan, Go or UI source change was introduced for this fix.
+
+Built on trusted node102 from current source and approved bundle02 runtime input.
+Bundle service-runtime-optimization-20261027-03, digest
+sha256:ae72b11a2b2cd01abb6ffc7b484993743c31024f365d39a2ae249f2febcdaad8,
+verified and published by the standard CLI; approved image identities unchanged.
+Transferred new source payload and reused byte-identical approved runtime files
+in the local QA stage; complete bundle integrity validation passed before publish.
+Production BIND component hashes match the edited worktree. Tests/docs remain
+excluded from distribution by the existing builder policy.
+
+Fresh project-runtime03 copied from runtime02 preserving desired configuration,
+project ID, packages1.0.1,17 generated passwords and Keycloak runtime input; imported
+bundle03 and confirmed rebind UPDATED through actual React/Wails34126. Repreparing
+Execution Node101 for the new immutable runtime; new full plan/Start still pending.
+No cleanup of installed BIND/PKI was requested or performed in this retry.
+Evidence: bind-readiness-tests.json, runtime03-build.log, runtime03-published.json,
+runtime06-install-ui-evidence.json/runtime06-full-run.log in the existing QA root.
+
+Actual React/Wails full repeat STARTED17:56:37MSK:
+installer-e8ab7170a9f9202572d0c6bf433ee95a / plan-4ba95795a0b4f7018aa8ce16,
+bundle03 ae72b11a. All infrastructure and szi103/sdku101/cspa102 selected,
+CURRENT_RUN_BOOTSTRAP,17 generated passwords and Keycloak runtime source retained.
+RUNNING; BIND Apply SUCCESS 18:01:03 MSK and Verify SUCCESS 18:01:14 MSK. Authoritative SOA readiness SUCCESS on node1/node2/node3 (events1229–1231); subsequent DNS client Apply/Verify SUCCESS, progress19%. Full terminal result pending. No UI reload
+or source edit after Start. Temporary source0f0ee0b4d6e745f3975d8be7711ca71e cleaned
+with qa-sync after repairing ownership of its root-created native-test pycache;
+approved build input and verified bundle retained on trusted node102.
