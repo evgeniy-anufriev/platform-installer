@@ -36652,12 +36652,16 @@ platform_bind_lifecycle_recovery: {}
   when: platform_deployments[platform_bind_base_zone.key].roles | first == 'primary'
 
 @@END
-@@PORTABLE {"path":"services/bind/ansible_collections/platform/bind/roles/bind/tasks/update_a_record.yml","mode":420,"size":275,"sha256":"1da0c801751cf384cea589ae2bcbd8b76239f101d6d09281e3c755608e6a4f3f","index":0,"count":1,"encoding":"utf-8","payloadBytes":275}
+@@PORTABLE {"path":"services/bind/ansible_collections/platform/bind/roles/bind/tasks/update_a_record.yml","mode":420,"size":487,"sha256":"9dd5b1b594cb15009534c7c3b83748702496c6a0ba263ba46911f289d82233c6","index":0,"count":1,"encoding":"utf-8","payloadBytes":487}
 ---
+- name: Сохранение одиночной записи до входа в пакетный цикл
+  ansible.builtin.set_fact:
+    _platform_bind_single_a_records: "{{ [platform_bind_a_record] }}"
+
 - name: "Обновление одной записи через общий механизм защищённого обновления зоны"
   ansible.builtin.include_tasks: update_a_records.yml
   vars:
-    platform_bind_a_records: "{{ [platform_bind_a_record] }}"
+    platform_bind_a_records: "{{ _platform_bind_single_a_records }}"
 
 @@END
 @@PORTABLE {"path":"services/bind/ansible_collections/platform/bind/roles/bind/tasks/update_a_records.yml","mode":420,"size":3786,"sha256":"71bcd909f58a1342a2277d073872206bc681818aa7ec01a5ec948aac8742a623","index":0,"count":1,"encoding":"utf-8","payloadBytes":3786}
@@ -39988,9 +39992,9 @@ tags: [docker, rootless]
 dependencies: {}
 
 @@END
-@@PORTABLE {"path":"services/docker/ansible_collections/platform/docker/roles/docker_rootless/defaults/main.yml","mode":420,"size":965,"sha256":"a5ee26e5d012ddfc062fac977378fa8956205ce42fa525a1420f3182835092e7","index":0,"count":1,"encoding":"utf-8","payloadBytes":965}
+@@PORTABLE {"path":"services/docker/ansible_collections/platform/docker/roles/docker_rootless/defaults/main.yml","mode":420,"size":958,"sha256":"45b58b308d9e99216000dcb31009449b7c9e85ca4b48ce713c9fdf1b8603ab05","index":0,"count":1,"encoding":"utf-8","payloadBytes":958}
 ---
-platform_docker_mode: create-user
+platform_docker_mode: auto
 platform_docker_name: "{{ (platform_name_prefix | default('') ~ '-') if (platform_name_prefix | default('')) else '' }}docker"
 platform_docker_account_name: "{{ (platform_name_prefix | default('') ~ '-') if (platform_name_prefix | default('')) else '' }}docker"
 platform_docker_data_root: "/home/{{ platform_docker_account_name }}/.local/share/docker"
@@ -40023,6 +40027,122 @@ platform_docker_packages:
     name: "{{ platform_docker_name }}-rootless-{{ platform_docker_account_name }}.service"
     state: restarted
     daemon_reload: true
+
+@@END
+@@PORTABLE {"path":"services/docker/ansible_collections/platform/docker/roles/docker_rootless/tasks/account.yml","mode":420,"size":5459,"sha256":"5c781908679e3dbaeda33924f3295168fd0de7c0fcfc81fda5ea48a047b5b46a","index":0,"count":1,"encoding":"utf-8","payloadBytes":5459}
+---
+- name: Проверка наличия выбранной учётной записи Docker
+  ansible.builtin.command:
+    argv: [getent, passwd, "{{ platform_docker_account_name }}"]
+  register: _platform_docker_existing_account
+  changed_when: false
+  failed_when: _platform_docker_existing_account.rc not in [0, 2]
+
+- name: Проверка наличия учётной записи в режиме existing-user
+  ansible.builtin.assert:
+    that: platform_docker_mode != 'existing-user' or _platform_docker_existing_account.rc == 0
+    fail_msg: DOCKER_ACCOUNT_REQUIRED
+
+- name: Создание отсутствующей учётной записи Docker
+  ansible.builtin.command:
+    argv: [useradd, --create-home, --user-group, --shell, /bin/bash, "{{ platform_docker_account_name }}"]
+  register: _platform_docker_created_account
+  when: _platform_docker_existing_account.rc == 2
+
+- name: Определение выбранной учётной записи через NSS
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ platform_docker_account_name }}"
+    fail_key: true
+
+- name: Сохранение UID и домашнего каталога выбранной учётной записи из NSS
+  ansible.builtin.set_fact:
+    _platform_docker_uid: "{{ getent_passwd[platform_docker_account_name][1] | int }}"
+    _platform_docker_gid: "{{ getent_passwd[platform_docker_account_name][2] | int }}"
+    _platform_docker_home: "{{ getent_passwd[platform_docker_account_name][4] }}"
+  changed_when: false
+
+- name: Проверка непривилегированной учётной записи Docker и допустимого домашнего каталога
+  ansible.builtin.assert:
+    that:
+      - _platform_docker_uid | int >= 1000
+      - _platform_docker_home is match('^/home/[a-z_][a-z0-9_-]{0,31}$')
+    fail_msg: DOCKER_ACCOUNT_INELIGIBLE
+
+- name: Проверка переданного пароля существующей учётной записи без его изменения
+  ansible.builtin.command:
+    argv:
+      - "{{ ansible_facts.discovered_interpreter_python | default(ansible_python_interpreter | default('/usr/bin/python3')) }}"
+      - -c
+      - |
+        import ctypes, ctypes.util, hmac, json, subprocess, sys
+        try:
+            entry = json.load(sys.stdin)
+            password = entry['password']
+            if not password or '\0' in password:
+                sys.exit(1)
+            record = subprocess.run(['getent', 'shadow', entry['username']], capture_output=True, text=True)
+            if record.returncode != 0:
+                sys.exit(1)
+            stored = record.stdout.split(':')[1]
+            if not stored or stored.startswith(('!', '*')):
+                sys.exit(1)
+            library = ctypes.CDLL(ctypes.util.find_library('crypt') or 'libcrypt.so.1')
+            library.crypt.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
+            library.crypt.restype = ctypes.c_char_p
+            actual = library.crypt(password.encode('utf-8'), stored.encode('ascii'))
+            sys.exit(0 if actual and hmac.compare_digest(actual, stored.encode('ascii')) else 1)
+        except Exception:
+            sys.exit(2)
+    stdin: >-
+      {{ {'username': platform_docker_account_name,
+          'password': lookup('ansible.builtin.file',
+              platform_docker_secret_files[platform_docker_account_credential.passwordSecretRef],
+              lstrip=False, rstrip=False)} | to_json }}
+    stdin_add_newline: false
+  register: _platform_docker_account_password_check
+  changed_when: false
+  failed_when: false
+  when: _platform_docker_existing_account.rc == 0
+  no_log: true
+
+- name: Отклонение несовпадающего пароля существующей учётной записи Docker
+  ansible.builtin.assert:
+    that: _platform_docker_account_password_check.rc == 0
+    fail_msg: DOCKER_ACCOUNT_PASSWORD_MISMATCH
+  when: _platform_docker_existing_account.rc == 0
+
+- name: Получение хеша пароля новой учётной записи без зависимости от passlib
+  ansible.builtin.command:
+    argv: [openssl, passwd, -6, -stdin]
+    stdin: >-
+      {{ lookup('ansible.builtin.file',
+          platform_docker_secret_files[platform_docker_account_credential.passwordSecretRef],
+          lstrip=False, rstrip=False) }}
+    stdin_add_newline: false
+  delegate_to: localhost
+  become: false
+  register: _platform_docker_account_password_hash
+  changed_when: false
+  when: _platform_docker_created_account.rc | default(1) == 0
+  no_log: true
+
+- name: Проверка формата хеша пароля новой учётной записи
+  ansible.builtin.assert:
+    that:
+      - _platform_docker_account_password_hash.stdout.startswith('$6$')
+      - _platform_docker_account_password_hash.stdout.split('$') | map('length') | list == [0, 1, 16, 86]
+      - _platform_docker_account_password_hash.stdout is match('^[./A-Za-z0-9$]+$')
+    fail_msg: DOCKER_ACCOUNT_HASH_INVALID
+  when: _platform_docker_created_account.rc | default(1) == 0
+  no_log: true
+
+- name: Установка пароля только для новой учётной записи Docker
+  ansible.builtin.command:
+    argv: [chpasswd, -e]
+    stdin: "{{ platform_docker_account_name }}:{{ _platform_docker_account_password_hash.stdout }}"
+  when: _platform_docker_created_account.rc | default(1) == 0
+  no_log: true
 
 @@END
 @@PORTABLE {"path":"services/docker/ansible_collections/platform/docker/roles/docker_rootless/tasks/clear_entry.yml","mode":420,"size":4680,"sha256":"1a7c95e37a09da79ac3d02ea2a0f362f43119d4510576750f7931f0aedda9253","index":0,"count":1,"encoding":"utf-8","payloadBytes":4680}
@@ -40335,8 +40455,11 @@ platform_docker_packages:
   ansible.builtin.include_tasks: verify.yml
 
 @@END
-@@PORTABLE {"path":"services/docker/ansible_collections/platform/docker/roles/docker_rootless/tasks/provision.yml","mode":420,"size":24111,"sha256":"724b57db2c023bd2eb6687418b45f36f699737fea9e518038f007aa63bb67fcd","index":0,"count":1,"encoding":"utf-8","payloadBytes":24111}
+@@PORTABLE {"path":"services/docker/ansible_collections/platform/docker/roles/docker_rootless/tasks/provision.yml","mode":420,"size":19988,"sha256":"fa057318dc9f9f48bc630f85cc71340f52403a15a0eab07fae3fd7a069120dc4","index":0,"count":1,"encoding":"utf-8","payloadBytes":19988}
 ---
+- name: Подготовка выбранной учётной записи Docker и проверка пароля
+  ansible.builtin.include_tasks: account.yml
+
 - name: Установка настроенных пакетов Docker без прав root для RED OS
   ansible.builtin.dnf:
     name: "{{ platform_docker_packages }}"
@@ -40387,97 +40510,6 @@ platform_docker_packages:
   ansible.builtin.assert:
     that: _platform_docker_binaries.results | rejectattr('stat.isreg', 'equalto', true) | list | length == 0
     fail_msg: DOCKER_RUNTIME_PACKAGE_INCOMPLETE
-
-- name: Проверить, существует ли уже выделенная учетная запись Docker
-  ansible.builtin.command:
-    argv: [getent, passwd, "{{ platform_docker_account_name }}"]
-  register: _platform_docker_existing_account
-  changed_when: false
-  failed_when: _platform_docker_existing_account.rc not in [0, 2]
-  when: platform_docker_mode == 'create-user'
-
-- name: Создать выделенную учетную запись Docker в заблокированном состоянии, только если она отсутствует
-  ansible.builtin.user:
-    name: "{{ platform_docker_account_name }}"
-    create_home: true
-    system: false
-    shell: /bin/bash
-    state: present
-  when:
-    - platform_docker_mode == 'create-user'
-    - _platform_docker_existing_account.rc == 2
-
-- name: Проверка состояния пароля при создании пользователя без чтения сохраненного хеша
-  ansible.builtin.command:
-    argv: [passwd, -S, "{{ platform_docker_account_name }}"]
-  register: _platform_docker_password_state
-  changed_when: false
-  when: platform_docker_mode == 'create-user'
-  no_log: true
-
-- name: Требовать состояние пароля поддерживаемой учетной записи
-  ansible.builtin.assert:
-    that: _platform_docker_password_state.stdout.split()[1] in ['LK', 'NP', 'PS']
-    fail_msg: DOCKER_ACCOUNT_PASSWORD_STATE_INVALID
-  when: platform_docker_mode == 'create-user'
-
-- name: Получение хэша пароля учетной записи без зависимости от библиотеки passlib Python
-  ansible.builtin.command:
-    argv: [openssl, passwd, -6, -stdin]
-    stdin: >-
-      {{ lookup('ansible.builtin.file',
-          platform_docker_secret_files[platform_docker_account_credential.passwordSecretRef],
-          lstrip=False, rstrip=False) }}
-    stdin_add_newline: false
-  delegate_to: localhost
-  become: false
-  register: _platform_docker_account_password_hash
-  changed_when: false
-  when:
-    - platform_docker_mode == 'create-user'
-    - _platform_docker_password_state.stdout.split()[1] in ['LK', 'NP']
-  no_log: true
-
-- name: "Проверить полный формат хеша пароля SHA-512 crypt"
-  ansible.builtin.assert:
-    that:
-      - _platform_docker_account_password_hash.stdout.startswith('$6$')
-      - _platform_docker_account_password_hash.stdout.split('$') | map('length') | list == [0, 1, 16, 86]
-      - _platform_docker_account_password_hash.stdout is match('^[./A-Za-z0-9$]+$')
-    fail_msg: DOCKER_ACCOUNT_HASH_INVALID
-  when:
-    - platform_docker_mode == 'create-user'
-    - _platform_docker_password_state.stdout.split()[1] in ['LK', 'NP']
-  no_log: true
-
-- name: Устанавливать пароль для создания пользователя только в том случае, если учетная запись заблокирована или отключена
-  ansible.builtin.command:
-    argv: [chpasswd, -e]
-    stdin: "{{ platform_docker_account_name }}:{{ _platform_docker_account_password_hash.stdout }}"
-  when:
-    - platform_docker_mode == 'create-user'
-    - _platform_docker_password_state.stdout.split()[1] in ['LK', 'NP']
-  no_log: true
-
-- name: Разрешить выбранную учетную запись через NSS
-  ansible.builtin.getent:
-    database: passwd
-    key: "{{ platform_docker_account_name }}"
-    fail_key: true
-
-- name: "Сохранить UID и домашний каталог выбранной учётной записи из NSS"
-  ansible.builtin.set_fact:
-    _platform_docker_uid: "{{ getent_passwd[platform_docker_account_name][1] | int }}"
-    _platform_docker_gid: "{{ getent_passwd[platform_docker_account_name][2] | int }}"
-    _platform_docker_home: "{{ getent_passwd[platform_docker_account_name][4] }}"
-  changed_when: false
-
-- name: "Проверить непривилегированную учётную запись Docker и допустимый домашний каталог"
-  ansible.builtin.assert:
-    that:
-      - _platform_docker_uid | int >= 1000
-      - _platform_docker_home is match('^/home/[a-z_][a-z0-9_-]{0,31}$')
-    fail_msg: DOCKER_ACCOUNT_INELIGIBLE
 
 - name: Чтение выделенных пользователю диапазонов subordinate UID и GID
   ansible.builtin.slurp:
@@ -40980,14 +41012,14 @@ platform_docker_packages:
   loop: [.bashrc, .bash_profile]
 
 @@END
-@@PORTABLE {"path":"services/docker/ansible_collections/platform/docker/roles/docker_rootless/tasks/validate.yml","mode":420,"size":4549,"sha256":"8d542a4c46de36feb538f4c199d4764d9d6a5bf65e3157ed677778018fc29fdd","index":0,"count":1,"encoding":"utf-8","payloadBytes":4549}
+@@PORTABLE {"path":"services/docker/ansible_collections/platform/docker/roles/docker_rootless/tasks/validate.yml","mode":420,"size":4381,"sha256":"8ae3cead4f806d674abf2f0b8e81f216d2b1b55e5c888431fcd9d5070629e90d","index":0,"count":1,"encoding":"utf-8","payloadBytes":4381}
 ---
 - name: Проверка желаемых настроек Docker
   ansible.builtin.assert:
     that:
-      - platform_docker_mode in ['create-user', 'existing-user']
+      - platform_docker_mode in ['auto', 'create-user', 'existing-user']
       - platform_docker_account_name is match('^[a-z_][a-z0-9_-]{0,31}$')
-      - platform_docker_account_name not in ['root', 'admin', 'platform-automation']
+      - platform_docker_account_name != 'root'
       - platform_docker_data_root is string
       - platform_docker_data_root | length > 1
       - platform_docker_data_root | length <= 255
@@ -41048,7 +41080,6 @@ platform_docker_packages:
       - platform_docker_secret_files is mapping
       - platform_docker_account_credential.passwordSecretRef in platform_docker_secret_files
     fail_msg: DOCKER_ACCOUNT_PASSWORD_REQUIRED
-  when: platform_docker_mode == 'create-user'
   no_log: true
 
 - name: Проверка файла паролей среды выполнения создания пользователя на контроллере
@@ -41061,7 +41092,6 @@ platform_docker_packages:
   delegate_to: localhost
   become: false
   register: _platform_docker_password_file
-  when: platform_docker_mode == 'create-user'
   no_log: true
 
 - name: Проверка типа, размера и защиты runtime-файла пароля
@@ -41072,7 +41102,6 @@ platform_docker_packages:
       - _platform_docker_password_file.stat.size >= 1
       - _platform_docker_password_file.stat.size <= 4096
     fail_msg: DOCKER_ACCOUNT_PASSWORD_INVALID
-  when: platform_docker_mode == 'create-user'
   no_log: true
 
 @@END
@@ -41409,7 +41438,7 @@ status: requires-service-install-10-runtime-evidence
       platform_docker_verify_only: true
 
 @@END
-@@PORTABLE {"path":"services/docker/service.yml","mode":420,"size":4031,"sha256":"b1d65f1187f5d318b63d1b12a66e8ffee57af185d1c84b76d417e62fb8a8becd","index":0,"count":1,"encoding":"utf-8","payloadBytes":4031}
+@@PORTABLE {"path":"services/docker/service.yml","mode":420,"size":4398,"sha256":"6ae21d1abcde64427ec2c8a41f48b9260a116caca1b972ddf6ba09d8f05ce674","index":0,"count":1,"encoding":"utf-8","payloadBytes":4398}
 apiVersion: platform.installer/service-manifest/v1alpha1
 kind: ServiceManifest
 metadata:
@@ -41419,6 +41448,12 @@ metadata:
   description: Rootless Docker Engine and Compose with LXC networking and TLS TCP API
   category: runtime
 modes:
+  auto:
+    displayName: Автоматически
+    description: Use an existing account after password verification, or create it when absent
+    memberRoles: []
+    placement: {explicit: true, hostScoped: true, minMembers: 1, distinctHosts: true}
+    x-requiredRuntimeSecretSettings: [accountCredential]
   create-user:
     displayName: Create Docker user
     description: Create a dedicated account using a runtime-only password
@@ -41430,6 +41465,7 @@ modes:
     description: Use an existing eligible account without changing its password
     memberRoles: []
     placement: {explicit: true, hostScoped: true, minMembers: 1, distinctHosts: true}
+    x-requiredRuntimeSecretSettings: [accountCredential]
 listeners:
   api: {protocol: tcp, defaultPort: 2376, tlsCapable: true, scope: deployment}
 capabilities: [service.docker.rootless, service.docker.compose]
@@ -43397,14 +43433,8 @@ galaxy_info:
 dependencies: []
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/application_account.yml","mode":420,"size":7691,"sha256":"e19ebf143c9641a4e53ac0cef6b01ea8b8c6183dd888cb692350d2f2651792dd","index":0,"count":1,"encoding":"utf-8","payloadBytes":7691}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/application_account.yml","mode":420,"size":7298,"sha256":"3608aa7b32847ef1afc64244ad08c188d8e847b5cad7fcc4fbf11ab5dc28cf49","index":0,"count":1,"encoding":"utf-8","payloadBytes":7298}
 ---
-- name: Исключение идентификаторов инфраструктуры из сверки паролей приложений
-  ansible.builtin.assert:
-    that: application_kafka_account.name not in ['admin', 'default']
-    fail_msg: APPLICATION_PROVIDER_IDENTIFIER_INVALID
-  when: platform_kafka_application_phase == 'apply' and application_kafka_account.mode == 'managed'
-
 - name: Выбор заданного Kafka principal из метаданных развёртывания SCRAM
   ansible.builtin.set_fact:
     application_kafka_description:
