@@ -167,3 +167,47 @@ React/Wails проходят отдельно. HIGH-RISK FULL DIFF после р
 в текущем service-runtime-optimization-journal.md. Один FULL PLAN review этого
 раздела, замечания BLOCK вернуть владельцу без автоматического redesign/re-review.
 
+
+## Последовательная подготовка библиотек и скриптов
+
+Owner request2026-10-27: commit current optimizations, then reduce orchestration
+and generic runner overhead observed in SZI (48:43,1158 task starts). Existing
+HAProxy optimization remains the committed baseline. No new concurrency,
+script source cache, provider-specific runner rules or public contract.
+
+Use existing Ansible mechanisms: select current library/instance placements once;
+only include script handlers for nonempty scope/phase; keep transient script paths
+as role variables rather than host facts; use one ordinary copy loop for script,
+selected secret files and optional invocation JSON. Keep permission modes, fresh
+source copy, stale-input removal, always cleanup, argv, timeouts, safe diagnostics
+and script-reported changed semantics. Provider script target context remains a
+lazy task variable; Execution Node callbacks must not contact target hosts.
+
+QA: native phase dispatch/order and empty placements; literal argv/batch input;
+multiple selected secrets/modes, failure cleanup, repeat changed=0; existing
+cross-account neighbor substitution repair, hook batching, skipped-provider
+callback and terminal-script regressions. One owner-requested FULL DIFF review.
+Existing runtime/bundle is not replaced during current run. PG/Redis/Vault provider
+logic, readiness policy and endpoint barriers remain outside this change.
+
+## Owner policy: omit global library Verify from new installation plans
+
+Explicit owner request removes the entire repeated global library Verify pass:
+resolver/snapshot/provider projections, container/config checks and endpoint
+HAProxy/DNS/HTTPS checks. Keep readiness at startup, per-library container health
+and endpoint publication/probes inside Apply. Emit only APPLICATION_LIBRARIES_APPLY
+and optional post_install depending on applications:apply. The standalone Verify
+playbook and saved Apply/Verify manifests remain supported; existing in-flight
+plans/bundles are immutable. Existing schema versions already allow Apply-only
+operations and do not require new fields, versions, flags or Go/UI domain logic.
+Use one shared admission suffix check for Apply-only and exact legacy Apply/Verify;
+keep infrastructure coverage, scope matching and terminal failure/cancel gates.
+
+Affected native/unit/schema/controller tests125 OK/2 explicit native gates;
+the two real action/controller gates independently enabled:2PASS6.089s. Controller
+fixture fails if the global Verify playbook is invoked. UI32PASS shows only Core-
+declared actions while retaining old-plan display. New tests cover FULL_PROJECT,
+libraries-only with/without SkipInfraVerify, legacy manifests with/without terminal,
+invalid order/duplicates/scope and terminal dependency. Updated-bundle real Wails
+acceptance/benchmark pending. Independent FULL DIFF required for changed admission;
+9file source manifest c673a9d7497d298fd1dc2ca4e2c1bca507c762b61b22c7b9ac55556b41cb5984.

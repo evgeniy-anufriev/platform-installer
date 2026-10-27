@@ -181,3 +181,62 @@ Corrected synthetic fixture9 PASS (runtime admin-reference input only).
 Baseline topic task witness also fails before new parser, matching obsolete CLI
 selector expectation. Existing14 failures remain visible, full regression is
 not labelled PASS. Runtime acceptance/benchmark of new sources pending.
+
+## Serial script dispatch/runner — FULL DIFF2026-10-27
+
+Owner request: checkpoint commit, optimize general library orchestration/script
+staging using existing mechanisms, then independent review. Baseline commit
+629dbb9d89f745c91827802f5e822791c957f601. New scope remains uncommitted.
+
+Independent architecture-reviewer `script_dispatch_diff_review`: APPROVE,
+blocking0. Final6file manifest script-dispatch-review-scope.json SHA256
+5a0cbf92338290e0c418f4e21e31802853f54d6791950a8265955757c70e4ca6,
+6/6 file hashes independently confirmed. Source scope: package_script/tasks and
+vars, ordered-library/ordered-instance/provider-script tasks, native dispatch QA.
+SDR-N01 nonblocking selection coverage resolved before final verdict by actual
+production ordering/selection witness with observing external-action fixture.
+Outer default-item caller collision corrected before freeze with explicit internal
+loop_var; native two-job compatibility PASS. No unresolved findings; no recheck.
+
+Reviewed: generic context-free runner, fresh ordinary copy, modes, stale removal,
+always cleanup, argv/timeouts/diagnostics, idempotent repeat and skipped-provider
+integration. No new contracts/cache/parallelism or provider-specific behavior.
+Mandatory overengineering review:0 findings.
+
+QA: affected78 distinct cases covered (root-only ownership skip closed separately).
+Focused30 OK/1root skip88.138s; terminal/progress46 PASS7.250s;
+final native12 OK/1root skip86.662s (includes new external-loop case), final-source
+root ownership PASS7.954s; actual ordered selection witness PASS5.071s.
+Standalone application Apply syntax PASS, diff check PASS. Runner task entries
+14→11. Real updated-bundle React/Wails acceptance and timing benchmark pending;
+existing installer-c14d36d0 not stopped/rebound. Architecture APPROVE does not
+claim updated-source runtime acceptance or a measured wall-time saving.
+
+Owner follow-up after this frozen review: per-library completion now calls shared verify_container, omitting repeated directory and Vault checks. Native28 PASS; added policy is not part of the preceding6file reviewed manifest. No additional review claimed.
+
+## Global application Verify removal — independent FULL DIFF
+
+Owner explicitly removed repeated global resolver/snapshot/provider preparation,
+container/config-tree inspection and endpoint TLS/HAProxy/DNS/HTTP verification
+from new installation plans. New sequence is library Apply (with existing
+startup/per-library health and endpoint publication checks), then optional
+post_install. Terminal action depends on applications:apply. Existing standalone
+Verify and old frozen Apply/Verify manifests remain supported.
+
+Independent architecture-reviewer `apply_only_diff_review`: APPROVE, blocking0,
+no findings, mandatory overengineering0. Base629dbb9d89f745c91827802f5e822791c957f601;
+9file manifest apply-only-review-scope.json SHA256
+c673a9d7497d298fd1dc2ca4e2c1bca507c762b61b22c7b9ac55556b41cb5984,
+9/9 hashes independently verified. Four production files: application plan,
+terminal admission, controller and infrastructure verification. Five QA files
+cover current/legacy order, scope, secrets and UI projection. Other dirty runner
+and per-library completion changes excluded from this review. No new fields,
+versions, schema, persistent state, flags or Go/UI execution rules introduced.
+
+RED OS125 cases OK/2 explicitly gated native skips; both enabled separately:
+2PASS6.089s. Real native action emits Apply-only; real controller fixture fails if
+it invokes global application Verify. Frontend32PASS19.19s. Covered full and
+libraries-only scopes, SkipInfraVerify false/true, old manifests with/without
+terminal, Apply failure/cancel preventing terminal, malformed scopes/order/duplicates.
+Infrastructure Verify coverage and admission remain intact. Current bundle/run
+not changed; updated-bundle real Wails acceptance/benchmark pending. No recheck.

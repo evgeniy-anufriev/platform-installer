@@ -131,7 +131,10 @@ describe("InstallationPage", () => {
     },
   );
 
-  it("localizes application Apply Verify and post-install action labels", () => {
+  it.each([
+    { types: ["APPLY", "VERIFY", "POST_INSTALL"] },
+    { types: ["APPLY", "POST_INSTALL"] },
+  ])("renders only declared application actions: $types", ({ types }) => {
     const runPlan = {
       id: "plan-labels",
       status: "EXECUTABLE",
@@ -151,7 +154,7 @@ describe("InstallationPage", () => {
         {
           id: "applications",
           order: 0,
-          actions: ["APPLY", "VERIFY", "POST_INSTALL"].map((type) => ({
+          actions: types.map((type) => ({
             id: type,
             type: "APPLICATION_LIBRARIES_" + type,
             summary: "English summary " + type,
@@ -182,10 +185,12 @@ describe("InstallationPage", () => {
     );
     for (const label of [
       "Установить библиотеки приложений",
-      "Проверить библиотеки приложений",
       "Выполнить действия после установки",
     ])
       expect(screen.getByText(label)).toBeTruthy();
+    if (types.includes("VERIFY"))
+      expect(screen.getByText("Проверить библиотеки приложений")).toBeTruthy();
+    else expect(screen.queryByText("Проверить библиотеки приложений")).toBeNull();
     expect(screen.queryByText(/English summary/)).toBeNull();
   });
 

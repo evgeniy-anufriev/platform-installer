@@ -179,7 +179,13 @@ class KafkaApplicationBatchTests(unittest.TestCase):
     def test_activation_still_rejects_an_unhealthy_container_without_vault_probe(self):
         self.container_probe(activate=True, healthy=False)
 
-    def container_probe(self, activate=False, healthy=True):
+    def test_library_boundary_needs_no_config_tree_or_vault_access(self):
+        self.container_probe(library_boundary=True)
+
+    def test_library_boundary_still_rejects_an_unhealthy_container(self):
+        self.container_probe(library_boundary=True, healthy=False)
+
+    def container_probe(self, activate=False, healthy=True, library_boundary=False):
         with tempfile.TemporaryDirectory(prefix='qa-container-verify-') as directory:
             root = Path(directory)
             inspected = [dict(Id='qa-container', Image='sha256:qa', Config=dict(Labels={
@@ -207,11 +213,21 @@ class KafkaApplicationBatchTests(unittest.TestCase):
             if activate:
                 # Default direct Verify still requests Vault verification; activation must override it.
                 variables['application_runtime_verify_vault'] = True
+            tasks = [{'ansible.builtin.include_tasks': str(role)}]
+            if library_boundary:
+                production = yaml.safe_load((ROOT / 'ansible-core/playbooks/applications/tasks/ordered-library.yml').read_text())
+                selected = next(t for t in production if t['name'] == 'Проверка размещений библиотеки приложений перед обработкой следующей библиотеки')
+                tasks = [{'ansible.builtin.include_role': selected['ansible.builtin.include_role']}]
+                variables['application_runtime_verify_vault'] = True
+                variables['application_runtime_job'].update(
+                    directoryConfigs=[dict(destination='absent-directory')],
+                    archiveConfigs=[dict(destination='absent-archive')])
             probe = root / 'verify.yml'
             probe.write_text(yaml.safe_dump([dict(hosts='localhost', connection='local', gather_facts=False,
-                vars=variables, tasks=[{'ansible.builtin.include_tasks': str(role)}])], sort_keys=False))
+                vars=variables, tasks=tasks)], sort_keys=False))
             result = subprocess.run(['ansible-playbook', '-i', 'localhost,', str(probe)],
-                env=dict(os.environ, ANSIBLE_CONFIG=str(ROOT / 'ansible-core/ansible.cfg')),
+                env=dict(os.environ, ANSIBLE_CONFIG=str(ROOT / 'ansible-core/ansible.cfg'),
+                         ANSIBLE_COLLECTIONS_PATH=str(ROOT / 'ansible-core/collections')),
                 capture_output=True, text=True, timeout=45)
             self.assertEqual(healthy, result.returncode == 0, (result.stdout + result.stderr)[-1800:])
 

@@ -10,6 +10,7 @@
 
 - name: Привязка выбранных логических экземпляров библиотеки приложений
   ansible.builtin.set_fact:
+    application_library_runtime_jobs: "{{ platform_application_preflight_jobs | selectattr('libraryId', 'equalto', application_library_id) | list }}"
     application_library_instance_ids: >-
       {{ hostvars['localhost'].application_runtime_inputs.jobs | selectattr('libraryId', 'equalto', application_library_id) |
          sort(attribute='instanceId') | sort(attribute='startupPriority') |
@@ -20,13 +21,13 @@
   ansible.builtin.include_role:
     name: platform.core.application_runtime
     tasks_from: apply_library
-  when: platform_application_preflight_jobs | selectattr('libraryId', 'equalto', application_library_id) | list | length > 0
+  when: application_library_runtime_jobs | length > 0
 
 - name: Доставка выбранных образов библиотеки перед выполнением сценариев pre_start
   ansible.builtin.include_role:
     name: platform.core.application_runtime
     tasks_from: image_delivery
-  loop: "{{ platform_application_preflight_jobs | selectattr('libraryId', 'equalto', application_library_id) | list }}"
+  loop: "{{ application_library_runtime_jobs }}"
   loop_control:
     loop_var: application_runtime_job
 
@@ -37,15 +38,18 @@
   vars:
     application_script_phase: before_start
     application_script_scope: library
-  loop: "{{ platform_application_preflight_jobs | selectattr('libraryId', 'equalto', application_library_id) | list }}"
+  loop: "{{ application_library_runtime_jobs }}"
   loop_control:
     loop_var: application_runtime_job
+  when: application_runtime_job.scripts | default([]) | selectattr('phase', 'equalto', application_script_phase) | selectattr('scope', 'equalto', application_script_scope) | list | length > 0
 
 - name: "Обработка экземпляров приложения с проверкой завершения каждого этапа"
   ansible.builtin.include_tasks: ordered-instance.yml
   loop: "{{ application_library_instance_ids }}"
   loop_control:
     loop_var: application_instance_id
+  vars:
+    application_instance_runtime_jobs: "{{ application_library_runtime_jobs | selectattr('instanceId', 'equalto', application_instance_id) | list }}"
 
 - name: "Выполнение сценариев готовности библиотеки перед публикацией конечной точки"
   ansible.builtin.include_role:
@@ -54,9 +58,10 @@
   vars:
     application_script_phase: after_ready
     application_script_scope: library
-  loop: "{{ platform_application_preflight_jobs | selectattr('libraryId', 'equalto', application_library_id) | list }}"
+  loop: "{{ application_library_runtime_jobs }}"
   loop_control:
     loop_var: application_runtime_job
+  when: application_runtime_job.scripts | default([]) | selectattr('phase', 'equalto', application_script_phase) | selectattr('scope', 'equalto', application_script_scope) | list | length > 0
 
 - name: Публикация и проверка готовых конечных точек библиотеки приложений
   ansible.builtin.include_tasks: ../../../../services/integrations/tasks/apply-source.yml
@@ -75,8 +80,8 @@
 - name: Проверка размещений библиотеки приложений перед обработкой следующей библиотеки
   ansible.builtin.include_role:
     name: platform.core.application_runtime
-    tasks_from: verify
-  loop: "{{ platform_application_preflight_jobs | selectattr('libraryId', 'equalto', application_library_id) | list }}"
+    tasks_from: verify_container
+  loop: "{{ application_library_runtime_jobs }}"
   loop_control:
     loop_var: application_runtime_job
 

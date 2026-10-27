@@ -450,7 +450,7 @@ def _acquire_project_pki_apply_lock(journal):
 def _command(release, journal, operation):
     kind = operation.get("operation")
     if kind == 'APPLICATION_LIBRARIES_POST_INSTALL':
-        prefix = dict(operation, operation='APPLICATION_LIBRARIES_VERIFY', operationId='applications:verify')
+        prefix = dict(operation, operation='APPLICATION_LIBRARIES_APPLY', operationId='applications:apply')
         command = _command(release, journal, prefix)
         command[3] = os.path.join(release, 'ansible-core/playbooks/applications/post-install.yml')
         command[5] = '@' + os.path.join(journal.directory, '.runtime-projection-' + hashlib.sha256(operation['operationId'].encode()).hexdigest() + '.json')
@@ -847,11 +847,8 @@ def validate_application_manifest(manifest):
             return
         if manifest['executionMode'] == 'APPLICATION_LIBRARIES_ONLY':
             operations = manifest['operations']
-            application_operations = operations[-2:]
-            if (len(application_operations) != 2 or
-                    application_operations[0]['targets'] != application_operations[1]['targets'] or
-                    application_operations[0]['applicationLibraries'] != application_operations[1]['applicationLibraries'] or
-                    application_operations[0]['applicationSemanticFingerprint'] != application_operations[1]['applicationSemanticFingerprint']):
+            application_operations = infra.application_suffix(operations)
+            if not application_operations:
                 raise LifecycleError('EXECUTION_MANIFEST_INVALID')
             refs, names = set(), set()
             for item in manifest['applicationSecretRequirements']:
@@ -913,18 +910,15 @@ def validate_application_manifest(manifest):
 def _validate_application_barrier(manifest):
     """The fixed application suffix follows every service Verify, with no scheduler."""
     operations = manifest.get('operations', [])
-    apps = [item for item in operations if item.get('operation') in
-            ('APPLICATION_LIBRARIES_APPLY', 'APPLICATION_LIBRARIES_VERIFY')]
+    try:
+        apps = infra.application_suffix(operations)
+    except LifecycleError:
+        raise LifecycleError('APPLICATION_INFRASTRUCTURE_BARRIER_INVALID')
     if not apps:
         return
-    if (manifest.get('apiVersion') != 'platform.installer/execution-manifest/v1alpha2' or
-            operations[-2:] != apps or len(apps) != 2 or
-            [item['operation'] for item in apps] != ['APPLICATION_LIBRARIES_APPLY', 'APPLICATION_LIBRARIES_VERIFY'] or
-            apps[0]['targets'] != apps[1]['targets'] or
-            apps[0]['applicationLibraries'] != apps[1]['applicationLibraries'] or
-            apps[0]['applicationSemanticFingerprint'] != apps[1]['applicationSemanticFingerprint']):
+    if manifest.get('apiVersion') != 'platform.installer/execution-manifest/v1alpha2':
         raise LifecycleError('APPLICATION_INFRASTRUCTURE_BARRIER_INVALID')
-    services = [item for item in operations[:-2] if item.get('operation') in ('SERVICE_APPLY', 'SERVICE_VERIFY')]
+    services = [item for item in operations[:-len(apps)] if item.get('operation') in ('SERVICE_APPLY', 'SERVICE_VERIFY')]
     if manifest.get('executionMode') == 'APPLICATION_LIBRARIES_ONLY':
         # The versioned infrastructure validator enforces the exact verify prefix.
         return

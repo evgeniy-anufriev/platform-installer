@@ -433,8 +433,10 @@ show the stage and current task without inventing a percentage. The mockup's
 state selector changes demonstration data only and never starts execution.
 Owner amendment 2026-10-25: Core may provide display-only `progressSteps` inside
 the application Apply action. Show shared preparation and each installed library
-as child rows. Count these leaves instead of the parent; ordinary infrastructure,
-Verify and post_install actions retain one unit each. Skipped library installations
+as child rows. Count these leaves instead of the parent; ordinary infrastructure
+and post_install actions retain one unit each. Owner amendment 2026-10-27 removes
+global application Verify from new Core plans; legacy Verify rows remain supported
+when present in a saved plan. Skipped library installations
 have no work unit. The percentage measures confirmed work units, not duration.
 Only explicit Core ACTION events confirm child completion. Terminal failure or
 cancel leaves an active child unfinished, without adding progress. The parent
@@ -998,11 +1000,12 @@ tab locally omits SERVICE_APPLY rows from the services block but leaves the
 underlying Core plan unchanged; this is only a display projection, not an
 execution plan. Once Core returns the selected-scope plan, the UI displays it
 without filtering. If fresh Core Build finds compatible saved infrastructure Verify
-evidence, the plan contains only library Apply/Verify. If that evidence is missing
-or stale, the same plan includes infrastructure Verify before library Apply/Verify;
+evidence, the plan contains library Apply and optional post-install actions. If that evidence is missing
+or stale, the same plan includes infrastructure Verify before library Apply;
 it does not include infrastructure Apply or create another plan/approval. A Core
-Verify failure stops the run before libraries. Libraries always run Apply/Verify
-and have no checkbox in this stage. The choice is local
+Verify failure stops the run before libraries. Library Apply includes per-library
+container/healthcheck verification; new plans have no separate global library Verify.
+The choice is local
 presentation state retained across navigation, not portable desired state.
 On Approve, Core builds the selected scope; the previous plan cannot be approved
 or started for that selection. During an active run the choice is locked. Existing Plan/Approve/Start/
@@ -1018,7 +1021,8 @@ only and never calls Core. On Approve, a changed scope first builds an authorita
 plan with the existing mode-aware API. Only that returned plan can be approved.
 New acknowledgements, changed runtime/revision/node, or re-including infrastructure
 require reviewing the returned plan before another confirmation. No separate Build
-click is required for the scope change. Libraries remain Apply -> Verify; Start is
+click is required for the scope change. Libraries use Apply with per-library
+health checks, followed by optional post-install actions; Start is
 unavailable while the displayed plan differs from the selected scope. This replaces
 the earlier B4 instruction requiring an explicit fresh Build after checkbox changes.
 

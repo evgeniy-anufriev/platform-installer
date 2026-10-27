@@ -46,7 +46,7 @@ class InfrastructureVerificationTests(unittest.TestCase):
         plan, manifest = result['deploymentPlan'], result['executionManifest']
         self.assertTrue(plan['skipInfrastructureVerify'])
         self.assertNotEqual('PASS', plan['infrastructureVerification']['status'])
-        self.assertEqual(['APPLICATION_LIBRARIES_APPLY', 'APPLICATION_LIBRARIES_VERIFY'],
+        self.assertEqual(['APPLICATION_LIBRARIES_APPLY'],
                          [op['operation'] for op in manifest['operations']])
         controller.validate_application_manifest(manifest)
         infra.assert_admission(self.root, manifest)
@@ -110,7 +110,7 @@ class InfrastructureVerificationTests(unittest.TestCase):
         manifest = result['executionManifest']
         self.assertEqual(['services', 'applications'], [phase['id'] for phase in result['deploymentPlan']['phases']])
         self.assertEqual(['SERVICE_VERIFY', 'SERVICE_VERIFY',
-                          'APPLICATION_LIBRARIES_APPLY', 'APPLICATION_LIBRARIES_VERIFY'],
+                          'APPLICATION_LIBRARIES_APPLY'],
                          [op['operation'] for op in manifest['operations']])
         self.assertEqual('BLOCKED', result['deploymentPlan']['infrastructureVerification']['status'])
         self.assertIsNone(manifest['infrastructureVerification']['evidenceRevision'])
@@ -145,7 +145,7 @@ class InfrastructureVerificationTests(unittest.TestCase):
         provider_public = {key: provider_password[key] for key in ('requirementRef', 'purpose', 'hosts')}
         base['executionManifest']['requiredCredentials'].append(provider_public)
         manifest = infra.scope_plan(base, 'APPLICATION_LIBRARIES_ONLY', self.root)['executionManifest']
-        self.assertEqual(['APPLICATION_LIBRARIES_APPLY', 'APPLICATION_LIBRARIES_VERIFY'],
+        self.assertEqual(['APPLICATION_LIBRARIES_APPLY'],
                          [op['operation'] for op in manifest['operations']])
         self.assertEqual([private, provider_password], manifest['runtimeSecretRequirements'])
         self.assertIn(public, manifest['requiredCredentials'])
@@ -158,7 +158,7 @@ class InfrastructureVerificationTests(unittest.TestCase):
         result = infra.scope_plan(self.base, 'APPLICATION_LIBRARIES_ONLY', self.root)
         self.assertEqual('EXECUTABLE', result['deploymentPlan']['status'])
         manifest = result['executionManifest']
-        self.assertEqual(['APPLICATION_LIBRARIES_APPLY', 'APPLICATION_LIBRARIES_VERIFY'],
+        self.assertEqual(['APPLICATION_LIBRARIES_APPLY'],
                          [op['operation'] for op in manifest['operations']])
         controller.validate_application_manifest(manifest)
         infra.assert_admission(self.root, manifest)
@@ -207,7 +207,7 @@ class InfrastructureVerificationTests(unittest.TestCase):
         manifest = self.full['executionManifest']
         controller.validate_application_manifest(manifest)
         bad = copy.deepcopy(manifest)
-        bad['operations'] = bad['operations'][-2:]
+        bad['operations'] = [op for op in bad['operations'] if op['operation'].startswith('APPLICATION_LIBRARIES_')]
         with self.assertRaises(LifecycleError):
             controller.validate_application_manifest(bad)
 
@@ -295,7 +295,7 @@ class InfrastructureVerificationTests(unittest.TestCase):
 
     def test_no_coverage_rejected(self):
         manifest = copy.deepcopy(self.base['executionManifest'])
-        manifest['operations'] = manifest['operations'][-2:]
+        manifest['operations'] = [op for op in manifest['operations'] if op['operation'].startswith('APPLICATION_LIBRARIES_')]
         with self.assertRaises(LifecycleError):
             infra.model(manifest)
 
@@ -617,7 +617,7 @@ class NativeInfrastructureScopeTests(unittest.TestCase):
                     self.assertTrue(all(op['operation'] == 'SERVICE_VERIFY' for op in manifest['operations']))
                 else:
                     self.assertEqual(['SERVICE_VERIFY', 'SERVICE_VERIFY',
-                                      'APPLICATION_LIBRARIES_APPLY', 'APPLICATION_LIBRARIES_VERIFY'],
+                                      'APPLICATION_LIBRARIES_APPLY'],
                                      [op['operation'] for op in manifest['operations']])
 
     def test_real_controller_verifies_then_applies_libraries_in_one_run(self):
@@ -659,20 +659,22 @@ class NativeInfrastructureScopeTests(unittest.TestCase):
             manifestDigest=digest(manifest), approvals=[dict(hostId='node1', address='192.0.2.1', port=22,
                 keyType=kind, publicKey=key)]))
         controller._materialize_runtime_projection(journal, journal.metadata(), manifest)
-        self.assertEqual(['SERVICE_VERIFY', 'SERVICE_VERIFY', 'APPLICATION_LIBRARIES_APPLY', 'APPLICATION_LIBRARIES_VERIFY'],
+        self.assertEqual(['SERVICE_VERIFY', 'SERVICE_VERIFY', 'APPLICATION_LIBRARIES_APPLY'],
                          [op['operation'] for op in manifest['operations']])
         playbooks = core / 'playbooks' / 'applications'
         playbooks.mkdir(parents=True)
         for action in ('apply', 'verify'):
             (playbooks / (action + '.yml')).write_text(
-                '- hosts: node1\n  gather_facts: false\n  tasks:\n    - ansible.builtin.assert:\n        that: platform_application_expected_library_ids == ["sdku"]\n')
+                '- hosts: node1\n  gather_facts: false\n  tasks:\n' +
+                ('    - ansible.builtin.fail:\n        msg: GLOBAL_APPLICATION_VERIFY_MUST_NOT_RUN\n' if action == 'verify' else
+                 '    - ansible.builtin.assert:\n        that: platform_application_expected_library_ids == ["sdku"]\n'))
         self.assertEqual('SUCCEEDED', controller._dispatch(str(release), journal, manifest, [False]))
         expected = manifest['infrastructureVerification']['model']
         self.assertEqual('BLOCKED', infra.summary(self.root, manifest['projectIdentity'], expected)['status'])
         controller._finish_run_with_outputs(journal, 'SUCCEEDED', '', '', manifest, str(release))
         self.assertEqual('PASS', infra.summary(self.root, manifest['projectIdentity'], expected)['status'])
         actions = [event['actionId'] for event in journal.events() if event['eventType'] == 'ACTION_COMPLETED']
-        self.assertEqual(['verify:provider', 'verify:consumer', 'applications:apply', 'applications:verify'], actions)
+        self.assertEqual(['verify:provider', 'verify:consumer', 'applications:apply'], actions)
 
 
 if __name__ == '__main__':

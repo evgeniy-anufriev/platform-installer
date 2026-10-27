@@ -193,6 +193,14 @@ Docker and Keycloak commands live in the
 Keycloak package scripts. Application Apply completes shared providers first,
 then runs materialization, image delivery, before-start scripts, activation,
 after-ready scripts and Verify for each library in its explicit plan order.
+New installation plans do not append a separate global application Verify
+operation. They proceed from library Apply (including per-library health checks)
+to optional post-install actions. Saved Apply/Verify manifests and the explicit
+standalone Verify playbook remain supported.
+The check at each library boundary calls `verify_container`: exact image/labels,
+Running and configured healthcheck only. It does not repeat configuration-tree
+or Vault identity/AppRole/secret-read checks. The standalone Verify entrypoint
+retains its existing behavior.
 Within a library, selected slots run by optional package `start_priority`
 (default 100), then instance ID; each instance finishes its after-ready phase
 before the next starts.
@@ -266,9 +274,10 @@ runtime-secret descriptor entrypoints. Nonempty libraries use plan v1alpha4 and
 descriptor v1alpha3; empty libraries preserve the infrastructure versions.
 Requirements contain immutable image identities, policy and public secret refs;
 repository probes and concrete image source selection remain execution-time.
-Two closed application operation descriptors select the existing standalone
-Apply/Verify playbooks. A8 integrates them after every infrastructure Verify in
-one mixed executable manifest. Old planning-request consumers explicitly reject
+Closed application operation descriptors select the existing standalone
+Apply/Verify playbooks. New plans emit only application Apply after the required
+infrastructure Verify prefix; the Verify descriptor remains for saved plans and
+manual checks. Old planning-request consumers explicitly reject
 application-aware plans; the new request/capability versions are opt-in.
 See the [A7 technical plan](work/application-libraries/milestones/a7/a7-technical-plan.md)
 and [contract versions](../contracts/README.md).
@@ -560,8 +569,8 @@ remain in Core. See [the plan](work/application-libraries/application-image-meta
 
 Application/LibraryPackage v1alpha3 adds `phase: post_install`. The resolved
 plan appends `APPLICATION_LIBRARIES_POST_INSTALL` only when selected packages
-declare active terminal scripts. It runs after the complete successful Apply/Verify
-prefix, never inside Verify, never after failure/cancel and never for skipped
+declare active terminal scripts. It runs after successful library Apply with
+per-library health checks, never inside Verify, never after failure/cancel and never for skipped
 libraries. The standalone entrypoint is
 `ansible-core/playbooks/applications/post-install.yml`. It resolves
 script contexts without image/container/provider preflight, reads only required

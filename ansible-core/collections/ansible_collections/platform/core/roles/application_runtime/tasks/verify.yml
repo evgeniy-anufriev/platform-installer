@@ -23,31 +23,8 @@
   loop: "{{ application_verified_config_trees.results }}"
   no_log: true
 
-- name: Проверка владельца и готовности образа приложения
-  tags: [platform_application_instance_state]
-  ansible.builtin.command:
-    argv: [docker, container, inspect, "{{ application_runtime_job.placement.containerName }}"]
-  become_user: "{{ application_runtime_job.account }}"
-  environment: "{{ application_runtime_job.dockerEnvironment }}"
-  register: application_container_verified
-  vars:
-    application_verified_object: "{{ (application_container_verified.stdout | from_json)[0] }}"
-    application_verified_labels: "{{ application_verified_object.Config.Labels | default({}, true) }}"
-  changed_when: false
-  failed_when: >-
-    application_container_verified.rc != 0 or
-    application_verified_object.Image != application_runtime_job.authority.requirement.imageId or
-    application_verified_labels.get('platform.installer.project') != application_runtime_job.projectId or
-    application_verified_labels.get('platform.installer.library') != application_runtime_job.libraryId or
-    application_verified_labels.get('platform.installer.instance') != application_runtime_job.instanceId or
-    application_verified_labels.get('platform.installer.host') != application_runtime_job.hostId or
-    not application_verified_object.State.Running or
-    (application_runtime_job.settings.readiness.mode | default('container') != 'container' and
-     application_verified_object.State.get('Health', {}).get('Status') != 'healthy')
-  until: application_container_verified is not failed
-  retries: "{{ application_runtime_job.settings.readiness.retries | default(10) }}"
-  delay: "{{ application_runtime_job.settings.readiness.delay | default(2) }}"
-  no_log: true
+- name: Проверка состояния контейнера и настроенной готовности
+  ansible.builtin.include_tasks: verify_container.yml
 
 - name: Проверка входа через AppRole и чтения выбранного секрета после готовности контейнера
   ansible.builtin.include_role:

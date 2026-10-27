@@ -672,3 +672,86 @@ exact two-library application projection/status/findings equality PASS.
 Logs under runtime QA preparation-*.log. Three QA workspaces cleaned by qa-sync.
 No PG/Redis/Vault source diff. No commit, bundle publication, new installation or
 stopping active installer-c14d36d0 performed for this scope.
+
+## Подготовка библиотек и универсального раннера: второй serial scope
+
+Owner requested a checkpoint commit before further optimization:629dbb9d89f745c91827802f5e822791c957f601
+(75files, previous Verify/Plan/Start, Kafka/HAProxy/provider preparation and
+related evidence). Worktree was clean after the commit; no master integration or
+push requested. New work uses that exact commit as its review baseline.
+
+SZI current-run baseline12:05:32–12:54:15МСК=48:43;1158 task starts,
+1684 target results (545 skipped). Approximately31:17 in1077 short-task
+intervals. HAProxy12:13 already addressed in committed earlier scope. Runner
+7:13 includes about3:05 actual scripts; the rest is staging/orchestration.
+
+New implementation: placements selected once per library/per instance; empty
+phase/scope skips the handler include. package_script transient paths/environment
+are ordinary role vars instead of host facts. Script/secret inputs/batch JSON use
+one standard copy loop, with an explicit internal loop_var. Stale cleanup, fresh
+copy, modes, source failure behavior, always cleanup, argv/timeouts/safe error and
+changed protocol retained. Provider target context is lazy task vars. Runner
+remains generic; no product/container knowledge, cache or new contract.
+Runner task entries14→11; no end-to-end timing saving claimed before a new bundle.
+
+QA on RED OS current167317ca source: focused30 OK/1 root-only skip (88.138s),
+root ownership witness separately PASS15.180s. After naming the internal loop,
+final native12 OK/1 root-only skip86.662s and exact final-source root ownership
+witness PASS. Added outer default-item caller compatibility and actual ordered
+selection fixture (two libraries/three instances; external container actions are
+observations, production task selection/vars/ordering preserved) PASS5.071s.
+Terminal/post_install/progress46 PASS7.250s; standalone Apply syntax PASS.
+Distinct affected cases78 covered including the skipped root case separately.
+No new legacy resolver broad run; prior baseline failures remain recorded above.
+Safe synthetic argv/secret/batch tests prove no expansion/leak and failure cleanup;
+repeat changed=0, neighbor source replacement, skipped-provider integrations and
+Execution Node callback without target contact remain covered.
+
+FULL DIFF independent review requested for final6file scope:
+script-dispatch-review-scope.json SHA256
+5a0cbf92338290e0c418f4e21e31802853f54d6791950a8265955757c70e4ca6.
+Final independent FULL DIFF APPROVE/blocking0, SDR-N01 test coverage resolved before final verdict; no recheck. Production scope frozen; existing run installer-c14d36d0
+continues on old bundle (UI85%/SDKU at observation); no runtime/bundle switch,
+PG/Redis/Vault provider edit or new run. Updated-bundle real acceptance/benchmark
+remain pending. This new scope is not included in the checkpoint commit.
+
+## Owner follow-up: lightweight per-library completion check
+
+Explicit owner request removes configuration-tree and Vault identity/AppRole/read
+checks only at the end of each library. ordered-library now calls the existing
+container-state task through verify_container.yml; the identical inspect/image/
+labels/Running/healthcheck predicate is shared with verify.yml. No duplicate
+container predicate, optional flag, new schema or provider rule introduced.
+Startup and standalone Verify keep their existing directory/Vault policy.
+
+Current-source RED OS28 tests PASS83.711s: library completion succeeds with missing
+configuration destinations and agentTemplate=true without Vault credentials;
+unhealthy container still fails; normal Verify, activation and multi-host
+Compose recovery, ordered selection and progress remain covered. No new run or
+bundle activation; source-only acceptance. This owner-authorized follow-up is
+outside the preceding frozen script-runner FULL DIFF manifest; no additional
+review invoked or previous verdict claimed for the added boundary policy.
+
+## Owner policy: omit global library Verify from new installation plans
+
+Explicit owner request removes the entire repeated global library Verify pass:
+resolver/snapshot/provider projections, container/config checks and endpoint
+HAProxy/DNS/HTTPS checks. Keep readiness at startup, per-library container health
+and endpoint publication/probes inside Apply. Emit only APPLICATION_LIBRARIES_APPLY
+and optional post_install depending on applications:apply. The standalone Verify
+playbook and saved Apply/Verify manifests remain supported; existing in-flight
+plans/bundles are immutable. Existing schema versions already allow Apply-only
+operations and do not require new fields, versions, flags or Go/UI domain logic.
+Use one shared admission suffix check for Apply-only and exact legacy Apply/Verify;
+keep infrastructure coverage, scope matching and terminal failure/cancel gates.
+
+Affected native/unit/schema/controller tests125 OK/2 explicit native gates;
+the two real action/controller gates independently enabled:2PASS6.089s. Controller
+fixture fails if the global Verify playbook is invoked. UI32PASS shows only Core-
+declared actions while retaining old-plan display. New tests cover FULL_PROJECT,
+libraries-only with/without SkipInfraVerify, legacy manifests with/without terminal,
+invalid order/duplicates/scope and terminal dependency. Updated-bundle real Wails
+acceptance/benchmark pending. Independent FULL DIFF APPROVE/blocking0, no findings, for changed admission;
+9file source manifest c673a9d7497d298fd1dc2ca4e2c1bca507c762b61b22c7b9ac55556b41cb5984.
+
+Final9file identity confirmed; native source QA and UI fixture checks above completed. Current installer-c14d36d0 observed88%/CSPA, old immutable plan retained. Temporary f43070fb QA workspace cleaned with qa-sync; bundle/runtime acceptance pending.

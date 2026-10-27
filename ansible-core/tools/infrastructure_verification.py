@@ -97,15 +97,32 @@ def model(manifest):
     return dict(fingerprint=digest(semantic), coverage=coverage, hosts=sorted(hosts))
 
 
+def application_suffix(operations):
+    """Accept current Apply-only and previously saved Apply/Verify suffixes."""
+    apps = [op for op in operations if op.get('operation') in
+            ('APPLICATION_LIBRARIES_APPLY', 'APPLICATION_LIBRARIES_VERIFY')]
+    if not apps:
+        return []
+    if ([op.get('operation') for op in apps] not in
+            (['APPLICATION_LIBRARIES_APPLY'], ['APPLICATION_LIBRARIES_APPLY', 'APPLICATION_LIBRARIES_VERIFY']) or
+            operations[-len(apps):] != apps or
+            any(app.get(field) != apps[0].get(field) for app in apps[1:]
+                for field in ('targets', 'applicationLibraries', 'applicationSemanticFingerprint', 'phaseId', 'applicationExecutionScope'))):
+        raise LifecycleError('EXECUTION_MANIFEST_INVALID')
+    return apps
+
+
 def has_library_verify_prefix(manifest):
     operations = manifest.get('operations', [])
     if manifest.get('apiVersion') == 'platform.installer/execution-manifest/v1alpha7' and operations and operations[-1].get('operation') == 'APPLICATION_LIBRARIES_POST_INSTALL':
         operations = operations[:-1]
-    if (manifest.get('executionMode') != 'APPLICATION_LIBRARIES_ONLY' or len(operations) < 3 or
-            [op.get('operation') for op in operations[-2:]] !=
-            ['APPLICATION_LIBRARIES_APPLY', 'APPLICATION_LIBRARIES_VERIFY']):
+    try:
+        apps = application_suffix(operations)
+    except LifecycleError:
         return False
-    verifies = operations[:-2]
+    if manifest.get('executionMode') != 'APPLICATION_LIBRARIES_ONLY' or not apps:
+        return False
+    verifies = operations[:-len(apps)]
     coverage = manifest.get('infrastructureVerification', {}).get('model', {}).get('coverage', {})
     return (bool(verifies) and len(verifies) == len(coverage) and
             all(op.get('operation') == 'SERVICE_VERIFY' for op in verifies) and
@@ -236,12 +253,12 @@ def validate_manifest(manifest):
                 manifest['runtimeSecretOutputs']):
             raise LifecycleError('EXECUTION_MANIFEST_INVALID')
     if mode == 'APPLICATION_LIBRARIES_ONLY':
-        apps = operations[-2:]
-        service_verifies = operations[:-2]
+        apps = application_suffix(operations)
+        service_verifies = operations[:-len(apps)] if apps else operations
         combined_verify = bool(service_verifies)
         service_requirements = manifest['runtimeSecretRequirements']
         service_inputs = manifest['runtimeSecretInputs']
-        if (not apps or [op['operation'] for op in apps] != ['APPLICATION_LIBRARIES_APPLY', 'APPLICATION_LIBRARIES_VERIFY'] or
+        if (not apps or
                 (combined_verify and not has_library_verify_prefix(manifest)) or
                 (not combined_verify and not skip and not isinstance(binding['evidenceRevision'], str)) or
                 (not combined_verify and not skip and not re.fullmatch(r'sha256:[a-f0-9]{64}', binding['evidenceRevision'])) or
