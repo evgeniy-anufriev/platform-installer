@@ -12,6 +12,42 @@ TASKS = Path(__file__).resolve().parents[1] / "ansible_collections/platform/kafk
 
 
 class RegistryPartialTopicRuntimeTests(unittest.TestCase):
+    def test_seed_create_and_repeat_do_not_describe_after_creation(self):
+        if not shutil.which('ansible-playbook'):
+            self.skipTest('Ansible runtime required')
+        with tempfile.TemporaryDirectory(prefix='platform-registry-seed-') as directory:
+            root = Path(directory)
+            (root / 'bin').mkdir()
+            cli = root / 'bin/kafka-topics.sh'
+            cli.write_text('#!/usr/bin/python3\nimport json,pathlib,sys\n'
+                'root=pathlib.Path(__file__).resolve().parents[1]\n'
+                'with (root/"calls.jsonl").open("a") as f:f.write(json.dumps(sys.argv[1:])+"\\n")\n'
+                'if "--create" in sys.argv:(root/"topic").write_text("Topic: _schemas PartitionCount: 1 ReplicationFactor: 2 Configs: cleanup.policy=compact,min.insync.replicas=2")\n'
+                'elif (root/"topic").exists():print((root/"topic").read_text())\n')
+            cli.chmod(0o700)
+            variables = dict(registry_instance=dict(id='member-1', deployment_id='qa',
+                bootstrap_servers='SSL://127.0.0.1:9093', config_directory=str(root),
+                replication_factor=2, min_insync_replicas=2),
+                _platform_kafka_registry_projection={'instances': [dict(id='member-1', deployment_id='qa')]},
+                platform_kafka_install_directory=str(root), platform_kafka_verify_only=False)
+            play = root / 'play.yml'
+            play.write_text(yaml.safe_dump([dict(hosts='localhost', connection='local', gather_facts=False,
+                vars=variables, tasks=[{'ansible.builtin.include_tasks': str(TASKS / 'schema_registry_topic.yml')}])]))
+            for repeat in [False, True]:
+                (root / 'calls.jsonl').write_text('')
+                result = subprocess.run(['ansible-playbook', '-i', 'localhost,', str(play)],
+                    capture_output=True, text=True, timeout=60)
+                self.assertEqual(0, result.returncode, result.stdout[-2000:] + result.stderr[-800:])
+                calls = [json.loads(s) for s in (root / 'calls.jsonl').read_text().splitlines()]
+                self.assertEqual(1 if repeat else 2, len(calls))
+                self.assertIn('--describe', calls[0])
+                if repeat:
+                    self.assertIn('changed=0', result.stdout)
+                else:
+                    self.assertIn('--create', calls[1])
+                    self.assertIn('cleanup.policy=compact', calls[1])
+                    self.assertIn('min.insync.replicas=2', calls[1])
+
     def test_non_seed_member_checks_existing_incompatible_and_missing_topic(self):
         if not shutil.which("ansible-playbook"):
             self.skipTest("Ansible runtime required")
@@ -57,7 +93,7 @@ class RegistryPartialTopicRuntimeTests(unittest.TestCase):
                     self.assertEqual(success, result.returncode == 0, result.stdout + result.stderr)
                     self.assertEqual(success, marker.exists())
                     calls = [json.loads(line) for line in (root / "calls.jsonl").read_text().splitlines()]
-                    self.assertTrue(calls)
+                    self.assertEqual(1, len(calls))
                     self.assertTrue(all("--describe" in args for args in calls))
                     self.assertFalse(any("--create" in args for args in calls))
 

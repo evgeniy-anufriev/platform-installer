@@ -1,0 +1,10 @@
+---
+- name: Проверка настроек ресурсов переносимой службы
+  ansible.builtin.include_role:
+    name: platform.core.project_settings
+
+- name: Расчёт частичной проекции HAProxy один раз перед подготовкой кандидата
+  ansible.builtin.include_tasks: resolve.yml
+
+- name: Подготовка и проверка полного кандидата частичной интеграции HAProxy
+  ansible.builtin.include_tasks: prepare.yml

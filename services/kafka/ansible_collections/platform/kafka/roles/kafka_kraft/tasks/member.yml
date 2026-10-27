@@ -81,8 +81,14 @@
            }) }}
   when: not (platform_kafka_verify_only | bool)
 
-- name: Проверка готовности PKI-01 для SSL listeners Kafka
-  ansible.builtin.include_tasks: validate_ssl_listener.yml
+- name: Подготовка PKI-01 один раз для TLS listeners экземпляра Kafka
+  ansible.builtin.include_tasks: prepare_member_tls.yml
+  when:
+    - not (platform_kafka_verify_only | bool)
+    - _platform_kafka_member_named_listeners | selectattr('securityProtocol', 'in', ['SSL', 'SASL_SSL']) | list | length > 0
+
+- name: Настройка TLS каждого listener по готовым материалам экземпляра Kafka
+  ansible.builtin.include_tasks: listener_tls_settings.yml
   loop: "{{ _platform_kafka_member_named_listeners | selectattr('securityProtocol', 'in', ['SSL', 'SASL_SSL']) | list }}"
   loop_control:
     loop_var: kafka_ssl_listener

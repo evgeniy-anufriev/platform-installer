@@ -4,24 +4,14 @@
   connection: local
   gather_facts: false
   tasks:
-    - name: Проверка настроек ресурсов переносимой службы
+    - name: Разрешение проекта для авторитетного плана
       ansible.builtin.include_role:
-        name: platform.core.project_settings
-      run_once: true
+        name: platform.core.project_resolution
 
-    - name: Вычисление параметров дополнительных библиотек приложений средствами Ansible
-      ansible.builtin.include_role:
-        name: platform.core.resolve_application_libraries
-      when: platform_desired_state.applicationLibraryDeployments is defined
-
-    - name: Формирование снимка проекта без обращения к целевым узлам
-      platform.core.project_snapshot:
-        project_root: "{{ platform_project_root }}"
-        service_catalog_path: "{{ platform_service_catalog_path }}"
-        installer_owned_paths: "{{ platform_installer_owned_paths | default([]) }}"
-      changed_when: false
-      become: false
-      register: platform_plan_snapshot
+    - name: Сохранение разрешённых входов планировщика
+      ansible.builtin.set_fact:
+        platform_plan_snapshot: "{{ platform_project_resolution }}"
+      no_log: true
 
     - name: Загрузка каталога сервисов
       ansible.builtin.include_vars:

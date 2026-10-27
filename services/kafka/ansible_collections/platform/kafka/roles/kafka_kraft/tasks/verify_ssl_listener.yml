@@ -3,6 +3,7 @@
   ansible.builtin.include_tasks: resolve_tls_runtime.yml
   vars:
     kafka_tls_member: "{{ kafka_member }}"
+  when: not (kafka_ssl_runtime_prepared | default(false) | bool)
 
 - name: Выполнение реального TLS-соединения с listener Kafka
   ansible.builtin.shell: |

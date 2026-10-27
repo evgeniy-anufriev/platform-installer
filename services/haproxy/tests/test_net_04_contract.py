@@ -66,7 +66,9 @@ class HAProxySystemdRuntimeDirectoryTests(unittest.TestCase):
         self.assertTrue(service_task["daemon_reload"])
         self.assertIn("_platform_haproxy_runtime_dropin.changed", service_task["state"])
         self.assertEqual("(platform_haproxy_partial_deployment_id is not defined and platform_haproxy_partial_deployment_ids is not defined)", start_tasks[2]["when"])
-        partial_reload = start_tasks[3]
+        self.assertEqual('partial_reload.yml', start_tasks[3]['ansible.builtin.include_tasks'])
+        with open(os.path.join(ROLE, 'tasks', 'partial_reload.yml'), encoding='utf-8') as stream:
+            partial_reload = yaml.safe_load(stream)[0]
         self.assertEqual("reloaded", partial_reload["ansible.builtin.systemd"]["state"])
         self.assertIn("platform_haproxy_active_artifacts_changed | default(false) | bool", partial_reload["when"])
 

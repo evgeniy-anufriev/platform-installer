@@ -145,6 +145,15 @@ class KafkaServiceRepairTests(unittest.TestCase):
             self.run_play(root, [task], dict(kafka_member=dict(id='m1', roles=['broker'],
                 listeners=dict(SASL=dict(port=9096, purpose='client', securityProtocol='SASL_SSL')))))
 
+    def test_verify_selects_one_controller_even_when_local_member_differs(self):
+        task = yaml.safe_load((ROLE / 'tasks/verify.yml').read_text())[1]
+        with tempfile.TemporaryDirectory() as directory:
+            self.run_play(Path(directory), [task, {'ansible.builtin.assert': dict(
+                that=['kafka_quorum_diagnostic_member.id == "c1"'])}], dict(
+                _platform_kafka_scram_enabled=False,
+                _platform_kafka_controller_instances=[dict(id='c1', host='node1'), dict(id='c2', host='node2')],
+                _platform_kafka_local_controller_instances=[dict(id='c2', host='node2')]))
+
     def test_broker_headers_use_the_selected_sasl_listener(self):
         task = yaml.safe_load((ROLE / 'tasks/verify.yml').read_text())[-1]
         with tempfile.TemporaryDirectory() as directory:

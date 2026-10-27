@@ -888,3 +888,16 @@ credential store is introduced. Existing schemas/legacy scripts remain unchanged
 Vault delivery retains fresh ownership/CAS reads; only duplicate preflight and
 invocation-local network discovery are removed. See the
 [phase4 plan](work/execution/service-runtime-optimization-phase4-plan.md).
+
+ADR-048 amendment, owner-approved planning optimization (2026-10-27): Core may
+reuse a private desired-derived resolution for the same actual project input
+closure and immutable runtime. The artifact contains no runtime credentials,
+target observations or approval/session state. It is replaced per project,
+published atomically under a per-project lock, and rejected on identity change.
+Unconfirmed external template inputs retain fresh resolution. Independent
+requests verify their actual source bytes; prepared images enrich a copy of the
+base, while mutable PKI/planner evidence is read by the existing planner.
+Standalone Ansible without reuse variables resolves normally. Start still
+rebuilds and compares the authoritative plan; no Go precedence implementation,
+public reference DTO or execution authorization is added. See the
+[phase5 scope](work/execution/service-runtime-optimization-plan.md).

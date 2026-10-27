@@ -111,24 +111,6 @@
     fail_msg: SCHEMA_REGISTRY_CONFIG_DRIFT
   no_log: true
 
-- name: Проверка готовности протокола брокера для выбранного соединения
-  ansible.builtin.command:
-    argv:
-      - "{{ platform_kafka_install_directory }}/bin/kafka-broker-api-versions.sh"
-      - --bootstrap-server
-      - "{{ registry_instance.bootstrap_servers | regex_replace('(SSL|PLAINTEXT)://', '') }}"
-      - --command-config
-      - "{{ registry_instance.config_directory }}/kafka-client.properties"
-  changed_when: false
-  register: _platform_kafka_registry_brokers_ready
-  retries: "{{ platform_kafka_schema_registry_readiness_retries }}"
-  delay: "{{ platform_kafka_schema_registry_readiness_delay }}"
-  until: >-
-    _platform_kafka_registry_brokers_ready.rc == 0 and
-    (registry_instance.broker_ids | difference(
-      _platform_kafka_registry_brokers_ready.stdout | regex_findall('\(id: ([0-9]+)') | map('int') | list) | length) == 0
-  no_log: true
-
 - name: "Проверка или создание служебного топика схем Schema Registry"
   ansible.builtin.include_tasks: schema_registry_topic.yml
 

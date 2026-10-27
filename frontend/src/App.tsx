@@ -536,6 +536,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     const runtimeDigest = executionNode?.runtimeDigest;
     if (
       !projectOpen ||
+      page !== "services" ||
       !revision ||
       !result.root ||
       executionNode?.status !== "READY" ||
@@ -560,13 +561,20 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     let request = servicePreviewRequests.current.get(requestKey);
     if (!request) {
       request = api.getServiceConfigurationPreview();
+      servicePreviewRequests.current.clear();
       servicePreviewRequests.current.set(requestKey, request);
       const pending = request;
       const clear = () => {
         if (servicePreviewRequests.current.get(requestKey) === pending)
           servicePreviewRequests.current.delete(requestKey);
       };
-      void pending.then(clear, clear);
+      void pending.then((value) => {
+        if (
+          value.projectRevision !== revision ||
+          value.runtimeDigest !== runtimeDigest
+        )
+          clear();
+      }, clear);
     }
     request
       .then((value) => {
@@ -599,6 +607,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     };
   }, [
     api,
+    page,
     projectOpen,
     result.root,
     result.managed?.projectRevision,
@@ -871,10 +880,18 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     setInstallationState(next);
   };
   const attachOrphanRun = async () => {
-    if (!api.attachOrphanRun || !orphanRun?.recoveryId) return;
+    if (!orphanRun) return;
+    const current = orphanRun.status === "CURRENT" && !!orphanRun.runId;
+    if (
+      (current && !api.getInstallationRun) ||
+      (!current && (!api.attachOrphanRun || !orphanRun.recoveryId))
+    )
+      return;
     setBundleBusy(true);
     try {
-      const operation = await api.attachOrphanRun(orphanRun.recoveryId);
+      const operation = current
+        ? await api.getInstallationRun!(orphanRun.runId!)
+        : await api.attachOrphanRun!(orphanRun.recoveryId!);
       if (operation.status !== "READY" || !operation.run) {
         setOrphanRun({
           ...orphanRun,
@@ -2364,16 +2381,24 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
                         <span>Ревизия: {orphanRun.projectRevision}</span>
                       )}
                       <span>{orphanRun.runState}</span>
-                      {orphanRun.status === "FOUND" && (
+                      {["FOUND", "CURRENT"].includes(orphanRun.status) && (
                         <button
                           className="outline"
                           disabled={bundleBusy}
                           onClick={attachOrphanRun}
                         >
-                          Подключиться
+                          {orphanRun.status === "CURRENT"
+                            ? "Открыть выполнение"
+                            : "Подключиться"}
                         </button>
                       )}
                     </div>
+                  )}
+                  {orphanRun?.status === "CURRENT" && (
+                    <p role="status">
+                      Запуск уже известен этому Installer. Откройте выполнение,
+                      чтобы восстановить наблюдение.
+                    </p>
                   )}
                   {orphanRun?.status === "NONE" && (
                     <p role="status">Прежний активный запуск не найден.</p>

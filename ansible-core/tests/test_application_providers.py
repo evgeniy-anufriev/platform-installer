@@ -403,6 +403,15 @@ class ApplicationProvidersTest(unittest.TestCase):
 
 
 class KafkaAdminSelectionTest(unittest.TestCase):
+    def test_aggregated_jobs_keep_only_install_libraries(self):
+        inputs = self.fixture(accounts=False)
+        inputs[1]['applicationExecutionScope'] = {'installLibraries': ['a']}
+        result = project_providers(*inputs)
+        self.assertEqual('PASS', result['status'], result['findings'])
+        self.assertEqual({'a-events'}, {topic['name'] for job in result['jobs'] for topic in job['topics']})
+        self.assertEqual([topic for job in result['jobs'] for topic in job['topics']],
+                         [topic for job in result['libraryJobs'] for topic in job['topics']])
+
     def fixture(self, sasl_first=False, mode='managed', accounts=True):
         ref = 'kafka-main'
         listeners = {

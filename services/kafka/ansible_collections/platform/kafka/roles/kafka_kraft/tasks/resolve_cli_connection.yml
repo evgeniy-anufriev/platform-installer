@@ -36,7 +36,17 @@
   ansible.builtin.include_tasks: resolve_tls_runtime.yml
   vars:
     kafka_tls_member: "{{ kafka_cli_member }}"
-  when: _platform_kafka_cli_connection.securityProtocol in ['SSL', 'SASL_SSL']
+  when:
+    - _platform_kafka_cli_connection.securityProtocol in ['SSL', 'SASL_SSL']
+    - not (platform_kafka_verify_only | bool) or kafka_cli_member.id not in (_platform_kafka_verify_tls_by_member | default({}))
+
+- name: Выбор готовой TLS-проекции экземпляра текущей проверки
+  ansible.builtin.set_fact:
+    _platform_kafka_tls_runtime: "{{ _platform_kafka_verify_tls_by_member[kafka_cli_member.id] }}"
+  when:
+    - platform_kafka_verify_only | bool
+    - _platform_kafka_cli_connection.securityProtocol in ['SSL', 'SASL_SSL']
+    - kafka_cli_member.id in (_platform_kafka_verify_tls_by_member | default({}))
 
 - name: Добавление проекции TLS к соединению Kafka CLI без секретных значений
   ansible.builtin.set_fact:

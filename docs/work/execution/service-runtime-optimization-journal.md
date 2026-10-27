@@ -426,3 +426,249 @@ snapshot в descriptors, image DESCRIBE и final Plan; archive/revision/staging;
 editMu удерживается на длительных synchronous Verify/Plan/descriptor операциях.
 Ни одна проверка или поведение Start в рамках анализа не менялись.
 Remote execution installer-6e8bcfed RUNNING/sequence539 подтверждён.
+
+### 27 октября: причина отсутствия Vault inputs и исправление повторного SSH approval
+
+Run installer-6e8bcfed terminal FAILED 26.10 23:20:29МСК на apply:qa-vault-consumer.
+Bootstrap assert VAULT_BOOTSTRAP_CREDENTIALS_REQUIRED, no_log скрывает payload.
+В events типизированные входы Vault, назначение admin token и unseal shares
+SKIPPED на всех3 узлах. Пакетные изменения Vault не меняли resolve_runtime_inputs,
+execution_controller или execution_secret_lease.
+
+Причина подтверждена Go-overlay тестом без SSH target контакта: Probe/Approve
+Execution Node раньше безусловно invalidated dynamic binding. Цепочка
+invalidateDynamicBindingLocked → clearRuntimeSecretDescriptorEvidenceLocked →
+Broker.ClearRuntimeSecretValues удаляла pending/attached typed inputs и Plan.
+Во время прошлой QA-подготовки после загрузки файлов повторно подтверждался
+ключ node1, затем повторно заполнены обычные пароли/application token, но не
+восстановлены typed SERVICE_ADMIN_TOKEN/SERVICE_UNSEAL_SHARES для самой роли.
+Это объясняет одновременно потерю плана и последующий Vault assert.
+
+По прямому запросу владельца Probe больше не заменяет binding до результата.
+Same-key approval сохраняет binding, plan, pending/attached inputs только при
+совпадении node/address/port/user/credential generation/runtime и прохождении
+existing trusted pin/command guard. Новый ключ и tampered pin заменяются штатно.
+Focused4 PASS (включая prepared/unprepared подслучаи), Go all/vet PASS.
+По запросу владельца review остановлен; последующий review не вызывается.
+
+Новый Wails reapproval.exe34123 собран/запущен, active bundle прежний ca1ff310.
+Незавершённые изменения Core phase5 в bundle не публиковались. Full retry
+готовится через actual React handlers; finite protected file-picker queue.
+До Plan helper проверит secretsInstalled до/после реального same-key recheck.
+Нового run ID пока нет; прежние окна не закрывались.
+
+Повторный FULL_PROJECT run после исправления SSH reapproval:
+installer-c14d36d0500efb8a3f5a3ac61bb0040c STARTED 27.10.2026 09:27:46МСК,
+plan-1277f48e179590eea1b1a3e0, bundle ca1ff310; Wails34123/actual React.
+Scope no skips, порядок szi→sdku→cspa, размещение103/101/102. Go all/vet PASS;
+реальный before/after same-key reapproval: typed inputs true/true.
+Native Vault resolve_runtime_inputs twice: ok10 changed0 failed0/unreachable0.
+
+Дополнительно на101 существующим execution_secret_lease.runtime_secret_inputs_for_operation
+проверен реально attached runtime lease нового run, без вывода значений:
+SERVICE_APPLY: SERVICE_ADMIN_TOKEN=true, SERVICE_UNSEAL_SHARES=true;
+SERVICE_VERIFY: SERVICE_ADMIN_TOKEN=true (unseal по контракту только Apply).
+Это подтверждает доставку до контроллера/фильтра операции, не только наличие в UI.
+Run продолжает выполняться; observer и окно оставлены открытыми.
+Исходники незавершённой phase5 resolver reuse не публиковались в active bundle.
+
+## Phase5 — Verify/Plan/Start reuse, 2026-10-27
+
+Владелец принял реализацию и запретил остановку текущего run и новое ревью.
+Изменения остаются в worktree; активный bundle ca1ff310 не заменён.
+Private Core artifact хранит resolved snapshot/configuration/connections/PKI
+intent/image lock и application rows. Identity проверяет фактическую closure
+документов (включая revision-excluded inputs), ownership context и immutable
+runtime. Атомарная замена одного файла на project ID; protocol lock сериализует
+первое разрешение. Runtime secrets и mutable target observations не кешируются.
+Unsupported external Jinja inputs используют fresh resolve и не публикуют base.
+
+Проверка реального протокола выявила и закрыла три ошибки прототипа:
+runtime evidence не передавалась DESCRIBE/Plan; cache hit терял application rows
+из Ansible facts; prepared images нельзя отключить task var поверх extra_vars.
+Теперь desired_only action строит чистую базу, enrichment выполняется отдельно,
+а image DESCRIBE получает private rows явно. Фильтр новых DTO/Go precedence
+не добавлялся. Start сохраняет авторитетную пересборку и сравнение плана.
+
+RED OS node102, source workspace273828ab: focused Core regression123 PASS,
+включая native семь независимых Ansible calls, unknown-version miss,
+corruption rejection, concurrent atomic writes, изменение источника между
+load/store и external lookup fresh fallback. Real protocol2 PASS: отдельные
+readonly snapshot и descriptor requests удаляют свой staging, DESCRIBE/Plan
+используют shared base; повторная авторитетная сборка даёт равный plan;
+selection/preparation mutation и stale digest отклоняются. Fresh-vs-reused
+golden comparison также PASS в финальном прогоне protocol2 (44,818с).
+Go test ./... и go vet ./... PASS; App80 и полный frontend321 (27 файлов)
+PASS, typecheck/lint PASS. Три временные source-only QA-копии на102 удалены
+штатным qa-sync cleanup; действующие runtime/bundle/run не затронуты.
+
+Восстановление просмотра текущего запуска: CURRENT теперь содержит run ID;
+существующий GetInstallationRun восстанавливает display-only сохранённый Plan.
+React предлагает «Открыть выполнение» без нового Approve/Start. Actual Wails
+recovery.exe34124 подключён к тому же installer-c14d36d0; события/27 действий/
+процент видны, окно оставлено открытым. Vault Apply/Verify SUCCESS; на последнем
+наблюдении Kafka Apply SUCCESS, Verify RUNNING,14/27 (51%).
+
+Acceptance boundary: phase5 пока не опубликована в runtime bundle. Реальные
+React/Wails Verify→Plan→Start с обновлённым Core и равный benchmark ещё не
+проведены; текущая установка использует предыдущую оптимизацию. PASS здесь
+означает перечисленные тесты, не полный deployment acceptance или замер экономии.
+
+## Kafka health-only Verify — owner-authorized correction, 2026-10-27
+
+Исходный Verify в текущем installer-c14d36d0 завершён SUCCESS:
+10:27:37–10:35:17 МСК,7мин40с,285 TASK_STARTED/814 событий. Общий main роли
+продолжал выполнять подготовку и проверки Apply; TLS resolve вызывался11 раз.
+
+По запросу владельца main теперь направляет Verify в отдельный verify_entry,
+а прежний вход установки сохранён в apply.yml. Verify использует существующие
+project_runtime/normalize_member для единых endpoint/unit identities, но не
+проходит проверки установки, владения, коллизий, конфигурации, пакетов и
+артефактов. Сохраняются active/MainPID, listeners, реальные TLS-handshake с
+проверкой CA и hostname/IP, аутентифицированный CLI кворума и регистрации
+unfenced brokers, HTTPS /subjects каждого локального Schema Registry.
+
+TLS-проекция вычисляется один раз на локальный экземпляр и сохраняется только
+в facts текущего Verify. CLI повторно использует эту проекцию; Apply всегда
+выполняет штатный resolve независимо от оставшихся facts. При SCRAM два
+health CLI используют одно рассчитанное admin-соединение. Без SCRAM кворум
+проверяется на одном детерминированно выбранном контроллере, а не на каждом.
+Runtime credentials читаются существующим run_cli_command, temporary config
+удаляется в always. Межзапускного кеша или новой credential persistence нет.
+
+QA выполняется из source-only workspace на102, без изменения установленных
+сервисов. Новый native fixture вызывает фактический main роли, настоящий
+OpenSSL и HTTPS API; systemd/Kafka CLI имеют явные синтетические ответы.
+Проверяются повтор changed=0, один TLS resolve при трёх listeners, runtime
+SCRAM credential plumbing/no-log, inactive node, недоверенный CA, неправильная
+TLS identity, неверный кворум, отсутствующий broker, Schema Registry503.
+Это не проверка реального SCRAM authentication сервером Kafka.
+Полный service/native и affected repair regression58 PASS (233,849с);
+дополнительный native тест единого выбора контроллера при отличающемся локальном
+участнике1 PASS (3,128с). Итого59 уникальных тестов. Восемь новых native
+health-сценариев PASS; положительный Verify повторён с changed=0 и одним TLS
+resolve на три listeners. Syntax-check standalone Apply/Verify2 PASS.
+Исходники проверены в workspace f348e1ec на102. Новая версия Verify не
+публиковалась в bundle и не запускалась против рабочего Kafka-кластера;
+реальный трёхузловой benchmark новой версии остаётся pending.
+Текущий run/active bundle не менялись, ревью по указанию владельца не вызывается.
+
+## HAProxy partial hook optimization — 2026-10-27
+
+Владелец разрешил оптимизацию hook с обязательным сохранением haproxy -c,
+без остановки текущего run и без ревью. В этом run HAProxy-часть Vault Apply
+заняла около2:20, ClickHouse Apply около5:10 при одинаковых106 TASK_STARTED.
+Копирование прежних backend на node1:24,875с против45,665с; четырёх базовых
+конфигов:7,982с против18,601с. Разница не сводится к одной команде: заметна
+общая стоимость task dispatch на загруженной Execution Node101 (1CPU).
+Исторический CPU-профиль этих интервалов не собран; load22 измерен позднее.
+
+Одиночный infrastructure integrate.yml и общий пакетный apply-source.yml
+теперь используют partial_prepare → activate → partial_reload через штатный
+tasks_from. Settings/scope/projection рассчитываются один раз перед prepare;
+activate/reload не входят повторно в общий main/lifecycle, package/PKI gate.
+Разделение подготовки и активации на всех участвующих хостах сохранено.
+Полный lifecycle обычной роли остаётся доступным; standard start использует
+тот же общий partial_reload task.
+
+По последующему запросу владельца cp заменён двумя штатными copy с
+remote_src:true: каталог conf.d рекурсивно одним вызовом и основной конфиг
+отдельно. Затем find/file оставляют только рассчитанный сохраняемый состав
+кандидата. Имена берутся из существующей доказанной inventory/third-party find;
+выбранные source fragments создаются существующими templates. Используется
+mode:preserve. Нет command/shell, rsync, Docker или нового Python helper для
+копирования. Активная публикация по-прежнему затрагивает
+только выбранные backend и frontend через штатный idempotent copy.
+Проверка полного кандидата haproxy -c до activation и активного графа после
+публикации, digest equality и archive/recovery proof не удалялись.
+
+RED OS102: первоначально HAProxy33/Core45 PASS; после замены cp на native copy
+финальный isolated root-owned workspace6d33f115: HAProxy35 и affected Core45,
+итого80 PASS (66,529с), syntax-check hook/ClickHouse Apply2 PASS. Native сценарий
+использует настоящий haproxy -c,40 соседних backend и сторонний filename с
+пробелом; проверяет сохранение соседних файлов, точный набор имён кандидата,
+повтор changed=0, отказ невалидного кандидата до публикации и неизменность
+активных файлов. Отдельный native состав проверяет удаление выбранного backend,
+невыбранного подкаталога и ссылки только из кандидата, сохранность источника и
+повтор changed=0. Старый partial fixture приведён к реальному порядку: template
+выбранного source выполняется после копирования сохраняемого состава.
+Рабочие службы стенда не изменялись. Runtime bundle не обновлялся; реальный
+hook benchmark и новая bundle/Wails acceptance остаются pending.
+
+## Kafka Apply — serial TLS/task optimization, 2026-10-27
+
+Владелец разрешил пункты1/3/4 анализа, исключив параллелизм. Последующими
+указаниями полностью удалены повторный describe политики _schemas и
+kafka-broker-api-versions перед Schema Registry. Текущий run/bundle не меняются.
+
+Подготовка resolve/stat/copy/PEM экземпляра выделена в prepare_member_tls и
+вызывается один раз перед циклом listeners. listener_tls_settings меняет только
+параметры listeners по готовым путям. validate_ssl_listener остаётся совместимым
+прямым wrapper. Порядок member.yml, bootstrap/finalization и перезапусков прежний.
+Списки копируемых PKI-файлов выбираются по формату до loop, без PKCS12-итераций
+в PEM-режиме. Нет межзапускного cache, новых credentials или публичных контрактов.
+Для структуры этого стенда: broker material preparation9→3, общий PEM13→7,
+TLS resolve16→10. Это расчёт количества вызовов по структуре, не замер нового run.
+
+Каждый участник читает _schemas один раз и проверяет существующие параметры.
+Отсутствующий топик создаётся прежним выбранным брокером. Для missing non-seed
+или verify-only возвращается SCHEMA_REGISTRY_TOPIC_REQUIRED без дополнительных
+сетевых чтений; создание с ошибкой по-прежнему останавливает Apply. Повторного
+describe после создания нет по явному решению владельца. Schema Registry API
+readiness и отдельный Kafka Verify сохраняются.
+
+RED OS102 workspace e7709a99: focused35 PASS, полный Kafka/repair61 PASS,
+Apply syntax PASS. Native one-materialization test проверяет три listeners,
+PEM и explicit PKCS12, одинаковые пути, client.auth, повтор changed=0 и no-log.
+Topic test доказывает describe+create на seed, один describe/changed=0 при
+повторе, один describe и отказ на missing/incompatible non-seed.
+Четыре реальных JVM PEM/PKCS12 теста PASS (231,865с), итого65 уникальных тестов.
+Старые qa_pem_tls фикстуры согласованы с ранее принятой health-only Verify:
+сверка server.properties не возвращается в Verify; material custody проверяется
+прямым helper, health/TLS/API — существующим native health fixture. Пустой
+account-custody fixture использует явный synthetic CLI вместо живого кластера.
+
+По новому явному запросу владельца выполнен один FULL DIFF independent review,
+scope зафиксирован десятью SHA256 в runtime review manifest. Предыдущий запрет
+ревью снят только для этого явно запрошенного шага. APPROVE_WITH_CHANGES,
+blockers0. KAS-N01 (nonblocking rotation flag coverage) закрыт расширенным native
+тестом: same-path certificate/key rotation даёт pki_changed=true, следующий
+повтор false/changed=0; тест PASS42,185с. Production scope после ревью не менялась,
+повторное ревью не вызывалось. Другие dirty изменения не включены в scope.
+См. service-runtime-optimization-review.md для hashes/вердикта и ограничений.
+QA workspace e7709a99 удалён штатным qa-sync cleanup; новый bundle/реальный
+updated-source Apply/benchmark не выполнялись. Текущий run продолжает77%
+resource/provider preparation на исходном bundle.
+
+## Общая подготовка ресурсов и провайдеров: serial optimization
+
+Закрытый baseline applications:prepare11:16:02–12:05:22МСК =49:20;
+1547 started tasks. Owner approved current scope; PG/Redis/Vault excluded.
+Implemented: raw defaults include once per library/host (semantic templating still
+per placement); parent stat observations reused only in reset read-only preflight,
+manual role fresh; Kafka aggregate selected-provider jobs, response parsed once;
+ClickHouse existing template lookup batched in controller action, accounts does
+not render unused table SQL. No new parallelism/public contract/persistence.
+
+QA fixed Jinja whitespace causing list to become a string before loop. Native
+Kafka fixture collection discovery and Templar DataLoader corrected. Frozen scope
+and independent review recorded in service-runtime-optimization-review.md;
+blockers0; PREP-N01 HA SQL coverage closed by native test-only addition.
+RED OS focused-final83 cases OK (82PASS/1 explicit SSH-target skip), syntax PASS;
+HA/standalone SQL equality PASS; provider selected-library create/repeat with both
+skipInfraVerify values PASS. Exact baseline/current applicationLibraries projection,
+status and safe findings equality PASS for2 libraries.
+
+Legacy resolver suite is not reported PASS: baseline replay of5 failures on prior
+resolver shows same missing adminCredential/runtime reference and database
+parameters schema failures. Corrected synthetic fixture9 PASS533.047s (only missing admin reference added
+in temporary test input). Final native48:34PASS/14FAIL,1067.995s; Kafka12,
+project-resolution1 and ClickHouse7 all PASS, including real standalone/3server
+HA resource/account/repeat/Verify. Full legacy regression is not PASS:12 tests
+lack required Kafka admin reference, one additionally uses schema-invalid empty
+PostgreSQL parameters, one synthetic topic CLI rejects aggregated topic selector
+(also fails with prior Kafka tasks). Baseline witnesses5 resolver+1topic and
+exact two-library application projection/status/findings equality PASS.
+Logs under runtime QA preparation-*.log. Three QA workspaces cleaned by qa-sync.
+No PG/Redis/Vault source diff. No commit, bundle publication, new installation or
+stopping active installer-c14d36d0 performed for this scope.

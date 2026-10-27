@@ -6,6 +6,7 @@
   any_errors_fatal: true
   roles:
     - role: platform.haproxy.haproxy
+      tasks_from: partial_prepare
       platform_haproxy_phase: prepare
       platform_haproxy_partial_deployment_id: "{{ hostvars['localhost']._platform_integration_source_id }}"
 
@@ -16,6 +17,7 @@
   any_errors_fatal: true
   roles:
     - role: platform.haproxy.haproxy
+      tasks_from: activate
       platform_haproxy_phase: activate
       platform_haproxy_partial_deployment_id: "{{ hostvars['localhost']._platform_integration_source_id }}"
 
@@ -26,5 +28,6 @@
   any_errors_fatal: true
   roles:
     - role: platform.haproxy.haproxy
+      tasks_from: partial_reload
       platform_haproxy_phase: start
       platform_haproxy_partial_deployment_id: "{{ hostvars['localhost']._platform_integration_source_id }}"

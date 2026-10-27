@@ -36,3 +36,13 @@
   ansible.builtin.assert:
     that: application_topic_batch_properties.rc == 0
     fail_msg: APPLICATION_TOPIC_CONFIG_READ_FAILED
+
+- name: Однократная проверка полученного пакета топиков без отдельных CLI вызовов
+  ansible.builtin.set_fact:
+    application_topic_batch_validation: "{{ platform_kafka_application_job.topics | platform.kafka.application_topics_validation(application_topic_batch_description, application_topic_batch_properties, platform_kafka_application_phase, platform_kafka_application_job.providerId) }}"
+  no_log: true
+
+- name: Проверка результатов пакета перед изменением любого топика
+  ansible.builtin.assert:
+    that: application_topic_batch_validation.findings | length == 0
+    fail_msg: "{{ application_topic_batch_validation.findings | to_json }}"

@@ -116,3 +116,68 @@ PRR-N02: preserve current lightweight configuration_only preview on cache miss;
 reuse complete result if already available, do not force full library resolver
 for early dataRoot display. Clarification incorporated. No repeated FULL review.
 Implementation remains owner-approval pending. Current installation unaffected.
+
+### Kafka Apply serial optimization — FULL DIFF, 2026-10-27
+
+Owner explicitly requested implementation of analysis items1/3/4 and independent
+review; parallelism is excluded. Later explicit decisions remove the second
+_schemas policy describe entirely and the broker-api-versions precheck before
+Schema Registry. Current run and active bundle remain unchanged.
+
+Independent architecture-reviewer `kafka_apply_serial_diff_review`:
+**APPROVE_WITH_CHANGES**, unresolved blockers **0**. One FULL DIFF used; no
+TARGETED_RECHECK requested or performed. Base f3225d184266ca3d1cc593265384f5355f13b07f.
+Scoped diff fingerprint sha256:33bb2c8827a5330495de95e57c157f4358f938479b9d277121183a12d01f91bb.
+Ten-file content fingerprint sha256:8b489366b4719b6e2c7717093f080074066057e7b184fa3421db1809c1573acc.
+Hashes verified twice by reviewer; previous unrelated dirty changes were excluded.
+
+KAS-N01 — NON_BLOCKING, low priority: add native coverage of
+platform_kafka_member_pki_changed on a same-path certificate/key rotation, then
+false on the unchanged repeat. Calculation was moved unchanged; no production
+defect identified. The owner-authorized follow-up is test-only and does not
+require another review. RESOLVED_BY_QA: expanded native test PASS (42,185с),
+same-path rotation asserts true and the next unchanged repeat false/changed=0.
+Only this test file was expanded after review; production scope remains identical.
+
+Overengineering: unnecessary abstractions0, duplicated contracts/DTO0,
+speculative features0, new persistence/cache/scheduler/concurrency0. Two task
+files separate material preparation from listener settings; the existing direct
+wrapper remains compatible without duplication.
+
+Evidence read by reviewer: Kafka/repair61 PASS, real JVM PEM/PKCS12 four PASS,
+Apply syntax PASS. Reviewer did not run tests or connect to target hosts.
+Verdict is limited to the stated source scope; new bundle, real full Apply and
+performance benchmark remain pending. Production scope is unchanged after review.
+
+## Подготовка ресурсов и провайдеров — FULL DIFF 2026-10-27
+
+Owner-approved serial scope: resolver raw defaults loading, read-only parent
+observations, existing aggregate Kafka jobs/response validation, ClickHouse SQL
+rendering through the existing template. PostgreSQL/Redis/Vault implementation,
+parallelism, active bundle and active installation are excluded.
+
+Independent architecture-reviewer `preparation_diff_review`: APPROVE_WITH_CHANGES,
+blocking0. Base f3225d184266ca3d1cc593265384f5355f13b07f; 16file runtime scope manifest
+`preparation-review-scope.json` SHA256
+`5a407db21ccb6357c718ebae47b1e23b0bb298e00316517b59be6091d45daebe`, 16/16 verified.
+No unnecessary mechanisms found. Architecture verdict is not overall QA acceptance.
+PREP-N01 nonblocking: HA template coverage. Closed after review by test-only
+standalone/raft-ha byte equality cases incl indexes/codec/settings; PASS6.141s.
+Updated test SHA256 `48bf6a53f55612d5b8250ce0d7ee1576cde0d1d0285d5b341e5d8574cfa11d51`.
+Production files unchanged after reviewed freeze; no second FULL review requested.
+
+Focused RED OS83 cases OK/1 explicit SSH-target skip; Kafka native selected-library
+create/repeat passes with skipInfraVerify false and true; standalone Apply syntax
+PASS. Resolver baseline/current two-library application projection/status/findings
+are identical. Extended legacy fixture QA has failures reproduced with prior
+resolver (missing required Kafka admin reference and empty PostgreSQL parameters
+rejected by current schema); broader QA completion/classification is tracked in
+journal, not silently marked PASS. Updated-source real bundle/run and timing
+benchmark remain pending; existing installer-c14d36d0 is not stopped.
+
+QA closeout: native48 completed34PASS/14legacy fixture failures; Kafka12,
+ClickHouse7 (real standalone/3server HA) and private-resolution1 PASS.
+Corrected synthetic fixture9 PASS (runtime admin-reference input only).
+Baseline topic task witness also fails before new parser, matching obsolete CLI
+selector expectation. Existing14 failures remain visible, full regression is
+not labelled PASS. Runtime acceptance/benchmark of new sources pending.

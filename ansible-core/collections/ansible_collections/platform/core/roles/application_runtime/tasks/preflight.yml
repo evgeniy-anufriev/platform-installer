@@ -223,6 +223,7 @@
 
 - name: "Формирование Compose-файлов и файлов библиотеки по шаблонам Ansible"
   ansible.builtin.set_fact:
+    application_preflight_parent_paths: "{{ ([application_library_path, application_instance_path ~ '/config'] + (application_runtime_job.configs | map(attribute='destination') | map('regex_replace', '^', application_instance_path ~ '/config/') | map('dirname') | list) + (application_runtime_job.directoryConfigs | map(attribute='destination') | map('regex_replace', '^', application_instance_path ~ '/config/') | map('dirname') | list) + (application_runtime_job.archiveConfigs | map(attribute='destination') | map('regex_replace', '^', application_instance_path ~ '/config/') | map('dirname') | list)) | platform.core.application_parent_paths }}"
     application_compose_content: "{{ lookup('ansible.builtin.template', application_runtime_job.appTemplate) }}"
     application_base_content: "{{ lookup('ansible.builtin.template', application_runtime_job.baseTemplate) }}"
     application_env_content: "{{ lookup('ansible.builtin.template', role_path ~ '/templates/library.env.j2') }}"
@@ -241,8 +242,20 @@
     get_checksum: false
     get_mime: false
     get_attributes: false
-  loop: "{{ ([application_library_path, application_instance_path ~ '/config'] + (application_runtime_job.configs | map(attribute='destination') | map('regex_replace', '^', application_instance_path ~ '/config/') | map('dirname') | list) + (application_runtime_job.directoryConfigs | map(attribute='destination') | map('regex_replace', '^', application_instance_path ~ '/config/') | map('dirname') | list) + (application_runtime_job.archiveConfigs | map(attribute='destination') | map('regex_replace', '^', application_instance_path ~ '/config/') | map('dirname') | list)) | platform.core.application_parent_paths }}"
-  register: application_ancestors
+  loop: "{{ application_preflight_parent_paths | difference((application_preflight_path_observations | default({}) if application_runtime_reuse_preflight_paths | default(false) | bool else {}) | list) }}"
+  register: _application_new_ancestors
+  no_log: true
+
+- name: Привязка наблюдений родительских путей в текущей read-only подготовке
+  ansible.builtin.set_fact:
+    application_ancestors:
+      results: "{{ application_preflight_parent_paths | map('extract', _application_parent_observations) | list }}"
+    application_preflight_path_observations: "{{ _application_parent_observations if application_runtime_reuse_preflight_paths | default(false) | bool else {} }}"
+  vars:
+    _application_parent_observations: >-
+      {{ (application_preflight_path_observations | default({}) if application_runtime_reuse_preflight_paths | default(false) | bool else {})
+         | combine(dict(_application_new_ancestors.results | default([]) | map(attribute='item')
+              | zip(_application_new_ancestors.results | default([])))) }}
   no_log: true
 
 - name: Отклонение небезопасных путей и неуправляемых каталогов приложений

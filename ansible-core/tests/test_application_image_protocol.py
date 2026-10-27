@@ -111,8 +111,36 @@ class ApplicationImageProtocolTests(unittest.TestCase):
                 response = json.loads(result.stdout)
                 self.assertEqual(result.returncode, 0, str(response))
                 return response
+            # Independent protocol requests share only a desired-derived base.
+            # No Start or target service operation is performed by this test.
+            snapshot_run = 'installer-snapshot-123456'
+            snapshot_journal = Journal(str(state), snapshot_run)
+            shutil.copytree(project, Path(snapshot_journal.directory) / 'project')
+            Path(snapshot_journal.directory, execution_protocol.SNAPSHOT_OWNER_FILE).write_text(
+                json.dumps(dict(kind='readonly', runId=snapshot_run)))
+            saved_snapshot = call(dict(operation='BuildProjectSnapshot', runId=snapshot_run))['projectSnapshot']
+            self.assertFalse(Path(snapshot_journal.directory).exists())
+            descriptor_run = 'installer-descriptors-123456'
+            descriptor_journal = Journal(str(state), descriptor_run)
+            shutil.copytree(project, Path(descriptor_journal.directory) / 'project')
+            archive_digest = 'sha256:' + 'd' * 64
+            snapshot_request = dict(apiVersion=execution_protocol.SNAPSHOT_REQUEST_VERSION,
+                kind='BuildProjectSnapshotRequest', requestId='0' * 32,
+                projectIdentity='application-image-qa', candidateProjectRevision=saved_snapshot['projectRevision'],
+                projectArchiveDigest=archive_digest, artifactLockDigest=bundle_digest,
+                catalogLockDigest=bundle['catalogDigest'], installerOwnedLogicalPaths=[],
+                projectContract='v2alpha1', snapshotContract='v1alpha1', editContract='v1alpha2')
+            Path(descriptor_journal.directory, execution_protocol.SNAPSHOT_OWNER_FILE).write_text(json.dumps(
+                dict(kind='candidate', runId=descriptor_run, requestId='0' * 32, archiveDigest=archive_digest)))
+            call(dict(operation='BuildRuntimeSecretDescriptors', runId=descriptor_run, snapshotRequest=snapshot_request))
+            self.assertFalse(Path(descriptor_journal.directory).exists())
+            timing = next((state / 'project-resolutions').glob('*.BuildRuntimeSecretDescriptors.timing.json'))
+            self.assertTrue(json.loads(timing.read_text())['resolution']['hit'])
             description = call(dict(operation='PrepareApplicationImages', phase='DESCRIBE',
                                     executionMode='FULL_PROJECT', deploymentOrder=['docker'], skipInfrastructureVerify=False))
+            timing_files = list((state / 'project-resolutions').glob('*.PrepareApplicationImages.timing.json'))
+            self.assertEqual(1, len(timing_files))
+            self.assertTrue(json.loads(timing_files[0].read_text())['resolution']['hit'])
             self.assertEqual(description['inputs']['placements'], [])
             self.assertEqual(description['inputs']['targetConnections'], {})
             self.assertEqual(len(description['inputs']['ready']), 3)
@@ -122,6 +150,27 @@ class ApplicationImageProtocolTests(unittest.TestCase):
                                 applicationLibraryOrder=sorted(variables['platform_desired_state']['applicationLibraryDeployments']),
                                 applicationVaultSources={}, applicationImagePreparation=prepared['preparationDigest']))
             plan = planned['deploymentPlan']
+            timing = next((state / 'project-resolutions').glob('*.BuildDeploymentPlan.timing.json'))
+            self.assertTrue(json.loads(timing.read_text())['resolution']['hit'])
+            # Start's authoritative rebuild uses the same Core operation while
+            # retaining fresh preparation admission and a full plan comparison.
+            rebuilt = call(dict(operation='BuildDeploymentPlan', project=str(project),
+                                executionMode='FULL_PROJECT', deploymentOrder=['docker'], skipInfrastructureVerify=False,
+                                applicationLibraryOrder=sorted(variables['platform_desired_state']['applicationLibraryDeployments']),
+                                applicationVaultSources={}, applicationImagePreparation=prepared['preparationDigest']))
+            self.assertEqual(plan, rebuilt['deploymentPlan'])
+            # Golden comparison against a fresh independent resolve proves the
+            # reusable private base did not change public plan semantics.
+            Path(journal.directory, '.project-resolution.json').unlink()
+            for artifact in (state / 'project-resolutions').glob('*.json'):
+                if len(artifact.stem) == 64:
+                    artifact.unlink()
+            fresh = call(dict(operation='BuildDeploymentPlan', project=str(project),
+                                executionMode='FULL_PROJECT', deploymentOrder=['docker'], skipInfrastructureVerify=False,
+                                applicationLibraryOrder=sorted(variables['platform_desired_state']['applicationLibraryDeployments']),
+                                applicationVaultSources={}, applicationImagePreparation=prepared['preparationDigest']))
+            self.assertFalse(json.loads(timing.read_text())['resolution']['hit'])
+            self.assertEqual(plan, fresh['deploymentPlan'])
             self.assertEqual(plan['apiVersion'], 'platform.installer/plan/v1alpha10')
             validator = SchemaValidator(str(ROOT / 'contracts'))
             self.assertEqual([], validator.validate(plan, ROOT / 'contracts/plan/v1alpha10/schema.json'))

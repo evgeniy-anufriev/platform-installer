@@ -15,6 +15,21 @@
   no_log: true
   become: false
 
+- name: Однократная загрузка исходных defaults каждой библиотеки и узла
+  ansible.builtin.include_vars:
+    file: "{{ item.value }}"
+    name: "_library_package_{{ item.key }}"
+  vars:
+    _application_library_namespace_inputs: >-
+      {%- set inputs = {} -%}
+      {%- for job in _application_inputs.jobs -%}
+      {%- set _ = inputs.update({([job.libraryId, job.hostId] | to_json | hash('sha256')): job.library.defaultsPath}) -%}
+      {%- endfor -%}
+      {{ inputs | dict2items }}
+  loop: "{{ _application_library_namespace_inputs }}"
+  no_log: true
+  become: false
+
 - name: "Определение топологии подключений перед формированием окружения потребителя"
   ansible.builtin.include_tasks: connection_topology.yml
   loop: "{{ _application_inputs.jobs }}"
@@ -37,7 +52,7 @@
 - name: Вычисление параметров каждого приложения и узла по переменным Ansible
   ansible.builtin.include_tasks: instance.yml
   vars:
-    _library_package: "{{ lookup('vars', '_library_package_' ~ ((application_job.libraryId ~ application_job.hostId) | hash('sha256'))) }}"
+    _library_package: "{{ lookup('vars', '_library_package_' ~ ([application_job.libraryId, application_job.hostId] | to_json | hash('sha256'))) }}"
     _application_package: "{{ lookup('vars', '_application_package_' ~ ((application_job.libraryId ~ application_job.slotId ~ application_job.hostId) | hash('sha256'))) }}"
   loop: "{{ _application_inputs.jobs }}"
   loop_control:

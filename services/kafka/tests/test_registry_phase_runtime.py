@@ -13,7 +13,7 @@ class RegistryPhaseRuntimeTests(unittest.TestCase):
     def test_principals_are_calculated_once_and_shared_with_reverse_host_order(self):
         if not shutil.which("ansible-playbook"):
             self.skipTest("Ansible runtime required")
-        main = yaml.safe_load((ROLE / "tasks/main.yml").read_text())
+        main = yaml.safe_load((ROLE / "tasks/apply.yml").read_text())
         names = {"Выбор узла расчёта principals для текущего запуска Kafka",
                  "Определение удостоверений сертификата экземпляра доверенной службы перед активацией авторизатора",
                  "Передача рассчитанных principals всем участникам текущего запуска Kafka"}

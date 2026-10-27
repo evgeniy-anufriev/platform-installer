@@ -4,25 +4,14 @@
   connection: local
   gather_facts: false
   tasks:
-    - name: Проверка настроек ресурсов переносимой службы
+    - name: Разрешение сохранённого проекта без повторного вычисления библиотек
       ansible.builtin.include_role:
-        name: platform.core.project_settings
-      run_once: true
+        name: platform.core.project_resolution
 
-    - name: Вычисление параметров дополнительных библиотек приложений средствами Ansible
-      ansible.builtin.include_role:
-        name: platform.core.resolve_application_libraries
-      when: platform_desired_state.applicationLibraryDeployments is defined
-
-    - name: Формирование воспроизводимого снимка проекта без внесения изменений
-      platform.core.project_snapshot:
-        project_root: "{{ platform_project_root | default(omit) }}"
-        service_catalog_path: "{{ platform_service_catalog_path }}"
-        installer_owned_paths: "{{ platform_installer_owned_paths | default([]) }}"
-      register: platform_project_snapshot
-      run_once: true
-      become: false
-      check_mode: false
+    - name: Сохранение публичного результата снимка
+      ansible.builtin.set_fact:
+        platform_project_snapshot: "{{ platform_project_resolution }}"
+      no_log: true
 
     - name: "Вывод идентификатора снимка без секретных данных"
       ansible.builtin.debug:

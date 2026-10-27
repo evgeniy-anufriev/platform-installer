@@ -78,3 +78,16 @@ silently deleted. The shared PKI pipeline and Java application PKCS12 delivery
 are unchanged, so they can still require their existing runtime store password.
 
 See [PEM implementation/isolated QA](../../docs/work/application-libraries/kafka-pem-plan.md).
+
+### Infrastructure Verify
+
+`platform_kafka_verify_only: true` enters `tasks/verify_entry.yml` directly.
+It checks each local member's active process, listener ports and actual TLS
+handshakes, then cluster quorum, registered unfenced brokers and each enabled
+Schema Registry HTTPS `/subjects` endpoint. It does not enter installation,
+ownership, configuration-drift, package or artifact checks. The existing shared
+member normalizer keeps manual inventory and project-derived identities equal.
+TLS paths are resolved once per local member and reused only within that Verify;
+Apply always resolves its own current inputs. Quorum diagnostics run on one
+selected member. CA/hostname validation and configured CLI authentication remain
+enabled; no certificates, accounts or service configuration are reconciled.

@@ -1,0 +1,8 @@
+---
+- name: Перечитывание конфигурации HAProxy после изменения выбранных backend-сервисов
+  ansible.builtin.systemd:
+    name: "{{ platform_haproxy_service_name }}"
+    state: reloaded
+  when:
+    - (platform_haproxy_partial_deployment_id is defined or platform_haproxy_partial_deployment_ids is defined)
+    - platform_haproxy_active_artifacts_changed | default(false) | bool

@@ -438,6 +438,10 @@ class ActionModule(ActionBase):
         del tmp
         task_vars = task_vars or {}
         try:
+            if self._task.args.get('resolved_result') is not None:
+                from ansible_collections.platform.core.plugins.module_utils.project_resolution import enrich
+                return enrich(self._task.args['resolved_result'],
+                              None if self._task.args.get('desired_only') else task_vars.get('platform_prepared_application_images'))
             requested_root = self._task.args.get("project_root")
             if requested_root and not os.path.isdir(os.path.realpath(requested_root)):
                 raise AnsibleError("Selected project directory does not exist")
@@ -452,6 +456,16 @@ class ActionModule(ActionBase):
             catalog_path = os.path.realpath(self._task.args.get("service_catalog_path") or task_vars.get("platform_service_catalog_path", ""))
             catalog_file = self._load(catalog_path)
             catalog = catalog_file.get("platform_service_catalog", catalog_file)
+            if (self._task.args.get('configuration_only') is True
+                    and task_vars.get('platform_project_resolution_directory')):
+                from ansible_collections.platform.core.plugins.module_utils import project_resolution as reuse
+                runtime = task_vars['platform_project_resolution_runtime']
+                expected, _ = reuse.identity(project_root, runtime)
+                cached = reuse.read(os.path.join(task_vars['platform_project_resolution_directory'],
+                                                reuse.scope_name(project_root, runtime)), expected)
+                if cached is not None:
+                    return dict(changed=False, snapshot=_safe_configuration_preview(
+                        cached['execution_configuration'], catalog, expected['revision'], task_vars.get('hostvars', {})))
             repo_root = self._repo_root(catalog_path, catalog)
             desired_state = task_vars.get("platform_desired_state", {})
             application_desired_state = desired_state
@@ -624,7 +638,7 @@ class ActionModule(ActionBase):
                 snapshot["applicationLibraries"] = applications
                 private_image_lock = resolve_image_lock(task_vars.get('platform_artifact_lock'),
                                                         (manifest or {}).get('artifactLock'),
-                                                        task_vars.get('platform_prepared_application_images'))
+                                                        None if self._task.args.get('desired_only') else task_vars.get('platform_prepared_application_images'))
                 if task_vars.get('platform_application_expected_fingerprint'):
                     scope = task_vars.get('platform_application_execution_scope', {})
                     model = application_execution_model(snapshot, private_image_lock,
@@ -643,6 +657,7 @@ class ActionModule(ActionBase):
             # the resolved configuration needed to build a digest-bound
             # execution manifest.
             return {"changed": False, "snapshot": snapshot, "pki_materialization": pki,
+                    "application_rows": task_vars.get('platform_application_rows', []),
                     "application_image_lock": private_image_lock if applications_enabled else {},
                     "execution_configuration": configuration,
                     "execution_connections": execution_connections}

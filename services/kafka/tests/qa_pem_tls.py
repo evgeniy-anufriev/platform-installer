@@ -109,7 +109,7 @@ class PemTlsQA(unittest.TestCase):
     def registry_prefix(self):
         source = yaml.safe_load((ROLE / 'tasks/schema_registry_member.yml').read_text())
         begin = next(i for i, t in enumerate(source) if t['name'] == 'Копирование хранилищ PKI в принадлежащие им каталоги времени выполнения реестра')
-        end = next(i for i, t in enumerate(source) if t['name'] == 'Проверка готовности протокола брокера для выбранного соединения')
+        end = next(i for i, t in enumerate(source) if t.get('ansible.builtin.include_tasks') == 'schema_registry_topic.yml')
         tasks = [source[0]] + source[begin:end]
         for task in tasks:
             if 'ansible.builtin.include_tasks' in task:
@@ -130,11 +130,14 @@ class PemTlsQA(unittest.TestCase):
                      dict(src=str(ROLE / 'templates/server.properties.j2'), dest=str(self.root / 'broker/server.properties'), mode='0600')})] + self.registry_prefix()
 
     def verify_prefix(self):
-        tasks = yaml.safe_load((ROLE / 'tasks/verify_ssl_listener.yml').read_text())[:4]
-        for task in tasks:
-            if 'ansible.builtin.include_tasks' in task:
-                task['ansible.builtin.include_tasks'] = str(ROLE / 'tasks' / task['ansible.builtin.include_tasks'])
-        return tasks
+        # Direct material-custody helper checks; the service's real health-only
+        # Verify is exercised by test_verify_health_runtime with live TLS/API.
+        verify = self.include('pem_identity.yml', kafka_pem_source_directory='{{ _platform_kafka_tls_runtime.targetDirectory }}',
+            kafka_pem_identity_path='{{ _platform_kafka_tls_runtime.keystorePath }}',
+            kafka_pem_ca_path='{{ _platform_kafka_tls_runtime.truststorePath }}',
+            kafka_pem_owner=self.user, kafka_pem_group=self.group, kafka_pem_verify_only=True)
+        verify['when'] = "platform_kafka_store_type == 'PEM'"
+        return [self.include('resolve_tls_runtime.yml'), verify]
 
     def native(self, mode, path):
         result = self.run_command(['java', '-cp', self.classpath, self.probe, mode, str(path)])
@@ -167,7 +170,7 @@ class PemTlsQA(unittest.TestCase):
         config = self.root / 'broker/server.properties'
         previous = config.read_text()
         config.write_text(previous + 'listener.name.internal.ssl.keystore.password=synthetic-invalid\n')
-        self.play(self.verify_prefix(), verify, expected='KAFKA_PEM_CONFIG_DRIFT')
+        self.play(self.verify_prefix(), verify, unchanged=True)
         self.assertTrue(config.read_text().endswith('password=synthetic-invalid\n'))
         config.write_text(previous)
         (self.root / 'broker/pki/identity.pem').chmod(0o644)
@@ -235,12 +238,12 @@ class PemTlsQA(unittest.TestCase):
             kafka_pem_identity_path=str(self.root / 'broker/pki/identity.pem'), kafka_pem_owner=self.user,
             kafka_pem_group=self.group, kafka_pem_verify_only=True)], expected='KAFKA_PEM_CONSUMER_DRIFT')
         self.assertFalse((self.root / 'broker/pki/identity.pem').exists())
-        # Even a pre-existing PEM bundle cannot make old PKCS12 properties pass PEM Verify.
+        # Material helper checks do not migrate existing PKCS12 properties.
         self.play([self.include('pem_identity.yml', kafka_pem_source_directory=str(self.source),
             kafka_pem_identity_path=str(self.root / 'broker/pki/identity.pem'), kafka_pem_owner=self.user,
             kafka_pem_group=self.group)])
         previous = (self.root / 'broker/server.properties').read_bytes()
-        self.play(self.verify_prefix(), expected='KAFKA_PEM_CONFIG_DRIFT')
+        self.play(self.verify_prefix(), unchanged=True)
         self.assertEqual(previous, (self.root / 'broker/server.properties').read_bytes())
 
     def test_library_only_pem_custody_and_cleanup_on_success_and_error(self):
@@ -249,9 +252,15 @@ class PemTlsQA(unittest.TestCase):
         secret.chmod(0o600)
         values = copy.deepcopy(self.values)
         values.update(platform_kafka_application_job=dict(topics=[], accounts=[], adminPasswordRef='runtime:synthetic-admin'),
-            application_topic_candidate=dict(tls=True, securityProtocol='SSL', pkiPlans=[self.plan]),
+            application_topic_candidate=dict(address='127.0.0.1', port=19093, tls=True, securityProtocol='SSL', pkiPlans=[self.plan]),
             application_kafka_credentials={'runtime:synthetic-admin': str(secret)},
             platform_application_secret_files={'runtime:synthetic-admin': str(secret)}, platform_kafka_application_phase='verify')
+        # This fixture exercises custody/cleanup, not a live Kafka account API.
+        cli = self.root / 'cli/bin'
+        cli.mkdir(parents=True)
+        (cli / 'kafka-configs.sh').write_text('#!/bin/sh\nexit 0\n')
+        (cli / 'kafka-configs.sh').chmod(0o700)
+        values['application_topic_cli_directory'] = str(cli.parent)
         before = self.source_hashes()
         cleanup = [dict(**{'ansible.builtin.stat': dict(path='{{ application_kafka_private.path }}')}, register='private_after'),
                    dict(**{'ansible.builtin.assert': dict(that=['not private_after.stat.exists'])})]

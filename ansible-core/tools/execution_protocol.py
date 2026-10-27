@@ -768,6 +768,48 @@ def start(value, state_root, runtime_release, controller, active_bundle_digest="
 
 
 def core_operation(value, state_root, runtime_release, operation, runtime_identity=None):
+    """Serialize publication for one project; retain no process/UI state."""
+    project = os.path.join(state_root, 'runs', value['runId'], 'project')
+    collections = os.path.join(runtime_release, 'ansible-core', 'collections')
+    implementation = os.path.join(collections, 'ansible_collections', 'platform', 'core',
+                                  'plugins', 'module_utils', 'project_resolution.py')
+    reusable_operation = operation in ('BuildProjectSnapshot', 'BuildRuntimeSecretDescriptors',
+                                       'BuildDeploymentPlan', 'PrepareApplicationImages')
+    supported = (runtime_identity is not None and os.path.isfile(implementation) and
+                 reusable_operation and (value.get('snapshotRequest') is None or
+                                          operation == 'BuildRuntimeSecretDescriptors'))
+    if not supported:
+        return _core_operation(value, state_root, runtime_release, operation, runtime_identity)
+    if collections not in sys.path:
+        sys.path.insert(0, collections)
+    from ansible_collections.platform.core.plugins.module_utils import project_resolution as resolution
+    directory = os.path.join(state_root, 'project-resolutions')
+    os.makedirs(directory, mode=0o700, exist_ok=True)
+    descriptor = os.open(os.path.join(directory, resolution.scope_name(project, runtime_identity) + '.lock'),
+                         os.O_CREAT | os.O_RDWR, 0o600)
+    started = time.monotonic()
+    acquired = started
+    try:
+        fcntl.flock(descriptor, fcntl.LOCK_EX)
+        acquired = time.monotonic()
+        return _core_operation(value, state_root, runtime_release, operation, runtime_identity)
+    finally:
+        try:
+            metrics = os.path.join(state_root, 'runs', value['runId'], '.project-resolution.json.metrics')
+            data = dict(operation=operation, elapsedSeconds=round(time.monotonic() - started, 6),
+                        lockWaitSeconds=round(acquired - started, 6))
+            if os.path.isfile(metrics):
+                with open(metrics, encoding='utf-8') as stream:
+                    data['resolution'] = json.load(stream)
+            resolution.atomic_json(os.path.join(directory,
+                resolution.scope_name(project, runtime_identity) + '.' + operation + '.timing.json'), data)
+        except (OSError, ValueError, TypeError):
+            pass  # Optional timing must not mask the operation's outcome.
+        finally:
+            os.close(descriptor)
+
+
+def _core_operation(value, state_root, runtime_release, operation, runtime_identity=None):
     """Run one fixed Core playbook against already trusted run staging."""
     from execution_controller import _collection_path
     journal = Journal(state_root, value["runId"])
@@ -859,6 +901,21 @@ def core_operation(value, state_root, runtime_release, operation, runtime_identi
     if operation == 'PrepareApplicationImages' and value.get('apiVersion') == SELECTION_REQUEST_VERSION:
         extra.update(platform_execution_skip_application_libraries=value['skipApplicationLibraries'],
                      platform_execution_application_library_order=value['applicationLibraryOrder'])
+    # Derived controller-private result only. Candidate/edit snapshots keep
+    # their independent proof and the configuration-only preview stays light.
+    if (runtime_identity is not None and value.get('snapshotRequest') is None
+            and operation in ('BuildProjectSnapshot', 'BuildRuntimeSecretDescriptors',
+                              'BuildDeploymentPlan', 'PrepareApplicationImages')):
+        extra.update(platform_project_resolution_directory=os.path.join(state_root, 'project-resolutions'),
+                     platform_project_resolution_local_path=os.path.join(journal.directory, '.project-resolution.json'),
+                     platform_project_resolution_runtime=runtime_identity)
+    elif runtime_identity is not None and operation == 'BuildRuntimeSecretDescriptors':
+        extra.update(platform_project_resolution_directory=os.path.join(state_root, 'project-resolutions'),
+                     platform_project_resolution_local_path=os.path.join(journal.directory, '.project-resolution.json'),
+                     platform_project_resolution_runtime=runtime_identity)
+    elif runtime_identity is not None and operation == 'BuildServiceConfigurationPreview':
+        extra.update(platform_project_resolution_directory=os.path.join(state_root, 'project-resolutions'),
+                     platform_project_resolution_runtime=runtime_identity)
     diagnostic_path = os.path.join(journal.directory, "core-diagnostic.json")
     descriptor, vars_path = tempfile.mkstemp(prefix=".execution-vars-", dir=journal.directory)
     try:
@@ -1131,9 +1188,11 @@ def main():
         return reply(_image_capabilities(args, value['apiVersion'] == SELECTION_REQUEST_VERSION) if value['apiVersion'] in IMAGE_REQUEST_VERSIONS else _b0_capabilities(args, value['apiVersion'] == SKIP_PLAN_REQUEST_VERSION) if value['apiVersion'] in (B0_PLAN_REQUEST_VERSION, SKIP_PLAN_REQUEST_VERSION) else _application_capabilities(args) if value['apiVersion'] == APPLICATION_PLAN_REQUEST_VERSION else _capabilities_v4(args))
     if operation == 'PrepareApplicationImages':
         if value['phase'] == 'DESCRIBE':
-            return reply(core_operation(value, args.state_root, args.runtime_release, operation))
+            return reply(core_operation(value, args.state_root, args.runtime_release, operation, observed))
         return reply(image_preparation.prepare(Journal(args.state_root, value['runId']), value, args.runtime_release, value['runtimeRelease']))
-    if operation in ("ValidateProject", "BuildDeploymentPlan"): return reply(core_operation(value, args.state_root, args.runtime_release, operation))
+    if operation in ("ValidateProject", "BuildDeploymentPlan"):
+        identity = observed if value.get('apiVersion') in IMAGE_REQUEST_VERSIONS else None
+        return reply(core_operation(value, args.state_root, args.runtime_release, operation, identity))
     if operation == "BuildProjectSnapshot":
         candidate = _validated_snapshot_request(value)
         runtime_release = value.get("runtimeRelease")

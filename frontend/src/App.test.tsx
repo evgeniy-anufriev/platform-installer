@@ -511,6 +511,65 @@ function api(overrides: Record<string, unknown> = {}): MockApi {
   } as unknown as MockApi;
 }
 
+it("restores a CURRENT run and its plan after a React reload without another Start", async () => {
+  const runId = "installer-current-run";
+  const getInstallationRun = vi.fn().mockResolvedValue({
+    status: "READY",
+    projectRevision: "sha256:run-revision",
+    run: { runId, state: "RUNNING", sequence: 0 },
+    plan: {
+      id: "current-plan",
+      projectRevision: "sha256:run-revision",
+      phases: [
+        {
+          id: "applications",
+          order: 0,
+          actions: [
+            {
+              id: "apply",
+              type: "APPLICATION_LIBRARIES_APPLY",
+              summary: "Apply libraries",
+              targets: ["node1"],
+              dependsOn: [],
+            },
+          ],
+        },
+      ],
+    },
+  });
+  const attachOrphanRun = vi.fn();
+  const startApprovedInstallation = vi.fn();
+  const subscribeInstallationRun = vi
+    .fn()
+    .mockResolvedValue({ status: "READY", subscriptionId: "current-sub" });
+  const value = api({
+    inspectOrphanRun: vi.fn().mockResolvedValue({ status: "CURRENT", runId }),
+    getInstallationRun,
+    attachOrphanRun,
+    startApprovedInstallation,
+    subscribeInstallationRun,
+  });
+  await openServers(value);
+  await userEvent.click(
+    screen.getByRole("button", { name: "Проверить прежний запуск" }),
+  );
+  expect(
+    await screen.findByText(/Запуск уже известен этому Installer/),
+  ).toBeTruthy();
+  await userEvent.click(
+    screen.getByRole("button", { name: "Открыть выполнение" }),
+  );
+  await waitFor(() =>
+    expect(subscribeInstallationRun).toHaveBeenCalledWith(runId, 0),
+  );
+  expect(screen.queryByText("В этом сеансе запуск ещё не начат.")).toBeNull();
+  expect(
+    screen.getAllByText("Установить библиотеки приложений").length,
+  ).toBeGreaterThan(0);
+  expect(attachOrphanRun).not.toHaveBeenCalled();
+  expect(startApprovedInstallation).not.toHaveBeenCalled();
+});
+
 it("attaches the previous run and reuses execution, events and cancellation without another Start", async () => {
   const runId = "installer-prior-run";
   let onRunEvent:
@@ -2194,6 +2253,56 @@ describe("UI-01H2 services navigation and safe settings", () => {
     expect(value.getServiceConfigurationPreview).toHaveBeenCalledOnce();
     expect(value.verifyProject).not.toHaveBeenCalled();
     expect(value.appendEditCommand).not.toHaveBeenCalled();
+  });
+
+  it("retries failed preview on return to Services and reuses a successful revision", async () => {
+    const value = api({
+      createInstallationPlan: vi.fn(),
+      getExecutionNodeContext: vi.fn().mockResolvedValue({
+        status: "READY",
+        selectionKind: "PROJECT_SERVER",
+        selectedHostId: "node1",
+        runtimeDigest: "sha256:runtime-a",
+      }),
+      getServiceConfigurationPreview: vi
+        .fn()
+        .mockRejectedValueOnce(
+          new Error("SERVICE_CONFIGURATION_PREVIEW_UNSUPPORTED"),
+        )
+        .mockResolvedValue({
+          projectRevision: "sha256:old",
+          runtimeDigest: "sha256:runtime-a",
+          services: {
+            "kafka-main": {
+              configuration: {
+                replicaCount: {
+                  state: "RESOLVED",
+                  source: "ROLE_DEFAULT",
+                  value: 5,
+                },
+              },
+              members: {},
+            },
+          },
+        }),
+    });
+    value.chooseProject.mockResolvedValue(project);
+    render(<App api={value} />);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Открыть папку проекта" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Сервисы" }));
+    await userEvent.click(screen.getByRole("button", { name: /^kafka-main/ }));
+    await screen.findByText(/Код: SERVICE_CONFIGURATION_PREVIEW_UNSUPPORTED/);
+    await userEvent.click(screen.getByRole("button", { name: /^Серверы$/ }));
+    await userEvent.click(screen.getByRole("button", { name: /^Сервисы$/ }));
+    expect(await screen.findByText("По умолчанию: 5")).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: /^Серверы$/ }));
+    await userEvent.click(screen.getByRole("button", { name: /^Сервисы$/ }));
+    expect(await screen.findByText("По умолчанию: 5")).toBeTruthy();
+    expect(value.getServiceConfigurationPreview).toHaveBeenCalledTimes(2);
+    expect(value.verifyProject).not.toHaveBeenCalled();
+    expect(value.createInstallationPlan).not.toHaveBeenCalled();
   });
 
   it("keeps local values visible when the READY Core projection is unavailable", async () => {

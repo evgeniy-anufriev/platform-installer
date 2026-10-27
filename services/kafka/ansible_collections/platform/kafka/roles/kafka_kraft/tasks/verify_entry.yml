@@ -1,0 +1,92 @@
+---
+- name: "Получение экземпляров Kafka из проекта, если список не задан явно"
+  ansible.builtin.include_tasks: project_runtime.yml
+  when:
+    - platform_kafka_instances | length == 0
+    - platform_desired_state is defined or platform_project is defined or platform_project_manifest_path is defined
+
+- name: Выбор явного ввода экземпляра службы Kafka
+  ansible.builtin.set_fact:
+    _platform_kafka_input_instances: "{{ platform_kafka_instances }}"
+  when: platform_kafka_instances | length > 0
+
+- name: Преобразование устаревших переменных одного экземпляра сервиса
+  ansible.builtin.set_fact:
+    _platform_kafka_input_instances:
+      - id: "{{ platform_kafka_service_name }}-{{ platform_kafka_node_id }}"
+        node_id: "{{ platform_kafka_node_id }}"
+        roles: [broker, controller]
+        listeners: "{{ platform_kafka_listeners | default(omit) }}"
+        tls_profile: "{{ platform_kafka_tls_profile }}"
+        data_directory: "{{ platform_kafka_data_directory }}"
+        log_directory: "{{ platform_kafka_log_directory }}/{{ platform_kafka_service_name }}"
+        config_directory: "{{ platform_kafka_config_directory }}"
+        host: "{{ inventory_hostname }}"
+        advertised_host: "{{ platform_kafka_advertised_host }}"
+        _compatibility_unit:
+          name: "{{ platform_kafka_service_name }}"
+          destination: "/etc/systemd/system/{{ platform_kafka_service_name }}.service"
+          environment_pattern: "{{ platform_kafka_config_directory }}/{{ platform_kafka_service_name }}/systemd.env"
+          runtime_directory: "{{ platform_kafka_config_directory }}/{{ platform_kafka_service_name }}"
+          description: "Apache Kafka {{ platform_kafka_version }} KRaft member"
+  when: platform_kafka_instances | length == 0
+
+- name: Инициализация нормализованного списка экземпляров службы Kafka
+  ansible.builtin.set_fact:
+    _platform_kafka_instances: []
+
+- name: Нормализация экземпляров службы Kafka в общую внутреннюю модель
+  ansible.builtin.include_tasks: normalize_member.yml
+  loop: "{{ _platform_kafka_input_instances }}"
+  loop_control:
+    loop_var: kafka_input_member
+    label: "{{ kafka_input_member.id }}"
+
+- name: Упорядочивание нормализованных экземпляров Kafka
+  ansible.builtin.set_fact:
+    _platform_kafka_instances: "{{ _platform_kafka_instances | sort(attribute='node_id') }}"
+
+- name: Получение наборов экземпляров службы Kafka
+  ansible.builtin.set_fact:
+    _platform_kafka_controller_instances: "{{ _platform_kafka_instances | selectattr('roles', 'contains', 'controller') | list }}"
+    _platform_kafka_broker_instances: "{{ _platform_kafka_instances | selectattr('roles', 'contains', 'broker') | list }}"
+    _platform_kafka_local_instances: "{{ _platform_kafka_instances | selectattr('host', 'equalto', inventory_hostname) | list }}"
+
+- name: Выбор способа аутентификации и начало локального расчёта TLS для Verify
+  ansible.builtin.set_fact:
+    _platform_kafka_scram_enabled: "{{ _platform_kafka_instances | map(attribute='listeners') | map('dict2items') | flatten | selectattr('value.securityProtocol', 'equalto', 'SASL_SSL') | list | length > 0 }}"
+    _platform_kafka_verify_tls_by_member: {}
+
+- name: Проверка работоспособности узлов и кластера Kafka
+  ansible.builtin.include_tasks: verify.yml
+
+- name: Расчёт адресов Schema Registry для проверки API
+  ansible.builtin.set_fact:
+    _platform_kafka_registry_projection: >-
+      {{ _platform_kafka_instances | platform.core.platform_kafka_schema_registry_projection(
+           platform_kafka_schema_registry_enabled,
+           platform_kafka_schema_registry_kafka_listener,
+           platform_kafka_schema_registry_http_port,
+           platform_kafka_schema_registry_https_port,
+           platform_kafka_schema_registry_name,
+           platform_kafka_schema_registry_config_directory,
+           platform_kafka_schema_registry_log_directory) }}
+  when: platform_kafka_schema_registry_enabled
+
+- name: Проверка наличия адресов для проверки включённого Schema Registry
+  ansible.builtin.assert:
+    that:
+      - _platform_kafka_registry_projection.instances | length > 0
+    fail_msg: SCHEMA_REGISTRY_HEALTH_TARGET_MISSING
+  when: platform_kafka_schema_registry_enabled
+
+- name: Выбор локальных адресов Schema Registry
+  ansible.builtin.set_fact:
+    _platform_kafka_registry_local: "{{ _platform_kafka_registry_projection.instances | selectattr('host', 'equalto', inventory_hostname) | list }}"
+  when: platform_kafka_schema_registry_enabled
+
+- name: Проверка готовности Schema Registry
+  ansible.builtin.include_tasks: schema_registry_verify.yml
+  when:
+    - platform_kafka_schema_registry_enabled
+    - _platform_kafka_registry_local | length > 0

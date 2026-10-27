@@ -75,7 +75,11 @@ class PartialOptimizationTests(unittest.TestCase):
             self.skipTest("Ansible runtime required")
         def tasks(file, names):
             source = yaml.safe_load((ROLE / "tasks" / file).read_text())
-            return [task for task in source if task.get("name") in names]
+            selected = [task for task in source if task.get("name") in names]
+            for task in selected:
+                if 'ansible.builtin.include_tasks' in task:
+                    task['ansible.builtin.include_tasks'] = str(ROLE / 'tasks' / task['ansible.builtin.include_tasks'])
+            return selected
         prepare = tasks("prepare.yml", {
             "Проверка наличия целевого каталога в выбранном плане PKI для HAProxy", "Развертывание входов HAProxy TLS PEM",
             "Атомарная сборка пакета HAProxy PEM без регистрации ключевых данных",
@@ -87,6 +91,7 @@ class PartialOptimizationTests(unittest.TestCase):
             "Установка проверенных файлов backend управляемого приложения HAProxy",
             "Запись изменения активного графа конфигурации HAProxy"})
         start = yaml.safe_load((ROLE / "tasks/start.yml").read_text())
+        start[-1] = yaml.safe_load((ROLE / 'tasks/partial_reload.yml').read_text())[0]
         with tempfile.TemporaryDirectory(prefix="platform-haproxy-partial-") as directory:
             root = Path(directory)
             active = root / "active"
@@ -103,7 +108,6 @@ class PartialOptimizationTests(unittest.TestCase):
             other = "30-backend-other-public.cfg"
             (active / "conf.d" / other).write_text("# retain other source\n")
             (candidate / "conf.d" / other).write_text("# must not publish this\n")
-            (candidate / "conf.d" / source).write_text("# selected backend\n")
             variables = {"platform_haproxy_partial_deployment_id": "vault",
                          "platform_haproxy_candidate_directory": str(candidate),
                          "platform_haproxy_main_config": str(active / "haproxy.cfg"),
@@ -121,8 +125,11 @@ class PartialOptimizationTests(unittest.TestCase):
             checks = [{"ansible.builtin.assert": {"that": [
                 "not platform_haproxy_tls_material_changed",
                 "not platform_haproxy_active_artifacts_changed"]}}]
+            render_selected = {'ansible.builtin.copy': {
+                'content': '# selected backend\n', 'dest': str(candidate / 'conf.d' / source)},
+                'changed_when': False}
             play = [{"hosts": "localhost", "connection": "local", "gather_facts": False,
-                     "vars": variables, "tasks": prepare + publish},
+                     "vars": variables, "tasks": prepare + [render_selected] + publish},
                     {"hosts": "localhost", "connection": "local", "gather_facts": False,
                      "vars": variables, "tasks": [reload_check,
                        {"ansible.builtin.assert": {"that": ["platform_haproxy_active_artifacts_changed"]}}]},

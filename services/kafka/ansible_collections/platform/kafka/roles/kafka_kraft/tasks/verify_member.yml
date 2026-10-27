@@ -25,10 +25,22 @@
     timeout: 5
   loop: "{{ kafka_member.listener_ports }}"
 
+- name: Расчёт TLS-проекции экземпляра Kafka для всех проверок соединения
+  ansible.builtin.include_tasks: resolve_tls_runtime.yml
+  vars:
+    kafka_tls_member: "{{ kafka_member }}"
+  when: kafka_member.listener_endpoints | selectattr('security_protocol', 'in', ['SSL', 'SASL_SSL']) | list | length > 0
+
+- name: Сохранение TLS-проекции экземпляра только для текущего Verify
+  ansible.builtin.set_fact:
+    _platform_kafka_verify_tls_by_member: "{{ _platform_kafka_verify_tls_by_member | default({}) | combine({kafka_member.id: _platform_kafka_tls_runtime}) }}"
+  when: kafka_member.listener_endpoints | selectattr('security_protocol', 'in', ['SSL', 'SASL_SSL']) | list | length > 0
+
 - name: Проверка SSL listeners Kafka через реальное TLS-соединение
   ansible.builtin.include_tasks: verify_ssl_listener.yml
   vars:
     kafka_ssl_listener: "{{ kafka_ssl_listener_entry.value | combine({'name': kafka_ssl_listener_entry.key}) }}"
+    kafka_ssl_runtime_prepared: true
   loop: "{{ kafka_member.listeners | default({}) | dict2items | selectattr('value.securityProtocol', 'in', ['SSL', 'SASL_SSL']) | rejectattr('value.purpose', 'equalto', 'controller') | list if 'controller' not in kafka_member.roles else kafka_member.listeners | default({}) | dict2items | selectattr('value.securityProtocol', 'in', ['SSL', 'SASL_SSL']) | list }}"
   loop_control:
     loop_var: kafka_ssl_listener_entry

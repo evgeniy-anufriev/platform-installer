@@ -43,7 +43,7 @@ else:
 
 
 class KafkaApplicationBatchTests(unittest.TestCase):
-    def probe(self, state, topics, expected_success=True, repeat=False, acl=False):
+    def probe(self, state, topics, expected_success=True, repeat=False, acl=False, skip_infra_verify=False):
         with tempfile.TemporaryDirectory(prefix='qa-kafka-batch-') as directory:
             root = Path(directory)
             (root / 'bin').mkdir()
@@ -52,7 +52,8 @@ class KafkaApplicationBatchTests(unittest.TestCase):
                 path.write_text(CLI)
                 path.chmod(0o700)
             (root / 'state.json').write_text(json.dumps(state))
-            variables = dict(application_topic_cli_directory=str(root),
+            variables = dict(platform_execution_skip_infrastructure_verify=skip_infra_verify,
+                             application_topic_cli_directory=str(root),
                              application_topic_candidate=dict(address='127.0.0.1', port='9092'),
                              application_topic_client=dict(path=str(root / 'client.properties')),
                              platform_kafka_application_job=dict(providerId='qa', topics=topics),
@@ -79,7 +80,8 @@ class KafkaApplicationBatchTests(unittest.TestCase):
             probe.write_text(yaml.safe_dump(play, sort_keys=False))
             def run():
                 result = subprocess.run(['ansible-playbook', '-i', 'localhost,', str(probe)],
-                                        env=dict(os.environ, ANSIBLE_CONFIG=str(ROOT / 'ansible-core/ansible.cfg')),
+                                        env=dict(os.environ, ANSIBLE_CONFIG=str(ROOT / 'ansible-core/ansible.cfg'),
+                                                 ANSIBLE_COLLECTIONS_PATH=str(ROOT / 'services/kafka') + ':' + str(ROOT / 'ansible-core/collections')),
                                         capture_output=True, text=True, timeout=90)
                 self.assertEqual(expected_success, result.returncode == 0,
                                  (result.stdout + result.stderr)[-2400:])
@@ -97,6 +99,33 @@ class KafkaApplicationBatchTests(unittest.TestCase):
                            [self.topic('qa.a'), self.topic('qa-b', policy='compact')])
         self.assertEqual(2, len(calls))
         self.assertEqual('^(qa\\.a|qa\\-b)$', calls[0][1][-1])
+
+    def test_skip_infra_verify_still_prepares_only_selected_library_topics(self):
+        from test_application_providers import KafkaAdminSelectionTest, project_providers
+        inputs = KafkaAdminSelectionTest().fixture(accounts=False)
+        inputs[1]['applicationExecutionScope'] = {'installLibraries': ['a']}
+        projected = project_providers(*inputs)
+        self.assertEqual('PASS', projected['status'], projected['findings'])
+        stage = yaml.safe_load((ROOT / 'ansible-core/playbooks/applications/stages/provider-stage.yml').read_text())
+        def walk(value):
+            if isinstance(value, dict):
+                yield value
+                for child in value.values():
+                    yield from walk(child)
+            elif isinstance(value, list):
+                for child in value:
+                    yield from walk(child)
+        task = next(t for t in walk(stage) if t.get('ansible.builtin.include_role', {}).get('tasks_from') == 'application_topics')
+        from ansible.template import Templar
+        from ansible.parsing.dataloader import DataLoader
+        jobs = Templar(loader=DataLoader(), variables={'application_provider_inputs': projected}).template(task['loop'])
+        self.assertEqual(1, len(jobs))
+        self.assertEqual(['a-events'], [t['name'] for t in jobs[0]['topics']])
+        for skip in (False, True):
+            with self.subTest(skipInfraVerify=skip):
+                calls = self.probe({'topics': {}}, jobs[0]['topics'], repeat=True, skip_infra_verify=skip)
+                created = [args[args.index('--topic') + 1] for _, args in calls if '--create' in args]
+                self.assertEqual(['a-events'], created)
 
     def test_configuration_from_neighbour_topic_cannot_hide_drift(self):
         calls = self.probe({'topics': {'qa.a': 'compact', 'qaXa': 'delete'}},
