@@ -43348,12 +43348,16 @@ tags: [kafka, kraft, offline]
 dependencies: {}
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/defaults/main.yml","mode":420,"size":3241,"sha256":"78b5b24aab7bc3c1f4b3f06da75dd310a0f05185b7a56f4e9a9c4e2c2ae55023","index":0,"count":1,"encoding":"utf-8","payloadBytes":3241}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/defaults/main.yml","mode":420,"size":3514,"sha256":"9c718cce49d8ad6778cd7d253ecfd6ba52511ceeeb822243ea65add31cca4c81","index":0,"count":1,"encoding":"utf-8","payloadBytes":3514}
 ---
 platform_kafka_version: "4.3.1"
+# Include the leading dot; use an empty string for extensionless Kafka commands.
+platform_kafka_script_extension: ".sh"
 platform_kafka_application_timeout_ms: 30000
 platform_kafka_phase: full
 platform_kafka_schema_registry_enabled: true
+# Reuse Kafka's approved archive and unpacked directory instead of a separate distribution.
+platform_kafka_schema_registry_use_kafka_distribution: false
 platform_kafka_schema_registry_kafka_listener: SSL
 platform_kafka_schema_registry_http_port: 8081
 platform_kafka_schema_registry_https_port: 8082
@@ -43433,7 +43437,7 @@ galaxy_info:
 dependencies: []
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/application_account.yml","mode":420,"size":7298,"sha256":"3608aa7b32847ef1afc64244ad08c188d8e847b5cad7fcc4fbf11ab5dc28cf49","index":0,"count":1,"encoding":"utf-8","payloadBytes":7298}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/application_account.yml","mode":420,"size":7400,"sha256":"ac7d5089f7dd5a0f23969c791e46845e1152cd01369b41da2b234dcd72bfd09c","index":0,"count":1,"encoding":"utf-8","payloadBytes":7400}
 ---
 - name: Выбор заданного Kafka principal из метаданных развёртывания SCRAM
   ansible.builtin.set_fact:
@@ -43470,7 +43474,7 @@ dependencies: []
 - name: Проверка пароля существующего приложения без изменения учетных данных
   ansible.builtin.command:
     argv:
-      - "{{ application_topic_cli_directory }}/bin/kafka-broker-api-versions.sh"
+      - "{{ application_topic_cli_directory }}/bin/kafka-broker-api-versions{{ platform_kafka_script_extension }}"
       - --bootstrap-server
       - "{{ application_kafka_account.candidates[0].address }}:{{ application_kafka_account.candidates[0].port }}"
       - --command-config
@@ -43512,7 +43516,7 @@ dependencies: []
     - name: Установка пароля выбранного приложения SCRAM с помощью файлового интерфейса Kafka
       ansible.builtin.command:
         argv:
-          - "{{ application_topic_cli_directory }}/bin/kafka-configs.sh"
+          - "{{ application_topic_cli_directory }}/bin/kafka-configs{{ platform_kafka_script_extension }}"
           - --bootstrap-server
           - "{{ application_topic_candidate.address }}:{{ application_topic_candidate.port }}"
           - --command-config
@@ -43539,7 +43543,7 @@ dependencies: []
     - name: Выполнение аутентификации приложения через SCRAM listener Kafka
       ansible.builtin.command:
         argv:
-          - "{{ application_topic_cli_directory }}/bin/kafka-broker-api-versions.sh"
+          - "{{ application_topic_cli_directory }}/bin/kafka-broker-api-versions{{ platform_kafka_script_extension }}"
           - --bootstrap-server
           - "{{ application_kafka_account.candidates[0].address }}:{{ application_kafka_account.candidates[0].port }}"
           - --command-config
@@ -43590,11 +43594,11 @@ dependencies: []
     application_kafka_credentials: "{{ platform_application_secret_files | default({}) | combine(platform_application_credential_files | default({})) }}"
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/application_accounts_read.yml","mode":420,"size":2263,"sha256":"821baf337ca16b41571df6c70a473fd6457778a998b6bb18c594a3673bce2ebe","index":0,"count":1,"encoding":"utf-8","payloadBytes":2263}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/application_accounts_read.yml","mode":420,"size":2331,"sha256":"cefd1bcb67b1675913e87551ea242d066dc6288ae7056ad231d111405bdbf24e","index":0,"count":1,"encoding":"utf-8","payloadBytes":2331}
 ---
 - name: Получение описания метаданных SCRAM один раз для всех пользователей развертывания
   ansible.builtin.command:
-    argv: ["{{ application_topic_cli_directory }}/bin/kafka-configs.sh", --bootstrap-server, "{{ application_topic_candidate.address }}:{{ application_topic_candidate.port }}", --command-config, "{{ application_kafka_private.path }}/admin.properties", --describe, --entity-type, users]
+    argv: ["{{ application_topic_cli_directory }}/bin/kafka-configs{{ platform_kafka_script_extension }}", --bootstrap-server, "{{ application_topic_candidate.address }}:{{ application_topic_candidate.port }}", --command-config, "{{ application_kafka_private.path }}/admin.properties", --describe, --entity-type, users]
   register: application_kafka_user_inventory
   changed_when: false
   failed_when: false
@@ -43618,7 +43622,7 @@ dependencies: []
   block:
     - name: "Чтение всех ACL развёртывания без фильтра по principal"
       ansible.builtin.command:
-        argv: ["{{ application_topic_cli_directory }}/bin/kafka-acls.sh", --bootstrap-server, "{{ application_topic_candidate.address }}:{{ application_topic_candidate.port }}", --command-config, "{{ application_kafka_private.path }}/admin.properties", --list, --resource-pattern-type, any]
+        argv: ["{{ application_topic_cli_directory }}/bin/kafka-acls{{ platform_kafka_script_extension }}", --bootstrap-server, "{{ application_topic_candidate.address }}:{{ application_topic_candidate.port }}", --command-config, "{{ application_kafka_private.path }}/admin.properties", --list, --resource-pattern-type, any]
       register: application_kafka_acl_inventory
       changed_when: false
       failed_when: false
@@ -43667,7 +43671,7 @@ dependencies: []
       changed_when: false
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/application_acl.yml","mode":420,"size":3350,"sha256":"b9e21d9b3fc8c9b82d0412d71c6af07645a3cd5fa2cb9ea1ada0a2aadcca58ba","index":0,"count":1,"encoding":"utf-8","payloadBytes":3350}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/application_acl.yml","mode":420,"size":3381,"sha256":"395e5d50aee2e56393cd4f7bed9a46f9e31bafcf1ef3b5a22faf6d5d6ac3088e","index":0,"count":1,"encoding":"utf-8","payloadBytes":3381}
 ---
 - name: Формирование CLI-селектора выбранного ресурса Kafka ACL
   ansible.builtin.set_fact:
@@ -43703,7 +43707,7 @@ dependencies: []
 
 - name: Добавление отсутствующих управляемых списков управления доступом без удаления других разрешений
   ansible.builtin.command:
-    argv: "{{ [application_topic_cli_directory ~ '/bin/kafka-acls.sh', '--bootstrap-server', application_topic_candidate.address ~ ':' ~ application_topic_candidate.port, '--command-config', application_kafka_private.path ~ '/admin.properties', '--add', '--allow-principal', 'User:' ~ application_kafka_account.name, '--allow-host', '*'] + application_kafka_acl_args + application_kafka_acl_operations }}"
+    argv: "{{ [application_topic_cli_directory ~ '/bin/kafka-acls' ~ platform_kafka_script_extension, '--bootstrap-server', application_topic_candidate.address ~ ':' ~ application_topic_candidate.port, '--command-config', application_kafka_private.path ~ '/admin.properties', '--add', '--allow-principal', 'User:' ~ application_kafka_account.name, '--allow-host', '*'] + application_kafka_acl_args + application_kafka_acl_operations }}"
   register: application_kafka_acl_creation
   failed_when: false
   changed_when: application_kafka_acl_creation.rc == 0
@@ -43720,11 +43724,11 @@ dependencies: []
   when: application_kafka_acl_creation is not skipped
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/application_acls_read.yml","mode":420,"size":789,"sha256":"29a4822c73420c4083dbaa7a88c4c4ae3d3b232345c224d09d3b72afda4e0eac","index":0,"count":1,"encoding":"utf-8","payloadBytes":789}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/application_acls_read.yml","mode":420,"size":820,"sha256":"fb6c6fc84688fcb971661fde34480cca883bc945214a3a2364fc040ba99a135b","index":0,"count":1,"encoding":"utf-8","payloadBytes":820}
 ---
 - name: Однократное чтение ACL выбранного principal Kafka
   ansible.builtin.command:
-    argv: "{{ [application_topic_cli_directory ~ '/bin/kafka-acls.sh', '--bootstrap-server', application_topic_candidate.address ~ ':' ~ application_topic_candidate.port, '--command-config', application_kafka_private.path ~ '/admin.properties', '--list', '--principal', 'User:' ~ application_kafka_account.name, '--resource-pattern-type', 'any'] }}"
+    argv: "{{ [application_topic_cli_directory ~ '/bin/kafka-acls' ~ platform_kafka_script_extension, '--bootstrap-server', application_topic_candidate.address ~ ':' ~ application_topic_candidate.port, '--command-config', application_kafka_private.path ~ '/admin.properties', '--list', '--principal', 'User:' ~ application_kafka_account.name, '--resource-pattern-type', 'any'] }}"
   register: application_kafka_acl_inventory
   changed_when: false
   failed_when: false
@@ -43756,7 +43760,7 @@ dependencies: []
     kafka_pem_ephemeral: true
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/application_topic.yml","mode":420,"size":3133,"sha256":"169511db3f151888bf7bba61ef591708dfc1a379b62422912f7ec23b86bd1fe6","index":0,"count":1,"encoding":"utf-8","payloadBytes":3133}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/application_topic.yml","mode":420,"size":3164,"sha256":"2b3d77dd40cee47611b3c545fa801a5fae24c6bb8eab484c42804790e6bb056a","index":0,"count":1,"encoding":"utf-8","payloadBytes":3164}
 ---
 - name: Проверка топика перед любым изменением
   ansible.builtin.include_tasks: application_topic_describe.yml
@@ -43781,7 +43785,7 @@ dependencies: []
       no_log: true
     - name: Создание объявленного топика без командной оболочки
       ansible.builtin.command:
-        argv: "{{ [application_topic_cli_directory ~ '/bin/kafka-topics.sh', '--bootstrap-server', application_topic_candidate.address ~ ':' ~ application_topic_candidate.port, '--command-config', application_topic_client.path, '--create', '--if-not-exists', '--topic', application_topic.name, '--partitions', application_topic.partitions | string, '--replication-factor', application_topic.replicationFactor | string] + application_topic_config_args }}"
+        argv: "{{ [application_topic_cli_directory ~ '/bin/kafka-topics' ~ platform_kafka_script_extension, '--bootstrap-server', application_topic_candidate.address ~ ':' ~ application_topic_candidate.port, '--command-config', application_topic_client.path, '--create', '--if-not-exists', '--topic', application_topic.name, '--partitions', application_topic.partitions | string, '--replication-factor', application_topic.replicationFactor | string] + application_topic_config_args }}"
       register: application_topic_creation
       failed_when: false
       changed_when: application_topic_creation.rc == 0
@@ -43804,12 +43808,12 @@ dependencies: []
         application_topic_readback: true
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/application_topic_describe.yml","mode":420,"size":8710,"sha256":"d932b55101822239533f7ce6c451e219bd5254dccbabd83feb2e0159c529a416","index":0,"count":1,"encoding":"utf-8","payloadBytes":8710}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/application_topic_describe.yml","mode":420,"size":8778,"sha256":"47dd8eab6c4b8390d4625d8ca9c0bbbe482297ef7809f7a07915da33385dc860","index":0,"count":1,"encoding":"utf-8","payloadBytes":8778}
 ---
 - name: "Получение описания явно указанного топика Kafka"
   ansible.builtin.command:
     argv:
-      - "{{ application_topic_cli_directory }}/bin/kafka-topics.sh"
+      - "{{ application_topic_cli_directory }}/bin/kafka-topics{{ platform_kafka_script_extension }}"
       - --bootstrap-server
       - "{{ application_topic_candidate.address }}:{{ application_topic_candidate.port }}"
       - --command-config
@@ -43890,7 +43894,7 @@ dependencies: []
           topic: "{{ application_topic.name }}"
     - name: Чтение действующих свойств топика с учётом настроек брокера по умолчанию
       ansible.builtin.command:
-        argv: ["{{ application_topic_cli_directory }}/bin/kafka-configs.sh", --bootstrap-server, "{{ application_topic_candidate.address }}:{{ application_topic_candidate.port }}", --command-config, "{{ application_topic_client.path }}", --describe, --all, --entity-type, topics, --entity-name, "{{ application_topic.name }}"]
+        argv: ["{{ application_topic_cli_directory }}/bin/kafka-configs{{ platform_kafka_script_extension }}", --bootstrap-server, "{{ application_topic_candidate.address }}:{{ application_topic_candidate.port }}", --command-config, "{{ application_topic_client.path }}", --describe, --all, --entity-type, topics, --entity-name, "{{ application_topic.name }}"]
       register: application_topic_single_properties
       changed_when: false
       failed_when: false
@@ -43958,7 +43962,7 @@ dependencies: []
     application_topic_cli_directory: "{{ hostvars[application_topic_candidate.hostId].platform_kafka_install_directory | default(platform_kafka_install_directory) }}"
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/application_topics_read.yml","mode":420,"size":2547,"sha256":"95df87cdc661a70942feabc5ea56f7fda004fa9efde7a35b0b097f5022dd0e61","index":0,"count":1,"encoding":"utf-8","payloadBytes":2547}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/application_topics_read.yml","mode":420,"size":2615,"sha256":"c582d39bc5e7fe4aae84c6fbfb38b260caff8a52d48cfc1fdc2ebdff4cbe63ab","index":0,"count":1,"encoding":"utf-8","payloadBytes":2615}
 ---
 - name: Привязка объявленного списка топиков Kafka
   ansible.builtin.set_fact:
@@ -43968,7 +43972,7 @@ dependencies: []
 
 - name: Однократное получение описаний объявленного набора топиков
   ansible.builtin.command:
-    argv: ["{{ application_topic_cli_directory }}/bin/kafka-topics.sh", --bootstrap-server, "{{ application_topic_candidate.address }}:{{ application_topic_candidate.port }}", --command-config, "{{ application_topic_client.path }}", --describe, --if-exists, --topic, "{{ application_topic_batch_pattern }}"]
+    argv: ["{{ application_topic_cli_directory }}/bin/kafka-topics{{ platform_kafka_script_extension }}", --bootstrap-server, "{{ application_topic_candidate.address }}:{{ application_topic_candidate.port }}", --command-config, "{{ application_topic_client.path }}", --describe, --if-exists, --topic, "{{ application_topic_batch_pattern }}"]
   register: application_topic_batch_description
   changed_when: false
   failed_when: false
@@ -43987,7 +43991,7 @@ dependencies: []
 
 - name: Однократное чтение действующих конфигураций запрошенных топиков Kafka
   ansible.builtin.command:
-    argv: ["{{ application_topic_cli_directory }}/bin/kafka-configs.sh", --bootstrap-server, "{{ application_topic_candidate.address }}:{{ application_topic_candidate.port }}", --command-config, "{{ application_topic_client.path }}", --describe, --all, --entity-type, topics]
+    argv: ["{{ application_topic_cli_directory }}/bin/kafka-configs{{ platform_kafka_script_extension }}", --bootstrap-server, "{{ application_topic_candidate.address }}:{{ application_topic_candidate.port }}", --command-config, "{{ application_topic_client.path }}", --describe, --all, --entity-type, topics]
   register: application_topic_batch_properties
   changed_when: false
   failed_when: false
@@ -44239,11 +44243,11 @@ dependencies: []
     loop_var: application_kafka_grant
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/authorization_security_guard.yml","mode":420,"size":1806,"sha256":"8f8c4aabb4940383e878a5b265739e226e0b775ea064d32679b8b5fcc32eb581","index":0,"count":1,"encoding":"utf-8","payloadBytes":1806}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/authorization_security_guard.yml","mode":420,"size":1837,"sha256":"41432dfa042e6c37de570d3001ec62cc77f92389dd67efc042c6712932c8cba1","index":0,"count":1,"encoding":"utf-8","payloadBytes":1837}
 ---
 - name: Наблюдение за списками управления доступом кластера, включая совпадения с подстановочными знаками и префиксами
   ansible.builtin.command:
-    argv: "{{ [application_topic_cli_directory ~ '/bin/kafka-acls.sh', '--bootstrap-server', application_topic_candidate.address ~ ':' ~ application_topic_candidate.port, '--command-config', application_kafka_private.path ~ '/admin.properties', '--list', '--cluster', '--resource-pattern-type', 'match'] }}"
+    argv: "{{ [application_topic_cli_directory ~ '/bin/kafka-acls' ~ platform_kafka_script_extension, '--bootstrap-server', application_topic_candidate.address ~ ':' ~ application_topic_candidate.port, '--command-config', application_kafka_private.path ~ '/admin.properties', '--list', '--cluster', '--resource-pattern-type', 'match'] }}"
   register: kafka_authorization_cluster_acls
   failed_when: false
   changed_when: false
@@ -45198,7 +45202,7 @@ dependencies: []
     - platform_kafka_phase in ['full', 'schema_registry'] or platform_kafka_verify_only
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/member.yml","mode":420,"size":17636,"sha256":"0582784dd373d8cad7b371c1c7afeba2223327c6d0fe47587c49179fe7f9c1b4","index":0,"count":1,"encoding":"utf-8","payloadBytes":17636}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/member.yml","mode":420,"size":17667,"sha256":"6a8490a6a43c964f5a8154d1fae2c509d80a0dda729f438336bb054c0850996d","index":0,"count":1,"encoding":"utf-8","payloadBytes":17667}
 ---
 - name: Создание изолированных каталогов экземпляров службы
   ansible.builtin.file:
@@ -45434,7 +45438,7 @@ dependencies: []
   become_user: "{{ platform_kafka_user }}"
   ansible.builtin.command:
     argv: >-
-      {{ [platform_kafka_install_directory ~ '/bin/kafka-storage.sh',
+      {{ [platform_kafka_install_directory ~ '/bin/kafka-storage' ~ platform_kafka_script_extension,
           'format',
           '--cluster-id', platform_kafka_cluster_id,
           '--config', kafka_member.config_directory ~ '/server.properties']
@@ -45733,7 +45737,7 @@ dependencies: []
   changed_when: false
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/prepare_host.yml","mode":420,"size":1950,"sha256":"0e0760e42fc700b3a5fc1307f64c01fba15050c4d443262e858c789e131d5c59","index":0,"count":1,"encoding":"utf-8","payloadBytes":1950}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/prepare_host.yml","mode":420,"size":2471,"sha256":"282a389085de4bfc8f540d656a7b682af7f7a6b94b6a7e214e501f39f03d3ba3","index":0,"count":1,"encoding":"utf-8","payloadBytes":2471}
 ---
 - name: Установка необходимого компонента Java для всего хоста
   ansible.builtin.package:
@@ -45756,7 +45760,19 @@ dependencies: []
     src: "{{ platform_kafka_artifact_path }}"
     dest: /opt
     remote_src: false
-    creates: "/opt/{{ platform_kafka_archive_directory }}/bin/kafka-storage.sh"
+    creates: "/opt/{{ platform_kafka_archive_directory }}/bin/kafka-storage{{ platform_kafka_script_extension }}"
+  register: _platform_kafka_distribution_unpack
+
+- name: Маркировка распакованного общего дистрибутива Kafka
+  ansible.builtin.copy:
+    content: "{{ platform_kafka_artifact_checksum }}"
+    dest: "/opt/{{ platform_kafka_archive_directory }}/.platform-kafka-approved-sha256"
+    owner: root
+    group: root
+    mode: '0644'
+  when:
+    - platform_kafka_schema_registry_use_kafka_distribution
+    - _platform_kafka_distribution_unpack is changed
 
 
 - name: Указание стабильного пути установки Kafka в утвержденной версии
@@ -46166,7 +46182,7 @@ dependencies: []
       changed_when: false
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/schema_registry.yml","mode":420,"size":9165,"sha256":"0444f24a078fa979f1c8556f8d91e1a897a3ceaf584a5e902ccadaa3d313e52b","index":0,"count":1,"encoding":"utf-8","payloadBytes":9165}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/schema_registry.yml","mode":420,"size":10205,"sha256":"12acd6647b64d75f41a2b3bf53954d97cd6430eeaa04e8aac0f7fb14bcf9664b","index":0,"count":1,"encoding":"utf-8","payloadBytes":10205}
 ---
 - name: Определение источника реестра перед установкой
   ansible.builtin.include_role:
@@ -46175,6 +46191,7 @@ dependencies: []
     platform_artifact_requirements:
       - {id: schema-registry-binary, name: confluent-schema-registry}
   when:
+    - not platform_kafka_schema_registry_use_kafka_distribution
     - not platform_kafka_verify_only
     - platform_artifact_source_authority_active | default(false) or platform_resolved_artifact_sources is defined
 
@@ -46185,6 +46202,7 @@ dependencies: []
     platform_artifact_delivery_requirements:
       - {id: schema-registry-binary, name: confluent-schema-registry}
   when:
+    - not platform_kafka_schema_registry_use_kafka_distribution
     - not platform_kafka_verify_only
     - platform_resolved_artifact_sources is defined
 
@@ -46193,6 +46211,7 @@ dependencies: []
     name: "confluent-schema-registry-{{ platform_kafka_schema_registry_version }}"
     state: present
   when:
+    - not platform_kafka_schema_registry_use_kafka_distribution
     - not platform_kafka_verify_only
     - platform_resolved_artifact_sources is defined
     - platform_resolved_artifact_sources['schema-registry-binary'].source == 'REPOSITORY'
@@ -46205,6 +46224,7 @@ dependencies: []
          else platform_kafka_schema_registry_artifact_path | default('') }}
     _platform_kafka_registry_remote_archive: "{{ platform_resolved_artifact_sources is defined }}"
   when:
+    - not platform_kafka_schema_registry_use_kafka_distribution
     - not platform_kafka_verify_only
     - platform_resolved_artifact_sources is not defined or platform_resolved_artifact_sources['schema-registry-binary'].source == 'OFFLINE_BUNDLE'
 
@@ -46216,6 +46236,7 @@ dependencies: []
   become: "{{ _platform_kafka_registry_remote_archive }}"
   register: _platform_kafka_registry_archive_stat
   when:
+    - not platform_kafka_schema_registry_use_kafka_distribution
     - not platform_kafka_verify_only
     - platform_resolved_artifact_sources is not defined or platform_resolved_artifact_sources['schema-registry-binary'].source == 'OFFLINE_BUNDLE'
 
@@ -46226,6 +46247,7 @@ dependencies: []
       - _platform_kafka_registry_archive_stat.stat.checksum | default('') == 'dc4d6234e0f7e1a91b369f9cf1d27d7c9885edb9f6440170c3a6f00ba68fcc81'
     fail_msg: SCHEMA_REGISTRY_ARTIFACT_MISSING_OR_CHECKSUM_MISMATCH
   when:
+    - not platform_kafka_schema_registry_use_kafka_distribution
     - not platform_kafka_verify_only
     - platform_resolved_artifact_sources is not defined or platform_resolved_artifact_sources['schema-registry-binary'].source == 'OFFLINE_BUNDLE'
 
@@ -46241,6 +46263,10 @@ dependencies: []
     that: not _platform_kafka_registry_install_stat.stat.exists or (_platform_kafka_registry_install_stat.stat.isdir | default(false) and not (_platform_kafka_registry_install_stat.stat.islnk | default(false)))
     fail_msg: SCHEMA_REGISTRY_INSTALL_PATH_UNSAFE
 
+- name: Проверка общего дистрибутива Kafka и Schema Registry
+  ansible.builtin.include_tasks: schema_registry_shared_distribution.yml
+  when: platform_kafka_schema_registry_use_kafka_distribution
+
 - name: Однократная распаковка проверенного дистрибутива Confluent
   ansible.builtin.command:
     argv: [cat, "{{ platform_kafka_schema_registry_install_directory }}/.platform-approved-sha256"]
@@ -46248,6 +46274,7 @@ dependencies: []
   failed_when: false
   register: _platform_kafka_registry_install_marker
   when:
+    - not platform_kafka_schema_registry_use_kafka_distribution
     - _platform_kafka_registry_install_stat.stat.exists
     - platform_resolved_artifact_sources is not defined or platform_resolved_artifact_sources['schema-registry-binary'].source == 'OFFLINE_BUNDLE'
 
@@ -46258,6 +46285,7 @@ dependencies: []
       - _platform_kafka_registry_install_marker.stdout == 'dc4d6234e0f7e1a91b369f9cf1d27d7c9885edb9f6440170c3a6f00ba68fcc81'
     fail_msg: SCHEMA_REGISTRY_INSTALL_OWNERSHIP_UNKNOWN
   when:
+    - not platform_kafka_schema_registry_use_kafka_distribution
     - _platform_kafka_registry_install_stat.stat.exists
     - platform_resolved_artifact_sources is not defined or platform_resolved_artifact_sources['schema-registry-binary'].source == 'OFFLINE_BUNDLE'
 
@@ -46268,6 +46296,7 @@ dependencies: []
     remote_src: "{{ _platform_kafka_registry_remote_archive }}"
     creates: "{{ platform_kafka_schema_registry_install_directory }}/share/java/schema-registry/kafka-schema-registry-{{ platform_kafka_schema_registry_version }}.jar"
   when:
+    - not platform_kafka_schema_registry_use_kafka_distribution
     - not platform_kafka_verify_only
     - platform_resolved_artifact_sources is not defined or platform_resolved_artifact_sources['schema-registry-binary'].source == 'OFFLINE_BUNDLE'
 
@@ -46279,6 +46308,7 @@ dependencies: []
     group: root
     mode: '0644'
   when:
+    - not platform_kafka_schema_registry_use_kafka_distribution
     - not platform_kafka_verify_only
     - platform_resolved_artifact_sources is not defined or platform_resolved_artifact_sources['schema-registry-binary'].source == 'OFFLINE_BUNDLE'
 
@@ -46287,19 +46317,19 @@ dependencies: []
     path: "{{ platform_kafka_schema_registry_install_directory }}/share/java/schema-registry/kafka-schema-registry-{{ platform_kafka_schema_registry_version }}.jar"
     follow: false
   register: _platform_kafka_registry_jar
-  when: platform_resolved_artifact_sources is not defined or platform_resolved_artifact_sources['schema-registry-binary'].source == 'OFFLINE_BUNDLE'
+  when: platform_kafka_schema_registry_use_kafka_distribution or platform_resolved_artifact_sources is not defined or platform_resolved_artifact_sources['schema-registry-binary'].source == 'OFFLINE_BUNDLE'
 
 - name: Проверка зафиксированного дистрибутива Schema Registry
   ansible.builtin.assert:
     that: _platform_kafka_registry_jar.stat.isreg | default(false) and not (_platform_kafka_registry_jar.stat.islnk | default(false))
     fail_msg: SCHEMA_REGISTRY_VERSION_UNAVAILABLE
-  when: platform_resolved_artifact_sources is not defined or platform_resolved_artifact_sources['schema-registry-binary'].source == 'OFFLINE_BUNDLE'
+  when: platform_kafka_schema_registry_use_kafka_distribution or platform_resolved_artifact_sources is not defined or platform_resolved_artifact_sources['schema-registry-binary'].source == 'OFFLINE_BUNDLE'
 
 - name: Определение выбранной программы запуска реестра
   ansible.builtin.set_fact:
     _platform_kafka_registry_launcher: >-
       {{ '/usr/bin/schema-registry-start'
-         if (platform_resolved_artifact_sources is defined and platform_resolved_artifact_sources['schema-registry-binary'].source == 'REPOSITORY')
+         if (not platform_kafka_schema_registry_use_kafka_distribution and platform_resolved_artifact_sources is defined and platform_resolved_artifact_sources['schema-registry-binary'].source == 'REPOSITORY')
          else platform_kafka_schema_registry_install_directory ~ '/bin/schema-registry-start' }}
 
 - name: Создание группы служб реестра
@@ -46379,7 +46409,7 @@ dependencies: []
   when: _platform_kafka_registry_clear_units.changed
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/schema_registry_member.yml","mode":420,"size":10036,"sha256":"ebe70e6b34a8f5628fe63a6618b1292c1a95f8f81e1f5ea81ebe5bfd3751de90","index":0,"count":1,"encoding":"utf-8","payloadBytes":10036}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/schema_registry_member.yml","mode":420,"size":10070,"sha256":"7a5442696ad8411bb68a599298a765b041e38e283875ca402fd0d98abdac1e5b","index":0,"count":1,"encoding":"utf-8","payloadBytes":10070}
 ---
 - name: Определение точного экземпляра службы Kafka PKI для сервера и клиента реестра
   ansible.builtin.include_tasks: resolve_tls_runtime.yml
@@ -46496,7 +46526,7 @@ dependencies: []
 - name: Проверка готовности протокола брокера для выбранного соединения
   ansible.builtin.command:
     argv:
-      - "{{ platform_kafka_install_directory }}/bin/kafka-broker-api-versions.sh"
+      - "{{ platform_kafka_install_directory }}/bin/kafka-broker-api-versions{{ platform_kafka_script_extension }}"
       - --bootstrap-server
       - "{{ registry_instance.bootstrap_servers | regex_replace('(SSL|PLAINTEXT)://', '') }}"
       - --command-config
@@ -46624,12 +46654,123 @@ dependencies: []
   when: not (item.skipped | default(false))
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/schema_registry_topic.yml","mode":420,"size":3904,"sha256":"794a498c46689e0a1eee4c6812fa2c2ea63de068f6d6a69828c014a7c2f6fefa","index":0,"count":1,"encoding":"utf-8","payloadBytes":3904}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/schema_registry_shared_distribution.yml","mode":420,"size":5241,"sha256":"ddbf0255f2a05f5c29562e9aec9b2cbc665bcd02535b6b71ace8786c4678f91a","index":0,"count":1,"encoding":"utf-8","payloadBytes":5241}
+---
+- name: Проверка общего корня установки Kafka и Schema Registry
+  ansible.builtin.assert:
+    that:
+      - platform_kafka_archive_directory is match('^[A-Za-z0-9_.+-]+$')
+      - platform_kafka_schema_registry_install_directory == '/opt/' ~ platform_kafka_archive_directory
+    fail_msg: SCHEMA_REGISTRY_SHARED_INSTALL_PATH_MISMATCH
+
+- name: Определение источника общего дистрибутива Kafka
+  ansible.builtin.include_role:
+    name: platform.core.artifact_source_gate
+  vars:
+    platform_artifact_requirements:
+      - {id: kafka-binary, name: kafka}
+  when:
+    - not platform_kafka_verify_only
+    - platform_artifact_source_authority_active | default(false) or platform_resolved_artifact_sources is defined
+
+- name: Проверка архивного источника общего дистрибутива
+  ansible.builtin.assert:
+    that: platform_resolved_artifact_sources['kafka-binary'].source == 'OFFLINE_BUNDLE'
+    fail_msg: SCHEMA_REGISTRY_SHARED_DISTRIBUTION_REQUIRES_ARCHIVE
+  when:
+    - not platform_kafka_verify_only
+    - platform_resolved_artifact_sources is defined
+
+- name: Доставка утверждённого общего архива Kafka
+  ansible.builtin.include_role:
+    name: platform.core.artifact_delivery
+  vars:
+    platform_artifact_delivery_requirements:
+      - {id: kafka-binary, name: kafka}
+  when:
+    - not platform_kafka_verify_only
+    - platform_resolved_artifact_sources is defined
+
+- name: Выбор утверждённого общего архива
+  ansible.builtin.set_fact:
+    _platform_kafka_shared_archive: >-
+      {{ platform_offline_artifact_paths['kafka-binary'][0]
+         if platform_resolved_artifact_sources is defined
+         else platform_kafka_artifact_path | default('') }}
+  when: not platform_kafka_verify_only
+
+- name: Выбор контрольной суммы общего дистрибутива
+  ansible.builtin.set_fact:
+    _platform_kafka_shared_checksum: >-
+      {{ platform_resolved_artifact_sources['kafka-binary'].artifacts[0].sha256
+         if platform_resolved_artifact_sources is defined
+         else platform_kafka_artifact_checksum }}
+
+- name: Проверка маркера распакованного общего дистрибутива
+  ansible.builtin.stat:
+    path: "{{ platform_kafka_schema_registry_install_directory }}/.platform-kafka-approved-sha256"
+    follow: false
+  register: _platform_kafka_shared_marker_stat
+
+- name: Подтверждение безопасного маркера общего дистрибутива
+  ansible.builtin.assert:
+    that:
+      - _platform_kafka_shared_marker_stat.stat.isreg | default(false)
+      - not (_platform_kafka_shared_marker_stat.stat.islnk | default(false))
+    fail_msg: SCHEMA_REGISTRY_SHARED_INSTALL_OWNERSHIP_UNKNOWN
+
+- name: Чтение идентификатора распакованного общего дистрибутива
+  ansible.builtin.command:
+    argv: [cat, "{{ platform_kafka_schema_registry_install_directory }}/.platform-kafka-approved-sha256"]
+  changed_when: false
+  register: _platform_kafka_shared_marker
+
+- name: Подтверждение соответствия распакованного общего дистрибутива
+  ansible.builtin.assert:
+    that:
+      - _platform_kafka_shared_checksum is match('^sha256:[0-9a-fA-F]{64}$')
+      - _platform_kafka_shared_marker.stdout == _platform_kafka_shared_checksum
+    fail_msg: SCHEMA_REGISTRY_SHARED_INSTALL_OWNERSHIP_UNKNOWN
+
+- name: Проверка контрольной суммы общего архива
+  ansible.builtin.stat:
+    path: "{{ _platform_kafka_shared_archive }}"
+    checksum_algorithm: sha256
+  delegate_to: "{{ inventory_hostname if platform_resolved_artifact_sources is defined else 'localhost' }}"
+  become: "{{ platform_resolved_artifact_sources is defined }}"
+  register: _platform_kafka_shared_archive_stat
+  when: not platform_kafka_verify_only
+
+- name: Подтверждение утверждённого общего архива
+  ansible.builtin.assert:
+    that:
+      - _platform_kafka_shared_archive_stat.stat.isreg | default(false)
+      - _platform_kafka_shared_checksum is match('^sha256:[0-9a-fA-F]{64}$')
+      - ('sha256:' ~ (_platform_kafka_shared_archive_stat.stat.checksum | default(''))) == _platform_kafka_shared_checksum
+    fail_msg: SCHEMA_REGISTRY_SHARED_ARTIFACT_MISSING_OR_CHECKSUM_MISMATCH
+  when: not platform_kafka_verify_only
+
+- name: Проверка программы запуска Schema Registry в общем дистрибутиве
+  ansible.builtin.stat:
+    path: "{{ platform_kafka_schema_registry_install_directory }}/bin/schema-registry-start"
+    follow: false
+  register: _platform_kafka_shared_launcher
+
+- name: Подтверждение программы запуска общего дистрибутива
+  ansible.builtin.assert:
+    that:
+      - _platform_kafka_shared_launcher.stat.isreg | default(false)
+      - not (_platform_kafka_shared_launcher.stat.islnk | default(false))
+      - _platform_kafka_shared_launcher.stat.executable | default(false)
+    fail_msg: SCHEMA_REGISTRY_SHARED_LAUNCHER_UNAVAILABLE
+
+@@END
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/schema_registry_topic.yml","mode":420,"size":4006,"sha256":"706677ffa00e319f6584d29bd9854c4272484c25632e4b0f174d267d9a339423","index":0,"count":1,"encoding":"utf-8","payloadBytes":4006}
 ---
 - name: Получение описания топика схемы без изменений
   ansible.builtin.command:
     argv:
-      - "{{ platform_kafka_install_directory }}/bin/kafka-topics.sh"
+      - "{{ platform_kafka_install_directory }}/bin/kafka-topics{{ platform_kafka_script_extension }}"
       - --bootstrap-server
       - "{{ registry_instance.bootstrap_servers | regex_replace('(SSL|PLAINTEXT)://', '') }}"
       - --command-config
@@ -46656,7 +46797,7 @@ dependencies: []
 - name: Создание отсутствующего топика на одном выбранном брокере
   ansible.builtin.command:
     argv:
-      - "{{ platform_kafka_install_directory }}/bin/kafka-topics.sh"
+      - "{{ platform_kafka_install_directory }}/bin/kafka-topics{{ platform_kafka_script_extension }}"
       - --bootstrap-server
       - "{{ registry_instance.bootstrap_servers | regex_replace('(SSL|PLAINTEXT)://', '') }}"
       - --command-config
@@ -46682,7 +46823,7 @@ dependencies: []
 - name: Ожидание заданной политики топика схем без её изменения
   ansible.builtin.command:
     argv:
-      - "{{ platform_kafka_install_directory }}/bin/kafka-topics.sh"
+      - "{{ platform_kafka_install_directory }}/bin/kafka-topics{{ platform_kafka_script_extension }}"
       - --bootstrap-server
       - "{{ registry_instance.bootstrap_servers | regex_replace('(SSL|PLAINTEXT)://', '') }}"
       - --command-config
@@ -46703,13 +46844,14 @@ dependencies: []
   no_log: true
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/schema_registry_validate.yml","mode":420,"size":5506,"sha256":"1f637cfdd7bcb0a89546735cfd644449aa519d86815041a91fb6f18a30c68c55","index":0,"count":1,"encoding":"utf-8","payloadBytes":5506}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/schema_registry_validate.yml","mode":420,"size":5579,"sha256":"136779cba219218db6893833bcabc5ab903df5156085658f41fa0df93d006c9a","index":0,"count":1,"encoding":"utf-8","payloadBytes":5579}
 ---
 - name: Проверка компонента реестра и фазы выполнения
   ansible.builtin.assert:
     that:
       - platform_kafka_phase in ['full', 'kafka', 'schema_registry']
       - platform_kafka_schema_registry_enabled is boolean
+      - platform_kafka_schema_registry_use_kafka_distribution is boolean
       - platform_kafka_schema_registry_version is string
       - platform_kafka_schema_registry_version | length > 0
       - platform_kafka_schema_registry_archive_directory is string
@@ -46923,7 +47065,7 @@ dependencies: []
   when: _platform_kafka_tls_runtime.storeType == 'PKCS12'
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/verify.yml","mode":420,"size":4574,"sha256":"3f9f8bbb4318661ce3ad2f4e34f393b930896ecc017d206e4db401025dca2a9a","index":0,"count":1,"encoding":"utf-8","payloadBytes":4574}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/verify.yml","mode":420,"size":4608,"sha256":"1a8b397cb616e66b0788e8c5c6ea0125ecc743772c6a16208e6f22c303e1dbeb","index":0,"count":1,"encoding":"utf-8","payloadBytes":4608}
 ---
 - name: Проверка каждого экземпляра службы Kafka в детерминированном порядке
   ansible.builtin.include_tasks: verify_member.yml
@@ -46963,7 +47105,7 @@ dependencies: []
   vars:
     kafka_cli_connection: "{{ _platform_kafka_cli_connection }}"
     kafka_cli_command_prefix:
-      - "{{ platform_kafka_install_directory }}/bin/kafka-broker-api-versions.sh"
+      - "{{ platform_kafka_install_directory }}/bin/kafka-broker-api-versions{{ platform_kafka_script_extension }}"
       - --bootstrap-server
       - "{{ _platform_kafka_cli_connection.bootstrapHost }}:{{ _platform_kafka_cli_connection.bootstrapPort }}"
     kafka_cli_command_suffix: []
@@ -47072,7 +47214,7 @@ dependencies: []
   when: kafka_member.listeners | default({}) | length > 0
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/verify_quorum.yml","mode":420,"size":2123,"sha256":"f25145c032b9d83a44280710236b38200998b21be1ebba607a3721d206851e6d","index":0,"count":1,"encoding":"utf-8","payloadBytes":2123}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/verify_quorum.yml","mode":420,"size":2157,"sha256":"deb58e5b20495fda47c34fde71fb3b2da954bcdd760db9255e02988bab5ddc68","index":0,"count":1,"encoding":"utf-8","payloadBytes":2157}
 ---
 - name: Определение подключения Kafka CLI к кворуму контроллеров по runtime-проекции
   ansible.builtin.include_tasks: resolve_cli_connection.yml
@@ -47085,7 +47227,7 @@ dependencies: []
   vars:
     kafka_cli_connection: "{{ _platform_kafka_cli_connection }}"
     kafka_cli_command_prefix:
-      - "{{ platform_kafka_install_directory }}/bin/kafka-metadata-quorum.sh"
+      - "{{ platform_kafka_install_directory }}/bin/kafka-metadata-quorum{{ platform_kafka_script_extension }}"
       - "{{ '--bootstrap-server' if _platform_kafka_scram_enabled | default(false) | bool else '--bootstrap-controller' }}"
       - "{{ _platform_kafka_cli_connection.bootstrapHost }}:{{ _platform_kafka_cli_connection.bootstrapPort }}"
     kafka_cli_command_suffix: [describe, --status]
@@ -47221,7 +47363,7 @@ ssl.key.password={{ password }}
 {% endif %}
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/templates/kafka.service.j2","mode":420,"size":521,"sha256":"6f2ac1b6602e6bc02de8101ba77329e93accea8ad106d1479311dbb522b3e582","index":0,"count":1,"encoding":"utf-8","payloadBytes":521}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/templates/kafka.service.j2","mode":420,"size":555,"sha256":"43644d5cfcca4638e7818c8f21815fbf8d79131ff2b42158f11ec89e3f828e10","index":0,"count":1,"encoding":"utf-8","payloadBytes":555}
 # {{ platform_kafka_name }}-managed: {{ kafka_member.systemd_unit_name }}
 [Unit]
 Description={{ kafka_member.systemd_description }}
@@ -47233,7 +47375,7 @@ Type=simple
 User={{ platform_kafka_user }}
 Group={{ platform_kafka_group }}
 EnvironmentFile={{ kafka_member.systemd_environment_pattern }}
-ExecStart={{ platform_kafka_install_directory }}/bin/kafka-server-start.sh $KAFKA_CONFIG_FILE
+ExecStart={{ platform_kafka_install_directory }}/bin/kafka-server-start{{ platform_kafka_script_extension }} $KAFKA_CONFIG_FILE
 Restart=on-failure
 RestartSec=5
 LimitNOFILE=100000
@@ -104737,161 +104879,5 @@ func NewSaveFileDialog(config DialogConfig) (SaveFileDialog, error) {
 	}
 	return saveDialog, nil
 }
-
-@@END
-@@PORTABLE {"path":"third_party/wails/internal/go-common-file-dialog/cfd/DialogConfig.go","mode":420,"size":4050,"sha256":"9cf7d818ab257568b8c7eb52ae86ffbe02ee713410b3e7cff44c69655023c7c8","index":0,"count":1,"encoding":"utf-8","payloadBytes":4050}
-// Cross-platform.
-
-package cfd
-
-import (
-	"fmt"
-	"os"
-	"reflect"
-)
-
-type FileFilter struct {
-	// The display name of the filter (That is shown to the user)
-	DisplayName string
-	// The filter pattern. Eg. "*.txt;*.png" to select all txt and png files, "*.*" to select any files, etc.
-	Pattern string
-}
-
-// Never obfuscate the FileFilter type.
-var _ = reflect.TypeOf(FileFilter{})
-
-type DialogConfig struct {
-	// The title of the dialog
-	Title string
-	// The role of the dialog. This is used to derive the dialog's GUID, which the
-	// OS will use to differentiate it from dialogs that are intended for other purposes.
-	// This means that, for example, a dialog with role "Import" will have a different
-	// previous location that it will open to than a dialog with role "Open". Can be any string.
-	Role string
-	// The default folder - the folder that is used the first time the user opens it
-	// (after the first time their last used location is used).
-	DefaultFolder string
-	// The initial folder - the folder that the dialog always opens to if not empty.
-	// If this is not empty, it will override the "default folder" behaviour and
-	// the dialog will always open to this folder.
-	Folder string
-	// The file filters that restrict which types of files the dialog is able to choose.
-	// Ignored by Select Folder Dialog.
-	FileFilters []FileFilter
-	// Sets the initially selected file filter. This is an index of FileFilters.
-	// Ignored by Select Folder Dialog.
-	SelectedFileFilterIndex uint
-	// The initial name of the file (I.E. the text in the file name text box) when the user opens the dialog.
-	// For the Select Folder Dialog, this sets the initial folder name.
-	FileName string
-	// The default extension applied when a user does not provide one as part of the file name.
-	// If the user selects a different file filter, the default extension will be automatically updated to match the new file filter.
-	// For Open / Open Multiple File Dialog, this only has an effect when the user specifies a file name with no extension and a file with the default extension exists.
-	// For Save File Dialog, this extension will be used whenever a user does not specify an extension.
-	// Ignored by Select Folder Dialog.
-	DefaultExtension string
-	// ParentWindowHandle is the handle (HWND) to the parent window of the dialog.
-	// If left as 0 / nil, the dialog will have no parent window.
-	ParentWindowHandle uintptr
-}
-
-var defaultFilters = []FileFilter{
-	{
-		DisplayName: "All Files (*.*)",
-		Pattern:     "*.*",
-	},
-}
-
-func (config *DialogConfig) apply(dialog Dialog) (err error) {
-	if config.Title != "" {
-		err = dialog.SetTitle(config.Title)
-		if err != nil {
-			return
-		}
-	}
-
-	if config.Role != "" {
-		err = dialog.SetRole(config.Role)
-		if err != nil {
-			return
-		}
-	}
-
-	if config.Folder != "" {
-		_, err = os.Stat(config.Folder)
-		if err != nil {
-			return
-		}
-		err = dialog.SetFolder(config.Folder)
-		if err != nil {
-			return
-		}
-	}
-
-	if config.DefaultFolder != "" {
-		_, err = os.Stat(config.DefaultFolder)
-		if err != nil {
-			return
-		}
-		err = dialog.SetDefaultFolder(config.DefaultFolder)
-		if err != nil {
-			return
-		}
-	}
-
-	if config.FileName != "" {
-		err = dialog.SetFileName(config.FileName)
-		if err != nil {
-			return
-		}
-	}
-
-	dialog.SetParentWindowHandle(config.ParentWindowHandle)
-
-	if dialog, ok := dialog.(FileDialog); ok {
-		var fileFilters []FileFilter
-		if config.FileFilters != nil && len(config.FileFilters) > 0 {
-			fileFilters = config.FileFilters
-		} else {
-			fileFilters = defaultFilters
-		}
-		err = dialog.SetFileFilters(fileFilters)
-		if err != nil {
-			return
-		}
-
-		if config.SelectedFileFilterIndex != 0 {
-			if config.SelectedFileFilterIndex > uint(len(fileFilters)) {
-				err = fmt.Errorf("selected file filter index out of range")
-				return
-			}
-			err = dialog.SetSelectedFileFilterIndex(config.SelectedFileFilterIndex)
-			if err != nil {
-				return
-			}
-		}
-
-		if config.DefaultExtension != "" {
-			err = dialog.SetDefaultExtension(config.DefaultExtension)
-			if err != nil {
-				return
-			}
-		}
-	}
-
-	return
-}
-
-@@END
-@@PORTABLE {"path":"third_party/wails/internal/go-common-file-dialog/cfd/errors.go","mode":420,"size":203,"sha256":"da9965fcccb049e1ac66f8f38eaeab9cf6e8a6112e1066712ae1f6bebd563b9c","index":0,"count":1,"encoding":"utf-8","payloadBytes":203}
-package cfd
-
-import "errors"
-
-var (
-	ErrCancelled = errors.New("cancelled by user")
-	ErrInvalidGUID = errors.New("guid cannot be nil")
-	ErrEmptyFilters = errors.New("must specify at least one filter")
-)
 
 @@END
