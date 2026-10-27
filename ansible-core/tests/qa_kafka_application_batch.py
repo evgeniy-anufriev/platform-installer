@@ -50,7 +50,7 @@ class KafkaApplicationBatchTests(unittest.TestCase):
                 path.write_text(CLI)
                 path.chmod(0o700)
             (root / 'state.json').write_text(json.dumps(state))
-            variables = dict(application_topic_cli_directory=str(root),
+            variables = dict(platform_kafka_script_extension='.sh', application_topic_cli_directory=str(root),
                              application_topic_candidate=dict(address='127.0.0.1', port='9092'),
                              application_topic_client=dict(path=str(root / 'client.properties')),
                              platform_kafka_application_job=dict(providerId='qa', topics=topics),
@@ -128,10 +128,10 @@ class KafkaApplicationBatchTests(unittest.TestCase):
 
     def test_library_verify_has_only_container_and_endpoint_checks(self):
         plays = yaml.safe_load((ROOT / 'ansible-core/playbooks/applications/verify.yml').read_text())
-        self.assertFalse(any(p.get('import_playbook') == 'applications/stages/provider-verify-stage.yml' for p in plays))
+        self.assertFalse(any(p.get('import_playbook') == 'stages/provider-verify-stage.yml' for p in plays))
         container = next(t for p in plays for t in p.get('tasks', []) if t['name'] == 'Проверка выбранного размещения каждого приложения')
         self.assertIs(False, container['vars']['application_runtime_verify_vault'])
-        self.assertTrue(any(p.get('import_playbook') == 'applications/stages/endpoint.yml' for p in plays))
+        self.assertTrue(any(p.get('import_playbook') == 'stages/endpoint.yml' for p in plays))
 
     def test_container_verify_with_agent_does_not_need_vault_or_provider_credentials(self):
         self.container_probe()

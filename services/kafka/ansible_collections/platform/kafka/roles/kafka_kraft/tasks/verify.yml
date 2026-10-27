@@ -37,7 +37,7 @@
   vars:
     kafka_cli_connection: "{{ _platform_kafka_cli_connection }}"
     kafka_cli_command_prefix:
-      - "{{ platform_kafka_install_directory }}/bin/kafka-broker-api-versions.sh"
+      - "{{ platform_kafka_install_directory }}/bin/kafka-broker-api-versions{{ platform_kafka_script_extension }}"
       - --bootstrap-server
       - "{{ _platform_kafka_cli_connection.bootstrapHost }}:{{ _platform_kafka_cli_connection.bootstrapPort }}"
     kafka_cli_command_suffix: []

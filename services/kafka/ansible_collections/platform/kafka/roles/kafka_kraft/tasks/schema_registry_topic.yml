@@ -2,7 +2,7 @@
 - name: Получение описания топика схемы без изменений
   ansible.builtin.command:
     argv:
-      - "{{ platform_kafka_install_directory }}/bin/kafka-topics.sh"
+      - "{{ platform_kafka_install_directory }}/bin/kafka-topics{{ platform_kafka_script_extension }}"
       - --bootstrap-server
       - "{{ registry_instance.bootstrap_servers | regex_replace('(SSL|PLAINTEXT)://', '') }}"
       - --command-config
@@ -29,7 +29,7 @@
 - name: Создание отсутствующего топика на одном выбранном брокере
   ansible.builtin.command:
     argv:
-      - "{{ platform_kafka_install_directory }}/bin/kafka-topics.sh"
+      - "{{ platform_kafka_install_directory }}/bin/kafka-topics{{ platform_kafka_script_extension }}"
       - --bootstrap-server
       - "{{ registry_instance.bootstrap_servers | regex_replace('(SSL|PLAINTEXT)://', '') }}"
       - --command-config
@@ -55,7 +55,7 @@
 - name: Ожидание заданной политики топика схем без её изменения
   ansible.builtin.command:
     argv:
-      - "{{ platform_kafka_install_directory }}/bin/kafka-topics.sh"
+      - "{{ platform_kafka_install_directory }}/bin/kafka-topics{{ platform_kafka_script_extension }}"
       - --bootstrap-server
       - "{{ registry_instance.bootstrap_servers | regex_replace('(SSL|PLAINTEXT)://', '') }}"
       - --command-config

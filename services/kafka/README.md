@@ -6,6 +6,58 @@ SERVICE-01B also supports multiple logical members on one physical Ansible
 host. The role is standalone and uses only an approved local/offline artifact
 supplied by the caller.
 
+Kafka command names use `platform_kafka_script_extension: ".sh"` by default.
+For a distribution with extensionless commands, set
+`platform_kafka_script_extension: ""` in inventory `group_vars` or `host_vars`.
+The suffix applies to Kafka startup, storage, verification and application
+topic/account/ACL commands, including Kafka commands used by Schema Registry.
+
+For a combined Kafka/Schema Registry archive, set these ordinary role variables
+in defaults or inventory (the current defaults retain separate distributions):
+
+```yaml
+platform_kafka_archive_directory: confluent-7.8.0
+platform_kafka_install_directory: /opt/kafka
+platform_kafka_script_extension: ""
+platform_kafka_schema_registry_use_kafka_distribution: true
+platform_kafka_schema_registry_install_directory: /opt/confluent-7.8.0
+```
+
+Also set `platform_kafka_version` and `platform_kafka_schema_registry_version`
+to the actual component versions of the approved distribution. The archive
+release number is not necessarily the embedded Kafka version. Manual inventory
+must supply `platform_kafka_artifact_path` and its approved
+`platform_kafka_artifact_checksum` (`sha256:...`). Kafka extracts the archive
+once under `/opt`; Registry reuses its real directory, launcher and versioned
+JAR. Separate Registry delivery/extraction and its separate distribution marker
+are skipped. Service configuration, users and systemd remain independent.
+
+The shared archive must be installed by this role: successful extraction records
+`.platform-kafka-approved-sha256`. An existing unmarked directory is rejected,
+not silently adopted. Shared Registry Apply checks both the approved archive
+and this installation marker, including in `schema_registry`-only phase.
+Verify checks the marker, launcher and JAR without delivering or extracting an
+archive; the approved Kafka checksum is still required. A repository package
+cannot substitute for the requested combined archive, and the role does not
+fall back to a different source when repository resolution selects one.
+
+If extraction is interrupted before its marker is written, repeat Apply refuses
+the unmarked directory. Recovery requires a separately authorized stop of both
+services, preservation of any distribution-local logs/custom files, and moving
+the unmarked directory aside after confirming it is the configured distribution
+root (not `/opt/kafka` or service data/configuration). Rerun Kafka Apply from the
+same approved archive so extraction creates a new marker. Do not manually create
+the marker or delete Kafka data/configuration to bypass this check.
+
+For Installer/bundle use, update the service package's `service.yml`,
+`artifacts.yml` and compatibility metadata to describe the approved combined
+distribution: both logical requirements (`kafka-binary` and
+`schema-registry-binary`) reference the same archive/checksum, with the correct
+component versions. Keep both requirement IDs for planning; one flag in inventory
+does not rewrite package metadata or acquire artifacts. The current pinned
+separate artifacts remain unchanged; the example above is not a claim of
+Confluent 7.8.0 runtime compatibility.
+
 Application library resource `kafka.topic` is supported by capability
 `service.kafka.topic`. Use the existing library provider stages or invoke
 `kafka_kraft` with `tasks_from: application_topics`,

@@ -7,7 +7,7 @@
 
 - name: Однократное получение описаний объявленного набора топиков
   ansible.builtin.command:
-    argv: ["{{ application_topic_cli_directory }}/bin/kafka-topics.sh", --bootstrap-server, "{{ application_topic_candidate.address }}:{{ application_topic_candidate.port }}", --command-config, "{{ application_topic_client.path }}", --describe, --if-exists, --topic, "{{ application_topic_batch_pattern }}"]
+    argv: ["{{ application_topic_cli_directory }}/bin/kafka-topics{{ platform_kafka_script_extension }}", --bootstrap-server, "{{ application_topic_candidate.address }}:{{ application_topic_candidate.port }}", --command-config, "{{ application_topic_client.path }}", --describe, --if-exists, --topic, "{{ application_topic_batch_pattern }}"]
   register: application_topic_batch_description
   changed_when: false
   failed_when: false
@@ -26,7 +26,7 @@
 
 - name: Однократное чтение действующих конфигураций запрошенных топиков Kafka
   ansible.builtin.command:
-    argv: ["{{ application_topic_cli_directory }}/bin/kafka-configs.sh", --bootstrap-server, "{{ application_topic_candidate.address }}:{{ application_topic_candidate.port }}", --command-config, "{{ application_topic_client.path }}", --describe, --all, --entity-type, topics]
+    argv: ["{{ application_topic_cli_directory }}/bin/kafka-configs{{ platform_kafka_script_extension }}", --bootstrap-server, "{{ application_topic_candidate.address }}:{{ application_topic_candidate.port }}", --command-config, "{{ application_topic_client.path }}", --describe, --all, --entity-type, topics]
   register: application_topic_batch_properties
   changed_when: false
   failed_when: false

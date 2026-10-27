@@ -1,7 +1,7 @@
 ---
 - name: Наблюдение за списками управления доступом кластера, включая совпадения с подстановочными знаками и префиксами
   ansible.builtin.command:
-    argv: "{{ [application_topic_cli_directory ~ '/bin/kafka-acls.sh', '--bootstrap-server', application_topic_candidate.address ~ ':' ~ application_topic_candidate.port, '--command-config', application_kafka_private.path ~ '/admin.properties', '--list', '--cluster', '--resource-pattern-type', 'match'] }}"
+    argv: "{{ [application_topic_cli_directory ~ '/bin/kafka-acls' ~ platform_kafka_script_extension, '--bootstrap-server', application_topic_candidate.address ~ ':' ~ application_topic_candidate.port, '--command-config', application_kafka_private.path ~ '/admin.properties', '--list', '--cluster', '--resource-pattern-type', 'match'] }}"
   register: kafka_authorization_cluster_acls
   failed_when: false
   changed_when: false

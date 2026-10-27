@@ -93,7 +93,7 @@ class Service01BContractTests(unittest.TestCase):
         self.assertIn("--no-initial-controllers", source)
         self.assertIn("--standalone", source)
         self.assertIn("kafka_member.directory_id is defined", source)
-        self.assertEqual(1, source.count("kafka-storage.sh"))
+        self.assertEqual(1, source.count("'/bin/kafka-storage' ~ platform_kafka_script_extension"))
 
     def test_quorum_and_effective_config_are_role_aware(self):
         main = (ROLE / "tasks" / "main.yml").read_text(encoding="utf-8")

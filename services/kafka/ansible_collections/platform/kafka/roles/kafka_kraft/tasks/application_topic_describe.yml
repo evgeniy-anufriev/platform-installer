@@ -2,7 +2,7 @@
 - name: "Получение описания явно указанного топика Kafka"
   ansible.builtin.command:
     argv:
-      - "{{ application_topic_cli_directory }}/bin/kafka-topics.sh"
+      - "{{ application_topic_cli_directory }}/bin/kafka-topics{{ platform_kafka_script_extension }}"
       - --bootstrap-server
       - "{{ application_topic_candidate.address }}:{{ application_topic_candidate.port }}"
       - --command-config
@@ -83,7 +83,7 @@
           topic: "{{ application_topic.name }}"
     - name: Чтение действующих свойств топика с учётом настроек брокера по умолчанию
       ansible.builtin.command:
-        argv: ["{{ application_topic_cli_directory }}/bin/kafka-configs.sh", --bootstrap-server, "{{ application_topic_candidate.address }}:{{ application_topic_candidate.port }}", --command-config, "{{ application_topic_client.path }}", --describe, --all, --entity-type, topics, --entity-name, "{{ application_topic.name }}"]
+        argv: ["{{ application_topic_cli_directory }}/bin/kafka-configs{{ platform_kafka_script_extension }}", --bootstrap-server, "{{ application_topic_candidate.address }}:{{ application_topic_candidate.port }}", --command-config, "{{ application_topic_client.path }}", --describe, --all, --entity-type, topics, --entity-name, "{{ application_topic.name }}"]
       register: application_topic_single_properties
       changed_when: false
       failed_when: false

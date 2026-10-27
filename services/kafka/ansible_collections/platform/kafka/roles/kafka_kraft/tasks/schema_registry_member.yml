@@ -114,7 +114,7 @@
 - name: Проверка готовности протокола брокера для выбранного соединения
   ansible.builtin.command:
     argv:
-      - "{{ platform_kafka_install_directory }}/bin/kafka-broker-api-versions.sh"
+      - "{{ platform_kafka_install_directory }}/bin/kafka-broker-api-versions{{ platform_kafka_script_extension }}"
       - --bootstrap-server
       - "{{ registry_instance.bootstrap_servers | regex_replace('(SSL|PLAINTEXT)://', '') }}"
       - --command-config
