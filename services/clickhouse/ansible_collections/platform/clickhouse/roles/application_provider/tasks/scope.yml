@@ -10,22 +10,18 @@
     fail_msg: APPLICATION_PROVIDER_SECRET_FILE_INVALID
   no_log: true
 
-- name: "Инициализация списка подготовленных описаний таблиц библиотеки"
-  ansible.builtin.set_fact:
-    clickhouse_application_tables: []
-
 - name: "Формирование описаний таблиц по шаблонам Ansible"
-  ansible.builtin.set_fact:
-    clickhouse_application_tables: "{{ clickhouse_application_tables + [{'database': item.0.name, 'definition': item.1, 'sql': lookup('ansible.builtin.template', 'application-table.sql.j2')}] }}"
-  loop: "{{ platform_clickhouse_application_job.databases | subelements('tables', skip_missing=true) }}"
-  loop_control:
-    label: "{{ item.0.name }}.{{ item.1.name }}"
+  platform.clickhouse.prepare_application_tables:
+    job: "{{ platform_clickhouse_application_job }}"
+    phase: "{{ platform_clickhouse_application_phase }}"
+    template_path: "{{ role_path }}/templates/application-table.sql.j2"
+  register: clickhouse_application_prepared_tables
   no_log: true
 
 - name: Обработка ресурсов библиотеки или экземпляра ClickHouse через TLS
   platform.clickhouse.application_scope:
     job: "{{ platform_clickhouse_application_job }}"
-    tables: "{{ clickhouse_application_tables }}"
+    tables: "{{ clickhouse_application_prepared_tables.tables }}"
     directory: "{{ hostvars[clickhouse_application_target.hostId].platform_clickhouse_config_root | default(platform_clickhouse_config_root) }}/{{ platform_clickhouse_application_job.providerId }}/{{ clickhouse_application_target.memberId }}"
     admin_password: "{{ lookup('ansible.builtin.file', platform_clickhouse_application_credential_files[platform_clickhouse_application_job.adminPasswordRef], rstrip=false) }}"
     passwords: "{{ dict(clickhouse_application_password_refs | zip(query('ansible.builtin.file', *clickhouse_application_password_paths, rstrip=false))) }}"

@@ -32,6 +32,7 @@
 - name: Подготовка исходных кандидатов перед активацией любого провайдера
   ansible.builtin.include_role:
     name: platform.haproxy.haproxy
+    tasks_from: partial_prepare
     apply: {become: true}
   vars:
     platform_haproxy_phase: prepare
@@ -41,6 +42,7 @@
 - name: Активация источника после проверки всех подготовленных конфигураций провайдера
   ansible.builtin.include_role:
     name: platform.haproxy.haproxy
+    tasks_from: activate
     apply: {become: true}
   vars:
     platform_haproxy_phase: activate
@@ -50,6 +52,7 @@
 - name: Перечитывание конфигурации HAProxy после активации всех провайдеров интеграции
   ansible.builtin.include_role:
     name: platform.haproxy.haproxy
+    tasks_from: partial_reload
     apply: {become: true}
   vars:
     platform_haproxy_phase: start

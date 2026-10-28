@@ -31,6 +31,21 @@ const tabLabels: Array<{ id: InstallationTab; label: string }> = [
 ];
 const executionEventWindowSize = 512;
 
+function planExpiryLabel(timestamp: string): string {
+  const date = new Date(timestamp);
+  if (!Number.isFinite(date.getTime())) return "Время неизвестно";
+  return `${new Intl.DateTimeFormat("ru-RU", {
+    timeZone: "Europe/Moscow",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).format(date)} МСК`;
+}
+
 function planActionLabel(action: {
   type: string;
   summary: string;
@@ -266,9 +281,14 @@ export function InstallationPage({
   onOpenServers,
   plan,
   busy,
+  starting = false,
   onCreatePlan,
   infrastructureObservation,
   selectedExecutionMode,
+  selectedSkippedServices,
+  onSkippedServicesChange,
+  selectedSkipInfrastructureVerify,
+  onSkipInfrastructureVerifyChange,
   onExecutionModeChange,
   serviceDeployments = [],
   applicationVaultSources = {},
@@ -300,15 +320,21 @@ export function InstallationPage({
   onOpenServers: () => void;
   plan?: InstallationPlanOperation;
   busy: boolean;
+  starting?: boolean;
   onCreatePlan: (
     deploymentOrder: string[],
     mode?: InstallationExecutionMode,
     skipInfrastructureVerify?: boolean,
     applicationLibraryOrder?: string[],
     skipApplicationLibraries?: string[],
+    skipServiceDeployments?: string[],
   ) => void;
   infrastructureObservation?: InfrastructureVerificationView;
   selectedExecutionMode?: InstallationExecutionMode;
+  selectedSkippedServices?: string[];
+  onSkippedServicesChange?: (ids: string[]) => void;
+  selectedSkipInfrastructureVerify?: boolean;
+  onSkipInfrastructureVerifyChange?: (value: boolean) => void;
   onExecutionModeChange?: (mode: InstallationExecutionMode) => void;
   serviceDeployments?: ServiceDeploymentInput[];
   applicationVaultSources?: InstallationPlanRequest["applicationVaultSources"];
@@ -337,23 +363,81 @@ export function InstallationPage({
   onCollectSecretOutputs?: () => Promise<void>;
 }) {
   const [orderError, setOrderError] = useState("");
+  const [localSkippedServices, setLocalSkippedServices] = useState<string[]>(
+    [],
+  );
+  const skippedServices = selectedSkippedServices ?? localSkippedServices;
+  const setSkippedServices = (ids: string[]) => {
+    setLocalSkippedServices(ids);
+    onSkippedServicesChange?.(ids);
+  };
   const [skippedLibraries, setSkippedLibraries] = useState<string[]>([]);
+  const selectionPlan = plan?.plan ?? runPlan;
   const selectionPlanId = useRef<string | undefined>(undefined);
-  useEffect(() => setSkippedLibraries([]), [state?.project?.id]);
   useEffect(() => {
-    if (selectionPlanId.current !== plan?.plan?.id) {
-      selectionPlanId.current = plan?.plan?.id;
-      setSkippedLibraries(plan?.plan?.skipApplicationLibraries || []);
+    setSkippedLibraries([]);
+    setLocalSkippedServices([]);
+  }, [state?.project?.id]);
+  useEffect(() => {
+    if (selectionPlan && selectionPlanId.current !== selectionPlan.id) {
+      selectionPlanId.current = selectionPlan?.id;
+      setSkippedLibraries(selectionPlan?.skipApplicationLibraries || []);
+      if (
+        !selectedExecutionMode ||
+        (selectionPlan?.executionMode || "FULL_PROJECT") === selectedExecutionMode
+      ) {
+        setLocalSkipInfrastructureVerify(
+          !!selectionPlan?.skipInfrastructureVerify,
+        );
+        onSkipInfrastructureVerifyChange?.(
+          !!selectionPlan?.skipInfrastructureVerify,
+        );
+      }
+      const restoredServices =
+        selectionPlan?.executionMode === "APPLICATION_LIBRARIES_ONLY"
+          ? serviceDeployments.map((s) => s.deploymentId)
+          : selectionPlan?.skipServiceDeployments || [];
+      if (
+        !selectedExecutionMode ||
+        (selectionPlan?.executionMode || "FULL_PROJECT") === selectedExecutionMode
+      ) {
+        setLocalSkippedServices(restoredServices);
+        onSkippedServicesChange?.(restoredServices);
+      }
     }
-  }, [plan?.plan?.id, plan?.plan?.skipApplicationLibraries]);
-  const [skipInfrastructureVerify, setSkipInfrastructureVerify] =
+  }, [
+    selectionPlan?.id,
+    selectionPlan?.skipApplicationLibraries,
+    selectionPlan?.skipServiceDeployments,
+    selectionPlan?.skipInfrastructureVerify,
+    selectionPlan?.executionMode,
+    serviceDeployments,
+    selectedExecutionMode,
+    onSkippedServicesChange,
+    onSkipInfrastructureVerifyChange,
+  ]);
+  const [localSkipInfrastructureVerify, setLocalSkipInfrastructureVerify] =
     useState(false);
-  useEffect(() => setSkipInfrastructureVerify(false), [state?.project?.id]);
+  const skipInfrastructureVerify =
+    selectedSkipInfrastructureVerify ?? localSkipInfrastructureVerify;
+  const setSkipInfrastructureVerify = (value: boolean) => {
+    setLocalSkipInfrastructureVerify(value);
+    onSkipInfrastructureVerifyChange?.(value);
+  };
+  useEffect(
+    () => setLocalSkipInfrastructureVerify(false),
+    [state?.project?.id],
+  );
   const [localExecutionMode, setLocalExecutionMode] =
     useState<InstallationExecutionMode>("FULL_PROJECT");
   const executionMode = selectedExecutionMode || localExecutionMode;
   const setExecutionMode = (mode: InstallationExecutionMode) => {
-    setSkipInfrastructureVerify(false);
+    setSkipInfrastructureVerify(mode === "APPLICATION_LIBRARIES_ONLY");
+    setSkippedServices(
+      mode === "APPLICATION_LIBRARIES_ONLY"
+        ? serviceDeployments.map((s) => s.deploymentId)
+        : [],
+    );
     setSkippedLibraries([]);
     setLocalExecutionMode(mode);
     onExecutionModeChange?.(mode);
@@ -369,6 +453,9 @@ export function InstallationPage({
   const skipChanged =
     !!plan?.plan &&
     (!!plan.plan.skipInfrastructureVerify !== skipInfrastructureVerify ||
+      (executionMode === "FULL_PROJECT" &&
+        JSON.stringify([...(plan.plan.skipServiceDeployments || [])].sort()) !==
+          JSON.stringify([...skippedServices].sort())) ||
       JSON.stringify([...(plan.plan.skipApplicationLibraries || [])].sort()) !==
         JSON.stringify([...skippedLibraries].sort()));
   const scopeChanged =
@@ -412,7 +499,16 @@ export function InstallationPage({
     const skip =
       executionMode === "APPLICATION_LIBRARIES_ONLY" &&
       skipInfrastructureVerify;
-    if (skippedLibraries.length)
+    if (skippedServices.length && executionMode === "FULL_PROJECT")
+      onCreatePlan(
+        deploymentOrder.order,
+        executionMode,
+        skip,
+        libraryOrder.order,
+        skippedLibraries,
+        skippedServices,
+      );
+    else if (skippedLibraries.length)
       onCreatePlan(
         deploymentOrder.order,
         executionMode,
@@ -429,6 +525,23 @@ export function InstallationPage({
       );
     else if (skip) onCreatePlan(deploymentOrder.order, executionMode, true);
     else onCreatePlan(deploymentOrder.order, executionMode);
+  };
+  const setServiceInstalled = (id: string, installed: boolean) => {
+    const current =
+      executionMode === "APPLICATION_LIBRARIES_ONLY"
+        ? serviceDeployments.map((s) => s.deploymentId)
+        : skippedServices;
+    const skipped = installed
+      ? current.filter((key) => key !== id)
+      : [...new Set([...current, id])];
+    const mode =
+      skipped.length === serviceDeployments.length
+        ? "APPLICATION_LIBRARIES_ONLY"
+        : "FULL_PROJECT";
+    setSkippedServices(skipped);
+    setLocalExecutionMode(mode);
+    setSkipInfrastructureVerify(mode === "APPLICATION_LIBRARIES_ONLY");
+    onExecutionModeChange?.(mode);
   };
   const node = state?.executionNode;
   const runActive = ["STARTING", "RUNNING", "CANCELLING"].includes(
@@ -450,6 +563,22 @@ export function InstallationPage({
       )}
     </>
   );
+  const serviceCheckbox = (id: string) => (
+    <input
+      type="checkbox"
+      aria-label={"Установить сервис " + id}
+      checked={
+        executionMode === "FULL_PROJECT" && !skippedServices.includes(id)
+      }
+      disabled={
+        busy ||
+        starting ||
+        runActive ||
+        executionMode === "INFRASTRUCTURE_VERIFY_ONLY"
+      }
+      onChange={(event) => setServiceInstalled(id, event.target.checked)}
+    />
+  );
   const servicesControl = (
     <div aria-label="services">
       <div
@@ -466,7 +595,15 @@ export function InstallationPage({
           <input
             type="checkbox"
             aria-label="Устанавливать инфраструктуру"
-            checked={executionMode === "FULL_PROJECT"}
+            checked={
+              executionMode === "FULL_PROJECT" && skippedServices.length === 0
+            }
+            ref={(input) => {
+              if (input)
+                input.indeterminate =
+                  executionMode === "FULL_PROJECT" &&
+                  skippedServices.length > 0;
+            }}
             disabled={busy || runActive}
             onChange={(event) =>
               setExecutionMode(
@@ -507,6 +644,32 @@ export function InstallationPage({
             он добавит его перед полным циклом библиотек.
           </p>
         )}
+      {serviceDeployments
+        .filter(
+          (service) =>
+            tab === "summary" || executionMode === "APPLICATION_LIBRARIES_ONLY" ||
+            !plan?.plan?.phases.some((phase) =>
+              phase.actions.some(
+                (action) =>
+                  action.type === "SERVICE_APPLY" &&
+                  action.serviceDeployment === service.deploymentId,
+              ),
+            ),
+        )
+        .map((service) => (
+          <label className="plan-action-row" key={service.deploymentId}>
+            {serviceCheckbox(service.deploymentId)}
+            <span>
+              Установить сервис {service.deploymentId}
+              <small>
+                {skippedServices.includes(service.deploymentId) ||
+                executionMode !== "FULL_PROJECT"
+                  ? "Установка и проверка пропущены; интеграции сохраняются"
+                  : "Установка и проверка"}
+              </small>
+            </span>
+          </label>
+        ))}
       {cachedObservation}
       {scopeChanged && (
         <p role="status">
@@ -550,7 +713,13 @@ export function InstallationPage({
                   <option value="RUNTIME_INPUT">
                     Из секретов инфраструктурного Vault
                   </option>
-                  <option value="CURRENT_RUN_BOOTSTRAP">
+                  <option
+                    value="CURRENT_RUN_BOOTSTRAP"
+                    disabled={
+                      executionMode !== "FULL_PROJECT" ||
+                      skippedServices.includes(service.deploymentId)
+                    }
+                  >
                     Из текущей установки Vault
                   </option>
                 </select>
@@ -808,8 +977,10 @@ export function InstallationPage({
         {tab === "plan" && (
           <>
             <PlanStage
+              starting={starting}
               key={plan?.plan?.id || "no-plan"}
               servicesControl={servicesControl}
+              serviceCheckbox={serviceCheckbox}
               librariesControl={librariesControl}
               scopeChanged={!runActive && scopeChanged}
               skipChanged={!runActive && skipChanged}
@@ -875,6 +1046,7 @@ export function InstallationPage({
 
 function PlanStage({
   servicesControl,
+  serviceCheckbox,
   librariesControl,
   scopeChanged,
   skipChanged,
@@ -883,6 +1055,7 @@ function PlanStage({
   draftActive,
   operation,
   busy,
+  starting = false,
   onCreatePlan,
   orderError,
   onApprovePlan,
@@ -893,6 +1066,7 @@ function PlanStage({
   onSetOutputEncryptionPassword,
 }: {
   servicesControl: ReactNode;
+  serviceCheckbox: (id: string) => ReactNode;
   librariesControl: ReactNode;
   scopeChanged: boolean;
   skipChanged: boolean;
@@ -901,6 +1075,7 @@ function PlanStage({
   draftActive: boolean;
   operation?: InstallationPlanOperation;
   busy: boolean;
+  starting?: boolean;
   onCreatePlan: () => void;
   orderError: string;
   onApprovePlan: (planId: string, acknowledgements: string[]) => void;
@@ -1157,7 +1332,11 @@ function PlanStage({
             <dt>Узел выполнения</dt>
             <dd>{plan.executionNodeId}</dd>
             <dt>Истекает</dt>
-            <dd>{plan.expiresAt}</dd>
+            <dd>
+              <time dateTime={plan.expiresAt}>
+                {planExpiryLabel(plan.expiresAt)}
+              </time>
+            </dd>
           </dl>
         </article>
         {(operation.error || run?.error) && (
@@ -1358,7 +1537,12 @@ function PlanStage({
                   )
                   .map((action, index) => (
                     <div className="plan-action-row" key={action.id}>
-                      <span className="plan-action-number">{index + 1}</span>
+                      <span className="plan-action-number">
+                        {action.type === "SERVICE_APPLY" &&
+                        action.serviceDeployment
+                          ? serviceCheckbox(action.serviceDeployment)
+                          : index + 1}
+                      </span>
                       <span className="plan-action-description">
                         <b>{planActionLabel(action)}</b>
                         {!!action.progressSteps?.length && (
@@ -1450,6 +1634,7 @@ function PlanStage({
       )}
       {plan.approved && !scopeChanged && (
         <StartApproval
+          starting={starting}
           plan={plan}
           busy={busy}
           canStart={canStart}
@@ -1469,6 +1654,7 @@ function PlanStage({
 function StartApproval({
   plan,
   busy,
+  starting = false,
   canStart,
   onStart,
   credentialStatus,
@@ -1478,6 +1664,7 @@ function StartApproval({
 }: {
   plan: NonNullable<InstallationPlanOperation["plan"]>;
   busy: boolean;
+  starting?: boolean;
   canStart: boolean;
   onStart: (planId: string) => void;
   credentialStatus: SessionCredentialStatus | null;
@@ -1494,11 +1681,13 @@ function StartApproval({
     >
       <div className="installation-start-gate">
         <span className="muted" role="status">
-          {runActive
-            ? "Выполнение этого плана уже запущено."
-            : canStart && (!required || present) && outputReady
-              ? "Одобренный план готов к запуску."
-              : "Запуск пока недоступен. Устраните причины ниже:"}
+          {starting
+            ? "Запускается выполнение…"
+            : runActive
+              ? "Выполнение этого плана уже запущено."
+              : canStart && (!required || present) && outputReady
+                ? "Одобренный план готов к запуску."
+                : "Запуск пока недоступен. Устраните причины ниже:"}
         </span>
         {!runActive && startBlockers.length > 0 && (
           <ul
@@ -1525,7 +1714,7 @@ function StartApproval({
           runActive
         }
       >
-        Начать выполнение
+        {starting ? "Запускается выполнение…" : "Начать выполнение"}
       </button>
     </footer>
   );

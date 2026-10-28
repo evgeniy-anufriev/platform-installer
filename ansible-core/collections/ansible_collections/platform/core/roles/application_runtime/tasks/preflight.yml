@@ -30,6 +30,9 @@
       XDG_RUNTIME_DIR: "/run/user/{{ application_uid }}"
       DOCKER_HOST: "unix:///run/user/{{ application_uid }}/docker.sock"
       DOCKER_CONFIG: "{{ platform_application_registry_config_directory if platform_application_registry_config_directory else application_home ~ '/.docker' }}"
+    application_image_platform:
+      os: "{{ application_runtime_discoveries[application_discovery_key].info.OSType }}"
+      architecture: "{{ {'x86_64': 'amd64', 'aarch64': 'arm64'}.get(application_runtime_discoveries[application_discovery_key].info.Architecture, application_runtime_discoveries[application_discovery_key].info.Architecture) }}"
     application_config_contents: []
     application_archive_pairs: []
     application_archive_checksums: {}
@@ -54,13 +57,6 @@
       - application_runtime_discoveries[application_discovery_key].info.OSType == application_runtime_job.authority.requirement.platform.os
       - application_runtime_discoveries[application_discovery_key].info.Architecture in ['x86_64', 'aarch64', 'amd64', 'arm64']
     fail_msg: APPLICATION_RUNTIME_DAEMON_INVALID
-
-- name: Определение целевой платформы образов
-  ansible.builtin.set_fact:
-    application_image_platform:
-      os: "{{ application_runtime_discoveries[application_discovery_key].info.OSType }}"
-      architecture: "{{ {'x86_64': 'amd64', 'aarch64': 'arm64'}.get(application_runtime_discoveries[application_discovery_key].info.Architecture, application_runtime_discoveries[application_discovery_key].info.Architecture) }}"
-  no_log: true
 
 - name: Проверка явного одобрения реестра на целевом узле приложения
   ansible.builtin.assert:
@@ -176,20 +172,11 @@
     fail_msg: APPLICATION_CONFIG_CONTENT_INVALID
   no_log: true
 
-- name: Вычисление отпечатка служебной конфигурации приложения
+- name: Сбор упорядоченных пар путей назначения и контрольных сумм содержимого
   ansible.builtin.set_fact:
-    application_config_pairs: []
-  no_log: true
-
-- name: "Сбор упорядоченных пар путей назначения и контрольных сумм содержимого"
-  ansible.builtin.set_fact:
-    application_config_pairs: "{{ application_config_pairs + [[item.destination, item.sha256]] }}"
-  loop: "{{ application_config_contents | sort(attribute='destination') }}"
-  no_log: true
-
-- name: Включение содержимого архивов в отпечаток конфигурации
-  ansible.builtin.set_fact:
-    application_config_pairs: "{{ (application_config_pairs + application_archive_pairs) | sort(attribute=0) }}"
+    application_config_pairs: "{{ ((application_sorted_configs | map(attribute='destination') | zip(application_sorted_configs | map(attribute='sha256')) | map('list') | list) + application_archive_pairs) | sort(attribute=0) }}"
+  vars:
+    application_sorted_configs: "{{ application_config_contents | sort(attribute='destination') }}"
   no_log: true
 
 - name: Привязка зарезервированного дайджеста и контекста шаблона
@@ -236,6 +223,7 @@
 
 - name: "Формирование Compose-файлов и файлов библиотеки по шаблонам Ansible"
   ansible.builtin.set_fact:
+    application_preflight_parent_paths: "{{ ([application_library_path, application_instance_path ~ '/config'] + (application_runtime_job.configs | map(attribute='destination') | map('regex_replace', '^', application_instance_path ~ '/config/') | map('dirname') | list) + (application_runtime_job.directoryConfigs | map(attribute='destination') | map('regex_replace', '^', application_instance_path ~ '/config/') | map('dirname') | list) + (application_runtime_job.archiveConfigs | map(attribute='destination') | map('regex_replace', '^', application_instance_path ~ '/config/') | map('dirname') | list)) | platform.core.application_parent_paths }}"
     application_compose_content: "{{ lookup('ansible.builtin.template', application_runtime_job.appTemplate) }}"
     application_base_content: "{{ lookup('ansible.builtin.template', application_runtime_job.baseTemplate) }}"
     application_env_content: "{{ lookup('ansible.builtin.template', role_path ~ '/templates/library.env.j2') }}"
@@ -254,8 +242,20 @@
     get_checksum: false
     get_mime: false
     get_attributes: false
-  loop: "{{ ([application_library_path, application_instance_path ~ '/config'] + (application_runtime_job.configs | map(attribute='destination') | map('regex_replace', '^', application_instance_path ~ '/config/') | map('dirname') | list) + (application_runtime_job.directoryConfigs | map(attribute='destination') | map('regex_replace', '^', application_instance_path ~ '/config/') | map('dirname') | list) + (application_runtime_job.archiveConfigs | map(attribute='destination') | map('regex_replace', '^', application_instance_path ~ '/config/') | map('dirname') | list)) | platform.core.application_parent_paths }}"
-  register: application_ancestors
+  loop: "{{ application_preflight_parent_paths | difference((application_preflight_path_observations | default({}) if application_runtime_reuse_preflight_paths | default(false) | bool else {}) | list) }}"
+  register: _application_new_ancestors
+  no_log: true
+
+- name: Привязка наблюдений родительских путей в текущей read-only подготовке
+  ansible.builtin.set_fact:
+    application_ancestors:
+      results: "{{ application_preflight_parent_paths | map('extract', _application_parent_observations) | list }}"
+    application_preflight_path_observations: "{{ _application_parent_observations if application_runtime_reuse_preflight_paths | default(false) | bool else {} }}"
+  vars:
+    _application_parent_observations: >-
+      {{ (application_preflight_path_observations | default({}) if application_runtime_reuse_preflight_paths | default(false) | bool else {})
+         | combine(dict(_application_new_ancestors.results | default([]) | map(attribute='item')
+              | zip(_application_new_ancestors.results | default([])))) }}
   no_log: true
 
 - name: Отклонение небезопасных путей и неуправляемых каталогов приложений

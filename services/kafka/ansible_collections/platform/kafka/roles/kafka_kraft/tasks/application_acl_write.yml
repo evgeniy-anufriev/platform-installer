@@ -1,0 +1,13 @@
+---
+- name: Добавление отсутствующих управляемых списков управления доступом без удаления других разрешений
+  ansible.builtin.command:
+    argv: "{{ [application_topic_cli_directory ~ '/bin/kafka-acls' ~ platform_kafka_script_extension, '--bootstrap-server', application_topic_candidate.address ~ ':' ~ application_topic_candidate.port, '--command-config', application_kafka_private.path ~ '/admin.properties', '--add', '--allow-principal', 'User:' ~ application_kafka_account.name, '--allow-host', '*'] + application_kafka_acl_args + application_kafka_acl_operations }}"
+  register: application_kafka_acl_creation
+  failed_when: false
+  changed_when: application_kafka_acl_creation.rc == 0
+  no_log: true
+
+- name: Проверка успешности добавления ACL
+  ansible.builtin.assert:
+    that: application_kafka_acl_creation.rc == 0
+    fail_msg: APPLICATION_KAFKA_ACL_CREATE_FAILED

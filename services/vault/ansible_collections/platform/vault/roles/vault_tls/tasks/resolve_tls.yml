@@ -15,9 +15,11 @@
   loop: [ca-chain.pem, certificate.pem, private-key.pem]
   register: _platform_vault_tls_files
   no_log: true
+  when: not (platform_vault_verify_only | bool)
 
 - name: Отклонение неполного набора TLS-файлов Vault API
   ansible.builtin.assert:
     that: _platform_vault_tls_files.results | map(attribute='stat.exists') | list | min
     fail_msg: VAULT_PKI_MATERIALIZATION_REQUIRED
   no_log: true
+  when: not (platform_vault_verify_only | bool)

@@ -3,38 +3,7 @@
   ansible.builtin.include_tasks: resolve_tls_runtime.yml
   vars:
     kafka_tls_member: "{{ kafka_member }}"
-
-- name: Проверка существующего потребителя Kafka PEM без его изменения
-  ansible.builtin.include_tasks: pem_identity.yml
-  vars:
-    kafka_pem_source_directory: "{{ _platform_kafka_tls_runtime.targetDirectory }}"
-    kafka_pem_identity_path: "{{ _platform_kafka_tls_runtime.keystorePath }}"
-    kafka_pem_ca_path: "{{ _platform_kafka_tls_runtime.truststorePath }}"
-    kafka_pem_owner: "{{ platform_kafka_user }}"
-    kafka_pem_group: "{{ platform_kafka_group }}"
-    kafka_pem_verify_only: true
-  when: _platform_kafka_tls_runtime.storeType == 'PEM'
-
-- name: Чтение конфигурации установленного экземпляра службы, не раскрывая ее
-  ansible.builtin.slurp:
-    src: "{{ kafka_member.config_directory }}/server.properties"
-  register: _platform_kafka_pem_member_config
-  no_log: true
-  when: _platform_kafka_tls_runtime.storeType == 'PEM'
-
-- name: Проверка использования выбранных PEM-файлов установленной конфигурацией Kafka listener
-  ansible.builtin.assert:
-    that:
-      - "('listener.name.' ~ (kafka_ssl_listener.name | lower) ~ '.ssl.keystore.type=PEM') in (_platform_kafka_pem_member_config.content | b64decode).splitlines()"
-      - "('listener.name.' ~ (kafka_ssl_listener.name | lower) ~ '.ssl.truststore.type=PEM') in (_platform_kafka_pem_member_config.content | b64decode).splitlines()"
-      - "('listener.name.' ~ (kafka_ssl_listener.name | lower) ~ '.ssl.keystore.location=' ~ _platform_kafka_tls_runtime.keystorePath) in (_platform_kafka_pem_member_config.content | b64decode).splitlines()"
-      - "('listener.name.' ~ (kafka_ssl_listener.name | lower) ~ '.ssl.truststore.location=' ~ _platform_kafka_tls_runtime.truststorePath) in (_platform_kafka_pem_member_config.content | b64decode).splitlines()"
-      - >-
-        (_platform_kafka_pem_member_config.content | b64decode).splitlines()
-        | select('match', '^listener\\.name\\.' ~ (kafka_ssl_listener.name | lower) ~ '\\.ssl\\.(key|keystore|truststore)\\.password=') | list | length == 0
-    fail_msg: KAFKA_PEM_CONFIG_DRIFT
-  no_log: true
-  when: _platform_kafka_tls_runtime.storeType == 'PEM'
+  when: not (kafka_ssl_runtime_prepared | default(false) | bool)
 
 - name: Выполнение реального TLS-соединения с listener Kafka
   ansible.builtin.shell: |

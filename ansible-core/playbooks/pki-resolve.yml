@@ -1,0 +1,15 @@
+---
+- name: Расчёт проекции проверки PKI на узле выполнения
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Расчёт плана проверки PKI со значениями роли по умолчанию
+      ansible.builtin.include_role:
+        name: platform.core.pki_materialize
+        tasks_from: resolve.yml
+      vars:
+        # PKI materialization plans are derived runtime state. Reconstruct
+        # them for every independent verify process; never persist or apply.
+        platform_pki_resolve_managed: true
+

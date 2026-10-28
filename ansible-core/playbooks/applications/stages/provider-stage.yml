@@ -81,7 +81,7 @@
             tasks_from: application_topics
           vars:
             platform_kafka_application_phase: apply
-          loop: "{{ application_provider_inputs.libraryJobs | selectattr('serviceType', 'equalto', 'kafka') | list }}"
+          loop: "{{ application_provider_inputs.jobs | selectattr('serviceType', 'equalto', 'kafka') | selectattr('topics') | list }}"
           loop_control:
             loop_var: platform_kafka_application_job
         - name: Создание всех ресурсов библиотеки перед экземплярами

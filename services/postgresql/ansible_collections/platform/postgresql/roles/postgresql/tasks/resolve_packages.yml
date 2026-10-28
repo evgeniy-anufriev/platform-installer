@@ -1,3 +1,4 @@
+---
 - name: Проверка имён пакетов PostgreSQL старого формата по маскам версии
   ansible.builtin.command:
     argv:
@@ -41,13 +42,14 @@
     - not (platform_postgresql_verify_only | bool)
     - platform_resolved_artifact_sources is not defined or
       platform_resolved_artifact_sources['postgresql-runtime'].source == 'REPOSITORY'
+    - _platform_postgresql_legacy_package_probe.rc | default(1) != 0 or _platform_postgresql_legacy_package_probe.stdout_lines | default([]) | length != 3
 
 - name: Выбор доступного семейства пакетов PostgreSQL, не меняя запрошенную версию
   ansible.builtin.set_fact:
     _platform_postgresql_repository_packages: >-
       {{ (_platform_postgresql_legacy_package_probe.stdout_lines | default([])
-          if (_platform_postgresql_legacy_package_probe.stdout_lines | default([]) | length == 3)
-          else _platform_postgresql_major_package_probe.stdout_lines | default([])) }}
+          if (_platform_postgresql_legacy_package_probe.rc | default(1) == 0 and _platform_postgresql_legacy_package_probe.stdout_lines | default([]) | length == 3)
+          else (_platform_postgresql_major_package_probe.stdout_lines | default([]) if _platform_postgresql_major_package_probe.rc | default(1) == 0 else [])) }}
   when:
     - ansible_facts.pkg_mgr | default('') == 'dnf'
     - not (platform_postgresql_verify_only | bool)
@@ -105,13 +107,14 @@
     - platform_postgresql_mode == 'pg_auto_failover'
     - platform_resolved_artifact_sources is not defined or
       platform_resolved_artifact_sources['pg-auto-failover'].source == 'REPOSITORY'
+    - _platform_postgresql_major_failover_package_probe.rc | default(1) != 0 or _platform_postgresql_major_failover_package_probe.stdout_lines | default([]) | length != 1
 
 - name: Выбор доступного пакета pg_auto_failover по основной версии PostgreSQL
   ansible.builtin.set_fact:
     _platform_postgresql_failover_repository_package: >-
       {{ (_platform_postgresql_major_failover_package_probe.stdout_lines | default([])
-          if (_platform_postgresql_major_failover_package_probe.stdout_lines | default([]) | length == 1)
-          else _platform_postgresql_legacy_failover_package_probe.stdout_lines | default([])) }}
+          if (_platform_postgresql_major_failover_package_probe.rc | default(1) == 0 and _platform_postgresql_major_failover_package_probe.stdout_lines | default([]) | length == 1)
+          else (_platform_postgresql_legacy_failover_package_probe.stdout_lines | default([]) if _platform_postgresql_legacy_failover_package_probe.rc | default(1) == 0 else [])) }}
   when:
     - ansible_facts.pkg_mgr | default('') == 'dnf'
     - not (platform_postgresql_verify_only | bool)

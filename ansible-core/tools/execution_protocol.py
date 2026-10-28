@@ -109,7 +109,9 @@ def owned(journal):
 
 
 SELECTION_REQUEST_VERSION = 'platform.installer/execution-runtime/v1alpha7'
-IMAGE_REQUEST_VERSIONS = (image_preparation.REQUEST_VERSION, SELECTION_REQUEST_VERSION)
+SERVICE_SELECTION_REQUEST_VERSION = 'platform.installer/execution-runtime/v1alpha8'
+SELECTION_REQUEST_VERSIONS = (SELECTION_REQUEST_VERSION, SERVICE_SELECTION_REQUEST_VERSION)
+IMAGE_REQUEST_VERSIONS = (image_preparation.REQUEST_VERSION,) + SELECTION_REQUEST_VERSIONS
 
 
 def request():
@@ -128,7 +130,7 @@ def request():
         return value
     if isinstance(value, dict) and value.get("apiVersion") in ("platform.installer/runtime-secret-lease/v1alpha1", "platform.installer/runtime-secret-lease/v1alpha2") and value.get("kind") == "PutRuntimeSecretLeaseRequest":
         return value
-    if not isinstance(value, dict) or value.get("apiVersion") not in ("platform.installer/execution-runtime/v1alpha1", DEPLOYMENT_PLAN_REQUEST_VERSION, APPLICATION_PLAN_REQUEST_VERSION, B0_PLAN_REQUEST_VERSION, SKIP_PLAN_REQUEST_VERSION, image_preparation.REQUEST_VERSION, SELECTION_REQUEST_VERSION):
+    if not isinstance(value, dict) or value.get("apiVersion") not in ("platform.installer/execution-runtime/v1alpha1", DEPLOYMENT_PLAN_REQUEST_VERSION, APPLICATION_PLAN_REQUEST_VERSION, B0_PLAN_REQUEST_VERSION, SKIP_PLAN_REQUEST_VERSION, image_preparation.REQUEST_VERSION, SELECTION_REQUEST_VERSION, SERVICE_SELECTION_REQUEST_VERSION):
         raise LifecycleError("EXECUTION_PROTOCOL_INVALID")
     if value.get("operation") not in OPERATIONS + ('PrepareApplicationImages',):
         raise LifecycleError("EXECUTION_OPERATION_UNSUPPORTED")
@@ -138,8 +140,10 @@ def request():
         fields = {'apiVersion', 'operation', 'runId', 'runtimeRelease', 'phase'}
         if value.get('phase') == 'DESCRIBE':
             fields.update(('executionMode', 'deploymentOrder', 'skipInfrastructureVerify'))
-            if value['apiVersion'] == SELECTION_REQUEST_VERSION:
+            if value['apiVersion'] in SELECTION_REQUEST_VERSIONS:
                 fields.update(('skipApplicationLibraries', 'applicationLibraryOrder'))
+            if value['apiVersion'] == SERVICE_SELECTION_REQUEST_VERSION:
+                fields.add('skipServiceDeployments')
         elif value.get('phase') == 'PREPARE':
             fields.add('inputsDigest')
             if 'preparationLease' in value:
@@ -149,7 +153,7 @@ def request():
         if set(value) != fields:
             raise LifecycleError('APPLICATION_IMAGE_REQUEST_INVALID')
     if value.get("operation") == "BuildDeploymentPlan":
-        if value.get("apiVersion") not in (DEPLOYMENT_PLAN_REQUEST_VERSION, APPLICATION_PLAN_REQUEST_VERSION, B0_PLAN_REQUEST_VERSION, SKIP_PLAN_REQUEST_VERSION, image_preparation.REQUEST_VERSION, SELECTION_REQUEST_VERSION):
+        if value.get("apiVersion") not in (DEPLOYMENT_PLAN_REQUEST_VERSION, APPLICATION_PLAN_REQUEST_VERSION, B0_PLAN_REQUEST_VERSION, SKIP_PLAN_REQUEST_VERSION, image_preparation.REQUEST_VERSION, SELECTION_REQUEST_VERSION, SERVICE_SELECTION_REQUEST_VERSION):
             raise LifecycleError("DEPLOYMENT_ORDER_REQUEST_VERSION_REQUIRED")
         expected = {"apiVersion", "operation", "runId", "project", "runtimeRelease", "deploymentOrder"}
         if 'applicationLibraryOrder' in value:
@@ -159,18 +163,18 @@ def request():
                     any(not isinstance(item, str) or re.fullmatch(r'[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*', item) is None
                         for item in library_order) or len(library_order) != len(set(library_order))):
                 raise LifecycleError('APPLICATION_LIBRARY_ORDER_INVALID')
-        if value['apiVersion'] in (APPLICATION_PLAN_REQUEST_VERSION, B0_PLAN_REQUEST_VERSION, SKIP_PLAN_REQUEST_VERSION, image_preparation.REQUEST_VERSION, SELECTION_REQUEST_VERSION):
+        if value['apiVersion'] in (APPLICATION_PLAN_REQUEST_VERSION, B0_PLAN_REQUEST_VERSION, SKIP_PLAN_REQUEST_VERSION, image_preparation.REQUEST_VERSION, SELECTION_REQUEST_VERSION, SERVICE_SELECTION_REQUEST_VERSION):
             expected.add('applicationVaultSources')
             sources = value.get('applicationVaultSources')
             if (not isinstance(sources, dict) or len(sources) > 16 or
                     any(not isinstance(key, str) or re.fullmatch(r'[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*', key) is None or
                         kind not in ('RUNTIME_INPUT', 'CURRENT_RUN_BOOTSTRAP') for key, kind in sources.items())):
                 raise LifecycleError('APPLICATION_VAULT_SOURCE_INVALID')
-        if value['apiVersion'] in (B0_PLAN_REQUEST_VERSION, SKIP_PLAN_REQUEST_VERSION, image_preparation.REQUEST_VERSION, SELECTION_REQUEST_VERSION):
+        if value['apiVersion'] in (B0_PLAN_REQUEST_VERSION, SKIP_PLAN_REQUEST_VERSION, image_preparation.REQUEST_VERSION, SELECTION_REQUEST_VERSION, SERVICE_SELECTION_REQUEST_VERSION):
             expected.add('executionMode')
             if value.get('executionMode') not in infra.MODES:
                 raise LifecycleError('EXECUTION_MODE_UNSUPPORTED')
-        if value['apiVersion'] in (SKIP_PLAN_REQUEST_VERSION, image_preparation.REQUEST_VERSION, SELECTION_REQUEST_VERSION):
+        if value['apiVersion'] in (SKIP_PLAN_REQUEST_VERSION, image_preparation.REQUEST_VERSION, SELECTION_REQUEST_VERSION, SERVICE_SELECTION_REQUEST_VERSION):
             expected.add('skipInfrastructureVerify')
             if type(value.get('skipInfrastructureVerify')) is not bool or value['skipInfrastructureVerify'] and value['executionMode'] != 'APPLICATION_LIBRARIES_ONLY':
                 raise LifecycleError('INFRA_VERIFY_SKIP_INVALID')
@@ -178,8 +182,10 @@ def request():
             expected.add('applicationImagePreparation')
             if not isinstance(value.get('applicationImagePreparation'), str) or re.fullmatch('sha256:[a-f0-9]{64}', value['applicationImagePreparation']) is None:
                 raise LifecycleError('APPLICATION_IMAGE_PREPARATION_REQUIRED')
-        if value['apiVersion'] == SELECTION_REQUEST_VERSION:
+        if value['apiVersion'] in SELECTION_REQUEST_VERSIONS:
             expected.add('skipApplicationLibraries')
+            if value['apiVersion'] == SERVICE_SELECTION_REQUEST_VERSION:
+                expected.update(('skipServiceDeployments', 'applicationLibraryOrder'))
             _selection_request(value)
             if not isinstance(value.get('project'), str) or not value['project']:
                 raise LifecycleError('EXECUTION_PROTOCOL_INVALID')
@@ -188,8 +194,14 @@ def request():
                 any(not isinstance(item, str) or re.fullmatch(r"[a-z0-9][a-z0-9-]{0,127}", item) is None for item in order) or
                 len(order) != len(set(order))):
             raise LifecycleError("DEPLOYMENT_ORDER_REQUEST_INVALID")
-    if value.get('operation') == 'PrepareApplicationImages' and value.get('phase') == 'DESCRIBE' and value['apiVersion'] == SELECTION_REQUEST_VERSION:
+    if value.get('operation') == 'PrepareApplicationImages' and value.get('phase') == 'DESCRIBE' and value['apiVersion'] in SELECTION_REQUEST_VERSIONS:
         _selection_request(value)
+    if value['apiVersion'] == SERVICE_SELECTION_REQUEST_VERSION and (value.get('operation') == 'BuildDeploymentPlan' or value.get('phase') == 'DESCRIBE'):
+        skipped = value.get('skipServiceDeployments')
+        if (not isinstance(skipped, list) or len(skipped) > MAX_DEPLOYMENT_ORDER or
+                any(not isinstance(item, str) or re.fullmatch(r'[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*', item) is None for item in skipped) or
+                len(skipped) != len(set(skipped)) or value.get('executionMode') != 'FULL_PROJECT'):
+            raise LifecycleError('SERVICE_SELECTION_INVALID')
     return value
 
 
@@ -239,7 +251,7 @@ def _b0_capabilities(args, skip=False):
     return result
 
 
-def _image_capabilities(args, selection=False):
+def _image_capabilities(args, selection=False, service_selection=False):
     result = _b0_capabilities(args, True)
     result['apiVersion'] = 'platform.installer/execution-capabilities/v1alpha10'
     result['supportedOperations'].append('PrepareApplicationImages')
@@ -262,6 +274,11 @@ def _image_capabilities(args, selection=False):
         result['apiVersion'] = 'platform.installer/execution-capabilities/v1alpha13'
         result['applicationProgress'] = dict(protocol='ApplicationProgress/v1alpha1',
             planContract='platform.installer/plan/v1alpha10')
+    if service_selection:
+        result['apiVersion'] = 'platform.installer/execution-capabilities/v1alpha14'
+        result['deploymentPlanRequestVersions'].append(SERVICE_SELECTION_REQUEST_VERSION)
+        result['serviceSelection'] = dict(protocol='ServiceSelection/v1alpha1',
+            planContract='platform.installer/plan/v1alpha11', manifestContract='platform.installer/execution-manifest/v1alpha8')
     result['runtimeSecretDescriptors']['protocol'] = 'BuildRuntimeSecretDescriptors/v1alpha4'
     return result
 
@@ -768,6 +785,48 @@ def start(value, state_root, runtime_release, controller, active_bundle_digest="
 
 
 def core_operation(value, state_root, runtime_release, operation, runtime_identity=None):
+    """Serialize publication for one project; retain no process/UI state."""
+    project = os.path.join(state_root, 'runs', value['runId'], 'project')
+    collections = os.path.join(runtime_release, 'ansible-core', 'collections')
+    implementation = os.path.join(collections, 'ansible_collections', 'platform', 'core',
+                                  'plugins', 'module_utils', 'project_resolution.py')
+    reusable_operation = operation in ('BuildProjectSnapshot', 'BuildRuntimeSecretDescriptors',
+                                       'BuildDeploymentPlan', 'PrepareApplicationImages')
+    supported = (runtime_identity is not None and os.path.isfile(implementation) and
+                 reusable_operation and (value.get('snapshotRequest') is None or
+                                          operation == 'BuildRuntimeSecretDescriptors'))
+    if not supported:
+        return _core_operation(value, state_root, runtime_release, operation, runtime_identity)
+    if collections not in sys.path:
+        sys.path.insert(0, collections)
+    from ansible_collections.platform.core.plugins.module_utils import project_resolution as resolution
+    directory = os.path.join(state_root, 'project-resolutions')
+    os.makedirs(directory, mode=0o700, exist_ok=True)
+    descriptor = os.open(os.path.join(directory, resolution.scope_name(project, runtime_identity) + '.lock'),
+                         os.O_CREAT | os.O_RDWR, 0o600)
+    started = time.monotonic()
+    acquired = started
+    try:
+        fcntl.flock(descriptor, fcntl.LOCK_EX)
+        acquired = time.monotonic()
+        return _core_operation(value, state_root, runtime_release, operation, runtime_identity)
+    finally:
+        try:
+            metrics = os.path.join(state_root, 'runs', value['runId'], '.project-resolution.json.metrics')
+            data = dict(operation=operation, elapsedSeconds=round(time.monotonic() - started, 6),
+                        lockWaitSeconds=round(acquired - started, 6))
+            if os.path.isfile(metrics):
+                with open(metrics, encoding='utf-8') as stream:
+                    data['resolution'] = json.load(stream)
+            resolution.atomic_json(os.path.join(directory,
+                resolution.scope_name(project, runtime_identity) + '.' + operation + '.timing.json'), data)
+        except (OSError, ValueError, TypeError):
+            pass  # Optional timing must not mask the operation's outcome.
+        finally:
+            os.close(descriptor)
+
+
+def _core_operation(value, state_root, runtime_release, operation, runtime_identity=None):
     """Run one fixed Core playbook against already trusted run staging."""
     from execution_controller import _collection_path
     journal = Journal(state_root, value["runId"])
@@ -840,25 +899,43 @@ def core_operation(value, state_root, runtime_release, operation, runtime_identi
                     raise LifecycleError('APPLICATION_IMAGE_PREPARATION_STALE')
                 inputs = image_preparation.read_inputs(journal)
                 if any(inputs.get(key) != value.get(key) for key in ('runtimeRelease', 'executionMode', 'deploymentOrder', 'skipInfrastructureVerify') +
-                       (('skipApplicationLibraries', 'applicationLibraryOrder') if value['apiVersion'] == SELECTION_REQUEST_VERSION else ())):
+                       (('skipApplicationLibraries', 'applicationLibraryOrder') if value['apiVersion'] in SELECTION_REQUEST_VERSIONS else ()) +
+                       (('skipServiceDeployments',) if value['apiVersion'] == SERVICE_SELECTION_REQUEST_VERSION else ())):
                     raise LifecycleError('APPLICATION_IMAGE_PREPARATION_STALE')
                 extra.update(platform_prepared_application_images=prepared, platform_application_image_metadata=True)
-            if value.get('apiVersion') == SELECTION_REQUEST_VERSION:
+            if value.get('apiVersion') in SELECTION_REQUEST_VERSIONS:
                 extra['platform_execution_skip_application_libraries'] = value['skipApplicationLibraries']
+            if value.get('apiVersion') == SERVICE_SELECTION_REQUEST_VERSION:
+                extra['platform_execution_skip_service_deployments'] = value['skipServiceDeployments']
             extra["platform_execution_deployment_order"] = value["deploymentOrder"]
             if 'applicationLibraryOrder' in value:
                 extra['platform_execution_application_library_order'] = value['applicationLibraryOrder']
             extra['platform_execution_application_vault_sources'] = value.get('applicationVaultSources', {})
-            if value.get('apiVersion') in (B0_PLAN_REQUEST_VERSION, SKIP_PLAN_REQUEST_VERSION, image_preparation.REQUEST_VERSION, SELECTION_REQUEST_VERSION):
+            if value.get('apiVersion') in (B0_PLAN_REQUEST_VERSION, SKIP_PLAN_REQUEST_VERSION, image_preparation.REQUEST_VERSION, SELECTION_REQUEST_VERSION, SERVICE_SELECTION_REQUEST_VERSION):
                 extra['platform_execution_mode'] = value['executionMode']
                 extra['platform_execution_skip_infrastructure_verify'] = value.get('skipInfrastructureVerify', False)
         if operation == "BuildRuntimeSecretDescriptors":
             playbook = "runtime-secret-descriptors.yml"
     else:
         raise LifecycleError("EXECUTION_OPERATION_UNSUPPORTED")
-    if operation == 'PrepareApplicationImages' and value.get('apiVersion') == SELECTION_REQUEST_VERSION:
+    if operation == 'PrepareApplicationImages' and value.get('apiVersion') in SELECTION_REQUEST_VERSIONS:
         extra.update(platform_execution_skip_application_libraries=value['skipApplicationLibraries'],
                      platform_execution_application_library_order=value['applicationLibraryOrder'])
+    # Derived controller-private result only. Candidate/edit snapshots keep
+    # their independent proof and the configuration-only preview stays light.
+    if (runtime_identity is not None and value.get('snapshotRequest') is None
+            and operation in ('BuildProjectSnapshot', 'BuildRuntimeSecretDescriptors',
+                              'BuildDeploymentPlan', 'PrepareApplicationImages')):
+        extra.update(platform_project_resolution_directory=os.path.join(state_root, 'project-resolutions'),
+                     platform_project_resolution_local_path=os.path.join(journal.directory, '.project-resolution.json'),
+                     platform_project_resolution_runtime=runtime_identity)
+    elif runtime_identity is not None and operation == 'BuildRuntimeSecretDescriptors':
+        extra.update(platform_project_resolution_directory=os.path.join(state_root, 'project-resolutions'),
+                     platform_project_resolution_local_path=os.path.join(journal.directory, '.project-resolution.json'),
+                     platform_project_resolution_runtime=runtime_identity)
+    elif runtime_identity is not None and operation == 'BuildServiceConfigurationPreview':
+        extra.update(platform_project_resolution_directory=os.path.join(state_root, 'project-resolutions'),
+                     platform_project_resolution_runtime=runtime_identity)
     diagnostic_path = os.path.join(journal.directory, "core-diagnostic.json")
     descriptor, vars_path = tempfile.mkstemp(prefix=".execution-vars-", dir=journal.directory)
     try:
@@ -937,8 +1014,10 @@ def core_operation(value, state_root, runtime_release, operation, runtime_identi
     if operation == 'PrepareApplicationImages':
         inputs = image_preparation.read_inputs(journal)
         inputs.update({key: value[key] for key in ('runtimeRelease', 'executionMode', 'deploymentOrder', 'skipInfrastructureVerify')})
-        if value['apiVersion'] == SELECTION_REQUEST_VERSION:
+        if value['apiVersion'] in SELECTION_REQUEST_VERSIONS:
             inputs.update({key: value[key] for key in ('skipApplicationLibraries', 'applicationLibraryOrder')})
+        if value['apiVersion'] == SERVICE_SELECTION_REQUEST_VERSION:
+            inputs['skipServiceDeployments'] = value['skipServiceDeployments']
         inputs['expiresAt'] = int(time.time()) + 120
         execution_secret_lease._write(os.path.join(journal.directory, 'application-image-inputs.json'), inputs)
         return dict(status='INPUTS_READY', inputsDigest=digest(inputs), inputs=inputs,
@@ -1128,12 +1207,14 @@ def main():
         if value.get('runtimeRelease') != expected_release:
             raise LifecycleError('EXECUTION_RUNTIME_RELEASE_INVALID')
     if operation == "GetCapabilities":
-        return reply(_image_capabilities(args, value['apiVersion'] == SELECTION_REQUEST_VERSION) if value['apiVersion'] in IMAGE_REQUEST_VERSIONS else _b0_capabilities(args, value['apiVersion'] == SKIP_PLAN_REQUEST_VERSION) if value['apiVersion'] in (B0_PLAN_REQUEST_VERSION, SKIP_PLAN_REQUEST_VERSION) else _application_capabilities(args) if value['apiVersion'] == APPLICATION_PLAN_REQUEST_VERSION else _capabilities_v4(args))
+        return reply(_image_capabilities(args, value['apiVersion'] in SELECTION_REQUEST_VERSIONS, value['apiVersion'] == SERVICE_SELECTION_REQUEST_VERSION) if value['apiVersion'] in IMAGE_REQUEST_VERSIONS else _b0_capabilities(args, value['apiVersion'] == SKIP_PLAN_REQUEST_VERSION) if value['apiVersion'] in (B0_PLAN_REQUEST_VERSION, SKIP_PLAN_REQUEST_VERSION) else _application_capabilities(args) if value['apiVersion'] == APPLICATION_PLAN_REQUEST_VERSION else _capabilities_v4(args))
     if operation == 'PrepareApplicationImages':
         if value['phase'] == 'DESCRIBE':
-            return reply(core_operation(value, args.state_root, args.runtime_release, operation))
+            return reply(core_operation(value, args.state_root, args.runtime_release, operation, observed))
         return reply(image_preparation.prepare(Journal(args.state_root, value['runId']), value, args.runtime_release, value['runtimeRelease']))
-    if operation in ("ValidateProject", "BuildDeploymentPlan"): return reply(core_operation(value, args.state_root, args.runtime_release, operation))
+    if operation in ("ValidateProject", "BuildDeploymentPlan"):
+        identity = observed if value.get('apiVersion') in IMAGE_REQUEST_VERSIONS else None
+        return reply(core_operation(value, args.state_root, args.runtime_release, operation, identity))
     if operation == "BuildProjectSnapshot":
         candidate = _validated_snapshot_request(value)
         runtime_release = value.get("runtimeRelease")

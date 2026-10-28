@@ -136,7 +136,7 @@ class PostInstallTests(unittest.TestCase):
                 stopped, executed = [False], []
                 def wait(process, *_args):
                     executed.append(process.args[0])
-                    if process.args[0] == 'applications:verify':
+                    if process.args[0] == 'applications:apply':
                         if outcome == 'cancel':
                             stopped[0] = True
                         if outcome == 'failure':

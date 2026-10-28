@@ -21,6 +21,8 @@ with (root / 'calls.jsonl').open('a') as stream:
     stream.write(json.dumps([kind, args]) + '\n')
 if state.get('fail'):
     sys.exit(1)
+if '--create' in args and state.get('fail_create'):
+    sys.exit(1)
 if '--create' in args:
     state['topics'][args[args.index('--topic')+1]] = 'delete'
     (root / 'state.json').write_text(json.dumps(state))
@@ -41,7 +43,7 @@ else:
 
 
 class KafkaApplicationBatchTests(unittest.TestCase):
-    def probe(self, state, topics, expected_success=True, repeat=False, acl=False):
+    def probe(self, state, topics, expected_success=True, repeat=False, acl=False, skip_infra_verify=False):
         with tempfile.TemporaryDirectory(prefix='qa-kafka-batch-') as directory:
             root = Path(directory)
             (root / 'bin').mkdir()
@@ -50,7 +52,8 @@ class KafkaApplicationBatchTests(unittest.TestCase):
                 path.write_text(CLI)
                 path.chmod(0o700)
             (root / 'state.json').write_text(json.dumps(state))
-            variables = dict(platform_kafka_script_extension='.sh', application_topic_cli_directory=str(root),
+            variables = dict(platform_kafka_script_extension='.sh', platform_execution_skip_infrastructure_verify=skip_infra_verify,
+                             application_topic_cli_directory=str(root),
                              application_topic_candidate=dict(address='127.0.0.1', port='9092'),
                              application_topic_client=dict(path=str(root / 'client.properties')),
                              platform_kafka_application_job=dict(providerId='qa', topics=topics),
@@ -77,7 +80,8 @@ class KafkaApplicationBatchTests(unittest.TestCase):
             probe.write_text(yaml.safe_dump(play, sort_keys=False))
             def run():
                 result = subprocess.run(['ansible-playbook', '-i', 'localhost,', str(probe)],
-                                        env=dict(os.environ, ANSIBLE_CONFIG=str(ROOT / 'ansible-core/ansible.cfg')),
+                                        env=dict(os.environ, ANSIBLE_CONFIG=str(ROOT / 'ansible-core/ansible.cfg'),
+                                                 ANSIBLE_COLLECTIONS_PATH=str(ROOT / 'services/kafka') + ':' + str(ROOT / 'ansible-core/collections')),
                                         capture_output=True, text=True, timeout=90)
                 self.assertEqual(expected_success, result.returncode == 0,
                                  (result.stdout + result.stderr)[-2400:])
@@ -96,16 +100,49 @@ class KafkaApplicationBatchTests(unittest.TestCase):
         self.assertEqual(2, len(calls))
         self.assertEqual('^(qa\\.a|qa\\-b)$', calls[0][1][-1])
 
+    def test_skip_infra_verify_still_prepares_only_selected_library_topics(self):
+        from test_application_providers import KafkaAdminSelectionTest, project_providers
+        inputs = KafkaAdminSelectionTest().fixture(accounts=False)
+        inputs[1]['applicationExecutionScope'] = {'installLibraries': ['a']}
+        projected = project_providers(*inputs)
+        self.assertEqual('PASS', projected['status'], projected['findings'])
+        stage = yaml.safe_load((ROOT / 'ansible-core/playbooks/applications/stages/provider-stage.yml').read_text())
+        def walk(value):
+            if isinstance(value, dict):
+                yield value
+                for child in value.values():
+                    yield from walk(child)
+            elif isinstance(value, list):
+                for child in value:
+                    yield from walk(child)
+        task = next(t for t in walk(stage) if t.get('ansible.builtin.include_role', {}).get('tasks_from') == 'application_topics')
+        from ansible.template import Templar
+        from ansible.parsing.dataloader import DataLoader
+        jobs = Templar(loader=DataLoader(), variables={'application_provider_inputs': projected}).template(task['loop'])
+        self.assertEqual(1, len(jobs))
+        self.assertEqual(['a-events'], [t['name'] for t in jobs[0]['topics']])
+        for skip in (False, True):
+            with self.subTest(skipInfraVerify=skip):
+                calls = self.probe({'topics': {}}, jobs[0]['topics'], repeat=True, skip_infra_verify=skip)
+                created = [args[args.index('--topic') + 1] for _, args in calls if '--create' in args]
+                self.assertEqual(['a-events'], created)
+
     def test_configuration_from_neighbour_topic_cannot_hide_drift(self):
         calls = self.probe({'topics': {'qa.a': 'compact', 'qaXa': 'delete'}},
                            [self.topic('qa.a')], expected_success=False)
         self.assertEqual(2, len(calls))
 
-    def test_missing_managed_topic_is_created_and_read_back_then_repeat_is_read_only(self):
+    def test_missing_managed_topic_is_created_without_readback_then_repeat_is_read_only(self):
         calls = self.probe({'topics': {}}, [self.topic('qa.a')], repeat=True)
-        self.assertEqual(7, len(calls), calls)
+        self.assertEqual(5, len(calls), calls)
         self.assertEqual(1, sum('--create' in args for _, args in calls))
-        self.assertEqual(1, sum('--entity-name' in args for _, args in calls))
+        self.assertEqual(0, sum('--entity-name' in args for _, args in calls))
+
+    def test_failed_creation_stops_without_post_creation_reads(self):
+        calls = self.probe({'topics': {}, 'fail_create': True},
+                           [self.topic('qa.a')], expected_success=False)
+        self.assertEqual(3, len(calls))
+        self.assertIn('--create', calls[-1][1])
 
     def test_missing_existing_topic_never_creates(self):
         calls = self.probe({'topics': {}}, [self.topic('qa.a', mode='existing')], expected_success=False)
@@ -142,7 +179,13 @@ class KafkaApplicationBatchTests(unittest.TestCase):
     def test_activation_still_rejects_an_unhealthy_container_without_vault_probe(self):
         self.container_probe(activate=True, healthy=False)
 
-    def container_probe(self, activate=False, healthy=True):
+    def test_library_boundary_needs_no_config_tree_or_vault_access(self):
+        self.container_probe(library_boundary=True)
+
+    def test_library_boundary_still_rejects_an_unhealthy_container(self):
+        self.container_probe(library_boundary=True, healthy=False)
+
+    def container_probe(self, activate=False, healthy=True, library_boundary=False):
         with tempfile.TemporaryDirectory(prefix='qa-container-verify-') as directory:
             root = Path(directory)
             inspected = [dict(Id='qa-container', Image='sha256:qa', Config=dict(Labels={
@@ -170,11 +213,21 @@ class KafkaApplicationBatchTests(unittest.TestCase):
             if activate:
                 # Default direct Verify still requests Vault verification; activation must override it.
                 variables['application_runtime_verify_vault'] = True
+            tasks = [{'ansible.builtin.include_tasks': str(role)}]
+            if library_boundary:
+                production = yaml.safe_load((ROOT / 'ansible-core/playbooks/applications/tasks/ordered-library.yml').read_text())
+                selected = next(t for t in production if t['name'] == 'Проверка размещений библиотеки приложений перед обработкой следующей библиотеки')
+                tasks = [{'ansible.builtin.include_role': selected['ansible.builtin.include_role']}]
+                variables['application_runtime_verify_vault'] = True
+                variables['application_runtime_job'].update(
+                    directoryConfigs=[dict(destination='absent-directory')],
+                    archiveConfigs=[dict(destination='absent-archive')])
             probe = root / 'verify.yml'
             probe.write_text(yaml.safe_dump([dict(hosts='localhost', connection='local', gather_facts=False,
-                vars=variables, tasks=[{'ansible.builtin.include_tasks': str(role)}])], sort_keys=False))
+                vars=variables, tasks=tasks)], sort_keys=False))
             result = subprocess.run(['ansible-playbook', '-i', 'localhost,', str(probe)],
-                env=dict(os.environ, ANSIBLE_CONFIG=str(ROOT / 'ansible-core/ansible.cfg')),
+                env=dict(os.environ, ANSIBLE_CONFIG=str(ROOT / 'ansible-core/ansible.cfg'),
+                         ANSIBLE_COLLECTIONS_PATH=str(ROOT / 'ansible-core/collections')),
                 capture_output=True, text=True, timeout=45)
             self.assertEqual(healthy, result.returncode == 0, (result.stdout + result.stderr)[-1800:])
 

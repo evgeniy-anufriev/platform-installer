@@ -49,7 +49,7 @@ class Service01DContractTests(unittest.TestCase):
             self.assertEqual(2, len(local))
 
     def test_role_projects_quorum_from_only_controllers_and_formats_brokers_outside_it(self):
-        main = (ROLE / "tasks" / "main.yml").read_text(encoding="utf-8")
+        main = (ROLE / "tasks" / "apply.yml").read_text(encoding="utf-8")
         member = (ROLE / "tasks" / "member.yml").read_text(encoding="utf-8")
         self.assertIn("for member in _platform_kafka_controller_instances", main)
         self.assertIn("controller_endpoint.bootstrap_host", main)
@@ -77,13 +77,13 @@ class Service01DContractTests(unittest.TestCase):
 
     def test_verify_reconstructs_the_derived_pki_plan(self):
         playbook = (SERVICE / "playbooks" / "verify.yml").read_text(encoding="utf-8")
-        self.assertIn("../../../ansible-core/playbooks/pki-verify.yml", playbook)
+        self.assertIn("../../../ansible-core/playbooks/pki-resolve.yml", playbook)
 
     def test_apply_restarts_members_when_target_pki_material_changes(self):
         member = (ROLE / "tasks" / "member.yml").read_text(encoding="utf-8")
         self.assertIn("platform_pki_material_changed | default(false) | bool", member)
         self.assertIn("platform_kafka_member_pki_changed | default(false) | bool", member)
-        listener = (ROLE / "tasks" / "validate_ssl_listener.yml").read_text(encoding="utf-8")
+        listener = (ROLE / "tasks" / "prepare_member_tls.yml").read_text(encoding="utf-8")
         self.assertIn("_platform_kafka_copied_pki_material.changed", listener)
 
     def test_kafka_tls_requires_server_and_client_auth_certificate_usage(self):

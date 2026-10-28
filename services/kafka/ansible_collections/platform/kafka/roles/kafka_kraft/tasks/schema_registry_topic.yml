@@ -2,7 +2,7 @@
 - name: Получение описания топика схемы без изменений
   ansible.builtin.command:
     argv:
-      - "{{ platform_kafka_install_directory }}/bin/kafka-topics{{ platform_kafka_script_extension }}"
+      - "{{ registry_topic_cli_directory | default(platform_kafka_install_directory) }}/bin/kafka-topics{{ platform_kafka_script_extension }}"
       - --bootstrap-server
       - "{{ registry_instance.bootstrap_servers | regex_replace('(SSL|PLAINTEXT)://', '') }}"
       - --command-config
@@ -26,10 +26,19 @@
   when: _platform_kafka_registry_topic_before.stdout | trim | length > 0
   no_log: true
 
+- name: Проверка наличия топика схем при отдельной проверке или запуске не на выбранном брокере
+  ansible.builtin.assert:
+    that: >-
+      (_platform_kafka_registry_topic_before.stdout | trim | length > 0) or
+      (not (platform_kafka_verify_only | bool) and registry_instance.id ==
+       (_platform_kafka_registry_projection.instances | selectattr('deployment_id', 'equalto', registry_instance.deployment_id) | first).id)
+    fail_msg: SCHEMA_REGISTRY_TOPIC_REQUIRED
+  no_log: true
+
 - name: Создание отсутствующего топика на одном выбранном брокере
   ansible.builtin.command:
     argv:
-      - "{{ platform_kafka_install_directory }}/bin/kafka-topics{{ platform_kafka_script_extension }}"
+      - "{{ registry_topic_cli_directory | default(platform_kafka_install_directory) }}/bin/kafka-topics{{ platform_kafka_script_extension }}"
       - --bootstrap-server
       - "{{ registry_instance.bootstrap_servers | regex_replace('(SSL|PLAINTEXT)://', '') }}"
       - --command-config
@@ -46,31 +55,37 @@
       - cleanup.policy=compact
       - --config
       - "min.insync.replicas={{ registry_instance.min_insync_replicas }}"
+  register: _platform_kafka_registry_topic_created
   when:
     - not platform_kafka_verify_only
     - _platform_kafka_registry_topic_before.stdout | trim | length == 0
     - registry_instance.id == (_platform_kafka_registry_projection.instances | selectattr('deployment_id', 'equalto', registry_instance.deployment_id) | first).id
   no_log: true
 
-- name: Ожидание заданной политики топика схем без её изменения
-  ansible.builtin.command:
-    argv:
-      - "{{ platform_kafka_install_directory }}/bin/kafka-topics{{ platform_kafka_script_extension }}"
-      - --bootstrap-server
-      - "{{ registry_instance.bootstrap_servers | regex_replace('(SSL|PLAINTEXT)://', '') }}"
-      - --command-config
-      - "{{ registry_instance.config_directory }}/kafka-client.properties"
-      - --describe
-      - --topic
-      - _schemas
-  changed_when: false
-  register: _platform_kafka_registry_topic_after
-  retries: "{{ platform_kafka_schema_registry_readiness_retries }}"
-  delay: "{{ platform_kafka_schema_registry_readiness_delay }}"
-  until: >-
-    _platform_kafka_registry_topic_after.rc == 0 and
-    (_platform_kafka_registry_topic_after.stdout | regex_search('PartitionCount: *1(?:\s|$)')) is not none and
-    (_platform_kafka_registry_topic_after.stdout | regex_search('ReplicationFactor: *' ~ registry_instance.replication_factor ~ '(?:\s|$)')) is not none and
-    (_platform_kafka_registry_topic_after.stdout | regex_search('cleanup[.]policy=compact(?:,(?=[A-Za-z0-9_.-]+=)|\s|$)')) is not none and
-    (_platform_kafka_registry_topic_after.stdout | regex_search('min[.]insync[.]replicas=' ~ registry_instance.min_insync_replicas ~ '(?:,|\s|$)')) is not none
-  no_log: true
+- name: Подтверждение политики созданного топика схем до запуска Schema Registry
+  when: _platform_kafka_registry_topic_created.changed | default(false)
+  block:
+    - name: Чтение фактической политики топика схем после создания
+      ansible.builtin.command:
+        argv:
+          - "{{ registry_topic_cli_directory | default(platform_kafka_install_directory) }}/bin/kafka-topics{{ platform_kafka_script_extension }}"
+          - --bootstrap-server
+          - "{{ registry_instance.bootstrap_servers | regex_replace('(SSL|PLAINTEXT)://', '') }}"
+          - --command-config
+          - "{{ registry_instance.config_directory }}/kafka-client.properties"
+          - --describe
+          - --topic
+          - _schemas
+      register: _platform_kafka_registry_topic_after
+      changed_when: false
+      no_log: true
+
+    - name: Проверка фактической политики созданного топика схем
+      ansible.builtin.assert:
+        that:
+          - "_platform_kafka_registry_topic_after.stdout | regex_search('PartitionCount: *1(?:\\s|$)') is not none"
+          - "_platform_kafka_registry_topic_after.stdout | regex_search('ReplicationFactor: *' ~ registry_instance.replication_factor ~ '(?:\\s|$)') is not none"
+          - "_platform_kafka_registry_topic_after.stdout | regex_search('cleanup[.]policy=compact(?:,(?=[A-Za-z0-9_.-]+=)|\\s|$)') is not none"
+          - "_platform_kafka_registry_topic_after.stdout | regex_search('min[.]insync[.]replicas=' ~ registry_instance.min_insync_replicas ~ '(?:,|\\s|$)') is not none"
+        fail_msg: SCHEMA_REGISTRY_TOPIC_MIGRATION_REQUIRED
+      no_log: true

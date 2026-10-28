@@ -99,7 +99,7 @@ class ServiceApplyPkiContractTests(unittest.TestCase):
         self.assertIn("no_log: true", render)
 
     def test_controller_side_validate_manifest_fallback_does_not_require_inventory_dir(self):
-        validate = os.path.join(ROOT, "ansible-core/playbooks/validate.yml")
+        validate = os.path.join(ROOT, "ansible-core/playbooks/tasks/prepare-validation.yml")
         with open(validate, encoding="utf-8") as handle:
             tasks = handle.read()
         self.assertIn("inventory_dir | default('/project/inventory', true)", tasks)
@@ -263,7 +263,7 @@ class ServiceApplyPkiContractTests(unittest.TestCase):
         self.assertIn("- --hostname\n      - \"{{ _platform_postgresql_member.address }}\"", lifecycle_tasks)
         self.assertNotIn("_platform_postgresql_monitor.hostname", lifecycle_tasks)
         self.assertNotIn("_platform_postgresql_member.hostname", lifecycle_tasks)
-        self.assertIn("file: reconcile.yml", main_tasks)
+        self.assertIn("else 'reconcile.yml'", main_tasks)
         self.assertIn("_platform_postgresql_monitor.address", reconcile_tasks)
         self.assertIn("_platform_postgresql_member.address", reconcile_tasks)
 

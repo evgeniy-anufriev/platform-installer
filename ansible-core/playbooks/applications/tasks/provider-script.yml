@@ -1,43 +1,43 @@
 ---
-- name: Определение только объявленного контекста сценария провайдера
-  ansible.builtin.set_fact:
+- name: Выполнение сценария провайдера с контекстом выбранной цели
+  vars:
     application_script_target_job: >-
       {{ hostvars['localhost'].application_runtime_inputs.scriptContexts |
          selectattr('libraryId', 'equalto', application_provider_batch.providerLibraryId) |
          selectattr('instanceId', 'equalto', application_provider_batch.providerInstanceId) |
          selectattr('hostId', 'equalto', application_provider_script_host) | first }}
-  no_log: true
+  block:
+    - name: "Определение учётной записи и домашнего каталога для запуска сценария на целевом узле"
+      ansible.builtin.getent:
+        database: passwd
+        key: "{{ application_script_target_job.account }}"
+      delegate_to: "{{ application_provider_script_host }}"
+      register: application_script_identity
+      when: application_provider_script.runOn | default('target') != 'execution_node'
+      no_log: true
 
-- name: "Определение учётной записи и домашнего каталога для запуска сценария на целевом узле"
-  ansible.builtin.getent:
-    database: passwd
-    key: "{{ application_script_target_job.account }}"
-  delegate_to: "{{ application_provider_script_host }}"
-  register: application_script_identity
-  when: application_provider_script.runOn | default('target') != 'execution_node'
-  no_log: true
-
-- name: Вызов универсального средства запуска с явными входными данными сценария для выбранной цели
-  ansible.builtin.include_role:
-    name: platform.core.package_script
-    apply:
-      delegate_to: "{{ 'localhost' if application_provider_script.runOn | default('target') == 'execution_node' else application_provider_script_host }}"
-      become: "{{ application_provider_script.runOn | default('target') != 'execution_node' }}"
-  vars:
-    platform_script_job:
-      id: "{{ application_provider_script.id }}"
-      path: "{{ application_provider_script.path }}"
-      argv: "{{ application_provider_script.argv }}"
-      secretInputs: "{{ application_provider_script.secretInputs }}"
-      account: "{{ lookup('ansible.builtin.pipe', 'id -un') if application_provider_script.runOn | default('target') == 'execution_node' else application_script_target_job.account }}"
-      workingDirectory: >-
-        {{ (platform_project_root | default(hostvars['localhost'].inventory_dir | dirname))
-           if application_provider_script.runOn | default('target') == 'execution_node' else
-           (application_script_target_job.placement.runtimeDirectory | regex_replace('^~(?=/|$)',
-             application_script_identity.ansible_facts.getent_passwd[application_script_target_job.account][4])) ~
-           '/' ~ application_script_target_job.placement.runtimePath }}
-    platform_script_secret_files: >-
-      {{ hostvars['localhost'].platform_application_secret_files |
-         combine(hostvars['localhost'].platform_application_credential_files | default({})) |
-         combine(application_provider_private_files | default({})) }}
-    platform_script_secret_root: "{{ hostvars['localhost'].platform_application_secret_root }}"
+    - name: Вызов универсального средства запуска с явными входными данными сценария для выбранной цели
+      ansible.builtin.include_role:
+        name: platform.core.package_script
+        apply:
+          delegate_to: "{{ 'localhost' if application_provider_script.runOn | default('target') == 'execution_node' else application_provider_script_host }}"
+          become: "{{ application_provider_script.runOn | default('target') != 'execution_node' }}"
+      vars:
+        platform_script_job:
+          id: "{{ application_provider_script.id }}"
+          path: "{{ application_provider_script.path }}"
+          argv: "{{ application_provider_script.argv }}"
+          secretInputs: "{{ application_provider_script.secretInputs }}"
+          invocations: "{{ application_provider_script.invocations | default([]) }}"
+          account: "{{ lookup('ansible.builtin.pipe', 'id -un') if application_provider_script.runOn | default('target') == 'execution_node' else application_script_target_job.account }}"
+          workingDirectory: >-
+            {{ (platform_project_root | default(hostvars['localhost'].inventory_dir | dirname))
+               if application_provider_script.runOn | default('target') == 'execution_node' else
+               (application_script_target_job.placement.runtimeDirectory | regex_replace('^~(?=/|$)',
+                 application_script_identity.ansible_facts.getent_passwd[application_script_target_job.account][4])) ~
+               '/' ~ application_script_target_job.placement.runtimePath }}
+        platform_script_secret_files: >-
+          {{ hostvars['localhost'].platform_application_secret_files |
+             combine(hostvars['localhost'].platform_application_credential_files | default({})) |
+             combine(application_provider_private_files | default({})) }}
+        platform_script_secret_root: "{{ hostvars['localhost'].platform_application_secret_root }}"

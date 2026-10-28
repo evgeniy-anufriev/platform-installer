@@ -28,7 +28,7 @@ class ActionModule(ActionBase):
             from ansible_collections.platform.core.plugins.module_utils.application_selection import execution_scope
             scope = execution_scope(snapshot, values.get('platform_execution_application_library_order'), values.get('platform_execution_skip_application_libraries'))
             placements, ready, targets = [], {}, set()
-            for row in ([] if values.get('platform_execution_mode') == 'INFRASTRUCTURE_VERIFY_ONLY' else values.get('platform_application_rows', [])):
+            for row in ([] if values.get('platform_execution_mode') == 'INFRASTRUCTURE_VERIFY_ONLY' else args.get('application_rows', values.get('platform_application_rows', []))):
                 if row['libraryId'] not in scope['installLibraries']:
                     continue
                 reference = row['settings']['image']

@@ -14,8 +14,10 @@
     get_checksum: false
   loop: [ca-chain.pem, certificate.pem, private-key.pem]
   register: _platform_redis_tls_inputs
+  when: not (platform_redis_verify_only | bool)
 
 - name: Проверка наличия всех подготовленных TLS-файлов Redis
   ansible.builtin.assert:
     that: _platform_redis_tls_inputs.results | map(attribute='stat.exists') | list | min
     fail_msg: REDIS_PKI_MATERIALIZATION_REQUIRED
+  when: not (platform_redis_verify_only | bool)

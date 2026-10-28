@@ -91,6 +91,28 @@ func TestAttachOrphanRestoresSavedDisplayPlanWithoutNewApproval(t *testing.T) {
 	}
 }
 
+func TestCurrentRunCanRestoreViewWithoutOrphanAttachOrNewPlan(t *testing.T) {
+	app, _, record := recoveredObservationFixture(t)
+	app.binding.bundleRoot = t.TempDir()
+	record.Plan = &InstallationPlanView{ID: record.PlanID, ProjectRevision: record.ProjectRevision, ExecutionNodeID: record.NodeID,
+		Phases: []InstallationPlanPhase{{ID: "applications", Actions: []InstallationPlanAction{{ID: "apply", Type: "APPLICATION_LIBRARIES_APPLY"}}}}}
+	if err := writeLocalRunRecord(app.localRunRecordRoot, record); err != nil {
+		t.Fatal(err)
+	}
+	app.installationRuns.rememberRun(record.RunID)
+	found := app.InspectOrphanRun()
+	if found.Status != "CURRENT" || found.RunID != record.RunID || found.ProjectRevision != record.ProjectRevision || found.RecoveryID != "" {
+		t.Fatalf("current run identity missing: %+v", found)
+	}
+	got := app.GetInstallationRun(found.RunID)
+	if got.Status != "READY" || got.Run == nil || got.Run.RunID != record.RunID || !reflect.DeepEqual(got.Plan, record.Plan) {
+		t.Fatalf("current run view lost: %+v", got)
+	}
+	if app.installationPlanID != "" || app.orphanRecovery != nil {
+		t.Fatal("restoring a view created plan or orphan authority")
+	}
+}
+
 func TestAttachOrphanRejectsChangedCandidate(t *testing.T) {
 	for _, change := range []string{"expired", "node", "project", "run", "record"} {
 		t.Run(change, func(t *testing.T) {

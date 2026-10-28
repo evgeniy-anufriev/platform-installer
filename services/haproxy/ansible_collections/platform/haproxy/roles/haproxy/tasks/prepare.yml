@@ -154,6 +154,7 @@
     mode: preserve
   loop: "{{ _platform_haproxy_third_party_fragments.files | sort(attribute='path') }}"
   changed_when: false
+  when: platform_haproxy_partial_deployment_id is not defined and platform_haproxy_partial_deployment_ids is not defined
 
 - name: Проверка существующих серверных частей приложений для обновления базового провайдера
   ansible.builtin.copy:
@@ -165,6 +166,7 @@
     mode: '0640'
   loop: "{{ _platform_haproxy_prior_backend_capture.previousInventory }}"
   when:
+    - platform_haproxy_partial_deployment_id is not defined and platform_haproxy_partial_deployment_ids is not defined
     - not (platform_haproxy_full_reconcile | bool)
     - >-
       (platform_haproxy_partial_deployment_id is not defined and platform_haproxy_partial_deployment_ids is not defined) or
@@ -187,17 +189,7 @@
   when: (platform_haproxy_partial_deployment_id is not defined and platform_haproxy_partial_deployment_ids is not defined)
 
 - name: Подготовка неизменённой конфигурации провайдера для проверки выбранных backend
-  ansible.builtin.copy:
-    src: "{{ item.src }}"
-    dest: "{{ platform_haproxy_candidate_directory }}/{{ item.dest }}"
-    remote_src: true
-    mode: preserve
-  loop:
-    - {src: "{{ platform_haproxy_main_config }}", dest: haproxy.cfg}
-    - {src: "{{ platform_haproxy_conf_directory }}/10-public.cfg", dest: conf.d/10-public.cfg}
-    - {src: "{{ platform_haproxy_conf_directory }}/20-local-stats.cfg", dest: conf.d/20-local-stats.cfg}
-    - {src: "{{ platform_haproxy_conf_directory }}/90-stats-backends.cfg", dest: conf.d/90-stats-backends.cfg}
-  changed_when: false
+  ansible.builtin.include_tasks: partial_copy.yml
   when: (platform_haproxy_partial_deployment_id is defined or platform_haproxy_partial_deployment_ids is defined)
 
 - name: Обновление приоритета домена в существующем кандидате общедоступного внешнего интерфейса

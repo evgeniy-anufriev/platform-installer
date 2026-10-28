@@ -361,3 +361,11 @@ application libraries360s/16.1%, доставка артефактов113s/5.0%,
 Подробная безопасная выборка: results/kafka-apply-timing.json в QA-каталоге.
 Шкала последовательных TASK_STARTED не суммирует параллельное время хостов;
 интервалы включают ожидание и оркестрацию, а не только CPU-команд.
+
+Run installer-680e7daae6c8379c42f6ec2044de2842 завершился **SUCCEEDED**:
+28 подтверждённых действий, failures0; полный infrastructure Apply/Verify,
+СЗИ→СДКУ→ЦСПА Apply/Verify и post_install SUCCESS. Bundle07/revision1458b18c
+не менялись этим наблюдением. UI не закрывался; отдельный readback pending.
+Владелец разрешил выпуск нового optimized bundle и новый полный run без
+дополнительного удаления ресурсов. Это повторный Apply, не новая clean-install
+проверка; новые package-v1alpha4 hooks должны войти в проект явным обновлением.

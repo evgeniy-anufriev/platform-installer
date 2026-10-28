@@ -11,6 +11,7 @@
 
 - name: Отклонение перекрывающихся локальных путей данных ClickHouse
   ansible.builtin.include_tasks: validate_data_paths.yml
+  when: not (platform_clickhouse_verify_only | bool)
 
 - name: Проверка разрешённых источников пакетов ClickHouse
   ansible.builtin.include_role:

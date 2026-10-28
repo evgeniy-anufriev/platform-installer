@@ -1,138 +1,18 @@
 ---
-- name: "Получение описания явно указанного топика Kafka"
-  ansible.builtin.command:
-    argv:
-      - "{{ application_topic_cli_directory }}/bin/kafka-topics{{ platform_kafka_script_extension }}"
-      - --bootstrap-server
-      - "{{ application_topic_candidate.address }}:{{ application_topic_candidate.port }}"
-      - --command-config
-      - "{{ application_topic_client.path }}"
-      - --describe
-      - --if-exists
-      - --topic
-      - "{{ '^' ~ (application_topic.name | regex_escape) ~ '$' }}"
-  register: application_topic_single_description
-  changed_when: false
-  failed_when: false
-  ignore_errors: true
-  no_log: true
-  until: application_topic_single_description.rc != 0 or not application_topic_must_exist or application_topic_single_description.stdout | trim | length > 0
-  retries: "{{ platform_kafka_startup_readiness_retries }}"
-  delay: "{{ platform_kafka_startup_readiness_delay }}"
-  when: application_topic_readback | default(false)
-
-- name: Привязка метаданных топика после его создания и повторного чтения
+- name: Выбор проверенных метаданных топика из общего ответа
   ansible.builtin.set_fact:
-    application_topic_description: "{{ application_topic_single_description }}"
-  changed_when: false
+    _application_topic_checked: >-
+      {{ application_topic_batch_validation.results[application_topic.name]
+         if application_topic_batch_validation is defined else
+         (application_topic | platform.kafka.application_topic_validation(application_topic_batch_description, application_topic_batch_properties, platform_kafka_application_phase, platform_kafka_application_job.providerId)) }}
   no_log: true
-  when: application_topic_readback | default(false)
 
-- name: Выбор метаданных топика Kafka из запрошенного набора
-  ansible.builtin.set_fact:
-    application_topic_description:
-      rc: "{{ application_topic_batch_description.rc }}"
-      stdout: "{{ application_topic_batch_description.stdout_lines | select('match', '^[ \\t]*Topic:[ \\t]*' ~ (application_topic.name | regex_escape) ~ '[ \\t]') | join('\n') }}"
-      stderr: "{{ application_topic_batch_description.stderr | default('') }}"
-  changed_when: false
-  no_log: true
-  when: not application_topic_readback | default(false)
-
-- name: "Различение отсутствия топика и ошибки подключения к Kafka"
+- name: Проверка результата выбранного топика
   ansible.builtin.assert:
-    that:
-      - application_topic_description.rc | int == 0
-      - not application_topic_must_exist or application_topic_description.stdout | trim | length > 0
-    fail_msg: "{{ application_topic_diagnostic | to_json }}"
-  vars:
-    application_topic_diagnostic:
-      code: APPLICATION_TOPIC_DESCRIBE_FAILED
-      provider: "{{ platform_kafka_application_job.providerId }}"
-      topic: "{{ application_topic.name }}"
-      address: "{{ application_topic_candidate.address }}:{{ application_topic_candidate.port }}"
-      timeoutMs: "{{ platform_kafka_application_timeout_ms }}"
-      reason: "{{ 'TOPIC_MISSING' if application_topic_description.rc | int == 0 else (application_topic_description.stderr | regex_search('(TopicAuthorizationException|TimeoutException|SSLHandshakeException)') | default('KAFKA_CLI_FAILED', true)) }}"
+    that: _application_topic_checked.findings | length == 0
+    fail_msg: "{{ _application_topic_checked.findings | to_json }}"
 
-- name: Проверка состояния существующего топика без внесения изменений
-  when: application_topic_description.stdout | trim | length > 0
-  block:
-    - name: Проверка заданного количества разделов и реплик топика
-      ansible.builtin.assert:
-        that:
-          - application_topic_description.stdout | regex_search('PartitionCount:[ \t]*' ~ application_topic.partitions ~ '(?:[ \t]|$)') is not none
-          - application_topic_description.stdout | regex_findall('(?:^|[ \t])Replicas:[ \t]*([0-9,]+)') | length == application_topic.partitions
-          - application_topic_description.stdout | regex_findall('(?:^|[ \t])Replicas:[ \t]*([0-9,]+)') | map('split', ',') | map('length') | unique | list == [application_topic.replicationFactor]
-        fail_msg: "{{ application_topic_diagnostic | to_json }}"
-      vars:
-        application_topic_diagnostic:
-          code: APPLICATION_TOPIC_DRIFT
-          provider: "{{ platform_kafka_application_job.providerId }}"
-          topic: "{{ application_topic.name }}"
-          expectedPartitions: "{{ application_topic.partitions }}"
-          expectedReplicationFactor: "{{ application_topic.replicationFactor }}"
-          observedPartitions: "{{ application_topic_description.stdout | regex_findall('PartitionCount:[ \t]*([0-9]+)') }}"
-          observedReplicaCounts: "{{ application_topic_description.stdout | regex_findall('(?:^|[ \t])Replicas:[ \t]*([0-9,]+)') | map('split', ',') | map('length') | list }}"
-    - name: Вывод сообщения о недоступных лидерах отдельно от несовпадения числа реплик
-      ansible.builtin.assert:
-        that: application_topic_description.stdout | regex_search('Leader:[ \t]*-1(?:[ \t]|$)') is none
-        fail_msg: "{{ application_topic_diagnostic | to_json }}"
-      vars:
-        application_topic_diagnostic:
-          code: APPLICATION_TOPIC_REPLICAS_UNAVAILABLE
-          provider: "{{ platform_kafka_application_job.providerId }}"
-          topic: "{{ application_topic.name }}"
-    - name: Чтение действующих свойств топика с учётом настроек брокера по умолчанию
-      ansible.builtin.command:
-        argv: ["{{ application_topic_cli_directory }}/bin/kafka-configs{{ platform_kafka_script_extension }}", --bootstrap-server, "{{ application_topic_candidate.address }}:{{ application_topic_candidate.port }}", --command-config, "{{ application_topic_client.path }}", --describe, --all, --entity-type, topics, --entity-name, "{{ application_topic.name }}"]
-      register: application_topic_single_properties
-      changed_when: false
-      failed_when: false
-      no_log: true
-      when: application_topic_readback | default(false)
-    - name: Привязка свойств топика, повторно прочитанных после создания
-      ansible.builtin.set_fact:
-        application_topic_properties: "{{ application_topic_single_properties }}"
-      changed_when: false
-      no_log: true
-      when: application_topic_readback | default(false)
-    - name: Выбор действующего блока конфигурации топика Kafka
-      ansible.builtin.set_fact:
-        application_topic_properties:
-          rc: "{{ application_topic_batch_properties.rc }}"
-          stdout: "{{ application_topic_batch_properties.stdout | regex_findall(application_topic_properties_pattern) | join('\n') }}"
-          stderr: "{{ application_topic_batch_properties.stderr | default('') }}"
-      vars:
-        application_topic_properties_pattern: '(?ms)^All configs for topic {{ application_topic.name | regex_escape }} are:[ \t]*\r?\n(.*?)(?=^All configs for topic |\Z)'
-      changed_when: false
-      no_log: true
-      when: not application_topic_readback | default(false)
-    - name: Проверка наличия ответа с конфигурацией выбранного топика
-      ansible.builtin.assert:
-        that: application_topic_properties.stdout | trim | length > 0
-        fail_msg: APPLICATION_TOPIC_CONFIG_READ_FAILED
-    - name: "Различение ошибки чтения настроек топика и расхождения значений"
-      ansible.builtin.assert:
-        that: application_topic_properties.rc | int == 0
-        fail_msg: "{{ application_topic_diagnostic | to_json }}"
-      vars:
-        application_topic_diagnostic:
-          code: APPLICATION_TOPIC_CONFIG_READ_FAILED
-          provider: "{{ platform_kafka_application_job.providerId }}"
-          topic: "{{ application_topic.name }}"
-          address: "{{ application_topic_candidate.address }}:{{ application_topic_candidate.port }}"
-          timeoutMs: "{{ platform_kafka_application_timeout_ms }}"
-          reason: "{{ application_topic_properties.stderr | regex_search('(TopicAuthorizationException|TimeoutException|SSLHandshakeException)') | default('KAFKA_CLI_FAILED', true) }}"
-    - name: Проверка соответствия действующих настроек топика заданным значениям
-      ansible.builtin.assert:
-        that:
-          - application_topic_properties.stdout | regex_search('(?m)^[ \t]*' ~ (item.key | regex_escape) ~ '=' ~ (item.value | regex_escape) ~ '[ \t]+sensitive=') is not none
-        fail_msg: "{{ application_topic_diagnostic | to_json }}"
-      vars:
-        application_topic_diagnostic:
-          code: APPLICATION_TOPIC_CONFIG_DRIFT
-          provider: "{{ platform_kafka_application_job.providerId }}"
-          topic: "{{ application_topic.name }}"
-          property: "{{ item.key }}"
-      loop: "{{ application_topic.config | dict2items | sort(attribute='key') }}"
-      loop_control:
-        label: "{{ item.key }}"
+- name: Привязка метаданных для штатного создания отсутствующего топика
+  ansible.builtin.set_fact:
+    application_topic_description: "{{ _application_topic_checked.description }}"
+  no_log: true

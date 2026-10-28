@@ -1,0 +1,15 @@
+---
+- name: Проверка готовности реестра HTTP и HTTPS без записи схемы
+  ansible.builtin.uri:
+    url: "{{ item }}/subjects"
+    method: GET
+    status_code: 200
+    validate_certs: true
+    ca_path: "{{ registry_instance.config_directory }}/pki/ca-chain.pem"
+    return_content: false
+    use_proxy: false
+  loop: ["{{ registry_instance.http_url }}", "{{ registry_instance.https_url }}"]
+  register: _platform_kafka_registry_http_ready
+  retries: "{{ platform_kafka_schema_registry_readiness_retries }}"
+  delay: "{{ platform_kafka_schema_registry_readiness_delay }}"
+  until: _platform_kafka_registry_http_ready.status | default(0) == 200

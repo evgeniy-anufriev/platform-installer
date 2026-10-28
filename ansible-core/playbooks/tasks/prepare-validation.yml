@@ -1,0 +1,81 @@
+---
+- name: Проверка настроек ресурсов переносимой службы
+  ansible.builtin.include_role:
+    name: platform.core.project_settings
+  run_once: true
+
+- name: Проверка дополнительного манифеста устаревшего портативного проекта
+  ansible.builtin.stat:
+    path: >-
+      {{ platform_project_manifest_path |
+         default((inventory_dir | default('/project/inventory', true)) ~ '/../project.yml', true) }}
+  register: platform_project_manifest_stat
+  run_once: true
+
+- name: Загрузка дополнительного манифеста устаревшего портативного проекта
+  ansible.builtin.include_vars:
+    file: >-
+      {{ platform_project_manifest_path |
+         default((inventory_dir | default('/project/inventory', true)) ~ '/../project.yml', true) }}
+    name: platform_project_manifest_document
+  register: _platform_project_manifest_load
+  when: platform_project_manifest_stat.stat.exists
+  run_once: true
+
+- name: Публикация текущего манифеста или пустого значения при его отсутствии
+  ansible.builtin.set_fact:
+    platform_project_manifest_document: "{{ _platform_project_manifest_load.ansible_facts.platform_project_manifest_document | default({}) }}"
+  run_once: true
+
+- name: Проверка опубликованного артефакта каталога сервисов
+  ansible.builtin.assert:
+    that:
+      - platform_service_catalog_path is defined
+      - platform_service_catalog_path | length > 0
+    fail_msg: >-
+      platform_service_catalog_path must reference a published service catalog YAML artifact
+  run_once: true
+
+- name: Загрузка опубликованного артефакта каталога сервисов
+  ansible.builtin.include_vars:
+    file: "{{ platform_service_catalog_path }}"
+    name: platform_catalog_artifact
+  run_once: true
+
+- name: Инициализация безопасной проекции желаемого хоста
+  ansible.builtin.set_fact:
+    platform_desired_hosts: {}
+  run_once: true
+
+- name: Сбор только нужных переменных platform_host
+  ansible.builtin.set_fact:
+    platform_desired_hosts: >-
+      {{ platform_desired_hosts |
+         combine({item: (hostvars[item].platform_host | default({}))}) }}
+  loop: "{{ groups['platform_targets'] | default([]) | sort }}"
+  loop_control:
+    label: "{{ item }}"
+  no_log: true
+  run_once: true
+
+- name: "Сбор экземпляров сервисов из inventory проекта"
+  ansible.builtin.set_fact:
+    platform_inventory_deployments: >-
+      {{ platform_inventory_deployments | default({}) |
+         combine({item: (hostvars[item].platform_deployments | default({}))}) }}
+  loop: "{{ groups['platform_targets'] | default([]) | sort }}"
+  loop_control:
+    label: "{{ item }}"
+  no_log: true
+  run_once: true
+
+- name: "Сбор адресов узлов из inventory без секретных данных"
+  ansible.builtin.set_fact:
+    platform_inventory_host_addresses: >-
+      {{ platform_inventory_host_addresses | default({}) |
+         combine({item: {'ansible_host': (hostvars[item].ansible_host | default(item))}}) }}
+  loop: "{{ groups['platform_targets'] | default([]) | sort }}"
+  loop_control:
+    label: "{{ item }}"
+  no_log: true
+  run_once: true

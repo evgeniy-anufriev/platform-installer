@@ -5,7 +5,12 @@
 - name: Повторное использование общих нормализованных источников конечных точек
   ansible.builtin.include_role:
     name: platform.core.resolve_endpoint_sources
-  when: platform_haproxy_full_reconcile | bool or (platform_haproxy_partial_deployment_id is defined or platform_haproxy_partial_deployment_ids is defined)
+  when:
+    - platform_haproxy_full_reconcile | bool or (platform_haproxy_partial_deployment_id is defined or platform_haproxy_partial_deployment_ids is defined)
+    - >-
+      platform_haproxy_full_reconcile | bool or
+      _platform_haproxy_partial_ids | length == 0 or
+      (_platform_haproxy_partial_ids | difference(platform_desired_state.serviceDeployments | default({}) | list) | length > 0)
 
 - name: Загрузка опубликованного каталога сервисов для проекции HAProxy
   ansible.builtin.include_vars:

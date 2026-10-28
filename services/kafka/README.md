@@ -86,6 +86,32 @@ after library resources have been created. Direct preflight/verify role calls
 remain available and read fresh state.
 See the [portable topic contract](../../docs/project-contract.md#kafka-topic-resources).
 
+ACL writes group equal missing operation sets for topic/group/transactional-id,
+within one principal and pattern type. Resource identity includes both type and
+case-sensitive name. Cluster grants remain separate; batching does not grant
+extra operations or delete existing bindings. The same writer serves application
+accounts and compatibility principals. One CLI invocation can still issue several
+Kafka protocol requests; batching avoids repeated JVM/client startup.
+
+Schema Registry Apply requires Ansible's ordinary `linear` strategy (explicit in
+the supplied playbook); `free` is not supported. Preparation completes before
+topic reconciliation and activation. `_schemas` policy is checked once per
+deployment in the current Ansible batch, through a prepared member. With `serial`
+it is read again in each batch. A partial inventory may check through a non-seed
+member but cannot create the missing topic there. The coordinator supplies only
+candidate identity; the delegated operation uses the selected host's exact
+prepared local instance and captured CLI directory after uniqueness/activation
+checks. Creation is followed by policy
+readback before activation. Ownership, symlink, PKI and configuration guards stay
+enabled. Ordinary health-only Verify remains unchanged.
+
+New Registry units start before the final HTTP/HTTPS readiness loop so startup
+waits can overlap. A unit is new only when its file is absent and systemd reports
+`LoadState=not-found` and `ActiveState=inactive`; loaded/active/ambiguous units keep
+the sequential activation/readiness path. Per-instance flags are a host-local list
+reset on each invocation, including with hash_behaviour=merge; they are not
+portable desired state or a persistent cache.
+
 The delivery slices are:
 
 - SERVICE-01A: `kraft-standalone`, production single-node KRaft (implemented);
@@ -118,7 +144,7 @@ secret material. Properties contain paths, not private key contents or PKCS12
 passwords. CA/hostname checks and certificate identities/ACLs remain in force.
 
 Registry continues to use its configured SSL Kafka listener; its HTTPS and
-inter-instance TLS also use PEM. Library topic/account hooks and SCRAM bootstrap
+inter-instance TLS also use PEM. Library topic/account hooks and administrative CLI
 create PEM bundles only in invocation-private directories and always remove them;
 authoritative PKI output is never changed by these hooks.
 
@@ -130,3 +156,52 @@ silently deleted. The shared PKI pipeline and Java application PKCS12 delivery
 are unchanged, so they can still require their existing runtime store password.
 
 See [PEM implementation/isolated QA](../../docs/work/application-libraries/kafka-pem-plan.md).
+
+## Controller authentication and encrypted JAAS
+
+The default controller listener uses `SASL_SSL` with `PLAIN`; client SASL
+listeners retain `SCRAM-SHA-512`. `StandardAuthorizer` remains enabled and
+`super.users` contains only `User:admin` from the first start. An authorized
+deployment requires its controller listener to use SASL_SSL; an explicit legacy
+SSL controller override must be updated in ordinary inventory/group_vars.
+Listener names and ports remain supplied by the normal listener projection.
+
+Controller JAAS uses the existing `platform_kafka_admin_credential.passwordSecretRef`
+and `platform_kafka_secret_files`. No second password variable is added.
+`systemd-creds` encrypts the JAAS from stdin using the node's host key, storing
+only `controller-jaas.cred` in the member configuration directory (root,0400).
+`LoadCredentialEncrypted` presents it to the Kafka JVM in the service-private
+credentials directory; the unit supplies the JAAS path through KAFKA_OPTS.
+The standard systemd host key is node-local `/var/lib/systemd/credential.secret`,
+not another operator password and not part of the portable project.
+The target needs systemd encrypted-credential support; RED OS systemd253 has
+been exercised. Other OS versions require their own compatibility acceptance.
+
+Before encrypting, Apply decrypts the existing blob only into operation memory
+and compares the expected JAAS. Unchanged credentials preserve the ciphertext
+and do not restart the service. Credential/unit changes participate in the
+existing member restart condition. Existing caller EnvironmentFile overrides
+must preserve the managed JAAS JVM option.
+
+For empty storage, the normal `kafka-storage format` call seeds the same admin
+as SCRAM-SHA-512 using `--add-scram`. An invocation-private0600 argfile in `/run`
+contains salt and saltedPassword, never a password in process argv; it is always
+removed after formatting. Existing storage is never reformatted. Subsequent
+administration authenticates the preseeded/existing SCRAM admin and reconciles
+the normal ACLs. Certificate superuser bootstrap, revocation and finalization
+restarts have been removed. Ordinary inter-broker SSL certificate ACLs remain.
+Changing an existing admin password requires coordinated credential rotation;
+this change does not add an automatic password-rotation mechanism.
+
+### Infrastructure Verify
+
+`platform_kafka_verify_only: true` enters `tasks/verify_entry.yml` directly.
+It checks each local member's active process, listener ports and actual TLS
+handshakes, then cluster quorum, registered unfenced brokers and each enabled
+Schema Registry HTTPS `/subjects` endpoint. It does not enter installation,
+ownership, configuration-drift, package or artifact checks. The existing shared
+member normalizer keeps manual inventory and project-derived identities equal.
+TLS paths are resolved once per local member and reused only within that Verify;
+Apply always resolves its own current inputs. Quorum diagnostics run on one
+selected member. CA/hostname validation and configured CLI authentication remain
+enabled; no certificates, accounts or service configuration are reconciled.

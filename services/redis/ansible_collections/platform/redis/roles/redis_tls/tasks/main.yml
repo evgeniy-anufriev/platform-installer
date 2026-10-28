@@ -30,6 +30,7 @@
 
 - name: Отклонение перекрывающихся локальных путей данных Redis
   ansible.builtin.include_tasks: validate_data_paths.yml
+  when: not (platform_redis_verify_only | bool)
 
 - name: Защита локальных путей к данным Redis перед изменением
   ansible.builtin.include_role:
@@ -44,6 +45,7 @@
   loop_control:
     loop_var: platform_managed_data_path_instance
     label: "{{ platform_managed_data_path_instance.id }}"
+  when: not (platform_redis_verify_only | bool)
 
 - name: Проверка принадлежности локального порта Redis перед изменением
   ansible.builtin.include_tasks: preflight.yml

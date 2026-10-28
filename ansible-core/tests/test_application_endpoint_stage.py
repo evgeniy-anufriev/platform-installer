@@ -91,10 +91,10 @@ class EndpointTaskTest(unittest.TestCase):
             self.skipTest('Ansible runtime required')
         tasks = yaml.safe_load((ROLE / 'tasks/prepare.yml').read_text())
         names = {'Выбор имён файлов выбранного источника конечной точки',
-                 'Проверка существующих серверных частей приложений для обновления базового провайдера',
                  'Сохранение точных проверенных внутренних ресурсов в базовом режиме',
                  'Выбор backend развёртывания источника для частичной интеграции HAProxy'}
         tasks = yaml.safe_load((ROLE / 'tasks/partial_scope.yml').read_text()) + [task for task in tasks if task.get('name') in names]
+        tasks += yaml.safe_load((ROLE / 'tasks/partial_copy.yml').read_text())
         for task in tasks:
             if 'ansible.builtin.copy' in task:
                 task['ansible.builtin.copy'].update(owner=str(os.geteuid()), group=str(os.getegid()))
@@ -107,6 +107,9 @@ class EndpointTaskTest(unittest.TestCase):
             neighbor = '30-backend-apigateway-sdku-test-child.cfg'
             (active / selected).write_text('selected')
             (active / neighbor).write_text('neighbor preserved')
+            for name in ['10-public.cfg', '20-local-stats.cfg', '90-stats-backends.cfg']:
+                (active / name).write_text('# existing provider fragment\n')
+            (root / 'haproxy.cfg').write_text('# existing main\n')
             backend = {'targetDeploymentId': 'apigateway-sdku', 'providerHostIds': ['localhost'],
                        'configFileName': selected}
             variables = {'platform_haproxy_partial_deployment_id': 'apigateway-sdku',
@@ -115,6 +118,7 @@ class EndpointTaskTest(unittest.TestCase):
                          'platform_haproxy_runtime_projection': {'backends': {'backends': {'proxy': [backend]}}},
                          '_platform_haproxy_prior_backend_capture': {'previousInventory': [{'name': selected}, {'name': neighbor}]},
                          'platform_haproxy_conf_directory': str(active),
+                         'platform_haproxy_main_config': str(root / 'haproxy.cfg'),
                          'platform_haproxy_candidate_directory': str(candidate),
                          'platform_haproxy_public_port': 443, 'platform_haproxy_pki_directory': '/pki',
                          'platform_desired_state': {'endpointGroups': {

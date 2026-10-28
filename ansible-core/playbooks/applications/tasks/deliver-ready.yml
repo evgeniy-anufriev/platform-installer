@@ -15,7 +15,9 @@
     platform_application_vault_values: "{{ hostvars['localhost'].platform_application_vault_values }}"
     platform_application_vault_documents: "{{ hostvars['localhost'].platform_application_vault_documents }}"
     platform_application_vault_identities: "{{ hostvars['localhost'].platform_application_vault_identities }}"
+    platform_application_vault_networks: "{{ hostvars['localhost'].platform_application_vault_networks | default({}) }}"
     platform_application_secret_files: "{{ hostvars['localhost'].platform_application_secret_files }}"
+    platform_application_credential_files: "{{ hostvars['localhost'].platform_application_credential_files | default({}) }}"
     platform_application_secret_root: "{{ hostvars['localhost'].platform_application_secret_root }}"
 
 - name: Запись готовых дельт общих полей без перезаписи предыдущих полей
@@ -39,19 +41,6 @@
          hostvars['localhost'].platform_application_completed_batches,
          hostvars['localhost'].platform_application_delivered_instances) }}
   no_log: true
-
-- name: "Повторная проверка управляемых документов перед доставкой учётных данных потребителю"
-  ansible.builtin.include_role:
-    name: platform.vault.application_provider
-    tasks_from: preflight
-    apply:
-      delegate_to: localhost
-      delegate_facts: true
-      become: false
-  loop: "{{ application_ready_instance_vault_jobs }}"
-  loop_control:
-    loop_var: platform_vault_application_job
-  vars: *vault_context
 
 - name: Доставка полных учетных данных и AppRole до запуска любого зависимого потребителя
   ansible.builtin.include_role:

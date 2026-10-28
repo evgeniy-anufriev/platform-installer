@@ -1,0 +1,15 @@
+---
+- name: Ожидание авторитетного SOA из локального BIND
+  ansible.builtin.command:
+    argv: [dig, "@127.0.0.1", "{{ item.value.zone }}", SOA, +norecurse, +noall, +answer, +comments, +time=2, +tries=1]
+  changed_when: false
+  register: _platform_bind_zone_ready
+  until: >-
+    _platform_bind_zone_ready.rc == 0 and
+    'status: NOERROR' in _platform_bind_zone_ready.stdout and
+    'flags: qr aa' in _platform_bind_zone_ready.stdout
+  retries: "{{ platform_bind_readiness_retries }}"
+  delay: "{{ platform_bind_readiness_delay }}"
+  loop: "{{ platform_bind_resolved_zones | dict2items | selectattr('key', 'in', platform_deployments) | list }}"
+  loop_control:
+    label: "{{ item.key }}"

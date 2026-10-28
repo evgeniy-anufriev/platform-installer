@@ -118,8 +118,5 @@
         fail_msg: APPLICATION_KAFKA_ACCOUNT_AUTHENTICATION_FAILED
 
 - name: Проверка или обеспечение заявленных ресурсов ACL
-  ansible.builtin.include_tasks: application_acl.yml
-  loop: "{{ application_kafka_account.grants }}"
-  loop_control:
-    loop_var: application_kafka_grant
+  ansible.builtin.include_tasks: application_acls.yml
   when: "'SCRAM-SHA-512' in application_kafka_description.stdout or platform_kafka_application_phase == 'apply'"

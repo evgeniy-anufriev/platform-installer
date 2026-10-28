@@ -24,7 +24,7 @@ class KafkaAdminProviderActionTest(unittest.TestCase):
                                 requests=[dict(id='member-cert', consumers=[dict(
                                     deploymentId='kafka-main' if matching_request else 'another-deployment', memberId='member')])]))
                         action = ActionModule.__new__(ActionModule)
-                        action._task = SimpleNamespace(args=dict(snapshot_result=prepared, service_catalog_path='unused'))
+                        action._task = SimpleNamespace(args=dict(snapshot_result=prepared, service_catalog_path='unused', project_root=ROOT))
                         action._loader = SimpleNamespace(load_from_file=lambda path: catalog)
                         result = action.run(task_vars=dict(platform_application_rows=rows, platform_desired_state=desired))
                         self.assertFalse(result['changed'])

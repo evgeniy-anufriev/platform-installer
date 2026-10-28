@@ -1,0 +1,16 @@
+---
+- name: Проверка инфраструктуры переносимого проекта
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  any_errors_fatal: true
+  pre_tasks:
+    - name: Подготовка обычных входов проверки проекта
+      ansible.builtin.import_tasks: tasks/prepare-validation.yml
+
+  tasks:
+    - name: Проверка инфраструктуры без вычисления приложений
+      ansible.builtin.include_tasks: tasks/validate-project.yml
+      vars:
+        platform_validation_application_findings: []
+        platform_validation_default_artifact: "{{ playbook_dir }}/../.runtime/infrastructure-validation-result.json"

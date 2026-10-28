@@ -7,7 +7,7 @@ from pathlib import Path
 import yaml
 
 
-TASKS = Path(__file__).resolve().parents[1] / "ansible_collections/platform/kafka/roles/kafka_kraft/tasks/main.yml"
+TASKS = Path(__file__).resolve().parents[1] / "ansible_collections/platform/kafka/roles/kafka_kraft/tasks/apply.yml"
 
 
 class KafkaUnitOwnershipRuntimeTests(unittest.TestCase):

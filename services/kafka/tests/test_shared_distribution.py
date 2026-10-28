@@ -17,7 +17,7 @@ ROLE = ROOT / 'services/kafka/ansible_collections/platform/kafka/roles/kafka_kra
 class SharedDistributionTests(unittest.TestCase):
     def probe(self, overrides=None, expected=True):
         shared = yaml.safe_load((ROLE / 'tasks/schema_registry_shared_distribution.yml').read_text())
-        registry = yaml.safe_load((ROLE / 'tasks/schema_registry.yml').read_text())
+        registry = yaml.safe_load((ROLE / 'tasks/schema_registry.yml').read_text())[0]['block']
         tasks = [copy.deepcopy(task) for task in shared
                  if 'ansible.builtin.assert' in task or
                  task['name'] == 'Выбор контрольной суммы общего дистрибутива']
@@ -107,7 +107,7 @@ class SharedDistributionNativeTests(unittest.TestCase):
                 'Однократная распаковка разрешённого дистрибутива Kafka',
                 'Маркировка распакованного общего дистрибутива Kafka',
                 'Указание стабильного пути установки Kafka в утвержденной версии')]
-            registry = yaml.safe_load((ROLE / 'tasks/schema_registry.yml').read_text())
+            registry = yaml.safe_load((ROLE / 'tasks/schema_registry.yml').read_text())[0]['block']
             boundary = next(i for i, task in enumerate(registry)
                             if task['name'] == 'Создание группы служб реестра')
             registry = copy.deepcopy(registry[:boundary])

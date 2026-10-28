@@ -31,20 +31,35 @@
     fail_msg: APPLICATION_KAFKA_ACL_MISSING
   when: platform_kafka_application_phase == 'verify' or application_kafka_account.mode == 'existing'
 
-- name: Добавление отсутствующих управляемых списков управления доступом без удаления других разрешений
-  ansible.builtin.command:
-    argv: "{{ [application_topic_cli_directory ~ '/bin/kafka-acls' ~ platform_kafka_script_extension, '--bootstrap-server', application_topic_candidate.address ~ ':' ~ application_topic_candidate.port, '--command-config', application_kafka_private.path ~ '/admin.properties', '--add', '--allow-principal', 'User:' ~ application_kafka_account.name, '--allow-host', '*'] + application_kafka_acl_args + application_kafka_acl_operations }}"
-  register: application_kafka_acl_creation
-  failed_when: false
-  changed_when: application_kafka_acl_creation.rc == 0
+- name: Сбор совместимой дельты ACL текущей учётной записи
+  ansible.builtin.set_fact:
+    application_kafka_acl_groups: >-
+      {{ application_kafka_acl_groups | combine({application_kafka_acl_group_key: {
+        'resources': (application_kafka_acl_group_previous.resources | default([])) + [application_kafka_acl_resource_key],
+        'selectors': (application_kafka_acl_group_previous.selectors | default([])) +
+          ([] if application_kafka_acl_resource_key in (application_kafka_acl_group_previous.resources | default([])) else application_kafka_acl_args[:-2]),
+        'operations': application_kafka_acl_operations,
+        'patternType': application_kafka_grant.patternType
+      }}) }}
+  vars:
+    # CLI applies the same operations to every selector. Only equal deltas share
+    # a command; cluster is never merged into the data-resource group.
+    application_kafka_acl_resource_key: "{{ [application_kafka_grant.resourceType, application_kafka_grant.name] | to_json }}"
+    application_kafka_acl_group_kind: "{{ 'data' if application_kafka_grant.resourceType in ['topic', 'group', 'transactional-id'] else application_kafka_grant.resourceType }}"
+    application_kafka_acl_group_key: "{{ [application_kafka_acl_group_kind, application_kafka_grant.patternType, application_kafka_acl_operations | reject('equalto', '--operation') | unique | sort] | to_json }}"
+    application_kafka_acl_group_previous: "{{ application_kafka_acl_groups.get(application_kafka_acl_group_key, {}) }}"
+  changed_when: false
   no_log: true
   when:
+    - application_kafka_acl_defer_write | default(false) | bool
     - platform_kafka_application_phase == 'apply'
     - application_kafka_account.mode == 'managed'
     - application_kafka_acl_operations | length > 0
 
-- name: Проверка успешности добавления ACL
-  ansible.builtin.assert:
-    that: application_kafka_acl_creation.rc == 0
-    fail_msg: APPLICATION_KAFKA_ACL_CREATE_FAILED
-  when: application_kafka_acl_creation is not skipped
+- name: Немедленное применение дельты ACL прямого вызова
+  ansible.builtin.include_tasks: application_acl_write.yml
+  when:
+    - not (application_kafka_acl_defer_write | default(false) | bool)
+    - platform_kafka_application_phase == 'apply'
+    - application_kafka_account.mode == 'managed'
+    - application_kafka_acl_operations | length > 0

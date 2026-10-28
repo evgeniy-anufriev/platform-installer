@@ -14,6 +14,7 @@
 
 - name: Отклонение перекрывающихся локальных путей данных Vault
   ansible.builtin.include_tasks: validate_data_paths.yml
+  when: not (platform_vault_verify_only | bool)
 
 - name: Защита локальных путей данных Vault перед изменением
   ansible.builtin.include_role:
@@ -28,6 +29,7 @@
   loop_control:
     loop_var: platform_managed_data_path_instance
     label: "{{ platform_managed_data_path_instance.id }}"
+  when: not (platform_vault_verify_only | bool)
 
 - name: Обеспечение взаимного исключения операций Vault для Installer и standalone-Ansible
   block:

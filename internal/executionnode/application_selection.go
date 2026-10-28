@@ -36,7 +36,7 @@ func selectionCapabilitySupported(c map[string]any) bool {
 
 func postInstallCapabilitySupported(c map[string]any) bool {
 	feature, ok := c["applicationPostInstall"].(map[string]any)
-	return ok && (c["apiVersion"] == "platform.installer/execution-capabilities/v1alpha12" || c["apiVersion"] == "platform.installer/execution-capabilities/v1alpha13") &&
+	return ok && (c["apiVersion"] == "platform.installer/execution-capabilities/v1alpha12" || (c["apiVersion"] == "platform.installer/execution-capabilities/v1alpha13" || serviceSelectionCapabilitySupported(c))) &&
 		closedKeys(feature, "protocol", "packageManifestVersion", "planContract", "manifestContract") &&
 		feature["protocol"] == "ApplicationPostInstall/v1alpha1" &&
 		feature["packageManifestVersion"] == "platform.installer/application-package/v1alpha3" &&
@@ -46,7 +46,7 @@ func postInstallCapabilitySupported(c map[string]any) bool {
 
 func applicationProgressCapabilitySupported(c map[string]any) bool {
 	feature, ok := c["applicationProgress"].(map[string]any)
-	return ok && c["apiVersion"] == "platform.installer/execution-capabilities/v1alpha13" &&
+	return ok && (c["apiVersion"] == "platform.installer/execution-capabilities/v1alpha13" || serviceSelectionCapabilitySupported(c)) &&
 		closedKeys(feature, "protocol", "planContract") &&
 		feature["protocol"] == "ApplicationProgress/v1alpha1" && feature["planContract"] == "platform.installer/plan/v1alpha10"
 }

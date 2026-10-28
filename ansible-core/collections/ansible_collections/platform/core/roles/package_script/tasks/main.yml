@@ -1,11 +1,4 @@
 ---
-- name: Привязка только общих путей к сценариям пакетов
-  ansible.builtin.set_fact:
-    platform_script_directory: "{{ platform_script_job.workingDirectory }}/.scripts"
-    platform_script_secret_directory: "{{ platform_script_job.workingDirectory }}/.scripts/.secrets/{{ platform_script_job.id }}"
-    platform_script_environment: {}
-  no_log: true
-
 - name: Проверка защиты входных данных сценария
   ansible.builtin.assert:
     that: >-
@@ -19,14 +12,6 @@
   ansible.builtin.file:
     path: "{{ platform_script_directory }}"
     state: directory
-    owner: "{{ platform_script_job.account }}"
-    mode: '0700'
-  no_log: true
-
-- name: Доставка точного сценария пакета из разрешенного списка
-  ansible.builtin.copy:
-    src: "{{ platform_script_job.path }}"
-    dest: "{{ platform_script_directory }}/{{ platform_script_job.id }}"
     owner: "{{ platform_script_job.account }}"
     mode: '0700'
   no_log: true
@@ -46,28 +31,27 @@
         state: directory
         owner: "{{ platform_script_job.account }}"
         mode: '0700'
-      when: platform_script_job.secretInputs | length > 0
+      when: platform_script_job.secretInputs | length > 0 or platform_script_job.invocations | default([]) | length > 0
+      changed_when: false
       no_log: true
 
-    - name: Подготовка входных файлов среды выполнения для выбранной целевой учетной записи
+    - name: Доставка сценария и выбранных входных файлов штатным копированием
       ansible.builtin.copy:
-        src: "{{ platform_script_secret_files[item.value] }}"
-        dest: "{{ platform_script_secret_directory }}/{{ item.key }}"
+        src: "{{ _platform_script_delivery_file.src | default(omit) }}"
+        content: "{{ _platform_script_delivery_file.content | default(omit) }}"
+        dest: "{{ _platform_script_delivery_file.dest }}"
         owner: "{{ platform_script_job.account }}"
-        mode: '0600'
-      loop: "{{ platform_script_job.secretInputs | dict2items }}"
-      no_log: true
-
-    - name: "Передача сценарию только путей защищённых входных файлов"
-      ansible.builtin.set_fact:
-        platform_script_environment: >-
-          {{ platform_script_environment | combine({'PLATFORM_SCRIPT_SECRET_' ~ (item.key | upper) ~ '_FILE': platform_script_secret_directory ~ '/' ~ item.key}) }}
-      loop: "{{ platform_script_job.secretInputs | dict2items }}"
+        mode: "{{ _platform_script_delivery_file.mode }}"
+      loop: "{{ _platform_script_delivery_files }}"
+      loop_control:
+        loop_var: _platform_script_delivery_file
+      register: _platform_script_copied_file
+      changed_when: not _platform_script_delivery_file.temporary and _platform_script_copied_file.changed
       no_log: true
 
     - name: Выполнение точного сценария пакета без оболочки или неограниченной среды выполнения
       ansible.builtin.command:
-        argv: "{{ ['timeout', '--kill-after=2s', '300s', platform_script_directory ~ '/' ~ platform_script_job.id] + platform_script_job.argv }}"
+        argv: "{{ ['timeout', '--kill-after=2s', ((300 * ([1, platform_script_job.invocations | default([]) | length] | max)) | string) ~ 's', platform_script_directory ~ '/' ~ platform_script_job.id] + platform_script_job.argv }}"
         chdir: "{{ platform_script_job.workingDirectory }}"
       become_user: "{{ platform_script_job.account }}"
       environment: "{{ platform_script_environment }}"

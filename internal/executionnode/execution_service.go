@@ -61,6 +61,7 @@ const (
 )
 
 type DeploymentPlan struct {
+	SkipServiceDeployments     []string
 	SkipApplicationLibraries   []string
 	SkipInfrastructureVerify   bool
 	ExecutionMode              ExecutionMode
@@ -138,6 +139,7 @@ type TargetHostTrustStager interface {
 type TargetHostTrustProvider func(DeploymentPlan) ([]TargetHostKeyApproval, error)
 
 type PlanRecord struct {
+	SkipServiceDeployments   []string
 	SkipApplicationLibraries []string
 	skipInfrastructureVerify bool
 	mode                     ExecutionMode
@@ -337,7 +339,7 @@ func (s *ExecutionService) buildPlan(ctx context.Context, node Node, root string
 	} else {
 		plan, err = builder.BuildDeploymentPlanForMode(ctx, node, root, release, append([]string{}, order...), mode, cloneVaultSources(sources), skipInfrastructureVerify...)
 	}
-	if err == nil && (plan.ExecutionMode != mode || !sameLibrarySelection(plan.SkipApplicationLibraries, applicationLibrarySelection(ctx)) || plan.SkipInfrastructureVerify != (len(skipInfrastructureVerify) > 0 && skipInfrastructureVerify[0]) || plan.InfrastructureVerification == nil || !plan.InfrastructureVerification.Validate()) {
+	if err == nil && (plan.ExecutionMode != mode || !sameLibrarySelection(plan.SkipServiceDeployments, serviceSelection(ctx)) || !sameLibrarySelection(plan.SkipApplicationLibraries, applicationLibrarySelection(ctx)) || plan.SkipInfrastructureVerify != (len(skipInfrastructureVerify) > 0 && skipInfrastructureVerify[0]) || plan.InfrastructureVerification == nil || !plan.InfrastructureVerification.Validate()) {
 		return DeploymentPlan{}, errors.New("DEPLOYMENT_PLAN_RESPONSE_INVALID")
 	}
 	return plan, err
@@ -363,7 +365,7 @@ func (s *ExecutionService) createPlan(ctx context.Context, node Node, projectRoo
 		return PlanRecord{}, errors.New("DEPLOYMENT_PLAN_INVALID")
 	}
 	now := s.now().UTC()
-	record := PlanRecord{SkipApplicationLibraries: applicationLibrarySelection(ctx), skipInfrastructureVerify: len(skipInfrastructureVerify) > 0 && skipInfrastructureVerify[0], mode: mode, vaultSources: cloneVaultSources(vaultSources), ID: plan.ID, Plan: cloneDeploymentPlan(plan), DeploymentOrder: slices.Clone(deploymentOrder), ApplicationLibraryOrder: slices.Clone(libraryOrder), CreatedAt: now, ExpiresAt: now.Add(s.ttl)}
+	record := PlanRecord{SkipServiceDeployments: serviceSelection(ctx), SkipApplicationLibraries: applicationLibrarySelection(ctx), skipInfrastructureVerify: len(skipInfrastructureVerify) > 0 && skipInfrastructureVerify[0], mode: mode, vaultSources: cloneVaultSources(vaultSources), ID: plan.ID, Plan: cloneDeploymentPlan(plan), DeploymentOrder: slices.Clone(deploymentOrder), ApplicationLibraryOrder: slices.Clone(libraryOrder), CreatedAt: now, ExpiresAt: now.Add(s.ttl)}
 	s.mu.Lock()
 	s.plans[record.ID] = record
 	s.projectRoots[record.ID] = projectRoot
@@ -508,7 +510,7 @@ func (s *ExecutionService) start(ctx context.Context, node Node, planID string, 
 	if len(record.Plan.RuntimeRelease) == 0 {
 		return ExecutionRun{}, errors.New("EXECUTION_PLAN_RUNTIME_RELEASE_MISSING")
 	}
-	fresh, err := s.buildPlan(WithApplicationLibrarySelection(ctx, record.SkipApplicationLibraries), node, projectRoot, record.Plan.RuntimeRelease, record.DeploymentOrder, record.ApplicationLibraryOrder, record.mode, record.vaultSources, record.skipInfrastructureVerify)
+	fresh, err := s.buildPlan(WithServiceSelection(WithApplicationLibrarySelection(ctx, record.SkipApplicationLibraries), record.SkipServiceDeployments), node, projectRoot, record.Plan.RuntimeRelease, record.DeploymentOrder, record.ApplicationLibraryOrder, record.mode, record.vaultSources, record.skipInfrastructureVerify)
 	if err != nil {
 		return ExecutionRun{}, err
 	}
@@ -883,6 +885,7 @@ func sameStrings(a, b []string) bool {
 	return true
 }
 func cloneDeploymentPlan(p DeploymentPlan) DeploymentPlan {
+	p.SkipServiceDeployments = slices.Clone(p.SkipServiceDeployments)
 	p.SkipApplicationLibraries = slices.Clone(p.SkipApplicationLibraries)
 	if p.InfrastructureVerification != nil {
 		value := *p.InfrastructureVerification
@@ -953,6 +956,7 @@ func cloneServicePlanRequest(r ServicePlanRequest) ServicePlanRequest {
 	return r
 }
 func clonePlanRecord(p PlanRecord) PlanRecord {
+	p.SkipServiceDeployments = slices.Clone(p.SkipServiceDeployments)
 	p.SkipApplicationLibraries = slices.Clone(p.SkipApplicationLibraries)
 	p.Plan = cloneDeploymentPlan(p.Plan)
 	p.vaultSources = cloneVaultSources(p.vaultSources)

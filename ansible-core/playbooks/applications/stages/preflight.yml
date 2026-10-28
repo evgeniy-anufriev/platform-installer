@@ -38,6 +38,7 @@
       ansible.builtin.set_fact:
         platform_application_preflight_jobs: []
         application_runtime_discoveries: {}
+        application_preflight_path_observations: {}
       no_log: true
     - name: Проверка и формирование проекции каждого выбранного размещения в памяти
       ansible.builtin.include_role:
@@ -45,6 +46,7 @@
         tasks_from: preflight
       vars:
         application_runtime_defer_archive_verification: true
+        application_runtime_reuse_preflight_paths: true
       loop: "{{ hostvars['localhost'].application_runtime_inputs.jobs | selectattr('hostId', 'equalto', inventory_hostname) | list }}"
       loop_control:
         loop_var: application_runtime_job

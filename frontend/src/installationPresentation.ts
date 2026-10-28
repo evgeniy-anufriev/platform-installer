@@ -177,6 +177,7 @@ export function installationDisplay(
   state?: InstallationState,
   run?: InstallationRunOperation,
   progress?: RunProgress,
+  starting = false,
 ): {
   label: string;
   detail: string;
@@ -184,6 +185,9 @@ export function installationDisplay(
   percent?: number;
   stage: "plan" | "execution" | "result";
 } {
+  if (starting) {
+    return { label: "Запускается выполнение…", detail: "Ожидается подтверждение запуска Core", tone: "running", stage: "plan" };
+  }
   const runState = run?.run?.state;
   if (runState === "SUCCEEDED") {
     return {

@@ -111,26 +111,18 @@
     fail_msg: SCHEMA_REGISTRY_CONFIG_DRIFT
   no_log: true
 
-- name: Проверка готовности протокола брокера для выбранного соединения
-  ansible.builtin.command:
-    argv:
-      - "{{ platform_kafka_install_directory }}/bin/kafka-broker-api-versions{{ platform_kafka_script_extension }}"
-      - --bootstrap-server
-      - "{{ registry_instance.bootstrap_servers | regex_replace('(SSL|PLAINTEXT)://', '') }}"
-      - --command-config
-      - "{{ registry_instance.config_directory }}/kafka-client.properties"
-  changed_when: false
-  register: _platform_kafka_registry_brokers_ready
-  retries: "{{ platform_kafka_schema_registry_readiness_retries }}"
-  delay: "{{ platform_kafka_schema_registry_readiness_delay }}"
-  until: >-
-    _platform_kafka_registry_brokers_ready.rc == 0 and
-    (registry_instance.broker_ids | difference(
-      _platform_kafka_registry_brokers_ready.stdout | regex_findall('\(id: ([0-9]+)') | map('int') | list) | length) == 0
-  no_log: true
+- name: Проверка наличия unit-файла перед подготовкой Schema Registry
+  ansible.builtin.stat:
+    path: "{{ registry_instance.unit_path }}"
+    follow: false
+    get_checksum: false
+  register: _platform_kafka_registry_unit_before
 
-- name: "Проверка или создание служебного топика схем Schema Registry"
-  ansible.builtin.include_tasks: schema_registry_topic.yml
+- name: Чтение состояния загруженной службы Schema Registry перед подготовкой
+  ansible.builtin.command:
+    argv: [systemctl, show, '--property=LoadState', '--property=ActiveState', '--', "{{ registry_instance.unit_name }}"]
+  changed_when: false
+  register: _platform_kafka_registry_service_before
 
 - name: Формирование файла службы systemd для Schema Registry
   ansible.builtin.template:
@@ -140,14 +132,6 @@
     group: root
     mode: '0644'
   register: _platform_kafka_registry_unit
-  when: not platform_kafka_verify_only
-
-- name: Запуск Schema Registry или перезапуск при изменении конфигурации или PKI
-  ansible.builtin.systemd:
-    name: "{{ registry_instance.unit_name }}"
-    daemon_reload: "{{ _platform_kafka_registry_unit.changed }}"
-    enabled: true
-    state: "{{ 'restarted' if (_platform_kafka_registry_unit.changed or _platform_kafka_registry_properties.changed or _platform_kafka_registry_pki_copy.changed or _platform_kafka_registry_pem_changed) else 'started' }}"
   when: not platform_kafka_verify_only
 
 - name: Проверка файла службы Schema Registry без перехода по символическим ссылкам
@@ -165,29 +149,21 @@
       - _platform_kafka_registry_unit_state.stat.checksum == (lookup('ansible.builtin.template', 'schema-registry.service.j2') | hash('sha256'))
     fail_msg: SCHEMA_REGISTRY_UNIT_DRIFT
 
-- name: Проверка того, работает ли служба реестра systemd
-  ansible.builtin.command:
-    argv: [systemctl, is-active, "{{ registry_instance.unit_name }}"]
+- name: Сохранение индивидуальных признаков запуска Schema Registry
+  ansible.builtin.set_fact:
+    _platform_kafka_registry_activation: >-
+      {{ (_platform_kafka_registry_activation | rejectattr('key', 'equalto', [registry_instance.deployment_id, registry_instance.id] | to_json) | list) + [{
+        'key': [registry_instance.deployment_id, registry_instance.id] | to_json,
+        'new': not _platform_kafka_registry_unit_before.stat.exists
+          and 'LoadState=not-found' in _platform_kafka_registry_service_before.stdout_lines
+          and 'ActiveState=inactive' in _platform_kafka_registry_service_before.stdout_lines,
+        'reload': _platform_kafka_registry_unit.changed | default(false) | bool,
+        'restart': (_platform_kafka_registry_unit.changed | default(false) | bool)
+          or (_platform_kafka_registry_properties.changed | default(false) | bool)
+          or (_platform_kafka_registry_pki_copy.changed | default(false) | bool)
+          or (_platform_kafka_registry_pem_changed | bool)
+      }] }}
   changed_when: false
-  register: _platform_kafka_registry_active
-  retries: "{{ platform_kafka_schema_registry_readiness_retries }}"
-  delay: "{{ platform_kafka_schema_registry_readiness_delay }}"
-  until: _platform_kafka_registry_active.rc == 0 and _platform_kafka_registry_active.stdout | trim == 'active'
-
-- name: Проверка готовности реестра HTTP и HTTPS без записи схемы
-  ansible.builtin.uri:
-    url: "{{ item }}/subjects"
-    method: GET
-    status_code: 200
-    validate_certs: true
-    ca_path: "{{ registry_instance.config_directory }}/pki/ca-chain.pem"
-    return_content: false
-    use_proxy: false
-  loop: ["{{ registry_instance.http_url }}", "{{ registry_instance.https_url }}"]
-  register: _platform_kafka_registry_http_ready
-  retries: "{{ platform_kafka_schema_registry_readiness_retries }}"
-  delay: "{{ platform_kafka_schema_registry_readiness_delay }}"
-  until: _platform_kafka_registry_http_ready.status | default(0) == 200
 
 - name: "Сброс временной переменной пароля"
   ansible.builtin.set_fact:

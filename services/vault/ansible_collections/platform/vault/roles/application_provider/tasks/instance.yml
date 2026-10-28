@@ -1,45 +1,29 @@
 ---
-- name: Повторная проверка управляемой политики и роли перед обновлением
+- name: Проверка документов, политики и роли непосредственно перед обновлением
   ansible.builtin.include_tasks: preflight.yml
   vars:
-    application_vault_identity_only: true
+    application_vault_identity_only: false
 
 - name: Согласование документов учётных записей экземпляра Vault
   ansible.builtin.include_tasks: library.yml
 
-- name: Определение назначения клиента IPv4 для каждого размещения Docker
-  ansible.builtin.command:
-    argv: [getent, ahostsv4, "{{ application_vault_provider.routeAddress }}"]
+- name: Определение ключа обнаружения сетей выбранных размещений Vault
+  ansible.builtin.set_fact:
+    application_vault_network_key: "{{ [platform_vault_application_job.providerId, application_vault_provider.routeAddress, platform_vault_application_job.hosts, platform_vault_application_job.hosts | map('extract', hostvars) | map(attribute='platform_docker_lxc_bridge', default='lxcbr0') | list] | to_json }}"
+  delegate_facts: false
   vars:
     application_vault_provider: "{{ platform_application_vault_runtime[platform_vault_application_job.providerId] }}"
-  delegate_to: "{{ item }}"
-  loop: "{{ platform_vault_application_job.hosts }}"
-  register: application_vault_addresses
-  changed_when: false
+  no_log: true
 
-- name: Определение исходного маршрута IPv4 для каждого фактического размещения Docker
-  ansible.builtin.command:
-    argv: [ip, -json, route, get, "{{ item.stdout.split()[0] }}"]
-  vars:
-    application_vault_provider: "{{ platform_application_vault_runtime[platform_vault_application_job.providerId] }}"
-  delegate_to: "{{ item.item }}"
-  loop: "{{ application_vault_addresses.results }}"
-  register: application_vault_routes
-  changed_when: false
-
-- name: Чтение подсети моста LXC IPv4 в каждом размещении Docker
-  ansible.builtin.command:
-    argv: [ip, -json, -4, address, show, dev, "{{ hostvars[item].platform_docker_lxc_bridge | default('lxcbr0') }}"]
-  delegate_to: "{{ item }}"
-  loop: "{{ platform_vault_application_job.hosts }}"
-  register: application_vault_lxc_addresses
-  changed_when: false
+- name: Однократное обнаружение сетей для точной группы размещений провайдера
+  ansible.builtin.include_tasks: networks.yml
+  when: application_vault_network_key not in (platform_application_vault_networks | default({}))
 
 - name: Привязка выбранной политики подсети и управляемых настроек AppRole
   ansible.builtin.set_fact:
     application_vault_role:
       bind_secret_id: false
-      token_bound_cidrs: "{{ application_vault_routes.results | map(attribute='stdout') | map('from_json') | list | platform.vault.application_vault_cidrs(application_vault_lxc_addresses.results | map(attribute='stdout') | map('from_json') | list) }}"
+      token_bound_cidrs: "{{ platform_application_vault_networks[application_vault_network_key].routes | platform.vault.application_vault_cidrs(platform_application_vault_networks[application_vault_network_key].bridges) }}"
       token_policies: ["{{ platform_vault_application_job.identity }}"]
       token_no_default_policy: true
       token_type: service

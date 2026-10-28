@@ -93,11 +93,11 @@ class ApplicationPlanTests(unittest.TestCase):
         self.assertIsNotNone(result['executionManifest'])
         self.assertIsNotNone(result['executionManifestDigest'])
         self.assertEqual(['verify:consumer', 'verify:provider'], plan['phases'][-1]['actions'][0]['dependsOn'])
-        self.assertEqual(OPERATIONS, [a['type'] for a in plan['phases'][-1]['actions']])
+        self.assertEqual(OPERATIONS[:1], [a['type'] for a in plan['phases'][-1]['actions']])
         validator = SchemaValidator(str(REPO / 'contracts'))
         self.assertEqual([], validator.validate(plan, str(REPO / 'contracts/plan/v1alpha4/schema.json')))
         self.assertEqual([], validator.validate(result['executionManifest'], str(REPO / 'contracts/execution-manifest/v1alpha2/schema.json')))
-        for operation in result['executionManifest']['operations'][-2:]:
+        for operation in result['executionManifest']['operations'][-1:]:
             self.assertEqual([], validator.validate(operation, str(REPO / 'contracts/execution-manifest/v1alpha2/application-operation.schema.json')))
 
     def test_no_network_probe_or_observation_in_plan(self):
@@ -263,6 +263,8 @@ class ApplicationPlanTests(unittest.TestCase):
         library['sharedSecretRequirements']['shared'] = {'source': {'kind': 'runtime_secret_ref', 'ref': 'shared-key'}}
         model = application_execution_model(value, image_lock())
         operations = [application_operation(action, model) for action in model['actions']]
+        # Previously saved manifests retain their Apply/Verify custody semantics.
+        operations.append(dict(operations[0], operationId='applications:verify', operation=OPERATIONS[1]))
         manifest = dict(operations=operations, artifactRequirements=[], artifactSourceAuthorities=[],
                         runtimeSecretRequirements=[], pkiMaterializationPlans=[],
                         applicationSecretRequirements=model['runtimeSecretRequirements'])

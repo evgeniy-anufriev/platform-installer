@@ -1,9 +1,7 @@
 ---
-- name: Наблюдение за списками управления доступом кластера, включая совпадения с подстановочными знаками и префиксами
-  ansible.builtin.command:
-    argv: "{{ [application_topic_cli_directory ~ '/bin/kafka-acls' ~ platform_kafka_script_extension, '--bootstrap-server', application_topic_candidate.address ~ ':' ~ application_topic_candidate.port, '--command-config', application_kafka_private.path ~ '/admin.properties', '--list', '--cluster', '--resource-pattern-type', 'match'] }}"
-  register: kafka_authorization_cluster_acls
-  failed_when: false
+- name: Использование общего снимка ACL для проверки административных прав
+  ansible.builtin.set_fact:
+    kafka_authorization_cluster_acls: "{{ application_kafka_acl_inventory }}"
   changed_when: false
   no_log: true
 

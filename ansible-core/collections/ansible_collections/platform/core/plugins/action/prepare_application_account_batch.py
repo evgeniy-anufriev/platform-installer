@@ -4,6 +4,7 @@ from ansible.plugins.action import ActionBase
 from ansible_collections.platform.core.plugins.module_utils.application_scripts import _argument
 from ansible_collections.platform.core.plugins.module_utils.application_connections import script_secret_source, script_secret_reference
 from ansible_collections.platform.core.plugins.module_utils.application_libraries import checked_file
+from ansible_collections.platform.core.plugins.module_utils.runtime_secret_identity import generated_password_ref
 
 
 class ActionModule(ActionBase):
@@ -26,7 +27,10 @@ class ActionModule(ActionBase):
             requests = []
             for account in batch['accounts']:
                 source = account['passwordSource']
-                password_ref = source['ref'] if source['kind'] == 'runtime_secret_ref' else 'pla-vault-' + hashlib.sha256(repr(sorted(source.items())).encode()).hexdigest()[:32]
+                if source['kind'] == 'generated':
+                    password_ref = generated_password_ref(snapshot['project']['id'], account['libraryId'], account['instanceId'], account['alias'])
+                else:
+                    password_ref = source['ref'] if source['kind'] == 'runtime_secret_ref' else 'pla-vault-' + hashlib.sha256(repr(sorted(source.items())).encode()).hexdigest()[:32]
                 requests.append(dict(account, passwordRef=password_ref))
             context = dict(job, accountBatch=[{key: value for key, value in item.items() if key not in ('passwordSource', 'passwordRef')} for item in requests])
             secret_inputs = {}

@@ -5,6 +5,12 @@ endpoint и wildcard records, валидирует complete candidates на вс
 и активирует их только после cluster barrier. Secondary получает зону native
 transfer, не Ansible copy.
 
+Фаза `start` ожидает авторитетный SOA каждой локальной зоны на всех участниках,
+включая завершение первоначального transfer на secondary. Число повторов и пауза
+задаются `platform_bind_readiness_retries` (60) и
+`platform_bind_readiness_delay` (2 секунды). Готовая зона проходит с первой попытки,
+без изменений; тайм-аут завершает Apply ошибкой. Отдельный Verify не изменён.
+
 Запуск: `services/bind/playbooks/apply.yml` и `verify.yml`. В desired state
 настраиваются `zone`, `defaultTtl` и
 `advancedConfig.options.minimal-responses`; package/path/phase defaults — в

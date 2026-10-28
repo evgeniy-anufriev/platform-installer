@@ -119,6 +119,7 @@
 
 - name: Расчёт управляемых запросов PKI по топологии
   platform.core.resolve_pki_requests:
+    deployment_selection: "{{ platform_execution_service_scope.installServices | default(omit) }}"
     project_path: "{{ platform_pki_project_path if (platform_desired_state | default({}) | length == 0) else omit }}"
     inventory_path: "{{ platform_pki_inventory_path if (platform_desired_state | default({}) | length == 0) else omit }}"
     desired_state: "{{ platform_desired_state | default({}) }}"

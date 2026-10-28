@@ -51,7 +51,7 @@ func (a *App) InspectOrphanRun() OrphanRunRecoveryResult {
 		return OrphanRunRecoveryResult{Status: "UNKNOWN"}
 	}
 	if a.installationRuns.knowsRun(record.RunID) {
-		return OrphanRunRecoveryResult{Status: "CURRENT"}
+		return OrphanRunRecoveryResult{Status: "CURRENT", RunID: record.RunID, ProjectRevision: record.ProjectRevision}
 	}
 	binding, err := a.resolveTrustedExecutionConnectionLocked()
 	if err != nil || !sameLocalRunNode(*record, binding.node) {
@@ -191,6 +191,14 @@ func (a *App) resolveInstallationObservationLocked(runID string) (*executionNode
 
 func (a *App) observedInstallationRunLocked(run executionnode.ExecutionRun) InstallationRunOperation {
 	result := InstallationRunOperation{Status: "READY", Run: ptrInstallationRun(installationRunView(run)), Result: installationResultView(run)}
+	// A React reload loses view state while the same Go session still owns
+	// the run. Return its saved display plan without creating or approving one.
+	if a.current.Status == "OPEN" && a.current.Project != nil && run.ProjectIdentity == a.current.Project.ID {
+		if record, err := readLocalRunRecord(a.localRunRecordRoot, a.current.Root, a.current.Project.ID); err == nil && record != nil && record.RunID == run.RunID {
+			result.Plan = record.Plan
+			result.ProjectRevision = record.ProjectRevision
+		}
+	}
 	if a.recoveredRun != nil && a.recoveredRun.RunID == run.RunID {
 		result.Reconnected = true
 		result.CancelUnconfirmed = a.recoveredCancelUnconfirmed

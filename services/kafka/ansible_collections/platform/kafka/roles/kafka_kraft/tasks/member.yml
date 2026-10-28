@@ -53,7 +53,8 @@
       - "'broker' not in kafka_member.roles or (_platform_kafka_member_named_listeners | selectattr('purpose', 'equalto', 'interBroker') | list | length > 0)"
       - "(_platform_kafka_member_named_listeners | selectattr('securityProtocol', 'in', ['SSL', 'SASL_SSL']) | list | length) == 0 or (kafka_member.tls_profile | default('') | length > 0)"
       - "(_platform_kafka_member_named_listeners | map(attribute='port') | list | unique | length) == (_platform_kafka_member_named_listeners | length)"
-      - "(_platform_kafka_member_named_listeners | selectattr('securityProtocol', 'equalto', 'SASL_SSL') | rejectattr('purpose', 'equalto', 'client') | list | length) == 0"
+      - "(_platform_kafka_member_named_listeners | selectattr('securityProtocol', 'equalto', 'SASL_SSL') | rejectattr('purpose', 'in', ['client', 'controller']) | list | length) == 0"
+      - "not (_platform_kafka_scram_enabled | default(false)) or (_platform_kafka_member_named_listeners | selectattr('purpose', 'equalto', 'controller') | selectattr('securityProtocol', 'equalto', 'SASL_SSL') | list | length == 1)"
     fail_msg: 'BLOCKED: named Kafka listeners are invalid for this member role or collide on ports'
   when: kafka_member.listeners | default({}) | length > 0
 
@@ -81,8 +82,14 @@
            }) }}
   when: not (platform_kafka_verify_only | bool)
 
-- name: Проверка готовности PKI-01 для SSL listeners Kafka
-  ansible.builtin.include_tasks: validate_ssl_listener.yml
+- name: Подготовка PKI-01 один раз для TLS listeners экземпляра Kafka
+  ansible.builtin.include_tasks: prepare_member_tls.yml
+  when:
+    - not (platform_kafka_verify_only | bool)
+    - _platform_kafka_member_named_listeners | selectattr('securityProtocol', 'in', ['SSL', 'SASL_SSL']) | list | length > 0
+
+- name: Настройка TLS каждого listener по готовым материалам экземпляра Kafka
+  ansible.builtin.include_tasks: listener_tls_settings.yml
   loop: "{{ _platform_kafka_member_named_listeners | selectattr('securityProtocol', 'in', ['SSL', 'SASL_SSL']) | list }}"
   loop_control:
     loop_var: kafka_ssl_listener
@@ -94,15 +101,21 @@
 - name: Настройка SCRAM listener Kafka без передачи паролей брокера
   ansible.builtin.set_fact:
     kafka_effective_config: "{{ kafka_effective_config | combine({('listener.name.' ~ (item.name | lower) ~ '.sasl.enabled.mechanisms'): 'SCRAM-SHA-512', ('listener.name.' ~ (item.name | lower) ~ '.scram-sha-512.sasl.jaas.config'): 'org.apache.kafka.common.security.scram.ScramLoginModule required;'}) }}"
-  loop: "{{ _platform_kafka_member_named_listeners | selectattr('securityProtocol', 'equalto', 'SASL_SSL') | list }}"
+  loop: "{{ _platform_kafka_member_named_listeners | selectattr('securityProtocol', 'equalto', 'SASL_SSL') | selectattr('purpose', 'equalto', 'client') | list }}"
   when: not (platform_kafka_verify_only | bool)
 
 - name: Включение авторизации KRaft с точными идентификаторами экземпляра доверенной службы
   ansible.builtin.set_fact:
-    kafka_effective_config: "{{ kafka_effective_config | combine({'authorizer.class.name': 'org.apache.kafka.metadata.authorizer.StandardAuthorizer', 'super.users': (['User:admin'] + (_platform_kafka_admin_principals if _platform_kafka_authorization_bootstrap else [])) | join(';'), 'allow.everyone.if.no.acl.found': false}) }}"
+    kafka_effective_config: "{{ kafka_effective_config | combine({'authorizer.class.name': 'org.apache.kafka.metadata.authorizer.StandardAuthorizer', 'super.users': 'User:admin', 'allow.everyone.if.no.acl.found': false}) }}"
   when:
     - not (platform_kafka_verify_only | bool)
     - _platform_kafka_scram_enabled
+
+- name: Настройка SASL PLAIN для соединений KRaft с готовыми локальными credentials
+  ansible.builtin.set_fact:
+    kafka_effective_config: "{{ kafka_effective_config | combine({'sasl.mechanism.controller.protocol': 'PLAIN', ('listener.name.' ~ (item.name | lower) ~ '.sasl.enabled.mechanisms'): 'PLAIN'}) }}"
+  loop: "{{ _platform_kafka_member_named_listeners | selectattr('purpose', 'equalto', 'controller') | selectattr('securityProtocol', 'equalto', 'SASL_SSL') | list }}"
+  when: not (platform_kafka_verify_only | bool)
 
 - name: Добавление действующей конфигурации брокера
   ansible.builtin.set_fact:
@@ -154,7 +167,7 @@
     that: >-
       ((_platform_kafka_member_advanced_config.keys() | list |
        intersect(_platform_kafka_reserved_config_keys)) | length) == 0
-      and (_platform_kafka_member_advanced_config.keys() | select('match', '^listener\\.name\\..*\\.(ssl|sasl|scram-sha-512)\\.') | list | length) == 0
+      and (_platform_kafka_member_advanced_config.keys() | select('match', '^listener\\.name\\..*\\.(ssl|sasl|plain|scram-sha-512)\\.') | list | length) == 0
     fail_msg: 'ADVANCED_SETTING_RESERVED: BLOCKED; member advanced configuration contains reserved Kafka keys'
   when: not (platform_kafka_verify_only | bool)
 
@@ -188,6 +201,12 @@
   when: not (platform_kafka_verify_only | bool)
   diff: false
   no_log: true
+
+- name: Подготовка зашифрованного JAAS до запуска экземпляра Kafka
+  ansible.builtin.include_tasks: controller_credentials.yml
+  when:
+    - not (platform_kafka_verify_only | bool)
+    - _platform_kafka_member_named_listeners | selectattr('purpose', 'equalto', 'controller') | selectattr('securityProtocol', 'equalto', 'SASL_SSL') | list | length > 0
 
 - name: Проверка метаданных экземпляра службы KRaft
   ansible.builtin.stat:
@@ -229,23 +248,66 @@
     - not (platform_kafka_verify_only | bool)
     - not platform_kafka_member_metadata.stat.exists
 
-- name: Форматирование неинициализированного хранилища Kafka ровно один раз
-  become_user: "{{ platform_kafka_user }}"
-  ansible.builtin.command:
-    argv: >-
-      {{ [platform_kafka_install_directory ~ '/bin/kafka-storage' ~ platform_kafka_script_extension,
-          'format',
-          '--cluster-id', platform_kafka_cluster_id,
-          '--config', kafka_member.config_directory ~ '/server.properties']
-         + (['--initial-controllers', _platform_kafka_initial_controllers | trim]
-            if _platform_kafka_storage_format_strategy == 'INITIAL_CONTROLLERS'
-            else (['--standalone']
-                  if _platform_kafka_storage_format_strategy == 'STANDALONE_COMPATIBILITY'
-                  else ['--no-initial-controllers'])) }}
+- name: Форматирование чистого хранилища с готовым SCRAM admin до первого запуска
   when:
     - not (platform_kafka_verify_only | bool)
     - not platform_kafka_member_metadata.stat.exists
-  changed_when: true
+  block:
+    - name: Создание временного argfile форматирования в оперативной памяти
+      ansible.builtin.tempfile:
+        path: /run
+        state: file
+        prefix: platform-kafka-format-
+      register: kafka_storage_scram_args
+      changed_when: false
+      when: _platform_kafka_scram_enabled | bool
+
+    - name: Запись начальной SCRAM-записи в закрытый argfile без пароля в argv
+      ansible.builtin.copy:
+        content: "--add-scram\n{{ lookup('ansible.builtin.file', platform_kafka_secret_files[platform_kafka_admin_credential.passwordSecretRef], rstrip=false) | platform.kafka.storage_scram }}\n"
+        dest: "{{ kafka_storage_scram_args.path }}"
+        owner: "{{ platform_kafka_user }}"
+        group: "{{ platform_kafka_group }}"
+        mode: '0600'
+      changed_when: false
+      no_log: true
+      diff: false
+      when: _platform_kafka_scram_enabled | bool
+
+    - name: Форматирование неинициализированного хранилища Kafka ровно один раз
+      become_user: "{{ platform_kafka_user }}"
+      ansible.builtin.command:
+        argv: >-
+          {{ [platform_kafka_install_directory ~ '/bin/kafka-storage' ~ platform_kafka_script_extension,
+              'format', '--cluster-id', platform_kafka_cluster_id,
+              '--config', kafka_member.config_directory ~ '/server.properties']
+             + (['--initial-controllers', _platform_kafka_initial_controllers | trim]
+                if _platform_kafka_storage_format_strategy == 'INITIAL_CONTROLLERS'
+                else (['--standalone'] if _platform_kafka_storage_format_strategy == 'STANDALONE_COMPATIBILITY'
+                      else ['--no-initial-controllers']))
+             + (['@' ~ kafka_storage_scram_args.path] if _platform_kafka_scram_enabled | bool else []) }}
+      register: kafka_storage_format_result
+      failed_when: false
+      changed_when: kafka_storage_format_result.rc == 0
+      no_log: true
+
+    - name: Проверка успешности форматирования с безопасной классификацией ошибки
+      ansible.builtin.assert:
+        that: kafka_storage_format_result.rc == 0
+        fail_msg: >-
+          KAFKA_STORAGE_FORMAT_FAILED: {{
+          (kafka_storage_format_result.stderr ~ kafka_storage_format_result.stdout)
+          | regex_findall('(?:[A-Za-z]+Exception|[A-Za-z]+Error|unrecognized arguments|not found|required|Permission denied|Unknown argument|Invalid SCRAM)')
+          | unique | join(',') }}
+  always:
+    - name: Удаление временного argfile после форматирования
+      ansible.builtin.file:
+        path: "{{ kafka_storage_scram_args.path }}"
+        state: absent
+      changed_when: false
+      when:
+        - _platform_kafka_scram_enabled | bool
+        - kafka_storage_scram_args.path is defined
 
 - name: Запись среды экземпляра systemd
   ansible.builtin.copy:
@@ -272,19 +334,6 @@
     daemon_reload: true
   when: not (platform_kafka_verify_only | bool)
 
-- name: Ожидание следующей секунды после записи конфигурации перед перезапуском SCRAM
-  ansible.builtin.wait_for:
-    timeout: 1
-  changed_when: false
-  when:
-    - _platform_kafka_scram_enabled | default(false) | bool
-    - not (platform_kafka_verify_only | bool)
-    - >-
-      platform_kafka_member_config.changed or
-      platform_kafka_member_environment.changed or
-      (platform_kafka_member_pki_changed | default(false) | bool) or
-      (platform_pki_material_changed | default(false) | bool)
-
 - name: Перезапуск экземпляра Kafka при изменении конфигурации, окружения или PKI
   ansible.builtin.systemd:
     name: "{{ kafka_member.systemd_unit_name }}"
@@ -294,6 +343,8 @@
     - >-
       platform_kafka_member_config.changed or
       platform_kafka_member_environment.changed or
+      platform_kafka_systemd_template.changed or
+      (platform_kafka_member_credentials_changed | default(false) | bool) or
       (platform_kafka_member_pki_changed | default(false) | bool) or
       (platform_pki_material_changed | default(false) | bool)
 

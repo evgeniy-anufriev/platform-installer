@@ -1,0 +1,37 @@
+---
+- name: Проверка желаемого проекта на контроллере Ansible
+  platform.core.validate_project:
+    manifest: "{{ platform_project_manifest_document }}"
+    topology: "{{ platform_project | default({}) }}"
+    ansible_desired_state: "{{ platform_desired_state | default({}) | dict2items | rejectattr('key', 'equalto', 'applicationLibraryDeployments') | items2dict }}"
+    application_findings: "{{ platform_validation_application_findings }}"
+    generated_state: "{{ platform_generated_state | default({}) }}"
+    project_id: >-
+      {{ platform_project_id |
+         default(platform_project_manifest_document.metadata.id |
+                 default((inventory_dir | default('/project/inventory', true) | dirname | basename), true), true) }}
+    inventory_deployments_by_host: "{{ platform_inventory_deployments | default({}) }}"
+    inventory_host_addresses: "{{ platform_inventory_host_addresses | default({}) }}"
+    desired_hosts: "{{ platform_desired_hosts }}"
+    service_catalog: >-
+      {{ platform_catalog_artifact.platform_service_catalog |
+         default(platform_catalog_artifact, true) }}
+    inventory_hosts: "{{ groups['platform_targets'] | default([]) }}"
+    artifact_path: >-
+      {{ platform_validation_artifact |
+         default(platform_validation_default_artifact, true) }}
+    contracts_root: >-
+      {{ platform_contracts_root |
+         default(playbook_dir ~ '/../../contracts', true) }}
+  run_once: true
+  become: false
+  check_mode: false
+  register: platform_validation
+
+- name: Вывод сводки проверки
+  ansible.builtin.debug:
+    msg:
+      status: "{{ platform_validation.validation.status }}"
+      artifact: "{{ platform_validation.artifact_path }}"
+      findings: "{{ platform_validation.validation.summary }}"
+  run_once: true

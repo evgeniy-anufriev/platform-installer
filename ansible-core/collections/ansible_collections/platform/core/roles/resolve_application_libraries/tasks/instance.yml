@@ -1,11 +1,4 @@
 ---
-- name: Загрузка проверенных параметров библиотеки по умолчанию в изолированное пространство имен
-  ansible.builtin.include_vars:
-    file: "{{ application_job.library.defaultsPath }}"
-    name: "_library_package_{{ (application_job.libraryId ~ application_job.hostId) | hash('sha256') }}"
-  no_log: true
-  become: false
-
 - name: Загрузка проверенных параметров приложения по умолчанию в изолированное пространство имен
   ansible.builtin.include_vars:
     file: "{{ application_job.application.defaultsPath }}"
@@ -21,11 +14,6 @@
          (application_job.library.definition.instance_id_strategy | default('qualified')) == 'application-name'
          else application_job.application.name ~ '-' ~ application_job.libraryId }}
     library_instance_id: "{{ application_job.libraryId }}"
-  no_log: true
-  become: false
-
-- name: "Сброс контекста ресурсов, подключений и топиков экземпляра приложения"
-  ansible.builtin.set_fact:
     application_topics: {}
     application_databases: {}
     _application_connections: {}

@@ -39,12 +39,18 @@ class ActionModule(ActionBase):
                                 data['metadata'].get('deletion_time') or data['metadata'].get('destroyed')):
                             raise ValueError()
                         value = data['data'].get(field)
-                        if value is None:
-                            value = secrets.token_urlsafe(32)
                     elif current['status'] == 404 and not current.get('json', {}).get('data'):
-                        value = secrets.token_urlsafe(32)
+                        value = None
                     else:
                         raise ValueError()
+                    # Keep the password already provisioned into the account during
+                    # this invocation when deferred delivery re-reads a missing KV.
+                    if ref in args['secret_files']:
+                        protected_secret_files(args['secret_files'], [ref], args['secret_root'])
+                        with open(args['secret_files'][ref], encoding='utf-8') as stream:
+                            value = stream.read(4097)
+                    if value is None:
+                        value = secrets.token_urlsafe(32)
                     generated[ref] = value
                 else:
                     raise ValueError()

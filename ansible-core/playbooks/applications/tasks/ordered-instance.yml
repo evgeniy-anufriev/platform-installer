@@ -11,7 +11,7 @@
   ansible.builtin.include_role:
     name: platform.core.application_runtime
     tasks_from: apply_instance
-  loop: "{{ platform_application_preflight_jobs | selectattr('libraryId', 'equalto', application_library_id) | selectattr('instanceId', 'equalto', application_instance_id) | list }}"
+  loop: "{{ application_instance_runtime_jobs }}"
   loop_control:
     loop_var: application_runtime_job
   when: (application_library_id ~ '/' ~ application_instance_id) in hostvars['localhost'].application_runtime_inputs.integrations.dependencies
@@ -23,15 +23,16 @@
   vars:
     application_script_phase: before_start
     application_script_scope: instance
-  loop: "{{ platform_application_preflight_jobs | selectattr('libraryId', 'equalto', application_library_id) | selectattr('instanceId', 'equalto', application_instance_id) | list }}"
+  loop: "{{ application_instance_runtime_jobs }}"
   loop_control:
     loop_var: application_runtime_job
+  when: application_runtime_job.scripts | default([]) | selectattr('phase', 'equalto', application_script_phase) | selectattr('scope', 'equalto', application_script_scope) | list | length > 0
 
 - name: Активация и проверка размещений логического экземпляра приложения
   ansible.builtin.include_role:
     name: platform.core.application_runtime
     tasks_from: activate_instance
-  loop: "{{ platform_application_preflight_jobs | selectattr('libraryId', 'equalto', application_library_id) | selectattr('instanceId', 'equalto', application_instance_id) | list }}"
+  loop: "{{ application_instance_runtime_jobs }}"
   loop_control:
     loop_var: application_runtime_job
 
@@ -42,9 +43,10 @@
   vars:
     application_script_phase: after_ready
     application_script_scope: instance
-  loop: "{{ platform_application_preflight_jobs | selectattr('libraryId', 'equalto', application_library_id) | selectattr('instanceId', 'equalto', application_instance_id) | list }}"
+  loop: "{{ application_instance_runtime_jobs }}"
   loop_control:
     loop_var: application_runtime_job
+  when: application_runtime_job.scripts | default([]) | selectattr('phase', 'equalto', application_script_phase) | selectattr('scope', 'equalto', application_script_scope) | list | length > 0
 
 - name: Привязка выбранных пакетов потребителей готового экземпляра приложения
   ansible.builtin.set_fact:

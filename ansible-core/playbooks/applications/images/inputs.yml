@@ -4,24 +4,20 @@
   connection: local
   gather_facts: false
   tasks:
-    - name: Загрузка обычных настроек проекта
+    - name: Разрешение проекта для подготовки образов
       ansible.builtin.include_role:
-        name: platform.core.project_settings
-    - name: "Вычисление настроек приложений с учётом значений по умолчанию и переопределений"
-      ansible.builtin.include_role:
-        name: platform.core.resolve_application_libraries
-      when: platform_desired_state.applicationLibraryDeployments is defined
-    - name: "Определение исходных данных проекта и параметров подключения к целевым узлам"
-      platform.core.project_snapshot:
-        project_root: "{{ platform_project_root }}"
-        service_catalog_path: "{{ platform_service_catalog_path }}"
-      register: platform_image_snapshot
+        name: platform.core.project_resolution
+    - name: Сохранение разрешённых входов подготовки образов
+      ansible.builtin.set_fact:
+        platform_image_snapshot: "{{ platform_project_resolution }}"
+      no_log: true
     - name: Сбор параметров выбранных образов для подготовки
       platform.core.prepare_application_images:
         project_root: "{{ platform_project_root }}"
         bundle_root: "{{ platform_execution_bundle_root }}"
         snapshot: "{{ platform_image_snapshot.snapshot }}"
         connections: "{{ platform_image_snapshot.execution_connections }}"
+        application_rows: "{{ platform_image_snapshot.application_rows }}"
       register: platform_image_inputs
     - name: Сохранение параметров подготовки образов для последующих standalone-playbook
       ansible.builtin.set_fact:

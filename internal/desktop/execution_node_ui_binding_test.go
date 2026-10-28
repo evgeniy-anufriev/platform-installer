@@ -102,6 +102,22 @@ func TestUIBindingUsesOnlySavedServerAndBlocksDraft(t *testing.T) {
 	}
 }
 
+func TestServiceConfigurationPreviewDuringDraftPreservesBinding(t *testing.T) {
+	app := NewApp(unavailableProjectReader{}, lifecycleStub{})
+	binding := &executionNodeBinding{dynamic: true, node: executionnode.Node{ID: "node1"}}
+	app.binding = binding
+	app.activeSession = "draft"
+	app.current = ProjectOpenResult{Status: "OPEN", Managed: &installer.ManagedProjectView{}, Catalog: &projectlifecycle.ProjectCatalogView{Status: "READY"}}
+	app.execution.context.Status = "READY"
+	_, err := app.GetServiceConfigurationPreview()
+	if err == nil || err.Error() != "SERVICE_CONFIGURATION_PREVIEW_UNAVAILABLE" {
+		t.Fatalf("draft preview error = %v", err)
+	}
+	if app.binding != binding || app.execution.context.Status != "READY" {
+		t.Fatal("presentation request invalidated the trusted execution binding")
+	}
+}
+
 func TestHostKeyTrustActionsAreBlockedDuringActiveInstallation(t *testing.T) {
 	registry := newInstallationRunRegistry()
 	registry.rememberRun("installer-active")

@@ -1,5 +1,11 @@
 # V2 roadmap and milestone gates
 
+Owner-approved selective infrastructure installation extends invocation selection
+to service deployment IDs. Preserve provider integrations, bind selection through
+fresh Start, and use the existing all-infrastructure skip path. Acceptance includes
+Core/schema/protocol, native Ansible repeat, Go Start binding and real React/Wails;
+current run remains untouched. See ADR-048 and the project contract.
+
 Owner-authorized per-library progress uses Core display steps inside the existing
 application Apply operation, existing ACTION events and leaf counting in UI.
 See the [plan](work/application-libraries/library-progress-plan.md) and ADR-048.
@@ -898,3 +904,9 @@ authority. Reuse synchronous Build/Approve/Start and session-secret transport.
 No operator-authored image SHA/size, new persistence or planning daemon. See the
 [implementation plan](work/application-libraries/application-image-metadata-plan.md)
 and ADR-046; current gates and blockers are recorded only in CURRENT_STATE.
+
+The owner-approved [runtime optimization](work/execution/service-runtime-optimization-phase4-plan.md)
+adds explicit compatible provider-script batching and removes repeated delivery
+preparation. Focused QA and independent review are separate from updated-bundle,
+React/Wails and cold-install timing acceptance; the active old-bundle run is not
+benchmark evidence for these changes.

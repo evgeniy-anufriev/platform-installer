@@ -31,7 +31,7 @@ class Service01BContractTests(unittest.TestCase):
         self.assertEqual("integer", self.schema["properties"]["nodeId"]["type"])
 
     def test_role_has_one_generic_member_execution_path_and_legacy_adapter(self):
-        source = (ROLE / "tasks" / "main.yml").read_text(encoding="utf-8")
+        source = (ROLE / "tasks" / "apply.yml").read_text(encoding="utf-8")
         self.assertIn("Преобразование устаревших переменных одного экземпляра сервиса", source)
         self.assertIn("Нормализация экземпляров службы Kafka в общую внутреннюю модель", source)
         self.assertIn("include_tasks: member.yml", source)
@@ -41,7 +41,7 @@ class Service01BContractTests(unittest.TestCase):
         self.assertNotIn("exactly one local Kafka member", source)
 
     def test_manual_member_input_does_not_require_project_state(self):
-        with (ROLE / "tasks" / "main.yml").open(encoding="utf-8") as stream:
+        with (ROLE / "tasks" / "apply.yml").open(encoding="utf-8") as stream:
             tasks = yaml.safe_load(stream)
         projection = next(task for task in tasks if task["name"] == "Получение экземпляров Kafka из проекта, если список не задан явно")
         self.assertIn("platform_kafka_instances | length == 0", projection["when"])
@@ -59,7 +59,7 @@ class Service01BContractTests(unittest.TestCase):
         self.assertIn("platform_kafka_quorum_mode", task["ansible.builtin.set_fact"])
 
     def test_role_blocks_identity_port_and_storage_collisions(self):
-        source = (ROLE / "tasks" / "main.yml").read_text(encoding="utf-8")
+        source = (ROLE / "tasks" / "apply.yml").read_text(encoding="utf-8")
         self.assertIn("Отклонение повторяющихся идентификаторов узла Kafka", source)
         self.assertIn("validate_host_resources.yml", source)
         resources = (ROLE / "tasks" / "validate_host_resources.yml").read_text(encoding="utf-8")
@@ -71,7 +71,7 @@ class Service01BContractTests(unittest.TestCase):
         self.assertIn("_platform_kafka_normalized_unit_service }}@{{ _platform_kafka_normalized_deployment_id }}-{{ _platform_kafka_normalized_member_number }}.service", source)
         self.assertIn("_platform_kafka_normalized_runtime_directory ~ '/systemd.env'", source)
         self.assertIn("legacy_systemd_unit_name", source)
-        main = (ROLE / "tasks" / "main.yml").read_text(encoding="utf-8")
+        main = (ROLE / "tasks" / "apply.yml").read_text(encoding="utf-8")
         self.assertIn("KAFKA_LEGACY_UNIT_REQUIRES_S11_CLEANUP", main)
         self.assertIn("KAFKA_UNIT_NAME_COLLISION", main)
         self.assertIn("KAFKA_UNIT_OWNERSHIP_UNKNOWN", main)
@@ -96,7 +96,7 @@ class Service01BContractTests(unittest.TestCase):
         self.assertEqual(1, source.count("'/bin/kafka-storage' ~ platform_kafka_script_extension"))
 
     def test_quorum_and_effective_config_are_role_aware(self):
-        main = (ROLE / "tasks" / "main.yml").read_text(encoding="utf-8")
+        main = (ROLE / "tasks" / "apply.yml").read_text(encoding="utf-8")
         member = (ROLE / "tasks" / "member.yml").read_text(encoding="utf-8")
         verify = (ROLE / "tasks" / "verify.yml").read_text(encoding="utf-8")
         self.assertIn("_platform_kafka_controller_instances", main)
@@ -192,14 +192,14 @@ class Service01BContractTests(unittest.TestCase):
         self.assertTrue(all(set(member["listeners"]) == {"PLAINTEXT", "SSL"} for member in brokers))
 
     def test_member_identity_is_not_an_inventory_host(self):
-        source = (ROLE / "tasks" / "main.yml").read_text(encoding="utf-8")
+        source = (ROLE / "tasks" / "apply.yml").read_text(encoding="utf-8")
         self.assertIn("platform_kafka_instances", source)
         self.assertIn("include_tasks: member.yml", source)
         self.assertNotIn("add_host", source)
 
     def test_optional_clean_install_is_guarded_and_reuses_common_lifecycle(self):
         defaults = (ROLE / "defaults" / "main.yml").read_text(encoding="utf-8")
-        main = (ROLE / "tasks" / "main.yml").read_text(encoding="utf-8")
+        main = (ROLE / "tasks" / "apply.yml").read_text(encoding="utf-8")
         clear = (ROLE / "tasks" / "clear.yml").read_text(encoding="utf-8")
         member = (ROLE / "tasks" / "member.yml").read_text(encoding="utf-8")
         self.assertIn("platform_kafka_clean_install: false", defaults)
@@ -263,7 +263,7 @@ class Service01BContractTests(unittest.TestCase):
         self.assertIn("mode: '0750'", prepare)
 
     def test_apply_waits_for_all_role_aware_member_listeners(self):
-        main = (ROLE / "tasks" / "main.yml").read_text(encoding="utf-8")
+        main = (ROLE / "tasks" / "apply.yml").read_text(encoding="utf-8")
         member = (ROLE / "tasks" / "member.yml").read_text(encoding="utf-8")
         self.assertIn("Ожидание всех локальных портов Kafka listeners после запуска экземпляра", main)
         self.assertIn("subelements('listener_ports'", main)

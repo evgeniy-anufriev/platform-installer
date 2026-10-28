@@ -1,8 +1,0 @@
----
-- name: Проверка текущего процесса после завершения настройки
-  ansible.builtin.include_tasks: authorization_status.yml
-
-- name: Отклонение неподтвержденного отзыва суперпользователя во время выполнения
-  ansible.builtin.assert:
-    that: kafka_authorization_running_final | bool
-    fail_msg: KAFKA_AUTHORIZATION_RUNTIME_FINALIZATION_REQUIRED

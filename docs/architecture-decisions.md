@@ -127,6 +127,18 @@ Status: Accepted.
 
 Delivery is split into `SERVICE-01A` standalone/single-node KRaft and `SERVICE-01B` distributed KRaft. SERVICE-01A proves installation, offline artifacts, Java, configuration, systemd, basic endpoint/TLS hooks, verification and idempotency without attempting every security or listener feature. PostgreSQL modes remain contract fixtures.
 
+Controller authentication uses SASL_SSL/PLAIN with the existing Kafka admin
+runtime credential; StandardAuthorizer remains enabled with `User:admin`.
+The role stores controller JAAS encrypted with the node's systemd host key and
+loads the decrypted credential into the service's memory-backed credential
+directory. No additional operator secret or persistent plaintext JAAS is added.
+Fresh storage is formatted with an initial SCRAM admin record before startup,
+so client administration does not require temporary certificate superusers or
+a later privilege-removal restart. Existing storage is never reformatted.
+This replaces certificate-based authorization bootstrap; ordinary TLS and
+internal broker ACLs remain separate concerns. Native role QA and real
+installer acceptance must be recorded separately.
+
 ## ADR-012: Standard Ansible is the standalone interface
 
 Status: Accepted.
@@ -876,3 +888,38 @@ or container behavior. New versioned request/plan/manifest/capability and
 package-script contracts make older runtimes reject unsupported selection.
 See the [Stage3 plan](work/application-libraries/szi-stage3-technical-plan.md)
 and its implementation journal; acceptance is recorded in CURRENT_STATE.md.
+
+ADR-048 amendment, owner-approved runtime optimization (2026-10-26): package
+v1alpha4 explicitly opts compatible provider hooks into batched invocation.
+Core groups only adjacent invocations inside an already-ready provider batch;
+script ID/source digest/order/target/execution location/secret references must
+match. The generic runner passes a private argument-array file and fresh secret
+files, with bounded aggregate timeout and existing cleanup. It does not own
+product authentication or dispatch. No scheduler, persistent cache or second
+credential store is introduced. Existing schemas/legacy scripts remain unchanged.
+Vault delivery retains fresh ownership/CAS reads; only duplicate preflight and
+invocation-local network discovery are removed. See the
+[phase4 plan](work/execution/service-runtime-optimization-phase4-plan.md).
+
+ADR-048 amendment, owner-approved planning optimization (2026-10-27): Core may
+reuse a private desired-derived resolution for the same actual project input
+closure and immutable runtime. The artifact contains no runtime credentials,
+target observations or approval/session state. It is replaced per project,
+published atomically under a per-project lock, and rejected on identity change.
+Unconfirmed external template inputs retain fresh resolution. Independent
+requests verify their actual source bytes; prepared images enrich a copy of the
+base, while mutable PKI/planner evidence is read by the existing planner.
+Standalone Ansible without reuse variables resolves normally. Start still
+rebuilds and compares the authoritative plan; no Go precedence implementation,
+public reference DTO or execution authorization is added. See the
+[phase5 scope](work/execution/service-runtime-optimization-plan.md).
+
+ADR-048 amendment, owner-approved service selection (2026-10-27): selected
+infrastructure deployments may omit their own Apply/Verify while remaining in
+the complete Core snapshot as providers. Selection is invocation state bound to
+plan/manifest and fresh Start, not desired-state deletion or a success proof.
+Integration jobs remain owned by existing provider hooks; service roles gain no
+selection branches. Core scopes installation artifacts, inputs/outputs and PKI.
+The all-unchecked UI reuses APPLICATION_LIBRARIES_ONLY + skipInfrastructureVerify.
+React edits selection only; Go transports and retains it without resolving service
+semantics. Existing bootstrap custody requires an actual Vault Apply in the plan.

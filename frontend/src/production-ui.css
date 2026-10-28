@@ -2731,6 +2731,21 @@ button:disabled {
   padding: 7px 0;
   font-size: 11px;
 }
+label.plan-action-row {
+  grid-template-columns: 20px minmax(0, 1.4fr) minmax(120px, 0.9fr) auto;
+  align-items: center;
+}
+label.plan-action-row > span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+label.plan-action-row > span > small {
+  display: block;
+  font-weight: 400;
+}
 .acknowledgement {
   gap: 7px;
   margin: 7px 0;

@@ -18,8 +18,10 @@
     get_checksum: false
   loop: [ca-chain.pem, certificate.pem, private-key.pem]
   register: platform_postgresql_tls_files
+  when: not (platform_postgresql_verify_only | bool)
 
 - name: Проверка наличия всех подготовленных PEM-файлов PostgreSQL
   ansible.builtin.assert:
     that: platform_postgresql_tls_files.results | map(attribute='stat.exists') | list | min
     fail_msg: POSTGRES_PKI_MATERIALIZATION_REQUIRED
+  when: not (platform_postgresql_verify_only | bool)

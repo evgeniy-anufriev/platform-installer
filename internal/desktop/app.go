@@ -574,7 +574,9 @@ func (a *App) VerifyProject() ProjectVerification {
 		if err != nil {
 			return a.setVerificationUnavailableLocked(err, revision)
 		}
-		return a.verifyProjectWithBindingLocked(binding, revision, true)
+		// Readiness belongs to Check/PrepareExecutionNode. Keep identity and
+		// runtime binding checks, but do not repeat inspection for a ready node.
+		return a.verifyProjectWithBindingLocked(binding, revision, a.execution.context.Status != "READY")
 	}
 	return a.verifyProjectWithReaderLocked(a.reader, revision, nil)
 }
@@ -745,7 +747,7 @@ func (a *App) SetSessionCredential(input runtimesecret.Input) (runtimesecret.Sta
 	if err == nil {
 		a.pauseRecoveredObservationLocked()
 		a.pendingHostKey = nil
-		a.invalidateDynamicBindingLocked()
+		a.invalidateDynamicBindingRuntimeInputsLocked(true)
 	}
 	return status, err
 }
@@ -1884,6 +1886,13 @@ func (a *App) CurrentProject() ProjectOpenResult {
 // exact saved revision. It neither changes Verify state nor creates a plan.
 func (a *App) GetServiceConfigurationPreview() (executionnode.ServiceConfigurationPreview, error) {
 	a.editMu.Lock()
+	// A draft is not a change of SSH identity. Do not send this read-only
+	// request through transport revalidation while the saved binding is gated
+	// by an edit session; that would invalidate an otherwise trusted binding.
+	if a.activeSession != "" {
+		a.editMu.Unlock()
+		return executionnode.ServiceConfigurationPreview{}, errors.New("SERVICE_CONFIGURATION_PREVIEW_UNAVAILABLE")
+	}
 	if a.current.Status != "OPEN" || a.current.Managed == nil || a.current.Catalog == nil || a.current.Catalog.Status != "READY" || a.execution.context.Status != "READY" {
 		a.editMu.Unlock()
 		return executionnode.ServiceConfigurationPreview{}, errors.New("SERVICE_CONFIGURATION_PREVIEW_UNAVAILABLE")

@@ -1,0 +1,23 @@
+---
+- name: Инициализация групп записи ACL текущей учётной записи
+  ansible.builtin.set_fact:
+    application_kafka_acl_groups: {}
+  changed_when: false
+  no_log: true
+
+- name: Вычисление недостающих прав каждого ресурса Kafka
+  ansible.builtin.include_tasks: application_acl.yml
+  loop: "{{ application_kafka_account.grants }}"
+  loop_control:
+    loop_var: application_kafka_grant
+  vars:
+    application_kafka_acl_defer_write: true
+
+- name: Применение совместимых групп ACL текущей учётной записи
+  ansible.builtin.include_tasks: application_acl_write.yml
+  loop: "{{ application_kafka_acl_groups | dict2items }}"
+  loop_control:
+    loop_var: application_kafka_acl_group
+  vars:
+    application_kafka_acl_args: "{{ application_kafka_acl_group.value.selectors + ['--resource-pattern-type', application_kafka_acl_group.value.patternType] }}"
+    application_kafka_acl_operations: "{{ application_kafka_acl_group.value.operations }}"

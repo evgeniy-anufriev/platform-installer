@@ -1,0 +1,14 @@
+---
+- name: Запуск Schema Registry или перезапуск при изменении конфигурации или PKI
+  ansible.builtin.systemd:
+    name: "{{ registry_instance.unit_name }}"
+    daemon_reload: "{{ registry_activation.reload }}"
+    enabled: true
+    state: "{{ 'restarted' if registry_activation.restart else 'started' }}"
+  vars:
+    registry_activation: "{{ _platform_kafka_registry_activation | selectattr('key', 'equalto', [registry_instance.deployment_id, registry_instance.id] | to_json) | first }}"
+  when: not platform_kafka_verify_only
+
+- name: Подтверждение готовности существующего Schema Registry перед следующим экземпляром
+  ansible.builtin.include_tasks: schema_registry_ready.yml
+  when: not ((_platform_kafka_registry_activation | selectattr('key', 'equalto', [registry_instance.deployment_id, registry_instance.id] | to_json) | first).new | bool)

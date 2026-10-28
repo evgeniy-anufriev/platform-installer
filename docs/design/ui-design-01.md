@@ -4,6 +4,16 @@ Status: DONE (design only). This document defines the future desktop
 interaction model; it does not introduce Wails, React, SQLite desired state,
 or a second project model.
 
+Owner refinement (2026-10-27): Plan infrastructure rows have one installation
+checkbox per service deployment beside its Apply action. It controls Apply and
+Verify together; all checkboxes start enabled. The infrastructure checkbox
+selects/clears all and shows an indeterminate state for a partial selection.
+Skipped deployments remain selectable after Core removes their operations, with
+an explicit skipped label and no progress contribution. Clearing all uses the
+existing infrastructure-Verify skip path. Changing selection requires a new plan
+and approval; selection is locked during a run. Existing provider integrations
+remain active. The current running UI must not be reloaded for this change.
+
 Static reference views are in [ui-design-01-mockups.html](ui-design-01-mockups.html).
 
 The 2026-09-05 [project creation design](ui-project-creation-design.md) extends
@@ -24,6 +34,16 @@ the deployment list and search stay visible on the left while the selected
 deployment editor remains on the right. Topology links select the exact
 deployment/member in that editor. Long parameter lists scroll inside the
 right-hand parameter column rather than moving the service list.
+
+Owner refinement (2026-10-27): Services, Applications and Installation remain
+unavailable until Core has returned the service configuration projection for the
+current saved revision and selected runtime. Fetch it automatically after
+Execution Node readiness and after a saved revision changes. Show waiting/errors
+within the existing Execution Node status; retry through its existing check
+action, without a separate projection panel or button. Preserve one successful
+revision/runtime observation across page navigation. This supersedes the static
+mockups' ungated links, adds no desired-state store, and does not replace a fresh
+authoritative deployment plan or execution approval.
 
 Owner refinement (2026-10-09): runtime-secret reference fields are omitted
 from the service and member parameter lists; they are configured through
@@ -433,8 +453,10 @@ show the stage and current task without inventing a percentage. The mockup's
 state selector changes demonstration data only and never starts execution.
 Owner amendment 2026-10-25: Core may provide display-only `progressSteps` inside
 the application Apply action. Show shared preparation and each installed library
-as child rows. Count these leaves instead of the parent; ordinary infrastructure,
-Verify and post_install actions retain one unit each. Skipped library installations
+as child rows. Count these leaves instead of the parent; ordinary infrastructure
+and post_install actions retain one unit each. Owner amendment 2026-10-27 removes
+global application Verify from new Core plans; legacy Verify rows remain supported
+when present in a saved plan. Skipped library installations
 have no work unit. The percentage measures confirmed work units, not duration.
 Only explicit Core ACTION events confirm child completion. Terminal failure or
 cancel leaves an active child unfinished, without adding progress. The parent
@@ -998,11 +1020,12 @@ tab locally omits SERVICE_APPLY rows from the services block but leaves the
 underlying Core plan unchanged; this is only a display projection, not an
 execution plan. Once Core returns the selected-scope plan, the UI displays it
 without filtering. If fresh Core Build finds compatible saved infrastructure Verify
-evidence, the plan contains only library Apply/Verify. If that evidence is missing
-or stale, the same plan includes infrastructure Verify before library Apply/Verify;
+evidence, the plan contains library Apply and optional post-install actions. If that evidence is missing
+or stale, the same plan includes infrastructure Verify before library Apply;
 it does not include infrastructure Apply or create another plan/approval. A Core
-Verify failure stops the run before libraries. Libraries always run Apply/Verify
-and have no checkbox in this stage. The choice is local
+Verify failure stops the run before libraries. Library Apply includes per-library
+container/healthcheck verification; new plans have no separate global library Verify.
+The choice is local
 presentation state retained across navigation, not portable desired state.
 On Approve, Core builds the selected scope; the previous plan cannot be approved
 or started for that selection. During an active run the choice is locked. Existing Plan/Approve/Start/
@@ -1018,7 +1041,8 @@ only and never calls Core. On Approve, a changed scope first builds an authorita
 plan with the existing mode-aware API. Only that returned plan can be approved.
 New acknowledgements, changed runtime/revision/node, or re-including infrastructure
 require reviewing the returned plan before another confirmation. No separate Build
-click is required for the scope change. Libraries remain Apply -> Verify; Start is
+click is required for the scope change. Libraries use Apply with per-library
+health checks, followed by optional post-install actions; Start is
 unavailable while the displayed plan differs from the selected scope. This replaces
 the earlier B4 instruction requiring an explicit fresh Build after checkbox changes.
 

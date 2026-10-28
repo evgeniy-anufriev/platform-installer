@@ -245,18 +245,15 @@ def application_execution_model(snapshot, image_lock=None, library_order=None, s
     targets.update(host for host, placements in snapshot.get('topology', {}).get('placementsByHost', {}).items()
                    if placements)
     if active_libraries:
-        for index, action in enumerate(('apply', 'verify')):
-            actions.append(dict(id='applications:' + action, type=OPERATIONS[index],
-                                targets=sorted(targets),
-                                dependsOn=['applications:apply'] if index else [],
-                                mutating=index == 0, reboot='NONE',
-                                summary=action.capitalize() + ' application libraries'))
+        actions.append(dict(id='applications:apply', type=OPERATIONS[0], targets=sorted(targets),
+                            dependsOn=[], mutating=True, reboot='NONE',
+                            summary='Apply application libraries'))
     post_install = any(active_script(script, instance) and script.get('phase') == 'post_install'
                        for library in active_libraries.values() for instance in library.get('instances', {}).values()
                        for script in library.get('scripts', []) + instance.get('scripts', []))
     if post_install:
         actions.append(dict(id='applications:post-install', type=POST_INSTALL, targets=sorted(targets),
-                            dependsOn=['applications:verify'], mutating=True, reboot='NONE',
+                            dependsOn=['applications:apply'], mutating=True, reboot='NONE',
                             summary='Run post-install application scripts'))
     return dict(actions=actions, postInstall=post_install, artifactRequirements=requirements,
                 runtimeSecretRequirements=sorted(secrets.values(), key=lambda item: item['requirementRef']),

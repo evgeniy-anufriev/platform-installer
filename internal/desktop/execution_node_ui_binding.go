@@ -102,7 +102,8 @@ func (a *App) ProbeExecutionNodeHostKey() HostKeyProbeResult {
 	}
 	a.pauseRecoveredObservationLocked()
 	a.pendingHostKey = nil
-	a.invalidateDynamicBindingLocked()
+	// A probe does not replace an approved pin. Retain the current binding
+	// until the operator approves an actually different connection/key.
 	id, address, port, err := a.selectedSavedExecutionServerLocked()
 	if err != nil {
 		return hostKeyProbeFailure(projectErrorCode(err))
@@ -180,6 +181,21 @@ func (a *App) ApproveExecutionNodeHostKey(probeID string) HostKeyProbeResult {
 		return hostKeyProbeFailure("ORPHAN_RUN_IDENTITY_UNVERIFIED")
 	}
 	verified, bundleErr := a.verifySelectedBundleLocked()
+	if previous := a.binding; previous != nil && previous.dynamic &&
+		previous.node.ID == id && previous.node.Address == address && previous.node.Port == port &&
+		previous.node.User == identity.Username && previous.credentialGeneration == identity.Generation &&
+		previous.node.HostKey.Fingerprint == pending.fingerprint {
+		sameRuntime := bundleErr == nil && previous.reader.runtimeRelease["bundleDigest"] == verified.Digest
+		if bundleErr != nil && previous.bundleRoot == "" && len(previous.reader.runtimeRelease) == 0 {
+			sameRuntime = true // Trust may be confirmed before runtime preparation.
+		}
+		if sameRuntime {
+			if current, err := a.resolveTrustedExecutionConnectionLocked(); err == nil && current == previous {
+				return HostKeyProbeResult{Status: "APPROVED", SafeLabel: a.execution.context.SafeLabel,
+					KeyType: pending.keyType, Fingerprint: pending.fingerprint}
+			}
+		}
+	}
 	knownHosts, fileInfo, directory, directoryInfo, digest, err := createSessionKnownHosts(address, port, pending.keyType, pending.publicKey)
 	if err != nil {
 		return hostKeyProbeFailure("EXECUTION_NODE_BINDING_INVALID")
@@ -229,6 +245,12 @@ func (a *App) verifySelectedBundleLocked() (executionbundle.Verified, error) {
 }
 
 func (a *App) invalidateDynamicBindingLocked() {
+	a.invalidateDynamicBindingRuntimeInputsLocked(false)
+}
+
+// SSH credential replacement still revokes node readiness and plans, but the
+// project-bound pending inputs can be re-attested without importing them again.
+func (a *App) invalidateDynamicBindingRuntimeInputsLocked(retainInputs bool) {
 	if a.binding == nil || !a.binding.dynamic {
 		return
 	}
@@ -244,7 +266,11 @@ func (a *App) invalidateDynamicBindingLocked() {
 	a.continuation = nil
 	a.installationPlanID = ""
 	a.installationGeneration++
-	a.clearRuntimeSecretDescriptorEvidenceLocked()
+	if retainInputs {
+		a.runtimeSecretEvidence = nil
+	} else {
+		a.clearRuntimeSecretDescriptorEvidenceLocked()
+	}
 }
 
 func probeExecutionHostKey(ctx context.Context, address string, port uint16) (string, string, string, error) {

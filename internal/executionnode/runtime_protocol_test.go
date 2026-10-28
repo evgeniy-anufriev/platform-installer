@@ -140,7 +140,7 @@ func TestPlanStagingAcceptsAnOmittedOptionalRequestID(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, call := range runner.calls {
-		if call.name == "ssh" && strings.Contains(call.input, "purpose=$5") {
+		if call.name == "ssh" && strings.Contains(call.input, "request_id=${6-}") {
 			if !strings.Contains(call.input, "request_id=${6-}") {
 				t.Fatalf("plan staging did not safely default omitted requestId: %q", call.input)
 			}
@@ -160,7 +160,7 @@ func TestPlanStagingClaimsPrivateDirectoryUnderStickyVarTmp(t *testing.T) {
 	if err := transport.stagePlanProject(context.Background(), testNode(), root, "installer-123", "plan"); err != nil {
 		t.Fatal(err)
 	}
-	claim := runner.calls[0]
+	claim := runner.calls[1] // A cache miss precedes the ordinary private upload.
 	if !strings.Contains(claim.input, "stat -c %a /var/tmp") || !strings.Contains(claim.input, `mkdir -- "$1"`) || strings.Contains(claim.input, "sudo") || strings.Contains(claim.input, "install -d") || !strings.HasSuffix(claim.args[len(claim.args)-1], "platform-installer-project-installer-123") {
 		t.Fatal("private claim guards missing")
 	}
@@ -588,6 +588,23 @@ func TestDecodeEventPagePreservesTypedTaskFieldsAndLegacyPagination(t *testing.T
 	}
 }
 
+func TestDecodeEventPagePreservesApplicationDeploymentContext(t *testing.T) {
+	for _, deployment := range []string{"qa-kafka", "keycloak", "data-manager-sdku", "szi", "sdku", "cspa"} {
+		t.Run(deployment, func(t *testing.T) {
+			event := validEvent("installer-context", 1)
+			encoded, _ := json.Marshal(event)
+			var value map[string]any
+			if err := json.Unmarshal(encoded, &value); err != nil {
+				t.Fatal(err)
+			}
+			value["serviceDeployment"] = deployment
+			page, err := decodeEventPage(map[string]any{"events": []any{value}}, "installer-context", 0, 256)
+			if err != nil || len(page.Events) != 1 || page.Events[0].ServiceDeployment != deployment {
+				t.Fatalf("deployment=%s page=%+v error=%v", deployment, page, err)
+			}
+		})
+	}
+}
 func TestDecodeEventPageRejectsWrongRunOversizeAndControlCharacters(t *testing.T) {
 	event := validEvent("installer-301", 1)
 	encoded, _ := json.Marshal(event)

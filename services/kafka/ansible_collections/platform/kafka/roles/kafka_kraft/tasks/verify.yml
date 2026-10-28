@@ -11,9 +11,7 @@
     kafka_quorum_diagnostic_member: >-
       {{ (_platform_kafka_broker_instances | first)
          if _platform_kafka_scram_enabled | default(false) | bool else
-         ((_platform_kafka_local_controller_instances | first)
-          if _platform_kafka_local_controller_instances | length > 0
-          else (_platform_kafka_controller_instances | first)) }}
+         (_platform_kafka_controller_instances | first) }}
   changed_when: false
 
 - name: Проверка кворума с помощью администратора с SCRAM или существующего подключения контроллера
@@ -30,7 +28,9 @@
   vars:
     kafka_cli_member: "{{ _platform_kafka_verify_broker }}"
     kafka_cli_purpose: "{{ 'admin' if _platform_kafka_scram_enabled | default(false) | bool else 'client' }}"
-  when: inventory_hostname == _platform_kafka_verify_broker.host
+  when:
+    - inventory_hostname == _platform_kafka_verify_broker.host
+    - not (_platform_kafka_scram_enabled | default(false) | bool)
 
 - name: Запрос регистрации брокера Kafka через вычисленное соединение CLI
   ansible.builtin.include_tasks: run_cli_command.yml

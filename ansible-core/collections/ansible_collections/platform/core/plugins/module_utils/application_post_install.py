@@ -27,10 +27,11 @@ def validation_prefix(manifest):
     """
     operations = manifest['operations']
     terminal = [item for item in operations if item['operation'] == OPERATION]
-    if len(terminal) != 1 or terminal != operations[-1:] or len(operations) < 3:
+    if len(terminal) != 1 or terminal != operations[-1:] or len(operations) < 2:
         raise ValueError('APPLICATION_POST_INSTALL_ORDER_INVALID')
     last = terminal[0]
-    if ([item['operation'] for item in operations[-3:]] != OPERATIONS or
+    lifecycle = OPERATIONS[:2] if operations[-2]['operation'] == OPERATIONS[1] else OPERATIONS[:1]
+    if ([item['operation'] for item in operations[-len(lifecycle)-1:]] != lifecycle + [OPERATION] or
             last['operationId'] != 'applications:post-install' or
             manifest.get('executionMode') == 'INFRASTRUCTURE_VERIFY_ONLY'):
         raise ValueError('APPLICATION_POST_INSTALL_ORDER_INVALID')

@@ -1,5 +1,6 @@
 """Provider batch dependency projection. No product APIs, scheduling or secrets."""
 import hashlib
+import json
 try:
     from .application_selection import scope_for
 except ImportError:
@@ -12,6 +13,23 @@ def instance_key(library_id, instance_id):
 
 def batch_id(connection):
     return 'provider-' + hashlib.sha256(('/'.join((connection['libraryId'], connection['applicationId'], connection['name']))).encode()).hexdigest()[:24]
+
+
+def _group_hooks(hooks):
+    result, previous_key = [], None
+    for hook in hooks:
+        if not hook.get('batch', False):
+            result.append(hook)
+            previous_key = None
+            continue
+        key = json.dumps([hook['id'], hook['sourceDigest'], hook.get('order', 0),
+                          hook.get('runOn', 'target'), hook['target'], hook['secretInputs']], sort_keys=True)
+        if result and key == previous_key:
+            result[-1]['invocations'].append(hook['argv'])
+        else:
+            result.append(dict(hook, argv=[], invocations=[hook['argv']]))
+        previous_key = key
+    return result
 
 
 def prepare_integrations(snapshot, jobs):
@@ -34,7 +52,7 @@ def prepare_integrations(snapshot, jobs):
                         raise ValueError('APPLICATION_ACCOUNT_CAPABILITY_UNSUPPORTED')
                     credentials = account['credentials']
                     if (set(credentials) != {'username', 'password'} or credentials['username']['source']['kind'] != 'literal'
-                            or credentials['password']['source']['kind'] not in ('runtime_secret_ref', 'vault_ref')):
+                            or credentials['password']['source']['kind'] not in ('runtime_secret_ref', 'vault_ref', 'generated')):
                         raise ValueError('APPLICATION_PROVIDER_CREDENTIAL_INVALID')
                     identity = consumer + '/' + alias
                     batch['accounts'].append(dict(id=identity, libraryId=library_id, instanceId=app_id,
@@ -63,6 +81,7 @@ def prepare_integrations(snapshot, jobs):
         if len(set(usernames)) != len(usernames):
             raise ValueError('APPLICATION_ACCOUNT_IDENTITY_CONFLICT')
         batch['hooks'].sort(key=lambda item: (item.get('order', 0), item['scope'] != 'library', item['consumerLibraryId'], item['consumerInstanceId'], item['id']))
+        batch['hooks'] = _group_hooks(batch['hooks'])
         batch['accounts'].sort(key=lambda item: item['id'])
     return dict(batches=sorted(batches.values(), key=lambda item: item['id']),
                 dependencies={key: sorted(value) for key, value in dependencies.items()},

@@ -9,6 +9,10 @@ Type=simple
 User={{ platform_kafka_user }}
 Group={{ platform_kafka_group }}
 EnvironmentFile={{ kafka_member.systemd_environment_pattern }}
+{% if _platform_kafka_member_named_listeners | selectattr('purpose', 'equalto', 'controller') | selectattr('securityProtocol', 'equalto', 'SASL_SSL') | list | length > 0 %}
+LoadCredentialEncrypted=kafka-jaas:{{ kafka_member.config_directory }}/controller-jaas.cred
+Environment="KAFKA_OPTS=-Djava.security.auth.login.config=%d/kafka-jaas"
+{% endif %}
 ExecStart={{ platform_kafka_install_directory }}/bin/kafka-server-start{{ platform_kafka_script_extension }} $KAFKA_CONFIG_FILE
 Restart=on-failure
 RestartSec=5

@@ -1,0 +1,37 @@
+---
+- name: Определение назначения клиента IPv4 для каждого размещения Docker
+  ansible.builtin.command:
+    argv: [getent, ahostsv4, "{{ application_vault_provider.routeAddress }}"]
+  vars:
+    application_vault_provider: "{{ platform_application_vault_runtime[platform_vault_application_job.providerId] }}"
+  delegate_to: "{{ item }}"
+  loop: "{{ platform_vault_application_job.hosts }}"
+  register: application_vault_addresses
+  changed_when: false
+
+- name: Определение исходного маршрута IPv4 для каждого фактического размещения Docker
+  ansible.builtin.command:
+    argv: [ip, -json, route, get, "{{ item.stdout.split()[0] }}"]
+  vars:
+    application_vault_provider: "{{ platform_application_vault_runtime[platform_vault_application_job.providerId] }}"
+  delegate_to: "{{ item.item }}"
+  loop: "{{ application_vault_addresses.results }}"
+  register: application_vault_routes
+  changed_when: false
+
+- name: Чтение подсети моста LXC IPv4 в каждом размещении Docker
+  ansible.builtin.command:
+    argv: [ip, -json, -4, address, show, dev, "{{ hostvars[item].platform_docker_lxc_bridge | default('lxcbr0') }}"]
+  delegate_to: "{{ item }}"
+  loop: "{{ platform_vault_application_job.hosts }}"
+  register: application_vault_lxc_addresses
+  changed_when: false
+
+- name: Сохранение обнаруженных маршрутов и мостов только в текущем вызове
+  ansible.builtin.set_fact:
+    platform_application_vault_networks: >-
+      {{ platform_application_vault_networks | default({}) | combine({application_vault_network_key: {
+        'routes': application_vault_routes.results | map(attribute='stdout') | map('from_json') | list,
+        'bridges': application_vault_lxc_addresses.results | map(attribute='stdout') | map('from_json') | list
+      }}) }}
+  no_log: true

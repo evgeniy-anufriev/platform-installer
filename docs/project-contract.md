@@ -291,6 +291,25 @@ Execution Node scripts use `execution: once`. The argument contains selected
 consumer IDs, connection aliases, endpoint/parameter placements and public URLs;
 it contains no accounts, credentials or runtime environment.
 
+Infrastructure selection follows the same invocation-only ownership:
+`skipServiceDeployments` contains deployment IDs, never service types or hosts.
+Request v1alpha8, plan v1alpha11 and manifest v1alpha8 bind the sorted selection
+and Core-derived `serviceExecutionScope` to approval and fresh Start. The complete
+snapshot remains authoritative for validation, connections and provider jobs.
+For a partial selection, skipped deployments have neither SERVICE_APPLY nor
+SERVICE_VERIFY, own installation artifacts/inputs/outputs or own PKI delivery.
+The full infrastructure SERVICE_PASSWORD credential set remains required, as in
+skipInfrastructureVerify. Selected consumers retain resource/account reconciliation,
+Vault/Agent delivery and endpoint integration. Integration writes may still modify
+an existing provider. Skipping asserts neither readiness nor Verify success.
+When all infrastructure checkboxes are cleared, UI uses the established
+APPLICATION_LIBRARIES_ONLY + skipInfrastructureVerify path, rather than another
+all-infrastructure execution mode. A skipped Vault cannot supply
+CURRENT_RUN_BOOTSTRAP; its consumers use the existing runtime token input.
+Selection is not saved in portable project YAML. Changing it requires a fresh
+plan and approval. A runtime without ServiceSelection/v1alpha1 refuses partial
+selection before image preparation or plan staging.
+
 `skipApplicationLibraries` is an invocation-only list of library instance IDs,
 not a portable desired-state setting. Request v1alpha7, plan v1alpha8 and
 execution manifest v1alpha6 bind it and the Core-derived execution scope.
@@ -317,6 +336,23 @@ and execution target come from the selected provider, without consumer wrapper
 scripts. `secretInputs` may reference a consumer `secret_binding` by `binding`;
 an explicitly optional absent binding supplies no input. Credential values are
 still delivered only through the existing protected files. Verify is unchanged.
+Package manifest v1alpha4 adds opt-in `batch: true` only for `provider_prepare`
+and `connection_apply`, with `execution: once`. Older schemas remain closed.
+Within one ready provider batch, only adjacent hooks with the same script ID,
+allowlisted source digest, order, target, execution location and exact secret
+references share an invocation. Original argument arrays retain their order in
+a private JSON input at `PLATFORM_SCRIPT_BATCH_FILE`; a batch script receives
+no command-line arguments. Singleton opt-ins receive a one-element array.
+The generic runner supplies only this file and the usual secret-file paths;
+product-specific authentication and operation dispatch remain inside the script.
+The timeout is 300 seconds times the original invocation count. Failure stops
+later operations; this is not an atomic transaction. Dependencies are derived
+before grouping, and accounts/Vault delivery wait for the complete batch.
+Each invocation restores directory ownership and uses the ordinary idempotent
+builtin copy for its allowlisted source; script source readiness is not cached.
+Secret inputs are freshly copied and cleaned
+for every invocation, including failure; batch input also uses this cleanup.
+
 Slots in every library package may specify `start_priority` (default 100); Apply orders selected
 logical instances by this value and then by instance ID, completing each
 instance's readiness and after-ready scripts before starting the next.
