@@ -17,12 +17,11 @@
 - name: Проверка отсутствия пересечений каталогов библиотек перед записью файлов
   ansible.builtin.assert:
     that:
-      - application_root != item.libraryPath
-      - not application_root.startswith(item.libraryPath + '/')
-      - not item.libraryPath.startswith(application_root + '/')
+      - application_root != item
+      - not application_root.startswith(item + '/')
+      - not item.startswith(application_root + '/')
     fail_msg: APPLICATION_LIBRARY_PATH_OVERLAP
-  loop: "{{ platform_application_preflight_jobs | default([]) }}"
-  when: item.libraryId != application_runtime_job.libraryId
+  loop: "{{ platform_application_preflight_jobs | default([]) | rejectattr('libraryId', 'equalto', application_runtime_job.libraryId) | map(attribute='libraryPath') | unique(case_sensitive=true) | list }}"
   no_log: true
 
 - name: Привязка общих путей размещения для Apply и Verify

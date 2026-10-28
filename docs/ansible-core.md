@@ -140,7 +140,12 @@ These paths replace the former root-level `application-*.yml` files; ordinary
 inventory and the Core/Go protocol are unchanged.
 All selected placements pass preflight before materialization. Each library/host
 has a shared `.env` and base Compose; per-instance Compose/config files use
-validated package render descriptors. Apply uses native Compose and a generated
+validated package render descriptors. Source configs are read once on the Execution
+Node with their SHA-256 computed from the returned bytes; final symlinks,
+nonregular files and observed in-read mutations are rejected. Source content stays
+under `no_log` and passes the existing secret-content validation. Overlap checks
+compare unique paths of other libraries on the same host, preserving case.
+Apply uses native Compose and a generated
 config-digest ownership label to recover an interrupted configuration activation.
 If ordinary Compose startup fails, Ansible handles the failure with `rescue`
 and makes one `up --force-recreate` attempt for that exact instance. Both attempts
