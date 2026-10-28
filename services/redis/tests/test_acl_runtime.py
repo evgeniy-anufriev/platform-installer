@@ -2,6 +2,7 @@ import copy
 import getpass
 import grp
 import hashlib
+import json
 import os
 import re
 import shutil
@@ -80,7 +81,10 @@ class RedisACLRuntimeTests(unittest.TestCase):
                                       'tls-ca-cert-file ' + str(pki / 'ca-chain.pem') + '\n'
                                       'tls-auth-clients yes\nunixsocket ' + str(unix_socket) + '\nunixsocketperm 700\n'
                                       'aclfile ' + str(root / (kind + '.users.acl')) + '\n'
-                                      'dir ' + str(root) + '\n', encoding='utf-8')
+                                      'dir ' + str(root) + '\n' +
+                                      ('sentinel sentinel-user default\nsentinel sentinel-pass ' +
+                                       json.dumps('fixture-sentinel-password') + '\n' if kind == 'sentinel' else ''),
+                                      encoding='utf-8')
                     process = subprocess.Popen(['redis-server', str(config)] + (['--sentinel'] if kind == 'sentinel' else []),
                                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, umask=0o077)
                     processes.append(process)
@@ -135,9 +139,63 @@ class RedisACLRuntimeTests(unittest.TestCase):
                 self.assertIn('changed=0', run(prepare))
                 owned = dict(variables, _platform_redis_has_persistent_state=True,
                              _platform_redis_acl_overwrite_allowed=True)
-                run(prepare, owned)
+                self.assertIn('changed=0', run(prepare, owned))
                 self.assertIn('changed=0', run(prepare, owned))
                 self.assertIn('changed=0', run(fixture_runtime))
+
+                member = yaml.safe_load((ROLE / 'tasks/member.yml').read_text(encoding='utf-8'))
+                config_tasks = [task for task in member if task['name'] in (
+                    'Подключение файла Redis ACL без перезаписи сохраненного состояния репликации',
+                    'Подключение ACL-файла Sentinel, сохранив сведения о выбранном мастере',
+                    'Настройка пароля узла Sentinel из секрета времени выполнения')]
+                self.assertEqual(3, len(config_tasks))
+                tracked = [root / (kind + suffix) for kind in ['redis', 'sentinel']
+                           for suffix in ['.users.acl', '.conf']]
+                for _ in range(2):
+                    for index, kind in enumerate(['redis', 'sentinel']):
+                        cli = ['redis-cli', '--raw', '--tls', '--cacert', str(pki / 'ca-chain.pem'),
+                               '--cert', str(pki / 'certificate.pem'), '--key', str(pki / 'private-key.pem'),
+                               '-h', '127.0.0.1', '-p', str(ports[index])]
+                        cli_env = dict(os.environ, REDISCLI_AUTH='fixture-' + kind + '-password')
+                        for command in [['ACL', 'SAVE'],
+                                        ['CONFIG', 'REWRITE'] if kind == 'redis' else ['SENTINEL', 'FLUSHCONFIG']]:
+                            saved = subprocess.run(cli + command, env=cli_env, capture_output=True,
+                                                   text=True, timeout=15)
+                            self.assertEqual(saved.returncode, 0, 'Native save/rewrite failed')
+                            self.assertEqual(saved.stdout.strip(), 'OK')
+                    before = [path.read_bytes() for path in tracked]
+                    self.assertIn('changed=0', run(prepare + config_tasks, owned))
+                    self.assertEqual(before, [path.read_bytes() for path in tracked])
+                    self.assertIn('changed=0', run(prepare + config_tasks, owned))
+
+                sentinel_config = root / 'sentinel.conf'
+                original_sentinel_config = sentinel_config.read_text(encoding='utf-8')
+                try:
+                    for value in ['fixture!plain', 'fixture with spaces', 'fixture\\slash', 'fixture"quote']:
+                        Path(secrets['sentinel']).write_text(value, encoding='utf-8')
+                        encoded_values = [json.dumps(value)]
+                        if ' ' not in value and '"' not in value:
+                            encoded_values.append(value)
+                        for encoded in encoded_values:
+                            sentinel_config.write_text(re.sub(r'(?m)^sentinel sentinel-pass .+$',
+                                lambda _: 'sentinel sentinel-pass ' + encoded, original_sentinel_config), encoding='utf-8')
+                            before = sentinel_config.read_bytes()
+                            self.assertIn('changed=0', run([prepare[0]] + config_tasks, owned))
+                            self.assertEqual(before, sentinel_config.read_bytes())
+                    Path(secrets['sentinel']).write_text('fixture-sentinel-password', encoding='utf-8')
+                    sentinel_config.write_text(re.sub(r'(?m)^sentinel sentinel-pass .+$',
+                        'sentinel sentinel-pass wrong-fixture-value', original_sentinel_config), encoding='utf-8')
+                    self.assertIn('changed=1', run([prepare[0]] + config_tasks, owned))
+                    self.assertIn('changed=0', run([prepare[0]] + config_tasks, owned))
+                finally:
+                    Path(secrets['sentinel']).write_text('fixture-sentinel-password', encoding='utf-8')
+                    sentinel_config.write_text(original_sentinel_config, encoding='utf-8')
+
+                redis_config = root / 'redis.conf'
+                redis_config.write_text(re.sub(r'(?m)^aclfile .+\n', '', redis_config.read_text()), encoding='utf-8')
+                self.assertIn('changed=1', run(prepare + config_tasks, owned))
+                self.assertIn('changed=0', run(prepare + config_tasks, owned))
+
                 redis_acl = root / 'redis.users.acl'
                 redis_password_hash = hashlib.sha256(b'fixture-redis-password').hexdigest()
                 redis_acl.write_text(redis_acl.read_text(encoding='utf-8').replace(redis_password_hash, '0' * 64),

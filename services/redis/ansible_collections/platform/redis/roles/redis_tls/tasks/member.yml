@@ -50,11 +50,20 @@
   ansible.builtin.include_tasks: acl_files.yml
 
 - name: Подключение файла Redis ACL без перезаписи сохраненного состояния репликации
+  vars:
+    _platform_redis_saved_config: >-
+      {{ ((_platform_redis_acl_configs | default({})).get('results', [])
+          | selectattr('item', 'equalto', 'redis') | map(attribute='content', default='')
+          | first | default('')) | b64decode }}
   ansible.builtin.lineinfile:
     path: "{{ redis_member.config_directory }}/redis.conf"
     regexp: '^\s*aclfile\s+'
     line: "aclfile {{ redis_member.config_directory }}/redis.users.acl"
   register: _platform_redis_acl_config
+  when: >-
+    (_platform_redis_saved_config | regex_findall('(?m)^[ \t]*aclfile[ \t]+(.+?)[ \t]*$'))
+    not in [[redis_member.config_directory ~ '/redis.users.acl'],
+            [(redis_member.config_directory ~ '/redis.users.acl') | to_json]]
   no_log: true
 
 - name: Удаление устаревшего requirepass Redis после прикрепления хешированного ACL
@@ -98,12 +107,22 @@
   when: "'sentinel' in redis_member.roles"
 
 - name: "Подключение ACL-файла Sentinel, сохранив сведения о выбранном мастере"
+  vars:
+    _platform_sentinel_saved_config: >-
+      {{ ((_platform_redis_acl_configs | default({})).get('results', [])
+          | selectattr('item', 'equalto', 'sentinel') | map(attribute='content', default='')
+          | first | default('')) | b64decode }}
   ansible.builtin.lineinfile:
     path: "{{ redis_member.config_directory }}/sentinel.conf"
     regexp: '^\s*aclfile\s+'
     line: "aclfile {{ redis_member.config_directory }}/sentinel.users.acl"
   register: _platform_sentinel_acl_config
-  when: "'sentinel' in redis_member.roles"
+  when:
+    - "'sentinel' in redis_member.roles"
+    - >-
+      (_platform_sentinel_saved_config | regex_findall('(?m)^[ \t]*aclfile[ \t]+(.+?)[ \t]*$'))
+      not in [[redis_member.config_directory ~ '/sentinel.users.acl'],
+              [(redis_member.config_directory ~ '/sentinel.users.acl') | to_json]]
   no_log: true
 
 - name: "Удаление устаревшей директивы requirepass Sentinel после подключения ACL с хешами паролей"
@@ -125,12 +144,31 @@
   no_log: true
 
 - name: Настройка пароля узла Sentinel из секрета времени выполнения
+  vars:
+    _platform_sentinel_saved_config: >-
+      {{ ((_platform_redis_acl_configs | default({})).get('results', [])
+          | selectattr('item', 'equalto', 'sentinel') | map(attribute='content', default='')
+          | first | default('')) | b64decode }}
+    _platform_sentinel_peer_password_value: >-
+      {{ lookup('ansible.builtin.file', platform_redis_secret_files[platform_redis_sentinel_credential.passwordSecretRef]) }}
+    _platform_sentinel_peer_password_forms: >-
+      {{ [_platform_sentinel_peer_password_value | to_json] +
+         ([_platform_sentinel_peer_password_value]
+          if not (_platform_sentinel_peer_password_value is search('[\s\x00-\x1f\x7f]'))
+             and '"' not in _platform_sentinel_peer_password_value
+             and "'" not in _platform_sentinel_peer_password_value else []) }}
+    _platform_sentinel_peer_password_lines: >-
+      {{ _platform_sentinel_saved_config | regex_findall('(?m)^[ \t]*sentinel[ \t]+sentinel-pass[ \t]+(.+?)[ \t]*$') }}
   ansible.builtin.lineinfile:
     path: "{{ redis_member.config_directory }}/sentinel.conf"
     regexp: '^sentinel sentinel-pass\s+'
     line: "sentinel sentinel-pass {{ lookup('ansible.builtin.file', platform_redis_secret_files[platform_redis_sentinel_credential.passwordSecretRef]) | to_json }}"
   register: _platform_sentinel_peer_password
-  when: "'sentinel' in redis_member.roles"
+  when:
+    - "'sentinel' in redis_member.roles"
+    - >-
+      _platform_sentinel_peer_password_lines | length != 1
+      or _platform_sentinel_peer_password_lines[0] not in _platform_sentinel_peer_password_forms
   no_log: true
 
 - name: "Перечитывание unit-файлов systemd после обновления служб Redis"

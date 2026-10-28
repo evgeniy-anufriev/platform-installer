@@ -101,7 +101,9 @@ def main():
                             default = line
                     retained = [line for line in content.splitlines() if line.strip() and shlex.split(line)[1] != 'default']
                     proposed = '\n'.join([default] + retained) + '\n'
-                    if proposed != content:
+                    # ACL SAVE orders users itself and adds default-user flags.
+                    # Keep that serialization when the effective ACL is unchanged.
+                    if not exists or comparable(checked_lines(proposed, args['password'])) != comparable(checked_lines(content, args['password'], True)):
                         descriptor, temporary = tempfile.mkstemp(prefix='.users-acl-', dir=directory)
                         try:
                             with os.fdopen(descriptor, 'w', encoding='utf-8') as stream:
