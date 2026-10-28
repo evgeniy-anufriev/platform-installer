@@ -47175,40 +47175,49 @@ platforms:
       platform_haproxy_phase: start
 
 @@END
-@@PORTABLE {"path":"services/haproxy/playbooks/integrate.yml","mode":420,"size":1693,"sha256":"508ba68c139a6cb7355c637e26c9e2a8f7d2522e84ce743f34fa42162ab6287e","index":0,"count":1,"encoding":"utf-8","payloadBytes":1693}
+@@PORTABLE {"path":"services/haproxy/playbooks/integrate.yml","mode":420,"size":2161,"sha256":"ae49bfad8a6be1ffdb45d0bcfc36cd67c125be39c7b1f7ac8913de9bb5c2aafa","index":0,"count":1,"encoding":"utf-8","payloadBytes":2161}
 ---
 - name: Подготовка и проверка кандидата HAProxy для одного источника конечной точки
   hosts: "{{ hostvars['localhost'].platform_service_integration_projection.haproxyHosts | default([]) if hostvars is defined else [] }}"
   become: true
   gather_facts: false
   any_errors_fatal: true
-  roles:
-    - role: platform.haproxy.haproxy
-      tasks_from: partial_prepare
-      platform_haproxy_phase: prepare
-      platform_haproxy_partial_deployment_id: "{{ hostvars['localhost']._platform_integration_source_id }}"
+  tasks:
+    - name: Подготовка источника общим частичным хуком HAProxy
+      ansible.builtin.import_role:
+        name: platform.haproxy.haproxy
+        tasks_from: partial_prepare
+      vars:
+        platform_haproxy_phase: prepare
+        platform_haproxy_partial_deployment_id: "{{ hostvars['localhost']._platform_integration_source_id }}"
 
 - name: Активация backend источника после проверки конфигураций на всём кластере
   hosts: "{{ hostvars['localhost'].platform_service_integration_projection.haproxyHosts | default([]) if hostvars is defined else [] }}"
   become: true
   gather_facts: false
   any_errors_fatal: true
-  roles:
-    - role: platform.haproxy.haproxy
-      tasks_from: activate
-      platform_haproxy_phase: activate
-      platform_haproxy_partial_deployment_id: "{{ hostvars['localhost']._platform_integration_source_id }}"
+  tasks:
+    - name: Активация подготовленного источника HAProxy
+      ansible.builtin.import_role:
+        name: platform.haproxy.haproxy
+        tasks_from: activate
+      vars:
+        platform_haproxy_phase: activate
+        platform_haproxy_partial_deployment_id: "{{ hostvars['localhost']._platform_integration_source_id }}"
 
 - name: Перечитывание конфигурации HAProxy после активации backend-сервиса источника
   hosts: "{{ hostvars['localhost'].platform_service_integration_projection.haproxyHosts | default([]) if hostvars is defined else [] }}"
   become: true
   gather_facts: false
   any_errors_fatal: true
-  roles:
-    - role: platform.haproxy.haproxy
-      tasks_from: partial_reload
-      platform_haproxy_phase: start
-      platform_haproxy_partial_deployment_id: "{{ hostvars['localhost']._platform_integration_source_id }}"
+  tasks:
+    - name: Перечитывание конфигурации общим частичным хуком HAProxy
+      ansible.builtin.import_role:
+        name: platform.haproxy.haproxy
+        tasks_from: partial_reload
+      vars:
+        platform_haproxy_phase: start
+        platform_haproxy_partial_deployment_id: "{{ hostvars['localhost']._platform_integration_source_id }}"
 
 @@END
 @@PORTABLE {"path":"services/haproxy/playbooks/reconcile.yml","mode":420,"size":140,"sha256":"ba35562833dbddb3c46c694d22c697ea2b69a67dcf455e0490747a923278af94","index":0,"count":1,"encoding":"utf-8","payloadBytes":140}
@@ -47264,7 +47273,7 @@ artifacts: []
 compatibilityRef: compatibility.yml
 
 @@END
-@@PORTABLE {"path":"services/integrations/playbooks/apply-endpoint.yml","mode":420,"size":2376,"sha256":"25ccffdaeba2d071c41cc473d275b97484abb55311bc749b7c606b16c4a3cb51","index":0,"count":1,"encoding":"utf-8","payloadBytes":2376}
+@@PORTABLE {"path":"services/integrations/playbooks/apply-endpoint.yml","mode":420,"size":2569,"sha256":"4bcf7a06219465a1a14908c9ec8328411daeb3190d47fecc04f3b829b486f817","index":0,"count":1,"encoding":"utf-8","payloadBytes":2569}
 ---
 - name: Определение конечной точки источника и её провайдеров без внесения изменений
   hosts: localhost
@@ -47283,10 +47292,13 @@ compatibilityRef: compatibility.yml
   gather_facts: false
   become: true
   any_errors_fatal: true
-  roles:
-    - role: platform.haproxy.haproxy
-      tasks_from: endpoint_verify
-      platform_haproxy_partial_deployment_id: "{{ hostvars['localhost']._platform_integration_source_id }}"
+  tasks:
+    - name: Проверка источника через явный вход HAProxy без применения конфигурации
+      ansible.builtin.import_role:
+        name: platform.haproxy.haproxy
+        tasks_from: endpoint_verify
+      vars:
+        platform_haproxy_partial_deployment_id: "{{ hostvars['localhost']._platform_integration_source_id }}"
       when: platform_endpoint_verify_only | default(false) | bool
 
 - import_playbook: ../../bind/playbooks/integrate.yml
@@ -48551,7 +48563,7 @@ dependencies: []
       changed_when: false
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/apply.yml","mode":420,"size":24967,"sha256":"5095bfeb9eb328c648fb988f3dc7cbb59361ade5373f3b824b97dbc2a69c07b4","index":0,"count":1,"encoding":"utf-8","payloadBytes":24967}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/apply.yml","mode":420,"size":24416,"sha256":"72079af3631ef6b38ab1ab180945ab572557974c80c75d7fd5ca03618404a58d","index":0,"count":1,"encoding":"utf-8","payloadBytes":24416}
 ---
 - name: Проверка настроек ресурсов переносимой службы
   ansible.builtin.include_role:
@@ -48633,20 +48645,8 @@ dependencies: []
   loop_control:
     label: "{{ item.id | default('unknown') }}"
 
-- name: Инициализация нормализованного списка экземпляров службы Kafka
-  ansible.builtin.set_fact:
-    _platform_kafka_instances: []
-
-- name: Нормализация экземпляров службы Kafka в общую внутреннюю модель
-  ansible.builtin.include_tasks: normalize_member.yml
-  loop: "{{ _platform_kafka_input_instances }}"
-  loop_control:
-    loop_var: kafka_input_member
-    label: "{{ kafka_input_member.id }}"
-
-- name: Упорядочивание нормализованных экземпляров Kafka
-  ansible.builtin.set_fact:
-    _platform_kafka_instances: "{{ _platform_kafka_instances | sort(attribute='node_id') }}"
+- name: Нормализация экземпляров Kafka по настройкам текущего узла
+  ansible.builtin.include_tasks: normalize_members.yml
 
 - name: Получение наборов экземпляров службы Kafka
   ansible.builtin.set_fact:
@@ -49950,115 +49950,26 @@ dependencies: []
   when: not (platform_kafka_verify_only | bool)
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/normalize_member.yml","mode":420,"size":8389,"sha256":"609097759b65e03ec0eef18be553ac54fe3a62bf190f35f221db34755a082dfa","index":0,"count":1,"encoding":"utf-8","payloadBytes":8389}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/normalize_member.yml","mode":420,"size":592,"sha256":"69298ffa4601c925079f80e2d4e218a9a9fd7377063f0de25a159507ad6a02f3","index":0,"count":1,"encoding":"utf-8","payloadBytes":592}
 ---
-- name: Получение нормализованных примитивов экземпляра службы Kafka
+- name: Нормализация отдельного экземпляра через общий пакетный шаблон
   ansible.builtin.set_fact:
-    _platform_kafka_normalized_roles: "{{ kafka_input_member.roles | unique | sort }}"
-    _platform_kafka_normalized_config_directory: "{{ kafka_input_member.config_directory | default(platform_kafka_config_directory ~ '/' ~ platform_kafka_service_name ~ '/' ~ kafka_input_member.id) }}"
-    _platform_kafka_normalized_compatibility_unit: "{{ kafka_input_member._compatibility_unit | default({}) }}"
-    _platform_kafka_normalized_deployment_id: "{{ kafka_input_member.deployment_id | default(platform_kafka_deployment_id) }}"
-    _platform_kafka_normalized_unit_service: >-
-      {{ platform_kafka_name if ('broker' in kafka_input_member.roles and 'controller' in kafka_input_member.roles)
-         else (platform_kafka_name ~ '-broker' if 'broker' in kafka_input_member.roles else platform_kafka_name ~ '-controller') }}
-    _platform_kafka_normalized_member_number: "{{ kafka_input_member.id | regex_replace('^.*-', '') }}"
-
-- name: Получение нормализованного каталога времени выполнения экземпляра службы Kafka
-  ansible.builtin.set_fact:
-    _platform_kafka_normalized_runtime_directory: "{{ _platform_kafka_normalized_compatibility_unit.runtime_directory | default(platform_kafka_config_directory ~ '/' ~ platform_kafka_service_name ~ '-' ~ kafka_input_member.id) }}"
-
-- name: Получение нормализованных ресурсов времени выполнения экземпляра службы Kafka
-  ansible.builtin.set_fact:
-    _platform_kafka_normalized_legacy_unit_name: "{{ _platform_kafka_normalized_compatibility_unit.name | default(platform_kafka_service_name ~ '@' ~ platform_kafka_service_name ~ '-' ~ kafka_input_member.id) }}"
-    _platform_kafka_normalized_unit_name: "{{ _platform_kafka_normalized_unit_service }}@{{ _platform_kafka_normalized_deployment_id }}-{{ _platform_kafka_normalized_member_number }}.service"
-    _platform_kafka_normalized_unit_destination: "/etc/systemd/system/{{ _platform_kafka_normalized_unit_service }}@{{ _platform_kafka_normalized_deployment_id }}-{{ _platform_kafka_normalized_member_number }}.service"
-    _platform_kafka_normalized_environment_pattern: "{{ _platform_kafka_normalized_compatibility_unit.environment_pattern | default(_platform_kafka_normalized_runtime_directory ~ '/systemd.env') }}"
-    _platform_kafka_normalized_description: "{{ _platform_kafka_normalized_compatibility_unit.description | default('Apache Kafka ' ~ platform_kafka_version ~ ' KRaft member %i') }}"
-    _platform_kafka_normalized_listeners: "{{ kafka_input_member.listeners | default({}) }}"
-    _platform_kafka_normalized_client_listener_port: "{{ kafka_input_member.listeners | default({}) | dict2items | selectattr('value.purpose', 'equalto', 'client') | map(attribute='value.port') | list | first | default(0, true) }}"
-    _platform_kafka_normalized_controller_listener_port: "{{ kafka_input_member.listeners | default({}) | dict2items | selectattr('value.purpose', 'equalto', 'controller') | map(attribute='value.port') | list | first | default(0, true) }}"
-    _platform_kafka_normalized_listener_ports: >-
-      {{ ((kafka_input_member.listeners | default({}) | dict2items
-            | selectattr('value.purpose', 'in', (['client', 'interBroker'] if 'broker' in _platform_kafka_normalized_roles else ['__none__']))
-            | map(attribute='value.port') | map('int') | list)
-          + (kafka_input_member.listeners | default({}) | dict2items
-            | selectattr('value.purpose', 'equalto', 'controller')
-            | selectattr('value.purpose', 'equalto', ('controller' if 'controller' in _platform_kafka_normalized_roles else '__none__'))
-            | map(attribute='value.port') | map('int') | list)
-          if (kafka_input_member.listeners | default({}) | length > 0)
-          else []) | unique | sort }}
-
-- name: Построение нормализованной проекции конечных точек Kafka listeners
-  ansible.builtin.set_fact:
-    _platform_kafka_normalized_listener_endpoints: >-
-      {% set endpoints = [] %}
-      {% for pair in (kafka_input_member.listeners | default({}) | dict2items | sort(attribute='key')) %}
-      {% set listener = pair.value | combine({'name': pair.key}) %}
-      {% if (listener.purpose == 'controller' and 'controller' in _platform_kafka_normalized_roles) or (listener.purpose in ['client', 'interBroker'] and 'broker' in _platform_kafka_normalized_roles) %}
-      {% set _ = endpoints.append({
-        'name': listener.name,
-        'purpose': listener.purpose,
-        'security_protocol': listener.securityProtocol,
-        'bootstrap_host': listener.advertisedAddress | default(kafka_input_member.advertised_host),
-        'bootstrap_port': listener.port | int
-      }) %}
-      {% endif %}
-      {% endfor %}
-      {{ endpoints | to_json }}
-
-- name: Преобразование нормализованной проекции Kafka listeners в список Ansible
-  ansible.builtin.set_fact:
-    _platform_kafka_normalized_listener_endpoints: "{{ _platform_kafka_normalized_listener_endpoints | from_json }}"
-
-- name: Выбор нормализованного контроллера Kafka и конечных точек клиента
-  ansible.builtin.set_fact:
-    _platform_kafka_normalized_controller_endpoint: >-
-      {{ _platform_kafka_normalized_listener_endpoints
-         | selectattr('purpose', 'equalto', 'controller') | list | first | default({}, true) }}
-    _platform_kafka_normalized_client_endpoint: >-
-      {{ _platform_kafka_normalized_listener_endpoints
-         | selectattr('purpose', 'equalto', 'client') | list | first | default({}, true) }}
-
-- name: Сбор нормализованного экземпляра службы Kafka
-  ansible.builtin.set_fact:
-    _platform_kafka_normalized_member: >-
-      {{ (kafka_input_member | combine({
-           'id': kafka_input_member.id | string,
-           'deployment_id': _platform_kafka_normalized_deployment_id,
-           'legacy_systemd_unit_name': _platform_kafka_normalized_legacy_unit_name ~ '.service',
-           'node_id': kafka_input_member.node_id | int,
-           'roles': _platform_kafka_normalized_roles,
-           'listeners': _platform_kafka_normalized_listeners,
-           'listener_endpoints': _platform_kafka_normalized_listener_endpoints,
-           'controller_endpoint': _platform_kafka_normalized_controller_endpoint,
-           'client_endpoint': _platform_kafka_normalized_client_endpoint,
-           'client_listener_port': _platform_kafka_normalized_client_listener_port,
-           'controller_listener_port': _platform_kafka_normalized_controller_listener_port,
-           'tls_profile': (kafka_input_member.tls_profile | default(platform_kafka_tls_profile)),
-           'config_directory': _platform_kafka_normalized_config_directory,
-           'runtime_directory': _platform_kafka_normalized_runtime_directory,
-           'systemd_unit_name': _platform_kafka_normalized_unit_name,
-           'systemd_unit_ownership_marker': '# ' ~ platform_kafka_name ~ '-managed: ' ~ _platform_kafka_normalized_unit_name,
-           'systemd_unit_destination': _platform_kafka_normalized_unit_destination,
-           'systemd_environment_pattern': _platform_kafka_normalized_environment_pattern,
-           'systemd_description': _platform_kafka_normalized_description,
-           'listener_ports': _platform_kafka_normalized_listener_ports,
-           'clear_paths': [
-             _platform_kafka_normalized_config_directory,
-             kafka_input_member.data_directory,
-             kafka_input_member.log_directory
-           ],
-           'managed_paths': [
-             _platform_kafka_normalized_config_directory,
-             _platform_kafka_normalized_runtime_directory,
-             kafka_input_member.data_directory,
-             kafka_input_member.log_directory
-           ]
-         })) | dict2items | rejectattr('key', 'equalto', '_compatibility_unit') | items2dict }}
+    _platform_kafka_normalized_member: "{{ (lookup('ansible.builtin.template', 'normalized-members.json.j2') | from_json)[0] }}"
+  vars:
+    kafka_normalization_members: "{{ [kafka_input_member] }}"
 
 - name: Добавление нормализованного экземпляра службы Kafka
   ansible.builtin.set_fact:
     _platform_kafka_instances: "{{ _platform_kafka_instances + [_platform_kafka_normalized_member] }}"
+
+@@END
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/normalize_members.yml","mode":420,"size":388,"sha256":"fdcc355ace91571a076c1e28ae2c0a9418ccbed3d72f607028d201f6404b10db","index":0,"count":1,"encoding":"utf-8","payloadBytes":388}
+---
+- name: Пакетная нормализация экземпляров Kafka с настройками текущего узла
+  ansible.builtin.set_fact:
+    _platform_kafka_instances: "{{ lookup('ansible.builtin.template', 'normalized-members.json.j2') | from_json | sort(attribute='node_id') }}"
+  vars:
+    kafka_normalization_members: "{{ _platform_kafka_input_instances }}"
 
 @@END
 @@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/pem_identity.yml","mode":420,"size":5037,"sha256":"ceb331bf7a211df0eefaa68bbb1af2ac30dd406bf772cd79fe8298a18738c975","index":0,"count":1,"encoding":"utf-8","payloadBytes":5037}
@@ -50160,6 +50071,71 @@ dependencies: []
     _platform_kafka_pem_inputs: {}
   no_log: true
   changed_when: false
+
+@@END
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/prepare_cli_config.yml","mode":420,"size":3508,"sha256":"e4c7783455d651ab162deb53729fdeefdc2befc50d38698caf17e08fa4e7971f","index":0,"count":1,"encoding":"utf-8","payloadBytes":3508}
+---
+- name: Проверка поддерживаемого протокола подключения Kafka CLI
+  ansible.builtin.assert:
+    that:
+      - kafka_cli_connection.securityProtocol in ['PLAINTEXT', 'SSL', 'SASL_SSL']
+    fail_msg: 'BLOCKED: Kafka CLI connection uses an unsupported security protocol'
+
+- name: Создание временной конфигурации Kafka CLI
+  ansible.builtin.tempfile:
+    state: file
+    prefix: "{{ platform_kafka_name }}-cli-"
+    suffix: .properties
+  register: _platform_kafka_cli_command_config
+  changed_when: false
+
+- name: Формирование конфигурации команды PLAINTEXT Kafka CLI по runtime-проекции
+  ansible.builtin.copy:
+    content: "security.protocol={{ kafka_cli_connection.securityProtocol }}\n"
+    dest: "{{ _platform_kafka_cli_command_config.path }}"
+    mode: '0600'
+  changed_when: false
+  when: kafka_cli_connection.securityProtocol == 'PLAINTEXT'
+
+- name: Определение SecretRef во время выполнения непосредственно перед выполнением SSL Kafka CLI
+  ansible.builtin.set_fact:
+    _platform_kafka_cli_password_file: >-
+      {{ (platform_pki_secret_files
+          | default(hostvars['localhost'].platform_pki_secret_files | default({}, true), true))[kafka_cli_connection.tls.storePasswordSecretRef] }}
+  no_log: true
+  when:
+    - kafka_cli_connection.securityProtocol in ['SSL', 'SASL_SSL']
+    - kafka_cli_connection.tls.truststoreType == 'PKCS12'
+
+- name: Формирование конфигурации команды SSL Kafka CLI по runtime-проекции
+  ansible.builtin.copy:
+    content: |-
+      security.protocol={{ kafka_cli_connection.securityProtocol }}
+      ssl.truststore.location={{ kafka_cli_connection.tls.truststorePath }}
+      ssl.truststore.type={{ kafka_cli_connection.tls.truststoreType }}
+      ssl.endpoint.identification.algorithm=https
+      {% if kafka_cli_connection.tls.truststoreType == 'PKCS12' %}
+      ssl.truststore.password={{ lookup('ansible.builtin.file', _platform_kafka_cli_password_file) | trim | platform.core.platform_java_properties_value }}
+      {% endif %}
+      {% if kafka_cli_connection.securityProtocol == 'SSL' %}
+      ssl.keystore.location={{ kafka_cli_connection.tls.keystorePath }}
+      ssl.keystore.type={{ kafka_cli_connection.tls.truststoreType }}
+      {% if kafka_cli_connection.tls.truststoreType == 'PKCS12' %}
+      ssl.keystore.password={{ lookup('ansible.builtin.file', _platform_kafka_cli_password_file) | trim | platform.core.platform_java_properties_value }}
+      ssl.key.password={{ lookup('ansible.builtin.file', _platform_kafka_cli_password_file) | trim | platform.core.platform_java_properties_value }}
+      {% endif %}
+      {% endif %}
+      {% if kafka_cli_connection.securityProtocol == 'SASL_SSL' %}
+      sasl.mechanism=SCRAM-SHA-512
+      {% set admin_password = lookup('ansible.builtin.file', platform_kafka_secret_files[kafka_cli_connection.adminPasswordRef], rstrip=false) %}
+      {% set admin_jaas = 'org.apache.kafka.common.security.scram.ScramLoginModule required username="admin" password=' ~ (admin_password | to_json(ensure_ascii=false)) ~ ';' %}
+      sasl.jaas.config={{ admin_jaas | platform.core.platform_java_properties_value }}
+      {% endif %}
+    dest: "{{ _platform_kafka_cli_command_config.path }}"
+    mode: '0600'
+  changed_when: false
+  no_log: true
+  when: kafka_cli_connection.securityProtocol in ['SSL', 'SASL_SSL']
 
 @@END
 @@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/prepare_host.yml","mode":420,"size":2471,"sha256":"282a389085de4bfc8f540d656a7b682af7f7a6b94b6a7e214e501f39f03d3ba3","index":0,"count":1,"encoding":"utf-8","payloadBytes":2471}
@@ -50594,74 +50570,16 @@ dependencies: []
   changed_when: false
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/run_cli_command.yml","mode":420,"size":5067,"sha256":"45855ca216bc44990146d329e313525e5c14e31c1a370414eaf37a2324238f68","index":0,"count":1,"encoding":"utf-8","payloadBytes":5067}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/run_cli_command.yml","mode":420,"size":1746,"sha256":"8871187668a896a6ea0838171adc495ec169be3536ccbd524798bd8c3424a53a","index":0,"count":1,"encoding":"utf-8","payloadBytes":1746}
 ---
-- name: Проверка поддерживаемого протокола подключения Kafka CLI
-  ansible.builtin.assert:
-    that:
-      - kafka_cli_connection.securityProtocol in ['PLAINTEXT', 'SSL', 'SASL_SSL']
-    fail_msg: 'BLOCKED: Kafka CLI connection uses an unsupported security protocol'
-
-- name: Создание временной конфигурации Kafka CLI
-  ansible.builtin.tempfile:
-    state: file
-    prefix: "{{ platform_kafka_name }}-cli-"
-    suffix: .properties
-  register: _platform_kafka_cli_command_config
-  changed_when: false
-
 - block:
-    - name: Формирование конфигурации команды PLAINTEXT Kafka CLI по runtime-проекции
-      ansible.builtin.copy:
-        content: "security.protocol={{ kafka_cli_connection.securityProtocol }}\n"
-        dest: "{{ _platform_kafka_cli_command_config.path }}"
-        mode: '0600'
-      changed_when: false
-      when: kafka_cli_connection.securityProtocol == 'PLAINTEXT'
-
-    - name: Определение SecretRef во время выполнения непосредственно перед выполнением SSL Kafka CLI
-      ansible.builtin.set_fact:
-        _platform_kafka_cli_password_file: >-
-          {{ (platform_pki_secret_files
-              | default(hostvars['localhost'].platform_pki_secret_files | default({}, true), true))[kafka_cli_connection.tls.storePasswordSecretRef] }}
-      no_log: true
-      when:
-        - kafka_cli_connection.securityProtocol in ['SSL', 'SASL_SSL']
-        - kafka_cli_connection.tls.truststoreType == 'PKCS12'
-
-    - name: Формирование конфигурации команды SSL Kafka CLI по runtime-проекции
-      ansible.builtin.copy:
-        content: |-
-          security.protocol={{ kafka_cli_connection.securityProtocol }}
-          ssl.truststore.location={{ kafka_cli_connection.tls.truststorePath }}
-          ssl.truststore.type={{ kafka_cli_connection.tls.truststoreType }}
-          ssl.endpoint.identification.algorithm=https
-          {% if kafka_cli_connection.tls.truststoreType == 'PKCS12' %}
-          ssl.truststore.password={{ lookup('ansible.builtin.file', _platform_kafka_cli_password_file) | trim | platform.core.platform_java_properties_value }}
-          {% endif %}
-          {% if kafka_cli_connection.securityProtocol == 'SSL' %}
-          ssl.keystore.location={{ kafka_cli_connection.tls.keystorePath }}
-          ssl.keystore.type={{ kafka_cli_connection.tls.truststoreType }}
-          {% if kafka_cli_connection.tls.truststoreType == 'PKCS12' %}
-          ssl.keystore.password={{ lookup('ansible.builtin.file', _platform_kafka_cli_password_file) | trim | platform.core.platform_java_properties_value }}
-          ssl.key.password={{ lookup('ansible.builtin.file', _platform_kafka_cli_password_file) | trim | platform.core.platform_java_properties_value }}
-          {% endif %}
-          {% endif %}
-          {% if kafka_cli_connection.securityProtocol == 'SASL_SSL' %}
-          sasl.mechanism=SCRAM-SHA-512
-          {% set admin_password = lookup('ansible.builtin.file', platform_kafka_secret_files[kafka_cli_connection.adminPasswordRef], rstrip=false) %}
-          {% set admin_jaas = 'org.apache.kafka.common.security.scram.ScramLoginModule required username="admin" password=' ~ (admin_password | to_json(ensure_ascii=false)) ~ ';' %}
-          sasl.jaas.config={{ admin_jaas | platform.core.platform_java_properties_value }}
-          {% endif %}
-        dest: "{{ _platform_kafka_cli_command_config.path }}"
-        mode: '0600'
-      changed_when: false
-      no_log: true
-      when: kafka_cli_connection.securityProtocol in ['SSL', 'SASL_SSL']
+    - name: Подготовка отдельной конфигурации Kafka CLI
+      ansible.builtin.include_tasks: prepare_cli_config.yml
+      when: kafka_cli_prepared_config is not defined
 
     - name: Выполнение вычисленной команды Kafka CLI без изменений
       ansible.builtin.command:
-        argv: "{{ kafka_cli_command_prefix + ['--command-config', _platform_kafka_cli_command_config.path] + kafka_cli_command_suffix }}"
+        argv: "{{ kafka_cli_command_prefix + ['--command-config', (kafka_cli_prepared_config | default(_platform_kafka_cli_command_config)).path] + kafka_cli_command_suffix }}"
       changed_when: false
       register: platform_kafka_cli_command_result
       failed_when: false
@@ -50685,6 +50603,9 @@ dependencies: []
         path: "{{ _platform_kafka_cli_command_config.path }}"
         state: absent
       changed_when: false
+      when:
+        - kafka_cli_prepared_config is not defined
+        - _platform_kafka_cli_command_config.path is defined
 
 @@END
 @@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/schema_registry.yml","mode":420,"size":10097,"sha256":"7f2ef76206928b1409220bd4ec4f4a57c2adcb9b29f9353bd527d27ed8d35b14","index":0,"count":1,"encoding":"utf-8","payloadBytes":10097}
@@ -51597,15 +51518,31 @@ dependencies: []
   ansible.builtin.include_tasks: listener_tls_settings.yml
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/verify.yml","mode":420,"size":4541,"sha256":"8b368d49adb090a5c8f1905d538ec14fd7366748f630b44ad5cec20d88bb52bb","index":0,"count":1,"encoding":"utf-8","payloadBytes":4541}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/verify.yml","mode":420,"size":1200,"sha256":"0fcefc307de9d901c9e30a2bbf338ed1a8667a742f4f110862f9b75b2c508210","index":0,"count":1,"encoding":"utf-8","payloadBytes":1200}
 ---
 - name: Проверка каждого экземпляра службы Kafka в детерминированном порядке
   ansible.builtin.include_tasks: verify_member.yml
-  loop: "{{ _platform_kafka_local_instances | sort(attribute='node_id') }}"
+  loop: "{{ range(_platform_kafka_local_instances | length) | list }}"
+  vars:
+    kafka_member: "{{ (_platform_kafka_local_instances | sort(attribute='node_id'))[kafka_verify_member_index] }}"
+  # Ansible groups includes by both loop item and label; keep them host-independent.
   loop_control:
-    loop_var: kafka_member
-    label: "{{ kafka_member.id }}"
+    loop_var: kafka_verify_member_index
+    label: "Локальный экземпляр {{ kafka_verify_member_index + 1 }}"
 
+- name: Проверка кластера Kafka через общее административное соединение
+  ansible.builtin.include_tasks: verify_cluster_scram.yml
+  when:
+    - _platform_kafka_scram_enabled | default(false) | bool
+    - inventory_hostname == (_platform_kafka_broker_instances | first).host
+
+- name: Проверка кластера Kafka через раздельные соединения контроллера и брокера
+  ansible.builtin.include_tasks: verify_cluster.yml
+  when: not (_platform_kafka_scram_enabled | default(false) | bool)
+
+@@END
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/verify_cluster.yml","mode":420,"size":4202,"sha256":"e1513a6fc30d643cf790704cb3051dda8b730f015a33f7599a0765a7d0807332","index":0,"count":1,"encoding":"utf-8","payloadBytes":4202}
+---
 - name: Выбор экземпляра Kafka для диагностики кворума без внесения изменений
   ansible.builtin.set_fact:
     kafka_quorum_diagnostic_member: >-
@@ -51682,7 +51619,36 @@ dependencies: []
   when: inventory_hostname == _platform_kafka_verify_broker.host
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/verify_entry.yml","mode":420,"size":5197,"sha256":"031a1eb04c47a5b674f6819fb375fbbcf2bc6fa3af6dc0e269bc418820ec4cbe","index":0,"count":1,"encoding":"utf-8","payloadBytes":5197}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/verify_cluster_scram.yml","mode":420,"size":1281,"sha256":"96716beb207e65c4d9ede9379ab9c538c4a72f15f388d5fe6ef82eab49fe24a2","index":0,"count":1,"encoding":"utf-8","payloadBytes":1281}
+---
+- name: Определение общего административного подключения Kafka для Verify
+  ansible.builtin.include_tasks: resolve_cli_connection.yml
+  vars:
+    kafka_cli_member: "{{ _platform_kafka_broker_instances | first }}"
+    kafka_cli_purpose: admin
+
+- name: Проверка кластера с гарантированным удалением общей конфигурации CLI
+  block:
+    - name: Подготовка общей конфигурации Kafka CLI
+      ansible.builtin.include_tasks: prepare_cli_config.yml
+      vars:
+        kafka_cli_connection: "{{ _platform_kafka_cli_connection }}"
+
+    - name: Проверка кворума и регистрации брокеров через одно подключение
+      ansible.builtin.include_tasks: verify_cluster.yml
+      vars:
+        kafka_cli_prepared_config: "{{ _platform_kafka_cli_command_config }}"
+        kafka_verify_cli_prepared: true
+  always:
+    - name: Удаление общей временной конфигурации Kafka CLI
+      ansible.builtin.file:
+        path: "{{ _platform_kafka_cli_command_config.path }}"
+        state: absent
+      changed_when: false
+      when: _platform_kafka_cli_command_config.path is defined
+
+@@END
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/verify_entry.yml","mode":420,"size":4646,"sha256":"edc5a70a80ebbe74901fc0b3419d4ce8bc95cb9b040590e9066e208121e042b0","index":0,"count":1,"encoding":"utf-8","payloadBytes":4646}
 ---
 - name: "Получение экземпляров Kafka из проекта, если список не задан явно"
   ansible.builtin.include_tasks: project_runtime.yml
@@ -51716,20 +51682,8 @@ dependencies: []
           description: "Apache Kafka {{ platform_kafka_version }} KRaft member"
   when: platform_kafka_instances | length == 0
 
-- name: Инициализация нормализованного списка экземпляров службы Kafka
-  ansible.builtin.set_fact:
-    _platform_kafka_instances: []
-
-- name: Нормализация экземпляров службы Kafka в общую внутреннюю модель
-  ansible.builtin.include_tasks: normalize_member.yml
-  loop: "{{ _platform_kafka_input_instances }}"
-  loop_control:
-    loop_var: kafka_input_member
-    label: "{{ kafka_input_member.id }}"
-
-- name: Упорядочивание нормализованных экземпляров Kafka
-  ansible.builtin.set_fact:
-    _platform_kafka_instances: "{{ _platform_kafka_instances | sort(attribute='node_id') }}"
+- name: Нормализация экземпляров Kafka по настройкам текущего узла
+  ansible.builtin.include_tasks: normalize_members.yml
 
 - name: Получение наборов экземпляров службы Kafka
   ansible.builtin.set_fact:
@@ -51777,7 +51731,7 @@ dependencies: []
     - _platform_kafka_registry_local | length > 0
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/verify_member.yml","mode":420,"size":2777,"sha256":"8f2410116a089650887858cdec58ad86442799464fb51d5bc0ff4e86de0e6fb8","index":0,"count":1,"encoding":"utf-8","payloadBytes":2777}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/verify_member.yml","mode":420,"size":3044,"sha256":"19b6744ffb2af5a1feb555ab5232c47c590b034531d0a78c18174b23e7b83728","index":0,"count":1,"encoding":"utf-8","payloadBytes":3044}
 ---
 - name: Проверка состояния экземпляра службы Kafka systemd и основного процесса
   ansible.builtin.command:
@@ -51819,22 +51773,26 @@ dependencies: []
 - name: Проверка SSL listeners Kafka через реальное TLS-соединение
   ansible.builtin.include_tasks: verify_ssl_listener.yml
   vars:
+    kafka_verify_ssl_listeners: "{{ kafka_member.listeners | default({}) | dict2items | selectattr('value.securityProtocol', 'in', ['SSL', 'SASL_SSL']) | rejectattr('value.purpose', 'equalto', 'controller') | list if 'controller' not in kafka_member.roles else kafka_member.listeners | default({}) | dict2items | selectattr('value.securityProtocol', 'in', ['SSL', 'SASL_SSL']) | list }}"
+    kafka_ssl_listener_entry: "{{ kafka_verify_ssl_listeners[kafka_verify_listener_index] }}"
     kafka_ssl_listener: "{{ kafka_ssl_listener_entry.value | combine({'name': kafka_ssl_listener_entry.key}) }}"
     kafka_ssl_runtime_prepared: true
-  loop: "{{ kafka_member.listeners | default({}) | dict2items | selectattr('value.securityProtocol', 'in', ['SSL', 'SASL_SSL']) | rejectattr('value.purpose', 'equalto', 'controller') | list if 'controller' not in kafka_member.roles else kafka_member.listeners | default({}) | dict2items | selectattr('value.securityProtocol', 'in', ['SSL', 'SASL_SSL']) | list }}"
+  loop: "{{ range(kafka_verify_ssl_listeners | length) | list }}"
+  # A host/member-specific label would serialize these includes again.
   loop_control:
-    loop_var: kafka_ssl_listener_entry
-    label: "{{ kafka_member.id }}:{{ kafka_ssl_listener_entry.key }}"
+    loop_var: kafka_verify_listener_index
+    label: "Локальный listener {{ kafka_verify_listener_index + 1 }}"
   when: kafka_member.listeners | default({}) | length > 0
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/verify_quorum.yml","mode":420,"size":2157,"sha256":"deb58e5b20495fda47c34fde71fb3b2da954bcdd760db9255e02988bab5ddc68","index":0,"count":1,"encoding":"utf-8","payloadBytes":2157}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/verify_quorum.yml","mode":420,"size":2221,"sha256":"610add832e839a13502b1b3a7e4a2310c4432a53a8ce1d38ec2538a53133b9ae","index":0,"count":1,"encoding":"utf-8","payloadBytes":2221}
 ---
 - name: Определение подключения Kafka CLI к кворуму контроллеров по runtime-проекции
   ansible.builtin.include_tasks: resolve_cli_connection.yml
   vars:
     kafka_cli_member: "{{ kafka_quorum_diagnostic_member }}"
     kafka_cli_purpose: "{{ 'admin' if _platform_kafka_scram_enabled | default(false) | bool else 'controller' }}"
+  when: not (kafka_verify_cli_prepared | default(false) | bool)
 
 - name: Получение состояния кворума контроллеров Kafka через рассчитанное подключение CLI
   ansible.builtin.include_tasks: run_cli_command.yml
@@ -51981,6 +51939,91 @@ LimitNOFILE=100000
 
 [Install]
 WantedBy=multi-user.target
+
+@@END
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/templates/normalized-members.json.j2","mode":420,"size":7247,"sha256":"e94ee476d5d4618e596db572d01fddcb6113ac458af8f0e3621f8c41d7059e6e","index":0,"count":1,"encoding":"utf-8","payloadBytes":7247}
+{% set members = [] %}
+{% for kafka_input_member in kafka_normalization_members %}
+{% set _platform_kafka_normalized_roles = kafka_input_member.roles | unique | sort %}
+{% set _platform_kafka_normalized_config_directory = kafka_input_member.config_directory | default(platform_kafka_config_directory ~ '/' ~ platform_kafka_service_name ~ '/' ~ kafka_input_member.id) %}
+{% set _platform_kafka_normalized_compatibility_unit = kafka_input_member._compatibility_unit | default({}) %}
+{% set _platform_kafka_normalized_deployment_id = kafka_input_member.deployment_id | default(platform_kafka_deployment_id) %}
+{% set _platform_kafka_normalized_unit_service = platform_kafka_name if ('broker' in kafka_input_member.roles and 'controller' in kafka_input_member.roles)
+         else (platform_kafka_name ~ '-broker' if 'broker' in kafka_input_member.roles else platform_kafka_name ~ '-controller') %}
+{% set _platform_kafka_normalized_member_number = kafka_input_member.id | regex_replace('^.*-', '') %}
+{% set _platform_kafka_normalized_runtime_directory = _platform_kafka_normalized_compatibility_unit.runtime_directory | default(platform_kafka_config_directory ~ '/' ~ platform_kafka_service_name ~ '-' ~ kafka_input_member.id) %}
+{% set _platform_kafka_normalized_legacy_unit_name = _platform_kafka_normalized_compatibility_unit.name | default(platform_kafka_service_name ~ '@' ~ platform_kafka_service_name ~ '-' ~ kafka_input_member.id) %}
+{% set _platform_kafka_normalized_unit_name %}{{ _platform_kafka_normalized_unit_service }}@{{ _platform_kafka_normalized_deployment_id }}-{{ _platform_kafka_normalized_member_number }}.service{% endset %}
+{% set _platform_kafka_normalized_unit_destination %}/etc/systemd/system/{{ _platform_kafka_normalized_unit_service }}@{{ _platform_kafka_normalized_deployment_id }}-{{ _platform_kafka_normalized_member_number }}.service{% endset %}
+{% set _platform_kafka_normalized_environment_pattern = _platform_kafka_normalized_compatibility_unit.environment_pattern | default(_platform_kafka_normalized_runtime_directory ~ '/systemd.env') %}
+{% set _platform_kafka_normalized_description = _platform_kafka_normalized_compatibility_unit.description | default('Apache Kafka ' ~ platform_kafka_version ~ ' KRaft member %i') %}
+{% set _platform_kafka_normalized_listeners = kafka_input_member.listeners | default({}) %}
+{% set _platform_kafka_normalized_client_listener_port = kafka_input_member.listeners | default({}) | dict2items | selectattr('value.purpose', 'equalto', 'client') | map(attribute='value.port') | list | first | default(0, true) %}
+{% set _platform_kafka_normalized_controller_listener_port = kafka_input_member.listeners | default({}) | dict2items | selectattr('value.purpose', 'equalto', 'controller') | map(attribute='value.port') | list | first | default(0, true) %}
+{% set _platform_kafka_normalized_listener_ports = ((kafka_input_member.listeners | default({}) | dict2items
+            | selectattr('value.purpose', 'in', (['client', 'interBroker'] if 'broker' in _platform_kafka_normalized_roles else ['__none__']))
+            | map(attribute='value.port') | map('int') | list)
+          + (kafka_input_member.listeners | default({}) | dict2items
+            | selectattr('value.purpose', 'equalto', 'controller')
+            | selectattr('value.purpose', 'equalto', ('controller' if 'controller' in _platform_kafka_normalized_roles else '__none__'))
+            | map(attribute='value.port') | map('int') | list)
+          if (kafka_input_member.listeners | default({}) | length > 0)
+          else []) | unique | sort %}
+{% set _platform_kafka_normalized_listener_endpoints %}{% set endpoints = [] %}
+      {% for pair in (kafka_input_member.listeners | default({}) | dict2items | sort(attribute='key')) %}
+      {% set listener = pair.value | combine({'name': pair.key}) %}
+      {% if (listener.purpose == 'controller' and 'controller' in _platform_kafka_normalized_roles) or (listener.purpose in ['client', 'interBroker'] and 'broker' in _platform_kafka_normalized_roles) %}
+      {% set _ = endpoints.append({
+        'name': listener.name,
+        'purpose': listener.purpose,
+        'security_protocol': listener.securityProtocol,
+        'bootstrap_host': listener.advertisedAddress | default(kafka_input_member.advertised_host),
+        'bootstrap_port': listener.port | int
+      }) %}
+      {% endif %}
+      {% endfor %}
+      {{ endpoints | to_json }}{% endset %}
+{% set _platform_kafka_normalized_listener_endpoints = _platform_kafka_normalized_listener_endpoints | from_json %}
+{% set _platform_kafka_normalized_controller_endpoint = _platform_kafka_normalized_listener_endpoints
+         | selectattr('purpose', 'equalto', 'controller') | list | first | default({}, true) %}
+{% set _platform_kafka_normalized_client_endpoint = _platform_kafka_normalized_listener_endpoints
+         | selectattr('purpose', 'equalto', 'client') | list | first | default({}, true) %}
+{% set _platform_kafka_normalized_member = (kafka_input_member | combine({
+           'id': kafka_input_member.id | string,
+           'deployment_id': _platform_kafka_normalized_deployment_id,
+           'legacy_systemd_unit_name': _platform_kafka_normalized_legacy_unit_name ~ '.service',
+           'node_id': kafka_input_member.node_id | int,
+           'roles': _platform_kafka_normalized_roles,
+           'listeners': _platform_kafka_normalized_listeners,
+           'listener_endpoints': _platform_kafka_normalized_listener_endpoints,
+           'controller_endpoint': _platform_kafka_normalized_controller_endpoint,
+           'client_endpoint': _platform_kafka_normalized_client_endpoint,
+           'client_listener_port': _platform_kafka_normalized_client_listener_port | string,
+           'controller_listener_port': _platform_kafka_normalized_controller_listener_port | string,
+           'tls_profile': (kafka_input_member.tls_profile | default(platform_kafka_tls_profile)),
+           'config_directory': _platform_kafka_normalized_config_directory,
+           'runtime_directory': _platform_kafka_normalized_runtime_directory,
+           'systemd_unit_name': _platform_kafka_normalized_unit_name,
+           'systemd_unit_ownership_marker': '# ' ~ platform_kafka_name ~ '-managed: ' ~ _platform_kafka_normalized_unit_name,
+           'systemd_unit_destination': _platform_kafka_normalized_unit_destination,
+           'systemd_environment_pattern': _platform_kafka_normalized_environment_pattern,
+           'systemd_description': _platform_kafka_normalized_description,
+           'listener_ports': _platform_kafka_normalized_listener_ports,
+           'clear_paths': [
+             _platform_kafka_normalized_config_directory,
+             kafka_input_member.data_directory,
+             kafka_input_member.log_directory
+           ],
+           'managed_paths': [
+             _platform_kafka_normalized_config_directory,
+             _platform_kafka_normalized_runtime_directory,
+             kafka_input_member.data_directory,
+             kafka_input_member.log_directory
+           ]
+         })) | dict2items | rejectattr('key', 'equalto', '_compatibility_unit') | items2dict %}
+{% set _ = members.append(_platform_kafka_normalized_member) %}
+{% endfor %}
+{{ members | to_json }}
 
 @@END
 @@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/templates/schema-registry-client.properties.j2","mode":420,"size":1011,"sha256":"a1b7a5d8ca11c8a4311b890470f09286ccaa87977f2b50efec1936e55566d6ff","index":0,"count":1,"encoding":"utf-8","payloadBytes":1011}
