@@ -2029,16 +2029,18 @@ class FilterModule:
                     application_prepared_image_lock=prepared_lock)
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/filter/application_integrations.py","mode":420,"size":682,"sha256":"c6601e85d85c420028c1bca2042e87947079db9b652252d31c5fe8430b4d99fd","index":0,"count":1,"encoding":"utf-8","payloadBytes":682}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/filter/application_integrations.py","mode":420,"size":844,"sha256":"e2513331be6d4c60853d844370670b64bf0009e383d6d9b2610c5e0707aead60","index":0,"count":1,"encoding":"utf-8","payloadBytes":844}
 """Small projections consumed by ordinary provider/Vault coordination tasks."""
 from ansible_collections.platform.core.plugins.module_utils.application_integrations import (
-    pending_instances, ready_vault_jobs, shared_vault_jobs)
+    pending_instances, ready_vault_jobs, shared_vault_jobs, shared_vault_fields, script_jobs)
 from ansible_collections.platform.core.plugins.module_utils.application_connections import connection_order_findings
 
 
 class FilterModule:
     def filters(self):
         return {'application_connection_order_findings': connection_order_findings,
+                'application_script_jobs': script_jobs,
+                'application_shared_vault_fields': shared_vault_fields,
                 'application_pending_instances': pending_instances,
                 'application_ready_vault_jobs': ready_vault_jobs,
                 'application_ready_shared_jobs': shared_vault_jobs}
@@ -22004,7 +22006,7 @@ def docker_save_image(path, reference):
                     imageId='sha256:' + hashlib.sha256(raw).hexdigest())
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_integrations.py","mode":420,"size":5953,"sha256":"a4b605e09a1600ded83ada0b0e3604816728343979d7a7d75ac204ae72beedbd","index":0,"count":1,"encoding":"utf-8","payloadBytes":5953}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/module_utils/application_integrations.py","mode":420,"size":6615,"sha256":"c9d25cef9d47be4bad5d3565b9657f4eba3adefb5f445db91f77288e479f8834","index":0,"count":1,"encoding":"utf-8","payloadBytes":6615}
 """Provider batch dependency projection. No product APIs, scheduling or secrets."""
 import hashlib
 import json
@@ -22105,16 +22107,32 @@ def ready_vault_jobs(jobs, inputs, completed, delivered):
             and instance_key(job['libraryId'], job['instanceId']) not in delivered]
 
 
-def shared_vault_jobs(jobs, inputs, completed):
+def script_jobs(jobs, phase, scope):
+    return [job for job in jobs if any(script['phase'] == phase and script['scope'] == scope
+                                     for script in job.get('scripts', []))]
+
+
+def shared_field_key(job, document, name):
+    return [job.get('providerId', ''), job['libraryId'], document.get('mount', ''), document['document'], name]
+
+
+def shared_vault_fields(jobs):
+    return [shared_field_key(job, document, name) for job in jobs
+            for document in job['documents'] for name in document['fields']]
+
+
+def shared_vault_jobs(jobs, inputs, completed, delivered=()):
     result = []
     for job in jobs:
         documents = []
         for document in job['documents']:
             fields = {name: value for name, value in document['fields'].items()
-                      if not set(inputs['sharedDependencies'].get(job['libraryId'] + '/' + name, [])) - set(completed)}
+                      if not set(inputs['sharedDependencies'].get(job['libraryId'] + '/' + name, [])) - set(completed)
+                      and shared_field_key(job, document, name) not in delivered}
             if fields:
                 documents.append(dict(document, fields=fields))
-        result.append(dict(job, documents=documents))
+        if documents:
+            result.append(dict(job, documents=documents))
     return result
 
 @@END
@@ -31007,6 +31025,69 @@ if __name__ == '__main__':
     main()
 
 @@END
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/modules/application_source_file.py","mode":420,"size":2148,"sha256":"dcc41d51d7ac8cc64594e20aebaaaeb96be952c36b9ba90e0b51ef79c29c6d9f","index":0,"count":1,"encoding":"utf-8","payloadBytes":2148}
+#!/usr/bin/python
+"""Read a regular source config once; hash exactly the returned binary content."""
+import base64
+import hashlib
+import os
+import stat
+
+from ansible.module_utils.basic import AnsibleModule
+
+DOCUMENTATION = r'''
+---
+module: application_source_file
+short_description: Read and hash a regular application source on the Execution Node
+description:
+  - Returns the same base64 content and SHA-256 used by application preflight.
+  - Rejects final-component symlinks, nonregular files and observed mutations.
+  - Call with no_log because source content must not enter execution diagnostics.
+options:
+  path:
+    description: Source path already resolved by the application package contract.
+    type: path
+    required: true
+'''
+
+
+def identity(info):
+    return (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+
+
+def read_source(path):
+    # Core executes on Linux. NONBLOCK lets us reject FIFOs without waiting for
+    # a writer; NOFOLLOW prevents a final symlink swap between check and open.
+    descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    try:
+        before = os.fstat(descriptor)
+        if not stat.S_ISREG(before.st_mode):
+            raise ValueError('APPLICATION_CONFIG_SOURCE_INVALID')
+        with os.fdopen(descriptor, 'rb', closefd=False) as stream:
+            raw = stream.read()
+        after = os.fstat(descriptor)
+        if identity(before) != identity(after) or len(raw) != before.st_size:
+            raise ValueError('APPLICATION_CONFIG_SOURCE_INVALID')
+        return dict(content=base64.b64encode(raw).decode('ascii'), encoding='base64',
+                    sha256=hashlib.sha256(raw).hexdigest())
+    finally:
+        os.close(descriptor)
+
+
+def main():
+    module = AnsibleModule(argument_spec=dict(path=dict(type='path', required=True, no_log=True)),
+                           supports_check_mode=True)
+    try:
+        result = read_source(module.params['path'])
+    except (OSError, ValueError):
+        module.fail_json(msg='APPLICATION_CONFIG_SOURCE_INVALID')
+    module.exit_json(changed=False, **result)
+
+
+if __name__ == '__main__':
+    main()
+
+@@END
 @@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/modules/build_deployment_plan.py","mode":420,"size":392,"sha256":"cc0e4f6a3efdee716904a2a8f54705042b36a62e92b4d986c33186acb30b7028","index":0,"count":1,"encoding":"utf-8","payloadBytes":392}
 DOCUMENTATION = r'''---
 module: build_deployment_plan
@@ -31262,6 +31343,83 @@ def main():
 
 
 if __name__ == "__main__":
+    main()
+
+@@END
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/plugins/modules/resolve_endpoint_publications.py","mode":420,"size":4208,"sha256":"7c2784075feb839efdf2dc20ab9fc9c15ba7263d0a4a2f8a919f275c8f22d9cd","index":0,"count":1,"encoding":"utf-8","payloadBytes":4208}
+#!/usr/bin/python
+"""Batch the existing endpoint/DNS resolvers without changing their rules."""
+from ansible.module_utils.basic import AnsibleModule
+from ansible_collections.platform.core.plugins.module_utils.service_integration_resolution import resolve_service_integrations
+from ansible_collections.platform.core.plugins.module_utils.service_endpoint_resolution import resolve_service_endpoints
+from ansible_collections.platform.core.plugins.module_utils.dns_resolution import resolve_dns_zones
+
+
+def resolve_batch(desired_state, service_catalog, inventory_hosts, inventory_deployments,
+                  endpoint_sources, source_ids):
+    known = set(desired_state.get('serviceDeployments', {})) | set(endpoint_sources)
+    if not source_ids or any(not isinstance(s, str) or s not in known for s in source_ids):
+        raise ValueError('APPLICATION_ENDPOINT_SCOPE_INVALID')
+    sources = sorted(set(source_ids))
+    projections = {s: resolve_service_integrations(desired_state, [], s,
+        inventory_deployments, endpoint_sources=endpoint_sources)['integrations'] for s in sources}
+    with_dns = [s for s in sources if projections[s]['dnsDeployments']]
+    endpoints = dict(endpoints={}, hostEndpoints={})
+    dns = dict(zones={})
+    if with_dns:
+        endpoints = resolve_service_endpoints(desired_state, service_catalog,
+            inventory_deployments=inventory_deployments, deployment_ids=with_dns, endpoint_sources=endpoint_sources)
+        if endpoints['status'] != 'PASS':
+            return dict(status='BLOCKED', findings=endpoints['findings'], sources=[])
+        dns = resolve_dns_zones(desired_state, service_catalog, inventory_hosts, inventory_deployments,
+                               True, with_dns, False, endpoint_sources=endpoint_sources)
+        if dns['status'] != 'PASS':
+            return dict(status='BLOCKED', findings=dns['findings'], sources=[])
+    result = []
+    for source in sources:
+        projection = projections[source]
+        names = []
+        if source in with_dns:
+            if source in endpoints['endpoints']:
+                names.append(endpoints['endpoints'][source]['fqdn'])
+            names.extend(e['fqdn'] for e in endpoints['hostEndpoints'].values()
+                         if e['serviceDeploymentId'] == source)
+        records = []
+        for provider in projection['dnsDeployments']:
+            zone = dns['zones'][provider]
+            for name in names:
+                matches = [r for r in zone['records'] if r['owner'] == name + '.']
+                if len(matches) == 1:
+                    records.append(dict(bindDeploymentId=provider, zone=zone['zone'], owner=name + '.',
+                                        addresses=matches[0]['values'], ttl=zone['defaultTtl']))
+        normalized = endpoint_sources.get(source, {})
+        if normalized:
+            names = [normalized['endpoint']['fqdn']]
+        expected = sorted(set(normalized.get('expectedAddresses', [])))
+        if not expected:
+            owners = {n.rstrip('.') + '.' for n in names}
+            expected = sorted({a for r in records if r['owner'] in owners for a in r['addresses']})
+        result.append(dict(sourceId=source, projection=projection, dnsRecords=records, fqdns=names,
+                           probe=normalized.get('probe', {}), expectedAddresses=expected))
+    return dict(status='PASS', findings=[], sources=result)
+
+
+def main():
+    module = AnsibleModule(argument_spec=dict(
+        desired_state=dict(type='dict', required=True), service_catalog=dict(type='dict', required=True),
+        inventory_hosts=dict(type='dict', required=True), inventory_deployments=dict(type='dict', required=True),
+        endpoint_sources=dict(type='dict', default={}), source_ids=dict(type='list', elements='str', required=True)),
+        supports_check_mode=True)
+    try:
+        result = resolve_batch(**module.params)
+        if result['status'] != 'PASS':
+            module.fail_json(msg='APPLICATION_ENDPOINT_RESOLUTION_BLOCKED', **result)
+        module.exit_json(changed=False, **result)
+    except (KeyError, TypeError, ValueError):
+        module.fail_json(msg='APPLICATION_ENDPOINT_SCOPE_INVALID')
+
+
+if __name__ == '__main__':
     main()
 
 @@END
@@ -31916,11 +32074,14 @@ application_runtime_verify_vault: true
   no_log: true
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/apply_library.yml","mode":420,"size":2980,"sha256":"d2dc27beb8bf99b8513d9b0e08e77d27ec5c62304e026960ecfa1ed9925b5782","index":0,"count":1,"encoding":"utf-8","payloadBytes":2980}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/apply_library.yml","mode":420,"size":3508,"sha256":"c5ca3bd7aa5eee89b34387bdc16214421a3315c3f9df935427f6de774e8e9eb7","index":0,"count":1,"encoding":"utf-8","payloadBytes":3508}
 ---
 - name: Привязка всех размещений с общей проекцией узла библиотеки
   ansible.builtin.set_fact:
     application_library_jobs: "{{ platform_application_preflight_jobs | selectattr('libraryId', 'equalto', application_library_id) | list }}"
+    application_library_pending_instances: >-
+      {{ hostvars['localhost'].application_runtime_inputs.integrations |
+         platform.core.application_pending_instances(hostvars['localhost'].platform_application_completed_batches | default([])) }}
   no_log: true
 
 - name: "Проверка одинакового содержимого общей библиотеки у всех потребителей"
@@ -31962,10 +32123,16 @@ application_runtime_verify_vault: true
       loop: "{{ application_library_jobs }}"
       when: >-
         (application_runtime_job.libraryId ~ '/' ~ application_runtime_job.instanceId) not in
-        (hostvars['localhost'].application_runtime_inputs.integrations |
-         platform.core.application_pending_instances(hostvars['localhost'].platform_application_completed_batches | default([])))
+        application_library_pending_instances
       loop_control:
         loop_var: application_runtime_job
+
+- name: Фиксация успешно подготовленных размещений текущей библиотеки
+  ansible.builtin.set_fact:
+    application_prepared_instance_ids: >-
+      {{ application_library_jobs | map(attribute='instanceId') | list |
+         difference(application_library_pending_instances | map('regex_replace', '^' ~ (application_library_id | regex_escape) ~ '/', '') | list) }}
+  no_log: true
 
 @@END
 @@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/discover_runtime.yml","mode":420,"size":1898,"sha256":"a117a009d3adae029046f99c3f66a2c412022e6392a9e535ae77bf2cf2080861","index":0,"count":1,"encoding":"utf-8","payloadBytes":1898}
@@ -32725,7 +32892,7 @@ application_runtime_verify_vault: true
     state: absent
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/resolve_paths.yml","mode":420,"size":1653,"sha256":"861bdafa1374687b37c67be22f60951e283a5085ae81b1e93082842e7ffa82f1","index":0,"count":1,"encoding":"utf-8","payloadBytes":1653}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/resolve_paths.yml","mode":420,"size":1697,"sha256":"e65d61c9f40091e4c2570fb80608096ae93e772c319c43a3e918ece23ac0d449","index":0,"count":1,"encoding":"utf-8","payloadBytes":1697}
 ---
 - name: "Определение каталога библиотеки относительно домашнего каталога пользователя Docker"
   ansible.builtin.set_fact:
@@ -32745,12 +32912,11 @@ application_runtime_verify_vault: true
 - name: Проверка отсутствия пересечений каталогов библиотек перед записью файлов
   ansible.builtin.assert:
     that:
-      - application_root != item.libraryPath
-      - not application_root.startswith(item.libraryPath + '/')
-      - not item.libraryPath.startswith(application_root + '/')
+      - application_root != item
+      - not application_root.startswith(item + '/')
+      - not item.startswith(application_root + '/')
     fail_msg: APPLICATION_LIBRARY_PATH_OVERLAP
-  loop: "{{ platform_application_preflight_jobs | default([]) }}"
-  when: item.libraryId != application_runtime_job.libraryId
+  loop: "{{ platform_application_preflight_jobs | default([]) | rejectattr('libraryId', 'equalto', application_runtime_job.libraryId) | map(attribute='libraryPath') | unique(case_sensitive=true) | list }}"
   no_log: true
 
 - name: Привязка общих путей размещения для Apply и Verify
@@ -32809,20 +32975,11 @@ application_runtime_verify_vault: true
   no_log: true
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/source_config.yml","mode":420,"size":1094,"sha256":"990e6fc7c4ed642518d066d9d7094fbedfda80240fad0a8f109bd0ba92e16274","index":0,"count":1,"encoding":"utf-8","payloadBytes":1094}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/source_config.yml","mode":420,"size":809,"sha256":"3393515055e2c06f4c8f488556c586af0c34f6d0f855f52b41be2a528066f3a7","index":0,"count":1,"encoding":"utf-8","payloadBytes":809}
 ---
-- name: Вычисление хешей исходных файлов на узле выполнения
-  ansible.builtin.stat:
+- name: Однократное чтение и хеширование исходного файла на узле выполнения
+  platform.core.application_source_file:
     path: "{{ application_config.path }}"
-    checksum_algorithm: sha256
-  delegate_to: localhost
-  become: false
-  register: application_source_stat
-  no_log: true
-
-- name: "Чтение исходных файлов для защищённой проверки отсутствия секретов"
-  ansible.builtin.slurp:
-    src: "{{ application_config.path }}"
   delegate_to: localhost
   become: false
   register: application_source_bytes
@@ -32830,7 +32987,7 @@ application_runtime_verify_vault: true
 
 - name: Сохранение пути исходного файла и контрольной суммы для копирования
   ansible.builtin.set_fact:
-    application_config_contents: "{{ application_config_contents + [{'destination': application_config.destination, 'path': application_config.path, 'content': application_source_bytes.content, 'encoding': 'base64', 'sha256': application_source_stat.stat.checksum, 'mode': application_config.mode | default('0644')}] }}"
+    application_config_contents: "{{ application_config_contents + [{'destination': application_config.destination, 'path': application_config.path, 'content': application_source_bytes.content, 'encoding': 'base64', 'sha256': application_source_bytes.sha256, 'mode': application_config.mode | default('0644')}] }}"
   no_log: true
 
 @@END
@@ -35650,7 +35807,7 @@ platform_name_prefix: ''
   become: false
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/resolve_application_libraries/tasks/instance.yml","mode":420,"size":14740,"sha256":"ae43a7987aef3eb6599433e9558a745fdca6b9a31e655a7795798f7663ee57c9","index":0,"count":1,"encoding":"utf-8","payloadBytes":14740}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/resolve_application_libraries/tasks/instance.yml","mode":420,"size":14490,"sha256":"1449b57cccda675ca92aae50bc20078c537a7c481e3b4288b997fb2ff68a38eb","index":0,"count":1,"encoding":"utf-8","payloadBytes":14490}
 ---
 - name: Загрузка проверенных параметров приложения по умолчанию в изолированное пространство имен
   ansible.builtin.include_vars:
@@ -35783,11 +35940,6 @@ platform_name_prefix: ''
 
 - name: Предоставление выбранных ключей ресурсов перед расширением параметров и среды
   ansible.builtin.include_tasks: resource_context.yml
-  loop: "{{ _application_connections | dict2items }}"
-  loop_control:
-    loop_var: resource_connection
-    label: "{{ resource_connection.key }}"
-  when: resource_connection.value.library_binding | default('') in application_job.deployment.bindings
 
 - name: "Обработка привязок ролей топиков старого формата после прямых ключей"
   ansible.builtin.include_tasks: topic_roles.yml
@@ -35960,22 +36112,32 @@ platform_name_prefix: ''
   become: false
 
 @@END
-@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/resolve_application_libraries/tasks/resource_context.yml","mode":420,"size":1306,"sha256":"f2c021af9540605448e792f087d5b3c0b8e909b7f93a647bf2f2dbc8ecccff2a","index":0,"count":1,"encoding":"utf-8","payloadBytes":1306}
+@@PORTABLE {"path":"ansible-core/collections/ansible_collections/platform/core/roles/resolve_application_libraries/tasks/resource_context.yml","mode":420,"size":1594,"sha256":"8d492e198025111054f26ad80da7f812373a48b13c4278871955c67193e5b495","index":0,"count":1,"encoding":"utf-8","payloadBytes":1594}
 ---
-- name: Передача выбранных ресурсов провайдеру соединений приложения
+- name: Передача выбранных ресурсов провайдерам соединений приложения
   ansible.builtin.set_fact:
-    "{{ 'application_topics' if _application_resources[resource_id].kind == 'kafka.topic' else 'application_databases' }}": >-
-      {{ (application_topics if _application_resources[resource_id].kind == 'kafka.topic' else application_databases) |
-         combine({resource_connection.key:
-           ((application_topics if _application_resources[resource_id].kind == 'kafka.topic' else application_databases)[resource_connection.key] | default({})) |
-           combine({resource_id: {'resourceId': resource_id, 'name': _application_resources[resource_id].parameters.name}})}) }}
-  loop: "{{ _application_resources.keys() | list }}"
-  loop_control:
-    loop_var: resource_id
-  when:
-    - _application_resources[resource_id].kind in ['kafka.topic', 'postgresql.database', 'clickhouse.database']
-    - _application_resources[resource_id].binding in application_job.deployment.bindings
-    - application_job.deployment.bindings[_application_resources[resource_id].binding].deploymentRef | default('') == application_job.deployment.bindings.get(resource_connection.value.library_binding, {}).deploymentRef | default('')
+    application_topics: "{{ _application_resource_context.topics }}"
+    application_databases: "{{ _application_resource_context.databases }}"
+  vars:
+    _application_resource_context: >-
+      {%- set ns = namespace(topics=application_topics, databases=application_databases) -%}
+      {%- set bindings = application_job.deployment.bindings -%}
+      {%- for connection_key, connection in _application_connections.items()
+          if connection.library_binding | default('') in bindings -%}
+      {%- for resource_id, resource in _application_resources.items()
+          if resource.kind in ['kafka.topic', 'postgresql.database', 'clickhouse.database']
+          and resource.binding in bindings
+          and bindings[resource.binding].deploymentRef | default('') ==
+              bindings.get(connection.library_binding, {}).deploymentRef | default('') -%}
+      {%- set entry = {resource_id: {'resourceId': resource_id, 'name': resource.parameters.name}} -%}
+      {%- if resource.kind == 'kafka.topic' -%}
+      {%- set ns.topics = ns.topics | combine({connection_key: ns.topics.get(connection_key, {}) | combine(entry)}) -%}
+      {%- else -%}
+      {%- set ns.databases = ns.databases | combine({connection_key: ns.databases.get(connection_key, {}) | combine(entry)}) -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {%- endfor -%}
+      {{ {'topics': ns.topics, 'databases': ns.databases} }}
   no_log: true
   become: false
 
@@ -36617,7 +36779,7 @@ artifactLock:
     - ansible.builtin.import_tasks: ../tasks/offline-archives.yml
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/applications/stages/provider-stage.yml","mode":420,"size":11633,"sha256":"27ae9029d0fa78b4266973209a5fa401127adbd27b4d4ba8bb94b5b92c9b9a95","index":0,"count":1,"encoding":"utf-8","payloadBytes":11633}
+@@PORTABLE {"path":"ansible-core/playbooks/applications/stages/provider-stage.yml","mode":420,"size":11985,"sha256":"5d4c2684627809eafd6561b9ad4b25036a98f522b93e0fcf9778d7e4972be0f1","index":0,"count":1,"encoding":"utf-8","payloadBytes":11985}
 ---
 - name: "Выполнение обработчиков провайдеров библиотеки, затем экземпляров приложений"
   hosts: localhost
@@ -36631,6 +36793,7 @@ artifactLock:
           ansible.builtin.set_fact:
             platform_application_completed_batches: []
             platform_application_delivered_instances: []
+            platform_application_delivered_shared_fields: []
           no_log: true
         - name: Проверка защищённого runtime-каталога перед передачей сгенерированных учётных данных
           ansible.builtin.assert:
@@ -36764,6 +36927,10 @@ artifactLock:
             loop_var: platform_vault_application_job
         - name: "Сохранение результатов доставки учётных данных экземпляров для координатора выполнения"
           ansible.builtin.set_fact:
+            platform_application_delivered_shared_fields: >-
+              {{ application_vault_inputs.libraryJobs |
+                 platform.core.application_ready_shared_jobs(application_runtime_inputs.integrations, []) |
+                 platform.core.application_shared_vault_fields }}
             platform_application_delivered_instances: >-
               {{ (application_vault_inputs.instanceJobs | platform.core.application_ready_vault_jobs(
                   application_runtime_inputs.integrations, [], [])) |
@@ -37150,8 +37317,17 @@ artifactLock:
         loop_var: platform_vault_application_job
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/applications/tasks/deliver-ready.yml","mode":420,"size":3839,"sha256":"d95b0e608558372a31020b0398f7157967256c968ff640dd56d0b2a5dec88387","index":0,"count":1,"encoding":"utf-8","payloadBytes":3839}
+@@PORTABLE {"path":"ansible-core/playbooks/applications/tasks/deliver-ready.yml","mode":420,"size":4195,"sha256":"de9bfd2879965a5a86ed53d13d160d9e33f13b0d9ebfcb74b3e14936981dbdc1","index":0,"count":1,"encoding":"utf-8","payloadBytes":4195}
 ---
+- name: Выбор только новых готовых общих полей Vault
+  ansible.builtin.set_fact:
+    application_ready_shared_vault_jobs: >-
+      {{ hostvars['localhost'].application_vault_inputs.libraryJobs |
+         platform.core.application_ready_shared_jobs(hostvars['localhost'].application_runtime_inputs.integrations,
+           hostvars['localhost'].platform_application_completed_batches,
+           hostvars['localhost'].platform_application_delivered_shared_fields) }}
+  no_log: true
+
 - name: Проверка готовых общих полей Vault перед доставкой с контролем версии CAS
   ansible.builtin.include_role:
     name: platform.vault.application_provider
@@ -37160,7 +37336,7 @@ artifactLock:
       delegate_to: localhost
       delegate_facts: true
       become: false
-  loop: "{{ hostvars['localhost'].application_vault_inputs.libraryJobs | platform.core.application_ready_shared_jobs(hostvars['localhost'].application_runtime_inputs.integrations, hostvars['localhost'].platform_application_completed_batches) }}"
+  loop: "{{ application_ready_shared_vault_jobs }}"
   loop_control:
     loop_var: platform_vault_application_job
   vars: &vault_context
@@ -37181,7 +37357,7 @@ artifactLock:
       delegate_to: localhost
       delegate_facts: true
       become: false
-  loop: "{{ hostvars['localhost'].application_vault_inputs.libraryJobs | platform.core.application_ready_shared_jobs(hostvars['localhost'].application_runtime_inputs.integrations, hostvars['localhost'].platform_application_completed_batches) }}"
+  loop: "{{ application_ready_shared_vault_jobs }}"
   loop_control:
     loop_var: platform_vault_application_job
   vars: *vault_context
@@ -37210,6 +37386,9 @@ artifactLock:
 
 - name: Запись завершенных результатов доставки без сохранения другого желаемого состояния
   ansible.builtin.set_fact:
+    platform_application_delivered_shared_fields: >-
+      {{ hostvars['localhost'].platform_application_delivered_shared_fields +
+         (application_ready_shared_vault_jobs | platform.core.application_shared_vault_fields) }}
     platform_application_delivered_instances: >-
       {{ hostvars['localhost'].platform_application_delivered_instances +
          (application_ready_instance_vault_jobs | map(attribute='libraryId') |
@@ -37217,6 +37396,47 @@ artifactLock:
   delegate_to: localhost
   delegate_facts: true
   no_log: true
+
+@@END
+@@PORTABLE {"path":"ansible-core/playbooks/applications/tasks/instance-placement.yml","mode":420,"size":1880,"sha256":"c8525ee30fba318f6d4d006304373d83e5433bbd06518c5b9364a25bdf7df67a","index":0,"count":1,"encoding":"utf-8","payloadBytes":1880}
+---
+- name: "Подготовка отложенных файлов агента после полной доставки учётных данных из Vault"
+  ansible.builtin.include_role:
+    name: platform.core.application_runtime
+    tasks_from: apply_instance
+  loop: "{{ application_instance_runtime_jobs | rejectattr('instanceId', 'in', application_prepared_instance_ids) | list }}"
+  loop_control:
+    loop_var: application_runtime_job
+
+- name: Выполнение сценариев pre_start экземпляра после доставки всех образов
+  ansible.builtin.include_role:
+    name: platform.core.application_runtime
+    tasks_from: run_scripts
+  vars:
+    application_script_phase: before_start
+    application_script_scope: instance
+  loop: "{{ application_instance_runtime_jobs | platform.core.application_script_jobs(application_script_phase, application_script_scope) }}"
+  loop_control:
+    loop_var: application_runtime_job
+
+- name: Активация и проверка размещений логического экземпляра приложения
+  ansible.builtin.include_role:
+    name: platform.core.application_runtime
+    tasks_from: activate_instance
+  loop: "{{ application_instance_runtime_jobs }}"
+  loop_control:
+    loop_var: application_runtime_job
+
+- name: Запуск готовых сценариев только после того, как каждое размещение будет работоспособным
+  ansible.builtin.include_role:
+    name: platform.core.application_runtime
+    tasks_from: run_scripts
+  vars:
+    application_script_phase: after_ready
+    application_script_scope: instance
+  loop: "{{ application_instance_runtime_jobs | platform.core.application_script_jobs(application_script_phase, application_script_scope) }}"
+  loop_control:
+    loop_var: application_runtime_job
 
 @@END
 @@PORTABLE {"path":"ansible-core/playbooks/applications/tasks/offline-archives.yml","mode":420,"size":1252,"sha256":"32730461aff004324f19725f8dd6024f3c9b1e31e30723b5a0b13128a724beaf","index":0,"count":1,"encoding":"utf-8","payloadBytes":1252}
@@ -37247,7 +37467,7 @@ artifactLock:
   no_log: true
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/applications/tasks/ordered-instance.yml","mode":420,"size":4115,"sha256":"0a3671175fbca62bf6391d6acaf2d0e3d0ad08c6f655a0152d5afe808221d681","index":0,"count":1,"encoding":"utf-8","payloadBytes":4115}
+@@PORTABLE {"path":"ansible-core/playbooks/applications/tasks/ordered-instance.yml","mode":420,"size":2232,"sha256":"003d4398eaacafa9f018e0eb6a789e969da219ad3c81f33c868505bbe9199247","index":0,"count":1,"encoding":"utf-8","payloadBytes":2232}
 ---
 - name: Проверка полноты пакетов провайдеров перед запуском потребителя приложения
   ansible.builtin.assert:
@@ -37256,47 +37476,11 @@ artifactLock:
       (hostvars['localhost'].application_runtime_inputs.integrations |
        platform.core.application_pending_instances(hostvars['localhost'].platform_application_completed_batches))
     fail_msg: APPLICATION_PROVIDER_PREPARATION_INCOMPLETE
+  run_once: true
 
-- name: "Подготовка отложенных файлов агента после полной доставки учётных данных из Vault"
-  ansible.builtin.include_role:
-    name: platform.core.application_runtime
-    tasks_from: apply_instance
-  loop: "{{ application_instance_runtime_jobs }}"
-  loop_control:
-    loop_var: application_runtime_job
-  when: (application_library_id ~ '/' ~ application_instance_id) in hostvars['localhost'].application_runtime_inputs.integrations.dependencies
-
-- name: Выполнение сценариев pre_start экземпляра после доставки всех образов
-  ansible.builtin.include_role:
-    name: platform.core.application_runtime
-    tasks_from: run_scripts
-  vars:
-    application_script_phase: before_start
-    application_script_scope: instance
-  loop: "{{ application_instance_runtime_jobs }}"
-  loop_control:
-    loop_var: application_runtime_job
-  when: application_runtime_job.scripts | default([]) | selectattr('phase', 'equalto', application_script_phase) | selectattr('scope', 'equalto', application_script_scope) | list | length > 0
-
-- name: Активация и проверка размещений логического экземпляра приложения
-  ansible.builtin.include_role:
-    name: platform.core.application_runtime
-    tasks_from: activate_instance
-  loop: "{{ application_instance_runtime_jobs }}"
-  loop_control:
-    loop_var: application_runtime_job
-
-- name: Запуск готовых сценариев только после того, как каждое размещение будет работоспособным
-  ansible.builtin.include_role:
-    name: platform.core.application_runtime
-    tasks_from: run_scripts
-  vars:
-    application_script_phase: after_ready
-    application_script_scope: instance
-  loop: "{{ application_instance_runtime_jobs }}"
-  loop_control:
-    loop_var: application_runtime_job
-  when: application_runtime_job.scripts | default([]) | selectattr('phase', 'equalto', application_script_phase) | selectattr('scope', 'equalto', application_script_scope) | list | length > 0
+- name: Подготовка и запуск размещений экземпляра на текущем узле
+  ansible.builtin.include_tasks: instance-placement.yml
+  when: application_instance_runtime_jobs | length > 0
 
 - name: Привязка выбранных пакетов потребителей готового экземпляра приложения
   ansible.builtin.set_fact:
@@ -37305,6 +37489,7 @@ artifactLock:
          selectattr('providerLibraryId', 'equalto', application_library_id) |
          selectattr('providerInstanceId', 'equalto', application_instance_id) | list }}
   no_log: true
+  run_once: true
 
 - name: Публикация и проверка конечной точки готового провайдера до запуска потребителей
   ansible.builtin.include_tasks: ../../../../services/integrations/tasks/apply-source.yml
@@ -37325,7 +37510,7 @@ artifactLock:
   run_once: true
 
 @@END
-@@PORTABLE {"path":"ansible-core/playbooks/applications/tasks/ordered-library.yml","mode":420,"size":6864,"sha256":"2868252381961b45f089f806334a8158c535527ddc0ca23a07c60558864f4faa","index":0,"count":1,"encoding":"utf-8","payloadBytes":6864}
+@@PORTABLE {"path":"ansible-core/playbooks/applications/tasks/ordered-library.yml","mode":420,"size":6706,"sha256":"cc82d23e11682dfc31699d3d39d570ab8725be8302de7fee16c0127046f417da","index":0,"count":1,"encoding":"utf-8","payloadBytes":6706}
 ---
 - name: Фиксация начала установки библиотеки
   ansible.builtin.debug:
@@ -37338,6 +37523,7 @@ artifactLock:
 
 - name: Привязка выбранных логических экземпляров библиотеки приложений
   ansible.builtin.set_fact:
+    application_prepared_instance_ids: []
     application_library_runtime_jobs: "{{ platform_application_preflight_jobs | selectattr('libraryId', 'equalto', application_library_id) | list }}"
     application_library_instance_ids: >-
       {{ hostvars['localhost'].application_runtime_inputs.jobs | selectattr('libraryId', 'equalto', application_library_id) |
@@ -37366,10 +37552,9 @@ artifactLock:
   vars:
     application_script_phase: before_start
     application_script_scope: library
-  loop: "{{ application_library_runtime_jobs }}"
+  loop: "{{ application_library_runtime_jobs | platform.core.application_script_jobs(application_script_phase, application_script_scope) }}"
   loop_control:
     loop_var: application_runtime_job
-  when: application_runtime_job.scripts | default([]) | selectattr('phase', 'equalto', application_script_phase) | selectattr('scope', 'equalto', application_script_scope) | list | length > 0
 
 - name: "Обработка экземпляров приложения с проверкой завершения каждого этапа"
   ansible.builtin.include_tasks: ordered-instance.yml
@@ -37386,10 +37571,9 @@ artifactLock:
   vars:
     application_script_phase: after_ready
     application_script_scope: library
-  loop: "{{ application_library_runtime_jobs }}"
+  loop: "{{ application_library_runtime_jobs | platform.core.application_script_jobs(application_script_phase, application_script_scope) }}"
   loop_control:
     loop_var: application_runtime_job
-  when: application_runtime_job.scripts | default([]) | selectattr('phase', 'equalto', application_script_phase) | selectattr('scope', 'equalto', application_script_scope) | list | length > 0
 
 - name: Публикация и проверка готовых конечных точек библиотеки приложений
   ansible.builtin.include_tasks: ../../../../services/integrations/tasks/apply-source.yml

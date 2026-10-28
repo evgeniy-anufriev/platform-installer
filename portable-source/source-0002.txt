@@ -41374,8 +41374,9 @@ license: [Apache-2.0]
 dependencies: {}
 
 @@END
-@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/plugins/action/prepare_application_tables.py","mode":420,"size":1425,"sha256":"76c068d59ba753ff5935e741d48d1a1929f9d84d1627cbaddce2ab1f2de5bcad","index":0,"count":1,"encoding":"utf-8","payloadBytes":1425}
+@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/plugins/action/prepare_application_tables.py","mode":420,"size":2078,"sha256":"d081c63ca0a3b33c7ddf5458f1f8d87cc2a67b7c8f87b4e820bde7e26402a9b1","index":0,"count":1,"encoding":"utf-8","payloadBytes":2078}
 """Render table SQL through the existing Ansible template lookup in one action."""
+import json
 from ansible.plugins.action import ActionBase
 from ansible.errors import AnsibleError
 
@@ -41389,14 +41390,22 @@ class ActionModule(ActionBase):
             job = self._task.args['job']
             if self._task.args['phase'] == 'accounts':
                 return dict(changed=False, tables=[])
-            tables = []
-            for database in job['databases']:
-                for table in database.get('tables', []):
-                    variables = dict(values, item=[database, table], platform_clickhouse_application_job=job,
-                                     table_template_path=self._task.args['template_path'])
-                    templar = self._templar.copy_with_new_env(available_variables=variables)
-                    sql = templar.template("{{ lookup('ansible.builtin.template', table_template_path, template_vars={'item': item, 'platform_clickhouse_application_job': platform_clickhouse_application_job}) }}")
-                    tables.append(dict(database=database['name'], definition=table, sql=sql))
+            if not any(database.get('tables') for database in job['databases']):
+                return dict(changed=False, tables=[])
+            variables = dict(values, platform_clickhouse_application_job=job,
+                             table_template_path=self._task.args['template_path'])
+            templar = self._templar.copy_with_new_env(available_variables=variables)
+            rendered = templar.template("{{ lookup('ansible.builtin.template', table_template_path, template_vars={'platform_clickhouse_application_job': platform_clickhouse_application_job}) }}")
+            # Depending on the Ansible native templating version, JSON may
+            # already have been converted into its list representation.
+            tables = json.loads(rendered) if isinstance(rendered, str) else rendered
+            expected = [(database['name'], table) for database in job['databases']
+                        for table in database.get('tables', [])]
+            if (not isinstance(tables, list) or len(tables) != len(expected) or
+                    any(not isinstance(row, dict) or row.get('database') != database or
+                        row.get('definition') != definition or not isinstance(row.get('sql'), str) or
+                        not row['sql'].strip() for row, (database, definition) in zip(tables, expected))):
+                raise ValueError()
             return dict(changed=False, tables=tables)
         except (AnsibleError, KeyError, TypeError, ValueError):
             return dict(changed=False, failed=True, msg='CLICKHOUSE_APPLICATION_TABLE_TEMPLATE_INVALID')
@@ -41962,7 +41971,7 @@ platform_clickhouse_application_credential_files: "{{ platform_clickhouse_secret
     platform_clickhouse_application_phase: resources
 
 @@END
-@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/roles/application_provider/tasks/scope.yml","mode":420,"size":3625,"sha256":"6152346f12a219d53db247990a3b2e474f11e4d6bf8e3d4788b23bcdf01c99fb","index":0,"count":1,"encoding":"utf-8","payloadBytes":3625}
+@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/roles/application_provider/tasks/scope.yml","mode":420,"size":3627,"sha256":"aa931c304d41b254e058c3206797c920a3f219d7d021d91846bdb5c797e562b7","index":0,"count":1,"encoding":"utf-8","payloadBytes":3627}
 ---
 - name: Проверка защиты учётных данных выбранных ресурсов ClickHouse
   ansible.builtin.assert:
@@ -41979,7 +41988,7 @@ platform_clickhouse_application_credential_files: "{{ platform_clickhouse_secret
   platform.clickhouse.prepare_application_tables:
     job: "{{ platform_clickhouse_application_job }}"
     phase: "{{ platform_clickhouse_application_phase }}"
-    template_path: "{{ role_path }}/templates/application-table.sql.j2"
+    template_path: "{{ role_path }}/templates/application-tables.json.j2"
   register: clickhouse_application_prepared_tables
   no_log: true
 
@@ -42024,31 +42033,47 @@ platform_clickhouse_application_credential_files: "{{ platform_clickhouse_secret
     platform_clickhouse_application_phase: verify
 
 @@END
-@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/roles/application_provider/templates/application-table.sql.j2","mode":420,"size":1428,"sha256":"7475efbb91c4df1fdf1b098c684e6c1ce35c80cd1b1089c742ea6a3c70269c31","index":0,"count":1,"encoding":"utf-8","payloadBytes":1428}
-#jinja2: trim_blocks: False
-CREATE TABLE IF NOT EXISTS `{{ item.0.name | replace('`', '``') }}`.`{{ item.1.name | replace('`', '``') }}`{% if platform_clickhouse_application_job.mode == 'raft-ha' %} ON CLUSTER default{% endif %}
+@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/roles/application_provider/templates/application-table-ddl.j2","mode":420,"size":1375,"sha256":"f46a80f532a22f8112119b6bdba7286c4de6ccea89c120bccf3f674e521fb914","index":0,"count":1,"encoding":"utf-8","payloadBytes":1375}
+{% macro ddl(database, table, mode) -%}
+CREATE TABLE IF NOT EXISTS `{{ database.name | replace('`', '``') }}`.`{{ table.name | replace('`', '``') }}`{% if mode == 'raft-ha' %} ON CLUSTER default{% endif %}
 (
-{% for column in item.1.columns %}
-  `{{ column.name | replace('`', '``') }}` {{ column.type }}{% if column.codec is defined %} CODEC({{ column.codec }}){% endif %}{{ ',' if not loop.last or item.1.indexes | default([]) else '' }}
+{% for column in table.columns %}
+  `{{ column.name | replace('`', '``') }}` {{ column.type }}{% if column.codec is defined %} CODEC({{ column.codec }}){% endif %}{{ ',' if not loop.last or table.indexes | default([]) else '' }}
 {% endfor %}
-{% for index in item.1.indexes | default([]) %}
+{% for index in table.indexes | default([]) %}
   INDEX `{{ index.name | replace('`', '``') }}` {{ index.expression }} TYPE {{ index.type }} GRANULARITY {{ index.granularity }}{{ ',' if not loop.last else '' }}
 {% endfor %}
 )
-ENGINE = {{ item.1.engine }}{% if platform_clickhouse_application_job.mode == 'raft-ha' %}('{{ item.1.replicationPath }}', '{replica}'){% else %}(){% endif %}
+ENGINE = {{ table.engine }}{% if mode == 'raft-ha' %}('{{ table.replicationPath }}', '{replica}'){% else %}(){% endif %}
 {% for key, clause in [('partition_by', 'PARTITION BY'), ('primary_key', 'PRIMARY KEY'), ('order_by', 'ORDER BY'), ('sample_by', 'SAMPLE BY')] %}
-{% if item.1[key] is defined %}
-{{ clause }} {{ item.1[key] }}
+{% if table[key] is defined %}
+{{ clause }} {{ table[key] }}
 {% endif %}
 {% endfor %}
-{% if item.1.settings | default({}) %}
+{% if table.settings | default({}) %}
 SETTINGS
-{% for key, value in item.1.settings | dictsort %}
+{% for key, value in table.settings | dictsort %}
   {{ key }} = {% if value is string %}'{{ value | replace('\\', '\\\\') | replace("'", "\\'") }}'{% elif value is boolean %}{{ value | int }}{% else %}{{ value }}{% endif %}{{ ',' if not loop.last else '' }}
 {% endfor %}
 {% endif %}
 ;
+{% endmacro %}
 
+@@END
+@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/roles/application_provider/templates/application-table.sql.j2","mode":420,"size":143,"sha256":"badf48cb2ba626d252860f7daefe4263a285bc0a7dc6e33e6fea0778723f5531","index":0,"count":1,"encoding":"utf-8","payloadBytes":143}
+#jinja2: trim_blocks: False
+{% from 'application-table-ddl.j2' import ddl %}{{ ddl(item.0, item.1, platform_clickhouse_application_job.mode) }}
+@@END
+@@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/roles/application_provider/templates/application-tables.json.j2","mode":420,"size":453,"sha256":"49d8e8de00877b93080c808ae1b7678c27ac5484dd89a9ba7b3a062e02ead1a6","index":0,"count":1,"encoding":"utf-8","payloadBytes":453}
+#jinja2: trim_blocks: False
+{% from 'application-table-ddl.j2' import ddl %}
+{% set result = namespace(tables=[]) %}
+{% for database in platform_clickhouse_application_job.databases %}
+{% for table in database.tables | default([]) %}
+{% set result.tables = result.tables + [{'database': database.name, 'definition': table, 'sql': ddl(database, table, platform_clickhouse_application_job.mode)}] %}
+{% endfor %}
+{% endfor %}
+{{ result.tables | to_json }}
 @@END
 @@PORTABLE {"path":"services/clickhouse/ansible_collections/platform/clickhouse/roles/clickhouse_tls/defaults/main.yml","mode":420,"size":1612,"sha256":"c825431e488a4287f3d5dbea97dcbebbd8fb5db542306bacf703bce8993240ad","index":0,"count":1,"encoding":"utf-8","payloadBytes":1612}
 ---
@@ -45479,56 +45504,38 @@ description: Platform HAProxy HTTPS routing role
 license: [Apache-2.0]
 
 @@END
-@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/plugins/modules/archive_managed_backends.py","mode":420,"size":15343,"sha256":"f353e6d01549239b38b58ad1b52c7bbb3dbfc508c4bda0a29b8d69dbe4cd68eb","index":0,"count":1,"encoding":"utf-8","payloadBytes":15343}
-#!/usr/bin/python
-"""Preflight and archive only proven Platform-owned HAProxy backend fragments.
+@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/plugins/action/render_fragments.py","mode":420,"size":1298,"sha256":"38463ec20fc338ab94dc26aad6d3d65058c2377273e4d36458dbabaa033cd3fc","index":0,"count":1,"encoding":"utf-8","payloadBytes":1298}
+"""Render the existing HAProxy templates once per host, without writing files."""
+import json
+from ansible.errors import AnsibleError
+from ansible.plugins.action import ActionBase
 
-This intentionally handles one fixed HAProxy layout, not arbitrary filesystem
-cleanup. The retained, exact prior Platform candidate proves the old inventory.
-"""
 
-from __future__ import absolute_import, division, print_function
+class ActionModule(ActionBase):
+    TRANSFERS_FILES = False
 
-__metaclass__ = type
+    def run(self, tmp=None, task_vars=None):
+        try:
+            variables = dict(task_vars or {}, haproxy_template_path=self._task.args['template_path'])
+            templar = self._templar.copy_with_new_env(available_variables=variables)
+            rendered = templar.template("{{ lookup('ansible.builtin.template', haproxy_template_path) }}")
+            files = json.loads(rendered) if isinstance(rendered, str) else rendered
+            expected = ['10-public.cfg'] + [item['configFileName'] for item in variables['platform_haproxy_application_backends']]
+            if (not isinstance(files, list) or len(set(expected)) != len(expected)
+                    or [item['name'] for item in files] != expected
+                    or any(not isinstance(item['content'], str) or not item['content'] for item in files)):
+                raise ValueError()
+            return dict(changed=False, files=files)
+        except (AnsibleError, KeyError, TypeError, ValueError):
+            return dict(failed=True, msg='HAPROXY_FRAGMENT_TEMPLATE_INVALID')
 
+@@END
+@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/plugins/module_utils/managed_graph.py","mode":420,"size":12428,"sha256":"98a42fc102033d0baccbd4aa104295cb73b5c4e4ee81cd3329da09d74a1315f2","index":0,"count":1,"encoding":"utf-8","payloadBytes":12428}
 import os
 import re
 import stat
 import uuid
 import hashlib
-
-from ansible.module_utils.basic import AnsibleModule
-
-
-DOCUMENTATION = r'''
----
-module: archive_managed_backends
-short_description: Guard and archive exact owned HAProxy backend fragments
-description:
-  - Rejects unowned reserved backend files and archives proven stale fragments before publication.
-options:
-  config_directory:
-    type: path
-    required: true
-    description: Fixed HAProxy configuration root.
-  candidate_files:
-    type: list
-    elements: str
-    required: true
-    description: Exact candidate backend fragment basenames.
-  activation_required:
-    type: bool
-    required: true
-    description: Whether the validated candidate differs from the active graph.
-  operation:
-    type: str
-    choices: [capture, archive]
-    default: archive
-  previous_inventory:
-    type: list
-    elements: dict
-    description: Exact name/SHA-256 proof from capture before candidate reset.
-'''
 
 NAME = re.compile(r"30-backend-[a-z][a-z0-9._-]*\.cfg\Z")
 MAX_FILE = 8 * 1024 * 1024
@@ -45786,6 +45793,61 @@ def archive(config_directory, candidate_files, activation_required, previous_inv
     finally:
         os.close(config_fd)
 
+@@END
+@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/plugins/modules/archive_managed_backends.py","mode":420,"size":3113,"sha256":"b8b215029566fa58e3392cd8babe2bbcf03cc9544528114893ac3032970cdd66","index":0,"count":1,"encoding":"utf-8","payloadBytes":3113}
+#!/usr/bin/python
+"""Preflight and archive only proven Platform-owned HAProxy backend fragments.
+
+This intentionally handles one fixed HAProxy layout, not arbitrary filesystem
+cleanup. The retained, exact prior Platform candidate proves the old inventory.
+"""
+
+from __future__ import absolute_import, division, print_function
+
+__metaclass__ = type
+
+import os
+import re
+import stat
+import uuid
+import hashlib
+
+from ansible.module_utils.basic import AnsibleModule
+
+
+DOCUMENTATION = r'''
+---
+module: archive_managed_backends
+short_description: Guard and archive exact owned HAProxy backend fragments
+description:
+  - Rejects unowned reserved backend files and archives proven stale fragments before publication.
+options:
+  config_directory:
+    type: path
+    required: true
+    description: Fixed HAProxy configuration root.
+  candidate_files:
+    type: list
+    elements: str
+    required: true
+    description: Exact candidate backend fragment basenames.
+  activation_required:
+    type: bool
+    required: true
+    description: Whether the validated candidate differs from the active graph.
+  operation:
+    type: str
+    choices: [capture, archive]
+    default: archive
+  previous_inventory:
+    type: list
+    elements: dict
+    description: Exact name/SHA-256 proof from capture before candidate reset.
+'''
+
+from ansible_collections.platform.haproxy.plugins.module_utils.managed_graph import (
+    ArchiveError, archive, capture_prior_candidate)
+
 
 def main():
     module = AnsibleModule(argument_spec={
@@ -45818,6 +45880,103 @@ if __name__ == "__main__":
     main()
 
 @@END
+@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/plugins/modules/fragment_batch.py","mode":420,"size":3910,"sha256":"2e2748dbacdf730896b33d9eb0727fccb638e87a94520e04b409827c845c6ba7","index":0,"count":1,"encoding":"utf-8","payloadBytes":3910}
+#!/usr/bin/python
+"""Bounded batch writes of already-rendered HAProxy fragments, never deletion."""
+import os
+import stat
+import uuid
+from ansible.module_utils.basic import AnsibleModule
+from ansible_collections.platform.haproxy.plugins.module_utils.managed_graph import (
+    ArchiveError, NAME, MAX_FILE, MAX_FILES, MAX_TOTAL, require,
+    open_directory_path, read_regular)
+
+DOCUMENTATION = r'''
+module: fragment_batch
+short_description: Compare or atomically write a bounded batch of HAProxy fragments
+options:
+  directory:
+    type: path
+    required: true
+  files:
+    type: list
+    elements: dict
+    required: true
+  operation:
+    type: str
+    choices: [inspect, write]
+    default: inspect
+'''
+
+
+def reconcile(directory, files, write=False):
+    require(isinstance(files, list) and 0 < len(files) <= MAX_FILES, 'HAPROXY_FRAGMENT_BATCH_INVALID')
+    payload = {}
+    for item in files:
+        name, content = item.get('name'), item.get('content')
+        require(isinstance(name, str) and (name == '10-public.cfg' or NAME.fullmatch(name))
+                and name not in payload and isinstance(content, str), 'HAPROXY_FRAGMENT_BATCH_INVALID')
+        data = content.encode('utf-8')
+        require(0 < len(data) <= MAX_FILE, 'HAPROXY_FRAGMENT_BATCH_INVALID')
+        if name != '10-public.cfg':
+            require(data.startswith(('# platform-installer-managed-backend/v1 ' + name + '\n').encode()),
+                    'HAPROXY_FRAGMENT_OWNER_INVALID')
+        payload[name] = data
+    require(sum(map(len, payload.values())) <= MAX_TOTAL, 'HAPROXY_FRAGMENT_BATCH_INVALID')
+    fd = open_directory_path(directory)
+    try:
+        changes = []
+        # Validate the complete batch before the first write; reject links/devices.
+        for name, data in payload.items():
+            try:
+                existing, info = read_regular(fd, name)
+                same = existing == data and stat.S_IMODE(info.st_mode) == 0o640 and info.st_gid == 0
+            except FileNotFoundError:
+                same = False
+            if not same:
+                changes.append(name)
+        if write:
+            for name in changes:
+                temp = '.fragment-' + uuid.uuid4().hex
+                out = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=fd)
+                try:
+                    with os.fdopen(out, 'wb', closefd=False) as stream:
+                        stream.write(payload[name])
+                        stream.flush()
+                    os.fchown(out, 0, 0)
+                    os.fchmod(out, 0o640)
+                    os.fsync(out)
+                    os.replace(temp, name, src_dir_fd=fd, dst_dir_fd=fd)
+                finally:
+                    os.close(out)
+                    try:
+                        os.unlink(temp, dir_fd=fd)
+                    except FileNotFoundError:
+                        pass
+            os.fsync(fd)
+        return dict(changed=bool(changes) if write else False, matches=not changes, changedFiles=changes)
+    finally:
+        os.close(fd)
+
+
+def main():
+    module = AnsibleModule(argument_spec=dict(directory=dict(type='path', required=True),
+        files=dict(type='list', elements='dict', required=True),
+        operation=dict(type='str', choices=['inspect', 'write'], default='inspect')), supports_check_mode=True)
+    try:
+        result = reconcile(module.params['directory'], module.params['files'],
+                           module.params['operation'] == 'write' and not module.check_mode)
+        if module.check_mode and module.params['operation'] == 'write':
+            result['changed'] = not result['matches']
+        module.exit_json(**result)
+    except (ArchiveError, OSError, ValueError, TypeError, AttributeError) as error:
+        module.fail_json(msg=str(error) if isinstance(error, ArchiveError) else 'HAPROXY_FRAGMENT_BATCH_FAILED')
+
+
+if __name__ == '__main__':
+    main()
+
+@@END
 @@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/defaults/main.yml","mode":420,"size":1303,"sha256":"f25fe19f5bc1c910a4191b672c02742dc767dd8d472593c4259d1f77f5036773","index":0,"count":1,"encoding":"utf-8","payloadBytes":1303}
 platform_haproxy_package: haproxy
 platform_haproxy_service_name: haproxy
@@ -45843,7 +46002,23 @@ platform_haproxy_phase: prepare
 platform_haproxy_full_reconcile: false
 
 @@END
-@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/activate.yml","mode":420,"size":2259,"sha256":"ea49d631a81261a93b55c1ac279e73e70978be2b860407e8bc7369396b8a1c07","index":0,"count":1,"encoding":"utf-8","payloadBytes":2259}
+@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/activate.yml","mode":420,"size":831,"sha256":"021c9ec38d049f1443421f61d5d8fad96179d91d5b48eb15fe6325a0b07d4627","index":0,"count":1,"encoding":"utf-8","payloadBytes":831}
+---
+- name: Активация изменённого графа HAProxy
+  when: >-
+    not ((platform_haproxy_partial_deployment_id is defined or platform_haproxy_partial_deployment_ids is defined)
+         and (_platform_haproxy_batch_prepared | default(false) | bool) and (_platform_haproxy_partial_unchanged | default(false) | bool))
+  ansible.builtin.include_tasks: activate_changed.yml
+
+- name: Подтверждение неизменённого графа на границе активации кластера
+  ansible.builtin.include_tasks: partial_verify_unchanged.yml
+  when:
+    - platform_haproxy_partial_deployment_id is defined or platform_haproxy_partial_deployment_ids is defined
+    - _platform_haproxy_batch_prepared | default(false) | bool
+    - _platform_haproxy_partial_unchanged | default(false) | bool
+
+@@END
+@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/activate_changed.yml","mode":420,"size":2468,"sha256":"dd7c135d5ccf1f13348461273ca9985985cedb55ea899fa0119627525f7df02e","index":0,"count":1,"encoding":"utf-8","payloadBytes":2468}
 ---
 - name: Проверка активной основной конфигурации HAProxy перед публикацией
   ansible.builtin.stat:
@@ -45877,7 +46052,7 @@ platform_haproxy_full_reconcile: false
 - name: Публикация и проверка подготовленного набора конфигурации HAProxy
   block:
     - name: Установка и проверка графа-кандидата
-      ansible.builtin.include_tasks: activate_publish.yml
+      ansible.builtin.include_tasks: "{{ 'partial_publish.yml' if (_platform_haproxy_batch_prepared | default(false) | bool) and (platform_haproxy_partial_deployment_id is defined or platform_haproxy_partial_deployment_ids is defined) else 'activate_publish.yml' }}"
   rescue:
     - name: "Остановка выполнения с указанием архива восстановления HAProxy"
       ansible.builtin.fail:
@@ -46125,6 +46300,146 @@ platform_haproxy_full_reconcile: false
   when: (platform_desired_state.serviceDeployments | dict2items | selectattr('value.serviceType', 'equalto', 'haproxy') | selectattr('key', 'in', platform_deployments | default({})) | list | length) > 0
 
 @@END
+@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/partial_build.yml","mode":420,"size":2889,"sha256":"003f81fbdd41789ba2f9d9f0b22f7e3232437ba8156bd306077c75c2d4b9100f","index":0,"count":1,"encoding":"utf-8","payloadBytes":2889}
+---
+- name: Сброс только временного графа-кандидата HAProxy
+  ansible.builtin.file:
+    path: "{{ platform_haproxy_candidate_directory }}"
+    state: absent
+  changed_when: false
+
+- name: Создание временного рабочего каталога конфигурации-кандидата HAProxy
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0750'
+  loop: ["{{ platform_haproxy_candidate_directory }}", "{{ platform_haproxy_candidate_directory }}/conf.d"]
+  changed_when: false
+
+- name: Подготовка неизменённой конфигурации провайдера для проверки выбранных backend
+  ansible.builtin.include_tasks: partial_copy.yml
+  when: (platform_haproxy_partial_deployment_id is defined or platform_haproxy_partial_deployment_ids is defined)
+
+- name: Пакетная запись выбранных фрагментов в кандидат HAProxy
+  platform.haproxy.fragment_batch:
+    directory: "{{ platform_haproxy_candidate_directory }}/conf.d"
+    files: "{{ _platform_haproxy_rendered.files }}"
+    operation: write
+  changed_when: false
+  no_log: true
+
+- name: Проверка структурированных глобальных параметров журнала HAProxy
+  ansible.builtin.assert:
+    that:
+      - platform_haproxy_global.log is sequence
+      - platform_haproxy_global.log | length > 0
+      - item.address is defined and item.address is string and item.address | length > 0
+      - item.facility is defined and item.facility in ['kern', 'user', 'mail', 'daemon', 'auth', 'syslog', 'lpr', 'news', 'uucp', 'cron', 'auth2', 'ftp', 'ntp', 'audit', 'alert', 'cron2', 'local0', 'local1', 'local2', 'local3', 'local4', 'local5', 'local6', 'local7']
+      - item.level is not defined or item.level in ['emerg', 'alert', 'crit', 'err', 'warning', 'notice', 'info', 'debug']
+    fail_msg: HAPROXY_GLOBAL_LOG_INVALID
+  loop: "{{ platform_haproxy_global.log }}"
+
+- name: Вычисление детерминированного дайджеста графа-кандидата
+  ansible.builtin.shell: >-
+    { sha256sum haproxy.cfg; cd conf.d; find . -type f -printf '%P\0' | sort -z | xargs -0 sha256sum; } |
+    sed 's#  \./#  conf.d/#' | sort |
+    sha256sum | awk '{print $1}'
+  args:
+    chdir: "{{ platform_haproxy_candidate_directory }}"
+    executable: /bin/bash
+  changed_when: false
+  register: _platform_haproxy_candidate_graph_digest
+
+- name: Проверка полного графа-кандидата HAProxy перед активацией кластера
+  ansible.builtin.command:
+    argv: ["{{ platform_haproxy_binary }}", '-c', '-f', "{{ platform_haproxy_candidate_directory }}/haproxy.cfg", '-f', "{{ platform_haproxy_candidate_directory }}/conf.d"]
+  changed_when: false
+
+@@END
+@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/partial_candidate.yml","mode":420,"size":4578,"sha256":"4e08d26aa9f5375ca9059d575e0779e4beb4f4e7fb6653fdb7cbba6d245fd709","index":0,"count":1,"encoding":"utf-8","payloadBytes":4578}
+---
+- name: Сбор прежнего списка управляемых файлов HAProxy перед очисткой кандидата
+  platform.haproxy.archive_managed_backends:
+    name_prefix: "{{ platform_name_prefix | default('', true) }}"
+    operation: capture
+    config_directory: "{{ platform_haproxy_config_directory }}"
+  register: _platform_haproxy_prior_backend_capture
+
+- name: Обнаружение несвязанных файлов HAProxy conf.d для полной проверки кандидатов
+  ansible.builtin.find:
+    paths: "{{ platform_haproxy_conf_directory }}"
+    file_type: file
+    recurse: false
+    excludes: [10-public.cfg, 20-local-stats.cfg, 30-backend-*.cfg, 90-stats-backends.cfg]
+  register: _platform_haproxy_third_party_fragments
+
+- name: Выбор имён файлов выбранного источника конечной точки
+  ansible.builtin.set_fact:
+    _platform_haproxy_partial_source_files: >-
+      {{ platform_haproxy_runtime_projection.backends.backends | dict2items |
+         map(attribute='value') | flatten |
+         selectattr('targetDeploymentId', 'in', _platform_haproxy_partial_ids) |
+         map(attribute='configFileName') | unique | list }}
+
+- name: Выбор backend развёртывания источника для частичной интеграции HAProxy
+  ansible.builtin.set_fact:
+    platform_haproxy_application_backends: >-
+      {{ platform_haproxy_runtime_projection.backends.backends | dict2items |
+         selectattr('key', 'in', platform_deployments) | map(attribute='value') |
+         flatten | selectattr('targetDeploymentId', 'in', _platform_haproxy_partial_ids) |
+         selectattr('providerHostIds', 'contains', inventory_hostname) |
+         sort(attribute='configFileName') }}
+    platform_haproxy_managed_application_backend_files: >-
+      {{ (((_platform_haproxy_prior_backend_capture.previousInventory | map(attribute='name') |
+           reject('in', _platform_haproxy_partial_source_files)) | list) +
+         (platform_haproxy_runtime_projection.backends.backends | dict2items |
+          selectattr('key', 'in', platform_deployments) | map(attribute='value') |
+          flatten | selectattr('targetDeploymentId', 'in', _platform_haproxy_partial_ids) |
+          selectattr('providerHostIds', 'contains', inventory_hostname) |
+          map(attribute='configFileName') | list)) | unique | sort }}
+  when:
+    - not (platform_haproxy_full_reconcile | bool)
+    - (platform_haproxy_partial_deployment_id is defined or platform_haproxy_partial_deployment_ids is defined)
+
+- name: Проверка целевых узлов проекции перед публикацией конфигурации-кандидата
+  ansible.builtin.include_tasks: check_targets.yml
+
+- name: Пакетный рендер выбранных фрагментов HAProxy штатными шаблонами
+  platform.haproxy.render_fragments:
+    template_path: "{{ role_path }}/templates/partial-fragments.json.j2"
+  register: _platform_haproxy_rendered
+  no_log: true
+
+- name: Сравнение выбранного набора фрагментов с активной конфигурацией
+  platform.haproxy.fragment_batch:
+    directory: "{{ platform_haproxy_conf_directory }}"
+    files: "{{ _platform_haproxy_rendered.files }}"
+  register: _platform_haproxy_fragment_comparison
+  no_log: true
+
+- name: Сброс признаков публикации для текущего вызова хука
+  ansible.builtin.set_fact:
+    _platform_haproxy_partial_unchanged: >-
+      {{ _platform_haproxy_fragment_comparison.matches and
+         (_platform_haproxy_prior_backend_capture.previousInventory | map(attribute='name') | sort | list) ==
+         (platform_haproxy_managed_application_backend_files | sort | list) }}
+    _platform_haproxy_batch_prepared: true
+    platform_haproxy_active_artifacts_changed: false
+    platform_haproxy_tls_material_changed: false
+
+- name: Подготовка изменённого кандидата частичной публикации
+  ansible.builtin.include_tasks: partial_build.yml
+  when: not (_platform_haproxy_partial_unchanged | bool)
+
+- name: Проверка неизменённой конфигурации с текущими TLS-файлами
+  ansible.builtin.command:
+    argv: ["{{ platform_haproxy_binary }}", '-c', '-f', "{{ platform_haproxy_main_config }}", '-f', "{{ platform_haproxy_conf_directory }}"]
+  changed_when: false
+  when: _platform_haproxy_partial_unchanged | bool
+
+@@END
 @@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/partial_copy.yml","mode":420,"size":2073,"sha256":"7dca3fc559c798d266f6879e647b84443b0c4cdcbb3e93aba1adeb86b9fdc0d9","index":0,"count":1,"encoding":"utf-8","payloadBytes":2073}
 ---
 - name: Выбор полного списка сохраняемых фрагментов для частичного кандидата
@@ -46174,7 +46489,7 @@ platform_haproxy_full_reconcile: false
   changed_when: false
 
 @@END
-@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/partial_prepare.yml","mode":420,"size":529,"sha256":"f5446d7664491fde0b38c3a112df7b9a0f58349b462cc67147768e6d6fa645d1","index":0,"count":1,"encoding":"utf-8","payloadBytes":529}
+@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/partial_prepare.yml","mode":420,"size":539,"sha256":"42863b4c93bb281504fb1ddc1ef8e2b50df991380153abbfe48b4793cf30cc89","index":0,"count":1,"encoding":"utf-8","payloadBytes":539}
 ---
 - name: Проверка настроек ресурсов переносимой службы
   ansible.builtin.include_role:
@@ -46184,7 +46499,44 @@ platform_haproxy_full_reconcile: false
   ansible.builtin.include_tasks: resolve.yml
 
 - name: Подготовка и проверка полного кандидата частичной интеграции HAProxy
-  ansible.builtin.include_tasks: prepare.yml
+  ansible.builtin.include_tasks: partial_candidate.yml
+
+@@END
+@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/partial_publish.yml","mode":420,"size":1795,"sha256":"3e6ad1e2f8f634e9b4616ccaccbc26638f63fe30ecdac6742934aecd63fb911a","index":0,"count":1,"encoding":"utf-8","payloadBytes":1795}
+---
+- name: Пакетная установка проверенных фрагментов HAProxy
+  platform.haproxy.fragment_batch:
+    directory: "{{ platform_haproxy_conf_directory }}"
+    files: "{{ _platform_haproxy_rendered.files }}"
+    operation: write
+  register: _platform_haproxy_partial_install
+  no_log: true
+
+- name: Запись изменения частичного графа HAProxy
+  ansible.builtin.set_fact:
+    platform_haproxy_active_artifacts_changed: "{{ _platform_haproxy_partial_install.changed or _platform_haproxy_backend_archive.changed }}"
+
+- name: Вычисление детерминированного дайджеста активного графа HAProxy
+  ansible.builtin.shell: >-
+    { sha256sum "{{ platform_haproxy_main_config }}"; cd "{{ platform_haproxy_conf_directory }}";
+      find . -type f -printf '%P\0' | sort -z | xargs -0 sha256sum; } |
+    sed "s#{{ platform_haproxy_main_config }}#haproxy.cfg#; s#  \./#  conf.d/#" | sort |
+    sha256sum | awk '{print $1}'
+  args:
+    executable: /bin/bash
+  changed_when: false
+  register: _platform_haproxy_active_graph_digest
+
+- name: "Проверка соответствия активной конфигурации HAProxy проверенному набору файлов"
+  ansible.builtin.assert:
+    that:
+      - _platform_haproxy_candidate_graph_digest.stdout == _platform_haproxy_active_graph_digest.stdout
+    fail_msg: HAPROXY_CANDIDATE_ACTIVE_GRAPH_MISMATCH
+
+- name: Проверка активной конфигурации HAProxy перед жизненным циклом службы
+  ansible.builtin.command:
+    argv: ["{{ platform_haproxy_binary }}", '-c', '-f', "{{ platform_haproxy_main_config }}", '-f', "{{ platform_haproxy_conf_directory }}"]
+  changed_when: false
 
 @@END
 @@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/partial_reload.yml","mode":420,"size":433,"sha256":"c654539a44b74a82d99b9968a1ba6f5a6af507a3ebf93a5249cb62093ea4fcc0","index":0,"count":1,"encoding":"utf-8","payloadBytes":433}
@@ -46224,8 +46576,30 @@ platform_haproxy_full_reconcile: false
   loop: "{{ _platform_haproxy_partial_ids }}"
 
 @@END
-@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/prepare.yml","mode":420,"size":12861,"sha256":"1627a0ec0581bc52e8b508a620cfb9b7b970bba603056e15385302103c217a15","index":0,"count":1,"encoding":"utf-8","payloadBytes":12861}
+@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/partial_verify_unchanged.yml","mode":420,"size":709,"sha256":"82ce8439a642f8152220b7fbb8768f9e96a0ce08bce34f1169af390d98692194","index":0,"count":1,"encoding":"utf-8","payloadBytes":709}
 ---
+- name: Подтверждение прежнего графа перед пропуском активации
+  platform.haproxy.archive_managed_backends:
+    name_prefix: "{{ platform_name_prefix | default('', true) }}"
+    operation: capture
+    config_directory: "{{ platform_haproxy_config_directory }}"
+
+- name: Подтверждение выбранных фрагментов перед пропуском активации
+  platform.haproxy.fragment_batch:
+    directory: "{{ platform_haproxy_conf_directory }}"
+    files: "{{ _platform_haproxy_rendered.files }}"
+  register: _platform_haproxy_unchanged_verified
+  failed_when: not _platform_haproxy_unchanged_verified.matches
+  no_log: true
+
+@@END
+@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/tasks/prepare.yml","mode":420,"size":13104,"sha256":"c9a1a26722a4c3399835ef9012c1b481278cc2edddda74fca7702f578623b90d","index":0,"count":1,"encoding":"utf-8","payloadBytes":13104}
+---
+- name: Сброс контекста пакетного хука перед обычной подготовкой HAProxy
+  ansible.builtin.set_fact:
+    _platform_haproxy_batch_prepared: false
+    _platform_haproxy_partial_unchanged: false
+
 - name: Сбор прежнего списка управляемых файлов HAProxy перед очисткой кандидата
   platform.haproxy.archive_managed_backends:
     name_prefix: "{{ platform_name_prefix | default('', true) }}"
@@ -46716,6 +47090,17 @@ defaults
     timeout server {{ platform_haproxy_defaults.timeout_server }}
 
 @@END
+@@PORTABLE {"path":"services/haproxy/ansible_collections/platform/haproxy/roles/haproxy/templates/partial-fragments.json.j2","mode":420,"size":515,"sha256":"d16f7a451c3ad18eb6564432a1a0c68c31c623c0b24bdfb3773e5e22ba0595dd","index":0,"count":1,"encoding":"utf-8","payloadBytes":515}
+{%- set ns = namespace(files=[]) -%}
+{%- set public -%}{% include '10-public.cfg.j2' %}{% endset -%}
+{%- set ns.files = ns.files + [{'name': '10-public.cfg', 'content': public ~ '\n'}] -%}
+{%- for platform_haproxy_application_backend in platform_haproxy_application_backends -%}
+{%- set backend -%}{% include '30-application-backend.cfg.j2' %}{% endset -%}
+{%- set ns.files = ns.files + [{'name': platform_haproxy_application_backend.configFileName, 'content': backend}] -%}
+{%- endfor -%}
+{{ ns.files | to_json }}
+
+@@END
 @@PORTABLE {"path":"services/haproxy/compatibility.yml","mode":420,"size":261,"sha256":"bd8f22a1c2fc8330c878d28a4d06d3d76bb1ef8519f26f4243f9e5aa6a2c9094","index":0,"count":1,"encoding":"utf-8","payloadBytes":261}
 apiVersion: platform.installer/service-compatibility/v1alpha1
 kind: ServiceCompatibility
@@ -47195,7 +47580,7 @@ compatibilityRef: compatibility.yml
     _platform_integration_selected_sources: "{{ _platform_integration_selected_sources + [{'sourceId': _platform_selected_source_id, 'projection': platform_service_integration_projection, 'dnsRecords': platform_bind_source_dns_records, 'fqdns': _platform_integration_source_fqdns, 'probe': _platform_integration_probe, 'expectedAddresses': platform_endpoint_probe_expected_addresses}] }}"
 
 @@END
-@@PORTABLE {"path":"services/integrations/tasks/resolve-selected-sources.yml","mode":420,"size":2341,"sha256":"81a329a9c9129b7142d9cd09d5a65c5e5c12802465bd02b5d6bb9cf7cb2e6f5c","index":0,"count":1,"encoding":"utf-8","payloadBytes":2341}
+@@PORTABLE {"path":"services/integrations/tasks/resolve-selected-sources.yml","mode":420,"size":3572,"sha256":"b5a316ede90a9477fdbab07e5dd52581e938dd26fdf972a44bef2bddfa41873f","index":0,"count":1,"encoding":"utf-8","payloadBytes":3572}
 ---
 - name: Проверка непустого списка выбранных источников конечных точек
   ansible.builtin.assert:
@@ -47207,15 +47592,36 @@ compatibilityRef: compatibility.yml
       - platform_endpoint_source_id is not defined or platform_endpoint_source_ids | unique | list == [platform_endpoint_source_id]
     fail_msg: APPLICATION_ENDPOINT_SCOPE_INVALID
 
-- name: Инициализация локальных для операции проекций выбранного источника
-  ansible.builtin.set_fact:
-    _platform_integration_selected_sources: []
+- name: Однократная загрузка каталога для выбранного набора источников
+  ansible.builtin.include_vars:
+    file: "{{ platform_service_catalog_path }}"
+    name: _platform_integration_catalog_file
 
-- name: Определение каждого выбранного источника с помощью существующего преобразователя
-  ansible.builtin.include_tasks: resolve-selected-source.yml
-  loop: "{{ platform_endpoint_source_ids | unique | sort }}"
-  loop_control:
-    loop_var: _platform_selected_source_id
+- name: Сбор inventory для пакетного расчёта интеграций
+  ansible.builtin.set_fact:
+    _platform_integration_inventory: >-
+      {%- set hosts = {} -%}
+      {%- set deployments = {} -%}
+      {%- for host in groups['platform_targets'] | default([]) | sort -%}
+      {%- set _ = hosts.update({host: {'ansible_host': hostvars[host].ansible_host | default(host)}}) -%}
+      {%- set _ = deployments.update({host: hostvars[host].platform_deployments | default({})}) -%}
+      {%- endfor -%}
+      {{ {'hosts': hosts, 'deployments': deployments} }}
+  no_log: true
+
+- name: Пакетный расчёт выбранных источников существующими преобразователями Core
+  platform.core.resolve_endpoint_publications:
+    source_ids: "{{ platform_endpoint_source_ids }}"
+    endpoint_sources: "{{ hostvars['localhost'].platform_endpoint_sources }}"
+    desired_state: "{{ platform_desired_state }}"
+    service_catalog: "{{ _platform_integration_catalog_file.platform_service_catalog | default(_platform_integration_catalog_file, true) }}"
+    inventory_hosts: "{{ _platform_integration_inventory.hosts }}"
+    inventory_deployments: "{{ _platform_integration_inventory.deployments }}"
+  register: _platform_integration_batch
+
+- name: Привязка проекций источников к общей публикации и проверкам
+  ansible.builtin.set_fact:
+    _platform_integration_selected_sources: "{{ _platform_integration_batch.sources }}"
 
 - name: Публикация выбранных участников провайдера и записей DNS
   ansible.builtin.set_fact:
