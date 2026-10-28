@@ -1,0 +1,62 @@
+---
+- name: Проверка поддерживаемого протокола подключения Kafka CLI
+  ansible.builtin.assert:
+    that:
+      - kafka_cli_connection.securityProtocol in ['PLAINTEXT', 'SSL', 'SASL_SSL']
+    fail_msg: 'BLOCKED: Kafka CLI connection uses an unsupported security protocol'
+
+- name: Создание временной конфигурации Kafka CLI
+  ansible.builtin.tempfile:
+    state: file
+    prefix: "{{ platform_kafka_name }}-cli-"
+    suffix: .properties
+  register: _platform_kafka_cli_command_config
+  changed_when: false
+
+- name: Формирование конфигурации команды PLAINTEXT Kafka CLI по runtime-проекции
+  ansible.builtin.copy:
+    content: "security.protocol={{ kafka_cli_connection.securityProtocol }}\n"
+    dest: "{{ _platform_kafka_cli_command_config.path }}"
+    mode: '0600'
+  changed_when: false
+  when: kafka_cli_connection.securityProtocol == 'PLAINTEXT'
+
+- name: Определение SecretRef во время выполнения непосредственно перед выполнением SSL Kafka CLI
+  ansible.builtin.set_fact:
+    _platform_kafka_cli_password_file: >-
+      {{ (platform_pki_secret_files
+          | default(hostvars['localhost'].platform_pki_secret_files | default({}, true), true))[kafka_cli_connection.tls.storePasswordSecretRef] }}
+  no_log: true
+  when:
+    - kafka_cli_connection.securityProtocol in ['SSL', 'SASL_SSL']
+    - kafka_cli_connection.tls.truststoreType == 'PKCS12'
+
+- name: Формирование конфигурации команды SSL Kafka CLI по runtime-проекции
+  ansible.builtin.copy:
+    content: |-
+      security.protocol={{ kafka_cli_connection.securityProtocol }}
+      ssl.truststore.location={{ kafka_cli_connection.tls.truststorePath }}
+      ssl.truststore.type={{ kafka_cli_connection.tls.truststoreType }}
+      ssl.endpoint.identification.algorithm=https
+      {% if kafka_cli_connection.tls.truststoreType == 'PKCS12' %}
+      ssl.truststore.password={{ lookup('ansible.builtin.file', _platform_kafka_cli_password_file) | trim | platform.core.platform_java_properties_value }}
+      {% endif %}
+      {% if kafka_cli_connection.securityProtocol == 'SSL' %}
+      ssl.keystore.location={{ kafka_cli_connection.tls.keystorePath }}
+      ssl.keystore.type={{ kafka_cli_connection.tls.truststoreType }}
+      {% if kafka_cli_connection.tls.truststoreType == 'PKCS12' %}
+      ssl.keystore.password={{ lookup('ansible.builtin.file', _platform_kafka_cli_password_file) | trim | platform.core.platform_java_properties_value }}
+      ssl.key.password={{ lookup('ansible.builtin.file', _platform_kafka_cli_password_file) | trim | platform.core.platform_java_properties_value }}
+      {% endif %}
+      {% endif %}
+      {% if kafka_cli_connection.securityProtocol == 'SASL_SSL' %}
+      sasl.mechanism=SCRAM-SHA-512
+      {% set admin_password = lookup('ansible.builtin.file', platform_kafka_secret_files[kafka_cli_connection.adminPasswordRef], rstrip=false) %}
+      {% set admin_jaas = 'org.apache.kafka.common.security.scram.ScramLoginModule required username="admin" password=' ~ (admin_password | to_json(ensure_ascii=false)) ~ ';' %}
+      sasl.jaas.config={{ admin_jaas | platform.core.platform_java_properties_value }}
+      {% endif %}
+    dest: "{{ _platform_kafka_cli_command_config.path }}"
+    mode: '0600'
+  changed_when: false
+  no_log: true
+  when: kafka_cli_connection.securityProtocol in ['SSL', 'SASL_SSL']

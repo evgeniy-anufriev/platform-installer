@@ -4,30 +4,39 @@
   become: true
   gather_facts: false
   any_errors_fatal: true
-  roles:
-    - role: platform.haproxy.haproxy
-      tasks_from: partial_prepare
-      platform_haproxy_phase: prepare
-      platform_haproxy_partial_deployment_id: "{{ hostvars['localhost']._platform_integration_source_id }}"
+  tasks:
+    - name: Подготовка источника общим частичным хуком HAProxy
+      ansible.builtin.import_role:
+        name: platform.haproxy.haproxy
+        tasks_from: partial_prepare
+      vars:
+        platform_haproxy_phase: prepare
+        platform_haproxy_partial_deployment_id: "{{ hostvars['localhost']._platform_integration_source_id }}"
 
 - name: Активация backend источника после проверки конфигураций на всём кластере
   hosts: "{{ hostvars['localhost'].platform_service_integration_projection.haproxyHosts | default([]) if hostvars is defined else [] }}"
   become: true
   gather_facts: false
   any_errors_fatal: true
-  roles:
-    - role: platform.haproxy.haproxy
-      tasks_from: activate
-      platform_haproxy_phase: activate
-      platform_haproxy_partial_deployment_id: "{{ hostvars['localhost']._platform_integration_source_id }}"
+  tasks:
+    - name: Активация подготовленного источника HAProxy
+      ansible.builtin.import_role:
+        name: platform.haproxy.haproxy
+        tasks_from: activate
+      vars:
+        platform_haproxy_phase: activate
+        platform_haproxy_partial_deployment_id: "{{ hostvars['localhost']._platform_integration_source_id }}"
 
 - name: Перечитывание конфигурации HAProxy после активации backend-сервиса источника
   hosts: "{{ hostvars['localhost'].platform_service_integration_projection.haproxyHosts | default([]) if hostvars is defined else [] }}"
   become: true
   gather_facts: false
   any_errors_fatal: true
-  roles:
-    - role: platform.haproxy.haproxy
-      tasks_from: partial_reload
-      platform_haproxy_phase: start
-      platform_haproxy_partial_deployment_id: "{{ hostvars['localhost']._platform_integration_source_id }}"
+  tasks:
+    - name: Перечитывание конфигурации общим частичным хуком HAProxy
+      ansible.builtin.import_role:
+        name: platform.haproxy.haproxy
+        tasks_from: partial_reload
+      vars:
+        platform_haproxy_phase: start
+        platform_haproxy_partial_deployment_id: "{{ hostvars['localhost']._platform_integration_source_id }}"

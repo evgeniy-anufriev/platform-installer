@@ -79,20 +79,8 @@
   loop_control:
     label: "{{ item.id | default('unknown') }}"
 
-- name: Инициализация нормализованного списка экземпляров службы Kafka
-  ansible.builtin.set_fact:
-    _platform_kafka_instances: []
-
-- name: Нормализация экземпляров службы Kafka в общую внутреннюю модель
-  ansible.builtin.include_tasks: normalize_member.yml
-  loop: "{{ _platform_kafka_input_instances }}"
-  loop_control:
-    loop_var: kafka_input_member
-    label: "{{ kafka_input_member.id }}"
-
-- name: Упорядочивание нормализованных экземпляров Kafka
-  ansible.builtin.set_fact:
-    _platform_kafka_instances: "{{ _platform_kafka_instances | sort(attribute='node_id') }}"
+- name: Нормализация экземпляров Kafka по настройкам текущего узла
+  ansible.builtin.include_tasks: normalize_members.yml
 
 - name: Получение наборов экземпляров службы Kafka
   ansible.builtin.set_fact:

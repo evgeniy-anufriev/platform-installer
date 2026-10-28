@@ -4,6 +4,7 @@
   vars:
     kafka_cli_member: "{{ kafka_quorum_diagnostic_member }}"
     kafka_cli_purpose: "{{ 'admin' if _platform_kafka_scram_enabled | default(false) | bool else 'controller' }}"
+  when: not (kafka_verify_cli_prepared | default(false) | bool)
 
 - name: Получение состояния кворума контроллеров Kafka через рассчитанное подключение CLI
   ansible.builtin.include_tasks: run_cli_command.yml

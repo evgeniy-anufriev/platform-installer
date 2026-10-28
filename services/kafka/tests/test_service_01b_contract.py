@@ -33,9 +33,9 @@ class Service01BContractTests(unittest.TestCase):
     def test_role_has_one_generic_member_execution_path_and_legacy_adapter(self):
         source = (ROLE / "tasks" / "apply.yml").read_text(encoding="utf-8")
         self.assertIn("Преобразование устаревших переменных одного экземпляра сервиса", source)
-        self.assertIn("Нормализация экземпляров службы Kafka в общую внутреннюю модель", source)
+        self.assertIn("include_tasks: normalize_members.yml", source)
         self.assertIn("include_tasks: member.yml", source)
-        self.assertIn("Упорядочивание нормализованных экземпляров Kafka", source)
+        self.assertIn("sort(attribute='node_id')", (ROLE / 'tasks/normalize_members.yml').read_text())
         self.assertNotIn("SERVICE-01", source)
         self.assertNotIn("_platform_kafka_legacy_single", source)
         self.assertNotIn("exactly one local Kafka member", source)
@@ -67,7 +67,7 @@ class Service01BContractTests(unittest.TestCase):
         self.assertIn("managed_paths", resources)
 
     def test_systemd_unit_uses_deployment_and_numeric_member_identity(self):
-        source = (ROLE / "tasks" / "normalize_member.yml").read_text(encoding="utf-8")
+        source = (ROLE / "templates" / "normalized-members.json.j2").read_text(encoding="utf-8")
         self.assertIn("_platform_kafka_normalized_unit_service }}@{{ _platform_kafka_normalized_deployment_id }}-{{ _platform_kafka_normalized_member_number }}.service", source)
         self.assertIn("_platform_kafka_normalized_runtime_directory ~ '/systemd.env'", source)
         self.assertIn("legacy_systemd_unit_name", source)
@@ -98,7 +98,7 @@ class Service01BContractTests(unittest.TestCase):
     def test_quorum_and_effective_config_are_role_aware(self):
         main = (ROLE / "tasks" / "apply.yml").read_text(encoding="utf-8")
         member = (ROLE / "tasks" / "member.yml").read_text(encoding="utf-8")
-        verify = (ROLE / "tasks" / "verify.yml").read_text(encoding="utf-8")
+        verify = (ROLE / "tasks" / "verify_cluster.yml").read_text(encoding="utf-8")
         self.assertIn("_platform_kafka_controller_instances", main)
         self.assertIn("_platform_kafka_broker_instances", main)
         self.assertIn("_platform_kafka_local_controller_instances", main)
@@ -113,10 +113,10 @@ class Service01BContractTests(unittest.TestCase):
         self.assertIn("--bootstrap-controller", quorum)
 
     def test_kafka_cli_diagnostics_consume_runtime_projection(self):
-        verify = (ROLE / "tasks" / "verify.yml").read_text(encoding="utf-8")
+        verify = (ROLE / "tasks" / "verify_cluster.yml").read_text(encoding="utf-8")
         resolve = (ROLE / "tasks" / "resolve_cli_connection.yml").read_text(encoding="utf-8")
         runtime = (ROLE / "tasks" / "resolve_tls_runtime.yml").read_text(encoding="utf-8")
-        runner = (ROLE / "tasks" / "run_cli_command.yml").read_text(encoding="utf-8")
+        runner = (ROLE / "tasks" / "run_cli_command.yml").read_text(encoding="utf-8") + (ROLE / "tasks" / "prepare_cli_config.yml").read_text(encoding="utf-8")
         self.assertIn("resolve_cli_connection.yml", verify)
         self.assertIn("run_cli_command.yml", verify)
         self.assertNotIn("server.properties", verify)
@@ -135,7 +135,7 @@ class Service01BContractTests(unittest.TestCase):
         self.assertIn("Удаление временной конфигурации Kafka CLI", runner)
 
     def test_listener_endpoint_projection_is_name_independent(self):
-        normalize = (ROLE / "tasks" / "normalize_member.yml").read_text(encoding="utf-8")
+        normalize = (ROLE / "templates" / "normalized-members.json.j2").read_text(encoding="utf-8")
         self.assertIn("listener_endpoints", normalize)
         self.assertIn("listener.purpose == 'controller'", normalize)
         self.assertIn("listener.advertisedAddress", normalize)

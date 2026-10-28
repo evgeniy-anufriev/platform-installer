@@ -24,7 +24,7 @@ class PartialHookContractTests(unittest.TestCase):
     def test_hook_prepares_once_and_keeps_cluster_phase_barriers(self):
         plays = yaml.safe_load((ROOT / 'services/haproxy/playbooks/integrate.yml').read_text())
         self.assertEqual(['partial_prepare', 'activate', 'partial_reload'],
-                         [p['roles'][0]['tasks_from'] for p in plays])
+                         [p['tasks'][0]['ansible.builtin.import_role']['tasks_from'] for p in plays])
         self.assertTrue(all(p['any_errors_fatal'] for p in plays))
         tasks = yaml.safe_load((ROOT / 'services/integrations/tasks/apply-source.yml').read_text())
         phases = [t['ansible.builtin.include_role'].get('tasks_from') for t in tasks

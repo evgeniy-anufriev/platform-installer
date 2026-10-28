@@ -183,7 +183,7 @@ class SourceDnsProjectionTests(unittest.TestCase):
                           if task.get("name") == "Инициализация пустой проекции интеграции конечной точки")
         with open(HAPROXY_PLAYBOOK, encoding="utf-8") as source:
             haproxy_plays = yaml.safe_load(source)
-        source_ids = [play["roles"][0]["platform_haproxy_partial_deployment_id"]
+        source_ids = [play["tasks"][0]["vars"]["platform_haproxy_partial_deployment_id"]
                       for play in haproxy_plays]
 
         playbook = [

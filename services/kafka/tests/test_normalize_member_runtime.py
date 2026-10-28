@@ -1,4 +1,5 @@
 import shutil
+import os
 import subprocess
 import tempfile
 import unittest
@@ -16,6 +17,7 @@ class KafkaMemberNormalizationRuntimeTests(unittest.TestCase):
         if not executable:
             self.skipTest("Ansible runtime required")
         tasks = []
+        inputs = []
         scenarios = [("broker-1", ["broker"], {}),
                      ("controller-2", ["controller"], {"name": "old-controller", "runtime_directory": "/tmp/custom-runtime"}),
                      ("combined-3", ["broker", "controller"], {}),
@@ -27,32 +29,43 @@ class KafkaMemberNormalizationRuntimeTests(unittest.TestCase):
                       "listeners": {"CLIENT": {"purpose": "client", "securityProtocol": "SSL", "port": 9093},
                                     "CONTROLLER": {"purpose": "controller", "securityProtocol": "SSL", "port": 9094}}}
             runtime = compatibility.get("runtime_directory", "/tmp/config/kafka-" + member_id)
+            inputs.append(member)
             service = "platform-kafka" if len(roles) == 2 else "platform-kafka-" + roles[0]
             tasks.extend([
                 {"ansible.builtin.set_fact": {"kafka_input_member": member}},
-                {"ansible.builtin.include_tasks": str(TASKS)},
+                {"ansible.builtin.include_tasks": str(TASKS.parents[6] / 'tests/fixtures/normalize_member_before_batch.yml')},
+                {"ansible.builtin.set_fact": {"legacy_member": "{{ _platform_kafka_normalized_member }}",
+                                             "expected_members": "{{ expected_members + [_platform_kafka_normalized_member] }}"}},
+                {"ansible.builtin.include_role": {"name": "platform.kafka.kafka_kraft", "tasks_from": "normalize_member", "public": True}},
                 {"ansible.builtin.assert": {"that": [
+                    "_platform_kafka_normalized_member == legacy_member",
                     "_platform_kafka_normalized_member.runtime_directory == expected_runtime",
                     "_platform_kafka_normalized_member.systemd_environment_pattern == expected_env",
                     "_platform_kafka_normalized_member.systemd_unit_name == expected_unit",
                     "_platform_kafka_normalized_member.legacy_systemd_unit_name == expected_legacy",
-                ]}, "vars": {"expected_runtime": runtime,
+                ], "fail_msg": "{{ {'expected': legacy_member, 'actual': _platform_kafka_normalized_member} | to_json }}"}, "vars": {"expected_runtime": runtime,
                     "expected_env": compatibility.get("environment_pattern", runtime + "/systemd.env"),
                     "expected_unit": service + "@qa-kafka-" + member_id[-1] + ".service",
                     "expected_legacy": compatibility.get("name", "kafka@kafka-" + member_id) + ".service"}},
             ])
+        tasks.extend([
+            {"ansible.builtin.set_fact": {"_platform_kafka_input_instances": inputs}},
+            {"ansible.builtin.include_role": {"name": "platform.kafka.kafka_kraft", "tasks_from": "normalize_members", "public": True}},
+            {"ansible.builtin.assert": {"that": "_platform_kafka_instances == expected_members"}},
+        ])
         variables = yaml.safe_load((TASKS.parent.parent / "defaults/main.yml").read_text(encoding="utf-8"))
         variables.update({"platform_name_prefix": "platform",
                           "platform_kafka_config_directory": "/tmp/config", "platform_kafka_service_name": "kafka",
                           "platform_kafka_deployment_id": "qa-kafka", "platform_kafka_tls_profile": "tls",
-                          "_platform_kafka_instances": []})
+                          "_platform_kafka_instances": [], "expected_members": []})
         play = [{"hosts": "localhost", "connection": "local", "gather_facts": False,
                  "vars": variables, "tasks": tasks}]
         with tempfile.TemporaryDirectory(prefix="platform-kafka-normalize-") as directory:
             path = Path(directory) / "test.yml"
             path.write_text(yaml.safe_dump(play), encoding="utf-8")
             result = subprocess.run([executable, "-i", "localhost,", str(path)],
-                                    capture_output=True, text=True, timeout=60)
+                                    env=dict(os.environ, ANSIBLE_COLLECTIONS_PATH=str(TASKS.parents[6])),
+                                    capture_output=True, text=True, timeout=120)
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
 
 

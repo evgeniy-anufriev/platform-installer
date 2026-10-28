@@ -16,10 +16,13 @@
   gather_facts: false
   become: true
   any_errors_fatal: true
-  roles:
-    - role: platform.haproxy.haproxy
-      tasks_from: endpoint_verify
-      platform_haproxy_partial_deployment_id: "{{ hostvars['localhost']._platform_integration_source_id }}"
+  tasks:
+    - name: Проверка источника через явный вход HAProxy без применения конфигурации
+      ansible.builtin.import_role:
+        name: platform.haproxy.haproxy
+        tasks_from: endpoint_verify
+      vars:
+        platform_haproxy_partial_deployment_id: "{{ hostvars['localhost']._platform_integration_source_id }}"
       when: platform_endpoint_verify_only | default(false) | bool
 
 - import_playbook: ../../bind/playbooks/integrate.yml

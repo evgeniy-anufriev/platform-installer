@@ -196,6 +196,15 @@ this change does not add an automatic password-rotation mechanism.
 ### Infrastructure Verify
 
 `platform_kafka_verify_only: true` enters `tasks/verify_entry.yml` directly.
+
+Apply and Verify normalize the complete input member list through the same
+`normalized-members.json.j2` template once per host. Host-specific defaults
+remain effective; no normalized state is reused from a previous operation.
+Local Verify includes use ordinal member/listener slots so Ansible can execute
+matching tasks concurrently on different hosts, including uneven placements.
+SCRAM quorum and broker diagnostics share one temporary mode-0600 CLI config
+inside an `always` cleanup scope. Distinct non-SCRAM controller/client
+connections retain separate configs and both diagnostic commands remain.
 It checks each local member's active process, listener ports and actual TLS
 handshakes, then cluster quorum, registered unfenced brokers and each enabled
 Schema Registry HTTPS `/subjects` endpoint. It does not enter installation,

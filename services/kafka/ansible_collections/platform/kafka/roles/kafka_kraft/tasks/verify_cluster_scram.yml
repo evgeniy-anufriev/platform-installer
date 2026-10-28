@@ -1,0 +1,26 @@
+---
+- name: Определение общего административного подключения Kafka для Verify
+  ansible.builtin.include_tasks: resolve_cli_connection.yml
+  vars:
+    kafka_cli_member: "{{ _platform_kafka_broker_instances | first }}"
+    kafka_cli_purpose: admin
+
+- name: Проверка кластера с гарантированным удалением общей конфигурации CLI
+  block:
+    - name: Подготовка общей конфигурации Kafka CLI
+      ansible.builtin.include_tasks: prepare_cli_config.yml
+      vars:
+        kafka_cli_connection: "{{ _platform_kafka_cli_connection }}"
+
+    - name: Проверка кворума и регистрации брокеров через одно подключение
+      ansible.builtin.include_tasks: verify_cluster.yml
+      vars:
+        kafka_cli_prepared_config: "{{ _platform_kafka_cli_command_config }}"
+        kafka_verify_cli_prepared: true
+  always:
+    - name: Удаление общей временной конфигурации Kafka CLI
+      ansible.builtin.file:
+        path: "{{ _platform_kafka_cli_command_config.path }}"
+        state: absent
+      changed_when: false
+      when: _platform_kafka_cli_command_config.path is defined

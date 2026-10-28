@@ -79,3 +79,44 @@ All six temporary qa-sync workspaces were cleaned. The first root-test transfer
 needed its test-created pycache ownership restored before standard cleanup; later
 runs disable bytecode writes. `git diff --check` PASS. Owner authorized committing these changes;
 no master merge, bundle publication or new installation run was performed.
+
+## Service entrypoint correction
+
+Owner-authorized follow-up after observing
+`installer-50f0c027f03980ce89344c8f981e8c99`: Vault's HAProxy phases took 134s
+and ClickHouse's 192s; complete endpoint hooks took 157s and 227s respectively.
+These are event timeline intervals, not summed parallel task durations.
+Both entered the full HAProxy lifecycle despite the intended `tasks_from`.
+
+The service integration playbook supplied `tasks_from` as a parameter in the
+`roles` list. That does not select a role task entrypoint; Ansible ran `main.yml`.
+The previous source-shape assertion accepted this syntax, while direct role-entry
+tests did not exercise the service playbook. Earlier component performance
+results therefore did not prove service-entry performance.
+
+Service phases now use explicit `ansible.builtin.import_role` with `tasks_from`
+for `partial_prepare`, `activate` and `partial_reload`. Their separate plays,
+resolved host scope and `any_errors_fatal` barriers are preserved. The same
+incorrect declaration in endpoint Verify now explicitly imports `endpoint_verify`.
+Library hooks already used explicit `include_role` and are unchanged.
+
+Native regression executes verbatim Vault/ClickHouse Apply entrypoints and the
+shared integration playbooks in a temporary fixture tree. External infrastructure,
+service mutations and resolved inputs are substituted; HAProxy `main.yml` is a
+failure sentinel. Cases cover both Apply and endpoint Verify, no providers,
+exact source/host selection, all-host phase readiness and failed preparation
+blocking all activation/reload. Separately, the existing real HAProxy candidate
+test exercises publication, repeat and invalid candidate/TLS rejection in
+isolated root-owned directories. This is not live service/UI acceptance.
+
+QA evidence: `.runtime/qa/haproxy-service-entry/`. Final selections: **34 distinct
+tests PASS**, no skips. Entry/regression selection initially had 32 PASS and one
+obsolete source-ID test error (33 tests, 297.305s): it indexed the old `roles`
+layout. The updated test preserves the same source-ID assertion and passed from
+fresh sources (6.271s). All six new native entry cases passed. The real HAProxy
+candidate/repeat/failure test passed (122.832s). Syntax checks passed for Vault
+Apply, ClickHouse Apply and HAProxy integrate. Both temporary qa-sync workspaces
+were cleaned; `git diff --check` passed. No full service wall-time saving is
+claimed from these isolated component and dispatch tests.
+No active run, installed service, published bundle or unrelated Kafka change is
+modified. Review is waived by the owner; the owner authorized committing this correction together with Kafka Verify optimization.
