@@ -24,10 +24,10 @@ class RegistryPhaseRuntimeTests(unittest.TestCase):
             child = root / "identity.yml"
             child.write_text(yaml.safe_dump([{"ansible.builtin.set_fact": {
                 "identity_source": True,
-                "_platform_kafka_admin_principals": "{{ _platform_kafka_admin_principals + ['User:' ~ kafka_authorization_member.id] }}"}}]))
+                "_platform_kafka_internal_principals": "{{ _platform_kafka_internal_principals + ['User:' ~ kafka_authorization_member.id] }}"}}]))
             tasks[1]["ansible.builtin.include_tasks"] = str(child)
             tasks.append({"ansible.builtin.assert": {"that": [
-                "_platform_kafka_admin_principals == ['User:m1', 'User:m2']",
+                "_platform_kafka_internal_principals == ['User:m1', 'User:m2']",
                 "identity_source is not defined or inventory_hostname == _platform_kafka_principal_source_host"]}})
             inventory = root / "inventory.yml"
             inventory.write_text(yaml.safe_dump({"all": {"hosts": {"h1": {"ansible_connection": "local"},
@@ -35,7 +35,7 @@ class RegistryPhaseRuntimeTests(unittest.TestCase):
             play = root / "play.yml"
             play.write_text(yaml.safe_dump([{"hosts": "all", "order": "reverse_inventory", "gather_facts": False,
                 "vars": {"_platform_kafka_scram_enabled": True, "platform_kafka_verify_only": False,
-                         "_platform_kafka_admin_principals": [], "_platform_kafka_instances": [{"id": "m1"}, {"id": "m2"}]},
+                         "_platform_kafka_internal_principals": [], "_platform_kafka_instances": [{"id": "m1"}, {"id": "m2"}]},
                 "tasks": tasks}]))
             result = subprocess.run(["ansible-playbook", "-i", str(inventory), str(play)],
                                     capture_output=True, text=True, timeout=60)

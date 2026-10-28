@@ -1,7 +1,7 @@
 ---
 - name: Получение описания метаданных SCRAM один раз для всех пользователей развертывания
   ansible.builtin.command:
-    argv: ["{{ application_topic_cli_directory }}/bin/kafka-configs.sh", --bootstrap-server, "{{ application_topic_candidate.address }}:{{ application_topic_candidate.port }}", --command-config, "{{ application_kafka_private.path }}/admin.properties", --describe, --entity-type, users]
+    argv: ["{{ application_topic_cli_directory }}/bin/kafka-configs{{ platform_kafka_script_extension }}", --bootstrap-server, "{{ application_topic_candidate.address }}:{{ application_topic_candidate.port }}", --command-config, "{{ application_kafka_private.path }}/admin.properties", --describe, --entity-type, users]
   register: application_kafka_user_inventory
   changed_when: false
   failed_when: false

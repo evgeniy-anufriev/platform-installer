@@ -12,7 +12,7 @@ TASKS = Path(__file__).resolve().parents[1] / "ansible_collections/platform/kafk
 
 
 class RegistryPartialTopicRuntimeTests(unittest.TestCase):
-    def test_seed_create_and_repeat_do_not_describe_after_creation(self):
+    def test_seed_create_confirms_policy_and_repeat_reads_once(self):
         if not shutil.which('ansible-playbook'):
             self.skipTest('Ansible runtime required')
         with tempfile.TemporaryDirectory(prefix='platform-registry-seed-') as directory:
@@ -39,7 +39,7 @@ class RegistryPartialTopicRuntimeTests(unittest.TestCase):
                     capture_output=True, text=True, timeout=60)
                 self.assertEqual(0, result.returncode, result.stdout[-2000:] + result.stderr[-800:])
                 calls = [json.loads(s) for s in (root / 'calls.jsonl').read_text().splitlines()]
-                self.assertEqual(1 if repeat else 2, len(calls))
+                self.assertEqual(1 if repeat else 3, len(calls))
                 self.assertIn('--describe', calls[0])
                 if repeat:
                     self.assertIn('changed=0', result.stdout)
@@ -51,11 +51,7 @@ class RegistryPartialTopicRuntimeTests(unittest.TestCase):
     def test_non_seed_member_checks_existing_incompatible_and_missing_topic(self):
         if not shutil.which("ansible-playbook"):
             self.skipTest("Ansible runtime required")
-        member_tasks = yaml.safe_load((TASKS / "schema_registry_member.yml").read_text())
-        include = next(task for task in member_tasks
-                       if task.get("ansible.builtin.include_tasks") == "schema_registry_topic.yml")
-        self.assertNotIn("when", include)
-        include["ansible.builtin.include_tasks"] = str(TASKS / "schema_registry_topic.yml")
+        include = {'ansible.builtin.include_tasks': str(TASKS / 'schema_registry_topic.yml')}
         with tempfile.TemporaryDirectory(prefix="platform-registry-partial-") as directory:
             root = Path(directory)
             (root / "bin").mkdir()

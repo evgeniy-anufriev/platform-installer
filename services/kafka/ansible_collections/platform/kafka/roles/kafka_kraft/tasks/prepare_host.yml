@@ -20,7 +20,19 @@
     src: "{{ platform_kafka_artifact_path }}"
     dest: /opt
     remote_src: false
-    creates: "/opt/{{ platform_kafka_archive_directory }}/bin/kafka-storage.sh"
+    creates: "/opt/{{ platform_kafka_archive_directory }}/bin/kafka-storage{{ platform_kafka_script_extension }}"
+  register: _platform_kafka_distribution_unpack
+
+- name: Маркировка распакованного общего дистрибутива Kafka
+  ansible.builtin.copy:
+    content: "{{ platform_kafka_artifact_checksum }}"
+    dest: "/opt/{{ platform_kafka_archive_directory }}/.platform-kafka-approved-sha256"
+    owner: root
+    group: root
+    mode: '0644'
+  when:
+    - platform_kafka_schema_registry_use_kafka_distribution
+    - _platform_kafka_distribution_unpack is changed
 
 
 - name: Указание стабильного пути установки Kafka в утвержденной версии

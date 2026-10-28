@@ -278,7 +278,7 @@
       become_user: "{{ platform_kafka_user }}"
       ansible.builtin.command:
         argv: >-
-          {{ [platform_kafka_install_directory ~ '/bin/kafka-storage.sh',
+          {{ [platform_kafka_install_directory ~ '/bin/kafka-storage' ~ platform_kafka_script_extension,
               'format', '--cluster-id', platform_kafka_cluster_id,
               '--config', kafka_member.config_directory ~ '/server.properties']
              + (['--initial-controllers', _platform_kafka_initial_controllers | trim]

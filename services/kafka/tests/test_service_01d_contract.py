@@ -66,7 +66,7 @@ class Service01DContractTests(unittest.TestCase):
         ssl_verify = (ROLE / "tasks" / "verify_ssl_listener.yml").read_text(encoding="utf-8")
         self.assertIn("Подтверждение лидера кворума и членства контроллера Kafka", quorum)
         self.assertIn("LeaderId", quorum)
-        self.assertIn("kafka-broker-api-versions.sh", verify)
+        self.assertIn("kafka-broker-api-versions{{ platform_kafka_script_extension }}", verify)
         self.assertIn("Выбор диагностических заголовков брокера без внесения изменений", verify)
         self.assertIn("Подтверждение регистрации брокеров Kafka и состояния unfenced", verify)
         self.assertIn("*[!0-9.]*)", ssl_verify)

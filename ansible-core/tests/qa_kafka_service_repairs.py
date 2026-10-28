@@ -21,7 +21,7 @@ class KafkaServiceRepairTests(unittest.TestCase):
         inventory.write_text(yaml.safe_dump(dict(all=dict(hosts={h: dict(ansible_connection='local')
             for h in (['h1', 'h2', 'h3'] if hosts == 'all' else ['localhost', 'h1', 'h2'])}))))
         play.write_text(yaml.safe_dump([dict(hosts=hosts, gather_facts=False,
-            vars=variables or {}, tasks=tasks)], sort_keys=False))
+            vars={'platform_kafka_script_extension': '.sh', **(variables or {})}, tasks=tasks)], sort_keys=False))
         result = subprocess.run(['ansible-playbook', '-i', str(inventory), str(play)],
             env=dict(os.environ, ANSIBLE_CONFIG=str(ROOT / 'ansible-core/ansible.cfg')),
             capture_output=True, text=True, timeout=180)

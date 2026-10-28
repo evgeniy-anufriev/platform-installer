@@ -35,14 +35,18 @@
   ansible.builtin.set_fact:
     application_kafka_acl_groups: >-
       {{ application_kafka_acl_groups | combine({application_kafka_acl_group_key: {
-        'names': (application_kafka_acl_group_previous.names | default([]) + [application_kafka_grant.name]) | unique(case_sensitive=true) | list,
+        'resources': (application_kafka_acl_group_previous.resources | default([])) + [application_kafka_acl_resource_key],
         'selectors': (application_kafka_acl_group_previous.selectors | default([])) +
-          ([] if application_kafka_grant.name in (application_kafka_acl_group_previous.names | default([])) else application_kafka_acl_args[:-2]),
+          ([] if application_kafka_acl_resource_key in (application_kafka_acl_group_previous.resources | default([])) else application_kafka_acl_args[:-2]),
         'operations': application_kafka_acl_operations,
         'patternType': application_kafka_grant.patternType
       }}) }}
   vars:
-    application_kafka_acl_group_key: "{{ [application_kafka_grant.resourceType, application_kafka_grant.patternType, application_kafka_acl_operations | reject('equalto', '--operation') | unique | sort] | to_json }}"
+    # CLI applies the same operations to every selector. Only equal deltas share
+    # a command; cluster is never merged into the data-resource group.
+    application_kafka_acl_resource_key: "{{ [application_kafka_grant.resourceType, application_kafka_grant.name] | to_json }}"
+    application_kafka_acl_group_kind: "{{ 'data' if application_kafka_grant.resourceType in ['topic', 'group', 'transactional-id'] else application_kafka_grant.resourceType }}"
+    application_kafka_acl_group_key: "{{ [application_kafka_acl_group_kind, application_kafka_grant.patternType, application_kafka_acl_operations | reject('equalto', '--operation') | unique | sort] | to_json }}"
     application_kafka_acl_group_previous: "{{ application_kafka_acl_groups.get(application_kafka_acl_group_key, {}) }}"
   changed_when: false
   no_log: true

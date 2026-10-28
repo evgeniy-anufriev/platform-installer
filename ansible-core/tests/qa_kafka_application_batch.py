@@ -52,7 +52,7 @@ class KafkaApplicationBatchTests(unittest.TestCase):
                 path.write_text(CLI)
                 path.chmod(0o700)
             (root / 'state.json').write_text(json.dumps(state))
-            variables = dict(platform_execution_skip_infrastructure_verify=skip_infra_verify,
+            variables = dict(platform_kafka_script_extension='.sh', platform_execution_skip_infrastructure_verify=skip_infra_verify,
                              application_topic_cli_directory=str(root),
                              application_topic_candidate=dict(address='127.0.0.1', port='9092'),
                              application_topic_client=dict(path=str(root / 'client.properties')),

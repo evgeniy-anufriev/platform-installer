@@ -34,7 +34,7 @@
 - name: Проверка пароля существующего приложения без изменения учетных данных
   ansible.builtin.command:
     argv:
-      - "{{ application_topic_cli_directory }}/bin/kafka-broker-api-versions.sh"
+      - "{{ application_topic_cli_directory }}/bin/kafka-broker-api-versions{{ platform_kafka_script_extension }}"
       - --bootstrap-server
       - "{{ application_kafka_account.candidates[0].address }}:{{ application_kafka_account.candidates[0].port }}"
       - --command-config
@@ -76,7 +76,7 @@
     - name: Установка пароля выбранного приложения SCRAM с помощью файлового интерфейса Kafka
       ansible.builtin.command:
         argv:
-          - "{{ application_topic_cli_directory }}/bin/kafka-configs.sh"
+          - "{{ application_topic_cli_directory }}/bin/kafka-configs{{ platform_kafka_script_extension }}"
           - --bootstrap-server
           - "{{ application_topic_candidate.address }}:{{ application_topic_candidate.port }}"
           - --command-config
@@ -103,7 +103,7 @@
     - name: Выполнение аутентификации приложения через SCRAM listener Kafka
       ansible.builtin.command:
         argv:
-          - "{{ application_topic_cli_directory }}/bin/kafka-broker-api-versions.sh"
+          - "{{ application_topic_cli_directory }}/bin/kafka-broker-api-versions{{ platform_kafka_script_extension }}"
           - --bootstrap-server
           - "{{ application_kafka_account.candidates[0].address }}:{{ application_kafka_account.candidates[0].port }}"
           - --command-config

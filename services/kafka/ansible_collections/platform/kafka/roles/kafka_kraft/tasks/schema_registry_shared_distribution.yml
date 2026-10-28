@@ -1,0 +1,108 @@
+---
+- name: Проверка общего корня установки Kafka и Schema Registry
+  ansible.builtin.assert:
+    that:
+      - platform_kafka_archive_directory is match('^[A-Za-z0-9_.+-]+$')
+      - platform_kafka_schema_registry_install_directory == '/opt/' ~ platform_kafka_archive_directory
+    fail_msg: SCHEMA_REGISTRY_SHARED_INSTALL_PATH_MISMATCH
+
+- name: Определение источника общего дистрибутива Kafka
+  ansible.builtin.include_role:
+    name: platform.core.artifact_source_gate
+  vars:
+    platform_artifact_requirements:
+      - {id: kafka-binary, name: kafka}
+  when:
+    - not platform_kafka_verify_only
+    - platform_artifact_source_authority_active | default(false) or platform_resolved_artifact_sources is defined
+
+- name: Проверка архивного источника общего дистрибутива
+  ansible.builtin.assert:
+    that: platform_resolved_artifact_sources['kafka-binary'].source == 'OFFLINE_BUNDLE'
+    fail_msg: SCHEMA_REGISTRY_SHARED_DISTRIBUTION_REQUIRES_ARCHIVE
+  when:
+    - not platform_kafka_verify_only
+    - platform_resolved_artifact_sources is defined
+
+- name: Доставка утверждённого общего архива Kafka
+  ansible.builtin.include_role:
+    name: platform.core.artifact_delivery
+  vars:
+    platform_artifact_delivery_requirements:
+      - {id: kafka-binary, name: kafka}
+  when:
+    - not platform_kafka_verify_only
+    - platform_resolved_artifact_sources is defined
+
+- name: Выбор утверждённого общего архива
+  ansible.builtin.set_fact:
+    _platform_kafka_shared_archive: >-
+      {{ platform_offline_artifact_paths['kafka-binary'][0]
+         if platform_resolved_artifact_sources is defined
+         else platform_kafka_artifact_path | default('') }}
+  when: not platform_kafka_verify_only
+
+- name: Выбор контрольной суммы общего дистрибутива
+  ansible.builtin.set_fact:
+    _platform_kafka_shared_checksum: >-
+      {{ platform_resolved_artifact_sources['kafka-binary'].artifacts[0].sha256
+         if platform_resolved_artifact_sources is defined
+         else platform_kafka_artifact_checksum }}
+
+- name: Проверка маркера распакованного общего дистрибутива
+  ansible.builtin.stat:
+    path: "{{ platform_kafka_schema_registry_install_directory }}/.platform-kafka-approved-sha256"
+    follow: false
+  register: _platform_kafka_shared_marker_stat
+
+- name: Подтверждение безопасного маркера общего дистрибутива
+  ansible.builtin.assert:
+    that:
+      - _platform_kafka_shared_marker_stat.stat.isreg | default(false)
+      - not (_platform_kafka_shared_marker_stat.stat.islnk | default(false))
+    fail_msg: SCHEMA_REGISTRY_SHARED_INSTALL_OWNERSHIP_UNKNOWN
+
+- name: Чтение идентификатора распакованного общего дистрибутива
+  ansible.builtin.command:
+    argv: [cat, "{{ platform_kafka_schema_registry_install_directory }}/.platform-kafka-approved-sha256"]
+  changed_when: false
+  register: _platform_kafka_shared_marker
+
+- name: Подтверждение соответствия распакованного общего дистрибутива
+  ansible.builtin.assert:
+    that:
+      - _platform_kafka_shared_checksum is match('^sha256:[0-9a-fA-F]{64}$')
+      - _platform_kafka_shared_marker.stdout == _platform_kafka_shared_checksum
+    fail_msg: SCHEMA_REGISTRY_SHARED_INSTALL_OWNERSHIP_UNKNOWN
+
+- name: Проверка контрольной суммы общего архива
+  ansible.builtin.stat:
+    path: "{{ _platform_kafka_shared_archive }}"
+    checksum_algorithm: sha256
+  delegate_to: "{{ inventory_hostname if platform_resolved_artifact_sources is defined else 'localhost' }}"
+  become: "{{ platform_resolved_artifact_sources is defined }}"
+  register: _platform_kafka_shared_archive_stat
+  when: not platform_kafka_verify_only
+
+- name: Подтверждение утверждённого общего архива
+  ansible.builtin.assert:
+    that:
+      - _platform_kafka_shared_archive_stat.stat.isreg | default(false)
+      - _platform_kafka_shared_checksum is match('^sha256:[0-9a-fA-F]{64}$')
+      - ('sha256:' ~ (_platform_kafka_shared_archive_stat.stat.checksum | default(''))) == _platform_kafka_shared_checksum
+    fail_msg: SCHEMA_REGISTRY_SHARED_ARTIFACT_MISSING_OR_CHECKSUM_MISMATCH
+  when: not platform_kafka_verify_only
+
+- name: Проверка программы запуска Schema Registry в общем дистрибутиве
+  ansible.builtin.stat:
+    path: "{{ platform_kafka_schema_registry_install_directory }}/bin/schema-registry-start"
+    follow: false
+  register: _platform_kafka_shared_launcher
+
+- name: Подтверждение программы запуска общего дистрибутива
+  ansible.builtin.assert:
+    that:
+      - _platform_kafka_shared_launcher.stat.isreg | default(false)
+      - not (_platform_kafka_shared_launcher.stat.islnk | default(false))
+      - _platform_kafka_shared_launcher.stat.executable | default(false)
+    fail_msg: SCHEMA_REGISTRY_SHARED_LAUNCHER_UNAVAILABLE

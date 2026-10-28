@@ -41,11 +41,13 @@ class KafkaMemberNormalizationRuntimeTests(unittest.TestCase):
                     "expected_unit": service + "@qa-kafka-" + member_id[-1] + ".service",
                     "expected_legacy": compatibility.get("name", "kafka@kafka-" + member_id) + ".service"}},
             ])
-        play = [{"hosts": "localhost", "connection": "local", "gather_facts": False,
-                 "vars": {"platform_kafka_config_directory": "/tmp/config", "platform_kafka_name": "platform-kafka", "platform_kafka_service_name": "kafka",
-                          "platform_kafka_version": yaml.safe_load((TASKS.parent.parent / "defaults/main.yml").read_text())["platform_kafka_version"],
+        variables = yaml.safe_load((TASKS.parent.parent / "defaults/main.yml").read_text(encoding="utf-8"))
+        variables.update({"platform_name_prefix": "platform",
+                          "platform_kafka_config_directory": "/tmp/config", "platform_kafka_service_name": "kafka",
                           "platform_kafka_deployment_id": "qa-kafka", "platform_kafka_tls_profile": "tls",
-                          "_platform_kafka_instances": []}, "tasks": tasks}]
+                          "_platform_kafka_instances": []})
+        play = [{"hosts": "localhost", "connection": "local", "gather_facts": False,
+                 "vars": variables, "tasks": tasks}]
         with tempfile.TemporaryDirectory(prefix="platform-kafka-normalize-") as directory:
             path = Path(directory) / "test.yml"
             path.write_text(yaml.safe_dump(play), encoding="utf-8")

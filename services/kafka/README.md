@@ -6,6 +6,58 @@ SERVICE-01B also supports multiple logical members on one physical Ansible
 host. The role is standalone and uses only an approved local/offline artifact
 supplied by the caller.
 
+Kafka command names use `platform_kafka_script_extension: ".sh"` by default.
+For a distribution with extensionless commands, set
+`platform_kafka_script_extension: ""` in inventory `group_vars` or `host_vars`.
+The suffix applies to Kafka startup, storage, verification and application
+topic/account/ACL commands, including Kafka commands used by Schema Registry.
+
+For a combined Kafka/Schema Registry archive, set these ordinary role variables
+in defaults or inventory (the current defaults retain separate distributions):
+
+```yaml
+platform_kafka_archive_directory: confluent-7.8.0
+platform_kafka_install_directory: /opt/kafka
+platform_kafka_script_extension: ""
+platform_kafka_schema_registry_use_kafka_distribution: true
+platform_kafka_schema_registry_install_directory: /opt/confluent-7.8.0
+```
+
+Also set `platform_kafka_version` and `platform_kafka_schema_registry_version`
+to the actual component versions of the approved distribution. The archive
+release number is not necessarily the embedded Kafka version. Manual inventory
+must supply `platform_kafka_artifact_path` and its approved
+`platform_kafka_artifact_checksum` (`sha256:...`). Kafka extracts the archive
+once under `/opt`; Registry reuses its real directory, launcher and versioned
+JAR. Separate Registry delivery/extraction and its separate distribution marker
+are skipped. Service configuration, users and systemd remain independent.
+
+The shared archive must be installed by this role: successful extraction records
+`.platform-kafka-approved-sha256`. An existing unmarked directory is rejected,
+not silently adopted. Shared Registry Apply checks both the approved archive
+and this installation marker, including in `schema_registry`-only phase.
+Verify checks the marker, launcher and JAR without delivering or extracting an
+archive; the approved Kafka checksum is still required. A repository package
+cannot substitute for the requested combined archive, and the role does not
+fall back to a different source when repository resolution selects one.
+
+If extraction is interrupted before its marker is written, repeat Apply refuses
+the unmarked directory. Recovery requires a separately authorized stop of both
+services, preservation of any distribution-local logs/custom files, and moving
+the unmarked directory aside after confirming it is the configured distribution
+root (not `/opt/kafka` or service data/configuration). Rerun Kafka Apply from the
+same approved archive so extraction creates a new marker. Do not manually create
+the marker or delete Kafka data/configuration to bypass this check.
+
+For Installer/bundle use, update the service package's `service.yml`,
+`artifacts.yml` and compatibility metadata to describe the approved combined
+distribution: both logical requirements (`kafka-binary` and
+`schema-registry-binary`) reference the same archive/checksum, with the correct
+component versions. Keep both requirement IDs for planning; one flag in inventory
+does not rewrite package metadata or acquire artifacts. The current pinned
+separate artifacts remain unchanged; the example above is not a claim of
+Confluent 7.8.0 runtime compatibility.
+
 Application library resource `kafka.topic` is supported by capability
 `service.kafka.topic`. Use the existing library provider stages or invoke
 `kafka_kraft` with `tasks_from: application_topics`,
@@ -33,6 +85,32 @@ used. Credential or principal conflicts therefore fail during Apply, possibly
 after library resources have been created. Direct preflight/verify role calls
 remain available and read fresh state.
 See the [portable topic contract](../../docs/project-contract.md#kafka-topic-resources).
+
+ACL writes group equal missing operation sets for topic/group/transactional-id,
+within one principal and pattern type. Resource identity includes both type and
+case-sensitive name. Cluster grants remain separate; batching does not grant
+extra operations or delete existing bindings. The same writer serves application
+accounts and compatibility principals. One CLI invocation can still issue several
+Kafka protocol requests; batching avoids repeated JVM/client startup.
+
+Schema Registry Apply requires Ansible's ordinary `linear` strategy (explicit in
+the supplied playbook); `free` is not supported. Preparation completes before
+topic reconciliation and activation. `_schemas` policy is checked once per
+deployment in the current Ansible batch, through a prepared member. With `serial`
+it is read again in each batch. A partial inventory may check through a non-seed
+member but cannot create the missing topic there. The coordinator supplies only
+candidate identity; the delegated operation uses the selected host's exact
+prepared local instance and captured CLI directory after uniqueness/activation
+checks. Creation is followed by policy
+readback before activation. Ownership, symlink, PKI and configuration guards stay
+enabled. Ordinary health-only Verify remains unchanged.
+
+New Registry units start before the final HTTP/HTTPS readiness loop so startup
+waits can overlap. A unit is new only when its file is absent and systemd reports
+`LoadState=not-found` and `ActiveState=inactive`; loaded/active/ambiguous units keep
+the sequential activation/readiness path. Per-instance flags are a host-local list
+reset on each invocation, including with hash_behaviour=merge; they are not
+portable desired state or a persistent cache.
 
 The delivery slices are:
 

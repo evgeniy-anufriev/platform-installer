@@ -109,7 +109,7 @@ class PemTlsQA(unittest.TestCase):
     def registry_prefix(self):
         source = yaml.safe_load((ROLE / 'tasks/schema_registry_member.yml').read_text())
         begin = next(i for i, t in enumerate(source) if t['name'] == 'Копирование хранилищ PKI в принадлежащие им каталоги времени выполнения реестра')
-        end = next(i for i, t in enumerate(source) if t.get('ansible.builtin.include_tasks') == 'schema_registry_topic.yml')
+        end = next(i for i, t in enumerate(source) if t['name'] == 'Проверка наличия unit-файла перед подготовкой Schema Registry')
         tasks = [source[0]] + source[begin:end]
         for task in tasks:
             if 'ansible.builtin.include_tasks' in task:

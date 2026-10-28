@@ -57,7 +57,7 @@ def grant(name, operations=('Read',), kind='topic', pattern='literal'):
 
 class KafkaAclWritesTests(unittest.TestCase):
     def probe(self, accounts, bindings=(), *, phase='apply', repeat=False, fail=False, direct=False,
-              success=True, direct_after=None, recover=False):
+              success=True, direct_after=None, recover=False, compatibility=False):
         with tempfile.TemporaryDirectory(prefix='qa-kafka-acl-writes-') as directory:
             root = Path(directory)
             (root / 'bin').mkdir()
@@ -66,7 +66,12 @@ class KafkaAclWritesTests(unittest.TestCase):
             cli.chmod(0o700)
             (root / 'state.json').write_text(json.dumps(dict(bindings=list(bindings), fail_add=fail, fail_partial=recover)))
             steps = [{'ansible.builtin.include_tasks': str(TASKS / 'application_acls_read_all.yml')}]
-            if direct:
+            if compatibility:
+                steps.append({'ansible.builtin.include_tasks': str(TASKS / 'authorization_principal.yml'),
+                              'loop': ['ANONYMOUS', 'CN=broker'],
+                              'loop_control': dict(loop_var='kafka_authorization_principal'),
+                              'vars': dict(kafka_authorization_cluster_operations=['Describe', 'IdempotentWrite'])})
+            elif direct:
                 steps.append({'ansible.builtin.include_tasks': str(TASKS / 'application_acl.yml'),
                               'vars': dict(application_kafka_account=accounts[0],
                                            application_kafka_grant=accounts[0]['grants'][0])})
@@ -77,7 +82,7 @@ class KafkaAclWritesTests(unittest.TestCase):
                 steps.append({'ansible.builtin.include_tasks': str(TASKS / 'application_acl.yml'),
                               'vars': dict(application_kafka_account=direct_after,
                                            application_kafka_grant=direct_after['grants'][0])})
-            variables = dict(application_topic_cli_directory=str(root),
+            variables = dict(platform_kafka_script_extension='.sh', application_topic_cli_directory=str(root),
                              application_topic_candidate=dict(address='127.0.0.1', port='1'),
                              application_kafka_private=dict(path=str(root)),
                              platform_kafka_application_phase=phase)
@@ -108,11 +113,11 @@ class KafkaAclWritesTests(unittest.TestCase):
                           for name in ['one', 'two'] for operation in ['READ', 'DESCRIBE']},
                          {tuple(b) for b in bindings})
 
-    def test_resource_types_patterns_and_operations_do_not_cross(self):
+    def test_compatible_types_share_a_write_but_patterns_and_deltas_do_not_cross(self):
         grants = [grant('one'), grant('two', ['Write']), grant('one', pattern='prefixed'),
                   grant('group', kind='group'), grant('kafka-cluster', ['IdempotentWrite'], kind='cluster')]
         calls, bindings = self.probe([dict(name='qa', mode='managed', grants=grants)])
-        self.assertEqual(5, sum('--add' in a for a in calls))
+        self.assertEqual(4, sum('--add' in a for a in calls))
         self.assertEqual({('TOPIC', 'one', 'LITERAL', 'READ'), ('TOPIC', 'two', 'LITERAL', 'WRITE'),
                           ('TOPIC', 'one', 'PREFIXED', 'READ'), ('GROUP', 'group', 'LITERAL', 'READ'),
                           ('CLUSTER', 'kafka-cluster', 'LITERAL', 'IDEMPOTENT_WRITE')},
@@ -148,7 +153,7 @@ class KafkaAclWritesTests(unittest.TestCase):
         calls, bindings = self.probe([dict(name='qa', mode='managed', grants=[
             grant('one'), grant('two'), grant('group', kind='group')])], recover=True)
         writes = [a for a in calls if '--add' in a]
-        self.assertEqual(3, len(writes))
+        self.assertEqual(2, len(writes))
         self.assertEqual(2, writes[0].count('--topic'))
         second_read = [index for index, args in enumerate(calls) if '--list' in args][1]
         self.assertEqual(1, sum('--add' in args for args in calls[:second_read]))
@@ -175,3 +180,34 @@ class KafkaAclWritesTests(unittest.TestCase):
         calls, bindings = self.probe([dict(name='qa', mode='managed', grants=[grant('one')])], direct=True)
         self.assertEqual(1, sum('--add' in a for a in calls))
         self.assertEqual(1, len(bindings))
+
+    def test_service_principals_use_two_writes_each_and_repeat_is_read_only(self):
+        calls, bindings = self.probe([], compatibility=True, repeat=True)
+        writes = [a for a in calls if '--add' in a]
+        self.assertEqual(4, len(writes))
+        expected = set()
+        for principal in ['User:ANONYMOUS', 'User:CN=broker']:
+            for kind in ['TOPIC', 'GROUP', 'TRANSACTIONAL_ID']:
+                expected.add((kind, '*', 'LITERAL', principal, '*', 'ALL', 'ALLOW'))
+            for operation in ['DESCRIBE', 'IDEMPOTENT_WRITE']:
+                expected.add(('CLUSTER', 'kafka-cluster', 'LITERAL', principal, '*', operation, 'ALLOW'))
+        self.assertEqual(expected, {tuple(b) for b in bindings})
+        for args in writes:
+            if '--cluster' in args:
+                self.assertNotIn('All', args)
+                self.assertNotIn('--topic', args)
+
+    def test_same_name_on_different_types_is_not_deduplicated(self):
+        grants = [grant('*', ['All'], kind=kind) for kind in ['topic', 'group', 'transactional-id']]
+        calls, bindings = self.probe([dict(name='qa', mode='managed', grants=grants)])
+        self.assertEqual(1, sum('--add' in a for a in calls))
+        self.assertEqual({'TOPIC', 'GROUP', 'TRANSACTIONAL_ID'}, {b[0] for b in bindings})
+
+    def test_cross_type_partial_deltas_do_not_widen_permissions(self):
+        existing = [['TOPIC', '*', 'LITERAL', 'User:qa', '*', 'READ', 'ALLOW']]
+        grants = [grant('*', ['Read', 'Describe'], kind=kind) for kind in ['topic', 'group']]
+        calls, bindings = self.probe([dict(name='qa', mode='managed', grants=grants)], existing)
+        self.assertEqual(2, sum('--add' in a for a in calls))
+        self.assertEqual({(kind, '*', 'LITERAL', 'User:qa', '*', op, 'ALLOW')
+                          for kind in ['TOPIC', 'GROUP'] for op in ['READ', 'DESCRIBE']},
+                         {tuple(b) for b in bindings})
