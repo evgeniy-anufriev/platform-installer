@@ -44273,7 +44273,7 @@ platform_docker_packages:
     fail_msg: DOCKER_CLEAR_DAEMON_STILL_ACTIVE
 
 @@END
-@@PORTABLE {"path":"services/docker/ansible_collections/platform/docker/roles/docker_rootless/tasks/data_root.yml","mode":420,"size":6725,"sha256":"f3e4617d5ea4c09fde899b1649d17711278808c097ef20fdd0f686363a0e491f","index":0,"count":1,"encoding":"utf-8","payloadBytes":6725}
+@@PORTABLE {"path":"services/docker/ansible_collections/platform/docker/roles/docker_rootless/tasks/data_root.yml","mode":420,"size":6804,"sha256":"94dcfaa7d8472479d6fa0a1456072fb6ac0d31421387fa8fa397c8ae1670fedf","index":0,"count":1,"encoding":"utf-8","payloadBytes":6804}
 ---
 - name: Проверка корневого пути к данным Docker
   ansible.builtin.assert:
@@ -44326,7 +44326,8 @@ platform_docker_packages:
     state: directory
     owner: "{{ platform_docker_account_name }}"
     group: "{{ _platform_docker_gid }}"
-    mode: '0700'
+    # Match dockerd setupDaemonRoot so daemon startup does not undo this mode.
+    mode: '0710'
   when: not (platform_docker_verify_only | bool)
 
 - name: Проверка компонентов каталога конфигурации Docker
