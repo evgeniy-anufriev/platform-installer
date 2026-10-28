@@ -98,14 +98,30 @@ def ready_vault_jobs(jobs, inputs, completed, delivered):
             and instance_key(job['libraryId'], job['instanceId']) not in delivered]
 
 
-def shared_vault_jobs(jobs, inputs, completed):
+def script_jobs(jobs, phase, scope):
+    return [job for job in jobs if any(script['phase'] == phase and script['scope'] == scope
+                                     for script in job.get('scripts', []))]
+
+
+def shared_field_key(job, document, name):
+    return [job.get('providerId', ''), job['libraryId'], document.get('mount', ''), document['document'], name]
+
+
+def shared_vault_fields(jobs):
+    return [shared_field_key(job, document, name) for job in jobs
+            for document in job['documents'] for name in document['fields']]
+
+
+def shared_vault_jobs(jobs, inputs, completed, delivered=()):
     result = []
     for job in jobs:
         documents = []
         for document in job['documents']:
             fields = {name: value for name, value in document['fields'].items()
-                      if not set(inputs['sharedDependencies'].get(job['libraryId'] + '/' + name, [])) - set(completed)}
+                      if not set(inputs['sharedDependencies'].get(job['libraryId'] + '/' + name, [])) - set(completed)
+                      and shared_field_key(job, document, name) not in delivered}
             if fields:
                 documents.append(dict(document, fields=fields))
-        result.append(dict(job, documents=documents))
+        if documents:
+            result.append(dict(job, documents=documents))
     return result

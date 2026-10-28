@@ -154,7 +154,8 @@ class StandaloneLibrariesQA(unittest.TestCase):
         def setup(d):
             for key, lib in d['platform_desired_state']['applicationLibraryDeployments'].items():
                 lib['resources']['model'] = lib['resources'].pop('applicationDatabase')
-                lib['resources']['model']['parameters'] = {}
+                # The current PostgreSQL resource contract requires an explicit name.
+                lib['resources']['model']['parameters'] = {'name': key + '-db'}
                 lib['resources'].update(main={'kind': 'kafka.topic', 'binding': 'messaging', 'parameters': {}},
                                         alternate={'kind': 'kafka.topic', 'binding': 'messaging', 'parameters': {'name': key + '.alternate'}})
                 lib['resource_defaults'] = {'postgresql': {'databases': {'model': {'name': key + '-db'}}}}
@@ -186,7 +187,7 @@ class StandaloneLibrariesQA(unittest.TestCase):
             return d['platform_desired_state']['applicationLibraryDeployments']['sdku']['resources']
         self.edit(self.vars, lambda d: resources(d)['model']['parameters'].update(name='explicit-db'))
         projected(database='explicit-db')
-        self.edit(self.vars, lambda d: resources(d)['model']['parameters'].pop('name'))
+        self.edit(self.vars, lambda d: resources(d)['model']['parameters'].update(name='sdku-db'))
         projected()
         self.edit(self.vars, lambda d: d['platform_desired_state']['applicationLibraryDeployments']['sdku']['applications']['gateway'].setdefault('overrides', {}).update(topicBindings={'kafka': {'main': 'alternate'}}))
         projected(topic='sdku.alternate')
@@ -448,6 +449,11 @@ done
         shutil.copytree(FIXTURE, self.root)
         self.vars = os.path.join(self.root, "inventory/group_vars/all/platform-installer.yml")
         self.defaults = os.path.join(self.root, "application-packages/apigateway/1.0.0/roles/application_apigateway/defaults/main.yml")
+        # Current Kafka defaults require a runtime admin reference even when
+        # these target-free tests exercise another application's provider.
+        # This is a synthetic reference only, never a credential value.
+        self.edit(self.vars, lambda data: data['platform_desired_state']['serviceDeployments']['kafka-main']['configuration'].setdefault(
+            'adminCredential', dict(passwordSecretRef='runtime:kafka-admin-password')))
 
     def edit(self, path, mutate):
         with open(path) as stream:

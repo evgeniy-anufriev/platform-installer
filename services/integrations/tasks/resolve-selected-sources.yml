@@ -9,15 +9,36 @@
       - platform_endpoint_source_id is not defined or platform_endpoint_source_ids | unique | list == [platform_endpoint_source_id]
     fail_msg: APPLICATION_ENDPOINT_SCOPE_INVALID
 
-- name: Инициализация локальных для операции проекций выбранного источника
-  ansible.builtin.set_fact:
-    _platform_integration_selected_sources: []
+- name: Однократная загрузка каталога для выбранного набора источников
+  ansible.builtin.include_vars:
+    file: "{{ platform_service_catalog_path }}"
+    name: _platform_integration_catalog_file
 
-- name: Определение каждого выбранного источника с помощью существующего преобразователя
-  ansible.builtin.include_tasks: resolve-selected-source.yml
-  loop: "{{ platform_endpoint_source_ids | unique | sort }}"
-  loop_control:
-    loop_var: _platform_selected_source_id
+- name: Сбор inventory для пакетного расчёта интеграций
+  ansible.builtin.set_fact:
+    _platform_integration_inventory: >-
+      {%- set hosts = {} -%}
+      {%- set deployments = {} -%}
+      {%- for host in groups['platform_targets'] | default([]) | sort -%}
+      {%- set _ = hosts.update({host: {'ansible_host': hostvars[host].ansible_host | default(host)}}) -%}
+      {%- set _ = deployments.update({host: hostvars[host].platform_deployments | default({})}) -%}
+      {%- endfor -%}
+      {{ {'hosts': hosts, 'deployments': deployments} }}
+  no_log: true
+
+- name: Пакетный расчёт выбранных источников существующими преобразователями Core
+  platform.core.resolve_endpoint_publications:
+    source_ids: "{{ platform_endpoint_source_ids }}"
+    endpoint_sources: "{{ hostvars['localhost'].platform_endpoint_sources }}"
+    desired_state: "{{ platform_desired_state }}"
+    service_catalog: "{{ _platform_integration_catalog_file.platform_service_catalog | default(_platform_integration_catalog_file, true) }}"
+    inventory_hosts: "{{ _platform_integration_inventory.hosts }}"
+    inventory_deployments: "{{ _platform_integration_inventory.deployments }}"
+  register: _platform_integration_batch
+
+- name: Привязка проекций источников к общей публикации и проверкам
+  ansible.builtin.set_fact:
+    _platform_integration_selected_sources: "{{ _platform_integration_batch.sources }}"
 
 - name: Публикация выбранных участников провайдера и записей DNS
   ansible.builtin.set_fact:

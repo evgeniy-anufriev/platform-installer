@@ -24,3 +24,18 @@ Prepare строит один полный candidate на host, сохраняе
 Неизменённый partial graph не перезагружается. Проверки targets последовательны.
 Сбой после начала многохостовой activation не означает автоматический rollback:
 сохраняются существующие archive и HAPROXY_ACTIVATION_RECOVERY_REQUIRED evidence.
+
+Partial publication uses a dedicated short path shared by application endpoint
+batches and singleton service hooks (including Vault and ClickHouse). Existing
+frontend/backend templates are rendered in one native lookup per provider host;
+`fragment_batch` compares or writes the selected files in one module call, with
+bounded payloads, root-owned no-follow paths and atomic per-file replacement.
+The selected source IDs, provider host filtering and ordinary role variables
+remain authoritative. The retained graph ownership proof is checked before any
+candidate reset. An unchanged selected graph keeps the candidate, validates the
+active configuration with current TLS material and rechecks proof/content at the
+activation boundary; no reload is requested. A changed graph retains all-host
+prepare/activate barriers, full candidate and active validation, digest equality
+and the existing archive/recovery evidence. This is not a whole-cluster atomic
+transaction. Full installation/reconcile resets batch facts and keeps its own
+path. No persistent cross-run readiness cache is introduced.

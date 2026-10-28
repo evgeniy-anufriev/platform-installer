@@ -17,11 +17,12 @@ TASKS = ROOT / 'ansible-core/playbooks/applications/tasks'
 
 @unittest.skipUnless(shutil.which('ansible-playbook'), 'native Ansible required')
 class ScriptDispatchRuntimeTests(unittest.TestCase):
-    def run_play(self, root, tasks, variables=None, success=True, role_path=None):
+    def run_play(self, root, tasks, variables=None, success=True, role_path=None,
+                 hosts='localhost', inventory='localhost,'):
         play = root / 'play.yml'
-        play.write_text(yaml.safe_dump([dict(hosts='localhost', connection='local', gather_facts=False,
+        play.write_text(yaml.safe_dump([dict(hosts=hosts, connection='local', gather_facts=False,
             vars=variables or {}, tasks=tasks)], sort_keys=False))
-        result = subprocess.run(['ansible-playbook', '-i', 'localhost,', str(play)],
+        result = subprocess.run(['ansible-playbook', '-i', inventory, str(play)],
             env=dict(os.environ, ANSIBLE_COLLECTIONS_PATH=str(ROOT / 'ansible-core/collections'),
                      **({'ANSIBLE_ROLES_PATH': str(role_path)} if role_path else {})),
             capture_output=True, text=True, timeout=120)
@@ -44,7 +45,7 @@ class ScriptDispatchRuntimeTests(unittest.TestCase):
 
     def test_empty_phases_do_not_enter_runtime_and_active_phases_keep_order(self):
         library = yaml.safe_load((TASKS / 'ordered-library.yml').read_text())
-        instance = yaml.safe_load((TASKS / 'ordered-instance.yml').read_text())
+        instance = yaml.safe_load((TASKS / 'instance-placement.yml').read_text())
         def phase(source, scope, selected):
             return copy.deepcopy(next(t for t in source
                 if t.get('ansible.builtin.include_role', {}).get('tasks_from') == 'run_scripts'
@@ -79,11 +80,11 @@ class ScriptDispatchRuntimeTests(unittest.TestCase):
             roles.mkdir(parents=True)
             # External container actions are observations; production ordering,
             # conditions, set_fact and include-task variables remain unchanged.
-            for step in ('apply_library', 'image_delivery', 'run_scripts', 'activate_instance', 'verify_container'):
+            for step in ('apply_library', 'apply_instance', 'image_delivery', 'run_scripts', 'activate_instance', 'verify_container'):
                 observation = "{{ seen + [{'step': '" + step + "', 'library': application_library_id, 'instance': application_runtime_job.instanceId | default('library')}] }}"
                 (roles / (step + '.yml')).write_text(yaml.safe_dump([
                     {'ansible.builtin.set_fact': {'seen': observation}}]))
-            for file in ('ordered-library.yml', 'ordered-instance.yml'):
+            for file in ('ordered-library.yml', 'ordered-instance.yml', 'instance-placement.yml'):
                 source = yaml.safe_load((TASKS / file).read_text())
                 for task in source:
                     role = task.get('ansible.builtin.include_role', {})
@@ -107,6 +108,95 @@ class ScriptDispatchRuntimeTests(unittest.TestCase):
             self.assertEqual([('a', 'second'), ('a', 'first'), ('b', 'other')],
                 [(row['library'], row['instance']) for row in seen if row['step'] == 'image_delivery'])
             self.assertFalse(any(row['step'] == 'run_scripts' for row in seen))
+
+    def test_preparation_once_per_invocation_with_late_dependencies(self):
+        library = yaml.safe_load((ROOT / 'ansible-core/collections/ansible_collections/platform/core/roles/application_runtime/tasks/apply_library.yml').read_text())
+        placement = yaml.safe_load((TASKS / 'instance-placement.yml').read_text())
+        with tempfile.TemporaryDirectory(prefix='application-preparation-') as folder:
+            root = Path(folder)
+            probe = root / 'prepare.yml'
+            probe.write_text(yaml.safe_dump([{'ansible.builtin.set_fact': {
+                'prepared': '{{ prepared + [application_runtime_job.instanceId] }}'}}]))
+            initial = copy.deepcopy(library[-2]['block'][-1])
+            initial['ansible.builtin.include_tasks'] = str(probe)
+            deferred = copy.deepcopy(placement[0])
+            del deferred['ansible.builtin.include_role']
+            deferred['ansible.builtin.include_tasks'] = str(probe)
+            jobs = [dict(libraryId='sample', instanceId=name) for name in ('early', 'late')]
+            variables = dict(prepared=[], application_library_id='sample',
+                platform_application_preflight_jobs=jobs, application_instance_runtime_jobs=jobs,
+                platform_application_completed_batches=['previous'], application_runtime_inputs=dict(integrations=dict(
+                    dependencies={'sample/early': ['previous'], 'sample/late': ['next']})))
+            tasks = [{'ansible.builtin.set_fact': variables}, library[0], initial, library[-1],
+                     {'ansible.builtin.assert': {'that': "application_prepared_instance_ids == ['early']"}},
+                     {'ansible.builtin.set_fact': {'platform_application_completed_batches': ['previous', 'next']}},
+                     deferred,
+                     {'ansible.builtin.assert': {'that': "prepared == ['early', 'late']"}},
+                     # Another operation must prepare both again, despite retained host facts.
+                     library[0], initial, library[-1], deferred,
+                     {'ansible.builtin.assert': {'that': "prepared == ['early', 'late', 'early', 'late']"}}]
+            self.run_play(root, tasks, variables)
+
+    def test_coordination_keeps_endpoint_hosts_without_local_placements(self):
+        with tempfile.TemporaryDirectory(prefix='application-coordination-') as folder:
+            root = Path(folder)
+            source = yaml.safe_load((TASKS / 'ordered-instance.yml').read_text())
+            endpoint = root / 'endpoint.yml'
+            endpoint.write_text(yaml.safe_dump([{'ansible.builtin.copy': {
+                'content': 'endpoint', 'dest': str(root / 'endpoint-{{ inventory_hostname }}')}}]))
+            placement = root / 'instance-placement.yml'
+            placement.write_text(yaml.safe_dump([{'ansible.builtin.copy': {
+                'content': 'placement', 'dest': str(root / 'placement-{{ inventory_hostname }}')}}]))
+            for task in source:
+                path = task.get('ansible.builtin.include_tasks')
+                if path == 'instance-placement.yml':
+                    task['ansible.builtin.include_tasks'] = str(placement)
+                elif path and 'apply-source' in path:
+                    task['ansible.builtin.include_tasks'] = str(endpoint)
+                elif path:  # provider/Vault side effects are outside this scheduling proof
+                    task['ansible.builtin.include_tasks'] = str(root / 'noop.yml')
+            (root / 'noop.yml').write_text('[]')
+            batch = dict(providerLibraryId='sample', providerInstanceId='one')
+            context = {'ansible.builtin.set_fact': dict(platform_application_completed_batches=[],
+                application_runtime_inputs=dict(integrations=dict(dependencies={}, batches=[batch]))),
+                'delegate_to': 'localhost', 'delegate_facts': True, 'run_once': True}
+            variables = dict(application_library_id='sample', application_instance_id='one',
+                application_instance_runtime_jobs="{{ [{'instanceId': 'one'}] if inventory_hostname == 'node2' else [] }}")
+            self.run_play(root, [context] + source + [{'ansible.builtin.assert': {
+                'that': 'application_ready_provider_batches | length == 1'}}], variables,
+                hosts='all', inventory='node1,node2,node3,')
+            self.assertEqual(['placement-node2'], [path.name for path in root.glob('placement-*')])
+            self.assertEqual(3, len(list(root.glob('endpoint-*'))))
+
+    def test_shared_delivery_coordinator_remembers_only_successful_fields(self):
+        with tempfile.TemporaryDirectory(prefix='application-shared-delta-') as folder:
+            root = Path(folder)
+            roles = root / 'roles/probe_vault/tasks'
+            roles.mkdir(parents=True)
+            for step in ('preflight', 'library', 'instance'):
+                (roles / (step + '.yml')).write_text(yaml.safe_dump([{
+                    'ansible.builtin.set_fact': {'seen': "{{ seen + [{'step': '" + step + "', 'fields': platform_vault_application_job.documents[0].fields | list}] }}"},
+                    'delegate_facts': False}]))
+            source = yaml.safe_load((TASKS / 'deliver-ready.yml').read_text())
+            for task in source:
+                if 'ansible.builtin.include_role' in task:
+                    task['ansible.builtin.include_role']['name'] = 'probe_vault'
+            (root / 'deliver.yml').write_text(yaml.safe_dump(source, sort_keys=False))
+            variables = dict(seen=[], platform_application_completed_batches=[], platform_application_delivered_instances=[],
+                platform_application_delivered_shared_fields=[], application_runtime_inputs=dict(integrations=dict(
+                    dependencies={}, sharedDependencies={'sample/late': ['ready']})),
+                application_vault_inputs=dict(instanceJobs=[], libraryJobs=[dict(providerId='vault', libraryId='sample',
+                    documents=[dict(mount='secret', document='shared', fields={'early': {}, 'late': {}})])]))
+            for name in ('vault_runtime', 'vault_values', 'vault_documents', 'vault_identities', 'secret_files'):
+                variables['platform_application_' + name] = {}
+            variables['platform_application_secret_root'] = str(root)
+            call = {'ansible.builtin.include_tasks': str(root / 'deliver.yml')}
+            tasks = [{'ansible.builtin.set_fact': variables}, call, call, {'ansible.builtin.set_fact': {'platform_application_completed_batches': ['ready']}},
+                     call, call, {'ansible.builtin.assert': {'that': [
+                         "seen | map(attribute='step') | list == ['preflight', 'library', 'preflight', 'library']",
+                         "seen | map(attribute='fields') | list == [['early'], ['early'], ['late'], ['late']]",
+                         'platform_application_delivered_shared_fields | length == 2']}}]
+            self.run_play(root, tasks, variables, role_path=root / 'roles')
 
     def test_copy_batch_preserves_inputs_and_repeat_changed_zero(self):
         with tempfile.TemporaryDirectory(prefix='script-delivery-') as folder:

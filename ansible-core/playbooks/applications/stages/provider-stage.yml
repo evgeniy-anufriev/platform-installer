@@ -11,6 +11,7 @@
           ansible.builtin.set_fact:
             platform_application_completed_batches: []
             platform_application_delivered_instances: []
+            platform_application_delivered_shared_fields: []
           no_log: true
         - name: Проверка защищённого runtime-каталога перед передачей сгенерированных учётных данных
           ansible.builtin.assert:
@@ -144,6 +145,10 @@
             loop_var: platform_vault_application_job
         - name: "Сохранение результатов доставки учётных данных экземпляров для координатора выполнения"
           ansible.builtin.set_fact:
+            platform_application_delivered_shared_fields: >-
+              {{ application_vault_inputs.libraryJobs |
+                 platform.core.application_ready_shared_jobs(application_runtime_inputs.integrations, []) |
+                 platform.core.application_shared_vault_fields }}
             platform_application_delivered_instances: >-
               {{ (application_vault_inputs.instanceJobs | platform.core.application_ready_vault_jobs(
                   application_runtime_inputs.integrations, [], [])) |

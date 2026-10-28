@@ -1,0 +1,14 @@
+---
+- name: Подтверждение прежнего графа перед пропуском активации
+  platform.haproxy.archive_managed_backends:
+    name_prefix: "{{ platform_name_prefix | default('', true) }}"
+    operation: capture
+    config_directory: "{{ platform_haproxy_config_directory }}"
+
+- name: Подтверждение выбранных фрагментов перед пропуском активации
+  platform.haproxy.fragment_batch:
+    directory: "{{ platform_haproxy_conf_directory }}"
+    files: "{{ _platform_haproxy_rendered.files }}"
+  register: _platform_haproxy_unchanged_verified
+  failed_when: not _platform_haproxy_unchanged_verified.matches
+  no_log: true

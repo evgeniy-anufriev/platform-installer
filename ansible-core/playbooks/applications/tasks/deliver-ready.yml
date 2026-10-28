@@ -1,4 +1,13 @@
 ---
+- name: Выбор только новых готовых общих полей Vault
+  ansible.builtin.set_fact:
+    application_ready_shared_vault_jobs: >-
+      {{ hostvars['localhost'].application_vault_inputs.libraryJobs |
+         platform.core.application_ready_shared_jobs(hostvars['localhost'].application_runtime_inputs.integrations,
+           hostvars['localhost'].platform_application_completed_batches,
+           hostvars['localhost'].platform_application_delivered_shared_fields) }}
+  no_log: true
+
 - name: Проверка готовых общих полей Vault перед доставкой с контролем версии CAS
   ansible.builtin.include_role:
     name: platform.vault.application_provider
@@ -7,7 +16,7 @@
       delegate_to: localhost
       delegate_facts: true
       become: false
-  loop: "{{ hostvars['localhost'].application_vault_inputs.libraryJobs | platform.core.application_ready_shared_jobs(hostvars['localhost'].application_runtime_inputs.integrations, hostvars['localhost'].platform_application_completed_batches) }}"
+  loop: "{{ application_ready_shared_vault_jobs }}"
   loop_control:
     loop_var: platform_vault_application_job
   vars: &vault_context
@@ -28,7 +37,7 @@
       delegate_to: localhost
       delegate_facts: true
       become: false
-  loop: "{{ hostvars['localhost'].application_vault_inputs.libraryJobs | platform.core.application_ready_shared_jobs(hostvars['localhost'].application_runtime_inputs.integrations, hostvars['localhost'].platform_application_completed_batches) }}"
+  loop: "{{ application_ready_shared_vault_jobs }}"
   loop_control:
     loop_var: platform_vault_application_job
   vars: *vault_context
@@ -57,6 +66,9 @@
 
 - name: Запись завершенных результатов доставки без сохранения другого желаемого состояния
   ansible.builtin.set_fact:
+    platform_application_delivered_shared_fields: >-
+      {{ hostvars['localhost'].platform_application_delivered_shared_fields +
+         (application_ready_shared_vault_jobs | platform.core.application_shared_vault_fields) }}
     platform_application_delivered_instances: >-
       {{ hostvars['localhost'].platform_application_delivered_instances +
          (application_ready_instance_vault_jobs | map(attribute='libraryId') |

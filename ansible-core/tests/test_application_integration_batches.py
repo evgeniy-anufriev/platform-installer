@@ -7,7 +7,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'ansible-core/collections/ansible_collections/platform/core/plugins/module_utils'))
-from application_integrations import prepare_integrations, pending_instances, ready_vault_jobs, shared_vault_jobs
+from application_integrations import prepare_integrations, pending_instances, ready_vault_jobs, shared_vault_jobs, shared_vault_fields, script_jobs
 
 
 def fixture(count=2):
@@ -104,6 +104,27 @@ class IntegrationBatchTests(unittest.TestCase):
         self.assertEqual({'ordinary', 'client-token'}, set(shared_vault_jobs(
             documents, result, [result['batches'][0]['id']])[0]['documents'][0]['fields']))
         self.assertEqual(2, len(documents[0]['documents'][0]['fields']))
+
+    def test_shared_delivery_only_selects_new_fields_and_keeps_document_identity(self):
+        jobs = [dict(providerId=provider, libraryId='consumer', documents=[
+            dict(mount='secret', document='shared', fields={'early': {}, 'late': {}})])
+            for provider in ('vault-a', 'vault-b')]
+        inputs = dict(sharedDependencies={'consumer/late': ['ready']})
+        first = shared_vault_jobs(jobs, inputs, [])
+        delivered = shared_vault_fields(first)
+        self.assertEqual(2, len(delivered))
+        self.assertEqual([], shared_vault_jobs(jobs, inputs, [], delivered))
+        late = shared_vault_jobs(jobs, inputs, ['ready'], delivered)
+        self.assertEqual([{'late': {}}, {'late': {}}], [job['documents'][0]['fields'] for job in late])
+        self.assertEqual([], shared_vault_jobs(jobs, inputs, ['ready'], delivered + shared_vault_fields(late)))
+        self.assertEqual(2, len(shared_vault_jobs(jobs, inputs, [])))  # fresh invocation
+        self.assertEqual(2, len(jobs[0]['documents'][0]['fields']))
+
+    def test_script_selection_preserves_order_and_excludes_other_phases(self):
+        jobs = [dict(instanceId='empty'), dict(instanceId='wrong', scripts=[dict(phase='after_ready', scope='library')]),
+                dict(instanceId='first', scripts=[dict(phase='before_start', scope='instance')]),
+                dict(instanceId='second', scripts=[dict(phase='before_start', scope='instance')])]
+        self.assertEqual(['first', 'second'], [job['instanceId'] for job in script_jobs(jobs, 'before_start', 'instance')])
 
 
 class RetainedPolicyTests(unittest.TestCase):

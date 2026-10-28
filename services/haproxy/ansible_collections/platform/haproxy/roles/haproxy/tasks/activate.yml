@@ -1,40 +1,13 @@
 ---
-- name: Проверка активной основной конфигурации HAProxy перед публикацией
-  ansible.builtin.stat:
-    path: "{{ platform_haproxy_main_config }}"
-    follow: false
-  register: _platform_haproxy_previous_main
+- name: Активация изменённого графа HAProxy
+  when: >-
+    not ((platform_haproxy_partial_deployment_id is defined or platform_haproxy_partial_deployment_ids is defined)
+         and (_platform_haproxy_batch_prepared | default(false) | bool) and (_platform_haproxy_partial_unchanged | default(false) | bool))
+  ansible.builtin.include_tasks: activate_changed.yml
 
-- name: Вычисление предыдущего активного дайджеста графа HAProxy при установке
-  ansible.builtin.shell: >-
-    { sha256sum "{{ platform_haproxy_main_config }}"; cd "{{ platform_haproxy_conf_directory }}";
-      find . -type f -printf '%P\0' | sort -z | xargs -0 sha256sum; } |
-    sed "s#{{ platform_haproxy_main_config }}#haproxy.cfg#; s#  \./#  conf.d/#" | sort |
-    sha256sum | awk '{print $1}'
-  args:
-    executable: /bin/bash
-  changed_when: false
-  register: _platform_haproxy_previous_graph_digest
-  when: _platform_haproxy_previous_main.stat.isreg | default(false)
-
-- name: Проверка владельца backend и архивация только устаревших файлов конфигурации
-  platform.haproxy.archive_managed_backends:
-    name_prefix: "{{ platform_name_prefix | default('', true) }}"
-    config_directory: "{{ platform_haproxy_config_directory }}"
-    candidate_files: "{{ platform_haproxy_managed_application_backend_files | default([]) }}"
-    previous_inventory: "{{ _platform_haproxy_prior_backend_capture.previousInventory }}"
-    activation_required: >-
-      {{ not (_platform_haproxy_previous_main.stat.isreg | default(false)) or
-         _platform_haproxy_previous_graph_digest.stdout != _platform_haproxy_candidate_graph_digest.stdout }}
-  register: _platform_haproxy_backend_archive
-
-- name: Публикация и проверка подготовленного набора конфигурации HAProxy
-  block:
-    - name: Установка и проверка графа-кандидата
-      ansible.builtin.include_tasks: activate_publish.yml
-  rescue:
-    - name: "Остановка выполнения с указанием архива восстановления HAProxy"
-      ansible.builtin.fail:
-        msg: >-
-          HAPROXY_ACTIVATION_RECOVERY_REQUIRED
-          archive={{ _platform_haproxy_backend_archive.archivePath | default('none', true) }}
+- name: Подтверждение неизменённого графа на границе активации кластера
+  ansible.builtin.include_tasks: partial_verify_unchanged.yml
+  when:
+    - platform_haproxy_partial_deployment_id is defined or platform_haproxy_partial_deployment_ids is defined
+    - _platform_haproxy_batch_prepared | default(false) | bool
+    - _platform_haproxy_partial_unchanged | default(false) | bool

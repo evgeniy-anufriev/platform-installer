@@ -1,0 +1,79 @@
+---
+- name: Сбор прежнего списка управляемых файлов HAProxy перед очисткой кандидата
+  platform.haproxy.archive_managed_backends:
+    name_prefix: "{{ platform_name_prefix | default('', true) }}"
+    operation: capture
+    config_directory: "{{ platform_haproxy_config_directory }}"
+  register: _platform_haproxy_prior_backend_capture
+
+- name: Обнаружение несвязанных файлов HAProxy conf.d для полной проверки кандидатов
+  ansible.builtin.find:
+    paths: "{{ platform_haproxy_conf_directory }}"
+    file_type: file
+    recurse: false
+    excludes: [10-public.cfg, 20-local-stats.cfg, 30-backend-*.cfg, 90-stats-backends.cfg]
+  register: _platform_haproxy_third_party_fragments
+
+- name: Выбор имён файлов выбранного источника конечной точки
+  ansible.builtin.set_fact:
+    _platform_haproxy_partial_source_files: >-
+      {{ platform_haproxy_runtime_projection.backends.backends | dict2items |
+         map(attribute='value') | flatten |
+         selectattr('targetDeploymentId', 'in', _platform_haproxy_partial_ids) |
+         map(attribute='configFileName') | unique | list }}
+
+- name: Выбор backend развёртывания источника для частичной интеграции HAProxy
+  ansible.builtin.set_fact:
+    platform_haproxy_application_backends: >-
+      {{ platform_haproxy_runtime_projection.backends.backends | dict2items |
+         selectattr('key', 'in', platform_deployments) | map(attribute='value') |
+         flatten | selectattr('targetDeploymentId', 'in', _platform_haproxy_partial_ids) |
+         selectattr('providerHostIds', 'contains', inventory_hostname) |
+         sort(attribute='configFileName') }}
+    platform_haproxy_managed_application_backend_files: >-
+      {{ (((_platform_haproxy_prior_backend_capture.previousInventory | map(attribute='name') |
+           reject('in', _platform_haproxy_partial_source_files)) | list) +
+         (platform_haproxy_runtime_projection.backends.backends | dict2items |
+          selectattr('key', 'in', platform_deployments) | map(attribute='value') |
+          flatten | selectattr('targetDeploymentId', 'in', _platform_haproxy_partial_ids) |
+          selectattr('providerHostIds', 'contains', inventory_hostname) |
+          map(attribute='configFileName') | list)) | unique | sort }}
+  when:
+    - not (platform_haproxy_full_reconcile | bool)
+    - (platform_haproxy_partial_deployment_id is defined or platform_haproxy_partial_deployment_ids is defined)
+
+- name: Проверка целевых узлов проекции перед публикацией конфигурации-кандидата
+  ansible.builtin.include_tasks: check_targets.yml
+
+- name: Пакетный рендер выбранных фрагментов HAProxy штатными шаблонами
+  platform.haproxy.render_fragments:
+    template_path: "{{ role_path }}/templates/partial-fragments.json.j2"
+  register: _platform_haproxy_rendered
+  no_log: true
+
+- name: Сравнение выбранного набора фрагментов с активной конфигурацией
+  platform.haproxy.fragment_batch:
+    directory: "{{ platform_haproxy_conf_directory }}"
+    files: "{{ _platform_haproxy_rendered.files }}"
+  register: _platform_haproxy_fragment_comparison
+  no_log: true
+
+- name: Сброс признаков публикации для текущего вызова хука
+  ansible.builtin.set_fact:
+    _platform_haproxy_partial_unchanged: >-
+      {{ _platform_haproxy_fragment_comparison.matches and
+         (_platform_haproxy_prior_backend_capture.previousInventory | map(attribute='name') | sort | list) ==
+         (platform_haproxy_managed_application_backend_files | sort | list) }}
+    _platform_haproxy_batch_prepared: true
+    platform_haproxy_active_artifacts_changed: false
+    platform_haproxy_tls_material_changed: false
+
+- name: Подготовка изменённого кандидата частичной публикации
+  ansible.builtin.include_tasks: partial_build.yml
+  when: not (_platform_haproxy_partial_unchanged | bool)
+
+- name: Проверка неизменённой конфигурации с текущими TLS-файлами
+  ansible.builtin.command:
+    argv: ["{{ platform_haproxy_binary }}", '-c', '-f', "{{ platform_haproxy_main_config }}", '-f', "{{ platform_haproxy_conf_directory }}"]
+  changed_when: false
+  when: _platform_haproxy_partial_unchanged | bool

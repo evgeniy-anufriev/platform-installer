@@ -1,0 +1,34 @@
+---
+- name: Пакетная установка проверенных фрагментов HAProxy
+  platform.haproxy.fragment_batch:
+    directory: "{{ platform_haproxy_conf_directory }}"
+    files: "{{ _platform_haproxy_rendered.files }}"
+    operation: write
+  register: _platform_haproxy_partial_install
+  no_log: true
+
+- name: Запись изменения частичного графа HAProxy
+  ansible.builtin.set_fact:
+    platform_haproxy_active_artifacts_changed: "{{ _platform_haproxy_partial_install.changed or _platform_haproxy_backend_archive.changed }}"
+
+- name: Вычисление детерминированного дайджеста активного графа HAProxy
+  ansible.builtin.shell: >-
+    { sha256sum "{{ platform_haproxy_main_config }}"; cd "{{ platform_haproxy_conf_directory }}";
+      find . -type f -printf '%P\0' | sort -z | xargs -0 sha256sum; } |
+    sed "s#{{ platform_haproxy_main_config }}#haproxy.cfg#; s#  \./#  conf.d/#" | sort |
+    sha256sum | awk '{print $1}'
+  args:
+    executable: /bin/bash
+  changed_when: false
+  register: _platform_haproxy_active_graph_digest
+
+- name: "Проверка соответствия активной конфигурации HAProxy проверенному набору файлов"
+  ansible.builtin.assert:
+    that:
+      - _platform_haproxy_candidate_graph_digest.stdout == _platform_haproxy_active_graph_digest.stdout
+    fail_msg: HAPROXY_CANDIDATE_ACTIVE_GRAPH_MISMATCH
+
+- name: Проверка активной конфигурации HAProxy перед жизненным циклом службы
+  ansible.builtin.command:
+    argv: ["{{ platform_haproxy_binary }}", '-c', '-f', "{{ platform_haproxy_main_config }}", '-f', "{{ platform_haproxy_conf_directory }}"]
+  changed_when: false

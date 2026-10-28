@@ -161,6 +161,7 @@ class VaultDeliveryRuntimeTests(unittest.TestCase):
                              platform_application_vault_documents={}, platform_application_vault_identities={},
                              platform_application_secret_files={'password-input': str(password_file)}, platform_application_secret_root=str(secret_root),
                              platform_application_completed_batches=[], platform_application_delivered_instances=[],
+                             platform_application_delivered_shared_fields=[],
                              application_vault_inputs=dict(libraryJobs=[], instanceJobs=jobs),
                              application_runtime_inputs={'integrations': {'dependencies': {}, 'sharedDependencies': {}}})
                 if generated:

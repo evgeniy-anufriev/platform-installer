@@ -1,0 +1,23 @@
+#jinja2: trim_blocks: False
+CREATE TABLE IF NOT EXISTS `{{ item.0.name | replace('`', '``') }}`.`{{ item.1.name | replace('`', '``') }}`{% if platform_clickhouse_application_job.mode == 'raft-ha' %} ON CLUSTER default{% endif %}
+(
+{% for column in item.1.columns %}
+  `{{ column.name | replace('`', '``') }}` {{ column.type }}{% if column.codec is defined %} CODEC({{ column.codec }}){% endif %}{{ ',' if not loop.last or item.1.indexes | default([]) else '' }}
+{% endfor %}
+{% for index in item.1.indexes | default([]) %}
+  INDEX `{{ index.name | replace('`', '``') }}` {{ index.expression }} TYPE {{ index.type }} GRANULARITY {{ index.granularity }}{{ ',' if not loop.last else '' }}
+{% endfor %}
+)
+ENGINE = {{ item.1.engine }}{% if platform_clickhouse_application_job.mode == 'raft-ha' %}('{{ item.1.replicationPath }}', '{replica}'){% else %}(){% endif %}
+{% for key, clause in [('partition_by', 'PARTITION BY'), ('primary_key', 'PRIMARY KEY'), ('order_by', 'ORDER BY'), ('sample_by', 'SAMPLE BY')] %}
+{% if item.1[key] is defined %}
+{{ clause }} {{ item.1[key] }}
+{% endif %}
+{% endfor %}
+{% if item.1.settings | default({}) %}
+SETTINGS
+{% for key, value in item.1.settings | dictsort %}
+  {{ key }} = {% if value is string %}'{{ value | replace('\\', '\\\\') | replace("'", "\\'") }}'{% elif value is boolean %}{{ value | int }}{% else %}{{ value }}{% endif %}{{ ',' if not loop.last else '' }}
+{% endfor %}
+{% endif %}
+;

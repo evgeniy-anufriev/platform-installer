@@ -1,0 +1,9 @@
+#jinja2: trim_blocks: False
+{% from 'application-table-ddl.j2' import ddl %}
+{% set result = namespace(tables=[]) %}
+{% for database in platform_clickhouse_application_job.databases %}
+{% for table in database.tables | default([]) %}
+{% set result.tables = result.tables + [{'database': database.name, 'definition': table, 'sql': ddl(database, table, platform_clickhouse_application_job.mode)}] %}
+{% endfor %}
+{% endfor %}
+{{ result.tables | to_json }}

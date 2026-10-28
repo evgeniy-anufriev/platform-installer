@@ -1,16 +1,7 @@
 ---
-- name: Вычисление хешей исходных файлов на узле выполнения
-  ansible.builtin.stat:
+- name: Однократное чтение и хеширование исходного файла на узле выполнения
+  platform.core.application_source_file:
     path: "{{ application_config.path }}"
-    checksum_algorithm: sha256
-  delegate_to: localhost
-  become: false
-  register: application_source_stat
-  no_log: true
-
-- name: "Чтение исходных файлов для защищённой проверки отсутствия секретов"
-  ansible.builtin.slurp:
-    src: "{{ application_config.path }}"
   delegate_to: localhost
   become: false
   register: application_source_bytes
@@ -18,5 +9,5 @@
 
 - name: Сохранение пути исходного файла и контрольной суммы для копирования
   ansible.builtin.set_fact:
-    application_config_contents: "{{ application_config_contents + [{'destination': application_config.destination, 'path': application_config.path, 'content': application_source_bytes.content, 'encoding': 'base64', 'sha256': application_source_stat.stat.checksum, 'mode': application_config.mode | default('0644')}] }}"
+    application_config_contents: "{{ application_config_contents + [{'destination': application_config.destination, 'path': application_config.path, 'content': application_source_bytes.content, 'encoding': 'base64', 'sha256': application_source_bytes.sha256, 'mode': application_config.mode | default('0644')}] }}"
   no_log: true
