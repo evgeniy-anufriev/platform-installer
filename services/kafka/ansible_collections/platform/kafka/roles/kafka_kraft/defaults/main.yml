@@ -43,7 +43,7 @@ platform_kafka_listeners:
     port: 9096
   CONTROLLER:
     purpose: controller
-    securityProtocol: SSL
+    securityProtocol: SASL_SSL
     port: 9093
 platform_kafka_log_retention_hours: 168
 platform_kafka_advanced_config: {}

@@ -286,6 +286,7 @@
       - log.dirs
       - listener.security.protocol.map
       - inter.broker.listener.name
+      - sasl.mechanism.controller.protocol
       - authorizer.class.name
       - super.users
       - allow.everyone.if.no.acl.found
@@ -295,7 +296,7 @@
     that: >-
       (platform_kafka_advanced_config.keys() | list |
        intersect(_platform_kafka_reserved_config_keys) | length) == 0
-      and (platform_kafka_advanced_config.keys() | select('match', '^listener\\.name\\..*\\.(ssl|sasl|scram-sha-512)\\.') | list | length) == 0
+      and (platform_kafka_advanced_config.keys() | select('match', '^listener\\.name\\..*\\.(ssl|sasl|plain|scram-sha-512)\\.') | list | length) == 0
     fail_msg: 'ADVANCED_SETTING_RESERVED: BLOCKED; reserved Kafka keys are controlled by the role'
 
 - name: Проверка разрешенных источников артефактов Kafka перед изменением
@@ -382,7 +383,7 @@
 - name: Обнаружение требования авторизации SCRAM для всего развертывания
   ansible.builtin.set_fact:
     _platform_kafka_scram_enabled: "{{ _platform_kafka_instances | map(attribute='listeners') | map('dict2items') | flatten | selectattr('value.securityProtocol', 'equalto', 'SASL_SSL') | list | length > 0 }}"
-    _platform_kafka_admin_principals: []
+    _platform_kafka_internal_principals: []
 
 - name: Проверка административного контроля и определение начальной загрузки перед мутациями хоста
   ansible.builtin.include_tasks: authorization_inputs.yml
@@ -410,7 +411,7 @@
 
 - name: Передача рассчитанных principals всем участникам текущего запуска Kafka
   ansible.builtin.set_fact:
-    _platform_kafka_admin_principals: "{{ hostvars[_platform_kafka_principal_source_host]._platform_kafka_admin_principals }}"
+    _platform_kafka_internal_principals: "{{ hostvars[_platform_kafka_principal_source_host]._platform_kafka_internal_principals }}"
   when: _platform_kafka_scram_enabled and not (platform_kafka_verify_only | bool)
 
 - name: Применение локальных экземпляров службы Kafka в детерминированном порядке узлов
@@ -432,19 +433,17 @@
     label: "{{ item.0.id }}:{{ item.1 }}"
   when: not (platform_kafka_verify_only | bool) and platform_kafka_phase != 'schema_registry'
 
-- name: "Настройка администратора перед последовательным отзывом bootstrap-доступа"
-  ansible.builtin.include_tasks: authorization_transition.yml
+- name: "Проверка администратора и настройка ACL после запуска кворума"
+  ansible.builtin.include_tasks:
+    file: authorization_setup.yml
+    apply:
+      delegate_to: "{{ (_platform_kafka_broker_instances | first).host }}"
+      become: true
+  run_once: true
   when:
     - _platform_kafka_scram_enabled
     - platform_kafka_phase != 'schema_registry'
     - not (platform_kafka_verify_only | bool)
-
-- name: "Подтверждение загрузки итоговой конфигурации Kafka перед следующим этапом"
-  ansible.builtin.include_tasks: authorization_confirm.yml
-  loop: "{{ _platform_kafka_local_instances }}"
-  loop_control:
-    loop_var: kafka_authorization_member
-  when: _platform_kafka_scram_enabled and not (platform_kafka_verify_only | bool)
 
 - name: Проверка локальных экземпляров службы Kafka и кластера
   ansible.builtin.include_tasks: verify.yml

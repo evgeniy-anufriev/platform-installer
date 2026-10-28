@@ -48,7 +48,10 @@ generated-deferred/no-password-reset restrictions only for this scope.
    jobs for the already existing read path. No new Verify jobs or Verify change.
 3. In existing Apply Vault preflight, read/check document ownership before
    resolving generated values. Extend the existing private document action with
-   a small `secrets.token_urlsafe(32)` generator (256 bits, ASCII, no newline).
+   a small cryptographic generator using `secrets.choice` and `SystemRandom`
+   shuffling. The owner-selected fixed length is15 ASCII characters, without
+   spaces/newlines; lowercase, uppercase, digit and `!` are guaranteed.
+   This is a fixed generation baseline, not a configurable provider policy.
    Reuse a valid password from the owned saved account document; without a saved
    password generate once per logical account per Apply, not per placement.
    Preserve current foreign-owner/tombstone rejection.

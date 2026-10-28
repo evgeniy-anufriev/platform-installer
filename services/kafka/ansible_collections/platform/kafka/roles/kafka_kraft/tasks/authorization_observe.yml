@@ -1,8 +1,0 @@
----
-- name: Проверка конфигурации экземпляра службы и текущего процесса
-  ansible.builtin.include_tasks: authorization_status.yml
-
-- name: Объединение только текущих данных локального процесса
-  ansible.builtin.set_fact:
-    kafka_authorization_local_final: "{{ kafka_authorization_local_final | bool and kafka_authorization_running_final | bool }}"
-  changed_when: false

@@ -66,7 +66,7 @@ secret material. Properties contain paths, not private key contents or PKCS12
 passwords. CA/hostname checks and certificate identities/ACLs remain in force.
 
 Registry continues to use its configured SSL Kafka listener; its HTTPS and
-inter-instance TLS also use PEM. Library topic/account hooks and SCRAM bootstrap
+inter-instance TLS also use PEM. Library topic/account hooks and administrative CLI
 create PEM bundles only in invocation-private directories and always remove them;
 authoritative PKI output is never changed by these hooks.
 
@@ -78,6 +78,42 @@ silently deleted. The shared PKI pipeline and Java application PKCS12 delivery
 are unchanged, so they can still require their existing runtime store password.
 
 See [PEM implementation/isolated QA](../../docs/work/application-libraries/kafka-pem-plan.md).
+
+## Controller authentication and encrypted JAAS
+
+The default controller listener uses `SASL_SSL` with `PLAIN`; client SASL
+listeners retain `SCRAM-SHA-512`. `StandardAuthorizer` remains enabled and
+`super.users` contains only `User:admin` from the first start. An authorized
+deployment requires its controller listener to use SASL_SSL; an explicit legacy
+SSL controller override must be updated in ordinary inventory/group_vars.
+Listener names and ports remain supplied by the normal listener projection.
+
+Controller JAAS uses the existing `platform_kafka_admin_credential.passwordSecretRef`
+and `platform_kafka_secret_files`. No second password variable is added.
+`systemd-creds` encrypts the JAAS from stdin using the node's host key, storing
+only `controller-jaas.cred` in the member configuration directory (root,0400).
+`LoadCredentialEncrypted` presents it to the Kafka JVM in the service-private
+credentials directory; the unit supplies the JAAS path through KAFKA_OPTS.
+The standard systemd host key is node-local `/var/lib/systemd/credential.secret`,
+not another operator password and not part of the portable project.
+The target needs systemd encrypted-credential support; RED OS systemd253 has
+been exercised. Other OS versions require their own compatibility acceptance.
+
+Before encrypting, Apply decrypts the existing blob only into operation memory
+and compares the expected JAAS. Unchanged credentials preserve the ciphertext
+and do not restart the service. Credential/unit changes participate in the
+existing member restart condition. Existing caller EnvironmentFile overrides
+must preserve the managed JAAS JVM option.
+
+For empty storage, the normal `kafka-storage format` call seeds the same admin
+as SCRAM-SHA-512 using `--add-scram`. An invocation-private0600 argfile in `/run`
+contains salt and saltedPassword, never a password in process argv; it is always
+removed after formatting. Existing storage is never reformatted. Subsequent
+administration authenticates the preseeded/existing SCRAM admin and reconciles
+the normal ACLs. Certificate superuser bootstrap, revocation and finalization
+restarts have been removed. Ordinary inter-broker SSL certificate ACLs remain.
+Changing an existing admin password requires coordinated credential rotation;
+this change does not add an automatic password-rotation mechanism.
 
 ### Infrastructure Verify
 

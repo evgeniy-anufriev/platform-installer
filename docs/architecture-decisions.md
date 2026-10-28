@@ -127,6 +127,18 @@ Status: Accepted.
 
 Delivery is split into `SERVICE-01A` standalone/single-node KRaft and `SERVICE-01B` distributed KRaft. SERVICE-01A proves installation, offline artifacts, Java, configuration, systemd, basic endpoint/TLS hooks, verification and idempotency without attempting every security or listener feature. PostgreSQL modes remain contract fixtures.
 
+Controller authentication uses SASL_SSL/PLAIN with the existing Kafka admin
+runtime credential; StandardAuthorizer remains enabled with `User:admin`.
+The role stores controller JAAS encrypted with the node's systemd host key and
+loads the decrypted credential into the service's memory-backed credential
+directory. No additional operator secret or persistent plaintext JAAS is added.
+Fresh storage is formatted with an initial SCRAM admin record before startup,
+so client administration does not require temporary certificate superusers or
+a later privilege-removal restart. Existing storage is never reformatted.
+This replaces certificate-based authorization bootstrap; ordinary TLS and
+internal broker ACLs remain separate concerns. Native role QA and real
+installer acceptance must be recorded separately.
+
 ## ADR-012: Standard Ansible is the standalone interface
 
 Status: Accepted.

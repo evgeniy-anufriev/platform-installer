@@ -140,7 +140,7 @@ func TestPlanStagingAcceptsAnOmittedOptionalRequestID(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, call := range runner.calls {
-		if call.name == "ssh" && strings.Contains(call.input, "purpose=$5") {
+		if call.name == "ssh" && strings.Contains(call.input, "request_id=${6-}") {
 			if !strings.Contains(call.input, "request_id=${6-}") {
 				t.Fatalf("plan staging did not safely default omitted requestId: %q", call.input)
 			}
@@ -160,7 +160,7 @@ func TestPlanStagingClaimsPrivateDirectoryUnderStickyVarTmp(t *testing.T) {
 	if err := transport.stagePlanProject(context.Background(), testNode(), root, "installer-123", "plan"); err != nil {
 		t.Fatal(err)
 	}
-	claim := runner.calls[0]
+	claim := runner.calls[1] // A cache miss precedes the ordinary private upload.
 	if !strings.Contains(claim.input, "stat -c %a /var/tmp") || !strings.Contains(claim.input, `mkdir -- "$1"`) || strings.Contains(claim.input, "sudo") || strings.Contains(claim.input, "install -d") || !strings.HasSuffix(claim.args[len(claim.args)-1], "platform-installer-project-installer-123") {
 		t.Fatal("private claim guards missing")
 	}

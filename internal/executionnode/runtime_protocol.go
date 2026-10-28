@@ -737,12 +737,23 @@ mkdir -- "$1"
 `
 
 func (t OpenSSHTransport) stagePlanProject(ctx context.Context, node Node, projectRoot, runID, purpose string) error {
+	slot, expected, err := projectTransferIdentity(projectRoot)
+	if err != nil {
+		return err
+	}
+	hit, err := t.projectArchiveCache(ctx, node, slot, expected, "lookup", runID, purpose, "")
+	if err != nil {
+		return &ExecutionError{Code: "PROJECT_TRANSFER_FAILED"}
+	}
+	if hit {
+		return nil
+	}
 	archive, err := createProjectArchive(projectRoot)
 	if err != nil {
 		return err
 	}
 	defer os.Remove(archive)
-	_, err = t.stageProjectArchive(ctx, node, archive, runID, purpose, "")
+	_, err = t.stageProjectArchive(ctx, node, archive, runID, purpose, "", slot, expected)
 	return err
 }
 
@@ -755,7 +766,7 @@ func (t OpenSSHTransport) stageCandidateProject(ctx context.Context, node Node, 
 	return t.stageProjectArchive(ctx, node, archive, runID, "candidate", requestID)
 }
 
-func (t OpenSSHTransport) stageProjectArchive(ctx context.Context, node Node, archive, runID, purpose, requestID string) (string, error) {
+func (t OpenSSHTransport) stageProjectArchive(ctx context.Context, node Node, archive, runID, purpose, requestID string, cacheIdentity ...string) (string, error) {
 	archiveFile, err := os.Open(archive)
 	if err != nil {
 		return "", err
@@ -770,6 +781,9 @@ func (t OpenSSHTransport) stageProjectArchive(ctx context.Context, node Node, ar
 		return "", closeErr
 	}
 	archiveDigest := "sha256:" + hex.EncodeToString(digest.Sum(nil))
+	if len(cacheIdentity) != 0 && (len(cacheIdentity) != 2 || cacheIdentity[1] != archiveDigest) {
+		return "", errors.New("PROJECT_REVISION_CHANGED")
+	}
 	identity, err := t.identityFile(node.CredentialRef)
 	if err != nil {
 		return "", err
@@ -794,6 +808,11 @@ func (t OpenSSHTransport) stageProjectArchive(ctx context.Context, node Node, ar
 	args := append(t.scpBase(node, identity), "-O", "--", archive, t.destination(node, remote+"/project.tar"))
 	if _, err := t.run(ctx, "scp", args, nil); err != nil {
 		return "", &ExecutionError{Code: "PROJECT_TRANSFER_FAILED"}
+	}
+	if len(cacheIdentity) == 2 {
+		if _, err := t.projectArchiveCache(ctx, node, cacheIdentity[0], archiveDigest, "publish", runID, purpose, remote+"/project.tar"); err != nil {
+			return "", &ExecutionError{Code: "PROJECT_TRANSFER_FAILED"}
+		}
 	}
 	script := "set -eu\nrun=$1; archive=$2; run_id=$3; expected=$4; purpose=$5; request_id=${6-}\ncase \"$purpose:$run\" in candidate:/var/tmp/platform-installer/execution-plan/installer-*|plan:/var/tmp/platform-installer-project-installer-*|snapshot:/var/tmp/platform-installer-project-installer-*) ;; *) exit 64;; esac\ncase \"$archive\" in \"$run/project.tar\") ;; *) exit 64;; esac\ncase \"$purpose\" in plan|snapshot|candidate) ;; *) exit 64;; esac\nactual=sha256:$(sha256sum \"$archive\" | awk '{print $1}')\n[ \"$actual\" = \"$expected\" ]\nif [ \"$purpose\" = candidate ]; then\n  runtime=$(sudo -n readlink -f /var/lib/platform-installer/runtime/current)\n  case \"$runtime\" in /var/lib/platform-installer/runtime/releases/*) ;; *) exit 64;; esac\n  sudo -n env PYTHONPATH=\"$runtime/ansible-core/tools\" python3 \"$runtime/ansible-core/tools/execution_protocol.py\" --runtime-release \"$runtime\" --controller \"$runtime/ansible-core/tools/execution_controller.py\" --stage-candidate-archive \"$archive\" --stage-run-id \"$run_id\" --stage-request-id \"$request_id\" --expected-archive-digest \"$expected\" >/dev/null\nelse\n  sudo -n install -d -m 0700 /var/lib/platform-installer/execution/runs/$run_id/project\n  sudo -n sh -c 'umask 077; printf \"%s\\n\" \"$1\" > \"$2\"' -- \"$actual\" /var/lib/platform-installer/execution/runs/$run_id/project-archive.digest\n  sudo -n tar -xf \"$archive\" -C /var/lib/platform-installer/execution/runs/$run_id/project\n  if [ \"$purpose\" = snapshot ]; then\n    sudo -n sh -c 'umask 077; printf \"{\\\"kind\\\":\\\"readonly\\\",\\\"runId\\\":\\\"%s\\\"}\\n\" \"$1\" > \"$2\"' -- \"$run_id\" /var/lib/platform-installer/execution/runs/$run_id/.snapshot-owner.json\n  fi\nfi\nsudo -n rm -f -- \"$archive\"\nrm -rf -- \"$run\"\n"
 	if _, err := t.ssh(ctx, node, "sh", []string{"-s", "--", remote, remote + "/project.tar", runID, archiveDigest, purpose, requestID}, []byte(script)); err != nil {

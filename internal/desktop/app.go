@@ -574,7 +574,9 @@ func (a *App) VerifyProject() ProjectVerification {
 		if err != nil {
 			return a.setVerificationUnavailableLocked(err, revision)
 		}
-		return a.verifyProjectWithBindingLocked(binding, revision, true)
+		// Readiness belongs to Check/PrepareExecutionNode. Keep identity and
+		// runtime binding checks, but do not repeat inspection for a ready node.
+		return a.verifyProjectWithBindingLocked(binding, revision, a.execution.context.Status != "READY")
 	}
 	return a.verifyProjectWithReaderLocked(a.reader, revision, nil)
 }

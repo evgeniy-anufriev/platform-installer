@@ -1,0 +1,9 @@
+{% set password = lookup('ansible.builtin.file', platform_kafka_secret_files[platform_kafka_admin_credential.passwordSecretRef], rstrip=false) | to_json(ensure_ascii=false) %}
+{% for listener in _platform_kafka_member_named_listeners | selectattr('purpose', 'equalto', 'controller') | selectattr('securityProtocol', 'equalto', 'SASL_SSL') %}
+{{ listener.name | lower }}.KafkaServer {
+  org.apache.kafka.common.security.plain.PlainLoginModule required
+  username="admin"
+  password={{ password }}
+  user_admin={{ password }};
+};
+{% endfor %}

@@ -22,6 +22,17 @@ document_action=importlib.util.module_from_spec(spec);spec.loader.exec_module(do
 
 
 class ApplicationProviderTest(unittest.TestCase):
+    def test_new_password_is_exactly_15_chars_and_guarantees_character_classes(self):
+        with patch.object(document_action.secrets, 'choice', side_effect=lambda alphabet: alphabet[0]):
+            value = document_action.generated_password()
+        self.assertEqual(15, len(value))
+        self.assertRegex(value, '[a-z]')
+        self.assertRegex(value, '[A-Z]')
+        self.assertRegex(value, '[0-9]')
+        self.assertIn('!', value)
+        self.assertTrue(value.isascii())
+        self.assertNotIn('\n', value)
+
     def test_deferred_delivery_keeps_already_provisioned_generated_password(self):
         with tempfile.TemporaryDirectory() as root:
             ref = 'pla-generated-' + 'a' * 40
@@ -34,7 +45,7 @@ class ApplicationProviderTest(unittest.TestCase):
                 provider={'mounts': {'secret/': {'type': 'kv', 'options': {'version': '2'}}}})
             action = object.__new__(document_action.ActionModule)
             action._task = SimpleNamespace(args=args)
-            with patch.object(document_action.secrets, 'token_urlsafe') as generator:
+            with patch.object(document_action, 'generated_password') as generator:
                 result = action.run()
                 self.assertFalse(result.get('failed', False))
                 self.assertEqual('already-provisioned', result['fields']['password'])
@@ -52,11 +63,11 @@ class ApplicationProviderTest(unittest.TestCase):
                         secret_files={}, provider={'mounts':{'secret/':{'type':'kv','options':{'version':'2'}}}})
             action = object.__new__(document_action.ActionModule)
             action._task = SimpleNamespace(args=args)
-            with patch.object(document_action.secrets, 'token_urlsafe', wraps=document_action.secrets.token_urlsafe) as generator:
+            with patch.object(document_action, 'generated_password', wraps=document_action.generated_password) as generator:
                 first = action.run()
                 self.assertFalse(first.get('failed', False))
-                self.assertEqual(43, len(first['fields']['password']))
-                generator.assert_called_once_with(32)
+                self.assertEqual(15, len(first['fields']['password']))
+                generator.assert_called_once_with()
                 args['current'] = self.response()
                 generator.reset_mock()
                 saved = action.run()

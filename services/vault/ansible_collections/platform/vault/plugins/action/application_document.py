@@ -1,8 +1,20 @@
 """Resolve one managed document through existing private inputs and builtin uri."""
 import re
 import secrets
+import string
 from ansible.plugins.action import ActionBase
 from ansible_collections.platform.core.plugins.module_utils.application_credentials import protected_secret_files
+
+
+def generated_password():
+    # Fixed 15-character baseline; guarantee each required character class.
+    chars = [secrets.choice(string.ascii_lowercase),
+             secrets.choice(string.ascii_uppercase),
+             secrets.choice(string.digits), '!']
+    alphabet = string.ascii_letters + string.digits + '!'
+    chars.extend(secrets.choice(alphabet) for _ in range(11))
+    secrets.SystemRandom().shuffle(chars)
+    return ''.join(chars)
 
 
 class ActionModule(ActionBase):
@@ -50,7 +62,7 @@ class ActionModule(ActionBase):
                         with open(args['secret_files'][ref], encoding='utf-8') as stream:
                             value = stream.read(4097)
                     if value is None:
-                        value = secrets.token_urlsafe(32)
+                        value = generated_password()
                     generated[ref] = value
                 else:
                     raise ValueError()
