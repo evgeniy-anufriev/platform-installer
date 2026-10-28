@@ -8,6 +8,8 @@ new destructive operation still requires explicit owner authorization.
 
 ## Active work and acceptance
 
+Owner-authorized follow-up: Redis native idempotence fix committed741593fb and latest origin/master integrated. Safe Kafka SCRAM failure diagnostics implemented: closed rc/reason/partial_count/elapsed_ms only; private CLI remains no_log. Focused RED OS filter3 + Core error9 + journal11 + native Ansible accounts13 PASS (36 tests), no raw output/secret sentinel leakage. Original runtime17 failure remains historically unclassified; successful later reads do not prove its cause. Master integration, bundle09 and full React/Wails repeat are authorized and pending. No new run started yet.
+
 Runtime17 full repeat installer-1b70b02196b421c9dabb4487c36d66e0 FAILED20:59:51MSK28.10.2026 on Kafka SCRAM metadata assertion/node1/event7283; plan015fe210/approved FULL_PROJECT, all10 infra+3libraries/no skips, bundle08/88629418. Ledger7287events/no gaps:18CHANGED (Redis17+Vault runtime dir1). Redis source idempotence fix implemented/tested: native19 tests +Apply/Verify syntax PASS, not bundled/deployed. Kafka same production template/tasks read-only Ansible3xPASS (10–12s,3users,0errors); originalCLI73.7s/30000ms API timeout, exact historical cause unknown because no_log lost rc/stderr; timeout only hypothesis. No Kafka source/target repair or new run. Terminal checks: Kafka3active, audit healthy/Vault=Agent=PG SCRAM/SQL loginsPASS/authErrors0. Heartbeat run-changed deleted after terminal/checks, UI open. Cleanup10213GB/service data preserved; QA sources/private inputs cleaned. See existing execution journal.
 
 

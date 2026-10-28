@@ -8,12 +8,11 @@
   no_log: true
 
 - name: Проверка полноты и доступности метаданных SCRAM перед изменением учётной записи
-  ansible.builtin.assert:
-    that:
-      - application_kafka_user_inventory.rc == 0
-      - application_kafka_user_inventory.stdout_lines | select('search', '^Error retrieving SCRAM credential configs') | list | length == 0
-    fail_msg: APPLICATION_KAFKA_ACCOUNT_UNAVAILABLE_OR_CONFLICT
-  no_log: true
+  ansible.builtin.fail:
+    msg: "{{ application_kafka_user_inventory | platform.kafka.scram_read_diagnostic }}"
+  when: >-
+    application_kafka_user_inventory.rc != 0 or
+    application_kafka_user_inventory.stdout_lines | select('search', '^Error retrieving SCRAM credential configs') | list | length > 0
 
 - name: Сброс результатов чтения Kafka ACL развёртывания
   ansible.builtin.set_fact:

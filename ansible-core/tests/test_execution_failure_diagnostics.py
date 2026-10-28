@@ -17,6 +17,27 @@ def failure(message, **extra):
 
 
 class FailureDiagnosticTests(unittest.TestCase):
+    def test_structured_scram_failure_reaches_operation_and_journal(self):
+        secret = 'SYNTHETIC_SECRET_NOT_FOR_JOURNAL'
+        record = dict(code='APPLICATION_KAFKA_SCRAM_READ_FAILED', rc=1,
+                      reason='TIMEOUT', partial_count=2, elapsed_ms=73733)
+        self.assertEqual(record['code'], controller._operation_error_code(failure(record)))
+        from execution_task_error import safe_task_error
+        error = safe_task_error(dict(msg=record, stdout=secret))
+        with tempfile.TemporaryDirectory() as root:
+            from test_execution_task_observability import _active_journal
+            journal = _active_journal(root)
+            journal.emit_operation_failure_diagnostic(controller._operation_error_code(failure(record)))
+            journal.task_event('TASK_COMPLETED', 'FAILED', 'scram-probe', host='node1',
+                               name='SCRAM read', failure_result=dict(msg=record, stdout=secret))
+            events = Path(journal.directory, 'events.jsonl').read_text()
+            self.assertIn(record['code'], events)
+            self.assertIn('reason=TIMEOUT', events)
+            self.assertNotIn(secret, events)
+        self.assertIn('reason=TIMEOUT', error['summary'])
+        self.assertIn('partial_count=2', error['summary'])
+        self.assertNotIn(secret, json.dumps(error))
+
     def test_closed_classes(self):
         cases = {
             "Timeout waiting for privilege escalation prompt": "ANSIBLE_BECOME_TIMEOUT",

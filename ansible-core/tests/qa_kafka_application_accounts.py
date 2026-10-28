@@ -23,6 +23,7 @@ if kind in ('kafka-configs.sh', 'kafka-configs'):
         (root / 'state.json').write_text(json.dumps(state))
     else:
         if state.get('metadata_fail'):
+            print(state.get('metadata_stderr', 'SECRET_SENTINEL'), file=sys.stderr)
             sys.exit(1)
         for name, (mechanism, password) in state['users'].items():
             print("SCRAM credential configs for user-principal '%s' are %s=iterations=8192" % (name, mechanism))
@@ -88,6 +89,11 @@ class KafkaApplicationAccountsTests(unittest.TestCase):
                 env=dict(os.environ, ANSIBLE_CONFIG=str(ROOT / 'ansible-core/ansible.cfg')),
                 capture_output=True, text=True, timeout=60)
             self.assertEqual(success, result.returncode == 0, (result.stdout + result.stderr)[-2200:])
+            if errors.get('metadata_fail') or errors.get('metadata_error'):
+                output = result.stdout + result.stderr
+                self.assertIn('APPLICATION_KAFKA_SCRAM_READ_FAILED', output)
+                self.assertNotIn('SECRET_SENTINEL', output)
+                self.assertIn('partial_count', output)
             return [json.loads(line) for line in (root / 'calls.jsonl').read_text().splitlines()]
 
     def test_two_users_share_both_inventory_commands_and_authenticate_separately(self):

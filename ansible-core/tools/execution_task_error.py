@@ -4,6 +4,7 @@
 # Fixed Core vocabulary only; never accept arbitrary uppercase output as a code.
 CORE_DIAGNOSTIC_CODES = frozenset(('PROJECT_SNAPSHOT_INPUT_INVALID',
     'APPLICATION_SCRIPT_EXECUTION_FAILED',
+    'APPLICATION_KAFKA_SCRAM_READ_FAILED',
     'APPLICATION_VAULT_DOCUMENT_WRITE_FAILED',
     'APPLICATION_ACCOUNT_CALLBACK_INVALID',
     'APPLICATION_ACCOUNT_CAPABILITY_UNSUPPORTED',
@@ -197,7 +198,7 @@ def core_error_code(result):
         return ''
     for key in ('error_code', 'code', 'msg'):
         value = result.get(key)
-        if key == 'msg' and isinstance(value, dict) and value.get('code') == 'APPLICATION_SCRIPT_EXECUTION_FAILED':
+        if key == 'msg' and isinstance(value, dict) and isinstance(value.get('code'), str) and value['code'] in CORE_DIAGNOSTIC_CODES:
             return value['code']
         if isinstance(value, str) and value in CORE_DIAGNOSTIC_CODES:
             return value
@@ -212,11 +213,14 @@ def safe_task_error(result, no_log=False):
     if code:
         summary = 'Core operation failed (' + code + ')'
         value = result.get('msg')
-        if code == 'APPLICATION_SCRIPT_EXECUTION_FAILED' and isinstance(value, dict):
-            for key, maximum in (('rc', 65535), ('step', 65535), ('http_status', 599), ('curl_exit', 255)):
+        if isinstance(value, dict):
+            for key, minimum, maximum in (('rc', -255, 65535), ('step', 0, 65535), ('http_status', 0, 599), ('curl_exit', 0, 255), ('partial_count', 0, 65535), ('elapsed_ms', 0, 86400000)):
                 item = value.get(key)
-                if type(item) is int and 0 <= item <= maximum:
+                if type(item) is int and minimum <= item <= maximum:
                     summary += '; %s=%d' % (key, item)
+            reason = value.get('reason')
+            if isinstance(reason, str) and reason in ('TLS', 'AUTHENTICATION', 'AUTHORIZATION', 'TIMEOUT', 'CONNECTION', 'PARTIAL_METADATA', 'CLI_FAILURE'):
+                summary += '; reason=' + reason
         return {'code': code, 'summary': summary}
     children = result.get('results')
     if isinstance(children, list):
