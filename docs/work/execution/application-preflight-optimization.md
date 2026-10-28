@@ -70,3 +70,48 @@ Current bundle, active installation and published master code were not changed.
 Remaining preflight candidates: shared-library calculations, batching filesystem
 observations and reducing other inapplicable task expansions. They are outside
 this first slice; provider/ClickHouse/Vault optimizations are also not included.
+
+## Resource context batching (owner follow-up)
+
+ClickHouse rendering was committed separately as `41b0fbfb`. The owner then
+requested reducing skipped task work. The foreign-library/root filtering is
+already committed in `82695173`; it is not a new change in this follow-up.
+
+`resolve_application_libraries` now builds both resource maps in one `set_fact`
+per application placement. The previous include loop over connections and task
+loop over all resources are replaced by an ordinary Jinja expression. Resource
+kind, binding presence and deploymentRef matching retain the previous rules,
+including aliases, default empty references and existing map entries. No new
+filter/plugin, persistent cache, provider selection rule or external request.
+`no_log` and `become: false` remain in place. Legacy topic-role processing still
+runs after direct resource keys.
+
+This removes per-resource skipped events from this task (the baseline had 32
+results including 24 skips), rather than hiding callbacks or skipping validation.
+There is now one context task result per placement, including empty maps. This
+does not eliminate all 375 skipped results or claim a 100.6-second stage saving.
+
+Validation uses fresh RED OS sources and target-free native Ansible. Full
+React/Wails installation and stage wall-time acceptance remain pending; no
+bundle publication, active run or deployed provider has been changed. Review
+remains waived by the owner. The owner authorized committing this follow-up.
+
+QA evidence for resource batching:
+- Native Ansible test PASS (3.134s): five scenarios, exact expected maps, alias and
+  deployment isolation, ignored kinds/missing bindings, provided references,
+  preservation of existing entries, empty sets and repeated execution. Exactly
+  one context task per scenario, changed=0, skipped=0.
+- Apply/Verify syntax checks PASS.
+- Initial library selection: 2 PASS / 1 FAIL (157.317s). Named topic inheritance/
+  override/reset and ClickHouse connection/history tests passed. The direct-key
+  test fixture supplied empty PostgreSQL parameters, rejected by the existing
+  deployments schema requiring name; this is not a successful regression run.
+  The fixture now supplies its explicit database name and restores that name
+  when testing reset. Production validation was not relaxed.
+- Evidence retained in `.runtime/qa/resource-context/`; corrected direct-key
+  regression is run separately from fresh qa-sync sources.
+- Corrected direct-key/alias/legacy collision/reset test PASS (77.910s), including
+  rejection of invalid binding and absent required topic. Final focused selections
+  total four distinct passing tests; the earlier fixture failure remains recorded.
+  Both qa-sync workspaces cleaned. `git diff --check` PASS. No full-suite or
+  end-to-end installation performance PASS is claimed.

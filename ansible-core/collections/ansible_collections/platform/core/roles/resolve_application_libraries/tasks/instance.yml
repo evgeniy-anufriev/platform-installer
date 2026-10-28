@@ -130,11 +130,6 @@
 
 - name: Предоставление выбранных ключей ресурсов перед расширением параметров и среды
   ansible.builtin.include_tasks: resource_context.yml
-  loop: "{{ _application_connections | dict2items }}"
-  loop_control:
-    loop_var: resource_connection
-    label: "{{ resource_connection.key }}"
-  when: resource_connection.value.library_binding | default('') in application_job.deployment.bindings
 
 - name: "Обработка привязок ролей топиков старого формата после прямых ключей"
   ansible.builtin.include_tasks: topic_roles.yml

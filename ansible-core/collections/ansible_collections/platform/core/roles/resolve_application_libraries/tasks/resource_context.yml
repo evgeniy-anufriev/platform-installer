@@ -1,17 +1,27 @@
 ---
-- name: Передача выбранных ресурсов провайдеру соединений приложения
+- name: Передача выбранных ресурсов провайдерам соединений приложения
   ansible.builtin.set_fact:
-    "{{ 'application_topics' if _application_resources[resource_id].kind == 'kafka.topic' else 'application_databases' }}": >-
-      {{ (application_topics if _application_resources[resource_id].kind == 'kafka.topic' else application_databases) |
-         combine({resource_connection.key:
-           ((application_topics if _application_resources[resource_id].kind == 'kafka.topic' else application_databases)[resource_connection.key] | default({})) |
-           combine({resource_id: {'resourceId': resource_id, 'name': _application_resources[resource_id].parameters.name}})}) }}
-  loop: "{{ _application_resources.keys() | list }}"
-  loop_control:
-    loop_var: resource_id
-  when:
-    - _application_resources[resource_id].kind in ['kafka.topic', 'postgresql.database', 'clickhouse.database']
-    - _application_resources[resource_id].binding in application_job.deployment.bindings
-    - application_job.deployment.bindings[_application_resources[resource_id].binding].deploymentRef | default('') == application_job.deployment.bindings.get(resource_connection.value.library_binding, {}).deploymentRef | default('')
+    application_topics: "{{ _application_resource_context.topics }}"
+    application_databases: "{{ _application_resource_context.databases }}"
+  vars:
+    _application_resource_context: >-
+      {%- set ns = namespace(topics=application_topics, databases=application_databases) -%}
+      {%- set bindings = application_job.deployment.bindings -%}
+      {%- for connection_key, connection in _application_connections.items()
+          if connection.library_binding | default('') in bindings -%}
+      {%- for resource_id, resource in _application_resources.items()
+          if resource.kind in ['kafka.topic', 'postgresql.database', 'clickhouse.database']
+          and resource.binding in bindings
+          and bindings[resource.binding].deploymentRef | default('') ==
+              bindings.get(connection.library_binding, {}).deploymentRef | default('') -%}
+      {%- set entry = {resource_id: {'resourceId': resource_id, 'name': resource.parameters.name}} -%}
+      {%- if resource.kind == 'kafka.topic' -%}
+      {%- set ns.topics = ns.topics | combine({connection_key: ns.topics.get(connection_key, {}) | combine(entry)}) -%}
+      {%- else -%}
+      {%- set ns.databases = ns.databases | combine({connection_key: ns.databases.get(connection_key, {}) | combine(entry)}) -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {%- endfor -%}
+      {{ {'topics': ns.topics, 'databases': ns.databases} }}
   no_log: true
   become: false
