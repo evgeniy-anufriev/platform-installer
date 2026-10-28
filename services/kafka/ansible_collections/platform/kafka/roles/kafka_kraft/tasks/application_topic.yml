@@ -22,7 +22,7 @@
       no_log: true
     - name: Создание объявленного топика без командной оболочки
       ansible.builtin.command:
-        argv: "{{ [application_topic_cli_directory ~ '/bin/kafka-topics.sh', '--bootstrap-server', application_topic_candidate.address ~ ':' ~ application_topic_candidate.port, '--command-config', application_topic_client.path, '--create', '--if-not-exists', '--topic', application_topic.name, '--partitions', application_topic.partitions | string, '--replication-factor', application_topic.replicationFactor | string] + application_topic_config_args }}"
+        argv: "{{ [application_topic_cli_directory ~ '/bin/kafka-topics' ~ platform_kafka_script_extension, '--bootstrap-server', application_topic_candidate.address ~ ':' ~ application_topic_candidate.port, '--command-config', application_topic_client.path, '--create', '--if-not-exists', '--topic', application_topic.name, '--partitions', application_topic.partitions | string, '--replication-factor', application_topic.replicationFactor | string] + application_topic_config_args }}"
       register: application_topic_creation
       failed_when: false
       changed_when: application_topic_creation.rc == 0

@@ -16,7 +16,7 @@ state = json.loads((root / 'state.json').read_text())
 args, kind = sys.argv[1:], pathlib.Path(__file__).name
 with (root / 'calls.jsonl').open('a') as stream:
     stream.write(json.dumps([kind, args]) + '\n')
-if kind == 'kafka-configs.sh':
+if kind in ('kafka-configs.sh', 'kafka-configs'):
     if '--alter' in args:
         name = args[args.index('--entity-name') + 1]
         state['users'][name] = ['SCRAM-SHA-512', 'qa-good']
@@ -28,7 +28,7 @@ if kind == 'kafka-configs.sh':
             print("SCRAM credential configs for user-principal '%s' are %s=iterations=8192" % (name, mechanism))
         if state.get('metadata_error'):
             print("Error retrieving SCRAM credential configs for user-principal 'other': ExecutionException")
-elif kind == 'kafka-broker-api-versions.sh':
+elif kind in ('kafka-broker-api-versions.sh', 'kafka-broker-api-versions'):
     if state.get('login_transport_fail'):
         sys.exit(1)
     content = pathlib.Path(args[args.index('--command-config') + 1]).read_text()
@@ -48,11 +48,13 @@ elif '--list' in args:
 
 class KafkaApplicationAccountsTests(unittest.TestCase):
     def probe(self, users, names, *, mode='existing', phase='apply', acl_names=None,
-              success=True, client_passwords=None, **errors):
+              success=True, client_passwords=None, extension=None, **errors):
         with tempfile.TemporaryDirectory(prefix='qa-kafka-accounts-') as directory:
             root = Path(directory)
             (root / 'bin').mkdir()
             for name in ['kafka-configs.sh', 'kafka-acls.sh', 'kafka-broker-api-versions.sh']:
+                if extension is not None:
+                    name = name.removesuffix('.sh') + extension
                 path = root / 'bin' / name
                 path.write_text(CLI)
                 path.chmod(0o700)
@@ -76,6 +78,8 @@ class KafkaApplicationAccountsTests(unittest.TestCase):
                     accountId=name, name=name, mode=mode, passwordRef=name, candidates=[candidate],
                     grants=[dict(resourceType='topic', name='qa.topic', patternType='literal', operations=['Read'])])
                     for name in names]))
+            if extension is not None:
+                variables['platform_kafka_script_extension'] = extension
             play = root / 'probe.yml'
             play.write_text(yaml.safe_dump([dict(hosts='localhost', connection='local', gather_facts=False,
                 vars=variables, tasks=[{'ansible.builtin.include_role': dict(name='platform.kafka.kafka_kraft',
@@ -95,6 +99,12 @@ class KafkaApplicationAccountsTests(unittest.TestCase):
         self.assertNotIn('--entity-name', metadata)
         self.assertNotIn('--principal', acl)
         self.assertEqual(2, sum(kind == 'kafka-broker-api-versions.sh' for kind, _ in calls))
+
+    def test_extensionless_commands_use_inventory_override(self):
+        calls = self.probe({'qa.one': ['SCRAM-SHA-512', 'qa-good']},
+                           ['qa.one'], extension='')
+        self.assertEqual(['kafka-configs', 'kafka-acls', 'kafka-broker-api-versions'],
+                         [kind for kind, _ in calls])
 
     def test_similar_principal_cannot_supply_missing_scram_metadata(self):
         calls = self.probe({'qaXone': ['SCRAM-SHA-512', 'qa-good']}, ['qa.one'], success=False)

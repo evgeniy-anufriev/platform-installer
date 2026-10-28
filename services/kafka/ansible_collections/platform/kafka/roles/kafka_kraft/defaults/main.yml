@@ -1,8 +1,12 @@
 ---
 platform_kafka_version: "4.3.1"
+# Include the leading dot; use an empty string for extensionless Kafka commands.
+platform_kafka_script_extension: ".sh"
 platform_kafka_application_timeout_ms: 30000
 platform_kafka_phase: full
 platform_kafka_schema_registry_enabled: true
+# Reuse Kafka's approved archive and unpacked directory instead of a separate distribution.
+platform_kafka_schema_registry_use_kafka_distribution: false
 platform_kafka_schema_registry_kafka_listener: SSL
 platform_kafka_schema_registry_http_port: 8081
 platform_kafka_schema_registry_https_port: 8082

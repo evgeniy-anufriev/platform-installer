@@ -67,7 +67,11 @@ The Windows development workstation is not the canonical runtime for Python/Ansi
 
 For the configured RED OS QA target at `192.168.56.101`, always connect as
 `platform-automation` using the persistent execution identity
-`.runtime/platform-exec-key-20260901` with `IdentitiesOnly=yes`. SSH key login
+`.runtime/secrets/qa-existing-execution-identity.pem` with `IdentitiesOnly=yes`.
+This existing identity was verified on 2026-10-27 with strict host-key checking,
+the `platform-automation` account and `sudo -n`. The former
+`.runtime/platform-exec-key-20260901` path is absent; do not use it for new QA.
+SSH key login
 is the established transport. The target policy grants
 `platform-automation ALL=(ALL) NOPASSWD: ALL`; use `sudo -n`/Ansible
 `become: true` and do not use password-based sudo or the `admin` login for

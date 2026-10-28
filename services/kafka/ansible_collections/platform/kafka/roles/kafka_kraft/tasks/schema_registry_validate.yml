@@ -4,6 +4,7 @@
     that:
       - platform_kafka_phase in ['full', 'kafka', 'schema_registry']
       - platform_kafka_schema_registry_enabled is boolean
+      - platform_kafka_schema_registry_use_kafka_distribution is boolean
       - platform_kafka_schema_registry_version is string
       - platform_kafka_schema_registry_version | length > 0
       - platform_kafka_schema_registry_archive_directory is string

@@ -130,3 +130,20 @@ issued no writes to that source worktree.
 No unnecessary abstraction, duplicated DTO, new persistence or generic scheduler
 was found by the reviewer. ACL tuple preservation, separate cluster grants and
 retained ownership/PKI/HTTP+HTTPS checks had no additional blocking findings.
+
+## Owner-authorized master integration (2026-10-28)
+
+Optimization commit: `ab49eb09`. Integrated `origin/master` at `16b37d99`,
+including the shared Kafka/Registry distribution and configurable CLI suffix.
+Conflict resolution retains phased Registry orchestration and ACL batching;
+new CLI tasks also consume `platform_kafka_script_extension`. Shared-distribution
+fixtures now select the tasks inside the fatal preparation block.
+
+Fresh qa-sync source on RED OS101: combined 94 tests PASS in 332.576s, no skips
+(Registry optimization/phase, accounts, ACL writes, application batch, shared
+archive native/assertion checks, member normalization, SERVICE-01B/01D contracts).
+Apply and Verify syntax checks PASS. Local evidence:
+`.runtime/qa/acl-registry/merge-focused-94.log`. Temporary source workspace cleaned.
+Source diff whitespace check PASS; two whitespace lines inherited unchanged from
+the origin/master generated portable-source snapshot were not edited.
+This integration does not claim installed-service or React/Wails performance acceptance.

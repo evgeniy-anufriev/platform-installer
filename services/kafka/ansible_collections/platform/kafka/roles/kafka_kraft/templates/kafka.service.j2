@@ -13,7 +13,7 @@ EnvironmentFile={{ kafka_member.systemd_environment_pattern }}
 LoadCredentialEncrypted=kafka-jaas:{{ kafka_member.config_directory }}/controller-jaas.cred
 Environment="KAFKA_OPTS=-Djava.security.auth.login.config=%d/kafka-jaas"
 {% endif %}
-ExecStart={{ platform_kafka_install_directory }}/bin/kafka-server-start.sh $KAFKA_CONFIG_FILE
+ExecStart={{ platform_kafka_install_directory }}/bin/kafka-server-start{{ platform_kafka_script_extension }} $KAFKA_CONFIG_FILE
 Restart=on-failure
 RestartSec=5
 LimitNOFILE=100000

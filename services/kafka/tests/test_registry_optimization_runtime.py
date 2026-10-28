@@ -119,7 +119,7 @@ class RegistryOptimizationRuntimeTests(unittest.TestCase):
                 'when': '_platform_kafka_registry_local | length > 0'}]
             play = dict(hosts='all', order='reverse_inventory', strategy='linear', gather_facts=False,
                 vars=dict(_platform_kafka_registry_local="{{ _platform_kafka_registry_projection.instances | selectattr('host', 'equalto', inventory_hostname) | list }}",
-                    platform_kafka_verify_only=False, existing=list(existing),
+                    platform_kafka_script_extension='.sh', platform_kafka_verify_only=False, existing=list(existing),
                     _platform_kafka_registry_activation=({'stale': {'new': True}} if stale_dict else [{'key': 'stale', 'new': True}])), tasks=steps)
             if serial:
                 play['serial'] = serial

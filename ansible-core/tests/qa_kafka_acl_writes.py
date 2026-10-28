@@ -82,7 +82,7 @@ class KafkaAclWritesTests(unittest.TestCase):
                 steps.append({'ansible.builtin.include_tasks': str(TASKS / 'application_acl.yml'),
                               'vars': dict(application_kafka_account=direct_after,
                                            application_kafka_grant=direct_after['grants'][0])})
-            variables = dict(application_topic_cli_directory=str(root),
+            variables = dict(platform_kafka_script_extension='.sh', application_topic_cli_directory=str(root),
                              application_topic_candidate=dict(address='127.0.0.1', port='1'),
                              application_kafka_private=dict(path=str(root)),
                              platform_kafka_application_phase=phase)
