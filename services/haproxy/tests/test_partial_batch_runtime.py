@@ -31,7 +31,7 @@ class PartialHookContractTests(unittest.TestCase):
                   if t.get('ansible.builtin.include_role', {}).get('name') == 'platform.haproxy.haproxy']
         self.assertEqual(['partial_prepare', 'activate', 'partial_reload', 'endpoint_verify'], phases)
         prepare = yaml.safe_load((ROLE / 'tasks/partial_prepare.yml').read_text())
-        self.assertEqual(['resolve.yml', 'prepare.yml'],
+        self.assertEqual(['resolve.yml', 'partial_candidate.yml'],
                          [t['ansible.builtin.include_tasks'] for t in prepare if 'ansible.builtin.include_tasks' in t])
 
 

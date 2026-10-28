@@ -57,7 +57,7 @@ class BackendFileContractTests(unittest.TestCase):
 
     def test_prepare_and_activation_manage_only_reserved_backend_files(self):
         prepare = (ROLE / "tasks" / "prepare.yml").read_text(encoding="utf-8")
-        activate = (ROLE / "tasks" / "activate.yml").read_text(encoding="utf-8")
+        activate = (ROLE / "tasks" / "activate_changed.yml").read_text(encoding="utf-8")
         self.assertIn("30-backend-*.cfg", prepare)
         self.assertIn("platform_haproxy_managed_application_backend_files", activate)
         self.assertIn("platform.haproxy.archive_managed_backends", activate)

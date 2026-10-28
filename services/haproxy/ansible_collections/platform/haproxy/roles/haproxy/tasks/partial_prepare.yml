@@ -7,4 +7,4 @@
   ansible.builtin.include_tasks: resolve.yml
 
 - name: Подготовка и проверка полного кандидата частичной интеграции HAProxy
-  ansible.builtin.include_tasks: prepare.yml
+  ansible.builtin.include_tasks: partial_candidate.yml

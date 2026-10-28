@@ -1,4 +1,9 @@
 ---
+- name: Сброс контекста пакетного хука перед обычной подготовкой HAProxy
+  ansible.builtin.set_fact:
+    _platform_haproxy_batch_prepared: false
+    _platform_haproxy_partial_unchanged: false
+
 - name: Сбор прежнего списка управляемых файлов HAProxy перед очисткой кандидата
   platform.haproxy.archive_managed_backends:
     name_prefix: "{{ platform_name_prefix | default('', true) }}"

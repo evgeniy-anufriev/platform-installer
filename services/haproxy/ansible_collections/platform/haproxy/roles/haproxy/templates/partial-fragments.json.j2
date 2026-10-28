@@ -1,0 +1,8 @@
+{%- set ns = namespace(files=[]) -%}
+{%- set public -%}{% include '10-public.cfg.j2' %}{% endset -%}
+{%- set ns.files = ns.files + [{'name': '10-public.cfg', 'content': public ~ '\n'}] -%}
+{%- for platform_haproxy_application_backend in platform_haproxy_application_backends -%}
+{%- set backend -%}{% include '30-application-backend.cfg.j2' %}{% endset -%}
+{%- set ns.files = ns.files + [{'name': platform_haproxy_application_backend.configFileName, 'content': backend}] -%}
+{%- endfor -%}
+{{ ns.files | to_json }}
