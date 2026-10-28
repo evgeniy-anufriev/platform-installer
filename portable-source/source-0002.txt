@@ -47843,6 +47843,50 @@ class FilterModule:
         return dict(application_topic_validation=validate_topic, application_topics_validation=validate_topics)
 
 @@END
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/plugins/filter/scram_diagnostic.py","mode":420,"size":1998,"sha256":"7f7b164812e71daeb6f7194fc3d1ca3178ea9abf91efd17a32cd03aa8ae9cbd9","index":0,"count":1,"encoding":"utf-8","payloadBytes":1998}
+"""Project private Kafka CLI results into a closed public failure record."""
+import re
+
+
+def scram_read_diagnostic(result):
+    result = result if isinstance(result, dict) else {}
+    output = '\n'.join(result.get(key, '') for key in ('stdout', 'stderr')
+                       if isinstance(result.get(key), str))
+    text = output.lower()
+    reason = 'CLI_FAILURE'
+    for category, markers in (
+        ('TLS', ('sslhandshakeexception', 'ssl handshake', 'pkix', 'certificate_unknown')),
+        ('AUTHENTICATION', ('saslauthenticationexception', 'authentication failed', 'invalid credentials')),
+        ('AUTHORIZATION', ('authorizationexception', 'not authorized', 'authorization failed')),
+        ('TIMEOUT', ('timeoutexception', 'timed out', 'timeout expired')),
+        ('CONNECTION', ('connectexception', 'connection refused', 'unknownhostexception')),
+    ):
+        if any(marker in text for marker in markers):
+            reason = category
+            break
+    partial = min(65535, sum(line.startswith('Error retrieving SCRAM credential configs')
+                             for line in output.splitlines()))
+    if reason == 'CLI_FAILURE' and partial:
+        reason = 'PARTIAL_METADATA'
+    rc = result.get('rc')
+    public = {'code': 'APPLICATION_KAFKA_SCRAM_READ_FAILED',
+              'rc': rc if type(rc) is int and -255 <= rc <= 65535 else -1,
+              'reason': reason, 'partial_count': partial}
+    delta = result.get('delta')
+    match = re.fullmatch(r'(\d{1,2}):(\d{2}):(\d{2})(?:\.(\d{1,6}))?', delta) if isinstance(delta, str) else None
+    if match:
+        hours, minutes, seconds = map(int, match.group(1, 2, 3))
+        elapsed = ((hours * 60 + minutes) * 60 + seconds) * 1000 + int((match[4] or '').ljust(6, '0')) // 1000
+        if minutes < 60 and seconds < 60 and elapsed <= 86400000:
+            public['elapsed_ms'] = elapsed
+    return public
+
+
+class FilterModule:
+    def filters(self):
+        return {'scram_read_diagnostic': scram_read_diagnostic}
+
+@@END
 @@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/plugins/filter/storage_credentials.py","mode":420,"size":685,"sha256":"803ce1879b3d1deba064159e2452af38780ca9ce37a7c33d485448a683dac695","index":0,"count":1,"encoding":"utf-8","payloadBytes":685}
 """Initial SCRAM record for Kafka's native storage formatter, never process argv."""
 import base64
@@ -48107,7 +48151,7 @@ dependencies: []
     application_kafka_credentials: "{{ platform_application_secret_files | default({}) | combine(platform_application_credential_files | default({})) }}"
 
 @@END
-@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/application_accounts_read.yml","mode":420,"size":1558,"sha256":"cd5234d60cbe7ee88151160b273b733c9064e4cb0025bb435c41f5e467f90fa5","index":0,"count":1,"encoding":"utf-8","payloadBytes":1558}
+@@PORTABLE {"path":"services/kafka/ansible_collections/platform/kafka/roles/kafka_kraft/tasks/application_accounts_read.yml","mode":420,"size":1561,"sha256":"ca2f3e5fefa21a92bd68f99ecee690959e32be89ed0171e252d0d085cb2286a5","index":0,"count":1,"encoding":"utf-8","payloadBytes":1561}
 ---
 - name: Получение описания метаданных SCRAM один раз для всех пользователей развертывания
   ansible.builtin.command:
@@ -48118,12 +48162,11 @@ dependencies: []
   no_log: true
 
 - name: Проверка полноты и доступности метаданных SCRAM перед изменением учётной записи
-  ansible.builtin.assert:
-    that:
-      - application_kafka_user_inventory.rc == 0
-      - application_kafka_user_inventory.stdout_lines | select('search', '^Error retrieving SCRAM credential configs') | list | length == 0
-    fail_msg: APPLICATION_KAFKA_ACCOUNT_UNAVAILABLE_OR_CONFLICT
-  no_log: true
+  ansible.builtin.fail:
+    msg: "{{ application_kafka_user_inventory | platform.kafka.scram_read_diagnostic }}"
+  when: >-
+    application_kafka_user_inventory.rc != 0 or
+    application_kafka_user_inventory.stdout_lines | select('search', '^Error retrieving SCRAM credential configs') | list | length > 0
 
 - name: Сброс результатов чтения Kafka ACL развёртывания
   ansible.builtin.set_fact:
@@ -56746,7 +56789,7 @@ def project_members(instances, deployment, settings):
     return result
 
 @@END
-@@PORTABLE {"path":"services/redis/ansible_collections/platform/redis/plugins/modules/acl_file.py","mode":420,"size":7309,"sha256":"1cafc475e896f720dcda89f6eda45dceddd3000b54a480c4c19c82e88e4cd74f","index":0,"count":1,"encoding":"utf-8","payloadBytes":7309}
+@@PORTABLE {"path":"services/redis/ansible_collections/platform/redis/plugins/modules/acl_file.py","mode":420,"size":7582,"sha256":"4354157ef949d04622bda77f57c7ab825f86b294c55611e69cecaed63cd77428","index":0,"count":1,"encoding":"utf-8","payloadBytes":7582}
 #!/usr/bin/python
 """Preserve named users while locking infrastructure ACL writes with app hooks."""
 import hashlib
@@ -56850,7 +56893,9 @@ def main():
                             default = line
                     retained = [line for line in content.splitlines() if line.strip() and shlex.split(line)[1] != 'default']
                     proposed = '\n'.join([default] + retained) + '\n'
-                    if proposed != content:
+                    # ACL SAVE orders users itself and adds default-user flags.
+                    # Keep that serialization when the effective ACL is unchanged.
+                    if not exists or comparable(checked_lines(proposed, args['password'])) != comparable(checked_lines(content, args['password'], True)):
                         descriptor, temporary = tempfile.mkstemp(prefix='.users-acl-', dir=directory)
                         try:
                             with os.fdopen(descriptor, 'w', encoding='utf-8') as stream:
@@ -57318,7 +57363,7 @@ platform_redis_install_from_system_repo: true
     - _platform_redis_local_instances | length > 0
 
 @@END
-@@PORTABLE {"path":"services/redis/ansible_collections/platform/redis/roles/redis_tls/tasks/member.yml","mode":420,"size":8045,"sha256":"3508b3cc5860c4a0b9d233558c59270fa18eb01fd1d024e026b91ddc584a8cfe","index":0,"count":1,"encoding":"utf-8","payloadBytes":8045}
+@@PORTABLE {"path":"services/redis/ansible_collections/platform/redis/roles/redis_tls/tasks/member.yml","mode":420,"size":10242,"sha256":"e6ceb59096d8083ec91037a578ba34fd27e167cad128da5aba95537025fd733b","index":0,"count":1,"encoding":"utf-8","payloadBytes":10242}
 ---
 - name: Создание путей к экземпляру службы Redis
   ansible.builtin.file:
@@ -57371,11 +57416,20 @@ platform_redis_install_from_system_repo: true
   ansible.builtin.include_tasks: acl_files.yml
 
 - name: Подключение файла Redis ACL без перезаписи сохраненного состояния репликации
+  vars:
+    _platform_redis_saved_config: >-
+      {{ ((_platform_redis_acl_configs | default({})).get('results', [])
+          | selectattr('item', 'equalto', 'redis') | map(attribute='content', default='')
+          | first | default('')) | b64decode }}
   ansible.builtin.lineinfile:
     path: "{{ redis_member.config_directory }}/redis.conf"
     regexp: '^\s*aclfile\s+'
     line: "aclfile {{ redis_member.config_directory }}/redis.users.acl"
   register: _platform_redis_acl_config
+  when: >-
+    (_platform_redis_saved_config | regex_findall('(?m)^[ \t]*aclfile[ \t]+(.+?)[ \t]*$'))
+    not in [[redis_member.config_directory ~ '/redis.users.acl'],
+            [(redis_member.config_directory ~ '/redis.users.acl') | to_json]]
   no_log: true
 
 - name: Удаление устаревшего requirepass Redis после прикрепления хешированного ACL
@@ -57419,12 +57473,22 @@ platform_redis_install_from_system_repo: true
   when: "'sentinel' in redis_member.roles"
 
 - name: "Подключение ACL-файла Sentinel, сохранив сведения о выбранном мастере"
+  vars:
+    _platform_sentinel_saved_config: >-
+      {{ ((_platform_redis_acl_configs | default({})).get('results', [])
+          | selectattr('item', 'equalto', 'sentinel') | map(attribute='content', default='')
+          | first | default('')) | b64decode }}
   ansible.builtin.lineinfile:
     path: "{{ redis_member.config_directory }}/sentinel.conf"
     regexp: '^\s*aclfile\s+'
     line: "aclfile {{ redis_member.config_directory }}/sentinel.users.acl"
   register: _platform_sentinel_acl_config
-  when: "'sentinel' in redis_member.roles"
+  when:
+    - "'sentinel' in redis_member.roles"
+    - >-
+      (_platform_sentinel_saved_config | regex_findall('(?m)^[ \t]*aclfile[ \t]+(.+?)[ \t]*$'))
+      not in [[redis_member.config_directory ~ '/sentinel.users.acl'],
+              [(redis_member.config_directory ~ '/sentinel.users.acl') | to_json]]
   no_log: true
 
 - name: "Удаление устаревшей директивы requirepass Sentinel после подключения ACL с хешами паролей"
@@ -57446,12 +57510,31 @@ platform_redis_install_from_system_repo: true
   no_log: true
 
 - name: Настройка пароля узла Sentinel из секрета времени выполнения
+  vars:
+    _platform_sentinel_saved_config: >-
+      {{ ((_platform_redis_acl_configs | default({})).get('results', [])
+          | selectattr('item', 'equalto', 'sentinel') | map(attribute='content', default='')
+          | first | default('')) | b64decode }}
+    _platform_sentinel_peer_password_value: >-
+      {{ lookup('ansible.builtin.file', platform_redis_secret_files[platform_redis_sentinel_credential.passwordSecretRef]) }}
+    _platform_sentinel_peer_password_forms: >-
+      {{ [_platform_sentinel_peer_password_value | to_json] +
+         ([_platform_sentinel_peer_password_value]
+          if not (_platform_sentinel_peer_password_value is search('[\s\x00-\x1f\x7f]'))
+             and '"' not in _platform_sentinel_peer_password_value
+             and "'" not in _platform_sentinel_peer_password_value else []) }}
+    _platform_sentinel_peer_password_lines: >-
+      {{ _platform_sentinel_saved_config | regex_findall('(?m)^[ \t]*sentinel[ \t]+sentinel-pass[ \t]+(.+?)[ \t]*$') }}
   ansible.builtin.lineinfile:
     path: "{{ redis_member.config_directory }}/sentinel.conf"
     regexp: '^sentinel sentinel-pass\s+'
     line: "sentinel sentinel-pass {{ lookup('ansible.builtin.file', platform_redis_secret_files[platform_redis_sentinel_credential.passwordSecretRef]) | to_json }}"
   register: _platform_sentinel_peer_password
-  when: "'sentinel' in redis_member.roles"
+  when:
+    - "'sentinel' in redis_member.roles"
+    - >-
+      _platform_sentinel_peer_password_lines | length != 1
+      or _platform_sentinel_peer_password_lines[0] not in _platform_sentinel_peer_password_forms
   no_log: true
 
 - name: "Перечитывание unit-файлов systemd после обновления служб Redis"
