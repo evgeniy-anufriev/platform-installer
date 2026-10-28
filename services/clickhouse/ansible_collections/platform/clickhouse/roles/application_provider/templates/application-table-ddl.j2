@@ -1,0 +1,24 @@
+{% macro ddl(database, table, mode) -%}
+CREATE TABLE IF NOT EXISTS `{{ database.name | replace('`', '``') }}`.`{{ table.name | replace('`', '``') }}`{% if mode == 'raft-ha' %} ON CLUSTER default{% endif %}
+(
+{% for column in table.columns %}
+  `{{ column.name | replace('`', '``') }}` {{ column.type }}{% if column.codec is defined %} CODEC({{ column.codec }}){% endif %}{{ ',' if not loop.last or table.indexes | default([]) else '' }}
+{% endfor %}
+{% for index in table.indexes | default([]) %}
+  INDEX `{{ index.name | replace('`', '``') }}` {{ index.expression }} TYPE {{ index.type }} GRANULARITY {{ index.granularity }}{{ ',' if not loop.last else '' }}
+{% endfor %}
+)
+ENGINE = {{ table.engine }}{% if mode == 'raft-ha' %}('{{ table.replicationPath }}', '{replica}'){% else %}(){% endif %}
+{% for key, clause in [('partition_by', 'PARTITION BY'), ('primary_key', 'PRIMARY KEY'), ('order_by', 'ORDER BY'), ('sample_by', 'SAMPLE BY')] %}
+{% if table[key] is defined %}
+{{ clause }} {{ table[key] }}
+{% endif %}
+{% endfor %}
+{% if table.settings | default({}) %}
+SETTINGS
+{% for key, value in table.settings | dictsort %}
+  {{ key }} = {% if value is string %}'{{ value | replace('\\', '\\\\') | replace("'", "\\'") }}'{% elif value is boolean %}{{ value | int }}{% else %}{{ value }}{% endif %}{{ ',' if not loop.last else '' }}
+{% endfor %}
+{% endif %}
+;
+{% endmacro %}

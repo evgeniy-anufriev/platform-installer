@@ -448,6 +448,11 @@ done
         shutil.copytree(FIXTURE, self.root)
         self.vars = os.path.join(self.root, "inventory/group_vars/all/platform-installer.yml")
         self.defaults = os.path.join(self.root, "application-packages/apigateway/1.0.0/roles/application_apigateway/defaults/main.yml")
+        # Current Kafka defaults require a runtime admin reference even when
+        # these target-free tests exercise another application's provider.
+        # This is a synthetic reference only, never a credential value.
+        self.edit(self.vars, lambda data: data['platform_desired_state']['serviceDeployments']['kafka-main']['configuration'].setdefault(
+            'adminCredential', dict(passwordSecretRef='runtime:kafka-admin-password')))
 
     def edit(self, path, mutate):
         with open(path) as stream:

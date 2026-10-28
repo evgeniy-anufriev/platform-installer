@@ -14,7 +14,7 @@
   platform.clickhouse.prepare_application_tables:
     job: "{{ platform_clickhouse_application_job }}"
     phase: "{{ platform_clickhouse_application_phase }}"
-    template_path: "{{ role_path }}/templates/application-table.sql.j2"
+    template_path: "{{ role_path }}/templates/application-tables.json.j2"
   register: clickhouse_application_prepared_tables
   no_log: true
 
