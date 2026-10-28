@@ -58397,12 +58397,24 @@ class ActionModule(ActionBase):
             return dict(failed=True, msg='APPLICATION_VAULT_ADMIN_CREDENTIAL_INVALID')
 
 @@END
-@@PORTABLE {"path":"services/vault/ansible_collections/platform/vault/plugins/action/application_document.py","mode":420,"size":3363,"sha256":"5f5250823aeb40d6429642db279067cbb7086b1cedb687b07fd339e02adb3720","index":0,"count":1,"encoding":"utf-8","payloadBytes":3363}
+@@PORTABLE {"path":"services/vault/ansible_collections/platform/vault/plugins/action/application_document.py","mode":420,"size":3819,"sha256":"1c88676b2f480e35f68b034bd49b912508bdc76f8bb932e65dea316ab472e66b","index":0,"count":1,"encoding":"utf-8","payloadBytes":3819}
 """Resolve one managed document through existing private inputs and builtin uri."""
 import re
 import secrets
+import string
 from ansible.plugins.action import ActionBase
 from ansible_collections.platform.core.plugins.module_utils.application_credentials import protected_secret_files
+
+
+def generated_password():
+    # Fixed 15-character baseline; guarantee each required character class.
+    chars = [secrets.choice(string.ascii_lowercase),
+             secrets.choice(string.ascii_uppercase),
+             secrets.choice(string.digits), '!']
+    alphabet = string.ascii_letters + string.digits + '!'
+    chars.extend(secrets.choice(alphabet) for _ in range(11))
+    secrets.SystemRandom().shuffle(chars)
+    return ''.join(chars)
 
 
 class ActionModule(ActionBase):
@@ -58450,7 +58462,7 @@ class ActionModule(ActionBase):
                         with open(args['secret_files'][ref], encoding='utf-8') as stream:
                             value = stream.read(4097)
                     if value is None:
-                        value = secrets.token_urlsafe(32)
+                        value = generated_password()
                     generated[ref] = value
                 else:
                     raise ValueError()
