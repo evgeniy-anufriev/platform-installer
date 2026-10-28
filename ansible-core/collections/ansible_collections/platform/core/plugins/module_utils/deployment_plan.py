@@ -651,7 +651,7 @@ def _runtime_secret_outputs(manifest_operations, deployments, definitions):
     return result
 
 
-def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at="1970-01-01T00:00:00Z", bundle_artifact_sources=None, pki_materialization=None, execution_configuration=None, execution_connections=None, pki_reissue=None, deployment_order=None, application_image_lock=None, application_vault_sources=None, application_library_order=None, skip_application_libraries=None):
+def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at="1970-01-01T00:00:00Z", bundle_artifact_sources=None, pki_materialization=None, execution_configuration=None, execution_connections=None, pki_reissue=None, deployment_order=None, application_image_lock=None, application_vault_sources=None, application_library_order=None, skip_application_libraries=None, skip_service_deployments=None):
     """Return a public plan and private manifest from already resolved Core data."""
     snapshot = snapshot if isinstance(snapshot, dict) else {}
     if snapshot.get('apiVersion') not in (None, 'platform.installer/project-snapshot/v1alpha1',
@@ -668,6 +668,19 @@ def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at
     explicit_identity = project.get("identitySource") == "PROJECT_MANIFEST"
     deployments = snapshot.get("serviceDeployments", {}) if isinstance(snapshot.get("serviceDeployments"), dict) else {}
     deployment_order = _validated_deployment_order(deployments, deployment_order)
+    try:
+        from .service_selection import execution_scope as service_scope, select_pki
+    except ImportError:
+        from service_selection import execution_scope as service_scope, select_pki
+    selection = service_scope(deployments, deployment_order, skip_service_deployments)
+    selected = {key: deployments[key] for key in selection['installServices']}
+    if skip_service_deployments and not selected:
+        raise ValueError('SERVICE_SELECTION_USE_SKIP_INFRA_VERIFY')
+    original_pki = pki_materialization
+    if skip_service_deployments:
+        pki_materialization = select_pki(pki_materialization, selected)
+        retained_ids = {item['id'] for item in (pki_materialization or {}).get('requests', [])}
+        pki_reissue = [item for item in (pki_reissue or []) if item['requestId'] in retained_ids]
     findings = _safe_findings(snapshot.get("findings"))
     if application_aware:
         findings.extend(application_model['findings'])
@@ -682,22 +695,22 @@ def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at
             if item['source'] == 'CURRENT_RUN_BOOTSTRAP':
                 provider = item['providerDeployment']
                 definition = definitions.get(deployments.get(provider, {}).get('serviceType'), {})
-                if definition.get('x-secretOutputs') != {'protocol': 'SecretOutputDelivery/v1alpha1', 'entries': ['admin-token', 'unseal-shares']}:
+                if provider not in selected or definition.get('x-secretOutputs') != {'protocol': 'SecretOutputDelivery/v1alpha1', 'entries': ['admin-token', 'unseal-shares']}:
                     findings.append(_finding('APPLICATION_BOOTSTRAP_PROVIDER_INVALID', 'applicationLibraries',
                                              'Bootstrap source must be a Vault deployment of this plan'))
     if not explicit_identity or not isinstance(identity, str) or not identity:
         findings.append(_finding("PROJECT_IDENTITY_REQUIRED", "project.metadata.id", "Installer-managed execution requires project.yml metadata.id"))
     if snapshot.get("validation", {}).get("status") != "PASS":
         findings.append(_finding("PROJECT_VALIDATION_BLOCKED", "validation", "Authoritative project validation is blocked"))
-    artifact_requirements = _artifact_requirements(deployments, definitions, execution_configuration)
+    artifact_requirements = _artifact_requirements(selected, definitions, execution_configuration)
     source_authorities, source_findings = _artifact_source_authorities(artifact_requirements, _bundle_source_index(bundle_artifact_sources), release["bundleDigest"])
     if application_model:
         artifact_requirements.extend(application_model['artifactRequirements'])
     findings.extend(source_findings)
-    pki_public, pki_private, pki_secret_findings = _pki_store_password_requirements(pki_materialization)
+    pki_public, pki_private, pki_secret_findings = _pki_store_password_requirements(original_pki if application_model and application_model['actions'] else pki_materialization)
     service_public, service_private, service_secret_findings = _service_runtime_secret_requirements(deployments, definitions, sorted(snapshot.get("hosts", {}).keys()) if isinstance(snapshot.get("hosts"), dict) else [])
     service_input_public, service_input_private, service_input_findings = _service_input_requirements(
-        deployments, definitions,
+        selected, definitions,
         (snapshot.get("topology") or {}).get("resolved", {}) if isinstance(snapshot.get("topology"), dict) else {},
     )
     required_credentials = pki_public + service_public + [
@@ -722,7 +735,7 @@ def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at
     deployment_targets, target_findings = _deployment_targets(snapshot, sorted(deployments), set(targets))
     findings.extend(target_findings)
     executable = not findings
-    pki_consumers = _pki_consumers(snapshot)
+    pki_consumers = [key for key in _pki_consumers(snapshot) if key in selected]
     reissue = pki_reissue if pki_reissue is not None else []
     if not isinstance(reissue, list) or len(reissue) > 256:
         raise ValueError("PKI_REISSUE_SCOPE_INVALID")
@@ -787,13 +800,15 @@ def build_deployment_plan(snapshot, service_catalog, runtime_release, created_at
         actions.append({"id": "pki:apply", "type": "PKI_APPLY", "targets": targets, "dependsOn": ["pki:reissue"] if reissue else [], "mutating": True, "reboot": "NONE", "summary": "Materialize approved PKI inputs"})
     service_actions = []
     deployment_positions = {deployment_id: index for index, deployment_id in enumerate(deployment_order)}
-    for deployment_id in deployment_order:
+    for deployment_id in selection['installServices']:
         deployment = deployments[deployment_id]
         dependencies = _service_dependencies(deployment_id, deployment, definitions, deployments,
                                              (snapshot.get("topology") or {}).get("placementsByHost", {}))
         prior_dependencies = []
         for dependency in dependencies:
             provider_id = dependency[len("apply:"):] if dependency.startswith("apply:") else dependency
+            if provider_id in selection['skippedServices']:
+                continue
             if provider_id not in deployment_positions or deployment_positions[provider_id] >= deployment_positions[deployment_id]:
                 findings.append(_finding(
                     "EXECUTION_ORDER_DEPENDENCY_CONFLICT", "deploymentOrder",

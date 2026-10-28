@@ -190,7 +190,8 @@ describe("InstallationPage", () => {
       expect(screen.getByText(label)).toBeTruthy();
     if (types.includes("VERIFY"))
       expect(screen.getByText("Проверить библиотеки приложений")).toBeTruthy();
-    else expect(screen.queryByText("Проверить библиотеки приложений")).toBeNull();
+    else
+      expect(screen.queryByText("Проверить библиотеки приложений")).toBeNull();
     expect(screen.queryByText(/English summary/)).toBeNull();
   });
 
@@ -832,6 +833,23 @@ describe("InstallationPage", () => {
     expect(eventTable.textContent).toContain("qa-bind");
   });
 
+  it("displays Core application and library context in the deployment column", () => {
+    const contexts = ["qa-kafka", "keycloak", "data-manager-sdku", "szi", "sdku", "cspa", undefined];
+    render(<InstallationPage
+      state={currentPlanState("plan-context", "sha256:revision", true)}
+      tab="execution" onTabChange={vi.fn()} onOpenServers={vi.fn()} busy={false}
+      onCreatePlan={vi.fn()} onApprovePlan={vi.fn()}
+      run={new desktop.InstallationRunOperation({status: "FAILED", run: {runId: "run-context", state: "FAILED", sequence: 7}})}
+      events={contexts.map((serviceDeployment, index) => new desktop.InstallationEventView({
+        runId: "run-context", sequence: index + 1, timestamp: "2026-10-27T19:00:00Z",
+        eventType: "TASK_COMPLETED", status: "SUCCESS", safeMessage: "Ansible task completed",
+        serviceDeployment, task: {uuid: "task-context-" + index, name: "Задача " + index},
+      }))}
+    />);
+    const rows = screen.getByRole("table").querySelectorAll("tbody tr");
+    expect(rows.length).toBe(contexts.length);
+    contexts.forEach((context, index) => expect(rows[index].querySelector("td:nth-child(3)")?.textContent).toBe(context ?? "—"));
+  });
   it("shows only the newest 512 execution events and follows the latest update", () => {
     const run = new desktop.InstallationRunOperation({
       status: "RUNNING",
@@ -1556,5 +1574,179 @@ describe("InstallationPage", () => {
       "Не удалось получить защищённые выходные файлы",
     );
     expect(screen.queryByText("SECRET_OUTPUT_DELIVERY_FAILED")).toBeNull();
+  });
+});
+
+describe("Service selection", () => {
+  const services = [
+    { deploymentId: "qa-kafka", serviceType: "kafka" },
+    { deploymentId: "qa-vault", serviceType: "vault" },
+  ];
+  const priorities = [
+    { serviceType: "kafka", priority: 1 },
+    { serviceType: "vault", priority: 2 },
+  ];
+  const plan = {
+    status: "PLAN_REVIEW" as const,
+    plan: {
+      id: "plan-selection",
+      status: "EXECUTABLE" as const,
+      executionMode: "FULL_PROJECT" as const,
+      projectRevision: "sha256:revision",
+      planFingerprint: "sha256:plan",
+      executionNodeId: "node1",
+      runtime: {
+        bundleDigest: "sha256:bundle",
+        coreVersion: "core",
+        catalogDigest: "sha256:catalog",
+        protocol: "protocol",
+      },
+      expiresAt: "2099-01-01T00:00:00Z",
+      approved: false,
+      acknowledgements: [],
+      phases: [
+        {
+          id: "services",
+          order: 0,
+          actions: services.flatMap((service) => [
+            {
+              id: "apply:" + service.deploymentId,
+              type: "SERVICE_APPLY",
+              serviceDeployment: service.deploymentId,
+              targets: ["node1"],
+              dependsOn: [],
+              mutating: true,
+              reboot: "NONE",
+              summary: "Apply",
+            },
+            {
+              id: "verify:" + service.deploymentId,
+              type: "SERVICE_VERIFY",
+              serviceDeployment: service.deploymentId,
+              targets: ["node1"],
+              dependsOn: ["apply:" + service.deploymentId],
+              mutating: false,
+              reboot: "NONE",
+              summary: "Verify",
+            },
+          ]),
+        },
+      ],
+    },
+  };
+  const props = {
+    state: currentPlanState("plan-selection", "sha256:revision", false),
+    tab: "plan" as const,
+    onTabChange: vi.fn(),
+    onOpenServers: vi.fn(),
+    busy: false,
+    onApprovePlan: vi.fn(),
+    serviceDeployments: services,
+    serviceExecutionPriorities: priorities,
+    plan,
+  };
+  it("keeps selected services visible in the summary after a plan exists", () => {
+    render(<InstallationPage {...props} tab="summary" onCreatePlan={vi.fn()} />);
+    for (const service of services) {
+      expect((screen.getByRole("checkbox", { name: "Установить сервис " + service.deploymentId }) as HTMLInputElement).checked).toBe(true);
+    }
+  });  it("preserves service skips when Start clears the editable plan", () => {
+    const selective = { ...plan, plan: { ...plan.plan!, skipServiceDeployments: ["qa-kafka"] } };
+    const { rerender } = render(<InstallationPage {...props} plan={selective} tab="summary" onCreatePlan={vi.fn()} />);
+    const checkbox = () => screen.getByRole("checkbox", { name: "Установить сервис qa-kafka" }) as HTMLInputElement;
+    expect(checkbox().checked).toBe(false);
+    rerender(<InstallationPage {...props} plan={undefined} tab="summary" onCreatePlan={vi.fn()} />);
+    expect(checkbox().checked).toBe(false);
+  });  it("binds one checkbox per deployment to Apply and Verify and requires a fresh plan", async () => {
+    const create = vi.fn();
+    const user = userEvent.setup();
+    render(<InstallationPage {...props} onCreatePlan={create} />);
+    expect(
+      screen.getAllByRole("checkbox", { name: /Установить сервис/ }),
+    ).toHaveLength(2);
+    expect(
+      screen.getByRole("checkbox", { name: "Установить сервис qa-kafka" }),
+    ).toHaveProperty("checked", true);
+    await user.click(
+      screen.getByRole("checkbox", { name: "Установить сервис qa-kafka" }),
+    );
+    expect(
+      screen.getByRole("checkbox", { name: "Устанавливать инфраструктуру" }),
+    ).toHaveProperty("indeterminate", true);
+    expect(
+      screen.getByRole("button", { name: "Одобрить план" }),
+    ).toHaveProperty("disabled", true);
+    await user.click(
+      screen.getByRole("button", { name: "Сформировать свежий план" }),
+    );
+    expect(create).toHaveBeenLastCalledWith(
+      ["qa-kafka", "qa-vault"],
+      "FULL_PROJECT",
+      false,
+      [],
+      [],
+      ["qa-kafka"],
+    );
+  });
+  it("uses the existing skipInfraVerify path when every deployment is unchecked", async () => {
+    const create = vi.fn();
+    const user = userEvent.setup();
+    render(<InstallationPage {...props} onCreatePlan={create} />);
+    await user.click(
+      screen.getByRole("checkbox", { name: "Устанавливать инфраструктуру" }),
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Сформировать свежий план" }),
+    );
+    expect(create).toHaveBeenLastCalledWith(
+      ["qa-kafka", "qa-vault"],
+      "APPLICATION_LIBRARIES_ONLY",
+      true,
+    );
+    expect(
+      screen
+        .getAllByRole("checkbox", { name: /Установить сервис/ })
+        .every((input) => !(input as HTMLInputElement).checked),
+    ).toBe(true);
+  });
+  it("keeps skipped services selectable after a new Core plan omits their actions", async () => {
+    const create = vi.fn();
+    const user = userEvent.setup();
+    const selected = {
+      ...plan,
+      plan: {
+        ...plan.plan,
+        id: "plan-selected",
+        skipServiceDeployments: ["qa-kafka"],
+        phases: [
+          {
+            ...plan.plan.phases[0],
+            actions: plan.plan.phases[0].actions.filter(
+              (a) => a.serviceDeployment !== "qa-kafka",
+            ),
+          },
+        ],
+      },
+    };
+    render(
+      <InstallationPage
+        {...props}
+        state={currentPlanState("plan-selected", "sha256:revision", false)}
+        plan={selected}
+        onCreatePlan={create}
+      />,
+    );
+    const input = screen.getByRole("checkbox", {
+      name: "Установить сервис qa-kafka",
+    });
+    expect(input).toHaveProperty("checked", false);
+    await user.click(input);
+    await user.click(
+      screen.getByRole("button", { name: "Сформировать свежий план" }),
+    );
+    expect(create).toHaveBeenLastCalledWith(
+      ["qa-kafka", "qa-vault"],
+      "FULL_PROJECT",
+    );
   });
 });

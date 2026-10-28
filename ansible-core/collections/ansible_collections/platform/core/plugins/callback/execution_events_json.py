@@ -6,6 +6,7 @@ import sys
 import time
 
 from ansible.plugins.callback import CallbackBase
+from ansible.template import Templar
 
 
 DOCUMENTATION = r"""
@@ -42,12 +43,29 @@ class CallbackModule(CallbackBase):
         super(CallbackModule, self).__init__()
         self._starts = {}
 
-    def _context(self):
-        return {
+    def _context(self, task=None):
+        context = {
             "phaseId": os.environ.get("PLATFORM_EXECUTION_PHASE_ID", ""),
             "actionId": os.environ.get("PLATFORM_EXECUTION_ACTION_ID", ""),
             "serviceDeployment": os.environ.get("PLATFORM_EXECUTION_SERVICE_DEPLOYMENT", ""),
         }
+        if task is not None and not context['serviceDeployment'] and context['actionId'].startswith('applications:'):
+            try:
+                variables = task.get_vars()
+                templar = Templar(loader=getattr(self, '_loader', None), variables=variables)
+                # Resolve only public identity selectors, never task arguments,
+                # environment or result payload (including no_log results).
+                for expression in ('application_runtime_job.instanceId', 'application_instance_id', 'application_library_id'):
+                    try:
+                        value = templar.template('{{ ' + expression + " | default('') }}")
+                    except Exception:
+                        continue
+                    if isinstance(value, str) and SAFE_ROLE.fullmatch(value):
+                        context['serviceDeployment'] = value
+                        break
+            except Exception:
+                pass
+        return context
 
     def _run_id(self):
         return os.environ.get("PLATFORM_EXECUTION_RUN_ID", "")
@@ -122,7 +140,7 @@ class CallbackModule(CallbackBase):
                 elapsed_milliseconds=self._elapsed(task_uuid) if event_type == "TASK_COMPLETED" else None,
                 no_log=no_log,
                 failure_result=getattr(result, "_result", {}) if status == "FAILED" else None,
-                **self._context()
+                **self._context(task)
             )
             # Only the tagged assertion's closed diagnostic grammar is public.
             if (result is not None and not no_log and
@@ -131,7 +149,7 @@ class CallbackModule(CallbackBase):
                 message = getattr(result, '_result', {}).get('msg', '')
                 if isinstance(message, str) and re.fullmatch(
                         r'HTTP backend (?:[A-Za-z0-9.:\[\]-]{1,253}|<invalid>):[0-9]{1,5}; expected=[0-9]{3}; actual=-?[0-9]{1,3}; timeout=[0-9]{1,10}s; reason=(?:OK|HTTP_STATUS_MISMATCH|TIMEOUT|CONNECTION_REFUSED|DNS_FAILURE|NETWORK_FAILURE|REQUEST_FAILED)', message):
-                    self._journal().event('DIAGNOSTIC', status, message, **self._context())
+                    self._journal().event('DIAGNOSTIC', status, message, **self._context(task))
         except Exception:
             try:
                 self._journal().mark_task_observability_degraded("TASK_EVENT_WRITE_FAILED")

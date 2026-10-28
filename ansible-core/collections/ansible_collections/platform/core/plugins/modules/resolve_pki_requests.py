@@ -4,6 +4,7 @@ from __future__ import absolute_import, division, print_function
 import yaml
 from ansible.module_utils.basic import AnsibleModule
 from ansible_collections.platform.core.plugins.module_utils.pki_resolution import resolve_certificate_requests
+from ansible_collections.platform.core.plugins.module_utils.service_selection import select_pki
 from ansible_collections.platform.core.plugins.module_utils.project_state import canonical_inventory_members, topology_with_inventory_members
 
 
@@ -21,6 +22,7 @@ def _inventory_hosts(inventory):
 
 def main():
     module = AnsibleModule(argument_spec={
+        "deployment_selection": {"type": "list", "elements": "str", "default": None},
         "project_path": {"type": "path", "required": False, "default": None},
         "inventory_path": {"type": "path", "required": False, "default": None},
         "desired_state": {"type": "dict", "required": False, "default": {}},
@@ -52,6 +54,8 @@ def main():
         module.fail_json(msg="PKI request resolution failed", error_code="PKI_RESOLUTION_FAILED", safe_details=str(error))
     if result.get("status") != "PASS":
         module.fail_json(msg="PKI request resolution is blocked", error_code="PKI_RESOLUTION_BLOCKED", findings=result.get("findings", []))
+    if module.params["deployment_selection"] is not None:
+        result = select_pki(result, module.params["deployment_selection"])
     module.exit_json(changed=False, pki=result)
 
 

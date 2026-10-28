@@ -5,6 +5,8 @@ from pathlib import Path
 import shutil
 import subprocess
 import tempfile
+import sys
+import yaml
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -65,7 +67,11 @@ p.write_text(json.dumps(s));pathlib.Path(a[a.index('--output')+1]).write_text(''
     def test_redirected_rest_failure_keeps_safe_diagnostics(self):
         self.exercise(True)
 
-    def exercise(self, reject_reset):
+    @unittest.skipUnless(shutil.which('ansible-playbook'), 'native Ansible required')
+    def test_generated_application_accounts_via_ansible_batch_and_repeat(self):
+        self.exercise(False, via_ansible=True)
+
+    def exercise(self, reject_reset, via_ansible=False):
         with tempfile.TemporaryDirectory() as directory:
             work = Path(directory)
             curl = work/'curl'
@@ -105,6 +111,9 @@ print(status,end='')
             env=dict(os.environ, PATH=str(work)+':'+os.environ['PATH'], STUB_STATE=str(work/'state'), STUB_INVALID_LOGIN_LOG=str(work/'invalid-login'), STUB_REJECT_RESET='1' if reject_reset else '0',
                      PLATFORM_SCRIPT_SECRET_ADMIN_PASSWORD_FILE=str(work/'admin'),
                      PLATFORM_SCRIPT_SECRET_ACCOUNT_BATCH_FILE=str(work/'batch'))
+            if via_ansible:
+                self.generated_ansible(work, env)
+                return
             result=subprocess.run(['/bin/sh',str(SCRIPT),'accounts','https://stub.invalid','master','admin','keycloak','','','{}'],env=env,capture_output=True,text=True,timeout=30)
             self.assertFalse((work/'invalid-login').exists(), 'Do not probe an account before its initial password is set')
             if reject_reset:
@@ -119,3 +128,56 @@ print(status,end='')
             self.assertEqual(0,repeat.returncode,repeat.stdout+repeat.stderr)
             self.assertEqual({'status':'ok','changed':False},json.loads(repeat.stdout))
             self.assertFalse((work/'invalid-login').exists())
+
+
+    def generated_ansible(self, work, env):
+        sys.path.insert(0,str(ROOT/'ansible-core/collections/ansible_collections/platform/core/plugins/module_utils'))
+        from application_integrations import prepare_integrations
+        from runtime_secret_identity import generated_password_ref
+        project = work/'project'
+        (project/'package/assets').mkdir(parents=True)
+        shutil.copyfile(SCRIPT,project/'package/assets/integration.sh')
+        secrets = work/'private'
+        secrets.mkdir(mode=0o700)
+        (secrets/'admin').write_text('stub-admin')
+        (secrets/'admin').chmod(0o600)
+        callback = dict(id='accounts',phase='account_apply',source='assets/integration.sh',run_on='execution_node',
+            argv=['accounts','https://stub.invalid','master','admin','keycloak','','','{}'],secretInputs={
+                'ADMIN_PASSWORD':{'valueFrom':'provided_connection','name':'sso','credential':'password'},
+                'ACCOUNT_BATCH':{'valueFrom':'account_batch'}})
+        provider=dict(scripts=[callback])
+        connection=dict(serviceType='application',libraryId='szi',applicationId='keycloak',name='sso',accountProvisioner={'apply_script':'accounts'})
+        instances={'keycloak':provider}
+        source_files={'admin-password':str(secrets/'admin')}
+        for app in ('audit','access'):
+            instances[app]=dict(connections={'sso':connection},credentialRequirements={'sso':dict(mode='managed',parameters={},credentials={
+                'username':{'source':{'kind':'literal','value':app}},'password':{'source':{'kind':'generated'}}})})
+            ref=generated_password_ref('generated-qa','szi',app,'sso')
+            (secrets/ref).write_text('stub-'+app)
+            (secrets/ref).chmod(0o600)
+            source_files[ref]=str(secrets/ref)
+        snapshot=dict(project={'id':'generated-qa'},hosts={'localhost':{'ansibleHost':'127.0.0.1'}},applicationLibraries={'libraries':{'szi':dict(
+            instances=instances,providedConnections={'sso':{'credentials':{'password':{'source':{'kind':'runtime_secret_ref','ref':'admin-password'}}}}})}})
+        batch=prepare_integrations(snapshot,[])['batches'][0]
+        provider_job=dict(libraryId='szi',instanceId='keycloak',hostId='localhost',applicationPackagePath='package')
+        production=str(ROOT/'ansible-core/playbooks/applications/tasks/provider-batch.yml')
+        variables=dict(platform_project_root=str(project),platform_desired_state={},
+            application_snapshot={'snapshot':snapshot},application_runtime_inputs={'jobs':[],'scriptContexts':[provider_job]},
+            platform_application_secret_root=str(secrets),platform_application_secret_files=source_files,
+            platform_application_credential_files={},platform_application_completed_batches=[],application_provider_batch=batch)
+        play=[dict(hosts='localhost',connection='local',gather_facts=False,vars=variables,
+            environment={key:env[key] for key in ('PATH','STUB_STATE','STUB_INVALID_LOGIN_LOG','STUB_REJECT_RESET')},tasks=[
+                {'name':'Create generated application accounts through production batch','ansible.builtin.include_tasks':production},
+                {'name':'Assert first callback changed','ansible.builtin.assert':{'that':["(platform_script_result.stdout | from_json).changed"]}},
+                {'name':'Repeat same generated application accounts','ansible.builtin.include_tasks':production},
+                {'name':'Assert repeated callback is unchanged','ansible.builtin.assert':{'that':["not (platform_script_result.stdout | from_json).changed"]}}
+            ])]
+        (work/'play.yml').write_text(yaml.safe_dump(play,allow_unicode=True))
+        (work/'inventory.yml').write_text(yaml.safe_dump({'all':{'hosts':{'localhost':dict(variables,ansible_connection='local')}}}))
+        environment=dict(os.environ,ANSIBLE_COLLECTIONS_PATH=str(ROOT/'ansible-core/collections'))
+        result=subprocess.run(['ansible-playbook','-i',str(work/'inventory.yml'),str(work/'play.yml')],env=environment,capture_output=True,text=True,timeout=120)
+        self.assertEqual(0,result.returncode,result.stdout[-2500:]+result.stderr[-800:])
+        self.assertEqual({'audit','access'},set(json.loads((work/'state').read_text())))
+        self.assertFalse((work/'invalid-login').exists())
+        for key in ('stub-admin','stub-access','stub-audit'):
+            self.assertNotIn(key,result.stdout+result.stderr)

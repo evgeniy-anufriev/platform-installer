@@ -17,6 +17,7 @@
     platform_application_vault_identities: "{{ hostvars['localhost'].platform_application_vault_identities }}"
     platform_application_vault_networks: "{{ hostvars['localhost'].platform_application_vault_networks | default({}) }}"
     platform_application_secret_files: "{{ hostvars['localhost'].platform_application_secret_files }}"
+    platform_application_credential_files: "{{ hostvars['localhost'].platform_application_credential_files | default({}) }}"
     platform_application_secret_root: "{{ hostvars['localhost'].platform_application_secret_root }}"
 
 - name: Запись готовых дельт общих полей без перезаписи предыдущих полей

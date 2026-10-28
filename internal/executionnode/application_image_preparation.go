@@ -28,6 +28,9 @@ type ImageTargetConnection struct {
 }
 
 func (t OpenSSHTransport) imagePlanningCapabilities(ctx context.Context, node Node, fallback string) (map[string]any, error) {
+	if len(serviceSelection(ctx)) > 0 {
+		return t.runtimeProtocol(ctx, node, map[string]any{"apiVersion": serviceSelectionRequestVersion, "operation": "GetCapabilities"})
+	}
 	capability, err := t.runtimeProtocol(ctx, node, map[string]any{"apiVersion": selectionPlanRequestVersion, "operation": "GetCapabilities"})
 	if err == nil && imagePlanCapabilitySupported(capability) {
 		return capability, nil
@@ -70,9 +73,12 @@ func (t OpenSSHTransport) prepareApplicationImages(ctx context.Context, node Nod
 	for _, key := range []string{"executionMode", "deploymentOrder", "skipInfrastructureVerify"} {
 		describe[key] = request[key]
 	}
-	if request["apiVersion"] == selectionPlanRequestVersion {
+	if request["apiVersion"] == selectionPlanRequestVersion || request["apiVersion"] == serviceSelectionRequestVersion {
 		describe["skipApplicationLibraries"] = request["skipApplicationLibraries"]
 		describe["applicationLibraryOrder"] = request["applicationLibraryOrder"]
+	}
+	if request["apiVersion"] == serviceSelectionRequestVersion {
+		describe["skipServiceDeployments"] = request["skipServiceDeployments"]
 	}
 	response, err := t.runtimeProtocol(ctx, node, describe)
 	if err != nil {

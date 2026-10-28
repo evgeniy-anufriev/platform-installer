@@ -1,5 +1,11 @@
 # V2 roadmap and milestone gates
 
+Owner-approved selective infrastructure installation extends invocation selection
+to service deployment IDs. Preserve provider integrations, bind selection through
+fresh Start, and use the existing all-infrastructure skip path. Acceptance includes
+Core/schema/protocol, native Ansible repeat, Go Start binding and real React/Wails;
+current run remains untouched. See ADR-048 and the project contract.
+
 Owner-authorized per-library progress uses Core display steps inside the existing
 application Apply operation, existing ACTION events and leaf counting in UI.
 See the [plan](work/application-libraries/library-progress-plan.md) and ADR-048.

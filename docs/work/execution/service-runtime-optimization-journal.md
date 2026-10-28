@@ -957,3 +957,126 @@ RUNNING; BIND Apply SUCCESS 18:01:03 MSK and Verify SUCCESS 18:01:14 MSK. Author
 or source edit after Start. Temporary source0f0ee0b4d6e745f3975d8be7711ca71e cleaned
 with qa-sync after repairing ownership of its root-created native-test pycache;
 approved build input and verified bundle retained on trusted node102.
+
+
+## Selective infrastructure installation — implementation in progress (2026-10-27)
+
+Owner approved invocation-only service selection with provider integrations
+retained. Checkpoint before implementation: ba4b5c1b (Core-projection UI gating
+and BIND readiness). Branch/worktree unchanged. No review requested or invoked.
+Current installer-e8ab7170a9f9202572d0c6bf433ee95a keeps running on immutable
+bundle03; its UI34126 has not been reloaded.
+
+Partial selection binds skipServiceDeployments and Core serviceExecutionScope
+through request8 / plan11 / manifest8, image preparation, approval and fresh
+Start. Own Apply/Verify, installation artifacts, typed inputs/outputs and PKI
+are omitted for skipped deployments. Full snapshot remains available for
+provider connections, resource/account hooks, Vault/Agent and endpoint jobs.
+Owner clarification: retain all infrastructure SERVICE_PASSWORD credentials,
+exactly as the existing skipInfrastructureVerify path; no provider-password
+selection/filtering mechanism. Typed installation-only bootstrap inputs stay
+scoped to actual service operations.
+A skipped Vault cannot provide CURRENT_RUN_BOOTSTRAP. Service roles unchanged;
+shared PKI resolution receives the same selected deployment scope as planning.
+All-unchecked UI uses the existing APPLICATION_LIBRARIES_ONLY +
+skipInfrastructureVerify path, following the owner's clarification.
+
+Focused Core selection tests12 PASS on RED OS102, including actual Ansible
+planner repeat and PKI module repeat with changed=0. Go full tests/vet PASS;
+fresh-Start selection preservation and mismatch refusal covered. UI isolated
+copy:123 tests PASS, lint/typecheck/build PASS. Further real protocol/regression
+checks remain in progress. Initial broad regression on an earlier source copy
+was stopped after finding the accidental descriptor-scope substitution; that
+substitution was corrected and new regression coverage added. It is not a PASS.
+The PKI native fixture now compares pki results rather than interpreter discovery
+facts attached only to the first module call.
+
+Frontend edits are staged under the existing QA directory
+ui-service-selection to avoid Vite HMR in the active run. They are not yet
+promoted into frontend/src. Real React/Wails acceptance and frontend promotion
+are pending the active run's terminal result. No new installation run started.
+
+Terminal checkpoint: installer-e8ab7170a9f9202572d0c6bf433ee95a FAILED
+19:12:33MSK/80%, APPLICATION_PROVIDER_CREDENTIAL_INVALID in application runtime
+preparation. Infrastructure Apply/Verify completed. Read-only active bundle03
+reproduction proves application_integrations rejects generated for SSO accounts,
+while runtime_secret_ref/vault_ref pass. grant-access and grant-access-audit
+passwords are generated; all infrastructure passwords remain runtime refs.
+Delivered Vault output package e512ae97c9e4283d2e12450e2d31d802 through actual React
+Result handler before frontend promotion. Decrypted only into .runtime/secrets
+with the existing secretfiles implementation; no values logged.
+
+Selective UI promoted after terminal:124 tests PASS, lint/typecheck PASS. Selection
+persists across navigation, and all-off retains skipInfraVerify. Neighbor Core
+regression:182 tests, one pre-existing stale Kafka PKI task-name selector error
+in test_pki_single_pass_resolution (not a PASS; no service task code changed by
+this feature). Focused selection12 and actual image/protocol2 tests PASS.
+Owner requested completion, generated SSO fix, bundle04 and actual Kafka-only
+infrastructure + all-libraries run. No server cleanup or new run performed yet.
+
+Generated application-provider account support implemented in generic integration
+projection and existing account callback reference derivation. No new generator
+or runner context; generated_password_ref matches the existing Vault source job.
+46 focused tests PASS, including actual production provider-batch.yml -> package
+script role -> Keycloak curl/jq script with local deterministic REST stub; repeat
+changed=false and no fixture passwords in stdout/stderr. No infrastructure
+credentials changed to generated. Corrected stale PKI test to read relocated
+prepare_member_tls.yml; isolated five-consumer repeat PASS (88s).
+
+Bundle service-runtime-optimization-20261027-04 / 121257d0589d492036bacb5b323c7e7c3cd660d2a0e41cdc70220b4c078c7b1e
+built on102 from current verified qa-sync source and approved runtime input.
+Container image identities unchanged; standard validate/publish PASS; protected
+prior bundle03 retained in QA. Project-runtime04 staged with same project ID,
+PKI and placements; actual React/Wails rebind UPDATED. Tool rejected Wails launch
+as blocked by policy; owner launched prepared script. Wails34127 active;
+Execution Node101 preparing new immutable runtime, no installation Start yet.
+Native QA source workspaces cleaned with qa-sync; approved bundle inputs retained.
+Stand driver guards exactly Kafka Apply/Verify and szi/sdku/cspa; all
+infrastructure passwords retained and current Vault inputs loaded from its
+standard encrypted output delivered through the actual Result handler.
+
+### Selective stand run, 2026-10-27
+
+Real React/Wails 34127, bundle04 `121257d0589d492036bacb5b323c7e7c3cd660d2a0e41cdc70220b4c078c7b1e`: plan `plan-210ae29b4f5c47d0f701b963` approved; only `qa-kafka-structure` SERVICE_APPLY/SERVICE_VERIFY, nine other deployments skipped, all three libraries selected. Run `installer-42854f955963e08aa8e287e0fcaefdde` started 20:25:55 MSK, RUNNING; PKI completed and Kafka Apply started. No stand PASS yet. Actual approved response retains all nine skips. Summary selection resets when editable plan disappears after Start; isolated fix and two regression cases passed all 37 InstallationPage tests. Apply UI fix only after terminal; no active-run reload.
+
+### Deferred generated PostgreSQL credential repair, 2026-10-27
+
+Selective run `installer-42854f955963e08aa8e287e0fcaefdde` FAILED 22:02 MSK at SZI container readiness. Kafka Apply/Verify succeeded; no other infrastructure service Apply/Verify ran. `grant-access-audit-node3` was restarting because PostgreSQL rejected `szi_audit`. Safe in-memory comparison proved Vault equals actual Java process DB_PASSWORD, but PostgreSQL SCRAM verifier did not match. Vault document had one version, created at deferred delivery.
+
+Root cause: `tasks/deliver-ready.yml` forwarded controller secret inputs but omitted `platform_application_credential_files`. Delegated delivery from a target host could not see the already provisioned generated password on localhost, so a missing KV document acquired a newly generated password. Fix forwards the existing localhost credential-file map in the shared Vault context; no new generator or secret persistence.
+
+Native RED OS regression exercises actual deferred Ansible tasks from a separate coordinator host, generated custody and repeat. Before fix: deterministic password mismatch failure. After fix: all21 Vault delivery/document tests PASS. Stand remediation used a bounded Ansible play to align only existing PostgreSQL role `szi_audit` with current Vault value; first changed1/failed0, repeat changed0/failed0. Afterwards Vault equals Agent, both passwords authenticate, PostgreSQL SCRAM comparison true. `grant-access-audit-node3` healthy/running; Java startup completed in23.441s; no auth failure in the fresh70s log window. No new installation run, no bundle rebuild/activation.
+
+After terminal, summary source fix applied: retain selection while editable plan clears and recover from runPlan. Actual React/Wails summary shows ten services, only qa-kafka-structure checked, nine unchecked with explicit skipped explanation. InstallationPage37 PASS, TypeScript PASS. Window retained. Evidence under `.runtime/qa/service-runtime-optimization/results/`: audit-generated-before/after, audit-password-repair/repeat, summary-selective-terminal.png.
+
+### Application task deployment context, 2026-10-27
+
+Owner requested application/library identity in the existing event deployment column without another installation run. Callback now preserves explicit infrastructure serviceDeployment; for applications:* task events it otherwise resolves scoped instanceId, ordered application_instance_id, then application_library_id. General preparation remains empty. Only public identity selectors are evaluated; no raw result/arguments/environment are journaled. Static no_log labels remain unchanged. Existing event field, Go decoding and UI column are reused, no schema/DTO/protocol version change or production UI/backend rule added.
+
+Native two-host Ansible exercises included library tasks and looped roles: TASK_STARTED/completed for no_log success, skipped and failed tasks; instance precedence; library restoration and no stale identity after scope exit. Unit coverage includes infrastructure precedence, non-application operations, absent/invalid/unresolved identities and no secret marker in the journal. Core52:47 PASS/5 existing isolated-root acceptance skips; final identity tests2 PASS. Go focused event decoding PASS, frontend InstallationPage38/typecheck PASS. Actual new-context runtime-bundle/Wails stand execution not performed; installation run and active bundle unchanged. Evidence event-context-regression/final.log and event-context-ui-tests/typecheck.log. Remote source QA workspace cleaned.
+
+### SSH credential renewal retains imported Vault inputs, 2026-10-28
+
+Owner requested removal of Vault input invalidation on SSH session renewal. Cause confirmed in SetSessionCredential: successful broker.Set retained project-bound pending inputs, but invalidateDynamicBindingLocked subsequently called ClearRuntimeSecretValues and erased them. The credential-save path now invalidates runtime connection/readiness, plans and descriptor evidence while retaining project-bound pending inputs for normal Core re-attestation. All other invalidation callers keep their existing clearing behavior; TTL, project/node changes and changed/tampered host-key behavior remain unchanged.
+
+Go regression covers same and replaced SSH password, retained token/shares after renewed trust, and binding retained Vault token to application requirements. Existing same-key/changed-key/tampered-pin tests PASS; go test ./... and go vet ./... PASS. Actual React/Wails34130 with rebuilt desktop executable: open saved project, verify node/trust, import both Vault files through actual service secret dialog, save SSH credentials again through actual Servers form, then status from real GetPendingRuntimeSecretDescriptors remains installed=true. Evidence ssh-retain-real-ui.log and ssh-retain-install-ui-evidence.json report PASS at10:06:08 MSK. No installation Apply/Verify or new run in this isolated acceptance. Existing installation preparation in Wails34129 untouched.
+
+Bundle05 37e9c4f28d9f248454c157fe5d9a99af7dd713ffdf791f1eb55666cbb045f07b built/validated/published, image identities unchanged, project-runtime04 bound and node101 READY. Prior library-only approval attempts did not start a run. Current React/Wails34129 requests APPLICATION_LIBRARIES_ONLY/skipInfraVerify=true/all3 libraries; fresh token import and descriptor binding are performed after Plan. No full stand PASS yet.
+
+### Library-only execution confirmed, 2026-10-28
+
+Actual React/Wails34129 accepted fresh Vault token/share files and re-attested the application Vault token descriptor. Plan `plan-1fd0990500489d17f98beb70` APPROVED, mode APPLICATION_LIBRARIES_ONLY, skipInfraVerify=true, all3 libraries, zero SERVICE_APPLY/SERVICE_VERIFY. Start returned STARTED with run `installer-9d1944ec37709f5d4b1bf81595c1b412`, bundle05/37e9c4f2, project revision6329b52e. QA wait timed out at300s but the existing Start completed afterwards; reconciled the same real response and run without a second Start. Evidence runtime13-install-ui-evidence.json/startConfirmed and runtime13-observe-confirmed.log, actual UI execution screenshot runtime13-run-confirmed.png. Observer attached, UI not reloaded. Installation still RUNNING; no stand PASS. The separate SSH-retention acceptance used rebuilt Wails34130; active installation process was not replaced.
+
+### Ongoing run checks
+
+User requested observation through terminal without UI reload. Existing heartbeat automation run updated to follow only installer-9d1944ec37709f5d4b1bf81595c1b412 every5min, notify meaningful changes only, perform safe audit password/context checks and stop after terminal checks. Live run events now contain serviceDeployment=data-manager-cspa for TASK_STARTED and TASK_COMPLETED in actual application preflight. Actual UI deployment-column proof stored runtime13-context-ui-proof.json/png; no reload. Library-level ordered-stage display not exercised yet.
+
+Read-only baseline comparison could not access KV: common Vault endpoint returned HTTP503. Direct verified-TLS /v1/sys/health on103: initialized=true/sealed=true. Temporary diagnostic token copy removed in finally. No unseal/repair attempted under monitoring scope; no password mismatch conclusion or PASS possible yet. Run remains RUNNING and observer/heartbeat active.
+
+### Library-only run terminal, observed 2026-10-28 10:39 MSK
+
+Run installer-9d1944ec37709f5d4b1bf81595c1b412 FAILED during common provider preparation, before ordered library installation. Last failed task: «Проверка подключений хранилищ и методов аутентификации Vault без HTTP-перенаправлений» (event1875, ANSIBLE_FAILURE_REDACTED); observer confirmed TERMINAL FAILED. Safe read-only diagnosis: verified-TLS health on103 initialized=true/sealed=true, common Vault endpoint503. Fresh audit logs report Vault is sealed/Code503. No unseal, repair, service restart, UI reload or second Start performed.
+
+Application context acceptance in actual run: events contain all11 instance IDs (data-manager-cspa/sdku, hmi-backend-cspa/sdku, hmi-frontend-para-cspa/sdku, keycloak, nginx, grant-access, grant-access-audit, grant-access-front). Actual deployment column shows concrete SZI instance IDs in retained event window. Saved runtime13-context-terminal-proof.json and runtime13-terminal.png. Ordered library-level context was not reached, so stand acceptance for library IDs is not claimed (native tests previously PASS).
+
+szi_audit equality/SQL login cannot be checked against Vault while sealed; no new mismatch conclusion. grant-access-audit and Keycloak are unhealthy, and fresh audit log indicates sealed Vault. Prior successful password repair remains historical, not current full PASS. New library deployment, readiness, post_install and complete integration acceptance are unfulfilled. Current blocker is existing Vault availability with infrastructure deliberately skipped. Observer finished; heartbeat removed after terminal checks. Await owner direction to unseal/recover infrastructure; no automatic repair authorized.

@@ -128,3 +128,40 @@ func TestSameHostKeyApprovalDoesNotReuseTamperedPin(t *testing.T) {
 		t.Fatal("damaged pin must take the normal replacement path")
 	}
 }
+
+func TestSessionCredentialRenewalRetainsVaultInputsForReattestation(t *testing.T) {
+	for _, password := range []string{"synthetic-password", "replacement-password"} {
+		t.Run(password, func(t *testing.T) {
+			app, binding, inputs := reapprovalFixture(t)
+			app.runtimeSecretEvidence = &runtimeSecretDescriptorEvidence{}
+			status, err := app.SetSessionCredential(runtimesecret.Input{Username: "platform-automation", SSHMode: runtimesecret.SSHPassword, SSHPassword: password, ElevationMode: runtimesecret.ElevationNone})
+			if err != nil || status.Status != "PRESENT" {
+				t.Fatalf("credential renewal: %v", err)
+			}
+			if app.binding != nil || app.installationPlanID != "" || app.runtimeSecretEvidence != nil {
+				t.Fatal("SSH renewal must still invalidate node readiness, plan and descriptor evidence")
+			}
+			if !app.secrets.ServiceSecretsPresent(binding, inputs) {
+				t.Fatal("SSH renewal erased imported Vault inputs")
+			}
+			setReapprovalProbe(t, app, false)
+			if result := app.ApproveExecutionNodeHostKey("reapproval"); result.Status != "APPROVED" {
+				t.Fatal(result.Status)
+			}
+			if !app.secrets.ServiceSecretsPresent(binding, inputs) {
+				t.Fatal("fresh approval erased retained Vault inputs")
+			}
+			descriptors := []runtimesecret.RuntimeSecretInput{
+				{RequirementRef: "vault-admin-input", Purpose: "SERVICE_ADMIN_TOKEN", ServiceDeployment: "vault-one", Operations: []string{"SERVICE_APPLY", "SERVICE_VERIFY"}},
+				{RequirementRef: "vault-unseal-input", Purpose: "SERVICE_UNSEAL_SHARES", ServiceDeployment: "vault-one", Operations: []string{"SERVICE_APPLY"}},
+			}
+			token := runtimesecret.RuntimeSecretInput{RequirementRef: "application-vault-input", Purpose: "APPLICATION_VAULT_ADMIN_TOKEN", ServiceDeployment: "vault-one"}
+			if err := app.secrets.BindPendingServiceSecretInputs(binding, descriptors, token); err != nil {
+				t.Fatal(err)
+			}
+			if missing := app.secrets.MissingRequiredSecrets(binding, []string{token.RequirementRef}, false, false); len(missing) != 0 {
+				t.Fatal("retained Vault token was not reattached")
+			}
+		})
+	}
+}

@@ -4,6 +4,16 @@ Status: DONE (design only). This document defines the future desktop
 interaction model; it does not introduce Wails, React, SQLite desired state,
 or a second project model.
 
+Owner refinement (2026-10-27): Plan infrastructure rows have one installation
+checkbox per service deployment beside its Apply action. It controls Apply and
+Verify together; all checkboxes start enabled. The infrastructure checkbox
+selects/clears all and shows an indeterminate state for a partial selection.
+Skipped deployments remain selectable after Core removes their operations, with
+an explicit skipped label and no progress contribution. Clearing all uses the
+existing infrastructure-Verify skip path. Changing selection requires a new plan
+and approval; selection is locked during a run. Existing provider integrations
+remain active. The current running UI must not be reloaded for this change.
+
 Static reference views are in [ui-design-01-mockups.html](ui-design-01-mockups.html).
 
 The 2026-09-05 [project creation design](ui-project-creation-design.md) extends

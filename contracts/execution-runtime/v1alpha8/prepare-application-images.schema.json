@@ -1,0 +1,147 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform-installer.local/contracts/execution-runtime/v1alpha8/prepare-application-images.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "apiVersion",
+    "operation",
+    "runId",
+    "runtimeRelease",
+    "phase"
+  ],
+  "properties": {
+    "apiVersion": {
+      "const": "platform.installer/execution-runtime/v1alpha8"
+    },
+    "operation": {
+      "const": "PrepareApplicationImages"
+    },
+    "runId": {
+      "type": "string"
+    },
+    "runtimeRelease": {
+      "$ref": "build-deployment-plan.schema.json#/properties/runtimeRelease"
+    },
+    "phase": {
+      "enum": [
+        "DESCRIBE",
+        "PREPARE"
+      ]
+    },
+    "executionMode": {
+      "$ref": "build-deployment-plan.schema.json#/properties/executionMode"
+    },
+    "deploymentOrder": {
+      "$ref": "build-deployment-plan.schema.json#/properties/deploymentOrder"
+    },
+    "skipInfrastructureVerify": {
+      "type": "boolean"
+    },
+    "inputsDigest": {
+      "$ref": "../../artifact-source/v1alpha2/image-lock.schema.json#/$defs/digest"
+    },
+    "preparationLease": {
+      "$ref": "../../application-image-preparation-lease/v1alpha1/schema.json"
+    },
+    "skipApplicationLibraries": {
+      "$ref": "../../plan/v1alpha8/schema.json#/$defs/libraryIds"
+    },
+    "applicationLibraryOrder": {
+      "$ref": "../../plan/v1alpha8/schema.json#/$defs/libraryIds"
+    },
+    "skipServiceDeployments": {
+      "type": "array",
+      "maxItems": 256,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9]*(?:[-_.][a-z0-9]+)*$",
+        "maxLength": 128
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "phase": {
+            "const": "DESCRIBE"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "executionMode",
+          "deploymentOrder",
+          "skipInfrastructureVerify",
+          "skipApplicationLibraries",
+          "applicationLibraryOrder",
+          "skipServiceDeployments"
+        ],
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "inputsDigest"
+              ]
+            },
+            {
+              "required": [
+                "preparationLease"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "phase": {
+            "const": "PREPARE"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "inputsDigest"
+        ],
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "executionMode"
+              ]
+            },
+            {
+              "required": [
+                "deploymentOrder"
+              ]
+            },
+            {
+              "required": [
+                "skipInfrastructureVerify"
+              ]
+            },
+            {
+              "required": [
+                "skipApplicationLibraries"
+              ]
+            },
+            {
+              "required": [
+                "applicationLibraryOrder"
+              ]
+            },
+            {
+              "required": [
+                "skipServiceDeployments"
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

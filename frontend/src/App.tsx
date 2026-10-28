@@ -382,7 +382,8 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     if (
       ["services", "applications", "installation"].includes(next) &&
       !coreProjectionReady
-    ) return;
+    )
+      return;
     if (page === "applications" && !confirmApplicationExit()) return;
     setPage(next);
   };
@@ -451,19 +452,18 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
   const coreProjectionReady = !!savedServiceConfigurationPreview;
   const visibleServiceConfigurationPreview =
     commandCount === 0 ? savedServiceConfigurationPreview : undefined;
-  const serviceConfigurationPreviewNotice =
-    coreProjectionReady
-      ? ""
-      : commandCount !== 0
-        ? "Сохраните или отмените изменения проекта, чтобы получить Core-проекцию."
-        : !executionReady
-          ? "Для получения Core-проекции выберите и подготовьте узел выполнения на странице «Серверы»."
-          : !executionNode?.runtimeDigest
-            ? "Core-проекция недоступна: runtime узла выполнения не подтверждён. Проверьте или подготовьте узел."
-            : !managed?.projectRevision
-              ? "Core-проекция недоступна: ревизия проекта не определена. Сохраните проект."
-              : serviceConfigurationPreviewError ||
-                "Получение Core-проекции для сохранённой ревизии. Тайм-аут запроса — 90 секунд. Сервисы, приложения и установка станут доступны после получения значений.";
+  const serviceConfigurationPreviewNotice = coreProjectionReady
+    ? ""
+    : commandCount !== 0
+      ? "Сохраните или отмените изменения проекта, чтобы получить Core-проекцию."
+      : !executionReady
+        ? "Для получения Core-проекции выберите и подготовьте узел выполнения на странице «Серверы»."
+        : !executionNode?.runtimeDigest
+          ? "Core-проекция недоступна: runtime узла выполнения не подтверждён. Проверьте или подготовьте узел."
+          : !managed?.projectRevision
+            ? "Core-проекция недоступна: ревизия проекта не определена. Сохраните проект."
+            : serviceConfigurationPreviewError ||
+              "Получение Core-проекции для сохранённой ревизии. Тайм-аут запроса — 90 секунд. Сервисы, приложения и установка станут доступны после получения значений.";
 
   useEffect(() => {
     let live = true;
@@ -543,7 +543,10 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
 
   useEffect(() => {
     let live = true;
-    if (commandCount !== 0) return () => { live = false; };
+    if (commandCount !== 0)
+      return () => {
+        live = false;
+      };
     setServiceConfigurationPreview(undefined);
     setServiceConfigurationPreviewError("");
     const revision = result.managed?.projectRevision;
@@ -592,8 +595,14 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     }
     request
       .then((value) => {
-        if (live && (value.projectRevision !== revision || value.runtimeDigest !== runtimeDigest)) {
-          setServiceConfigurationPreviewError("Core вернул проекцию другой ревизии или runtime. Проверьте сервер, чтобы повторить получение.");
+        if (
+          live &&
+          (value.projectRevision !== revision ||
+            value.runtimeDigest !== runtimeDigest)
+        ) {
+          setServiceConfigurationPreviewError(
+            "Core вернул проекцию другой ревизии или runtime. Проверьте сервер, чтобы повторить получение.",
+          );
           return;
         }
         if (
@@ -957,6 +966,14 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
   };
   const installationOrderRef = useRef<string[]>([]);
   const installationLibraryOrderRef = useRef<string[]>([]);
+  const [installationSkippedServices, setInstallationSkippedServices] =
+    useState<string[]>([]);
+  const [installationSkipInfraVerify, setInstallationSkipInfraVerify] =
+    useState(false);
+  useEffect(() => {
+    setInstallationSkippedServices([]);
+    setInstallationSkipInfraVerify(false);
+  }, [result.root]);
   const installationSkippedLibrariesRef = useRef<string[]>([]);
   const createInstallationPlan = async (
     deploymentOrder: string[],
@@ -964,6 +981,7 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     skipInfrastructureVerify = false,
     applicationLibraryOrder: string[] = [],
     skipApplicationLibraries: string[] = [],
+    skipServiceDeployments: string[] = [],
   ) => {
     if (
       ["STARTING", "RUNNING", "CANCELLING"].includes(
@@ -977,6 +995,8 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
     installationOrderRef.current = deploymentOrder;
     installationLibraryOrderRef.current = applicationLibraryOrder;
     installationSkippedLibrariesRef.current = skipApplicationLibraries;
+    setInstallationSkippedServices(skipServiceDeployments);
+    setInstallationSkipInfraVerify(skipInfrastructureVerify);
     try {
       const operation: InstallationPlanOperation =
         api.createInstallationPlanForMode
@@ -991,12 +1011,16 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
                   ? installationVaultSources
                   : {},
               skipInfrastructureVerify,
+              ...(skipServiceDeployments.length
+                ? { skipServiceDeployments }
+                : {}),
               ...(skipApplicationLibraries.length
                 ? { skipApplicationLibraries }
                 : {}),
             })
           : executionMode === "FULL_PROJECT" &&
               !skipApplicationLibraries.length &&
+              !skipServiceDeployments.length &&
               !Object.keys(installationVaultSources).length &&
               api.createInstallationPlan
             ? await api.createInstallationPlan(deploymentOrder)
@@ -1038,7 +1062,11 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
           installationSkippedLibrariesRef.current;
         const fresh = await api.createInstallationPlanForMode({
           executionMode: installationExecutionMode,
+          skipInfrastructureVerify: installationSkipInfraVerify,
           deploymentOrder: installationOrderRef.current,
+          ...(installationSkippedServices.length
+            ? { skipServiceDeployments: installationSkippedServices }
+            : {}),
           ...(installationLibraryOrderRef.current.length
             ? { applicationLibraryOrder: installationLibraryOrderRef.current }
             : {}),
@@ -1956,8 +1984,9 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
         : current,
     );
     if (readiness.status === "READY" && !coreProjectionReady) {
-      if (serviceConfigurationPreviewError) servicePreviewRequests.current.clear();
-      setServicePreviewAttempt(value => value + 1);
+      if (serviceConfigurationPreviewError)
+        servicePreviewRequests.current.clear();
+      setServicePreviewAttempt((value) => value + 1);
     }
     setLastNodeCheck({
       binding: nodeCheckBinding(refreshed || executionNode),
@@ -2078,18 +2107,21 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
             )
             .map((item) => {
               const enabled =
-                (!["services", "applications", "installation"].includes(item.id) || coreProjectionReady) && (
-                item.id === "project" ||
-                (item.id === "servers" && projectOpen) ||
-                (item.id === "topology" && topologyAvailable) ||
-                (item.id === "certificates" && topologyAvailable) ||
-                (item.id === "services" && topologyAvailable) ||
-                (item.id === "applications" && projectOpen) ||
-                (item.id === "installation" && projectOpen) ||
-                item.id === "logs" ||
-                item.id === "help" ||
-                item.id === "about" ||
-                item.id === "settings");
+                (!["services", "applications", "installation"].includes(
+                  item.id,
+                ) ||
+                  coreProjectionReady) &&
+                (item.id === "project" ||
+                  (item.id === "servers" && projectOpen) ||
+                  (item.id === "topology" && topologyAvailable) ||
+                  (item.id === "certificates" && topologyAvailable) ||
+                  (item.id === "services" && topologyAvailable) ||
+                  (item.id === "applications" && projectOpen) ||
+                  (item.id === "installation" && projectOpen) ||
+                  item.id === "logs" ||
+                  item.id === "help" ||
+                  item.id === "about" ||
+                  item.id === "settings");
               return (
                 <button
                   key={item.id}
@@ -2097,7 +2129,14 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
                     item.id === page ? "active" : enabled ? undefined : "future"
                   }
                   disabled={!enabled}
-                  title={!enabled && ["services", "applications", "installation"].includes(item.id) ? serviceConfigurationPreviewNotice : undefined}
+                  title={
+                    !enabled &&
+                    ["services", "applications", "installation"].includes(
+                      item.id,
+                    )
+                      ? serviceConfigurationPreviewNotice
+                      : undefined
+                  }
                   aria-current={item.id === page ? "page" : undefined}
                   onClick={() => {
                     if (
@@ -2171,9 +2210,13 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
               title="Открыть узел выполнения на странице «Серверы»"
             >
               Узел выполнения:{" "}
-              {executionReady && !coreProjectionReady ? (serviceConfigurationPreviewError ? "Ошибка получения данных Core" : "Получение данных Core…") : executionNodeStatusLabel(
-                executionNode?.status || "NOT_CONFIGURED",
-              )}
+              {executionReady && !coreProjectionReady
+                ? serviceConfigurationPreviewError
+                  ? "Ошибка получения данных Core"
+                  : "Получение данных Core…"
+                : executionNodeStatusLabel(
+                    executionNode?.status || "NOT_CONFIGURED",
+                  )}
               {executionNode?.safeLabel
                 ? ` · ${executionNode.safeLabel.split(" · ")[0]}`
                 : ""}
@@ -2384,7 +2427,11 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
                   : null
               }
               executionNode={executionNode}
-              coreProjectionNotice={!coreProjectionReady ? serviceConfigurationPreviewNotice : undefined}
+              coreProjectionNotice={
+                !coreProjectionReady
+                  ? serviceConfigurationPreviewNotice
+                  : undefined
+              }
               onSelectExecutionNode={selectExecutionNode}
               onCheckExecutionNode={checkExecutionNode}
               onProbeExecutionNodeHostKey={probeExecutionNodeHostKey}
@@ -2514,127 +2561,136 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
               verificationStatus={verification.status}
             />
           )}
-          {!loading && !creating && projectOpen && coreProjectionReady && page === "applications" && (
-            <ApplicationsPage
-              managed={managed}
-              snapshot={snapshot}
-              intents={intents.filter(isApplicationIntent)}
-              busy={
-                editBusy ||
-                refreshRequired ||
-                ["STARTING", "RUNNING", "CANCELLING"].includes(
-                  installationRun?.run?.state || "",
-                )
-              }
-              onAppend={appendStructuralIntent}
-              onAmend={amendConfigurationIntent}
-              onReview={review}
-              onInstallation={() => setPage("installation")}
-              onProviderSecrets={(deployment) => {
-                setSelectedServiceDeployment(deployment);
-                setSelectedServiceMember("");
-                setServicesView("detail");
-                setPage("services");
-              }}
-              onDirtyChange={setApplicationFormDirty}
-              choosePackage={api.chooseApplicationPackageDirectory}
-              onImport={reviewPackage}
-              draftActive={!!sessionId}
-              backendError={editError?.message}
-              loadSecrets={api.getRuntimeSecretDescriptors}
-              executionContextKey={JSON.stringify([
-                executionNode?.selectionKind,
-                executionNode?.selectedHostId,
-                executionNode?.runtimeDigest,
-                executionNode?.status,
-              ])}
-              saveSecrets={api.setDeploymentRuntimeSecretValues}
-              loadSecretAvailability={
-                api.getApplicationRuntimeSecretAvailability
-              }
-            />
-          )}
-          {!loading && !creating && projectOpen && coreProjectionReady && page === "services" && (
-            <ServicesPage
-              key={serviceFormEpoch}
-              managed={managed}
-              catalog={result.catalog}
-              effectivePreview={visibleServiceConfigurationPreview}
-              corePreviewNotice={serviceConfigurationPreviewNotice}
-              deploymentIntents={intents.filter(
-                (intent): intent is DeploymentIntent =>
-                  intent.operation === "CreateServiceDeployment" ||
-                  intent.operation === "DeleteServiceDeployment",
-              )}
-              placementIntents={intents.filter(
-                (intent): intent is PlacementIntent =>
-                  intent.operation === "ReconcileDeploymentPlacement" ||
-                  intent.operation === "ReconcileHostScopedDeploymentPlacement",
-              )}
-              certificateIntents={intents.filter(
-                (intent): intent is CertificateIntent =>
-                  intent.operation === "CreateCertificateAuthority" ||
-                  intent.operation === "UpdateCertificateAuthority" ||
-                  intent.operation === "DeleteCertificateAuthority" ||
-                  intent.operation === "CreateCertificateProfile" ||
-                  intent.operation === "UpdateCertificateProfile" ||
-                  intent.operation === "DeleteCertificateProfile" ||
-                  intent.operation === "CreateTLSProfile" ||
-                  intent.operation === "UpdateTLSProfile" ||
-                  intent.operation === "DeleteTLSProfile" ||
-                  intent.operation === "CreateCertificateScope" ||
-                  intent.operation === "UpdateCertificateScope" ||
-                  intent.operation === "DeleteCertificateScope",
-              )}
-              configurationIntents={intents.filter(
-                (intent): intent is ConfigurationIntent =>
-                  intent.operation === "SetServiceConfigurationValue" ||
-                  intent.operation === "RemoveServiceConfigurationOverride",
-              )}
-              busy={editBusy}
-              structuralDisabled={refreshRequired}
-              commandCount={commandCount}
-              error={editError?.message}
-              view={servicesView}
-              selectedDeploymentId={selectedServiceDeployment}
-              selectedMemberId={selectedServiceMember}
-              focusMemberSettings={focusServiceMemberSettings}
-              onSelectedMemberChange={setSelectedServiceMember}
-              onOpenDeployment={(deploymentId) => {
-                setSelectedServiceDeployment(deploymentId);
-                setSelectedServiceMember("");
-                setFocusServiceMemberSettings(false);
-                setServicesView("detail");
-              }}
-              onBackToList={() => {
-                setServicesView("list");
-                setSelectedServiceDeployment("");
-                setSelectedServiceMember("");
-                setFocusServiceMemberSettings(false);
-              }}
-              onOpenTopology={() => setPage("topology")}
-              onAmend={amendConfigurationIntent}
-              onManageCertificates={(memberId) => {
-                setCertificateReturn({
-                  deploymentId: selectedServiceDeployment,
-                  memberId,
-                });
-                setPage("certificates");
-              }}
-              onAppend={appendStructuralIntent}
-              onReview={review}
-              onDiscard={discard}
-              onGetPendingRuntimeSecretDescriptors={
-                getPendingRuntimeSecretDescriptors
-              }
-              onSetPendingDeploymentRuntimeSecretValues={
-                setPendingDeploymentRuntimeSecretValues
-              }
-              onChoosePendingDeploymentRuntimeSecretFile={
-                choosePendingDeploymentRuntimeSecretFile
-              }
-            />
-          )}
+          {!loading &&
+            !creating &&
+            projectOpen &&
+            coreProjectionReady &&
+            page === "applications" && (
+              <ApplicationsPage
+                managed={managed}
+                snapshot={snapshot}
+                intents={intents.filter(isApplicationIntent)}
+                busy={
+                  editBusy ||
+                  refreshRequired ||
+                  ["STARTING", "RUNNING", "CANCELLING"].includes(
+                    installationRun?.run?.state || "",
+                  )
+                }
+                onAppend={appendStructuralIntent}
+                onAmend={amendConfigurationIntent}
+                onReview={review}
+                onInstallation={() => setPage("installation")}
+                onProviderSecrets={(deployment) => {
+                  setSelectedServiceDeployment(deployment);
+                  setSelectedServiceMember("");
+                  setServicesView("detail");
+                  setPage("services");
+                }}
+                onDirtyChange={setApplicationFormDirty}
+                choosePackage={api.chooseApplicationPackageDirectory}
+                onImport={reviewPackage}
+                draftActive={!!sessionId}
+                backendError={editError?.message}
+                loadSecrets={api.getRuntimeSecretDescriptors}
+                executionContextKey={JSON.stringify([
+                  executionNode?.selectionKind,
+                  executionNode?.selectedHostId,
+                  executionNode?.runtimeDigest,
+                  executionNode?.status,
+                ])}
+                saveSecrets={api.setDeploymentRuntimeSecretValues}
+                loadSecretAvailability={
+                  api.getApplicationRuntimeSecretAvailability
+                }
+              />
+            )}
+          {!loading &&
+            !creating &&
+            projectOpen &&
+            coreProjectionReady &&
+            page === "services" && (
+              <ServicesPage
+                key={serviceFormEpoch}
+                managed={managed}
+                catalog={result.catalog}
+                effectivePreview={visibleServiceConfigurationPreview}
+                corePreviewNotice={serviceConfigurationPreviewNotice}
+                deploymentIntents={intents.filter(
+                  (intent): intent is DeploymentIntent =>
+                    intent.operation === "CreateServiceDeployment" ||
+                    intent.operation === "DeleteServiceDeployment",
+                )}
+                placementIntents={intents.filter(
+                  (intent): intent is PlacementIntent =>
+                    intent.operation === "ReconcileDeploymentPlacement" ||
+                    intent.operation ===
+                      "ReconcileHostScopedDeploymentPlacement",
+                )}
+                certificateIntents={intents.filter(
+                  (intent): intent is CertificateIntent =>
+                    intent.operation === "CreateCertificateAuthority" ||
+                    intent.operation === "UpdateCertificateAuthority" ||
+                    intent.operation === "DeleteCertificateAuthority" ||
+                    intent.operation === "CreateCertificateProfile" ||
+                    intent.operation === "UpdateCertificateProfile" ||
+                    intent.operation === "DeleteCertificateProfile" ||
+                    intent.operation === "CreateTLSProfile" ||
+                    intent.operation === "UpdateTLSProfile" ||
+                    intent.operation === "DeleteTLSProfile" ||
+                    intent.operation === "CreateCertificateScope" ||
+                    intent.operation === "UpdateCertificateScope" ||
+                    intent.operation === "DeleteCertificateScope",
+                )}
+                configurationIntents={intents.filter(
+                  (intent): intent is ConfigurationIntent =>
+                    intent.operation === "SetServiceConfigurationValue" ||
+                    intent.operation === "RemoveServiceConfigurationOverride",
+                )}
+                busy={editBusy}
+                structuralDisabled={refreshRequired}
+                commandCount={commandCount}
+                error={editError?.message}
+                view={servicesView}
+                selectedDeploymentId={selectedServiceDeployment}
+                selectedMemberId={selectedServiceMember}
+                focusMemberSettings={focusServiceMemberSettings}
+                onSelectedMemberChange={setSelectedServiceMember}
+                onOpenDeployment={(deploymentId) => {
+                  setSelectedServiceDeployment(deploymentId);
+                  setSelectedServiceMember("");
+                  setFocusServiceMemberSettings(false);
+                  setServicesView("detail");
+                }}
+                onBackToList={() => {
+                  setServicesView("list");
+                  setSelectedServiceDeployment("");
+                  setSelectedServiceMember("");
+                  setFocusServiceMemberSettings(false);
+                }}
+                onOpenTopology={() => setPage("topology")}
+                onAmend={amendConfigurationIntent}
+                onManageCertificates={(memberId) => {
+                  setCertificateReturn({
+                    deploymentId: selectedServiceDeployment,
+                    memberId,
+                  });
+                  setPage("certificates");
+                }}
+                onAppend={appendStructuralIntent}
+                onReview={review}
+                onDiscard={discard}
+                onGetPendingRuntimeSecretDescriptors={
+                  getPendingRuntimeSecretDescriptors
+                }
+                onSetPendingDeploymentRuntimeSecretValues={
+                  setPendingDeploymentRuntimeSecretValues
+                }
+                onChoosePendingDeploymentRuntimeSecretFile={
+                  choosePendingDeploymentRuntimeSecretFile
+                }
+              />
+            )}
           {!loading && !creating && projectOpen && page === "certificates" && (
             <CertificatesPage
               managed={managed}
@@ -2682,61 +2738,71 @@ export function App({ api = backend }: { api?: ProjectBackend }) {
               }
             />
           )}
-          {!loading && !creating && projectOpen && coreProjectionReady && page === "installation" && (
-            <InstallationPage
-              key={result.root}
-              state={installationState}
-              draftActive={!!sessionId || refreshRequired}
-              tab={installationTab}
-              onTabChange={setInstallationTab}
-              onOpenServers={() => setPage("servers")}
-              plan={installationPlan}
-              infrastructureObservation={infrastructureObservation}
-              selectedExecutionMode={installationExecutionMode}
-              onExecutionModeChange={setInstallationExecutionMode}
-              busy={installationBusy}
-              starting={installationStarting}
-              onCreatePlan={createInstallationPlan}
-              applicationVaultSources={installationVaultSources}
-              onApplicationVaultSourcesChange={(sources) => {
-                setInstallationVaultSources(sources);
-                setInstallationPlan(undefined);
-              }}
-              serviceDeployments={Object.values(
-                result.managed?.deployments || {},
-              ).map((item) => ({
-                deploymentId: item.deploymentId,
-                serviceType: item.serviceType,
-              }))}
-              serviceExecutionPriorities={serviceExecutionPriorities}
-              libraryDeployments={Object.entries(
-                result.managed?.applicationLibraries || {},
-              ).map(([deploymentId, value]) => ({
-                deploymentId,
-                libraryRef: value.libraryRef,
-              }))}
-              libraryExecutionPriorities={libraryExecutionPriorities}
-              onApprovePlan={approveInstallationPlan}
-              approvalErrorAttempt={approvalErrorAttempt}
-              run={installationRun}
-              runPlan={runPlan}
-              runProgress={runProgress}
-              events={installationEvents}
-              credentialStatus={credentialStatus}
-              onSetOutputEncryptionPassword={setOutputEncryptionPassword}
-              secretOutputPackages={secretOutputPackages}
-              outputDelivery={outputDelivery}
-              onRefreshSecretOutputs={() => void refreshSecretOutputs()}
-              onCollectSecretOutputs={() =>
-                collectAndDeliverSecretOutputs(
-                  installationRun?.run?.runId || "",
-                  true,
-                )
-              }
-              onStart={startApprovedInstallation}
-              onCancel={cancelInstallationRun}
-            />
-          )}
+          {!loading &&
+            !creating &&
+            projectOpen &&
+            coreProjectionReady &&
+            page === "installation" && (
+              <InstallationPage
+                key={result.root}
+                state={installationState}
+                draftActive={!!sessionId || refreshRequired}
+                tab={installationTab}
+                onTabChange={setInstallationTab}
+                onOpenServers={() => setPage("servers")}
+                plan={installationPlan}
+                infrastructureObservation={infrastructureObservation}
+                selectedSkippedServices={installationSkippedServices}
+                onSkippedServicesChange={setInstallationSkippedServices}
+                selectedSkipInfrastructureVerify={installationSkipInfraVerify}
+                onSkipInfrastructureVerifyChange={
+                  setInstallationSkipInfraVerify
+                }
+                selectedExecutionMode={installationExecutionMode}
+                onExecutionModeChange={setInstallationExecutionMode}
+                busy={installationBusy}
+                starting={installationStarting}
+                onCreatePlan={createInstallationPlan}
+                applicationVaultSources={installationVaultSources}
+                onApplicationVaultSourcesChange={(sources) => {
+                  setInstallationVaultSources(sources);
+                  setInstallationPlan(undefined);
+                }}
+                serviceDeployments={Object.values(
+                  result.managed?.deployments || {},
+                ).map((item) => ({
+                  deploymentId: item.deploymentId,
+                  serviceType: item.serviceType,
+                }))}
+                serviceExecutionPriorities={serviceExecutionPriorities}
+                libraryDeployments={Object.entries(
+                  result.managed?.applicationLibraries || {},
+                ).map(([deploymentId, value]) => ({
+                  deploymentId,
+                  libraryRef: value.libraryRef,
+                }))}
+                libraryExecutionPriorities={libraryExecutionPriorities}
+                onApprovePlan={approveInstallationPlan}
+                approvalErrorAttempt={approvalErrorAttempt}
+                run={installationRun}
+                runPlan={runPlan}
+                runProgress={runProgress}
+                events={installationEvents}
+                credentialStatus={credentialStatus}
+                onSetOutputEncryptionPassword={setOutputEncryptionPassword}
+                secretOutputPackages={secretOutputPackages}
+                outputDelivery={outputDelivery}
+                onRefreshSecretOutputs={() => void refreshSecretOutputs()}
+                onCollectSecretOutputs={() =>
+                  collectAndDeliverSecretOutputs(
+                    installationRun?.run?.runId || "",
+                    true,
+                  )
+                }
+                onStart={startApprovedInstallation}
+                onCancel={cancelInstallationRun}
+              />
+            )}
           {!loading && !creating && (
             <UtilityPages
               page={page}

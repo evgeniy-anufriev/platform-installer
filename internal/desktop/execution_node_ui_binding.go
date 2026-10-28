@@ -245,6 +245,12 @@ func (a *App) verifySelectedBundleLocked() (executionbundle.Verified, error) {
 }
 
 func (a *App) invalidateDynamicBindingLocked() {
+	a.invalidateDynamicBindingRuntimeInputsLocked(false)
+}
+
+// SSH credential replacement still revokes node readiness and plans, but the
+// project-bound pending inputs can be re-attested without importing them again.
+func (a *App) invalidateDynamicBindingRuntimeInputsLocked(retainInputs bool) {
 	if a.binding == nil || !a.binding.dynamic {
 		return
 	}
@@ -260,7 +266,11 @@ func (a *App) invalidateDynamicBindingLocked() {
 	a.continuation = nil
 	a.installationPlanID = ""
 	a.installationGeneration++
-	a.clearRuntimeSecretDescriptorEvidenceLocked()
+	if retainInputs {
+		a.runtimeSecretEvidence = nil
+	} else {
+		a.clearRuntimeSecretDescriptorEvidenceLocked()
+	}
 }
 
 func probeExecutionHostKey(ctx context.Context, address string, port uint16) (string, string, string, error) {

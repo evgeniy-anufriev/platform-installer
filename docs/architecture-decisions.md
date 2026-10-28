@@ -901,3 +901,13 @@ Standalone Ansible without reuse variables resolves normally. Start still
 rebuilds and compares the authoritative plan; no Go precedence implementation,
 public reference DTO or execution authorization is added. See the
 [phase5 scope](work/execution/service-runtime-optimization-plan.md).
+
+ADR-048 amendment, owner-approved service selection (2026-10-27): selected
+infrastructure deployments may omit their own Apply/Verify while remaining in
+the complete Core snapshot as providers. Selection is invocation state bound to
+plan/manifest and fresh Start, not desired-state deletion or a success proof.
+Integration jobs remain owned by existing provider hooks; service roles gain no
+selection branches. Core scopes installation artifacts, inputs/outputs and PKI.
+The all-unchecked UI reuses APPLICATION_LIBRARIES_ONLY + skipInfrastructureVerify.
+React edits selection only; Go transports and retains it without resolving service
+semantics. Existing bootstrap custody requires an actual Vault Apply in the plan.

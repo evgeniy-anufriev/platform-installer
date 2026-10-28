@@ -745,7 +745,7 @@ func (a *App) SetSessionCredential(input runtimesecret.Input) (runtimesecret.Sta
 	if err == nil {
 		a.pauseRecoveredObservationLocked()
 		a.pendingHostKey = nil
-		a.invalidateDynamicBindingLocked()
+		a.invalidateDynamicBindingRuntimeInputsLocked(true)
 	}
 	return status, err
 }

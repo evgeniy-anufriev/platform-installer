@@ -1182,6 +1182,7 @@ export namespace desktop {
     }
   }
   export class InstallationPlanView {
+    skipServiceDeployments: string[];
     skipApplicationLibraries: string[];
     skipInfrastructureVerify: boolean;
     executionMode: string;
@@ -1209,6 +1210,7 @@ export namespace desktop {
 
     constructor(source: any = {}) {
       if ("string" === typeof source) source = JSON.parse(source);
+      this.skipServiceDeployments = source["skipServiceDeployments"];
       this.skipApplicationLibraries = source["skipApplicationLibraries"];
       this.skipInfrastructureVerify = source["skipInfrastructureVerify"];
       this.executionMode = source["executionMode"];
@@ -1299,6 +1301,7 @@ export namespace desktop {
   }
 
   export class InstallationPlanRequest {
+    skipServiceDeployments: string[];
     skipApplicationLibraries: string[];
     skipInfrastructureVerify: boolean;
     executionMode: string;
@@ -1312,6 +1315,7 @@ export namespace desktop {
 
     constructor(source: any = {}) {
       if ("string" === typeof source) source = JSON.parse(source);
+      this.skipServiceDeployments = source["skipServiceDeployments"];
       this.skipApplicationLibraries = source["skipApplicationLibraries"];
       this.skipInfrastructureVerify = source["skipInfrastructureVerify"];
       this.executionMode = source["executionMode"];

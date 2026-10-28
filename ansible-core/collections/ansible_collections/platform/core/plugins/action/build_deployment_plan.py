@@ -25,7 +25,7 @@ class ActionModule(ActionBase):
                     project.get("identitySource") == "PROJECT_MANIFEST" and
                     isinstance(snapshot.get("validation"), dict) and snapshot["validation"].get("status") == "PASS"):
                 reissue = inspect_reissue(self._task.args.get("pki_state_root"), project.get("id"), pki.get("requests", []))
-            result = build_deployment_plan(snapshot, self._task.args.get("service_catalog"), self._task.args.get("runtime_release"), self._task.args.get("created_at", "1970-01-01T00:00:00Z"), self._task.args.get("bundle_artifact_sources"), pki, self._task.args.get("execution_configuration"), self._task.args.get("execution_connections"), reissue, self._task.args.get("deployment_order"), application_image_lock=self._task.args.get("application_image_lock"), application_vault_sources=self._task.args.get("application_vault_sources"), application_library_order=self._task.args.get("application_library_order"), skip_application_libraries=self._task.args.get("skip_application_libraries"))
+            result = build_deployment_plan(snapshot, self._task.args.get("service_catalog"), self._task.args.get("runtime_release"), self._task.args.get("created_at", "1970-01-01T00:00:00Z"), self._task.args.get("bundle_artifact_sources"), pki, self._task.args.get("execution_configuration"), self._task.args.get("execution_connections"), reissue, self._task.args.get("deployment_order"), application_image_lock=self._task.args.get("application_image_lock"), application_vault_sources=self._task.args.get("application_vault_sources"), application_library_order=self._task.args.get("application_library_order"), skip_application_libraries=self._task.args.get("skip_application_libraries"), skip_service_deployments=self._task.args.get("skip_service_deployments"))
             mode = self._task.args.get("execution_mode") or ('FULL_PROJECT' if self._task.args.get('application_image_metadata') or self._task.args.get('skip_application_libraries') is not None else None)
             if mode is not None:
                 import sys
@@ -58,6 +58,12 @@ class ActionModule(ActionBase):
             if self._task.args.get('application_image_metadata') or self._task.args.get('skip_application_libraries') is not None:
                 result = describe_progress(result, execution_scope(snapshot, self._task.args.get('application_library_order'), self._task.args.get('skip_application_libraries')),
                                            self._task.args.get('skip_infrastructure_verify', False))
+            if self._task.args.get('skip_service_deployments') is not None:
+                from ansible_collections.platform.core.plugins.module_utils.service_selection import execution_scope as service_scope, promote as promote_services
+                if mode != 'FULL_PROJECT':
+                    raise ValueError('SERVICE_SELECTION_MODE_INVALID')
+                scope = service_scope(snapshot['serviceDeployments'], self._task.args['deployment_order'], self._task.args['skip_service_deployments'])
+                result = promote_services(result, scope)
             result['executionManifestDigest'] = canonical_digest(result['executionManifest']) if result.get('executionManifest') else None
             destination = os.environ.get("PLATFORM_EXECUTION_MANIFEST_OUTPUT")
             manifest = result["executionManifest"]

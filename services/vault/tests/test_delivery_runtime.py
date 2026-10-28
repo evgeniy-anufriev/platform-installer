@@ -47,7 +47,7 @@ class VaultDeliveryRuntimeTests(unittest.TestCase):
                                     capture_output=True, text=True, timeout=30)
             self.assertEqual(0, result.returncode, (result.stdout + result.stderr)[-1500:])
 
-    def exercise(self, *, race=False, foreign=False, repeat=True):
+    def exercise(self, *, race=False, foreign=False, repeat=True, generated=False):
         with tempfile.TemporaryDirectory(prefix='qa-vault-delivery-') as directory:
             root = Path(directory)
             secret_root = root / 'secrets'
@@ -163,6 +163,13 @@ class VaultDeliveryRuntimeTests(unittest.TestCase):
                              platform_application_completed_batches=[], platform_application_delivered_instances=[],
                              application_vault_inputs=dict(libraryJobs=[], instanceJobs=jobs),
                              application_runtime_inputs={'integrations': {'dependencies': {}, 'sharedDependencies': {}}})
+                if generated:
+                    ref = 'pla-generated-' + 'a' * 40
+                    facts['platform_application_credential_files'] = {ref: str(password_file)}
+                    facts['platform_application_secret_files'] = {}
+                    for job in jobs:
+                        job['documents'][0]['fields']['password'] = {
+                            'source': {'kind': 'generated'}, 'passwordRef': ref}
                 play = root / 'probe.yml'
                 play.write_text(yaml.safe_dump([
                     dict(hosts='localhost', gather_facts=False, tasks=[{'ansible.builtin.set_fact': facts}]),
@@ -183,6 +190,10 @@ class VaultDeliveryRuntimeTests(unittest.TestCase):
                     self.assertEqual(0, state['writes'])
                     return
                 self.assertEqual(2, state['writes'])
+                if generated:
+                    for document in state['kv'].values():
+                        self.assertTrue(document['data']['password'] == password_file.read_text(),
+                                        'Deferred delivery changed the provisioned password')
                 self.assertEqual(1 if race else 0, state['conflicts'])
                 self.assertEqual(2 if repeat else 1, state['gets']['secret/data/lib/second/accounts/db'])
                 self.assertEqual((2 if repeat else 1) + (1 if race else 0),
@@ -198,6 +209,9 @@ class VaultDeliveryRuntimeTests(unittest.TestCase):
 
     def test_deferred_delivery_reads_each_document_once_and_reuses_networks(self):
         self.exercise()
+
+    def test_generated_password_custody_crosses_delegated_host_and_repeat(self):
+        self.exercise(generated=True)
 
     def test_cas_conflict_retains_unrelated_fields_and_retries_once(self):
         self.exercise(race=True, repeat=False)

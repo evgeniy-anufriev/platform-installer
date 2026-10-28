@@ -22,6 +22,7 @@ type InstallationPlanOperation struct {
 }
 
 type InstallationPlanRequest struct {
+	SkipServiceDeployments   []string                    `json:"skipServiceDeployments"`
 	SkipApplicationLibraries []string                    `json:"skipApplicationLibraries"`
 	SkipInfrastructureVerify bool                        `json:"skipInfrastructureVerify"`
 	ExecutionMode            executionnode.ExecutionMode `json:"executionMode"`
@@ -31,6 +32,7 @@ type InstallationPlanRequest struct {
 }
 
 type InstallationPlanView struct {
+	SkipServiceDeployments                []string                                  `json:"skipServiceDeployments"`
 	SkipApplicationLibraries              []string                                  `json:"skipApplicationLibraries"`
 	SkipInfrastructureVerify              bool                                      `json:"skipInfrastructureVerify"`
 	ExecutionMode                         executionnode.ExecutionMode               `json:"executionMode"`
@@ -128,7 +130,7 @@ func (a *App) createInstallationPlan(request InstallationPlanRequest) Installati
 	ctx, cancel := a.operationContext(10 * time.Minute)
 	defer cancel()
 	ctx = executionnode.WithImagePreparationCredentials(ctx, a.imagePreparationCredentialsLocked)
-	ctx = executionnode.WithApplicationLibrarySelection(ctx, request.SkipApplicationLibraries)
+	ctx = executionnode.WithServiceSelection(executionnode.WithApplicationLibrarySelection(ctx, request.SkipApplicationLibraries), request.SkipServiceDeployments)
 	var record executionnode.PlanRecord
 	if request.ExecutionMode == "" {
 		record, err = binding.plans.CreatePlanWithOrder(ctx, binding.node, a.current.Root, binding.reader.runtimeRelease, request.DeploymentOrder)
@@ -363,7 +365,7 @@ func installationPlanView(record executionnode.PlanRecord, binding *executionNod
 	if mode == "" {
 		mode = executionnode.FullProject
 	}
-	view := InstallationPlanView{SkipApplicationLibraries: append([]string{}, record.Plan.SkipApplicationLibraries...), SkipInfrastructureVerify: record.Plan.SkipInfrastructureVerify, ExecutionMode: mode, InfrastructureVerification: record.Plan.InfrastructureVerification, ID: record.ID, Status: record.Plan.Status, ProjectRevision: record.Plan.ProjectRevision,
+	view := InstallationPlanView{SkipServiceDeployments: append([]string{}, record.Plan.SkipServiceDeployments...), SkipApplicationLibraries: append([]string{}, record.Plan.SkipApplicationLibraries...), SkipInfrastructureVerify: record.Plan.SkipInfrastructureVerify, ExecutionMode: mode, InfrastructureVerification: record.Plan.InfrastructureVerification, ID: record.ID, Status: record.Plan.Status, ProjectRevision: record.Plan.ProjectRevision,
 		PlanFingerprint: record.Plan.PlanFingerprint, ExecutionNodeID: binding.node.ID, Runtime: runtime,
 		ExpiresAt: record.ExpiresAt.UTC().Format(time.RFC3339), Approved: record.Approved,
 		Acknowledgements: make([]InstallationAcknowledgement, 0, len(record.Plan.AcknowledgementDetails)),

@@ -410,6 +410,15 @@ Task-detail failure is best effort and emits one normalized degradation
 diagnostic per affected action; critical lifecycle integrity remains
 fail-closed. `no_log` task names and all raw module results are excluded.
 
+For task events, the existing `serviceDeployment` display field keeps the
+controller-supplied infrastructure deployment when present. Within application
+operations, the callback otherwise resolves only the scoped public identity:
+`application_runtime_job.instanceId`, then `application_instance_id`, then
+`application_library_id`. General preparation has no deployment value. This
+also applies to `no_log` task metadata; arguments, environment and raw results
+remain excluded. Go and UI transport and display the field without inferring
+application identities. Plan action deployment references are unchanged.
+
 The Execution Node journal is authoritative. GetEvents returns bounded pages
 to Go RunObserver, which maintains the operator's local Installer mirror and
 typed subscribers. Local mirror errors cannot change the remote run result.

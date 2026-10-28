@@ -49,8 +49,14 @@ it("passes the selected current-run Vault source through the real plan handler a
   await userEvent.click(
     screen.getByRole("button", { name: "Открыть папку проекта" }),
   );
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: "Установка" })).toHaveProperty(
+      "disabled",
+      false,
+    ),
+  );
   await userEvent.click(screen.getByRole("button", { name: "Установка" }));
-  await userEvent.click(screen.getByRole("tab", { name: "План" }));
+  await userEvent.click(await screen.findByRole("tab", { name: "План" }));
   const selector = await screen.findByRole("combobox", {
     name: "Источник токена Vault · vault-main",
   });
@@ -68,8 +74,14 @@ it("passes the selected current-run Vault source through the real plan handler a
     ),
   );
   await userEvent.click(screen.getByRole("button", { name: "Серверы" }));
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: "Установка" })).toHaveProperty(
+      "disabled",
+      false,
+    ),
+  );
   await userEvent.click(screen.getByRole("button", { name: "Установка" }));
-  await userEvent.click(screen.getByRole("tab", { name: "План" }));
+  await userEvent.click(await screen.findByRole("tab", { name: "План" }));
   expect(
     screen.getByRole("combobox", {
       name: "Источник токена Vault · vault-main",
@@ -463,11 +475,15 @@ it("explains when the previous run cannot be checked and keeps the safety block 
 function api(overrides: Record<string, unknown> = {}): MockApi {
   return {
     getExecutionNodeContext: vi.fn().mockResolvedValue({
-      status: "READY", selectionKind: "PROJECT_SERVER", selectedHostId: "node1",
+      status: "READY",
+      selectionKind: "PROJECT_SERVER",
+      selectedHostId: "node1",
       runtimeDigest: "sha256:runtime-a",
     }),
     getServiceConfigurationPreview: vi.fn().mockResolvedValue({
-      projectRevision: "sha256:old", runtimeDigest: "sha256:runtime-a", services: {},
+      projectRevision: "sha256:old",
+      runtimeDigest: "sha256:runtime-a",
+      services: {},
     }),
     getApplicationConfig: vi.fn().mockResolvedValue({
       status: "READY",
@@ -861,7 +877,14 @@ it("shows the read-only Installation state without requesting a deployment plan"
     ],
   });
   const value = api({
-    getExecutionNodeContext: vi.fn().mockResolvedValue({ status: "READY", runtimeDigest: "sha256:runtime-a", selectionKind: "PROJECT_SERVER", selectedHostId: "node1" }),
+    getExecutionNodeContext: vi
+      .fn()
+      .mockResolvedValue({
+        status: "READY",
+        runtimeDigest: "sha256:runtime-a",
+        selectionKind: "PROJECT_SERVER",
+        selectedHostId: "node1",
+      }),
     getInstallationState,
   });
   value.chooseProject.mockResolvedValue(project);
@@ -2198,6 +2221,12 @@ describe("UI-01H2 services navigation and safe settings", () => {
     await userEvent.click(
       screen.getByRole("button", { name: "Открыть папку проекта" }),
     );
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Сервисы" })).toHaveProperty(
+        "disabled",
+        false,
+      ),
+    );
     await userEvent.click(screen.getByRole("button", { name: "Сервисы" }));
     await userEvent.click(screen.getByRole("button", { name: /^kafka-main/ }));
     expect(screen.getByText("По умолчанию: 3")).toBeTruthy();
@@ -2242,6 +2271,12 @@ describe("UI-01H2 services navigation and safe settings", () => {
     await userEvent.click(
       screen.getByRole("button", { name: "Открыть папку проекта" }),
     );
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Сервисы" })).toHaveProperty(
+        "disabled",
+        false,
+      ),
+    );
     await userEvent.click(screen.getByRole("button", { name: "Сервисы" }));
     await userEvent.click(screen.getByRole("button", { name: /^kafka-main/ }));
     expect(await screen.findByText("По умолчанию: 5")).toBeTruthy();
@@ -2265,7 +2300,7 @@ describe("UI-01H2 services navigation and safe settings", () => {
   it("retries failed projection explicitly and reuses a successful revision", async () => {
     const value = api({
       createInstallationPlan: vi.fn(),
-      checkExecutionNode: vi.fn().mockResolvedValue({status:"READY"}),
+      checkExecutionNode: vi.fn().mockResolvedValue({ status: "READY" }),
       getExecutionNodeContext: vi.fn().mockResolvedValue({
         status: "READY",
         selectionKind: "PROJECT_SERVER",
@@ -2299,13 +2334,24 @@ describe("UI-01H2 services navigation and safe settings", () => {
     await userEvent.click(
       screen.getByRole("button", { name: "Открыть папку проекта" }),
     );
-    await userEvent.click(screen.getByRole("button",{name:"Серверы"}));
+    await userEvent.click(screen.getByRole("button", { name: "Серверы" }));
     await screen.findByText(/Код: SERVICE_CONFIGURATION_PREVIEW_UNSUPPORTED/);
-    for (const name of ['Сервисы', 'Приложения', 'Установка']) expect(screen.getByRole('button',{name})).toHaveProperty('disabled',true);
-    await userEvent.click(screen.getByRole('button',{name:'Проверить узел'}));
-    await waitFor(()=>expect(screen.getByRole('button',{name:'Сервисы'})).toHaveProperty('disabled',false));
-    await userEvent.click(screen.getByRole('button',{name:'Сервисы'}));
-    await userEvent.click(screen.getByRole('button',{name:/^kafka-main/}));
+    for (const name of ["Сервисы", "Приложения", "Установка"])
+      expect(screen.getByRole("button", { name })).toHaveProperty(
+        "disabled",
+        true,
+      );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Проверить узел" }),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Сервисы" })).toHaveProperty(
+        "disabled",
+        false,
+      ),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Сервисы" }));
+    await userEvent.click(screen.getByRole("button", { name: /^kafka-main/ }));
     expect(await screen.findByText("По умолчанию: 5")).toBeTruthy();
     await userEvent.click(screen.getByRole("button", { name: /^Серверы$/ }));
     await userEvent.click(screen.getByRole("button", { name: /^Сервисы$/ }));
@@ -2318,37 +2364,67 @@ describe("UI-01H2 services navigation and safe settings", () => {
   it("blocks dependent sections until the automatic saved Core projection arrives", async () => {
     let complete!: (value: unknown) => void;
     const value = api({
-      getServiceConfigurationPreview: vi.fn().mockImplementation(() => new Promise(resolve => { complete = resolve; })),
+      getServiceConfigurationPreview: vi.fn().mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            complete = resolve;
+          }),
+      ),
       createInstallationPlan: vi.fn(),
     });
     value.chooseProject.mockResolvedValue(project);
     render(<App api={value} />);
-    await userEvent.click(screen.getByRole("button", { name: "Открыть папку проекта" }));
-    await userEvent.click(screen.getByRole("button",{name:"Серверы"}));
-    await waitFor(() => expect(value.getServiceConfigurationPreview).toHaveBeenCalledOnce());
+    await userEvent.click(
+      screen.getByRole("button", { name: "Открыть папку проекта" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Серверы" }));
+    await waitFor(() =>
+      expect(value.getServiceConfigurationPreview).toHaveBeenCalledOnce(),
+    );
     for (const name of ["Сервисы", "Приложения", "Установка"]) {
-      expect(screen.getByRole("button", { name })).toHaveProperty("disabled", true);
+      expect(screen.getByRole("button", { name })).toHaveProperty(
+        "disabled",
+        true,
+      );
     }
     expect(screen.getByText(/Тайм-аут запроса — 90 секунд/)).toBeTruthy();
-    await act(async () => complete({ projectRevision: "sha256:old", runtimeDigest: "sha256:runtime-a", services: {} }));
+    await act(async () =>
+      complete({
+        projectRevision: "sha256:old",
+        runtimeDigest: "sha256:runtime-a",
+        services: {},
+      }),
+    );
     for (const name of ["Сервисы", "Приложения", "Установка"]) {
-      expect(screen.getByRole("button", { name })).toHaveProperty("disabled", false);
+      expect(screen.getByRole("button", { name })).toHaveProperty(
+        "disabled",
+        false,
+      );
     }
     expect(value.verifyProject).not.toHaveBeenCalled();
     expect(value.createInstallationPlan).not.toHaveBeenCalled();
   });
 
   it("keeps sections blocked on a stale Core projection and offers a retry", async () => {
-    const value = api({ getServiceConfigurationPreview: vi.fn().mockResolvedValue({
-      projectRevision: "sha256:another", runtimeDigest: "sha256:runtime-a", services: {},
-    }) });
+    const value = api({
+      getServiceConfigurationPreview: vi.fn().mockResolvedValue({
+        projectRevision: "sha256:another",
+        runtimeDigest: "sha256:runtime-a",
+        services: {},
+      }),
+    });
     value.chooseProject.mockResolvedValue(project);
     render(<App api={value} />);
-    await userEvent.click(screen.getByRole("button", { name: "Открыть папку проекта" }));
-    await userEvent.click(screen.getByRole("button",{name:"Серверы"}));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Открыть папку проекта" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Серверы" }));
     await screen.findByText(/Core вернул проекцию другой ревизии/);
     for (const name of ["Сервисы", "Приложения", "Установка"]) {
-      expect(screen.getByRole("button", { name })).toHaveProperty("disabled", true);
+      expect(screen.getByRole("button", { name })).toHaveProperty(
+        "disabled",
+        true,
+      );
     }
     expect(screen.getByRole("button", { name: "Проверить узел" })).toBeTruthy();
   });
@@ -2372,8 +2448,11 @@ describe("UI-01H2 services navigation and safe settings", () => {
     await userEvent.click(
       screen.getByRole("button", { name: "Открыть папку проекта" }),
     );
-    await userEvent.click(screen.getByRole("button",{name:"Серверы"}));
-    expect(screen.getByRole("button", { name: "Сервисы" })).toHaveProperty("disabled",true);
+    await userEvent.click(screen.getByRole("button", { name: "Серверы" }));
+    expect(screen.getByRole("button", { name: "Сервисы" })).toHaveProperty(
+      "disabled",
+      true,
+    );
     expect(
       await screen.findByText(
         /Core-проекция недоступна для текущей сохранённой ревизии.*SERVICE_CONFIGURATION_PREVIEW_UNSUPPORTED/,
@@ -2401,6 +2480,12 @@ describe("UI-01H2 services navigation and safe settings", () => {
     await userEvent.click(
       screen.getByRole("button", { name: "Открыть папку проекта" }),
     );
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Сервисы" })).toHaveProperty(
+        "disabled",
+        false,
+      ),
+    );
     await userEvent.click(screen.getByRole("button", { name: "Сервисы" }));
     await userEvent.click(screen.getByRole("button", { name: /^kafka-main/ }));
     expect(
@@ -2426,8 +2511,11 @@ describe("UI-01H2 services navigation and safe settings", () => {
     await userEvent.click(
       screen.getByRole("button", { name: "Открыть папку проекта" }),
     );
-    await userEvent.click(screen.getByRole("button",{name:"Серверы"}));
-    expect(screen.getByRole("button", { name: "Сервисы" })).toHaveProperty("disabled",true);
+    await userEvent.click(screen.getByRole("button", { name: "Серверы" }));
+    expect(screen.getByRole("button", { name: "Сервисы" })).toHaveProperty(
+      "disabled",
+      true,
+    );
     expect(
       await screen.findByText(
         /Core-проекция недоступна: runtime узла выполнения не подтверждён/,
@@ -2513,6 +2601,12 @@ describe("UI-01H2 services navigation and safe settings", () => {
     await userEvent.click(
       screen.getByRole("button", { name: "Открыть папку проекта" }),
     );
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Сервисы" })).toHaveProperty(
+        "disabled",
+        false,
+      ),
+    );
     await userEvent.click(screen.getByRole("button", { name: "Сервисы" }));
     await userEvent.click(screen.getByRole("button", { name: /^kafka-main/ }));
     expect(await screen.findByText("По умолчанию: 5")).toBeTruthy();
@@ -2521,6 +2615,12 @@ describe("UI-01H2 services navigation and safe settings", () => {
     await userEvent.click(screen.getByRole("button", { name: "Серверы" }));
     await userEvent.click(
       screen.getByRole("button", { name: "Проверить узел" }),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Сервисы" })).toHaveProperty(
+        "disabled",
+        false,
+      ),
     );
     await userEvent.click(screen.getByRole("button", { name: "Сервисы" }));
     await userEvent.click(screen.getByRole("button", { name: /^kafka-main/ }));
@@ -2602,6 +2702,12 @@ describe("UI-01H2 services navigation and safe settings", () => {
     await userEvent.click(
       screen.getByRole("button", { name: "Открыть папку проекта" }),
     );
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Сервисы" })).toHaveProperty(
+        "disabled",
+        false,
+      ),
+    );
     await userEvent.click(screen.getByRole("button", { name: "Сервисы" }));
     await userEvent.click(screen.getByRole("button", { name: /^redis-main/ }));
     await userEvent.click(screen.getByRole("button", { name: "Секреты" }));
@@ -2668,6 +2774,12 @@ describe("UI-01H2 services navigation and safe settings", () => {
     await userEvent.click(
       screen.getByRole("button", { name: "Открыть папку проекта" }),
     );
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Сервисы" })).toHaveProperty(
+        "disabled",
+        false,
+      ),
+    );
     await userEvent.click(screen.getByRole("button", { name: "Сервисы" }));
     await userEvent.click(screen.getByRole("button", { name: /^kafka-main/ }));
     await userEvent.click(screen.getByRole("button", { name: "Секреты" }));
@@ -2709,6 +2821,12 @@ describe("UI-01H2 services navigation and safe settings", () => {
     render(<App api={value} />);
     await userEvent.click(
       screen.getByRole("button", { name: "Открыть папку проекта" }),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Сервисы" })).toHaveProperty(
+        "disabled",
+        false,
+      ),
     );
     await userEvent.click(screen.getByRole("button", { name: "Сервисы" }));
     expect(
@@ -2770,6 +2888,12 @@ describe("UI-01H2 services navigation and safe settings", () => {
     await userEvent.click(
       screen.getByRole("button", { name: "Открыть папку проекта" }),
     );
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Сервисы" })).toHaveProperty(
+        "disabled",
+        false,
+      ),
+    );
     await userEvent.click(screen.getByRole("button", { name: "Сервисы" }));
     await userEvent.click(screen.getByRole("button", { name: /^kafka-main/ }));
     await userEvent.click(screen.getByRole("button", { name: "Секреты" }));
@@ -2798,6 +2922,12 @@ describe("UI-01H2 services navigation and safe settings", () => {
     render(<App api={value} />);
     await userEvent.click(
       screen.getByRole("button", { name: "Открыть папку проекта" }),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Сервисы" })).toHaveProperty(
+        "disabled",
+        false,
+      ),
     );
     await userEvent.click(screen.getByRole("button", { name: "Сервисы" }));
     await userEvent.click(screen.getByRole("button", { name: /^kafka-main/ }));
@@ -2865,6 +2995,12 @@ describe("UI-01H2 services navigation and safe settings", () => {
     await userEvent.click(
       screen.getByRole("button", { name: "Открыть папку проекта" }),
     );
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Сервисы" })).toHaveProperty(
+        "disabled",
+        false,
+      ),
+    );
     await userEvent.click(screen.getByRole("button", { name: "Сервисы" }));
     await userEvent.click(screen.getByRole("button", { name: /^qa-redis/ }));
     const field = screen.getByRole("textbox", {
@@ -2889,6 +3025,12 @@ describe("UI-01H2 services navigation and safe settings", () => {
     render(<App api={value} />);
     await userEvent.click(
       screen.getByRole("button", { name: "Открыть папку проекта" }),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Сервисы" })).toHaveProperty(
+        "disabled",
+        false,
+      ),
     );
     await userEvent.click(screen.getByRole("button", { name: "Сервисы" }));
     await userEvent.click(screen.getByRole("button", { name: /^kafka-main/ }));
@@ -2952,6 +3094,12 @@ describe("UI-01H2 services navigation and safe settings", () => {
     render(<App api={value} />);
     await userEvent.click(
       screen.getByRole("button", { name: "Открыть папку проекта" }),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Сервисы" })).toHaveProperty(
+        "disabled",
+        false,
+      ),
     );
     await userEvent.click(screen.getByRole("button", { name: "Сервисы" }));
     await userEvent.click(screen.getByRole("button", { name: /^kafka-main/ }));
@@ -3050,6 +3198,12 @@ describe("UI-01H2 services navigation and safe settings", () => {
     await userEvent.click(
       screen.getByRole("button", { name: "Открыть папку проекта" }),
     );
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Сервисы" })).toHaveProperty(
+        "disabled",
+        false,
+      ),
+    );
     await userEvent.click(screen.getByRole("button", { name: "Сервисы" }));
     await userEvent.click(screen.getByRole("button", { name: /^kafka-main/ }));
     expect(await screen.findByText("unknownSetting")).toBeTruthy();
@@ -3067,6 +3221,12 @@ describe("UI-01H2 services navigation and safe settings", () => {
     render(<App api={value} />);
     await userEvent.click(
       screen.getByRole("button", { name: "Открыть папку проекта" }),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Сервисы" })).toHaveProperty(
+        "disabled",
+        false,
+      ),
     );
     await userEvent.click(screen.getByRole("button", { name: "Сервисы" }));
     await userEvent.click(
@@ -3116,6 +3276,12 @@ describe("UI-01H3 member settings and TLS navigation", () => {
     await userEvent.click(
       screen.getByRole("button", { name: "Открыть папку проекта" }),
     );
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Сервисы" })).toHaveProperty(
+        "disabled",
+        false,
+      ),
+    );
     await userEvent.click(screen.getByRole("button", { name: "Сервисы" }));
     await userEvent.click(screen.getByRole("button", { name: /^kafka-main/ }));
     const deployment = screen.getByLabelText(
@@ -3144,6 +3310,12 @@ describe("UI-01H3 member settings and TLS navigation", () => {
     render(<App api={value} />);
     await userEvent.click(
       screen.getByRole("button", { name: "Открыть папку проекта" }),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Сервисы" })).toHaveProperty(
+        "disabled",
+        false,
+      ),
     );
     await userEvent.click(screen.getByRole("button", { name: "Сервисы" }));
     await userEvent.click(screen.getByRole("button", { name: /^kafka-main/ }));
@@ -3182,6 +3354,12 @@ describe("UI-01H3 member settings and TLS navigation", () => {
     render(<App api={value} />);
     await userEvent.click(
       screen.getByRole("button", { name: "Открыть папку проекта" }),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Сервисы" })).toHaveProperty(
+        "disabled",
+        false,
+      ),
     );
     await userEvent.click(screen.getByRole("button", { name: "Сервисы" }));
     await userEvent.click(screen.getByRole("button", { name: /^kafka-main/ }));
@@ -3233,6 +3411,12 @@ describe("UI-01H3 member settings and TLS navigation", () => {
     render(<App api={value} />);
     await userEvent.click(
       screen.getByRole("button", { name: "Открыть папку проекта" }),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Сервисы" })).toHaveProperty(
+        "disabled",
+        false,
+      ),
     );
     await userEvent.click(screen.getByRole("button", { name: "Сервисы" }));
     await userEvent.click(screen.getByRole("button", { name: /^kafka-main/ }));
@@ -3874,6 +4058,7 @@ it.each(["blocked", "new-risk", "ready"])(
                 ...fullPlan,
                 id: "b4-library",
                 executionMode: "APPLICATION_LIBRARIES_ONLY",
+                skipInfrastructureVerify: true,
                 acknowledgements:
                   scenario === "new-risk"
                     ? [{ code: "NEW_RISK", summary: "New confirmation" }]
@@ -3884,6 +4069,11 @@ it.each(["blocked", "new-risk", "ready"])(
     const legacy = vi.fn();
     const value = api({
       createInstallationPlanForMode: mode,
+      getInstallationPlan: vi.fn(async (id: string) =>
+        id === "b4-full"
+          ? { status: "PLAN_REVIEW", plan: fullPlan }
+          : mode.mock.results.at(-1)?.value,
+      ),
       createInstallationPlan: legacy,
       approveInstallationPlan: vi.fn().mockResolvedValue({
         status: "PLAN_APPROVED",
@@ -3891,10 +4081,11 @@ it.each(["blocked", "new-risk", "ready"])(
           ...fullPlan,
           id: "b4-library",
           executionMode: "APPLICATION_LIBRARIES_ONLY",
+          skipInfrastructureVerify: true,
           approved: true,
         },
       }),
-      getInstallationState: vi.fn().mockResolvedValue({
+      getInstallationState: vi.fn().mockImplementation(async () => ({
         status: "PLAN_REVIEW",
         project: {
           id: "p",
@@ -3902,9 +4093,15 @@ it.each(["blocked", "new-risk", "ready"])(
           hasUnsavedChanges: false,
         },
         executionNode: { status: "READY" },
-        plan: { status: "PLAN_REVIEW", planId: "b4-full" },
+        plan:
+          mode.mock.calls.length === 0
+            ? { status: "NONE" }
+            : {
+                status: "PLAN_REVIEW",
+                planId: mode.mock.calls.length > 1 ? "b4-library" : "b4-full",
+              },
         prerequisites: [],
-      }),
+      })),
     });
     value.chooseProject.mockResolvedValue({
       ...project,
@@ -3933,21 +4130,116 @@ it.each(["blocked", "new-risk", "ready"])(
       screen.getByRole("checkbox", { name: "Устанавливать инфраструктуру" }),
     ).toHaveProperty("checked", false);
     await userEvent.click(
-      screen.getByRole("button", { name: "Одобрить план" }),
+      screen.getByRole("button", { name: "Сформировать свежий план" }),
     );
     await waitFor(() =>
       expect(mode).toHaveBeenCalledWith({
         executionMode: "APPLICATION_LIBRARIES_ONLY",
         deploymentOrder: [],
         applicationVaultSources: {},
+        skipInfrastructureVerify: true,
       }),
     );
     expect(legacy).not.toHaveBeenCalled();
-    if (scenario === "ready")
+    if (scenario === "ready") {
+      await userEvent.click(
+        await screen.findByRole("button", { name: "Одобрить план" }),
+      );
       expect(value.approveInstallationPlan).toHaveBeenCalledWith(
         "b4-library",
         [],
       );
-    else expect(value.approveInstallationPlan).not.toHaveBeenCalled();
+    } else expect(value.approveInstallationPlan).not.toHaveBeenCalled();
   },
 );
+
+it("retains service selection across navigation and sends all-unchecked through skipInfraVerify", async () => {
+  const create = vi.fn().mockResolvedValue({ status: "BLOCKED" });
+  const value = api({
+    createInstallationPlanForMode: create,
+    getApplicationConfig: vi.fn().mockResolvedValue({
+      status: "READY",
+      config: {
+        schemaVersion: 1,
+        serverTypes: [],
+        serviceExecutionPriorities: [
+          { serviceType: "kafka", priority: 1 },
+          { serviceType: "vault", priority: 2 },
+        ],
+        libraryExecutionPriorities: [{ libraryName: "szi", priority: 1 }],
+      },
+    }),
+    getInstallationState: vi
+      .fn()
+      .mockResolvedValue({
+        status: "READY_TO_PLAN",
+        project: { id: "p", hasUnsavedChanges: false },
+        executionNode: { status: "READY" },
+        plan: { status: "NONE" },
+        prerequisites: [],
+      }),
+  });
+  value.chooseProject.mockResolvedValue({
+    ...project,
+    managed: {
+      ...project.managed,
+      deployments: {
+        "kafka-main": {
+          deploymentId: "kafka-main",
+          serviceType: "kafka",
+          mode: "kraft",
+        },
+        "vault-main": {
+          deploymentId: "vault-main",
+          serviceType: "vault",
+          mode: "raft-ha",
+        },
+      },
+      applicationLibraries: { szi: { libraryRef: "szi@1.0.0" } },
+    },
+  } as unknown as OpenResult);
+  render(<App api={value} />);
+  await userEvent.click(
+    screen.getByRole("button", { name: "Открыть папку проекта" }),
+  );
+  await userEvent.click(screen.getByRole("button", { name: "Установка" }));
+  await userEvent.click(screen.getByRole("tab", { name: "План" }));
+  await userEvent.click(
+    screen.getByRole("checkbox", { name: "Установить сервис kafka-main" }),
+  );
+  const revisit = async () => {
+    await userEvent.click(screen.getByRole("button", { name: "Серверы" }));
+    await userEvent.click(screen.getByRole("button", { name: "Установка" }));
+    await userEvent.click(screen.getByRole("tab", { name: "План" }));
+  };
+  await revisit();
+  expect(
+    screen.getByRole("checkbox", { name: "Установить сервис kafka-main" }),
+  ).toHaveProperty("checked", false);
+  await userEvent.click(
+    screen.getByRole("button", { name: "Сформировать свежий план" }),
+  );
+  expect(create).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      executionMode: "FULL_PROJECT",
+      skipServiceDeployments: ["kafka-main"],
+    }),
+  );
+  await userEvent.click(
+    screen.getByRole("checkbox", { name: "Устанавливать инфраструктуру" }),
+  );
+  await userEvent.click(
+    screen.getByRole("checkbox", { name: "Устанавливать инфраструктуру" }),
+  );
+  await revisit();
+  await userEvent.click(
+    screen.getByRole("button", { name: "Сформировать свежий план" }),
+  );
+  expect(create).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      executionMode: "APPLICATION_LIBRARIES_ONLY",
+      skipInfrastructureVerify: true,
+      applicationVaultSources: {},
+    }),
+  );
+});

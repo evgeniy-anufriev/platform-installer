@@ -554,7 +554,7 @@ class PKISinglePassResolutionTests(unittest.TestCase):
                 handlers = []
                 if service == "kafka":
                     member = tasks(service, "member.yml")
-                    listener = tasks(service, "validate_ssl_listener.yml")
+                    listener = tasks(service, "prepare_member_tls.yml")
                     selected = [named(member, "Инициализация сигнала изменения экземпляра службы Kafka PKI"),
                                 named(listener, "Копирование PKI-файлов в каталог потребителя с владельцем Kafka"),
                                 named(listener, "Объединение сигнала изменения экземпляра службы Kafka PKI")]

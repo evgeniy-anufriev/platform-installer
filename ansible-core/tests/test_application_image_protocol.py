@@ -101,10 +101,10 @@ class ApplicationImageProtocolTests(unittest.TestCase):
             base = dict(apiVersion='platform.installer/execution-runtime/v1alpha6', runId=run_id, runtimeRelease=runtime_release)
             def call(value):
                 request = dict(base, **value)
-                if request['apiVersion'] == execution_protocol.SELECTION_REQUEST_VERSION and request['operation'] != 'GetCapabilities':
+                if request['apiVersion'] in execution_protocol.SELECTION_REQUEST_VERSIONS and request['operation'] != 'GetCapabilities':
                     name = 'build-deployment-plan' if request['operation'] == 'BuildDeploymentPlan' else 'prepare-application-images'
                     findings = SchemaValidator(str(ROOT / 'contracts')).validate(request,
-                        str(ROOT / ('contracts/execution-runtime/v1alpha7/' + name + '.schema.json')))
+                        str(ROOT / ('contracts/execution-runtime/' + request['apiVersion'].rsplit('/', 1)[1] + '/' + name + '.schema.json')))
                     self.assertFalse(findings, str(findings))
                 result = subprocess.run(command, input=json.dumps(request), text=True, stdout=subprocess.PIPE,
                                         stderr=subprocess.PIPE, timeout=90)
@@ -272,6 +272,28 @@ class ApplicationImageProtocolTests(unittest.TestCase):
                                       stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=90)
             self.assertNotEqual(0, rejected.returncode)
             self.assertIn('APPLICATION_IMAGE_PREPARATION_STALE', rejected.stdout)
+            # New service selection traverses the real image-preparation and planner protocol.
+            base['apiVersion'] = execution_protocol.SERVICE_SELECTION_REQUEST_VERSION
+            capability = call(dict(operation='GetCapabilities'))
+            self.assertEqual([], validator.validate(capability, ROOT / 'contracts/execution-capabilities/v1alpha14/schema.json'))
+            self.assertEqual('ServiceSelection/v1alpha1', capability['serviceSelection']['protocol'])
+            service_selection = dict(selection, skipServiceDeployments=[])
+            description = call(dict(service_selection, operation='PrepareApplicationImages', phase='DESCRIBE'))
+            self.assertEqual([], description['inputs']['skipServiceDeployments'])
+            prepared = call(dict(operation='PrepareApplicationImages', phase='PREPARE', inputsDigest=description['inputsDigest']))
+            planned = call(dict(service_selection, operation='BuildDeploymentPlan', project=str(project),
+                applicationVaultSources={}, applicationImagePreparation=prepared['preparationDigest']))
+            self.assertEqual([], validator.validate(planned['deploymentPlan'], ROOT / 'contracts/plan/v1alpha11/schema.json'))
+            new_manifest = json.loads(manifest_path.read_text())
+            self.assertEqual([], validator.validate(new_manifest, ROOT / 'contracts/execution-manifest/v1alpha8/schema.json'))
+            validate_application_manifest(new_manifest)
+            self.assertEqual(['docker'], planned['deploymentPlan']['serviceExecutionScope']['installServices'])
+            stale_service = dict(base, **dict(service_selection, skipServiceDeployments=['docker'], operation='BuildDeploymentPlan',
+                project=str(project), applicationVaultSources={}, applicationImagePreparation=prepared['preparationDigest']))
+            rejected = subprocess.run(command, input=json.dumps(stale_service), text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=90)
+            self.assertNotEqual(0, rejected.returncode)
+            self.assertIn('APPLICATION_IMAGE_PREPARATION_STALE', rejected.stdout)
+            base['apiVersion'] = execution_protocol.SELECTION_REQUEST_VERSION
             self.assertNotIn('x-container-images', yaml.safe_load(variables_path.read_text())['platform_artifact_lock'])
             # A failed/stale handle never produces an alternative executable plan.
             invalid = dict(base, operation='BuildDeploymentPlan', project=str(project), executionMode='FULL_PROJECT',

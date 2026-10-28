@@ -588,6 +588,23 @@ func TestDecodeEventPagePreservesTypedTaskFieldsAndLegacyPagination(t *testing.T
 	}
 }
 
+func TestDecodeEventPagePreservesApplicationDeploymentContext(t *testing.T) {
+	for _, deployment := range []string{"qa-kafka", "keycloak", "data-manager-sdku", "szi", "sdku", "cspa"} {
+		t.Run(deployment, func(t *testing.T) {
+			event := validEvent("installer-context", 1)
+			encoded, _ := json.Marshal(event)
+			var value map[string]any
+			if err := json.Unmarshal(encoded, &value); err != nil {
+				t.Fatal(err)
+			}
+			value["serviceDeployment"] = deployment
+			page, err := decodeEventPage(map[string]any{"events": []any{value}}, "installer-context", 0, 256)
+			if err != nil || len(page.Events) != 1 || page.Events[0].ServiceDeployment != deployment {
+				t.Fatalf("deployment=%s page=%+v error=%v", deployment, page, err)
+			}
+		})
+	}
+}
 func TestDecodeEventPageRejectsWrongRunOversizeAndControlCharacters(t *testing.T) {
 	event := validEvent("installer-301", 1)
 	encoded, _ := json.Marshal(event)

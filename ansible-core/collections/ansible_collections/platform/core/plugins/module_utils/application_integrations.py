@@ -52,7 +52,7 @@ def prepare_integrations(snapshot, jobs):
                         raise ValueError('APPLICATION_ACCOUNT_CAPABILITY_UNSUPPORTED')
                     credentials = account['credentials']
                     if (set(credentials) != {'username', 'password'} or credentials['username']['source']['kind'] != 'literal'
-                            or credentials['password']['source']['kind'] not in ('runtime_secret_ref', 'vault_ref')):
+                            or credentials['password']['source']['kind'] not in ('runtime_secret_ref', 'vault_ref', 'generated')):
                         raise ValueError('APPLICATION_PROVIDER_CREDENTIAL_INVALID')
                     identity = consumer + '/' + alias
                     batch['accounts'].append(dict(id=identity, libraryId=library_id, instanceId=app_id,
