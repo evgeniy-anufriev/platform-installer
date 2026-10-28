@@ -50,7 +50,8 @@
     state: directory
     owner: "{{ platform_docker_account_name }}"
     group: "{{ _platform_docker_gid }}"
-    mode: '0700'
+    # Match dockerd setupDaemonRoot so daemon startup does not undo this mode.
+    mode: '0710'
   when: not (platform_docker_verify_only | bool)
 
 - name: Проверка компонентов каталога конфигурации Docker

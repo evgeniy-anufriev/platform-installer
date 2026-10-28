@@ -49,7 +49,7 @@ class DockerDataRootTests(unittest.TestCase):
         expected = {"log-driver": "local", "features": {"buildkit": True}, "data-root": str(self.data)}
         self.assertEqual(expected, json.loads(self.config.read_text()))
         self.assertEqual(0o600, self.config.stat().st_mode & 0o777)
-        self.assertEqual(0o700, self.data.stat().st_mode & 0o777)
+        self.assertEqual(0o710, self.data.stat().st_mode & 0o777)
         self.assertIn("changed=0", self.run_tasks())
         before = self.config.stat().st_mtime_ns
         self.assertIn("changed=0", self.run_tasks(verify=True))
@@ -69,6 +69,25 @@ class DockerDataRootTests(unittest.TestCase):
         self.assertFalse(self.config.exists())
         self.run_tasks()
         self.assertEqual({"data-root": str(self.data)}, json.loads(self.config.read_text()))
+
+    def test_native_daemon_permissions_survive_repeat_and_old_mode_is_repaired_once(self):
+        self.run_tasks()
+        witness = self.data / 'retained-volume'
+        witness.write_text('retained')
+        config_mtime = self.config.stat().st_mtime_ns
+        # dockerd setupDaemonRoot establishes 0711, then its final native 0710.
+        self.data.chmod(0o711)
+        self.data.chmod(0o710)
+        native_ctime = self.data.stat().st_ctime_ns
+        self.assertIn('changed=0', self.run_tasks())
+        self.assertEqual(native_ctime, self.data.stat().st_ctime_ns)
+        self.data.chmod(0o700)
+        self.assertIn('changed=1', self.run_tasks())
+        self.assertEqual(0o710, self.data.stat().st_mode & 0o777)
+        self.assertIn('changed=0', self.run_tasks())
+        self.assertIn('changed=0', self.run_tasks(verify=True))
+        self.assertEqual(config_mtime, self.config.stat().st_mtime_ns)
+        self.assertEqual('retained', witness.read_text())
 
     def test_unsafe_paths_rejected_before_config_write(self):
         for path in ("relative/path", "/", "/etc/docker", str(self.home / "../escape"),
