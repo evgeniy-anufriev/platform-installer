@@ -1,0 +1,6 @@
+---
+- name: Пакетная нормализация экземпляров Kafka с настройками текущего узла
+  ansible.builtin.set_fact:
+    _platform_kafka_instances: "{{ lookup('ansible.builtin.template', 'normalized-members.json.j2') | from_json | sort(attribute='node_id') }}"
+  vars:
+    kafka_normalization_members: "{{ _platform_kafka_input_instances }}"

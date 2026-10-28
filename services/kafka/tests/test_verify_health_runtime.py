@@ -152,6 +152,58 @@ class VerifyHealthRuntimeTests(unittest.TestCase):
         self.assertEqual(0, result.returncode, result.stdout[-3500:] + result.stderr[-800:])
         self.assertIn('changed=0', result.stdout)
         self.assertNotIn('synthetic-test-password', result.stdout + result.stderr)
+        self.assertEqual(1, result.stdout.count(' : Создание временной конфигурации Kafka CLI]'))
+        self.assertEqual(1, result.stdout.count(' : Удаление общей временной конфигурации Kafka CLI]'))
+
+    def test_local_member_and_listener_includes_align_across_hosts(self):
+        values = copy.deepcopy(self.values)
+        members, requests, plans = [], [], []
+        for number, host in enumerate(('node1', 'node2', 'node3', 'node2'), 1):
+            member = dict(self.member, id='kafka-' + str(number), node_id=number, host=host)
+            members.append(member)
+            requests.append(dict(id='cert-' + str(number), usages=['serverAuth', 'clientAuth'], consumers=[dict(
+                deploymentId=member['deployment_id'], memberId=member['id'], hostId=host, tlsProfileRef='infra')]))
+            plans.append(dict(requestId='cert-' + str(number), tlsProfileId='infra', hostId=host,
+                              targetDirectory=str(self.source), formats=['PEM']))
+        values.update(_platform_kafka_input_instances=members, platform_pki_requests=requests,
+                      platform_pki_materialization_plans=plans,
+                      _platform_kafka_local_instances="{{ _platform_kafka_instances | selectattr('host', 'equalto', inventory_hostname) | list }}")
+        call = copy.deepcopy(yaml.safe_load((ROLE / 'tasks/verify.yml').read_text())[0])
+        call['ansible.builtin.include_tasks'] = str(ROLE / 'tasks/verify_member.yml')
+        play = self.root / 'parallel.yml'
+        play.write_text(yaml.safe_dump([dict(hosts='all', connection='local', gather_facts=False,
+            vars=values, tasks=[{'ansible.builtin.include_role': dict(name='platform.kafka.kafka_kraft',
+                tasks_from='normalize_members', public=True)}, call])]))
+        result = subprocess.run(['ansible-playbook', '-i', 'node1,node2,node3,', str(play)],
+            env=dict(os.environ, ANSIBLE_COLLECTIONS_PATH=str(ROOT / 'ansible-core/collections') + ':' + str(ROOT / 'services/kafka'),
+                     PATH=str(self.bin) + os.pathsep + os.environ['PATH']), capture_output=True, text=True, timeout=120)
+        self.assertEqual(0, result.returncode, result.stdout[-4000:] + result.stderr[-1000:])
+        self.assertEqual(2, result.stdout.count('TASK [Проверка состояния экземпляра службы Kafka systemd и основного процесса]'))
+        self.assertEqual(6, result.stdout.count('TASK [Выполнение реального TLS-соединения с listener Kafka]'))
+        for host in ('node1', 'node2', 'node3'):
+            self.assertRegex(result.stdout, host + r'\s+: ok=.*changed=0.*failed=0')
+
+    def test_shared_cli_configuration_reused_and_removed_after_failure(self):
+        values = copy.deepcopy(self.values)
+        values['platform_kafka_instances'][0]['listeners']['CLIENT']['securityProtocol'] = 'SASL_SSL'
+        values['platform_kafka_schema_registry_kafka_listener'] = 'INTERNAL'
+        secret = self.root / 'synthetic-password'
+        secret.write_text('synthetic-test-password')
+        values['platform_kafka_admin_credential'] = {'passwordSecretRef': 'runtime:qa-admin'}
+        values['platform_kafka_secret_files'] = {'runtime:qa-admin': str(secret)}
+        paths = self.root / 'config-paths'
+        record = ('while [ "$1" != --command-config ]; do shift; done\n'
+                  'test "$(stat -c %a "$2")" = 600 || exit 9\n'
+                  'printf "%s\\n" "$2" >> ' + str(paths) + '\n')
+        self.script('kafka-metadata-quorum.sh', record + 'printf \'LeaderId: 1\\nCurrentVoters: [{"id":1,}]\\n\'')
+        self.script('kafka-broker-api-versions.sh', record + 'exit 7')
+        result = self.run_verify(values)
+        self.assertNotEqual(0, result.returncode)
+        observed = paths.read_text().splitlines()
+        self.assertEqual(2, len(observed))
+        self.assertEqual(observed[0], observed[1])
+        self.assertFalse(Path(observed[0]).exists())
+        self.assertNotIn('synthetic-test-password', result.stdout + result.stderr)
 
     def test_untrusted_tls_fails(self):
         other = self.root / 'wrong-ca.pem'

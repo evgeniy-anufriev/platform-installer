@@ -1,0 +1,75 @@
+---
+- name: Выбор экземпляра Kafka для диагностики кворума без внесения изменений
+  ansible.builtin.set_fact:
+    kafka_quorum_diagnostic_member: >-
+      {{ (_platform_kafka_broker_instances | first)
+         if _platform_kafka_scram_enabled | default(false) | bool else
+         (_platform_kafka_controller_instances | first) }}
+  changed_when: false
+
+- name: Проверка кворума с помощью администратора с SCRAM или существующего подключения контроллера
+  ansible.builtin.include_tasks: verify_quorum.yml
+  when: inventory_hostname == kafka_quorum_diagnostic_member.host
+
+- name: Выбор брокера Kafka для диагностики регистрации без внесения изменений
+  ansible.builtin.set_fact:
+    _platform_kafka_verify_broker: "{{ _platform_kafka_broker_instances | first }}"
+  changed_when: false
+
+- name: Определение подключения Kafka CLI для проверки регистрации брокеров
+  ansible.builtin.include_tasks: resolve_cli_connection.yml
+  vars:
+    kafka_cli_member: "{{ _platform_kafka_verify_broker }}"
+    kafka_cli_purpose: "{{ 'admin' if _platform_kafka_scram_enabled | default(false) | bool else 'client' }}"
+  when:
+    - inventory_hostname == _platform_kafka_verify_broker.host
+    - not (_platform_kafka_scram_enabled | default(false) | bool)
+
+- name: Запрос регистрации брокера Kafka через вычисленное соединение CLI
+  ansible.builtin.include_tasks: run_cli_command.yml
+  vars:
+    kafka_cli_connection: "{{ _platform_kafka_cli_connection }}"
+    kafka_cli_command_prefix:
+      - "{{ platform_kafka_install_directory }}/bin/kafka-broker-api-versions{{ platform_kafka_script_extension }}"
+      - --bootstrap-server
+      - "{{ _platform_kafka_cli_connection.bootstrapHost }}:{{ _platform_kafka_cli_connection.bootstrapPort }}"
+    kafka_cli_command_suffix: []
+    kafka_cli_expected_unfenced_broker_count: "{{ _platform_kafka_broker_instances | length }}"
+  when: inventory_hostname == _platform_kafka_verify_broker.host
+
+- name: Проверка успешности вычисленной команды диагностики регистрации брокера Kafka
+  ansible.builtin.assert:
+    that: platform_kafka_cli_command_result.rc == 0
+    fail_msg: Kafka broker registration diagnostic command failed
+  when: inventory_hostname == _platform_kafka_verify_broker.host
+
+- name: Выбор диагностических заголовков брокера без внесения изменений
+  ansible.builtin.set_fact:
+    _platform_kafka_unfenced_broker_headers: >-
+      {{ platform_kafka_cli_command_result.stdout_lines
+         | select('search', 'isFenced:\s*false\)\s*->\s*\(')
+         | list }}
+  changed_when: false
+  when: inventory_hostname == _platform_kafka_verify_broker.host
+
+- name: "Подтверждение регистрации брокеров Kafka и состояния unfenced"
+  ansible.builtin.assert:
+    that:
+      - _platform_kafka_unfenced_broker_headers | length == _platform_kafka_broker_instances | length
+      - kafka_verify_broker_endpoints | length == 1
+      - >-
+        (_platform_kafka_unfenced_broker_headers
+         | select('search', '^\s*' ~ (kafka_verify_broker_endpoints[0].bootstrap_host | regex_escape) ~ ':' ~ (kafka_verify_broker_endpoints[0].bootstrap_port | string) ~
+           '\s+\(id:\s*' ~ (item.node_id | string) ~ '.*isFenced:\s*false\)\s*->\s*\(')
+         | list | length) == 1
+    fail_msg: Kafka broker diagnostic does not contain exactly the expected registered, unfenced members
+  vars:
+    kafka_verify_broker_endpoints: >-
+      {{ item.listener_endpoints
+         | selectattr('name', 'equalto', _platform_kafka_cli_connection.listenerName)
+         | selectattr('security_protocol', 'equalto', _platform_kafka_cli_connection.securityProtocol)
+         | list }}
+  loop: "{{ _platform_kafka_broker_instances }}"
+  loop_control:
+    label: "{{ item.id }}"
+  when: inventory_hostname == _platform_kafka_verify_broker.host
