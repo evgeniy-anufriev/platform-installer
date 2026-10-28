@@ -1,13 +1,13 @@
 ---
-- name: Определение существующего bootstrap-подключения TLS
+- name: Определение административного SCRAM-подключения Kafka
   ansible.builtin.include_tasks: resolve_cli_connection.yml
   vars:
     kafka_cli_member: "{{ _platform_kafka_broker_instances | first }}"
-    kafka_cli_purpose: interBroker
+    kafka_cli_purpose: admin
 
 - name: Выбор административного SCRAM listener Kafka
   ansible.builtin.set_fact:
-    kafka_admin_listener_candidates: "{{ (_platform_kafka_broker_instances | first).listener_endpoints | selectattr('security_protocol', 'equalto', 'SASL_SSL') | list }}"
+    kafka_admin_listener_candidates: "{{ (_platform_kafka_broker_instances | first).listener_endpoints | selectattr('purpose', 'equalto', 'client') | selectattr('security_protocol', 'equalto', 'SASL_SSL') | list }}"
   changed_when: false
 
 - name: Проверка однозначности SCRAM listener для учётной записи администратора Kafka
@@ -23,14 +23,14 @@
     platform_kafka_application_job:
       adminPasswordRef: "{{ platform_kafka_admin_credential.passwordSecretRef }}"
     application_topic_candidate:
-      address: "{{ (_platform_kafka_cli_connection.bootstrapHost if _platform_kafka_authorization_bootstrap else kafka_admin_listener_candidates[0].bootstrap_host) }}"
-      port: "{{ (_platform_kafka_cli_connection.bootstrapPort if _platform_kafka_authorization_bootstrap else kafka_admin_listener_candidates[0].bootstrap_port) }}"
+      address: "{{ kafka_admin_listener_candidates[0].bootstrap_host }}"
+      port: "{{ kafka_admin_listener_candidates[0].bootstrap_port }}"
       tls: true
-      securityProtocol: "{{ 'SSL' if _platform_kafka_authorization_bootstrap else 'SASL_SSL' }}"
+      securityProtocol: SASL_SSL
       pkiPlans: "{{ _platform_kafka_tls_runtime_plans }}"
     application_kafka_account:
       name: admin
-      mode: "{{ 'managed' if _platform_kafka_authorization_bootstrap else 'existing' }}"
+      mode: existing
       passwordRef: "{{ platform_kafka_admin_credential.passwordSecretRef }}"
       grants: []
       candidates:
@@ -49,10 +49,10 @@
   vars:
     platform_application_secret_files: "{{ platform_kafka_secret_files }}"
   block:
-    - name: Подготовка индивидуального загрузочного идентификатора PEM для вызова
+    - name: Подготовка PEM-файлов административного CLI
       ansible.builtin.include_tasks: application_client_tls.yml
       when: platform_kafka_store_type == 'PEM'
-    - name: "Формирование временного подключения по bootstrap-сертификату или учётной записи администратора"
+    - name: "Формирование временного подключения администратора SCRAM"
       ansible.builtin.template:
         src: application-topics-client.properties.j2
         dest: "{{ application_kafka_private.path }}/admin.properties"
@@ -90,7 +90,7 @@
         kafka_authorization_cluster_operations: [Describe, IdempotentWrite]
     - name: Настройка внутренних и устаревших клиентов с наличием сертификатов без статуса суперпользователя
       ansible.builtin.include_tasks: authorization_principal.yml
-      loop: "{{ _platform_kafka_admin_principals }}"
+      loop: "{{ _platform_kafka_internal_principals }}"
       loop_control:
         loop_var: kafka_member_principal
       vars:

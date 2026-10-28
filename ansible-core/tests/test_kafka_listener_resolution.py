@@ -75,6 +75,18 @@ class KafkaListenerResolutionTests(unittest.TestCase):
         self.assertEqual("SSL", listeners["SSL"]["securityProtocol"])
         self.assertNotIn("tlsProfile", listeners["SSL"])
 
+    def test_controller_sasl_ssl_is_projected_for_controller_and_broker_roles(self):
+        listeners = {
+            'QUORUM': {'purpose': 'controller', 'securityProtocol': 'SASL_SSL', 'port': 19093},
+            'CLIENT': {'purpose': 'client', 'securityProtocol': 'SASL_SSL', 'port': 19096},
+            'REPLICATION': {'purpose': 'interBroker', 'securityProtocol': 'SSL', 'port': 19094},
+        }
+        for roles in [['controller'], ['broker'], ['controller','broker']]:
+            result = resolution.listener_runtime_properties({'listeners': listeners}, dict(self.member,roles=roles))
+            self.assertEqual('PASS',result['status'])
+            self.assertIn('QUORUM:SASL_SSL',result['properties']['listener.security.protocol.map'])
+            self.assertEqual('QUORUM',result['properties']['controller.listener.names'])
+
 
 if __name__ == "__main__":
     unittest.main()

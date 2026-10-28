@@ -34,7 +34,7 @@ func TestPasswordProjectStagingDoesNotRequirePEM(t *testing.T) {
 			}
 		}
 	}
-	if len(runner.calls) != 3 || runner.calls[1].name != "scp" {
+	if len(runner.calls) != 5 || runner.calls[2].name != "scp" {
 		t.Fatal("project was not uploaded/extracted")
 	}
 }

@@ -28,7 +28,7 @@ class KafkaServiceRepairTests(unittest.TestCase):
         self.assertEqual(success, result.returncode == 0, (result.stdout + result.stderr)[-2500:])
         return result.stdout + result.stderr
 
-    def test_admin_bootstrap_reads_inventory_before_create_and_login(self):
+    def test_preseeded_admin_reads_inventory_before_login(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             role = root / 'roles/qa'
@@ -47,17 +47,15 @@ class KafkaServiceRepairTests(unittest.TestCase):
             secret = root / 'password'
             secret.write_text('qa-good')
             secret.chmod(0o600)
-            member = dict(host='localhost', listener_endpoints=[dict(security_protocol='SASL_SSL',
+            member = dict(host='localhost', listener_endpoints=[dict(purpose='client', security_protocol='SASL_SSL',
                 bootstrap_host='127.0.0.1', bootstrap_port=9096)])
-            variables = dict(_platform_kafka_broker_instances=[member], _platform_kafka_admin_principals=[],
-                platform_kafka_install_directory=str(root), _platform_kafka_authorization_bootstrap=True,
+            variables = dict(_platform_kafka_broker_instances=[member], _platform_kafka_internal_principals=[],
+                platform_kafka_install_directory=str(root),
                 platform_kafka_verify_only=False, platform_kafka_store_type='PKCS12',
                 platform_kafka_application_timeout_ms=1000, platform_kafka_admin_credential=dict(passwordSecretRef='runtime:admin'),
                 platform_kafka_secret_files={'runtime:admin': str(secret)}, platform_pki_secret_files={'runtime:admin': str(secret)})
-            for bootstrap, metadata_fail in [(True, False), (False, False), (True, True)]:
-                variables['_platform_kafka_authorization_bootstrap'] = bootstrap
-                variables['platform_kafka_verify_only'] = not bootstrap
-                users = {} if bootstrap else {'admin': ['SCRAM-SHA-512', 'qa-good']}
+            for metadata_fail in [False, True]:
+                users = {'admin': ['SCRAM-SHA-512', 'qa-good']}
                 (root / 'state.json').write_text(json.dumps(dict(users=users, metadata_fail=metadata_fail)))
                 (root / 'calls.jsonl').write_text('')
                 self.run_play(root, [{'ansible.builtin.include_role': dict(name='qa', tasks_from='authorization_setup')}],
@@ -66,65 +64,9 @@ class KafkaServiceRepairTests(unittest.TestCase):
                 self.assertEqual('kafka-configs.sh', calls[0][0])
                 self.assertIn('--describe', calls[0][1])
                 self.assertEqual(1, sum('--describe' in args for _, args in calls))
-                self.assertEqual(1 if bootstrap and not metadata_fail else 0, sum('--alter' in args for _, args in calls))
+                self.assertEqual(0, sum('--alter' in args for _, args in calls))
                 self.assertEqual(0 if metadata_fail else 1, sum(name == 'kafka-broker-api-versions.sh' for name, _ in calls))
                 self.assertEqual(0 if metadata_fail else 1, sum(name == 'kafka-acls.sh' and '--list' in args for name, args in calls))
-
-    def test_boolean_decision_uses_all_host_observations(self):
-        subjects = yaml.safe_load((ROLE / 'tasks/authorization_inputs.yml').read_text())
-        subjects = subjects[-3:]
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            for observations, bootstrap in [([True, True], False), ([True, False], True),
-                                             (['True', 'False'], True)]:
-                variables = dict(_platform_kafka_instances=[dict(host='h1'), dict(host='h2')],
-                    platform_kafka_verify_only=False)
-                tasks = [dict(**{'ansible.builtin.set_fact': dict(kafka_authorization_local_final=value)},
-                              delegate_to=host, delegate_facts=True)
-                         for host, value in zip(['h1', 'h2'], observations)]
-                tasks += subjects + [{'ansible.builtin.assert': dict(that=[
-                    '(_platform_kafka_authorization_bootstrap | type_debug) == "bool"',
-                    '_platform_kafka_authorization_bootstrap == ' + str(bootstrap).lower()])}]
-                self.run_play(root, tasks, variables)
-
-    def transition(self, failure='', verify=False):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            shutil.copy(ROLE / 'tasks/authorization_transition.yml', root)
-            setup = [{'ansible.builtin.fail': dict(msg='QA_ADMIN_FAILURE')}] if failure == 'admin' else [
-                {'ansible.builtin.debug': dict(msg='QA_ADMIN_AUTHENTICATED')}]
-            (root / 'authorization_setup.yml').write_text(yaml.safe_dump(setup))
-            final = [{'ansible.builtin.lineinfile': dict(path=str(root / 'order'), create=True,
-                line='{{ kafka_authorization_member.id }}')}]
-            if failure == 'quorum':
-                final += [{'ansible.builtin.fail': dict(msg='QA_QUORUM_FAILURE')}]
-            (root / 'authorization_finalize_member.yml').write_text(yaml.safe_dump(final))
-            variables = dict(_platform_kafka_broker_instances=[dict(host='h1')],
-                _platform_kafka_instances=[dict(host='h3', id='m3', node_id=3),
-                    dict(host='h1', id='m1', node_id=1), dict(host='h2', id='m2', node_id=2)],
-                platform_kafka_verify_only=verify, _platform_kafka_authorization_bootstrap=True)
-            self.run_play(root, [{'ansible.builtin.include_tasks': str(root / 'authorization_transition.yml')},
-                {'ansible.builtin.copy': dict(content='unexpected', dest=str(root / 'after-failure'))}],
-                variables, hosts='h1' if failure == 'limited' else 'all', success=not failure)
-            order = (root / 'order').read_text().splitlines() if (root / 'order').exists() else []
-            self.assertEqual([] if failure in ['admin', 'limited'] or verify else ['m1'] if failure else ['m1', 'm2', 'm3'], order)
-            if failure:
-                self.assertFalse((root / 'after-failure').exists(), 'peer continued after fatal transition')
-
-    def test_admin_failure_stops_all_three_hosts_before_revocation(self):
-        self.transition('admin')
-
-    def test_quorum_failure_stops_before_second_member(self):
-        self.transition('quorum')
-
-    def test_success_finalizes_members_in_node_order(self):
-        self.transition()
-
-    def test_verify_never_finalizes_members(self):
-        self.transition(verify=True)
-
-    def test_limited_play_cannot_revoke_members_outside_the_play(self):
-        self.transition('limited')
 
     def test_cluster_guard_ignores_data_all_but_rejects_cluster_alter(self):
         tasks = yaml.safe_load((ROLE / 'tasks/authorization_security_guard.yml').read_text())[1:]

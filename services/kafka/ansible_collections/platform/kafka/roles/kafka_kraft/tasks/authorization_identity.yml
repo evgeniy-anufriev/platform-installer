@@ -20,7 +20,7 @@
       - "'\n' not in kafka_authorization_subject.stdout"
     fail_msg: KAFKA_ADMIN_CERTIFICATE_PRINCIPAL_INVALID
 
-- name: Сбор выбранных идентификаторов экземпляров службы для привилегированной начальной загрузки и внутреннего трафика
+- name: Сбор сертификатных principals межброкерного SSL-трафика
   ansible.builtin.set_fact:
-    _platform_kafka_admin_principals: "{{ (_platform_kafka_admin_principals + ['User:' ~ (kafka_authorization_subject.stdout | regex_replace('^subject=\\s*', ''))]) | unique | sort }}"
+    _platform_kafka_internal_principals: "{{ (_platform_kafka_internal_principals + ['User:' ~ (kafka_authorization_subject.stdout | regex_replace('^subject=\\s*', ''))]) | unique | sort }}"
   changed_when: false

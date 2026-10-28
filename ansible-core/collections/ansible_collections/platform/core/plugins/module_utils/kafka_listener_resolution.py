@@ -53,8 +53,8 @@ def normalize_listeners(configuration, member, path="configuration.listeners"):
             findings.append(_finding("LISTENER_PURPOSE_INVALID", item_path + ".purpose", "Unsupported listener purpose"))
         if protocol not in SUPPORTED_PROTOCOLS:
             findings.append(_finding("LISTENER_PROTOCOL_INVALID", item_path + ".securityProtocol", "Only PLAINTEXT, SSL and SASL_SSL are supported"))
-        if protocol == "SASL_SSL" and purpose != "client":
-            findings.append(_finding("LISTENER_PURPOSE_INVALID", item_path + ".purpose", "SCRAM is supported on client listeners only"))
+        if protocol == "SASL_SSL" and purpose not in ("client", "controller"):
+            findings.append(_finding("LISTENER_PURPOSE_INVALID", item_path + ".purpose", "SASL_SSL is supported on client and controller listeners"))
         if not isinstance(port, int) or isinstance(port, bool) or not 1 <= port <= 65535:
             findings.append(_finding("LISTENER_PORT_INVALID", item_path + ".port", "Listener port must be an integer from 1 through 65535"))
         listeners[name] = listener

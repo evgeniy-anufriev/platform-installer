@@ -3,6 +3,7 @@
   ansible.builtin.set_fact:
     _platform_kafka_cli_listener_matches: >-
       {{ (kafka_cli_member.listener_endpoints
+          | selectattr('purpose', 'equalto', 'client')
           | selectattr('security_protocol', 'equalto', 'SASL_SSL') | list)
          if kafka_cli_purpose == 'admin' else
          (kafka_cli_member.listener_endpoints

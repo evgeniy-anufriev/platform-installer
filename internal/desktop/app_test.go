@@ -1088,10 +1088,32 @@ func TestV02VerificationDoesNotPublishAfterInFlightBindingInvalidation(t *testin
 	app := NewApp(reader, lifecycleStub{}, WithExplicitExecutionNode(node.ID, node.Address), WithTrustedExecutionNodeBinding(executionNodeBinding{node: node, reader: reader, service: stub, bundleRoot: "bundle"}))
 	app.current = ProjectOpenResult{Status: "OPEN", Root: root, Project: &projectlifecycle.Project{ID: "project-aaaaaaaaaaaaaaaa"}, Verification: notVerified()}
 	app.bindExecutionLocked(root, app.current.Project, nil)
+	app.execution.setStatus("READY")
 	transport.onVerify = func() { app.binding.dynamic = true }
 	result := app.VerifyProject()
-	if result.Status != "UNVERIFIED" || app.execution.context.Status == "READY" || app.binding != nil || app.current.Snapshot != nil {
+	if stub.inspectCalls != 0 || result.Status != "UNVERIFIED" || app.execution.context.Status == "READY" || app.binding != nil || app.current.Snapshot != nil {
 		t.Fatalf("in-flight invalidation published verification: %#v", result)
+	}
+}
+
+func TestV02ReadyProjectVerificationDoesNotRepeatNodeInspection(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "project.yml"), []byte("name: unchanged\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	node := executionnode.Node{ID: "qa-node", Address: "192.0.2.10"}
+	release := map[string]any{"bundleDigest": "sha256:" + strings.Repeat("d", 64), "catalogDigest": "sha256:" + strings.Repeat("e", 64), "coreVersion": "test-core", "planningProtocol": executionbundle.ProtocolVersion}
+	transport := &bindingChangeVerificationTransport{}
+	reader := projectReader{transport: transport, node: node, runtimeRelease: release}
+	stub := &executionLifecycleStub{inspection: executionnode.Inspection{State: executionnode.Ready}}
+	app := NewApp(reader, lifecycleStub{}, WithExplicitExecutionNode(node.ID, node.Address), WithTrustedExecutionNodeBinding(executionNodeBinding{node: node, reader: reader, service: stub, bundleRoot: "bundle"}))
+	app.current = ProjectOpenResult{Status: "OPEN", Root: root, Project: &projectlifecycle.Project{ID: "project-aaaaaaaaaaaaaaaa"}, Verification: notVerified()}
+	app.bindExecutionLocked(root, app.current.Project, nil)
+	app.execution.setStatus("READY")
+
+	result := app.VerifyProject()
+	if stub.inspectCalls != 0 || result.Status != "VERIFIED" || app.execution.context.Status != "READY" || app.binding == nil || app.current.Snapshot == nil {
+		t.Fatalf("ready verification inspected node or lost evidence: %#v", result)
 	}
 }
 

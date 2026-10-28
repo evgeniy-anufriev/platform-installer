@@ -620,17 +620,8 @@ func createProjectArchive(root string) (string, error) {
 		_ = os.Remove(name)
 		return "", e
 	}
-	for _, entry := range []string{"inventory", "project.yml", "ansible.cfg", "application-packages", "library-packages"} {
-		candidate := filepath.Join(absolute, entry)
-		if _, statErr := os.Lstat(candidate); statErr != nil {
-			if errors.Is(statErr, os.ErrNotExist) && entry != "inventory" {
-				continue
-			}
-			return cleanup(errors.New("SERVICE_PROJECT_INVALID"))
-		}
-		if err := appendTarPath(writer, absolute, candidate); err != nil {
-			return cleanup(err)
-		}
+	if err := writeProjectArchive(writer, absolute); err != nil {
+		return cleanup(err)
 	}
 	if err := writer.Close(); err != nil {
 		_ = file.Close()
